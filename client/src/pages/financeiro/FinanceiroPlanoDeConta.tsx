@@ -430,6 +430,26 @@ export default function FinanceiroPlanoDeConta() {
             <p className="text-sm text-slate-500 mt-0.5">{allContas.length} conta(s) cadastrada(s)</p>
           </div>
           <div className="flex items-center gap-2">
+            {hasChildrenSet.size > 0 && (
+              <>
+                <Button
+                  size="sm" variant="outline"
+                  className="h-8 text-xs text-slate-600 border-slate-200"
+                  onClick={() => setCollapsedIds(new Set(Array.from(hasChildrenSet)))}
+                  title="Recolher todos os grupos"
+                >
+                  Fechar tudo
+                </Button>
+                <Button
+                  size="sm" variant="outline"
+                  className="h-8 text-xs text-slate-600 border-slate-200"
+                  onClick={() => setCollapsedIds(new Set())}
+                  title="Expandir todos os grupos"
+                >
+                  Expandir tudo
+                </Button>
+              </>
+            )}
             <Button size="sm" onClick={() => openCreate()} className="bg-blue-600 hover:bg-blue-700 text-white">
               <Plus className="w-4 h-4 mr-1.5" />Nova Conta
             </Button>
@@ -560,18 +580,23 @@ export default function FinanceiroPlanoDeConta() {
                         className="flex items-center gap-2 flex-1 min-w-0 py-2.5 pr-1"
                         style={{ paddingLeft: `${8 + (nivel - 1) * 20}px` }}
                       >
-                        {/* Botão colapso/expansão */}
+                        {/* Botão colapso/expansão — aparece em qualquer conta com filhos */}
                         {hasKids ? (
                           <button
                             type="button"
                             onClick={() => toggleCollapse(c.id)}
-                            className="p-0.5 rounded hover:bg-slate-200 transition-colors flex-shrink-0"
+                            className={cn(
+                              "p-1 rounded transition-colors flex-shrink-0",
+                              isCollapsed
+                                ? "bg-slate-200 text-slate-700 hover:bg-slate-300"
+                                : "text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+                            )}
                             title={isCollapsed ? "Expandir grupo" : "Recolher grupo"}
                           >
-                            <ChevronRight className={cn("w-3.5 h-3.5 text-slate-400 transition-transform", !isCollapsed && "rotate-90")} />
+                            <ChevronRight className={cn("w-3.5 h-3.5 transition-transform duration-150", !isCollapsed && "rotate-90")} />
                           </button>
                         ) : (
-                          nivel > 1 && <span className="w-4 flex-shrink-0" />
+                          <span className="w-5 flex-shrink-0" />
                         )}
                         <span className={cn(
                           "font-mono flex-shrink-0 text-right",

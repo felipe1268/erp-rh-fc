@@ -1,6 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3508 — **PLANO DE CONTAS · COLAPSO/EXPANSÃO EM TODOS OS NÍVEIS + FECHAR/EXPANDIR TUDO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Extensão da Rev. 3507: chevron clicável em QUALQUER nível que tenha filhos (não só raiz).
+ * Botões "Fechar tudo" (colapsa todos os grupos de uma vez) e "Expandir tudo" (limpa
+ * collapsedIds) adicionados no header, visíveis quando há ao menos 1 grupo com filhos.
+ * Chevron recolhido = fundo slate-200 + texto slate-700 (destaque visual); expandido =
+ * apenas cor slate-500 com hover. Folhas (sem filhos) mostram espaçador `w-5` neutro.
+ * Arquivo: `FinanceiroPlanoDeConta.tsx`.
+ *
  * Rev. 3507 — **PLANO DE CONTAS · COLAPSO/EXPANSÃO DE GRUPOS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Qualquer conta com filhos ganha um chevron clicável que recolhe/expande o grupo.
  * Estado: `collapsedIds` (Set<number>). Derivados: `hasChildrenSet` (IDs com filhos),
