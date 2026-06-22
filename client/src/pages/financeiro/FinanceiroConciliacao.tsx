@@ -30,6 +30,23 @@ function formatInt(v: any) {
   return new Intl.NumberFormat("pt-BR").format(Number(v) || 0);
 }
 // Rev. 3198 — máscara BRL pt-BR p/ o input de valor do "Lançar no ERP".
+function isTransportError(e: any): boolean {
+  const m = String(e?.message ?? "").toLowerCase();
+  return (
+    m.includes("did not match the expected pattern") ||
+    m.includes("load failed") ||
+    m.includes("failed to fetch") ||
+    m.includes("network request failed") ||
+    m === "" ||
+    m.includes("the operation was aborted") ||
+    m.includes("fetch is aborted")
+  );
+}
+function transportErrMsg(e: any): string {
+  if (isTransportError(e)) return "Falha de rede (iPad/Safari). Toque novamente para tentar.";
+  return e?.message ?? "Erro desconhecido";
+}
+
 function maskBRLInput(raw: string) {
   const d = String(raw).replace(/\D/g, "");
   return (Number(d || "0") / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -605,9 +622,9 @@ export default function FinanceiroConciliacao() {
         setLancStatement(null);
       } catch (e: any) {
         if (lancCreatedRef.current?.stmtId === lancStatement.id) {
-          toast({ title: "Recebível criado, mas a baixa/conciliação falhou", description: `${e?.message ?? ""} — clique novamente para tentar conciliar (não recria o título) ou concilie manualmente.`, variant: "destructive" });
+          toast({ title: "Recebível criado, mas a baixa/conciliação falhou", description: `${transportErrMsg(e)} — clique novamente para tentar conciliar (não recria o título) ou concilie manualmente.`, variant: "destructive" });
         } else {
-          toast({ title: "Erro ao lançar no Contas a Receber", description: e?.message, variant: "destructive" });
+          toast({ title: "Erro ao lançar no Contas a Receber", description: transportErrMsg(e), variant: "destructive" });
         }
       } finally {
         setLancBusy(false);
@@ -650,9 +667,9 @@ export default function FinanceiroConciliacao() {
     } catch (e: any) {
       // Lançamento já criado + conciliação falhou: preserva o id; novo clique só concilia.
       if (lancCreatedRef.current?.stmtId === lancStatement.id) {
-        toast({ title: "Lançamento criado, mas a conciliação falhou", description: `${e?.message ?? ""} — clique novamente para tentar conciliar (não recria o lançamento) ou concilie manualmente.`, variant: "destructive" });
+        toast({ title: "Lançamento criado, mas a conciliação falhou", description: `${transportErrMsg(e)} — clique novamente para tentar conciliar (não recria o lançamento) ou concilie manualmente.`, variant: "destructive" });
       } else {
-        toast({ title: "Erro ao lançar no Contas a Pagar", description: e?.message, variant: "destructive" });
+        toast({ title: "Erro ao lançar no Contas a Pagar", description: transportErrMsg(e), variant: "destructive" });
       }
     } finally {
       setLancBusy(false);

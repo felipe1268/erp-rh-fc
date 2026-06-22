@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3477 — **CONCILIAÇÃO BANCÁRIA · (1) ERRO "THE STRING DID NOT MATCH THE EXPECTED
+ * PATTERN" NO "LANÇAR E CONCILIAR" MAPEADO PARA MENSAGEM AMIGÁVEL + (2) BUGFIX
+ * `getOcsPorMes` "operator does not exist: date ~ unknown". BACKEND PONTUAL + FRONTEND ·
+ * ZERO ALTER DESTRUTIVO/DROP/DELETE.**
+ *
+ * **Problema 1 (iOS/iPad):** Ao clicar "Lançar e conciliar" em alguns dispositivos iOS/iPad,
+ * o WebKit abortava o fetch a nível de transporte e lançava a exceção nativa
+ * `"The string did not match the expected pattern."` — mensagem críptica, sem contexto.
+ * O servidor NUNCA recebia a requisição (zero log de erro no backend), portanto nenhum
+ * dado era duplicado; o usuário precisava apenas tocar novamente.
+ * Fix: helper `isTransportError` / `transportErrMsg` detecta essa família de erros
+ * (includes "did not match the expected pattern", "load failed", "failed to fetch",
+ * "network request failed", "the operation was aborted", "fetch is aborted" e mensagem
+ * vazia) e substitui pela mensagem `"Falha de rede (iPad/Safari). Toque novamente para
+ * tentar."` — aplicado nos dois paths de `submitLancar` (Contas a Receber + Contas a
+ * Pagar), tanto no erro do lançamento quanto no erro da baixa/conciliação.
+ *
+ * **Problema 2 (Backend):** `getOcsPorMes` lançava
+ * `operator does not exist: date ~ unknown` porque `compras_ordens.data_vencimento` e
+ * `data_entrega_prevista` são colunas do tipo `date` e o operador regex `~` do Postgres
+ * não opera sobre `date` (só `text`). Fix: adicionado `::text` em todos os quatro
+ * predicados do `CASE WHEN ... ~ ...` na CTE `oc_data`.
+ *
+ * Arquivos: `client/src/pages/financeiro/FinanceiroConciliacao.tsx` (+`isTransportError`,
+ * +`transportErrMsg`, 2 catch blocks atualizados), `server/routers/financial.ts`
+ * (`getOcsPorMes` CASE → `::text`).
+ *
  * Rev. 3476 — **FORNECEDORES · BUGFIX: BOTÃO "BUSCAR CNPJ" BLOQUEADO NO MODO EDIÇÃO.
  * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *

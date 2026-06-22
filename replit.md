@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3477** — **CONCILIAÇÃO BANCÁRIA · (1) ERRO "THE STRING DID NOT MATCH THE EXPECTED PATTERN" NO "LANÇAR E CONCILIAR" MAPEADO PARA MENSAGEM AMIGÁVEL + (2) BUGFIX `getOcsPorMes` "operator does not exist: date ~ unknown". BACKEND PONTUAL + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** (1) iOS/WebKit abortava fetch a nível de transporte → `isTransportError`/`transportErrMsg` detecta e exibe "Falha de rede (iPad/Safari). Toque novamente para tentar." nos 2 catch de `submitLancar`. (2) `data_vencimento`/`data_entrega_prevista` são colunas `date` — `~` só opera em `text`; fix: `::text` nos 4 predicados do `CASE WHEN ... ~ ...`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3476** — **FORNECEDORES · BUGFIX: BOTÃO "BUSCAR CNPJ" BLOQUEADO NO MODO EDIÇÃO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `abrirEditar()` pré-setava `lastFetchedCNPJ.current` com o CNPJ existente → guard bloqueava o botão; fix: reset para `""` na abertura. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3475** — **EMPRESAS TERCEIRAS · AUTO-PREENCHIMENTO DA FICHA AO DIGITAR O CNPJ (14 DÍGITOS). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** useEffect+debounce 600ms dispara BrasilAPI ao completar 14 dígitos; guard lastFetchedCnpj evita re-busca; onBlur redundante removido. Detalhe: `shared/changelog.ts`.
-
 ### Revisões recentes (one-liners)
+
+- **Rev. 3475** — **EMPRESAS TERCEIRAS · AUTO-PREENCHIMENTO DA FICHA AO DIGITAR O CNPJ (14 DÍGITOS). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** useEffect+debounce 600ms dispara BrasilAPI ao completar 14 dígitos; guard lastFetchedCnpj evita re-busca; onBlur redundante removido. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3468** — **CONCILIAÇÃO BANCÁRIA · DIALOG DE EDIÇÃO — CAMPO OBRA: AUTO-MATCH CASE-INSENSITIVE + HINT QUANDO NÃO CASA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Auto-match em `obrasOpts`; hint âmbar se sem match. Detalhe: `shared/changelog.ts`.
 

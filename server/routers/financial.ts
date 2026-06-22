@@ -5712,14 +5712,14 @@ export const financialRouter = router({
                 co.data_vencimento        AS "dataVencimento",
                 co.data_entrega_prevista  AS "dataEntregaPrevista",
                 CASE
-                  WHEN co.data_vencimento ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
-                       THEN co.data_vencimento::date
-                  WHEN co.data_vencimento ~ '^[0-9]{2}/[0-9]{2}/[0-9]{4}$'
-                       THEN to_date(co.data_vencimento, 'DD/MM/YYYY')
-                  WHEN co.data_entrega_prevista ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
-                       THEN co.data_entrega_prevista::date
-                  WHEN co.data_entrega_prevista ~ '^[0-9]{2}/[0-9]{2}/[0-9]{4}$'
-                       THEN to_date(co.data_entrega_prevista, 'DD/MM/YYYY')
+                  WHEN co.data_vencimento::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+                       THEN co.data_vencimento::text::date
+                  WHEN co.data_vencimento::text ~ '^[0-9]{2}/[0-9]{2}/[0-9]{4}$'
+                       THEN to_date(co.data_vencimento::text, 'DD/MM/YYYY')
+                  WHEN co.data_entrega_prevista::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+                       THEN co.data_entrega_prevista::text::date
+                  WHEN co.data_entrega_prevista::text ~ '^[0-9]{2}/[0-9]{2}/[0-9]{4}$'
+                       THEN to_date(co.data_entrega_prevista::text, 'DD/MM/YYYY')
                   ELSE DATE(co.created_at)
                 END AS data_ref
            FROM compras_ordens co
