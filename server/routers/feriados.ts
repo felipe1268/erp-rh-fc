@@ -458,8 +458,8 @@ export const feriadosRouter = router({
       data: z.string(),
       tipo: z.enum(['nacional','estadual','municipal','ponto_facultativo','compensado']),
       recorrente: z.boolean().default(true),
-      estado: z.string().optional(),
-      cidade: z.string().optional(),
+      estado: z.string().nullish(),
+      cidade: z.string().nullish(),
       observado: z.boolean().optional(),
     }))
     .mutation(async ({ input, ctx }) => {

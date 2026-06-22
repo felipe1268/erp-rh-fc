@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3538** — **FERIADOS · BUGFIX CADASTRAR FERIADO COM CIDADE VAZIA — ZOD REJEITAVA `null`. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** `cidade: z.string().optional()` rejeita `null` que o frontend envia quando o campo fica em branco. Fix: `z.string().nullish()` em `cidade` e `estado`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3537** — **FERIADOS · BUGFIX `RIGHT()` EM COLUNA DATE — BAIXAR FERIADOS FALHAVA. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** `RIGHT(data, 5)` em coluna DATE sem cast → Postgres rejeitava. Fix: `RIGHT(data::text, 5)` nos 2 lugares. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3536** — **FOLHA DE PAGAMENTO · BUGFIX `Loader2` NÃO IMPORTADO — PÁGINA CRASHAVA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `Loader2` usado mas ausente no import lucide-react → `ReferenceError` derrubava a tela inteira. Adicionado ao import. Detalhe: `shared/changelog.ts`.

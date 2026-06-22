@@ -1,6 +1,12 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3538 — **FERIADOS · BUGFIX CADASTRAR FERIADO COM CIDADE VAZIA — ZOD REJEITAVA `null`. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
+ * `cidade: z.string().optional()` aceita `undefined` mas não `null`. Frontend envia `null` quando
+ * o campo "Cidade" fica em branco ("Vazio = todas"). Fix: `z.string().nullish()` em `cidade` e
+ * `estado` (mesmo padrão) no input do endpoint de criação de feriado.
+ * Arquivo: `server/routers/feriados.ts`.
+ *
  * Rev. 3537 — **FERIADOS · BUGFIX `RIGHT()` EM COLUNA DATE — BAIXAR FERIADOS FALHAVA. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
  * `RIGHT(feriados.data, 5)` usava função de texto em coluna DATE — Postgres rejeita sem cast explícito.
  * Fix: `RIGHT(feriados.data::text, 5)` nos 2 lugares (dedup de recorrente + verificação de conflito).
