@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3501** — **CONCILIAÇÃO · REMOÇÃO OTIMISTA DE "JÁ CONCILIADOS" APÓS DESCONCILIAR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `dismissedConcIds` Set remove o item de `repConc` imediatamente; ID capturado via `variables.linhaId` no onSuccess; `useEffect([report])` zera ambos os sets no próximo "Atualizar". Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3500** — **CONCILIAÇÃO · REMOÇÃO OTIMISTA DA LISTA "NO EXTRATO, SEM LANÇAMENTO" APÓS LANÇAR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `dismissedStmtIds` Set remove o item imediatamente após sucesso; contador do header atualiza junto; `useEffect([report])` limpa o set no próximo "Atualizar". Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3499** — **MÚTUOS INTERCOMPANY · 4 CATEGORIAS AUTO-0132…0135 + SUBGRUPOS 10.4 E 8.4 NO PLANO. NEON · ZERO ALTER/DROP.** Fundamento: art. 464 RIR/2018 (mútuo entre coligadas exige contrato+juros SELIC). AUTO-0132 MÚTUO CONCEDIDO (despesa/CC PASSIVOS); AUTO-0133 MÚTUO RECEBIDO (receita/CC PASSIVOS); AUTO-0134 JUROS PAGOS (despesa/CC FINANCEIRO); AUTO-0135 JUROS RECEBIDOS (receita/CC FINANCEIRO). Detalhe: `shared/changelog.ts`.

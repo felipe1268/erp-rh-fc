@@ -840,9 +840,13 @@ export default function FinanceiroConciliacao() {
   // A linha volta para "No extrato, sem lançamento" e o lançamento do ERP
   // retorna para pendente (a_pagar / a_receber).
   const [confirmDesconciliar, setConfirmDesconciliar] = useState<{ id: number; descricao: string; valor: number } | null>(null);
+  // Rev. 3501 — IDs de linhas conciliadas que foram desconciliadas nesta sessão.
+  // Remove o item de repConc IMEDIATAMENTE, antes do próximo "Atualizar".
+  const [dismissedConcIds, setDismissedConcIds] = useState<Set<number>>(new Set());
   const desconciliarMut = (trpc as any).financial.desconciliarLinha.useMutation({
-    onSuccess: () => {
+    onSuccess: (_data: any, variables: any) => {
       toast({ title: "Conciliação desfeita", description: "A linha voltou para o extrato pendente e o lançamento do ERP está como pendente." });
+      if (variables?.linhaId) setDismissedConcIds(prev => new Set([...prev, Number(variables.linhaId)]));
       setConfirmDesconciliar(null);
       refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true);
     },
@@ -921,9 +925,9 @@ export default function FinanceiroConciliacao() {
     // Rev. 3478 — staleTime Infinity: não refaz automaticamente; usuário controla via "Atualizar".
     { enabled: !!companyId && !!contaBancariaId, retry: false, staleTime: Infinity, refetchOnWindowFocus: false }
   );
-  // Rev. 3500 — quando o report é recarregado (usuário clicou "Atualizar"), limpa os IDs
+  // Rev. 3500/3501 — quando o report é recarregado (usuário clicou "Atualizar"), limpa os IDs
   // descartados otimisticamente — o backend já reflete o estado real.
-  useEffect(() => { setDismissedStmtIds(new Set()); }, [report]);
+  useEffect(() => { setDismissedStmtIds(new Set()); setDismissedConcIds(new Set()); }, [report]);
   // Rev. 3319 — PANORAMA GERAL DO MÊS: quando há um MÊS selecionado mas NENHUMA conta,
   // roda o mesmo motor de conciliação para TODAS as contas com extrato no período e
   // devolve totais agregados + por conta. READ-ONLY (nada concilia sem entrar na conta).
@@ -1038,7 +1042,7 @@ export default function FinanceiroConciliacao() {
     });
   };
 
-  const repConc: any[] = report?.conciliados ?? [];
+  const repConc: any[] = (report?.conciliados ?? []).filter((r: any) => !dismissedConcIds.has(Number(r.id)));
   // Rev. 3235 — as linhas que formam um par de ESTORNO (débito do cheque + crédito de
   // devolução do MESMO cheque) NÃO entram na lista normal "no extrato, sem lançamento":
   // o par tem saldo zero (tentativa de pagamento frustrada) e é tratado num bloco próprio

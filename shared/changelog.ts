@@ -1,6 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3501 — **CONCILIAÇÃO · REMOÇÃO OTIMISTA DE "JÁ CONCILIADOS" APÓS DESCONCILIAR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Mesmo padrão da Rev. 3500: ao desfazer uma conciliação com sucesso, o item some
+ * imediatamente de "Já conciliados" sem precisar de refresh. `dismissedConcIds: Set<number>`
+ * filtra `repConc` na hora; usa `variables.linhaId` do onSuccess da mutation para capturar
+ * o ID correto (o confirmDesconciliar já foi limpo no mesmo callback).
+ * `useEffect([report])` limpa ambos os sets (dismissedStmtIds + dismissedConcIds) quando
+ * o usuário clica "Atualizar". Arquivos: `FinanceiroConciliacao.tsx`.
+ *
  * Rev. 3500 — **CONCILIAÇÃO · REMOÇÃO OTIMISTA DA LISTA "NO EXTRATO, SEM LANÇAMENTO" APÓS LANÇAR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Problema: ao concluir um lançamento via botão "Lançar", o item permanecia na lista
  * exigindo refresh manual — usuário achava que o lançamento não tinha sido salvo.
