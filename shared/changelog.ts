@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3549 — **NOTAS FISCAIS (NFS-e) · DIALOG DE LOTE REDESENHADO — LAYOUT MODERNO SEM SCROLL HORIZONTAL + FASES 0→100%. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Redesenho completo do Dialog de Importação em Lote: cabeçalho gradiente indigo→violeta com
+ * percentual em 4xl, barra de progresso branca sobre fundo semi-transparente, 3 mini-cards KPI
+ * (Total / Extraídos / Erros). Lista de arquivos sem tabela (sem scroll horizontal): cada arquivo
+ * vira um card-row com nome truncado, dados extraídos inline (NF# · data · valor líquido · tomador)
+ * e indicador de 4 fases com bolinhas coloridas animadas (Lendo arquivo → IA extraindo → Extraído
+ * → Cadastrado!). Handler granularizado: status "reading" antes do FileReader, "parsing" antes do
+ * mutateAsync, "saving" e "saved" no handleSalvarLote. Botão de salvar mostra contador "Salvando
+ * N/M…" em tempo real. Dialog máx. 46svh com scroll APENAS vertical na lista. Footer com
+ * "Selecionar todos" + botão compacto. BatchItem.status expandido para 7 valores.
+ * Arquivo: `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`.
+ *
  * Rev. 3548 — **NOTAS FISCAIS (NFS-e) · IMPORTAÇÃO DE MÚLTIPLOS PDFs EM LOTE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Seleção múltipla de PDFs: o mesmo botão "Importar PDF" agora aceita N arquivos (atributo `multiple`).
  * Fluxo de arquivo único: mantido igual (abre formulário de revisão para editar antes de salvar).

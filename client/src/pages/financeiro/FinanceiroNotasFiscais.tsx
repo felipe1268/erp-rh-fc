@@ -63,7 +63,7 @@ type BatchItem = {
   fileName: string;
   parsed: any | null;
   error: string | null;
-  status: "pending" | "processing" | "ok" | "error";
+  status: "pending" | "reading" | "parsing" | "ok" | "saving" | "saved" | "error";
   selected: boolean;
 };
 
@@ -293,7 +293,8 @@ export default function FinanceiroNotasFiscais() {
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      setBatchItems(prev => prev.map((it, idx) => idx === i ? { ...it, status: "processing" } : it));
+      // Fase 1: lendo arquivo
+      setBatchItems(prev => prev.map((it, idx) => idx === i ? { ...it, status: "reading" } : it));
       try {
         const base64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
@@ -301,6 +302,8 @@ export default function FinanceiroNotasFiscais() {
           reader.onerror = reject;
           reader.readAsDataURL(file);
         });
+        // Fase 2: IA processando
+        setBatchItems(prev => prev.map((it, idx) => idx === i ? { ...it, status: "parsing" } : it));
         const parsed = await parsePdfMut.mutateAsync({ companyId, pdfBase64: base64 });
         setBatchItems(prev => prev.map((it, idx) =>
           idx === i ? { ...it, status: "ok", parsed } : it
@@ -350,7 +353,7 @@ export default function FinanceiroNotasFiscais() {
           arquivoNome:        item.fileName,
           observacoes:        null,
         });
-        setBatchItems(prev => prev.map(it => it.id === item.id ? { ...it, status: "ok" } : it));
+        setBatchItems(prev => prev.map(it => it.id === item.id ? { ...it, status: "saved" } : it));
         ok++;
       } catch {
         fail++;
@@ -989,122 +992,207 @@ export default function FinanceiroNotasFiscais() {
           </Dialog>
         )}
 
-        {/* ─── Dialog Importação em Lote ─── */}
-        <Dialog open={batchOpen} onOpenChange={v => { if (!isParsing && !batchSaving) setBatchOpen(v); }}>
-          <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Upload className="h-5 w-5 text-indigo-600" />
-                Importação em Lote — {batchItems.length} PDF(s)
-              </DialogTitle>
-              <DialogDescription>
-                {isParsing
-                  ? `Lendo PDFs... ${batchItems.filter(i => i.status === "ok" || i.status === "error").length} de ${batchItems.length} concluídos`
-                  : `${batchItems.filter(i => i.selected && i.status === "ok").length} selecionada(s) para cadastrar`
-                }
-              </DialogDescription>
-            </DialogHeader>
+        {/* ─── Dialog Importação em Lote (redesenhado Rev.3549) ─── */}
+        {batchOpen && (() => {
+          const total = batchItems.length;
+          const done  = batchItems.filter(i => ["ok","saved","error"].includes(i.status)).length;
+          const okCnt = batchItems.filter(i => i.status === "ok" || i.status === "saved").length;
+          const errCnt = batchItems.filter(i => i.status === "error").length;
+          const savedCnt = batchItems.filter(i => i.status === "saved").length;
+          const selCnt = batchItems.filter(i => i.selected && i.status === "ok").length;
+          const pct = total ? Math.round((done / total) * 100) : 0;
 
-            {/* Barra de progresso */}
-            {isParsing && (
-              <div className="w-full bg-slate-100 rounded-full h-2">
-                <div
-                  className="bg-indigo-600 h-2 rounded-full transition-all"
-                  style={{ width: `${(batchItems.filter(i => i.status === "ok" || i.status === "error").length / batchItems.length) * 100}%` }}
-                />
-              </div>
-            )}
+          const phaseLabel = (s: BatchItem["status"]) => {
+            if (s === "pending")  return { step: 0, label: "Aguardando", color: "text-slate-400" };
+            if (s === "reading")  return { step: 1, label: "Lendo arquivo…", color: "text-indigo-500" };
+            if (s === "parsing")  return { step: 2, label: "IA extraindo…", color: "text-violet-500" };
+            if (s === "ok")       return { step: 3, label: "Extraído", color: "text-emerald-600" };
+            if (s === "saving")   return { step: 3, label: "Salvando…", color: "text-indigo-500" };
+            if (s === "saved")    return { step: 4, label: "Cadastrado!", color: "text-emerald-700" };
+            if (s === "error")    return { step: -1, label: "Erro", color: "text-red-500" };
+            return { step: 0, label: "", color: "" };
+          };
 
-            {/* Tabela de resultados */}
-            <div className="flex-1 overflow-y-auto">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-white border-b">
-                  <tr className="text-left text-slate-500 text-xs">
-                    <th className="py-2 px-2 w-8">
-                      <input
-                        type="checkbox"
-                        checked={batchItems.filter(i => i.status === "ok").every(i => i.selected)}
-                        onChange={e => setBatchItems(prev => prev.map(it =>
-                          it.status === "ok" ? { ...it, selected: e.target.checked } : it
-                        ))}
-                      />
-                    </th>
-                    <th className="py-2 px-2">Arquivo</th>
-                    <th className="py-2 px-2">NF #</th>
-                    <th className="py-2 px-2">Data</th>
-                    <th className="py-2 px-2">Tomador</th>
-                    <th className="py-2 px-2 text-right">Valor Líq.</th>
-                    <th className="py-2 px-2 text-center">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {batchItems.map(item => (
-                    <tr key={item.id} className={`border-b last:border-0 ${item.selected && item.status === "ok" ? "bg-indigo-50/40" : ""}`}>
-                      <td className="py-2 px-2">
-                        {item.status === "ok" && (
-                          <input
-                            type="checkbox"
-                            checked={item.selected}
-                            onChange={e => setBatchItems(prev => prev.map(it =>
-                              it.id === item.id ? { ...it, selected: e.target.checked } : it
-                            ))}
-                          />
-                        )}
-                      </td>
-                      <td className="py-2 px-2 max-w-[160px]">
-                        <span className="text-slate-600 truncate block" title={item.fileName}>
-                          {item.fileName}
-                        </span>
-                      </td>
-                      <td className="py-2 px-2 font-mono font-medium">
-                        {item.parsed?.numeroNf ?? "—"}
-                      </td>
-                      <td className="py-2 px-2 text-slate-600 whitespace-nowrap">
-                        {item.parsed?.dataEmissao
-                          ? new Date(item.parsed.dataEmissao + "T12:00:00").toLocaleDateString("pt-BR")
-                          : "—"}
-                      </td>
-                      <td className="py-2 px-2 max-w-[180px]">
-                        <span className="truncate block text-slate-700" title={item.parsed?.tomadorRazaoSocial ?? ""}>
-                          {item.parsed?.tomadorRazaoSocial ?? "—"}
-                        </span>
-                      </td>
-                      <td className="py-2 px-2 text-right font-medium">
-                        {item.parsed?.valorLiquido != null ? formatBRL(item.parsed.valorLiquido) : "—"}
-                      </td>
-                      <td className="py-2 px-2 text-center">
-                        {item.status === "pending"    && <span className="text-slate-400 text-xs">Aguardando</span>}
-                        {item.status === "processing" && <Loader2 className="h-4 w-4 animate-spin text-indigo-500 mx-auto" />}
-                        {item.status === "ok"         && <span className="inline-flex items-center gap-1 text-emerald-700 text-xs font-medium"><CheckCircle className="h-3.5 w-3.5" /> OK</span>}
-                        {item.status === "error"      && (
-                          <span className="inline-flex items-center gap-1 text-red-600 text-xs font-medium" title={item.error ?? ""}>
-                            <AlertTriangle className="h-3.5 w-3.5" /> Erro
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          const StepDot = ({ active, done: d, err }: { active: boolean; done: boolean; err: boolean }) => (
+            <span className={`inline-block w-2 h-2 rounded-full transition-all ${
+              err   ? "bg-red-400" :
+              d     ? "bg-emerald-500" :
+              active ? "bg-indigo-500 animate-pulse" :
+                       "bg-slate-200"
+            }`} />
+          );
 
-            <DialogFooter className="shrink-0 flex-col sm:flex-row gap-2 pt-2 border-t">
-              <Button variant="outline" onClick={() => setBatchOpen(false)} disabled={isParsing || batchSaving}>
-                Fechar
-              </Button>
-              <Button
-                className="bg-indigo-600 hover:bg-indigo-700 gap-2"
-                onClick={handleSalvarLote}
-                disabled={isParsing || batchSaving || !batchItems.some(i => i.selected && i.status === "ok")}
-              >
-                {batchSaving
-                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
-                  : <><CheckCircle className="h-4 w-4" /> Cadastrar {batchItems.filter(i => i.selected && i.status === "ok").length} NF-e(s)</>
-                }
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+          return (
+            <Dialog open onOpenChange={v => { if (!isParsing && !batchSaving) setBatchOpen(v); }}>
+              <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden rounded-2xl">
+                <DialogDescription className="sr-only">Importação em lote de PDFs</DialogDescription>
+
+                {/* ── Cabeçalho gradiente ── */}
+                <div className="bg-gradient-to-br from-indigo-600 to-violet-600 px-6 pt-5 pb-4 text-white">
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <p className="text-xs font-medium text-indigo-200 uppercase tracking-widest mb-0.5">Importação em Lote</p>
+                      <h2 className="text-xl font-bold">{total} PDF{total !== 1 ? "s" : ""} selecionados</h2>
+                    </div>
+                    {/* Percentual grande */}
+                    <div className="text-right">
+                      <div className="text-4xl font-black tabular-nums leading-none">{pct}%</div>
+                      <div className="text-xs text-indigo-200 mt-0.5">concluído</div>
+                    </div>
+                  </div>
+
+                  {/* Barra de progresso */}
+                  <div className="w-full bg-white/20 rounded-full h-1.5 mb-4">
+                    <div
+                      className="bg-white h-1.5 rounded-full transition-all duration-500"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+
+                  {/* KPI mini-cards */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { label: "Total",     value: total,    bg: "bg-white/10", val: "text-white" },
+                      { label: "Extraídos", value: okCnt,    bg: "bg-emerald-500/30", val: "text-emerald-100" },
+                      { label: "Erros",     value: errCnt,   bg: "bg-red-500/30", val: "text-red-100" },
+                    ].map(k => (
+                      <div key={k.label} className={`${k.bg} rounded-xl px-3 py-2 text-center`}>
+                        <div className={`text-2xl font-bold ${k.val}`}>{k.value}</div>
+                        <div className="text-xs text-white/70 mt-0.5">{k.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ── Lista de arquivos ── */}
+                <div className="divide-y divide-slate-100 max-h-[46svh] overflow-y-auto overscroll-contain">
+                  {batchItems.map(item => {
+                    const { step, label, color } = phaseLabel(item.status);
+                    const isOk = item.status === "ok";
+                    const isSaved = item.status === "saved";
+                    const isErr = item.status === "error";
+                    const isActive = item.status === "reading" || item.status === "parsing" || item.status === "saving";
+
+                    return (
+                      <div key={item.id} className={`px-5 py-3.5 flex items-start gap-3 transition-colors ${
+                        (isOk && item.selected) || isSaved ? "bg-emerald-50/50" : isErr ? "bg-red-50/40" : ""
+                      }`}>
+                        {/* Checkbox */}
+                        <div className="pt-0.5 shrink-0">
+                          {isOk ? (
+                            <input
+                              type="checkbox"
+                              checked={item.selected}
+                              onChange={e => setBatchItems(prev => prev.map(it =>
+                                it.id === item.id ? { ...it, selected: e.target.checked } : it
+                              ))}
+                              className="w-4 h-4 accent-indigo-600 cursor-pointer"
+                            />
+                          ) : (
+                            <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                              isSaved ? "border-emerald-500 bg-emerald-500" :
+                              isErr ? "border-red-300 bg-red-50" :
+                              "border-slate-200"
+                            }`}>
+                              {isSaved && <CheckCircle className="h-3 w-3 text-white" />}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Conteúdo */}
+                        <div className="flex-1 min-w-0">
+                          {/* Nome do arquivo */}
+                          <p className="text-sm font-medium text-slate-800 truncate" title={item.fileName}>
+                            {item.fileName.replace(/\.pdf$/i, "")}
+                          </p>
+
+                          {/* Dados extraídos (quando disponível) */}
+                          {item.parsed && (
+                            <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                              {item.parsed.numeroNf && (
+                                <span className="text-xs text-slate-500">NF <span className="font-semibold text-slate-700">{item.parsed.numeroNf}</span></span>
+                              )}
+                              {item.parsed.dataEmissao && (
+                                <span className="text-xs text-slate-500">
+                                  {new Date(item.parsed.dataEmissao + "T12:00:00").toLocaleDateString("pt-BR")}
+                                </span>
+                              )}
+                              {item.parsed.valorLiquido != null && (
+                                <span className="text-xs font-semibold text-indigo-600">{formatBRL(item.parsed.valorLiquido)}</span>
+                              )}
+                              {item.parsed.tomadorRazaoSocial && (
+                                <span className="text-xs text-slate-500 truncate max-w-[180px]" title={item.parsed.tomadorRazaoSocial}>
+                                  {item.parsed.tomadorRazaoSocial}
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Error message */}
+                          {isErr && item.error && (
+                            <p className="text-xs text-red-500 mt-0.5 line-clamp-2">{item.error}</p>
+                          )}
+
+                          {/* Indicador de fases */}
+                          <div className="flex items-center gap-1.5 mt-1.5">
+                            <StepDot active={step === 1} done={step > 1 && !isErr} err={false} />
+                            <div className={`h-px flex-1 max-w-[16px] transition-colors ${step > 1 && !isErr ? "bg-emerald-400" : "bg-slate-200"}`} />
+                            <StepDot active={step === 2} done={step > 2 && !isErr} err={false} />
+                            <div className={`h-px flex-1 max-w-[16px] transition-colors ${step > 2 && !isErr ? "bg-emerald-400" : "bg-slate-200"}`} />
+                            <StepDot active={step === 3} done={step === 4} err={isErr} />
+                            <div className={`h-px flex-1 max-w-[16px] transition-colors ${step === 4 ? "bg-emerald-400" : "bg-slate-200"}`} />
+                            <StepDot active={false} done={step === 4} err={false} />
+                            <span className={`text-xs ml-1 ${color} ${isActive ? "animate-pulse" : ""}`}>{label}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* ── Rodapé com select-all e botão ── */}
+                <div className="px-5 py-4 border-t bg-slate-50 flex items-center justify-between gap-3">
+                  {/* Select all */}
+                  <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 accent-indigo-600"
+                      checked={batchItems.filter(i => i.status === "ok").length > 0 &&
+                               batchItems.filter(i => i.status === "ok").every(i => i.selected)}
+                      onChange={e => setBatchItems(prev => prev.map(it =>
+                        it.status === "ok" ? { ...it, selected: e.target.checked } : it
+                      ))}
+                      disabled={isParsing || batchSaving}
+                    />
+                    Selecionar todos
+                  </label>
+
+                  <div className="flex gap-2 shrink-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setBatchOpen(false)}
+                      disabled={isParsing || batchSaving}
+                    >
+                      Fechar
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="bg-indigo-600 hover:bg-indigo-700 gap-1.5"
+                      onClick={handleSalvarLote}
+                      disabled={isParsing || batchSaving || selCnt === 0}
+                    >
+                      {batchSaving
+                        ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Salvando {savedCnt}/{selCnt + savedCnt}…</>
+                        : <><CheckCircle className="h-3.5 w-3.5" /> Cadastrar {selCnt} NF-e{selCnt !== 1 ? "s" : ""}</>
+                      }
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          );
+        })()}
 
         {/* ─── AlertDialog Cancelar NF ─── */}
         <AlertDialog open={!!deleteTarget} onOpenChange={v => !v && setDeleteTarget(null)}>
