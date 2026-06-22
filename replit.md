@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3545** — **BUILD DE PRODUÇÃO · BUGFIX OOM NO VITE BUILD — CHUNKS GRANULARES + HEAP REDUZIDO. ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Build morria silenciosamente após "4679 modules transformed" (exit -1, SIGKILL). Causa: Rollup mantinha grafo completo em RAM + `--max-old-space-size=8192` em ambiente com ~4.4 GB disponíveis sem swap. Fix 1: `manualChunks` expandido de 4 → 10 buckets (vendor-react, vendor-radix, vendor-icons, vendor-trpc, vendor-forms, vendor-dates, vendor-motion, vendor-pdf + three/webifc/xlsx/charts originais). Fix 2: heap reduzido de 8192 → 3584 MB no `package.json` (Vite + esbuild servidor). Detalhe: `shared/changelog.ts`.
+- **Rev. 3546** — **NOTAS FISCAIS (NFS-e) · FILTRO PADRÃO DE ANO/MÊS (TIMELINE). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Seletor de Ano (◀/▶) + botão "Ano todo" + 12 pills de mês com bolinhas de status (verde=todas conciliadas, azul=em aberto, cinza=sem NFs). Mês corrente pré-selecionado. Query anual separada para os dots; listQuery passa `ano`+`mes` ao backend. KPIs e tabela refletem o período ativo. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3544** — **IMPORTAÇÃO DE EXTRATO · BUGFIX CRÍTICO `$6` DUPLICADO → `42601 syntax error at or near ")"`. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Query de dedup usava `$6` duas vezes na mesma string — o helper `dbExecute` divide por `/\$\d+/g`, então o segundo `$6` recebia `params[6]=undefined` → Postgres via `saldo_apos=)` → syntax error. Afetava toda importação PDF (Caixa/BB/Santander/IA). Existia em 2 lugares (1 fase + 2 fases). Fix: segundo `$6` → `$7`, `salParam` passado 2× no array. Detalhe: `shared/changelog.ts`.
+- **Rev. 3545** — **BUILD DE PRODUÇÃO · BUGFIX OOM NO VITE BUILD — CHUNKS GRANULARES + HEAP REDUZIDO. ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Build morria silenciosamente após "4679 modules transformed" (exit -1, SIGKILL). Causa: Rollup mantinha grafo completo em RAM + `--max-old-space-size=8192` em ambiente com ~4.4 GB disponíveis sem swap. Fix 1: `manualChunks` expandido de 4 → 10 buckets. Fix 2: heap reduzido de 8192 → 3584 MB no `package.json`. Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
+
+- **Rev. 3544** — **IMPORTAÇÃO DE EXTRATO · BUGFIX CRÍTICO `$6` DUPLICADO → `42601 syntax error at or near ")"`. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3543** — **NOTAS FISCAIS (NFS-e) · NOVO MÓDULO "CONTROLE DE NOTAS FISCAIS" NA ABA MOVIMENTAÇÕES. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

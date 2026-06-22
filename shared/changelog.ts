@@ -1,6 +1,15 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3546 — **NOTAS FISCAIS (NFS-e) · FILTRO PADRÃO DE ANO/MÊS (TIMELINE). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Adicionado o seletor padrão de Ano + 12 pills de mês (idêntico ao de Lançamentos e Contas a Pagar)
+ * na página FinanceiroNotasFiscais. Navegação por chevron ◀/▶ no ano; botão "Ano todo" (mesSel=null);
+ * pill do mês corrente pré-selecionado ao entrar na tela. Bolinhas de status por mês calculadas
+ * client-side a partir de uma query anual separada: verde=todas conciliadas, azul=em aberto,
+ * cinza=sem NFs (NFs canceladas não contam). A query principal (listQuery) passa `ano` + `mes` ao
+ * backend (que já suportava esses filtros via Zod). KPIs e tabela refletem sempre o período ativo.
+ * Arquivos: `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`.
+ *
  * Rev. 3545 — **BUILD DE PRODUÇÃO · BUGFIX OOM NO VITE BUILD — CHUNKS GRANULARES + HEAP REDUZIDO. ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Causa-raiz: o build de produção (`pnpm build`) morria silenciosamente após "4679 modules
  * transformed" com exit code -1 (SIGKILL do OS). Root cause: Rollup tentava manter o grafo

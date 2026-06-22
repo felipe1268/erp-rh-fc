@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,10 @@ import {
   Plus, Search, FileText, ExternalLink, Edit2, Trash2, Eye,
   Link, Link2Off, CheckCircle, Clock, AlertTriangle, RefreshCw,
   Building2, Calendar, Banknote, Receipt, X, ChevronDown, ChevronUp,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
+
+const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
 function formatBRL(v: number | string | null | undefined) {
   const n = parseFloat(String(v ?? 0));
@@ -129,6 +132,8 @@ export default function FinanceiroNotasFiscais() {
   const { toast } = useToast();
   const { user } = useAuth();
 
+  const [ano, setAno] = useState(new Date().getFullYear());
+  const [mesSel, setMesSel] = useState<number | null>(new Date().getMonth() + 1);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("todos");
   const [filterSemVinculo, setFilterSemVinculo] = useState(false);
@@ -144,6 +149,8 @@ export default function FinanceiroNotasFiscais() {
   const listQuery = trpc.fiscalNotes.list.useQuery(
     {
       companyId: companyId ?? 0,
+      ano,
+      mes: mesSel ?? undefined,
       search: search || undefined,
       status: filterStatus !== "todos" ? filterStatus : undefined,
       semVinculo: filterSemVinculo || undefined,
@@ -151,7 +158,31 @@ export default function FinanceiroNotasFiscais() {
     { enabled: !!companyId, staleTime: 30_000 }
   );
 
+  // Query separada (ano inteiro, sem mes) para calcular as bolinhas de status dos 12 meses.
+  const yearQuery = trpc.fiscalNotes.list.useQuery(
+    { companyId: companyId ?? 0, ano },
+    { enabled: !!companyId, staleTime: 60_000 }
+  );
+
   const nfs: NF[] = useMemo(() => (listQuery.data ?? []) as NF[], [listQuery.data]);
+
+  // Bolinha por mês: verde=todas conciliadas, azul=tem NF em aberto, cinza=sem NFs.
+  const mesesStatus = useMemo((): Record<number, "consolidado" | "lancamento" | "vazio"> => {
+    const map: Record<number, "consolidado" | "lancamento" | "vazio"> = {};
+    for (let m = 1; m <= 12; m++) map[m] = "vazio";
+    for (const nf of (yearQuery.data ?? []) as NF[]) {
+      const d = String(nf.dataEmissao).slice(0, 10);
+      const m = parseInt(d.split("-")[1] ?? "0", 10);
+      if (!m) continue;
+      if (nf.status === "cancelada") continue;
+      if (map[m] === "vazio") {
+        map[m] = nf.status === "conciliada" ? "consolidado" : "lancamento";
+      } else if (map[m] === "consolidado" && nf.status !== "conciliada") {
+        map[m] = "lancamento";
+      }
+    }
+    return map;
+  }, [yearQuery.data]);
 
   const criarMut = trpc.fiscalNotes.criar.useMutation({
     onSuccess: () => { toast({ title: "NF-e cadastrada!" }); setDialogOpen(false); listQuery.refetch(); },
@@ -299,6 +330,63 @@ export default function FinanceiroNotasFiscais() {
             </Card>
           ))}
         </div>
+
+        {/* Timeline Ano / Mês */}
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setAno(a => a - 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="text-base font-bold text-gray-800 min-w-[3.5rem] text-center">{ano}</span>
+                <button type="button" onClick={() => setAno(a => a + 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+                <Button
+                  type="button"
+                  variant={mesSel == null ? "default" : "outline"}
+                  size="sm"
+                  className="h-8 text-xs ml-2"
+                  onClick={() => setMesSel(null)}
+                >
+                  Ano todo
+                </Button>
+              </div>
+              <div className="flex items-center gap-4 text-xs text-gray-500">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />Com lançamento</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Consolidado</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />Sem dados</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+              {MESES.map((m, i) => {
+                const num = i + 1;
+                const status = mesesStatus[num];
+                const isSelected = mesSel === num;
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setMesSel(num)}
+                    className={`relative flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all
+                      ${isSelected
+                        ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
+                        : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50"
+                      }`}
+                  >
+                    <span>{m}</span>
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      status === "consolidado" ? "bg-green-500" :
+                      status === "lancamento"  ? "bg-blue-500" :
+                      "bg-gray-300"
+                    }`} />
+                  </button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Filtros */}
         <div className="flex flex-wrap gap-2 items-center">
