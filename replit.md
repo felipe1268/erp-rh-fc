@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3536** — **FOLHA DE PAGAMENTO · BUGFIX `Loader2` NÃO IMPORTADO — PÁGINA CRASHAVA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `Loader2` usado mas ausente no import lucide-react → `ReferenceError` derrubava a tela inteira. Adicionado ao import. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3535** — **PAINEL RH · BUGFIX PRORROGAR/EFETIVAR/DESLIGAR EXPERIÊNCIA — `dataEvento` NULL + `registradoPor` TIPO ERRADO. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** 4 callers de `createEmployeeHistory` passavam `data:` (inexistente) → `dataEvento` NOT NULL quebrava. Também passavam `registradoPor: ctx.user.name` (string) numa coluna `integer`. Fix: `data:` → `dataEvento:` + `ctx.user.name` → `ctx.user.id` nos 4 endpoints. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3534** — **CONCILIAÇÃO · LIMPAR EXTRATOS DE TODAS AS CONTAS DO PERÍODO (BULK). BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Novo endpoint `limparExtratoMes` (sem filtro de conta): soft-delete de todas as linhas do extrato no período + reverte conciliação dos lançamentos vinculados. Botão ghost vermelho "Limpar todos extratos do período" ao lado do label "Conta Bancária" — só aparece quando há período definido. AlertDialog com aviso âmbar explicando que afeta todas as contas. Detalhe: `shared/changelog.ts`.

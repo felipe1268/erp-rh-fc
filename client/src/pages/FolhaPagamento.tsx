@@ -12,7 +12,7 @@ import {
   Eye, Trash2, RefreshCw, ArrowLeft, XCircle, Info, Building2,
   FileSpreadsheet, AlertCircle, ShieldCheck, Clock, TrendingUp, TrendingDown,
   Filter, Briefcase, BarChart3, ChevronDown, ChevronUp, Lightbulb, Wrench, ArrowRight, MapPin, Scale,
-  HardHat, Ban, User, CheckCircle2, Calculator, Zap, Moon, FileCheck, Wallet, Pencil, Save, X, FileDown, PenLine, ClipboardCheck, FileBarChart, ExternalLink, ZoomIn
+  HardHat, Ban, User, CheckCircle2, Calculator, Zap, Moon, FileCheck, Wallet, Pencil, Save, X, FileDown, PenLine, ClipboardCheck, FileBarChart, ExternalLink, ZoomIn, Loader2
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import FullScreenDialog from "@/components/FullScreenDialog";

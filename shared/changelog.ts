@@ -1,6 +1,10 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3536 — **FOLHA DE PAGAMENTO · BUGFIX `Loader2` NÃO IMPORTADO — PÁGINA CRASHAVA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * `Loader2` usado na linha de "Carregando relatório..." mas ausente no import de lucide-react. Adicionado.
+ * Arquivo: `client/src/pages/FolhaPagamento.tsx`.
+ *
  * Rev. 3535 — **PAINEL RH · BUGFIX PRORROGAR/EFETIVAR/DESLIGAR EXPERIÊNCIA — `dataEvento` NULL + `registradoPor` TIPO ERRADO. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
  * Causa: 4 chamadas a `createEmployeeHistory` usavam campo `data:` (inexistente) em vez de `dataEvento:`.
  * Como `dataEvento` é NOT NULL sem default, o INSERT falhava com erro de constraint.
