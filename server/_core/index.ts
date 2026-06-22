@@ -3928,37 +3928,19 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3516: coluna regras_produto_json garantida em empresas_terceiras.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3516 empresas_terceiras.regras_produto_json:`, e?.message || e); }
 
-        // Rev. 3524 — categoria AUTO "MEDIÇÃO DE PROJETO" para obras do tipo "Projetos".
-        // Replica estrutura (conta_pai_id, tipo, natureza, nivel, centro_custo_id) de
-        // "MEDIÇÃO DE OBRA" em cada empresa que ainda não tem "MEDIÇÃO DE PROJETO".
-        // Idempotente: só insere se não existir (guard por LOWER(nome)+ativo).
+        // Rev. 3525 — inativar "MEDIÇÃO DE PROJETO" (AUTO-0136) criada por engano na Rev.3524.
+        // Já existe "CONSULTORIA E PROJETOS" que cobre o mesmo caso de uso.
+        // Soft-delete (ativo=0) — R-001/R-007/R-010 OK (sem DELETE/DROP).
         try {
           await db.execute(sql`
-            INSERT INTO financial_accounts
-              (company_id, codigo, nome, tipo, natureza, nivel, conta_pai_id, centro_custo_id, ativo, ordem)
-            SELECT
-              src.company_id,
-              'AUTO-0136',
-              'MEDIÇÃO DE PROJETO',
-              src.tipo,
-              src.natureza,
-              src.nivel,
-              src.conta_pai_id,
-              src.centro_custo_id,
-              1,
-              src.ordem
-            FROM financial_accounts src
-            WHERE LOWER(src.nome) = 'medição de obra'
-              AND src.ativo = 1
-              AND NOT EXISTS (
-                SELECT 1 FROM financial_accounts ex
-                WHERE ex.company_id = src.company_id
-                  AND LOWER(ex.nome) = 'medição de projeto'
-                  AND ex.ativo = 1
-              )
+            UPDATE financial_accounts
+            SET ativo = 0
+            WHERE LOWER(nome) = 'medição de projeto'
+              AND codigo = 'AUTO-0136'
+              AND ativo = 1
           `);
-          console.log(`[SyncSchema+] Rev. 3524: categoria "MEDIÇÃO DE PROJETO" (AUTO-0136) garantida em todas as empresas.`);
-        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3524 MEDIÇÃO DE PROJETO:`, e?.message || e); }
+          console.log(`[SyncSchema+] Rev. 3525: "MEDIÇÃO DE PROJETO" (AUTO-0136) inativada (substituída por "CONSULTORIA E PROJETOS").`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3525 inativar MEDIÇÃO DE PROJETO:`, e?.message || e); }
 
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));

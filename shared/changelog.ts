@@ -1,7 +1,12 @@
 /**
  * Changelog centralizado do ERP.
  *
- * Rev. 3524 — **FINANCEIRO · NOVA CATEGORIA "MEDIÇÃO DE PROJETO" (AUTO-0136). NEON · ZERO ALTER/DROP.**
+ * Rev. 3525 — **FINANCEIRO · INATIVAR "MEDIÇÃO DE PROJETO" (AUTO-0136). NEON · ZERO ALTER/DROP/DELETE.**
+ * Categoria criada por engano na Rev.3524 — já existe "CONSULTORIA E PROJETOS" para o mesmo caso.
+ * SyncSchema+ executa `UPDATE financial_accounts SET ativo=0 WHERE LOWER(nome)='medição de projeto'
+ * AND codigo='AUTO-0136' AND ativo=1`. Soft-delete idempotente.
+ *
+ * Rev. 3524 — **FINANCEIRO · NOVA CATEGORIA "MEDIÇÃO DE PROJETO" (AUTO-0136). NEON · ZERO ALTER/DROP.** (REVERTIDO)
  * Bloco SyncSchema+ em `server/_core/index.ts` insere `MEDIÇÃO DE PROJETO` (AUTO-0136)
  * para toda empresa que já tem `MEDIÇÃO DE OBRA`, copiando conta_pai_id, tipo (receita),
  * natureza, nivel e centro_custo_id. Idempotente: só insere quando não existe
