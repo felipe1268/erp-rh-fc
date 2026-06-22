@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3486 — **PLANO DE CONTAS · CONTAS IMP REMOVIDAS: LANÇAMENTOS MIGRADOS + CONTAS RECODIFICADAS.
+ * ZERO FRONTEND · UPDATES NO NEON · ZERO ALTER/DROP/DELETE.**
+ * 8 IMP com equivalente na estrutura → lançamentos migrados para a conta correta + ativo=0:
+ *   IMP-003→5.1 Comissões, IMP-004→5.7 Manut.Veículos, IMP-007→7.1 Juros Empréstimos,
+ *   IMP-008→3.5 Transporte Logística, IMP-009→6.1 Honorários Jurídicos,
+ *   IMP-013→6.2 Processos Trabalhistas, IMP-014+015→5.2 Marketing e Publicidade.
+ * 7 IMP sem equivalente → só recodificadas (IMP-XXX → código numérico do grupo):
+ *   Hospedagem→5.9, Seguro Veículos→5.10, Guias FGTS→4.11, Topografia→3.11,
+ *   Telefone Celular→4.12, Compra Terreno→5.11, Investimentos Financeiros→7.3.
+ *
  * Rev. 3485 — **PLANO DE CONTAS · CONTAS IMP-001…IMP-015 RECLASSIFICADAS PARA OS GRUPOS CORRETOS.
  * ZERO FRONTEND · UPDATE NO NEON · ZERO ALTER/DROP/DELETE.**
  * Todas as 15 contas tinham lançamentos → não foram excluídas; foram movidas via UPDATE.
