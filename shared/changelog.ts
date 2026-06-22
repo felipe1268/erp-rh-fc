@@ -1,6 +1,12 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3473 — **OBRAS · LAYOUT DOS CARDS — BADGES (TIPO CONTRATO + STATUS) MOVIDOS PARA
+ * LINHA PRÓPRIA ACIMA DO NOME DA OBRA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Antes: badges flutuavam à direita do nome em `justify-between`, espremendo o texto e
+ * causando sobreposição em mobile. Agora: badges ficam em `flex-wrap` acima do nome,
+ * o nome ocupa a largura total do card sem truncamento forçado.
+ *
  * Rev. 3472 — **OBRAS · DATA DE INÍCIO NOS CARDS EXIBIDA EM MM/AAAA (FORMATO BRASILEIRO).
  * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Antes: "Início: 2026-01-01". Agora: "Início: 01/2026". Extração direta da string

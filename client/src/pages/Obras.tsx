@@ -619,21 +619,19 @@ export default function Obras() {
               return (
                 <Card key={obra.id} className="hover:shadow-md transition-shadow">
                   <CardContent className="p-5">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-base truncate">{obra.nome}</h3>
-                        {(obra.numOrcamento || obra.codigo) && <p className="text-xs text-muted-foreground">Orç: {obra.numOrcamento || obra.codigo}</p>}
-                        {obra.cliente && (
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <UserCheck className="h-3 w-3 text-blue-400 shrink-0" />
-                            <p className="text-xs text-blue-700 font-medium truncate">{obra.cliente}</p>
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1.5">
+                    <div className="mb-3">
+                      <div className="flex flex-wrap items-center gap-1 mb-1">
                         {getTipoContratoBadge(obra.tipoContrato)}
                         {getStatusBadge(obra.status)}
                       </div>
+                      <h3 className="font-semibold text-base leading-tight">{obra.nome}</h3>
+                      {(obra.numOrcamento || obra.codigo) && <p className="text-xs text-muted-foreground">Orç: {obra.numOrcamento || obra.codigo}</p>}
+                      {obra.cliente && (
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <UserCheck className="h-3 w-3 text-blue-400 shrink-0" />
+                          <p className="text-xs text-blue-700 font-medium truncate">{obra.cliente}</p>
+                        </div>
+                      )}
                     </div>
                     {/* Condições de trabalho */}
                     {(obra.insalubridadeGrau && obra.insalubridadeGrau !== "none") || obra.periculosidade === 1 || obra.adicionalNoturnoAtivo === 1 ? (
