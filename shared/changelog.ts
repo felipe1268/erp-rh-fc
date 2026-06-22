@@ -1,6 +1,10 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3490 — **PLANO DE CONTAS · MODAL SCROLL CORRIGIDO NO MOBILE/TABLET. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * DialogContent virou flex-col + overflow-hidden; corpo usa flex-1 overflow-y-auto (rola);
+ * footer usa shrink-0 (fixo no rodapé — nunca sai da tela); altura 92svh (viewport dinâmico).
+ *
  * Rev. 3489 — **PLANO DE CONTAS · CAMPO CÓDIGO READ-ONLY — GERADO AUTOMATICAMENTE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Input de Código substituído por div read-only com badge "auto" verde.
  * Exibe "—" quando ainda sem pai/código; preenchido automaticamente ao escolher grupo.

@@ -593,7 +593,7 @@ export default function FinanceiroPlanoDeConta() {
 
         {/* ── Modal Nova / Editar ── */}
         <Dialog open={dialogOpen} onOpenChange={(o) => o ? setDialogOpen(true) : closeDialog()}>
-          <DialogContent className="max-w-xl w-full max-h-[92vh] overflow-y-auto p-0 gap-0 rounded-2xl">
+          <DialogContent className="max-w-xl w-full h-[92svh] max-h-[92svh] flex flex-col p-0 gap-0 rounded-2xl overflow-hidden">
 
             {/* Cabeçalho colorido por tipo */}
             {(() => {
@@ -618,7 +618,7 @@ export default function FinanceiroPlanoDeConta() {
               );
             })()}
 
-            <div className="px-6 pt-5 pb-2 space-y-5">
+            <div className="flex-1 overflow-y-auto px-6 pt-5 pb-2 space-y-5">
 
               {/* ── Grupo pai ── */}
               <div>
@@ -787,8 +787,8 @@ export default function FinanceiroPlanoDeConta() {
 
             </div>
 
-            {/* Footer com botões touch-friendly */}
-            <div className="px-6 py-4 flex flex-col-reverse sm:flex-row gap-2 sm:justify-end border-t border-slate-100 bg-white rounded-b-2xl">
+            {/* Footer fixo — botões touch-friendly */}
+            <div className="shrink-0 px-6 py-4 flex flex-col-reverse sm:flex-row gap-2 sm:justify-end border-t border-slate-100 bg-white rounded-b-2xl">
               <Button variant="outline" onClick={closeDialog} className="h-11 rounded-xl px-6 text-sm">
                 Cancelar
               </Button>

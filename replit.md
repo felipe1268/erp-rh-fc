@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3490** — **PLANO DE CONTAS · MODAL SCROLL CORRIGIDO NO MOBILE/TABLET. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** DialogContent flex-col; corpo scroll independente (flex-1 overflow-y-auto); footer fixo (shrink-0); altura 92svh. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3489** — **PLANO DE CONTAS · CAMPO CÓDIGO READ-ONLY. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Código gerado automaticamente pelo sistema; usuário não edita. Badge "auto" verde. Exibe "—" sem pai selecionado. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3488** — **PLANO DE CONTAS · MODAL REDESENHADO — LAYOUT MODERNO RESPONSIVO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Cabeçalho colorido por Tipo. Seletor de Tipo → chips coloridos em grid 2×4. Inputs maiores (h-12 rounded-xl). Footer empilhado no mobile. Detalhe: `shared/changelog.ts`.
