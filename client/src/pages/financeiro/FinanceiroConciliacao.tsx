@@ -206,6 +206,7 @@ export default function FinanceiroConciliacao() {
   }, [modoData, ano, mesSel, dataInicio, dataFim]);
   const [contaBancariaId, setContaBancariaId] = useState<string>("");
   const [conciliadoFilter, setConciliadoFilter] = useState("all");
+  const [reportStale, setReportStale] = useState(false);
   // Rev. 3219 — busca única que filtra AMBAS as listas (extrato sem lançamento + ERP sem extrato).
   const [buscaConc, setBuscaConc] = useState("");
   const [selectedStatement, setSelectedStatement] = useState<number | null>(null);
@@ -240,6 +241,9 @@ export default function FinanceiroConciliacao() {
   useEffect(() => { setToleranciaDias(diasDoMes); }, [diasDoMes]);
   // Rev. 3187 — ao escolher a conta, já dispara as sugestões automáticas (tela única).
   useEffect(() => { if (contaBancariaId) { setMostrarSugestoes(true); setSelSug(new Set()); } }, [contaBancariaId]);
+  // Rev. 3478 — ao trocar conta ou período, o relatório vai recarregar do zero (nova query key).
+  // Limpa o badge de desatualizado para não aparecer na conta/período nova.
+  useEffect(() => { setReportStale(false); }, [contaBancariaId, dataInicio, dataFim]);
   // Opções do dropdown: presets curtos + os dias exatos do mês (dedup, ordenado).
   const tolOptions = useMemo(() => {
     const set = new Set<number>([0, 1, 2, 3, 5, 7, 10, 15, diasDoMes]);
@@ -614,10 +618,10 @@ export default function FinanceiroConciliacao() {
             await lancConciliarMut.mutateAsync({ companyId, statementLineId: lancStatement.id, entryId });
           }
           lancCreatedRef.current = null;
-          if (!contaBancariaId && periodoDefinido) refetchGeral();
+          setReportStale(true);
         } else {
           toast({ title: "Recebível lançado no Contas a Receber!" });
-          refetchReport(); if (!contaBancariaId && periodoDefinido) refetchGeral();
+          setReportStale(true);
         }
         setLancStatement(null);
       } catch (e: any) {
@@ -658,10 +662,10 @@ export default function FinanceiroConciliacao() {
         // Mutation DEDICADA (sem onError próprio) p/ o erro cair no catch abaixo sem toast duplo.
         await lancConciliarMut.mutateAsync({ companyId, statementLineId: lancStatement.id, entryId });
         lancCreatedRef.current = null;
-        if (!contaBancariaId && periodoDefinido) refetchGeral();
+        setReportStale(true);
       } else {
         toast({ title: "Conta a pagar lançada!" });
-        refetchReport(); if (!contaBancariaId && periodoDefinido) refetchGeral();
+        setReportStale(true);
       }
       setLancStatement(null);
     } catch (e: any) {
@@ -751,13 +755,13 @@ export default function FinanceiroConciliacao() {
   }, [statementsAno]);
 
   const conciliarMut = (trpc as any).financial.conciliarLancamento.useMutation({
-    onSuccess: () => { toast({ title: "Conciliação registrada!" }); refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug(); if (!contaBancariaId && periodoDefinido) refetchGeral(); setConfirmGeralConciliar(null); setSelectedStatement(null); setSelectedEntry(null); setManualExtSel(null); setManualLanSel(null); },
+    onSuccess: () => { toast({ title: "Conciliação registrada!" }); refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true); setConfirmGeralConciliar(null); setSelectedStatement(null); setSelectedEntry(null); setManualExtSel(null); setManualLanSel(null); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
   // Rev. 3239 — conciliação de um GRUPO unificado (VR / combustível / manutenção) contra UMA
   // linha do extrato (N lançamentos : 1 linha). Mesma UX do par 1:1, mas envia os itensIds.
   const conciliarGrupoMut = (trpc as any).financial.conciliarGrupoLancamentos.useMutation({
-    onSuccess: (res: any) => { toast({ title: `Grupo conciliado! ${formatInt(res.conciliados)} lançamento(s) baixado(s).` }); refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug(); if (!contaBancariaId && periodoDefinido) refetchGeral(); setConfirmGeralConciliar(null); setSelectedStatement(null); setSelectedEntry(null); setManualExtSel(null); setManualLanSel(null); },
+    onSuccess: (res: any) => { toast({ title: `Grupo conciliado! ${formatInt(res.conciliados)} lançamento(s) baixado(s).` }); refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true); setConfirmGeralConciliar(null); setSelectedStatement(null); setSelectedEntry(null); setManualExtSel(null); setManualLanSel(null); },
     onError: (e: any) => toast({ title: "Erro ao conciliar grupo", description: e.message, variant: "destructive" }),
   });
   // Rev. 3399 — Conciliação de lançamento SEM conta bancária via sugestão automática.
@@ -765,8 +769,7 @@ export default function FinanceiroConciliacao() {
   const conciliarSemContaMut = (trpc as any).financial.conciliarSemContaComExtrato.useMutation({
     onSuccess: () => {
       toast({ title: "Lançamento vinculado e conciliado!", description: `Conta bancária preenchida automaticamente.` });
-      refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug();
-      if (!contaBancariaId && periodoDefinido) refetchGeral();
+      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true);
       setConfirmSemConta(null);
     },
     onError: (e: any) => toast({ title: "Erro ao conciliar", description: e.message, variant: "destructive" }),
@@ -776,15 +779,14 @@ export default function FinanceiroConciliacao() {
     onSuccess: () => {
       toast({ title: "PIX conciliado!", description: "Linha do extrato vinculada ao lançamento ERP." });
       setConciliarPixDlg(null); setConciliarPixEntry(null); setBuscaConciliarPix("");
-      refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug();
-      if (!contaBancariaId && periodoDefinido) refetchGeral();
+      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true);
     },
     onError: (e: any) => toast({ title: "Erro ao conciliar PIX", description: e.message, variant: "destructive" }),
   });
   // Rev. 3198 — conciliação do fluxo "Lançar": SEM onError próprio (o erro é tratado
   // no catch do submitLancar, preservando o id criado p/ não duplicar no retry).
   const lancConciliarMut = (trpc as any).financial.conciliarLancamento.useMutation({
-    onSuccess: () => { toast({ title: "Lançado e conciliado!" }); refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport(); refetchSug(); setSelectedStatement(null); setSelectedEntry(null); },
+    onSuccess: () => { toast({ title: "Lançado e conciliado!" }); refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true); setSelectedStatement(null); setSelectedEntry(null); },
   });
 
   // Rev. 3175 — Importação em 2 fases com PROGRESSO REAL (0–100%): analisa (parse →
@@ -811,7 +813,7 @@ export default function FinanceiroConciliacao() {
     onSuccess: (res: any) => {
       toast({ title: res.afetados > 0 ? `Extrato limpo! ${formatInt(res.afetados)} linha(s) removida(s).` : "Nada para limpar neste período." });
       setConfirmLimpar(false);
-      refetchSt(); refetchStAno(); refetchAccStatus(); refetchSug(); refetchReport();
+      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true);
     },
     onError: (e: any) => toast({ title: "Erro ao limpar extrato", description: e.message, variant: "destructive" }),
   });
@@ -820,7 +822,7 @@ export default function FinanceiroConciliacao() {
     onSuccess: () => {
       toast({ title: "Linha removida do extrato", description: "Se estava conciliada, o lançamento do ERP voltou a pendente." });
       setConfirmExcluirLinha(null);
-      refetchSt(); refetchStAno(); refetchAccStatus(); refetchSug(); refetchReport();
+      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true);
     },
     onError: (e: any) => {
       toast({ title: "Erro ao remover linha", description: e.message, variant: "destructive" });
@@ -835,7 +837,7 @@ export default function FinanceiroConciliacao() {
     onSuccess: () => {
       toast({ title: "Conciliação desfeita", description: "A linha voltou para o extrato pendente e o lançamento do ERP está como pendente." });
       setConfirmDesconciliar(null);
-      refetchSt(); refetchStAno(); refetchAccStatus(); refetchSug(); refetchReport();
+      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true);
     },
     onError: (e: any) => {
       toast({ title: "Erro ao desfazer conciliação", description: e.message, variant: "destructive" });
@@ -848,7 +850,7 @@ export default function FinanceiroConciliacao() {
     onSuccess: () => {
       toast({ title: "Lançado como movimentação interna", description: "Linha conciliada. O lançamento ficará catalogado como transferência interna do grupo." });
       setLancStatement(null);
-      refetchSt(); refetchStAno(); refetchAccStatus(); refetchSug(); refetchReport(); if (!contaBancariaId && periodoDefinido) refetchGeral();
+      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true);
     },
     onError: (e: any) => toast({ title: "Não foi possível lançar como interna", description: e?.message ?? "Tente novamente.", variant: "destructive" }),
   });
@@ -909,7 +911,8 @@ export default function FinanceiroConciliacao() {
     { companyId, contaBancariaId: parseInt(contaBancariaId) || 0, dataInicio, dataFim },
     // Rev. 3445 — habilitado também p/ Caixa Interno: não tem extrato, mas precisa do bloco
     // "Sem conta bancária definida" (lancamentosSemConta) p/ o usuário vincular lançamentos.
-    { enabled: !!companyId && !!contaBancariaId, retry: false }
+    // Rev. 3478 — staleTime Infinity: não refaz automaticamente; usuário controla via "Atualizar".
+    { enabled: !!companyId && !!contaBancariaId, retry: false, staleTime: Infinity, refetchOnWindowFocus: false }
   );
   // Rev. 3319 — PANORAMA GERAL DO MÊS: quando há um MÊS selecionado mas NENHUMA conta,
   // roda o mesmo motor de conciliação para TODAS as contas com extrato no período e
@@ -917,13 +920,22 @@ export default function FinanceiroConciliacao() {
   const geralAtivo = !!companyId && periodoDefinido && !contaBancariaId;
   const { data: reportGeral, isFetching: geralLoading, isError: geralIsError, error: geralError, refetch: refetchGeral } = (trpc as any).financial.getConciliacaoReportGeral.useQuery(
     { companyId, dataInicio, dataFim },
-    { enabled: geralAtivo, retry: false }
+    // Rev. 3478 — staleTime Infinity: idem.
+    { enabled: geralAtivo, retry: false, staleTime: Infinity, refetchOnWindowFocus: false }
   );
   // Rev. 3441 — varredura OC/OS/Locação por mês (panorama)
   const { data: ocsMesData, isFetching: ocsMesLoading } = (trpc as any).financial.getOcsPorMes.useQuery(
     { companyId, dataInicio, dataFim },
     { enabled: geralAtivo, retry: false }
   );
+  // Rev. 3478 — atualiza o relatório manualmente (remove o badge de "desatualizado").
+  function atualizarRelatorio() {
+    setReportStale(false);
+    refetchReport();
+    if (geralAtivo) refetchGeral();
+    if (mostrarSugestoes) refetchSug();
+  }
+
   const geralTotais: any = reportGeral?.totais ?? null;
   const geralContas: any[] = reportGeral?.contas ?? [];
   const geralSemConta: any[] = reportGeral?.lancamentosSemConta ?? [];
@@ -994,7 +1006,7 @@ export default function FinanceiroConciliacao() {
   const confirmarDemoMut = (trpc as any).financial.confirmarDemonstrativo.useMutation({
     onSuccess: (_d: any, vars: any) => {
       toast({ title: vars?.veredicto === "errado" ? "Marcado como errado" : vars?.veredicto === "pendente" ? "Conferência desfeita" : "Identificação confirmada" });
-      refetchReport();
+      setReportStale(true);
       setDemoConf(null);
     },
     onError: (e: any) => toast({ title: "Não consegui salvar a conferência", description: e?.message || "Tente novamente.", variant: "destructive" }),
@@ -1095,7 +1107,7 @@ export default function FinanceiroConciliacao() {
       } catch { /* segue sem identificação por IA */ }
       await anexarComprovMut.mutateAsync({ companyId, entryId, comprovanteUrl: up.url, extraido });
       toast({ title: "Comprovante anexado!", description: `Lançamento agora tem comprovante para rastreabilidade.${viaMsg}` });
-      refetchReport(); refetchSug();
+      setReportStale(true);
     } catch (err: any) {
       toast({ title: "Erro ao anexar comprovante", description: err?.message || "Falha no upload.", variant: "destructive" });
     } finally {
@@ -1127,7 +1139,7 @@ export default function FinanceiroConciliacao() {
         if (Number(r?.processados ?? 0) === 0) break;
       }
       toast({ title: "Comprovantes relidos por IA", description: `${formatInt(feitos)} comprovante(s) identificado(s). As sugestões já consideram beneficiário/CNPJ/ID.` });
-      refetchSug(); refetchReport();
+      setReportStale(true);
     } catch (err: any) {
       toast({ title: "Erro ao reler comprovantes", description: err?.message || "Falha na leitura por IA.", variant: "destructive" });
     } finally {
@@ -1772,7 +1784,7 @@ export default function FinanceiroConciliacao() {
       refetchSt();
       refetchStAno();
       refetchAccStatus();
-      refetchReport();
+      setReportStale(true);
     },
     onError: (e: any) => { setConfirmConciliar(false); toast({ title: "Erro ao conciliar", description: e.message, variant: "destructive" }); },
   });
@@ -2002,6 +2014,7 @@ export default function FinanceiroConciliacao() {
       refetchSt();
       refetchStAno();
       refetchAccStatus();
+      setReportStale(false);
       refetchReport();
       refetchSug();
       // Rev. 3363 — havendo rendimento(s) de aplicação automática detectado(s), abre o
@@ -2038,7 +2051,7 @@ export default function FinanceiroConciliacao() {
       });
       setShowRendimento(false);
       setRendimentoPropostas([]);
-      refetchReport();
+      setReportStale(true);
       refetchSt();
     } catch (e: any) {
       toast({ title: "Erro ao lançar rendimento", description: e?.message || "Falha ao registrar o rendimento.", variant: "destructive" });
@@ -3437,6 +3450,24 @@ export default function FinanceiroConciliacao() {
                 </CardContent>
               </Card>
             )}
+            {/* Rev. 3478 — Banner de dados desatualizados: aparece após qualquer ação de
+                conciliação/lançamento; some ao clicar "Atualizar" ou ao carregar o relatório. */}
+            {reportStale && !reportLoading && (
+              <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-lg bg-amber-50 border border-amber-200">
+                <span className="flex items-center gap-1.5 text-sm text-amber-800">
+                  <RefreshCw className="w-4 h-4 shrink-0" />
+                  Relatório desatualizado — ações realizadas ainda não estão refletidas nos totais.
+                </span>
+                <Button size="sm" variant="outline" onClick={atualizarRelatorio} className="h-7 shrink-0 text-xs border-amber-400 text-amber-900 hover:bg-amber-100">
+                  Atualizar
+                </Button>
+              </div>
+            )}
+            {reportLoading && (
+              <div className="flex items-center gap-2 px-4 py-2 text-xs text-gray-500">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Atualizando relatório…
+              </div>
+            )}
             {/* Rev. 3187 — Progresso da conciliação + KPIs (fonte única getConciliacaoReport). */}
             <Card className="border-0 shadow-sm">
               <CardContent className="p-4 space-y-4">
@@ -4034,7 +4065,7 @@ export default function FinanceiroConciliacao() {
             <NaturezaOverrideDialog
               open={!!ovRow} onOpenChange={(o) => { if (!o) setOvRow(null); }}
               companyId={companyId} line={ovRow}
-              onDone={() => { setOvRow(null); refetchGeral(); }}
+              onDone={() => { setOvRow(null); setReportStale(true); }}
             />
 
             {/* Rev. 3368 — mapa da movimentação interna por contraparte (só conferência). */}
@@ -4057,7 +4088,7 @@ export default function FinanceiroConciliacao() {
               ano={ano}
               mes={modoData === "mes" ? mesSel : null}
               periodoLabel={modoData === "mes" ? (mesSel != null ? `${MESES[mesSel - 1]}/${ano}` : `Ano ${ano}`) : `Ano ${ano}`}
-              onDone={() => { refetchReport(); if (!contaBancariaId && periodoDefinido) refetchGeral(); }}
+              onDone={() => { setReportStale(true); }}
             />
 
             {/* Rev. 3177 — Detalhe CONSULTIVO (read-only) do lançamento, aberto ao clicar na sugestão. */}
@@ -6069,7 +6100,7 @@ export default function FinanceiroConciliacao() {
                     await deleteEntryMut.mutateAsync({ id: deleteEntryTarget.id, companyId: Number(companyId), motivo: deleteEntryMotivo.trim() });
                     setDeleteEntryTarget(null);
                     toast({ title: "Lançamento excluído", description: deleteEntryTarget.nome });
-                    refetchReport?.();
+                    setReportStale(true);
                   } catch (err: any) {
                     toast({ title: "Erro ao excluir", description: String(err?.message ?? err), variant: "destructive" });
                   }
@@ -6325,7 +6356,7 @@ export default function FinanceiroConciliacao() {
                           });
                           toast({ title: "Cheque vinculado ao PIX/TED", description: `${res.updated > 0 ? "Controle de Cheques atualizado com sucesso." : "Nenhum cheque encontrado com este número."}` });
                           closeDialog();
-                          refetchReport();
+                          setReportStale(true);
                         } catch (err: any) {
                           toast({ title: "Erro ao vincular", description: String(err?.message ?? err), variant: "destructive" });
                         }

@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3478** — **CONCILIAÇÃO BANCÁRIA · RELATÓRIO NÃO RECARREGA AUTOMATICAMENTE A CADA AÇÃO — USUÁRIO CONTROLA VIA BOTÃO "ATUALIZAR". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** A cada ação (conciliação, lançamento, desconciliação, etc.) o ERP disparava 3 queries pesadas simultaneamente (`refetchReport`/`refetchGeral`/`refetchSug`). Fix: `staleTime: Infinity` nas duas queries principais; todos os `onSuccess` substituem os refetches pesados por `setReportStale(true)`; banner âmbar "Relatório desatualizado" + botão "Atualizar" aparecem acima do card de progresso; `refetchSt`/`refetchStAno`/`refetchAccStatus` (leves) são mantidos. `useEffect` limpa o badge ao trocar conta/período. Import de extrato mantém carga explícita. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3477** — **CONCILIAÇÃO BANCÁRIA · (1) ERRO "THE STRING DID NOT MATCH THE EXPECTED PATTERN" NO "LANÇAR E CONCILIAR" MAPEADO PARA MENSAGEM AMIGÁVEL + (2) BUGFIX `getOcsPorMes` "operator does not exist: date ~ unknown". BACKEND PONTUAL + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** (1) iOS/WebKit abortava fetch a nível de transporte → `isTransportError`/`transportErrMsg` detecta e exibe "Falha de rede (iPad/Safari). Toque novamente para tentar." nos 2 catch de `submitLancar`. (2) `data_vencimento`/`data_entrega_prevista` são colunas `date` — `~` só opera em `text`; fix: `::text` nos 4 predicados do `CASE WHEN ... ~ ...`. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3476** — **FORNECEDORES · BUGFIX: BOTÃO "BUSCAR CNPJ" BLOQUEADO NO MODO EDIÇÃO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `abrirEditar()` pré-setava `lastFetchedCNPJ.current` com o CNPJ existente → guard bloqueava o botão; fix: reset para `""` na abertura. Detalhe: `shared/changelog.ts`.
-
 ### Revisões recentes (one-liners)
+
+- **Rev. 3476** — **FORNECEDORES · BUGFIX: BOTÃO "BUSCAR CNPJ" BLOQUEADO NO MODO EDIÇÃO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `abrirEditar()` pré-setava `lastFetchedCNPJ.current` com o CNPJ existente → guard bloqueava o botão; fix: reset para `""` na abertura. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3475** — **EMPRESAS TERCEIRAS · AUTO-PREENCHIMENTO DA FICHA AO DIGITAR O CNPJ (14 DÍGITOS). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** useEffect+debounce 600ms dispara BrasilAPI ao completar 14 dígitos; guard lastFetchedCnpj evita re-busca; onBlur redundante removido. Detalhe: `shared/changelog.ts`.
 
@@ -63,20 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3466** — **CONCILIAÇÃO BANCÁRIA · CAMPO "CONCILIADO" EXIBE QUEM CONCILIOU + DATA/HORA BR (DD/MM/AAAA HH:MM). BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** 3 colunas novas via SyncSchema+ (`conciliado_em`, `conciliado_por_id`, `conciliado_por_nome`); 7 writers atualizados; UI exibe "Sim · DD/MM HH:MM" + "por {nome}" em verde. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3465** — **CONCILIAÇÃO BANCÁRIA · CAMPO "CONCILIADO" NO DETALHE DO LANÇAMENTO EXIBE BANCO, AGÊNCIA E CONTA QUANDO CONCILIADO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Linha 🏦 com apelido/banco/agência/conta aparece logo abaixo de "Sim · data" no card "Dados financeiros". Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3456** — **OBRAS · DIALOGS DE CONFIRMAÇÃO (EXCLUIR / LIBERAR SN / MESCLAR) SUBSTITUÍDOS POR AlertDialog shadcn. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3455** — **CONCILIAÇÃO BANCÁRIA · LANÇAR NO C/RECEBER — (1) LANCCOMBO SELECIONÁVEL NO iOS/TABLET + (2) FILTRO DE OBRA CONSIDERA obra_clientes + (3) HOTFIX clientes.atualizar dataNascimento "" → null. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3454** — **CONCILIAÇÃO BANCÁRIA · CACHE PERSISTENTE DA ANÁLISE IA (BATCH). BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3453** — **CLIENTES · CAMPOS PF (DATA NASCIMENTO, RG, ÓRGÃO EMISSOR, ESTADO CIVIL, SEXO, PROFISSÃO, NACIONALIDADE) + LEMBRETE DE ANIVERSÁRIO. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3452** — **CLIENTES · NOMES EXIBIDOS SEMPRE EM CAIXA ALTA NA LISTAGEM. 100% FRONTEND.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3451** — **OBRAS · MÚLTIPLOS CLIENTES POR OBRA (DONOS DA OBRA). BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3450** — **FINANCEIRO / CONCILIAÇÃO BANCÁRIA · CRIAR CLIENTE INLINE NO FORM "LANÇAR NO CONTAS A RECEBER". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 
 ### REGRA DE OURO — Cabeçalho de documentos institucionais FC (Rev. 2106+)

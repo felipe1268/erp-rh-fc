@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3478 — **CONCILIAÇÃO BANCÁRIA · RELATÓRIO NÃO RECARREGA AUTOMATICAMENTE A CADA
+ * AÇÃO — USUÁRIO CONTROLA VIA BOTÃO "ATUALIZAR". 100% FRONTEND · ZERO BACKEND/SCHEMA/
+ * ALTER/DROP/DELETE.**
+ *
+ * **Problema:** A cada conciliação, lançamento, desconciliação, exclusão de linha ou
+ * qualquer outra ação na tela, o ERP disparava simultaneamente `refetchReport`,
+ * `refetchGeral` e `refetchSug` — três queries pesadas que re-processavam listas de
+ * dezenas/centenas de lançamentos. O resultado era uma tela "carregando toda hora",
+ * impactando a velocidade de trabalho especialmente no iPad.
+ *
+ * **Solução:**
+ * - `getConciliacaoReport` e `getConciliacaoReportGeral` passam a ter
+ *   `staleTime: Infinity, refetchOnWindowFocus: false` — React Query NÃO reexecuta
+ *   essas queries automaticamente; o cache persiste até o usuário solicitar.
+ * - Todos os `onSuccess` de mutations (+ `submitLancar` + handlers inline) substituem
+ *   `refetchReport()/refetchSug()/refetchGeral()` por `setReportStale(true)`.
+ * - Queries rápidas (`refetchSt`, `refetchStAno`, `refetchAccStatus`) são mantidas
+ *   no `onSuccess` para atualizar extrato e bolinhas do calendário sem custo.
+ * - Novo banner âmbar "Relatório desatualizado" aparece logo acima do card de progresso
+ *   após qualquer ação, com botão "Atualizar" que dispara `atualizarRelatorio()`:
+ *   `setReportStale(false)` + `refetchReport()` + `refetchGeral()` (se panorama ativo)
+ *   + `refetchSug()` (se sugestões abertas).
+ * - `useEffect([contaBancariaId, dataInicio, dataFim])` reseta `reportStale` ao trocar
+ *   de conta/período (nova query key = fresh load = badge não faz sentido).
+ * - Fluxo de **import de extrato** mantém o `refetchReport()` explícito (carga inicial
+ *   legitimamente forçada; `reportStale` zerado antes).
+ *
+ * Mutations alteradas: `conciliarMut`, `conciliarGrupoMut`, `conciliarSemContaMut`,
+ * `conciliarPixMut`, `lancConciliarMut`, `limparMut`, `excluirLinhaMut`,
+ * `desconciliarMut`, `naturezaInternaMut`, `confirmarDemoMut`, `conciliarSugMut`,
+ * `NaturezaOverrideDialog.onDone`, `OVRow.onDone`, handler anexar comprovante,
+ * handler reler comprovantes IA, handler lançar rendimento, handler excluir lançamento,
+ * handler vincular cheque/PIX, `submitLancar` (paths receber + pagar).
+ *
+ * Arquivo: `client/src/pages/financeiro/FinanceiroConciliacao.tsx`.
+ *
  * Rev. 3477 — **CONCILIAÇÃO BANCÁRIA · (1) ERRO "THE STRING DID NOT MATCH THE EXPECTED
  * PATTERN" NO "LANÇAR E CONCILIAR" MAPEADO PARA MENSAGEM AMIGÁVEL + (2) BUGFIX
  * `getOcsPorMes` "operator does not exist: date ~ unknown". BACKEND PONTUAL + FRONTEND ·
