@@ -1505,7 +1505,7 @@ export default function FinanceiroConciliacao() {
         <div className="text-right shrink-0">
           <p className={`text-sm font-bold ${isEntrada ? "text-emerald-600" : "text-rose-500"}`}>{formatBRL(Math.abs(Number(s.valor)))}</p>
           {s.saldoApos != null && (
-            <p className="text-[10px] text-gray-400 mt-0.5" title="Saldo bancário após este lançamento">saldo {formatBRL(Number(s.saldoApos))}</p>
+            <p className={`text-[10px] mt-0.5 ${Number(s.saldoApos) < 0 ? "text-red-500" : "text-emerald-600"}`} title="Saldo bancário após este lançamento">saldo {formatBRL(Number(s.saldoApos))}</p>
           )}
         </div>
       </button>

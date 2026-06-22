@@ -1,6 +1,10 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3510 — **CONCILIAÇÃO · SALDO ACUMULADO COLORIDO: VERMELHO SE NEGATIVO, VERDE SE POSITIVO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * `saldoApos` nas linhas do extrato estava sempre `text-gray-400`.
+ * Agora: `< 0 → text-red-500`; `≥ 0 → text-emerald-600`. Arquivo: `FinanceiroConciliacao.tsx` (linha `saldoApos`).
+ *
  * Rev. 3509 — **CONCILIAÇÃO · BUGFIX MOVIMENTAÇÃO INTERNA: ITEM PERMANECIA NA LISTA APÓS CONFIRMAR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * `naturezaInternaMut.onSuccess` não adicionava `lineId` ao `dismissedStmtIds` nem chamava
  * `refetchReport()`. Resultado: item ficava em "No extrato, sem lançamento"; segundo clique
