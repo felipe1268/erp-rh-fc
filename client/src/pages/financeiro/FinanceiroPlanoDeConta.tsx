@@ -17,7 +17,7 @@ import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Plus, Search, BookOpen, Sprout, Pencil, Trash2, Check, ChevronsUpDown,
+  Plus, Search, BookOpen, Pencil, Trash2, Check, ChevronsUpDown,
   ChevronRight, Layers, Tag, ArrowRight, Info, HelpCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -228,7 +228,6 @@ export default function FinanceiroPlanoDeConta() {
   const [paiPopoverOpen, setPaiPopoverOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
   const [showAvancado, setShowAvancado] = useState(false);
-  const [confirmSeed, setConfirmSeed] = useState(false);
 
   const { data: contas, isLoading, refetch } = (trpc as any).financial.getAccounts.useQuery(
     { companyId, escopo: "plano", ativo: true, tipo: tipoFilter !== "all" ? tipoFilter : undefined },
@@ -237,10 +236,6 @@ export default function FinanceiroPlanoDeConta() {
 
   const allContas: any[] = Array.isArray(contas) ? contas : [];
 
-  const seedMut = (trpc as any).financial.seedAccounts.useMutation({
-    onSuccess: () => { toast({ title: "Plano de contas carregado!" }); refetch(); },
-    onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
-  });
   const createMut = (trpc as any).financial.createAccount.useMutation({
     onSuccess: () => { toast({ title: "Conta criada!" }); closeDialog(); refetch(); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
@@ -363,14 +358,6 @@ export default function FinanceiroPlanoDeConta() {
             <p className="text-sm text-slate-500 mt-0.5">{allContas.length} conta(s) cadastrada(s)</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline" size="sm"
-              onClick={() => setConfirmSeed(true)}
-              disabled={seedMut.isPending}
-            >
-              <Sprout className="w-4 h-4 mr-1.5 text-emerald-600" />
-              {seedMut.isPending ? "Carregando..." : "Carregar Padrão FC"}
-            </Button>
             <Button size="sm" onClick={() => openCreate()} className="bg-blue-600 hover:bg-blue-700 text-white">
               <Plus className="w-4 h-4 mr-1.5" />Nova Conta
             </Button>
@@ -429,9 +416,7 @@ export default function FinanceiroPlanoDeConta() {
               <div className="p-10 text-center text-slate-400">
                 <BookOpen className="w-10 h-10 mx-auto mb-3 text-slate-300" />
                 <p className="font-medium">Nenhuma conta cadastrada.</p>
-                <p className="text-sm mt-1">
-                  Clique em <strong>"+ Nova Conta"</strong> para criar do zero, ou em <strong>"Carregar Padrão FC"</strong> para usar o modelo FC Engenharia.
-                </p>
+                <p className="text-sm mt-1">Clique em <strong>"+ Nova Conta"</strong> para começar.</p>
               </div>
             ) : (
               <div className="divide-y divide-slate-100">
@@ -750,38 +735,6 @@ export default function FinanceiroPlanoDeConta() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-
-        {/* ── Confirmação Carregar Padrão ── */}
-        <AlertDialog open={confirmSeed} onOpenChange={setConfirmSeed}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle className="flex items-center gap-2">
-                <Sprout className="w-4 h-4 text-emerald-600" />
-                Carregar Plano de Contas Padrão FC?
-              </AlertDialogTitle>
-              <AlertDialogDescription className="space-y-2">
-                <p>
-                  Esta ação vai criar automaticamente um conjunto de contas pré-definidas para FC Engenharia — grupos de receita, custo de obra, despesas fixas, variáveis, financeiras e impostos.
-                </p>
-                <p className="text-amber-600 font-medium">
-                  ⚠️ As contas que já existem não serão apagadas. Serão adicionadas apenas as que ainda não existem.
-                </p>
-                <p>
-                  Se preferir criar seu próprio plano do zero, clique em <strong>Cancelar</strong> e use o botão <strong>"+ Nova Conta"</strong>.
-                </p>
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar — vou criar do zero</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => { seedMut.mutate({ companyId }); setConfirmSeed(false); }}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
-              >
-                Sim, carregar padrão FC
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
 
         {/* ── Confirmação excluir ── */}
         <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>

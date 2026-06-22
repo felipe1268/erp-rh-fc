@@ -1,6 +1,13 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3482 — **PLANO DE CONTAS · BOTÃO "CARREGAR PADRÃO FC" REMOVIDO A PEDIDO DO USUÁRIO.
+ * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Usuário quer cadastrar o próprio plano do zero. Removidos: botão, state confirmSeed,
+ * AlertDialog de confirmação, import Sprout, mutation seedMut. Texto do estado vazio
+ * atualizado para "Clique em + Nova Conta para começar."
+ * Arquivo: `client/src/pages/financeiro/FinanceiroPlanoDeConta.tsx`
+ *
  * Rev. 3481 — **PLANO DE CONTAS · LEGENDAS COMPLETAS + CONFIRMAÇÃO "CARREGAR PADRÃO" +
  * DESCRIÇÕES EM TODOS OS CAMPOS DO FORMULÁRIO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
