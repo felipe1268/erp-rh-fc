@@ -247,9 +247,6 @@ export default function FinanceiroConciliacao() {
   // Rev. 3478 — ao trocar conta ou período, o relatório vai recarregar do zero (nova query key).
   // Limpa o badge de desatualizado para não aparecer na conta/período nova.
   useEffect(() => { setReportStale(false); }, [contaBancariaId, dataInicio, dataFim]);
-  // Rev. 3500 — quando o report é recarregado (usuário clicou "Atualizar"), limpa os IDs
-  // descartados otimisticamente — o backend já reflete o estado real.
-  useEffect(() => { setDismissedStmtIds(new Set()); }, [report]);
   // Opções do dropdown: presets curtos + os dias exatos do mês (dedup, ordenado).
   const tolOptions = useMemo(() => {
     const set = new Set<number>([0, 1, 2, 3, 5, 7, 10, 15, diasDoMes]);
@@ -924,6 +921,9 @@ export default function FinanceiroConciliacao() {
     // Rev. 3478 — staleTime Infinity: não refaz automaticamente; usuário controla via "Atualizar".
     { enabled: !!companyId && !!contaBancariaId, retry: false, staleTime: Infinity, refetchOnWindowFocus: false }
   );
+  // Rev. 3500 — quando o report é recarregado (usuário clicou "Atualizar"), limpa os IDs
+  // descartados otimisticamente — o backend já reflete o estado real.
+  useEffect(() => { setDismissedStmtIds(new Set()); }, [report]);
   // Rev. 3319 — PANORAMA GERAL DO MÊS: quando há um MÊS selecionado mas NENHUMA conta,
   // roda o mesmo motor de conciliação para TODAS as contas com extrato no período e
   // devolve totais agregados + por conta. READ-ONLY (nada concilia sem entrar na conta).
