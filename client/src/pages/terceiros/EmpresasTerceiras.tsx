@@ -88,10 +88,12 @@ export default function EmpresasTerceiras() {
   const [dupDialog, setDupDialog] = useState<null | { mode: "block-same"; nome: string } | { mode: "replicate-from-fornecedor"; fornecedor: any }>(null);
 
   const lastCheckedDupCNPJ = useRef("");
+  const lastFetchedCnpj = useRef("");
   // Reset do cache ao abrir/fechar o form — evita pular checagem em reabertura.
   useEffect(() => {
     if (!showForm) {
       lastCheckedDupCNPJ.current = "";
+      lastFetchedCnpj.current = "";
       setDupDialog(null);
     }
   }, [showForm]);
@@ -119,6 +121,22 @@ export default function EmpresasTerceiras() {
     }, 500);
     return () => { cancelled = true; clearTimeout(timer); };
   }, [form.cnpj, showForm, editingId, companyId]);
+
+  // Auto-busca na Receita Federal ao atingir 14 dígitos (debounce 600ms).
+  useEffect(() => {
+    if (!showForm) return;
+    const cnpjDigits = (form.cnpj || "").replace(/\D/g, "");
+    if (cnpjDigits.length !== 14) return;
+    if (cnpjDigits === lastFetchedCnpj.current) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      if (cancelled) return;
+      lastFetchedCnpj.current = cnpjDigits;
+      buscarCNPJ(cnpjDigits);
+    }, 600);
+    return () => { cancelled = true; clearTimeout(timer); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.cnpj, showForm]);
 
   const checarDuplicidade = async (cnpjDigits: string) => {
     if (!companyId || cnpjDigits.length !== 14 || editingId) return false;
@@ -392,7 +410,7 @@ export default function EmpresasTerceiras() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div><Label>Razão Social *</Label><Input value={form.razaoSocial || ""} onChange={(e) => setForm({ ...form, razaoSocial: e.target.value })} onBlur={(e) => setForm({ ...form, razaoSocial: upperCaseEmpresa(e.target.value) })} /></div>
                   <div><Label>Nome Fantasia</Label><Input value={form.nomeFantasia || ""} onChange={(e) => setForm({ ...form, nomeFantasia: e.target.value })} onBlur={(e) => setForm({ ...form, nomeFantasia: upperCaseEmpresa(e.target.value) })} /></div>
-                  <div><Label>CNPJ *</Label><div className="flex gap-2"><Input placeholder="00.000.000/0000-00" value={form.cnpj || ""} onChange={(e) => { setForm({ ...form, cnpj: cnpjMask(e.target.value) }); }} onBlur={(e) => buscarCNPJ(e.target.value)} className="flex-1 font-mono" />{cnpjLoading && <Loader2 className="h-5 w-5 animate-spin text-blue-500 self-center" />}</div></div>
+                  <div><Label>CNPJ *</Label><div className="flex gap-2"><Input placeholder="00.000.000/0000-00" value={form.cnpj || ""} onChange={(e) => { setForm({ ...form, cnpj: cnpjMask(e.target.value) }); }} className="flex-1 font-mono" />{cnpjLoading && <Loader2 className="h-5 w-5 animate-spin text-blue-500 self-center" />}</div></div>
                   <div><Label>Tipo de Serviço</Label><Input placeholder="Ex: Elétrica, Hidráulica, Gesso..." value={form.tipoServico || ""} onChange={(e) => setForm({ ...form, tipoServico: e.target.value })} /></div>
                   <div><Label>Inscrição Estadual</Label><Input value={form.inscricaoEstadual || ""} onChange={(e) => setForm({ ...form, inscricaoEstadual: e.target.value })} /></div>
                   <div><Label>Inscrição Municipal</Label><Input value={form.inscricaoMunicipal || ""} onChange={(e) => setForm({ ...form, inscricaoMunicipal: e.target.value })} /></div>

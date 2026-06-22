@@ -1,6 +1,15 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3475 — **EMPRESAS TERCEIRAS · AUTO-PREENCHIMENTO DA FICHA AO DIGITAR O CNPJ
+ * (14 DÍGITOS → BrasilAPI). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Antes: busca só disparava no onBlur (ao sair do campo) ou via botão "Buscar".
+ * Agora: useEffect com debounce 600ms detecta quando o CNPJ atinge 14 dígitos e
+ * chama `buscarCNPJ` automaticamente — igual ao padrão de checagem de duplicidade.
+ * Guard `lastFetchedCnpj` evita re-busca ao re-abrir o mesmo form. Reset em todo
+ * fechamento de form. onBlur redundante removido do campo CNPJ.
+ *
  * Rev. 3474 — **OBRAS · DATA DE INÍCIO NOS CARDS EM DD/MM/AAAA. 100% FRONTEND.**
  * Rev. 3472 exibia MM/AAAA; ajustado para o formato completo DD/MM/AAAA via slice.
  *
