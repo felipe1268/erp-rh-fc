@@ -1693,11 +1693,20 @@ export default function FinanceiroConciliacao() {
   useEffect(() => { if (pendingEditMode && detEntry) { iniciarEdicaoEntry(); setPendingEditMode(false); } }, [detEntry, pendingEditMode]);
   const iniciarEdicaoEntry = () => {
     if (!detEntry) return;
+    // Rev. 3467+ — auto-match: se obraId é null mas obraNome vem preenchido (planilha),
+    // tenta encontrar a obra na lista pelo nome (case-insensitive, trim) e pré-seleciona.
+    let resolvedObraId = detEntry.obraId ?? null;
+    let resolvedObraNome = detEntry.obraNome ?? "";
+    if (resolvedObraId == null && resolvedObraNome) {
+      const norm = (s: string) => s.trim().toLowerCase();
+      const match = obrasOpts.find(o => norm(o.nome) === norm(resolvedObraNome));
+      if (match) { resolvedObraId = match.id; resolvedObraNome = match.nome; }
+    }
     setDetEditForm({
       contaId: detEntry.contaId ?? null,
       contaNome: detEntry.contaNome ?? "",
-      obraId: detEntry.obraId ?? null,
-      obraNome: detEntry.obraNome ?? "",
+      obraId: resolvedObraId,
+      obraNome: resolvedObraNome,
       contaBancariaId: detEntry.contaBancariaId ?? null,
       formaPagamento: detEntry.formaPagamento ?? "",
       fornecedorNome: detEntry.fornecedorNome ?? "",
@@ -4321,6 +4330,12 @@ export default function FinanceiroConciliacao() {
                                   {obrasOpts.map(o => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
                                 </SelectContent>
                               </Select>
+                              {/* Rev. 3468 — hint: quando obraId é null mas obraNome vem da planilha */}
+                              {detEditForm.obraId == null && detEditForm.obraNome && (
+                                <p className="text-[11px] text-amber-600 flex items-center gap-1">
+                                  <span>⚠</span> Na planilha: <span className="font-medium">{detEditForm.obraNome}</span> — selecione a obra correspondente acima
+                                </p>
+                              )}
                             </div>
                             {/* Forma de pagamento */}
                             <div className="space-y-1.5">

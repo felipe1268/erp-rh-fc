@@ -1,6 +1,20 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3468 — **CONCILIAÇÃO BANCÁRIA · DIALOG DE EDIÇÃO — CAMPO OBRA MOSTRA O NOME
+ * IMPORTADO DA PLANILHA (obraNome) QUANDO obraId É NULL. AUTO-MATCH POR NOME + HINT ÂMBAR.
+ * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * CAUSA: lançamentos importados da planilha financeira guardam `obra_nome` (texto) mas
+ * `obra_id = NULL`. O Select do campo Obra usa o FK para selecionar e exibia vazio,
+ * ocultando a informação que estava na planilha.
+ *
+ * SOLUÇÃO (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`):
+ * - `iniciarEdicaoEntry`: ao abrir o form de edição, se `obraId = null` e `obraNome`
+ *   existe, faz auto-match case-insensitive contra `obrasOpts`; se encontrar, pré-seleciona.
+ * - Hint âmbar abaixo do Select: quando `obraId` ainda é null após o auto-match (obra não
+ *   cadastrada com o mesmo nome), exibe "⚠ Na planilha: <nome> — selecione a obra correspondente".
+ *
  * Rev. 3467 — **CONCILIAÇÃO BANCÁRIA · SUGESTÕES AUTOMÁTICAS — LANÇAMENTO EXIBE FORNECEDOR
  * COMO TÍTULO PRINCIPAL + DESCRIÇÃO COMO SUBTÍTULO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *

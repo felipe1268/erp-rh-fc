@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3468** — **CONCILIAÇÃO BANCÁRIA · DIALOG DE EDIÇÃO — CAMPO OBRA MOSTRA NOME DA PLANILHA (obraNome) QUANDO obraId É NULL: AUTO-MATCH POR NOME + HINT ÂMBAR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Auto-match case-insensitive em `obrasOpts`; se não casa, hint "⚠ Na planilha: X" aparece abaixo do select. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3467** — **CONCILIAÇÃO BANCÁRIA · SUGESTÕES — LANÇAMENTO EXIBE FORNECEDOR COMO TÍTULO + DESCRIÇÃO COMO SUBTÍTULO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Quando `fornecedorNome` existe, aparece como título azul/âmbar; a descrição fica como subtítulo cinza logo abaixo. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3466** — **CONCILIAÇÃO BANCÁRIA · CAMPO "CONCILIADO" EXIBE QUEM CONCILIOU + DATA/HORA BR (DD/MM/AAAA HH:MM). BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** 3 colunas novas via SyncSchema+ (`conciliado_em`, `conciliado_por_id`, `conciliado_por_nome`); 7 writers atualizados; UI exibe "Sim · DD/MM HH:MM" + "por {nome}" em verde. Detalhe: `shared/changelog.ts`.
-
 ### Revisões recentes (one-liners)
+
+- **Rev. 3466** — **CONCILIAÇÃO BANCÁRIA · CAMPO "CONCILIADO" EXIBE QUEM CONCILIOU + DATA/HORA BR (DD/MM/AAAA HH:MM). BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** 3 colunas novas via SyncSchema+ (`conciliado_em`, `conciliado_por_id`, `conciliado_por_nome`); 7 writers atualizados; UI exibe "Sim · DD/MM HH:MM" + "por {nome}" em verde. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3465** — **CONCILIAÇÃO BANCÁRIA · CAMPO "CONCILIADO" NO DETALHE DO LANÇAMENTO EXIBE BANCO, AGÊNCIA E CONTA QUANDO CONCILIADO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Linha 🏦 com apelido/banco/agência/conta aparece logo abaixo de "Sim · data" no card "Dados financeiros". Detalhe: `shared/changelog.ts`.
 
