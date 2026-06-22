@@ -217,6 +217,9 @@ export default function FinanceiroConciliacao() {
   const [manualLanSel, setManualLanSel] = useState<any | null>(null);
   // Rev. 3459 — flag para abrir o dialog de detalhe JÁ em modo edição (atalho do botão lápis).
   const [pendingEditMode, setPendingEditMode] = useState(false);
+  // Rev. 3500 — IDs de linhas do extrato que já foram lançadas/conciliadas nesta sessão.
+  // Remoção IMEDIATA da lista "No extrato, sem lançamento" antes do próximo refetch.
+  const [dismissedStmtIds, setDismissedStmtIds] = useState<Set<number>>(new Set());
   // Rev. 3462 — display do combobox de fornecedor no form de edição (análogo a lancFornDisplay).
   const [detEditFornDisplay, setDetEditFornDisplay] = useState("");
   // Rev. 3239 — grupos expandidos (mostra os lançamentos-membro inline).
@@ -244,6 +247,9 @@ export default function FinanceiroConciliacao() {
   // Rev. 3478 — ao trocar conta ou período, o relatório vai recarregar do zero (nova query key).
   // Limpa o badge de desatualizado para não aparecer na conta/período nova.
   useEffect(() => { setReportStale(false); }, [contaBancariaId, dataInicio, dataFim]);
+  // Rev. 3500 — quando o report é recarregado (usuário clicou "Atualizar"), limpa os IDs
+  // descartados otimisticamente — o backend já reflete o estado real.
+  useEffect(() => { setDismissedStmtIds(new Set()); }, [report]);
   // Opções do dropdown: presets curtos + os dias exatos do mês (dedup, ordenado).
   const tolOptions = useMemo(() => {
     const set = new Set<number>([0, 1, 2, 3, 5, 7, 10, 15, diasDoMes]);
@@ -619,9 +625,11 @@ export default function FinanceiroConciliacao() {
           }
           lancCreatedRef.current = null;
           setReportStale(true);
+          if (!isStandalone && lancStatement?.id) setDismissedStmtIds(prev => new Set([...prev, Number(lancStatement.id)]));
         } else {
           toast({ title: "Recebível lançado no Contas a Receber!" });
           setReportStale(true);
+          if (!isStandalone && lancStatement?.id) setDismissedStmtIds(prev => new Set([...prev, Number(lancStatement.id)]));
         }
         setLancStatement(null);
       } catch (e: any) {
@@ -663,9 +671,11 @@ export default function FinanceiroConciliacao() {
         await lancConciliarMut.mutateAsync({ companyId, statementLineId: lancStatement.id, entryId });
         lancCreatedRef.current = null;
         setReportStale(true);
+        if (lancStatement?.id) setDismissedStmtIds(prev => new Set([...prev, Number(lancStatement.id)]));
       } else {
         toast({ title: "Conta a pagar lançada!" });
         setReportStale(true);
+        if (!isStandalone && lancStatement?.id) setDismissedStmtIds(prev => new Set([...prev, Number(lancStatement.id)]));
       }
       setLancStatement(null);
     } catch (e: any) {
@@ -1034,7 +1044,7 @@ export default function FinanceiroConciliacao() {
   // o par tem saldo zero (tentativa de pagamento frustrada) e é tratado num bloco próprio
   // ("Cheques devolvidos"). A linha de quitação real (reapresentação/PIX) também sai da
   // lista crua porque é exibida amarrada ao par.
-  const repExtRaw: any[] = report?.extratoSemLancamento ?? [];
+  const repExtRaw: any[] = (report?.extratoSemLancamento ?? []).filter((r: any) => !dismissedStmtIds.has(Number(r.id)));
   const repExt: any[] = repExtRaw.filter((r) => !r.reversal && !r.reversalResolveGrupo);
   const repDevol: any[] = report?.chequesDevolvidos ?? [];
   const repLan: any[] = report?.lancamentosSemExtrato ?? [];

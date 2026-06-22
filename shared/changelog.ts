@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3500 — **CONCILIAÇÃO · REMOÇÃO OTIMISTA DA LISTA "NO EXTRATO, SEM LANÇAMENTO" APÓS LANÇAR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Problema: ao concluir um lançamento via botão "Lançar", o item permanecia na lista
+ * exigindo refresh manual — usuário achava que o lançamento não tinha sido salvo.
+ * Solução: `dismissedStmtIds: Set<number>` — ao concluir qualquer caminho de sucesso
+ * (entrada ou saída, com ou sem conciliação), o ID da linha do extrato entra no set e
+ * é filtrado de `repExtRaw` imediatamente. A contagem do header ("No extrato, sem
+ * lançamento (N)") também diminui na hora. Quando o usuário clicar "Atualizar", o
+ * `useEffect([report])` zera o set — o backend já reflete o estado real.
+ * Arquivos: `FinanceiroConciliacao.tsx`.
+ *
  * Rev. 3499 — **MÚTUOS INTERCOMPANY · 4 CATEGORIAS AUTO + 4 NÓS NO PLANO. NEON · ZERO ALTER/DROP.**
  * Fundamento legal: mútuo entre coligadas exige contrato + juros mínimos SELIC (art. 464 RIR/2018).
  * Plano de Contas: 10.4 Mútuos Intercompany (pai=10, despesa_financeira);
