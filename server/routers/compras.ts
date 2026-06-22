@@ -1366,6 +1366,7 @@ export const comprasRouter = router({
           cicloPrazoParcela: empresasTerceiras.cicloPrazoParcela,
           cicloFormaPagamento: empresasTerceiras.cicloFormaPagamento,
           cicloDataReferencia: (empresasTerceiras as any).cicloDataReferencia,
+          regrasProdutoJson: (empresasTerceiras as any).regrasProdutoJson,
         }).from(empresasTerceiras)
           .where(and(
             inArray((empresasTerceiras as any).fornecedorId, fornIds),
@@ -1541,10 +1542,12 @@ export const comprasRouter = router({
       cicloPrazoParcela:   z.number().int().min(0).max(365).optional().nullable(),
       cicloFormaPagamento: z.enum(["cheque", "pix", "boleto", "transferencia"]).optional().nullable(),
       cicloDataReferencia: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+      // Rev. 3516 — regras especiais de pagamento por produto
+      regrasProdutoJson: z.string().optional().nullable(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
-      const { id, categorias, socios, cicloPagamento, cicloDiaFechamento, cicloNumParcelas, cicloPrazoParcela, cicloFormaPagamento, cicloDataReferencia, ...rest } = input;
+      const { id, categorias, socios, cicloPagamento, cicloDiaFechamento, cicloNumParcelas, cicloPrazoParcela, cicloFormaPagamento, cicloDataReferencia, regrasProdutoJson, ...rest } = input;
       // Tenant auth + anti-duplicidade no MESMO módulo (fornecedores) ao editar.
       const [existing] = await db.select().from(fornecedores).where(eq(fornecedores.id, id));
       if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Fornecedor não encontrado." });
@@ -1583,6 +1586,7 @@ export const comprasRouter = router({
       if (cicloPrazoParcela !== undefined) cicloPayload.cicloPrazoParcela = cicloPrazoParcela;
       if (cicloFormaPagamento !== undefined) cicloPayload.cicloFormaPagamento = cicloFormaPagamento;
       if (cicloDataReferencia !== undefined) cicloPayload.cicloDataReferencia = cicloDataReferencia;
+      if (regrasProdutoJson !== undefined) cicloPayload.regrasProdutoJson = regrasProdutoJson;
       if (Object.keys(cicloPayload).length > 0) {
         await db.update(empresasTerceiras)
           .set(cicloPayload)

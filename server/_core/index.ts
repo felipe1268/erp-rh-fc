@@ -3922,6 +3922,12 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3514: coluna ciclo_data_referencia garantida em empresas_terceiras.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3514 empresas_terceiras.ciclo_data_referencia:`, e?.message || e); }
 
+        // Rev. 3516 — regras especiais de pagamento por produto (ADD COLUMN IF NOT EXISTS — R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`ALTER TABLE empresas_terceiras ADD COLUMN IF NOT EXISTS regras_produto_json TEXT`);
+          console.log(`[SyncSchema+] Rev. 3516: coluna regras_produto_json garantida em empresas_terceiras.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3516 empresas_terceiras.regras_produto_json:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

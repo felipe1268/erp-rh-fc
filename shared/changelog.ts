@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3516 — **FORNECEDORES · REGRAS ESPECIAIS DE PAGAMENTO POR PRODUTO. BACKEND + SCHEMA ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
+ * Nova seção "Regras especiais por produto" no cadastro de fornecedores (editando). O
+ * usuário define N regras com: palavra-chave do produto (ex.: "Cimento"), forma de
+ * pagamento e número máximo de parcelas. Cada regra fica salva em
+ * `empresas_terceiras.regras_produto_json` (TEXT, ADD COLUMN IF NOT EXISTS via
+ * [SyncSchema+]). Na tela de Cotações, ao abrir o detalhe de uma cotação vinculada a
+ * um fornecedor com regras cadastradas, o sistema cruza as descrições dos itens com as
+ * palavras-chave (NFD-normalized, case-insensitive) e exibe um banner violeta por regra
+ * ativada indicando a forma e prazo corretos. Arquivos: drizzle/schema.ts,
+ * server/_core/index.ts, server/routers/compras.ts,
+ * client/src/pages/compras/Fornecedores.tsx, client/src/pages/compras/Cotacoes.tsx.
+ *
  * Rev. 3515 — **LANÇAMENTOS FINANCEIROS · AGRUPAMENTO POR PERÍODO (MÊS) NA LISTA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Quando a lista contém lançamentos de mais de um mês (ex.: "Ano todo"), a tela
  * insere automaticamente cabeçalhos de período entre os grupos mensais. Cada cabeçalho

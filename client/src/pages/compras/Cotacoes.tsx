@@ -3775,6 +3775,40 @@ export default function Cotacoes() {
                 );
               })()}
 
+              {/* Rev. 3516 — Alerta de regras especiais por produto do fornecedor */}
+              {(() => {
+                const itens: any[] = (detalheFullscreen as any)?.itens ?? [];
+                const rawRegras = (forn as any)?.regrasProdutoJson;
+                if (!rawRegras || itens.length === 0) return null;
+                let regras: any[] = [];
+                try { regras = JSON.parse(rawRegras); } catch { return null; }
+                if (!Array.isArray(regras) || regras.length === 0) return null;
+                const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+                const regrasAtivadas = regras.filter(r =>
+                  itens.some(it => norm(it.descricao ?? "").includes(norm(r.produto ?? "")))
+                );
+                if (regrasAtivadas.length === 0) return null;
+                return (
+                  <div className="space-y-2">
+                    {regrasAtivadas.map((r: any) => {
+                      const fpLabel = r.formaPagamento === "cheque" ? "Cheque" : r.formaPagamento === "pix" ? "PIX" : r.formaPagamento === "boleto" ? "Boleto" : "Transferência";
+                      return (
+                        <div key={r.id ?? r.produto} className="flex items-start gap-3 rounded-lg border-2 border-violet-400 bg-violet-50 p-3">
+                          <Zap className="h-5 w-5 text-violet-600 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-bold text-violet-900">Regra especial: {r.produto}</p>
+                            <p className="text-xs text-violet-700 mt-0.5">
+                              Esta OC contém <strong>{r.produto}</strong> — pagamento deve ser em <strong>{fpLabel}</strong>, em até <strong>{r.numParcelas}×</strong>
+                              {r.prazoEntreParcelas ? ` com prazo de ${r.prazoEntreParcelas} dias entre parcelas` : ""}.
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
               {(detalheFullscreen as any)?.itens?.some((it: any) => it.semVerba) && (() => {
                 const avulsos = ((detalheFullscreen as any).itens as any[]).filter((it: any) => it.semVerba && it.motivoSemVerba === "avulso");
                 const estouros = ((detalheFullscreen as any).itens as any[]).filter((it: any) => it.semVerba && it.motivoSemVerba !== "avulso");

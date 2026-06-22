@@ -3961,6 +3961,8 @@ export const empresasTerceiras = pgTable("empresas_terceiras", {
   alvaraValidade: timestamp("alvara_validade", { mode: "string" }),
   seguroVidaUrl: varchar("seguro_vida_url", { length: 500 }),
   seguroVidaValidade: timestamp("seguro_vida_validade", { mode: "string" }),
+  // Rev. 3516 — regras especiais de pagamento por produto (JSON array)
+  regrasProdutoJson: text("regras_produto_json"),
   // Dados bancários
   banco: varchar({ length: 100 }),
   agencia: varchar({ length: 20 }),

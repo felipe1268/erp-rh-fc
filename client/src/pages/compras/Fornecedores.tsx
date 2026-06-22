@@ -291,6 +291,11 @@ export default function Fornecedores() {
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando]       = useState<number | null>(null);
   const [form, setForm]               = useState({ ...EMPTY_FORM });
+  // Rev. 3516 — regras especiais de pagamento por produto
+  type RegraProduto = { id: string; produto: string; formaPagamento: string; numParcelas: number; prazoEntreParcelas: number };
+  const [regrasProduto, setRegrasProduto] = useState<RegraProduto[]>([]);
+  const [addingRegra, setAddingRegra] = useState(false);
+  const [novaRegra, setNovaRegra] = useState({ produto: "", formaPagamento: "cheque", numParcelas: "3", prazoEntreParcelas: "30" });
   const [buscandoCNPJ, setBuscandoCNPJ] = useState(false);
   const [buscaCategoria, setBuscaCategoria] = useState("");
   const [erroCNPJ, setErroCNPJ]       = useState<string | null>(null);
@@ -407,6 +412,13 @@ export default function Fornecedores() {
       cicloFormaPagamento: (f as any).cicloFormaPagamento ?? "",
       cicloDataReferencia: (f as any).cicloDataReferencia ?? "",
     });
+    // Rev. 3516 — carregar regras de produto salvas
+    try {
+      const raw = (f as any).regrasProdutoJson;
+      setRegrasProduto(raw ? JSON.parse(raw) : []);
+    } catch { setRegrasProduto([]); }
+    setAddingRegra(false);
+    setNovaRegra({ produto: "", formaPagamento: "cheque", numParcelas: "3", prazoEntreParcelas: "30" });
     setEditando(f.id);
     setErroCNPJ(null);
     lastFetchedCNPJ.current = "";
@@ -418,6 +430,9 @@ export default function Fornecedores() {
     setEditando(null);
     setErroCNPJ(null);
     setBuscaCategoria("");
+    setRegrasProduto([]);
+    setAddingRegra(false);
+    setNovaRegra({ produto: "", formaPagamento: "cheque", numParcelas: "3", prazoEntreParcelas: "30" });
   }
 
   const editFromUrlRef = useRef(false);
@@ -617,7 +632,7 @@ export default function Fornecedores() {
     };
     const { cicloPagamento: _cp, cicloDiaFechamento: _cd, cicloNumParcelas: _cn, cicloPrazoParcela: _cpr, cicloFormaPagamento: _cf, cicloDataReferencia: _cdr, ...restForm } = form;
     if (editando) {
-      atualizarMut.mutate({ id: editando, ...restForm, ...cicloFields });
+      atualizarMut.mutate({ id: editando, ...restForm, ...cicloFields, regrasProdutoJson: JSON.stringify(regrasProduto) });
     } else {
       criarMut.mutate({ companyId, ...restForm });
     }
@@ -1483,6 +1498,100 @@ export default function Fornecedores() {
                       )}
                     </div>
                   </div>
+
+                  {/* Rev. 3516 — Regras especiais por produto */}
+                  {editando && (
+                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                      <div className="px-4 py-2.5 border-b border-slate-100 flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-violet-100 flex items-center justify-center">
+                          <Tag className="h-3.5 w-3.5 text-violet-600" />
+                        </div>
+                        <span className="text-xs font-bold text-slate-700 flex-1">Regras especiais por produto</span>
+                        <Button size="sm" variant="outline" className="h-6 text-xs px-2 gap-1"
+                          onClick={() => { setAddingRegra(true); setNovaRegra({ produto: "", formaPagamento: "cheque", numParcelas: "3", prazoEntreParcelas: "30" }); }}>
+                          <Plus className="h-3 w-3" />Nova regra
+                        </Button>
+                      </div>
+                      <div className="p-4 space-y-2">
+                        <p className="text-[10px] text-slate-400 mb-2">
+                          Quando uma Ordem de Compra deste fornecedor contiver o produto cadastrado, o sistema exibe um aviso com as condições especiais de pagamento.
+                        </p>
+                        {regrasProduto.length === 0 && !addingRegra && (
+                          <p className="text-xs text-slate-400 italic">Nenhuma regra cadastrada.</p>
+                        )}
+                        {regrasProduto.map(r => (
+                          <div key={r.id} className="flex items-center gap-2 bg-violet-50 rounded-lg px-3 py-2 border border-violet-100">
+                            <Package className="h-3.5 w-3.5 text-violet-500 flex-shrink-0" />
+                            <span className="text-xs font-semibold text-violet-800 flex-1">{r.produto}</span>
+                            <span className="text-[10px] text-slate-500 bg-white border border-slate-200 rounded px-1.5 py-0.5">
+                              {r.formaPagamento === "cheque" ? "Cheque" : r.formaPagamento === "pix" ? "PIX" : r.formaPagamento === "boleto" ? "Boleto" : "Transferência"}
+                              {" "}em até {r.numParcelas}×
+                              {r.prazoEntreParcelas ? ` / ${r.prazoEntreParcelas}d` : ""}
+                            </span>
+                            <Button size="sm" variant="ghost" className="h-5 w-5 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
+                              onClick={() => setRegrasProduto(prev => prev.filter(x => x.id !== r.id))}>
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ))}
+                        {addingRegra && (
+                          <div className="bg-slate-50 rounded-lg border border-slate-200 p-3 space-y-2">
+                            <p className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide">Nova regra</p>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="col-span-2">
+                                <Label className="text-[10px] text-slate-500">Produto (palavra-chave)</Label>
+                                <Input value={novaRegra.produto} onChange={e => setNovaRegra(p => ({ ...p, produto: e.target.value }))}
+                                  className="h-8 text-xs mt-0.5" placeholder="ex: Cimento, Areia, Aço..." />
+                              </div>
+                              <div>
+                                <Label className="text-[10px] text-slate-500">Forma de pagamento</Label>
+                                <Select value={novaRegra.formaPagamento} onValueChange={v => setNovaRegra(p => ({ ...p, formaPagamento: v }))}>
+                                  <SelectTrigger className="h-8 text-xs mt-0.5"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="cheque">Cheque</SelectItem>
+                                    <SelectItem value="pix">PIX</SelectItem>
+                                    <SelectItem value="boleto">Boleto</SelectItem>
+                                    <SelectItem value="transferencia">Transferência</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div>
+                                <Label className="text-[10px] text-slate-500">Nº máx. de parcelas</Label>
+                                <Input value={novaRegra.numParcelas} onChange={e => setNovaRegra(p => ({ ...p, numParcelas: e.target.value }))}
+                                  type="number" min={1} max={24} className="h-8 text-xs mt-0.5" />
+                              </div>
+                              <div>
+                                <Label className="text-[10px] text-slate-500">Prazo entre parcelas (dias)</Label>
+                                <Input value={novaRegra.prazoEntreParcelas} onChange={e => setNovaRegra(p => ({ ...p, prazoEntreParcelas: e.target.value }))}
+                                  type="number" min={0} max={365} className="h-8 text-xs mt-0.5" placeholder="ex: 30" />
+                              </div>
+                            </div>
+                            <div className="flex gap-2 pt-1">
+                              <Button size="sm" className="h-7 text-xs px-3 bg-violet-600 hover:bg-violet-700 text-white"
+                                onClick={() => {
+                                  if (!novaRegra.produto.trim()) { toast.error("Informe o nome do produto."); return; }
+                                  const np = parseInt(novaRegra.numParcelas);
+                                  const pp = parseInt(novaRegra.prazoEntreParcelas);
+                                  setRegrasProduto(prev => [...prev, {
+                                    id: crypto.randomUUID(),
+                                    produto: novaRegra.produto.trim(),
+                                    formaPagamento: novaRegra.formaPagamento,
+                                    numParcelas: isNaN(np) ? 1 : np,
+                                    prazoEntreParcelas: isNaN(pp) ? 0 : pp,
+                                  }]);
+                                  setAddingRegra(false);
+                                  setNovaRegra({ produto: "", formaPagamento: "cheque", numParcelas: "3", prazoEntreParcelas: "30" });
+                                }}>
+                                Adicionar
+                              </Button>
+                              <Button size="sm" variant="outline" className="h-7 text-xs px-3"
+                                onClick={() => setAddingRegra(false)}>Cancelar</Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Observações */}
                   <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
