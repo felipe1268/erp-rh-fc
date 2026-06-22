@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3532** — **CONCILIAÇÃO · BUGFIX TOLERÂNCIA DE DATA NA SUGESTÃO AUTOMÁTICA. BACKEND + FRONTEND · ZERO ALTER/DROP/DELETE.** `toleranciaDias` estava inicializado com `diasDoMes` (ex: 31) e re-sincronizado a cada troca de mês via useEffect — sistema enviava `tol=31` ao backend aceitando pares com até 31 dias de diferença. Fix: default → 0 (mesmo dia) em ambas as telas + localStorage cap 7d + backend fallback 0 + confiança "alta" agora exige `delta===0` (antes `<=1`). Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3531** — **PONTO DIXI · BUGFIX BATIDAS DIXI IGNORADAS QUANDO EXISTE APONTAMENTO DE CAMPO. BACKEND PONTUAL · ZERO ALTER/DROP.** Importador usava Set "empId_data": qualquer registro existente bloqueava o dia inteiro. Fix: Set→Map com fonte+batidas; fonte='campo' → MERGE (une+ordena+reatribui slots+recalcula totais); fonte=manual → proteção total mantida. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3530** — **FORNECEDORES · BUGFIX CICLO/REGRAS SUMINDO AO SALVAR. BACKEND PONTUAL · ZERO ALTER/DROP.** `atualizarFornecedor` fazia só UPDATE em `empresasTerceiras`; sem linha vinculada → dados sumiam. Fix: upsert (SELECT→UPDATE ou INSERT). Detalhe: `shared/changelog.ts`.
@@ -61,8 +63,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3527** — **CONCILIAÇÃO · FORMA DE PAGAMENTO "DÉBITO EM CONTA". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Adicionada opção `debito_em_conta` no Select de Forma de Pagamento do dialog de edição. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3526** — **CONCILIAÇÃO · CATEGORIA COM BUSCA POR TEXTO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Campo "Conta (Categoria)" no dialog de edição trocado de Select simples para `SearchableSelect` (busca com normalização NFD). Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3525** — **FINANCEIRO · INATIVAR "MEDIÇÃO DE PROJETO" (AUTO-0136). NEON · ZERO ALTER/DROP/DELETE.** Criada por engano na Rev.3524 (já existe "CONSULTORIA E PROJETOS"). SyncSchema+ faz soft-delete (`ativo=0`). Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3523** — **OBRAS · BUGFIX TIPO "PROJETOS" — ZOD ENUM NO BACKEND. BACKEND PONTUAL · ZERO ALTER/DROP.** `z.enum` nos 2 endpoints de criar/editar obra (server/routers.ts) não incluía `"projeto"` → erro ao salvar. Corrigido. Detalhe: `shared/changelog.ts`.
 

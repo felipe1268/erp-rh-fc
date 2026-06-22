@@ -1,6 +1,22 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3532 — **CONCILIAÇÃO · BUGFIX TOLERÂNCIA DE DATA NA SUGESTÃO AUTOMÁTICA. BACKEND + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ * Causa: `toleranciaDias` era inicializado com `diasDoMes` (ex: 31) em ambas as telas de conciliação,
+ * e em `FinanceiroConciliacao.tsx` havia um `useEffect` que FORÇAVA reset para `diasDoMes` ao trocar de
+ * mês — ou seja, o sistema enviava `tol=31` ao backend, aceitando pares com até 31 dias de diferença.
+ * Resultado: o algoritmo sugeria lançamentos de datas completamente diferentes (±2d, ±3d, ±5d…)
+ * só porque o VALOR coincidia.
+ * Fix:
+ *   1. `FinanceiroConciliacao.tsx`: default de `toleranciaDias` → 0; removido useEffect de re-sync.
+ *   2. `FinanceiroConciliacaoWorkspace.tsx`: default → 0; restauração do localStorage limitada a max 7d.
+ *   3. Backend `suggestReconciliation`: default fallback `tol` 5 → 0.
+ *   4. Score: `confianca="alta"` agora exige `delta === 0` (antes `<= 1`), evitando que ±1d seja
+ *      classificado como alta confiança.
+ * Com `tol=0` o sistema só sugere pares onde data do extrato === data do lançamento.
+ * O dropdown de tolerância continua disponível (0 / 1 / 2 / 3 / 5 / 7 / 10 / 15 / diasDoMes)
+ * para os casos onde o usuário queira ampliar manualmente.
+ *
  * Rev. 3531 — **PONTO DIXI · BUGFIX BATIDAS DIXI IGNORADAS QUANDO EXISTE APONTAMENTO DE CAMPO. BACKEND PONTUAL · ZERO ALTER/DROP.**
  * Cenário: funcionário não bateu entrada no Dixi mas tem Apontamento de Campo no mesmo dia;
  * as demais batidas (saída almoço, volta, saída final) existiam no Dixi mas sumiam no Espelho.

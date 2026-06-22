@@ -247,9 +247,7 @@ export default function FinanceiroConciliacao() {
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
   // Rev. 3411 — IDs de linhas já conciliadas nesta sessão (filtradas localmente sem re-análise)
   const [conciliadosIds, setConciliadosIds] = useState<Set<number>>(new Set());
-  const [toleranciaDias, setToleranciaDias] = useState(() => new Date(_now.getFullYear(), _now.getMonth() + 1, 0).getDate());
-  // Re-sincroniza a tolerância com os dias exatos do mês ao trocar de mês/ano.
-  useEffect(() => { setToleranciaDias(diasDoMes); }, [diasDoMes]);
+  const [toleranciaDias, setToleranciaDias] = useState(0);
   // Rev. 3187 — ao escolher a conta, já dispara as sugestões automáticas (tela única).
   useEffect(() => { if (contaBancariaId) { setMostrarSugestoes(true); setSelSug(new Set()); } }, [contaBancariaId]);
   // Rev. 3478 — ao trocar conta ou período, o relatório vai recarregar do zero (nova query key).

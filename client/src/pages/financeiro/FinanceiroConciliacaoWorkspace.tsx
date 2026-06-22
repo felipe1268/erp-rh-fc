@@ -57,7 +57,7 @@ export default function FinanceiroConciliacaoWorkspace() {
   const [ano, setAno] = useState(_now.getFullYear());
   const [mesSel, setMesSel] = useState<number | null>(_now.getMonth() + 1);
   const [contaBancariaId, setContaBancariaId] = useState<string>("");
-  const [toleranciaDias, setToleranciaDias] = useState<number>(() => new Date(_now.getFullYear(), _now.getMonth() + 1, 0).getDate());
+  const [toleranciaDias, setToleranciaDias] = useState<number>(0);
   const [conciliadoFilter, setConciliadoFilter] = useState("all");
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
   const [selSug, setSelSug] = useState<Set<number>>(new Set());
@@ -74,7 +74,7 @@ export default function FinanceiroConciliacaoWorkspace() {
         if (s.contaBancariaId) setContaBancariaId(String(s.contaBancariaId));
         if (typeof s.ano === "number") setAno(s.ano);
         if (s.mesSel === null || typeof s.mesSel === "number") setMesSel(s.mesSel);
-        if (typeof s.toleranciaDias === "number") setToleranciaDias(s.toleranciaDias);
+        if (typeof s.toleranciaDias === "number") setToleranciaDias(Math.min(s.toleranciaDias, 7));
         if (s.conciliadoFilter) setConciliadoFilter(s.conciliadoFilter);
         if (Array.isArray(s.selSug)) setSelSug(new Set(s.selSug));
         if (s.mostrarSugestoes) setMostrarSugestoes(true);

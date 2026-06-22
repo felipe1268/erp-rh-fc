@@ -6719,7 +6719,7 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
-    const tol = input.toleranciaDias ?? 5;
+    const tol = input.toleranciaDias ?? 0;
 
     // dbExecute liga params por ORDEM DE APARIÇÃO ($N é cosmético) → manter ascendente.
     const stConds = [`company_id=$1`, `conta_bancaria_id=$2`, `COALESCE(conciliado,0)=0`, `excluido_em IS NULL`];
@@ -6902,7 +6902,7 @@ export const financialRouter = router({
         entryValor: Number(c.entry.valorRealizado ?? c.entry.valorPrevisto), entryTipo: c.entry.tipo,
         deltaDias: c.delta,
         // Identificado pelo comprovante → "alta" mesmo que o valor fosse ambíguo.
-        confianca: c.via ? "alta" : ((!ambiguo && c.delta <= 1) ? "alta" : "media"),
+        confianca: c.via ? "alta" : (!ambiguo && c.delta === 0 ? "alta" : "media"),
         scoreConfianca,
         identificadoVia: viaLabel,
         entryComprovanteBeneficiario: c.entry.comprovanteBeneficiario ?? null,
