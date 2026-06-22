@@ -762,13 +762,13 @@ export default function FinanceiroConciliacao() {
   }, [statementsAno]);
 
   const conciliarMut = (trpc as any).financial.conciliarLancamento.useMutation({
-    onSuccess: () => { toast({ title: "Conciliação registrada!" }); refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true); setConfirmGeralConciliar(null); setSelectedStatement(null); setSelectedEntry(null); setManualExtSel(null); setManualLanSel(null); },
+    onSuccess: () => { toast({ title: "Conciliação registrada!" }); refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true); refetchReport(); setConfirmGeralConciliar(null); setSelectedStatement(null); setSelectedEntry(null); setManualExtSel(null); setManualLanSel(null); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
   // Rev. 3239 — conciliação de um GRUPO unificado (VR / combustível / manutenção) contra UMA
   // linha do extrato (N lançamentos : 1 linha). Mesma UX do par 1:1, mas envia os itensIds.
   const conciliarGrupoMut = (trpc as any).financial.conciliarGrupoLancamentos.useMutation({
-    onSuccess: (res: any) => { toast({ title: `Grupo conciliado! ${formatInt(res.conciliados)} lançamento(s) baixado(s).` }); refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true); setConfirmGeralConciliar(null); setSelectedStatement(null); setSelectedEntry(null); setManualExtSel(null); setManualLanSel(null); },
+    onSuccess: (res: any) => { toast({ title: `Grupo conciliado! ${formatInt(res.conciliados)} lançamento(s) baixado(s).` }); refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true); refetchReport(); setConfirmGeralConciliar(null); setSelectedStatement(null); setSelectedEntry(null); setManualExtSel(null); setManualLanSel(null); },
     onError: (e: any) => toast({ title: "Erro ao conciliar grupo", description: e.message, variant: "destructive" }),
   });
   // Rev. 3399 — Conciliação de lançamento SEM conta bancária via sugestão automática.
@@ -776,7 +776,7 @@ export default function FinanceiroConciliacao() {
   const conciliarSemContaMut = (trpc as any).financial.conciliarSemContaComExtrato.useMutation({
     onSuccess: () => {
       toast({ title: "Lançamento vinculado e conciliado!", description: `Conta bancária preenchida automaticamente.` });
-      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true);
+      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true); refetchReport();
       setConfirmSemConta(null);
     },
     onError: (e: any) => toast({ title: "Erro ao conciliar", description: e.message, variant: "destructive" }),
@@ -786,14 +786,14 @@ export default function FinanceiroConciliacao() {
     onSuccess: () => {
       toast({ title: "PIX conciliado!", description: "Linha do extrato vinculada ao lançamento ERP." });
       setConciliarPixDlg(null); setConciliarPixEntry(null); setBuscaConciliarPix("");
-      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true);
+      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true); refetchReport();
     },
     onError: (e: any) => toast({ title: "Erro ao conciliar PIX", description: e.message, variant: "destructive" }),
   });
   // Rev. 3198 — conciliação do fluxo "Lançar": SEM onError próprio (o erro é tratado
   // no catch do submitLancar, preservando o id criado p/ não duplicar no retry).
   const lancConciliarMut = (trpc as any).financial.conciliarLancamento.useMutation({
-    onSuccess: () => { toast({ title: "Lançado e conciliado!" }); refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true); setSelectedStatement(null); setSelectedEntry(null); },
+    onSuccess: () => { toast({ title: "Lançado e conciliado!" }); refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true); refetchReport(); setSelectedStatement(null); setSelectedEntry(null); },
   });
 
   // Rev. 3175 — Importação em 2 fases com PROGRESSO REAL (0–100%): analisa (parse →

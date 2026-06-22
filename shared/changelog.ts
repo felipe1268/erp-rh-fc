@@ -1,6 +1,13 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3503 — **CONCILIAÇÃO · REPORT REFETCH AUTOMÁTICO APÓS CONCILIAR/LANÇAR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Após qualquer conciliação bem-sucedida, `refetchReport()` era omitido — só `setReportStale(true)`
+ * era chamado, exigindo clique manual em "Atualizar" para ver "Já conciliados" atualizado.
+ * Corrigido: adicionado `refetchReport()` no onSuccess de 5 mutations:
+ * `conciliarMut`, `conciliarGrupoMut`, `conciliarSemContaMut`, `conciliarPixMut`, `lancConciliarMut`.
+ * Arquivo: `FinanceiroConciliacao.tsx`.
+ *
  * Rev. 3502 — **CATEGORIAS · BUSCA SEM ACENTO (NORMALIZE NFD). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Busca em FinanceiroCategorias.tsx não normalizava acentos: "Mutuo" não encontrava "MÚTUO".
  * Corrigido via `normalize("NFD").replace(/[\u0300-\u036f]/g,"")` em `norm()` aplicada
