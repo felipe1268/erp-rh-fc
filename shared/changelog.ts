@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3493 — **PLANO DE CONTAS · GRUPO 10 — PASSIVOS E DÍVIDAS. NEON · ZERO ALTER/DROP.**
+ * Novo grupo raiz "10 · PASSIVOS E DÍVIDAS" para medir alavancagem da empresa.
+ * 3 subgrupos: 10.1 Obrigações Tributárias em Aberto, 10.2 Dívidas Bancárias e Financeiras, 10.3 Acordos e Parcelamentos - Fornecedores.
+ * 8 folhas: 10.1.1 Parcelamento DAS/Simples, 10.1.2 Parcelamento FGTS, 10.1.3 Parcelamento Outros Tributos,
+ *   10.2.1 Parcela Empréstimo Bancário, 10.2.2 Parcela Financiamento, 10.2.3 Limite de Crédito/Ch.Especial,
+ *   10.3.1 Acordo Fornecedor-Materiais, 10.3.2 Acordo Fornecedor-Serviços/MDO.
+ * 9 novas categorias AUTO-0114…AUTO-0122 para cada folha.
+ * Categorias existentes redirecionadas: DÍVIDAS TRIBUTÁRIAS→10.1, EMPRÉSTIMOS→10.2.1,
+ *   FINANCIAMENTOS→10.2.2, CONSIGNADO FUNCIONÁRIOS→10.2.
+ *
  * Rev. 3492 — **CATEGORIAS FINANCEIRAS · PADRONIZAÇÃO DE NOMES. NEON · ZERO ALTER/DROP.**
  * 3 inativações (duplicatas): SALÁRIO - MÃO DE OBRA (=MÃO DE OBRA DIRETA), DESPESAS VARIAVEIS (=OUTRAS DESPESAS), CUSTO DE OBRA (genérico demais).
  * 22 renomeações para padronizar nomenclatura:

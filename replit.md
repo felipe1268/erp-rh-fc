@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3493** — **PLANO DE CONTAS · GRUPO 10 — PASSIVOS E DÍVIDAS. NEON · ZERO ALTER/DROP.** Novo grupo raiz para medir alavancagem: 3 subgrupos (Tributárias, Bancárias, Fornecedores), 8 folhas, 9 categorias AUTO. Categorias existentes redirecionadas. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3492** — **CATEGORIAS FINANCEIRAS · PADRONIZAÇÃO DE NOMES. NEON · ZERO ALTER/DROP.** 3 inativações (duplicatas), 22 renomeações (acentos, prefixos DESPESA COM removidos, nomes alinhados ao plano). Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3491** — **CATEGORIAS FINANCEIRAS · DIAGNÓSTICO E AJUSTE COMPLETO. NEON · ZERO ALTER/DROP.** 18 conta_pai_id corrigidos, 1 inativação (Transferência Bancária), 2 correções no plano, 11 novas categorias criadas (AUTO-0102…AUTO-0113). Detalhe: `shared/changelog.ts`.
