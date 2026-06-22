@@ -1,6 +1,11 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3496 — **PLANO GRUPO 3 · MÃO DE OBRA PJ E SUBEMPREITEIRO. NEON · ZERO ALTER/DROP.**
+ * AUTO-0130 MÃO DE OBRA PJ → 3.1.3 Serviços PJ/Terceirizados, CC Obras.
+ * AUTO-0131 SUBEMPREITEIRO - MÃO DE OBRA → 3.4.1 Serviços Especializados, CC Obras.
+ * Distinção clara: CLT direto (3.1.1) × PJ individual (3.1.3/AUTO-0130) × Terceirizada CLT (3.1.3/AUTO-0022) × Subempreiteiro (3.4.1/AUTO-0131).
+ *
  * Rev. 3495 — **CATEGORIAS RECEITA · 7 NOVAS AUTO-0123…AUTO-0129 COM CC VINCULADO. NEON · ZERO ALTER/DROP.**
  * AUTO-0123 MEDIÇÃO DE OBRA (→ plano 1.1.1, CC Obras), AUTO-0124 ADITIVO CONTRATUAL (→ 1.1.2, CC Obras),
  * AUTO-0125 CONSULTORIA E PROJETOS (→ 1.1.3, CC Comercial), AUTO-0126 RECEITAS DIVERSAS (→ 1.2, CC Adm),
