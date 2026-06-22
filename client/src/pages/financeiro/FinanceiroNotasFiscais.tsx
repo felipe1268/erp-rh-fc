@@ -637,9 +637,6 @@ export default function FinanceiroNotasFiscais() {
                       <div className="flex flex-col items-center gap-2">
                         <Receipt className="h-8 w-8 text-slate-300" />
                         <span className="text-slate-400 text-sm">Nenhuma nota fiscal encontrada.</span>
-                        <Button size="sm" onClick={openNew} className="mt-2 gap-1">
-                          <Plus className="h-3.5 w-3.5" /> Cadastrar NF-e
-                        </Button>
                       </div>
                     </td>
                   </tr>
