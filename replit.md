@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3524** — **FINANCEIRO · NOVA CATEGORIA "MEDIÇÃO DE PROJETO" (AUTO-0136). NEON · ZERO ALTER/DROP.** SyncSchema+ em `server/_core/index.ts` insere a categoria para toda empresa que já tem "MEDIÇÃO DE OBRA" (mesma conta pai, tipo receita, CC). Idempotente. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3523** — **OBRAS · BUGFIX TIPO "PROJETOS" — ZOD ENUM NO BACKEND. BACKEND PONTUAL · ZERO ALTER/DROP.** `z.enum` nos 2 endpoints de criar/editar obra (server/routers.ts) não incluía `"projeto"` → erro ao salvar. Corrigido. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3522** — **OBRAS · RENOMEAR TIPO "APENAS PROJETO" → "PROJETOS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Label do chip renomeado; valor no banco (`projeto`) inalterado. Detalhe: `shared/changelog.ts`.

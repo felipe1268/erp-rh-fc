@@ -1,6 +1,13 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3524 — **FINANCEIRO · NOVA CATEGORIA "MEDIÇÃO DE PROJETO" (AUTO-0136). NEON · ZERO ALTER/DROP.**
+ * Bloco SyncSchema+ em `server/_core/index.ts` insere `MEDIÇÃO DE PROJETO` (AUTO-0136)
+ * para toda empresa que já tem `MEDIÇÃO DE OBRA`, copiando conta_pai_id, tipo (receita),
+ * natureza, nivel e centro_custo_id. Idempotente: só insere quando não existe
+ * (guard `NOT EXISTS` por `LOWER(nome)='medição de projeto' AND ativo=1`).
+ * Executa automaticamente no próximo restart do servidor.
+ *
  * Rev. 3523 — **OBRAS · BUGFIX TIPO "PROJETOS" — ZOD ENUM NO BACKEND. BACKEND PONTUAL · ZERO ALTER/DROP.**
  * `z.enum(["global","mdo","adm"])` em 2 endpoints de `server/routers.ts` (criar e editar obra)
  * não incluía `"projeto"` → erro "Invalid option" ao salvar. Adicionado `"projeto"` aos 2 enums.
