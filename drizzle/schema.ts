@@ -9922,6 +9922,49 @@ export const dreAnalisesIa = pgTable("dre_analises_ia", {
   uniqueIndex("uniq_dre_analise_chave").on(table.companyId, table.periodo, table.tipoPeriodo),
 ]);
 
+// Rev. 3543 — Notas Fiscais de Serviço Eletrônicas (NFS-e) emitidas pela FC Engenharia.
+// Controle de NFs emitidas: cruzamento com lançamentos financeiros e linhas do extrato bancário.
+// Tabela criada via self-heal CREATE TABLE IF NOT EXISTS (R-001/R-007/R-010 OK).
+export const fiscalNotes = pgTable("fiscal_notes", {
+  id:                  serial().primaryKey(),
+  companyId:           integer("company_id").notNull(),
+  numeroNf:            varchar("numero_nf", { length: 20 }).notNull(),
+  serie:               varchar("serie", { length: 20 }),
+  chaveAcesso:         varchar("chave_acesso", { length: 60 }),
+  dataEmissao:         date("data_emissao", { mode: "string" }).notNull(),
+  dataCompetencia:     date("data_competencia", { mode: "string" }),
+  dataVencimento:      date("data_vencimento", { mode: "string" }),
+  tomadorCnpj:         varchar("tomador_cnpj", { length: 20 }),
+  tomadorRazaoSocial:  varchar("tomador_razao_social", { length: 255 }),
+  obraId:              integer("obra_id"),
+  obraNome:            varchar("obra_nome", { length: 255 }),
+  bmReferencia:        varchar("bm_referencia", { length: 60 }),
+  descricaoServico:    text("descricao_servico"),
+  valorBruto:          numeric("valor_bruto", { precision: 15, scale: 2 }).notNull(),
+  deducoesTotal:       numeric("deducoes_total", { precision: 15, scale: 2 }).default("0"),
+  baseCalculoIss:      numeric("base_calculo_iss", { precision: 15, scale: 2 }),
+  aliquotaIss:         numeric("aliquota_iss", { precision: 5, scale: 2 }),
+  issRetido:           numeric("iss_retido", { precision: 15, scale: 2 }).default("0"),
+  retencaoInss:        numeric("retencao_inss", { precision: 15, scale: 2 }).default("0"),
+  retencaoIrrf:        numeric("retencao_irrf", { precision: 15, scale: 2 }).default("0"),
+  retencaoPisCofins:   numeric("retencao_pis_cofins", { precision: 15, scale: 2 }).default("0"),
+  valorLiquido:        numeric("valor_liquido", { precision: 15, scale: 2 }).notNull(),
+  status:              varchar("status", { length: 30 }).default("pendente").notNull(),
+  entryId:             integer("entry_id"),
+  stmtLineId:          integer("stmt_line_id"),
+  arquivoUrl:          text("arquivo_url"),
+  arquivoNome:         varchar("arquivo_nome", { length: 255 }),
+  observacoes:         text("observacoes"),
+  criadoPorId:         integer("criado_por_id"),
+  criadoPorNome:       varchar("criado_por_nome", { length: 255 }),
+  createdAt:           timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt:           timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_fn_company").on(t.companyId),
+  index("idx_fn_emissao").on(t.dataEmissao),
+  index("idx_fn_status").on(t.status),
+]);
+
 // Rev. 2960 — "Combo de Demissões" SALVO (simulação persistente). O Combo do
 // Dashboard Aviso Prévio era volátil; agora pode ser salvo por NOME, listado,
 // reaberto, editado (tipo de aviso + data de referência + adicionar/remover

@@ -192,6 +192,7 @@ const FinanceiroConciliacao   = lazyWithRetry(() => import("./pages/financeiro/F
 const FinanceiroCheques       = lazyWithRetry(() => import("./pages/financeiro/FinanceiroCheques"));
 const FinanceiroCartaoCredito = lazyWithRetry(() => import("./pages/financeiro/FinanceiroCartaoCredito"));
 const FinanceiroConciliacaoWorkspace = lazyWithRetry(() => import("./pages/financeiro/FinanceiroConciliacaoWorkspace"));
+const FinanceiroNotasFiscais  = lazyWithRetry(() => import("./pages/financeiro/FinanceiroNotasFiscais"));
 const FinanceiroRecorrentes  = lazyWithRetry(() => import("./pages/financeiro/FinanceiroRecorrentes"));
 const FinanceiroCronograma   = lazyWithRetry(() => import("./pages/financeiro/FinanceiroCronograma"));
 const FinanceiroAnaliseCFO    = lazyWithRetry(() => import("./pages/financeiro/FinanceiroAnaliseCFO"));
@@ -502,6 +503,7 @@ function Router() {
         <Route path="/financeiro/categorias" component={() => <RouteGuard component={FinanceiroCategorias} route="/financeiro/categorias" />} />
         <Route path="/financeiro/centros-de-custo" component={() => <RouteGuard component={FinanceiroCentrosCusto} route="/financeiro/centros-de-custo" />} />
         <Route path="/financeiro/configuracoes" component={() => <RouteGuard component={FinanceiroConfiguracoes} route="/financeiro/lancamentos" />} />
+        <Route path="/financeiro/notas-fiscais" component={() => <RouteGuard component={FinanceiroNotasFiscais} route="/financeiro/lancamentos" />} />
         <Route path="/financeiro/conciliacao/workspace" component={() => <RouteGuard component={FinanceiroConciliacaoWorkspace} route="/financeiro/conciliacao" />} />
         <Route path="/financeiro/conciliacao" component={() => <RouteGuard component={FinanceiroConciliacao} route="/financeiro/conciliacao" />} />
         <Route path="/financeiro/cheques" component={() => <RouteGuard component={FinanceiroCheques} route="/financeiro/cheques" />} />

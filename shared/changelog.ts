@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3543 — **NOTAS FISCAIS (NFS-e) · NOVO MÓDULO "CONTROLE DE NOTAS FISCAIS" NA ABA MOVIMENTAÇÕES. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ * Nova tabela `fiscal_notes` (via self-heal CREATE TABLE IF NOT EXISTS): número NF, série,
+ * chave de acesso, datas (emissão/competência/vencimento), tomador (CNPJ + razão social),
+ * obra + BM de referência, valores (bruto / deduções / ISS / INSS / IRRF / PIS-COFINS / líquido),
+ * status (pendente → recebida → conciliada), vínculo com `financial_entries` (entryId) e com
+ * `bank_statement_lines` (stmtLineId). Status atualizado automaticamente via regra: entryId+stmtLineId
+ * ambos preenchidos → conciliada; só um → recebida; nenhum → pendente.
+ * Arquivos: `drizzle/schema.ts` (fiscalNotes), `server/_core/index.ts` (SyncSchema+),
+ * `server/routers/fiscalNotes.ts` (novo router tRPC: list/getById/criar/atualizar/vincularLancamento/
+ * vincularExtrato/excluir/listByEntry), `server/routers.ts` (import + registro),
+ * `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx` (página completa),
+ * `client/src/components/DashboardLayout.tsx` (item "Notas Fiscais (NF-e)" em Movimentações),
+ * `client/src/App.tsx` (rota /financeiro/notas-fiscais + lazy import).
+ * KPIs: contagem + valor por status (Pendente/Recebida/Conciliada). Tabela com busca por NF/
+ * tomador/obra; filtro de status + botão "Sem Lançamento". Dialog de cadastro em 3 abas
+ * (Dados Gerais / Tributação / Vínculo). Cálculo automático do Valor Líquido ao digitar retenções.
+ * Dialog de detalhe com campos para informar ID do lançamento e ID do extrato e vincular
+ * diretamente. AlertDialog de confirmação ao cancelar NF.
+ *
  * Rev. 3542 — **DESLIGAMENTO NA EXPERIÊNCIA · BUGFIX FGTS 40% INDEVIDO NO TÉRMINO NO PRAZO. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
  * Causa: `multaFGTS` era calculada para qualquer `iniciativa==='empregador'`, inclusive no
  * término no prazo. O término no prazo é vencimento natural do contrato de experiência —

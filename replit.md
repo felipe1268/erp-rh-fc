@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3543** — **NOTAS FISCAIS (NFS-e) · NOVO MÓDULO "CONTROLE DE NOTAS FISCAIS" NA ABA MOVIMENTAÇÕES. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Nova tabela `fiscal_notes` via SyncSchema+ (número NF, série, chave de acesso, datas, tomador, obra/BM, valores bruto/retenções/líquido, status automático, vínculo com `financial_entries` e `bank_statement_lines`). Router tRPC completo (list/criar/atualizar/vincularLancamento/vincularExtrato/excluir). Página com KPIs por status, tabela filtrável, dialog 3 abas (Dados/Tributação/Vínculo), cálculo automático do valor líquido, dialog de vínculo, AlertDialog de cancelamento. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3542** — **DESLIGAMENTO NA EXPERIÊNCIA · BUGFIX FGTS 40% INDEVIDO NO TÉRMINO NO PRAZO. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Término no prazo = vencimento natural do contrato → sem multa FGTS (art. 18 Lei 8.036/90). Condição corrigida: `multaFGTS` só calculada quando `iniciativa==='empregador' && antecipado`. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3541** — **DESLIGAMENTO NA EXPERIÊNCIA · 4 TIPOS DE ENCERRAMENTO + ART. 479/480 + AVISO EM "AVISOS PRÉVIOS". BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Dialog expandido: chips "Empresa/Funcionário" + "No prazo/Antecipado" + aviso contextual Art. 479/480 + campo de data. Backend: calcula rescisão + FGTS 40% (só antecipado empregador) + Art. 479/480; insere em `termination_notices`. Detalhe: `shared/changelog.ts`.
-
 ### Revisões recentes (one-liners)
+
+- **Rev. 3541** — **DESLIGAMENTO NA EXPERIÊNCIA · 4 TIPOS DE ENCERRAMENTO + ART. 479/480 + AVISO EM "AVISOS PRÉVIOS". BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3540** — **FERIADOS · BOTÃO APAGAR SEMPRE VISÍVEL + ALERTDIALOG DE CONFIRMAÇÃO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3538** — **FERIADOS · BUGFIX CADASTRAR FERIADO COM CIDADE VAZIA — ZOD REJEITAVA `null`. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3537** — **FERIADOS · BUGFIX `RIGHT()` EM COLUNA DATE — BAIXAR FERIADOS FALHAVA. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3536** — **FOLHA DE PAGAMENTO · BUGFIX `Loader2` NÃO IMPORTADO — PÁGINA CRASHAVA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3532** — **CONCILIAÇÃO · BUGFIX TOLERÂNCIA DE DATA NA SUGESTÃO AUTOMÁTICA. BACKEND + FRONTEND · ZERO ALTER/DROP/DELETE.** `toleranciaDias` estava inicializado com `diasDoMes` (ex: 31) e re-sincronizado a cada troca de mês via useEffect — sistema enviava `tol=31` ao backend aceitando pares com até 31 dias de diferença. Fix: default → 0 (mesmo dia) em ambas as telas + localStorage cap 7d + backend fallback 0 + confiança "alta" agora exige `delta===0` (antes `<=1`). Detalhe: `shared/changelog.ts`.
 

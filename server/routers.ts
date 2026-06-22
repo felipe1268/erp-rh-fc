@@ -148,6 +148,7 @@ import { sstAnalyticsRouter } from "./routers/sstAnalytics";
 import { acidentesRouter } from "./routers/acidentes";
 import { avaliacaoFuncionariosRouter } from "./routers/avaliacaoFuncionarios";
 import { systemDocumentTemplatesRouter } from "./routers/systemDocumentTemplates";
+import { fiscalNotesRouter } from "./routers/fiscalNotes";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
@@ -1693,6 +1694,7 @@ export const appRouter = router({
   financial: financialRouter,
   cheques: chequesRouter,
   cartao: cartaoRouter,
+  fiscalNotes: fiscalNotesRouter,
 
   // ============================================================
   // DESCONTOS CLT (Motor de Cálculo)

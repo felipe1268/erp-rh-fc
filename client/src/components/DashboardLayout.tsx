@@ -492,6 +492,7 @@ const menuSectionsFinanceiro: MenuSection[] = [
       { icon: DollarSign,    label: "Lançamentos",       path: "/financeiro/lancamentos" },
       { icon: HandCoins,     label: "Contas a Receber",   path: "/financeiro/contas-a-receber-titulos" },
       { icon: CheckCircle,   label: "Contas a Pagar",     path: "/financeiro/contas-a-pagar" },
+      { icon: FileText,      label: "Notas Fiscais (NF-e)", path: "/financeiro/notas-fiscais" },
       { icon: ArrowLeftRight, label: "Conciliação Bancária", path: "/financeiro/conciliacao" },
       { icon: Banknote, label: "Controle de Cheques", path: "/financeiro/cheques" },
       { icon: CreditCard, label: "Cartão de Crédito", path: "/financeiro/cartao" },

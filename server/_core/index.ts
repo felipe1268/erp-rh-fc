@@ -3967,6 +3967,52 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3525: "MEDIÇÃO DE PROJETO" (AUTO-0136) inativada (substituída por "CONSULTORIA E PROJETOS").`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3525 inativar MEDIÇÃO DE PROJETO:`, e?.message || e); }
 
+        // Rev. 3543 — Notas Fiscais de Serviço Eletrônicas (NFS-e): controle de NFs emitidas pela FC,
+        // com cruzamento com lançamentos financeiros (entryId) e extrato bancário (stmtLineId).
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS fiscal_notes (
+              id                  SERIAL PRIMARY KEY,
+              company_id          INTEGER NOT NULL,
+              numero_nf           VARCHAR(20) NOT NULL,
+              serie               VARCHAR(20),
+              chave_acesso        VARCHAR(60),
+              data_emissao        DATE NOT NULL,
+              data_competencia    DATE,
+              data_vencimento     DATE,
+              tomador_cnpj        VARCHAR(20),
+              tomador_razao_social VARCHAR(255),
+              obra_id             INTEGER,
+              obra_nome           VARCHAR(255),
+              bm_referencia       VARCHAR(60),
+              descricao_servico   TEXT,
+              valor_bruto         NUMERIC(15,2) NOT NULL,
+              deducoes_total      NUMERIC(15,2) DEFAULT 0,
+              base_calculo_iss    NUMERIC(15,2),
+              aliquota_iss        NUMERIC(5,2),
+              iss_retido          NUMERIC(15,2) DEFAULT 0,
+              retencao_inss       NUMERIC(15,2) DEFAULT 0,
+              retencao_irrf       NUMERIC(15,2) DEFAULT 0,
+              retencao_pis_cofins NUMERIC(15,2) DEFAULT 0,
+              valor_liquido       NUMERIC(15,2) NOT NULL,
+              status              VARCHAR(30) DEFAULT 'pendente' NOT NULL,
+              entry_id            INTEGER,
+              stmt_line_id        INTEGER,
+              arquivo_url         TEXT,
+              arquivo_nome        VARCHAR(255),
+              observacoes         TEXT,
+              criado_por_id       INTEGER,
+              criado_por_nome     VARCHAR(255),
+              created_at          TIMESTAMP DEFAULT NOW() NOT NULL,
+              updated_at          TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_fn_company ON fiscal_notes (company_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_fn_emissao ON fiscal_notes (data_emissao)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_fn_status  ON fiscal_notes (status)`);
+          console.log(`[SyncSchema+] Rev. 3543: tabela fiscal_notes garantida (Controle de NFS-e).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA fiscal_notes:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
