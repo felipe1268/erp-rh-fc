@@ -1,6 +1,9 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3474 — **OBRAS · DATA DE INÍCIO NOS CARDS EM DD/MM/AAAA. 100% FRONTEND.**
+ * Rev. 3472 exibia MM/AAAA; ajustado para o formato completo DD/MM/AAAA via slice.
+ *
  * Rev. 3473 — **OBRAS · LAYOUT DOS CARDS — BADGES (TIPO CONTRATO + STATUS) MOVIDOS PARA
  * LINHA PRÓPRIA ACIMA DO NOME DA OBRA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Antes: badges flutuavam à direita do nome em `justify-between`, espremendo o texto e

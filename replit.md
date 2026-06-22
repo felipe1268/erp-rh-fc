@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3473** — **OBRAS · LAYOUT DOS CARDS — BADGES (TIPO CONTRATO + STATUS) EM LINHA PRÓPRIA ACIMA DO NOME. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Fim da sobreposição em mobile: badges saem do `justify-between` lateral e vão para `flex-wrap` acima do nome. Detalhe: `shared/changelog.ts`.
+- **Rev. 3474** — **OBRAS · DATA DE INÍCIO NOS CARDS EM DD/MM/AAAA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** "Início: 2026-01-01" → "Início: 01/01/2026". Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3472** — **OBRAS · DATA DE INÍCIO NOS CARDS EM MM/AAAA (FORMATO BRASILEIRO). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** "Início: 2026-01-01" → "Início: 01/2026". Detalhe: `shared/changelog.ts`.
+- **Rev. 3473** — **OBRAS · LAYOUT DOS CARDS — BADGES (TIPO CONTRATO + STATUS) EM LINHA PRÓPRIA ACIMA DO NOME. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Fim da sobreposição em mobile: badges saem do `justify-between` lateral e vão para `flex-wrap` acima do nome. Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
 
