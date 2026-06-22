@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3480** — **PLANO DE CONTAS · NOVO LAYOUT: CHIPS DE TIPO, BARRA COLORIDA LATERAL POR TIPO, BOTÃO "+ SUBCONTA" INLINE NO HOVER, FORMULÁRIO REORGANIZADO COM CAMPOS AVANÇADOS COLAPSÍVEIS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Lista: barra colorida 1px na raiz (cor por tipo), ícone `ChevronRight` nas filhas, fundo diferenciado nas raízes, botão `+` no hover abre formulário pré-preenchido com aquela conta como pai. Filtros: Select de tipo substituído por chips pill horizontais com contagem. Formulário: "Conta Pai" renomeado para "Dentro de qual grupo?" + subtexto explicativo; "Sem pai (conta raiz)" virou "Grupo principal (sem pai)" com ícone; campo "Nível" removido (era derivado, confundia); DRE/Ordem movidos para seção "Configurações avançadas" colapsível; Código+Nome lado a lado. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3479** — **DASHBOARD CONCILIAÇÃO BANCÁRIA · EXPANSÃO MASSIVA DE KPIs E GRÁFICOS: TOP FORNECEDORES, POR CATEGORIA, POR BANCO, SALDO ACUMULADO, % CONCILIAÇÃO POR MÊS. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Nova procedure `getConciliacaoDashExtra` (5 queries: top fornecedores/categorias despesa/receita/obras/extremos do extrato). No frontend: +6 KPI cards (ticket médio, maior entrada/saída, contas ativas, fornecedores únicos, descrições únicas), +10 novos gráficos (entradas×saídas/mês, % conciliado/mês via ComposedChart, saldo acumulado AreaChart, saídas/entradas/comparativo por banco, ranking fornecedores com minibar + horizontal bar, donut+ranking categorias despesa, bar+ranking categorias receita, stacked bar obras+ranking), +4 DetailDialogs de detalhe. Componentes auxiliares `SectionTitle`/`MiniBar`/`TopListCard` adicionados no próprio arquivo. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3478** — **CONCILIAÇÃO BANCÁRIA · RELATÓRIO NÃO RECARREGA AUTOMATICAMENTE A CADA AÇÃO — USUÁRIO CONTROLA VIA BOTÃO "ATUALIZAR". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** A cada ação (conciliação, lançamento, desconciliação, etc.) o ERP disparava 3 queries pesadas simultaneamente (`refetchReport`/`refetchGeral`/`refetchSug`). Fix: `staleTime: Infinity` nas duas queries principais; todos os `onSuccess` substituem os refetches pesados por `setReportStale(true)`; banner âmbar "Relatório desatualizado" + botão "Atualizar" aparecem acima do card de progresso; `refetchSt`/`refetchStAno`/`refetchAccStatus` (leves) são mantidos. `useEffect` limpa o badge ao trocar conta/período. Import de extrato mantém carga explícita. Detalhe: `shared/changelog.ts`.
-
 ### Revisões recentes (one-liners)
+
+- **Rev. 3478** — **CONCILIAÇÃO BANCÁRIA · RELATÓRIO NÃO RECARREGA AUTOMATICAMENTE A CADA AÇÃO — USUÁRIO CONTROLA VIA BOTÃO "ATUALIZAR". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3477** — **CONCILIAÇÃO BANCÁRIA · (1) ERRO "THE STRING DID NOT MATCH THE EXPECTED PATTERN" MAPEADO PARA MENSAGEM AMIGÁVEL + (2) BUGFIX `getOcsPorMes` "operator does not exist: date ~ unknown". BACKEND PONTUAL + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3475** — **EMPRESAS TERCEIRAS · AUTO-PREENCHIMENTO DA FICHA AO DIGITAR O CNPJ (14 DÍGITOS). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3468** — **CONCILIAÇÃO BANCÁRIA · DIALOG DE EDIÇÃO — CAMPO OBRA: AUTO-MATCH CASE-INSENSITIVE + HINT QUANDO NÃO CASA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3466** — **CONCILIAÇÃO BANCÁRIA · CAMPO "CONCILIADO" EXIBE QUEM CONCILIOU + DATA/HORA BR (DD/MM/AAAA HH:MM). BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 
 ### REGRA DE OURO — Cabeçalho de documentos institucionais FC (Rev. 2106+)

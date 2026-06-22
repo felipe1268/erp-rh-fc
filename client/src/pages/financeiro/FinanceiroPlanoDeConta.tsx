@@ -16,83 +16,71 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, BookOpen, Sprout, Pencil, Trash2, Check, ChevronsUpDown } from "lucide-react";
+import {
+  Plus, Search, BookOpen, Sprout, Pencil, Trash2, Check, ChevronsUpDown,
+  ChevronRight, Layers, Tag, ArrowRight,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// ─── Tipos e constantes ────────────────────────────────────────────────────────
+
 const TIPOS = [
-  { value: "receita_bruta", label: "Receita Bruta" },
-  { value: "deducao_receita", label: "Dedução da Receita" },
-  { value: "custo_obra", label: "Custo de Obra" },
-  { value: "despesa_fixa", label: "Despesa Fixa" },
-  { value: "despesa_variavel", label: "Despesa Variável" },
-  { value: "despesa_financeira", label: "Despesa Financeira" },
-  { value: "receita_financeira", label: "Receita Financeira" },
-  { value: "imposto_resultado", label: "Imposto sobre Resultado" },
+  { value: "receita_bruta",       label: "Receita Bruta",          group: "receita" },
+  { value: "deducao_receita",     label: "Dedução da Receita",      group: "receita" },
+  { value: "custo_obra",          label: "Custo de Obra",           group: "custo"   },
+  { value: "despesa_fixa",        label: "Despesa Fixa",            group: "despesa" },
+  { value: "despesa_variavel",    label: "Despesa Variável",        group: "despesa" },
+  { value: "despesa_financeira",  label: "Despesa Financeira",      group: "despesa" },
+  { value: "receita_financeira",  label: "Receita Financeira",      group: "receita" },
+  { value: "imposto_resultado",   label: "Imposto s/ Resultado",    group: "imposto" },
 ];
 
-const TIPO_COLORS: Record<string, string> = {
-  receita_bruta: "bg-green-100 text-green-800",
-  deducao_receita: "bg-yellow-100 text-yellow-800",
-  custo_obra: "bg-orange-100 text-orange-800",
-  despesa_fixa: "bg-red-100 text-red-800",
-  despesa_variavel: "bg-pink-100 text-pink-800",
-  despesa_financeira: "bg-purple-100 text-purple-800",
-  receita_financeira: "bg-teal-100 text-teal-800",
-  imposto_resultado: "bg-gray-100 text-gray-800",
+const TIPO_META: Record<string, { color: string; bar: string; dot: string }> = {
+  receita_bruta:      { color: "bg-emerald-100 text-emerald-800 border-emerald-200", bar: "bg-emerald-400", dot: "#10b981" },
+  deducao_receita:    { color: "bg-yellow-100  text-yellow-800  border-yellow-200",  bar: "bg-yellow-400",  dot: "#eab308" },
+  custo_obra:         { color: "bg-orange-100  text-orange-800  border-orange-200",  bar: "bg-orange-400",  dot: "#f97316" },
+  despesa_fixa:       { color: "bg-red-100     text-red-800     border-red-200",     bar: "bg-red-400",     dot: "#ef4444" },
+  despesa_variavel:   { color: "bg-pink-100    text-pink-800    border-pink-200",    bar: "bg-pink-400",    dot: "#ec4899" },
+  despesa_financeira: { color: "bg-violet-100  text-violet-800  border-violet-200",  bar: "bg-violet-400",  dot: "#8b5cf6" },
+  receita_financeira: { color: "bg-teal-100    text-teal-800    border-teal-200",    bar: "bg-teal-400",    dot: "#14b8a6" },
+  imposto_resultado:  { color: "bg-slate-100   text-slate-700   border-slate-200",   bar: "bg-slate-400",   dot: "#64748b" },
 };
 
-// Rev. 2166 — comparador natural por código contábil ("4.9" < "4.10" < "5").
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function cmpCodigo(a: string, b: string): number {
   const pa = String(a).split(".").map((s) => Number(s) || 0);
   const pb = String(b).split(".").map((s) => Number(s) || 0);
   const n = Math.max(pa.length, pb.length);
   for (let i = 0; i < n; i++) {
-    const x = pa[i] ?? -1;
-    const y = pb[i] ?? -1;
+    const x = pa[i] ?? -1, y = pb[i] ?? -1;
     if (x !== y) return x - y;
   }
   return 0;
 }
 
-// Próximo código filho de `parent` (ex.: pai "4" + filhos ["4.1","4.2","4.9"] → "4.10").
-// Se `parent` for vazio, devolve próxima raiz (ex.: existentes [1,2,3,4,5] → "6").
 function suggestNextCode(parentCodigo: string, allCodigos: string[]): string {
   if (!parentCodigo) {
-    const raizes = allCodigos
-      .map((c) => Number(String(c).split(".")[0]))
-      .filter((n) => Number.isFinite(n) && n > 0);
-    const max = raizes.length ? Math.max(...raizes) : 0;
-    return String(max + 1);
+    const raizes = allCodigos.map((c) => Number(String(c).split(".")[0])).filter((n) => Number.isFinite(n) && n > 0);
+    return String(raizes.length ? Math.max(...raizes) + 1 : 1);
   }
   const prefix = `${parentCodigo}.`;
-  const filhosDiretos = allCodigos
-    .filter((c) => c.startsWith(prefix))
-    .map((c) => {
-      const resto = c.slice(prefix.length);
-      const seg = resto.split(".")[0];
-      return Number(seg);
-    })
-    .filter((n) => Number.isFinite(n) && n > 0);
-  const max = filhosDiretos.length ? Math.max(...filhosDiretos) : 0;
-  return `${parentCodigo}.${max + 1}`;
+  const filhos = allCodigos.filter((c) => c.startsWith(prefix)).map((c) => Number(c.slice(prefix.length).split(".")[0])).filter((n) => Number.isFinite(n) && n > 0);
+  return `${parentCodigo}.${filhos.length ? Math.max(...filhos) + 1 : 1}`;
 }
 
 type FormState = {
   id?: number;
-  codigo: string;
-  nome: string;
-  tipo: string;
-  natureza: string;
-  nivel: number;
-  contaPaiId: string; // string vazia = sem pai
-  classificacaoDRE: string;
-  ordem: string;
+  codigo: string; nome: string; tipo: string; natureza: string;
+  nivel: number; contaPaiId: string; classificacaoDRE: string; ordem: string;
 };
 
 const EMPTY_FORM: FormState = {
-  codigo: "", nome: "", tipo: "custo_obra", natureza: "devedora", nivel: 1,
-  contaPaiId: "", classificacaoDRE: "", ordem: "0",
+  codigo: "", nome: "", tipo: "custo_obra", natureza: "devedora",
+  nivel: 1, contaPaiId: "", classificacaoDRE: "", ordem: "0",
 };
+
+// ─── Componente principal ─────────────────────────────────────────────────────
 
 export default function FinanceiroPlanoDeConta() {
   const { companyId } = useCompany();
@@ -103,9 +91,8 @@ export default function FinanceiroPlanoDeConta() {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [paiPopoverOpen, setPaiPopoverOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [showAvancado, setShowAvancado] = useState(false);
 
-  // Rev. 2157 — escopo='plano' filtra fora as categorias operacionais (AUTO-*)
-  // Rev. 2160 — ativo:true esconde contas soft-deletadas (ex.: órfã 3.3 migrada na Rev. 2159)
   const { data: contas, isLoading, refetch } = (trpc as any).financial.getAccounts.useQuery(
     { companyId, escopo: "plano", ativo: true, tipo: tipoFilter !== "all" ? tipoFilter : undefined },
     { enabled: !!companyId }
@@ -117,35 +104,26 @@ export default function FinanceiroPlanoDeConta() {
     onSuccess: () => { toast({ title: "Plano de contas carregado!" }); refetch(); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
-
   const createMut = (trpc as any).financial.createAccount.useMutation({
     onSuccess: () => { toast({ title: "Conta criada!" }); closeDialog(); refetch(); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
-
   const updateMut = (trpc as any).financial.updateAccount.useMutation({
     onSuccess: () => { toast({ title: "Conta atualizada!" }); closeDialog(); refetch(); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
-
   const deleteMut = (trpc as any).financial.deleteAccount.useMutation({
     onSuccess: (r: any) => { toast({ title: "Conta excluída!", description: `${r.codigo} — ${r.nome}` }); setDeleteTarget(null); refetch(); },
     onError: (e: any) => toast({ title: "Não foi possível excluir", description: e.message, variant: "destructive" }),
   });
 
-  // Ordenação natural por código contábil (4.9 antes de 4.10, antes de 5).
-  const sortedContas = useMemo(() => {
-    return [...allContas].sort((a, b) => cmpCodigo(a.codigo, b.codigo));
-  }, [allContas]);
-
-  const filtered = sortedContas.filter((c: any) => {
+  const sortedContas = useMemo(() => [...allContas].sort((a, b) => cmpCodigo(a.codigo, b.codigo)), [allContas]);
+  const filtered = useMemo(() => sortedContas.filter((c: any) => {
     if (!search) return true;
     const q = search.toLowerCase();
     return c.codigo.toLowerCase().includes(q) || c.nome.toLowerCase().includes(q);
-  });
+  }), [sortedContas, search]);
 
-  // Pais elegíveis para o select (ordenados naturalmente).
-  // Quando editando, exclui a própria conta e suas descendentes pra evitar ciclo.
   const eligibleParents = useMemo(() => {
     const editingCodigo = form.id ? allContas.find((c) => c.id === form.id)?.codigo : null;
     return sortedContas.filter((c: any) => {
@@ -156,22 +134,33 @@ export default function FinanceiroPlanoDeConta() {
     });
   }, [sortedContas, form.id, allContas]);
 
-  function openCreate() {
+  function openCreate(parentId?: number) {
+    if (parentId != null) {
+      const pai = allContas.find((c) => c.id === parentId);
+      if (pai) {
+        const allCodigos = allContas.map((c) => String(c.codigo));
+        setForm({
+          ...EMPTY_FORM,
+          contaPaiId: String(parentId),
+          codigo: suggestNextCode(String(pai.codigo), allCodigos),
+          nivel: (Number(pai.nivel) || 1) + 1,
+          tipo: pai.tipo,
+          natureza: pai.natureza,
+        });
+        setDialogOpen(true);
+        return;
+      }
+    }
     setForm(EMPTY_FORM);
     setDialogOpen(true);
   }
 
   function openEdit(c: any) {
     setForm({
-      id: c.id,
-      codigo: c.codigo,
-      nome: c.nome,
-      tipo: c.tipo,
-      natureza: c.natureza,
+      id: c.id, codigo: c.codigo, nome: c.nome, tipo: c.tipo, natureza: c.natureza,
       nivel: Number(c.nivel) || 1,
       contaPaiId: c.contaPaiId ? String(c.contaPaiId) : "",
-      classificacaoDRE: c.classificacaoDRE ?? "",
-      ordem: String(c.ordem ?? 0),
+      classificacaoDRE: c.classificacaoDRE ?? "", ordem: String(c.ordem ?? 0),
     });
     setDialogOpen(true);
   }
@@ -179,239 +168,280 @@ export default function FinanceiroPlanoDeConta() {
   function closeDialog() {
     setDialogOpen(false);
     setForm(EMPTY_FORM);
+    setShowAvancado(false);
   }
 
-  // Ao escolher conta-pai → sugere próximo código + nível + tipo/natureza herdados.
   function onPickParent(paiId: string) {
     if (!paiId) {
-      // "Sem pai" (raiz)
       const allCodigos = allContas.filter((c) => c.id !== form.id).map((c) => String(c.codigo));
-      setForm((f) => ({
-        ...f,
-        contaPaiId: "",
-        codigo: f.id ? f.codigo : suggestNextCode("", allCodigos),
-        nivel: 1,
-      }));
+      setForm((f) => ({ ...f, contaPaiId: "", codigo: f.id ? f.codigo : suggestNextCode("", allCodigos), nivel: 1 }));
       return;
     }
     const pai = allContas.find((c) => String(c.id) === paiId);
     if (!pai) return;
     const allCodigos = allContas.filter((c) => c.id !== form.id).map((c) => String(c.codigo));
-    const next = suggestNextCode(String(pai.codigo), allCodigos);
     setForm((f) => ({
-      ...f,
-      contaPaiId: paiId,
-      // Rev. 2173 — em edição também sugere o próximo código sob o NOVO pai.
-      // Antes a edição mantinha o código antigo, então filhos órfãos como
-      // "3.1.1" continuavam aparecendo aninhados mesmo depois de mudar de pai.
-      // User ainda pode editar manualmente o campo "Código" se quiser.
-      codigo: next,
+      ...f, contaPaiId: paiId, codigo: suggestNextCode(String(pai.codigo), allCodigos),
       nivel: (Number(pai.nivel) || 1) + 1,
-      // herda tipo/natureza do pai pra coerência contábil (user pode alterar)
       tipo: f.id ? f.tipo : pai.tipo,
       natureza: f.id ? f.natureza : pai.natureza,
     }));
   }
 
   function handleSave() {
-    if (!form.nome.trim()) {
-      toast({ title: "Nome obrigatório", variant: "destructive" });
-      return;
-    }
-    if (!form.codigo.trim()) {
-      toast({ title: "Código obrigatório", variant: "destructive" });
-      return;
-    }
-    if (form.id) {
-      updateMut.mutate({
-        id: form.id,
-        companyId,
-        nome: form.nome,
-        tipo: form.tipo,
-        natureza: form.natureza,
-        contaPaiId: form.contaPaiId ? Number(form.contaPaiId) : null,
-        classificacaoDRE: form.classificacaoDRE || undefined,
-        ordem: parseInt(form.ordem) || 0,
-        // Rev. 2166 — envia nivel pra acompanhar troca de Conta Pai em edição
-        // (onPickParent já recalcula form.nivel = pai.nivel + 1).
-        nivel: form.nivel,
-        // Rev. 2173 — envia codigo pra permitir reorganização hierárquica
-        // (antes era silenciosamente ignorado pelo backend).
-        codigo: form.codigo,
-      });
-    } else {
-      createMut.mutate({
-        companyId,
-        escopo: "plano",
-        codigo: form.codigo,
-        nome: form.nome,
-        tipo: form.tipo,
-        natureza: form.natureza,
-        nivel: form.nivel,
-        contaPaiId: form.contaPaiId ? Number(form.contaPaiId) : undefined,
-        classificacaoDRE: form.classificacaoDRE || undefined,
-        ordem: parseInt(form.ordem) || 0,
-      });
-    }
+    if (!form.nome.trim()) { toast({ title: "Nome obrigatório", variant: "destructive" }); return; }
+    if (!form.codigo.trim()) { toast({ title: "Código obrigatório", variant: "destructive" }); return; }
+    const payload = {
+      companyId, nome: form.nome, tipo: form.tipo, natureza: form.natureza,
+      contaPaiId: form.contaPaiId ? Number(form.contaPaiId) : null,
+      classificacaoDRE: form.classificacaoDRE || undefined,
+      ordem: parseInt(form.ordem) || 0,
+      nivel: form.nivel, codigo: form.codigo,
+    };
+    if (form.id) updateMut.mutate({ id: form.id, ...payload } as any);
+    else createMut.mutate({ ...payload, escopo: "plano" } as any);
   }
 
-  const paiSelecionado = form.contaPaiId
-    ? eligibleParents.find((c: any) => String(c.id) === form.contaPaiId)
-    : null;
+  const paiSelecionado = form.contaPaiId ? eligibleParents.find((c: any) => String(c.id) === form.contaPaiId) : null;
+
+  // Contadores por grupo de tipo
+  const countByTipo = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const c of allContas) m[c.tipo] = (m[c.tipo] ?? 0) + 1;
+    return m;
+  }, [allContas]);
 
   return (
     <DashboardLayout>
-      <div className="max-w-5xl mx-auto p-6 space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-5">
+
+        {/* ── Header ── */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <BookOpen className="w-6 h-6 text-blue-600" />Plano de Contas
+            <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+              <BookOpen className="w-5 h-5 text-blue-600" />
+              Plano de Contas
             </h1>
-            <p className="text-sm text-gray-500 mt-1">{filtered.length} conta(s) cadastrada(s)</p>
+            <p className="text-sm text-slate-500 mt-0.5">{allContas.length} conta(s) cadastrada(s)</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => seedMut.mutate({ companyId })} disabled={seedMut.isPending}>
-              <Sprout className="w-4 h-4 mr-2 text-green-600" />
+            <Button variant="outline" size="sm" onClick={() => seedMut.mutate({ companyId })} disabled={seedMut.isPending}>
+              <Sprout className="w-4 h-4 mr-1.5 text-emerald-600" />
               {seedMut.isPending ? "Carregando..." : "Carregar Padrão"}
             </Button>
-            <Button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700 text-white">
-              <Plus className="w-4 h-4 mr-2" />Nova Conta
+            <Button size="sm" onClick={() => openCreate()} className="bg-blue-600 hover:bg-blue-700 text-white">
+              <Plus className="w-4 h-4 mr-1.5" />Nova Conta
             </Button>
           </div>
         </div>
 
-        {/* Filtros */}
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-4 flex flex-wrap gap-3">
-            <Select value={tipoFilter} onValueChange={setTipoFilter}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Tipo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os Tipos</SelectItem>
-                {TIPOS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input className="pl-9" placeholder="Código ou nome..." value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
-          </CardContent>
-        </Card>
+        {/* ── Chips de tipo (resumo visual) ── */}
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setTipoFilter("all")}
+            className={cn("text-xs px-3 py-1 rounded-full border font-medium transition-colors",
+              tipoFilter === "all" ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-600 border-slate-200 hover:border-slate-400")}
+          >
+            Todos
+          </button>
+          {TIPOS.map(t => {
+            const meta = TIPO_META[t.value];
+            const active = tipoFilter === t.value;
+            return (
+              <button
+                key={t.value}
+                onClick={() => setTipoFilter(t.value)}
+                className={cn("text-xs px-3 py-1 rounded-full border font-medium transition-colors",
+                  active ? `${meta.color} border-current` : "bg-white text-slate-500 border-slate-200 hover:border-slate-300")}
+              >
+                {t.label}
+                {countByTipo[t.value] ? <span className="ml-1 opacity-60">{countByTipo[t.value]}</span> : null}
+              </button>
+            );
+          })}
+        </div>
 
-        {/* Contas */}
-        <Card className="border-0 shadow-sm">
+        {/* ── Busca ── */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Input className="pl-9 bg-white" placeholder="Buscar por código ou nome..." value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+
+        {/* ── Lista de contas ── */}
+        <Card className="border border-slate-200 shadow-sm overflow-hidden">
           <CardContent className="p-0">
             {isLoading ? (
-              <div className="p-8 text-center text-gray-500">Carregando...</div>
+              <div className="p-10 text-center text-slate-400">Carregando...</div>
             ) : filtered.length === 0 ? (
-              <div className="p-8 text-center text-gray-400">
-                <BookOpen className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                <p>Nenhuma conta cadastrada.</p>
-                <p className="text-sm mt-1">Clique em "Carregar Padrão" para usar o plano de contas FC Engenharia.</p>
+              <div className="p-10 text-center text-slate-400">
+                <BookOpen className="w-10 h-10 mx-auto mb-3 text-slate-300" />
+                <p className="font-medium">Nenhuma conta cadastrada.</p>
+                <p className="text-sm mt-1">Clique em "Carregar Padrão" para usar o plano FC Engenharia.</p>
               </div>
             ) : (
-              <div className="divide-y divide-gray-100">
-                {filtered.map((c: any) => (
-                  <div
-                    key={c.id}
-                    className="px-5 py-2.5 flex items-center justify-between hover:bg-gray-50 group"
-                    style={{ paddingLeft: `${20 + (c.nivel - 1) * 20}px` }}
-                  >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <span className="text-xs font-mono text-gray-500 w-16 flex-shrink-0">{c.codigo}</span>
-                      <span className={`text-sm truncate ${c.nivel === 1 ? "font-bold text-gray-800" : c.nivel === 2 ? "font-medium text-gray-700" : "text-gray-600"}`}>
-                        {c.nome}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Badge className={`text-xs ${TIPO_COLORS[c.tipo] ?? "bg-gray-100"}`}>
-                        {TIPOS.find(t => t.value === c.tipo)?.label ?? c.tipo}
-                      </Badge>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${c.natureza === "credora" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
-                        {c.natureza}
-                      </span>
-                      <div className="flex items-center gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button
-                          variant="ghost" size="icon"
-                          className="h-7 w-7 text-gray-400 hover:text-blue-600"
-                          onClick={() => openEdit(c)}
-                          title="Editar"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost" size="icon"
-                          className="h-7 w-7 text-gray-400 hover:text-red-600"
-                          onClick={() => setDeleteTarget(c)}
-                          title="Excluir"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
+              <div className="divide-y divide-slate-100">
+                {filtered.map((c: any) => {
+                  const nivel = Number(c.nivel) || 1;
+                  const meta = TIPO_META[c.tipo] ?? TIPO_META.despesa_fixa;
+                  const tipoLabel = TIPOS.find(t => t.value === c.tipo)?.label ?? c.tipo;
+                  const isRaiz = nivel === 1;
+
+                  return (
+                    <div
+                      key={c.id}
+                      className={cn(
+                        "flex items-center gap-0 hover:bg-slate-50 group transition-colors",
+                        isRaiz && "bg-slate-50/70",
+                      )}
+                    >
+                      {/* Barra colorida lateral por tipo */}
+                      <div className={cn("w-1 self-stretch flex-shrink-0", isRaiz ? meta.bar : "bg-transparent")} />
+
+                      {/* Indentação com marcador de hierarquia */}
+                      <div
+                        className="flex items-center gap-2 flex-1 min-w-0 py-2.5 pr-3"
+                        style={{ paddingLeft: `${12 + (nivel - 1) * 22}px` }}
+                      >
+                        {/* Indicador de nível */}
+                        {nivel > 1 && (
+                          <ChevronRight className="w-3 h-3 text-slate-300 flex-shrink-0" />
+                        )}
+
+                        {/* Código */}
+                        <span className={cn(
+                          "font-mono flex-shrink-0 text-right",
+                          isRaiz ? "text-xs font-bold text-slate-700 w-16" : "text-[11px] text-slate-400 w-16",
+                        )}>
+                          {c.codigo}
+                        </span>
+
+                        {/* Nome */}
+                        <span className={cn(
+                          "truncate flex-1",
+                          nivel === 1 ? "text-sm font-bold text-slate-900" :
+                          nivel === 2 ? "text-sm font-semibold text-slate-700" :
+                          "text-sm text-slate-600",
+                        )} title={c.nome}>
+                          {c.nome}
+                        </span>
+                      </div>
+
+                      {/* Badges + ações */}
+                      <div className="flex items-center gap-1.5 pr-3 shrink-0">
+                        <Badge className={cn("text-[11px] border hidden sm:inline-flex", meta.color)}>
+                          {tipoLabel}
+                        </Badge>
+                        <span className={cn(
+                          "text-[11px] px-2 py-0.5 rounded-full hidden md:inline-block",
+                          c.natureza === "credora" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700",
+                        )}>
+                          {c.natureza}
+                        </span>
+
+                        {/* Ações — aparecem no hover */}
+                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ml-1">
+                          <button
+                            className="p-1.5 rounded hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors"
+                            title="Adicionar subconta"
+                            onClick={() => openCreate(c.id)}
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            className="p-1.5 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
+                            title="Editar"
+                            onClick={() => openEdit(c)}
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            className="p-1.5 rounded hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors"
+                            title="Excluir"
+                            onClick={() => setDeleteTarget(c)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Modal Nova / Editar conta */}
+        {/* ── Modal Nova / Editar ── */}
         <Dialog open={dialogOpen} onOpenChange={(o) => o ? setDialogOpen(true) : closeDialog()}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>{form.id ? "Editar Conta Contábil" : "Nova Conta Contábil"}</DialogTitle>
+              <DialogTitle className="flex items-center gap-2">
+                <Tag className="w-4 h-4 text-blue-600" />
+                {form.id ? "Editar Conta" : "Nova Conta"}
+              </DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
-              {/* Rev. 2166 — Conta Pai gera código automático */}
+
+            <div className="space-y-4 pt-1">
+
+              {/* ── Conta Pai ─────────────────────────────────────────────── */}
               <div>
-                <Label>Conta Pai <span className="text-gray-400 text-xs font-normal">(opcional — escolha pra gerar o código)</span></Label>
+                <Label className="text-sm font-medium text-slate-700">
+                  Dentro de qual grupo?
+                </Label>
+                <p className="text-[11px] text-slate-400 mb-1.5">
+                  Escolha uma conta existente para criar uma subconta, ou deixe em branco para criar um grupo principal.
+                </p>
                 <Popover open={paiPopoverOpen} onOpenChange={setPaiPopoverOpen}>
                   <PopoverTrigger asChild>
                     <button
                       type="button"
-                      role="combobox"
-                      aria-expanded={paiPopoverOpen}
                       className={cn(
-                        "mt-1 h-9 w-full flex items-center justify-between rounded-md border px-2 text-sm bg-white transition-colors",
-                        paiPopoverOpen ? "border-blue-400 ring-2 ring-blue-100" : "border-gray-200 hover:border-gray-300",
+                        "w-full flex items-center justify-between rounded-md border px-3 h-10 text-sm bg-white transition-colors",
+                        paiPopoverOpen ? "border-blue-400 ring-2 ring-blue-100" : "border-slate-200 hover:border-slate-300",
                       )}
                     >
-                      <span className={cn("truncate text-left", !paiSelecionado && "text-gray-400")}>
-                        {paiSelecionado ? `${paiSelecionado.codigo} · ${paiSelecionado.nome}` : "— Sem pai (conta raiz) —"}
-                      </span>
-                      <div className="flex items-center gap-1 shrink-0">
+                      {paiSelecionado ? (
+                        <span className="flex items-center gap-2 text-slate-900 truncate">
+                          <span className="font-mono text-xs text-slate-500">{paiSelecionado.codigo}</span>
+                          <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span className="truncate">{paiSelecionado.nome}</span>
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 flex items-center gap-1.5">
+                          <Layers className="w-3.5 h-3.5" />
+                          Grupo principal (sem pai)
+                        </span>
+                      )}
+                      <div className="flex items-center gap-1 shrink-0 ml-2">
                         {paiSelecionado && (
                           <span
-                            className="text-gray-400 hover:text-red-500 px-1"
+                            className="text-slate-400 hover:text-red-500 px-1 text-base leading-none"
                             role="button"
                             tabIndex={-1}
                             onClick={(e) => { e.stopPropagation(); e.preventDefault(); onPickParent(""); setPaiPopoverOpen(false); }}
                           >×</span>
                         )}
-                        <ChevronsUpDown className="w-3.5 h-3.5 text-gray-400" />
+                        <ChevronsUpDown className="w-3.5 h-3.5 text-slate-400" />
                       </div>
                     </button>
                   </PopoverTrigger>
                   <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start" sideOffset={4}>
-                    <Command
-                      filter={(itemValue, sQ) => {
-                        const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                        return norm(itemValue).includes(norm(sQ)) ? 1 : 0;
-                      }}
-                    >
-                      <CommandInput placeholder="Buscar por código ou nome..." />
+                    <Command filter={(v, q) => {
+                      const n = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                      return n(v).includes(n(q)) ? 1 : 0;
+                    }}>
+                      <CommandInput placeholder="Buscar conta..." />
                       <CommandList className="max-h-72">
-                        <CommandEmpty className="py-6 text-center text-sm text-gray-400">Nenhuma conta encontrada.</CommandEmpty>
+                        <CommandEmpty className="py-6 text-center text-sm text-slate-400">Nenhuma conta encontrada.</CommandEmpty>
                         <CommandGroup>
                           <CommandItem
                             value="--sem-pai--"
                             onSelect={() => { onPickParent(""); setPaiPopoverOpen(false); }}
-                            className="text-xs text-gray-500 italic"
+                            className="text-xs text-slate-500 italic"
                           >
-                            <Check className={cn("w-3.5 h-3.5 mr-2", !form.contaPaiId ? "opacity-100" : "opacity-0")} />
-                            — Sem pai (conta raiz) —
+                            <Check className={cn("w-3.5 h-3.5 mr-2 text-blue-600", !form.contaPaiId ? "opacity-100" : "opacity-0")} />
+                            <Layers className="w-3.5 h-3.5 mr-1.5 text-slate-400" />
+                            Grupo principal (sem pai)
                           </CommandItem>
                           {eligibleParents.map((p: any) => (
                             <CommandItem
@@ -419,10 +449,11 @@ export default function FinanceiroPlanoDeConta() {
                               value={`${p.codigo} ${p.nome}`}
                               onSelect={() => { onPickParent(String(p.id)); setPaiPopoverOpen(false); }}
                               className="text-xs"
+                              style={{ paddingLeft: `${12 + ((Number(p.nivel) || 1) - 1) * 12}px` }}
                             >
-                              <Check className={cn("w-3.5 h-3.5 mr-2", String(p.id) === form.contaPaiId ? "opacity-100" : "opacity-0")} />
-                              <span className="font-mono text-gray-500 mr-2">{p.codigo}</span>
-                              <span className="text-gray-800">{p.nome}</span>
+                              <Check className={cn("w-3.5 h-3.5 mr-2 text-blue-600 shrink-0", String(p.id) === form.contaPaiId ? "opacity-100" : "opacity-0")} />
+                              <span className="font-mono text-slate-400 mr-2 shrink-0">{p.codigo}</span>
+                              <span className={cn("truncate", Number(p.nivel) === 1 ? "font-semibold text-slate-800" : "text-slate-700")}>{p.nome}</span>
                             </CommandItem>
                           ))}
                         </CommandGroup>
@@ -432,37 +463,38 @@ export default function FinanceiroPlanoDeConta() {
                 </Popover>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              {/* ── Separador visual ── */}
+              <div className="h-px bg-slate-100" />
+
+              {/* ── Código (auto) + Nome ── */}
+              <div className="grid grid-cols-[140px,1fr] gap-3">
                 <div>
-                  <Label>Código *</Label>
+                  <Label className="text-sm">Código *</Label>
                   <Input
                     value={form.codigo}
                     onChange={e => setForm(f => ({ ...f, codigo: e.target.value }))}
-                    placeholder="Ex: 4.9"
+                    placeholder={paiSelecionado ? `${paiSelecionado.codigo}.X` : "Ex: 4"}
+                    className="font-mono"
                   />
-                  {/* Rev. 2173 — código sempre editável (inclusive em edição) pra
-                      permitir reorganizar a hierarquia. Backend valida formato. */}
-                  <p className="text-[10px] text-gray-400 mt-1">
-                    Sugerido automaticamente ao escolher a conta pai — editável.
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    {paiSelecionado ? "Gerado automaticamente — você pode editar." : "Número ou código livre."}
                   </p>
                 </div>
                 <div>
-                  <Label>Nível</Label>
+                  <Label className="text-sm">Nome *</Label>
                   <Input
-                    type="number"
-                    value={form.nivel}
-                    onChange={e => setForm(f => ({ ...f, nivel: parseInt(e.target.value) || 1 }))}
-                    min="1" max="5"
+                    value={form.nome}
+                    onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
+                    placeholder="Nome da conta"
+                    autoFocus
                   />
                 </div>
               </div>
-              <div>
-                <Label>Nome *</Label>
-                <Input value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} placeholder="Nome da conta" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+
+              {/* ── Tipo + Natureza ── */}
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Tipo</Label>
+                  <Label className="text-sm">Tipo</Label>
                   <Select value={form.tipo} onValueChange={v => setForm(f => ({ ...f, tipo: v }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -471,7 +503,7 @@ export default function FinanceiroPlanoDeConta() {
                   </Select>
                 </div>
                 <div>
-                  <Label>Natureza</Label>
+                  <Label className="text-sm">Natureza</Label>
                   <Select value={form.natureza} onValueChange={v => setForm(f => ({ ...f, natureza: v }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -481,18 +513,33 @@ export default function FinanceiroPlanoDeConta() {
                   </Select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Classificação DRE</Label>
-                  <Input value={form.classificacaoDRE} onChange={e => setForm(f => ({ ...f, classificacaoDRE: e.target.value }))} />
-                </div>
-                <div>
-                  <Label>Ordem</Label>
-                  <Input type="number" value={form.ordem} onChange={e => setForm(f => ({ ...f, ordem: e.target.value }))} />
-                </div>
+
+              {/* ── Avançado (colapsível) ── */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowAvancado(v => !v)}
+                  className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1 transition-colors"
+                >
+                  <ChevronRight className={cn("w-3 h-3 transition-transform", showAvancado && "rotate-90")} />
+                  Configurações avançadas (DRE · Ordem)
+                </button>
+                {showAvancado && (
+                  <div className="grid grid-cols-2 gap-3 mt-2">
+                    <div>
+                      <Label className="text-sm">Classificação DRE</Label>
+                      <Input value={form.classificacaoDRE} onChange={e => setForm(f => ({ ...f, classificacaoDRE: e.target.value }))} placeholder="Opcional" />
+                    </div>
+                    <div>
+                      <Label className="text-sm">Ordem</Label>
+                      <Input type="number" value={form.ordem} onChange={e => setForm(f => ({ ...f, ordem: e.target.value }))} />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-            <DialogFooter>
+
+            <DialogFooter className="mt-2">
               <Button variant="outline" onClick={closeDialog}>Cancelar</Button>
               <Button
                 onClick={handleSave}
@@ -505,7 +552,7 @@ export default function FinanceiroPlanoDeConta() {
           </DialogContent>
         </Dialog>
 
-        {/* Confirm excluir */}
+        {/* ── Confirm excluir ── */}
         <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
@@ -513,7 +560,7 @@ export default function FinanceiroPlanoDeConta() {
               <AlertDialogDescription>
                 <strong>{deleteTarget?.codigo} — {deleteTarget?.nome}</strong>
                 <br />
-                A conta será desativada (soft-delete). Se houver lançamentos ou contas filhas vinculadas, a exclusão será bloqueada.
+                A conta será desativada. Se houver lançamentos ou subcontas vinculadas, a exclusão será bloqueada.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -528,6 +575,7 @@ export default function FinanceiroPlanoDeConta() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
       </div>
     </DashboardLayout>
   );

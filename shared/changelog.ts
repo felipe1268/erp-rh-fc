@@ -1,6 +1,41 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3480 — **PLANO DE CONTAS · NOVO LAYOUT: CHIPS DE TIPO, BARRA COLORIDA LATERAL,
+ * BOTÃO "+ SUBCONTA" INLINE, FORMULÁRIO REORGANIZADO COM CAMPOS AVANÇADOS COLAPSÍVEIS.
+ * 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * **Contexto:** O usuário queria mudar o layout do Plano de Contas e avaliar se o campo
+ * "Conta Pai raiz" fazia sentido. Conclusão: o campo É necessário (define hierarquia +
+ * gera código automático), mas o texto "Sem pai (conta raiz)" era confuso. O layout da
+ * lista e do formulário foram completamente reformulados.
+ *
+ * **Lista de contas — mudanças:**
+ * - Barra colorida lateral (1px) nas contas raiz, cor por tipo (verde=receita, laranja=custo, etc.)
+ * - Ícone de indentação `ChevronRight` para contas filhas (nível > 1)
+ * - Botão `+` inline no hover de cada linha → abre formulário já pré-preenchido com aquela
+ *   conta como pai (novo shortcut "Adicionar subconta")
+ * - Linha raiz com fundo levemente diferenciado (`bg-slate-50/70`)
+ * - Badges responsivos: tipo some em mobile (hidden sm:inline-flex), natureza some em tablet
+ *
+ * **Filtros — mudanças:**
+ * - Substituiu o Select de tipo por chips/botões pill horizontais com contagem por tipo
+ * - Barra de busca ocupando largura total, sem o card wrapper desnecessário
+ *
+ * **Formulário (Dialog) — mudanças:**
+ * - Campo "Conta Pai" renomeado para "Dentro de qual grupo?" com subtexto explicativo
+ * - Placeholder do trigger mudou de "— Sem pai (conta raiz) —" para
+ *   "Grupo principal (sem pai)" com ícone `Layers` (mais intuitivo)
+ * - Dentro do dropdown, opção sem pai também usa "Grupo principal (sem pai)"
+ * - Itens do dropdown têm indentação visual por nível
+ * - Campo "Nível" REMOVIDO do formulário — era editável mas derivado do pai, confundia
+ *   (lógica interna mantida: `onPickParent` continua calculando e `handleSave` envia `nivel`)
+ * - Campos "Classificação DRE" e "Ordem" movidos para seção colapsível "Configurações avançadas"
+ * - Código e Nome ficam lado a lado (grid 140px + 1fr) com hint contextual no código
+ * - autoFocus no campo Nome para agilizar o cadastro
+ *
+ * **Arquivo alterado:** `client/src/pages/financeiro/FinanceiroPlanoDeConta.tsx`
+ *
  * Rev. 3479 — **DASHBOARD CONCILIAÇÃO BANCÁRIA · EXPANSÃO MASSIVA DE KPIs E GRÁFICOS:
  * TOP FORNECEDORES, POR CATEGORIA, POR BANCO, SALDO ACUMULADO, % CONCILIAÇÃO POR MÊS
  * E MUITO MAIS. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
