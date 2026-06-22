@@ -1,6 +1,15 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3520 — **CONCILIAÇÃO · SELEÇÃO MÚLTIPLA EM "JÁ CONCILIADOS" PARA DESFAZER EM LOTE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Checkbox em cada linha da seção "Já conciliados" + checkbox "Selecionar todos"
+ * (visíveis no filtro ativo) no header. Ao selecionar ≥1 item aparece botão âmbar
+ * "Desfazer N selecionado(s)". AlertDialog de confirmação exibe quantidade + aviso
+ * de que as linhas voltarão para "No extrato, sem lançamento". Execução sequencial
+ * via `desconciliarSilentMut` (sem toasts individuais); toast final resume "X de Y
+ * desfeito(s)". Remoção otimista via `dismissedConcIds` em cada iteração. Linha
+ * selecionada recebe fundo âmbar sutil. Arquivo: `FinanceiroConciliacao.tsx`.
+ *
  * Rev. 3519 — **FORNECEDORES · BUGFIX LAYOUT MODAL — BOTÃO "SALVAR ALTERAÇÕES" CORTADO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * O footer com `sticky bottom-0` estava dentro do div scrollável (`overflow-y-auto`),
  * ficando preso ao fundo do scroll em vez do modal — quando o conteúdo cresceu

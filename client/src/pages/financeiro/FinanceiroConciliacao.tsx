@@ -862,6 +862,30 @@ export default function FinanceiroConciliacao() {
       setConfirmDesconciliar(null);
     },
   });
+  // Rev. 3520 — Seleção múltipla em "Já conciliados" para desfazer em lote.
+  const [selectedConcIds, setSelectedConcIds] = useState<Set<number>>(new Set());
+  const [confirmBulkDesconciliar, setConfirmBulkDesconciliar] = useState(false);
+  const [bulkDesconciliarPending, setBulkDesconciliarPending] = useState(false);
+  // Mutation silenciosa (sem toast individual) usada no bulk.
+  const desconciliarSilentMut = (trpc as any).financial.desconciliarLinha.useMutation({
+    onSuccess: (_d: any, variables: any) => {
+      if (variables?.linhaId) setDismissedConcIds(prev => new Set([...prev, Number(variables.linhaId)]));
+    },
+  });
+  async function executarBulkDesconciliar() {
+    setBulkDesconciliarPending(true);
+    const ids = Array.from(selectedConcIds);
+    let ok = 0;
+    for (const id of ids) {
+      try { await desconciliarSilentMut.mutateAsync({ companyId, linhaId: id }); ok++; } catch {}
+    }
+    setBulkDesconciliarPending(false);
+    setSelectedConcIds(new Set());
+    setConfirmBulkDesconciliar(false);
+    setReportStale(true);
+    refetchSt(); refetchStAno(); refetchAccStatus();
+    toast({ title: `${ok} de ${ids.length} conciliação(ões) desfeita(s)`, description: "As linhas voltaram para o extrato pendente." });
+  }
   // Rev. 3392 — Confirmar movimentação interna: cria lançamento tipo "transferencia"/
   // natureza "interno" + concilia a linha do extrato em 1 clique.
   const naturezaInternaMut = (trpc as any).financial.confirmarMovimentacaoInterna.useMutation({
@@ -5175,8 +5199,29 @@ export default function FinanceiroConciliacao() {
                   <details className="group">
                     <summary className="flex items-center justify-between cursor-pointer select-none px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50">
                       <span className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-600" />Já conciliados ({filterConcTipo !== "all" ? `${formatInt(repConcView.length)}/` : ""}{formatInt(repConc.length)}) · {formatBRL(vConc)}</span>
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center rounded-md border border-gray-200 overflow-hidden text-xs" onClick={(e) => e.preventDefault()}>
+                      <div className="flex items-center gap-2" onClick={(e) => e.preventDefault()}>
+                        {/* Barra de ação em lote */}
+                        {selectedConcIds.size > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmBulkDesconciliar(true)}
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-100 text-amber-700 border border-amber-300 text-xs font-semibold hover:bg-amber-200 transition-colors"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />Desfazer {selectedConcIds.size} selecionado(s)
+                          </button>
+                        )}
+                        {/* Selecionar todos (visíveis) */}
+                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-gray-100 transition-colors">
+                          <Checkbox
+                            checked={repConcView.length > 0 && repConcView.every((c: any) => selectedConcIds.has(Number(c.id)))}
+                            onCheckedChange={(v) => {
+                              if (v) setSelectedConcIds(prev => new Set([...prev, ...repConcView.map((c: any) => Number(c.id))]));
+                              else setSelectedConcIds(prev => { const next = new Set(prev); repConcView.forEach((c: any) => next.delete(Number(c.id))); return next; });
+                            }}
+                          />
+                          <span className="text-xs text-gray-500 select-none">Todos</span>
+                        </div>
+                        <div className="flex items-center rounded-md border border-gray-200 overflow-hidden text-xs">
                           <button type="button" onClick={() => setFilterConcTipo("all")} className={`px-2 py-1 transition-colors ${filterConcTipo === "all" ? "bg-gray-700 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Todos</button>
                           <button type="button" onClick={() => setFilterConcTipo(filterConcTipo === "entrada" ? "all" : "entrada")} className={`px-2 py-1 border-l border-gray-200 transition-colors ${filterConcTipo === "entrada" ? "bg-green-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Entrada</button>
                           <button type="button" onClick={() => setFilterConcTipo(filterConcTipo === "saida" ? "all" : "saida")} className={`px-2 py-1 border-l border-gray-200 transition-colors ${filterConcTipo === "saida" ? "bg-red-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>Saída</button>
@@ -5185,34 +5230,48 @@ export default function FinanceiroConciliacao() {
                       </div>
                     </summary>
                     <div className="divide-y divide-gray-100 max-h-[360px] overflow-y-auto border-t">
-                      {repConcView.map((c: any) => (
-                        <div key={c.id} className="px-4 py-3 flex items-center gap-3">
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs text-gray-500">{fmtData(c.data)}</p>
-                            <p className="text-sm text-gray-700 break-words">{c.descricao || "—"}</p>
-                            <p className="text-xs text-gray-400 break-words">↔ {c.entryFornecedor || c.entryDescricao || `Lançamento #${c.entryId ?? ""}`}</p>
-                          </div>
-                          <p className={`text-sm font-bold shrink-0 ${Number(c.valor) >= 0 ? "text-green-600" : "text-red-500"}`}>{formatBRL(Math.abs(Number(c.valor)))}</p>
-                          {c.entryId && (
+                      {repConcView.map((c: any) => {
+                        const isSelected = selectedConcIds.has(Number(c.id));
+                        return (
+                          <div key={c.id} className={`px-4 py-3 flex items-center gap-3 transition-colors ${isSelected ? "bg-amber-50" : ""}`}>
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => {
+                                setSelectedConcIds(prev => {
+                                  const next = new Set(prev);
+                                  next.has(Number(c.id)) ? next.delete(Number(c.id)) : next.add(Number(c.id));
+                                  return next;
+                                });
+                              }}
+                              className="shrink-0"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs text-gray-500">{fmtData(c.data)}</p>
+                              <p className="text-sm text-gray-700 break-words">{c.descricao || "—"}</p>
+                              <p className="text-xs text-gray-400 break-words">↔ {c.entryFornecedor || c.entryDescricao || `Lançamento #${c.entryId ?? ""}`}</p>
+                            </div>
+                            <p className={`text-sm font-bold shrink-0 ${Number(c.valor) >= 0 ? "text-green-600" : "text-red-500"}`}>{formatBRL(Math.abs(Number(c.valor)))}</p>
+                            {c.entryId && (
+                              <button
+                                type="button"
+                                onClick={() => setDetalheEntryId(Number(c.entryId))}
+                                title="Ver detalhes do lançamento conciliado"
+                                className="shrink-0 p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                            )}
                             <button
                               type="button"
-                              onClick={() => setDetalheEntryId(Number(c.entryId))}
-                              title="Ver detalhes do lançamento conciliado"
-                              className="shrink-0 p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                              onClick={() => setConfirmDesconciliar({ id: c.id, descricao: c.descricao || "—", valor: Number(c.valor) })}
+                              title="Desfazer conciliação — a linha volta ao extrato pendente e o lançamento do ERP fica como pendente"
+                              className="shrink-0 p-1.5 rounded-md text-gray-300 hover:text-amber-600 hover:bg-amber-50 transition-colors"
                             >
-                              <Eye className="w-4 h-4" />
+                              <RotateCcw className="w-4 h-4" />
                             </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setConfirmDesconciliar({ id: c.id, descricao: c.descricao || "—", valor: Number(c.valor) })}
-                            title="Desfazer conciliação — a linha volta ao extrato pendente e o lançamento do ERP fica como pendente"
-                            className="shrink-0 p-1.5 rounded-md text-gray-300 hover:text-amber-600 hover:bg-amber-50 transition-colors"
-                          >
-                            <RotateCcw className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
+                          </div>
+                        );
+                      })}
                     </div>
                   </details>
                 </CardContent>
@@ -5440,6 +5499,33 @@ export default function FinanceiroConciliacao() {
         </AlertDialog>
 
         {/* Rev. 3396 — Desfazer conciliação (sem excluir a linha do extrato) */}
+        {/* Rev. 3520 — AlertDialog: desfazer conciliação em lote */}
+        <AlertDialog open={confirmBulkDesconciliar} onOpenChange={(o: boolean) => { if (!o && !bulkDesconciliarPending) setConfirmBulkDesconciliar(false); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <RotateCcw className="w-5 h-5 text-amber-600" />Desfazer {selectedConcIds.size} conciliação(ões)?
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2 text-sm text-gray-600">
+                  <p>As <strong>{selectedConcIds.size} linha(s) selecionada(s)</strong> voltarão para <strong>"No extrato, sem lançamento"</strong> e os lançamentos do ERP voltarão para <strong>pendente</strong>.</p>
+                  <p className="text-[11px] text-gray-400">As linhas <em>não</em> são excluídas — você poderá conciliá-las novamente.</p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={bulkDesconciliarPending}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-amber-600 hover:bg-amber-700"
+                disabled={bulkDesconciliarPending}
+                onClick={(e: any) => { e.preventDefault(); executarBulkDesconciliar(); }}
+              >
+                {bulkDesconciliarPending ? <><Loader2 className="w-4 h-4 animate-spin mr-1" />Desfazendo...</> : `Sim, desfazer ${selectedConcIds.size}`}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         <AlertDialog open={!!confirmDesconciliar} onOpenChange={(o: boolean) => { if (!o && !desconciliarMut.isPending) setConfirmDesconciliar(null); }}>
           <AlertDialogContent>
             <AlertDialogHeader>
