@@ -1000,14 +1000,14 @@ export default function FinanceiroNotasFiscais() {
           const pct = total ? Math.round((done / total) * 100) : 0;
 
           const phaseLabel = (s: BatchItem["status"]) => {
-            if (s === "pending")  return { step: 0, label: "Aguardando", color: "text-slate-400" };
-            if (s === "reading")  return { step: 1, label: "Lendo arquivo…", color: "text-indigo-500" };
-            if (s === "parsing")  return { step: 2, label: "IA extraindo…", color: "text-violet-500" };
-            if (s === "ok")       return { step: 3, label: "Extraído", color: "text-emerald-600" };
-            if (s === "saving")   return { step: 3, label: "Salvando…", color: "text-indigo-500" };
-            if (s === "saved")    return { step: 4, label: "Cadastrado!", color: "text-emerald-700" };
-            if (s === "error")    return { step: -1, label: "Erro", color: "text-red-500" };
-            return { step: 0, label: "", color: "" };
+            if (s === "pending")  return { step: 0, pct:   0, label: "Aguardando",    color: "text-slate-400" };
+            if (s === "reading")  return { step: 1, pct:  25, label: "Lendo arquivo…", color: "text-indigo-500" };
+            if (s === "parsing")  return { step: 2, pct:  50, label: "IA extraindo…", color: "text-violet-500" };
+            if (s === "ok")       return { step: 3, pct:  75, label: "Extraído",      color: "text-emerald-600" };
+            if (s === "saving")   return { step: 3, pct:  87, label: "Salvando…",     color: "text-indigo-500" };
+            if (s === "saved")    return { step: 4, pct: 100, label: "Cadastrado!",   color: "text-emerald-700" };
+            if (s === "error")    return { step: -1, pct:  0, label: "Erro",          color: "text-red-500" };
+            return { step: 0, pct: 0, label: "", color: "" };
           };
 
           const StepDot = ({ active, done: d, err }: { active: boolean; done: boolean; err: boolean }) => (
@@ -1130,16 +1130,32 @@ export default function FinanceiroNotasFiscais() {
                             <p className="text-xs text-red-500 mt-0.5 line-clamp-2">{item.error}</p>
                           )}
 
-                          {/* Indicador de fases */}
+                          {/* Indicador de fases + percentual por arquivo */}
                           <div className="flex items-center gap-1.5 mt-1.5">
+                            {/* Mini barra de progresso individual */}
+                            <div className="w-16 bg-slate-100 rounded-full h-1 shrink-0">
+                              <div
+                                className={`h-1 rounded-full transition-all duration-500 ${
+                                  isErr ? "bg-red-400" : step === 4 ? "bg-emerald-500" : "bg-indigo-500"
+                                }`}
+                                style={{ width: `${isErr ? 100 : pct}%` }}
+                              />
+                            </div>
+                            {/* Percentual numérico */}
+                            <span className={`text-xs font-semibold tabular-nums w-8 shrink-0 ${
+                              isErr ? "text-red-500" : step === 4 ? "text-emerald-600" : "text-indigo-600"
+                            }`}>
+                              {isErr ? "Erro" : `${pct}%`}
+                            </span>
+                            {/* Bolinhas */}
                             <StepDot active={step === 1} done={step > 1 && !isErr} err={false} />
-                            <div className={`h-px flex-1 max-w-[16px] transition-colors ${step > 1 && !isErr ? "bg-emerald-400" : "bg-slate-200"}`} />
+                            <div className={`h-px w-3 transition-colors ${step > 1 && !isErr ? "bg-emerald-400" : "bg-slate-200"}`} />
                             <StepDot active={step === 2} done={step > 2 && !isErr} err={false} />
-                            <div className={`h-px flex-1 max-w-[16px] transition-colors ${step > 2 && !isErr ? "bg-emerald-400" : "bg-slate-200"}`} />
+                            <div className={`h-px w-3 transition-colors ${step > 2 && !isErr ? "bg-emerald-400" : "bg-slate-200"}`} />
                             <StepDot active={step === 3} done={step === 4} err={isErr} />
-                            <div className={`h-px flex-1 max-w-[16px] transition-colors ${step === 4 ? "bg-emerald-400" : "bg-slate-200"}`} />
+                            <div className={`h-px w-3 transition-colors ${step === 4 ? "bg-emerald-400" : "bg-slate-200"}`} />
                             <StepDot active={false} done={step === 4} err={false} />
-                            <span className={`text-xs ml-1 ${color} ${isActive ? "animate-pulse" : ""}`}>{label}</span>
+                            <span className={`text-xs ml-0.5 ${color} ${isActive ? "animate-pulse" : ""}`}>{label}</span>
                           </div>
                         </div>
                       </div>
