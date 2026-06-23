@@ -1,6 +1,20 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3555 — **SEFAZ · BUGFIX "Unsupported PKCS12 PFX data" — NODE 20 / OPENSSL 3.0 REJEITA RC2-40-CBC DOS CERTIFICADOS A1 ICP-BRASIL. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
+ *
+ * Node.js 18+ usa OpenSSL 3.0 que desabilita por padrão o algoritmo `RC2-40-CBC` usado pela
+ * cadeia ICP-Brasil nos certificados A1 (.p12/.pfx). Passar o Buffer do PFX diretamente ao
+ * `https.Agent({ pfx })` lançava "Unsupported PKCS12 PFX data" em runtime.
+ *
+ * **Fix:** nova função `pfxToPem(pfxBase64, password)` usa `node-forge` (independe do OpenSSL do
+ * Node) para abrir o PKCS12, extrair certificado (`certBag`) e chave privada
+ * (`pkcs8ShroudedKeyBag`) como strings PEM. `callSefaz` passa `{ cert, key }` ao
+ * `https.Agent` em vez de `{ pfx, passphrase }` — bypass completo do RC2 legacy.
+ * Pacote `node-forge@1.4.0` adicionado como dependência de produção.
+ *
+ * Arquivos: `server/routers/sefaz.ts` (+pfxToPem, import forge), `package.json`.
+ *
  * Rev. 3554 — **SEFAZ · BUGFIX "db.execute is not a function" — getDb() É ASSÍNCRONA, FALTAVA await. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
  *
  * `getDb()` em `server/db.ts` é declarada como `async function` — retorna uma `Promise<db|null>`.

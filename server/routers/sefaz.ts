@@ -12,6 +12,7 @@ import { sql } from "drizzle-orm";
 import https from "https";
 import { gunzipSync } from "zlib";
 import { XMLParser } from "fast-xml-parser";
+import forge from "node-forge";
 
 // ── URLs do WebService ──────────────────────────────────────────────────────
 const SEFAZ_URL_PROD = "https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx";
@@ -64,10 +65,40 @@ function buildSoapEnvelope(cnpj: string, cUFAutor: number, ultNSU: string, tpAmb
 </soap12:Envelope>`;
 }
 
+/**
+ * Extrai cert + key PEM do PFX usando node-forge.
+ * Necessário porque Node 18+/OpenSSL 3.0 rejeita o RC2-40-CBC usado nos
+ * certificados A1 brasileiros (ICP-Brasil) com "Unsupported PKCS12 PFX data".
+ */
+function pfxToPem(pfxBase64: string, password: string): { cert: string; key: string } {
+  const pfxDer = forge.util.decode64(pfxBase64);
+  const pfxAsn1 = forge.asn1.fromDer(pfxDer);
+  const pfx = forge.pkcs12.pkcs12FromAsn1(pfxAsn1, password);
+
+  // Extrai certificado
+  const certBags = pfx.getBags({ bagType: forge.pki.oids.certBag });
+  const certBag = certBags[forge.pki.oids.certBag]?.[0];
+  if (!certBag?.cert) throw new Error("Certificado não encontrado no PFX.");
+  const certPem = forge.pki.certificateToPem(certBag.cert);
+
+  // Extrai chave privada
+  const keyBags = pfx.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag });
+  const keyBag = keyBags[forge.pki.oids.pkcs8ShroudedKeyBag]?.[0];
+  if (!keyBag?.key) throw new Error("Chave privada não encontrada no PFX.");
+  const keyPem = forge.pki.privateKeyToPem(keyBag.key);
+
+  return { cert: certPem, key: keyPem };
+}
+
 function callSefaz(url: string, soapXml: string, pfxBase64: string, pfxPassword: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const pfxBuf = Buffer.from(pfxBase64, "base64");
-    const agent = new https.Agent({ pfx: pfxBuf, passphrase: pfxPassword });
+    let cert: string, key: string;
+    try {
+      ({ cert, key } = pfxToPem(pfxBase64, pfxPassword));
+    } catch (e: any) {
+      return reject(new Error("Erro ao ler certificado PFX: " + (e?.message || e)));
+    }
+    const agent = new https.Agent({ cert, key, rejectUnauthorized: true });
     const body = Buffer.from(soapXml, "utf-8");
     const urlObj = new URL(url);
 
