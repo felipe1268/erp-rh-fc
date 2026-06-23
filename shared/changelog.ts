@@ -1,6 +1,23 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3611 — **NF-e RECEBIDAS · BUGFIX NF# EM NOTAÇÃO CIENTÍFICA PARCIAL ("3.5260405"). BACKEND ADITIVO (SyncSchema+) + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * Causa-raiz: fast-xml-parser convertia a chave NF-e de 44 dígitos para float64 JS (ex: 3.526e+43).
+ * `extractNumeroNf` recebia uma string com 21 chars (não 44) → caía no fallback `.slice(0,9)` →
+ * gravava "3.5260405" em vez de "35260405". Rev.3600 limpou a `chave_acesso` corrompida mas não
+ * recalculou os `numero_nf` que ficaram com ponto decimal no banco.
+ *
+ * Fixes:
+ * 1. SyncSchema+ Rev.3611 (backend): UPDATE fiscal_notes SET numero_nf = CAST(CAST(SUBSTRING(chave_acesso,26,9) AS INTEGER) AS TEXT)
+ *    WHERE numero_nf LIKE '%.%' AND chave_acesso ~ '^[0-9]{44}$' — recalcula todos os numero_nf
+ *    corrompidos a partir da chave de acesso válida usando a posição oficial (bytes 26–34, 1-indexed).
+ * 2. Frontend defensivo: nova função `resolveNumeroNf(numeroNf, chaveAcesso)` — detecta '.' no número,
+ *    extrai da chave se disponível (chave.substring(25,34)); aplicada nos 2 pontos de exibição da
+ *    aba NF-e Recebidas (coluna NF# na tabela + header do dialog).
+ *
+ * Arquivos: `server/_core/index.ts` (SyncSchema+ Rev.3611), `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`.
+ *
  * Rev. 3610 — **NF-e RECEBIDAS · BUGFIX BOTÃO "CONSULTAR NO SEFAZ" ABRIA PÁGINA INICIAL EM VEZ DA NOTA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * O parâmetro `tipoConteudo=XmlNFe` não é reconhecido pelo portal nfe.fazenda.gov.br —

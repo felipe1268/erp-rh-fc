@@ -1292,6 +1292,21 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3051: índice único idx_cp_employee_uniq garantido (1 financeiro por sócio).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA idx_cp_employee_uniq (provável duplicata pré-existente):`, e?.message || e); }
 
+        // Rev. 3611 — SEFAZ: recalcular numero_nf corrompido (float "3.5260405") a partir da chave_acesso.
+        // Causa: fast-xml-parser convertia chNFe (44 dígitos) para float64 → extractNumeroNf recebia string de 21 chars → .slice(0,9) gravava "3.5260405".
+        try {
+          const fixResult = await db.execute(sql`
+            UPDATE fiscal_notes
+            SET numero_nf = CAST(CAST(SUBSTRING(chave_acesso, 26, 9) AS INTEGER) AS TEXT)
+            WHERE numero_nf LIKE '%.%'
+              AND chave_acesso IS NOT NULL
+              AND chave_acesso ~ '^[0-9]{44}$'
+          `);
+          const fixed = (fixResult as any)?.rowCount ?? (fixResult as any)?.rows?.length ?? 0;
+          if (fixed > 0) console.log(`[SyncSchema+] Rev. 3611: ${fixed} numero_nf corrompido(s) recalculado(s) a partir de chave_acesso.`);
+          else console.log(`[SyncSchema+] Rev. 3611: nenhum numero_nf corrompido encontrado.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3611 numero_nf fix:`, e?.message || e); }
+
         // Rev. 2551 — Convenção Coletiva com IA: análises + itens de auditoria.
         try {
           await db.execute(sql`

@@ -28,6 +28,14 @@ function formatBRL(v: number | string | null | undefined) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n);
 }
 
+function resolveNumeroNf(numeroNf: string | null | undefined, chaveAcesso: string | null | undefined): string {
+  const nf = String(numeroNf ?? "");
+  if (!nf.includes(".")) return nf;
+  const chave = (chaveAcesso ?? "").replace(/\D/g, "");
+  if (chave.length === 44) return String(parseInt(chave.substring(25, 34), 10));
+  return nf;
+}
+
 function parseBRL(s: string): number {
   const clean = s.replace(/[R$\s.]/g, "").replace(",", ".");
   const n = parseFloat(clean);
@@ -1066,7 +1074,7 @@ export default function FinanceiroNotasFiscais() {
                             title="Clique para ver detalhes da NF-e"
                           >
                             <td className="px-3 py-2.5">
-                              <span className="font-semibold text-indigo-700">#{nf.numeroNf || "—"}</span>
+                              <span className="font-semibold text-indigo-700">#{resolveNumeroNf(nf.numeroNf, nf.chaveAcesso) || "—"}</span>
                             </td>
                             <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{fmtDateBR(nf.dataEmissao)}</td>
                             <td className="px-3 py-2.5 max-w-[220px]">
@@ -2046,7 +2054,7 @@ export default function FinanceiroNotasFiscais() {
                       <div>
                         <p className="text-[10px] font-bold tracking-widest uppercase opacity-70 mb-0.5">Nota Fiscal Eletrônica</p>
                         <h2 className="text-xl font-bold leading-tight">
-                          NF-e {nf.numeroNf ? `#${nf.numeroNf}` : "—"}
+                          NF-e {nf.numeroNf ? `#${resolveNumeroNf(nf.numeroNf, nf.chaveAcesso)}` : "—"}
                           {det?.ide?.serie ? <span className="text-base font-normal opacity-80 ml-1">· Série {det.ide.serie}</span> : null}
                         </h2>
                         <p className="text-indigo-200 text-xs mt-0.5">
