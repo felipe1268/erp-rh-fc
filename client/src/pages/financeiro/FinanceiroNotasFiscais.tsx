@@ -162,6 +162,10 @@ export default function FinanceiroNotasFiscais() {
 
   const [confirmHistorico, setConfirmHistorico] = useState(false);
 
+  // ── Progresso simulado da sync SEFAZ (0-100) ──────────────────────────────
+  const [syncProgress, setSyncProgress] = useState<number | null>(null);
+  const syncIvRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // ── Aba principal: emitidas | recebidas ──────────────────────────────────────
   const [pageTab, setPageTab] = useState<"emitidas" | "recebidas">("emitidas");
   const [recAno, setRecAno] = useState(new Date().getFullYear());
@@ -316,15 +320,39 @@ export default function FinanceiroNotasFiscais() {
     onSuccess: () => { toast({ title: "NF-e cancelada." }); setDeleteTarget(null); listQuery.refetch(); },
     onError: (e) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
+  const finishSyncProgress = (ok: boolean) => {
+    if (syncIvRef.current) { clearInterval(syncIvRef.current); syncIvRef.current = null; }
+    setSyncProgress(100);
+    setTimeout(() => setSyncProgress(null), ok ? 900 : 600);
+  };
   const sefazSyncMut = (trpc as any).sefaz.syncNow.useMutation({
     onSuccess: (r: any) => {
+      finishSyncProgress(!r?.erro);
       nfeRecQuery.refetch();
       if (r?.erro) toast({ title: "SEFAZ: " + r.erro, variant: "destructive" });
       else if (r?.aviso) toast({ title: "⚠️ " + (r.aviso || "Rate limit SEFAZ"), variant: "default" });
       else toast({ title: `SEFAZ: ${r?.importadas ?? 0} NF-e novas importadas, ${r?.ignoradas ?? 0} já existiam.` });
     },
-    onError: (e: any) => toast({ title: "Erro na sync SEFAZ", description: e.message, variant: "destructive" }),
+    onError: (e: any) => {
+      finishSyncProgress(false);
+      toast({ title: "Erro na sync SEFAZ", description: e.message, variant: "destructive" });
+    },
   });
+
+  // Anima progresso enquanto a mutation está pendente
+  useEffect(() => {
+    if (sefazSyncMut.isPending) {
+      setSyncProgress(0);
+      let elapsed = 0;
+      syncIvRef.current = setInterval(() => {
+        elapsed += 250;
+        // Curva exponencial: chega em ~85% em ~10s, nunca passa
+        const p = 85 * (1 - Math.exp(-elapsed / 7000));
+        setSyncProgress(Math.round(Math.min(p, 85)));
+      }, 250);
+    }
+    return () => { if (syncIvRef.current) { clearInterval(syncIvRef.current); syncIvRef.current = null; } };
+  }, [sefazSyncMut.isPending]);
   const importXmlMut = (trpc as any).sefaz.importXml.useMutation({
     onSuccess: (r: any) => {
       nfeRecQuery.refetch();
@@ -681,6 +709,49 @@ export default function FinanceiroNotasFiscais() {
             </div>
           )}
         </div>
+
+        {/* Barra de progresso sync SEFAZ */}
+        {syncProgress !== null && (
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <RefreshCw className={`h-4 w-4 text-indigo-600 ${syncProgress < 100 ? "animate-spin" : ""}`} />
+                <span className="text-sm font-semibold text-indigo-800">
+                  {syncProgress < 100 ? "Consultando SEFAZ..." : "✅ Sincronização concluída!"}
+                </span>
+              </div>
+              <span className="text-sm font-bold tabular-nums text-indigo-700">{syncProgress}%</span>
+            </div>
+            <div className="relative h-2 rounded-full bg-indigo-200 overflow-hidden">
+              <div
+                className="absolute inset-y-0 left-0 rounded-full transition-all"
+                style={{
+                  width: `${syncProgress}%`,
+                  background: syncProgress === 100
+                    ? "linear-gradient(90deg,#10b981,#059669)"
+                    : "linear-gradient(90deg,#6366f1,#4f46e5)",
+                  transition: syncProgress === 100 ? "width 0.3s ease-out" : "width 0.25s linear",
+                }}
+              />
+              {syncProgress < 100 && (
+                <div
+                  className="absolute inset-y-0 rounded-full opacity-40"
+                  style={{
+                    width: "30%",
+                    left: `${Math.max(0, syncProgress - 15)}%`,
+                    background: "linear-gradient(90deg,transparent,white,transparent)",
+                    animation: "shimmer 1.2s ease-in-out infinite",
+                  }}
+                />
+              )}
+            </div>
+            {syncProgress < 100 && (
+              <p className="text-xs text-indigo-500 mt-1.5">
+                Buscando NF-e recebidas pelo CNPJ da empresa junto ao SEFAZ…
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Sub-abas: Emitidas | Recebidas */}
         <div className="flex gap-1 border-b border-slate-200 -mb-1">

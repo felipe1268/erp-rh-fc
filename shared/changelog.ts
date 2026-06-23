@@ -1,6 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3581 — **NF-e RECEBIDAS · BARRA DE PROGRESSO 0→100% ANIMADA AO CLICAR "SINCRONIZAR SEFAZ". 100% FRONTEND · ZERO BACKEND.**
+ *
+ * Ao clicar "Sincronizar SEFAZ": banner indigo aparece com spinner + porcentagem + barra animada.
+ * Progresso simulado em curva exponencial (0→85% em ~10s) via setInterval 250ms.
+ * Na conclusão (onSuccess/onError): salta para 100% (barra verde), some após 900ms.
+ * Efeito shimmer (brilho deslizante) na barra enquanto pendente via @keyframes shimmer.
+ * Arquivo: `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx` + `client/src/index.css`.
+ *
  * Rev. 3580 — **CRONÔMETROS NF-e/NFS-e · HORÁRIO "ÚLTIMA SYNC" CORRIGIDO PARA BRASÍLIA (America/Sao_Paulo). 100% FRONTEND · ZERO BACKEND.**
  *
  * `toLocaleTimeString` nas duas abas (NF-e Recebidas e NFS-e Emitidas) estava sem timeZone →

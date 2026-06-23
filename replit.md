@@ -50,7 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3580** — **CRONÔMETROS · "ÚLTIMA SYNC" AGORA EXIBE HORÁRIO DE BRASÍLIA. 100% FRONTEND · ZERO BACKEND.** `timeZone: "America/Sao_Paulo"` adicionado nas duas abas. Detalhe: `shared/changelog.ts`.
+- **Rev. 3581** — **NF-e RECEBIDAS · BARRA DE PROGRESSO 0→100% AO SINCRONIZAR SEFAZ. 100% FRONTEND · ZERO BACKEND.** Curva exponencial 0→85% + salto 100% na conclusão, shimmer, banner indigo→verde. Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3580** — **CRONÔMETROS · "ÚLTIMA SYNC" AGORA EXIBE HORÁRIO DE BRASÍLIA. 100% FRONTEND · ZERO BACKEND.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3579** — **NF-e RECEBIDAS · TIMELINE COM LEGENDA + DOTS POR MÊS (MESMO PADRÃO DA ABA EMITIDAS). 100% FRONTEND · ZERO BACKEND.** Detalhe: `shared/changelog.ts`.
 

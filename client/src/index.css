@@ -881,3 +881,9 @@ html, body, * {
   gap: 0 !important;
   animation: none !important;
 }
+
+@keyframes shimmer {
+  0%   { opacity: 0; }
+  50%  { opacity: 0.5; }
+  100% { opacity: 0; }
+}
