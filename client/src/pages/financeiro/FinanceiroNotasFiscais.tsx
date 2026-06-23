@@ -1962,28 +1962,6 @@ export default function FinanceiroNotasFiscais() {
           );
         })()}
 
-        {/* ─── AlertDialog Cancelar NF ─── */}
-        {/* ─── AlertDialog Histórico Completo SEFAZ ─── */}
-        <AlertDialog open={confirmHistorico} onOpenChange={setConfirmHistorico}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Baixar histórico completo da SEFAZ?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Isso vai zerar o ponteiro NSU e baixar <strong>todas as NF-e recebidas desde o início</strong> cadastradas na SEFAZ para o CNPJ da empresa. Pode demorar alguns minutos dependendo do volume.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-amber-600 hover:bg-amber-700"
-                onClick={() => sefazResetNsuMut.mutate({ companyId: companyId ?? 0 })}
-              >
-                Baixar tudo
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
         <AlertDialog open={!!deleteTarget} onOpenChange={v => !v && setDeleteTarget(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
@@ -2007,6 +1985,27 @@ export default function FinanceiroNotasFiscais() {
 
         </>}
         {/* fim aba emitidas */}
+
+        {/* ─── AlertDialog Histórico Completo SEFAZ (fora de qualquer aba) ─── */}
+        <AlertDialog open={confirmHistorico} onOpenChange={setConfirmHistorico}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Baixar histórico completo da SEFAZ?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Isso vai zerar o ponteiro NSU e baixar <strong>todas as NF-e recebidas desde o início</strong> cadastradas na SEFAZ para o CNPJ da empresa. Pode demorar alguns minutos dependendo do volume.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-amber-600 hover:bg-amber-700"
+                onClick={() => sefazResetNsuMut.mutate({ companyId: companyId ?? 0 })}
+              >
+                Baixar tudo
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* ── Dialog detalhe NF-e Recebida — espelho fiel da nota ── */}
         <Dialog open={!!nfeRecDetalhe} onOpenChange={v => { if (!v) { setNfeRecDetalhe(null); setShowJustRecusa(false); setJustRecusa(""); } }}>
