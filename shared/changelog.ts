@@ -1,6 +1,15 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3577 — **NFS-e EMITIDAS · CRONÔMETRO REGRESSIVO NA ABA EMITIDAS (MESMO PADRÃO DO RECEBIDAS). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Banner idêntico ao da aba NF-e Recebidas, mas para as NFS-e municipais (SIAP GEO etc.).
+ * Query `nfseEmitidas.getMunicipios` com refetchInterval=60s; pega o `last_sync_at` mais recente
+ * entre os municípios habilitados; `munCountdownSec` via setInterval a cada segundo (gap 55min).
+ * Banner só aparece quando há pelo menos 1 município com `enabled=1`.
+ * Subtexto lista os nomes das prefeituras sincronizadas.
+ * Arquivo: `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`.
+ *
  * Rev. 3576 — **NF-e RECEBIDAS · CRONÔMETRO REGRESSIVO VISÍVEL NA ABA RECEBIDAS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Banner animado no topo da aba "NF-e Recebidas": anel SVG de progresso (âmbar→verde) + contador

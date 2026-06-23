@@ -186,14 +186,20 @@ export default function FinanceiroNotasFiscais() {
   );
   const sefazCfg: any = sefazCfgQuery.data ?? null;
 
-  // ── Cronômetro regressivo: atualiza a cada segundo ───────────────────────────
+  // ── Municípios NFS-e emitidas (last_sync_at por município) ───────────────────
+  const municipiosQuery = (trpc as any).nfseEmitidas.getMunicipios.useQuery(
+    { companyId: companyId ?? 0 },
+    { enabled: !!companyId && pageTab === "emitidas", staleTime: 60_000, refetchInterval: 60_000 }
+  );
+  const municipios: any[] = municipiosQuery.data ?? [];
+
+  // ── Cronômetro regressivo SEFAZ: atualiza a cada segundo ─────────────────────
   const [countdownSec, setCountdownSec] = useState<number | null>(null);
   useEffect(() => {
     if (!sefazCfg) { setCountdownSec(null); return; }
     const calcSecs = () => {
       try {
         const result = JSON.parse(sefazCfg.last_sync_result || "{}");
-        // Se rate-limited usa rateLimitedAt + 58min; senão usa last_sync_at + 58min
         const baseTs = result?.rateLimitedAt
           ? new Date(result.rateLimitedAt).getTime()
           : sefazCfg.last_sync_at
@@ -201,14 +207,34 @@ export default function FinanceiroNotasFiscais() {
             : null;
         if (!baseTs) { setCountdownSec(null); return; }
         const nextSyncMs = baseTs + 58 * 60 * 1000;
-        const diff = Math.floor((nextSyncMs - Date.now()) / 1000);
-        setCountdownSec(Math.max(0, diff));
+        setCountdownSec(Math.max(0, Math.floor((nextSyncMs - Date.now()) / 1000)));
       } catch { setCountdownSec(null); }
     };
     calcSecs();
     const iv = setInterval(calcSecs, 1000);
     return () => clearInterval(iv);
   }, [sefazCfg]);
+
+  // ── Cronômetro regressivo NFS-e Municipal: município com sync mais recente ────
+  const [munCountdownSec, setMunCountdownSec] = useState<number | null>(null);
+  useEffect(() => {
+    const enabled = municipios.filter((m: any) => m.enabled);
+    if (!enabled.length) { setMunCountdownSec(null); return; }
+    // Pega o last_sync_at mais recente entre os municípios habilitados
+    const latestTs = enabled.reduce((best: number | null, m: any) => {
+      if (!m.last_sync_at) return best;
+      const t = new Date(m.last_sync_at).getTime();
+      return best === null || t > best ? t : best;
+    }, null as number | null);
+    const calcSecs = () => {
+      if (!latestTs) { setMunCountdownSec(null); return; }
+      const nextMs = latestTs + 55 * 60 * 1000;
+      setMunCountdownSec(Math.max(0, Math.floor((nextMs - Date.now()) / 1000)));
+    };
+    calcSecs();
+    const iv = setInterval(calcSecs, 1000);
+    return () => clearInterval(iv);
+  }, [municipios]);
 
   const recTotais = useMemo(() => {
     const total = nfeRec.length;
@@ -884,6 +910,73 @@ export default function FinanceiroNotasFiscais() {
             ABA: NFS-e EMITIDAS (conteúdo original)
         ═══════════════════════════════════════════════════════════════════════ */}
         {pageTab === "emitidas" && <>
+
+        {/* Cronômetro NFS-e Municipal */}
+        {(() => {
+          const enabledMuns = municipios.filter((m: any) => m.enabled);
+          if (!enabledMuns.length) return null;
+          const fmtC = (s: number) => {
+            if (s <= 0) return null;
+            const h = Math.floor(s / 3600);
+            const m = Math.floor((s % 3600) / 60);
+            const sec = s % 60;
+            if (h > 0) return `${h}h ${String(m).padStart(2,"0")}min`;
+            return `${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`;
+          };
+          const label = fmtC(munCountdownSec ?? 0);
+          const latestSync = enabledMuns
+            .map((m: any) => m.last_sync_at)
+            .filter(Boolean)
+            .sort()
+            .at(-1);
+          return (
+            <div className={`flex items-center gap-3 rounded-xl border px-4 py-2.5 ${label ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
+              <div className="relative shrink-0 w-10 h-10">
+                <svg className="w-10 h-10 -rotate-90" viewBox="0 0 36 36">
+                  <circle cx="18" cy="18" r="15" fill="none" stroke="#e5e7eb" strokeWidth="3" />
+                  <circle cx="18" cy="18" r="15" fill="none"
+                    stroke={label ? "#f59e0b" : "#10b981"} strokeWidth="3"
+                    strokeDasharray="94.2"
+                    strokeDashoffset={label ? String(94.2 * (1 - (munCountdownSec ?? 0) / (55 * 60))) : "0"}
+                    strokeLinecap="round"
+                    style={{ transition: "stroke-dashoffset 1s linear" }}
+                  />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <RefreshCw className={`w-3.5 h-3.5 ${label ? "text-amber-500" : "text-emerald-500 animate-spin"}`} />
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                {label ? (
+                  <>
+                    <p className="text-sm font-semibold text-amber-800">
+                      Próxima sync automática em{" "}
+                      <span className="font-mono text-amber-700 tabular-nums">{label}</span>
+                    </p>
+                    <p className="text-xs text-amber-600 mt-0.5">
+                      Prefeituras sincronizadas: {enabledMuns.map((m: any) => m.nome_municipio).join(", ")} — o sistema busca novas NFS-e automaticamente toda hora.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-semibold text-emerald-800">✅ Pronto — sincronizando em background</p>
+                    <p className="text-xs text-emerald-600 mt-0.5">
+                      {enabledMuns.map((m: any) => m.nome_municipio).join(", ")} — buscando novas NFS-e agora.
+                    </p>
+                  </>
+                )}
+              </div>
+              {latestSync && (
+                <div className="text-right text-xs text-slate-400 shrink-0 hidden sm:block">
+                  <div>Última sync</div>
+                  <div className="font-medium text-slate-500">
+                    {new Date(latestSync).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* KPI cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

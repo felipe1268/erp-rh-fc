@@ -50,7 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3576** — **NF-e RECEBIDAS · CRONÔMETRO REGRESSIVO NA ABA RECEBIDAS. 100% FRONTEND · ZERO BACKEND.** Banner animado: anel SVG âmbar→verde + MM:SS/HHhMM monoespaçado a cada segundo + NSU atual. Detalhe: `shared/changelog.ts`.
+- **Rev. 3577** — **NFS-e EMITIDAS · CRONÔMETRO REGRESSIVO NA ABA EMITIDAS (MESMO PADRÃO). 100% FRONTEND · ZERO BACKEND.** Banner âmbar→verde + MM:SS a cada segundo nas duas abas. Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3576** — **NF-e RECEBIDAS · CRONÔMETRO REGRESSIVO NA ABA RECEBIDAS. 100% FRONTEND · ZERO BACKEND.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3575** — **NFS-e EMITIDAS MUNICIPAIS · CRON HORÁRIO — MESMO PADRÃO DO SEFAZ. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
