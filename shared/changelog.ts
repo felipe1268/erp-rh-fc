@@ -1,6 +1,15 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3569 — **NF-e RECEBIDAS (SEFAZ) · BUGFIX "HISTÓRICO COMPLETO" LANÇAVA EXCEÇÃO NO iOS — window.confirm() SUBSTITUÍDO POR AlertDialog. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * `window.confirm()` é bloqueado em WebViews iOS (Replit mobile) e lança
+ * `TypeError: The string did not match the expected pattern.` — a exception era capturada
+ * pelo `onError` da mutation `sefaz.resetNSU` e exibida como "Erro ao resetar NSU".
+ * Correção: botão "Histórico completo" agora abre um `AlertDialog` shadcn com
+ * confirmação "Baixar tudo" / "Cancelar", eliminando o `confirm()` nativo.
+ * Arquivo: `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`.
+ *
  * Rev. 3568 — **NFS-e MUNICIPAIS · BUGFIX "BAIXAR TUDO" RETORNAVA 0 MUNICÍPIOS QUANDO SYNC AUTOMÁTICO DESLIGADO. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
  *
  * `syncAllMunicipios` filtrava `AND enabled=1` — excluía municípios com toggle desligado.

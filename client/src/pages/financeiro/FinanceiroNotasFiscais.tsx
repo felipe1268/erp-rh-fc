@@ -160,6 +160,8 @@ export default function FinanceiroNotasFiscais() {
   const [batchItems, setBatchItems] = useState<BatchItem[]>([]);
   const [batchSaving, setBatchSaving] = useState(false);
 
+  const [confirmHistorico, setConfirmHistorico] = useState(false);
+
   // ── Aba principal: emitidas | recebidas ──────────────────────────────────────
   const [pageTab, setPageTab] = useState<"emitidas" | "recebidas">("emitidas");
   const [recAno, setRecAno] = useState(new Date().getFullYear());
@@ -535,15 +537,11 @@ export default function FinanceiroNotasFiscais() {
                 variant="outline"
                 className="gap-1.5 h-9 border-amber-300 text-amber-700 hover:bg-amber-50"
                 disabled={sefazSyncMut.isPending || sefazResetNsuMut.isPending}
-                onClick={() => {
-                  if (confirm("Isso vai baixar TODAS as NF-e desde o início (zera o NSU). Pode demorar. Continuar?")) {
-                    sefazResetNsuMut.mutate({ companyId: companyId ?? 0 });
-                  }
-                }}
+                onClick={() => setConfirmHistorico(true)}
                 title="Zera o NSU e baixa todas as NF-e desde o início"
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${sefazResetNsuMut.isPending ? "animate-spin" : ""}`} />
-                Histórico completo
+                {sefazResetNsuMut.isPending ? "Baixando..." : "Histórico completo"}
               </Button>
             </div>
           )}
@@ -1434,6 +1432,27 @@ export default function FinanceiroNotasFiscais() {
         })()}
 
         {/* ─── AlertDialog Cancelar NF ─── */}
+        {/* ─── AlertDialog Histórico Completo SEFAZ ─── */}
+        <AlertDialog open={confirmHistorico} onOpenChange={setConfirmHistorico}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Baixar histórico completo da SEFAZ?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Isso vai zerar o ponteiro NSU e baixar <strong>todas as NF-e recebidas desde o início</strong> cadastradas na SEFAZ para o CNPJ da empresa. Pode demorar alguns minutos dependendo do volume.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-amber-600 hover:bg-amber-700"
+                onClick={() => sefazResetNsuMut.mutate({ companyId: companyId ?? 0 })}
+              >
+                Baixar tudo
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         <AlertDialog open={!!deleteTarget} onOpenChange={v => !v && setDeleteTarget(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
