@@ -70,6 +70,7 @@
 - [NPS fill-time clock](nps-fill-time-clock.md) — tempoRespostaSegundos = useRef(Date.now()) restarted on entering tab "avaliacao" (not mount), sent as round((now-start)/1000) min 1; logged users start on "obras" so mount-time inflates it.
 - [react-pdf worker version match](pdfjs-worker-version-match.md) — "Erro ao carregar PDF" = bundled worker version ≠ react-pdf's internal pdfjs API; pin pdfjs-dist EXACTLY to react-pdf's dep, realign on every react-pdf upgrade.
 
+- [SEFAZ NSU rate-limit loop](sefaz-nsu-rate-limit-loop.md) — cStat=656 retorna ultNSU correto; NÃO salvar causa loop eterno independente de tempo de espera. Importação alternativa via XML disponível.
 - [Saldo inicial conta bancária](saldo-inicial-conta-bancaria.md) — saldo de abertura vive em `financial_opening_balances` (1 linha/conta), NÃO em coluna; Fluxo de Caixa soma p/ semear o Acumulado; mutações de conta precisam de tenant guard.
 - [Notification recipient tenancy](notification-recipient-tenancy.md) — notify queries must join `user_companies` (users has NO companyId; admin roles are global in getCompaniesForUser) or you leak across tenants.
 - [resolveCompanyIds trusts input](resolvecompanyids-no-intersect.md) — resolveCompanyIds/companyFilter don't intersect with user's allowed companies; per-company endpoints must call assert guard explicitly (loop every id for lists).

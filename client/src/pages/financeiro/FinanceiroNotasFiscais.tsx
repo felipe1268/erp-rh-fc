@@ -169,6 +169,10 @@ export default function FinanceiroNotasFiscais() {
   const [recSearch, setRecSearch] = useState("");
   const [recStatus, setRecStatus] = useState("todos");
 
+  // ── Upload XML ──────────────────────────────────────────────────────────────
+  const [xmlUploading, setXmlUploading] = useState(false);
+  const xmlInputRef = useRef<HTMLInputElement>(null);
+
   const nfeRecQuery = (trpc as any).sefaz.listNFeRecebidas.useQuery(
     { companyId: companyId ?? 0, ano: recAno, mes: recMes ?? undefined, search: recSearch || undefined, status: recStatus !== "todos" ? recStatus : undefined },
     { enabled: !!companyId && pageTab === "recebidas", staleTime: 30_000 }
@@ -237,9 +241,20 @@ export default function FinanceiroNotasFiscais() {
     onSuccess: (r: any) => {
       nfeRecQuery.refetch();
       if (r?.erro) toast({ title: "SEFAZ: " + r.erro, variant: "destructive" });
+      else if (r?.aviso) toast({ title: "⚠️ " + (r.aviso || "Rate limit SEFAZ"), variant: "default" });
       else toast({ title: `SEFAZ: ${r?.importadas ?? 0} NF-e novas importadas, ${r?.ignoradas ?? 0} já existiam.` });
     },
     onError: (e: any) => toast({ title: "Erro na sync SEFAZ", description: e.message, variant: "destructive" }),
+  });
+  const importXmlMut = (trpc as any).sefaz.importXml.useMutation({
+    onSuccess: (r: any) => {
+      nfeRecQuery.refetch();
+      const msg = `${r.importadas} NF-e importada${r.importadas !== 1 ? "s" : ""}, ${r.ignoradas} já existia${r.ignoradas !== 1 ? "m" : ""}.`;
+      const erroTxt = r.erros?.length ? ` ${r.erros.length} com erro.` : "";
+      toast({ title: "Import XML: " + msg + erroTxt, variant: r.importadas > 0 ? "default" : "destructive" });
+      setXmlUploading(false);
+    },
+    onError: (e: any) => { toast({ title: "Erro no import XML", description: e.message, variant: "destructive" }); setXmlUploading(false); },
   });
   const sefazResetNsuMut = (trpc as any).sefaz.resetNSU.useMutation({
     onSuccess: () => {
@@ -406,6 +421,27 @@ export default function FinanceiroNotasFiscais() {
     if (ok > 0) setBatchOpen(false);
   }
 
+  async function handleXmlUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []).filter(
+      f => f.name.toLowerCase().endsWith(".xml") || f.type === "text/xml" || f.type === "application/xml"
+    );
+    if (!files.length || !companyId) return;
+    if (xmlInputRef.current) xmlInputRef.current.value = "";
+    setXmlUploading(true);
+    try {
+      const xmlFiles = await Promise.all(
+        files.map(async f => ({
+          name: f.name,
+          content: await f.text(),
+        }))
+      );
+      importXmlMut.mutate({ companyId, xmlFiles });
+    } catch {
+      setXmlUploading(false);
+      toast({ title: "Erro ao ler os arquivos XML", variant: "destructive" });
+    }
+  }
+
   function openNew() {
     setEditingId(null);
     setForm(emptyForm());
@@ -522,6 +558,26 @@ export default function FinanceiroNotasFiscais() {
           )}
           {pageTab === "recebidas" && (
             <div className="flex gap-2 shrink-0 flex-wrap">
+              <input
+                ref={xmlInputRef}
+                type="file"
+                accept=".xml,text/xml,application/xml"
+                multiple
+                className="hidden"
+                onChange={handleXmlUpload}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 h-9 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                disabled={xmlUploading || importXmlMut.isPending}
+                onClick={() => xmlInputRef.current?.click()}
+                title="Importe NF-e pelo arquivo XML baixado do portal SEFAZ"
+              >
+                {xmlUploading || importXmlMut.isPending
+                  ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Importando...</>
+                  : <><Upload className="h-3.5 w-3.5" /> Importar XML</>}
+              </Button>
               <Button
                 size="sm"
                 className="gap-1.5 h-9 bg-indigo-600 hover:bg-indigo-700 text-white"

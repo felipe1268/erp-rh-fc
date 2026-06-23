@@ -1,6 +1,22 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3572 — **SEFAZ NF-e RECEBIDAS · BUGFIX LOOP ETERNO cStat=656 (ultNSU NÃO SALVO) + IMPORTAÇÃO POR UPLOAD DE XML PARA HISTÓRICO 2018-2026. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * BUG ROOT CAUSE (confirmado pelos logs): a SEFAZ retorna `ultNSU=9615` junto com cStat=656
+ * mas o código descartava esse valor — cada nova chamada enviava `ultNSU=0` de novo, recebendo
+ * 656 eternamente. Fix: quando cStat=656 e `novoUltNSU > 0`, salvar imediatamente em
+ * `company_nfe_config.ultimo_nsu`. Próxima chamada parte do NSU correto.
+ *
+ * NOVA FUNCIONALIDADE — Importar XML: botão "Importar XML" (verde) na aba NF-e Recebidas
+ * aceita múltiplos .xml; lê client-side com `File.text()`; chama `sefaz.importXml` no backend;
+ * o endpoint parseia o nfeProc/NFe/infNFe (XMLParser já disponível), extrai chNFe/nNF/dhEmi/
+ * emit/total/infAdic; ignora duplicatas (por chave) e canceladas (cStat 101/102); insere com
+ * `origem='xml_upload'`; `listNFeRecebidas` já filtra `IN ('sefaz_nfe','xml_upload')`.
+ * Suporta até 500 arquivos por envio; 2MB/arquivo.
+ *
+ * Arquivos: `server/routers/sefaz.ts`, `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`.
+ *
  * Rev. 3571 — **SEFAZ + SIAP GEO · DIAGNÓSTICO DE ERROS: LOG XML BRUTO + COOLDOWN 58min ANTI-RATE-LIMIT + DETALHE NO FRONTEND. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * SEFAZ: (1) Gate de cooldown 58min — após rate-limit (cStat=656), evita queimar cota com

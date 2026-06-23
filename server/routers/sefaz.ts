@@ -209,6 +209,7 @@ export async function executarSyncNFe(companyId: number): Promise<{ importadas: 
   let ignoradas = 0;
   let paginas = 0;
   let rateLimited = false;
+  let rateLimitedNsu: string | null = null; // NSU que a SEFAZ instrui usar na próxima chamada
 
   // ── Gate de cooldown: evitar queimar cota SEFAZ se já foi rate-limited recentemente ──
   try {
@@ -263,7 +264,12 @@ export async function executarSyncNFe(companyId: number): Promise<{ importadas: 
       // 137 = sem documentos | 138 = documento localizado | 498 = consultaNSU diferenciada
       // 656 = rate limit (Consumo Indevido) — NÃO avança NSU, sinaliza para UI
       if (cStat === "137") break;
-      if (cStat === "656") { rateLimited = true; break; }
+      if (cStat === "656") {
+        rateLimited = true;
+        // SEFAZ retorna o ultNSU correto: salvar para que a próxima chamada use esse ponto
+        if (novoUltNSU && novoUltNSU > "000000000000000") rateLimitedNsu = novoUltNSU;
+        break;
+      }
       if (cStat !== "138" && cStat !== "498") {
         // Inclui trecho do XML bruto na mensagem para diagnóstico
         throw new Error(`SEFAZ cStat=${cStat}: ${xMotivo} | xml=${respXml.slice(0, 300)}`);
@@ -328,19 +334,31 @@ export async function executarSyncNFe(companyId: number): Promise<{ importadas: 
     }
 
     // Salvar resultado final
-    // Se rate-limited: NÃO avança o NSU (mantém ultNSUInicial) para retentar do mesmo ponto
+    // Se rate-limited: a SEFAZ retorna o ultNSU que devemos usar → salvar para evitar o loop
     const avisoRateLimit = rateLimited
-      ? "Limite SEFAZ atingido (cStat=656): tente novamente após 1 hora. NSU não foi avançado."
+      ? `Limite SEFAZ (cStat=656). Tente novamente após 1 hora.${rateLimitedNsu ? ` NSU salvo: ${rateLimitedNsu}.` : ""}`
       : undefined;
     const resultPayload = rateLimited
-      ? { importadas, ignoradas, paginas, aviso: avisoRateLimit, rateLimitedAt: new Date().toISOString() }
+      ? { importadas, ignoradas, paginas, aviso: avisoRateLimit, rateLimitedAt: new Date().toISOString(), nsuSalvo: rateLimitedNsu }
       : { importadas, ignoradas, paginas };
-    await db.execute(sql`
-      UPDATE company_nfe_config
-      SET last_sync_at = NOW(),
-          last_sync_result = ${JSON.stringify(resultPayload)}
-      WHERE company_id = ${companyId}
-    `);
+    if (rateLimited && rateLimitedNsu) {
+      // CRÍTICO: salvar o NSU retornado pela SEFAZ para que a próxima chamada não entre em loop
+      await db.execute(sql`
+        UPDATE company_nfe_config
+        SET last_sync_at = NOW(),
+            ultimo_nsu = ${rateLimitedNsu},
+            last_sync_result = ${JSON.stringify(resultPayload)}
+        WHERE company_id = ${companyId}
+      `);
+      console.log(`[SefazSync] company=${companyId} rateLimitedNsu salvo: ${rateLimitedNsu}`);
+    } else {
+      await db.execute(sql`
+        UPDATE company_nfe_config
+        SET last_sync_at = NOW(),
+            last_sync_result = ${JSON.stringify(resultPayload)}
+        WHERE company_id = ${companyId}
+      `);
+    }
 
     console.log(`[SefazSync] company=${companyId} DONE importadas=${importadas} ignoradas=${ignoradas}${avisoRateLimit ? " RATE-LIMITED" : ""}`);
 
@@ -491,6 +509,86 @@ export const sefazRouter = router({
       return { ok: true };
     }),
 
+  // ── Importação por upload de XML (histórico 2018-2026) ───────────────────────
+  importXml: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      xmlFiles: z.array(z.object({
+        name: z.string(),
+        content: z.string().max(2_000_000), // 2MB por arquivo
+      })).max(500),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.user?.role !== "admin_master" && ctx.user?.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      let importadas = 0;
+      let ignoradas = 0;
+      const erros: string[] = [];
+
+      for (const file of input.xmlFiles) {
+        try {
+          const parsed = xmlParser.parse(file.content);
+
+          // Suporta: nfeProc (completo), NFe (sem protocolo), resNFe (resumo)
+          const nfeProcRoot = parsed["nfeProc"] || parsed;
+          const nfeNode = nfeProcRoot["NFe"] || nfeProcRoot["nfeProc"]?.["NFe"] || nfeProcRoot;
+          const infNFe = nfeNode["infNFe"] || nfeNode["NFe"]?.["infNFe"];
+          const protNFe = nfeProcRoot["protNFe"];
+          const infProt = protNFe?.["infProt"];
+
+          // Chave de acesso — campo mais crítico
+          const idAttr = String(infNFe?.["@_Id"] || infNFe?.Id || "").replace(/^NFe/, "");
+          const chNFe = String(infProt?.["chNFe"] || idAttr || "").replace(/\D/g, "").padStart(44, "");
+          if (chNFe.length !== 44) {
+            erros.push(`${file.name}: chave de acesso não encontrada ou inválida`);
+            ignoradas++;
+            continue;
+          }
+
+          // Duplicata
+          const existe = (await db.execute(sql`
+            SELECT id FROM fiscal_notes WHERE company_id=${input.companyId} AND chave_acesso=${chNFe} LIMIT 1
+          `)) as any;
+          if (((existe?.rows ?? existe) as any[])?.length > 0) { ignoradas++; continue; }
+
+          // cStat: 101=cancelada, 102=inutilizada → não importar
+          const cStat = String(infProt?.["cStat"] || "100");
+          if (cStat === "101" || cStat === "102") { ignoradas++; continue; }
+
+          const ide = infNFe?.["ide"] || {};
+          const emit = infNFe?.["emit"] || {};
+          const total = infNFe?.["total"]?.["ICMSTot"] || {};
+          const infAdic = infNFe?.["infAdic"] || {};
+
+          const nNF = String(ide?.["nNF"] || ide?.nNF || "0");
+          const dhEmi = String(ide?.["dhEmi"] || ide?.dhEmi || "").slice(0, 10);
+          const emitenteCnpj = cleanCnpj(String(emit?.["CNPJ"] || emit?.CPF || ""));
+          const emitenteNome = String(emit?.["xNome"] || emit?.xNome || "");
+          const valor = parseFloat(String(total?.["vNF"] || "0")) || 0;
+          const desc = String(infAdic?.["infCpl"] || infAdic?.infCpl || `NF-e ${nNF} — importada via XML`).slice(0, 500);
+
+          const dataEmissao = dhEmi || new Date().toISOString().slice(0, 10);
+
+          await db.execute(sql`
+            INSERT INTO fiscal_notes
+              (company_id, numero_nf, chave_acesso, data_emissao, descricao_servico,
+               valor_bruto, valor_liquido, status, origem, emitente_cnpj, emitente_nome,
+               criado_por_nome, created_at, updated_at)
+            VALUES
+              (${input.companyId}, ${nNF}, ${chNFe}, ${dataEmissao}::date, ${desc},
+               ${valor}, ${valor}, 'pendente', 'xml_upload', ${emitenteCnpj}, ${emitenteNome},
+               'Import XML', NOW(), NOW())
+          `);
+          importadas++;
+        } catch (e: any) {
+          erros.push(`${file.name}: ${(e?.message || "Erro desconhecido").slice(0, 120)}`);
+        }
+      }
+
+      console.log(`[SefazXmlImport] company=${input.companyId} importadas=${importadas} ignoradas=${ignoradas} erros=${erros.length}`);
+      return { importadas, ignoradas, erros };
+    }),
+
   listNFeRecebidas: protectedProcedure
     .input(z.object({
       companyId: z.number(),
@@ -507,7 +605,7 @@ export const sefazRouter = router({
                entry_id, created_at
         FROM fiscal_notes
         WHERE company_id = ${input.companyId}
-          AND origem = 'sefaz_nfe'
+          AND origem IN ('sefaz_nfe', 'xml_upload')
           ${input.ano ? sql`AND EXTRACT(YEAR FROM data_emissao) = ${input.ano}` : sql``}
           ${input.mes ? sql`AND EXTRACT(MONTH FROM data_emissao) = ${input.mes}` : sql``}
           ${input.status && input.status !== "todos" ? sql`AND status = ${input.status}` : sql``}

@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3571** — **SEFAZ + SIAP GEO · DIAGNÓSTICO: LOG XML BRUTO + COOLDOWN 58min ANTI-RATE-LIMIT + CONTADOR REGRESSIVO NO FRONTEND. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.** Gate 58min evita queimar cota SEFAZ; `rateLimitedAt` grava timestamp; frontend mostra "aguardar ~N min". SIAP GEO: log XML bruto + detecção de faultstring para erros descritivos. Detalhe: `shared/changelog.ts`.
+- **Rev. 3572** — **SEFAZ NF-e · BUGFIX LOOP ETERNO cStat=656 (ultNSU=9615 RETORNADO PELA SEFAZ NÃO ERA SALVO) + IMPORTAÇÃO POR UPLOAD DE XML (HISTÓRICO 2018-2026). BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Fix: salvar `novoUltNSU` quando 656; `listNFeRecebidas` inclui `xml_upload`; botão "Importar XML" verde na aba Recebidas. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3570** — **iOS WEBVIEW · BUGFIX MUTATIONS FALHAVAM COM "THE STRING DID NOT MATCH THE EXPECTED PATTERN" — RETRY AUTOMÁTICO PARA ERROS DE TRANSPORTE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3571** — **SEFAZ + SIAP GEO · DIAGNÓSTICO: LOG XML BRUTO + COOLDOWN 58min ANTI-RATE-LIMIT + CONTADOR REGRESSIVO NO FRONTEND. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3566** — **NFS-e EMITIDAS MUNICIPAIS · "BAIXAR TUDO" — IMPORTAÇÃO HISTÓRICA EM LOTE + SELETOR DE PERÍODO POR CARD. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
