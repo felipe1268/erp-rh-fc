@@ -1,6 +1,20 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3562 — **NFS-e EMITIDAS MUNICIPAIS · BUGFIX DOIS ERROS DE ARRANQUE: (1) INSERT SEED COM COLUNAS INEXISTENTES auth_type/descricao → REMOVIDAS; (2) for...of SEM Array.isArray → RENDER TRANSITÓRIO LANÇAVA "(intermediate value) is not iterable". BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * Dois bugs introduzidos na Rev. 3561 corrigidos:
+ * (1) BACKEND: O INSERT do auto-seed em `getMunicipios` e `addMunicipio` referenciava
+ * colunas `auth_type` e `descricao` que não foram criadas no `CREATE TABLE` do SyncSchema+.
+ * O PostgreSQL rejeitava com "column auth_type of relation company_nfse_municipal_config
+ * does not exist" em toda chamada ao endpoint — a seção inteira não carregava. Fix: removidas
+ * as duas colunas do INSERT VALUES; `enabled` corrigido de `false` (booleano) para `0` (SMALLINT).
+ * (2) FRONTEND: O `useEffect` que sincroniza `municipios` → `munForms` usava `for (const mun of
+ * municipios)` sem checar `Array.isArray`. O tRPC/React Query pode entregar um estado transitório
+ * de cache (objeto não-iterável) antes de confirmar o Array, lançando "(intermediate value) is
+ * not iterable" como toast de erro. Fix: `Array.isArray` guard + `.forEach` substituindo `for...of`.
+ * Arquivos: `server/routers/nfseEmitidas.ts`, `client/src/pages/configuracoes/FinanceiroConfigSection.tsx`.
+ *
  * Rev. 3561 — **NFS-e EMITIDAS MUNICIPAIS · NOVO MÓDULO: CONSULTA AUTOMÁTICA NAS PREFEITURAS (SIAP GEO, SIL, GIAP, TINUS). BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * Novo módulo para consultar NFS-e emitidas pela FC Engenharia nas prefeituras municipais via

@@ -39,17 +39,16 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
   // Estado local: mapa ibge_code → { inscricao, senha, enabled }
   const [munForms, setMunForms] = useState<Record<number, { inscricao: string; senha: string; enabled: boolean }>>({});
   useEffect(() => {
-    if (municipios) {
-      const m: Record<number, { inscricao: string; senha: string; enabled: boolean }> = {};
-      for (const mun of municipios) {
-        m[mun.ibge_code] = {
-          inscricao: mun.inscricao_municipal || "",
-          senha: mun.token || "",
-          enabled: !!mun.enabled,
-        };
-      }
-      setMunForms(m);
-    }
+    if (!municipios || !Array.isArray(municipios)) return;
+    const m: Record<number, { inscricao: string; senha: string; enabled: boolean }> = {};
+    municipios.forEach((mun: any) => {
+      m[Number(mun.ibge_code)] = {
+        inscricao: mun.inscricao_municipal || "",
+        senha: mun.token || "",
+        enabled: !!mun.enabled,
+      };
+    });
+    setMunForms(m);
   }, [municipios]);
 
   const saveMunMut = (trpc as any).nfseEmitidas.saveMunicipio.useMutation({

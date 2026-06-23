@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3561** — **NFS-e EMITIDAS MUNICIPAIS · NOVO MÓDULO: CONSULTA AUTOMÁTICA NAS PREFEITURAS (SIAP GEO, SIL, GIAP, TINUS). BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** 4 prefeituras pré-configuradas (Guaratinguetá-SP SIAP GEO, Aparecida-SP SIL, Araraquara-SP GIAP, Igarassu-PE TINUS). Login = Inscrição Municipal; Senha = senha do portal. Cards em Configurações → Financeiro; NFS-e importadas em `fiscal_notes` com `origem='nfse_mun_<ibge>'`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3562** — **NFS-e EMITIDAS MUNICIPAIS · BUGFIX DOIS ERROS DE ARRANQUE: INSERT SEED COM auth_type/descricao INEXISTENTES + for...of SEM Array.isArray. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.** (1) INSERT em `getMunicipios`/`addMunicipio` referenciava colunas inexistentes → seção não carregava; (2) `for...of municipios` sem `Array.isArray` → toast `(intermediate value) is not iterable` no render transitório. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3560** — **SEFAZ · RATE-LIMIT (cStat=656) AGORA SINALIZADO NA UI + NSU NÃO AVANÇA. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.** Antes: 656 gravava "0 importadas" como sucesso silencioso e cada nova chamada resetava o timer de 1h. Fix: backend seta `rateLimited=true`, não avança NSU; frontend exibe toast.warning âmbar e badge "⚠️ Limite/hora SEFAZ" na última sincronização. Detalhe: `shared/changelog.ts`.
+- **Rev. 3561** — **NFS-e EMITIDAS MUNICIPAIS · NOVO MÓDULO: CONSULTA AUTOMÁTICA NAS PREFEITURAS (SIAP GEO, SIL, GIAP, TINUS). BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Só Guaratinguetá-SP SIAP GEO auto-semeada. Login = Inscrição Municipal; Senha = senha do portal. Cards em Configurações → Financeiro; NFS-e importadas em `fiscal_notes` com `origem='nfse_mun_<ibge>'`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3557** — **SEFAZ · BUGFIX soap:Sender — FALTAVA soap12:Header COM nfeCabecMsg. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Todos os WS SEFAZ exigem `<nfeCabecMsg>` no `<soap12:Header>` com `<cUF>` e `<versaoDados>`. Sem ele → `soap:Sender`. `buildSoapEnvelope` não incluía o Header — adicionado. Detalhe: `shared/changelog.ts`.
 
