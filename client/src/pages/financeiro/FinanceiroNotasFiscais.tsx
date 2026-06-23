@@ -2377,7 +2377,7 @@ export default function FinanceiroNotasFiscais() {
                                 <p className="text-[10px] font-bold tracking-widest uppercase text-red-500 mb-1">Como funciona</p>
                                 {[
                                   { n: "1", text: "Digite abaixo o motivo da recusa — obrigatório pela SEFAZ (mín. 15 caracteres)." },
-                                  { n: "2", text: "Clique em "Confirmar recusa e avisar SEFAZ". O sistema assina o evento XML com o certificado A1 e envia ao WebService NFeRecepcaoEvento4." },
+                                  { n: "2", text: "Clique em 'Confirmar recusa e avisar SEFAZ'. O sistema assina o evento XML com o certificado A1 e envia ao WebService NFeRecepcaoEvento4." },
                                   { n: "3", text: "A SEFAZ retorna o protocolo de confirmação (cStat 135). Ele aparece no toast e fica registrado na nota." },
                                   { n: "4", text: "O emitente será notificado automaticamente pela SEFAZ sobre a recusa." },
                                 ].map(({ n, text }) => (
