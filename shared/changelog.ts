@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3576 — **NF-e RECEBIDAS · CRONÔMETRO REGRESSIVO VISÍVEL NA ABA RECEBIDAS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Banner animado no topo da aba "NF-e Recebidas": anel SVG de progresso (âmbar→verde) + contador
+ * MM:SS / HHh MMmin em fonte monoespaçada, atualizando a cada segundo via setInterval.
+ * Quando chega a 0: anel vira verde + ícone spinning + "Pronto — sincronizando em background".
+ * Lado direito: hora da última sync. Linha de subtexto: NSU atual.
+ * Lógica: `rateLimitedAt + 58min` quando existe rate-limit, senão `last_sync_at + 58min`.
+ * Query `sefaz.getConfig` adicionada com refetchInterval=60s p/ manter o dado fresco.
+ * Arquivo: `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`.
+ *
  * Rev. 3575 — **NFS-e EMITIDAS MUNICIPAIS · CRON HORÁRIO — MESMO PADRÃO DO SEFAZ. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
  *
  * `startNfseMunCron` usava o mesmo padrão antigo do SEFAZ: filtrava por `sync_hora` e rodava 1×/dia.

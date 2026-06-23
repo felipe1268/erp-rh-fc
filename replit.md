@@ -50,7 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3575** — **NFS-e EMITIDAS MUNICIPAIS · CRON HORÁRIO — MESMO PADRÃO DO SEFAZ. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** `startNfseMunCron` passa de 1×/dia (sync_hora) para toda hora (55min gap). Detalhe: `shared/changelog.ts`.
+- **Rev. 3576** — **NF-e RECEBIDAS · CRONÔMETRO REGRESSIVO NA ABA RECEBIDAS. 100% FRONTEND · ZERO BACKEND.** Banner animado: anel SVG âmbar→verde + MM:SS/HHhMM monoespaçado a cada segundo + NSU atual. Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3575** — **NFS-e EMITIDAS MUNICIPAIS · CRON HORÁRIO — MESMO PADRÃO DO SEFAZ. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3574** — **SEFAZ NF-e · UI CONFIG — TEXTO "TODO DIA 06:00" CORRIGIDO + NSU VISÍVEL + RATE LIMIT COMO INFORMATIVO. 100% FRONTEND · ZERO BACKEND.** Detalhe: `shared/changelog.ts`.
 

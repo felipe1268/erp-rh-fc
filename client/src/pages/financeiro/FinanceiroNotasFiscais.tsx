@@ -179,6 +179,37 @@ export default function FinanceiroNotasFiscais() {
   );
   const nfeRec: any[] = nfeRecQuery.data ?? [];
 
+  // ── Config SEFAZ (last_sync_at / ultimo_nsu / last_sync_result) ──────────────
+  const sefazCfgQuery = (trpc as any).sefaz.getConfig.useQuery(
+    { companyId: companyId ?? 0 },
+    { enabled: !!companyId && pageTab === "recebidas", staleTime: 60_000, refetchInterval: 60_000 }
+  );
+  const sefazCfg: any = sefazCfgQuery.data ?? null;
+
+  // ── Cronômetro regressivo: atualiza a cada segundo ───────────────────────────
+  const [countdownSec, setCountdownSec] = useState<number | null>(null);
+  useEffect(() => {
+    if (!sefazCfg) { setCountdownSec(null); return; }
+    const calcSecs = () => {
+      try {
+        const result = JSON.parse(sefazCfg.last_sync_result || "{}");
+        // Se rate-limited usa rateLimitedAt + 58min; senão usa last_sync_at + 58min
+        const baseTs = result?.rateLimitedAt
+          ? new Date(result.rateLimitedAt).getTime()
+          : sefazCfg.last_sync_at
+            ? new Date(sefazCfg.last_sync_at).getTime()
+            : null;
+        if (!baseTs) { setCountdownSec(null); return; }
+        const nextSyncMs = baseTs + 58 * 60 * 1000;
+        const diff = Math.floor((nextSyncMs - Date.now()) / 1000);
+        setCountdownSec(Math.max(0, diff));
+      } catch { setCountdownSec(null); }
+    };
+    calcSecs();
+    const iv = setInterval(calcSecs, 1000);
+    return () => clearInterval(iv);
+  }, [sefazCfg]);
+
   const recTotais = useMemo(() => {
     const total = nfeRec.length;
     const valorTotal = nfeRec.reduce((s: number, r: any) => s + (r.valorLiquido || 0), 0);
@@ -626,8 +657,85 @@ export default function FinanceiroNotasFiscais() {
         ═══════════════════════════════════════════════════════════════════════ */}
         {pageTab === "recebidas" && (() => {
           const MESES_REC = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+          const fmtCountdown = (s: number) => {
+            if (s <= 0) return null; // ready to sync
+            const h = Math.floor(s / 3600);
+            const m = Math.floor((s % 3600) / 60);
+            const sec = s % 60;
+            if (h > 0) return `${h}h ${String(m).padStart(2,"0")}min`;
+            return `${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`;
+          };
+          const countdownLabel = fmtCountdown(countdownSec ?? 0);
+          const nsuNum = Number(sefazCfg?.ultimo_nsu ?? 0);
           return (
             <div className="space-y-4">
+              {/* Cronômetro de próxima sync */}
+              {sefazCfg && (
+                <div className={`flex items-center gap-3 rounded-xl border px-4 py-2.5 ${
+                  countdownLabel
+                    ? "border-amber-200 bg-amber-50"
+                    : "border-emerald-200 bg-emerald-50"
+                }`}>
+                  {/* Anel de progresso animado */}
+                  <div className="relative shrink-0 w-10 h-10">
+                    <svg className="w-10 h-10 -rotate-90" viewBox="0 0 36 36">
+                      <circle cx="18" cy="18" r="15" fill="none" stroke="#e5e7eb" strokeWidth="3" />
+                      <circle
+                        cx="18" cy="18" r="15" fill="none"
+                        stroke={countdownLabel ? "#f59e0b" : "#10b981"}
+                        strokeWidth="3"
+                        strokeDasharray="94.2"
+                        strokeDashoffset={countdownLabel
+                          ? String(94.2 * (1 - (countdownSec ?? 0) / (58 * 60)))
+                          : "0"}
+                        strokeLinecap="round"
+                        style={{ transition: "stroke-dashoffset 1s linear" }}
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      {countdownLabel
+                        ? <RefreshCw className="w-3.5 h-3.5 text-amber-500" />
+                        : <RefreshCw className="w-3.5 h-3.5 text-emerald-500 animate-spin" />
+                      }
+                    </div>
+                  </div>
+                  {/* Texto */}
+                  <div className="flex-1 min-w-0">
+                    {countdownLabel ? (
+                      <>
+                        <p className="text-sm font-semibold text-amber-800">
+                          Próxima sync automática em{" "}
+                          <span className="font-mono text-amber-700 tabular-nums">{countdownLabel}</span>
+                        </p>
+                        <p className="text-xs text-amber-600 mt-0.5">
+                          SEFAZ permite 1 chamada/hora — o sistema aguarda e sincroniza sozinho.
+                          {nsuNum > 0 && <> · NSU atual: <strong>{nsuNum.toLocaleString("pt-BR")}</strong></>}
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm font-semibold text-emerald-800">
+                          ✅ Pronto — sincronizando agora em background
+                        </p>
+                        <p className="text-xs text-emerald-600 mt-0.5">
+                          A cota SEFAZ foi renovada. O cron horário já está buscando novas NF-e.
+                          {nsuNum > 0 && <> · NSU atual: <strong>{nsuNum.toLocaleString("pt-BR")}</strong></>}
+                        </p>
+                      </>
+                    )}
+                  </div>
+                  {/* Última sync */}
+                  {sefazCfg.last_sync_at && (
+                    <div className="text-right text-xs text-slate-400 shrink-0 hidden sm:block">
+                      <div>Última sync</div>
+                      <div className="font-medium text-slate-500">
+                        {new Date(sefazCfg.last_sync_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* KPI cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
