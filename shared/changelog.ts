@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3610 — **NF-e RECEBIDAS · BUGFIX BOTÃO "CONSULTAR NO SEFAZ" ABRIA PÁGINA INICIAL EM VEZ DA NOTA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * O parâmetro `tipoConteudo=XmlNFe` não é reconhecido pelo portal nfe.fazenda.gov.br —
+ * o servidor ignorava o parâmetro e redirecionava para a página inicial.
+ * O valor correto é `tipoConteudo=7PhJ%2BgAVw2g%3D` (base64 "7PhJ+gAVw2g=" URL-encoded),
+ * que é o identificador padrão do portal para consulta completa de NF-e por chave de acesso.
+ * A chave de 44 dígitos já era extraída corretamente via `.replace(/\D/g,"")`.
+ *
+ * Após a correção, clicar em "Consultar no SEFAZ" abre diretamente a página da nota no portal
+ * da Receita Federal com todos os dados: emitente, destinatário, itens, impostos e protocolo de autorização.
+ *
+ * Arquivo: `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx` — URL corrigida.
+ *
  * Rev. 3609 — **NF-e RECEBIDAS · BUGFIX CRÍTICO BACKFILL "115 NOTAS SEM XML" — ESTRATÉGIA NSU RESET + RESYNC EM VEZ DE consChNFe. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * Causa-raiz: `recuperarXmlsBackfill` usava `consChNFe` via `NFeDistribuicaoDFe` para tentar

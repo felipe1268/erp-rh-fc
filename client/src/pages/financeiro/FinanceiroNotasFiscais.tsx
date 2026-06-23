@@ -2499,7 +2499,7 @@ export default function FinanceiroNotasFiscais() {
                         size="sm"
                         className="gap-1.5 border-indigo-300 text-indigo-700 hover:bg-indigo-50"
                         onClick={() => window.open(
-                          `https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx?tipoConteudo=XmlNFe&tipoConsulta=completa&nfe=${String(nf.chaveAcesso).replace(/\D/g,"")}`,
+                          `https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx?tipoConsulta=completa&tipoConteudo=7PhJ%2BgAVw2g%3D&nfe=${String(nf.chaveAcesso).replace(/\D/g,"")}`,
                           "_blank"
                         )}
                       >
