@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3599** — **NF-e RECEBIDAS · BUGFIX BOTÃO 👁 NÃO ABRIA DETALHE — DIALOG DENTRO DO BLOCO "EMITIDAS". 100% FRONTEND · ZERO BACKEND/ALTER/DROP/DELETE.** Dialog `nfeRecDetalhe` estava dentro de `{pageTab==="emitidas" && <>...</>}` → nunca renderizava na aba recebidas. Movido para fora de ambas as abas. Detalhe: `shared/changelog.ts`.
+- **Rev. 3600** — **NF-e RECEBIDAS · DIALOG DANFE MODERNO + ACATAR/RECUSAR/DESCONHEÇO + BUGFIX CHAVE NOTAÇÃO CIENTÍFICA. BACKEND ADITIVO + FRONTEND + SYNCSCHEMA+ · ZERO ALTER/DROP/DELETE.** `numberParseOptions.skipLike` no XMLParser evita float64 em chave de 44 dígitos; SyncSchema+ limpa chaves corrompidas; endpoint `sefaz.manifestar`; dialog redesenhado com header gradiente, CNPJ formatado, chave em grupos de 4. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3598** — **NFS-e EMITIDAS · BUGFIX NF-e RECEBIDA (SEFAZ) APARECIA NA ABA EMITIDAS. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** `fiscalNotes.list` não filtrava por `origem` → registros `sefaz_nfe`/`xml_upload` misturados com emitidas. Fix: `notInArray(fiscalNotes.origem, ["sefaz_nfe","xml_upload"])` no WHERE. Detalhe: `shared/changelog.ts`.
+- **Rev. 3599** — **NF-e RECEBIDAS · BUGFIX BOTÃO 👁 NÃO ABRIA DETALHE — DIALOG DENTRO DO BLOCO "EMITIDAS". 100% FRONTEND · ZERO BACKEND/ALTER/DROP/DELETE.** Dialog `nfeRecDetalhe` estava dentro de `{pageTab==="emitidas" && <>...</>}` → nunca renderizava na aba recebidas. Movido para fora de ambas as abas. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3594** — **EPI · PERMISSÃO ESPECIAL "EDITAR ESTOQUE CENTRAL" POR GRUPO — SEM PRECISAR SER ADMIN. 100% FRONTEND · ZERO BACKEND/ALTER/DROP/DELETE.** Mensagem do campo bloqueado corrigida (não dizia mais "vá para Estoque por Obra" quando essa aba também não oferecia edição do Central). Adicionado botão lápis verde nas linhas do Central na aba Estoque por Obra, visível só para `canWriteCentral`. Detalhe: `shared/changelog.ts`.
 

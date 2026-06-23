@@ -633,7 +633,7 @@ export const sefazRouter = router({
     .input(z.object({
       id: z.number(),
       companyId: z.number(),
-      status: z.enum(["acatada", "recusada", "desconhecida"]),
+      status: z.enum(["acatada", "recusada", "desconhecida", "pendente"]),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();

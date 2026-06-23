@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3600 — **NF-e RECEBIDAS · DIALOG REDESENHADO (DANFE MODERNO) + ACATAR / RECUSAR / DESCONHEÇO + BUGFIX CHAVE EM NOTAÇÃO CIENTÍFICA. BACKEND ADITIVO + FRONTEND + SYNCSCHEMA+ · ZERO ALTER/DROP/DELETE.**
+ *
+ * (1) CHAVE CIENTÍFICA: fast-xml-parser com `parseAttributeValue:true` convertia a string de 44 dígitos
+ * da chave NF-e para float64 JS → perde precisão → armazenava "3.526062546426e+43". Fix: `numberParseOptions:
+ * { skipLike: /^\d{12,}$/ }` evita converter strings de 12+ dígitos consecutivos.
+ * SyncSchema+: UPDATE fiscal_notes SET chave_acesso=NULL onde chave LIKE '%e+%' → próxima sync reinsere corretamente.
+ * (2) MANIFESTAÇÃO: novo endpoint `sefaz.manifestar` — status in (acatada, recusada, desconhecida, pendente).
+ * Dialog: 3 botões com ícones (✓ Acatar / ✗ Recusar / ? Desconheço); "Desfazer" quando já manifestado.
+ * (3) REDESENHO: header gradiente indigo estilo DANFE (NF-e, Recebida via SEFAZ, Valor); seções com título
+ * tarja cinza; chave formatada em grupos de 4 dígitos; CNPJ formatado XX.XXX.XXX/XXXX-XX;
+ * link SEFAZ só aparece quando chave tem exatos 44 dígitos válidos.
+ *
  * Rev. 3599 — **NF-e RECEBIDAS · BUGFIX BOTÃO 👁 NÃO ABRIA DETALHE — DIALOG ESTAVA DENTRO DO BLOCO "EMITIDAS". 100% FRONTEND · ZERO BACKEND/ALTER/DROP/DELETE.**
  *
  * O `<Dialog open={!!nfeRecDetalhe}>` foi colocado dentro do bloco `{pageTab === "emitidas" && <>...</>}`.
