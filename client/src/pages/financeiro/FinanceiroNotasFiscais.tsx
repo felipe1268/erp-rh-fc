@@ -52,11 +52,27 @@ function isoToInput(s: string | null | undefined) {
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  pendente:   { label: "Pendente",   color: "bg-amber-100 text-amber-800 border-amber-200" },
-  recebida:   { label: "Recebida",   color: "bg-blue-100 text-blue-800 border-blue-200" },
-  conciliada: { label: "Conciliada", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
-  cancelada:  { label: "Cancelada",  color: "bg-red-100 text-red-700 border-red-200" },
+  pendente:      { label: "Pendente",      color: "bg-amber-100 text-amber-800 border-amber-200" },
+  recebida:      { label: "Recebida",      color: "bg-blue-100 text-blue-800 border-blue-200" },
+  conciliada:    { label: "Conciliada",    color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
+  cancelada:     { label: "Cancelada",     color: "bg-red-100 text-red-700 border-red-200" },
+  acatada:       { label: "✓ Acatada",     color: "bg-green-100 text-green-800 border-green-200" },
+  recusada:      { label: "✗ Recusada",    color: "bg-red-100 text-red-800 border-red-200" },
+  desconhecida:  { label: "? Desconhecida",color: "bg-slate-100 text-slate-700 border-slate-300" },
 };
+
+function fmtChave(chave: string | null | undefined): string {
+  if (!chave) return "—";
+  const clean = String(chave).replace(/\D/g, "");
+  if (clean.length !== 44) return String(chave);
+  return clean.match(/.{1,4}/g)?.join(" ") ?? String(chave);
+}
+function fmtCnpjDisplay(cnpj: string | null | undefined): string {
+  if (!cnpj) return "—";
+  const c = String(cnpj).replace(/\D/g, "");
+  if (c.length !== 14) return cnpj;
+  return `${c.slice(0,2)}.${c.slice(2,5)}.${c.slice(5,8)}/${c.slice(8,12)}-${c.slice(12)}`;
+}
 
 type BatchItem = {
   id: string;
@@ -371,6 +387,15 @@ export default function FinanceiroNotasFiscais() {
       sefazSyncMut.mutate({ companyId: companyId ?? 0 });
     },
     onError: (e: any) => toast({ title: "Erro ao resetar NSU", description: e.message, variant: "destructive" }),
+  });
+  const manifestarMut = (trpc as any).sefaz.manifestar.useMutation({
+    onSuccess: (_: any, vars: any) => {
+      const labels: Record<string, string> = { acatada: "acatada ✓", recusada: "recusada ✗", desconhecida: "marcada como desconhecida" };
+      toast({ title: `NF-e ${labels[vars.status] ?? vars.status}` });
+      setNfeRecDetalhe((prev: any) => prev ? { ...prev, status: vars.status } : null);
+      nfeRecQuery.refetch();
+    },
+    onError: (e: any) => toast({ title: "Erro ao manifestar", description: e.message, variant: "destructive" }),
   });
   const vincularEntryMut = trpc.fiscalNotes.vincularLancamento.useMutation({
     onSuccess: () => { toast({ title: "Lançamento vinculado!" }); setDetalheNf(null); listQuery.refetch(); },
@@ -1914,91 +1939,180 @@ export default function FinanceiroNotasFiscais() {
 
         {/* ── Dialog detalhe NF-e Recebida — fora de qualquer aba para sempre renderizar ── */}
         <Dialog open={!!nfeRecDetalhe} onOpenChange={v => !v && setNfeRecDetalhe(null)}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-indigo-700">
-                <Receipt className="w-5 h-5" />
-                NF-e #{nfeRecDetalhe?.numeroNf || "—"}
-              </DialogTitle>
-              <DialogDescription>
-                Detalhes da nota fiscal recebida via SEFAZ
-              </DialogDescription>
-            </DialogHeader>
+          <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden rounded-2xl">
             {nfeRecDetalhe && (() => {
               const nf = nfeRecDetalhe;
               const st = STATUS_MAP[nf.status] ?? { label: nf.status, color: "bg-gray-100 text-gray-700 border-gray-200" };
+              const chaveRaw = String(nf.chaveAcesso || "");
+              const chaveFormatada = fmtChave(chaveRaw);
+              const chaveParaCopiar = String(nf.chaveAcesso || "").replace(/\D/g, "");
+              const isMutating = manifestarMut.isPending;
+              const canManifest = ["pendente", "recebida"].includes(nf.status);
               return (
-                <div className="space-y-4 py-1">
-                  <div className="flex items-center justify-between">
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border ${st.color}`}>
-                      {st.label}
-                    </span>
-                    <span className="text-2xl font-bold text-emerald-700 tabular-nums">{formatBRL(nf.valorLiquido)}</span>
-                  </div>
-                  <div className="rounded-xl border bg-slate-50 p-3 space-y-1.5">
-                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Emitente</p>
-                    <p className="font-semibold text-slate-800 break-words">{nf.emitenteNome || "—"}</p>
-                    <p className="text-sm text-slate-500 tabular-nums">{nf.emitenteCnpj || "—"}</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-xl border bg-slate-50 p-3">
-                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Emissão</p>
-                      <p className="font-semibold text-slate-800">{fmtDateBR(nf.dataEmissao)}</p>
-                    </div>
-                    <div className="rounded-xl border bg-slate-50 p-3">
-                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Importada em</p>
-                      <p className="font-semibold text-slate-800">{fmtDateBR(nf.createdAt)}</p>
-                    </div>
-                  </div>
-                  {nf.descricaoServico && (
-                    <div className="rounded-xl border bg-slate-50 p-3">
-                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Descrição</p>
-                      <p className="text-sm text-slate-700 break-words">{nf.descricaoServico}</p>
-                    </div>
-                  )}
-                  {nf.chaveAcesso && (
-                    <div className="rounded-xl border bg-slate-50 p-3">
-                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Chave de Acesso</p>
-                      <div className="flex items-start gap-2">
-                        <p className="font-mono text-xs text-slate-600 break-all flex-1 select-all leading-relaxed">{nf.chaveAcesso}</p>
-                        <button
-                          type="button"
-                          className="shrink-0 p-1.5 rounded-lg hover:bg-slate-200 text-slate-500 hover:text-slate-700 transition-colors"
-                          title="Copiar chave"
-                          onClick={() => {
-                            navigator.clipboard.writeText(nf.chaveAcesso).then(() => {
-                              setCopiedChave(true);
-                              setTimeout(() => setCopiedChave(false), 2000);
-                            });
-                          }}
-                        >
-                          {copiedChave ? <CheckIcon className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-                        </button>
+                <>
+                  {/* Cabeçalho estilo DANFE */}
+                  <div className="bg-gradient-to-r from-indigo-700 to-indigo-500 px-5 py-4 text-white">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-bold tracking-widest uppercase opacity-70 mb-0.5">Nota Fiscal Eletrônica</p>
+                        <h2 className="text-xl font-bold leading-tight">NF-e {nf.numeroNf ? `#${nf.numeroNf}` : "—"}</h2>
+                        <p className="text-indigo-200 text-xs mt-0.5">Recebida via SEFAZ</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-[10px] uppercase tracking-wide opacity-70">Valor</p>
+                        <p className="text-2xl font-bold tabular-nums">{formatBRL(nf.valorLiquido)}</p>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border mt-1 ${st.color}`}>
+                          {st.label}
+                        </span>
                       </div>
                     </div>
-                  )}
-                  {nf.nsuSefaz && (
-                    <p className="text-xs text-slate-400">NSU SEFAZ: <span className="font-mono">{nf.nsuSefaz}</span></p>
-                  )}
-                </div>
+                  </div>
+
+                  <div className="p-5 space-y-4 max-h-[65svh] overflow-y-auto">
+                    {/* Emitente */}
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
+                      <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200">
+                        <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500">Emitente</p>
+                      </div>
+                      <div className="px-3 py-2.5 space-y-0.5">
+                        <p className="font-semibold text-slate-800 break-words leading-snug">{nf.emitenteNome || "—"}</p>
+                        <p className="text-sm text-slate-500 font-mono">{fmtCnpjDisplay(nf.emitenteCnpj)}</p>
+                      </div>
+                    </div>
+
+                    {/* Datas */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                        <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500 mb-1">Emissão</p>
+                        <p className="font-semibold text-slate-800 tabular-nums">{fmtDateBR(nf.dataEmissao)}</p>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                        <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500 mb-1">Importada em</p>
+                        <p className="font-semibold text-slate-800 tabular-nums">{fmtDateBR(nf.createdAt)}</p>
+                      </div>
+                    </div>
+
+                    {/* Descrição */}
+                    {nf.descricaoServico && (
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
+                        <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200">
+                          <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500">Descrição</p>
+                        </div>
+                        <p className="px-3 py-2.5 text-sm text-slate-700 break-words leading-relaxed">{nf.descricaoServico}</p>
+                      </div>
+                    )}
+
+                    {/* Chave de Acesso */}
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
+                      <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200 flex items-center justify-between">
+                        <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500">Chave de Acesso (44 dígitos)</p>
+                        {chaveRaw && (
+                          <button
+                            type="button"
+                            className="flex items-center gap-1 text-xs text-slate-500 hover:text-indigo-700 transition-colors"
+                            title="Copiar chave"
+                            onClick={() => {
+                              navigator.clipboard.writeText(chaveParaCopiar).then(() => {
+                                setCopiedChave(true);
+                                setTimeout(() => setCopiedChave(false), 2000);
+                              });
+                            }}
+                          >
+                            {copiedChave ? <CheckIcon className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                            {copiedChave ? "Copiado!" : "Copiar"}
+                          </button>
+                        )}
+                      </div>
+                      <div className="px-3 py-2.5">
+                        <p className="font-mono text-xs text-slate-600 break-all select-all leading-loose tracking-wider">
+                          {chaveFormatada}
+                        </p>
+                        {nf.nsuSefaz && (
+                          <p className="text-[11px] text-slate-400 mt-1.5">NSU: <span className="font-mono">{nf.nsuSefaz}</span></p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Manifestação */}
+                    {canManifest && (
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
+                        <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200">
+                          <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500">Sua Manifestação</p>
+                        </div>
+                        <div className="px-3 py-3 flex flex-col gap-2">
+                          <p className="text-xs text-slate-500 leading-relaxed">Essa NF-e pertence à sua empresa?</p>
+                          <div className="grid grid-cols-3 gap-2">
+                            <button
+                              type="button"
+                              disabled={isMutating}
+                              className="flex flex-col items-center gap-1 py-2.5 px-2 rounded-xl border-2 border-green-300 bg-green-50 hover:bg-green-100 text-green-800 transition-colors disabled:opacity-50"
+                              onClick={() => manifestarMut.mutate({ id: nf.id, companyId: companyId!, status: "acatada" })}
+                            >
+                              <CheckIcon className="w-5 h-5 text-green-600" />
+                              <span className="text-xs font-semibold">Acatar</span>
+                              <span className="text-[10px] text-green-600 text-center leading-tight">É nossa, confirmar</span>
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isMutating}
+                              className="flex flex-col items-center gap-1 py-2.5 px-2 rounded-xl border-2 border-red-300 bg-red-50 hover:bg-red-100 text-red-800 transition-colors disabled:opacity-50"
+                              onClick={() => manifestarMut.mutate({ id: nf.id, companyId: companyId!, status: "recusada" })}
+                            >
+                              <X className="w-5 h-5 text-red-600" />
+                              <span className="text-xs font-semibold">Recusar</span>
+                              <span className="text-[10px] text-red-600 text-center leading-tight">Não é nossa</span>
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isMutating}
+                              className="flex flex-col items-center gap-1 py-2.5 px-2 rounded-xl border-2 border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 transition-colors disabled:opacity-50"
+                              onClick={() => manifestarMut.mutate({ id: nf.id, companyId: companyId!, status: "desconhecida" })}
+                            >
+                              <span className="text-lg font-bold text-slate-500">?</span>
+                              <span className="text-xs font-semibold">Desconheço</span>
+                              <span className="text-[10px] text-slate-500 text-center leading-tight">Não reconheço</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {!canManifest && (
+                      <div className={`rounded-xl border px-3 py-2.5 text-center text-sm font-medium ${st.color}`}>
+                        Manifestação: {st.label}
+                        {["acatada","recusada","desconhecida"].includes(nf.status) && (
+                          <button
+                            type="button"
+                            className="ml-3 text-xs underline opacity-70 hover:opacity-100"
+                            onClick={() => manifestarMut.mutate({ id: nf.id, companyId: companyId!, status: "pendente" as any })}
+                          >
+                            Desfazer
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Footer */}
+                  <div className="px-5 py-3 border-t bg-slate-50 flex flex-wrap items-center justify-between gap-2">
+                    {nf.chaveAcesso && String(nf.chaveAcesso).replace(/\D/g,"").length === 44 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+                        onClick={() => window.open(
+                          `https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx?tipoConteudo=XmlNFe&tipoConsulta=completa&nfe=${String(nf.chaveAcesso).replace(/\D/g,"")}`,
+                          "_blank"
+                        )}
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        Consultar no SEFAZ
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setNfeRecDetalhe(null)}>Fechar</Button>
+                  </div>
+                </>
               );
             })()}
-            <DialogFooter className="flex-col sm:flex-row gap-2">
-              {nfeRecDetalhe?.chaveAcesso && (
-                <Button
-                  variant="outline"
-                  className="gap-1.5 border-indigo-300 text-indigo-700 hover:bg-indigo-50"
-                  onClick={() => window.open(
-                    `https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx?tipoConteudo=XmlNFe&tipoConsulta=completa&nfe=${nfeRecDetalhe.chaveAcesso}`,
-                    "_blank"
-                  )}
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  Abrir no portal SEFAZ
-                </Button>
-              )}
-              <Button variant="ghost" onClick={() => setNfeRecDetalhe(null)}>Fechar</Button>
-            </DialogFooter>
           </DialogContent>
         </Dialog>
 

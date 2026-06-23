@@ -4108,6 +4108,29 @@ Regras:
           if (!affected.length) console.log(`[SyncSchema+] Rev. 3596: nenhum NSU corrompido por rate-limit encontrado — OK`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3596 nsu-rate-reset:`, e?.message || e); }
 
+        // Rev. 3600 — BUGFIX: chave_acesso armazenada em notação científica (3.526e+43)
+        // Causa: fast-xml-parser com parseAttributeValue:true convertia strings de 44 dígitos
+        // para float64 JS, que perde precisão e gera "3.526062546426e+43".
+        // Fix XMLParser: numberParseOptions.skipLike para 12+ dígitos.
+        // SyncSchema+: limpa registros com chave corrompida → próxima sync reinsere corretamente.
+        try {
+          const badChave = (await db.execute(sql`
+            SELECT id, company_id, chave_acesso FROM fiscal_notes
+            WHERE origem IN ('sefaz_nfe', 'xml_upload')
+              AND chave_acesso LIKE '%e+%'
+          `)) as any;
+          const badRows = (badChave?.rows ?? badChave) as any[];
+          for (const row of badRows) {
+            await db.execute(sql`
+              UPDATE fiscal_notes
+              SET chave_acesso = NULL, numero_nf = NULL, status = 'pendente'
+              WHERE id = ${row.id}
+            `);
+            console.log(`[SyncSchema+] Rev. 3600: chave corrompida limpada id=${row.id} company=${row.company_id} era="${row.chave_acesso}"`);
+          }
+          if (!badRows.length) console.log(`[SyncSchema+] Rev. 3600: nenhuma chave em notação científica encontrada — OK`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3600 chave-cientifica:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

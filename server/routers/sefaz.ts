@@ -32,6 +32,9 @@ const xmlParser = new XMLParser({
   attributeNamePrefix: "@_",
   parseAttributeValue: true,
   allowBooleanAttributes: true,
+  // Evita converter strings de 12+ dígitos (chave NF-e, CNPJ, NSU) para float64
+  // — float64 perde precisão em 44 dígitos, resultando em notação científica (ex: 3.526e+43)
+  numberParseOptions: { skipLike: /^\d{12,}$/, leadingZeros: false },
 });
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -624,6 +627,24 @@ export const sefazRouter = router({
 
       console.log(`[SefazXmlImport] company=${input.companyId} importadas=${importadas} ignoradas=${ignoradas} erros=${erros.length}`);
       return { importadas, ignoradas, erros };
+    }),
+
+  manifestar: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      status: z.enum(["acatada", "recusada", "desconhecida"]),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      await db.execute(sql`
+        UPDATE fiscal_notes
+        SET status = ${input.status}, updated_at = NOW()
+        WHERE id = ${input.id}
+          AND company_id = ${input.companyId}
+          AND origem IN ('sefaz_nfe', 'xml_upload')
+      `);
+      return { ok: true };
     }),
 
   listNFeRecebidas: protectedProcedure
