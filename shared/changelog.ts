@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3578 — **NFS-e EMITIDAS · DIALOG "NOVA NFS-e" REDESENHADO — LAYOUT MODERNO SEM ABAS, SEÇÕES VISUAIS, VALOR LÍQUIDO DESTACADO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Substituiu o layout com 3 abas (Dados Gerais / Tributação / Vínculo) por tela única scrollável:
+ * - Cabeçalho gradiente indigo com ícone + badge "NF #N" ao vivo.
+ * - Seção Identificação (Nº NF, Série, Emissão, Competência, Vencimento).
+ * - Seção Tomador (CNPJ + Razão Social).
+ * - Seção Obra & Referência (Obra, BM, Descrição).
+ * - Seção Valores & Tributação em card bg-slate: Bruto/Deduções + retencões em grid-4 + card
+ *   verde escuro mostrando Valor Líquido em destaque (24px bold).
+ * - Seção "Avançado" colapsível (<details>) para Chave de Acesso, URL PDF, Observações.
+ * - Rodapé bg-slate-50 com botão "Emitir NF-e" azul indigo.
+ * Arquivo: `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`.
+ *
  * Rev. 3577 — **NFS-e EMITIDAS · CRONÔMETRO REGRESSIVO NA ABA EMITIDAS (MESMO PADRÃO DO RECEBIDAS). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Banner idêntico ao da aba NF-e Recebidas, mas para as NFS-e municipais (SIAP GEO etc.).

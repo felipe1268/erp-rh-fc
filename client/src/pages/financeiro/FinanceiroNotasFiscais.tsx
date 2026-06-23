@@ -1196,188 +1196,223 @@ export default function FinanceiroNotasFiscais() {
           </div>
         </Card>
 
-        {/* ─── Dialog Cadastro/Edição ─── */}
+        {/* ─── Dialog Cadastro/Edição (layout moderno) ─── */}
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Receipt className="h-5 w-5 text-indigo-600" />
-                {editingId ? `Editar NF-e #${form.numeroNf}` : "Nova Nota Fiscal de Serviço"}
-              </DialogTitle>
-            </DialogHeader>
+          <DialogContent className="max-w-2xl max-h-[92svh] flex flex-col p-0 gap-0 overflow-hidden rounded-2xl">
 
-            {/* Tabs */}
-            <div className="flex border-b gap-4 px-1 shrink-0">
-              {(["dados", "tributacao", "vinculo"] as const).map(t => (
-                <button key={t} onClick={() => setTab(t)}
-                  className={`pb-2 text-sm font-medium capitalize border-b-2 transition-colors ${tab === t ? "border-indigo-600 text-indigo-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
-                  {t === "dados" ? "Dados Gerais" : t === "tributacao" ? "Tributação" : "Vínculo / Arquivo"}
-                </button>
-              ))}
+            {/* ── Cabeçalho colorido ── */}
+            <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 px-6 py-4 shrink-0">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="bg-white/20 rounded-xl p-2">
+                    <Receipt className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-white leading-tight">
+                      {editingId ? "Editar Nota Fiscal" : "Nova Nota Fiscal de Serviço"}
+                    </h2>
+                    <p className="text-indigo-200 text-xs mt-0.5">NFS-e · Serviços prestados pela FC Engenharia</p>
+                  </div>
+                </div>
+                {form.numeroNf && (
+                  <div className="bg-white/20 rounded-lg px-3 py-1 text-white text-sm font-mono font-bold">
+                    NF #{form.numeroNf}
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-1 py-2 space-y-4">
+            {/* ── Corpo scrollável ── */}
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
 
-              {/* Tab: Dados Gerais */}
-              {tab === "dados" && (
-                <>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="col-span-1">
-                      <Label className="text-xs mb-1 block">Número NF *</Label>
-                      <Input value={form.numeroNf} onChange={e => setF("numeroNf", e.target.value)} placeholder="55" />
-                    </div>
-                    <div>
-                      <Label className="text-xs mb-1 block">Série</Label>
-                      <Input value={form.serie ?? ""} onChange={e => setF("serie", e.target.value)} placeholder="NE / 70000" />
-                    </div>
-                    <div>
-                      <Label className="text-xs mb-1 block">Data Emissão *</Label>
-                      <Input type="date" value={isoToInput(form.dataEmissao)} onChange={e => setF("dataEmissao", e.target.value)} />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label className="text-xs mb-1 block">Competência</Label>
-                      <Input type="date" value={isoToInput(form.dataCompetencia)} onChange={e => setF("dataCompetencia", e.target.value)} />
-                    </div>
-                    <div>
-                      <Label className="text-xs mb-1 block">Vencimento</Label>
-                      <Input type="date" value={isoToInput(form.dataVencimento)} onChange={e => setF("dataVencimento", e.target.value)} />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label className="text-xs mb-1 block">CNPJ do Tomador</Label>
-                      <Input value={form.tomadorCnpj ?? ""} onChange={e => setF("tomadorCnpj", e.target.value)} placeholder="00.000.000/0001-00" />
-                    </div>
-                    <div className="col-span-1">
-                      <Label className="text-xs mb-1 block">Razão Social do Tomador</Label>
-                      <Input value={form.tomadorRazaoSocial ?? ""} onChange={e => setF("tomadorRazaoSocial", e.target.value)} placeholder="Nome do cliente..." />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label className="text-xs mb-1 block">Obra</Label>
-                      <Input value={form.obraNome ?? ""} onChange={e => setF("obraNome", e.target.value)} placeholder="Nome da obra..." />
-                    </div>
-                    <div>
-                      <Label className="text-xs mb-1 block">BM (Boletim de Medição)</Label>
-                      <Input value={form.bmReferencia ?? ""} onChange={e => setF("bmReferencia", e.target.value)} placeholder="BM 001, BM 002..." />
-                    </div>
+              {/* Seção 1 — Identificação */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-1 h-4 bg-indigo-500 rounded-full" />
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Identificação</span>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <Label className="text-xs font-medium text-slate-600 mb-1.5 block">Número NF <span className="text-red-500">*</span></Label>
+                    <Input
+                      value={form.numeroNf}
+                      onChange={e => setF("numeroNf", e.target.value)}
+                      placeholder="55"
+                      className="h-10 text-base font-semibold"
+                    />
                   </div>
                   <div>
-                    <Label className="text-xs mb-1 block">Descrição do Serviço</Label>
-                    <Textarea value={form.descricaoServico ?? ""} onChange={e => setF("descricaoServico", e.target.value)}
-                      placeholder="Descreva o serviço prestado..." rows={3} />
+                    <Label className="text-xs font-medium text-slate-600 mb-1.5 block">Série</Label>
+                    <Input value={form.serie ?? ""} onChange={e => setF("serie", e.target.value)} placeholder="NE / 70000" className="h-10" />
                   </div>
                   <div>
-                    <Label className="text-xs mb-1 block">Chave de Acesso NFS-e</Label>
-                    <Input value={form.chaveAcesso ?? ""} onChange={e => setF("chaveAcesso", e.target.value)} placeholder="35 dígitos..." className="font-mono text-xs" />
+                    <Label className="text-xs font-medium text-slate-600 mb-1.5 block">Data Emissão <span className="text-red-500">*</span></Label>
+                    <Input type="date" value={isoToInput(form.dataEmissao)} onChange={e => setF("dataEmissao", e.target.value)} className="h-10" />
                   </div>
-                </>
-              )}
+                </div>
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  <div>
+                    <Label className="text-xs font-medium text-slate-600 mb-1.5 block">Competência</Label>
+                    <Input type="date" value={isoToInput(form.dataCompetencia)} onChange={e => setF("dataCompetencia", e.target.value)} className="h-10" />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-medium text-slate-600 mb-1.5 block">Vencimento</Label>
+                    <Input type="date" value={isoToInput(form.dataVencimento)} onChange={e => setF("dataVencimento", e.target.value)} className="h-10" />
+                  </div>
+                </div>
+              </div>
 
-              {/* Tab: Tributação */}
-              {tab === "tributacao" && (
-                <>
+              {/* Seção 2 — Tomador */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-1 h-4 bg-blue-500 rounded-full" />
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Tomador do Serviço</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs font-medium text-slate-600 mb-1.5 block">CNPJ</Label>
+                    <Input value={form.tomadorCnpj ?? ""} onChange={e => setF("tomadorCnpj", e.target.value)} placeholder="00.000.000/0001-00" className="h-10 font-mono" />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-medium text-slate-600 mb-1.5 block">Razão Social</Label>
+                    <Input value={form.tomadorRazaoSocial ?? ""} onChange={e => setF("tomadorRazaoSocial", e.target.value)} placeholder="Nome do cliente..." className="h-10" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Seção 3 — Obra & Referência */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-1 h-4 bg-amber-500 rounded-full" />
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Obra & Referência</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs font-medium text-slate-600 mb-1.5 block">Obra</Label>
+                    <Input value={form.obraNome ?? ""} onChange={e => setF("obraNome", e.target.value)} placeholder="Nome da obra..." className="h-10" />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-medium text-slate-600 mb-1.5 block">BM (Boletim de Medição)</Label>
+                    <Input value={form.bmReferencia ?? ""} onChange={e => setF("bmReferencia", e.target.value)} placeholder="BM 001, BM 002..." className="h-10" />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <Label className="text-xs font-medium text-slate-600 mb-1.5 block">Descrição do Serviço</Label>
+                  <Textarea
+                    value={form.descricaoServico ?? ""}
+                    onChange={e => setF("descricaoServico", e.target.value)}
+                    placeholder="Descreva o serviço prestado..."
+                    rows={2}
+                    className="resize-none"
+                  />
+                </div>
+              </div>
+
+              {/* Seção 4 — Valores */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-1 h-4 bg-emerald-500 rounded-full" />
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Valores & Tributação</span>
+                </div>
+                <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label className="text-xs mb-1 block">Valor Bruto do Serviço *</Label>
+                      <Label className="text-xs font-medium text-slate-600 mb-1.5 block">Valor Bruto do Serviço <span className="text-red-500">*</span></Label>
                       <Input
                         value={form.valorBruto}
                         onChange={e => setF("valorBruto", e.target.value)}
                         onBlur={() => handleMoneyBlur("valorBruto")}
                         placeholder="R$ 0,00"
+                        className="h-10 text-base font-semibold bg-white"
                       />
                     </div>
                     <div>
-                      <Label className="text-xs mb-1 block">Deduções (Material / BC ISSQN)</Label>
+                      <Label className="text-xs font-medium text-slate-600 mb-1.5 block">Deduções (Material / BC ISSQN)</Label>
                       <Input
                         value={form.deducoesTotal}
                         onChange={e => setF("deducoesTotal", e.target.value)}
                         onBlur={() => handleMoneyBlur("deducoesTotal")}
                         placeholder="R$ 0,00"
+                        className="h-10 bg-white"
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-4 gap-2">
+                    {([
+                      { key: "issRetido", label: "ISS (5%)" },
+                      { key: "retencaoInss", label: "INSS" },
+                      { key: "retencaoIrrf", label: "IRRF" },
+                      { key: "retencaoPisCofins", label: "PIS/COFINS" },
+                    ] as const).map(({ key, label }) => (
+                      <div key={key}>
+                        <Label className="text-xs font-medium text-slate-600 mb-1.5 block">{label}</Label>
+                        <Input
+                          value={(form as any)[key]}
+                          onChange={e => setF(key, e.target.value)}
+                          onBlur={() => handleMoneyBlur(key)}
+                          placeholder="R$ 0,00"
+                          className="h-9 text-xs bg-white"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  {/* Valor Líquido destacado */}
+                  <div className="bg-emerald-600 rounded-xl px-4 py-3 flex items-center justify-between">
                     <div>
-                      <Label className="text-xs mb-1 block">ISS Retido (5%)</Label>
-                      <Input
-                        value={form.issRetido}
-                        onChange={e => setF("issRetido", e.target.value)}
-                        onBlur={() => handleMoneyBlur("issRetido")}
-                        placeholder="R$ 0,00"
-                      />
+                      <p className="text-emerald-100 text-xs font-medium">Valor Líquido (entra no banco)</p>
+                      <p className="text-emerald-200 text-xs mt-0.5">Bruto − ISS − INSS − IRRF − PIS/COFINS</p>
                     </div>
-                    <div>
-                      <Label className="text-xs mb-1 block">INSS Retido</Label>
-                      <Input
-                        value={form.retencaoInss}
-                        onChange={e => setF("retencaoInss", e.target.value)}
-                        onBlur={() => handleMoneyBlur("retencaoInss")}
-                        placeholder="R$ 0,00"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-xs mb-1 block">IRRF Retido</Label>
-                      <Input
-                        value={form.retencaoIrrf}
-                        onChange={e => setF("retencaoIrrf", e.target.value)}
-                        onBlur={() => handleMoneyBlur("retencaoIrrf")}
-                        placeholder="R$ 0,00"
-                      />
-                    </div>
+                    <div className="text-white text-2xl font-bold tabular-nums">{form.valorLiquido}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Seção 5 — Avançado (colapsível) */}
+              <details className="group">
+                <summary className="flex items-center gap-2 cursor-pointer list-none select-none">
+                  <div className="w-1 h-4 bg-slate-400 rounded-full" />
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Avançado</span>
+                  <ChevronRight className="h-3.5 w-3.5 text-slate-400 transition-transform group-open:rotate-90 ml-auto" />
+                </summary>
+                <div className="mt-3 space-y-3">
+                  <div>
+                    <Label className="text-xs font-medium text-slate-600 mb-1.5 block">Chave de Acesso NFS-e</Label>
+                    <Input value={form.chaveAcesso ?? ""} onChange={e => setF("chaveAcesso", e.target.value)} placeholder="35 dígitos..." className="font-mono text-xs h-9" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label className="text-xs mb-1 block">PIS/COFINS Retidos</Label>
-                      <Input
-                        value={form.retencaoPisCofins}
-                        onChange={e => setF("retencaoPisCofins", e.target.value)}
-                        onBlur={() => handleMoneyBlur("retencaoPisCofins")}
-                        placeholder="R$ 0,00"
-                      />
+                      <Label className="text-xs font-medium text-slate-600 mb-1.5 block">URL do PDF da NF-e</Label>
+                      <Input value={form.arquivoUrl ?? ""} onChange={e => setF("arquivoUrl", e.target.value)} placeholder="https://..." className="h-9 text-xs" />
                     </div>
-                    <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-200">
-                      <Label className="text-xs font-medium text-emerald-700 block mb-0.5">Valor Líquido (entra no banco)</Label>
-                      <div className="text-xl font-bold text-emerald-700">{form.valorLiquido}</div>
-                      <p className="text-xs text-emerald-500 mt-0.5">Bruto − ISS − INSS − IRRF − PIS/COFINS</p>
+                    <div>
+                      <Label className="text-xs font-medium text-slate-600 mb-1.5 block">Nome do Arquivo</Label>
+                      <Input value={form.arquivoNome ?? ""} onChange={e => setF("arquivoNome", e.target.value)} placeholder="NF_055.pdf" className="h-9 text-xs" />
                     </div>
                   </div>
                   <div>
-                    <Label className="text-xs mb-1 block">Observações</Label>
-                    <Textarea value={form.observacoes ?? ""} onChange={e => setF("observacoes", e.target.value)} rows={2} />
-                  </div>
-                </>
-              )}
-
-              {/* Tab: Vínculo / Arquivo */}
-              {tab === "vinculo" && (
-                <div className="space-y-4">
-                  <div>
-                    <Label className="text-xs mb-1 block">URL do PDF da NF-e</Label>
-                    <Input value={form.arquivoUrl ?? ""} onChange={e => setF("arquivoUrl", e.target.value)} placeholder="https://..." />
-                    <p className="text-xs text-slate-400 mt-1">Cole a URL pública do PDF ou do upload.</p>
-                  </div>
-                  <div>
-                    <Label className="text-xs mb-1 block">Nome do Arquivo</Label>
-                    <Input value={form.arquivoNome ?? ""} onChange={e => setF("arquivoNome", e.target.value)} placeholder="NF_055_NOVA_PLANTA.pdf" />
-                  </div>
-                  <div className="bg-blue-50 rounded-lg p-3 border border-blue-200 text-sm text-blue-700">
-                    <strong>Dica:</strong> Após salvar a NF, use o botão <Eye className="inline h-3.5 w-3.5 mx-0.5" /> na lista para vincular a um lançamento financeiro ou linha do extrato bancário.
+                    <Label className="text-xs font-medium text-slate-600 mb-1.5 block">Observações</Label>
+                    <Textarea value={form.observacoes ?? ""} onChange={e => setF("observacoes", e.target.value)} rows={2} className="resize-none text-sm" />
                   </div>
                 </div>
-              )}
+              </details>
+
             </div>
 
-            <DialogFooter className="shrink-0 border-t pt-3">
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-              <Button onClick={handleSubmit} disabled={isSaving || !form.numeroNf || !form.dataEmissao} className="gap-2">
-                {isSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-                {editingId ? "Salvar Alterações" : "Cadastrar NF-e"}
+            {/* ── Rodapé ── */}
+            <div className="shrink-0 border-t bg-slate-50/80 px-5 py-3 flex items-center justify-between gap-3">
+              <Button variant="outline" onClick={() => setDialogOpen(false)} className="h-10">
+                Cancelar
               </Button>
-            </DialogFooter>
+              <Button
+                onClick={handleSubmit}
+                disabled={isSaving || !form.numeroNf || !form.dataEmissao}
+                className="h-10 px-6 gap-2 bg-indigo-600 hover:bg-indigo-700"
+              >
+                {isSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                {editingId ? "Salvar Alterações" : "Emitir NF-e"}
+              </Button>
+            </div>
+
           </DialogContent>
         </Dialog>
 
