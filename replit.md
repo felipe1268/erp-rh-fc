@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3550** — **INTEGRAÇÃO SEFAZ NFeDistribuicaoDFe — CONSULTA AUTOMÁTICA DE NF-e RECEBIDAS. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Novo router `sefaz.ts` com SOAP/mTLS (`https.Agent + pfx`) + gzip/XML (`fast-xml-parser + zlib`). Tabela `company_nfe_config` (SyncSchema+) guarda cert A1 base64, senha, UF, ambiente, NSU. Colunas aditivas em `fiscal_notes`: `origem`, `emitente_cnpj`, `emitente_nome`, `nsu_sefaz`. Cron diário às 06:00. Sub-seção "Integração SEFAZ" no card FINANCEIRO de Configurações: upload .pfx, senha, toggle auto-sync, botão "Sincronizar Agora", status da última sync. Detalhe: `shared/changelog.ts`.
+- **Rev. 3551** — **CONCILIAÇÃO · PAINEL "IA LEU NOS DEMONSTRATIVOS" — BOTÃO MINIMIZAR/EXPANDIR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Clique no título do card alterna entre expandido e minimizado (só cabeçalho + contagem compacta visível). Cards, chips, busca e tabela somem ao minimizar. Chevron gira -90° indicando estado. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3549** — **NOTAS FISCAIS (NFS-e) · DIALOG DE LOTE REDESENHADO — LAYOUT MODERNO SEM SCROLL HORIZONTAL + FASES 0→100%. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Cabeçalho gradiente com percentual 4xl + barra de progresso + 3 KPI cards. Card-row por arquivo com 4 fases animadas (Lendo → IA → Extraído → Cadastrado). Sem tabela = sem scroll horizontal. Detalhe: `shared/changelog.ts`.
+- **Rev. 3550** — **INTEGRAÇÃO SEFAZ NFeDistribuicaoDFe — CONSULTA AUTOMÁTICA DE NF-e RECEBIDAS. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Novo router `sefaz.ts` com SOAP/mTLS (`https.Agent + pfx`) + gzip/XML (`fast-xml-parser + zlib`). Tabela `company_nfe_config` (SyncSchema+) guarda cert A1 base64, senha, UF, ambiente, NSU. Colunas aditivas em `fiscal_notes`: `origem`, `emitente_cnpj`, `emitente_nome`, `nsu_sefaz`. Cron diário às 06:00. Sub-seção "Integração SEFAZ" no card FINANCEIRO de Configurações. Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
+
+- **Rev. 3549** — **NOTAS FISCAIS (NFS-e) · DIALOG DE LOTE REDESENHADO — LAYOUT MODERNO SEM SCROLL HORIZONTAL + FASES 0→100%. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3548** — **NOTAS FISCAIS (NFS-e) · IMPORTAÇÃO DE MÚLTIPLOS PDFs EM LOTE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3546** — **NOTAS FISCAIS (NFS-e) · FILTRO PADRÃO DE ANO/MÊS (TIMELINE). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3545** — **BUILD DE PRODUÇÃO · BUGFIX OOM NO VITE BUILD — CHUNKS GRANULARES + HEAP REDUZIDO. ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3544** — **IMPORTAÇÃO DE EXTRATO · BUGFIX CRÍTICO `$6` DUPLICADO → `42601 syntax error at or near ")"`. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3543** — **NOTAS FISCAIS (NFS-e) · NOVO MÓDULO "CONTROLE DE NOTAS FISCAIS" NA ABA MOVIMENTAÇÕES. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

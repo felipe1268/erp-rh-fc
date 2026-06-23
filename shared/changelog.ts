@@ -1,6 +1,15 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3551 — **CONCILIAÇÃO · PAINEL "IA LEU NOS DEMONSTRATIVOS" — BOTÃO MINIMIZAR/EXPANDIR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * Clicar no título do card "Tudo que a IA leu nos demonstrativos" alterna entre expandido
+ * (comportamento atual) e minimizado (só cabeçalho visível: título + chevron + contagem
+ * compacta "N pagamentos · R$ X"). State `leituraMinimizada` inicia em `false`. Quando
+ * minimizado, cards de total, chips de tipo, barra de busca e tabela ficam ocultos —
+ * eliminando a poluição visual sem perder os dados. Botão "Tela cheia" permanece visível
+ * em ambos os estados. Chevron gira -90° quando minimizado.
+ * Arquivo: `client/src/pages/financeiro/FinanceiroConciliacao.tsx`.
+ *
  * Rev. 3550 — **INTEGRAÇÃO SEFAZ NFeDistribuicaoDFe — CONSULTA AUTOMÁTICA DE NF-e RECEBIDAS. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
  * Integração completa com o WebService `NFeDistribuicaoDFe` da SEFAZ Federal para buscar
  * automaticamente todas as NF-e onde o CNPJ da empresa é destinatário. Backend: novo router

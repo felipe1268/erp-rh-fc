@@ -1241,6 +1241,7 @@ export default function FinanceiroConciliacao() {
   // controla qual tipo a tabela mostra; `buscaLeitura` é a busca livre da lista inline.
   const [demoFiltro, setDemoFiltro] = useState<"todos" | "pix" | "boleto">("todos");
   const [buscaLeitura, setBuscaLeitura] = useState("");
+  const [leituraMinimizada, setLeituraMinimizada] = useState(false);
   // Rev. 3240 — visão "tela cheia" da leitura da IA (PIX/boletos). `leituraFull` abre o
   // diálogo full-screen; `abrirLeituraFull(kind)` pré-filtra e abre (as "duas telas").
   const [leituraFull, setLeituraFull] = useState(false);
@@ -3432,17 +3433,28 @@ export default function FinanceiroConciliacao() {
                 <Card className="border-0 shadow-sm ring-1 ring-violet-100">
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-start gap-2 min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => setLeituraMinimizada(v => !v)}
+                        className="flex items-start gap-2 min-w-0 flex-1 text-left hover:opacity-80 transition-opacity"
+                      >
                         <Sparkles className="w-4 h-4 text-violet-600 mt-0.5 shrink-0" />
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold text-gray-800">Tudo que a IA leu nos demonstrativos</p>
-                          <p className="text-xs text-gray-500">Lista de TODOS os pagamentos identificados nos PDFs anexados — só consulta, não concilia nada automaticamente.</p>
+                          <p className="text-sm font-semibold text-gray-800 flex items-center gap-1.5">
+                            Tudo que a IA leu nos demonstrativos
+                            <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${leituraMinimizada ? "-rotate-90" : ""}`} />
+                          </p>
+                          {leituraMinimizada
+                            ? <p className="text-xs text-gray-400">{lista.length} pagamentos · {formatBRL(total)}</p>
+                            : <p className="text-xs text-gray-500">Lista de TODOS os pagamentos identificados nos PDFs anexados — só consulta, não concilia nada automaticamente.</p>
+                          }
                         </div>
-                      </div>
+                      </button>
                       <Button size="sm" variant="outline" onClick={() => abrirLeituraFull(demoFiltro)} className="border-violet-200 text-violet-700 hover:bg-violet-50 h-8 shrink-0">
                         <Maximize2 className="w-3.5 h-3.5 mr-1.5" />Tela cheia
                       </Button>
                     </div>
+                    {!leituraMinimizada && <>
                     {/* Cards de total (metodologia do extrato) — reagem ao filtro + busca */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div className="rounded-xl border border-violet-100 bg-violet-50/70 p-3 flex items-center gap-3">
@@ -3515,6 +3527,7 @@ export default function FinanceiroConciliacao() {
                       )}
                     </div>
                     <p className="text-[11px] text-gray-400">Mostrando {formatInt(lista.length)} de {formatInt(porFiltro.length)}{termo ? ` (filtro "${buscaLeitura.trim()}")` : ""} · A leitura por IA é uma ajuda para identificar quem recebeu — confira sempre no PDF original. Não concilia nada automaticamente.</p>
+                    </>}
                   </CardContent>
                 </Card>
               );
