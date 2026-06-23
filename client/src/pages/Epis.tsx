@@ -145,12 +145,13 @@ export default function Epis() {
   const hasValidCompany = isConstrutoras ? companyIds.length > 0 : !!companyId;
   const { user } = useAuth();
   const isMaster = user?.role === "admin_master";
-  const { hasGroup, groupOcultarValores, isAdminMaster, isAdmin, isSomenteVisualizacao, allowedObraIds, canAccessObra } = usePermissions();
+  const { hasGroup, groupOcultarValores, isAdminMaster, isAdmin, isSomenteVisualizacao, allowedObraIds, canAccessObra, canEditEpiCentral } = usePermissions();
   const hideEpiValues = !isAdminMaster && hasGroup && groupOcultarValores('/epis');
   const readOnly = !isAdminMaster && hasGroup && isSomenteVisualizacao;
   // Rev. 2950 — escrita no Almoxarifado Central só p/ acesso TOTAL (admin/master ou
   // sem restrição de obra); usuários restritos só cadastram/ajustam nas suas obras.
-  const canWriteCentral = isAdminMaster || isAdmin || allowedObraIds === null;
+  // Rev. 3594 — canEditEpiCentral: permissão especial do grupo SST sem precisar ser admin.
+  const canWriteCentral = isAdminMaster || isAdmin || allowedObraIds === null || canEditEpiCentral;
 
   // Suporte a ?tab= para links diretos da sidebar
   const validTabs: ViewMode[] = useMemo(() => ["catalogo", "entregas", "estoque_obra", "transferencias", "config", "checklist", "validade", "custos", "minimo", "ia", "capacidade", "necessidade", "descontos"], []);

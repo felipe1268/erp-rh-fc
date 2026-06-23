@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3594 — **EPI · PERMISSÃO ESPECIAL "EDITAR ESTOQUE CENTRAL" POR GRUPO — SEM PRECISAR SER ADMIN. 100% FRONTEND · ZERO BACKEND/ALTER/DROP/DELETE.**
+ *
+ * Novo campo `extras?: Record<string, boolean>` adicionado à interface `ModulePerm`
+ * (shared/modulePages.ts) e preservado por `normalizeModulePerm`. A flag
+ * `canEditEpiCentral` é lida de `moduleAccess.sst.extras.canEditEpiCentral`.
+ * Fluxo completo: (1) Admin abre Configurações → Usuários → seleciona um Grupo SST →
+ * expande o módulo → seção "Permissões Especiais" → ativa "Editar estoque central de
+ * EPIs" → salva. (2) O `ModulePermsEditor` (Usuarios.tsx) inclui checkbox com ícone
+ * Warehouse e descrição, usando `toggleExtra` para gravar em `extras`. (3)
+ * `PermissionsContext` deriva `canEditEpiCentral` do `normalizedAccess['sst'].extras`.
+ * (4) Em `Epis.tsx`, `canWriteCentral` agora inclui `|| canEditEpiCentral`. O JSON do
+ * grupo é persistido em `user_groups.module_access` (sem ALTER TABLE). 100% FRONTEND.
+ *
  * Rev. 3593 — **EPI · BUGFIX MENSAGEM ENGANOSA "VÁ PARA ESTOQUE POR OBRA" + LÁPIS CENTRAL NO ESTOQUE POR OBRA. 100% FRONTEND · ZERO BACKEND/ALTER/DROP/DELETE.**
  *
  * Dois problemas relatados: (1) campo "Estoque (Almoxarifado Central)" desabilitado mostrava

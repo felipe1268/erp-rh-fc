@@ -749,6 +749,7 @@ export interface ModulePerm {
   level: ModuleLevel;
   pages: Record<string, PagePerms>;
   sensitiveHidden: string[];   // IDs de SensitiveFlag que devem ser ocultados
+  extras?: Record<string, boolean>; // Permissões especiais do módulo (ex: canEditEpiCentral)
 }
 
 export type ModulesAccessMap = Record<string, ModulePerm | "admin" | "viewer" | null>;
@@ -821,6 +822,7 @@ export function normalizeModulePerm(moduleId: string, raw: unknown): ModulePerm 
       level:           obj.level ?? "admin",
       pages,
       sensitiveHidden: obj.sensitiveHidden ?? [],
+      extras:          (obj.extras && typeof obj.extras === "object") ? (obj.extras as Record<string, boolean>) : {},
     };
   }
   return null;

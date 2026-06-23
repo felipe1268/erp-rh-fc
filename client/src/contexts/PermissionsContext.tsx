@@ -67,6 +67,8 @@ interface PermissionsContextType {
   isSomenteVisualizacao: boolean;
   isOcultarDadosSensiveis: boolean;
   hasGroup: boolean;
+  // Permissões especiais de módulo
+  canEditEpiCentral: boolean;
 }
 
 const PermissionsContext = createContext<PermissionsContextType>({
@@ -97,6 +99,7 @@ const PermissionsContext = createContext<PermissionsContextType>({
   isSomenteVisualizacao: false,
   isOcultarDadosSensiveis: false,
   hasGroup: false,
+  canEditEpiCentral: false,
 });
 
 export function PermissionsProvider({ children }: { children: ReactNode }) {
@@ -253,6 +256,10 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     const page = getPagePerm(moduleId, pageId);
     return page?.delete ?? false;
   };
+
+  // ── Permissões especiais de módulo ───────────────────────────────────────
+  // true se o grupo do usuário concedeu explicitamente a permissão extra no módulo sst
+  const canEditEpiCentral = !!(normalizedAccess['sst']?.extras?.['canEditEpiCentral']);
 
   // ── Dados sensíveis LGPD ──────────────────────────────────────────────────
   const isSensitiveHidden = (moduleId: string, flagId: string): boolean => {
@@ -553,6 +560,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
         isSomenteVisualizacao,
         isOcultarDadosSensiveis,
         hasGroup,
+        canEditEpiCentral,
       }}
     >
       {children}

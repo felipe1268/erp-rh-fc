@@ -10,7 +10,7 @@ import {
   ChevronDown, Save, Trash2, RefreshCw, User, Mail, KeyRound,
   Settings2, AlertTriangle, CheckSquare, Square, ArrowLeft,
   Layers, Plus, UserCheck, Edit2, Check, Palette, UsersRound,
-  ShieldCheck, ShieldAlert, Crown, Info, ChevronRight, HardHat,
+  ShieldCheck, ShieldAlert, Crown, Info, ChevronRight, HardHat, Warehouse,
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
@@ -111,6 +111,12 @@ function ModulePermsEditor({ moduleAccess, onChange }: ModulePermsEditorProps) {
     if (!cur) return;
     const sh = cur.sensitiveHidden ?? [];
     onChange({ ...moduleAccess, [modId]: { ...cur, sensitiveHidden: hidden ? [...sh.filter(x=>x!==flagId), flagId] : sh.filter(x=>x!==flagId) } });
+  };
+  const toggleExtra = (modId: string, key: string, val: boolean) => {
+    const cur = moduleAccess[modId];
+    if (!cur) return;
+    const extras = { ...(cur.extras ?? {}), [key]: val };
+    onChange({ ...moduleAccess, [modId]: { ...cur, extras } });
   };
   const setAll = (level: "admin" | null) => {
     if (level === null) { onChange(Object.fromEntries(ALL_MODULES.map(m => [m.id, null]))); return; }
@@ -255,6 +261,31 @@ function ModulePermsEditor({ moduleAccess, onChange }: ModulePermsEditorProps) {
                           </label>
                         );
                       })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Permissões Especiais — SST */}
+                {mod.id === "sst" && (
+                  <div>
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <Settings2 className="h-3 w-3 text-emerald-600" /> Permissões Especiais
+                    </p>
+                    <div className="space-y-1.5">
+                      {(() => {
+                        const val = !!(perm.extras?.['canEditEpiCentral']);
+                        return (
+                          <label className={`flex items-center gap-2.5 p-2.5 rounded-lg border cursor-pointer text-xs transition-all ${
+                            val ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-white border-border text-slate-600 hover:bg-slate-50"}`}>
+                            <input type="checkbox" checked={val} onChange={e => toggleExtra(mod.id, 'canEditEpiCentral', e.target.checked)} className="rounded" />
+                            <Warehouse className={`h-3.5 w-3.5 shrink-0 ${val ? "text-emerald-600" : "text-slate-300"}`} />
+                            <div>
+                              <span className="font-semibold">Editar estoque central de EPIs</span>
+                              <span className="block text-[10px] text-muted-foreground mt-0.5">Permite ajustar a quantidade no Almoxarifado Central sem ser administrador.</span>
+                            </div>
+                          </label>
+                        );
+                      })()}
                     </div>
                   </div>
                 )}
