@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3605 — **NF-e RECEBIDAS · BACKFILL AUTOMÁTICO DE XML — RECUPERA O XML COMPLETO DAS NOTAS IMPORTADAS COMO RESUMO. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * Problema: notas importadas via SEFAZ como resNFe (resumo) tinham xml_payload=NULL, exibindo aviso
+ * amarelo "sem XML completo" no dialog de detalhes.
+ *
+ * Solução em 3 camadas:
+ * 1. FIX NO SYNC EXISTENTE: o loop de sincronização NSU agora verifica se a nota já existe COM
+ *    xml_payload=NULL e, se o documento que chegou for nfeProc (com XML completo), faz UPDATE em vez
+ *    de ignorar. Ou seja, a cada sync horário, notas que agora possuem XML completo na SEFAZ são
+ *    automaticamente completadas.
+ * 2. NOVO ENDPOINT recuperarXmlsBackfill: usa consChNFe (query por chave de acesso) em vez de
+ *    distNSU. Busca até N notas (lote configurável 1-20) com xml_payload IS NULL, consulta a SEFAZ
+ *    individualmente para cada uma e faz UPDATE quando recebe nfeProc. Retorna { recuperadas, erros,
+ *    restantes }.
+ * 3. BOTÃO "N notas sem XML — Recuperar" (âmbar): aparece no rodapé da tabela NF-e Recebidas
+ *    somente quando há notas sem XML. Clique executa o backfill com lote=10, toast com resultado,
+ *    refetch automático da lista. Desaparece quando semXml=0.
+ * 4. listNFeRecebidas agora retorna { semXml: number, items: [...] } (aditivo — frontend adaptado).
+ * 5. PASSO A PASSO DA RECUSA: guia com 4 passos numerados + aviso de pré-requisito A1 + botão
+ *    renomeado para "Confirmar recusa e avisar SEFAZ" + contador de chars melhorado.
+ *
+ * ZERO ALTER/DROP/DELETE · backend aditivo + frontend.
+ *
  * Rev. 3604 — **NF-e RECEBIDAS · DIALOG "ESPELHO FIEL" — TODOS OS ITENS, IMPOSTOS, TOTAIS, TRANSPORTE E DUPLICATAS. BACKEND ADITIVO + SYNCSCHEMA+ · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
  *
  * Antes: dialog exibia apenas emitente, datas, chave de acesso e botões de manifestação.

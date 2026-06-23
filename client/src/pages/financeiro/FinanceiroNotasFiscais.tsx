@@ -201,7 +201,21 @@ export default function FinanceiroNotasFiscais() {
     { companyId: companyId ?? 0, ano: recAno, mes: recMes ?? undefined, search: recSearch || undefined, status: recStatus !== "todos" ? recStatus : undefined },
     { enabled: !!companyId && pageTab === "recebidas", staleTime: 30_000 }
   );
-  const nfeRec: any[] = nfeRecQuery.data ?? [];
+  const nfeRec: any[] = nfeRecQuery.data?.items ?? [];
+  const nfeSemXml: number = nfeRecQuery.data?.semXml ?? 0;
+  const backfillMut = (trpc as any).sefaz.recuperarXmlsBackfill.useMutation({
+    onSuccess: (res: any) => {
+      nfeRecQuery.refetch();
+      if (res.recuperadas > 0) {
+        toast.success(`${res.recuperadas} XML${res.recuperadas !== 1 ? "s" : ""} recuperado${res.recuperadas !== 1 ? "s" : ""} com sucesso!${res.restantes > 0 ? ` Ainda faltam ${res.restantes}.` : " Todos os XMLs estão completos."}`);
+      } else if (res.restantes === 0) {
+        toast.success("Todas as notas já têm XML completo!");
+      } else {
+        toast.error(`Nenhum XML novo recuperado. ${res.erros} erro${res.erros !== 1 ? "s" : ""} — SEFAZ pode ter retornado apenas resumo (resNFe) para estas notas.`);
+      }
+    },
+    onError: (e: any) => toast.error("Erro ao recuperar XMLs: " + (e?.message || "Tente novamente.")),
+  });
 
   // Query anual sem filtros para dots do calendário recebidas
   const nfeRecYearQuery = (trpc as any).sefaz.listNFeRecebidas.useQuery(
@@ -211,7 +225,7 @@ export default function FinanceiroNotasFiscais() {
   const recMesesStatus = useMemo((): Record<number, "consolidado" | "lancamento" | "vazio"> => {
     const map: Record<number, "consolidado" | "lancamento" | "vazio"> = {};
     for (let m = 1; m <= 12; m++) map[m] = "vazio";
-    for (const nf of (nfeRecYearQuery.data ?? []) as any[]) {
+    for (const nf of (nfeRecYearQuery.data?.items ?? []) as any[]) {
       const d = String(nf.dataEmissao || nf.dataEntrada || "").slice(0, 10);
       const m = parseInt(d.split("-")[1] ?? "0", 10);
       if (!m) continue;
@@ -1084,8 +1098,21 @@ export default function FinanceiroNotasFiscais() {
                   </table>
                 </div>
                 {nfeRec.length > 0 && (
-                  <div className="px-4 py-2 border-t text-xs text-slate-400 bg-slate-50/60">
-                    {nfeRec.length} NF-e{nfeRec.length !== 1 ? "s" : ""} recebida{nfeRec.length !== 1 ? "s" : ""} via SEFAZ — atualizado automaticamente todo dia às 06:00.
+                  <div className="px-4 py-2.5 border-t text-xs text-slate-400 bg-slate-50/60 flex items-center justify-between gap-3 flex-wrap">
+                    <span>{nfeRec.length} NF-e{nfeRec.length !== 1 ? "s" : ""} recebida{nfeRec.length !== 1 ? "s" : ""} via SEFAZ — atualizado automaticamente todo dia às 06:00.</span>
+                    {nfeSemXml > 0 && (
+                      <button
+                        type="button"
+                        disabled={backfillMut.isPending}
+                        onClick={() => backfillMut.mutate({ companyId: companyId!, lote: 10 })}
+                        className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800 font-semibold transition-colors disabled:opacity-60 shrink-0"
+                        title="Consulta a SEFAZ para recuperar o XML completo das notas importadas como resumo"
+                      >
+                        {backfillMut.isPending
+                          ? <><RefreshCw className="w-3 h-3 animate-spin" />Recuperando…</>
+                          : <><RefreshCw className="w-3 h-3" />{nfeSemXml} nota{nfeSemXml !== 1 ? "s" : ""} sem XML — Recuperar</>}
+                      </button>
+                    )}
                   </div>
                 )}
               </Card>

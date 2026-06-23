@@ -61,6 +61,34 @@ function padNSU(nsu: string | number) {
   return String(nsu || 0).replace(/\D/g, "").padStart(15, "0");
 }
 
+function buildSoapEnvelopeByChave(cnpj: string, cUFAutor: number, chNFe: string, tpAmb: number) {
+  return `<?xml version="1.0" encoding="utf-8"?>
+<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+  xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
+  <soap12:Header>
+    <nfeCabecMsg xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe">
+      <cUF>${cUFAutor}</cUF>
+      <versaoDados>1.01</versaoDados>
+    </nfeCabecMsg>
+  </soap12:Header>
+  <soap12:Body>
+    <nfeDistDFeInteresse xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe">
+      <nfeDadosMsg>
+        <distDFeInt xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.01">
+          <tpAmb>${tpAmb}</tpAmb>
+          <cUFAutor>${cUFAutor}</cUFAutor>
+          <CNPJ>${cleanCnpj(cnpj)}</CNPJ>
+          <consChNFe>
+            <chNFe>${chNFe}</chNFe>
+          </consChNFe>
+        </distDFeInt>
+      </nfeDadosMsg>
+    </nfeDistDFeInteresse>
+  </soap12:Body>
+</soap12:Envelope>`;
+}
+
 function buildSoapEnvelope(cnpj: string, cUFAutor: number, ultNSU: string, tpAmb: number) {
   // Operação renomeada no WSDL atual: nfeDistDFeInteresse (não nfeDistDFeInt)
   // nfeCabecMsg no Header é obrigatório em todos os WS SEFAZ
@@ -677,10 +705,23 @@ export async function executarSyncNFe(companyId: number): Promise<{ importadas: 
 
         // Verificar se já existe pela chave de acesso
         const existe = (await db.execute(sql`
-          SELECT id FROM fiscal_notes WHERE company_id = ${companyId} AND chave_acesso = ${nfe.chNFe} LIMIT 1
+          SELECT id, xml_payload FROM fiscal_notes WHERE company_id = ${companyId} AND chave_acesso = ${nfe.chNFe} LIMIT 1
         `)) as any;
         const existeRows = (existe?.rows ?? existe) as any[];
-        if (existeRows?.length > 0) { ignoradas++; continue; }
+        if (existeRows?.length > 0) {
+          // Atualizar xml_payload se chegou nfeProc e a nota ainda não tem XML completo
+          const existente = existeRows[0];
+          if (!existente.xml_payload && nfe.rawXml) {
+            await db.execute(sql`
+              UPDATE fiscal_notes SET xml_payload = ${nfe.rawXml}, updated_at = NOW()
+              WHERE id = ${existente.id} AND company_id = ${companyId}
+            `);
+            importadas++; // conta como "melhorada"
+          } else {
+            ignoradas++;
+          }
+          continue;
+        }
 
         // Cancelada → não importar
         if (nfe.cSitNFe === "2" || nfe.cSitNFe === "3") { ignoradas++; continue; }
@@ -1133,39 +1174,158 @@ export const sefazRouter = router({
     }))
     .query(async ({ input, ctx }) => {
       const db = await getDb();
-      const rows = (await db.execute(sql`
-        SELECT id, numero_nf, chave_acesso, data_emissao, emitente_cnpj, emitente_nome,
-               nsu_sefaz, valor_bruto, valor_liquido, status, descricao_servico,
-               entry_id, created_at
-        FROM fiscal_notes
+      const [rows, semXmlRows] = await Promise.all([
+        db.execute(sql`
+          SELECT id, numero_nf, chave_acesso, data_emissao, emitente_cnpj, emitente_nome,
+                 nsu_sefaz, valor_bruto, valor_liquido, status, descricao_servico,
+                 entry_id, created_at
+          FROM fiscal_notes
+          WHERE company_id = ${input.companyId}
+            AND origem IN ('sefaz_nfe', 'xml_upload')
+            ${input.ano ? sql`AND EXTRACT(YEAR FROM data_emissao) = ${input.ano}` : sql``}
+            ${input.mes ? sql`AND EXTRACT(MONTH FROM data_emissao) = ${input.mes}` : sql``}
+            ${input.status && input.status !== "todos" ? sql`AND status = ${input.status}` : sql``}
+            ${input.search ? sql`AND (
+              emitente_nome ILIKE ${'%' + input.search + '%'}
+              OR emitente_cnpj ILIKE ${'%' + input.search + '%'}
+              OR numero_nf ILIKE ${'%' + input.search + '%'}
+              OR chave_acesso ILIKE ${'%' + input.search + '%'}
+            )` : sql``}
+          ORDER BY data_emissao DESC, id DESC
+          LIMIT 500
+        `) as any,
+        db.execute(sql`
+          SELECT COUNT(*)::int AS cnt FROM fiscal_notes
+          WHERE company_id = ${input.companyId}
+            AND origem IN ('sefaz_nfe', 'xml_upload')
+            AND xml_payload IS NULL
+            AND chave_acesso IS NOT NULL
+        `) as any,
+      ]);
+      const semXml = Number(((semXmlRows?.rows ?? semXmlRows)?.[0] as any)?.cnt ?? 0);
+      return {
+        semXml,
+        items: ((rows?.rows ?? rows) as any[]).map((r: any) => ({
+          id: Number(r.id),
+          numeroNf: String(r.numero_nf || ""),
+          chaveAcesso: r.chave_acesso || null,
+          dataEmissao: r.data_emissao ? String(r.data_emissao).slice(0, 10) : null,
+          emitenteCnpj: r.emitente_cnpj || null,
+          emitenteNome: r.emitente_nome || null,
+          nsuSefaz: r.nsu_sefaz || null,
+          valorBruto: parseFloat(r.valor_bruto || "0") || 0,
+          valorLiquido: parseFloat(r.valor_liquido || "0") || 0,
+          status: String(r.status || "pendente"),
+          descricaoServico: r.descricao_servico || null,
+          entryId: r.entry_id ? Number(r.entry_id) : null,
+          createdAt: r.created_at ? String(r.created_at).slice(0, 10) : null,
+        })),
+      };
+    }),
+
+  recuperarXmlsBackfill: protectedProcedure
+    .input(z.object({ companyId: z.number(), lote: z.number().min(1).max(20).default(10) }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      // Busca notas sem xml_payload
+      const pendentes = (await db.execute(sql`
+        SELECT id, chave_acesso FROM fiscal_notes
         WHERE company_id = ${input.companyId}
           AND origem IN ('sefaz_nfe', 'xml_upload')
-          ${input.ano ? sql`AND EXTRACT(YEAR FROM data_emissao) = ${input.ano}` : sql``}
-          ${input.mes ? sql`AND EXTRACT(MONTH FROM data_emissao) = ${input.mes}` : sql``}
-          ${input.status && input.status !== "todos" ? sql`AND status = ${input.status}` : sql``}
-          ${input.search ? sql`AND (
-            emitente_nome ILIKE ${'%' + input.search + '%'}
-            OR emitente_cnpj ILIKE ${'%' + input.search + '%'}
-            OR numero_nf ILIKE ${'%' + input.search + '%'}
-            OR chave_acesso ILIKE ${'%' + input.search + '%'}
-          )` : sql``}
-        ORDER BY data_emissao DESC, id DESC
-        LIMIT 500
+          AND xml_payload IS NULL
+          AND chave_acesso IS NOT NULL
+          AND length(chave_acesso) = 44
+        ORDER BY id ASC
+        LIMIT ${input.lote}
       `)) as any;
-      return ((rows?.rows ?? rows) as any[]).map((r: any) => ({
-        id: Number(r.id),
-        numeroNf: String(r.numero_nf || ""),
-        chaveAcesso: r.chave_acesso || null,
-        dataEmissao: r.data_emissao ? String(r.data_emissao).slice(0, 10) : null,
-        emitenteCnpj: r.emitente_cnpj || null,
-        emitenteNome: r.emitente_nome || null,
-        nsuSefaz: r.nsu_sefaz || null,
-        valorBruto: parseFloat(r.valor_bruto || "0") || 0,
-        valorLiquido: parseFloat(r.valor_liquido || "0") || 0,
-        status: String(r.status || "pendente"),
-        descricaoServico: r.descricao_servico || null,
-        entryId: r.entry_id ? Number(r.entry_id) : null,
-        createdAt: r.created_at ? String(r.created_at).slice(0, 10) : null,
-      }));
+      const notas: { id: number; chave_acesso: string }[] = (pendentes?.rows ?? pendentes) as any[];
+
+      if (!notas.length) return { recuperadas: 0, erros: 0, restantes: 0 };
+
+      // Busca certificado
+      const cfgRows = (await db.execute(sql`
+        SELECT cnpj, cert_pfx_base64, cert_password, ambiente, uf
+        FROM company_nfe_config WHERE company_id = ${input.companyId} AND ativo = 1
+      `)) as any;
+      const cfg = (cfgRows?.rows ?? cfgRows)?.[0];
+      if (!cfg?.cert_pfx_base64 || !cfg?.cert_password) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Certificado A1 não configurado. Acesse Configurações → Financeiro → SEFAZ." });
+      }
+
+      const cnpj = cleanCnpj(cfg.cnpj || "");
+      const tpAmb = cfg.ambiente === "homologacao" ? 2 : 1;
+      const url = tpAmb === 2 ? SEFAZ_URL_HOM : SEFAZ_URL_PROD;
+      const ufCodigo = UF_CODES[String(cfg.uf || "SP").toUpperCase()] || 35;
+
+      let recuperadas = 0;
+      let erros = 0;
+
+      for (const nota of notas) {
+        try {
+          const soap = buildSoapEnvelopeByChave(cnpj, ufCodigo, nota.chave_acesso, tpAmb);
+          const respXml = await callSefaz(url, soap, cfg.cert_pfx_base64, cfg.cert_password);
+
+          const parsed = xmlParser.parse(respXml);
+          const env = parsed["soap:Envelope"] || parsed["soap12:Envelope"] || parsed["s:Envelope"] || parsed["Envelope"] || parsed;
+          const body = env?.["soap:Body"] || env?.["soap12:Body"] || env?.["s:Body"] || env?.["Body"] || env;
+          const resp = body?.["nfeDistDFeInteresseResponse"] || body?.["nfeDistDFeIntResponse"] || body;
+          const ret = resp?.["nfeDistDFeInteresseResult"]?.["retDistDFeInt"]
+            || resp?.["nfeDistDFeInteresseResult"]?.["nfeRetDistDFeInt"]
+            || resp?.["nfeRetDistDFeInt"]
+            || {};
+
+          const cStat = String(ret?.cStat ?? "");
+          if (cStat !== "138" && cStat !== "498") {
+            console.log(`[BackfillXml] nota=${nota.id} chave=${nota.chave_acesso.slice(0, 10)}… cStat=${cStat} — sem XML`);
+            erros++;
+            continue;
+          }
+
+          const lote = ret?.loteDistDFeInt?.docZip;
+          const docs: any[] = Array.isArray(lote) ? lote : lote ? [lote] : [];
+          let encontrado = false;
+
+          for (const doc of docs) {
+            const b64 = String(doc?.["#text"] || doc || "");
+            const schema = String(doc?.["@_schema"] || doc?.schema || "");
+            if (!schema.startsWith("nfeProc")) continue;
+            const nfe = processDocZip(b64, "0");
+            if (!nfe?.rawXml || !nfe.chNFe) continue;
+            if (nfe.chNFe !== nota.chave_acesso) continue;
+
+            await db.execute(sql`
+              UPDATE fiscal_notes
+              SET xml_payload = ${nfe.rawXml}, updated_at = NOW()
+              WHERE id = ${nota.id} AND company_id = ${input.companyId}
+            `);
+            recuperadas++;
+            encontrado = true;
+            break;
+          }
+
+          if (!encontrado) {
+            // SEFAZ respondeu mas sem nfeProc (ainda só tem resNFe) — normal para notas antigas
+            console.log(`[BackfillXml] nota=${nota.id} cStat=138 mas sem nfeProc nos docs (resNFe only)`);
+            erros++;
+          }
+        } catch (e: any) {
+          console.error(`[BackfillXml] nota=${nota.id} erro:`, e?.message);
+          erros++;
+        }
+      }
+
+      // Conta restantes após esse lote
+      const restantesRow = (await db.execute(sql`
+        SELECT COUNT(*)::int AS cnt FROM fiscal_notes
+        WHERE company_id = ${input.companyId}
+          AND origem IN ('sefaz_nfe', 'xml_upload')
+          AND xml_payload IS NULL
+          AND chave_acesso IS NOT NULL
+          AND length(chave_acesso) = 44
+      `)) as any;
+      const restantes = Number(((restantesRow?.rows ?? restantesRow)?.[0] as any)?.cnt ?? 0);
+
+      console.log(`[BackfillXml] company=${input.companyId} recuperadas=${recuperadas} erros=${erros} restantes=${restantes}`);
+      return { recuperadas, erros, restantes };
     }),
 });
