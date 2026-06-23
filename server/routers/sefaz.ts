@@ -44,7 +44,8 @@ function padNSU(nsu: string | number) {
 }
 
 function buildSoapEnvelope(cnpj: string, cUFAutor: number, ultNSU: string, tpAmb: number) {
-  // nfeCabecMsg no Header é OBRIGATÓRIO para todos os WS SEFAZ (sem ele → soap:Sender)
+  // Operação renomeada no WSDL atual: nfeDistDFeInteresse (não nfeDistDFeInt)
+  // nfeCabecMsg no Header é obrigatório em todos os WS SEFAZ
   return `<?xml version="1.0" encoding="utf-8"?>
 <soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xmlns:xsd="http://www.w3.org/2001/XMLSchema"
@@ -56,7 +57,7 @@ function buildSoapEnvelope(cnpj: string, cUFAutor: number, ultNSU: string, tpAmb
     </nfeCabecMsg>
   </soap12:Header>
   <soap12:Body>
-    <nfeDistDFeInt xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe">
+    <nfeDistDFeInteresse xmlns="http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe">
       <nfeDadosMsg>
         <distDFeInt xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.01">
           <tpAmb>${tpAmb}</tpAmb>
@@ -67,7 +68,7 @@ function buildSoapEnvelope(cnpj: string, cUFAutor: number, ultNSU: string, tpAmb
           </distNSU>
         </distDFeInt>
       </nfeDadosMsg>
-    </nfeDistDFeInt>
+    </nfeDistDFeInteresse>
   </soap12:Body>
 </soap12:Envelope>`;
 }
@@ -115,7 +116,7 @@ function callSefaz(url: string, soapXml: string, pfxBase64: string, pfxPassword:
       method: "POST",
       agent,
       headers: {
-        "Content-Type": 'application/soap+xml; charset=utf-8; action="http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe/nfeDistDFeInt"',
+        "Content-Type": 'application/soap+xml; charset=utf-8; action="http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe/nfeDistDFeInteresse"',
         "Content-Length": body.byteLength,
       },
     }, (res) => {
@@ -218,8 +219,11 @@ export async function executarSyncNFe(companyId: number): Promise<{ importadas: 
       // Navegar pelo envelope SOAP
       const env = parsed["soap12:Envelope"] || parsed["s:Envelope"] || parsed["Envelope"] || parsed;
       const body = env?.["soap12:Body"] || env?.["s:Body"] || env?.["Body"] || env;
-      const resp = body?.["nfeDistDFeIntResponse"] || body;
-      const ret = resp?.["nfeDistDFeIntResult"]?.["nfeRetDistDFeInt"]
+      const resp = body?.["nfeDistDFeInteresseResponse"] || body?.["nfeDistDFeIntResponse"] || body;
+      // Campo da resposta: retDistDFeInt (operação Interesse) ou nfeRetDistDFeInt (legado)
+      const ret = resp?.["nfeDistDFeInteresseResult"]?.["retDistDFeInt"]
+        || resp?.["nfeDistDFeInteresseResult"]?.["nfeRetDistDFeInt"]
+        || resp?.["nfeDistDFeIntResult"]?.["nfeRetDistDFeInt"]
         || resp?.["nfeRetDistDFeInt"]
         || {};
 
@@ -229,7 +233,8 @@ export async function executarSyncNFe(companyId: number): Promise<{ importadas: 
       const maxNSU = padNSU(ret?.maxNSU ?? ultNSU);
 
       // 137 = sem documentos | 138 = documento localizado | 498 = consultaNSU diferenciada
-      if (cStat === "137") break; // sem mais docs
+      // 656 = rate limit (Consumo Indevido) — salva o ultNSU retornado e encerra sem erro
+      if (cStat === "137" || cStat === "656") break;
       if (cStat !== "138" && cStat !== "498") {
         throw new Error(`SEFAZ cStat=${cStat}: ${xMotivo}`);
       }

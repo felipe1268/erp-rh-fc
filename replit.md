@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3558** — **SEFAZ · BUGFIX OPERAÇÃO RENOMEADA: nfeDistDFeInt → nfeDistDFeInteresse. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** WSDL real define `nfeDistDFeInteresse` (não `nfeDistDFeInt`). Com o nome correto: HTTP 200, cStat=656 (rate-limit — confirma mTLS+SOAP funcionando). Fix: Body, action no Content-Type, parsing `retDistDFeInt`, cStat=656 tratado como break. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3557** — **SEFAZ · BUGFIX soap:Sender — FALTAVA soap12:Header COM nfeCabecMsg. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Todos os WS SEFAZ exigem `<nfeCabecMsg>` no `<soap12:Header>` com `<cUF>` e `<versaoDados>`. Sem ele → `soap:Sender`. `buildSoapEnvelope` não incluía o Header — adicionado. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3556** — **SEFAZ · BUGFIX soap:Sender HTTP 500 — FALTAVA action NO Content-Type + rejectUnauthorized. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** SOAP 1.2 exige `action="...nfeDistDFeInt"` embutido no Content-Type. Sem ela, SEFAZ retorna `soap:Sender`. Fix: action no Content-Type, `byteLength` no Content-Length, `rejectUnauthorized:false` (cadeia ICP-Brasil não está no bundle de CAs do Node). Detalhe: `shared/changelog.ts`.

@@ -1,6 +1,20 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3558 — **SEFAZ · BUGFIX OPERAÇÃO RENOMEADA: nfeDistDFeInt → nfeDistDFeInteresse. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
+ *
+ * O WSDL real de `www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx` define
+ * a operação como `nfeDistDFeInteresse` (não `nfeDistDFeInt`). Com o nome correto,
+ * a chamada retornou HTTP 200 com `cStat=656` — confirmando mTLS + SOAP funcionais.
+ *
+ * Correções em `server/routers/sefaz.ts`:
+ * 1. `buildSoapEnvelope` — `<nfeDistDFeInteresse>` no Body.
+ * 2. `callSefaz` — `action="...nfeDistDFeInteresse"` no Content-Type.
+ * 3. Parsing da resposta — `nfeDistDFeInteresseResult > retDistDFeInt`
+ *    (campo também foi renomeado de `nfeRetDistDFeInt` para `retDistDFeInt`).
+ * 4. `cStat=656` (Consumo Indevido / rate-limit) tratado como break normal
+ *    (salva `ultNSU` retornado, encerra sem lançar erro).
+ *
  * Rev. 3557 — **SEFAZ · BUGFIX soap:Sender — FALTAVA soap12:Header COM nfeCabecMsg. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
  *
  * Todos os WebServices SEFAZ exigem o elemento `<nfeCabecMsg>` dentro do `<soap12:Header>`
