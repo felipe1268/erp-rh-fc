@@ -15,9 +15,10 @@
  *    Remove as ~100 linhas corrompidas com duplicata limpa confirmada. Autorizado pelo usuário.
  * 2. Query `listNFeRecebidas` + count `semXml`: adicionado `AND status != 'duplicata'` como
  *    camada extra de segurança (protege registros corrompidos sem duplicata limpa ainda).
- * 3. Sync dedup: SELECT agora usa `chave_acesso = ${nfe.chNFe} OR (emitente_cnpj + data_emissao + valor_bruto)`
- *    — garante que novas sincronizações nunca reinserem NF-es já existentes, mesmo que a chave
- *    salva estivesse corrompida.
+ * 3. Sync dedup: mantido apenas `chave_acesso = ${nfe.chNFe}` — a combinação emitente+valor+data
+ *    foi testada e revertida pois gera falso-positivo (ex: MYSA S.A. emitiu 4 NF-es distintas
+ *    de R$2.820,00 no mesmo dia com chaves diferentes). A chave de acesso de 44 dígitos é a
+ *    única chave única confiável para NF-e; o fast-xml-parser já foi corrigido (Rev.3600).
  *
  * Arquivos: server/routers/sefaz.ts (sync dedup, listNFeRecebidas, semXml count),
  *            server/_core/index.ts (SyncSchema+ Rev.3612 DELETE).

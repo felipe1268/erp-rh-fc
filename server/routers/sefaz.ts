@@ -728,18 +728,13 @@ export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?:
         const nfe = processDocZip(b64, nsuDoc);
         if (!nfe || !nfe.chNFe) { ignoradas++; continue; }
 
-        // Verificar se já existe pela chave de acesso OU por emitente+data+valor (fallback anti-duplicata)
-        const _dedupeDataEmissao = nfe.dhEmi ? nfe.dhEmi.substring(0, 10) : new Date().toISOString().substring(0, 10);
-        const _dedupeValorNum = parseFloat(nfe.vNF || "0") || 0;
-        const _dedupeCnpj = cleanCnpj(nfe.CNPJ || '');
+        // Verificar se já existe pela chave de acesso (chave única de 44 dígitos da NF-e)
+        // NÃO usar emitente+valor+data como fallback — a mesma empresa pode emitir múltiplas
+        // NF-es de mesmo valor no mesmo dia (ex: MYSA 4x R$2.820 em 2026-04-08).
         const existe = (await db.execute(sql`
           SELECT id, xml_payload FROM fiscal_notes
           WHERE company_id = ${companyId}
-            AND origem IN ('sefaz_nfe', 'xml_upload')
-            AND (
-              chave_acesso = ${nfe.chNFe}
-              OR (emitente_cnpj = ${_dedupeCnpj} AND data_emissao = ${_dedupeDataEmissao}::date AND valor_bruto = ${_dedupeValorNum})
-            )
+            AND chave_acesso = ${nfe.chNFe}
           LIMIT 1
         `)) as any;
         const existeRows = (existe?.rows ?? existe) as any[];
