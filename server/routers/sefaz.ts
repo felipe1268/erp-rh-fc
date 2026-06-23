@@ -322,7 +322,7 @@ export const sefazRouter = router({
   getConfig: protectedProcedure
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input, ctx }) => {
-      if (!ctx.user?.isAdminLike) throw new TRPCError({ code: "FORBIDDEN" });
+      if (ctx.user?.role !== "admin_master" && ctx.user?.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = getDb();
       const rows = (await db.execute(sql`
         SELECT company_id, cnpj, uf, ambiente, sync_enabled, ativo,
@@ -345,7 +345,7 @@ export const sefazRouter = router({
       certPassword: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      if (!ctx.user?.isAdminLike) throw new TRPCError({ code: "FORBIDDEN" });
+      if (ctx.user?.role !== "admin_master" && ctx.user?.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = getDb();
 
       // Upsert
@@ -385,7 +385,7 @@ export const sefazRouter = router({
   syncNow: protectedProcedure
     .input(z.object({ companyId: z.number() }))
     .mutation(async ({ input, ctx }) => {
-      if (!ctx.user?.isAdminLike) throw new TRPCError({ code: "FORBIDDEN" });
+      if (ctx.user?.role !== "admin_master" && ctx.user?.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const result = await executarSyncNFe(input.companyId);
       return result;
     }),
@@ -393,7 +393,7 @@ export const sefazRouter = router({
   resetNSU: protectedProcedure
     .input(z.object({ companyId: z.number() }))
     .mutation(async ({ input, ctx }) => {
-      if (!ctx.user?.isAdminLike) throw new TRPCError({ code: "FORBIDDEN" });
+      if (ctx.user?.role !== "admin_master" && ctx.user?.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = getDb();
       await db.execute(sql`
         UPDATE company_nfe_config SET ultimo_nsu = '000000000000000' WHERE company_id = ${input.companyId}

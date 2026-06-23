@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3553 — **SEFAZ · BUGFIX FORBIDDEN EM TODOS OS ENDPOINTS DO ROUTER — ctx.user.isAdminLike NÃO EXISTE. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
+ *
+ * Os 4 gates de autorização do `sefazRouter` (getConfig, saveConfig, syncNow, resetNSU) usavam
+ * `ctx.user?.isAdminLike` — propriedade que **não existe** no objeto de contexto tRPC (é um campo
+ * virtual computado localmente em outros routers). O valor era sempre `undefined` (falsy),
+ * bloqueando QUALQUER usuário, inclusive admin_master, com erro FORBIDDEN ao salvar configuração SEFAZ.
+ *
+ * Fix: substituído pelo padrão correto `ctx.user?.role !== "admin_master" && ctx.user?.role !== "admin"`,
+ * idêntico ao usado em todos os demais routers do sistema.
+ *
+ * Arquivo: `server/routers/sefaz.ts` (4 linhas alteradas).
+ *
  * Rev. 3552 — **NOTAS FISCAIS · DUAS SUB-ABAS: "NFS-e EMITIDAS" + "NF-e RECEBIDAS (SEFAZ)". BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * A tela `/financeiro/notas-fiscais` foi reestruturada com duas sub-abas:
