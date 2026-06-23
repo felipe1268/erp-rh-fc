@@ -963,7 +963,7 @@ export default function Epis() {
                   <Input type="number" min={0} value={epiForm.quantidadeEstoque} disabled={!canWriteCentral}
                     onChange={e => setEpiForm(f => ({ ...f, quantidadeEstoque: parseInt(e.target.value) || 0 }))} />
                   {!canWriteCentral && (
-                    <p className="text-[11px] text-muted-foreground mt-1">Você não pode alterar o estoque Central. Ajuste o estoque nas suas obras em "Estoque por Obra".</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">Apenas administradores podem alterar o estoque do Almoxarifado Central. Para ajustar o estoque de uma obra específica, use a aba "Estoque por Obra" e clique no lápis da linha correspondente.</p>
                   )}
                 </div>
                 <div>
@@ -3197,6 +3197,14 @@ export default function Epis() {
                                     setAjusteObraRow(e); setAjusteObraQtd(String(e.quantidade ?? 0));
                                   }}>
                                     <Pencil className="h-3.5 w-3.5 text-blue-600" />
+                                  </Button>
+                                )}
+                                {e.obraId === "central" && canWriteCentral && (
+                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Ajustar estoque central" onClick={() => {
+                                    const epi = episAllList.find((ep: any) => ep.id === e.epiId);
+                                    if (epi) { setEditingEpi(epi); loadEpiForEdit(epi); setViewMode('editar_epi'); }
+                                  }}>
+                                    <Pencil className="h-3.5 w-3.5 text-emerald-600" />
                                   </Button>
                                 )}
                                 <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Editar cadastro do EPI (catálogo central)" onClick={() => {

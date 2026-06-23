@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3593 — **EPI · BUGFIX MENSAGEM ENGANOSA "VÁ PARA ESTOQUE POR OBRA" + LÁPIS CENTRAL NO ESTOQUE POR OBRA. 100% FRONTEND · ZERO BACKEND/ALTER/DROP/DELETE.**
+ *
+ * Dois problemas relatados: (1) campo "Estoque (Almoxarifado Central)" desabilitado mostrava
+ * mensagem "Ajuste o estoque nas suas obras em Estoque por Obra" — porém nessa aba o Central
+ * também não tinha botão de edição, criando um loop circular sem saída. Mensagem corrigida:
+ * esclarece que só administradores podem alterar o Central e orienta o usuário a usar o lápis
+ * de obra para ajustar estoque de obras específicas. (2) Aba "Estoque por Obra" não tinha botão
+ * lápis para linhas do Almoxarifado Central — apenas para obras. Adicionado botão lápis verde
+ * (`text-emerald-600`) nas linhas `obraId === "central"` visível apenas para `canWriteCentral`
+ * (admin / admin_master / allowedObraIds=null); ao clicar abre o formulário de edição do EPI
+ * (editar_epi) onde o campo central está desbloqueado para esses usuários. 100% FRONTEND.
+ *
  * Rev. 3592 — **CONCILIAÇÃO · BUGFIX FALSO POSITIVO "INTERNO" — PADRÃO `cdb`/`rdb` CASAVA STRINGS HEX DE IDs PIX. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
  *
  * Auditoria detalhada linha-a-linha revelou 2 pagamentos reais classificados como "movimentação

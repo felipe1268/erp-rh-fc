@@ -50,6 +50,10 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3593** — **EPI · BUGFIX MENSAGEM ENGANOSA "VÁ PARA ESTOQUE POR OBRA" + LÁPIS CENTRAL NO ESTOQUE POR OBRA. 100% FRONTEND · ZERO BACKEND/ALTER/DROP/DELETE.** Mensagem do campo bloqueado corrigida (não dizia mais "vá para Estoque por Obra" quando essa aba também não oferecia edição do Central). Adicionado botão lápis verde nas linhas do Central na aba Estoque por Obra, visível só para `canWriteCentral`. Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3592** — **CONCILIAÇÃO · BUGFIX FALSO POSITIVO "INTERNO" — PADRÃO `cdb`/`rdb` CASAVA STRINGS HEX DE IDs PIX. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3587** — **CRÍTICO · BUGFIX TELA BRANCA — HTML CACHEADO 1H + CHUNK CIRCULAR vendor-react↔vendor-radix + SW SEM cache:no-store. BACKEND PONTUAL + BUILD CONFIG · ZERO ALTER/DROP/DELETE.** (1) `express.static` servia `index.html` com `max-age=3600` → HTML antigo pós-deploy → chunks 404 → crash. Fix: `setHeaders` no `express.static` para `.html`/`sw.js` = `no-cache,no-store`. (2) SW navigate sem `cache:no-store` → mesmo problema via HTTP cache. (3) `use-sync-external-store`+`react-is` foram pro vendor-radix → ciclo vendor-react↔vendor-radix. Fix: adicionados ao padrão vendor-react. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3586** — **CRÍTICO · BUGFIX TELA BRANCA — CHUNK CIRCULAR vendor-misc↔vendor-react/radix/charts. BUILD CONFIG · ZERO BACKEND/ALTER/DROP/DELETE.** Removido `return "vendor-misc"` catch-all do manualChunks. Detalhe: `shared/changelog.ts`.
