@@ -179,6 +179,28 @@ export default function FinanceiroNotasFiscais() {
   );
   const nfeRec: any[] = nfeRecQuery.data ?? [];
 
+  // Query anual sem filtros para dots do calendário recebidas
+  const nfeRecYearQuery = (trpc as any).sefaz.listNFeRecebidas.useQuery(
+    { companyId: companyId ?? 0, ano: recAno },
+    { enabled: !!companyId && pageTab === "recebidas", staleTime: 60_000 }
+  );
+  const recMesesStatus = useMemo((): Record<number, "consolidado" | "lancamento" | "vazio"> => {
+    const map: Record<number, "consolidado" | "lancamento" | "vazio"> = {};
+    for (let m = 1; m <= 12; m++) map[m] = "vazio";
+    for (const nf of (nfeRecYearQuery.data ?? []) as any[]) {
+      const d = String(nf.dataEmissao || nf.dataEntrada || "").slice(0, 10);
+      const m = parseInt(d.split("-")[1] ?? "0", 10);
+      if (!m) continue;
+      if (nf.status === "cancelada") continue;
+      if (map[m] === "vazio") {
+        map[m] = nf.status === "conciliada" ? "consolidado" : "lancamento";
+      } else if (map[m] === "consolidado" && nf.status !== "conciliada") {
+        map[m] = "lancamento";
+      }
+    }
+    return map;
+  }, [nfeRecYearQuery.data]);
+
   // ── Config SEFAZ (last_sync_at / ultimo_nsu / last_sync_result) ──────────────
   const sefazCfgQuery = (trpc as any).sefaz.getConfig.useQuery(
     { companyId: companyId ?? 0 },
@@ -799,20 +821,33 @@ export default function FinanceiroNotasFiscais() {
               {/* Timeline ano/mês */}
               <Card className="border-0 shadow-sm">
                 <CardContent className="p-4">
-                  <div className="flex items-center gap-2 mb-3 flex-wrap">
-                    <button type="button" onClick={() => setRecAno(a => a - 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500"><ChevronLeft className="w-4 h-4" /></button>
-                    <span className="text-base font-bold text-gray-800 min-w-[3.5rem] text-center">{recAno}</span>
-                    <button type="button" onClick={() => setRecAno(a => a + 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500"><ChevronRight className="w-4 h-4" /></button>
-                    <Button type="button" variant={recMes == null ? "default" : "outline"} size="sm" className="h-8 text-xs ml-2" onClick={() => setRecMes(null)}>Ano todo</Button>
+                  <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={() => setRecAno(a => a - 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800"><ChevronLeft className="w-4 h-4" /></button>
+                      <span className="text-base font-bold text-gray-800 min-w-[3.5rem] text-center">{recAno}</span>
+                      <button type="button" onClick={() => setRecAno(a => a + 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800"><ChevronRight className="w-4 h-4" /></button>
+                      <Button type="button" variant={recMes == null ? "default" : "outline"} size="sm" className="h-8 text-xs ml-2" onClick={() => setRecMes(null)}>Ano todo</Button>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-gray-500">
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />Com lançamento</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Consolidado</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />Sem dados</span>
+                    </div>
                   </div>
                   <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
                     {MESES_REC.map((m, i) => {
                       const num = i + 1;
+                      const status = recMesesStatus[num];
                       return (
                         <button key={m} type="button" onClick={() => setRecMes(num)}
                           className={`flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all
-                            ${recMes === num ? "border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm" : "border-gray-200 bg-white text-gray-500 hover:border-gray-300"}`}>
+                            ${recMes === num ? "border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm" : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50"}`}>
                           <span>{m}</span>
+                          <span className={`w-1.5 h-1.5 rounded-full ${
+                            status === "consolidado" ? "bg-green-500" :
+                            status === "lancamento"  ? "bg-blue-500" :
+                            "bg-gray-300"
+                          }`} />
                         </button>
                       );
                     })}

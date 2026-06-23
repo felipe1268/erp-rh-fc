@@ -1,6 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3579 — **NF-e RECEBIDAS · TIMELINE COM LEGENDA + DOTS POR MÊS (MESMO PADRÃO DA ABA EMITIDAS). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * A aba NF-e Recebidas (SEFAZ) agora tem legenda "● Com lançamento / ● Consolidado / ● Sem dados"
+ * e dots coloridos nos botões de mês — idêntico ao calendário da aba NFS-e Emitidas.
+ * Nova query `nfeRecYearQuery` (ano sem filtros) alimenta o `recMesesStatus` useMemo que classifica
+ * cada mês como consolidado/lancamento/vazio baseado no `status` das NF-e recebidas.
+ * Arquivo: `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`.
+ *
  * Rev. 3578 — **NFS-e EMITIDAS · DIALOG "NOVA NFS-e" REDESENHADO — LAYOUT MODERNO SEM ABAS, SEÇÕES VISUAIS, VALOR LÍQUIDO DESTACADO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Substituiu o layout com 3 abas (Dados Gerais / Tributação / Vínculo) por tela única scrollável:
