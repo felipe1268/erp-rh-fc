@@ -369,18 +369,20 @@ async function executarSyncMunicipio(opts: {
   const db = await getDb();
   const { companyId, ibgeCode, cnpj } = opts;
 
-  const [mun] = await db.$client.query<any>(
+  const munRes = await db.$client.query<any>(
     `SELECT * FROM company_nfse_municipal_config WHERE company_id=$1 AND ibge_code=$2`,
     [companyId, ibgeCode]
   );
+  const mun = munRes.rows[0];
   if (!mun) return { importadas: 0, ignoradas: 0, erro: "Município não configurado." };
   if (!mun.inscricao_municipal) return { importadas: 0, ignoradas: 0, aviso: "Inscrição Municipal não preenchida." };
 
   // Pega certificado da config SEFAZ (compartilhado)
-  const [sefazCfg] = await db.$client.query<any>(
+  const sefazRes = await db.$client.query<any>(
     `SELECT cert_pfx_base64, cert_password FROM company_nfe_config WHERE company_id=$1`,
     [companyId]
   );
+  const sefazCfg = sefazRes.rows[0];
 
   const hoje = new Date();
   const dataFinal = opts.dataFinal || hoje.toISOString().slice(0, 10);
@@ -412,11 +414,11 @@ async function executarSyncMunicipio(opts: {
       if (!nota.numero) { ignoradas++; continue; }
 
       // Dedup por (company_id, numero_nf, origem)
-      const [existing] = await db.$client.query<any>(
+      const existingRes = await db.$client.query<any>(
         `SELECT id FROM fiscal_notes WHERE company_id=$1 AND numero_nf=$2 AND origem=$3`,
         [companyId, nota.numero, origem]
       );
-      if (existing) { ignoradas++; continue; }
+      if (existingRes.rows[0]) { ignoradas++; continue; }
 
       await db.$client.query(
         `INSERT INTO fiscal_notes

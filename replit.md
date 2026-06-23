@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3563** — **NFS-e EMITIDAS MUNICIPAIS · BUGFIX "(intermediate value) is not iterable" NO BOTÃO SINCRONIZAR. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** `executarSyncMunicipio` usava `const [x] = await db.$client.query<any>(...)` — `QueryResult` do driver `pg` NÃO é iterável (não tem `Symbol.iterator`); desestruturação de array lançava o TypeError. 3 ocorrências corrigidas para `const res = await ...; const x = res.rows[0]`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3562** — **NFS-e EMITIDAS MUNICIPAIS · BUGFIX DOIS ERROS DE ARRANQUE: INSERT SEED COM auth_type/descricao INEXISTENTES + for...of SEM Array.isArray. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.** (1) INSERT em `getMunicipios`/`addMunicipio` referenciava colunas inexistentes → seção não carregava; (2) `for...of municipios` sem `Array.isArray` → toast `(intermediate value) is not iterable` no render transitório. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3561** — **NFS-e EMITIDAS MUNICIPAIS · NOVO MÓDULO: CONSULTA AUTOMÁTICA NAS PREFEITURAS (SIAP GEO, SIL, GIAP, TINUS). BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Só Guaratinguetá-SP SIAP GEO auto-semeada. Login = Inscrição Municipal; Senha = senha do portal. Cards em Configurações → Financeiro; NFS-e importadas em `fiscal_notes` com `origem='nfse_mun_<ibge>'`. Detalhe: `shared/changelog.ts`.

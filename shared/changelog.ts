@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3563 — **NFS-e EMITIDAS MUNICIPAIS · BUGFIX "(intermediate value) is not iterable" NO BOTÃO SINCRONIZAR. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
+ *
+ * `executarSyncMunicipio` em `server/routers/nfseEmitidas.ts` usava desestruturação de
+ * array (`const [x] = await db.$client.query<any>(...)`) sobre o retorno do driver `pg`.
+ * `db.$client.query()` retorna um `QueryResult` (objeto com `.rows: []`), NÃO um array
+ * diretamente — portanto `const [x] = queryResult` tenta chamar `Symbol.iterator` no
+ * objeto, que não existe, lançando `TypeError: (intermediate value) is not iterable`.
+ * O erro aparecia como toast imediatamente ao clicar "Sincronizar NFS-e Municipal".
+ * Ocorrências corrigidas (3): linhas 372 (`mun`), 380 (`sefazCfg`) e 415 (`existing`).
+ * Fix: `const res = await db.$client.query(...); const x = res.rows[0]` em todas.
+ * Arquivo: `server/routers/nfseEmitidas.ts`.
+ *
  * Rev. 3562 — **NFS-e EMITIDAS MUNICIPAIS · BUGFIX DOIS ERROS DE ARRANQUE: (1) INSERT SEED COM COLUNAS INEXISTENTES auth_type/descricao → REMOVIDAS; (2) for...of SEM Array.isArray → RENDER TRANSITÓRIO LANÇAVA "(intermediate value) is not iterable". BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * Dois bugs introduzidos na Rev. 3561 corrigidos:
