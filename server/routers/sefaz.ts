@@ -352,6 +352,7 @@ interface ResNFe {
   nProt?: string;
   dhRecbto?: string;
   nsu?: string;
+  rawXml?: string; // XML completo para armazenar no xml_payload
 }
 
 function processDocZip(base64gz: string, nsu: string): ResNFe | null {
@@ -361,7 +362,7 @@ function processDocZip(base64gz: string, nsu: string): ResNFe | null {
     const parsed = xmlParser.parse(xml);
     const root = parsed["resNFe"] || parsed["nfeProc"] || parsed["procEventoNFe"];
     if (!root) return null;
-    // resNFe (resumo distribuído pelo SEFAZ)
+    // resNFe (resumo distribuído pelo SEFAZ) — sem XML completo
     if (parsed["resNFe"]) {
       const r = parsed["resNFe"];
       return {
@@ -374,9 +375,10 @@ function processDocZip(base64gz: string, nsu: string): ResNFe | null {
         cSitNFe: String(r.cSitNFe || "1"),
         nProt: String(r.nProt || ""),
         nsu,
+        rawXml: undefined, // resumo não tem XML completo
       };
     }
-    // nfeProc (NF-e completa com protocolo) — mesmo schema do importXml
+    // nfeProc (NF-e completa com protocolo) — salva XML completo
     if (parsed["nfeProc"]) {
       const proc = parsed["nfeProc"];
       const infNFe = proc?.["NFe"]?.["infNFe"] || {};
@@ -396,9 +398,164 @@ function processDocZip(base64gz: string, nsu: string): ResNFe | null {
         cSitNFe: String(infProt?.["cStat"] === "101" ? "2" : infProt?.["cStat"] === "110" ? "3" : "1"),
         nProt: String(infProt?.["nProt"] || ""),
         nsu,
+        rawXml: xml, // XML completo disponível no nfeProc
       };
     }
     return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Parseia o XML completo de uma NF-e (nfeProc) e retorna estrutura de detalhes.
+ * Usado pelo endpoint getDetalhesNFe.
+ */
+function parseNFeXml(xml: string): Record<string, any> | null {
+  try {
+    const p = xmlParser.parse(xml);
+    const proc = p["nfeProc"] || p;
+    const nfe = proc["NFe"] || proc["nfe"] || {};
+    const infNFe = nfe["infNFe"] || {};
+    const infProt = proc["protNFe"]?.["infProt"] || {};
+    const ide = infNFe["ide"] || {};
+    const emit = infNFe["emit"] || {};
+    const dest = infNFe["dest"] || {};
+    const transp = infNFe["transp"] || {};
+    const cobr = infNFe["cobr"] || {};
+    const total = infNFe["total"]?.["ICMSTot"] || {};
+    const infAdic = infNFe["infAdic"] || {};
+
+    // Produtos — pode ser array ou objeto único
+    const rawDet = infNFe["det"];
+    const detArr: any[] = Array.isArray(rawDet) ? rawDet : rawDet ? [rawDet] : [];
+    const itens = detArr.map((det: any) => {
+      const prod = det["prod"] || {};
+      const imp = det["imposto"] || {};
+      const icmsBlock = imp["ICMS"] || {};
+      const icmsInner = icmsBlock[Object.keys(icmsBlock)[0]] || {};
+      const ipiBlock = imp["IPI"]?.["IPITrib"] || {};
+      const pisBlock = imp["PIS"]?.["PISAliq"] || imp["PIS"]?.["PISNT"] || {};
+      const cofinsBlock = imp["COFINS"]?.["COFINSAliq"] || imp["COFINS"]?.["COFINSNT"] || {};
+      return {
+        nItem: det["@_nItem"] ?? "",
+        cProd: String(prod["cProd"] || ""),
+        xProd: String(prod["xProd"] || ""),
+        ncm: String(prod["NCM"] || ""),
+        cfop: String(prod["CFOP"] || ""),
+        uCom: String(prod["uCom"] || ""),
+        qCom: String(prod["qCom"] || "0"),
+        vUnCom: String(prod["vUnCom"] || "0"),
+        vProd: String(prod["vProd"] || "0"),
+        vDesc: String(prod["vDesc"] || "0"),
+        cst: String(icmsInner["CST"] || icmsInner["CSOSN"] || ""),
+        vBC: String(icmsInner["vBC"] || "0"),
+        pICMS: String(icmsInner["pICMS"] || "0"),
+        vICMS: String(icmsInner["vICMS"] || "0"),
+        pIPI: String(ipiBlock["pIPI"] || "0"),
+        vIPI: String(ipiBlock["vIPI"] || "0"),
+        pPIS: String(pisBlock["pPIS"] || "0"),
+        vPIS: String(pisBlock["vPIS"] || "0"),
+        pCOFINS: String(cofinsBlock["pCOFINS"] || "0"),
+        vCOFINS: String(cofinsBlock["vCOFINS"] || "0"),
+      };
+    });
+
+    // Endereço emitente
+    const enderEmit = emit["enderEmit"] || {};
+    const enderDest = dest["enderDest"] || {};
+
+    // Duplicatas
+    const rawDup = cobr["dup"];
+    const dups: any[] = Array.isArray(rawDup) ? rawDup : rawDup ? [rawDup] : [];
+
+    // Volumes
+    const rawVol = transp["vol"];
+    const vols: any[] = Array.isArray(rawVol) ? rawVol : rawVol ? [rawVol] : [];
+
+    return {
+      ide: {
+        nNF: String(ide["nNF"] || ""),
+        serie: String(ide["serie"] || ""),
+        mod: String(ide["mod"] || ""),
+        dhEmi: String(ide["dhEmi"] || ""),
+        dhSaiEnt: String(ide["dhSaiEnt"] || ""),
+        tpNF: String(ide["tpNF"] ?? ""),
+        natOp: String(ide["natOp"] || ""),
+        tpEmis: String(ide["tpEmis"] || ""),
+        finNFe: String(ide["finNFe"] || ""),
+      },
+      emit: {
+        cnpj: String(emit["CNPJ"] || emit["CPF"] || ""),
+        xNome: String(emit["xNome"] || ""),
+        xFant: String(emit["xFant"] || ""),
+        ie: String(emit["IE"] || ""),
+        endereco: `${enderEmit["xLgr"] || ""}, ${enderEmit["nro"] || ""}${enderEmit["xCpl"] ? " " + enderEmit["xCpl"] : ""}`,
+        bairro: String(enderEmit["xBairro"] || ""),
+        municipio: String(enderEmit["xMun"] || ""),
+        uf: String(enderEmit["UF"] || ""),
+        cep: String(enderEmit["CEP"] || ""),
+        fone: String(enderEmit["fone"] || ""),
+      },
+      dest: {
+        cnpj: String(dest["CNPJ"] || dest["CPF"] || ""),
+        xNome: String(dest["xNome"] || ""),
+        ie: String(dest["IE"] || ""),
+        email: String(dest["email"] || ""),
+        endereco: `${enderDest["xLgr"] || ""}, ${enderDest["nro"] || ""}${enderDest["xCpl"] ? " " + enderDest["xCpl"] : ""}`,
+        bairro: String(enderDest["xBairro"] || ""),
+        municipio: String(enderDest["xMun"] || ""),
+        uf: String(enderDest["UF"] || ""),
+        cep: String(enderDest["CEP"] || ""),
+      },
+      itens,
+      total: {
+        vBC: String(total["vBC"] || "0"),
+        vICMS: String(total["vICMS"] || "0"),
+        vICMSDeson: String(total["vICMSDeson"] || "0"),
+        vST: String(total["vST"] || "0"),
+        vProd: String(total["vProd"] || "0"),
+        vFrete: String(total["vFrete"] || "0"),
+        vSeg: String(total["vSeg"] || "0"),
+        vDesc: String(total["vDesc"] || "0"),
+        vII: String(total["vII"] || "0"),
+        vIPI: String(total["vIPI"] || "0"),
+        vPIS: String(total["vPIS"] || "0"),
+        vCOFINS: String(total["vCOFINS"] || "0"),
+        vOutro: String(total["vOutro"] || "0"),
+        vNF: String(total["vNF"] || "0"),
+      },
+      transp: {
+        modFrete: String(transp["modFrete"] ?? ""),
+        transportadora: String(transp["transporta"]?.["xNome"] || ""),
+        volumes: vols.map((v: any) => ({
+          qVol: String(v["qVol"] || ""),
+          esp: String(v["esp"] || ""),
+          marca: String(v["marca"] || ""),
+          nVol: String(v["nVol"] || ""),
+          pesoL: String(v["pesoL"] || ""),
+          pesoB: String(v["pesoB"] || ""),
+        })),
+      },
+      fatura: cobr["fat"] ? {
+        nFat: String(cobr["fat"]["nFat"] || ""),
+        vOrig: String(cobr["fat"]["vOrig"] || "0"),
+        vDesc: String(cobr["fat"]["vDesc"] || "0"),
+        vLiq: String(cobr["fat"]["vLiq"] || "0"),
+      } : null,
+      duplicatas: dups.map((d: any) => ({
+        nDup: String(d["nDup"] || ""),
+        dVenc: String(d["dVenc"] || ""),
+        vDup: String(d["vDup"] || "0"),
+      })),
+      infAdic: String(infAdic["infCpl"] || infAdic["infAdFisco"] || ""),
+      protocolo: {
+        nProt: String(infProt["nProt"] || ""),
+        dhRecbto: String(infProt["dhRecbto"] || ""),
+        cStat: String(infProt["cStat"] || ""),
+        xMotivo: String(infProt["xMotivo"] || ""),
+      },
+    };
   } catch {
     return null;
   }
@@ -536,12 +693,12 @@ export async function executarSyncNFe(companyId: number): Promise<{ importadas: 
           INSERT INTO fiscal_notes
             (company_id, numero_nf, chave_acesso, data_emissao, tomador_cnpj, tomador_razao_social,
              descricao_servico, valor_bruto, valor_liquido, status, origem, emitente_cnpj, emitente_nome, nsu_sefaz,
-             criado_por_nome, created_at, updated_at)
+             xml_payload, criado_por_nome, created_at, updated_at)
           VALUES
             (${companyId}, ${numNf}, ${nfe.chNFe}, ${dataEmissao}::date, ${cnpj}, 'FC ENGENHARIA',
              ${'NF-e recebida via SEFAZ' + (nfe.xNome ? ' — ' + nfe.xNome : '')},
              ${valorNum}, ${valorNum}, 'pendente', 'sefaz_nfe', ${cleanCnpj(nfe.CNPJ || '')}, ${nfe.xNome || ''},
-             ${nsuDoc}, 'SEFAZ Auto-Sync', NOW(), NOW())
+             ${nsuDoc}, ${nfe.rawXml || null}, 'SEFAZ Auto-Sync', NOW(), NOW())
         `);
         importadas++;
       }
@@ -814,11 +971,11 @@ export const sefazRouter = router({
             INSERT INTO fiscal_notes
               (company_id, numero_nf, chave_acesso, data_emissao, descricao_servico,
                valor_bruto, valor_liquido, status, origem, emitente_cnpj, emitente_nome,
-               criado_por_nome, created_at, updated_at)
+               xml_payload, criado_por_nome, created_at, updated_at)
             VALUES
               (${input.companyId}, ${nNF}, ${chNFe}, ${dataEmissao}::date, ${desc},
                ${valor}, ${valor}, 'pendente', 'xml_upload', ${emitenteCnpj}, ${emitenteNome},
-               'Import XML', NOW(), NOW())
+               ${file.content}, 'Import XML', NOW(), NOW())
           `);
           importadas++;
         } catch (e: any) {
@@ -929,6 +1086,41 @@ export const sefazRouter = router({
       `);
 
       return { ok: true, cStat, xMotivo, nProt };
+    }),
+
+  getDetalhesNFe: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      const rows = (await db.execute(sql`
+        SELECT id, numero_nf, chave_acesso, data_emissao, emitente_cnpj, emitente_nome,
+               valor_bruto, valor_liquido, status, descricao_servico, nsu_sefaz,
+               xml_payload, created_at
+        FROM fiscal_notes
+        WHERE id = ${input.id} AND company_id = ${input.companyId}
+          AND origem IN ('sefaz_nfe', 'xml_upload')
+        LIMIT 1
+      `)) as any;
+      const row = (rows?.rows ?? rows)?.[0];
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Nota não encontrada." });
+      const xml = row.xml_payload ? String(row.xml_payload) : null;
+      const detalhes = xml ? parseNFeXml(xml) : null;
+      return {
+        id: Number(row.id),
+        numeroNf: String(row.numero_nf || ""),
+        chaveAcesso: row.chave_acesso || null,
+        dataEmissao: row.data_emissao ? String(row.data_emissao).slice(0, 10) : null,
+        emitenteCnpj: row.emitente_cnpj || null,
+        emitenteNome: row.emitente_nome || null,
+        valorBruto: parseFloat(row.valor_bruto || "0") || 0,
+        valorLiquido: parseFloat(row.valor_liquido || "0") || 0,
+        status: String(row.status || "pendente"),
+        descricaoServico: row.descricao_servico || null,
+        nsuSefaz: row.nsu_sefaz || null,
+        createdAt: row.created_at ? String(row.created_at).slice(0, 10) : null,
+        temXml: !!xml,
+        detalhes, // null quando só temos o resNFe (resumo SEFAZ)
+      };
     }),
 
   listNFeRecebidas: protectedProcedure

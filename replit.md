@@ -50,9 +50,11 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3604** — **NF-e RECEBIDAS · DIALOG "ESPELHO FIEL" — TODOS OS ITENS, IMPOSTOS, TOTAIS, TRANSPORTE E DUPLICATAS. BACKEND ADITIVO + SYNCSCHEMA+ · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Nova coluna `xml_payload TEXT` em `fiscal_notes` (SyncSchema+ Rev.3604). `processDocZip` agora salva o XML completo quando disponível (nfeProc). Novo endpoint `sefaz.getDetalhesNFe` parseia o XML e retorna emitente/destinatário/itens/totais/transporte/duplicatas/infAdic/protocolo. Dialog expandido para `max-w-3xl` com loading state; notas sem XML exibem aviso informativo. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3603** — **NF-e RECEBIDAS · MANIFESTAÇÃO DO DESTINATÁRIO REAL VIA SEFAZ (NFeRecepcaoEvento4). BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Acatar (210200) / Recusar (210220, exige justificativa 15–255 chars) / Desconheço (210240) agora geram evento XML assinado (XMLDsig RSA-SHA1, C14N 1.0, NT 2014.002) e comunicam ao WebService SEFAZ com mTLS + cert A1. Protocolo SEFAZ (nProt) exibido no toast. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3602** — **NFS-e EMITIDAS · BOTÃO "SINCRONIZAR AGORA" NA ABA EMITIDAS + PROVIDER nfse_nacional EXPLÍCITO. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.** Botão "Sincronizar Agora" no cronômetro da aba Emitidas chama `syncAllMunicipios` (SIAP GEO + Portal Nacional simultaneamente). Provider `nfse_nacional` agora tem branch explícita com logs. Detalhe: `shared/changelog.ts`.
+- **Rev. 3602** — **NFS-e EMITIDAS · BOTÃO "SINCRONIZAR AGORA" + PROVIDER nfse_nacional EXPLÍCITO. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3601** — **NFS-e EMITIDAS MUNICIPAIS · BUGFIX CRON + ENABLE PORTAIS GUARATINGUETÁ. BACKEND PONTUAL + SYNCSCHEMA+ · ZERO ALTER/DROP/DELETE.** (1) Cron chamava `executarSyncMunicipio` com args posicionais → nunca importava nada desde Rev.3561. Fix: objeto + JOIN cnpj. (2) Primeira sync usava "último mês" → sem histórico. Fix: `last_sync_at IS NULL` → 2018-01-01; SIAP GEO capeado em 2025-12-31. (3) SyncSchema+: habilita ambos portais (enabled=1). Detalhe: `shared/changelog.ts`.
 

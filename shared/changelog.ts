@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3604 — **NF-e RECEBIDAS · DIALOG "ESPELHO FIEL" — TODOS OS ITENS, IMPOSTOS, TOTAIS, TRANSPORTE E DUPLICATAS. BACKEND ADITIVO + SYNCSCHEMA+ · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
+ *
+ * Antes: dialog exibia apenas emitente, datas, chave de acesso e botões de manifestação.
+ * Agora: ao abrir qualquer NF-e recebida, o sistema carrega e exibe TODA a estrutura fiscal:
+ *
+ *   Dados da nota (natureza da operação, série, tipo entrada/saída)
+ *   Emitente completo (razão social, fantasia, CNPJ, IE, endereço, telefone)
+ *   Destinatário completo (razão social, CNPJ, IE, endereço, e-mail)
+ *   Produtos/itens — tabela com: #, código, descrição, NCM, CFOP, qtd, unidade,
+ *     valor unitário, valor produto, CST ICMS, % ICMS, vICMS, vIPI
+ *   Totais — grade com todos os campos de ICMSTot: BC, ICMS, ICMS Desonerado,
+ *     ST, IPI, PIS, COFINS, Frete, Seguro, Desconto, Outros + Total NF em destaque
+ *   Transporte — modalidade de frete, transportadora, volumes (qtd, espécie, marca, peso)
+ *   Cobrança/Duplicatas — tabela de parcelas (nDup, vencimento, valor) + fatura (vOrig/vLiq)
+ *   Informações Adicionais (infCpl)
+ *   Protocolo SEFAZ (nProt, data autorização) nas 3 áreas: header, chave e rodapé
+ *
+ * Implementação:
+ *   SyncSchema+: `ALTER TABLE fiscal_notes ADD COLUMN IF NOT EXISTS xml_payload TEXT`
+ *   processDocZip(): agora retorna rawXml para nfeProc (XML completo disponível na distribuição)
+ *   Import SEFAZ sync: INSERT inclui xml_payload = rawXml
+ *   Import XML manual: INSERT inclui xml_payload = file.content
+ *   Nova função parseNFeXml(): parseia o nfeProc completo → estrutura detalhes (emit/dest/itens/total/transp/cobr/infAdic/protocolo)
+ *   Novo endpoint sefaz.getDetalhesNFe: busca nota + xml_payload, retorna { temXml, detalhes }
+ *   Dialog expandido para max-w-3xl com loading skeleton enquanto carrega
+ *   Notas antigas (apenas resNFe, sem XML completo) exibem aviso informativo amarelo
+ *
+ * Arquivos tocados: server/routers/sefaz.ts, server/_core/index.ts, client/src/pages/financeiro/FinanceiroNotasFiscais.tsx, shared/version.ts, shared/changelog.ts, replit.md
+ *
  * Rev. 3603 — **NF-e RECEBIDAS · MANIFESTAÇÃO DO DESTINATÁRIO REAL VIA SEFAZ (NFeRecepcaoEvento4) — ACATAR/RECUSAR/DESCONHECIMENTO AGORA COMUNICAM A SEFAZ. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * Antes: botões "Acatar/Recusar/Desconheço" só atualizavam o banco local.

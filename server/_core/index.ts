@@ -4144,6 +4144,12 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3601: portais NFS-e municipal de Guaratinguetá habilitados (enabled=1).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3601 enable-nfse-mun:`, e?.message || e); }
 
+        // Rev. 3604 — xml_payload em fiscal_notes (NF-e XML completo para espelho fiel)
+        try {
+          await db.$client.query(`ALTER TABLE fiscal_notes ADD COLUMN IF NOT EXISTS xml_payload TEXT`);
+          console.log(`[SyncSchema+] Rev. 3604: fiscal_notes.xml_payload adicionada (ou já existia).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3604 xml_payload:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

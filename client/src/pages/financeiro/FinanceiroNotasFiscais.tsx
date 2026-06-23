@@ -400,6 +400,10 @@ export default function FinanceiroNotasFiscais() {
     },
     onError: (e: any) => toast({ title: "Erro ao resetar NSU", description: e.message, variant: "destructive" }),
   });
+  const nfeDetalhesQuery = (trpc as any).sefaz.getDetalhesNFe.useQuery(
+    { id: nfeRecDetalhe?.id ?? 0, companyId: companyId ?? 0 },
+    { enabled: !!nfeRecDetalhe && !!companyId }
+  );
   const manifestarMut = (trpc as any).sefaz.manifestar.useMutation({
     onSuccess: (data: any, vars: any) => {
       const labels: Record<string, string> = { acatada: "acatada ✓", recusada: "recusada ✗", desconhecida: "marcada como desconhecida" };
@@ -1977,9 +1981,9 @@ export default function FinanceiroNotasFiscais() {
         </>}
         {/* fim aba emitidas */}
 
-        {/* ── Dialog detalhe NF-e Recebida — fora de qualquer aba para sempre renderizar ── */}
+        {/* ── Dialog detalhe NF-e Recebida — espelho fiel da nota ── */}
         <Dialog open={!!nfeRecDetalhe} onOpenChange={v => { if (!v) { setNfeRecDetalhe(null); setShowJustRecusa(false); setJustRecusa(""); } }}>
-          <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden rounded-2xl">
+          <DialogContent className="max-w-3xl p-0 gap-0 overflow-hidden rounded-2xl">
             {nfeRecDetalhe && (() => {
               const nf = nfeRecDetalhe;
               const st = STATUS_MAP[nf.status] ?? { label: nf.status, color: "bg-gray-100 text-gray-700 border-gray-200" };
@@ -1988,61 +1992,295 @@ export default function FinanceiroNotasFiscais() {
               const chaveParaCopiar = String(nf.chaveAcesso || "").replace(/\D/g, "");
               const isMutating = manifestarMut.isPending;
               const canManifest = ["pendente", "recebida"].includes(nf.status);
+              const det = nfeDetalhesQuery.data?.detalhes ?? null;
+              const isLoadingDet = nfeDetalhesQuery.isLoading;
+              const fmtV = (v: any) => {
+                const n = parseFloat(String(v || "0"));
+                return isNaN(n) || n === 0 ? "—" : formatBRL(n);
+              };
+              const fmtQ = (v: any) => {
+                const n = parseFloat(String(v || "0"));
+                return isNaN(n) ? "—" : n.toLocaleString("pt-BR", { maximumFractionDigits: 4 });
+              };
+              const fmtPct = (v: any) => {
+                const n = parseFloat(String(v || "0"));
+                return isNaN(n) || n === 0 ? "—" : `${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+              };
+              const FRETE_MODAL: Record<string, string> = { "0": "Por conta do emitente", "1": "Por conta do destinatário", "2": "Por conta de terceiros", "9": "Sem frete" };
+              const TPNF: Record<string, string> = { "0": "Entrada", "1": "Saída" };
               return (
                 <>
-                  {/* Cabeçalho estilo DANFE */}
+                  {/* ── Cabeçalho estilo DANFE ── */}
                   <div className="bg-gradient-to-r from-indigo-700 to-indigo-500 px-5 py-4 text-white">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-[10px] font-bold tracking-widest uppercase opacity-70 mb-0.5">Nota Fiscal Eletrônica</p>
-                        <h2 className="text-xl font-bold leading-tight">NF-e {nf.numeroNf ? `#${nf.numeroNf}` : "—"}</h2>
-                        <p className="text-indigo-200 text-xs mt-0.5">Recebida via SEFAZ</p>
+                        <h2 className="text-xl font-bold leading-tight">
+                          NF-e {nf.numeroNf ? `#${nf.numeroNf}` : "—"}
+                          {det?.ide?.serie ? <span className="text-base font-normal opacity-80 ml-1">· Série {det.ide.serie}</span> : null}
+                        </h2>
+                        <p className="text-indigo-200 text-xs mt-0.5">
+                          {det?.ide?.natOp || "Recebida via SEFAZ"}
+                        </p>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="text-[10px] uppercase tracking-wide opacity-70">Valor</p>
+                        <p className="text-[10px] uppercase tracking-wide opacity-70">Valor Total NF</p>
                         <p className="text-2xl font-bold tabular-nums">{formatBRL(nf.valorLiquido)}</p>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border mt-1 ${st.color}`}>
-                          {st.label}
-                        </span>
+                        <div className="flex items-center gap-1.5 justify-end mt-1">
+                          {det?.ide?.tpNF !== undefined && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-white/20">
+                              {TPNF[String(det.ide.tpNF)] ?? "NF-e"}
+                            </span>
+                          )}
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${st.color}`}>
+                            {st.label}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="p-5 space-y-4 max-h-[65svh] overflow-y-auto">
-                    {/* Emitente */}
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
-                      <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200">
-                        <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500">Emitente</p>
-                      </div>
-                      <div className="px-3 py-2.5 space-y-0.5">
-                        <p className="font-semibold text-slate-800 break-words leading-snug">{nf.emitenteNome || "—"}</p>
-                        <p className="text-sm text-slate-500 font-mono">{fmtCnpjDisplay(nf.emitenteCnpj)}</p>
-                      </div>
-                    </div>
+                  {/* ── Corpo com scroll ── */}
+                  <div className="p-5 space-y-4 max-h-[70svh] overflow-y-auto">
 
-                    {/* Datas */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
-                        <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500 mb-1">Emissão</p>
-                        <p className="font-semibold text-slate-800 tabular-nums">{fmtDateBR(nf.dataEmissao)}</p>
-                      </div>
-                      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
-                        <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500 mb-1">Importada em</p>
-                        <p className="font-semibold text-slate-800 tabular-nums">{fmtDateBR(nf.createdAt)}</p>
-                      </div>
-                    </div>
-
-                    {/* Descrição */}
-                    {nf.descricaoServico && (
-                      <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
-                        <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200">
-                          <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500">Descrição</p>
-                        </div>
-                        <p className="px-3 py-2.5 text-sm text-slate-700 break-words leading-relaxed">{nf.descricaoServico}</p>
+                    {/* Loading */}
+                    {isLoadingDet && (
+                      <div className="flex items-center justify-center py-6 gap-2 text-slate-500">
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span className="text-sm">Carregando dados da nota…</span>
                       </div>
                     )}
 
-                    {/* Chave de Acesso */}
+                    {/* ── Emitente + Destinatário ── */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
+                        <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200">
+                          <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500">Emitente</p>
+                        </div>
+                        <div className="px-3 py-2.5 space-y-0.5">
+                          <p className="font-semibold text-slate-800 break-words leading-snug text-sm">{det?.emit?.xNome || nf.emitenteNome || "—"}</p>
+                          {det?.emit?.xFant && det.emit.xFant !== det.emit.xNome && (
+                            <p className="text-xs text-slate-500 italic">{det.emit.xFant}</p>
+                          )}
+                          <p className="text-xs text-slate-500 font-mono">{fmtCnpjDisplay(det?.emit?.cnpj || nf.emitenteCnpj)}</p>
+                          {det?.emit?.ie && <p className="text-xs text-slate-400">IE: {det.emit.ie}</p>}
+                          {det?.emit?.endereco && det.emit.endereco.trim() !== "," && (
+                            <p className="text-xs text-slate-400 break-words">{det.emit.endereco}{det.emit.bairro ? ` — ${det.emit.bairro}` : ""}</p>
+                          )}
+                          {det?.emit?.municipio && (
+                            <p className="text-xs text-slate-400">{det.emit.municipio}{det.emit.uf ? ` — ${det.emit.uf}` : ""}{det.emit.cep ? ` · CEP ${det.emit.cep}` : ""}</p>
+                          )}
+                          {det?.emit?.fone && <p className="text-xs text-slate-400">Fone: {det.emit.fone}</p>}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
+                        <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200">
+                          <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500">Destinatário</p>
+                        </div>
+                        <div className="px-3 py-2.5 space-y-0.5">
+                          <p className="font-semibold text-slate-800 break-words leading-snug text-sm">{det?.dest?.xNome || "FC ENGENHARIA"}</p>
+                          <p className="text-xs text-slate-500 font-mono">{fmtCnpjDisplay(det?.dest?.cnpj || "")}</p>
+                          {det?.dest?.ie && <p className="text-xs text-slate-400">IE: {det.dest.ie}</p>}
+                          {det?.dest?.endereco && det.dest.endereco.trim() !== "," && (
+                            <p className="text-xs text-slate-400 break-words">{det.dest.endereco}{det.dest.bairro ? ` — ${det.dest.bairro}` : ""}</p>
+                          )}
+                          {det?.dest?.municipio && (
+                            <p className="text-xs text-slate-400">{det.dest.municipio}{det.dest.uf ? ` — ${det.dest.uf}` : ""}{det.dest.cep ? ` · CEP ${det.dest.cep}` : ""}</p>
+                          )}
+                          {det?.dest?.email && <p className="text-xs text-slate-400 break-all">{det.dest.email}</p>}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ── Datas + protocolo ── */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                        <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400 mb-0.5">Emissão</p>
+                        <p className="font-semibold text-slate-800 tabular-nums text-sm">{fmtDateBR(nf.dataEmissao)}</p>
+                      </div>
+                      {det?.ide?.dhSaiEnt && (
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                          <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400 mb-0.5">Saída / Entrada</p>
+                          <p className="font-semibold text-slate-800 tabular-nums text-sm">{fmtDateBR(String(det.ide.dhSaiEnt).slice(0,10))}</p>
+                        </div>
+                      )}
+                      {det?.protocolo?.nProt && (
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                          <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400 mb-0.5">Protocolo SEFAZ</p>
+                          <p className="font-semibold text-slate-800 font-mono text-xs break-all">{det.protocolo.nProt}</p>
+                        </div>
+                      )}
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                        <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400 mb-0.5">Importada em</p>
+                        <p className="font-semibold text-slate-800 tabular-nums text-sm">{fmtDateBR(nf.createdAt)}</p>
+                      </div>
+                    </div>
+
+                    {/* ── Produtos / Itens ── */}
+                    {det?.itens && det.itens.length > 0 && (
+                      <div className="rounded-xl border border-slate-200 overflow-hidden">
+                        <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200 flex items-center gap-2">
+                          <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500">Produtos / Serviços</p>
+                          <span className="text-[10px] bg-indigo-100 text-indigo-700 font-semibold px-1.5 rounded-full">{det.itens.length} {det.itens.length === 1 ? "item" : "itens"}</span>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="bg-slate-50 border-b border-slate-200">
+                                <th className="px-3 py-1.5 text-left text-[10px] font-bold tracking-wider uppercase text-slate-400 w-6">#</th>
+                                <th className="px-2 py-1.5 text-left text-[10px] font-bold tracking-wider uppercase text-slate-400">Código</th>
+                                <th className="px-2 py-1.5 text-left text-[10px] font-bold tracking-wider uppercase text-slate-400 min-w-[160px]">Descrição</th>
+                                <th className="px-2 py-1.5 text-left text-[10px] font-bold tracking-wider uppercase text-slate-400">NCM</th>
+                                <th className="px-2 py-1.5 text-left text-[10px] font-bold tracking-wider uppercase text-slate-400">CFOP</th>
+                                <th className="px-2 py-1.5 text-right text-[10px] font-bold tracking-wider uppercase text-slate-400">Qtd</th>
+                                <th className="px-2 py-1.5 text-left text-[10px] font-bold tracking-wider uppercase text-slate-400">Un</th>
+                                <th className="px-2 py-1.5 text-right text-[10px] font-bold tracking-wider uppercase text-slate-400">V.Unit</th>
+                                <th className="px-2 py-1.5 text-right text-[10px] font-bold tracking-wider uppercase text-slate-400">V.Prod</th>
+                                <th className="px-2 py-1.5 text-right text-[10px] font-bold tracking-wider uppercase text-slate-400">ICMS%</th>
+                                <th className="px-2 py-1.5 text-right text-[10px] font-bold tracking-wider uppercase text-slate-400">vICMS</th>
+                                <th className="px-2 py-1.5 text-right text-[10px] font-bold tracking-wider uppercase text-slate-400">vIPI</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {det.itens.map((item: any, idx: number) => (
+                                <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                  <td className="px-3 py-1.5 text-slate-400 tabular-nums">{item.nItem || idx + 1}</td>
+                                  <td className="px-2 py-1.5 text-slate-500 font-mono">{item.cProd || "—"}</td>
+                                  <td className="px-2 py-1.5 text-slate-800 break-words max-w-[200px]">{item.xProd || "—"}</td>
+                                  <td className="px-2 py-1.5 text-slate-500 font-mono">{item.ncm || "—"}</td>
+                                  <td className="px-2 py-1.5 text-slate-500 font-mono">{item.cfop || "—"}</td>
+                                  <td className="px-2 py-1.5 text-right text-slate-700 tabular-nums">{fmtQ(item.qCom)}</td>
+                                  <td className="px-2 py-1.5 text-slate-500">{item.uCom || "—"}</td>
+                                  <td className="px-2 py-1.5 text-right text-slate-700 tabular-nums">{fmtV(item.vUnCom)}</td>
+                                  <td className="px-2 py-1.5 text-right font-semibold text-slate-800 tabular-nums">{fmtV(item.vProd)}</td>
+                                  <td className="px-2 py-1.5 text-right text-slate-500 tabular-nums">{fmtPct(item.pICMS)}</td>
+                                  <td className="px-2 py-1.5 text-right text-slate-600 tabular-nums">{fmtV(item.vICMS)}</td>
+                                  <td className="px-2 py-1.5 text-right text-slate-600 tabular-nums">{fmtV(item.vIPI)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Totais ── */}
+                    {det?.total && (
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
+                        <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200">
+                          <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500">Totais da NF-e</p>
+                        </div>
+                        <div className="px-3 py-2.5">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1.5 text-xs">
+                            {[
+                              ["Valor Produtos", det.total.vProd],
+                              ["Base Cálc. ICMS", det.total.vBC],
+                              ["Valor ICMS", det.total.vICMS],
+                              ["ICMS Desonerado", det.total.vICMSDeson],
+                              ["Valor ST", det.total.vST],
+                              ["Valor IPI", det.total.vIPI],
+                              ["Valor PIS", det.total.vPIS],
+                              ["Valor COFINS", det.total.vCOFINS],
+                              ["Frete", det.total.vFrete],
+                              ["Seguro", det.total.vSeg],
+                              ["Desconto", det.total.vDesc],
+                              ["Outras Despesas", det.total.vOutro],
+                            ].filter(([_, v]) => parseFloat(String(v || "0")) !== 0).map(([label, val]) => (
+                              <div key={String(label)} className="flex justify-between gap-1">
+                                <span className="text-slate-400">{label}</span>
+                                <span className="text-slate-700 tabular-nums font-medium">{fmtV(val)}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="mt-2 pt-2 border-t border-slate-200 flex justify-between items-center">
+                            <span className="text-sm font-bold text-slate-700">TOTAL DA NOTA</span>
+                            <span className="text-lg font-bold text-indigo-700 tabular-nums">{fmtV(det.total.vNF)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Transporte ── */}
+                    {det?.transp && (det.transp.transportadora || det.transp.volumes?.length > 0) && (
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
+                        <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200">
+                          <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500">Transporte</p>
+                        </div>
+                        <div className="px-3 py-2.5 space-y-1 text-xs">
+                          {det.transp.modFrete !== undefined && (
+                            <p className="text-slate-600"><span className="text-slate-400">Modalidade frete:</span> {FRETE_MODAL[String(det.transp.modFrete)] ?? det.transp.modFrete}</p>
+                          )}
+                          {det.transp.transportadora && (
+                            <p className="text-slate-600"><span className="text-slate-400">Transportadora:</span> {det.transp.transportadora}</p>
+                          )}
+                          {det.transp.volumes?.map((vol: any, i: number) => (
+                            <p key={i} className="text-slate-500">
+                              Vol {i + 1}: {vol.qVol ? `${vol.qVol} vol.` : ""} {vol.esp ? `· ${vol.esp}` : ""} {vol.marca ? `· Marca: ${vol.marca}` : ""} {vol.pesoB ? `· Peso bruto: ${vol.pesoB}kg` : ""}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Cobrança / Duplicatas ── */}
+                    {det?.duplicatas && det.duplicatas.length > 0 && (
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
+                        <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200 flex items-center gap-2">
+                          <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500">Cobrança / Duplicatas</p>
+                          <span className="text-[10px] bg-amber-100 text-amber-700 font-semibold px-1.5 rounded-full">{det.duplicatas.length} parcela(s)</span>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="bg-slate-50 border-b border-slate-200">
+                                <th className="px-3 py-1.5 text-left text-[10px] font-bold tracking-wider uppercase text-slate-400">Nº Dup.</th>
+                                <th className="px-3 py-1.5 text-left text-[10px] font-bold tracking-wider uppercase text-slate-400">Vencimento</th>
+                                <th className="px-3 py-1.5 text-right text-[10px] font-bold tracking-wider uppercase text-slate-400">Valor</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {det.duplicatas.map((dup: any, i: number) => (
+                                <tr key={i} className="hover:bg-slate-50">
+                                  <td className="px-3 py-1.5 text-slate-700 font-mono">{dup.nDup || `0${i + 1}`}</td>
+                                  <td className="px-3 py-1.5 text-slate-600 tabular-nums">{dup.dVenc ? fmtDateBR(String(dup.dVenc).slice(0,10)) : "—"}</td>
+                                  <td className="px-3 py-1.5 text-right font-semibold text-slate-800 tabular-nums">{fmtV(dup.vDup)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        {det.fatura && (
+                          <div className="px-3 py-2 border-t border-slate-100 flex gap-4 text-xs text-slate-500">
+                            {det.fatura.nFat && <span>Fatura {det.fatura.nFat}</span>}
+                            <span>V.Orig: {fmtV(det.fatura.vOrig)}</span>
+                            {parseFloat(det.fatura.vDesc) > 0 && <span>Desc: {fmtV(det.fatura.vDesc)}</span>}
+                            <span className="font-semibold text-slate-700">V.Líq: {fmtV(det.fatura.vLiq)}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ── Informações Adicionais ── */}
+                    {det?.infAdic && (
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
+                        <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200">
+                          <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500">Informações Adicionais</p>
+                        </div>
+                        <p className="px-3 py-2.5 text-xs text-slate-600 break-words leading-relaxed whitespace-pre-wrap">{String(det.infAdic)}</p>
+                      </div>
+                    )}
+
+                    {/* ── Nota sem XML completo ── */}
+                    {!isLoadingDet && !det && (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 flex gap-2 items-start">
+                        <span className="text-amber-500 text-sm mt-0.5">ⓘ</span>
+                        <p className="text-xs text-amber-700 leading-relaxed">
+                          XML completo não disponível para esta nota — foi importada via resumo SEFAZ (resNFe). Novas sincronizações e importações de XML salvarão o conteúdo completo automaticamente.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* ── Chave de Acesso ── */}
                     <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
                       <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200 flex items-center justify-between">
                         <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500">Chave de Acesso (44 dígitos)</p>
@@ -2064,16 +2302,20 @@ export default function FinanceiroNotasFiscais() {
                         )}
                       </div>
                       <div className="px-3 py-2.5">
-                        <p className="font-mono text-xs text-slate-600 break-all select-all leading-loose tracking-wider">
-                          {chaveFormatada}
-                        </p>
+                        <p className="font-mono text-xs text-slate-600 break-all select-all leading-loose tracking-wider">{chaveFormatada}</p>
                         {nf.nsuSefaz && (
-                          <p className="text-[11px] text-slate-400 mt-1.5">NSU: <span className="font-mono">{nf.nsuSefaz}</span></p>
+                          <p className="text-[11px] text-slate-400 mt-1">NSU: <span className="font-mono">{nf.nsuSefaz}</span></p>
+                        )}
+                        {det?.protocolo?.nProt && (
+                          <p className="text-[11px] text-slate-400 mt-0.5">
+                            Protocolo: <span className="font-mono">{det.protocolo.nProt}</span>
+                            {det.protocolo.dhRecbto ? ` · ${fmtDateBR(String(det.protocolo.dhRecbto).slice(0,10))}` : ""}
+                          </p>
                         )}
                       </div>
                     </div>
 
-                    {/* Manifestação */}
+                    {/* ── Manifestação ── */}
                     {canManifest && (
                       <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
                         <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200 flex items-center justify-between">
@@ -2118,7 +2360,6 @@ export default function FinanceiroNotasFiscais() {
                               </div>
                             </>
                           ) : (
-                            /* ── Passo 2: Justificativa para "Recusar" ── */
                             <div className="flex flex-col gap-2">
                               <p className="text-xs font-semibold text-red-700">Motivo da recusa <span className="font-normal text-slate-400">(obrigatório pela SEFAZ, 15–255 caracteres)</span></p>
                               <textarea
@@ -2177,7 +2418,7 @@ export default function FinanceiroNotasFiscais() {
                     )}
                   </div>
 
-                  {/* Footer */}
+                  {/* ── Footer ── */}
                   <div className="px-5 py-3 border-t bg-slate-50 flex flex-wrap items-center justify-between gap-2">
                     {nf.chaveAcesso && String(nf.chaveAcesso).replace(/\D/g,"").length === 44 && (
                       <Button
