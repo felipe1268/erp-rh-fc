@@ -115,8 +115,18 @@ function callHttps(
       res.on("data", c => chunks.push(c));
       res.on("end", () => {
         const buf = Buffer.concat(chunks);
-        try { resolve(buf.toString("utf-8")); }
-        catch { resolve(buf.toString()); }
+        const text = (() => { try { return buf.toString("utf-8"); } catch { return buf.toString(); } })();
+        // Rejeita respostas não-XML (HTML de erro 404/500, etc.)
+        if (res.statusCode && res.statusCode >= 400) {
+          reject(new Error(`HTTP ${res.statusCode} — endpoint indisponível. Resposta: ${text.slice(0, 200).replace(/\s+/g, " ")}`));
+          return;
+        }
+        const trimmed = text.trimStart();
+        if (trimmed.startsWith("<!DOCTYPE") || trimmed.startsWith("<html") || trimmed.startsWith("<HTML")) {
+          reject(new Error(`HTTP ${res.statusCode ?? "?"} — portal retornou página HTML (endpoint inválido ou inativo). Verifique a URL configurada.`));
+          return;
+        }
+        resolve(text);
       });
     });
     req.on("error", reject);
@@ -432,6 +442,17 @@ async function executarSyncMunicipio(opts: {
       return d.toISOString().slice(0, 10);
     })()
   );
+
+  // Se o range for impossível (dataInicial > dataFinal), não há nada a consultar.
+  // Isso ocorre tipicamente com SIAP GEO (cap 2025-12-31) quando o sync incremental
+  // parte de um mês em 2026+.
+  {
+    const di = new Date(dataInicial), df = new Date(dataFinal);
+    if (di > df) {
+      console.log(`[NfseMunSync] company=${companyId} ibge=${ibgeCode} provider=${mun.provider}: dataInicial(${dataInicial}) > dataFinal(${dataFinal}) — range impossível, nada a consultar.`);
+      return { importadas: 0, ignoradas: 0, aviso: `Sem notas a consultar: portal cobre até ${dataFinal}.` };
+    }
+  }
 
   let importadas = 0;
   let ignoradas = 0;

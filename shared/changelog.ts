@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3615 — **NFS-e EMITIDAS · BUGFIX SYNC PREFEITURA RETORNAVA "0 importadas" SEM MOSTRAR ERRO. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Diagnóstico: `callHttps` não checava o statusCode HTTP nem detectava HTML no corpo.
+ * Portal SIAP GEO (`guaratingueta.geosiap.net.br`) e Portal Nacional (`nfse.gov.br/SistemaNacional/nfse.asmx`)
+ * respondiam 404 HTML — a função devolvia o HTML para `parseAbrasrResponse`, que não encontrava
+ * tags XML e retornava array vazio. O sync gravava `{importadas:0, ignoradas:0}` sem erro.
+ *
+ * Bugs corrigidos:
+ * (1) `callHttps`: rejeita resposta quando `statusCode >= 400` OU quando body começa com `<!DOCTYPE`/`<html`.
+ *     Lança Error descritivo com o código HTTP e primeiros 200 chars — agora `last_sync_result`
+ *     grava `{erro: "HTTP 404 — endpoint indisponível..."}` em vez de silêncio.
+ * (2) `executarSyncMunicipio`: quando `dataInicial > dataFinal` (SIAP GEO capeado em 2025-12-31
+ *     mas sync incremental parte de maio/junho 2026), retorna early com `aviso` — evita chamada
+ *     HTTP desnecessária e log desnecessário.
+ *
+ * WORKAROUND para notas 2026: usar o botão "Importar PDF" (DANFSe) que já existe na tela NFS-e
+ * Emitidas. O endpoint correto do Portal Nacional precisa ser investigado (a URL SOAP não existe).
+ *
+ * Arquivos: server/routers/nfseEmitidas.ts.
+ *
  * Rev. 3614 — **NF-e RECEBIDAS · BUGFIX BOTÃO "CONSULTAR NO SEFAZ" BLOQUEADO NO iOS + CONTADOR "SEM XML" CORRETO. 100% FRONTEND + BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Problema 1 — Botão "Consultar no SEFAZ" não abria no iOS Safari:
