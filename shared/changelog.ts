@@ -1,6 +1,20 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3564 — **SEFAZ NF-e RECEBIDAS · HORÁRIO DE SINCRONIZAÇÃO CONFIGURÁVEL. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
+ *
+ * O horário do cron SEFAZ era fixo em 06:00 (hardcoded). Agora cada empresa pode
+ * configurar o horário que preferir (00:00–23:00) diretamente em Configurações →
+ * Financeiro → Integração SEFAZ. O cron passou a verificar a cada hora cheia quais
+ * empresas têm `sync_hora = hora_atual` e dispara a sincronização apenas para elas,
+ * permitindo que diferentes empresas rodem em horários distintos.
+ *
+ * Arquivos alterados:
+ * - `server/_core/index.ts` — SyncSchema+ Rev. 3564: `ADD COLUMN IF NOT EXISTS sync_hora SMALLINT NOT NULL DEFAULT 6` em `company_nfe_config`.
+ * - `server/routers/sefaz.ts` — `startSefazCron` reescrito para rodar a cada hora cheia (scheduleNext) e filtrar por `COALESCE(sync_hora,6) = horaAtual`; `getConfig` retorna `sync_hora`; `saveConfig` aceita `syncHora` (z.number().min(0).max(23).default(6)) e salva no UPDATE/INSERT.
+ * - `client/src/pages/configuracoes/FinanceiroConfigSection.tsx` — state `syncHora:6`; hydration de `sefazCfg.sync_hora`; seletor Select 00:00–23:00 abaixo do toggle; texto "às HH:00" dinâmico; `syncHora` passado na mutation.
+ * - `shared/version.ts` — Rev. 3564.
+ *
  * Rev. 3563 — **NFS-e EMITIDAS MUNICIPAIS · BUGFIX "(intermediate value) is not iterable" NO BOTÃO SINCRONIZAR. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
  *
  * `executarSyncMunicipio` em `server/routers/nfseEmitidas.ts` usava desestruturação de

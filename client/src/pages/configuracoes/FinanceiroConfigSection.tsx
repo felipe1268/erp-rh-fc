@@ -91,7 +91,7 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
   const UF_LIST = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
   // ── SEFAZ state ──
-  const [sefazForm, setSefazForm] = useState({ cnpj: "", uf: "SP", ambiente: "producao", syncEnabled: true });
+  const [sefazForm, setSefazForm] = useState({ cnpj: "", uf: "SP", ambiente: "producao", syncEnabled: true, syncHora: 6 });
   const [sefazPassword, setSefazPassword] = useState("");
   const [sefazCertName, setSefazCertName] = useState<string | null>(null);
   const [sefazCertB64, setSefazCertB64] = useState<string | null>(null);
@@ -107,6 +107,7 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
         uf: sefazCfg.uf || "SP",
         ambiente: sefazCfg.ambiente || "producao",
         syncEnabled: Number(sefazCfg.sync_enabled) === 1,
+        syncHora: Number(sefazCfg.sync_hora ?? 6),
       });
     }
   }, [sefazCfg]);
@@ -149,6 +150,7 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
       uf: sefazForm.uf,
       ambiente: sefazForm.ambiente as any,
       syncEnabled: sefazForm.syncEnabled,
+      syncHora: sefazForm.syncHora,
       ...(sefazCertB64 ? { certPfxBase64: sefazCertB64 } : {}),
       ...(sefazPassword ? { certPassword: sefazPassword } : {}),
     });
@@ -463,9 +465,12 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
 
             {/* Sync automático toggle */}
             <div className="flex items-center justify-between gap-3 py-1">
-              <div>
+              <div className="flex-1 min-w-0">
                 <span className="text-sm font-medium text-gray-800">Sincronização automática diária</span>
-                <p className="text-xs text-gray-500 mt-0.5">Busca NF-e novas todo dia às 06:00.</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Busca NF-e novas todo dia às{" "}
+                  <strong>{String(sefazForm.syncHora).padStart(2, "0")}:00</strong>.
+                </p>
               </div>
               <div className="flex flex-col items-end gap-0.5">
                 <Switch
@@ -476,6 +481,27 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
                   {sefazForm.syncEnabled ? "Ligada" : "Desligada"}
                 </span>
               </div>
+            </div>
+
+            {/* Horário da sincronização */}
+            <div className="flex items-center gap-3">
+              <Label className="text-xs text-gray-600 whitespace-nowrap">Horário do disparo</Label>
+              <Select
+                value={String(sefazForm.syncHora)}
+                onValueChange={v => setSefazForm(f => ({ ...f, syncHora: Number(v) }))}
+              >
+                <SelectTrigger className="h-8 text-sm w-36">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 24 }, (_, h) => (
+                    <SelectItem key={h} value={String(h)}>
+                      {String(h).padStart(2, "0")}:00
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span className="text-xs text-gray-400">(hora de Brasília)</span>
             </div>
 
             {/* Campos de configuração */}

@@ -326,23 +326,25 @@ export async function executarSyncNFe(companyId: number): Promise<{ importadas: 
   }
 }
 
-// ── Cron simples: roda 1× por dia às 06:00 ───────────────────────────────────
+// ── Cron horário: a cada hora verifica quais empresas têm sync_hora = hora atual ──
 let _cronStarted = false;
 export function startSefazCron() {
   if (_cronStarted) return;
   _cronStarted = true;
 
-  const runAll = async () => {
+  const runHour = async (horaAtual: number) => {
     try {
       const db = await getDb();
       const rows = (await db.execute(sql`
-        SELECT company_id FROM company_nfe_config WHERE ativo = 1 AND sync_enabled = 1
+        SELECT company_id FROM company_nfe_config
+        WHERE ativo = 1 AND sync_enabled = 1
+          AND COALESCE(sync_hora, 6) = ${horaAtual}
       `)) as any;
       const list = (rows?.rows ?? rows) as any[];
       for (const r of list) {
         try {
           const res = await executarSyncNFe(Number(r.company_id));
-          console.log(`[SefazSync] company=${r.company_id} importadas=${res.importadas} ignoradas=${res.ignoradas}${res.erro ? " ERRO=" + res.erro : ""}`);
+          console.log(`[SefazSync] company=${r.company_id} hora=${horaAtual}h importadas=${res.importadas} ignoradas=${res.ignoradas}${res.erro ? " ERRO=" + res.erro : ""}`);
         } catch (e: any) {
           console.error(`[SefazSync] company=${r.company_id} ERRO:`, e?.message);
         }
@@ -352,20 +354,21 @@ export function startSefazCron() {
     }
   };
 
-  // Rodar às 06:00 todos os dias
+  // Agendamento: dispara no início de cada hora cheia
   const scheduleNext = () => {
     const now = new Date();
     const next = new Date();
-    next.setHours(6, 0, 0, 0);
-    if (next <= now) next.setDate(next.getDate() + 1);
+    next.setMinutes(0, 0, 0);
+    next.setHours(now.getHours() + 1);
     const ms = next.getTime() - now.getTime();
     setTimeout(async () => {
-      await runAll();
+      const hora = new Date().getHours();
+      await runHour(hora);
       scheduleNext();
     }, ms);
   };
   scheduleNext();
-  console.log("[SefazSync] Cron diário agendado (06:00).");
+  console.log("[SefazSync] Cron diário agendado (verifica cada hora cheia; roda por empresa conforme sync_hora configurado).");
 }
 
 // ── tRPC Router ────────────────────────────────────────────────────────────────
@@ -378,6 +381,7 @@ export const sefazRouter = router({
       const db = await getDb();
       const rows = (await db.execute(sql`
         SELECT company_id, cnpj, uf, ambiente, sync_enabled, ativo,
+               COALESCE(sync_hora, 6) AS sync_hora,
                ultimo_nsu, last_sync_at, last_sync_result,
                CASE WHEN cert_pfx_base64 IS NOT NULL AND cert_pfx_base64 <> '' THEN true ELSE false END AS tem_certificado
         FROM company_nfe_config WHERE company_id = ${input.companyId}
@@ -393,6 +397,7 @@ export const sefazRouter = router({
       uf: z.string().default("SP"),
       ambiente: z.enum(["producao", "homologacao"]).default("producao"),
       syncEnabled: z.boolean().default(true),
+      syncHora: z.number().min(0).max(23).default(6),
       certPfxBase64: z.string().optional(),
       certPassword: z.string().optional(),
     }))
@@ -413,6 +418,7 @@ export const sefazRouter = router({
             uf = ${input.uf},
             ambiente = ${input.ambiente},
             sync_enabled = ${input.syncEnabled ? 1 : 0},
+            sync_hora = ${input.syncHora},
             ativo = 1,
             ${input.certPfxBase64 ? sql`cert_pfx_base64 = ${input.certPfxBase64},` : sql``}
             ${input.certPassword ? sql`cert_password = ${input.certPassword},` : sql``}
@@ -422,11 +428,11 @@ export const sefazRouter = router({
       } else {
         await db.execute(sql`
           INSERT INTO company_nfe_config
-            (company_id, cnpj, uf, ambiente, sync_enabled, ativo,
+            (company_id, cnpj, uf, ambiente, sync_enabled, sync_hora, ativo,
              cert_pfx_base64, cert_password, ultimo_nsu, created_at, updated_at)
           VALUES
             (${input.companyId}, ${input.cnpj}, ${input.uf}, ${input.ambiente},
-             ${input.syncEnabled ? 1 : 0}, 1,
+             ${input.syncEnabled ? 1 : 0}, ${input.syncHora}, 1,
              ${input.certPfxBase64 || null}, ${input.certPassword || null},
              '000000000000000', NOW(), NOW())
         `);
