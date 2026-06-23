@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3572** — **SEFAZ NF-e · BUGFIX LOOP ETERNO cStat=656 (ultNSU=9615 RETORNADO PELA SEFAZ NÃO ERA SALVO) + IMPORTAÇÃO POR UPLOAD DE XML (HISTÓRICO 2018-2026). BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Fix: salvar `novoUltNSU` quando 656; `listNFeRecebidas` inclui `xml_upload`; botão "Importar XML" verde na aba Recebidas. Detalhe: `shared/changelog.ts`.
+- **Rev. 3573** — **SEFAZ NF-e · SYNC AUTOMÁTICO HORÁRIO — HISTÓRICO COMPLETO SEM AÇÃO MANUAL. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.** Cron passa de 1x/dia para toda hora (58min gap). Até 50 NF-e/hora automaticamente. Histórico 2018-2026 chega sem intervenção. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3571** — **SEFAZ + SIAP GEO · DIAGNÓSTICO: LOG XML BRUTO + COOLDOWN 58min ANTI-RATE-LIMIT + CONTADOR REGRESSIVO NO FRONTEND. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3572** — **SEFAZ NF-e · BUGFIX LOOP ETERNO cStat=656 (ultNSU=9615 RETORNADO PELA SEFAZ NÃO ERA SALVO) + IMPORTAÇÃO POR UPLOAD DE XML (HISTÓRICO 2018-2026). BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3566** — **NFS-e EMITIDAS MUNICIPAIS · "BAIXAR TUDO" — IMPORTAÇÃO HISTÓRICA EM LOTE + SELETOR DE PERÍODO POR CARD. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

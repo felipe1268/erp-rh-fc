@@ -488,10 +488,10 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
             {/* Sync automático toggle */}
             <div className="flex items-center justify-between gap-3 py-1">
               <div className="flex-1 min-w-0">
-                <span className="text-sm font-medium text-gray-800">Sincronização automática diária</span>
+                <span className="text-sm font-medium text-gray-800">Sincronização automática horária</span>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Busca NF-e novas todo dia às{" "}
-                  <strong>{String(sefazForm.syncHora).padStart(2, "0")}:00</strong>.
+                  Busca NF-e automaticamente <strong>toda hora</strong> (limite SEFAZ: 1 chamada/hora/CNPJ).
+                  O histórico completo é trazido aos poucos — até 50 NF-e por hora, sem ação manual.
                 </p>
               </div>
               <div className="flex flex-col items-end gap-0.5">
@@ -503,27 +503,6 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
                   {sefazForm.syncEnabled ? "Ligada" : "Desligada"}
                 </span>
               </div>
-            </div>
-
-            {/* Horário da sincronização */}
-            <div className="flex items-center gap-3">
-              <Label className="text-xs text-gray-600 whitespace-nowrap">Horário do disparo</Label>
-              <Select
-                value={String(sefazForm.syncHora)}
-                onValueChange={v => setSefazForm(f => ({ ...f, syncHora: Number(v) }))}
-              >
-                <SelectTrigger className="h-8 text-sm w-36">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 24 }, (_, h) => (
-                    <SelectItem key={h} value={String(h)}>
-                      {String(h).padStart(2, "0")}:00
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <span className="text-xs text-gray-400">(hora de Brasília)</span>
             </div>
 
             {/* Campos de configuração */}

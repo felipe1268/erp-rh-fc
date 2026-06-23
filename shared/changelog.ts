@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3573 — **SEFAZ NF-e · SYNC AUTOMÁTICO HORÁRIO — HISTÓRICO COMPLETO SEM AÇÃO MANUAL. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * Antes: cron rodava 1x/dia no `sync_hora` configurado → histórico levaria meses.
+ * Agora: cron roda toda hora cheia, sincronizando qualquer empresa com `sync_enabled=1` que não
+ * foi consultada nos últimos 58 minutos. Aproveita o máximo que a SEFAZ permite (1 chamada/hora/CNPJ).
+ * Resultado: até 50 NF-e trazidas por hora automaticamente, sem nenhuma ação do usuário.
+ * Histórico completo 2018-2026 chega em horas/dias dependendo do volume.
+ * UI: label atualizado para "Sincronização automática horária"; campo "Horário do disparo" removido
+ * (não faz mais sentido). Arquivos: `server/routers/sefaz.ts`, `client/src/pages/configuracoes/FinanceiroConfigSection.tsx`.
+ *
  * Rev. 3572 — **SEFAZ NF-e RECEBIDAS · BUGFIX LOOP ETERNO cStat=656 (ultNSU NÃO SALVO) + IMPORTAÇÃO POR UPLOAD DE XML PARA HISTÓRICO 2018-2026. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * BUG ROOT CAUSE (confirmado pelos logs): a SEFAZ retorna `ultNSU=9615` junto com cStat=656

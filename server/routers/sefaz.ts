@@ -382,19 +382,25 @@ export function startSefazCron() {
   if (_cronStarted) return;
   _cronStarted = true;
 
-  const runHour = async (horaAtual: number) => {
+  const runHour = async () => {
     try {
       const db = await getDb();
+      // Sincroniza TODA empresa com sync_enabled=1 que não foi sincronizada nos últimos 58 minutos.
+      // Isso aproveita ao máximo o limite SEFAZ (1 chamada/hora/CNPJ) e traz o histórico completo
+      // automaticamente, 50 NF-e por hora, sem nenhuma ação manual.
       const rows = (await db.execute(sql`
         SELECT company_id FROM company_nfe_config
         WHERE ativo = 1 AND sync_enabled = 1
-          AND COALESCE(sync_hora, 6) = ${horaAtual}
+          AND (last_sync_at IS NULL OR last_sync_at < NOW() - INTERVAL '58 minutes')
       `)) as any;
       const list = (rows?.rows ?? rows) as any[];
+      if (list.length > 0) {
+        console.log(`[SefazSync] Cron disparado — ${list.length} empresa(s) elegível(is) para sync`);
+      }
       for (const r of list) {
         try {
           const res = await executarSyncNFe(Number(r.company_id));
-          console.log(`[SefazSync] company=${r.company_id} hora=${horaAtual}h importadas=${res.importadas} ignoradas=${res.ignoradas}${res.erro ? " ERRO=" + res.erro : ""}`);
+          console.log(`[SefazSync] company=${r.company_id} importadas=${res.importadas} ignoradas=${res.ignoradas}${(res as any).aviso ? " AVISO=" + (res as any).aviso : ""}${res.erro ? " ERRO=" + res.erro : ""}`);
         } catch (e: any) {
           console.error(`[SefazSync] company=${r.company_id} ERRO:`, e?.message);
         }
@@ -412,13 +418,12 @@ export function startSefazCron() {
     next.setHours(now.getHours() + 1);
     const ms = next.getTime() - now.getTime();
     setTimeout(async () => {
-      const hora = new Date().getHours();
-      await runHour(hora);
+      await runHour();
       scheduleNext();
     }, ms);
   };
   scheduleNext();
-  console.log("[SefazSync] Cron diário agendado (verifica cada hora cheia; roda por empresa conforme sync_hora configurado).");
+  console.log("[SefazSync] Cron horário agendado — sincroniza automaticamente toda hora (máx SEFAZ: 1 chamada/hora/CNPJ).");
 }
 
 // ── tRPC Router ────────────────────────────────────────────────────────────────
