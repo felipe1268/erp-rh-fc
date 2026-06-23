@@ -597,7 +597,7 @@ export const nfseEmitidasRouter = router({
       const cnpj = cfgRes.rows[0]?.cnpj || "";
       const munRes = await db.$client.query<any>(
         `SELECT ibge_code, nome_municipio, uf FROM company_nfse_municipal_config
-         WHERE company_id=$1 AND inscricao_municipal IS NOT NULL AND enabled=1`,
+         WHERE company_id=$1 AND inscricao_municipal IS NOT NULL AND inscricao_municipal != ''`,
         [input.companyId]
       );
       const resultados: Array<{ ibge: number; nome: string; uf: string; importadas: number; ignoradas: number; erro?: string }> = [];

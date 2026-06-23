@@ -60,7 +60,7 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
     onSuccess: (r: any) => {
       setBulkResult(r);
       refetchMunicipios();
-      if (r.municipios === 0) toast.warning("Nenhum município com sync ativo configurado.");
+      if (r.municipios === 0) toast.warning("Nenhum município com Inscrição Municipal configurada.");
       else toast.success(`Concluído: ${r.totalImportadas} NFS-e importadas em ${r.municipios} município(s).`);
     },
     onError: (e: any) => toast.error(e.message || "Erro na importação em lote"),

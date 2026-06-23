@@ -50,7 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3567** — **NF-e RECEBIDAS (SEFAZ) · BOTÃO "SINCRONIZAR SEFAZ" + "HISTÓRICO COMPLETO" NA TELA DE NOTAS FISCAIS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Botão "Atualizar" só fazia refetch local. Substituído por "Sincronizar SEFAZ" (chama `sefaz.syncNow` + refetch) e "Histórico completo" (zera NSU via `resetNSU` + `syncNow`). Detalhe: `shared/changelog.ts`.
+- **Rev. 3568** — **NFS-e MUNICIPAIS · BUGFIX "BAIXAR TUDO" RETORNAVA 0 MUNICÍPIOS QUANDO SYNC AUTOMÁTICO DESLIGADO. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** `syncAllMunicipios` filtrava `enabled=1`; corrido para `inscricao_municipal IS NOT NULL AND != ''` — funciona independente do toggle. Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3567** — **NF-e RECEBIDAS (SEFAZ) · BOTÃO "SINCRONIZAR SEFAZ" + "HISTÓRICO COMPLETO" NA TELA DE NOTAS FISCAIS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3566** — **NFS-e EMITIDAS MUNICIPAIS · "BAIXAR TUDO" — IMPORTAÇÃO HISTÓRICA EM LOTE + SELETOR DE PERÍODO POR CARD. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

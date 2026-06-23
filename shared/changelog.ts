@@ -1,6 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3568 — **NFS-e MUNICIPAIS · BUGFIX "BAIXAR TUDO" RETORNAVA 0 MUNICÍPIOS QUANDO SYNC AUTOMÁTICO DESLIGADO. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
+ *
+ * `syncAllMunicipios` filtrava `AND enabled=1` — excluía municípios com toggle desligado.
+ * "Baixar Tudo" deve funcionar para qualquer município com Inscrição Municipal preenchida,
+ * independente do toggle de sync automático. Filtro corrigido para
+ * `inscricao_municipal IS NOT NULL AND inscricao_municipal != ''`.
+ * Toast frontend ajustado para "Nenhum município com Inscrição Municipal configurada."
+ *
  * Rev. 3567 — **NF-e RECEBIDAS (SEFAZ) · BOTÃO "SINCRONIZAR SEFAZ" + "HISTÓRICO COMPLETO" NA TELA DE NOTAS FISCAIS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * O botão "Atualizar" na aba NF-e Recebidas apenas fazia refetch da lista local —
