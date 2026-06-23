@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3616 — **NFS-e EMITIDAS · UX PORTAL INDISPONÍVEL — BANNER VERMELHO + CTA "IMPORTAR PDF" NO ESTADO VAZIO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Portais SIAP GEO e Portal Nacional de Guaratinguetá estão com 404 (confirmado por testes de
+ * conectividade). O sync automático horário nunca importava nada, mas a UI mostrava apenas o
+ * cronômetro normal (verde/âmbar) sem indicar falha. Usuário via "Nenhuma nota fiscal encontrada."
+ * sem entender o motivo.
+ *
+ * Mudanças:
+ * (1) Widget cronômetro do sync municipal: lê `last_sync_result.erro`/`.aviso` de cada município
+ *     habilitado. Se algum tem `erro` → banner vermelho com nome do município + descrição do erro
+ *     + botão "Importar PDF" vermelho + botão "Tentar novamente". Se tem `aviso` (ex: período
+ *     vazio SIAP GEO cap 2025 × sync 2026) → banner âmbar com CTA de PDF. Caso normal: timer
+ *     verde/âmbar inalterado.
+ * (2) Estado vazio da tabela ("Nenhuma nota encontrada"): substituído por mensagem explicativa
+ *     com botão "Importar PDF do DANFSe" direto na célula vazia.
+ *
+ * Arquivos: client/src/pages/financeiro/FinanceiroNotasFiscais.tsx.
+ *
  * Rev. 3615 — **NFS-e EMITIDAS · BUGFIX SYNC PREFEITURA RETORNAVA "0 importadas" SEM MOSTRAR ERRO. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Diagnóstico: `callHttps` não checava o statusCode HTTP nem detectava HTML no corpo.

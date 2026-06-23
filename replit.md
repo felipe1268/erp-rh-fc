@@ -50,9 +50,11 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3616** — **NFS-e EMITIDAS · UX PORTAL INDISPONÍVEL — BANNER VERMELHO + CTA "IMPORTAR PDF" NO ESTADO VAZIO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Portais SIAP GEO e Portal Nacional de Guaratinguetá confirmados com 404 por testes de conectividade. A UI mostrava cronômetro verde/âmbar sem indicar falha; usuário via "Nenhuma nota fiscal encontrada." sem contexto. Fix: widget de sync municipal lê `last_sync_result.erro`/`.aviso` → banner vermelho (erro de HTTP) ou âmbar (período vazio) com botão "Importar PDF" direto. Estado vazio da tabela ganhou mensagem explicativa + botão "Importar PDF do DANFSe". Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3615** — **NFS-e EMITIDAS · BUGFIX SYNC PREFEITURA "0 importadas" SEM ERRO — ENDPOINTS 404. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** `callHttps` não verificava statusCode HTTP nem detectava HTML no body → SIAP GEO + Portal Nacional retornavam 404 HTML silenciosamente gravado como "0 importadas". Fix: rejeitar resposta com `statusCode >= 400` ou body HTML. Fix adicional: `executarSyncMunicipio` retorna early quando `dataInicial > dataFinal` (SIAP GEO cap 2025-12-31 × sync incremental 2026). Workaround p/ notas 2026: "Importar PDF". Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3614** — **NF-e RECEBIDAS · BUGFIX BOTÃO "CONSULTAR NO SEFAZ" BLOQUEADO NO iOS + CONTADOR "SEM XML" CORRETO. 100% FRONTEND + BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** `onClick` era `async`+`await clipboard` antes do `window.open` → iOS Safari bloqueava popup. Fix: handler síncrono, `window.open` primeira instrução, clipboard fire-and-forget. Contador `semXml`: `chave_acesso IS NOT NULL` incluía 26 chaves corrompidas irrecuperáveis → mudado para `~ '^[0-9]{44}$'`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3614** — **NF-e RECEBIDAS · BUGFIX BOTÃO "CONSULTAR NO SEFAZ" BLOQUEADO NO iOS + CONTADOR "SEM XML" CORRETO. 100% FRONTEND + BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
 
 - **Rev. 3613** — **NF-e RECEBIDAS · BUGFIX "CONSULTAR NO SEFAZ" ABRE HOMEPAGE + CHAVE COPIADA AUTOMÁTICA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `tipoConsulta=completa` não é reconhecido → redirect para homepage. Fix: URL correto `consultaRecaptcha.aspx?tipoConteudo=7PhJ%2BgAVw2g%3D&nfe=<CHAVE44>`. Detalhe: `shared/changelog.ts`.
 

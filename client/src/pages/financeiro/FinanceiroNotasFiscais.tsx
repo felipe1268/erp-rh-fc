@@ -1141,6 +1141,89 @@ export default function FinanceiroNotasFiscais() {
         {(() => {
           const enabledMuns = municipios.filter((m: any) => m.enabled);
           if (!enabledMuns.length) return null;
+
+          // Detecta erros/avisos no último resultado de sync de cada município
+          const munErros: { nome: string; erro: string }[] = [];
+          const munAvisos: { nome: string; aviso: string }[] = [];
+          for (const m of enabledMuns) {
+            try {
+              const r = JSON.parse(m.last_sync_result || "{}");
+              if (r.erro) munErros.push({ nome: m.nome_municipio, erro: r.erro });
+              else if (r.aviso) munAvisos.push({ nome: m.nome_municipio, aviso: r.aviso });
+            } catch { /* ignora */ }
+          }
+          const temErro = munErros.length > 0;
+          const temAviso = munAvisos.length > 0 && !temErro;
+
+          // Banner de erro: portal indisponível
+          if (temErro) {
+            return (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 flex flex-col sm:flex-row sm:items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-red-800">Portal da prefeitura indisponível</p>
+                  {munErros.map(e => (
+                    <p key={e.nome} className="text-xs text-red-600 mt-0.5 break-words">
+                      <span className="font-medium">{e.nome}:</span> {e.erro.slice(0, 120)}
+                    </p>
+                  ))}
+                  <p className="text-xs text-red-500 mt-1.5">
+                    Use <strong>Importar PDF</strong> (botão no canto superior direito) para cadastrar suas notas enquanto o portal estiver fora.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-1.5 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 h-8 border-red-300 text-red-700 hover:bg-red-100 text-xs"
+                    onClick={() => pdfInputRef.current?.click()}
+                  >
+                    <Upload className="w-3 h-3" /> Importar PDF
+                  </Button>
+                  <button
+                    className="flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-100 disabled:opacity-50 bg-white transition-colors"
+                    disabled={syncAllMunMut.isPending}
+                    onClick={() => syncAllMunMut.mutate({ companyId: companyId! })}
+                  >
+                    {syncAllMunMut.isPending
+                      ? <><RefreshCw className="w-3 h-3 animate-spin" /> Tentando…</>
+                      : <><RefreshCw className="w-3 h-3" /> Tentar novamente</>
+                    }
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
+          // Banner de aviso: período sem notas (ex: SIAP GEO cap 2025 × sync 2026)
+          if (temAviso) {
+            return (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex flex-col sm:flex-row sm:items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-amber-800">Sync municipal com aviso</p>
+                  {munAvisos.map(a => (
+                    <p key={a.nome} className="text-xs text-amber-700 mt-0.5">
+                      <span className="font-medium">{a.nome}:</span> {a.aviso.slice(0, 150)}
+                    </p>
+                  ))}
+                  <p className="text-xs text-amber-600 mt-1.5">
+                    Para notas emitidas em 2026, use <strong>Importar PDF</strong>.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 h-8 border-amber-300 text-amber-700 hover:bg-amber-100 text-xs shrink-0 self-start"
+                  onClick={() => pdfInputRef.current?.click()}
+                >
+                  <Upload className="w-3 h-3" /> Importar PDF
+                </Button>
+              </div>
+            );
+          }
+
+          // Estado normal: timer + botão sincronizar
           const fmtC = (s: number) => {
             if (s <= 0) return null;
             const h = Math.floor(s / 3600);
@@ -1365,10 +1448,22 @@ export default function FinanceiroNotasFiscais() {
                 )}
                 {!listQuery.isLoading && nfs.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="py-12 text-center">
-                      <div className="flex flex-col items-center gap-2">
-                        <Receipt className="h-8 w-8 text-slate-300" />
-                        <span className="text-slate-400 text-sm">Nenhuma nota fiscal encontrada.</span>
+                    <td colSpan={10} className="py-10 text-center">
+                      <div className="flex flex-col items-center gap-3 max-w-xs mx-auto">
+                        <Receipt className="h-9 w-9 text-slate-300" />
+                        <p className="text-slate-500 text-sm font-medium">Nenhuma nota encontrada neste período</p>
+                        <p className="text-slate-400 text-xs leading-relaxed">
+                          O sync automático com a prefeitura está com problema? Use o botão{" "}
+                          <strong className="text-slate-600">Importar PDF</strong> para cadastrar notas a partir do DANFSe.
+                        </p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5 border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+                          onClick={() => pdfInputRef.current?.click()}
+                        >
+                          <Upload className="h-3.5 w-3.5" /> Importar PDF do DANFSe
+                        </Button>
                       </div>
                     </td>
                   </tr>
