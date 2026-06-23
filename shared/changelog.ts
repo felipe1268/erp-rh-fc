@@ -1,6 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3589 — **NF-e RECEBIDAS · BUGFIX processDocZip IGNORAVA nfeProc (NF-e COMPLETA) — SÓ PROCESSAVA resNFe. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
+ *
+ * `processDocZip` retornava `null` para documentos `nfeProc` (NF-e completa com protocolo) — só
+ * extraía dados de `resNFe` (resumo). Documentos nfeProc eram contados como `ignoradas` e nunca
+ * importados. Fix: bloco `nfeProc` adicionado — extrai chNFe do infProt, emitente do emit,
+ * dhEmi/tpNF do ide, vNF do ICMSTot; cSitNFe derivado do cStat do protocolo (101=cancelada,
+ * 110=denegada). Mesmo padrão do endpoint `importXml`. Arquivos: `server/routers/sefaz.ts`.
+ *
  * Rev. 3588 — **NF-e RECEBIDAS · BUGFIX "HISTÓRICO COMPLETO" BLOQUEADO PELO COOLDOWN DE RATE-LIMIT. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * `resetNSU` zerava o NSU mas NÃO limpava `last_sync_result` (que contém `rateLimitedAt`).

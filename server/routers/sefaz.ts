@@ -157,7 +157,7 @@ function processDocZip(base64gz: string, nsu: string): ResNFe | null {
     const parsed = xmlParser.parse(xml);
     const root = parsed["resNFe"] || parsed["nfeProc"] || parsed["procEventoNFe"];
     if (!root) return null;
-    // resNFe (resumo)
+    // resNFe (resumo distribuído pelo SEFAZ)
     if (parsed["resNFe"]) {
       const r = parsed["resNFe"];
       return {
@@ -169,6 +169,28 @@ function processDocZip(base64gz: string, nsu: string): ResNFe | null {
         vNF: String(r.vNF || "0"),
         cSitNFe: String(r.cSitNFe || "1"),
         nProt: String(r.nProt || ""),
+        nsu,
+      };
+    }
+    // nfeProc (NF-e completa com protocolo) — mesmo schema do importXml
+    if (parsed["nfeProc"]) {
+      const proc = parsed["nfeProc"];
+      const infNFe = proc?.["NFe"]?.["infNFe"] || {};
+      const infProt = proc?.["protNFe"]?.["infProt"] || {};
+      const ide = infNFe?.["ide"] || {};
+      const emit = infNFe?.["emit"] || {};
+      const total = infNFe?.["total"]?.["ICMSTot"] || {};
+      const chNFe = String(infProt?.["chNFe"] || "").replace(/\D/g, "");
+      if (!chNFe || chNFe.length !== 44) return null;
+      return {
+        chNFe,
+        CNPJ: String(emit?.["CNPJ"] || emit?.["CPF"] || ""),
+        xNome: String(emit?.["xNome"] || ""),
+        dhEmi: String(ide?.["dhEmi"] || ""),
+        tpNF: String(ide?.["tpNF"] ?? ""),
+        vNF: String(total?.["vNF"] || "0"),
+        cSitNFe: String(infProt?.["cStat"] === "101" ? "2" : infProt?.["cStat"] === "110" ? "3" : "1"),
+        nProt: String(infProt?.["nProt"] || ""),
         nsu,
       };
     }
