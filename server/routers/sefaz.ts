@@ -210,12 +210,36 @@ export async function executarSyncNFe(companyId: number): Promise<{ importadas: 
   let paginas = 0;
   let rateLimited = false;
 
+  // ── Gate de cooldown: evitar queimar cota SEFAZ se já foi rate-limited recentemente ──
+  try {
+    const prevResult = JSON.parse(cfg.last_sync_result || "{}");
+    if (prevResult?.aviso && prevResult?.rateLimitedAt) {
+      const elapsedMs = Date.now() - new Date(prevResult.rateLimitedAt).getTime();
+      const cooldownMs = 58 * 60 * 1000; // 58 minutos
+      if (elapsedMs < cooldownMs) {
+        const restantMin = Math.ceil((cooldownMs - elapsedMs) / 60000);
+        const aviso = `Limite SEFAZ — aguarde mais ${restantMin} min antes de tentar novamente (cooldown automático).`;
+        console.log(`[SefazSync] company=${companyId} COOLDOWN=${restantMin}min — sem chamada à API`);
+        return { importadas: 0, ignoradas: 0, aviso };
+      }
+    }
+  } catch { /* ignora erro de parse */ }
+
   try {
     // Loop de paginação — cada chamada retorna até 50 docs; continua enquanto maxNSU > ultNSU
     while (paginas < 20) {
       paginas++;
       const soap = buildSoapEnvelope(cnpj, ufCodigo, ultNSU, tpAmb);
-      const respXml = await callSefaz(url, soap, cfg.cert_pfx_base64, cfg.cert_password);
+      let respXml: string;
+      try {
+        respXml = await callSefaz(url, soap, cfg.cert_pfx_base64, cfg.cert_password);
+      } catch (httpErr: any) {
+        console.error(`[SefazSync] company=${companyId} HTTP error:`, httpErr?.message);
+        throw httpErr;
+      }
+
+      // Log das primeiras 800 chars para diagnóstico (sem dados sensíveis)
+      console.log(`[SefazSync] company=${companyId} raw(${respXml.length}): ${respXml.slice(0, 800).replace(/\n/g, " ")}`);
 
       const parsed = xmlParser.parse(respXml);
       // Resposta usa prefixo "soap:" (não "soap12:") — cobrir todos os prefixos conhecidos
@@ -234,12 +258,15 @@ export async function executarSyncNFe(companyId: number): Promise<{ importadas: 
       const novoUltNSU = padNSU(ret?.ultNSU ?? ultNSU);
       const maxNSU = padNSU(ret?.maxNSU ?? ultNSU);
 
+      console.log(`[SefazSync] company=${companyId} cStat=${cStat} xMotivo="${xMotivo}" ultNSU=${ultNSU} novoUltNSU=${novoUltNSU} maxNSU=${maxNSU}`);
+
       // 137 = sem documentos | 138 = documento localizado | 498 = consultaNSU diferenciada
       // 656 = rate limit (Consumo Indevido) — NÃO avança NSU, sinaliza para UI
       if (cStat === "137") break;
       if (cStat === "656") { rateLimited = true; break; }
       if (cStat !== "138" && cStat !== "498") {
-        throw new Error(`SEFAZ cStat=${cStat}: ${xMotivo}`);
+        // Inclui trecho do XML bruto na mensagem para diagnóstico
+        throw new Error(`SEFAZ cStat=${cStat}: ${xMotivo} | xml=${respXml.slice(0, 300)}`);
       }
 
       // Processar documentos
@@ -305,12 +332,17 @@ export async function executarSyncNFe(companyId: number): Promise<{ importadas: 
     const avisoRateLimit = rateLimited
       ? "Limite SEFAZ atingido (cStat=656): tente novamente após 1 hora. NSU não foi avançado."
       : undefined;
+    const resultPayload = rateLimited
+      ? { importadas, ignoradas, paginas, aviso: avisoRateLimit, rateLimitedAt: new Date().toISOString() }
+      : { importadas, ignoradas, paginas };
     await db.execute(sql`
       UPDATE company_nfe_config
       SET last_sync_at = NOW(),
-          last_sync_result = ${JSON.stringify({ importadas, ignoradas, paginas, aviso: avisoRateLimit })}
+          last_sync_result = ${JSON.stringify(resultPayload)}
       WHERE company_id = ${companyId}
     `);
+
+    console.log(`[SefazSync] company=${companyId} DONE importadas=${importadas} ignoradas=${ignoradas}${avisoRateLimit ? " RATE-LIMITED" : ""}`);
 
     return rateLimited
       ? { importadas, ignoradas, aviso: avisoRateLimit }

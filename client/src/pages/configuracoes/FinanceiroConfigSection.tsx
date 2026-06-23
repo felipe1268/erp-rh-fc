@@ -469,8 +469,16 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
                 {(() => {
                   try {
                     const r = JSON.parse(sefazCfg.last_sync_result || "{}");
-                    if (r.erro) return <span className="text-red-600 font-medium">— Erro: {r.erro.slice(0, 80)}</span>;
-                    if (r.aviso) return <span className="text-amber-600 font-medium">— ⚠️ Limite/hora SEFAZ — tente novamente em 1h</span>;
+                    if (r.erro) return <span className="text-red-600 font-medium" title={r.erro}>— ❌ Erro: {r.erro.slice(0, 120)}</span>;
+                    if (r.aviso) {
+                      // Cooldown automático: calcular se ainda dentro do período
+                      if (r.rateLimitedAt) {
+                        const elapsedMin = Math.floor((Date.now() - new Date(r.rateLimitedAt).getTime()) / 60000);
+                        const restMin = Math.max(0, 58 - elapsedMin);
+                        return <span className="text-amber-600 font-medium">— ⚠️ Rate limit SEFAZ (cStat=656){restMin > 0 ? ` — aguardar ~${restMin} min` : " — pode tentar novamente"}</span>;
+                      }
+                      return <span className="text-amber-600 font-medium">— ⚠️ {r.aviso.slice(0, 100)}</span>;
+                    }
                     return <span className="text-emerald-700">— {r.importadas ?? 0} importadas, {r.ignoradas ?? 0} ignoradas</span>;
                   } catch { return null; }
                 })()}

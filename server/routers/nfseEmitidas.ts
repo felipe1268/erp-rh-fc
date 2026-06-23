@@ -316,7 +316,17 @@ async function consultarPorProvider(opts: {
       "Content-Type": "text/xml; charset=utf-8",
       "SOAPAction": "http://tempuri.org/ConsultarNfse",
     });
-    return parseAbrasrResponse(respXml);
+    // Log para diagnóstico — mostra os primeiros 1000 chars da resposta bruta
+    console.log(`[NfseMun][siapgeo] cnpj=${cnpj.replace(/\D/g,"").slice(-4)} inscricao=${inscricaoMunicipal} periodo=${dataInicial}→${dataFinal}`);
+    console.log(`[NfseMun][siapgeo] resposta(${respXml.length}): ${respXml.slice(0, 1000).replace(/\n/g, " ")}`);
+    const notas = parseAbrasrResponse(respXml);
+    console.log(`[NfseMun][siapgeo] notas parseadas=${notas.length}`);
+    if (notas.length === 0) {
+      // Tenta detectar mensagem de erro no XML bruto
+      const erroMatch = respXml.match(/<(?:[^:]+:)?(?:faultstring|Mensagem|Erro|Error|Message)>([^<]{1,200})<\//i);
+      if (erroMatch) throw new Error(`SIAP GEO: ${erroMatch[1].trim()}`);
+    }
+    return notas;
   }
 
   // ── SIL Tecnologia (Aparecida) — SOAP ABRASF com login/senha ────────────────

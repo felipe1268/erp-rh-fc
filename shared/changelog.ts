@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3571 — **SEFAZ + SIAP GEO · DIAGNÓSTICO DE ERROS: LOG XML BRUTO + COOLDOWN 58min ANTI-RATE-LIMIT + DETALHE NO FRONTEND. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * SEFAZ: (1) Gate de cooldown 58min — após rate-limit (cStat=656), evita queimar cota com
+ * chamadas desnecessárias; retorna minutagem restante sem chamar a API. (2) Log do XML bruto
+ * dos primeiros 800 chars no console para diagnóstico. (3) `rateLimitedAt` salvo no
+ * `last_sync_result` para cálculo do contador regressivo no frontend. (4) Frontend mostra
+ * "Rate limit SEFAZ (cStat=656) — aguardar ~N min" com countdown ao vivo.
+ * SIAP GEO: (1) Log do XML bruto da resposta (1000 chars) no console. (2) Detecção de erro
+ * no XML bruto via regex (faultstring/Mensagem/Erro) — lança erro descritivo quando 0 notas.
+ * Arquivos: `server/routers/sefaz.ts`, `server/routers/nfseEmitidas.ts`,
+ * `client/src/pages/configuracoes/FinanceiroConfigSection.tsx`.
+ *
  * Rev. 3570 — **iOS WEBVIEW · BUGFIX MUTATIONS FALHAVAM COM "THE STRING DID NOT MATCH THE EXPECTED PATTERN" — RETRY AUTOMÁTICO PARA ERROS DE TRANSPORTE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * iOS WebView dropa requests de rede esporadicamente e rejeita a Promise com

@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3570** — **iOS WEBVIEW · BUGFIX MUTATIONS FALHAVAM COM "THE STRING DID NOT MATCH THE EXPECTED PATTERN" — RETRY AUTOMÁTICO PARA ERROS DE TRANSPORTE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** iOS WebView dropa requests e rejeita com esse `TypeError`; com `retry:false` o `e.message` cru aparecia em qualquer toast. Fix: `mutations.retry` permite 1 retry (800ms) para erros de transporte iOS. Detalhe: `shared/changelog.ts`.
+- **Rev. 3571** — **SEFAZ + SIAP GEO · DIAGNÓSTICO: LOG XML BRUTO + COOLDOWN 58min ANTI-RATE-LIMIT + CONTADOR REGRESSIVO NO FRONTEND. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.** Gate 58min evita queimar cota SEFAZ; `rateLimitedAt` grava timestamp; frontend mostra "aguardar ~N min". SIAP GEO: log XML bruto + detecção de faultstring para erros descritivos. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3569** — **NF-e RECEBIDAS (SEFAZ) · BUGFIX "HISTÓRICO COMPLETO" LANÇAVA EXCEÇÃO NO iOS — window.confirm() SUBSTITUÍDO POR AlertDialog. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `window.confirm()` bloqueado em WebViews iOS — Fix: AlertDialog shadcn. Detalhe: `shared/changelog.ts`.
+- **Rev. 3570** — **iOS WEBVIEW · BUGFIX MUTATIONS FALHAVAM COM "THE STRING DID NOT MATCH THE EXPECTED PATTERN" — RETRY AUTOMÁTICO PARA ERROS DE TRANSPORTE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3566** — **NFS-e EMITIDAS MUNICIPAIS · "BAIXAR TUDO" — IMPORTAÇÃO HISTÓRICA EM LOTE + SELETOR DE PERÍODO POR CARD. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
