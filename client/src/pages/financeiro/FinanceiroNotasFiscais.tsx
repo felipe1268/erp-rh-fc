@@ -777,7 +777,7 @@ export default function FinanceiroNotasFiscais() {
                     <div className="text-right text-xs text-slate-400 shrink-0 hidden sm:block">
                       <div>Última sync</div>
                       <div className="font-medium text-slate-500">
-                        {new Date(sefazCfg.last_sync_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                        {new Date(sefazCfg.last_sync_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}
                       </div>
                     </div>
                   )}
@@ -1005,7 +1005,7 @@ export default function FinanceiroNotasFiscais() {
                 <div className="text-right text-xs text-slate-400 shrink-0 hidden sm:block">
                   <div>Última sync</div>
                   <div className="font-medium text-slate-500">
-                    {new Date(latestSync).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                    {new Date(latestSync).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}
                   </div>
                 </div>
               )}

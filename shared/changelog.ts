@@ -1,6 +1,12 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3580 — **CRONÔMETROS NF-e/NFS-e · HORÁRIO "ÚLTIMA SYNC" CORRIGIDO PARA BRASÍLIA (America/Sao_Paulo). 100% FRONTEND · ZERO BACKEND.**
+ *
+ * `toLocaleTimeString` nas duas abas (NF-e Recebidas e NFS-e Emitidas) estava sem timeZone →
+ * exibia UTC. Adicionado `timeZone: "America/Sao_Paulo"` nos dois pontos.
+ * Arquivo: `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`.
+ *
  * Rev. 3579 — **NF-e RECEBIDAS · TIMELINE COM LEGENDA + DOTS POR MÊS (MESMO PADRÃO DA ABA EMITIDAS). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * A aba NF-e Recebidas (SEFAZ) agora tem legenda "● Com lançamento / ● Consolidado / ● Sem dados"

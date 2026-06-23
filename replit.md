@@ -50,7 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3579** — **NF-e RECEBIDAS · TIMELINE COM LEGENDA + DOTS POR MÊS (MESMO PADRÃO DA ABA EMITIDAS). 100% FRONTEND · ZERO BACKEND.** Legenda ● Com lançamento / ● Consolidado / ● Sem dados + dot colorido em cada mês. Detalhe: `shared/changelog.ts`.
+- **Rev. 3580** — **CRONÔMETROS · "ÚLTIMA SYNC" AGORA EXIBE HORÁRIO DE BRASÍLIA. 100% FRONTEND · ZERO BACKEND.** `timeZone: "America/Sao_Paulo"` adicionado nas duas abas. Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3579** — **NF-e RECEBIDAS · TIMELINE COM LEGENDA + DOTS POR MÊS (MESMO PADRÃO DA ABA EMITIDAS). 100% FRONTEND · ZERO BACKEND.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3578** — **NFS-e EMITIDAS · DIALOG "NOVA NFS-e" REDESENHADO — SEM ABAS, SEÇÕES VISUAIS, VALOR LÍQUIDO DESTACADO. 100% FRONTEND · ZERO BACKEND.** Header gradiente indigo, 4 seções (Identificação, Tomador, Obra, Valores) + Avançado colapsível. Detalhe: `shared/changelog.ts`.
 
