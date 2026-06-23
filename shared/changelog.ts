@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3552 — **NOTAS FISCAIS · DUAS SUB-ABAS: "NFS-e EMITIDAS" + "NF-e RECEBIDAS (SEFAZ)". BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * A tela `/financeiro/notas-fiscais` foi reestruturada com duas sub-abas:
+ *
+ * **Aba "📤 NFS-e Emitidas"** — conteúdo original sem alteração (NFs emitidas pela FC Engenharia,
+ * controle de status, vínculo com lançamentos/extrato, importação por PDF, etc.).
+ *
+ * **Aba "📥 NF-e Recebidas (SEFAZ)"** — nova aba que exibe as NF-e de produto recebidas pela FC
+ * via integração SEFAZ NFeDistribuicaoDFe (Rev. 3550). Dados lidos de `fiscal_notes WHERE origem='sefaz_nfe'`.
+ * Interface: 4 KPI cards (total, valor total, pendentes, com lançamento), timeline ano/mês, filtro
+ * busca + status, tabela com NF#, data emissão, emitente (CNPJ+nome), valor líquido, status, trecho
+ * da chave de acesso e data de importação. Card de aviso "configure o certificado A1" aparece quando
+ * não há dados. Footer informa atualização automática diária às 06:00.
+ *
+ * **Backend aditivo:** novo endpoint `sefaz.listNFeRecebidas` (query fiscal_notes, filtros ano/mês/
+ * status/busca, LIMIT 500, retorno mapeado camelCase). Zero ALTER/DROP/DELETE.
+ *
+ * **Frontend:** pageTab state ("emitidas"|"recebidas"), header condicional por aba, seletor de abas
+ * com borda-underline estilo indigo, query nfeRecQuery habilitada só quando aba ativa.
+ *
+ * Arquivos: `server/routers/sefaz.ts` (+listNFeRecebidas), `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`.
+ *
  * Rev. 3551 — **CONCILIAÇÃO · PAINEL "IA LEU NOS DEMONSTRATIVOS" — BOTÃO MINIMIZAR/EXPANDIR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Clicar no título do card "Tudo que a IA leu nos demonstrativos" alterna entre expandido
  * (comportamento atual) e minimizado (só cabeçalho visível: título + chevron + contagem

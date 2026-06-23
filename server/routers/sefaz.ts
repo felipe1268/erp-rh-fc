@@ -400,4 +400,50 @@ export const sefazRouter = router({
       `);
       return { ok: true };
     }),
+
+  listNFeRecebidas: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      ano: z.number().optional(),
+      mes: z.number().optional(),
+      search: z.string().optional(),
+      status: z.string().optional(),
+    }))
+    .query(async ({ input, ctx }) => {
+      const db = getDb();
+      const rows = (await db.execute(sql`
+        SELECT id, numero_nf, chave_acesso, data_emissao, emitente_cnpj, emitente_nome,
+               nsu_sefaz, valor_bruto, valor_liquido, status, descricao_servico,
+               entry_id, created_at
+        FROM fiscal_notes
+        WHERE company_id = ${input.companyId}
+          AND origem = 'sefaz_nfe'
+          ${input.ano ? sql`AND EXTRACT(YEAR FROM data_emissao) = ${input.ano}` : sql``}
+          ${input.mes ? sql`AND EXTRACT(MONTH FROM data_emissao) = ${input.mes}` : sql``}
+          ${input.status && input.status !== "todos" ? sql`AND status = ${input.status}` : sql``}
+          ${input.search ? sql`AND (
+            emitente_nome ILIKE ${'%' + input.search + '%'}
+            OR emitente_cnpj ILIKE ${'%' + input.search + '%'}
+            OR numero_nf ILIKE ${'%' + input.search + '%'}
+            OR chave_acesso ILIKE ${'%' + input.search + '%'}
+          )` : sql``}
+        ORDER BY data_emissao DESC, id DESC
+        LIMIT 500
+      `)) as any;
+      return ((rows?.rows ?? rows) as any[]).map((r: any) => ({
+        id: Number(r.id),
+        numeroNf: String(r.numero_nf || ""),
+        chaveAcesso: r.chave_acesso || null,
+        dataEmissao: r.data_emissao ? String(r.data_emissao).slice(0, 10) : null,
+        emitenteCnpj: r.emitente_cnpj || null,
+        emitenteNome: r.emitente_nome || null,
+        nsuSefaz: r.nsu_sefaz || null,
+        valorBruto: parseFloat(r.valor_bruto || "0") || 0,
+        valorLiquido: parseFloat(r.valor_liquido || "0") || 0,
+        status: String(r.status || "pendente"),
+        descricaoServico: r.descricao_servico || null,
+        entryId: r.entry_id ? Number(r.entry_id) : null,
+        createdAt: r.created_at ? String(r.created_at).slice(0, 10) : null,
+      }));
+    }),
 });
