@@ -473,16 +473,16 @@ export const nfseEmitidasRouter = router({
       const guara = MUNICIPIOS_PADRAO[0];
       await db.$client.query(
         `INSERT INTO company_nfse_municipal_config
-          (company_id, ibge_code, nome_municipio, uf, provider, endpoint, auth_type, descricao,
+          (company_id, ibge_code, nome_municipio, uf, provider, endpoint,
            inscricao_municipal, token, enabled)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,false)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,0)
          ON CONFLICT (company_id, ibge_code) DO UPDATE
            SET inscricao_municipal = COALESCE(company_nfse_municipal_config.inscricao_municipal, EXCLUDED.inscricao_municipal),
                token               = COALESCE(company_nfse_municipal_config.token,               EXCLUDED.token)`,
         [
           companyId, guara.ibge_code, guara.nome_municipio, guara.uf,
-          guara.provider, guara.endpoint, guara.auth_type, guara.descricao,
-          "13239401",  // inscrição municipal FC (login do portal)
+          guara.provider, guara.endpoint,
+          "13239401",  // inscrição municipal FC (login do portal SIAP GEO)
           "31335504",  // senha do Portal do Contribuinte de Guaratinguetá
         ]
       );
@@ -526,9 +526,9 @@ export const nfseEmitidasRouter = router({
       const endpoint = input.endpoint || defaultEndpoints[input.provider] || "";
       await db.$client.query(
         `INSERT INTO company_nfse_municipal_config
-          (company_id, ibge_code, nome_municipio, uf, provider, endpoint, auth_type,
+          (company_id, ibge_code, nome_municipio, uf, provider, endpoint,
            inscricao_municipal, token, enabled)
-         VALUES ($1,$2,$3,$4,$5,$6,'portal_login',$7,$8,false)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,0)
          ON CONFLICT (company_id, ibge_code) DO UPDATE
            SET nome_municipio=$3, uf=$4, provider=$5, endpoint=$6,
                inscricao_municipal=$7, token=$8`,
