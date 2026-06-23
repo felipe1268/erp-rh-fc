@@ -179,6 +179,8 @@ export default function FinanceiroNotasFiscais() {
   const [confirmHistorico, setConfirmHistorico] = useState(false);
   const [nfeRecDetalhe, setNfeRecDetalhe] = useState<any>(null);
   const [copiedChave, setCopiedChave] = useState(false);
+  const [justRecusa, setJustRecusa] = useState("");
+  const [showJustRecusa, setShowJustRecusa] = useState(false);
 
   // ── Progresso simulado da sync SEFAZ (0-100) ──────────────────────────────
   const [syncProgress, setSyncProgress] = useState<number | null>(null);
@@ -399,10 +401,13 @@ export default function FinanceiroNotasFiscais() {
     onError: (e: any) => toast({ title: "Erro ao resetar NSU", description: e.message, variant: "destructive" }),
   });
   const manifestarMut = (trpc as any).sefaz.manifestar.useMutation({
-    onSuccess: (_: any, vars: any) => {
+    onSuccess: (data: any, vars: any) => {
       const labels: Record<string, string> = { acatada: "acatada ✓", recusada: "recusada ✗", desconhecida: "marcada como desconhecida" };
-      toast({ title: `NF-e ${labels[vars.status] ?? vars.status}` });
+      const proto = data?.nProt ? ` · Protocolo SEFAZ: ${data.nProt}` : (data?.local ? " (apenas local)" : " · aguardando confirmação SEFAZ");
+      toast({ title: `NF-e ${labels[vars.status] ?? vars.status}`, description: proto });
       setNfeRecDetalhe((prev: any) => prev ? { ...prev, status: vars.status } : null);
+      setShowJustRecusa(false);
+      setJustRecusa("");
       nfeRecQuery.refetch();
     },
     onError: (e: any) => toast({ title: "Erro ao manifestar", description: e.message, variant: "destructive" }),
@@ -1973,7 +1978,7 @@ export default function FinanceiroNotasFiscais() {
         {/* fim aba emitidas */}
 
         {/* ── Dialog detalhe NF-e Recebida — fora de qualquer aba para sempre renderizar ── */}
-        <Dialog open={!!nfeRecDetalhe} onOpenChange={v => !v && setNfeRecDetalhe(null)}>
+        <Dialog open={!!nfeRecDetalhe} onOpenChange={v => { if (!v) { setNfeRecDetalhe(null); setShowJustRecusa(false); setJustRecusa(""); } }}>
           <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden rounded-2xl">
             {nfeRecDetalhe && (() => {
               const nf = nfeRecDetalhe;
@@ -2071,43 +2076,88 @@ export default function FinanceiroNotasFiscais() {
                     {/* Manifestação */}
                     {canManifest && (
                       <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
-                        <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200">
+                        <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200 flex items-center justify-between">
                           <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500">Sua Manifestação</p>
+                          <p className="text-[10px] text-slate-400">Enviado diretamente à SEFAZ</p>
                         </div>
                         <div className="px-3 py-3 flex flex-col gap-2">
-                          <p className="text-xs text-slate-500 leading-relaxed">Essa NF-e pertence à sua empresa?</p>
-                          <div className="grid grid-cols-3 gap-2">
-                            <button
-                              type="button"
-                              disabled={isMutating}
-                              className="flex flex-col items-center gap-1 py-2.5 px-2 rounded-xl border-2 border-green-300 bg-green-50 hover:bg-green-100 text-green-800 transition-colors disabled:opacity-50"
-                              onClick={() => manifestarMut.mutate({ id: nf.id, companyId: companyId!, status: "acatada" })}
-                            >
-                              <CheckIcon className="w-5 h-5 text-green-600" />
-                              <span className="text-xs font-semibold">Acatar</span>
-                              <span className="text-[10px] text-green-600 text-center leading-tight">É nossa, confirmar</span>
-                            </button>
-                            <button
-                              type="button"
-                              disabled={isMutating}
-                              className="flex flex-col items-center gap-1 py-2.5 px-2 rounded-xl border-2 border-red-300 bg-red-50 hover:bg-red-100 text-red-800 transition-colors disabled:opacity-50"
-                              onClick={() => manifestarMut.mutate({ id: nf.id, companyId: companyId!, status: "recusada" })}
-                            >
-                              <X className="w-5 h-5 text-red-600" />
-                              <span className="text-xs font-semibold">Recusar</span>
-                              <span className="text-[10px] text-red-600 text-center leading-tight">Não é nossa</span>
-                            </button>
-                            <button
-                              type="button"
-                              disabled={isMutating}
-                              className="flex flex-col items-center gap-1 py-2.5 px-2 rounded-xl border-2 border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 transition-colors disabled:opacity-50"
-                              onClick={() => manifestarMut.mutate({ id: nf.id, companyId: companyId!, status: "desconhecida" })}
-                            >
-                              <span className="text-lg font-bold text-slate-500">?</span>
-                              <span className="text-xs font-semibold">Desconheço</span>
-                              <span className="text-[10px] text-slate-500 text-center leading-tight">Não reconheço</span>
-                            </button>
-                          </div>
+                          {!showJustRecusa ? (
+                            <>
+                              <p className="text-xs text-slate-500 leading-relaxed">Essa NF-e pertence à sua empresa?</p>
+                              <div className="grid grid-cols-3 gap-2">
+                                <button
+                                  type="button"
+                                  disabled={isMutating}
+                                  className="flex flex-col items-center gap-1 py-2.5 px-2 rounded-xl border-2 border-green-300 bg-green-50 hover:bg-green-100 text-green-800 transition-colors disabled:opacity-50"
+                                  onClick={() => manifestarMut.mutate({ id: nf.id, companyId: companyId!, status: "acatada" })}
+                                >
+                                  {isMutating ? <RefreshCw className="w-5 h-5 animate-spin text-green-600" /> : <CheckIcon className="w-5 h-5 text-green-600" />}
+                                  <span className="text-xs font-semibold">Acatar</span>
+                                  <span className="text-[10px] text-green-600 text-center leading-tight">É nossa, confirmar</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isMutating}
+                                  className="flex flex-col items-center gap-1 py-2.5 px-2 rounded-xl border-2 border-red-300 bg-red-50 hover:bg-red-100 text-red-800 transition-colors disabled:opacity-50"
+                                  onClick={() => { setShowJustRecusa(true); setJustRecusa(""); }}
+                                >
+                                  <X className="w-5 h-5 text-red-600" />
+                                  <span className="text-xs font-semibold">Recusar</span>
+                                  <span className="text-[10px] text-red-600 text-center leading-tight">Não é nossa</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isMutating}
+                                  className="flex flex-col items-center gap-1 py-2.5 px-2 rounded-xl border-2 border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 transition-colors disabled:opacity-50"
+                                  onClick={() => manifestarMut.mutate({ id: nf.id, companyId: companyId!, status: "desconhecida" })}
+                                >
+                                  {isMutating ? <RefreshCw className="w-5 h-5 animate-spin text-slate-500" /> : <span className="text-lg font-bold text-slate-500">?</span>}
+                                  <span className="text-xs font-semibold">Desconheço</span>
+                                  <span className="text-[10px] text-slate-500 text-center leading-tight">Não reconheço</span>
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            /* ── Passo 2: Justificativa para "Recusar" ── */
+                            <div className="flex flex-col gap-2">
+                              <p className="text-xs font-semibold text-red-700">Motivo da recusa <span className="font-normal text-slate-400">(obrigatório pela SEFAZ, 15–255 caracteres)</span></p>
+                              <textarea
+                                className="w-full rounded-lg border border-red-300 bg-white px-3 py-2 text-sm text-slate-800 resize-none focus:outline-none focus:ring-2 focus:ring-red-300 placeholder:text-slate-400"
+                                rows={3}
+                                maxLength={255}
+                                placeholder="Ex: Nota fiscal não corresponde a nenhuma compra realizada pela empresa."
+                                value={justRecusa}
+                                onChange={e => setJustRecusa(e.target.value)}
+                              />
+                              <div className="flex items-center justify-between gap-2">
+                                <span className={`text-[11px] ${justRecusa.trim().length < 15 ? "text-red-400" : "text-slate-400"}`}>
+                                  {justRecusa.trim().length}/255 {justRecusa.trim().length < 15 ? `(mín. ${15 - justRecusa.trim().length} restantes)` : "✓"}
+                                </span>
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-600 hover:bg-slate-100 transition-colors"
+                                    onClick={() => { setShowJustRecusa(false); setJustRecusa(""); }}
+                                  >
+                                    Cancelar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isMutating || justRecusa.trim().length < 15}
+                                    className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                                    onClick={() => {
+                                      manifestarMut.mutate({ id: nf.id, companyId: companyId!, status: "recusada", justificativa: justRecusa.trim() });
+                                      setShowJustRecusa(false);
+                                      setJustRecusa("");
+                                    }}
+                                  >
+                                    {isMutating ? <RefreshCw className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+                                    Recusar e avisar SEFAZ
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}

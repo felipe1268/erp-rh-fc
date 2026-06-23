@@ -18,6 +18,21 @@ import forge from "node-forge";
 const SEFAZ_URL_PROD = "https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx";
 const SEFAZ_URL_HOM  = "https://hom1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx";
 
+// ── URLs Manifestação do Destinatário (MD-e) ────────────────────────────────
+const MDEV_URL_PROD = "https://nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx";
+const MDEV_URL_HOM  = "https://hom1.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx";
+
+const MDEV_TP_EVENTO: Record<string, number> = {
+  acatada:      210200,   // Confirmação da Operação
+  recusada:     210220,   // Operação Não Realizada
+  desconhecida: 210240,   // Desconhecimento da Operação
+};
+const MDEV_DESC: Record<number, string> = {
+  210200: "Confirmacao da Operacao",
+  210220: "Operacao nao Realizada",
+  210240: "Desconhecimento da Operacao",
+};
+
 // Códigos IBGE de UF para o campo cUFAutor
 const UF_CODES: Record<string, number> = {
   AC:12, AL:27, AP:16, AM:13, BA:29, CE:23, DF:53, ES:32,
@@ -138,6 +153,192 @@ function callSefaz(url: string, soapXml: string, pfxBase64: string, pfxPassword:
     req.write(body);
     req.end();
   });
+}
+
+// ── XMLDsig RSA-SHA1 para Manifestação do Destinatário ──────────────────────
+
+/**
+ * Assina o XML do infEvento com RSA-SHA1 (XMLDsig enveloped, C14N 1.0).
+ * Retorna o bloco <Signature> completo para inserir dentro de <evento>.
+ *
+ * O infEventoXml DEVE ter o namespace declarado em si mesmo
+ * (xmlns="http://www.portalfiscal.inf.br/nfe") para que a canonicalização
+ * do elemento isolado seja trivial (sem namespaces herdados).
+ */
+function signInfEvento(infEventoXml: string, refId: string, certPem: string, keyPem: string): string {
+  // 1. SHA-1 digest do infEvento (C14N trivial: o XML já é o canonical form
+  //    pois o namespace está declarado no próprio elemento)
+  const mdDigest = forge.md.sha1.create();
+  mdDigest.update(forge.util.encodeUtf8(infEventoXml));
+  const digestValue = forge.util.encode64(mdDigest.digest().bytes());
+
+  // 2. SignedInfo (sem whitespace entre tags; namespace no próprio elemento)
+  const signedInfoXml =
+    `<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#">` +
+    `<CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"></CanonicalizationMethod>` +
+    `<SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"></SignatureMethod>` +
+    `<Reference URI="#${refId}">` +
+    `<Transforms>` +
+    `<Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"></Transform>` +
+    `<Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"></Transform>` +
+    `</Transforms>` +
+    `<DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"></DigestMethod>` +
+    `<DigestValue>${digestValue}</DigestValue>` +
+    `</Reference>` +
+    `</SignedInfo>`;
+
+  // 3. RSA-SHA1 sobre a C14N do SignedInfo
+  const pkey = forge.pki.privateKeyFromPem(keyPem);
+  const mdSign = forge.md.sha1.create();
+  mdSign.update(forge.util.encodeUtf8(signedInfoXml));
+  const signatureValue = forge.util.encode64(pkey.sign(mdSign));
+
+  // 4. X509 cert (strip marcadores PEM + newlines)
+  const x509 = certPem
+    .replace(/-----BEGIN CERTIFICATE-----/, "")
+    .replace(/-----END CERTIFICATE-----/, "")
+    .replace(/\r?\n/g, "");
+
+  return (
+    `<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">` +
+    signedInfoXml +
+    `<SignatureValue>${signatureValue}</SignatureValue>` +
+    `<KeyInfo><X509Data><X509Certificate>${x509}</X509Certificate></X509Data></KeyInfo>` +
+    `</Signature>`
+  );
+}
+
+/**
+ * Monta o envEvento assinado pronto para enviar à SEFAZ.
+ */
+function buildEnvEvento(opts: {
+  cnpj: string;
+  chaveNFe: string;
+  tpEvento: number;
+  tpAmb: number;
+  justificativa?: string;
+  certPem: string;
+  keyPem: string;
+}): string {
+  const { cnpj, chaveNFe, tpEvento, tpAmb, justificativa, certPem, keyPem } = opts;
+
+  // dhEvento no fuso BRT (UTC-3) — SEFAZ exige offset explícito
+  const now = new Date();
+  const localIso = new Date(now.getTime() - 3 * 3600000).toISOString().slice(0, 19) + "-03:00";
+  const nSeqEvento = 1;
+  const id = `ID${tpEvento}${chaveNFe}${String(nSeqEvento).padStart(2, "0")}`;
+  const desc = MDEV_DESC[tpEvento];
+
+  const xJust = justificativa
+    ? `<xJust>${justificativa.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</xJust>`
+    : "";
+
+  const detEvento =
+    `<detEvento versao="1.00"><descEvento>${desc}</descEvento>${tpEvento === 210220 ? xJust : ""}</detEvento>`;
+
+  // infEvento com namespace próprio para C14N trivial
+  const infEventoXml =
+    `<infEvento xmlns="http://www.portalfiscal.inf.br/nfe" Id="${id}">` +
+    `<cOrgao>91</cOrgao>` +
+    `<tpAmb>${tpAmb}</tpAmb>` +
+    `<CNPJ>${cleanCnpj(cnpj)}</CNPJ>` +
+    `<chNFe>${chaveNFe}</chNFe>` +
+    `<dhEvento>${localIso}</dhEvento>` +
+    `<tpEvento>${tpEvento}</tpEvento>` +
+    `<nSeqEvento>${nSeqEvento}</nSeqEvento>` +
+    `<verEvento>1.00</verEvento>` +
+    detEvento +
+    `</infEvento>`;
+
+  const signature = signInfEvento(infEventoXml, id, certPem, keyPem);
+
+  const eventoXml =
+    `<evento xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.00">` +
+    infEventoXml + signature +
+    `</evento>`;
+
+  return (
+    `<envEvento xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.00">` +
+    `<idLote>1</idLote>` +
+    eventoXml +
+    `</envEvento>`
+  );
+}
+
+function buildSoapEventoEnvelope(envEventoXml: string): string {
+  const wsdl = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4";
+  return (
+    `<?xml version="1.0" encoding="utf-8"?>` +
+    `<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">` +
+    `<soap12:Header>` +
+    `<nfeCabecMsg xmlns="${wsdl}"><cUF>91</cUF><versaoDados>1.00</versaoDados></nfeCabecMsg>` +
+    `</soap12:Header>` +
+    `<soap12:Body>` +
+    `<nfeRecepcaoEvento xmlns="${wsdl}"><nfeDadosMsg>${envEventoXml}</nfeDadosMsg></nfeRecepcaoEvento>` +
+    `</soap12:Body>` +
+    `</soap12:Envelope>`
+  );
+}
+
+function callSefazEvento(url: string, soapXml: string, pfxBase64: string, pfxPassword: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let cert: string, key: string;
+    try {
+      ({ cert, key } = pfxToPem(pfxBase64, pfxPassword));
+    } catch (e: any) {
+      return reject(new Error("Erro ao ler certificado PFX: " + (e?.message || e)));
+    }
+    const agent = new https.Agent({ cert, key, rejectUnauthorized: false });
+    const body = Buffer.from(soapXml, "utf-8");
+    const urlObj = new URL(url);
+    const req = https.request({
+      hostname: urlObj.hostname,
+      path: urlObj.pathname + (urlObj.search || ""),
+      method: "POST",
+      agent,
+      headers: {
+        "Content-Type": 'application/soap+xml; charset=utf-8; action="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4/nfeRecepcaoEvento"',
+        "Content-Length": body.byteLength,
+      },
+    }, (res) => {
+      const chunks: Buffer[] = [];
+      res.on("data", c => chunks.push(c));
+      res.on("end", () => {
+        const raw = Buffer.concat(chunks).toString("utf-8");
+        if ((res.statusCode ?? 0) >= 400) {
+          reject(new Error(`SEFAZ HTTP ${res.statusCode}: ${raw.slice(0, 400)}`));
+        } else {
+          resolve(raw);
+        }
+      });
+    });
+    req.on("error", reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+/** Extrai cStat/xMotivo/nProt do XML de retorno do NFeRecepcaoEvento4 */
+function parseRetEnvEvento(respXml: string): { cStat: string; xMotivo: string; nProt: string } {
+  try {
+    const parsed = xmlParser.parse(respXml);
+    // Navega pela estrutura SOAP → retEnvEvento → retEvento → infEvento
+    const body =
+      parsed?.["soap12:Envelope"]?.["soap12:Body"] ??
+      parsed?.["soap:Envelope"]?.["soap:Body"] ?? {};
+    const result = body["nfeRecepcaoEventoResult"] ?? body["nfeRecepcaoEvento4Result"] ?? {};
+    const retEnv = result["retEnvEvento"] ?? parsed["retEnvEvento"] ?? {};
+    const retEvento = retEnv["retEvento"] ?? retEnv;
+    const infRet = retEvento["infEvento"] ?? retEvento;
+
+    // cStat pode estar no nível retEvento.infEvento ou retEnvEvento
+    const cStat   = String(infRet?.cStat   ?? retEnv?.cStat   ?? "");
+    const xMotivo = String(infRet?.xMotivo ?? retEnv?.xMotivo ?? "Resposta não reconhecida");
+    const nProt   = String(infRet?.nProt   ?? "");
+    return { cStat, xMotivo, nProt };
+  } catch {
+    return { cStat: "", xMotivo: "Erro ao interpretar resposta da SEFAZ", nProt: "" };
+  }
 }
 
 interface ResNFe {
@@ -634,17 +835,100 @@ export const sefazRouter = router({
       id: z.number(),
       companyId: z.number(),
       status: z.enum(["acatada", "recusada", "desconhecida", "pendente"]),
+      justificativa: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+
+      // "pendente" = reverter localmente, sem evento SEFAZ
+      if (input.status === "pendente") {
+        await db.execute(sql`
+          UPDATE fiscal_notes SET status = 'pendente', updated_at = NOW()
+          WHERE id = ${input.id} AND company_id = ${input.companyId}
+            AND origem IN ('sefaz_nfe', 'xml_upload')
+        `);
+        return { ok: true, local: true };
+      }
+
+      const tpEvento = MDEV_TP_EVENTO[input.status];
+      if (!tpEvento) throw new TRPCError({ code: "BAD_REQUEST", message: "Status inválido." });
+
+      // Operação Não Realizada exige justificativa (15–255 chars, NT 2014.002)
+      if (tpEvento === 210220) {
+        const just = (input.justificativa || "").trim();
+        if (just.length < 15 || just.length > 255)
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Justificativa obrigatória (15–255 caracteres) para recusa." });
+      }
+
+      // Busca nota
+      const noteRows = (await db.execute(sql`
+        SELECT id, chave_acesso FROM fiscal_notes
+        WHERE id = ${input.id} AND company_id = ${input.companyId}
+          AND origem IN ('sefaz_nfe', 'xml_upload')
+      `)) as any;
+      const note = (noteRows?.rows ?? noteRows)?.[0];
+      if (!note) throw new TRPCError({ code: "NOT_FOUND", message: "Nota não encontrada." });
+
+      const chaveNFe = String(note.chave_acesso || "").replace(/\D/g, "");
+      if (chaveNFe.length !== 44)
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Chave de acesso inválida (${chaveNFe.length} dígitos — esperado 44). Não é possível manifestar.` });
+
+      // Busca certificado da empresa
+      const cfgRows = (await db.execute(sql`
+        SELECT cnpj, cert_pfx_base64, cert_password, ambiente
+        FROM company_nfe_config WHERE company_id = ${input.companyId} AND ativo = 1
+      `)) as any;
+      const cfg = (cfgRows?.rows ?? cfgRows)?.[0];
+      if (!cfg?.cert_pfx_base64 || !cfg?.cert_password)
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Certificado A1 não configurado. Acesse Configurações → Financeiro → SEFAZ." });
+
+      const cnpj = cleanCnpj(cfg.cnpj || "");
+      const tpAmb = cfg.ambiente === "homologacao" ? 2 : 1;
+      const url   = tpAmb === 2 ? MDEV_URL_HOM : MDEV_URL_PROD;
+
+      // Extrai PEM do PFX
+      let certPem: string, keyPem: string;
+      try {
+        ({ cert: certPem, key: keyPem } = pfxToPem(cfg.cert_pfx_base64, cfg.cert_password));
+      } catch (e: any) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro ao ler certificado: " + (e?.message || e) });
+      }
+
+      // Monta e assina envEvento
+      const envEventoXml = buildEnvEvento({
+        cnpj, chaveNFe, tpEvento, tpAmb,
+        justificativa: input.justificativa,
+        certPem, keyPem,
+      });
+      const soap = buildSoapEventoEnvelope(envEventoXml);
+
+      console.log(`[SefazMDE] company=${input.companyId} chave=${chaveNFe.slice(0, 10)}… tpEvento=${tpEvento} tpAmb=${tpAmb} url=${url}`);
+
+      // Envia para SEFAZ
+      let respXml: string;
+      try {
+        respXml = await callSefazEvento(url, soap, cfg.cert_pfx_base64, cfg.cert_password);
+      } catch (e: any) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro de comunicação com SEFAZ: " + (e?.message || e) });
+      }
+
+      const { cStat, xMotivo, nProt } = parseRetEnvEvento(respXml);
+      console.log(`[SefazMDE] cStat=${cStat} xMotivo=${xMotivo} nProt=${nProt}`);
+
+      // 135 = registrado e vinculado | 136 = registrado (NF-e não no AN) | 628 = já existe (idempotente)
+      const isOk = ["135", "136", "628"].includes(cStat);
+      if (!isOk) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `SEFAZ ${cStat}: ${xMotivo}` });
+      }
+
+      // Atualiza status local
       await db.execute(sql`
-        UPDATE fiscal_notes
-        SET status = ${input.status}, updated_at = NOW()
-        WHERE id = ${input.id}
-          AND company_id = ${input.companyId}
+        UPDATE fiscal_notes SET status = ${input.status}, updated_at = NOW()
+        WHERE id = ${input.id} AND company_id = ${input.companyId}
           AND origem IN ('sefaz_nfe', 'xml_upload')
       `);
-      return { ok: true };
+
+      return { ok: true, cStat, xMotivo, nProt };
     }),
 
   listNFeRecebidas: protectedProcedure

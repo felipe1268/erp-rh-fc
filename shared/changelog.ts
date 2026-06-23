@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3603 — **NF-e RECEBIDAS · MANIFESTAÇÃO DO DESTINATÁRIO REAL VIA SEFAZ (NFeRecepcaoEvento4) — ACATAR/RECUSAR/DESCONHECIMENTO AGORA COMUNICAM A SEFAZ. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * Antes: botões "Acatar/Recusar/Desconheço" só atualizavam o banco local.
+ * Agora: cada ação gera um evento XML assinado digitalmente (XMLDsig RSA-SHA1 enveloped,
+ * C14N 1.0, conforme NT 2014.002) e envia ao WebService `NFeRecepcaoEvento4` da SEFAZ,
+ * usando o certificado A1 da empresa configurado em Configurações → Financeiro → SEFAZ.
+ *
+ * Eventos enviados:
+ *   210200 — Confirmação da Operação ("Acatar")
+ *   210220 — Operação Não Realizada ("Recusar") — exige justificativa 15–255 chars
+ *   210240 — Desconhecimento da Operação ("Desconheço")
+ *
+ * BACKEND (server/routers/sefaz.ts):
+ *   - `signInfEvento()`: XMLDsig RSA-SHA1 via node-forge (SHA-1 digest + RSA sign + X509)
+ *   - `buildEnvEvento()`: monta o envEvento com infEvento assinado (cOrgao=91/AN, dhEvento BRT-3)
+ *   - `buildSoapEventoEnvelope()`: SOAP 1.2 para NFeRecepcaoEvento4 com nfeCabecMsg no Header
+ *   - `callSefazEvento()`: mTLS + SOAPAction correto
+ *   - `parseRetEnvEvento()`: extrai cStat/xMotivo/nProt do XML de retorno (suporta SOAP 1.1/1.2)
+ *   - `manifestar` endpoint: valida chave (44 dígitos), busca cert, assina, envia, parse resposta;
+ *     cStat 135/136=ok, 628=já existe (idempotente); status="pendente" → só local (sem evento)
+ *
+ * FRONTEND (FinanceiroNotasFiscais.tsx):
+ *   - Botão "Recusar" abre passo 2 inline com textarea de justificativa (15–255 chars)
+ *     antes de confirmar → botão "Recusar e avisar SEFAZ" ativo só com texto suficiente
+ *   - Toast de sucesso exibe protocolo SEFAZ (nProt) quando disponível
+ *   - Header do card "Sua Manifestação" indica "Enviado diretamente à SEFAZ"
+ *   - Estado justRecusa/showJustRecusa resetado no sucesso e no fechar dialog
+ *
  * Rev. 3602 — **NFS-e EMITIDAS · BOTÃO "SINCRONIZAR AGORA" NA ABA EMITIDAS + PROVIDER nfse_nacional EXPLÍCITO. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * (1) FRONTEND: botão "Sincronizar Agora" adicionado diretamente na aba NFS-e Emitidas (no bloco do
