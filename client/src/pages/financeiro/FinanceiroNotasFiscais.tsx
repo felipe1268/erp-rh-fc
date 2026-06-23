@@ -1888,7 +1888,31 @@ export default function FinanceiroNotasFiscais() {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* ── Dialog detalhe NF-e Recebida ────────────────────────────────────── */}
+        <AlertDialog open={!!deleteTarget} onOpenChange={v => !v && setDeleteTarget(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Cancelar NF-e #{deleteTarget?.numeroNf}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                A nota será marcada como <strong>cancelada</strong>. Nenhum dado será excluído.
+                Valor líquido: {formatBRL(deleteTarget?.valorLiquido)} — Tomador: {deleteTarget?.tomadorRazaoSocial ?? "—"}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Não cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-red-600 hover:bg-red-700"
+                onClick={() => deleteTarget && excluirMut.mutate({ id: deleteTarget.id, companyId: companyId! })}
+              >
+                Confirmar Cancelamento
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        </>}
+        {/* fim aba emitidas */}
+
+        {/* ── Dialog detalhe NF-e Recebida — fora de qualquer aba para sempre renderizar ── */}
         <Dialog open={!!nfeRecDetalhe} onOpenChange={v => !v && setNfeRecDetalhe(null)}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
@@ -1905,22 +1929,17 @@ export default function FinanceiroNotasFiscais() {
               const st = STATUS_MAP[nf.status] ?? { label: nf.status, color: "bg-gray-100 text-gray-700 border-gray-200" };
               return (
                 <div className="space-y-4 py-1">
-                  {/* Status + Valor */}
                   <div className="flex items-center justify-between">
                     <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border ${st.color}`}>
                       {st.label}
                     </span>
                     <span className="text-2xl font-bold text-emerald-700 tabular-nums">{formatBRL(nf.valorLiquido)}</span>
                   </div>
-
-                  {/* Emitente */}
                   <div className="rounded-xl border bg-slate-50 p-3 space-y-1.5">
                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Emitente</p>
                     <p className="font-semibold text-slate-800 break-words">{nf.emitenteNome || "—"}</p>
                     <p className="text-sm text-slate-500 tabular-nums">{nf.emitenteCnpj || "—"}</p>
                   </div>
-
-                  {/* Datas */}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-xl border bg-slate-50 p-3">
                       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Emissão</p>
@@ -1931,16 +1950,12 @@ export default function FinanceiroNotasFiscais() {
                       <p className="font-semibold text-slate-800">{fmtDateBR(nf.createdAt)}</p>
                     </div>
                   </div>
-
-                  {/* Descrição */}
                   {nf.descricaoServico && (
                     <div className="rounded-xl border bg-slate-50 p-3">
                       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Descrição</p>
                       <p className="text-sm text-slate-700 break-words">{nf.descricaoServico}</p>
                     </div>
                   )}
-
-                  {/* Chave de Acesso */}
                   {nf.chaveAcesso && (
                     <div className="rounded-xl border bg-slate-50 p-3">
                       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Chave de Acesso</p>
@@ -1962,8 +1977,6 @@ export default function FinanceiroNotasFiscais() {
                       </div>
                     </div>
                   )}
-
-                  {/* NSU */}
                   {nf.nsuSefaz && (
                     <p className="text-xs text-slate-400">NSU SEFAZ: <span className="font-mono">{nf.nsuSefaz}</span></p>
                   )}
@@ -1988,30 +2001,6 @@ export default function FinanceiroNotasFiscais() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-
-        <AlertDialog open={!!deleteTarget} onOpenChange={v => !v && setDeleteTarget(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Cancelar NF-e #{deleteTarget?.numeroNf}?</AlertDialogTitle>
-              <AlertDialogDescription>
-                A nota será marcada como <strong>cancelada</strong>. Nenhum dado será excluído.
-                Valor líquido: {formatBRL(deleteTarget?.valorLiquido)} — Tomador: {deleteTarget?.tomadorRazaoSocial ?? "—"}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Não cancelar</AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-red-600 hover:bg-red-700"
-                onClick={() => deleteTarget && excluirMut.mutate({ id: deleteTarget.id, companyId: companyId! })}
-              >
-                Confirmar Cancelamento
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-        </>}
-        {/* fim aba emitidas */}
 
       </div>
     </DashboardLayout>

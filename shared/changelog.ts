@@ -1,6 +1,13 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3599 — **NF-e RECEBIDAS · BUGFIX BOTÃO 👁 NÃO ABRIA DETALHE — DIALOG ESTAVA DENTRO DO BLOCO "EMITIDAS". 100% FRONTEND · ZERO BACKEND/ALTER/DROP/DELETE.**
+ *
+ * O `<Dialog open={!!nfeRecDetalhe}>` foi colocado dentro do bloco `{pageTab === "emitidas" && <>...</>}`.
+ * Quando a aba ativa é "recebidas", esse bloco não renderiza → clicar no 👁 chamava `setNfeRecDetalhe(nf)`,
+ * mas o Dialog nunca montava → nada abria. Fix: Dialog movido para fora de ambas as abas (antes do `</div>`
+ * que fecha o container principal), garantindo que sempre esteja na árvore de renderização.
+ *
  * Rev. 3598 — **NFS-e EMITIDAS · BUGFIX NF-e RECEBIDA (SEFAZ) APARECIA NA ABA EMITIDAS. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
  *
  * A aba "NFS-e Emitidas" usa `fiscalNotes.list` que não filtrava por `origem`.
