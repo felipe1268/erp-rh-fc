@@ -37,15 +37,16 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
     { companyId }, { enabled: !!companyId }
   );
   // Estado local: mapa ibge_code → { inscricao, senha, enabled }
-  const [munForms, setMunForms] = useState<Record<number, { inscricao: string; senha: string; enabled: boolean }>>({});
+  const [munForms, setMunForms] = useState<Record<number, { inscricao: string; senha: string; enabled: boolean; syncHora: number }>>({});
   useEffect(() => {
     if (!municipios || !Array.isArray(municipios)) return;
-    const m: Record<number, { inscricao: string; senha: string; enabled: boolean }> = {};
+    const m: Record<number, { inscricao: string; senha: string; enabled: boolean; syncHora: number }> = {};
     municipios.forEach((mun: any) => {
       m[Number(mun.ibge_code)] = {
         inscricao: mun.inscricao_municipal || "",
         senha: mun.token || "",
         enabled: !!mun.enabled,
+        syncHora: Number(mun.sync_hora ?? 6),
       };
     });
     setMunForms(m);
@@ -641,7 +642,7 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
             {/* Cards de cada município */}
             {(municipios || []).map((mun: any) => {
               const ibge = Number(mun.ibge_code);
-              const form = munForms[ibge] || { inscricao: "", senha: "", enabled: false };
+              const form = munForms[ibge] || { inscricao: "", senha: "", enabled: false, syncHora: 6 };
               const isSyncing = syncMunMut.isPending && (syncMunMut.variables as any)?.ibgeCode === ibge;
               const isSaving = saveMunMut.isPending && (saveMunMut.variables as any)?.ibgeCode === ibge;
 
@@ -709,9 +710,9 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
                     </div>
                   </div>
 
-                  {/* Toggle sync + última sync */}
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
+                  {/* Toggle sync + última sync + horário */}
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <Switch
                         checked={form.enabled}
                         onCheckedChange={v => setMunForms(f => ({ ...f, [ibge]: { ...f[ibge], enabled: v } }))}
@@ -719,6 +720,25 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
                       <span className={`text-[11px] font-medium ${form.enabled ? "text-emerald-600" : "text-gray-400"}`}>
                         {form.enabled ? "Sync automático ligado" : "Sync automático desligado"}
                       </span>
+                      {/* Seletor de hora */}
+                      <div className="flex items-center gap-1.5 ml-1">
+                        <span className="text-[10px] text-gray-500">às</span>
+                        <Select
+                          value={String(form.syncHora ?? 6)}
+                          onValueChange={v => setMunForms(f => ({ ...f, [ibge]: { ...f[ibge], syncHora: Number(v) } }))}
+                        >
+                          <SelectTrigger className="h-6 text-[11px] w-20 px-2">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 24 }, (_, h) => (
+                              <SelectItem key={h} value={String(h)}>
+                                {String(h).padStart(2, "0")}:00
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                     {mun.last_sync_at && (
                       <span className="text-[10px] text-slate-400">
@@ -751,6 +771,7 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
                         inscricaoMunicipal: form.inscricao,
                         token: form.senha,
                         enabled: form.enabled,
+                        syncHora: form.syncHora,
                       })}
                     >
                       {isSaving ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Save className="w-3 h-3 mr-1" />}

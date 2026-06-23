@@ -1,6 +1,20 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3565 — **NFS-e EMITIDAS MUNICIPAIS · HORÁRIO DE SINCRONIZAÇÃO CONFIGURÁVEL + CRON AUTOMÁTICO. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
+ *
+ * O toggle "Sync automático" existia mas não fazia nada — não havia cron. Agora cada
+ * município tem um seletor de hora (00:00–23:00) integrado ao toggle, e um cron
+ * horário (`startNfseMunCron`) verifica na hora cheia quais municípios têm
+ * `COALESCE(sync_hora,6) = hora_atual` com `enabled=1` e `inscricao_municipal` preenchida,
+ * disparando `executarSyncMunicipio` para cada um.
+ *
+ * Arquivos alterados:
+ * - `server/_core/index.ts` — SyncSchema+ Rev. 3565: `ADD COLUMN IF NOT EXISTS sync_hora SMALLINT NOT NULL DEFAULT 6` em `company_nfse_municipal_config`; `startNfseMunCron()` chamado na inicialização.
+ * - `server/routers/nfseEmitidas.ts` — `getMunicipios` retorna `COALESCE(sync_hora,6)`; `saveMunicipio` aceita e salva `syncHora`; `startNfseMunCron()` exportada (cron horário).
+ * - `client/src/pages/configuracoes/FinanceiroConfigSection.tsx` — `munForms` inclui `syncHora:number`; hydration de `mun.sync_hora`; Select 00:00–23:00 inline no toggle de cada card; mutation passa `syncHora`.
+ * - `shared/version.ts` — Rev. 3565.
+ *
  * Rev. 3564 — **SEFAZ NF-e RECEBIDAS · HORÁRIO DE SINCRONIZAÇÃO CONFIGURÁVEL. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
  *
  * O horário do cron SEFAZ era fixo em 06:00 (hardcoded). Agora cada empresa pode

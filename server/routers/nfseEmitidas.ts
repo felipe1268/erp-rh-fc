@@ -490,7 +490,7 @@ export const nfseEmitidasRouter = router({
       );
 
       const rows = await db.$client.query<any>(
-        `SELECT * FROM company_nfse_municipal_config WHERE company_id=$1 ORDER BY nome_municipio`,
+        `SELECT *, COALESCE(sync_hora, 6) AS sync_hora FROM company_nfse_municipal_config WHERE company_id=$1 ORDER BY nome_municipio`,
         [companyId]
       );
 
@@ -498,6 +498,7 @@ export const nfseEmitidasRouter = router({
         ...r,
         ibge_code: Number(r.ibge_code),
         enabled: r.enabled === true || Number(r.enabled) === 1,
+        sync_hora: Number(r.sync_hora ?? 6),
       }));
     }),
 
@@ -552,7 +553,7 @@ export const nfseEmitidasRouter = router({
       return { success: true };
     }),
 
-  // Salva inscrição municipal, token e toggle de sincronização
+  // Salva inscrição municipal, token, toggle e horário de sincronização
   saveMunicipio: protectedProcedure
     .input(z.object({
       companyId: z.number(),
@@ -560,17 +561,19 @@ export const nfseEmitidasRouter = router({
       inscricaoMunicipal: z.string().optional(),
       token: z.string().optional(),
       enabled: z.boolean(),
+      syncHora: z.number().min(0).max(23).default(6),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       await db.$client.query(
         `UPDATE company_nfse_municipal_config
-         SET inscricao_municipal=$1, token=$2, enabled=$3, updated_at=NOW()
-         WHERE company_id=$4 AND ibge_code=$5`,
+         SET inscricao_municipal=$1, token=$2, enabled=$3, sync_hora=$4, updated_at=NOW()
+         WHERE company_id=$5 AND ibge_code=$6`,
         [
           input.inscricaoMunicipal || null,
           input.token || null,
           input.enabled ? 1 : 0,
+          input.syncHora,
           input.companyId,
           input.ibgeCode,
         ]
@@ -618,5 +621,47 @@ export const nfseEmitidasRouter = router({
     }),
 });
 
-// Exporta para uso no cron (futuro)
 export { executarSyncMunicipio };
+
+// ── Cron horário: a cada hora cheia verifica quais municípios têm sync_hora = hora atual ──
+let _nfseMunCronStarted = false;
+export function startNfseMunCron() {
+  if (_nfseMunCronStarted) return;
+  _nfseMunCronStarted = true;
+
+  const runHour = async (horaAtual: number) => {
+    try {
+      const db = await getDb();
+      const rows = await db.$client.query<any>(
+        `SELECT company_id, ibge_code FROM company_nfse_municipal_config
+         WHERE enabled = 1 AND inscricao_municipal IS NOT NULL
+           AND COALESCE(sync_hora, 6) = $1`,
+        [horaAtual]
+      );
+      for (const r of rows.rows) {
+        try {
+          const res = await executarSyncMunicipio(Number(r.company_id), Number(r.ibge_code));
+          console.log(`[NfseMunSync] company=${r.company_id} ibge=${r.ibge_code} hora=${horaAtual}h importadas=${res.importadas} ignoradas=${res.ignoradas}${res.erro ? " ERRO=" + res.erro : ""}`);
+        } catch (e: any) {
+          console.error(`[NfseMunSync] company=${r.company_id} ibge=${r.ibge_code} ERRO:`, e?.message);
+        }
+      }
+    } catch (e: any) {
+      console.error("[NfseMunSync] Cron erro:", e?.message);
+    }
+  };
+
+  const scheduleNext = () => {
+    const now = new Date();
+    const next = new Date();
+    next.setMinutes(0, 0, 0);
+    next.setHours(now.getHours() + 1);
+    const ms = next.getTime() - now.getTime();
+    setTimeout(async () => {
+      await runHour(new Date().getHours());
+      scheduleNext();
+    }, ms);
+  };
+  scheduleNext();
+  console.log("[NfseMunSync] Cron diário agendado (verifica cada hora cheia; roda por município conforme sync_hora configurado).");
+}

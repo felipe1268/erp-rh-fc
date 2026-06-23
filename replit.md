@@ -50,7 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3564** — **SEFAZ NF-e RECEBIDAS · HORÁRIO DE SINCRONIZAÇÃO CONFIGURÁVEL. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** O cron era fixo em 06:00 (hardcoded). Agora cada empresa configura o horário (00:00–23:00) em Configurações → Financeiro → Integração SEFAZ. Cron passa a rodar a cada hora cheia e filtra por `COALESCE(sync_hora,6) = hora_atual`. SyncSchema+ garante `ALTER TABLE company_nfe_config ADD COLUMN IF NOT EXISTS sync_hora SMALLINT DEFAULT 6`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3565** — **NFS-e EMITIDAS MUNICIPAIS · HORÁRIO DE SINCRONIZAÇÃO CONFIGURÁVEL + CRON AUTOMÁTICO. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Toggle "Sync automático" existia mas sem cron — o disparo nunca acontecia. Adicionado seletor de hora (00:00–23:00) inline no toggle de cada card e `startNfseMunCron()` (horário por município via `COALESCE(sync_hora,6) = hora_atual`). SyncSchema+ garante coluna `sync_hora` em `company_nfse_municipal_config`. Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3564** — **SEFAZ NF-e RECEBIDAS · HORÁRIO DE SINCRONIZAÇÃO CONFIGURÁVEL. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3563** — **NFS-e EMITIDAS MUNICIPAIS · BUGFIX "(intermediate value) is not iterable" NO BOTÃO SINCRONIZAR. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** `executarSyncMunicipio` usava `const [x] = await db.$client.query<any>(...)` — `QueryResult` do driver `pg` NÃO é iterável (não tem `Symbol.iterator`); desestruturação de array lançava o TypeError. 3 ocorrências corrigidas para `const res = await ...; const x = res.rows[0]`. Detalhe: `shared/changelog.ts`.
 

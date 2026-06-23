@@ -4076,6 +4076,12 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3561: company_nfse_municipal_config garantida.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3561 nfse_municipal:`, e?.message || e); }
 
+        // Rev. 3565 — NFS-e Municipal: horário configurável da sincronização automática (padrão 06:00).
+        try {
+          await db.execute(sql`ALTER TABLE company_nfse_municipal_config ADD COLUMN IF NOT EXISTS sync_hora SMALLINT NOT NULL DEFAULT 6`);
+          console.log(`[SyncSchema+] Rev. 3565: coluna sync_hora garantida em company_nfse_municipal_config (padrão=6).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3565 nfse_mun_sync_hora:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
@@ -5278,8 +5284,11 @@ Regras:
     // t=0s — AutoCheck (leve, só agenda cron)
     import("../routers/datajudAutoCheck").then(m => m.startAutoCheckJob()).catch(e => console.error("[AutoCheck] Falha ao iniciar:", e));
 
-    // t=0s — SEFAZ NFeDistribuicaoDFe cron (busca NF-e recebidas todo dia às 06:00)
+    // t=0s — SEFAZ NFeDistribuicaoDFe cron (busca NF-e recebidas; horário por empresa)
     import("../routers/sefaz").then(m => m.startSefazCron()).catch(e => console.error("[SefazSync] Falha ao iniciar cron:", e));
+
+    // t=0s — NFS-e Municipal cron (consulta prefeituras; horário por município)
+    import("../routers/nfseEmitidas").then(m => m.startNfseMunCron()).catch(e => console.error("[NfseMunSync] Falha ao iniciar cron:", e));
 
     // t=15s — RescisaoCheck
     delay(15_000).then(() =>
