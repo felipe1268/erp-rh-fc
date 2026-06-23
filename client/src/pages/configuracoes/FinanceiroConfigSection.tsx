@@ -795,7 +795,7 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
                         <p className="text-[10px] text-slate-500 mt-0.5">
                           {sefazCfg?.tem_certificado
                             ? "Certificado A1 do SEFAZ detectado. Nenhuma senha adicional necessária."
-                            : "Certificado A1 não encontrado. Configure-o acima em "Integração SEFAZ / Certificado A1"."}
+                            : 'Certificado A1 não encontrado. Configure-o acima em "Integração SEFAZ / Certificado A1".'}
                         </p>
                       </div>
                     </div>
