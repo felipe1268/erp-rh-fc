@@ -1,6 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3557 — **SEFAZ · BUGFIX soap:Sender — FALTAVA soap12:Header COM nfeCabecMsg. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
+ *
+ * Todos os WebServices SEFAZ exigem o elemento `<nfeCabecMsg>` dentro do `<soap12:Header>`
+ * contendo `<cUF>` e `<versaoDados>`. Sem ele o servidor retorna `soap:Sender` (HTTP 500).
+ * `buildSoapEnvelope` não incluía o Header — adicionado agora.
+ *
+ * Arquivo: `server/routers/sefaz.ts` (`buildSoapEnvelope` +6 linhas).
+ *
  * Rev. 3556 — **SEFAZ · BUGFIX soap:Sender — FALTAVA action NO Content-Type + rejectUnauthorized. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
  *
  * SOAP 1.2 exige que a action seja embarcada no Content-Type:
