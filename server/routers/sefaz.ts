@@ -147,7 +147,7 @@ function extractNumeroNf(chave: string): string {
 
 // ── Função principal de sincronização ────────────────────────────────────────
 export async function executarSyncNFe(companyId: number): Promise<{ importadas: number; ignoradas: number; erro?: string }> {
-  const db = getDb();
+  const db = await getDb();
 
   // Buscar config
   const cfgRows = (await db.execute(sql`
@@ -282,7 +282,7 @@ export function startSefazCron() {
 
   const runAll = async () => {
     try {
-      const db = getDb();
+      const db = await getDb();
       const rows = (await db.execute(sql`
         SELECT company_id FROM company_nfe_config WHERE ativo = 1 AND sync_enabled = 1
       `)) as any;
@@ -323,7 +323,7 @@ export const sefazRouter = router({
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input, ctx }) => {
       if (ctx.user?.role !== "admin_master" && ctx.user?.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
-      const db = getDb();
+      const db = await getDb();
       const rows = (await db.execute(sql`
         SELECT company_id, cnpj, uf, ambiente, sync_enabled, ativo,
                ultimo_nsu, last_sync_at, last_sync_result,
@@ -346,7 +346,7 @@ export const sefazRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       if (ctx.user?.role !== "admin_master" && ctx.user?.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
-      const db = getDb();
+      const db = await getDb();
 
       // Upsert
       const exists = (await db.execute(sql`
@@ -394,7 +394,7 @@ export const sefazRouter = router({
     .input(z.object({ companyId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       if (ctx.user?.role !== "admin_master" && ctx.user?.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
-      const db = getDb();
+      const db = await getDb();
       await db.execute(sql`
         UPDATE company_nfe_config SET ultimo_nsu = '000000000000000' WHERE company_id = ${input.companyId}
       `);
@@ -410,7 +410,7 @@ export const sefazRouter = router({
       status: z.string().optional(),
     }))
     .query(async ({ input, ctx }) => {
-      const db = getDb();
+      const db = await getDb();
       const rows = (await db.execute(sql`
         SELECT id, numero_nf, chave_acesso, data_emissao, emitente_cnpj, emitente_nome,
                nsu_sefaz, valor_bruto, valor_liquido, status, descricao_servico,

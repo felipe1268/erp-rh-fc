@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3554** — **SEFAZ · BUGFIX "db.execute is not a function" — getDb() É ASYNC, FALTAVA await. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** `getDb()` é async — retorna Promise. Todos os 7 sites em sefaz.ts faziam `const db = getDb()` sem await → db era Promise → `.execute` inexistente. Fix: `await getDb()` em todos. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3553** — **SEFAZ · BUGFIX FORBIDDEN EM TODOS OS ENDPOINTS — `ctx.user.isAdminLike` NÃO EXISTE. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Os 4 gates do sefazRouter usavam `ctx.user?.isAdminLike` (propriedade inexistente no contexto tRPC = sempre `undefined`), bloqueando qualquer usuário ao salvar/ler config SEFAZ. Fix: substituído por `role !== "admin_master" && role !== "admin"`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3552** — **NOTAS FISCAIS · DUAS SUB-ABAS: "NFS-e EMITIDAS" + "NF-e RECEBIDAS (SEFAZ)". BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** A tela `/financeiro/notas-fiscais` ganhou seletor de abas: "📤 NFS-e Emitidas" (conteúdo original intacto) e "📥 NF-e Recebidas (SEFAZ)" (NF-e importadas via integração SEFAZ da Rev. 3550, `origem='sefaz_nfe'`). Aba recebidas: 4 KPI cards, timeline ano/mês, filtro busca+status, tabela emitente/CNPJ/valor/chave. Novo endpoint `sefaz.listNFeRecebidas`. Detalhe: `shared/changelog.ts`.

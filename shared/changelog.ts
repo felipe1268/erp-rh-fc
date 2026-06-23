@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3554 — **SEFAZ · BUGFIX "db.execute is not a function" — getDb() É ASSÍNCRONA, FALTAVA await. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
+ *
+ * `getDb()` em `server/db.ts` é declarada como `async function` — retorna uma `Promise<db|null>`.
+ * Em `sefaz.ts`, todos os 7 sites de uso faziam `const db = getDb()` sem `await`, atribuindo
+ * uma Promise ao invés do objeto de conexão → `db.execute is not a function` em runtime.
+ * Fix: substituído `const db = getDb()` por `const db = await getDb()` em todos os sites
+ * (`executarSyncNFe`, cron `runAll`, `getConfig`, `saveConfig`, `syncNow`, `resetNSU`, `listNFeRecebidas`).
+ *
+ * Arquivo: `server/routers/sefaz.ts` (7 linhas).
+ *
  * Rev. 3553 — **SEFAZ · BUGFIX FORBIDDEN EM TODOS OS ENDPOINTS DO ROUTER — ctx.user.isAdminLike NÃO EXISTE. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
  *
  * Os 4 gates de autorização do `sefazRouter` (getConfig, saveConfig, syncNow, resetNSU) usavam
