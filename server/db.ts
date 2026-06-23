@@ -299,11 +299,13 @@ export async function getCompaniesForUser(userId: number, role: string) {
   try {
     const obraIds = await getEffectiveAllowedObraIds(userId, role);
     if (Array.isArray(obraIds) && obraIds.length > 0) {
-      const compRes = await db.execute(sql`
-        SELECT DISTINCT "companyId" FROM obras
-         WHERE id = ANY(${obraIds}) AND "deletedAt" IS NULL
-      `);
-      const compRows: any[] = (compRes as any)?.rows ?? (compRes as any) ?? [];
+      // Usa $client.query + $1::int[] porque db.execute(sql`ANY(${array})`)
+      // expande para ANY(($1,$2,...)) — tupla, não array — causando erro no PG.
+      const compRes = await db.$client.query<{ companyId: number }>(
+        `SELECT DISTINCT "companyId" FROM obras WHERE id = ANY($1::int[]) AND "deletedAt" IS NULL`,
+        [obraIds]
+      );
+      const compRows: any[] = compRes.rows ?? [];
       for (const r of compRows) {
         const n = Number(r.companyId);
         if (Number.isFinite(n)) companyIdSet.add(n);

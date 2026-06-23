@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3584** — **CRÍTICO · BUGFIX TELA BRANCA NO APP PUBLICADO — `getCompaniesForUser` CRASHAVA COM `ANY(($1,$2,$3))`. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** `db.execute(sql\`ANY(${array})\`)` gera tupla em vez de array PG → crash no login de usuários com obras concedidas → tela branca. Fix: `db.$client.query` com `$1::int[]`. Arquivo: `server/db.ts`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3583** — **NF-e RECEBIDAS · BUGFIX BANNER "NENHUMA NF-e" FALSO ALARME. 100% FRONTEND · ZERO BACKEND.** Banner âmbar "Configure o certificado A1" só aparece quando cert realmente não está configurado. Com cert mas sem notas → banner azul neutro. Banner verde corrigido: "sincronizando agora" → "pronta para sincronizar". Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3582** — **NFS-e MUNICIPAIS · PORTAL NACIONAL (nfse.gov.br) AUTO-CONFIGURADO PARA GUARATINGUETÁ. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Guaratinguetá migrou do SIAP GEO para o Portal Nacional a partir de 01/01/2026. Segundo registro semeado (ibge_code sintético 35186020, provider=nfse_nacional). Card UI indigo com bloco cert A1 em vez de senha. Detalhe: `shared/changelog.ts`.

@@ -1,6 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3584 — **CRÍTICO · BUGFIX TELA BRANCA NO APP PUBLICADO — `getCompaniesForUser` CRASHAVA COM `ANY(($1,$2,$3))`. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
+ *
+ * `db.execute(sql\`WHERE id = ANY(${obraIds})\`)` expande array JS em tupla `($1,$2,$3)`, não em array PG.
+ * PostgreSQL rejeita `ANY(($1,$2,$3))` com "op ANY/ALL (array) requires array on right side".
+ * O erro derrubava o `getCompaniesForUser` de usuários com obras concedidas, crashando o login e gerando tela branca.
+ * Fix: substituído por `db.$client.query("WHERE id = ANY($1::int[])", [obraIds])` — passa array real ao driver PG.
+ * Arquivo: `server/db.ts` (linha 302-311).
+ *
  * Rev. 3583 — **NF-e RECEBIDAS · BUGFIX BANNER "NENHUMA NF-e" FALSO ALARME + TEXTO BANNER VERDE CORRIGIDO. 100% FRONTEND · ZERO BACKEND.**
  *
  * O banner âmbar "Nenhuma NF-e recebida encontrada" disparava para qualquer resultado 0,
