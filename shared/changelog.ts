@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3561 — **NFS-e EMITIDAS MUNICIPAIS · NOVO MÓDULO: CONSULTA AUTOMÁTICA NAS PREFEITURAS (SIAP GEO, SIL, GIAP, TINUS). BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * Novo módulo para consultar NFS-e emitidas pela FC Engenharia nas prefeituras municipais via
+ * WebService/API. Suporta 4 provedores: SIAP GEO (Guaratinguetá-SP via geosiap.net.br, SOAP
+ * com login/senha no header), SIL Tecnologia (Aparecida-SP, ABRASF 2.x), GIAP/GINFES (Araraquara-SP,
+ * REST com token), TINUS/ABRASF 1.00 (Igarassu-PE). Login = Inscrição Municipal; Senha = senha
+ * do portal do contribuinte. Arquitetura: tabela `company_nfse_municipal_config` (auto-seed
+ * dos 4 municípios); router `nfseEmitidas` (getMunicipios, saveMunicipio, syncMunicipio,
+ * listNFseEmitidasMunicipal); nova seção "NFS-e Emitidas (Prefeituras Municipais)" em
+ * Configurações → Financeiro com cards por prefeitura (inscrição, senha, toggle sync,
+ * última sync, botão Sincronizar Agora). NFS-e importadas entram em `fiscal_notes`
+ * com `origem='nfse_mun_<ibge>'`.
+ * Arquivos: `server/routers/nfseEmitidas.ts`, `server/_core/index.ts` (SyncSchema+),
+ * `server/routers.ts`, `client/src/pages/configuracoes/FinanceiroConfigSection.tsx`.
+ *
  * Rev. 3560 — **SEFAZ · RATE-LIMIT (cStat=656) AGORA SINALIZADO NA UI + NSU NÃO AVANÇA. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * Quando o SEFAZ retorna cStat=656 ("Consumo Indevido"), o comportamento anterior era

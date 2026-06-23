@@ -30,7 +30,41 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
   const { selectedCompanyId } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
 
-  const [expanded, setExpanded] = useState<"tributario" | "socios" | "sefaz" | null>(null);
+  const [expanded, setExpanded] = useState<"tributario" | "socios" | "sefaz" | "nfseMun" | null>(null);
+
+  // ── NFS-e Emitidas Municipais state ──
+  const { data: municipios, refetch: refetchMunicipios } = (trpc as any).nfseEmitidas.getMunicipios.useQuery(
+    { companyId }, { enabled: !!companyId }
+  );
+  // Estado local: mapa ibge_code → { inscricao, senha, enabled }
+  const [munForms, setMunForms] = useState<Record<number, { inscricao: string; senha: string; enabled: boolean }>>({});
+  useEffect(() => {
+    if (municipios) {
+      const m: Record<number, { inscricao: string; senha: string; enabled: boolean }> = {};
+      for (const mun of municipios) {
+        m[mun.ibge_code] = {
+          inscricao: mun.inscricao_municipal || "",
+          senha: mun.token || "",
+          enabled: !!mun.enabled,
+        };
+      }
+      setMunForms(m);
+    }
+  }, [municipios]);
+
+  const saveMunMut = (trpc as any).nfseEmitidas.saveMunicipio.useMutation({
+    onSuccess: () => { toast.success("Configuração salva!"); refetchMunicipios(); },
+    onError: (e: any) => toast.error(e.message || "Erro ao salvar"),
+  });
+  const syncMunMut = (trpc as any).nfseEmitidas.syncMunicipio.useMutation({
+    onSuccess: (r: any) => {
+      if (r.erro) toast.error("Sync: " + r.erro);
+      else if (r.aviso) toast.warning("⚠️ " + r.aviso);
+      else toast.success(`${r.importadas} NFS-e importadas, ${r.ignoradas} ignoradas.`);
+      refetchMunicipios();
+    },
+    onError: (e: any) => toast.error(e.message || "Erro na sincronização"),
+  });
 
   // ── SEFAZ state ──
   const [sefazForm, setSefazForm] = useState({ cnpj: "", uf: "SP", ambiente: "producao", syncEnabled: true });
@@ -520,6 +554,168 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
                 Resetar NSU
               </Button>
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* Sub-seção: NFS-e Emitidas Municipais */}
+      <div className="border-b border-emerald-100 last:border-0">
+        <button
+          onClick={() => setExpanded(expanded === "nfseMun" ? null : "nfseMun")}
+          className="w-full flex items-center justify-between px-4 py-3 bg-white hover:bg-emerald-50/50 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <FileText className="w-4 h-4 text-blue-500" />
+            <span className="font-medium text-gray-800 text-sm">NFS-e Emitidas (Prefeituras Municipais)</span>
+            {municipios && municipios.filter((m: any) => m.inscricao_municipal).length > 0 && (
+              <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs flex items-center gap-1">
+                <CheckCircle className="w-3 h-3" /> {municipios.filter((m: any) => m.inscricao_municipal).length} configurada(s)
+              </span>
+            )}
+          </div>
+          <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${expanded === "nfseMun" ? "rotate-90" : ""}`} />
+        </button>
+
+        {expanded === "nfseMun" && (
+          <div className="px-4 pb-4 bg-white space-y-3">
+            {/* Explicação */}
+            <div className="rounded-lg border border-blue-200 bg-blue-50/60 px-3 py-3 text-sm text-blue-900 flex items-start gap-2">
+              <FileText className="w-4 h-4 mt-0.5 shrink-0 text-blue-600" />
+              <p>
+                Consulta NFS-e <strong>emitidas pela empresa</strong> nos portais das prefeituras municipais.
+                Informe a <strong>Inscrição Municipal</strong> (= login do portal) e a <strong>senha</strong> de cada cidade.
+                O botão "Sincronizar" importa as notas para a aba <strong>NFS-e Emitidas</strong>.
+              </p>
+            </div>
+
+            {/* Cards de cada município */}
+            {(municipios || []).map((mun: any) => {
+              const ibge = Number(mun.ibge_code);
+              const form = munForms[ibge] || { inscricao: "", senha: "", enabled: false };
+              const isSyncing = syncMunMut.isPending && (syncMunMut.variables as any)?.ibgeCode === ibge;
+              const isSaving = saveMunMut.isPending && (saveMunMut.variables as any)?.ibgeCode === ibge;
+
+              let syncResult: { importadas?: number; ignoradas?: number; erro?: string; aviso?: string } = {};
+              try { syncResult = JSON.parse(mun.last_sync_result || "{}"); } catch {}
+
+              const providerBadge: Record<string, { label: string; color: string }> = {
+                nfse_nacional: { label: "NFS-e Nacional", color: "bg-indigo-100 text-indigo-700" },
+                sil: { label: "SIL Tecnologia", color: "bg-violet-100 text-violet-700" },
+                giap: { label: "GIAP / Token", color: "bg-amber-100 text-amber-700" },
+                tinus: { label: "TINUS ABRASF", color: "bg-teal-100 text-teal-700" },
+                siapgeo: { label: "SIAP GEO", color: "bg-sky-100 text-sky-700" },
+              };
+              const badge = providerBadge[mun.provider] || { label: mun.provider, color: "bg-gray-100 text-gray-600" };
+
+              return (
+                <div key={ibge} className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                  {/* Header do card */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-gray-800 text-sm">{mun.nome_municipio}</span>
+                      <span className="text-xs font-medium text-gray-400">{mun.uf}</span>
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${badge.color}`}>{badge.label}</span>
+                    </div>
+                    {form.inscricao ? (
+                      <span className="text-[10px] text-emerald-700 font-semibold flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3" /> Configurado
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-amber-600 font-semibold flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" /> Sem inscrição
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Campos */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-xs text-gray-600">Inscrição Municipal / Login</Label>
+                      <Input
+                        className="mt-1 text-sm h-8"
+                        placeholder="Ex: 13239401"
+                        value={form.inscricao}
+                        onChange={e => setMunForms(f => ({ ...f, [ibge]: { ...f[ibge], inscricao: e.target.value } }))}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-600">Senha do Portal</Label>
+                      <Input
+                        type="password"
+                        className="mt-1 text-sm h-8"
+                        placeholder="••••••••"
+                        value={form.senha}
+                        onChange={e => setMunForms(f => ({ ...f, [ibge]: { ...f[ibge], senha: e.target.value } }))}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Toggle sync + última sync */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={form.enabled}
+                        onCheckedChange={v => setMunForms(f => ({ ...f, [ibge]: { ...f[ibge], enabled: v } }))}
+                      />
+                      <span className={`text-[11px] font-medium ${form.enabled ? "text-emerald-600" : "text-gray-400"}`}>
+                        {form.enabled ? "Sync automático ligado" : "Sync automático desligado"}
+                      </span>
+                    </div>
+                    {mun.last_sync_at && (
+                      <span className="text-[10px] text-slate-400">
+                        {new Date(mun.last_sync_at).toLocaleString("pt-BR")}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Resultado da última sync */}
+                  {mun.last_sync_at && (
+                    <div className="text-[11px] px-2 py-1 rounded bg-white border border-slate-200">
+                      {syncResult.erro
+                        ? <span className="text-red-600">❌ {syncResult.erro.slice(0, 100)}</span>
+                        : syncResult.aviso
+                        ? <span className="text-amber-600">⚠️ {syncResult.aviso.slice(0, 100)}</span>
+                        : <span className="text-emerald-700">✓ {syncResult.importadas ?? 0} importadas, {syncResult.ignoradas ?? 0} ignoradas</span>
+                      }
+                    </div>
+                  )}
+
+                  {/* Ações */}
+                  <div className="flex gap-2 pt-1">
+                    <Button
+                      size="sm"
+                      className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-7 px-3"
+                      disabled={isSaving}
+                      onClick={() => saveMunMut.mutate({
+                        companyId,
+                        ibgeCode: ibge,
+                        inscricaoMunicipal: form.inscricao,
+                        token: form.senha,
+                        enabled: form.enabled,
+                      })}
+                    >
+                      {isSaving ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Save className="w-3 h-3 mr-1" />}
+                      Salvar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-blue-300 text-blue-700 hover:bg-blue-50 text-xs h-7 px-3"
+                      disabled={isSyncing || !form.inscricao}
+                      title={!form.inscricao ? "Preencha a Inscrição Municipal primeiro" : ""}
+                      onClick={() => syncMunMut.mutate({ companyId, ibgeCode: ibge })}
+                    >
+                      {isSyncing ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Play className="w-3 h-3 mr-1" />}
+                      Sincronizar Agora
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+
+            {(!municipios || municipios.length === 0) && (
+              <div className="text-center text-gray-400 text-sm py-4">Carregando municípios...</div>
+            )}
           </div>
         )}
       </div>

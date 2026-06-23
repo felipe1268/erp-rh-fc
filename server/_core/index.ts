@@ -4044,6 +4044,32 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3550: company_nfe_config + colunas SEFAZ em fiscal_notes garantidas.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3550 SEFAZ config:`, e?.message || e); }
 
+        // Rev. 3561 — NFS-e Emitidas Municipais: config por município (4 prefeituras pré-definidas).
+        // ADITIVO — zero ALTER destrutivo/DROP/DELETE (R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS company_nfse_municipal_config (
+              id                  SERIAL PRIMARY KEY,
+              company_id          INTEGER NOT NULL,
+              ibge_code           INTEGER NOT NULL,
+              nome_municipio      VARCHAR(100) NOT NULL,
+              uf                  VARCHAR(2) NOT NULL DEFAULT 'SP',
+              provider            VARCHAR(30) NOT NULL,
+              endpoint            TEXT NOT NULL,
+              inscricao_municipal VARCHAR(30),
+              token               TEXT,
+              enabled             SMALLINT NOT NULL DEFAULT 0,
+              last_sync_at        TIMESTAMP,
+              last_sync_result    TEXT,
+              created_at          TIMESTAMP NOT NULL DEFAULT NOW(),
+              updated_at          TIMESTAMP NOT NULL DEFAULT NOW(),
+              UNIQUE(company_id, ibge_code)
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_nfse_mun_company ON company_nfse_municipal_config(company_id)`);
+          console.log(`[SyncSchema+] Rev. 3561: company_nfse_municipal_config garantida.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3561 nfse_municipal:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
