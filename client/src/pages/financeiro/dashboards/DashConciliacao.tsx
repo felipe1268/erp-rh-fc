@@ -355,9 +355,13 @@ export default function DashConciliacao() {
     });
   }, [entradasSaidasMes]);
 
-  // Saídas por banco (top 8)
+  // Saídas por banco (top 8) — usa externos para ser consistente com os KPI cards (exclui mov. internas)
   const saidasPorBanco = useMemo(() =>
-    detalheContas.slice(0, 8).map((d) => ({ name: d.conta, Saídas: d.valorSaidas, Entradas: d.valorEntradas })),
+    detalheContas.slice(0, 8).map((d) => ({
+      name: d.conta,
+      Saídas: d.valorSaidasExternas ?? d.valorSaidas,
+      Entradas: d.valorEntradasExternas ?? d.valorEntradas,
+    })),
   [detalheContas]);
 
   // Extra data
@@ -566,7 +570,7 @@ export default function DashConciliacao() {
             <div className="space-y-2">
               <SectionTitle>O que mais foi pago por banco (conta bancária)</SectionTitle>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <ChartCard title="Saídas por conta bancária (R$)" subtitle="Quanto cada banco debitou no período" height={Math.max(220, saidasPorBanco.length * 44 + 40)} onOpen={ir}>
+                <ChartCard title="Saídas por conta bancária (R$)" subtitle="Quanto cada banco debitou no período · caixa real (exclui mov. internas)" height={Math.max(220, saidasPorBanco.length * 44 + 40)} onOpen={ir}>
                   {saidasPorBanco.length === 0 ? <EmptyState /> : (
                     <ResponsiveContainer>
                       <BarChart data={saidasPorBanco} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
@@ -580,7 +584,7 @@ export default function DashConciliacao() {
                   )}
                 </ChartCard>
 
-                <ChartCard title="Entradas por conta bancária (R$)" subtitle="Quanto cada banco creditou no período" height={Math.max(220, saidasPorBanco.length * 44 + 40)} onOpen={ir}>
+                <ChartCard title="Entradas por conta bancária (R$)" subtitle="Quanto cada banco creditou no período · caixa real (exclui mov. internas)" height={Math.max(220, saidasPorBanco.length * 44 + 40)} onOpen={ir}>
                   {saidasPorBanco.length === 0 ? <EmptyState /> : (
                     <ResponsiveContainer>
                       <BarChart data={saidasPorBanco} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
@@ -596,7 +600,7 @@ export default function DashConciliacao() {
               </div>
 
               {/* Entradas + Saídas lado a lado por banco */}
-              <ChartCard title="Entradas × Saídas por conta bancária (R$)" subtitle="Comparativo direto por conta" height={Math.max(220, saidasPorBanco.length * 52 + 40)} onOpen={ir}>
+              <ChartCard title="Entradas × Saídas por conta bancária (R$)" subtitle="Comparativo direto por conta · caixa real (exclui mov. internas)" height={Math.max(220, saidasPorBanco.length * 52 + 40)} onOpen={ir}>
                 {saidasPorBanco.length === 0 ? <EmptyState /> : (
                   <ResponsiveContainer>
                     <BarChart data={saidasPorBanco} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>

@@ -1,6 +1,15 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3590 — **CONCILIAÇÃO · BUGFIX GRÁFICOS DE BARRAS POR BANCO USAVAM TOTAIS BRUTOS (COM MOV. INTERNAS) — INCONSISTENTE COM OS KPI CARDS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * `saidasPorBanco` useMemo alimentava os 3 gráficos de barras por banco com `valorSaidas`/`valorEntradas`
+ * (totais brutos, incluindo movimentações internas como aplicações/resgates), enquanto os KPI cards usam
+ * `valorSaidasExternas`/`valorEntradasExternas`. Com uma única conta e aplicações automáticas assimétricas,
+ * o gráfico mostrava entradas > saídas mas o card mostrava saldo negativo — aparente contradição.
+ * Fix: `saidasPorBanco` agora usa `valorSaidasExternas ?? valorSaidas` e `valorEntradasExternas ?? valorEntradas`.
+ * Subtítulos dos 3 gráficos atualizados para "caixa real (exclui mov. internas)". Arquivo: `DashConciliacao.tsx`.
+ *
  * Rev. 3589 — **NF-e RECEBIDAS · BUGFIX processDocZip IGNORAVA nfeProc (NF-e COMPLETA) — SÓ PROCESSAVA resNFe. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
  *
  * `processDocZip` retornava `null` para documentos `nfeProc` (NF-e completa com protocolo) — só
