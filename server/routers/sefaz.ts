@@ -216,9 +216,9 @@ export async function executarSyncNFe(companyId: number): Promise<{ importadas: 
       const respXml = await callSefaz(url, soap, cfg.cert_pfx_base64, cfg.cert_password);
 
       const parsed = xmlParser.parse(respXml);
-      // Navegar pelo envelope SOAP
-      const env = parsed["soap12:Envelope"] || parsed["s:Envelope"] || parsed["Envelope"] || parsed;
-      const body = env?.["soap12:Body"] || env?.["s:Body"] || env?.["Body"] || env;
+      // Resposta usa prefixo "soap:" (não "soap12:") — cobrir todos os prefixos conhecidos
+      const env = parsed["soap:Envelope"] || parsed["soap12:Envelope"] || parsed["s:Envelope"] || parsed["Envelope"] || parsed;
+      const body = env?.["soap:Body"] || env?.["soap12:Body"] || env?.["s:Body"] || env?.["Body"] || env;
       const resp = body?.["nfeDistDFeInteresseResponse"] || body?.["nfeDistDFeIntResponse"] || body;
       // Campo da resposta: retDistDFeInt (operação Interesse) ou nfeRetDistDFeInt (legado)
       const ret = resp?.["nfeDistDFeInteresseResult"]?.["retDistDFeInt"]

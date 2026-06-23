@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3559** — **SEFAZ · BUGFIX PARSING ENVELOPE — RESPOSTA USA "soap:" NÃO "soap12:". BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** SEFAZ responde com prefixo `soap:` (não `soap12:`). Parser navegava `soap12:Envelope/Body` → `ret` vazio → `cStat=""`. Fix: tenta `soap:` primeiro em env e body. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3558** — **SEFAZ · BUGFIX OPERAÇÃO RENOMEADA: nfeDistDFeInt → nfeDistDFeInteresse. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** WSDL real define `nfeDistDFeInteresse` (não `nfeDistDFeInt`). Com o nome correto: HTTP 200, cStat=656 (rate-limit — confirma mTLS+SOAP funcionando). Fix: Body, action no Content-Type, parsing `retDistDFeInt`, cStat=656 tratado como break. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3557** — **SEFAZ · BUGFIX soap:Sender — FALTAVA soap12:Header COM nfeCabecMsg. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Todos os WS SEFAZ exigem `<nfeCabecMsg>` no `<soap12:Header>` com `<cUF>` e `<versaoDados>`. Sem ele → `soap:Sender`. `buildSoapEnvelope` não incluía o Header — adicionado. Detalhe: `shared/changelog.ts`.

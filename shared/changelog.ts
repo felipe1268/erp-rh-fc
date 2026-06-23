@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3559 — **SEFAZ · BUGFIX PARSING ENVELOPE — RESPOSTA USA "soap:" NÃO "soap12:". BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
+ *
+ * O servidor SEFAZ responde com `xmlns:soap="http://www.w3.org/2003/05/soap-envelope"` usando
+ * o prefixo `soap:` (não `soap12:`). O parser navegava por `soap12:Envelope`/`soap12:Body`
+ * e não encontrava nada → `ret` ficava `{}` → `cStat=""` → "SEFAZ cStat=:".
+ * Fix: `env` tenta `soap:Envelope` PRIMEIRO, depois `soap12:`, `s:`, `Envelope`.
+ * Mesmo para `body` (`soap:Body` primeiro). Testado contra o XML real de `cStat=656`.
+ *
+ * Arquivo: `server/routers/sefaz.ts` (2 linhas da navegação do envelope).
+ *
  * Rev. 3558 — **SEFAZ · BUGFIX OPERAÇÃO RENOMEADA: nfeDistDFeInt → nfeDistDFeInteresse. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
  *
  * O WSDL real de `www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx` define
