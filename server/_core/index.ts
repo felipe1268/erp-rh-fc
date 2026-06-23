@@ -4013,6 +4013,37 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3543: tabela fiscal_notes garantida (Controle de NFS-e).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA fiscal_notes:`, e?.message || e); }
 
+        // Rev. 3550 — Integração SEFAZ NFeDistribuicaoDFe: config do certificado A1 por empresa
+        // + colunas origem/emitente/nsu em fiscal_notes para NF-e recebidas automaticamente.
+        // ADITIVO — zero ALTER destrutivo/DROP/DELETE (R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS company_nfe_config (
+              id                SERIAL PRIMARY KEY,
+              company_id        INTEGER NOT NULL UNIQUE,
+              cnpj              VARCHAR(20) NOT NULL DEFAULT '',
+              uf                VARCHAR(2)  NOT NULL DEFAULT 'SP',
+              ambiente          VARCHAR(20) NOT NULL DEFAULT 'producao',
+              cert_pfx_base64   TEXT,
+              cert_password     TEXT,
+              ultimo_nsu        VARCHAR(15) NOT NULL DEFAULT '000000000000000',
+              sync_enabled      SMALLINT NOT NULL DEFAULT 1,
+              ativo             SMALLINT NOT NULL DEFAULT 1,
+              last_sync_at      TIMESTAMP,
+              last_sync_result  TEXT,
+              created_at        TIMESTAMP NOT NULL DEFAULT NOW(),
+              updated_at        TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_nfe_cfg_company ON company_nfe_config(company_id)`);
+          // Colunas aditivas em fiscal_notes para NF-e recebidas via SEFAZ
+          await db.execute(sql`ALTER TABLE fiscal_notes ADD COLUMN IF NOT EXISTS origem VARCHAR(30) DEFAULT 'manual'`);
+          await db.execute(sql`ALTER TABLE fiscal_notes ADD COLUMN IF NOT EXISTS emitente_cnpj VARCHAR(20)`);
+          await db.execute(sql`ALTER TABLE fiscal_notes ADD COLUMN IF NOT EXISTS emitente_nome VARCHAR(255)`);
+          await db.execute(sql`ALTER TABLE fiscal_notes ADD COLUMN IF NOT EXISTS nsu_sefaz VARCHAR(15)`);
+          console.log(`[SyncSchema+] Rev. 3550: company_nfe_config + colunas SEFAZ em fiscal_notes garantidas.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3550 SEFAZ config:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
@@ -5214,6 +5245,9 @@ Regras:
 
     // t=0s — AutoCheck (leve, só agenda cron)
     import("../routers/datajudAutoCheck").then(m => m.startAutoCheckJob()).catch(e => console.error("[AutoCheck] Falha ao iniciar:", e));
+
+    // t=0s — SEFAZ NFeDistribuicaoDFe cron (busca NF-e recebidas todo dia às 06:00)
+    import("../routers/sefaz").then(m => m.startSefazCron()).catch(e => console.error("[SefazSync] Falha ao iniciar cron:", e));
 
     // t=15s — RescisaoCheck
     delay(15_000).then(() =>

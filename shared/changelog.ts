@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3550 — **INTEGRAÇÃO SEFAZ NFeDistribuicaoDFe — CONSULTA AUTOMÁTICA DE NF-e RECEBIDAS. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
+ * Integração completa com o WebService `NFeDistribuicaoDFe` da SEFAZ Federal para buscar
+ * automaticamente todas as NF-e onde o CNPJ da empresa é destinatário. Backend: novo router
+ * `server/routers/sefaz.ts` com SOAP/mTLS via `https.Agent({pfx, passphrase})` + gzip/XML via
+ * `fast-xml-parser` + `zlib.gunzipSync`. Tabela `company_nfe_config` (SyncSchema+) armazena
+ * certificado A1 (.pfx em base64), senha, UF, ambiente (produção/homologação), último NSU e
+ * resultado da última sync. Colunas aditivas em `fiscal_notes`: `origem`, `emitente_cnpj`,
+ * `emitente_nome`, `nsu_sefaz`. Cron diário às 06:00 via `startSefazCron` (agendado no startup
+ * junto com AutoCheck e RescisaoCheck). Paginação automática por NSU (loop até 20 páginas de 50
+ * docs). Frontend: nova sub-seção "Integração SEFAZ (NF-e Recebidas)" dentro do card FINANCEIRO
+ * em Configurações — toggle sync automático, CNPJ, UF, ambiente (Produção/Homologação), upload
+ * do .pfx, campo senha, badge "Certificado OK", status da última sync com contagem, botão
+ * "Sincronizar Agora" (manual) e "Resetar NSU". Procedures: `getConfig`, `saveConfig`, `syncNow`,
+ * `resetNSU`. Registrado como `sefaz` no appRouter. São Paulo (cUFAutor=35) por padrão.
+ * Arquivos: `server/routers/sefaz.ts` (novo), `server/_core/index.ts` (SyncSchema+ Rev.3550 +
+ * cron startup), `server/routers.ts` (import + registro), `client/src/pages/configuracoes/
+ * FinanceiroConfigSection.tsx` (sub-seção SEFAZ com upload cert, sync, status).
+ *
  * Rev. 3549 — **NOTAS FISCAIS (NFS-e) · DIALOG DE LOTE REDESENHADO — LAYOUT MODERNO SEM SCROLL HORIZONTAL + FASES 0→100%. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  * Redesenho completo do Dialog de Importação em Lote: cabeçalho gradiente indigo→violeta com
  * percentual em 4xl, barra de progresso branca sobre fundo semi-transparente, 3 mini-cards KPI

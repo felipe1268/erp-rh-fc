@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3550** — **INTEGRAÇÃO SEFAZ NFeDistribuicaoDFe — CONSULTA AUTOMÁTICA DE NF-e RECEBIDAS. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Novo router `sefaz.ts` com SOAP/mTLS (`https.Agent + pfx`) + gzip/XML (`fast-xml-parser + zlib`). Tabela `company_nfe_config` (SyncSchema+) guarda cert A1 base64, senha, UF, ambiente, NSU. Colunas aditivas em `fiscal_notes`: `origem`, `emitente_cnpj`, `emitente_nome`, `nsu_sefaz`. Cron diário às 06:00. Sub-seção "Integração SEFAZ" no card FINANCEIRO de Configurações: upload .pfx, senha, toggle auto-sync, botão "Sincronizar Agora", status da última sync. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3549** — **NOTAS FISCAIS (NFS-e) · DIALOG DE LOTE REDESENHADO — LAYOUT MODERNO SEM SCROLL HORIZONTAL + FASES 0→100%. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Cabeçalho gradiente com percentual 4xl + barra de progresso + 3 KPI cards. Card-row por arquivo com 4 fases animadas (Lendo → IA → Extraído → Cadastrado). Sem tabela = sem scroll horizontal. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3548** — **NOTAS FISCAIS (NFS-e) · IMPORTAÇÃO DE MÚLTIPLOS PDFs EM LOTE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Seleção múltipla de PDFs: arquivo único abre formulário de revisão; ≥2 arquivos abre Dialog de lote com barra de progresso, checkboxes por linha, "Cadastrar N NF-e(s)" em lote. Detalhe: `shared/changelog.ts`.
-
 ### Revisões recentes (one-liners)
+
+- **Rev. 3548** — **NOTAS FISCAIS (NFS-e) · IMPORTAÇÃO DE MÚLTIPLOS PDFs EM LOTE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3547** — **NOTAS FISCAIS (NFS-e) · IMPORTAÇÃO DE PDF (DANFSe) COM EXTRAÇÃO AUTOMÁTICA VIA IA. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

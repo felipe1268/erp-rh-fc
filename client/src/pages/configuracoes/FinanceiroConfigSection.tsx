@@ -7,8 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { Save, ChevronRight, Banknote, FileText, Users, RefreshCw, Zap } from "lucide-react";
+import { Save, ChevronRight, Banknote, FileText, Users, RefreshCw, Zap, Shield, Upload, Play, RotateCcw, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useRef } from "react";
 
 function fmtBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -29,7 +30,75 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
   const { selectedCompanyId } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
 
-  const [expanded, setExpanded] = useState<"tributario" | "socios" | null>(null);
+  const [expanded, setExpanded] = useState<"tributario" | "socios" | "sefaz" | null>(null);
+
+  // ── SEFAZ state ──
+  const [sefazForm, setSefazForm] = useState({ cnpj: "", uf: "SP", ambiente: "producao", syncEnabled: true });
+  const [sefazPassword, setSefazPassword] = useState("");
+  const [sefazCertName, setSefazCertName] = useState<string | null>(null);
+  const [sefazCertB64, setSefazCertB64] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: sefazCfg, refetch: refetchSefaz } = (trpc as any).sefaz.getConfig.useQuery(
+    { companyId }, { enabled: !!companyId }
+  );
+  useEffect(() => {
+    if (sefazCfg) {
+      setSefazForm({
+        cnpj: sefazCfg.cnpj || "",
+        uf: sefazCfg.uf || "SP",
+        ambiente: sefazCfg.ambiente || "producao",
+        syncEnabled: Number(sefazCfg.sync_enabled) === 1,
+      });
+    }
+  }, [sefazCfg]);
+
+  const saveSefazMut = (trpc as any).sefaz.saveConfig.useMutation({
+    onSuccess: () => { toast.success("Configuração SEFAZ salva!"); refetchSefaz(); setSefazCertB64(null); setSefazPassword(""); },
+    onError: (e: any) => toast.error(e.message || "Erro ao salvar"),
+  });
+  const syncNowMut = (trpc as any).sefaz.syncNow.useMutation({
+    onSuccess: (r: any) => {
+      if (r.erro) { toast.error("SEFAZ: " + r.erro); }
+      else { toast.success(`Sincronizado! ${r.importadas} NF-e importadas, ${r.ignoradas} ignoradas.`); }
+      refetchSefaz();
+    },
+    onError: (e: any) => toast.error(e.message || "Erro na sincronização"),
+  });
+  const resetNSUMut = (trpc as any).sefaz.resetNSU.useMutation({
+    onSuccess: () => { toast.success("NSU zerado — próxima sincronização buscará do início."); refetchSefaz(); },
+    onError: (e: any) => toast.error(e.message || "Erro"),
+  });
+
+  function handleCertFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSefazCertName(file.name);
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const b64 = (ev.target?.result as string).split(",")[1] || "";
+      setSefazCertB64(b64);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function handleSaveSefaz() {
+    if (!sefazForm.cnpj.replace(/\D/g, "")) { toast.error("Informe o CNPJ."); return; }
+    saveSefazMut.mutate({
+      companyId,
+      cnpj: sefazForm.cnpj,
+      uf: sefazForm.uf,
+      ambiente: sefazForm.ambiente as any,
+      syncEnabled: sefazForm.syncEnabled,
+      ...(sefazCertB64 ? { certPfxBase64: sefazCertB64 } : {}),
+      ...(sefazPassword ? { certPassword: sefazPassword } : {}),
+    });
+  }
+
+  function fmtSyncAt(dt: string | null) {
+    if (!dt) return "Nunca sincronizado";
+    return new Date(dt).toLocaleString("pt-BR");
+  }
   const [taxForm, setTaxForm] = useState<any>({});
   const [autoImportOn, setAutoImportOn] = useState(false);
   const [showAutoImport, setShowAutoImport] = useState(false);
@@ -276,6 +345,177 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
                 onClick={() => onManageSocios?.()}
               >
                 <Users className="w-3.5 h-3.5 mr-1" /> Gerenciar sócios em Configurações → Sócios
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Sub-seção: NF-e SEFAZ */}
+      <div className="border-b border-emerald-100 last:border-0">
+        <button
+          onClick={() => setExpanded(expanded === "sefaz" ? null : "sefaz")}
+          className="w-full flex items-center justify-between px-4 py-3 bg-white hover:bg-emerald-50/50 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <Shield className="w-4 h-4 text-emerald-500" />
+            <span className="font-medium text-gray-800 text-sm">Integração SEFAZ (NF-e Recebidas)</span>
+            {sefazCfg?.tem_certificado && (
+              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs flex items-center gap-1">
+                <CheckCircle className="w-3 h-3" /> Certificado OK
+              </span>
+            )}
+            {!sefazCfg?.tem_certificado && sefazCfg && (
+              <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" /> Sem certificado
+              </span>
+            )}
+          </div>
+          <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${expanded === "sefaz" ? "rotate-90" : ""}`} />
+        </button>
+
+        {expanded === "sefaz" && (
+          <div className="px-4 pb-4 bg-white space-y-4">
+            {/* Explicação */}
+            <div className="rounded-lg border border-indigo-200 bg-indigo-50/60 px-3 py-3 text-sm text-indigo-900 flex items-start gap-2">
+              <Shield className="w-4 h-4 mt-0.5 shrink-0 text-indigo-600" />
+              <p>
+                Consulta automaticamente o WebService <strong>NFeDistribuicaoDFe</strong> da SEFAZ Federal
+                e importa todas as NF-e onde o CNPJ da empresa é <strong>destinatário</strong>.
+                Roda todo dia às 06:00. Requer certificado digital <strong>A1 (.pfx)</strong>.
+              </p>
+            </div>
+
+            {/* Status da última sync */}
+            {sefazCfg?.last_sync_at && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 flex items-center gap-2">
+                <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+                <span>Última sincronização: <strong>{fmtSyncAt(sefazCfg.last_sync_at)}</strong></span>
+                {(() => {
+                  try {
+                    const r = JSON.parse(sefazCfg.last_sync_result || "{}");
+                    if (r.erro) return <span className="text-red-600 font-medium">— Erro: {r.erro.slice(0, 80)}</span>;
+                    return <span className="text-emerald-700">— {r.importadas ?? 0} importadas, {r.ignoradas ?? 0} ignoradas</span>;
+                  } catch { return null; }
+                })()}
+              </div>
+            )}
+
+            {/* Sync automático toggle */}
+            <div className="flex items-center justify-between gap-3 py-1">
+              <div>
+                <span className="text-sm font-medium text-gray-800">Sincronização automática diária</span>
+                <p className="text-xs text-gray-500 mt-0.5">Busca NF-e novas todo dia às 06:00.</p>
+              </div>
+              <div className="flex flex-col items-end gap-0.5">
+                <Switch
+                  checked={sefazForm.syncEnabled}
+                  onCheckedChange={v => setSefazForm(f => ({ ...f, syncEnabled: v }))}
+                />
+                <span className={`text-[11px] font-semibold ${sefazForm.syncEnabled ? "text-emerald-600" : "text-gray-400"}`}>
+                  {sefazForm.syncEnabled ? "Ligada" : "Desligada"}
+                </span>
+              </div>
+            </div>
+
+            {/* Campos de configuração */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">CNPJ da Empresa</Label>
+                <Input
+                  className="mt-1 text-sm"
+                  placeholder="00.000.000/0000-00"
+                  value={sefazForm.cnpj}
+                  onChange={e => setSefazForm(f => ({ ...f, cnpj: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label className="text-xs">UF (Estado)</Label>
+                <Select value={sefazForm.uf} onValueChange={v => setSefazForm(f => ({ ...f, uf: v }))}>
+                  <SelectTrigger className="mt-1 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"].map(uf => (
+                      <SelectItem key={uf} value={uf}>{uf}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Ambiente</Label>
+                <Select value={sefazForm.ambiente} onValueChange={v => setSefazForm(f => ({ ...f, ambiente: v }))}>
+                  <SelectTrigger className="mt-1 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="producao">Produção</SelectItem>
+                    <SelectItem value="homologacao">Homologação (Testes)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Certificado A1 */}
+            <div className="space-y-2">
+              <Label className="text-xs">Certificado Digital A1 (.pfx)</Label>
+              <div className="flex items-center gap-2">
+                <input ref={fileInputRef} type="file" accept=".pfx,.p12" className="hidden" onChange={handleCertFile} />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="text-xs border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="w-3.5 h-3.5 mr-1" />
+                  {sefazCertName || (sefazCfg?.tem_certificado ? "Substituir .pfx" : "Selecionar .pfx")}
+                </Button>
+                {sefazCertName && <span className="text-xs text-emerald-600 font-medium">✓ {sefazCertName}</span>}
+                {!sefazCertName && sefazCfg?.tem_certificado && (
+                  <span className="text-xs text-emerald-600">Certificado já cadastrado</span>
+                )}
+              </div>
+              <div>
+                <Label className="text-xs">Senha do Certificado</Label>
+                <Input
+                  type="password"
+                  className="mt-1 text-sm max-w-xs"
+                  placeholder={sefazCfg?.tem_certificado ? "••••••• (deixe em branco para manter)" : "Senha do .pfx"}
+                  value={sefazPassword}
+                  onChange={e => setSefazPassword(e.target.value)}
+                  autoComplete="new-password"
+                />
+              </div>
+            </div>
+
+            {/* Ações */}
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+              <Button
+                size="sm"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                disabled={saveSefazMut.isPending}
+                onClick={handleSaveSefaz}
+              >
+                {saveSefazMut.isPending ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1" />}
+                Salvar Configuração
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+                disabled={!sefazCfg?.tem_certificado || syncNowMut.isPending}
+                onClick={() => syncNowMut.mutate({ companyId })}
+              >
+                {syncNowMut.isPending ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Play className="w-3.5 h-3.5 mr-1" />}
+                Sincronizar Agora
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-slate-500 text-xs"
+                disabled={resetNSUMut.isPending}
+                onClick={() => resetNSUMut.mutate({ companyId })}
+                title="Zera o NSU — próxima sync buscará todas as NF-e desde o início"
+              >
+                <RotateCcw className="w-3 h-3 mr-1" />
+                Resetar NSU
               </Button>
             </div>
           </div>

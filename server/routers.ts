@@ -149,6 +149,7 @@ import { acidentesRouter } from "./routers/acidentes";
 import { avaliacaoFuncionariosRouter } from "./routers/avaliacaoFuncionarios";
 import { systemDocumentTemplatesRouter } from "./routers/systemDocumentTemplates";
 import { fiscalNotesRouter } from "./routers/fiscalNotes";
+import { sefazRouter } from "./routers/sefaz";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
@@ -1695,6 +1696,7 @@ export const appRouter = router({
   cheques: chequesRouter,
   cartao: cartaoRouter,
   fiscalNotes: fiscalNotesRouter,
+  sefaz: sefazRouter,
 
   // ============================================================
   // DESCONTOS CLT (Motor de Cálculo)
