@@ -2360,42 +2360,85 @@ export default function FinanceiroNotasFiscais() {
                               </div>
                             </>
                           ) : (
-                            <div className="flex flex-col gap-2">
-                              <p className="text-xs font-semibold text-red-700">Motivo da recusa <span className="font-normal text-slate-400">(obrigatório pela SEFAZ, 15–255 caracteres)</span></p>
-                              <textarea
-                                className="w-full rounded-lg border border-red-300 bg-white px-3 py-2 text-sm text-slate-800 resize-none focus:outline-none focus:ring-2 focus:ring-red-300 placeholder:text-slate-400"
-                                rows={3}
-                                maxLength={255}
-                                placeholder="Ex: Nota fiscal não corresponde a nenhuma compra realizada pela empresa."
-                                value={justRecusa}
-                                onChange={e => setJustRecusa(e.target.value)}
-                              />
-                              <div className="flex items-center justify-between gap-2">
-                                <span className={`text-[11px] ${justRecusa.trim().length < 15 ? "text-red-400" : "text-slate-400"}`}>
-                                  {justRecusa.trim().length}/255 {justRecusa.trim().length < 15 ? `(mín. ${15 - justRecusa.trim().length} restantes)` : "✓"}
-                                </span>
-                                <div className="flex gap-2">
-                                  <button
-                                    type="button"
-                                    className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-600 hover:bg-slate-100 transition-colors"
-                                    onClick={() => { setShowJustRecusa(false); setJustRecusa(""); }}
-                                  >
-                                    Cancelar
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={isMutating || justRecusa.trim().length < 15}
-                                    className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center gap-1.5"
-                                    onClick={() => {
-                                      manifestarMut.mutate({ id: nf.id, companyId: companyId!, status: "recusada", justificativa: justRecusa.trim() });
-                                      setShowJustRecusa(false);
-                                      setJustRecusa("");
-                                    }}
-                                  >
-                                    {isMutating ? <RefreshCw className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
-                                    Recusar e avisar SEFAZ
-                                  </button>
+                            <div className="flex flex-col gap-3">
+                              {/* ── Cabeçalho vermelho ── */}
+                              <div className="flex items-center gap-2 pb-2 border-b border-red-100">
+                                <div className="w-7 h-7 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                                  <X className="w-4 h-4 text-red-600" />
                                 </div>
+                                <div>
+                                  <p className="text-sm font-bold text-red-700">Recusar esta NF-e</p>
+                                  <p className="text-[11px] text-red-400">Operação Não Realizada — NT 2014.002 · Art. 3º § 2º</p>
+                                </div>
+                              </div>
+
+                              {/* ── Passo a passo ── */}
+                              <div className="rounded-lg bg-red-50 border border-red-100 px-3 py-2.5 space-y-2">
+                                <p className="text-[10px] font-bold tracking-widest uppercase text-red-500 mb-1">Como funciona</p>
+                                {[
+                                  { n: "1", text: "Digite abaixo o motivo da recusa — obrigatório pela SEFAZ (mín. 15 caracteres)." },
+                                  { n: "2", text: "Clique em "Confirmar recusa e avisar SEFAZ". O sistema assina o evento XML com o certificado A1 e envia ao WebService NFeRecepcaoEvento4." },
+                                  { n: "3", text: "A SEFAZ retorna o protocolo de confirmação (cStat 135). Ele aparece no toast e fica registrado na nota." },
+                                  { n: "4", text: "O emitente será notificado automaticamente pela SEFAZ sobre a recusa." },
+                                ].map(({ n, text }) => (
+                                  <div key={n} className="flex gap-2 items-start">
+                                    <span className="mt-0.5 w-4 h-4 rounded-full bg-red-200 text-red-700 text-[10px] font-bold flex items-center justify-center shrink-0">{n}</span>
+                                    <p className="text-[11px] text-red-700 leading-snug">{text}</p>
+                                  </div>
+                                ))}
+                                <div className="mt-2 pt-2 border-t border-red-100 flex gap-1.5 items-start">
+                                  <span className="text-amber-500 text-xs mt-0.5 shrink-0">⚠</span>
+                                  <p className="text-[11px] text-amber-700 leading-snug">
+                                    <strong>Pré-requisito:</strong> a empresa precisa ter o certificado A1 configurado em <em>Configurações → Financeiro → SEFAZ</em>. Sem ele, a recusa não será enviada à SEFAZ.
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* ── Textarea de justificativa ── */}
+                              <div>
+                                <label className="block text-xs font-semibold text-red-700 mb-1">
+                                  Motivo da recusa <span className="font-normal text-slate-400">(obrigatório · 15–255 caracteres)</span>
+                                </label>
+                                <textarea
+                                  className="w-full rounded-lg border border-red-300 bg-white px-3 py-2 text-sm text-slate-800 resize-none focus:outline-none focus:ring-2 focus:ring-red-300 placeholder:text-slate-400"
+                                  rows={3}
+                                  maxLength={255}
+                                  autoFocus
+                                  placeholder="Ex: Nota fiscal não corresponde a nenhuma compra realizada por esta empresa."
+                                  value={justRecusa}
+                                  onChange={e => setJustRecusa(e.target.value)}
+                                />
+                                <div className="flex items-center justify-between mt-1">
+                                  <span className={`text-[11px] tabular-nums ${justRecusa.trim().length < 15 ? "text-red-400" : "text-emerald-600 font-medium"}`}>
+                                    {justRecusa.trim().length < 15
+                                      ? `${justRecusa.trim().length}/255 — faltam ${15 - justRecusa.trim().length} caracteres`
+                                      : `${justRecusa.trim().length}/255 ✓ pronto para enviar`}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* ── Botões ── */}
+                              <div className="flex gap-2 justify-end">
+                                <button
+                                  type="button"
+                                  className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs text-slate-600 hover:bg-slate-100 transition-colors"
+                                  onClick={() => { setShowJustRecusa(false); setJustRecusa(""); }}
+                                >
+                                  Cancelar
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isMutating || justRecusa.trim().length < 15}
+                                  className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                                  onClick={() => {
+                                    manifestarMut.mutate({ id: nf.id, companyId: companyId!, status: "recusada", justificativa: justRecusa.trim() });
+                                    setShowJustRecusa(false);
+                                    setJustRecusa("");
+                                  }}
+                                >
+                                  {isMutating ? <RefreshCw className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+                                  Confirmar recusa e avisar SEFAZ
+                                </button>
                               </div>
                             </div>
                           )}
