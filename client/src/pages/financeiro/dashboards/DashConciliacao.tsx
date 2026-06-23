@@ -197,20 +197,31 @@ export default function DashConciliacao() {
   }, [statusArr]);
 
   const detalheContas = useMemo(() =>
-    statusArr.map((s) => ({
-      conta: nomeConta(s.contaBancariaId),
-      linhas: Number(s.total) || 0,
-      conciliadas: Number(s.conciliadas) || 0,
-      pendentes: Math.max((Number(s.total) || 0) - (Number(s.conciliadas) || 0), 0),
-      valorTotal: Number(s.valorTotal) || 0,
-      valorEntradas: Number(s.valorEntradas) || 0,
-      valorSaidas: Number(s.valorSaidas) || 0,
-      saldo: (Number(s.valorEntradas) || 0) - (Number(s.valorSaidas) || 0),
-      valorConciliado: Number(s.valorConciliado) || 0,
-      valorPendente: Math.max((Number(s.valorTotal) || 0) - (Number(s.valorConciliado) || 0), 0),
-      valorPendenteEntradas: Math.max((Number(s.valorEntradas) || 0) - (Number(s.valorConciliadoEntradas) || 0), 0),
-      valorPendenteSaidas: Math.max((Number(s.valorSaidas) || 0) - (Number(s.valorConciliadoSaidas) || 0), 0),
-    })).sort((a, b) => b.valorTotal - a.valorTotal),
+    statusArr.map((s) => {
+      const valorEntradas = Number(s.valorEntradas) || 0;
+      const valorSaidas = Number(s.valorSaidas) || 0;
+      const valorEntradasInternas = Number(s.valorEntradasInternas) || 0;
+      const valorSaidasInternas = Number(s.valorSaidasInternas) || 0;
+      return {
+        conta: nomeConta(s.contaBancariaId),
+        linhas: Number(s.total) || 0,
+        conciliadas: Number(s.conciliadas) || 0,
+        pendentes: Math.max((Number(s.total) || 0) - (Number(s.conciliadas) || 0), 0),
+        valorTotal: Number(s.valorTotal) || 0,
+        valorEntradas,
+        valorSaidas,
+        valorEntradasInternas,
+        valorSaidasInternas,
+        valorEntradasExternas: valorEntradas - valorEntradasInternas,
+        valorSaidasExternas: valorSaidas - valorSaidasInternas,
+        saldo: valorEntradas - valorSaidas,
+        saldoExterno: (valorEntradas - valorEntradasInternas) - (valorSaidas - valorSaidasInternas),
+        valorConciliado: Number(s.valorConciliado) || 0,
+        valorPendente: Math.max((Number(s.valorTotal) || 0) - (Number(s.valorConciliado) || 0), 0),
+        valorPendenteEntradas: Math.max(valorEntradas - (Number(s.valorConciliadoEntradas) || 0), 0),
+        valorPendenteSaidas: Math.max(valorSaidas - (Number(s.valorConciliadoSaidas) || 0), 0),
+      };
+    }).sort((a, b) => b.valorTotal - a.valorTotal),
   [statusArr, contasArr]);
 
   const lancArr: any[] = Array.isArray(lancamentos) ? lancamentos : [];

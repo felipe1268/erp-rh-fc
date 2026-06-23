@@ -1,6 +1,15 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3591 — **CONCILIAÇÃO · BUGFIX GRÁFICOS DE BARRAS POR BANCO — `detalheContas` NÃO CALCULAVA `valorEntradasExternas`/`valorSaidasExternas` → SEMPRE CAIA NO BRUTO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Causa raiz definitiva: `detalheContas` useMemo (alimenta os 3 gráficos de barras) não computava
+ * `valorEntradasExternas`/`valorSaidasExternas` — as colunas eram `undefined`, logo o `??` da Rev. 3590
+ * sempre caía em `valorEntradas`/`valorSaidas` (brutos). O servidor retorna `valorEntradasInternas` e
+ * `valorSaidasInternas` por conta. Fix: `detalheContas` agora deriva os externos (bruto - interno)
+ * inline, expondo também `saldoExterno`. Gráficos ficam consistentes com os KPI cards.
+ * Arquivo: `DashConciliacao.tsx`.
+ *
  * Rev. 3590 — **CONCILIAÇÃO · BUGFIX GRÁFICOS DE BARRAS POR BANCO USAVAM TOTAIS BRUTOS (COM MOV. INTERNAS) — INCONSISTENTE COM OS KPI CARDS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * `saidasPorBanco` useMemo alimentava os 3 gráficos de barras por banco com `valorSaidas`/`valorEntradas`
