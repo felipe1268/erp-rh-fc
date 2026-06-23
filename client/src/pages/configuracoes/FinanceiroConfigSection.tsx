@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
@@ -6,10 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
-import { Save, ChevronRight, Banknote, FileText, Users, RefreshCw, Zap, Shield, Upload, Play, RotateCcw, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
+import { Save, ChevronRight, Banknote, FileText, Users, RefreshCw, Zap, Shield, Upload, Play, RotateCcw, CheckCircle, AlertCircle, Loader2, Plus, Trash2, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
-import { useRef } from "react";
 
 function fmtBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -65,6 +65,31 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
     },
     onError: (e: any) => toast.error(e.message || "Erro na sincronização"),
   });
+  const addMunMut = (trpc as any).nfseEmitidas.addMunicipio.useMutation({
+    onSuccess: () => { toast.success("Cidade adicionada!"); refetchMunicipios(); setShowAddDialog(false); resetAddForm(); },
+    onError: (e: any) => toast.error(e.message || "Erro ao adicionar"),
+  });
+  const deleteMunMut = (trpc as any).nfseEmitidas.deleteMunicipio.useMutation({
+    onSuccess: () => { toast.success("Cidade removida."); refetchMunicipios(); setConfirmDeleteIbge(null); },
+    onError: (e: any) => toast.error(e.message || "Erro ao remover"),
+  });
+
+  // Dialog "Nova Cidade"
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [confirmDeleteIbge, setConfirmDeleteIbge] = useState<number | null>(null);
+  const emptyAddForm = { nome: "", uf: "SP", provider: "siapgeo", endpoint: "", inscricao: "", senha: "", ibge: "", showEndpoint: false };
+  const [addForm, setAddForm] = useState(emptyAddForm);
+  function resetAddForm() { setAddForm(emptyAddForm); }
+
+  const PROVIDER_OPTIONS = [
+    { value: "siapgeo", label: "SIAP GEO", color: "bg-sky-100 text-sky-700" },
+    { value: "sil", label: "SIL Tecnologia", color: "bg-violet-100 text-violet-700" },
+    { value: "giap", label: "GIAP / Token", color: "bg-amber-100 text-amber-700" },
+    { value: "tinus", label: "TINUS ABRASF", color: "bg-teal-100 text-teal-700" },
+    { value: "nfse_nacional", label: "NFS-e Nacional", color: "bg-indigo-100 text-indigo-700" },
+  ];
+
+  const UF_LIST = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
   // ── SEFAZ state ──
   const [sefazForm, setSefazForm] = useState({ cnpj: "", uf: "SP", ambiente: "producao", syncEnabled: true });
@@ -616,15 +641,24 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
                       <span className="text-xs font-medium text-gray-400">{mun.uf}</span>
                       <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${badge.color}`}>{badge.label}</span>
                     </div>
-                    {form.inscricao ? (
-                      <span className="text-[10px] text-emerald-700 font-semibold flex items-center gap-1">
-                        <CheckCircle className="w-3 h-3" /> Configurado
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-amber-600 font-semibold flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" /> Sem inscrição
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {form.inscricao ? (
+                        <span className="text-[10px] text-emerald-700 font-semibold flex items-center gap-1">
+                          <CheckCircle className="w-3 h-3" /> Configurado
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-amber-600 font-semibold flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" /> Sem inscrição
+                        </span>
+                      )}
+                      <button
+                        title="Remover cidade"
+                        className="p-1 rounded hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"
+                        onClick={() => setConfirmDeleteIbge(ibge)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Campos */}
@@ -713,12 +747,168 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
               );
             })}
 
+            {/* Botão adicionar nova cidade */}
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400 text-xs h-8"
+              onClick={() => { resetAddForm(); setShowAddDialog(true); }}
+            >
+              <Plus className="w-3.5 h-3.5 mr-1.5" /> Adicionar Cidade
+            </Button>
+
             {(!municipios || municipios.length === 0) && (
               <div className="text-center text-gray-400 text-sm py-4">Carregando municípios...</div>
             )}
           </div>
         )}
       </div>
+
+      {/* Dialog: Nova Cidade */}
+      <Dialog open={showAddDialog} onOpenChange={v => { setShowAddDialog(v); if (!v) resetAddForm(); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Plus className="w-4 h-4 text-blue-600" /> Nova Cidade
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-2">
+                <Label className="text-xs text-gray-600">Nome do Município *</Label>
+                <Input
+                  className="mt-1 text-sm h-8"
+                  placeholder="Ex: São Paulo"
+                  value={addForm.nome}
+                  onChange={e => setAddForm(f => ({ ...f, nome: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-gray-600">UF *</Label>
+                <Select value={addForm.uf} onValueChange={v => setAddForm(f => ({ ...f, uf: v }))}>
+                  <SelectTrigger className="mt-1 h-8 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {UF_LIST.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs text-gray-600">Sistema / Portal *</Label>
+              <Select value={addForm.provider} onValueChange={v => setAddForm(f => ({ ...f, provider: v }))}>
+                <SelectTrigger className="mt-1 h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {PROVIDER_OPTIONS.map(p => (
+                    <SelectItem key={p.value} value={p.value}>
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded mr-2 ${p.color}`}>{p.label}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs text-gray-600">Inscrição Municipal / Login</Label>
+                <Input
+                  className="mt-1 text-sm h-8"
+                  placeholder="Ex: 13239401"
+                  value={addForm.inscricao}
+                  onChange={e => setAddForm(f => ({ ...f, inscricao: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-gray-600">Senha do Portal</Label>
+                <Input
+                  type="password"
+                  className="mt-1 text-sm h-8"
+                  placeholder="••••••••"
+                  value={addForm.senha}
+                  onChange={e => setAddForm(f => ({ ...f, senha: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            {/* Avançado: endpoint + ibge */}
+            <button
+              className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-700"
+              onClick={() => setAddForm(f => ({ ...f, showEndpoint: !f.showEndpoint }))}
+            >
+              <ChevronDown className={`w-3 h-3 transition-transform ${addForm.showEndpoint ? "rotate-180" : ""}`} />
+              Configurações avançadas (endpoint / código IBGE)
+            </button>
+            {addForm.showEndpoint && (
+              <div className="space-y-2 pt-1 border-t border-slate-100">
+                <div>
+                  <Label className="text-xs text-gray-600">Endpoint WebService (opcional)</Label>
+                  <Input
+                    className="mt-1 text-sm h-8 font-mono text-[11px]"
+                    placeholder="https://..."
+                    value={addForm.endpoint}
+                    onChange={e => setAddForm(f => ({ ...f, endpoint: e.target.value }))}
+                  />
+                  <p className="text-[10px] text-slate-400 mt-0.5">Deixe em branco para usar o padrão do sistema selecionado.</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-600">Código IBGE (7 dígitos, opcional)</Label>
+                  <Input
+                    className="mt-1 text-sm h-8"
+                    placeholder="Ex: 3550308"
+                    value={addForm.ibge}
+                    maxLength={7}
+                    onChange={e => setAddForm(f => ({ ...f, ibge: e.target.value.replace(/\D/g, "") }))}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => { setShowAddDialog(false); resetAddForm(); }}>Cancelar</Button>
+            <Button
+              size="sm"
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              disabled={!addForm.nome.trim() || addMunMut.isPending}
+              onClick={() => addMunMut.mutate({
+                companyId,
+                nomeMunicipio: addForm.nome.trim(),
+                uf: addForm.uf,
+                provider: addForm.provider,
+                endpoint: addForm.endpoint || undefined,
+                inscricaoMunicipal: addForm.inscricao || undefined,
+                token: addForm.senha || undefined,
+                ibgeCode: addForm.ibge ? Number(addForm.ibge) : undefined,
+              })}
+            >
+              {addMunMut.isPending ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Plus className="w-3.5 h-3.5 mr-1" />}
+              Adicionar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* AlertDialog: Confirmar exclusão de cidade */}
+      <AlertDialog open={confirmDeleteIbge !== null} onOpenChange={v => { if (!v) setConfirmDeleteIbge(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover cidade?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A configuração da cidade será removida. As NFS-e já importadas <strong>não são apagadas</strong>.
+              Você pode adicionar a cidade novamente a qualquer momento.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => confirmDeleteIbge !== null && deleteMunMut.mutate({ companyId, ibgeCode: confirmDeleteIbge })}
+            >
+              {deleteMunMut.isPending ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : null}
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Modal: Auto-Importar */}
       <Dialog open={showAutoImport} onOpenChange={setShowAutoImport}>

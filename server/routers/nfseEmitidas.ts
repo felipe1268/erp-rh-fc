@@ -468,29 +468,77 @@ export const nfseEmitidasRouter = router({
       const db = await getDb();
       const { companyId } = input;
 
-      // Auto-seed: garante que os 4 municípios existam
-      for (const m of MUNICIPIOS_PADRAO) {
-        await db.$client.query(
-          `INSERT INTO company_nfse_municipal_config
-            (company_id, ibge_code, nome_municipio, uf, provider, endpoint, enabled)
-           VALUES ($1,$2,$3,$4,$5,$6,0)
-           ON CONFLICT (company_id, ibge_code) DO NOTHING`,
-          [companyId, m.ibge_code, m.nome_municipio, m.uf, m.provider, m.endpoint]
-        );
-      }
+      // Auto-seed: só Guaratinguetá (SIAP GEO) como cidade padrão
+      const guara = MUNICIPIOS_PADRAO[0];
+      await db.$client.query(
+        `INSERT INTO company_nfse_municipal_config
+          (company_id, ibge_code, nome_municipio, uf, provider, endpoint, auth_type, descricao, enabled)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,false)
+         ON CONFLICT (company_id, ibge_code) DO NOTHING`,
+        [companyId, guara.ibge_code, guara.nome_municipio, guara.uf, guara.provider, guara.endpoint, guara.auth_type, guara.descricao]
+      );
 
       const rows = await db.$client.query<any>(
-        `SELECT * FROM company_nfse_municipal_config WHERE company_id=$1 ORDER BY ibge_code`,
+        `SELECT * FROM company_nfse_municipal_config WHERE company_id=$1 ORDER BY nome_municipio`,
         [companyId]
       );
 
-      return rows.rows.map(r => ({
+      return rows.rows.map((r: any) => ({
         ...r,
         ibge_code: Number(r.ibge_code),
-        enabled: Number(r.enabled) === 1,
-        // Enriquece com metadados estáticos
-        ...MUNICIPIOS_PADRAO.find(m => m.ibge_code === Number(r.ibge_code)),
+        enabled: r.enabled === true || Number(r.enabled) === 1,
       }));
+    }),
+
+  // Adiciona nova cidade manualmente
+  addMunicipio: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      nomeMunicipio: z.string().min(2),
+      uf: z.string().length(2),
+      provider: z.string().default("siapgeo"),
+      endpoint: z.string().optional(),
+      inscricaoMunicipal: z.string().optional(),
+      token: z.string().optional(),
+      ibgeCode: z.number().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      // ibge_code: usa o fornecido ou gera um baseado no timestamp (9000000-9999999)
+      const ibge = input.ibgeCode || (9000000 + (Date.now() % 999999));
+      // Endpoint padrão por provider se não informado
+      const defaultEndpoints: Record<string, string> = {
+        siapgeo: "https://[cidade].geosiap.net.br/[prefixo]/webservices/nfse.asmx",
+        sil: "https://[cidade].siltecnologia.com.br/tbw/Consultas",
+        giap: "https://[cidade].giap.com.br/ords/pma/ws/nfe",
+        tinus: "https://www.tinus.com.br/csp/[CIDADE]/nfse.webservice.cls",
+        nfse_nacional: "https://www.nfse.gov.br/SistemaNacional/nfse.asmx",
+      };
+      const endpoint = input.endpoint || defaultEndpoints[input.provider] || "";
+      await db.$client.query(
+        `INSERT INTO company_nfse_municipal_config
+          (company_id, ibge_code, nome_municipio, uf, provider, endpoint, auth_type,
+           inscricao_municipal, token, enabled)
+         VALUES ($1,$2,$3,$4,$5,$6,'portal_login',$7,$8,false)
+         ON CONFLICT (company_id, ibge_code) DO UPDATE
+           SET nome_municipio=$3, uf=$4, provider=$5, endpoint=$6,
+               inscricao_municipal=$7, token=$8`,
+        [input.companyId, ibge, input.nomeMunicipio, input.uf.toUpperCase(),
+          input.provider, endpoint, input.inscricaoMunicipal || null, input.token || null]
+      );
+      return { success: true, ibgeCode: ibge };
+    }),
+
+  // Remove cidade (config apenas — notas já importadas são mantidas)
+  deleteMunicipio: protectedProcedure
+    .input(z.object({ companyId: z.number(), ibgeCode: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      await db.$client.query(
+        `DELETE FROM company_nfse_municipal_config WHERE company_id=$1 AND ibge_code=$2`,
+        [input.companyId, input.ibgeCode]
+      );
+      return { success: true };
     }),
 
   // Salva inscrição municipal, token e toggle de sincronização
