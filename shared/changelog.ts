@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3570 — **iOS WEBVIEW · BUGFIX MUTATIONS FALHAVAM COM "THE STRING DID NOT MATCH THE EXPECTED PATTERN" — RETRY AUTOMÁTICO PARA ERROS DE TRANSPORTE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * iOS WebView dropa requests de rede esporadicamente e rejeita a Promise com
+ * `TypeError: The string did not match the expected pattern.` (também `Failed to fetch`, `NetworkError`).
+ * Com `mutations: { retry: false }` (config anterior), a mutation falhava na 1ª tentativa e o
+ * `e.message` cru aparecia em qualquer toast com `onError: (e) => toast.error(e.message)`.
+ * Fix: `mutations.retry` agora permite 1 retry automático (delay 800ms) quando o erro
+ * corresponde ao padrão iOS de transporte. Se o retry funcionar, o usuário não vê erro nenhum.
+ * Arquivo: `client/src/main.tsx`.
+ *
  * Rev. 3569 — **NF-e RECEBIDAS (SEFAZ) · BUGFIX "HISTÓRICO COMPLETO" LANÇAVA EXCEÇÃO NO iOS — window.confirm() SUBSTITUÍDO POR AlertDialog. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * `window.confirm()` é bloqueado em WebViews iOS (Replit mobile) e lança

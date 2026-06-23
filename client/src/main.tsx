@@ -105,7 +105,14 @@ const queryClient = new QueryClient({
       refetchOnReconnect: "always",
     },
     mutations: {
-      retry: false,
+      // iOS WebView pode dropar requests com "The string did not match the expected pattern."
+      // Permitir 1 retry automático para esse padrão específico.
+      retry: (failureCount, error) => {
+        if (failureCount >= 1) return false;
+        const msg = error instanceof Error ? error.message : String(error ?? "");
+        return msg.includes("did not match the expected pattern") || msg.includes("Failed to fetch") || msg.includes("NetworkError");
+      },
+      retryDelay: 800,
     },
   },
 });

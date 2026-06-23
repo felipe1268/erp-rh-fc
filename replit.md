@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3569** — **NF-e RECEBIDAS (SEFAZ) · BUGFIX "HISTÓRICO COMPLETO" LANÇAVA EXCEÇÃO NO iOS — window.confirm() SUBSTITUÍDO POR AlertDialog. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `window.confirm()` é bloqueado em WebViews iOS e lança `TypeError: The string did not match the expected pattern.` — capturado pelo `onError` de `sefaz.resetNSU` e exibido como "Erro ao resetar NSU". Fix: botão abre `AlertDialog` shadcn (sem JS nativo). Detalhe: `shared/changelog.ts`.
+- **Rev. 3570** — **iOS WEBVIEW · BUGFIX MUTATIONS FALHAVAM COM "THE STRING DID NOT MATCH THE EXPECTED PATTERN" — RETRY AUTOMÁTICO PARA ERROS DE TRANSPORTE. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** iOS WebView dropa requests e rejeita com esse `TypeError`; com `retry:false` o `e.message` cru aparecia em qualquer toast. Fix: `mutations.retry` permite 1 retry (800ms) para erros de transporte iOS. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3568** — **NFS-e MUNICIPAIS · BUGFIX "BAIXAR TUDO" RETORNAVA 0 MUNICÍPIOS QUANDO SYNC AUTOMÁTICO DESLIGADO. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** `syncAllMunicipios` filtrava `enabled=1`; corrido para `inscricao_municipal IS NOT NULL AND != ''` — funciona independente do toggle. Detalhe: `shared/changelog.ts`.
+- **Rev. 3569** — **NF-e RECEBIDAS (SEFAZ) · BUGFIX "HISTÓRICO COMPLETO" LANÇAVA EXCEÇÃO NO iOS — window.confirm() SUBSTITUÍDO POR AlertDialog. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `window.confirm()` bloqueado em WebViews iOS — Fix: AlertDialog shadcn. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3566** — **NFS-e EMITIDAS MUNICIPAIS · "BAIXAR TUDO" — IMPORTAÇÃO HISTÓRICA EM LOTE + SELETOR DE PERÍODO POR CARD. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
