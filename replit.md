@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3573** — **SEFAZ NF-e · SYNC AUTOMÁTICO HORÁRIO — HISTÓRICO COMPLETO SEM AÇÃO MANUAL. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.** Cron passa de 1x/dia para toda hora (58min gap). Até 50 NF-e/hora automaticamente. Histórico 2018-2026 chega sem intervenção. Detalhe: `shared/changelog.ts`.
+- **Rev. 3574** — **SEFAZ NF-e · UI CONFIG — TEXTO "TODO DIA 06:00" CORRIGIDO + NSU VISÍVEL + RATE LIMIT COMO INFORMATIVO. 100% FRONTEND · ZERO BACKEND.** "⚠️ Rate limit" → "⏳ Próxima sync em ~N min"; card azul mostra NSU atual. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3572** — **SEFAZ NF-e · BUGFIX LOOP ETERNO cStat=656 (ultNSU=9615 RETORNADO PELA SEFAZ NÃO ERA SALVO) + IMPORTAÇÃO POR UPLOAD DE XML (HISTÓRICO 2018-2026). BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3573** — **SEFAZ NF-e · SYNC AUTOMÁTICO HORÁRIO — HISTÓRICO COMPLETO SEM AÇÃO MANUAL. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3566** — **NFS-e EMITIDAS MUNICIPAIS · "BAIXAR TUDO" — IMPORTAÇÃO HISTÓRICA EM LOTE + SELETOR DE PERÍODO POR CARD. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

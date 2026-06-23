@@ -454,11 +454,18 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
             {/* Explicação */}
             <div className="rounded-lg border border-indigo-200 bg-indigo-50/60 px-3 py-3 text-sm text-indigo-900 flex items-start gap-2">
               <Shield className="w-4 h-4 mt-0.5 shrink-0 text-indigo-600" />
-              <p>
-                Consulta automaticamente o WebService <strong>NFeDistribuicaoDFe</strong> da SEFAZ Federal
-                e importa todas as NF-e onde o CNPJ da empresa é <strong>destinatário</strong>.
-                Roda todo dia às 06:00. Requer certificado digital <strong>A1 (.pfx)</strong>.
-              </p>
+              <div className="space-y-1">
+                <p>
+                  Consulta automaticamente o WebService <strong>NFeDistribuicaoDFe</strong> da SEFAZ Federal
+                  e importa todas as NF-e onde o CNPJ da empresa é <strong>destinatário</strong>.
+                  Requer certificado digital <strong>A1 (.pfx)</strong>.
+                </p>
+                <p className="text-indigo-700 font-medium">
+                  ⏱ Roda automaticamente <strong>toda hora</strong> (limite da SEFAZ: 1 chamada/hora/CNPJ).
+                  O histórico completo é trazido aos poucos — até 50 NF-e por chamada, sem ação manual.
+                  "Rate limit" é normal: significa que a cota da hora foi usada e o sistema aguarda a próxima hora.
+                </p>
+              </div>
             </div>
 
             {/* Status da última sync */}
@@ -471,17 +478,26 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
                     const r = JSON.parse(sefazCfg.last_sync_result || "{}");
                     if (r.erro) return <span className="text-red-600 font-medium" title={r.erro}>— ❌ Erro: {r.erro.slice(0, 120)}</span>;
                     if (r.aviso) {
-                      // Cooldown automático: calcular se ainda dentro do período
                       if (r.rateLimitedAt) {
                         const elapsedMin = Math.floor((Date.now() - new Date(r.rateLimitedAt).getTime()) / 60000);
                         const restMin = Math.max(0, 58 - elapsedMin);
-                        return <span className="text-amber-600 font-medium">— ⚠️ Rate limit SEFAZ (cStat=656){restMin > 0 ? ` — aguardar ~${restMin} min` : " — pode tentar novamente"}</span>;
+                        if (restMin > 0) {
+                          return <span className="text-amber-600 font-medium">— ⏳ Cota SEFAZ usada · próxima sync automática em ~{restMin} min</span>;
+                        }
+                        return <span className="text-emerald-700 font-medium">— ✅ Pronto para sincronizar</span>;
                       }
                       return <span className="text-amber-600 font-medium">— ⚠️ {r.aviso.slice(0, 100)}</span>;
                     }
                     return <span className="text-emerald-700">— {r.importadas ?? 0} importadas, {r.ignoradas ?? 0} ignoradas</span>;
                   } catch { return null; }
                 })()}
+              </div>
+            )}
+            {/* NSU atual — progresso do histórico */}
+            {sefazCfg?.ultimo_nsu && Number(sefazCfg.ultimo_nsu) > 0 && (
+              <div className="rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2 text-xs text-blue-800 flex items-center gap-2">
+                <span className="font-semibold shrink-0">📍 Posição atual:</span>
+                <span>NSU <strong>{Number(sefazCfg.ultimo_nsu).toLocaleString("pt-BR")}</strong> — a SEFAZ entrega até 50 NF-e por hora a partir deste ponto. O sistema avança automaticamente a cada hora até trazer todo o histórico.</span>
               </div>
             )}
 

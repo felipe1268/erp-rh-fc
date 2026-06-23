@@ -1,6 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3574 — **SEFAZ NF-e · UI CONFIGURAÇÃO SEFAZ — TEXTOS CORRIGIDOS + NSU VISÍVEL + MENSAGEM RATE LIMIT MELHORADA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * (1) Descrição azul: removido "Roda todo dia às 06:00" (obsoleto) → texto explica sync horária.
+ * (2) Status de rate limit: de "⚠️ Rate limit SEFAZ" → "⏳ Cota SEFAZ usada · próxima sync automática em ~N min"
+ *     (torna claro que é comportamento NORMAL, não erro; e que o sistema continua sozinho).
+ * (3) Card azul "Posição atual: NSU N.NNN" mostra onde o histórico está e que avança automaticamente.
+ * Arquivo: `client/src/pages/configuracoes/FinanceiroConfigSection.tsx`.
+ *
  * Rev. 3573 — **SEFAZ NF-e · SYNC AUTOMÁTICO HORÁRIO — HISTÓRICO COMPLETO SEM AÇÃO MANUAL. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * Antes: cron rodava 1x/dia no `sync_hora` configurado → histórico levaria meses.
