@@ -1,13 +1,13 @@
 // Rev. 2895 — Service Worker do ERP FC (PWA / Levantamento Offline no Tablet).
+// CACHE_VERSION é substituído em build-time pelo plugin Vite (vite.config.ts).
+// Isso garante que cada deploy gere um sw.js diferente → browser instala nova versão.
 // Estratégias:
 //  • /api/*           → SEMPRE rede (nunca cacheia dados/tRPC).
 //  • navegação (HTML) → network-first com fallback ao app shell em cache (offline boot).
 //  • /assets/* (hash) → cache-first (imutáveis; o hash muda a cada build).
 //  • demais GET same-origin → stale-while-revalidate.
-// Cuidados anti-"servir velho": assets são versionados por hash; o app shell é
-// sempre revalidado pela rede quando online; caches antigos são limpos no activate.
 
-const CACHE = "erp-fc-v1";
+const CACHE = "erp-fc-__SW_BUILD_TS__";
 const SHELL = "/";
 
 self.addEventListener("install", (event) => {

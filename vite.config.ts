@@ -1,5 +1,6 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import fs from "node:fs";
 import path from "node:path";
 import { defineConfig } from "vite";
 
@@ -7,6 +8,21 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    // Rev. 3585 — Injeta timestamp de build no sw.js para forçar atualização do
+    // Service Worker a cada deploy. Sem isso, o browser não detecta mudança no
+    // sw.js e o SW antigo continua servindo assets velhos → tela branca no iOS.
+    {
+      name: "inject-sw-build-ts",
+      apply: "build",
+      closeBundle() {
+        const swOut = path.resolve(import.meta.dirname, "dist/public/sw.js");
+        if (fs.existsSync(swOut)) {
+          const content = fs.readFileSync(swOut, "utf-8");
+          const patched = content.replace("__SW_BUILD_TS__", Date.now().toString());
+          fs.writeFileSync(swOut, patched);
+        }
+      },
+    },
   ],
   resolve: {
     alias: {

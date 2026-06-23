@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3585 — **CRÍTICO · BUGFIX TELA BRANCA NO APP PUBLICADO — SERVICE WORKER COM CACHE ESTÁTICO + 2º BUG ANY(array). BACKEND PONTUAL + BUILD CONFIG · ZERO ALTER/DROP/DELETE.**
+ *
+ * Dois problemas simultâneos causavam tela branca no app publicado (iOS Safari):
+ * (1) `sw.js` usava `CACHE = "erp-fc-v1"` estático — browser não detectava mudança entre
+ *     deploys, SW antigo permanecia ativo servindo assets com hashes antigos.
+ *     Fix: placeholder `__SW_BUILD_TS__` no sw.js + plugin Vite `inject-sw-build-ts`
+ *     que substitui o placeholder pelo timestamp real em `closeBundle`. Cada build
+ *     gera sw.js único → browser instala nova versão → limpa cache antigo.
+ * (2) `pjConformidadeJobs.ts` usava `sql\`ANY(${empIds}::int[])\`` — Drizzle expande
+ *     array como tupla `($1,$2,...)`; `::int[]` não salva → PG rejeita.
+ *     Fix: `db.$client.query("ANY($2::int[])", [companyId, empIds, mesRef])`.
+ * Arquivos: `client/public/sw.js`, `vite.config.ts`, `server/services/pjConformidadeJobs.ts`.
+ *
  * Rev. 3584 — **CRÍTICO · BUGFIX TELA BRANCA NO APP PUBLICADO — `getCompaniesForUser` CRASHAVA COM `ANY(($1,$2,$3))`. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
  *
  * `db.execute(sql\`WHERE id = ANY(${obraIds})\`)` expande array JS em tupla `($1,$2,$3)`, não em array PG.

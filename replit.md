@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3585** — **CRÍTICO · BUGFIX TELA BRANCA — SERVICE WORKER CACHE ESTÁTICO + 2º BUG ANY(array). BUILD CONFIG + BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** SW usava `CACHE="erp-fc-v1"` fixo → browser não detectava deploy novo → assets antigos. Fix: placeholder `__SW_BUILD_TS__` + plugin Vite injeta timestamp real em cada build. Fix 2: `pjConformidadeJobs` usava `sql\`ANY(${array}::int[])\`` → mesmo bug de tupla. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3584** — **CRÍTICO · BUGFIX TELA BRANCA NO APP PUBLICADO — `getCompaniesForUser` CRASHAVA COM `ANY(($1,$2,$3))`. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** `db.execute(sql\`ANY(${array})\`)` gera tupla em vez de array PG → crash no login de usuários com obras concedidas → tela branca. Fix: `db.$client.query` com `$1::int[]`. Arquivo: `server/db.ts`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3583** — **NF-e RECEBIDAS · BUGFIX BANNER "NENHUMA NF-e" FALSO ALARME. 100% FRONTEND · ZERO BACKEND.** Banner âmbar "Configure o certificado A1" só aparece quando cert realmente não está configurado. Com cert mas sem notas → banner azul neutro. Banner verde corrigido: "sincronizando agora" → "pronta para sincronizar". Detalhe: `shared/changelog.ts`.

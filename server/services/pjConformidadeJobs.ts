@@ -68,16 +68,19 @@ async function coletarPendencias(db: any, companyId: number, mesRef: string, hoj
   if (emps.length === 0) return [];
   const empIds = emps.map((e) => e.id);
 
-  const itensRes: any = await db.execute(sql`
-    SELECT * FROM pj_conformidade
-    WHERE "deletedAt" IS NULL
-      AND "companyId" = ${companyId}
-      AND "employeeId" = ANY(${empIds}::int[])
-      AND (
-        ("tipo" IN ('das','nf') AND "competencia" = ${mesRef})
-        OR "tipo" IN ('cnd','seguro_vida','status_cnpj')
-      )
-  `);
+  // Usa $client.query + $2::int[] porque db.execute(sql`ANY(${array}::int[])`)
+  // expande o array em ($1,$2,...) — tupla, não array PG — e o cast não funciona.
+  const itensRes: any = await db.$client.query(
+    `SELECT * FROM pj_conformidade
+     WHERE "deletedAt" IS NULL
+       AND "companyId" = $1
+       AND "employeeId" = ANY($2::int[])
+       AND (
+         ("tipo" IN ('das','nf') AND "competencia" = $3)
+         OR "tipo" IN ('cnd','seguro_vida','status_cnpj')
+       )`,
+    [companyId, empIds, mesRef]
+  );
   const itens: any[] = itensRes?.rows ?? [];
 
   const alertas: ItemAlerta[] = [];
