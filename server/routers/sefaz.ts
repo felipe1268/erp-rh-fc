@@ -622,9 +622,10 @@ export async function executarSyncNFe(companyId: number): Promise<{ importadas: 
   let rateLimited = false;
   let rateLimitedNsu: string | null = null; // NSU que a SEFAZ instrui usar na próxima chamada
 
-  // ── Gate geral de tempo (58 min): protege contra chamadas repetidas dentro da mesma janela horária ──
+  // ── Gate geral de tempo: respeita o intervalo configurado pelo usuário (padrão 1h, mín 1h) ──
   // Cobre TANTO o caso de rate-limit anterior QUANTO chamadas manuais "Sincronizar Agora" em sequência.
-  const COOLDOWN_MS = 58 * 60 * 1000;
+  const intervaloHoras = Math.max(1, Number(cfg.sync_intervalo_horas ?? 1));
+  const COOLDOWN_MS = (intervaloHoras * 60 - 2) * 60 * 1000; // 2 min de folga
   try {
     if (cfg.last_sync_at) {
       const elapsedMs = Date.now() - new Date(cfg.last_sync_at).getTime();
@@ -637,10 +638,10 @@ export async function executarSyncNFe(companyId: number): Promise<{ importadas: 
           if (prevResult?.rateLimitedAt) {
             aviso = `Limite SEFAZ ativo — aguarde mais ${restantMin} min (cStat=656). O sistema sincronizará automaticamente.`;
           } else {
-            aviso = `SEFAZ permite 1 chamada/hora — próxima sync disponível em ${restantMin} min.`;
+            aviso = `Intervalo configurado: ${intervaloHoras}h — próxima sync disponível em ${restantMin} min.`;
           }
-        } catch { aviso = `Aguarde mais ${restantMin} min — SEFAZ permite apenas 1 chamada/hora/CNPJ.`; }
-        console.log(`[SefazSync] company=${companyId} TIME_GATE=${restantMin}min — sem chamada à API`);
+        } catch { aviso = `Aguarde mais ${restantMin} min (intervalo: ${intervaloHoras}h).`; }
+        console.log(`[SefazSync] company=${companyId} TIME_GATE=${restantMin}min (intervalo=${intervaloHoras}h) — sem chamada à API`);
         return { importadas: 0, ignoradas: 0, aviso };
       }
     }
@@ -830,7 +831,10 @@ export function startSefazCron() {
       const rows = (await db.execute(sql`
         SELECT company_id FROM company_nfe_config
         WHERE ativo = 1 AND sync_enabled = 1
-          AND (last_sync_at IS NULL OR last_sync_at < NOW() - INTERVAL '58 minutes')
+          AND (
+            last_sync_at IS NULL
+            OR last_sync_at < NOW() - (INTERVAL '1 minute' * (COALESCE(sync_intervalo_horas, 1) * 60 - 2))
+          )
       `)) as any;
       const list = (rows?.rows ?? rows) as any[];
       if (list.length > 0) {
@@ -876,6 +880,7 @@ export const sefazRouter = router({
       const rows = (await db.execute(sql`
         SELECT company_id, cnpj, uf, ambiente, sync_enabled, ativo,
                COALESCE(sync_hora, 6) AS sync_hora,
+               COALESCE(sync_intervalo_horas, 1) AS sync_intervalo_horas,
                ultimo_nsu, last_sync_at, last_sync_result,
                CASE WHEN cert_pfx_base64 IS NOT NULL AND cert_pfx_base64 <> '' THEN true ELSE false END AS tem_certificado
         FROM company_nfe_config WHERE company_id = ${input.companyId}
@@ -892,6 +897,7 @@ export const sefazRouter = router({
       ambiente: z.enum(["producao", "homologacao"]).default("producao"),
       syncEnabled: z.boolean().default(true),
       syncHora: z.number().min(0).max(23).default(6),
+      syncIntervaloHoras: z.number().min(1).max(24).default(1),
       certPfxBase64: z.string().optional(),
       certPassword: z.string().optional(),
     }))
@@ -913,6 +919,7 @@ export const sefazRouter = router({
             ambiente = ${input.ambiente},
             sync_enabled = ${input.syncEnabled ? 1 : 0},
             sync_hora = ${input.syncHora},
+            sync_intervalo_horas = ${input.syncIntervaloHoras},
             ativo = 1,
             ${input.certPfxBase64 ? sql`cert_pfx_base64 = ${input.certPfxBase64},` : sql``}
             ${input.certPassword ? sql`cert_password = ${input.certPassword},` : sql``}
@@ -922,11 +929,11 @@ export const sefazRouter = router({
       } else {
         await db.execute(sql`
           INSERT INTO company_nfe_config
-            (company_id, cnpj, uf, ambiente, sync_enabled, sync_hora, ativo,
+            (company_id, cnpj, uf, ambiente, sync_enabled, sync_hora, sync_intervalo_horas, ativo,
              cert_pfx_base64, cert_password, ultimo_nsu, created_at, updated_at)
           VALUES
             (${input.companyId}, ${input.cnpj}, ${input.uf}, ${input.ambiente},
-             ${input.syncEnabled ? 1 : 0}, ${input.syncHora}, 1,
+             ${input.syncEnabled ? 1 : 0}, ${input.syncHora}, ${input.syncIntervaloHoras}, 1,
              ${input.certPfxBase64 || null}, ${input.certPassword || null},
              '000000000000000', NOW(), NOW())
         `);

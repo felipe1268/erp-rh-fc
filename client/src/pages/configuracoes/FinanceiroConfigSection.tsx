@@ -105,7 +105,7 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
   const UF_LIST = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
   // ── SEFAZ state ──
-  const [sefazForm, setSefazForm] = useState({ cnpj: "", uf: "SP", ambiente: "producao", syncEnabled: true, syncHora: 6 });
+  const [sefazForm, setSefazForm] = useState({ cnpj: "", uf: "SP", ambiente: "producao", syncEnabled: true, syncHora: 6, syncIntervaloHoras: 1 });
   const [sefazPassword, setSefazPassword] = useState("");
   const [sefazCertName, setSefazCertName] = useState<string | null>(null);
   const [sefazCertB64, setSefazCertB64] = useState<string | null>(null);
@@ -122,6 +122,7 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
         ambiente: sefazCfg.ambiente || "producao",
         syncEnabled: Number(sefazCfg.sync_enabled) === 1,
         syncHora: Number(sefazCfg.sync_hora ?? 6),
+        syncIntervaloHoras: Number(sefazCfg.sync_intervalo_horas ?? 1),
       });
     }
   }, [sefazCfg]);
@@ -165,6 +166,7 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
       ambiente: sefazForm.ambiente as any,
       syncEnabled: sefazForm.syncEnabled,
       syncHora: sefazForm.syncHora,
+      syncIntervaloHoras: sefazForm.syncIntervaloHoras,
       ...(sefazCertB64 ? { certPfxBase64: sefazCertB64 } : {}),
       ...(sefazPassword ? { certPassword: sefazPassword } : {}),
     });
@@ -501,13 +503,13 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
               </div>
             )}
 
-            {/* Sync automático toggle */}
+            {/* Sync automático toggle + intervalo */}
             <div className="flex items-center justify-between gap-3 py-1">
               <div className="flex-1 min-w-0">
-                <span className="text-sm font-medium text-gray-800">Sincronização automática horária</span>
+                <span className="text-sm font-medium text-gray-800">Sincronização automática</span>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Busca NF-e automaticamente <strong>toda hora</strong> (limite SEFAZ: 1 chamada/hora/CNPJ).
-                  O histórico completo é trazido aos poucos — até 50 NF-e por hora, sem ação manual.
+                  Busca NF-e automaticamente a cada <strong>{sefazForm.syncIntervaloHoras}h</strong> (limite SEFAZ: 1 chamada/hora/CNPJ — mínimo 1h).
+                  O histórico completo é trazido aos poucos — até 50 NF-e por chamada, sem ação manual.
                 </p>
               </div>
               <div className="flex flex-col items-end gap-0.5">
@@ -519,6 +521,35 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
                   {sefazForm.syncEnabled ? "Ligada" : "Desligada"}
                 </span>
               </div>
+            </div>
+
+            {/* Intervalo de sincronização */}
+            <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+              <div className="flex-1 min-w-0">
+                <span className="text-sm font-medium text-gray-800">Frequência de consulta à SEFAZ</span>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  A cada quantas horas o ERP consulta o servidor da SEFAZ.
+                  O mínimo é <strong>1 hora</strong> (limite da SEFAZ por CNPJ).
+                </p>
+              </div>
+              <Select
+                value={String(sefazForm.syncIntervaloHoras)}
+                onValueChange={v => setSefazForm(f => ({ ...f, syncIntervaloHoras: Number(v) }))}
+              >
+                <SelectTrigger className="w-28 text-sm shrink-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">A cada 1h</SelectItem>
+                  <SelectItem value="2">A cada 2h</SelectItem>
+                  <SelectItem value="3">A cada 3h</SelectItem>
+                  <SelectItem value="4">A cada 4h</SelectItem>
+                  <SelectItem value="6">A cada 6h</SelectItem>
+                  <SelectItem value="8">A cada 8h</SelectItem>
+                  <SelectItem value="12">A cada 12h</SelectItem>
+                  <SelectItem value="24">Uma vez por dia</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Campos de configuração */}

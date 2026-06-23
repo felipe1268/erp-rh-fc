@@ -1,6 +1,22 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3608 — **SEFAZ NF-e · FREQUÊNCIA DE CONSULTA CONFIGURÁVEL (1h → 24h). BACKEND ADITIVO + SYNCSCHEMA+ + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
+ *
+ * Nova coluna `sync_intervalo_horas SMALLINT DEFAULT 1` em `company_nfe_config` (SyncSchema+ Rev.3608).
+ * O usuário escolhe de quantas em quantas horas o ERP consulta a SEFAZ: 1h, 2h, 3h, 4h, 6h, 8h, 12h
+ * ou uma vez por dia (24h). O mínimo imposto é 1h (limite da SEFAZ por CNPJ).
+ *
+ * Mudanças:
+ * - `sefaz.getConfig` retorna `sync_intervalo_horas` (COALESCE → 1).
+ * - `sefaz.saveConfig` aceita `syncIntervaloHoras` (z.number 1-24, default 1) e persiste.
+ * - `executarSyncNFe` gate: `COOLDOWN_MS = (intervaloHoras * 60 - 2) * 60 * 1000`
+ *   (usa o intervalo configurado em vez de 58 min fixo).
+ * - `startSefazCron` query: `last_sync_at < NOW() - (INTERVAL '1 minute' * (sync_intervalo_horas * 60 - 2))`
+ *   (cada empresa é respeitada individualmente pelo banco).
+ * - Configurações → Financeiro → Integração SEFAZ: novo selector "Frequência de consulta à SEFAZ"
+ *   com opções 1h…24h; toggle de sync mostra o intervalo atual no subtexto dinamicamente.
+ *
  * Rev. 3606 — **NF-e RECEBIDAS · BUGFIX CRÍTICO TELA VAZIA — COLUNA `origem` FALTAVA NO SCHEMA DRIZZLE + GATE DE TEMPO GERAL NO SEFAZ SYNC. BACKEND PONTUAL + SCHEMA · ZERO ALTER/DROP/DELETE.**
  *
  * Causa-raiz dupla: (1) As colunas `origem`, `emitente_cnpj`, `emitente_nome`, `nsu_sefaz` e

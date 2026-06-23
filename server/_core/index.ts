@@ -4050,6 +4050,12 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3564: coluna sync_hora garantida em company_nfe_config (padrão=6).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3564 sync_hora:`, e?.message || e); }
 
+        // Rev. 3608 — SEFAZ: intervalo de sincronização automática configurável (padrão=1h).
+        try {
+          await db.execute(sql`ALTER TABLE company_nfe_config ADD COLUMN IF NOT EXISTS sync_intervalo_horas SMALLINT NOT NULL DEFAULT 1`);
+          console.log(`[SyncSchema+] Rev. 3608: coluna sync_intervalo_horas garantida em company_nfe_config (padrão=1h).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3608 sync_intervalo_horas:`, e?.message || e); }
+
         // Rev. 3561 — NFS-e Emitidas Municipais: config por município (4 prefeituras pré-definidas).
         // ADITIVO — zero ALTER destrutivo/DROP/DELETE (R-001/R-007/R-010 OK).
         try {
