@@ -4082,6 +4082,32 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3565: coluna sync_hora garantida em company_nfse_municipal_config (padrão=6).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3565 nfse_mun_sync_hora:`, e?.message || e); }
 
+        // Rev. 3596 — BUGFIX: NSU de histórico sobreescrito por rate-limit (656 sem progresso).
+        // Reseta para '000000000000000' qualquer empresa onde o rate-limit salvou o NSU atual
+        // sem ter importado nenhum documento (nsuSalvo != null mas importadas=0 no result JSON).
+        try {
+          const rateRows = (await db.execute(sql`
+            SELECT company_id, ultimo_nsu, last_sync_result
+            FROM company_nfe_config
+            WHERE ativo = 1
+              AND last_sync_result IS NOT NULL
+              AND (last_sync_result::jsonb->>'nsuSalvo') IS NOT NULL
+              AND (last_sync_result::jsonb->>'nsuSalvo') != 'null'
+              AND COALESCE((last_sync_result::jsonb->>'importadas')::int, 0) = 0
+          `)) as any;
+          const affected = (rateRows?.rows ?? rateRows) as any[];
+          for (const row of affected) {
+            await db.execute(sql`
+              UPDATE company_nfe_config
+              SET ultimo_nsu = '000000000000000',
+                  last_sync_result = NULL
+              WHERE company_id = ${row.company_id}
+            `);
+            console.log(`[SyncSchema+] Rev. 3596: NSU resetado para histórico company=${row.company_id} (era ${row.ultimo_nsu}, rate-limited sem progresso)`);
+          }
+          if (!affected.length) console.log(`[SyncSchema+] Rev. 3596: nenhum NSU corrompido por rate-limit encontrado — OK`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3596 nsu-rate-reset:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3596 — **SEFAZ NF-e · BUGFIX CRÍTICO NSU SOBREESCRITO POR RATE-LIMIT SEM PROGRESSO — HISTÓRICO NUNCA CHEGAVA. BACKEND PONTUAL + SYNCSCHEMA+ · ZERO ALTER/DROP/DELETE.**
+ *
+ * **Causa-raiz:** ao clicar "Histórico completo" (reset NSU→0 + syncNow), a SEFAZ
+ * retorna cStat=656 (rate-limit) na primeira chamada. A resposta 656 inclui
+ * `ultNSU=9616` (o NSU máximo atual), e o código SALVAVA esse valor como novo
+ * `ultimo_nsu` — desfazendo silenciosamente o reset. O ponteiro saltava de 0 para 9616
+ * sem ter processado nenhum documento, tornando impossível importar o histórico.
+ *
+ * **Fix backend (sefaz.ts):** variável `deveAvancarNsu = rateLimited && rateLimitedNsu && importadas > 0`.
+ * Só salva o NSU retornado pelo 656 se houve progresso real (`importadas > 0`).
+ * Quando bloqueado na 1ª chamada sem importar nada, salva apenas `last_sync_at` +
+ * `last_sync_result` (com `rateLimitedAt` para o cooldown), mas preserva `ultimo_nsu`
+ * no valor resetado. Próximo cron (após 58 min de cooldown) parte do NSU correto.
+ *
+ * **Fix SyncSchema+ (Rev. 3596):** detecta registros com `nsuSalvo != null` mas
+ * `importadas = 0` em `last_sync_result` (assinatura do bug), reseta `ultimo_nsu`
+ * para `'000000000000000'` e limpa `last_sync_result` na startup — corrige empresas
+ * já afetadas pelo bug sem intervenção manual.
+ *
+ * **Comportamento após fix:** "Histórico completo" → NSU fica em 0 → cron horário
+ * busca a partir do 0 → cada hora 50 docs são processados em sequência até exaurir
+ * o histórico disponível na SEFAZ (NF-e onde o CNPJ é destinatário).
+ *
+ * Arquivos: `server/routers/sefaz.ts`, `server/_core/index.ts`, `shared/version.ts`.
+ *
  * Rev. 3595 — **NF-e RECEBIDAS · CLICAR NA LINHA ABRE DETALHE DA NOTA + LINK PORTAL SEFAZ. 100% FRONTEND · ZERO BACKEND/ALTER/DROP/DELETE.**
  *
  * Cada linha da tabela "NF-e Recebidas (SEFAZ)" agora é clicável (cursor-pointer,

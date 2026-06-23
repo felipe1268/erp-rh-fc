@@ -356,15 +356,18 @@ export async function executarSyncNFe(companyId: number): Promise<{ importadas: 
     }
 
     // Salvar resultado final
-    // Se rate-limited: a SEFAZ retorna o ultNSU que devemos usar → salvar para evitar o loop
+    // Rate-limit: SEFAZ retorna ultNSU no 656, mas só deve ser salvo se houve progresso real.
+    // Se importadas=0 (bloqueado logo na 1ª chamada sem processar nada), NÃO avançar o NSU
+    // — caso contrário o reset de histórico seria desfeito (NSU pularia de 0 para o atual).
+    const deveAvancarNsu = rateLimited && rateLimitedNsu && importadas > 0;
     const avisoRateLimit = rateLimited
-      ? `Limite SEFAZ (cStat=656). Tente novamente após 1 hora.${rateLimitedNsu ? ` NSU salvo: ${rateLimitedNsu}.` : ""}`
+      ? `Limite SEFAZ (cStat=656). Tente novamente após 1 hora.${deveAvancarNsu ? ` NSU salvo: ${rateLimitedNsu}.` : ""}`
       : undefined;
     const resultPayload = rateLimited
-      ? { importadas, ignoradas, paginas, aviso: avisoRateLimit, rateLimitedAt: new Date().toISOString(), nsuSalvo: rateLimitedNsu }
+      ? { importadas, ignoradas, paginas, aviso: avisoRateLimit, rateLimitedAt: new Date().toISOString(), nsuSalvo: deveAvancarNsu ? rateLimitedNsu : null }
       : { importadas, ignoradas, paginas };
-    if (rateLimited && rateLimitedNsu) {
-      // CRÍTICO: salvar o NSU retornado pela SEFAZ para que a próxima chamada não entre em loop
+    if (deveAvancarNsu) {
+      // Progresso real antes do rate-limit — salvar checkpoint do NSU
       await db.execute(sql`
         UPDATE company_nfe_config
         SET last_sync_at = NOW(),
@@ -372,14 +375,17 @@ export async function executarSyncNFe(companyId: number): Promise<{ importadas: 
             last_sync_result = ${JSON.stringify(resultPayload)}
         WHERE company_id = ${companyId}
       `);
-      console.log(`[SefazSync] company=${companyId} rateLimitedNsu salvo: ${rateLimitedNsu}`);
+      console.log(`[SefazSync] company=${companyId} rateLimitedNsu salvo (progresso real): ${rateLimitedNsu}`);
     } else {
+      // Sem progresso (rate-limit na 1ª chamada) ou sem rateLimitedNsu
+      // Mantém ultimo_nsu intacto (preserva reset de histórico); salva apenas timing
       await db.execute(sql`
         UPDATE company_nfe_config
         SET last_sync_at = NOW(),
             last_sync_result = ${JSON.stringify(resultPayload)}
         WHERE company_id = ${companyId}
       `);
+      if (rateLimited) console.log(`[SefazSync] company=${companyId} rate-limited sem progresso — ultimo_nsu preservado (${ultNSU})`);
     }
 
     console.log(`[SefazSync] company=${companyId} DONE importadas=${importadas} ignoradas=${ignoradas}${avisoRateLimit ? " RATE-LIMITED" : ""}`);
