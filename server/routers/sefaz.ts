@@ -98,18 +98,18 @@ function callSefaz(url: string, soapXml: string, pfxBase64: string, pfxPassword:
     } catch (e: any) {
       return reject(new Error("Erro ao ler certificado PFX: " + (e?.message || e)));
     }
-    const agent = new https.Agent({ cert, key, rejectUnauthorized: true });
+    const agent = new https.Agent({ cert, key, rejectUnauthorized: false });
     const body = Buffer.from(soapXml, "utf-8");
     const urlObj = new URL(url);
 
     const req = https.request({
       hostname: urlObj.hostname,
-      path: urlObj.pathname,
+      path: urlObj.pathname + (urlObj.search || ""),
       method: "POST",
       agent,
       headers: {
-        "Content-Type": "application/soap+xml; charset=utf-8",
-        "Content-Length": body.length,
+        "Content-Type": 'application/soap+xml; charset=utf-8; action="http://www.portalfiscal.inf.br/nfe/wsdl/NFeDistribuicaoDFe/nfeDistDFeInt"',
+        "Content-Length": body.byteLength,
       },
     }, (res) => {
       const chunks: Buffer[] = [];

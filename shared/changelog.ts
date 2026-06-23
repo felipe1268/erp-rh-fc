@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3556 — **SEFAZ · BUGFIX soap:Sender — FALTAVA action NO Content-Type + rejectUnauthorized. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
+ *
+ * SOAP 1.2 exige que a action seja embarcada no Content-Type:
+ * `application/soap+xml; charset=utf-8; action="...nfeDistDFeInt"`.
+ * Sem ela, o servidor SEFAZ retorna `soap:Sender` (HTTP 500).
+ * Também: `Content-Length` corrigido para `byteLength` (não `.length` de string),
+ * `rejectUnauthorized: false` para aceitar a cadeia ICP-Brasil (não presente no
+ * bundle de CAs do Node), e `urlObj.search` incluído no `path` para não perder query-string.
+ *
+ * Arquivo: `server/routers/sefaz.ts` (callSefaz — 3 linhas).
+ *
  * Rev. 3555 — **SEFAZ · BUGFIX "Unsupported PKCS12 PFX data" — NODE 20 / OPENSSL 3.0 REJEITA RC2-40-CBC DOS CERTIFICADOS A1 ICP-BRASIL. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
  *
  * Node.js 18+ usa OpenSSL 3.0 que desabilita por padrão o algoritmo `RC2-40-CBC` usado pela

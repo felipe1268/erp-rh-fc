@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3556** — **SEFAZ · BUGFIX soap:Sender HTTP 500 — FALTAVA action NO Content-Type + rejectUnauthorized. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** SOAP 1.2 exige `action="...nfeDistDFeInt"` embutido no Content-Type. Sem ela, SEFAZ retorna `soap:Sender`. Fix: action no Content-Type, `byteLength` no Content-Length, `rejectUnauthorized:false` (cadeia ICP-Brasil não está no bundle de CAs do Node). Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3555** — **SEFAZ · BUGFIX "Unsupported PKCS12 PFX data" — NODE 20/OPENSSL 3.0 REJEITA RC2-40-CBC DOS CERTS A1 ICP-BRASIL. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** `https.Agent({ pfx })` falha no Node 18+/OpenSSL 3.0 com certificados brasileiros (RC2-40-CBC). Fix: `pfxToPem()` via `node-forge` extrai cert+key como PEM sem depender do OpenSSL nativo. `node-forge@1.4.0` adicionado. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3554** — **SEFAZ · BUGFIX "db.execute is not a function" — getDb() É ASYNC, FALTAVA await. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** `getDb()` é async — retorna Promise. Todos os 7 sites em sefaz.ts faziam `const db = getDb()` sem await → db era Promise → `.execute` inexistente. Fix: `await getDb()` em todos. Detalhe: `shared/changelog.ts`.
