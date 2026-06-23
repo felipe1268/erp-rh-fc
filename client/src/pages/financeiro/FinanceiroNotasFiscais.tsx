@@ -31,9 +31,11 @@ function formatBRL(v: number | string | null | undefined) {
 function resolveNumeroNf(numeroNf: string | null | undefined, chaveAcesso: string | null | undefined): string {
   const nf = String(numeroNf ?? "");
   if (!nf.includes(".")) return nf;
+  // numero_nf é float corrompido — tenta extrair do chave_acesso
   const chave = (chaveAcesso ?? "").replace(/\D/g, "");
   if (chave.length === 44) return String(parseInt(chave.substring(25, 34), 10));
-  return nf;
+  // chave_acesso também está corrompida (decimal ou científica) — número irrecuperável
+  return "";
 }
 
 function parseBRL(s: string): number {

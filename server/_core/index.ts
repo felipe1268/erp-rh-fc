@@ -1331,6 +1331,61 @@ Regras:
           else console.log(`[SyncSchema+] Rev. 3612: nenhuma duplicata corrompida encontrada.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3612 delete duplicatas:`, e?.message || e); }
 
+        // Rev. 3618 — SEFAZ: limpar chaves corrompidas em float JS que escaparam do Rev. 3600
+        // (que ficava no bloco ColFix = roda 1x). Cobre AMBOS os formatos float:
+        //   • decimal "3.5260625464260"  → chave_acesso LIKE '%.%'
+        //   • científico "3.526e+43"     → chave_acesso LIKE '%e+%' (chave válida nunca tem 'e')
+        // (a) Deleta os que têm cópia limpa confirmada (mesmo cnpj/valor/data, chave 44 dígitos).
+        // (b) Marca como 'duplicata' os restantes — sem cópia limpa, chave irrecuperável.
+        try {
+          const delFloat = await db.execute(sql`
+            DELETE FROM fiscal_notes c
+            WHERE c.origem IN ('sefaz_nfe', 'xml_upload')
+              AND c.chave_acesso IS NOT NULL
+              AND (c.chave_acesso LIKE '%.%' OR c.chave_acesso LIKE '%e+%')
+              AND EXISTS (
+                SELECT 1 FROM fiscal_notes cl
+                WHERE cl.company_id = c.company_id
+                  AND cl.emitente_cnpj = c.emitente_cnpj
+                  AND cl.valor_bruto = c.valor_bruto
+                  AND cl.data_emissao = c.data_emissao
+                  AND cl.id != c.id
+                  AND cl.chave_acesso ~ '^[0-9]{44}$'
+                  AND cl.status != 'duplicata'
+              )
+          `);
+          const ndel = (delFloat as any)?.rowCount ?? 0;
+          if (ndel > 0) console.log(`[SyncSchema+] Rev. 3618: ${ndel} NF-e(s) com chave float corrompida + duplicata limpa removida(s).`);
+          const markFloat = await db.execute(sql`
+            UPDATE fiscal_notes
+            SET status = 'duplicata'
+            WHERE origem IN ('sefaz_nfe', 'xml_upload')
+              AND chave_acesso IS NOT NULL
+              AND (chave_acesso LIKE '%.%' OR chave_acesso LIKE '%e+%')
+              AND status != 'duplicata'
+          `);
+          const nmark = (markFloat as any)?.rowCount ?? 0;
+          if (nmark > 0) console.log(`[SyncSchema+] Rev. 3618: ${nmark} NF-e(s) com chave float corrompida sem duplicata → marcada(s) como 'duplicata'.`);
+          else if (ndel === 0) console.log(`[SyncSchema+] Rev. 3618: nenhuma chave float corrompida — OK`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3618 float-chave:`, e?.message || e); }
+
+        // Rev. 3618b — SEFAZ: numero_nf com float mas chave NULL (corrompida limpa pelo Rev.3600)
+        // Essas linhas ficam com numero_nf = "3.5260xxx" e chave_acesso = NULL → mostram #3.526... na lista.
+        // Marca como 'duplicata' se tiver cópia limpa; senão marca tb ('duplicata') pois NF# é irrecuperável.
+        try {
+          const markNullChave = await db.execute(sql`
+            UPDATE fiscal_notes
+            SET status = 'duplicata'
+            WHERE origem IN ('sefaz_nfe', 'xml_upload')
+              AND (chave_acesso IS NULL OR chave_acesso NOT LIKE '%[0-9][0-9][0-9][0-9][0-9]%')
+              AND numero_nf LIKE '%.%'
+              AND status != 'duplicata'
+          `);
+          const nm = (markNullChave as any)?.rowCount ?? 0;
+          if (nm > 0) console.log(`[SyncSchema+] Rev. 3618b: ${nm} NF-e(s) com numero_nf float e chave inválida → marcada(s) como 'duplicata'.`);
+          else console.log(`[SyncSchema+] Rev. 3618b: nenhum numero_nf float com chave inválida — OK`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3618b:`, e?.message || e); }
+
         // Rev. 2551 — Convenção Coletiva com IA: análises + itens de auditoria.
         try {
           await db.execute(sql`

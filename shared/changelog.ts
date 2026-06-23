@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3618 — **NF-e RECEBIDAS · BUGFIX NF# EM FLOAT — "JOGO DA VELHA" SUMIU DA LISTA. BACKEND PONTUAL (SyncSchema+) + FRONTEND · ZERO ALTER/DROP.**
+ *
+ * Causa-raiz: Rev. 3600 (ColFix, roda 1x) limpava chaves em notação científica (`e+`) e
+ * zeraba o parser. Mas NF-es que chegaram via sync DEPOIS desse ColFix e que tinham chave
+ * corrompida (fast-xml-parser float "3.5260304646408e+43") não passaram pelo cleanup — ficavam
+ * com `numero_nf = "3.5260304"` e `chave_acesso = "3.53e+43"` → visíveis na lista com NF# float.
+ * Rev. 3612 só apagava os que tinham cópia limpa; Rev. 3611 só corrigia quando a chave era 44 dígitos.
+ *
+ * Fix: Rev. 3618 no bloco ALWAYS-RUN (SyncSchema+) em dois passos:
+ *   (a) DELETE das que têm cópia limpa confirmada (mesmo cnpj/valor/data, chave 44 dígitos).
+ *   (b) UPDATE status='duplicata' das restantes (chave irrecuperável) → ocultas pelo filtro da query.
+ * A Rev. 3618 cobre AMBOS os formatos float: decimal ('%.%') E científico ('%e+%').
+ * Resultado: 26 NF-e(s) com chave float corrompida marcadas como 'duplicata' na primeira execução.
+ *
+ * Frontend: `resolveNumeroNf` atualizado para retornar "" (→ exibe "—") quando tanto `numero_nf`
+ * quanto `chave_acesso` estão corrompidos — nunca mais exibe "#3.5260625" na célula.
+ *
+ * Arquivos: server/_core/index.ts (SyncSchema+), client/.../FinanceiroNotasFiscais.tsx.
+ *
  * Rev. 3617 — **NF-e RECEBIDAS · DIALOG "ESPELHO FIEL" COMPLETO — SEÇÃO "DADOS DA NF-e" + "EVENTOS E SERVIÇOS" + DigestValue. BACKEND PONTUAL + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Referência: portal nfe.fazenda.gov.br (captura tela do usuário). O dialog exibia emitente/dest/
