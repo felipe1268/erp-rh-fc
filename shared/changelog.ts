@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3613 — **NF-e RECEBIDAS · BUGFIX "CONSULTAR NO SEFAZ" ABRE HOMEPAGE + CHAVE COPIADA AUTOMÁTICA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Causa: parâmetro `tipoConsulta=completa` não é reconhecido pelo portal nfe.fazenda.gov.br v2.9.7.0
+ * → redirect para a homepage. O URL correto para o formulário de consulta com chave pré-preenchida é:
+ * `consultaRecaptcha.aspx?tipoConteudo=7PhJ%2BgAVw2g%3D&nfe=<CHAVE44>` (sem tipoConsulta).
+ *
+ * Nota: o portal exige reCAPTCHA humano — não é possível abrir a nota sem interação. Fix de UX:
+ * 1. Remove `tipoConsulta=completa` → portal abre direto no formulário com chave pré-preenchida.
+ * 2. `navigator.clipboard.writeText(chave)` copia a chave automaticamente ao clicar.
+ * 3. Toast "Chave copiada! Resolva o CAPTCHA para ver a nota." orienta o usuário.
+ *
+ * Arquivo: client/src/pages/financeiro/FinanceiroNotasFiscais.tsx (onClick do botão "Consultar no SEFAZ").
+ *
  * Rev. 3612 — **NF-e RECEBIDAS · REMOÇÃO DE DUPLICATAS CORROMPIDAS + DEDUP ROBUSTO NO SYNC. BACKEND PONTUAL (SyncSchema+ DELETE + QUERY FIX + SYNC FIX) · ZERO SCHEMA/ALTER.**
  *
  * Causa-raiz das duplicatas: o dedup do sync (`syncNFeSefaz`) usava só `chave_acesso = ${nfe.chNFe}`
