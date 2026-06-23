@@ -741,8 +741,9 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
               };
               const badge = providerBadge[mun.provider] || { label: mun.provider, color: "bg-gray-100 text-gray-600" };
 
+              const isNacional = mun.provider === "nfse_nacional";
               return (
-                <div key={ibge} className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                <div key={ibge} className={`rounded-xl border p-4 space-y-3 ${isNacional ? "border-indigo-200 bg-indigo-50/40" : "border-slate-200 bg-slate-50"}`}>
                   {/* Header do card */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -751,7 +752,17 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
                       <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${badge.color}`}>{badge.label}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      {form.inscricao ? (
+                      {isNacional ? (
+                        sefazCfg?.tem_certificado ? (
+                          <span className="text-[10px] text-emerald-700 font-semibold flex items-center gap-1">
+                            <CheckCircle className="w-3 h-3" /> Cert. A1 ok
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-amber-600 font-semibold flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3" /> Sem cert. A1
+                          </span>
+                        )
+                      ) : form.inscricao ? (
                         <span className="text-[10px] text-emerald-700 font-semibold flex items-center gap-1">
                           <CheckCircle className="w-3 h-3" /> Configurado
                         </span>
@@ -770,28 +781,47 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
                     </div>
                   </div>
 
+                  {/* Descrição do portal */}
+                  {mun.descricao && (
+                    <p className="text-[11px] text-slate-500 leading-relaxed">{mun.descricao}</p>
+                  )}
+
                   {/* Campos */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label className="text-xs text-gray-600">Inscrição Municipal / Login</Label>
-                      <Input
-                        className="mt-1 text-sm h-8"
-                        placeholder="Ex: 13239401"
-                        value={form.inscricao}
-                        onChange={e => setMunForms(f => ({ ...f, [ibge]: { ...f[ibge], inscricao: e.target.value } }))}
-                      />
+                  {isNacional ? (
+                    <div className="rounded-lg border border-indigo-200 bg-white px-3 py-2 flex items-start gap-2">
+                      <span className="text-indigo-400 mt-0.5">🔐</span>
+                      <div>
+                        <p className="text-[11px] font-semibold text-indigo-700">Autenticação via Certificado A1</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">
+                          {sefazCfg?.tem_certificado
+                            ? "Certificado A1 do SEFAZ detectado. Nenhuma senha adicional necessária."
+                            : "Certificado A1 não encontrado. Configure-o acima em "Integração SEFAZ / Certificado A1"."}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <Label className="text-xs text-gray-600">Senha do Portal</Label>
-                      <Input
-                        type="password"
-                        className="mt-1 text-sm h-8"
-                        placeholder="••••••••"
-                        value={form.senha}
-                        onChange={e => setMunForms(f => ({ ...f, [ibge]: { ...f[ibge], senha: e.target.value } }))}
-                      />
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-xs text-gray-600">Inscrição Municipal / Login</Label>
+                        <Input
+                          className="mt-1 text-sm h-8"
+                          placeholder="Ex: 13239401"
+                          value={form.inscricao}
+                          onChange={e => setMunForms(f => ({ ...f, [ibge]: { ...f[ibge], inscricao: e.target.value } }))}
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-gray-600">Senha do Portal</Label>
+                        <Input
+                          type="password"
+                          className="mt-1 text-sm h-8"
+                          placeholder="••••••••"
+                          value={form.senha}
+                          onChange={e => setMunForms(f => ({ ...f, [ibge]: { ...f[ibge], senha: e.target.value } }))}
+                        />
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Toggle sync + última sync + horário */}
                   <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -900,8 +930,10 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
                       size="sm"
                       variant="outline"
                       className="border-blue-300 text-blue-700 hover:bg-blue-50 text-xs h-7 px-3"
-                      disabled={isSyncing || !form.inscricao}
-                      title={!form.inscricao ? "Preencha a Inscrição Municipal primeiro" : ""}
+                      disabled={isSyncing || (isNacional ? !sefazCfg?.tem_certificado : !form.inscricao)}
+                      title={isNacional
+                        ? (!sefazCfg?.tem_certificado ? "Configure o Certificado A1 do SEFAZ primeiro" : "")
+                        : (!form.inscricao ? "Preencha a Inscrição Municipal primeiro" : "")}
                       onClick={() => syncMunMut.mutate({
                         companyId,
                         ibgeCode: ibge,

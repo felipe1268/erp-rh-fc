@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3582 — **NFS-e MUNICIPAIS · PORTAL NACIONAL (nfse.gov.br) AUTO-CONFIGURADO PARA GUARATINGUETÁ. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * Guaratinguetá migrou do SIAP GEO para o Portal Nacional NFS-e a partir de 01/01/2026.
+ * Solução: segundo registro auto-semeado com ibge_code sintético 35186020 (8 dígitos — todos os IBGE reais têm 7),
+ * provider="nfse_nacional", endpoint="https://www.nfse.gov.br/SistemaNacional/nfse.asmx", enabled=0.
+ * SIAP GEO (ibge_code=3518602) mantido para importação de notas históricas (≤ 31/12/2025) via "Sincronizar Período".
+ * UI: card do Portal Nacional com fundo indigo, bloco "🔐 Autenticação via Certificado A1" em vez de campo senha,
+ * status "Cert. A1 ok"/"Sem cert. A1", botão Sincronizar desabilitado sem cert.
+ * Backend: `getMunicipios` semeia os dois registros; `consultarPorProvider` já tinha fallback nfse_nacional (ABRASF+cert A1).
+ * Arquivos: `server/routers/nfseEmitidas.ts`, `client/src/pages/configuracoes/FinanceiroConfigSection.tsx`.
+ *
  * Rev. 3581 — **NF-e RECEBIDAS · BARRA DE PROGRESSO 0→100% ANIMADA AO CLICAR "SINCRONIZAR SEFAZ". 100% FRONTEND · ZERO BACKEND.**
  *
  * Ao clicar "Sincronizar SEFAZ": banner indigo aparece com spinner + porcentagem + barra animada.

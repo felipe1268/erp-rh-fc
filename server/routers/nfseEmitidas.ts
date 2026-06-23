@@ -13,7 +13,8 @@ import forge from "node-forge";
 import { XMLParser } from "fast-xml-parser";
 
 // ── Municípios pré-configurados ──────────────────────────────────────────────
-// Guaratinguetá usa SIAP GEO (geosiap.net.br) — inscrição/login + senha do portal
+// Guaratinguetá: SIAP GEO para notas até 31/12/2025 + Portal Nacional a partir de 01/01/2026
+// ibge_code 35186020 (8 dígitos) = sintético para Portal Nacional (todos os IBGE reais têm 7 dígitos)
 export const MUNICIPIOS_PADRAO = [
   {
     ibge_code: 3518602,
@@ -22,7 +23,16 @@ export const MUNICIPIOS_PADRAO = [
     provider: "siapgeo",
     endpoint: "https://guaratingueta.geosiap.net.br/pmguaratingueta/webservices/nfse.asmx",
     auth_type: "portal_login",
-    descricao: "SIAP GEO — portal contribuinte com inscrição municipal (login) + senha",
+    descricao: "SIAP GEO — portal antigo (notas até 31/12/2025). Inscrição = login, token = senha.",
+  },
+  {
+    ibge_code: 35186020,
+    nome_municipio: "Guaratinguetá (NFS-e Nacional)",
+    uf: "SP",
+    provider: "nfse_nacional",
+    endpoint: "https://www.nfse.gov.br/SistemaNacional/nfse.asmx",
+    auth_type: "certificado_a1",
+    descricao: "Portal Nacional NFS-e (nfse.gov.br) — notas a partir de 01/01/2026. Usa certificado A1 do SEFAZ.",
   },
   {
     ibge_code: 3502507,
@@ -480,9 +490,10 @@ export const nfseEmitidasRouter = router({
       const db = await getDb();
       const { companyId } = input;
 
-      // Auto-seed: só Guaratinguetá (SIAP GEO) como cidade padrão
-      // inscricao_municipal e token pré-preenchidos — COALESCE preserva o que já foi salvo
-      const guara = MUNICIPIOS_PADRAO[0];
+      // Auto-seed: Guaratinguetá SIAP GEO (notas até 2025) + Portal Nacional (notas 2026+)
+      // COALESCE preserva o que o usuário já editou, sem sobrescrever
+      const guara = MUNICIPIOS_PADRAO[0]; // SIAP GEO
+      const guaraNacional = MUNICIPIOS_PADRAO[1]; // Portal Nacional
       await db.$client.query(
         `INSERT INTO company_nfse_municipal_config
           (company_id, ibge_code, nome_municipio, uf, provider, endpoint,
@@ -496,6 +507,21 @@ export const nfseEmitidasRouter = router({
           guara.provider, guara.endpoint,
           "13239401",  // inscrição municipal FC (login do portal SIAP GEO)
           "31335504",  // senha do Portal do Contribuinte de Guaratinguetá
+        ]
+      );
+      // Guaratinguetá Portal Nacional (notas a partir de 01/01/2026) — usa certificado A1 do SEFAZ
+      // token=NULL pois autenticação é via certificado A1 (compartilhado com SEFAZ)
+      await db.$client.query(
+        `INSERT INTO company_nfse_municipal_config
+          (company_id, ibge_code, nome_municipio, uf, provider, endpoint,
+           inscricao_municipal, token, enabled)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,NULL,0)
+         ON CONFLICT (company_id, ibge_code) DO UPDATE
+           SET inscricao_municipal = COALESCE(company_nfse_municipal_config.inscricao_municipal, EXCLUDED.inscricao_municipal)`,
+        [
+          companyId, guaraNacional.ibge_code, guaraNacional.nome_municipio, guaraNacional.uf,
+          guaraNacional.provider, guaraNacional.endpoint,
+          "13239401",  // mesma inscrição municipal
         ]
       );
 
