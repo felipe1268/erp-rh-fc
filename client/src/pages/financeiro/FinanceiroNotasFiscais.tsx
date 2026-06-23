@@ -973,6 +973,7 @@ export default function FinanceiroNotasFiscais() {
                         <th className="px-3 py-2.5 text-left">Status</th>
                         <th className="px-3 py-2.5 text-left">Chave de Acesso</th>
                         <th className="px-3 py-2.5 text-left">Importada em</th>
+                        <th className="px-3 py-2.5 w-10"></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -995,7 +996,11 @@ export default function FinanceiroNotasFiscais() {
                           <tr
                             key={nf.id}
                             className="border-b hover:bg-indigo-50/50 transition-colors cursor-pointer"
+                            style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
+                            role="button"
+                            tabIndex={0}
                             onClick={() => { setNfeRecDetalhe(nf); setCopiedChave(false); }}
+                            onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { setNfeRecDetalhe(nf); setCopiedChave(false); } }}
                             title="Clique para ver detalhes da NF-e"
                           >
                             <td className="px-3 py-2.5">
@@ -1017,6 +1022,17 @@ export default function FinanceiroNotasFiscais() {
                               <span className="truncate block" title={nf.chaveAcesso ?? ""}>{nf.chaveAcesso ? nf.chaveAcesso.slice(0, 22) + "…" : "—"}</span>
                             </td>
                             <td className="px-3 py-2.5 text-slate-400 text-xs whitespace-nowrap">{fmtDateBR(nf.createdAt)}</td>
+                            <td className="px-3 py-2.5">
+                              <button
+                                type="button"
+                                className="p-1.5 rounded-lg text-indigo-400 hover:text-indigo-700 hover:bg-indigo-100 transition-colors"
+                                style={{ touchAction: "manipulation" }}
+                                title="Ver detalhes"
+                                onClick={e => { e.stopPropagation(); setNfeRecDetalhe(nf); setCopiedChave(false); }}
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                            </td>
                           </tr>
                         );
                       })}

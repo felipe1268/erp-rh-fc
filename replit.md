@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3596** — **SEFAZ NF-e · BUGFIX CRÍTICO NSU SOBREESCRITO POR RATE-LIMIT SEM PROGRESSO — HISTÓRICO NUNCA CHEGAVA. BACKEND PONTUAL + SYNCSCHEMA+ · ZERO ALTER/DROP/DELETE.** `cStat=656` na 1ª chamada (sem progresso) retornava `ultNSU=9616` que era salvo como novo ponteiro, pulando o histórico inteiro. Fix: só avança NSU quando `importadas > 0`. SyncSchema+ corrige registros já afetados na startup. Detalhe: `shared/changelog.ts`.
+- **Rev. 3597** — **NF-e RECEBIDAS · BUGFIX CLICAR NA LINHA NÃO ABRIA DETALHE NO iOS/MOBILE — TOUCH-ACTION + BOTÃO 👁 EXPLÍCITO. 100% FRONTEND · ZERO BACKEND/ALTER/DROP/DELETE.** `touchAction:"manipulation"` no `<tr>` + `role="button"` + botão Eye dedicado com `stopPropagation`. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3595** — **NF-e RECEBIDAS · CLICAR NA LINHA ABRE DETALHE DA NOTA + LINK PORTAL SEFAZ. 100% FRONTEND · ZERO BACKEND/ALTER/DROP/DELETE.** Linhas da tabela clicáveis (Dialog com emitente, chave de acesso copiável, botão "Abrir no portal SEFAZ"). Detalhe: `shared/changelog.ts`.
+- **Rev. 3596** — **SEFAZ NF-e · BUGFIX CRÍTICO NSU SOBREESCRITO POR RATE-LIMIT SEM PROGRESSO — HISTÓRICO NUNCA CHEGAVA. BACKEND PONTUAL + SYNCSCHEMA+ · ZERO ALTER/DROP/DELETE.** `cStat=656` na 1ª chamada (sem progresso) retornava `ultNSU=9616` que era salvo como novo ponteiro, pulando o histórico inteiro. Fix: só avança NSU quando `importadas > 0`. SyncSchema+ corrige registros já afetados na startup. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3594** — **EPI · PERMISSÃO ESPECIAL "EDITAR ESTOQUE CENTRAL" POR GRUPO — SEM PRECISAR SER ADMIN. 100% FRONTEND · ZERO BACKEND/ALTER/DROP/DELETE.** Mensagem do campo bloqueado corrigida (não dizia mais "vá para Estoque por Obra" quando essa aba também não oferecia edição do Central). Adicionado botão lápis verde nas linhas do Central na aba Estoque por Obra, visível só para `canWriteCentral`. Detalhe: `shared/changelog.ts`.
 

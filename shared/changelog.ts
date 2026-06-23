@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3597 — **NF-e RECEBIDAS · BUGFIX CLICAR NA LINHA NÃO ABRIA DETALHE NO iOS/MOBILE — TOUCH-ACTION + BOTÃO 👁 EXPLÍCITO. 100% FRONTEND · ZERO BACKEND/ALTER/DROP/DELETE.**
+ *
+ * No iOS/iPad, tabela dentro de `overflow-x-auto` pode engolir eventos de toque antes
+ * do `onClick` do `<tr>` disparar (o browser aguarda para distinguir scroll de tap).
+ * Fix: (1) `style={{ WebkitTapHighlightColor:"transparent", touchAction:"manipulation" }}`
+ * no `<tr>` — instrui o browser a tratar imediatamente como tap, sem aguardar cooldown;
+ * (2) `role="button"` + `tabIndex={0}` + `onKeyDown` para acessibilidade; (3) botão 👁
+ * (`Eye`, `p-1.5 rounded-lg`) na última coluna da linha com `onClick+stopPropagation`
+ * e `touchAction:"manipulation"` próprio — garante toque funcional mesmo se o `<tr>`
+ * perder o evento; (4) nova `<th>` vazia `w-10` no header para alinhar a coluna.
+ *
+ * Arquivos: `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`.
+ *
  * Rev. 3596 — **SEFAZ NF-e · BUGFIX CRÍTICO NSU SOBREESCRITO POR RATE-LIMIT SEM PROGRESSO — HISTÓRICO NUNCA CHEGAVA. BACKEND PONTUAL + SYNCSCHEMA+ · ZERO ALTER/DROP/DELETE.**
  *
  * **Causa-raiz:** ao clicar "Histórico completo" (reset NSU→0 + syncNow), a SEFAZ
