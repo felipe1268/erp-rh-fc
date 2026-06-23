@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3598 — **NFS-e EMITIDAS · BUGFIX NF-e RECEBIDA (SEFAZ) APARECIA NA ABA EMITIDAS. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
+ *
+ * A aba "NFS-e Emitidas" usa `fiscalNotes.list` que não filtrava por `origem`.
+ * Resultado: registros `sefaz_nfe` (NF-e recebidas via SEFAZ) e `xml_upload` apareciam
+ * misturados com as NFS-e emitidas, mostrando a nota da NEOBETEL como se fosse uma
+ * nota emitida pela FC Engenharia com tomador=FC Engenharia.
+ * Fix: `notInArray(fiscalNotes.origem, ["sefaz_nfe", "xml_upload"])` no WHERE de `fiscalNotes.list`.
+ * As NF-e recebidas continuam aparecendo corretamente na aba "NF-e Recebidas (SEFAZ)"
+ * via endpoint separado `sefaz.listNFeRecebidas` que já filtra `origem IN ('sefaz_nfe','xml_upload')`.
+ *
  * Rev. 3597 — **NF-e RECEBIDAS · BUGFIX CLICAR NA LINHA NÃO ABRIA DETALHE NO iOS/MOBILE — TOUCH-ACTION + BOTÃO 👁 EXPLÍCITO. 100% FRONTEND · ZERO BACKEND/ALTER/DROP/DELETE.**
  *
  * No iOS/iPad, tabela dentro de `overflow-x-auto` pode engolir eventos de toque antes

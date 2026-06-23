@@ -2,7 +2,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
 import { fiscalNotes } from "../../drizzle/schema";
-import { eq, and, desc, ilike, or, isNull } from "drizzle-orm";
+import { eq, and, desc, ilike, or, isNull, notInArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { getUserCompanyLinks } from "../db";
 import { invokeGeminiVision, invokeAnthropicVision } from "../_core/llm";
@@ -151,6 +151,8 @@ export const fiscalNotesRouter = router({
         .from(fiscalNotes)
         .where(and(
           eq(fiscalNotes.companyId, input.companyId),
+          // Excluir NF-e recebidas (SEFAZ e XML upload) — elas aparecem na aba "NF-e Recebidas"
+          notInArray(fiscalNotes.origem, ["sefaz_nfe", "xml_upload"]),
           input.status   ? eq(fiscalNotes.status, input.status) : undefined,
           input.obraId   ? eq(fiscalNotes.obraId, input.obraId) : undefined,
           input.semVinculo ? isNull(fiscalNotes.entryId) : undefined,
