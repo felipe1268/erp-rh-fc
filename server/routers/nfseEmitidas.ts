@@ -678,19 +678,23 @@ export function startNfseMunCron() {
   if (_nfseMunCronStarted) return;
   _nfseMunCronStarted = true;
 
-  const runHour = async (horaAtual: number) => {
+  const runHour = async () => {
     try {
       const db = await getDb();
+      // Sincroniza todo município habilitado que não foi consultado nas últimas 55 min.
+      // Prefeituras municipais não têm o limite rígido da SEFAZ, então podemos rodar toda hora.
       const rows = await db.$client.query<any>(
         `SELECT company_id, ibge_code FROM company_nfse_municipal_config
          WHERE enabled = 1 AND inscricao_municipal IS NOT NULL
-           AND COALESCE(sync_hora, 6) = $1`,
-        [horaAtual]
+           AND (last_sync_at IS NULL OR last_sync_at < NOW() - INTERVAL '55 minutes')`
       );
+      if (rows.rows.length > 0) {
+        console.log(`[NfseMunSync] Cron disparado — ${rows.rows.length} município(s) elegível(is) para sync`);
+      }
       for (const r of rows.rows) {
         try {
           const res = await executarSyncMunicipio(Number(r.company_id), Number(r.ibge_code));
-          console.log(`[NfseMunSync] company=${r.company_id} ibge=${r.ibge_code} hora=${horaAtual}h importadas=${res.importadas} ignoradas=${res.ignoradas}${res.erro ? " ERRO=" + res.erro : ""}`);
+          console.log(`[NfseMunSync] company=${r.company_id} ibge=${r.ibge_code} importadas=${res.importadas} ignoradas=${res.ignoradas}${res.erro ? " ERRO=" + res.erro : ""}`);
         } catch (e: any) {
           console.error(`[NfseMunSync] company=${r.company_id} ibge=${r.ibge_code} ERRO:`, e?.message);
         }
@@ -707,10 +711,10 @@ export function startNfseMunCron() {
     next.setHours(now.getHours() + 1);
     const ms = next.getTime() - now.getTime();
     setTimeout(async () => {
-      await runHour(new Date().getHours());
+      await runHour();
       scheduleNext();
     }, ms);
   };
   scheduleNext();
-  console.log("[NfseMunSync] Cron diário agendado (verifica cada hora cheia; roda por município conforme sync_hora configurado).");
+  console.log("[NfseMunSync] Cron horário agendado — sincroniza automaticamente toda hora (prefeituras municipais).");
 }

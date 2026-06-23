@@ -1,6 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3575 — **NFS-e EMITIDAS MUNICIPAIS · CRON HORÁRIO — MESMO PADRÃO DO SEFAZ. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
+ *
+ * `startNfseMunCron` usava o mesmo padrão antigo do SEFAZ: filtrava por `sync_hora` e rodava 1×/dia.
+ * Corrigido para rodar toda hora para qualquer município com `last_sync_at IS NULL OR < NOW()-55min`.
+ * Prefeituras municipais (SIAP GEO, SIL etc.) não têm o limite rígido de 1/hora da SEFAZ, então
+ * 55 min de gap é suficiente para evitar flood sem prejudicar o histórico.
+ * Arquivo: `server/routers/nfseEmitidas.ts`.
+ *
  * Rev. 3574 — **SEFAZ NF-e · UI CONFIGURAÇÃO SEFAZ — TEXTOS CORRIGIDOS + NSU VISÍVEL + MENSAGEM RATE LIMIT MELHORADA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * (1) Descrição azul: removido "Roda todo dia às 06:00" (obsoleto) → texto explica sync horária.
