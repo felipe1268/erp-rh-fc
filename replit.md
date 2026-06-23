@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3583** — **NF-e RECEBIDAS · BUGFIX BANNER "NENHUMA NF-e" FALSO ALARME. 100% FRONTEND · ZERO BACKEND.** Banner âmbar "Configure o certificado A1" só aparece quando cert realmente não está configurado. Com cert mas sem notas → banner azul neutro. Banner verde corrigido: "sincronizando agora" → "pronta para sincronizar". Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3582** — **NFS-e MUNICIPAIS · PORTAL NACIONAL (nfse.gov.br) AUTO-CONFIGURADO PARA GUARATINGUETÁ. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Guaratinguetá migrou do SIAP GEO para o Portal Nacional a partir de 01/01/2026. Segundo registro semeado (ibge_code sintético 35186020, provider=nfse_nacional). Card UI indigo com bloco cert A1 em vez de senha. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3581** — **NF-e RECEBIDAS · BARRA DE PROGRESSO 0→100% AO SINCRONIZAR SEFAZ. 100% FRONTEND · ZERO BACKEND.** Curva exponencial 0→85% + salto 100% na conclusão, shimmer, banner indigo→verde. Detalhe: `shared/changelog.ts`.

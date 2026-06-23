@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3583 — **NF-e RECEBIDAS · BUGFIX BANNER "NENHUMA NF-e" FALSO ALARME + TEXTO BANNER VERDE CORRIGIDO. 100% FRONTEND · ZERO BACKEND.**
+ *
+ * O banner âmbar "Nenhuma NF-e recebida encontrada" disparava para qualquer resultado 0,
+ * mesmo com o certificado A1 já configurado — instruindo o usuário a "Configure o certificado A1"
+ * quando na verdade ele estava ok. Fix: dividido em dois banners condicionais:
+ * (1) sem cert A1 → âmbar com instrução de configurar; (2) com cert mas sem notas → azul informativo
+ * "Nenhuma NF-e encontrada neste período. O cron sincroniza automaticamente a cada hora."
+ * Também corrigido o texto do banner verde: "sincronizando agora em background" → "pronta para sincronizar"
+ * (o banner aparece quando o cooldown expira, não necessariamente enquanto uma sync está em curso).
+ * Arquivo: `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`.
+ *
  * Rev. 3582 — **NFS-e MUNICIPAIS · PORTAL NACIONAL (nfse.gov.br) AUTO-CONFIGURADO PARA GUARATINGUETÁ. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * Guaratinguetá migrou do SIAP GEO para o Portal Nacional NFS-e a partir de 01/01/2026.

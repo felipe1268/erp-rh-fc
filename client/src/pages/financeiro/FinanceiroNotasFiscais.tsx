@@ -834,10 +834,10 @@ export default function FinanceiroNotasFiscais() {
                     ) : (
                       <>
                         <p className="text-sm font-semibold text-emerald-800">
-                          ✅ Pronto — sincronizando agora em background
+                          ✅ Cota renovada — pronta para sincronizar
                         </p>
                         <p className="text-xs text-emerald-600 mt-0.5">
-                          A cota SEFAZ foi renovada. O cron horário já está buscando novas NF-e.
+                          A janela de 1h foi renovada. O cron sincroniza automaticamente a cada hora.
                           {nsuNum > 0 && <> · NSU atual: <strong>{nsuNum.toLocaleString("pt-BR")}</strong></>}
                         </p>
                       </>
@@ -873,16 +873,30 @@ export default function FinanceiroNotasFiscais() {
                 ))}
               </div>
 
-              {/* Aviso se sem certificado */}
-              {nfeRec.length === 0 && !nfeRecQuery.isLoading && (
+              {/* Aviso: sem certificado → ação necessária | com cert mas sem notas → informativo */}
+              {nfeRec.length === 0 && !nfeRecQuery.isLoading && !sefazCfg?.tem_certificado && (
                 <Card className="border-0 shadow-sm ring-1 ring-amber-100 bg-amber-50/60">
                   <CardContent className="p-4 flex items-start gap-3">
                     <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
                     <div>
-                      <p className="text-sm font-semibold text-amber-800">Nenhuma NF-e recebida encontrada</p>
+                      <p className="text-sm font-semibold text-amber-800">Certificado A1 não configurado</p>
                       <p className="text-xs text-amber-700 mt-1">
-                        Configure o certificado A1 em <strong>Configurações → Financeiro → Integração SEFAZ</strong> e clique em
-                        "Sincronizar Agora" para buscar automaticamente todas as NF-e recebidas pelo CNPJ da empresa.
+                        Configure o certificado A1 em <strong>Configurações → Financeiro → Integração SEFAZ</strong> para buscar
+                        automaticamente todas as NF-e recebidas pelo CNPJ da empresa.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+              {nfeRec.length === 0 && !nfeRecQuery.isLoading && sefazCfg?.tem_certificado && (
+                <Card className="border-0 shadow-sm ring-1 ring-blue-100 bg-blue-50/40">
+                  <CardContent className="p-4 flex items-start gap-3">
+                    <CheckCircle className="w-5 h-5 text-blue-500 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-blue-800">Nenhuma NF-e encontrada neste período</p>
+                      <p className="text-xs text-blue-600 mt-1">
+                        O certificado A1 está configurado e o SEFAZ sincroniza automaticamente toda hora.
+                        Se a empresa emitiu NF-e para fornecedores ou recebeu de terceiros, elas aparecerão aqui após a próxima sincronização.
                       </p>
                     </div>
                   </CardContent>
