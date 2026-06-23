@@ -203,10 +203,12 @@ export async function executarSyncNFe(companyId: number): Promise<{ importadas: 
   const url = tpAmb === 2 ? SEFAZ_URL_HOM : SEFAZ_URL_PROD;
   const ufCodigo = UF_CODES[String(cfg.uf || "SP").toUpperCase()] || 35;
 
-  let ultNSU = padNSU(cfg.ultimo_nsu || "0");
+  const ultNSUInicial = padNSU(cfg.ultimo_nsu || "0");
+  let ultNSU = ultNSUInicial;
   let importadas = 0;
   let ignoradas = 0;
   let paginas = 0;
+  let rateLimited = false;
 
   try {
     // Loop de paginação — cada chamada retorna até 50 docs; continua enquanto maxNSU > ultNSU
@@ -233,8 +235,9 @@ export async function executarSyncNFe(companyId: number): Promise<{ importadas: 
       const maxNSU = padNSU(ret?.maxNSU ?? ultNSU);
 
       // 137 = sem documentos | 138 = documento localizado | 498 = consultaNSU diferenciada
-      // 656 = rate limit (Consumo Indevido) — salva o ultNSU retornado e encerra sem erro
-      if (cStat === "137" || cStat === "656") break;
+      // 656 = rate limit (Consumo Indevido) — NÃO avança NSU, sinaliza para UI
+      if (cStat === "137") break;
+      if (cStat === "656") { rateLimited = true; break; }
       if (cStat !== "138" && cStat !== "498") {
         throw new Error(`SEFAZ cStat=${cStat}: ${xMotivo}`);
       }
@@ -298,14 +301,20 @@ export async function executarSyncNFe(companyId: number): Promise<{ importadas: 
     }
 
     // Salvar resultado final
+    // Se rate-limited: NÃO avança o NSU (mantém ultNSUInicial) para retentar do mesmo ponto
+    const avisoRateLimit = rateLimited
+      ? "Limite SEFAZ atingido (cStat=656): tente novamente após 1 hora. NSU não foi avançado."
+      : undefined;
     await db.execute(sql`
       UPDATE company_nfe_config
       SET last_sync_at = NOW(),
-          last_sync_result = ${JSON.stringify({ importadas, ignoradas, paginas })}
+          last_sync_result = ${JSON.stringify({ importadas, ignoradas, paginas, aviso: avisoRateLimit })}
       WHERE company_id = ${companyId}
     `);
 
-    return { importadas, ignoradas };
+    return rateLimited
+      ? { importadas, ignoradas, aviso: avisoRateLimit }
+      : { importadas, ignoradas };
   } catch (e: any) {
     const msg = e?.message || "Erro desconhecido";
     await db.execute(sql`

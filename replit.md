@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3559** — **SEFAZ · BUGFIX PARSING ENVELOPE — RESPOSTA USA "soap:" NÃO "soap12:". BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** SEFAZ responde com prefixo `soap:` (não `soap12:`). Parser navegava `soap12:Envelope/Body` → `ret` vazio → `cStat=""`. Fix: tenta `soap:` primeiro em env e body. Detalhe: `shared/changelog.ts`.
+- **Rev. 3560** — **SEFAZ · RATE-LIMIT (cStat=656) AGORA SINALIZADO NA UI + NSU NÃO AVANÇA. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.** Antes: 656 gravava "0 importadas" como sucesso silencioso e cada nova chamada resetava o timer de 1h. Fix: backend seta `rateLimited=true`, não avança NSU; frontend exibe toast.warning âmbar e badge "⚠️ Limite/hora SEFAZ" na última sincronização. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3558** — **SEFAZ · BUGFIX OPERAÇÃO RENOMEADA: nfeDistDFeInt → nfeDistDFeInteresse. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** WSDL real define `nfeDistDFeInteresse` (não `nfeDistDFeInt`). Com o nome correto: HTTP 200, cStat=656 (rate-limit — confirma mTLS+SOAP funcionando). Fix: Body, action no Content-Type, parsing `retDistDFeInt`, cStat=656 tratado como break. Detalhe: `shared/changelog.ts`.
+- **Rev. 3559** — **SEFAZ · BUGFIX PARSING ENVELOPE — RESPOSTA USA "soap:" NÃO "soap12:". BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** SEFAZ responde com prefixo `soap:` (não `soap12:`). Parser navegava `soap12:Envelope/Body` → `ret` vazio → `cStat=""`. Fix: tenta `soap:` primeiro em env e body. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3557** — **SEFAZ · BUGFIX soap:Sender — FALTAVA soap12:Header COM nfeCabecMsg. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Todos os WS SEFAZ exigem `<nfeCabecMsg>` no `<soap12:Header>` com `<cUF>` e `<versaoDados>`. Sem ele → `soap:Sender`. `buildSoapEnvelope` não incluía o Header — adicionado. Detalhe: `shared/changelog.ts`.
 
@@ -65,6 +65,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3552** — **NOTAS FISCAIS · DUAS SUB-ABAS: "NFS-e EMITIDAS" + "NF-e RECEBIDAS (SEFAZ)". BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** A tela `/financeiro/notas-fiscais` ganhou seletor de abas: "📤 NFS-e Emitidas" (conteúdo original intacto) e "📥 NF-e Recebidas (SEFAZ)" (NF-e importadas via integração SEFAZ da Rev. 3550, `origem='sefaz_nfe'`). Aba recebidas: 4 KPI cards, timeline ano/mês, filtro busca+status, tabela emitente/CNPJ/valor/chave. Novo endpoint `sefaz.listNFeRecebidas`. Detalhe: `shared/changelog.ts`.
 
 ### Revisões recentes (one-liners)
+
+- **Rev. 3558** — **SEFAZ · BUGFIX OPERAÇÃO RENOMEADA: nfeDistDFeInt → nfeDistDFeInteresse. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3551** — **CONCILIAÇÃO · PAINEL "IA LEU NOS DEMONSTRATIVOS" — BOTÃO MINIMIZAR/EXPANDIR. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

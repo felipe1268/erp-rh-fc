@@ -60,6 +60,7 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
   const syncNowMut = (trpc as any).sefaz.syncNow.useMutation({
     onSuccess: (r: any) => {
       if (r.erro) { toast.error("SEFAZ: " + r.erro); }
+      else if (r.aviso) { toast.warning(`⚠️ Limite SEFAZ: tente novamente em 1 hora. (${r.importadas ?? 0} importadas)`); }
       else { toast.success(`Sincronizado! ${r.importadas} NF-e importadas, ${r.ignoradas} ignoradas.`); }
       refetchSefaz();
     },
@@ -395,6 +396,7 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
                   try {
                     const r = JSON.parse(sefazCfg.last_sync_result || "{}");
                     if (r.erro) return <span className="text-red-600 font-medium">— Erro: {r.erro.slice(0, 80)}</span>;
+                    if (r.aviso) return <span className="text-amber-600 font-medium">— ⚠️ Limite/hora SEFAZ — tente novamente em 1h</span>;
                     return <span className="text-emerald-700">— {r.importadas ?? 0} importadas, {r.ignoradas ?? 0} ignoradas</span>;
                   } catch { return null; }
                 })()}

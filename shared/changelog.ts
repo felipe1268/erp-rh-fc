@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3560 — **SEFAZ · RATE-LIMIT (cStat=656) AGORA SINALIZADO NA UI + NSU NÃO AVANÇA. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * Quando o SEFAZ retorna cStat=656 ("Consumo Indevido"), o comportamento anterior era
+ * silencioso: gravava "0 importadas, 0 ignoradas" como sucesso, sem avisar o usuário.
+ * Pior: cada nova chamada resetava o timer de 1 hora do SEFAZ, prolongando o bloqueio.
+ * Fix backend: ao detectar 656, seta `rateLimited=true` + break (sem avançar `ultNSU`);
+ * o save final grava `aviso` no JSON de resultado (não avança NSU → retenta do mesmo ponto).
+ * Fix frontend: toast.warning "⚠️ Limite SEFAZ: tente novamente em 1 hora" (antes toast.success);
+ * linha "Última sincronização" exibe badge âmbar em vez do verde "0 importadas".
+ * Arquivos: `server/routers/sefaz.ts`, `client/src/pages/configuracoes/FinanceiroConfigSection.tsx`.
+ *
  * Rev. 3559 — **SEFAZ · BUGFIX PARSING ENVELOPE — RESPOSTA USA "soap:" NÃO "soap12:". BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
  *
  * O servidor SEFAZ responde com `xmlns:soap="http://www.w3.org/2003/05/soap-envelope"` usando
