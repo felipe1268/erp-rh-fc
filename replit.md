@@ -50,7 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3613** — **NF-e RECEBIDAS · BUGFIX "CONSULTAR NO SEFAZ" ABRE HOMEPAGE + CHAVE COPIADA AUTOMÁTICA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `tipoConsulta=completa` não é reconhecido → redirect para homepage. Fix: URL correto `consultaRecaptcha.aspx?tipoConteudo=7PhJ%2BgAVw2g%3D&nfe=<CHAVE44>`. `navigator.clipboard` copia a chave automaticamente. Toast orienta o usuário a resolver o CAPTCHA. Detalhe: `shared/changelog.ts`.
+- **Rev. 3614** — **NF-e RECEBIDAS · BUGFIX BOTÃO "CONSULTAR NO SEFAZ" BLOQUEADO NO iOS + CONTADOR "SEM XML" CORRETO. 100% FRONTEND + BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** `onClick` era `async`+`await clipboard` antes do `window.open` → iOS Safari bloqueava popup. Fix: handler síncrono, `window.open` primeira instrução, clipboard fire-and-forget. Contador `semXml`: `chave_acesso IS NOT NULL` incluía 26 chaves corrompidas irrecuperáveis → mudado para `~ '^[0-9]{44}$'`. Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3613** — **NF-e RECEBIDAS · BUGFIX "CONSULTAR NO SEFAZ" ABRE HOMEPAGE + CHAVE COPIADA AUTOMÁTICA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `tipoConsulta=completa` não é reconhecido → redirect para homepage. Fix: URL correto `consultaRecaptcha.aspx?tipoConteudo=7PhJ%2BgAVw2g%3D&nfe=<CHAVE44>`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3612** — **NF-e RECEBIDAS · REMOÇÃO DE DUPLICATAS CORROMPIDAS + DEDUP ROBUSTO NO SYNC. BACKEND PONTUAL (SyncSchema+ DELETE + QUERY FIX + SYNC FIX) · ZERO SCHEMA/ALTER.** Dedup do sync usava só `chave_acesso` → após bugfix do fast-xml-parser, mesma NF-e entrava duas vezes (chave corrompida ≠ chave limpa). SyncSchema+ Rev.3612 apaga as ~100 linhas corrompidas com duplicata limpa confirmada (332→243). Query `listNFeRecebidas` + count `semXml` filtram `status != 'duplicata'`. Detalhe: `shared/changelog.ts`.
 

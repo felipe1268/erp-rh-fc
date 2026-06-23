@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3614 — **NF-e RECEBIDAS · BUGFIX BOTÃO "CONSULTAR NO SEFAZ" BLOQUEADO NO iOS + CONTADOR "SEM XML" CORRETO. 100% FRONTEND + BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Problema 1 — Botão "Consultar no SEFAZ" não abria no iOS Safari:
+ * Causa: `onClick` era `async` e chamava `await navigator.clipboard.writeText()` ANTES do
+ * `window.open()`. iOS/Safari só permite `window.open` em event handlers síncronos — qualquer
+ * `await` antes da chamada faz o popup blocker cortar. Fix: handler virou síncrono; `window.open`
+ * é chamado como PRIMEIRA instrução; `clipboard.writeText` é fire-and-forget (`.catch(()=>{})`).
+ *
+ * Problema 2 — Contador "N notas sem XML — Recuperar" mostrava 332 (stale) em vez de 217:
+ * Causa: `chave_acesso IS NOT NULL` incluía as 26 notas com chave corrompida ("3.526e+43") que
+ * não podem ser recuperadas via backfill (consChNFe rejeita chave inválida). Fix: condição mudada
+ * para `chave_acesso ~ '^[0-9]{44}$'` — conta apenas notas com chave limpa de 44 dígitos.
+ *
+ * Arquivos: client/src/pages/financeiro/FinanceiroNotasFiscais.tsx, server/routers/sefaz.ts.
+ *
  * Rev. 3613 — **NF-e RECEBIDAS · BUGFIX "CONSULTAR NO SEFAZ" ABRE HOMEPAGE + CHAVE COPIADA AUTOMÁTICA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Causa: parâmetro `tipoConsulta=completa` não é reconhecido pelo portal nfe.fazenda.gov.br v2.9.7.0

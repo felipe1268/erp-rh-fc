@@ -1237,7 +1237,7 @@ export const sefazRouter = router({
             AND origem IN ('sefaz_nfe', 'xml_upload')
             AND status != 'duplicata'
             AND xml_payload IS NULL
-            AND chave_acesso IS NOT NULL
+            AND chave_acesso ~ '^[0-9]{44}$'
         `) as any,
       ]);
       const semXml = Number(((semXmlRows?.rows ?? semXmlRows)?.[0] as any)?.cnt ?? 0);

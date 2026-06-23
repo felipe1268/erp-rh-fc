@@ -2506,16 +2506,18 @@ export default function FinanceiroNotasFiscais() {
                         variant="outline"
                         size="sm"
                         className="gap-1.5 border-indigo-300 text-indigo-700 hover:bg-indigo-50"
-                        onClick={async () => {
+                        onClick={() => {
                           const chave = String(nf.chaveAcesso).replace(/\D/g, "");
-                          try { await navigator.clipboard.writeText(chave); } catch {}
+                          // window.open PRIMEIRO — antes de qualquer await (iOS Safari bloqueia popup se chamado após await)
                           window.open(
                             `https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx?tipoConteudo=7PhJ%2BgAVw2g%3D&nfe=${chave}`,
                             "_blank"
                           );
+                          // clipboard: fire-and-forget, não bloqueia o popup
+                          navigator.clipboard?.writeText(chave).catch(() => {});
                           toast({
-                            title: "Chave copiada!",
-                            description: "O portal SEFAZ foi aberto com a chave pré-preenchida. Resolva o CAPTCHA para ver a nota.",
+                            title: "Portal SEFAZ aberto",
+                            description: "Chave pré-preenchida no portal. Resolva o CAPTCHA para ver a nota.",
                           });
                         }}
                       >
