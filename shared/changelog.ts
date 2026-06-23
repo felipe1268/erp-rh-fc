@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3595 — **NF-e RECEBIDAS · CLICAR NA LINHA ABRE DETALHE DA NOTA + LINK PORTAL SEFAZ. 100% FRONTEND · ZERO BACKEND/ALTER/DROP/DELETE.**
+ *
+ * Cada linha da tabela "NF-e Recebidas (SEFAZ)" agora é clicável (cursor-pointer,
+ * hover indigo). Ao clicar abre um Dialog com: status + valor destacado, bloco
+ * Emitente (nome + CNPJ), datas (Emissão / Importada em), Descrição do serviço,
+ * Chave de Acesso completa com botão "Copiar" (feedback ✓ por 2s via clipboard API),
+ * NSU SEFAZ. Footer do dialog tem botão "Abrir no portal SEFAZ" que abre
+ * https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx?... em nova aba.
+ * Novos imports lucide: Copy, CheckIcon. Novos states: nfeRecDetalhe + copiedChave.
+ * O botão "Histórico completo" (já existente) zera o NSU e baixa todas as NF-e
+ * de todos os anos anteriores em uma chamada paginada.
+ *
  * Rev. 3594 — **EPI · PERMISSÃO ESPECIAL "EDITAR ESTOQUE CENTRAL" POR GRUPO — SEM PRECISAR SER ADMIN. 100% FRONTEND · ZERO BACKEND/ALTER/DROP/DELETE.**
  *
  * Novo campo `extras?: Record<string, boolean>` adicionado à interface `ModulePerm`

@@ -17,7 +17,7 @@ import {
   Plus, Search, FileText, ExternalLink, Edit2, Trash2, Eye,
   Link, Link2Off, CheckCircle, Clock, AlertTriangle, RefreshCw,
   Building2, Calendar, Banknote, Receipt, X, ChevronDown, ChevronUp,
-  ChevronLeft, ChevronRight, Upload, Loader2,
+  ChevronLeft, ChevronRight, Upload, Loader2, Copy, Check as CheckIcon,
 } from "lucide-react";
 
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
@@ -161,6 +161,8 @@ export default function FinanceiroNotasFiscais() {
   const [batchSaving, setBatchSaving] = useState(false);
 
   const [confirmHistorico, setConfirmHistorico] = useState(false);
+  const [nfeRecDetalhe, setNfeRecDetalhe] = useState<any>(null);
+  const [copiedChave, setCopiedChave] = useState(false);
 
   // ── Progresso simulado da sync SEFAZ (0-100) ──────────────────────────────
   const [syncProgress, setSyncProgress] = useState<number | null>(null);
@@ -990,7 +992,12 @@ export default function FinanceiroNotasFiscais() {
                       {nfeRec.map((nf: any) => {
                         const st = STATUS_MAP[nf.status] ?? { label: nf.status, color: "bg-gray-100 text-gray-700 border-gray-200" };
                         return (
-                          <tr key={nf.id} className="border-b hover:bg-slate-50 transition-colors">
+                          <tr
+                            key={nf.id}
+                            className="border-b hover:bg-indigo-50/50 transition-colors cursor-pointer"
+                            onClick={() => { setNfeRecDetalhe(nf); setCopiedChave(false); }}
+                            title="Clique para ver detalhes da NF-e"
+                          >
                             <td className="px-3 py-2.5">
                               <span className="font-semibold text-indigo-700">#{nf.numeroNf || "—"}</span>
                             </td>
@@ -1864,6 +1871,107 @@ export default function FinanceiroNotasFiscais() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* ── Dialog detalhe NF-e Recebida ────────────────────────────────────── */}
+        <Dialog open={!!nfeRecDetalhe} onOpenChange={v => !v && setNfeRecDetalhe(null)}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-indigo-700">
+                <Receipt className="w-5 h-5" />
+                NF-e #{nfeRecDetalhe?.numeroNf || "—"}
+              </DialogTitle>
+              <DialogDescription>
+                Detalhes da nota fiscal recebida via SEFAZ
+              </DialogDescription>
+            </DialogHeader>
+            {nfeRecDetalhe && (() => {
+              const nf = nfeRecDetalhe;
+              const st = STATUS_MAP[nf.status] ?? { label: nf.status, color: "bg-gray-100 text-gray-700 border-gray-200" };
+              return (
+                <div className="space-y-4 py-1">
+                  {/* Status + Valor */}
+                  <div className="flex items-center justify-between">
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border ${st.color}`}>
+                      {st.label}
+                    </span>
+                    <span className="text-2xl font-bold text-emerald-700 tabular-nums">{formatBRL(nf.valorLiquido)}</span>
+                  </div>
+
+                  {/* Emitente */}
+                  <div className="rounded-xl border bg-slate-50 p-3 space-y-1.5">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Emitente</p>
+                    <p className="font-semibold text-slate-800 break-words">{nf.emitenteNome || "—"}</p>
+                    <p className="text-sm text-slate-500 tabular-nums">{nf.emitenteCnpj || "—"}</p>
+                  </div>
+
+                  {/* Datas */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-xl border bg-slate-50 p-3">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Emissão</p>
+                      <p className="font-semibold text-slate-800">{fmtDateBR(nf.dataEmissao)}</p>
+                    </div>
+                    <div className="rounded-xl border bg-slate-50 p-3">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Importada em</p>
+                      <p className="font-semibold text-slate-800">{fmtDateBR(nf.createdAt)}</p>
+                    </div>
+                  </div>
+
+                  {/* Descrição */}
+                  {nf.descricaoServico && (
+                    <div className="rounded-xl border bg-slate-50 p-3">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Descrição</p>
+                      <p className="text-sm text-slate-700 break-words">{nf.descricaoServico}</p>
+                    </div>
+                  )}
+
+                  {/* Chave de Acesso */}
+                  {nf.chaveAcesso && (
+                    <div className="rounded-xl border bg-slate-50 p-3">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Chave de Acesso</p>
+                      <div className="flex items-start gap-2">
+                        <p className="font-mono text-xs text-slate-600 break-all flex-1 select-all leading-relaxed">{nf.chaveAcesso}</p>
+                        <button
+                          type="button"
+                          className="shrink-0 p-1.5 rounded-lg hover:bg-slate-200 text-slate-500 hover:text-slate-700 transition-colors"
+                          title="Copiar chave"
+                          onClick={() => {
+                            navigator.clipboard.writeText(nf.chaveAcesso).then(() => {
+                              setCopiedChave(true);
+                              setTimeout(() => setCopiedChave(false), 2000);
+                            });
+                          }}
+                        >
+                          {copiedChave ? <CheckIcon className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* NSU */}
+                  {nf.nsuSefaz && (
+                    <p className="text-xs text-slate-400">NSU SEFAZ: <span className="font-mono">{nf.nsuSefaz}</span></p>
+                  )}
+                </div>
+              );
+            })()}
+            <DialogFooter className="flex-col sm:flex-row gap-2">
+              {nfeRecDetalhe?.chaveAcesso && (
+                <Button
+                  variant="outline"
+                  className="gap-1.5 border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+                  onClick={() => window.open(
+                    `https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx?tipoConteudo=XmlNFe&tipoConsulta=completa&nfe=${nfeRecDetalhe.chaveAcesso}`,
+                    "_blank"
+                  )}
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  Abrir no portal SEFAZ
+                </Button>
+              )}
+              <Button variant="ghost" onClick={() => setNfeRecDetalhe(null)}>Fechar</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <AlertDialog open={!!deleteTarget} onOpenChange={v => !v && setDeleteTarget(null)}>
           <AlertDialogContent>
