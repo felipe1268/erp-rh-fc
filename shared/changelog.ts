@@ -1,6 +1,23 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3606 — **NF-e RECEBIDAS · BUGFIX CRÍTICO TELA VAZIA — COLUNA `origem` FALTAVA NO SCHEMA DRIZZLE + GATE DE TEMPO GERAL NO SEFAZ SYNC. BACKEND PONTUAL + SCHEMA · ZERO ALTER/DROP/DELETE.**
+ *
+ * Causa-raiz dupla: (1) As colunas `origem`, `emitente_cnpj`, `emitente_nome`, `nsu_sefaz` e
+ * `xml_payload` foram adicionadas à tabela `fiscal_notes` via SyncSchema+ (Rev.3550/3604) mas
+ * NUNCA foram declaradas no schema Drizzle (`drizzle/schema.ts`). Resultado: `fiscalNotes.origem`
+ * era `undefined`, e `notInArray(fiscalNotes.origem, ["sefaz_nfe", "xml_upload"])` na procedure
+ * `fiscalNotes.list` gerava `syntax error at or near "in"` em toda chamada — a aba NFS-e Emitidas
+ * crashava com erro repetido no log. (2) `executarSyncNFe` só bloqueava re-chamadas após rate-limit
+ * (cStat=656); chamadas manuais via "Sincronizar Agora" dentro da mesma janela de 1h disparavam
+ * nova chamada real à SEFAZ, que retornava 656 e congelava a cota por mais 1h. Fix: gate geral de
+ * tempo (58 min) usando `last_sync_at` substitui o gate antigo (só ativado por rateLimitedAt) —
+ * bloqueia TANTO cron quanto botão manual se a última sync foi < 58 min atrás, com mensagem clara
+ * distinguindo rate-limit ativo de aguardo normal.
+ *
+ * Arquivos: `drizzle/schema.ts` (5 colunas adicionadas ao fiscalNotes), `server/routers/sefaz.ts`
+ * (gate de tempo geral em executarSyncNFe). ZERO ALTER/DROP/DELETE — colunas já existem no Neon.
+ *
  * Rev. 3605 — **NF-e RECEBIDAS · BACKFILL AUTOMÁTICO DE XML — RECUPERA O XML COMPLETO DAS NOTAS IMPORTADAS COMO RESUMO. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * Problema: notas importadas via SEFAZ como resNFe (resumo) tinham xml_payload=NULL, exibindo aviso

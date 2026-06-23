@@ -622,16 +622,25 @@ export async function executarSyncNFe(companyId: number): Promise<{ importadas: 
   let rateLimited = false;
   let rateLimitedNsu: string | null = null; // NSU que a SEFAZ instrui usar na próxima chamada
 
-  // ── Gate de cooldown: evitar queimar cota SEFAZ se já foi rate-limited recentemente ──
+  // ── Gate geral de tempo (58 min): protege contra chamadas repetidas dentro da mesma janela horária ──
+  // Cobre TANTO o caso de rate-limit anterior QUANTO chamadas manuais "Sincronizar Agora" em sequência.
+  const COOLDOWN_MS = 58 * 60 * 1000;
   try {
-    const prevResult = JSON.parse(cfg.last_sync_result || "{}");
-    if (prevResult?.aviso && prevResult?.rateLimitedAt) {
-      const elapsedMs = Date.now() - new Date(prevResult.rateLimitedAt).getTime();
-      const cooldownMs = 58 * 60 * 1000; // 58 minutos
-      if (elapsedMs < cooldownMs) {
-        const restantMin = Math.ceil((cooldownMs - elapsedMs) / 60000);
-        const aviso = `Limite SEFAZ — aguarde mais ${restantMin} min antes de tentar novamente (cooldown automático).`;
-        console.log(`[SefazSync] company=${companyId} COOLDOWN=${restantMin}min — sem chamada à API`);
+    if (cfg.last_sync_at) {
+      const elapsedMs = Date.now() - new Date(cfg.last_sync_at).getTime();
+      if (elapsedMs < COOLDOWN_MS) {
+        const restantMin = Math.ceil((COOLDOWN_MS - elapsedMs) / 60000);
+        // Verificar se há rate-limit ativo para dar mensagem mais específica
+        let aviso: string;
+        try {
+          const prevResult = JSON.parse(cfg.last_sync_result || "{}");
+          if (prevResult?.rateLimitedAt) {
+            aviso = `Limite SEFAZ ativo — aguarde mais ${restantMin} min (cStat=656). O sistema sincronizará automaticamente.`;
+          } else {
+            aviso = `SEFAZ permite 1 chamada/hora — próxima sync disponível em ${restantMin} min.`;
+          }
+        } catch { aviso = `Aguarde mais ${restantMin} min — SEFAZ permite apenas 1 chamada/hora/CNPJ.`; }
+        console.log(`[SefazSync] company=${companyId} TIME_GATE=${restantMin}min — sem chamada à API`);
         return { importadas: 0, ignoradas: 0, aviso };
       }
     }

@@ -9959,6 +9959,12 @@ export const fiscalNotes = pgTable("fiscal_notes", {
   criadoPorNome:       varchar("criado_por_nome", { length: 255 }),
   createdAt:           timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   updatedAt:           timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+  // Rev. 3550 — colunas SEFAZ adicionadas via SyncSchema+ (precisam estar aqui para o Drizzle ORM não gerar SQL inválido)
+  origem:              varchar("origem", { length: 30 }).default("manual"),
+  emitenteCnpj:        varchar("emitente_cnpj", { length: 20 }),
+  emitenteNome:        varchar("emitente_nome", { length: 255 }),
+  nsuSefaz:            varchar("nsu_sefaz", { length: 20 }),
+  xmlPayload:          text("xml_payload"),
 }, (t) => [
   index("idx_fn_company").on(t.companyId),
   index("idx_fn_emissao").on(t.dataEmissao),
