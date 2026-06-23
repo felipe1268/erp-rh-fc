@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3602 — **NFS-e EMITIDAS · BOTÃO "SINCRONIZAR AGORA" NA ABA EMITIDAS + PROVIDER nfse_nacional EXPLÍCITO. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * (1) FRONTEND: botão "Sincronizar Agora" adicionado diretamente na aba NFS-e Emitidas (no bloco do
+ * cronômetro), sem precisar ir a Configurações. Chama `syncAllMunicipios` que processa SIAP GEO (portal
+ * antigo, até 2025) + Portal Nacional (2026+) simultaneamente. Resultado por portal exibido inline.
+ * `syncAllMunMut` + `setSyncAllResult` + refetch das queries após sync.
+ * (2) BACKEND: provider `nfse_nacional` agora tem branch explícita em `consultarPorProvider` (antes
+ * era fallback genérico sem log). Logs de diagnóstico adicionados (mesmo padrão do SIAP GEO).
+ * Erro de provider desconhecido agora lança mensagem clara.
+ *
+ * Rev. 3601 — **NFS-e EMITIDAS MUNICIPAIS · BUGFIX CRON + ENABLE PORTAIS GUARATINGUETÁ. BACKEND PONTUAL + SYNCSCHEMA+ · ZERO ALTER/DROP/DELETE.**
+ *
+ * Três correções para que as NFS-e que a FC Engenharia EMITE apareçam automaticamente no ERP:
+ * (1) BUGFIX CRON: `executarSyncMunicipio` era chamada com args posicionais (companyId, ibgeCode)
+ * mas a função espera um objeto `{ companyId, ibgeCode, cnpj }` — resultado: 0 notas importadas
+ * em todo cron automático desde Rev. 3561. Fix: cron agora passa objeto + busca cnpj via JOIN.
+ * (2) BUGFIX DATE RANGE: primeira sync (last_sync_at IS NULL) usava "último mês" → portais históricos
+ * não tinham notas. Fix: se last_sync_at IS NULL, dataInicial='2018-01-01' (histórico completo).
+ * SIAP GEO tem notas só até 31/12/2025 → dataFinal capado nessa data automaticamente.
+ * (3) SYNCSCHEMA+ Rev.3601: habilita enabled=1 nos portais de Guaratinguetá (ibge 3518602 + 35186020)
+ * que estavam com enabled=0 — sem isso o cron nunca disparava.
+ *
  * Rev. 3600 — **NF-e RECEBIDAS · DIALOG REDESENHADO (DANFE MODERNO) + ACATAR / RECUSAR / DESCONHEÇO + BUGFIX CHAVE EM NOTAÇÃO CIENTÍFICA. BACKEND ADITIVO + FRONTEND + SYNCSCHEMA+ · ZERO ALTER/DROP/DELETE.**
  *
  * (1) CHAVE CIENTÍFICA: fast-xml-parser com `parseAttributeValue:true` convertia a string de 44 dígitos

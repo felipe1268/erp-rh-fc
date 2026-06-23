@@ -367,15 +367,27 @@ async function consultarPorProvider(opts: {
     return parseAbrasrResponse(respXml);
   }
 
-  // ── NFS-e Nacional (fallback) ─────────────────────────────────────────────
-  if (!certPfxBase64) throw new Error("Certificado A1 não configurado. Configure em Integração SEFAZ.");
-  const { cert, key } = pfxToPem(certPfxBase64, certPassword || "");
-  const soapBody = buildAbrasrConsultarNfse(cnpj, inscricaoMunicipal, dataInicial, dataFinal);
-  const respXml = await callHttps(endpoint, soapBody, {
-    "Content-Type": "text/xml; charset=utf-8",
-    "SOAPAction": "http://www.abrasf.org.br/nfse.xsd/ConsultarNfse",
-  }, cert, key);
-  return parseAbrasrResponse(respXml);
+  // ── NFS-e Nacional (nfse.gov.br) — SOAP 1.1 + Certificado A1 ─────────────
+  if (provider === "nfse_nacional") {
+    if (!certPfxBase64) throw new Error("Certificado A1 não configurado. Configure em Integração SEFAZ.");
+    const { cert, key } = pfxToPem(certPfxBase64, certPassword || "");
+    const soapBody = buildAbrasrConsultarNfse(cnpj, inscricaoMunicipal, dataInicial, dataFinal);
+    console.log(`[NfseMun][nfse_nacional] cnpj=${cnpj.replace(/\D/g,"").slice(-4)} inscricao=${inscricaoMunicipal} periodo=${dataInicial}→${dataFinal}`);
+    const respXml = await callHttps(endpoint, soapBody, {
+      "Content-Type": "text/xml; charset=utf-8",
+      "SOAPAction": "http://www.abrasf.org.br/nfse.xsd/ConsultarNfse",
+    }, cert, key);
+    console.log(`[NfseMun][nfse_nacional] resposta(${respXml.length}): ${respXml.slice(0, 500).replace(/\n/g, " ")}`);
+    const notas = parseAbrasrResponse(respXml);
+    console.log(`[NfseMun][nfse_nacional] notas parseadas=${notas.length}`);
+    if (notas.length === 0) {
+      const erroMatch = respXml.match(/<(?:[^:]+:)?(?:faultstring|Mensagem|Erro|Error|Message)>([^<]{1,200})<\//i);
+      if (erroMatch) throw new Error(`Portal Nacional: ${erroMatch[1].trim()}`);
+    }
+    return notas;
+  }
+
+  throw new Error(`Provider desconhecido: ${provider}`);
 }
 
 // ── Função principal de sincronização ─────────────────────────────────────────
@@ -405,12 +417,21 @@ async function executarSyncMunicipio(opts: {
   const sefazCfg = sefazRes.rows[0];
 
   const hoje = new Date();
-  const dataFinal = opts.dataFinal || hoje.toISOString().slice(0, 10);
-  const dataInicial = opts.dataInicial || (() => {
-    const d = new Date(hoje);
-    d.setMonth(d.getMonth() - 1);
-    return d.toISOString().slice(0, 10);
-  })();
+
+  // SIAP GEO só tem notas até 31/12/2025 — capear dataFinal nessa data
+  const isSiapGeo = mun.provider === "siapgeo";
+  const dataFinalDefault = isSiapGeo ? "2025-12-31" : hoje.toISOString().slice(0, 10);
+  const dataFinal = opts.dataFinal || dataFinalDefault;
+
+  // Primeira sync (last_sync_at IS NULL): buscar histórico completo desde 2018
+  // Syncs seguintes: apenas o último mês (incremental)
+  const dataInicial = opts.dataInicial || (
+    mun.last_sync_at == null ? "2018-01-01" : (() => {
+      const d = new Date(hoje);
+      d.setMonth(d.getMonth() - 1);
+      return d.toISOString().slice(0, 10);
+    })()
+  );
 
   let importadas = 0;
   let ignoradas = 0;
@@ -710,16 +731,22 @@ export function startNfseMunCron() {
       // Sincroniza todo município habilitado que não foi consultado nas últimas 55 min.
       // Prefeituras municipais não têm o limite rígido da SEFAZ, então podemos rodar toda hora.
       const rows = await db.$client.query<any>(
-        `SELECT company_id, ibge_code FROM company_nfse_municipal_config
-         WHERE enabled = 1 AND inscricao_municipal IS NOT NULL
-           AND (last_sync_at IS NULL OR last_sync_at < NOW() - INTERVAL '55 minutes')`
+        `SELECT m.company_id, m.ibge_code, c.cnpj
+         FROM company_nfse_municipal_config m
+         LEFT JOIN company_nfe_config c ON c.company_id = m.company_id
+         WHERE m.enabled = 1 AND m.inscricao_municipal IS NOT NULL
+           AND (m.last_sync_at IS NULL OR m.last_sync_at < NOW() - INTERVAL '55 minutes')`
       );
       if (rows.rows.length > 0) {
         console.log(`[NfseMunSync] Cron disparado — ${rows.rows.length} município(s) elegível(is) para sync`);
       }
       for (const r of rows.rows) {
         try {
-          const res = await executarSyncMunicipio(Number(r.company_id), Number(r.ibge_code));
+          const res = await executarSyncMunicipio({
+            companyId: Number(r.company_id),
+            ibgeCode: Number(r.ibge_code),
+            cnpj: r.cnpj || "",
+          });
           console.log(`[NfseMunSync] company=${r.company_id} ibge=${r.ibge_code} importadas=${res.importadas} ignoradas=${res.ignoradas}${res.erro ? " ERRO=" + res.erro : ""}`);
         } catch (e: any) {
           console.error(`[NfseMunSync] company=${r.company_id} ibge=${r.ibge_code} ERRO:`, e?.message);

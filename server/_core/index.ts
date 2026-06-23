@@ -4131,6 +4131,19 @@ Regras:
           if (!badRows.length) console.log(`[SyncSchema+] Rev. 3600: nenhuma chave em notação científica encontrada — OK`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3600 chave-cientifica:`, e?.message || e); }
 
+        // Rev. 3601 — Habilitar portais NFS-e municipal de Guaratinguetá (SIAP GEO + Portal Nacional)
+        // Ambos estavam com enabled=0; sem isso o cron nunca dispara e as NFS-e emitidas não aparecem.
+        try {
+          await db.$client.query(`
+            UPDATE company_nfse_municipal_config
+            SET enabled = 1, updated_at = NOW()
+            WHERE ibge_code IN (3518602, 35186020)
+              AND inscricao_municipal IS NOT NULL
+              AND enabled = 0
+          `);
+          console.log(`[SyncSchema+] Rev. 3601: portais NFS-e municipal de Guaratinguetá habilitados (enabled=1).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3601 enable-nfse-mun:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

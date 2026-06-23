@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3600** — **NF-e RECEBIDAS · DIALOG DANFE MODERNO + ACATAR/RECUSAR/DESCONHEÇO + BUGFIX CHAVE NOTAÇÃO CIENTÍFICA. BACKEND ADITIVO + FRONTEND + SYNCSCHEMA+ · ZERO ALTER/DROP/DELETE.** `numberParseOptions.skipLike` no XMLParser evita float64 em chave de 44 dígitos; SyncSchema+ limpa chaves corrompidas; endpoint `sefaz.manifestar`; dialog redesenhado com header gradiente, CNPJ formatado, chave em grupos de 4. Detalhe: `shared/changelog.ts`.
+- **Rev. 3602** — **NFS-e EMITIDAS · BOTÃO "SINCRONIZAR AGORA" NA ABA EMITIDAS + PROVIDER nfse_nacional EXPLÍCITO. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.** Botão "Sincronizar Agora" no cronômetro da aba Emitidas chama `syncAllMunicipios` (SIAP GEO + Portal Nacional simultaneamente). Provider `nfse_nacional` agora tem branch explícita com logs. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3599** — **NF-e RECEBIDAS · BUGFIX BOTÃO 👁 NÃO ABRIA DETALHE — DIALOG DENTRO DO BLOCO "EMITIDAS". 100% FRONTEND · ZERO BACKEND/ALTER/DROP/DELETE.** Dialog `nfeRecDetalhe` estava dentro de `{pageTab==="emitidas" && <>...</>}` → nunca renderizava na aba recebidas. Movido para fora de ambas as abas. Detalhe: `shared/changelog.ts`.
+- **Rev. 3601** — **NFS-e EMITIDAS MUNICIPAIS · BUGFIX CRON + ENABLE PORTAIS GUARATINGUETÁ. BACKEND PONTUAL + SYNCSCHEMA+ · ZERO ALTER/DROP/DELETE.** (1) Cron chamava `executarSyncMunicipio` com args posicionais → nunca importava nada desde Rev.3561. Fix: objeto + JOIN cnpj. (2) Primeira sync usava "último mês" → sem histórico. Fix: `last_sync_at IS NULL` → 2018-01-01; SIAP GEO capeado em 2025-12-31. (3) SyncSchema+: habilita ambos portais (enabled=1). Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3594** — **EPI · PERMISSÃO ESPECIAL "EDITAR ESTOQUE CENTRAL" POR GRUPO — SEM PRECISAR SER ADMIN. 100% FRONTEND · ZERO BACKEND/ALTER/DROP/DELETE.** Mensagem do campo bloqueado corrigida (não dizia mais "vá para Estoque por Obra" quando essa aba também não oferecia edição do Central). Adicionado botão lápis verde nas linhas do Central na aba Estoque por Obra, visível só para `canWriteCentral`. Detalhe: `shared/changelog.ts`.
 

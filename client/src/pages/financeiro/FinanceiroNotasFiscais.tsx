@@ -237,6 +237,16 @@ export default function FinanceiroNotasFiscais() {
   );
   const municipios: any[] = municipiosQuery.data ?? [];
 
+  const [syncAllResult, setSyncAllResult] = useState<any>(null);
+  const syncAllMunMut = (trpc as any).nfseEmitidas.syncAllMunicipios.useMutation({
+    onSuccess: (data: any) => {
+      setSyncAllResult(data);
+      municipiosQuery.refetch();
+      listQuery.refetch();
+      yearQuery.refetch();
+    },
+  });
+
   // ── Cronômetro regressivo SEFAZ: atualiza a cada segundo ─────────────────────
   const [countdownSec, setCountdownSec] = useState<number | null>(null);
   useEffect(() => {
@@ -1134,17 +1144,42 @@ export default function FinanceiroNotasFiscais() {
                   </>
                 )}
               </div>
-              {latestSync && (
-                <div className="text-right text-xs text-slate-400 shrink-0 hidden sm:block">
-                  <div>Última sync</div>
-                  <div className="font-medium text-slate-500">
-                    {new Date(latestSync).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}
+              <div className="flex flex-col items-end gap-1.5 shrink-0">
+                {latestSync && (
+                  <div className="text-right text-xs text-slate-400 hidden sm:block">
+                    <div>Última sync</div>
+                    <div className="font-medium text-slate-500">
+                      {new Date(latestSync).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+                <button
+                  className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg border border-emerald-300 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed bg-white transition-colors"
+                  disabled={syncAllMunMut.isPending}
+                  onClick={() => syncAllMunMut.mutate({ companyId: companyId! })}
+                >
+                  {syncAllMunMut.isPending
+                    ? <><RefreshCw className="w-3 h-3 animate-spin" /> Sincronizando…</>
+                    : <><RefreshCw className="w-3 h-3" /> Sincronizar Agora</>
+                  }
+                </button>
+              </div>
             </div>
           );
         })()}
+
+        {/* Resultado da sync manual */}
+        {syncAllResult && (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs flex flex-wrap gap-3 items-center">
+            <span className="font-semibold text-emerald-800">Sync concluída:</span>
+            {syncAllResult.resultados?.map((r: any) => (
+              <span key={r.ibge} className={r.erro ? "text-red-600" : "text-emerald-700"}>
+                {r.nome}: {r.erro ? `❌ ${r.erro.slice(0, 60)}` : `✓ ${r.importadas} novas`}
+              </span>
+            ))}
+            <button className="ml-auto text-slate-400 hover:text-slate-600 text-[10px] underline" onClick={() => setSyncAllResult(null)}>fechar</button>
+          </div>
+        )}
 
         {/* KPI cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
