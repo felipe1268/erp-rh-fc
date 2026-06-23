@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3609 — **NF-e RECEBIDAS · BUGFIX CRÍTICO BACKFILL "115 NOTAS SEM XML" — ESTRATÉGIA NSU RESET + RESYNC EM VEZ DE consChNFe. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * Causa-raiz: `recuperarXmlsBackfill` usava `consChNFe` via `NFeDistribuicaoDFe` para tentar
+ * recuperar o XML completo das notas importadas só como resumo (`resNFe`). Mas a SEFAZ distribui
+ * primeiro o `resNFe` (resumo, NSU baixo) e depois o `nfeProc` (XML completo, NSU maior).
+ * Como o `ultimo_nsu` já havia avançado além do NSU do `nfeProc`, o `consChNFe` retornava
+ * apenas o mesmo `resNFe` de volta — nunca o XML completo. O frontend recebia `erros=N`,
+ * mostrava toast brevemente (imperceptível no iOS) e o contador não diminuía.
+ *
+ * Solução: nova estratégia NSU reset + resync.
+ * 1. `executarSyncNFe` ganha parâmetros opcionais `{ skipTimeGate, forceUltNSU }`.
+ *    - `skipTimeGate=true`: ignora o gate de 1h (backfill tem janela própria).
+ *    - `forceUltNSU`: antes de sincronizar, reescreve `ultimo_nsu` no banco e limpa
+ *      `last_sync_at` — forçando o SEFAZ a re-entregar os NSUs a partir desse ponto.
+ * 2. `recuperarXmlsBackfill` agora:
+ *    a. Encontra o menor `nsu_sefaz` entre notas sem XML.
+ *    b. Subtrai 50 (buffer de segurança) → `forceNSU`.
+ *    c. Chama `executarSyncNFe` com `{ skipTimeGate: true, forceUltNSU: forceNSU }`.
+ *    d. O loop de sync (Rev.3605) já sabe fazer UPDATE em notas existentes quando
+ *       `nfeProc` chega para uma nota que tinha apenas `resNFe`.
+ *    e. Compara contagem antes/depois → retorna `{ recuperadas, restantes, aviso }`.
+ * 3. Frontend: input simplificado (sem `lote`); toasts melhorados (sucesso/parcial/info
+ *    explicativo para notas fora da janela SEFAZ de 90 dias); `toast.info` com duration=7s
+ *    para caso sem progresso (mais visível no iOS).
+ *
+ * Se restarem notas sem XML após o primeiro clique (SEFAZ pagina 50 docs/vez + rate-limit),
+ * o usuário pode clicar novamente — cada clique avança o resync a partir do NSU correto.
+ * Notas muito antigas (> 90 dias de NSU fora da janela) podem não ter `nfeProc` disponível
+ * na SEFAZ; serão reportadas como "sem XML disponível na SEFAZ".
+ *
+ * Arquivos: `server/routers/sefaz.ts`, `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`
+ *
  * Rev. 3608 — **SEFAZ NF-e · FREQUÊNCIA DE CONSULTA CONFIGURÁVEL (1h → 24h). BACKEND ADITIVO + SYNCSCHEMA+ + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
  *
  * Nova coluna `sync_intervalo_horas SMALLINT DEFAULT 1` em `company_nfe_config` (SyncSchema+ Rev.3608).

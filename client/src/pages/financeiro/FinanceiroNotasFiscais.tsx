@@ -206,12 +206,16 @@ export default function FinanceiroNotasFiscais() {
   const backfillMut = (trpc as any).sefaz.recuperarXmlsBackfill.useMutation({
     onSuccess: (res: any) => {
       nfeRecQuery.refetch();
-      if (res.recuperadas > 0) {
-        toast.success(`${res.recuperadas} XML${res.recuperadas !== 1 ? "s" : ""} recuperado${res.recuperadas !== 1 ? "s" : ""} com sucesso!${res.restantes > 0 ? ` Ainda faltam ${res.restantes}.` : " Todos os XMLs estão completos."}`);
+      if (res.recuperadas > 0 && res.restantes === 0) {
+        toast.success(`${res.recuperadas} XML${res.recuperadas !== 1 ? "s" : ""} recuperado${res.recuperadas !== 1 ? "s" : ""}! Todas as notas agora têm XML completo.`);
+      } else if (res.recuperadas > 0) {
+        toast.success(`${res.recuperadas} XML${res.recuperadas !== 1 ? "s" : ""} recuperado${res.recuperadas !== 1 ? "s" : ""}. Ainda faltam ${res.restantes} — clique novamente para continuar.${res.aviso ? " " + res.aviso : ""}`);
       } else if (res.restantes === 0) {
         toast.success("Todas as notas já têm XML completo!");
       } else {
-        toast.error(`Nenhum XML novo recuperado. ${res.erros} erro${res.erros !== 1 ? "s" : ""} — SEFAZ pode ter retornado apenas resumo (resNFe) para estas notas.`);
+        // Sem progresso: notas podem ser antigas (fora da janela SEFAZ de 90 dias)
+        const avisoExtra = res.aviso ? ` ${res.aviso}` : "";
+        toast.info(`Nenhum XML novo desta vez (${res.restantes} notas antigas podem não ter XML disponível na SEFAZ).${avisoExtra}`, { duration: 7000 });
       }
     },
     onError: (e: any) => toast.error("Erro ao recuperar XMLs: " + (e?.message || "Tente novamente.")),
@@ -1104,7 +1108,7 @@ export default function FinanceiroNotasFiscais() {
                       <button
                         type="button"
                         disabled={backfillMut.isPending}
-                        onClick={() => backfillMut.mutate({ companyId: companyId!, lote: 10 })}
+                        onClick={() => backfillMut.mutate({ companyId: companyId! })}
                         className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-800 font-semibold transition-colors disabled:opacity-60 shrink-0"
                         title="Consulta a SEFAZ para recuperar o XML completo das notas importadas como resumo"
                       >

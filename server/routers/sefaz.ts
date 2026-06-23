@@ -596,12 +596,12 @@ function extractNumeroNf(chave: string): string {
 }
 
 // ── Função principal de sincronização ────────────────────────────────────────
-export async function executarSyncNFe(companyId: number): Promise<{ importadas: number; ignoradas: number; erro?: string }> {
+export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?: boolean; forceUltNSU?: string }): Promise<{ importadas: number; ignoradas: number; erro?: string; aviso?: string }> {
   const db = await getDb();
 
   // Buscar config
   const cfgRows = (await db.execute(sql`
-    SELECT cnpj, cert_pfx_base64, cert_password, ultimo_nsu, ambiente, uf
+    SELECT cnpj, cert_pfx_base64, cert_password, ultimo_nsu, ambiente, uf, sync_intervalo_horas, last_sync_at, last_sync_result
     FROM company_nfe_config WHERE company_id = ${companyId} AND ativo = 1
   `)) as any;
   const cfg = (cfgRows?.rows ?? cfgRows)?.[0];
@@ -614,7 +614,17 @@ export async function executarSyncNFe(companyId: number): Promise<{ importadas: 
   const url = tpAmb === 2 ? SEFAZ_URL_HOM : SEFAZ_URL_PROD;
   const ufCodigo = UF_CODES[String(cfg.uf || "SP").toUpperCase()] || 35;
 
-  const ultNSUInicial = padNSU(cfg.ultimo_nsu || "0");
+  // Se forceUltNSU foi passado (backfill), aplica imediatamente antes de começar
+  if (opts?.forceUltNSU !== undefined) {
+    await db.execute(sql`
+      UPDATE company_nfe_config
+      SET ultimo_nsu = ${opts.forceUltNSU}, last_sync_at = NULL
+      WHERE company_id = ${companyId}
+    `);
+    console.log(`[SefazSync] company=${companyId} forceUltNSU=${opts.forceUltNSU} — NSU resetado para backfill`);
+  }
+
+  const ultNSUInicial = opts?.forceUltNSU !== undefined ? opts.forceUltNSU : padNSU(cfg.ultimo_nsu || "0");
   let ultNSU = ultNSUInicial;
   let importadas = 0;
   let ignoradas = 0;
@@ -624,28 +634,33 @@ export async function executarSyncNFe(companyId: number): Promise<{ importadas: 
 
   // ── Gate geral de tempo: respeita o intervalo configurado pelo usuário (padrão 1h, mín 1h) ──
   // Cobre TANTO o caso de rate-limit anterior QUANTO chamadas manuais "Sincronizar Agora" em sequência.
+  // skipTimeGate=true usado pelo backfill de XML (não tem cooldown próprio).
   const intervaloHoras = Math.max(1, Number(cfg.sync_intervalo_horas ?? 1));
   const COOLDOWN_MS = (intervaloHoras * 60 - 2) * 60 * 1000; // 2 min de folga
-  try {
-    if (cfg.last_sync_at) {
-      const elapsedMs = Date.now() - new Date(cfg.last_sync_at).getTime();
-      if (elapsedMs < COOLDOWN_MS) {
-        const restantMin = Math.ceil((COOLDOWN_MS - elapsedMs) / 60000);
-        // Verificar se há rate-limit ativo para dar mensagem mais específica
-        let aviso: string;
-        try {
-          const prevResult = JSON.parse(cfg.last_sync_result || "{}");
-          if (prevResult?.rateLimitedAt) {
-            aviso = `Limite SEFAZ ativo — aguarde mais ${restantMin} min (cStat=656). O sistema sincronizará automaticamente.`;
-          } else {
-            aviso = `Intervalo configurado: ${intervaloHoras}h — próxima sync disponível em ${restantMin} min.`;
-          }
-        } catch { aviso = `Aguarde mais ${restantMin} min (intervalo: ${intervaloHoras}h).`; }
-        console.log(`[SefazSync] company=${companyId} TIME_GATE=${restantMin}min (intervalo=${intervaloHoras}h) — sem chamada à API`);
-        return { importadas: 0, ignoradas: 0, aviso };
+  if (!opts?.skipTimeGate) {
+    try {
+      // Relê last_sync_at do banco (pode ter sido atualizado pelo forceUltNSU acima)
+      const tsRows = (await db.execute(sql`SELECT last_sync_at, last_sync_result FROM company_nfe_config WHERE company_id = ${companyId}`)) as any;
+      const ts = (tsRows?.rows ?? tsRows)?.[0];
+      if (ts?.last_sync_at) {
+        const elapsedMs = Date.now() - new Date(ts.last_sync_at).getTime();
+        if (elapsedMs < COOLDOWN_MS) {
+          const restantMin = Math.ceil((COOLDOWN_MS - elapsedMs) / 60000);
+          let aviso: string;
+          try {
+            const prevResult = JSON.parse(ts.last_sync_result || "{}");
+            if (prevResult?.rateLimitedAt) {
+              aviso = `Limite SEFAZ ativo — aguarde mais ${restantMin} min (cStat=656). O sistema sincronizará automaticamente.`;
+            } else {
+              aviso = `Intervalo configurado: ${intervaloHoras}h — próxima sync disponível em ${restantMin} min.`;
+            }
+          } catch { aviso = `Aguarde mais ${restantMin} min (intervalo: ${intervaloHoras}h).`; }
+          console.log(`[SefazSync] company=${companyId} TIME_GATE=${restantMin}min (intervalo=${intervaloHoras}h) — sem chamada à API`);
+          return { importadas: 0, ignoradas: 0, aviso };
+        }
       }
-    }
-  } catch { /* ignora erro de parse */ }
+    } catch { /* ignora erro de parse */ }
+  }
 
   try {
     // Loop de paginação — cada chamada retorna até 50 docs; continua enquanto maxNSU > ultNSU
@@ -1239,28 +1254,20 @@ export const sefazRouter = router({
       };
     }),
 
+  // ── Backfill de XML via re-sync de NSU ──────────────────────────────────────
+  // Estratégia correta: o consChNFe via DistDFeInt retorna o mesmo resNFe (resumo)
+  // que já está no banco — a SEFAZ distribui resNFe primeiro, depois nfeProc com NSU maior.
+  // Se o ultimo_nsu já avançou além do NSU do nfeProc, a única forma de recuperar é
+  // resetar o ultimo_nsu para ANTES do NSU mínimo das notas sem XML e re-sincronizar.
+  // O loop de sync (Rev.3605) já faz UPDATE em notas existentes quando chega nfeProc.
   recuperarXmlsBackfill: protectedProcedure
-    .input(z.object({ companyId: z.number(), lote: z.number().min(1).max(20).default(10) }))
+    .input(z.object({ companyId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
-      // Busca notas sem xml_payload
-      const pendentes = (await db.execute(sql`
-        SELECT id, chave_acesso FROM fiscal_notes
-        WHERE company_id = ${input.companyId}
-          AND origem IN ('sefaz_nfe', 'xml_upload')
-          AND xml_payload IS NULL
-          AND chave_acesso IS NOT NULL
-          AND length(chave_acesso) = 44
-        ORDER BY id ASC
-        LIMIT ${input.lote}
-      `)) as any;
-      const notas: { id: number; chave_acesso: string }[] = (pendentes?.rows ?? pendentes) as any[];
 
-      if (!notas.length) return { recuperadas: 0, erros: 0, restantes: 0 };
-
-      // Busca certificado
+      // 1. Verifica se há certificado configurado
       const cfgRows = (await db.execute(sql`
-        SELECT cnpj, cert_pfx_base64, cert_password, ambiente, uf
+        SELECT cert_pfx_base64, cert_password, ultimo_nsu
         FROM company_nfe_config WHERE company_id = ${input.companyId} AND ativo = 1
       `)) as any;
       const cfg = (cfgRows?.rows ?? cfgRows)?.[0];
@@ -1268,70 +1275,8 @@ export const sefazRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "Certificado A1 não configurado. Acesse Configurações → Financeiro → SEFAZ." });
       }
 
-      const cnpj = cleanCnpj(cfg.cnpj || "");
-      const tpAmb = cfg.ambiente === "homologacao" ? 2 : 1;
-      const url = tpAmb === 2 ? SEFAZ_URL_HOM : SEFAZ_URL_PROD;
-      const ufCodigo = UF_CODES[String(cfg.uf || "SP").toUpperCase()] || 35;
-
-      let recuperadas = 0;
-      let erros = 0;
-
-      for (const nota of notas) {
-        try {
-          const soap = buildSoapEnvelopeByChave(cnpj, ufCodigo, nota.chave_acesso, tpAmb);
-          const respXml = await callSefaz(url, soap, cfg.cert_pfx_base64, cfg.cert_password);
-
-          const parsed = xmlParser.parse(respXml);
-          const env = parsed["soap:Envelope"] || parsed["soap12:Envelope"] || parsed["s:Envelope"] || parsed["Envelope"] || parsed;
-          const body = env?.["soap:Body"] || env?.["soap12:Body"] || env?.["s:Body"] || env?.["Body"] || env;
-          const resp = body?.["nfeDistDFeInteresseResponse"] || body?.["nfeDistDFeIntResponse"] || body;
-          const ret = resp?.["nfeDistDFeInteresseResult"]?.["retDistDFeInt"]
-            || resp?.["nfeDistDFeInteresseResult"]?.["nfeRetDistDFeInt"]
-            || resp?.["nfeRetDistDFeInt"]
-            || {};
-
-          const cStat = String(ret?.cStat ?? "");
-          if (cStat !== "138" && cStat !== "498") {
-            console.log(`[BackfillXml] nota=${nota.id} chave=${nota.chave_acesso.slice(0, 10)}… cStat=${cStat} — sem XML`);
-            erros++;
-            continue;
-          }
-
-          const lote = ret?.loteDistDFeInt?.docZip;
-          const docs: any[] = Array.isArray(lote) ? lote : lote ? [lote] : [];
-          let encontrado = false;
-
-          for (const doc of docs) {
-            const b64 = String(doc?.["#text"] || doc || "");
-            const schema = String(doc?.["@_schema"] || doc?.schema || "");
-            if (!schema.startsWith("nfeProc")) continue;
-            const nfe = processDocZip(b64, "0");
-            if (!nfe?.rawXml || !nfe.chNFe) continue;
-            if (nfe.chNFe !== nota.chave_acesso) continue;
-
-            await db.execute(sql`
-              UPDATE fiscal_notes
-              SET xml_payload = ${nfe.rawXml}, updated_at = NOW()
-              WHERE id = ${nota.id} AND company_id = ${input.companyId}
-            `);
-            recuperadas++;
-            encontrado = true;
-            break;
-          }
-
-          if (!encontrado) {
-            // SEFAZ respondeu mas sem nfeProc (ainda só tem resNFe) — normal para notas antigas
-            console.log(`[BackfillXml] nota=${nota.id} cStat=138 mas sem nfeProc nos docs (resNFe only)`);
-            erros++;
-          }
-        } catch (e: any) {
-          console.error(`[BackfillXml] nota=${nota.id} erro:`, e?.message);
-          erros++;
-        }
-      }
-
-      // Conta restantes após esse lote
-      const restantesRow = (await db.execute(sql`
+      // 2. Conta notas sem XML antes do sync
+      const antesRow = (await db.execute(sql`
         SELECT COUNT(*)::int AS cnt FROM fiscal_notes
         WHERE company_id = ${input.companyId}
           AND origem IN ('sefaz_nfe', 'xml_upload')
@@ -1339,9 +1284,53 @@ export const sefazRouter = router({
           AND chave_acesso IS NOT NULL
           AND length(chave_acesso) = 44
       `)) as any;
-      const restantes = Number(((restantesRow?.rows ?? restantesRow)?.[0] as any)?.cnt ?? 0);
+      const antesCount = Number(((antesRow?.rows ?? antesRow)?.[0] as any)?.cnt ?? 0);
+      if (antesCount === 0) return { recuperadas: 0, restantes: 0, aviso: undefined };
 
-      console.log(`[BackfillXml] company=${input.companyId} recuperadas=${recuperadas} erros=${erros} restantes=${restantes}`);
-      return { recuperadas, erros, restantes };
+      // 3. Encontra o menor NSU entre as notas sem XML (para resetar o ponteiro do SEFAZ)
+      const minNsuRow = (await db.execute(sql`
+        SELECT MIN(nsu_sefaz::bigint) AS min_nsu FROM fiscal_notes
+        WHERE company_id = ${input.companyId}
+          AND origem = 'sefaz_nfe'
+          AND xml_payload IS NULL
+          AND nsu_sefaz IS NOT NULL
+          AND nsu_sefaz ~ '^[0-9]+$'
+      `)) as any;
+      const minNsuNum = Number(((minNsuRow?.rows ?? minNsuRow)?.[0] as any)?.min_nsu ?? 0);
+
+      // 4. Define o NSU de início: 50 posições antes do menor NSU sem XML (buffer de segurança)
+      //    Se não houver nsu_sefaz válido nas notas, reseta para "0" (resync completo).
+      const novoNSU = minNsuNum > 50 ? padNSU(String(minNsuNum - 50)) : "000000000000000";
+      const ultNSUAtual = padNSU(cfg.ultimo_nsu || "0");
+
+      // Só faz sentido resetar se o novoNSU for menor que o atual
+      const forceNSU = novoNSU < ultNSUAtual ? novoNSU : novoNSU;
+      console.log(`[BackfillXml] company=${input.companyId} antesCount=${antesCount} minNsu=${minNsuNum} ultNSUAtual=${ultNSUAtual} forceNSU=${forceNSU}`);
+
+      // 5. Executa sync com NSU resetado e sem gate de tempo (bypass)
+      const syncResult = await executarSyncNFe(input.companyId, {
+        skipTimeGate: true,
+        forceUltNSU: forceNSU,
+      });
+
+      // 6. Conta quantas notas ainda estão sem XML após o sync
+      const depoisRow = (await db.execute(sql`
+        SELECT COUNT(*)::int AS cnt FROM fiscal_notes
+        WHERE company_id = ${input.companyId}
+          AND origem IN ('sefaz_nfe', 'xml_upload')
+          AND xml_payload IS NULL
+          AND chave_acesso IS NOT NULL
+          AND length(chave_acesso) = 44
+      `)) as any;
+      const depoisCount = Number(((depoisRow?.rows ?? depoisRow)?.[0] as any)?.cnt ?? 0);
+
+      const recuperadas = antesCount - depoisCount;
+      console.log(`[BackfillXml] company=${input.companyId} recuperadas=${recuperadas} restantes=${depoisCount} syncImportadas=${syncResult.importadas}`);
+
+      return {
+        recuperadas,
+        restantes: depoisCount,
+        aviso: syncResult.aviso ?? syncResult.erro,
+      };
     }),
 });
