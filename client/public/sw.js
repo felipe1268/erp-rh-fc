@@ -38,9 +38,11 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/api/")) return;     // dados nunca pelo SW
 
   // Navegação (app shell): network-first → cache → shell.
+  // cache:'no-store' evita que o HTTP cache do browser sirva HTML antigo (com
+  // hashes de chunk velhos) após um deploy → garante sempre o HTML mais recente.
   if (req.mode === "navigate") {
     event.respondWith(
-      fetch(req)
+      fetch(new Request(req.url, { cache: "no-store", credentials: "same-origin" }))
         .then((resp) => {
           const copy = resp.clone();
           caches.open(CACHE).then((c) => c.put(SHELL, copy)).catch(() => {});

@@ -122,3 +122,4 @@
 - [criarManual explicit-id IDOR](cheques-criar-manual-idor.md) — INSERT de 1 linha que aceita FK id explícito (fornecedorId/contaBancariaId) deve validar ownership da empresa; assertCompanyAccess só autoriza a empresa, não o recurso referenciado.
 - [Conciliação interno×externo](conciliacao-interno-classificacao.md) — 3 camadas (texto+CNPJ cadastrável+override por linha); SQL predicate e JS `_isLancInterno` DEVEM espelhar; só classifica, read-only.
 - [Circular chunk vendor-misc crash](circular-chunk-vendor-misc.md) — catch-all `return "vendor-misc"` em manualChunks cria ciclos (react-dom↔misc↔radix↔charts) → exports undefined → tela branca pré-listener. Fix: `return undefined`.
+- [HTML cache stale post-deploy](html-cache-stale-deploy.md) — express.static(distPath,{maxAge:"1h"}) serve index.html com max-age=3600; após deploy chunks ficam 404 → tela branca. Fix: setHeaders para .html/.sw.js = no-cache,no-store.

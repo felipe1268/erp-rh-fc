@@ -65,7 +65,7 @@ export default defineConfig({
           // ── tRPC + tanstack-query ─────────────────────────────────────────
           if (id.includes("/@trpc/") || id.includes("/@tanstack/")) return "vendor-trpc";
           // ── react core ────────────────────────────────────────────────────
-          if (id.includes("/react-dom/") || id.includes("/react/") || id.includes("/scheduler/")) return "vendor-react";
+          if (id.includes("/react-dom/") || id.includes("/react/") || id.includes("/scheduler/") || id.includes("/use-sync-external-store/") || id.includes("/react-is/")) return "vendor-react";
           // ── form / validation ─────────────────────────────────────────────
           if (id.includes("/react-hook-form/") || id.includes("/zod/") || id.includes("/@hookform/")) return "vendor-forms";
           // ── date / i18n utils ─────────────────────────────────────────────

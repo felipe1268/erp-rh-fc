@@ -1,6 +1,23 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3587 — **CRÍTICO · BUGFIX TELA BRANCA — HTML CACHEADO COM HASHES ANTIGOS + CHUNK CIRCULAR vendor-react↔vendor-radix + SW SEM cache:no-store. BACKEND PONTUAL + BUILD CONFIG · ZERO ALTER/DROP/DELETE.**
+ *
+ * Três causas simultâneas identificadas:
+ * (1) `express.static(distPath, { maxAge:"1h" })` servia `index.html` e `sw.js` com
+ *     `Cache-Control: private, max-age=3600`. Após deploy, browser servia HTML antigo
+ *     (com hashes de chunk velhos) por até 1h → chunks 404 → crash antes dos event
+ *     listeners → tela branca sem log. Fix: `setHeaders` no express.static sobrescreve
+ *     Cache-Control para `.html` e `sw.js` com `no-cache, no-store, must-revalidate`.
+ * (2) No SW, `fetch(req)` para navigate sem `cache:'no-store'` podia retornar HTML do
+ *     cache HTTP do browser → mesma stale-HTML → chunk 404. Fix: `fetch(new Request(
+ *     req.url, { cache:"no-store", credentials:"same-origin" }))` no navigate handler.
+ * (3) `return undefined` no manualChunks (Rev. 3586) moveu `use-sync-external-store`
+ *     e `react-is` para vendor-radix → novo ciclo vendor-react↔vendor-radix. Fix:
+ *     adicionados `/use-sync-external-store/` e `/react-is/` ao padrão do vendor-react
+ *     em `vite.config.ts` → eles ficam junto com react-dom que os importa.
+ * Arquivos: `server/_core/vite.ts`, `client/public/sw.js`, `vite.config.ts`.
+ *
  * Rev. 3586 — **CRÍTICO · BUGFIX TELA BRANCA — DEPENDÊNCIA CIRCULAR ENTRE CHUNKS vendor-misc ↔ vendor-react/vendor-radix/vendor-charts. BUILD CONFIG · ZERO BACKEND/ALTER/DROP/DELETE.**
  *
  * Causa raiz da tela branca para TODOS os usuários: `manualChunks` em `vite.config.ts` tinha

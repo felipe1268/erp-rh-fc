@@ -59,17 +59,23 @@ export function serveStatic(app: Express) {
   const distPath = candidates.find(p => fs.existsSync(p)) || candidates[0];
   console.log(`[Static] Serving from: ${distPath} (exists: ${fs.existsSync(distPath)})`);
 
-  // Serve hashed assets with long-term cache (1 year)
+  // Serve hashed assets with long-term cache (1 year) — safe because hash changes on every build
   app.use("/assets", express.static(path.join(distPath, "assets"), {
     maxAge: "1y",
     immutable: true,
     etag: false,
   }));
 
-  // Serve other static files with shorter cache
+  // Serve other static files — HTML and sw.js MUST NOT be cached (they reference
+  // hashed assets; any stale HTML after a deploy → old chunk hashes → 404 → white screen)
   app.use(express.static(distPath, {
     maxAge: "1h",
     etag: true,
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith(".html") || filePath.endsWith("sw.js")) {
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      }
+    },
   }));
 
   // fall through to index.html for client-side routing

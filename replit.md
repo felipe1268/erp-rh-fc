@@ -50,9 +50,11 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3586** — **CRÍTICO · BUGFIX TELA BRANCA — DEPENDÊNCIA CIRCULAR ENTRE CHUNKS vendor-misc ↔ vendor-react/vendor-radix/vendor-charts. BUILD CONFIG · ZERO BACKEND/ALTER/DROP/DELETE.** `manualChunks` tinha `return "vendor-misc"` como catch-all para todos os módulos restantes → react internals (ex: `use-sync-external-store`) iam pro vendor-misc enquanto vendor-misc também importava de vendor-react → 3 ciclos entre chunks → um chunk acessava exports `undefined` antes da inicialização completa → crash antes dos event listeners → tela branca para TODOS sem log no servidor. Fix: `return undefined` em `vite.config.ts` linha 74. Detalhe: `shared/changelog.ts`.
+- **Rev. 3587** — **CRÍTICO · BUGFIX TELA BRANCA — HTML CACHEADO 1H + CHUNK CIRCULAR vendor-react↔vendor-radix + SW SEM cache:no-store. BACKEND PONTUAL + BUILD CONFIG · ZERO ALTER/DROP/DELETE.** (1) `express.static` servia `index.html` com `max-age=3600` → HTML antigo pós-deploy → chunks 404 → crash. Fix: `setHeaders` no `express.static` para `.html`/`sw.js` = `no-cache,no-store`. (2) SW navigate sem `cache:no-store` → mesmo problema via HTTP cache. (3) `use-sync-external-store`+`react-is` foram pro vendor-radix → ciclo vendor-react↔vendor-radix. Fix: adicionados ao padrão vendor-react. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3585** — **CRÍTICO · BUGFIX TELA BRANCA — SERVICE WORKER CACHE ESTÁTICO + 2º BUG ANY(array). BUILD CONFIG + BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** SW usava `CACHE="erp-fc-v1"` fixo → browser não detectava deploy novo → assets antigos. Fix: placeholder `__SW_BUILD_TS__` + plugin Vite injeta timestamp real em cada build. Fix 2: `pjConformidadeJobs` mesmo bug de tupla ANY. Detalhe: `shared/changelog.ts`.
+- **Rev. 3586** — **CRÍTICO · BUGFIX TELA BRANCA — CHUNK CIRCULAR vendor-misc↔vendor-react/radix/charts. BUILD CONFIG · ZERO BACKEND/ALTER/DROP/DELETE.** Removido `return "vendor-misc"` catch-all do manualChunks. Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3585** — **CRÍTICO · BUGFIX TELA BRANCA — SERVICE WORKER CACHE ESTÁTICO + 2º BUG ANY(array). BUILD CONFIG + BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3584** — **CRÍTICO · BUGFIX TELA BRANCA — `getCompaniesForUser` CRASHAVA COM `ANY(($1,$2,$3))`. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -62,7 +64,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3581** — **NF-e RECEBIDAS · BARRA DE PROGRESSO 0→100% AO SINCRONIZAR SEFAZ. 100% FRONTEND · ZERO BACKEND.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3580** — **CRONÔMETROS · "ÚLTIMA SYNC" AGORA EXIBE HORÁRIO DE BRASÍLIA. 100% FRONTEND · ZERO BACKEND.** Detalhe: `shared/changelog.ts`.
 
 
 - **Rev. 3578** — **NFS-e EMITIDAS · DIALOG "NOVA NFS-e" REDESENHADO — SEM ABAS, SEÇÕES VISUAIS, VALOR LÍQUIDO DESTACADO. 100% FRONTEND · ZERO BACKEND.** Header gradiente indigo, 4 seções (Identificação, Tomador, Obra, Valores) + Avançado colapsível. Detalhe: `shared/changelog.ts`.
