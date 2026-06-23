@@ -914,8 +914,11 @@ const _INTERNO_PATTERNS = [
   // cadastrado), então continuam sendo classificadas como internas por esses casadores — sem
   // depender deste rótulo genérico. (Caso precise reclassificar 1 linha pontual, use a exceção
   // por lançamento em financial_internal_overrides.)
+  // Rev. 3592 — "cdb" e "rdb" agora usam \y (word-boundary PostgreSQL) para não casar
+  // strings hexadecimais em IDs de transação PIX (ex: "...96cdbb15bad..." contém "cdb"
+  // mas não é CDB financeiro). Auditoria detectou 2 falsos positivos (Kelbem / Kellen).
   "transfer.*entre contas", "transf interna", "transferencia interna",
-  "aplica", "resgate", "contamax", "rdb", "cdb",
+  "aplica", "resgate", "contamax", "\\yrdb\\y", "\\ycdb\\y",
   "fundo de invest", "fc engenharia",
 ];
 const _INTERNO_REGEX_SRC = _INTERNO_PATTERNS.join("|");

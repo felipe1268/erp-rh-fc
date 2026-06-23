@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3592 — **CONCILIAÇÃO · BUGFIX FALSO POSITIVO "INTERNO" — PADRÃO `cdb`/`rdb` CASAVA STRINGS HEX DE IDs PIX. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
+ *
+ * Auditoria detalhada linha-a-linha revelou 2 pagamentos reais classificados como "movimentação
+ * interna" por falso positivo: "Kelbem Carlos De Lima Silva" (-R$719) e "Kellen Larissa
+ * Lourenco Claro" (-R$250). Causa: `cdb` regex sem word-boundary casava strings hexadecimais
+ * nos IDs de transação PIX (ex: `...96cdbb15bad...` contém `cdb` mas não é CDB financeiro).
+ * Fix: `cdb` → `\ycdb\y` e `rdb` → `\yrdb\y` em `_INTERNO_PATTERNS` (`\y` = word-boundary
+ * PostgreSQL). A regex JS (`_internoRegex`) compartilha o mesmo `_INTERNO_REGEX_SRC`.
+ * Impacto: R$969 saem de "movimentação interna" para "caixa real (saídas)" → saldo externo
+ * muda de -R$55.426,94 para ≈ -R$56.395,94 (mais negativo, mais preciso).
+ * Arquivo: `server/routers/financial.ts`.
+ *
  * Rev. 3591 — **CONCILIAÇÃO · BUGFIX GRÁFICOS DE BARRAS POR BANCO — `detalheContas` NÃO CALCULAVA `valorEntradasExternas`/`valorSaidasExternas` → SEMPRE CAIA NO BRUTO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Causa raiz definitiva: `detalheContas` useMemo (alimenta os 3 gráficos de barras) não computava
