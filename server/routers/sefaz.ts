@@ -728,9 +728,19 @@ export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?:
         const nfe = processDocZip(b64, nsuDoc);
         if (!nfe || !nfe.chNFe) { ignoradas++; continue; }
 
-        // Verificar se já existe pela chave de acesso
+        // Verificar se já existe pela chave de acesso OU por emitente+data+valor (fallback anti-duplicata)
+        const _dedupeDataEmissao = nfe.dhEmi ? nfe.dhEmi.substring(0, 10) : new Date().toISOString().substring(0, 10);
+        const _dedupeValorNum = parseFloat(nfe.vNF || "0") || 0;
+        const _dedupeCnpj = cleanCnpj(nfe.CNPJ || '');
         const existe = (await db.execute(sql`
-          SELECT id, xml_payload FROM fiscal_notes WHERE company_id = ${companyId} AND chave_acesso = ${nfe.chNFe} LIMIT 1
+          SELECT id, xml_payload FROM fiscal_notes
+          WHERE company_id = ${companyId}
+            AND origem IN ('sefaz_nfe', 'xml_upload')
+            AND (
+              chave_acesso = ${nfe.chNFe}
+              OR (emitente_cnpj = ${_dedupeCnpj} AND data_emissao = ${_dedupeDataEmissao}::date AND valor_bruto = ${_dedupeValorNum})
+            )
+          LIMIT 1
         `)) as any;
         const existeRows = (existe?.rows ?? existe) as any[];
         if (existeRows?.length > 0) {
@@ -1213,6 +1223,7 @@ export const sefazRouter = router({
           FROM fiscal_notes
           WHERE company_id = ${input.companyId}
             AND origem IN ('sefaz_nfe', 'xml_upload')
+            AND status != 'duplicata'
             ${input.ano ? sql`AND EXTRACT(YEAR FROM data_emissao) = ${input.ano}` : sql``}
             ${input.mes ? sql`AND EXTRACT(MONTH FROM data_emissao) = ${input.mes}` : sql``}
             ${input.status && input.status !== "todos" ? sql`AND status = ${input.status}` : sql``}
@@ -1229,6 +1240,7 @@ export const sefazRouter = router({
           SELECT COUNT(*)::int AS cnt FROM fiscal_notes
           WHERE company_id = ${input.companyId}
             AND origem IN ('sefaz_nfe', 'xml_upload')
+            AND status != 'duplicata'
             AND xml_payload IS NULL
             AND chave_acesso IS NOT NULL
         `) as any,

@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3612** — **NF-e RECEBIDAS · REMOÇÃO DE DUPLICATAS CORROMPIDAS + DEDUP ROBUSTO NO SYNC. BACKEND PONTUAL (SyncSchema+ DELETE + QUERY FIX + SYNC FIX) · ZERO SCHEMA/ALTER.** Dedup do sync usava só `chave_acesso` → após bugfix do fast-xml-parser, mesma NF-e entrava duas vezes (chave corrompida ≠ chave limpa). SyncSchema+ Rev.3612 apaga as ~100 linhas corrompidas com duplicata limpa confirmada. Query `listNFeRecebidas` + count `semXml` filtram `status != 'duplicata'`. Sync dedup ampliado: `chave_acesso = X OR (emitente_cnpj + data_emissao + valor_bruto)`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3611** — **NF-e RECEBIDAS · BUGFIX NF# EM NOTAÇÃO CIENTÍFICA PARCIAL ("3.5260405"). BACKEND ADITIVO (SyncSchema+) + FRONTEND · ZERO ALTER/DROP/DELETE.** fast-xml-parser convertia a chave de 44 dígitos para float64 → `extractNumeroNf` caía no `.slice(0,9)` → gravava "3.5260405". SyncSchema+ recalcula via `SUBSTRING(chave_acesso,26,9)::INTEGER` para todos onde `numero_nf LIKE '%.%'`. Frontend: `resolveNumeroNf()` corrige exibição defensivamente enquanto dados antigos existem. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3610** — **NF-e RECEBIDAS · BUGFIX BOTÃO "CONSULTAR NO SEFAZ" ABRIA PÁGINA INICIAL EM VEZ DA NOTA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Parâmetro `tipoConteudo=XmlNFe` não é reconhecido pelo portal nfe.fazenda.gov.br → redirecionava para a página inicial. Fix: `tipoConteudo=7PhJ%2BgAVw2g%3D` (base64 URL-encoded, identificador padrão do portal). Detalhe: `shared/changelog.ts`.

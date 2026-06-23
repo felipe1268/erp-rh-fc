@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3612 — **NF-e RECEBIDAS · REMOÇÃO DE DUPLICATAS CORROMPIDAS + DEDUP ROBUSTO NO SYNC. BACKEND PONTUAL (SyncSchema+ DELETE + QUERY FIX + SYNC FIX) · ZERO SCHEMA/ALTER.**
+ *
+ * Causa-raiz das duplicatas: o dedup do sync (`syncNFeSefaz`) usava só `chave_acesso = ${nfe.chNFe}`
+ * como chave de verificação. Nas sincronizações anteriores ao bugfix do fast-xml-parser (Rev.3600),
+ * a `chave_acesso` era gravada corrompida ("3.526e+43"). Após o fix, o mesmo documento chegou
+ * novamente com a chave limpa ("35260413...44 dígitos") → o SELECT não encontrou a linha corrompida
+ * → INSERT novo → mesma NF-e aparecia duas vezes na lista, inflando valores e contagens.
+ *
+ * Correções:
+ * 1. SyncSchema+ Rev.3612 (backend): DELETE FROM fiscal_notes WHERE numero_nf LIKE '%.%'
+ *    AND EXISTS (cópia limpa com chave 44 dígitos + mesmo emitente_cnpj+valor_bruto+data_emissao).
+ *    Remove as ~100 linhas corrompidas com duplicata limpa confirmada. Autorizado pelo usuário.
+ * 2. Query `listNFeRecebidas` + count `semXml`: adicionado `AND status != 'duplicata'` como
+ *    camada extra de segurança (protege registros corrompidos sem duplicata limpa ainda).
+ * 3. Sync dedup: SELECT agora usa `chave_acesso = ${nfe.chNFe} OR (emitente_cnpj + data_emissao + valor_bruto)`
+ *    — garante que novas sincronizações nunca reinserem NF-es já existentes, mesmo que a chave
+ *    salva estivesse corrompida.
+ *
+ * Arquivos: server/routers/sefaz.ts (sync dedup, listNFeRecebidas, semXml count),
+ *            server/_core/index.ts (SyncSchema+ Rev.3612 DELETE).
+ *
  * Rev. 3611 — **NF-e RECEBIDAS · BUGFIX NF# EM NOTAÇÃO CIENTÍFICA PARCIAL ("3.5260405"). BACKEND ADITIVO (SyncSchema+) + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * Causa-raiz: fast-xml-parser convertia a chave NF-e de 44 dígitos para float64 JS (ex: 3.526e+43).

@@ -1307,6 +1307,30 @@ Regras:
           else console.log(`[SyncSchema+] Rev. 3611: nenhum numero_nf corrompido encontrado.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3611 numero_nf fix:`, e?.message || e); }
 
+        // Rev. 3612 — SEFAZ: apagar duplicatas corrompidas (chave_acesso em notação científica)
+        // que têm cópia limpa no banco. Causa: dedup usava só chave_acesso; chave corrompida ≠
+        // chave limpa → mesma NF-e inserida duas vezes. Confirmado pelo usuário: pode apagar duplicatas.
+        try {
+          const delResult = await db.execute(sql`
+            DELETE FROM fiscal_notes c
+            WHERE c.numero_nf LIKE '%.%'
+              AND c.origem IN ('sefaz_nfe', 'xml_upload')
+              AND EXISTS (
+                SELECT 1 FROM fiscal_notes cl
+                WHERE cl.company_id = c.company_id
+                  AND cl.emitente_cnpj = c.emitente_cnpj
+                  AND cl.valor_bruto = c.valor_bruto
+                  AND cl.data_emissao = c.data_emissao
+                  AND cl.id != c.id
+                  AND cl.chave_acesso ~ '^[0-9]{44}$'
+                  AND cl.status != 'duplicata'
+              )
+          `);
+          const deleted = (delResult as any)?.rowCount ?? 0;
+          if (deleted > 0) console.log(`[SyncSchema+] Rev. 3612: ${deleted} NF-e(s) duplicada(s) corrompida(s) removida(s).`);
+          else console.log(`[SyncSchema+] Rev. 3612: nenhuma duplicata corrompida encontrada.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3612 delete duplicatas:`, e?.message || e); }
+
         // Rev. 2551 — Convenção Coletiva com IA: análises + itens de auditoria.
         try {
           await db.execute(sql`
