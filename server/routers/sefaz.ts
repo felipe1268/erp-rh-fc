@@ -582,6 +582,9 @@ function parseNFeXml(xml: string): Record<string, any> | null {
         dhRecbto: String(infProt["dhRecbto"] || ""),
         cStat: String(infProt["cStat"] || ""),
         xMotivo: String(infProt["xMotivo"] || ""),
+        digVal: String(infProt["digVal"] || ""),
+        verAplic: String(infProt["verAplic"] || ""),
+        tpAmb: String(infProt["tpAmb"] || ""),
       },
     };
   } catch {

@@ -2184,6 +2184,63 @@ export default function FinanceiroNotasFiscais() {
                       </div>
                     )}
 
+                    {/* ── Dados da NF-e (igual portal fazenda.gov.br) ── */}
+                    {det && (
+                      <div className="rounded-xl border border-slate-200 overflow-hidden">
+                        <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200">
+                          <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500">Dados da NF-e</p>
+                        </div>
+                        <div className="px-3 py-2.5 space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Natureza da operação</p>
+                              <p className="text-sm text-slate-800 mt-0.5 break-words">{det.ide?.natOp || "—"}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Tipo da operação</p>
+                              <p className="text-sm text-slate-800 mt-0.5">
+                                {det.ide?.tpNF !== undefined && det.ide.tpNF !== ""
+                                  ? `${det.ide.tpNF} - ${TPNF[String(det.ide.tpNF)] ?? det.ide.tpNF}`
+                                  : "—"}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Chave de acesso</p>
+                              <p className="font-mono text-[11px] text-slate-600 break-all mt-0.5 leading-relaxed tracking-wider">{chaveFormatada}</p>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-100">
+                            <div>
+                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Modelo</p>
+                              <p className="text-sm text-slate-800 mt-0.5">{det.ide?.mod || "55"}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Série</p>
+                              <p className="text-sm text-slate-800 mt-0.5">{det.ide?.serie || "—"}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Número</p>
+                              <p className="text-sm font-semibold text-slate-800 mt-0.5">{resolveNumeroNf(nf.numeroNf, nf.chaveAcesso) || det.ide?.nNF || "—"}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Data/Hora da emissão</p>
+                              <p className="text-sm text-slate-800 tabular-nums mt-0.5">
+                                {det.ide?.dhEmi ? (() => {
+                                  try {
+                                    return new Date(det.ide.dhEmi).toLocaleString("pt-BR", {
+                                      timeZone: "America/Sao_Paulo",
+                                      day: "2-digit", month: "2-digit", year: "numeric",
+                                      hour: "2-digit", minute: "2-digit", second: "2-digit",
+                                    });
+                                  } catch { return String(det.ide.dhEmi).slice(0, 19).replace("T", " "); }
+                                })() : fmtDateBR(nf.dataEmissao)}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* ── Emitente + Destinatário ── */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
@@ -2225,28 +2282,24 @@ export default function FinanceiroNotasFiscais() {
                       </div>
                     </div>
 
-                    {/* ── Datas + protocolo ── */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                        <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400 mb-0.5">Emissão</p>
-                        <p className="font-semibold text-slate-800 tabular-nums text-sm">{fmtDateBR(nf.dataEmissao)}</p>
-                      </div>
-                      {det?.ide?.dhSaiEnt && (
-                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                    {/* ── Datas adicionais ── */}
+                    <div className="flex flex-wrap gap-2">
+                      {det?.ide?.dhSaiEnt && String(det.ide.dhSaiEnt).length > 4 && (
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 flex-1 min-w-[130px]">
                           <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400 mb-0.5">Saída / Entrada</p>
                           <p className="font-semibold text-slate-800 tabular-nums text-sm">{fmtDateBR(String(det.ide.dhSaiEnt).slice(0,10))}</p>
                         </div>
                       )}
-                      {det?.protocolo?.nProt && (
-                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                          <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400 mb-0.5">Protocolo SEFAZ</p>
-                          <p className="font-semibold text-slate-800 font-mono text-xs break-all">{det.protocolo.nProt}</p>
-                        </div>
-                      )}
-                      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 flex-1 min-w-[130px]">
                         <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400 mb-0.5">Importada em</p>
                         <p className="font-semibold text-slate-800 tabular-nums text-sm">{fmtDateBR(nf.createdAt)}</p>
                       </div>
+                      {nf.nsuSefaz && (
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 flex-1 min-w-[130px]">
+                          <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400 mb-0.5">NSU SEFAZ</p>
+                          <p className="font-semibold text-slate-800 font-mono text-sm">{nf.nsuSefaz}</p>
+                        </div>
+                      )}
                     </div>
 
                     {/* ── Produtos / Itens ── */}
@@ -2403,6 +2456,59 @@ export default function FinanceiroNotasFiscais() {
                       </div>
                     )}
 
+                    {/* ── Eventos e Serviços (igual portal fazenda.gov.br) ── */}
+                    {det?.protocolo?.nProt && (
+                      <div className="rounded-xl border border-slate-200 overflow-hidden">
+                        <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200">
+                          <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500">Eventos e Serviços</p>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="bg-slate-50 border-b border-slate-200">
+                                <th className="px-3 py-1.5 text-left text-[10px] font-bold tracking-wider uppercase text-slate-400">Evento</th>
+                                <th className="px-3 py-1.5 text-left text-[10px] font-bold tracking-wider uppercase text-slate-400">Protocolo</th>
+                                <th className="px-3 py-1.5 text-left text-[10px] font-bold tracking-wider uppercase text-slate-400">Data autorização</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr>
+                                <td className="px-3 py-2 text-slate-700 font-medium">
+                                  {det.protocolo.cStat === "100" || det.protocolo.cStat === ""
+                                    ? "Autorização de Uso"
+                                    : det.protocolo.xMotivo || "Autorização de Uso"}
+                                </td>
+                                <td className="px-3 py-2 font-mono text-slate-600">{det.protocolo.nProt}</td>
+                                <td className="px-3 py-2 text-slate-600 tabular-nums">
+                                  {det.protocolo.dhRecbto ? (() => {
+                                    try {
+                                      return new Date(det.protocolo.dhRecbto).toLocaleString("pt-BR", {
+                                        timeZone: "America/Sao_Paulo",
+                                        day: "2-digit", month: "2-digit", year: "numeric",
+                                        hour: "2-digit", minute: "2-digit", second: "2-digit",
+                                      });
+                                    } catch { return String(det.protocolo.dhRecbto).slice(0, 19).replace("T", " "); }
+                                  })() : "—"}
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                        {det.protocolo.digVal && (
+                          <div className="px-3 py-2 border-t border-slate-100 bg-slate-50/60">
+                            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide mb-0.5">Digest Value</p>
+                            <p className="font-mono text-xs text-slate-500 break-all select-all">{det.protocolo.digVal}</p>
+                          </div>
+                        )}
+                        {det.protocolo.verAplic && (
+                          <div className="px-3 py-1.5 border-t border-slate-100 text-[10px] text-slate-400">
+                            Versão aplicativo: {det.protocolo.verAplic}
+                            {det.protocolo.tpAmb && ` · Ambiente: ${det.protocolo.tpAmb === "1" ? "Produção" : "Homologação"}`}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* ── Nota sem XML completo ── */}
                     {!isLoadingDet && !det && (
                       <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 flex gap-2 items-start">
@@ -2414,6 +2520,7 @@ export default function FinanceiroNotasFiscais() {
                     )}
 
                     {/* ── Chave de Acesso ── */}
+                    {(!det || !det.protocolo?.nProt) && (
                     <div className="rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
                       <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-200 flex items-center justify-between">
                         <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500">Chave de Acesso (44 dígitos)</p>
@@ -2436,17 +2543,9 @@ export default function FinanceiroNotasFiscais() {
                       </div>
                       <div className="px-3 py-2.5">
                         <p className="font-mono text-xs text-slate-600 break-all select-all leading-loose tracking-wider">{chaveFormatada}</p>
-                        {nf.nsuSefaz && (
-                          <p className="text-[11px] text-slate-400 mt-1">NSU: <span className="font-mono">{nf.nsuSefaz}</span></p>
-                        )}
-                        {det?.protocolo?.nProt && (
-                          <p className="text-[11px] text-slate-400 mt-0.5">
-                            Protocolo: <span className="font-mono">{det.protocolo.nProt}</span>
-                            {det.protocolo.dhRecbto ? ` · ${fmtDateBR(String(det.protocolo.dhRecbto).slice(0,10))}` : ""}
-                          </p>
-                        )}
                       </div>
                     </div>
+                    )}
 
                     {/* ── Manifestação ── */}
                     {canManifest && (

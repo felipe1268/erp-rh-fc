@@ -1,6 +1,23 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3617 — **NF-e RECEBIDAS · DIALOG "ESPELHO FIEL" COMPLETO — SEÇÃO "DADOS DA NF-e" + "EVENTOS E SERVIÇOS" + DigestValue. BACKEND PONTUAL + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Referência: portal nfe.fazenda.gov.br (captura tela do usuário). O dialog exibia emitente/dest/
+ * produtos/totais mas faltavam duas seções visíveis no portal oficial:
+ * (1) "Dados da NF-e" — Natureza da operação, Tipo da operação (tpNF "0-Entrada"/"1-Saída"),
+ *     Chave de acesso, Modelo, Série, Número e Data/Hora completa da emissão (com HH:mm:ss).
+ * (2) "Eventos e Serviços" — tabela Evento/Protocolo/Data autorização (com hora) + bloco
+ *     Digest Value (digVal do infProt) + versão do aplicativo SEFAZ + ambiente.
+ *
+ * Backend: `parseNFeXml` em sefaz.ts agora extrai `digVal`, `verAplic` e `tpAmb` do `infProt`.
+ * Frontend: seção "Dados da NF-e" inserida após o loading-state e antes de Emitente/Dest;
+ * grid "Datas + protocolo" substituído por grid enxuto (Saída/Entrada + Importada em + NSU);
+ * seção "Eventos e Serviços" inserida após InfAdic; seção "Chave de Acesso" tornada condicional
+ * (só aparece quando não há protocolo, evitando duplicação com Eventos e Serviços).
+ *
+ * Arquivos: server/routers/sefaz.ts, client/src/pages/financeiro/FinanceiroNotasFiscais.tsx.
+ *
  * Rev. 3616 — **NFS-e EMITIDAS · UX PORTAL INDISPONÍVEL — BANNER VERMELHO + CTA "IMPORTAR PDF" NO ESTADO VAZIO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Portais SIAP GEO e Portal Nacional de Guaratinguetá estão com 404 (confirmado por testes de
