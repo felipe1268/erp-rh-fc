@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3567 — **NF-e RECEBIDAS (SEFAZ) · BOTÃO "SINCRONIZAR SEFAZ" + "HISTÓRICO COMPLETO" NA TELA DE NOTAS FISCAIS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * O botão "Atualizar" na aba NF-e Recebidas apenas fazia refetch da lista local —
+ * não disparava a sincronização com a SEFAZ (endpoint `sefaz.syncNow`).
+ * Fix: botão "Sincronizar SEFAZ" (indigo, ação principal) chama `sefaz.syncNow` +
+ * refetch ao concluir, com toast de resultado (N importadas / N ignoradas / erro).
+ * Botão "Histórico completo" (âmbar) chama `sefaz.resetNSU` (zera NSU para
+ * `000000000000000`) e em seguida dispara `syncNow`, trazendo todas as NF-e desde
+ * o início da empresa. Ambos ficam desabilitados enquanto a operação está em curso.
+ * Arquivo: `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`.
+ *
  * Rev. 3566 — **NFS-e EMITIDAS MUNICIPAIS · "BAIXAR TUDO" — IMPORTAÇÃO HISTÓRICA EM LOTE + SELETOR DE PERÍODO POR CARD. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * Novo endpoint `syncAllMunicipios` percorre todos os municípios com `enabled=1` e

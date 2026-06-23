@@ -231,6 +231,21 @@ export default function FinanceiroNotasFiscais() {
     onSuccess: () => { toast({ title: "NF-e cancelada." }); setDeleteTarget(null); listQuery.refetch(); },
     onError: (e) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
+  const sefazSyncMut = (trpc as any).sefaz.syncNow.useMutation({
+    onSuccess: (r: any) => {
+      nfeRecQuery.refetch();
+      if (r?.erro) toast({ title: "SEFAZ: " + r.erro, variant: "destructive" });
+      else toast({ title: `SEFAZ: ${r?.importadas ?? 0} NF-e novas importadas, ${r?.ignoradas ?? 0} já existiam.` });
+    },
+    onError: (e: any) => toast({ title: "Erro na sync SEFAZ", description: e.message, variant: "destructive" }),
+  });
+  const sefazResetNsuMut = (trpc as any).sefaz.resetNSU.useMutation({
+    onSuccess: () => {
+      toast({ title: "NSU zerado. Sincronizando histórico completo..." });
+      sefazSyncMut.mutate({ companyId: companyId ?? 0 });
+    },
+    onError: (e: any) => toast({ title: "Erro ao resetar NSU", description: e.message, variant: "destructive" }),
+  });
   const vincularEntryMut = trpc.fiscalNotes.vincularLancamento.useMutation({
     onSuccess: () => { toast({ title: "Lançamento vinculado!" }); setDetalheNf(null); listQuery.refetch(); },
     onError: (e) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
@@ -504,10 +519,31 @@ export default function FinanceiroNotasFiscais() {
             </div>
           )}
           {pageTab === "recebidas" && (
-            <div className="flex gap-2 shrink-0">
-              <Button variant="ghost" size="sm" className="gap-1.5 h-9" onClick={() => nfeRecQuery.refetch()}>
-                <RefreshCw className={`h-3.5 w-3.5 ${nfeRecQuery.isFetching ? "animate-spin" : ""}`} />
-                Atualizar
+            <div className="flex gap-2 shrink-0 flex-wrap">
+              <Button
+                size="sm"
+                className="gap-1.5 h-9 bg-indigo-600 hover:bg-indigo-700 text-white"
+                disabled={sefazSyncMut.isPending || sefazResetNsuMut.isPending}
+                onClick={() => sefazSyncMut.mutate({ companyId: companyId ?? 0 })}
+                title="Busca as NF-e novas desde a última sincronização"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${sefazSyncMut.isPending ? "animate-spin" : ""}`} />
+                {sefazSyncMut.isPending ? "Sincronizando..." : "Sincronizar SEFAZ"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 h-9 border-amber-300 text-amber-700 hover:bg-amber-50"
+                disabled={sefazSyncMut.isPending || sefazResetNsuMut.isPending}
+                onClick={() => {
+                  if (confirm("Isso vai baixar TODAS as NF-e desde o início (zera o NSU). Pode demorar. Continuar?")) {
+                    sefazResetNsuMut.mutate({ companyId: companyId ?? 0 });
+                  }
+                }}
+                title="Zera o NSU e baixa todas as NF-e desde o início"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${sefazResetNsuMut.isPending ? "animate-spin" : ""}`} />
+                Histórico completo
               </Button>
             </div>
           )}

@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3566** — **NFS-e EMITIDAS MUNICIPAIS · "BAIXAR TUDO" — IMPORTAÇÃO HISTÓRICA EM LOTE + SELETOR DE PERÍODO POR CARD. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Novo endpoint `syncAllMunicipios` + painel "Baixar Tudo — Consolidar Base" com De/Até; resultado por município (importadas/ignoradas/erro). Cada card também ganhou De/Até individual. Detalhe: `shared/changelog.ts`.
+- **Rev. 3567** — **NF-e RECEBIDAS (SEFAZ) · BOTÃO "SINCRONIZAR SEFAZ" + "HISTÓRICO COMPLETO" NA TELA DE NOTAS FISCAIS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Botão "Atualizar" só fazia refetch local. Substituído por "Sincronizar SEFAZ" (chama `sefaz.syncNow` + refetch) e "Histórico completo" (zera NSU via `resetNSU` + `syncNow`). Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3565** — **NFS-e EMITIDAS MUNICIPAIS · HORÁRIO DE SINCRONIZAÇÃO CONFIGURÁVEL + CRON AUTOMÁTICO. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3566** — **NFS-e EMITIDAS MUNICIPAIS · "BAIXAR TUDO" — IMPORTAÇÃO HISTÓRICA EM LOTE + SELETOR DE PERÍODO POR CARD. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3564** — **SEFAZ NF-e RECEBIDAS · HORÁRIO DE SINCRONIZAÇÃO CONFIGURÁVEL. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
