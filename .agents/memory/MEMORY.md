@@ -121,3 +121,4 @@
 - [Vale snapshot é fonte de leitura](vale-snapshot-is-read-source.md) — Folha lê snapshot do período, não payroll_advances; todo write de decisão deve re-sincronizar o snapshot ou some no reload.
 - [criarManual explicit-id IDOR](cheques-criar-manual-idor.md) — INSERT de 1 linha que aceita FK id explícito (fornecedorId/contaBancariaId) deve validar ownership da empresa; assertCompanyAccess só autoriza a empresa, não o recurso referenciado.
 - [Conciliação interno×externo](conciliacao-interno-classificacao.md) — 3 camadas (texto+CNPJ cadastrável+override por linha); SQL predicate e JS `_isLancInterno` DEVEM espelhar; só classifica, read-only.
+- [Circular chunk vendor-misc crash](circular-chunk-vendor-misc.md) — catch-all `return "vendor-misc"` em manualChunks cria ciclos (react-dom↔misc↔radix↔charts) → exports undefined → tela branca pré-listener. Fix: `return undefined`.

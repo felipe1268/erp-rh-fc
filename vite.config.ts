@@ -70,8 +70,8 @@ export default defineConfig({
           if (id.includes("/react-hook-form/") || id.includes("/zod/") || id.includes("/@hookform/")) return "vendor-forms";
           // ── date / i18n utils ─────────────────────────────────────────────
           if (id.includes("/date-fns/") || id.includes("/dayjs/") || id.includes("/luxon/")) return "vendor-dates";
-          // ── tudo mais de node_modules ─────────────────────────────────────
-          return "vendor-misc";
+          // ── tudo mais: deixa Rollup decidir (evita chunks circulares) ──
+          return undefined;
         },
       },
     },

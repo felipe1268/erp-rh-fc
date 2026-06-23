@@ -50,19 +50,20 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3585** — **CRÍTICO · BUGFIX TELA BRANCA — SERVICE WORKER CACHE ESTÁTICO + 2º BUG ANY(array). BUILD CONFIG + BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** SW usava `CACHE="erp-fc-v1"` fixo → browser não detectava deploy novo → assets antigos. Fix: placeholder `__SW_BUILD_TS__` + plugin Vite injeta timestamp real em cada build. Fix 2: `pjConformidadeJobs` usava `sql\`ANY(${array}::int[])\`` → mesmo bug de tupla. Detalhe: `shared/changelog.ts`.
+- **Rev. 3586** — **CRÍTICO · BUGFIX TELA BRANCA — DEPENDÊNCIA CIRCULAR ENTRE CHUNKS vendor-misc ↔ vendor-react/vendor-radix/vendor-charts. BUILD CONFIG · ZERO BACKEND/ALTER/DROP/DELETE.** `manualChunks` tinha `return "vendor-misc"` como catch-all para todos os módulos restantes → react internals (ex: `use-sync-external-store`) iam pro vendor-misc enquanto vendor-misc também importava de vendor-react → 3 ciclos entre chunks → um chunk acessava exports `undefined` antes da inicialização completa → crash antes dos event listeners → tela branca para TODOS sem log no servidor. Fix: `return undefined` em `vite.config.ts` linha 74. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3584** — **CRÍTICO · BUGFIX TELA BRANCA NO APP PUBLICADO — `getCompaniesForUser` CRASHAVA COM `ANY(($1,$2,$3))`. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** `db.execute(sql\`ANY(${array})\`)` gera tupla em vez de array PG → crash no login de usuários com obras concedidas → tela branca. Fix: `db.$client.query` com `$1::int[]`. Arquivo: `server/db.ts`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3585** — **CRÍTICO · BUGFIX TELA BRANCA — SERVICE WORKER CACHE ESTÁTICO + 2º BUG ANY(array). BUILD CONFIG + BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** SW usava `CACHE="erp-fc-v1"` fixo → browser não detectava deploy novo → assets antigos. Fix: placeholder `__SW_BUILD_TS__` + plugin Vite injeta timestamp real em cada build. Fix 2: `pjConformidadeJobs` mesmo bug de tupla ANY. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3583** — **NF-e RECEBIDAS · BUGFIX BANNER "NENHUMA NF-e" FALSO ALARME. 100% FRONTEND · ZERO BACKEND.** Banner âmbar "Configure o certificado A1" só aparece quando cert realmente não está configurado. Com cert mas sem notas → banner azul neutro. Banner verde corrigido: "sincronizando agora" → "pronta para sincronizar". Detalhe: `shared/changelog.ts`.
+- **Rev. 3584** — **CRÍTICO · BUGFIX TELA BRANCA — `getCompaniesForUser` CRASHAVA COM `ANY(($1,$2,$3))`. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3582** — **NFS-e MUNICIPAIS · PORTAL NACIONAL (nfse.gov.br) AUTO-CONFIGURADO PARA GUARATINGUETÁ. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Guaratinguetá migrou do SIAP GEO para o Portal Nacional a partir de 01/01/2026. Segundo registro semeado (ibge_code sintético 35186020, provider=nfse_nacional). Card UI indigo com bloco cert A1 em vez de senha. Detalhe: `shared/changelog.ts`.
+- **Rev. 3583** — **NF-e RECEBIDAS · BUGFIX BANNER "NENHUMA NF-e" FALSO ALARME. 100% FRONTEND · ZERO BACKEND.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3581** — **NF-e RECEBIDAS · BARRA DE PROGRESSO 0→100% AO SINCRONIZAR SEFAZ. 100% FRONTEND · ZERO BACKEND.** Curva exponencial 0→85% + salto 100% na conclusão, shimmer, banner indigo→verde. Detalhe: `shared/changelog.ts`.
+- **Rev. 3582** — **NFS-e MUNICIPAIS · PORTAL NACIONAL (nfse.gov.br) AUTO-CONFIGURADO PARA GUARATINGUETÁ. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3581** — **NF-e RECEBIDAS · BARRA DE PROGRESSO 0→100% AO SINCRONIZAR SEFAZ. 100% FRONTEND · ZERO BACKEND.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3580** — **CRONÔMETROS · "ÚLTIMA SYNC" AGORA EXIBE HORÁRIO DE BRASÍLIA. 100% FRONTEND · ZERO BACKEND.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3579** — **NF-e RECEBIDAS · TIMELINE COM LEGENDA + DOTS POR MÊS (MESMO PADRÃO DA ABA EMITIDAS). 100% FRONTEND · ZERO BACKEND.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3578** — **NFS-e EMITIDAS · DIALOG "NOVA NFS-e" REDESENHADO — SEM ABAS, SEÇÕES VISUAIS, VALOR LÍQUIDO DESTACADO. 100% FRONTEND · ZERO BACKEND.** Header gradiente indigo, 4 seções (Identificação, Tomador, Obra, Valores) + Avançado colapsível. Detalhe: `shared/changelog.ts`.
 

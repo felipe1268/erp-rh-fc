@@ -1,6 +1,23 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3586 — **CRÍTICO · BUGFIX TELA BRANCA — DEPENDÊNCIA CIRCULAR ENTRE CHUNKS vendor-misc ↔ vendor-react/vendor-radix/vendor-charts. BUILD CONFIG · ZERO BACKEND/ALTER/DROP/DELETE.**
+ *
+ * Causa raiz da tela branca para TODOS os usuários: `manualChunks` em `vite.config.ts` tinha
+ * `return "vendor-misc"` como catch-all para todos os módulos restantes de node_modules.
+ * React internals que `react-dom` importa (ex: `use-sync-external-store`) iam para vendor-misc,
+ * enquanto vendor-misc também importava de vendor-react (libraries importando React).
+ * Isso criava três dependências circulares entre chunks:
+ *   vendor-misc → vendor-react → vendor-misc
+ *   vendor-misc → vendor-radix → vendor-misc
+ *   vendor-misc → vendor-charts → vendor-misc
+ * No runtime, um chunk acessava exports `undefined` do outro antes de sua inicialização completa.
+ * O crash acontecia ANTES dos event listeners de erro serem registrados em main.tsx → nenhum
+ * erro chegava ao servidor (/api/diag/client-error) → página 100% branca sem diagnóstico.
+ * Fix: substituído `return "vendor-misc"` por `return undefined` — o Rollup passa a alocar
+ * automaticamente os módulos sem padrão específico, colocando-os com seus importadores e
+ * eliminando os ciclos. Arquivo: `vite.config.ts` (linha 74).
+ *
  * Rev. 3585 — **CRÍTICO · BUGFIX TELA BRANCA NO APP PUBLICADO — SERVICE WORKER COM CACHE ESTÁTICO + 2º BUG ANY(array). BACKEND PONTUAL + BUILD CONFIG · ZERO ALTER/DROP/DELETE.**
  *
  * Dois problemas simultâneos causavam tela branca no app publicado (iOS Safari):
