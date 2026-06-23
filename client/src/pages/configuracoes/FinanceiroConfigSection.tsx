@@ -38,6 +38,10 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
   );
   // Estado local: mapa ibge_code → { inscricao, senha, enabled }
   const [munForms, setMunForms] = useState<Record<number, { inscricao: string; senha: string; enabled: boolean; syncHora: number }>>({});
+  const [munPeriodo, setMunPeriodo] = useState<Record<number, { de: string; ate: string }>>({});
+  const [bulkDe, setBulkDe] = useState("");
+  const [bulkAte, setBulkAte] = useState("");
+  const [bulkResult, setBulkResult] = useState<null | { resultados: any[]; totalImportadas: number; totalIgnoradas: number; municipios: number }>(null);
   useEffect(() => {
     if (!municipios || !Array.isArray(municipios)) return;
     const m: Record<number, { inscricao: string; senha: string; enabled: boolean; syncHora: number }> = {};
@@ -52,6 +56,15 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
     setMunForms(m);
   }, [municipios]);
 
+  const syncAllMut = (trpc as any).nfseEmitidas.syncAllMunicipios.useMutation({
+    onSuccess: (r: any) => {
+      setBulkResult(r);
+      refetchMunicipios();
+      if (r.municipios === 0) toast.warning("Nenhum município com sync ativo configurado.");
+      else toast.success(`Concluído: ${r.totalImportadas} NFS-e importadas em ${r.municipios} município(s).`);
+    },
+    onError: (e: any) => toast.error(e.message || "Erro na importação em lote"),
+  });
   const saveMunMut = (trpc as any).nfseEmitidas.saveMunicipio.useMutation({
     onSuccess: () => { toast.success("Configuração salva!"); refetchMunicipios(); },
     onError: (e: any) => toast.error(e.message || "Erro ao salvar"),
@@ -639,6 +652,73 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
               </p>
             </div>
 
+            {/* ── Painel "Baixar Tudo" ── */}
+            <div className="rounded-xl border-2 border-dashed border-blue-300 bg-blue-50/40 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
+                  <RefreshCw className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-blue-900">Baixar Tudo — Consolidar Base</p>
+                  <p className="text-[11px] text-blue-700">Importa NFS-e de <strong>todos os municípios</strong> configurados de uma vez. Use para montar o histórico completo.</p>
+                </div>
+              </div>
+
+              {/* Período */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-gray-600 whitespace-nowrap font-medium">De</span>
+                  <Input type="date" className="h-8 text-xs w-36 bg-white" value={bulkDe} onChange={e => { setBulkDe(e.target.value); setBulkResult(null); }} />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-gray-600 whitespace-nowrap font-medium">Até</span>
+                  <Input type="date" className="h-8 text-xs w-36 bg-white" value={bulkAte} onChange={e => { setBulkAte(e.target.value); setBulkResult(null); }} />
+                </div>
+                {(bulkDe || bulkAte) && (
+                  <button className="text-[10px] text-gray-400 hover:text-gray-600 underline" onClick={() => { setBulkDe(""); setBulkAte(""); setBulkResult(null); }}>limpar datas</button>
+                )}
+              </div>
+              {!bulkDe && (
+                <p className="text-[10px] text-blue-600 bg-blue-100 rounded px-2 py-1 inline-block">
+                  💡 Sem data inicial → usa os últimos 30 dias. Para o histórico completo, coloque a data de abertura da empresa.
+                </p>
+              )}
+
+              <Button
+                className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-8 px-4 w-full sm:w-auto"
+                disabled={syncAllMut.isPending}
+                onClick={() => {
+                  setBulkResult(null);
+                  syncAllMut.mutate({ companyId, dataInicial: bulkDe || undefined, dataFinal: bulkAte || undefined });
+                }}
+              >
+                {syncAllMut.isPending
+                  ? <><Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />Importando... aguarde</>
+                  : <><RefreshCw className="w-3.5 h-3.5 mr-2" />Baixar Tudo</>
+                }
+              </Button>
+
+              {/* Resultado */}
+              {bulkResult && (
+                <div className="rounded-lg border border-blue-200 bg-white p-3 space-y-2 text-xs">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className="font-semibold text-gray-700">{bulkResult.municipios} município(s)</span>
+                    <span className="text-emerald-700 font-semibold">✓ {bulkResult.totalImportadas} importadas</span>
+                    <span className="text-gray-500">{bulkResult.totalIgnoradas} ignoradas (já existiam)</span>
+                  </div>
+                  {bulkResult.resultados.map((r: any) => (
+                    <div key={r.ibge} className={`flex items-center justify-between px-2 py-1 rounded ${r.erro ? "bg-red-50 border border-red-200" : "bg-gray-50 border border-gray-100"}`}>
+                      <span className="font-medium">{r.nome} <span className="text-gray-400 font-normal">{r.uf}</span></span>
+                      {r.erro
+                        ? <span className="text-red-600 text-[10px]">❌ {r.erro.slice(0, 80)}</span>
+                        : <span className="text-emerald-700">{r.importadas} import. · {r.ignoradas} ignor.</span>
+                      }
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Cards de cada município */}
             {(municipios || []).map((mun: any) => {
               const ibge = Number(mun.ibge_code);
@@ -759,6 +839,42 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
                     </div>
                   )}
 
+                  {/* Período de importação */}
+                  <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-2">
+                    <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Período de importação</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-gray-500 whitespace-nowrap">De</span>
+                        <Input
+                          type="date"
+                          className="h-7 text-xs w-36 px-2"
+                          value={munPeriodo[ibge]?.de || ""}
+                          onChange={e => setMunPeriodo(p => ({ ...p, [ibge]: { ...p[ibge], de: e.target.value, ate: p[ibge]?.ate || "" } }))}
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-gray-500 whitespace-nowrap">Até</span>
+                        <Input
+                          type="date"
+                          className="h-7 text-xs w-36 px-2"
+                          value={munPeriodo[ibge]?.ate || ""}
+                          onChange={e => setMunPeriodo(p => ({ ...p, [ibge]: { ...p[ibge], ate: e.target.value, de: p[ibge]?.de || "" } }))}
+                        />
+                      </div>
+                      {(munPeriodo[ibge]?.de || munPeriodo[ibge]?.ate) && (
+                        <button
+                          className="text-[10px] text-gray-400 hover:text-gray-600 underline"
+                          onClick={() => setMunPeriodo(p => ({ ...p, [ibge]: { de: "", ate: "" } }))}
+                        >
+                          limpar
+                        </button>
+                      )}
+                    </div>
+                    {!munPeriodo[ibge]?.de && !munPeriodo[ibge]?.ate && (
+                      <p className="text-[10px] text-gray-400">Sem datas → importa os últimos 30 dias.</p>
+                    )}
+                  </div>
+
                   {/* Ações */}
                   <div className="flex gap-2 pt-1">
                     <Button
@@ -783,10 +899,15 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
                       className="border-blue-300 text-blue-700 hover:bg-blue-50 text-xs h-7 px-3"
                       disabled={isSyncing || !form.inscricao}
                       title={!form.inscricao ? "Preencha a Inscrição Municipal primeiro" : ""}
-                      onClick={() => syncMunMut.mutate({ companyId, ibgeCode: ibge })}
+                      onClick={() => syncMunMut.mutate({
+                        companyId,
+                        ibgeCode: ibge,
+                        dataInicial: munPeriodo[ibge]?.de || undefined,
+                        dataFinal: munPeriodo[ibge]?.ate || undefined,
+                      })}
                     >
                       {isSyncing ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Play className="w-3 h-3 mr-1" />}
-                      Sincronizar Agora
+                      {munPeriodo[ibge]?.de ? "Sincronizar Período" : "Sincronizar Agora"}
                     </Button>
                   </div>
                 </div>

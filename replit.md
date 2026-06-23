@@ -50,7 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3565** — **NFS-e EMITIDAS MUNICIPAIS · HORÁRIO DE SINCRONIZAÇÃO CONFIGURÁVEL + CRON AUTOMÁTICO. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Toggle "Sync automático" existia mas sem cron — o disparo nunca acontecia. Adicionado seletor de hora (00:00–23:00) inline no toggle de cada card e `startNfseMunCron()` (horário por município via `COALESCE(sync_hora,6) = hora_atual`). SyncSchema+ garante coluna `sync_hora` em `company_nfse_municipal_config`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3566** — **NFS-e EMITIDAS MUNICIPAIS · "BAIXAR TUDO" — IMPORTAÇÃO HISTÓRICA EM LOTE + SELETOR DE PERÍODO POR CARD. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Novo endpoint `syncAllMunicipios` + painel "Baixar Tudo — Consolidar Base" com De/Até; resultado por município (importadas/ignoradas/erro). Cada card também ganhou De/Até individual. Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3565** — **NFS-e EMITIDAS MUNICIPAIS · HORÁRIO DE SINCRONIZAÇÃO CONFIGURÁVEL + CRON AUTOMÁTICO. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3564** — **SEFAZ NF-e RECEBIDAS · HORÁRIO DE SINCRONIZAÇÃO CONFIGURÁVEL. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

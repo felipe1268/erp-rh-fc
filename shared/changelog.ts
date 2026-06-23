@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3566 — **NFS-e EMITIDAS MUNICIPAIS · "BAIXAR TUDO" — IMPORTAÇÃO HISTÓRICA EM LOTE + SELETOR DE PERÍODO POR CARD. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * Novo endpoint `syncAllMunicipios` percorre todos os municípios com `enabled=1` e
+ * `inscricao_municipal` preenchida, chama `executarSyncMunicipio` para cada um e devolve
+ * um resumo consolidado (importadas/ignoradas/erro por município + totais).
+ * No frontend: painel "Baixar Tudo — Consolidar Base" com campos De/Até e botão
+ * "Baixar Tudo"; resultado expandido por município com status ✓/❌.
+ * Cada card individual ganhou também campos De/Até para sincronização por município.
+ * Arquivos: `server/routers/nfseEmitidas.ts` (novo endpoint), `FinanceiroConfigSection.tsx`
+ * (painel bulk + estado munPeriodo + syncAllMut).
+ *
  * Rev. 3565 — **NFS-e EMITIDAS MUNICIPAIS · HORÁRIO DE SINCRONIZAÇÃO CONFIGURÁVEL + CRON AUTOMÁTICO. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
  *
  * O toggle "Sync automático" existia mas não fazia nada — não havia cron. Agora cada

@@ -581,6 +581,45 @@ export const nfseEmitidasRouter = router({
       return { success: true };
     }),
 
+  // Sincroniza TODOS os municípios configurados de uma vez (histórico completo)
+  syncAllMunicipios: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      dataInicial: z.string().optional(),
+      dataFinal: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const cfgRes = await db.$client.query<any>(
+        `SELECT cnpj FROM company_nfe_config WHERE company_id=$1`,
+        [input.companyId]
+      );
+      const cnpj = cfgRes.rows[0]?.cnpj || "";
+      const munRes = await db.$client.query<any>(
+        `SELECT ibge_code, nome_municipio, uf FROM company_nfse_municipal_config
+         WHERE company_id=$1 AND inscricao_municipal IS NOT NULL AND enabled=1`,
+        [input.companyId]
+      );
+      const resultados: Array<{ ibge: number; nome: string; uf: string; importadas: number; ignoradas: number; erro?: string }> = [];
+      for (const mun of munRes.rows) {
+        try {
+          const r = await executarSyncMunicipio({
+            companyId: input.companyId,
+            ibgeCode: Number(mun.ibge_code),
+            cnpj,
+            dataInicial: input.dataInicial,
+            dataFinal: input.dataFinal,
+          });
+          resultados.push({ ibge: Number(mun.ibge_code), nome: mun.nome_municipio, uf: mun.uf, importadas: r.importadas, ignoradas: r.ignoradas, erro: r.erro });
+        } catch (e: any) {
+          resultados.push({ ibge: Number(mun.ibge_code), nome: mun.nome_municipio, uf: mun.uf, importadas: 0, ignoradas: 0, erro: e?.message || "Erro desconhecido" });
+        }
+      }
+      const totalImportadas = resultados.reduce((a, r) => a + r.importadas, 0);
+      const totalIgnoradas = resultados.reduce((a, r) => a + r.ignoradas, 0);
+      return { resultados, totalImportadas, totalIgnoradas, municipios: munRes.rows.length };
+    }),
+
   // Sincroniza um município manualmente
   syncMunicipio: protectedProcedure
     .input(z.object({
