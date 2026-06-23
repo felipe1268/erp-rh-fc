@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3588 — **NF-e RECEBIDAS · BUGFIX "HISTÓRICO COMPLETO" BLOQUEADO PELO COOLDOWN DE RATE-LIMIT. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * `resetNSU` zerava o NSU mas NÃO limpava `last_sync_result` (que contém `rateLimitedAt`).
+ * O gate de cooldown (58 min) via `last_sync_result` bloqueava a sync após o reset sem nem
+ * chamar a SEFAZ — o usuário clicava "Histórico completo" e não via nada acontecer.
+ * Fix backend: `UPDATE ... SET ultimo_nsu='000000000000000', last_sync_result=NULL` → ação
+ * explícita do usuário sempre chega à SEFAZ. Fix frontend: toast de rate-limit com título
+ * descritivo + `duration:8000` para ser legível.
+ * Arquivos: `server/routers/sefaz.ts`, `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`.
+ *
  * Rev. 3587 — **CRÍTICO · BUGFIX TELA BRANCA — HTML CACHEADO COM HASHES ANTIGOS + CHUNK CIRCULAR vendor-react↔vendor-radix + SW SEM cache:no-store. BACKEND PONTUAL + BUILD CONFIG · ZERO ALTER/DROP/DELETE.**
  *
  * Três causas simultâneas identificadas:

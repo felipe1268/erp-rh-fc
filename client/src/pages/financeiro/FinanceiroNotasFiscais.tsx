@@ -330,7 +330,7 @@ export default function FinanceiroNotasFiscais() {
       finishSyncProgress(!r?.erro);
       nfeRecQuery.refetch();
       if (r?.erro) toast({ title: "SEFAZ: " + r.erro, variant: "destructive" });
-      else if (r?.aviso) toast({ title: "⚠️ " + (r.aviso || "Rate limit SEFAZ"), variant: "default" });
+      else if (r?.aviso) toast({ title: "⚠️ Limite de chamadas SEFAZ", description: r.aviso, variant: "default", duration: 8000 });
       else toast({ title: `SEFAZ: ${r?.importadas ?? 0} NF-e novas importadas, ${r?.ignoradas ?? 0} já existiam.` });
     },
     onError: (e: any) => {

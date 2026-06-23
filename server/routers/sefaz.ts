@@ -508,8 +508,12 @@ export const sefazRouter = router({
     .mutation(async ({ input, ctx }) => {
       if (ctx.user?.role !== "admin_master" && ctx.user?.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
+      // Zera NSU E limpa last_sync_result (inclui rateLimitedAt) para que o cooldown
+      // não bloqueie a próxima chamada explícita do usuário.
       await db.execute(sql`
-        UPDATE company_nfe_config SET ultimo_nsu = '000000000000000' WHERE company_id = ${input.companyId}
+        UPDATE company_nfe_config
+        SET ultimo_nsu = '000000000000000', last_sync_result = NULL
+        WHERE company_id = ${input.companyId}
       `);
       return { ok: true };
     }),
