@@ -282,9 +282,13 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
   const saiSemTotal = (data?.saidasSemNota ?? []).reduce((s: number, b: any) => s + Math.abs(parseFloat(b.valor ?? "0")), 0);
 
   const totalAlerts = ocsSemQtd + entSemQtd + saiSemQtd;
-  const saúde = r
-    ? Math.round(((r.coberturaNfseReceita ?? 50) + (r.coberturaOcNfe ?? 50) + (r.coberturaSaidaNfe ?? 50)) / 3)
-    : null;
+  const saúde = (() => {
+    if (!r) return null;
+    // Inclui só coberturas com dados reais (null = sem OCs ou sem NFS-e no período → não conta)
+    const vals = [r.coberturaNfseReceita, r.coberturaOcNfe, r.coberturaSaidaNfe].filter((v): v is number => v !== null && v !== undefined);
+    if (vals.length === 0) return 0;
+    return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+  })();
 
   return (
     <>
