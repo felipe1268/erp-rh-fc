@@ -368,4 +368,143 @@ export const fiscalNotesRouter = router({
       return db.select().from(fiscalNotes)
         .where(and(eq(fiscalNotes.companyId, input.companyId), eq(fiscalNotes.entryId, input.entryId)));
     }),
+
+  // ── Panorama Fiscal: cruzamento NF-e × OC × banco ─────────────────────────
+  getPanoramaFiscal: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mes: z.number().min(1).max(12),
+      ano: z.number().min(2018).max(2040),
+    }))
+    .query(async ({ input, ctx }) => {
+      await _assertNfAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const { companyId, mes, ano } = input;
+
+      const di = `${ano}-${String(mes).padStart(2, "0")}-01`;
+      const mesProx = mes === 12 ? 1 : mes + 1;
+      const anoProx = mes === 12 ? ano + 1 : ano;
+      const df = `${anoProx}-${String(mesProx).padStart(2, "0")}-01`;
+
+      // 1. NFS-e emitidas do período
+      const nfseQ = await db.$client.query(`
+        SELECT id, numero_nf, tomador_razao_social, tomador_cnpj,
+               valor_bruto, valor_liquido, data_emissao, status, origem
+        FROM fiscal_notes
+        WHERE company_id = $1
+          AND data_emissao >= $2 AND data_emissao < $3
+          AND origem LIKE 'nfse_%'
+          AND status != 'cancelada'
+        ORDER BY data_emissao DESC
+      `, [companyId, di, df]);
+
+      // 2. NF-e recebidas do período
+      const nfeQ = await db.$client.query(`
+        SELECT id, numero_nf, emitente_cnpj, emitente_nome,
+               valor_bruto, data_emissao, status, chave_acesso
+        FROM fiscal_notes
+        WHERE company_id = $1
+          AND data_emissao >= $2 AND data_emissao < $3
+          AND (origem = 'sefaz_nfe' OR origem = 'xml_upload')
+          AND status != 'cancelada'
+        ORDER BY data_emissao DESC
+      `, [companyId, di, df]);
+
+      // 3. Linhas de extrato bancário do período (com vínculo a NF via stmt_line_id)
+      const bankQ = await db.$client.query(`
+        SELECT bsl.id, bsl.data, bsl.descricao, bsl.valor, bsl.tipo, bsl.conciliado,
+          (SELECT fn.id      FROM fiscal_notes fn WHERE fn.stmt_line_id = bsl.id AND fn.company_id = $1 LIMIT 1) AS fn_id,
+          (SELECT fn.numero_nf FROM fiscal_notes fn WHERE fn.stmt_line_id = bsl.id AND fn.company_id = $1 LIMIT 1) AS fn_numero
+        FROM bank_statement_lines bsl
+        WHERE bsl.company_id = $1
+          AND bsl.data >= $2 AND bsl.data < $3
+        ORDER BY bsl.data DESC
+        LIMIT 600
+      `, [companyId, di, df]);
+
+      // 4. Ordens de Compra do período (com CNPJ do fornecedor)
+      const ocQ = await db.$client.query(`
+        SELECT po.id, po.numero, po.supplier_nome, po.valor_total,
+               po.status, po.created_at, po.obra_nome, po.tipo,
+               COALESCE(f.cnpj, '') AS supplier_cnpj,
+               COALESCE(f.razao_social, po.supplier_nome, '') AS supplier_razao
+        FROM purchase_orders po
+        LEFT JOIN fornecedores f ON f.id = po.supplier_id AND f.company_id = $1
+        WHERE po.company_id = $1
+          AND po.status NOT IN ('cancelada', 'rascunho')
+          AND po.created_at >= $2 AND po.created_at < $3
+        ORDER BY po.created_at DESC
+        LIMIT 300
+      `, [companyId, di, df]);
+
+      const nfseList: any[] = nfseQ.rows;
+      const nfeList: any[]  = nfeQ.rows;
+      const bankList: any[] = bankQ.rows;
+      const ocList: any[]   = ocQ.rows;
+
+      // Cross: OC × NF-e por CNPJ + valor ±30%
+      const nfeByCnpj = new Map<string, any[]>();
+      for (const nfe of nfeList) {
+        const cnpj = (nfe.emitente_cnpj ?? "").replace(/\D/g, "");
+        if (!cnpj) continue;
+        if (!nfeByCnpj.has(cnpj)) nfeByCnpj.set(cnpj, []);
+        nfeByCnpj.get(cnpj)!.push(nfe);
+      }
+
+      const ocsComNota: any[] = [];
+      const ocsSemNota: any[] = [];
+      for (const oc of ocList) {
+        const cnpj = (oc.supplier_cnpj ?? "").replace(/\D/g, "");
+        const matches = cnpj ? (nfeByCnpj.get(cnpj) ?? []) : [];
+        const ocVal = parseFloat(oc.valor_total ?? "0");
+        const match = matches.find(nfe => {
+          const nfeVal = parseFloat(nfe.valor_bruto ?? "0");
+          if (ocVal <= 0 || nfeVal <= 0) return false;
+          return Math.abs(ocVal - nfeVal) / Math.max(ocVal, nfeVal) <= 0.30;
+        }) ?? (matches.length > 0 ? matches[0] : null);
+
+        if (match) ocsComNota.push({ ...oc, nfeNumero: match.numero_nf, nfeValor: match.valor_bruto, nfeEmissao: match.data_emissao });
+        else ocsSemNota.push(oc);
+      }
+
+      // Entradas/saídas bancárias com/sem NF
+      const bankCreditos = bankList.filter((b: any) => b.tipo === "credito");
+      const bankDebitos  = bankList.filter((b: any) => b.tipo === "debito");
+      const entradasComNota = bankCreditos.filter((b: any) => b.fn_id != null);
+      const entradasSemNota = bankCreditos.filter((b: any) => b.fn_id == null);
+      const saidasComNota   = bankDebitos.filter((b: any) => b.fn_id != null);
+      const saidasSemNota   = bankDebitos.filter((b: any) => b.fn_id == null);
+
+      const sumV = (arr: any[], f = "valor") => arr.reduce((s: number, r: any) => s + Math.abs(parseFloat(r[f] ?? "0")), 0);
+
+      const totNfse       = sumV(nfseList, "valor_bruto");
+      const totNfe        = sumV(nfeList, "valor_bruto");
+      const totCreditos   = sumV(bankCreditos);
+      const totDebitos    = sumV(bankDebitos);
+      const totOcs        = sumV(ocList, "valor_total");
+      const totOcsNota    = sumV(ocsComNota, "valor_total");
+      const totSaiNota    = sumV(saidasComNota);
+
+      return {
+        periodo: { mes, ano },
+        resumo: {
+          nfseEmitidas:        { qtd: nfseList.length, total: totNfse },
+          nfeRecebidas:        { qtd: nfeList.length,  total: totNfe  },
+          entradasBancarias:   { qtd: bankCreditos.length, total: totCreditos },
+          saidasBancarias:     { qtd: bankDebitos.length,  total: totDebitos  },
+          totalOcs:            { qtd: ocList.length,   total: totOcs  },
+          coberturaNfseReceita: totCreditos > 0 ? Math.min(100, Math.round(totNfse / totCreditos * 100)) : null,
+          coberturaOcNfe:       totOcs > 0 ? Math.round(totOcsNota / totOcs * 100) : null,
+          coberturaSaidaNfe:    totDebitos > 0 ? Math.round(totSaiNota / totDebitos * 100) : null,
+        },
+        nfseEmitidas: nfseList,
+        nfeRecebidas: nfeList,
+        ocsComNota,
+        ocsSemNota,
+        entradasComNota,
+        entradasSemNota,
+        saidasComNota,
+        saidasSemNota,
+      };
+    }),
 });

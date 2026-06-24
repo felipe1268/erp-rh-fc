@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
+import PanoramaFiscal from "./PanoramaFiscal";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -163,7 +164,7 @@ function calcValorLiquido(form: any) {
 }
 
 export default function FinanceiroNotasFiscais() {
-  const { companyId } = useCompany();
+  const { companyId, selectedCompany } = useCompany();
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -199,7 +200,7 @@ export default function FinanceiroNotasFiscais() {
   const syncIvRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Aba principal: emitidas | recebidas ──────────────────────────────────────
-  const [pageTab, setPageTab] = useState<"emitidas" | "recebidas">("emitidas");
+  const [pageTab, setPageTab] = useState<"emitidas" | "recebidas" | "panorama">("emitidas");
   const [recAno, setRecAno] = useState(new Date().getFullYear());
   const [recMes, setRecMes] = useState<number | null>(new Date().getMonth() + 1);
   const [recSearch, setRecSearch] = useState("");
@@ -835,20 +836,24 @@ export default function FinanceiroNotasFiscais() {
           </div>
         )}
 
-        {/* Sub-abas: Emitidas | Recebidas */}
+        {/* Sub-abas: Emitidas | Recebidas | Panorama */}
         <div className="flex gap-1 border-b border-slate-200 -mb-1">
-          {(["emitidas", "recebidas"] as const).map(t => (
+          {([
+            { key: "emitidas",  label: "📤 NFS-e Emitidas" },
+            { key: "recebidas", label: "📥 NF-e Recebidas (SEFAZ)" },
+            { key: "panorama",  label: "📊 Panorama Fiscal" },
+          ] as const).map(({ key, label }) => (
             <button
-              key={t}
+              key={key}
               type="button"
-              onClick={() => setPageTab(t)}
+              onClick={() => setPageTab(key)}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
-                pageTab === t
+                pageTab === key
                   ? "border-indigo-600 text-indigo-700 bg-indigo-50/60"
                   : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"
               }`}
             >
-              {t === "emitidas" ? "📤 NFS-e Emitidas" : "📥 NF-e Recebidas (SEFAZ)"}
+              {label}
             </button>
           ))}
         </div>
@@ -2928,6 +2933,17 @@ export default function FinanceiroNotasFiscais() {
             })()}
           </DialogContent>
         </Dialog>
+
+        {/* ═══════════════════════════════════════════════════════════════════════
+            ABA: PANORAMA FISCAL
+        ═══════════════════════════════════════════════════════════════════════ */}
+        {pageTab === "panorama" && (
+          <PanoramaFiscal
+            companyId={companyId ?? 0}
+            companyNome={selectedCompany?.nomeFantasia ?? selectedCompany?.razaoSocial ?? ""}
+            companyLogoUrl={selectedCompany?.logoUrl ?? undefined}
+          />
+        )}
 
       </div>
     </DashboardLayout>

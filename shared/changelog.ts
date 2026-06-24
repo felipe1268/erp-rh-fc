@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3620 — **PANORAMA FISCAL · ABA "📊 Panorama Fiscal" EM NOTAS FISCAIS — CRUZAMENTO NFS-e × NF-e × OC × EXTRATO + EXPORT PDF + EXCEL + GUIA SPED. BACKEND ADITIVO + FRONTEND NOVO · ZERO ALTER/DROP/DELETE.**
+ *
+ * Nova aba "📊 Panorama Fiscal" na tela `/financeiro/notas-fiscais`, ao lado de "NFS-e Emitidas" e "NF-e Recebidas".
+ *
+ * **Backend** — novo endpoint `fiscalNotes.getPanoramaFiscal({ companyId, mes, ano })`:
+ *   - NFS-e emitidas do período (`origem LIKE 'nfse_%'`).
+ *   - NF-e recebidas do período (`origem = 'sefaz_nfe' OR 'xml_upload'`).
+ *   - Linhas de extrato bancário (crédito/débito) com vínculo via `fiscal_notes.stmt_line_id`.
+ *   - Ordens de Compra com JOIN `fornecedores.cnpj` para cruzamento por CNPJ.
+ *   - Cruzamento OC × NF-e: grupo por CNPJ limpo + tolerância de valor ±30%.
+ *   - Retorno: `resumo` (6 KPIs + 3 percentuais de cobertura), `ocsComNota`, `ocsSemNota`,
+ *     `entradasComNota/SemNota`, `saidasComNota/SemNota`, `nfseEmitidas`, `nfeRecebidas`.
+ *
+ * **Frontend** — componente `PanoramaFiscal.tsx` (arquivo separado, ~300 linhas):
+ *   - Seletor mês/ano com navegação ← → independente do filtro das outras abas.
+ *   - 6 KPI cards com barra de progresso de cobertura: NFS-e emitidas, NF-e recebidas,
+ *     OCs (compras), entradas bancárias, saídas bancárias, card "Cobertura Geral".
+ *   - Seção 1 — OC × NF-e: tabela "OCs com NF-e" (colapsível) + "OCs SEM NF-e" aberta por padrão.
+ *   - Seção 2 — Entradas bancárias × NFS-e: tabela com/sem nota.
+ *   - Seção 3 — Saídas bancárias × NF-e: tabela com/sem nota.
+ *   - Export PDF: `window.print()` com CSS `@media print` que isola só o painel.
+ *     Logo da empresa aparece somente no PDF (classe `hidden print:block`).
+ *   - Export Excel: `xlsx` (SheetJS) client-side, workbook com 5 abas:
+ *     Resumo, NFS-e Emitidas, NF-e Recebidas, OC vs NF-e, Movimentos s/ Nota.
+ *   - Painel informativo SPED (colapsível): guia sobre EFD-ICMS/IPI, EFD-Contribuições,
+ *     EFD-Reinf e Livro Caixa Digital com prazos e recomendação de envio ao contador.
+ *
+ * **Wiring** em `FinanceiroNotasFiscais.tsx`:
+ *   - `useState<"emitidas" | "recebidas" | "panorama">` — terceiro valor adicionado.
+ *   - `useCompany()` passa a desestruturar `selectedCompany` para enviar nome e logo ao componente.
+ *   - Barra de abas convertida de array mapeado para array de objetos `{ key, label }`.
+ *   - Render condicional `{pageTab === "panorama" && <PanoramaFiscal … />}` antes do fechamento.
+ *
+ * Arquivos tocados: `server/routers/fiscalNotes.ts` (endpoint appended),
+ * `client/src/pages/financeiro/PanoramaFiscal.tsx` (new),
+ * `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx` (import + state + tabs + render).
+ *
  * Rev. 3619 — **NFS-e EMITIDAS · PORTAL NACIONAL REST+mTLS+NSU (sefin.nfse.gov.br) + ESPELHO FIEL ABRASF + XML SALVO. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
  *
  * O Portal Nacional NFS-e (Receita Federal) migrou do WebService SOAP legado para
