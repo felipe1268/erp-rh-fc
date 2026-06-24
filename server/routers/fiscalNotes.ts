@@ -531,4 +531,47 @@ export const fiscalNotesRouter = router({
         saidasSemNota,
       };
     }),
+
+  /** Retorna status de cada mês do ano: "ok" | "parcial" | "none"
+   *  "ok"      = tem NFS-e emitidas E NF-e recebidas
+   *  "parcial" = tem apenas um dos dois
+   *  "none"    = nenhum dado fiscal
+   */
+  getMesesStatus: protectedProcedure
+    .input(z.object({ companyId: z.number(), ano: z.number().min(2018).max(2040) }))
+    .query(async ({ input, ctx }) => {
+      await _assertNfAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const { companyId, ano } = input;
+      const rows = await db.$client.query<{ mes: number; tipo: string; cnt: number }>(`
+        SELECT
+          EXTRACT(MONTH FROM data_emissao)::int AS mes,
+          CASE
+            WHEN origem LIKE 'nfse_%' THEN 'nfse'
+            ELSE 'nfe'
+          END AS tipo,
+          COUNT(*)::int AS cnt
+        FROM fiscal_notes
+        WHERE company_id = $1
+          AND data_emissao >= $2 AND data_emissao < $3
+          AND status != 'cancelada'
+        GROUP BY 1, 2
+      `, [companyId, `${ano}-01-01`, `${ano + 1}-01-01`]);
+
+      const result: Record<number, "ok" | "parcial" | "none"> = {};
+      for (let m = 1; m <= 12; m++) result[m] = "none";
+      for (const r of rows.rows) {
+        const cur = result[r.mes];
+        if (r.tipo === "nfse") {
+          result[r.mes] = cur === "parcial" || cur === "ok" ? "ok" : "parcial";
+          if (cur === "none") result[r.mes] = "parcial";
+          // se já era parcial por nfe → agora ok
+          if (cur === "parcial") result[r.mes] = "ok";
+        } else {
+          if (cur === "none") result[r.mes] = "parcial";
+          if (cur === "parcial") result[r.mes] = "ok";
+        }
+      }
+      return result as Record<number, "ok" | "parcial" | "none">;
+    }),
 });

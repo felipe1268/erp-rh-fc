@@ -173,6 +173,11 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
     { enabled: !!companyId, staleTime: 60_000 }
   );
 
+  const { data: mesesStatus } = trpc.fiscalNotes.getMesesStatus.useQuery(
+    { companyId, ano },
+    { enabled: !!companyId, staleTime: 300_000 }
+  );
+
   // ── Progresso de loading ──────────────────────────────────────────────────
   const [loadingPct, setLoadingPct] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -418,11 +423,12 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
             {MESES_SHORT.map((m, i) => {
               const numMes = i + 1;
               const isSelected = mes === numMes;
-              const dotColor = isSelected
-                ? (data && ((r?.nfseEmitidas.total ?? 0) > 0 || (r?.nfeRecebidas.total ?? 0) > 0)
-                    ? "bg-emerald-500"
-                    : "bg-amber-400")
-                : "bg-gray-300";
+              const st = mesesStatus?.[numMes] ?? "none";
+              const dotColor = st === "ok"
+                ? "bg-emerald-500"
+                : st === "parcial"
+                  ? "bg-amber-400"
+                  : "bg-gray-300";
               return (
                 <button
                   key={m}

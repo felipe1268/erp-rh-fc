@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3658 — **PANORAMA FISCAL · DOTS DOS MESES REFLETEM DADOS REAIS DO ANO. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Antes: `dotColor` só era calculado para o mês selecionado (usando `data` já carregado);
+ * todos os outros ficavam `bg-gray-300` independente de terem dados.
+ *
+ * Fix: novo endpoint leve `getMesesStatus` (GROUP BY MONTH, uma query) retorna
+ * `Record<1..12, "ok"|"parcial"|"none">` para todo o ano:
+ *   - "ok"      = tem NFS-e emitidas E NF-e recebidas no mês
+ *   - "parcial" = tem só um dos dois
+ *   - "none"    = nenhum dado fiscal
+ * Frontend: `useQuery` em `getMesesStatus` (staleTime 5min) → dots coloridos em todos os
+ * 12 chips: verde=ok, âmbar=parcial, cinza=none.
+ *
  * Rev. 3657 — **NF-e RECEBIDAS · CRONÔMETRO SEFAZ MAIOR E MAIS VISÍVEL. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Anel ampliado: `w-16 h-16` (64px, r=22, viewBox 56) → `w-24 h-24` (96px, r=34, viewBox 80).

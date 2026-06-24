@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3657** — **NF-e RECEBIDAS · CRONÔMETRO SEFAZ MAIOR E MAIS VISÍVEL. 100% FRONTEND.** Anel `w-16→w-24`, fonte interna `11px→text-base/sm`, countdown lateral em `text-2xl font-black font-mono`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3658** — **PANORAMA FISCAL · DOTS DOS MESES REFLETEM DADOS REAIS DO ANO. BACKEND ADITIVO + FRONTEND.** Novo endpoint `getMesesStatus` (GROUP BY mês) retorna ok/parcial/none p/ todos os 12 meses; chips ganham verde/âmbar/cinza corretos. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3656** — **NF-e / NFS-e · BUGFIX "ÚLTIMA SYNC" HORÁRIO ERRADO (UTC EM VEZ DE BRT). 100% FRONTEND.** `pg` retorna `last_sync_at` sem timezone → `parseAsUTC()` em 4 ocorrências corrige. Detalhe: `shared/changelog.ts`.
+- **Rev. 3657** — **NF-e RECEBIDAS · CRONÔMETRO SEFAZ MAIOR E MAIS VISÍVEL. 100% FRONTEND.** Anel `w-16→w-24`, fonte interna `11px→text-base/sm`, countdown lateral em `text-2xl font-black font-mono`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3652** — **NFS-e EMITIDAS · BUGFIX ENDPOINT SIAP GEO GUARATINGUETÁ — HTTP 404 (URL ERRADA). BACKEND PONTUAL.** `/webservices/nfse.asmx` → `/websis/siapnet/nfse/nfse.asmx`. Detalhe: `shared/changelog.ts`.
 
