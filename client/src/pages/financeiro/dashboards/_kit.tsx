@@ -107,13 +107,13 @@ export function KpiCard({
       className={`p-4 border-slate-200 transition-all ${onClick ? "cursor-pointer hover:shadow-md hover:-translate-y-0.5" : ""}`}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-xs font-medium text-slate-500 truncate">{label}</p>
-          <p className="text-xl md:text-2xl font-bold text-slate-900 mt-1 tabular-nums truncate">{value}</p>
-          {sub && <p className="text-xs text-slate-400 mt-0.5 truncate">{sub}</p>}
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium text-slate-500 leading-tight mb-1">{label}</p>
+          <p className="text-sm md:text-base lg:text-lg font-bold text-slate-900 tabular-nums leading-snug break-all">{value}</p>
+          {sub && <p className="text-[11px] text-slate-400 mt-0.5 leading-tight">{sub}</p>}
         </div>
-        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${tones[tone]}`}>
-          <Icon className="w-4.5 h-4.5" style={{ width: 18, height: 18 }} />
+        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${tones[tone]}`}>
+          <Icon className="w-4 h-4" />
         </div>
       </div>
       {onClick && (
@@ -136,8 +136,8 @@ export function ChartCard({
     <Card className={`p-4 border-slate-200 ${className}`}>
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="min-w-0">
-          <h3 className="font-semibold text-slate-800 text-sm md:text-base truncate">{title}</h3>
-          {subtitle && <p className="text-xs text-slate-400 truncate">{subtitle}</p>}
+          <h3 className="font-semibold text-slate-800 text-sm md:text-base leading-snug">{title}</h3>
+          {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
         </div>
         {onOpen && (
           <button

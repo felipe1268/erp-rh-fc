@@ -1,6 +1,13 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3637 — **DASHBOARDS · BUGFIX TEXTO/NÚMERO CORTADO NOS KPI CARDS E CHART CARDS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * KpiCard: `truncate` removido do valor + fonte reduzida (text-2xl→text-sm/base/lg responsivo)
+ * + `break-all` para wrap seguro de strings BRL longas. ChartCard: `truncate` removido do
+ * título e do subtítulo (títulos longos como "NF-e Recebidas × NFS-e Emitidas × Saídas por mês"
+ * não são mais cortados). Ícone reduzido w-9→w-8 para dar mais espaço ao valor.
+ *
  * Rev. 3636 — **NF-e RECEBIDAS · ANEL SEFAZ COM DÍGITOS DO COUNTDOWN. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Anel de progresso ampliado (w-10→w-16) e dígitos do cronômetro exibidos
