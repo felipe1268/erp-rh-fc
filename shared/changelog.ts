@@ -1,6 +1,13 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3633 — **DASHBOARD NOTAS FISCAIS · "NF-e POR FORNECEDOR" TROCADO DE PIE PARA BARRAS HORIZONTAIS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Gráfico de rosca (PieChart) substituído por BarChart horizontal (layout="vertical"):
+ * fornecedores no eixo Y (nomes truncados a 22 chars), valor em R$ no eixo X
+ * (tickFormatter k), cada barra com cor do PALETTE. Nomes longos ficam legíveis.
+ * Limpeza: `pieData` (dead code) removido; `PieChart/Pie` removidos dos imports.
+ *
  * Rev. 3632 — **PANORAMA FISCAL · BUGFIX ENTRADAS BANCÁRIAS MOSTRANDO EXTRATOS JÁ APAGADOS. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Causa-raiz: `getPanoramaFiscal` consultava `bank_statement_lines` sem o

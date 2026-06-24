@@ -5,7 +5,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { useCompany } from "@/hooks/useCompany";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, PieChart, Pie, Cell,
+  Legend, Cell,
 } from "recharts";
 import {
   FileText, ShoppingCart, Receipt, Building2, CheckCircle2,
@@ -343,11 +343,6 @@ export default function DashNotasFiscais() {
   const prevNfeByMonth = useMemo(() => groupByMonth(prevData?.nfeRecebidas ?? [], "data_emissao", "valor_bruto"), [prevData]);
   const topForn        = useMemo(() => groupFornecedores(data?.nfeRecebidas ?? []), [data]);
   const topFornMax     = topForn[0]?.total ?? 1;
-  const pieData        = topForn.slice(0, 8).map((f, i) => ({
-    name: f.nome.length > 22 ? f.nome.slice(0, 22) + "…" : f.nome,
-    value: f.total,
-    color: PALETTE[i % PALETTE.length],
-  }));
 
   const periodoLabel = mes === 0 ? String(ano) : `${MESES_ABREV[mes - 1]}/${ano}`;
   const indiceGeral  = resumo
@@ -479,28 +474,33 @@ export default function DashNotasFiscais() {
 
           <ChartCard
             title="NF-e por Fornecedor"
-            subtitle={`Top ${pieData.length} · ${periodoLabel}`}
+            subtitle={`Top ${Math.min(topForn.length, 8)} · ${periodoLabel}`}
             height={270}
             onOpen={topForn.length > 0 ? () => setDlg("nfeRecebidas") : undefined}
             openLabel="Ver todas"
           >
-            {pieData.length === 0
+            {topForn.length === 0
               ? <EmptyState />
               : (
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={pieData} dataKey="value" nameKey="name"
-                      cx="50%" cy="48%" outerRadius={90} innerRadius={46}
-                      paddingAngle={2}
-                      label={({ percent }) => percent > 0.05 ? `${(percent * 100).toFixed(0)}%` : ""}
-                      labelLine={false} fontSize={10}
-                    >
-                      {pieData.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
-                    </Pie>
+                  <BarChart
+                    layout="vertical"
+                    data={topForn.slice(0, 8).map(f => ({
+                      name: f.name.length > 22 ? f.name.slice(0, 21) + "…" : f.name,
+                      Valor: f.total,
+                    }))}
+                    margin={{ top: 2, right: 12, left: 4, bottom: 2 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} tick={{ fontSize: 10 }} />
+                    <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 10 }} />
                     <Tooltip formatter={(v: any) => formatBRL(Number(v))} />
-                    <Legend wrapperStyle={{ fontSize: 10 }} />
-                  </PieChart>
+                    <Bar dataKey="Valor" radius={[0,3,3,0]} maxBarSize={18}>
+                      {topForn.slice(0, 8).map((_, i) => (
+                        <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
                 </ResponsiveContainer>
               )
             }
