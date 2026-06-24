@@ -467,6 +467,7 @@ export const fiscalNotesRouter = router({
 
       const ocsComNota: any[] = [];
       const ocsSemNota: any[] = [];
+      const matchedNfeIds = new Set<number>();
       for (const oc of ocList) {
         const cnpj = (oc.supplier_cnpj ?? "").replace(/\D/g, "");
         const matches = cnpj ? (nfeByCnpj.get(cnpj) ?? []) : [];
@@ -477,9 +478,15 @@ export const fiscalNotesRouter = router({
           return Math.abs(ocVal - nfeVal) / Math.max(ocVal, nfeVal) <= 0.30;
         }) ?? (matches.length > 0 ? matches[0] : null);
 
-        if (match) ocsComNota.push({ ...oc, nfeNumero: match.numero_nf, nfeValor: match.valor_bruto, nfeEmissao: match.data_emissao });
-        else ocsSemNota.push(oc);
+        if (match) {
+          matchedNfeIds.add(match.id);
+          ocsComNota.push({ ...oc, nfeNumero: match.numero_nf, nfeValor: match.valor_bruto, nfeEmissao: match.data_emissao });
+        } else {
+          ocsSemNota.push(oc);
+        }
       }
+      // NF-e que não foram casadas com nenhuma OC do período
+      const nfeSemOc = nfeList.filter((nfe: any) => !matchedNfeIds.has(nfe.id));
 
       // Entradas/saídas bancárias com/sem NF
       const bankCreditos = bankList.filter((b: any) => b.tipo === "credito");
@@ -517,6 +524,7 @@ export const fiscalNotesRouter = router({
         nfeRecebidas: nfeList,
         ocsComNota,
         ocsSemNota,
+        nfeSemOc,
         entradasComNota,
         entradasSemNota,
         saidasComNota,

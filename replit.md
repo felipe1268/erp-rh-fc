@@ -50,19 +50,19 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3654** — **DASHBOARD NF-e · SEÇÃO "NF-e SEM OC" — NOTAS RECEBIDAS SEM ORDEM DE COMPRA CORRESPONDENTE. BACKEND PONTUAL + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** `getPanoramaFiscal` rastreia NF-e casadas com OC via `matchedNfeIds: Set<number>` e retorna `nfeSemOc`. Frontend: 4º PendCard (rose), seção colapsível na `OcNfeSection` e `DetailDialog` dedicado. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3653** — **NF-e RECEBIDAS · BUGFIX "HISTÓRICO COMPLETO" BLOQUEADO PELO TIME GATE — last_sync_at NÃO ERA ZERADO NO resetNSU. BACKEND PONTUAL.** `resetNSU` agora zera também `last_sync_at = NULL` → sync dispara imediatamente após o reset. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3652** — **NFS-e EMITIDAS · BUGFIX ENDPOINT SIAP GEO GUARATINGUETÁ — HTTP 404 (URL ERRADA). BACKEND PONTUAL.** `/webservices/nfse.asmx` → `/websis/siapnet/nfse/nfse.asmx`. SyncSchema+ corrige no banco. Detalhe: `shared/changelog.ts`.
+- **Rev. 3652** — **NFS-e EMITIDAS · BUGFIX ENDPOINT SIAP GEO GUARATINGUETÁ — HTTP 404 (URL ERRADA). BACKEND PONTUAL.** `/webservices/nfse.asmx` → `/websis/siapnet/nfse/nfse.asmx`. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3651** — **NFS-e EMITIDAS · BUGFIX CRÍTICO SIAP GEO 0 NOTAS — XMLParser SEM removeNSPrefix + RESET last_sync_at. BACKEND PONTUAL.** fast-xml-parser sem removeNSPrefix não casava tags `soap:Envelope` → 0 notas para sempre. Fix: removeNSPrefix=true + SyncSchema+ reseta last_sync_at para re-scan 2018→2025. Detalhe: `shared/changelog.ts`.
+- **Rev. 3651** — **NFS-e EMITIDAS · BUGFIX CRÍTICO SIAP GEO 0 NOTAS — XMLParser SEM removeNSPrefix + RESET last_sync_at. BACKEND PONTUAL.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3650** — **CONFIGURAÇÕES SEFAZ · MÁSCARA CNPJ (XX.XXX.XXX/XXXX-XX). 100% FRONTEND · ZERO BACKEND/SCHEMA.** Campo exibia dígitos crus; máscara progressiva no onChange + formatação ao carregar. Detalhe: `shared/changelog.ts`.
+- **Rev. 3650** — **CONFIGURAÇÕES SEFAZ · MÁSCARA CNPJ (XX.XXX.XXX/XXXX-XX). 100% FRONTEND · ZERO BACKEND/SCHEMA.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3649** — **NFS-e EMITIDAS · BUGFIX SIAP GEO LOOP ETERNO 0 NOTAS — dataInicial CALCULADO COMO "hoje-1mês" EM VEZ DE "último dataFinal+1d". BACKEND PONTUAL.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3649** — **NFS-e EMITIDAS · BUGFIX SIAP GEO LOOP ETERNO 0 NOTAS — dataInicial CALCULADO COMO "hoje-1mês". BACKEND PONTUAL.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3648** — **iOS SAFARI · BUGFIX "text/html is not a valid JavaScript MIME type" NÃO CAPTURADO PELO lazyWithRetry. FRONTEND.** Adicionado padrão MIME type à lista isChunkErr → auto-reload em vez de ErrorBoundary. Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3647** — **NF-e RECEBIDAS · BUGFIX HORÁRIO LOG SEFAZ EM UTC EM VEZ DE BRT. BACKEND PONTUAL.** `AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo'` na query do getSyncLog. Detalhe: `shared/changelog.ts`.
+- **Rev. 3648** — **iOS SAFARI · BUGFIX "text/html is not a valid JavaScript MIME type" NÃO CAPTURADO PELO lazyWithRetry. FRONTEND.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3646** — **NF-e RECEBIDAS · BUGFIX CRÍTICO LOOP NSU=0 + GATE VAZA PÓS-BACKFILL. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** `deveAvancarNsu` não exige mais `importadas > 0`; backfill não zera `last_sync_at`. Detalhe: `shared/changelog.ts`.
 

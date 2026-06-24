@@ -183,12 +183,15 @@ function PendCard({
 }
 
 /* ─────────────────── OC × NF-e accordion ─────────────────── */
-function OcNfeSection({ data, onOpenSem, onOpenCom }: { data: any; onOpenSem: () => void; onOpenCom: () => void }) {
+function OcNfeSection({ data, onOpenSem, onOpenCom, onOpenNfeSem }: { data: any; onOpenSem: () => void; onOpenCom: () => void; onOpenNfeSem: () => void }) {
   const [openSem, setOpenSem] = useState(false);
   const [openCom, setOpenCom] = useState(true);
+  const [openNfeSem, setOpenNfeSem] = useState(false);
   if (!data) return null;
   const comNota: any[] = data.ocsComNota ?? [];
   const semNota: any[] = data.ocsSemNota ?? [];
+  const nfeSemOc: any[] = data.nfeSemOc ?? [];
+  const totNfeSemOc = nfeSemOc.reduce((s, r) => s + Math.abs(parseFloat(r.valor_bruto ?? "0")), 0);
   const totCom = comNota.reduce((s, r) => s + parseFloat(r.valor_total ?? "0"), 0);
   const totSem = semNota.reduce((s, r) => s + parseFloat(r.valor_total ?? "0"), 0);
 
@@ -301,13 +304,62 @@ function OcNfeSection({ data, onOpenSem, onOpenCom }: { data: any; onOpenSem: ()
               )
           )}
         </div>
+        {/* NF-e sem OC */}
+        <div className="rounded-lg border border-rose-100 overflow-hidden">
+          <button type="button" onClick={() => setOpenNfeSem(v => !v)}
+            className="w-full flex items-center justify-between px-4 py-3 bg-rose-50 hover:bg-rose-100 transition-colors text-left">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+              <span className="text-xs font-semibold text-slate-700">NF-e sem OC vinculada — verificar se há OC correspondente</span>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <span className="text-xs font-bold text-rose-700 tabular-nums">{formatBRL(totNfeSemOc)}</span>
+              <span className="text-[11px] text-slate-400">{nfeSemOc.length} item{nfeSemOc.length !== 1 ? "s" : ""}</span>
+              <button type="button" onClick={(e) => { e.stopPropagation(); onOpenNfeSem(); }}
+                className="text-[11px] text-rose-600 hover:text-rose-800 font-medium underline">Detalhe</button>
+            </div>
+          </button>
+          {openNfeSem && (
+            nfeSemOc.length === 0
+              ? <p className="text-xs text-emerald-600 text-center py-3">✅ Todas as NF-e recebidas têm OC correspondente.</p>
+              : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-slate-50 border-b border-slate-100">
+                      <tr>{["NF#","Emitente","CNPJ","Valor","Emissão","Status"].map(h =>
+                        <th key={h} className="px-3 py-2 text-left font-semibold text-slate-500 whitespace-nowrap">{h}</th>
+                      )}</tr>
+                    </thead>
+                    <tbody>
+                      {nfeSemOc.slice(0, 25).map((r, i) => (
+                        <tr key={i} className="border-b border-slate-50 odd:bg-white even:bg-slate-50/40 hover:bg-slate-50">
+                          <td className="px-3 py-2 font-medium text-rose-600">#{r.numero_nf ?? "—"}</td>
+                          <td className="px-3 py-2 max-w-[160px] truncate" title={r.emitente_nome}>{r.emitente_nome ?? "—"}</td>
+                          <td className="px-3 py-2 text-slate-400 tabular-nums text-[11px]">{r.emitente_cnpj ?? "—"}</td>
+                          <td className="px-3 py-2 tabular-nums font-semibold text-right text-rose-700">{formatBRL(parseFloat(r.valor_bruto ?? "0"))}</td>
+                          <td className="px-3 py-2 text-slate-400 whitespace-nowrap">{r.data_emissao ? formatDate(r.data_emissao) : "—"}</td>
+                          <td className="px-3 py-2"><span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600">{r.status ?? "—"}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {nfeSemOc.length > 25 && (
+                    <div className="text-center py-2 text-xs text-slate-400">
+                      … e mais {nfeSemOc.length - 25} itens.{" "}
+                      <button type="button" onClick={onOpenNfeSem} className="text-violet-600 underline">Ver todos</button>
+                    </div>
+                  )}
+                </div>
+              )
+          )}
+        </div>
       </div>
     </Card>
   );
 }
 
 /* ─────────────────── Main Dashboard ─────────────────── */
-type DlgKey = "nfeRecebidas"|"nfseEmitidas"|"saidasSemNota"|"entradasSemNota"|"ocsSemNota"|"ocsComNota"|"fornecedorDetail";
+type DlgKey = "nfeRecebidas"|"nfseEmitidas"|"saidasSemNota"|"entradasSemNota"|"ocsSemNota"|"ocsComNota"|"nfeSemOc"|"fornecedorDetail";
 
 export default function DashNotasFiscais() {
   const [, nav] = useLocation();
@@ -755,7 +807,7 @@ export default function DashNotasFiscais() {
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2 px-1">
             Pendências — ação necessária
           </h2>
-          <div className="grid md:grid-cols-3 gap-3">
+          <div className="grid md:grid-cols-4 gap-3">
             <PendCard icon={ArrowDownLeft} label="Entradas sem NFS-e emitida"
               count={data?.entradasSemNota?.length ?? 0}
               total={sumB(data?.entradasSemNota ?? [])}
@@ -768,6 +820,10 @@ export default function DashNotasFiscais() {
               count={data?.ocsSemNota?.length ?? 0}
               total={data?.ocsSemNota?.reduce((s: number, r: any) => s + parseFloat(r.valor_total ?? "0"), 0) ?? 0}
               color="orange" onClick={() => setDlg("ocsSemNota")} />
+            <PendCard icon={FileText} label="NF-e sem OC vinculada"
+              count={data?.nfeSemOc?.length ?? 0}
+              total={data?.nfeSemOc?.reduce((s: number, r: any) => s + Math.abs(parseFloat(r.valor_bruto ?? "0")), 0) ?? 0}
+              color="rose" onClick={() => setDlg("nfeSemOc")} />
           </div>
         </div>
 
@@ -776,6 +832,7 @@ export default function DashNotasFiscais() {
           data={data}
           onOpenSem={() => setDlg("ocsSemNota")}
           onOpenCom={() => setDlg("ocsComNota")}
+          onOpenNfeSem={() => setDlg("nfeSemOc")}
         />
 
         {/* Comparativo anual — NF-e Recebidas */}
@@ -850,6 +907,15 @@ export default function DashNotasFiscais() {
           subtitle={`${data?.ocsComNota?.length ?? 0} ordens conciliadas com nota fiscal`}
           columns={COL_OC} rows={data?.ocsComNota ?? []} totalKey="valor_total"
           icon={CheckCircle2}
+        />
+        <DetailDialog
+          open={dlg === "nfeSemOc"} onOpenChange={o => !o && setDlg(null)}
+          title="NF-e sem OC Vinculada"
+          subtitle={`${data?.nfeSemOc?.length ?? 0} notas recebidas sem ordem de compra correspondente`}
+          columns={COL_NF} rows={data?.nfeSemOc ?? []} totalKey="valor_bruto"
+          icon={FileText}
+          onGoTo={() => { nav("/financeiro/notas-fiscais"); setDlg(null); }}
+          goLabel="Ir para NF-e Recebidas"
         />
         <DetailDialog
           open={dlg === "fornecedorDetail"}

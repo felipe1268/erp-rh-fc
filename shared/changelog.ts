@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3654 — **DASHBOARD NF-e · SEÇÃO "NF-e SEM OC" — NOTAS RECEBIDAS SEM ORDEM DE COMPRA CORRESPONDENTE. BACKEND PONTUAL + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Backend (`getPanoramaFiscal`): durante o loop OC × NF-e, agora rastreia os IDs de NF-e
+ * que foram casados em alguma OC (`matchedNfeIds: Set<number>`). Após o loop,
+ * `nfeSemOc = nfeList.filter(nfe => !matchedNfeIds.has(nfe.id))` e retorna no payload.
+ *
+ * Frontend (`DashNotasFiscais`):
+ * - `DlgKey` ganha `"nfeSemOc"`.
+ * - `OcNfeSection` ganha prop `onOpenNfeSem` + terceira seção colapsível (fundo rose)
+ *   com tabela inline NF#/Emitente/CNPJ/Valor/Emissão/Status, limite 25 linhas + "Ver todos".
+ * - Pendências: grid `3 → 4` colunas; 4º card "NF-e sem OC vinculada" (rose).
+ * - `DetailDialog` dedicado usando `COL_NF` + link "Ir para NF-e Recebidas".
+ *
  * Rev. 3653 — **NF-e RECEBIDAS · BUGFIX "HISTÓRICO COMPLETO" BLOQUEADO PELO TIME GATE — last_sync_at NÃO ERA ZERADO NO resetNSU. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Ao clicar "Histórico completo", o frontend:
