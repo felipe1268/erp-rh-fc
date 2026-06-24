@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3655** — **NFS-e EMITIDAS · BUGFIX SIAP GEO LOOP ETERNO DE 404 — FALLBACK "2018-01-01" QUANDO PORTAL FORA DO AR. BACKEND PONTUAL.** Sync com erro HTTP deixava `last_sync_result` sem `dataFinal` → fallback `"2018-01-01"` → early-return nunca disparava → 404 infinito. Fix: fallback passa a `"2026-01-01"` para SIAP GEO já tentado, disparando o early-return imediatamente. Detalhe: `shared/changelog.ts`.
+- **Rev. 3656** — **NF-e / NFS-e · BUGFIX "ÚLTIMA SYNC" HORÁRIO ERRADO (UTC EM VEZ DE BRT). 100% FRONTEND.** `pg` retorna `last_sync_at` sem timezone → `new Date()` interpreta como local → UTC exibido cru. Fix: `parseAsUTC()` em 4 ocorrências + `timeZone:"America/Sao_Paulo"` nos toLocaleString. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3654** — **DASHBOARD NF-e · SEÇÃO "NF-e SEM OC". BACKEND PONTUAL + FRONTEND.** `getPanoramaFiscal` retorna `nfeSemOc`; frontend: 4º PendCard, seção colapsível e dialog. Detalhe: `shared/changelog.ts`.
+- **Rev. 3655** — **NFS-e EMITIDAS · BUGFIX SIAP GEO LOOP ETERNO DE 404 — FALLBACK "2018-01-01" QUANDO PORTAL FORA DO AR. BACKEND PONTUAL.** Fallback `"2018-01-01"` → `"2026-01-01"` para SIAP GEO já tentado, disparando o early-return. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3652** — **NFS-e EMITIDAS · BUGFIX ENDPOINT SIAP GEO GUARATINGUETÁ — HTTP 404 (URL ERRADA). BACKEND PONTUAL.** `/webservices/nfse.asmx` → `/websis/siapnet/nfse/nfse.asmx`. Detalhe: `shared/changelog.ts`.
 

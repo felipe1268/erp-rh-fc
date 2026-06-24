@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
+import { parseAsUTC } from "@/lib/dateUtils";
 import PanoramaFiscal from "./PanoramaFiscal";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -297,7 +298,7 @@ export default function FinanceiroNotasFiscais() {
         const baseTs = result?.rateLimitedAt
           ? new Date(result.rateLimitedAt).getTime()
           : sefazCfg.last_sync_at
-            ? new Date(sefazCfg.last_sync_at).getTime()
+            ? parseAsUTC(sefazCfg.last_sync_at).getTime()
             : null;
         if (!baseTs) { setCountdownSec(null); return; }
         const nextSyncMs = baseTs + gateMs;
@@ -317,7 +318,7 @@ export default function FinanceiroNotasFiscais() {
     // Pega o last_sync_at mais recente entre os municípios habilitados
     const latestTs = enabled.reduce((best: number | null, m: any) => {
       if (!m.last_sync_at) return best;
-      const t = new Date(m.last_sync_at).getTime();
+      const t = parseAsUTC(m.last_sync_at).getTime();
       return best === null || t > best ? t : best;
     }, null as number | null);
     const calcSecs = () => {
@@ -979,7 +980,7 @@ export default function FinanceiroNotasFiscais() {
                         <div className="text-right text-xs text-slate-400 shrink-0 hidden sm:block">
                           <div>Última sync</div>
                           <div className="font-medium text-slate-500">
-                            {new Date(sefazCfg.last_sync_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}
+                            {parseAsUTC(sefazCfg.last_sync_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}
                           </div>
                         </div>
                       )}

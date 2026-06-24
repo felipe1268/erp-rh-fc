@@ -1,6 +1,22 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3656 — **NF-e / NFS-e · BUGFIX "ÚLTIMA SYNC" MOSTRANDO HORÁRIO ERRADO (UTC EM VEZ DE BRT). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Causa: `pg` driver retorna colunas `last_sync_at` como string no formato
+ * `"YYYY-MM-DD HH:MM:SS"` (sem sufixo de timezone). `new Date("2026-06-24 12:07:00")`
+ * é interpretado pelo browser como horário LOCAL (BRT), então o
+ * `timeZone: "America/Sao_Paulo"` no toLocaleTimeString não faz nenhuma conversão
+ * e exibe o valor UTC bruto (12:07) em vez do BRT correto (09:07).
+ *
+ * Fix: substituir todos os `new Date(last_sync_at)` por `parseAsUTC(last_sync_at)`
+ * (helper já existente em `client/src/lib/dateUtils.ts` que faz
+ * `str.replace(" ","T") + "Z"` antes de construir o Date → interpreta como UTC).
+ * Adicionar `timeZone: "America/Sao_Paulo"` em todos os `toLocaleString` que faltavam.
+ *
+ * Arquivos: `FinanceiroNotasFiscais.tsx` (3 ocorrências + import),
+ *           `FinanceiroConfigSection.tsx` (fmtSyncAt + 1 inline + import).
+ *
  * Rev. 3655 — **NFS-e EMITIDAS · BUGFIX SIAP GEO LOOP ETERNO DE 404 — FALLBACK "2018-01-01" QUANDO PORTAL ESTAVA FORA DO AR. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Causa-raiz: quando `executarSyncMunicipio` retorna `{ erro: "HTTP 404..." }`, o campo

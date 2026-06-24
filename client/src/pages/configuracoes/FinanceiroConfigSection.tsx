@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { parseAsUTC } from "@/lib/dateUtils";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
@@ -174,7 +175,7 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
 
   function fmtSyncAt(dt: string | null) {
     if (!dt) return "Nunca sincronizado";
-    return new Date(dt).toLocaleString("pt-BR");
+    return parseAsUTC(dt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
   }
   const [taxForm, setTaxForm] = useState<any>({});
   const [autoImportOn, setAutoImportOn] = useState(false);
@@ -894,7 +895,7 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
                     </div>
                     {mun.last_sync_at && (
                       <span className="text-[10px] text-slate-400">
-                        {new Date(mun.last_sync_at).toLocaleString("pt-BR")}
+                        {parseAsUTC(mun.last_sync_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}
                       </span>
                     )}
                   </div>
