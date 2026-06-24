@@ -758,8 +758,8 @@ function BankTable({ rows, tipo }: { rows: any[]; tipo: "entrada" | "saida" }) {
                       <td className="px-3 py-2 whitespace-nowrap text-slate-500 font-medium">{fmtDate(b.data)}</td>
                       <td className="px-3 py-2 text-[11px] whitespace-nowrap">
                         <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${c.bg} ${c.text} font-medium`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
-                          <span className="truncate max-w-[90px]" title={b.conta_nome}>{b.conta_nome || "—"}</span>
+                          <span className={`w-1.5 h-1.5 rounded-full ${c.dot} shrink-0`} />
+                          <span className="whitespace-nowrap">{b.conta_nome || "—"}</span>
                         </span>
                         {(b.conta_agencia || b.conta_numero) && (
                           <span className="block text-slate-400 text-[10px] mt-0.5 pl-0.5">
