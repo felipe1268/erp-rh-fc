@@ -229,8 +229,6 @@ export default function FinanceiroNotasFiscais() {
 
   // ── Aba principal: emitidas | recebidas | panorama ───────────────────────────
   const [pageTab, setPageTab] = useState<"emitidas" | "recebidas" | "panorama">("emitidas");
-  // Sub-aba da aba Recebidas: nfe = NF-e produtos (SEFAZ) | nfse = NFS-e serviços (Portal Nacional)
-  const [recebidasSub, setRecebidasSub] = useState<"nfe" | "nfse">("nfe");
   const [recAno, setRecAno] = useState(new Date().getFullYear());
   const [recMes, setRecMes] = useState<number | null>(new Date().getMonth() + 1);
   const [recSearch, setRecSearch] = useState("");
@@ -306,41 +304,8 @@ export default function FinanceiroNotasFiscais() {
   );
   const municipios: any[] = municipiosQuery.data ?? [];
 
-  // ── NFS-e Tomadas (onde FC recebe serviços) ──────────────────────────────────
-  const [tomAno, setTomAno] = useState(new Date().getFullYear());
-  const [tomMes, setTomMes] = useState<number | null>(null);
-  const [tomSearch, setTomSearch] = useState("");
-  const [tomSyncAnoInicial, setTomSyncAnoInicial] = useState(2018);
-  const [tomSyncAnoFinal, setTomSyncAnoFinal] = useState(2025);
-  const [tomSyncResult, setTomSyncResult] = useState<any>(null);
-
-  const tomQuery = (trpc as any).nfseEmitidas.listNfseTomadas.useQuery(
-    { companyId: companyId ?? 0, ano: tomAno, mes: tomMes ?? undefined, search: tomSearch || undefined },
-    { enabled: !!companyId && pageTab === "recebidas" && recebidasSub === "nfse", staleTime: 30_000 }
-  );
-  const tomNotas: any[] = tomQuery.data?.items ?? [];
-  const tomKpi = tomQuery.data?.kpi ?? { total: 0, valorTotal: 0, mesesComNota: 0, prestadoresDistintos: 0 };
-  const tomTotalGeral: number = tomQuery.data?.totalGeral ?? 0;
-
   // SIAP GEO ibge_code para Guaratinguetá
   const GUARA_IBGE = 3518602;
-
-  const syncTomadasMut = (trpc as any).nfseEmitidas.syncNfseTomadas.useMutation({
-    onSuccess: (data: any) => {
-      setTomSyncResult(data);
-      tomQuery.refetch();
-      if (data?.aviso) {
-        // Backend retornou aviso explicativo (ex: API sem distribuição em lote)
-        toast({ title: "ℹ️ Verificação concluída", description: data.aviso.slice(0, 120), duration: 8000 });
-      } else if (data.importadas > 0) {
-        toast({ title: `✅ ${data.importadas} NFS-e importadas` });
-      } else {
-        toast({ title: "ℹ️ Nenhuma nota nova encontrada",
-          description: data.erros?.length ? `Erros em ${data.erros.length} ano(s)` : undefined });
-      }
-    },
-    onError: (e: any) => toast({ title: "Erro ao verificar", description: e?.message, variant: "destructive" }),
-  });
 
   const [syncAllResult, setSyncAllResult] = useState<any>(null);
   const syncAllMunMut = (trpc as any).nfseEmitidas.syncAllMunicipios.useMutation({
@@ -929,7 +894,7 @@ export default function FinanceiroNotasFiscais() {
             <div className="flex gap-2 shrink-0">
             </div>
           )}
-          {pageTab === "recebidas" && recebidasSub === "nfe" && (
+          {pageTab === "recebidas" && (
             <div className="flex gap-2 shrink-0 flex-wrap">
               <input
                 ref={xmlInputRef}
@@ -971,20 +936,6 @@ export default function FinanceiroNotasFiscais() {
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${sefazResetNsuMut.isPending ? "animate-spin" : ""}`} />
                 {sefazResetNsuMut.isPending ? "Baixando..." : "Histórico completo"}
-              </Button>
-            </div>
-          )}
-          {pageTab === "recebidas" && recebidasSub === "nfse" && (
-            <div className="flex gap-2 shrink-0">
-              <Button
-                size="sm"
-                className="gap-1.5 h-9 bg-amber-600 hover:bg-amber-700 text-white"
-                disabled={isParsing}
-                onClick={() => pdfInputRef.current?.click()}
-              >
-                {isParsing
-                  ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Lendo PDF…</>
-                  : <><Upload className="h-3.5 w-3.5" /> Importar PDF</>}
               </Button>
             </div>
           )}
@@ -1055,33 +1006,11 @@ export default function FinanceiroNotasFiscais() {
           ))}
         </div>
 
-        {/* Sub-nav da aba Recebidas: NF-e Produtos (SEFAZ) | NFS-e Serviços (Portal Nacional) */}
-        {pageTab === "recebidas" && (
-          <div className="flex gap-1 bg-slate-100 rounded-xl p-1 w-fit">
-            {([
-              { key: "nfe",  label: "📦 NF-e Produtos (SEFAZ)" },
-              { key: "nfse", label: "📋 NFS-e Serviços (Portal Nacional)" },
-            ] as const).map(({ key, label }) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setRecebidasSub(key)}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                  recebidasSub === key
-                    ? "bg-white text-indigo-700 shadow-sm"
-                    : "text-slate-500 hover:text-slate-700"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
 
         {/* ═══════════════════════════════════════════════════════════════════════
             ABA: NF-e RECEBIDAS (SEFAZ) — sub-aba Produtos
         ═══════════════════════════════════════════════════════════════════════ */}
-        {pageTab === "recebidas" && recebidasSub === "nfe" && (() => {
+        {pageTab === "recebidas" && (() => {
           const MESES_REC = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
           const fmtCountdown = (s: number) => {
             if (s <= 0) return null; // ready to sync
@@ -3623,196 +3552,6 @@ export default function FinanceiroNotasFiscais() {
           </DialogContent>
         </Dialog>
 
-        {/* ═══════════════════════════════════════════════════════════════════════
-            ABA: NFS-e RECEBIDAS — sub-aba Serviços (Portal Nacional, FC como tomador)
-        ═══════════════════════════════════════════════════════════════════════ */}
-        {pageTab === "recebidas" && recebidasSub === "nfse" && (() => {
-          const MESES_TOM = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
-          const fmtCnpj = (c: string | null | undefined) => {
-            const d = String(c || "").replace(/\D/g, "");
-            if (d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
-            return d || "—";
-          };
-
-          return (
-            <>
-              {/* Cabeçalho com gradiente violeta */}
-              <div className="rounded-2xl overflow-hidden"
-                style={{ background: "linear-gradient(135deg,#7c3aed 0%,#a855f7 60%,#6d28d9 100%)" }}>
-                <div className="px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                      📨 NFS-e Tomadas — Serviços Recebidos
-                    </h2>
-                    <p className="text-sm text-violet-200 mt-0.5">
-                      NFS-e de serviços recebidos pela FC · Portal Nacional NFS-e (sefin.nfse.gov.br) — mTLS cert A1
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => setTomAno(a => a - 1)} className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center text-sm font-bold">‹</button>
-                    <span className="text-white font-bold text-lg tabular-nums w-16 text-center">{tomAno}</span>
-                    <button onClick={() => setTomAno(a => a + 1)} className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center text-sm font-bold">›</button>
-                  </div>
-                </div>
-                {/* Chips de mês */}
-                <div className="px-6 pb-4 flex flex-wrap gap-1.5">
-                  <button
-                    onClick={() => setTomMes(null)}
-                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${tomMes === null ? "bg-white text-violet-800" : "bg-white/20 text-white hover:bg-white/30"}`}
-                  >Ano todo</button>
-                  {MESES_TOM.map((m, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setTomMes(tomMes === i + 1 ? null : i + 1)}
-                      className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${tomMes === i + 1 ? "bg-white text-violet-800" : "bg-white/20 text-white hover:bg-white/30"}`}
-                    >{m}</button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Banner: Portal Nacional NFS-e — Limitação da API */}
-              <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 flex gap-4">
-                <div className="text-2xl shrink-0 mt-0.5">⚠️</div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-bold text-amber-900 text-sm mb-1">
-                    Portal Nacional NFS-e — sem distribuição em lote (API v1.6.0)
-                  </h3>
-                  <p className="text-xs text-amber-800 leading-relaxed">
-                    Testado em 24/06/2026: a API <strong>sefin.nfse.gov.br v1.6.0</strong> não fornece endpoint de
-                    distribuição em lote (equivalente ao <em>nfeDistDFeInt</em> do SEFAZ NF-e). Só existe{" "}
-                    <code className="bg-amber-100 px-1 rounded">GET /nfse/&#123;chave50dígitos&#125;</code>{" "}
-                    para consulta individual e <code className="bg-amber-100 px-1 rounded">POST /nfse</code> para emissão.
-                    <br />
-                    <strong>Para adicionar NFS-e de serviços recebidos:</strong> solicite o DANFSe (PDF) ao
-                    prestador de serviço e importe abaixo — o sistema extrai os dados automaticamente via IA.
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      onClick={() => pdfInputRef.current?.click()}
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-700 text-white px-3 py-1.5 rounded-lg hover:bg-amber-800 transition-colors"
-                    >
-                      <Upload className="h-3 w-3" /> Importar PDF (DANFSe)
-                    </button>
-                    <button
-                      onClick={() => syncTomadasMut.mutate({ companyId })}
-                      disabled={syncTomadasMut.isPending}
-                      className="inline-flex items-center gap-1.5 text-xs text-amber-700 bg-amber-100 border border-amber-300 px-3 py-1.5 rounded-lg hover:bg-amber-200 disabled:opacity-50 transition-colors"
-                    >
-                      {syncTomadasMut.isPending
-                        ? <><Loader2 className="h-3 w-3 animate-spin" /> Verificando cert…</>
-                        : <><RefreshCw className="h-3 w-3" /> Verificar autenticação</>
-                      }
-                    </button>
-                    <a
-                      href="https://www.nfse.gov.br/EmissorNacional/Login"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs text-amber-700 bg-white border border-amber-300 px-3 py-1.5 rounded-lg hover:bg-amber-50 transition-colors"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      Abrir nfse.gov.br
-                    </a>
-                  </div>
-                  {syncTomadasMut.isError && (
-                    <p className="text-xs text-red-700 mt-2">
-                      ❌ {(syncTomadasMut.error as any)?.message || "Erro ao verificar"}
-                    </p>
-                  )}
-                  {syncTomadasMut.isSuccess && (syncTomadasMut.data as any)?.aviso && (
-                    <p className="text-xs text-amber-900 bg-amber-100 border border-amber-200 rounded-lg px-3 py-2 mt-2">
-                      {(syncTomadasMut.data as any).aviso}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* KPI Cards */}
-              {(
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {[
-                    { label: "Notas no ano", value: tomKpi.total.toString(), sub: `${tomTotalGeral} total histórico`, color: "border-violet-300 bg-violet-50" },
-                    { label: "Valor total", value: formatBRL(tomKpi.valorTotal), sub: `em ${tomMes ? MESES_TOM[(tomMes??1)-1] : "todo o ano " + tomAno}`, color: "border-purple-300 bg-purple-50" },
-                    { label: "Prestadores", value: tomKpi.prestadoresDistintos.toString(), sub: "fornecedores distintos", color: "border-indigo-300 bg-indigo-50" },
-                    { label: "Meses c/ nota", value: `${tomKpi.mesesComNota}/12`, sub: "no ano selecionado", color: "border-pink-300 bg-pink-50" },
-                  ].map(({ label, value, sub, color }) => (
-                    <div key={label} className={`rounded-xl border p-4 ${color}`}>
-                      <p className="text-xs font-medium text-slate-500 mb-1">{label}</p>
-                      <p className="text-xl font-black text-slate-900 break-all">{value}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">{sub}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Busca */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <input
-                  className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-300"
-                  placeholder="Buscar por prestador, CNPJ ou número..."
-                  value={tomSearch}
-                  onChange={e => setTomSearch(e.target.value)}
-                />
-              </div>
-
-              {/* Tabela */}
-              {tomQuery.isLoading ? (
-                <div className="flex items-center justify-center py-16 text-slate-400 gap-2">
-                  <Loader2 className="h-5 w-5 animate-spin" /><span>Carregando...</span>
-                </div>
-              ) : tomNotas.length === 0 ? (
-                <div className="text-center py-12 text-slate-400">
-                  <Receipt className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                  <p className="font-medium">Nenhuma NFS-e tomada em {tomMes ? MESES_TOM[tomMes-1] : ""}  {tomAno}</p>
-                  <p className="text-sm mt-1">{tomTotalGeral > 0 ? "Tente outro período ou clique para sincronizar." : "Clique em Sincronizar para importar as notas do SIAP GEO."}</p>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-slate-200 overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="bg-slate-50 border-b border-slate-200">
-                        <tr>
-                          <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Prestador (Emitente)</th>
-                          <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">CNPJ</th>
-                          <th className="text-center px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Nº</th>
-                          <th className="text-center px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Emissão</th>
-                          <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Valor Bruto</th>
-                          <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Valor Líq.</th>
-                          <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Descrição</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {tomNotas.map((n: any, idx: number) => (
-                          <tr key={n.id} className={`border-b border-slate-100 hover:bg-slate-50 transition-colors ${idx % 2 === 0 ? "" : "bg-slate-50/40"}`}>
-                            <td className="px-4 py-3">
-                              <span className="font-medium text-slate-800">{n.emitente_nome || "—"}</span>
-                            </td>
-                            <td className="px-4 py-3 text-slate-500 font-mono text-xs">{fmtCnpj(n.emitente_cnpj)}</td>
-                            <td className="px-3 py-3 text-center text-slate-700 font-mono font-semibold">{n.numero_nf || "—"}</td>
-                            <td className="px-3 py-3 text-center text-slate-500">{fmtDateBR(n.data_emissao)}</td>
-                            <td className="px-4 py-3 text-right font-semibold text-slate-800">{formatBRL(n.valor_bruto)}</td>
-                            <td className="px-4 py-3 text-right text-slate-600">{formatBRL(n.valor_liquido)}</td>
-                            <td className="px-4 py-3 text-slate-500 max-w-xs">
-                              <span className="block truncate" title={n.descricao_servico || ""}>{n.descricao_servico || "—"}</span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot className="bg-violet-50 border-t-2 border-violet-200">
-                        <tr>
-                          <td colSpan={4} className="px-4 py-3 text-sm font-bold text-violet-800">{tomNotas.length} nota{tomNotas.length !== 1 ? "s" : ""}</td>
-                          <td className="px-4 py-3 text-right font-black text-violet-900">{formatBRL(tomNotas.reduce((s: number, n: any) => s + parseFloat(n.valor_bruto || "0"), 0))}</td>
-                          <td className="px-4 py-3 text-right font-bold text-violet-800">{formatBRL(tomNotas.reduce((s: number, n: any) => s + parseFloat(n.valor_liquido || "0"), 0))}</td>
-                          <td />
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </>
-          );
-        })()}
 
         {/* ═══════════════════════════════════════════════════════════════════════
             ABA: PANORAMA FISCAL

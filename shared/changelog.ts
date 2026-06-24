@@ -1,6 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3679 — **NF-e RECEBIDAS · REMOVE SUB-ABA "NFS-e SERVIÇOS (PORTAL NACIONAL)" — MANTÉM SÓ SEFAZ AUTOMÁTICO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * API sefin.nfse.gov.br v1.6.0 não tem distribuição em lote; sub-aba Portal Nacional mostrava
+ * 0 notas e criava confusão. SEFAZ NF-e Produtos está funcionando (notas chegando automaticamente).
+ * Removidos: sub-nav pills, bloco NFS-e Tomadas (~188 linhas), state recebidasSub + tomAno/tomMes/
+ * tomSearch/tomQuery/tomKpi/tomTotalGeral/syncTomadasMut. Aba Recebidas agora mostra diretamente
+ * o painel SEFAZ NF-e sem seletor de sub-aba. Arquivo: `FinanceiroNotasFiscais.tsx`.
+ *
  * Rev. 3678 — **NFS-e EMITIDAS · CAMPOS COMPLETOS DO XML SIAP GEO: 12 NOVAS COLUNAS + DIALOG REDESENHADO. BACKEND ADITIVO + SCHEMA + FRONTEND · ZERO DROP/DELETE.**
  *
  * Captura todos os campos presentes no XML de exportação SIAP GEO e exibe num dialog de detalhes
