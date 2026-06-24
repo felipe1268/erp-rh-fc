@@ -1,6 +1,20 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3625 — **NF-e RECEBIDAS · TOGGLE LIGA/DESLIGA SYNC AUTOMÁTICO + SELETOR DE INTERVALO DIRETO NA ABA. 100% FRONTEND + BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
+ *
+ * Problema: sync automático horário consumia a cota SEFAZ antes do usuário conseguir
+ * usar o botao "Recuperar XMLs" ou "Histórico completo" manualmente.
+ * SOLUCAO (1): Banner do cronometro reformulado — linha de controles abaixo do timer com:
+ *   toggle pill (liga/desliga sync automático) + select de intervalo (1h/2h/3h/4h/6h/8h/12h/24h).
+ *   Estado cinza "⏸ Sync desligado" / ambar "Proxima sync em X" / verde "Pronta para sincronizar".
+ * SOLUCAO (2): handleQuickSave chama sefaz.saveConfig repassando todos os campos existentes
+ *   (cnpj/uf/ambiente/syncHora) alterando apenas syncEnabled ou syncIntervaloHoras.
+ *   Efeito imediato: backend atualiza sync_enabled/sync_intervalo_horas; cron nao executa mais.
+ * SOLUCAO (3): Calculo do cronometro regressivo agora usa sync_intervalo_horas do cfg
+ *   em vez do hardcode de 58min — o anel e o texto refletem o intervalo escolhido.
+ * Arquivo: client/src/pages/financeiro/FinanceiroNotasFiscais.tsx.
+ *
  * Rev. 3624 — **NF-e RECEBIDAS · LOG DE AUDITORIA DE SINCRONIZACAO SEFAZ — DATA/HORA BRASILIA, NSU, STATUS POR CICLO. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * Pedido: 5 ciclos de sync sem crescimento (217 notas); sem visibilidade de quando/o que cada
