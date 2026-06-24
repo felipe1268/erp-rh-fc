@@ -576,7 +576,6 @@ export const fiscalNotesRouter = router({
         if (r.tipo === "nfse") {
           result[r.mes] = cur === "parcial" || cur === "ok" ? "ok" : "parcial";
           if (cur === "none") result[r.mes] = "parcial";
-          // se já era parcial por nfe → agora ok
           if (cur === "parcial") result[r.mes] = "ok";
         } else {
           if (cur === "none") result[r.mes] = "parcial";
@@ -584,5 +583,54 @@ export const fiscalNotesRouter = router({
         }
       }
       return result as Record<number, "ok" | "parcial" | "none">;
+    }),
+
+  getMultiYearSeries: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      anos: z.number().min(2).max(10).optional(),
+    }))
+    .query(async ({ input, ctx }) => {
+      await _assertNfAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const { companyId } = input;
+      const qtdAnos = Math.min(10, Math.max(2, input.anos ?? 5));
+      const anoFim = new Date().getFullYear();
+      const anoIni = anoFim - qtdAnos + 1;
+
+      const rows = await db.$client.query(`
+        SELECT
+          EXTRACT(YEAR FROM data_emissao)::int AS ano,
+          SUM(CASE WHEN (origem = 'sefaz_nfe' OR origem = 'xml_upload') AND status != 'cancelada'
+              THEN COALESCE(valor_bruto::numeric, 0) ELSE 0 END) AS nfe_total,
+          COUNT(CASE WHEN (origem = 'sefaz_nfe' OR origem = 'xml_upload') AND status != 'cancelada'
+              THEN 1 END)::int AS nfe_count,
+          SUM(CASE WHEN origem LIKE 'nfse_%' AND status != 'cancelada'
+              THEN COALESCE(valor_bruto::numeric, 0) ELSE 0 END) AS nfse_total,
+          COUNT(CASE WHEN origem LIKE 'nfse_%' AND status != 'cancelada'
+              THEN 1 END)::int AS nfse_count
+        FROM fiscal_notes
+        WHERE company_id = $1
+          AND data_emissao >= $2 AND data_emissao < $3
+          AND data_emissao IS NOT NULL
+        GROUP BY 1
+        ORDER BY 1
+      `, [companyId, `${anoIni}-01-01`, `${anoFim + 1}-01-01`]);
+
+      const byAno = new Map<number, any>();
+      for (const r of rows.rows) byAno.set(Number(r.ano), r);
+
+      const series = [];
+      for (let a = anoIni; a <= anoFim; a++) {
+        const r = byAno.get(a);
+        series.push({
+          ano: a,
+          nfeTotal:  parseFloat(r?.nfe_total  ?? "0") || 0,
+          nfeCount:  parseInt(r?.nfe_count   ?? "0") || 0,
+          nfseTotal: parseFloat(r?.nfse_total ?? "0") || 0,
+          nfseCount: parseInt(r?.nfse_count  ?? "0") || 0,
+        });
+      }
+      return series;
     }),
 });

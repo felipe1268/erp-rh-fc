@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3682 — **DASHBOARD NF-e · CARD "EVOLUÇÃO 5 ANOS — ENTRADAS × SAÍDAS" COM BARCHART AGRUPADO + TABELA a/a. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * Novo endpoint `fiscalNotes.getMultiYearSeries({ companyId, anos })` agrega totais anuais em
+ * uma única query SQL (SUM CASE WHEN por origem, GROUP BY EXTRACT(YEAR FROM data_emissao)).
+ * Retorna array `{ ano, nfeTotal, nfeCount, nfseTotal, nfseCount }` para os últimos N anos
+ * (padrão 5, máximo 10), preenchendo com zeros os anos sem movimento.
+ *
+ * No DashNotasFiscais adicionado card "Evolução N Anos — Entradas × Saídas":
+ * - BarChart agrupado (verde=NF-e Recebidas, violeta=NFS-e Emitidas) com LabelList compacto e
+ *   tooltip customizado com contagem de NFs por ano/série.
+ * - Tabela com colunas: Ano | NF-e + Δ% | NFS-e + Δ% | Saldo (NFS-e − NF-e).
+ * - Linha de rodapé "Total período" com soma dos 5 anos.
+ * - Ano corrente destacado com badge "atual" e fundo violeta suave.
+ * - Variação calculada vs ano anterior: verde se positivo, vermelho se negativo.
+ *
+ * Arquivos: `server/routers/fiscalNotes.ts` (endpoint), `client/src/pages/financeiro/dashboards/DashNotasFiscais.tsx` (card + query).
+ * Zero schema, zero ALTER/DROP/DELETE.
+ *
  * Rev. 3681 — **NFS-e EMITIDAS · BUGFIX CRASH "[object Date]" NO DIALOG ESPELHO — TIMESTAMP PRESERVADO PELO SUPERJSON. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Causa-raiz: `getDetalhesNFse` usava `db.$client.query()` (raw node-postgres), que retorna colunas

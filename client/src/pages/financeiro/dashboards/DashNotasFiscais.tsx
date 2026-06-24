@@ -385,6 +385,13 @@ export default function DashNotasFiscais() {
     { enabled: !!companyId, staleTime: 300_000 }
   );
 
+  const multiYearQuery = (trpc as any).fiscalNotes.getMultiYearSeries.useQuery(
+    { companyId: companyId ?? 0, anos: 5 },
+    { enabled: !!companyId, staleTime: 300_000 }
+  );
+  const multiYearData: Array<{ ano: number; nfeTotal: number; nfeCount: number; nfseTotal: number; nfseCount: number }> =
+    multiYearQuery.data ?? [];
+
   const data     = pQuery.data;
   const anoData  = mes === 0 ? data : anoQuery.data;
   const prevData = prevQuery.data;
@@ -834,6 +841,152 @@ export default function DashNotasFiscais() {
           onOpenCom={() => setDlg("ocsComNota")}
           onOpenNfeSem={() => setDlg("nfeSemOc")}
         />
+
+        {/* Evolução 5 Anos — Entradas × Saídas */}
+        {multiYearData.length >= 2 && (() => {
+          const chartData = multiYearData.map(d => ({
+            ano: String(d.ano),
+            "NF-e Recebidas": d.nfeTotal,
+            "NFS-e Emitidas":  d.nfseTotal,
+            _nfeCount: d.nfeCount,
+            _nfseCount: d.nfseCount,
+          }));
+          const totalNfe  = multiYearData.reduce((s, d) => s + d.nfeTotal,  0);
+          const totalNfse = multiYearData.reduce((s, d) => s + d.nfseTotal, 0);
+          return (
+            <Card className="p-4 border-slate-200">
+              <div className="flex items-start justify-between gap-2 mb-4">
+                <div>
+                  <h3 className="font-semibold text-slate-800 text-sm md:text-base">
+                    Evolução {multiYearData.length} Anos — Entradas × Saídas
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    NF-e Recebidas (compras) vs NFS-e Emitidas (faturamento) · {multiYearData[0]?.ano}–{multiYearData[multiYearData.length - 1]?.ano}
+                  </p>
+                </div>
+                <div className="flex gap-3 text-xs shrink-0">
+                  <span className="flex items-center gap-1.5 text-slate-600">
+                    <span className="w-3 h-3 rounded-sm inline-block" style={{ background: GREEN }} />
+                    Entradas
+                  </span>
+                  <span className="flex items-center gap-1.5 text-slate-600">
+                    <span className="w-3 h-3 rounded-sm inline-block" style={{ background: VIOLET }} />
+                    Saídas
+                  </span>
+                </div>
+              </div>
+
+              {/* BarChart agrupado */}
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={chartData} barCategoryGap="22%" barGap={3} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="ano" tick={{ fontSize: 12, fill: "#64748b" }} axisLine={false} tickLine={false} />
+                  <YAxis tickFormatter={(v: number) => formatBRLCompact(v)} tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={72} />
+                  <Tooltip
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null;
+                      return (
+                        <div className="bg-white rounded-xl shadow-xl border border-slate-200 p-3 min-w-[210px]">
+                          <p className="text-xs font-bold text-slate-700 mb-2">{label}</p>
+                          {payload.map((p: any) => {
+                            const count = p.dataKey === "NF-e Recebidas" ? p.payload._nfeCount : p.payload._nfseCount;
+                            return (
+                              <div key={p.dataKey} className="flex items-center justify-between gap-3 mb-1">
+                                <span className="flex items-center gap-1.5 text-xs text-slate-600">
+                                  <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ background: p.color }} />
+                                  {p.name}
+                                </span>
+                                <div className="text-right">
+                                  <span className="text-xs font-semibold tabular-nums text-slate-800">{formatBRLCompact(Number(p.value))}</span>
+                                  <span className="text-[10px] text-slate-400 ml-1">({count} NFs)</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    }}
+                  />
+                  <Bar dataKey="NF-e Recebidas" fill={GREEN} radius={[4, 4, 0, 0]}>
+                    <LabelList dataKey="NF-e Recebidas" position="top" formatter={(v: number) => v > 0 ? formatBRLCompact(v) : ""} style={{ fontSize: 10, fill: "#64748b" }} />
+                  </Bar>
+                  <Bar dataKey="NFS-e Emitidas" fill={VIOLET} radius={[4, 4, 0, 0]}>
+                    <LabelList dataKey="NFS-e Emitidas" position="top" formatter={(v: number) => v > 0 ? formatBRLCompact(v) : ""} style={{ fontSize: 10, fill: "#64748b" }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+
+              {/* Tabela resumo */}
+              <div className="mt-4 overflow-auto rounded-lg border border-slate-200">
+                <table className="w-full text-xs">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-semibold text-slate-600">Ano</th>
+                      <th className="px-3 py-2 text-right font-semibold text-emerald-700">NF-e Recebidas</th>
+                      <th className="px-3 py-2 text-right font-semibold text-slate-400">Δ%</th>
+                      <th className="px-3 py-2 text-right font-semibold text-violet-700">NFS-e Emitidas</th>
+                      <th className="px-3 py-2 text-right font-semibold text-slate-400">Δ%</th>
+                      <th className="px-3 py-2 text-right font-semibold text-slate-600">Saldo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {multiYearData.map((d, i) => {
+                      const prev = multiYearData[i - 1];
+                      const dNfe  = prev && prev.nfeTotal  > 0 ? ((d.nfeTotal  - prev.nfeTotal)  / prev.nfeTotal)  * 100 : null;
+                      const dNfse = prev && prev.nfseTotal > 0 ? ((d.nfseTotal - prev.nfseTotal) / prev.nfseTotal) * 100 : null;
+                      const saldo = d.nfseTotal - d.nfeTotal;
+                      const isCurrentYear = d.ano === new Date().getFullYear();
+                      return (
+                        <tr key={d.ano} className={`border-t border-slate-100 ${isCurrentYear ? "bg-violet-50/40" : "hover:bg-slate-50"}`}>
+                          <td className="px-3 py-2 font-semibold text-slate-700">
+                            {d.ano}{isCurrentYear && <span className="ml-1 text-[10px] text-violet-500 font-normal">atual</span>}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-slate-800">
+                            {d.nfeTotal > 0 ? formatBRL(d.nfeTotal) : <span className="text-slate-300">—</span>}
+                            {d.nfeCount > 0 && <span className="ml-1 text-slate-400">({d.nfeCount})</span>}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums">
+                            {dNfe == null ? <span className="text-slate-300">—</span> : (
+                              <span className={dNfe >= 0 ? "text-emerald-600" : "text-red-500"}>
+                                {dNfe >= 0 ? "+" : ""}{dNfe.toFixed(1)}%
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-slate-800">
+                            {d.nfseTotal > 0 ? formatBRL(d.nfseTotal) : <span className="text-slate-300">—</span>}
+                            {d.nfseCount > 0 && <span className="ml-1 text-slate-400">({d.nfseCount})</span>}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums">
+                            {dNfse == null ? <span className="text-slate-300">—</span> : (
+                              <span className={dNfse >= 0 ? "text-emerald-600" : "text-red-500"}>
+                                {dNfse >= 0 ? "+" : ""}{dNfse.toFixed(1)}%
+                              </span>
+                            )}
+                          </td>
+                          <td className={`px-3 py-2 text-right tabular-nums font-semibold ${saldo >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                            {(d.nfeTotal > 0 || d.nfseTotal > 0) ? formatBRL(saldo) : <span className="text-slate-300">—</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot className="bg-slate-50 border-t border-slate-200">
+                    <tr>
+                      <td className="px-3 py-2 font-bold text-slate-700">Total período</td>
+                      <td className="px-3 py-2 text-right tabular-nums font-bold text-emerald-700">{formatBRL(totalNfe)}</td>
+                      <td />
+                      <td className="px-3 py-2 text-right tabular-nums font-bold text-violet-700">{formatBRL(totalNfse)}</td>
+                      <td />
+                      <td className={`px-3 py-2 text-right tabular-nums font-bold ${totalNfse - totalNfe >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                        {formatBRL(totalNfse - totalNfe)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </Card>
+          );
+        })()}
 
         {/* Comparativo anual — NF-e Recebidas */}
         <ComparativoAnual
