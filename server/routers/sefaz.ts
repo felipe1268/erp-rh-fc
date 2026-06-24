@@ -934,9 +934,7 @@ export function startSefazCron() {
           )
       `)) as any;
       const list = (rows?.rows ?? rows) as any[];
-      if (list.length > 0) {
-        console.log(`[SefazSync] Cron disparado — ${list.length} empresa(s) elegível(is) para sync`);
-      }
+      console.log(`[SefazSync] Cron disparado — ${list.length} empresa(s) elegível(is) para sync`);
       for (const r of list) {
         try {
           const res = await executarSyncNFe(Number(r.company_id));

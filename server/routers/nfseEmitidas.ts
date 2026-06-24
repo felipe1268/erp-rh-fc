@@ -727,17 +727,29 @@ async function executarSyncMunicipio(opts: {
       // Valida cert e faz probe de autenticação com chave fictícia de 50 zeros
       const { cert, key } = pfxToPem(sefazCfg.cert_pfx_base64, sefazCfg.cert_password || "");
       const baseUrl = (mun.endpoint || "https://sefin.nfse.gov.br/sefinnacional").replace(/\/$/, "");
-      const probeResp = await callHttpsGetJson(`${baseUrl}/nfse/${"0".repeat(50)}`, cert, key);
+      let probeResp: any = null;
+      let probeHttpStatus = 0;
+      try {
+        probeResp = await callHttpsGetJson(`${baseUrl}/nfse/${"0".repeat(50)}`, cert, key);
+        probeHttpStatus = probeResp === null ? 404 : 200;
+      } catch (probeErr: any) {
+        // HTTP >= 400 (exceto 404) → rejeita; ex: 403 = sem cert / 401 = cert inválido
+        const m = String(probeErr?.message || "");
+        const match = m.match(/HTTP (\d+)/);
+        probeHttpStatus = match ? Number(match[1]) : 0;
+        if (probeHttpStatus !== 404) throw probeErr; // propaga para o catch externo
+      }
       const probeErro = probeResp?.erro?.codigo ?? probeResp?.erros?.[0]?.Codigo ?? "";
-      // E2401 = "Chave não encontrada" → autenticação OK, API respondendo
-      const authOk = probeErro === "E2401";
+      // E2401 = "Chave não encontrada" → auth OK (resp. JSON)
+      // probeResp===null (HTTP 404) WITH cert = cert aceito pelo WAF → auth OK implícito
+      // (sem cert → 403; com cert inválido → 401/403 → throw acima)
+      const authOk = probeErro === "E2401" || probeResp === null;
 
       const aviso = authOk
-        ? "Autenticação mTLS ✓ — Certificado válido. Porém, a API Portal Nacional NFS-e " +
-          "(sefin.nfse.gov.br v1.6.0) não fornece endpoint de distribuição em lote. " +
-          "Apenas consulta individual por chave de 50 dígitos (GET /nfse/{chave}). " +
-          "Para importar NFS-e de serviços recebidos, solicite o DANFSe ao prestador e use 'Importar PDF'."
-        : `Portal Nacional respondeu código '${probeErro || "inesperado"}'. ` +
+        ? "Certificado A1 aceito pelo Portal Nacional ✓ — API respondendo. " +
+          "Porém, sefin.nfse.gov.br v1.6.0 não oferece distribuição em lote de NFS-e tomadas. " +
+          "Para importar NFS-e de serviços recebidos, solicite o DANFSe (PDF) ao prestador e use 'Importar PDF'."
+        : `Portal Nacional respondeu código '${probeErro || `HTTP ${probeHttpStatus}`}'. ` +
           "Verifique se o certificado A1 está correto em Configurações → SEFAZ.";
 
       await db.$client.query(

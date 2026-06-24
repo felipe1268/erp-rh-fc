@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3666 — **PORTAL NACIONAL NFS-e + SEFAZ NF-e · BUGFIX PROBE "INESPERADO" + CRON LOG SILENCIOSO. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Dois bugs corrigidos:
+ *
+ * (1) PROBE PORTAL NACIONAL retornava "inesperado" mesmo com cert válido.
+ *     Causa: sefin.nfse.gov.br retorna HTTP 403 SEM cert e HTTP 404 COM cert para chave 50-zeros.
+ *     `callHttpsGetJson` resolve(null) para HTTP 404 → probeResp===null → probeErro="" → "inesperado".
+ *     Fix: try/catch separado para o probe. Se throw + HTTP != 404 → cert inválido (propaga).
+ *     Se resolve(null) (HTTP 404 com cert) = endpoint alcançado sem bloqueio → authOk=true.
+ *     Mensagem agora: "Certificado A1 aceito pelo Portal Nacional ✓ — API respondendo."
+ *
+ * (2) SEFAZ CRON silencioso: cron do NF-e só logava `[SefazSync] Cron disparado` quando havia
+ *     empresas elegíveis. Se `sync_enabled=0` ou empresa em cooldown de 58min, cron disparava
+ *     sem nenhum log — parecia "parado". Fix: log sempre (mesmo com 0 elegíveis).
+ *
+ * Contexto adicional: 217 notas em março/2026 é comportamento CORRETO — sync histórica completou
+ * backfill até o NSU atual; SEFAZ retorna cStat=137 "Sem mais documentos"; novas NF-e
+ * (abril/maio/junho) aparecerão automaticamente conforme forem emitidas/distribuídas pelo SEFAZ.
+ *
  * Rev. 3665 — **NOTAS FISCAIS · REDESIGN EMITIDAS + RECEBIDAS NFS-e — FONTE ÚNICA, SEM DUPLICATAS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Problemas resolvidos:
