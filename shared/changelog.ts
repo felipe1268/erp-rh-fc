@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3621 — **PANORAMA FISCAL · SELETOR DE MÊS/ANO NO PADRÃO DO SISTEMA — CARD BRANCO + 12 CHIPS + BOLINHAS DE STATUS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Substituído o seletor inline `< Jun/2026 >` pelo padrão do sistema (mesmo layout de Contas a Receber,
+ * Lançamentos, Cheques etc.):
+ *   - Card branco com `border + shadow-sm` e `overflow-hidden`.
+ *   - Linha 1: `< 2026 >` para navegar ano, legenda (Com dados / Parcial / Sem dados) e botões
+ *     Atualizar / Excel / PDF integrados no mesmo card.
+ *   - Linha 2: grid 6 cols (mobile) / 12 cols (≥sm) com chips Jan→Dez.
+ *   - Chip selecionado: `border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm`.
+ *   - Bolinha sob cada chip: verde se mês selecionado e tem dados, âmbar se selecionado sem dados, cinza demais.
+ *   - Botões Atualizar/Excel/PDF condensados (hidden label no mobile; ícone sempre visível).
+ *   - Navegação de mês agora via clique direto no chip (não mais `<` `>` mês a mês).
+ *
  * Rev. 3620 — **PANORAMA FISCAL · ABA "📊 Panorama Fiscal" EM NOTAS FISCAIS — CRUZAMENTO NFS-e × NF-e × OC × EXTRATO + EXPORT PDF + EXCEL + GUIA SPED. BACKEND ADITIVO + FRONTEND NOVO · ZERO ALTER/DROP/DELETE.**
  *
  * Nova aba "📊 Panorama Fiscal" na tela `/financeiro/notas-fiscais`, ao lado de "NFS-e Emitidas" e "NF-e Recebidas".
