@@ -799,21 +799,15 @@ export default function FinanceiroNotasFiscais() {
           )}
           {pageTab === "tomadas" && (
             <div className="flex gap-2 shrink-0 flex-wrap">
-              <Button
-                size="sm"
-                className="gap-1.5 h-9 bg-violet-600 hover:bg-violet-700 text-white"
-                disabled={syncTomadasMut.isPending}
-                onClick={() => syncTomadasMut.mutate({
-                  companyId: companyId ?? 0,
-                  ibgeCode: GUARA_IBGE,
-                  anoInicial: tomSyncAnoInicial,
-                  anoFinal: tomSyncAnoFinal,
-                })}
-                title={`Busca NFS-e tomadas ${tomSyncAnoInicial}–${tomSyncAnoFinal} no SIAP GEO`}
+              <a
+                href="https://guaratingueta.geosiap.net.br/pmguaratingueta"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md text-sm font-medium bg-violet-600 hover:bg-violet-700 text-white"
               >
-                <RefreshCw className={`h-3.5 w-3.5 ${syncTomadasMut.isPending ? "animate-spin" : ""}`} />
-                {syncTomadasMut.isPending ? "Importando..." : `Importar ${tomSyncAnoInicial}–${tomSyncAnoFinal}`}
-              </Button>
+                <ExternalLink className="h-3.5 w-3.5" />
+                Abrir Portal SIAP GEO
+              </a>
             </div>
           )}
           {pageTab === "recebidas" && (
@@ -3218,23 +3212,39 @@ export default function FinanceiroNotasFiscais() {
                 </div>
               </div>
 
-              {/* KPI Cards */}
-              {tomTotalGeral === 0 ? (
-                <div className="rounded-xl border border-violet-200 bg-violet-50 p-6 text-center">
-                  <div className="text-4xl mb-3">📨</div>
-                  <h3 className="font-bold text-violet-900 text-lg mb-1">Nenhuma NFS-e tomada importada ainda</h3>
-                  <p className="text-sm text-violet-700 mb-4">
-                    Clique em <strong>Importar 2018–2025</strong> (botão acima) para buscar todas as NFS-e onde a FC é tomador no portal SIAP GEO de Guaratinguetá.
+              {/* Banner: API não disponível */}
+              <div className="rounded-xl border border-amber-300 bg-amber-50 px-5 py-4 flex gap-4">
+                <div className="text-2xl shrink-0 mt-0.5">⚠️</div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-amber-900 text-sm mb-1">
+                    Sincronização automática indisponível — SIAP GEO Guaratinguetá não expõe esta API
+                  </h3>
+                  <p className="text-xs text-amber-800 leading-relaxed">
+                    A prefeitura de Guaratinguetá implementa apenas a consulta de <strong>NFS-e emitidas</strong> ({`ConsultarNfse`}).
+                    A operação <strong>ConsultarNfseServicoTomado</strong> — que retornaria as notas onde a FC é tomadora — retorna HTTP 404 (não implementada no servidor SIAP GEO desta cidade).
                   </p>
-                  <div className="flex items-center justify-center gap-3 text-xs text-violet-600">
-                    <span>🔐 Login: <strong>13239401</strong></span>
-                    <span>·</span>
-                    <span>📅 Período: <strong>2018–2025</strong></span>
-                    <span>·</span>
-                    <span>🌐 SIAP GEO Guaratinguetá</span>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <a
+                      href="https://guaratingueta.geosiap.net.br/pmguaratingueta"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-700 text-white px-3 py-1.5 rounded-lg hover:bg-amber-800 transition-colors"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      Abrir portal SIAP GEO
+                    </a>
+                    <span className="inline-flex items-center gap-1.5 text-xs text-amber-700 bg-amber-100 border border-amber-300 px-3 py-1.5 rounded-lg">
+                      Login: <strong>13239401</strong> · Senha: <strong>31335504</strong>
+                    </span>
                   </div>
+                  <p className="text-xs text-amber-700 mt-2">
+                    💡 <strong>Como registrar:</strong> acesse o portal, exporte as NFS-e tomadas (XML ou relatório) e lançar manualmente os valores em <em>Lançamentos → Contas a Pagar</em>, ou aguardar um futuro módulo de importação por arquivo.
+                  </p>
                 </div>
-              ) : (
+              </div>
+
+              {/* KPI Cards — só mostra se já houver registros manuais */}
+              {tomTotalGeral > 0 && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {[
                     { label: "Notas no ano", value: tomKpi.total.toString(), sub: `${tomTotalGeral} total histórico`, color: "border-violet-300 bg-violet-50" },
@@ -3250,48 +3260,6 @@ export default function FinanceiroNotasFiscais() {
                   ))}
                 </div>
               )}
-
-              {/* Controles de sync */}
-              <div className="flex flex-wrap items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-600 font-medium">Importar anos:</span>
-                  <select
-                    value={tomSyncAnoInicial}
-                    onChange={e => setTomSyncAnoInicial(Number(e.target.value))}
-                    className="text-xs border border-slate-300 rounded px-2 py-1"
-                  >
-                    {Array.from({length: 8}, (_,i) => 2018+i).map(a => <option key={a} value={a}>{a}</option>)}
-                  </select>
-                  <span className="text-xs text-slate-500">até</span>
-                  <select
-                    value={tomSyncAnoFinal}
-                    onChange={e => setTomSyncAnoFinal(Number(e.target.value))}
-                    className="text-xs border border-slate-300 rounded px-2 py-1"
-                  >
-                    {Array.from({length: 8}, (_,i) => 2018+i).map(a => <option key={a} value={a}>{a}</option>)}
-                  </select>
-                </div>
-                <Button
-                  size="sm"
-                  className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5"
-                  disabled={syncTomadasMut.isPending}
-                  onClick={() => syncTomadasMut.mutate({
-                    companyId: companyId ?? 0,
-                    ibgeCode: GUARA_IBGE,
-                    anoInicial: tomSyncAnoInicial,
-                    anoFinal: tomSyncAnoFinal,
-                  })}
-                >
-                  <RefreshCw className={`h-3.5 w-3.5 ${syncTomadasMut.isPending ? "animate-spin" : ""}`} />
-                  {syncTomadasMut.isPending ? `Importando ${tomSyncAnoInicial}–${tomSyncAnoFinal}...` : `Sincronizar ${tomSyncAnoInicial}–${tomSyncAnoFinal}`}
-                </Button>
-                {tomSyncResult && (
-                  <span className="text-xs text-slate-600">
-                    ✅ {tomSyncResult.importadas} importadas · {tomSyncResult.ignoradas} já existiam
-                    {tomSyncResult.erros?.length > 0 && <span className="text-red-600"> · {tomSyncResult.erros.length} erro(s)</span>}
-                  </span>
-                )}
-              </div>
 
               {/* Busca */}
               <div className="relative">
