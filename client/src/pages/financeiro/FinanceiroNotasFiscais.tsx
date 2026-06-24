@@ -902,7 +902,7 @@ export default function FinanceiroNotasFiscais() {
                         const ringColor = countdownLabel
                           ? (syncOn ? "#f59e0b" : "#94a3b8")
                           : "#10b981";
-                        const circ = 2 * Math.PI * 22; // r=22, viewBox 56
+                        const circ = 2 * Math.PI * 34; // r=34, viewBox 80
                         const progress = countdownLabel
                           ? 1 - (countdownSec ?? 0) / gateTotal
                           : 1;
@@ -912,35 +912,35 @@ export default function FinanceiroNotasFiscais() {
                         const mm = Math.floor((cs % 3600) / 60);
                         const ss = cs % 60;
                         return (
-                          <div className="relative shrink-0 w-16 h-16">
-                            <svg className="w-16 h-16 -rotate-90" viewBox="0 0 56 56">
-                              <circle cx="28" cy="28" r="22" fill="none" stroke="#e5e7eb" strokeWidth="4" />
-                              <circle cx="28" cy="28" r="22" fill="none"
-                                stroke={ringColor} strokeWidth="4"
+                          <div className="relative shrink-0 w-24 h-24">
+                            <svg className="w-24 h-24 -rotate-90" viewBox="0 0 80 80">
+                              <circle cx="40" cy="40" r="34" fill="none" stroke="#e5e7eb" strokeWidth="5" />
+                              <circle cx="40" cy="40" r="34" fill="none"
+                                stroke={ringColor} strokeWidth="5"
                                 strokeDasharray={`${circ}`}
                                 strokeDashoffset={String(dashOffset)}
                                 strokeLinecap="round"
                                 style={{ transition: "stroke-dashoffset 1s linear" }}
                               />
                             </svg>
-                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-0">
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5">
                               {countdownLabel ? (
                                 hh > 0 ? (
                                   <>
-                                    <span className={`text-[11px] font-black leading-none tabular-nums ${syncOn ? "text-amber-700" : "text-slate-600"}`}>
+                                    <span className={`text-base font-black leading-none tabular-nums ${syncOn ? "text-amber-700" : "text-slate-600"}`}>
                                       {hh}h
                                     </span>
-                                    <span className={`text-[10px] font-bold leading-none tabular-nums ${syncOn ? "text-amber-600" : "text-slate-500"}`}>
+                                    <span className={`text-sm font-bold leading-none tabular-nums ${syncOn ? "text-amber-600" : "text-slate-500"}`}>
                                       {String(mm).padStart(2, "0")}m
                                     </span>
                                   </>
                                 ) : (
-                                  <span className={`text-[11px] font-black leading-none tabular-nums font-mono ${syncOn ? "text-amber-700" : "text-slate-600"}`}>
+                                  <span className={`text-sm font-black leading-none tabular-nums font-mono ${syncOn ? "text-amber-700" : "text-slate-600"}`}>
                                     {String(mm).padStart(2, "0")}:{String(ss).padStart(2, "0")}
                                   </span>
                                 )
                               ) : (
-                                <RefreshCw className="w-4 h-4 text-emerald-500 animate-spin" />
+                                <RefreshCw className="w-5 h-5 text-emerald-500 animate-spin" />
                               )}
                             </div>
                           </div>
@@ -951,8 +951,10 @@ export default function FinanceiroNotasFiscais() {
                         {countdownLabel ? (
                           <>
                             <p className={`text-sm font-semibold ${syncOn ? "text-amber-800" : "text-slate-600"}`}>
-                              {syncOn ? "Próxima sync em " : "Cota SEFAZ disponível em "}
-                              <span className={`font-mono tabular-nums ${syncOn ? "text-amber-700" : "text-slate-700"}`}>{countdownLabel}</span>
+                              {syncOn ? "Próxima sync em" : "Cota SEFAZ disponível em"}
+                            </p>
+                            <p className={`text-2xl font-black tabular-nums font-mono leading-tight ${syncOn ? "text-amber-700" : "text-slate-700"}`}>
+                              {countdownLabel}
                             </p>
                             <p className={`text-xs mt-0.5 ${syncOn ? "text-amber-600" : "text-slate-500"}`}>
                               {syncOn

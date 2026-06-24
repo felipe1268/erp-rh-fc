@@ -1,6 +1,13 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3657 — **NF-e RECEBIDAS · CRONÔMETRO SEFAZ MAIOR E MAIS VISÍVEL. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Anel ampliado: `w-16 h-16` (64px, r=22, viewBox 56) → `w-24 h-24` (96px, r=34, viewBox 80).
+ * Fonte interna: 11px/10px → `text-base`/`text-sm` (16px/14px).
+ * Texto lateral: deixou de ser inline com o label → título em `text-sm` separado +
+ * countdown em `text-2xl font-black font-mono` bem destacado.
+ *
  * Rev. 3656 — **NF-e / NFS-e · BUGFIX "ÚLTIMA SYNC" MOSTRANDO HORÁRIO ERRADO (UTC EM VEZ DE BRT). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Causa: `pg` driver retorna colunas `last_sync_at` como string no formato
