@@ -160,8 +160,8 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
   };
 
   const { data, isFetching, refetch } = trpc.fiscalNotes.getPanoramaFiscal.useQuery(
-    { companyId, mes, ano },
-    { enabled: !!companyId, staleTime: 60_000 }
+    { companyId, mes: mes === 0 ? 1 : mes, ano },
+    { enabled: !!companyId && mes !== 0, staleTime: 60_000 }
   );
 
   // ── Progresso de loading ──────────────────────────────────────────────────
@@ -313,6 +313,18 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
                 className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
                 <ChevronRight className="w-4 h-4" />
               </button>
+              {/* Ano todo — mesmo padrão do sistema */}
+              <button
+                type="button"
+                onClick={() => setMes(m => m === 0 ? (hoje.getMonth() + 1) : 0)}
+                className={`ml-1 px-3 py-1 rounded-lg border text-xs font-semibold transition-all
+                  ${mes === 0
+                    ? "border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm"
+                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                  }`}
+              >
+                Ano todo
+              </button>
             </div>
 
             <div className="flex-1" />
@@ -379,16 +391,28 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
           </div>
         </div>
 
+        {/* ── Placeholder "Ano todo" ────────────────────────────────────── */}
+        {mes === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
+            <span className="text-4xl">📅</span>
+            <p className="text-base font-semibold text-slate-700">Selecione um mês para ver o panorama</p>
+            <p className="text-sm text-slate-400 max-w-xs">
+              O cruzamento NFS-e × NF-e × OC × Extrato é gerado mês a mês.<br />
+              Clique em um dos chips acima para carregar.
+            </p>
+          </div>
+        )}
+
         {/* Print header */}
-        <div className="hidden print:flex items-center justify-between border-b pb-4 mb-4">
+        {mes !== 0 && <div className="hidden print:flex items-center justify-between border-b pb-4 mb-4">
           {companyLogoUrl && <img src={companyLogoUrl} alt="" className="h-12 object-contain" />}
           <div className="text-right">
             <p className="text-xl font-bold">Panorama Fiscal — {periodoLabel}</p>
             <p className="text-sm text-slate-500">{companyNome} · {new Date().toLocaleDateString("pt-BR")}</p>
           </div>
-        </div>
+        </div>}
 
-        {!data ? (
+        {mes !== 0 && (!data ? (
           <div className="text-center py-16 text-slate-400">
             <Receipt className="h-10 w-10 mx-auto mb-3 opacity-30" />
             <p>Nenhum dado disponível para {periodoShort}.</p>
@@ -553,7 +577,7 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
             ════════════════════════════════════════════════════════════ */}
             <SpedSugestao open={openSec.spedInfo} onToggle={() => toggle("spedInfo")} />
           </>
-        )}
+        ))}
       </div>
     </>
   );
