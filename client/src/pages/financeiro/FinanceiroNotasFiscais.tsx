@@ -209,8 +209,8 @@ export default function FinanceiroNotasFiscais() {
     setDismissPortalErro(true);
   }
 
-  // ── Aba principal: emitidas | recebidas ──────────────────────────────────────
-  const [pageTab, setPageTab] = useState<"emitidas" | "recebidas" | "panorama">("emitidas");
+  // ── Aba principal: emitidas | recebidas | tomadas | panorama ─────────────────
+  const [pageTab, setPageTab] = useState<"emitidas" | "recebidas" | "tomadas" | "panorama">("emitidas");
   const [recAno, setRecAno] = useState(new Date().getFullYear());
   const [recMes, setRecMes] = useState<number | null>(new Date().getMonth() + 1);
   const [recSearch, setRecSearch] = useState("");
@@ -284,6 +284,41 @@ export default function FinanceiroNotasFiscais() {
     { enabled: !!companyId && pageTab === "emitidas", staleTime: 60_000, refetchInterval: 60_000 }
   );
   const municipios: any[] = municipiosQuery.data ?? [];
+
+  // ── NFS-e Tomadas (onde FC recebe serviços) ──────────────────────────────────
+  const [tomAno, setTomAno] = useState(new Date().getFullYear());
+  const [tomMes, setTomMes] = useState<number | null>(null);
+  const [tomSearch, setTomSearch] = useState("");
+  const [tomSyncAnoInicial, setTomSyncAnoInicial] = useState(2018);
+  const [tomSyncAnoFinal, setTomSyncAnoFinal] = useState(2025);
+  const [tomSyncResult, setTomSyncResult] = useState<any>(null);
+
+  const tomQuery = (trpc as any).nfseEmitidas.listNfseTomadas.useQuery(
+    { companyId: companyId ?? 0, ano: tomAno, mes: tomMes ?? undefined, search: tomSearch || undefined },
+    { enabled: !!companyId && pageTab === "tomadas", staleTime: 30_000 }
+  );
+  const tomNotas: any[] = tomQuery.data?.items ?? [];
+  const tomKpi = tomQuery.data?.kpi ?? { total: 0, valorTotal: 0, mesesComNota: 0, prestadoresDistintos: 0 };
+  const tomTotalGeral: number = tomQuery.data?.totalGeral ?? 0;
+
+  // SIAP GEO ibge_code para Guaratinguetá
+  const GUARA_IBGE = 3518602;
+
+  const syncTomadasMut = (trpc as any).nfseEmitidas.syncNfseTomadas.useMutation({
+    onSuccess: (data: any) => {
+      setTomSyncResult(data);
+      tomQuery.refetch();
+      toast({
+        title: data.importadas > 0
+          ? `✅ ${data.importadas} NFS-e tomadas importadas`
+          : "ℹ️ Nenhuma nota nova encontrada",
+        description: data.erros?.length
+          ? `Erros em ${data.erros.length} ano(s): ${data.erros[0]}`
+          : `${data.ignoradas} já existiam · Anos: ${(data.anos ?? []).join(", ")}`,
+      });
+    },
+    onError: (e: any) => toast({ title: "Erro ao sincronizar", description: e?.message, variant: "destructive" }),
+  });
 
   const [syncAllResult, setSyncAllResult] = useState<any>(null);
   const syncAllMunMut = (trpc as any).nfseEmitidas.syncAllMunicipios.useMutation({
@@ -762,6 +797,25 @@ export default function FinanceiroNotasFiscais() {
               </Button>
             </div>
           )}
+          {pageTab === "tomadas" && (
+            <div className="flex gap-2 shrink-0 flex-wrap">
+              <Button
+                size="sm"
+                className="gap-1.5 h-9 bg-violet-600 hover:bg-violet-700 text-white"
+                disabled={syncTomadasMut.isPending}
+                onClick={() => syncTomadasMut.mutate({
+                  companyId: companyId ?? 0,
+                  ibgeCode: GUARA_IBGE,
+                  anoInicial: tomSyncAnoInicial,
+                  anoFinal: tomSyncAnoFinal,
+                })}
+                title={`Busca NFS-e tomadas ${tomSyncAnoInicial}–${tomSyncAnoFinal} no SIAP GEO`}
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${syncTomadasMut.isPending ? "animate-spin" : ""}`} />
+                {syncTomadasMut.isPending ? "Importando..." : `Importar ${tomSyncAnoInicial}–${tomSyncAnoFinal}`}
+              </Button>
+            </div>
+          )}
           {pageTab === "recebidas" && (
             <div className="flex gap-2 shrink-0 flex-wrap">
               <input
@@ -857,6 +911,7 @@ export default function FinanceiroNotasFiscais() {
           {([
             { key: "emitidas",  label: "📤 NFS-e Emitidas" },
             { key: "recebidas", label: "📥 NF-e Recebidas (SEFAZ)" },
+            { key: "tomadas",   label: "📨 NFS-e Tomadas" },
             { key: "panorama",  label: "📊 Panorama Fiscal" },
           ] as const).map(({ key, label }) => (
             <button
@@ -3115,6 +3170,198 @@ export default function FinanceiroNotasFiscais() {
             })()}
           </DialogContent>
         </Dialog>
+
+        {/* ═══════════════════════════════════════════════════════════════════════
+            ABA: NFS-e TOMADAS (FC como tomador de serviços)
+        ═══════════════════════════════════════════════════════════════════════ */}
+        {pageTab === "tomadas" && (() => {
+          const MESES_TOM = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+          const fmtCnpj = (c: string | null | undefined) => {
+            const d = String(c || "").replace(/\D/g, "");
+            if (d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+            return d || "—";
+          };
+
+          return (
+            <>
+              {/* Cabeçalho com gradiente violeta */}
+              <div className="rounded-2xl overflow-hidden"
+                style={{ background: "linear-gradient(135deg,#7c3aed 0%,#a855f7 60%,#6d28d9 100%)" }}>
+                <div className="px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                      📨 NFS-e Tomadas — Serviços Recebidos
+                    </h2>
+                    <p className="text-sm text-violet-200 mt-0.5">
+                      NFS-e emitidas por terceiros para a FC · Prefeitura de Guaratinguetá (SIAP GEO 2018–2025)
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setTomAno(a => a - 1)} className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center text-sm font-bold">‹</button>
+                    <span className="text-white font-bold text-lg tabular-nums w-16 text-center">{tomAno}</span>
+                    <button onClick={() => setTomAno(a => a + 1)} className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center text-sm font-bold">›</button>
+                  </div>
+                </div>
+                {/* Chips de mês */}
+                <div className="px-6 pb-4 flex flex-wrap gap-1.5">
+                  <button
+                    onClick={() => setTomMes(null)}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${tomMes === null ? "bg-white text-violet-800" : "bg-white/20 text-white hover:bg-white/30"}`}
+                  >Ano todo</button>
+                  {MESES_TOM.map((m, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setTomMes(tomMes === i + 1 ? null : i + 1)}
+                      className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${tomMes === i + 1 ? "bg-white text-violet-800" : "bg-white/20 text-white hover:bg-white/30"}`}
+                    >{m}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* KPI Cards */}
+              {tomTotalGeral === 0 ? (
+                <div className="rounded-xl border border-violet-200 bg-violet-50 p-6 text-center">
+                  <div className="text-4xl mb-3">📨</div>
+                  <h3 className="font-bold text-violet-900 text-lg mb-1">Nenhuma NFS-e tomada importada ainda</h3>
+                  <p className="text-sm text-violet-700 mb-4">
+                    Clique em <strong>Importar 2018–2025</strong> (botão acima) para buscar todas as NFS-e onde a FC é tomador no portal SIAP GEO de Guaratinguetá.
+                  </p>
+                  <div className="flex items-center justify-center gap-3 text-xs text-violet-600">
+                    <span>🔐 Login: <strong>13239401</strong></span>
+                    <span>·</span>
+                    <span>📅 Período: <strong>2018–2025</strong></span>
+                    <span>·</span>
+                    <span>🌐 SIAP GEO Guaratinguetá</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { label: "Notas no ano", value: tomKpi.total.toString(), sub: `${tomTotalGeral} total histórico`, color: "border-violet-300 bg-violet-50" },
+                    { label: "Valor total", value: formatBRL(tomKpi.valorTotal), sub: `em ${tomMes ? MESES_TOM[(tomMes??1)-1] : "todo o ano " + tomAno}`, color: "border-purple-300 bg-purple-50" },
+                    { label: "Prestadores", value: tomKpi.prestadoresDistintos.toString(), sub: "fornecedores distintos", color: "border-indigo-300 bg-indigo-50" },
+                    { label: "Meses c/ nota", value: `${tomKpi.mesesComNota}/12`, sub: "no ano selecionado", color: "border-pink-300 bg-pink-50" },
+                  ].map(({ label, value, sub, color }) => (
+                    <div key={label} className={`rounded-xl border p-4 ${color}`}>
+                      <p className="text-xs font-medium text-slate-500 mb-1">{label}</p>
+                      <p className="text-xl font-black text-slate-900 break-all">{value}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{sub}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Controles de sync */}
+              <div className="flex flex-wrap items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-600 font-medium">Importar anos:</span>
+                  <select
+                    value={tomSyncAnoInicial}
+                    onChange={e => setTomSyncAnoInicial(Number(e.target.value))}
+                    className="text-xs border border-slate-300 rounded px-2 py-1"
+                  >
+                    {Array.from({length: 8}, (_,i) => 2018+i).map(a => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                  <span className="text-xs text-slate-500">até</span>
+                  <select
+                    value={tomSyncAnoFinal}
+                    onChange={e => setTomSyncAnoFinal(Number(e.target.value))}
+                    className="text-xs border border-slate-300 rounded px-2 py-1"
+                  >
+                    {Array.from({length: 8}, (_,i) => 2018+i).map(a => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                </div>
+                <Button
+                  size="sm"
+                  className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5"
+                  disabled={syncTomadasMut.isPending}
+                  onClick={() => syncTomadasMut.mutate({
+                    companyId: companyId ?? 0,
+                    ibgeCode: GUARA_IBGE,
+                    anoInicial: tomSyncAnoInicial,
+                    anoFinal: tomSyncAnoFinal,
+                  })}
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${syncTomadasMut.isPending ? "animate-spin" : ""}`} />
+                  {syncTomadasMut.isPending ? `Importando ${tomSyncAnoInicial}–${tomSyncAnoFinal}...` : `Sincronizar ${tomSyncAnoInicial}–${tomSyncAnoFinal}`}
+                </Button>
+                {tomSyncResult && (
+                  <span className="text-xs text-slate-600">
+                    ✅ {tomSyncResult.importadas} importadas · {tomSyncResult.ignoradas} já existiam
+                    {tomSyncResult.erros?.length > 0 && <span className="text-red-600"> · {tomSyncResult.erros.length} erro(s)</span>}
+                  </span>
+                )}
+              </div>
+
+              {/* Busca */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input
+                  className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-300"
+                  placeholder="Buscar por prestador, CNPJ ou número..."
+                  value={tomSearch}
+                  onChange={e => setTomSearch(e.target.value)}
+                />
+              </div>
+
+              {/* Tabela */}
+              {tomQuery.isLoading ? (
+                <div className="flex items-center justify-center py-16 text-slate-400 gap-2">
+                  <Loader2 className="h-5 w-5 animate-spin" /><span>Carregando...</span>
+                </div>
+              ) : tomNotas.length === 0 ? (
+                <div className="text-center py-12 text-slate-400">
+                  <Receipt className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                  <p className="font-medium">Nenhuma NFS-e tomada em {tomMes ? MESES_TOM[tomMes-1] : ""}  {tomAno}</p>
+                  <p className="text-sm mt-1">{tomTotalGeral > 0 ? "Tente outro período ou clique para sincronizar." : "Clique em Sincronizar para importar as notas do SIAP GEO."}</p>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-slate-200 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50 border-b border-slate-200">
+                        <tr>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Prestador (Emitente)</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">CNPJ</th>
+                          <th className="text-center px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Nº</th>
+                          <th className="text-center px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Emissão</th>
+                          <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Valor Bruto</th>
+                          <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Valor Líq.</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Descrição</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tomNotas.map((n: any, idx: number) => (
+                          <tr key={n.id} className={`border-b border-slate-100 hover:bg-slate-50 transition-colors ${idx % 2 === 0 ? "" : "bg-slate-50/40"}`}>
+                            <td className="px-4 py-3">
+                              <span className="font-medium text-slate-800">{n.emitente_nome || "—"}</span>
+                            </td>
+                            <td className="px-4 py-3 text-slate-500 font-mono text-xs">{fmtCnpj(n.emitente_cnpj)}</td>
+                            <td className="px-3 py-3 text-center text-slate-700 font-mono font-semibold">{n.numero_nf || "—"}</td>
+                            <td className="px-3 py-3 text-center text-slate-500">{fmtDateBR(n.data_emissao)}</td>
+                            <td className="px-4 py-3 text-right font-semibold text-slate-800">{formatBRL(n.valor_bruto)}</td>
+                            <td className="px-4 py-3 text-right text-slate-600">{formatBRL(n.valor_liquido)}</td>
+                            <td className="px-4 py-3 text-slate-500 max-w-xs">
+                              <span className="block truncate" title={n.descricao_servico || ""}>{n.descricao_servico || "—"}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-violet-50 border-t-2 border-violet-200">
+                        <tr>
+                          <td colSpan={4} className="px-4 py-3 text-sm font-bold text-violet-800">{tomNotas.length} nota{tomNotas.length !== 1 ? "s" : ""}</td>
+                          <td className="px-4 py-3 text-right font-black text-violet-900">{formatBRL(tomNotas.reduce((s: number, n: any) => s + parseFloat(n.valor_bruto || "0"), 0))}</td>
+                          <td className="px-4 py-3 text-right font-bold text-violet-800">{formatBRL(tomNotas.reduce((s: number, n: any) => s + parseFloat(n.valor_liquido || "0"), 0))}</td>
+                          <td />
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          );
+        })()}
 
         {/* ═══════════════════════════════════════════════════════════════════════
             ABA: PANORAMA FISCAL

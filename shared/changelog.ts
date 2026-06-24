@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3661 — **NFS-e TOMADAS · NOVO MÓDULO: ABA "📨 NFS-e TOMADAS" — SERVIÇOS RECEBIDOS PELA FC VIA SIAP GEO. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * FC Engenharia frequentemente recebe NFS-e emitidas por terceiros (prestadores de serviços)
+ * onde a FC é o TOMADOR. Essas notas vivem no mesmo portal SIAP GEO (guaratingueta.geosiap.net.br)
+ * na operação `ConsultarNfseServicoTomado` — distinta da `ConsultarNfse` (emitidas).
+ *
+ * Backend (server/routers/nfseEmitidas.ts):
+ *   - `buildSiapGeoConsultarNfseServicoTomado(login, senha, cnpj, inscrição, dataI, dataF)`:
+ *     monta o envelope SOAP com `<Tomador>` em vez de `<Prestador>`, SOAPAction correto.
+ *   - `parseServicoTomadoResponse(xml)`: extrai `PrestadorServico` (= emitente) de cada `CompNfse`,
+ *     retornando { numero, chave, dataEmissao, prestadorCnpj, prestadorNome, valorBruto, valorLiquido, discriminacao }.
+ *   - `executarSyncNfseTomado({ companyId, ibgeCode, cnpj, anoInicial?, anoFinal? })`:
+ *     lê config de `company_nfse_municipal_config`, faz loop ano-a-ano (2018–2025 cap),
+ *     insere em `fiscal_notes` com `origem='nfse_tomada_<ibgeCode>'`; emitente_cnpj/nome = prestador.
+ *   - Novo endpoint tRPC `syncNfseTomadas` (mutation): recupera CNPJ de `company_nfe_config`, chama sync.
+ *   - Novo endpoint tRPC `listNfseTomadas` (query): filtra `origem LIKE 'nfse_tomada_%'`,
+ *     retorna `{ items, kpi: { total, valorTotal, mesesComNota, prestadoresDistintos }, totalGeral }`.
+ *
+ * Frontend (client/src/pages/financeiro/FinanceiroNotasFiscais.tsx):
+ *   - pageTab type ampliado: `"emitidas" | "recebidas" | "tomadas" | "panorama"`.
+ *   - Estado: `tomAno`, `tomMes`, `tomSearch`, `tomSyncAnoInicial` (2018), `tomSyncAnoFinal` (2025).
+ *   - Query: `tomQuery` + `tomKpi` + `tomTotalGeral`.
+ *   - Mutation: `syncTomadasMut` (SIAP GEO ibge=3518602).
+ *   - Tab "📨 NFS-e Tomadas" adicionada ao seletor de abas.
+ *   - Header: botão "Importar 2018–2025" violeta visível quando aba ativa.
+ *   - Conteúdo: header gradiente violeta + seletor de ano/mês; KPI cards 4 métricas;
+ *     painel de controle de sync (seletores de ano inicial/final + botão Sincronizar + resumo resultado);
+ *     busca por prestador/CNPJ/número; tabela completa (emitente, CNPJ, nº, data, valor bruto, líquido, descrição)
+ *     com totalizador no footer; estado vazio com CTA "Sincronizar".
+ *   - SIAP GEO cobre apenas 2018–2025 (notas 2026+ precisam Portal Nacional c/ cert A1).
+ *
  * Rev. 3660 — **NF-e RECEBIDAS · BUGFIX MANIFESTAÇÃO (ACEITAR/RECUSAR/DESCONHEÇO) — ENOTFOUND nfe.fazenda.gov.br. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * `nfe.fazenda.gov.br` não resolve DNS no ambiente do servidor (ENOTFOUND).

@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3661** — **NFS-e TOMADAS · NOVO MÓDULO ABA "📨 NFS-e TOMADAS" — SERVIÇOS RECEBIDOS PELA FC VIA SIAP GEO. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** `ConsultarNfseServicoTomado` SOAP (SOAPAction correto) + `parseServicoTomadoResponse` (extrai Prestador/emitente) + `executarSyncNfseTomado` (loop anual 2018–2025 cap); tRPC `syncNfseTomadas` + `listNfseTomadas` com KPIs; aba "📨 NFS-e Tomadas" no seletor; header violeta + chips mês + KPI cards + painel sync (seletor ano inicial/final) + tabela (emitente, CNPJ, nº, data, valor bruto/líq., descrição) + footer totalizador. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3660** — **NF-e RECEBIDAS · BUGFIX MANIFESTAÇÃO ENOTFOUND nfe.fazenda.gov.br. BACKEND PONTUAL.** Rota por cUF da chave: SP/MG/PR/demais → SVRS; RS → sefaz.rs; BA → sefaz.ba. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3659** — **NFS-e EMITIDAS · BANNER "PORTAL OFFLINE" FECHÁVEL COM PERSISTÊNCIA (localStorage). 100% FRONTEND.** Botão "✕ Fechar aviso" grava dismissal no localStorage → banner não reaparece entre sessões. Detalhe: `shared/changelog.ts`.

@@ -460,6 +460,88 @@ function buildSiapGeoConsultarNfse(
 </soapenv:Envelope>`;
 }
 
+// ── SIAP GEO: ConsultarNfseServicoTomado (FC como tomador de serviços) ────────
+function buildSiapGeoConsultarNfseServicoTomado(
+  login: string,
+  senha: string,
+  cnpj: string,
+  inscricaoMunicipal: string,
+  dataInicial: string,
+  dataFinal: string,
+) {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+  xmlns:e="http://www.abrasf.org.br/nfse.xsd">
+  <soapenv:Header>
+    <AuthHeader xmlns="http://tempuri.org/">
+      <Usuario>${login}</Usuario>
+      <Senha>${senha}</Senha>
+    </AuthHeader>
+  </soapenv:Header>
+  <soapenv:Body>
+    <e:ConsultarNfseServicoTomadoEnvio>
+      <Tomador>
+        <CpfCnpj><Cnpj>${cnpj.replace(/\D/g, "")}</Cnpj></CpfCnpj>
+        <InscricaoMunicipal>${inscricaoMunicipal}</InscricaoMunicipal>
+      </Tomador>
+      <PeriodoEmissao>
+        <DataInicial>${dataInicial}</DataInicial>
+        <DataFinal>${dataFinal}</DataFinal>
+      </PeriodoEmissao>
+    </e:ConsultarNfseServicoTomadoEnvio>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+}
+
+/** Parseia resposta ConsultarNfseServicoTomadoResposta — extrai o Prestador (quem emitiu) */
+function parseServicoTomadoResponse(respXml: string): Array<{
+  numero: string; chave: string; dataEmissao: string;
+  prestadorCnpj: string; prestadorNome: string;
+  valorBruto: number; valorLiquido: number; discriminacao: string; situacao: string;
+}> {
+  try {
+    const parsed = xmlParser.parse(respXml);
+    const getAny = (...paths: string[]) => {
+      for (const p of paths) {
+        let n: any = parsed;
+        for (const k of p.split(".")) { n = n?.[k]; }
+        if (n !== undefined) return n;
+      }
+      return undefined;
+    };
+    const erroMatch = respXml.match(/<(?:[^:]+:)?(?:faultstring|Mensagem|Erro|Error|Message)>([^<]{1,300})<\//i);
+    if (erroMatch) throw new Error(`SIAP GEO: ${erroMatch[1].trim()}`);
+
+    const resposta =
+      getAny("Envelope.Body.ConsultarNfseServicoTomadoResposta") ||
+      getAny("Envelope.Body.ConsultarNfseResposta") ||
+      {};
+    const lista = resposta?.ListaNfse?.CompNfse;
+    if (!lista) return [];
+    const arr = Array.isArray(lista) ? lista : [lista];
+    return arr.map((comp: any) => {
+      const inf = comp?.Nfse?.InfNfse || {};
+      const vals = inf?.Servico?.Valores || {};
+      const prest = inf?.PrestadorServico || inf?.Prestador || {};
+      const prestIdent = prest?.IdentificacaoPrestador?.CpfCnpj || prest?.CpfCnpj || {};
+      return {
+        numero: String(inf?.Numero || ""),
+        chave: String(inf?.CodigoVerificacao || inf?.ChaveNfse || ""),
+        dataEmissao: String(inf?.DataEmissao || "").slice(0, 10),
+        prestadorCnpj: String(prestIdent?.Cnpj || prestIdent?.Cpf || "").replace(/\D/g, ""),
+        prestadorNome: String(prest?.RazaoSocial || prest?.razaoSocial || ""),
+        valorBruto: parseFloat(vals?.ValorServicos || "0") || 0,
+        valorLiquido: parseFloat(vals?.ValorLiquidoNfse || vals?.ValorServicos || "0") || 0,
+        discriminacao: String(inf?.Servico?.Discriminacao || ""),
+        situacao: String(comp?.Situacao || inf?.Situacao || "Normal"),
+      };
+    });
+  } catch (e: any) {
+    console.warn(`[NfseTomadas] parseServicoTomadoResponse erro: ${e?.message}`);
+    return [];
+  }
+}
+
 // ── SIL Tecnologia: login/senha via SOAP ─────────────────────────────────────
 function buildSilConsultarNfse(
   login: string,
@@ -1049,9 +1131,185 @@ export const nfseEmitidasRouter = router({
       );
       return rows.rows;
     }),
+
+  // ── NFS-e Tomadas: sync histórico por ano (2018-2025, SIAP GEO) ──────────────
+  syncNfseTomadas: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      ibgeCode: z.number(),
+      anoInicial: z.number().min(2018).max(2025).optional(),
+      anoFinal: z.number().min(2018).max(2025).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      const [sefazCfg] = (await db.$client.query<any>(
+        `SELECT cnpj FROM company_nfe_config WHERE company_id=$1`,
+        [input.companyId]
+      )).rows;
+      const cnpj = sefazCfg?.cnpj || "";
+      return executarSyncNfseTomado({
+        companyId: input.companyId,
+        ibgeCode: input.ibgeCode,
+        cnpj,
+        anoInicial: input.anoInicial,
+        anoFinal: input.anoFinal,
+      });
+    }),
+
+  // ── NFS-e Tomadas: lista (onde FC é tomador) ──────────────────────────────────
+  listNfseTomadas: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      ano: z.number().optional(),
+      mes: z.number().min(1).max(12).optional(),
+      search: z.string().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const ano = input.ano ?? new Date().getFullYear();
+      const params: any[] = [input.companyId, ano];
+      let mesFiltro = "";
+      if (input.mes) {
+        params.push(input.mes);
+        mesFiltro = `AND EXTRACT(MONTH FROM data_emissao::date) = $${params.length}`;
+      }
+      let searchFiltro = "";
+      if (input.search && input.search.trim()) {
+        params.push(`%${input.search.trim()}%`);
+        searchFiltro = `AND (emitente_nome ILIKE $${params.length} OR emitente_cnpj ILIKE $${params.length} OR numero_nf ILIKE $${params.length})`;
+      }
+      const rows = await db.$client.query<any>(
+        `SELECT id, numero_nf, chave_acesso, data_emissao, emitente_cnpj, emitente_nome,
+                descricao_servico, valor_bruto, valor_liquido, status, origem, created_at
+         FROM fiscal_notes
+         WHERE company_id=$1
+           AND origem LIKE 'nfse_tomada_%'
+           AND EXTRACT(YEAR FROM data_emissao::date) = $2
+           ${mesFiltro}
+           ${searchFiltro}
+         ORDER BY data_emissao DESC NULLS LAST`,
+        params
+      );
+      // Totais para KPIs
+      const kpiRows = await db.$client.query<any>(
+        `SELECT
+           COUNT(*)::int AS total,
+           COALESCE(SUM(valor_bruto::numeric), 0)::numeric AS valor_total,
+           COUNT(DISTINCT EXTRACT(MONTH FROM data_emissao::date))::int AS meses_com_nota,
+           COUNT(DISTINCT emitente_cnpj)::int AS prestadores_distintos
+         FROM fiscal_notes
+         WHERE company_id=$1
+           AND origem LIKE 'nfse_tomada_%'
+           AND EXTRACT(YEAR FROM data_emissao::date) = $2`,
+        [input.companyId, ano]
+      );
+      // Contagem anual para verificar se já tem dados históricos
+      const totalGeralRows = await db.$client.query<any>(
+        `SELECT COUNT(*)::int AS total FROM fiscal_notes
+         WHERE company_id=$1 AND origem LIKE 'nfse_tomada_%'`,
+        [input.companyId]
+      );
+      const kpi = kpiRows.rows[0] ?? {};
+      return {
+        items: rows.rows,
+        kpi: {
+          total: Number(kpi.total ?? 0),
+          valorTotal: parseFloat(kpi.valor_total ?? "0"),
+          mesesComNota: Number(kpi.meses_com_nota ?? 0),
+          prestadoresDistintos: Number(kpi.prestadores_distintos ?? 0),
+        },
+        totalGeral: Number(totalGeralRows.rows[0]?.total ?? 0),
+      };
+    }),
 });
 
 export { executarSyncMunicipio };
+
+// ── Sync NFS-e Tomadas (onde FC é o tomador de serviços) ──────────────────────
+// Busca por ano no SIAP GEO para evitar timeout em períodos longos.
+async function executarSyncNfseTomado(opts: {
+  companyId: number;
+  ibgeCode: number;
+  cnpj: string;
+  anoInicial?: number;
+  anoFinal?: number;
+}): Promise<{ importadas: number; ignoradas: number; erros: string[]; anos: number[] }> {
+  const db = await getDb();
+  const { companyId, ibgeCode, cnpj } = opts;
+
+  const munRes = await db.$client.query<any>(
+    `SELECT * FROM company_nfse_municipal_config WHERE company_id=$1 AND ibge_code=$2`,
+    [companyId, ibgeCode]
+  );
+  const mun = munRes.rows[0];
+  if (!mun) return { importadas: 0, ignoradas: 0, erros: ["Município não configurado."], anos: [] };
+  if (!mun.token) return { importadas: 0, ignoradas: 0, erros: ["Senha do portal não configurada."], anos: [] };
+  if (!mun.inscricao_municipal) return { importadas: 0, ignoradas: 0, erros: ["Inscrição Municipal não preenchida."], anos: [] };
+
+  const login = mun.inscricao_municipal;
+  const senha = mun.token;
+  const cleanCnpj = cnpj.replace(/\D/g, "");
+  const hoje = new Date();
+  const anoInicial = opts.anoInicial ?? 2018;
+  // SIAP GEO cobre apenas até 31/12/2025 (notas 2026+ vêm do Portal Nacional)
+  const anoFinal = Math.min(opts.anoFinal ?? 2025, 2025);
+
+  let totalImportadas = 0, totalIgnoradas = 0;
+  const erros: string[] = [];
+  const anosProcessados: number[] = [];
+
+  for (let ano = anoInicial; ano <= anoFinal; ano++) {
+    const dataInicial = `${ano}-01-01`;
+    const dataFinal = `${ano}-12-31`;
+    const origem = `nfse_tomada_${ibgeCode}`;
+
+    try {
+      const soapBody = buildSiapGeoConsultarNfseServicoTomado(login, senha, cleanCnpj, mun.inscricao_municipal, dataInicial, dataFinal);
+      console.log(`[NfseTomadas][siapgeo] company=${companyId} ano=${ano} endpoint=${mun.endpoint}`);
+      const respXml = await callHttps(mun.endpoint, soapBody, {
+        "Content-Type": "text/xml; charset=utf-8",
+        "SOAPAction": "http://tempuri.org/ConsultarNfseServicoTomado",
+      });
+      console.log(`[NfseTomadas][siapgeo] ano=${ano} resposta(${respXml.length}): ${respXml.slice(0, 400).replace(/\n/g, " ")}`);
+
+      const notas = parseServicoTomadoResponse(respXml);
+      console.log(`[NfseTomadas][siapgeo] ano=${ano} notas=${notas.length}`);
+      anosProcessados.push(ano);
+
+      for (const nota of notas) {
+        if (!nota.numero) { totalIgnoradas++; continue; }
+        const existingRes = await db.$client.query<any>(
+          `SELECT id FROM fiscal_notes WHERE company_id=$1 AND numero_nf=$2 AND origem=$3`,
+          [companyId, nota.numero, origem]
+        );
+        if (existingRes.rows[0]) { totalIgnoradas++; continue; }
+        await db.$client.query(
+          `INSERT INTO fiscal_notes
+            (company_id, numero_nf, chave_acesso, data_emissao, emitente_cnpj, emitente_nome,
+             tomador_cnpj, descricao_servico, valor_bruto, valor_liquido, status, origem, created_at, updated_at)
+           VALUES ($1,$2,$3,$4::date,$5,$6,$7,$8,$9,$10,'pendente',$11,NOW(),NOW())
+           ON CONFLICT DO NOTHING`,
+          [
+            companyId, nota.numero, nota.chave || null,
+            nota.dataEmissao || hoje.toISOString().slice(0, 10),
+            nota.prestadorCnpj || null, nota.prestadorNome || null,
+            cleanCnpj || null,
+            nota.discriminacao || null, nota.valorBruto, nota.valorLiquido,
+            origem,
+          ]
+        );
+        totalImportadas++;
+      }
+    } catch (e: any) {
+      const msg = e?.message || "Erro desconhecido";
+      console.error(`[NfseTomadas][siapgeo] ano=${ano} ERRO: ${msg}`);
+      erros.push(`${ano}: ${msg}`);
+    }
+  }
+
+  console.log(`[NfseTomadas] concluído — importadas=${totalImportadas} ignoradas=${totalIgnoradas} erros=${erros.length}`);
+  return { importadas: totalImportadas, ignoradas: totalIgnoradas, erros, anos: anosProcessados };
+}
 
 // ── Cron horário: a cada hora cheia verifica quais municípios têm sync_hora = hora atual ──
 let _nfseMunCronStarted = false;
