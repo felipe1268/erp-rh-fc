@@ -642,6 +642,78 @@ export default function DashNotasFiscais() {
           }
         </ChartCard>
 
+        {/* ── Gráfico 1b: Faturamento × Compras — NFS-e × NF-e por mês ─── */}
+        {(() => {
+          const fcData = composedDataMes.map(d => ({
+            mes: d.mes,
+            "NFS-e Emitidas":  d["NFS-e Emitidas"]  as number,
+            "NF-e Recebidas":  d["NF-e Recebidas"]  as number,
+            Saldo: (d["NFS-e Emitidas"] as number) - (d["NF-e Recebidas"] as number),
+          }));
+          const totalNfse  = fcData.reduce((s, d) => s + d["NFS-e Emitidas"], 0);
+          const totalNfe   = fcData.reduce((s, d) => s + d["NF-e Recebidas"], 0);
+          const saldoTotal = totalNfse - totalNfe;
+          const hasSomeData = fcData.some(d => d["NFS-e Emitidas"] > 0 || d["NF-e Recebidas"] > 0);
+          return (
+            <ChartCard
+              title="Faturamento × Compras — Notas por Mês"
+              subtitle={`NFS-e Emitidas (receita) vs NF-e Recebidas (custos) · ${periodoLabel}`}
+              height={300}
+            >
+              {!hasSomeData
+                ? <EmptyState message="Sem notas fiscais no período." />
+                : (
+                  <>
+                    {/* Totalizador rápido */}
+                    <div className="flex gap-4 mb-3 px-2 flex-wrap">
+                      <span className="text-xs text-slate-500">Faturamento: <strong className="text-violet-600">{formatBRL(totalNfse)}</strong></span>
+                      <span className="text-xs text-slate-500">Compras c/ NF-e: <strong className="text-blue-600">{formatBRL(totalNfe)}</strong></span>
+                      <span className={`text-xs font-bold ${saldoTotal >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                        Saldo: {saldoTotal >= 0 ? "+" : ""}{formatBRL(saldoTotal)}
+                      </span>
+                    </div>
+                    <ResponsiveContainer width="100%" height="85%">
+                      <ComposedChart data={fcData} margin={{ top: 6, right: 50, bottom: 4, left: 8 }} barCategoryGap="25%">
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                        <XAxis dataKey="mes" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                        <YAxis yAxisId="val" tickFormatter={formatBRLCompact} tick={{ fontSize: 10, fill: "#94a3b8" }} width={68} axisLine={false} tickLine={false} />
+                        <YAxis yAxisId="saldo" orientation="right" tickFormatter={formatBRLCompact}
+                          tick={{ fontSize: 10, fill: "#94a3b8" }} width={56} axisLine={false} tickLine={false} />
+                        <Tooltip content={({ active, payload, label }) => {
+                          if (!active || !payload?.length) return null;
+                          return (
+                            <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3 text-xs">
+                              <p className="font-bold text-slate-700 mb-1">{label}</p>
+                              {payload.map((p: any) => (
+                                <p key={p.dataKey} style={{ color: p.color }} className="flex justify-between gap-4">
+                                  <span>{p.name}:</span>
+                                  <span className="font-bold tabular-nums">{formatBRL(Number(p.value))}</span>
+                                </p>
+                              ))}
+                            </div>
+                          );
+                        }} />
+                        <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                        <Bar yAxisId="val" dataKey="NFS-e Emitidas" fill={VIOLET} radius={[3,3,0,0]} maxBarSize={22} />
+                        <Bar yAxisId="val" dataKey="NF-e Recebidas" fill={BLUE}   radius={[3,3,0,0]} maxBarSize={22} />
+                        <Line yAxisId="saldo" dataKey="Saldo" stroke="#10b981" strokeWidth={2}
+                          dot={{ r: 3, fill: "#10b981" }} activeDot={{ r: 5 }}
+                          strokeDasharray={totalNfe === 0 ? "4 3" : undefined} />
+                        <ReferenceLine yAxisId="saldo" y={0} stroke="#e2e8f0" strokeWidth={1} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                    {totalNfe === 0 && (
+                      <p className="text-[10px] text-center text-slate-400 -mt-1">
+                        * NF-e Recebidas disponíveis apenas a partir de 2026 (SEFAZ). Importar XMLs para incluir anos anteriores.
+                      </p>
+                    )}
+                  </>
+                )
+              }
+            </ChartCard>
+          );
+        })()}
+
         {/* ── Gráfico 2: Cobertura fiscal + Treemap fornecedores ────────── */}
         <div className="grid md:grid-cols-12 gap-4">
           {/* Coverage stacked bar — Saídas c/ NF-e vs s/ NF-e */}

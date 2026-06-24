@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3684 — **DASHBOARD NF-e · GRÁFICO "FATURAMENTO × COMPRAS — NFS-e × NF-e POR MÊS" COM SALDO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Novo ChartCard inserido entre "Evolução Fiscal Mensal" e "Cobertura de NF-e nas Saídas".
+ * Usa os dados já carregados em composedDataMes (zero nova query). ComposedChart com dois eixos Y:
+ * eixo esquerdo = barras grupadas NFS-e Emitidas (violet) + NF-e Recebidas (blue); eixo direito =
+ * linha "Saldo" (verde, NFS-e - NF-e). Cabeçalho inline: Faturamento | Compras c/ NF-e | Saldo ±.
+ * Linha tracejada quando NF-e = 0 (anos anteriores ao SEFAZ). Nota rodapé "*NF-e Recebidas
+ * disponíveis apenas a partir de 2026" aparece apenas quando totalNfe===0. Responsivo ao seletor
+ * mes/ano já existente no dashboard.
+ * Arquivo: `client/src/pages/financeiro/dashboards/DashNotasFiscais.tsx`.
+ *
  * Rev. 3683 — **DASHBOARD NF-e · ANÁLISE TRIBUTÁRIA COMPLETA (ISS/INSS/IRRF/PIS/COFINS/CSLL) + PERFIL DE ENTRADAS NF-e. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * Novo endpoint `fiscalNotes.getAnalyseTributaria({ companyId, mes, ano })` agrega em paralelo
