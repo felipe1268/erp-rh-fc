@@ -101,7 +101,7 @@ async function queryPeriod(db: any, companyId: number, di: string, df: string) {
   };
 }
 
-function buildResumo(label: string, empresa: string, data: ReturnType<typeof buildResumo> extends Promise<infer T> ? T : any, nfse: any[], nfe: any[], bank: any[], ocs: any[]): string {
+function buildResumo(label: string, empresa: string, nfse: any[], nfe: any[], bank: any[], ocs: any[]): string {
   const sumV = (arr: any[], f = "valor") => arr.reduce((s, r) => s + Math.abs(parseFloat(r[f] ?? "0")), 0);
   const entradas = bank.filter(b => b.tipo === "credito");
   const saidas   = bank.filter(b => b.tipo === "debito");
@@ -278,7 +278,7 @@ export function registerPacoteContadorRoute(app: Express) {
         const folder = `${String(mes).padStart(2,"0")}_${MESES[mes-1]}_${ano}`;
 
         archive.append(buildChecklist(label, empresa, nfse, nfe, bank, ocs), { name: `${folder}/00_CHECKLIST.txt` });
-        archive.append(bom(buildResumo(label, empresa, null as any, nfse, nfe, bank, ocs)), { name: `${folder}/01_Resumo.csv` });
+        archive.append(bom(buildResumo(label, empresa, nfse, nfe, bank, ocs)), { name: `${folder}/01_Resumo.csv` });
         archive.append(bom(buildNfse(nfse)),             { name: `${folder}/02_NFS-e_Emitidas.csv` });
         archive.append(bom(buildNfe(nfe)),               { name: `${folder}/03_NF-e_Recebidas_SEFAZ.csv` });
         archive.append(bom(buildOcs(ocs)),               { name: `${folder}/04_OCs_x_NF-e.csv` });
@@ -305,7 +305,7 @@ export function registerPacoteContadorRoute(app: Express) {
           const folder = `${String(m).padStart(2,"0")}_${MESES[m-1]}`;
 
           archive.append(buildChecklist(label, empresa, nfse, nfe, bank, ocs), { name: `${folder}/00_CHECKLIST.txt` });
-          archive.append(bom(buildResumo(label, empresa, null as any, nfse, nfe, bank, ocs)), { name: `${folder}/01_Resumo.csv` });
+          archive.append(bom(buildResumo(label, empresa, nfse, nfe, bank, ocs)), { name: `${folder}/01_Resumo.csv` });
           archive.append(bom(buildNfse(nfse)),             { name: `${folder}/02_NFS-e_Emitidas.csv` });
           archive.append(bom(buildNfe(nfe)),               { name: `${folder}/03_NF-e_Recebidas_SEFAZ.csv` });
           archive.append(bom(buildOcs(ocs)),               { name: `${folder}/04_OCs_x_NF-e.csv` });

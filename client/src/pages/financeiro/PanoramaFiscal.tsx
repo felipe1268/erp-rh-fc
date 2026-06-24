@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import {
   ChevronLeft, ChevronRight, RefreshCw, Printer,
   FileSpreadsheet, AlertTriangle, CheckCircle2,
@@ -146,6 +147,7 @@ interface Props {
 }
 
 export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl }: Props) {
+  const { toast } = useToast();
   const hoje = new Date();
   const [mes, setMes] = useState(hoje.getMonth() + 1);  // 1-12
   const [ano, setAno] = useState(hoje.getFullYear());
@@ -208,7 +210,7 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
       );
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({ error: "Erro ao gerar pacote" }));
-        alert(err.error || "Erro ao gerar pacote");
+        toast({ title: "Erro ao gerar pacote", description: err.error || "Tente novamente em instantes.", variant: "destructive" });
         return;
       }
       const blob = await resp.blob();
@@ -220,6 +222,9 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
       document.body.appendChild(a);
       a.click();
       setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+      toast({ title: "Pacote gerado com sucesso!", description: `Pacote_Contador_${label}.zip baixado.` });
+    } catch {
+      toast({ title: "Erro ao gerar pacote", description: "Verifique sua conexão e tente novamente.", variant: "destructive" });
     } finally {
       setDownloadingPacote(false);
     }
