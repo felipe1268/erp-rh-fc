@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3626** — **PANORAMA FISCAL · BUGFIX ÍNDICE GERAL SEMPRE ZERO — `coberturaSaidaNfe` USAVA `fn_id` (CONCILIAÇÃO) EM VEZ DE RATIO DE VOLUME. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** `fn_id` só é preenchido na conciliação manual → NF-e recebidas do SEFAZ nunca geram `fn_id` em saídas → `totSaiNota` sempre 0 → cobertura 0%. Fix: `coberturaSaidaNfe = min(100, totNfe / totDebitos × 100)` — mesmo padrão de `coberturaNfseReceita`, independe de conciliação. R$3.025M NF-e ÷ R$3.599M débitos = 84%; Índice Geral passa de 0% p/ ~42%. Detalhe: `shared/changelog.ts`.
+- **Rev. 3627** — **PRODUÇÃO · BUGFIX OOM "Internal Server Error" — AUTOCHECK CIRCUIT BREAKER + HEAP 1GB→2GB. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** AutoCheck disparava a cada 5min; cada falha de conexão Neon acumulava handles → heap 1022MB em 51min → FATAL OOM. Fix: circuit breaker com backoff exponencial (5/10/20/40min cap) em `datajudAutoCheck.ts`; `--max-old-space-size` 1024→2048 no deploy. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3625** — **NF-e RECEBIDAS · TOGGLE LIGA/DESLIGA SYNC AUTOMÁTICO + SELETOR DE INTERVALO DIRETO NA ABA. 100% FRONTEND + BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3626** — **PANORAMA FISCAL · BUGFIX ÍNDICE GERAL SEMPRE ZERO — `coberturaSaidaNfe` USAVA `fn_id` (CONCILIAÇÃO) EM VEZ DE RATIO DE VOLUME. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3623** — **PANORAMA FISCAL · BOTÃO "PACOTE CONTADOR" — ZIP COM NFS-e, NF-e, EXTRATO, OCs + CHECKLIST. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

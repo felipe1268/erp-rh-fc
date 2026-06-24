@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3627 — **PRODUCAO · BUGFIX OOM + AUTOCHECK CIRCUIT BREAKER — SERVER TRAVOU COM "Internal Server Error". BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
+ *
+ * Causa-raiz: autoCheckJob disparava a cada 5min; cada falha de conexao Neon
+ * ("Connection terminated unexpectedly") acumulava handles/closures sem liberar;
+ * heap cresceu de ~200MB para 1022MB em 51min -> FATAL ERROR heap limit OOM.
+ * FIX (1): Circuit breaker com backoff exponencial em datajudAutoCheck.ts:
+ *   _autoCheckConsecFails + _autoCheckBackoffUntil; falha de conexao -> pausa
+ *   5min/10min/20min/40min (cap); sucesso -> zera contador.
+ * FIX (2): .replit [deployment] run: --max-old-space-size=1024 -> 2048 (via skill).
+ * ACAO NECESSARIA: republicar (Deploy) para aplicar o novo build em producao.
+ *
  * Rev. 3626 — **PANORAMA FISCAL · BUGFIX ÍNDICE GERAL SEMPRE ZERO — coberturaSaidaNfe USAVA fn_id (CONCILIACAO) EM VEZ DE RATIO DE VOLUME. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
  *
  * Causa-raiz: coberturaSaidaNfe = totSaiNota / totDebitos onde totSaiNota = saidas com

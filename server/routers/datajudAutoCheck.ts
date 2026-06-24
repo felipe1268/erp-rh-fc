@@ -16,8 +16,13 @@ import { TRPCError } from "@trpc/server";
 // AUTO-CHECK JOB (runs server-side)
 // ============================================================
 let autoCheckInterval: NodeJS.Timeout | null = null;
+let _autoCheckConsecFails = 0;
+let _autoCheckBackoffUntil = 0;
 
 async function runAutoCheck() {
+  // Circuit breaker: backoff exponencial após falhas consecutivas de conexão
+  if (Date.now() < _autoCheckBackoffUntil) return;
+
   const db = (await getDb())!;
   if (!db) return;
 
@@ -166,8 +171,20 @@ async function runAutoCheck() {
 
       console.log(`[AutoCheck] Empresa ${config.companyId}: ${processos.length} processos verificados, ${alertasGerados} alertas gerados`);
     }
-  } catch (e) {
-    console.error("[AutoCheck] Erro geral:", e);
+    _autoCheckConsecFails = 0; // sucesso: zera contador
+  } catch (e: any) {
+    const msg = String(e?.message ?? e);
+    const isConnErr = msg.includes("Connection terminated") || msg.includes("connection timeout") || msg.includes("ECONNRESET");
+    if (isConnErr) {
+      _autoCheckConsecFails++;
+      // Backoff exponencial: 5min, 10min, 20min, 40min (cap 40min)
+      const backoffMs = Math.min(40, 5 * Math.pow(2, _autoCheckConsecFails - 1)) * 60 * 1000;
+      _autoCheckBackoffUntil = Date.now() + backoffMs;
+      console.warn(`[AutoCheck] Falha de conexão #${_autoCheckConsecFails} — pausando ${Math.round(backoffMs / 60000)}min`);
+    } else {
+      _autoCheckConsecFails = 0;
+      console.error("[AutoCheck] Erro geral:", e);
+    }
   }
 }
 
