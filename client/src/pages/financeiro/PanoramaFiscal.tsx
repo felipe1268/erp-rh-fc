@@ -23,8 +23,15 @@ function fmtBRL(v: number | string | null | undefined, opts?: { compact?: boolea
 }
 function fmtDate(s: string | Date | null | undefined) {
   if (!s) return "—";
-  const t = String(s).slice(0, 10);
-  return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t.split("-").reverse().join("/") : t;
+  if (s instanceof Date) return s.toLocaleDateString("pt-BR");
+  const str = String(s);
+  // "YYYY-MM-DD" ou "YYYY-MM-DDTHH:..." → pega os 10 primeiros chars
+  const t = str.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t.split("-").reverse().join("/");
+  // fallback: tenta parsear qualquer string reconhecível como data
+  const d = new Date(str);
+  if (!isNaN(d.getTime())) return d.toLocaleDateString("pt-BR");
+  return str;
 }
 function fmtCnpj(c: string | null | undefined) {
   if (!c) return "—";
