@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3632 — **PANORAMA FISCAL · BUGFIX ENTRADAS BANCÁRIAS MOSTRANDO EXTRATOS JÁ APAGADOS. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Causa-raiz: `getPanoramaFiscal` consultava `bank_statement_lines` sem o
+ * guard `AND bsl.excluido_em IS NULL`. O "Limpar extrato" na Conciliação
+ * Bancária é soft-delete (grava `excluido_em`), não exclusão física — regra
+ * JAMAIS DELETE. Todas as outras queries do financial.ts filtram corretamente;
+ * o Panorama Fiscal ficou de fora. Resultado: contas bancárias removidas
+ * (ex.: Banco do Brasil, extratos de Fev/Mar/Abr 2026) continuavam aparecendo
+ * no painel "Entradas SEM NFS-e" com valores inflados.
+ *
+ * Fix: `AND bsl.excluido_em IS NULL` adicionado à query `bankQ`.
+ * Uma linha de código; sem impacto em outros endpoints.
+ *
  * Rev. 3631 — **NF-e RECEBIDAS · CRONÔMETRO SEMPRE VISÍVEL + TOGGLE SYNC REMOVIDO DO BANNER. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * (1) O anel de countdown na aba "NF-e Recebidas" agora é exibido SEMPRE,

@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3632** — **PANORAMA FISCAL · BUGFIX ENTRADAS BANCÁRIAS MOSTRANDO EXTRATOS JÁ APAGADOS. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** `getPanoramaFiscal` consultava `bank_statement_lines` sem `AND bsl.excluido_em IS NULL` — "Limpar extrato" é soft-delete, não exclusão física; extratos removidos (ex.: Banco do Brasil Fev/Mar/Abr) continuavam aparecendo. Fix: 1 linha. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3631** — **NF-e RECEBIDAS · CRONÔMETRO SEMPRE VISÍVEL + TOGGLE SYNC REMOVIDO DO BANNER. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Anel de countdown exibido mesmo com sync desligado (cinza = modo manual; âmbar = sync ligado aguardando). Toggle liga/desliga e seletor de frequência removidos do banner — ficam exclusivamente em Configurações → Financeiro. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3630** — **DASHBOARD NOTAS FISCAIS · NOVO PAINEL `/financeiro/dashboards/notas-fiscais`. FRONTEND ADITIVO · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** KPIs, 3 ring gauges de saúde fiscal, barra mensal NF-e × NFS-e × Saídas, pie top fornecedores, lista top-10 fornecedores, 3 cards de pendência, accordion OC × NF-e, 2 ComparativoAnual (NF-e + NFS-e a/a), 6 DetailDialog drill-down. Sidebar Financeiro → Dashboards. Detalhe: `shared/changelog.ts`.
