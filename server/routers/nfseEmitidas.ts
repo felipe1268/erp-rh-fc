@@ -1210,6 +1210,59 @@ export const nfseEmitidasRouter = router({
         totalGeral: Number(totalGeralRows.rows[0]?.total ?? 0),
       };
     }),
+
+  // ── Importação manual de XMLs de NFS-e (Portal Nacional ABRASF, 2026+) ──────
+  importNfseXmlManual: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      xmlContents: z.array(z.object({ name: z.string(), content: z.string() })),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      let importadas = 0;
+      let ignoradas = 0;
+      const erros: string[] = [];
+      const hoje = new Date().toISOString().slice(0, 10);
+      for (const file of input.xmlContents) {
+        try {
+          const nota = parseSefinNfseXml(file.content);
+          if (!nota || !nota.numero) {
+            erros.push(`${file.name}: XML inválido ou sem número de nota`);
+            continue;
+          }
+          // Dedup: qualquer nota NFS-e do mesmo número já importada (qualquer origem)
+          const dup = await db.$client.query<any>(
+            `SELECT id FROM fiscal_notes WHERE company_id=$1 AND numero_nf=$2 AND origem LIKE 'nfse%'`,
+            [input.companyId, nota.numero]
+          );
+          if (dup.rows[0]) { ignoradas++; continue; }
+          await db.$client.query(
+            `INSERT INTO fiscal_notes
+              (company_id, numero_nf, chave_acesso, data_emissao,
+               tomador_cnpj, tomador_razao_social, descricao_servico,
+               valor_bruto, valor_liquido, status, origem, xml_payload,
+               created_at, updated_at)
+             VALUES ($1,$2,$3,$4::date,$5,$6,$7,$8,$9,'pendente','nfse_xml_manual',$10,NOW(),NOW())`,
+            [
+              input.companyId,
+              nota.numero,
+              nota.chave || null,
+              nota.dataEmissao || hoje,
+              nota.tomadorCnpj || null,
+              nota.tomadorNome || null,
+              nota.discriminacao || null,
+              nota.valorBruto,
+              nota.valorLiquido,
+              file.content,
+            ]
+          );
+          importadas++;
+        } catch (e: any) {
+          erros.push(`${file.name}: ${e?.message || "Erro desconhecido"}`);
+        }
+      }
+      return { importadas, ignoradas, erros };
+    }),
 });
 
 export { executarSyncMunicipio };

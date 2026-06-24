@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3670 — **NFS-e EMITIDAS · BOTÃO "BAIXAR HISTÓRICO 2018–2025" + "IMPORTAR XML (2026+)". BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * Dois novos botões no banner "NFS-e Emitidas":
+ *
+ * (1) "Baixar histórico (2018–2025)" — chama `syncAllMunicipios` com dataInicial="2018-01-01"
+ *   dataFinal="2025-12-31". Abre AlertDialog de confirmação antes de disparar. Traz o histórico
+ *   completo via API SIAP GEO (portal da prefeitura de Guaratinguetá). Notas já existentes são
+ *   ignoradas pelo dedup existente (numero_nf + origem LIKE 'nfse%').
+ *
+ * (2) "Importar XML (2026+)" — novo endpoint `importNfseXmlManual` no router `nfseEmitidas`.
+ *   Aceita array de { name, content } com XML ABRASF (Portal Nacional nfse.gov.br).
+ *   Parser: `parseSefinNfseXml` (já existente). Dedup por (numero_nf + origem LIKE 'nfse%').
+ *   Insere com origem='nfse_xml_manual'. Retorna { importadas, ignoradas, erros[] }.
+ *   Input file hidden (`nfseXmlInputRef`) com accept=".xml". Toast com resultado.
+ *
+ * Arquivos: `server/routers/nfseEmitidas.ts` (endpoint novo antes da linha de fechamento do router),
+ * `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx` (state, ref, mutation, handler, input,
+ * banner redesenhado, AlertDialog de confirmação).
+ *
  * Rev. 3669 — **SEFAZ NF-e · BOTÃO "LIGAR SYNC AUTOMÁTICO" DIRETO NA ABA NF-e RECEBIDAS. 100% FRONTEND · ZERO BACKEND/SCHEMA.**
  *
  * Diagnóstico Rev. 3668 revelou: company_id=60002 com sync_enabled=0 → cron nunca roda.

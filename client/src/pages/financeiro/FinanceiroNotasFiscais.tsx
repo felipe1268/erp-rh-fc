@@ -20,6 +20,7 @@ import {
   Link, Link2Off, CheckCircle, Clock, AlertTriangle, RefreshCw,
   Building2, Calendar, Banknote, Receipt, X, ChevronDown, ChevronUp,
   ChevronLeft, ChevronRight, Upload, Loader2, Copy, Check as CheckIcon,
+  Download, FileCode,
 } from "lucide-react";
 
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
@@ -191,6 +192,7 @@ export default function FinanceiroNotasFiscais() {
   const [nfseEspelhoId, setNfseEspelhoId] = useState<number | null>(null);
 
   const [confirmHistorico, setConfirmHistorico] = useState(false);
+  const [confirmHistoricoNfse, setConfirmHistoricoNfse] = useState(false);
   const [nfeRecDetalhe, setNfeRecDetalhe] = useState<any>(null);
   const [copiedChave, setCopiedChave] = useState(false);
   const [justRecusa, setJustRecusa] = useState("");
@@ -221,6 +223,7 @@ export default function FinanceiroNotasFiscais() {
   // ── Upload XML ──────────────────────────────────────────────────────────────
   const [xmlUploading, setXmlUploading] = useState(false);
   const xmlInputRef = useRef<HTMLInputElement>(null);
+  const nfseXmlInputRef = useRef<HTMLInputElement>(null);
 
   const nfeRecQuery = (trpc as any).sefaz.listNFeRecebidas.useQuery(
     { companyId: companyId ?? 0, ano: recAno, mes: recMes ?? undefined, search: recSearch || undefined, status: recStatus !== "todos" ? recStatus : undefined },
@@ -331,6 +334,16 @@ export default function FinanceiroNotasFiscais() {
       listQuery.refetch();
       yearQuery.refetch();
     },
+  });
+  const importNfseXmlMut = (trpc as any).nfseEmitidas.importNfseXmlManual.useMutation({
+    onSuccess: (r: any) => {
+      listQuery.refetch();
+      yearQuery.refetch();
+      const msg = `${r.importadas} NFS-e importada${r.importadas !== 1 ? "s" : ""}, ${r.ignoradas} já existia${r.ignoradas !== 1 ? "m" : ""}.`;
+      const erroTxt = r.erros?.length ? ` ${r.erros.length} com erro.` : "";
+      toast({ title: "Import XML NFS-e: " + msg + erroTxt, variant: r.importadas > 0 ? "default" : "destructive" });
+    },
+    onError: (e: any) => toast({ title: "Erro no import XML NFS-e", description: e.message, variant: "destructive" }),
   });
 
   // ── Cronômetro regressivo SEFAZ: atualiza a cada segundo ─────────────────────
@@ -693,6 +706,22 @@ export default function FinanceiroNotasFiscais() {
     }
   }
 
+  async function handleNfseXmlUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []).filter(
+      f => f.name.toLowerCase().endsWith(".xml") || f.type === "text/xml" || f.type === "application/xml"
+    );
+    if (!files.length || !companyId) return;
+    if (nfseXmlInputRef.current) nfseXmlInputRef.current.value = "";
+    try {
+      const xmlContents = await Promise.all(
+        files.map(async f => ({ name: f.name, content: await f.text() }))
+      );
+      importNfseXmlMut.mutate({ companyId, xmlContents });
+    } catch {
+      toast({ title: "Erro ao ler arquivos XML de NFS-e", variant: "destructive" });
+    }
+  }
+
   function openNew() {
     setEditingId(null);
     setForm(emptyForm());
@@ -789,6 +818,7 @@ export default function FinanceiroNotasFiscais() {
 
         {/* Input PDF global — sempre no DOM para funcionar em qualquer aba */}
         <input ref={pdfInputRef} type="file" accept=".pdf,application/pdf" multiple className="hidden" onChange={handlePdfUpload} />
+        <input ref={nfseXmlInputRef} type="file" accept=".xml,text/xml,application/xml" multiple className="hidden" onChange={handleNfseXmlUpload} />
 
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1385,26 +1415,46 @@ export default function FinanceiroNotasFiscais() {
         ═══════════════════════════════════════════════════════════════════════ */}
         {pageTab === "emitidas" && <>
 
-        {/* Banner NFS-e Emitidas — fonte e ação principal */}
-        <div className="rounded-xl border border-indigo-100 bg-gradient-to-r from-indigo-50 to-slate-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
-          <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-semibold text-indigo-900">NFS-e Emitidas pela FC</span>
-              <span className="inline-flex items-center gap-1 text-[11px] bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 font-medium">
-                🔐 Portal Nacional autenticado ✓
-              </span>
+        {/* Banner NFS-e Emitidas — fonte e ações */}
+        <div className="rounded-xl border border-indigo-100 bg-gradient-to-r from-indigo-50 to-slate-50 px-4 py-3 flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+            <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-semibold text-indigo-900">NFS-e Emitidas pela FC</span>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                <strong>2018–2025:</strong> busque o histórico completo via API da prefeitura (SIAP GEO) clicando em "Baixar histórico".
+                {" "}<strong>2026 em diante:</strong> baixe o XML da NFS-e no site <a href="https://www.nfse.gov.br" target="_blank" rel="noreferrer" className="underline">nfse.gov.br</a> e use "Importar XML" — ou importe o PDF (DANFSe) com extração via IA.
+              </p>
             </div>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Histórico <strong>2018–2025</strong>: importado via SIAP GEO (portal municipal encerrado).
-              {" "}Para notas de <strong>2026 em diante</strong>: use <strong>Importar PDF</strong> — o sistema extrai os dados automaticamente via IA.
-            </p>
           </div>
-          <div className="flex gap-2 shrink-0">
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              size="sm"
+              onClick={() => setConfirmHistoricoNfse(true)}
+              disabled={syncAllMunMut.isPending}
+              className="gap-1.5 h-8 bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
+            >
+              {syncAllMunMut.isPending
+                ? <><Loader2 className="w-3 h-3 animate-spin" /> Buscando…</>
+                : <><Download className="w-3 h-3" /> Baixar histórico (2018–2025)</>}
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => nfseXmlInputRef.current?.click()}
+              disabled={importNfseXmlMut.isPending}
+              className="gap-1.5 h-8 bg-indigo-600 hover:bg-indigo-700 text-white text-xs"
+            >
+              {importNfseXmlMut.isPending
+                ? <><Loader2 className="w-3 h-3 animate-spin" /> Importando…</>
+                : <><FileCode className="w-3 h-3" /> Importar XML (2026+)</>}
+            </Button>
             <Button
               size="sm"
               onClick={() => pdfInputRef.current?.click()}
               disabled={isParsing}
-              className="gap-1.5 h-8 bg-indigo-600 hover:bg-indigo-700 text-white text-xs"
+              variant="outline"
+              className="gap-1.5 h-8 border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-xs"
             >
               {isParsing ? <><Loader2 className="w-3 h-3 animate-spin" /> Lendo…</> : <><Upload className="w-3 h-3" /> Importar PDF</>}
             </Button>
@@ -1412,7 +1462,7 @@ export default function FinanceiroNotasFiscais() {
               size="sm"
               variant="outline"
               onClick={openNew}
-              className="gap-1.5 h-8 border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-xs"
+              className="gap-1.5 h-8 border-slate-200 text-slate-700 hover:bg-slate-50 text-xs"
             >
               <Plus className="w-3 h-3" /> Nova NFS-e
             </Button>
@@ -2422,6 +2472,32 @@ export default function FinanceiroNotasFiscais() {
                 onClick={() => sefazResetNsuMut.mutate({ companyId: companyId ?? 0 })}
               >
                 Baixar tudo
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* AlertDialog: Histórico NFS-e Emitidas 2018–2025 via SIAP GEO */}
+        <AlertDialog open={confirmHistoricoNfse} onOpenChange={setConfirmHistoricoNfse}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Baixar histórico NFS-e 2018–2025?</AlertDialogTitle>
+              <AlertDialogDescription>
+                O sistema vai consultar a API da prefeitura de Guaratinguetá (SIAP GEO) e trazer{" "}
+                <strong>todas as NFS-e emitidas pela FC de 2018 até 31/12/2025</strong>.
+                Notas já importadas serão ignoradas automaticamente. Pode levar alguns minutos.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-emerald-600 hover:bg-emerald-700"
+                onClick={() => {
+                  setConfirmHistoricoNfse(false);
+                  syncAllMunMut.mutate({ companyId: companyId ?? 0, dataInicial: "2018-01-01", dataFinal: "2025-12-31" });
+                }}
+              >
+                Baixar histórico completo
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

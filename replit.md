@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3670** — **NFS-e EMITIDAS · BOTÃO "BAIXAR HISTÓRICO 2018–2025" + "IMPORTAR XML (2026+)". BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Dois novos botões no banner NFS-e Emitidas: (1) "Baixar histórico (2018–2025)" → AlertDialog de confirmação → `syncAllMunicipios({dataInicial:"2018-01-01",dataFinal:"2025-12-31"})` via SIAP GEO; (2) "Importar XML (2026+)" → input file oculto → novo endpoint `importNfseXmlManual` (parseia XML ABRASF com `parseSefinNfseXml`, dedup por numero_nf+origem, insere com `origem='nfse_xml_manual'`). Arquivos: `server/routers/nfseEmitidas.ts`, `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3669** — **SEFAZ NF-e · BOTÃO "LIGAR SYNC AUTOMÁTICO" DIRETO NA ABA NF-e RECEBIDAS. 100% FRONTEND · ZERO BACKEND/SCHEMA.** Diagnóstico Rev. 3668 revelou sync_enabled=0 (cron nunca rodava; 217 notas vieram de sync manual). Quando sync=OFF + cert presente, exibe faixa verde com botão "Ligar sync automático" que chama `sefaz.saveConfig({syncEnabled:true})` sem sair da aba. Arquivo: `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3668** — **SEFAZ NF-e · LOG DIAGNÓSTICO COMPLETO — MOSTRA ESTADO REAL DE CADA EMPRESA NO CRON. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** "0 elegíveis" era ambíguo (cooldown vs sync_enabled=0). Cron agora loga TODAS as companies_nfe_config com motivo: `ativo=0 | sync_enabled=0 | cooldown (X/58min) | ELEGÍVEL` + NSU atual + último resultado. Arquivo: `server/routers/sefaz.ts`. Detalhe: `shared/changelog.ts`.
