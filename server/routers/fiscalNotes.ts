@@ -421,7 +421,7 @@ export const fiscalNotesRouter = router({
         LEFT JOIN company_bank_accounts cba ON cba.id = bsl.conta_bancaria_id
         WHERE bsl.company_id = $1
           AND bsl.data >= $2 AND bsl.data < $3
-        ORDER BY bsl.data DESC
+        ORDER BY bsl.data ASC
         LIMIT 600
       `, [companyId, di, df]);
 
