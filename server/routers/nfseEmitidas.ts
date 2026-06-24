@@ -180,6 +180,58 @@ function decompressGzipBase64(b64: string): Promise<string> {
   });
 }
 
+// ── Parser do formato de exportação proprietário SIAP GEO ────────────────────
+// Raiz <nfse> com múltiplos filhos <nf>. Valores em centavos (inteiros).
+// Datas em DD/MM/YYYY. Uma única chamada retorna N notas.
+type SiapGeoNota = {
+  numero: string; chave: string; dataEmissao: string; dataPrestacao: string;
+  prestadorCnpj: string; tomadorCnpj: string; tomadorNome: string;
+  valorBruto: number; valorLiquido: number; valorIss: number;
+  discriminacao: string; status: "pendente" | "cancelada";
+};
+function parseSiapGeoExportXml(xml: string): SiapGeoNota[] | null {
+  // Detecta pelo prefixo da tag raiz
+  if (!xml.includes("<nfse") || !xml.includes("<nf>")) return null;
+  try {
+    const parsed = xmlParser.parse(xml);
+    const root = parsed?.nfse;
+    if (!root) return null;
+    // fast-xml-parser: array ou objeto único quando há 1 elemento
+    const nfArr: any[] = Array.isArray(root.nf) ? root.nf : root.nf ? [root.nf] : [];
+    if (!nfArr.length) return null;
+
+    const parseDateBR = (s: string): string => {
+      // DD/MM/YYYY → YYYY-MM-DD
+      const m = String(s || "").match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      return m ? `${m[3]}-${m[2]}-${m[1]}` : String(s || "").slice(0, 10);
+    };
+    const centsToReais = (v: any): number => {
+      const n = parseInt(String(v ?? "0"), 10);
+      return isNaN(n) ? 0 : n / 100;
+    };
+
+    return nfArr.map((nf: any): SiapGeoNota => {
+      const bruto = centsToReais(nf.vl_servico);
+      const retencoes = [nf.vl_inss, nf.vl_csll, nf.vl_pis, nf.vl_cofins, nf.vl_ir, nf.vl_outras_retencoes]
+        .reduce((acc, v) => acc + centsToReais(v), 0);
+      return {
+        numero:        String(nf.nr_nf ?? ""),
+        chave:         String(nf.codigoverificacao ?? ""),
+        dataEmissao:   parseDateBR(String(nf.dt_emissao ?? "")),
+        dataPrestacao: parseDateBR(String(nf.dt_prestacao ?? "")),
+        prestadorCnpj: String(nf.p_documento ?? "").replace(/\D/g, ""),
+        tomadorCnpj:   String(nf.t_documento ?? "").replace(/\D/g, ""),
+        tomadorNome:   String(nf.t_razao_social ?? ""),
+        valorBruto:    bruto,
+        valorLiquido:  Math.max(0, bruto - retencoes),
+        valorIss:      centsToReais(nf.vl_iss),
+        discriminacao: String(nf.discriminacao ?? ""),
+        status:        String(nf.id_nf_st) === "2" ? "cancelada" : "pendente",
+      };
+    }).filter(n => !!n.numero);
+  } catch { return null; }
+}
+
 // ── Parser de NFS-e XML individual (Portal Nacional ABRASF) ──────────────────
 function parseSefinNfseXml(xml: string): {
   numero: string; chave: string; dataEmissao: string;
@@ -1271,14 +1323,54 @@ export const nfseEmitidasRouter = router({
       let ignoradas = 0;
       const erros: string[] = [];
       const hoje = new Date().toISOString().slice(0, 10);
+
       for (const file of input.xmlContents) {
         try {
+          // ── Formato SIAP GEO Export (<nfse> com N filhos <nf>) ──────────
+          const siapNotas = parseSiapGeoExportXml(file.content);
+          if (siapNotas !== null) {
+            // Arquivo de exportação SIAP GEO — pode conter dezenas de notas
+            for (const nota of siapNotas) {
+              try {
+                const dup = await db.$client.query<any>(
+                  `SELECT id FROM fiscal_notes WHERE company_id=$1 AND numero_nf=$2 AND origem LIKE 'nfse%'`,
+                  [input.companyId, nota.numero]
+                );
+                if (dup.rows[0]) { ignoradas++; continue; }
+                await db.$client.query(
+                  `INSERT INTO fiscal_notes
+                    (company_id, numero_nf, chave_acesso, data_emissao,
+                     tomador_cnpj, tomador_razao_social, descricao_servico,
+                     valor_bruto, valor_liquido, status, origem,
+                     created_at, updated_at)
+                   VALUES ($1,$2,$3,$4::date,$5,$6,$7,$8,$9,$10,'nfse_siapgeo_export',NOW(),NOW())`,
+                  [
+                    input.companyId,
+                    nota.numero,
+                    nota.chave || null,
+                    nota.dataEmissao || hoje,
+                    nota.tomadorCnpj || null,
+                    nota.tomadorNome || null,
+                    nota.discriminacao || null,
+                    nota.valorBruto,
+                    nota.valorLiquido,
+                    nota.status,
+                  ]
+                );
+                importadas++;
+              } catch (e: any) {
+                erros.push(`${file.name} NF#${nota.numero}: ${e?.message || "Erro"}`);
+              }
+            }
+            continue; // próximo arquivo
+          }
+
+          // ── Formato ABRASF individual (Portal Nacional, uma nota por XML) ─
           const nota = parseSefinNfseXml(file.content);
           if (!nota || !nota.numero) {
-            erros.push(`${file.name}: XML inválido ou sem número de nota`);
+            erros.push(`${file.name}: XML inválido ou formato não reconhecido (suporte: ABRASF individual ou exportação SIAP GEO)`);
             continue;
           }
-          // Dedup: qualquer nota NFS-e do mesmo número já importada (qualquer origem)
           const dup = await db.$client.query<any>(
             `SELECT id FROM fiscal_notes WHERE company_id=$1 AND numero_nf=$2 AND origem LIKE 'nfse%'`,
             [input.companyId, nota.numero]

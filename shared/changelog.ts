@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3674 — **NFS-e EMITIDAS · IMPORTAR XML SIAP GEO EXPORT — MÚLTIPLAS NOTAS POR ARQUIVO (<nfse>/<nf>). BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * O portal SIAP GEO tem opção "Exportar → em formato XML" que gera um arquivo com raiz `<nfse>`
+ * e N filhos `<nf>` (formato proprietário, valores em centavos, datas DD/MM/YYYY). O importador
+ * anterior (`importNfseXmlManual`) só entendia ABRASF individual (1 nota por XML).
+ *
+ * Novo parser `parseSiapGeoExportXml`: auto-detecta o formato pela presença de `<nfse>` + `<nf>`.
+ * Mapeia: nr_nf→numero, dt_emissao→data, t_documento→tomadorCnpj, t_razao_social, vl_servico/100→bruto,
+ * retencoes(INSS+IR+PIS+COFINS+CSLL+OUTRAS)/100 descontadas do líquido, id_nf_st=2→cancelada.
+ * Origem: `nfse_siapgeo_export`. Dedup por company_id+numero_nf+origem LIKE 'nfse%' (ignora duplicatas).
+ *
+ * `importNfseXmlManual` (backend): tenta SIAP GEO export primeiro; se detectado, itera todos os
+ * `<nf>` do arquivo e insere cada um individualmente (com dedup). Fall-through para ABRASF.
+ * Frontend: hint do botão "Importar XML" atualizado para indicar que aceita o formato SIAP GEO.
+ *
  * Rev. 3673 — **NFS-e EMITIDAS · BUGFIX CAP 2025-12-31 SIAP GEO — PORTAL TEM NOTAS DE 2026 + RESET ROWS TRAVADAS + LOOP ATÉ ANO ATUAL. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * Diagnóstico: a suposição "SIAP GEO só tem notas até 31/12/2025" estava errada — confirmado

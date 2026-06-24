@@ -1465,7 +1465,7 @@ export default function FinanceiroNotasFiscais() {
               </div>
               <p className="text-xs text-slate-500 leading-relaxed">
                 <strong>2018–{new Date().getFullYear()}:</strong> busque o histórico completo via API da prefeitura (SIAP GEO) clicando em "Baixar histórico".
-                {" "}<strong>2026 em diante:</strong> baixe o XML da NFS-e no site <a href="https://www.nfse.gov.br" target="_blank" rel="noreferrer" className="underline">nfse.gov.br</a> e use "Importar XML" — ou importe o PDF (DANFSe) com extração via IA.
+                {" "}<strong>Importar XML:</strong> aceita (1) exportação SIAP GEO ("em formato XML" — um arquivo com várias notas) ou (2) XML ABRASF individual do Portal Nacional. Todas as notas do arquivo são importadas de uma vez.
               </p>
             </div>
           </div>
