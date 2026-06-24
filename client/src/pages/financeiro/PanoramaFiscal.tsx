@@ -639,54 +639,131 @@ function OcTable({ rows, variant }: { rows: any[]; variant: "ok" | "warn" }) {
   );
 }
 
+// paleta de cores por índice de banco (até 8 bancos distintos)
+const BANK_COLORS = [
+  { bg: "bg-blue-50",    border: "border-blue-200",    text: "text-blue-800",    dot: "bg-blue-500"    },
+  { bg: "bg-violet-50",  border: "border-violet-200",  text: "text-violet-800",  dot: "bg-violet-500"  },
+  { bg: "bg-amber-50",   border: "border-amber-200",   text: "text-amber-800",   dot: "bg-amber-500"   },
+  { bg: "bg-teal-50",    border: "border-teal-200",    text: "text-teal-800",    dot: "bg-teal-500"    },
+  { bg: "bg-rose-50",    border: "border-rose-200",    text: "text-rose-800",    dot: "bg-rose-500"    },
+  { bg: "bg-indigo-50",  border: "border-indigo-200",  text: "text-indigo-800",  dot: "bg-indigo-500"  },
+  { bg: "bg-orange-50",  border: "border-orange-200",  text: "text-orange-800",  dot: "bg-orange-500"  },
+  { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-800", dot: "bg-emerald-500" },
+];
+
 function BankTable({ rows, tipo }: { rows: any[]; tipo: "entrada" | "saida" }) {
   const ring = tipo === "entrada" ? "border-emerald-100" : "border-rose-100";
   const head = tipo === "entrada" ? "bg-emerald-50/80 text-emerald-700" : "bg-rose-50/80 text-rose-700";
   const valColor = tipo === "entrada" ? "text-emerald-700" : "text-rose-700";
+
+  // Agrupa por conta_nome preservando a ordem já vinda do backend
+  const bankOrder: string[] = [];
+  const groups: Record<string, any[]> = {};
+  for (const b of rows) {
+    const key = b.conta_nome || "—";
+    if (!groups[key]) { groups[key] = []; bankOrder.push(key); }
+    groups[key].push(b);
+  }
+  // mapa nome→índice de cor
+  const colorIdx: Record<string, number> = {};
+  bankOrder.forEach((name, i) => { colorIdx[name] = i % BANK_COLORS.length; });
+
+  // Legenda (só bancos presentes)
+  const legendItems = bankOrder.map(name => ({
+    name,
+    color: BANK_COLORS[colorIdx[name]],
+    agencia: groups[name][0]?.conta_agencia || "",
+    conta:   groups[name][0]?.conta_numero  || "",
+    total:   groups[name].reduce((s: number, b: any) => s + Math.abs(parseFloat(b.valor ?? "0")), 0),
+    qtd:     groups[name].length,
+  }));
+
   return (
-    <div className={`overflow-x-auto rounded-xl border ${ring}`}>
-      <table className="w-full text-xs">
-        <thead className={`${head} uppercase`}>
-          <tr>
-            {["Data","Conta","Descrição","Valor","Conciliado","NF#"].map(h => (
-              <th key={h} className="px-3 py-2.5 text-left font-semibold whitespace-nowrap tracking-wide">{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((b: any, i: number) => (
-            <tr key={b.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
-              <td className="px-3 py-2 whitespace-nowrap text-slate-500 font-medium">{fmtDate(b.data)}</td>
-              <td className="px-3 py-2 text-[11px] max-w-[140px]">
-                <span className="block truncate text-slate-700 font-medium" title={b.conta_nome}>{b.conta_nome || "—"}</span>
-                {(b.conta_agencia || b.conta_numero) && (
-                  <span className="block text-slate-400 whitespace-nowrap">
-                    {b.conta_agencia ? `Ag. ${b.conta_agencia}` : ""}{b.conta_agencia && b.conta_numero ? " / " : ""}
-                    {b.conta_numero ? `C. ${b.conta_numero}` : ""}
-                  </span>
-                )}
-              </td>
-              <td className="px-3 py-2 max-w-[220px] truncate text-slate-700" title={b.descricao}>{b.descricao}</td>
-              <td className={`px-3 py-2 text-right font-bold whitespace-nowrap ${valColor}`}>
-                {fmtBRL(b.valor)}
-              </td>
-              <td className="px-3 py-2 text-center">
-                {b.conciliado
-                  ? <span className="text-emerald-500 text-sm">✓</span>
-                  : <span className="text-slate-300 text-sm">○</span>
-                }
-              </td>
-              <td className="px-3 py-2 text-slate-400 font-mono text-[11px]">{b.fn_numero || "—"}</td>
-            </tr>
+    <div className="space-y-0">
+      {/* Legenda */}
+      {legendItems.length > 1 && (
+        <div className="flex flex-wrap gap-2 px-1 pb-3">
+          {legendItems.map(l => (
+            <div key={l.name}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-medium ${l.color.bg} ${l.color.border} ${l.color.text}`}>
+              <span className={`w-2 h-2 rounded-full shrink-0 ${l.color.dot}`} />
+              <span className="font-semibold">{l.name}</span>
+              {(l.agencia || l.conta) && (
+                <span className="opacity-60 font-normal">
+                  {l.agencia ? `Ag.${l.agencia}` : ""}{l.agencia && l.conta ? " / " : ""}
+                  {l.conta ? `C.${l.conta}` : ""}
+                </span>
+              )}
+              <span className="opacity-70">· {l.qtd} lançto{l.qtd !== 1 ? "s" : ""}</span>
+            </div>
           ))}
-        </tbody>
-      </table>
-      {rows.length === 0 && (
-        <div className="flex items-center justify-center gap-2 py-6 text-slate-400">
-          <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-          <span className="text-xs">Nenhum item nesta categoria</span>
         </div>
       )}
+
+      <div className={`overflow-x-auto rounded-xl border ${ring}`}>
+        <table className="w-full text-xs">
+          <thead className={`${head} uppercase`}>
+            <tr>
+              {["Data","Descrição","Valor","Conc.","NF#"].map(h => (
+                <th key={h} className="px-3 py-2.5 text-left font-semibold whitespace-nowrap tracking-wide">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {bankOrder.map(bankName => {
+              const c = BANK_COLORS[colorIdx[bankName]];
+              const bankRows = groups[bankName];
+              const subtotal = bankRows.reduce((s: number, b: any) => s + Math.abs(parseFloat(b.valor ?? "0")), 0);
+              const ag = bankRows[0]?.conta_agencia || "";
+              const ct = bankRows[0]?.conta_numero  || "";
+              return (
+                <React.Fragment key={bankName}>
+                  {/* Cabeçalho separador do banco */}
+                  <tr className={`${c.bg} border-b ${c.border}`}>
+                    <td colSpan={5} className="px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${c.dot}`} />
+                          <span className={`font-bold text-[12px] ${c.text}`}>{bankName}</span>
+                          {(ag || ct) && (
+                            <span className={`text-[11px] opacity-70 ${c.text}`}>
+                              {ag ? `Ag. ${ag}` : ""}{ag && ct ? " / " : ""}{ct ? `C. ${ct}` : ""}
+                            </span>
+                          )}
+                        </div>
+                        <span className={`text-[11px] font-semibold ${c.text} opacity-80`}>
+                          {bankRows.length} lançto{bankRows.length !== 1 ? "s" : ""} · {fmtBRL(subtotal)}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                  {/* Linhas do banco */}
+                  {bankRows.map((b: any, i: number) => (
+                    <tr key={b.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/40"}>
+                      <td className="px-3 py-2 whitespace-nowrap text-slate-500 font-medium">{fmtDate(b.data)}</td>
+                      <td className="px-3 py-2 max-w-[240px] truncate text-slate-700" title={b.descricao}>{b.descricao}</td>
+                      <td className={`px-3 py-2 text-right font-bold whitespace-nowrap ${valColor}`}>{fmtBRL(b.valor)}</td>
+                      <td className="px-3 py-2 text-center">
+                        {b.conciliado
+                          ? <span className="text-emerald-500 text-sm">✓</span>
+                          : <span className="text-slate-300 text-sm">○</span>
+                        }
+                      </td>
+                      <td className="px-3 py-2 text-slate-400 font-mono text-[11px]">{b.fn_numero || "—"}</td>
+                    </tr>
+                  ))}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+        {rows.length === 0 && (
+          <div className="flex items-center justify-center gap-2 py-6 text-slate-400">
+            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+            <span className="text-xs">Nenhum item nesta categoria</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
