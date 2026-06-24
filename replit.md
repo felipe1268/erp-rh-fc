@@ -50,9 +50,11 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3681** — **NFS-e EMITIDAS · BUGFIX CRASH "[object Date]" NO DIALOG ESPELHO — TIMESTAMP PRESERVADO PELO SUPERJSON. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** `getDetalhesNFse` usa `db.$client.query()` (raw pg), que retorna colunas TIMESTAMP (`created_at`) como `Date` JS. tRPC+superjson preserva o objeto Date no frontend; `Row` renderizava `{value || "—"}` — Date é truthy → React crash "Objects are not valid as a React child". Fix: mapear `row` antes do retorno, convertendo qualquer `Date` para ISO string via `v instanceof Date ? v.toISOString() : v`. Arquivo: `server/routers/nfseEmitidas.ts`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3680** — **NFS-e EMITIDAS · IMPORTAÇÃO HISTÓRICA XML + BUGFIX DEDUP ANO 2026. BACKEND PONTUAL + SCRIPT ONE-SHOT · ZERO ALTER/DROP/DELETE.** `importNfseXmlManual` deduplicava só por `numero_nf` sem ano, fazendo 2026 (reinicia em NF#1) colidir com 2018. Fix: dedup por `chave_acesso` quando preenchida, ou `(numero_nf + EXTRACT(YEAR FROM data_emissao))` quando vazia — aplicado em ambos os caminhos (SIAP GEO + ABRASF). Script `scripts/import_nfse_xml.mjs`: dedup em memória (sets `chavesExist`+`nfAnoExist`), batch INSERT 50 notas, 571 notas importadas (2018–2026). Arquivos: `server/routers/nfseEmitidas.ts`, `scripts/import_nfse_xml.mjs`. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3679** — **NF-e RECEBIDAS · REMOVE SUB-ABA "NFS-e SERVIÇOS (PORTAL NACIONAL)" — MANTÉM SÓ SEFAZ AUTOMÁTICO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** API Portal Nacional sem distribuição em lote; SEFAZ funcionando. Removidos: sub-nav pills, bloco NFS-e Tomadas (~188 linhas), state recebidasSub + tom*. Aba Recebidas → direto SEFAZ NF-e. Arquivo: `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3679** — **NF-e RECEBIDAS · REMOVE SUB-ABA "NFS-e SERVIÇOS (PORTAL NACIONAL)" — MANTÉM SÓ SEFAZ AUTOMÁTICO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3678** — **NFS-e EMITIDAS · CAMPOS COMPLETOS DO XML SIAP GEO: 12 NOVAS COLUNAS + DIALOG REDESENHADO. BACKEND ADITIVO + SCHEMA + FRONTEND · ZERO DROP/DELETE.** 12 colunas em `fiscal_notes` + SyncSchema+ + parser expandido + INSERT 28 campos + dialog 5 seções. Detalhe: `shared/changelog.ts`.
 

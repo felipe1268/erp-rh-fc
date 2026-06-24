@@ -1,6 +1,23 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3681 — **NFS-e EMITIDAS · BUGFIX CRASH "[object Date]" NO DIALOG ESPELHO — TIMESTAMP PRESERVADO PELO SUPERJSON. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Causa-raiz: `getDetalhesNFse` usava `db.$client.query()` (raw node-postgres), que retorna colunas
+ * TIMESTAMP (`created_at`) como objetos `Date` JavaScript (comportamento padrão do pg driver).
+ * O tRPC usa superjson como transformer — ele preserva `Date` objects na serialização/deserialização.
+ * No frontend, o componente `Row` renderizava `{value || "—"}`, e como `Date` é truthy, a expressão
+ * retornava o objeto Date que React tentava renderizar como filho de `<span>` → crash
+ * "Objects are not valid as a React child (found: [object Date])".
+ *
+ * **Fix (server/routers/nfseEmitidas.ts)** — antes do `return { row, detalhes }`:
+ *   Mapear todas as entradas de `row` e converter qualquer `Date` para string ISO
+ *   via `v instanceof Date ? v.toISOString() : v`. Resultado: `rowStr` com apenas strings/primitivos,
+ *   imune ao superjson Date-preservation.
+ *
+ * Arquivos: `server/routers/nfseEmitidas.ts`.
+ * Zero frontend, zero schema, zero ALTER/DROP/DELETE.
+ *
  * Rev. 3680 — **NFS-e EMITIDAS · IMPORTAÇÃO HISTÓRICA XML + BUGFIX DEDUP ANO 2026. BACKEND PONTUAL + SCRIPT ONE-SHOT · ZERO ALTER/DROP/DELETE.**
  *
  * Problema: `importNfseXmlManual` deduplicava NFS-e só por `numero_nf` sem considerar o ano.

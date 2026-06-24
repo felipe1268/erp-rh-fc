@@ -1221,7 +1221,13 @@ export const nfseEmitidasRouter = router({
       const row = res.rows[0];
       if (!row) throw new Error("Nota não encontrada");
       const detalhes = row.xml_payload ? parseSefinNfseXmlFull(row.xml_payload) : null;
-      return { row, detalhes };
+      const rowStr = Object.fromEntries(
+        Object.entries(row as Record<string, unknown>).map(([k, v]) => [
+          k,
+          v instanceof Date ? v.toISOString() : v,
+        ])
+      );
+      return { row: rowStr, detalhes };
     }),
 
   // Lista NFS-e importadas via prefeituras
