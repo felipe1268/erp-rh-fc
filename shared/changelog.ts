@@ -1,6 +1,12 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3650 — **CONFIGURAÇÕES SEFAZ · MÁSCARA CNPJ (XX.XXX.XXX/XXXX-XX). 100% FRONTEND · ZERO BACKEND/SCHEMA.**
+ *
+ * Campo "CNPJ da Empresa" exibia dígitos crus (ex.: 29353906000171). Adicionada máscara
+ * progressiva no onChange e formatação ao carregar do banco via useEffect. O save já
+ * stripava /\D/g antes de enviar ao backend — comportamento mantido.
+ *
  * Rev. 3649 — **NFS-e EMITIDAS · BUGFIX SIAP GEO "LOOP ETERNO 0 NOTAS" — dataInicial ERRADO. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * `executarSyncMunicipio` (Path B — SIAP GEO): quando `last_sync_at != NULL`, calculava

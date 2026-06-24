@@ -117,7 +117,7 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
   useEffect(() => {
     if (sefazCfg) {
       setSefazForm({
-        cnpj: sefazCfg.cnpj || "",
+        cnpj: (() => { const d = (sefazCfg.cnpj || "").replace(/\D/g, "").slice(0, 14); return d.replace(/^(\d{2})(\d)/, "$1.$2").replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3").replace(/\.(\d{3})(\d)/, ".$1/$2").replace(/(\d{4})(\d)/, "$1-$2"); })(),
         uf: sefazCfg.uf || "SP",
         ambiente: sefazCfg.ambiente || "producao",
         syncEnabled: Number(sefazCfg.sync_enabled) === 1,
@@ -560,7 +560,15 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
                   className="mt-1 text-sm"
                   placeholder="00.000.000/0000-00"
                   value={sefazForm.cnpj}
-                  onChange={e => setSefazForm(f => ({ ...f, cnpj: e.target.value }))}
+                  onChange={e => {
+                    const d = e.target.value.replace(/\D/g, "").slice(0, 14);
+                    const fmt = d
+                      .replace(/^(\d{2})(\d)/, "$1.$2")
+                      .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+                      .replace(/\.(\d{3})(\d)/, ".$1/$2")
+                      .replace(/(\d{4})(\d)/, "$1-$2");
+                    setSefazForm(f => ({ ...f, cnpj: fmt }));
+                  }}
                 />
               </div>
               <div>

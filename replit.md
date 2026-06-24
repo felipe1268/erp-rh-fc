@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3650** — **CONFIGURAÇÕES SEFAZ · MÁSCARA CNPJ (XX.XXX.XXX/XXXX-XX). 100% FRONTEND · ZERO BACKEND/SCHEMA.** Campo exibia dígitos crus; máscara progressiva no onChange + formatação ao carregar. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3649** — **NFS-e EMITIDAS · BUGFIX SIAP GEO LOOP ETERNO 0 NOTAS — dataInicial CALCULADO COMO "hoje-1mês" EM VEZ DE "último dataFinal+1d". BACKEND PONTUAL.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3648** — **iOS SAFARI · BUGFIX "text/html is not a valid JavaScript MIME type" NÃO CAPTURADO PELO lazyWithRetry. FRONTEND.** Adicionado padrão MIME type à lista isChunkErr → auto-reload em vez de ErrorBoundary. Detalhe: `shared/changelog.ts`.
