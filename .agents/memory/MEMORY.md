@@ -1,3 +1,4 @@
+- [Dashboard period selector standard](dashboard-period-selector-standard.md) — seletor de mês/ano = white-card (PanoramaFiscal), NUNCA DashHeader gradiente. Regra de ouro do usuário.
 - [Dialog no-truncate rule](dialog-no-truncate.md) — dialogs NUNCA truncam texto; use break-words/break-all; truncate só em linhas compactas de tabela com title= tooltip.
 - [Which DB the app uses](db-connection.md) — `executeSql` tool hits the Replit Postgres (`DATABASE_URL`/helium), but the app reads `NEON_DATABASE_URL`. To inspect REAL app data, query Neon.
 - [Importar planilha financeira FC](financeiro-excel-import.md) — abas mensais têm linha TOTAL no rodapé (dobra o import; filtrar por regex DD/MM/AAAA); memoizar de-para fuzzy + execute_values; nohup& não sobrevive entre tool calls.

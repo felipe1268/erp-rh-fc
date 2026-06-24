@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3634** — **DASHBOARD NOTAS FISCAIS · SELETOR DE PERÍODO PADRONIZADO (WHITE-CARD). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** DashHeader (gradiente) substituído pelo padrão white-card do PanoramaFiscal: `< ano >` + "Ano todo" + legend dots + Atualizar (linha 1) + 12 chips com dot de status (linha 2). Regra de ouro gravada em memória. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3633** — **DASHBOARD NOTAS FISCAIS · "NF-e POR FORNECEDOR" TROCADO DE PIE PARA BARRAS HORIZONTAIS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** PieChart substituído por BarChart horizontal (fornecedores no Y, valor no X, nomes truncados 22 chars, cores PALETTE). Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3632** — **PANORAMA FISCAL · BUGFIX ENTRADAS BANCÁRIAS MOSTRANDO EXTRATOS JÁ APAGADOS. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** `getPanoramaFiscal` consultava `bank_statement_lines` sem `AND bsl.excluido_em IS NULL` — "Limpar extrato" é soft-delete, não exclusão física; extratos removidos (ex.: Banco do Brasil Fev/Mar/Abr) continuavam aparecendo. Fix: 1 linha. Detalhe: `shared/changelog.ts`.

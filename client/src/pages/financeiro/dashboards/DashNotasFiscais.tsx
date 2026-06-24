@@ -10,10 +10,11 @@ import {
 import {
   FileText, ShoppingCart, Receipt, Building2, CheckCircle2,
   ArrowDownLeft, ArrowUpRight, Banknote,
+  ChevronLeft, ChevronRight, RefreshCw,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import {
-  PALETTE, formatBRL, formatBRLCompact, DashHeader, KpiCard, ChartCard,
+  PALETTE, formatBRL, formatBRLCompact, KpiCard, ChartCard,
   EmptyState, BRLTooltip, ComparativoAnual, DetailDialog, DetailColumn,
   MESES_ABREV,
 } from "./_kit";
@@ -355,33 +356,75 @@ export default function DashNotasFiscais() {
     <DashboardLayout>
       <div className="max-w-[1400px] mx-auto space-y-5 p-4 md:p-6">
 
-        {/* Header */}
-        <DashHeader
-          theme="violet"
-          icon={FileText}
-          title="Dashboard — Notas Fiscais"
-          subtitle="Análise NF-e × NFS-e × OCs × Extrato Bancário"
-          ano={ano}
-          onAno={setAno}
-          onRefresh={() => { pQuery.refetch(); anoQuery.refetch(); prevQuery.refetch(); }}
-        />
-
-        {/* Seletor de mês */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {[{ label: "Ano todo", val: 0 }, ...MESES_ABREV.map((m, i) => ({ label: m, val: i + 1 }))].map(({ label, val }) => (
-            <button
-              key={val}
-              type="button"
-              onClick={() => setMes(val)}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all border
-                ${mes === val
-                  ? "bg-violet-600 text-white border-violet-600 shadow-sm"
-                  : "bg-white text-slate-600 border-slate-200 hover:border-violet-300 hover:text-violet-700"
-                }`}
-            >
-              {label}
+        {/* ── Seletor de período — padrão do sistema ─────────────────────── */}
+        <div className="rounded-2xl border border-slate-200 shadow-sm bg-white overflow-hidden">
+          {/* Linha 1: ano + "Ano todo" + legend + Atualizar */}
+          <div className="px-4 py-3 flex flex-wrap items-center gap-2 border-b border-slate-100">
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={() => setAno(a => a - 1)}
+                className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-base font-bold text-gray-800 min-w-[3.5rem] text-center">{ano}</span>
+              <button type="button" onClick={() => setAno(a => a + 1)}
+                className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              <button type="button"
+                onClick={() => setMes(m => m === 0 ? (new Date().getMonth() + 1) : 0)}
+                className={`ml-1 px-3 py-1 rounded-lg border text-xs font-semibold transition-all
+                  ${mes === 0
+                    ? "border-violet-500 bg-violet-50 text-violet-700 shadow-sm"
+                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"}`}
+              >Ano todo</button>
+            </div>
+            <div className="flex-1" />
+            {/* Legend */}
+            <div className="hidden sm:flex items-center gap-3 text-xs text-gray-500">
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />Com dados
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />Sem dados
+              </span>
+            </div>
+            {/* Atualizar */}
+            <button type="button"
+              onClick={() => { pQuery.refetch(); anoQuery.refetch(); prevQuery.refetch(); }}
+              disabled={pQuery.isFetching}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50">
+              <RefreshCw className={`h-3.5 w-3.5 ${pQuery.isFetching ? "animate-spin" : ""}`} />
+              <span className="hidden sm:inline">Atualizar</span>
             </button>
-          ))}
+          </div>
+          {/* Linha 2: 12 chips de mês com dots de status */}
+          <div className="px-4 py-3 grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+            {MESES_ABREV.map((m, i) => {
+              const numMes = i + 1;
+              const isSelected = mes === numMes;
+              const dotSrc = (mes === 0 ? pQuery.data : anoQuery.data);
+              const hasNfse = (dotSrc?.nfseEmitidas ?? []).some((n: any) => {
+                const d = n.data_emissao ? new Date(n.data_emissao).getMonth() + 1 : 0;
+                return d === numMes;
+              });
+              const hasNfe = (dotSrc?.nfeRecebidas ?? []).some((n: any) => {
+                const d = n.data_emissao ? new Date(n.data_emissao).getMonth() + 1 : 0;
+                return d === numMes;
+              });
+              const dotColor = (hasNfse || hasNfe) ? "bg-emerald-500" : "bg-gray-300";
+              return (
+                <button key={m} type="button" onClick={() => setMes(numMes)}
+                  className={`relative flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all
+                    ${isSelected
+                      ? "border-violet-500 bg-violet-50 text-violet-700 shadow-sm"
+                      : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50"}`}
+                >
+                  <span>{m}</span>
+                  <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* KPI row */}

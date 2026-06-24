@@ -1,6 +1,15 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3634 — **DASHBOARD NOTAS FISCAIS · SELETOR DE PERÍODO PADRONIZADO (WHITE-CARD). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Substituído DashHeader (gradiente violet) + chips planos pelo padrão white-card
+ * do sistema (mesmo layout do PanoramaFiscal):
+ * Linha 1: < ano > + "Ano todo" + legend (Com dados/Sem dados) + Atualizar.
+ * Linha 2: 12 chips de mês com dot de status (emerald=tem dados, cinza=sem).
+ * Dots derivados de pQuery (ano todo) ou anoQuery (mês específico).
+ * Regra de ouro gravada em .agents/memory/dashboard-period-selector-standard.md.
+ *
  * Rev. 3633 — **DASHBOARD NOTAS FISCAIS · "NF-e POR FORNECEDOR" TROCADO DE PIE PARA BARRAS HORIZONTAIS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Gráfico de rosca (PieChart) substituído por BarChart horizontal (layout="vertical"):
