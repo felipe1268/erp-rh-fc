@@ -1,6 +1,12 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3641 — **DASHBOARD NF-e · RÓTULO DA BARRA "NF-e POR FORNECEDOR" EM NÚMERO COMPLETO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * LabelList formatter trocado de `formatBRLCompact` (abreviava p/ "R$ 165 mil") para
+ * `Intl.NumberFormat(pt-BR, currency=BRL, maximumFractionDigits=0)` → "R$ 165.000".
+ * Margem direita ampliada de 72 → 120px para acomodar rótulos mais longos sem quebra de linha.
+ *
  * Rev. 3640 — **DASHBOARD NF-e · TREEMAP SUBSTITUÍDO POR BARCHART HORIZONTAL "NF-e POR FORNECEDOR". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Treemap removido (ruim p/ leitura). BarChart layout="vertical": fornecedor no eixo Y

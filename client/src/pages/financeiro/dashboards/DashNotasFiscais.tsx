@@ -629,7 +629,7 @@ export default function DashNotasFiscais() {
                   <BarChart
                     layout="vertical"
                     data={treemapData.slice(0, 10)}
-                    margin={{ top: 4, right: 72, left: 4, bottom: 4 }}
+                    margin={{ top: 4, right: 120, left: 4, bottom: 4 }}
                   >
                     <XAxis type="number" hide />
                     <YAxis
@@ -660,8 +660,12 @@ export default function DashNotasFiscais() {
                       <LabelList
                         dataKey="value"
                         position="right"
-                        formatter={(v: number) => formatBRLCompact(v)}
-                        style={{ fontSize: 11, fill: "#64748b", fontWeight: 600 }}
+                        formatter={(v: number) =>
+                          new Intl.NumberFormat("pt-BR", {
+                            style: "currency", currency: "BRL", maximumFractionDigits: 0,
+                          }).format(v)
+                        }
+                        style={{ fontSize: 11, fill: "#475569", fontWeight: 600 }}
                       />
                     </Bar>
                   </BarChart>

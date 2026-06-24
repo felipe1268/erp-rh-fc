@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3641** — **DASHBOARD NF-e · RÓTULO DA BARRA "NF-e POR FORNECEDOR" EM NÚMERO COMPLETO. 100% FRONTEND.** LabelList: formatBRLCompact → Intl.NumberFormat sem decimais ("R$ 165.000"); margem direita 72→120px. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3640** — **DASHBOARD NF-e · TREEMAP → BARCHART HORIZONTAL "NF-e POR FORNECEDOR". 100% FRONTEND.** BarChart vertical layout, fornecedor no Y, valor compacto à direita, altura dinâmica. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3639** — **DASHBOARD NOTAS FISCAIS · HEADER GRADIENTE VIOLETA + ANO NO HEADER. 100% FRONTEND.** DashHeader (violet) com ano integrado igual aos outros dashboards; white-card simplificado com só chips de mês. Detalhe: `shared/changelog.ts`.
