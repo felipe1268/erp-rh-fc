@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3671 — **NFS-e EMITIDAS · PROGRESSO 0–100% NO HISTÓRICO + CRONÔMETRO DE RATE-LIMIT + BUGFIX HTTP 404 SIAP GEO. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * Três melhorias na aba "📤 Emitidas":
+ *
+ * (1) PROGRESSO REAL 0–100%: "Baixar histórico" agora não chama `syncAllMunicipios` em bloco.
+ *   O frontend faz um loop ano a ano (2018 → 2025, 8 chamadas a `syncMunicipio`), exibindo
+ *   uma barra de progresso que avança a cada ano concluído ("🔄 Buscando 2021… (ano 4 de 8)",
+ *   barra verde, "37% concluído") + contador de novas importadas em tempo real.
+ *   Ao terminar, toast com resumo total (importadas · já existiam · erros).
+ *
+ * (2) CRONÔMETRO DE RATE-LIMIT: A prefeitura (SIAP GEO) aceita 1 consulta a cada ~55 min.
+ *   O cronômetro regressivo `munCountdownSec` (já calculado desde Rev. 3577) agora aparece
+ *   no banner da aba Emitidas como pill âmbar "⏱ MM:SS p/ próxima consulta".
+ *   Quando o contador chega a zero, exibe pill verde "Consulta disponível".
+ *
+ * (3) BUGFIX HTTP 404 SIAP GEO: O ON CONFLICT do seed `getMunicipios` para Guaratinguetá
+ *   (SIAP GEO) só atualizava `inscricao_municipal` e `token`, NUNCA `endpoint`. Rows criadas
+ *   antes de Rev. 3652 mantinham a URL antiga (`/webservices/nfse.asmx` → 404). Fix: adicionado
+ *   `endpoint = EXCLUDED.endpoint` ao ON CONFLICT → próximo `getMunicipios` corrige a URL no DB.
+ *
+ * Arquivos: `server/routers/nfseEmitidas.ts` (ON CONFLICT fix), `FinanceiroNotasFiscais.tsx`
+ * (syncHistoricoProgress state + syncMunicipioMut + iniciarSyncHistoricoNfse + banner redesenhado).
+ *
  * Rev. 3670 — **NFS-e EMITIDAS · BOTÃO "BAIXAR HISTÓRICO 2018–2025" + "IMPORTAR XML (2026+)". BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * Dois novos botões no banner "NFS-e Emitidas":

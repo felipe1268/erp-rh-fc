@@ -335,6 +335,12 @@ export default function FinanceiroNotasFiscais() {
       yearQuery.refetch();
     },
   });
+
+  const [syncHistoricoProgress, setSyncHistoricoProgress] = useState<{
+    running: boolean; anoAtual: number; anoIdx: number; totalAnos: number;
+    importadas: number; ignoradas: number;
+  } | null>(null);
+  const syncMunicipioMut = (trpc as any).nfseEmitidas.syncMunicipio.useMutation();
   const importNfseXmlMut = (trpc as any).nfseEmitidas.importNfseXmlManual.useMutation({
     onSuccess: (r: any) => {
       listQuery.refetch();
@@ -704,6 +710,40 @@ export default function FinanceiroNotasFiscais() {
       setXmlUploading(false);
       toast({ title: "Erro ao ler os arquivos XML", variant: "destructive" });
     }
+  }
+
+  async function iniciarSyncHistoricoNfse() {
+    if (!companyId) return;
+    setConfirmHistoricoNfse(false);
+    const anos = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
+    let totalImportadas = 0, totalIgnoradas = 0, totalErros = 0;
+    setSyncHistoricoProgress({ running: true, anoAtual: anos[0], anoIdx: 0, totalAnos: anos.length, importadas: 0, ignoradas: 0 });
+    for (let i = 0; i < anos.length; i++) {
+      const ano = anos[i];
+      setSyncHistoricoProgress(p => p ? { ...p, anoAtual: ano, anoIdx: i } : null);
+      try {
+        const r: any = await syncMunicipioMut.mutateAsync({
+          companyId,
+          ibgeCode: GUARA_IBGE,
+          dataInicial: `${ano}-01-01`,
+          dataFinal: `${ano}-12-31`,
+        });
+        totalImportadas += r.importadas ?? 0;
+        totalIgnoradas += r.ignoradas ?? 0;
+      } catch {
+        totalErros++;
+      }
+      setSyncHistoricoProgress(p => p ? { ...p, importadas: totalImportadas, ignoradas: totalIgnoradas } : null);
+    }
+    setSyncHistoricoProgress(null);
+    municipiosQuery.refetch();
+    listQuery.refetch();
+    yearQuery.refetch();
+    toast({
+      title: `Histórico NFS-e concluído`,
+      description: `${totalImportadas} importadas · ${totalIgnoradas} já existiam${totalErros ? ` · ${totalErros} erros` : ""}`,
+      variant: totalImportadas > 0 ? "default" : "destructive",
+    });
   }
 
   async function handleNfseXmlUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -1428,45 +1468,84 @@ export default function FinanceiroNotasFiscais() {
               </p>
             </div>
           </div>
-          <div className="flex gap-2 flex-wrap">
-            <Button
-              size="sm"
-              onClick={() => setConfirmHistoricoNfse(true)}
-              disabled={syncAllMunMut.isPending}
-              className="gap-1.5 h-8 bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
-            >
-              {syncAllMunMut.isPending
-                ? <><Loader2 className="w-3 h-3 animate-spin" /> Buscando…</>
-                : <><Download className="w-3 h-3" /> Baixar histórico (2018–2025)</>}
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => nfseXmlInputRef.current?.click()}
-              disabled={importNfseXmlMut.isPending}
-              className="gap-1.5 h-8 bg-indigo-600 hover:bg-indigo-700 text-white text-xs"
-            >
-              {importNfseXmlMut.isPending
-                ? <><Loader2 className="w-3 h-3 animate-spin" /> Importando…</>
-                : <><FileCode className="w-3 h-3" /> Importar XML (2026+)</>}
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => pdfInputRef.current?.click()}
-              disabled={isParsing}
-              variant="outline"
-              className="gap-1.5 h-8 border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-xs"
-            >
-              {isParsing ? <><Loader2 className="w-3 h-3 animate-spin" /> Lendo…</> : <><Upload className="w-3 h-3" /> Importar PDF</>}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={openNew}
-              className="gap-1.5 h-8 border-slate-200 text-slate-700 hover:bg-slate-50 text-xs"
-            >
-              <Plus className="w-3 h-3" /> Nova NFS-e
-            </Button>
-          </div>
+          {/* Barra de progresso do histórico */}
+          {syncHistoricoProgress?.running ? (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between text-xs text-slate-600">
+                <span className="font-medium">
+                  🔄 Buscando {syncHistoricoProgress.anoAtual}…
+                  <span className="text-slate-400 ml-1">
+                    (ano {syncHistoricoProgress.anoIdx + 1} de {syncHistoricoProgress.totalAnos})
+                  </span>
+                </span>
+                <span className="text-emerald-700 font-semibold">
+                  {syncHistoricoProgress.importadas} novas · {syncHistoricoProgress.ignoradas} já existiam
+                </span>
+              </div>
+              <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                <div
+                  className="bg-emerald-500 h-2.5 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.round((syncHistoricoProgress.anoIdx / syncHistoricoProgress.totalAnos) * 100)}%` }}
+                />
+              </div>
+              <div className="text-[10px] text-slate-400 text-right">
+                {Math.round((syncHistoricoProgress.anoIdx / syncHistoricoProgress.totalAnos) * 100)}% concluído
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2 flex-wrap items-center">
+              <Button
+                size="sm"
+                onClick={() => setConfirmHistoricoNfse(true)}
+                disabled={!!syncHistoricoProgress}
+                className="gap-1.5 h-8 bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
+              >
+                <Download className="w-3 h-3" /> Baixar histórico (2018–2025)
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => nfseXmlInputRef.current?.click()}
+                disabled={importNfseXmlMut.isPending}
+                className="gap-1.5 h-8 bg-indigo-600 hover:bg-indigo-700 text-white text-xs"
+              >
+                {importNfseXmlMut.isPending
+                  ? <><Loader2 className="w-3 h-3 animate-spin" /> Importando…</>
+                  : <><FileCode className="w-3 h-3" /> Importar XML (2026+)</>}
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => pdfInputRef.current?.click()}
+                disabled={isParsing}
+                variant="outline"
+                className="gap-1.5 h-8 border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-xs"
+              >
+                {isParsing ? <><Loader2 className="w-3 h-3 animate-spin" /> Lendo…</> : <><Upload className="w-3 h-3" /> Importar PDF</>}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={openNew}
+                className="gap-1.5 h-8 border-slate-200 text-slate-700 hover:bg-slate-50 text-xs"
+              >
+                <Plus className="w-3 h-3" /> Nova NFS-e
+              </Button>
+              {/* Cronômetro: tempo até próxima consulta permitida na prefeitura */}
+              {munCountdownSec !== null && munCountdownSec > 0 && (
+                <span className="ml-auto flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-0.5 font-mono">
+                  <Clock className="w-3 h-3" />
+                  {munCountdownSec >= 3600
+                    ? `${Math.floor(munCountdownSec / 3600)}h ${String(Math.floor((munCountdownSec % 3600) / 60)).padStart(2, "0")}m`
+                    : `${String(Math.floor(munCountdownSec / 60)).padStart(2, "0")}:${String(munCountdownSec % 60).padStart(2, "0")}`}
+                  <span className="font-sans font-normal">p/ próxima consulta</span>
+                </span>
+              )}
+              {munCountdownSec === 0 && (
+                <span className="ml-auto flex items-center gap-1 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-0.5">
+                  <CheckCircle className="w-3 h-3" /> Consulta disponível
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Resultado da sync (quando executada manualmente) */}
@@ -2492,10 +2571,7 @@ export default function FinanceiroNotasFiscais() {
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
               <AlertDialogAction
                 className="bg-emerald-600 hover:bg-emerald-700"
-                onClick={() => {
-                  setConfirmHistoricoNfse(false);
-                  syncAllMunMut.mutate({ companyId: companyId ?? 0, dataInicial: "2018-01-01", dataFinal: "2025-12-31" });
-                }}
+                onClick={() => iniciarSyncHistoricoNfse()}
               >
                 Baixar histórico completo
               </AlertDialogAction>

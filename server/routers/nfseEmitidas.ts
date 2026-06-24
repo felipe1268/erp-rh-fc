@@ -893,7 +893,8 @@ export const nfseEmitidasRouter = router({
            inscricao_municipal, token, enabled)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,0)
          ON CONFLICT (company_id, ibge_code) DO UPDATE
-           SET inscricao_municipal = COALESCE(company_nfse_municipal_config.inscricao_municipal, EXCLUDED.inscricao_municipal),
+           SET endpoint            = EXCLUDED.endpoint,
+               inscricao_municipal = COALESCE(company_nfse_municipal_config.inscricao_municipal, EXCLUDED.inscricao_municipal),
                token               = COALESCE(company_nfse_municipal_config.token,               EXCLUDED.token)`,
         [
           companyId, guara.ibge_code, guara.nome_municipio, guara.uf,
