@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3662 — **NFS-e TOMADAS · PORTAL NACIONAL mTLS — SYNC AUTOMÁTICO VIA DFe NSU (MESMO FLUXO DAS EMITIDAS). BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * O SIAP GEO de Guaratinguetá não implementa `ConsultarNfseServicoTomado` (HTTP 404).
+ * A fonte correta é o Portal Nacional NFS-e (sefin.nfse.gov.br) que já é usado para
+ * as NFS-e emitidas de 2026+. O endpoint `GET /DFe/{NSU}` distribui TODOS os documentos
+ * da FC (prestador e tomador) em um único stream NSU — basta classificar.
+ *
+ * Backend (server/routers/nfseEmitidas.ts):
+ *   - `parseSefinNfseXml` agora retorna também `prestadorCnpj` e `prestadorNome`
+ *     (de `PrestadorServico.IdentificacaoPrestador.CpfCnpj` e `RazaoSocial`).
+ *   - Bloco `nfse_nacional` (Path A) modificado: em vez de inserir apenas emitidas,
+ *     classifica cada DFe pelo CNPJ:
+ *       * `prestadorCnpj == fcCnpj` → emitida (comportamento anterior, `origem=nfse_mun_35186020`)
+ *       * `tomadorCnpj == fcCnpj` → tomada → INSERT com `origem='nfse_tomada_nacional'`,
+ *         `emitente_cnpj=prestadorCnpj`, `emitente_nome=prestadorNome`
+ *   - `syncNfseTomadas` tRPC: redireciona para `executarSyncMunicipio(ibge=35186020)`
+ *     em vez de chamar o SIAP GEO; retorna `{ importadas, ignoradas, erros, aviso }`.
+ *   - `listNfseTomadas` e KPIs: filtro ampliado para
+ *     `(origem LIKE 'nfse_tomada_%' OR origem = 'nfse_tomada_nacional')`.
+ *
+ * Frontend (FinanceiroNotasFiscais.tsx, aba "📨 NFS-e Tomadas"):
+ *   - Banner âmbar substituído por banner violeta explicando o Portal Nacional mTLS.
+ *   - Botão "🔄 Sincronizar Portal Nacional" dispara `syncNfseTomadas`.
+ *   - Feedback inline de sucesso/erro + link para nfse.gov.br.
+ *   - KPI cards exibidos sem condicional de totalGeral > 0.
+ *
  * Rev. 3661 — **NFS-e TOMADAS · NOVO MÓDULO: ABA "📨 NFS-e TOMADAS" — SERVIÇOS RECEBIDOS PELA FC VIA SIAP GEO. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * FC Engenharia frequentemente recebe NFS-e emitidas por terceiros (prestadores de serviços)

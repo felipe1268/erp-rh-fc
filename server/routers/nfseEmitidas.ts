@@ -183,6 +183,7 @@ function decompressGzipBase64(b64: string): Promise<string> {
 // ── Parser de NFS-e XML individual (Portal Nacional ABRASF) ──────────────────
 function parseSefinNfseXml(xml: string): {
   numero: string; chave: string; dataEmissao: string;
+  prestadorCnpj: string; prestadorNome: string;
   tomadorCnpj: string; tomadorNome: string;
   valorBruto: number; valorLiquido: number; discriminacao: string;
 } | null {
@@ -203,12 +204,16 @@ function parseSefinNfseXml(xml: string): {
     if (!inf) return null;
     const vals = inf?.Servico?.Valores || {};
     const tom = inf?.Tomador?.IdentificacaoTomador?.CpfCnpj || {};
+    const prest = inf?.PrestadorServico?.IdentificacaoPrestador?.CpfCnpj ||
+                  inf?.Prestador?.CpfCnpj || {};
     const numero = String(inf?.Numero || inf?.numero || "");
     if (!numero) return null;
     return {
       numero,
       chave: String(inf?.CodigoVerificacao || inf?.ChaveNfse || inf?.chaveAcesso || ""),
       dataEmissao: String(inf?.DataEmissao || inf?.dataEmissao || "").slice(0, 10),
+      prestadorCnpj: String(prest?.Cnpj || prest?.Cpf || "").replace(/\D/g, ""),
+      prestadorNome: String(inf?.PrestadorServico?.RazaoSocial || inf?.Prestador?.RazaoSocial || ""),
       tomadorCnpj: String(tom?.Cnpj || tom?.Cpf || inf?.Tomador?.CpfCnpj?.Cnpj || "").replace(/\D/g, ""),
       tomadorNome: String(inf?.Tomador?.RazaoSocial || ""),
       valorBruto: parseFloat(vals?.ValorServicos || "0") || 0,
@@ -742,25 +747,61 @@ async function executarSyncMunicipio(opts: {
             const nota = parseSefinNfseXml(xmlStr);
             if (!nota) { ignoradas++; continue; }
 
-            const existingRes = await db.$client.query<any>(
-              `SELECT id FROM fiscal_notes WHERE company_id=$1 AND numero_nf=$2 AND origem=$3`,
-              [companyId, nota.numero, origem]
-            );
-            if (existingRes.rows[0]) { ignoradas++; continue; }
+            // Classificar: FC como prestador = emitida; FC como tomador = tomada
+            const fcCnpjClean = cnpj.replace(/\D/g, "");
+            const isTomada = nota.tomadorCnpj === fcCnpjClean && nota.prestadorCnpj !== fcCnpjClean;
+            const isEmitida = nota.prestadorCnpj === fcCnpjClean;
 
-            await db.$client.query(
-              `INSERT INTO fiscal_notes
-                (company_id, numero_nf, chave_acesso, data_emissao, tomador_cnpj, tomador_razao_social,
-                 descricao_servico, valor_bruto, valor_liquido, status, origem, xml_payload, created_at, updated_at)
-               VALUES ($1,$2,$3,$4::date,$5,$6,$7,$8,$9,'pendente',$10,$11,NOW(),NOW())
-               ON CONFLICT DO NOTHING`,
-              [companyId, nota.numero, nota.chave || null,
-               nota.dataEmissao || hoje.toISOString().slice(0, 10),
-               nota.tomadorCnpj || null, nota.tomadorNome || null,
-               nota.discriminacao || null, nota.valorBruto, nota.valorLiquido,
-               origem, xmlStr]
-            );
-            importadas++;
+            // ── Inserir EMITIDA ────────────────────────────────────────────────
+            if (isEmitida) {
+              const existingRes = await db.$client.query<any>(
+                `SELECT id FROM fiscal_notes WHERE company_id=$1 AND numero_nf=$2 AND origem=$3`,
+                [companyId, nota.numero, origem]
+              );
+              if (!existingRes.rows[0]) {
+                await db.$client.query(
+                  `INSERT INTO fiscal_notes
+                    (company_id, numero_nf, chave_acesso, data_emissao, tomador_cnpj, tomador_razao_social,
+                     descricao_servico, valor_bruto, valor_liquido, status, origem, xml_payload, created_at, updated_at)
+                   VALUES ($1,$2,$3,$4::date,$5,$6,$7,$8,$9,'pendente',$10,$11,NOW(),NOW())
+                   ON CONFLICT DO NOTHING`,
+                  [companyId, nota.numero, nota.chave || null,
+                   nota.dataEmissao || hoje.toISOString().slice(0, 10),
+                   nota.tomadorCnpj || null, nota.tomadorNome || null,
+                   nota.discriminacao || null, nota.valorBruto, nota.valorLiquido,
+                   origem, xmlStr]
+                );
+                importadas++;
+              } else { ignoradas++; }
+            }
+
+            // ── Inserir TOMADA (FC como tomador) ──────────────────────────────
+            if (isTomada) {
+              const origemTomada = "nfse_tomada_nacional";
+              const existingTom = await db.$client.query<any>(
+                `SELECT id FROM fiscal_notes WHERE company_id=$1 AND numero_nf=$2 AND origem=$3`,
+                [companyId, nota.numero, origemTomada]
+              );
+              if (!existingTom.rows[0]) {
+                await db.$client.query(
+                  `INSERT INTO fiscal_notes
+                    (company_id, numero_nf, chave_acesso, data_emissao,
+                     emitente_cnpj, emitente_nome, tomador_cnpj,
+                     descricao_servico, valor_bruto, valor_liquido,
+                     status, origem, xml_payload, created_at, updated_at)
+                   VALUES ($1,$2,$3,$4::date,$5,$6,$7,$8,$9,$10,'pendente',$11,$12,NOW(),NOW())
+                   ON CONFLICT DO NOTHING`,
+                  [companyId, nota.numero, nota.chave || null,
+                   nota.dataEmissao || hoje.toISOString().slice(0, 10),
+                   nota.prestadorCnpj || null, nota.prestadorNome || null,
+                   fcCnpjClean,
+                   nota.discriminacao || null, nota.valorBruto, nota.valorLiquido,
+                   origemTomada, xmlStr]
+                );
+              }
+            }
+
+            if (!isEmitida && !isTomada) { ignoradas++; }
           } catch (docErr: any) {
             console.warn(`[NfseMun][nfse_nacional] erro ao processar doc NSU=${doc.NSU}: ${docErr?.message}`);
             ignoradas++;
@@ -1136,24 +1177,32 @@ export const nfseEmitidasRouter = router({
   syncNfseTomadas: protectedProcedure
     .input(z.object({
       companyId: z.number(),
-      ibgeCode: z.number(),
+      ibgeCode: z.number().optional(),
       anoInicial: z.number().min(2018).max(2025).optional(),
       anoFinal: z.number().min(2018).max(2025).optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       const [sefazCfg] = (await db.$client.query<any>(
-        `SELECT cnpj FROM company_nfe_config WHERE company_id=$1`,
+        `SELECT cnpj, cert_pfx_base64 FROM company_nfe_config WHERE company_id=$1`,
         [input.companyId]
       )).rows;
       const cnpj = sefazCfg?.cnpj || "";
-      return executarSyncNfseTomado({
+      // Portal Nacional NFS-e (ibge_code sintético 35186020) usa mTLS com cert A1 do SEFAZ.
+      // O mesmo DFe endpoint retorna emitidas + tomadas — basta classificar pelo CNPJ do prestador.
+      const IBGE_PORTAL_NACIONAL = 35186020;
+      const result = await executarSyncMunicipio({
         companyId: input.companyId,
-        ibgeCode: input.ibgeCode,
+        ibgeCode: IBGE_PORTAL_NACIONAL,
         cnpj,
-        anoInicial: input.anoInicial,
-        anoFinal: input.anoFinal,
       });
+      return {
+        importadas: result.importadas,
+        ignoradas: result.ignoradas,
+        erros: result.erro ? [result.erro] : [],
+        aviso: result.aviso,
+        anos: [],
+      };
     }),
 
   // ── NFS-e Tomadas: lista (onde FC é tomador) ──────────────────────────────────
@@ -1183,7 +1232,7 @@ export const nfseEmitidasRouter = router({
                 descricao_servico, valor_bruto, valor_liquido, status, origem, created_at
          FROM fiscal_notes
          WHERE company_id=$1
-           AND origem LIKE 'nfse_tomada_%'
+           AND (origem LIKE 'nfse_tomada_%' OR origem = 'nfse_tomada_nacional')
            AND EXTRACT(YEAR FROM data_emissao::date) = $2
            ${mesFiltro}
            ${searchFiltro}
@@ -1199,14 +1248,14 @@ export const nfseEmitidasRouter = router({
            COUNT(DISTINCT emitente_cnpj)::int AS prestadores_distintos
          FROM fiscal_notes
          WHERE company_id=$1
-           AND origem LIKE 'nfse_tomada_%'
+           AND (origem LIKE 'nfse_tomada_%' OR origem = 'nfse_tomada_nacional')
            AND EXTRACT(YEAR FROM data_emissao::date) = $2`,
         [input.companyId, ano]
       );
       // Contagem anual para verificar se já tem dados históricos
       const totalGeralRows = await db.$client.query<any>(
         `SELECT COUNT(*)::int AS total FROM fiscal_notes
-         WHERE company_id=$1 AND origem LIKE 'nfse_tomada_%'`,
+         WHERE company_id=$1 AND (origem LIKE 'nfse_tomada_%' OR origem = 'nfse_tomada_nacional')`,
         [input.companyId]
       );
       const kpi = kpiRows.rows[0] ?? {};

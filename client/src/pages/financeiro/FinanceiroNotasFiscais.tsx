@@ -3212,39 +3212,57 @@ export default function FinanceiroNotasFiscais() {
                 </div>
               </div>
 
-              {/* Banner: API não disponível */}
-              <div className="rounded-xl border border-amber-300 bg-amber-50 px-5 py-4 flex gap-4">
-                <div className="text-2xl shrink-0 mt-0.5">⚠️</div>
+              {/* Banner: Portal Nacional mTLS */}
+              <div className="rounded-xl border border-violet-200 bg-violet-50 px-5 py-4 flex gap-4">
+                <div className="text-2xl shrink-0 mt-0.5">🔐</div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-bold text-amber-900 text-sm mb-1">
-                    Sincronização automática indisponível — SIAP GEO Guaratinguetá não expõe esta API
+                  <h3 className="font-bold text-violet-900 text-sm mb-1">
+                    Sincronização via Portal Nacional NFS-e — Certificado A1
                   </h3>
-                  <p className="text-xs text-amber-800 leading-relaxed">
-                    A prefeitura de Guaratinguetá implementa apenas a consulta de <strong>NFS-e emitidas</strong> ({`ConsultarNfse`}).
-                    A operação <strong>ConsultarNfseServicoTomado</strong> — que retornaria as notas onde a FC é tomadora — retorna HTTP 404 (não implementada no servidor SIAP GEO desta cidade).
+                  <p className="text-xs text-violet-800 leading-relaxed">
+                    O Portal Nacional (<strong>sefin.nfse.gov.br</strong>) distribui todas as NFS-e da FC por NSU — tanto
+                    as <strong>emitidas</strong> (FC como prestador) quanto as <strong>tomadas</strong> (FC como tomador).
+                    O sistema usa o mesmo certificado A1 já configurado para a SEFAZ, autenticando via mTLS.
+                    Ao clicar em Sincronizar, uma única chamada baixa ambos os tipos e os classifica automaticamente.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      onClick={() => syncTomadasMut.mutate({ companyId })}
+                      disabled={syncTomadasMut.isPending}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold bg-violet-700 text-white px-3 py-1.5 rounded-lg hover:bg-violet-800 disabled:opacity-50 transition-colors"
+                    >
+                      {syncTomadasMut.isPending
+                        ? <><Loader2 className="h-3 w-3 animate-spin" /> Sincronizando…</>
+                        : <><RefreshCw className="h-3 w-3" /> Sincronizar Portal Nacional</>
+                      }
+                    </button>
                     <a
-                      href="https://guaratingueta.geosiap.net.br/pmguaratingueta"
+                      href="https://www.nfse.gov.br/EmissorNacional/Login"
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-700 text-white px-3 py-1.5 rounded-lg hover:bg-amber-800 transition-colors"
+                      className="inline-flex items-center gap-1.5 text-xs text-violet-700 bg-violet-100 border border-violet-300 px-3 py-1.5 rounded-lg hover:bg-violet-200 transition-colors"
                     >
                       <ExternalLink className="h-3 w-3" />
-                      Abrir portal SIAP GEO
+                      Abrir portal nfse.gov.br
                     </a>
-                    <span className="inline-flex items-center gap-1.5 text-xs text-amber-700 bg-amber-100 border border-amber-300 px-3 py-1.5 rounded-lg">
-                      Login: <strong>13239401</strong> · Senha: <strong>31335504</strong>
-                    </span>
                   </div>
-                  <p className="text-xs text-amber-700 mt-2">
-                    💡 <strong>Como registrar:</strong> acesse o portal, exporte as NFS-e tomadas (XML ou relatório) e lançar manualmente os valores em <em>Lançamentos → Contas a Pagar</em>, ou aguardar um futuro módulo de importação por arquivo.
-                  </p>
+                  {syncTomadasMut.isError && (
+                    <p className="text-xs text-red-700 mt-2">
+                      ❌ {(syncTomadasMut.error as any)?.message || "Erro ao sincronizar"}
+                    </p>
+                  )}
+                  {syncTomadasMut.isSuccess && (
+                    <p className="text-xs text-green-700 mt-2">
+                      ✅ {(syncTomadasMut.data as any)?.importadas ?? 0} NFS-e tomadas importadas,&nbsp;
+                      {(syncTomadasMut.data as any)?.ignoradas ?? 0} já existentes
+                      {(syncTomadasMut.data as any)?.aviso && <> — {(syncTomadasMut.data as any).aviso}</>}
+                    </p>
+                  )}
                 </div>
               </div>
 
-              {/* KPI Cards — só mostra se já houver registros manuais */}
-              {tomTotalGeral > 0 && (
+              {/* KPI Cards */}
+              {(
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {[
                     { label: "Notas no ano", value: tomKpi.total.toString(), sub: `${tomTotalGeral} total histórico`, color: "border-violet-300 bg-violet-50" },

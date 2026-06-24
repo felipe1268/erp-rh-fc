@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3662** — **NFS-e TOMADAS · PORTAL NACIONAL mTLS — SYNC AUTOMÁTICO VIA DFe NSU (MESMO FLUXO DAS EMITIDAS). BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.** SIAP GEO não implementa `ConsultarNfseServicoTomado`; fonte correta = Portal Nacional (`sefin.nfse.gov.br`): `GET /DFe/{NSU}` distribui TODOS os docs da FC — classificar por CNPJ: prestadorCnpj=FC → emitida; tomadorCnpj=FC → tomada (`origem='nfse_tomada_nacional'`, emitente_cnpj=prestador). `parseSefinNfseXml` estendido com prestadorCnpj/Nome. `syncNfseTomadas` redireciona para `executarSyncMunicipio(ibge=35186020)`. Banner âmbar → violeta com botão "Sincronizar Portal Nacional". Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3661** — **NFS-e TOMADAS · NOVO MÓDULO ABA "📨 NFS-e TOMADAS" — SERVIÇOS RECEBIDOS PELA FC VIA SIAP GEO. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** `ConsultarNfseServicoTomado` SOAP (SOAPAction correto) + `parseServicoTomadoResponse` (extrai Prestador/emitente) + `executarSyncNfseTomado` (loop anual 2018–2025 cap); tRPC `syncNfseTomadas` + `listNfseTomadas` com KPIs; aba "📨 NFS-e Tomadas" no seletor; header violeta + chips mês + KPI cards + painel sync (seletor ano inicial/final) + tabela (emitente, CNPJ, nº, data, valor bruto/líq., descrição) + footer totalizador. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3660** — **NF-e RECEBIDAS · BUGFIX MANIFESTAÇÃO ENOTFOUND nfe.fazenda.gov.br. BACKEND PONTUAL.** Rota por cUF da chave: SP/MG/PR/demais → SVRS; RS → sefaz.rs; BA → sefaz.ba. Detalhe: `shared/changelog.ts`.
