@@ -652,11 +652,12 @@ const BANK_COLORS = [
 ];
 
 function BankTable({ rows, tipo }: { rows: any[]; tipo: "entrada" | "saida" }) {
+  const [filterConta, setFilterConta] = React.useState("__all__");
   const ring = tipo === "entrada" ? "border-emerald-100" : "border-rose-100";
   const head = tipo === "entrada" ? "bg-emerald-50/80 text-emerald-700" : "bg-rose-50/80 text-rose-700";
   const valColor = tipo === "entrada" ? "text-emerald-700" : "text-rose-700";
 
-  // Agrupa por conta_nome preservando a ordem já vinda do backend
+  // monta grupos na ordem original do backend (conta_nome ASC, data ASC)
   const bankOrder: string[] = [];
   const groups: Record<string, any[]> = {};
   for (const b of rows) {
@@ -664,11 +665,12 @@ function BankTable({ rows, tipo }: { rows: any[]; tipo: "entrada" | "saida" }) {
     if (!groups[key]) { groups[key] = []; bankOrder.push(key); }
     groups[key].push(b);
   }
-  // mapa nome→índice de cor
   const colorIdx: Record<string, number> = {};
   bankOrder.forEach((name, i) => { colorIdx[name] = i % BANK_COLORS.length; });
 
-  // Legenda (só bancos presentes)
+  // aplica filtro
+  const visibleBanks = filterConta === "__all__" ? bankOrder : bankOrder.filter(n => n === filterConta);
+
   const legendItems = bankOrder.map(name => ({
     name,
     color: BANK_COLORS[colorIdx[name]],
@@ -680,37 +682,50 @@ function BankTable({ rows, tipo }: { rows: any[]; tipo: "entrada" | "saida" }) {
 
   return (
     <div className="space-y-0">
-      {/* Legenda */}
-      {legendItems.length > 1 && (
-        <div className="flex flex-wrap gap-2 px-1 pb-3">
-          {legendItems.map(l => (
-            <div key={l.name}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-medium ${l.color.bg} ${l.color.border} ${l.color.text}`}>
-              <span className={`w-2 h-2 rounded-full shrink-0 ${l.color.dot}`} />
-              <span className="font-semibold">{l.name}</span>
-              {(l.agencia || l.conta) && (
-                <span className="opacity-60 font-normal">
-                  {l.agencia ? `Ag.${l.agencia}` : ""}{l.agencia && l.conta ? " / " : ""}
-                  {l.conta ? `C.${l.conta}` : ""}
-                </span>
-              )}
-              <span className="opacity-70">· {l.qtd} lançto{l.qtd !== 1 ? "s" : ""}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Barra: legenda + filtro */}
+      <div className="flex flex-wrap items-center gap-2 px-1 pb-3">
+        {/* Chips de legenda */}
+        {legendItems.map(l => (
+          <button
+            key={l.name}
+            type="button"
+            onClick={() => setFilterConta(prev => prev === l.name ? "__all__" : l.name)}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-medium transition-all
+              ${filterConta === l.name || filterConta === "__all__"
+                ? `${l.color.bg} ${l.color.border} ${l.color.text}`
+                : "bg-slate-50 border-slate-200 text-slate-400 opacity-50"
+              }`}
+          >
+            <span className={`w-2 h-2 rounded-full shrink-0 ${l.color.dot}`} />
+            <span className="font-semibold">{l.name}</span>
+            {(l.agencia || l.conta) && (
+              <span className="opacity-60 font-normal hidden sm:inline">
+                {l.agencia ? `Ag.${l.agencia}` : ""}{l.agencia && l.conta ? "/" : ""}
+                {l.conta ? `C.${l.conta}` : ""}
+              </span>
+            )}
+            <span className="opacity-70">· {l.qtd}</span>
+          </button>
+        ))}
+        {filterConta !== "__all__" && (
+          <button type="button" onClick={() => setFilterConta("__all__")}
+            className="text-[11px] text-slate-400 underline underline-offset-2 hover:text-slate-600 ml-1">
+            ver todos
+          </button>
+        )}
+      </div>
 
       <div className={`overflow-x-auto rounded-xl border ${ring}`}>
         <table className="w-full text-xs">
           <thead className={`${head} uppercase`}>
             <tr>
-              {["Data","Descrição","Valor","Conc.","NF#"].map(h => (
+              {["Data","Conta","Descrição","Valor","Conc.","NF#"].map(h => (
                 <th key={h} className="px-3 py-2.5 text-left font-semibold whitespace-nowrap tracking-wide">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {bankOrder.map(bankName => {
+            {visibleBanks.map(bankName => {
               const c = BANK_COLORS[colorIdx[bankName]];
               const bankRows = groups[bankName];
               const subtotal = bankRows.reduce((s: number, b: any) => s + Math.abs(parseFloat(b.valor ?? "0")), 0);
@@ -718,9 +733,9 @@ function BankTable({ rows, tipo }: { rows: any[]; tipo: "entrada" | "saida" }) {
               const ct = bankRows[0]?.conta_numero  || "";
               return (
                 <React.Fragment key={bankName}>
-                  {/* Cabeçalho separador do banco */}
+                  {/* Separador de banco */}
                   <tr className={`${c.bg} border-b ${c.border}`}>
-                    <td colSpan={5} className="px-3 py-2">
+                    <td colSpan={6} className="px-3 py-2">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${c.dot}`} />
@@ -737,11 +752,22 @@ function BankTable({ rows, tipo }: { rows: any[]; tipo: "entrada" | "saida" }) {
                       </div>
                     </td>
                   </tr>
-                  {/* Linhas do banco */}
+                  {/* Linhas individuais com badge de conta */}
                   {bankRows.map((b: any, i: number) => (
                     <tr key={b.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/40"}>
                       <td className="px-3 py-2 whitespace-nowrap text-slate-500 font-medium">{fmtDate(b.data)}</td>
-                      <td className="px-3 py-2 max-w-[240px] truncate text-slate-700" title={b.descricao}>{b.descricao}</td>
+                      <td className="px-3 py-2 text-[11px] whitespace-nowrap">
+                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${c.bg} ${c.text} font-medium`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
+                          <span className="truncate max-w-[90px]" title={b.conta_nome}>{b.conta_nome || "—"}</span>
+                        </span>
+                        {(b.conta_agencia || b.conta_numero) && (
+                          <span className="block text-slate-400 text-[10px] mt-0.5 pl-0.5">
+                            {b.conta_agencia ? `Ag.${b.conta_agencia}` : ""}{b.conta_agencia && b.conta_numero ? "/" : ""}{b.conta_numero || ""}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 max-w-[220px] truncate text-slate-700" title={b.descricao}>{b.descricao}</td>
                       <td className={`px-3 py-2 text-right font-bold whitespace-nowrap ${valColor}`}>{fmtBRL(b.valor)}</td>
                       <td className="px-3 py-2 text-center">
                         {b.conciliado
