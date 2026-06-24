@@ -373,7 +373,7 @@ export const fiscalNotesRouter = router({
   getPanoramaFiscal: protectedProcedure
     .input(z.object({
       companyId: z.number(),
-      mes: z.number().min(1).max(12),
+      mes: z.number().min(0).max(12),   // 0 = ano todo
       ano: z.number().min(2018).max(2040),
     }))
     .query(async ({ input, ctx }) => {
@@ -381,10 +381,11 @@ export const fiscalNotesRouter = router({
       const db = await getDb();
       const { companyId, mes, ano } = input;
 
-      const di = `${ano}-${String(mes).padStart(2, "0")}-01`;
-      const mesProx = mes === 12 ? 1 : mes + 1;
-      const anoProx = mes === 12 ? ano + 1 : ano;
-      const df = `${anoProx}-${String(mesProx).padStart(2, "0")}-01`;
+      // mes=0 → ano todo; mes=1..12 → mês específico
+      const di = mes === 0 ? `${ano}-01-01` : `${ano}-${String(mes).padStart(2, "0")}-01`;
+      const mesProx = mes === 0 ? 1 : (mes === 12 ? 1 : mes + 1);
+      const anoProx = mes === 0 ? ano + 1 : (mes === 12 ? ano + 1 : ano);
+      const df = mes === 0 ? `${ano + 1}-01-01` : `${anoProx}-${String(mesProx).padStart(2, "0")}-01`;
 
       // 1. NFS-e emitidas do período
       const nfseQ = await db.$client.query(`

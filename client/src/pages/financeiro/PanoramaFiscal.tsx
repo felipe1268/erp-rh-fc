@@ -160,8 +160,8 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
   };
 
   const { data, isFetching, refetch } = trpc.fiscalNotes.getPanoramaFiscal.useQuery(
-    { companyId, mes: mes === 0 ? 1 : mes, ano },
-    { enabled: !!companyId && mes !== 0, staleTime: 60_000 }
+    { companyId, mes, ano },
+    { enabled: !!companyId, staleTime: 60_000 }
   );
 
   // ── Progresso de loading ──────────────────────────────────────────────────
@@ -194,7 +194,7 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
     if (!data) return;
     const XLSX = await import("xlsx");
     const wb = XLSX.utils.book_new();
-    const pl = `${MESES_SHORT[mes - 1]}/${ano}`;
+    const pl = mes === 0 ? `Ano-${ano}` : `${MESES_SHORT[mes - 1]}/${ano}`;
 
     const resumoData = [
       ["Panorama Fiscal — " + pl], ["Empresa:", companyNome ?? ""], [""],
@@ -230,8 +230,8 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
     XLSX.writeFile(wb, `panorama-fiscal-${pl.replace("/", "-")}.xlsx`);
   }, [data, mes, ano, companyNome, r]);
 
-  const periodoLabel = `${MESES[mes - 1]} ${ano}`;
-  const periodoShort = `${MESES_SHORT[mes - 1]}/${ano}`;
+  const periodoLabel = mes === 0 ? `Ano ${ano}` : `${MESES[mes - 1]} ${ano}`;
+  const periodoShort = mes === 0 ? `${ano}` : `${MESES_SHORT[mes - 1]}/${ano}`;
 
   // ── Loading ───────────────────────────────────────────────────────────────
   if (!data && isFetching) {
@@ -395,28 +395,16 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
           </div>
         </div>
 
-        {/* ── Placeholder "Ano todo" ────────────────────────────────────── */}
-        {mes === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
-            <span className="text-4xl">📅</span>
-            <p className="text-base font-semibold text-slate-700">Selecione um mês para ver o panorama</p>
-            <p className="text-sm text-slate-400 max-w-xs">
-              O cruzamento NFS-e × NF-e × OC × Extrato é gerado mês a mês.<br />
-              Clique em um dos chips acima para carregar.
-            </p>
-          </div>
-        )}
-
         {/* Print header */}
-        {mes !== 0 && <div className="hidden print:flex items-center justify-between border-b pb-4 mb-4">
+        <div className="hidden print:flex items-center justify-between border-b pb-4 mb-4">
           {companyLogoUrl && <img src={companyLogoUrl} alt="" className="h-12 object-contain" />}
           <div className="text-right">
             <p className="text-xl font-bold">Panorama Fiscal — {periodoLabel}</p>
             <p className="text-sm text-slate-500">{companyNome} · {new Date().toLocaleDateString("pt-BR")}</p>
           </div>
-        </div>}
+        </div>
 
-        {mes !== 0 && (!data ? (
+        {!data ? (
           <div className="text-center py-16 text-slate-400">
             <Receipt className="h-10 w-10 mx-auto mb-3 opacity-30" />
             <p>Nenhum dado disponível para {periodoShort}.</p>
@@ -581,7 +569,7 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
             ════════════════════════════════════════════════════════════ */}
             <SpedSugestao open={openSec.spedInfo} onToggle={() => toggle("spedInfo")} />
           </>
-        ))}
+        )}
       </div>
     </>
   );

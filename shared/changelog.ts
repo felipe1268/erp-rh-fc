@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3622 — **PANORAMA FISCAL · MODO "ANO TODO" + BUGFIX ÍNDICE GERAL 17% FALSO. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * Dois problemas resolvidos nesta revisão:
+ *
+ * **1. Modo "Ano todo" funcional (era placeholder):**
+ *   - Backend: `getPanoramaFiscal` aceitava só `mes 1..12`; agora aceita `mes=0`
+ *     que mapeia para `di=${ano}-01-01` / `df=${ano+1}-01-01` (período anual completo).
+ *   - Frontend: query sempre habilitada (`enabled: !!companyId`); `mes=0` passa direto
+ *     para o backend sem substituição; placeholder removido; `periodoLabel="Ano 2026"`,
+ *     `periodoShort="2026"`; Excel exportado como `panorama-fiscal-Ano-2026.xlsx`.
+ *
+ * **2. Bugfix índice geral 17% em todo mês sem OCs:**
+ *   - Causa: cálculo usava `?? 50` como fallback para cobertura `null`
+ *     → `(0 + 50 + 0) / 3 = 17%` artificial em qualquer mês sem OCs.
+ *   - Fix: média calculada apenas sobre coberturas não-nulas; `null` = eixo
+ *     sem dados no período, excluído da média. Zero se todos forem nulos.
+ *
+ * **Arquivos:** `server/routers/fiscalNotes.ts` (validação + range de datas),
+ * `client/src/pages/financeiro/PanoramaFiscal.tsx` (query, labels, export, cálculo saúde).
+ *
  * Rev. 3621 — **PANORAMA FISCAL · SELETOR DE MÊS/ANO NO PADRÃO DO SISTEMA — CARD BRANCO + 12 CHIPS + BOLINHAS DE STATUS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Substituído o seletor inline `< Jun/2026 >` pelo padrão do sistema (mesmo layout de Contas a Receber,

@@ -50,9 +50,11 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3622** — **PANORAMA FISCAL · MODO "ANO TODO" FUNCIONAL + BUGFIX ÍNDICE GERAL 17% FALSO. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.** (1) Botão "Ano todo" agora executa de verdade: backend aceita `mes=0` → range `${ano}-01-01..${ano+1}-01-01`; frontend sempre habilita a query e exibe o panorama anual completo. (2) Bugfix: `coberturaNfseReceita ?? 50` etc. inflava índice geral para 17% em meses sem OCs; corrigido para média só das coberturas não-nulas. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3621** — **PANORAMA FISCAL · SELETOR DE MÊS/ANO NO PADRÃO DO SISTEMA — CARD BRANCO + 12 CHIPS + BOLINHAS DE STATUS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Substituído o seletor inline `< Jun/2026 >` pelo padrão do sistema (mesmo layout de Contas a Receber, Lançamentos, Cheques etc.): card branco com borda+sombra; linha 1 com `< 2026 >` + legenda (Com dados/Parcial/Sem dados) + botões Atualizar/Excel/PDF integrados; linha 2 com grid 6 cols (mobile) / 12 cols (≥sm) de chips Jan→Dez; chip selecionado `border-emerald-500 bg-emerald-50`; bolinha verde/âmbar/cinza por status. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3620** — **PANORAMA FISCAL · ABA "📊 Panorama Fiscal" EM NOTAS FISCAIS — CRUZAMENTO NFS-e × NF-e × OC × EXTRATO + EXPORT PDF + EXCEL + GUIA SPED. BACKEND ADITIVO + FRONTEND NOVO · ZERO ALTER/DROP/DELETE.** Nova aba na tela `/financeiro/notas-fiscais`. Backend: `fiscalNotes.getPanoramaFiscal({ companyId, mes, ano })` cruza NFS-e emitidas × NF-e recebidas × linhas de extrato (via `stmt_line_id`) × OCs (JOIN `fornecedores.cnpj`, match ±30%). Retorna 6 KPIs + 3 coberturas + listas com/sem nota. Frontend: `PanoramaFiscal.tsx` separado (painel Saúde Fiscal com 3 medidores SVG circulares, painel Pendências com cards de alerta scroll-to-section, 3 seções colapsíveis OC×NF/Entradas/Saídas zebra-striped, PDF via `window.print()`, Excel via `xlsx` 5 abas, guia SPED colapsível). Detalhe: `shared/changelog.ts`.
+- **Rev. 3620** — **PANORAMA FISCAL · ABA "📊 Panorama Fiscal" EM NOTAS FISCAIS — CRUZAMENTO NFS-e × NF-e × OC × EXTRATO + EXPORT PDF + EXCEL + GUIA SPED. BACKEND ADITIVO + FRONTEND NOVO · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3619** — **NFS-e EMITIDAS · PORTAL NACIONAL REST+mTLS+NSU (sefin.nfse.gov.br) + ESPELHO FIEL ABRASF + XML SALVO. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
