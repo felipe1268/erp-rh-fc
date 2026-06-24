@@ -99,7 +99,7 @@ function AlertCard({ icon, title, count, total, variant, onClick }: {
         <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${countStyle[variant]}`}>{count}</span>
       </div>
       <p className="text-sm font-semibold text-slate-800 leading-snug">{title}</p>
-      <p className="text-lg font-extrabold text-slate-900">{fmtBRL(total, { compact: true })}</p>
+      <p className="text-lg font-extrabold text-slate-900">{fmtBRL(total)}</p>
     </button>
   );
 }
@@ -124,7 +124,7 @@ function SectionToggle({ title, count, total, open, onToggle, variant = "default
       <span className={`w-2 h-2 rounded-full shrink-0 ${dot[variant]}`} />
       <span className="flex-1 text-left">{title}</span>
       {total !== undefined && (
-        <span className="text-xs font-bold opacity-80 hidden sm:inline">{fmtBRL(total, { compact: true })}</span>
+        <span className="text-xs font-bold opacity-80 hidden sm:inline">{fmtBRL(total)}</span>
       )}
       <span className="text-xs opacity-60 ml-1">{count} item{count !== 1 ? "s" : ""}</span>
       {open ? <ChevronUp className="h-4 w-4 shrink-0 opacity-50" /> : <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />}
@@ -379,7 +379,7 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
                   ].map(m => (
                     <div key={m.label} className={`rounded-xl px-3 py-2.5 ${m.bg}`}>
                       <p className="text-[10px] uppercase tracking-wide text-slate-500 font-medium mb-1">{m.label}</p>
-                      <p className={`text-base font-extrabold ${m.color}`}>{fmtBRL(m.val, { compact: true })}</p>
+                      <p className={`text-base font-extrabold ${m.color}`}>{fmtBRL(m.val)}</p>
                       <p className="text-[10px] text-slate-400">{m.qtd} doc{m.qtd !== 1 ? "s" : ""}</p>
                     </div>
                   ))}
