@@ -710,116 +710,44 @@ async function executarSyncMunicipio(opts: {
   let ignoradas = 0;
   const origem = `nfse_mun_${ibgeCode}`;
 
-  // ── Path A: Portal Nacional NFS-e (REST + mTLS + NSU) ──────────────────────
+  // ── Path A: Portal Nacional NFS-e (REST mTLS) ────────────────────────────────
+  // DIAGNÓSTICO (testado 24/06/2026): A API sefin.nfse.gov.br v1.6.0 NÃO fornece
+  // endpoint de distribuição em lote. Os únicos endpoints disponíveis são:
+  //   POST /sefinnacional/nfse         — emitir NFS-e
+  //   GET  /sefinnacional/nfse/{chave} — consultar nota por chave de 50 dígitos
+  //   (retorna E2401 "Chave não encontrada" p/ chave inexistente → auth ok)
+  // Não existe /DFe/{NSU}, /distribuicao, /contribuinte/nfse nem listagem por CNPJ.
+  // A importação de NFS-e recebidas deve ser feita via PDF (DANFSe) importado
+  // manualmente — o prestador envia o PDF e o usuário usa "Importar PDF".
   if (mun.provider === "nfse_nacional") {
     try {
       if (!sefazCfg?.cert_pfx_base64) {
         return { importadas: 0, ignoradas: 0, aviso: "Certificado A1 não configurado. Configure em Configurações → SEFAZ." };
       }
+      // Valida cert e faz probe de autenticação com chave fictícia de 50 zeros
       const { cert, key } = pfxToPem(sefazCfg.cert_pfx_base64, sefazCfg.cert_password || "");
       const baseUrl = (mun.endpoint || "https://sefin.nfse.gov.br/sefinnacional").replace(/\/$/, "");
-      const ultimoNsuSalvo = Number(mun.ultimo_nsu ?? 0);
-      let nsuAtual = ultimoNsuSalvo;
-      let novoUltimoNsu = ultimoNsuSalvo;
-      let totalLotes = 0;
-      const MAX_LOTES = 200;
+      const probeResp = await callHttpsGetJson(`${baseUrl}/nfse/${"0".repeat(50)}`, cert, key);
+      const probeErro = probeResp?.erro?.codigo ?? probeResp?.erros?.[0]?.Codigo ?? "";
+      // E2401 = "Chave não encontrada" → autenticação OK, API respondendo
+      const authOk = probeErro === "E2401";
 
-      console.log(`[NfseMun][nfse_nacional] company=${companyId} cnpj=...${cnpj.replace(/\D/g,"").slice(-4)} nsuInicial=${nsuAtual}`);
-
-      while (totalLotes < MAX_LOTES) {
-        totalLotes++;
-        const nsuPadded = String(nsuAtual).padStart(15, "0");
-        const url = `${baseUrl}/DFe/${nsuPadded}`;
-        const resp = await callHttpsGetJson(url, cert, key);
-        if (!resp || !Array.isArray(resp.docZip) || resp.docZip.length === 0) {
-          console.log(`[NfseMun][nfse_nacional] lote ${totalLotes}: sem documentos (NSU=${nsuAtual}) — fim.`);
-          break;
-        }
-
-        const ultNsu = Number(resp.ultNSU ?? resp.ultNsu ?? nsuAtual);
-        if (ultNsu > novoUltimoNsu) novoUltimoNsu = ultNsu;
-
-        for (const doc of resp.docZip) {
-          try {
-            const b64 = doc.docZip || doc.DocZip || "";
-            if (!b64) continue;
-            const xmlStr = await decompressGzipBase64(b64);
-            const nota = parseSefinNfseXml(xmlStr);
-            if (!nota) { ignoradas++; continue; }
-
-            // Classificar: FC como prestador = emitida; FC como tomador = tomada
-            const fcCnpjClean = cnpj.replace(/\D/g, "");
-            const isTomada = nota.tomadorCnpj === fcCnpjClean && nota.prestadorCnpj !== fcCnpjClean;
-            const isEmitida = nota.prestadorCnpj === fcCnpjClean;
-
-            // ── Inserir EMITIDA ────────────────────────────────────────────────
-            if (isEmitida) {
-              const existingRes = await db.$client.query<any>(
-                `SELECT id FROM fiscal_notes WHERE company_id=$1 AND numero_nf=$2 AND origem=$3`,
-                [companyId, nota.numero, origem]
-              );
-              if (!existingRes.rows[0]) {
-                await db.$client.query(
-                  `INSERT INTO fiscal_notes
-                    (company_id, numero_nf, chave_acesso, data_emissao, tomador_cnpj, tomador_razao_social,
-                     descricao_servico, valor_bruto, valor_liquido, status, origem, xml_payload, created_at, updated_at)
-                   VALUES ($1,$2,$3,$4::date,$5,$6,$7,$8,$9,'pendente',$10,$11,NOW(),NOW())
-                   ON CONFLICT DO NOTHING`,
-                  [companyId, nota.numero, nota.chave || null,
-                   nota.dataEmissao || hoje.toISOString().slice(0, 10),
-                   nota.tomadorCnpj || null, nota.tomadorNome || null,
-                   nota.discriminacao || null, nota.valorBruto, nota.valorLiquido,
-                   origem, xmlStr]
-                );
-                importadas++;
-              } else { ignoradas++; }
-            }
-
-            // ── Inserir TOMADA (FC como tomador) ──────────────────────────────
-            if (isTomada) {
-              const origemTomada = "nfse_tomada_nacional";
-              const existingTom = await db.$client.query<any>(
-                `SELECT id FROM fiscal_notes WHERE company_id=$1 AND numero_nf=$2 AND origem=$3`,
-                [companyId, nota.numero, origemTomada]
-              );
-              if (!existingTom.rows[0]) {
-                await db.$client.query(
-                  `INSERT INTO fiscal_notes
-                    (company_id, numero_nf, chave_acesso, data_emissao,
-                     emitente_cnpj, emitente_nome, tomador_cnpj,
-                     descricao_servico, valor_bruto, valor_liquido,
-                     status, origem, xml_payload, created_at, updated_at)
-                   VALUES ($1,$2,$3,$4::date,$5,$6,$7,$8,$9,$10,'pendente',$11,$12,NOW(),NOW())
-                   ON CONFLICT DO NOTHING`,
-                  [companyId, nota.numero, nota.chave || null,
-                   nota.dataEmissao || hoje.toISOString().slice(0, 10),
-                   nota.prestadorCnpj || null, nota.prestadorNome || null,
-                   fcCnpjClean,
-                   nota.discriminacao || null, nota.valorBruto, nota.valorLiquido,
-                   origemTomada, xmlStr]
-                );
-              }
-            }
-
-            if (!isEmitida && !isTomada) { ignoradas++; }
-          } catch (docErr: any) {
-            console.warn(`[NfseMun][nfse_nacional] erro ao processar doc NSU=${doc.NSU}: ${docErr?.message}`);
-            ignoradas++;
-          }
-        }
-
-        nsuAtual = Number(resp.ultNSU ?? resp.ultNsu ?? nsuAtual) + 1;
-        if (resp.docZip.length < 50) break; // menos que 1 lote completo → fim
-      }
+      const aviso = authOk
+        ? "Autenticação mTLS ✓ — Certificado válido. Porém, a API Portal Nacional NFS-e " +
+          "(sefin.nfse.gov.br v1.6.0) não fornece endpoint de distribuição em lote. " +
+          "Apenas consulta individual por chave de 50 dígitos (GET /nfse/{chave}). " +
+          "Para importar NFS-e de serviços recebidos, solicite o DANFSe ao prestador e use 'Importar PDF'."
+        : `Portal Nacional respondeu código '${probeErro || "inesperado"}'. ` +
+          "Verifique se o certificado A1 está correto em Configurações → SEFAZ.";
 
       await db.$client.query(
         `UPDATE company_nfse_municipal_config
-         SET last_sync_at=NOW(), last_sync_result=$1, ultimo_nsu=$2, updated_at=NOW()
-         WHERE company_id=$3 AND ibge_code=$4`,
-        [JSON.stringify({ importadas, ignoradas, ultimoNsu: novoUltimoNsu }), novoUltimoNsu, companyId, ibgeCode]
+         SET last_sync_at=NOW(), last_sync_result=$1, updated_at=NOW()
+         WHERE company_id=$2 AND ibge_code=$3`,
+        [JSON.stringify({ importadas: 0, ignoradas: 0, aviso }), companyId, ibgeCode]
       );
-      console.log(`[NfseMun][nfse_nacional] concluído — importadas=${importadas} ignoradas=${ignoradas} ultimoNsu=${novoUltimoNsu}`);
-      return { importadas, ignoradas };
+      console.log(`[NfseMun][nfse_nacional] probe authOk=${authOk} probeErro=${probeErro}`);
+      return { importadas: 0, ignoradas: 0, aviso };
     } catch (e: any) {
       const msg = e?.message || "Erro desconhecido";
       await db.$client.query(

@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3664 — **PORTAL NACIONAL NFS-e · DIAGNÓSTICO DE API + CORREÇÃO BACKEND + UX HONESTA. BACKEND PONTUAL + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Investigação completa (24/06/2026): a API sefin.nfse.gov.br v1.6.0 NÃO tem endpoint
+ * de distribuição em lote. Só existe POST /nfse (emitir) e GET /nfse/{chave50dígitos}
+ * (consulta individual). O probe de 50 zeros retornou E2401 "Chave não encontrada" →
+ * confirma que autenticação mTLS + cert A1 funcionam corretamente.
+ * O SIAP GEO de Guaratinguetá também está com todas as rotas 404 (município migrou sistema).
+ *
+ * Backend (nfseEmitidas.ts):
+ *   - executarSyncMunicipio para nfse_nacional: substitui loop NSU (que chamava /DFe/{NSU}
+ *     retornando 404 silencioso) por um probe de auth real (GET /nfse/{50zeros}).
+ *     E2401 = auth OK. Retorna aviso explicativo em vez de importadas=0 silencioso.
+ *
+ * Frontend (FinanceiroNotasFiscais.tsx):
+ *   - Banner violeta "Sincronização via Portal Nacional" → âmbar com explicação real da API
+ *   - Botão primário: "Importar PDF (DANFSe)" em vez de "Sincronizar"
+ *   - Botão secundário: "Verificar autenticação" (faz probe do cert)
+ *   - onSuccess do syncTomadasMut: detecta `data.aviso` e exibe toast informativo
+ *   - Resultado do probe exibido em painel âmbar com texto completo
+ *
  * Rev. 3663 — **NOTAS FISCAIS · SIMPLIFICAÇÃO PARA 3 ABAS: EMITIDAS | RECEBIDAS | PANORAMA FISCAL. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Usuário pediu interface mais clara: "só preciso de duas/três — emitidas e recebidas".

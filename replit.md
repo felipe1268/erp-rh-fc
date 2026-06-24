@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3664** — **PORTAL NACIONAL NFS-e · DIAGNÓSTICO API + BACKEND PROBE + UX. BACKEND PONTUAL + FRONTEND · ZERO SCHEMA.** sefin.nfse.gov.br v1.6.0 não tem endpoint de distribuição em lote — apenas GET /nfse/{chave50} e POST /nfse. `executarSyncMunicipio` para `nfse_nacional` substitui loop NSU (404 silencioso) por probe de auth (E2401=cert OK). Banner âmbar explica a limitação; botão primário vira "Importar PDF". Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3663** — **NOTAS FISCAIS · SIMPLIFICAÇÃO PARA 3 ABAS: EMITIDAS | RECEBIDAS | PANORAMA FISCAL. 100% FRONTEND · ZERO BACKEND/SCHEMA.** 4 abas → 3: "📤 Emitidas" + "📥 Recebidas" (sub-nav pill: "📦 NF-e Produtos (SEFAZ)" | "📋 NFS-e Serviços (Portal Nacional)") + "📊 Panorama Fiscal". Header buttons condicionais por sub-aba. tomadas query habilitada por `recebidasSub==="nfse"`. Subtítulo corrigido. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3662** — **NFS-e TOMADAS · PORTAL NACIONAL mTLS — SYNC AUTOMÁTICO VIA DFe NSU (MESMO FLUXO DAS EMITIDAS). BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.** SIAP GEO não implementa `ConsultarNfseServicoTomado`; fonte correta = Portal Nacional (`sefin.nfse.gov.br`): `GET /DFe/{NSU}` distribui TODOS os docs da FC — classificar por CNPJ: prestadorCnpj=FC → emitida; tomadorCnpj=FC → tomada (`origem='nfse_tomada_nacional'`, emitente_cnpj=prestador). `parseSefinNfseXml` estendido com prestadorCnpj/Nome. `syncNfseTomadas` redireciona para `executarSyncMunicipio(ibge=35186020)`. Banner âmbar → violeta com botão "Sincronizar Portal Nacional". Detalhe: `shared/changelog.ts`.

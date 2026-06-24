@@ -310,16 +310,17 @@ export default function FinanceiroNotasFiscais() {
     onSuccess: (data: any) => {
       setTomSyncResult(data);
       tomQuery.refetch();
-      toast({
-        title: data.importadas > 0
-          ? `✅ ${data.importadas} NFS-e tomadas importadas`
-          : "ℹ️ Nenhuma nota nova encontrada",
-        description: data.erros?.length
-          ? `Erros em ${data.erros.length} ano(s): ${data.erros[0]}`
-          : `${data.ignoradas} já existiam · Anos: ${(data.anos ?? []).join(", ")}`,
-      });
+      if (data?.aviso) {
+        // Backend retornou aviso explicativo (ex: API sem distribuição em lote)
+        toast({ title: "ℹ️ Verificação concluída", description: data.aviso.slice(0, 120), duration: 8000 });
+      } else if (data.importadas > 0) {
+        toast({ title: `✅ ${data.importadas} NFS-e importadas` });
+      } else {
+        toast({ title: "ℹ️ Nenhuma nota nova encontrada",
+          description: data.erros?.length ? `Erros em ${data.erros.length} ano(s)` : undefined });
+      }
     },
-    onError: (e: any) => toast({ title: "Erro ao sincronizar", description: e?.message, variant: "destructive" }),
+    onError: (e: any) => toast({ title: "Erro ao verificar", description: e?.message, variant: "destructive" }),
   });
 
   const [syncAllResult, setSyncAllResult] = useState<any>(null);
@@ -3236,50 +3237,57 @@ export default function FinanceiroNotasFiscais() {
                 </div>
               </div>
 
-              {/* Banner: Portal Nacional mTLS */}
-              <div className="rounded-xl border border-violet-200 bg-violet-50 px-5 py-4 flex gap-4">
-                <div className="text-2xl shrink-0 mt-0.5">🔐</div>
+              {/* Banner: Portal Nacional NFS-e — Limitação da API */}
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 flex gap-4">
+                <div className="text-2xl shrink-0 mt-0.5">⚠️</div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-bold text-violet-900 text-sm mb-1">
-                    Sincronização via Portal Nacional NFS-e — Certificado A1
+                  <h3 className="font-bold text-amber-900 text-sm mb-1">
+                    Portal Nacional NFS-e — sem distribuição em lote (API v1.6.0)
                   </h3>
-                  <p className="text-xs text-violet-800 leading-relaxed">
-                    O Portal Nacional (<strong>sefin.nfse.gov.br</strong>) distribui todas as NFS-e da FC por NSU — tanto
-                    as <strong>emitidas</strong> (FC como prestador) quanto as <strong>tomadas</strong> (FC como tomador).
-                    O sistema usa o mesmo certificado A1 já configurado para a SEFAZ, autenticando via mTLS.
-                    Ao clicar em Sincronizar, uma única chamada baixa ambos os tipos e os classifica automaticamente.
+                  <p className="text-xs text-amber-800 leading-relaxed">
+                    Testado em 24/06/2026: a API <strong>sefin.nfse.gov.br v1.6.0</strong> não fornece endpoint de
+                    distribuição em lote (equivalente ao <em>nfeDistDFeInt</em> do SEFAZ NF-e). Só existe{" "}
+                    <code className="bg-amber-100 px-1 rounded">GET /nfse/&#123;chave50dígitos&#125;</code>{" "}
+                    para consulta individual e <code className="bg-amber-100 px-1 rounded">POST /nfse</code> para emissão.
+                    <br />
+                    <strong>Para adicionar NFS-e de serviços recebidos:</strong> solicite o DANFSe (PDF) ao
+                    prestador de serviço e importe abaixo — o sistema extrai os dados automaticamente via IA.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
+                      onClick={() => nfseInputRef.current?.click()}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-700 text-white px-3 py-1.5 rounded-lg hover:bg-amber-800 transition-colors"
+                    >
+                      <Upload className="h-3 w-3" /> Importar PDF (DANFSe)
+                    </button>
+                    <button
                       onClick={() => syncTomadasMut.mutate({ companyId })}
                       disabled={syncTomadasMut.isPending}
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold bg-violet-700 text-white px-3 py-1.5 rounded-lg hover:bg-violet-800 disabled:opacity-50 transition-colors"
+                      className="inline-flex items-center gap-1.5 text-xs text-amber-700 bg-amber-100 border border-amber-300 px-3 py-1.5 rounded-lg hover:bg-amber-200 disabled:opacity-50 transition-colors"
                     >
                       {syncTomadasMut.isPending
-                        ? <><Loader2 className="h-3 w-3 animate-spin" /> Sincronizando…</>
-                        : <><RefreshCw className="h-3 w-3" /> Sincronizar Portal Nacional</>
+                        ? <><Loader2 className="h-3 w-3 animate-spin" /> Verificando cert…</>
+                        : <><RefreshCw className="h-3 w-3" /> Verificar autenticação</>
                       }
                     </button>
                     <a
                       href="https://www.nfse.gov.br/EmissorNacional/Login"
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs text-violet-700 bg-violet-100 border border-violet-300 px-3 py-1.5 rounded-lg hover:bg-violet-200 transition-colors"
+                      className="inline-flex items-center gap-1.5 text-xs text-amber-700 bg-white border border-amber-300 px-3 py-1.5 rounded-lg hover:bg-amber-50 transition-colors"
                     >
                       <ExternalLink className="h-3 w-3" />
-                      Abrir portal nfse.gov.br
+                      Abrir nfse.gov.br
                     </a>
                   </div>
                   {syncTomadasMut.isError && (
                     <p className="text-xs text-red-700 mt-2">
-                      ❌ {(syncTomadasMut.error as any)?.message || "Erro ao sincronizar"}
+                      ❌ {(syncTomadasMut.error as any)?.message || "Erro ao verificar"}
                     </p>
                   )}
-                  {syncTomadasMut.isSuccess && (
-                    <p className="text-xs text-green-700 mt-2">
-                      ✅ {(syncTomadasMut.data as any)?.importadas ?? 0} NFS-e tomadas importadas,&nbsp;
-                      {(syncTomadasMut.data as any)?.ignoradas ?? 0} já existentes
-                      {(syncTomadasMut.data as any)?.aviso && <> — {(syncTomadasMut.data as any).aviso}</>}
+                  {syncTomadasMut.isSuccess && (syncTomadasMut.data as any)?.aviso && (
+                    <p className="text-xs text-amber-900 bg-amber-100 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+                      {(syncTomadasMut.data as any).aviso}
                     </p>
                   )}
                 </div>
