@@ -220,18 +220,17 @@ export default function FinanceiroNotasFiscais() {
     onSuccess: (res: any) => {
       nfeRecQuery.refetch();
       if (res.recuperadas > 0 && res.restantes === 0) {
-        toast.success(`${res.recuperadas} XML${res.recuperadas !== 1 ? "s" : ""} recuperado${res.recuperadas !== 1 ? "s" : ""}! Todas as notas agora têm XML completo.`);
+        toast({ title: `✅ ${res.recuperadas} XML${res.recuperadas !== 1 ? "s" : ""} recuperado${res.recuperadas !== 1 ? "s" : ""}! Todas as notas agora têm XML completo.` });
       } else if (res.recuperadas > 0) {
-        toast.success(`${res.recuperadas} XML${res.recuperadas !== 1 ? "s" : ""} recuperado${res.recuperadas !== 1 ? "s" : ""}. Ainda faltam ${res.restantes} — clique novamente para continuar.${res.aviso ? " " + res.aviso : ""}`);
+        toast({ title: `✅ ${res.recuperadas} XML${res.recuperadas !== 1 ? "s" : ""} recuperado${res.recuperadas !== 1 ? "s" : ""}`, description: `Ainda faltam ${res.restantes} — clique novamente para continuar.${res.aviso ? " " + res.aviso : ""}` });
       } else if (res.restantes === 0) {
-        toast.success("Todas as notas já têm XML completo!");
+        toast({ title: "✅ Todas as notas já têm XML completo!" });
       } else {
-        // Sem progresso: notas podem ser antigas (fora da janela SEFAZ de 90 dias)
         const avisoExtra = res.aviso ? ` ${res.aviso}` : "";
-        toast.info(`Nenhum XML novo desta vez (${res.restantes} notas antigas podem não ter XML disponível na SEFAZ).${avisoExtra}`, { duration: 7000 });
+        toast({ title: "ℹ️ Nenhum XML novo desta vez", description: `${res.restantes} nota${res.restantes !== 1 ? "s" : ""} antiga${res.restantes !== 1 ? "s" : ""} podem não ter XML disponível na SEFAZ.${avisoExtra}`, duration: 7000 } as any);
       }
     },
-    onError: (e: any) => toast.error("Erro ao recuperar XMLs: " + (e?.message || "Tente novamente.")),
+    onError: (e: any) => toast({ title: "Erro ao recuperar XMLs", description: e?.message || "Tente novamente.", variant: "destructive" }),
   });
 
   // Query anual sem filtros para dots do calendário recebidas

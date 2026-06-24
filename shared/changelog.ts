@@ -1,6 +1,20 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3629 — **NF-e RECEBIDAS · BUGFIX BOTAO "N NOTAS SEM XML — RECUPERAR" SEM FEEDBACK — toast.success/error/info NAO EXISTEM NO useToast DO SHADCN. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Causa-raiz: `backfillMut.onSuccess` e `onError` usavam `toast.success(...)`,
+ * `toast.info(...)` e `toast.error(...)` — metodos que nao existem no objeto
+ * retornado por `const { toast } = useToast()` do shadcn/ui. O callback lancava
+ * TypeError silenciosamente, o catch interno do React Query suprimia e nada
+ * aparecia para o usuario (nem spinner, nem mensagem de resultado).
+ *
+ * Fix: substituidos por `toast({ title: "...", description: "..." })` e
+ * `toast({ ..., variant: "destructive" })` conforme a API correta do useToast.
+ *
+ * Arquivo: client/src/pages/financeiro/FinanceiroNotasFiscais.tsx (backfillMut).
+ * Zero backend/schema/alter — apenas correcao de chamada de funcao no frontend.
+ *
  * Rev. 3628 — **DASHBOARD CONCILIACAO · BUGFIX CARDS VAZIOS — JOIN financial_accounts/obras + FALLBACK comprovante_beneficiario. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
  *
  * Causa-raiz: getConciliacaoDashExtra filtrava por `conta_nome IS NOT NULL`,
