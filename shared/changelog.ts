@@ -1,6 +1,15 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3648 — **BUGFIX iOS SAFARI · "text/html is not a valid JavaScript MIME type" NÃO ERA CAPTURADO PELO lazyWithRetry. 100% FRONTEND · ZERO BACKEND/SCHEMA.**
+ *
+ * Safari/iOS rejeita chunks JS servidos como text/html (404 → HTML de erro) com a
+ * mensagem `TypeError: 'text/html' is not a valid JavaScript MIME type`. Essa mensagem
+ * não estava na lista `isChunkErr` do lazyWithRetry → o erro subia para o ErrorBoundary
+ * em vez de triggerar o reload automático pós-deploy. Fix: adicionar
+ * `msg.includes("is not a valid JavaScript MIME type")` e `msg.includes("text/html")`
+ * à lista de padrões reconhecidos como chunk-stale.
+ *
  * Rev. 3647 — **NF-e RECEBIDAS · BUGFIX HORÁRIO DO LOG DE SYNC EM UTC EM VEZ DE BRT. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * `nfe_sync_log.iniciado_em` é `TIMESTAMP WITHOUT TIME ZONE` e armazena UTC (via `NOW()`).

@@ -96,6 +96,8 @@ function lazyWithRetry<T extends ComponentType<any>>(
         msg.includes("Importing a module script failed") ||
         msg.includes("error loading dynamically imported module") ||
         msg.includes("Loading chunk") ||
+        msg.includes("is not a valid JavaScript MIME type") ||
+        msg.includes("text/html") ||
         err?.name === "ChunkLoadError"
       );
     };
