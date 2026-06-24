@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3676 — **NFS-e EMITIDAS · DIALOG "DETALHES E VÍNCULOS" REDESENHADO — HEADER GRADIENTE + KPI ROW + CARDS MODERNOS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Dialog antigo: fundo branco liso, layout simples com grid e inputs soltos, scroll horizontal visível.
+ * Novo design: sem scroll, sem overflow. Header gradiente indigo→blue com NF# + tomador + badge "Detalhes e
+ * Vínculos". Abaixo: row de 3 KPIs (Emissão / Valor Bruto / Valor Líquido) em grade dividida. Body em
+ * bg-slate-50 com cards brancos arredondados para Lançamento Financeiro (ícone azul) e Extrato Bancário
+ * (ícone violeta), cada um com badge do ID vinculado atual. Footer: botão "Abrir PDF" ghost à esquerda +
+ * "Fechar" escuro à direita. Ícone DollarSign adicionado ao import lucide-react.
+ * Arquivo: `FinanceiroNotasFiscais.tsx`.
+ *
  * Rev. 3675 — **NFS-e EMITIDAS · PROGRESSO REAL 0–100% NO IMPORT XML SIAP GEO (LOTES DE 10). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Botão "Importar XML" exibia "Importando…" sem nenhum feedback de progresso.

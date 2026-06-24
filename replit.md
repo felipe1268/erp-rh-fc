@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3676** — **NFS-e EMITIDAS · DIALOG "DETALHES E VÍNCULOS" REDESENHADO — HEADER GRADIENTE + KPI ROW + CARDS MODERNOS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Header gradiente indigo→blue (NF# + tomador); row de 3 KPIs (Emissão/Bruto/Líquido); cards brancos arredondados para Lançamento (azul) e Extrato (violeta) com badge do ID atual; footer com "Abrir PDF" + "Fechar"; sem scroll. Arquivo: `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3675** — **NFS-e EMITIDAS · PROGRESSO REAL 0–100% NO IMPORT XML SIAP GEO (LOTES DE 10). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** DOMParser conta os `<nf>` antes de enviar; lotes de 10 → `mutateAsync` por lote → botão mostra "30/75 (40%)" em tempo real; toast final consolidado. Arquivo: `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3674** — **NFS-e EMITIDAS · IMPORTAR XML SIAP GEO EXPORT — MÚLTIPLAS NOTAS POR ARQUIVO (<nfse>/<nf>). BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Portal SIAP GEO tem opção "Exportar → em formato XML" com raiz `<nfse>` e N filhos `<nf>`. Novo `parseSiapGeoExportXml`: auto-detecta formato, converte centavos, datas BR, mapeia status (id_nf_st=2→cancelada), origem `nfse_siapgeo_export`. `importNfseXmlManual` tenta SIAP GEO primeiro, fall-through para ABRASF. Arquivos: `nfseEmitidas.ts`, `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.

@@ -18,7 +18,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import {
   Plus, Search, FileText, ExternalLink, Edit2, Trash2, Eye,
   Link, Link2Off, CheckCircle, Clock, AlertTriangle, RefreshCw,
-  Building2, Calendar, Banknote, Receipt, X, ChevronDown, ChevronUp,
+  Building2, Calendar, Banknote, Receipt, X, DollarSign, ChevronDown, ChevronUp,
   ChevronLeft, ChevronRight, Upload, Loader2, Copy, Check as CheckIcon,
   Download, FileCode,
 } from "lucide-react";
@@ -2055,88 +2055,127 @@ export default function FinanceiroNotasFiscais() {
         {/* ─── Dialog Detalhe / Vínculos ─── */}
         {detalheNf && (
           <Dialog open={!!detalheNf} onOpenChange={v => !v && setDetalheNf(null)}>
-            <DialogContent className="max-w-lg">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Link className="h-4 w-4 text-indigo-600" />
-                  NF-e #{detalheNf.numeroNf} — Detalhes e Vínculos
-                </DialogTitle>
-              </DialogHeader>
-
-              <div className="space-y-4 text-sm">
-                {/* Resumo */}
-                <div className="bg-slate-50 rounded-lg p-3 grid grid-cols-2 gap-2 border">
-                  <div><span className="text-slate-500 text-xs">Tomador</span><div className="font-medium truncate">{detalheNf.tomadorRazaoSocial ?? "—"}</div></div>
-                  <div><span className="text-slate-500 text-xs">Emissão</span><div>{fmtDateBR(detalheNf.dataEmissao)}</div></div>
-                  <div><span className="text-slate-500 text-xs">Valor Bruto</span><div className="font-medium">{formatBRL(detalheNf.valorBruto)}</div></div>
-                  <div><span className="text-slate-500 text-xs">Valor Líquido</span><div className="font-bold text-emerald-700">{formatBRL(detalheNf.valorLiquido)}</div></div>
-                  {detalheNf.bmReferencia && <div className="col-span-2"><span className="text-slate-500 text-xs">Referência</span><div>{detalheNf.obraNome} — {detalheNf.bmReferencia}</div></div>}
+            <DialogContent className="max-w-md p-0 overflow-hidden gap-0">
+              {/* Header gradiente */}
+              <div className="bg-gradient-to-r from-indigo-600 to-blue-600 px-5 py-4 flex items-start justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <Link className="h-4 w-4 text-indigo-200" />
+                    <span className="text-xs font-medium text-indigo-200 uppercase tracking-wide">Detalhes e Vínculos</span>
+                  </div>
+                  <h2 className="text-white font-bold text-lg leading-tight">NF-e #{detalheNf.numeroNf}</h2>
+                  {detalheNf.tomadorRazaoSocial && (
+                    <p className="text-indigo-100 text-sm mt-0.5 truncate max-w-xs">{detalheNf.tomadorRazaoSocial}</p>
+                  )}
                 </div>
+                <button onClick={() => setDetalheNf(null)} className="text-indigo-200 hover:text-white transition-colors mt-0.5">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
 
-                {/* Vínculo com Lançamento */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-slate-600">Lançamento Financeiro (ID)</Label>
+              {/* KPI row */}
+              <div className="grid grid-cols-3 divide-x border-b bg-white">
+                <div className="px-4 py-3 text-center">
+                  <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Emissão</p>
+                  <p className="text-sm font-semibold text-slate-700 mt-0.5">{fmtDateBR(detalheNf.dataEmissao)}</p>
+                </div>
+                <div className="px-4 py-3 text-center">
+                  <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Valor Bruto</p>
+                  <p className="text-sm font-semibold text-slate-700 mt-0.5">{formatBRL(detalheNf.valorBruto)}</p>
+                </div>
+                <div className="px-4 py-3 text-center">
+                  <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Valor Líquido</p>
+                  <p className="text-sm font-bold text-emerald-600 mt-0.5">{formatBRL(detalheNf.valorLiquido)}</p>
+                </div>
+              </div>
+
+              {/* Body */}
+              <div className="px-5 py-4 space-y-4 bg-slate-50">
+                {detalheNf.bmReferencia && (
+                  <div className="flex items-center gap-2 text-xs text-slate-500 bg-white rounded-lg px-3 py-2 border">
+                    <Building2 className="h-3.5 w-3.5 shrink-0 text-indigo-400" />
+                    <span className="truncate">{detalheNf.obraNome} — {detalheNf.bmReferencia}</span>
+                  </div>
+                )}
+
+                {/* Vínculo Lançamento */}
+                <div className="bg-white rounded-xl border p-4 space-y-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                      <DollarSign className="h-3.5 w-3.5 text-blue-600" />
+                    </div>
+                    <span className="text-xs font-semibold text-slate-700">Lançamento Financeiro</span>
+                    {detalheNf.entryId && (
+                      <span className="ml-auto text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">#{detalheNf.entryId}</span>
+                    )}
+                  </div>
                   <div className="flex gap-2">
                     <Input
                       type="number"
                       value={vincularEntryId}
                       onChange={e => setVincularEntryId(e.target.value)}
                       placeholder="ID do lançamento..."
-                      className="flex-1"
+                      className="flex-1 h-9 text-sm"
                     />
                     <Button
                       onClick={() => vincularEntryMut.mutate({ id: detalheNf.id, companyId: detalheNf.companyId ?? companyId!, entryId: vincularEntryId ? parseInt(vincularEntryId) : null })}
                       disabled={vincularEntryMut.isPending}
+                      size="sm"
                       variant={vincularEntryId ? "default" : "outline"}
-                      className="gap-1 shrink-0"
+                      className={`gap-1.5 shrink-0 h-9 ${vincularEntryId ? "bg-blue-600 hover:bg-blue-700" : ""}`}
                     >
-                      {vincularEntryId ? <Link className="h-3.5 w-3.5" /> : <Link2Off className="h-3.5 w-3.5" />}
+                      {vincularEntryMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : vincularEntryId ? <Link className="h-3.5 w-3.5" /> : <Link2Off className="h-3.5 w-3.5" />}
                       {vincularEntryId ? "Vincular" : "Desvincular"}
                     </Button>
                   </div>
-                  {detalheNf.entryId && (
-                    <p className="text-xs text-blue-600">Atualmente vinculado ao Lançamento #{detalheNf.entryId}</p>
-                  )}
                 </div>
 
-                {/* Vínculo com Extrato */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-slate-600">Linha do Extrato Bancário (ID)</Label>
+                {/* Vínculo Extrato */}
+                <div className="bg-white rounded-xl border p-4 space-y-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-6 h-6 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
+                      <FileText className="h-3.5 w-3.5 text-violet-600" />
+                    </div>
+                    <span className="text-xs font-semibold text-slate-700">Linha do Extrato Bancário</span>
+                    {detalheNf.stmtLineId && (
+                      <span className="ml-auto text-[10px] bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full font-medium">#{detalheNf.stmtLineId}</span>
+                    )}
+                  </div>
                   <div className="flex gap-2">
                     <Input
                       type="number"
                       value={vincularStmtId}
                       onChange={e => setVincularStmtId(e.target.value)}
                       placeholder="ID da linha do extrato..."
-                      className="flex-1"
+                      className="flex-1 h-9 text-sm"
                     />
                     <Button
                       onClick={() => vincularStmtMut.mutate({ id: detalheNf.id, companyId: detalheNf.companyId ?? companyId!, stmtLineId: vincularStmtId ? parseInt(vincularStmtId) : null })}
                       disabled={vincularStmtMut.isPending}
+                      size="sm"
                       variant={vincularStmtId ? "default" : "outline"}
-                      className="gap-1 shrink-0"
+                      className={`gap-1.5 shrink-0 h-9 ${vincularStmtId ? "bg-violet-600 hover:bg-violet-700" : ""}`}
                     >
-                      {vincularStmtId ? <Link className="h-3.5 w-3.5" /> : <Link2Off className="h-3.5 w-3.5" />}
+                      {vincularStmtMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : vincularStmtId ? <Link className="h-3.5 w-3.5" /> : <Link2Off className="h-3.5 w-3.5" />}
                       {vincularStmtId ? "Vincular" : "Desvincular"}
                     </Button>
                   </div>
-                  {detalheNf.stmtLineId && (
-                    <p className="text-xs text-violet-600">Atualmente vinculada ao Extrato #{detalheNf.stmtLineId}</p>
-                  )}
                 </div>
-
-                {detalheNf.arquivoUrl && (
-                  <a href={detalheNf.arquivoUrl} target="_blank" rel="noopener noreferrer">
-                    <Button variant="outline" size="sm" className="gap-2 w-full">
-                      <ExternalLink className="h-3.5 w-3.5" /> Abrir PDF da NF-e
-                    </Button>
-                  </a>
-                )}
               </div>
 
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setDetalheNf(null)}>Fechar</Button>
-              </DialogFooter>
+              {/* Footer */}
+              <div className="px-5 py-3 bg-white border-t flex items-center justify-between gap-2">
+                {detalheNf.arquivoUrl ? (
+                  <a href={detalheNf.arquivoUrl} target="_blank" rel="noopener noreferrer">
+                    <Button variant="ghost" size="sm" className="gap-1.5 text-slate-600 hover:text-slate-800">
+                      <ExternalLink className="h-3.5 w-3.5" /> Abrir PDF
+                    </Button>
+                  </a>
+                ) : <span />}
+                <Button size="sm" onClick={() => setDetalheNf(null)} className="bg-slate-800 hover:bg-slate-700 text-white px-5">
+                  Fechar
+                </Button>
+              </div>
             </DialogContent>
           </Dialog>
         )}
