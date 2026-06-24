@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -186,6 +186,8 @@ export default function FinanceiroNotasFiscais() {
   const [batchItems, setBatchItems] = useState<BatchItem[]>([]);
   const [batchSaving, setBatchSaving] = useState(false);
 
+  const [nfseEspelhoId, setNfseEspelhoId] = useState<number | null>(null);
+
   const [confirmHistorico, setConfirmHistorico] = useState(false);
   const [nfeRecDetalhe, setNfeRecDetalhe] = useState<any>(null);
   const [copiedChave, setCopiedChave] = useState(false);
@@ -259,6 +261,12 @@ export default function FinanceiroNotasFiscais() {
     { enabled: !!companyId && pageTab === "recebidas", staleTime: 60_000, refetchInterval: 60_000 }
   );
   const sefazCfg: any = sefazCfgQuery.data ?? null;
+
+  // ── Espelho fiel NFS-e emitida ───────────────────────────────────────────────
+  const nfseEspelhoQuery = (trpc as any).nfseEmitidas.getDetalhesNFse.useQuery(
+    { id: nfseEspelhoId ?? 0, companyId: companyId ?? 0 },
+    { enabled: !!nfseEspelhoId && !!companyId, staleTime: 60_000 }
+  );
 
   // ── Municípios NFS-e emitidas (last_sync_at por município) ───────────────────
   const municipiosQuery = (trpc as any).nfseEmitidas.getMunicipios.useQuery(
@@ -1513,6 +1521,10 @@ export default function FinanceiroNotasFiscais() {
                       </td>
                       <td className="px-3 py-2.5">
                         <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button size="icon" variant="ghost" className="h-7 w-7 text-indigo-600 hover:text-indigo-800" title="Espelho fiel da NFS-e"
+                            onClick={() => setNfseEspelhoId(nf.id)}>
+                            <FileText className="h-3.5 w-3.5" />
+                          </Button>
                           <Button size="icon" variant="ghost" className="h-7 w-7" title="Detalhe / Vincular"
                             onClick={() => { setDetalheNf(nf); setVincularEntryId(String(nf.entryId ?? "")); setVincularStmtId(String(nf.stmtLineId ?? "")); }}>
                             <Eye className="h-3.5 w-3.5" />
@@ -1852,6 +1864,194 @@ export default function FinanceiroNotasFiscais() {
             </DialogContent>
           </Dialog>
         )}
+
+        {/* ─── Dialog Espelho Fiel NFS-e Emitida ─── */}
+        {nfseEspelhoId && (() => {
+          const d = nfseEspelhoQuery.data?.detalhes;
+          const row = nfseEspelhoQuery.data?.row;
+          const isLoading = nfseEspelhoQuery.isLoading;
+
+          const fmtVal = (v: number | undefined) =>
+            v == null || isNaN(Number(v)) ? "—" : new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(v));
+          const fmtPct = (v: number | undefined) =>
+            v == null || isNaN(Number(v)) || Number(v) === 0 ? "—" : (Number(v) * 100).toFixed(2).replace(".", ",") + " %";
+          const fmtDt = (s: string | undefined) => {
+            if (!s) return "—";
+            const t = String(s).slice(0, 10);
+            return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t.split("-").reverse().join("/") : s;
+          };
+
+          const Row = ({ label, value, mono }: { label: string; value?: string | null; mono?: boolean }) => (
+            <div className="flex flex-col min-w-0">
+              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide leading-none mb-0.5">{label}</span>
+              <span className={`text-sm text-slate-800 break-words ${mono ? "font-mono text-xs" : ""}`}>{value || "—"}</span>
+            </div>
+          );
+
+          const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+            <div className="space-y-2">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest border-b pb-1">{title}</h3>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">{children}</div>
+            </div>
+          );
+
+          return (
+            <Dialog open onOpenChange={v => !v && setNfseEspelhoId(null)}>
+              <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader className="pb-2 border-b">
+                  <DialogTitle className="flex items-center gap-2 text-base">
+                    <FileText className="h-4 w-4 text-indigo-600 shrink-0" />
+                    Espelho da NFS-e #{row?.numero_nf ?? nfseEspelhoId}
+                    {row?.origem && (
+                      <span className="text-xs font-normal text-slate-400 ml-1">— {row.origem}</span>
+                    )}
+                  </DialogTitle>
+                </DialogHeader>
+
+                {isLoading && (
+                  <div className="py-12 flex flex-col items-center gap-3 text-slate-400">
+                    <Loader2 className="h-7 w-7 animate-spin" />
+                    <span className="text-sm">Carregando dados da nota…</span>
+                  </div>
+                )}
+
+                {!isLoading && !d && (
+                  <div className="py-8 text-center space-y-2">
+                    <Receipt className="h-9 w-9 text-slate-200 mx-auto" />
+                    <p className="text-slate-500 text-sm font-medium">XML não disponível para esta nota</p>
+                    <p className="text-slate-400 text-xs">Esta nota foi importada via PDF ou sem XML completo. Os dados abaixo são os registrados no ERP.</p>
+                    {row && (
+                      <div className="mt-4 bg-slate-50 rounded-lg p-4 text-left grid grid-cols-2 gap-3 text-sm border max-w-sm mx-auto">
+                        <Row label="Número" value={row.numero_nf} />
+                        <Row label="Data Emissão" value={fmtDt(row.data_emissao)} />
+                        <Row label="Tomador" value={row.tomador_razao_social} />
+                        <Row label="CNPJ Tomador" value={row.tomador_cnpj} mono />
+                        <Row label="Valor Bruto" value={fmtVal(parseFloat(row.valor_bruto))} />
+                        <Row label="Valor Líquido" value={fmtVal(parseFloat(row.valor_liquido))} />
+                        {row.descricao_servico && (
+                          <div className="col-span-2 flex flex-col">
+                            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-0.5">Discriminação</span>
+                            <span className="text-xs text-slate-700 whitespace-pre-wrap break-words">{row.descricao_servico}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {!isLoading && d && (
+                  <div className="space-y-5 py-2 text-sm">
+
+                    {/* ── Identificação ── */}
+                    <Section title="Identificação da NFS-e">
+                      <Row label="Número"            value={d.numero} />
+                      <Row label="Código Verificação" value={d.codigoVerificacao} mono />
+                      <Row label="Data de Emissão"   value={d.dataEmissao ? d.dataEmissao.replace("T", " ").slice(0, 16) : "—"} />
+                      <Row label="Competência"       value={fmtDt(d.competencia)} />
+                      {d.rpsNumero && <Row label="RPS Número"  value={d.rpsNumero} />}
+                      {d.serie     && <Row label="Série"       value={d.serie} />}
+                      {d.situacao  && <Row label="Natureza Op." value={d.situacao} />}
+                    </Section>
+
+                    {/* ── Prestador ── */}
+                    <Section title="Prestador de Serviço (Emitente)">
+                      <Row label="Razão Social" value={d.prestadorNome} />
+                      <Row label="CNPJ"         value={d.prestadorCnpj} mono />
+                      <Row label="Insc. Municipal" value={d.prestadorInscricao} mono />
+                      {d.prestadorEndereco && <Row label="Endereço"  value={d.prestadorEndereco} />}
+                      {d.prestadorBairro   && <Row label="Bairro"    value={d.prestadorBairro} />}
+                      {(d.prestadorMunicipio || d.prestadorUf) && (
+                        <Row label="Município / UF" value={[d.prestadorMunicipio, d.prestadorUf].filter(Boolean).join(" / ")} />
+                      )}
+                      {d.prestadorCep      && <Row label="CEP"       value={d.prestadorCep} mono />}
+                      {d.prestadorEmail    && <Row label="E-mail"    value={d.prestadorEmail} />}
+                      {d.prestadorFone     && <Row label="Telefone"  value={d.prestadorFone} mono />}
+                    </Section>
+
+                    {/* ── Tomador ── */}
+                    <Section title="Tomador de Serviço (Destinatário)">
+                      <Row label="Razão Social" value={d.tomadorNome || row?.tomador_razao_social} />
+                      <Row label="CNPJ / CPF"   value={d.tomadorCnpj || row?.tomador_cnpj} mono />
+                      {d.tomadorInscricao  && <Row label="Insc. Municipal" value={d.tomadorInscricao} mono />}
+                      {d.tomadorEndereco   && <Row label="Endereço"  value={d.tomadorEndereco} />}
+                      {d.tomadorBairro     && <Row label="Bairro"    value={d.tomadorBairro} />}
+                      {(d.tomadorMunicipio || d.tomadorUf) && (
+                        <Row label="Município / UF" value={[d.tomadorMunicipio, d.tomadorUf].filter(Boolean).join(" / ")} />
+                      )}
+                      {d.tomadorCep        && <Row label="CEP"       value={d.tomadorCep} mono />}
+                      {d.tomadorEmail      && <Row label="E-mail"    value={d.tomadorEmail} />}
+                      {d.tomadorFone       && <Row label="Telefone"  value={d.tomadorFone} mono />}
+                    </Section>
+
+                    {/* ── Serviço ── */}
+                    <Section title="Serviço">
+                      {d.codigoItemLista   && <Row label="Item da Lista"       value={d.codigoItemLista} />}
+                      {d.codigoTributacao  && <Row label="Cód. Tributação Mun." value={d.codigoTributacao} />}
+                      {d.codigoMunicipio   && <Row label="Cód. Município"      value={d.codigoMunicipio} mono />}
+                      {d.municipioIncidencia && <Row label="Munic. Incidência"  value={d.municipioIncidencia} />}
+                    </Section>
+
+                    {/* ── Discriminação ── */}
+                    {(d.discriminacao || row?.descricao_servico) && (
+                      <div className="space-y-1.5">
+                        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest border-b pb-1">Discriminação dos Serviços</h3>
+                        <div className="bg-slate-50 rounded-lg p-3 border text-xs text-slate-700 whitespace-pre-wrap break-words leading-relaxed max-h-40 overflow-y-auto">
+                          {d.discriminacao || row?.descricao_servico}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Valores ── */}
+                    <div className="space-y-2">
+                      <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest border-b pb-1">Valores e Tributos</h3>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+                        <Row label="Valor dos Serviços"   value={fmtVal(d.valorServicos)} />
+                        {d.valorDeducoes > 0 && <Row label="Deduções"           value={fmtVal(d.valorDeducoes)} />}
+                        <Row label="Base de Cálculo ISS"  value={fmtVal(d.baseCalculo)} />
+                        <Row label="Alíquota ISS"         value={fmtPct(d.aliquota)} />
+                        <Row label="Valor ISS"            value={fmtVal(d.valorIss)} />
+                        <Row label="ISS Retido?"          value={d.issRetido === "1" ? "✔ Sim" : "✘ Não"} />
+                        {d.valorIssRetido > 0  && <Row label="ISS Retido (val.)"   value={fmtVal(d.valorIssRetido)} />}
+                        {d.valorInss > 0       && <Row label="INSS"                value={fmtVal(d.valorInss)} />}
+                        {d.valorIr > 0         && <Row label="IRRF"                value={fmtVal(d.valorIr)} />}
+                        {d.valorCsll > 0       && <Row label="CSLL"                value={fmtVal(d.valorCsll)} />}
+                        {d.valorPis > 0        && <Row label="PIS"                 value={fmtVal(d.valorPis)} />}
+                        {d.valorCofins > 0     && <Row label="COFINS"              value={fmtVal(d.valorCofins)} />}
+                        {d.valorOutrasRetencoes > 0 && <Row label="Outras Ret."    value={fmtVal(d.valorOutrasRetencoes)} />}
+                      </div>
+                      <div className="mt-3 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3 flex justify-between items-center">
+                        <span className="text-sm font-semibold text-emerald-800">Valor Líquido da NFS-e</span>
+                        <span className="text-xl font-bold text-emerald-700">{fmtVal(d.valorLiquido)}</span>
+                      </div>
+                    </div>
+
+                    {/* ── Informações Complementares ── */}
+                    {d.informacoesCompl && (
+                      <div className="space-y-1.5">
+                        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest border-b pb-1">Informações Complementares</h3>
+                        <div className="bg-amber-50 rounded-lg p-3 border border-amber-100 text-xs text-slate-700 whitespace-pre-wrap break-words leading-relaxed">
+                          {d.informacoesCompl}
+                        </div>
+                      </div>
+                    )}
+
+                  </div>
+                )}
+
+                <DialogFooter className="pt-2 border-t mt-2">
+                  {row?.arquivo_url && (
+                    <a href={row.arquivo_url} target="_blank" rel="noopener noreferrer" className="mr-auto">
+                      <Button variant="outline" size="sm" className="gap-1.5">
+                        <ExternalLink className="h-3.5 w-3.5" /> Abrir PDF
+                      </Button>
+                    </a>
+                  )}
+                  <Button variant="outline" onClick={() => setNfseEspelhoId(null)}>Fechar</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          );
+        })()}
 
         {/* ─── Dialog Importação em Lote (redesenhado Rev.3549) ─── */}
         {batchOpen && (() => {

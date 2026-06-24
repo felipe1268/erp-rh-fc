@@ -9,6 +9,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { sql } from "drizzle-orm";
 import https from "https";
+import zlib from "zlib";
 import forge from "node-forge";
 import { XMLParser } from "fast-xml-parser";
 
@@ -30,9 +31,9 @@ export const MUNICIPIOS_PADRAO = [
     nome_municipio: "Guaratinguetá (NFS-e Nacional)",
     uf: "SP",
     provider: "nfse_nacional",
-    endpoint: "https://www.nfse.gov.br/SistemaNacional/nfse.asmx",
+    endpoint: "https://sefin.nfse.gov.br/sefinnacional",
     auth_type: "certificado_a1",
-    descricao: "Portal Nacional NFS-e (nfse.gov.br) — notas a partir de 01/01/2026. Usa certificado A1 do SEFAZ.",
+    descricao: "Portal Nacional NFS-e (sefin.nfse.gov.br) — notas a partir de 01/01/2026. REST+mTLS via NSU com certificado A1 do SEFAZ.",
   },
   {
     ibge_code: 3502507,
@@ -133,6 +134,209 @@ function callHttps(
     req.write(bodyBuf);
     req.end();
   });
+}
+
+// ── GET mTLS → JSON (Portal Nacional NFS-e) ──────────────────────────────────
+function callHttpsGetJson(url: string, cert?: string, key?: string): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const agentOpts: https.AgentOptions = { rejectUnauthorized: false };
+    if (cert && key) { agentOpts.cert = cert; agentOpts.key = key; }
+    const agent = new https.Agent(agentOpts);
+    const req = https.request({
+      hostname: parsed.hostname,
+      port: parsed.port ? parseInt(parsed.port) : 443,
+      path: parsed.pathname + (parsed.search || ""),
+      method: "GET",
+      headers: { "Accept": "application/json" },
+      agent,
+    }, (res) => {
+      const chunks: Buffer[] = [];
+      res.on("data", c => chunks.push(c));
+      res.on("end", () => {
+        const text = Buffer.concat(chunks).toString("utf-8");
+        if (res.statusCode === 404 || res.statusCode === 204) { resolve(null); return; }
+        if (res.statusCode && res.statusCode >= 400) {
+          reject(new Error(`HTTP ${res.statusCode} — ${text.slice(0, 300).replace(/\s+/g, " ")}`));
+          return;
+        }
+        try { resolve(JSON.parse(text)); } catch { resolve(null); }
+      });
+    });
+    req.on("error", reject);
+    req.end();
+  });
+}
+
+// ── Descomprime GZip+Base64 → string UTF-8 ────────────────────────────────────
+function decompressGzipBase64(b64: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const buf = Buffer.from(b64, "base64");
+    zlib.gunzip(buf, (err, result) => {
+      if (err) reject(err);
+      else resolve(result.toString("utf-8"));
+    });
+  });
+}
+
+// ── Parser de NFS-e XML individual (Portal Nacional ABRASF) ──────────────────
+function parseSefinNfseXml(xml: string): {
+  numero: string; chave: string; dataEmissao: string;
+  tomadorCnpj: string; tomadorNome: string;
+  valorBruto: number; valorLiquido: number; discriminacao: string;
+} | null {
+  try {
+    const parsed = xmlParser.parse(xml);
+    const getAny = (...paths: string[]) => {
+      for (const p of paths) {
+        let node: any = parsed;
+        for (const k of p.split(".")) { node = node?.[k]; }
+        if (node !== undefined) return node;
+      }
+      return undefined;
+    };
+    const inf =
+      getAny("CompNfse.Nfse.InfNfse") ||
+      getAny("nfse.infNfse") ||
+      {};
+    if (!inf) return null;
+    const vals = inf?.Servico?.Valores || {};
+    const tom = inf?.Tomador?.IdentificacaoTomador?.CpfCnpj || {};
+    const numero = String(inf?.Numero || inf?.numero || "");
+    if (!numero) return null;
+    return {
+      numero,
+      chave: String(inf?.CodigoVerificacao || inf?.ChaveNfse || inf?.chaveAcesso || ""),
+      dataEmissao: String(inf?.DataEmissao || inf?.dataEmissao || "").slice(0, 10),
+      tomadorCnpj: String(tom?.Cnpj || tom?.Cpf || inf?.Tomador?.CpfCnpj?.Cnpj || "").replace(/\D/g, ""),
+      tomadorNome: String(inf?.Tomador?.RazaoSocial || ""),
+      valorBruto: parseFloat(vals?.ValorServicos || "0") || 0,
+      valorLiquido: parseFloat(vals?.ValorLiquidoNfse || vals?.ValorServicos || "0") || 0,
+      discriminacao: String(inf?.Servico?.Discriminacao || ""),
+    };
+  } catch { return null; }
+}
+
+// ── Parser COMPLETO de NFS-e XML ABRASF (Portal Nacional + SIAP GEO / SIL / TINUS) ───
+export function parseSefinNfseXmlFull(xml: string): Record<string, any> | null {
+  try {
+    const parsed = xmlParser.parse(xml);
+
+    // Suporta múltiplos envelopes ABRASF
+    const getDeep = (obj: any, ...paths: string[]) => {
+      for (const p of paths) {
+        let n: any = obj;
+        for (const k of p.split(".")) { n = n?.[k]; }
+        if (n !== undefined && n !== null) return n;
+      }
+      return undefined;
+    };
+
+    const inf: any =
+      getDeep(parsed, "CompNfse.Nfse.InfNfse") ||
+      getDeep(parsed, "nfse.infNfse") ||
+      getDeep(parsed, "Nfse.InfNfse") ||
+      {};
+
+    const numero = String(inf?.Numero || inf?.numero || "");
+    if (!numero) return null;
+
+    const vals    = inf?.Servico?.Valores   || inf?.servico?.Valores || {};
+    const serv    = inf?.Servico            || inf?.servico          || {};
+    const prest   = inf?.PrestadorServico   || inf?.Prestador        || {};
+    const tom     = inf?.TomadorServico     || inf?.Tomador          || {};
+    const rps     = inf?.IdentificacaoRps   || {};
+    const orgao   = inf?.OrgaoGerador       || {};
+
+    // Prestador
+    const prestIdent  = prest?.IdentificacaoPrestador || {};
+    const prestCnpj   = prestIdent?.CpfCnpj?.Cnpj || prestIdent?.CpfCnpj?.Cpf || prest?.CpfCnpj?.Cnpj || "";
+    const prestInscr  = prestIdent?.InscricaoMunicipal || prest?.InscricaoMunicipal || "";
+    const prestEnd    = prest?.Endereco || {};
+
+    // Tomador
+    const tomIdent    = tom?.IdentificacaoTomador || {};
+    const tomCnpj     = tomIdent?.CpfCnpj?.Cnpj || tomIdent?.CpfCnpj?.Cpf || tom?.CpfCnpj?.Cnpj || "";
+    const tomEnd      = tom?.Endereco || {};
+    const tomContato  = tom?.Contato  || {};
+
+    const fmtCnpj = (s: string) => {
+      const d = String(s || "").replace(/\D/g, "");
+      if (d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+      if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+      return d;
+    };
+    const fmtCep = (s: string) => {
+      const d = String(s || "").replace(/\D/g, "");
+      return d.length === 8 ? d.replace(/(\d{5})(\d{3})/, "$1-$2") : d;
+    };
+
+    const n = (v: any) => parseFloat(String(v || "0")) || 0;
+
+    return {
+      // Identificação da NFS-e
+      numero,
+      serie:                   String(rps?.Serie         || rps?.serie         || ""),
+      rpsNumero:               String(rps?.Numero        || rps?.numero        || ""),
+      rpsTipo:                 String(rps?.Tipo          || rps?.tipo          || ""),
+      codigoVerificacao:       String(inf?.CodigoVerificacao || inf?.ChaveNfse || ""),
+      dataEmissao:             String(inf?.DataEmissao   || "").replace("T", " ").slice(0, 19),
+      competencia:             String(inf?.Competencia   || "").slice(0, 10),
+      situacao:                String(inf?.NaturezaOperacao || inf?.situacao || ""),
+      informacoesCompl:        String(inf?.InformacoesComplementares || inf?.informacoesComplementares || ""),
+
+      // Serviço
+      discriminacao:           String(serv?.Discriminacao || ""),
+      codigoItemLista:         String(serv?.ItemListaServico || serv?.CodigoTributacaoMunicipio || ""),
+      codigoTributacao:        String(serv?.CodigoTributacaoMunicipio || ""),
+      codigoMunicipio:         String(serv?.CodigoMunicipio || orgao?.CodigoMunicipio || ""),
+      municipioIncidencia:     String(serv?.MunicipioIncidencia || ""),
+
+      // Valores
+      valorServicos:           n(vals?.ValorServicos),
+      valorDeducoes:           n(vals?.ValorDeducoes),
+      valorPis:                n(vals?.ValorPis),
+      valorCofins:             n(vals?.ValorCofins),
+      valorInss:               n(vals?.ValorInss),
+      valorIr:                 n(vals?.ValorIr),
+      valorCsll:               n(vals?.ValorCsll),
+      issRetido:               String(vals?.IssRetido || "2"), // 1=sim 2=não
+      valorIss:                n(vals?.ValorIss),
+      valorIssRetido:          n(vals?.ValorIssRetido),
+      valorOutrasRetencoes:    n(vals?.OutrasRetencoes),
+      baseCalculo:             n(vals?.BaseCalculo),
+      aliquota:                n(vals?.Aliquota),
+      valorLiquido:            n(vals?.ValorLiquidoNfse || vals?.ValorServicos),
+
+      // Prestador (emitente)
+      prestadorCnpj:           fmtCnpj(prestCnpj),
+      prestadorInscricao:      String(prestInscr),
+      prestadorNome:           String(prest?.RazaoSocial || prest?.razaoSocial || ""),
+      prestadorEndereco:       [prestEnd?.Endereco, prestEnd?.Numero, prestEnd?.Complemento].filter(Boolean).join(", "),
+      prestadorBairro:         String(prestEnd?.Bairro || ""),
+      prestadorMunicipio:      String(prestEnd?.NomeMunicipio || prestEnd?.CodigoMunicipio || ""),
+      prestadorUf:             String(prestEnd?.Uf || prestEnd?.UF || ""),
+      prestadorCep:            fmtCep(prestEnd?.Cep || prestEnd?.CEP || ""),
+      prestadorEmail:          String(prest?.Contato?.Email || ""),
+      prestadorFone:           String(prest?.Contato?.Telefone || prest?.Contato?.Fone || ""),
+
+      // Tomador (destinatário)
+      tomadorCnpj:             fmtCnpj(tomCnpj),
+      tomadorInscricao:        String(tomIdent?.InscricaoMunicipal || ""),
+      tomadorNome:             String(tom?.RazaoSocial || tom?.razaoSocial || ""),
+      tomadorEndereco:         [tomEnd?.Endereco, tomEnd?.Numero, tomEnd?.Complemento].filter(Boolean).join(", "),
+      tomadorBairro:           String(tomEnd?.Bairro || ""),
+      tomadorMunicipio:        String(tomEnd?.NomeMunicipio || tomEnd?.CodigoMunicipio || ""),
+      tomadorUf:               String(tomEnd?.Uf || tomEnd?.UF || ""),
+      tomadorCep:              fmtCep(tomEnd?.Cep || tomEnd?.CEP || ""),
+      tomadorEmail:            String(tomContato?.Email || ""),
+      tomadorFone:             String(tomContato?.Telefone || tomContato?.Fone || ""),
+
+      // Órgão gerador
+      orgaoMunicipio:          String(orgao?.CodigoMunicipio || ""),
+      orgaoUf:                 String(orgao?.Uf || orgao?.UF || ""),
+    };
+  } catch { return null; }
 }
 
 // ── SOAP envelope ABRASF ConsultarNfse ───────────────────────────────────────
@@ -377,24 +581,11 @@ async function consultarPorProvider(opts: {
     return parseAbrasrResponse(respXml);
   }
 
-  // ── NFS-e Nacional (nfse.gov.br) — SOAP 1.1 + Certificado A1 ─────────────
+  // ── NFS-e Nacional (sefin.nfse.gov.br) — REST GET /DFe/{NSU} + mTLS ────────
+  // O sync NSU é tratado diretamente em executarSyncMunicipio (loop por lote de 50).
+  // Nunca deve chegar aqui via consultarPorProvider.
   if (provider === "nfse_nacional") {
-    if (!certPfxBase64) throw new Error("Certificado A1 não configurado. Configure em Integração SEFAZ.");
-    const { cert, key } = pfxToPem(certPfxBase64, certPassword || "");
-    const soapBody = buildAbrasrConsultarNfse(cnpj, inscricaoMunicipal, dataInicial, dataFinal);
-    console.log(`[NfseMun][nfse_nacional] cnpj=${cnpj.replace(/\D/g,"").slice(-4)} inscricao=${inscricaoMunicipal} periodo=${dataInicial}→${dataFinal}`);
-    const respXml = await callHttps(endpoint, soapBody, {
-      "Content-Type": "text/xml; charset=utf-8",
-      "SOAPAction": "http://www.abrasf.org.br/nfse.xsd/ConsultarNfse",
-    }, cert, key);
-    console.log(`[NfseMun][nfse_nacional] resposta(${respXml.length}): ${respXml.slice(0, 500).replace(/\n/g, " ")}`);
-    const notas = parseAbrasrResponse(respXml);
-    console.log(`[NfseMun][nfse_nacional] notas parseadas=${notas.length}`);
-    if (notas.length === 0) {
-      const erroMatch = respXml.match(/<(?:[^:]+:)?(?:faultstring|Mensagem|Erro|Error|Message)>([^<]{1,200})<\//i);
-      if (erroMatch) throw new Error(`Portal Nacional: ${erroMatch[1].trim()}`);
-    }
-    return notas;
+    throw new Error("nfse_nacional usa path NSU direto em executarSyncMunicipio.");
   }
 
   throw new Error(`Provider desconhecido: ${provider}`);
@@ -427,14 +618,103 @@ async function executarSyncMunicipio(opts: {
   const sefazCfg = sefazRes.rows[0];
 
   const hoje = new Date();
+  let importadas = 0;
+  let ignoradas = 0;
+  const origem = `nfse_mun_${ibgeCode}`;
 
+  // ── Path A: Portal Nacional NFS-e (REST + mTLS + NSU) ──────────────────────
+  if (mun.provider === "nfse_nacional") {
+    try {
+      if (!sefazCfg?.cert_pfx_base64) {
+        return { importadas: 0, ignoradas: 0, aviso: "Certificado A1 não configurado. Configure em Configurações → SEFAZ." };
+      }
+      const { cert, key } = pfxToPem(sefazCfg.cert_pfx_base64, sefazCfg.cert_password || "");
+      const baseUrl = (mun.endpoint || "https://sefin.nfse.gov.br/sefinnacional").replace(/\/$/, "");
+      const ultimoNsuSalvo = Number(mun.ultimo_nsu ?? 0);
+      let nsuAtual = ultimoNsuSalvo;
+      let novoUltimoNsu = ultimoNsuSalvo;
+      let totalLotes = 0;
+      const MAX_LOTES = 200;
+
+      console.log(`[NfseMun][nfse_nacional] company=${companyId} cnpj=...${cnpj.replace(/\D/g,"").slice(-4)} nsuInicial=${nsuAtual}`);
+
+      while (totalLotes < MAX_LOTES) {
+        totalLotes++;
+        const nsuPadded = String(nsuAtual).padStart(15, "0");
+        const url = `${baseUrl}/DFe/${nsuPadded}`;
+        const resp = await callHttpsGetJson(url, cert, key);
+        if (!resp || !Array.isArray(resp.docZip) || resp.docZip.length === 0) {
+          console.log(`[NfseMun][nfse_nacional] lote ${totalLotes}: sem documentos (NSU=${nsuAtual}) — fim.`);
+          break;
+        }
+
+        const ultNsu = Number(resp.ultNSU ?? resp.ultNsu ?? nsuAtual);
+        if (ultNsu > novoUltimoNsu) novoUltimoNsu = ultNsu;
+
+        for (const doc of resp.docZip) {
+          try {
+            const b64 = doc.docZip || doc.DocZip || "";
+            if (!b64) continue;
+            const xmlStr = await decompressGzipBase64(b64);
+            const nota = parseSefinNfseXml(xmlStr);
+            if (!nota) { ignoradas++; continue; }
+
+            const existingRes = await db.$client.query<any>(
+              `SELECT id FROM fiscal_notes WHERE company_id=$1 AND numero_nf=$2 AND origem=$3`,
+              [companyId, nota.numero, origem]
+            );
+            if (existingRes.rows[0]) { ignoradas++; continue; }
+
+            await db.$client.query(
+              `INSERT INTO fiscal_notes
+                (company_id, numero_nf, chave_acesso, data_emissao, tomador_cnpj, tomador_razao_social,
+                 descricao_servico, valor_bruto, valor_liquido, status, origem, xml_payload, created_at, updated_at)
+               VALUES ($1,$2,$3,$4::date,$5,$6,$7,$8,$9,'pendente',$10,$11,NOW(),NOW())
+               ON CONFLICT DO NOTHING`,
+              [companyId, nota.numero, nota.chave || null,
+               nota.dataEmissao || hoje.toISOString().slice(0, 10),
+               nota.tomadorCnpj || null, nota.tomadorNome || null,
+               nota.discriminacao || null, nota.valorBruto, nota.valorLiquido,
+               origem, xmlStr]
+            );
+            importadas++;
+          } catch (docErr: any) {
+            console.warn(`[NfseMun][nfse_nacional] erro ao processar doc NSU=${doc.NSU}: ${docErr?.message}`);
+            ignoradas++;
+          }
+        }
+
+        nsuAtual = Number(resp.ultNSU ?? resp.ultNsu ?? nsuAtual) + 1;
+        if (resp.docZip.length < 50) break; // menos que 1 lote completo → fim
+      }
+
+      await db.$client.query(
+        `UPDATE company_nfse_municipal_config
+         SET last_sync_at=NOW(), last_sync_result=$1, ultimo_nsu=$2, updated_at=NOW()
+         WHERE company_id=$3 AND ibge_code=$4`,
+        [JSON.stringify({ importadas, ignoradas, ultimoNsu: novoUltimoNsu }), novoUltimoNsu, companyId, ibgeCode]
+      );
+      console.log(`[NfseMun][nfse_nacional] concluído — importadas=${importadas} ignoradas=${ignoradas} ultimoNsu=${novoUltimoNsu}`);
+      return { importadas, ignoradas };
+    } catch (e: any) {
+      const msg = e?.message || "Erro desconhecido";
+      await db.$client.query(
+        `UPDATE company_nfse_municipal_config
+         SET last_sync_at=NOW(), last_sync_result=$1, updated_at=NOW()
+         WHERE company_id=$2 AND ibge_code=$3`,
+        [JSON.stringify({ erro: msg }), companyId, ibgeCode]
+      ).catch(() => {});
+      return { importadas, ignoradas, erro: msg };
+    }
+  }
+
+  // ── Path B: provedores SOAP (SIAP GEO, SIL, TINUS, GIAP) — baseados em data ─
   // SIAP GEO só tem notas até 31/12/2025 — capear dataFinal nessa data
   const isSiapGeo = mun.provider === "siapgeo";
   const dataFinalDefault = isSiapGeo ? "2025-12-31" : hoje.toISOString().slice(0, 10);
   const dataFinal = opts.dataFinal || dataFinalDefault;
 
   // Primeira sync (last_sync_at IS NULL): buscar histórico completo desde 2018
-  // Syncs seguintes: apenas o último mês (incremental)
   const dataInicial = opts.dataInicial || (
     mun.last_sync_at == null ? "2018-01-01" : (() => {
       const d = new Date(hoje);
@@ -443,19 +723,14 @@ async function executarSyncMunicipio(opts: {
     })()
   );
 
-  // Se o range for impossível (dataInicial > dataFinal), não há nada a consultar.
-  // Isso ocorre tipicamente com SIAP GEO (cap 2025-12-31) quando o sync incremental
-  // parte de um mês em 2026+.
+  // Range impossível: SIAP GEO cap 2025-12-31 vs sync 2026
   {
     const di = new Date(dataInicial), df = new Date(dataFinal);
     if (di > df) {
-      console.log(`[NfseMunSync] company=${companyId} ibge=${ibgeCode} provider=${mun.provider}: dataInicial(${dataInicial}) > dataFinal(${dataFinal}) — range impossível, nada a consultar.`);
+      console.log(`[NfseMunSync] company=${companyId} ibge=${ibgeCode} provider=${mun.provider}: dataInicial(${dataInicial}) > dataFinal(${dataFinal}) — range impossível.`);
       return { importadas: 0, ignoradas: 0, aviso: `Sem notas a consultar: portal cobre até ${dataFinal}.` };
     }
   }
-
-  let importadas = 0;
-  let ignoradas = 0;
 
   try {
     const notas = await consultarPorProvider({
@@ -470,12 +745,9 @@ async function executarSyncMunicipio(opts: {
       dataFinal,
     });
 
-    const origem = `nfse_mun_${ibgeCode}`;
-
     for (const nota of notas) {
       if (!nota.numero) { ignoradas++; continue; }
 
-      // Dedup por (company_id, numero_nf, origem)
       const existingRes = await db.$client.query<any>(
         `SELECT id FROM fiscal_notes WHERE company_id=$1 AND numero_nf=$2 AND origem=$3`,
         [companyId, nota.numero, origem]
@@ -488,16 +760,10 @@ async function executarSyncMunicipio(opts: {
            descricao_servico, valor_bruto, valor_liquido, status, origem, created_at, updated_at)
          VALUES ($1,$2,$3,$4::date,$5,$6,$7,$8,$9,'pendente',$10,NOW(),NOW())`,
         [
-          companyId,
-          nota.numero,
-          nota.chave || null,
+          companyId, nota.numero, nota.chave || null,
           nota.dataEmissao || hoje.toISOString().slice(0, 10),
-          nota.tomadorCnpj || null,
-          nota.tomadorNome || null,
-          nota.discriminacao || null,
-          nota.valorBruto,
-          nota.valorLiquido,
-          origem,
+          nota.tomadorCnpj || null, nota.tomadorNome || null,
+          nota.discriminacao || null, nota.valorBruto, nota.valorLiquido, origem,
         ]
       );
       importadas++;
@@ -602,7 +868,7 @@ export const nfseEmitidasRouter = router({
         sil: "https://[cidade].siltecnologia.com.br/tbw/Consultas",
         giap: "https://[cidade].giap.com.br/ords/pma/ws/nfe",
         tinus: "https://www.tinus.com.br/csp/[CIDADE]/nfse.webservice.cls",
-        nfse_nacional: "https://www.nfse.gov.br/SistemaNacional/nfse.asmx",
+        nfse_nacional: "https://sefin.nfse.gov.br/sefinnacional",
       };
       const endpoint = input.endpoint || defaultEndpoints[input.provider] || "";
       await db.$client.query(
@@ -715,6 +981,25 @@ export const nfseEmitidasRouter = router({
       )).rows;
       const cnpj = sefazCfg?.cnpj || "";
       return executarSyncMunicipio({ ...input, cnpj });
+    }),
+
+  // Detalhes completos de uma NFS-e (parse do xml_payload)
+  getDetalhesNFse: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const res = await db.$client.query<any>(
+        `SELECT id, numero_nf, chave_acesso, data_emissao, tomador_cnpj, tomador_razao_social,
+                descricao_servico, valor_bruto, valor_liquido, status, origem, xml_payload,
+                arquivo_url, observacoes, created_at
+         FROM fiscal_notes
+         WHERE id=$1 AND company_id=$2`,
+        [input.id, input.companyId]
+      );
+      const row = res.rows[0];
+      if (!row) throw new Error("Nota não encontrada");
+      const detalhes = row.xml_payload ? parseSefinNfseXmlFull(row.xml_payload) : null;
+      return { row, detalhes };
     }),
 
   // Lista NFS-e importadas via prefeituras

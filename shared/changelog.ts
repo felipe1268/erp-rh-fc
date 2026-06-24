@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3619 — **NFS-e EMITIDAS · PORTAL NACIONAL REST+mTLS+NSU (sefin.nfse.gov.br) + ESPELHO FIEL ABRASF + XML SALVO. BACKEND ADITIVO + FRONTEND · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
+ *
+ * O Portal Nacional NFS-e (Receita Federal) migrou do WebService SOAP legado para
+ * a API REST NSU em 01/01/2026. O provider `nfse_nacional` foi reescrito do zero:
+ *   - Endpoint: GET `https://sefin.nfse.gov.br/sefinnacional/DFe/{NSU}` com mTLS A1
+ *   - Autenticação: certificado A1 extraído do PFX via `node-forge` (mesmo mecanismo do SEFAZ NF-e)
+ *   - Paginação: lote de 50 documentos por NSU; itera até `docZip.length < 50` ou `ultNSU` estabiliza
+ *   - Descompressão: cada `docZip[].docZip` é GZip+Base64 (zlib.gunzip) → XML ABRASF
+ *   - NSU persistido em nova coluna `company_nfse_municipal_config.ultimo_nsu BIGINT DEFAULT 0`
+ *     (SyncSchema+ Rev. 3619; ADD COLUMN IF NOT EXISTS — zero ALTER destrutivo)
+ *   - XML completo salvo em `fiscal_notes.xml_payload` (coluna já existia desde Rev. 3604)
+ *     no INSERT, com `ON CONFLICT DO NOTHING` para idempotência
+ *
+ * Nota completa com todos os detalhes:
+ *   - Nova função `parseSefinNfseXmlFull` (exportada de nfseEmitidas.ts) parseia XML ABRASF
+ *     completo: identificação, RPS, código verificação, competência, prestador (emitente com
+ *     endereço/inscrição/email/fone), tomador (destinatário com endereço/email/fone),
+ *     serviço (item lista, código tributação, município incidência, discriminação),
+ *     todos os valores e tributos (ISS retido, INSS, IRRF, CSLL, PIS, COFINS, alíquota,
+ *     base de cálculo, valor líquido), informações complementares e órgão gerador.
+ *   - Novo endpoint tRPC `nfseEmitidas.getDetalhesNFse(id, companyId)` lê `xml_payload`
+ *     do banco e retorna `{ row, detalhes }` com todos os campos parseados.
+ *   - Dialog "Espelho Fiel NFS-e" no frontend (FinanceiroNotasFiscais.tsx): abre ao clicar no
+ *     ícone FileText (azul) na linha da tabela. Exibe seções: Identificação, Prestador, Tomador,
+ *     Serviço, Discriminação (scroll), Valores e Tributos com highlight verde do valor líquido,
+ *     Informações Complementares. Fallback gracioso para notas sem XML (importadas via PDF).
+ *
+ * Arquivos: server/routers/nfseEmitidas.ts (reescrita provider nfse_nacional + parseSefinNfseXmlFull
+ * + endpoint getDetalhesNFse), server/_core/index.ts (SyncSchema+ Rev.3619 ultimo_nsu + endpoint),
+ * client/.../FinanceiroNotasFiscais.tsx (estado, query, botão tabela, dialog espelho).
+ *
  * Rev. 3618 — **NF-e RECEBIDAS · BUGFIX NF# EM FLOAT — "JOGO DA VELHA" SUMIU DA LISTA. BACKEND PONTUAL (SyncSchema+) + FRONTEND · ZERO ALTER/DROP.**
  *
  * Causa-raiz: Rev. 3600 (ColFix, roda 1x) limpava chaves em notação científica (`e+`) e

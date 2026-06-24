@@ -4182,6 +4182,19 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3565: coluna sync_hora garantida em company_nfse_municipal_config (padrão=6).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3565 nfse_mun_sync_hora:`, e?.message || e); }
 
+        // Rev. 3619 — NFS-e Nacional: coluna ultimo_nsu + atualizar endpoint para sefin.nfse.gov.br
+        try {
+          await db.$client.query(`ALTER TABLE company_nfse_municipal_config ADD COLUMN IF NOT EXISTS ultimo_nsu BIGINT NOT NULL DEFAULT 0`);
+          // Atualiza endpoint dos registros existentes para o novo URL REST
+          await db.$client.query(`
+            UPDATE company_nfse_municipal_config
+            SET endpoint = 'https://sefin.nfse.gov.br/sefinnacional', updated_at = NOW()
+            WHERE provider = 'nfse_nacional'
+              AND (endpoint IS NULL OR endpoint LIKE '%nfse.gov.br/SistemaNacional%' OR endpoint = '')
+          `);
+          console.log(`[SyncSchema+] Rev. 3619: ultimo_nsu garantida em company_nfse_municipal_config; endpoint nfse_nacional atualizado para sefin REST.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3619 nfse-nacional-rest:`, e?.message || e); }
+
         // Rev. 3596 — BUGFIX: NSU de histórico sobreescrito por rate-limit (656 sem progresso).
         // Reseta para '000000000000000' qualquer empresa onde o rate-limit salvou o NSU atual
         // sem ter importado nenhum documento (nsuSalvo != null mas importadas=0 no result JSON).
