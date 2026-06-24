@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3659 — **NFS-e EMITIDAS · BANNER "PORTAL OFFLINE" FECHÁVEL COM PERSISTÊNCIA (localStorage). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * O banner vermelho "Portal da prefeitura indisponível" (SIAP GEO Guaratinguetá, genuinamente
+ * fora do ar) aparecia em toda visita à aba NFS-e Emitidas porque o `last_sync_result` guarda
+ * o erro permanentemente no banco. Não havia como fechar.
+ *
+ * Fix: botão "✕ Fechar aviso" chama `fecharBannerPortal()` → grava
+ * `localStorage["nfse_portal_erro_dismissed"] = "1"` + seta estado → banner some.
+ * Na inicialização, `useState(() => localStorage.getItem(...) === "1")` lê a decisão
+ * anterior, então permanece fechado entre sessões do mesmo browser.
+ *
  * Rev. 3658 — **PANORAMA FISCAL · DOTS DOS MESES REFLETEM DADOS REAIS DO ANO. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Antes: `dotColor` só era calculado para o mês selecionado (usando `data` já carregado);

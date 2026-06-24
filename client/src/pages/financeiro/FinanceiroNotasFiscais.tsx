@@ -200,6 +200,15 @@ export default function FinanceiroNotasFiscais() {
   const [syncProgress, setSyncProgress] = useState<number | null>(null);
   const syncIvRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // ── Dismiss do banner de portal offline ─────────────────────────────────────
+  const [dismissPortalErro, setDismissPortalErro] = useState(
+    () => localStorage.getItem("nfse_portal_erro_dismissed") === "1"
+  );
+  function fecharBannerPortal() {
+    localStorage.setItem("nfse_portal_erro_dismissed", "1");
+    setDismissPortalErro(true);
+  }
+
   // ── Aba principal: emitidas | recebidas ──────────────────────────────────────
   const [pageTab, setPageTab] = useState<"emitidas" | "recebidas" | "panorama">("emitidas");
   const [recAno, setRecAno] = useState(new Date().getFullYear());
@@ -1294,7 +1303,7 @@ export default function FinanceiroNotasFiscais() {
           const temAviso = munAvisos.length > 0 && !temErro;
 
           // Banner de erro: portal indisponível
-          if (temErro) {
+          if (temErro && !dismissPortalErro) {
             return (
               <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 flex flex-col sm:flex-row sm:items-start gap-3">
                 <AlertTriangle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
@@ -1327,6 +1336,13 @@ export default function FinanceiroNotasFiscais() {
                       ? <><RefreshCw className="w-3 h-3 animate-spin" /> Tentando…</>
                       : <><RefreshCw className="w-3 h-3" /> Tentar novamente</>
                     }
+                  </button>
+                  <button
+                    className="flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-lg border border-slate-300 text-slate-500 hover:bg-slate-100 bg-white transition-colors"
+                    onClick={fecharBannerPortal}
+                    title="Fechar aviso"
+                  >
+                    ✕ Fechar aviso
                   </button>
                 </div>
               </div>
