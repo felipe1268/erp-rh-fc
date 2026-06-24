@@ -922,9 +922,27 @@ export function startSefazCron() {
   const runHour = async () => {
     try {
       const db = await getDb();
+      // Diagnóstico: loga o estado de TODAS as configs (elegíveis ou não) para visibilidade total.
+      const allRows = (await db.execute(sql`
+        SELECT company_id, ativo, sync_enabled, ultimo_nsu, sync_intervalo_horas,
+               last_sync_at,
+               EXTRACT(EPOCH FROM (NOW() - last_sync_at))/60 AS elapsed_min,
+               COALESCE(sync_intervalo_horas, 1) * 60 - 2 AS cooldown_min,
+               last_sync_result
+        FROM company_nfe_config
+      `)) as any;
+      const allList = (allRows?.rows ?? allRows) as any[];
+      for (const r of allList) {
+        const elapsed = r.elapsed_min !== null ? Math.round(Number(r.elapsed_min)) : null;
+        const cooldown = Number(r.cooldown_min);
+        const inCooldown = elapsed !== null && elapsed < cooldown;
+        const reason = r.ativo != 1 ? "ativo=0" : r.sync_enabled != 1 ? "sync_enabled=0" : inCooldown ? `cooldown (${elapsed}/${cooldown}min)` : "ELEGÍVEL";
+        let lastResult = "";
+        try { const lr = JSON.parse(r.last_sync_result || "{}"); lastResult = lr.rateLimitedAt ? " rateLimit" : lr.cStat ? ` cStat=${lr.cStat}` : lr.importadas !== undefined ? ` imp=${lr.importadas}` : ""; } catch {}
+        console.log(`[SefazSync] company=${r.company_id} ativo=${r.ativo} sync=${r.sync_enabled} nsu=${r.ultimo_nsu} sync_at=${r.last_sync_at ? new Date(r.last_sync_at).toISOString().slice(11,19) : "null"}${lastResult} → ${reason}`);
+      }
+
       // Sincroniza TODA empresa com sync_enabled=1 que não foi sincronizada nos últimos 58 minutos.
-      // Isso aproveita ao máximo o limite SEFAZ (1 chamada/hora/CNPJ) e traz o histórico completo
-      // automaticamente, 50 NF-e por hora, sem nenhuma ação manual.
       const rows = (await db.execute(sql`
         SELECT company_id FROM company_nfe_config
         WHERE ativo = 1 AND sync_enabled = 1

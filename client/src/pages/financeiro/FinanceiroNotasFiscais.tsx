@@ -454,6 +454,13 @@ export default function FinanceiroNotasFiscais() {
       toast({ title: "Erro na sync SEFAZ", description: e.message, variant: "destructive" });
     },
   });
+  const sefazEnableSyncMut = (trpc as any).sefaz.saveConfig.useMutation({
+    onSuccess: () => {
+      toast({ title: "✅ Sync automático ligado!", description: "O sistema sincronizará com a SEFAZ automaticamente a cada hora." });
+      sefazCfgQuery.refetch();
+    },
+    onError: (e: any) => toast({ title: "Erro ao ligar sync", description: e.message, variant: "destructive" }),
+  });
 
 
   // Anima progresso enquanto a mutation está pendente
@@ -1067,7 +1074,30 @@ export default function FinanceiroNotasFiscais() {
                         </div>
                       )}
                     </div>
-
+                    {/* CTA: ligar sync automático direto aqui */}
+                    {!syncOn && sefazCfg?.tem_certificado && (
+                      <div className="mt-3 pt-3 border-t border-slate-200 flex items-center gap-3">
+                        <button
+                          onClick={() => sefazEnableSyncMut.mutate({
+                            companyId: companyId!,
+                            cnpj: sefazCfg.cnpj ?? "",
+                            uf: sefazCfg.uf ?? "SP",
+                            ambiente: sefazCfg.ambiente ?? "producao",
+                            syncEnabled: true,
+                            syncHora: Number(sefazCfg.sync_hora ?? 6),
+                            syncIntervaloHoras: Number(sefazCfg.sync_intervalo_horas ?? 1),
+                          })}
+                          disabled={sefazEnableSyncMut.isPending}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60 transition-colors"
+                        >
+                          {sefazEnableSyncMut.isPending
+                            ? <><span className="animate-spin inline-block w-3 h-3 border border-white border-t-transparent rounded-full" /> Ativando…</>
+                            : <><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg> Ligar sync automático</>
+                          }
+                        </button>
+                        <span className="text-xs text-slate-400">Importa novas NF-e automaticamente a cada hora.</span>
+                      </div>
+                    )}
                   </div>
                 );
               })()}

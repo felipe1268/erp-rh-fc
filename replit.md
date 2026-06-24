@@ -50,6 +50,10 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3669** — **SEFAZ NF-e · BOTÃO "LIGAR SYNC AUTOMÁTICO" DIRETO NA ABA NF-e RECEBIDAS. 100% FRONTEND · ZERO BACKEND/SCHEMA.** Diagnóstico Rev. 3668 revelou sync_enabled=0 (cron nunca rodava; 217 notas vieram de sync manual). Quando sync=OFF + cert presente, exibe faixa verde com botão "Ligar sync automático" que chama `sefaz.saveConfig({syncEnabled:true})` sem sair da aba. Arquivo: `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3668** — **SEFAZ NF-e · LOG DIAGNÓSTICO COMPLETO — MOSTRA ESTADO REAL DE CADA EMPRESA NO CRON. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** "0 elegíveis" era ambíguo (cooldown vs sync_enabled=0). Cron agora loga TODAS as companies_nfe_config com motivo: `ativo=0 | sync_enabled=0 | cooldown (X/58min) | ELEGÍVEL` + NSU atual + último resultado. Arquivo: `server/routers/sefaz.ts`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3667** — **SEFAZ NF-e · CRON A CADA 30 MIN + RUN IMEDIATO NO STARTUP. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Cron disparava só em `:00`; restart às 15:40 com last_sync_at=15:05 (55min < gate 58min) pulava 16:00 e só rodava às 17:00. Fix: cron a cada 30min (`:00` e `:30`) + run inicial 30s após startup. Gate de 58min preservado → SEFAZ ≤1 chamada/hora/CNPJ. Arquivo: `server/routers/sefaz.ts`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3666** — **PORTAL NACIONAL NFS-e + SEFAZ NF-e · BUGFIX PROBE "INESPERADO" + CRON LOG SILENCIOSO. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** (1) Probe "inesperado" com cert válido: HTTP 404 com cert = endpoint alcançado → `authOk=true`. (2) Cron só logava com empresas elegíveis; fix: loga sempre. Arquivos: `server/routers/nfseEmitidas.ts`, `server/routers/sefaz.ts`. Detalhe: `shared/changelog.ts`.

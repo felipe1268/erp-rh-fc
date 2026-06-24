@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3669 — **SEFAZ NF-e · BOTÃO "LIGAR SYNC AUTOMÁTICO" DIRETO NA ABA NF-e RECEBIDAS. 100% FRONTEND · ZERO BACKEND/SCHEMA.**
+ *
+ * Diagnóstico Rev. 3668 revelou: company_id=60002 com sync_enabled=0 → cron nunca roda.
+ * As 217 NF-e vieram de sync manual (botão "Sincronizar Agora"). Para o automático funcionar
+ * é preciso sync_enabled=1, mas a UI só mostrava "Configure em Configurações → Financeiro"
+ * sem ação direta. Fix: quando sync_enabled=0 e há certificado, exibe faixa verde com botão
+ * "✅ Ligar sync automático" que chama sefaz.saveConfig({syncEnabled:true}) sem sair da aba.
+ * Após ativar, o cron a cada 30min (Rev. 3667) já encontra a empresa elegível automaticamente.
+ *
+ * Rev. 3668 — **SEFAZ NF-e · LOG DIAGNÓSTICO COMPLETO NO CRON — MOSTRA ESTADO DE CADA EMPRESA (ativo/sync_enabled/cooldown/NSU). BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * "0 elegíveis" era ambíguo: podia ser cooldown OU sync_enabled=0. Adicionado log de diagnóstico
+ * que itera sobre TODAS as company_nfe_config (incluindo as bloqueadas) e exibe o motivo exato:
+ *   → ativo=0 | sync_enabled=0 | cooldown (Xmin/58min) | ELEGÍVEL
+ * Também mostra ultimo_nsu, ultimo sync_at e último resultado (cStat, importadas, rateLimit).
+ * Isso permite rastrear em logs se a empresa nunca sincronizará (sync desligado) vs. está
+ * aguardando o cooldown expirar. Sem esse log era impossível distinguir os dois cenários.
+ *
  * Rev. 3667 — **SEFAZ NF-e · CRON A CADA 30 MIN + RUN IMEDIATO NO STARTUP. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Problema: cron disparava apenas no início de cada hora cheia (:00). Após restart às 15:40,
