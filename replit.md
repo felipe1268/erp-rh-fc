@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3652** — **NFS-e EMITIDAS · BUGFIX ENDPOINT SIAP GEO GUARATINGUETÁ — HTTP 404 (URL ERRADA). BACKEND PONTUAL.** `/webservices/nfse.asmx` → `/websis/siapnet/nfse/nfse.asmx`. SyncSchema+ corrige no banco. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3651** — **NFS-e EMITIDAS · BUGFIX CRÍTICO SIAP GEO 0 NOTAS — XMLParser SEM removeNSPrefix + RESET last_sync_at. BACKEND PONTUAL.** fast-xml-parser sem removeNSPrefix não casava tags `soap:Envelope` → 0 notas para sempre. Fix: removeNSPrefix=true + SyncSchema+ reseta last_sync_at para re-scan 2018→2025. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3650** — **CONFIGURAÇÕES SEFAZ · MÁSCARA CNPJ (XX.XXX.XXX/XXXX-XX). 100% FRONTEND · ZERO BACKEND/SCHEMA.** Campo exibia dígitos crus; máscara progressiva no onChange + formatação ao carregar. Detalhe: `shared/changelog.ts`.

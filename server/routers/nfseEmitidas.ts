@@ -22,7 +22,7 @@ export const MUNICIPIOS_PADRAO = [
     nome_municipio: "Guaratinguetá",
     uf: "SP",
     provider: "siapgeo",
-    endpoint: "https://guaratingueta.geosiap.net.br/pmguaratingueta/webservices/nfse.asmx",
+    endpoint: "https://guaratingueta.geosiap.net.br/pmguaratingueta/websis/siapnet/nfse/nfse.asmx",
     auth_type: "portal_login",
     descricao: "SIAP GEO — portal antigo (notas até 31/12/2025). Inscrição = login, token = senha.",
   },

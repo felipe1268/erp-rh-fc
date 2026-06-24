@@ -1,6 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3652 — **NFS-e EMITIDAS · BUGFIX ENDPOINT SIAP GEO GUARATINGUETÁ ERRADO (HTTP 404). BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
+ *
+ * URL configurada: `.../webservices/nfse.asmx` → retornava HTTP 404.
+ * URL correta (confirmada no portal oficial Siapnet/GEO SIAP):
+ * `.../websis/siapnet/nfse/nfse.asmx`
+ * SyncSchema+ Rev.3652 atualiza o endpoint no banco para todos os registros SIAP GEO
+ * de Guaratinguetá que ainda usam o path antigo.
+ *
  * Rev. 3651 — **NFS-e EMITIDAS · BUGFIX CRÍTICO SIAP GEO 0 NOTAS — XMLParser SEM removeNSPrefix + RESET last_sync_at. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * O XMLParser (fast-xml-parser) não tinha `removeNSPrefix: true`. O SIAP GEO de Guaratinguetá

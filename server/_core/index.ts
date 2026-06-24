@@ -4300,6 +4300,24 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3601: portais NFS-e municipal de Guaratinguetá habilitados (enabled=1).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3601 enable-nfse-mun:`, e?.message || e); }
 
+        // Rev. 3652 — Corrigir endpoint SIAP GEO de Guaratinguetá: /webservices/ → /websis/siapnet/nfse/
+        // A URL antiga retornava HTTP 404. URL correta confirmada via consulta ao portal oficial.
+        try {
+          const { rowCount } = await db.$client.query(`
+            UPDATE company_nfse_municipal_config
+            SET endpoint = 'https://guaratingueta.geosiap.net.br/pmguaratingueta/websis/siapnet/nfse/nfse.asmx',
+                updated_at = NOW()
+            WHERE provider = 'siapgeo'
+              AND ibge_code = 3518602
+              AND (endpoint LIKE '%/webservices/%' OR endpoint NOT LIKE '%/websis/%')
+          `);
+          if ((rowCount ?? 0) > 0) {
+            console.log(`[SyncSchema+] Rev. 3652: endpoint SIAP GEO Guaratinguetá corrigido para /websis/siapnet/nfse/nfse.asmx.`);
+          } else {
+            console.log(`[SyncSchema+] Rev. 3652: endpoint SIAP GEO já correto — sem alteração.`);
+          }
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3652 endpoint-siapgeo:`, e?.message || e); }
+
         // Rev. 3651 — Resetar last_sync_at do SIAP GEO para forçar re-scan histórico completo.
         // Motivo: XMLParser sem removeNSPrefix fazia getAny("Envelope.Body.X") não casar com
         // respostas .NET que usam prefixo soap:/s: → importadas=0 gravado em last_sync_result
