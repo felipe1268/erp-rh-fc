@@ -13,7 +13,7 @@ const TIMEZONE = "America/Sao_Paulo";
  * Converte uma string de data do banco para um Date object interpretado como UTC.
  * Strings sem indicador de timezone (Z, +, -) são tratadas como UTC.
  */
-function parseAsUTC(value: string | Date): Date {
+export function parseAsUTC(value: string | Date): Date {
   if (value instanceof Date) return value;
   
   const str = value.trim();
