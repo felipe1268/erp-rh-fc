@@ -195,6 +195,9 @@ export default function FinanceiroNotasFiscais() {
   const [detalheNf, setDetalheNf] = useState<NF | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [selectedRecIds, setSelectedRecIds] = useState<Set<number>>(new Set());
+  const [bulkRecDeleteOpen, setBulkRecDeleteOpen] = useState(false);
+  const masterRecRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<any>(emptyForm());
   const [tab, setTab] = useState<"dados" | "tributacao" | "vinculo">("dados");
   const [vincularEntryId, setVincularEntryId] = useState("");
@@ -260,6 +263,15 @@ export default function FinanceiroNotasFiscais() {
       }
     },
     onError: (e: any) => toast({ title: "Erro ao recuperar XMLs", description: e?.message || "Tente novamente.", variant: "destructive" }),
+  });
+  const excluirRecLoteMut = (trpc as any).fiscalNotes.excluirLote.useMutation({
+    onSuccess: (_: any, vars: any) => {
+      const n = vars.ids.length;
+      setSelectedRecIds(new Set());
+      nfeRecQuery.refetch();
+      toast({ title: `✅ ${n} NF-e${n !== 1 ? "s" : ""} excluída${n !== 1 ? "s" : ""} com sucesso.` });
+    },
+    onError: (e: any) => toast({ title: "Erro ao excluir", description: e?.message, variant: "destructive" }),
   });
 
   // Query anual sem filtros para dots do calendário recebidas
@@ -1332,12 +1344,46 @@ export default function FinanceiroNotasFiscais() {
                 </Select>
               </div>
 
+              {/* Barra de seleção múltipla */}
+              {selectedRecIds.size > 0 && (
+                <div className="flex items-center gap-3 px-4 py-2.5 bg-indigo-600 text-white rounded-xl mb-2 shadow">
+                  <span className="text-sm font-medium">{selectedRecIds.size} NF-e{selectedRecIds.size !== 1 ? "s" : ""} selecionada{selectedRecIds.size !== 1 ? "s" : ""}</span>
+                  <div className="flex-1" />
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRecIds(new Set())}
+                    className="text-xs px-2 py-1 rounded bg-white/20 hover:bg-white/30 transition-colors"
+                  >Desmarcar todas</button>
+                  <button
+                    type="button"
+                    onClick={() => setBulkRecDeleteOpen(true)}
+                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded bg-red-500 hover:bg-red-400 font-semibold transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Excluir {selectedRecIds.size}
+                  </button>
+                </div>
+              )}
+
               {/* Tabela */}
               <Card className="border-0 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-slate-50 border-b text-xs text-slate-500 uppercase tracking-wide">
+                        <th className="px-3 py-2.5 w-8">
+                          <input
+                            type="checkbox"
+                            ref={masterRecRef}
+                            className="rounded cursor-pointer"
+                            checked={nfeRec.length > 0 && selectedRecIds.size === nfeRec.length}
+                            onChange={e => {
+                              if (e.target.checked) setSelectedRecIds(new Set(nfeRec.map((n: any) => n.id)));
+                              else setSelectedRecIds(new Set());
+                            }}
+                            onClick={e => e.stopPropagation()}
+                          />
+                        </th>
                         <th className="px-3 py-2.5 text-left">NF#</th>
                         <th className="px-3 py-2.5 text-left">Emissão</th>
                         <th className="px-3 py-2.5 text-left">Emitente</th>
@@ -1351,11 +1397,11 @@ export default function FinanceiroNotasFiscais() {
                     </thead>
                     <tbody>
                       {nfeRecQuery.isLoading && (
-                        <tr><td colSpan={8} className="py-10 text-center text-slate-400">Carregando...</td></tr>
+                        <tr><td colSpan={10} className="py-10 text-center text-slate-400">Carregando...</td></tr>
                       )}
                       {!nfeRecQuery.isLoading && nfeRec.length === 0 && (
                         <tr>
-                          <td colSpan={8} className="py-12 text-center">
+                          <td colSpan={10} className="py-12 text-center">
                             <div className="flex flex-col items-center gap-2">
                               <Receipt className="h-8 w-8 text-slate-300" />
                               <span className="text-slate-400 text-sm">Nenhuma NF-e recebida neste período.</span>
@@ -1365,10 +1411,11 @@ export default function FinanceiroNotasFiscais() {
                       )}
                       {nfeRec.map((nf: any) => {
                         const st = STATUS_MAP[nf.status] ?? { label: nf.status, color: "bg-gray-100 text-gray-700 border-gray-200" };
+                        const isRecSelected = selectedRecIds.has(nf.id);
                         return (
                           <tr
                             key={nf.id}
-                            className="border-b hover:bg-indigo-50/50 transition-colors cursor-pointer"
+                            className={`border-b hover:bg-indigo-50/50 transition-colors cursor-pointer ${isRecSelected ? "bg-indigo-50" : ""}`}
                             style={{ WebkitTapHighlightColor: "transparent", touchAction: "manipulation" }}
                             role="button"
                             tabIndex={0}
@@ -1376,6 +1423,18 @@ export default function FinanceiroNotasFiscais() {
                             onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { setNfeRecDetalhe(nf); setCopiedChave(false); } }}
                             title="Clique para ver detalhes da NF-e"
                           >
+                            <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                className="rounded cursor-pointer"
+                                checked={isRecSelected}
+                                onChange={e => {
+                                  const next = new Set(selectedRecIds);
+                                  if (e.target.checked) next.add(nf.id); else next.delete(nf.id);
+                                  setSelectedRecIds(next);
+                                }}
+                              />
+                            </td>
                             <td className="px-3 py-2.5">
                               <span className="font-semibold text-indigo-700">#{resolveNumeroNf(nf.numeroNf, nf.chaveAcesso) || "—"}</span>
                             </td>
@@ -2848,6 +2907,29 @@ export default function FinanceiroNotasFiscais() {
             </Dialog>
           );
         })()}
+
+        {/* AlertDialog — excluir NF-e Recebidas em lote */}
+        <AlertDialog open={bulkRecDeleteOpen} onOpenChange={v => { if (!v) setBulkRecDeleteOpen(false); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir {selectedRecIds.size} NF-e{selectedRecIds.size !== 1 ? "s" : ""} permanentemente?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta ação <strong>não pode ser desfeita</strong>. As NF-e selecionadas serão removidas do banco de dados.
+                O SEFAZ poderá reimportá-las automaticamente no próximo sync, ou manualmente via "Sincronizar Agora".
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setBulkRecDeleteOpen(false)}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-red-600 hover:bg-red-700"
+                onClick={() => { setBulkRecDeleteOpen(false); excluirRecLoteMut.mutate({ ids: Array.from(selectedRecIds), companyId: companyId! }); }}
+                disabled={excluirRecLoteMut.isPending}
+              >
+                {excluirRecLoteMut.isPending ? "Excluindo..." : `Excluir ${selectedRecIds.size} NF-e${selectedRecIds.size !== 1 ? "s" : ""}`}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <AlertDialog open={bulkDeleteOpen} onOpenChange={v => { if (!v) setBulkDeleteOpen(false); }}>
           <AlertDialogContent>
