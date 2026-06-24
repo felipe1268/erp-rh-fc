@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3626 — **PANORAMA FISCAL · BUGFIX ÍNDICE GERAL SEMPRE ZERO — coberturaSaidaNfe USAVA fn_id (CONCILIACAO) EM VEZ DE RATIO DE VOLUME. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
+ *
+ * Causa-raiz: coberturaSaidaNfe = totSaiNota / totDebitos onde totSaiNota = saidas com
+ * fn_id != null. fn_id so e preenchido durante conciliacao manual. NF-e recebidas do
+ * SEFAZ nunca tem stmt_line_id ligado a saidas bancarias -> totSaiNota sempre 0 -> 0%.
+ * Com Receita=0% (sem NFS-e emitidas), OC=null (sem OCs), Saida=0% -> Indice Geral = 0%.
+ * FIX: coberturaSaidaNfe = min(100, round(totNfe / totDebitos * 100)) — ratio de volume,
+ * mesmo padrao de coberturaNfseReceita. Independe de conciliacao.
+ * Resultado: R$3.025M NF-e rec / R$3.599M debitos = 84% -> Indice Geral ~42%.
+ * Sublabel do gauge atualizado para "NF-e rec. / debitos".
+ *
  * Rev. 3625 — **NF-e RECEBIDAS · TOGGLE LIGA/DESLIGA SYNC AUTOMÁTICO + SELETOR DE INTERVALO DIRETO NA ABA. 100% FRONTEND + BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
  *
  * Problema: sync automático horário consumia a cota SEFAZ antes do usuário conseguir

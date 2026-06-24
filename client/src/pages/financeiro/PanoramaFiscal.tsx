@@ -481,7 +481,7 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
                 <div className="grid grid-cols-3 gap-4 mb-6">
                   <GaugeMeter pct={r!.coberturaNfseReceita} label="Receita c/ NFS-e" sublabel="entradas bancárias" size={88} />
                   <GaugeMeter pct={r!.coberturaOcNfe}       label="OC c/ NF-e"      sublabel="ordens de compra"    size={88} />
-                  <GaugeMeter pct={r!.coberturaSaidaNfe}    label="Saída c/ nota"   sublabel="débitos bancários"   size={88} />
+                  <GaugeMeter pct={r!.coberturaSaidaNfe}    label="Saída c/ nota"   sublabel="NF-e rec. ÷ débitos" size={88} />
                 </div>
 
                 {/* 5 volumes em linha */}

@@ -500,7 +500,9 @@ export const fiscalNotesRouter = router({
           totalOcs:            { qtd: ocList.length,   total: totOcs  },
           coberturaNfseReceita: totCreditos > 0 ? Math.min(100, Math.round(totNfse / totCreditos * 100)) : null,
           coberturaOcNfe:       totOcs > 0 ? Math.round(totOcsNota / totOcs * 100) : null,
-          coberturaSaidaNfe:    totDebitos > 0 ? Math.round(totSaiNota / totDebitos * 100) : null,
+          // Ratio de volume: NF-e recebidas / débitos bancários (mesmo padrão de coberturaNfseReceita)
+          // Não depende de conciliação manual (fn_id); reflete cobertura documental real.
+          coberturaSaidaNfe:    totDebitos > 0 ? Math.min(100, Math.round(totNfe / totDebitos * 100)) : null,
         },
         nfseEmitidas: nfseList,
         nfeRecebidas: nfeList,

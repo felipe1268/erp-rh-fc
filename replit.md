@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3625** — **NF-e RECEBIDAS · TOGGLE LIGA/DESLIGA SYNC AUTOMÁTICO + SELETOR DE INTERVALO DIRETO NA ABA. 100% FRONTEND + BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Sync automático consumia a cota SEFAZ antes do usuário usar "Recuperar XMLs". Fix: banner do cronômetro reformulado com linha de controles inline — toggle pill (liga/desliga) + select de intervalo 1h/2h/3h/4h/6h/8h/12h/24h. Efeito imediato: `handleQuickSave` chama `sefaz.saveConfig` repassando todos os campos existentes, alterando só `syncEnabled` ou `syncIntervaloHoras`. Anel e cronômetro respeitam o intervalo configurado (antes hardcoded em 58min). Detalhe: `shared/changelog.ts`.
+- **Rev. 3626** — **PANORAMA FISCAL · BUGFIX ÍNDICE GERAL SEMPRE ZERO — `coberturaSaidaNfe` USAVA `fn_id` (CONCILIAÇÃO) EM VEZ DE RATIO DE VOLUME. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** `fn_id` só é preenchido na conciliação manual → NF-e recebidas do SEFAZ nunca geram `fn_id` em saídas → `totSaiNota` sempre 0 → cobertura 0%. Fix: `coberturaSaidaNfe = min(100, totNfe / totDebitos × 100)` — mesmo padrão de `coberturaNfseReceita`, independe de conciliação. R$3.025M NF-e ÷ R$3.599M débitos = 84%; Índice Geral passa de 0% p/ ~42%. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3624** — **NF-e RECEBIDAS · LOG DE AUDITORIA DE SINCRONIZAÇÃO SEFAZ — DATA/HORA BRASÍLIA, NSU, STATUS POR CICLO. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Nova tabela `nfe_sync_log` (SyncSchema+ Rev.3624) registra cada execução com timestamps BRT via `AT TIME ZONE 'America/Sao_Paulo'`, NSU inicial/final, importadas, ignoradas, cstat, status. Painel colapsível na aba Recebidas com badge colorido. Bugfix: `buildResumo` tipo circular + `alert()` → toast. Detalhe: `shared/changelog.ts`.
+- **Rev. 3625** — **NF-e RECEBIDAS · TOGGLE LIGA/DESLIGA SYNC AUTOMÁTICO + SELETOR DE INTERVALO DIRETO NA ABA. 100% FRONTEND + BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3623** — **PANORAMA FISCAL · BOTÃO "PACOTE CONTADOR" — ZIP COM NFS-e, NF-e, EXTRATO, OCs + CHECKLIST. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
