@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3655 — **NFS-e EMITIDAS · BUGFIX SIAP GEO LOOP ETERNO DE 404 — FALLBACK "2018-01-01" QUANDO PORTAL ESTAVA FORA DO AR. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Causa-raiz: quando `executarSyncMunicipio` retorna `{ erro: "HTTP 404..." }`, o campo
+ * `last_sync_at` é atualizado (≠ null) mas `last_sync_result` fica `{ erro: "..." }` — sem
+ * campo `dataFinal`. Na próxima sync, o bloco de cálculo do `dataInicial` entra no caminho
+ * `last_sync_at != null && isSiapGeo` mas não encontra `lastResult.dataFinal`, caindo no
+ * fallback `return "2018-01-01"`. Como `"2018-01-01" < "2025-12-31"` (dataFinal do SIAP GEO),
+ * o early-return (`dataInicial > dataFinal`) nunca dispara → nova chamada HTTP → 404 → loop.
+ *
+ * Fix: substituir o fallback `"2018-01-01"` por `"2026-01-01"` quando SIAP GEO já foi tentado
+ * (last_sync_at != null) mas não tem dataFinal registrado. `"2026-01-01" > "2025-12-31"` →
+ * early-return imediato com aviso "cobertura esgotada", zero HTTP request ao portal fora do ar.
+ *
+ * Arquivo: `server/routers/nfseEmitidas.ts` — bloco dataInicial / fallback SIAP GEO.
+ *
  * Rev. 3654 — **DASHBOARD NF-e · SEÇÃO "NF-e SEM OC" — NOTAS RECEBIDAS SEM ORDEM DE COMPRA CORRESPONDENTE. BACKEND PONTUAL + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Backend (`getPanoramaFiscal`): durante o loop OC × NF-e, agora rastreia os IDs de NF-e

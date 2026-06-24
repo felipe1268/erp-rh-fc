@@ -730,7 +730,11 @@ async function executarSyncMunicipio(opts: {
           return d.toISOString().slice(0, 10);
         }
       } catch { /* ignora */ }
-      return "2018-01-01"; // fallback: re-escanear tudo
+      // last_sync_at != null mas sem dataFinal (ex: sync terminou em erro HTTP).
+      // Não regredir para 2018 — isso causaria tentativas infinitas quando o portal
+      // está fora do ar. Como SIAP GEO só cobre até 2025-12-31, usar 2026-01-01
+      // dispara o early-return (dataInicial > dataFinal) e evita novas chamadas HTTP.
+      return "2026-01-01";
     }
     // Outros provedores (SIL, TINUS, GIAP): incrementar pelo último mês
     const d = new Date(hoje);

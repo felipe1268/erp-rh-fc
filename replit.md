@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3654** — **DASHBOARD NF-e · SEÇÃO "NF-e SEM OC" — NOTAS RECEBIDAS SEM ORDEM DE COMPRA CORRESPONDENTE. BACKEND PONTUAL + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** `getPanoramaFiscal` rastreia NF-e casadas com OC via `matchedNfeIds: Set<number>` e retorna `nfeSemOc`. Frontend: 4º PendCard (rose), seção colapsível na `OcNfeSection` e `DetailDialog` dedicado. Detalhe: `shared/changelog.ts`.
+- **Rev. 3655** — **NFS-e EMITIDAS · BUGFIX SIAP GEO LOOP ETERNO DE 404 — FALLBACK "2018-01-01" QUANDO PORTAL FORA DO AR. BACKEND PONTUAL.** Sync com erro HTTP deixava `last_sync_result` sem `dataFinal` → fallback `"2018-01-01"` → early-return nunca disparava → 404 infinito. Fix: fallback passa a `"2026-01-01"` para SIAP GEO já tentado, disparando o early-return imediatamente. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3653** — **NF-e RECEBIDAS · BUGFIX "HISTÓRICO COMPLETO" BLOQUEADO PELO TIME GATE — last_sync_at NÃO ERA ZERADO NO resetNSU. BACKEND PONTUAL.** `resetNSU` agora zera também `last_sync_at = NULL` → sync dispara imediatamente após o reset. Detalhe: `shared/changelog.ts`.
+- **Rev. 3654** — **DASHBOARD NF-e · SEÇÃO "NF-e SEM OC". BACKEND PONTUAL + FRONTEND.** `getPanoramaFiscal` retorna `nfeSemOc`; frontend: 4º PendCard, seção colapsível e dialog. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3652** — **NFS-e EMITIDAS · BUGFIX ENDPOINT SIAP GEO GUARATINGUETÁ — HTTP 404 (URL ERRADA). BACKEND PONTUAL.** `/webservices/nfse.asmx` → `/websis/siapnet/nfse/nfse.asmx`. Detalhe: `shared/changelog.ts`.
 
