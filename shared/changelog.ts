@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3623 — **PANORAMA FISCAL · BOTÃO "PACOTE CONTADOR" — ZIP ORGANIZADO COM NFS-e, NF-e, EXTRATO, OCs + CHECKLIST MENSAL/ANUAL. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * Nova rota GET /api/download/pacote-contador?companyId=&mes=&ano= gera um ZIP com:
+ * 00_CHECKLIST.txt — pendências + documentos mensais/trimestrais/anuais para o contador;
+ * 01_Resumo.csv — KPIs e coberturas fiscais;
+ * 02_NFS-e_Emitidas.csv — com retenções ISS/INSS/IRRF/PIS-COFINS;
+ * 03_NF-e_Recebidas_SEFAZ.csv — com chave de acesso;
+ * 04_OCs_x_NF-e.csv — OCs com vínculo a NF-e por CNPJ;
+ * 05_Extrato_Entradas.csv + 06_Extrato_Saidas.csv — por conta bancária.
+ * Modo mensal: uma pasta. Modo anual (mes=0): subpastas por mês com dados.
+ * CSVs com BOM UTF-8 para Excel BR. Botão violeta "Pacote Contador" no Panorama Fiscal.
+ * Arquivos: server/routers/downloadPacoteContador.ts (novo), server/_core/index.ts, PanoramaFiscal.tsx.
+ *
  * Rev. 3622 — **PANORAMA FISCAL · MODO "ANO TODO" + BUGFIX ÍNDICE GERAL 17% FALSO. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * Dois problemas resolvidos nesta revisão:
