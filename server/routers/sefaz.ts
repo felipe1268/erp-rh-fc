@@ -1066,7 +1066,7 @@ export const sefazRouter = router({
       // não bloqueie a próxima chamada explícita do usuário.
       await db.execute(sql`
         UPDATE company_nfe_config
-        SET ultimo_nsu = '000000000000000', last_sync_result = NULL
+        SET ultimo_nsu = '000000000000000', last_sync_result = NULL, last_sync_at = NULL
         WHERE company_id = ${input.companyId}
       `);
       return { ok: true };

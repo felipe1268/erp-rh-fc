@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3653 — **NF-e RECEBIDAS · BUGFIX "HISTÓRICO COMPLETO" BLOQUEADO PELO TIME GATE — last_sync_at NÃO ERA ZERADO NO resetNSU. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Ao clicar "Histórico completo", o frontend:
+ * 1. Chama `resetNSU` → zera `ultimo_nsu` + `last_sync_result` (mas NÃO `last_sync_at`)
+ * 2. Na sequência chama `syncNow` → `executarSyncNFe` → time gate (58 min) ainda ativo
+ *    → retorna `{ importadas:0, aviso:"Aguarde X min" }`
+ * 3. Barra de progresso simula 0→100% em poucos segundos sem importar nada.
+ *
+ * Fix: `resetNSU` agora inclui `last_sync_at = NULL` no UPDATE, liberando o gate.
+ * A primeira sync pós-reset pode buscar até 1.000 NF-e (20 páginas × 50 docs/página).
+ * O cron horário continua buscando mais até esgotar o NSU máximo.
+ *
  * Rev. 3652 — **NFS-e EMITIDAS · BUGFIX ENDPOINT SIAP GEO GUARATINGUETÁ ERRADO (HTTP 404). BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
  *
  * URL configurada: `.../webservices/nfse.asmx` → retornava HTTP 404.
