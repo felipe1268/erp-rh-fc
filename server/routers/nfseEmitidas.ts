@@ -70,6 +70,7 @@ const xmlParser = new XMLParser({
   attributeNamePrefix: "@_",
   parseAttributeValue: true,
   allowBooleanAttributes: true,
+  removeNSPrefix: true,  // strips soap:/soapenv:/s: prefixes → Envelope.Body.X sempre casa
 });
 
 // ── Helpers compartilhados ────────────────────────────────────────────────────

@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3651** — **NFS-e EMITIDAS · BUGFIX CRÍTICO SIAP GEO 0 NOTAS — XMLParser SEM removeNSPrefix + RESET last_sync_at. BACKEND PONTUAL.** fast-xml-parser sem removeNSPrefix não casava tags `soap:Envelope` → 0 notas para sempre. Fix: removeNSPrefix=true + SyncSchema+ reseta last_sync_at para re-scan 2018→2025. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3650** — **CONFIGURAÇÕES SEFAZ · MÁSCARA CNPJ (XX.XXX.XXX/XXXX-XX). 100% FRONTEND · ZERO BACKEND/SCHEMA.** Campo exibia dígitos crus; máscara progressiva no onChange + formatação ao carregar. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3649** — **NFS-e EMITIDAS · BUGFIX SIAP GEO LOOP ETERNO 0 NOTAS — dataInicial CALCULADO COMO "hoje-1mês" EM VEZ DE "último dataFinal+1d". BACKEND PONTUAL.** Detalhe: `shared/changelog.ts`.

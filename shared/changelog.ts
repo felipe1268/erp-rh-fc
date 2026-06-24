@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3651 — **NFS-e EMITIDAS · BUGFIX CRÍTICO SIAP GEO 0 NOTAS — XMLParser SEM removeNSPrefix + RESET last_sync_at. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * O XMLParser (fast-xml-parser) não tinha `removeNSPrefix: true`. O SIAP GEO de Guaratinguetá
+ * (WebService .NET .asmx) responde com prefixo `soap:` ou `s:` nas tags SOAP — ex.:
+ * `<soap:Envelope><soap:Body><ConsultarNfseResposta>`. Sem o removeNSPrefix, as chaves no
+ * objeto parseado ficavam `"soap:Envelope"` e `getAny("Envelope.Body.ConsultarNfseResposta")`
+ * nunca casava → `parseAbrasrResponse` retornava [] → importadas=0 gravado permanentemente.
+ *
+ * Fix duplo:
+ * 1. `removeNSPrefix: true` no XMLParser → prefixos stripped → `Envelope.Body.X` sempre casa.
+ * 2. SyncSchema+ Rev.3651 reseta `last_sync_at = NULL` para SIAP GEO com importadas=0,
+ *    forçando re-scan histórico completo (2018-01-01 → 2025-12-31) no próximo cron/sync.
+ *
  * Rev. 3650 — **CONFIGURAÇÕES SEFAZ · MÁSCARA CNPJ (XX.XXX.XXX/XXXX-XX). 100% FRONTEND · ZERO BACKEND/SCHEMA.**
  *
  * Campo "CNPJ da Empresa" exibia dígitos crus (ex.: 29353906000171). Adicionada máscara

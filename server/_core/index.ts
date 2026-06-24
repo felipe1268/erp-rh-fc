@@ -4300,6 +4300,25 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3601: portais NFS-e municipal de Guaratinguetá habilitados (enabled=1).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3601 enable-nfse-mun:`, e?.message || e); }
 
+        // Rev. 3651 — Resetar last_sync_at do SIAP GEO para forçar re-scan histórico completo.
+        // Motivo: XMLParser sem removeNSPrefix fazia getAny("Envelope.Body.X") não casar com
+        // respostas .NET que usam prefixo soap:/s: → importadas=0 gravado em last_sync_result
+        // com dataFinal=2025-12-31 → Rev.3649 via dataFinal+1d entrava em range impossível
+        // permanente. Fix duplo: removeNSPrefix=true no parser + reset do last_sync_at.
+        try {
+          const { rowCount } = await db.$client.query(`
+            UPDATE company_nfse_municipal_config
+            SET last_sync_at = NULL, last_sync_result = NULL, updated_at = NOW()
+            WHERE provider = 'siapgeo'
+              AND (last_sync_result IS NULL OR last_sync_result::jsonb->>'importadas' = '0')
+          `);
+          if ((rowCount ?? 0) > 0) {
+            console.log(`[SyncSchema+] Rev. 3651: last_sync_at resetado para ${rowCount} portal(is) SIAP GEO com importadas=0 — re-scan histórico forçado.`);
+          } else {
+            console.log(`[SyncSchema+] Rev. 3651: SIAP GEO já com importadas>0 — sem reset necessário.`);
+          }
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3651 reset-siapgeo:`, e?.message || e); }
+
         // Rev. 3604 — xml_payload em fiscal_notes (NF-e XML completo para espelho fiel)
         try {
           await db.$client.query(`ALTER TABLE fiscal_notes ADD COLUMN IF NOT EXISTS xml_payload TEXT`);
