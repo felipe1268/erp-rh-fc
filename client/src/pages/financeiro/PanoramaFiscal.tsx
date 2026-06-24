@@ -5,7 +5,7 @@ import {
   ChevronLeft, ChevronRight, RefreshCw, Printer,
   FileSpreadsheet, AlertTriangle, CheckCircle2,
   Info, ChevronDown, ChevronUp, ArrowUpRight, ArrowDownLeft,
-  ShoppingCart, FileWarning, Receipt,
+  ShoppingCart, FileWarning, Receipt, FolderArchive,
 } from "lucide-react";
 
 const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -196,6 +196,35 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
 
   const r = data?.resumo;
 
+  // ── Pacote Contador download ───────────────────────────────────────────────
+  const [downloadingPacote, setDownloadingPacote] = useState(false);
+  const downloadPacote = useCallback(async () => {
+    if (!companyId) return;
+    setDownloadingPacote(true);
+    try {
+      const resp = await fetch(
+        `/api/download/pacote-contador?companyId=${companyId}&mes=${mes}&ano=${ano}`,
+        { credentials: "include" }
+      );
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: "Erro ao gerar pacote" }));
+        alert(err.error || "Erro ao gerar pacote");
+        return;
+      }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const label = mes === 0 ? `Anual_${ano}` : `${MESES_SHORT[mes - 1]}_${ano}`;
+      a.download = `Pacote_Contador_${label}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+    } finally {
+      setDownloadingPacote(false);
+    }
+  }, [companyId, mes, ano]);
+
   // ── Excel export ──────────────────────────────────────────────────────────
   const exportExcel = useCallback(async () => {
     if (!data) return;
@@ -369,6 +398,12 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
                 className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors disabled:opacity-40">
                 <Printer className="h-3.5 w-3.5" />
                 PDF
+              </button>
+              <button type="button" onClick={downloadPacote} disabled={downloadingPacote}
+                title={mes === 0 ? `Baixar pacote anual ${ano} para o contador` : `Baixar pacote de ${MESES[mes-1]} ${ano} para o contador`}
+                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 rounded-lg transition-colors disabled:opacity-50">
+                <FolderArchive className={`h-3.5 w-3.5 ${downloadingPacote ? "animate-pulse" : ""}`} />
+                <span className="hidden sm:inline">{downloadingPacote ? "Gerando…" : "Pacote Contador"}</span>
               </button>
             </div>
           </div>
