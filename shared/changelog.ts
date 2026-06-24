@@ -1,6 +1,20 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3646 — **NF-e RECEBIDAS · BUGFIX CRÍTICO LOOP NSU=0 + GATE VAZA PÓS-BACKFILL. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Bug 1 — Loop NSU=0 eterno: `deveAvancarNsu = rateLimited && rateLimitedNsu && importadas > 0`
+ * impedia salvar o NSU retornado pela SEFAZ no cStat=656 quando importadas=0 (rate-limit
+ * na 1ª chamada sem processar nada). Resultado: o próximo sync (1h depois) começa com o
+ * mesmo NSU antigo (ex: 0), SEFAZ retorna 656 de novo, loop eterno. Fix: remover a guarda
+ * `importadas > 0`; sempre salvar `rateLimitedNsu` quando SEFAZ retorna cStat=656.
+ *
+ * Bug 2 — Gate vaza após backfill: o caminho `forceUltNSU` fazia
+ * `SET ultimo_nsu = X, last_sync_at = NULL`, limpando o timestamp do gate. Um syncNow
+ * imediatamente após o backfill encontrava `last_sync_at = NULL` e passava o gate
+ * sem esperar o intervalo configurado, gerando chamadas repetidas e reforçando o rate-limit.
+ * Fix: remover `last_sync_at = NULL` do UPDATE do forceUltNSU (backfill usa skipTimeGate=true).
+ *
  * Rev. 3645 — **NFS-e EMITIDAS · RING COM DÍGITOS (w-16) + PAINEL "REGRAS DE CONSULTA" DOS PORTAIS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Anel do cronômetro expandido de w-10 → w-16 com dígitos internos idênticos ao padrão

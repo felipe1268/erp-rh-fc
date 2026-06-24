@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3646** — **NF-e RECEBIDAS · BUGFIX CRÍTICO LOOP NSU=0 + GATE VAZA PÓS-BACKFILL. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** `deveAvancarNsu` não exige mais `importadas > 0`; backfill não zera `last_sync_at`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3645** — **NFS-e EMITIDAS · RING COM DÍGITOS (w-16) + PAINEL "REGRAS DE CONSULTA". 100% FRONTEND.** Anel ampliado w-10→w-16 com dígitos internos; painel permanente explica SIAP GEO (até 31/12/2025) × Portal Nacional (2026+, req. cert A1). Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3644** — **PANORAMA FISCAL · BUGFIX OCs SEMPRE "0" — QUERY USAVA `purchase_orders` (VAZIA) EM VEZ DE `compras_ordens`. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.

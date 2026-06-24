@@ -651,11 +651,13 @@ export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?:
   const url = tpAmb === 2 ? SEFAZ_URL_HOM : SEFAZ_URL_PROD;
   const ufCodigo = UF_CODES[String(cfg.uf || "SP").toUpperCase()] || 35;
 
-  // Se forceUltNSU foi passado (backfill), aplica imediatamente antes de começar
+  // Se forceUltNSU foi passado (backfill), aplica imediatamente antes de começar.
+  // NÃO zerar last_sync_at: o backfill já usa skipTimeGate=true; zerar aqui permitiria
+  // que um syncNow subsequente passasse o gate sem esperar o intervalo configurado.
   if (opts?.forceUltNSU !== undefined) {
     await db.execute(sql`
       UPDATE company_nfe_config
-      SET ultimo_nsu = ${opts.forceUltNSU}, last_sync_at = NULL
+      SET ultimo_nsu = ${opts.forceUltNSU}
       WHERE company_id = ${companyId}
     `);
     console.log(`[SefazSync] company=${companyId} forceUltNSU=${opts.forceUltNSU} — NSU resetado para backfill`);
@@ -829,12 +831,13 @@ export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?:
     }
 
     // Salvar resultado final
-    // Rate-limit: SEFAZ retorna ultNSU no 656, mas só deve ser salvo se houve progresso real.
-    // Se importadas=0 (bloqueado logo na 1ª chamada sem processar nada), NÃO avançar o NSU
-    // — caso contrário o reset de histórico seria desfeito (NSU pularia de 0 para o atual).
-    const deveAvancarNsu = rateLimited && rateLimitedNsu && importadas > 0;
+    // Rate-limit: quando cStat=656, a SEFAZ retorna o ultNSU correto (ponto de retomada).
+    // SEMPRE salvar esse NSU, independente de importadas — sem isso o próximo sync começa
+    // do mesmo NSU antigo (ex: 0) e SEFAZ retorna 656 de novo → loop eterno.
+    // A condição anterior `importadas > 0` foi removida pois criava exatamente esse loop.
+    const deveAvancarNsu = rateLimited && rateLimitedNsu !== null;
     const avisoRateLimit = rateLimited
-      ? `Limite SEFAZ (cStat=656). Tente novamente após 1 hora.${deveAvancarNsu ? ` NSU salvo: ${rateLimitedNsu}.` : ""}`
+      ? `Limite SEFAZ (cStat=656). Aguarde pelo menos 1 hora antes de tentar novamente.${deveAvancarNsu ? ` NSU atualizado: ${rateLimitedNsu}.` : ""}`
       : undefined;
     const resultPayload = rateLimited
       ? { importadas, ignoradas, paginas, aviso: avisoRateLimit, rateLimitedAt: new Date().toISOString(), nsuSalvo: deveAvancarNsu ? rateLimitedNsu : null }
