@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import {
@@ -164,6 +164,29 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
     { enabled: !!companyId, staleTime: 60_000 }
   );
 
+  // ── Progresso de loading ──────────────────────────────────────────────────
+  const [loadingPct, setLoadingPct] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (isFetching) {
+      setLoadingPct(0);
+      timerRef.current = setInterval(() => {
+        setLoadingPct(p => {
+          if (p >= 90) { clearInterval(timerRef.current!); return 90; }
+          // acelera no início, desacelera perto de 90%
+          const step = p < 40 ? 6 : p < 70 ? 3 : 1;
+          return Math.min(p + step, 90);
+        });
+      }, 180);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (loadingPct > 0) setLoadingPct(100);
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFetching]);
+
   const r = data?.resumo;
 
   // ── Excel export ──────────────────────────────────────────────────────────
@@ -213,9 +236,39 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
   // ── Loading ───────────────────────────────────────────────────────────────
   if (!data && isFetching) {
     return (
-      <div className="flex flex-col items-center justify-center py-28 gap-3">
-        <div className="w-12 h-12 rounded-full border-4 border-indigo-200 border-t-indigo-600 animate-spin" />
-        <p className="text-sm text-slate-500">Carregando panorama fiscal…</p>
+      <div className="flex flex-col items-center justify-center py-28 gap-5 px-6">
+        <div className="w-full max-w-sm space-y-3">
+          {/* Rótulo */}
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-slate-500 font-medium">Carregando panorama fiscal…</span>
+            <span className="text-indigo-600 font-bold tabular-nums">{loadingPct}%</span>
+          </div>
+          {/* Barra de fundo */}
+          <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-indigo-400 transition-all duration-200 ease-out"
+              style={{ width: `${loadingPct}%` }}
+            />
+          </div>
+          {/* Etapas informativas */}
+          <div className="grid grid-cols-3 gap-2 pt-1">
+            {[
+              { label: "NFS-e + NF-e", pct: 30 },
+              { label: "Extrato bancário", pct: 60 },
+              { label: "Cruzamento OC", pct: 90 },
+            ].map(step => (
+              <div key={step.label}
+                className={`flex items-center gap-1.5 text-[11px] transition-colors duration-300 ${
+                  loadingPct >= step.pct ? "text-indigo-600 font-semibold" : "text-slate-300"
+                }`}>
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 transition-colors duration-300 ${
+                  loadingPct >= step.pct ? "bg-indigo-500" : "bg-slate-200"
+                }`} />
+                {step.label}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
