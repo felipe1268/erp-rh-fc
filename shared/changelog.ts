@@ -1,6 +1,20 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3635 — **DASHBOARD NOTAS FISCAIS · GRÁFICOS AVANÇADOS (ComposedChart + Coverage + Treemap + Ranking). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * 3 novos gráficos altamente detalhados:
+ * 1. ComposedChart "Evolução Fiscal Mensal" (full-width, h=320): barras NF-e+NFS-e +
+ *    Area com gradiente para Saídas+Entradas bancárias + gradiente SVG (defs) + tooltip multi-item.
+ * 2. ComposedChart "Cobertura de NF-e nas Saídas" (h=280): stacked bars c/ NF-e (verde)
+ *    vs s/ NF-e (vermelho) por mês + linha % cobertura no eixo Y direito (0-100%) +
+ *    tooltip inline com total+pct+cobertura colorida.
+ * 3. Treemap "NF-e por Fornecedor" (h=280): todos fornecedores proporcionalmente +
+ *    CustomTreemapNode (labels auto-tamanho, valor abreviado, stroke branco).
+ * 4. Ranking de Fornecedores redesenhado: badge % do total colorido, ticket médio, cor indexada.
+ * Fix: groupFornecedores retornava .nome mas o código de gráfico usava .name (undefined) → added name=nome.
+ * Novos dados: entByMonth (entradas/mês), coverageData (cobertura mensal), treemapData.
+ *
  * Rev. 3634 — **DASHBOARD NOTAS FISCAIS · SELETOR DE PERÍODO PADRONIZADO (WHITE-CARD). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Substituído DashHeader (gradiente violet) + chips planos pelo padrão white-card

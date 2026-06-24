@@ -5,7 +5,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { useCompany } from "@/hooks/useCompany";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, Cell,
+  Legend, Cell, ComposedChart, Area, Line, ReferenceLine, Treemap,
 } from "recharts";
 import {
   FileText, ShoppingCart, Receipt, Building2, CheckCircle2,
@@ -63,6 +63,57 @@ function RingGauge({
   );
 }
 
+/* ─────────────────── Treemap node ─────────────────── */
+function TreemapNode(props: any) {
+  const { x, y, width, height, name, value, index } = props;
+  if (!width || !height || width < 3 || height < 3) return null;
+  const fill = PALETTE[index % PALETTE.length];
+  const showLabel = width > 44 && height > 26;
+  const showVal   = width > 60 && height > 44;
+  const fs        = Math.min(11, Math.max(8, Math.floor(width / 9)));
+  const maxChars  = Math.max(5, Math.floor(width / (fs * 0.6)));
+  const label     = (name?.length ?? 0) > maxChars ? name.slice(0, maxChars - 1) + "…" : (name ?? "");
+  return (
+    <g>
+      <rect x={x + 1} y={y + 1} width={width - 2} height={height - 2}
+        fill={fill} rx={4} fillOpacity={0.9} stroke="#fff" strokeWidth={2} />
+      {showLabel && (
+        <text x={x + width / 2} y={y + height / 2 + (showVal ? -8 : 4)}
+          textAnchor="middle" fill="#fff" fontSize={fs} fontWeight={700}
+          style={{ pointerEvents: "none", userSelect: "none" }}>
+          {label}
+        </text>
+      )}
+      {showVal && (
+        <text x={x + width / 2} y={y + height / 2 + 8}
+          textAnchor="middle" fill="rgba(255,255,255,0.88)" fontSize={fs - 1}
+          style={{ pointerEvents: "none", userSelect: "none" }}>
+          {formatBRLCompact(Number(value))}
+        </text>
+      )}
+    </g>
+  );
+}
+
+/* ─────────────────── Custom tooltip for ComposedChart ─────────────────── */
+function MultiTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white rounded-xl shadow-xl border border-slate-200 p-3 min-w-[190px]">
+      <p className="text-xs font-bold text-slate-700 mb-2">{label}</p>
+      {payload.map((p: any) => (
+        <div key={p.dataKey} className="flex items-center justify-between gap-3 mb-0.5">
+          <span className="flex items-center gap-1.5 text-xs text-slate-600">
+            <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ background: p.color }} />
+            {p.name}
+          </span>
+          <span className="text-xs font-semibold tabular-nums text-slate-800">{formatBRLCompact(Number(p.value))}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ─────────────────── Helpers ─────────────────── */
 function groupByMonth(items: any[], dateKey: string, valueKey: string): number[] {
   const arr = new Array(12).fill(0);
@@ -89,7 +140,7 @@ function groupFornecedores(nfeList: any[]) {
     map.set(cnpj, e);
   }
   return [...map.entries()]
-    .map(([cnpj, v]) => ({ cnpj, ...v }))
+    .map(([cnpj, v]) => ({ cnpj, name: v.nome, ...v }))
     .sort((a, b) => b.total - a.total);
 }
 
@@ -325,25 +376,57 @@ export default function DashNotasFiscais() {
     [...(anoData?.saidasComNota ?? []), ...(anoData?.saidasSemNota ?? [])],
     "data", "valor"
   ), [anoData]);
+  const entByMonth  = useMemo(() => groupByMonth(
+    [...(anoData?.entradasComNota ?? []), ...(anoData?.entradasSemNota ?? [])],
+    "data", "valor"
+  ), [anoData]);
   const prevNfseByMonth = useMemo(() => groupByMonth(prevData?.nfseEmitidas ?? [], "data_emissao", "valor_bruto"), [prevData]);
 
-  const barData = useMemo(() => MESES_ABREV.map((m, i) => ({
+  /* ComposedChart monthly — bars NF-e + NFS-e, area saídas, line entradas */
+  const composedData = useMemo(() => MESES_ABREV.map((m, i) => ({
     mes: m,
-    "NF-e Recebidas": nfeByMonth[i],
-    "NFS-e Emitidas": nfseByMonth[i],
-    "Saídas Bancárias": saiByMonth[i],
-  })), [nfeByMonth, nfseByMonth, saiByMonth]);
+    "NF-e Recebidas":  nfeByMonth[i] ?? 0,
+    "NFS-e Emitidas":  nfseByMonth[i] ?? 0,
+    "Saídas Banco":    Math.abs(saiByMonth[i] ?? 0),
+    "Entradas Banco":  Math.abs(entByMonth[i] ?? 0),
+  })), [nfeByMonth, nfseByMonth, saiByMonth, entByMonth]);
 
-  const barDataMes = mes !== 0 ? [{
+  const composedDataMes = mes !== 0 ? [{
     mes: MESES_ABREV[mes - 1],
-    "NF-e Recebidas": resumo?.nfeRecebidas.total ?? 0,
-    "NFS-e Emitidas": resumo?.nfseEmitidas.total ?? 0,
-    "Saídas Bancárias": resumo?.saidasBancarias.total ?? 0,
-  }] : barData;
+    "NF-e Recebidas":  resumo?.nfeRecebidas.total    ?? 0,
+    "NFS-e Emitidas":  resumo?.nfseEmitidas.total    ?? 0,
+    "Saídas Banco":    resumo?.saidasBancarias.total  ?? 0,
+    "Entradas Banco":  resumo?.entradasBancarias.total ?? 0,
+  }] : composedData;
 
+  /* Coverage chart — Saídas c/ NF-e vs Sem NF-e por mês */
+  const coverageData = useMemo(() => {
+    const filterMonth = (arr: any[], dateKey: string, i: number) =>
+      arr.filter((r: any) => {
+        const raw = r[dateKey]; if (!raw) return false;
+        const d = new Date(typeof raw === "string" ? raw.replace(" ", "T") : raw);
+        return !isNaN(d.getTime()) && d.getMonth() === i;
+      }).reduce((s: number, r: any) => s + Math.abs(parseFloat(String(r.valor ?? "0")) || 0), 0);
+    return MESES_ABREV.map((label, i) => {
+      const com  = filterMonth(anoData?.saidasComNota  ?? [], "data", i);
+      const sem  = filterMonth(anoData?.saidasSemNota  ?? [], "data", i);
+      const tot  = com + sem;
+      const pct  = tot > 0 ? Math.round((com / tot) * 100) : null;
+      return { mes: label, "c/ NF-e": com, "s/ NF-e": sem, "% Cobert.": pct };
+    });
+  }, [anoData]);
+
+  /* Treemap fornecedores */
   const prevNfeByMonth = useMemo(() => groupByMonth(prevData?.nfeRecebidas ?? [], "data_emissao", "valor_bruto"), [prevData]);
   const topForn        = useMemo(() => groupFornecedores(data?.nfeRecebidas ?? []), [data]);
   const topFornMax     = topForn[0]?.total ?? 1;
+  const totalForn      = useMemo(() => topForn.reduce((s, f) => s + f.total, 0), [topForn]);
+  const treemapData    = useMemo(() => topForn.slice(0, 18).map((f, i) => ({
+    name:  f.nome,
+    value: f.total,
+    qtd:   f.qtd,
+    fill:  PALETTE[i % PALETTE.length],
+  })), [topForn]);
 
   const periodoLabel = mes === 0 ? String(ano) : `${MESES_ABREV[mes - 1]}/${ano}`;
   const indiceGeral  = resumo
@@ -488,76 +571,138 @@ export default function DashNotasFiscais() {
           </div>
         </Card>
 
-        {/* Charts */}
-        <div className="grid md:grid-cols-3 gap-4">
+        {/* ── Gráfico 1: Evolução mensal — ComposedChart ────────────────── */}
+        <ChartCard
+          title="Evolução Fiscal Mensal"
+          subtitle={`NF-e + NFS-e emitidas × movimentos bancários · ${ano}`}
+          height={320}
+        >
+          {composedDataMes.every(d =>
+            !d["NF-e Recebidas"] && !d["NFS-e Emitidas"] && !d["Saídas Banco"] && !d["Entradas Banco"]
+          )
+            ? <EmptyState message="Sem dados para o período." />
+            : (
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={composedDataMes} margin={{ top: 6, right: 16, bottom: 4, left: 8 }}>
+                  <defs>
+                    <linearGradient id="gradSai" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor={AMBER}  stopOpacity={0.25} />
+                      <stop offset="95%" stopColor={AMBER}  stopOpacity={0.02} />
+                    </linearGradient>
+                    <linearGradient id="gradEnt" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor={GREEN}  stopOpacity={0.20} />
+                      <stop offset="95%" stopColor={GREEN}  stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="mes" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                  <YAxis tickFormatter={formatBRLCompact} tick={{ fontSize: 10, fill: "#94a3b8" }} width={68} axisLine={false} tickLine={false} />
+                  <Tooltip content={<MultiTooltip />} />
+                  <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                  <Area dataKey="Saídas Banco"   fill="url(#gradSai)" stroke={AMBER}  strokeWidth={1.5} dot={false} activeDot={{ r: 4 }} />
+                  <Area dataKey="Entradas Banco" fill="url(#gradEnt)" stroke={GREEN}  strokeWidth={1.5} strokeDasharray="4 3" dot={false} activeDot={{ r: 4 }} />
+                  <Bar  dataKey="NF-e Recebidas" fill={BLUE}   radius={[4,4,0,0]} maxBarSize={20} />
+                  <Bar  dataKey="NFS-e Emitidas" fill={VIOLET} radius={[4,4,0,0]} maxBarSize={20} />
+                  <ReferenceLine y={0} stroke="#e2e8f0" />
+                </ComposedChart>
+              </ResponsiveContainer>
+            )
+          }
+        </ChartCard>
+
+        {/* ── Gráfico 2: Cobertura fiscal + Treemap fornecedores ────────── */}
+        <div className="grid md:grid-cols-12 gap-4">
+          {/* Coverage stacked bar — Saídas c/ NF-e vs s/ NF-e */}
           <ChartCard
-            title="NF-e Recebidas × NFS-e Emitidas × Saídas por mês"
-            subtitle={`Valores mensais — ${ano}`}
-            height={270}
-            className="md:col-span-2"
+            title="Cobertura de NF-e nas Saídas"
+            subtitle={`Saídas bancárias c/ nota vs sem nota · ${ano}`}
+            height={280}
+            className="md:col-span-7"
           >
-            {barDataMes.every(d => !d["NF-e Recebidas"] && !d["NFS-e Emitidas"] && !d["Saídas Bancárias"])
-              ? <EmptyState message="Sem dados para o período." />
+            {coverageData.every(d => !d["c/ NF-e"] && !d["s/ NF-e"])
+              ? <EmptyState message="Sem movimentos no período." />
               : (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={barDataMes} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
-                    <YAxis tickFormatter={formatBRLCompact} tick={{ fontSize: 10 }} width={72} />
-                    <Tooltip content={<BRLTooltip />} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="NF-e Recebidas"  fill={BLUE}   radius={[3,3,0,0]} maxBarSize={22} />
-                    <Bar dataKey="NFS-e Emitidas"  fill={GREEN}  radius={[3,3,0,0]} maxBarSize={22} />
-                    <Bar dataKey="Saídas Bancárias" fill={AMBER} radius={[3,3,0,0]} maxBarSize={22} />
-                  </BarChart>
+                  <ComposedChart data={coverageData} margin={{ top: 6, right: 40, bottom: 4, left: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                    <XAxis dataKey="mes" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                    <YAxis yAxisId="val" tickFormatter={formatBRLCompact} tick={{ fontSize: 10, fill: "#94a3b8" }} width={68} axisLine={false} tickLine={false} />
+                    <YAxis yAxisId="pct" orientation="right" tickFormatter={v => v == null ? "" : `${v}%`} domain={[0, 100]} tick={{ fontSize: 10, fill: "#94a3b8" }} width={36} axisLine={false} tickLine={false} />
+                    <Tooltip content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null;
+                      const com  = payload.find((p: any) => p.dataKey === "c/ NF-e")?.value ?? 0;
+                      const sem  = payload.find((p: any) => p.dataKey === "s/ NF-e")?.value ?? 0;
+                      const pct  = payload.find((p: any) => p.dataKey === "% Cobert.")?.value;
+                      const tot  = Number(com) + Number(sem);
+                      return (
+                        <div className="bg-white rounded-xl shadow-xl border border-slate-200 p-3 min-w-[200px]">
+                          <p className="text-xs font-bold text-slate-700 mb-2">{label}</p>
+                          <div className="flex justify-between text-xs mb-0.5"><span className="flex gap-1 items-center"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"/>c/ NF-e</span><span className="font-semibold">{formatBRLCompact(Number(com))}</span></div>
+                          <div className="flex justify-between text-xs mb-0.5"><span className="flex gap-1 items-center"><span className="w-2 h-2 rounded-full bg-rose-400 inline-block"/>s/ NF-e</span><span className="font-semibold">{formatBRLCompact(Number(sem))}</span></div>
+                          <div className="border-t border-slate-100 mt-1.5 pt-1.5 flex justify-between text-xs">
+                            <span className="text-slate-500">Total</span><span className="font-bold">{formatBRLCompact(tot)}</span>
+                          </div>
+                          {pct != null && <div className="flex justify-between text-xs mt-0.5"><span className="text-slate-500">Cobertura</span><span className={`font-bold ${Number(pct) >= 70 ? "text-emerald-600" : Number(pct) >= 40 ? "text-amber-600" : "text-rose-600"}`}>{pct}%</span></div>}
+                        </div>
+                      );
+                    }} />
+                    <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                    <Bar yAxisId="val" dataKey="c/ NF-e" fill={GREEN} stackId="cov" radius={[0,0,0,0]} maxBarSize={28} />
+                    <Bar yAxisId="val" dataKey="s/ NF-e" fill={RED}   stackId="cov" radius={[4,4,0,0]} maxBarSize={28} />
+                    <Line yAxisId="pct" dataKey="% Cobert." stroke="#6366f1" strokeWidth={2} dot={{ fill: "#6366f1", r: 3 }} activeDot={{ r: 5 }} connectNulls={false} />
+                  </ComposedChart>
                 </ResponsiveContainer>
               )
             }
           </ChartCard>
 
+          {/* Treemap fornecedores */}
           <ChartCard
             title="NF-e por Fornecedor"
-            subtitle={`Top ${Math.min(topForn.length, 8)} · ${periodoLabel}`}
-            height={270}
+            subtitle={`${topForn.length} fornecedores · ${periodoLabel}`}
+            height={280}
+            className="md:col-span-5"
             onOpen={topForn.length > 0 ? () => setDlg("nfeRecebidas") : undefined}
             openLabel="Ver todas"
           >
-            {topForn.length === 0
+            {treemapData.length === 0
               ? <EmptyState />
               : (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    layout="vertical"
-                    data={topForn.slice(0, 8).map(f => ({
-                      name: f.name.length > 22 ? f.name.slice(0, 21) + "…" : f.name,
-                      Valor: f.total,
-                    }))}
-                    margin={{ top: 2, right: 12, left: 4, bottom: 2 }}
+                  <Treemap
+                    data={treemapData}
+                    dataKey="value"
+                    aspectRatio={4 / 3}
+                    content={<TreemapNode />}
                   >
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                    <XAxis type="number" tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} tick={{ fontSize: 10 }} />
-                    <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 10 }} />
-                    <Tooltip formatter={(v: any) => formatBRL(Number(v))} />
-                    <Bar dataKey="Valor" radius={[0,3,3,0]} maxBarSize={18}>
-                      {topForn.slice(0, 8).map((_, i) => (
-                        <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (!active || !payload?.[0]) return null;
+                        const d = payload[0].payload;
+                        return (
+                          <div className="bg-white rounded-xl shadow-xl border border-slate-200 p-3 min-w-[180px]">
+                            <p className="text-xs font-bold text-slate-800 mb-1">{d.name}</p>
+                            <p className="text-sm font-bold" style={{ color: d.fill }}>{formatBRL(d.value)}</p>
+                            <p className="text-xs text-slate-400">{d.qtd} NF{d.qtd !== 1 ? "s" : ""} · {totalForn > 0 ? Math.round((d.value/totalForn)*100) : 0}% do total</p>
+                          </div>
+                        );
+                      }}
+                    />
+                  </Treemap>
                 </ResponsiveContainer>
               )
             }
           </ChartCard>
         </div>
 
-        {/* Top fornecedores lista */}
+        {/* ── Gráfico 3: Top fornecedores — lista detalhada ─────────────── */}
         <Card className="p-4 border-slate-200">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="font-semibold text-slate-800 text-sm">Top Fornecedores — NF-e Recebidas</h3>
-              <p className="text-xs text-slate-400">{topForn.length} fornecedor{topForn.length !== 1 ? "es" : ""} · {periodoLabel}</p>
+              <h3 className="font-semibold text-slate-800 text-sm">Ranking de Fornecedores — NF-e Recebidas</h3>
+              <p className="text-xs text-slate-400">{topForn.length} fornecedor{topForn.length !== 1 ? "es" : ""} · {periodoLabel} · total {formatBRL(totalForn)}</p>
             </div>
-            {topForn.length > 8 && (
+            {topForn.length > 10 && (
               <button type="button" onClick={() => setDlg("nfeRecebidas")}
                 className="text-xs text-violet-600 hover:text-violet-800 font-medium">
                 Ver todos ({topForn.length})
@@ -567,25 +712,41 @@ export default function DashNotasFiscais() {
           {topForn.length === 0 && (
             <p className="text-xs text-slate-400 text-center py-4">Sem NF-e recebidas no período.</p>
           )}
-          <div className="space-y-2.5">
-            {topForn.slice(0, 10).map((f, i) => (
-              <div key={f.cnpj} className="flex items-center gap-3">
-                <span className="w-5 text-xs font-bold text-slate-400 text-right shrink-0">{i + 1}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="text-xs font-medium text-slate-700 truncate" title={f.nome}>{f.nome}</span>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[11px] text-slate-400 tabular-nums">{f.qtd} NF{f.qtd !== 1 ? "s" : ""}</span>
-                      <span className="text-xs font-bold text-slate-800 tabular-nums">{formatBRL(f.total)}</span>
+          <div className="space-y-2">
+            {topForn.slice(0, 10).map((f, i) => {
+              const pct   = totalForn > 0 ? (f.total / totalForn) * 100 : 0;
+              const ticket = f.qtd > 0 ? f.total / f.qtd : 0;
+              return (
+                <div key={f.cnpj} className="flex items-center gap-3 group">
+                  <span className="w-5 text-xs font-black tabular-nums shrink-0 text-right"
+                    style={{ color: PALETTE[i % PALETTE.length] }}>
+                    {i + 1}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <span className="text-xs font-semibold text-slate-700 leading-tight" title={f.nome}
+                        style={{ display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                        {f.nome}
+                      </span>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="text-[11px] text-slate-400 tabular-nums hidden sm:block">
+                          {f.qtd} NF{f.qtd !== 1 ? "s" : ""} · tkt médio {formatBRLCompact(ticket)}
+                        </span>
+                        <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full text-white tabular-nums"
+                          style={{ backgroundColor: PALETTE[i % PALETTE.length] }}>
+                          {pct.toFixed(1)}%
+                        </span>
+                        <span className="text-xs font-bold text-slate-800 tabular-nums w-24 text-right">{formatBRL(f.total)}</span>
+                      </div>
+                    </div>
+                    <div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                      <div className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${(f.total / topFornMax) * 100}%`, backgroundColor: PALETTE[i % PALETTE.length] }} />
                     </div>
                   </div>
-                  <div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                    <div className="h-full rounded-full"
-                      style={{ width: `${(f.total / topFornMax) * 100}%`, backgroundColor: PALETTE[i % PALETTE.length] }} />
-                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Card>
 
