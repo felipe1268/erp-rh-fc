@@ -396,7 +396,7 @@ function BankTable({ rows, tipo }: { rows: any[]; tipo: "entrada" | "saida" }) {
         <tbody className="divide-y divide-slate-100">
           {rows.map((b: any) => (
             <tr key={b.id} className="hover:bg-slate-50">
-              <td className="px-3 py-2 whitespace-nowrap text-slate-500">{b.data?.slice(0,10).split("-").reverse().join("/")}</td>
+              <td className="px-3 py-2 whitespace-nowrap text-slate-500">{fmtDate(b.data)}</td>
               <td className="px-3 py-2 max-w-[220px] truncate" title={b.descricao}>{b.descricao}</td>
               <td className={`px-3 py-2 text-right font-medium ${tipo === "entrada" ? "text-emerald-700" : "text-rose-700"}`}>
                 {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Math.abs(parseFloat(b.valor ?? "0")))}
