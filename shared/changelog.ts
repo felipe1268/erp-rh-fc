@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3645 — **NFS-e EMITIDAS · RING COM DÍGITOS (w-16) + PAINEL "REGRAS DE CONSULTA" DOS PORTAIS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Anel do cronômetro expandido de w-10 → w-16 com dígitos internos idênticos ao padrão
+ * NF-e Recebidas (Rev. 3636): "Xh/YYm" quando há horas, "MM:SS" mono nos últimos 60min,
+ * RefreshCw girando quando cota disponível.
+ * Novo painel "Regras de consulta" sempre visível abaixo do timer:
+ *   - SIAP GEO: cobre NFS-e de 2018 até 31/12/2025
+ *   - Portal Nacional: cobre NFS-e a partir de 01/01/2026 — requer Certificado A1 SEFAZ
+ * Dica permanente: notas 2026+ chegam via Portal Nacional (cert A1) ou Importar PDF.
+ *
  * Rev. 3644 — **PANORAMA FISCAL + DASHBOARD NF-e · BUGFIX OCs SEMPRE "0" — TABELA ERRADA. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * `getPanoramaFiscal` consultava `purchase_orders` (tabela legada/vazia) em vez de
