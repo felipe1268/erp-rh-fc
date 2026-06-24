@@ -660,12 +660,8 @@ export default function DashNotasFiscais() {
                       <LabelList
                         dataKey="value"
                         position="right"
-                        formatter={(v: number) =>
-                          new Intl.NumberFormat("pt-BR", {
-                            style: "currency", currency: "BRL", maximumFractionDigits: 0,
-                          }).format(v)
-                        }
-                        style={{ fontSize: 11, fill: "#475569", fontWeight: 600 }}
+                        formatter={(v: number) => formatBRL(v)}
+                        style={{ fontSize: 10, fill: "#475569", fontWeight: 600 }}
                       />
                     </Bar>
                   </BarChart>

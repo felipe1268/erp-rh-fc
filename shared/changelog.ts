@@ -1,6 +1,11 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3642 — **DASHBOARD NF-e · RÓTULO BARRA COM SEPARADOR PONTO/VÍRGULA (formatBRL). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * LabelList formatter trocado para `formatBRL` → exibe "R$ 165.000,00" com separador
+ * de milhar (ponto) e decimal (vírgula) conforme padrão pt-BR.
+ *
  * Rev. 3641 — **DASHBOARD NF-e · RÓTULO DA BARRA "NF-e POR FORNECEDOR" EM NÚMERO COMPLETO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * LabelList formatter trocado de `formatBRLCompact` (abreviava p/ "R$ 165 mil") para
