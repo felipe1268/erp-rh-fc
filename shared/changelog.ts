@@ -1,6 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3647 — **NF-e RECEBIDAS · BUGFIX HORÁRIO DO LOG DE SYNC EM UTC EM VEZ DE BRT. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * `nfe_sync_log.iniciado_em` é `TIMESTAMP WITHOUT TIME ZONE` e armazena UTC (via `NOW()`).
+ * A query `TO_CHAR(iniciado_em AT TIME ZONE 'America/Sao_Paulo', ...)` tratava o valor
+ * como hora local (São Paulo) e convertia errado (+3h em vez de -3h). Fix: encadear
+ * `AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo'` — primeiro marca como UTC
+ * (retorna TIMESTAMPTZ), depois converte para hora Brasília (retorna TIMESTAMP local).
+ *
  * Rev. 3646 — **NF-e RECEBIDAS · BUGFIX CRÍTICO LOOP NSU=0 + GATE VAZA PÓS-BACKFILL. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Bug 1 — Loop NSU=0 eterno: `deveAvancarNsu = rateLimited && rateLimitedNsu && importadas > 0`

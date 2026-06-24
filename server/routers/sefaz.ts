@@ -964,8 +964,8 @@ export const sefazRouter = router({
       const db = await getDb();
       const rows = (await db.execute(sql`
         SELECT id, company_id,
-          TO_CHAR(iniciado_em AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI:SS') AS iniciado_brt,
-          TO_CHAR(finalizado_em AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI:SS') AS finalizado_brt,
+          TO_CHAR(iniciado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI:SS') AS iniciado_brt,
+          TO_CHAR(finalizado_em AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI:SS') AS finalizado_brt,
           iniciado_em,
           finalizado_em,
           nsu_inicial, nsu_final,
