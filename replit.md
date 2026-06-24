@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3629** — **NF-e RECEBIDAS · BUGFIX BOTÃO "N NOTAS SEM XML — RECUPERAR" SEM FEEDBACK — `toast.success/error/info` NÃO EXISTEM NO `useToast` DO SHADCN. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `backfillMut.onSuccess` usava `toast.success(...)`/`toast.info(...)`/`toast.error(...)` — métodos inexistentes no `useToast` do shadcn → TypeError silencioso → nada aparecia ao clicar. Fix: substituídos por `toast({ title, description, variant })`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3630** — **DASHBOARD NOTAS FISCAIS · NOVO PAINEL `/financeiro/dashboards/notas-fiscais`. FRONTEND ADITIVO · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** KPIs, 3 ring gauges de saúde fiscal, barra mensal NF-e × NFS-e × Saídas, pie top fornecedores, lista top-10 fornecedores, 3 cards de pendência, accordion OC × NF-e, 2 ComparativoAnual (NF-e + NFS-e a/a), 6 DetailDialog drill-down. Sidebar Financeiro → Dashboards. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3628** — **DASHBOARD CONCILIAÇÃO · BUGFIX CARDS VAZIOS — JOIN `financial_accounts`/`obras` + FALLBACK `comprovante_beneficiario`. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** `getConciliacaoDashExtra` filtrava por `conta_nome IS NOT NULL`, `obra_nome IS NOT NULL`, `fornecedor_nome IS NOT NULL` — campos desnormalizados nulos quando lançamento usa `conta_id`/`obra_id` sem duplicar o nome. Fix: LEFT JOIN em `financial_accounts` e `obras` com `COALESCE(fe.conta_nome, fa.nome)` / `COALESCE(fe.obra_nome, o.nome)`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3629** — **NF-e RECEBIDAS · BUGFIX BOTÃO "N NOTAS SEM XML — RECUPERAR" SEM FEEDBACK — `toast.success/error/info` NÃO EXISTEM NO `useToast` DO SHADCN. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** `backfillMut.onSuccess` usava `toast.success(...)`/`toast.info(...)`/`toast.error(...)` — métodos inexistentes no `useToast` do shadcn → TypeError silencioso → nada aparecia ao clicar. Fix: substituídos por `toast({ title, description, variant })`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3623** — **PANORAMA FISCAL · BOTÃO "PACOTE CONTADOR" — ZIP COM NFS-e, NF-e, EXTRATO, OCs + CHECKLIST. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

@@ -484,6 +484,7 @@ const menuSectionsFinanceiro: MenuSection[] = [
       { icon: ArrowLeftRight, label: "Conciliação Bancária", path: "/financeiro/dashboards/conciliacao" },
       { icon: Banknote,       label: "Controle de Cheques", path: "/financeiro/dashboards/cheques" },
       { icon: CreditCard,     label: "Cartão de Crédito",   path: "/financeiro/dashboards/cartao" },
+      { icon: FileText,       label: "Notas Fiscais",        path: "/financeiro/dashboards/notas-fiscais" },
     ],
   },
   {

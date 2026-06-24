@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3630 — **DASHBOARD NOTAS FISCAIS · NOVO PAINEL EM /financeiro/dashboards/notas-fiscais. FRONTEND ADITIVO · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Novo dashboard completo de análise fiscal, acessível via menu Dashboards do
+ * módulo Financeiro. Consume o endpoint existente `fiscalNotes.getPanoramaFiscal`
+ * (sem nenhuma mudança backend). Funcionalidades:
+ *
+ *  • Seletor de período: ano todo ou mês específico (Jan–Dez)
+ *  • 5 KPI cards: NFS-e Emitidas, NF-e Recebidas, OCs, Entradas e Saídas Bancárias
+ *  • 3 ring gauges de Saúde Fiscal: Receita c/ NFS-e, OC c/ NF-e, Saída c/ nota + Índice Geral
+ *  • Barra agrupada mensal: NF-e × NFS-e × Saídas Bancárias
+ *  • Pie chart top-8 fornecedores por NF-e recebida
+ *  • Lista horizontal com mini-barra dos top-10 fornecedores
+ *  • 3 cards de pendência (Entradas sem NFS-e, Saídas sem NF-e, OCs sem nota)
+ *  • Accordion OC × NF-e (OCs com e sem nota vinculada, inline com 25 linhas + "ver todos")
+ *  • ComparativoAnual × 2: NF-e Recebidas a/a + NFS-e Emitidas a/a (via query ano-1)
+ *  • 6 DetailDialog de drill-down com busca client-side
+ *  • Navegação para tela operacional em cada dialog
+ *
+ * Arquivos: client/src/pages/financeiro/dashboards/DashNotasFiscais.tsx (novo),
+ *           client/src/App.tsx (rota lazy), client/src/components/DashboardLayout.tsx (item sidebar).
+ *
  * Rev. 3629 — **NF-e RECEBIDAS · BUGFIX BOTAO "N NOTAS SEM XML — RECUPERAR" SEM FEEDBACK — toast.success/error/info NAO EXISTEM NO useToast DO SHADCN. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Causa-raiz: `backfillMut.onSuccess` e `onError` usavam `toast.success(...)`,
