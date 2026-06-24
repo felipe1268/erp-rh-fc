@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3675** — **NFS-e EMITIDAS · PROGRESSO REAL 0–100% NO IMPORT XML SIAP GEO (LOTES DE 10). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** DOMParser conta os `<nf>` antes de enviar; lotes de 10 → `mutateAsync` por lote → botão mostra "30/75 (40%)" em tempo real; toast final consolidado. Arquivo: `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3674** — **NFS-e EMITIDAS · IMPORTAR XML SIAP GEO EXPORT — MÚLTIPLAS NOTAS POR ARQUIVO (<nfse>/<nf>). BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Portal SIAP GEO tem opção "Exportar → em formato XML" com raiz `<nfse>` e N filhos `<nf>`. Novo `parseSiapGeoExportXml`: auto-detecta formato, converte centavos, datas BR, mapeia status (id_nf_st=2→cancelada), origem `nfse_siapgeo_export`. `importNfseXmlManual` tenta SIAP GEO primeiro, fall-through para ABRASF. Arquivos: `nfseEmitidas.ts`, `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3673** — **NFS-e EMITIDAS · BUGFIX CAP 2025-12-31 SIAP GEO — PORTAL TEM NOTAS 2026 + RESET ROWS TRAVADAS + LOOP ATÉ ANO ATUAL. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.** Confirmado no portal ISS Online: 14 notas jan/26 (R$1,38M) + 7 notas jun/26 (R$436K). Fix: (1) removido `dataFinalDefault="2025-12-31"` → usa hoje para todos os provedores SOAP; (2) SyncSchema+: reseta rows SIAP GEO travadas em `dataFinal=2025-12-31+importadas=0`; (3) frontend: loop vai até `getFullYear()` atual, label/dialog atualizados. Arquivos: `nfseEmitidas.ts`, `index.ts`, `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.

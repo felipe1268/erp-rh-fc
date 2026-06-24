@@ -341,16 +341,8 @@ export default function FinanceiroNotasFiscais() {
     importadas: number; ignoradas: number;
   } | null>(null);
   const syncMunicipioMut = (trpc as any).nfseEmitidas.syncMunicipio.useMutation();
-  const importNfseXmlMut = (trpc as any).nfseEmitidas.importNfseXmlManual.useMutation({
-    onSuccess: (r: any) => {
-      listQuery.refetch();
-      yearQuery.refetch();
-      const msg = `${r.importadas} NFS-e importada${r.importadas !== 1 ? "s" : ""}, ${r.ignoradas} já existia${r.ignoradas !== 1 ? "m" : ""}.`;
-      const erroTxt = r.erros?.length ? ` ${r.erros.length} com erro.` : "";
-      toast({ title: "Import XML NFS-e: " + msg + erroTxt, variant: r.importadas > 0 ? "default" : "destructive" });
-    },
-    onError: (e: any) => toast({ title: "Erro no import XML NFS-e", description: e.message, variant: "destructive" }),
-  });
+  const importNfseXmlMut = (trpc as any).nfseEmitidas.importNfseXmlManual.useMutation();
+  const [xmlImportProgress, setXmlImportProgress] = useState<{ done: number; total: number } | null>(null);
 
   // ── Cronômetro regressivo SEFAZ: atualiza a cada segundo ─────────────────────
   const [countdownSec, setCountdownSec] = useState<number | null>(null);
@@ -753,13 +745,51 @@ export default function FinanceiroNotasFiscais() {
     );
     if (!files.length || !companyId) return;
     if (nfseXmlInputRef.current) nfseXmlInputRef.current.value = "";
+    let totalImportadas = 0, totalIgnoradas = 0, allErros: string[] = [];
     try {
-      const xmlContents = await Promise.all(
-        files.map(async f => ({ name: f.name, content: await f.text() }))
-      );
-      importNfseXmlMut.mutate({ companyId, xmlContents });
-    } catch {
-      toast({ title: "Erro ao ler arquivos XML de NFS-e", variant: "destructive" });
+      for (const file of files) {
+        const content = await file.text();
+        // Detecta formato SIAP GEO Export (<nfse> com <nf> filhos)
+        if (content.includes("<nfse") && content.includes("<nf>")) {
+          const domParser = new DOMParser();
+          const doc = domParser.parseFromString(content, "text/xml");
+          const nfNodes = Array.from(doc.querySelectorAll("nfse > nf"));
+          if (nfNodes.length > 0) {
+            const serializer = new XMLSerializer();
+            const BATCH = 10;
+            setXmlImportProgress({ done: 0, total: nfNodes.length });
+            for (let i = 0; i < nfNodes.length; i += BATCH) {
+              const batch = nfNodes.slice(i, i + BATCH);
+              const batchXml = `<?xml version="1.0" encoding="UTF-8"?>\n<nfse>\n${
+                batch.map(n => serializer.serializeToString(n)).join("\n")
+              }\n</nfse>`;
+              const r: any = await importNfseXmlMut.mutateAsync({
+                companyId, xmlContents: [{ name: file.name, content: batchXml }],
+              });
+              totalImportadas += r.importadas ?? 0;
+              totalIgnoradas += r.ignoradas ?? 0;
+              allErros.push(...(r.erros ?? []));
+              setXmlImportProgress({ done: Math.min(i + BATCH, nfNodes.length), total: nfNodes.length });
+            }
+            setXmlImportProgress(null);
+            continue;
+          }
+        }
+        // Formato ABRASF individual (1 nota por XML)
+        const r: any = await importNfseXmlMut.mutateAsync({
+          companyId, xmlContents: [{ name: file.name, content }],
+        });
+        totalImportadas += r.importadas ?? 0;
+        totalIgnoradas += r.ignoradas ?? 0;
+        allErros.push(...(r.erros ?? []));
+      }
+      listQuery.refetch(); yearQuery.refetch();
+      const msg = `${totalImportadas} NFS-e importada${totalImportadas !== 1 ? "s" : ""}, ${totalIgnoradas} já existia${totalIgnoradas !== 1 ? "m" : ""}.`;
+      const erroTxt = allErros.length ? ` ${allErros.length} com erro.` : "";
+      toast({ title: "Import XML NFS-e: " + msg + erroTxt, variant: totalImportadas > 0 ? "default" : "destructive" });
+    } catch (err: any) {
+      setXmlImportProgress(null);
+      toast({ title: "Erro no import XML NFS-e", description: err?.message, variant: "destructive" });
     }
   }
 
@@ -1509,9 +1539,14 @@ export default function FinanceiroNotasFiscais() {
                 disabled={importNfseXmlMut.isPending}
                 className="gap-1.5 h-8 bg-indigo-600 hover:bg-indigo-700 text-white text-xs"
               >
-                {importNfseXmlMut.isPending
-                  ? <><Loader2 className="w-3 h-3 animate-spin" /> Importando…</>
-                  : <><FileCode className="w-3 h-3" /> Importar XML (2026+)</>}
+                {(importNfseXmlMut.isPending || xmlImportProgress)
+                  ? <>
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      {xmlImportProgress
+                        ? `${xmlImportProgress.done}/${xmlImportProgress.total} (${Math.round(xmlImportProgress.done / xmlImportProgress.total * 100)}%)`
+                        : "Importando…"}
+                    </>
+                  : <><FileCode className="w-3 h-3" /> Importar XML</>}
               </Button>
               <Button
                 size="sm"

@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3675 — **NFS-e EMITIDAS · PROGRESSO REAL 0–100% NO IMPORT XML SIAP GEO (LOTES DE 10). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Botão "Importar XML" exibia "Importando…" sem nenhum feedback de progresso.
+ * Fix: `handleNfseXmlUpload` agora parseia o XML no browser (DOMParser + querySelectorAll)
+ * para contar os `<nf>` antes de enviar, divide em lotes de 10 notas e chama
+ * `importNfseXmlMut.mutateAsync` por lote, atualizando `xmlImportProgress.done` a cada resposta.
+ * Botão mostra `<spinner> X/Y (Z%)` em tempo real (ex: "30/75 (40%)").
+ * Ao concluir, mostra toast final consolidado (total importadas + ignoradas + erros).
+ * ABRASF individual: continua como antes (1 arquivo = 1 chamada, sem barra de progresso).
+ * Arquivo: `FinanceiroNotasFiscais.tsx`.
+ *
  * Rev. 3674 — **NFS-e EMITIDAS · IMPORTAR XML SIAP GEO EXPORT — MÚLTIPLAS NOTAS POR ARQUIVO (<nfse>/<nf>). BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * O portal SIAP GEO tem opção "Exportar → em formato XML" que gera um arquivo com raiz `<nfse>`
