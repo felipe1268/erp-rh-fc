@@ -50,6 +50,10 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3640** — **DASHBOARD NF-e · TREEMAP → BARCHART HORIZONTAL "NF-e POR FORNECEDOR". 100% FRONTEND.** BarChart vertical layout, fornecedor no Y, valor compacto à direita, altura dinâmica. Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3639** — **DASHBOARD NOTAS FISCAIS · HEADER GRADIENTE VIOLETA + ANO NO HEADER. 100% FRONTEND.** DashHeader (violet) com ano integrado igual aos outros dashboards; white-card simplificado com só chips de mês. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3638** — **DASHBOARD NF-e · BUGFIX CRASH "f.name.length" NO TREEMAP DE FORNECEDORES. 100% FRONTEND.** Recharts Treemap: dados em root+children + content como render function. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3637** — **DASHBOARDS · BUGFIX TEXTO/NÚMERO CORTADO NOS KPI CARDS E CHART CARDS. 100% FRONTEND.** KpiCard: truncate removido + fonte responsiva (text-sm/base/lg) + break-all. ChartCard: truncate removido do título/subtítulo. Detalhe: `shared/changelog.ts`.

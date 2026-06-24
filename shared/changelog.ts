@@ -1,6 +1,20 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3640 — **DASHBOARD NF-e · TREEMAP SUBSTITUÍDO POR BARCHART HORIZONTAL "NF-e POR FORNECEDOR". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Treemap removido (ruim p/ leitura). BarChart layout="vertical": fornecedor no eixo Y
+ * (truncado 20 chars), valor no X (oculto), barras coloridas por PALETTE, LabelList à direita
+ * com formatBRLCompact, tooltip com nome completo+BRL+qtd+%. Altura dinâmica: 36px/fornecedor
+ * (máx 10, min 240px). TreemapNode fn + treemapRoot useMemo removidos; import Treemap→LabelList.
+ *
+ * Rev. 3639 — **DASHBOARD NOTAS FISCAIS · HEADER GRADIENTE VIOLETA PADRONIZADO + ANO NO HEADER. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * DashHeader (theme="violet") adicionado: título "Dashboard — Notas Fiscais" + seletor de
+ * ano integrado + refresh — igual aos outros dashboards (Cartão, Cheques, Conciliação…).
+ * White-card simplificado: apenas chips de mês + "Tudo" como primeiro chip da grade 13-colunas.
+ * Imports ChevronLeft/ChevronRight/RefreshCw removidos (agora internos ao DashHeader).
+ *
  * Rev. 3638 — **DASHBOARD NF-e · BUGFIX CRASH "f.name.length" NO TREEMAP DE FORNECEDORES. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Recharts Treemap crash com `content={<JSX/>}` + flat data: (1) dados agora embrulhados

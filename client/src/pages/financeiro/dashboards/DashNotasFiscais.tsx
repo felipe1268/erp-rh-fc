@@ -5,16 +5,15 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { useCompany } from "@/hooks/useCompany";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, Cell, ComposedChart, Area, Line, ReferenceLine, Treemap,
+  Legend, Cell, ComposedChart, Area, Line, ReferenceLine, LabelList,
 } from "recharts";
 import {
   FileText, ShoppingCart, Receipt, Building2, CheckCircle2,
   ArrowDownLeft, ArrowUpRight, Banknote,
-  ChevronLeft, ChevronRight, RefreshCw,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import {
-  PALETTE, formatBRL, formatBRLCompact, KpiCard, ChartCard,
+  PALETTE, formatBRL, formatBRLCompact, DashHeader, KpiCard, ChartCard,
   EmptyState, BRLTooltip, ComparativoAnual, DetailDialog, DetailColumn,
   MESES_ABREV,
 } from "./_kit";
@@ -60,38 +59,6 @@ function RingGauge({
       <span className="text-xs font-semibold text-slate-700 text-center leading-tight">{label}</span>
       <span className="text-[11px] text-slate-400 text-center leading-tight">{sub}</span>
     </div>
-  );
-}
-
-/* ─────────────────── Treemap node ─────────────────── */
-function TreemapNode(props: any) {
-  const { x, y, width, height, name, value, index } = props;
-  if (!width || !height || width < 3 || height < 3) return null;
-  const fill = PALETTE[index % PALETTE.length];
-  const showLabel = width > 44 && height > 26;
-  const showVal   = width > 60 && height > 44;
-  const fs        = Math.min(11, Math.max(8, Math.floor(width / 9)));
-  const maxChars  = Math.max(5, Math.floor(width / (fs * 0.6)));
-  const label     = (name?.length ?? 0) > maxChars ? name.slice(0, maxChars - 1) + "…" : (name ?? "");
-  return (
-    <g>
-      <rect x={x + 1} y={y + 1} width={width - 2} height={height - 2}
-        fill={fill} rx={4} fillOpacity={0.9} stroke="#fff" strokeWidth={2} />
-      {showLabel && (
-        <text x={x + width / 2} y={y + height / 2 + (showVal ? -8 : 4)}
-          textAnchor="middle" fill="#fff" fontSize={fs} fontWeight={700}
-          style={{ pointerEvents: "none", userSelect: "none" }}>
-          {label}
-        </text>
-      )}
-      {showVal && (
-        <text x={x + width / 2} y={y + height / 2 + 8}
-          textAnchor="middle" fill="rgba(255,255,255,0.88)" fontSize={fs - 1}
-          style={{ pointerEvents: "none", userSelect: "none" }}>
-          {formatBRLCompact(Number(value))}
-        </text>
-      )}
-    </g>
   );
 }
 
@@ -427,9 +394,6 @@ export default function DashNotasFiscais() {
     qtd:   f.qtd,
     fill:  PALETTE[i % PALETTE.length],
   })), [topForn]);
-  const treemapRoot    = useMemo(() => (
-    treemapData.length > 0 ? [{ name: "root", children: treemapData }] : []
-  ), [treemapData]);
 
   const periodoLabel = mes === 0 ? String(ano) : `${MESES_ABREV[mes - 1]}/${ano}`;
   const indiceGeral  = resumo
@@ -442,49 +406,39 @@ export default function DashNotasFiscais() {
     <DashboardLayout>
       <div className="max-w-[1400px] mx-auto space-y-5 p-4 md:p-6">
 
-        {/* ── Seletor de período — padrão do sistema ─────────────────────── */}
+        {/* ── Cabeçalho com gradiente — padrão dos outros dashboards ──────── */}
+        <DashHeader
+          theme="violet"
+          icon={FileText}
+          title="Dashboard — Notas Fiscais"
+          subtitle={`Análise NF-e × NFS-e × OCs × Extrato Bancário · ${ano}`}
+          ano={ano}
+          onAno={setAno}
+          onRefresh={() => { pQuery.refetch(); anoQuery.refetch(); prevQuery.refetch(); }}
+        />
+
+        {/* ── Seletor de mês — "Ano todo" + 12 chips ───────────────────────── */}
         <div className="rounded-2xl border border-slate-200 shadow-sm bg-white overflow-hidden">
-          {/* Linha 1: ano + "Ano todo" + legend + Atualizar */}
-          <div className="px-4 py-3 flex flex-wrap items-center gap-2 border-b border-slate-100">
-            <div className="flex items-center gap-1">
-              <button type="button" onClick={() => setAno(a => a - 1)}
-                className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <span className="text-base font-bold text-gray-800 min-w-[3.5rem] text-center">{ano}</span>
-              <button type="button" onClick={() => setAno(a => a + 1)}
-                className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
-                <ChevronRight className="w-4 h-4" />
-              </button>
-              <button type="button"
-                onClick={() => setMes(m => m === 0 ? (new Date().getMonth() + 1) : 0)}
-                className={`ml-1 px-3 py-1 rounded-lg border text-xs font-semibold transition-all
-                  ${mes === 0
-                    ? "border-violet-500 bg-violet-50 text-violet-700 shadow-sm"
-                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"}`}
-              >Ano todo</button>
+          {/* Linha única: legend + "Ano todo" + meses */}
+          <div className="px-4 pt-3 pb-1 flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Período</span>
+            <div className="flex items-center gap-3 text-xs text-gray-400">
+              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />Com dados</span>
+              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-gray-300 inline-block" />Sem dados</span>
             </div>
-            <div className="flex-1" />
-            {/* Legend */}
-            <div className="hidden sm:flex items-center gap-3 text-xs text-gray-500">
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />Com dados
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />Sem dados
-              </span>
-            </div>
-            {/* Atualizar */}
-            <button type="button"
-              onClick={() => { pQuery.refetch(); anoQuery.refetch(); prevQuery.refetch(); }}
-              disabled={pQuery.isFetching}
-              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50">
-              <RefreshCw className={`h-3.5 w-3.5 ${pQuery.isFetching ? "animate-spin" : ""}`} />
-              <span className="hidden sm:inline">Atualizar</span>
-            </button>
           </div>
-          {/* Linha 2: 12 chips de mês com dots de status */}
-          <div className="px-4 py-3 grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+          <div className="px-4 py-3 grid grid-cols-7 sm:grid-cols-13 gap-1.5">
+            {/* "Ano todo" como primeiro chip */}
+            <button type="button"
+              onClick={() => setMes(0)}
+              className={`relative flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all col-span-1
+                ${mes === 0
+                  ? "border-violet-500 bg-violet-50 text-violet-700 shadow-sm"
+                  : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50"}`}
+            >
+              <span>Tudo</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-transparent" />
+            </button>
             {MESES_ABREV.map((m, i) => {
               const numMes = i + 1;
               const isSelected = mes === numMes;
@@ -659,11 +613,11 @@ export default function DashNotasFiscais() {
             }
           </ChartCard>
 
-          {/* Treemap fornecedores */}
+          {/* BarChart horizontal — Top fornecedores */}
           <ChartCard
             title="NF-e por Fornecedor"
-            subtitle={`${topForn.length} fornecedores · ${periodoLabel}`}
-            height={280}
+            subtitle={`Top ${Math.min(topForn.length, 10)} fornecedores · ${periodoLabel}`}
+            height={Math.max(240, Math.min(topForn.length, 10) * 36 + 24)}
             className="md:col-span-5"
             onOpen={topForn.length > 0 ? () => setDlg("nfeRecebidas") : undefined}
             openLabel="Ver todas"
@@ -672,26 +626,45 @@ export default function DashNotasFiscais() {
               ? <EmptyState />
               : (
                 <ResponsiveContainer width="100%" height="100%">
-                  <Treemap
-                    data={treemapRoot}
-                    dataKey="value"
-                    aspectRatio={4 / 3}
-                    content={(props: any) => <TreemapNode {...props} />}
+                  <BarChart
+                    layout="vertical"
+                    data={treemapData.slice(0, 10)}
+                    margin={{ top: 4, right: 72, left: 4, bottom: 4 }}
                   >
+                    <XAxis type="number" hide />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      width={130}
+                      tick={{ fontSize: 11, fill: "#475569" }}
+                      tickFormatter={(v: string) => v.length > 20 ? v.slice(0, 19) + "…" : v}
+                    />
                     <Tooltip
+                      cursor={{ fill: "#f1f5f9" }}
                       content={({ active, payload }) => {
                         if (!active || !payload?.[0]) return null;
                         const d = payload[0].payload;
                         return (
-                          <div className="bg-white rounded-xl shadow-xl border border-slate-200 p-3 min-w-[180px]">
-                            <p className="text-xs font-bold text-slate-800 mb-1">{d.name}</p>
+                          <div className="bg-white rounded-xl shadow-xl border border-slate-200 p-3 min-w-[200px]">
+                            <p className="text-xs font-bold text-slate-800 mb-1 leading-snug">{d.name}</p>
                             <p className="text-sm font-bold" style={{ color: d.fill }}>{formatBRL(d.value)}</p>
-                            <p className="text-xs text-slate-400">{d.qtd} NF{d.qtd !== 1 ? "s" : ""} · {totalForn > 0 ? Math.round((d.value/totalForn)*100) : 0}% do total</p>
+                            <p className="text-xs text-slate-400 mt-0.5">{d.qtd} NF{d.qtd !== 1 ? "s" : ""} · {totalForn > 0 ? Math.round((d.value / totalForn) * 100) : 0}% do total</p>
                           </div>
                         );
                       }}
                     />
-                  </Treemap>
+                    <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={28}>
+                      {treemapData.slice(0, 10).map((entry, i) => (
+                        <Cell key={i} fill={entry.fill} />
+                      ))}
+                      <LabelList
+                        dataKey="value"
+                        position="right"
+                        formatter={(v: number) => formatBRLCompact(v)}
+                        style={{ fontSize: 11, fill: "#64748b", fontWeight: 600 }}
+                      />
+                    </Bar>
+                  </BarChart>
                 </ResponsiveContainer>
               )
             }
