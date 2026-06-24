@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3631 — **NF-e RECEBIDAS · CRONÔMETRO SEMPRE VISÍVEL + TOGGLE SYNC REMOVIDO DO BANNER. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * (1) O anel de countdown na aba "NF-e Recebidas" agora é exibido SEMPRE,
+ * independente de o sync automático estar ligado ou desligado — o usuário sabe
+ * quando a cota SEFAZ estará disponível mesmo em modo manual.
+ * Quando desligado: anel cinza + texto "Cota SEFAZ disponível em Xh" (countdown)
+ * ou "✅ Cota SEFAZ disponível — use Sincronizar Agora" (quando passa da hora).
+ * Quando ligado: comportamento âmbar/verde anterior inalterado.
+ *
+ * (2) Removidos do banner da aba Recebidas: toggle liga/desliga + seletor de
+ * frequência. Esses controles ficam EXCLUSIVAMENTE em Configurações → Financeiro
+ * → Integração SEFAZ. Padrão de UX unificado.
+ *
+ * Limpeza: `sefazSaveQuickMut` e `handleQuickSave` removidos (dead code).
+ *
  * Rev. 3630 — **DASHBOARD NOTAS FISCAIS · NOVO PAINEL EM /financeiro/dashboards/notas-fiscais. FRONTEND ADITIVO · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Novo dashboard completo de análise fiscal, acessível via menu Dashboards do

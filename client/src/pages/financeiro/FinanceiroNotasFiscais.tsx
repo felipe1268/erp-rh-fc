@@ -407,26 +407,6 @@ export default function FinanceiroNotasFiscais() {
     },
   });
 
-  // ── Salvar configuração rápida (toggle + intervalo) direto da aba recebidas ──
-  const sefazSaveQuickMut = (trpc as any).sefaz.saveConfig.useMutation({
-    onSuccess: () => {
-      sefazCfgQuery.refetch();
-      toast({ title: "✅ Configuração atualizada" });
-    },
-    onError: (e: any) => toast({ title: "Erro ao salvar", description: e.message, variant: "destructive" }),
-  });
-  const handleQuickSave = (patch: { syncEnabled?: boolean; syncIntervaloHoras?: number }) => {
-    if (!sefazCfg || !companyId) return;
-    sefazSaveQuickMut.mutate({
-      companyId,
-      cnpj: sefazCfg.cnpj ?? "",
-      uf: sefazCfg.uf ?? "SP",
-      ambiente: (sefazCfg.ambiente ?? "producao") as "producao" | "homologacao",
-      syncEnabled: patch.syncEnabled !== undefined ? patch.syncEnabled : Boolean(Number(sefazCfg.sync_enabled)),
-      syncHora: Number(sefazCfg.sync_hora ?? 6),
-      syncIntervaloHoras: patch.syncIntervaloHoras ?? Number(sefazCfg.sync_intervalo_horas ?? 1),
-    });
-  };
 
   // Anima progresso enquanto a mutation está pendente
   useEffect(() => {
@@ -906,7 +886,6 @@ export default function FinanceiroNotasFiscais() {
                 const syncOn = Boolean(Number(sefazCfg.sync_enabled));
                 const intervaloH = Number(sefazCfg.sync_intervalo_horas ?? 1);
                 const gateTotal = (Math.max(1, intervaloH) * 60 - 2) * 60;
-                const isSaving = sefazSaveQuickMut.isPending;
                 return (
                   <div className={`rounded-xl border px-4 py-3 ${
                     !syncOn
@@ -917,18 +896,21 @@ export default function FinanceiroNotasFiscais() {
                   }`}>
                     {/* Linha principal: anel + texto + última sync */}
                     <div className="flex items-center gap-3">
-                      {/* Anel de progresso */}
+                      {/* Anel de progresso — sempre mostra o timer, independente de syncOn */}
                       <div className="relative shrink-0 w-10 h-10">
                         <svg className="w-10 h-10 -rotate-90" viewBox="0 0 36 36">
                           <circle cx="18" cy="18" r="15" fill="none" stroke="#e5e7eb" strokeWidth="3" />
                           <circle
                             cx="18" cy="18" r="15" fill="none"
-                            stroke={!syncOn ? "#94a3b8" : countdownLabel ? "#f59e0b" : "#10b981"}
+                            stroke={
+                              countdownLabel
+                                ? (syncOn ? "#f59e0b" : "#94a3b8")
+                                : "#10b981"
+                            }
                             strokeWidth="3"
                             strokeDasharray="94.2"
                             strokeDashoffset={
-                              !syncOn ? "94.2"
-                              : countdownLabel
+                              countdownLabel
                                 ? String(94.2 * (1 - (countdownSec ?? 0) / gateTotal))
                                 : "0"
                             }
@@ -938,38 +920,36 @@ export default function FinanceiroNotasFiscais() {
                         </svg>
                         <div className="absolute inset-0 flex items-center justify-center">
                           <RefreshCw className={`w-3.5 h-3.5 ${
-                            !syncOn ? "text-slate-400"
-                            : countdownLabel ? "text-amber-500"
-                            : "text-emerald-500 animate-spin"
+                            countdownLabel
+                              ? (syncOn ? "text-amber-500" : "text-slate-400")
+                              : "text-emerald-500 animate-spin"
                           }`} />
                         </div>
                       </div>
-                      {/* Texto */}
+                      {/* Texto — sempre mostra quando a cota estará disponível */}
                       <div className="flex-1 min-w-0">
-                        {!syncOn ? (
+                        {countdownLabel ? (
                           <>
-                            <p className="text-sm font-semibold text-slate-600">⏸ Sync automático desligado</p>
-                            <p className="text-xs text-slate-500 mt-0.5">
-                              Use "Sincronizar Agora" para buscar NF-e manualmente.
-                              {nsuNum > 0 && <> · NSU atual: <strong>{nsuNum.toLocaleString("pt-BR")}</strong></>}
+                            <p className={`text-sm font-semibold ${syncOn ? "text-amber-800" : "text-slate-600"}`}>
+                              {syncOn ? "Próxima sync em " : "Cota SEFAZ disponível em "}
+                              <span className={`font-mono tabular-nums ${syncOn ? "text-amber-700" : "text-slate-700"}`}>{countdownLabel}</span>
                             </p>
-                          </>
-                        ) : countdownLabel ? (
-                          <>
-                            <p className="text-sm font-semibold text-amber-800">
-                              Próxima sync em{" "}
-                              <span className="font-mono text-amber-700 tabular-nums">{countdownLabel}</span>
-                            </p>
-                            <p className="text-xs text-amber-600 mt-0.5">
-                              Limite SEFAZ: 1 chamada/{intervaloH}h por CNPJ.
+                            <p className={`text-xs mt-0.5 ${syncOn ? "text-amber-600" : "text-slate-500"}`}>
+                              {syncOn
+                                ? `Limite SEFAZ: 1 chamada/${intervaloH}h por CNPJ.`
+                                : `Sync automático desligado. Configure em Configurações → Financeiro.`}
                               {nsuNum > 0 && <> · NSU: <strong>{nsuNum.toLocaleString("pt-BR")}</strong></>}
                             </p>
                           </>
                         ) : (
                           <>
-                            <p className="text-sm font-semibold text-emerald-800">✅ Cota renovada — pronta para sincronizar</p>
-                            <p className="text-xs text-emerald-600 mt-0.5">
-                              O cron sincroniza automaticamente a cada {intervaloH}h.
+                            <p className={`text-sm font-semibold ${syncOn ? "text-emerald-800" : "text-slate-600"}`}>
+                              {syncOn ? "✅ Cota renovada — pronta para sincronizar" : "✅ Cota SEFAZ disponível — use Sincronizar Agora"}
+                            </p>
+                            <p className={`text-xs mt-0.5 ${syncOn ? "text-emerald-600" : "text-slate-500"}`}>
+                              {syncOn
+                                ? `O cron sincroniza automaticamente a cada ${intervaloH}h.`
+                                : `Sync automático desligado. Configure em Configurações → Financeiro.`}
                               {nsuNum > 0 && <> · NSU: <strong>{nsuNum.toLocaleString("pt-BR")}</strong></>}
                             </p>
                           </>
@@ -986,38 +966,6 @@ export default function FinanceiroNotasFiscais() {
                       )}
                     </div>
 
-                    {/* Linha de controles: toggle + intervalo */}
-                    <div className="flex items-center gap-3 mt-2.5 pt-2.5 border-t border-slate-200/70 flex-wrap">
-                      {/* Toggle liga/desliga */}
-                      <button
-                        disabled={isSaving}
-                        onClick={() => handleQuickSave({ syncEnabled: !syncOn })}
-                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus:outline-none disabled:opacity-50 ${
-                          syncOn ? "bg-indigo-600" : "bg-slate-300"
-                        }`}
-                        title={syncOn ? "Desligar sync automático" : "Ligar sync automático"}
-                      >
-                        <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${syncOn ? "translate-x-5" : "translate-x-0.5"}`} />
-                      </button>
-                      <span className={`text-xs font-medium ${syncOn ? "text-indigo-700" : "text-slate-500"}`}>
-                        {isSaving ? "Salvando…" : syncOn ? "Sync automático ligado" : "Sync automático desligado"}
-                      </span>
-
-                      <div className="flex items-center gap-1.5 ml-auto">
-                        <span className="text-xs text-slate-500 whitespace-nowrap">A cada</span>
-                        <select
-                          disabled={isSaving}
-                          value={intervaloH}
-                          onChange={e => handleQuickSave({ syncIntervaloHoras: Number(e.target.value) })}
-                          className="text-xs border border-slate-300 rounded-md px-2 py-1 bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-400 disabled:opacity-50"
-                        >
-                          {[1, 2, 3, 4, 6, 8, 12, 24].map(h => (
-                            <option key={h} value={h}>{h}h</option>
-                          ))}
-                        </select>
-                        <span className="text-xs text-slate-500">horas</span>
-                      </div>
-                    </div>
                   </div>
                 );
               })()}
