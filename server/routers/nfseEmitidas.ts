@@ -714,21 +714,38 @@ async function executarSyncMunicipio(opts: {
   const dataFinalDefault = isSiapGeo ? "2025-12-31" : hoje.toISOString().slice(0, 10);
   const dataFinal = opts.dataFinal || dataFinalDefault;
 
-  // Primeira sync (last_sync_at IS NULL): buscar histórico completo desde 2018
-  const dataInicial = opts.dataInicial || (
-    mun.last_sync_at == null ? "2018-01-01" : (() => {
-      const d = new Date(hoje);
-      d.setMonth(d.getMonth() - 1);
-      return d.toISOString().slice(0, 10);
-    })()
-  );
+  // Calcula dataInicial: primeira sync desde 2018; syncs seguintes retomam do último dataFinal
+  // escaneado (salvo em last_sync_result.dataFinal) + 1 dia.
+  // SIAP GEO: NÃO usar "hoje - 1 mês" — em 2026 isso daria Mai/2026 > 2025-12-31 → loop eterno.
+  const dataInicial = opts.dataInicial || (() => {
+    if (mun.last_sync_at == null) return "2018-01-01"; // primeira sync: histórico completo
+    if (isSiapGeo) {
+      // Retomar do dia seguinte ao último dataFinal escaneado
+      try {
+        const lastResult = JSON.parse(mun.last_sync_result || "{}");
+        if (lastResult.dataFinal) {
+          const d = new Date(lastResult.dataFinal);
+          d.setDate(d.getDate() + 1);
+          return d.toISOString().slice(0, 10);
+        }
+      } catch { /* ignora */ }
+      return "2018-01-01"; // fallback: re-escanear tudo
+    }
+    // Outros provedores (SIL, TINUS, GIAP): incrementar pelo último mês
+    const d = new Date(hoje);
+    d.setMonth(d.getMonth() - 1);
+    return d.toISOString().slice(0, 10);
+  })();
 
-  // Range impossível: SIAP GEO cap 2025-12-31 vs sync 2026
+  // Range impossível: dataInicial > dataFinal (SIAP GEO já coberto ou provedor esgotado)
   {
     const di = new Date(dataInicial), df = new Date(dataFinal);
     if (di > df) {
-      console.log(`[NfseMunSync] company=${companyId} ibge=${ibgeCode} provider=${mun.provider}: dataInicial(${dataInicial}) > dataFinal(${dataFinal}) — range impossível.`);
-      return { importadas: 0, ignoradas: 0, aviso: `Sem notas a consultar: portal cobre até ${dataFinal}.` };
+      console.log(`[NfseMunSync] company=${companyId} ibge=${ibgeCode} provider=${mun.provider}: dataInicial(${dataInicial}) > dataFinal(${dataFinal}) — cobertura esgotada.`);
+      const avisoMsg = isSiapGeo
+        ? `SIAP GEO já sincronizado até 31/12/2025. Notas de 2026 chegam via Portal Nacional ou Importar PDF.`
+        : `Sem notas a consultar: portal cobre até ${dataFinal}.`;
+      return { importadas: 0, ignoradas: 0, aviso: avisoMsg };
     }
   }
 

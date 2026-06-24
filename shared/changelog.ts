@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3649 — **NFS-e EMITIDAS · BUGFIX SIAP GEO "LOOP ETERNO 0 NOTAS" — dataInicial ERRADO. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * `executarSyncMunicipio` (Path B — SIAP GEO): quando `last_sync_at != NULL`, calculava
+ * `dataInicial = hoje - 1 mês` (Mai/2026). Como `dataFinal = 2025-12-31` para SIAP GEO,
+ * `2026-05-XX > 2025-12-31` → range impossível → aviso silencioso → `last_sync_at` NÃO
+ * atualizado → próximo sync idêntico → loop eterno com 0 notas importadas.
+ *
+ * Fix: para SIAP GEO, `dataInicial` retoma a partir do `lastResult.dataFinal + 1 dia`
+ * (salvo em `last_sync_result`). Assim após a primeira cobertura completa (até 2025-12-31)
+ * o sistema reporta "SIAP GEO já sincronizado" em vez de re-entrar no loop.
+ * Fallback: se `last_sync_result.dataFinal` não existir, inicia em 2018-01-01 (re-scan total).
+ *
  * Rev. 3648 — **BUGFIX iOS SAFARI · "text/html is not a valid JavaScript MIME type" NÃO ERA CAPTURADO PELO lazyWithRetry. 100% FRONTEND · ZERO BACKEND/SCHEMA.**
  *
  * Safari/iOS rejeita chunks JS servidos como text/html (404 → HTML de erro) com a

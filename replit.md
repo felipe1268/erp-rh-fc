@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3649** — **NFS-e EMITIDAS · BUGFIX SIAP GEO LOOP ETERNO 0 NOTAS — dataInicial CALCULADO COMO "hoje-1mês" EM VEZ DE "último dataFinal+1d". BACKEND PONTUAL.** Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3648** — **iOS SAFARI · BUGFIX "text/html is not a valid JavaScript MIME type" NÃO CAPTURADO PELO lazyWithRetry. FRONTEND.** Adicionado padrão MIME type à lista isChunkErr → auto-reload em vez de ErrorBoundary. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3647** — **NF-e RECEBIDAS · BUGFIX HORÁRIO LOG SEFAZ EM UTC EM VEZ DE BRT. BACKEND PONTUAL.** `AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo'` na query do getSyncLog. Detalhe: `shared/changelog.ts`.
