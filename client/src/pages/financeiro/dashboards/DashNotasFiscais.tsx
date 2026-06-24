@@ -656,8 +656,8 @@ export default function DashNotasFiscais() {
           const hasSomeData = fcData.some(d => d["NFS-e Emitidas"] > 0 || d["NF-e Recebidas"] > 0);
           return (
             <ChartCard
-              title="Faturamento × Compras — Notas por Mês"
-              subtitle={`NFS-e Emitidas (receita) vs NF-e Recebidas (custos) · ${periodoLabel}`}
+              title="Entradas × Saídas — Notas por Mês"
+              subtitle={`NFS-e Emitidas (entradas/faturamento) vs NF-e Recebidas (saídas/compras) · ${periodoLabel}`}
               height={300}
             >
               {!hasSomeData
@@ -666,8 +666,8 @@ export default function DashNotasFiscais() {
                   <>
                     {/* Totalizador rápido */}
                     <div className="flex gap-4 mb-3 px-2 flex-wrap">
-                      <span className="text-xs text-slate-500">Faturamento: <strong className="text-violet-600">{formatBRL(totalNfse)}</strong></span>
-                      <span className="text-xs text-slate-500">Compras c/ NF-e: <strong className="text-blue-600">{formatBRL(totalNfe)}</strong></span>
+                      <span className="text-xs text-slate-500">Entradas (NFS-e): <strong className="text-violet-600">{formatBRL(totalNfse)}</strong></span>
+                      <span className="text-xs text-slate-500">Saídas (NF-e): <strong className="text-blue-600">{formatBRL(totalNfe)}</strong></span>
                       <span className={`text-xs font-bold ${saldoTotal >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                         Saldo: {saldoTotal >= 0 ? "+" : ""}{formatBRL(saldoTotal)}
                       </span>
@@ -694,8 +694,8 @@ export default function DashNotasFiscais() {
                           );
                         }} />
                         <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-                        <Bar yAxisId="val" dataKey="NFS-e Emitidas" fill={VIOLET} radius={[3,3,0,0]} maxBarSize={22} />
-                        <Bar yAxisId="val" dataKey="NF-e Recebidas" fill={BLUE}   radius={[3,3,0,0]} maxBarSize={22} />
+                        <Bar yAxisId="val" dataKey="NFS-e Emitidas" name="Entradas (NFS-e)" fill={VIOLET} radius={[3,3,0,0]} maxBarSize={22} />
+                        <Bar yAxisId="val" dataKey="NF-e Recebidas" name="Saídas (NF-e)"   fill={BLUE}   radius={[3,3,0,0]} maxBarSize={22} />
                         <Line yAxisId="saldo" dataKey="Saldo" stroke="#10b981" strokeWidth={2}
                           dot={{ r: 3, fill: "#10b981" }} activeDot={{ r: 5 }}
                           strokeDasharray={totalNfe === 0 ? "4 3" : undefined} />
