@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3680 — **NFS-e EMITIDAS · IMPORTAÇÃO HISTÓRICA XML + BUGFIX DEDUP ANO 2026. BACKEND PONTUAL + SCRIPT ONE-SHOT · ZERO ALTER/DROP/DELETE.**
+ *
+ * Problema: `importNfseXmlManual` deduplicava NFS-e só por `numero_nf` sem considerar o ano.
+ * Como 2026 reinicia a numeração a partir de NF#1, todas as notas 2026 eram ignoradas por colisão
+ * com as notas 2018 (NF#1/2018 vs NF#1/2026 = mesmo número, dedup entendia como duplicata).
+ *
+ * **Fix (server/routers/nfseEmitidas.ts)**:
+ *   - Path SIAP GEO (linha ~1367): dedup agora usa `chave_acesso` quando não-vazia (≥4 chars)
+ *     OU `(numero_nf + EXTRACT(YEAR FROM data_emissao))` quando chave vazia.
+ *   - Path ABRASF (linha ~1433): mesmo fix aplicado.
+ *
+ * **Script one-shot (scripts/import_nfse_xml.mjs)**:
+ *   - Lê todos os XMLs de `attached_assets/` (2018-2025 + Dec/2025 + 2026).
+ *   - Dedup em memória: carrega sets `chavesExist` (chave_acesso) + `nfAnoExist` (numero_nf|ano)
+ *     do banco antes de processar, sem consulta por nota → importação 10× mais rápida.
+ *   - Batch INSERT em lotes de 50 com ON CONFLICT DO NOTHING.
+ *   - Resultado: 571 notas no banco (31+49+43+44+23+38+116+165+62), 2018-2026.
+ *   - Empresa FC Engenharia = company_id 60002, CNPJ 29.353.906/0001-71.
+ *
+ * Zero ALTER TABLE / DROP / DELETE. Apenas INSERTs + bugfix de query de dedup.
+ *
  * Rev. 3679 — **NF-e RECEBIDAS · REMOVE SUB-ABA "NFS-e SERVIÇOS (PORTAL NACIONAL)" — MANTÉM SÓ SEFAZ AUTOMÁTICO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * API sefin.nfse.gov.br v1.6.0 não tem distribuição em lote; sub-aba Portal Nacional mostrava

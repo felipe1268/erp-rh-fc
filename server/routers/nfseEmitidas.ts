@@ -1363,11 +1363,21 @@ export const nfseEmitidasRouter = router({
             // Arquivo de exportação SIAP GEO — pode conter dezenas de notas
             for (const nota of siapNotas) {
               try {
-                const dup = await db.$client.query<any>(
-                  `SELECT id FROM fiscal_notes WHERE company_id=$1 AND numero_nf=$2 AND origem LIKE 'nfse%'`,
-                  [input.companyId, nota.numero]
-                );
-                if (dup.rows[0]) { ignoradas++; continue; }
+                // Dedup robusto: por chave_acesso (quando preenchida) OU (numero_nf + ano_emissao)
+                const hasChave = nota.chave && nota.chave.length >= 4;
+                const dupSiap = hasChave
+                  ? await db.$client.query<any>(
+                      `SELECT id FROM fiscal_notes WHERE company_id=$1 AND chave_acesso=$2 AND origem LIKE 'nfse%' LIMIT 1`,
+                      [input.companyId, nota.chave]
+                    )
+                  : await db.$client.query<any>(
+                      `SELECT id FROM fiscal_notes
+                       WHERE company_id=$1 AND numero_nf=$2
+                         AND EXTRACT(YEAR FROM data_emissao)=EXTRACT(YEAR FROM $3::date)
+                         AND origem LIKE 'nfse%' LIMIT 1`,
+                      [input.companyId, nota.numero, nota.dataEmissao || new Date().toISOString().slice(0,10)]
+                    );
+                if (dupSiap.rows[0]) { ignoradas++; continue; }
                 await db.$client.query(
                   `INSERT INTO fiscal_notes
                     (company_id, numero_nf, serie, chave_acesso, data_emissao, data_prestacao,
@@ -1429,11 +1439,21 @@ export const nfseEmitidasRouter = router({
             erros.push(`${file.name}: XML inválido ou formato não reconhecido (suporte: ABRASF individual ou exportação SIAP GEO)`);
             continue;
           }
-          const dup = await db.$client.query<any>(
-            `SELECT id FROM fiscal_notes WHERE company_id=$1 AND numero_nf=$2 AND origem LIKE 'nfse%'`,
-            [input.companyId, nota.numero]
-          );
-          if (dup.rows[0]) { ignoradas++; continue; }
+          // Dedup robusto: por chave_acesso (quando preenchida) OU (numero_nf + ano_emissao)
+          const hasChaveAbrasf = nota.chave && nota.chave.length >= 4;
+          const dupAbrasf = hasChaveAbrasf
+            ? await db.$client.query<any>(
+                `SELECT id FROM fiscal_notes WHERE company_id=$1 AND chave_acesso=$2 AND origem LIKE 'nfse%' LIMIT 1`,
+                [input.companyId, nota.chave]
+              )
+            : await db.$client.query<any>(
+                `SELECT id FROM fiscal_notes
+                 WHERE company_id=$1 AND numero_nf=$2
+                   AND EXTRACT(YEAR FROM data_emissao)=EXTRACT(YEAR FROM $3::date)
+                   AND origem LIKE 'nfse%' LIMIT 1`,
+                [input.companyId, nota.numero, nota.dataEmissao || new Date().toISOString().slice(0,10)]
+              );
+          if (dupAbrasf.rows[0]) { ignoradas++; continue; }
           await db.$client.query(
             `INSERT INTO fiscal_notes
               (company_id, numero_nf, chave_acesso, data_emissao,
