@@ -184,9 +184,17 @@ function decompressGzipBase64(b64: string): Promise<string> {
 // Raiz <nfse> com múltiplos filhos <nf>. Valores em centavos (inteiros).
 // Datas em DD/MM/YYYY. Uma única chamada retorna N notas.
 type SiapGeoNota = {
-  numero: string; chave: string; dataEmissao: string; dataPrestacao: string;
-  prestadorCnpj: string; tomadorCnpj: string; tomadorNome: string;
-  valorBruto: number; valorLiquido: number; valorIss: number;
+  numero: string; serie: string; chave: string;
+  dataEmissao: string; dataPrestacao: string;
+  prestadorCnpj: string;
+  tomadorCnpj: string; tomadorNome: string;
+  tomadorInscricao: string; tomadorEmail: string; tomadorTelefone: string;
+  valorBruto: number; valorLiquido: number;
+  issRetido: number; retencaoInss: number; retencaoIrrf: number;
+  retencaoCsll: number; retencaoPis: number; retencaoCofins: number; retencaoOutras: number;
+  deducoesTotal: number; aliquotaIss: number;
+  cdCnae: string; cdListaServico: string;
+  optanteSimples: boolean; tributada: boolean;
   discriminacao: string; status: "pendente" | "cancelada";
 };
 function parseSiapGeoExportXml(xml: string): SiapGeoNota[] | null {
@@ -201,7 +209,6 @@ function parseSiapGeoExportXml(xml: string): SiapGeoNota[] | null {
     if (!nfArr.length) return null;
 
     const parseDateBR = (s: string): string => {
-      // DD/MM/YYYY → YYYY-MM-DD
       const m = String(s || "").match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
       return m ? `${m[3]}-${m[2]}-${m[1]}` : String(s || "").slice(0, 10);
     };
@@ -211,22 +218,46 @@ function parseSiapGeoExportXml(xml: string): SiapGeoNota[] | null {
     };
 
     return nfArr.map((nf: any): SiapGeoNota => {
-      const bruto = centsToReais(nf.vl_servico);
-      const retencoes = [nf.vl_inss, nf.vl_csll, nf.vl_pis, nf.vl_cofins, nf.vl_ir, nf.vl_outras_retencoes]
-        .reduce((acc, v) => acc + centsToReais(v), 0);
+      const bruto      = centsToReais(nf.vl_servico);
+      const inss       = centsToReais(nf.vl_inss);
+      const csll       = centsToReais(nf.vl_csll);
+      const pis        = centsToReais(nf.vl_pis);
+      const cofins     = centsToReais(nf.vl_cofins);
+      const ir         = centsToReais(nf.vl_ir);
+      const outras     = centsToReais(nf.vl_outras_retencoes);
+      const deducoes   = centsToReais(nf.vl_deducoes);
+      const retencoes  = inss + csll + pis + cofins + ir + outras;
+      // alíquota: XML traz em centésimos de porcento (217 = 2.17%)
+      const aliquota   = Math.round(parseInt(String(nf.aliquota ?? "0"), 10)) / 100;
       return {
-        numero:        String(nf.nr_nf ?? ""),
-        chave:         String(nf.codigoverificacao ?? ""),
-        dataEmissao:   parseDateBR(String(nf.dt_emissao ?? "")),
-        dataPrestacao: parseDateBR(String(nf.dt_prestacao ?? "")),
-        prestadorCnpj: String(nf.p_documento ?? "").replace(/\D/g, ""),
-        tomadorCnpj:   String(nf.t_documento ?? "").replace(/\D/g, ""),
-        tomadorNome:   String(nf.t_razao_social ?? ""),
-        valorBruto:    bruto,
-        valorLiquido:  Math.max(0, bruto - retencoes),
-        valorIss:      centsToReais(nf.vl_iss),
-        discriminacao: String(nf.discriminacao ?? ""),
-        status:        String(nf.id_nf_st) === "2" ? "cancelada" : "pendente",
+        numero:           String(nf.nr_nf ?? ""),
+        serie:            String(nf.serie ?? ""),
+        chave:            String(nf.codigoverificacao ?? ""),
+        dataEmissao:      parseDateBR(String(nf.dt_emissao ?? "")),
+        dataPrestacao:    parseDateBR(String(nf.dt_prestacao ?? "")),
+        prestadorCnpj:    String(nf.p_documento ?? "").replace(/\D/g, ""),
+        tomadorCnpj:      String(nf.t_documento ?? "").replace(/\D/g, ""),
+        tomadorNome:      String(nf.t_razao_social ?? ""),
+        tomadorInscricao: String(nf.t_inscricao ?? ""),
+        tomadorEmail:     String(nf.t_email ?? ""),
+        tomadorTelefone:  String(nf.t_telefone ?? ""),
+        valorBruto:       bruto,
+        valorLiquido:     Math.max(0, bruto - retencoes),
+        issRetido:        centsToReais(nf.vl_iss),
+        retencaoInss:     inss,
+        retencaoIrrf:     ir,
+        retencaoCsll:     csll,
+        retencaoPis:      pis,
+        retencaoCofins:   cofins,
+        retencaoOutras:   outras,
+        deducoesTotal:    deducoes,
+        aliquotaIss:      aliquota,
+        cdCnae:           String(nf.cd_cnae ?? ""),
+        cdListaServico:   String(nf.cd_lista_servico ?? ""),
+        optanteSimples:   String(nf.optante_simples ?? "") === "S",
+        tributada:        String(nf.tributada ?? "") === "S",
+        discriminacao:    String(nf.discriminacao ?? ""),
+        status:           String(nf.id_nf_st) === "2" ? "cancelada" : "pendente",
       };
     }).filter(n => !!n.numero);
   } catch { return null; }
@@ -1339,20 +1370,47 @@ export const nfseEmitidasRouter = router({
                 if (dup.rows[0]) { ignoradas++; continue; }
                 await db.$client.query(
                   `INSERT INTO fiscal_notes
-                    (company_id, numero_nf, chave_acesso, data_emissao,
-                     tomador_cnpj, tomador_razao_social, descricao_servico,
-                     valor_bruto, valor_liquido, status, origem,
-                     created_at, updated_at)
-                   VALUES ($1,$2,$3,$4::date,$5,$6,$7,$8,$9,$10,'nfse_siapgeo_export',NOW(),NOW())`,
+                    (company_id, numero_nf, serie, chave_acesso, data_emissao, data_prestacao,
+                     tomador_cnpj, tomador_razao_social, tomador_inscricao, tomador_email, tomador_telefone,
+                     descricao_servico, cd_cnae, cd_lista_servico, optante_simples, tributada,
+                     valor_bruto, deducoes_total, aliquota_iss,
+                     iss_retido, retencao_inss, retencao_irrf, retencao_csll,
+                     retencao_pis, retencao_cofins, retencao_outras,
+                     valor_liquido, status, origem, created_at, updated_at)
+                   VALUES ($1,$2,$3,$4,$5::date,$6::date,
+                           $7,$8,$9,$10,$11,
+                           $12,$13,$14,$15,$16,
+                           $17,$18,$19,
+                           $20,$21,$22,$23,
+                           $24,$25,$26,
+                           $27,$28,'nfse_siapgeo_export',NOW(),NOW())`,
                   [
                     input.companyId,
                     nota.numero,
+                    nota.serie || null,
                     nota.chave || null,
                     nota.dataEmissao || hoje,
+                    nota.dataPrestacao || null,
                     nota.tomadorCnpj || null,
                     nota.tomadorNome || null,
+                    nota.tomadorInscricao || null,
+                    nota.tomadorEmail || null,
+                    nota.tomadorTelefone || null,
                     nota.discriminacao || null,
+                    nota.cdCnae || null,
+                    nota.cdListaServico || null,
+                    nota.optanteSimples,
+                    nota.tributada,
                     nota.valorBruto,
+                    nota.deducoesTotal,
+                    nota.aliquotaIss || null,
+                    nota.issRetido,
+                    nota.retencaoInss,
+                    nota.retencaoIrrf,
+                    nota.retencaoCsll,
+                    nota.retencaoPis,
+                    nota.retencaoCofins,
+                    nota.retencaoOutras,
                     nota.valorLiquido,
                     nota.status,
                   ]

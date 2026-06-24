@@ -4363,6 +4363,23 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3604: fiscal_notes.xml_payload adicionada (ou já existia).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3604 xml_payload:`, e?.message || e); }
 
+        // Rev. 3678 — campos completos NFS-e SIAP GEO: impostos individuais + classificação + tomador
+        try {
+          await db.$client.query(`ALTER TABLE fiscal_notes ADD COLUMN IF NOT EXISTS retencao_csll NUMERIC(15,2) DEFAULT 0`);
+          await db.$client.query(`ALTER TABLE fiscal_notes ADD COLUMN IF NOT EXISTS retencao_pis NUMERIC(15,2) DEFAULT 0`);
+          await db.$client.query(`ALTER TABLE fiscal_notes ADD COLUMN IF NOT EXISTS retencao_cofins NUMERIC(15,2) DEFAULT 0`);
+          await db.$client.query(`ALTER TABLE fiscal_notes ADD COLUMN IF NOT EXISTS retencao_outras NUMERIC(15,2) DEFAULT 0`);
+          await db.$client.query(`ALTER TABLE fiscal_notes ADD COLUMN IF NOT EXISTS data_prestacao DATE`);
+          await db.$client.query(`ALTER TABLE fiscal_notes ADD COLUMN IF NOT EXISTS cd_cnae VARCHAR(20)`);
+          await db.$client.query(`ALTER TABLE fiscal_notes ADD COLUMN IF NOT EXISTS cd_lista_servico VARCHAR(10)`);
+          await db.$client.query(`ALTER TABLE fiscal_notes ADD COLUMN IF NOT EXISTS optante_simples BOOLEAN`);
+          await db.$client.query(`ALTER TABLE fiscal_notes ADD COLUMN IF NOT EXISTS tributada BOOLEAN`);
+          await db.$client.query(`ALTER TABLE fiscal_notes ADD COLUMN IF NOT EXISTS tomador_inscricao VARCHAR(30)`);
+          await db.$client.query(`ALTER TABLE fiscal_notes ADD COLUMN IF NOT EXISTS tomador_email VARCHAR(255)`);
+          await db.$client.query(`ALTER TABLE fiscal_notes ADD COLUMN IF NOT EXISTS tomador_telefone VARCHAR(30)`);
+          console.log(`[SyncSchema+] Rev. 3678: 12 colunas NFS-e detalhadas adicionadas em fiscal_notes.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3678 colunas-nfse:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

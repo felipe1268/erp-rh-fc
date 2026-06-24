@@ -1,6 +1,39 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3678 — **NFS-e EMITIDAS · CAMPOS COMPLETOS DO XML SIAP GEO: 12 NOVAS COLUNAS + DIALOG REDESENHADO. BACKEND ADITIVO + SCHEMA + FRONTEND · ZERO DROP/DELETE.**
+ *
+ * Captura todos os campos presentes no XML de exportação SIAP GEO e exibe num dialog de detalhes
+ * completo com 5 seções scrolláveis (Identificação / Classificação / Tomador / Impostos / Vínculos).
+ *
+ * **Schema** (`drizzle/schema.ts`): 12 novas colunas em `fiscal_notes`:
+ *   `retencao_csll`, `retencao_pis`, `retencao_cofins`, `retencao_outras` (NUMERIC 15,2),
+ *   `data_prestacao` (DATE), `cd_cnae`, `cd_lista_servico`, `optante_simples` (BOOLEAN),
+ *   `tributada` (BOOLEAN), `tomador_inscricao`, `tomador_email`, `tomador_telefone`.
+ *
+ * **SyncSchema+** (`server/_core/index.ts`): bloco Rev. 3678 com 12× `ALTER TABLE IF NOT EXISTS`.
+ *
+ * **Parser** (`server/routers/nfseEmitidas.ts`):
+ *   - `SiapGeoNota` type expandido com todos os novos campos.
+ *   - `parseSiapGeoExportXml`: captura dt_prestacao, aliquota (÷100 → %), cd_cnae,
+ *     cd_lista_servico, optante_simples (S/N), tributada (S/N), vl_inss/csll/pis/cofins/ir/outras
+ *     individualmente, t_inscricao/email/telefone, serie.
+ *   - INSERT da importação XML atualizado com todos os 28 campos.
+ *
+ * **Frontend** (`client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`):
+ *   - Tipo `NF` expandido com 13 novos campos tipados.
+ *   - Dialog "Detalhes Completos" (`max-w-xl`, `max-h-[90svh]`):
+ *     header gradient com badge "Cancelada"; KPI row mostra data prestação e alíquota ISS como hint;
+ *     body scrollável com 5 cards:
+ *     (1) Identificação: NF#/série/código/datas/status/origem/optante/tributada/obra;
+ *     (2) Classificação do Serviço: CNAE + Lista LC 116 + discriminação completa sem truncar;
+ *     (3) Tomador: razão social, CNPJ, inscrição municipal, email, telefone;
+ *     (4) Impostos e Valores: tabela detalhada dedução→ISS→INSS→IR→CSLL→PIS→COFINS→Outras→Líquido;
+ *     (5) Vínculos: lançamento + extrato (preservado).
+ *
+ * **Compatibilidade**: notas já importadas via SOAP aparecem com os campos novos em branco (NULL);
+ * ao reimportar via XML de exportação SIAP GEO, todos os campos são preenchidos.
+ *
  * Rev. 3677 — **NFS-e EMITIDAS · SELEÇÃO MÚLTIPLA + EXCLUSÃO EM LOTE. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * Usuário precisava poder selecionar várias NFS-e e apagá-las. Implementado:
