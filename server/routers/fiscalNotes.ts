@@ -415,6 +415,8 @@ export const fiscalNotesRouter = router({
       const bankQ = await db.$client.query(`
         SELECT bsl.id, bsl.data, bsl.descricao, bsl.valor, bsl.tipo, bsl.conciliado,
           COALESCE(cba.apelido, cba.banco, '') AS conta_nome,
+          COALESCE(cba.agencia, '') AS conta_agencia,
+          COALESCE(cba.conta, '') AS conta_numero,
           (SELECT fn.id      FROM fiscal_notes fn WHERE fn.stmt_line_id = bsl.id AND fn.company_id = $1 LIMIT 1) AS fn_id,
           (SELECT fn.numero_nf FROM fiscal_notes fn WHERE fn.stmt_line_id = bsl.id AND fn.company_id = $1 LIMIT 1) AS fn_numero
         FROM bank_statement_lines bsl

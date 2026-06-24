@@ -657,7 +657,15 @@ function BankTable({ rows, tipo }: { rows: any[]; tipo: "entrada" | "saida" }) {
           {rows.map((b: any, i: number) => (
             <tr key={b.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
               <td className="px-3 py-2 whitespace-nowrap text-slate-500 font-medium">{fmtDate(b.data)}</td>
-              <td className="px-3 py-2 whitespace-nowrap text-slate-500 text-[11px] max-w-[120px] truncate" title={b.conta_nome}>{b.conta_nome || "—"}</td>
+              <td className="px-3 py-2 text-[11px] max-w-[140px]">
+                <span className="block truncate text-slate-700 font-medium" title={b.conta_nome}>{b.conta_nome || "—"}</span>
+                {(b.conta_agencia || b.conta_numero) && (
+                  <span className="block text-slate-400 whitespace-nowrap">
+                    {b.conta_agencia ? `Ag. ${b.conta_agencia}` : ""}{b.conta_agencia && b.conta_numero ? " / " : ""}
+                    {b.conta_numero ? `C. ${b.conta_numero}` : ""}
+                  </span>
+                )}
+              </td>
               <td className="px-3 py-2 max-w-[220px] truncate text-slate-700" title={b.descricao}>{b.descricao}</td>
               <td className={`px-3 py-2 text-right font-bold whitespace-nowrap ${valColor}`}>
                 {fmtBRL(b.valor)}
