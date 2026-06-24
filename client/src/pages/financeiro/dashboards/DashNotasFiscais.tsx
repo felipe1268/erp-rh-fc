@@ -307,7 +307,7 @@ function OcNfeSection({ data, onOpenSem, onOpenCom }: { data: any; onOpenSem: ()
 }
 
 /* ─────────────────── Main Dashboard ─────────────────── */
-type DlgKey = "nfeRecebidas"|"nfseEmitidas"|"saidasSemNota"|"entradasSemNota"|"ocsSemNota"|"ocsComNota";
+type DlgKey = "nfeRecebidas"|"nfseEmitidas"|"saidasSemNota"|"entradasSemNota"|"ocsSemNota"|"ocsComNota"|"fornecedorDetail";
 
 export default function DashNotasFiscais() {
   const [, nav] = useLocation();
@@ -316,6 +316,7 @@ export default function DashNotasFiscais() {
   const [ano, setAno] = useState(curYear);
   const [mes, setMes] = useState(0);
   const [dlg, setDlg] = useState<DlgKey | null>(null);
+  const [selectedFornCnpj, setSelectedFornCnpj] = useState<string | null>(null);
 
   const pQuery = (trpc as any).fiscalNotes.getPanoramaFiscal.useQuery(
     { companyId: companyId ?? 0, mes, ano },
@@ -390,10 +391,18 @@ export default function DashNotasFiscais() {
   const totalForn      = useMemo(() => topForn.reduce((s, f) => s + f.total, 0), [topForn]);
   const treemapData    = useMemo(() => topForn.slice(0, 18).map((f, i) => ({
     name:  f.nome ?? "Desconhecido",
+    cnpj:  f.cnpj,
     value: f.total,
     qtd:   f.qtd,
     fill:  PALETTE[i % PALETTE.length],
   })), [topForn]);
+
+  const fornRows = useMemo(() =>
+    selectedFornCnpj
+      ? (data?.nfeRecebidas ?? []).filter((n: any) => n.emitente_cnpj === selectedFornCnpj)
+      : [],
+  [selectedFornCnpj, data]);
+  const fornName = treemapData.find(d => d.cnpj === selectedFornCnpj)?.name ?? "";
 
   const periodoLabel = mes === 0 ? String(ano) : `${MESES_ABREV[mes - 1]}/${ano}`;
   const indiceGeral  = resumo
@@ -649,11 +658,22 @@ export default function DashNotasFiscais() {
                             <p className="text-xs font-bold text-slate-800 mb-1 leading-snug">{d.name}</p>
                             <p className="text-sm font-bold" style={{ color: d.fill }}>{formatBRL(d.value)}</p>
                             <p className="text-xs text-slate-400 mt-0.5">{d.qtd} NF{d.qtd !== 1 ? "s" : ""} · {totalForn > 0 ? Math.round((d.value / totalForn) * 100) : 0}% do total</p>
+                            <p className="text-xs text-violet-500 mt-1.5 font-medium">Clique para ver as notas →</p>
                           </div>
                         );
                       }}
                     />
-                    <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={28}>
+                    <Bar
+                      dataKey="value"
+                      radius={[0, 4, 4, 0]}
+                      maxBarSize={28}
+                      cursor="pointer"
+                      onClick={(barData: any) => {
+                        if (!barData?.cnpj) return;
+                        setSelectedFornCnpj(barData.cnpj);
+                        setDlg("fornecedorDetail");
+                      }}
+                    >
                       {treemapData.slice(0, 10).map((entry, i) => (
                         <Cell key={i} fill={entry.fill} />
                       ))}
@@ -693,7 +713,11 @@ export default function DashNotasFiscais() {
               const pct   = totalForn > 0 ? (f.total / totalForn) * 100 : 0;
               const ticket = f.qtd > 0 ? f.total / f.qtd : 0;
               return (
-                <div key={f.cnpj} className="flex items-center gap-3 group">
+                <div
+                  key={f.cnpj}
+                  className="flex items-center gap-3 group cursor-pointer hover:bg-slate-50 rounded-lg px-1 -mx-1 transition-colors"
+                  onClick={() => { setSelectedFornCnpj(f.cnpj); setDlg("fornecedorDetail"); }}
+                >
                   <span className="w-5 text-xs font-black tabular-nums shrink-0 text-right"
                     style={{ color: PALETTE[i % PALETTE.length] }}>
                     {i + 1}
@@ -826,6 +850,16 @@ export default function DashNotasFiscais() {
           subtitle={`${data?.ocsComNota?.length ?? 0} ordens conciliadas com nota fiscal`}
           columns={COL_OC} rows={data?.ocsComNota ?? []} totalKey="valor_total"
           icon={CheckCircle2}
+        />
+        <DetailDialog
+          open={dlg === "fornecedorDetail"}
+          onOpenChange={o => { if (!o) { setDlg(null); setSelectedFornCnpj(null); } }}
+          title={fornName || "Fornecedor"}
+          subtitle={`${fornRows.length} NF-e recebidas · ${periodoLabel}`}
+          columns={COL_NF} rows={fornRows} totalKey="valor_bruto"
+          icon={FileText}
+          onGoTo={() => { nav("/financeiro/notas-fiscais"); setDlg(null); setSelectedFornCnpj(null); }}
+          goLabel="Ir para NF-e Recebidas"
         />
       </div>
     </DashboardLayout>

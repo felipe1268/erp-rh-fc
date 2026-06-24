@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3643** — **DASHBOARD NF-e · DRILL-DOWN POR FORNECEDOR (GRÁFICO + RANKING CLICÁVEL). 100% FRONTEND.** Clicar na barra ou na linha do ranking abre DetailDialog filtrado pelas NF-e do fornecedor. Tooltip com "Clique para ver as notas →". Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3642** — **DASHBOARD NF-e · RÓTULO BARRA COM formatBRL (ponto/vírgula). 100% FRONTEND.** LabelList → formatBRL: "R$ 165.000,00" com separadores pt-BR corretos. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3641** — **DASHBOARD NF-e · RÓTULO DA BARRA "NF-e POR FORNECEDOR" EM NÚMERO COMPLETO. 100% FRONTEND.** LabelList: formatBRLCompact → Intl.NumberFormat sem decimais ("R$ 165.000"); margem direita 72→120px. Detalhe: `shared/changelog.ts`.

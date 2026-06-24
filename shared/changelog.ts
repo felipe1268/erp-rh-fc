@@ -1,6 +1,13 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3643 — **DASHBOARD NF-e · DRILL-DOWN POR FORNECEDOR + RANKING CLICÁVEL. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Clicar em qualquer barra do gráfico "NF-e por Fornecedor" OU em qualquer linha do
+ * "Ranking de Fornecedores" abre DetailDialog filtrado pelas NF-e daquele fornecedor.
+ * Tooltip mostra "Clique para ver as notas →". cnpj adicionado ao treemapData.
+ * Estado selectedFornCnpj + DlgKey "fornecedorDetail" adicionados.
+ *
  * Rev. 3642 — **DASHBOARD NF-e · RÓTULO BARRA COM SEPARADOR PONTO/VÍRGULA (formatBRL). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * LabelList formatter trocado para `formatBRL` → exibe "R$ 165.000,00" com separador
