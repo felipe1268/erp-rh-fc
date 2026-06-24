@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3624 — **NF-e RECEBIDAS · LOG DE AUDITORIA DE SINCRONIZACAO SEFAZ — DATA/HORA BRASILIA, NSU, STATUS POR CICLO. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * Pedido: 5 ciclos de sync sem crescimento (217 notas); sem visibilidade de quando/o que cada
+ * ciclo fez; timestamps precisavam ser em horario de Brasilia (BRT).
+ * CAUSA-RAIZ do 217 estavel: cStat=137 = nenhum documento novo no NSU atual (comportamento
+ * correto do SEFAZ). As 217 notas sao reais; sistema aguarda novos documentos chegarem.
+ * SOLUCOES:
+ * (1) SyncSchema+ Rev.3624: tabela nfe_sync_log (id, company_id, iniciado_em, finalizado_em,
+ *     nsu_inicial, nsu_final, importadas, ignoradas, paginas, cstat, xmotivo, status, observacao)
+ *     + indice (company_id, iniciado_em DESC). Zero ALTER/DROP/DELETE.
+ * (2) Helpers insertSyncLog + finalizeSyncLog em sefaz.ts; executarSyncNFe insere row
+ *     status=rodando antes do loop SEFAZ e finaliza com ok/rate_limit/erro. SELECT usa
+ *     AT TIME ZONE 'America/Sao_Paulo' entregando BRT formatado DD/MM/YYYY HH24:MI:SS.
+ * (3) Endpoint sefaz.getSyncLog (admin/admin_master) retorna ultimas 30 entradas com
+ *     iniciado_brt, finalizado_brt e duracao_seg.
+ * (4) Painel colapsivel details "Log de Sincronizacoes SEFAZ" no frontend entre o cronometro
+ *     e os KPI cards: tabela com badge status colorido (OK/Rate Limit/Erro/Rodando),
+ *     Importadas (verde), Ignoradas, Paginas, NSU Inicial, NSU Final, Duracao em seg.
+ *     refetchInterval 2min, habilitado so na aba recebidas.
+ * BUGFIX Rev.3623: buildResumo tinha param data com tipo circular; alert() -> toast shadcn.
+ *
  * Rev. 3623 — **PANORAMA FISCAL · BOTÃO "PACOTE CONTADOR" — ZIP ORGANIZADO COM NFS-e, NF-e, EXTRATO, OCs + CHECKLIST MENSAL/ANUAL. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * Nova rota GET /api/download/pacote-contador?companyId=&mes=&ano= gera um ZIP com:

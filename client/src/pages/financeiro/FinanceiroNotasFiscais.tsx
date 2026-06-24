@@ -441,6 +441,10 @@ export default function FinanceiroNotasFiscais() {
     { id: nfeRecDetalhe?.id ?? 0, companyId: companyId ?? 0 },
     { enabled: !!nfeRecDetalhe && !!companyId }
   );
+  const sefazSyncLogQuery = (trpc as any).sefaz.getSyncLog.useQuery(
+    { companyId: companyId ?? 0, limit: 30 },
+    { enabled: !!companyId && pageTab === "recebidas", refetchInterval: 120_000 }
+  );
   const manifestarMut = (trpc as any).sefaz.manifestar.useMutation({
     onSuccess: (data: any, vars: any) => {
       const labels: Record<string, string> = { acatada: "acatada ✓", recusada: "recusada ✗", desconhecida: "marcada como desconhecida" };
@@ -941,6 +945,79 @@ export default function FinanceiroNotasFiscais() {
                   )}
                 </div>
               )}
+
+              {/* Painel de auditoria de sync */}
+              {(() => {
+                const logs: any[] = sefazSyncLogQuery.data ?? [];
+                if (!sefazCfg) return null;
+                const statusBadge = (s: string) => {
+                  if (s === "ok")         return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700">✓ OK</span>;
+                  if (s === "rate_limit") return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">⏱ Rate Limit</span>;
+                  if (s === "erro")       return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-100 text-red-700">✗ Erro</span>;
+                  if (s === "rodando")    return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-100 text-indigo-700 animate-pulse">⟳ Rodando</span>;
+                  return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-600">{s}</span>;
+                };
+                return (
+                  <details className="rounded-xl border border-slate-200 bg-white overflow-hidden group">
+                    <summary className="flex items-center justify-between px-4 py-2.5 cursor-pointer select-none hover:bg-slate-50 transition-colors list-none">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-slate-700">🕵️ Log de Sincronizações SEFAZ</span>
+                        {logs.length > 0 && (
+                          <span className="text-[11px] text-slate-400">— última: {logs[0]?.iniciado_brt ?? "—"} (Horário Brasília)</span>
+                        )}
+                      </div>
+                      <span className="text-xs text-slate-400 group-open:hidden">▼ ver detalhes</span>
+                      <span className="text-xs text-slate-400 hidden group-open:inline">▲ fechar</span>
+                    </summary>
+                    <div className="overflow-x-auto border-t border-slate-100">
+                      {logs.length === 0 ? (
+                        <p className="text-xs text-slate-400 px-4 py-3">Nenhum registro de sync ainda — o log é gerado a partir desta revisão.</p>
+                      ) : (
+                        <table className="w-full text-xs">
+                          <thead className="bg-slate-50 text-[11px] text-slate-500 uppercase tracking-wide">
+                            <tr>
+                              <th className="px-3 py-2 text-left font-medium">Data/Hora (BRT)</th>
+                              <th className="px-3 py-2 text-left font-medium">Status</th>
+                              <th className="px-3 py-2 text-right font-medium">Importadas</th>
+                              <th className="px-3 py-2 text-right font-medium">Ignoradas</th>
+                              <th className="px-3 py-2 text-right font-medium">Páginas</th>
+                              <th className="px-3 py-2 text-left font-medium hidden md:table-cell">NSU Inicial</th>
+                              <th className="px-3 py-2 text-left font-medium hidden md:table-cell">NSU Final</th>
+                              <th className="px-3 py-2 text-right font-medium hidden lg:table-cell">Duração</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {logs.map((log: any) => (
+                              <tr key={log.id} className="hover:bg-slate-50/60">
+                                <td className="px-3 py-1.5 font-mono text-slate-600 whitespace-nowrap">
+                                  {log.iniciado_brt ?? "—"}
+                                </td>
+                                <td className="px-3 py-1.5">{statusBadge(log.status)}</td>
+                                <td className="px-3 py-1.5 text-right tabular-nums">
+                                  {log.importadas > 0
+                                    ? <span className="font-semibold text-emerald-700">{log.importadas}</span>
+                                    : <span className="text-slate-400">0</span>}
+                                </td>
+                                <td className="px-3 py-1.5 text-right tabular-nums text-slate-500">{log.ignoradas}</td>
+                                <td className="px-3 py-1.5 text-right tabular-nums text-slate-400">{log.paginas}</td>
+                                <td className="px-3 py-1.5 font-mono text-slate-400 text-[10px] hidden md:table-cell">
+                                  {log.nsu_inicial ? Number(log.nsu_inicial).toLocaleString("pt-BR") : "—"}
+                                </td>
+                                <td className="px-3 py-1.5 font-mono text-slate-400 text-[10px] hidden md:table-cell">
+                                  {log.nsu_final ? Number(log.nsu_final).toLocaleString("pt-BR") : "—"}
+                                </td>
+                                <td className="px-3 py-1.5 text-right text-slate-400 hidden lg:table-cell">
+                                  {log.duracao_seg != null ? `${log.duracao_seg}s` : "—"}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  </details>
+                );
+              })()}
 
               {/* KPI cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

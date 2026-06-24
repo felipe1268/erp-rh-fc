@@ -4152,6 +4152,30 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3608: coluna sync_intervalo_horas garantida em company_nfe_config (padrão=1h).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3608 sync_intervalo_horas:`, e?.message || e); }
 
+        // Rev. 3624 — Log de auditoria das sincronizações SEFAZ (nfe_sync_log).
+        // Registra cada execução com timestamps BRT, NSU inicial/final, importadas, ignoradas, cStat.
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS nfe_sync_log (
+              id           SERIAL PRIMARY KEY,
+              company_id   INTEGER NOT NULL,
+              iniciado_em  TIMESTAMP NOT NULL DEFAULT NOW(),
+              finalizado_em TIMESTAMP,
+              nsu_inicial  VARCHAR(15),
+              nsu_final    VARCHAR(15),
+              importadas   INTEGER NOT NULL DEFAULT 0,
+              ignoradas    INTEGER NOT NULL DEFAULT 0,
+              paginas      INTEGER NOT NULL DEFAULT 0,
+              cstat        VARCHAR(10),
+              xmotivo      TEXT,
+              status       VARCHAR(20) NOT NULL DEFAULT 'rodando',
+              observacao   TEXT
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_nfe_sync_log_company ON nfe_sync_log(company_id, iniciado_em DESC)`);
+          console.log(`[SyncSchema+] Rev. 3624: tabela nfe_sync_log garantida (log de auditoria de sync SEFAZ).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3624 nfe_sync_log:`, e?.message || e); }
+
         // Rev. 3561 — NFS-e Emitidas Municipais: config por município (4 prefeituras pré-definidas).
         // ADITIVO — zero ALTER destrutivo/DROP/DELETE (R-001/R-007/R-010 OK).
         try {

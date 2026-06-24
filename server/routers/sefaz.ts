@@ -598,6 +598,40 @@ function extractNumeroNf(chave: string): string {
   return String(parseInt(chave.substring(25, 34), 10)); // nNF (9 dígitos sem zeros à esquerda)
 }
 
+// ── Helpers de auditoria de sync ─────────────────────────────────────────────
+async function insertSyncLog(db: any, companyId: number, nsuInicial: string): Promise<number | null> {
+  try {
+    const r = (await db.execute(sql`
+      INSERT INTO nfe_sync_log (company_id, nsu_inicial, status, iniciado_em)
+      VALUES (${companyId}, ${nsuInicial}, 'rodando', NOW())
+      RETURNING id
+    `)) as any;
+    return (r?.rows ?? r)?.[0]?.id ?? null;
+  } catch { return null; }
+}
+
+async function finalizeSyncLog(db: any, logId: number | null, data: {
+  nsuFinal: string; importadas: number; ignoradas: number; paginas: number;
+  cstat?: string; xmotivo?: string; status: string; observacao?: string;
+}) {
+  if (!logId) return;
+  try {
+    await db.execute(sql`
+      UPDATE nfe_sync_log
+      SET finalizado_em = NOW(),
+          nsu_final    = ${data.nsuFinal},
+          importadas   = ${data.importadas},
+          ignoradas    = ${data.ignoradas},
+          paginas      = ${data.paginas},
+          cstat        = ${data.cstat ?? null},
+          xmotivo      = ${data.xmotivo ?? null},
+          status       = ${data.status},
+          observacao   = ${data.observacao ?? null}
+      WHERE id = ${logId}
+    `);
+  } catch { /* não bloquear o sync principal por falha no log */ }
+}
+
 // ── Função principal de sincronização ────────────────────────────────────────
 export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?: boolean; forceUltNSU?: string }): Promise<{ importadas: number; ignoradas: number; erro?: string; aviso?: string }> {
   const db = await getDb();
@@ -634,6 +668,7 @@ export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?:
   let paginas = 0;
   let rateLimited = false;
   let rateLimitedNsu: string | null = null; // NSU que a SEFAZ instrui usar na próxima chamada
+  let syncLogId: number | null = null;
 
   // ── Gate geral de tempo: respeita o intervalo configurado pelo usuário (padrão 1h, mín 1h) ──
   // Cobre TANTO o caso de rate-limit anterior QUANTO chamadas manuais "Sincronizar Agora" em sequência.
@@ -664,6 +699,9 @@ export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?:
       }
     } catch { /* ignora erro de parse */ }
   }
+
+  // Registrar início do sync no log de auditoria
+  syncLogId = await insertSyncLog(db, companyId, ultNSUInicial);
 
   try {
     // Loop de paginação — cada chamada retorna até 50 docs; continua enquanto maxNSU > ultNSU
@@ -825,6 +863,19 @@ export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?:
 
     console.log(`[SefazSync] company=${companyId} DONE importadas=${importadas} ignoradas=${ignoradas}${avisoRateLimit ? " RATE-LIMITED" : ""}`);
 
+    // Finalizar log de auditoria
+    const finalNsu = deveAvancarNsu ? (rateLimitedNsu ?? ultNSU) : ultNSU;
+    await finalizeSyncLog(db, syncLogId, {
+      nsuFinal: finalNsu,
+      importadas,
+      ignoradas,
+      paginas,
+      cstat: rateLimited ? "656" : undefined,
+      xmotivo: rateLimited ? "Consumo Indevido / Rate Limit SEFAZ" : undefined,
+      status: rateLimited ? "rate_limit" : "ok",
+      observacao: avisoRateLimit,
+    });
+
     return rateLimited
       ? { importadas, ignoradas, aviso: avisoRateLimit }
       : { importadas, ignoradas };
@@ -835,6 +886,14 @@ export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?:
       SET last_sync_at = NOW(), last_sync_result = ${JSON.stringify({ erro: msg })}
       WHERE company_id = ${companyId}
     `).catch(() => {});
+    await finalizeSyncLog(db, syncLogId, {
+      nsuFinal: ultNSU,
+      importadas,
+      ignoradas,
+      paginas,
+      status: "erro",
+      observacao: msg.slice(0, 400),
+    });
     return { importadas, ignoradas, erro: msg };
   }
 }
@@ -894,6 +953,29 @@ export function startSefazCron() {
 
 // ── tRPC Router ────────────────────────────────────────────────────────────────
 export const sefazRouter = router({
+
+  getSyncLog: protectedProcedure
+    .input(z.object({ companyId: z.number(), limit: z.number().min(1).max(100).default(30) }))
+    .query(async ({ input, ctx }) => {
+      if (ctx.user?.role !== "admin_master" && ctx.user?.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      const rows = (await db.execute(sql`
+        SELECT id, company_id,
+          TO_CHAR(iniciado_em AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI:SS') AS iniciado_brt,
+          TO_CHAR(finalizado_em AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI:SS') AS finalizado_brt,
+          iniciado_em,
+          finalizado_em,
+          nsu_inicial, nsu_final,
+          importadas, ignoradas, paginas,
+          cstat, xmotivo, status, observacao,
+          EXTRACT(EPOCH FROM (finalizado_em - iniciado_em))::int AS duracao_seg
+        FROM nfe_sync_log
+        WHERE company_id = ${input.companyId}
+        ORDER BY iniciado_em DESC
+        LIMIT ${input.limit}
+      `)) as any;
+      return (rows?.rows ?? rows) as any[];
+    }),
 
   getConfig: protectedProcedure
     .input(z.object({ companyId: z.number() }))
