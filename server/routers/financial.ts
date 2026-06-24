@@ -11563,51 +11563,58 @@ export const financialRouter = router({
     const R = (r: any) => rows(r) as any[];
 
     // 1. Top fornecedores por saídas (despesas registradas no ERP).
+    // Rev. 3628 — fallback p/ comprovante_beneficiario quando fornecedor_nome está nulo.
     const fornRes = await dbExecute(db,
-      `SELECT NULLIF(TRIM(fornecedor_nome),'') AS nome,
+      `SELECT NULLIF(TRIM(COALESCE(fornecedor_nome, comprovante_beneficiario)),'') AS nome,
               COUNT(*)::int AS qtd,
               COALESCE(SUM(ABS(COALESCE(valor_realizado,valor_previsto,0))),0) AS total
          FROM financial_entries
         WHERE company_id=$1 AND tipo='despesa'
           AND EXTRACT(YEAR FROM COALESCE(data_competencia,data_vencimento,created_at::date))=$2
-          AND NULLIF(TRIM(fornecedor_nome),'') IS NOT NULL
+          AND NULLIF(TRIM(COALESCE(fornecedor_nome, comprovante_beneficiario)),'') IS NOT NULL
         GROUP BY 1 ORDER BY 3 DESC LIMIT 20`,
       [cid, yr]);
 
     // 2. Top categorias – despesas.
+    // Rev. 3628 — JOIN em financial_accounts p/ recuperar nome quando conta_nome desnormalizado está nulo.
     const catDespRes = await dbExecute(db,
-      `SELECT NULLIF(TRIM(conta_nome),'') AS nome,
+      `SELECT NULLIF(TRIM(COALESCE(fe.conta_nome, fa.nome)),'') AS nome,
               COUNT(*)::int AS qtd,
-              COALESCE(SUM(ABS(COALESCE(valor_realizado,valor_previsto,0))),0) AS total
-         FROM financial_entries
-        WHERE company_id=$1 AND tipo='despesa'
-          AND EXTRACT(YEAR FROM COALESCE(data_competencia,data_vencimento,created_at::date))=$2
-          AND NULLIF(TRIM(conta_nome),'') IS NOT NULL
+              COALESCE(SUM(ABS(COALESCE(fe.valor_realizado,fe.valor_previsto,0))),0) AS total
+         FROM financial_entries fe
+         LEFT JOIN financial_accounts fa ON fa.id = fe.conta_id
+        WHERE fe.company_id=$1 AND fe.tipo='despesa'
+          AND EXTRACT(YEAR FROM COALESCE(fe.data_competencia,fe.data_vencimento,fe.created_at::date))=$2
+          AND NULLIF(TRIM(COALESCE(fe.conta_nome, fa.nome)),'') IS NOT NULL
         GROUP BY 1 ORDER BY 3 DESC LIMIT 15`,
       [cid, yr]);
 
     // 3. Top categorias – receitas.
+    // Rev. 3628 — idem: JOIN financial_accounts p/ fallback de nome.
     const catRecRes = await dbExecute(db,
-      `SELECT NULLIF(TRIM(conta_nome),'') AS nome,
+      `SELECT NULLIF(TRIM(COALESCE(fe.conta_nome, fa.nome)),'') AS nome,
               COUNT(*)::int AS qtd,
-              COALESCE(SUM(ABS(COALESCE(valor_realizado,valor_previsto,0))),0) AS total
-         FROM financial_entries
-        WHERE company_id=$1 AND tipo='receita'
-          AND EXTRACT(YEAR FROM COALESCE(data_competencia,data_vencimento,created_at::date))=$2
-          AND NULLIF(TRIM(conta_nome),'') IS NOT NULL
+              COALESCE(SUM(ABS(COALESCE(fe.valor_realizado,fe.valor_previsto,0))),0) AS total
+         FROM financial_entries fe
+         LEFT JOIN financial_accounts fa ON fa.id = fe.conta_id
+        WHERE fe.company_id=$1 AND fe.tipo='receita'
+          AND EXTRACT(YEAR FROM COALESCE(fe.data_competencia,fe.data_vencimento,fe.created_at::date))=$2
+          AND NULLIF(TRIM(COALESCE(fe.conta_nome, fa.nome)),'') IS NOT NULL
         GROUP BY 1 ORDER BY 3 DESC LIMIT 15`,
       [cid, yr]);
 
     // 4. Top obras por volume financeiro (despesas + receitas).
+    // Rev. 3628 — JOIN em obras p/ recuperar nome quando obra_nome desnormalizado está nulo.
     const obrasRes = await dbExecute(db,
-      `SELECT NULLIF(TRIM(obra_nome),'') AS nome,
+      `SELECT NULLIF(TRIM(COALESCE(fe.obra_nome, o.nome)),'') AS nome,
               COUNT(*)::int AS qtd,
-              COALESCE(SUM(CASE WHEN tipo='despesa' THEN ABS(COALESCE(valor_realizado,valor_previsto,0)) ELSE 0 END),0) AS despesas,
-              COALESCE(SUM(CASE WHEN tipo='receita' THEN ABS(COALESCE(valor_realizado,valor_previsto,0)) ELSE 0 END),0) AS receitas
-         FROM financial_entries
-        WHERE company_id=$1
-          AND EXTRACT(YEAR FROM COALESCE(data_competencia,data_vencimento,created_at::date))=$2
-          AND NULLIF(TRIM(obra_nome),'') IS NOT NULL
+              COALESCE(SUM(CASE WHEN fe.tipo='despesa' THEN ABS(COALESCE(fe.valor_realizado,fe.valor_previsto,0)) ELSE 0 END),0) AS despesas,
+              COALESCE(SUM(CASE WHEN fe.tipo='receita' THEN ABS(COALESCE(fe.valor_realizado,fe.valor_previsto,0)) ELSE 0 END),0) AS receitas
+         FROM financial_entries fe
+         LEFT JOIN obras o ON o.id = fe.obra_id
+        WHERE fe.company_id=$1
+          AND EXTRACT(YEAR FROM COALESCE(fe.data_competencia,fe.data_vencimento,fe.created_at::date))=$2
+          AND NULLIF(TRIM(COALESCE(fe.obra_nome, o.nome)),'') IS NOT NULL
         GROUP BY 1 ORDER BY (despesas+receitas) DESC LIMIT 15`,
       [cid, yr]);
 

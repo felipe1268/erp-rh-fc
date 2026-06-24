@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3628 — **DASHBOARD CONCILIACAO · BUGFIX CARDS VAZIOS — JOIN financial_accounts/obras + FALLBACK comprovante_beneficiario. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
+ *
+ * Causa-raiz: getConciliacaoDashExtra filtrava por `conta_nome IS NOT NULL`,
+ * `obra_nome IS NOT NULL` e `fornecedor_nome IS NOT NULL` — campos desnormalizados
+ * que ficam NULL quando o lancamento e gravado com `conta_id`/`obra_id` sem o
+ * nome duplicado. Resultado: todos os cards analiticos (Top Categorias Despesas,
+ * Top Categorias Receitas, Despesas x Receitas por Obra, Ranking de Obras,
+ * Ranking de Fornecedores, Top 10 Fornecedores) exibiam "Nenhum dado no periodo"
+ * mesmo com lancamentos existentes no banco.
+ *
+ * Fix:
+ * - catDesp / catRec: LEFT JOIN financial_accounts fa ON fa.id = fe.conta_id;
+ *   COALESCE(fe.conta_nome, fa.nome) como valor e como filtro IS NOT NULL.
+ * - obras: LEFT JOIN obras o ON o.id = fe.obra_id;
+ *   COALESCE(fe.obra_nome, o.nome) como valor e como filtro IS NOT NULL.
+ * - fornecedores: COALESCE(fornecedor_nome, comprovante_beneficiario) como
+ *   fallback para lancamentos vindos de PIX/boleto com beneficiario extraido.
+ *
+ * Arquivos: server/routers/financial.ts (getConciliacaoDashExtra linhas ~11568-11622).
+ * Zero ALTER/DROP/DELETE — apenas SELECT com JOIN adicionado.
+ *
  * Rev. 3627 — **PRODUCAO · BUGFIX OOM + AUTOCHECK CIRCUIT BREAKER — SERVER TRAVOU COM "Internal Server Error". BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
  *
  * Causa-raiz: autoCheckJob disparava a cada 5min; cada falha de conexao Neon

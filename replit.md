@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3627** — **PRODUÇÃO · BUGFIX OOM "Internal Server Error" — AUTOCHECK CIRCUIT BREAKER + HEAP 1GB→2GB. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** AutoCheck disparava a cada 5min; cada falha de conexão Neon acumulava handles → heap 1022MB em 51min → FATAL OOM. Fix: circuit breaker com backoff exponencial (5/10/20/40min cap) em `datajudAutoCheck.ts`; `--max-old-space-size` 1024→2048 no deploy. Detalhe: `shared/changelog.ts`.
+- **Rev. 3628** — **DASHBOARD CONCILIAÇÃO · BUGFIX CARDS VAZIOS — JOIN `financial_accounts`/`obras` + FALLBACK `comprovante_beneficiario`. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** `getConciliacaoDashExtra` filtrava por `conta_nome IS NOT NULL`, `obra_nome IS NOT NULL`, `fornecedor_nome IS NOT NULL` — campos desnormalizados nulos quando lançamento usa `conta_id`/`obra_id` sem duplicar o nome. Fix: LEFT JOIN em `financial_accounts` e `obras` com `COALESCE(fe.conta_nome, fa.nome)` / `COALESCE(fe.obra_nome, o.nome)`; fornecedores fallback para `comprovante_beneficiario`. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3626** — **PANORAMA FISCAL · BUGFIX ÍNDICE GERAL SEMPRE ZERO — `coberturaSaidaNfe` USAVA `fn_id` (CONCILIAÇÃO) EM VEZ DE RATIO DE VOLUME. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3627** — **PRODUÇÃO · BUGFIX OOM "Internal Server Error" — AUTOCHECK CIRCUIT BREAKER + HEAP 1GB→2GB. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.** AutoCheck disparava a cada 5min; cada falha de conexão Neon acumulava handles → heap 1022MB em 51min → FATAL OOM. Fix: circuit breaker com backoff exponencial (5/10/20/40min cap) em `datajudAutoCheck.ts`; `--max-old-space-size` 1024→2048 no deploy. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3623** — **PANORAMA FISCAL · BOTÃO "PACOTE CONTADOR" — ZIP COM NFS-e, NF-e, EXTRATO, OCs + CHECKLIST. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
