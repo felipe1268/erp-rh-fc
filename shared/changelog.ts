@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3644 — **PANORAMA FISCAL + DASHBOARD NF-e · BUGFIX OCs SEMPRE "0" — TABELA ERRADA. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * `getPanoramaFiscal` consultava `purchase_orders` (tabela legada/vazia) em vez de
+ * `compras_ordens` (tabela real do sistema). Resultado: 0 OCs em todos os períodos.
+ * Fix: query reescrita sobre `compras_ordens` com colunas corretas:
+ *   - `numero_oc` (era `numero`)
+ *   - `fornecedor_id` (era `supplier_id`)
+ *   - `fornecedor_nome` (era `supplier_nome`)
+ *   - `total` (era `valor_total`)
+ *   - LEFT JOIN `obras` para `obra_nome`
+ * Nenhum outro dado (NF-e, extrato bancário) foi afetado.
+ *
  * Rev. 3643 — **DASHBOARD NF-e · DRILL-DOWN POR FORNECEDOR + RANKING CLICÁVEL. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Clicar em qualquer barra do gráfico "NF-e por Fornecedor" OU em qualquer linha do

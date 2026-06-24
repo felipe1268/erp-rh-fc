@@ -429,17 +429,25 @@ export const fiscalNotesRouter = router({
       `, [companyId, di, df]);
 
       // 4. Ordens de Compra do período (com CNPJ do fornecedor)
+      // NOTA: as OCs do sistema ficam em `compras_ordens`, NÃO em `purchase_orders`
       const ocQ = await db.$client.query(`
-        SELECT po.id, po.numero, po.supplier_nome, po.valor_total,
-               po.status, po.created_at, po.obra_nome, po.tipo,
-               COALESCE(f.cnpj, '') AS supplier_cnpj,
-               COALESCE(f.razao_social, po.supplier_nome, '') AS supplier_razao
-        FROM purchase_orders po
-        LEFT JOIN fornecedores f ON f.id = po.supplier_id AND f.company_id = $1
-        WHERE po.company_id = $1
-          AND po.status NOT IN ('cancelada', 'rascunho')
-          AND po.created_at >= $2 AND po.created_at < $3
-        ORDER BY po.created_at DESC
+        SELECT co.id,
+               co.numero_oc               AS numero,
+               co.fornecedor_nome         AS supplier_nome,
+               co.total                   AS valor_total,
+               co.status,
+               co.created_at,
+               COALESCE(o.nome, '')       AS obra_nome,
+               COALESCE(co.tipo, 'compra') AS tipo,
+               COALESCE(f.cnpj, '')       AS supplier_cnpj,
+               COALESCE(f.razao_social, co.fornecedor_nome, '') AS supplier_razao
+        FROM compras_ordens co
+        LEFT JOIN fornecedores f ON f.id = co.fornecedor_id AND f.company_id = $1
+        LEFT JOIN obras o ON o.id = co.obra_id
+        WHERE co.company_id = $1
+          AND co.status NOT IN ('cancelada', 'rascunho')
+          AND co.created_at >= $2 AND co.created_at < $3
+        ORDER BY co.created_at DESC
         LIMIT 300
       `, [companyId, di, df]);
 
