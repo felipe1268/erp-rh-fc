@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3683 — **DASHBOARD NF-e · ANÁLISE TRIBUTÁRIA COMPLETA (ISS/INSS/IRRF/PIS/COFINS/CSLL) + PERFIL DE ENTRADAS NF-e. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * Novo endpoint `fiscalNotes.getAnalyseTributaria({ companyId, mes, ano })` agrega em paralelo
+ * (Promise.all) três queries: (1) impostos das NFS-e emitidas: SUM por iss_retido, retencao_inss,
+ * retencao_irrf, retencao_csll, SUM(retencao_pis + retencao_cofins + retencao_pis_cofins) para
+ * unificar formatos SIAP GEO e ABRASF, carga tributária efetiva = totalRetenções/bruto×100,
+ * contagem optante_simples e tributada; (2) KPIs de NF-e recebidas: COUNT, SUM, AVG (ticket médio),
+ * COUNT DISTINCT CNPJ normalizado (fornecedores únicos), pendentes, com entry_id, MIN/MAX valor;
+ * (3) evolução mensal de retenções (apenas quando mes=0, GROUP BY MONTH) para o gráfico stacked.
+ * Frontend — dois novos cards no DashNotasFiscais (após OcNfeSection, antes Evolução 5 anos):
+ * "Carga Tributária NFS-e": header com % efetiva colorida (verde<5/amber<10/red>10%), 6 KPI cards
+ * coloridos (ISS/INSS/IRRF/PIS-COFINS/CSLL/Outras) com % sobre bruto no hover, fluxo visual
+ * Bruto→Deduções→BaseISS→Retenções→Líquido em blocos coloridos scrolláveis, barras de distribuição
+ * de retenções com % e R$, BarChart stacked mensal (ISS+INSS+IRRF+PIS-COFINS empilhados), rodapé
+ * com qtd/simples/tributadas/baseISS. "Perfil das Entradas NF-e": 4 KPI cards (ticket médio,
+ * fornecedores únicos, pendentes, com lançamento) com % do total, 2 cards extremos (menor/maior NF-e
+ * com ícone TrendingDown/Up), barras de status (com lançamento / pendentes / sem vínculo).
+ * Novos ícones: Calculator, Percent, TrendingUp, TrendingDown, Package, Users, BadgeDollarSign.
+ * Arquivos: `server/routers/fiscalNotes.ts`, `client/src/pages/financeiro/dashboards/DashNotasFiscais.tsx`.
+ *
  * Rev. 3682 — **DASHBOARD NF-e · CARD "EVOLUÇÃO 5 ANOS — ENTRADAS × SAÍDAS" COM BARCHART AGRUPADO + TABELA a/a. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * Novo endpoint `fiscalNotes.getMultiYearSeries({ companyId, anos })` agrega totais anuais em

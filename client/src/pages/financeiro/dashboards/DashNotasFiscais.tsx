@@ -9,7 +9,8 @@ import {
 } from "recharts";
 import {
   FileText, ShoppingCart, Receipt, Building2, CheckCircle2,
-  ArrowDownLeft, ArrowUpRight, Banknote,
+  ArrowDownLeft, ArrowUpRight, Banknote, Calculator, Percent,
+  TrendingUp, TrendingDown, Package, Users, BadgeDollarSign,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import {
@@ -391,6 +392,12 @@ export default function DashNotasFiscais() {
   );
   const multiYearData: Array<{ ano: number; nfeTotal: number; nfeCount: number; nfseTotal: number; nfseCount: number }> =
     multiYearQuery.data ?? [];
+
+  const tributariaQuery = (trpc as any).fiscalNotes.getAnalyseTributaria.useQuery(
+    { companyId: companyId ?? 0, mes, ano },
+    { enabled: !!companyId, staleTime: 60_000 }
+  );
+  const trib = tributariaQuery.data;
 
   const data     = pQuery.data;
   const anoData  = mes === 0 ? data : anoQuery.data;
@@ -841,6 +848,222 @@ export default function DashNotasFiscais() {
           onOpenCom={() => setDlg("ocsComNota")}
           onOpenNfeSem={() => setDlg("nfeSemOc")}
         />
+
+        {/* ── Carga Tributária — NFS-e Emitidas ─────────────────────────── */}
+        <Card className="p-5 border-slate-200">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Calculator className="w-5 h-5 text-violet-600" />
+              <div>
+                <h2 className="text-base font-bold text-slate-800">Carga Tributária — NFS-e Emitidas</h2>
+                <p className="text-xs text-slate-400 mt-0.5">ISS · INSS · IRRF · PIS/COFINS · CSLL · Outras retenções · {periodoLabel}</p>
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <span className={`text-3xl font-black tabular-nums ${(trib?.nfse.cargaEfetiva ?? 0) > 10 ? "text-red-600" : (trib?.nfse.cargaEfetiva ?? 0) > 5 ? "text-amber-600" : "text-emerald-600"}`}>
+                {(trib?.nfse.cargaEfetiva ?? 0).toFixed(1)}%
+              </span>
+              <p className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">Carga Efetiva</p>
+            </div>
+          </div>
+
+          {/* KPI cards de impostos */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
+            {[
+              { label: "ISS Retido",   val: trib?.nfse.iss,       color: "text-violet-700", bg: "bg-violet-50", border: "border-violet-200", tip: `Alíq. base: ${(trib?.nfse.baseIss ?? 0) > 0 ? ((trib?.nfse.iss ?? 0) / (trib?.nfse.baseIss ?? 1) * 100).toFixed(2) + "%" : "—"}` },
+              { label: "INSS Retido",  val: trib?.nfse.inss,      color: "text-blue-700",   bg: "bg-blue-50",   border: "border-blue-200"   },
+              { label: "IRRF Retido",  val: trib?.nfse.irrf,      color: "text-amber-700",  bg: "bg-amber-50",  border: "border-amber-200"  },
+              { label: "PIS / COFINS", val: trib?.nfse.pisCofins,  color: "text-rose-700",   bg: "bg-rose-50",   border: "border-rose-200"   },
+              { label: "CSLL",         val: trib?.nfse.csll,      color: "text-indigo-700", bg: "bg-indigo-50", border: "border-indigo-200" },
+              { label: "Outras",       val: trib?.nfse.outras,    color: "text-slate-700",  bg: "bg-slate-50",  border: "border-slate-200"  },
+            ].map(({ label, val, color, bg, border, tip }) => (
+              <div key={label} className={`${bg} ${border} border rounded-xl p-3 text-center`} title={tip}>
+                <p className="text-[11px] text-slate-500 font-semibold mb-1 leading-tight">{label}</p>
+                <p className={`text-sm font-black tabular-nums ${color}`}>{formatBRL(val ?? 0)}</p>
+                {(trib?.nfse.bruto ?? 0) > 0 && (val ?? 0) > 0 && (
+                  <p className="text-[10px] text-slate-400 mt-0.5">{((val! / trib!.nfse.bruto) * 100).toFixed(2)}%</p>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Fluxo bruto → deduções → retenções → líquido */}
+          <div className="flex items-center gap-2 mb-5 overflow-x-auto pb-1">
+            {[
+              { label: "Valor Bruto",    val: trib?.nfse.bruto,          color: "bg-slate-700"   },
+              { label: "− Deduções",     val: -(trib?.nfse.deducoes ?? 0), color: "bg-rose-400"  },
+              { label: "Base ISS",       val: trib?.nfse.baseIss,         color: "bg-violet-400" },
+              { label: "− Retenções",    val: -(trib?.nfse.totalRetencoes ?? 0), color: "bg-red-500" },
+              { label: "Valor Líquido",  val: trib?.nfse.liquido,         color: "bg-emerald-500" },
+            ].map(({ label, val, color }, idx) => (
+              <div key={label} className="flex items-center gap-2 shrink-0">
+                {idx > 0 && <span className="text-slate-300 font-bold">→</span>}
+                <div className={`${color} rounded-lg px-3 py-2 text-white text-center min-w-[100px]`}>
+                  <p className="text-[10px] font-semibold opacity-80 uppercase tracking-wide">{label}</p>
+                  <p className="text-sm font-black tabular-nums">{formatBRL(Math.abs(val ?? 0))}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Barras de magnitude das retenções */}
+          {(trib?.nfse.totalRetencoes ?? 0) > 0 && (
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Distribuição das Retenções</p>
+              {[
+                { label: "ISS Retido",   val: trib?.nfse.iss,       color: "bg-violet-500" },
+                { label: "INSS Retido",  val: trib?.nfse.inss,      color: "bg-blue-500"   },
+                { label: "IRRF Retido",  val: trib?.nfse.irrf,      color: "bg-amber-500"  },
+                { label: "PIS/COFINS",   val: trib?.nfse.pisCofins,  color: "bg-rose-500"   },
+                { label: "CSLL",         val: trib?.nfse.csll,      color: "bg-indigo-500" },
+                { label: "Outras",       val: trib?.nfse.outras,    color: "bg-slate-400"  },
+              ].filter(x => (x.val ?? 0) > 0).map(({ label, val, color }) => {
+                const pct = ((val ?? 0) / trib!.nfse.totalRetencoes) * 100;
+                return (
+                  <div key={label} className="flex items-center gap-3">
+                    <span className="text-[11px] text-slate-500 w-24 shrink-0 text-right">{label}</span>
+                    <div className="flex-1 h-5 bg-slate-100 rounded-full overflow-hidden">
+                      <div className={`h-full ${color} rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="text-[11px] font-bold text-slate-700 w-16 tabular-nums text-right">{formatBRL(val ?? 0)}</span>
+                    <span className="text-[10px] text-slate-400 w-10 tabular-nums">{pct.toFixed(1)}%</span>
+                  </div>
+                );
+              })}
+              <div className="flex items-center gap-3 mt-2 pt-2 border-t border-slate-100">
+                <span className="text-[11px] font-bold text-slate-700 w-24 shrink-0 text-right">Total</span>
+                <div className="flex-1" />
+                <span className="text-[11px] font-black text-slate-800 w-16 tabular-nums text-right">{formatBRL(trib?.nfse.totalRetencoes ?? 0)}</span>
+                <span className="text-[10px] text-slate-400 w-10 tabular-nums">{(trib?.nfse.cargaEfetiva ?? 0).toFixed(1)}%</span>
+              </div>
+            </div>
+          )}
+
+          {/* Evolução mensal de retenções (ano todo) */}
+          {mes === 0 && (trib?.nfse.mensal ?? []).some((r: any) => r.iss + r.inss + r.irrf + r.csll + r.pisCofins > 0) && (
+            <div className="mt-5 pt-4 border-t border-slate-100">
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-3">Retenções Mês a Mês — {ano}</p>
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={trib!.nfse.mensal} margin={{ top: 4, right: 12, bottom: 2, left: 4 }} barSize={16}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="mes" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                  <YAxis tickFormatter={formatBRLCompact} tick={{ fontSize: 10, fill: "#94a3b8" }} width={60} axisLine={false} tickLine={false} />
+                  <Tooltip formatter={(v: any) => formatBRL(Number(v))} />
+                  <Legend wrapperStyle={{ fontSize: 10, paddingTop: 4 }} />
+                  <Bar dataKey="iss"       stackId="t" fill="#8b5cf6" name="ISS"      />
+                  <Bar dataKey="inss"      stackId="t" fill="#3b82f6" name="INSS"     />
+                  <Bar dataKey="irrf"      stackId="t" fill="#f59e0b" name="IRRF"     />
+                  <Bar dataKey="pisCofins" stackId="t" fill="#f43f5e" name="PIS/COFINS" radius={[3,3,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Rodapé: optante simples + tributada no município */}
+          {(trib?.nfse.qtd ?? 0) > 0 && (
+            <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap gap-4 text-xs text-slate-500">
+              <span>📋 <strong>{trib?.nfse.qtd}</strong> NFS-e no período</span>
+              <span>🏛 Optantes Simples: <strong>{trib?.nfse.simplesCount}</strong></span>
+              <span>🏙 Tributadas no município: <strong>{trib?.nfse.tributadaCount}</strong></span>
+              <span>📐 Base ISS: <strong>{formatBRL(trib?.nfse.baseIss ?? 0)}</strong></span>
+            </div>
+          )}
+
+          {(trib?.nfse.qtd ?? 0) === 0 && !tributariaQuery.isLoading && (
+            <EmptyState message="Nenhuma NFS-e emitida no período para análise tributária." />
+          )}
+        </Card>
+
+        {/* ── Análise de Entradas — NF-e Recebidas ──────────────────────── */}
+        <Card className="p-5 border-slate-200">
+          <div className="flex items-center gap-2 mb-4">
+            <Package className="w-5 h-5 text-blue-600" />
+            <div>
+              <h2 className="text-base font-bold text-slate-800">Perfil das Entradas — NF-e Recebidas</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Ticket médio · fornecedores ativos · status · extremos de valor · {periodoLabel}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center">
+              <p className="text-[11px] text-slate-500 font-semibold mb-1">Ticket Médio</p>
+              <p className="text-sm font-black text-blue-700 tabular-nums">{formatBRL(trib?.nfe.ticketMedio ?? 0)}</p>
+            </div>
+            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-center">
+              <p className="text-[11px] text-slate-500 font-semibold mb-1">Fornecedores Únicos</p>
+              <p className="text-sm font-black text-indigo-700 tabular-nums">{trib?.nfe.fornecedoresUnicos ?? 0}</p>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
+              <p className="text-[11px] text-slate-500 font-semibold mb-1">Pendentes</p>
+              <p className="text-sm font-black text-amber-700 tabular-nums">{trib?.nfe.pendentes ?? 0}</p>
+              {(trib?.nfe.qtd ?? 0) > 0 && (
+                <p className="text-[10px] text-slate-400">{Math.round(((trib?.nfe.pendentes ?? 0) / (trib?.nfe.qtd ?? 1)) * 100)}% do total</p>
+              )}
+            </div>
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
+              <p className="text-[11px] text-slate-500 font-semibold mb-1">Com Lançamento</p>
+              <p className="text-sm font-black text-emerald-700 tabular-nums">{trib?.nfe.comLancamento ?? 0}</p>
+              {(trib?.nfe.qtd ?? 0) > 0 && (
+                <p className="text-[10px] text-slate-400">{Math.round(((trib?.nfe.comLancamento ?? 0) / (trib?.nfe.qtd ?? 1)) * 100)}% do total</p>
+              )}
+            </div>
+          </div>
+
+          {/* Extremos de valor */}
+          {(trib?.nfe.qtd ?? 0) > 0 && (
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                <TrendingDown className="w-8 h-8 text-emerald-500 shrink-0" />
+                <div>
+                  <p className="text-[11px] text-slate-500 font-semibold">Menor NF-e</p>
+                  <p className="text-sm font-black text-slate-700 tabular-nums">{formatBRL(trib?.nfe.menorNf ?? 0)}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                <TrendingUp className="w-8 h-8 text-blue-500 shrink-0" />
+                <div>
+                  <p className="text-[11px] text-slate-500 font-semibold">Maior NF-e</p>
+                  <p className="text-sm font-black text-slate-700 tabular-nums">{formatBRL(trib?.nfe.maiorNf ?? 0)}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Barra de status visual */}
+          {(trib?.nfe.qtd ?? 0) > 0 && (
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Status das NF-e</p>
+              {[
+                { label: "Com Lançamento", val: trib?.nfe.comLancamento ?? 0, color: "bg-emerald-500", textColor: "text-emerald-700" },
+                { label: "Pendentes",      val: trib?.nfe.pendentes ?? 0,     color: "bg-amber-400",   textColor: "text-amber-700"   },
+                { label: "Sem vínculo",    val: Math.max(0, (trib?.nfe.qtd ?? 0) - (trib?.nfe.pendentes ?? 0) - (trib?.nfe.comLancamento ?? 0)), color: "bg-slate-300", textColor: "text-slate-500" },
+              ].filter(x => x.val > 0).map(({ label, val, color, textColor }) => {
+                const pct = (val / (trib?.nfe.qtd ?? 1)) * 100;
+                return (
+                  <div key={label} className="flex items-center gap-3">
+                    <span className={`text-[11px] font-medium w-28 shrink-0 text-right ${textColor}`}>{label}</span>
+                    <div className="flex-1 h-4 bg-slate-100 rounded-full overflow-hidden">
+                      <div className={`h-full ${color} rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="text-[11px] font-bold text-slate-700 tabular-nums w-8 text-right">{val}</span>
+                    <span className="text-[10px] text-slate-400 w-10 tabular-nums">{pct.toFixed(1)}%</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Total e rodapé */}
+          <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap gap-4 text-xs text-slate-500">
+            <span>📦 <strong>{trib?.nfe.qtd ?? 0}</strong> NF-e no período</span>
+            <span>💰 Total: <strong>{formatBRL(trib?.nfe.total ?? 0)}</strong></span>
+            <span>👥 Fornecedores únicos: <strong>{trib?.nfe.fornecedoresUnicos ?? 0}</strong></span>
+          </div>
+
+          {(trib?.nfe.qtd ?? 0) === 0 && !tributariaQuery.isLoading && (
+            <EmptyState message="Nenhuma NF-e recebida no período." />
+          )}
+        </Card>
 
         {/* Evolução 5 Anos — Entradas × Saídas */}
         {multiYearData.length >= 2 && (() => {

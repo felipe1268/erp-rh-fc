@@ -633,4 +633,123 @@ export const fiscalNotesRouter = router({
       }
       return series;
     }),
+
+  getAnalyseTributaria: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mes: z.number().min(0).max(12),
+      ano: z.number().min(2018).max(2040),
+    }))
+    .query(async ({ input, ctx }) => {
+      await _assertNfAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const { companyId, mes, ano } = input;
+      const di = mes === 0 ? `${ano}-01-01` : `${ano}-${String(mes).padStart(2, "0")}-01`;
+      const mesProx = mes === 0 ? 1 : (mes === 12 ? 1 : mes + 1);
+      const anoProx = mes === 0 ? ano + 1 : (mes === 12 ? ano + 1 : ano);
+      const df = mes === 0 ? `${ano + 1}-01-01` : `${anoProx}-${String(mesProx).padStart(2, "0")}-01`;
+
+      const [nfseQ, nfeQ, mesQ] = await Promise.all([
+        // Agregados de impostos das NFS-e emitidas
+        db.$client.query(`
+          SELECT
+            COUNT(*)::int                                           AS qtd,
+            SUM(valor_bruto::numeric)                              AS bruto,
+            SUM(valor_liquido::numeric)                            AS liquido,
+            SUM(COALESCE(deducoes_total::numeric,0))               AS deducoes,
+            SUM(COALESCE(base_calculo_iss::numeric,0))             AS base_iss,
+            SUM(COALESCE(iss_retido::numeric,0))                   AS iss,
+            SUM(COALESCE(retencao_inss::numeric,0))                AS inss,
+            SUM(COALESCE(retencao_irrf::numeric,0))                AS irrf,
+            SUM(COALESCE(retencao_csll::numeric,0))                AS csll,
+            SUM(COALESCE(retencao_pis::numeric,0)
+              + COALESCE(retencao_cofins::numeric,0)
+              + COALESCE(retencao_pis_cofins::numeric,0))          AS pis_cofins,
+            SUM(COALESCE(retencao_outras::numeric,0))              AS outras,
+            COUNT(CASE WHEN optante_simples = true THEN 1 END)::int AS simples_count,
+            COUNT(CASE WHEN tributada = true THEN 1 END)::int       AS tributada_count
+          FROM fiscal_notes
+          WHERE company_id = $1 AND data_emissao >= $2 AND data_emissao < $3
+            AND origem LIKE 'nfse_%' AND status != 'cancelada'
+        `, [companyId, di, df]),
+
+        // KPIs de NF-e recebidas
+        db.$client.query(`
+          SELECT
+            COUNT(*)::int                                              AS qtd,
+            SUM(valor_bruto::numeric)                                  AS total,
+            AVG(valor_bruto::numeric)                                  AS ticket_medio,
+            COUNT(DISTINCT NULLIF(
+              regexp_replace(COALESCE(emitente_cnpj,''),'[^0-9]','','g'),''
+            ))                                                         AS fornecedores_unicos,
+            COUNT(CASE WHEN status = 'pendente' THEN 1 END)::int       AS pendentes,
+            COUNT(CASE WHEN entry_id IS NOT NULL THEN 1 END)::int      AS com_lancamento,
+            MIN(valor_bruto::numeric)                                  AS menor_nf,
+            MAX(valor_bruto::numeric)                                  AS maior_nf
+          FROM fiscal_notes
+          WHERE company_id = $1 AND data_emissao >= $2 AND data_emissao < $3
+            AND (origem = 'sefaz_nfe' OR origem = 'xml_upload') AND status != 'cancelada'
+        `, [companyId, di, df]),
+
+        // Evolução mensal de impostos (só quando ano todo, mes=0)
+        mes === 0 ? db.$client.query(`
+          SELECT
+            EXTRACT(MONTH FROM data_emissao)::int                      AS mes,
+            SUM(COALESCE(iss_retido::numeric,0))                       AS iss,
+            SUM(COALESCE(retencao_inss::numeric,0))                    AS inss,
+            SUM(COALESCE(retencao_irrf::numeric,0))                    AS irrf,
+            SUM(COALESCE(retencao_csll::numeric,0))                    AS csll,
+            SUM(COALESCE(retencao_pis::numeric,0)
+              + COALESCE(retencao_cofins::numeric,0)
+              + COALESCE(retencao_pis_cofins::numeric,0))              AS pis_cofins,
+            SUM(valor_bruto::numeric)                                  AS bruto
+          FROM fiscal_notes
+          WHERE company_id = $1 AND data_emissao >= $2 AND data_emissao < $3
+            AND origem LIKE 'nfse_%' AND status != 'cancelada'
+          GROUP BY 1 ORDER BY 1
+        `, [companyId, di, df]) : Promise.resolve({ rows: [] }),
+      ]);
+
+      const n = nfseQ.rows[0] ?? {};
+      const f = nfeQ.rows[0] ?? {};
+      const p = (v: any) => parseFloat(v ?? "0") || 0;
+      const ii = (v: any) => parseInt(v ?? "0") || 0;
+
+      const iss = p(n.iss), inss = p(n.inss), irrf = p(n.irrf);
+      const csll = p(n.csll), pisCofins = p(n.pis_cofins), outras = p(n.outras);
+      const totalRetencoes = iss + inss + irrf + csll + pisCofins + outras;
+      const bruto = p(n.bruto);
+      const cargaEfetiva = bruto > 0 ? (totalRetencoes / bruto) * 100 : 0;
+
+      const MESES_ABREV_BK = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+      const mensal = Array.from({ length: 12 }, (_, i) => {
+        const r = mesQ.rows.find((x: any) => Number(x.mes) === i + 1);
+        return {
+          mes: MESES_ABREV_BK[i],
+          iss:      p(r?.iss),
+          inss:     p(r?.inss),
+          irrf:     p(r?.irrf),
+          csll:     p(r?.csll),
+          pisCofins:p(r?.pis_cofins),
+          bruto:    p(r?.bruto),
+        };
+      });
+
+      return {
+        nfse: {
+          qtd: ii(n.qtd), bruto, liquido: p(n.liquido),
+          deducoes: p(n.deducoes), baseIss: p(n.base_iss),
+          iss, inss, irrf, csll, pisCofins, outras,
+          totalRetencoes, cargaEfetiva,
+          simplesCount: ii(n.simples_count), tributadaCount: ii(n.tributada_count),
+          mensal,
+        },
+        nfe: {
+          qtd: ii(f.qtd), total: p(f.total), ticketMedio: p(f.ticket_medio),
+          fornecedoresUnicos: ii(f.fornecedores_unicos),
+          pendentes: ii(f.pendentes), comLancamento: ii(f.com_lancamento),
+          menorNf: p(f.menor_nf), maiorNf: p(f.maior_nf),
+        },
+      };
+    }),
 });
