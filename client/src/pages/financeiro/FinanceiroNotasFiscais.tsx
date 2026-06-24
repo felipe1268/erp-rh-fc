@@ -2116,369 +2116,331 @@ export default function FinanceiroNotasFiscais() {
         {/* ─── Dialog Detalhe / Vínculos ─── */}
         {detalheNf && (
           <Dialog open={!!detalheNf} onOpenChange={v => !v && setDetalheNf(null)}>
-            <DialogContent className="max-w-xl p-0 overflow-hidden gap-0 flex flex-col max-h-[90svh]">
+            <DialogContent className="w-[96vw] max-w-6xl p-0 overflow-hidden gap-0 flex flex-col h-[92svh]">
               {/* Header gradiente */}
-              <div className="bg-gradient-to-r from-indigo-600 to-blue-600 px-5 py-4 flex items-start justify-between shrink-0">
-                <div>
+              <div className="bg-gradient-to-r from-indigo-600 to-blue-600 px-6 py-4 flex items-start justify-between shrink-0">
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 mb-0.5">
-                    <FileText className="h-4 w-4 text-indigo-200" />
+                    <FileText className="h-4 w-4 text-indigo-200 shrink-0" />
                     <span className="text-xs font-medium text-indigo-200 uppercase tracking-wide">NFS-e Emitida — Detalhes Completos</span>
                   </div>
-                  <h2 className="text-white font-bold text-lg leading-tight">
+                  <h2 className="text-white font-bold text-xl leading-tight">
                     NF #{detalheNf.numeroNf}
-                    {detalheNf.serie ? <span className="text-indigo-200 font-normal text-sm ml-1.5">Série {detalheNf.serie}</span> : null}
+                    {detalheNf.serie ? <span className="text-indigo-200 font-normal text-base ml-2">Série {detalheNf.serie}</span> : null}
                   </h2>
                   {detalheNf.tomadorRazaoSocial && (
-                    <p className="text-indigo-100 text-sm mt-0.5">{detalheNf.tomadorRazaoSocial}</p>
+                    <p className="text-indigo-100 text-sm mt-0.5 truncate">{detalheNf.tomadorRazaoSocial}</p>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 ml-4 shrink-0">
                   {detalheNf.status === "cancelada" && (
                     <span className="text-[10px] bg-red-500 text-white px-2 py-0.5 rounded-full font-semibold uppercase tracking-wide">Cancelada</span>
                   )}
-                  <button onClick={() => setDetalheNf(null)} className="text-indigo-200 hover:text-white transition-colors">
-                    <X className="h-4 w-4" />
+                  <button onClick={() => setDetalheNf(null)} className="text-indigo-200 hover:text-white transition-colors p-1">
+                    <X className="h-5 w-5" />
                   </button>
                 </div>
               </div>
 
               {/* KPI row */}
-              <div className="grid grid-cols-3 divide-x border-b bg-white shrink-0">
-                <div className="px-4 py-3 text-center">
+              <div className="grid grid-cols-4 divide-x border-b bg-white shrink-0">
+                <div className="px-5 py-3 text-center">
                   <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Emissão</p>
                   <p className="text-sm font-semibold text-slate-700 mt-0.5">{fmtDateBR(detalheNf.dataEmissao)}</p>
                   {detalheNf.dataPrestacao && detalheNf.dataPrestacao !== detalheNf.dataEmissao && (
-                    <p className="text-[10px] text-slate-400 mt-0.5">Prestação: {fmtDateBR(detalheNf.dataPrestacao)}</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Prest.: {fmtDateBR(detalheNf.dataPrestacao)}</p>
                   )}
                 </div>
-                <div className="px-4 py-3 text-center">
+                <div className="px-5 py-3 text-center">
                   <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Valor Bruto</p>
                   <p className="text-sm font-semibold text-slate-700 mt-0.5">{formatBRL(detalheNf.valorBruto)}</p>
                   {detalheNf.aliquotaIss && parseFloat(detalheNf.aliquotaIss) > 0 && (
                     <p className="text-[10px] text-slate-400 mt-0.5">ISS {parseFloat(detalheNf.aliquotaIss).toFixed(2)}%</p>
                   )}
                 </div>
-                <div className="px-4 py-3 text-center">
+                <div className="px-5 py-3 text-center">
                   <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Valor Líquido</p>
-                  <p className="text-sm font-bold text-emerald-600 mt-0.5">{formatBRL(detalheNf.valorLiquido)}</p>
+                  <p className="text-base font-bold text-emerald-600 mt-0.5">{formatBRL(detalheNf.valorLiquido)}</p>
+                </div>
+                <div className="px-5 py-3 text-center">
+                  <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Status</p>
+                  <p className={`text-sm font-bold mt-0.5 ${detalheNf.status === "cancelada" ? "text-red-600" : "text-emerald-600"}`}>
+                    {detalheNf.status === "cancelada" ? "Cancelada" : "Ativa"}
+                  </p>
+                  {detalheNf.origem && <p className="text-[10px] text-slate-400 mt-0.5 truncate">{detalheNf.origem.replace(/_/g, " ")}</p>}
                 </div>
               </div>
 
-              {/* Body scrollável */}
-              <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4 bg-slate-50">
+              {/* Body — 2 colunas */}
+              <div className="overflow-y-auto flex-1 bg-slate-50">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-5">
 
-                {/* ── Seção 1: Identificação ── */}
-                <div className="bg-white rounded-xl border">
-                  <div className="px-4 py-2.5 border-b flex items-center gap-2">
-                    <div className="w-5 h-5 rounded bg-indigo-100 flex items-center justify-center shrink-0">
-                      <FileText className="h-3 w-3 text-indigo-600" />
-                    </div>
-                    <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Identificação</span>
-                  </div>
-                  <div className="px-4 py-3 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                    <div>
-                      <p className="text-[10px] text-slate-400 uppercase tracking-wide">NF #</p>
-                      <p className="font-semibold text-slate-700">{detalheNf.numeroNf}{detalheNf.serie ? ` — Série ${detalheNf.serie}` : ""}</p>
-                    </div>
-                    {detalheNf.chaveAcesso && (
-                      <div className="col-span-2">
-                        <p className="text-[10px] text-slate-400 uppercase tracking-wide">Código de Verificação</p>
-                        <p className="font-mono text-xs text-slate-600 break-all">{detalheNf.chaveAcesso}</p>
-                      </div>
-                    )}
-                    <div>
-                      <p className="text-[10px] text-slate-400 uppercase tracking-wide">Data de Emissão</p>
-                      <p className="text-slate-700">{fmtDateBR(detalheNf.dataEmissao)}</p>
-                    </div>
-                    {detalheNf.dataPrestacao && (
-                      <div>
-                        <p className="text-[10px] text-slate-400 uppercase tracking-wide">Data de Prestação</p>
-                        <p className="text-slate-700">{fmtDateBR(detalheNf.dataPrestacao)}</p>
-                      </div>
-                    )}
-                    <div>
-                      <p className="text-[10px] text-slate-400 uppercase tracking-wide">Status</p>
-                      <p className={`font-semibold ${detalheNf.status === "cancelada" ? "text-red-600" : "text-emerald-600"}`}>
-                        {detalheNf.status === "cancelada" ? "Cancelada" : "Ativa"}
-                      </p>
-                    </div>
-                    {detalheNf.origem && (
-                      <div>
-                        <p className="text-[10px] text-slate-400 uppercase tracking-wide">Origem</p>
-                        <p className="text-slate-500 text-xs">{detalheNf.origem.replace(/_/g, " ")}</p>
-                      </div>
-                    )}
-                    {detalheNf.optanteSimples !== null && detalheNf.optanteSimples !== undefined && (
-                      <div>
-                        <p className="text-[10px] text-slate-400 uppercase tracking-wide">Optante Simples</p>
-                        <p className="text-slate-700">{detalheNf.optanteSimples ? "Sim" : "Não"}</p>
-                      </div>
-                    )}
-                    {detalheNf.tributada !== null && detalheNf.tributada !== undefined && (
-                      <div>
-                        <p className="text-[10px] text-slate-400 uppercase tracking-wide">Tributada no Município</p>
-                        <p className="text-slate-700">{detalheNf.tributada ? "Sim" : "Não"}</p>
-                      </div>
-                    )}
-                    {detalheNf.bmReferencia && (
-                      <div className="col-span-2 flex items-center gap-2 text-xs text-slate-500 bg-slate-50 rounded-lg px-3 py-2 border mt-1">
-                        <Building2 className="h-3.5 w-3.5 shrink-0 text-indigo-400" />
-                        <span>{detalheNf.obraNome && `${detalheNf.obraNome} — `}{detalheNf.bmReferencia}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                  {/* ── Coluna Esquerda ── */}
+                  <div className="space-y-4">
 
-                {/* ── Seção 2: Serviço ── */}
-                {(detalheNf.descricaoServico || detalheNf.cdCnae || detalheNf.cdListaServico) && (
-                  <div className="bg-white rounded-xl border">
-                    <div className="px-4 py-2.5 border-b flex items-center gap-2">
-                      <div className="w-5 h-5 rounded bg-blue-100 flex items-center justify-center shrink-0">
-                        <FileText className="h-3 w-3 text-blue-600" />
+                    {/* Seção: Identificação */}
+                    <div className="bg-white rounded-xl border shadow-sm">
+                      <div className="px-4 py-2.5 border-b flex items-center gap-2 bg-indigo-50/60 rounded-t-xl">
+                        <div className="w-5 h-5 rounded bg-indigo-100 flex items-center justify-center shrink-0">
+                          <FileText className="h-3 w-3 text-indigo-600" />
+                        </div>
+                        <span className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">Identificação</span>
                       </div>
-                      <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Classificação do Serviço</span>
-                    </div>
-                    <div className="px-4 py-3 space-y-2 text-sm">
-                      {(detalheNf.cdCnae || detalheNf.cdListaServico) && (
-                        <div className="grid grid-cols-2 gap-x-6 gap-y-2">
-                          {detalheNf.cdCnae && (
-                            <div>
-                              <p className="text-[10px] text-slate-400 uppercase tracking-wide">CNAE</p>
-                              <p className="font-mono text-slate-700">{detalheNf.cdCnae}</p>
-                            </div>
-                          )}
-                          {detalheNf.cdListaServico && (
-                            <div>
-                              <p className="text-[10px] text-slate-400 uppercase tracking-wide">Lista de Serviços (LC 116)</p>
-                              <p className="font-mono text-slate-700">{detalheNf.cdListaServico}</p>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                      {detalheNf.descricaoServico && (
+                      <div className="px-4 py-3 grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
                         <div>
-                          <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-1">Discriminação do Serviço</p>
-                          <p className="text-slate-600 text-xs leading-relaxed whitespace-pre-line bg-slate-50 rounded-lg p-3 border">
-                            {detalheNf.descricaoServico}
-                          </p>
+                          <p className="text-[10px] text-slate-400 uppercase tracking-wide">NF #</p>
+                          <p className="font-semibold text-slate-700">{detalheNf.numeroNf}{detalheNf.serie ? ` — Série ${detalheNf.serie}` : ""}</p>
                         </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* ── Seção 3: Tomador ── */}
-                {(detalheNf.tomadorCnpj || detalheNf.tomadorRazaoSocial) && (
-                  <div className="bg-white rounded-xl border">
-                    <div className="px-4 py-2.5 border-b flex items-center gap-2">
-                      <div className="w-5 h-5 rounded bg-amber-100 flex items-center justify-center shrink-0">
-                        <Building2 className="h-3 w-3 text-amber-600" />
-                      </div>
-                      <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Tomador do Serviço</span>
-                    </div>
-                    <div className="px-4 py-3 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                      {detalheNf.tomadorRazaoSocial && (
-                        <div className="col-span-2">
-                          <p className="text-[10px] text-slate-400 uppercase tracking-wide">Razão Social</p>
-                          <p className="font-semibold text-slate-700">{detalheNf.tomadorRazaoSocial}</p>
-                        </div>
-                      )}
-                      {detalheNf.tomadorCnpj && (
                         <div>
-                          <p className="text-[10px] text-slate-400 uppercase tracking-wide">CNPJ / CPF</p>
-                          <p className="font-mono text-slate-700">{detalheNf.tomadorCnpj}</p>
+                          <p className="text-[10px] text-slate-400 uppercase tracking-wide">Data de Emissão</p>
+                          <p className="text-slate-700">{fmtDateBR(detalheNf.dataEmissao)}</p>
                         </div>
-                      )}
-                      {detalheNf.tomadorInscricao && (
-                        <div>
-                          <p className="text-[10px] text-slate-400 uppercase tracking-wide">Inscrição Municipal</p>
-                          <p className="font-mono text-slate-700">{detalheNf.tomadorInscricao}</p>
-                        </div>
-                      )}
-                      {detalheNf.tomadorEmail && (
-                        <div>
-                          <p className="text-[10px] text-slate-400 uppercase tracking-wide">E-mail</p>
-                          <p className="text-slate-600 text-xs">{detalheNf.tomadorEmail}</p>
-                        </div>
-                      )}
-                      {detalheNf.tomadorTelefone && (
-                        <div>
-                          <p className="text-[10px] text-slate-400 uppercase tracking-wide">Telefone</p>
-                          <p className="text-slate-600 text-xs">{detalheNf.tomadorTelefone}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* ── Seção 4: Impostos e Valores ── */}
-                <div className="bg-white rounded-xl border">
-                  <div className="px-4 py-2.5 border-b flex items-center gap-2">
-                    <div className="w-5 h-5 rounded bg-emerald-100 flex items-center justify-center shrink-0">
-                      <DollarSign className="h-3 w-3 text-emerald-600" />
-                    </div>
-                    <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Impostos e Valores</span>
-                  </div>
-                  <div className="px-4 py-3 text-sm">
-                    <div className="space-y-1.5">
-                      {/* Valor bruto */}
-                      <div className="flex justify-between py-1.5 border-b border-dashed">
-                        <span className="text-slate-500">Valor dos Serviços</span>
-                        <span className="font-semibold text-slate-700">{formatBRL(detalheNf.valorBruto)}</span>
-                      </div>
-                      {/* Deduções */}
-                      {detalheNf.deducoesTotal && parseFloat(detalheNf.deducoesTotal) > 0 && (
-                        <div className="flex justify-between py-1.5 border-b border-dashed">
-                          <span className="text-slate-500">Deduções</span>
-                          <span className="text-red-500">− {formatBRL(detalheNf.deducoesTotal)}</span>
-                        </div>
-                      )}
-                      {/* Base de cálculo */}
-                      {detalheNf.baseCalculoIss && parseFloat(detalheNf.baseCalculoIss) > 0 && (
-                        <div className="flex justify-between py-1.5 border-b border-dashed text-slate-400 text-xs">
-                          <span>Base de Cálculo ISS</span>
-                          <span>{formatBRL(detalheNf.baseCalculoIss)}</span>
-                        </div>
-                      )}
-                      {/* ISS */}
-                      {detalheNf.issRetido && parseFloat(detalheNf.issRetido) > 0 && (
-                        <div className="flex justify-between py-1.5 border-b border-dashed">
-                          <span className="text-slate-500">
-                            ISS Retido
-                            {detalheNf.aliquotaIss && parseFloat(detalheNf.aliquotaIss) > 0
-                              ? <span className="text-[10px] text-slate-400 ml-1">({parseFloat(detalheNf.aliquotaIss).toFixed(2)}%)</span>
-                              : null}
-                          </span>
-                          <span className="text-red-500">− {formatBRL(detalheNf.issRetido)}</span>
-                        </div>
-                      )}
-                      {/* INSS */}
-                      {detalheNf.retencaoInss && parseFloat(detalheNf.retencaoInss) > 0 && (
-                        <div className="flex justify-between py-1.5 border-b border-dashed">
-                          <span className="text-slate-500">Retenção INSS</span>
-                          <span className="text-red-500">− {formatBRL(detalheNf.retencaoInss)}</span>
-                        </div>
-                      )}
-                      {/* IR */}
-                      {detalheNf.retencaoIrrf && parseFloat(detalheNf.retencaoIrrf) > 0 && (
-                        <div className="flex justify-between py-1.5 border-b border-dashed">
-                          <span className="text-slate-500">Retenção IR</span>
-                          <span className="text-red-500">− {formatBRL(detalheNf.retencaoIrrf)}</span>
-                        </div>
-                      )}
-                      {/* CSLL */}
-                      {detalheNf.retencaoCsll && parseFloat(detalheNf.retencaoCsll) > 0 && (
-                        <div className="flex justify-between py-1.5 border-b border-dashed">
-                          <span className="text-slate-500">Retenção CSLL</span>
-                          <span className="text-red-500">− {formatBRL(detalheNf.retencaoCsll)}</span>
-                        </div>
-                      )}
-                      {/* PIS */}
-                      {detalheNf.retencaoPis && parseFloat(detalheNf.retencaoPis) > 0 && (
-                        <div className="flex justify-between py-1.5 border-b border-dashed">
-                          <span className="text-slate-500">Retenção PIS</span>
-                          <span className="text-red-500">− {formatBRL(detalheNf.retencaoPis)}</span>
-                        </div>
-                      )}
-                      {/* COFINS */}
-                      {detalheNf.retencaoCofins && parseFloat(detalheNf.retencaoCofins) > 0 && (
-                        <div className="flex justify-between py-1.5 border-b border-dashed">
-                          <span className="text-slate-500">Retenção COFINS</span>
-                          <span className="text-red-500">− {formatBRL(detalheNf.retencaoCofins)}</span>
-                        </div>
-                      )}
-                      {/* PIS+COFINS legado (campo agrupado) */}
-                      {!detalheNf.retencaoPis && !detalheNf.retencaoCofins && detalheNf.retencaoPisCofins && parseFloat(detalheNf.retencaoPisCofins) > 0 && (
-                        <div className="flex justify-between py-1.5 border-b border-dashed">
-                          <span className="text-slate-500">Retenção PIS/COFINS</span>
-                          <span className="text-red-500">− {formatBRL(detalheNf.retencaoPisCofins)}</span>
-                        </div>
-                      )}
-                      {/* Outras */}
-                      {detalheNf.retencaoOutras && parseFloat(detalheNf.retencaoOutras) > 0 && (
-                        <div className="flex justify-between py-1.5 border-b border-dashed">
-                          <span className="text-slate-500">Outras Retenções</span>
-                          <span className="text-red-500">− {formatBRL(detalheNf.retencaoOutras)}</span>
-                        </div>
-                      )}
-                      {/* Valor líquido */}
-                      <div className="flex justify-between pt-2">
-                        <span className="font-semibold text-slate-700">Valor Líquido</span>
-                        <span className="font-bold text-emerald-600 text-base">{formatBRL(detalheNf.valorLiquido)}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ── Seção 5: Vínculos ── */}
-                <div className="bg-white rounded-xl border">
-                  <div className="px-4 py-2.5 border-b flex items-center gap-2">
-                    <div className="w-5 h-5 rounded bg-slate-100 flex items-center justify-center shrink-0">
-                      <Link className="h-3 w-3 text-slate-600" />
-                    </div>
-                    <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Vínculos</span>
-                  </div>
-                  <div className="px-4 py-3 space-y-3">
-                    {/* Vínculo Lançamento */}
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                          <DollarSign className="h-3 w-3 text-blue-600" />
-                        </div>
-                        <span className="text-xs font-semibold text-slate-700">Lançamento Financeiro</span>
-                        {detalheNf.entryId && (
-                          <span className="ml-auto text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">#{detalheNf.entryId}</span>
+                        {detalheNf.dataPrestacao && (
+                          <div>
+                            <p className="text-[10px] text-slate-400 uppercase tracking-wide">Data de Prestação</p>
+                            <p className="text-slate-700">{fmtDateBR(detalheNf.dataPrestacao)}</p>
+                          </div>
+                        )}
+                        {detalheNf.optanteSimples !== null && detalheNf.optanteSimples !== undefined && (
+                          <div>
+                            <p className="text-[10px] text-slate-400 uppercase tracking-wide">Optante Simples</p>
+                            <p className="text-slate-700">{detalheNf.optanteSimples ? "Sim" : "Não"}</p>
+                          </div>
+                        )}
+                        {detalheNf.tributada !== null && detalheNf.tributada !== undefined && (
+                          <div>
+                            <p className="text-[10px] text-slate-400 uppercase tracking-wide">Tributada no Município</p>
+                            <p className="text-slate-700">{detalheNf.tributada ? "Sim" : "Não"}</p>
+                          </div>
+                        )}
+                        {detalheNf.chaveAcesso && (
+                          <div className="col-span-2">
+                            <p className="text-[10px] text-slate-400 uppercase tracking-wide">Código de Verificação</p>
+                            <p className="font-mono text-xs text-slate-600 break-all">{detalheNf.chaveAcesso}</p>
+                          </div>
+                        )}
+                        {detalheNf.bmReferencia && (
+                          <div className="col-span-2 flex items-center gap-2 text-xs text-slate-500 bg-slate-50 rounded-lg px-3 py-2 border">
+                            <Building2 className="h-3.5 w-3.5 shrink-0 text-indigo-400" />
+                            <span>{detalheNf.obraNome && `${detalheNf.obraNome} — `}{detalheNf.bmReferencia}</span>
+                          </div>
                         )}
                       </div>
-                      <div className="flex gap-2">
-                        <Input
-                          type="number"
-                          value={vincularEntryId}
-                          onChange={e => setVincularEntryId(e.target.value)}
-                          placeholder="ID do lançamento..."
-                          className="flex-1 h-9 text-sm"
-                        />
-                        <Button
-                          onClick={() => vincularEntryMut.mutate({ id: detalheNf.id, companyId: detalheNf.companyId ?? companyId!, entryId: vincularEntryId ? parseInt(vincularEntryId) : null })}
-                          disabled={vincularEntryMut.isPending}
-                          size="sm"
-                          variant={vincularEntryId ? "default" : "outline"}
-                          className={`gap-1.5 shrink-0 h-9 ${vincularEntryId ? "bg-blue-600 hover:bg-blue-700" : ""}`}
-                        >
-                          {vincularEntryMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : vincularEntryId ? <Link className="h-3.5 w-3.5" /> : <Link2Off className="h-3.5 w-3.5" />}
-                          {vincularEntryId ? "Vincular" : "Desvincular"}
-                        </Button>
-                      </div>
                     </div>
 
-                    <div className="border-t pt-3 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-5 h-5 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
-                          <FileText className="h-3 w-3 text-violet-600" />
+                    {/* Seção: Tomador */}
+                    {(detalheNf.tomadorCnpj || detalheNf.tomadorRazaoSocial) && (
+                      <div className="bg-white rounded-xl border shadow-sm">
+                        <div className="px-4 py-2.5 border-b flex items-center gap-2 bg-amber-50/60 rounded-t-xl">
+                          <div className="w-5 h-5 rounded bg-amber-100 flex items-center justify-center shrink-0">
+                            <Building2 className="h-3 w-3 text-amber-600" />
+                          </div>
+                          <span className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Tomador do Serviço</span>
                         </div>
-                        <span className="text-xs font-semibold text-slate-700">Linha do Extrato Bancário</span>
-                        {detalheNf.stmtLineId && (
-                          <span className="ml-auto text-[10px] bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full font-medium">#{detalheNf.stmtLineId}</span>
-                        )}
+                        <div className="px-4 py-3 grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                          {detalheNf.tomadorRazaoSocial && (
+                            <div className="col-span-2">
+                              <p className="text-[10px] text-slate-400 uppercase tracking-wide">Razão Social</p>
+                              <p className="font-semibold text-slate-700">{detalheNf.tomadorRazaoSocial}</p>
+                            </div>
+                          )}
+                          {detalheNf.tomadorCnpj && (
+                            <div>
+                              <p className="text-[10px] text-slate-400 uppercase tracking-wide">CNPJ / CPF</p>
+                              <p className="font-mono text-slate-700">{detalheNf.tomadorCnpj}</p>
+                            </div>
+                          )}
+                          {detalheNf.tomadorInscricao && (
+                            <div>
+                              <p className="text-[10px] text-slate-400 uppercase tracking-wide">Inscrição Municipal</p>
+                              <p className="font-mono text-slate-700">{detalheNf.tomadorInscricao}</p>
+                            </div>
+                          )}
+                          {detalheNf.tomadorEmail && (
+                            <div>
+                              <p className="text-[10px] text-slate-400 uppercase tracking-wide">E-mail</p>
+                              <p className="text-slate-600 text-xs break-all">{detalheNf.tomadorEmail}</p>
+                            </div>
+                          )}
+                          {detalheNf.tomadorTelefone && (
+                            <div>
+                              <p className="text-[10px] text-slate-400 uppercase tracking-wide">Telefone</p>
+                              <p className="text-slate-600 text-xs">{detalheNf.tomadorTelefone}</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex gap-2">
-                        <Input
-                          type="number"
-                          value={vincularStmtId}
-                          onChange={e => setVincularStmtId(e.target.value)}
-                          placeholder="ID da linha do extrato..."
-                          className="flex-1 h-9 text-sm"
-                        />
-                        <Button
-                          onClick={() => vincularStmtMut.mutate({ id: detalheNf.id, companyId: detalheNf.companyId ?? companyId!, stmtLineId: vincularStmtId ? parseInt(vincularStmtId) : null })}
-                          disabled={vincularStmtMut.isPending}
-                          size="sm"
-                          variant={vincularStmtId ? "default" : "outline"}
-                          className={`gap-1.5 shrink-0 h-9 ${vincularStmtId ? "bg-violet-600 hover:bg-violet-700" : ""}`}
-                        >
-                          {vincularStmtMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : vincularStmtId ? <Link className="h-3.5 w-3.5" /> : <Link2Off className="h-3.5 w-3.5" />}
-                          {vincularStmtId ? "Vincular" : "Desvincular"}
-                        </Button>
+                    )}
+
+                    {/* Seção: Vínculos */}
+                    <div className="bg-white rounded-xl border shadow-sm">
+                      <div className="px-4 py-2.5 border-b flex items-center gap-2 bg-slate-50 rounded-t-xl">
+                        <div className="w-5 h-5 rounded bg-slate-200 flex items-center justify-center shrink-0">
+                          <Link className="h-3 w-3 text-slate-600" />
+                        </div>
+                        <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Vínculos</span>
+                      </div>
+                      <div className="px-4 py-3 space-y-4">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                              <DollarSign className="h-3 w-3 text-blue-600" />
+                            </div>
+                            <span className="text-xs font-semibold text-slate-700">Lançamento Financeiro</span>
+                            {detalheNf.entryId && (
+                              <span className="ml-auto text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">#{detalheNf.entryId}</span>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <Input type="number" value={vincularEntryId} onChange={e => setVincularEntryId(e.target.value)} placeholder="ID do lançamento..." className="flex-1 h-9 text-sm" />
+                            <Button onClick={() => vincularEntryMut.mutate({ id: detalheNf.id, companyId: detalheNf.companyId ?? companyId!, entryId: vincularEntryId ? parseInt(vincularEntryId) : null })} disabled={vincularEntryMut.isPending} size="sm" variant={vincularEntryId ? "default" : "outline"} className={`gap-1.5 shrink-0 h-9 ${vincularEntryId ? "bg-blue-600 hover:bg-blue-700" : ""}`}>
+                              {vincularEntryMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : vincularEntryId ? <Link className="h-3.5 w-3.5" /> : <Link2Off className="h-3.5 w-3.5" />}
+                              {vincularEntryId ? "Vincular" : "Desvincular"}
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="border-t pt-3 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-5 h-5 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
+                              <FileText className="h-3 w-3 text-violet-600" />
+                            </div>
+                            <span className="text-xs font-semibold text-slate-700">Linha do Extrato Bancário</span>
+                            {detalheNf.stmtLineId && (
+                              <span className="ml-auto text-[10px] bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full font-medium">#{detalheNf.stmtLineId}</span>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <Input type="number" value={vincularStmtId} onChange={e => setVincularStmtId(e.target.value)} placeholder="ID da linha do extrato..." className="flex-1 h-9 text-sm" />
+                            <Button onClick={() => vincularStmtMut.mutate({ id: detalheNf.id, companyId: detalheNf.companyId ?? companyId!, stmtLineId: vincularStmtId ? parseInt(vincularStmtId) : null })} disabled={vincularStmtMut.isPending} size="sm" variant={vincularStmtId ? "default" : "outline"} className={`gap-1.5 shrink-0 h-9 ${vincularStmtId ? "bg-violet-600 hover:bg-violet-700" : ""}`}>
+                              {vincularStmtMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : vincularStmtId ? <Link className="h-3.5 w-3.5" /> : <Link2Off className="h-3.5 w-3.5" />}
+                              {vincularStmtId ? "Vincular" : "Desvincular"}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ── Coluna Direita ── */}
+                  <div className="space-y-4">
+
+                    {/* Seção: Serviço */}
+                    {(detalheNf.descricaoServico || detalheNf.cdCnae || detalheNf.cdListaServico) && (
+                      <div className="bg-white rounded-xl border shadow-sm">
+                        <div className="px-4 py-2.5 border-b flex items-center gap-2 bg-blue-50/60 rounded-t-xl">
+                          <div className="w-5 h-5 rounded bg-blue-100 flex items-center justify-center shrink-0">
+                            <FileText className="h-3 w-3 text-blue-600" />
+                          </div>
+                          <span className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Classificação do Serviço</span>
+                        </div>
+                        <div className="px-4 py-3 space-y-3 text-sm">
+                          {(detalheNf.cdCnae || detalheNf.cdListaServico) && (
+                            <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+                              {detalheNf.cdCnae && (
+                                <div>
+                                  <p className="text-[10px] text-slate-400 uppercase tracking-wide">CNAE</p>
+                                  <p className="font-mono text-slate-700">{detalheNf.cdCnae}</p>
+                                </div>
+                              )}
+                              {detalheNf.cdListaServico && (
+                                <div>
+                                  <p className="text-[10px] text-slate-400 uppercase tracking-wide">Lista de Serviços (LC 116)</p>
+                                  <p className="font-mono text-slate-700">{detalheNf.cdListaServico}</p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {detalheNf.descricaoServico && (
+                            <div>
+                              <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-1">Discriminação do Serviço</p>
+                              <div className="text-slate-600 text-xs leading-relaxed whitespace-pre-line bg-slate-50 rounded-lg p-3 border max-h-52 overflow-y-auto">
+                                {detalheNf.descricaoServico}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Seção: Impostos e Valores */}
+                    <div className="bg-white rounded-xl border shadow-sm">
+                      <div className="px-4 py-2.5 border-b flex items-center gap-2 bg-emerald-50/60 rounded-t-xl">
+                        <div className="w-5 h-5 rounded bg-emerald-100 flex items-center justify-center shrink-0">
+                          <DollarSign className="h-3 w-3 text-emerald-600" />
+                        </div>
+                        <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Impostos e Valores</span>
+                      </div>
+                      <div className="px-4 py-3 text-sm">
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between py-1.5 border-b border-dashed">
+                            <span className="text-slate-500">Valor dos Serviços</span>
+                            <span className="font-semibold text-slate-700">{formatBRL(detalheNf.valorBruto)}</span>
+                          </div>
+                          {detalheNf.deducoesTotal && parseFloat(detalheNf.deducoesTotal) > 0 && (
+                            <div className="flex justify-between py-1.5 border-b border-dashed">
+                              <span className="text-slate-500">Deduções</span>
+                              <span className="text-red-500">− {formatBRL(detalheNf.deducoesTotal)}</span>
+                            </div>
+                          )}
+                          {detalheNf.baseCalculoIss && parseFloat(detalheNf.baseCalculoIss) > 0 && (
+                            <div className="flex justify-between py-1.5 border-b border-dashed text-slate-400 text-xs">
+                              <span>Base de Cálculo ISS</span>
+                              <span>{formatBRL(detalheNf.baseCalculoIss)}</span>
+                            </div>
+                          )}
+                          {detalheNf.issRetido && parseFloat(detalheNf.issRetido) > 0 && (
+                            <div className="flex justify-between py-1.5 border-b border-dashed">
+                              <span className="text-slate-500">ISS Retido{detalheNf.aliquotaIss && parseFloat(detalheNf.aliquotaIss) > 0 ? <span className="text-[10px] text-slate-400 ml-1">({parseFloat(detalheNf.aliquotaIss).toFixed(2)}%)</span> : null}</span>
+                              <span className="text-red-500">− {formatBRL(detalheNf.issRetido)}</span>
+                            </div>
+                          )}
+                          {detalheNf.retencaoInss && parseFloat(detalheNf.retencaoInss) > 0 && (
+                            <div className="flex justify-between py-1.5 border-b border-dashed">
+                              <span className="text-slate-500">Retenção INSS</span>
+                              <span className="text-red-500">− {formatBRL(detalheNf.retencaoInss)}</span>
+                            </div>
+                          )}
+                          {detalheNf.retencaoIrrf && parseFloat(detalheNf.retencaoIrrf) > 0 && (
+                            <div className="flex justify-between py-1.5 border-b border-dashed">
+                              <span className="text-slate-500">Retenção IR</span>
+                              <span className="text-red-500">− {formatBRL(detalheNf.retencaoIrrf)}</span>
+                            </div>
+                          )}
+                          {detalheNf.retencaoCsll && parseFloat(detalheNf.retencaoCsll) > 0 && (
+                            <div className="flex justify-between py-1.5 border-b border-dashed">
+                              <span className="text-slate-500">Retenção CSLL</span>
+                              <span className="text-red-500">− {formatBRL(detalheNf.retencaoCsll)}</span>
+                            </div>
+                          )}
+                          {detalheNf.retencaoPis && parseFloat(detalheNf.retencaoPis) > 0 && (
+                            <div className="flex justify-between py-1.5 border-b border-dashed">
+                              <span className="text-slate-500">Retenção PIS</span>
+                              <span className="text-red-500">− {formatBRL(detalheNf.retencaoPis)}</span>
+                            </div>
+                          )}
+                          {detalheNf.retencaoCofins && parseFloat(detalheNf.retencaoCofins) > 0 && (
+                            <div className="flex justify-between py-1.5 border-b border-dashed">
+                              <span className="text-slate-500">Retenção COFINS</span>
+                              <span className="text-red-500">− {formatBRL(detalheNf.retencaoCofins)}</span>
+                            </div>
+                          )}
+                          {!detalheNf.retencaoPis && !detalheNf.retencaoCofins && detalheNf.retencaoPisCofins && parseFloat(detalheNf.retencaoPisCofins) > 0 && (
+                            <div className="flex justify-between py-1.5 border-b border-dashed">
+                              <span className="text-slate-500">Retenção PIS/COFINS</span>
+                              <span className="text-red-500">− {formatBRL(detalheNf.retencaoPisCofins)}</span>
+                            </div>
+                          )}
+                          {detalheNf.retencaoOutras && parseFloat(detalheNf.retencaoOutras) > 0 && (
+                            <div className="flex justify-between py-1.5 border-b border-dashed">
+                              <span className="text-slate-500">Outras Retenções</span>
+                              <span className="text-red-500">− {formatBRL(detalheNf.retencaoOutras)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between pt-2.5">
+                            <span className="font-bold text-slate-800 text-base">Valor Líquido</span>
+                            <span className="font-bold text-emerald-600 text-xl">{formatBRL(detalheNf.valorLiquido)}</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -2486,7 +2448,7 @@ export default function FinanceiroNotasFiscais() {
               </div>
 
               {/* Footer */}
-              <div className="px-5 py-3 bg-white border-t flex items-center justify-between gap-2 shrink-0">
+              <div className="px-6 py-3 bg-white border-t flex items-center justify-between gap-2 shrink-0">
                 {detalheNf.arquivoUrl ? (
                   <a href={detalheNf.arquivoUrl} target="_blank" rel="noopener noreferrer">
                     <Button variant="ghost" size="sm" className="gap-1.5 text-slate-600 hover:text-slate-800">
@@ -2494,7 +2456,7 @@ export default function FinanceiroNotasFiscais() {
                     </Button>
                   </a>
                 ) : <span />}
-                <Button size="sm" onClick={() => setDetalheNf(null)} className="bg-slate-800 hover:bg-slate-700 text-white px-5">
+                <Button size="sm" onClick={() => setDetalheNf(null)} className="bg-slate-800 hover:bg-slate-700 text-white px-6">
                   Fechar
                 </Button>
               </div>
