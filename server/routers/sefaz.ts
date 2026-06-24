@@ -948,12 +948,21 @@ export function startSefazCron() {
     }
   };
 
-  // Agendamento: dispara no início de cada hora cheia
+  // Dispara a cada 30 minutos (:00 e :30) — a gate de 58 min garante ≤1 chamada/hora/CNPJ.
+  // Isso elimina o problema de "janela perdida": se o servidor reiniciar às 15:40 e o último
+  // sync foi às 15:05 (55 min atrás), o disparo das 16:00 seria bloqueado pelo gate (55 < 58).
+  // Com disparo às :30, o check das 16:30 encontra 85 min decorridos → gate libera → sync roda.
   const scheduleNext = () => {
     const now = new Date();
-    const next = new Date();
-    next.setMinutes(0, 0, 0);
-    next.setHours(now.getHours() + 1);
+    const next = new Date(now);
+    // Próxima marca de meia hora (:00 ou :30)
+    const curMin = now.getMinutes();
+    if (curMin < 30) {
+      next.setMinutes(30, 0, 0);
+    } else {
+      next.setMinutes(0, 0, 0);
+      next.setHours(now.getHours() + 1);
+    }
     const ms = next.getTime() - now.getTime();
     setTimeout(async () => {
       await runHour();
@@ -961,7 +970,12 @@ export function startSefazCron() {
     }, ms);
   };
   scheduleNext();
-  console.log("[SefazSync] Cron horário agendado — sincroniza automaticamente toda hora (máx SEFAZ: 1 chamada/hora/CNPJ).");
+
+  // Run inicial após 30s — garante que um restart não adie o sync por até 1h.
+  // A gate de 58 min decide se o sync realmente roda ou pula (sem chamar o SEFAZ a mais).
+  setTimeout(() => { runHour().catch(e => console.error("[SefazSync] Startup run erro:", e?.message)); }, 30_000);
+
+  console.log("[SefazSync] Cron a cada 30 min agendado — gate de 58 min garante ≤ 1 chamada/hora/CNPJ no SEFAZ.");
 }
 
 // ── tRPC Router ────────────────────────────────────────────────────────────────

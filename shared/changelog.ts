@@ -1,6 +1,22 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3667 — **SEFAZ NF-e · CRON A CADA 30 MIN + RUN IMEDIATO NO STARTUP. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Problema: cron disparava apenas no início de cada hora cheia (:00). Após restart às 15:40,
+ * o próximo disparo era 16:00 (20 min depois). Se last_sync_at = 15:05, o check encontrava
+ * 55 min decorridos < gate de 58 min → empresa NOT elegível → sync pulado. Próxima chance: 17:00
+ * (perda de 1 hora de janela). Com restart frequente isso acumulava atrasos.
+ *
+ * Solução:
+ * (1) Cron agora dispara a cada 30 min (:00 e :30). A gate de 58 min garante ≤ 1 chamada/hora/CNPJ
+ *     no SEFAZ — o rate limit da API é respeitado. O disparo extra apenas verifica elegibilidade.
+ * (2) Run inicial 30s após startup: permite que, se last_sync_at já tem > 58 min, a sync rode
+ *     imediatamente sem esperar até a próxima marca de meia hora (máx 29 min de atraso pós-restart).
+ *
+ * Resultado: sincronização ocorre a cada ~1h como o SEFAZ exige, sem perder janelas por timing
+ * de restart. Log sempre exibe quantas empresas foram encontradas (0 elegíveis = cooldown ativo).
+ *
  * Rev. 3666 — **PORTAL NACIONAL NFS-e + SEFAZ NF-e · BUGFIX PROBE "INESPERADO" + CRON LOG SILENCIOSO. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Dois bugs corrigidos:
