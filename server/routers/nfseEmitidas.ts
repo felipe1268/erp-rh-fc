@@ -819,13 +819,19 @@ export const nfseEmitidasRouter = router({
       );
       // Guaratinguetá Portal Nacional (notas a partir de 01/01/2026) — usa certificado A1 do SEFAZ
       // token=NULL pois autenticação é via certificado A1 (compartilhado com SEFAZ)
+      // ON CONFLICT: atualiza provider/endpoint/nome para corrigir registros antigos criados
+      // antes da Rev.3619 quando 'nfse_nacional' ainda não existia como provider type.
       await db.$client.query(
         `INSERT INTO company_nfse_municipal_config
           (company_id, ibge_code, nome_municipio, uf, provider, endpoint,
            inscricao_municipal, token, enabled)
          VALUES ($1,$2,$3,$4,$5,$6,$7,NULL,0)
          ON CONFLICT (company_id, ibge_code) DO UPDATE
-           SET inscricao_municipal = COALESCE(company_nfse_municipal_config.inscricao_municipal, EXCLUDED.inscricao_municipal)`,
+           SET provider         = EXCLUDED.provider,
+               endpoint         = EXCLUDED.endpoint,
+               nome_municipio   = EXCLUDED.nome_municipio,
+               uf               = EXCLUDED.uf,
+               inscricao_municipal = COALESCE(company_nfse_municipal_config.inscricao_municipal, EXCLUDED.inscricao_municipal)`,
         [
           companyId, guaraNacional.ibge_code, guaraNacional.nome_municipio, guaraNacional.uf,
           guaraNacional.provider, guaraNacional.endpoint,

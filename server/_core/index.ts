@@ -4195,6 +4195,23 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3619: ultimo_nsu garantida em company_nfse_municipal_config; endpoint nfse_nacional atualizado para sefin REST.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3619 nfse-nacional-rest:`, e?.message || e); }
 
+        // Rev. 3619-B -- BUGFIX: ibge_code=35186020 (Portal Nacional) criado na Rev.3582 com
+        // provider='siapgeo' (nfse_nacional ainda nao existia). SyncSchema+ Rev.3619 nao corrigia
+        // porque filtrava WHERE provider='nfse_nacional' -- que nunca era verdadeiro. Fix: forca
+        // provider + endpoint corretos para o registro sintetico 35186020.
+        try {
+          await db.$client.query(`
+            UPDATE company_nfse_municipal_config
+            SET provider = 'nfse_nacional',
+                endpoint = 'https://sefin.nfse.gov.br/sefinnacional',
+                nome_municipio = 'Guaratingueta (NFS-e Nacional)',
+                updated_at = NOW()
+            WHERE ibge_code = 35186020
+              AND provider != 'nfse_nacional'
+          `);
+          console.log(`[SyncSchema+] Rev. 3619-B: provider corrigido para 'nfse_nacional' em ibge_code=35186020 (Portal Nacional REST).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3619-B nfse-nacional-provider-fix:`, e?.message || e); }
+
         // Rev. 3596 — BUGFIX: NSU de histórico sobreescrito por rate-limit (656 sem progresso).
         // Reseta para '000000000000000' qualquer empresa onde o rate-limit salvou o NSU atual
         // sem ter importado nenhum documento (nsuSalvo != null mas importadas=0 no result JSON).
