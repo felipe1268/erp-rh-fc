@@ -896,36 +896,55 @@ export default function FinanceiroNotasFiscais() {
                   }`}>
                     {/* Linha principal: anel + texto + última sync */}
                     <div className="flex items-center gap-3">
-                      {/* Anel de progresso — sempre mostra o timer, independente de syncOn */}
-                      <div className="relative shrink-0 w-10 h-10">
-                        <svg className="w-10 h-10 -rotate-90" viewBox="0 0 36 36">
-                          <circle cx="18" cy="18" r="15" fill="none" stroke="#e5e7eb" strokeWidth="3" />
-                          <circle
-                            cx="18" cy="18" r="15" fill="none"
-                            stroke={
-                              countdownLabel
-                                ? (syncOn ? "#f59e0b" : "#94a3b8")
-                                : "#10b981"
-                            }
-                            strokeWidth="3"
-                            strokeDasharray="94.2"
-                            strokeDashoffset={
-                              countdownLabel
-                                ? String(94.2 * (1 - (countdownSec ?? 0) / gateTotal))
-                                : "0"
-                            }
-                            strokeLinecap="round"
-                            style={{ transition: "stroke-dashoffset 1s linear" }}
-                          />
-                        </svg>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <RefreshCw className={`w-3.5 h-3.5 ${
-                            countdownLabel
-                              ? (syncOn ? "text-amber-500" : "text-slate-400")
-                              : "text-emerald-500 animate-spin"
-                          }`} />
-                        </div>
-                      </div>
+                      {/* Anel de progresso com dígitos do countdown */}
+                      {(() => {
+                        const ringColor = countdownLabel
+                          ? (syncOn ? "#f59e0b" : "#94a3b8")
+                          : "#10b981";
+                        const circ = 2 * Math.PI * 22; // r=22, viewBox 56
+                        const progress = countdownLabel
+                          ? 1 - (countdownSec ?? 0) / gateTotal
+                          : 1;
+                        const dashOffset = circ * (1 - progress);
+                        const cs = countdownSec ?? 0;
+                        const hh = Math.floor(cs / 3600);
+                        const mm = Math.floor((cs % 3600) / 60);
+                        const ss = cs % 60;
+                        return (
+                          <div className="relative shrink-0 w-16 h-16">
+                            <svg className="w-16 h-16 -rotate-90" viewBox="0 0 56 56">
+                              <circle cx="28" cy="28" r="22" fill="none" stroke="#e5e7eb" strokeWidth="4" />
+                              <circle cx="28" cy="28" r="22" fill="none"
+                                stroke={ringColor} strokeWidth="4"
+                                strokeDasharray={`${circ}`}
+                                strokeDashoffset={String(dashOffset)}
+                                strokeLinecap="round"
+                                style={{ transition: "stroke-dashoffset 1s linear" }}
+                              />
+                            </svg>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-0">
+                              {countdownLabel ? (
+                                hh > 0 ? (
+                                  <>
+                                    <span className={`text-[11px] font-black leading-none tabular-nums ${syncOn ? "text-amber-700" : "text-slate-600"}`}>
+                                      {hh}h
+                                    </span>
+                                    <span className={`text-[10px] font-bold leading-none tabular-nums ${syncOn ? "text-amber-600" : "text-slate-500"}`}>
+                                      {String(mm).padStart(2, "0")}m
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className={`text-[11px] font-black leading-none tabular-nums font-mono ${syncOn ? "text-amber-700" : "text-slate-600"}`}>
+                                    {String(mm).padStart(2, "0")}:{String(ss).padStart(2, "0")}
+                                  </span>
+                                )
+                              ) : (
+                                <RefreshCw className="w-4 h-4 text-emerald-500 animate-spin" />
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                       {/* Texto — sempre mostra quando a cota estará disponível */}
                       <div className="flex-1 min-w-0">
                         {countdownLabel ? (

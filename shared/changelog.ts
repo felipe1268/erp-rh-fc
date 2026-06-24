@@ -1,6 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3636 — **NF-e RECEBIDAS · ANEL SEFAZ COM DÍGITOS DO COUNTDOWN. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Anel de progresso ampliado (w-10→w-16) e dígitos do cronômetro exibidos
+ * dentro do círculo: quando horas > 0 mostra "Xh / YYm" em 2 linhas;
+ * quando só minutos/segundos mostra "MM:SS" em fonte mono.
+ * Quando cota disponível (countdown=0): RefreshCw girando verde.
+ * Arco SVG recalculado para r=22 / circumference=2π×22.
+ *
  * Rev. 3635 — **DASHBOARD NOTAS FISCAIS · GRÁFICOS AVANÇADOS (ComposedChart + Coverage + Treemap + Ranking). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * 3 novos gráficos altamente detalhados:

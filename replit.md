@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3636** — **NF-e RECEBIDAS · ANEL SEFAZ COM DÍGITOS DO COUNTDOWN. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Anel ampliado (w-10→w-16); dígitos dentro do círculo: "Xh/YYm" (com horas) ou "MM:SS" (mono, últimos 60min). Cota disponível → RefreshCw verde girando. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3635** — **DASHBOARD NOTAS FISCAIS · GRÁFICOS AVANÇADOS (ComposedChart + Coverage + Treemap + Ranking). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** ComposedChart evolução mensal (barras+areas com gradiente SVG); stacked bar cobertura c/s NF-e + linha % no eixo direito; Treemap de fornecedores; ranking redesenhado com badge % e ticket médio. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3634** — **DASHBOARD NOTAS FISCAIS · SELETOR DE PERÍODO PADRONIZADO (WHITE-CARD). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** DashHeader (gradiente) substituído pelo padrão white-card do PanoramaFiscal: `< ano >` + "Ano todo" + legend dots + Atualizar (linha 1) + 12 chips com dot de status (linha 2). Regra de ouro gravada em memória. Detalhe: `shared/changelog.ts`.
