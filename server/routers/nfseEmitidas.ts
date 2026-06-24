@@ -396,20 +396,67 @@ function parseAbrasrResponse(xml: string): Array<{
   valorBruto: number; valorLiquido: number; discriminacao: string;
 }> {
   const parsed = xmlParser.parse(xml);
+  const getPath = (obj: any, path: string) => {
+    let n: any = obj;
+    for (const k of path.split(".")) { n = n?.[k]; }
+    return n;
+  };
   const getAny = (...paths: string[]) => {
     for (const p of paths) {
-      let node: any = parsed;
-      for (const k of p.split(".")) { node = node?.[k]; }
-      if (node !== undefined) return node;
+      const v = getPath(parsed, p);
+      if (v !== undefined) return v;
     }
     return undefined;
   };
 
-  const resposta =
+  // ── Resolve resposta → objeto com ListaNfse ──────────────────────────────────
+  // Padrão ABRASF direto (SIL, TINUS, GIAP):
+  //   Envelope.Body.ConsultarNfseResposta.ListaNfse.CompNfse
+  // Padrão .NET ASMX (SIAP GEO Guaratinguetá):
+  //   Envelope.Body.ConsultarNfseResponse.ConsultarNfseResult  — pode ser objeto
+  //   ou string CDATA/HTML-encoded com <RetornoConsultarNfse><ListaNfse>...</ListaNfse></RetornoConsultarNfse>
+  let resposta: any =
     getAny("Envelope.Body.ConsultarNfseResposta") ||
     getAny("Envelope.Body.ConsultarNfseServicoPrestadoResposta") ||
-    getAny("soapenv:Envelope.soapenv:Body.ConsultarNfseResposta") ||
-    {};
+    getAny("soapenv:Envelope.soapenv:Body.ConsultarNfseResposta");
+
+  if (!resposta) {
+    // Tenta path .NET ASMX
+    const result =
+      getAny("Envelope.Body.ConsultarNfseResponse.ConsultarNfseResult") ||
+      getAny("Envelope.Body.ConsultarNfseResult");
+
+    if (result !== undefined) {
+      if (typeof result === "string" && result.trim().startsWith("<")) {
+        // CDATA ou HTML-encoded — faz segundo parse
+        const inner = xmlParser.parse(result);
+        resposta =
+          inner?.RetornoConsultarNfse ||
+          inner?.ConsultarNfseResposta ||
+          (inner?.ListaNfse ? inner : undefined);
+      } else if (typeof result === "object") {
+        resposta = result?.RetornoConsultarNfse || result;
+      }
+    }
+  }
+
+  if (!resposta) {
+    // Último fallback: procura ListaNfse em qualquer lugar do corpo
+    const body =
+      getAny("Envelope.Body") ||
+      getAny("soapenv:Envelope.soapenv:Body") ||
+      {};
+    const tryDeep = (obj: any, depth = 0): any => {
+      if (!obj || typeof obj !== "object" || depth > 4) return undefined;
+      if (obj.ListaNfse) return obj;
+      for (const v of Object.values(obj)) {
+        const found = tryDeep(v, depth + 1);
+        if (found) return found;
+      }
+      return undefined;
+    };
+    resposta = tryDeep(body) || {};
+  }
 
   const lista = resposta?.ListaNfse?.CompNfse;
   if (!lista) return [];
@@ -628,12 +675,22 @@ async function consultarPorProvider(opts: {
       "Content-Type": "text/xml; charset=utf-8",
       "SOAPAction": "http://tempuri.org/ConsultarNfse",
     });
-    // Log para diagnóstico — mostra os primeiros 1000 chars da resposta bruta
     console.log(`[NfseMun][siapgeo] cnpj=${cnpj.replace(/\D/g,"").slice(-4)} inscricao=${inscricaoMunicipal} periodo=${dataInicial}→${dataFinal}`);
-    console.log(`[NfseMun][siapgeo] resposta(${respXml.length}): ${respXml.slice(0, 1000).replace(/\n/g, " ")}`);
+    console.log(`[NfseMun][siapgeo] resposta(${respXml.length}): ${respXml.slice(0, 1500).replace(/\n/g, " ")}`);
     const notas = parseAbrasrResponse(respXml);
     console.log(`[NfseMun][siapgeo] notas parseadas=${notas.length}`);
     if (notas.length === 0) {
+      // Log da estrutura parseada para diagnóstico de path mismatch
+      try {
+        const parsedDebug = xmlParser.parse(respXml);
+        const bodyKeys = Object.keys(parsedDebug?.Envelope?.Body || parsedDebug?.["soapenv:Envelope"]?.["soapenv:Body"] || {});
+        console.log(`[NfseMun][siapgeo] body keys: [${bodyKeys.join(", ")}]`);
+        const bodyNode = parsedDebug?.Envelope?.Body || {};
+        for (const k of bodyKeys) {
+          const childKeys = typeof bodyNode[k] === "object" ? Object.keys(bodyNode[k] || {}) : [`(${typeof bodyNode[k]})`];
+          console.log(`  ${k} → [${childKeys.join(", ")}]`);
+        }
+      } catch { /* diagnóstico opcional */ }
       // Tenta detectar mensagem de erro no XML bruto
       const erroMatch = respXml.match(/<(?:[^:]+:)?(?:faultstring|Mensagem|Erro|Error|Message)>([^<]{1,200})<\//i);
       if (erroMatch) throw new Error(`SIAP GEO: ${erroMatch[1].trim()}`);

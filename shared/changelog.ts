@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3672 — **NFS-e EMITIDAS · BUGFIX PARSER SIAP GEO 0 NOTAS — PATH .NET ASMX ConsultarNfseResponse.ConsultarNfseResult + CDATA INNER XML + LOG DIAGNÓSTICO. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
+ *
+ * Diagnóstico: SIAP GEO Guaratinguetá é um serviço .NET ASMX que embrulha a resposta em
+ * `Envelope.Body.ConsultarNfseResponse.ConsultarNfseResult` (e não em `ConsultarNfseResposta`
+ * como no padrão ABRASF direto). O `parseAbrasrResponse` só conhecia os paths SIL/TINUS/GIAP
+ * → toda chamada retornava `resposta = {}` → `lista = undefined` → 0 notas sem erro.
+ *
+ * Fix em `parseAbrasrResponse` (3 camadas de fallback):
+ *   1. Path .NET ASMX: `Envelope.Body.ConsultarNfseResponse.ConsultarNfseResult`
+ *      - Se o resultado for string (CDATA ou HTML-encoded `&lt;RetornoConsultarNfse&gt;...`):
+ *        faz segundo parse com xmlParser e procura `RetornoConsultarNfse` / `ListaNfse`
+ *      - Se o resultado for objeto: procura `RetornoConsultarNfse` dentro dele
+ *   2. Path curto: `Envelope.Body.ConsultarNfseResult` (variação sem wrapper "Response")
+ *   3. Fallback profundo: `tryDeep()` varre `Envelope.Body` até profundidade 4 procurando
+ *      qualquer objeto com `ListaNfse` — garante cobertura p/ estruturas desconhecidas
+ *
+ * Log diagnóstico adicionado quando 0 notas: imprime `body keys` + subchaves de cada filho
+ * do Body (ex: "ConsultarNfseResponse → [ConsultarNfseResult]") para identificar o path exato
+ * em futuras variações de portal.
+ *
+ * Arquivo: `server/routers/nfseEmitidas.ts` (`parseAbrasrResponse` + bloco siapgeo).
+ *
  * Rev. 3671 — **NFS-e EMITIDAS · PROGRESSO 0–100% NO HISTÓRICO + CRONÔMETRO DE RATE-LIMIT + BUGFIX HTTP 404 SIAP GEO. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * Três melhorias na aba "📤 Emitidas":
