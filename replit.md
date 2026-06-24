@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3665** — **NOTAS FISCAIS · REDESIGN EMITIDAS + RECEBIDAS NFS-e — FONTE ÚNICA, SEM DUPLICATAS. 100% FRONTEND · ZERO BACKEND/SCHEMA.** Remove cronômetro NFS-e municipal + "REGRAS DE CONSULTA" (fontes mortas retornando 0). Banner limpo na aba Emitidas: histórico 2018–2025 importado, 2026+ → Importar PDF. `pdfInputRef` input movido para fora de condicionais (sempre no DOM). Header Recebidas NFS-e Serviços: botão vira "Importar PDF" (amber). Referências a `nfseInputRef` (nunca definida) substituídas por `pdfInputRef`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3664** — **PORTAL NACIONAL NFS-e · DIAGNÓSTICO API + BACKEND PROBE + UX. BACKEND PONTUAL + FRONTEND · ZERO SCHEMA.** sefin.nfse.gov.br v1.6.0 não tem endpoint de distribuição em lote — apenas GET /nfse/{chave50} e POST /nfse. `executarSyncMunicipio` para `nfse_nacional` substitui loop NSU (404 silencioso) por probe de auth (E2401=cert OK). Banner âmbar explica a limitação; botão primário vira "Importar PDF". Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3663** — **NOTAS FISCAIS · SIMPLIFICAÇÃO PARA 3 ABAS: EMITIDAS | RECEBIDAS | PANORAMA FISCAL. 100% FRONTEND · ZERO BACKEND/SCHEMA.** 4 abas → 3: "📤 Emitidas" + "📥 Recebidas" (sub-nav pill: "📦 NF-e Produtos (SEFAZ)" | "📋 NFS-e Serviços (Portal Nacional)") + "📊 Panorama Fiscal". Header buttons condicionais por sub-aba. tomadas query habilitada por `recebidasSub==="nfse"`. Subtítulo corrigido. Detalhe: `shared/changelog.ts`.

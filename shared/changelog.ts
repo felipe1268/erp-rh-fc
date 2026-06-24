@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3665 — **NOTAS FISCAIS · REDESIGN EMITIDAS + RECEBIDAS NFS-e — FONTE ÚNICA, SEM DUPLICATAS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Problemas resolvidos:
+ * (1) Aba Emitidas mostrava cronômetro regressivo + "REGRAS DE CONSULTA" com duas fontes
+ *     (SIAP GEO offline + Portal Nacional sem API de lote) — ambas retornavam 0, confuso.
+ * (2) Header duplicava botões que já estavam no banner interno.
+ * (3) `nfseInputRef` usada mas nunca definida — silently falha ao tentar importar PDF.
+ * (4) `pdfInputRef` só estava no DOM quando pageTab==="emitidas" — clique na aba NFS-e Serviços
+ *     não funcionava (nulo).
+ *
+ * Soluções:
+ * - `<input ref={pdfInputRef}>` movido para fora de qualquer condicional (sempre no DOM).
+ * - Cronômetro NFS-e municipal (sync ring) + "REGRAS DE CONSULTA" removidos da aba Emitidas.
+ * - Substituídos por banner limpo: "Histórico 2018-2025 importado · 2026+ → Importar PDF".
+ *   Badge "Portal Nacional autenticado ✓" mostra status do cert sem UI desnecessária.
+ * - Botões Emitidas realocados do header para o banner (Importar PDF + Nova NFS-e).
+ * - Header Recebidas NFS-e Serviços: "Sincronizar Portal Nacional" → "Importar PDF" (amber).
+ * - Todas as referências a `nfseInputRef` trocadas por `pdfInputRef` (mesmo handler PDF).
+ * - syncAllResult: mantido mas exibe aviso/erro de forma mais honesta (amber/red/green).
+ *
  * Rev. 3664 — **PORTAL NACIONAL NFS-e · DIAGNÓSTICO DE API + CORREÇÃO BACKEND + UX HONESTA. BACKEND PONTUAL + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Investigação completa (24/06/2026): a API sefin.nfse.gov.br v1.6.0 NÃO tem endpoint

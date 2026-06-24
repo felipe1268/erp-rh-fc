@@ -780,6 +780,9 @@ export default function FinanceiroNotasFiscais() {
     <DashboardLayout>
       <div className="p-4 md:p-6 space-y-4 max-w-7xl mx-auto">
 
+        {/* Input PDF global — sempre no DOM para funcionar em qualquer aba */}
+        <input ref={pdfInputRef} type="file" accept=".pdf,application/pdf" multiple className="hidden" onChange={handlePdfUpload} />
+
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
@@ -791,13 +794,6 @@ export default function FinanceiroNotasFiscais() {
           </div>
           {pageTab === "emitidas" && (
             <div className="flex gap-2 shrink-0">
-              <input ref={pdfInputRef} type="file" accept=".pdf,application/pdf" multiple className="hidden" onChange={handlePdfUpload} />
-              <Button variant="outline" onClick={() => pdfInputRef.current?.click()} disabled={isParsing} className="gap-2">
-                {isParsing ? <><Loader2 className="h-4 w-4 animate-spin" /> Lendo PDF...</> : <><Upload className="h-4 w-4" /> Importar PDF</>}
-              </Button>
-              <Button onClick={openNew} className="bg-indigo-600 hover:bg-indigo-700 gap-2">
-                <Plus className="h-4 w-4" /> Nova NFS-e
-              </Button>
             </div>
           )}
           {pageTab === "recebidas" && recebidasSub === "nfe" && (
@@ -849,12 +845,13 @@ export default function FinanceiroNotasFiscais() {
             <div className="flex gap-2 shrink-0">
               <Button
                 size="sm"
-                className="gap-1.5 h-9 bg-violet-600 hover:bg-violet-700 text-white"
-                disabled={syncTomadasMut.isPending}
-                onClick={() => syncTomadasMut.mutate({ companyId: companyId ?? 0 })}
+                className="gap-1.5 h-9 bg-amber-600 hover:bg-amber-700 text-white"
+                disabled={isParsing}
+                onClick={() => pdfInputRef.current?.click()}
               >
-                <RefreshCw className={`h-3.5 w-3.5 ${syncTomadasMut.isPending ? "animate-spin" : ""}`} />
-                {syncTomadasMut.isPending ? "Sincronizando..." : "Sincronizar Portal Nacional"}
+                {isParsing
+                  ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Lendo PDF…</>
+                  : <><Upload className="h-3.5 w-3.5" /> Importar PDF</>}
               </Button>
             </div>
           )}
@@ -1358,230 +1355,53 @@ export default function FinanceiroNotasFiscais() {
         ═══════════════════════════════════════════════════════════════════════ */}
         {pageTab === "emitidas" && <>
 
-        {/* Cronômetro NFS-e Municipal */}
-        {(() => {
-          const enabledMuns = municipios.filter((m: any) => m.enabled);
-          if (!enabledMuns.length) return null;
-
-          // Detecta erros/avisos no último resultado de sync de cada município
-          const munErros: { nome: string; erro: string }[] = [];
-          const munAvisos: { nome: string; aviso: string }[] = [];
-          for (const m of enabledMuns) {
-            try {
-              const r = JSON.parse(m.last_sync_result || "{}");
-              if (r.erro) munErros.push({ nome: m.nome_municipio, erro: r.erro });
-              else if (r.aviso) munAvisos.push({ nome: m.nome_municipio, aviso: r.aviso });
-            } catch { /* ignora */ }
-          }
-          const temErro = munErros.length > 0;
-          const temAviso = munAvisos.length > 0 && !temErro;
-
-          // Banner de erro: portal indisponível
-          if (temErro && !dismissPortalErro) {
-            return (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 flex flex-col sm:flex-row sm:items-start gap-3">
-                <AlertTriangle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-red-800">Portal da prefeitura indisponível</p>
-                  {munErros.map(e => (
-                    <p key={e.nome} className="text-xs text-red-600 mt-0.5 break-words">
-                      <span className="font-medium">{e.nome}:</span> {e.erro.slice(0, 120)}
-                    </p>
-                  ))}
-                  <p className="text-xs text-red-500 mt-1.5">
-                    Use <strong>Importar PDF</strong> (botão no canto superior direito) para cadastrar suas notas enquanto o portal estiver fora.
-                  </p>
-                </div>
-                <div className="flex flex-col gap-1.5 shrink-0">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1.5 h-8 border-red-300 text-red-700 hover:bg-red-100 text-xs"
-                    onClick={() => pdfInputRef.current?.click()}
-                  >
-                    <Upload className="w-3 h-3" /> Importar PDF
-                  </Button>
-                  <button
-                    className="flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-100 disabled:opacity-50 bg-white transition-colors"
-                    disabled={syncAllMunMut.isPending}
-                    onClick={() => syncAllMunMut.mutate({ companyId: companyId! })}
-                  >
-                    {syncAllMunMut.isPending
-                      ? <><RefreshCw className="w-3 h-3 animate-spin" /> Tentando…</>
-                      : <><RefreshCw className="w-3 h-3" /> Tentar novamente</>
-                    }
-                  </button>
-                  <button
-                    className="flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-lg border border-slate-300 text-slate-500 hover:bg-slate-100 bg-white transition-colors"
-                    onClick={fecharBannerPortal}
-                    title="Fechar aviso"
-                  >
-                    ✕ Fechar aviso
-                  </button>
-                </div>
-              </div>
-            );
-          }
-
-          // Banner de aviso: período sem notas (ex: SIAP GEO cap 2025 × sync 2026)
-          if (temAviso) {
-            return (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex flex-col sm:flex-row sm:items-start gap-3">
-                <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-amber-800">Sync municipal com aviso</p>
-                  {munAvisos.map(a => (
-                    <p key={a.nome} className="text-xs text-amber-700 mt-0.5">
-                      <span className="font-medium">{a.nome}:</span> {a.aviso.slice(0, 150)}
-                    </p>
-                  ))}
-                  <p className="text-xs text-amber-600 mt-1.5">
-                    Para notas emitidas em 2026, use <strong>Importar PDF</strong>.
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5 h-8 border-amber-300 text-amber-700 hover:bg-amber-100 text-xs shrink-0 self-start"
-                  onClick={() => pdfInputRef.current?.click()}
-                >
-                  <Upload className="w-3 h-3" /> Importar PDF
-                </Button>
-              </div>
-            );
-          }
-
-          // Estado normal: timer + botão sincronizar
-          const secs = munCountdownSec ?? 0;
-          const h = Math.floor(secs / 3600);
-          const m = Math.floor((secs % 3600) / 60);
-          const sec = secs % 60;
-          const label = secs > 0
-            ? (h > 0 ? `${h}h ${String(m).padStart(2,"0")}min` : `${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`)
-            : null;
-          const latestSync = enabledMuns
-            .map((m2: any) => m2.last_sync_at)
-            .filter(Boolean)
-            .sort()
-            .at(-1);
-
-          // Regras de cobertura de cada portal habilitado
-          const regraPortais = enabledMuns.map((mun2: any) => {
-            if (mun2.provider === "siapgeo")
-              return { nome: mun2.nome_municipio, regra: "cobre NFS-e de 2018 até 31/12/2025 (SIAP GEO)", cor: "text-blue-700" };
-            if (mun2.provider === "nfse_nacional")
-              return { nome: mun2.nome_municipio, regra: "cobre NFS-e a partir de 01/01/2026 — requer Certificado A1 SEFAZ", cor: "text-violet-700" };
-            return { nome: mun2.nome_municipio, regra: `portal: ${mun2.provider}`, cor: "text-slate-600" };
-          });
-
-          return (
-            <div className="flex flex-col gap-2">
-              {/* Ring timer */}
-              <div className={`flex items-center gap-3 rounded-xl border px-4 py-2.5 ${label ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
-                {/* Ring ampliado com dígitos dentro */}
-                <div className="relative shrink-0 w-16 h-16">
-                  <svg className="w-16 h-16 -rotate-90" viewBox="0 0 36 36">
-                    <circle cx="18" cy="18" r="15" fill="none" stroke="#e5e7eb" strokeWidth="2.5" />
-                    <circle cx="18" cy="18" r="15" fill="none"
-                      stroke={label ? "#f59e0b" : "#10b981"} strokeWidth="2.5"
-                      strokeDasharray="94.2"
-                      strokeDashoffset={label ? String(94.2 * (1 - secs / (55 * 60))) : "0"}
-                      strokeLinecap="round"
-                      style={{ transition: "stroke-dashoffset 1s linear" }}
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    {label ? (
-                      h > 0 ? (
-                        <>
-                          <span className="font-mono text-[9px] font-bold leading-none tabular-nums" style={{ color: "#d97706" }}>{h}h</span>
-                          <span className="font-mono text-[9px] font-bold leading-none tabular-nums mt-0.5" style={{ color: "#d97706" }}>{String(m).padStart(2,"0")}m</span>
-                        </>
-                      ) : (
-                        <span className="font-mono text-[9px] font-bold leading-none tabular-nums" style={{ color: "#d97706" }}>
-                          {String(m).padStart(2,"0")}:{String(sec).padStart(2,"0")}
-                        </span>
-                      )
-                    ) : (
-                      <RefreshCw className="w-4 h-4 text-emerald-500 animate-spin" />
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  {label ? (
-                    <>
-                      <p className="text-sm font-semibold text-amber-800">
-                        Próxima sync automática em{" "}
-                        <span className="font-mono text-amber-700 tabular-nums">{label}</span>
-                      </p>
-                      <p className="text-xs text-amber-600 mt-0.5">
-                        {enabledMuns.map((m2: any) => m2.nome_municipio).join(", ")} — o sistema busca novas NFS-e automaticamente toda hora.
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-sm font-semibold text-emerald-800">✅ Pronto — sincronizando em background</p>
-                      <p className="text-xs text-emerald-600 mt-0.5">
-                        {enabledMuns.map((m2: any) => m2.nome_municipio).join(", ")} — buscando novas NFS-e agora.
-                      </p>
-                    </>
-                  )}
-                </div>
-                <div className="flex flex-col items-end gap-1.5 shrink-0">
-                  {latestSync && (
-                    <div className="text-right text-xs text-slate-400 hidden sm:block">
-                      <div>Última sync</div>
-                      <div className="font-medium text-slate-500">
-                        {new Date(latestSync).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}
-                      </div>
-                    </div>
-                  )}
-                  <button
-                    className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg border border-emerald-300 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed bg-white transition-colors"
-                    disabled={syncAllMunMut.isPending}
-                    onClick={() => syncAllMunMut.mutate({ companyId: companyId! })}
-                  >
-                    {syncAllMunMut.isPending
-                      ? <><RefreshCw className="w-3 h-3 animate-spin" /> Sincronizando…</>
-                      : <><RefreshCw className="w-3 h-3" /> Sincronizar Agora</>
-                    }
-                  </button>
-                </div>
-              </div>
-
-              {/* Regras de cobertura dos portais */}
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 flex flex-col gap-1.5">
-                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-0.5">Regras de consulta</p>
-                {regraPortais.map((r, i) => (
-                  <div key={i} className="flex items-start gap-1.5">
-                    <span className="text-[10px] mt-0.5">📋</span>
-                    <p className="text-xs leading-snug">
-                      <span className="font-semibold text-slate-700">{r.nome}:</span>{" "}
-                      <span className={r.cor}>{r.regra}</span>
-                    </p>
-                  </div>
-                ))}
-                <p className="text-[11px] text-slate-500 mt-0.5 border-t border-slate-200 pt-1.5">
-                  💡 Notas de <strong>2026 em diante</strong> só chegam via <strong>Portal Nacional</strong> (cert A1) ou <strong>Importar PDF</strong>.
-                </p>
-              </div>
+        {/* Banner NFS-e Emitidas — fonte e ação principal */}
+        <div className="rounded-xl border border-indigo-100 bg-gradient-to-r from-indigo-50 to-slate-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-semibold text-indigo-900">NFS-e Emitidas pela FC</span>
+              <span className="inline-flex items-center gap-1 text-[11px] bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5 font-medium">
+                🔐 Portal Nacional autenticado ✓
+              </span>
             </div>
-          );
-        })()}
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Histórico <strong>2018–2025</strong>: importado via SIAP GEO (portal municipal encerrado).
+              {" "}Para notas de <strong>2026 em diante</strong>: use <strong>Importar PDF</strong> — o sistema extrai os dados automaticamente via IA.
+            </p>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <Button
+              size="sm"
+              onClick={() => pdfInputRef.current?.click()}
+              disabled={isParsing}
+              className="gap-1.5 h-8 bg-indigo-600 hover:bg-indigo-700 text-white text-xs"
+            >
+              {isParsing ? <><Loader2 className="w-3 h-3 animate-spin" /> Lendo…</> : <><Upload className="w-3 h-3" /> Importar PDF</>}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={openNew}
+              className="gap-1.5 h-8 border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-xs"
+            >
+              <Plus className="w-3 h-3" /> Nova NFS-e
+            </Button>
+          </div>
+        </div>
 
-        {/* Resultado da sync manual */}
+        {/* Resultado da sync (quando executada manualmente) */}
         {syncAllResult && (
           <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs flex flex-wrap gap-3 items-center">
-            <span className="font-semibold text-emerald-800">Sync concluída:</span>
+            <span className="font-semibold text-emerald-800">Verificação concluída:</span>
             {syncAllResult.resultados?.map((r: any) => (
-              <span key={r.ibge} className={r.erro ? "text-red-600" : "text-emerald-700"}>
-                {r.nome}: {r.erro ? `❌ ${r.erro.slice(0, 60)}` : `✓ ${r.importadas} novas`}
+              <span key={r.ibge} className={r.erro ? "text-red-600" : r.aviso ? "text-amber-700" : "text-emerald-700"}>
+                {r.nome}: {r.erro ? `❌ ${r.erro.slice(0, 60)}` : r.aviso ? `ℹ️ ${r.aviso.slice(0, 80)}` : `✓ ${r.importadas} novas`}
               </span>
             ))}
             <button className="ml-auto text-slate-400 hover:text-slate-600 text-[10px] underline" onClick={() => setSyncAllResult(null)}>fechar</button>
           </div>
         )}
+
 
         {/* KPI cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -3255,7 +3075,7 @@ export default function FinanceiroNotasFiscais() {
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
-                      onClick={() => nfseInputRef.current?.click()}
+                      onClick={() => pdfInputRef.current?.click()}
                       className="inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-700 text-white px-3 py-1.5 rounded-lg hover:bg-amber-800 transition-colors"
                     >
                       <Upload className="h-3 w-3" /> Importar PDF (DANFSe)
