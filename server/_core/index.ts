@@ -4337,6 +4337,26 @@ Regras:
           }
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3651 reset-siapgeo:`, e?.message || e); }
 
+        // Rev. 3673 — SIAP GEO tem notas de 2026 (confirmado no portal ISS Online).
+        // Rows que foram bloqueadas com last_sync_result.dataFinal='2025-12-31' e importadas=0
+        // nunca avançariam (próximo dataInicial = 2026-01-01 > cap 2025-12-31 → early-return).
+        // Fix: resetar last_sync_at/result para forçar re-scan desde 2018-01-01.
+        try {
+          const { rowCount } = await db.$client.query(`
+            UPDATE company_nfse_municipal_config
+            SET last_sync_at = NULL, last_sync_result = NULL, updated_at = NOW()
+            WHERE provider = 'siapgeo'
+              AND last_sync_result IS NOT NULL
+              AND (last_sync_result::jsonb->>'dataFinal') = '2025-12-31'
+              AND (last_sync_result::jsonb->>'importadas')::int = 0
+          `);
+          if ((rowCount ?? 0) > 0) {
+            console.log(`[SyncSchema+] Rev. 3673: ${rowCount} portal(is) SIAP GEO resetados (dataFinal=2025-12-31 + importadas=0) — re-scan histórico completo forçado.`);
+          } else {
+            console.log(`[SyncSchema+] Rev. 3673: nenhum portal SIAP GEO travado em 2025-12-31 — sem reset necessário.`);
+          }
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3673 reset-siapgeo-cap:`, e?.message || e); }
+
         // Rev. 3604 — xml_payload em fiscal_notes (NF-e XML completo para espelho fiel)
         try {
           await db.$client.query(`ALTER TABLE fiscal_notes ADD COLUMN IF NOT EXISTS xml_payload TEXT`);

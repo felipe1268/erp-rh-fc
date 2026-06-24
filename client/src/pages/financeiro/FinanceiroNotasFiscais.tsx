@@ -715,7 +715,8 @@ export default function FinanceiroNotasFiscais() {
   async function iniciarSyncHistoricoNfse() {
     if (!companyId) return;
     setConfirmHistoricoNfse(false);
-    const anos = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
+    const anoFim = new Date().getFullYear();
+    const anos = Array.from({ length: anoFim - 2018 + 1 }, (_, i) => 2018 + i);
     let totalImportadas = 0, totalIgnoradas = 0, totalErros = 0;
     setSyncHistoricoProgress({ running: true, anoAtual: anos[0], anoIdx: 0, totalAnos: anos.length, importadas: 0, ignoradas: 0 });
     for (let i = 0; i < anos.length; i++) {
@@ -1463,7 +1464,7 @@ export default function FinanceiroNotasFiscais() {
                 <span className="text-sm font-semibold text-indigo-900">NFS-e Emitidas pela FC</span>
               </div>
               <p className="text-xs text-slate-500 leading-relaxed">
-                <strong>2018–2025:</strong> busque o histórico completo via API da prefeitura (SIAP GEO) clicando em "Baixar histórico".
+                <strong>2018–{new Date().getFullYear()}:</strong> busque o histórico completo via API da prefeitura (SIAP GEO) clicando em "Baixar histórico".
                 {" "}<strong>2026 em diante:</strong> baixe o XML da NFS-e no site <a href="https://www.nfse.gov.br" target="_blank" rel="noreferrer" className="underline">nfse.gov.br</a> e use "Importar XML" — ou importe o PDF (DANFSe) com extração via IA.
               </p>
             </div>
@@ -1500,7 +1501,7 @@ export default function FinanceiroNotasFiscais() {
                 disabled={!!syncHistoricoProgress}
                 className="gap-1.5 h-8 bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
               >
-                <Download className="w-3 h-3" /> Baixar histórico (2018–2025)
+                <Download className="w-3 h-3" /> Baixar histórico (2018–{new Date().getFullYear()})
               </Button>
               <Button
                 size="sm"
@@ -2560,10 +2561,10 @@ export default function FinanceiroNotasFiscais() {
         <AlertDialog open={confirmHistoricoNfse} onOpenChange={setConfirmHistoricoNfse}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Baixar histórico NFS-e 2018–2025?</AlertDialogTitle>
+              <AlertDialogTitle>Baixar histórico NFS-e 2018–{new Date().getFullYear()}?</AlertDialogTitle>
               <AlertDialogDescription>
                 O sistema vai consultar a API da prefeitura de Guaratinguetá (SIAP GEO) e trazer{" "}
-                <strong>todas as NFS-e emitidas pela FC de 2018 até 31/12/2025</strong>.
+                <strong>todas as NFS-e emitidas pela FC de 2018 até hoje</strong>.
                 Notas já importadas serão ignoradas automaticamente. Pode levar alguns minutos.
               </AlertDialogDescription>
             </AlertDialogHeader>

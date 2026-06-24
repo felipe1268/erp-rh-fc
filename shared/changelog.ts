@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3673 — **NFS-e EMITIDAS · BUGFIX CAP 2025-12-31 SIAP GEO — PORTAL TEM NOTAS DE 2026 + RESET ROWS TRAVADAS + LOOP ATÉ ANO ATUAL. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * Diagnóstico: a suposição "SIAP GEO só tem notas até 31/12/2025" estava errada — confirmado
+ * via login no portal ISS Online (guaratingueta.geosiap.net.br) que mostra notas de 2026:
+ * jan/26 = 14 notas / R$1,38M; jun/26 = 7 notas / R$436K.
+ *
+ * Três correções:
+ *   1. Backend (`executarSyncMunicipio`): removido `dataFinalDefault = "2025-12-31"` para SIAP GEO.
+ *      Todos os provedores SOAP agora usam `hoje` como dataFinal padrão.
+ *      Fallback sem dataFinal usa "último mês" igual aos outros provedores (sem lógica especial SIAP GEO).
+ *      Early-return "cobertura esgotada" mantido (genérico — serve quando dataInicial > dataFinal).
+ *
+ *   2. SyncSchema+ (`server/_core/index.ts`): reseta `last_sync_at/result` para todas as rows SIAP GEO
+ *      onde `last_sync_result.dataFinal = '2025-12-31'` e `importadas = 0` — essas rows estavam travadas
+ *      (próximo dataInicial seria "2026-01-01" > cap "2025-12-31" → loop eterno de early-return).
+ *      Após reset, next cron recomeça de 2018-01-01 e importa tudo.
+ *
+ *   3. Frontend (`FinanceiroNotasFiscais.tsx`): loop "Baixar histórico" agora vai até `new Date().getFullYear()`
+ *      (não hardcoded 2025). Label do botão, título do AlertDialog e texto descritivo atualizados.
+ *
+ * Arquivo: `server/routers/nfseEmitidas.ts`, `server/_core/index.ts`, `FinanceiroNotasFiscais.tsx`.
+ *
  * Rev. 3672 — **NFS-e EMITIDAS · BUGFIX PARSER SIAP GEO 0 NOTAS — PATH .NET ASMX ConsultarNfseResponse.ConsultarNfseResult + CDATA INNER XML + LOG DIAGNÓSTICO. BACKEND PONTUAL · ZERO ALTER/DROP/DELETE.**
  *
  * Diagnóstico: SIAP GEO Guaratinguetá é um serviço .NET ASMX que embrulha a resposta em
