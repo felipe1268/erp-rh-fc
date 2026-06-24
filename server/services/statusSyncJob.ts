@@ -246,15 +246,10 @@ export async function syncEmployeeStatus(): Promise<{
         ));
 
         const diasRestantes = Math.ceil((new Date(at.dataRetorno! + "T12:00:00").getTime() - new Date(today + "T12:00:00").getTime()) / 86400000);
+        const dataRetornoBR = String(at.dataRetorno || "").split("-").reverse().join("/");
         const titulo = diasRestantes <= 0
           ? `RETORNO HOJE — ${emp.nomeCompleto} retorna do afastamento`
-          : `RETORNO EM ${diasRestantes} DIA(S) — ${emp.nomeCompleto} retorna em ${at.dataRetorno}`;
-
-        // Rev. 1352: dispara o e-mail de fato (antes ficava "pendente" eterno).
-        // Em caso de erro de SMTP, registra como "erro" para aparecer no contador,
-        // mas NUNCA propaga a exceção (o job não pode quebrar por causa de e-mail).
-        // Rev. 1459: usa template branded (mesmo padrão dos demais e-mails de movimentação)
-        const dataRetornoBR = String(at.dataRetorno || "").split("-").reverse().join("/");
+          : `RETORNO EM ${diasRestantes} DIA(S) — ${emp.nomeCompleto} retorna em ${dataRetornoBR}`;
         const corpoTxt = `Bom dia,
 
 Comunicamos que o colaborador abaixo identificado tem retorno previsto do afastamento.
