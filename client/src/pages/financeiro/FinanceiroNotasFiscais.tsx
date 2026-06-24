@@ -209,8 +209,10 @@ export default function FinanceiroNotasFiscais() {
     setDismissPortalErro(true);
   }
 
-  // ── Aba principal: emitidas | recebidas | tomadas | panorama ─────────────────
-  const [pageTab, setPageTab] = useState<"emitidas" | "recebidas" | "tomadas" | "panorama">("emitidas");
+  // ── Aba principal: emitidas | recebidas | panorama ───────────────────────────
+  const [pageTab, setPageTab] = useState<"emitidas" | "recebidas" | "panorama">("emitidas");
+  // Sub-aba da aba Recebidas: nfe = NF-e produtos (SEFAZ) | nfse = NFS-e serviços (Portal Nacional)
+  const [recebidasSub, setRecebidasSub] = useState<"nfe" | "nfse">("nfe");
   const [recAno, setRecAno] = useState(new Date().getFullYear());
   const [recMes, setRecMes] = useState<number | null>(new Date().getMonth() + 1);
   const [recSearch, setRecSearch] = useState("");
@@ -295,7 +297,7 @@ export default function FinanceiroNotasFiscais() {
 
   const tomQuery = (trpc as any).nfseEmitidas.listNfseTomadas.useQuery(
     { companyId: companyId ?? 0, ano: tomAno, mes: tomMes ?? undefined, search: tomSearch || undefined },
-    { enabled: !!companyId && pageTab === "tomadas", staleTime: 30_000 }
+    { enabled: !!companyId && pageTab === "recebidas" && recebidasSub === "nfse", staleTime: 30_000 }
   );
   const tomNotas: any[] = tomQuery.data?.items ?? [];
   const tomKpi = tomQuery.data?.kpi ?? { total: 0, valorTotal: 0, mesesComNota: 0, prestadoresDistintos: 0 };
@@ -797,20 +799,7 @@ export default function FinanceiroNotasFiscais() {
               </Button>
             </div>
           )}
-          {pageTab === "tomadas" && (
-            <div className="flex gap-2 shrink-0 flex-wrap">
-              <a
-                href="https://guaratingueta.geosiap.net.br/pmguaratingueta"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md text-sm font-medium bg-violet-600 hover:bg-violet-700 text-white"
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-                Abrir Portal SIAP GEO
-              </a>
-            </div>
-          )}
-          {pageTab === "recebidas" && (
+          {pageTab === "recebidas" && recebidasSub === "nfe" && (
             <div className="flex gap-2 shrink-0 flex-wrap">
               <input
                 ref={xmlInputRef}
@@ -852,6 +841,19 @@ export default function FinanceiroNotasFiscais() {
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${sefazResetNsuMut.isPending ? "animate-spin" : ""}`} />
                 {sefazResetNsuMut.isPending ? "Baixando..." : "Histórico completo"}
+              </Button>
+            </div>
+          )}
+          {pageTab === "recebidas" && recebidasSub === "nfse" && (
+            <div className="flex gap-2 shrink-0">
+              <Button
+                size="sm"
+                className="gap-1.5 h-9 bg-violet-600 hover:bg-violet-700 text-white"
+                disabled={syncTomadasMut.isPending}
+                onClick={() => syncTomadasMut.mutate({ companyId: companyId ?? 0 })}
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${syncTomadasMut.isPending ? "animate-spin" : ""}`} />
+                {syncTomadasMut.isPending ? "Sincronizando..." : "Sincronizar Portal Nacional"}
               </Button>
             </div>
           )}
@@ -900,12 +902,11 @@ export default function FinanceiroNotasFiscais() {
           </div>
         )}
 
-        {/* Sub-abas: Emitidas | Recebidas | Panorama */}
+        {/* Abas principais: Emitidas | Recebidas | Panorama */}
         <div className="flex gap-1 border-b border-slate-200 -mb-1">
           {([
-            { key: "emitidas",  label: "📤 NFS-e Emitidas" },
-            { key: "recebidas", label: "📥 NF-e Recebidas (SEFAZ)" },
-            { key: "tomadas",   label: "📨 NFS-e Tomadas" },
+            { key: "emitidas",  label: "📤 Emitidas" },
+            { key: "recebidas", label: "📥 Recebidas" },
             { key: "panorama",  label: "📊 Panorama Fiscal" },
           ] as const).map(({ key, label }) => (
             <button
@@ -923,10 +924,33 @@ export default function FinanceiroNotasFiscais() {
           ))}
         </div>
 
+        {/* Sub-nav da aba Recebidas: NF-e Produtos (SEFAZ) | NFS-e Serviços (Portal Nacional) */}
+        {pageTab === "recebidas" && (
+          <div className="flex gap-1 bg-slate-100 rounded-xl p-1 w-fit">
+            {([
+              { key: "nfe",  label: "📦 NF-e Produtos (SEFAZ)" },
+              { key: "nfse", label: "📋 NFS-e Serviços (Portal Nacional)" },
+            ] as const).map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setRecebidasSub(key)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                  recebidasSub === key
+                    ? "bg-white text-indigo-700 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* ═══════════════════════════════════════════════════════════════════════
-            ABA: NF-e RECEBIDAS (SEFAZ)
+            ABA: NF-e RECEBIDAS (SEFAZ) — sub-aba Produtos
         ═══════════════════════════════════════════════════════════════════════ */}
-        {pageTab === "recebidas" && (() => {
+        {pageTab === "recebidas" && recebidasSub === "nfe" && (() => {
           const MESES_REC = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
           const fmtCountdown = (s: number) => {
             if (s <= 0) return null; // ready to sync
@@ -3166,9 +3190,9 @@ export default function FinanceiroNotasFiscais() {
         </Dialog>
 
         {/* ═══════════════════════════════════════════════════════════════════════
-            ABA: NFS-e TOMADAS (FC como tomador de serviços)
+            ABA: NFS-e RECEBIDAS — sub-aba Serviços (Portal Nacional, FC como tomador)
         ═══════════════════════════════════════════════════════════════════════ */}
-        {pageTab === "tomadas" && (() => {
+        {pageTab === "recebidas" && recebidasSub === "nfse" && (() => {
           const MESES_TOM = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
           const fmtCnpj = (c: string | null | undefined) => {
             const d = String(c || "").replace(/\D/g, "");
@@ -3187,7 +3211,7 @@ export default function FinanceiroNotasFiscais() {
                       📨 NFS-e Tomadas — Serviços Recebidos
                     </h2>
                     <p className="text-sm text-violet-200 mt-0.5">
-                      NFS-e emitidas por terceiros para a FC · Prefeitura de Guaratinguetá (SIAP GEO 2018–2025)
+                      NFS-e de serviços recebidos pela FC · Portal Nacional NFS-e (sefin.nfse.gov.br) — mTLS cert A1
                     </p>
                   </div>
                   <div className="flex items-center gap-2">

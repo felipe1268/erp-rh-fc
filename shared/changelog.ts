@@ -1,6 +1,29 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3663 — **NOTAS FISCAIS · SIMPLIFICAÇÃO PARA 3 ABAS: EMITIDAS | RECEBIDAS | PANORAMA FISCAL. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Usuário pediu interface mais clara: "só preciso de duas/três — emitidas e recebidas".
+ * Antes havia 4 abas: NFS-e Emitidas / NF-e Recebidas (SEFAZ) / NFS-e Tomadas / Panorama.
+ * Agora são 3 abas com sub-nav interno na aba Recebidas:
+ *
+ *   📤 Emitidas   — NFS-e onde a FC é prestador (fonte: Portal Nacional + SIAP GEO)
+ *   📥 Recebidas  — Sub-nav: "📦 NF-e Produtos (SEFAZ)" | "📋 NFS-e Serviços (Portal Nacional)"
+ *                    • NF-e Produtos: NF-e de mercadorias via SEFAZ NFeDistribuicaoDFe (conteúdo anterior)
+ *                    • NFS-e Serviços: NFS-e onde FC é tomadora via Portal Nacional mTLS (conteúdo anterior)
+ *   📊 Panorama Fiscal — inalterado
+ *
+ * Mudanças em FinanceiroNotasFiscais.tsx:
+ *   - pageTab type: removido "tomadas" (era 4 opções, agora 3)
+ *   - Novo state `recebidasSub: "nfe" | "nfse"` controla a sub-aba dentro de Recebidas
+ *   - Tab bar: 4 botões → 3 botões com labels simplificados
+ *   - Sub-nav pill aparece apenas quando pageTab==="recebidas" (toggle pill branco sobre fundo cinza)
+ *   - Header buttons condicionais por sub-aba:
+ *       * nfe: Importar XML + Sincronizar SEFAZ + Histórico completo
+ *       * nfse: Sincronizar Portal Nacional (violeta)
+ *   - tomadas query enable: agora ativa quando recebidas && recebidasSub==="nfse"
+ *   - Subtítulo do header violeta: "SIAP GEO 2018–2025" → "Portal Nacional NFS-e mTLS cert A1"
+ *
  * Rev. 3662 — **NFS-e TOMADAS · PORTAL NACIONAL mTLS — SYNC AUTOMÁTICO VIA DFe NSU (MESMO FLUXO DAS EMITIDAS). BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * O SIAP GEO de Guaratinguetá não implementa `ConsultarNfseServicoTomado` (HTTP 404).
