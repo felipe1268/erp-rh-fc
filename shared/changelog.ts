@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3677 — **NFS-e EMITIDAS · SELEÇÃO MÚLTIPLA + EXCLUSÃO EM LOTE. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * Usuário precisava poder selecionar várias NFS-e e apagá-las. Implementado:
+ * - Backend: `excluirLote` (hard DELETE FROM fiscal_notes WHERE id IN (...) AND companyId = ?)
+ *   com guard `_assertNfAccess` e cap de 200 ids por chamada; retorna count de excluídos.
+ * - Frontend: coluna checkbox (checkbox master no thead com estado indeterminate; por linha).
+ *   Barra de seleção indigo aparece quando ≥1 selecionado: count + "Limpar" + "Excluir N".
+ *   AlertDialog de confirmação ("ação não pode ser desfeita").
+ *   Linha selecionada recebe fundo indigo-50; deselect automático após exclusão.
+ * Arquivos: `server/routers/fiscalNotes.ts`, `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`.
+ *
  * Rev. 3676 — **NFS-e EMITIDAS · DIALOG "DETALHES E VÍNCULOS" REDESENHADO — HEADER GRADIENTE + KPI ROW + CARDS MODERNOS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Dialog antigo: fundo branco liso, layout simples com grid e inputs soltos, scroll horizontal visível.

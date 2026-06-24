@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3677** — **NFS-e EMITIDAS · SELEÇÃO MÚLTIPLA + EXCLUSÃO EM LOTE. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Checkbox master no thead (indeterminate) + checkbox por linha; barra indigo com contador + "Excluir N" ao selecionar; AlertDialog de confirmação; hard DELETE no banco via `excluirLote` (cap 200 ids, guard companyId). Arquivos: `fiscalNotes.ts`, `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3676** — **NFS-e EMITIDAS · DIALOG "DETALHES E VÍNCULOS" REDESENHADO — HEADER GRADIENTE + KPI ROW + CARDS MODERNOS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Header gradiente indigo→blue (NF# + tomador); row de 3 KPIs (Emissão/Bruto/Líquido); cards brancos arredondados para Lançamento (azul) e Extrato (violeta) com badge do ID atual; footer com "Abrir PDF" + "Fechar"; sem scroll. Arquivo: `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3675** — **NFS-e EMITIDAS · PROGRESSO REAL 0–100% NO IMPORT XML SIAP GEO (LOTES DE 10). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** DOMParser conta os `<nf>` antes de enviar; lotes de 10 → `mutateAsync` por lote → botão mostra "30/75 (40%)" em tempo real; toast final consolidado. Arquivo: `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.

@@ -179,6 +179,8 @@ export default function FinanceiroNotasFiscais() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<NF | null>(null);
   const [detalheNf, setDetalheNf] = useState<NF | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [form, setForm] = useState<any>(emptyForm());
   const [tab, setTab] = useState<"dados" | "tributacao" | "vinculo">("dados");
   const [vincularEntryId, setVincularEntryId] = useState("");
@@ -446,6 +448,15 @@ export default function FinanceiroNotasFiscais() {
   const excluirMut = trpc.fiscalNotes.excluir.useMutation({
     onSuccess: () => { toast({ title: "NF-e cancelada." }); setDeleteTarget(null); listQuery.refetch(); },
     onError: (e) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
+  const excluirLoteMut = trpc.fiscalNotes.excluirLote.useMutation({
+    onSuccess: (r) => {
+      toast({ title: `${r.deleted} nota${r.deleted !== 1 ? "s" : ""} excluída${r.deleted !== 1 ? "s" : ""} permanentemente.` });
+      setSelectedIds(new Set());
+      setBulkDeleteOpen(false);
+      listQuery.refetch();
+    },
+    onError: (e) => toast({ title: "Erro ao excluir", description: e.message, variant: "destructive" }),
   });
   const finishSyncProgress = (ok: boolean) => {
     if (syncIvRef.current) { clearInterval(syncIvRef.current); syncIvRef.current = null; }
@@ -1711,11 +1722,46 @@ export default function FinanceiroNotasFiscais() {
         </div>
 
         {/* Tabela */}
+        {/* Barra de seleção em lote */}
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-3 px-4 py-2.5 bg-indigo-600 text-white rounded-xl shadow-lg">
+            <CheckIcon className="h-4 w-4 shrink-0" />
+            <span className="text-sm font-medium flex-1">
+              {selectedIds.size} nota{selectedIds.size !== 1 ? "s" : ""} selecionada{selectedIds.size !== 1 ? "s" : ""}
+            </span>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-indigo-200 hover:text-white hover:bg-indigo-700 h-7 px-3"
+              onClick={() => setSelectedIds(new Set())}
+            >
+              Limpar
+            </Button>
+            <Button
+              size="sm"
+              className="bg-red-500 hover:bg-red-600 text-white gap-1.5 h-7 px-3"
+              onClick={() => setBulkDeleteOpen(true)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Excluir {selectedIds.size}
+            </Button>
+          </div>
+        )}
+
         <Card className="border-0 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-50 border-b text-xs text-slate-500 uppercase tracking-wide">
+                  <th className="px-3 py-2.5 w-8">
+                    <input
+                      type="checkbox"
+                      className="rounded border-slate-300 cursor-pointer"
+                      checked={nfs.length > 0 && selectedIds.size === nfs.length}
+                      ref={el => { if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < nfs.length; }}
+                      onChange={e => setSelectedIds(e.target.checked ? new Set(nfs.map(n => n.id)) : new Set())}
+                    />
+                  </th>
                   <th className="px-3 py-2.5 text-left">NF</th>
                   <th className="px-3 py-2.5 text-left">Emissão</th>
                   <th className="px-3 py-2.5 text-left">Tomador</th>
@@ -1730,11 +1776,11 @@ export default function FinanceiroNotasFiscais() {
               </thead>
               <tbody>
                 {listQuery.isLoading && (
-                  <tr><td colSpan={10} className="py-10 text-center text-slate-400">Carregando...</td></tr>
+                  <tr><td colSpan={11} className="py-10 text-center text-slate-400">Carregando...</td></tr>
                 )}
                 {!listQuery.isLoading && nfs.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="py-10 text-center">
+                    <td colSpan={11} className="py-10 text-center">
                       <div className="flex flex-col items-center gap-3 max-w-xs mx-auto">
                         <Receipt className="h-9 w-9 text-slate-300" />
                         <p className="text-slate-500 text-sm font-medium">Nenhuma nota encontrada neste período</p>
@@ -1756,8 +1802,21 @@ export default function FinanceiroNotasFiscais() {
                 )}
                 {nfs.map(nf => {
                   const st = STATUS_MAP[nf.status] ?? { label: nf.status, color: "bg-gray-100 text-gray-700 border-gray-200" };
+                  const isSelected = selectedIds.has(nf.id);
                   return (
-                    <tr key={nf.id} className="border-b hover:bg-slate-50 transition-colors group">
+                    <tr key={nf.id} className={`border-b hover:bg-slate-50 transition-colors group ${isSelected ? "bg-indigo-50/60" : ""}`}>
+                      <td className="px-3 py-2.5">
+                        <input
+                          type="checkbox"
+                          className="rounded border-slate-300 cursor-pointer"
+                          checked={isSelected}
+                          onChange={e => {
+                            const next = new Set(selectedIds);
+                            if (e.target.checked) next.add(nf.id); else next.delete(nf.id);
+                            setSelectedIds(next);
+                          }}
+                        />
+                      </td>
                       <td className="px-3 py-2.5">
                         <span className="font-semibold text-indigo-700">#{nf.numeroNf}</span>
                         {nf.serie && <span className="text-xs text-slate-400 ml-1">/{nf.serie}</span>}
@@ -2585,6 +2644,28 @@ export default function FinanceiroNotasFiscais() {
             </Dialog>
           );
         })()}
+
+        <AlertDialog open={bulkDeleteOpen} onOpenChange={v => { if (!v) setBulkDeleteOpen(false); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir {selectedIds.size} nota{selectedIds.size !== 1 ? "s" : ""} permanentemente?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta ação <strong>não pode ser desfeita</strong>. Os registros serão removidos do banco de dados.
+                Caso queira reimportar, será necessário fazer o sync ou upload do XML novamente.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setBulkDeleteOpen(false)}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-red-600 hover:bg-red-700"
+                onClick={() => excluirLoteMut.mutate({ ids: Array.from(selectedIds), companyId: companyId! })}
+                disabled={excluirLoteMut.isPending}
+              >
+                {excluirLoteMut.isPending ? "Excluindo..." : `Excluir ${selectedIds.size} nota${selectedIds.size !== 1 ? "s" : ""}`}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <AlertDialog open={!!deleteTarget} onOpenChange={v => !v && setDeleteTarget(null)}>
           <AlertDialogContent>

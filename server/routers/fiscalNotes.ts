@@ -2,7 +2,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
 import { fiscalNotes } from "../../drizzle/schema";
-import { eq, and, desc, ilike, or, isNull, notInArray } from "drizzle-orm";
+import { eq, and, desc, ilike, or, isNull, notInArray, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { getUserCompanyLinks } from "../db";
 import { invokeGeminiVision, invokeAnthropicVision } from "../_core/llm";
@@ -319,6 +319,17 @@ export const fiscalNotesRouter = router({
         .set({ status: "cancelada", updatedAt: now })
         .where(and(eq(fiscalNotes.id, input.id), eq(fiscalNotes.companyId, input.companyId)));
       return { success: true };
+    }),
+
+  excluirLote: protectedProcedure
+    .input(z.object({ ids: z.array(z.number()).min(1).max(200), companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      await _assertNfAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const result = await db.delete(fiscalNotes)
+        .where(and(inArray(fiscalNotes.id, input.ids), eq(fiscalNotes.companyId, input.companyId)))
+        .returning({ id: fiscalNotes.id });
+      return { deleted: result.length };
     }),
 
   parsePdf: protectedProcedure
