@@ -1359,76 +1359,119 @@ export default function FinanceiroNotasFiscais() {
           }
 
           // Estado normal: timer + botão sincronizar
-          const fmtC = (s: number) => {
-            if (s <= 0) return null;
-            const h = Math.floor(s / 3600);
-            const m = Math.floor((s % 3600) / 60);
-            const sec = s % 60;
-            if (h > 0) return `${h}h ${String(m).padStart(2,"0")}min`;
-            return `${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`;
-          };
-          const label = fmtC(munCountdownSec ?? 0);
+          const secs = munCountdownSec ?? 0;
+          const h = Math.floor(secs / 3600);
+          const m = Math.floor((secs % 3600) / 60);
+          const sec = secs % 60;
+          const label = secs > 0
+            ? (h > 0 ? `${h}h ${String(m).padStart(2,"0")}min` : `${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`)
+            : null;
           const latestSync = enabledMuns
-            .map((m: any) => m.last_sync_at)
+            .map((m2: any) => m2.last_sync_at)
             .filter(Boolean)
             .sort()
             .at(-1);
+
+          // Regras de cobertura de cada portal habilitado
+          const regraPortais = enabledMuns.map((mun2: any) => {
+            if (mun2.provider === "siapgeo")
+              return { nome: mun2.nome_municipio, regra: "cobre NFS-e de 2018 até 31/12/2025 (SIAP GEO)", cor: "text-blue-700" };
+            if (mun2.provider === "nfse_nacional")
+              return { nome: mun2.nome_municipio, regra: "cobre NFS-e a partir de 01/01/2026 — requer Certificado A1 SEFAZ", cor: "text-violet-700" };
+            return { nome: mun2.nome_municipio, regra: `portal: ${mun2.provider}`, cor: "text-slate-600" };
+          });
+
           return (
-            <div className={`flex items-center gap-3 rounded-xl border px-4 py-2.5 ${label ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
-              <div className="relative shrink-0 w-10 h-10">
-                <svg className="w-10 h-10 -rotate-90" viewBox="0 0 36 36">
-                  <circle cx="18" cy="18" r="15" fill="none" stroke="#e5e7eb" strokeWidth="3" />
-                  <circle cx="18" cy="18" r="15" fill="none"
-                    stroke={label ? "#f59e0b" : "#10b981"} strokeWidth="3"
-                    strokeDasharray="94.2"
-                    strokeDashoffset={label ? String(94.2 * (1 - (munCountdownSec ?? 0) / (55 * 60))) : "0"}
-                    strokeLinecap="round"
-                    style={{ transition: "stroke-dashoffset 1s linear" }}
-                  />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <RefreshCw className={`w-3.5 h-3.5 ${label ? "text-amber-500" : "text-emerald-500 animate-spin"}`} />
+            <div className="flex flex-col gap-2">
+              {/* Ring timer */}
+              <div className={`flex items-center gap-3 rounded-xl border px-4 py-2.5 ${label ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
+                {/* Ring ampliado com dígitos dentro */}
+                <div className="relative shrink-0 w-16 h-16">
+                  <svg className="w-16 h-16 -rotate-90" viewBox="0 0 36 36">
+                    <circle cx="18" cy="18" r="15" fill="none" stroke="#e5e7eb" strokeWidth="2.5" />
+                    <circle cx="18" cy="18" r="15" fill="none"
+                      stroke={label ? "#f59e0b" : "#10b981"} strokeWidth="2.5"
+                      strokeDasharray="94.2"
+                      strokeDashoffset={label ? String(94.2 * (1 - secs / (55 * 60))) : "0"}
+                      strokeLinecap="round"
+                      style={{ transition: "stroke-dashoffset 1s linear" }}
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    {label ? (
+                      h > 0 ? (
+                        <>
+                          <span className="font-mono text-[9px] font-bold leading-none tabular-nums" style={{ color: "#d97706" }}>{h}h</span>
+                          <span className="font-mono text-[9px] font-bold leading-none tabular-nums mt-0.5" style={{ color: "#d97706" }}>{String(m).padStart(2,"0")}m</span>
+                        </>
+                      ) : (
+                        <span className="font-mono text-[9px] font-bold leading-none tabular-nums" style={{ color: "#d97706" }}>
+                          {String(m).padStart(2,"0")}:{String(sec).padStart(2,"0")}
+                        </span>
+                      )
+                    ) : (
+                      <RefreshCw className="w-4 h-4 text-emerald-500 animate-spin" />
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  {label ? (
+                    <>
+                      <p className="text-sm font-semibold text-amber-800">
+                        Próxima sync automática em{" "}
+                        <span className="font-mono text-amber-700 tabular-nums">{label}</span>
+                      </p>
+                      <p className="text-xs text-amber-600 mt-0.5">
+                        {enabledMuns.map((m2: any) => m2.nome_municipio).join(", ")} — o sistema busca novas NFS-e automaticamente toda hora.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm font-semibold text-emerald-800">✅ Pronto — sincronizando em background</p>
+                      <p className="text-xs text-emerald-600 mt-0.5">
+                        {enabledMuns.map((m2: any) => m2.nome_municipio).join(", ")} — buscando novas NFS-e agora.
+                      </p>
+                    </>
+                  )}
+                </div>
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  {latestSync && (
+                    <div className="text-right text-xs text-slate-400 hidden sm:block">
+                      <div>Última sync</div>
+                      <div className="font-medium text-slate-500">
+                        {new Date(latestSync).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}
+                      </div>
+                    </div>
+                  )}
+                  <button
+                    className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg border border-emerald-300 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed bg-white transition-colors"
+                    disabled={syncAllMunMut.isPending}
+                    onClick={() => syncAllMunMut.mutate({ companyId: companyId! })}
+                  >
+                    {syncAllMunMut.isPending
+                      ? <><RefreshCw className="w-3 h-3 animate-spin" /> Sincronizando…</>
+                      : <><RefreshCw className="w-3 h-3" /> Sincronizar Agora</>
+                    }
+                  </button>
                 </div>
               </div>
-              <div className="flex-1 min-w-0">
-                {label ? (
-                  <>
-                    <p className="text-sm font-semibold text-amber-800">
-                      Próxima sync automática em{" "}
-                      <span className="font-mono text-amber-700 tabular-nums">{label}</span>
+
+              {/* Regras de cobertura dos portais */}
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 flex flex-col gap-1.5">
+                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-0.5">Regras de consulta</p>
+                {regraPortais.map((r, i) => (
+                  <div key={i} className="flex items-start gap-1.5">
+                    <span className="text-[10px] mt-0.5">📋</span>
+                    <p className="text-xs leading-snug">
+                      <span className="font-semibold text-slate-700">{r.nome}:</span>{" "}
+                      <span className={r.cor}>{r.regra}</span>
                     </p>
-                    <p className="text-xs text-amber-600 mt-0.5">
-                      Prefeituras sincronizadas: {enabledMuns.map((m: any) => m.nome_municipio).join(", ")} — o sistema busca novas NFS-e automaticamente toda hora.
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-sm font-semibold text-emerald-800">✅ Pronto — sincronizando em background</p>
-                    <p className="text-xs text-emerald-600 mt-0.5">
-                      {enabledMuns.map((m: any) => m.nome_municipio).join(", ")} — buscando novas NFS-e agora.
-                    </p>
-                  </>
-                )}
-              </div>
-              <div className="flex flex-col items-end gap-1.5 shrink-0">
-                {latestSync && (
-                  <div className="text-right text-xs text-slate-400 hidden sm:block">
-                    <div>Última sync</div>
-                    <div className="font-medium text-slate-500">
-                      {new Date(latestSync).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}
-                    </div>
                   </div>
-                )}
-                <button
-                  className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg border border-emerald-300 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed bg-white transition-colors"
-                  disabled={syncAllMunMut.isPending}
-                  onClick={() => syncAllMunMut.mutate({ companyId: companyId! })}
-                >
-                  {syncAllMunMut.isPending
-                    ? <><RefreshCw className="w-3 h-3 animate-spin" /> Sincronizando…</>
-                    : <><RefreshCw className="w-3 h-3" /> Sincronizar Agora</>
-                  }
-                </button>
+                ))}
+                <p className="text-[11px] text-slate-500 mt-0.5 border-t border-slate-200 pt-1.5">
+                  💡 Notas de <strong>2026 em diante</strong> só chegam via <strong>Portal Nacional</strong> (cert A1) ou <strong>Importar PDF</strong>.
+                </p>
               </div>
             </div>
           );
