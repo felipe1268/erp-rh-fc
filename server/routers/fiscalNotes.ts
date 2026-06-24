@@ -414,9 +414,11 @@ export const fiscalNotesRouter = router({
       // 3. Linhas de extrato bancário do período (com vínculo a NF via stmt_line_id)
       const bankQ = await db.$client.query(`
         SELECT bsl.id, bsl.data, bsl.descricao, bsl.valor, bsl.tipo, bsl.conciliado,
+          COALESCE(cba.apelido, cba.banco, '') AS conta_nome,
           (SELECT fn.id      FROM fiscal_notes fn WHERE fn.stmt_line_id = bsl.id AND fn.company_id = $1 LIMIT 1) AS fn_id,
           (SELECT fn.numero_nf FROM fiscal_notes fn WHERE fn.stmt_line_id = bsl.id AND fn.company_id = $1 LIMIT 1) AS fn_numero
         FROM bank_statement_lines bsl
+        LEFT JOIN company_bank_accounts cba ON cba.id = bsl.conta_bancaria_id
         WHERE bsl.company_id = $1
           AND bsl.data >= $2 AND bsl.data < $3
         ORDER BY bsl.data DESC

@@ -648,7 +648,7 @@ function BankTable({ rows, tipo }: { rows: any[]; tipo: "entrada" | "saida" }) {
       <table className="w-full text-xs">
         <thead className={`${head} uppercase`}>
           <tr>
-            {["Data","Descrição","Valor","Conciliado","NF#"].map(h => (
+            {["Data","Conta","Descrição","Valor","Conciliado","NF#"].map(h => (
               <th key={h} className="px-3 py-2.5 text-left font-semibold whitespace-nowrap tracking-wide">{h}</th>
             ))}
           </tr>
@@ -657,7 +657,8 @@ function BankTable({ rows, tipo }: { rows: any[]; tipo: "entrada" | "saida" }) {
           {rows.map((b: any, i: number) => (
             <tr key={b.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
               <td className="px-3 py-2 whitespace-nowrap text-slate-500 font-medium">{fmtDate(b.data)}</td>
-              <td className="px-3 py-2 max-w-[240px] truncate text-slate-700" title={b.descricao}>{b.descricao}</td>
+              <td className="px-3 py-2 whitespace-nowrap text-slate-500 text-[11px] max-w-[120px] truncate" title={b.conta_nome}>{b.conta_nome || "—"}</td>
+              <td className="px-3 py-2 max-w-[220px] truncate text-slate-700" title={b.descricao}>{b.descricao}</td>
               <td className={`px-3 py-2 text-right font-bold whitespace-nowrap ${valColor}`}>
                 {fmtBRL(b.valor)}
               </td>
