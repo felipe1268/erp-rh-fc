@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3638** — **DASHBOARD NF-e · BUGFIX CRASH "f.name.length" NO TREEMAP DE FORNECEDORES. 100% FRONTEND.** Recharts Treemap: dados em root+children + content como render function. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3637** — **DASHBOARDS · BUGFIX TEXTO/NÚMERO CORTADO NOS KPI CARDS E CHART CARDS. 100% FRONTEND.** KpiCard: truncate removido + fonte responsiva (text-sm/base/lg) + break-all. ChartCard: truncate removido do título/subtítulo. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3636** — **NF-e RECEBIDAS · ANEL SEFAZ COM DÍGITOS DO COUNTDOWN. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Anel ampliado (w-10→w-16); dígitos dentro do círculo: "Xh/YYm" (com horas) ou "MM:SS" (mono, últimos 60min). Cota disponível → RefreshCw verde girando. Detalhe: `shared/changelog.ts`.

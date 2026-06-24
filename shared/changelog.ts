@@ -1,6 +1,13 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3638 — **DASHBOARD NF-e · BUGFIX CRASH "f.name.length" NO TREEMAP DE FORNECEDORES. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Recharts Treemap crash com `content={<JSX/>}` + flat data: (1) dados agora embrulhados
+ * em root node `[{name:"root",children:[...]}]`; (2) `content` trocado de JSX element
+ * para render function `(p)=><TreemapNode {...p}/>` (evita clone interno com props undefined);
+ * (3) `f.nome` com fallback `?? "Desconhecido"`.
+ *
  * Rev. 3637 — **DASHBOARDS · BUGFIX TEXTO/NÚMERO CORTADO NOS KPI CARDS E CHART CARDS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * KpiCard: `truncate` removido do valor + fonte reduzida (text-2xl→text-sm/base/lg responsivo)

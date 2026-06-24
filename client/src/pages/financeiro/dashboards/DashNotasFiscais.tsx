@@ -422,11 +422,14 @@ export default function DashNotasFiscais() {
   const topFornMax     = topForn[0]?.total ?? 1;
   const totalForn      = useMemo(() => topForn.reduce((s, f) => s + f.total, 0), [topForn]);
   const treemapData    = useMemo(() => topForn.slice(0, 18).map((f, i) => ({
-    name:  f.nome,
+    name:  f.nome ?? "Desconhecido",
     value: f.total,
     qtd:   f.qtd,
     fill:  PALETTE[i % PALETTE.length],
   })), [topForn]);
+  const treemapRoot    = useMemo(() => (
+    treemapData.length > 0 ? [{ name: "root", children: treemapData }] : []
+  ), [treemapData]);
 
   const periodoLabel = mes === 0 ? String(ano) : `${MESES_ABREV[mes - 1]}/${ano}`;
   const indiceGeral  = resumo
@@ -670,10 +673,10 @@ export default function DashNotasFiscais() {
               : (
                 <ResponsiveContainer width="100%" height="100%">
                   <Treemap
-                    data={treemapData}
+                    data={treemapRoot}
                     dataKey="value"
                     aspectRatio={4 / 3}
-                    content={<TreemapNode />}
+                    content={(props: any) => <TreemapNode {...props} />}
                   >
                     <Tooltip
                       content={({ active, payload }) => {
