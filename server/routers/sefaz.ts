@@ -19,8 +19,20 @@ const SEFAZ_URL_PROD = "https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDi
 const SEFAZ_URL_HOM  = "https://hom1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx";
 
 // ── URLs Manifestação do Destinatário (MD-e) ────────────────────────────────
-const MDEV_URL_PROD = "https://nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx";
+// nfe.fazenda.gov.br não resolve em todos os ambientes; usar endpoint por UF.
+// SVRS (nfe.svrs.rs.gov.br) cobre a maioria dos estados: SP, RJ, PR, SC, GO, DF, etc.
 const MDEV_URL_HOM  = "https://hom1.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx";
+const MDEV_URL_SVRS = "https://nfe.svrs.rs.gov.br/ws/recepcaoevento/recepcaoevento4.asmx";
+// Mapa cUF → URL de produção para estados com servidor próprio
+const MDEV_URL_POR_CUF: Record<number, string> = {
+  43: "https://nfe.sefaz.rs.gov.br/ws/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx", // RS
+  29: "https://nfep.sefaz.ba.gov.br/ws/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx", // BA
+  // MG (31) e SP (35) e demais → SVRS (default)
+};
+function getMdeUrl(cUF: number, tpAmb: number): string {
+  if (tpAmb === 2) return MDEV_URL_HOM;
+  return MDEV_URL_POR_CUF[cUF] ?? MDEV_URL_SVRS;
+}
 
 const MDEV_TP_EVENTO: Record<string, number> = {
   acatada:      210200,   // Confirmação da Operação
@@ -1206,7 +1218,8 @@ export const sefazRouter = router({
 
       const cnpj = cleanCnpj(cfg.cnpj || "");
       const tpAmb = cfg.ambiente === "homologacao" ? 2 : 1;
-      const url   = tpAmb === 2 ? MDEV_URL_HOM : MDEV_URL_PROD;
+      const cUF   = parseInt(chaveNFe.slice(0, 2), 10);
+      const url   = getMdeUrl(cUF, tpAmb);
 
       // Extrai PEM do PFX
       let certPem: string, keyPem: string;

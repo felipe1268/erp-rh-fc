@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3660 — **NF-e RECEBIDAS · BUGFIX MANIFESTAÇÃO (ACEITAR/RECUSAR/DESCONHEÇO) — ENOTFOUND nfe.fazenda.gov.br. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * `nfe.fazenda.gov.br` não resolve DNS no ambiente do servidor (ENOTFOUND).
+ * `www1.nfe.fazenda.gov.br` e `nfe.svrs.rs.gov.br` resolvem (verificado via dns.lookup).
+ *
+ * Fix: substituído `MDEV_URL_PROD` (string estática) por `getMdeUrl(cUF, tpAmb)` que
+ * extrai o cUF dos 2 primeiros dígitos da chave NF-e e roteia para:
+ *   - RS (43) → nfe.sefaz.rs.gov.br
+ *   - BA (29) → nfep.sefaz.ba.gov.br
+ *   - demais (incl. SP=35, MG=31, RJ=33, PR=41...) → nfe.svrs.rs.gov.br (SVRS)
+ * Homologação mantém hom1.nfe.fazenda.gov.br (resolve).
+ *
  * Rev. 3659 — **NFS-e EMITIDAS · BANNER "PORTAL OFFLINE" FECHÁVEL COM PERSISTÊNCIA (localStorage). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * O banner vermelho "Portal da prefeitura indisponível" (SIAP GEO Guaratinguetá, genuinamente
