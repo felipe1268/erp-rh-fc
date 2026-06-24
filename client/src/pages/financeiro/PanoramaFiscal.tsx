@@ -1,22 +1,27 @@
 import React, { useState, useRef, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
-  ChevronLeft, ChevronRight, RefreshCw, Printer, Download,
-  FileSpreadsheet, TrendingUp, TrendingDown, AlertTriangle,
-  CheckCircle2, XCircle, Info, ChevronDown, ChevronUp,
+  ChevronLeft, ChevronRight, RefreshCw, Printer,
+  FileSpreadsheet, AlertTriangle, CheckCircle2,
+  Info, ChevronDown, ChevronUp, ArrowUpRight, ArrowDownLeft,
+  ShoppingCart, FileWarning, Receipt,
 } from "lucide-react";
 
-const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+const MESES_SHORT = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
-function fmtBRL(v: number | string | null | undefined) {
+function fmtBRL(v: number | string | null | undefined, opts?: { compact?: boolean }) {
   const n = parseFloat(String(v ?? 0));
-  if (isNaN(n)) return "R$ 0,00";
+  if (isNaN(n)) return "R$ 0";
+  if (opts?.compact) {
+    const abs = Math.abs(n);
+    if (abs >= 1_000_000) return `R$ ${(abs / 1_000_000).toFixed(1).replace(".", ",")}M`;
+    if (abs >= 1_000) return `R$ ${(abs / 1_000).toFixed(0)}k`;
+  }
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Math.abs(n));
 }
-function fmtDate(s: string | null | undefined) {
+function fmtDate(s: string | Date | null | undefined) {
   if (!s) return "—";
   const t = String(s).slice(0, 10);
   return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t.split("-").reverse().join("/") : t;
@@ -24,62 +29,105 @@ function fmtDate(s: string | null | undefined) {
 function fmtCnpj(c: string | null | undefined) {
   if (!c) return "—";
   const d = String(c).replace(/\D/g, "");
-  if (d.length !== 14) return c;
+  if (d.length !== 14) return String(c);
   return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12)}`;
 }
 
-function PctBadge({ pct }: { pct: number | null }) {
-  if (pct === null) return <span className="text-slate-400 text-xs">—</span>;
-  const color = pct >= 80 ? "bg-emerald-100 text-emerald-800" : pct >= 50 ? "bg-amber-100 text-amber-800" : "bg-red-100 text-red-700";
-  return <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${color}`}>{pct}%</span>;
-}
-
-function KpiCard({ label, total, qtd, pct, pctLabel, color }: {
-  label: string; total: number; qtd: number; pct?: number | null; pctLabel?: string; color: string;
+// ── Medidor circular SVG ─────────────────────────────────────────────────────
+function GaugeMeter({ pct, label, sublabel, size = 96 }: {
+  pct: number | null; label: string; sublabel: string; size?: number;
 }) {
+  const r = 38;
+  const cx = 50;
+  const cy = 50;
+  const circ = 2 * Math.PI * r;
+  const val  = pct ?? 0;
+  const dash = (val / 100) * circ;
+  const color = val >= 80 ? "#10b981" : val >= 50 ? "#f59e0b" : "#ef4444";
+  const bg    = val >= 80 ? "#d1fae5" : val >= 50 ? "#fef3c7" : "#fee2e2";
+  const textColor = val >= 80 ? "text-emerald-700" : val >= 50 ? "text-amber-700" : "text-red-600";
+
   return (
-    <Card className={`border ${color}`}>
-      <CardContent className="p-4">
-        <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">{label}</p>
-        <p className="text-xl font-bold text-slate-900 mt-1">{fmtBRL(total)}</p>
-        <p className="text-xs text-slate-400 mt-0.5">{qtd} documento{qtd !== 1 ? "s" : ""}</p>
-        {pct !== undefined && pct !== null && (
-          <div className="mt-2 flex items-center gap-1.5">
-            <div className="flex-1 bg-slate-200 rounded-full h-1.5 overflow-hidden">
-              <div className="h-1.5 rounded-full bg-indigo-500" style={{ width: `${Math.min(100, pct)}%` }} />
-            </div>
-            <span className="text-xs text-slate-500">{pctLabel}</span>
-            <PctBadge pct={pct} />
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <div className="flex flex-col items-center gap-1">
+      <div className="relative" style={{ width: size, height: size }}>
+        <svg viewBox="0 0 100 100" width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+          <circle cx={cx} cy={cy} r={r} fill="none" stroke={bg} strokeWidth="10" />
+          <circle
+            cx={cx} cy={cy} r={r} fill="none"
+            stroke={color} strokeWidth="10"
+            strokeDasharray={`${dash} ${circ}`}
+            strokeLinecap="round"
+            style={{ transition: "stroke-dasharray 0.6s ease" }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          {pct === null
+            ? <span className="text-slate-400 text-lg font-bold">—</span>
+            : <span className={`text-xl font-extrabold ${textColor}`}>{val}%</span>
+          }
+        </div>
+      </div>
+      <p className="text-xs font-semibold text-slate-700 text-center leading-tight">{label}</p>
+      <p className="text-[10px] text-slate-400 text-center">{sublabel}</p>
+    </div>
   );
 }
 
-function SectionHeader({ title, count, open, onToggle, variant = "default" }: {
-  title: string; count: number; open: boolean; onToggle: () => void; variant?: "ok" | "warn" | "default";
+// ── Card de alerta de ação ────────────────────────────────────────────────────
+function AlertCard({ icon, title, count, total, variant, onClick }: {
+  icon: React.ReactNode; title: string; count: number; total: number;
+  variant: "danger" | "warn" | "ok"; onClick?: () => void;
 }) {
-  const colors = {
-    ok: "border-emerald-200 bg-emerald-50 text-emerald-800",
-    warn: "border-amber-200 bg-amber-50 text-amber-800",
-    default: "border-slate-200 bg-slate-50 text-slate-700",
+  const styles = {
+    danger: "border-red-200 bg-red-50 hover:bg-red-100/80",
+    warn:   "border-amber-200 bg-amber-50 hover:bg-amber-100/80",
+    ok:     "border-emerald-200 bg-emerald-50 hover:bg-emerald-100/80",
   };
-  const icons = {
-    ok: <CheckCircle2 className="h-4 w-4 text-emerald-600" />,
-    warn: <AlertTriangle className="h-4 w-4 text-amber-600" />,
-    default: <Info className="h-4 w-4 text-slate-400" />,
+  const countStyle = {
+    danger: "bg-red-500 text-white",
+    warn:   "bg-amber-500 text-white",
+    ok:     "bg-emerald-500 text-white",
   };
   return (
     <button
       type="button"
-      onClick={onToggle}
-      className={`w-full flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors hover:brightness-95 ${colors[variant]}`}
+      onClick={onClick}
+      className={`flex flex-col gap-2 p-4 rounded-2xl border transition-colors text-left w-full ${styles[variant]} ${onClick ? "cursor-pointer" : "cursor-default"}`}
     >
-      {icons[variant]}
+      <div className="flex items-start justify-between gap-2">
+        <div className="p-2 rounded-xl bg-white/70">{icon}</div>
+        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${countStyle[variant]}`}>{count}</span>
+      </div>
+      <p className="text-sm font-semibold text-slate-800 leading-snug">{title}</p>
+      <p className="text-lg font-extrabold text-slate-900">{fmtBRL(total, { compact: true })}</p>
+    </button>
+  );
+}
+
+// ── Toggle de seção ─────────────────────────────────────────────────────────
+function SectionToggle({ title, count, total, open, onToggle, variant = "default" }: {
+  title: string; count: number; total?: number; open: boolean; onToggle: () => void;
+  variant?: "ok" | "warn" | "default";
+}) {
+  const base = {
+    ok:      "border-emerald-200 bg-emerald-50/60 text-emerald-800",
+    warn:    "border-amber-200  bg-amber-50/60  text-amber-800",
+    default: "border-slate-200  bg-slate-50/60  text-slate-700",
+  };
+  const dot = { ok: "bg-emerald-500", warn: "bg-amber-500", default: "bg-slate-400" };
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-medium transition-all hover:brightness-95 ${base[variant]}`}
+    >
+      <span className={`w-2 h-2 rounded-full shrink-0 ${dot[variant]}`} />
       <span className="flex-1 text-left">{title}</span>
-      <span className="text-xs opacity-70">{count} item{count !== 1 ? "s" : ""}</span>
-      {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+      {total !== undefined && (
+        <span className="text-xs font-bold opacity-80 hidden sm:inline">{fmtBRL(total, { compact: true })}</span>
+      )}
+      <span className="text-xs opacity-60 ml-1">{count} item{count !== 1 ? "s" : ""}</span>
+      {open ? <ChevronUp className="h-4 w-4 shrink-0 opacity-50" /> : <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />}
     </button>
   );
 }
@@ -92,17 +140,24 @@ interface Props {
 
 export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl }: Props) {
   const hoje = new Date();
-  const [mes, setMes]   = useState(hoje.getMonth() + 1);
-  const [ano, setAno]   = useState(hoje.getFullYear());
+  const [mes, setMes] = useState(hoje.getMonth() + 1);
+  const [ano, setAno] = useState(hoje.getFullYear());
   const [openSec, setOpenSec] = useState<Record<string, boolean>>({
     ocsComNota: false, ocsSemNota: true,
     entComNota: false, entSemNota: true,
     saiComNota: false, saiSemNota: true,
-    nfseList: false,   nfeList: false,
+    spedInfo: false,
   });
-  const printRef = useRef<HTMLDivElement>(null);
+  const secOcsRef    = useRef<HTMLDivElement>(null);
+  const secEntRef    = useRef<HTMLDivElement>(null);
+  const secSaiRef    = useRef<HTMLDivElement>(null);
+  const printRef     = useRef<HTMLDivElement>(null);
 
   const toggle = (key: string) => setOpenSec(p => ({ ...p, [key]: !p[key] }));
+  const jumpTo = (ref: React.RefObject<HTMLDivElement | null>, secKey: string) => {
+    setOpenSec(p => ({ ...p, [secKey]: true }));
+    setTimeout(() => ref.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+  };
 
   const { data, isFetching, refetch } = trpc.fiscalNotes.getPanoramaFiscal.useQuery(
     { companyId, mes, ano },
@@ -111,270 +166,296 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
 
   const r = data?.resumo;
 
-  // ── Excel export ─────────────────────────────────────────────────────────
+  // ── Excel export ──────────────────────────────────────────────────────────
   const exportExcel = useCallback(async () => {
     if (!data) return;
     const XLSX = await import("xlsx");
     const wb = XLSX.utils.book_new();
+    const pl = `${MESES_SHORT[mes - 1]}/${ano}`;
 
-    const periodoLabel = `${MESES[mes - 1]}/${ano}`;
-
-    // Sheet 1: Resumo
     const resumoData = [
-      ["Panorama Fiscal — " + periodoLabel, "", ""],
-      ["Empresa:", companyNome ?? "", ""],
-      ["", "", ""],
+      ["Panorama Fiscal — " + pl], ["Empresa:", companyNome ?? ""], [""],
       ["INDICADOR", "VALOR (R$)", "COBERTURA NF (%)"],
-      ["NFS-e Emitidas",      r?.nfseEmitidas.total ?? 0,    ""],
-      ["NF-e Recebidas",      r?.nfeRecebidas.total ?? 0,    ""],
-      ["Entradas Bancárias",  r?.entradasBancarias.total ?? 0, r?.coberturaNfseReceita != null ? `${r.coberturaNfseReceita}%` : "—"],
-      ["Saídas Bancárias",    r?.saidasBancarias.total ?? 0,   r?.coberturaSaidaNfe != null ? `${r.coberturaSaidaNfe}%` : "—"],
-      ["Total OCs (Compras)", r?.totalOcs.total ?? 0,          r?.coberturaOcNfe != null ? `${r.coberturaOcNfe}%` : "—"],
+      ["NFS-e Emitidas", r?.nfseEmitidas.total ?? 0, ""],
+      ["NF-e Recebidas", r?.nfeRecebidas.total ?? 0, ""],
+      ["Entradas Bancárias", r?.entradasBancarias.total ?? 0, r?.coberturaNfseReceita != null ? `${r.coberturaNfseReceita}%` : "—"],
+      ["Saídas Bancárias", r?.saidasBancarias.total ?? 0, r?.coberturaSaidaNfe != null ? `${r.coberturaSaidaNfe}%` : "—"],
+      ["Total OCs", r?.totalOcs.total ?? 0, r?.coberturaOcNfe != null ? `${r.coberturaOcNfe}%` : "—"],
     ];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumoData), "Resumo");
 
-    // Sheet 2: NFS-e Emitidas
-    const nfseRows = [["NF#", "Tomador", "CNPJ Tomador", "Valor Bruto", "Valor Líquido", "Emissão", "Status"]];
-    for (const n of data.nfseEmitidas ?? []) {
+    const nfseRows = [["NF#","Tomador","CNPJ Tomador","Valor Bruto","Valor Líquido","Emissão","Status"]];
+    for (const n of data.nfseEmitidas ?? [])
       nfseRows.push([n.numero_nf, n.tomador_razao_social ?? "", fmtCnpj(n.tomador_cnpj), parseFloat(n.valor_bruto ?? "0"), parseFloat(n.valor_liquido ?? "0"), fmtDate(n.data_emissao), n.status]);
-    }
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(nfseRows), "NFS-e Emitidas");
 
-    // Sheet 3: NF-e Recebidas
-    const nfeRows = [["NF#", "Emitente", "CNPJ Emitente", "Valor", "Emissão", "Status"]];
-    for (const n of data.nfeRecebidas ?? []) {
+    const nfeRows = [["NF#","Emitente","CNPJ","Valor","Emissão","Status"]];
+    for (const n of data.nfeRecebidas ?? [])
       nfeRows.push([n.numero_nf, n.emitente_nome ?? "", fmtCnpj(n.emitente_cnpj), parseFloat(n.valor_bruto ?? "0"), fmtDate(n.data_emissao), n.status]);
-    }
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(nfeRows), "NF-e Recebidas");
 
-    // Sheet 4: OCs sem Nota
-    const ocRows = [["OC#", "Fornecedor", "CNPJ", "Valor", "Obra", "Status", "Emitida em"]];
-    for (const o of data.ocsSemNota ?? []) {
-      ocRows.push([o.numero, o.supplier_razao ?? o.supplier_nome, fmtCnpj(o.supplier_cnpj), parseFloat(o.valor_total ?? "0"), o.obra_nome ?? "", o.status, fmtDate(o.created_at)]);
-    }
-    for (const o of data.ocsComNota ?? []) {
-      ocRows.push([o.numero + " ✓", o.supplier_razao ?? o.supplier_nome, fmtCnpj(o.supplier_cnpj), parseFloat(o.valor_total ?? "0"), o.obra_nome ?? "", o.status + " (NF " + (o.nfeNumero ?? "?") + ")", fmtDate(o.created_at)]);
-    }
+    const ocRows = [["OC#","Fornecedor","CNPJ","Valor","Obra","Status","NF#","Emitida em"]];
+    for (const o of [...(data.ocsSemNota ?? []), ...(data.ocsComNota ?? [])])
+      ocRows.push([o.numero, o.supplier_razao ?? o.supplier_nome, fmtCnpj(o.supplier_cnpj), parseFloat(o.valor_total ?? "0"), o.obra_nome ?? "", o.status, o.nfeNumero ?? "—", fmtDate(o.created_at)]);
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ocRows), "OC vs NF-e");
 
-    // Sheet 5: Movimentos sem Nota
-    const movRows = [["Data", "Descrição", "Valor", "Tipo", "Conciliado", "NF vinculada"]];
-    for (const b of [...(data.saidasSemNota ?? []), ...(data.entradasSemNota ?? [])]) {
+    const movRows = [["Data","Descrição","Valor","Tipo","Conciliado","NF#"]];
+    for (const b of [...(data.saidasSemNota ?? []), ...(data.entradasSemNota ?? [])])
       movRows.push([fmtDate(b.data), b.descricao, parseFloat(b.valor ?? "0"), b.tipo === "credito" ? "Entrada" : "Saída", b.conciliado ? "Sim" : "Não", b.fn_numero ?? "—"]);
-    }
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(movRows), "Movimentos s/ Nota");
 
-    XLSX.writeFile(wb, `panorama-fiscal-${periodoLabel.replace("/", "-")}.xlsx`);
+    XLSX.writeFile(wb, `panorama-fiscal-${pl.replace("/", "-")}.xlsx`);
   }, [data, mes, ano, companyNome, r]);
 
-  // ── PDF export ────────────────────────────────────────────────────────────
-  const exportPdf = () => window.print();
+  const periodoLabel = `${MESES[mes - 1]} ${ano}`;
+  const periodoShort = `${MESES_SHORT[mes - 1]}/${ano}`;
 
+  // ── Loading ───────────────────────────────────────────────────────────────
   if (!data && isFetching) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <RefreshCw className="h-6 w-6 animate-spin text-indigo-500 mr-2" />
-        <span className="text-slate-500">Carregando panorama fiscal…</span>
+      <div className="flex flex-col items-center justify-center py-28 gap-3">
+        <div className="w-12 h-12 rounded-full border-4 border-indigo-200 border-t-indigo-600 animate-spin" />
+        <p className="text-sm text-slate-500">Carregando panorama fiscal…</p>
       </div>
     );
   }
 
-  const periodoLabel = `${MESES[mes - 1]}/${ano}`;
+  // ── Derived counts ────────────────────────────────────────────────────────
+  const ocsSemQtd   = data?.ocsSemNota?.length ?? 0;
+  const ocsSemTotal = (data?.ocsSemNota ?? []).reduce((s: number, o: any) => s + parseFloat(o.valor_total ?? "0"), 0);
+  const entSemQtd   = data?.entradasSemNota?.length ?? 0;
+  const entSemTotal = (data?.entradasSemNota ?? []).reduce((s: number, b: any) => s + Math.abs(parseFloat(b.valor ?? "0")), 0);
+  const saiSemQtd   = data?.saidasSemNota?.length ?? 0;
+  const saiSemTotal = (data?.saidasSemNota ?? []).reduce((s: number, b: any) => s + Math.abs(parseFloat(b.valor ?? "0")), 0);
+
+  const totalAlerts = ocsSemQtd + entSemQtd + saiSemQtd;
+  const saúde = r
+    ? Math.round(((r.coberturaNfseReceita ?? 50) + (r.coberturaOcNfe ?? 50) + (r.coberturaSaidaNfe ?? 50)) / 3)
+    : null;
 
   return (
     <>
-      {/* ── Print CSS ─────────────────────────────────────────────────────── */}
       <style>{`
         @media print {
           body * { visibility: hidden !important; }
           #panorama-print-area, #panorama-print-area * { visibility: visible !important; }
-          #panorama-print-area { position: fixed; top: 0; left: 0; width: 100%; padding: 24px; }
+          #panorama-print-area { position: fixed; inset: 0; padding: 24px; overflow: visible; }
           .no-print { display: none !important; }
         }
       `}</style>
 
-      <div id="panorama-print-area" ref={printRef}>
-        {/* ── Header ───────────────────────────────────────────────────── */}
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-              📊 Panorama Fiscal
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Cruzamento NFS-e × NF-e × OC × Extrato Bancário
-            </p>
-          </div>
-          {/* Print logo */}
-          {companyLogoUrl && (
-            <img src={companyLogoUrl} alt="Logo" className="h-10 object-contain hidden print:block" />
-          )}
-        </div>
+      <div id="panorama-print-area" ref={printRef} className="space-y-5 pb-10">
 
-        {/* ── Seletor mês/ano + botões ──────────────────────────────────── */}
-        <div className="flex items-center gap-3 mb-5 no-print">
-          <div className="flex items-center gap-1 border rounded-xl px-3 py-1.5 bg-white shadow-sm">
-            <button type="button" onClick={() => { if (mes === 1) { setMes(12); setAno(a => a - 1); } else setMes(m => m - 1); }} className="p-0.5 hover:bg-slate-100 rounded">
+        {/* ── Barra de controle ──────────────────────────────────────────── */}
+        <div className="no-print flex flex-wrap items-center gap-2">
+          {/* Seletor de período */}
+          <div className="flex items-center gap-1 bg-slate-100 rounded-xl px-2 py-1.5">
+            <button type="button"
+              onClick={() => { if (mes === 1) { setMes(12); setAno(a => a - 1); } else setMes(m => m - 1); }}
+              className="p-1 hover:bg-white rounded-lg transition-colors">
               <ChevronLeft className="h-4 w-4 text-slate-500" />
             </button>
-            <span className="text-sm font-semibold text-slate-700 w-20 text-center">{periodoLabel}</span>
-            <button type="button" onClick={() => { if (mes === 12) { setMes(1); setAno(a => a + 1); } else setMes(m => m + 1); }} className="p-0.5 hover:bg-slate-100 rounded">
+            <span className="text-sm font-bold text-slate-800 min-w-[120px] text-center">{periodoLabel}</span>
+            <button type="button"
+              onClick={() => { if (mes === 12) { setMes(1); setAno(a => a + 1); } else setMes(m => m + 1); }}
+              className="p-1 hover:bg-white rounded-lg transition-colors">
               <ChevronRight className="h-4 w-4 text-slate-500" />
             </button>
           </div>
-          <Button size="sm" variant="outline" onClick={() => refetch()} disabled={isFetching} className="gap-1.5 h-9">
+
+          <button type="button" onClick={() => refetch()} disabled={isFetching}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors disabled:opacity-50">
             <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} />
             Atualizar
-          </Button>
+          </button>
+
           <div className="flex-1" />
-          <Button size="sm" variant="outline" onClick={exportExcel} disabled={!data || isFetching} className="gap-1.5 h-9 border-emerald-300 text-emerald-700 hover:bg-emerald-50">
+
+          <button type="button" onClick={exportExcel} disabled={!data || isFetching}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors disabled:opacity-40">
             <FileSpreadsheet className="h-3.5 w-3.5" />
             Excel
-          </Button>
-          <Button size="sm" variant="outline" onClick={exportPdf} disabled={!data} className="gap-1.5 h-9 border-indigo-300 text-indigo-700 hover:bg-indigo-50">
+          </button>
+          <button type="button" onClick={() => window.print()} disabled={!data}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition-colors disabled:opacity-40">
             <Printer className="h-3.5 w-3.5" />
             PDF
-          </Button>
+          </button>
         </div>
 
-        {/* ── Print header (só no PDF) ─────────────────────────────────── */}
-        <div className="hidden print:block mb-6">
-          <div className="flex items-center justify-between border-b pb-3 mb-4">
-            {companyLogoUrl && <img src={companyLogoUrl} alt="Logo" className="h-12 object-contain" />}
-            <div className="text-right">
-              <p className="text-lg font-bold text-slate-900">Panorama Fiscal</p>
-              <p className="text-sm text-slate-600">{companyNome} · {periodoLabel}</p>
-              <p className="text-xs text-slate-400">Gerado em {new Date().toLocaleDateString("pt-BR")}</p>
-            </div>
+        {/* Print header */}
+        <div className="hidden print:flex items-center justify-between border-b pb-4 mb-4">
+          {companyLogoUrl && <img src={companyLogoUrl} alt="" className="h-12 object-contain" />}
+          <div className="text-right">
+            <p className="text-xl font-bold">Panorama Fiscal — {periodoLabel}</p>
+            <p className="text-sm text-slate-500">{companyNome} · {new Date().toLocaleDateString("pt-BR")}</p>
           </div>
         </div>
 
         {!data ? (
-          <div className="text-center py-12 text-slate-400">Nenhum dado disponível para {periodoLabel}.</div>
+          <div className="text-center py-16 text-slate-400">
+            <Receipt className="h-10 w-10 mx-auto mb-3 opacity-30" />
+            <p>Nenhum dado disponível para {periodoShort}.</p>
+          </div>
         ) : (
           <>
-            {/* ── 6 KPI cards ─────────────────────────────────────────────── */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
-              <KpiCard label="NFS-e Emitidas" total={r!.nfseEmitidas.total} qtd={r!.nfseEmitidas.qtd}
-                pct={r!.coberturaNfseReceita} pctLabel="das entradas" color="border-indigo-100" />
-              <KpiCard label="NF-e Recebidas" total={r!.nfeRecebidas.total} qtd={r!.nfeRecebidas.qtd}
-                pct={r!.coberturaOcNfe} pctLabel="das OCs" color="border-sky-100" />
-              <KpiCard label="OCs (Compras)" total={r!.totalOcs.total} qtd={r!.totalOcs.qtd}
-                color="border-violet-100" />
-              <KpiCard label="Entradas Bancárias" total={r!.entradasBancarias.total} qtd={r!.entradasBancarias.qtd}
-                pct={r!.coberturaNfseReceita} pctLabel="com nota" color="border-emerald-100" />
-              <KpiCard label="Saídas Bancárias" total={r!.saidasBancarias.total} qtd={r!.saidasBancarias.qtd}
-                pct={r!.coberturaSaidaNfe} pctLabel="com nota" color="border-rose-100" />
-              <Card className="border border-amber-100 bg-amber-50/60">
-                <CardContent className="p-4">
-                  <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">Cobertura Geral</p>
-                  <div className="mt-2 space-y-1.5">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-slate-600">Receita c/ nota</span>
-                      <PctBadge pct={r!.coberturaNfseReceita} />
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-slate-600">OC c/ NF-e</span>
-                      <PctBadge pct={r!.coberturaOcNfe} />
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-slate-600">Saídas c/ nota</span>
-                      <PctBadge pct={r!.coberturaSaidaNfe} />
-                    </div>
+            {/* ════════════════════════════════════════════════════════════
+                PAINEL DE SAÚDE FISCAL
+            ════════════════════════════════════════════════════════════ */}
+            <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
+              {/* Header do painel */}
+              <div className="px-5 py-4 bg-gradient-to-r from-slate-800 to-slate-700 flex items-center justify-between">
+                <div>
+                  <h2 className="text-white font-bold text-base">Saúde Fiscal — {periodoShort}</h2>
+                  <p className="text-slate-400 text-xs mt-0.5">Cobertura de documentos fiscais sobre movimentos financeiros</p>
+                </div>
+                {saúde !== null && (
+                  <div className="text-right">
+                    <p className={`text-3xl font-black ${saúde >= 80 ? "text-emerald-400" : saúde >= 50 ? "text-amber-400" : "text-red-400"}`}>{saúde}%</p>
+                    <p className="text-slate-400 text-[10px] uppercase tracking-wide">índice geral</p>
                   </div>
-                </CardContent>
-              </Card>
+                )}
+              </div>
+
+              {/* Medidores + volumes */}
+              <div className="bg-white px-5 py-5">
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                  <GaugeMeter pct={r!.coberturaNfseReceita} label="Receita c/ NFS-e" sublabel="entradas bancárias" size={88} />
+                  <GaugeMeter pct={r!.coberturaOcNfe}       label="OC c/ NF-e"      sublabel="ordens de compra"    size={88} />
+                  <GaugeMeter pct={r!.coberturaSaidaNfe}    label="Saída c/ nota"   sublabel="débitos bancários"   size={88} />
+                </div>
+
+                {/* 5 volumes em linha */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 border-t border-slate-100 pt-4">
+                  {[
+                    { label: "NFS-e emitidas", val: r!.nfseEmitidas.total,      qtd: r!.nfseEmitidas.qtd,      color: "text-indigo-600",  bg: "bg-indigo-50" },
+                    { label: "NF-e recebidas", val: r!.nfeRecebidas.total,       qtd: r!.nfeRecebidas.qtd,      color: "text-sky-600",     bg: "bg-sky-50" },
+                    { label: "OCs (compras)",  val: r!.totalOcs.total,           qtd: r!.totalOcs.qtd,          color: "text-violet-600",  bg: "bg-violet-50" },
+                    { label: "Entradas banco", val: r!.entradasBancarias.total,  qtd: r!.entradasBancarias.qtd, color: "text-emerald-600", bg: "bg-emerald-50" },
+                    { label: "Saídas banco",   val: r!.saidasBancarias.total,    qtd: r!.saidasBancarias.qtd,   color: "text-rose-600",    bg: "bg-rose-50" },
+                  ].map(m => (
+                    <div key={m.label} className={`rounded-xl px-3 py-2.5 ${m.bg}`}>
+                      <p className="text-[10px] uppercase tracking-wide text-slate-500 font-medium mb-1">{m.label}</p>
+                      <p className={`text-base font-extrabold ${m.color}`}>{fmtBRL(m.val, { compact: true })}</p>
+                      <p className="text-[10px] text-slate-400">{m.qtd} doc{m.qtd !== 1 ? "s" : ""}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
 
-            {/* ── Seção 1: OCs × NF-e ──────────────────────────────────── */}
-            <div className="space-y-2 mb-4">
-              <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Ordens de Compra × NF-e Recebida</h3>
+            {/* ════════════════════════════════════════════════════════════
+                PAINEL DE AÇÕES — só mostra se há pendências
+            ════════════════════════════════════════════════════════════ */}
+            {totalAlerts > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="flex items-center justify-center w-6 h-6 rounded-full bg-red-500 text-white text-xs font-bold shrink-0">{totalAlerts}</div>
+                  <h3 className="text-sm font-bold text-slate-800">Pendências — ação necessária</h3>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {ocsSemQtd > 0 && (
+                    <AlertCard
+                      icon={<ShoppingCart className="h-5 w-5 text-amber-600" />}
+                      title="OCs sem NF-e recebida"
+                      count={ocsSemQtd} total={ocsSemTotal}
+                      variant={ocsSemQtd >= 5 ? "danger" : "warn"}
+                      onClick={() => jumpTo(secOcsRef, "ocsSemNota")}
+                    />
+                  )}
+                  {entSemQtd > 0 && (
+                    <AlertCard
+                      icon={<ArrowDownLeft className="h-5 w-5 text-amber-600" />}
+                      title="Entradas sem NFS-e emitida"
+                      count={entSemQtd} total={entSemTotal}
+                      variant={entSemQtd >= 5 ? "danger" : "warn"}
+                      onClick={() => jumpTo(secEntRef, "entSemNota")}
+                    />
+                  )}
+                  {saiSemQtd > 0 && (
+                    <AlertCard
+                      icon={<ArrowUpRight className="h-5 w-5 text-rose-600" />}
+                      title="Saídas sem NF-e recebida"
+                      count={saiSemQtd} total={saiSemTotal}
+                      variant="warn"
+                      onClick={() => jumpTo(secSaiRef, "saiSemNota")}
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+            {totalAlerts === 0 && data && (
+              <div className="flex items-center gap-3 px-5 py-4 rounded-2xl border border-emerald-200 bg-emerald-50">
+                <CheckCircle2 className="h-6 w-6 text-emerald-600 shrink-0" />
+                <div>
+                  <p className="text-sm font-bold text-emerald-800">Tudo certo! Sem pendências no período.</p>
+                  <p className="text-xs text-emerald-600 mt-0.5">Todas as OCs, entradas e saídas têm documentos fiscais vinculados.</p>
+                </div>
+              </div>
+            )}
 
-              <SectionHeader title="✅ OCs com NF-e vinculada" count={data.ocsComNota.length}
+            {/* ════════════════════════════════════════════════════════════
+                SEÇÃO 1 — OCs × NF-e
+            ════════════════════════════════════════════════════════════ */}
+            <div ref={secOcsRef} className="space-y-2">
+              <GroupHeading icon={<ShoppingCart className="h-4 w-4 text-violet-600" />}
+                title="Ordens de Compra × NF-e Recebida" />
+
+              <SectionToggle title="OCs com NF-e vinculada" count={data.ocsComNota.length}
+                total={(data.ocsComNota ?? []).reduce((s: number, o: any) => s + parseFloat(o.valor_total ?? "0"), 0)}
                 open={openSec.ocsComNota} onToggle={() => toggle("ocsComNota")} variant="ok" />
               {openSec.ocsComNota && (
-                <div className="overflow-x-auto rounded-xl border border-slate-200">
-                  <table className="w-full text-xs">
-                    <thead className="bg-slate-50 text-slate-500 uppercase">
-                      <tr>{["OC#","Fornecedor","CNPJ","Valor OC","NF-e#","Valor NF-e","Obra","Status"].map(h => (
-                        <th key={h} className="px-3 py-2 text-left font-medium whitespace-nowrap">{h}</th>
-                      ))}</tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {data.ocsComNota.map((o: any) => (
-                        <tr key={o.id} className="hover:bg-slate-50">
-                          <td className="px-3 py-2 font-mono text-indigo-700">{o.numero}</td>
-                          <td className="px-3 py-2 max-w-[160px] truncate" title={o.supplier_razao}>{o.supplier_razao || o.supplier_nome}</td>
-                          <td className="px-3 py-2 font-mono text-slate-400">{fmtCnpj(o.supplier_cnpj)}</td>
-                          <td className="px-3 py-2 text-right font-medium">{fmtBRL(o.valor_total)}</td>
-                          <td className="px-3 py-2 text-emerald-700 font-medium">{o.nfeNumero || "—"}</td>
-                          <td className="px-3 py-2 text-right">{o.nfeValor ? fmtBRL(o.nfeValor) : "—"}</td>
-                          <td className="px-3 py-2 max-w-[120px] truncate text-slate-400" title={o.obra_nome}>{o.obra_nome || "—"}</td>
-                          <td className="px-3 py-2"><Badge className="bg-emerald-100 text-emerald-800 text-[10px]">{o.status}</Badge></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {data.ocsComNota.length === 0 && <p className="text-center py-4 text-slate-400 text-xs">Nenhuma OC com NF-e vinculada</p>}
-                </div>
+                <OcTable rows={data.ocsComNota} variant="ok" />
               )}
 
-              <SectionHeader title="⚠️ OCs SEM NF-e — verificar nota fiscal" count={data.ocsSemNota.length}
+              <SectionToggle title="OCs SEM NF-e — solicitar nota fiscal ao fornecedor" count={data.ocsSemNota.length}
+                total={ocsSemTotal}
                 open={openSec.ocsSemNota} onToggle={() => toggle("ocsSemNota")} variant="warn" />
               {openSec.ocsSemNota && (
-                <div className="overflow-x-auto rounded-xl border border-amber-200">
-                  <table className="w-full text-xs">
-                    <thead className="bg-amber-50 text-amber-700 uppercase">
-                      <tr>{["OC#","Fornecedor","CNPJ","Valor","Obra","Status","Emitida em"].map(h => (
-                        <th key={h} className="px-3 py-2 text-left font-medium whitespace-nowrap">{h}</th>
-                      ))}</tr>
-                    </thead>
-                    <tbody className="divide-y divide-amber-50">
-                      {data.ocsSemNota.map((o: any) => (
-                        <tr key={o.id} className="hover:bg-amber-50/60">
-                          <td className="px-3 py-2 font-mono text-indigo-700">{o.numero}</td>
-                          <td className="px-3 py-2 max-w-[160px] truncate" title={o.supplier_razao}>{o.supplier_razao || o.supplier_nome}</td>
-                          <td className="px-3 py-2 font-mono text-slate-400">{fmtCnpj(o.supplier_cnpj)}</td>
-                          <td className="px-3 py-2 text-right font-medium text-rose-700">{fmtBRL(o.valor_total)}</td>
-                          <td className="px-3 py-2 max-w-[120px] truncate text-slate-400" title={o.obra_nome}>{o.obra_nome || "—"}</td>
-                          <td className="px-3 py-2"><Badge className="bg-slate-100 text-slate-700 text-[10px]">{o.status}</Badge></td>
-                          <td className="px-3 py-2 text-slate-400">{fmtDate(o.created_at)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {data.ocsSemNota.length === 0 && <p className="text-center py-4 text-slate-400 text-xs">Nenhuma OC sem NF-e neste período</p>}
-                </div>
+                <OcTable rows={data.ocsSemNota} variant="warn" />
               )}
             </div>
 
-            {/* ── Seção 2: Entradas bancárias × NFS-e ─────────────────── */}
-            <div className="space-y-2 mb-4">
-              <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Entradas Bancárias × NFS-e Emitida</h3>
+            {/* ════════════════════════════════════════════════════════════
+                SEÇÃO 2 — Entradas bancárias × NFS-e
+            ════════════════════════════════════════════════════════════ */}
+            <div ref={secEntRef} className="space-y-2">
+              <GroupHeading icon={<ArrowDownLeft className="h-4 w-4 text-emerald-600" />}
+                title="Entradas Bancárias × NFS-e Emitida" />
 
-              <SectionHeader title="✅ Entradas com NFS-e vinculada" count={data.entradasComNota.length}
+              <SectionToggle title="Entradas com NFS-e vinculada" count={data.entradasComNota.length}
+                total={(data.entradasComNota ?? []).reduce((s: number, b: any) => s + Math.abs(parseFloat(b.valor ?? "0")), 0)}
                 open={openSec.entComNota} onToggle={() => toggle("entComNota")} variant="ok" />
               {openSec.entComNota && <BankTable rows={data.entradasComNota} tipo="entrada" />}
 
-              <SectionHeader title="⚠️ Entradas SEM NFS-e — sem nota de serviço" count={data.entradasSemNota.length}
+              <SectionToggle title="Entradas SEM NFS-e — verificar nota de serviço" count={data.entradasSemNota.length}
+                total={entSemTotal}
                 open={openSec.entSemNota} onToggle={() => toggle("entSemNota")} variant="warn" />
               {openSec.entSemNota && <BankTable rows={data.entradasSemNota} tipo="entrada" />}
             </div>
 
-            {/* ── Seção 3: Saídas bancárias × NF-e ────────────────────── */}
-            <div className="space-y-2 mb-4">
-              <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">Saídas Bancárias × NF-e Recebida</h3>
+            {/* ════════════════════════════════════════════════════════════
+                SEÇÃO 3 — Saídas bancárias × NF-e
+            ════════════════════════════════════════════════════════════ */}
+            <div ref={secSaiRef} className="space-y-2">
+              <GroupHeading icon={<ArrowUpRight className="h-4 w-4 text-rose-600" />}
+                title="Saídas Bancárias × NF-e Recebida" />
 
-              <SectionHeader title="✅ Saídas com NF-e vinculada" count={data.saidasComNota.length}
+              <SectionToggle title="Saídas com NF-e vinculada" count={data.saidasComNota.length}
+                total={(data.saidasComNota ?? []).reduce((s: number, b: any) => s + Math.abs(parseFloat(b.valor ?? "0")), 0)}
                 open={openSec.saiComNota} onToggle={() => toggle("saiComNota")} variant="ok" />
               {openSec.saiComNota && <BankTable rows={data.saidasComNota} tipo="saida" />}
 
-              <SectionHeader title="⚠️ Saídas SEM NF-e — verificar comprovante" count={data.saidasSemNota.length}
+              <SectionToggle title="Saídas SEM NF-e — verificar comprovante fiscal" count={data.saidasSemNota.length}
+                total={saiSemTotal}
                 open={openSec.saiSemNota} onToggle={() => toggle("saiSemNota")} variant="warn" />
               {openSec.saiSemNota && <BankTable rows={data.saidasSemNota} tipo="saida" />}
             </div>
 
-            {/* ── Caixa SPED ──────────────────────────────────────────── */}
-            <SpedSugestao />
+            {/* ════════════════════════════════════════════════════════════
+                GUIA SPED
+            ════════════════════════════════════════════════════════════ */}
+            <SpedSugestao open={openSec.spedInfo} onToggle={() => toggle("spedInfo")} />
           </>
         )}
       </div>
@@ -382,70 +463,136 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
   );
 }
 
-function BankTable({ rows, tipo }: { rows: any[]; tipo: "entrada" | "saida" }) {
-  const borderColor = tipo === "entrada" ? "border-emerald-200" : "border-rose-200";
-  const headBg      = tipo === "entrada" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700";
+// ── Sub-componentes ──────────────────────────────────────────────────────────
+
+function GroupHeading({ icon, title }: { icon: React.ReactNode; title: string }) {
   return (
-    <div className={`overflow-x-auto rounded-xl border ${borderColor}`}>
-      <table className="w-full text-xs">
-        <thead className={`${headBg} uppercase`}>
-          <tr>{["Data","Descrição","Valor","Conciliado","NF#"].map(h => (
-            <th key={h} className="px-3 py-2 text-left font-medium whitespace-nowrap">{h}</th>
-          ))}</tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {rows.map((b: any) => (
-            <tr key={b.id} className="hover:bg-slate-50">
-              <td className="px-3 py-2 whitespace-nowrap text-slate-500">{fmtDate(b.data)}</td>
-              <td className="px-3 py-2 max-w-[220px] truncate" title={b.descricao}>{b.descricao}</td>
-              <td className={`px-3 py-2 text-right font-medium ${tipo === "entrada" ? "text-emerald-700" : "text-rose-700"}`}>
-                {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Math.abs(parseFloat(b.valor ?? "0")))}
-              </td>
-              <td className="px-3 py-2">
-                {b.conciliado ? <span className="text-emerald-600">✓</span> : <span className="text-amber-500">—</span>}
-              </td>
-              <td className="px-3 py-2 text-slate-400">{b.fn_numero || "—"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {rows.length === 0 && <p className="text-center py-4 text-slate-400 text-xs">Nenhum item nesta categoria</p>}
+    <div className="flex items-center gap-2 pt-2">
+      {icon}
+      <h3 className="text-xs font-bold text-slate-600 uppercase tracking-widest">{title}</h3>
     </div>
   );
 }
 
-function SpedSugestao() {
-  const [open, setOpen] = useState(false);
+function OcTable({ rows, variant }: { rows: any[]; variant: "ok" | "warn" }) {
+  const ring  = variant === "ok" ? "border-emerald-100" : "border-amber-100";
+  const head  = variant === "ok" ? "bg-emerald-50/80 text-emerald-700" : "bg-amber-50/80 text-amber-700";
   return (
-    <div className="rounded-xl border border-blue-200 bg-blue-50 mt-6 no-print">
-      <button
-        type="button"
-        className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-blue-800"
-        onClick={() => setOpen(o => !o)}
-      >
+    <div className={`overflow-x-auto rounded-xl border ${ring}`}>
+      <table className="w-full text-xs">
+        <thead className={`${head} uppercase`}>
+          <tr>
+            {["OC#","Fornecedor","CNPJ","Valor OC","NF-e#","Obra","Status"].map(h => (
+              <th key={h} className="px-3 py-2.5 text-left font-semibold whitespace-nowrap tracking-wide">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((o: any, i: number) => (
+            <tr key={o.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+              <td className="px-3 py-2 font-mono font-bold text-indigo-700 whitespace-nowrap">{o.numero}</td>
+              <td className="px-3 py-2 max-w-[180px] truncate font-medium text-slate-800" title={o.supplier_razao || o.supplier_nome}>
+                {o.supplier_razao || o.supplier_nome || "—"}
+              </td>
+              <td className="px-3 py-2 font-mono text-slate-400 whitespace-nowrap text-[11px]">{fmtCnpj(o.supplier_cnpj)}</td>
+              <td className="px-3 py-2 text-right font-bold text-slate-800 whitespace-nowrap">{fmtBRL(o.valor_total)}</td>
+              <td className="px-3 py-2 whitespace-nowrap">
+                {o.nfeNumero
+                  ? <span className="flex items-center gap-1 text-emerald-700 font-semibold"><CheckCircle2 className="h-3 w-3" />{o.nfeNumero}</span>
+                  : <span className="text-slate-300">—</span>
+                }
+              </td>
+              <td className="px-3 py-2 max-w-[140px] truncate text-slate-400" title={o.obra_nome}>{o.obra_nome || "—"}</td>
+              <td className="px-3 py-2">
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{o.status}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {rows.length === 0 && (
+        <div className="flex items-center justify-center gap-2 py-6 text-slate-400">
+          <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+          <span className="text-xs">Nenhum item nesta categoria</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BankTable({ rows, tipo }: { rows: any[]; tipo: "entrada" | "saida" }) {
+  const ring = tipo === "entrada" ? "border-emerald-100" : "border-rose-100";
+  const head = tipo === "entrada" ? "bg-emerald-50/80 text-emerald-700" : "bg-rose-50/80 text-rose-700";
+  const valColor = tipo === "entrada" ? "text-emerald-700" : "text-rose-700";
+  return (
+    <div className={`overflow-x-auto rounded-xl border ${ring}`}>
+      <table className="w-full text-xs">
+        <thead className={`${head} uppercase`}>
+          <tr>
+            {["Data","Descrição","Valor","Conciliado","NF#"].map(h => (
+              <th key={h} className="px-3 py-2.5 text-left font-semibold whitespace-nowrap tracking-wide">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((b: any, i: number) => (
+            <tr key={b.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+              <td className="px-3 py-2 whitespace-nowrap text-slate-500 font-medium">{fmtDate(b.data)}</td>
+              <td className="px-3 py-2 max-w-[240px] truncate text-slate-700" title={b.descricao}>{b.descricao}</td>
+              <td className={`px-3 py-2 text-right font-bold whitespace-nowrap ${valColor}`}>
+                {fmtBRL(b.valor)}
+              </td>
+              <td className="px-3 py-2 text-center">
+                {b.conciliado
+                  ? <span className="text-emerald-500 text-sm">✓</span>
+                  : <span className="text-slate-300 text-sm">○</span>
+                }
+              </td>
+              <td className="px-3 py-2 text-slate-400 font-mono text-[11px]">{b.fn_numero || "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {rows.length === 0 && (
+        <div className="flex items-center justify-center gap-2 py-6 text-slate-400">
+          <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+          <span className="text-xs">Nenhum item nesta categoria</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SpedSugestao({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  return (
+    <div className="rounded-2xl border border-blue-200 overflow-hidden no-print">
+      <button type="button" onClick={onToggle}
+        className="w-full flex items-center gap-3 px-5 py-3.5 bg-blue-50 hover:bg-blue-100 transition-colors text-sm font-semibold text-blue-800">
         <Info className="h-4 w-4 text-blue-500 shrink-0" />
-        <span className="flex-1 text-left">Formatos legais exigidos pelo governo (SPED / EFD)</span>
+        <span className="flex-1 text-left">Obrigações legais — SPED / EFD</span>
+        <span className="text-[10px] text-blue-400 font-normal hidden sm:inline">clique para expandir</span>
         {open ? <ChevronUp className="h-4 w-4 text-blue-400" /> : <ChevronDown className="h-4 w-4 text-blue-400" />}
       </button>
       {open && (
-        <div className="px-4 pb-4 space-y-3 text-xs text-blue-900">
-          <div className="grid sm:grid-cols-2 gap-3">
+        <div className="px-5 py-4 bg-white">
+          <div className="grid sm:grid-cols-2 gap-3 mb-4">
             {[
-              { titulo: "EFD-ICMS/IPI (SPED Fiscal)", prazo: "Mensal até dia 25", conteudo: "Todas as NF-e de entrada e saída, ICMS, IPI. Gerado pelo contador via sistema contábil.", cor: "border-blue-300 bg-blue-100" },
-              { titulo: "EFD-Contribuições", prazo: "Mensal até dia 10", conteudo: "PIS/COFINS sobre NF-e e NFS-e. Vincula cada nota ao faturamento tributável.", cor: "border-violet-300 bg-violet-100" },
-              { titulo: "EFD-Reinf", prazo: "Mensal até dia 15", conteudo: "Retenções na fonte sobre NFS-e (CSLL, PIS, COFINS, IR). Serviços prestados e tomados.", cor: "border-indigo-300 bg-indigo-100" },
-              { titulo: "Livro Caixa Digital", prazo: "Anual (ECF até julho)", conteudo: "Para Lucro Presumido/Real: todas as entradas e saídas de caixa com e sem nota.", cor: "border-emerald-300 bg-emerald-100" },
+              { t: "EFD-ICMS/IPI (SPED Fiscal)",  p: "Mensal até dia 25",  d: "Todas as NF-e de entrada e saída, ICMS e IPI. Gerado pelo contador via sistema contábil.", c: "border-blue-200 bg-blue-50" },
+              { t: "EFD-Contribuições",            p: "Mensal até dia 10",  d: "PIS/COFINS sobre NF-e e NFS-e. Vincula cada nota ao faturamento tributável.",               c: "border-violet-200 bg-violet-50" },
+              { t: "EFD-Reinf",                   p: "Mensal até dia 15",  d: "Retenções na fonte sobre NFS-e (CSLL, PIS, COFINS, IR). Serviços prestados e tomados.",     c: "border-indigo-200 bg-indigo-50" },
+              { t: "Livro Caixa Digital (ECF)",   p: "Anual até julho",    d: "Para Lucro Presumido/Real: todas as entradas e saídas de caixa com e sem nota.",             c: "border-emerald-200 bg-emerald-50" },
             ].map(s => (
-              <div key={s.titulo} className={`rounded-lg border p-3 ${s.cor}`}>
-                <p className="font-semibold">{s.titulo}</p>
-                <p className="text-blue-600 mt-0.5">Prazo: {s.prazo}</p>
-                <p className="mt-1 text-blue-800/80">{s.conteudo}</p>
+              <div key={s.t} className={`rounded-xl border p-3 text-xs ${s.c}`}>
+                <p className="font-bold text-slate-800">{s.t}</p>
+                <p className="text-blue-600 font-medium mt-0.5">Prazo: {s.p}</p>
+                <p className="text-slate-600 mt-1 leading-relaxed">{s.d}</p>
               </div>
             ))}
           </div>
-          <p className="text-blue-600 italic">
-            💡 Recomendação: envie o Excel gerado nesta tela ao contador mensalmente — ele contém todos os cruzamentos necessários para preencher o SPED Fiscal, EFD-Contribuições e Reinf sem retrabalho.
-          </p>
+          <div className="flex items-start gap-2 px-4 py-3 bg-indigo-50 rounded-xl text-xs text-indigo-800">
+            <FileWarning className="h-4 w-4 text-indigo-500 shrink-0 mt-0.5" />
+            <p><strong>Recomendação:</strong> envie o Excel gerado nesta tela ao contador mensalmente — ele contém todos os cruzamentos necessários para preencher o SPED Fiscal, EFD-Contribuições e EFD-Reinf sem retrabalho.</p>
+          </div>
         </div>
       )}
     </div>
