@@ -315,7 +315,7 @@ function buildSoapEventoEnvelope(envEventoXml: string): string {
     `<nfeCabecMsg xmlns="${wsdl}"><cUF>91</cUF><versaoDados>1.00</versaoDados></nfeCabecMsg>` +
     `</soap12:Header>` +
     `<soap12:Body>` +
-    `<nfeRecepcaoEvento xmlns="${wsdl}"><nfeDadosMsg>${envEventoXml}</nfeDadosMsg></nfeRecepcaoEvento>` +
+    `<nfeRecepcaoEvento4 xmlns="${wsdl}"><nfeDadosMsg>${envEventoXml}</nfeDadosMsg></nfeRecepcaoEvento4>` +
     `</soap12:Body>` +
     `</soap12:Envelope>`
   );
@@ -338,7 +338,7 @@ function callSefazEvento(url: string, soapXml: string, pfxBase64: string, pfxPas
       method: "POST",
       agent,
       headers: {
-        "Content-Type": 'application/soap+xml; charset=utf-8; action="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4/nfeRecepcaoEvento"',
+        "Content-Type": 'application/soap+xml; charset=utf-8; action="http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4/nfeRecepcaoEvento4"',
         "Content-Length": body.byteLength,
       },
     }, (res) => {
