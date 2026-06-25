@@ -1313,24 +1313,30 @@ export const sefazRouter = router({
             if (((existeNfse?.rows ?? existeNfse) as any[])?.length > 0) { ignoradas++; continue; }
 
             // Campos do Portal Nacional SPED v1.01
-            const emit   = infNFSe?.["emit"]    || infNFSe?.["Emit"]    || {};
-            const tomad  = infNFSe?.["tomador"]  || infNFSe?.["Tomador"] || infNFSe?.["dest"] || {};
-            const serv   = infNFSe?.["serv"]     || infNFSe?.["Serv"]    || {};
-            const vPrest = serv?.["vServPrest"]  || serv?.["VServPrest"] || {};
+            // Estrutura real: infNFSe.emit (prestador), infNFSe.DPS.infDPS.toma (tomador),
+            //                 infNFSe.valores.vLiq (valor), infNFSe.dhProc (data)
+            const emit   = infNFSe?.["emit"]  || {};
+            const dps    = infNFSe?.["DPS"]?.["infDPS"] || {};
+            const tomad  = dps?.["toma"]  || {};
+            const servDps = dps?.["serv"]?.["cServ"] || dps?.["serv"] || {};
+            const valoresInf = infNFSe?.["valores"] || {};
+            const valoresDps = dps?.["valores"]?.["vServPrest"] || {};
 
             const numero     = String(infNFSe?.["nNFSe"] || "0");
-            const dEmi       = String(infNFSe?.["dEmi"]  || infNFSe?.["dCompet"] || "").slice(0, 10);
-            const prestCnpj  = cleanCnpj(String(emit?.["CNPJ"] || emit?.["CPF"] || emit?.["cnpj"] || ""));
-            const prestNome  = String(emit?.["xNome"] || emit?.["razaoSocial"] || "");
-            const tomCnpj    = cleanCnpj(String(tomad?.["CNPJ"] || tomad?.["CPF"] || tomad?.["cnpj"] || ""));
-            const tomNome    = String(tomad?.["xNome"] || tomad?.["razaoSocial"] || "");
+            const dEmi       = String(infNFSe?.["dhProc"] || dps?.["dhEmi"] || dps?.["dCompet"] || "").slice(0, 10);
+            const prestCnpj  = cleanCnpj(String(emit?.["CNPJ"] || emit?.["CPF"] || ""));
+            const prestNome  = String(emit?.["xNome"] || "");
+            const tomCnpj    = cleanCnpj(String(tomad?.["CNPJ"] || tomad?.["CPF"] || ""));
+            const tomNome    = String(tomad?.["xNome"] || "");
             const valorBruto = parseFloat(String(
-              infNFSe?.["vNFSe"] || vPrest?.["vServPrest"] || vPrest?.["vReceb"] || "0"
+              valoresDps?.["vServ"] || valoresInf?.["vLiq"] || valoresInf?.["vBC"] || "0"
             )) || 0;
             const valorLiq   = parseFloat(String(
-              vPrest?.["vReceb"] || vPrest?.["vServPrest"] || infNFSe?.["vNFSe"] || "0"
+              valoresInf?.["vLiq"] || valoresDps?.["vServ"] || "0"
             )) || 0;
-            const disc = String(serv?.["xDiscServ"] || serv?.["discriminacao"] || `NFS-e ${numero} — importada via XML`).slice(0, 500);
+            const disc = String(
+              servDps?.["xDescServ"] || `NFS-e ${numero} — importada via XML`
+            ).slice(0, 500);
             const dataEmissao = dEmi || new Date().toISOString().slice(0, 10);
 
             await db.execute(sql`

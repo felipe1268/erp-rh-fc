@@ -1,15 +1,20 @@
 /**
  * Changelog centralizado do ERP.
  *
- * Rev. 3721 — **IMPORT XML · SUPORTE A NFS-e NACIONAL SPED (Portal Nacional sped.fazenda.gov.br). BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * Rev. 3721 — **IMPORT XML · SUPORTE A NFS-e NACIONAL SPED (Portal Nacional sped.fazenda.gov.br) — PATHS CORRETOS. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * `importXml` só reconhecia NF-e de produtos (busca por `infNFe`). Ao receber NFS-e Nacional SPED v1.01
  * (`<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse"><infNFSe Id="NFS{44}">`), o parser não achava a chave
  * → empurrava para `erros` E `ignoradas` → toast confuso ("1 já existia. 1 com erro.") com tabela vazia.
- * Fix: detecção prévia do nó `NFSe` no XML parseado; extrai chave do `@_Id` (strip "NFS"), número `nNFSe`,
- * prestador (`emit`), tomador (`tomador`/`dest`), valor (`vNFSe`/`serv.vServPrest`), data (`dEmi`/`dCompet`);
- * insere como `origem='xml_upload'` com `emitente_cnpj/nome` + `tomador_cnpj/razao_social`.
- * Erros de "formato não reconhecido" agora só vão para `erros[]` (não `ignoradas`), evitando toast enganoso.
+ * Fix (1ª iteração): detecta nó `NFSe`; extrai chave de `infNFSe["@_Id"]` (strip "NFS") → 44 dígitos.
+ * Fix (2ª iteração — paths reais verificados via parse do XML real):
+ *   - Data: `infNFSe.dhProc` (não `dEmi`/`dCompet`)
+ *   - Tomador: `infNFSe.DPS.infDPS.toma` (não `infNFSe.tomador`)
+ *   - Valor: `infNFSe.valores.vLiq` (não `infNFSe.vNFSe`)
+ *   - Discriminação: `infNFSe.DPS.infDPS.serv.cServ.xDescServ`
+ *   - CNPJ emitente vem como Number (14 dígitos) → `String()` + `cleanCnpj` funciona.
+ * Insere com `origem='xml_upload'` + `emitente_cnpj/nome` + `tomador_cnpj/razao_social`.
+ * Erros de formato só vão para `erros[]` (não `ignoradas`) → sem toast enganoso "já existia".
  * Arquivo: `server/routers/sefaz.ts`.
  *
  * Rev. 3720 — **INTEGRAÇÃO OMIE · IMPORTAÇÃO NF-e RECEBIDAS COM TOGGLE HABILITAR/DESABILITAR. BACKEND ADITIVO + SCHEMA + FRONTEND · ZERO ALTER/DROP/DELETE.**
