@@ -18,6 +18,7 @@ import {
   XCircle, AlertTriangle, Lock, Unlock, FileText, TrendingUp, ArrowRight, Info,
 } from "lucide-react";
 import { toast } from "sonner";
+import { parseAsUTC } from "@/lib/dateUtils";
 
 function BRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 2 }).format(v || 0);
@@ -527,7 +528,7 @@ function AlertsPanel({ companyId }: { companyId: number }) {
                         <Badge variant="outline" className="text-[10px]">{a.tipo}</Badge>
                       </div>
                       <p className="text-xs text-slate-600 mt-0.5">{a.mensagem}</p>
-                      <p className="text-[10px] text-slate-400 mt-1">{new Date(a.criado_em).toLocaleString("pt-BR")}</p>
+                      <p className="text-[10px] text-slate-400 mt-1">{parseAsUTC(a.criado_em).toLocaleString("pt-BR")}</p>
                     </div>
                     {!a.lida && (
                       <Button size="sm" variant="ghost" onClick={() => handleRead(a.id)}>

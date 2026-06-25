@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3704** — **5 MELHORIAS: UNIQUE pj_payments + iOS new Date() × 2 + SEFAZ E-MAIL RATE LIMIT + CONCILIAÇÃO PAINEL SAÚDE 12 MESES. BACKEND PONTUAL + SCHEMA ADITIVO + FRONTEND · ZERO DROP/DELETE.** (1) UNIQUE INDEX em pj_payments previne duplicatas; (2) `parseAsUTC` em CFOSuite+DRE; (3) e-mail automático para admins quando cStat=656; (4) card "Saúde da Conciliação" grade 12 meses clicável. Arquivos: schema, _core, sefaz.ts, 3 TSX. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3703** — **SEFAZ NF-e · BUGFIX RATE LIMIT DUPLO POR HOT-RELOAD — PRÉ-SALVA last_sync_at ANTES DO CALL + STARTUP DELAY 30s→3min. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Restart durante sync longo não salvava last_sync_at → startup run da nova instância chamava SEFAZ no cooldown → Rate Limit duplo. Fix: pré-salva `last_sync_at=NOW()` ANTES do SOAP + startup delay 30s→3min. Arquivo: `server/routers/sefaz.ts`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3702** — **SEFAZ NF-e · BUGFIX CRONÔMETRO VERDE (iOS SAFARI new Date() → NaN NO rateLimitedAt). 100% FRONTEND · ZERO BACKEND/SCHEMA.** Fix: `parseAsUTC(rateLimitedAt)` + guard `isNaN`. Arquivo: `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.

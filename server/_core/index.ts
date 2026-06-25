@@ -4486,6 +4486,8 @@ Regras:
               END LOOP;
             END $body$;
             CREATE UNIQUE INDEX IF NOT EXISTS uq_compras_solicitacoes_numero ON compras_solicitacoes (company_id, numero_sc);
+            -- Rev. 3704 — UNIQUE em pj_payments: impede 2 pagamentos do mesmo tipo/mês/contrato
+            CREATE UNIQUE INDEX IF NOT EXISTS pjp_uniq_contrato_mes_tipo ON pj_payments (company_id, "contractId", "mesReferencia", tipo);
 
             CREATE TABLE IF NOT EXISTS compras_reservas_log (
               id SERIAL PRIMARY KEY,

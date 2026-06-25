@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { parseAsUTC } from "@/lib/dateUtils";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -461,7 +462,7 @@ export default function FinanceiroDRE() {
                 <p className="text-xs text-gray-500">Diagnóstico do resultado com benchmarks do setor de construção e fontes citadas</p>
                 {!analiseMut.isPending && analiseSalvaEm && (
                   <p className="text-[11px] text-gray-400 mt-0.5">
-                    Salva em {new Date(analiseSalvaEm).toLocaleString("pt-BR")}
+                    Salva em {parseAsUTC(analiseSalvaEm).toLocaleString("pt-BR")}
                     {(analise as any)?.geradoPorNome ? ` · por ${(analise as any).geradoPorNome}` : ""}
                   </p>
                 )}

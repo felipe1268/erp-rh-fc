@@ -2859,6 +2859,9 @@ export const pjPayments = pgTable("pj_payments", {
         index("pjp_contract").on(table.contractId),
         index("pjp_company_mes").on(table.companyId, table.mesReferencia),
         index("pjp_employee").on(table.employeeId),
+        // Rev. 3704 — garante unicidade: 1 pagamento por (empresa, contrato, mês, tipo).
+        // Previne duplicatas que corrompiam a conciliação (valor dobrado no extrato).
+        uniqueIndex("pjp_uniq_contrato_mes_tipo").on(table.companyId, table.contractId, table.mesReferencia, table.tipo),
 ]);
 
 export const pontoConsolidacao = pgTable("ponto_consolidacao", {

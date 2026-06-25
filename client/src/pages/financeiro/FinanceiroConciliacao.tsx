@@ -996,6 +996,11 @@ export default function FinanceiroConciliacao() {
     // Rev. 3478 — staleTime Infinity: idem.
     { enabled: geralAtivo, retry: false, staleTime: Infinity, refetchOnWindowFocus: false }
   );
+  // Rev. 3704 — painel de saúde: status de conciliação dos 12 meses do ano (bolinha/% por mês).
+  const { data: resumoSaude } = (trpc as any).financial.getConciliacaoResumoMensal.useQuery(
+    { companyId, ano },
+    { enabled: companyId > 0, staleTime: 5 * 60_000, refetchOnWindowFocus: false }
+  );
   // Rev. 3441 — varredura OC/OS/Locação por mês (panorama)
   const { data: ocsMesData, isFetching: ocsMesLoading } = (trpc as any).financial.getOcsPorMes.useQuery(
     { companyId, dataInicio, dataFim },
@@ -2479,6 +2484,52 @@ export default function FinanceiroConciliacao() {
             )}
           </div>
         </div>
+
+        {/* Rev. 3704 — Painel de saúde da conciliação: grade 12 meses com % conciliado */}
+        {resumoSaude && resumoSaude.length > 0 && (
+          <Card className="border-0 shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                  <CircleCheck className="w-4 h-4 text-green-500" />
+                  Saúde da Conciliação {ano}
+                </p>
+                <span className="text-xs text-gray-400">clique no mês para navegar</span>
+              </div>
+              <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+                {(["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"] as const).map((m, i) => {
+                  const mes = i + 1;
+                  const d = (resumoSaude as any[]).find((r: any) => r.mes === mes);
+                  const pct = d && d.total > 0 ? Math.round((d.conciliadas / d.total) * 100) : null;
+                  const isActive = mesSel === mes && modoData === "mes";
+                  const colorCls = pct === null
+                    ? "bg-gray-100 text-gray-400"
+                    : pct === 100 ? "bg-green-100 text-green-700"
+                    : pct > 0    ? "bg-amber-100 text-amber-700"
+                    :              "bg-red-100 text-red-500";
+                  return (
+                    <button
+                      key={mes}
+                      type="button"
+                      onClick={() => { setMesSel(mes); setModoData("mes"); }}
+                      className={`rounded-md p-1.5 text-center transition-all border-2 ${isActive ? "border-blue-400" : "border-transparent"} ${colorCls} hover:opacity-80`}
+                      title={pct === null ? `${m}: sem extrato importado` : `${m}: ${pct}% conciliado (${d.conciliadas}/${d.total} linhas)`}
+                    >
+                      <div className="text-[10px] font-medium leading-none">{m}</div>
+                      <div className="text-[11px] font-bold leading-tight mt-0.5">{pct === null ? "—" : `${pct}%`}</div>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex flex-wrap items-center gap-4 mt-3 text-xs text-gray-500">
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-green-200 inline-block" />100% conciliado</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-amber-200 inline-block" />Parcial</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-red-100 inline-block" />Pendente</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-gray-100 inline-block" />Sem extrato</span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">

@@ -13,6 +13,7 @@ import https from "https";
 import { gunzipSync } from "zlib";
 import { XMLParser } from "fast-xml-parser";
 import forge from "node-forge";
+import { sendEmail } from "../services/smtpService";
 
 // ── URLs do WebService ──────────────────────────────────────────────────────
 const SEFAZ_URL_PROD = "https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx";
@@ -896,6 +897,33 @@ export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?:
         WHERE company_id = ${companyId}
       `);
       if (rateLimited) console.log(`[SefazSync] company=${companyId} rate-limited sem progresso — ultimo_nsu preservado (${ultNSU})`);
+    }
+
+    // Notificar admins por e-mail quando Rate Limit é detectado pelo cron
+    // (usuário só veria o alerta se abrisse a aba — aqui chegamos proativamente).
+    if (rateLimited) {
+      try {
+        const adminRes = await db.$client.query(
+          `SELECT u.email, u."name" FROM users u
+           JOIN user_companies uc ON uc.user_id = u.id
+           WHERE uc.company_id = $1
+             AND u.role IN ('admin', 'admin_master')
+             AND u.email IS NOT NULL AND u.email <> ''
+           LIMIT 5`,
+          [companyId]
+        );
+        const cnpjFmt = cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+        for (const admin of adminRes.rows as { email: string; name: string }[]) {
+          await sendEmail({
+            to: admin.email,
+            subject: `⚠️ SEFAZ NF-e — Limite de requisições atingido (${cnpjFmt})`,
+            html: `<p>Olá${admin.name ? `, ${admin.name}` : ""},</p>
+                   <p>O sincronizador SEFAZ atingiu o limite de requisições (<strong>cStat=656</strong>) para o CNPJ <strong>${cnpjFmt}</strong>.</p>
+                   <p>O sistema retomará automaticamente em aproximadamente 1 hora. Nenhuma ação é necessária.</p>
+                   <p style="color:#9ca3af;font-size:12px">ERP FC Engenharia · NF-e Recebidas · ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}</p>`,
+          }).catch(() => { /* não bloquear o sync por falha no envio */ });
+        }
+      } catch { /* não bloquear o sync por falha na consulta */ }
     }
 
     console.log(`[SefazSync] company=${companyId} DONE importadas=${importadas} ignoradas=${ignoradas}${avisoRateLimit ? " RATE-LIMITED" : ""}`);

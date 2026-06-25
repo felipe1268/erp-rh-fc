@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3704 — **5 MELHORIAS: UNIQUE pj_payments + iOS new Date() × 2 + SEFAZ E-MAIL RATE LIMIT + CONCILIAÇÃO PAINEL DE SAÚDE 12 MESES. BACKEND PONTUAL + SCHEMA ADITIVO + FRONTEND · ZERO DROP/DELETE.**
+ *
+ * 1. `UNIQUE INDEX pjp_uniq_contrato_mes_tipo` em `pj_payments (company_id, "contractId", "mesReferencia", tipo)` — impede
+ *    duplicatas silenciosas que dobravam valores na conciliação. Schema Drizzle + SyncSchema+.
+ * 2. iOS Safari `new Date()` crash em `FinanceiroCFOSuite.tsx` (campo `criado_em`) e `FinanceiroDRE.tsx`
+ *    (`analiseSalvaEm`) — substituído por `parseAsUTC()` da lib dateUtils.
+ * 3. SEFAZ Rate Limit e-mail: quando cStat=656 é detectado pelo cron, o sistema envia e-mail automático
+ *    para todos os admins/admin_master da empresa via `sendEmail` (smtpService). Não bloqueia o sync.
+ * 4. Conciliação — card "Saúde da Conciliação YYYY": grade 12 meses clicável com % conciliado por mês
+ *    (verde=100%, âmbar=parcial, vermelho=pendente, cinza=sem extrato). Usa query existente
+ *    `getConciliacaoResumoMensal`. Aparece acima do filtro de período.
+ * 5. (Ver Rev. 3703) SEFAZ startup delay 30s→3min já entregue na rev. anterior.
+ * Arquivos: `drizzle/schema.ts`, `server/_core/index.ts`, `server/routers/sefaz.ts`,
+ *           `FinanceiroCFOSuite.tsx`, `FinanceiroDRE.tsx`, `FinanceiroConciliacao.tsx`.
+ *
  * Rev. 3703 — **SEFAZ NF-e · BUGFIX RATE LIMIT DUPLO POR HOT-RELOAD — PRÉ-SALVA last_sync_at ANTES DO CALL + STARTUP DELAY 30s→3min. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Causa-raiz: quando o processo Node é encerrado no meio de um call SEFAZ (hot-reload /
