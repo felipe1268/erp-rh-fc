@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3689 — **SEFAZ NF-e · BUGFIX RATE-LIMIT RECORRENTE — GATE POR CNPJ (MULTI-EMPRESA). BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Raiz: duas empresas configuradas com o mesmo CNPJ/certificado eram sincronizadas em sequência
+ * pelo cron → SEFAZ rate-limitava a segunda (limita por CNPJ, não por company_id). O gate de 58 min
+ * era por `company_id`, nunca protegia a segunda empresa. Fix em duas camadas: (1) Cron: dedup por
+ * CNPJ na query — inclui `cnpj_limpo` no SELECT, filtra `cnpjsSincronizadosNestaRodada` antes de
+ * chamar executarSyncNFe; loga motivo da exclusão. (2) executarSyncNFe: gate reescrito para checar
+ * MAX(last_sync_at) de TODOS os company_nfe_config com o mesmo CNPJ limpo (REGEXP_REPLACE) em vez
+ * de só o `company_id` atual — bloqueia inclusive o botão "Sincronizar Agora" se outra empresa com
+ * mesmo CNPJ sincronizou recentemente. Arquivo: `server/routers/sefaz.ts`.
+ *
  * Rev. 3688 — **NFS-e EMITIDAS · SELEÇÃO EM LOTE + MUDAR STATUS EM MASSA. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * Novo endpoint `fiscalNotes.bulkUpdateStatus({ ids, companyId, status })`: UPDATE em lote com

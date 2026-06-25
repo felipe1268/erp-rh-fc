@@ -691,8 +691,18 @@ export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?:
   const COOLDOWN_MS = (intervaloHoras * 60 - 2) * 60 * 1000; // 2 min de folga
   if (!opts?.skipTimeGate) {
     try {
-      // Relê last_sync_at do banco (pode ter sido atualizado pelo forceUltNSU acima)
-      const tsRows = (await db.execute(sql`SELECT last_sync_at, last_sync_result FROM company_nfe_config WHERE company_id = ${companyId}`)) as any;
+      // Gate por CNPJ: checa o último sync de QUALQUER empresa com o mesmo CNPJ.
+      // Múltiplas companies podem compartilhar o mesmo certificado; o SEFAZ rate-limita por CNPJ.
+      const cnpjLimpo = cnpj || "";
+      const tsRows = (await db.execute(sql`
+        SELECT MAX(last_sync_at) AS last_sync_at,
+               (SELECT last_sync_result FROM company_nfe_config
+                WHERE REGEXP_REPLACE(COALESCE(cnpj,''), '[^0-9]', '', 'g') = ${cnpjLimpo}
+                  AND last_sync_at IS NOT NULL
+                ORDER BY last_sync_at DESC LIMIT 1) AS last_sync_result
+        FROM company_nfe_config
+        WHERE REGEXP_REPLACE(COALESCE(cnpj,''), '[^0-9]', '', 'g') = ${cnpjLimpo}
+      `)) as any;
       const ts = (tsRows?.rows ?? tsRows)?.[0];
       if (ts?.last_sync_at) {
         const elapsedMs = Date.now() - new Date(ts.last_sync_at).getTime();
@@ -707,7 +717,7 @@ export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?:
               aviso = `Intervalo configurado: ${intervaloHoras}h — próxima sync disponível em ${restantMin} min.`;
             }
           } catch { aviso = `Aguarde mais ${restantMin} min (intervalo: ${intervaloHoras}h).`; }
-          console.log(`[SefazSync] company=${companyId} TIME_GATE=${restantMin}min (intervalo=${intervaloHoras}h) — sem chamada à API`);
+          console.log(`[SefazSync] company=${companyId} CNPJ_GATE=${restantMin}min (intervalo=${intervaloHoras}h) — outro company com mesmo CNPJ sincronizou recentemente`);
           return { importadas: 0, ignoradas: 0, aviso };
         }
       }
@@ -943,8 +953,11 @@ export function startSefazCron() {
       }
 
       // Sincroniza TODA empresa com sync_enabled=1 que não foi sincronizada nos últimos 58 minutos.
+      // Gate por CNPJ: se múltiplas empresas compartilham o mesmo certificado/CNPJ, o SEFAZ
+      // rate-limita por CNPJ (não por company_id). Garante 1 chamada/hora/CNPJ no SEFAZ.
       const rows = (await db.execute(sql`
-        SELECT company_id FROM company_nfe_config
+        SELECT company_id, REGEXP_REPLACE(COALESCE(cnpj,''), '[^0-9]', '', 'g') AS cnpj_limpo
+        FROM company_nfe_config
         WHERE ativo = 1 AND sync_enabled = 1
           AND (
             last_sync_at IS NULL
@@ -952,8 +965,22 @@ export function startSefazCron() {
           )
       `)) as any;
       const list = (rows?.rows ?? rows) as any[];
-      console.log(`[SefazSync] Cron disparado — ${list.length} empresa(s) elegível(is) para sync`);
-      for (const r of list) {
+
+      // Agrupa por CNPJ: só sincroniza uma empresa por CNPJ por rodada do cron.
+      // (o gate de 58 min em executarSyncNFe também bloqueia chamadas manuais subsequentes)
+      const cnpjsSincronizadosNestaRodada = new Set<string>();
+      const listFiltrada = list.filter((r: any) => {
+        const cnpj = String(r.cnpj_limpo || r.company_id);
+        if (cnpjsSincronizadosNestaRodada.has(cnpj)) {
+          console.log(`[SefazSync] company=${r.company_id} CNPJ=${cnpj} — pulando: outro company com mesmo CNPJ já sincronizado nesta rodada`);
+          return false;
+        }
+        cnpjsSincronizadosNestaRodada.add(cnpj);
+        return true;
+      });
+
+      console.log(`[SefazSync] Cron disparado — ${list.length} empresa(s) elegível(is), ${listFiltrada.length} após dedup CNPJ`);
+      for (const r of listFiltrada) {
         try {
           const res = await executarSyncNFe(Number(r.company_id));
           console.log(`[SefazSync] company=${r.company_id} importadas=${res.importadas} ignoradas=${res.ignoradas}${(res as any).aviso ? " AVISO=" + (res as any).aviso : ""}${res.erro ? " ERRO=" + res.erro : ""}`);

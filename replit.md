@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3689** — **SEFAZ NF-e · BUGFIX RATE-LIMIT RECORRENTE — GATE POR CNPJ (MULTI-EMPRESA). BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Raiz: 2 empresas com mesmo CNPJ/cert sincronizadas em sequência pelo cron → SEFAZ rate-limita a 2ª (limita por CNPJ, não company_id). Fix duplo: (1) cron faz dedup por CNPJ antes de disparar os syncs; (2) gate de 58 min em `executarSyncNFe` agora checa MAX(last_sync_at) de TODAS as companies com o mesmo CNPJ. Arquivo: `server/routers/sefaz.ts`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3688** — **NFS-e EMITIDAS · SELEÇÃO EM LOTE + MUDAR STATUS EM MASSA. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Novo endpoint `fiscalNotes.bulkUpdateStatus({ ids, companyId, status })` com guard `_assertNfAccess` + inArray+eq(companyId). Barra de seleção em lote ganhou botão "Mudar Status"; dialog `AlertDialog` com grid 2×2 (Pendente/Recebida/Conciliada/Cancelada, badge colorido + destaque na selecionada). Ao confirmar: UPDATE em lote, toast, limpa seleção, refetch. Arquivos: `server/routers/fiscalNotes.ts`, `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3687** — **DASHBOARD NF-e · CARD "ENTRADAS × SAÍDAS" MOVIDO PARA PRIMEIRA POSIÇÃO + TOTALIZADORES NO HEADER. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
