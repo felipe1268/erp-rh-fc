@@ -217,6 +217,7 @@ export default function FinanceiroConciliacao() {
   const [reportStale, setReportStale] = useState(false);
   // Rev. 3219 — busca única que filtra AMBAS as listas (extrato sem lançamento + ERP sem extrato).
   const [buscaConc, setBuscaConc] = useState("");
+  const [buscaJaConc, setBuscaJaConc] = useState("");
   const [selectedStatement, setSelectedStatement] = useState<number | null>(null);
   // Rev. 3239 — pode ser um id numérico (lançamento individual) OU um id de GRUPO ("grp:…").
   const [selectedEntry, setSelectedEntry] = useState<number | string | null>(null);
@@ -1140,10 +1141,19 @@ export default function FinanceiroConciliacao() {
     if (filterLanTipo === "saida")   arr = arr.filter((r: any) => r.tipo === "despesa");
     return arr;
   })();
+  const termoJaConc = normBusca(buscaJaConc).trim();
   const repConcView: any[] = (() => {
-    if (filterConcTipo === "entrada") return repConc.filter((r: any) => Number(r.valor) >= 0);
-    if (filterConcTipo === "saida")   return repConc.filter((r: any) => Number(r.valor) < 0);
-    return repConc;
+    let arr = termoJaConc ? repConc.filter((r: any) => {
+      const alvo = normBusca([
+        r.descricao, r.entryFornecedor, r.entryDescricao,
+        fmtData(r.data), formatBRL(Math.abs(Number(r.valor) || 0)),
+        String(Math.abs(Number(r.valor) || 0)),
+      ].filter(Boolean).join(" "));
+      return alvo.includes(termoJaConc);
+    }) : repConc;
+    if (filterConcTipo === "entrada") arr = arr.filter((r: any) => Number(r.valor) >= 0);
+    if (filterConcTipo === "saida")   arr = arr.filter((r: any) => Number(r.valor) < 0);
+    return arr;
   })();
   // Rev. 3188 — lançamentos SEM conta bancária definida vêm num bloco próprio e NÃO entram
   // no número da conta (antes apareciam/contavam em todas as contas, inflando "ERP sem extrato").
@@ -5285,7 +5295,27 @@ export default function FinanceiroConciliacao() {
                         <ChevronRight className="w-4 h-4 text-gray-400 transition-transform group-open:rotate-90" />
                       </div>
                     </summary>
+                    <div className="px-3 py-2 border-t bg-gray-50">
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                        <input
+                          type="text"
+                          placeholder="Buscar por descrição, fornecedor, data, valor…"
+                          value={buscaJaConc}
+                          onChange={(e) => setBuscaJaConc(e.target.value)}
+                          className="w-full pl-8 pr-7 py-1.5 text-xs rounded-md border border-gray-200 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+                        />
+                        {buscaJaConc && (
+                          <button type="button" onClick={() => setBuscaJaConc("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
                     <div className="divide-y divide-gray-100 max-h-[360px] overflow-y-auto border-t">
+                      {repConcView.length === 0 && termoJaConc && (
+                        <p className="px-4 py-6 text-center text-xs text-gray-400">Nenhum resultado para "{buscaJaConc}"</p>
+                      )}
                       {repConcView.map((c: any) => {
                         const isSelected = selectedConcIds.has(Number(c.id));
                         return (

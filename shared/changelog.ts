@@ -1,6 +1,15 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3700 — **CONCILIAÇÃO · CAMPO DE BUSCA NA SEÇÃO "JÁ CONCILIADOS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Seção "Já conciliados" exibia centenas de linhas sem forma de filtrar. Adicionado input de
+ * busca (estado `buscaJaConc`) logo abaixo do header colapsável, com ícone lupa e botão ✕ para
+ * limpar. Filtra por descrição do extrato, fornecedor/descrição do lançamento vinculado, data e
+ * valor (BRL formatado + número cru), normalizando acentos e caixa. Mensagem "Nenhum resultado"
+ * aparece quando a busca não encontra nada. O filtro Todos/Entrada/Saída continua funcionando em
+ * conjunto com a busca. Arquivo: `FinanceiroConciliacao.tsx`.
+ *
  * Rev. 3699 — **FOLHA PJ · BUGFIX VALORES ERRADOS NA CONCILIAÇÃO — CONTRATO EDITADO NÃO PROPAGAVA AO pj_payments. BACKEND PONTUAL + COLFIX · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Causa-raiz: `gerarPrevisoesDoContrato` usa dedup por `(employeeId, mesReferencia, tipo)` —
