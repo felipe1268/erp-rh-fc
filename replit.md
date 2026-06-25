@@ -50,7 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3693** — **SEFAZ CONFIG · BUGFIX iOS SAFARI CRASH "The string did not match the expected pattern" + DROPDOWN FREQUÊNCIA MAIS LARGO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Raiz: `new Date(r.rateLimitedAt)` direto (linha 487 de `FinanceiroConfigSection.tsx`) recebia timestamp Postgres com espaço "YYYY-MM-DD HH:MM:SS" → iOS Safari lança DOMException → toast de erro vermelho. Fix: `parseAsUTC(r.rateLimitedAt)` (já importado). Bônus: SelectTrigger de frequência `w-32`→`w-36` + placeholder "Selecione…" + rótulo "1× por dia". Arquivo: `FinanceiroConfigSection.tsx`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3694** — **SEFAZ CONFIG · FREQUÊNCIA DECIMAL — INPUT LIVRE 1h–24h (EX: 1.5 = 1h 30min). SCHEMA ADITIVO + FRONTEND · ZERO DROP/DELETE.** `sync_intervalo_horas` SMALLINT → NUMERIC(4,2) via SyncSchema+. Dropdown removido → Input text+inputMode=decimal; blur snappa ao 0.25 mais próximo; helper `fmtIntervalHoras` mostra "1h 30min" abaixo do campo. Arquivo: `FinanceiroConfigSection.tsx`. Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3693** — **SEFAZ CONFIG · BUGFIX iOS SAFARI CRASH "The string did not match the expected pattern". 100% FRONTEND · ZERO BACKEND/SCHEMA.** `new Date(r.rateLimitedAt)` → `parseAsUTC(r.rateLimitedAt)`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3692** — **NFS-e EMITIDAS · STATUS "VALIDADA" + CONCILIADA AUTOMÁTICA AO VINCULAR EXTRATO. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.** Novo status `validada` (violeta) no fluxo: Pendente→Recebida→Validada→[vincula extrato]→Conciliada (auto). `vincularExtrato` com stmtLineId != null → sempre "conciliada". KPI cards: 4→5 (+ "Validadas"). Filtro + dialog bulk incluem "Validada". Arquivos: `server/routers/fiscalNotes.ts`, `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
 
@@ -61,8 +63,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3689** — **SEFAZ NF-e · BUGFIX RATE-LIMIT RECORRENTE — GATE POR CNPJ (MULTI-EMPRESA). BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3688** — **NFS-e EMITIDAS · SELEÇÃO EM LOTE + MUDAR STATUS EM MASSA. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3687** — **DASHBOARD NF-e · CARD "ENTRADAS × SAÍDAS" MOVIDO PARA PRIMEIRA POSIÇÃO + TOTALIZADORES NO HEADER. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3684** — **DASHBOARD NF-e · GRÁFICO "FATURAMENTO × COMPRAS — NFS-e × NF-e POR MÊS" COM SALDO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Novo ChartCard entre "Evolução Fiscal Mensal" e "Cobertura": barras grupadas NFS-e (violet) × NF-e (blue) + linha Saldo (verde) em eixo direito. Totalizador inline: Faturamento | Compras c/ NF-e | Saldo ±. Linha tracejada quando NF-e=0; nota rodapé contextual. Usa composedDataMes existente, zero nova query. Arquivo: `DashNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
 

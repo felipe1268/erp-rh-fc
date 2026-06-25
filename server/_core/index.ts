@@ -4152,6 +4152,12 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3608: coluna sync_intervalo_horas garantida em company_nfe_config (padrão=1h).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3608 sync_intervalo_horas:`, e?.message || e); }
 
+        // Rev. 3694 — SEFAZ: converte sync_intervalo_horas SMALLINT → NUMERIC(4,2) para suportar intervalos decimais (ex: 1.5h).
+        try {
+          await db.execute(sql`ALTER TABLE company_nfe_config ALTER COLUMN sync_intervalo_horas TYPE NUMERIC(4,2) USING sync_intervalo_horas::NUMERIC(4,2)`);
+          console.log(`[SyncSchema+] Rev. 3694: sync_intervalo_horas convertida para NUMERIC(4,2) (suporta 1.5h, 1.25h etc).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3694 sync_intervalo_horas NUMERIC:`, e?.message || e); }
+
         // Rev. 3690 — SEFAZ: minuto do horário de sincronização configurável (padrão=0).
         try {
           await db.execute(sql`ALTER TABLE company_nfe_config ADD COLUMN IF NOT EXISTS sync_minuto SMALLINT NOT NULL DEFAULT 0`);

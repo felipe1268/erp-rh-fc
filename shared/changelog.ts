@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3694 — **SEFAZ CONFIG · FREQUÊNCIA DECIMAL — INPUT LIVRE 1h–24h (EX: 1.5 = 1h 30min). SCHEMA ADITIVO + FRONTEND · ZERO DROP/DELETE.**
+ *
+ * Usuário queria configurar 1h30min ou 1h15min — o dropdown anterior só permitia horas inteiras.
+ * SyncSchema+ Rev.3694: `ALTER COLUMN sync_intervalo_horas SMALLINT → NUMERIC(4,2)` (não destrutivo;
+ * SMALLINT cabe em NUMERIC sem perda). Backend: `z.number().min(1).max(24)` já aceitava decimais;
+ * a SQL de gate `INTERVAL '1 minute' * (sync_intervalo_horas * 60 - 8)` funciona corretamente com
+ * NUMERIC (ex: 1.5 × 60 − 8 = 82 min). Frontend: Select removido → Input tipo text com inputMode
+ * decimal; valor snappado no blur ao múltiplo de 0.25 mais próximo (precisão de 15min);
+ * helper `fmtIntervalHoras(h)` converte decimal → "1h 30min" exibido abaixo do campo e na descrição
+ * principal; aceita vírgula como separador decimal (mobile BR). `intervaloInput` state string separado
+ * evita o bug React de controlled number input apagar o ponto ao digitar "1.". Arquivo: `FinanceiroConfigSection.tsx`.
+ *
  * Rev. 3693 — **SEFAZ CONFIG · BUGFIX iOS SAFARI CRASH "The string did not match the expected pattern" + DROPDOWN FREQUÊNCIA MAIS LARGO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Raiz: `new Date(r.rateLimitedAt)` direto em `FinanceiroConfigSection.tsx` (linha 487) recebia timestamp
