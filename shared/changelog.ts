@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3710 — **SEFAZ NF-e · BUGFIX "UNEXPECTED END OF JSON INPUT" — LIMITE 3 PÁGINAS NO syncNow + REMOVE AUTO-SYNC APÓS RESET NSU. BACKEND PONTUAL + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Causa-raiz: NSU foi resetado para `000000000000000` via "Resetar histórico".
+ * Ao clicar "Sincronizar SEFAZ", `syncNow` chamava `executarSyncNFe` sem limite de páginas
+ * (while paginas < 20). Com NSU=0 e SEFAZ respondendo sem 656 (backoff expirado), a função
+ * tentava baixar todos os NSUs a partir de 0 — até 200+ páginas × 2–5s = potencial 400–1000s.
+ * O proxy da Replit cortava a conexão antes da resposta chegar → body HTTP vazio →
+ * `response.json()` no browser jogava "Unexpected end of JSON input".
+ * Agrobravante: `sefazResetNsuMut.onSuccess` auto-chamava `sefazSyncMut` imediatamente após
+ * o reset, disparando o download completo sem aviso ao usuário.
+ *
+ * Fix backend (`server/routers/sefaz.ts`):
+ *   1. `executarSyncNFe` recebe novo opt `maxPaginas` (default 20 para cron).
+ *   2. `syncNow` chama com `{ maxPaginas: 3 }` — máximo 150 docs por clique, ~6–15s.
+ *      O cron continua paginando o restante a cada ciclo (a cada hora).
+ *   3. Return inclui `parcial: true` quando `paginas >= limitePaginas && !rateLimited`,
+ *      sinalizando ao frontend que há mais páginas sendo baixadas pelo cron.
+ *
+ * Fix frontend (`FinanceiroNotasFiscais.tsx`):
+ *   1. `sefazResetNsuMut.onSuccess`: removida chamada automática a `sefazSyncMut`.
+ *      Agora apenas avisa "NSU zerado — clique em 'Sincronizar SEFAZ' para iniciar".
+ *   2. `sefazSyncMut.onSuccess`: novo branch para `r.parcial` mostra toast específico
+ *      "sincronização parcial — cron continua automaticamente".
+ *
  * Rev. 3709 — **SEFAZ NF-e · BACKOFF PROGRESSIVO PARA cStat=656 CONSECUTIVOS (1h→2h→4h). BACKEND PONTUAL + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Causa-raiz: Após o duplo disparo de 24/06 (pré-Rev.3707), o SEFAZ bloqueou o CNPJ.

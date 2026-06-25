@@ -670,7 +670,7 @@ async function finalizeSyncLog(db: any, logId: number | null, data: {
 }
 
 // ── Função principal de sincronização ────────────────────────────────────────
-export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?: boolean; forceUltNSU?: string }): Promise<{ importadas: number; ignoradas: number; erro?: string; aviso?: string }> {
+export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?: boolean; forceUltNSU?: string; maxPaginas?: number }): Promise<{ importadas: number; ignoradas: number; erro?: string; aviso?: string; parcial?: boolean }> {
   const db = await getDb();
 
   // Buscar config
@@ -819,9 +819,10 @@ export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?:
   // Registrar início do sync no log de auditoria
   syncLogId = await insertSyncLog(db, companyId, ultNSUInicial);
 
+  const limitePaginas = opts?.maxPaginas ?? 20;
   try {
     // Loop de paginação — cada chamada retorna até 50 docs; continua enquanto maxNSU > ultNSU
-    while (paginas < 20) {
+    while (paginas < limitePaginas) {
       paginas++;
       const soap = buildSoapEnvelope(cnpj, ufCodigo, ultNSU, tpAmb);
       let respXml: string;
@@ -1022,9 +1023,10 @@ export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?:
       observacao: avisoRateLimit,
     });
 
+    const parcial = !rateLimited && paginas >= limitePaginas;
     return rateLimited
       ? { importadas, ignoradas, aviso: avisoRateLimit }
-      : { importadas, ignoradas };
+      : { importadas, ignoradas, ...(parcial ? { parcial: true } : {}) };
   } catch (e: any) {
     const msg = e?.message || "Erro desconhecido";
     await db.execute(sql`
@@ -1253,7 +1255,9 @@ export const sefazRouter = router({
     .input(z.object({ companyId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       if (ctx.user?.role !== "admin_master" && ctx.user?.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
-      const result = await executarSyncNFe(input.companyId);
+      // Limitar a 3 páginas (≤150 docs) para evitar timeout do proxy (~25s máx).
+      // O cron continua paginando o restante a cada ciclo.
+      const result = await executarSyncNFe(input.companyId, { maxPaginas: 3 });
       return result;
     }),
 

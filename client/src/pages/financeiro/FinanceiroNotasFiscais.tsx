@@ -504,6 +504,7 @@ export default function FinanceiroNotasFiscais() {
       nfeRecQuery.refetch();
       if (r?.erro) toast({ title: "SEFAZ: " + r.erro, variant: "destructive" });
       else if (r?.aviso) toast({ title: "⚠️ Limite de chamadas SEFAZ", description: r.aviso, variant: "default", duration: 8000 });
+      else if (r?.parcial) toast({ title: `SEFAZ: ${r?.importadas ?? 0} NF-e importadas (sincronização parcial — cron continua automaticamente)`, duration: 7000 });
       else toast({ title: `SEFAZ: ${r?.importadas ?? 0} NF-e novas importadas, ${r?.ignoradas ?? 0} já existiam.` });
     },
     onError: (e: any) => {
@@ -546,8 +547,8 @@ export default function FinanceiroNotasFiscais() {
   });
   const sefazResetNsuMut = (trpc as any).sefaz.resetNSU.useMutation({
     onSuccess: () => {
-      toast({ title: "NSU zerado. Sincronizando histórico completo..." });
-      sefazSyncMut.mutate({ companyId: companyId ?? 0 });
+      toast({ title: "NSU zerado. Clique em 'Sincronizar SEFAZ' para iniciar o download do histórico.", duration: 8000 });
+      sefazCfgQuery.refetch();
     },
     onError: (e: any) => toast({ title: "Erro ao resetar NSU", description: e.message, variant: "destructive" }),
   });
