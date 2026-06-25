@@ -324,6 +324,89 @@ export const contabilidadeRouter = router({
       return { ok: true, envelopeStatus: envStatus, status: novoStatus };
     }),
 
+  // ── DOCUMENTOS DO MÊS (listas completas para visualização antes do download) ─
+  getDocumentosMes: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mes: z.number().int().min(1).max(12),
+      ano: z.number().int().min(2020).max(2035),
+    }))
+    .query(async ({ input, ctx }) => {
+      await assertAccess(ctx.user.id, ctx.user.role, input.companyId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      const { companyId, mes, ano } = input;
+      const mesProx = mes === 12 ? 1 : mes + 1;
+      const anoProx = mes === 12 ? ano + 1 : ano;
+      const di = `${ano}-${String(mes).padStart(2,"0")}-01`;
+      const df = `${anoProx}-${String(mesProx).padStart(2,"0")}-01`;
+
+      const [nfseQ, nfeQ, extratoQ, ocQ] = await Promise.all([
+        // NFS-e emitidas
+        db.$client.query(`
+          SELECT id, numero_nf, tomador_razao_social, tomador_cnpj,
+                 valor_bruto::float, valor_liquido::float,
+                 iss_retido::float, data_emissao, status
+          FROM fiscal_notes
+          WHERE company_id=$1 AND data_emissao >= $2 AND data_emissao < $3
+            AND origem NOT LIKE '%tomada%'
+            AND origem NOT IN ('sefaz_nfe','xml_upload')
+            AND status != 'cancelada'
+          ORDER BY data_emissao ASC
+          LIMIT 500
+        `, [companyId, di, df]),
+
+        // NF-e recebidas SEFAZ
+        db.$client.query(`
+          SELECT numero_nf, emitente_nome, emitente_cnpj,
+                 valor_bruto::float, data_emissao, status, chave_acesso
+          FROM fiscal_notes
+          WHERE company_id=$1 AND data_emissao >= $2 AND data_emissao < $3
+            AND (origem = 'sefaz_nfe' OR origem = 'xml_upload')
+            AND status != 'cancelada'
+          ORDER BY data_emissao ASC
+          LIMIT 500
+        `, [companyId, di, df]),
+
+        // Extrato bancário (limitado a 300 para não sobrecarregar)
+        db.$client.query(`
+          SELECT bsl.data, bsl.descricao, bsl.valor::float, bsl.tipo, bsl.conciliado,
+                 COALESCE(cba.apelido, cba.banco, '') AS conta_nome,
+                 cba.banco
+          FROM bank_statement_lines bsl
+          LEFT JOIN company_bank_accounts cba ON cba.id = bsl.conta_bancaria_id
+          WHERE bsl.company_id=$1 AND bsl.data >= $2 AND bsl.data < $3
+            AND bsl.excluido_em IS NULL
+          ORDER BY bsl.data ASC, bsl.id ASC
+          LIMIT 300
+        `, [companyId, di, df]),
+
+        // Ordens de compra
+        db.$client.query(`
+          SELECT co.numero_oc AS numero,
+                 COALESCE(f.razao_social, co.fornecedor_nome, '') AS fornecedor,
+                 co.total::float AS valor_total,
+                 co.status, co.created_at,
+                 COALESCE(o.nome, '') AS obra_nome
+          FROM compras_ordens co
+          LEFT JOIN fornecedores f ON f.id = co.fornecedor_id AND f.company_id=$1
+          LEFT JOIN obras o ON o.id = co.obra_id
+          WHERE co.company_id=$1 AND co.status NOT IN ('cancelada','rascunho')
+            AND co.created_at >= $2 AND co.created_at < $3
+          ORDER BY co.created_at ASC
+          LIMIT 300
+        `, [companyId, di, df]),
+      ]);
+
+      return {
+        nfseEmitidas: nfseQ.rows as any[],
+        nfeRecebidas: nfeQ.rows as any[],
+        extrato:      extratoQ.rows as any[],
+        ocs:          ocQ.rows as any[],
+      };
+    }),
+
   // ── HISTÓRICO PLURIANUAL ──────────────────────────────────────────────────
   getHistorico: protectedProcedure
     .input(z.object({

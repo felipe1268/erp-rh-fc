@@ -1,4 +1,4 @@
-// Rev. 3717 — Módulo Contabilidade: controle mensal/anual de envios ao contador
+// Rev. 3719 — Módulo Contabilidade: painel de documentos com abas antes do download
 // Layout: padrão white-card com chips de mês (igual Conciliação Bancária)
 
 import { useState, useMemo } from "react";
@@ -13,12 +13,11 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { toast } from "@/hooks/use-toast";
 import {
-  ChevronLeft, ChevronRight, CheckCircle2, Clock, Send,
+  ChevronLeft, ChevronRight, Send,
   FileText, Download, RefreshCw, Archive,
-  Receipt, Landmark, ShoppingCart, PenSquare, Plus, X,
+  Receipt, Landmark, ShoppingCart, Plus, X, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -27,15 +26,9 @@ const MESES_FULL  = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
                      "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
 interface MesData {
-  mes: number;
-  label: string;
-  futuro: boolean;
-  status: string;
-  envelopeId: number | null;
-  envelopeStatus: string | null;
-  enviadoEm: string | null;
-  enviadoPorNome: string | null;
-  observacoes: string | null;
+  mes: number; label: string; futuro: boolean; status: string;
+  envelopeId: number | null; envelopeStatus: string | null;
+  enviadoEm: string | null; enviadoPorNome: string | null; observacoes: string | null;
   contagens: { nfse: number; nfe: number; extratos: number; ocs: number };
 }
 
@@ -52,6 +45,13 @@ function fmtDate(s: string | null) {
   catch { return s; }
 }
 
+function fmtBRL(v: number | null | undefined) {
+  if (v == null || isNaN(v)) return "—";
+  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+type DocTab = "nfse" | "nfe" | "extrato" | "ocs";
+
 // ── Painel de detalhe do mês ──────────────────────────────────────────────────
 function PainelMes({
   mes, dados, ano, companyId, companyNome,
@@ -61,6 +61,7 @@ function PainelMes({
   companyId: number; companyNome: string;
   onClose: () => void; onRefetch: () => void;
 }) {
+  const [tab, setTab] = useState<DocTab>("nfse");
   const [dlgEnvio, setDlgEnvio] = useState(false);
   const [dlgFCSign, setDlgFCSign] = useState(false);
   const [obsEnvio, setObsEnvio] = useState("");
@@ -68,6 +69,11 @@ function PainelMes({
     { papel: "diretor" as const, ordemAssinatura: 1, nome: "", email: "", cargo: "Sócio Administrador", empresaNome: companyNome },
     { papel: "fornecedor" as const, ordemAssinatura: 2, nome: "Pronus Tributário", email: "contabil@pronustributario.com.br", cargo: "Contabilista", empresaNome: "Pronus Tributário" },
   ]);
+
+  const docsQuery = trpc.contabilidade.getDocumentosMes.useQuery(
+    { companyId, mes, ano },
+    { enabled: !!companyId, staleTime: 60_000 }
+  );
 
   const registrarMut = trpc.contabilidade.registrarEnvio.useMutation({
     onSuccess: () => { toast({ title: "Envio registrado!" }); setDlgEnvio(false); setObsEnvio(""); onRefetch(); },
@@ -92,27 +98,18 @@ function PainelMes({
 
   const mesLabel = MESES_FULL[mes - 1];
   const cont = dados.contagens;
+  const docs = docsQuery.data;
 
-  function handleRegistrar() {
-    registrarMut.mutate({
-      companyId, mes, ano,
-      arquivos: ["Pacote Contador (ZIP)", "Planilha Extrato (XLSX)", "NFS-e Emitidas (HTML)", "NF-e Recebidas (CSV)", "OCs do Período (CSV)"],
-      observacoes: obsEnvio || null,
-    });
-  }
-
-  function handleCriarEnvelope() {
-    criarEnvMut.mutate({
-      companyId, mes, ano,
-      nomeEmpresa: companyNome,
-      contagens: cont,
-      signatarios: fcSignatarios.filter(s => s.nome && s.email),
-    });
-  }
+  const tabs: { id: DocTab; label: string; icon: React.ReactNode; count: number; color: string }[] = [
+    { id: "nfse",    label: "NFS-e Emitidas",    icon: <Receipt className="w-3.5 h-3.5" />,    count: cont.nfse,     color: "text-violet-600" },
+    { id: "nfe",     label: "NF-e Recebidas",     icon: <FileText className="w-3.5 h-3.5" />,   count: cont.nfe,      color: "text-blue-600" },
+    { id: "extrato", label: "Extrato Bancário",   icon: <Landmark className="w-3.5 h-3.5" />,   count: cont.extratos, color: "text-green-600" },
+    { id: "ocs",     label: "Ordens de Compra",   icon: <ShoppingCart className="w-3.5 h-3.5" />, count: cont.ocs,   color: "text-orange-600" },
+  ];
 
   return (
     <div className="mt-4 border border-slate-200 rounded-xl bg-white shadow-sm overflow-hidden">
-      {/* Header do painel */}
+      {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 bg-slate-50 border-b border-slate-200">
         <div className="flex items-center gap-2">
           <span className={cn("w-2.5 h-2.5 rounded-full", statusDotColor(dados.status))} />
@@ -124,116 +121,324 @@ function PainelMes({
         </button>
       </div>
 
-      <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-5">
-        {/* Checklist de documentos */}
-        <div>
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Documentos do Mês</p>
-          <div className="space-y-1.5">
-            {[
-              { icon: Receipt,      label: "NFS-e Emitidas",    val: cont.nfse,    color: "text-violet-600" },
-              { icon: FileText,     label: "NF-e Recebidas",    val: cont.nfe,     color: "text-blue-600" },
-              { icon: Landmark,     label: "Linhas de Extrato", val: cont.extratos, color: "text-green-600" },
-              { icon: ShoppingCart, label: "Ordens de Compra",  val: cont.ocs,     color: "text-orange-600" },
-            ].map(({ icon: Icon, label, val, color }) => (
-              <div key={label} className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-slate-50">
-                <span className="flex items-center gap-1.5 text-sm text-slate-600">
-                  <Icon className="w-3.5 h-3.5 text-slate-400" />
-                  {label}
-                </span>
-                <span className={cn("text-sm font-bold", val > 0 ? color : "text-slate-400")}>{val}</span>
+      {/* Abas de categorias */}
+      <div className="flex gap-0 border-b border-slate-200 bg-white overflow-x-auto">
+        {tabs.map(t => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTab(t.id)}
+            className={cn(
+              "flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors",
+              tab === t.id
+                ? "border-indigo-500 text-indigo-700 bg-indigo-50"
+                : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+            )}
+          >
+            {t.icon}
+            {t.label}
+            <span className={cn(
+              "ml-1 text-xs font-bold px-1.5 py-0.5 rounded-full",
+              t.count > 0 ? cn("bg-opacity-10", t.color, t.color.replace("text-","bg-").replace("-600","-100")) : "bg-gray-100 text-gray-400"
+            )}>
+              {t.count}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* Conteúdo da aba */}
+      <div className="min-h-[220px]">
+        {docsQuery.isLoading ? (
+          <div className="flex items-center justify-center py-16 gap-2 text-slate-400">
+            <Loader2 className="w-5 h-5 animate-spin" />
+            <span className="text-sm">Carregando documentos…</span>
+          </div>
+        ) : docsQuery.error ? (
+          <div className="flex items-center justify-center py-12 text-red-500 text-sm">
+            Erro ao carregar: {docsQuery.error.message}
+          </div>
+        ) : (
+          <>
+            {/* NFS-e Emitidas */}
+            {tab === "nfse" && (
+              <div>
+                {!docs?.nfseEmitidas.length ? (
+                  <p className="text-center text-slate-400 text-sm py-10">Nenhuma NFS-e emitida neste mês.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-100 bg-slate-50 text-slate-500">
+                          <th className="text-left px-4 py-2 font-medium">Nº Nota</th>
+                          <th className="text-left px-4 py-2 font-medium">Tomador</th>
+                          <th className="text-left px-4 py-2 font-medium">Data</th>
+                          <th className="text-right px-4 py-2 font-medium">Bruto</th>
+                          <th className="text-right px-4 py-2 font-medium">Líquido</th>
+                          <th className="text-right px-4 py-2 font-medium">ISS</th>
+                          <th className="text-center px-4 py-2 font-medium">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {docs.nfseEmitidas.map((n: any, i: number) => (
+                          <tr key={i} className="border-b border-slate-50 hover:bg-slate-50">
+                            <td className="px-4 py-2 font-medium text-indigo-700">{n.numero_nf || "—"}</td>
+                            <td className="px-4 py-2 text-slate-700 max-w-[180px] truncate" title={n.tomador_razao_social}>{n.tomador_razao_social || "—"}</td>
+                            <td className="px-4 py-2 text-slate-500">{fmtDate(n.data_emissao)}</td>
+                            <td className="px-4 py-2 text-right text-slate-700">{fmtBRL(n.valor_bruto)}</td>
+                            <td className="px-4 py-2 text-right text-green-700 font-medium">{fmtBRL(n.valor_liquido)}</td>
+                            <td className="px-4 py-2 text-right text-slate-500">{fmtBRL(n.iss_retido)}</td>
+                            <td className="px-4 py-2 text-center">
+                              <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-medium",
+                                n.status === "conciliada" ? "bg-green-100 text-green-700" :
+                                n.status === "enviada"    ? "bg-blue-100 text-blue-700" :
+                                "bg-amber-50 text-amber-700"
+                              )}>{n.status}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-slate-50 border-t border-slate-200">
+                          <td colSpan={3} className="px-4 py-2 font-semibold text-slate-600">Total ({docs.nfseEmitidas.length})</td>
+                          <td className="px-4 py-2 text-right font-semibold text-slate-700">{fmtBRL(docs.nfseEmitidas.reduce((s: number, n: any) => s + (n.valor_bruto ?? 0), 0))}</td>
+                          <td className="px-4 py-2 text-right font-semibold text-green-700">{fmtBRL(docs.nfseEmitidas.reduce((s: number, n: any) => s + (n.valor_liquido ?? 0), 0))}</td>
+                          <td colSpan={2} />
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
+            )}
 
-          {dados.enviadoEm && (
-            <div className="mt-3 text-xs text-slate-500 bg-green-50 border border-green-100 rounded-lg p-2.5">
-              <span className="font-medium text-green-700">Enviado em {fmtDate(dados.enviadoEm)}</span>
-              {dados.enviadoPorNome && <> por {dados.enviadoPorNome}</>}
-              {dados.observacoes && <p className="mt-1 text-slate-600">{dados.observacoes}</p>}
-            </div>
-          )}
-        </div>
+            {/* NF-e Recebidas */}
+            {tab === "nfe" && (
+              <div>
+                {!docs?.nfeRecebidas.length ? (
+                  <p className="text-center text-slate-400 text-sm py-10">Nenhuma NF-e recebida neste mês.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-100 bg-slate-50 text-slate-500">
+                          <th className="text-left px-4 py-2 font-medium">Nº Nota</th>
+                          <th className="text-left px-4 py-2 font-medium">Emitente</th>
+                          <th className="text-left px-4 py-2 font-medium">CNPJ</th>
+                          <th className="text-left px-4 py-2 font-medium">Data</th>
+                          <th className="text-right px-4 py-2 font-medium">Valor</th>
+                          <th className="text-center px-4 py-2 font-medium">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {docs.nfeRecebidas.map((n: any, i: number) => (
+                          <tr key={i} className="border-b border-slate-50 hover:bg-slate-50">
+                            <td className="px-4 py-2 font-medium text-blue-700">{n.numero_nf || "—"}</td>
+                            <td className="px-4 py-2 text-slate-700 max-w-[160px] truncate" title={n.emitente_nome}>{n.emitente_nome || "—"}</td>
+                            <td className="px-4 py-2 text-slate-500 font-mono">{n.emitente_cnpj || "—"}</td>
+                            <td className="px-4 py-2 text-slate-500">{fmtDate(n.data_emissao)}</td>
+                            <td className="px-4 py-2 text-right font-medium text-slate-700">{fmtBRL(n.valor_bruto)}</td>
+                            <td className="px-4 py-2 text-center">
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700">{n.status}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-slate-50 border-t border-slate-200">
+                          <td colSpan={4} className="px-4 py-2 font-semibold text-slate-600">Total ({docs.nfeRecebidas.length})</td>
+                          <td className="px-4 py-2 text-right font-semibold text-blue-700">{fmtBRL(docs.nfeRecebidas.reduce((s: number, n: any) => s + (n.valor_bruto ?? 0), 0))}</td>
+                          <td />
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
 
-        {/* Ações */}
-        <div className="space-y-3">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Ações</p>
+            {/* Extrato Bancário */}
+            {tab === "extrato" && (
+              <div>
+                {!docs?.extrato.length ? (
+                  <p className="text-center text-slate-400 text-sm py-10">Nenhum extrato bancário importado neste mês.</p>
+                ) : (
+                  <>
+                    {cont.extratos > 300 && (
+                      <div className="px-4 pt-3 text-xs text-amber-700 bg-amber-50 border-b border-amber-100 py-2">
+                        ⚠ Mostrando as primeiras 300 de {cont.extratos} linhas. O download ZIP inclui todas.
+                      </div>
+                    )}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-slate-100 bg-slate-50 text-slate-500">
+                            <th className="text-left px-4 py-2 font-medium">Data</th>
+                            <th className="text-left px-4 py-2 font-medium">Conta</th>
+                            <th className="text-left px-4 py-2 font-medium">Descrição</th>
+                            <th className="text-right px-4 py-2 font-medium">Valor</th>
+                            <th className="text-center px-4 py-2 font-medium">Conc.</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {docs.extrato.map((e: any, i: number) => (
+                            <tr key={i} className="border-b border-slate-50 hover:bg-slate-50">
+                              <td className="px-4 py-1.5 text-slate-500">{fmtDate(e.data)}</td>
+                              <td className="px-4 py-1.5 text-slate-500 max-w-[100px] truncate" title={e.conta_nome}>{e.conta_nome || e.banco || "—"}</td>
+                              <td className="px-4 py-1.5 text-slate-700 max-w-[200px] truncate" title={e.descricao}>{e.descricao || "—"}</td>
+                              <td className={cn("px-4 py-1.5 text-right font-medium",
+                                e.valor >= 0 ? "text-green-700" : "text-red-700"
+                              )}>
+                                {fmtBRL(Math.abs(e.valor))}{e.valor < 0 ? " D" : " C"}
+                              </td>
+                              <td className="px-4 py-1.5 text-center">
+                                {e.conciliado ? <span className="text-green-600">✓</span> : <span className="text-slate-300">–</span>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-slate-50 border-t border-slate-200">
+                            <td colSpan={3} className="px-4 py-2 font-semibold text-slate-600">
+                              {docs.extrato.length} linhas {cont.extratos > 300 ? `(de ${cont.extratos})` : ""}
+                            </td>
+                            <td className="px-4 py-2 text-right font-semibold text-slate-700">
+                              {fmtBRL(docs.extrato.reduce((s: number, e: any) => s + (e.valor ?? 0), 0))}
+                            </td>
+                            <td />
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
+            {/* Ordens de Compra */}
+            {tab === "ocs" && (
+              <div>
+                {!docs?.ocs.length ? (
+                  <p className="text-center text-slate-400 text-sm py-10">Nenhuma ordem de compra neste mês.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-100 bg-slate-50 text-slate-500">
+                          <th className="text-left px-4 py-2 font-medium">Nº OC</th>
+                          <th className="text-left px-4 py-2 font-medium">Fornecedor</th>
+                          <th className="text-left px-4 py-2 font-medium">Obra</th>
+                          <th className="text-left px-4 py-2 font-medium">Data</th>
+                          <th className="text-right px-4 py-2 font-medium">Total</th>
+                          <th className="text-center px-4 py-2 font-medium">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {docs.ocs.map((o: any, i: number) => (
+                          <tr key={i} className="border-b border-slate-50 hover:bg-slate-50">
+                            <td className="px-4 py-2 font-medium text-orange-700">{o.numero || "—"}</td>
+                            <td className="px-4 py-2 text-slate-700 max-w-[160px] truncate" title={o.fornecedor}>{o.fornecedor || "—"}</td>
+                            <td className="px-4 py-2 text-slate-500 max-w-[120px] truncate" title={o.obra_nome}>{o.obra_nome || "—"}</td>
+                            <td className="px-4 py-2 text-slate-500">{fmtDate(o.created_at)}</td>
+                            <td className="px-4 py-2 text-right font-medium text-slate-700">{fmtBRL(o.valor_total)}</td>
+                            <td className="px-4 py-2 text-center">
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-50 text-orange-700">{o.status}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-slate-50 border-t border-slate-200">
+                          <td colSpan={4} className="px-4 py-2 font-semibold text-slate-600">Total ({docs.ocs.length})</td>
+                          <td className="px-4 py-2 text-right font-semibold text-orange-700">{fmtBRL(docs.ocs.reduce((s: number, o: any) => s + (o.valor_total ?? 0), 0))}</td>
+                          <td />
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* ── Rodapé: ações e downloads ─────────────────────────────────────── */}
+      <div className="border-t border-slate-200 bg-slate-50 px-5 py-4">
+        <div className="flex flex-wrap gap-2 items-center justify-between">
           {/* Downloads */}
-          <div className="space-y-1.5">
+          <div className="flex flex-wrap gap-2">
             <Button
-              variant="outline" size="sm" className="w-full justify-start gap-2 text-sm"
+              variant="outline" size="sm" className="gap-1.5 text-sm"
               onClick={() => window.open(`/api/download/pacote-contador?companyId=${companyId}&mes=${mes}&ano=${ano}`, "_blank")}
-              disabled={dados.futuro}
+              disabled={dados.futuro || docsQuery.isLoading}
             >
-              <Download className="w-4 h-4 text-indigo-600" />
-              Baixar Pacote Contador (ZIP)
+              <Download className="w-3.5 h-3.5 text-indigo-600" />
+              Baixar Pacote ZIP
             </Button>
             <Button
-              variant="outline" size="sm" className="w-full justify-start gap-2 text-sm"
+              variant="outline" size="sm" className="gap-1.5 text-sm"
               onClick={() => window.open(`/api/download/contabilidade-xlsx?companyId=${companyId}&mes=${mes}&ano=${ano}`, "_blank")}
-              disabled={dados.futuro}
+              disabled={dados.futuro || docsQuery.isLoading}
             >
-              <Download className="w-4 h-4 text-green-600" />
-              Planilha Extrato Bancário (XLSX)
+              <Download className="w-3.5 h-3.5 text-green-600" />
+              Planilha XLSX
             </Button>
           </div>
 
-          <Separator />
+          {/* Registro e FCSign */}
+          <div className="flex flex-wrap gap-2 items-center">
+            {/* Alterar status */}
+            {!dados.futuro && (
+              <div className="flex gap-1 items-center">
+                {(["pendente","enviado","assinado"] as const).map(s => (
+                  <button
+                    key={s} type="button"
+                    disabled={dados.status === s || atualizarMut.isPending}
+                    onClick={() => atualizarMut.mutate({ companyId, mes, ano, status: s })}
+                    className={cn(
+                      "px-2.5 py-1 rounded text-xs font-medium border transition-all",
+                      dados.status === s
+                        ? "bg-slate-100 text-slate-400 border-slate-200 cursor-default"
+                        : "bg-white text-slate-600 border-slate-300 hover:border-slate-400"
+                    )}
+                  >
+                    {s === "pendente" ? "Pendente" : s === "enviado" ? "Enviado" : "Assinado"}
+                  </button>
+                ))}
+              </div>
+            )}
 
-          {/* Registrar envio */}
-          <Button
-            size="sm" className="w-full justify-start gap-2 text-sm bg-blue-600 hover:bg-blue-700"
-            onClick={() => setDlgEnvio(true)}
-            disabled={dados.futuro}
-          >
-            <Send className="w-4 h-4" />
-            {dados.status === "pendente" ? "Registrar Envio ao Contador" : "Atualizar Registro de Envio"}
-          </Button>
-
-          {/* FCSign */}
-          <Button
-            size="sm" variant="outline" className="w-full justify-start gap-2 text-sm border-violet-300 text-violet-700 hover:bg-violet-50"
-            onClick={() => setDlgFCSign(true)}
-            disabled={dados.futuro}
-          >
-            <Plus className="w-4 h-4" />
-            {dados.envelopeId ? "Novo Envelope FCSign" : "Gerar Lista Mestre (FCSign)"}
-          </Button>
-
-          {dados.envelopeId && (
-            <Button
-              size="sm" variant="ghost" className="w-full justify-start gap-2 text-sm text-slate-600"
-              onClick={() => syncMut.mutate({ companyId, mes, ano })}
-              disabled={syncMut.isPending}
-            >
-              <RefreshCw className={cn("w-4 h-4", syncMut.isPending && "animate-spin")} />
-              Sincronizar status do envelope
-              {dados.envelopeStatus && <span className="ml-auto text-xs text-slate-400">{dados.envelopeStatus}</span>}
+            <Button size="sm" className="gap-1.5 text-sm bg-blue-600 hover:bg-blue-700"
+              onClick={() => setDlgEnvio(true)} disabled={dados.futuro}>
+              <Send className="w-3.5 h-3.5" />
+              {dados.status === "pendente" ? "Registrar Envio" : "Atualizar Envio"}
             </Button>
-          )}
 
-          {/* Alterar status manual */}
-          {!dados.futuro && (
-            <div className="flex gap-1.5 flex-wrap pt-1">
-              {(["pendente","enviado","assinado"] as const).map(s => (
-                <button
-                  key={s}
-                  type="button"
-                  disabled={dados.status === s || atualizarMut.isPending}
-                  onClick={() => atualizarMut.mutate({ companyId, mes, ano, status: s })}
-                  className={cn(
-                    "px-2.5 py-1 rounded text-xs font-medium border transition-all",
-                    dados.status === s
-                      ? "bg-slate-100 text-slate-400 border-slate-200 cursor-default"
-                      : "bg-white text-slate-600 border-slate-300 hover:border-slate-400"
-                  )}
-                >
-                  {s === "pendente" ? "Pendente" : s === "enviado" ? "Enviado" : "Assinado"}
-                </button>
-              ))}
-            </div>
-          )}
+            <Button size="sm" variant="outline" className="gap-1.5 text-sm border-violet-300 text-violet-700 hover:bg-violet-50"
+              onClick={() => setDlgFCSign(true)} disabled={dados.futuro}>
+              <Plus className="w-3.5 h-3.5" />
+              {dados.envelopeId ? "Novo FCSign" : "Gerar FCSign"}
+            </Button>
+
+            {dados.envelopeId && (
+              <Button size="sm" variant="ghost" className="gap-1.5 text-sm text-slate-500"
+                onClick={() => syncMut.mutate({ companyId, mes, ano })} disabled={syncMut.isPending}>
+                <RefreshCw className={cn("w-3.5 h-3.5", syncMut.isPending && "animate-spin")} />
+                Sync envelope
+                {dados.envelopeStatus && <span className="text-xs text-slate-400">({dados.envelopeStatus})</span>}
+              </Button>
+            )}
+          </div>
         </div>
+
+        {/* Info envio */}
+        {dados.enviadoEm && (
+          <p className="mt-2 text-xs text-green-700 bg-green-50 border border-green-100 rounded px-2.5 py-1.5">
+            Enviado em {fmtDate(dados.enviadoEm)}{dados.enviadoPorNome ? ` por ${dados.enviadoPorNome}` : ""}
+            {dados.observacoes ? ` — ${dados.observacoes}` : ""}
+          </p>
+        )}
       </div>
 
       {/* Dialog: Registrar Envio */}
@@ -243,9 +448,7 @@ function PainelMes({
             <DialogTitle>Registrar Envio — {mesLabel} / {ano}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
-            <p className="text-sm text-slate-600">
-              Confirma o envio dos documentos abaixo ao contador (Pronus Tributário)?
-            </p>
+            <p className="text-sm text-slate-600">Confirma o envio dos documentos abaixo ao contador (Pronus Tributário)?</p>
             <ul className="text-sm text-slate-700 space-y-0.5 pl-4 list-disc">
               <li>{cont.nfse} NFS-e emitidas</li>
               <li>{cont.nfe} NF-e recebidas</li>
@@ -254,12 +457,12 @@ function PainelMes({
             </ul>
             <div>
               <Label>Observações (opcional)</Label>
-              <Textarea value={obsEnvio} onChange={e => setObsEnvio(e.target.value)} rows={3} placeholder="Alguma observação sobre este envio…" />
+              <Textarea value={obsEnvio} onChange={e => setObsEnvio(e.target.value)} rows={3} placeholder="Alguma observação…" />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDlgEnvio(false)}>Cancelar</Button>
-            <Button onClick={handleRegistrar} disabled={registrarMut.isPending}>
+            <Button onClick={() => registrarMut.mutate({ companyId, mes, ano, observacoes: obsEnvio || null })} disabled={registrarMut.isPending}>
               {registrarMut.isPending ? "Salvando…" : "Confirmar Envio"}
             </Button>
           </DialogFooter>
@@ -294,10 +497,8 @@ function PainelMes({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDlgFCSign(false)}>Cancelar</Button>
-            <Button
-              onClick={handleCriarEnvelope}
-              disabled={criarEnvMut.isPending || fcSignatarios.filter(s => s.nome && s.email).length < 1}
-            >
+            <Button onClick={() => criarEnvMut.mutate({ companyId, mes, ano, nomeEmpresa: companyNome, contagens: cont, signatarios: fcSignatarios.filter(s => s.nome && s.email) })}
+              disabled={criarEnvMut.isPending || fcSignatarios.filter(s => s.nome && s.email).length < 1}>
               {criarEnvMut.isPending ? "Gerando…" : "Gerar Envelope"}
             </Button>
           </DialogFooter>
@@ -332,7 +533,7 @@ export default function FinanceiroContabilidade() {
     <DashboardLayout>
     <div className="flex flex-col gap-4 p-4 md:p-6 bg-gray-50 min-h-full">
 
-      {/* ── Cabeçalho padrão ───────────────────────────────────────────────── */}
+      {/* ── Cabeçalho ─────────────────────────────────────────────────────── */}
       <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
@@ -341,7 +542,7 @@ export default function FinanceiroContabilidade() {
               Contabilidade — Controle de Envios
             </h1>
             <p className="text-sm text-gray-500 mt-0.5">
-              Registre e acompanhe os documentos enviados ao contador mês a mês
+              Visualize e confirme os documentos antes de enviar ao contador
             </p>
           </div>
           {anoQuery.isFetching && (
@@ -350,8 +551,6 @@ export default function FinanceiroContabilidade() {
             </span>
           )}
         </div>
-
-        {/* KPIs rápidos */}
         <div className="flex flex-wrap gap-4 mt-3">
           <span className="flex items-center gap-1.5 text-sm text-gray-600">
             <span className="w-2.5 h-2.5 rounded-full bg-green-500 inline-block" />
@@ -368,20 +567,19 @@ export default function FinanceiroContabilidade() {
         </div>
       </div>
 
-      {/* ── Seletor de período — padrão white-card ──────────────────────────── */}
+      {/* ── Seletor de período — white-card ─────────────────────────────────── */}
       <Card className="border border-gray-200 shadow-sm">
         <CardContent className="p-4">
-          {/* Linha 1: Ano + legenda */}
           <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
             <div className="flex items-center gap-2">
               <button type="button" onClick={() => { setAno(a => a - 1); setMesSel(null); }}
-                className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                className="p-1 rounded hover:bg-gray-100 text-gray-500">
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <span className="text-base font-bold text-gray-800 min-w-[3.5rem] text-center">{ano}</span>
               <button type="button" onClick={() => { setAno(a => a + 1); setMesSel(null); }}
                 disabled={ano >= anoAtual + 1}
-                className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800 disabled:opacity-30">
+                className="p-1 rounded hover:bg-gray-100 text-gray-500 disabled:opacity-30">
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
@@ -392,24 +590,18 @@ export default function FinanceiroContabilidade() {
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />Futuro</span>
             </div>
           </div>
-
-          {/* Linha 2: 12 chips de mês */}
           <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
             {anoQuery.isLoading
-              ? Array.from({ length: 12 }).map((_, i) => (
-                  <div key={i} className="h-12 rounded-lg bg-gray-100 animate-pulse" />
-                ))
+              ? Array.from({ length: 12 }).map((_, i) => <div key={i} className="h-12 rounded-lg bg-gray-100 animate-pulse" />)
               : anoQuery.error
-              ? <p className="col-span-12 text-sm text-red-500 py-2">Erro ao carregar dados: {anoQuery.error.message}</p>
+              ? <p className="col-span-12 text-sm text-red-500 py-2">Erro: {anoQuery.error.message}</p>
               : MESES_ABREV.map((abrev, i) => {
                   const num = i + 1;
                   const d = meses.find(m => m.mes === num);
                   const s = d?.status ?? "futuro";
                   const isSelected = mesSel === num;
                   return (
-                    <button
-                      key={abrev}
-                      type="button"
+                    <button key={abrev} type="button"
                       onClick={() => setMesSel(isSelected ? null : num)}
                       className={cn(
                         "flex flex-col items-center gap-0.5 py-2 rounded-lg border text-xs font-medium transition-all",
@@ -428,24 +620,19 @@ export default function FinanceiroContabilidade() {
         </CardContent>
       </Card>
 
-      {/* ── Painel de detalhe do mês selecionado ───────────────────────────── */}
+      {/* ── Painel do mês ──────────────────────────────────────────────────── */}
       {mesSel !== null && (
         <PainelMes
-          mes={mesSel}
-          dados={mesDados}
-          ano={ano}
-          companyId={companyId!}
-          companyNome={company?.nome ?? "FC Engenharia"}
-          onClose={() => setMesSel(null)}
-          onRefetch={() => anoQuery.refetch()}
+          mes={mesSel} dados={mesDados} ano={ano}
+          companyId={companyId!} companyNome={company?.nome ?? "FC Engenharia"}
+          onClose={() => setMesSel(null)} onRefetch={() => anoQuery.refetch()}
         />
       )}
 
-      {/* ── Estado vazio (nenhum mês selecionado) ──────────────────────────── */}
       {mesSel === null && !anoQuery.isLoading && (
         <div className="flex flex-col items-center justify-center py-16 text-gray-400">
           <Archive className="w-10 h-10 mb-3 opacity-40" />
-          <p className="text-sm">Selecione um mês para ver os documentos e registrar o envio ao contador.</p>
+          <p className="text-sm">Selecione um mês para ver os documentos do período.</p>
         </div>
       )}
     </div>

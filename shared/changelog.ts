@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3719 — **CONTABILIDADE · PAINEL DE DOCUMENTOS COM ABAS ANTES DO DOWNLOAD — NFS-e / NF-e / EXTRATO / OCs. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Em vez de gerar o ZIP/XLSX às cegas (propenso a erro SQL), o módulo Contabilidade agora carrega
+ * e exibe todos os documentos do mês selecionado em abas antes de disponibilizar os downloads:
+ * Aba "NFS-e Emitidas" (número, tomador, bruto, líquido, ISS, status), "NF-e Recebidas" (número,
+ * emitente, CNPJ, valor, status), "Extrato Bancário" (data, conta, descrição, valor C/D, conciliado)
+ * e "Ordens de Compra" (número OC, fornecedor, obra, valor total, status). Cada aba exibe totalizador
+ * no rodapé. Aviso quando extrato > 300 linhas (limite de preview). Downloads ZIP e XLSX movidos para
+ * o rodapé do painel, habilitados somente após os dados carregarem. Backend: novo endpoint tRPC
+ * `contabilidade.getDocumentosMes` com 4 queries paralelas (fiscal_notes NFS-e + NF-e + bank_statement_lines
+ * + compras_ordens com JOINs corretos — obra_id snake_case). Colunas verificadas no schema.
+ * Arquivos: `server/routers/contabilidade.ts`, `client/src/pages/financeiro/FinanceiroContabilidade.tsx`.
+ *
  * Rev. 3718 — **PACOTE CONTADOR + PLANILHA XLSX · BUGFIX "COLUMN DOES NOT EXIST" — codigo_servico → cd_lista_servico + fe.numero_nf → JOIN fiscal_notes. 100% BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Dois downloads do módulo Contabilidade falhavam com "Erro interno" / "Erro ao gerar planilha":
