@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3697 — **PACOTE CONTADOR · BUGFIX "column nome does not exist" + OCs USANDO TABELA ERRADA. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Dois bugs em `downloadPacoteContador.ts`: (1) `SELECT nome, razao_social FROM companies`
+ * → tabela `companies` usa camelCase (`"razaoSocial"`, `"nomeFantasia"`), não snake_case;
+ * gerava `42703 column "nome" does not exist` e abortava todo o ZIP. Fix: usar colunas corretas.
+ * (2) Query de OCs usava `purchase_orders` (tabela vazia do Prisma legado) em vez de
+ * `compras_ordens` (tabela real do sistema) — OCs nunca apareciam no pacote. Fix: migrar
+ * query para `compras_ordens co` com colunas corretas (`numero_oc`, `total`, `fornecedor_nome`
+ * etc.) + JOIN `obras` para `obra_nome`. Arquivo: `server/routers/downloadPacoteContador.ts`.
+ *
  * Rev. 3696 — **DASHBOARD NF-e · BUGFIX LÓGICA OC × NF-e — DEDUP + TOLERÂNCIA 10% + MATCH DIRETO POR NÚMERO NF. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * A lógica anterior tinha 3 falhas críticas: (1) `matchedNfeIds` só bloqueava a lista

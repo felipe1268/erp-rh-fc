@@ -75,20 +75,27 @@ async function queryPeriod(db: any, companyId: number, di: string, df: string) {
       LIMIT 2000
     `, [companyId, di, df]),
 
+    // NOTA: OCs do sistema ficam em `compras_ordens`, NÃO em `purchase_orders`
     db.$client.query(`
-      SELECT po.numero, po.supplier_nome, po.valor_total, po.status,
-             po.created_at, po.obra_nome, po.tipo,
+      SELECT co.numero_oc AS numero,
+             co.fornecedor_nome AS supplier_nome,
+             co.total AS valor_total,
+             co.status,
+             co.created_at,
+             COALESCE(o.nome, '') AS obra_nome,
+             COALESCE(co.tipo, 'compra') AS tipo,
              COALESCE(f.cnpj, '') AS supplier_cnpj,
-             COALESCE(f.razao_social, po.supplier_nome, '') AS supplier_razao,
+             COALESCE(f.razao_social, co.fornecedor_nome, '') AS supplier_razao,
              (SELECT fn.numero_nf FROM fiscal_notes fn
-              WHERE fn.emitente_cnpj = f.cnpj AND fn.company_id = $1
+              WHERE fn.emitente_cnpj = COALESCE(f.cnpj, '') AND fn.company_id = $1
                 AND fn.data_emissao >= $2 AND fn.data_emissao < $3
                 AND fn.status != 'cancelada' LIMIT 1) AS nfe_vinculada
-      FROM purchase_orders po
-      LEFT JOIN fornecedores f ON f.id = po.supplier_id AND f.company_id = $1
-      WHERE po.company_id = $1 AND po.status NOT IN ('cancelada','rascunho')
-        AND po.created_at >= $2 AND po.created_at < $3
-      ORDER BY po.created_at ASC
+      FROM compras_ordens co
+      LEFT JOIN fornecedores f ON f.id = co.fornecedor_id AND f.company_id = $1
+      LEFT JOIN obras o ON o.id = co.obra_id
+      WHERE co.company_id = $1 AND co.status NOT IN ('cancelada','rascunho')
+        AND co.created_at >= $2 AND co.created_at < $3
+      ORDER BY co.created_at ASC
       LIMIT 500
     `, [companyId, di, df]),
   ]);
@@ -255,9 +262,9 @@ export function registerPacoteContadorRoute(app: Express) {
 
       // Busca nome da empresa
       const empQ = await db.$client.query(
-        `SELECT nome, razao_social FROM companies WHERE id = $1`, [companyId]
+        `SELECT "razaoSocial", "nomeFantasia" FROM companies WHERE id = $1`, [companyId]
       );
-      const empresa = empQ.rows[0]?.razao_social || empQ.rows[0]?.nome || `Empresa ${companyId}`;
+      const empresa = empQ.rows[0]?.razaoSocial || empQ.rows[0]?.nomeFantasia || `Empresa ${companyId}`;
 
       const archive = archiver("zip", { zlib: { level: 6 } });
       archive.on("error", (err) => {

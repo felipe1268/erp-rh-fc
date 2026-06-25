@@ -50,9 +50,11 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3697** — **PACOTE CONTADOR · BUGFIX "column nome does not exist" + OCs USANDO TABELA ERRADA. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Dois bugs: (1) `SELECT nome, razao_social FROM companies` → tabela usa camelCase `"razaoSocial"`/`"nomeFantasia"` → `42703` abortava o ZIP inteiro; (2) query de OCs usava `purchase_orders` (vazia) em vez de `compras_ordens` → OCs sempre zeradas no pacote. Arquivo: `server/routers/downloadPacoteContador.ts`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3696** — **DASHBOARD NF-e · BUGFIX LÓGICA OC × NF-e — DEDUP + TOLERÂNCIA 10% + MATCH DIRETO POR NÚMERO NF. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Mesma NF-e aparecia em várias OCs (dedup só bloqueava `nfeSemOc`, não o `find()`). Fallback `matches[0]` vinculava qualquer NF-e do mesmo CNPJ sem bater valor. Nova estratégia: Camada 1=número NF direto na OC; Camada 2=CNPJ+valor±10%+data±90 dias; sem fallback. Arquivo: `server/routers/fiscalNotes.ts`. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3695** — **NFS-e EMITIDAS · LEGENDA DOS IMPOSTOS NO DIALOG ESPELHO — SUB-LABELS DESCRITIVOS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Sub-legenda `text-[10px]` sob cada imposto: ISS=tributo municipal; INSS=previdência; IR=IRRF na fonte; CSLL=1%; PIS=0,65%; COFINS=3%; etc. Mobile-friendly (sempre visível). Arquivo: `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3695** — **NFS-e EMITIDAS · LEGENDA DOS IMPOSTOS NO DIALOG ESPELHO — SUB-LABELS DESCRITIVOS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3694** — **SEFAZ CONFIG · FREQUÊNCIA DECIMAL — INPUT LIVRE 1h–24h (EX: 1.5 = 1h 30min). SCHEMA ADITIVO + FRONTEND · ZERO DROP/DELETE.** `sync_intervalo_horas` SMALLINT → NUMERIC(4,2) via SyncSchema+. Dropdown removido → Input text+inputMode=decimal; blur snappa ao 0.25 mais próximo; helper `fmtIntervalHoras` mostra "1h 30min" abaixo do campo. Arquivo: `FinanceiroConfigSection.tsx`. Detalhe: `shared/changelog.ts`.
 
