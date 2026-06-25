@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3699 — **FOLHA PJ · BUGFIX VALORES ERRADOS NA CONCILIAÇÃO — CONTRATO EDITADO NÃO PROPAGAVA AO pj_payments. BACKEND PONTUAL + COLFIX · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Causa-raiz: `gerarPrevisoesDoContrato` usa dedup por `(employeeId, mesReferencia, tipo)` —
+ * correto para evitar duplicatas. Porém `contratos.update` atualizava só `pj_contracts.valorMensal`
+ * e nunca retroagia aos `pj_payments` já gerados (status=pendente). `financialAutoImport` criou
+ * `financial_entries` com o valor antigo e o guard `entryExists` impediu re-criação. Resultado:
+ * André (R$ 8.000) e Rodnei (R$ 3.500) mostravam R$ 12.000 na conciliação.
+ *
+ * Fix em 3 camadas:
+ * (1) Nova função `sincronizarPagamentosPendentesInterno(db, employeeId)` — faz UPDATE em
+ *     `pj_payments` pendentes recalculando valor via JOIN `pj_contracts` (adiantamento%/fechamento%),
+ *     depois propaga o novo `valor_previsto` para `financial_entries` vinculados (origem_modulo=
+ *     'pagamento_pj') ainda não pagos.
+ * (2) `contratos.update` chama a função acima automaticamente se `valorMensal`,
+ *     `percentualAdiantamento` ou `percentualFechamento` mudaram.
+ * (3) Nova tRPC procedure `contratos.sincronizarPagamentosPendentes` para uso manual pela UI
+ *     quando necessário.
+ * (4) ColFix `v3699-2026-06-25-pj-payments-valor-sync` corrige todos os pj_payments pendentes
+ *     divergentes no banco (André + Rodnei + quaisquer outros) no próximo restart.
+ *
+ * Arquivo: `server/routers/pjContracts.ts`, `server/_core/index.ts`.
+ *
  * Rev. 3698 — **CONCILIAÇÃO · PRESTADORES PJ APARECEM NO CAMPO FORNECEDOR COM BADGE "PJ". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Campo "Fornecedor" no dialog de lançamento/conciliação agora inclui os prestadores PJ ativos

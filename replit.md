@@ -50,9 +50,11 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3699** — **FOLHA PJ · BUGFIX VALORES ERRADOS NA CONCILIAÇÃO — CONTRATO EDITADO NÃO PROPAGAVA AO pj_payments. BACKEND PONTUAL + COLFIX · ZERO SCHEMA/ALTER/DROP/DELETE.** `contratos.update` atualizava só `pj_contracts.valorMensal` mas nunca retroagia aos `pj_payments` já gerados (pendentes). Fix: nova função `sincronizarPagamentosPendentesInterno` propaga novo valor aos pagamentos + `financial_entries` vinculados; chamada automática no update de contrato quando valor/percentuais mudam; nova procedure `contratos.sincronizarPagamentosPendentes`; ColFix `v3699` corrige André (8k→12k) e Rodnei (3.5k→12k) no restart. Arquivo: `server/routers/pjContracts.ts`, `server/_core/index.ts`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3698** — **CONCILIAÇÃO · PRESTADORES PJ APARECEM NO CAMPO FORNECEDOR COM BADGE "PJ". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Campo "Fornecedor" no dialog de lançamento/conciliação agora inclui prestadores PJ ativos (`pj.contratos.list`). Cada PJ aparece no dropdown com badge âmbar "PJ" ao lado do nome. Dedupado por nome — se já existir no cadastro de fornecedores, não duplica. Encerrados excluídos. `LancCombo` estendido para `isPJ?: boolean`. Arquivo: `FinanceiroConciliacao.tsx`. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3697** — **PACOTE CONTADOR · BUGFIX "column nome does not exist" + OCs USANDO TABELA ERRADA. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Dois bugs: (1) `SELECT nome, razao_social FROM companies` → tabela usa camelCase `"razaoSocial"`/`"nomeFantasia"` → `42703` abortava o ZIP inteiro; (2) query de OCs usava `purchase_orders` (vazia) em vez de `compras_ordens` → OCs sempre zeradas no pacote. Arquivo: `server/routers/downloadPacoteContador.ts`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3697** — **PACOTE CONTADOR · BUGFIX "column nome does not exist" + OCs USANDO TABELA ERRADA. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3696** — **DASHBOARD NF-e · BUGFIX LÓGICA OC × NF-e — DEDUP + TOLERÂNCIA 10% + MATCH DIRETO POR NÚMERO NF. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

@@ -4396,7 +4396,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v3273-2026-06-18-ferias-dataAgendamento";
+    const COLFIX_VERSION = "v3699-2026-06-25-pj-payments-valor-sync";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -5580,6 +5580,51 @@ Regras:
           console.log("[FinancialSync] Nenhuma medição confirmada em planejamento_medicoes!");
         }
       } catch (e: any) { console.warn("[FinancialSync] Backfill falhou (não-fatal):", e?.message ?? e); }
+
+      // Rev. 3699 — Corrige pj_payments PENDENTES cujo valor diverge do valorMensal atual do contrato
+      // (causado por edição de contrato sem propagação retroativa ao pj_payments já gerados).
+      try {
+        const pjRes = await db.$client.query(`
+          UPDATE pj_payments pp
+          SET valor = CASE
+                WHEN pp.tipo = 'adiantamento'
+                  THEN ROUND(pjc."valorMensal"::numeric * pjc."percentualAdiantamento"::numeric / 100, 2)::text
+                WHEN pp.tipo = 'fechamento'
+                  THEN ROUND(pjc."valorMensal"::numeric * pjc."percentualFechamento"::numeric / 100, 2)::text
+                ELSE pp.valor
+              END,
+              "updatedAt" = NOW()
+          FROM pj_contracts pjc
+          WHERE pp."contractId" = pjc.id
+            AND pp.status = 'pendente'
+            AND pjc.status NOT IN ('encerrado','cancelado')
+            AND CASE
+                  WHEN pp.tipo = 'adiantamento'
+                    THEN ABS(pp.valor::numeric - ROUND(pjc."valorMensal"::numeric * pjc."percentualAdiantamento"::numeric / 100, 2)) > 0.009
+                  WHEN pp.tipo = 'fechamento'
+                    THEN ABS(pp.valor::numeric - ROUND(pjc."valorMensal"::numeric * pjc."percentualFechamento"::numeric / 100, 2)) > 0.009
+                  ELSE false
+                END
+        `);
+        const pjCount = (pjRes as any)?.rowCount ?? 0;
+        console.log(`[ColFix Rev.3699] pj_payments corrigidos: ${pjCount}`);
+
+        // Propaga valores corrigidos para financial_entries vinculados (não pagos)
+        const feRes = await db.$client.query(`
+          UPDATE financial_entries fe
+          SET valor_previsto = pjp.valor::numeric,
+              updated_at = NOW()
+          FROM pj_payments pjp
+          WHERE fe.origem_modulo = 'pagamento_pj'
+            AND fe.origem_id = pjp.id
+            AND pjp.status = 'pendente'
+            AND COALESCE(fe.status,'') <> 'pago'
+            AND ABS(COALESCE(fe.valor_previsto,0) - pjp.valor::numeric) > 0.009
+        `);
+        const feCount = (feRes as any)?.rowCount ?? 0;
+        console.log(`[ColFix Rev.3699] financial_entries (pagamento_pj) corrigidos: ${feCount}`);
+      } catch (e: any) { console.warn("[ColFix Rev.3699] pj_payments sync falhou (não-fatal):", e?.message ?? e); }
+
       // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos
       import("../services/startupCache").then(({ setCache }) =>
         setCache("colfix_version", COLFIX_VERSION)

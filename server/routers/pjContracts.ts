@@ -43,6 +43,53 @@ function addMeses(ano: number, mes1a12: number, n: number): { ano: number; mes: 
  *
  * Retorna a quantidade de novas medições criadas.
  */
+// Rev. 3699 — Sincroniza pj_payments PENDENTES + financial_entries vinculados ao valorMensal
+// atual do contrato. Chamada após update de contrato e disponível como procedure manual.
+async function sincronizarPagamentosPendentesInterno(db: any, employeeId: number): Promise<{ pagamentos: number; entries: number }> {
+  // Atualiza pj_payments pendentes: recalcula valor a partir do contrato vigente (ativo ou pendente)
+  const pRes = await db.$client.query(`
+    UPDATE pj_payments pp
+    SET valor = CASE
+          WHEN pp.tipo = 'adiantamento'
+            THEN ROUND(pjc."valorMensal"::numeric * pjc."percentualAdiantamento"::numeric / 100, 2)::text
+          WHEN pp.tipo = 'fechamento'
+            THEN ROUND(pjc."valorMensal"::numeric * pjc."percentualFechamento"::numeric / 100, 2)::text
+          ELSE pp.valor
+        END,
+        descricao = CASE
+          WHEN pp.tipo = 'adiantamento'
+            THEN 'Adiantamento ' || pjc."percentualAdiantamento"::text || '% — Serviços de engenharia'
+          WHEN pp.tipo = 'fechamento'
+            THEN 'Fechamento ' || pjc."percentualFechamento"::text || '% — Serviços de engenharia'
+          ELSE pp.descricao
+        END,
+        "updatedAt" = NOW()
+    FROM pj_contracts pjc
+    WHERE pp."employeeId" = $1
+      AND pp."contractId" = pjc.id
+      AND pp.status = 'pendente'
+      AND pjc.status NOT IN ('encerrado','cancelado')
+  `, [employeeId]);
+  const pagamentos = pRes.rowCount ?? 0;
+
+  // Propaga o novo valor_previsto para financial_entries vinculados ainda não pagos
+  const eRes = await db.$client.query(`
+    UPDATE financial_entries fe
+    SET valor_previsto = pjp.valor::numeric,
+        updated_at = NOW()
+    FROM pj_payments pjp
+    WHERE fe.origem_modulo = 'pagamento_pj'
+      AND fe.origem_id = pjp.id
+      AND pjp."employeeId" = $1
+      AND pjp.status = 'pendente'
+      AND COALESCE(fe.status,'') <> 'pago'
+      AND ABS(COALESCE(fe.valor_previsto,0) - pjp.valor::numeric) > 0.009
+  `, [employeeId]);
+  const entries = eRes.rowCount ?? 0;
+
+  return { pagamentos, entries };
+}
+
 async function gerarPrevisoesDoContrato(
   db: any,
   contrato: any,
@@ -769,7 +816,27 @@ export const pjContractsRouter = router({
 
         updateData.updatedAt = sql`NOW()`;
         await db.update(pjContracts).set(updateData).where(eq(pjContracts.id, id));
+
+        // Rev. 3699 — propagar mudança de valorMensal/percentuais aos pj_payments PENDENTES
+        const valorCampos = ['valorMensal', 'percentualAdiantamento', 'percentualFechamento'];
+        const mudouValor = valorCampos.some(c => updateData[c] !== undefined && String(updateData[c]) !== String((atual as any)[c]));
+        if (mudouValor) {
+          try {
+            const r = await sincronizarPagamentosPendentesInterno(db, atual.employeeId);
+            console.log(`[PJ Update] Sincronizados ${r.pagamentos} pj_payments e ${r.entries} financial_entries p/ employee ${atual.employeeId}`);
+          } catch (e: any) { console.warn("[PJ Update] sincronizar falhou (não-fatal):", e?.message ?? e); }
+        }
+
         return { success: true, revisao: novaRevisao };
+      }),
+
+    /** Sincroniza pj_payments PENDENTES + financial_entries ao valorMensal atual do contrato */
+    sincronizarPagamentosPendentes: protectedProcedure
+      .input(z.object({ companyId: z.number(), employeeId: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = (await getDb())!;
+        const r = await sincronizarPagamentosPendentesInterno(db, input.employeeId);
+        return { success: true, ...r };
       }),
 
     /** Upload contrato assinado */

@@ -1575,6 +1575,7 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
          LEFT JOIN lancamentos_parceiros lp ON e.origem_modulo='parceiro_lancamento' AND lp.id = e.origem_id AND lp."companyId" = e.company_id
          LEFT JOIN parceiros_conveniados pc ON pc.id = lp."parceiroId" AND pc."companyId" = e.company_id
          LEFT JOIN pj_payments pjp ON e.origem_modulo='pagamento_pj' AND pjp.id = e.origem_id AND pjp."companyId" = e.company_id
+             AND pjp."mesReferencia" = TO_CHAR(e.data_competencia, 'YYYY-MM')
          LEFT JOIN employees pjemp ON pjemp.id = pjp."employeeId" AND pjemp."companyId" = e.company_id
          LEFT JOIN pj_contracts pjc ON pjc.id = pjp."contractId" AND pjc."companyId" = e.company_id
          LEFT JOIN compras_ordens co ON e.origem_modulo IN ('compras','compra_oc') AND co.id = e.origem_id AND co.company_id = e.company_id
@@ -1618,6 +1619,7 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
          LEFT JOIN lancamentos_parceiros lp ON e.origem_modulo='parceiro_lancamento' AND lp.id = e.origem_id AND lp."companyId" = e.company_id
          LEFT JOIN parceiros_conveniados pc ON pc.id = lp."parceiroId" AND pc."companyId" = e.company_id
          LEFT JOIN pj_payments pjp ON e.origem_modulo='pagamento_pj' AND pjp.id = e.origem_id AND pjp."companyId" = e.company_id
+             AND pjp."mesReferencia" = TO_CHAR(e.data_competencia, 'YYYY-MM')
          LEFT JOIN employees pjemp ON pjemp.id = pjp."employeeId" AND pjemp."companyId" = e.company_id
          LEFT JOIN pj_contracts pjc ON pjc.id = pjp."contractId" AND pjc."companyId" = e.company_id
          LEFT JOIN compras_ordens co ON e.origem_modulo IN ('compras','compra_oc') AND co.id = e.origem_id AND co.company_id = e.company_id
@@ -2063,6 +2065,7 @@ export const financialRouter = router({
        LEFT JOIN fleet_fuel_records ffr ON e.origem_modulo = 'frota_abastecimento' AND ffr.id = e.origem_id AND ffr.company_id = e.company_id
        LEFT JOIN fleet_maintenances fm ON e.origem_modulo = 'frota_manutencao' AND fm.id = e.origem_id AND fm.company_id = e.company_id
        LEFT JOIN pj_payments pjp ON e.origem_modulo = 'pagamento_pj' AND pjp.id = e.origem_id AND pjp."companyId" = e.company_id
+           AND pjp."mesReferencia" = TO_CHAR(e.data_competencia, 'YYYY-MM')
        LEFT JOIN employees pjemp ON pjemp.id = pjp."employeeId" AND pjemp."companyId" = e.company_id
        WHERE ${conds.join(" AND ")}
        ORDER BY COALESCE(e.data_competencia, e.data_vencimento, e.created_at::date) DESC, e.created_at DESC
