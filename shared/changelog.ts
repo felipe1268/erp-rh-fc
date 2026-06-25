@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3711 — **EXTRATO SANTANDER · BUGFIX CRÍTICO PARSER — "EXTRATO_PJ_A4_INTELIGENTE 1.0" TEM VALOR NA MESMA LINHA DA DESCRIÇÃO (NÃO EM LINHA SEPARADA). 100% BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Causa-raiz: `parseSantanderExtratoPdf` foi escrito assumindo o formato antigo onde o valor
+ * monetário ficava numa LINHA PRÓPRIA (apenas dígitos, ex.: "3.000,00-"). O algoritmo usava
+ * `isValueLine(t)` para detectar o encerramento de cada transação.
+ * O "Extrato_PJ_A4_Inteligente 1.0" (Santander PJ atual) coloca DATA + DESCRIÇÃO + NR_DOC +
+ * VALOR tudo na MESMA linha (colunas Créditos/Débitos inline, ex.:
+ * "07/01   PIX ENVIADO ICL MONTAGENS   -   3.000,00-"). `isValueLine` nunca retornava true
+ * porque a linha tem letras; `descParts` acumulava tudo sem jamais emitir uma transação →
+ * resultado: 0 ou 1 lançamento importado de um extrato com centenas.
+ *
+ * Fix (`server/services/santanderPdfParser.ts`):
+ *   Reescrito o loop principal com NOVO ALGORITMO:
+ *   • CADA LINHA COM VALOR MONETÁRIO = UMA TRANSAÇÃO (flush imediato da anterior).
+ *   • Linhas SEM valor = CONTINUAÇÃO da transação anterior (beneficiário, CNPJ, parcela).
+ *   • Prefix (antes do 1º valor) → extrai data DD/MM (carry-forward) + descrição.
+ *   • 1º valor na linha = transação (débito se termina "-", crédito se não termina).
+ *   • Demais valores na mesma linha = saldo do dia (ignorados).
+ *   • Nº doc de 6 dígitos no final do prefix → removido (ex.: "051152", "010107").
+ *   • Continuação "09014246000197" (CNPJ, 14 dígitos) → incluída na descrição.
+ *   • Ruído existente (SALDO, cabeçalhos, etc.) preservado.
+ *   • `parseRendimentoContaMax` e `RendimentoAplicacao` (CDB ContaMax) preservados.
+ *
+ * Resultado esperado: extrato de 13 páginas / ~200+ lançamentos importado integralmente.
+ *
  * Rev. 3710 — **SEFAZ NF-e · BUGFIX "UNEXPECTED END OF JSON INPUT" — LIMITE 3 PÁGINAS NO syncNow + REMOVE AUTO-SYNC APÓS RESET NSU. BACKEND PONTUAL + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Causa-raiz: NSU foi resetado para `000000000000000` via "Resetar histórico".
