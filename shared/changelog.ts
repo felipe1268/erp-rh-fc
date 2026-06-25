@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3691 — **NFS-e EMITIDAS · BOTÃO "CONCILIAR MÊS" — MARCA TODAS AS NOTAS DO MÊS COMO CONCILIADA. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * Novo endpoint `fiscalNotes.conciliarMes({ companyId, ano, mes })`: UPDATE em lote em `fiscal_notes`
+ * onde `data_emissao` cai no intervalo [1º..último dia] do mês e `status != 'cancelada'` → `status='conciliada'`.
+ * Retorna `{ updated: N }`.
+ *
+ * Frontend `FinanceiroNotasFiscais.tsx`: botão verde "Conciliar Mês" aparece na barra de filtros
+ * somente quando um mês específico está selecionado (não no modo "Ano todo"). Abre um AlertDialog
+ * de confirmação com nome do mês/ano, aviso sobre canceladas preservadas e texto informativo sobre
+ * desfazer via seleção em lote. Após confirmação: toast com contagem + refetch da lista (ponto do
+ * calendário vira verde). Arquivos: `server/routers/fiscalNotes.ts`, `FinanceiroNotasFiscais.tsx`.
+ *
  * Rev. 3690 — **SEFAZ NF-e · HORÁRIO HH:MM CONFIGURÁVEL + CRON A CADA 15 MIN. BACKEND ADITIVO + SCHEMA + FRONTEND · ZERO DROP/DELETE.**
  *
  * Nova coluna `sync_minuto SMALLINT NOT NULL DEFAULT 0` em `company_nfe_config` via SyncSchema+ Rev.3690.

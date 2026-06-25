@@ -338,6 +338,33 @@ export const fiscalNotesRouter = router({
       return { updated: result.length };
     }),
 
+  conciliarMes: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      ano: z.number().int().min(2010).max(2100),
+      mes: z.number().int().min(1).max(12),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await _assertNfAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const mm = String(input.mes).padStart(2, "0");
+      const dataInicio = `${input.ano}-${mm}-01`;
+      const proxMes = input.mes === 12 ? 1 : input.mes + 1;
+      const proxAno = input.mes === 12 ? input.ano + 1 : input.ano;
+      const dataFim = `${proxAno}-${String(proxMes).padStart(2, "0")}-01`;
+      const result = await db.$client.query(
+        `UPDATE fiscal_notes
+            SET status = 'conciliada', updated_at = NOW()
+          WHERE company_id = $1
+            AND data_emissao >= $2
+            AND data_emissao <  $3
+            AND status != 'cancelada'
+          RETURNING id`,
+        [input.companyId, dataInicio, dataFim]
+      );
+      return { updated: result.rowCount ?? 0 };
+    }),
+
   excluirLote: protectedProcedure
     .input(z.object({ ids: z.array(z.number()).min(1).max(200), companyId: z.number() }))
     .mutation(async ({ input, ctx }) => {

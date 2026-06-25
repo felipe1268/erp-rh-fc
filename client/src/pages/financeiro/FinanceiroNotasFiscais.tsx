@@ -197,6 +197,7 @@ export default function FinanceiroNotasFiscais() {
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
   const [bulkStatusTarget, setBulkStatusTarget] = useState<string>("recebida");
+  const [conciliarMesOpen, setConciliarMesOpen] = useState(false);
   const [selectedRecIds, setSelectedRecIds] = useState<Set<number>>(new Set());
   const [bulkRecDeleteOpen, setBulkRecDeleteOpen] = useState(false);
   const masterRecRef = useRef<HTMLInputElement>(null);
@@ -461,6 +462,16 @@ export default function FinanceiroNotasFiscais() {
     },
     onError: (e) => toast({ title: "Erro ao atualizar status", description: e.message, variant: "destructive" }),
   });
+  const conciliarMesMut = (trpc as any).fiscalNotes.conciliarMes.useMutation({
+    onSuccess: (r: { updated: number }) => {
+      const nomeMes = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][mesSel! - 1];
+      toast({ title: `${r.updated} nota${r.updated !== 1 ? "s" : ""} de ${nomeMes}/${ano} marcada${r.updated !== 1 ? "s" : ""} como Conciliada.` });
+      setConciliarMesOpen(false);
+      listQuery.refetch();
+    },
+    onError: (e: any) => toast({ title: "Erro ao conciliar mês", description: e.message, variant: "destructive" }),
+  });
+
   const finishSyncProgress = (ok: boolean) => {
     if (syncIvRef.current) { clearInterval(syncIvRef.current); syncIvRef.current = null; }
     setSyncProgress(100);
@@ -1733,6 +1744,17 @@ export default function FinanceiroNotasFiscais() {
           <Button variant="ghost" size="sm" className="h-9 gap-1" onClick={() => listQuery.refetch()}>
             <RefreshCw className={`h-3.5 w-3.5 ${listQuery.isFetching ? "animate-spin" : ""}`} />
           </Button>
+          {mesSel !== null && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 gap-1.5 border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-400"
+              onClick={() => setConciliarMesOpen(true)}
+            >
+              <CheckCircle className="h-3.5 w-3.5" />
+              Conciliar Mês
+            </Button>
+          )}
         </div>
 
         {/* Tabela */}
@@ -2908,6 +2930,33 @@ export default function FinanceiroNotasFiscais() {
                 disabled={excluirRecLoteMut.isPending}
               >
                 {excluirRecLoteMut.isPending ? "Excluindo..." : `Excluir ${selectedRecIds.size} NF-e${selectedRecIds.size !== 1 ? "s" : ""}`}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Dialog — Conciliar mês inteiro */}
+        <AlertDialog open={conciliarMesOpen} onOpenChange={v => { if (!v) setConciliarMesOpen(false); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                Conciliar {mesSel !== null ? ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"][mesSel - 1] : ""}/{ano}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Todas as NFS-e emitidas neste mês (exceto as canceladas) serão marcadas como <strong>Conciliada</strong>.
+                O mês aparecerá com o ponto verde <span className="inline-block w-2 h-2 rounded-full bg-green-500 align-middle mx-0.5" /> no calendário.
+                <br /><br />
+                Esta ação pode ser desfeita manualmente nota a nota ou usando a seleção em lote.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={conciliarMesMut.isPending}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-emerald-600 hover:bg-emerald-700"
+                disabled={conciliarMesMut.isPending}
+                onClick={() => conciliarMesMut.mutate({ companyId: companyId!, ano, mes: mesSel! })}
+              >
+                {conciliarMesMut.isPending ? "Conciliando..." : "Confirmar Conciliação"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3691** — **NFS-e EMITIDAS · BOTÃO "CONCILIAR MÊS" — MARCA TODAS AS NOTAS DO MÊS COMO CONCILIADA. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Novo endpoint `fiscalNotes.conciliarMes({ companyId, ano, mes })`: UPDATE em lote filtrando `data_emissao` no intervalo do mês, preservando canceladas. Botão verde "Conciliar Mês" na barra de filtros (visível só com mês selecionado); AlertDialog de confirmação com contagem e aviso. Mês vira ponto verde no calendário após conciliação. Arquivos: `server/routers/fiscalNotes.ts`, `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3690** — **SEFAZ NF-e · HORÁRIO HH:MM CONFIGURÁVEL + CRON A CADA 15 MIN. BACKEND ADITIVO + SCHEMA + FRONTEND · ZERO DROP/DELETE.** Nova coluna `sync_minuto` em `company_nfe_config` (SyncSchema+). `saveConfig`/`getConfig` atualizados. Cron: 30 min → 15 min. Gate: IS NULL aguarda horário BRT configurado; IS NOT NULL usa elapsed-(8 min buffer). UI: card único com dropdown de frequência + inputs HH:MM + texto descritivo dinâmico. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3689** — **SEFAZ NF-e · BUGFIX RATE-LIMIT RECORRENTE — GATE POR CNPJ (MULTI-EMPRESA). BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Raiz: 2 empresas com mesmo CNPJ/cert sincronizadas em sequência pelo cron → SEFAZ rate-limita a 2ª (limita por CNPJ, não company_id). Fix duplo: (1) cron faz dedup por CNPJ antes de disparar os syncs; (2) gate de 58 min em `executarSyncNFe` agora checa MAX(last_sync_at) de TODAS as companies com o mesmo CNPJ. Arquivo: `server/routers/sefaz.ts`. Detalhe: `shared/changelog.ts`.
