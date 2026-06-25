@@ -1,6 +1,15 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3701 — **SEFAZ NF-e · CRONÔMETRO "PRÓXIMA VERIFICAÇÃO" NO ANEL QUANDO COTA DISPONÍVEL. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Quando a cota SEFAZ estava renovada (countdownSec=0), o anel mostrava apenas
+ * um RefreshCw girando sem indicar quando o cron dispararia de novo. Fix: novo
+ * estado `cronSecsLeft` (useEffect com interval 1s) computa o tempo BRT até o
+ * próximo :00 ou :30 da hora (janelas do cron). Quando sync=ON e cota disponível,
+ * o anel exibe "próx. MM:SS" verde em vez do ícone; o texto mostra
+ * "Próxima verificação em MM:SS · limite SEFAZ: 1/Xh." Arquivo: `FinanceiroNotasFiscais.tsx`.
+ *
  * Rev. 3700 — **CONCILIAÇÃO · CAMPO DE BUSCA NA SEÇÃO "JÁ CONCILIADOS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Seção "Já conciliados" exibia centenas de linhas sem forma de filtrar. Adicionado input de

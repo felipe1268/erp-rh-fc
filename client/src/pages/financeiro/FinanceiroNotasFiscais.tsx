@@ -365,6 +365,23 @@ export default function FinanceiroNotasFiscais() {
     return () => clearInterval(iv);
   }, [sefazCfg]);
 
+  // ── Próximo disparo do cron SEFAZ (:00 e :30 de cada hora) ──────────────────
+  const [cronSecsLeft, setCronSecsLeft] = useState<number>(0);
+  useEffect(() => {
+    const calc = () => {
+      const now = new Date();
+      const brt = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+      const min = brt.getMinutes();
+      const sec = brt.getSeconds();
+      const secsInHour = min * 60 + sec;
+      const next = secsInHour < 1800 ? 1800 - secsInHour : 3600 - secsInHour;
+      setCronSecsLeft(next);
+    };
+    calc();
+    const iv = setInterval(calc, 1000);
+    return () => clearInterval(iv);
+  }, []);
+
   // ── Cronômetro regressivo NFS-e Municipal: município com sync mais recente ────
   const [munCountdownSec, setMunCountdownSec] = useState<number | null>(null);
   useEffect(() => {
@@ -1120,8 +1137,15 @@ export default function FinanceiroNotasFiscais() {
                                     {String(mm).padStart(2, "0")}:{String(ss).padStart(2, "0")}
                                   </span>
                                 )
+                              ) : syncOn ? (
+                                <>
+                                  <span className="text-[9px] font-semibold text-emerald-600 leading-none">próx.</span>
+                                  <span className="text-sm font-black leading-none tabular-nums font-mono text-emerald-700">
+                                    {String(Math.floor(cronSecsLeft / 60)).padStart(2,"0")}:{String(cronSecsLeft % 60).padStart(2,"0")}
+                                  </span>
+                                </>
                               ) : (
-                                <RefreshCw className="w-5 h-5 text-emerald-500 animate-spin" />
+                                <RefreshCw className="w-5 h-5 text-slate-400" />
                               )}
                             </div>
                           </div>
@@ -1151,7 +1175,7 @@ export default function FinanceiroNotasFiscais() {
                             </p>
                             <p className={`text-xs mt-0.5 ${syncOn ? "text-emerald-600" : "text-slate-500"}`}>
                               {syncOn
-                                ? `O cron sincroniza automaticamente a cada ${intervaloH}h.`
+                                ? <>Próxima verificação em <strong className="font-mono">{String(Math.floor(cronSecsLeft / 60)).padStart(2,"0")}:{String(cronSecsLeft % 60).padStart(2,"0")}</strong> · limite SEFAZ: 1/{intervaloH}h.</>
                                 : `Sync automático desligado. Configure em Configurações → Financeiro.`}
                               {nsuNum > 0 && <> · NSU: <strong>{nsuNum.toLocaleString("pt-BR")}</strong></>}
                             </p>
