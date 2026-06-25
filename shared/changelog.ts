@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3693 — **SEFAZ CONFIG · BUGFIX iOS SAFARI CRASH "The string did not match the expected pattern" + DROPDOWN FREQUÊNCIA MAIS LARGO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Raiz: `new Date(r.rateLimitedAt)` direto em `FinanceiroConfigSection.tsx` (linha 487) recebia timestamp
+ * Postgres no formato espaço "YYYY-MM-DD HH:MM:SS" → iOS Safari lança DOMException "The string did not
+ * match the expected pattern." → toast de erro vermelho toda vez que o SEFAZ tinha entrado em rate-limit.
+ * Fix: substituído por `parseAsUTC(r.rateLimitedAt)` (já importado, já trata o espaço → T + Z).
+ * Bônus: SelectTrigger do dropdown de frequência ampliado `w-32` → `w-36` + placeholder "Selecione…"
+ * adicionado ao SelectValue para evitar campo vazio visual em iOS com fonte grande; última opção renomeada
+ * "Uma vez por dia" → "1× por dia" (mais curto). Arquivo: `FinanceiroConfigSection.tsx`.
+ *
  * Rev. 3692 — **NFS-e EMITIDAS · STATUS "VALIDADA" + CONCILIADA AUTOMÁTICA AO VINCULAR EXTRATO. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * Novo status `validada` (violeta) inserido entre "Recebida" e "Conciliada" no fluxo de NFS-e emitidas.

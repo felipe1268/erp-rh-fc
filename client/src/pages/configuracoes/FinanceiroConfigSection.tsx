@@ -484,7 +484,7 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
                     if (r.erro) return <span className="text-red-600 font-medium" title={r.erro}>— ❌ Erro: {r.erro.slice(0, 120)}</span>;
                     if (r.aviso) {
                       if (r.rateLimitedAt) {
-                        const elapsedMin = Math.floor((Date.now() - new Date(r.rateLimitedAt).getTime()) / 60000);
+                        const elapsedMin = Math.floor((Date.now() - parseAsUTC(r.rateLimitedAt).getTime()) / 60000);
                         const restMin = Math.max(0, 58 - elapsedMin);
                         if (restMin > 0) {
                           return <span className="text-amber-600 font-medium">— ⏳ Cota SEFAZ usada · próxima sync automática em ~{restMin} min</span>;
@@ -540,8 +540,8 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
                   value={String(sefazForm.syncIntervaloHoras)}
                   onValueChange={v => setSefazForm(f => ({ ...f, syncIntervaloHoras: Number(v) }))}
                 >
-                  <SelectTrigger className="w-32 text-sm shrink-0">
-                    <SelectValue />
+                  <SelectTrigger className="w-36 text-sm shrink-0">
+                    <SelectValue placeholder="Selecione…" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="1">A cada 1h</SelectItem>
@@ -551,7 +551,7 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
                     <SelectItem value="6">A cada 6h</SelectItem>
                     <SelectItem value="8">A cada 8h</SelectItem>
                     <SelectItem value="12">A cada 12h</SelectItem>
-                    <SelectItem value="24">Uma vez por dia</SelectItem>
+                    <SelectItem value="24">1× por dia</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
