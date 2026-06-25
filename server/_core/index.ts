@@ -883,6 +883,24 @@ Regras:
           console.log(`[SyncSchema+] Tabela dds_participacoes_terceiros garantida.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA dds_participacoes_terceiros:`, e?.message || e); }
 
+        // Rev. 3707 — he_solicitacao_atividades: tabela existe no schema Drizzle mas nunca teve
+        // entrada no SyncSchema+ → se não existir no Neon, DELETE/INSERT/SELECT na tela de edição
+        // de HE jogam "relation does not exist", o servidor crasha sem enviar body JSON e o browser
+        // mostra "Unexpected end of JSON input". CREATE TABLE IF NOT EXISTS — seguro, aditivo.
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS he_solicitacao_atividades (
+              id SERIAL PRIMARY KEY,
+              solicitacao_id INTEGER NOT NULL,
+              atividade_id INTEGER NOT NULL,
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS he_sol_atv_sol ON he_solicitacao_atividades(solicitacao_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS he_sol_atv_atv ON he_solicitacao_atividades(atividade_id)`);
+          console.log(`[SyncSchema+] Rev. 3707: tabela he_solicitacao_atividades garantida (HE solicitação × atividades de planejamento).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 3707 he_solicitacao_atividades:`, e?.message || e); }
+
         // Rev. 3351 — MOVIMENTAÇÃO INTERNA configurável: base de CNPJs/CPFs do grupo +
         // exceção por lançamento. Aditivo (CREATE TABLE IF NOT EXISTS — R-001/R-007/R-010 OK).
         try {
