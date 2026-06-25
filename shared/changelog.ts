@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3715 — **PLANILHA CONTADOR · EXPORT XLSX NO FORMATO DO CONTADOR (1 ABA/CONTA BANCÁRIA). BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Nova rota GET `/api/download/contabilidade-xlsx?companyId=&mes=&ano=` gera um arquivo xlsx
+ * fiel ao modelo do contador: 1 aba por conta bancária com Data | Histórico do Banco |
+ * Histórico Real | Nº Nota Fiscal | Nº CNPJ | Entrada | Saída | Saldo (acumulado).
+ * Fonte: `bank_statement_lines` + LEFT JOIN `financial_entries` (NF, CNPJ, nome real para
+ * linhas conciliadas). Saldo inicial vem de `financial_opening_balances` se cadastrado (senão 0).
+ * Linha de TOTAL ao final de cada aba. Botão "📥 Planilha Contador" (verde) no header da
+ * Conciliação Bancária — ativo apenas quando mês específico está selecionado.
+ * Arquivos: `server/routers/downloadContabilidadeXlsx.ts` (novo), `server/_core/index.ts`,
+ * `client/src/pages/financeiro/FinanceiroConciliacao.tsx`.
+ *
  * Rev. 3714 — **DASHBOARD CONCILIAÇÃO · BUGFIX "NENHUM DADO" EM FORNECEDORES + CATEGORIAS — UNION COM EXTRATO BANCÁRIO. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * `getConciliacaoDashExtra` consultava SOMENTE `financial_entries` (lançamentos ERP). Empresas

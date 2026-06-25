@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3715** — **PLANILHA CONTADOR · EXPORT XLSX NO FORMATO DO CONTADOR (1 ABA/CONTA BANCÁRIA). BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Rota GET `/api/download/contabilidade-xlsx` gera xlsx com 1 aba por banco: Data/Histórico/NF/CNPJ/Entrada/Saída/Saldo acumulado. Dados de `bank_statement_lines` + `financial_entries` (para NF/CNPJ de conciliados). Botão "Planilha Contador" (verde) no header da Conciliação Bancária. Arquivos: `downloadContabilidadeXlsx.ts` (novo) + `index.ts` + `FinanceiroConciliacao.tsx`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3714** — **DASHBOARD CONCILIAÇÃO · BUGFIX "NENHUM DADO" EM FORNECEDORES + CATEGORIAS — UNION COM EXTRATO BANCÁRIO. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** `getConciliacaoDashExtra` consultava só `financial_entries`; empresas com apenas extrato importado viam tudo vazio. Fix: UNION ALL com `bank_statement_lines` (entry_id IS NULL para não duplicar conciliados). Arquivo: `server/routers/financial.ts`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3713** — **DASHBOARD CONCILIAÇÃO · TERCEIRA BARRA "SALDO" NO GRÁFICO "ENTRADAS VS SAÍDAS POR MÊS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Terceira barra azul "Saldo" (entradas − saídas) adicionada ao BarChart mensal ao lado de Entradas/Saídas. Arquivo: `DashConciliacao.tsx`. Detalhe: `shared/changelog.ts`.

@@ -165,9 +165,45 @@ function LancCombo({ value, onChangeText, onSelect, options, placeholder = "Busc
   );
 }
 
+const MESES_FULL = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
 export default function FinanceiroConciliacao() {
   const { companyId } = useCompany();
   const { toast } = useToast();
+
+  // ── Planilha Contador (contabilidade) ──────────────────────────────────────
+  const [downloadingContabil, setDownloadingContabil] = useState(false);
+  const downloadContabilidade = async (mes: number, year: number) => {
+    if (!companyId || mes < 1 || mes > 12) {
+      toast({ title: "Selecione um mês específico", description: "O download da planilha requer um mês selecionado (não 'Ano todo').", variant: "destructive" });
+      return;
+    }
+    setDownloadingContabil(true);
+    try {
+      const resp = await fetch(
+        `/api/download/contabilidade-xlsx?companyId=${companyId}&mes=${mes}&ano=${year}`,
+        { credentials: "include" }
+      );
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: "Erro ao gerar planilha" }));
+        toast({ title: "Erro ao gerar planilha", description: err.error || "Tente novamente.", variant: "destructive" });
+        return;
+      }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Contabilidade_${MESES_FULL[mes - 1]}_${year}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+      toast({ title: "Planilha gerada!", description: `Contabilidade_${MESES_FULL[mes - 1]}_${year}.xlsx baixado.` });
+    } catch {
+      toast({ title: "Erro ao gerar planilha", description: "Verifique sua conexão e tente novamente.", variant: "destructive" });
+    } finally {
+      setDownloadingContabil(false);
+    }
+  };
   // Rev. 3165 — Período pelo MESMO PADRÃO das demais telas do Financeiro: navegação por
   // ANO + meses (Jan–Dez). `mesSel=null` = "Ano todo". dataInicio/dataFim derivam daí.
   const _now = new Date();
@@ -2420,6 +2456,18 @@ export default function FinanceiroConciliacao() {
             <p className="text-sm text-gray-500 mt-1">Relacione os lançamentos do sistema com o extrato bancário</p>
           </div>
           <div className="flex items-center gap-2">
+            {/* Planilha Contador */}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+              disabled={downloadingContabil || mesSel == null}
+              onClick={() => mesSel != null && downloadContabilidade(mesSel, ano)}
+              title={mesSel == null ? "Selecione um mês para baixar a planilha do contador" : `Baixar planilha contabilidade ${MESES_FULL[mesSel - 1]} ${ano}`}
+            >
+              <FileDown className="w-3.5 h-3.5 mr-1.5" />
+              {downloadingContabil ? "Gerando…" : "Planilha Contador"}
+            </Button>
             {/* Rev. 3398 — Modo Caixa Interno: sem extrato, sem consolidação */}
             {contaSelecionadaCaixaInterno ? (
               <>

@@ -12,6 +12,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { registerDownloadSSTRoute } from "../routers/downloadSST";
 import { registerDownloadOCRoute } from "../routers/downloadOC";
 import { registerPacoteContadorRoute } from "../routers/downloadPacoteContador";
+import { registerContabilidadeXlsxRoute } from "../routers/downloadContabilidadeXlsx";
 import { registerPortalDocumentosRoute } from "../routers/portalDocumentos";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
@@ -293,6 +294,7 @@ async function startServer() {
   registerDownloadSSTRoute(app);
   registerDownloadOCRoute(app);
   registerPacoteContadorRoute(app);
+  registerContabilidadeXlsxRoute(app);
   registerPortalDocumentosRoute(app);
 
   // Upload multipart para documentos SST grandes (PGR/PCMSO/LTCAT — até 150MB)
