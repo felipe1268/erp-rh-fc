@@ -82,7 +82,6 @@ export const contabilidadeRouter = router({
            FROM fiscal_notes
            WHERE company_id=$1 AND EXTRACT(YEAR FROM data_emissao)=$2
              AND origem IN ('nfse_siapgeo_export','nfse_siapgeo','nfse_nacional','nfse_xml_manual')
-             AND (deleted_at IS NULL OR deleted_at > NOW())
            GROUP BY 1`,
           [input.companyId, input.ano]
         ),
@@ -90,7 +89,7 @@ export const contabilidadeRouter = router({
           `SELECT EXTRACT(MONTH FROM data_emissao)::int AS mes, COUNT(*) AS total
            FROM fiscal_notes
            WHERE company_id=$1 AND EXTRACT(YEAR FROM data_emissao)=$2
-             AND origem='sefaz_nfe' AND (deleted_at IS NULL OR deleted_at > NOW())
+             AND origem='sefaz_nfe'
            GROUP BY 1`,
           [input.companyId, input.ano]
         ),
@@ -104,9 +103,9 @@ export const contabilidadeRouter = router({
           [input.companyId, input.ano]
         ),
         db.$client.query<{ mes: number; total: string }>(
-          `SELECT EXTRACT(MONTH FROM data_emissao)::int AS mes, COUNT(*) AS total
+          `SELECT EXTRACT(MONTH FROM created_at)::int AS mes, COUNT(*) AS total
            FROM compras_ordens
-           WHERE company_id=$1 AND EXTRACT(YEAR FROM data_emissao)=$2
+           WHERE company_id=$1 AND EXTRACT(YEAR FROM created_at)=$2
              AND status NOT IN ('cancelado','rascunho')
            GROUP BY 1`,
           [input.companyId, input.ano]
