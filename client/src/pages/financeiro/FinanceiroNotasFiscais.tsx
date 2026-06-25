@@ -1567,14 +1567,6 @@ export default function FinanceiroNotasFiscais() {
             <div className="flex gap-2 flex-wrap items-center">
               <Button
                 size="sm"
-                onClick={() => setConfirmHistoricoNfse(true)}
-                disabled={!!syncHistoricoProgress}
-                className="gap-1.5 h-8 bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
-              >
-                <Download className="w-3 h-3" /> Baixar histórico (2018–{new Date().getFullYear()})
-              </Button>
-              <Button
-                size="sm"
                 onClick={() => nfseXmlInputRef.current?.click()}
                 disabled={importNfseXmlMut.isPending}
                 className="gap-1.5 h-8 bg-indigo-600 hover:bg-indigo-700 text-white text-xs"
@@ -1587,23 +1579,6 @@ export default function FinanceiroNotasFiscais() {
                         : "Importando…"}
                     </>
                   : <><FileCode className="w-3 h-3" /> Importar XML</>}
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => pdfInputRef.current?.click()}
-                disabled={isParsing}
-                variant="outline"
-                className="gap-1.5 h-8 border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-xs"
-              >
-                {isParsing ? <><Loader2 className="w-3 h-3 animate-spin" /> Lendo…</> : <><Upload className="w-3 h-3" /> Importar PDF</>}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={openNew}
-                className="gap-1.5 h-8 border-slate-200 text-slate-700 hover:bg-slate-50 text-xs"
-              >
-                <Plus className="w-3 h-3" /> Nova NFS-e
               </Button>
               {/* Cronômetro: tempo até próxima consulta permitida na prefeitura */}
               {munCountdownSec !== null && munCountdownSec > 0 && (
