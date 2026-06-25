@@ -4396,7 +4396,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v3699-2026-06-25-pj-payments-valor-sync";
+    const COLFIX_VERSION = "v3706-2026-06-25-andre-pj-payments-fix";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -5626,6 +5626,56 @@ Regras:
         const feCount = (feRes as any)?.rowCount ?? 0;
         console.log(`[ColFix Rev.3699] financial_entries (pagamento_pj) corrigidos: ${feCount}`);
       } catch (e: any) { console.warn("[ColFix Rev.3699] pj_payments sync falhou (não-fatal):", e?.message ?? e); }
+
+      // [ColFix Rev.3706] Corrige pj_payments do contrato PJ-2026-0021 (André Figueiredo Augusto)
+      // O sync Rev.3699 só atualizava status='pendente'; pagamentos já marcados como 'pago'
+      // ficaram com o valor antigo (R$ 12.000). Corrige para bater com o valorMensal atual (R$ 8.000).
+      try {
+        const andreRes = await db.$client.query(`
+          UPDATE pj_payments pp
+          SET valor = CASE
+                WHEN pp.tipo = 'adiantamento'
+                  THEN ROUND(pjc."valorMensal"::numeric * pjc."percentualAdiantamento"::numeric / 100, 2)::text
+                WHEN pp.tipo = 'fechamento'
+                  THEN ROUND(pjc."valorMensal"::numeric * pjc."percentualFechamento"::numeric / 100, 2)::text
+                ELSE pp.valor
+              END,
+              descricao = CASE
+                WHEN pp.tipo = 'adiantamento'
+                  THEN 'Adiantamento ' || pjc."percentualAdiantamento"::text || '% — Serviços de engenharia'
+                WHEN pp.tipo = 'fechamento'
+                  THEN 'Fechamento ' || pjc."percentualFechamento"::text || '% — Serviços de engenharia'
+                ELSE pp.descricao
+              END,
+              "updatedAt" = NOW()
+          FROM pj_contracts pjc
+          WHERE pp."contractId" = pjc.id
+            AND pjc."numeroContrato" = 'PJ-2026-0021'
+            AND CASE
+                  WHEN pp.tipo = 'adiantamento'
+                    THEN ABS(pp.valor::numeric - ROUND(pjc."valorMensal"::numeric * pjc."percentualAdiantamento"::numeric / 100, 2)) > 0.009
+                  WHEN pp.tipo = 'fechamento'
+                    THEN ABS(pp.valor::numeric - ROUND(pjc."valorMensal"::numeric * pjc."percentualFechamento"::numeric / 100, 2)) > 0.009
+                  ELSE false
+                END
+        `);
+        const andreCount = (andreRes as any)?.rowCount ?? 0;
+        console.log(`[ColFix Rev.3706] pj_payments André (PJ-2026-0021) corrigidos: ${andreCount}`);
+
+        // Propaga novos valores para financial_entries vinculados (todos, não só pendentes)
+        const andFeRes = await db.$client.query(`
+          UPDATE financial_entries fe
+          SET valor_previsto = pjp.valor::numeric,
+              updated_at = NOW()
+          FROM pj_payments pjp
+          JOIN pj_contracts pjc ON pjp."contractId" = pjc.id
+          WHERE fe.origem_modulo = 'pagamento_pj'
+            AND fe.origem_id = pjp.id
+            AND pjc."numeroContrato" = 'PJ-2026-0021'
+            AND ABS(COALESCE(fe.valor_previsto,0) - pjp.valor::numeric) > 0.009
+        `);
+        console.log(`[ColFix Rev.3706] financial_entries André corrigidos: ${(andFeRes as any)?.rowCount ?? 0}`);
+      } catch (e: any) { console.warn("[ColFix Rev.3706] André pj_payments fix falhou (não-fatal):", e?.message ?? e); }
 
       // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos
       import("../services/startupCache").then(({ setCache }) =>
