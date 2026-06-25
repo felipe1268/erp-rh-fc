@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3722** — **PLANILHA CONTABILIDADE · BUGFIX DATA "Fri Jan 02" → "02/01/2026" + JOIN DUPLO NF. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** `fmtDate` recebia Date object do pg → `String(date).slice(0,10)` dava dia da semana. Fix: `instanceof Date` → UTC getters. Query: JOIN duplo em `fiscal_notes` (via `stmt_line_id` + via `fe.fiscal_note_id`). Arquivo: `downloadContabilidadeXlsx.ts`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3721** — **IMPORT XML · SUPORTE A NFS-e NACIONAL SPED (Portal Nacional sped.fazenda.gov.br). BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** `importXml` só reconhecia NF-e de produtos; ao receber NFS-e Nacional SPED v1.01 (`<NFSe xmlns="sped.fazenda.gov.br/nfse">`), não achava a chave → toast confuso "já existia + com erro" com tabela vazia. Fix: detecta nó `NFSe`, extrai chave do `@_Id` (strip "NFS"), campos `emit`/`tomador`/`serv`/`vNFSe`/`dEmi`, insere como `origem='xml_upload'`. Erros de formato agora vão só para `erros[]`, não `ignoradas`. Arquivo: `server/routers/sefaz.ts`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3720** — **INTEGRAÇÃO OMIE · IMPORTAÇÃO NF-e RECEBIDAS COM TOGGLE HABILITAR/DESABILITAR. BACKEND ADITIVO + SCHEMA + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.

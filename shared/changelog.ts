@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3722 — **PLANILHA CONTABILIDADE · BUGFIX DATA "Fri Jan 02" → "02/01/2026" + JOIN DUPLO NF (stmt_line + entry). BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * `fmtDate` recebia objeto `Date` do pg (coluna DATE retorna como Date JS meia-noite UTC) e fazia
+ * `String(date).slice(0,10)` = "Fri Jan 02" — incompatível com o formato pedido pelo contador.
+ * Fix: detecta `instanceof Date` → `getUTCDate()/getUTCMonth()/getUTCFullYear()` → "DD/MM/YYYY".
+ * Também: query agora faz LEFT JOIN duplo em `fiscal_notes` —
+ * `fn1` via `fn1.stmt_line_id = bsl.id` (nota vinculada direto ao extrato) +
+ * `fn2` via `fn2.id = fe.fiscal_note_id` (nota vinculada ao lançamento financeiro) —
+ * COALESCE fn1 → fn2 para número NF e CNPJ, aumentando cobertura das colunas "Nº Nota Fiscal" / "Nº CNPJ".
+ * Arquivo: `server/routers/downloadContabilidadeXlsx.ts`.
+ *
  * Rev. 3721 — **IMPORT XML · SUPORTE A NFS-e NACIONAL SPED (Portal Nacional sped.fazenda.gov.br) — PATHS CORRETOS. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * `importXml` só reconhecia NF-e de produtos (busca por `infNFe`). Ao receber NFS-e Nacional SPED v1.01

@@ -25,6 +25,13 @@ function excelDate(dateStr: string): number {
 
 function fmtDate(s: any): string {
   if (!s) return "";
+  // pg retorna colunas DATE como objetos Date (meia-noite UTC) — usar UTC para evitar off-by-one de timezone
+  if (s instanceof Date) {
+    const d = String(s.getUTCDate()).padStart(2, "0");
+    const m = String(s.getUTCMonth() + 1).padStart(2, "0");
+    const y = s.getUTCFullYear();
+    return `${d}/${m}/${y}`;
+  }
   const str = String(s).slice(0, 10);
   if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str.split("-").reverse().join("/");
   return str;
@@ -140,6 +147,7 @@ export function registerContabilidadeXlsxRoute(app: Express) {
         const contaDesc = [conta.conta_desc, conta.agencia, conta.conta].filter(Boolean).join(" · ");
 
         // ── Linhas do mês para esta conta ──────────────────────────────────
+        // fn1 = NF vinculada diretamente ao line (stmt_line_id); fn2 = NF vinculada ao lançamento
         const linesQ = await db.$client.query(
           `SELECT
               bsl.data,
@@ -148,11 +156,13 @@ export function registerContabilidadeXlsxRoute(app: Express) {
               bsl.entry_id,
               fe.fornecedor_nome,
               fe.descricao      AS entry_desc,
-              COALESCE(fn.numero_nf, '')                            AS numero_nf,
-              COALESCE(fn.emitente_cnpj, fn.tomador_cnpj, '')      AS fornecedor_cnpj
+              COALESCE(fn1.numero_nf, fn2.numero_nf, '')                                            AS numero_nf,
+              COALESCE(fn1.emitente_cnpj, fn1.tomador_cnpj,
+                       fn2.emitente_cnpj, fn2.tomador_cnpj, '')                                    AS fornecedor_cnpj
              FROM bank_statement_lines bsl
-             LEFT JOIN financial_entries fe ON fe.id = bsl.entry_id
-             LEFT JOIN fiscal_notes fn ON fn.stmt_line_id = bsl.id
+             LEFT JOIN financial_entries fe  ON fe.id = bsl.entry_id
+             LEFT JOIN fiscal_notes fn1      ON fn1.stmt_line_id = bsl.id
+             LEFT JOIN fiscal_notes fn2      ON fn2.id = fe.fiscal_note_id
             WHERE bsl.company_id = $1
               AND bsl.conta_bancaria_id = $2
               AND bsl.excluido_em IS NULL
