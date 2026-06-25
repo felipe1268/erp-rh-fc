@@ -57,7 +57,7 @@ async function queryData(db: any, companyId: number, di: string, df: string) {
       SELECT id, numero_nf, tomador_razao_social, tomador_cnpj,
              valor_bruto, valor_liquido, iss_retido, retencao_inss, retencao_irrf,
              retencao_pis_cofins, data_emissao, data_competencia, status,
-             descricao_servico, codigo_servico, aliquota_iss, xml_payload
+             descricao_servico, cd_lista_servico, aliquota_iss, xml_payload
       FROM fiscal_notes
       WHERE company_id = $1 AND data_emissao >= $2 AND data_emissao < $3
         AND origem NOT LIKE '%tomada%'
@@ -131,10 +131,11 @@ async function queryData(db: any, companyId: number, di: string, df: string) {
     db.$client.query(`
       SELECT bsl.data, bsl.descricao, bsl.valor::float AS valor, bsl.conciliado,
              COALESCE(cba.apelido, cba.banco, '') AS conta_nome, cba.banco,
-             fe.numero_nf AS fn_numero, fe.fornecedor_nome
+             COALESCE(fn.numero_nf, '') AS fn_numero, fe.fornecedor_nome
       FROM bank_statement_lines bsl
       LEFT JOIN company_bank_accounts cba ON cba.id = bsl.conta_bancaria_id
       LEFT JOIN financial_entries fe ON fe.id = bsl.entry_id
+      LEFT JOIN fiscal_notes fn ON fn.stmt_line_id = bsl.id
       WHERE bsl.company_id = $1 AND bsl.data >= $2 AND bsl.data < $3
         AND bsl.excluido_em IS NULL
         AND cba."tipoConta" ILIKE '%cartao%'
@@ -201,7 +202,7 @@ function buildNfseHtml(n: any, tipo: "emitida" | "tomada", empresa: string): Buf
   <tr><td>Competência</td><td>${fmtDate(n.data_competencia)}</td></tr>
   ${parte}
   <tr><td>Descrição do Serviço</td><td>${n.descricao_servico || "—"}</td></tr>
-  <tr><td>Código do Serviço</td><td>${n.codigo_servico || "—"}</td></tr>
+  <tr><td>Código do Serviço</td><td>${n.cd_lista_servico || "—"}</td></tr>
   ${n.aliquota_iss ? `<tr><td>Alíquota ISS</td><td>${n.aliquota_iss}%</td></tr>` : ""}
   <tr><td>Status</td><td>${n.status || "—"}</td></tr>
 </table>

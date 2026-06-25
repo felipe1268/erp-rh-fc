@@ -147,11 +147,12 @@ export function registerContabilidadeXlsxRoute(app: Express) {
               bsl.valor::float  AS valor,
               bsl.entry_id,
               fe.fornecedor_nome,
-              fe.numero_nf,
-              fe.fornecedor_cnpj,
-              fe.descricao      AS entry_desc
+              fe.descricao      AS entry_desc,
+              COALESCE(fn.numero_nf, '')                            AS numero_nf,
+              COALESCE(fn.emitente_cnpj, fn.tomador_cnpj, '')      AS fornecedor_cnpj
              FROM bank_statement_lines bsl
              LEFT JOIN financial_entries fe ON fe.id = bsl.entry_id
+             LEFT JOIN fiscal_notes fn ON fn.stmt_line_id = bsl.id
             WHERE bsl.company_id = $1
               AND bsl.conta_bancaria_id = $2
               AND bsl.excluido_em IS NULL

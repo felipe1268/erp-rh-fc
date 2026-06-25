@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3718 — **PACOTE CONTADOR + PLANILHA XLSX · BUGFIX "COLUMN DOES NOT EXIST" — codigo_servico → cd_lista_servico + fe.numero_nf → JOIN fiscal_notes. 100% BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Dois downloads do módulo Contabilidade falhavam com "Erro interno" / "Erro ao gerar planilha":
+ * (1) `downloadPacoteContador.ts`: query de NFS-e selecionava `codigo_servico` (coluna inexistente em
+ * `fiscal_notes`); corrigido para `cd_lista_servico` (nome real no schema). Mesmo fix aplicado ao
+ * HTML espelho e à query do cartão que usava `fe.numero_nf` (coluna inexistente em `financial_entries`);
+ * substituído por LEFT JOIN fiscal_notes ON stmt_line_id.
+ * (2) `downloadContabilidadeXlsx.ts`: query LEFT JOIN financial_entries selecionava `fe.numero_nf` e
+ * `fe.fornecedor_cnpj` (ambos inexistentes); substituídos por LEFT JOIN fiscal_notes ON stmt_line_id
+ * com COALESCE(fn.numero_nf,'') e COALESCE(fn.emitente_cnpj, fn.tomador_cnpj,'').
+ * Arquivos: `server/routers/downloadPacoteContador.ts`, `server/routers/downloadContabilidadeXlsx.ts`.
+ *
  * Rev. 3717 — **MÓDULO CONTABILIDADE · ABA DEDICADA COM CONTROLE MENSAL/ANUAL DE ENVIOS AO CONTADOR + FCSIGN (LISTA MESTRE). BACKEND ADITIVO + SCHEMA + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * Nova página `/financeiro/contabilidade` na sidebar (seção "Contabilidade → Envios ao Contador").
