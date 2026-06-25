@@ -833,11 +833,11 @@ export default function FinanceiroConciliacao() {
   // Rev. 3169 — Consolidar / desconsolidar o mês de uma vez (fecha/reabre todas as
   // linhas do extrato da conta+período). Repinta o extrato do mês e as bolinhas do ano.
   const consolidarMut = (trpc as any).financial.consolidarMes.useMutation({
-    onSuccess: (res: any) => { toast({ title: `Mês consolidado! ${formatInt(res.afetados)} lançamento(s) marcado(s).` }); refetchSt(); refetchStAno(); refetchAccStatus(); },
+    onSuccess: (res: any) => { toast({ title: `Mês consolidado! ${formatInt(res.afetados)} lançamento(s) marcado(s).` }); refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(false); refetchReport(); },
     onError: (e: any) => toast({ title: "Erro ao consolidar", description: e.message, variant: "destructive" }),
   });
   const desconsolidarMut = (trpc as any).financial.desconsolidarMes.useMutation({
-    onSuccess: (res: any) => { toast({ title: `Mês reaberto! ${formatInt(res.afetados)} lançamento(s) desmarcado(s).` }); refetchSt(); refetchStAno(); refetchAccStatus(); },
+    onSuccess: (res: any) => { toast({ title: `Mês reaberto! ${formatInt(res.afetados)} lançamento(s) desmarcado(s).` }); refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(false); refetchReport(); },
     onError: (e: any) => toast({ title: "Erro ao desconsolidar", description: e.message, variant: "destructive" }),
   });
   // Rev. 3179 — Limpar extrato importado errado (conta+período). Soft-delete no backend.
@@ -845,7 +845,7 @@ export default function FinanceiroConciliacao() {
     onSuccess: (res: any) => {
       toast({ title: res.afetados > 0 ? `Extrato limpo! ${formatInt(res.afetados)} linha(s) removida(s).` : "Nada para limpar neste período." });
       setConfirmLimpar(false);
-      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true);
+      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(false); refetchReport();
     },
     onError: (e: any) => toast({ title: "Erro ao limpar extrato", description: e.message, variant: "destructive" }),
   });
@@ -854,7 +854,7 @@ export default function FinanceiroConciliacao() {
     onSuccess: (res: any) => {
       toast({ title: res.afetados > 0 ? `Extratos limpos! ${formatInt(res.afetados)} linha(s) removida(s) de todas as contas.` : "Nenhuma linha encontrada neste período." });
       setShowLimparMesDlg(false);
-      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true);
+      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(false); refetchReport();
     },
     onError: (e: any) => { toast({ title: "Erro ao limpar extratos", description: e.message, variant: "destructive" }); setShowLimparMesDlg(false); },
   });
@@ -863,7 +863,7 @@ export default function FinanceiroConciliacao() {
     onSuccess: () => {
       toast({ title: "Linha removida do extrato", description: "Se estava conciliada, o lançamento do ERP voltou a pendente." });
       setConfirmExcluirLinha(null);
-      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true);
+      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(false); refetchReport();
     },
     onError: (e: any) => {
       toast({ title: "Erro ao remover linha", description: e.message, variant: "destructive" });
@@ -882,7 +882,7 @@ export default function FinanceiroConciliacao() {
       toast({ title: "Conciliação desfeita", description: "A linha voltou para o extrato pendente e o lançamento do ERP está como pendente." });
       if (variables?.linhaId) setDismissedConcIds(prev => new Set([...prev, Number(variables.linhaId)]));
       setConfirmDesconciliar(null);
-      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true);
+      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(false); refetchReport();
     },
     onError: (e: any) => {
       toast({ title: "Erro ao desfazer conciliação", description: e.message, variant: "destructive" });
@@ -909,8 +909,8 @@ export default function FinanceiroConciliacao() {
     setBulkDesconciliarPending(false);
     setSelectedConcIds(new Set());
     setConfirmBulkDesconciliar(false);
-    setReportStale(true);
-    refetchSt(); refetchStAno(); refetchAccStatus();
+    setReportStale(false);
+    refetchSt(); refetchStAno(); refetchAccStatus(); refetchReport();
     toast({ title: `${ok} de ${ids.length} conciliação(ões) desfeita(s)`, description: "As linhas voltaram para o extrato pendente." });
   }
   // Rev. 3392 — Confirmar movimentação interna: cria lançamento tipo "transferencia"/
@@ -1889,7 +1889,8 @@ export default function FinanceiroConciliacao() {
       refetchSt();
       refetchStAno();
       refetchAccStatus();
-      setReportStale(true);
+      setReportStale(false);
+      refetchReport();
     },
     onError: (e: any) => { setConfirmConciliar(false); toast({ title: "Erro ao conciliar", description: e.message, variant: "destructive" }); },
   });

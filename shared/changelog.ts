@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3708 — **CONCILIAÇÃO BANCÁRIA · BUGFIX ITENS VOLTANDO COMO PENDENTES APÓS CONCILIAR — refetchReport() FALTANDO EM 7 MUTATIONS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Causa-raiz: A query `getConciliacaoReport` usa `staleTime: Infinity` (não refaz automaticamente —
+ * design intencional da Rev. 3478 para o usuário controlar via "Atualizar"). Porém, mutations que
+ * alteram o estado de conciliação precisam chamar `refetchReport()` explicitamente para que as listas
+ * "No extrato, sem lançamento" e "No ERP, sem extrato" reflitam imediatamente o novo estado.
+ *
+ * O principal bug: `conciliarSugMut.onSuccess` (conciliação em lote via sugestões de IA)
+ * chamava `refetchSt()` mas NÃO chamava `refetchReport()`. Resultado: após conciliar N pares via
+ * sugestões, os lançamentos do ERP (lado direito) continuavam aparecendo como pendentes. O usuário
+ * via os itens "voltando" para a lista de pendentes mesmo depois de ter confirmado a conciliação.
+ * As bolinhas de % no card (361/381) atualizavam corretamente (via `refetchAccStatus`), mas a
+ * tela de detalhes continuava mostrando os itens.
+ *
+ * Adicionalmente, os seguintes `onSuccess` também estavam com `setReportStale(true)` sem chamar
+ * `refetchReport()`, causando comportamento inconsistente (dados só atualizavam via botão manual):
+ *   - `consolidarMut` (Consolidar Mês)
+ *   - `desconsolidarMut` (Desconsolidar Mês)
+ *   - `desconciliarMut` (Desfazer conciliação individual)
+ *   - `executarBulkDesconciliar` (Desfazer em lote)
+ *   - `excluirLinhaMut` (Excluir linha do extrato)
+ *   - `limparMut` (Limpar extrato do período)
+ *   - `limparExtratoMesMut` (Limpar extratos de todas as contas)
+ *
+ * Fix: todos os 7 `onSuccess` acima receberam `refetchReport()` + `setReportStale(false)` (não
+ * precisa mais do badge "desatualizado" pois o report atualiza automaticamente).
+ *
+ * Arquivo: `client/src/pages/financeiro/FinanceiroConciliacao.tsx`.
+ *
  * Rev. 3707 — **SEFAZ NF-e · BUGFIX RACE CONDITION — GATE ATÔMICO (UPDATE…RETURNING) SUBSTITUI SELECT→UPDATE SEPARADOS. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Causa-raiz: O log de sincronizações mostrava entradas duplicadas no exato mesmo segundo
