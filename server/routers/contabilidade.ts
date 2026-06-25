@@ -94,11 +94,10 @@ export const contabilidadeRouter = router({
           [input.companyId, input.ano]
         ),
         db.$client.query<{ mes: number; total: string }>(
-          `SELECT EXTRACT(MONTH FROM bsl.data)::int AS mes, COUNT(*) AS total
-           FROM bank_statement_lines bsl
-           JOIN company_bank_accounts cba ON cba.id=bsl.account_id
-           WHERE cba.company_id=$1 AND EXTRACT(YEAR FROM bsl.data)=$2
-             AND bsl.excluido_em IS NULL
+          `SELECT EXTRACT(MONTH FROM data)::int AS mes, COUNT(*) AS total
+           FROM bank_statement_lines
+           WHERE company_id=$1 AND EXTRACT(YEAR FROM data)=$2
+             AND excluido_em IS NULL
            GROUP BY 1`,
           [input.companyId, input.ano]
         ),

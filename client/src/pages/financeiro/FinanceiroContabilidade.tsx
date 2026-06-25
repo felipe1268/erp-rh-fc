@@ -4,6 +4,7 @@
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
+import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -328,7 +329,8 @@ export default function FinanceiroContabilidade() {
   }), [meses]);
 
   return (
-    <div className="flex flex-col gap-4 p-4 md:p-6 min-h-screen bg-gray-50">
+    <DashboardLayout>
+    <div className="flex flex-col gap-4 p-4 md:p-6 bg-gray-50 min-h-full">
 
       {/* ── Cabeçalho padrão ───────────────────────────────────────────────── */}
       <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
@@ -447,5 +449,6 @@ export default function FinanceiroContabilidade() {
         </div>
       )}
     </div>
+    </DashboardLayout>
   );
 }
