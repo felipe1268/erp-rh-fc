@@ -72,9 +72,10 @@ export function registerContabilidadeXlsxRoute(app: Express) {
       const contasQ = await db.$client.query(
         `SELECT DISTINCT bsl.conta_bancaria_id,
                 cba.banco,
-                cba.descricao AS conta_desc,
+                cba.apelido   AS conta_desc,
                 cba.agencia,
-                cba.conta
+                cba.conta,
+                cba."tipoConta" AS tipo_conta
            FROM bank_statement_lines bsl
            LEFT JOIN company_bank_accounts cba ON cba.id = bsl.conta_bancaria_id
           WHERE bsl.company_id = $1
