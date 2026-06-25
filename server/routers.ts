@@ -149,6 +149,7 @@ import { acidentesRouter } from "./routers/acidentes";
 import { avaliacaoFuncionariosRouter } from "./routers/avaliacaoFuncionarios";
 import { systemDocumentTemplatesRouter } from "./routers/systemDocumentTemplates";
 import { fiscalNotesRouter } from "./routers/fiscalNotes";
+import { contabilidadeRouter } from "./routers/contabilidade";
 import { sefazRouter } from "./routers/sefaz";
 import { nfseEmitidasRouter } from "./routers/nfseEmitidas";
 import { storagePut } from "./storage";
@@ -1699,6 +1700,7 @@ export const appRouter = router({
   fiscalNotes: fiscalNotesRouter,
   sefaz: sefazRouter,
   nfseEmitidas: nfseEmitidasRouter,
+  contabilidade: contabilidadeRouter,
 
   // ============================================================
   // DESCONTOS CLT (Motor de Cálculo)

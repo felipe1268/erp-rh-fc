@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3717 — **MÓDULO CONTABILIDADE · ABA DEDICADA COM CONTROLE MENSAL/ANUAL DE ENVIOS AO CONTADOR + FCSIGN (LISTA MESTRE). BACKEND ADITIVO + SCHEMA + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * Nova página `/financeiro/contabilidade` na sidebar (seção "Contabilidade → Envios ao Contador").
+ * Grid 12-meses com status por cor: Pendente (âmbar) / Enviado (azul) / Assinado (verde) / Futuro (cinza).
+ * Clique no mês abre painel lateral com: checklist de documentos (NFS-e, NF-e, Extrato, OCs) com
+ * contagens reais do banco, botões de download (Pacote ZIP + Planilha XLSX), seção de registro de envio
+ * (salva `contabilidade_envios` com upsert idempotente por company+mês+ano), e seção FCSign para gerar
+ * "Lista Mestre" como envelope IntegraSign (protocolo digital com assinatura das partes).
+ * Backend: `server/routers/contabilidade.ts` (getAno / registrarEnvio / criarEnvelope / atualizarStatus /
+ * syncEnvelope / getHistorico). SyncSchema+ Rev.3717 cria `contabilidade_envios` (UNIQUE company+mes+ano).
+ * Arquivos: `server/routers/contabilidade.ts` (novo), `server/_core/index.ts` (SyncSchema+), `server/routers.ts`,
+ * `client/src/pages/financeiro/FinanceiroContabilidade.tsx` (novo), `client/src/App.tsx`, `client/src/components/DashboardLayout.tsx`.
+ *
  * Rev. 3716 — **PACOTE CONTADOR · REESTRUTURADO NO PADRÃO PRONUS — XLSX BANCÁRIO + ESPELHOS HTML NFS-e + CARTÃO + PASTAS CORRETAS. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * `downloadPacoteContador.ts` reescrito com estrutura de pastas exigida pela contabilidade:

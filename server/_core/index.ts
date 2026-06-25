@@ -4412,6 +4412,32 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3678: 12 colunas NFS-e detalhadas adicionadas em fiscal_notes.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3678 colunas-nfse:`, e?.message || e); }
 
+        // Rev. 3717 — Módulo Contabilidade: tabela de controle de envios mensais ao contador
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS contabilidade_envios (
+              id                SERIAL PRIMARY KEY,
+              company_id        INTEGER NOT NULL,
+              mes               SMALLINT NOT NULL,
+              ano               SMALLINT NOT NULL,
+              status            VARCHAR(30) NOT NULL DEFAULT 'pendente',
+              arquivos_json     TEXT,
+              envelope_id       INTEGER,
+              envelope_status   VARCHAR(30),
+              observacoes       TEXT,
+              enviado_em        TIMESTAMP,
+              enviado_por_id    INTEGER,
+              enviado_por_nome  VARCHAR(255),
+              created_at        TIMESTAMP NOT NULL DEFAULT NOW(),
+              updated_at        TIMESTAMP NOT NULL DEFAULT NOW(),
+              UNIQUE(company_id, mes, ano)
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_cont_env_company ON contabilidade_envios(company_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_cont_env_ano ON contabilidade_envios(ano)`);
+          console.log(`[SyncSchema+] Rev. 3717: tabela contabilidade_envios garantida.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3717 contabilidade_envios:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

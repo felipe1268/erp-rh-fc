@@ -39,7 +39,7 @@ import {
   Home, Tag, GripVertical, Network, ScanFace, PackageCheck, PenLine, ChevronLeft,
   Camera, Blocks, CheckSquare, FileCheck2, Milestone, Fuel,
   UserMinus, Search, X, GraduationCap, Sparkles, HeartPulse, Award,
-  RefreshCw, HandCoins, Scissors,
+  RefreshCw, HandCoins, Scissors, Archive,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -508,6 +508,12 @@ const menuSectionsFinanceiro: MenuSection[] = [
       { icon: BarChart3,     label: "DRE",               path: "/financeiro/dre" },
       { icon: FileSpreadsheet, label: "Fluxo de Caixa",  path: "/financeiro/fluxo-de-caixa" },
       { icon: AlertTriangle, label: "Obrigações Fiscais", path: "/financeiro/obrigacoes-fiscais" },
+    ],
+  },
+  {
+    title: "Contabilidade",
+    items: [
+      { icon: Archive,       label: "Envios ao Contador", path: "/financeiro/contabilidade" },
     ],
   },
   {
