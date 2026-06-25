@@ -709,57 +709,79 @@ export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?:
   let rateLimitedNsu: string | null = null; // NSU que a SEFAZ instrui usar na próxima chamada
   let syncLogId: number | null = null;
 
-  // ── Gate geral de tempo: respeita o intervalo configurado pelo usuário (padrão 1h, mín 1h) ──
-  // Cobre TANTO o caso de rate-limit anterior QUANTO chamadas manuais "Sincronizar Agora" em sequência.
-  // skipTimeGate=true usado pelo backfill de XML (não tem cooldown próprio).
+  // ── Gate atômico: checa intervalo E pré-salva last_sync_at em um único UPDATE ──
+  // Substituiu a antiga sequência SELECT→UPDATE (race condition: dois disparos simultâneos
+  // — cron e startup run — passavam o SELECT antes de qualquer um fazer o UPDATE, gerando
+  // duas chamadas SEFAZ em sequência e esgotando a cota).
+  //
+  // Lógica: UPDATE só efetiva se o elapsed desde o último sync >= cooldown.
+  // Se rowCount=0 → outro processo já reivindicou este slot → retorna aviso.
+  // skipTimeGate=true é usado pelo backfill de XML (não tem cooldown próprio).
   const intervaloHoras = Math.max(1, Number(cfg.sync_intervalo_horas ?? 1));
-  const COOLDOWN_MS = (intervaloHoras * 60 - 2) * 60 * 1000; // 2 min de folga
+  const cooldownMin = intervaloHoras * 60 - 2; // 2 min de folga
+
   if (!opts?.skipTimeGate) {
     try {
-      // Gate por CNPJ: checa o último sync de QUALQUER empresa com o mesmo CNPJ.
-      // Múltiplas companies podem compartilhar o mesmo certificado; o SEFAZ rate-limita por CNPJ.
       const cnpjLimpo = cnpj || "";
-      const tsRows = (await db.execute(sql`
+
+      // Primeiro: checa o sync mais recente de QUALQUER empresa com o mesmo CNPJ.
+      // O gate deve ser por CNPJ (não por company_id) porque o SEFAZ rate-limita por CNPJ.
+      const tsRows = (await db.$client.query(`
         SELECT MAX(last_sync_at) AS last_sync_at,
                (SELECT last_sync_result FROM company_nfe_config
-                WHERE REGEXP_REPLACE(COALESCE(cnpj,''), '[^0-9]', '', 'g') = ${cnpjLimpo}
+                WHERE REGEXP_REPLACE(COALESCE(cnpj,''), '[^0-9]', '', 'g') = $1
                   AND last_sync_at IS NOT NULL
                 ORDER BY last_sync_at DESC LIMIT 1) AS last_sync_result
         FROM company_nfe_config
-        WHERE REGEXP_REPLACE(COALESCE(cnpj,''), '[^0-9]', '', 'g') = ${cnpjLimpo}
-      `)) as any;
+        WHERE REGEXP_REPLACE(COALESCE(cnpj,''), '[^0-9]', '', 'g') = $1
+      `, [cnpjLimpo])) as any;
       const ts = (tsRows?.rows ?? tsRows)?.[0];
+
       if (ts?.last_sync_at) {
         const elapsedMs = Date.now() - new Date(ts.last_sync_at).getTime();
-        if (elapsedMs < COOLDOWN_MS) {
-          const restantMin = Math.ceil((COOLDOWN_MS - elapsedMs) / 60000);
+        const cooldownMs = cooldownMin * 60 * 1000;
+        if (elapsedMs < cooldownMs) {
+          const restantMin = Math.ceil((cooldownMs - elapsedMs) / 60000);
           let aviso: string;
           try {
             const prevResult = JSON.parse(ts.last_sync_result || "{}");
-            if (prevResult?.rateLimitedAt) {
-              aviso = `Limite SEFAZ ativo — aguarde mais ${restantMin} min (cStat=656). O sistema sincronizará automaticamente.`;
-            } else {
-              aviso = `Intervalo configurado: ${intervaloHoras}h — próxima sync disponível em ${restantMin} min.`;
-            }
+            aviso = prevResult?.rateLimitedAt
+              ? `Limite SEFAZ ativo — aguarde mais ${restantMin} min (cStat=656). O sistema sincronizará automaticamente.`
+              : `Intervalo configurado: ${intervaloHoras}h — próxima sync disponível em ${restantMin} min.`;
           } catch { aviso = `Aguarde mais ${restantMin} min (intervalo: ${intervaloHoras}h).`; }
-          console.log(`[SefazSync] company=${companyId} CNPJ_GATE=${restantMin}min (intervalo=${intervaloHoras}h) — outro company com mesmo CNPJ sincronizou recentemente`);
+          console.log(`[SefazSync] company=${companyId} CNPJ_GATE=${restantMin}min (intervalo=${intervaloHoras}h) — em cooldown`);
           return { importadas: 0, ignoradas: 0, aviso };
         }
       }
-    } catch { /* ignora erro de parse */ }
-  }
 
-  // Pré-salvar last_sync_at ANTES do call SEFAZ:
-  // Se o processo for encerrado no meio da chamada (hot-reload/restart), o timestamp
-  // já estará gravado no banco, impedindo que o startup run da nova instância
-  // dispare uma segunda chamada dentro do cooldown (causa dos Rate Limits duplos).
-  try {
-    await db.execute(sql`
-      UPDATE company_nfe_config
-      SET last_sync_at = NOW()
-      WHERE company_id = ${companyId}
-    `);
-  } catch { /* não bloquear o sync por falha no pré-save */ }
+      // Gate atômico: tenta reservar o slot de sync para esta company_id.
+      // Condição: (last_sync_at IS NULL) OR (last_sync_at < NOW() - cooldown)
+      // Se outro processo já fez UPDATE no mesmo instante, rowCount=0 → abort.
+      const claimed = await db.$client.query(`
+        UPDATE company_nfe_config
+        SET last_sync_at = NOW()
+        WHERE company_id = $1
+          AND (
+            last_sync_at IS NULL
+            OR last_sync_at < NOW() - ($2 || ' minutes')::interval
+          )
+        RETURNING company_id
+      `, [companyId, String(cooldownMin)]) as any;
+      const claimedCount = (claimed?.rowCount ?? (claimed?.rows?.length ?? 0));
+      if (claimedCount === 0) {
+        // Outro processo (cron ou startup run) reivindicou o slot nos últimos milissegundos
+        console.log(`[SefazSync] company=${companyId} — slot já reivindicado por outro processo, abortando`);
+        return { importadas: 0, ignoradas: 0, aviso: `Sincronização já iniciada por outro processo.` };
+      }
+    } catch (e: any) {
+      console.warn(`[SefazSync] company=${companyId} gate atômico falhou (não-fatal):`, e?.message);
+      // Em caso de falha no gate, faz pre-save conservador e continua
+      try { await db.$client.query(`UPDATE company_nfe_config SET last_sync_at = NOW() WHERE company_id = $1`, [companyId]); } catch {}
+    }
+  } else {
+    // skipTimeGate=true (backfill): apenas pré-salva para bloquear syncs concorrentes
+    try { await db.$client.query(`UPDATE company_nfe_config SET last_sync_at = NOW() WHERE company_id = $1`, [companyId]); } catch {}
+  }
 
   // Registrar início do sync no log de auditoria
   syncLogId = await insertSyncLog(db, companyId, ultNSUInicial);

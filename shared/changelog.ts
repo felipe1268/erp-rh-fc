@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3707 — **SEFAZ NF-e · BUGFIX RACE CONDITION — GATE ATÔMICO (UPDATE…RETURNING) SUBSTITUI SELECT→UPDATE SEPARADOS. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Causa-raiz: O log de sincronizações mostrava entradas duplicadas no exato mesmo segundo
+ * (ex.: "24/06/2026 07:00:00 × 2"). O cron de 15 min e o startup run de 3 min podiam coincidir
+ * quando o servidor reiniciava próximo a um marco de :00/:15/:30/:45 (ex.: restart às 06:57 →
+ * próximo cron = 07:00, startup run = 07:00 — mesmo instante). Ambos os disparos passavam pelo
+ * SELECT de `last_sync_at` antes de qualquer um gravar o UPDATE, resultando em duas chamadas
+ * reais ao SEFAZ. A segunda chamada sempre recebia cStat=656 (Rate Limit), esgotando a cota de
+ * 1 chamada/hora/CNPJ e bloqueando todas as sincronizações seguintes por ~1h.
+ *
+ * Fix: substituída a sequência SELECT (check gate) + UPDATE (pre-save) por uma operação atômica:
+ *   UPDATE company_nfe_config SET last_sync_at = NOW()
+ *   WHERE company_id = $1 AND (last_sync_at IS NULL OR last_sync_at < NOW() - cooldown)
+ *   RETURNING company_id
+ * Se rowCount=0 → outro processo reivindicou o slot no mesmo instante → abort imediato.
+ * O Postgres garante que apenas UM dos dois processos simultâneos terá rowCount=1.
+ * O check por CNPJ (multi-empresa) foi mantido ANTES do UPDATE atômico (leitura mais barata).
+ *
+ * Arquivo: `server/routers/sefaz.ts`. Detalhe: `shared/changelog.ts`.
+ *
  * Rev. 3706 — **MANIFESTAÇÃO DO DESTINATÁRIO · BUGFIX ENDPOINT ERRADO — MD-e DEVE IR AO AMBIENTE NACIONAL (AN), NÃO AO SVRS. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Causa-raiz: Todas as 4 correções da Rev. 3705 estavam corretas, mas o cStat=242 persistia porque o
