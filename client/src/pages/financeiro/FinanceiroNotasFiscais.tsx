@@ -243,6 +243,7 @@ export default function FinanceiroNotasFiscais() {
 
   // ── Upload XML ──────────────────────────────────────────────────────────────
   const [xmlUploading, setXmlUploading] = useState(false);
+  const [xmlUploadProgress, setXmlUploadProgress] = useState<{ done: number; total: number } | null>(null);
   const xmlInputRef = useRef<HTMLInputElement>(null);
   const nfseXmlInputRef = useRef<HTMLInputElement>(null);
 
@@ -737,17 +738,36 @@ export default function FinanceiroNotasFiscais() {
     if (!files.length || !companyId) return;
     if (xmlInputRef.current) xmlInputRef.current.value = "";
     setXmlUploading(true);
+    setXmlUploadProgress({ done: 0, total: files.length });
+    let importadas = 0, ignoradas = 0, erros = 0;
     try {
-      const xmlFiles = await Promise.all(
-        files.map(async f => ({
-          name: f.name,
-          content: await f.text(),
-        }))
-      );
-      importXmlMut.mutate({ companyId, xmlFiles });
+      for (let i = 0; i < files.length; i++) {
+        setXmlUploadProgress({ done: i, total: files.length });
+        try {
+          const content = await files[i].text();
+          const r: any = await importXmlMut.mutateAsync({
+            companyId,
+            xmlFiles: [{ name: files[i].name, content }],
+          });
+          importadas += r?.importadas ?? 0;
+          ignoradas  += r?.ignoradas  ?? 0;
+        } catch {
+          erros++;
+        }
+      }
+      setXmlUploadProgress({ done: files.length, total: files.length });
+      if (erros === 0) {
+        toast({ title: `${importadas} NF-e importadas · ${ignoradas} já existiam` });
+      } else {
+        toast({ title: `${importadas} importadas · ${erros} erro(s)`, variant: "destructive" });
+      }
+      listQuery?.refetch?.();
+      yearQuery?.refetch?.();
     } catch {
-      setXmlUploading(false);
       toast({ title: "Erro ao ler os arquivos XML", variant: "destructive" });
+    } finally {
+      setXmlUploading(false);
+      setXmlUploadProgress(null);
     }
   }
 
@@ -973,7 +993,12 @@ export default function FinanceiroNotasFiscais() {
                 title="Importe NF-e pelo arquivo XML baixado do portal SEFAZ"
               >
                 {xmlUploading || importXmlMut.isPending
-                  ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Importando...</>
+                  ? <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      {xmlUploadProgress && xmlUploadProgress.total > 1
+                        ? `Importando... ${Math.round((xmlUploadProgress.done / xmlUploadProgress.total) * 100)}%`
+                        : "Importando..."}
+                    </>
                   : <><Upload className="h-3.5 w-3.5" /> Importar XML</>}
               </Button>
               <Button
