@@ -13,6 +13,7 @@ import https from "https";
 import { gunzipSync } from "zlib";
 import { XMLParser } from "fast-xml-parser";
 import forge from "node-forge";
+import crypto from "crypto";
 import { sendEmail } from "../services/smtpService";
 
 // ── URLs do WebService ──────────────────────────────────────────────────────
@@ -37,13 +38,13 @@ function getMdeUrl(cUF: number, tpAmb: number): string {
 
 const MDEV_TP_EVENTO: Record<string, number> = {
   acatada:      210200,   // Confirmação da Operação
-  recusada:     210220,   // Operação Não Realizada
-  desconhecida: 210240,   // Desconhecimento da Operação
+  recusada:     210240,   // Operação Não Realizada
+  desconhecida: 210220,   // Desconhecimento da Operação
 };
 const MDEV_DESC: Record<number, string> = {
   210200: "Confirmacao da Operacao",
-  210220: "Operacao nao Realizada",
-  210240: "Desconhecimento da Operacao",
+  210220: "Desconhecimento da Operacao",
+  210240: "Operacao nao Realizada",
 };
 
 // Códigos IBGE de UF para o campo cUFAutor
@@ -207,13 +208,13 @@ function callSefaz(url: string, soapXml: string, pfxBase64: string, pfxPassword:
  * do elemento isolado seja trivial (sem namespaces herdados).
  */
 function signInfEvento(infEventoXml: string, refId: string, certPem: string, keyPem: string): string {
-  // 1. SHA-1 digest do infEvento (C14N trivial: o XML já é o canonical form
-  //    pois o namespace está declarado no próprio elemento)
-  const mdDigest = forge.md.sha1.create();
-  mdDigest.update(forge.util.encodeUtf8(infEventoXml));
-  const digestValue = forge.util.encode64(mdDigest.digest().bytes());
+  // 1. DigestValue = base64(SHA1(UTF-8 bytes of infEventoXml))
+  //    Usamos node:crypto em vez de node-forge para evitar quirks de encoding
+  const digestValue = crypto.createHash("sha1")
+    .update(Buffer.from(infEventoXml, "utf-8"))
+    .digest("base64");
 
-  // 2. SignedInfo (sem whitespace entre tags; namespace no próprio elemento)
+  // 2. SignedInfo — C14N trivial (único namespace, atributos já em ordem canônica)
   const signedInfoXml =
     `<SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#">` +
     `<CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"></CanonicalizationMethod>` +
@@ -228,11 +229,11 @@ function signInfEvento(infEventoXml: string, refId: string, certPem: string, key
     `</Reference>` +
     `</SignedInfo>`;
 
-  // 3. RSA-SHA1 sobre a C14N do SignedInfo
-  const pkey = forge.pki.privateKeyFromPem(keyPem);
-  const mdSign = forge.md.sha1.create();
-  mdSign.update(forge.util.encodeUtf8(signedInfoXml));
-  const signatureValue = forge.util.encode64(pkey.sign(mdSign));
+  // 3. SignatureValue = base64(RSA-SHA1(C14N(SignedInfo)))
+  //    createSign("RSA-SHA1") faz o hash SHA1 internamente (via OpenSSL) — mais confiável
+  const signatureValue = crypto.createSign("RSA-SHA1")
+    .update(Buffer.from(signedInfoXml, "utf-8"))
+    .sign(keyPem, "base64");
 
   // 4. X509 cert (strip marcadores PEM + newlines)
   const x509 = certPem
@@ -274,8 +275,9 @@ function buildEnvEvento(opts: {
     ? `<xJust>${justificativa.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</xJust>`
     : "";
 
+  // xJust obrigatório só para 210240 "Operacao nao Realizada" (NT 2014.002)
   const detEvento =
-    `<detEvento versao="1.00"><descEvento>${desc}</descEvento>${tpEvento === 210220 ? xJust : ""}</detEvento>`;
+    `<detEvento versao="1.00"><descEvento>${desc}</descEvento>${tpEvento === 210240 ? xJust : ""}</detEvento>`;
 
   // infEvento com namespace próprio para C14N trivial
   const infEventoXml =
@@ -301,19 +303,18 @@ function buildEnvEvento(opts: {
   return (
     `<envEvento xmlns="http://www.portalfiscal.inf.br/nfe" versao="1.00">` +
     `<idLote>1</idLote>` +
-    `<indSinc>1</indSinc>` +
     eventoXml +
     `</envEvento>`
   );
 }
 
-function buildSoapEventoEnvelope(envEventoXml: string): string {
+function buildSoapEventoEnvelope(envEventoXml: string, cUF: number): string {
   const wsdl = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4";
   return (
     `<?xml version="1.0" encoding="utf-8"?>` +
     `<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">` +
     `<soap12:Header>` +
-    `<nfeCabecMsg xmlns="${wsdl}"><cUF>91</cUF><versaoDados>1.00</versaoDados></nfeCabecMsg>` +
+    `<nfeCabecMsg xmlns="${wsdl}"><cUF>${cUF}</cUF><versaoDados>1.00</versaoDados></nfeCabecMsg>` +
     `</soap12:Header>` +
     `<soap12:Body>` +
     `<nfeRecepcaoEvento xmlns="${wsdl}"><nfeDadosMsg>${envEventoXml}</nfeDadosMsg></nfeRecepcaoEvento>` +
@@ -1324,8 +1325,8 @@ export const sefazRouter = router({
       const tpEvento = MDEV_TP_EVENTO[input.status];
       if (!tpEvento) throw new TRPCError({ code: "BAD_REQUEST", message: "Status inválido." });
 
-      // Operação Não Realizada exige justificativa (15–255 chars, NT 2014.002)
-      if (tpEvento === 210220) {
+      // Operação Não Realizada (210240) exige justificativa (15–255 chars, NT 2014.002)
+      if (tpEvento === 210240) {
         const just = (input.justificativa || "").trim();
         if (just.length < 15 || just.length > 255)
           throw new TRPCError({ code: "BAD_REQUEST", message: "Justificativa obrigatória (15–255 caracteres) para recusa." });
@@ -1372,7 +1373,7 @@ export const sefazRouter = router({
         justificativa: input.justificativa,
         certPem, keyPem,
       });
-      const soap = buildSoapEventoEnvelope(envEventoXml);
+      const soap = buildSoapEventoEnvelope(envEventoXml, cUF);
 
       console.log(`[SefazMDE] company=${input.companyId} chave=${chaveNFe.slice(0, 10)}… tpEvento=${tpEvento} tpAmb=${tpAmb} url=${url}`);
       console.log(`[SefazMDE] envEvento FULL (${envEventoXml.length} chars):`, envEventoXml);

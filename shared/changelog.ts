@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3705 — **MANIFESTAÇÃO DO DESTINATÁRIO · BUGFIX SEFAZ 242 "MENSAGEM SOAP INVÁLIDA" — 4 CORREÇÕES: node:crypto + indSinc + códigos trocados + cUF. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Causa-raiz (4 problemas combinados):
+ * 1. **node-forge encoding quirk**: `forge.util.encodeUtf8()` + `pkey.sign()` produzia DigestValue/SignatureValue
+ *    com bytes incorretos em algumas versões → assinatura XML inválida → SEFAZ rejeita com 242.
+ *    Fix: substituído por `node:crypto` (`createHash("sha1")` + `createSign("RSA-SHA1")`), que usa
+ *    OpenSSL diretamente e é o padrão do ecossistema Node.
+ * 2. **`indSinc` inexistente no schema NT 2014.002**: elemento `<indSinc>1</indSinc>` não existe no
+ *    XSD `TenvEvento` → schema validation failure no SEFAZ → cStat=242. Removido.
+ * 3. **Códigos trocados**: `MDEV_TP_EVENTO.recusada` era `210220` (Desconhecimento) em vez de `210240`
+ *    (Operação Não Realizada); `desconhecida` era `210240` em vez de `210220`. Corrigido.
+ *    `MDEV_DESC` idem. Condição `xJust` corrigida: `210220 → 210240` (só "Operação Não Realizada"
+ *    exige justificativa). Condição de validação `tpEvento === 210220 → 210240`.
+ * 4. **cUF=91 hardcoded no SOAP header**: `buildSoapEventoEnvelope` enviava `<cUF>91</cUF>` fixo.
+ *    SVRS espera o cUF do emitente (ex: 35 para SP). Agora recebe o cUF extraído dos 2 primeiros
+ *    dígitos da chave de acesso e o passa ao header `nfeCabecMsg`.
+ * Arquivo: `server/routers/sefaz.ts`.
+ *
  * Rev. 3704 — **5 MELHORIAS: UNIQUE pj_payments + iOS new Date() × 2 + SEFAZ E-MAIL RATE LIMIT + CONCILIAÇÃO PAINEL DE SAÚDE 12 MESES. BACKEND PONTUAL + SCHEMA ADITIVO + FRONTEND · ZERO DROP/DELETE.**
  *
  * 1. `UNIQUE INDEX pjp_uniq_contrato_mes_tipo` em `pj_payments (company_id, "contractId", "mesReferencia", tipo)` — impede

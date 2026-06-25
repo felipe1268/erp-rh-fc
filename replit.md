@@ -50,17 +50,19 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3705** — **MANIFESTAÇÃO DO DESTINATÁRIO · BUGFIX SEFAZ 242 "MENSAGEM SOAP INVÁLIDA" — 4 CORREÇÕES: node:crypto + indSinc + CÓDIGOS TROCADOS + cUF. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** (1) `signInfEvento` reescrita com `node:crypto` (`createHash("sha1")` + `createSign("RSA-SHA1")`) — node-forge tinha encoding quirk que corrompida DigestValue/SignatureValue; (2) `<indSinc>` removido — não existe no schema NT 2014.002 `TenvEvento`; (3) `MDEV_TP_EVENTO.recusada` 210220→210240, `desconhecida` 210240→210220 + `MDEV_DESC` + condição `xJust` + validação corrigidas; (4) `buildSoapEventoEnvelope` agora recebe e envia o cUF real do emitente (da chave) no header `nfeCabecMsg` em vez de 91 fixo. Arquivo: `server/routers/sefaz.ts`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3704** — **5 MELHORIAS: UNIQUE pj_payments + iOS new Date() × 2 + SEFAZ E-MAIL RATE LIMIT + CONCILIAÇÃO PAINEL SAÚDE 12 MESES. BACKEND PONTUAL + SCHEMA ADITIVO + FRONTEND · ZERO DROP/DELETE.** (1) UNIQUE INDEX em pj_payments previne duplicatas; (2) `parseAsUTC` em CFOSuite+DRE; (3) e-mail automático para admins quando cStat=656; (4) card "Saúde da Conciliação" grade 12 meses clicável. Arquivos: schema, _core, sefaz.ts, 3 TSX. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3703** — **SEFAZ NF-e · BUGFIX RATE LIMIT DUPLO POR HOT-RELOAD — PRÉ-SALVA last_sync_at ANTES DO CALL + STARTUP DELAY 30s→3min. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Restart durante sync longo não salvava last_sync_at → startup run da nova instância chamava SEFAZ no cooldown → Rate Limit duplo. Fix: pré-salva `last_sync_at=NOW()` ANTES do SOAP + startup delay 30s→3min. Arquivo: `server/routers/sefaz.ts`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3703** — **SEFAZ NF-e · BUGFIX RATE LIMIT DUPLO POR HOT-RELOAD — PRÉ-SALVA last_sync_at ANTES DO CALL + STARTUP DELAY 30s→3min. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3702** — **SEFAZ NF-e · BUGFIX CRONÔMETRO VERDE (iOS SAFARI new Date() → NaN NO rateLimitedAt). 100% FRONTEND · ZERO BACKEND/SCHEMA.** Fix: `parseAsUTC(rateLimitedAt)` + guard `isNaN`. Arquivo: `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3702** — **SEFAZ NF-e · BUGFIX CRONÔMETRO VERDE (iOS SAFARI new Date() → NaN NO rateLimitedAt). 100% FRONTEND · ZERO BACKEND/SCHEMA.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3701** — **SEFAZ NF-e · CRONÔMETRO "PRÓXIMA VERIFICAÇÃO" NO ANEL QUANDO COTA DISPONÍVEL. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Anel exibe "próx. MM:SS" verde quando cota renovada. Detalhe: `shared/changelog.ts`.
+- **Rev. 3701** — **SEFAZ NF-e · CRONÔMETRO "PRÓXIMA VERIFICAÇÃO" NO ANEL QUANDO COTA DISPONÍVEL. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3700** — **CONCILIAÇÃO · CAMPO DE BUSCA NA SEÇÃO "JÁ CONCILIADOS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Input de busca adicionado logo abaixo do header colapsável; filtra por descrição, fornecedor, data e valor. Arquivo: `FinanceiroConciliacao.tsx`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3700** — **CONCILIAÇÃO · CAMPO DE BUSCA NA SEÇÃO "JÁ CONCILIADOS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3699** — **FOLHA PJ · BUGFIX VALORES ERRADOS NA CONCILIAÇÃO — CONTRATO EDITADO NÃO PROPAGAVA AO pj_payments. BACKEND PONTUAL + COLFIX · ZERO SCHEMA/ALTER/DROP/DELETE.** `contratos.update` atualizava só `pj_contracts.valorMensal` mas nunca retroagia aos `pj_payments` já gerados (pendentes). Fix: nova função `sincronizarPagamentosPendentesInterno` propaga novo valor aos pagamentos + `financial_entries` vinculados; chamada automática no update de contrato quando valor/percentuais mudam; nova procedure `contratos.sincronizarPagamentosPendentes`; ColFix `v3699` corrige André (8k→12k) e Rodnei (3.5k→12k) no restart. Arquivo: `server/routers/pjContracts.ts`, `server/_core/index.ts`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3699** — **FOLHA PJ · BUGFIX VALORES ERRADOS NA CONCILIAÇÃO — CONTRATO EDITADO NÃO PROPAGAVA AO pj_payments. BACKEND PONTUAL + COLFIX · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3697** — **PACOTE CONTADOR · BUGFIX "column nome does not exist" + OCs USANDO TABELA ERRADA. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
