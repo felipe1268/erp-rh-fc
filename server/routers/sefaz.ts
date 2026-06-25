@@ -359,25 +359,45 @@ function callSefazEvento(url: string, soapXml: string, pfxBase64: string, pfxPas
   });
 }
 
-/** Extrai cStat/xMotivo/nProt do XML de retorno do NFeRecepcaoEvento4 */
+/** Extrai cStat/xMotivo/nProt do XML de retorno do NFeRecepcaoEvento4.
+ *  Tenta múltiplos caminhos de namespace para cobrir SVRS, AN e sefaz estaduais. */
 function parseRetEnvEvento(respXml: string): { cStat: string; xMotivo: string; nProt: string } {
   try {
-    const parsed = xmlParser.parse(respXml);
-    // Navega pela estrutura SOAP → retEnvEvento → retEvento → infEvento
-    const body =
-      parsed?.["soap12:Envelope"]?.["soap12:Body"] ??
-      parsed?.["soap:Envelope"]?.["soap:Body"] ?? {};
-    const result = body["nfeRecepcaoEventoResult"] ?? body["nfeRecepcaoEvento4Result"] ?? {};
-    const retEnv = result["retEnvEvento"] ?? parsed["retEnvEvento"] ?? {};
-    const retEvento = retEnv["retEvento"] ?? retEnv;
-    const infRet = retEvento["infEvento"] ?? retEvento;
+    // Parser sem namespace para navegar a estrutura — removeNSPrefix permite achar os
+    // elementos sem precisar saber qual prefixo cada SEFAZ usa (SVRS vs AN vs estadual).
+    const parserNoNs = new XMLParser({
+      ignoreAttributes: false,
+      attributeNamePrefix: "@_",
+      removeNSPrefix: true,
+      numberParseOptions: { skipLike: /^\d{12,}$/, leadingZeros: false },
+    });
+    const p = parserNoNs.parse(respXml);
 
-    // cStat pode estar no nível retEvento.infEvento ou retEnvEvento
+    // Envelope SOAP (prefixo já removido → "Envelope")
+    const envelope = p?.Envelope ?? p?.["soap12:Envelope"] ?? p?.["soap:Envelope"] ?? p ?? {};
+    const body     = envelope?.Body ?? envelope?.["soap12:Body"] ?? envelope?.["soap:Body"] ?? {};
+
+    // Inner result — SVRS usa "nfeRecepcaoEvento4Result", AN pode usar "nfeRecepcaoEventoResult"
+    const result   = body?.nfeRecepcaoEvento4Result ?? body?.nfeRecepcaoEventoResult ?? body ?? {};
+
+    // retEnvEvento → retEvento → infEvento (hierarquia padrão)
+    const retEnv   = result?.retEnvEvento ?? p?.retEnvEvento ?? {};
+    const retEvento = retEnv?.retEvento ?? retEnv;
+    const infRet   = retEvento?.infEvento ?? retEvento;
+
     const cStat   = String(infRet?.cStat   ?? retEnv?.cStat   ?? "");
     const xMotivo = String(infRet?.xMotivo ?? retEnv?.xMotivo ?? "Resposta não reconhecida");
     const nProt   = String(infRet?.nProt   ?? "");
+
+    // Log diagnóstico quando o parse não encontra cStat (facilita depuração futura)
+    if (!cStat) {
+      console.warn("[SefazMDE] parseRetEnvEvento: cStat vazio. XML (500 chars):", respXml.slice(0, 500));
+      console.warn("[SefazMDE] parsed (compact):", JSON.stringify(p).slice(0, 800));
+    }
+
     return { cStat, xMotivo, nProt };
-  } catch {
+  } catch (err: any) {
+    console.error("[SefazMDE] parseRetEnvEvento error:", err?.message, respXml.slice(0, 300));
     return { cStat: "", xMotivo: "Erro ao interpretar resposta da SEFAZ", nProt: "" };
   }
 }
