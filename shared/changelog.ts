@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3702 — **SEFAZ NF-e · BUGFIX CRONÔMETRO MOSTRA VERDE (COTA RENOVADA) QUANDO AINDA HÁ GATE ATIVO — iOS SAFARI new Date() RETORNA NaN PARA TIMESTAMP COM ESPAÇO. 100% FRONTEND · ZERO BACKEND/SCHEMA.**
+ *
+ * `calcSecs` usava `new Date(result.rateLimitedAt).getTime()` para o campo de rate-limit.
+ * iOS Safari rejeita o formato "YYYY-MM-DD HH:MM:SS" (separador espaço) retornando `NaN`
+ * → `baseTs = NaN` → guard `!baseTs` é falso (NaN é falsy para `!`) → ERRO: guard passou,
+ * `nextSyncMs = NaN`, `Math.max(0, NaN) = 0` → countdown zerado → anel verde "pronta para
+ * sincronizar" mesmo com 84 min de gate restante. Fix: `parseAsUTC(result.rateLimitedAt)`
+ * (igual à correção da Rev. 3693 em outro ponto) + guard explícito `|| isNaN(baseTs)`.
+ * Arquivo: `FinanceiroNotasFiscais.tsx`.
+ *
  * Rev. 3701 — **SEFAZ NF-e · CRONÔMETRO "PRÓXIMA VERIFICAÇÃO" NO ANEL QUANDO COTA DISPONÍVEL. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Quando a cota SEFAZ estava renovada (countdownSec=0), o anel mostrava apenas

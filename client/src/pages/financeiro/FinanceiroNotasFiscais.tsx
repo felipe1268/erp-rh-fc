@@ -351,11 +351,11 @@ export default function FinanceiroNotasFiscais() {
         const gateMs = (intervaloHoras * 60 - 2) * 60 * 1000;
         const result = JSON.parse(sefazCfg.last_sync_result || "{}");
         const baseTs = result?.rateLimitedAt
-          ? new Date(result.rateLimitedAt).getTime()
+          ? parseAsUTC(result.rateLimitedAt).getTime()
           : sefazCfg.last_sync_at
             ? parseAsUTC(sefazCfg.last_sync_at).getTime()
             : null;
-        if (!baseTs) { setCountdownSec(null); return; }
+        if (!baseTs || isNaN(baseTs)) { setCountdownSec(null); return; }
         const nextSyncMs = baseTs + gateMs;
         setCountdownSec(Math.max(0, Math.floor((nextSyncMs - Date.now()) / 1000)));
       } catch { setCountdownSec(null); }

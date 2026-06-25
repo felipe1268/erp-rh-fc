@@ -50,7 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3701** — **SEFAZ NF-e · CRONÔMETRO "PRÓXIMA VERIFICAÇÃO" NO ANEL QUANDO COTA DISPONÍVEL. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Anel mostrava só RefreshCw girando quando cota estava renovada (sem indicar quando o cron dispararia). Novo estado `cronSecsLeft` computa tempo BRT até próximo :00/:30 da hora. Anel exibe "próx. MM:SS" verde; texto mostra "Próxima verificação em MM:SS". Arquivo: `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3702** — **SEFAZ NF-e · BUGFIX CRONÔMETRO VERDE (iOS SAFARI new Date() → NaN NO rateLimitedAt). 100% FRONTEND · ZERO BACKEND/SCHEMA.** `new Date(result.rateLimitedAt)` retorna NaN no iOS Safari → gate zerava → anel mostrava "cota renovada" com 84 min restantes. Fix: `parseAsUTC(rateLimitedAt)` + guard `|| isNaN(baseTs)`. Arquivo: `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3701** — **SEFAZ NF-e · CRONÔMETRO "PRÓXIMA VERIFICAÇÃO" NO ANEL QUANDO COTA DISPONÍVEL. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Anel exibe "próx. MM:SS" verde quando cota renovada; texto mostra "Próxima verificação em MM:SS". Arquivo: `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3700** — **CONCILIAÇÃO · CAMPO DE BUSCA NA SEÇÃO "JÁ CONCILIADOS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Input de busca adicionado logo abaixo do header colapsável; filtra por descrição, fornecedor, data e valor. Arquivo: `FinanceiroConciliacao.tsx`. Detalhe: `shared/changelog.ts`.
 
