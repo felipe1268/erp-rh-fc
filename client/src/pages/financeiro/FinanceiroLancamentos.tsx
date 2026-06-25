@@ -917,10 +917,11 @@ export default function FinanceiroLancamentos() {
     }
   }
 
+  const norm = (s: string) => (s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const matchBusca = (l: any): boolean => {
     if (!search) return true;
-    const q = search.toLowerCase();
-    return (l.descricao ?? "").toLowerCase().includes(q) || (l.obraNome ?? "").toLowerCase().includes(q) || (l.contaNome ?? "").toLowerCase().includes(q);
+    const q = norm(search);
+    return norm(l.descricao).includes(q) || norm(l.obraNome).includes(q) || norm(l.contaNome).includes(q);
   };
   const rawLancamentos = (data?.data ?? []) as any[];
   // Rev. 3156 — descarta SEMPRE o ruído de cancelados (cancelado em outro módulo +

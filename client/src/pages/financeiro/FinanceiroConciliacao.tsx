@@ -115,8 +115,9 @@ function LancCombo({ value, onChangeText, onSelect, options, placeholder = "Busc
   placeholder?: string; noneLabel?: string; onClear?: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const filtered = value.trim()
-    ? options.filter(o => o.label.toLowerCase().includes(value.trim().toLowerCase()))
+    ? options.filter(o => norm(o.label).includes(norm(value.trim())))
     : options;
   return (
     <div className="relative">
