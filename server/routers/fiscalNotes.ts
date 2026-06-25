@@ -321,6 +321,23 @@ export const fiscalNotesRouter = router({
       return { success: true };
     }),
 
+  bulkUpdateStatus: protectedProcedure
+    .input(z.object({
+      ids: z.array(z.number()).min(1).max(200),
+      companyId: z.number(),
+      status: z.enum(["pendente","recebida","conciliada","cancelada"]),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await _assertNfAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const result = await db
+        .update(fiscalNotes)
+        .set({ status: input.status, updatedAt: new Date() } as any)
+        .where(and(inArray(fiscalNotes.id, input.ids), eq(fiscalNotes.companyId, input.companyId)))
+        .returning({ id: fiscalNotes.id });
+      return { updated: result.length };
+    }),
+
   excluirLote: protectedProcedure
     .input(z.object({ ids: z.array(z.number()).min(1).max(200), companyId: z.number() }))
     .mutation(async ({ input, ctx }) => {

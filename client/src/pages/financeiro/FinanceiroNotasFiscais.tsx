@@ -195,6 +195,8 @@ export default function FinanceiroNotasFiscais() {
   const [detalheNf, setDetalheNf] = useState<NF | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
+  const [bulkStatusTarget, setBulkStatusTarget] = useState<string>("recebida");
   const [selectedRecIds, setSelectedRecIds] = useState<Set<number>>(new Set());
   const [bulkRecDeleteOpen, setBulkRecDeleteOpen] = useState(false);
   const masterRecRef = useRef<HTMLInputElement>(null);
@@ -448,6 +450,16 @@ export default function FinanceiroNotasFiscais() {
       listQuery.refetch();
     },
     onError: (e) => toast({ title: "Erro ao excluir", description: e.message, variant: "destructive" }),
+  });
+  const bulkStatusMut = trpc.fiscalNotes.bulkUpdateStatus.useMutation({
+    onSuccess: (r) => {
+      const st = STATUS_MAP[bulkStatusTarget]?.label ?? bulkStatusTarget;
+      toast({ title: `${r.updated} nota${r.updated !== 1 ? "s" : ""} marcada${r.updated !== 1 ? "s" : ""} como "${st}".` });
+      setSelectedIds(new Set());
+      setBulkStatusOpen(false);
+      listQuery.refetch();
+    },
+    onError: (e) => toast({ title: "Erro ao atualizar status", description: e.message, variant: "destructive" }),
   });
   const finishSyncProgress = (ok: boolean) => {
     if (syncIvRef.current) { clearInterval(syncIvRef.current); syncIvRef.current = null; }
@@ -1726,9 +1738,9 @@ export default function FinanceiroNotasFiscais() {
         {/* Tabela */}
         {/* Barra de seleção em lote */}
         {selectedIds.size > 0 && (
-          <div className="flex items-center gap-3 px-4 py-2.5 bg-indigo-600 text-white rounded-xl shadow-lg">
+          <div className="flex items-center gap-3 px-4 py-2.5 bg-indigo-600 text-white rounded-xl shadow-lg flex-wrap">
             <CheckIcon className="h-4 w-4 shrink-0" />
-            <span className="text-sm font-medium flex-1">
+            <span className="text-sm font-medium flex-1 min-w-[120px]">
               {selectedIds.size} nota{selectedIds.size !== 1 ? "s" : ""} selecionada{selectedIds.size !== 1 ? "s" : ""}
             </span>
             <Button
@@ -1738,6 +1750,14 @@ export default function FinanceiroNotasFiscais() {
               onClick={() => setSelectedIds(new Set())}
             >
               Limpar
+            </Button>
+            <Button
+              size="sm"
+              className="bg-white/20 hover:bg-white/30 text-white gap-1.5 h-7 px-3"
+              onClick={() => setBulkStatusOpen(true)}
+            >
+              <CheckIcon className="h-3.5 w-3.5" />
+              Mudar Status
             </Button>
             <Button
               size="sm"
@@ -2888,6 +2908,47 @@ export default function FinanceiroNotasFiscais() {
                 disabled={excluirRecLoteMut.isPending}
               >
                 {excluirRecLoteMut.isPending ? "Excluindo..." : `Excluir ${selectedRecIds.size} NF-e${selectedRecIds.size !== 1 ? "s" : ""}`}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={bulkStatusOpen} onOpenChange={v => { if (!v) setBulkStatusOpen(false); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Mudar status de {selectedIds.size} nota{selectedIds.size !== 1 ? "s" : ""}</AlertDialogTitle>
+              <AlertDialogDescription>
+                Selecione o novo status a aplicar em todas as notas selecionadas.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="px-1 py-2 grid grid-cols-2 gap-2">
+              {(["pendente","recebida","conciliada","cancelada"] as const).map(s => {
+                const info = STATUS_MAP[s];
+                return (
+                  <button
+                    key={s}
+                    onClick={() => setBulkStatusTarget(s)}
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${
+                      bulkStatusTarget === s
+                        ? "border-indigo-500 bg-indigo-50"
+                        : "border-slate-200 hover:border-slate-300 bg-white"
+                    }`}
+                  >
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border ${info.color}`}>
+                      {info.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setBulkStatusOpen(false)}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-indigo-600 hover:bg-indigo-700"
+                onClick={() => bulkStatusMut.mutate({ ids: Array.from(selectedIds), companyId: companyId!, status: bulkStatusTarget as any })}
+                disabled={bulkStatusMut.isPending}
+              >
+                {bulkStatusMut.isPending ? "Atualizando..." : `Aplicar "${STATUS_MAP[bulkStatusTarget]?.label ?? bulkStatusTarget}"`}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

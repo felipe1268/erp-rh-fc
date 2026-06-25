@@ -50,9 +50,11 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3686** — **DASHBOARD NF-e · COMPARATIVO TRIMESTRAL — ÚLTIMOS 5 ANOS (NFS-e EMITIDAS). BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Novo endpoint `fiscalNotes.getQuarterlySeries` agrupa por ANO+TRIMESTRE via EXTRACT(QUARTER) + pivot server-side (4 linhas Q1..Q4 × n colunas de ano). Novo card: BarChart agrupado (4 grupos Q1..Q4, até 5 barras coloridas por ano) + tabela trimestre×ano com Δ% ▲/▼ vs ano anterior + rodapé totais anuais. Inserido após "Evolução 5 Anos". Arquivos: `server/routers/fiscalNotes.ts`, `DashNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3688** — **NFS-e EMITIDAS · SELEÇÃO EM LOTE + MUDAR STATUS EM MASSA. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Novo endpoint `fiscalNotes.bulkUpdateStatus({ ids, companyId, status })` com guard `_assertNfAccess` + inArray+eq(companyId). Barra de seleção em lote ganhou botão "Mudar Status"; dialog `AlertDialog` com grid 2×2 (Pendente/Recebida/Conciliada/Cancelada, badge colorido + destaque na selecionada). Ao confirmar: UPDATE em lote, toast, limpa seleção, refetch. Arquivos: `server/routers/fiscalNotes.ts`, `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3685** — **DASHBOARD NF-e · RENOMEAR LABELS GRÁFICO "ENTRADAS × SAÍDAS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3687** — **DASHBOARD NF-e · CARD "ENTRADAS × SAÍDAS" MOVIDO PARA PRIMEIRA POSIÇÃO + TOTALIZADORES NO HEADER. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3686** — **DASHBOARD NF-e · COMPARATIVO TRIMESTRAL — ÚLTIMOS 5 ANOS (NFS-e EMITIDAS). BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3684** — **DASHBOARD NF-e · GRÁFICO "FATURAMENTO × COMPRAS — NFS-e × NF-e POR MÊS" COM SALDO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Novo ChartCard entre "Evolução Fiscal Mensal" e "Cobertura": barras grupadas NFS-e (violet) × NF-e (blue) + linha Saldo (verde) em eixo direito. Totalizador inline: Faturamento | Compras c/ NF-e | Saldo ±. Linha tracejada quando NF-e=0; nota rodapé contextual. Usa composedDataMes existente, zero nova query. Arquivo: `DashNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
 

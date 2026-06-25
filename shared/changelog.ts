@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3688 — **NFS-e EMITIDAS · SELEÇÃO EM LOTE + MUDAR STATUS EM MASSA. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * Novo endpoint `fiscalNotes.bulkUpdateStatus({ ids, companyId, status })`: UPDATE em lote com
+ * inArray(ids) + eq(companyId) guard (usa `_assertNfAccess`); aceita status = pendente | recebida |
+ * conciliada | cancelada; retorna `{ updated }`. Frontend: novo estado `bulkStatusOpen` +
+ * `bulkStatusTarget` (default "recebida"); nova mutation `bulkStatusMut` com toast de confirmação.
+ * Barra de seleção em lote existente ganhou botão "Mudar Status" (entre Limpar e Excluir). Dialog
+ * `AlertDialog` com grid 2×2 dos 4 status (badge colorido + borda highlight ao selecionar) + botão
+ * "Aplicar". Ao confirmar: atualiza banco, limpa seleção, fecha dialog, refetch da listagem.
+ * Arquivos: `server/routers/fiscalNotes.ts`, `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`.
+ *
+ * Rev. 3687 — **DASHBOARD NF-e · CARD "ENTRADAS × SAÍDAS" MOVIDO PARA PRIMEIRA POSIÇÃO + TOTALIZADORES NO HEADER. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
  * Rev. 3686 — **DASHBOARD NF-e · COMPARATIVO TRIMESTRAL — ÚLTIMOS 5 ANOS (NFS-e EMITIDAS). BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * Novo endpoint `fiscalNotes.getQuarterlySeries({ companyId, anos })`: GROUP BY YEAR + QUARTER
