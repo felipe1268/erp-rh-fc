@@ -2420,68 +2420,103 @@ export default function FinanceiroNotasFiscais() {
                       </div>
                       <div className="px-4 py-3 text-sm">
                         <div className="space-y-1.5">
-                          <div className="flex justify-between py-1.5 border-b border-dashed">
-                            <span className="text-slate-500">Valor dos Serviços</span>
-                            <span className="font-semibold text-slate-700">{formatBRL(detalheNf.valorBruto)}</span>
+                          <div className="flex justify-between items-start py-1.5 border-b border-dashed">
+                            <span className="flex flex-col">
+                              <span className="text-slate-500">Valor dos Serviços</span>
+                              <span className="text-[10px] text-slate-400 leading-tight">Valor bruto total constante na NFS-e</span>
+                            </span>
+                            <span className="font-semibold text-slate-700 shrink-0">{formatBRL(detalheNf.valorBruto)}</span>
                           </div>
                           {detalheNf.deducoesTotal && parseFloat(detalheNf.deducoesTotal) > 0 && (
-                            <div className="flex justify-between py-1.5 border-b border-dashed">
-                              <span className="text-slate-500">Deduções</span>
-                              <span className="text-red-500">− {formatBRL(detalheNf.deducoesTotal)}</span>
+                            <div className="flex justify-between items-start py-1.5 border-b border-dashed">
+                              <span className="flex flex-col">
+                                <span className="text-slate-500">Deduções</span>
+                                <span className="text-[10px] text-slate-400 leading-tight">Abatimentos da base de cálculo (ex.: material, subempreitada)</span>
+                              </span>
+                              <span className="text-red-500 shrink-0">− {formatBRL(detalheNf.deducoesTotal)}</span>
                             </div>
                           )}
                           {detalheNf.baseCalculoIss && parseFloat(detalheNf.baseCalculoIss) > 0 && (
-                            <div className="flex justify-between py-1.5 border-b border-dashed text-slate-400 text-xs">
-                              <span>Base de Cálculo ISS</span>
-                              <span>{formatBRL(detalheNf.baseCalculoIss)}</span>
+                            <div className="flex justify-between items-start py-1.5 border-b border-dashed text-slate-400 text-xs">
+                              <span className="flex flex-col">
+                                <span>Base de Cálculo ISS</span>
+                                <span className="text-[10px] text-slate-300 leading-tight">Valor sobre o qual a alíquota ISS é aplicada</span>
+                              </span>
+                              <span className="shrink-0">{formatBRL(detalheNf.baseCalculoIss)}</span>
                             </div>
                           )}
                           {detalheNf.issRetido && parseFloat(detalheNf.issRetido) > 0 && (
-                            <div className="flex justify-between py-1.5 border-b border-dashed">
-                              <span className="text-slate-500">ISS Retido{detalheNf.aliquotaIss && parseFloat(detalheNf.aliquotaIss) > 0 ? <span className="text-[10px] text-slate-400 ml-1">({parseFloat(detalheNf.aliquotaIss).toFixed(2)}%)</span> : null}</span>
-                              <span className="text-red-500">− {formatBRL(detalheNf.issRetido)}</span>
+                            <div className="flex justify-between items-start py-1.5 border-b border-dashed">
+                              <span className="flex flex-col">
+                                <span className="text-slate-500">
+                                  ISS Retido{detalheNf.aliquotaIss && parseFloat(detalheNf.aliquotaIss) > 0 ? <span className="text-[10px] text-slate-400 ml-1">({parseFloat(detalheNf.aliquotaIss).toFixed(2)}%)</span> : null}
+                                </span>
+                                <span className="text-[10px] text-slate-400 leading-tight">Imposto Sobre Serviços · tributo municipal · retido pelo tomador</span>
+                              </span>
+                              <span className="text-red-500 shrink-0">− {formatBRL(detalheNf.issRetido)}</span>
                             </div>
                           )}
                           {detalheNf.retencaoInss && parseFloat(detalheNf.retencaoInss) > 0 && (
-                            <div className="flex justify-between py-1.5 border-b border-dashed">
-                              <span className="text-slate-500">Retenção INSS</span>
-                              <span className="text-red-500">− {formatBRL(detalheNf.retencaoInss)}</span>
+                            <div className="flex justify-between items-start py-1.5 border-b border-dashed">
+                              <span className="flex flex-col">
+                                <span className="text-slate-500">Retenção INSS</span>
+                                <span className="text-[10px] text-slate-400 leading-tight">Instituto Nacional do Seguro Social · contribuição previdenciária retida pelo tomador</span>
+                              </span>
+                              <span className="text-red-500 shrink-0">− {formatBRL(detalheNf.retencaoInss)}</span>
                             </div>
                           )}
                           {detalheNf.retencaoIrrf && parseFloat(detalheNf.retencaoIrrf) > 0 && (
-                            <div className="flex justify-between py-1.5 border-b border-dashed">
-                              <span className="text-slate-500">Retenção IR</span>
-                              <span className="text-red-500">− {formatBRL(detalheNf.retencaoIrrf)}</span>
+                            <div className="flex justify-between items-start py-1.5 border-b border-dashed">
+                              <span className="flex flex-col">
+                                <span className="text-slate-500">Retenção IR</span>
+                                <span className="text-[10px] text-slate-400 leading-tight">Imposto de Renda na Fonte (IRRF) · retido pelo tomador sobre o pagamento</span>
+                              </span>
+                              <span className="text-red-500 shrink-0">− {formatBRL(detalheNf.retencaoIrrf)}</span>
                             </div>
                           )}
                           {detalheNf.retencaoCsll && parseFloat(detalheNf.retencaoCsll) > 0 && (
-                            <div className="flex justify-between py-1.5 border-b border-dashed">
-                              <span className="text-slate-500">Retenção CSLL</span>
-                              <span className="text-red-500">− {formatBRL(detalheNf.retencaoCsll)}</span>
+                            <div className="flex justify-between items-start py-1.5 border-b border-dashed">
+                              <span className="flex flex-col">
+                                <span className="text-slate-500">Retenção CSLL</span>
+                                <span className="text-[10px] text-slate-400 leading-tight">Contribuição Social sobre o Lucro Líquido · retida pelo tomador (1%)</span>
+                              </span>
+                              <span className="text-red-500 shrink-0">− {formatBRL(detalheNf.retencaoCsll)}</span>
                             </div>
                           )}
                           {detalheNf.retencaoPis && parseFloat(detalheNf.retencaoPis) > 0 && (
-                            <div className="flex justify-between py-1.5 border-b border-dashed">
-                              <span className="text-slate-500">Retenção PIS</span>
-                              <span className="text-red-500">− {formatBRL(detalheNf.retencaoPis)}</span>
+                            <div className="flex justify-between items-start py-1.5 border-b border-dashed">
+                              <span className="flex flex-col">
+                                <span className="text-slate-500">Retenção PIS</span>
+                                <span className="text-[10px] text-slate-400 leading-tight">Programa de Integração Social · retido pelo tomador (0,65%)</span>
+                              </span>
+                              <span className="text-red-500 shrink-0">− {formatBRL(detalheNf.retencaoPis)}</span>
                             </div>
                           )}
                           {detalheNf.retencaoCofins && parseFloat(detalheNf.retencaoCofins) > 0 && (
-                            <div className="flex justify-between py-1.5 border-b border-dashed">
-                              <span className="text-slate-500">Retenção COFINS</span>
-                              <span className="text-red-500">− {formatBRL(detalheNf.retencaoCofins)}</span>
+                            <div className="flex justify-between items-start py-1.5 border-b border-dashed">
+                              <span className="flex flex-col">
+                                <span className="text-slate-500">Retenção COFINS</span>
+                                <span className="text-[10px] text-slate-400 leading-tight">Contribuição p/ Financiamento da Seguridade Social · retida pelo tomador (3%)</span>
+                              </span>
+                              <span className="text-red-500 shrink-0">− {formatBRL(detalheNf.retencaoCofins)}</span>
                             </div>
                           )}
                           {!detalheNf.retencaoPis && !detalheNf.retencaoCofins && detalheNf.retencaoPisCofins && parseFloat(detalheNf.retencaoPisCofins) > 0 && (
-                            <div className="flex justify-between py-1.5 border-b border-dashed">
-                              <span className="text-slate-500">Retenção PIS/COFINS</span>
-                              <span className="text-red-500">− {formatBRL(detalheNf.retencaoPisCofins)}</span>
+                            <div className="flex justify-between items-start py-1.5 border-b border-dashed">
+                              <span className="flex flex-col">
+                                <span className="text-slate-500">Retenção PIS/COFINS</span>
+                                <span className="text-[10px] text-slate-400 leading-tight">PIS (0,65%) + COFINS (3%) informados de forma unificada · retidos pelo tomador</span>
+                              </span>
+                              <span className="text-red-500 shrink-0">− {formatBRL(detalheNf.retencaoPisCofins)}</span>
                             </div>
                           )}
                           {detalheNf.retencaoOutras && parseFloat(detalheNf.retencaoOutras) > 0 && (
-                            <div className="flex justify-between py-1.5 border-b border-dashed">
-                              <span className="text-slate-500">Outras Retenções</span>
-                              <span className="text-red-500">− {formatBRL(detalheNf.retencaoOutras)}</span>
+                            <div className="flex justify-between items-start py-1.5 border-b border-dashed">
+                              <span className="flex flex-col">
+                                <span className="text-slate-500">Outras Retenções</span>
+                                <span className="text-[10px] text-slate-400 leading-tight">Demais retenções informadas na NFS-e</span>
+                              </span>
+                              <span className="text-red-500 shrink-0">− {formatBRL(detalheNf.retencaoOutras)}</span>
                             </div>
                           )}
                           <div className="flex justify-between pt-2.5">

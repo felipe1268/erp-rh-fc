@@ -1,6 +1,23 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3695 — **NFS-e EMITIDAS · LEGENDA DOS IMPOSTOS NO DIALOG "ESPELHO FIEL" — SUB-LABELS DESCRITIVOS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Cada linha da seção "Impostos e Valores" do dialog de detalhes da NFS-e recebeu uma
+ * sub-legenda em texto `text-[10px] text-slate-400` explicando o imposto:
+ * ISS: "Imposto Sobre Serviços · tributo municipal · retido pelo tomador";
+ * INSS: "Instituto Nacional do Seguro Social · contribuição previdenciária retida pelo tomador";
+ * IR: "Imposto de Renda na Fonte (IRRF) · retido pelo tomador sobre o pagamento";
+ * CSLL: "Contribuição Social sobre o Lucro Líquido · retida pelo tomador (1%)";
+ * PIS: "Programa de Integração Social · retido pelo tomador (0,65%)";
+ * COFINS: "Contribuição p/ Financiamento da Seguridade Social · retida pelo tomador (3%)";
+ * PIS/COFINS unificado: "PIS (0,65%) + COFINS (3%) informados de forma unificada · retidos pelo tomador";
+ * Outras Retenções: "Demais retenções informadas na NFS-e".
+ * Implementação: cada `<span className="text-slate-500">` virou `<span className="flex flex-col">`
+ * com o rótulo original + sub-label; `shrink-0` adicionado ao valor monetário para
+ * não comprimir o texto quando a legenda é longa. Mobile-friendly: sempre visível, sem hover.
+ * Arquivo: `FinanceiroNotasFiscais.tsx`.
+ *
  * Rev. 3694 — **SEFAZ CONFIG · FREQUÊNCIA DECIMAL — INPUT LIVRE 1h–24h (EX: 1.5 = 1h 30min). SCHEMA ADITIVO + FRONTEND · ZERO DROP/DELETE.**
  *
  * Usuário queria configurar 1h30min ou 1h15min — o dropdown anterior só permitia horas inteiras.

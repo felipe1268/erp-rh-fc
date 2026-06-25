@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3695** — **NFS-e EMITIDAS · LEGENDA DOS IMPOSTOS NO DIALOG ESPELHO — SUB-LABELS DESCRITIVOS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Sub-legenda `text-[10px]` sob cada imposto: ISS=tributo municipal; INSS=previdência; IR=IRRF na fonte; CSLL=1%; PIS=0,65%; COFINS=3%; etc. Mobile-friendly (sempre visível). Arquivo: `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3694** — **SEFAZ CONFIG · FREQUÊNCIA DECIMAL — INPUT LIVRE 1h–24h (EX: 1.5 = 1h 30min). SCHEMA ADITIVO + FRONTEND · ZERO DROP/DELETE.** `sync_intervalo_horas` SMALLINT → NUMERIC(4,2) via SyncSchema+. Dropdown removido → Input text+inputMode=decimal; blur snappa ao 0.25 mais próximo; helper `fmtIntervalHoras` mostra "1h 30min" abaixo do campo. Arquivo: `FinanceiroConfigSection.tsx`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3693** — **SEFAZ CONFIG · BUGFIX iOS SAFARI CRASH "The string did not match the expected pattern". 100% FRONTEND · ZERO BACKEND/SCHEMA.** `new Date(r.rateLimitedAt)` → `parseAsUTC(r.rateLimitedAt)`. Detalhe: `shared/changelog.ts`.
