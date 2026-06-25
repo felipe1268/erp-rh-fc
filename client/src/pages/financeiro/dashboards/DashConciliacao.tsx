@@ -340,7 +340,7 @@ export default function DashConciliacao() {
     }
     return MESES.map((mes, i) => {
       const d = map.get(i + 1) ?? { entradas: 0, saidas: 0, conciliadas: 0, total: 0 };
-      return { mes, Entradas: d.entradas, Saídas: d.saidas };
+      return { mes, Entradas: d.entradas, Saídas: d.saidas, Saldo: d.entradas - d.saidas };
     });
   }, [mensalArr]);
 
@@ -538,8 +538,9 @@ export default function DashConciliacao() {
                     <YAxis tickFormatter={formatBRLCompact} tick={{ fontSize: 10, fill: "#64748b" }} width={62} />
                     <Tooltip content={<BRLTooltip />} cursor={{ fill: "#f1f5f9" }} />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Bar dataKey="Entradas" fill={GREEN} radius={[3, 3, 0, 0]} maxBarSize={24} />
-                    <Bar dataKey="Saídas" fill={RED} radius={[3, 3, 0, 0]} maxBarSize={24} />
+                    <Bar dataKey="Entradas" fill={GREEN} radius={[3, 3, 0, 0]} maxBarSize={22} />
+                    <Bar dataKey="Saídas" fill={RED} radius={[3, 3, 0, 0]} maxBarSize={22} />
+                    <Bar dataKey="Saldo" fill={BLUE} radius={[3, 3, 0, 0]} maxBarSize={22} />
                   </BarChart>
                 </ResponsiveContainer>
               </ChartCard>

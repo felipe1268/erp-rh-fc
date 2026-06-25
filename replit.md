@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3713** — **DASHBOARD CONCILIAÇÃO · TERCEIRA BARRA "SALDO" NO GRÁFICO "ENTRADAS VS SAÍDAS POR MÊS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Terceira barra azul "Saldo" (entradas − saídas) adicionada ao BarChart mensal ao lado de Entradas/Saídas. Arquivo: `DashConciliacao.tsx`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3712** — **CONCILIAÇÃO · SALDO (ENTRADAS − SAÍDAS) POR CONTA + TOTALIZADOR DE TODAS AS CONTAS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Cada card exibe "= saldo R$ X" (azul se positivo, laranja se negativo) após entradas/saídas. Rodapé cinza com total consolidado de todas as contas ao final da lista. Arquivo: `FinanceiroConciliacao.tsx`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3711** — **EXTRATO SANTANDER · BUGFIX CRÍTICO PARSER — "EXTRATO_PJ_A4_INTELIGENTE 1.0" TEM VALOR NA MESMA LINHA DA DESCRIÇÃO (NÃO EM LINHA SEPARADA). 100% BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** O parser aguardava `isValueLine` (linha com APENAS número, ex: "3.000,00-") para encerrar cada transação. O formato atual do Santander PJ coloca data + descrição + valor tudo numa só linha (colunas Créditos/Débitos inline). Resultado: `isValueLine` nunca ativava, `descParts` acumulava tudo sem emitir → apenas 1 item importado de um extrato com 200+ lançamentos. Fix: novo algoritmo — CADA LINHA com valor monetário = 1 transação (flush imediato); linhas sem valor = continuação (beneficiário/CNPJ/parcela). Arquivo: `server/services/santanderPdfParser.ts`. Detalhe: `shared/changelog.ts`.

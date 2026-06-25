@@ -1,6 +1,12 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3713 — **DASHBOARD CONCILIAÇÃO · TERCEIRA BARRA "SALDO" NO GRÁFICO "ENTRADAS VS SAÍDAS POR MÊS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * O BarChart mensal agora exibe três barras lado a lado: Entradas (verde) · Saídas (vermelho) ·
+ * Saldo (azul, = entradas − saídas; negativo aponta para baixo). Saldo derivado do campo já
+ * presente em `entradasSaidasMes`. Arquivo: `DashConciliacao.tsx`.
+ *
  * Rev. 3712 — **CONCILIAÇÃO · SALDO (ENTRADAS − SAÍDAS) POR CONTA + TOTALIZADOR DE TODAS AS CONTAS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Cada card da seção "Conciliação por conta" agora exibe "= saldo R$ X" (azul se positivo,
