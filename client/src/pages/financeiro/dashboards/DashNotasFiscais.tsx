@@ -1184,11 +1184,11 @@ export default function DashNotasFiscais() {
                 </div>
                 <div className="flex gap-3 text-xs shrink-0">
                   <span className="flex items-center gap-1.5 text-slate-600">
-                    <span className="w-3 h-3 rounded-sm inline-block" style={{ background: VIOLET }} />
+                    <span className="w-3 h-3 rounded-sm inline-block" style={{ background: GREEN }} />
                     Saídas (NFS-e)
                   </span>
                   <span className="flex items-center gap-1.5 text-slate-600">
-                    <span className="w-3 h-3 rounded-sm inline-block" style={{ background: GREEN }} />
+                    <span className="w-3 h-3 rounded-sm inline-block" style={{ background: RED }} />
                     Entradas (NF-e)
                   </span>
                 </div>
@@ -1225,10 +1225,10 @@ export default function DashNotasFiscais() {
                       );
                     }}
                   />
-                  <Bar dataKey="NFS-e Emitidas" fill={VIOLET} radius={[4, 4, 0, 0]}>
+                  <Bar dataKey="NFS-e Emitidas" fill={GREEN} radius={[4, 4, 0, 0]}>
                     <LabelList dataKey="NFS-e Emitidas" position="top" formatter={(v: number) => v > 0 ? formatBRLCompact(v) : ""} style={{ fontSize: 10, fill: "#64748b" }} />
                   </Bar>
-                  <Bar dataKey="NF-e Recebidas" fill={GREEN} radius={[4, 4, 0, 0]}>
+                  <Bar dataKey="NF-e Recebidas" fill={RED} radius={[4, 4, 0, 0]}>
                     <LabelList dataKey="NF-e Recebidas" position="top" formatter={(v: number) => v > 0 ? formatBRLCompact(v) : ""} style={{ fontSize: 10, fill: "#64748b" }} />
                   </Bar>
                 </BarChart>
@@ -1240,9 +1240,9 @@ export default function DashNotasFiscais() {
                   <thead className="bg-slate-50">
                     <tr>
                       <th className="px-3 py-2 text-left font-semibold text-slate-600">Ano</th>
-                      <th className="px-3 py-2 text-right font-semibold text-violet-700">NFS-e Emitidas</th>
+                      <th className="px-3 py-2 text-right font-semibold text-green-700">NFS-e Emitidas</th>
                       <th className="px-3 py-2 text-right font-semibold text-slate-400">Δ%</th>
-                      <th className="px-3 py-2 text-right font-semibold text-emerald-700">NF-e Recebidas</th>
+                      <th className="px-3 py-2 text-right font-semibold text-red-600">NF-e Recebidas</th>
                       <th className="px-3 py-2 text-right font-semibold text-slate-400">Δ%</th>
                       <th className="px-3 py-2 text-right font-semibold text-slate-600">Saldo</th>
                     </tr>
