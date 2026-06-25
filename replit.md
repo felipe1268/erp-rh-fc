@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3714** — **DASHBOARD CONCILIAÇÃO · BUGFIX "NENHUM DADO" EM FORNECEDORES + CATEGORIAS — UNION COM EXTRATO BANCÁRIO. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** `getConciliacaoDashExtra` consultava só `financial_entries`; empresas com apenas extrato importado viam tudo vazio. Fix: UNION ALL com `bank_statement_lines` (entry_id IS NULL para não duplicar conciliados). Arquivo: `server/routers/financial.ts`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3713** — **DASHBOARD CONCILIAÇÃO · TERCEIRA BARRA "SALDO" NO GRÁFICO "ENTRADAS VS SAÍDAS POR MÊS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Terceira barra azul "Saldo" (entradas − saídas) adicionada ao BarChart mensal ao lado de Entradas/Saídas. Arquivo: `DashConciliacao.tsx`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3712** — **CONCILIAÇÃO · SALDO (ENTRADAS − SAÍDAS) POR CONTA + TOTALIZADOR DE TODAS AS CONTAS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Cada card exibe "= saldo R$ X" (azul se positivo, laranja se negativo) após entradas/saídas. Rodapé cinza com total consolidado de todas as contas ao final da lista. Arquivo: `FinanceiroConciliacao.tsx`. Detalhe: `shared/changelog.ts`.

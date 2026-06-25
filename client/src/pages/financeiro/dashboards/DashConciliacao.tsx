@@ -635,7 +635,7 @@ export default function DashConciliacao() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <TopListCard
                   title="Ranking de fornecedores por valor pago"
-                  subtitle={`Despesas lançadas no ERP · ano ${ano} · clique p/ ver detalhes`}
+                  subtitle={`Saídas do extrato + lançamentos ERP · ano ${ano} · clique p/ ver detalhes`}
                   items={topFornecedores.slice(0, 15)}
                   color={BLUE}
                   onOpen={() => setDetForn(true)}
@@ -668,7 +668,7 @@ export default function DashConciliacao() {
             <div className="space-y-2">
               <SectionTitle>Análise por categoria de lançamento</SectionTitle>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <ChartCard title="Top categorias — Despesas" subtitle={`Distribuição por conta do plano de contas · ${ano}`} height={260} onOpen={() => setDetCategDesp(true)}>
+                <ChartCard title="Top categorias — Despesas" subtitle={`Débitos do extrato + categorias ERP · ${ano}`} height={260} onOpen={() => setDetCategDesp(true)}>
                   {catDespPie.length === 0 ? <EmptyState message="Nenhuma despesa categorizada no período." /> : (
                     <ResponsiveContainer>
                       <PieChart>
@@ -696,7 +696,7 @@ export default function DashConciliacao() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <ChartCard title="Top categorias — Receitas (R$)" subtitle={`Valor por categoria de receita · ${ano}`} height={Math.max(220, Math.min(topCategRec.length, 10) * 44 + 40)} onOpen={() => setDetCategRec(true)}>
+                <ChartCard title="Top categorias — Receitas (R$)" subtitle={`Créditos do extrato + categorias ERP · ${ano}`} height={Math.max(220, Math.min(topCategRec.length, 10) * 44 + 40)} onOpen={() => setDetCategRec(true)}>
                   {topCategRec.length === 0 ? <EmptyState message="Nenhuma receita categorizada no período." /> : (
                     <ResponsiveContainer>
                       <BarChart

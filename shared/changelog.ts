@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3714 — **DASHBOARD CONCILIAÇÃO · BUGFIX "NENHUM DADO" EM FORNECEDORES + CATEGORIAS — UNION COM EXTRATO BANCÁRIO. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * `getConciliacaoDashExtra` consultava SOMENTE `financial_entries` (lançamentos ERP). Empresas
+ * que só importaram extrato bancário (`bank_statement_lines`) viam todos esses cards vazios.
+ * Fix: cada query agora é um UNION ALL — (1) ERP entries com nome/categoria + (2) linhas do
+ * extrato com `entry_id IS NULL` (não conciliadas, para evitar double-count), usando `descricao`
+ * como nome do fornecedor / categoria. Afeta: top fornecedores, top categorias despesas,
+ * top categorias receitas. Obras ficam inalteradas (sem campo obra_id no extrato bancário).
+ * Arquivo: `server/routers/financial.ts`. Subtítulos dos cards atualizados.
+ *
  * Rev. 3713 — **DASHBOARD CONCILIAÇÃO · TERCEIRA BARRA "SALDO" NO GRÁFICO "ENTRADAS VS SAÍDAS POR MÊS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * O BarChart mensal agora exibe três barras lado a lado: Entradas (verde) · Saídas (vermelho) ·

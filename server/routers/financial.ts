@@ -11552,6 +11552,10 @@ export const financialRouter = router({
   // Rev. 3479 — DASHBOARD CONCILIAÇÃO · EXTRA: top fornecedores, categorias, obras e
   // extremos do extrato (maior entrada/saída). Alimenta os novos KPIs e gráficos do
   // DashConciliacao.tsx. READ-ONLY · ZERO ALTER/DROP/DELETE.
+  //
+  // Rev. 3714 — UNION com bank_statement_lines para fornecedores e categorias:
+  // quando financial_entries está vazio ou sem nome/categoria, usa descricao do extrato
+  // como fallback (only lines with entry_id IS NULL to avoid double-counting conciliated items).
   getConciliacaoDashExtra: protectedProcedure.input(z.object({
     companyId: z.number(),
     ano: z.number(),
@@ -11565,44 +11569,80 @@ export const financialRouter = router({
     // Helper p/ normalizar rows.
     const R = (r: any) => rows(r) as any[];
 
-    // 1. Top fornecedores por saídas (despesas registradas no ERP).
-    // Rev. 3628 — fallback p/ comprovante_beneficiario quando fornecedor_nome está nulo.
+    // 1. Top fornecedores por saídas.
+    // Rev. 3714 — UNION: ERP entries (fornecedor_nome) + extrato bancário (descricao, débitos sem entry_id).
     const fornRes = await dbExecute(db,
-      `SELECT NULLIF(TRIM(COALESCE(fornecedor_nome, comprovante_beneficiario)),'') AS nome,
-              COUNT(*)::int AS qtd,
-              COALESCE(SUM(ABS(COALESCE(valor_realizado,valor_previsto,0))),0) AS total
-         FROM financial_entries
-        WHERE company_id=$1 AND tipo='despesa'
-          AND EXTRACT(YEAR FROM COALESCE(data_competencia,data_vencimento,created_at::date))=$2
-          AND NULLIF(TRIM(COALESCE(fornecedor_nome, comprovante_beneficiario)),'') IS NOT NULL
+      `SELECT nome, COUNT(*)::int AS qtd, COALESCE(SUM(total),0) AS total
+         FROM (
+           SELECT NULLIF(TRIM(COALESCE(fornecedor_nome, comprovante_beneficiario)),'') AS nome,
+                  ABS(COALESCE(valor_realizado,valor_previsto,0)) AS total
+             FROM financial_entries
+            WHERE company_id=$1 AND tipo='despesa'
+              AND EXTRACT(YEAR FROM COALESCE(data_competencia,data_vencimento,created_at::date))=$2
+              AND NULLIF(TRIM(COALESCE(fornecedor_nome, comprovante_beneficiario)),'') IS NOT NULL
+           UNION ALL
+           SELECT NULLIF(TRIM(descricao),'') AS nome,
+                  ABS(valor::numeric) AS total
+             FROM bank_statement_lines
+            WHERE company_id=$1 AND excluido_em IS NULL
+              AND EXTRACT(YEAR FROM data)=$2
+              AND valor < 0
+              AND entry_id IS NULL
+              AND NULLIF(TRIM(descricao),'') IS NOT NULL
+         ) sub
+        WHERE nome IS NOT NULL
         GROUP BY 1 ORDER BY 3 DESC LIMIT 20`,
       [cid, yr]);
 
     // 2. Top categorias – despesas.
-    // Rev. 3628 — JOIN em financial_accounts p/ recuperar nome quando conta_nome desnormalizado está nulo.
+    // Rev. 3714 — UNION: ERP entries (conta_nome) + extrato bancário (descricao, débitos sem entry_id).
     const catDespRes = await dbExecute(db,
-      `SELECT NULLIF(TRIM(COALESCE(fe.conta_nome, fa.nome)),'') AS nome,
-              COUNT(*)::int AS qtd,
-              COALESCE(SUM(ABS(COALESCE(fe.valor_realizado,fe.valor_previsto,0))),0) AS total
-         FROM financial_entries fe
-         LEFT JOIN financial_accounts fa ON fa.id = fe.conta_id
-        WHERE fe.company_id=$1 AND fe.tipo='despesa'
-          AND EXTRACT(YEAR FROM COALESCE(fe.data_competencia,fe.data_vencimento,fe.created_at::date))=$2
-          AND NULLIF(TRIM(COALESCE(fe.conta_nome, fa.nome)),'') IS NOT NULL
+      `SELECT nome, COUNT(*)::int AS qtd, COALESCE(SUM(total),0) AS total
+         FROM (
+           SELECT NULLIF(TRIM(COALESCE(fe.conta_nome, fa.nome)),'') AS nome,
+                  ABS(COALESCE(fe.valor_realizado,fe.valor_previsto,0)) AS total
+             FROM financial_entries fe
+             LEFT JOIN financial_accounts fa ON fa.id = fe.conta_id
+            WHERE fe.company_id=$1 AND fe.tipo='despesa'
+              AND EXTRACT(YEAR FROM COALESCE(fe.data_competencia,fe.data_vencimento,fe.created_at::date))=$2
+              AND NULLIF(TRIM(COALESCE(fe.conta_nome, fa.nome)),'') IS NOT NULL
+           UNION ALL
+           SELECT NULLIF(TRIM(descricao),'') AS nome,
+                  ABS(valor::numeric) AS total
+             FROM bank_statement_lines
+            WHERE company_id=$1 AND excluido_em IS NULL
+              AND EXTRACT(YEAR FROM data)=$2
+              AND valor < 0
+              AND entry_id IS NULL
+              AND NULLIF(TRIM(descricao),'') IS NOT NULL
+         ) sub
+        WHERE nome IS NOT NULL
         GROUP BY 1 ORDER BY 3 DESC LIMIT 15`,
       [cid, yr]);
 
     // 3. Top categorias – receitas.
-    // Rev. 3628 — idem: JOIN financial_accounts p/ fallback de nome.
+    // Rev. 3714 — UNION: ERP entries (conta_nome) + extrato bancário (descricao, créditos sem entry_id).
     const catRecRes = await dbExecute(db,
-      `SELECT NULLIF(TRIM(COALESCE(fe.conta_nome, fa.nome)),'') AS nome,
-              COUNT(*)::int AS qtd,
-              COALESCE(SUM(ABS(COALESCE(fe.valor_realizado,fe.valor_previsto,0))),0) AS total
-         FROM financial_entries fe
-         LEFT JOIN financial_accounts fa ON fa.id = fe.conta_id
-        WHERE fe.company_id=$1 AND fe.tipo='receita'
-          AND EXTRACT(YEAR FROM COALESCE(fe.data_competencia,fe.data_vencimento,fe.created_at::date))=$2
-          AND NULLIF(TRIM(COALESCE(fe.conta_nome, fa.nome)),'') IS NOT NULL
+      `SELECT nome, COUNT(*)::int AS qtd, COALESCE(SUM(total),0) AS total
+         FROM (
+           SELECT NULLIF(TRIM(COALESCE(fe.conta_nome, fa.nome)),'') AS nome,
+                  ABS(COALESCE(fe.valor_realizado,fe.valor_previsto,0)) AS total
+             FROM financial_entries fe
+             LEFT JOIN financial_accounts fa ON fa.id = fe.conta_id
+            WHERE fe.company_id=$1 AND fe.tipo='receita'
+              AND EXTRACT(YEAR FROM COALESCE(fe.data_competencia,fe.data_vencimento,fe.created_at::date))=$2
+              AND NULLIF(TRIM(COALESCE(fe.conta_nome, fa.nome)),'') IS NOT NULL
+           UNION ALL
+           SELECT NULLIF(TRIM(descricao),'') AS nome,
+                  ABS(valor::numeric) AS total
+             FROM bank_statement_lines
+            WHERE company_id=$1 AND excluido_em IS NULL
+              AND EXTRACT(YEAR FROM data)=$2
+              AND valor > 0
+              AND entry_id IS NULL
+              AND NULLIF(TRIM(descricao),'') IS NOT NULL
+         ) sub
+        WHERE nome IS NOT NULL
         GROUP BY 1 ORDER BY 3 DESC LIMIT 15`,
       [cid, yr]);
 
