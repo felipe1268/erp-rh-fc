@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3709 — **SEFAZ NF-e · BACKOFF PROGRESSIVO PARA cStat=656 CONSECUTIVOS (1h→2h→4h). BACKEND PONTUAL + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Causa-raiz: Após o duplo disparo de 24/06 (pré-Rev.3707), o SEFAZ bloqueou o CNPJ.
+ * O sistema continuava tentando a cada 1h e cada tentativa retornava 656 — comportamento
+ * que pode prolongar indefinidamente o bloqueio do SEFAZ (o servidor interpreta tentativas
+ * frequentes como "consumo indevido" e mantém o bloqueio ativo).
+ *
+ * Fix backend (`server/routers/sefaz.ts`):
+ *   1. `consecutiveRlCount` declarado em `executarSyncNFe`, populado a partir de
+ *      `last_sync_result.rateLimitConsecutive` antes do gate atômico.
+ *   2. Multiplicador de backoff: 1× (1 RL), 2× (2–3 RL), 4× (4+ RL).
+ *      O cooldown efetivo é `intervalo × multiplier`, tanto no check rápido por CNPJ
+ *      quanto no gate atômico UPDATE…RETURNING.
+ *   3. `resultPayload` agora inclui `rateLimitConsecutive: novoConsecutiveRl` em caso
+ *      de 656, ou `rateLimitConsecutive: 0` em caso de sucesso (reset automático).
+ *   4. Mensagem de aviso atualizada: inclui contagem e tempo previsto
+ *      (ex: "Próxima tentativa em ~4h (backoff 4×, tentativa 5).").
+ *
+ * Fix frontend (`client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`):
+ *   1. Cronômetro regressivo: lê `rateLimitConsecutive` de `last_sync_result` e
+ *      aplica o mesmo multiplicador — exibe tempo correto (ex: 3h20m em vez de 58min).
+ *   2. `gateTotal` (total do anel de progresso) também multiplicado pelo backoff.
+ *   3. Banner: quando `_consec >= 2`, exibe
+ *      "⚠️ SEFAZ bloqueou N× seguidas — backoff Mx (próxima tentativa em ~Xh)."
+ *
  * Rev. 3708 — **CONCILIAÇÃO BANCÁRIA · BUGFIX ITENS VOLTANDO COMO PENDENTES APÓS CONCILIAR — refetchReport() FALTANDO EM 7 MUTATIONS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Causa-raiz: A query `getConciliacaoReport` usa `staleTime: Infinity` (não refaz automaticamente —

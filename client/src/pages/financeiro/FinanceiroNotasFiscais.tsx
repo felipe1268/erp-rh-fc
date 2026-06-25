@@ -348,8 +348,11 @@ export default function FinanceiroNotasFiscais() {
     const calcSecs = () => {
       try {
         const intervaloHoras = Math.max(1, Number(sefazCfg.sync_intervalo_horas ?? 1));
-        const gateMs = (intervaloHoras * 60 - 2) * 60 * 1000;
         const result = JSON.parse(sefazCfg.last_sync_result || "{}");
+        // Backoff progressivo: mesmo cálculo do backend
+        const consecutiveRl = result?.rateLimitedAt ? Math.max(1, result?.rateLimitConsecutive ?? 1) : 0;
+        const rlMultiplier = consecutiveRl >= 4 ? 4 : consecutiveRl >= 2 ? 2 : 1;
+        const gateMs = (intervaloHoras * 60 - 2) * 60 * 1000 * rlMultiplier;
         const baseTs = result?.rateLimitedAt
           ? parseAsUTC(result.rateLimitedAt).getTime()
           : sefazCfg.last_sync_at
@@ -1084,7 +1087,10 @@ export default function FinanceiroNotasFiscais() {
               {sefazCfg && (() => {
                 const syncOn = Boolean(Number(sefazCfg.sync_enabled));
                 const intervaloH = Number(sefazCfg.sync_intervalo_horas ?? 1);
-                const gateTotal = (Math.max(1, intervaloH) * 60 - 2) * 60;
+                const _rlResult = (() => { try { return JSON.parse(sefazCfg.last_sync_result || "{}"); } catch { return {}; } })();
+                const _consec = _rlResult?.rateLimitedAt ? Math.max(1, _rlResult?.rateLimitConsecutive ?? 1) : 0;
+                const _rlMult = _consec >= 4 ? 4 : _consec >= 2 ? 2 : 1;
+                const gateTotal = (Math.max(1, intervaloH) * 60 - 2) * 60 * _rlMult;
                 return (
                   <div className={`rounded-xl border px-4 py-3 ${
                     !syncOn
@@ -1163,7 +1169,9 @@ export default function FinanceiroNotasFiscais() {
                             </p>
                             <p className={`text-xs mt-0.5 ${syncOn ? "text-amber-600" : "text-slate-500"}`}>
                               {syncOn
-                                ? `Limite SEFAZ: 1 chamada/${intervaloH}h por CNPJ.`
+                                ? _consec >= 2
+                                  ? `⚠️ SEFAZ bloqueou ${_consec}× seguidas — backoff ${_rlMult}× (próxima tentativa em ~${intervaloH * _rlMult}h).`
+                                  : `Limite SEFAZ: 1 chamada/${intervaloH}h por CNPJ.`
                                 : `Sync automático desligado. Configure em Configurações → Financeiro.`}
                               {nsuNum > 0 && <> · NSU: <strong>{nsuNum.toLocaleString("pt-BR")}</strong></>}
                             </p>

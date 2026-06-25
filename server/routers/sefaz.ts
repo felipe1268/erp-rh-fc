@@ -708,6 +708,7 @@ export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?:
   let rateLimited = false;
   let rateLimitedNsu: string | null = null; // NSU que a SEFAZ instrui usar na próxima chamada
   let syncLogId: number | null = null;
+  let consecutiveRlCount = 0; // quantos 656 consecutivos ANTES deste sync (lido do last_sync_result)
 
   // ── Gate atômico: checa intervalo E pré-salva last_sync_at em um único UPDATE ──
   // Substituiu a antiga sequência SELECT→UPDATE (race condition: dois disparos simultâneos
@@ -717,6 +718,12 @@ export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?:
   // Lógica: UPDATE só efetiva se o elapsed desde o último sync >= cooldown.
   // Se rowCount=0 → outro processo já reivindicou este slot → retorna aviso.
   // skipTimeGate=true é usado pelo backfill de XML (não tem cooldown próprio).
+  //
+  // Backoff progressivo para 656 consecutivos:
+  //   1 consecutivo  → cooldown normal (1h configurado)
+  //   2–3 consecutivos → 2× cooldown (2h)
+  //   4+ consecutivos  → 4× cooldown (4h máx)
+  // Evita que tentativas horárias mantenham o CNPJ bloqueado no SEFAZ.
   const intervaloHoras = Math.max(1, Number(cfg.sync_intervalo_horas ?? 1));
   const cooldownMin = intervaloHoras * 60 - 2; // 2 min de folga
 
@@ -739,39 +746,65 @@ export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?:
 
       if (ts?.last_sync_at) {
         const elapsedMs = Date.now() - new Date(ts.last_sync_at).getTime();
-        const cooldownMs = cooldownMin * 60 * 1000;
-        if (elapsedMs < cooldownMs) {
-          const restantMin = Math.ceil((cooldownMs - elapsedMs) / 60000);
+
+        // Lê contador de 656 consecutivos para backoff progressivo
+        let prevResult: any = {};
+        try { prevResult = JSON.parse(ts.last_sync_result || "{}"); } catch {}
+        consecutiveRlCount = prevResult?.rateLimitedAt ? Math.max(1, prevResult?.rateLimitConsecutive ?? 1) : 0;
+
+        // Multiplicador de backoff: 1× (1 RL), 2× (2–3 RL), 4× (4+ RL)
+        const rlMultiplier = consecutiveRlCount >= 4 ? 4 : consecutiveRlCount >= 2 ? 2 : 1;
+        const effectiveCooldownMs = cooldownMin * 60 * 1000 * rlMultiplier;
+
+        if (elapsedMs < effectiveCooldownMs) {
+          const restantMin = Math.ceil((effectiveCooldownMs - elapsedMs) / 60000);
           let aviso: string;
-          try {
-            const prevResult = JSON.parse(ts.last_sync_result || "{}");
-            aviso = prevResult?.rateLimitedAt
-              ? `Limite SEFAZ ativo — aguarde mais ${restantMin} min (cStat=656). O sistema sincronizará automaticamente.`
-              : `Intervalo configurado: ${intervaloHoras}h — próxima sync disponível em ${restantMin} min.`;
-          } catch { aviso = `Aguarde mais ${restantMin} min (intervalo: ${intervaloHoras}h).`; }
-          console.log(`[SefazSync] company=${companyId} CNPJ_GATE=${restantMin}min (intervalo=${intervaloHoras}h) — em cooldown`);
+          const rlDesc = consecutiveRlCount >= 2 ? ` (${consecutiveRlCount}× consecutivos → backoff ${rlMultiplier}×)` : "";
+          aviso = prevResult?.rateLimitedAt
+            ? `Limite SEFAZ ativo — aguarde mais ${restantMin} min (cStat=656${rlDesc}). O sistema sincronizará automaticamente.`
+            : `Intervalo configurado: ${intervaloHoras}h — próxima sync disponível em ${restantMin} min.`;
+          console.log(`[SefazSync] company=${companyId} CNPJ_GATE=${restantMin}min (backoff ${rlMultiplier}× / consec=${consecutiveRlCount}) — em cooldown`);
           return { importadas: 0, ignoradas: 0, aviso };
         }
-      }
 
-      // Gate atômico: tenta reservar o slot de sync para esta company_id.
-      // Condição: (last_sync_at IS NULL) OR (last_sync_at < NOW() - cooldown)
-      // Se outro processo já fez UPDATE no mesmo instante, rowCount=0 → abort.
-      const claimed = await db.$client.query(`
-        UPDATE company_nfe_config
-        SET last_sync_at = NOW()
-        WHERE company_id = $1
-          AND (
-            last_sync_at IS NULL
-            OR last_sync_at < NOW() - ($2 || ' minutes')::interval
-          )
-        RETURNING company_id
-      `, [companyId, String(cooldownMin)]) as any;
-      const claimedCount = (claimed?.rowCount ?? (claimed?.rows?.length ?? 0));
-      if (claimedCount === 0) {
-        // Outro processo (cron ou startup run) reivindicou o slot nos últimos milissegundos
-        console.log(`[SefazSync] company=${companyId} — slot já reivindicado por outro processo, abortando`);
-        return { importadas: 0, ignoradas: 0, aviso: `Sincronização já iniciada por outro processo.` };
+        // Cooldown vencido — calcular cooldownMin efetivo para o gate atômico
+        const effectiveCooldownMin = cooldownMin * rlMultiplier;
+
+        // Gate atômico: tenta reservar o slot de sync para esta company_id.
+        // Condição: (last_sync_at IS NULL) OR (last_sync_at < NOW() - cooldown)
+        // Se outro processo já fez UPDATE no mesmo instante, rowCount=0 → abort.
+        const claimed = await db.$client.query(`
+          UPDATE company_nfe_config
+          SET last_sync_at = NOW()
+          WHERE company_id = $1
+            AND (
+              last_sync_at IS NULL
+              OR last_sync_at < NOW() - ($2 || ' minutes')::interval
+            )
+          RETURNING company_id
+        `, [companyId, String(effectiveCooldownMin)]) as any;
+        const claimedCount = (claimed?.rowCount ?? (claimed?.rows?.length ?? 0));
+        if (claimedCount === 0) {
+          console.log(`[SefazSync] company=${companyId} — slot já reivindicado por outro processo, abortando`);
+          return { importadas: 0, ignoradas: 0, aviso: `Sincronização já iniciada por outro processo.` };
+        }
+      } else {
+        // Sem last_sync_at: primeiro sync — gate atômico com cooldown normal
+        const claimed = await db.$client.query(`
+          UPDATE company_nfe_config
+          SET last_sync_at = NOW()
+          WHERE company_id = $1
+            AND (
+              last_sync_at IS NULL
+              OR last_sync_at < NOW() - ($2 || ' minutes')::interval
+            )
+          RETURNING company_id
+        `, [companyId, String(cooldownMin)]) as any;
+        const claimedCount = (claimed?.rowCount ?? (claimed?.rows?.length ?? 0));
+        if (claimedCount === 0) {
+          console.log(`[SefazSync] company=${companyId} — slot já reivindicado por outro processo, abortando`);
+          return { importadas: 0, ignoradas: 0, aviso: `Sincronização já iniciada por outro processo.` };
+        }
       }
     } catch (e: any) {
       console.warn(`[SefazSync] company=${companyId} gate atômico falhou (não-fatal):`, e?.message);
@@ -917,12 +950,14 @@ export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?:
     // do mesmo NSU antigo (ex: 0) e SEFAZ retorna 656 de novo → loop eterno.
     // A condição anterior `importadas > 0` foi removida pois criava exatamente esse loop.
     const deveAvancarNsu = rateLimited && rateLimitedNsu !== null;
+    const novoConsecutiveRl = consecutiveRlCount + 1;
+    const rlMultiplierFinal = novoConsecutiveRl >= 4 ? 4 : novoConsecutiveRl >= 2 ? 2 : 1;
     const avisoRateLimit = rateLimited
-      ? `Limite SEFAZ (cStat=656). Aguarde pelo menos 1 hora antes de tentar novamente.${deveAvancarNsu ? ` NSU atualizado: ${rateLimitedNsu}.` : ""}`
+      ? `Limite SEFAZ (cStat=656). Próxima tentativa em ~${intervaloHoras * rlMultiplierFinal}h (backoff ${rlMultiplierFinal}×, tentativa ${novoConsecutiveRl}).`
       : undefined;
     const resultPayload = rateLimited
-      ? { importadas, ignoradas, paginas, aviso: avisoRateLimit, rateLimitedAt: new Date().toISOString(), nsuSalvo: deveAvancarNsu ? rateLimitedNsu : null }
-      : { importadas, ignoradas, paginas };
+      ? { importadas, ignoradas, paginas, aviso: avisoRateLimit, rateLimitedAt: new Date().toISOString(), rateLimitConsecutive: novoConsecutiveRl, nsuSalvo: deveAvancarNsu ? rateLimitedNsu : null }
+      : { importadas, ignoradas, paginas, rateLimitConsecutive: 0 };
     if (deveAvancarNsu) {
       // Progresso real antes do rate-limit — salvar checkpoint do NSU
       await db.execute(sql`
