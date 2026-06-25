@@ -952,16 +952,22 @@ export function startSefazCron() {
         console.log(`[SefazSync] company=${r.company_id} ativo=${r.ativo} sync=${r.sync_enabled} nsu=${r.ultimo_nsu} sync_at=${r.last_sync_at ? new Date(r.last_sync_at).toISOString().slice(11,19) : "null"}${lastResult} → ${reason}`);
       }
 
-      // Sincroniza TODA empresa com sync_enabled=1 que não foi sincronizada nos últimos 58 minutos.
+      // Sincroniza TODA empresa com sync_enabled=1 que não foi sincronizada nos últimos N minutos.
       // Gate por CNPJ: se múltiplas empresas compartilham o mesmo certificado/CNPJ, o SEFAZ
       // rate-limita por CNPJ (não por company_id). Garante 1 chamada/hora/CNPJ no SEFAZ.
+      // Gate de horário: quando last_sync_at IS NULL, aguarda o horário configurado (hora:minuto BRT).
       const rows = (await db.execute(sql`
         SELECT company_id, REGEXP_REPLACE(COALESCE(cnpj,''), '[^0-9]', '', 'g') AS cnpj_limpo
         FROM company_nfe_config
         WHERE ativo = 1 AND sync_enabled = 1
           AND (
-            last_sync_at IS NULL
-            OR last_sync_at < NOW() - (INTERVAL '1 minute' * (COALESCE(sync_intervalo_horas, 1) * 60 - 2))
+            (last_sync_at IS NULL AND
+             EXTRACT(HOUR   FROM NOW() AT TIME ZONE 'America/Sao_Paulo') * 60
+             + EXTRACT(MINUTE FROM NOW() AT TIME ZONE 'America/Sao_Paulo')
+             >= COALESCE(sync_hora, 6) * 60 + COALESCE(sync_minuto, 0))
+            OR
+            (last_sync_at IS NOT NULL AND
+             last_sync_at < NOW() - (INTERVAL '1 minute' * (COALESCE(sync_intervalo_horas, 1) * 60 - 8)))
           )
       `)) as any;
       const list = (rows?.rows ?? rows) as any[];
@@ -993,17 +999,16 @@ export function startSefazCron() {
     }
   };
 
-  // Dispara a cada 30 minutos (:00 e :30) — a gate de 58 min garante ≤1 chamada/hora/CNPJ.
-  // Isso elimina o problema de "janela perdida": se o servidor reiniciar às 15:40 e o último
-  // sync foi às 15:05 (55 min atrás), o disparo das 16:00 seria bloqueado pelo gate (55 < 58).
-  // Com disparo às :30, o check das 16:30 encontra 85 min decorridos → gate libera → sync roda.
+  // Dispara a cada 15 minutos (:00, :15, :30, :45) — a gate respeita o intervalo configurado.
+  // 15 min de granularidade permite que hora:minuto seja honrado com ±7 min de precisão.
   const scheduleNext = () => {
     const now = new Date();
     const next = new Date(now);
-    // Próxima marca de meia hora (:00 ou :30)
+    // Próxima marca de quarto de hora (:00, :15, :30 ou :45)
     const curMin = now.getMinutes();
-    if (curMin < 30) {
-      next.setMinutes(30, 0, 0);
+    const nextQuarter = Math.ceil((curMin + 1) / 15) * 15;
+    if (nextQuarter < 60) {
+      next.setMinutes(nextQuarter, 0, 0);
     } else {
       next.setMinutes(0, 0, 0);
       next.setHours(now.getHours() + 1);
@@ -1057,6 +1062,7 @@ export const sefazRouter = router({
       const rows = (await db.execute(sql`
         SELECT company_id, cnpj, uf, ambiente, sync_enabled, ativo,
                COALESCE(sync_hora, 6) AS sync_hora,
+               COALESCE(sync_minuto, 0) AS sync_minuto,
                COALESCE(sync_intervalo_horas, 1) AS sync_intervalo_horas,
                ultimo_nsu, last_sync_at, last_sync_result,
                CASE WHEN cert_pfx_base64 IS NOT NULL AND cert_pfx_base64 <> '' THEN true ELSE false END AS tem_certificado
@@ -1074,6 +1080,7 @@ export const sefazRouter = router({
       ambiente: z.enum(["producao", "homologacao"]).default("producao"),
       syncEnabled: z.boolean().default(true),
       syncHora: z.number().min(0).max(23).default(6),
+      syncMinuto: z.number().min(0).max(59).default(0),
       syncIntervaloHoras: z.number().min(1).max(24).default(1),
       certPfxBase64: z.string().optional(),
       certPassword: z.string().optional(),
@@ -1096,6 +1103,7 @@ export const sefazRouter = router({
             ambiente = ${input.ambiente},
             sync_enabled = ${input.syncEnabled ? 1 : 0},
             sync_hora = ${input.syncHora},
+            sync_minuto = ${input.syncMinuto},
             sync_intervalo_horas = ${input.syncIntervaloHoras},
             ativo = 1,
             ${input.certPfxBase64 ? sql`cert_pfx_base64 = ${input.certPfxBase64},` : sql``}
@@ -1106,11 +1114,11 @@ export const sefazRouter = router({
       } else {
         await db.execute(sql`
           INSERT INTO company_nfe_config
-            (company_id, cnpj, uf, ambiente, sync_enabled, sync_hora, sync_intervalo_horas, ativo,
+            (company_id, cnpj, uf, ambiente, sync_enabled, sync_hora, sync_minuto, sync_intervalo_horas, ativo,
              cert_pfx_base64, cert_password, ultimo_nsu, created_at, updated_at)
           VALUES
             (${input.companyId}, ${input.cnpj}, ${input.uf}, ${input.ambiente},
-             ${input.syncEnabled ? 1 : 0}, ${input.syncHora}, ${input.syncIntervaloHoras}, 1,
+             ${input.syncEnabled ? 1 : 0}, ${input.syncHora}, ${input.syncMinuto}, ${input.syncIntervaloHoras}, 1,
              ${input.certPfxBase64 || null}, ${input.certPassword || null},
              '000000000000000', NOW(), NOW())
         `);

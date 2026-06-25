@@ -4152,6 +4152,12 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3608: coluna sync_intervalo_horas garantida em company_nfe_config (padrão=1h).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3608 sync_intervalo_horas:`, e?.message || e); }
 
+        // Rev. 3690 — SEFAZ: minuto do horário de sincronização configurável (padrão=0).
+        try {
+          await db.execute(sql`ALTER TABLE company_nfe_config ADD COLUMN IF NOT EXISTS sync_minuto SMALLINT NOT NULL DEFAULT 0`);
+          console.log(`[SyncSchema+] Rev. 3690: coluna sync_minuto garantida em company_nfe_config (padrão=0).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3690 sync_minuto:`, e?.message || e); }
+
         // Rev. 3624 — Log de auditoria das sincronizações SEFAZ (nfe_sync_log).
         // Registra cada execução com timestamps BRT, NSU inicial/final, importadas, ignoradas, cStat.
         try {

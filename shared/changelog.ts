@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3690 — **SEFAZ NF-e · HORÁRIO HH:MM CONFIGURÁVEL + CRON A CADA 15 MIN. BACKEND ADITIVO + SCHEMA + FRONTEND · ZERO DROP/DELETE.**
+ *
+ * Nova coluna `sync_minuto SMALLINT NOT NULL DEFAULT 0` em `company_nfe_config` via SyncSchema+ Rev.3690.
+ * Backend: `getConfig` retorna `sync_minuto`; `saveConfig` aceita `syncMinuto` (z.number 0-59) e persiste.
+ * Cron: `scheduleNext()` passa de 30 min (:00/:30) para 15 min (:00/:15/:30/:45) → precisão ±7 min no horário.
+ * Gate de elegibilidade reescrito: `last_sync_at IS NULL` → aguarda horário BRT (`hora*60+minuto`); `IS NOT NULL`
+ * → elapsed >= `(intervalo*60 - 8)` min (antes: 2 min de folga; agora: 8 para compatibilidade com tick de 15 min).
+ * Frontend `FinanceiroConfigSection.tsx`: seção "Frequência + Horário" unificada em um card — dropdown de frequência
+ * mantido + dois inputs numéricos HH (0-23) e MM (0-59) com texto descritivo dinâmico (modo diário vs intervalo).
+ * Arquivos: `server/_core/index.ts`, `server/routers/sefaz.ts`, `client/src/pages/configuracoes/FinanceiroConfigSection.tsx`.
+ *
  * Rev. 3689 — **SEFAZ NF-e · BUGFIX RATE-LIMIT RECORRENTE — GATE POR CNPJ (MULTI-EMPRESA). BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Raiz: duas empresas configuradas com o mesmo CNPJ/certificado eram sincronizadas em sequência

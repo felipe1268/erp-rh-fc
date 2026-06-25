@@ -106,7 +106,7 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
   const UF_LIST = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
   // ── SEFAZ state ──
-  const [sefazForm, setSefazForm] = useState({ cnpj: "", uf: "SP", ambiente: "producao", syncEnabled: true, syncHora: 6, syncIntervaloHoras: 1 });
+  const [sefazForm, setSefazForm] = useState({ cnpj: "", uf: "SP", ambiente: "producao", syncEnabled: true, syncHora: 6, syncMinuto: 0, syncIntervaloHoras: 1 });
   const [sefazPassword, setSefazPassword] = useState("");
   const [sefazCertName, setSefazCertName] = useState<string | null>(null);
   const [sefazCertB64, setSefazCertB64] = useState<string | null>(null);
@@ -123,6 +123,7 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
         ambiente: sefazCfg.ambiente || "producao",
         syncEnabled: Number(sefazCfg.sync_enabled) === 1,
         syncHora: Number(sefazCfg.sync_hora ?? 6),
+        syncMinuto: Number(sefazCfg.sync_minuto ?? 0),
         syncIntervaloHoras: Number(sefazCfg.sync_intervalo_horas ?? 1),
       });
     }
@@ -167,6 +168,7 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
       ambiente: sefazForm.ambiente as any,
       syncEnabled: sefazForm.syncEnabled,
       syncHora: sefazForm.syncHora,
+      syncMinuto: sefazForm.syncMinuto,
       syncIntervaloHoras: sefazForm.syncIntervaloHoras,
       ...(sefazCertB64 ? { certPfxBase64: sefazCertB64 } : {}),
       ...(sefazPassword ? { certPassword: sefazPassword } : {}),
@@ -524,33 +526,66 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
               </div>
             </div>
 
-            {/* Intervalo de sincronização */}
-            <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
-              <div className="flex-1 min-w-0">
-                <span className="text-sm font-medium text-gray-800">Frequência de consulta à SEFAZ</span>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  A cada quantas horas o ERP consulta o servidor da SEFAZ.
-                  O mínimo é <strong>1 hora</strong> (limite da SEFAZ por CNPJ).
-                </p>
+            {/* Frequência + Horário de sincronização */}
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 space-y-3">
+              {/* Frequência */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm font-medium text-gray-800">Frequência de consulta à SEFAZ</span>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    A cada quantas horas. Mínimo <strong>1h</strong> (limite SEFAZ por CNPJ).
+                  </p>
+                </div>
+                <Select
+                  value={String(sefazForm.syncIntervaloHoras)}
+                  onValueChange={v => setSefazForm(f => ({ ...f, syncIntervaloHoras: Number(v) }))}
+                >
+                  <SelectTrigger className="w-32 text-sm shrink-0">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">A cada 1h</SelectItem>
+                    <SelectItem value="2">A cada 2h</SelectItem>
+                    <SelectItem value="3">A cada 3h</SelectItem>
+                    <SelectItem value="4">A cada 4h</SelectItem>
+                    <SelectItem value="6">A cada 6h</SelectItem>
+                    <SelectItem value="8">A cada 8h</SelectItem>
+                    <SelectItem value="12">A cada 12h</SelectItem>
+                    <SelectItem value="24">Uma vez por dia</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <Select
-                value={String(sefazForm.syncIntervaloHoras)}
-                onValueChange={v => setSefazForm(f => ({ ...f, syncIntervaloHoras: Number(v) }))}
-              >
-                <SelectTrigger className="w-28 text-sm shrink-0">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">A cada 1h</SelectItem>
-                  <SelectItem value="2">A cada 2h</SelectItem>
-                  <SelectItem value="3">A cada 3h</SelectItem>
-                  <SelectItem value="4">A cada 4h</SelectItem>
-                  <SelectItem value="6">A cada 6h</SelectItem>
-                  <SelectItem value="8">A cada 8h</SelectItem>
-                  <SelectItem value="12">A cada 12h</SelectItem>
-                  <SelectItem value="24">Uma vez por dia</SelectItem>
-                </SelectContent>
-              </Select>
+              {/* Horário (hora:minuto) */}
+              <div className="flex items-center gap-3 pt-1 border-t border-slate-200">
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm font-medium text-gray-800">Horário da primeira sincronização</span>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Define o horário de início. O cron verifica a cada 15 min — precisão de ±7 min.
+                    {sefazForm.syncIntervaloHoras === 24
+                      ? ` Sync diário às ${String(sefazForm.syncHora).padStart(2,"0")}:${String(sefazForm.syncMinuto).padStart(2,"0")}.`
+                      : ` Após o primeiro sync às ${String(sefazForm.syncHora).padStart(2,"0")}:${String(sefazForm.syncMinuto).padStart(2,"0")}, repete a cada ${sefazForm.syncIntervaloHoras}h.`}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <input
+                    type="number"
+                    min={0} max={23}
+                    className="w-14 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={sefazForm.syncHora}
+                    onChange={e => setSefazForm(f => ({ ...f, syncHora: Math.min(23, Math.max(0, Number(e.target.value) || 0)) }))}
+                  />
+                  <span className="text-slate-500 font-bold text-lg">:</span>
+                  <input
+                    type="number"
+                    min={0} max={59}
+                    step={1}
+                    className="w-14 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={sefazForm.syncMinuto}
+                    onChange={e => setSefazForm(f => ({ ...f, syncMinuto: Math.min(59, Math.max(0, Number(e.target.value) || 0)) }))}
+                  />
+                  <span className="text-xs text-slate-400 ml-1">BRT</span>
+                </div>
+              </div>
             </div>
 
             {/* Campos de configuração */}
