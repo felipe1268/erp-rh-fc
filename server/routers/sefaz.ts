@@ -1375,7 +1375,7 @@ export const sefazRouter = router({
       const soap = buildSoapEventoEnvelope(envEventoXml);
 
       console.log(`[SefazMDE] company=${input.companyId} chave=${chaveNFe.slice(0, 10)}… tpEvento=${tpEvento} tpAmb=${tpAmb} url=${url}`);
-      console.log(`[SefazMDE] envEvento (600 chars):`, envEventoXml.slice(0, 600));
+      console.log(`[SefazMDE] envEvento FULL (${envEventoXml.length} chars):`, envEventoXml);
       console.log(`[SefazMDE] soap body (400 chars):`, soap.slice(0, 400));
 
       // Envia para SEFAZ
