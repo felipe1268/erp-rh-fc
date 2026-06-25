@@ -678,8 +678,8 @@ export default function DashNotasFiscais() {
                           );
                         }} />
                         <Legend wrapperStyle={{ fontSize: 11, paddingTop: 6 }} />
-                        <Bar    yAxisId="val"    dataKey="Entradas (NFS-e)" fill={VIOLET} radius={[4,4,0,0]} maxBarSize={24} />
                         <Bar    yAxisId="val"    dataKey="Saídas (NF-e)"   fill={BLUE}   radius={[4,4,0,0]} maxBarSize={24} />
+                        <Bar    yAxisId="val"    dataKey="Entradas (NFS-e)" fill={VIOLET} radius={[4,4,0,0]} maxBarSize={24} />
                         <Area   yAxisId="desvio" dataKey="Desvio" fill="url(#gradDesvio)" stroke="#10b981" strokeWidth={2.5}
                           dot={{ r: 3, fill: "#10b981", strokeWidth: 0 }} activeDot={{ r: 5 }}
                           strokeDasharray={totalSai === 0 ? "5 3" : undefined} />
