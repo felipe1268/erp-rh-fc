@@ -389,6 +389,14 @@ function parseRetEnvEvento(respXml: string): { cStat: string; xMotivo: string; n
     const xMotivo = String(infRet?.xMotivo ?? retEnv?.xMotivo ?? "Resposta não reconhecida");
     const nProt   = String(infRet?.nProt   ?? "");
 
+    // Detecta SOAP Fault — retornado quando SEFAZ rejeita a requisição por schema/cert/etc.
+    const fault = envelope?.Body?.Fault ?? envelope?.Body?.["soap12:Fault"] ?? envelope?.Body?.["soap:Fault"];
+    if (fault) {
+      const reason = fault?.Reason?.Text ?? fault?.faultstring ?? fault?.Reason ?? "SOAP Fault";
+      console.warn("[SefazMDE] SOAP Fault detectado:", JSON.stringify(fault).slice(0, 400));
+      return { cStat: "FAULT", xMotivo: String(reason), nProt: "" };
+    }
+
     // Log diagnóstico quando o parse não encontra cStat (facilita depuração futura)
     if (!cStat) {
       console.warn("[SefazMDE] parseRetEnvEvento: cStat vazio. XML (500 chars):", respXml.slice(0, 500));
@@ -1300,6 +1308,7 @@ export const sefazRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
+      console.log(`[SefazMDE] manifestar recebido — id=${input.id} company=${input.companyId} status=${input.status}`);
 
       // "pendente" = reverter localmente, sem evento SEFAZ
       if (input.status === "pendente") {
