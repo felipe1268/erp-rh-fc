@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3716 — **PACOTE CONTADOR · REESTRUTURADO NO PADRÃO PRONUS — XLSX BANCÁRIO + ESPELHOS HTML NFS-e + CARTÃO + PASTAS CORRETAS. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * `downloadPacoteContador.ts` reescrito com estrutura de pastas exigida pela contabilidade:
+ * `Faturas_Emitidas/` (espelho HTML por NFS-e + lista CSV), `Servicos_Tomados/` (NFS-e tomadas +
+ * NF-e de compras), `Extratos_Bancarios/` (XLSX 1 aba/banco idêntico à Planilha Contador +
+ * CSV geral), `Extratos_Cartoes/` (lançamentos de cartão). Checklist atualizado com e-mail
+ * da Pronus. NFS-e separadas: emitidas × tomadas. XLSX bancário reutiliza mesma lógica do
+ * downloadContabilidadeXlsx (import XLSX inline). Pacote anual gera pasta por mês.
+ * Arquivo: `server/routers/downloadPacoteContador.ts`.
+ *
  * Rev. 3715 — **PLANILHA CONTADOR · EXPORT XLSX NO FORMATO DO CONTADOR (1 ABA/CONTA BANCÁRIA). BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Nova rota GET `/api/download/contabilidade-xlsx?companyId=&mes=&ano=` gera um arquivo xlsx
