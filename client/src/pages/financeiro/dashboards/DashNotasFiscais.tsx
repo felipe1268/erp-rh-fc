@@ -610,7 +610,95 @@ export default function DashNotasFiscais() {
           </div>
         </Card>
 
-        {/* ── Gráfico 1: Evolução mensal — ComposedChart ────────────────── */}
+        {/* ── Gráfico PRINCIPAL: Entradas × Saídas com Desvio ─────────────── */}
+        {(() => {
+          const fcData = composedDataMes.map(d => ({
+            mes: d.mes,
+            "Entradas (NFS-e)": d["NFS-e Emitidas"]  as number,
+            "Saídas (NF-e)":    d["NF-e Recebidas"]  as number,
+            Desvio: (d["NFS-e Emitidas"] as number) - (d["NF-e Recebidas"] as number),
+          }));
+          const totalEnt  = fcData.reduce((s, d) => s + d["Entradas (NFS-e)"], 0);
+          const totalSai  = fcData.reduce((s, d) => s + d["Saídas (NF-e)"], 0);
+          const desvioTotal = totalEnt - totalSai;
+          const hasSomeData = fcData.some(d => d["Entradas (NFS-e)"] > 0 || d["Saídas (NF-e)"] > 0);
+          return (
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+              {/* Header com saldo destacado */}
+              <div className="px-5 pt-5 pb-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-bold text-slate-800">Entradas × Saídas — Notas Fiscais</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">NFS-e Emitidas (receita) vs NF-e Recebidas (custo) · {periodoLabel}</p>
+                </div>
+                <div className="flex gap-6 shrink-0">
+                  <div className="text-right">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-violet-400">Entradas</p>
+                    <p className="text-lg font-black text-violet-700 tabular-nums">{formatBRL(totalEnt)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-blue-400">Saídas</p>
+                    <p className="text-lg font-black text-blue-700 tabular-nums">{formatBRL(totalSai)}</p>
+                  </div>
+                  <div className="text-right border-l border-slate-100 pl-6">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Desvio</p>
+                    <p className={`text-xl font-black tabular-nums ${desvioTotal >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                      {desvioTotal >= 0 ? "+" : ""}{formatBRL(desvioTotal)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="h-72 px-2 pb-4">
+                {!hasSomeData
+                  ? <div className="h-full flex items-center justify-center text-slate-400 text-sm">Sem notas fiscais no período.</div>
+                  : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={fcData} margin={{ top: 6, right: 56, bottom: 4, left: 8 }} barCategoryGap="22%">
+                        <defs>
+                          <linearGradient id="gradDesvio" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%"  stopColor="#10b981" stopOpacity={0.15} />
+                            <stop offset="95%" stopColor="#10b981" stopOpacity={0.01} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                        <XAxis dataKey="mes" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                        <YAxis yAxisId="val"    tickFormatter={formatBRLCompact} tick={{ fontSize: 10, fill: "#94a3b8" }} width={68} axisLine={false} tickLine={false} />
+                        <YAxis yAxisId="desvio" orientation="right" tickFormatter={formatBRLCompact} tick={{ fontSize: 10, fill: "#10b981" }} width={58} axisLine={false} tickLine={false} />
+                        <Tooltip content={({ active, payload, label }) => {
+                          if (!active || !payload?.length) return null;
+                          return (
+                            <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3 text-xs min-w-[180px]">
+                              <p className="font-bold text-slate-700 mb-2">{label}</p>
+                              {payload.map((p: any) => (
+                                <p key={p.dataKey} style={{ color: p.color ?? p.fill }} className="flex justify-between gap-4 mb-0.5">
+                                  <span>{p.name}:</span>
+                                  <span className="font-bold tabular-nums">{formatBRL(Number(p.value))}</span>
+                                </p>
+                              ))}
+                            </div>
+                          );
+                        }} />
+                        <Legend wrapperStyle={{ fontSize: 11, paddingTop: 6 }} />
+                        <Bar    yAxisId="val"    dataKey="Entradas (NFS-e)" fill={VIOLET} radius={[4,4,0,0]} maxBarSize={24} />
+                        <Bar    yAxisId="val"    dataKey="Saídas (NF-e)"   fill={BLUE}   radius={[4,4,0,0]} maxBarSize={24} />
+                        <Area   yAxisId="desvio" dataKey="Desvio" fill="url(#gradDesvio)" stroke="#10b981" strokeWidth={2.5}
+                          dot={{ r: 3, fill: "#10b981", strokeWidth: 0 }} activeDot={{ r: 5 }}
+                          strokeDasharray={totalSai === 0 ? "5 3" : undefined} />
+                        <ReferenceLine yAxisId="desvio" y={0} stroke="#d1fae5" strokeWidth={1.5} strokeDasharray="4 2" />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  )
+                }
+              </div>
+              {totalSai === 0 && (
+                <p className="text-[10px] text-center text-slate-400 pb-3">
+                  * NF-e Recebidas disponíveis a partir de 2026. Importe XMLs anteriores para completar o histórico.
+                </p>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* ── Gráfico 2: Evolução mensal — ComposedChart ────────────────── */}
         <ChartCard
           title="Evolução Fiscal Mensal"
           subtitle={`NF-e + NFS-e emitidas × movimentos bancários · ${ano}`}
@@ -648,78 +736,6 @@ export default function DashNotasFiscais() {
             )
           }
         </ChartCard>
-
-        {/* ── Gráfico 1b: Faturamento × Compras — NFS-e × NF-e por mês ─── */}
-        {(() => {
-          const fcData = composedDataMes.map(d => ({
-            mes: d.mes,
-            "NFS-e Emitidas":  d["NFS-e Emitidas"]  as number,
-            "NF-e Recebidas":  d["NF-e Recebidas"]  as number,
-            Saldo: (d["NFS-e Emitidas"] as number) - (d["NF-e Recebidas"] as number),
-          }));
-          const totalNfse  = fcData.reduce((s, d) => s + d["NFS-e Emitidas"], 0);
-          const totalNfe   = fcData.reduce((s, d) => s + d["NF-e Recebidas"], 0);
-          const saldoTotal = totalNfse - totalNfe;
-          const hasSomeData = fcData.some(d => d["NFS-e Emitidas"] > 0 || d["NF-e Recebidas"] > 0);
-          return (
-            <ChartCard
-              title="Entradas × Saídas — Notas por Mês"
-              subtitle={`NFS-e Emitidas (entradas/faturamento) vs NF-e Recebidas (saídas/compras) · ${periodoLabel}`}
-              height={300}
-            >
-              {!hasSomeData
-                ? <EmptyState message="Sem notas fiscais no período." />
-                : (
-                  <>
-                    {/* Totalizador rápido */}
-                    <div className="flex gap-4 mb-3 px-2 flex-wrap">
-                      <span className="text-xs text-slate-500">Entradas (NFS-e): <strong className="text-violet-600">{formatBRL(totalNfse)}</strong></span>
-                      <span className="text-xs text-slate-500">Saídas (NF-e): <strong className="text-blue-600">{formatBRL(totalNfe)}</strong></span>
-                      <span className={`text-xs font-bold ${saldoTotal >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                        Saldo: {saldoTotal >= 0 ? "+" : ""}{formatBRL(saldoTotal)}
-                      </span>
-                    </div>
-                    <ResponsiveContainer width="100%" height="85%">
-                      <ComposedChart data={fcData} margin={{ top: 6, right: 50, bottom: 4, left: 8 }} barCategoryGap="25%">
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                        <XAxis dataKey="mes" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                        <YAxis yAxisId="val" tickFormatter={formatBRLCompact} tick={{ fontSize: 10, fill: "#94a3b8" }} width={68} axisLine={false} tickLine={false} />
-                        <YAxis yAxisId="saldo" orientation="right" tickFormatter={formatBRLCompact}
-                          tick={{ fontSize: 10, fill: "#94a3b8" }} width={56} axisLine={false} tickLine={false} />
-                        <Tooltip content={({ active, payload, label }) => {
-                          if (!active || !payload?.length) return null;
-                          return (
-                            <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3 text-xs">
-                              <p className="font-bold text-slate-700 mb-1">{label}</p>
-                              {payload.map((p: any) => (
-                                <p key={p.dataKey} style={{ color: p.color }} className="flex justify-between gap-4">
-                                  <span>{p.name}:</span>
-                                  <span className="font-bold tabular-nums">{formatBRL(Number(p.value))}</span>
-                                </p>
-                              ))}
-                            </div>
-                          );
-                        }} />
-                        <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-                        <Bar yAxisId="val" dataKey="NFS-e Emitidas" name="Entradas (NFS-e)" fill={VIOLET} radius={[3,3,0,0]} maxBarSize={22} />
-                        <Bar yAxisId="val" dataKey="NF-e Recebidas" name="Saídas (NF-e)"   fill={BLUE}   radius={[3,3,0,0]} maxBarSize={22} />
-                        <Line yAxisId="saldo" dataKey="Saldo" stroke="#10b981" strokeWidth={2}
-                          dot={{ r: 3, fill: "#10b981" }} activeDot={{ r: 5 }}
-                          strokeDasharray={totalNfe === 0 ? "4 3" : undefined} />
-                        <ReferenceLine yAxisId="saldo" y={0} stroke="#e2e8f0" strokeWidth={1} />
-                      </ComposedChart>
-                    </ResponsiveContainer>
-                    {totalNfe === 0 && (
-                      <p className="text-[10px] text-center text-slate-400 -mt-1">
-                        * NF-e Recebidas disponíveis apenas a partir de 2026 (SEFAZ). Importar XMLs para incluir anos anteriores.
-                      </p>
-                    )}
-                  </>
-                )
-              }
-            </ChartCard>
-          );
-        })()}
 
         {/* ── Gráfico 2: Cobertura fiscal + Treemap fornecedores ────────── */}
         <div className="grid md:grid-cols-12 gap-4">
