@@ -483,7 +483,7 @@ export const fiscalNotesRouter = router({
         LIMIT 600
       `, [companyId, di, df]);
 
-      // 4. Ordens de Compra do período (com CNPJ do fornecedor)
+      // 4. Ordens de Compra do período (com CNPJ do fornecedor e número da NF se preenchido)
       // NOTA: as OCs do sistema ficam em `compras_ordens`, NÃO em `purchase_orders`
       const ocQ = await db.$client.query(`
         SELECT co.id,
@@ -492,6 +492,8 @@ export const fiscalNotesRouter = router({
                co.total                   AS valor_total,
                co.status,
                co.created_at,
+               co.data_entrega_real       AS data_entrega,
+               co.numero_nf               AS numero_nf_oc,
                COALESCE(o.nome, '')       AS obra_nome,
                COALESCE(co.tipo, 'compra') AS tipo,
                COALESCE(f.cnpj, '')       AS supplier_cnpj,
@@ -511,27 +513,57 @@ export const fiscalNotesRouter = router({
       const bankList: any[] = bankQ.rows;
       const ocList: any[]   = ocQ.rows;
 
-      // Cross: OC × NF-e por CNPJ + valor ±30%
+      // Cross: OC × NF-e — match em camadas, sem fallback genérico
+      // Camada 1: match direto pelo número da NF gravado na OC (definitivo)
+      // Camada 2: CNPJ + valor ±10% + data ±90 dias
+      // Regra: cada NF-e só pode ser vinculada a UMA OC (first-come-first-served por valor)
+
+      // Índices de NF-e
       const nfeByCnpj = new Map<string, any[]>();
+      const nfeByNumero = new Map<string, any>();
       for (const nfe of nfeList) {
         const cnpj = (nfe.emitente_cnpj ?? "").replace(/\D/g, "");
-        if (!cnpj) continue;
-        if (!nfeByCnpj.has(cnpj)) nfeByCnpj.set(cnpj, []);
-        nfeByCnpj.get(cnpj)!.push(nfe);
+        if (cnpj) {
+          if (!nfeByCnpj.has(cnpj)) nfeByCnpj.set(cnpj, []);
+          nfeByCnpj.get(cnpj)!.push(nfe);
+        }
+        const num = (nfe.numero_nf ?? "").toString().replace(/^0+/, "").trim();
+        if (num) nfeByNumero.set(num, nfe);
       }
 
       const ocsComNota: any[] = [];
       const ocsSemNota: any[] = [];
       const matchedNfeIds = new Set<number>();
+
       for (const oc of ocList) {
-        const cnpj = (oc.supplier_cnpj ?? "").replace(/\D/g, "");
-        const matches = cnpj ? (nfeByCnpj.get(cnpj) ?? []) : [];
-        const ocVal = parseFloat(oc.valor_total ?? "0");
-        const match = matches.find(nfe => {
-          const nfeVal = parseFloat(nfe.valor_bruto ?? "0");
-          if (ocVal <= 0 || nfeVal <= 0) return false;
-          return Math.abs(ocVal - nfeVal) / Math.max(ocVal, nfeVal) <= 0.30;
-        }) ?? (matches.length > 0 ? matches[0] : null);
+        let match: any = null;
+
+        // Camada 1: número da NF direto (campo preenchido ao receber a OC)
+        if (oc.numero_nf_oc) {
+          const numNorm = (oc.numero_nf_oc as string).replace(/^0+/, "").trim();
+          const candidate = nfeByNumero.get(numNorm);
+          if (candidate && !matchedNfeIds.has(candidate.id)) {
+            match = candidate;
+          }
+        }
+
+        // Camada 2: CNPJ + valor ±10% + janela de ±90 dias
+        if (!match) {
+          const cnpj = (oc.supplier_cnpj ?? "").replace(/\D/g, "");
+          const candidates = cnpj ? (nfeByCnpj.get(cnpj) ?? []) : [];
+          const ocVal = parseFloat(oc.valor_total ?? "0");
+          const ocRefDate = new Date(oc.data_entrega ?? oc.created_at).getTime();
+          match = candidates.find(nfe => {
+            if (matchedNfeIds.has(nfe.id)) return false;
+            const nfeVal = parseFloat(nfe.valor_bruto ?? "0");
+            if (ocVal <= 0 || nfeVal <= 0) return false;
+            const pct = Math.abs(ocVal - nfeVal) / Math.max(ocVal, nfeVal);
+            if (pct > 0.10) return false; // ±10% de tolerância
+            const nfeDate = new Date(nfe.data_emissao).getTime();
+            const diffDays = Math.abs(ocRefDate - nfeDate) / 86_400_000;
+            return diffDays <= 90;
+          }) ?? null;
+        }
 
         if (match) {
           matchedNfeIds.add(match.id);

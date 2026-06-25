@@ -1,6 +1,23 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3696 — **DASHBOARD NF-e · BUGFIX LÓGICA OC × NF-e — DEDUP + TOLERÂNCIA 10% + MATCH DIRETO POR NÚMERO NF. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * A lógica anterior tinha 3 falhas críticas: (1) `matchedNfeIds` só bloqueava a lista
+ * final `nfeSemOc`, mas NÃO o `find()` interno → mesma NF-e aparecia vinculada a várias
+ * OCs diferentes; (2) fallback `?? matches[0]` vinculava qualquer NF-e do mesmo CNPJ
+ * mesmo sem bater o valor (e.g. OC R$364,70 → NF-e R$513,90); (3) tolerância de 30% era
+ * muito larga, gerando falsos positivos.
+ * Nova estratégia em camadas, sem fallback genérico:
+ * Camada 1 — match direto por `co.numero_nf` = `fn.numero_nf` (definitivo, preenchido ao
+ *   receber a OC). Normaliza zeros à esquerda em ambos os lados.
+ * Camada 2 — CNPJ + valor ±10% + janela de ±90 dias a partir de `data_entrega_real`
+ *   (ou `created_at` como fallback). Checa `!matchedNfeIds.has(nfe.id)` DENTRO do find().
+ * Cada NF-e só pode ser vinculada a UMA OC (first-come-first-served, OCs ordenadas por
+ * data desc → OC mais nova tem prioridade).
+ * SELECT da OC ganhou `co.data_entrega_real` e `co.numero_nf` para suportar as camadas.
+ * Arquivo: `server/routers/fiscalNotes.ts`.
+ *
  * Rev. 3695 — **NFS-e EMITIDAS · LEGENDA DOS IMPOSTOS NO DIALOG "ESPELHO FIEL" — SUB-LABELS DESCRITIVOS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Cada linha da seção "Impostos e Valores" do dialog de detalhes da NFS-e recebeu uma
