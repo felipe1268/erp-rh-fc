@@ -50,9 +50,11 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3702** — **SEFAZ NF-e · BUGFIX CRONÔMETRO VERDE (iOS SAFARI new Date() → NaN NO rateLimitedAt). 100% FRONTEND · ZERO BACKEND/SCHEMA.** `new Date(result.rateLimitedAt)` retorna NaN no iOS Safari → gate zerava → anel mostrava "cota renovada" com 84 min restantes. Fix: `parseAsUTC(rateLimitedAt)` + guard `|| isNaN(baseTs)`. Arquivo: `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3703** — **SEFAZ NF-e · BUGFIX RATE LIMIT DUPLO POR HOT-RELOAD — PRÉ-SALVA last_sync_at ANTES DO CALL + STARTUP DELAY 30s→3min. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Restart durante sync longo não salvava last_sync_at → startup run da nova instância chamava SEFAZ no cooldown → Rate Limit duplo. Fix: pré-salva `last_sync_at=NOW()` ANTES do SOAP + startup delay 30s→3min. Arquivo: `server/routers/sefaz.ts`. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3701** — **SEFAZ NF-e · CRONÔMETRO "PRÓXIMA VERIFICAÇÃO" NO ANEL QUANDO COTA DISPONÍVEL. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Anel exibe "próx. MM:SS" verde quando cota renovada; texto mostra "Próxima verificação em MM:SS". Arquivo: `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3702** — **SEFAZ NF-e · BUGFIX CRONÔMETRO VERDE (iOS SAFARI new Date() → NaN NO rateLimitedAt). 100% FRONTEND · ZERO BACKEND/SCHEMA.** Fix: `parseAsUTC(rateLimitedAt)` + guard `isNaN`. Arquivo: `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3701** — **SEFAZ NF-e · CRONÔMETRO "PRÓXIMA VERIFICAÇÃO" NO ANEL QUANDO COTA DISPONÍVEL. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Anel exibe "próx. MM:SS" verde quando cota renovada. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3700** — **CONCILIAÇÃO · CAMPO DE BUSCA NA SEÇÃO "JÁ CONCILIADOS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Input de busca adicionado logo abaixo do header colapsável; filtra por descrição, fornecedor, data e valor. Arquivo: `FinanceiroConciliacao.tsx`. Detalhe: `shared/changelog.ts`.
 

@@ -1,6 +1,20 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3703 — **SEFAZ NF-e · BUGFIX RATE LIMIT DUPLO POR HOT-RELOAD — PRÉ-SALVA last_sync_at ANTES DO CALL + STARTUP DELAY 30s→3min. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Causa-raiz: quando o processo Node é encerrado no meio de um call SEFAZ (hot-reload /
+ * Replit restart durante sync longo de 58s), `last_sync_at` não é salvo. A nova instância
+ * dispara o "startup run" (30s) e vê `last_sync_at` stale → acha que o gate expirou →
+ * chama SEFAZ de novo → Rate Limit (cStat=656). Isso explica os pares 07:07:22/07:07:29
+ * e 16:10:54(OK)/16:12:06(Rate Limit) no log.
+ * Fix 1: `executarSyncNFe` faz `UPDATE last_sync_at = NOW()` ANTES do primeiro SOAP call
+ * (após o gate pass). Mesmo que o processo morra, o timestamp já está no banco → próxima
+ * instância vê gate recente → bloqueia corretamente.
+ * Fix 2: startup delay 30s → 3min — margem generosa para que o cron regular (:15 marks)
+ * resolva a elegiblidade antes que o startup run interfira.
+ * Arquivo: `server/routers/sefaz.ts`.
+ *
  * Rev. 3702 — **SEFAZ NF-e · BUGFIX CRONÔMETRO MOSTRA VERDE (COTA RENOVADA) QUANDO AINDA HÁ GATE ATIVO — iOS SAFARI new Date() RETORNA NaN PARA TIMESTAMP COM ESPAÇO. 100% FRONTEND · ZERO BACKEND/SCHEMA.**
  *
  * `calcSecs` usava `new Date(result.rateLimitedAt).getTime()` para o campo de rate-limit.

@@ -724,6 +724,18 @@ export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?:
     } catch { /* ignora erro de parse */ }
   }
 
+  // Pré-salvar last_sync_at ANTES do call SEFAZ:
+  // Se o processo for encerrado no meio da chamada (hot-reload/restart), o timestamp
+  // já estará gravado no banco, impedindo que o startup run da nova instância
+  // dispare uma segunda chamada dentro do cooldown (causa dos Rate Limits duplos).
+  try {
+    await db.execute(sql`
+      UPDATE company_nfe_config
+      SET last_sync_at = NOW()
+      WHERE company_id = ${companyId}
+    `);
+  } catch { /* não bloquear o sync por falha no pré-save */ }
+
   // Registrar início do sync no log de auditoria
   syncLogId = await insertSyncLog(db, companyId, ultNSUInicial);
 
@@ -1021,11 +1033,13 @@ export function startSefazCron() {
   };
   scheduleNext();
 
-  // Run inicial após 30s — garante que um restart não adie o sync por até 1h.
-  // A gate de 58 min decide se o sync realmente roda ou pula (sem chamar o SEFAZ a mais).
-  setTimeout(() => { runHour().catch(e => console.error("[SefazSync] Startup run erro:", e?.message)); }, 30_000);
+  // Run inicial após 3 min — delay generoso garante que o processo está estável antes de
+  // chamar o SEFAZ. O pré-save de last_sync_at (antes do call) já protege contra duplos
+  // disparos em restarts consecutivos, mas 3 min evita que um restart imediato pós-deploy
+  // dispute com o cron do próximo :15 mark (máx 15 min de espera pelo cron regular).
+  setTimeout(() => { runHour().catch(e => console.error("[SefazSync] Startup run erro:", e?.message)); }, 3 * 60_000);
 
-  console.log("[SefazSync] Cron a cada 30 min agendado — gate de 58 min garante ≤ 1 chamada/hora/CNPJ no SEFAZ.");
+  console.log("[SefazSync] Cron a cada 15 min agendado — gate de ~(intervalo-2)min garante ≤ 1 chamada/Xh/CNPJ no SEFAZ.");
 }
 
 // ── tRPC Router ────────────────────────────────────────────────────────────────
