@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3692 — **NFS-e EMITIDAS · STATUS "VALIDADA" + CONCILIADA AUTOMÁTICA AO VINCULAR EXTRATO. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * Novo status `validada` (violeta) inserido entre "Recebida" e "Conciliada" no fluxo de NFS-e emitidas.
+ * Backend: `z.enum` de `bulkUpdateStatus` expandido para 5 valores. `vincularExtrato` reescrito:
+ * `stmtLineId != null` → status="conciliada" diretamente (antes: só conciliava se entryId também presente).
+ * Frontend: STATUS_MAP + "Validada" violeta; `totais` agora inclui `validada/valorValidada`; KPI cards
+ * passam de 4 para 5 colunas (md:grid-cols-5) com novo card "Validadas"; filtro dropdown + grid do dialog
+ * de bulk status incluem "Validada" como 3ª opção. Fluxo resultante:
+ * Pendente → Recebida → Validada → [vincular extrato] → Conciliada (automático).
+ * Arquivos: `server/routers/fiscalNotes.ts`, `FinanceiroNotasFiscais.tsx`.
+ *
  * Rev. 3691 — **NFS-e EMITIDAS · BOTÃO "CONCILIAR MÊS" — MARCA TODAS AS NOTAS DO MÊS COMO CONCILIADA. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * Novo endpoint `fiscalNotes.conciliarMes({ companyId, ano, mes })`: UPDATE em lote em `fiscal_notes`

@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3692** — **NFS-e EMITIDAS · STATUS "VALIDADA" + CONCILIADA AUTOMÁTICA AO VINCULAR EXTRATO. BACKEND PONTUAL + FRONTEND · ZERO ALTER/DROP/DELETE.** Novo status `validada` (violeta) no fluxo: Pendente→Recebida→Validada→[vincula extrato]→Conciliada (auto). `vincularExtrato` com stmtLineId != null → sempre "conciliada". KPI cards: 4→5 (+ "Validadas"). Filtro + dialog bulk incluem "Validada". Arquivos: `server/routers/fiscalNotes.ts`, `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3691** — **NFS-e EMITIDAS · BOTÃO "CONCILIAR MÊS" — MARCA TODAS AS NOTAS DO MÊS COMO CONCILIADA. BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.** Novo endpoint `fiscalNotes.conciliarMes({ companyId, ano, mes })`: UPDATE em lote filtrando `data_emissao` no intervalo do mês, preservando canceladas. Botão verde "Conciliar Mês" na barra de filtros (visível só com mês selecionado); AlertDialog de confirmação com contagem e aviso. Mês vira ponto verde no calendário após conciliação. Arquivos: `server/routers/fiscalNotes.ts`, `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3690** — **SEFAZ NF-e · HORÁRIO HH:MM CONFIGURÁVEL + CRON A CADA 15 MIN. BACKEND ADITIVO + SCHEMA + FRONTEND · ZERO DROP/DELETE.** Nova coluna `sync_minuto` em `company_nfe_config` (SyncSchema+). `saveConfig`/`getConfig` atualizados. Cron: 30 min → 15 min. Gate: IS NULL aguarda horário BRT configurado; IS NOT NULL usa elapsed-(8 min buffer). UI: card único com dropdown de frequência + inputs HH:MM + texto descritivo dinâmico. Detalhe: `shared/changelog.ts`.

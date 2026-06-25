@@ -299,9 +299,9 @@ export const fiscalNotesRouter = router({
       const [cur] = await db.select({ entryId: fiscalNotes.entryId })
         .from(fiscalNotes)
         .where(and(eq(fiscalNotes.id, input.id), eq(fiscalNotes.companyId, input.companyId)));
-      const novoStatus = input.stmtLineId != null && cur?.entryId != null
+      // Vincular ao extrato → sempre conciliada; desvincular → recebida
+      const novoStatus = input.stmtLineId != null
         ? "conciliada"
-        : input.stmtLineId != null ? "recebida"
         : cur?.entryId != null ? "recebida" : "pendente";
       await db.update(fiscalNotes)
         .set({ stmtLineId: input.stmtLineId, status: novoStatus, updatedAt: now })
@@ -325,7 +325,7 @@ export const fiscalNotesRouter = router({
     .input(z.object({
       ids: z.array(z.number()).min(1).max(200),
       companyId: z.number(),
-      status: z.enum(["pendente","recebida","conciliada","cancelada"]),
+      status: z.enum(["pendente","recebida","validada","conciliada","cancelada"]),
     }))
     .mutation(async ({ input, ctx }) => {
       await _assertNfAccess(ctx.user, input.companyId);

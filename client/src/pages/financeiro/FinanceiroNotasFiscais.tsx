@@ -67,6 +67,7 @@ function isoToInput(s: string | null | undefined) {
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   pendente:      { label: "Pendente",      color: "bg-amber-100 text-amber-800 border-amber-200" },
   recebida:      { label: "Recebida",      color: "bg-blue-100 text-blue-800 border-blue-200" },
+  validada:      { label: "Validada",      color: "bg-violet-100 text-violet-800 border-violet-200" },
   conciliada:    { label: "Conciliada",    color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
   cancelada:     { label: "Cancelada",     color: "bg-red-100 text-red-700 border-red-200" },
   acatada:       { label: "✓ Acatada",     color: "bg-green-100 text-green-800 border-green-200" },
@@ -892,19 +893,22 @@ export default function FinanceiroNotasFiscais() {
   const isSaving = criarMut.isPending || atualizarMut.isPending;
 
   const totais = useMemo(() => {
-    const pendente = nfs.filter(n => n.status === "pendente");
-    const recebida = nfs.filter(n => n.status === "recebida");
+    const pendente  = nfs.filter(n => n.status === "pendente");
+    const recebida  = nfs.filter(n => n.status === "recebida");
+    const validada  = nfs.filter(n => n.status === "validada");
     const conciliada = nfs.filter(n => n.status === "conciliada");
     const somarLiq = (arr: NF[]) => arr.reduce((s, n) => s + parseFloat(String(n.valorLiquido || 0)), 0);
     return {
       total: nfs.length,
       pendente: pendente.length,
       recebida: recebida.length,
+      validada: validada.length,
       conciliada: conciliada.length,
-      valorPendente: somarLiq(pendente),
-      valorRecebida: somarLiq(recebida),
+      valorPendente:   somarLiq(pendente),
+      valorRecebida:   somarLiq(recebida),
+      valorValidada:   somarLiq(validada),
       valorConciliada: somarLiq(conciliada),
-      valorTotal: somarLiq(nfs),
+      valorTotal:      somarLiq(nfs),
     };
   }, [nfs]);
 
@@ -1635,12 +1639,13 @@ export default function FinanceiroNotasFiscais() {
 
 
         {/* KPI cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {[
-            { label: "Pendentes", count: totais.pendente, valor: totais.valorPendente, color: "amber" },
-            { label: "Recebidas", count: totais.recebida, valor: totais.valorRecebida, color: "blue" },
+            { label: "Pendentes",   count: totais.pendente,   valor: totais.valorPendente,   color: "amber" },
+            { label: "Recebidas",   count: totais.recebida,   valor: totais.valorRecebida,   color: "blue" },
+            { label: "Validadas",   count: totais.validada,   valor: totais.valorValidada,   color: "violet" },
             { label: "Conciliadas", count: totais.conciliada, valor: totais.valorConciliada, color: "emerald" },
-            { label: "Total NFs", count: totais.total, valor: totais.valorTotal, color: "slate" },
+            { label: "Total NFs",   count: totais.total,      valor: totais.valorTotal,      color: "slate" },
           ].map(k => (
             <Card key={k.label} className="border-0 shadow-sm">
               <CardContent className="p-3">
@@ -1728,6 +1733,7 @@ export default function FinanceiroNotasFiscais() {
               <SelectItem value="todos">Todos</SelectItem>
               <SelectItem value="pendente">Pendente</SelectItem>
               <SelectItem value="recebida">Recebida</SelectItem>
+              <SelectItem value="validada">Validada</SelectItem>
               <SelectItem value="conciliada">Conciliada</SelectItem>
               <SelectItem value="cancelada">Cancelada</SelectItem>
             </SelectContent>
@@ -2971,7 +2977,7 @@ export default function FinanceiroNotasFiscais() {
               </AlertDialogDescription>
             </AlertDialogHeader>
             <div className="px-1 py-2 grid grid-cols-2 gap-2">
-              {(["pendente","recebida","conciliada","cancelada"] as const).map(s => {
+              {(["pendente","recebida","validada","conciliada","cancelada"] as const).map(s => {
                 const info = STATUS_MAP[s];
                 return (
                   <button
