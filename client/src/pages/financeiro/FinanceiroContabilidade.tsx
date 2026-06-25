@@ -169,48 +169,48 @@ function PainelMes({
                 {!docs?.nfseEmitidas.length ? (
                   <p className="text-center text-slate-400 text-sm py-10">Nenhuma NFS-e emitida neste mês.</p>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-slate-100 bg-slate-50 text-slate-500">
-                          <th className="text-left px-4 py-2 font-medium">Nº Nota</th>
-                          <th className="text-left px-4 py-2 font-medium">Tomador</th>
-                          <th className="text-left px-4 py-2 font-medium">Data</th>
-                          <th className="text-right px-4 py-2 font-medium">Bruto</th>
-                          <th className="text-right px-4 py-2 font-medium">Líquido</th>
-                          <th className="text-right px-4 py-2 font-medium">ISS</th>
-                          <th className="text-center px-4 py-2 font-medium">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {docs.nfseEmitidas.map((n: any, i: number) => (
-                          <tr key={i} className="border-b border-slate-50 hover:bg-slate-50">
-                            <td className="px-4 py-2 font-medium text-indigo-700">{n.numero_nf || "—"}</td>
-                            <td className="px-4 py-2 text-slate-700 max-w-[180px] truncate" title={n.tomador_razao_social}>{n.tomador_razao_social || "—"}</td>
-                            <td className="px-4 py-2 text-slate-500">{fmtDate(n.data_emissao)}</td>
-                            <td className="px-4 py-2 text-right text-slate-700">{fmtBRL(n.valor_bruto)}</td>
-                            <td className="px-4 py-2 text-right text-green-700 font-medium">{fmtBRL(n.valor_liquido)}</td>
-                            <td className="px-4 py-2 text-right text-slate-500">{fmtBRL(n.iss_retido)}</td>
-                            <td className="px-4 py-2 text-center">
-                              <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-medium",
-                                n.status === "conciliada" ? "bg-green-100 text-green-700" :
-                                n.status === "enviada"    ? "bg-blue-100 text-blue-700" :
-                                "bg-amber-50 text-amber-700"
-                              )}>{n.status}</span>
-                            </td>
+                  <>
+                    <div className="flex items-center gap-6 px-4 py-2 bg-violet-50 border-b border-violet-100 text-xs">
+                      <span className="font-semibold text-slate-600">{docs.nfseEmitidas.length} notas</span>
+                      <span className="text-slate-500">Bruto: <strong className="text-slate-700">{fmtBRL(docs.nfseEmitidas.reduce((s: number, n: any) => s + (n.valor_bruto ?? 0), 0))}</strong></span>
+                      <span className="text-slate-500">Líquido: <strong className="text-green-700">{fmtBRL(docs.nfseEmitidas.reduce((s: number, n: any) => s + (n.valor_liquido ?? 0), 0))}</strong></span>
+                      <span className="text-slate-500">ISS: <strong className="text-slate-600">{fmtBRL(docs.nfseEmitidas.reduce((s: number, n: any) => s + (n.iss_retido ?? 0), 0))}</strong></span>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-slate-100 bg-slate-50 text-slate-500">
+                            <th className="text-left px-4 py-2 font-medium">Nº Nota</th>
+                            <th className="text-left px-4 py-2 font-medium">Tomador</th>
+                            <th className="text-left px-4 py-2 font-medium">Data</th>
+                            <th className="text-right px-4 py-2 font-medium">Bruto</th>
+                            <th className="text-right px-4 py-2 font-medium">Líquido</th>
+                            <th className="text-right px-4 py-2 font-medium">ISS</th>
+                            <th className="text-center px-4 py-2 font-medium">Status</th>
                           </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr className="bg-slate-50 border-t border-slate-200">
-                          <td colSpan={3} className="px-4 py-2 font-semibold text-slate-600">Total ({docs.nfseEmitidas.length})</td>
-                          <td className="px-4 py-2 text-right font-semibold text-slate-700">{fmtBRL(docs.nfseEmitidas.reduce((s: number, n: any) => s + (n.valor_bruto ?? 0), 0))}</td>
-                          <td className="px-4 py-2 text-right font-semibold text-green-700">{fmtBRL(docs.nfseEmitidas.reduce((s: number, n: any) => s + (n.valor_liquido ?? 0), 0))}</td>
-                          <td colSpan={2} />
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {docs.nfseEmitidas.map((n: any, i: number) => (
+                            <tr key={i} className="border-b border-slate-50 hover:bg-slate-50">
+                              <td className="px-4 py-2 font-medium text-indigo-700">{n.numero_nf || "—"}</td>
+                              <td className="px-4 py-2 text-slate-700 max-w-[180px] truncate" title={n.tomador_razao_social}>{n.tomador_razao_social || "—"}</td>
+                              <td className="px-4 py-2 text-slate-500">{fmtDate(n.data_emissao)}</td>
+                              <td className="px-4 py-2 text-right text-slate-700">{fmtBRL(n.valor_bruto)}</td>
+                              <td className="px-4 py-2 text-right text-green-700 font-medium">{fmtBRL(n.valor_liquido)}</td>
+                              <td className="px-4 py-2 text-right text-slate-500">{fmtBRL(n.iss_retido)}</td>
+                              <td className="px-4 py-2 text-center">
+                                <span className={cn("px-1.5 py-0.5 rounded text-[10px] font-medium",
+                                  n.status === "conciliada" ? "bg-green-100 text-green-700" :
+                                  n.status === "enviada"    ? "bg-blue-100 text-blue-700" :
+                                  "bg-amber-50 text-amber-700"
+                                )}>{n.status}</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
                 )}
               </div>
             )}
@@ -221,41 +221,40 @@ function PainelMes({
                 {!docs?.nfeRecebidas.length ? (
                   <p className="text-center text-slate-400 text-sm py-10">Nenhuma NF-e recebida neste mês.</p>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-slate-100 bg-slate-50 text-slate-500">
-                          <th className="text-left px-4 py-2 font-medium">Nº Nota</th>
-                          <th className="text-left px-4 py-2 font-medium">Emitente</th>
-                          <th className="text-left px-4 py-2 font-medium">CNPJ</th>
-                          <th className="text-left px-4 py-2 font-medium">Data</th>
-                          <th className="text-right px-4 py-2 font-medium">Valor</th>
-                          <th className="text-center px-4 py-2 font-medium">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {docs.nfeRecebidas.map((n: any, i: number) => (
-                          <tr key={i} className="border-b border-slate-50 hover:bg-slate-50">
-                            <td className="px-4 py-2 font-medium text-blue-700">{n.numero_nf || "—"}</td>
-                            <td className="px-4 py-2 text-slate-700 max-w-[160px] truncate" title={n.emitente_nome}>{n.emitente_nome || "—"}</td>
-                            <td className="px-4 py-2 text-slate-500 font-mono">{n.emitente_cnpj || "—"}</td>
-                            <td className="px-4 py-2 text-slate-500">{fmtDate(n.data_emissao)}</td>
-                            <td className="px-4 py-2 text-right font-medium text-slate-700">{fmtBRL(n.valor_bruto)}</td>
-                            <td className="px-4 py-2 text-center">
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700">{n.status}</span>
-                            </td>
+                  <>
+                    <div className="flex items-center gap-6 px-4 py-2 bg-blue-50 border-b border-blue-100 text-xs">
+                      <span className="font-semibold text-slate-600">{docs.nfeRecebidas.length} notas</span>
+                      <span className="text-slate-500">Total: <strong className="text-blue-700">{fmtBRL(docs.nfeRecebidas.reduce((s: number, n: any) => s + (n.valor_bruto ?? 0), 0))}</strong></span>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-slate-100 bg-slate-50 text-slate-500">
+                            <th className="text-left px-4 py-2 font-medium">Nº Nota</th>
+                            <th className="text-left px-4 py-2 font-medium">Emitente</th>
+                            <th className="text-left px-4 py-2 font-medium">CNPJ</th>
+                            <th className="text-left px-4 py-2 font-medium">Data</th>
+                            <th className="text-right px-4 py-2 font-medium">Valor</th>
+                            <th className="text-center px-4 py-2 font-medium">Status</th>
                           </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr className="bg-slate-50 border-t border-slate-200">
-                          <td colSpan={4} className="px-4 py-2 font-semibold text-slate-600">Total ({docs.nfeRecebidas.length})</td>
-                          <td className="px-4 py-2 text-right font-semibold text-blue-700">{fmtBRL(docs.nfeRecebidas.reduce((s: number, n: any) => s + (n.valor_bruto ?? 0), 0))}</td>
-                          <td />
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {docs.nfeRecebidas.map((n: any, i: number) => (
+                            <tr key={i} className="border-b border-slate-50 hover:bg-slate-50">
+                              <td className="px-4 py-2 font-medium text-blue-700">{n.numero_nf || "—"}</td>
+                              <td className="px-4 py-2 text-slate-700 max-w-[160px] truncate" title={n.emitente_nome}>{n.emitente_nome || "—"}</td>
+                              <td className="px-4 py-2 text-slate-500 font-mono">{n.emitente_cnpj || "—"}</td>
+                              <td className="px-4 py-2 text-slate-500">{fmtDate(n.data_emissao)}</td>
+                              <td className="px-4 py-2 text-right font-medium text-slate-700">{fmtBRL(n.valor_bruto)}</td>
+                              <td className="px-4 py-2 text-center">
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700">{n.status}</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
                 )}
               </div>
             )}
@@ -267,11 +266,14 @@ function PainelMes({
                   <p className="text-center text-slate-400 text-sm py-10">Nenhum extrato bancário importado neste mês.</p>
                 ) : (
                   <>
-                    {cont.extratos > 300 && (
-                      <div className="px-4 pt-3 text-xs text-amber-700 bg-amber-50 border-b border-amber-100 py-2">
-                        ⚠ Mostrando as primeiras 300 de {cont.extratos} linhas. O download ZIP inclui todas.
-                      </div>
-                    )}
+                    <div className="flex items-center gap-6 px-4 py-2 bg-green-50 border-b border-green-100 text-xs flex-wrap">
+                      <span className="font-semibold text-slate-600">
+                        {docs.extrato.length} linhas{cont.extratos > 300 ? ` (de ${cont.extratos} — ZIP inclui todas)` : ""}
+                      </span>
+                      <span className="text-slate-500">Saldo: <strong className={docs.extrato.reduce((s: number, e: any) => s + (e.valor ?? 0), 0) >= 0 ? "text-green-700" : "text-red-700"}>{fmtBRL(docs.extrato.reduce((s: number, e: any) => s + (e.valor ?? 0), 0))}</strong></span>
+                      <span className="text-slate-500">Entradas: <strong className="text-green-700">{fmtBRL(docs.extrato.filter((e: any) => e.valor > 0).reduce((s: number, e: any) => s + e.valor, 0))}</strong></span>
+                      <span className="text-slate-500">Saídas: <strong className="text-red-700">{fmtBRL(Math.abs(docs.extrato.filter((e: any) => e.valor < 0).reduce((s: number, e: any) => s + e.valor, 0)))}</strong></span>
+                    </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
@@ -300,17 +302,6 @@ function PainelMes({
                             </tr>
                           ))}
                         </tbody>
-                        <tfoot>
-                          <tr className="bg-slate-50 border-t border-slate-200">
-                            <td colSpan={3} className="px-4 py-2 font-semibold text-slate-600">
-                              {docs.extrato.length} linhas {cont.extratos > 300 ? `(de ${cont.extratos})` : ""}
-                            </td>
-                            <td className="px-4 py-2 text-right font-semibold text-slate-700">
-                              {fmtBRL(docs.extrato.reduce((s: number, e: any) => s + (e.valor ?? 0), 0))}
-                            </td>
-                            <td />
-                          </tr>
-                        </tfoot>
                       </table>
                     </div>
                   </>
@@ -324,41 +315,40 @@ function PainelMes({
                 {!docs?.ocs.length ? (
                   <p className="text-center text-slate-400 text-sm py-10">Nenhuma ordem de compra neste mês.</p>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-slate-100 bg-slate-50 text-slate-500">
-                          <th className="text-left px-4 py-2 font-medium">Nº OC</th>
-                          <th className="text-left px-4 py-2 font-medium">Fornecedor</th>
-                          <th className="text-left px-4 py-2 font-medium">Obra</th>
-                          <th className="text-left px-4 py-2 font-medium">Data</th>
-                          <th className="text-right px-4 py-2 font-medium">Total</th>
-                          <th className="text-center px-4 py-2 font-medium">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {docs.ocs.map((o: any, i: number) => (
-                          <tr key={i} className="border-b border-slate-50 hover:bg-slate-50">
-                            <td className="px-4 py-2 font-medium text-orange-700">{o.numero || "—"}</td>
-                            <td className="px-4 py-2 text-slate-700 max-w-[160px] truncate" title={o.fornecedor}>{o.fornecedor || "—"}</td>
-                            <td className="px-4 py-2 text-slate-500 max-w-[120px] truncate" title={o.obra_nome}>{o.obra_nome || "—"}</td>
-                            <td className="px-4 py-2 text-slate-500">{fmtDate(o.created_at)}</td>
-                            <td className="px-4 py-2 text-right font-medium text-slate-700">{fmtBRL(o.valor_total)}</td>
-                            <td className="px-4 py-2 text-center">
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-50 text-orange-700">{o.status}</span>
-                            </td>
+                  <>
+                    <div className="flex items-center gap-6 px-4 py-2 bg-orange-50 border-b border-orange-100 text-xs">
+                      <span className="font-semibold text-slate-600">{docs.ocs.length} ordens</span>
+                      <span className="text-slate-500">Total: <strong className="text-orange-700">{fmtBRL(docs.ocs.reduce((s: number, o: any) => s + (o.valor_total ?? 0), 0))}</strong></span>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-slate-100 bg-slate-50 text-slate-500">
+                            <th className="text-left px-4 py-2 font-medium">Nº OC</th>
+                            <th className="text-left px-4 py-2 font-medium">Fornecedor</th>
+                            <th className="text-left px-4 py-2 font-medium">Obra</th>
+                            <th className="text-left px-4 py-2 font-medium">Data</th>
+                            <th className="text-right px-4 py-2 font-medium">Total</th>
+                            <th className="text-center px-4 py-2 font-medium">Status</th>
                           </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr className="bg-slate-50 border-t border-slate-200">
-                          <td colSpan={4} className="px-4 py-2 font-semibold text-slate-600">Total ({docs.ocs.length})</td>
-                          <td className="px-4 py-2 text-right font-semibold text-orange-700">{fmtBRL(docs.ocs.reduce((s: number, o: any) => s + (o.valor_total ?? 0), 0))}</td>
-                          <td />
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {docs.ocs.map((o: any, i: number) => (
+                            <tr key={i} className="border-b border-slate-50 hover:bg-slate-50">
+                              <td className="px-4 py-2 font-medium text-orange-700">{o.numero || "—"}</td>
+                              <td className="px-4 py-2 text-slate-700 max-w-[160px] truncate" title={o.fornecedor}>{o.fornecedor || "—"}</td>
+                              <td className="px-4 py-2 text-slate-500 max-w-[120px] truncate" title={o.obra_nome}>{o.obra_nome || "—"}</td>
+                              <td className="px-4 py-2 text-slate-500">{fmtDate(o.created_at)}</td>
+                              <td className="px-4 py-2 text-right font-medium text-slate-700">{fmtBRL(o.valor_total)}</td>
+                              <td className="px-4 py-2 text-center">
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-50 text-orange-700">{o.status}</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
                 )}
               </div>
             )}
