@@ -50,9 +50,11 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3705** — **MANIFESTAÇÃO DO DESTINATÁRIO · BUGFIX SEFAZ 242 "MENSAGEM SOAP INVÁLIDA" — 4 CORREÇÕES: node:crypto + indSinc + CÓDIGOS TROCADOS + cUF. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** (1) `signInfEvento` reescrita com `node:crypto` (`createHash("sha1")` + `createSign("RSA-SHA1")`) — node-forge tinha encoding quirk que corrompida DigestValue/SignatureValue; (2) `<indSinc>` removido — não existe no schema NT 2014.002 `TenvEvento`; (3) `MDEV_TP_EVENTO.recusada` 210220→210240, `desconhecida` 210240→210220 + `MDEV_DESC` + condição `xJust` + validação corrigidas; (4) `buildSoapEventoEnvelope` agora recebe e envia o cUF real do emitente (da chave) no header `nfeCabecMsg` em vez de 91 fixo. Arquivo: `server/routers/sefaz.ts`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3706** — **MANIFESTAÇÃO DO DESTINATÁRIO · BUGFIX ENDPOINT ERRADO — MD-e DEVE IR AO AMBIENTE NACIONAL (AN), NÃO AO SVRS. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** As 4 correções da Rev. 3705 estavam corretas, mas o cStat=242 persistia porque o envio ia para o SVRS (`nfe.svrs.rs.gov.br`). A NT 2014.002 determina que MD-e SEMPRE vai ao Ambiente Nacional (`www.nfe.fazenda.gov.br`). Fix: `getMdeUrl` agora retorna sempre o AN em produção; `buildSoapEventoEnvelope` usa `cUF=91` (código AN) fixo no header. Arquivo: `server/routers/sefaz.ts`. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3704** — **5 MELHORIAS: UNIQUE pj_payments + iOS new Date() × 2 + SEFAZ E-MAIL RATE LIMIT + CONCILIAÇÃO PAINEL SAÚDE 12 MESES. BACKEND PONTUAL + SCHEMA ADITIVO + FRONTEND · ZERO DROP/DELETE.** (1) UNIQUE INDEX em pj_payments previne duplicatas; (2) `parseAsUTC` em CFOSuite+DRE; (3) e-mail automático para admins quando cStat=656; (4) card "Saúde da Conciliação" grade 12 meses clicável. Arquivos: schema, _core, sefaz.ts, 3 TSX. Detalhe: `shared/changelog.ts`.
+- **Rev. 3705** — **MANIFESTAÇÃO DO DESTINATÁRIO · BUGFIX SEFAZ 242 "MENSAGEM SOAP INVÁLIDA" — 4 CORREÇÕES: node:crypto + indSinc + CÓDIGOS TROCADOS + cUF. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** (1) `signInfEvento` reescrita com `node:crypto` (`createHash("sha1")` + `createSign("RSA-SHA1")`) — node-forge tinha encoding quirk que corrompida DigestValue/SignatureValue; (2) `<indSinc>` removido — não existe no schema NT 2014.002 `TenvEvento`; (3) `MDEV_TP_EVENTO.recusada` 210220→210240, `desconhecida` 210240→210220 + `MDEV_DESC` + condição `xJust` + validação corrigidas; (4) cUF real do emitente passado para o header. Arquivo: `server/routers/sefaz.ts`. Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3704** — **5 MELHORIAS: UNIQUE pj_payments + iOS new Date() × 2 + SEFAZ E-MAIL RATE LIMIT + CONCILIAÇÃO PAINEL SAÚDE 12 MESES. BACKEND PONTUAL + SCHEMA ADITIVO + FRONTEND · ZERO DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3703** — **SEFAZ NF-e · BUGFIX RATE LIMIT DUPLO POR HOT-RELOAD — PRÉ-SALVA last_sync_at ANTES DO CALL + STARTUP DELAY 30s→3min. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -61,8 +63,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3701** — **SEFAZ NF-e · CRONÔMETRO "PRÓXIMA VERIFICAÇÃO" NO ANEL QUANDO COTA DISPONÍVEL. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3700** — **CONCILIAÇÃO · CAMPO DE BUSCA NA SEÇÃO "JÁ CONCILIADOS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3699** — **FOLHA PJ · BUGFIX VALORES ERRADOS NA CONCILIAÇÃO — CONTRATO EDITADO NÃO PROPAGAVA AO pj_payments. BACKEND PONTUAL + COLFIX · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3697** — **PACOTE CONTADOR · BUGFIX "column nome does not exist" + OCs USANDO TABELA ERRADA. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

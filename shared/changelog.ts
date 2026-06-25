@@ -1,6 +1,20 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3706 — **MANIFESTAÇÃO DO DESTINATÁRIO · BUGFIX ENDPOINT ERRADO — MD-e DEVE IR AO AMBIENTE NACIONAL (AN), NÃO AO SVRS. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Causa-raiz: Todas as 4 correções da Rev. 3705 estavam corretas, mas o cStat=242 persistia porque o
+ * envio estava indo para o SVRS (`nfe.svrs.rs.gov.br`). A NT 2014.002 determina explicitamente que a
+ * Manifestação do Destinatário SEMPRE deve ser enviada ao Ambiente Nacional (AN) em
+ * `www.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx`, independente da UF do emitente.
+ * O SVRS é um SEFAZ Virtual para autorizadores — não processa MD-e de destinatários, retornando 242.
+ *
+ * Fix: `getMdeUrl` simplificado para sempre retornar AN em produção e HOM1 em homologação.
+ * `buildSoapEventoEnvelope`: `cUF` no header fixado em 91 (código AN). Parâmetro `cUF` removido.
+ * `cOrgao=91` no `infEvento` já estava correto desde Rev. 3705.
+ *
+ * Arquivo: `server/routers/sefaz.ts`.
+ *
  * Rev. 3705 — **MANIFESTAÇÃO DO DESTINATÁRIO · BUGFIX SEFAZ 242 "MENSAGEM SOAP INVÁLIDA" — 4 CORREÇÕES: node:crypto + indSinc + códigos trocados + cUF. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Causa-raiz (4 problemas combinados):

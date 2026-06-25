@@ -21,19 +21,12 @@ const SEFAZ_URL_PROD = "https://www1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDi
 const SEFAZ_URL_HOM  = "https://hom1.nfe.fazenda.gov.br/NFeDistribuicaoDFe/NFeDistribuicaoDFe.asmx";
 
 // ── URLs Manifestação do Destinatário (MD-e) ────────────────────────────────
-// nfe.fazenda.gov.br não resolve em todos os ambientes; usar endpoint por UF.
-// SVRS (nfe.svrs.rs.gov.br) cobre a maioria dos estados: SP, RJ, PR, SC, GO, DF, etc.
+// NT 2014.002: MD-e SEMPRE vai ao Ambiente Nacional (AN), independente da UF do emitente.
+// O destinatário envia para AN; a AN roteia para o autorizador do emitente se necessário.
+const MDEV_URL_PROD = "https://www.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx";
 const MDEV_URL_HOM  = "https://hom1.nfe.fazenda.gov.br/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx";
-const MDEV_URL_SVRS = "https://nfe.svrs.rs.gov.br/ws/recepcaoevento/recepcaoevento4.asmx";
-// Mapa cUF → URL de produção para estados com servidor próprio
-const MDEV_URL_POR_CUF: Record<number, string> = {
-  43: "https://nfe.sefaz.rs.gov.br/ws/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx", // RS
-  29: "https://nfep.sefaz.ba.gov.br/ws/NFeRecepcaoEvento4/NFeRecepcaoEvento4.asmx", // BA
-  // MG (31) e SP (35) e demais → SVRS (default)
-};
-function getMdeUrl(cUF: number, tpAmb: number): string {
-  if (tpAmb === 2) return MDEV_URL_HOM;
-  return MDEV_URL_POR_CUF[cUF] ?? MDEV_URL_SVRS;
+function getMdeUrl(tpAmb: number): string {
+  return tpAmb === 2 ? MDEV_URL_HOM : MDEV_URL_PROD;
 }
 
 const MDEV_TP_EVENTO: Record<string, number> = {
@@ -308,13 +301,14 @@ function buildEnvEvento(opts: {
   );
 }
 
-function buildSoapEventoEnvelope(envEventoXml: string, cUF: number): string {
+function buildSoapEventoEnvelope(envEventoXml: string): string {
   const wsdl = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4";
+  // cUF=91 = Ambiente Nacional (AN) — destino sempre AN para MD-e (NT 2014.002)
   return (
     `<?xml version="1.0" encoding="utf-8"?>` +
     `<soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">` +
     `<soap12:Header>` +
-    `<nfeCabecMsg xmlns="${wsdl}"><cUF>${cUF}</cUF><versaoDados>1.00</versaoDados></nfeCabecMsg>` +
+    `<nfeCabecMsg xmlns="${wsdl}"><cUF>91</cUF><versaoDados>1.00</versaoDados></nfeCabecMsg>` +
     `</soap12:Header>` +
     `<soap12:Body>` +
     `<nfeRecepcaoEvento xmlns="${wsdl}"><nfeDadosMsg>${envEventoXml}</nfeDadosMsg></nfeRecepcaoEvento>` +
@@ -1357,7 +1351,7 @@ export const sefazRouter = router({
       const cnpj = cleanCnpj(cfg.cnpj || "");
       const tpAmb = cfg.ambiente === "homologacao" ? 2 : 1;
       const cUF   = parseInt(chaveNFe.slice(0, 2), 10);
-      const url   = getMdeUrl(cUF, tpAmb);
+      const url   = getMdeUrl(tpAmb);
 
       // Extrai PEM do PFX
       let certPem: string, keyPem: string;
@@ -1373,9 +1367,9 @@ export const sefazRouter = router({
         justificativa: input.justificativa,
         certPem, keyPem,
       });
-      const soap = buildSoapEventoEnvelope(envEventoXml, cUF);
+      const soap = buildSoapEventoEnvelope(envEventoXml);
 
-      console.log(`[SefazMDE] company=${input.companyId} chave=${chaveNFe.slice(0, 10)}… tpEvento=${tpEvento} tpAmb=${tpAmb} url=${url}`);
+      console.log(`[SefazMDE] company=${input.companyId} chave=${chaveNFe.slice(0, 10)}… tpEvento=${tpEvento} tpAmb=${tpAmb} cUF=${cUF} url=${url}`);
       console.log(`[SefazMDE] envEvento FULL (${envEventoXml.length} chars):`, envEventoXml);
       console.log(`[SefazMDE] soap body (400 chars):`, soap.slice(0, 400));
 
