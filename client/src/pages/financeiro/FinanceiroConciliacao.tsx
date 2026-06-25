@@ -3029,6 +3029,7 @@ export default function FinanceiroConciliacao() {
                                   <span>{formatInt(c.linhas)} linha(s) no extrato</span>
                                   <span className="text-emerald-600 font-semibold" title="Total de entradas (créditos) no extrato">▼ entradas {formatBRL(t.valorEntradas ?? 0)}</span>
                                   <span className="text-red-600 font-semibold" title="Total de saídas (débitos) no extrato">▲ saídas {formatBRL(t.valorSaidas ?? 0)}</span>
+                                  {(() => { const saldo = (t.valorEntradas ?? 0) - (t.valorSaidas ?? 0); return <span className={`font-semibold ${saldo >= 0 ? "text-blue-600" : "text-orange-600"}`} title="Saldo do período (entradas − saídas)">{saldo >= 0 ? "=" : "="} saldo {formatBRL(saldo)}</span>; })()}
                                 </p>
                               </div>
                               <div className="hidden sm:flex items-center gap-1.5 shrink-0">
@@ -3117,6 +3118,20 @@ export default function FinanceiroConciliacao() {
                           </div>
                         );
                       })}
+                      {/* ── Totalizador de todas as contas ── */}
+                      {geralContas.length > 1 && (() => {
+                        const totEnt   = geralContas.reduce((s: number, c: any) => s + ((c.totais?.valorEntradas) ?? 0), 0);
+                        const totSai   = geralContas.reduce((s: number, c: any) => s + ((c.totais?.valorSaidas)   ?? 0), 0);
+                        const totSaldo = totEnt - totSai;
+                        return (
+                          <div className="rounded-xl border border-gray-300 bg-gray-50 px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+                            <p className="text-xs font-bold text-gray-700 shrink-0">Total — {formatInt(geralContas.length)} contas</p>
+                            <span className="text-emerald-700 text-xs font-semibold">▼ entradas {formatBRL(totEnt)}</span>
+                            <span className="text-red-700 text-xs font-semibold">▲ saídas {formatBRL(totSai)}</span>
+                            <span className={`text-xs font-bold ${totSaldo >= 0 ? "text-blue-700" : "text-orange-700"}`}>= saldo {formatBRL(totSaldo)}</span>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* Lançamentos sem conta definida (company-wide, contado uma vez) */}

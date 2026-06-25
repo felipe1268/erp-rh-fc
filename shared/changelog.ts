@@ -1,6 +1,13 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3712 — **CONCILIAÇÃO · SALDO (ENTRADAS − SAÍDAS) POR CONTA + TOTALIZADOR DE TODAS AS CONTAS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Cada card da seção "Conciliação por conta" agora exibe "= saldo R$ X" (azul se positivo,
+ * laranja se negativo) logo após as entradas e saídas. Após o último card, aparece um rodapé
+ * cinza com o total consolidado de todas as contas: entradas / saídas / saldo. Visível apenas
+ * quando há mais de 1 conta. Arquivo: `FinanceiroConciliacao.tsx`.
+ *
  * Rev. 3711 — **EXTRATO SANTANDER · BUGFIX CRÍTICO PARSER — "EXTRATO_PJ_A4_INTELIGENTE 1.0" TEM VALOR NA MESMA LINHA DA DESCRIÇÃO (NÃO EM LINHA SEPARADA). 100% BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Causa-raiz: `parseSantanderExtratoPdf` foi escrito assumindo o formato antigo onde o valor
