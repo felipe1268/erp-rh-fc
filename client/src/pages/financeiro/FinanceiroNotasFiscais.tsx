@@ -536,16 +536,7 @@ export default function FinanceiroNotasFiscais() {
     }
     return () => { if (syncIvRef.current) { clearInterval(syncIvRef.current); syncIvRef.current = null; } };
   }, [sefazSyncMut.isPending]);
-  const importXmlMut = (trpc as any).sefaz.importXml.useMutation({
-    onSuccess: (r: any) => {
-      nfeRecQuery.refetch();
-      const msg = `${r.importadas} NF-e importada${r.importadas !== 1 ? "s" : ""}, ${r.ignoradas} já existia${r.ignoradas !== 1 ? "m" : ""}.`;
-      const erroTxt = r.erros?.length ? ` ${r.erros.length} com erro.` : "";
-      toast({ title: "Import XML: " + msg + erroTxt, variant: r.importadas > 0 ? "default" : "destructive" });
-      setXmlUploading(false);
-    },
-    onError: (e: any) => { toast({ title: "Erro no import XML", description: e.message, variant: "destructive" }); setXmlUploading(false); },
-  });
+  const importXmlMut = (trpc as any).sefaz.importXml.useMutation();
   const sefazResetNsuMut = (trpc as any).sefaz.resetNSU.useMutation({
     onSuccess: () => {
       toast({ title: "NSU zerado. Clique em 'Sincronizar SEFAZ' para iniciar o download do histórico.", duration: 8000 });
@@ -739,7 +730,7 @@ export default function FinanceiroNotasFiscais() {
     if (xmlInputRef.current) xmlInputRef.current.value = "";
     setXmlUploading(true);
     setXmlUploadProgress({ done: 0, total: files.length });
-    let importadas = 0, ignoradas = 0, erros = 0;
+    let importadas = 0, ignoradas = 0, backendErros = 0, fileErros = 0;
     try {
       for (let i = 0; i < files.length; i++) {
         setXmlUploadProgress({ done: i, total: files.length });
@@ -749,20 +740,23 @@ export default function FinanceiroNotasFiscais() {
             companyId,
             xmlFiles: [{ name: files[i].name, content }],
           });
-          importadas += r?.importadas ?? 0;
-          ignoradas  += r?.ignoradas  ?? 0;
+          importadas    += r?.importadas ?? 0;
+          ignoradas     += r?.ignoradas  ?? 0;
+          backendErros  += r?.erros?.length ?? 0;
         } catch {
-          erros++;
+          fileErros++;
         }
       }
       setXmlUploadProgress({ done: files.length, total: files.length });
-      if (erros === 0) {
-        toast({ title: `${importadas} NF-e importadas · ${ignoradas} já existiam` });
-      } else {
-        toast({ title: `${importadas} importadas · ${erros} erro(s)`, variant: "destructive" });
-      }
+      nfeRecQuery?.refetch?.();
       listQuery?.refetch?.();
       yearQuery?.refetch?.();
+      const totalErros = backendErros + fileErros;
+      const msg =
+        `${importadas} NF-e importada${importadas !== 1 ? "s" : ""}` +
+        `, ${ignoradas} já existia${ignoradas !== 1 ? "m" : ""}` +
+        (totalErros > 0 ? `, ${totalErros} com erro` : "") + ".";
+      toast({ title: "Import XML: " + msg, variant: importadas > 0 ? "default" : totalErros > 0 ? "destructive" : "default" });
     } catch {
       toast({ title: "Erro ao ler os arquivos XML", variant: "destructive" });
     } finally {
