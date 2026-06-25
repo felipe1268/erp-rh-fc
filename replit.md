@@ -50,9 +50,11 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3698** — **CONCILIAÇÃO · PRESTADORES PJ APARECEM NO CAMPO FORNECEDOR COM BADGE "PJ". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Campo "Fornecedor" no dialog de lançamento/conciliação agora inclui prestadores PJ ativos (`pj.contratos.list`). Cada PJ aparece no dropdown com badge âmbar "PJ" ao lado do nome. Dedupado por nome — se já existir no cadastro de fornecedores, não duplica. Encerrados excluídos. `LancCombo` estendido para `isPJ?: boolean`. Arquivo: `FinanceiroConciliacao.tsx`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3697** — **PACOTE CONTADOR · BUGFIX "column nome does not exist" + OCs USANDO TABELA ERRADA. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Dois bugs: (1) `SELECT nome, razao_social FROM companies` → tabela usa camelCase `"razaoSocial"`/`"nomeFantasia"` → `42703` abortava o ZIP inteiro; (2) query de OCs usava `purchase_orders` (vazia) em vez de `compras_ordens` → OCs sempre zeradas no pacote. Arquivo: `server/routers/downloadPacoteContador.ts`. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3696** — **DASHBOARD NF-e · BUGFIX LÓGICA OC × NF-e — DEDUP + TOLERÂNCIA 10% + MATCH DIRETO POR NÚMERO NF. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Mesma NF-e aparecia em várias OCs (dedup só bloqueava `nfeSemOc`, não o `find()`). Fallback `matches[0]` vinculava qualquer NF-e do mesmo CNPJ sem bater valor. Nova estratégia: Camada 1=número NF direto na OC; Camada 2=CNPJ+valor±10%+data±90 dias; sem fallback. Arquivo: `server/routers/fiscalNotes.ts`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3696** — **DASHBOARD NF-e · BUGFIX LÓGICA OC × NF-e — DEDUP + TOLERÂNCIA 10% + MATCH DIRETO POR NÚMERO NF. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3695** — **NFS-e EMITIDAS · LEGENDA DOS IMPOSTOS NO DIALOG ESPELHO — SUB-LABELS DESCRITIVOS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

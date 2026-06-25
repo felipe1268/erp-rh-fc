@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3698 — **CONCILIAÇÃO · PRESTADORES PJ APARECEM NO CAMPO FORNECEDOR COM BADGE "PJ". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Campo "Fornecedor" no dialog de lançamento/conciliação agora inclui os prestadores PJ ativos
+ * (via `pj.contratos.list`). Cada PJ aparece na lista dropdown com badge âmbar "PJ" ao lado do
+ * nome. Dedupado por nome (case-insensitive) — se já existir no cadastro de fornecedores, não
+ * duplica; apenas entra com flag isPJ quando exclusivo. Contratos "encerrados" são excluídos.
+ * `LancCombo` estendido para `isPJ?: boolean` nas options. Também melhora busca sem acento
+ * (norm NFD) nos dois campos de fornecedor da conciliação.
+ * Arquivo: `client/src/pages/financeiro/FinanceiroConciliacao.tsx`.
+ *
  * Rev. 3697 — **PACOTE CONTADOR · BUGFIX "column nome does not exist" + OCs USANDO TABELA ERRADA. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Dois bugs em `downloadPacoteContador.ts`: (1) `SELECT nome, razao_social FROM companies`

@@ -110,8 +110,8 @@ const FORMAS_PAG_OPTS = [
 ];
 function LancCombo({ value, onChangeText, onSelect, options, placeholder = "Buscar…", noneLabel, onClear }: {
   value: string; onChangeText?: (s: string) => void;
-  onSelect: (opt: { id: string | number; label: string } | null) => void;
-  options: { id: string | number; label: string }[];
+  onSelect: (opt: { id: string | number; label: string; isPJ?: boolean } | null) => void;
+  options: { id: string | number; label: string; isPJ?: boolean }[];
   placeholder?: string; noneLabel?: string; onClear?: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -145,10 +145,15 @@ function LancCombo({ value, onChangeText, onSelect, options, placeholder = "Busc
             </button>
           )}
           {filtered.map(o => (
-            <button key={o.id} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 border-b border-gray-50 last:border-0"
+            <button key={o.id} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 border-b border-gray-50 last:border-0 flex items-center gap-2"
               onMouseDown={e => { e.preventDefault(); onSelect(o); setOpen(false); }}
               onTouchEnd={e => { e.preventDefault(); onSelect(o); setOpen(false); }}>
-              {o.label}
+              <span className="flex-1 text-left">{o.label}</span>
+              {o.isPJ && (
+                <span className="shrink-0 text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-300 px-1.5 py-0.5 rounded leading-none">
+                  PJ
+                </span>
+              )}
             </button>
           ))}
           {filtered.length === 0 && !noneLabel && (
@@ -368,6 +373,7 @@ export default function FinanceiroConciliacao() {
   // quando os fornecedores estavam cadastrados em outra empresa do grupo FC.
   // ativo: undefined → inclui fornecedores com ativo=NULL (cadastros antigos) além dos ativo=true.
   const { data: lancFornecedores } = (trpc as any).compras.listarFornecedores.useQuery({ companyId, includeAllGroup: true }, { enabled: !!companyId });
+  const { data: lancPjContratos } = (trpc as any).pj.contratos.list.useQuery({ companyId }, { enabled: !!companyId });
   // Rev. 3455 — movido p/ antes de obrasParaLanc (era linha 366) p/ resolver clienteId na filtragem
   const { data: lancClientes, refetch: refetchLancClientes } = (trpc as any).clientes.list.useQuery({ companyId }, { enabled: !!companyId });
   const clienteOpts: { id: number; nome: string }[] = useMemo(() => {
@@ -427,17 +433,26 @@ export default function FinanceiroConciliacao() {
     }
     return out;
   }, [lancCostCenters]);
-  const fornNomes: string[] = useMemo(() => {
-    const seen = new Set<string>(); const out: string[] = [];
+  const lancFornOpts: { id: number; label: string; isPJ?: boolean }[] = useMemo(() => {
+    const seen = new Set<string>();
+    const out: { id: number; label: string; isPJ?: boolean }[] = [];
+    // Rev. 3463 — prioridade: nomeFantasia (nome comercial) → razaoSocial (fallback).
     for (const f of (Array.isArray(lancFornecedores) ? lancFornecedores : [])) {
-      // Rev. 3463 — prioridade: nomeFantasia (nome comercial) → razaoSocial (fallback).
-      // razaoSocial frequentemente traz CNPJ prefixado + nome do sócio, o que não é o
-      // nome pelo qual a empresa é conhecida. nomeFantasia é o nome visível no ERP.
       const nome = String(f?.nomeFantasia ?? f?.razaoSocial ?? "").trim();
-      if (!nome || seen.has(nome.toLowerCase())) continue; seen.add(nome.toLowerCase()); out.push(nome);
+      if (!nome || seen.has(nome.toLowerCase())) continue;
+      seen.add(nome.toLowerCase());
+      out.push({ id: out.length, label: nome });
     }
-    return out.sort((a, b) => a.localeCompare(b, "pt-BR"));
-  }, [lancFornecedores]);
+    // Prestadores PJ ativos (com badge de aviso na lista)
+    for (const c of (Array.isArray(lancPjContratos) ? lancPjContratos : [])) {
+      if (c.status === "encerrado") continue;
+      const nome = String(c.razaoSocialPrestador ?? c.employeeName ?? "").trim();
+      if (!nome || seen.has(nome.toLowerCase())) continue;
+      seen.add(nome.toLowerCase());
+      out.push({ id: out.length, label: nome, isPJ: true });
+    }
+    return out.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+  }, [lancFornecedores, lancPjContratos]);
   const [lancStatement, setLancStatement] = useState<any | null>(null);
   const [lancBusy, setLancBusy] = useState(false);
   const { user } = useAuth();
@@ -4525,7 +4540,7 @@ export default function FinanceiroConciliacao() {
                                   setDetEditFornDisplay(opt.label);
                                   setDetEditForm(f => f ? { ...f, fornecedorNome: opt.label } : f);
                                 }}
-                                options={fornNomes.map((n, i) => ({ id: i, label: n }))}
+                                options={lancFornOpts}
                                 placeholder="Buscar fornecedor do cadastro…"
                                 noneLabel="— (sem fornecedor) —"
                                 onClear={() => { setDetEditFornDisplay(""); setDetEditForm(f => f ? { ...f, fornecedorNome: "" } : f); }}
@@ -6165,7 +6180,7 @@ export default function FinanceiroConciliacao() {
                         setLancFornDisplay(opt.label);
                         setLancForm(f => ({ ...f, fornecedorNome: opt.label }));
                       }}
-                      options={fornNomes.map((n, i) => ({ id: i, label: n }))}
+                      options={lancFornOpts}
                       placeholder="Buscar fornecedor do cadastro…"
                       noneLabel="— (sem fornecedor) —"
                       onClear={() => { setLancFornDisplay(""); setLancForm(f => ({ ...f, fornecedorNome: "" })); }}
