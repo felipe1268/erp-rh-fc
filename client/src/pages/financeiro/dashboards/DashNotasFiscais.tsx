@@ -1179,17 +1179,17 @@ export default function DashNotasFiscais() {
                     Evolução {multiYearData.length} Anos — Entradas × Saídas
                   </h3>
                   <p className="text-xs text-slate-400">
-                    NF-e Recebidas (compras) vs NFS-e Emitidas (faturamento) · {multiYearData[0]?.ano}–{multiYearData[multiYearData.length - 1]?.ano}
+                    NFS-e Emitidas (faturamento) vs NF-e Recebidas (compras) · {multiYearData[0]?.ano}–{multiYearData[multiYearData.length - 1]?.ano}
                   </p>
                 </div>
                 <div className="flex gap-3 text-xs shrink-0">
                   <span className="flex items-center gap-1.5 text-slate-600">
-                    <span className="w-3 h-3 rounded-sm inline-block" style={{ background: GREEN }} />
-                    Entradas
+                    <span className="w-3 h-3 rounded-sm inline-block" style={{ background: VIOLET }} />
+                    Saídas (NFS-e)
                   </span>
                   <span className="flex items-center gap-1.5 text-slate-600">
-                    <span className="w-3 h-3 rounded-sm inline-block" style={{ background: VIOLET }} />
-                    Saídas
+                    <span className="w-3 h-3 rounded-sm inline-block" style={{ background: GREEN }} />
+                    Entradas (NF-e)
                   </span>
                 </div>
               </div>
@@ -1225,11 +1225,11 @@ export default function DashNotasFiscais() {
                       );
                     }}
                   />
-                  <Bar dataKey="NF-e Recebidas" fill={GREEN} radius={[4, 4, 0, 0]}>
-                    <LabelList dataKey="NF-e Recebidas" position="top" formatter={(v: number) => v > 0 ? formatBRLCompact(v) : ""} style={{ fontSize: 10, fill: "#64748b" }} />
-                  </Bar>
                   <Bar dataKey="NFS-e Emitidas" fill={VIOLET} radius={[4, 4, 0, 0]}>
                     <LabelList dataKey="NFS-e Emitidas" position="top" formatter={(v: number) => v > 0 ? formatBRLCompact(v) : ""} style={{ fontSize: 10, fill: "#64748b" }} />
+                  </Bar>
+                  <Bar dataKey="NF-e Recebidas" fill={GREEN} radius={[4, 4, 0, 0]}>
+                    <LabelList dataKey="NF-e Recebidas" position="top" formatter={(v: number) => v > 0 ? formatBRLCompact(v) : ""} style={{ fontSize: 10, fill: "#64748b" }} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -1240,9 +1240,9 @@ export default function DashNotasFiscais() {
                   <thead className="bg-slate-50">
                     <tr>
                       <th className="px-3 py-2 text-left font-semibold text-slate-600">Ano</th>
-                      <th className="px-3 py-2 text-right font-semibold text-emerald-700">NF-e Recebidas</th>
-                      <th className="px-3 py-2 text-right font-semibold text-slate-400">Δ%</th>
                       <th className="px-3 py-2 text-right font-semibold text-violet-700">NFS-e Emitidas</th>
+                      <th className="px-3 py-2 text-right font-semibold text-slate-400">Δ%</th>
+                      <th className="px-3 py-2 text-right font-semibold text-emerald-700">NF-e Recebidas</th>
                       <th className="px-3 py-2 text-right font-semibold text-slate-400">Δ%</th>
                       <th className="px-3 py-2 text-right font-semibold text-slate-600">Saldo</th>
                     </tr>
@@ -1260,17 +1260,6 @@ export default function DashNotasFiscais() {
                             {d.ano}{isCurrentYear && <span className="ml-1 text-[10px] text-violet-500 font-normal">atual</span>}
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums text-slate-800">
-                            {d.nfeTotal > 0 ? formatBRL(d.nfeTotal) : <span className="text-slate-300">—</span>}
-                            {d.nfeCount > 0 && <span className="ml-1 text-slate-400">({d.nfeCount})</span>}
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums">
-                            {dNfe == null ? <span className="text-slate-300">—</span> : (
-                              <span className={dNfe >= 0 ? "text-emerald-600" : "text-red-500"}>
-                                {dNfe >= 0 ? "+" : ""}{dNfe.toFixed(1)}%
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums text-slate-800">
                             {d.nfseTotal > 0 ? formatBRL(d.nfseTotal) : <span className="text-slate-300">—</span>}
                             {d.nfseCount > 0 && <span className="ml-1 text-slate-400">({d.nfseCount})</span>}
                           </td>
@@ -1278,6 +1267,17 @@ export default function DashNotasFiscais() {
                             {dNfse == null ? <span className="text-slate-300">—</span> : (
                               <span className={dNfse >= 0 ? "text-emerald-600" : "text-red-500"}>
                                 {dNfse >= 0 ? "+" : ""}{dNfse.toFixed(1)}%
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-slate-800">
+                            {d.nfeTotal > 0 ? formatBRL(d.nfeTotal) : <span className="text-slate-300">—</span>}
+                            {d.nfeCount > 0 && <span className="ml-1 text-slate-400">({d.nfeCount})</span>}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums">
+                            {dNfe == null ? <span className="text-slate-300">—</span> : (
+                              <span className={dNfe >= 0 ? "text-emerald-600" : "text-red-500"}>
+                                {dNfe >= 0 ? "+" : ""}{dNfe.toFixed(1)}%
                               </span>
                             )}
                           </td>
@@ -1291,9 +1291,9 @@ export default function DashNotasFiscais() {
                   <tfoot className="bg-slate-50 border-t border-slate-200">
                     <tr>
                       <td className="px-3 py-2 font-bold text-slate-700">Total período</td>
-                      <td className="px-3 py-2 text-right tabular-nums font-bold text-emerald-700">{formatBRL(totalNfe)}</td>
-                      <td />
                       <td className="px-3 py-2 text-right tabular-nums font-bold text-violet-700">{formatBRL(totalNfse)}</td>
+                      <td />
+                      <td className="px-3 py-2 text-right tabular-nums font-bold text-emerald-700">{formatBRL(totalNfe)}</td>
                       <td />
                       <td className={`px-3 py-2 text-right tabular-nums font-bold ${totalNfse - totalNfe >= 0 ? "text-emerald-700" : "text-red-600"}`}>
                         {formatBRL(totalNfse - totalNfe)}
