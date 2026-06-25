@@ -422,12 +422,12 @@ export function ComparativoAnual({
       {/* KPIs de variação anual */}
       <div className="grid grid-cols-3 gap-2 mb-3">
         <div className="rounded-lg bg-slate-50 px-3 py-2">
-          <p className="text-[11px] text-slate-500">Total {anoAtual}</p>
-          <p className="text-sm md:text-base font-bold text-slate-900 tabular-nums">{formatBRL(totAtual)}</p>
-        </div>
-        <div className="rounded-lg bg-slate-50 px-3 py-2">
           <p className="text-[11px] text-slate-500">Total {anoPrev}</p>
           <p className="text-sm md:text-base font-bold text-slate-600 tabular-nums">{formatBRL(totPrev)}</p>
+        </div>
+        <div className="rounded-lg bg-violet-50 border border-violet-200 px-3 py-2">
+          <p className="text-[11px] text-violet-600 font-semibold">Total {anoAtual}</p>
+          <p className="text-sm md:text-base font-bold text-violet-900 tabular-nums">{formatBRL(totAtual)}</p>
         </div>
         <div className="rounded-lg bg-slate-50 px-3 py-2">
           <p className="text-[11px] text-slate-500">Variação a/a</p>
@@ -442,8 +442,8 @@ export function ComparativoAnual({
           <TableHeader className="sticky top-0 bg-slate-50 z-10">
             <TableRow>
               <TableHead className="text-xs font-semibold">Mês</TableHead>
-              <TableHead className="text-right text-xs font-semibold">{anoPrev}</TableHead>
-              <TableHead className="text-right text-xs font-semibold">{anoAtual}</TableHead>
+              <TableHead className="text-right text-xs font-semibold text-slate-500">{anoPrev}</TableHead>
+              <TableHead className="text-right text-xs font-bold text-violet-700 bg-violet-50">{anoAtual}</TableHead>
               <TableHead className="text-right text-xs font-semibold">Δ a/a</TableHead>
               <TableHead className="text-right text-xs font-semibold">Δ m/m</TableHead>
             </TableRow>
@@ -461,8 +461,8 @@ export function ComparativoAnual({
                   onClick={clicavel ? () => onOpenMes!(i) : undefined}
                 >
                   <TableCell className="font-medium text-slate-700">{mes}</TableCell>
-                  <TableCell className="text-right tabular-nums text-slate-500">{prev ? formatBRL(prev) : "—"}</TableCell>
-                  <TableCell className="text-right tabular-nums text-slate-900">{cur ? formatBRL(cur) : "—"}</TableCell>
+                  <TableCell className="text-right tabular-nums text-slate-400">{prev ? formatBRL(prev) : "—"}</TableCell>
+                  <TableCell className="text-right tabular-nums font-semibold text-violet-900 bg-violet-50/60">{cur ? formatBRL(cur) : "—"}</TableCell>
                   <TableCell className="text-right">
                     {cur === 0 && prev === 0 ? <span className="text-slate-300">—</span> : <DeltaBadge curr={cur} prev={prev} goodWhen={goodWhen} size="xs" />}
                   </TableCell>
@@ -476,8 +476,8 @@ export function ComparativoAnual({
           <TableFooter className="sticky bottom-0">
             <TableRow>
               <TableCell className="font-bold text-xs">Total {valorLabel}</TableCell>
-              <TableCell className="text-right font-bold text-xs tabular-nums">{formatBRL(totPrev)}</TableCell>
-              <TableCell className="text-right font-bold text-xs tabular-nums">{formatBRL(totAtual)}</TableCell>
+              <TableCell className="text-right font-bold text-xs tabular-nums text-slate-500">{formatBRL(totPrev)}</TableCell>
+              <TableCell className="text-right font-bold text-xs tabular-nums text-violet-900 bg-violet-50">{formatBRL(totAtual)}</TableCell>
               <TableCell className="text-right" colSpan={2}>
                 <DeltaBadge curr={totAtual} prev={totPrev} goodWhen={goodWhen} size="xs" />
               </TableCell>
