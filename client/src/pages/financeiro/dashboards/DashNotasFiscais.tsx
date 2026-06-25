@@ -393,6 +393,13 @@ export default function DashNotasFiscais() {
   const multiYearData: Array<{ ano: number; nfeTotal: number; nfeCount: number; nfseTotal: number; nfseCount: number }> =
     multiYearQuery.data ?? [];
 
+  const quarterlyQuery = (trpc as any).fiscalNotes.getQuarterlySeries.useQuery(
+    { companyId: companyId ?? 0, anos: 5 },
+    { enabled: !!companyId, staleTime: 300_000 }
+  );
+  const quarterlyData: { anos: number[]; quarters: Record<string,any>[]; anuais: {ano:number;nfseTotal:number;nfeTotal:number}[] } =
+    quarterlyQuery.data ?? { anos: [], quarters: [], anuais: [] };
+
   const tributariaQuery = (trpc as any).fiscalNotes.getAnalyseTributaria.useQuery(
     { companyId: companyId ?? 0, mes, ano },
     { enabled: !!companyId, staleTime: 60_000 }
@@ -1275,6 +1282,135 @@ export default function DashNotasFiscais() {
                       <td className={`px-3 py-2 text-right tabular-nums font-bold ${totalNfse - totalNfe >= 0 ? "text-emerald-700" : "text-red-600"}`}>
                         {formatBRL(totalNfse - totalNfe)}
                       </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </Card>
+          );
+        })()}
+
+        {/* ── Comparativo Trimestral — últimos 5 anos ───────────────────── */}
+        {quarterlyData.anos.length >= 2 && (() => {
+          const anos = quarterlyData.anos;
+          const quarters = quarterlyData.quarters;
+          const YEAR_COLORS = ["#7c3aed","#2563eb","#059669","#d97706","#dc2626"];
+          const fmtDelta = (curr: number, prev: number) => {
+            if (!prev) return null;
+            const d = ((curr - prev) / prev) * 100;
+            return d;
+          };
+          return (
+            <Card className="p-4">
+              <div className="flex items-center justify-between mb-1">
+                <div>
+                  <h3 className="font-semibold text-slate-800 text-sm">Comparativo Trimestral — NFS-e Emitidas</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Evolução por trimestre · {anos[0]}–{anos[anos.length-1]} · últimos {anos.length} anos</p>
+                </div>
+                <div className="flex gap-2 flex-wrap justify-end">
+                  {anos.map((a, i) => (
+                    <span key={a} className="flex items-center gap-1 text-xs text-slate-600">
+                      <span className="w-3 h-3 rounded-sm inline-block" style={{ backgroundColor: YEAR_COLORS[i % YEAR_COLORS.length] }} />
+                      {a}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* BarChart agrupado */}
+              <div className="h-52 mt-3">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={quarters} barCategoryGap="20%" barGap={2} margin={{ top: 4, right: 8, bottom: 4, left: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                    <XAxis dataKey="trimestre" tick={{ fontSize: 12, fontWeight: 600, fill: "#64748b" }} axisLine={false} tickLine={false} />
+                    <YAxis tickFormatter={formatBRLCompact} tick={{ fontSize: 10, fill: "#94a3b8" }} width={60} axisLine={false} tickLine={false} />
+                    <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null;
+                        const total = payload.reduce((s: number, p: any) => s + (Number(p.value) || 0), 0);
+                        return (
+                          <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3 text-xs min-w-[160px]">
+                            <p className="font-bold text-slate-700 mb-2">{label}</p>
+                            {payload.map((p: any) => (
+                              <p key={p.dataKey} style={{ color: p.fill }} className="flex justify-between gap-3 mb-0.5">
+                                <span>{p.name}:</span>
+                                <span className="font-bold tabular-nums">{formatBRL(Number(p.value))}</span>
+                              </p>
+                            ))}
+                            {payload.length > 1 && (
+                              <p className="border-t border-slate-100 mt-1.5 pt-1.5 flex justify-between font-bold text-slate-700">
+                                <span>Total:</span>
+                                <span className="tabular-nums">{formatBRL(total)}</span>
+                              </p>
+                            )}
+                          </div>
+                        );
+                      }}
+                    />
+                    {anos.map((a, i) => (
+                      <Bar key={a} dataKey={`nfse_${a}`} name={String(a)}
+                        fill={YEAR_COLORS[i % YEAR_COLORS.length]}
+                        radius={[3,3,0,0]} maxBarSize={18} />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Tabela: linhas = trimestres, colunas = anos */}
+              <div className="mt-4 overflow-x-auto rounded-lg border border-slate-100">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="px-3 py-2 text-left font-semibold text-slate-600">Tri</th>
+                      {anos.map((a, i) => (
+                        <th key={a} className="px-3 py-2 text-right font-semibold" style={{ color: YEAR_COLORS[i % YEAR_COLORS.length] }}>
+                          {a}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {quarters.map((q, qi) => (
+                      <tr key={q.trimestre as string} className="border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
+                        <td className="px-3 py-1.5 font-bold text-slate-700">{q.trimestre}</td>
+                        {anos.map((a, ai) => {
+                          const val  = Number(q[`nfse_${a}`]) || 0;
+                          const prev = ai > 0 ? Number(q[`nfse_${anos[ai-1]}`]) || 0 : null;
+                          const delta = prev != null ? fmtDelta(val, prev) : null;
+                          return (
+                            <td key={a} className="px-3 py-1.5 text-right">
+                              {val > 0
+                                ? <span className="tabular-nums text-slate-800">{formatBRL(val)}</span>
+                                : <span className="text-slate-300">—</span>
+                              }
+                              {delta != null && (
+                                <span className={`ml-1 text-[10px] font-medium ${delta >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                                  {delta >= 0 ? "▲" : "▼"}{Math.abs(delta).toFixed(0)}%
+                                </span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="bg-slate-50 border-t-2 border-slate-200">
+                    <tr>
+                      <td className="px-3 py-2 font-bold text-slate-700">Total</td>
+                      {quarterlyData.anuais.map((d, ai) => {
+                        const prev = ai > 0 ? quarterlyData.anuais[ai-1].nfseTotal : null;
+                        const delta = prev != null ? fmtDelta(d.nfseTotal, prev) : null;
+                        return (
+                          <td key={d.ano} className="px-3 py-2 text-right font-bold text-violet-700 tabular-nums">
+                            {d.nfseTotal > 0 ? formatBRL(d.nfseTotal) : <span className="text-slate-300">—</span>}
+                            {delta != null && d.nfseTotal > 0 && (
+                              <span className={`ml-1 text-[10px] font-medium ${delta >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                                {delta >= 0 ? "▲" : "▼"}{Math.abs(delta).toFixed(0)}%
+                              </span>
+                            )}
+                          </td>
+                        );
+                      })}
                     </tr>
                   </tfoot>
                 </table>

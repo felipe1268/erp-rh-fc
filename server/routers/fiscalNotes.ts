@@ -634,6 +634,71 @@ export const fiscalNotesRouter = router({
       return series;
     }),
 
+  getQuarterlySeries: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      anos: z.number().min(2).max(10).optional(),
+    }))
+    .query(async ({ input, ctx }) => {
+      await _assertNfAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const { companyId } = input;
+      const qtdAnos = Math.min(10, Math.max(2, input.anos ?? 5));
+      const anoFim = new Date().getFullYear();
+      const anoIni = anoFim - qtdAnos + 1;
+
+      const rows = await db.$client.query(`
+        SELECT
+          EXTRACT(YEAR    FROM data_emissao)::int AS ano,
+          EXTRACT(QUARTER FROM data_emissao)::int AS tri,
+          SUM(CASE WHEN origem LIKE 'nfse_%' AND status != 'cancelada'
+              THEN COALESCE(valor_bruto::numeric, 0) ELSE 0 END) AS nfse_total,
+          COUNT(CASE WHEN origem LIKE 'nfse_%' AND status != 'cancelada'
+              THEN 1 END)::int AS nfse_count,
+          SUM(CASE WHEN (origem = 'sefaz_nfe' OR origem = 'xml_upload') AND status != 'cancelada'
+              THEN COALESCE(valor_bruto::numeric, 0) ELSE 0 END) AS nfe_total
+        FROM fiscal_notes
+        WHERE company_id = $1
+          AND data_emissao >= $2 AND data_emissao < $3
+          AND data_emissao IS NOT NULL
+        GROUP BY 1, 2
+        ORDER BY 1, 2
+      `, [companyId, `${anoIni}-01-01`, `${anoFim + 1}-01-01`]);
+
+      // pivot: { ano, q1Nfse, q2Nfse, q3Nfse, q4Nfse, q1Nfe, ... }
+      const byAno = new Map<number, { nfse: number[]; nfe: number[] }>();
+      for (let a = anoIni; a <= anoFim; a++) byAno.set(a, { nfse: [0,0,0,0], nfe: [0,0,0,0] });
+      for (const r of rows.rows) {
+        const a = Number(r.ano);
+        const t = Number(r.tri) - 1; // 0..3
+        const entry = byAno.get(a);
+        if (entry && t >= 0 && t < 4) {
+          entry.nfse[t] += parseFloat(r.nfse_total ?? "0") || 0;
+          entry.nfe[t]  += parseFloat(r.nfe_total  ?? "0") || 0;
+        }
+      }
+
+      const anos = Array.from({ length: qtdAnos }, (_, i) => anoIni + i);
+      // per-quarter rows for grouped BarChart
+      const quarters = ["Q1","Q2","Q3","Q4"].map((label, qi) => {
+        const entry: Record<string, number | string> = { trimestre: label };
+        for (const a of anos) {
+          const d = byAno.get(a)!;
+          entry[`nfse_${a}`] = d.nfse[qi];
+          entry[`nfe_${a}`]  = d.nfe[qi];
+        }
+        return entry;
+      });
+
+      // annual totals for context
+      const anuais = anos.map(a => {
+        const d = byAno.get(a)!;
+        return { ano: a, nfseTotal: d.nfse.reduce((s,v)=>s+v,0), nfeTotal: d.nfe.reduce((s,v)=>s+v,0) };
+      });
+
+      return { anos, quarters, anuais };
+    }),
+
   getAnalyseTributaria: protectedProcedure
     .input(z.object({
       companyId: z.number(),

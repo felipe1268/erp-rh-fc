@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3686 — **DASHBOARD NF-e · COMPARATIVO TRIMESTRAL — ÚLTIMOS 5 ANOS (NFS-e EMITIDAS). BACKEND ADITIVO + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * Novo endpoint `fiscalNotes.getQuarterlySeries({ companyId, anos })`: GROUP BY YEAR + QUARTER
+ * com CASE WHEN por origem; pivot server-side gerando 4 linhas (Q1..Q4) com colunas nfse_AAAA +
+ * nfe_AAAA para cada ano; retorna também `anuais` (totais anuais) para rodapé. Novo KPI Card
+ * "Comparativo Trimestral — NFS-e Emitidas": BarChart agrupado (4 grupos Q1..Q4, 5 barras/ano com
+ * YEAR_COLORS distintas) + tabela linhas=trimestres × colunas=anos com Δ% ▲/▼ vs ano anterior e
+ * rodapé "Total" anual. Tooltip mostra todos os anos + soma do trimestre. Inserido após o card
+ * "Evolução 5 Anos" e antes dos "Comparativos Anuais". Arquivos: `server/routers/fiscalNotes.ts`,
+ * `client/src/pages/financeiro/dashboards/DashNotasFiscais.tsx`.
+ *
+ * Rev. 3685 — **DASHBOARD NF-e · RENOMEAR LABELS GRÁFICO "ENTRADAS × SAÍDAS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ * NFS-e Emitidas = "Entradas (NFS-e)"; NF-e Recebidas = "Saídas (NF-e)"; título atualizado;
+ * totalizador inline e subtítulo corrigidos. Arquivo: `DashNotasFiscais.tsx`.
+ *
  * Rev. 3684 — **DASHBOARD NF-e · GRÁFICO "FATURAMENTO × COMPRAS — NFS-e × NF-e POR MÊS" COM SALDO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Novo ChartCard inserido entre "Evolução Fiscal Mensal" e "Cobertura de NF-e nas Saídas".
