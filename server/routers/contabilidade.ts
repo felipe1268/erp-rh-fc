@@ -399,11 +399,17 @@ export const contabilidadeRouter = router({
         `, [companyId, di, df]),
       ]);
 
+      // pg retorna TIMESTAMP como Date object — converter para ISO string antes de serializar
+      const sanitize = (rows: any[]) =>
+        rows.map(row => Object.fromEntries(
+          Object.entries(row).map(([k, v]) => [k, v instanceof Date ? v.toISOString() : v])
+        ));
+
       return {
-        nfseEmitidas: nfseQ.rows as any[],
-        nfeRecebidas: nfeQ.rows as any[],
-        extrato:      extratoQ.rows as any[],
-        ocs:          ocQ.rows as any[],
+        nfseEmitidas: sanitize(nfseQ.rows),
+        nfeRecebidas: sanitize(nfeQ.rows),
+        extrato:      sanitize(extratoQ.rows),
+        ocs:          sanitize(ocQ.rows),
       };
     }),
 

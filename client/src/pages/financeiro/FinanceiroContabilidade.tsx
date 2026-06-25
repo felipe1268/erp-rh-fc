@@ -39,10 +39,13 @@ function statusDotColor(s: string) {
   return "bg-gray-300";
 }
 
-function fmtDate(s: string | null) {
-  if (!s) return "—";
-  try { return new Date(s.replace(" ", "T")).toLocaleDateString("pt-BR", { day:"2-digit", month:"2-digit", year:"numeric" }); }
-  catch { return s; }
+function fmtDate(s: string | Date | null | undefined) {
+  if (s == null) return "—";
+  try {
+    const d = s instanceof Date ? s : new Date(String(s).replace(" ", "T"));
+    return d.toLocaleDateString("pt-BR", { day:"2-digit", month:"2-digit", year:"numeric" });
+  }
+  catch { return "—"; }
 }
 
 function fmtBRL(v: number | null | undefined) {
