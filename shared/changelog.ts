@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3721 — **IMPORT XML · SUPORTE A NFS-e NACIONAL SPED (Portal Nacional sped.fazenda.gov.br). BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * `importXml` só reconhecia NF-e de produtos (busca por `infNFe`). Ao receber NFS-e Nacional SPED v1.01
+ * (`<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse"><infNFSe Id="NFS{44}">`), o parser não achava a chave
+ * → empurrava para `erros` E `ignoradas` → toast confuso ("1 já existia. 1 com erro.") com tabela vazia.
+ * Fix: detecção prévia do nó `NFSe` no XML parseado; extrai chave do `@_Id` (strip "NFS"), número `nNFSe`,
+ * prestador (`emit`), tomador (`tomador`/`dest`), valor (`vNFSe`/`serv.vServPrest`), data (`dEmi`/`dCompet`);
+ * insere como `origem='xml_upload'` com `emitente_cnpj/nome` + `tomador_cnpj/razao_social`.
+ * Erros de "formato não reconhecido" agora só vão para `erros[]` (não `ignoradas`), evitando toast enganoso.
+ * Arquivo: `server/routers/sefaz.ts`.
+ *
  * Rev. 3720 — **INTEGRAÇÃO OMIE · IMPORTAÇÃO NF-e RECEBIDAS COM TOGGLE HABILITAR/DESABILITAR. BACKEND ADITIVO + SCHEMA + FRONTEND · ZERO ALTER/DROP/DELETE.**
  *
  * Novo router `server/routers/omie.ts` com 5 procedures tRPC:

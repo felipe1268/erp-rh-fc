@@ -50,9 +50,11 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3719** — **CONTABILIDADE · PAINEL DE DOCUMENTOS COM ABAS ANTES DO DOWNLOAD — NFS-e / NF-e / EXTRATO / OCs. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Novo endpoint `contabilidade.getDocumentosMes` (4 queries paralelas). Frontend redesenhado: ao clicar no chip do mês, carrega e exibe todos os documentos em abas com tabelas e totalizadores. Downloads ZIP/XLSX no rodapé, habilitados após dados carregarem. Arquivos: `contabilidade.ts`, `FinanceiroContabilidade.tsx`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3721** — **IMPORT XML · SUPORTE A NFS-e NACIONAL SPED (Portal Nacional sped.fazenda.gov.br). BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** `importXml` só reconhecia NF-e de produtos; ao receber NFS-e Nacional SPED v1.01 (`<NFSe xmlns="sped.fazenda.gov.br/nfse">`), não achava a chave → toast confuso "já existia + com erro" com tabela vazia. Fix: detecta nó `NFSe`, extrai chave do `@_Id` (strip "NFS"), campos `emit`/`tomador`/`serv`/`vNFSe`/`dEmi`, insere como `origem='xml_upload'`. Erros de formato agora vão só para `erros[]`, não `ignoradas`. Arquivo: `server/routers/sefaz.ts`. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3718** — **PACOTE CONTADOR + PLANILHA XLSX · BUGFIX "COLUMN DOES NOT EXIST" — codigo_servico → cd_lista_servico + fe.numero_nf → JOIN fiscal_notes. 100% BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3720** — **INTEGRAÇÃO OMIE · IMPORTAÇÃO NF-e RECEBIDAS COM TOGGLE HABILITAR/DESABILITAR. BACKEND ADITIVO + SCHEMA + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3719** — **CONTABILIDADE · PAINEL DE DOCUMENTOS COM ABAS ANTES DO DOWNLOAD. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3717** — **MÓDULO CONTABILIDADE · ABA DEDICADA COM CONTROLE MENSAL/ANUAL DE ENVIOS AO CONTADOR + FCSIGN (LISTA MESTRE). BACKEND ADITIVO + SCHEMA + FRONTEND · ZERO ALTER/DROP/DELETE.** Nova página `/financeiro/contabilidade` (sidebar seção "Contabilidade"). Grid 12-meses color-coded (pendente/enviado/assinado/futuro). Painel lateral: checklist docs reais (NFS-e/NF-e/Extrato/OCs), downloads (ZIP+XLSX), registro de envio (upsert), FCSign automático (gera envelope IntegraSign como "Protocolo de Entrega" com assinatura digital). SyncSchema+ cria `contabilidade_envios` (UNIQUE company+mes+ano). Router: `contabilidade.ts`. Detalhe: `shared/changelog.ts`.
 

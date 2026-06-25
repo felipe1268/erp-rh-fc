@@ -1296,6 +1296,60 @@ export const sefazRouter = router({
         try {
           const parsed = xmlParser.parse(file.content);
 
+          // ── Detecta NFS-e Nacional SPED (Portal Nacional sped.fazenda.gov.br) ──
+          // Formato: <NFSe xmlns="http://www.sped.fazenda.gov.br/nfse"><infNFSe Id="NFS{44}">
+          const nfseRoot = parsed["NFSe"] || parsed["nfse"];
+          if (nfseRoot) {
+            const infNFSe = nfseRoot["infNFSe"] || nfseRoot["infNfse"] || {};
+            const idRaw = String(infNFSe?.["@_Id"] || infNFSe?.["Id"] || "").replace(/^NFS/i, "");
+            const chave = idRaw.replace(/\D/g, "");
+            if (chave.length !== 44) {
+              erros.push(`${file.name}: NFS-e sem chave de acesso válida (Id="${idRaw}")`);
+              continue;
+            }
+            const existeNfse = (await db.execute(sql`
+              SELECT id FROM fiscal_notes WHERE company_id=${input.companyId} AND chave_acesso=${chave} LIMIT 1
+            `)) as any;
+            if (((existeNfse?.rows ?? existeNfse) as any[])?.length > 0) { ignoradas++; continue; }
+
+            // Campos do Portal Nacional SPED v1.01
+            const emit   = infNFSe?.["emit"]    || infNFSe?.["Emit"]    || {};
+            const tomad  = infNFSe?.["tomador"]  || infNFSe?.["Tomador"] || infNFSe?.["dest"] || {};
+            const serv   = infNFSe?.["serv"]     || infNFSe?.["Serv"]    || {};
+            const vPrest = serv?.["vServPrest"]  || serv?.["VServPrest"] || {};
+
+            const numero     = String(infNFSe?.["nNFSe"] || "0");
+            const dEmi       = String(infNFSe?.["dEmi"]  || infNFSe?.["dCompet"] || "").slice(0, 10);
+            const prestCnpj  = cleanCnpj(String(emit?.["CNPJ"] || emit?.["CPF"] || emit?.["cnpj"] || ""));
+            const prestNome  = String(emit?.["xNome"] || emit?.["razaoSocial"] || "");
+            const tomCnpj    = cleanCnpj(String(tomad?.["CNPJ"] || tomad?.["CPF"] || tomad?.["cnpj"] || ""));
+            const tomNome    = String(tomad?.["xNome"] || tomad?.["razaoSocial"] || "");
+            const valorBruto = parseFloat(String(
+              infNFSe?.["vNFSe"] || vPrest?.["vServPrest"] || vPrest?.["vReceb"] || "0"
+            )) || 0;
+            const valorLiq   = parseFloat(String(
+              vPrest?.["vReceb"] || vPrest?.["vServPrest"] || infNFSe?.["vNFSe"] || "0"
+            )) || 0;
+            const disc = String(serv?.["xDiscServ"] || serv?.["discriminacao"] || `NFS-e ${numero} — importada via XML`).slice(0, 500);
+            const dataEmissao = dEmi || new Date().toISOString().slice(0, 10);
+
+            await db.execute(sql`
+              INSERT INTO fiscal_notes
+                (company_id, numero_nf, chave_acesso, data_emissao, descricao_servico,
+                 valor_bruto, valor_liquido, status, origem,
+                 emitente_cnpj, emitente_nome, tomador_cnpj, tomador_razao_social,
+                 xml_payload, criado_por_nome, created_at, updated_at)
+              VALUES
+                (${input.companyId}, ${numero}, ${chave}, ${dataEmissao}::date, ${disc},
+                 ${valorBruto}, ${valorLiq > 0 ? valorLiq : valorBruto}, 'pendente', 'xml_upload',
+                 ${prestCnpj || null}, ${prestNome || null}, ${tomCnpj || null}, ${tomNome || null},
+                 ${file.content}, 'Import XML', NOW(), NOW())
+            `);
+            importadas++;
+            continue; // não cai no bloco NF-e abaixo
+          }
+
+          // ── NF-e de Produtos SEFAZ ────────────────────────────────────────────
           // Suporta: nfeProc (completo), NFe (sem protocolo), resNFe (resumo)
           const nfeProcRoot = parsed["nfeProc"] || parsed;
           const nfeNode = nfeProcRoot["NFe"] || nfeProcRoot["nfeProc"]?.["NFe"] || nfeProcRoot;
@@ -1307,8 +1361,7 @@ export const sefazRouter = router({
           const idAttr = String(infNFe?.["@_Id"] || infNFe?.Id || "").replace(/^NFe/, "");
           const chNFe = String(infProt?.["chNFe"] || idAttr || "").replace(/\D/g, "").padStart(44, "");
           if (chNFe.length !== 44) {
-            erros.push(`${file.name}: chave de acesso não encontrada ou inválida`);
-            ignoradas++;
+            erros.push(`${file.name}: formato de XML não reconhecido (NF-e ou NFS-e esperado)`);
             continue;
           }
 
