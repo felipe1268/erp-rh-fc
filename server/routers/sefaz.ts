@@ -377,8 +377,8 @@ function parseRetEnvEvento(respXml: string): { cStat: string; xMotivo: string; n
     const envelope = p?.Envelope ?? p?.["soap12:Envelope"] ?? p?.["soap:Envelope"] ?? p ?? {};
     const body     = envelope?.Body ?? envelope?.["soap12:Body"] ?? envelope?.["soap:Body"] ?? {};
 
-    // Inner result — SVRS usa "nfeRecepcaoEvento4Result", AN pode usar "nfeRecepcaoEventoResult"
-    const result   = body?.nfeRecepcaoEvento4Result ?? body?.nfeRecepcaoEventoResult ?? body ?? {};
+    // Inner result — SVRS usa "nfeResultMsg", fallback para "nfeRecepcaoEvento4Result" / "nfeRecepcaoEventoResult"
+    const result   = body?.nfeResultMsg ?? body?.nfeRecepcaoEvento4Result ?? body?.nfeRecepcaoEventoResult ?? body ?? {};
 
     // retEnvEvento → retEvento → infEvento (hierarquia padrão)
     const retEnv   = result?.retEnvEvento ?? p?.retEnvEvento ?? {};
@@ -1374,6 +1374,8 @@ export const sefazRouter = router({
       const soap = buildSoapEventoEnvelope(envEventoXml);
 
       console.log(`[SefazMDE] company=${input.companyId} chave=${chaveNFe.slice(0, 10)}… tpEvento=${tpEvento} tpAmb=${tpAmb} url=${url}`);
+      console.log(`[SefazMDE] envEvento (600 chars):`, envEventoXml.slice(0, 600));
+      console.log(`[SefazMDE] soap body (400 chars):`, soap.slice(0, 400));
 
       // Envia para SEFAZ
       let respXml: string;
