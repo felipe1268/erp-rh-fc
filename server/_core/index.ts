@@ -4438,6 +4438,30 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3717: tabela contabilidade_envios garantida.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3717 contabilidade_envios:`, e?.message || e); }
 
+        // Rev. 3720 — Integração Omie: config e progresso do sync NF-e
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS omie_nfe_config (
+              id                    SERIAL PRIMARY KEY,
+              company_id            INTEGER NOT NULL UNIQUE,
+              app_key               VARCHAR(200),
+              app_secret            VARCHAR(200),
+              enabled               BOOLEAN NOT NULL DEFAULT FALSE,
+              ano_inicio            SMALLINT NOT NULL DEFAULT 2020,
+              last_sync_at          TIMESTAMP,
+              sync_status           VARCHAR(20) NOT NULL DEFAULT 'idle',
+              sync_pagina           INTEGER NOT NULL DEFAULT 0,
+              sync_paginas_total    INTEGER NOT NULL DEFAULT 0,
+              sync_notas_importadas INTEGER NOT NULL DEFAULT 0,
+              sync_error            TEXT,
+              created_at            TIMESTAMP NOT NULL DEFAULT NOW(),
+              updated_at            TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_omie_cfg_company ON omie_nfe_config(company_id)`);
+          console.log(`[SyncSchema+] Rev. 3720: tabela omie_nfe_config garantida.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3720 omie_nfe_config:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

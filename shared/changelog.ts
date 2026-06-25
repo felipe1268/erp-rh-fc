@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3720 — **INTEGRAÇÃO OMIE · IMPORTAÇÃO NF-e RECEBIDAS COM TOGGLE HABILITAR/DESABILITAR. BACKEND ADITIVO + SCHEMA + FRONTEND · ZERO ALTER/DROP/DELETE.**
+ *
+ * Novo router `server/routers/omie.ts` com 5 procedures tRPC:
+ * `getConfig` (query), `saveConfig` (salva App Key + App Secret + enabled + anoInicio),
+ * `testConnection` (chama ListarNFe e retorna amostra de 3 notas para validar as chaves),
+ * `syncNfe` (dispara importação assíncrona via setImmediate — retorna imediatamente; progresso
+ * gravado no DB a cada página processada), `cancelSync` (marca como idle e remove do guard).
+ * Tabela `omie_nfe_config` criada via SyncSchema+ Rev.3720 (UNIQUE company_id).
+ * A importação percorre ano a ano de anoInicio até o ano corrente, página a página (50 notas/chamada,
+ * 250ms de pausa entre chamadas para respeitar o rate limit da Omie). Dedup por chave_acesso +
+ * company_id (WHERE NOT EXISTS). Todos os campos disponíveis na ListarNFe são persistidos:
+ * chave_acesso, número, série, data_emissao, emitente_cnpj/nome, valor_bruto, ICMS/IPI/PIS/COFINS/ISS/IR/INSS,
+ * natureza da operação, status (N→importada / C→cancelada), origen='omie_nfe'. O payload JSON completo
+ * da nota é gravado em xml_payload para acesso a todos os campos brutos.
+ * Frontend: nova seção "Integração Omie (NF-e Recebidas)" no accordion de Configurações → Financeiro,
+ * com toggle habilitar/desabilitar (para cancelar a assinatura após o histórico completo), inputs para
+ * App Key + App Secret, seletor de ano inicial, botão "Testar Conexão" (mostra amostra de notas) e
+ * botão "Importar Todas as NF-e" com barra de progresso + cancel. Auto-poll a cada 2,5s quando
+ * sync_status='running'. Arquivos: `server/routers/omie.ts` (novo), `server/routers.ts`,
+ * `server/_core/index.ts` (SyncSchema+), `client/src/pages/configuracoes/FinanceiroConfigSection.tsx`.
+ *
  * Rev. 3719 — **CONTABILIDADE · PAINEL DE DOCUMENTOS COM ABAS ANTES DO DOWNLOAD — NFS-e / NF-e / EXTRATO / OCs. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Em vez de gerar o ZIP/XLSX às cegas (propenso a erro SQL), o módulo Contabilidade agora carrega

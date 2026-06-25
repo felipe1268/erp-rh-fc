@@ -152,6 +152,7 @@ import { fiscalNotesRouter } from "./routers/fiscalNotes";
 import { contabilidadeRouter } from "./routers/contabilidade";
 import { sefazRouter } from "./routers/sefaz";
 import { nfseEmitidasRouter } from "./routers/nfseEmitidas";
+import { omieRouter } from "./routers/omie";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
@@ -1701,6 +1702,7 @@ export const appRouter = router({
   sefaz: sefazRouter,
   nfseEmitidas: nfseEmitidasRouter,
   contabilidade: contabilidadeRouter,
+  omie: omieRouter,
 
   // ============================================================
   // DESCONTOS CLT (Motor de Cálculo)

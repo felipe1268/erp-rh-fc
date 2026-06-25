@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
-import { Save, ChevronRight, Banknote, FileText, Users, RefreshCw, Zap, Shield, Upload, Play, RotateCcw, CheckCircle, AlertCircle, Loader2, Plus, Trash2, ChevronDown } from "lucide-react";
+import { Save, ChevronRight, Banknote, FileText, Users, RefreshCw, Zap, Shield, Upload, Play, RotateCcw, CheckCircle, AlertCircle, Loader2, Plus, Trash2, ChevronDown, Link2 } from "lucide-react";
 import { toast } from "sonner";
 
 function fmtBRL(v: number) {
@@ -31,7 +31,7 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
   const { selectedCompanyId } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
 
-  const [expanded, setExpanded] = useState<"tributario" | "socios" | "sefaz" | "nfseMun" | null>(null);
+  const [expanded, setExpanded] = useState<"tributario" | "socios" | "sefaz" | "nfseMun" | "omie" | null>(null);
 
   // ── NFS-e Emitidas Municipais state ──
   const { data: municipios, refetch: refetchMunicipios } = (trpc as any).nfseEmitidas.getMunicipios.useQuery(
@@ -148,6 +148,62 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
     onSuccess: () => { toast.success("NSU zerado — próxima sincronização buscará do início."); refetchSefaz(); },
     onError: (e: any) => toast.error(e.message || "Erro"),
   });
+
+  // ── Omie state ──────────────────────────────────────────────────────────────
+  const [omieForm, setOmieForm] = useState({ appKey: "", appSecret: "", enabled: false, anoInicio: 2020 });
+  const [omieTestResult, setOmieTestResult] = useState<null | { ok: boolean; mensagem: string; totalNotas: number; amostra: any[] }>(null);
+
+  const { data: omieCfg, refetch: refetchOmie } = (trpc as any).omie.getConfig.useQuery(
+    { companyId },
+    {
+      enabled: !!companyId,
+      refetchInterval: (data: any) => (data?.sync_status === "running" ? 2500 : false),
+    }
+  );
+  useEffect(() => {
+    if (omieCfg) {
+      setOmieForm({
+        appKey:     omieCfg.app_key     || "",
+        appSecret:  omieCfg.app_secret  || "",
+        enabled:    !!omieCfg.enabled,
+        anoInicio:  Number(omieCfg.ano_inicio ?? 2020),
+      });
+    }
+  }, [omieCfg]);
+
+  const omieSaveMut = (trpc as any).omie.saveConfig.useMutation({
+    onSuccess: () => { toast.success("Configuração Omie salva!"); refetchOmie(); },
+    onError: (e: any) => toast.error(e.message || "Erro ao salvar"),
+  });
+  const omieTestMut = (trpc as any).omie.testConnection.useMutation({
+    onSuccess: (r: any) => {
+      setOmieTestResult(r);
+      if (r.ok) toast.success(r.mensagem);
+      else toast.error(r.mensagem);
+    },
+    onError: (e: any) => { setOmieTestResult({ ok: false, mensagem: e.message || "Erro", totalNotas: 0, amostra: [] }); toast.error(e.message || "Erro ao testar"); },
+  });
+  const omieSyncMut = (trpc as any).omie.syncNfe.useMutation({
+    onSuccess: () => { toast.success("Importação Omie iniciada — acompanhe o progresso."); refetchOmie(); },
+    onError: (e: any) => toast.error(e.message || "Erro ao iniciar importação"),
+  });
+  const omieCancelMut = (trpc as any).omie.cancelSync.useMutation({
+    onSuccess: () => { toast.success("Sync cancelado."); refetchOmie(); },
+    onError: (e: any) => toast.error(e.message || "Erro"),
+  });
+
+  const omieIsRunning = omieCfg?.sync_status === "running";
+  const omieProgress  = omieIsRunning && omieCfg.sync_pagina > 0 && omieCfg.sync_paginas_total > 0
+    ? Math.round((omieCfg.sync_pagina / omieCfg.sync_paginas_total) * 100)
+    : null;
+
+  function handleSaveOmie() {
+    if (!omieForm.appKey.trim() || !omieForm.appSecret.trim()) {
+      toast.error("Informe o App Key e o App Secret da Omie.");
+      return;
+    }
+    omieSaveMut.mutate({ companyId, appKey: omieForm.appKey.trim(), appSecret: omieForm.appSecret.trim(), enabled: omieForm.enabled, anoInicio: omieForm.anoInicio });
+  }
 
   function handleCertFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -1057,6 +1113,241 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
             {(!municipios || municipios.length === 0) && (
               <div className="text-center text-gray-400 text-sm py-4">Carregando municípios...</div>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* Sub-seção: Integração Omie (NF-e Recebidas) */}
+      <div className="border-b border-emerald-100 last:border-0">
+        <button
+          onClick={() => setExpanded(expanded === "omie" ? null : "omie")}
+          className="w-full flex items-center justify-between px-4 py-3 bg-white hover:bg-amber-50/50 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <Link2 className="w-4 h-4 text-amber-500" />
+            <span className="font-medium text-gray-800 text-sm">Integração Omie (NF-e Recebidas)</span>
+            {omieCfg?.enabled && (
+              <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs flex items-center gap-1">
+                <CheckCircle className="w-3 h-3" /> Ativo
+              </span>
+            )}
+            {omieIsRunning && (
+              <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs flex items-center gap-1 animate-pulse">
+                <Loader2 className="w-3 h-3 animate-spin" /> Importando…
+              </span>
+            )}
+            {omieCfg?.sync_status === "done" && (
+              <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs flex items-center gap-1">
+                <CheckCircle className="w-3 h-3" /> Concluído
+              </span>
+            )}
+          </div>
+          <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${expanded === "omie" ? "rotate-90" : ""}`} />
+        </button>
+
+        {expanded === "omie" && (
+          <div className="px-4 pb-5 bg-white space-y-4">
+            {/* Explicação */}
+            <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-3 text-sm text-amber-900 flex items-start gap-2">
+              <Link2 className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
+              <div className="space-y-1">
+                <p>
+                  Importa <strong>NF-e recebidas</strong> diretamente do sistema Omie — todos os campos
+                  (chave, emitente, valores, impostos ICMS/IPI/PIS/COFINS/ISS/IR/INSS, natureza, etc.).
+                  Deduplicação automática por chave de acesso de 44 dígitos.
+                </p>
+                <p className="text-xs text-amber-700">
+                  ⚠ As credenciais abaixo são <strong>App Key + App Secret</strong> gerados no painel Omie
+                  (Configurações → Integração API), <strong>não</strong> o login/senha do site.
+                </p>
+              </div>
+            </div>
+
+            {/* Toggle habilitar */}
+            <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+              <div>
+                <p className="text-sm font-medium text-gray-800">Integração habilitada</p>
+                <p className="text-xs text-gray-500 mt-0.5">Desabilite após concluir a importação histórica.</p>
+              </div>
+              <Switch
+                checked={omieForm.enabled}
+                onCheckedChange={v => setOmieForm(f => ({ ...f, enabled: v }))}
+              />
+            </div>
+
+            {/* Campos App Key / App Secret */}
+            <div className="grid grid-cols-1 gap-3">
+              <div>
+                <Label className="text-xs">App Key (Omie)</Label>
+                <Input
+                  className="mt-1 text-sm font-mono"
+                  placeholder="Ex: 1234567890"
+                  value={omieForm.appKey}
+                  onChange={e => setOmieForm(f => ({ ...f, appKey: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label className="text-xs">App Secret (Omie)</Label>
+                <Input
+                  type="password"
+                  className="mt-1 text-sm font-mono"
+                  placeholder="••••••••••••••••••••"
+                  value={omieForm.appSecret}
+                  onChange={e => setOmieForm(f => ({ ...f, appSecret: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            {/* Ano Início */}
+            <div>
+              <Label className="text-xs">Importar a partir do ano</Label>
+              <Select
+                value={String(omieForm.anoInicio)}
+                onValueChange={v => setOmieForm(f => ({ ...f, anoInicio: Number(v) }))}
+              >
+                <SelectTrigger className="mt-1 text-sm w-40"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: new Date().getFullYear() - 2009 }, (_, i) => 2010 + i).reverse().map(y => (
+                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-400 mt-1">
+                A importação percorrerá ano a ano de {omieForm.anoInicio} até {new Date().getFullYear()}.
+              </p>
+            </div>
+
+            {/* Botões: Salvar + Testar */}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                className="bg-amber-600 hover:bg-amber-700 text-white"
+                onClick={handleSaveOmie}
+                disabled={omieSaveMut.isPending}
+              >
+                {omieSaveMut.isPending ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1" />}
+                Salvar Configuração
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-amber-300 text-amber-700 hover:bg-amber-50"
+                disabled={omieTestMut.isPending || !omieForm.appKey || !omieForm.appSecret}
+                onClick={() => { setOmieTestResult(null); omieTestMut.mutate({ companyId, appKey: omieForm.appKey, appSecret: omieForm.appSecret }); }}
+              >
+                {omieTestMut.isPending ? <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Zap className="w-3.5 h-3.5 mr-1" />}
+                Testar Conexão
+              </Button>
+            </div>
+
+            {/* Resultado do teste */}
+            {omieTestResult && (
+              <div className={`rounded-lg border px-3 py-2.5 text-sm ${omieTestResult.ok ? "border-green-200 bg-green-50 text-green-800" : "border-red-200 bg-red-50 text-red-800"}`}>
+                <p className="font-medium flex items-center gap-1.5">
+                  {omieTestResult.ok ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                  {omieTestResult.mensagem}
+                </p>
+                {omieTestResult.ok && omieTestResult.amostra?.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    <p className="text-xs text-green-700 font-medium">Amostra ({omieTestResult.amostra.length} notas):</p>
+                    {omieTestResult.amostra.map((n: any, i: number) => (
+                      <p key={i} className="text-xs text-green-700">
+                        NF {n.numero} · {n.emitente} · {n.data} · R$ {Number(n.valor ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Separador */}
+            <div className="border-t border-slate-100 pt-3">
+              <p className="text-xs font-semibold text-gray-700 mb-2">📥 Importação Histórica Completa</p>
+              <p className="text-xs text-gray-500 mb-3">
+                Importa <strong>todas</strong> as NF-e do Omie a partir de {omieForm.anoInicio}, página a página (50 notas por chamada).
+                O processo roda em background — você pode fechar esta tela e voltar para checar o progresso.
+              </p>
+
+              {/* Progresso */}
+              {omieIsRunning && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-3 mb-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                    <span className="text-sm font-medium text-blue-800">Importando…</span>
+                    <span className="text-xs text-blue-600 ml-auto">
+                      {omieCfg.sync_notas_importadas} notas importadas
+                    </span>
+                  </div>
+                  {omieProgress !== null && (
+                    <div className="w-full bg-blue-200 rounded-full h-2">
+                      <div
+                        className="bg-blue-600 h-2 rounded-full transition-all"
+                        style={{ width: `${omieProgress}%` }}
+                      />
+                    </div>
+                  )}
+                  <p className="text-xs text-blue-600">
+                    {omieCfg.sync_pagina} / {omieCfg.sync_paginas_total > 0 ? omieCfg.sync_paginas_total : "?"} páginas processadas
+                  </p>
+                </div>
+              )}
+
+              {/* Status concluído */}
+              {omieCfg?.sync_status === "done" && (
+                <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 mb-3">
+                  <p className="text-sm font-medium text-green-800 flex items-center gap-1.5">
+                    <CheckCircle className="w-4 h-4" />
+                    Importação concluída — {omieCfg.sync_notas_importadas} notas importadas
+                  </p>
+                  {omieCfg.last_sync_at && (
+                    <p className="text-xs text-green-600 mt-0.5">
+                      Concluído em {new Date(omieCfg.last_sync_at).toLocaleString("pt-BR")}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Erro */}
+              {omieCfg?.sync_status === "error" && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 mb-3">
+                  <p className="text-sm font-medium text-red-800 flex items-center gap-1.5">
+                    <AlertCircle className="w-4 h-4" /> Erro na importação
+                  </p>
+                  <p className="text-xs text-red-600 mt-0.5">{omieCfg.sync_error}</p>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <Button
+                  className="bg-amber-500 hover:bg-amber-600 text-white flex-1 sm:flex-none"
+                  size="sm"
+                  disabled={omieIsRunning || omieSyncMut.isPending || !omieCfg?.enabled}
+                  onClick={() => omieSyncMut.mutate({ companyId })}
+                  title={!omieCfg?.enabled ? "Habilite a integração e salve antes de importar" : ""}
+                >
+                  {omieIsRunning || omieSyncMut.isPending
+                    ? <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />Importando…</>
+                    : <><Play className="w-3.5 h-3.5 mr-1" />Importar Todas as NF-e</>
+                  }
+                </Button>
+                {omieIsRunning && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-red-600 border-red-200 hover:bg-red-50"
+                    disabled={omieCancelMut.isPending}
+                    onClick={() => omieCancelMut.mutate({ companyId })}
+                  >
+                    Cancelar
+                  </Button>
+                )}
+              </div>
+              {!omieCfg?.enabled && (
+                <p className="text-xs text-amber-600 mt-1.5">
+                  ↑ Habilite a integração e salve a configuração primeiro.
+                </p>
+              )}
+            </div>
           </div>
         )}
       </div>
