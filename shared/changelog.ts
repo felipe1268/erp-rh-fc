@@ -1,6 +1,56 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3738 — **NF-e RECEBIDAS · SEFAZ — GATE DE COOLDOWN AGORA FICA ACIMA DO LIMITE DE 2h (FIM DO 656 INTERMITENTE POR CHAMADA "UNS SEGUNDOS CEDO DEMAIS"). BACKEND PONTUAL (1 LINHA + COMENTÁRIO) · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Continuação do diagnóstico da Rev. 3737. Com o reset de NSU no boot já removido (NSU passou a
+ * avançar: 9627 → 9634), o Log da SEFAZ AINDA mostrava "Rate Limit" (cStat=656) em algumas rodadas.
+ *
+ * Causa-raiz (margem de folga no lado ERRADO do limite): o gate de tempo usava
+ * `cooldownMin = intervaloHoras*60 - 2` (118 min p/ intervalo de 2h). Como a SEFAZ rate-limita em
+ * "1 chamada / 2h por CNPJ", e o cron dispara a cada 15 min (arredonda o instante real da chamada),
+ * uma sync podia cair em ~1h58–2h00 depois da anterior — ou seja, ABAIXO de 2h — e a SEFAZ rejeitava
+ * com 656 (Consumo Indevido). Isso re-armava o backoff e gerava um 656 intermitente mesmo já partindo
+ * do NSU correto. A "folga" de -2 min era exatamente o que empurrava a chamada para baixo do limite.
+ *
+ * Correção (Rev. 3738): `cooldownMin = intervaloHoras*60 + 3`. A janela passa a ficar SEMPRE ACIMA do
+ * intervalo (chamada efetiva entre ~2h03 e ~2h15 com o arredondamento do cron), garantindo
+ * espaçamento > 2h por CNPJ e eliminando o 656 de borda. O gate em `executarSyncNFe` é a autoridade
+ * única (cron, syncNow e backfill passam por ele), então a correção cobre todos os caminhos.
+ *
+ * Também (operacional, fora do diff): a empresa-piloto teve `ultimo_nsu` ajustado para o MAIOR NSU
+ * já importado (`MAX(fiscal_notes.nsu_sefaz)` = 9627, ponto de retomada provadamente seguro) — feito
+ * na Rev. 3737; a próxima sync, agora bem espaçada, parte de 9634 e deve finalmente importar.
+ *
+ * Arquivo: `server/routers/sefaz.ts` (`executarSyncNFe`, cálculo de `cooldownMin`). Detalhe aqui.
+ *
+ * Rev. 3737 — **NF-e RECEBIDAS · SEFAZ — FIM DO LOOP ETERNO DE RATE-LIMIT (cStat=656). REMOVIDO RESET DE NSU NO BOOT (Rev. 3596) QUE RE-ZERAVA O NSU BOM A CADA RESTART. BACKEND (1 BLOCO DE STARTUP REMOVIDO) · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Contexto (queixa do piloto FC): a sincronização com a SEFAZ "só dá erro" — o Log de
+ * Sincronizações mostrava "Rate Limit" em quase toda rodada, com NSU INICIAL = 0 e NSU FINAL ≈ 9634,
+ * ou seja, cada sync recomeçava do zero. Consulta direta ao Neon confirmou o sintoma: a empresa
+ * estava com `ultimo_nsu = 0` e `last_sync_result = NULL`.
+ *
+ * Causa-raiz (LOOP auto-infligido): existia um bloco de startup `[SyncSchema+]` da Rev. 3596 que,
+ * a CADA boot do servidor, zerava `ultimo_nsu` (e `last_sync_result`) de toda empresa cujo último
+ * resultado tivesse `nsuSalvo != null` E `importadas = 0`. Essa regra foi escrita sob a premissa
+ * (hoje OBSOLETA) de que "salvar o NSU num 656 sem importar nada" era corrupção. Mas isso é
+ * justamente o comportamento CORRETO e OBRIGATÓRIO: quando a SEFAZ devolve `cStat=656` (Consumo
+ * Indevido) ela retorna o `ultNSU` de retomada — e `importadas = 0` é o normal nesse caso. Como o
+ * bloco roda em todo restart (e deploys/reinícios são frequentes), ele destruía exatamente o NSU
+ * que precisávamos preservar: NSU bom → reset p/ 0 no boot → próxima sync manda ultNSU=0 → SEFAZ
+ * 656 de novo → grava nsuSalvo+importadas=0 → próximo boot reseta de novo → loop infinito,
+ * independente de quanto se espera.
+ *
+ * Correção (Rev. 3737): REMOVIDO o bloco de reset de NSU da Rev. 3596 em `server/_core/index.ts`
+ * (substituído por um comentário explicando por quê). Nada mais zera o NSU no boot. O estado atual
+ * (`ultimo_nsu = 0`) se auto-corrige com SEGURANÇA na próxima sync: a SEFAZ responde 656 com o
+ * `ultNSU` correto de retomada, que agora PERSISTE (a lógica de salvar o NSU no 656 já existia e
+ * estava certa — só estava sendo sabotada pelo reset do boot). Sem perda de documentos: partir de
+ * 0 é seguro porque a própria SEFAZ informa o ponto de retomada via 656.
+ *
+ * Arquivo: `server/_core/index.ts` (bloco `[SyncSchema+]` Rev. 3596 removido). Detalhe completo aqui.
+ *
  * Rev. 3736 — **CONCILIAÇÃO BANCÁRIA · SUGESTÃO — CHEQUES/BOLETOS AGORA BUSCAM LANÇAMENTOS DE OUTROS MESES + CASAMENTO PELO Nº DO CHEQUE. BACKEND READ-ONLY (`sugerirConciliacao`) · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Contexto (queixa do piloto FC): no mesmo dia 06/01 dois cheques (902 e 903) foram compensados

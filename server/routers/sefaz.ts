@@ -725,7 +725,11 @@ export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?:
   //   4+ consecutivos  → 4× cooldown (4h máx)
   // Evita que tentativas horárias mantenham o CNPJ bloqueado no SEFAZ.
   const intervaloHoras = Math.max(1, Number(cfg.sync_intervalo_horas ?? 1));
-  const cooldownMin = intervaloHoras * 60 - 2; // 2 min de folga
+  // MARGEM DE SEGURANÇA ACIMA do limite SEFAZ (1 chamada/2h por CNPJ). A janela precisa ficar
+  // ACIMA do intervalo, NUNCA abaixo. A folga negativa antiga (-2) + arredondamento do cron (15 min)
+  // permitia uma chamada cair em ~1h58–2h00 (< 2h) → a SEFAZ devolvia cStat=656 (Consumo Indevido),
+  // re-disparando o rate-limit num ciclo intermitente. +3 garante espaçamento sempre > intervalo.
+  const cooldownMin = intervaloHoras * 60 + 3;
 
   if (!opts?.skipTimeGate) {
     try {

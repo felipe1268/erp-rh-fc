@@ -4272,31 +4272,14 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3619-B: provider corrigido para 'nfse_nacional' em ibge_code=35186020 (Portal Nacional REST).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3619-B nfse-nacional-provider-fix:`, e?.message || e); }
 
-        // Rev. 3596 — BUGFIX: NSU de histórico sobreescrito por rate-limit (656 sem progresso).
-        // Reseta para '000000000000000' qualquer empresa onde o rate-limit salvou o NSU atual
-        // sem ter importado nenhum documento (nsuSalvo != null mas importadas=0 no result JSON).
-        try {
-          const rateRows = (await db.execute(sql`
-            SELECT company_id, ultimo_nsu, last_sync_result
-            FROM company_nfe_config
-            WHERE ativo = 1
-              AND last_sync_result IS NOT NULL
-              AND (last_sync_result::jsonb->>'nsuSalvo') IS NOT NULL
-              AND (last_sync_result::jsonb->>'nsuSalvo') != 'null'
-              AND COALESCE((last_sync_result::jsonb->>'importadas')::int, 0) = 0
-          `)) as any;
-          const affected = (rateRows?.rows ?? rateRows) as any[];
-          for (const row of affected) {
-            await db.execute(sql`
-              UPDATE company_nfe_config
-              SET ultimo_nsu = '000000000000000',
-                  last_sync_result = NULL
-              WHERE company_id = ${row.company_id}
-            `);
-            console.log(`[SyncSchema+] Rev. 3596: NSU resetado para histórico company=${row.company_id} (era ${row.ultimo_nsu}, rate-limited sem progresso)`);
-          }
-          if (!affected.length) console.log(`[SyncSchema+] Rev. 3596: nenhum NSU corrompido por rate-limit encontrado — OK`);
-        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3596 nsu-rate-reset:`, e?.message || e); }
+        // Rev. 3737 — REMOVIDO o reset de NSU da Rev. 3596 (causava LOOP ETERNO de rate-limit).
+        // A Rev. 3596 zerava ultimo_nsu de toda empresa com `nsuSalvo != null` e `importadas = 0`,
+        // partindo da premissa (hoje OBSOLETA) de que salvar o NSU num 656 sem importar era corrupção.
+        // Na verdade isso é o comportamento CORRETO e OBRIGATÓRIO: no cStat=656 a SEFAZ devolve o
+        // ultNSU de retomada (importadas=0 é normal). Como este bloco roda a CADA boot, ele re-zerava
+        // o NSU bom toda vez → próxima sync mandava ultNSU=0 → 656 de novo → loop infinito. Removido.
+        // O estado atual (ultimo_nsu=0) se auto-corrige com segurança na próxima sync: a SEFAZ
+        // responde 656 com o ultNSU correto, que agora persiste por não haver mais reset no boot.
 
         // Rev. 3600 — BUGFIX: chave_acesso armazenada em notação científica (3.526e+43)
         // Causa: fast-xml-parser com parseAttributeValue:true convertia strings de 44 dígitos

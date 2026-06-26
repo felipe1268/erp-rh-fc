@@ -26,6 +26,40 @@ cStat=656 · ultNSU enviado=000000000000000 · ultNSU retornado=000000000009615
   a próxima consulta parta desse ponto
 - Cooldown de 58min (`rateLimitedAt` no JSON) evita queimar a cota com chamadas extras
 
+## Armadilha — reset de NSU no boot re-cria o loop (mesmo com o save do 656 correto)
+O save do `ultNSU` do 656 (acima) pode estar 100% certo e o loop AINDA acontecer se algum bloco de
+startup zerar o NSU a cada boot. Já existiu um migration `[SyncSchema+]` que, todo boot, resetava
+`ultimo_nsu=0` + `last_sync_result=NULL` para empresas com `nsuSalvo!=null` E `importadas=0`,
+achando que era "corrupção". Mas `nsuSalvo + importadas=0` é exatamente o estado CORRETO após um 656.
+Resultado: NSU bom → reset p/ 0 no boot → 656 de novo → loop, independente do tempo de espera.
+
+**Why:** deploys/restarts são frequentes; um reset no boot desfaz o save do 656 antes da próxima sync.
+**How to apply:** ao depurar "só dá erro / NSU inicial=0", NÃO olhe só o handler do 656 — procure
+TODO bloco de boot/migration que escreve em `ultimo_nsu`/`last_sync_result`. `importadas=0` NUNCA é
+sinal de corrupção por si só.
+
+## Resume point seguro (heal manual sem pular documentos)
+Para curar `ultimo_nsu=0` na mão sem risco de PULAR NF-e: derive o ponto de retomada dos NOSSOS
+próprios dados — `MAX(nsu_sefaz)` em `fiscal_notes` (origem `sefaz_nfe`). Temos provadamente tudo
+até esse NSU, então `ultimo_nsu = MAX(nsu_sefaz)` faz a próxima sync pedir o próximo e nada é pulado.
+NUNCA chutar o NSU de um screenshot/log (pode ser maxNSU = docs ainda NÃO consumidos → pula notas).
+Limpar `last_sync_at` + `last_sync_result` zera cooldown/backoff p/ a próxima cron rodar já.
+
+## Margem do gate de cooldown deve ficar ACIMA do limite SEFAZ, não abaixo
+Mesmo com NSU correto, dá 656 intermitente se o gate de tempo permitir uma chamada um pouco ANTES
+das 2h. Havia `cooldownMin = intervaloHoras*60 - 2` (118 min p/ intervalo de 2h); com o cron a cada
+15 min, a chamada efetiva caía em ~1h58–2h00 (< 2h) e a SEFAZ devolvia cStat=656 (Consumo Indevido).
+**Why:** a SEFAZ rate-limita "1 chamada / 2h por CNPJ"; folga NEGATIVA empurra a chamada para baixo
+do teto. **How to apply:** o espaçamento mínimo entre chamadas precisa ser > intervalo configurado
+(ex.: `intervaloHoras*60 + 3`), nunca menor. O gate de `executarSyncNFe` é a autoridade única
+(cron, syncNow e backfill passam por ele) — corrigir lá cobre todos os caminhos.
+
+## NÃO limpar last_sync_at para "acelerar" um heal
+Limpar `last_sync_at=NULL` faz o gate liberar uma chamada IMEDIATA (branch "primeiro sync"), que pode
+bater na SEFAZ poucos minutos após a anterior → 656 na hora + backoff escalado. Para curar dados,
+ajuste só `ultimo_nsu` (via MAX(nsu_sefaz)) e deixe o `last_sync_at` real intacto; a próxima sync
+bem-espaçada resolve. Resetar `rateLimitConsecutive` é ok, mas mantenha o espaçamento de 2h.
+
 ## Importação alternativa via XML
 Para histórico 2018-2026: botão "Importar XML" na aba NF-e Recebidas aceita nfeProc/NFe XML.
 Endpoint `sefaz.importXml`; `listNFeRecebidas` filtra `IN ('sefaz_nfe', 'xml_upload')`.
