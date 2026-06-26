@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3731 — **XLSX EXTRATO BANCÁRIO · LAYOUT PRONUS EXATO — FORMATO ZERO "R$ 0,00" + LAYOUT COMPACTO (EMPRESA L1, BANCO L3-4, CABEÇALHO L5, DADOS L6+). BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Dois ajustes em `buildExtratoBancarioBuffer` (downloadContabilidadeXlsx.ts), que alimenta
+ * tanto o download avulso quanto o ZIP do Pacote Contador:
+ * 1. Formato BRL: removida seção zero `;"R$ -"` — zero agora exibe "R$ 0,00" (igual ao modelo Pronus);
+ *    positivo = "R$ 10,00", negativo = "-R$ 10,00".
+ * 2. Layout compacto idêntico ao modelo (IMG_2860): empresa na linha 1 (A1:H1 mesclado),
+ *    espaço na linha 2, caixa banco em A3:F4 mesclado + metadata G3:H4,
+ *    cabeçalho roxo na linha 5, dados a partir da linha 6.
+ *    Antes: título em L2, banco em L5-6, cabeçalho em L8, dados de L9.
+ * Arquivo: `server/routers/downloadContabilidadeXlsx.ts`.
+ *
  * Rev. 3730 — **PACOTE CONTADOR · XLSX EXTRATO BANCÁRIO — BUGFIX LINHAS VAZIAS: buildExtratoBancarioBuffer EXPORTADA DE downloadContabilidadeXlsx.ts (query EXTRACT/MONTH/YEAR, layout Pronus correto). BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Causa raiz das linhas vazias: `buildExtratoBancarioXlsx` no pacote usava `bsl.data >= $3 AND bsl.data < $4`

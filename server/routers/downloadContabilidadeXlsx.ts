@@ -61,8 +61,8 @@ const C = {
   LIGHT  : "F2F2F2",
 };
 
-// Formato BRL: positivo "R$ 10,00" | negativo "-R$ 10,00" | zero "R$ -"
-const BRL = '"R$ "#,##0.00;"-R$ "#,##0.00;"R$ -"';
+// Formato BRL: positivo "R$ 10,00" | negativo "-R$ 10,00" | zero "R$ 0,00"
+const BRL = '"R$ "#,##0.00;"-R$ "#,##0.00';
 
 // ── Builders de estilo ───────────────────────────────────────────────────────
 
@@ -258,26 +258,30 @@ export async function buildExtratoBancarioBuffer(
     const lines = linesQ.rows;
     const ws: XLSX.WorkSheet = {};
 
-    addCell(ws, "A2", tituloEmpresa, "s", sTitle());
+    // Linha 1 — título empresa (A1:H1)
+    addCell(ws, "A1", tituloEmpresa, "s", sTitle());
 
-    for (const addr of ["B5","C5","D5","E5","F5","A6","B6","C6","D6","E6","F6"]) {
+    // Linhas 3-4 — caixa banco (A3:F4 mesclado) + metadata saldo anterior
+    for (const addr of ["B3","C3","D3","E3","F3","A4","B4","C4","D4","E4","F4"]) {
       addCell(ws, addr, "", "s", sBankEmpty());
     }
-    addCell(ws, "A5", bancoLabel, "s", sBank());
+    addCell(ws, "A3", bancoLabel, "s", sBank());
 
-    addCell(ws, "G5", "Data Saldo Anterior", "s", sInfoLabel());
-    addCell(ws, "H5", dataSaldoAnt,           "s", sInfoDate());
-    addCell(ws, "G6", "Saldo Anterior",        "s", sInfoLabel());
-    addCell(ws, "H6", saldoInicial,            "n", sInfoMoney());
+    addCell(ws, "G3", "Data Saldo Anterior", "s", sInfoLabel());
+    addCell(ws, "H3", dataSaldoAnt,           "s", sInfoDate());
+    addCell(ws, "G4", "Saldo Anterior",        "s", sInfoLabel());
+    addCell(ws, "H4", saldoInicial,            "n", sInfoMoney());
 
+    // Linha 5 — cabeçalho roxo
     const hdrs = ["Data","Histórico do Banco","Histórico Real",
                   "Nº Nota Fiscal","Nº CNPJ","Entrada","Saída","Saldo"];
     const cols = ["A","B","C","D","E","F","G","H"];
-    hdrs.forEach((h, i) => addCell(ws, `${cols[i]}8`, h, "s", sHeader()));
+    hdrs.forEach((h, i) => addCell(ws, `${cols[i]}5`, h, "s", sHeader()));
 
+    // Linha 6+ — dados
     let saldo = saldoInicial;
     lines.forEach((line, idx) => {
-      const row   = idx + 9;
+      const row   = idx + 6;
       const valor = parseFloat(String(line.valor)) || 0;
       const ent   = valor > 0 ? valor : 0;
       const sai   = valor < 0 ? Math.abs(valor) : 0;
@@ -298,7 +302,8 @@ export async function buildExtratoBancarioBuffer(
       addCell(ws, `H${row}`, saldo,"n", sMoney(sSign));
     });
 
-    const totalRow = lines.length + 9;
+    // Linha TOTAL
+    const totalRow = lines.length + 6;
     let totEnt = 0, totSai = 0;
     lines.forEach(l => {
       const v = parseFloat(String(l.valor)) || 0;
@@ -313,22 +318,19 @@ export async function buildExtratoBancarioBuffer(
 
     ws["!ref"] = `A1:H${totalRow}`;
     ws["!merges"] = [
-      { s: { r: 1, c: 0 }, e: { r: 1, c: 7 } },
-      { s: { r: 4, c: 0 }, e: { r: 5, c: 5 } },
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } },  // A1:H1 — título
+      { s: { r: 2, c: 0 }, e: { r: 3, c: 5 } },  // A3:F4 — caixa banco
     ];
     ws["!cols"] = [
       { wch: 12 }, { wch: 44 }, { wch: 34 },
       { wch: 18 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 16 },
     ];
-    ws["!rows"] = new Array(8).fill(null);
-    ws["!rows"][0] = { hpt: 8  };
-    ws["!rows"][1] = { hpt: 32 };
-    ws["!rows"][2] = { hpt: 6  };
-    ws["!rows"][3] = { hpt: 6  };
-    ws["!rows"][4] = { hpt: 22 };
-    ws["!rows"][5] = { hpt: 22 };
-    ws["!rows"][6] = { hpt: 8  };
-    ws["!rows"][7] = { hpt: 28 };
+    ws["!rows"] = new Array(5).fill(null);
+    ws["!rows"][0] = { hpt: 32 };  // Linha 1 — título
+    ws["!rows"][1] = { hpt: 6  };  // Linha 2 — espaço
+    ws["!rows"][2] = { hpt: 22 };  // Linha 3 — banco (topo)
+    ws["!rows"][3] = { hpt: 22 };  // Linha 4 — banco (base)
+    ws["!rows"][4] = { hpt: 28 };  // Linha 5 — cabeçalho
 
     XLSX.utils.book_append_sheet(wb, ws, sheetName(banco, contaDesc));
   }
