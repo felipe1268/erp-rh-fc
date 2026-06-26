@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3742 — **CONCILIAÇÃO BANCÁRIA · CHEQUES DEVOLVIDOS — NOVO BOTÃO "DESCONSIDERAR DA CONCILIAÇÃO": TIRA O PAR DO CÁLCULO DO % SEM APAGAR O CHEQUE (P/ O % CHEGAR A 100% QUANDO O PAGAMENTO REAL FOI POR PIX/TED CONCILIADO EM OUTRA CONTA). REVERSÍVEL. SCHEMA ADITIVO (3 COLUNAS) · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
+ *
+ * Pedido do piloto FC: na Conciliação Bancária, um cheque emitido foi DEVOLVIDO pelo banco (par
+ * compensação=débito + devolução=crédito, saldo zero) e o pagamento ao fornecedor acabou sendo feito
+ * por PIX/TED — que foi conciliado em OUTRA conta bancária. Como o par devolvido fica na conta original
+ * sem ter como casar com lançamento ali, ele permanecia `conciliado=0` e SEGURAVA o percentual de
+ * conciliação abaixo de 100% (ex.: 16/36 = 44%) para sempre. O usuário pediu um jeito de "tirar esse
+ * par da conta do %" SEM apagar a informação do cheque (que precisa continuar registrada/visível).
+ *
+ * Causa-raiz: o % de conciliação é `conciliadas/total` sobre `bank_statement_lines` (filtrando só
+ * `excluido_em IS NULL`). As linhas do cheque devolvido entram no `total` mas nunca no `conciliadas`,
+ * então puxam o % para baixo. Usar o soft-delete existente (`excluido_em`) resolveria o %, MAS removeria
+ * a linha do extrato/painel — exatamente o que o usuário NÃO quer (perderia o registro do cheque).
+ *
+ * Correção (Rev. 3742): novo flag dedicado `desconsiderado_em` (+ `desconsiderado_por_id`/`_por_nome`)
+ * em `bank_statement_lines` — distinto de `excluido_em`. "DESCONSIDERAR" marca as duas linhas do par;
+ * "RECONSIDERAR" desfaz. As linhas CONTINUAM visíveis no painel "Cheques devolvidos" (agora com badge
+ * "Desconsiderado do %" e a linha esmaecida), mas SAEM do cálculo do percentual. Todas as agregações de
+ * % passaram a filtrar `desconsiderado_em IS NULL`: `getBankAccountsConciliacaoStatus` (cards por conta),
+ * `getConciliacaoResumoMensal` (saúde mensal) e `getBankStatementsMonthlyStatus` (bolinhas do ano). O
+ * relatório (`_computeConciliacaoReport`) passa o flag `desconsiderado` em cada cheque devolvido (lido das
+ * linhas pareadas) p/ o front renderizar o estado. Mutations novas `desconsiderarChequeDevolvido` /
+ * `reconsiderarChequeDevolvido` ({companyId, lineIds[]}) com tenant guard (`_assertFinanceiroCompanyAccess`),
+ * UPDATE por `company_id` + `excluido_em IS NULL` (ids inline validados via `inlineIds`), `RETURNING id` p/
+ * contar afetados, e audit log. Schema sincronizado via `[SyncSchema+]` (ADD COLUMN IF NOT EXISTS, aditivo).
+ * Frontend: botão por cheque no painel de devolvidos + invalidação das 4 superfícies de %.
+ *
+ * Arquivos: `drizzle/schema.ts` (3 colunas em bankStatementLines), `server/_core/index.ts` ([SyncSchema+]),
+ * `server/routers/financial.ts` (filtros de % + 2 mutations + flag no relatório),
+ * `client/src/pages/financeiro/FinanceiroConciliacao.tsx` (botão/badge + mutations). Detalhe aqui.
+ *
  * Rev. 3741 — **CONCILIAÇÃO · CAIXA INTERNO — NOVO LANÇAMENTO NÃO APARECIA NA LISTA SEM RECARREGAR A PÁGINA. AGORA A LISTA (A CONFIRMAR / CONFIRMADAS) ATUALIZA NA HORA. 100% FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Queixa do piloto FC: ao criar um lançamento no Caixa Interno ("Novo lançamento"), ele não entrava

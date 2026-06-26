@@ -13,7 +13,7 @@ import { runAllAutoImports } from "../services/financialAutoImport";
 // flag global. Quando FINANCEIRO_SOMENTE_REAL, os endpoints de leitura escondem
 // TODAS as projeções (cronograma/PCP/folha projetada/etc.), não só o cronograma.
 import { sqlNotProjecao, FINANCEIRO_SOMENTE_REAL } from "../../shared/financeiroProjecao";
-import { detectarParesEstorno, pareceCompensacaoCheque, type LinhaEstornoMin } from "../../shared/chequeMotivos";
+import { detectarParesEstorno, pareceCompensacaoCheque, pareceDevolucaoCheque, type LinhaEstornoMin } from "../../shared/chequeMotivos";
 import {
   runAllDespesasImport,
   runAllReceitasImport,
@@ -1043,7 +1043,8 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
 
     // 2) Extrato SEM lançamento (pendências)
     const pendRes = await dbExecute(db,
-      `SELECT id, data, descricao, valor, tipo, saldo_apos AS "saldoApos"
+      `SELECT id, data, descricao, valor, tipo, saldo_apos AS "saldoApos",
+              desconsiderado_em AS "desconsideradoEm"
          FROM bank_statement_lines
         WHERE company_id=$1 AND conta_bancaria_id=$2 AND data>=$3 AND data<=$4
           AND COALESCE(conciliado,0)=0 AND excluido_em IS NULL
@@ -1543,6 +1544,10 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
         debitoId: p.debitoId,
         creditoId: p.creditoId,
         resolucao,
+        // Rev. 3742 — par DESCONSIDERADO do cálculo do % (cheque devolvido já pago por
+        // PIX/TED conciliado em OUTRA conta). Continua visível no painel, mas com badge e
+        // fora da conta do percentual. Marca se QUALQUER das duas linhas estiver desconsiderada.
+        desconsiderado: !!(deb?.desconsideradoEm || cred?.desconsideradoEm),
       };
     });
     void minById;
@@ -5388,7 +5393,7 @@ export const financialRouter = router({
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
     // dbExecute liga params por ORDEM DE APARIÇÃO do $N. Mantemos a ordem:
     // [companyId, dataInicio, dataFim, (contaBancariaId)].
-    const conds = [`company_id=$1`, `data>=$2`, `data<=$3`, `excluido_em IS NULL`];
+    const conds = [`company_id=$1`, `data>=$2`, `data<=$3`, `excluido_em IS NULL`, `desconsiderado_em IS NULL`];
     const vals: any[] = [input.companyId, `${input.ano}-01-01`, `${input.ano}-12-31`];
     if (input.contaBancariaId) { conds.push(`conta_bancaria_id=$4`); vals.push(input.contaBancariaId); }
     const res = await dbExecute(db,
@@ -5885,6 +5890,7 @@ export const financialRouter = router({
          LEFT JOIN financial_internal_overrides ov
            ON ov.line_id=b.id AND ov.company_id=b.company_id AND ov.natureza IN ('efetivo','interno')
         WHERE b.company_id=$1 AND b.data>=$2 AND b.data<=$3 AND b.excluido_em IS NULL
+          AND b.desconsiderado_em IS NULL
         GROUP BY b.conta_bancaria_id`,
       [input.companyId, input.dataInicio, input.dataFim]);
     // Rev. 3423 — Caixa Interno: segunda query separada p/ evitar UNION ALL com params reutilizados
@@ -6444,7 +6450,7 @@ export const financialRouter = router({
               COALESCE(SUM(CASE WHEN valor>=0 THEN valor ELSE 0 END),0) AS "valorEntradas",
               COALESCE(SUM(CASE WHEN valor<0 THEN ABS(valor) ELSE 0 END),0) AS "valorSaidas"
          FROM bank_statement_lines
-        WHERE company_id=$1 AND excluido_em IS NULL
+        WHERE company_id=$1 AND excluido_em IS NULL AND desconsiderado_em IS NULL
           AND EXTRACT(year FROM data)=$2
         GROUP BY EXTRACT(month FROM data)
         ORDER BY 1`,
@@ -6458,6 +6464,88 @@ export const financialRouter = router({
       valorEntradas: Number(r.valorEntradas) || 0,
       valorSaidas: Number(r.valorSaidas) || 0,
     }));
+  }),
+
+  // Rev. 3742 — DESCONSIDERAR par de cheque devolvido do CÁLCULO do %. NÃO apaga nada:
+  // marca as linhas (desconsiderado_em=NOW) p/ saírem da conta do percentual (todas as
+  // agregações filtram `desconsiderado_em IS NULL`), mas elas seguem visíveis no painel
+  // "Cheques devolvidos" com badge. Reversível via reconsiderarChequeDevolvido. Caso de
+  // uso: cheque devolvido cujo pagamento real (PIX/TED) já foi conciliado em OUTRA conta —
+  // o par compensação+devolução não casa aqui e impedia o % de chegar a 100%. Tenant guard.
+  desconsiderarChequeDevolvido: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    lineIds: z.array(z.number()).min(1),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const ids = Array.from(new Set(input.lineIds.map(Number).filter((n) => Number.isFinite(n) && n > 0)));
+    if (!ids.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhuma linha informada." });
+    // Guard de ELEGIBILIDADE (Rev. 3742): o endpoint só desconsidera um PAR de estorno de cheque
+    // devolvido (compensação=débito + devolução=crédito, mesmo valor absoluto), espelhando os
+    // predicados de `detectarParesEstorno`. Sem isso, a API aceitaria lineIds arbitrários da
+    // empresa e tiraria linhas quaisquer do cálculo do %, distorcendo o indicador.
+    {
+      const sel = await dbExecute(db,
+        `SELECT id, valor, descricao, conciliado FROM bank_statement_lines
+          WHERE company_id=$1 AND excluido_em IS NULL AND id IN (${inlineIds(ids)})`,
+        [input.companyId]);
+      const linhas = rows(sel);
+      if (linhas.length !== 2) throw new TRPCError({ code: "BAD_REQUEST", message: "Só é possível desconsiderar o par (compensação + devolução) de um cheque devolvido." });
+      const cents = (v: any) => Math.round(Math.abs(Number(v) || 0) * 100);
+      const debito = linhas.find((l: any) => Number(l.valor) < 0);
+      const credito = linhas.find((l: any) => Number(l.valor) >= 0);
+      const elegivel = !!debito && !!credito
+        && cents(debito.valor) === cents(credito.valor) && cents(credito.valor) > 0
+        && pareceCompensacaoCheque(debito.descricao) && pareceDevolucaoCheque(credito.descricao)
+        && Number(debito.conciliado) !== 1 && Number(credito.conciliado) !== 1;
+      if (!elegivel) throw new TRPCError({ code: "BAD_REQUEST", message: "Estas linhas não formam um par de cheque devolvido elegível (ou já estão conciliadas)." });
+    }
+    const porNome = (ctx.user as any)?.nome ?? (ctx.user as any)?.name ?? null;
+    // dbExecute liga params por ORDEM DE APARIÇÃO: $1=por_id, $2=por_nome, $3=company_id.
+    // Os ids vão INLINE (números validados) — guard de empresa via company_id + excluido_em.
+    const upd = await dbExecute(db,
+      `UPDATE bank_statement_lines
+          SET desconsiderado_em=NOW(), desconsiderado_por_id=$1, desconsiderado_por_nome=$2
+        WHERE company_id=$3 AND excluido_em IS NULL AND desconsiderado_em IS NULL
+          AND id IN (${inlineIds(ids)})
+        RETURNING id`,
+      [ctx.user?.id ?? null, porNome, input.companyId]);
+    const afetados = rows(upd).length;
+    await createAuditLog(db, {
+      userId: ctx.user?.id,
+      action: "bank_statement_line_desconsiderar",
+      details: `Desconsiderou ${afetados} linha(s) de extrato da conciliação (cheque devolvido): #${ids.join(", #")}`,
+      companyId: input.companyId,
+    });
+    return { ok: true, afetados };
+  }),
+
+  // Rev. 3742 — RECONSIDERAR (desfaz o desconsiderar): volta as linhas para a conta do %.
+  reconsiderarChequeDevolvido: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    lineIds: z.array(z.number()).min(1),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const ids = Array.from(new Set(input.lineIds.map(Number).filter((n) => Number.isFinite(n) && n > 0)));
+    if (!ids.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhuma linha informada." });
+    const upd = await dbExecute(db,
+      `UPDATE bank_statement_lines
+          SET desconsiderado_em=NULL, desconsiderado_por_id=NULL, desconsiderado_por_nome=NULL
+        WHERE company_id=$1 AND excluido_em IS NULL AND desconsiderado_em IS NOT NULL
+          AND id IN (${inlineIds(ids)})
+        RETURNING id`,
+      [input.companyId]);
+    const afetados = rows(upd).length;
+    await createAuditLog(db, {
+      userId: ctx.user?.id,
+      action: "bank_statement_line_reconsiderar",
+      details: `Reconsiderou ${afetados} linha(s) de extrato na conciliação: #${ids.join(", #")}`,
+      companyId: input.companyId,
+    });
+    return { ok: true, afetados };
   }),
 
   conciliarLancamento: protectedProcedure.input(z.object({

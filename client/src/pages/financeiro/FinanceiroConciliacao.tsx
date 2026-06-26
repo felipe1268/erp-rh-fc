@@ -17,7 +17,7 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Link2, X, Trash2, CalendarX, FileSpreadsheet, FileDown, Plus, Maximize2, Minimize2, Search, Users, Building2, Pencil, Wallet, CircleCheck, CircleDot, Zap } from "lucide-react";
+import { CheckCircle, AlertCircle, RefreshCw, ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, Upload, FileText, Sparkles, ArrowRight, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Landmark, Check, RotateCcw, Loader2, Eye, Paperclip, ExternalLink, Link2, X, Trash2, CalendarX, FileSpreadsheet, FileDown, Plus, Maximize2, Minimize2, Search, Users, Building2, Pencil, Wallet, CircleCheck, CircleDot, Zap, EyeOff } from "lucide-react";
 import { formatConta, formatAgencia } from "@/lib/formatters";
 import { NaturezaOverrideDialog, NaturezaBadge, type LancNaturezaLinha } from "./_NaturezaOverride";
 import { SearchableSelect } from "@/components/SearchableSelect";
@@ -890,6 +890,25 @@ export default function FinanceiroConciliacao() {
   // no catch do submitLancar, preservando o id criado p/ não duplicar no retry).
   const lancConciliarMut = (trpc as any).financial.conciliarLancamento.useMutation({
     onSuccess: () => { toast({ title: "Lançado e conciliado!" }); refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true); refetchReport(); setSelectedStatement(null); setSelectedEntry(null); },
+  });
+  // Rev. 3742 — DESCONSIDERAR / RECONSIDERAR cheque devolvido do cálculo do %. NÃO apaga o
+  // cheque: tira o par do percentual (cheque já pago por PIX/TED conciliado em OUTRA conta),
+  // deixando o % chegar a 100%. Reversível. Repinta todas as superfícies de % (cards/meses).
+  const desconsiderarChequeMut = (trpc as any).financial.desconsiderarChequeDevolvido.useMutation({
+    onSuccess: (res: any) => {
+      toast({ title: "Cheque desconsiderado da conciliação", description: `${formatInt(res?.afetados ?? 0)} linha(s) fora do cálculo do %.` });
+      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true); refetchReport();
+      (utils as any).financial?.getConciliacaoResumoMensal?.invalidate?.();
+    },
+    onError: (e: any) => toast({ title: "Erro ao desconsiderar", description: e.message, variant: "destructive" }),
+  });
+  const reconsiderarChequeMut = (trpc as any).financial.reconsiderarChequeDevolvido.useMutation({
+    onSuccess: (res: any) => {
+      toast({ title: "Cheque reconsiderado", description: `${formatInt(res?.afetados ?? 0)} linha(s) de volta ao cálculo do %.` });
+      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true); refetchReport();
+      (utils as any).financial?.getConciliacaoResumoMensal?.invalidate?.();
+    },
+    onError: (e: any) => toast({ title: "Erro ao reconsiderar", description: e.message, variant: "destructive" }),
   });
 
   // Rev. 3175 — Importação em 2 fases com PROGRESSO REAL (0–100%): analisa (parse →
@@ -5038,7 +5057,7 @@ export default function FinanceiroConciliacao() {
                     {repDevol.map((d: any) => {
                       const res = d.resolucao ?? { tipo: "pendente" };
                       return (
-                        <div key={d.grupoId} className="px-4 py-3">
+                        <div key={d.grupoId} className={`px-4 py-3 ${d.desconsiderado ? "opacity-60 bg-gray-50/60" : ""}`}>
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
                               <p className="text-sm font-medium text-gray-800 flex items-center flex-wrap gap-x-2 gap-y-1">
@@ -5121,6 +5140,40 @@ export default function FinanceiroConciliacao() {
                                   )}
                                 </div>
                               )}
+                              {/* Rev. 3742 — Desconsiderar/Reconsiderar do cálculo do % (NÃO apaga o cheque) */}
+                              <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                {d.desconsiderado ? (
+                                  <>
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-px rounded-full text-[10px] font-medium bg-gray-200 text-gray-600" title="Este par foi tirado do cálculo do percentual de conciliação. O cheque continua registrado.">
+                                      <EyeOff className="w-3 h-3" /> Desconsiderado do %
+                                    </span>
+                                    <button
+                                      type="button"
+                                      disabled={desconsiderarChequeMut.isPending || reconsiderarChequeMut.isPending}
+                                      className="text-[11px] text-gray-600 hover:text-gray-800 underline disabled:opacity-50"
+                                      onClick={() => {
+                                        const lineIds = [d.debitoId, d.creditoId].filter((x: any) => x != null);
+                                        if (lineIds.length) reconsiderarChequeMut.mutate({ companyId, lineIds });
+                                      }}
+                                    >
+                                      Reconsiderar no %
+                                    </button>
+                                  </>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    disabled={desconsiderarChequeMut.isPending || reconsiderarChequeMut.isPending}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium border border-gray-300 text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors disabled:opacity-50"
+                                    title="Tira este par do CÁLCULO do percentual de conciliação SEM apagar o cheque. Use quando o pagamento real (PIX/TED) já foi conciliado em OUTRA conta — assim o % pode chegar a 100%."
+                                    onClick={() => {
+                                      const lineIds = [d.debitoId, d.creditoId].filter((x: any) => x != null);
+                                      if (lineIds.length) desconsiderarChequeMut.mutate({ companyId, lineIds });
+                                    }}
+                                  >
+                                    <EyeOff className="w-3 h-3" /> Desconsiderar da conciliação
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>

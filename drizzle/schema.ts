@@ -7527,6 +7527,14 @@ export const bankStatementLines = pgTable("bank_statement_lines", {
   // Rev. 3179 — soft-delete: "Limpar extrato" marca a linha como excluída (NULL=ativa).
   // Honra a regra JAMAIS DELETE: removemos via UPDATE e filtramos em todas as leituras.
   excluidoEm: timestamp("excluido_em", { mode: "string" }),
+  // Rev. 3742 — DESCONSIDERAR da conciliação (≠ excluir). A linha CONTINUA visível no
+  // extrato/painel (NÃO apaga a informação), mas sai do CÁLCULO do % de conciliação.
+  // Uso típico: cheque devolvido cujo pagamento real (PIX/TED) foi conciliado em OUTRA
+  // conta — o par compensação+devolução não tem como casar aqui e travava o % < 100%.
+  // NULL = conta normalmente no %; preenchido = ignorado no %.
+  desconsideradoEm: timestamp("desconsiderado_em", { mode: "string" }),
+  desconsideradoPorId: integer("desconsiderado_por_id"),
+  desconsideradoPorNome: varchar("desconsiderado_por_nome", { length: 255 }),
 }, (t) => [
   index("idx_bsl_company").on(t.companyId),
   index("idx_bsl_conta").on(t.contaBancariaId),

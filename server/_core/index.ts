@@ -806,6 +806,16 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3181: coluna excluido_em garantida em bank_statement_lines (soft-delete de extrato).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA bank_statement_lines.excluido_em:`, e?.message || e); }
 
+        // Rev. 3742 — DESCONSIDERAR linha do extrato da conciliação (≠ excluir): a linha
+        // continua visível, mas sai do CÁLCULO do %. Caso típico: cheque devolvido pago por
+        // PIX/TED conciliado em OUTRA conta. Colunas aditivas (R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`ALTER TABLE bank_statement_lines ADD COLUMN IF NOT EXISTS desconsiderado_em TIMESTAMP`);
+          await db.execute(sql`ALTER TABLE bank_statement_lines ADD COLUMN IF NOT EXISTS desconsiderado_por_id INTEGER`);
+          await db.execute(sql`ALTER TABLE bank_statement_lines ADD COLUMN IF NOT EXISTS desconsiderado_por_nome VARCHAR(255)`);
+          console.log(`[SyncSchema+] Rev. 3742: colunas desconsiderado_em/por_id/por_nome garantidas em bank_statement_lines (desconsiderar da conciliação).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA bank_statement_lines.desconsiderado_*:`, e?.message || e); }
+
         // Rev. 3352 — feriados.observado: a empresa ADOTA (segue) o feriado?
         // Cria a coluna SÓ se não existir (idempotente) e, NESSE ÚNICO momento, faz o
         // backfill dos facultativos → observado=0 (empresa decide se segue). Em boots
