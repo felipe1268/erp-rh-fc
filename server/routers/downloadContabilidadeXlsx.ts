@@ -157,7 +157,7 @@ export function registerContabilidadeXlsxRoute(app: Express) {
               bsl.entry_id,
               fe.fornecedor_nome,
               fe.descricao      AS entry_desc,
-              COALESCE(fn1.numero_nf, fe.nota_fiscal_numero, '')  AS numero_nf,
+              COALESCE(fn1.numero_nf, '')                          AS numero_nf,
               COALESCE(fn1.emitente_cnpj, fn1.tomador_cnpj, '')   AS fornecedor_cnpj
              FROM bank_statement_lines bsl
              LEFT JOIN financial_entries fe  ON fe.id = bsl.entry_id

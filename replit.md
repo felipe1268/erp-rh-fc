@@ -50,7 +50,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3726** — **PLANILHA CONTADOR · BUGFIX "column fe.fiscal_note_id does not exist" — BOTÃO "PLANILHA CONTADOR" RETORNAVA ERRO. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** `fe.fiscal_note_id` não existe em `financial_entries`. Fix: remove JOIN fn2; usa `COALESCE(fn1.numero_nf, fe.nota_fiscal_numero)`. Arquivo: `downloadContabilidadeXlsx.ts`. Detalhe: `shared/changelog.ts`.
+- **Rev. 3726** — **PLANILHA CONTADOR · BUGFIX "column does not exist" — JOIN EM COLUNA INEXISTENTE EM financial_entries. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** `financial_entries` não tem FK p/ `fiscal_notes`. Fix: remove JOINs inválidos; mantém só `fn1 ON fn1.stmt_line_id = bsl.id`; `numero_nf = COALESCE(fn1.numero_nf, '')`. Arquivo: `downloadContabilidadeXlsx.ts`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3725** — **CONTABILIDADE · 3 BUGFIXES: BADGE NF-e RECEBIDAS ZERO + IMPORT NFS-e SPED CHAVE 50 DÍGITOS + TOAST ERRO DETALHADO. PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** (1) Badge "NF-e Recebidas" no painel mensal mostrava 0 mesmo com notas presentes: query do calendário usava `origem='sefaz_nfe'` apenas; `getDocumentosMes` usava `OR origem='xml_upload'`. Fix: alinhar filtros em `contabilidade.ts`. (2) Import XML NFS-e Nacional SPED: chave tem 50 dígitos (não 44). Check `!==44` rejeitava todas → fix: `<15`. Suporte a wrappers `nfseProc`/`compNfse`. (3) Toast exibe texto do primeiro erro. Arquivos: `contabilidade.ts`, `sefaz.ts`, `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
 

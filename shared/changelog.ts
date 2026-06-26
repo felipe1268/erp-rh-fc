@@ -1,12 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
- * Rev. 3726 — **PLANILHA CONTADOR · BUGFIX "column fe.fiscal_note_id does not exist". BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ * Rev. 3726 — **PLANILHA CONTADOR · BUGFIX "column does not exist" — JOIN EM COLUNA INEXISTENTE EM financial_entries. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
- * `downloadContabilidadeXlsx.ts` fazia `LEFT JOIN fiscal_notes fn2 ON fn2.id = fe.fiscal_note_id`
- * mas `financial_entries` não tem coluna `fiscal_note_id` → toda chamada ao botão "Planilha Contador"
- * retornava `{"error":"Erro ao gerar planilha"}`. Fix: removido o JOIN fn2; número da NF usa
- * `COALESCE(fn1.numero_nf, fe.nota_fiscal_numero, '')` (campo texto que já existe na tabela).
+ * `downloadContabilidadeXlsx.ts` (Rev. 3722) adicionou dois JOINs extras em `fiscal_notes`:
+ * `fn2 ON fn2.id = fe.fiscal_note_id` — a coluna `fiscal_note_id` não existe em `financial_entries`.
+ * Ao corrigir para `fe.nota_fiscal_numero` como fallback, o mesmo erro: essa coluna também não existe
+ * (ela fica em outras tabelas do schema). `financial_entries` não tem nenhum FK para `fiscal_notes`.
+ * Fix definitivo: único JOIN mantido é `fn1 ON fn1.stmt_line_id = bsl.id` (coluna real do schema);
+ * `numero_nf = COALESCE(fn1.numero_nf, '')` e `fornecedor_cnpj = COALESCE(fn1.emitente_cnpj, fn1.tomador_cnpj, '')`.
  * Arquivo: `server/routers/downloadContabilidadeXlsx.ts`.
  *
  * Rev. 3725 — **CONTABILIDADE · 3 BUGFIXES: BADGE "NF-e RECEBIDAS" ZERO + IMPORT NFS-e SPED CHAVE 50 DÍGITOS + TOAST DE ERRO DETALHADO. 100% PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
