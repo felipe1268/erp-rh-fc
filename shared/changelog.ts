@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3734 — **NF-e RECEBIDAS · CRONÔMETRO SEFAZ AGORA DISPARA A SYNC AO ZERAR (ANTES ERA SÓ VISUAL). 100% FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Queixa do piloto: "o cronômetro conta, zera, mas NÃO chama a atualização". Causa raiz:
+ * os dois cronômetros da aba Recebidas (`countdownSec` da cota SEFAZ e `cronSecsLeft` do
+ * tick :00/:30) eram PURAMENTE de display — ao zerar, nada disparava `sefaz.syncNow`.
+ * A sincronização só acontecia quando o cron do backend (a cada 15 min, com gate próprio)
+ * decidia rodar, então o usuário via "Cota renovada — pronta para sincronizar / Próxima
+ * verificação em 29:39" e ficava esperando até ~30 min sem nada acontecer.
+ *
+ * Correção (em `FinanceiroNotasFiscais.tsx`):
+ * 1. Novo `useEffect` de auto-disparo: quando `countdownSec` chega a 0, o sync automático
+ *    está ligado (`sync_enabled`) e nenhuma sync está pendente, chama `sefazSyncMut.mutate`.
+ *    A fórmula do cronômetro JÁ casa com o gate atômico do backend `(intervalo*60-2)*backoff`
+ *    a partir de `rateLimitedAt`/`last_sync_at`, então o disparo passa o gate por CNPJ.
+ * 2. Guarda por janela de cota (`autoSyncFiredForTsRef` chaveado pelo `baseTs`): exatamente
+ *    1 disparo por renovação, imune a jitter de relógio. O gate atômico do servidor protege
+ *    contra disparos simultâneos de múltiplas abas/usuários (perdedores recebem aviso).
+ * 3. `sefazSyncMut` onSuccess/onError agora dão `sefazCfgQuery.refetch()` — o cronômetro
+ *    reinicia a partir do novo `last_sync_at`/`rateLimitedAt` e o auto-disparo rearma p/ a
+ *    próxima janela (sem isso o countdown ficava preso em 00:00).
+ * 4. Texto do card no estado verde reflete a realidade: "Cota renovada — sincronizando
+ *    automaticamente" / "🔄 Sincronizando com a SEFAZ agora…" (antes prometia só a próxima
+ *    verificação do cron). Botão manual "Sincronizar SEFAZ" segue funcionando igual.
+ *
  * Rev. 3733 — **PACOTE CONTADOR · XLSX EXTRATO (BANCÁRIO + CARTÃO) — IDENTIDADE VISUAL FC (AZUL-MARINHO + DOURADO) + LAYOUT DE APRESENTAÇÃO. 100% FORMATAÇÃO · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Repaginação das planilhas para a marca FC (cores derivadas do tema do app via OKLCH→hex):

@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3734** — **NF-e RECEBIDAS · CRONÔMETRO SEFAZ AGORA DISPARA A SYNC AO ZERAR (ANTES ERA SÓ VISUAL). 100% FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Os cronômetros da aba Recebidas eram puramente de display — zeravam sem chamar `sefaz.syncNow`; o usuário ficava esperando o cron do backend (até ~30 min). Novo `useEffect` auto-dispara `sefazSyncMut.mutate` quando `countdownSec` chega a 0 (sync ligado + nada pendente), com guarda por janela de cota (`autoSyncFiredForTsRef`/`baseTs`) = 1 disparo por renovação; gate atômico por CNPJ do backend protege multi-aba. `onSuccess/onError` agora `refetch` da config (cronômetro reinicia + rearma). Card verde reflete "sincronizando automaticamente". Arquivo: `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3733** — **PACOTE CONTADOR · XLSX EXTRATO (BANCÁRIO + CARTÃO) — IDENTIDADE VISUAL FC (AZUL-MARINHO + DOURADO) + LAYOUT DE APRESENTAÇÃO. 100% FORMATAÇÃO · ZERO SCHEMA/ALTER/DROP/DELETE.** Cores da marca (NAVY #0F3778, NAVY_DARK #082047, GOLD #E9AB2B, ZEBRA #EEF2F9): título faixa navy+dourado, caixa banco/cartão navy, cabeçalho navy (era roxo Pronus), zebra striping, saldo verde/vermelho suave, TOTAL dourado. `sText/sDate/sMoney` ganharam param `alt`. Arquivo: `downloadContabilidadeXlsx.ts`. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3732** — **PACOTE CONTADOR · EXTRATO CARTÃO DE CRÉDITO — XLSX PRONUS (UMA ABA/FATURA) COM DADOS REAIS DE financial_cartao_*. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** CSV vazio = query errada (`bank_statement_lines tipoConta`); fix: `financial_cartao_itens/faturas/cartoes` mes_ref/ano_ref. Nova fn `buildExtratCartaoBuffer` exportada; layout igual ao bancário; `.csv` → `.xlsx`. Arquivos: `downloadContabilidadeXlsx.ts`, `downloadPacoteContador.ts`. Detalhe: `shared/changelog.ts`.
-
 ### 5 one-liners
+
+- **Rev. 3732** — **PACOTE CONTADOR · EXTRATO CARTÃO DE CRÉDITO — XLSX PRONUS (UMA ABA/FATURA) COM DADOS REAIS DE financial_cartao_*. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3731** — **XLSX EXTRATO BANCÁRIO · LAYOUT PRONUS EXATO — FORMATO ZERO "R$ 0,00" + LAYOUT COMPACTO (EMPRESA L1, BANCO L3-4, CABEÇALHO L5, DADOS L6+). BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3729** — **PACOTE CONTADOR · XLSX EXTRATO BANCÁRIO — LAYOUT PRONUS (CABEÇALHO ROXO #7030A0, LINHAS LAVANDA/BRANCO, SALDO VERDE/VERMELHO). BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3728** — **PACOTE CONTADOR · BUGFIX "Erro interno ao gerar pacote" — JOINs INVÁLIDOS EM financial_entries NO downloadPacoteContador.ts. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3727** — **FINANCEIRO · PADRONIZAÇÃO DE CORES — ENTRADA=VERDE, SAÍDA=VERMELHO EM TODOS OS GRÁFICOS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3725** — **CONTABILIDADE · 3 BUGFIXES: BADGE NF-e RECEBIDAS ZERO + IMPORT NFS-e SPED CHAVE 50 DÍGITOS + TOAST ERRO DETALHADO. PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 

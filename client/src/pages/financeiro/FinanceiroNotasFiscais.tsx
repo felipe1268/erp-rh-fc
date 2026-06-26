@@ -504,6 +504,10 @@ export default function FinanceiroNotasFiscais() {
     onSuccess: (r: any) => {
       finishSyncProgress(!r?.erro);
       nfeRecQuery.refetch();
+      // Recarrega a config para que o cronômetro reinicie a partir do novo last_sync_at
+      // (ou rateLimitedAt). Sem isso o countdown fica preso em 00:00 e o auto-disparo
+      // não rearma para a próxima janela de cota.
+      sefazCfgQuery.refetch();
       if (r?.erro) toast({ title: "SEFAZ: " + r.erro, variant: "destructive" });
       else if (r?.aviso) toast({ title: "⚠️ Limite de chamadas SEFAZ", description: r.aviso, variant: "default", duration: 8000 });
       else if (r?.parcial) toast({ title: `SEFAZ: ${r?.importadas ?? 0} NF-e importadas (sincronização parcial — cron continua automaticamente)`, duration: 7000 });
@@ -511,9 +515,38 @@ export default function FinanceiroNotasFiscais() {
     },
     onError: (e: any) => {
       finishSyncProgress(false);
+      sefazCfgQuery.refetch();
       toast({ title: "Erro na sync SEFAZ", description: e.message, variant: "destructive" });
     },
   });
+
+  // ── Auto-disparo da sync quando a cota renova (cronômetro chega a 00:00) ─────
+  // Antes o cronômetro era PURAMENTE visual: zerava e ficava esperando o cron do
+  // backend (até ~30 min depois). Agora, assim que a cota renova com a página
+  // aberta e o sync automático ligado, disparamos a sincronização na hora.
+  // Guarda por janela de cota (baseTs = rateLimitedAt|last_sync_at) garante 1
+  // disparo por renovação, imune a jitter de relógio. O gate atômico do backend
+  // (por CNPJ) protege contra disparos simultâneos de múltiplas abas/usuários.
+  const autoSyncFiredForTsRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!sefazCfg || !companyId) return;
+    if (!Boolean(Number(sefazCfg.sync_enabled))) return; // só auto-dispara com sync automático ligado
+    if (countdownSec === null || countdownSec > 0) return; // ainda há cooldown
+    if (sefazSyncMut.isPending) return; // já sincronizando
+    let baseTs: number | null = null;
+    try {
+      const result = JSON.parse(sefazCfg.last_sync_result || "{}");
+      baseTs = result?.rateLimitedAt
+        ? parseAsUTC(result.rateLimitedAt).getTime()
+        : sefazCfg.last_sync_at ? parseAsUTC(sefazCfg.last_sync_at).getTime() : null;
+    } catch {
+      baseTs = sefazCfg.last_sync_at ? parseAsUTC(sefazCfg.last_sync_at).getTime() : null;
+    }
+    const windowKey = baseTs ?? 0;
+    if (autoSyncFiredForTsRef.current === windowKey) return; // já disparou nesta janela
+    autoSyncFiredForTsRef.current = windowKey;
+    sefazSyncMut.mutate({ companyId });
+  }, [countdownSec, sefazCfg, companyId]);
   const sefazEnableSyncMut = (trpc as any).sefaz.saveConfig.useMutation({
     onSuccess: () => {
       toast({ title: "✅ Sync automático ligado!", description: "O sistema sincronizará com a SEFAZ automaticamente a cada hora." });
@@ -1207,11 +1240,15 @@ export default function FinanceiroNotasFiscais() {
                         ) : (
                           <>
                             <p className={`text-sm font-semibold ${syncOn ? "text-emerald-800" : "text-slate-600"}`}>
-                              {syncOn ? "✅ Cota renovada — pronta para sincronizar" : "✅ Cota SEFAZ disponível — use Sincronizar Agora"}
+                              {syncOn
+                                ? (sefazSyncMut.isPending ? "🔄 Sincronizando com a SEFAZ agora…" : "✅ Cota renovada — sincronizando automaticamente")
+                                : "✅ Cota SEFAZ disponível — use Sincronizar Agora"}
                             </p>
                             <p className={`text-xs mt-0.5 ${syncOn ? "text-emerald-600" : "text-slate-500"}`}>
                               {syncOn
-                                ? <>Próxima verificação em <strong className="font-mono">{String(Math.floor(cronSecsLeft / 60)).padStart(2,"0")}:{String(cronSecsLeft % 60).padStart(2,"0")}</strong> · limite SEFAZ: 1/{intervaloH}h.</>
+                                ? (sefazSyncMut.isPending
+                                    ? <>Buscando NF-e novas… · limite SEFAZ: 1/{intervaloH}h.</>
+                                    : <>O disparo é automático ao renovar a cota · limite SEFAZ: 1/{intervaloH}h.</>)
                                 : `Sync automático desligado. Configure em Configurações → Financeiro.`}
                               {nsuNum > 0 && <> · NSU: <strong>{nsuNum.toLocaleString("pt-BR")}</strong></>}
                             </p>
