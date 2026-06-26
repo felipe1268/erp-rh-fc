@@ -246,7 +246,8 @@ export default function FinanceiroContasAReceberTitulos() {
 
   const toggle = (k: string) => setExpanded((p) => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n; });
 
-  const baixaMut = (trpc as any).financial.darBaixaReceber.useMutation({
+  // Rev. 3743 — baixa via histórico unificado (financial_entry_baixas): parcial/total + estorno por baixa.
+  const baixaMut = (trpc as any).financial.registrarBaixa.useMutation({
     onSuccess: (r: any) => { toast({ title: r?.quitado ? "Título recebido!" : "Baixa parcial registrada!", description: r?.quitado ? undefined : `Saldo restante: ${formatBRL(r?.saldo ?? 0)}` }); setShowBaixa(null); refetch(); },
     onError: (e: any) => toast({ title: "Erro na baixa", description: e.message, variant: "destructive" }),
   });
@@ -492,7 +493,7 @@ export default function FinanceiroContasAReceberTitulos() {
         )}
       </div>
 
-      {showBaixa && <BaixaDialog titulo={showBaixa} companyId={companyId} contasBancarias={contasBancarias} onClose={() => setShowBaixa(null)} onSubmit={(p: any) => baixaMut.mutate(p)} pending={baixaMut.isPending} />}
+      {showBaixa && <BaixaDialog titulo={showBaixa} companyId={companyId} contasBancarias={contasBancarias} onClose={() => setShowBaixa(null)} onSubmit={(p: any) => baixaMut.mutate(p)} pending={baixaMut.isPending} onRefetch={refetch} />}
       {showNovo && <NovoTituloDialog companyId={companyId} clientesOpts={clientesOpts} onClose={() => setShowNovo(false)} onSubmit={(p: any) => criarMut.mutate(p)} pending={criarMut.isPending} />}
       {showAnexo && <AnexoDialog titulo={showAnexo} companyId={companyId} onClose={() => setShowAnexo(null)} onSubmit={(p: any) => anexarMut.mutate(p)} pending={anexarMut.isPending} />}
     </DashboardLayout>
@@ -500,10 +501,19 @@ export default function FinanceiroContasAReceberTitulos() {
 }
 
 // ─────────────────────────── BAIXA (recebimento) ───────────────────────────
-function BaixaDialog({ titulo, companyId, contasBancarias, onClose, onSubmit, pending }: any) {
+function BaixaDialog({ titulo, companyId, contasBancarias, onClose, onSubmit, pending, onRefetch }: any) {
   const { toast } = useToast();
   const prev = num(titulo.valorPrevisto), real = num(titulo.valorRealizado);
   const saldo = Math.max(0, prev - real);
+  // Rev. 3743 — histórico de baixas do título (parciais) + estorno por baixa.
+  const baixasQuery = (trpc as any).financial.getEntryBaixas.useQuery(
+    { entryId: titulo.id, companyId },
+    { enabled: !!companyId && !!titulo.id }
+  );
+  const estornoBaixaMut = (trpc as any).financial.estornarBaixaItem.useMutation({
+    onSuccess: () => { toast({ title: "Baixa estornada!" }); baixasQuery.refetch(); onRefetch?.(); },
+    onError: (e: any) => toast({ title: "Erro ao estornar", description: e.message, variant: "destructive" }),
+  });
   const [valor, setValor] = useState(maskBRL(String(Math.round(saldo * 100))));
   const [data, setData] = useState(new Date().toISOString().slice(0, 10));
   const [contaId, setContaId] = useState<string>("");
@@ -537,16 +547,25 @@ function BaixaDialog({ titulo, companyId, contasBancarias, onClose, onSubmit, pe
     } finally { setUploading(false); }
   }
 
-  function submit() {
-    const v = parseMaskBRL(valor);
-    if (!Number.isFinite(v) || v <= 0) { toast({ title: "Valor inválido", variant: "destructive" }); return; }
-    onSubmit({
-      id: titulo.id, companyId, valorRecebido: v, dataRecebimento: data,
+  function basePayload() {
+    return {
+      id: titulo.id, companyId,
+      valor: parseMaskBRL(valor),
+      data,
       contaBancariaId: contaId ? Number(contaId) : undefined,
       formaPagamento: forma || undefined,
       comprovanteUrl: comprovanteUrl || undefined,
       observacoes: obs.trim() || undefined,
-    });
+    };
+  }
+  function submit() {
+    const v = parseMaskBRL(valor);
+    if (!Number.isFinite(v) || v <= 0) { toast({ title: "Valor inválido", variant: "destructive" }); return; }
+    onSubmit(basePayload());
+  }
+  // Opção C — fecha o título mesmo com saldo (sobra de centavo / desconto não recebido).
+  function quitarSaldo() {
+    onSubmit({ ...basePayload(), quitarTotal: true });
   }
 
   return (
@@ -609,11 +628,49 @@ function BaixaDialog({ titulo, companyId, contasBancarias, onClose, onSubmit, pe
             {comprovanteUrl && <span className="text-[11px] text-emerald-600 flex items-center gap-1 mt-1"><CheckCircle className="h-3 w-3" /> comprovante anexado</span>}
           </div>
           <div><Label className="text-xs">Observações</Label><Textarea value={obs} onChange={(e) => setObs(e.target.value)} rows={2} /></div>
+
+          {/* Rev. 3743 — Histórico de baixas (parciais) + estorno por baixa */}
+          {Array.isArray(baixasQuery.data) && baixasQuery.data.length > 0 && (
+            <div className="border border-slate-200 rounded-lg p-2.5 bg-slate-50/50">
+              <p className="text-[11px] font-semibold text-slate-600 mb-1.5">Histórico de baixas</p>
+              <div className="space-y-1.5">
+                {baixasQuery.data.map((b: any) => {
+                  const estornada = !!b.estornadaEm;
+                  return (
+                    <div key={b.id} className={`flex items-center justify-between gap-2 text-xs rounded px-2 py-1.5 border ${estornada ? "bg-slate-100 border-slate-200 opacity-60" : "bg-white border-slate-200"}`}>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`font-semibold tabular-nums ${estornada ? "line-through text-slate-400" : "text-emerald-700"}`}>{formatBRL(num(b.valor))}</span>
+                          <span className="text-slate-500">{fmtDateBR(b.data)}</span>
+                          {b.formaPagamento && <span className="text-slate-400 uppercase text-[10px]">{String(b.formaPagamento).replace(/_/g, " ")}</span>}
+                          {b.quitouTotal === 1 && !estornada && <span className="text-[10px] px-1 rounded bg-emerald-100 text-emerald-700 border border-emerald-200">quitação total</span>}
+                          {estornada && <span className="text-[10px] px-1 rounded bg-red-100 text-red-600 border border-red-200">estornada</span>}
+                        </div>
+                        {b.observacoes && <p className="text-[10px] text-slate-400 break-words">{b.observacoes}</p>}
+                        {estornada && b.estornoMotivo && <p className="text-[10px] text-red-400 break-words">motivo: {b.estornoMotivo}</p>}
+                      </div>
+                      {!estornada && (
+                        <Button size="sm" variant="outline" className="h-6 px-2 text-[10px] border-red-200 text-red-600 hover:bg-red-50 shrink-0"
+                          disabled={estornoBaixaMut.isPending}
+                          onClick={() => { if (confirm("Estornar esta baixa? O saldo do título será reaberto.")) estornoBaixaMut.mutate({ baixaId: b.id, companyId }); }}>
+                          Estornar
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
-        <DialogFooter>
+        <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          {/* Opção C — Quitar saldo: fecha o título mesmo com saldo restante */}
+          <Button variant="outline" onClick={quitarSaldo} disabled={pending || uploading} className="border-emerald-300 text-emerald-700 hover:bg-emerald-50">
+            Quitar saldo
+          </Button>
           <Button onClick={submit} disabled={pending || uploading} className="bg-emerald-600 hover:bg-emerald-700">
-            {pending && <Loader2 className="h-4 w-4 animate-spin mr-1" />} Confirmar recebimento
+            {pending && <Loader2 className="h-4 w-4 animate-spin mr-1" />} Registrar baixa
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -85,6 +85,72 @@ async function _assertContaBancariaPertenceEmpresa(db: any, contaBancariaId: num
   }
 }
 
+// Rev. 3743 — Recalcula o ROLLUP de um lançamento a partir das suas baixas ATIVAS:
+//   valor_realizado = SUM(valor das baixas não estornadas)
+//   status = derivado (tipo-aware): quitado se SUM>=previsto OU houver baixa quitou_total=1;
+//            parcial (recebido_parcial p/ receita; despesa segue 'a_pagar'); zerado volta ao aberto.
+//   data_pagamento = data da última baixa quando quitado; NULL enquanto parcial.
+// dbExecute liga params por ORDEM DE APARIÇÃO — placeholders e array seguem a mesma ordem.
+// Rev. 3743 — serializa todas as operações de baixa/estorno/rollup do MESMO lançamento
+// (registrarBaixa, estornarBaixaItem, estornarPagamento, estornarReceber). Usado DENTRO de
+// uma transação (lock de transação) para impedir corrida no BACKFILL (duplo "Baixa anterior")
+// e no rollup (duas baixas concorrentes somando estado defasado). hashtext→int4, aceito por
+// pg_advisory_xact_lock(bigint); a chave inclui companyId p/ não colidir entre empresas.
+async function _lockEntryBaixas(tx: any, companyId: number, entryId: number) {
+  await dbExecute(tx, `SELECT pg_advisory_xact_lock(hashtext($1))`, [`feb:${companyId}:${entryId}`]);
+}
+
+// Rev. 3743 — soft-estorna TODAS as baixas ativas de um lançamento (usado pelos estornos
+// legados estornarPagamento/estornarReceber, p/ que o histórico de baixas fique consistente
+// com o entry reaberto — senão ficam linhas ativas órfãs que o rollup re-somaria na próxima baixa).
+async function _estornarBaixasAtivasDoEntry(tx: any, entryId: number, companyId: number, userId: any, userName: any, motivo: string) {
+  await dbExecute(tx,
+    `UPDATE financial_entry_baixas
+     SET estornada_em=NOW(), estornada_por_id=$1, estornada_por_nome=$2, estorno_motivo=$3
+     WHERE entry_id=$4 AND company_id=$5 AND estornada_em IS NULL`,
+    [userId ?? null, userName ?? null, motivo, entryId, companyId]
+  );
+}
+
+async function _aplicarRollupBaixas(db: any, entryId: number, companyId: number) {
+  const [entry]: any = await dbExecute(db,
+    `SELECT id, tipo, valor_previsto FROM financial_entries WHERE id=$1 AND company_id=$2`,
+    [entryId, companyId]
+  ).then((r: any) => (Array.isArray(r) ? r : r?.rows ?? []));
+  if (!entry) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado." });
+  const agg: any = rows(await dbExecute(db,
+    `SELECT COALESCE(SUM(valor),0) AS soma,
+            MAX(CASE WHEN quitou_total=1 THEN 1 ELSE 0 END) AS tem_quitacao,
+            MAX(data) AS ultima_data
+     FROM financial_entry_baixas
+     WHERE entry_id=$1 AND company_id=$2 AND estornada_em IS NULL`,
+    [entryId, companyId]
+  ))[0] ?? {};
+  const previsto = Number(entry.valor_previsto ?? 0);
+  const acumulado = Math.round(Number(agg.soma ?? 0) * 100) / 100;
+  const forceQuit = Number(agg.tem_quitacao ?? 0) === 1;
+  const temBaixa = acumulado > 0 || forceQuit;
+  const quitado = temBaixa && (forceQuit || acumulado + 0.005 >= previsto);
+  const isReceita = entry.tipo === "receita";
+  let novoStatus: string;
+  if (quitado) novoStatus = isReceita ? "recebido" : "pago";
+  else if (acumulado > 0) novoStatus = isReceita ? "recebido_parcial" : "a_pagar";
+  else novoStatus = isReceita ? "a_receber" : "a_pagar";
+  const dataPag = quitado
+    ? (agg.ultima_data ? String(agg.ultima_data).slice(0, 10) : new Date().toISOString().slice(0, 10))
+    : null;
+  await dbExecute(db,
+    `UPDATE financial_entries
+     SET valor_realizado=$1, status=$2, data_pagamento=$3, updated_at=NOW()
+     WHERE id=$4 AND company_id=$5`,
+    [acumulado > 0 ? acumulado : null, novoStatus, dataPag, entryId, companyId]
+  );
+  return {
+    acumulado, previsto, quitado, status: novoStatus,
+    saldo: Math.max(0, Math.round((previsto - acumulado) * 100) / 100),
+  };
+}
+
 // Executa queries parametrizadas corretamente no Drizzle ORM
 // dbExecute(db, string, array) ignora o array — é preciso usar sql template
 //
@@ -3737,18 +3803,25 @@ export const financialRouter = router({
       throw new TRPCError({ code: "BAD_REQUEST", message: `Lançamento não está pago (status=${entry.status}).` });
     }
     const snapshot = `desc="${entry.descricao ?? ""}" pago=${entry.data_pagamento ?? "-"} valor_realizado=${entry.valor_realizado ?? "-"} forma=${entry.forma_pagamento ?? "-"}`;
-    await dbExecute(db,
-      `UPDATE financial_entries
-         SET status='a_pagar',
-             data_pagamento=NULL,
-             valor_realizado=NULL,
-             forma_pagamento=NULL,
-             comprovante_url=NULL,
-             observacoes=CONCAT(COALESCE(observacoes,''), E'\n[ESTORNO ', TO_CHAR(NOW(),'DD/MM/YYYY HH24:MI'), ' por ', $1::text, ']: ', $2::text),
-             updated_at=NOW()
-       WHERE id=$3 AND company_id=$4 AND status='pago'`,
-      [ctx.user?.name ?? "?", input.motivo, input.id, input.companyId]
-    );
+    // Rev. 3743 — numa transação com lock por lançamento, soft-estorna o histórico de baixas
+    // (registrarBaixa) ANTES de zerar o entry, p/ não deixar linhas ativas órfãs que o rollup
+    // re-somaria na próxima baixa. No-op para títulos pagos pela rota antiga (sem baixas).
+    await (db as any).transaction(async (tx: any) => {
+      await _lockEntryBaixas(tx, input.companyId, input.id);
+      await _estornarBaixasAtivasDoEntry(tx, input.id, input.companyId, ctx.user?.id, ctx.user?.name, `Estorno do pagamento: ${input.motivo}`);
+      await dbExecute(tx,
+        `UPDATE financial_entries
+           SET status='a_pagar',
+               data_pagamento=NULL,
+               valor_realizado=NULL,
+               forma_pagamento=NULL,
+               comprovante_url=NULL,
+               observacoes=CONCAT(COALESCE(observacoes,''), E'\n[ESTORNO ', TO_CHAR(NOW(),'DD/MM/YYYY HH24:MI'), ' por ', $1::text, ']: ', $2::text),
+               updated_at=NOW()
+         WHERE id=$3 AND company_id=$4 AND status='pago'`,
+        [ctx.user?.name ?? "?", input.motivo, input.id, input.companyId]
+      );
+    });
     await createAuditLog({
       action: "financial_entry_reversed",
       userId: ctx.user?.id,
@@ -8707,18 +8780,201 @@ export const financialRouter = router({
       [input.id, input.companyId]
     ).then((r: any) => (Array.isArray(r) ? r : r?.rows ?? []));
     if (!entry) throw new TRPCError({ code: "NOT_FOUND", message: "Título a receber não encontrado." });
-    await dbExecute(db,
-      `UPDATE financial_entries
-       SET status='a_receber', valor_realizado=NULL, data_pagamento=NULL, updated_at=NOW()
-       WHERE id=$1 AND company_id=$2 AND tipo='receita'`,
-      [input.id, input.companyId]
-    );
+    // Rev. 3743 — numa transação com lock por lançamento, soft-estorna o histórico de baixas
+    // (registrarBaixa) ANTES de zerar o entry, p/ não deixar linhas ativas órfãs que o rollup
+    // re-somaria na próxima baixa. No-op para títulos recebidos pela rota antiga (sem baixas).
+    await (db as any).transaction(async (tx: any) => {
+      await _lockEntryBaixas(tx, input.companyId, input.id);
+      await _estornarBaixasAtivasDoEntry(tx, input.id, input.companyId, ctx.user?.id, ctx.user?.name, `Estorno do recebimento${input.motivo ? ": " + input.motivo : ""}`);
+      await dbExecute(tx,
+        `UPDATE financial_entries
+         SET status='a_receber', valor_realizado=NULL, data_pagamento=NULL, updated_at=NOW()
+         WHERE id=$1 AND company_id=$2 AND tipo='receita'`,
+        [input.id, input.companyId]
+      );
+    });
     await createAuditLog({
       action: "financial_receivable_reversed",
       userId: ctx.user?.id, companyId: input.companyId,
       details: `Estorno recebimento título ${input.id}${input.motivo ? " — motivo: " + input.motivo : ""}`,
     });
     return { ok: true };
+  }),
+
+  // ─── Rev. 3743 — BAIXA PARCIAL (Contas a Pagar/Receber) via histórico de baixas ───
+  // Lista o histórico de baixas (ativas + estornadas) de um lançamento.
+  getEntryBaixas: protectedProcedure.input(z.object({
+    entryId: z.number(),
+    companyId: z.number(),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const res = await dbExecute(db,
+      `SELECT id, valor, data, conta_bancaria_id AS "contaBancariaId",
+              forma_pagamento AS "formaPagamento", juros, descontos, outros,
+              comprovante_url AS "comprovanteUrl", cheque_tipo AS "chequeTipo",
+              cheque_numero AS "chequeNumero", observacoes, quitou_total AS "quitouTotal",
+              estornada_em AS "estornadaEm", estornada_por_nome AS "estornadaPorNome",
+              estorno_motivo AS "estornoMotivo", criado_por_nome AS "criadoPorNome",
+              created_at AS "createdAt"
+       FROM financial_entry_baixas
+       WHERE entry_id=$1 AND company_id=$2
+       ORDER BY (estornada_em IS NULL) DESC, data ASC, id ASC`,
+      [input.entryId, input.companyId]
+    );
+    return rows(res);
+  }),
+
+  // Registra UMA baixa (pagamento/recebimento parcial ou total). Insere a linha de
+  // histórico e recalcula o rollup do entry (valor_realizado=SUM ativas, status, data).
+  registrarBaixa: protectedProcedure.input(z.object({
+    id: z.number(),
+    companyId: z.number(),
+    valor: z.number().nonnegative("Valor inválido."),
+    data: z.string().optional(),
+    contaBancariaId: z.number().nullable().optional(),
+    formaPagamento: z.string().optional(),
+    juros: z.number().optional(),
+    descontos: z.number().optional(),
+    outros: z.number().optional(),
+    comprovanteUrl: z.string().optional(),
+    chequeTipo: z.string().optional(),
+    chequeNumero: z.string().optional(),
+    chequeBanco: z.string().optional(),
+    chequeAgencia: z.string().optional(),
+    chequeConta: z.string().optional(),
+    chequeTitular: z.string().optional(),
+    chequeDataEmissao: z.string().optional(),
+    chequeDataBomPara: z.string().optional(),
+    observacoes: z.string().optional(),
+    quitarTotal: z.boolean().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    if (input.contaBancariaId != null) {
+      await _assertContaBancariaPertenceEmpresa(db, input.contaBancariaId, input.companyId);
+    }
+    const dataBaixa = (input.data || new Date().toISOString().slice(0, 10)).slice(0, 10);
+    const isCheque = input.formaPagamento === "cheque";
+    // Rev. 3743 — TUDO numa transação com advisory lock por lançamento: serializa backfill +
+    // insert + rollup contra baixas/estornos concorrentes do MESMO título (sem isso, dois cliques
+    // simultâneos duplicariam o backfill "Baixa anterior" e/ou somariam estado defasado no rollup).
+    const { tipo, roll } = await (db as any).transaction(async (tx: any) => {
+      await _lockEntryBaixas(tx, input.companyId, input.id);
+      const [entry]: any = await dbExecute(tx,
+        `SELECT id, tipo, valor_previsto, valor_realizado, status, data_pagamento
+         FROM financial_entries WHERE id=$1 AND company_id=$2`,
+        [input.id, input.companyId]
+      ).then((r: any) => (Array.isArray(r) ? r : r?.rows ?? []));
+      if (!entry) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado." });
+      if (entry.tipo !== "despesa" && entry.tipo !== "receita") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Lançamento não suporta baixa." });
+      }
+      if (entry.status === "pago" || entry.status === "recebido") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Título já quitado — estorne antes de nova baixa." });
+      }
+      if (entry.status === "cancelado") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Lançamento cancelado não pode receber baixa." });
+      }
+      // valor 0 só é aceito quando força-se a quitação manual (opção C: perdoa o saldo restante).
+      if (input.valor <= 0 && !input.quitarTotal) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Informe o valor da baixa." });
+      }
+      // BACKFILL (migração suave): títulos parciais antigos foram baixados pela rota legada
+      // (darBaixaReceber) gravando valor_realizado SEM criar linha no histórico. Como o rollup
+      // recalcula valor_realizado=SUM(baixas ativas), a 1ª baixa nova zeraria o valor anterior.
+      // Aqui, se o entry tem valor_realizado>0 mas NENHUMA baixa ativa, semeamos uma linha base.
+      // (O lock acima garante que esta leitura+insert não corra com outra registrarBaixa do mesmo título.)
+      const jaRealizado = Math.round(Number(entry.valor_realizado ?? 0) * 100) / 100;
+      if (jaRealizado > 0) {
+        const exist: any = rows(await dbExecute(tx,
+          `SELECT COUNT(*)::int AS n FROM financial_entry_baixas
+           WHERE entry_id=$1 AND company_id=$2 AND estornada_em IS NULL`,
+          [input.id, input.companyId]
+        ))[0] ?? {};
+        if (Number(exist.n ?? 0) === 0) {
+          const dataBase = (entry.data_pagamento ? String(entry.data_pagamento).slice(0, 10) : dataBaixa);
+          await dbExecute(tx,
+            `INSERT INTO financial_entry_baixas
+               (entry_id, company_id, tipo, valor, data, observacoes, quitou_total, criado_por_nome)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+            [input.id, input.companyId, entry.tipo, jaRealizado, dataBase,
+             "Baixa anterior (migração do histórico)", 0, "sistema"]
+          );
+        }
+      }
+      // dbExecute liga params por ORDEM DE APARIÇÃO — placeholders e array seguem a mesma ordem.
+      await dbExecute(tx,
+        `INSERT INTO financial_entry_baixas
+           (entry_id, company_id, tipo, valor, data, conta_bancaria_id, forma_pagamento,
+            juros, descontos, outros, comprovante_url,
+            cheque_tipo, cheque_numero, cheque_banco, cheque_agencia, cheque_conta, cheque_titular,
+            cheque_data_emissao, cheque_data_bom_para, observacoes, quitou_total,
+            criado_por_id, criado_por_nome)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`,
+        [input.id, input.companyId, entry.tipo, input.valor, dataBaixa,
+         input.contaBancariaId ?? null, input.formaPagamento ?? null,
+         input.juros ?? null, input.descontos ?? null, input.outros ?? null, input.comprovanteUrl ?? null,
+         isCheque ? (input.chequeTipo ?? null) : null,
+         isCheque ? (input.chequeNumero ?? null) : null,
+         isCheque ? (input.chequeBanco ?? null) : null,
+         isCheque ? (input.chequeAgencia ?? null) : null,
+         isCheque ? (input.chequeConta ?? null) : null,
+         isCheque ? (input.chequeTitular ?? null) : null,
+         isCheque ? (input.chequeDataEmissao ?? null) : null,
+         isCheque ? (input.chequeDataBomPara ?? null) : null,
+         input.observacoes ?? null, input.quitarTotal ? 1 : 0,
+         ctx.user?.id ?? null, ctx.user?.name ?? null]
+      );
+      const r = await _aplicarRollupBaixas(tx, input.id, input.companyId);
+      return { tipo: entry.tipo as string, roll: r };
+    });
+    await createAuditLog({
+      action: tipo === "receita" ? "financial_receivable_partial_paid" : "financial_payable_partial_paid",
+      userId: ctx.user?.id, companyId: input.companyId,
+      details: `Baixa ${roll.quitado ? "TOTAL" : "PARCIAL"}${input.quitarTotal ? " (quitação manual)" : ""} ${tipo} ${input.id}: +R$${input.valor} (acum. R$${roll.acumulado}/${roll.previsto})`,
+    });
+    return { ok: true, quitado: roll.quitado, acumulado: roll.acumulado, saldo: roll.saldo, status: roll.status };
+  }),
+
+  // Estorna UMA baixa (soft): marca estornada_em e recalcula o rollup (reabre o título
+  // para 'a_pagar'/'a_receber' ou 'recebido_parcial' conforme as baixas restantes).
+  estornarBaixaItem: protectedProcedure.input(z.object({
+    baixaId: z.number(),
+    companyId: z.number(),
+    motivo: z.string().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const [baixa]: any = await dbExecute(db,
+      `SELECT id, entry_id AS "entryId", valor, estornada_em AS "estornadaEm"
+       FROM financial_entry_baixas WHERE id=$1 AND company_id=$2`,
+      [input.baixaId, input.companyId]
+    ).then((r: any) => (Array.isArray(r) ? r : r?.rows ?? []));
+    if (!baixa) throw new TRPCError({ code: "NOT_FOUND", message: "Baixa não encontrada." });
+    if (baixa.estornadaEm) throw new TRPCError({ code: "BAD_REQUEST", message: "Baixa já estornada." });
+    // Rev. 3743 — numa transação com lock por lançamento: serializa estorno desta baixa contra
+    // registrarBaixa/estornos concorrentes do mesmo título; o re-check de estornada_em dentro do
+    // UPDATE (WHERE estornada_em IS NULL) torna o estorno idempotente sob corrida.
+    const roll = await (db as any).transaction(async (tx: any) => {
+      await _lockEntryBaixas(tx, input.companyId, Number(baixa.entryId));
+      await dbExecute(tx,
+        `UPDATE financial_entry_baixas
+         SET estornada_em=NOW(), estornada_por_id=$1, estornada_por_nome=$2, estorno_motivo=$3
+         WHERE id=$4 AND company_id=$5 AND estornada_em IS NULL`,
+        [ctx.user?.id ?? null, ctx.user?.name ?? null, input.motivo ?? null, input.baixaId, input.companyId]
+      );
+      return await _aplicarRollupBaixas(tx, Number(baixa.entryId), input.companyId);
+    });
+    await createAuditLog({
+      action: "financial_baixa_reversed",
+      userId: ctx.user?.id, companyId: input.companyId,
+      details: `Estorno baixa ${input.baixaId} (lançamento ${baixa.entryId}, R$${baixa.valor})${input.motivo ? " — motivo: " + input.motivo : ""}`,
+    });
+    return { ok: true, quitado: roll.quitado, acumulado: roll.acumulado, saldo: roll.saldo, status: roll.status };
   }),
 
   getContasAPagar: protectedProcedure.input(z.object({

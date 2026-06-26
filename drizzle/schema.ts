@@ -7240,6 +7240,47 @@ export const financialEntries = pgTable("financial_entries", {
   index("idx_fe_status").on(t.status),
 ]);
 
+// 2a-bis. Baixas (pagamentos/recebimentos) PARCIAIS de um lançamento (financial_entries).
+// Rev. 3743 — um título 1→N baixas (datas/contas/formas diferentes). O `valor_realizado`
+// do entry é o ROLLUP (SUM das baixas ativas); o status do entry é derivado: parcial
+// (a_pagar / recebido_parcial) enquanto soma < previsto, quitado (pago / recebido) quando
+// soma ≥ previsto OU quitação manual. Estorno é SOFT (estornada_em), preserva histórico.
+// Aditiva/self-heal (CREATE TABLE IF NOT EXISTS) — ZERO ALTER/DROP/DELETE.
+export const financialEntryBaixas = pgTable("financial_entry_baixas", {
+  id: serial().notNull(),
+  entryId: integer("entry_id").notNull(),
+  companyId: integer("company_id").notNull(),
+  tipo: text(), // 'despesa' | 'receita' (espelha o entry; facilita relatórios)
+  valor: numeric("valor", { precision: 15, scale: 2 }).notNull(),
+  data: date("data", { mode: "string" }).notNull(),
+  contaBancariaId: integer("conta_bancaria_id"),
+  formaPagamento: text("forma_pagamento"),
+  juros: numeric("juros", { precision: 15, scale: 2 }),
+  descontos: numeric("descontos", { precision: 15, scale: 2 }),
+  outros: numeric("outros", { precision: 15, scale: 2 }),
+  comprovanteUrl: text("comprovante_url"),
+  chequeTipo: text("cheque_tipo"),
+  chequeNumero: varchar("cheque_numero", { length: 20 }),
+  chequeBanco: varchar("cheque_banco", { length: 100 }),
+  chequeAgencia: varchar("cheque_agencia", { length: 20 }),
+  chequeConta: varchar("cheque_conta", { length: 30 }),
+  chequeTitular: varchar("cheque_titular", { length: 255 }),
+  chequeDataEmissao: date("cheque_data_emissao", { mode: "string" }),
+  chequeDataBomPara: date("cheque_data_bom_para", { mode: "string" }),
+  observacoes: text("observacoes"),
+  quitouTotal: smallint("quitou_total").default(0), // baixa que FECHOU o título (auto ou manual)
+  estornadaEm: timestamp("estornada_em", { mode: "string" }),
+  estornadaPorId: integer("estornada_por_id"),
+  estornadaPorNome: varchar("estornada_por_nome", { length: 255 }),
+  estornoMotivo: text("estorno_motivo"),
+  criadoPorId: integer("criado_por_id"),
+  criadoPorNome: varchar("criado_por_nome", { length: 255 }),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_feb_entry").on(t.entryId),
+  index("idx_feb_company").on(t.companyId),
+]);
+
 // 2b. Controle de Cheques (Opção A) — camada de CONTROLE/identificação importada
 // da planilha "CONTROLE DE CHEQUES" (abas mensais). NÃO é lançamento financeiro;
 // serve para a Conciliação Bancária identificar as linhas anônimas

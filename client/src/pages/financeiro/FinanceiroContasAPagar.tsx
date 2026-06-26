@@ -253,9 +253,29 @@ export default function FinanceiroContasAPagar() {
     { enabled: !!companyId }
   );
 
-  const payMut = (trpc as any).financial.updateEntryStatus.useMutation({
-    onSuccess: () => { toast({ title: "Pagamento registrado!" }); setShowPay(null); refetch(); },
+  // Rev. 3743 — baixa via histórico (financial_entry_baixas): parcial ou total.
+  const payMut = (trpc as any).financial.registrarBaixa.useMutation({
+    onSuccess: (r: any) => {
+      toast({ title: r?.quitado ? "Título quitado!" : "Baixa parcial registrada!", description: r?.quitado ? undefined : `Saldo em aberto: ${formatBRL(Number(r?.saldo ?? 0))}` });
+      setShowPay(null);
+      refetch();
+      if (detailEntryId) detailQuery.refetch();
+    },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
+  // Rev. 3743 — histórico de baixas do título aberto no diálogo de pagamento
+  const baixasQuery = (trpc as any).financial.getEntryBaixas.useQuery(
+    { entryId: showPay?.id ?? 0, companyId },
+    { enabled: !!companyId && !!showPay?.id }
+  );
+  const estornoBaixaMut = (trpc as any).financial.estornarBaixaItem.useMutation({
+    onSuccess: () => {
+      toast({ title: "Baixa estornada!" });
+      baixasQuery.refetch();
+      refetch();
+      if (detailEntryId) detailQuery.refetch();
+    },
+    onError: (e: any) => toast({ title: "Erro ao estornar", description: e.message, variant: "destructive" }),
   });
 
   // Rev. 2657 — fornecedores e categorias para os datalists do modal EDITAR
@@ -400,8 +420,12 @@ export default function FinanceiroContasAPagar() {
   // Sincroniza conta bancária do lançamento ao abrir o diálogo (permite alterar)
   useEffect(() => {
     setContaBancariaId(showPay?.contaBancariaId ?? null);
-    // Rev. 2655 — inicializa campos da baixa detalhada ao abrir
-    setValorPagar(showPay?.valorPrevisto != null ? String(showPay.valorPrevisto) : "");
+    // Rev. 2655/3743 — inicializa campos da baixa detalhada ao abrir; valor pré-preenche
+    // com o SALDO EM ABERTO (previsto − já pago), editável p/ baixa parcial.
+    const saldoAbertoInit = showPay
+      ? Math.max(0, Math.round((Number(showPay.valorPrevisto ?? 0) - Number(showPay.valorRealizado ?? 0)) * 100) / 100)
+      : 0;
+    setValorPagar(showPay ? String(saldoAbertoInit) : "");
     setJurosPay("");
     setDescontosPay("");
     setOutrosPay("");
@@ -423,6 +447,32 @@ export default function FinanceiroContasAPagar() {
     const n = (s: string) => { const x = parseFloat(String(s).replace(",", ".")); return Number.isFinite(x) ? x : 0; };
     return n(valorPagar) + n(jurosPay) - n(descontosPay) + n(outrosPay);
   }, [valorPagar, jurosPay, descontosPay, outrosPay]);
+
+  // Rev. 3743 — payload da baixa (registrarBaixa). `valor` = principal aplicado ao título
+  // (juros/descontos/outros vão separados, p/ registro). quitarTotal é injetado no caller.
+  function baixaPayload() {
+    const num = (s: string) => { const x = parseFloat(String(s).replace(",", ".")); return Number.isFinite(x) ? x : 0; };
+    return {
+      id: showPay.id, companyId,
+      valor: num(valorPagar),
+      data: dataPagamento || undefined,
+      formaPagamento: formaPagamento || undefined,
+      contaBancariaId,
+      juros: jurosPay ? num(jurosPay) : undefined,
+      descontos: descontosPay ? num(descontosPay) : undefined,
+      outros: outrosPay ? num(outrosPay) : undefined,
+      observacoes: obsPay || undefined,
+      comprovanteUrl: comprovanteUrl || undefined,
+      chequeTipo: formaPagamento === "cheque" ? (chequeTipo || undefined) : undefined,
+      chequeNumero: formaPagamento === "cheque" ? (chequeNumero || undefined) : undefined,
+      chequeBanco: formaPagamento === "cheque" ? (chequeBanco || undefined) : undefined,
+      chequeAgencia: formaPagamento === "cheque" ? (chequeAgencia || undefined) : undefined,
+      chequeConta: formaPagamento === "cheque" ? (chequeConta || undefined) : undefined,
+      chequeTitular: formaPagamento === "cheque" ? (chequeTitular || undefined) : undefined,
+      chequeDataEmissao: formaPagamento === "cheque" ? (chequeDataEmissao || undefined) : undefined,
+      chequeDataBomPara: formaPagamento === "cheque" ? (chequeDataBomPara || undefined) : undefined,
+    };
+  }
 
   // Rev. 2655 — upload de comprovante (PDF/Word/imagem)
   const uploadCompMut = (trpc as any).financial.uploadComprovante.useMutation();
@@ -1424,12 +1474,20 @@ export default function FinanceiroContasAPagar() {
                                 {c.status === "pago" && c.valorRealizado && Number(c.valorRealizado) !== Number(c.valorPrevisto) && (
                                   <div className="text-[10px] text-green-600">pago: {formatBRL(Number(c.valorRealizado))}</div>
                                 )}
+                                {/* Rev. 3743 — baixa PARCIAL: mostra pago + saldo em aberto */}
+                                {c.status !== "pago" && Number(c.valorRealizado ?? 0) > 0 && (
+                                  <div className="text-[10px] text-amber-600">pago: {formatBRL(Number(c.valorRealizado))} · saldo {formatBRL(Math.max(0, Number(c.valorPrevisto ?? 0) - Number(c.valorRealizado ?? 0)))}</div>
+                                )}
                               </td>
                               {/* Status */}
                               <td className="px-2 py-2.5 text-center">
                                 {c.status === "pago" ? (
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-green-100 text-green-700 border border-green-200">
                                     <CheckCircle className="w-3 h-3" />Pago
+                                  </span>
+                                ) : Number(c.valorRealizado ?? 0) > 0 ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-700 border border-amber-200" title="Baixa parcial — saldo em aberto">
+                                    <Clock className="w-3 h-3" />Parcial
                                   </span>
                                 ) : vencida ? (
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-700 border border-red-200">
@@ -2314,6 +2372,12 @@ export default function FinanceiroContasAPagar() {
                   <p className="text-sm font-medium text-gray-800">{showPay.descricao ?? showPay.contaNome ?? "—"}</p>
                   {showPay.obraNome && <p className="text-xs text-gray-500">{showPay.obraNome}</p>}
                   <p className="text-lg font-bold text-orange-700 mt-1">{formatBRL(Number(showPay.valorPrevisto))}</p>
+                  {Number(showPay.valorRealizado ?? 0) > 0 && (
+                    <div className="flex items-center gap-3 mt-1.5 text-xs">
+                      <span className="text-green-700 font-medium">Já pago: {formatBRL(Number(showPay.valorRealizado ?? 0))}</span>
+                      <span className="text-orange-700 font-semibold">Saldo em aberto: {formatBRL(Math.max(0, Math.round((Number(showPay.valorPrevisto ?? 0) - Number(showPay.valorRealizado ?? 0)) * 100) / 100))}</span>
+                    </div>
+                  )}
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
@@ -2463,29 +2527,53 @@ export default function FinanceiroContasAPagar() {
                   <Label>Observações</Label>
                   <Textarea rows={2} value={obsPay} onChange={e => setObsPay(e.target.value)} placeholder="Observações da baixa (opcional)" />
                 </div>
+
+                {/* Rev. 3743 — Histórico de baixas do título (parciais) + estorno por baixa */}
+                {Array.isArray(baixasQuery.data) && baixasQuery.data.length > 0 && (
+                  <div className="border border-slate-200 rounded-lg p-3 bg-slate-50/50">
+                    <p className="text-xs font-semibold text-slate-600 mb-2">Histórico de baixas</p>
+                    <div className="space-y-1.5">
+                      {baixasQuery.data.map((b: any) => {
+                        const estornada = !!b.estornadaEm;
+                        return (
+                          <div key={b.id} className={`flex items-center justify-between gap-2 text-xs rounded px-2 py-1.5 border ${estornada ? "bg-slate-100 border-slate-200 opacity-60" : "bg-white border-slate-200"}`}>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className={`font-semibold tabular-nums ${estornada ? "line-through text-slate-400" : "text-green-700"}`}>{formatBRL(Number(b.valor ?? 0))}</span>
+                                <span className="text-slate-500">{fmtDateBR(b.data)}</span>
+                                {b.formaPagamento && <span className="text-slate-400 uppercase text-[10px]">{String(b.formaPagamento).replace(/_/g, " ")}</span>}
+                                {b.quitouTotal === 1 && !estornada && <span className="text-[10px] px-1 rounded bg-emerald-100 text-emerald-700 border border-emerald-200">quitação total</span>}
+                                {estornada && <span className="text-[10px] px-1 rounded bg-red-100 text-red-600 border border-red-200">estornada</span>}
+                              </div>
+                              {b.observacoes && <p className="text-[10px] text-slate-400 break-words">{b.observacoes}</p>}
+                              {estornada && b.estornoMotivo && <p className="text-[10px] text-red-400 break-words">motivo: {b.estornoMotivo}</p>}
+                            </div>
+                            {!estornada && (
+                              <Button size="sm" variant="outline" className="h-6 px-2 text-[10px] border-red-200 text-red-600 hover:bg-red-50 shrink-0"
+                                disabled={estornoBaixaMut.isPending}
+                                onClick={() => { if (confirm("Estornar esta baixa? O saldo do título será reaberto.")) estornoBaixaMut.mutate({ baixaId: b.id, companyId }); }}>
+                                Estornar
+                              </Button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
-            <DialogFooter>
+            <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
               <Button variant="outline" onClick={() => setShowPay(null)}>Cancelar</Button>
+              {/* Opção C — Quitar saldo: fecha o título mesmo com sobra de centavo/juros/desconto */}
+              <Button variant="outline" className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                disabled={payMut.isPending || uploadingComp}
+                onClick={() => payMut.mutate({ ...baixaPayload(), quitarTotal: true })}>
+                Quitar saldo
+              </Button>
               <Button className="bg-green-600 hover:bg-green-700 text-white" disabled={payMut.isPending || uploadingComp}
-                onClick={() => payMut.mutate({
-                  id: showPay.id, companyId, status: "pago", dataPagamento, formaPagamento, contaBancariaId,
-                  valorRealizado: totalPagar,
-                  juros: jurosPay ? Number(String(jurosPay).replace(",", ".")) : undefined,
-                  descontos: descontosPay ? Number(String(descontosPay).replace(",", ".")) : undefined,
-                  outros: outrosPay ? Number(String(outrosPay).replace(",", ".")) : undefined,
-                  observacoes: obsPay || undefined,
-                  comprovanteUrl: comprovanteUrl || undefined,
-                  chequeTipo: formaPagamento === "cheque" ? (chequeTipo || undefined) : undefined,
-                  chequeNumero: formaPagamento === "cheque" ? (chequeNumero || undefined) : undefined,
-                  chequeBanco: formaPagamento === "cheque" ? (chequeBanco || undefined) : undefined,
-                  chequeAgencia: formaPagamento === "cheque" ? (chequeAgencia || undefined) : undefined,
-                  chequeConta: formaPagamento === "cheque" ? (chequeConta || undefined) : undefined,
-                  chequeTitular: formaPagamento === "cheque" ? (chequeTitular || undefined) : undefined,
-                  chequeDataEmissao: formaPagamento === "cheque" ? (chequeDataEmissao || undefined) : undefined,
-                  chequeDataBomPara: formaPagamento === "cheque" ? (chequeDataBomPara || undefined) : undefined,
-                })}>
-                {payMut.isPending ? "Registrando..." : "Confirmar Pagamento"}
+                onClick={() => payMut.mutate(baixaPayload())}>
+                {payMut.isPending ? "Registrando..." : "Registrar baixa"}
               </Button>
             </DialogFooter>
           </DialogContent>

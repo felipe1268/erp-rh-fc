@@ -1,6 +1,55 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3743 — **CONTAS A PAGAR & A RECEBER (TÍTULOS) — BAIXA PARCIAL COM HISTÓRICO: AGORA DÁ P/ PAGAR/RECEBER UM TÍTULO EM VÁRIAS PARCELAS (DATAS/CONTAS DIFERENTES), VER O SALDO EM ABERTO + BADGE "PARCIAL", ESTORNAR CADA BAIXA INDIVIDUALMENTE, E "QUITAR SALDO" P/ FECHAR MANUALMENTE (OPÇÃO C). SCHEMA ADITIVO (1 TABELA NOVA) · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
+ *
+ * Pedido do piloto FC: até então, baixar um título em Contas a Pagar era tudo-ou-nada (marcava "pago"
+ * com o valor cheio). Em Contas a Receber já havia baixa parcial (via `darBaixaReceber`, gravando
+ * `valor_realizado` direto no entry), mas SEM histórico — não dava p/ ver/estornar cada recebimento
+ * separadamente. O usuário queria: (1) registrar N baixas por título com data/conta/forma próprias,
+ * (2) ver o saldo em aberto e um badge "Parcial", (3) o título virar "pago"/"recebido" sozinho quando a
+ * soma das baixas atingir o previsto, (4) PODER forçar a quitação manual mesmo sobrando centavo/desconto
+ * (opção C), e (5) estornar uma baixa específica reabrindo o saldo.
+ *
+ * Arquitetura: nova tabela ADITIVA `financial_entry_baixas` = histórico, uma linha por baixa, p/ os DOIS
+ * tipos (despesa e receita). Estorno é soft (`estornada_em`). O `valor_realizado` do entry passa a ser o
+ * ROLLUP = SUM(baixas ativas), recalculado pelo helper `_aplicarRollupBaixas` a cada baixa/estorno; ele
+ * também decide o status (receita → `recebido_parcial`/`recebido`; despesa → MANTÉM `a_pagar` no parcial,
+ * vira `pago` ao fechar — ZERO status novo p/ despesa, blast radius mínimo) e a `data_pagamento` (= data da
+ * baixa que fecha; NULL enquanto parcial). Quitado quando `forceQuit` (alguma baixa com `quitou_total=1`)
+ * OU `acumulado + 0.005 >= previsto`.
+ *
+ * Backend (`server/routers/financial.ts`): 3 procedures novas — `getEntryBaixas` (lista ativas+estornadas),
+ * `registrarBaixa` (insere a baixa + rollup; aceita `valor` 0 só com `quitarTotal` p/ perdoar saldo; guards
+ * `_assertFinanceiroCompanyAccess` + `_assertContaBancariaPertenceEmpresa`; audit) e `estornarBaixaItem`
+ * (soft-estorno + rollup, reabre o título). BACKFILL suave: títulos parciais antigos baixados pela rota
+ * legada (`darBaixaReceber`) têm `valor_realizado>0` mas NENHUMA linha no histórico — como o rollup
+ * recalcula por SUM(baixas), a 1ª baixa nova zeraria o valor anterior; por isso, ao detectar
+ * `valor_realizado>0` sem baixa ativa, `registrarBaixa` semeia uma linha base "Baixa anterior (migração do
+ * histórico)" preservando o valor. Schema sincronizado via `[SyncSchema+]` (CREATE TABLE IF NOT EXISTS,
+ * aditivo, com índices entry_id/company_id).
+ *
+ * CONSISTÊNCIA & CONCORRÊNCIA (pós code-review): os estornos LEGADOS (`estornarPagamento`,
+ * `estornarReceber`) — usados quando o título já está totalmente pago/recebido — agora soft-estornam TODAS
+ * as baixas ativas do lançamento ANTES de reabrir o entry (helper `_estornarBaixasAtivasDoEntry`); sem
+ * isso ficavam linhas de histórico órfãs que o rollup re-somaria na próxima baixa. Além disso,
+ * `registrarBaixa`, `estornarBaixaItem` e os dois estornos legados passam a rodar dentro de
+ * `db.transaction` com um advisory lock por lançamento (`_lockEntryBaixas` =
+ * `pg_advisory_xact_lock(hashtext('feb:<companyId>:<entryId>'))`), serializando backfill+insert+rollup
+ * contra cliques/sessões concorrentes do MESMO título (fim do duplo "Baixa anterior" e do rollup defasado).
+ *
+ * Frontend: Contas a Pagar (`FinanceiroContasAPagar.tsx`) — diálogo de pagamento repontado de
+ * `updateEntryStatus` p/ `registrarBaixa`, pré-preenche o SALDO em aberto (editável), mostra "já pago /
+ * saldo em aberto", lista o histórico de baixas com botão "Estornar" por linha, botões "Registrar baixa" e
+ * "Quitar saldo" (quitarTotal); a lista de títulos ganha badge "Parcial" (derivado de `valor_realizado>0`
+ * com status≠pago) + "pago X · saldo Y". Contas a Receber (`FinanceiroContasAReceberTitulos.tsx`) —
+ * `BaixaDialog` repontado p/ `registrarBaixa`, mesmo histórico+estorno por baixa + botão "Quitar saldo"
+ * (badge "Parcial" e saldo já existiam).
+ *
+ * Arquivos: `drizzle/schema.ts` (tabela `financialEntryBaixas`), `server/_core/index.ts` ([SyncSchema+]),
+ * `server/routers/financial.ts` (helper + 3 procedures + backfill), `client/src/pages/financeiro/
+ * FinanceiroContasAPagar.tsx`, `client/src/pages/financeiro/FinanceiroContasAReceberTitulos.tsx`. Detalhe aqui.
+ *
  * Rev. 3742 — **CONCILIAÇÃO BANCÁRIA · CHEQUES DEVOLVIDOS — NOVO BOTÃO "DESCONSIDERAR DA CONCILIAÇÃO": TIRA O PAR DO CÁLCULO DO % SEM APAGAR O CHEQUE (P/ O % CHEGAR A 100% QUANDO O PAGAMENTO REAL FOI POR PIX/TED CONCILIADO EM OUTRA CONTA). REVERSÍVEL. SCHEMA ADITIVO (3 COLUNAS) · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
  *
  * Pedido do piloto FC: na Conciliação Bancária, um cheque emitido foi DEVOLVIDO pelo banco (par

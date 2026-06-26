@@ -128,3 +128,4 @@
 - [HTML cache stale post-deploy](html-cache-stale-deploy.md) — express.static(distPath,{maxAge:"1h"}) serve index.html com max-age=3600; após deploy chunks ficam 404 → tela branca. Fix: setHeaders para .html/.sw.js = no-cache,no-store.
 - [Confirm-combo dual-state data loss](confirm-combo-dual-state-dataloss.md) — combos de autocomplete que separam texto-digitado vs valor-confirmado descartam o texto livre no save; use `confirmado || display` como fallback em TODO save (criar+editar).
 - [Desconsiderar cheque devolvido do %](conciliacao-desconsiderar-cheque.md) — flag `desconsiderado_em` tira par do % sem apagar; mutation que retira lineIds do % precisa de guard de elegibilidade (par válido), não só tenant guard.
+- [Baixa parcial financeiro](financeiro-baixa-parcial.md) — rollup=SUM(baixas ativas); estornos LEGADOS devem soft-estornar baixas (senão órfãs inflam rollup); concorrência via advisory lock por entry em db.transaction.

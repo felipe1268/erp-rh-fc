@@ -816,6 +816,49 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3742: colunas desconsiderado_em/por_id/por_nome garantidas em bank_statement_lines (desconsiderar da conciliação).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA bank_statement_lines.desconsiderado_*:`, e?.message || e); }
 
+        // Rev. 3743 — BAIXA PARCIAL de Contas a Pagar/Receber: histórico 1→N baixas por
+        // título (datas/contas/formas diferentes). O valor_realizado do entry é o ROLLUP
+        // (SUM das baixas ativas); status derivado (parcial vs quitado). Estorno SOFT
+        // (estornada_em). CREATE TABLE IF NOT EXISTS — aditivo (R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS financial_entry_baixas (
+              id SERIAL PRIMARY KEY,
+              entry_id INTEGER NOT NULL,
+              company_id INTEGER NOT NULL,
+              tipo TEXT,
+              valor NUMERIC(15,2) NOT NULL,
+              data DATE NOT NULL,
+              conta_bancaria_id INTEGER,
+              forma_pagamento TEXT,
+              juros NUMERIC(15,2),
+              descontos NUMERIC(15,2),
+              outros NUMERIC(15,2),
+              comprovante_url TEXT,
+              cheque_tipo TEXT,
+              cheque_numero VARCHAR(20),
+              cheque_banco VARCHAR(100),
+              cheque_agencia VARCHAR(20),
+              cheque_conta VARCHAR(30),
+              cheque_titular VARCHAR(255),
+              cheque_data_emissao DATE,
+              cheque_data_bom_para DATE,
+              observacoes TEXT,
+              quitou_total SMALLINT DEFAULT 0,
+              estornada_em TIMESTAMP,
+              estornada_por_id INTEGER,
+              estornada_por_nome VARCHAR(255),
+              estorno_motivo TEXT,
+              criado_por_id INTEGER,
+              criado_por_nome VARCHAR(255),
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_feb_entry ON financial_entry_baixas(entry_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_feb_company ON financial_entry_baixas(company_id)`);
+          console.log(`[SyncSchema+] Rev. 3743: tabela financial_entry_baixas garantida (baixa parcial Contas a Pagar/Receber).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA financial_entry_baixas:`, e?.message || e); }
+
         // Rev. 3352 — feriados.observado: a empresa ADOTA (segue) o feriado?
         // Cria a coluna SÓ se não existir (idempotente) e, NESSE ÚNICO momento, faz o
         // backfill dos facultativos → observado=0 (empresa decide se segue). Em boots
