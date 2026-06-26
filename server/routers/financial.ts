@@ -4054,6 +4054,7 @@ export const financialRouter = router({
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
     const [entry]: any = await dbExecute(db,
       `SELECT id, descricao, valor_previsto, data_vencimento, status, origem_modulo, origem_id, conta_nome
        FROM financial_entries WHERE id=$1 AND company_id=$2`,
@@ -5487,6 +5488,48 @@ export const financialRouter = router({
     const totalEntradas = entries.filter(e => e.tipo === "receita").reduce((s, e) => s + Math.abs(Number(e.valorRealizado ?? e.valorPrevisto) || 0), 0);
     const totalSaidas   = entries.filter(e => e.tipo === "despesa").reduce((s, e) => s + Math.abs(Number(e.valorRealizado ?? e.valorPrevisto) || 0), 0);
     return { aConfirmar, confirmadas, totalEntradas, totalSaidas, total: entries.length };
+  }),
+
+  // Rev. 3735 — ALERTA DE DUPLICIDADE no "Novo lançamento" do Caixa Interno. READ-ONLY:
+  // dado conta + valor + data, devolve lançamentos NÃO cancelados já existentes na MESMA
+  // conta com o MESMO valor (|previsto| ou |realizado|) e a MESMA data de competência.
+  // O frontend usa isso só para AVISAR antes de criar (regra de ouro: não bloqueia/aplica
+  // nada sozinho — o usuário decide criar mesmo assim ou cancelar).
+  checkDuplicataCaixaInterno: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    contaBancariaId: z.number(),
+    valor: z.number(),
+    dataCompetencia: z.string(),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const valor = Math.abs(Number(input.valor) || 0);
+    if (!valor) return { matches: [] as any[] };
+    // dbExecute liga params por ORDEM DE APARIÇÃO do $N; o valor aparece 2x → $4 e $5
+    // distintos (placeholder repetido quebra o split). data castada p/ ::date dos dois lados.
+    const res = await dbExecute(db,
+      `SELECT e.id,
+              e.descricao,
+              e.fornecedor_nome  AS "fornecedorNome",
+              e.cliente_nome     AS "clienteNome",
+              e.tipo,
+              e.status,
+              e.conciliado,
+              e.valor_previsto   AS "valorPrevisto",
+              e.valor_realizado  AS "valorRealizado",
+              e.data_competencia AS "dataCompetencia",
+              e.origem_modulo    AS "origemModulo"
+         FROM financial_entries e
+        WHERE e.company_id = $1
+          AND e.conta_bancaria_id = $2
+          AND e.status <> 'cancelado'
+          AND e.data_competencia::date = $3::date
+          AND (ABS(e.valor_previsto) = $4 OR ABS(e.valor_realizado) = $5)
+        ORDER BY e.conciliado DESC, e.id DESC
+        LIMIT 20`,
+      [input.companyId, input.contaBancariaId, input.dataCompetencia, valor, valor]);
+    return { matches: rows(res) as any[] };
   }),
 
   // Rev. 3398 — confirmar entrada de caixa interno: marca conciliado=1 sem extrato bancário.

@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3735 — **CONCILIAÇÃO · CAIXA INTERNO — ALERTA DE DUPLICIDADE NO "NOVO LANÇAMENTO" + BOTÃO EXCLUIR NAS LINHAS. BACKEND ADITIVO (1 QUERY READ-ONLY) + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Contexto (queixa do piloto FC): no Caixa Interno ADM o usuário criou via "Novo lançamento"
+ * títulos que JÁ tinham sido importados (mesmo valor/data) — gerando "duplicatas". Diagnóstico
+ * por consulta direta ao Neon confirmou que NÃO há duplicação automática: `confirmarEntradaCaixa`
+ * é UPDATE puro (não cria nada). As cópias eram re-digitações manuais. Além disso, a tela de
+ * Conciliação não tinha como EXCLUIR esses lançamentos — o usuário precisava sair p/ o Contas a
+ * Pagar. Duas melhorias cirúrgicas, ambas respeitando a regra de ouro (nada bloqueia/aplica
+ * sozinho — só avisa; exclusão sempre com confirmação explícita + motivo):
+ *
+ * 1. ALERTA DE DUPLICIDADE (read-only). Novo `financial.checkDuplicataCaixaInterno` (companyId,
+ *    contaBancariaId, valor, dataCompetencia) com `_assertFinanceiroCompanyAccess`: devolve até 20
+ *    lançamentos NÃO cancelados na MESMA conta com MESMO |valor| (previsto OU realizado) e MESMA
+ *    `data_competencia` (cast `::date` dos dois lados; placeholders $4/$5 distintos p/ o mesmo
+ *    valor por causa do binding posicional do dbExecute). No front, `submitLancar` ganhou
+ *    `skipDupCheck`: só para o "Novo lançamento" do Caixa Interno (`isStandalone &&
+ *    contaSelecionadaCaixaInterno`), antes de gravar, chama o check via `trpc.useUtils().fetch`.
+ *    Se houver candidatos, abre AlertDialog âmbar listando-os; "Cancelar" aborta, "Criar mesmo
+ *    assim" reexecuta com `skipDupCheck=true`. Falha na checagem NÃO trava o lançamento.
+ *
+ * 2. BOTÃO EXCLUIR NAS LINHAS. As listas "A confirmar" e "Confirmadas" do Caixa Interno ganharam
+ *    um botão de lixeira que reaproveita o diálogo de exclusão já existente (`deleteEntryTarget` +
+ *    motivo ≥5 chars + auditoria). `onSuccess` agora também dá `refetchCaixa()`. Como hardening,
+ *    `financial.deleteEntry` ganhou `_assertFinanceiroCompanyAccess` (faltava o guard de tenant).
+ *
+ * Arquivos: `client/src/pages/financeiro/FinanceiroConciliacao.tsx`, `server/routers/financial.ts`.
+ *
  * Rev. 3734 — **NF-e RECEBIDAS · CRONÔMETRO SEFAZ AGORA DISPARA A SYNC AO ZERAR (ANTES ERA SÓ VISUAL). 100% FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Queixa do piloto: "o cronômetro conta, zera, mas NÃO chama a atualização". Causa raiz:

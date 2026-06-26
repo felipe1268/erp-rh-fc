@@ -545,6 +545,11 @@ export default function FinanceiroConciliacao() {
   // Rev. 3198 — guarda o lançamento JÁ criado p/ a linha atual: se a conciliação
   // automática falhar, um novo clique tenta SÓ conciliar (não recria → sem duplicidade).
   const lancCreatedRef = useRef<{ stmtId: any; entryId: number } | null>(null);
+  const utils = trpc.useUtils();
+  // Rev. 3735 — alerta de duplicidade no Caixa Interno: quando o usuário cria um "Novo
+  // lançamento" e já existe outro com mesma conta/valor/data, guarda os candidatos aqui
+  // p/ confirmar antes de gravar (não bloqueia — só avisa).
+  const [dupCaixaDialog, setDupCaixaDialog] = useState<{ conciliar: boolean; matches: any[] } | null>(null);
   const criarLancMut = (trpc as any).financial.createEntry.useMutation();
   const criarReceberMut = (trpc as any).financial.criarTituloReceber.useMutation();
   const darBaixaReceberMut = (trpc as any).financial.darBaixaReceber.useMutation();
@@ -626,12 +631,27 @@ export default function FinanceiroConciliacao() {
   // Contas a Pagar (createEntry despesa; "só lançar" deixa a_pagar / "e conciliar"
   // grava pago + concilia). REGRA DE OURO: nada concilia sem o clique EXPLÍCITO em
   // "Lançar e conciliar"; "Só lançar" jamais toca a conciliação.
-  async function submitLancar(conciliar: boolean) {
+  async function submitLancar(conciliar: boolean, skipDupCheck = false) {
     if (!lancStatement) return;
     const valor = parseBRLInput(lancForm.valor);
     if (!valor || valor <= 0) { toast({ title: "Informe um valor válido", variant: "destructive" }); return; }
     if (!lancForm.data) { toast({ title: "Informe a data do lançamento", variant: "destructive" }); return; }
     const isStandalone = lancStatement?.id == null;
+    // Rev. 3735 — ALERTA DE DUPLICIDADE (só no "Novo lançamento" do Caixa Interno): antes de
+    // criar, checa se já existe lançamento com mesma conta + valor + data. Se houver, abre o
+    // aviso e interrompe; o usuário confirma ("Criar mesmo assim") ou cancela. Falha na
+    // checagem NÃO trava o lançamento (segue o fluxo normal).
+    if (isStandalone && contaSelecionadaCaixaInterno && !skipDupCheck) {
+      const contaDup = Number(lancStatement.contaBancariaId) || parseInt(contaBancariaId) || 0;
+      if (contaDup) {
+        try {
+          const dup: any = await utils.financial.checkDuplicataCaixaInterno.fetch({
+            companyId, contaBancariaId: contaDup, valor, dataCompetencia: lancForm.data,
+          });
+          if (dup?.matches?.length) { setDupCaixaDialog({ conciliar, matches: dup.matches }); return; }
+        } catch { /* checagem falhou: não bloqueia o lançamento */ }
+      }
+    }
     const entrada = isStandalone ? lancForm.tipo === "receita" : Number(lancStatement.valor) >= 0;
     const cat = catOpts.find(c => c.nome.trim().toLowerCase() === lancForm.contaNome.trim().toLowerCase());
     const natureza = cat?.natureza === "fixo" || cat?.natureza === "variavel" ? cat.natureza : "variavel";
@@ -3329,6 +3349,16 @@ export default function FinanceiroConciliacao() {
                               >
                                 <Check className="w-3.5 h-3.5 mr-1" />Confirmar
                               </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 text-red-500 hover:bg-red-50 shrink-0"
+                                title="Excluir lançamento"
+                                disabled={deleteEntryMut.isPending}
+                                onClick={() => { setDeleteEntryMotivo(""); setDeleteEntryTarget({ id: e.id, nome, valor, status: e.status }); }}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
                             </div>
                           );
                         })}
@@ -3378,6 +3408,16 @@ export default function FinanceiroConciliacao() {
                                 onClick={() => desconciliarEntradaMut.mutate({ companyId, entryId: e.id })}
                               >
                                 <RotateCcw className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 text-red-500 hover:bg-red-50 shrink-0"
+                                title="Excluir lançamento"
+                                disabled={deleteEntryMut.isPending}
+                                onClick={() => { setDeleteEntryMotivo(""); setDeleteEntryTarget({ id: e.id, nome, valor, status: e.status }); }}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
                               </Button>
                             </div>
                           );
@@ -6438,6 +6478,8 @@ export default function FinanceiroConciliacao() {
                     setDeleteEntryTarget(null);
                     toast({ title: "Lançamento excluído", description: deleteEntryTarget.nome });
                     setReportStale(true);
+                    // Rev. 3735 — atualiza também a lista do Caixa Interno (botão de excluir das linhas).
+                    if (contaSelecionadaCaixaInterno) refetchCaixa();
                   } catch (err: any) {
                     toast({ title: "Erro ao excluir", description: String(err?.message ?? err), variant: "destructive" });
                   }
@@ -6448,6 +6490,59 @@ export default function FinanceiroConciliacao() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Rev. 3735 — ALERTA DE DUPLICIDADE (Caixa Interno): avisa antes de criar um lançamento
+            que já existe (mesma conta/valor/data). O usuário decide: cancelar ou criar mesmo assim. */}
+        <AlertDialog open={dupCaixaDialog != null} onOpenChange={(o: boolean) => { if (!o && !lancBusy) setDupCaixaDialog(null); }}>
+          <AlertDialogContent className="max-w-lg">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2 text-amber-700">
+                <AlertCircle className="w-5 h-5" />Possível lançamento duplicado
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="text-sm text-gray-600 space-y-2">
+                  <p>
+                    Já existe {(dupCaixaDialog?.matches?.length ?? 0) > 1 ? "lançamentos" : "um lançamento"} nesta
+                    conta com o <strong>mesmo valor</strong> e a <strong>mesma data</strong>. Confira antes de criar
+                    outro:
+                  </p>
+                  <div className="rounded-lg border border-amber-100 bg-amber-50/60 divide-y divide-amber-100 max-h-56 overflow-auto">
+                    {(dupCaixaDialog?.matches ?? []).map((m: any) => {
+                      const v = Math.abs(Number(m.valorRealizado ?? m.valorPrevisto) || 0);
+                      const nm = m.fornecedorNome || m.clienteNome || m.descricao || `Lançamento #${m.id}`;
+                      return (
+                        <div key={m.id} className="px-3 py-2 text-sm">
+                          <p className="font-medium text-gray-800 break-words">{nm}</p>
+                          <p className="text-xs text-gray-500 flex flex-wrap items-center gap-x-2">
+                            <span>{m.dataCompetencia ? String(m.dataCompetencia).slice(0,10).split("-").reverse().join("/") : "—"}</span>
+                            <span className="font-medium text-gray-700">{formatBRL(v)}</span>
+                            <span>· {m.status}</span>
+                            {Number(m.conciliado) === 1 && <span className="text-green-600">· confirmado</span>}
+                            {m.origemModulo && <span className="text-gray-400">· {m.origemModulo}</span>}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={lancBusy}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={lancBusy}
+                className="bg-amber-600 hover:bg-amber-700"
+                onClick={() => {
+                  const d = dupCaixaDialog;
+                  setDupCaixaDialog(null);
+                  if (d) submitLancar(d.conciliar, true);
+                }}
+              >
+                Criar mesmo assim
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Rev. 3429 — Portal full-screen nativo (sem Radix Dialog) */}
         {vincularPixDlg != null && createPortal((() => {
