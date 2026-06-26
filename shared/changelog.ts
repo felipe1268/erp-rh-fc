@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3729 — **PACOTE CONTADOR · XLSX EXTRATO BANCÁRIO — LAYOUT PRONUS COMPLETO (CABEÇALHO ROXO, LINHAS LAVANDA, SALDO VERDE/VERMELHO). 100% FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Reescrita completa de `buildExtratoBancarioXlsx` em `downloadPacoteContador.ts` para replicar
+ * o template Pronus mostrado pelo usuário:
+ * - Linha 2: nome do banco em caixa mesclada A2:E2 (bold, centralizado, bordas); G2:H2 = "Data Saldo Anterior" + data (último dia do mês anterior); G3:H3 = "Saldo Anterior" + valor formatado.
+ * - Linha 4: cabeçalho roxo (#7030A0), fonte branca bold, bordas roxas, colunas: Data | Histórico do Banco | Histórico Real | Nº Nota Fiscal | Nº CNPJ | Entrada | Saída | Saldo.
+ * - Linhas de dados: alternância branco/lavanda (#EDE7F6); Entrada/Saída com formato "R$ -" para zero; Saldo com fundo verde (#C6EFCE, fonte #375623) para positivo e vermelho (#FFC7CE, fonte #9C0006) para negativo.
+ * - Linha TOTAL: fundo lavanda escuro (#F0EBF8), A:E mesclados, totais de entrada/saída, saldo final com cor condicional.
+ * - Alturas de linha configuradas (!rows); larguras de coluna ajustadas.
+ * Arquivo: `server/routers/downloadPacoteContador.ts`.
+ *
  * Rev. 3728 — **PACOTE CONTADOR · BUGFIX "Erro interno ao gerar pacote" — JOINs INVÁLIDOS EM financial_entries NO downloadPacoteContador.ts. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Causa: `financial_entries` não tem colunas `numero_nf` nem `fornecedor_cnpj`.

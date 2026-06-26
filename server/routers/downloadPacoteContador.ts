@@ -221,10 +221,10 @@ function buildNfseHtml(n: any, tipo: "emitida" | "tomada", empresa: string): Buf
   return Buffer.from(html, "utf8");
 }
 
-// ── XLSX de extrato bancário (1 aba por conta) ───────────────────────────────
+// ── XLSX de extrato bancário (layout Pronus) ─────────────────────────────────
 async function buildExtratoBancarioXlsx(
   db: any, companyId: number, di: string, df: string,
-  mes: number, ano: number, empresa: string
+  mes: number, ano: number, _empresa: string
 ): Promise<Buffer> {
   const contasQ = await db.$client.query(`
     SELECT DISTINCT bsl.conta_bancaria_id,
@@ -246,11 +246,33 @@ async function buildExtratoBancarioXlsx(
     for (const r of obQ.rows) openingBalances[Number(r.conta_bancaria_id)] = parseFloat(r.saldo || "0");
   } catch { /* tabela inexistente */ }
 
+  // Data do saldo anterior = último dia do mês anterior
+  const prevMes = mes === 1 ? 12 : mes - 1;
+  const prevAno = mes === 1 ? ano - 1 : ano;
+  const lastDay = new Date(ano, mes - 1, 0).getDate();
+  const dataAnteriorStr = `${String(lastDay).padStart(2,"0")}/${String(prevMes).padStart(2,"0")}/${prevAno}`;
+
+  // ── Paleta ────────────────────────────────────────────────────────────────
+  const PURPLE    = "7030A0";
+  const LAVENDER  = "EDE7F6";
+  const GREEN_BG  = "C6EFCE";
+  const GREEN_FG  = "375623";
+  const RED_BG    = "FFC7CE";
+  const RED_FG    = "9C0006";
+  const TOTAL_BG  = "F0EBF8";
+
+  const thin = { style: "thin", color: { rgb: "CCCCCC" } } as any;
+  const purpleThin = { style: "thin", color: { rgb: PURPLE } } as any;
+
+  const allBorder     = { top: thin, left: thin, right: thin, bottom: thin };
+  const hdrBorder     = { top: purpleThin, left: purpleThin, right: purpleThin, bottom: purpleThin };
+
+  // Formato "R$ -" para zero, "-R$ X" para negativo
+  const FMT_POS_ZERO  = '"R$ "#,##0.00;;"R$ -"';   // entrada/saída (sempre ≥0)
+  const FMT_SALDO_POS = '"R$ "#,##0.00;"R$ "-#,##0.00;"R$ -"';
+  const FMT_SALDO_NEG = '"R$ "#,##0.00;"-R$ "#,##0.00;"R$ -"'; // seção negativa = abs
+
   const wb = XLSX.utils.book_new();
-  const headerFill = { patternType: "solid", fgColor: { rgb: "1E3A5F" } } as any;
-  const headerFont = { bold: true, color: { rgb: "FFFFFF" } } as any;
-  const numFmt = { numFmt: '#,##0.00', alignment: { horizontal: "right" } } as any;
-  const boldNum = { numFmt: '#,##0.00', font: { bold: true }, alignment: { horizontal: "right" } } as any;
 
   for (const conta of contasQ.rows) {
     const contaId = Number(conta.conta_bancaria_id);
@@ -268,62 +290,170 @@ async function buildExtratoBancarioXlsx(
       ORDER BY bsl.data, bsl.id
     `, [companyId, contaId, di, df]);
 
-    const lines = linesQ.rows;
+    const lines        = linesQ.rows;
     const saldoInicial = openingBalances[contaId] ?? 0;
     const ws: XLSX.WorkSheet = {};
+    const merges: any[]      = [];
 
-    // Título / info da conta
-    ws["A1"] = { v: empresa, t: "s", s: { font: { bold: true, sz: 13 } } };
-    ws["A2"] = { v: `${banco}${conta.conta_desc ? " · " + conta.conta_desc : ""}`, t: "s", s: { font: { sz: 11 } } };
-    ws["A3"] = { v: `Agência: ${conta.agencia || "—"} · Conta: ${conta.conta || "—"}`, t: "s" };
-    ws["G4"] = { v: "Saldo Anterior", t: "s", s: { font: { bold: true } } };
-    ws["H4"] = { v: saldoInicial, t: "n", s: numFmt };
+    // ── Linha 1: vazia (espaço visual) ──────────────────────────────────────
 
-    // Cabeçalhos row 6
-    const hdrs = ["Data","Histórico do Banco","Histórico Real","Nº NF","CNPJ","Entrada","Saída","Saldo"];
-    ["A","B","C","D","E","F","G","H"].forEach((col, i) => {
-      ws[`${col}6`] = { v: hdrs[i], t: "s", s: { font: headerFont, fill: headerFill, alignment: { horizontal: "center" } } };
+    // ── Linha 2: nome do banco (A2:E2 merge) + metadados saldo (G2:H2/G3:H3) ─
+    const bancoLabel = `BANCO ${banco.toUpperCase()}${conta.conta_desc ? "  ·  " + conta.conta_desc : ""}`;
+    ws["A2"] = {
+      v: bancoLabel, t: "s",
+      s: {
+        font: { bold: true, sz: 12 },
+        alignment: { horizontal: "center", vertical: "center", wrapText: false },
+        border: allBorder,
+      },
+    };
+    merges.push({ s: { r: 1, c: 0 }, e: { r: 1, c: 4 } }); // A2:E2
+
+    // Metadados: G2 = label, H2 = data
+    ws["G2"] = {
+      v: "Data Saldo Anterior", t: "s",
+      s: { font: { bold: true, sz: 10 }, border: allBorder, alignment: { horizontal: "right", vertical: "center" } },
+    };
+    ws["H2"] = {
+      v: dataAnteriorStr, t: "s",
+      s: { font: { sz: 10 }, border: allBorder, alignment: { horizontal: "right", vertical: "center" } },
+    };
+
+    // Linha 3: G3 = label saldo anterior, H3 = valor
+    ws["G3"] = {
+      v: "Saldo Anterior", t: "s",
+      s: { font: { bold: true, sz: 10 }, border: allBorder, alignment: { horizontal: "right", vertical: "center" } },
+    };
+    ws["H3"] = {
+      v: saldoInicial, t: "n",
+      s: {
+        numFmt: '"R$ "#,##0.00',
+        font: { sz: 10 },
+        border: allBorder,
+        alignment: { horizontal: "right", vertical: "center" },
+      },
+    };
+
+    // ── Linha 4: cabeçalhos ──────────────────────────────────────────────────
+    const COLS = ["A","B","C","D","E","F","G","H"];
+    const HDRS = ["Data","Histórico do Banco","Histórico Real","Nº Nota Fiscal","Nº CNPJ","Entrada","Saída","Saldo"];
+    COLS.forEach((col, i) => {
+      ws[`${col}4`] = {
+        v: HDRS[i], t: "s",
+        s: {
+          font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 },
+          fill: { patternType: "solid", fgColor: { rgb: PURPLE } },
+          alignment: { horizontal: "center", vertical: "center" },
+          border: hdrBorder,
+        },
+      };
     });
 
+    // ── Linhas de dados a partir da linha 5 ─────────────────────────────────
     let saldo = saldoInicial;
     lines.forEach((line: any, idx: number) => {
-      const row = idx + 7;
-      const valor = parseFloat(String(line.valor)) || 0;
+      const row    = idx + 5;
+      const isAlt  = idx % 2 === 1;
+      const rowFill = isAlt
+        ? { patternType: "solid" as any, fgColor: { rgb: LAVENDER } }
+        : undefined;
+
+      const valor   = parseFloat(String(line.valor)) || 0;
       const entrada = valor > 0 ? valor : 0;
       const saida   = valor < 0 ? Math.abs(valor) : 0;
-      saldo += entrada - saida;
+      saldo        += valor;
 
-      const fmtD = (s: any) => {
-        if (!s) return "";
-        const str = String(s).slice(0, 10);
-        return /^\d{4}-\d{2}-\d{2}$/.test(str) ? str.split("-").reverse().join("/") : str;
-      };
-      const fmtC = (v: any) => {
-        const d = String(v ?? "").replace(/\D/g, "");
-        if (d.length === 14) return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12)}`;
-        return String(v ?? "");
+      const baseStyle = (extra?: object) => ({
+        ...(rowFill ? { fill: rowFill } : {}),
+        border: allBorder,
+        alignment: { vertical: "center" },
+        ...(extra || {}),
+      });
+
+      ws[`A${row}`] = { v: fmtDate(line.data), t: "s", s: baseStyle() };
+      ws[`B${row}`] = { v: line.descricao || "", t: "s", s: baseStyle() };
+      ws[`C${row}`] = { v: line.fornecedor_nome || line.entry_desc || "", t: "s", s: baseStyle() };
+      ws[`D${row}`] = { v: line.numero_nf || "", t: "s", s: baseStyle({ alignment: { horizontal: "center", vertical: "center" } }) };
+      ws[`E${row}`] = { v: line.fornecedor_cnpj ? fmtCnpj(line.fornecedor_cnpj) : "", t: "s", s: baseStyle({ alignment: { horizontal: "center", vertical: "center" } }) };
+
+      // Entrada — "R$ -" para zero
+      ws[`F${row}`] = {
+        v: entrada, t: "n",
+        s: { ...baseStyle(), numFmt: FMT_POS_ZERO, alignment: { horizontal: "right", vertical: "center" } },
       };
 
-      ws[`A${row}`] = { v: fmtD(line.data), t: "s" };
-      ws[`B${row}`] = { v: line.descricao || "", t: "s" };
-      ws[`C${row}`] = { v: line.fornecedor_nome || line.entry_desc || "", t: "s" };
-      ws[`D${row}`] = { v: line.numero_nf || "", t: "s" };
-      ws[`E${row}`] = { v: line.fornecedor_cnpj ? fmtC(line.fornecedor_cnpj) : "", t: "s" };
-      ws[`F${row}`] = { v: entrada, t: "n", s: { numFmt: '#,##0.00', font: { color: { rgb: entrada > 0 ? "006400" : "000000" } }, alignment: { horizontal: "right" } } };
-      ws[`G${row}`] = { v: saida,   t: "n", s: { numFmt: '#,##0.00', font: { color: { rgb: saida   > 0 ? "8B0000" : "000000" } }, alignment: { horizontal: "right" } } };
-      ws[`H${row}`] = { v: saldo,   t: "n", s: numFmt };
+      // Saída — "R$ -" para zero
+      ws[`G${row}`] = {
+        v: saida, t: "n",
+        s: { ...baseStyle(), numFmt: FMT_POS_ZERO, alignment: { horizontal: "right", vertical: "center" } },
+      };
+
+      // Saldo — fundo verde (positivo) ou vermelho (negativo)
+      const saldoPos = saldo >= 0;
+      ws[`H${row}`] = {
+        v: saldo, t: "n",
+        s: {
+          numFmt: saldoPos ? FMT_SALDO_POS : FMT_SALDO_NEG,
+          fill: { patternType: "solid", fgColor: { rgb: saldoPos ? GREEN_BG : RED_BG } },
+          font: { bold: true, color: { rgb: saldoPos ? GREEN_FG : RED_FG } },
+          border: allBorder,
+          alignment: { horizontal: "right", vertical: "center" },
+        },
+      };
     });
 
-    const totalRow = lines.length + 7;
-    const totEnt = lines.reduce((s: number, l: any) => { const v = parseFloat(String(l.valor)) || 0; return s + (v > 0 ? v : 0); }, 0);
-    const totSai = lines.reduce((s: number, l: any) => { const v = parseFloat(String(l.valor)) || 0; return s + (v < 0 ? Math.abs(v) : 0); }, 0);
-    ws[`A${totalRow}`] = { v: "TOTAL", t: "s", s: { font: { bold: true } } };
-    ws[`F${totalRow}`] = { v: totEnt, t: "n", s: boldNum };
-    ws[`G${totalRow}`] = { v: totSai, t: "n", s: boldNum };
-    ws[`H${totalRow}`] = { v: saldo,  t: "n", s: boldNum };
+    // ── Linha de TOTAL ───────────────────────────────────────────────────────
+    const totalRow = lines.length + 5;
+    const totEnt = lines.reduce((s: number, l: any) => {
+      const v = parseFloat(String(l.valor)) || 0; return s + (v > 0 ? v : 0);
+    }, 0);
+    const totSai = lines.reduce((s: number, l: any) => {
+      const v = parseFloat(String(l.valor)) || 0; return s + (v < 0 ? Math.abs(v) : 0);
+    }, 0);
 
-    ws["!ref"] = `A1:H${totalRow}`;
-    ws["!cols"] = [{ wch: 12 }, { wch: 45 }, { wch: 35 }, { wch: 18 }, { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 16 }];
+    const totalCellStyle = {
+      fill: { patternType: "solid" as any, fgColor: { rgb: TOTAL_BG } },
+      font: { bold: true },
+      border: allBorder,
+    };
+
+    ws[`A${totalRow}`] = { v: "TOTAL", t: "s", s: { ...totalCellStyle, alignment: { horizontal: "center", vertical: "center" } } };
+    merges.push({ s: { r: totalRow - 1, c: 0 }, e: { r: totalRow - 1, c: 4 } }); // A:E merge
+
+    ws[`F${totalRow}`] = { v: totEnt, t: "n", s: { ...totalCellStyle, numFmt: FMT_POS_ZERO, alignment: { horizontal: "right" } } };
+    ws[`G${totalRow}`] = { v: totSai, t: "n", s: { ...totalCellStyle, numFmt: FMT_POS_ZERO, alignment: { horizontal: "right" } } };
+
+    const saldoFinalPos = saldo >= 0;
+    ws[`H${totalRow}`] = {
+      v: saldo, t: "n",
+      s: {
+        numFmt: saldoFinalPos ? FMT_SALDO_POS : FMT_SALDO_NEG,
+        fill: { patternType: "solid", fgColor: { rgb: saldoFinalPos ? GREEN_BG : RED_BG } },
+        font: { bold: true, color: { rgb: saldoFinalPos ? GREEN_FG : RED_FG } },
+        border: allBorder,
+        alignment: { horizontal: "right" },
+      },
+    };
+
+    // ── Configurações da planilha ─────────────────────────────────────────────
+    ws["!ref"]  = `A1:H${totalRow}`;
+    ws["!cols"] = [
+      { wch: 12 },  // A: Data
+      { wch: 40 },  // B: Histórico Banco
+      { wch: 32 },  // C: Histórico Real
+      { wch: 18 },  // D: Nº Nota Fiscal
+      { wch: 20 },  // E: Nº CNPJ
+      { wch: 15 },  // F: Entrada
+      { wch: 15 },  // G: Saída
+      { wch: 16 },  // H: Saldo
+    ];
+    ws["!rows"] = [
+      { hpt: 8  },  // row 1: espaço visual
+      { hpt: 26 },  // row 2: banco
+      { hpt: 20 },  // row 3: saldo anterior
+      { hpt: 22 },  // row 4: cabeçalho
+    ];
+    ws["!merges"] = merges;
 
     const sn = [banco, conta.conta_desc].filter(Boolean).join(" - ").slice(0, 31);
     XLSX.utils.book_append_sheet(wb, ws, sn);
