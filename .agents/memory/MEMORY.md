@@ -126,3 +126,4 @@
 - [Circular chunk vendor-misc crash](circular-chunk-vendor-misc.md) — catch-all `return "vendor-misc"` em manualChunks cria ciclos (react-dom↔misc↔radix↔charts) → exports undefined → tela branca pré-listener. Fix: `return undefined`.
 - [Conciliação cheque/boleto cross-month](conciliacao-cheque-cross-month.md) — sugestão de cheque/boleto deve buscar lançamentos de OUTROS meses (janela ampla) + casar pelo nº do cheque; demais formas seguem estritas ao período.
 - [HTML cache stale post-deploy](html-cache-stale-deploy.md) — express.static(distPath,{maxAge:"1h"}) serve index.html com max-age=3600; após deploy chunks ficam 404 → tela branca. Fix: setHeaders para .html/.sw.js = no-cache,no-store.
+- [Confirm-combo dual-state data loss](confirm-combo-dual-state-dataloss.md) — combos de autocomplete que separam texto-digitado vs valor-confirmado descartam o texto livre no save; use `confirmado || display` como fallback em TODO save (criar+editar).
