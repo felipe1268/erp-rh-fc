@@ -739,6 +739,7 @@ export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?:
       // O gate deve ser por CNPJ (não por company_id) porque o SEFAZ rate-limita por CNPJ.
       const tsRows = (await db.$client.query(`
         SELECT MAX(last_sync_at) AS last_sync_at,
+               EXTRACT(EPOCH FROM (NOW() - MAX(last_sync_at))) AS elapsed_sec,
                (SELECT last_sync_result FROM company_nfe_config
                 WHERE REGEXP_REPLACE(COALESCE(cnpj,''), '[^0-9]', '', 'g') = $1
                   AND last_sync_at IS NOT NULL
@@ -749,7 +750,13 @@ export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?:
       const ts = (tsRows?.rows ?? tsRows)?.[0];
 
       if (ts?.last_sync_at) {
-        const elapsedMs = Date.now() - new Date(ts.last_sync_at).getTime();
+        // elapsed calculado em SQL (TZ-safe), NUNCA via `new Date(ts.last_sync_at)`:
+        // a coluna last_sync_at é `timestamp without time zone` gravando horário UTC (sessão GMT),
+        // mas o processo Node roda em TZ=America/Sao_Paulo (server/_core/index.ts) → node-pg
+        // interpretaria o valor 3h adiantado → elapsed negativo → gate "aguarde +Xmin" inflado
+        // em ~180min. O cron SELECIONAVA por SQL (correto), mas ESTE gate rejeitava por 3h
+        // ("o cronômetro zera mas não sincroniza"). EXTRACT(EPOCH) no banco evita o skew.
+        const elapsedMs = Math.max(0, Number(ts.elapsed_sec ?? 0) * 1000);
 
         // Lê contador de 656 consecutivos para backoff progressivo
         let prevResult: any = {};
@@ -1063,6 +1070,7 @@ export function startSefazCron() {
       const allRows = (await db.execute(sql`
         SELECT company_id, ativo, sync_enabled, ultimo_nsu, sync_intervalo_horas,
                last_sync_at,
+               TO_CHAR(last_sync_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo', 'HH24:MI:SS') AS last_sync_hms,
                EXTRACT(EPOCH FROM (NOW() - last_sync_at))/60 AS elapsed_min,
                COALESCE(sync_intervalo_horas, 1) * 60 + 3 AS cooldown_min,
                last_sync_result
@@ -1076,7 +1084,9 @@ export function startSefazCron() {
         const reason = r.ativo != 1 ? "ativo=0" : r.sync_enabled != 1 ? "sync_enabled=0" : inCooldown ? `cooldown (${elapsed}/${cooldown}min)` : "ELEGÍVEL";
         let lastResult = "";
         try { const lr = JSON.parse(r.last_sync_result || "{}"); lastResult = lr.rateLimitedAt ? " rateLimit" : lr.cStat ? ` cStat=${lr.cStat}` : lr.importadas !== undefined ? ` imp=${lr.importadas}` : ""; } catch {}
-        console.log(`[SefazSync] company=${r.company_id} ativo=${r.ativo} sync=${r.sync_enabled} nsu=${r.ultimo_nsu} sync_at=${r.last_sync_at ? new Date(r.last_sync_at).toISOString().slice(11,19) : "null"}${lastResult} → ${reason}`);
+        // sync_at em BRT vindo do SQL (NÃO `new Date(last_sync_at)`: a coluna é timestamp-without-tz
+        // gravando UTC e o processo roda em TZ=America/Sao_Paulo → o parse JS sairia 3h enviesado).
+        console.log(`[SefazSync] company=${r.company_id} ativo=${r.ativo} sync=${r.sync_enabled} nsu=${r.ultimo_nsu} sync_at=${r.last_sync_hms ?? "null"}${lastResult} → ${reason}`);
       }
 
       // Sincroniza TODA empresa com sync_enabled=1 que não foi sincronizada nos últimos N minutos.

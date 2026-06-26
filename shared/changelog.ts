@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3745 — **NF-e RECEBIDAS · SEFAZ AUTO-SYNC — CAUSA-RAIZ REAL DO "ZERA MAS NÃO SINCRONIZA" / "AGUARDE +413 MIN" QUANDO O ANEL JÁ MOSTRA ~4H: O GATE AUTORITATIVO CALCULAVA O `elapsed` EM JS (`Date.now() - new Date(last_sync_at)`), MAS A COLUNA É `timestamp without time zone` (GRAVA UTC) E O PROCESSO RODA EM `TZ=America/Sao_Paulo` → O node-pg INTERPRETAVA O VALOR 3H ADIANTADO → `elapsed` NEGATIVO → O GATE INFLAVA A ESPERA EM ~180 MIN E REJEITAVA A SYNC POR 3H A MAIS (MANUAL **E** CRON). AGORA O `elapsed` É CALCULADO EM SQL (`EXTRACT(EPOCH FROM NOW()-MAX(last_sync_at))`), TZ-SAFE. 100% BUGFIX · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Sintoma reportado pelo piloto FC (pós Rev. 3744): ao clicar "Sincronizar SEFAZ", o toast dizia
+ * "Limite SEFAZ ativo — aguarde mais 413 min (cStat=656, 2× → backoff 2×)" ENQUANTO o anel/cronômetro
+ * da mesma tela mostrava "Próxima sync em 3h 52min". Os dois números deveriam bater; divergiam em
+ * ~180 min = exatamente o offset BRT↔UTC (3h). Esse era o smoking-gun.
+ *
+ * Causa-raiz: o gate autoritativo em `executarSyncNFe` (`server/routers/sefaz.ts`) decidia o cooldown
+ * comparando `Date.now()` (instante absoluto/UTC) com `new Date(ts.last_sync_at)`. A coluna
+ * `company_nfe_config.last_sync_at` é `timestamp without time zone` e grava horário UTC (a sessão do
+ * banco está em GMT, logo `NOW()` persiste UTC). Como `server/_core/index.ts` força
+ * `process.env.TZ = 'America/Sao_Paulo'`, o node-pg parseia o `timestamp without time zone` na TZ LOCAL
+ * do processo (BRT) → o Date sai 3h ADIANTADO em termos absolutos → `elapsedMs` fica ~−167 min (negativo)
+ * → `restante = effectiveCooldown − elapsed = 246 − (−167) = 413 min`. O cron SELECIONAVA a empresa
+ * corretamente (sua query usa SQL puro `last_sync_at < NOW() - interval`, TZ-consistente), mas ao chamar
+ * `executarSyncNFe` o gate JS rejeitava por mais 3h → a SEFAZ só era consultada ~3h DEPOIS da hora certa.
+ * Esse skew (não a folga de fórmula da Rev. 3744) é o que de fato sustentava o "zera mas não sincroniza"
+ * — a Rev. 3744 alinhou as fórmulas de janela (boa higiene), mas não tocava no cálculo de `elapsed`.
+ *
+ * Fix cirúrgico: passar a calcular o `elapsed` NO BANCO. A query do gate agora retorna
+ * `EXTRACT(EPOCH FROM (NOW() - MAX(last_sync_at))) AS elapsed_sec` e o código usa
+ * `elapsedMs = max(0, elapsed_sec*1000)` em vez de `Date.now() - new Date(...)`. Isso elimina o skew de
+ * TZ (igual ao que o diagnóstico do cron e o claim atômico `last_sync_at < NOW() - interval` já faziam) e
+ * faz o gate concordar com o anel do cliente (que usa `parseAsUTC`). Validado contra os dados reais no
+ * Neon sob `TZ=America/Sao_Paulo`: cálculo antigo → restante 405 min (bug); cálculo novo → 225 min (anel).
+ * O backoff progressivo (Rev. 3738) e os alinhamentos de fórmula (Rev. 3744) foram PRESERVADOS.
+ * Arquivos: `server/routers/sefaz.ts`. Lição geral: NUNCA fazer aritmética de tempo em JS com colunas
+ * `timestamp without time zone` quando o processo está em TZ ≠ UTC — calcular o delta em SQL.
+ *
  * Rev. 3744 — **NF-e RECEBIDAS · SEFAZ AUTO-SYNC — "O CRONÔMETRO ZERA MAS NÃO SINCRONIZA": ALINHADAS AS 4 FÓRMULAS DE GATE (CLIENTE, AUTO-DISPARO, CRON, DIAGNÓSTICO) AO GATE REAL DO BACKEND (`intervalo*60 + 3` ×backoff). AGORA, AO RENOVAR A COTA/INTERVALO CONFIGURADO, O ERP EFETIVAMENTE CONSULTA A SEFAZ. 100% BUGFIX · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Pedido do piloto FC: na tela NF-e Recebidas, o cronômetro regressivo da sincronização SEFAZ contava
