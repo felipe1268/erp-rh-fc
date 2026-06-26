@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3728 — **PACOTE CONTADOR · BUGFIX "Erro interno ao gerar pacote" — JOINs INVÁLIDOS EM financial_entries NO downloadPacoteContador.ts. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Causa: `financial_entries` não tem colunas `numero_nf` nem `fornecedor_cnpj`.
+ * Dois locais afetados em `downloadPacoteContador.ts`:
+ * 1. Query `queryData` (extrato bancário): `fe.numero_nf AS fn_numero`, `fe.fornecedor_cnpj` →
+ *    substituídos por `COALESCE(fn.numero_nf,'') AS fn_numero` e
+ *    `COALESCE(fn.emitente_cnpj, fn.tomador_cnpj,'') AS fornecedor_cnpj`,
+ *    com `LEFT JOIN fiscal_notes fn ON fn.stmt_line_id = bsl.id`.
+ * 2. Query `buildExtratoBancarioXlsx` (XLSX por conta): mesmo problema; mesma correção.
+ * Erro manifesto: `{"error":"Erro interno ao gerar pacote"}` ao clicar em Download ZIP.
+ * Arquivo: `server/routers/downloadPacoteContador.ts`.
+ *
  * Rev. 3727 — **FINANCEIRO · PADRONIZAÇÃO DE CORES — ENTRADA=VERDE, SAÍDA=VERMELHO EM TODOS OS GRÁFICOS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Regra aplicada a todos os gráficos financeiros: entrada (receita) = verde (#10b981/#22c55e),

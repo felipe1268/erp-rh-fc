@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3728** — **PACOTE CONTADOR · BUGFIX "Erro interno ao gerar pacote" — JOINs INVÁLIDOS EM financial_entries NO downloadPacoteContador.ts. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** `financial_entries` não tem `numero_nf`/`fornecedor_cnpj`. Fix: 2 queries afetadas (queryData + buildExtratoBancarioXlsx); substituídas por `LEFT JOIN fiscal_notes fn ON fn.stmt_line_id = bsl.id` + `COALESCE(fn.numero_nf,'')` + `COALESCE(fn.emitente_cnpj, fn.tomador_cnpj,'')`. Arquivo: `downloadPacoteContador.ts`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3727** — **FINANCEIRO · PADRONIZAÇÃO DE CORES — ENTRADA=VERDE, SAÍDA=VERMELHO EM TODOS OS GRÁFICOS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Regra: entrada=verde (#10b981), saída=vermelho (#ef4444). DashNotasFiscais: barras NF-e Recebidas BLUE→RED, NFS-e Emitidas VIOLET→GREEN; áreas Saídas Banco AMBER→RED; KpiCards e legendas atualizados. FinanceiroCronograma: Custo Previsto orange→red. FinanceiroContasAReceber: barra previsto light-blue→light-green. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3726** — **PLANILHA CONTADOR · BUGFIX "column does not exist" — JOIN EM COLUNA INEXISTENTE EM financial_entries. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** `financial_entries` não tem FK p/ `fiscal_notes`. Fix: remove JOINs inválidos; mantém só `fn1 ON fn1.stmt_line_id = bsl.id`; `numero_nf = COALESCE(fn1.numero_nf, '')`. Arquivo: `downloadContabilidadeXlsx.ts`. Detalhe: `shared/changelog.ts`.
-
 ### 5 one-liners
+
+- **Rev. 3726** — **PLANILHA CONTADOR · BUGFIX "column does not exist" — JOIN EM COLUNA INEXISTENTE EM financial_entries. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3725** — **CONTABILIDADE · 3 BUGFIXES: BADGE NF-e RECEBIDAS ZERO + IMPORT NFS-e SPED CHAVE 50 DÍGITOS + TOAST ERRO DETALHADO. PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3723** — **CONTABILIDADE · TABELA EXTRATO — COLUNA "VALOR" → ENTRADA | SAÍDA | SALDO ACUMULADO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3722** — **PLANILHA CONTABILIDADE · BUGFIX DATA "Fri Jan 02" → "02/01/2026" + JOIN DUPLO NF. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3721** — **IMPORT XML · SUPORTE A NFS-e NACIONAL SPED (Portal Nacional sped.fazenda.gov.br). BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 ### Histórico completo
 

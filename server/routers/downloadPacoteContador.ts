@@ -96,10 +96,13 @@ async function queryData(db: any, companyId: number, di: string, df: string) {
              COALESCE(cba.agencia, '') AS conta_agencia,
              COALESCE(cba.conta, '') AS conta_numero,
              cba.banco, cba."tipoConta",
-             fe.numero_nf AS fn_numero, fe.fornecedor_nome, fe.fornecedor_cnpj
+             COALESCE(fn.numero_nf, '') AS fn_numero,
+             fe.fornecedor_nome,
+             COALESCE(fn.emitente_cnpj, fn.tomador_cnpj, '') AS fornecedor_cnpj
       FROM bank_statement_lines bsl
       LEFT JOIN company_bank_accounts cba ON cba.id = bsl.conta_bancaria_id
       LEFT JOIN financial_entries fe ON fe.id = bsl.entry_id
+      LEFT JOIN fiscal_notes fn ON fn.stmt_line_id = bsl.id
       WHERE bsl.company_id = $1 AND bsl.data >= $2 AND bsl.data < $3
         AND bsl.excluido_em IS NULL
         AND COALESCE(cba."tipoConta", 'corrente') NOT ILIKE '%cartao%'
@@ -254,9 +257,12 @@ async function buildExtratoBancarioXlsx(
     const banco   = conta.banco || "Banco";
     const linesQ  = await db.$client.query(`
       SELECT bsl.data, bsl.descricao, bsl.valor::float AS valor, bsl.entry_id,
-             fe.fornecedor_nome, fe.numero_nf, fe.fornecedor_cnpj, fe.descricao AS entry_desc
+             fe.fornecedor_nome, fe.descricao AS entry_desc,
+             COALESCE(fn.numero_nf, '') AS numero_nf,
+             COALESCE(fn.emitente_cnpj, fn.tomador_cnpj, '') AS fornecedor_cnpj
       FROM bank_statement_lines bsl
       LEFT JOIN financial_entries fe ON fe.id = bsl.entry_id
+      LEFT JOIN fiscal_notes fn ON fn.stmt_line_id = bsl.id
       WHERE bsl.company_id = $1 AND bsl.conta_bancaria_id = $2
         AND bsl.data >= $3 AND bsl.data < $4 AND bsl.excluido_em IS NULL
       ORDER BY bsl.data, bsl.id
