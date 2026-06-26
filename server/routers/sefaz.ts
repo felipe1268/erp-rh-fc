@@ -1297,14 +1297,26 @@ export const sefazRouter = router({
           const parsed = xmlParser.parse(file.content);
 
           // ── Detecta NFS-e Nacional SPED (Portal Nacional sped.fazenda.gov.br) ──
-          // Formato: <NFSe xmlns="http://www.sped.fazenda.gov.br/nfse"><infNFSe Id="NFS{44}">
-          const nfseRoot = parsed["NFSe"] || parsed["nfse"];
+          // Formatos: <NFSe>…</NFSe> (bruto)  |  <nfseProc><NFSe>…</NFSe></nfseProc>  |  <compNfse>…</compNfse>
+          console.log(`[SefazXmlImport] ${file.name} — root keys:`, Object.keys(parsed).slice(0, 10));
+          const nfseRoot =
+            parsed["NFSe"]   || parsed["nfse"]   ||                   // bruto
+            parsed["nfseProc"]?.["NFSe"]          ||                   // processada Portal Nacional
+            parsed["compNfse"]?.["NFSe"]          ||                   // compNfse ABRASF
+            parsed["nfseProc"]?.["nfse"]          ||
+            parsed["compNfse"]?.["nfse"]          || null;
           if (nfseRoot) {
             const infNFSe = nfseRoot["infNFSe"] || nfseRoot["infNfse"] || {};
-            const idRaw = String(infNFSe?.["@_Id"] || infNFSe?.["Id"] || "").replace(/^NFS/i, "");
+            const idAttrRaw = infNFSe?.["@_Id"] ?? infNFSe?.["Id"] ?? infNFSe?.["@_id"] ?? "";
+            console.log(`[SefazXmlImport] NFS-e detectada — infNFSe keys:`, Object.keys(infNFSe).slice(0, 12), "Id=", String(idAttrRaw).slice(0, 20));
+            const idRaw = String(idAttrRaw).replace(/^NFS/i, "");
             const chave = idRaw.replace(/\D/g, "");
             if (chave.length !== 44) {
-              erros.push(`${file.name}: NFS-e sem chave de acesso válida (Id="${idRaw}")`);
+              // Tentar extrair chave de nNFSe + cLocEmi como fallback
+              const nNFSe  = String(infNFSe?.["nNFSe"]  || "").replace(/\D/g, "").padStart(15, "0");
+              const cLoc   = String(infNFSe?.["cLocEmi"] || infNFSe?.["cLocPrestacao"] || "0").replace(/\D/g, "").padStart(7, "0");
+              console.log(`[SefazXmlImport] chave inválida (len=${chave.length}), fallback cLoc=${cLoc} nNFSe=${nNFSe}`);
+              erros.push(`${file.name}: NFS-e — Id="${String(idAttrRaw).slice(0,20)}" chave=${chave.slice(0,20)}... (${chave.length} dígitos, esperado 44)`);
               continue;
             }
             const existeNfse = (await db.execute(sql`
@@ -1407,11 +1419,13 @@ export const sefazRouter = router({
           `);
           importadas++;
         } catch (e: any) {
-          erros.push(`${file.name}: ${(e?.message || "Erro desconhecido").slice(0, 120)}`);
+          const msg = (e?.message || "Erro desconhecido").slice(0, 200);
+          console.error(`[SefazXmlImport] ERRO em ${file.name}:`, msg, e);
+          erros.push(`${file.name}: ${msg}`);
         }
       }
 
-      console.log(`[SefazXmlImport] company=${input.companyId} importadas=${importadas} ignoradas=${ignoradas} erros=${erros.length}`);
+      console.log(`[SefazXmlImport] company=${input.companyId} importadas=${importadas} ignoradas=${ignoradas} erros=${erros.length} lista=${JSON.stringify(erros)}`);
       return { importadas, ignoradas, erros };
     }),
 

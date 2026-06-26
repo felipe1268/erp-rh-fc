@@ -732,6 +732,7 @@ export default function FinanceiroNotasFiscais() {
     setXmlUploading(true);
     setXmlUploadProgress({ done: 0, total: files.length });
     let importadas = 0, ignoradas = 0, backendErros = 0, fileErros = 0;
+    const allErros: string[] = [];
     try {
       for (let i = 0; i < files.length; i++) {
         setXmlUploadProgress({ done: i, total: files.length });
@@ -744,8 +745,10 @@ export default function FinanceiroNotasFiscais() {
           importadas    += r?.importadas ?? 0;
           ignoradas     += r?.ignoradas  ?? 0;
           backendErros  += r?.erros?.length ?? 0;
-        } catch {
+          if (r?.erros?.length) { allErros.push(...r.erros); console.error("[ImportXML] erros:", r.erros); }
+        } catch (err: any) {
           fileErros++;
+          allErros.push(String(err?.message || err).slice(0, 150));
         }
       }
       setXmlUploadProgress({ done: files.length, total: files.length });
@@ -757,7 +760,11 @@ export default function FinanceiroNotasFiscais() {
         `${importadas} NF-e importada${importadas !== 1 ? "s" : ""}` +
         `, ${ignoradas} já existia${ignoradas !== 1 ? "m" : ""}` +
         (totalErros > 0 ? `, ${totalErros} com erro` : "") + ".";
-      toast({ title: "Import XML: " + msg, variant: importadas > 0 ? "default" : totalErros > 0 ? "destructive" : "default" });
+      toast({
+        title: "Import XML: " + msg,
+        description: allErros.length > 0 ? allErros[0].slice(0, 160) : undefined,
+        variant: importadas > 0 ? "default" : totalErros > 0 ? "destructive" : "default",
+      });
     } catch {
       toast({ title: "Erro ao ler os arquivos XML", variant: "destructive" });
     } finally {
