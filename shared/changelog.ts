@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3732 — **PACOTE CONTADOR · EXTRATO CARTÃO DE CRÉDITO — XLSX PRONUS (UMA ABA/FATURA) COM DADOS REAIS DE financial_cartao_*. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Causa raiz do CSV vazio: query usava `bank_statement_lines WHERE tipoConta ILIKE '%cartao%'`,
+ * que retorna 0 linhas pois os dados estão em `financial_cartao_itens/faturas/cartoes`.
+ * Solução estrutural:
+ * 1. Nova função exportada `buildExtratCartaoBuffer(db,companyId,mes,ano,empresa)` em
+ *    `downloadContabilidadeXlsx.ts`, com layout Pronus idêntico ao bancário:
+ *    título empresa L1 (A1:H1), caixa cartão L3-4 (A3:F4 + vencimento/total G3:H4),
+ *    cabeçalho roxo L5, dados L6+, TOTAL ao final. Uma aba por fatura. BRL sem "R$ -".
+ *    Colunas: Data | Descrição | Cidade | Tipo | Parcela | Obra | Categoria | Valor.
+ * 2. Query corrigida em `queryData` (para checklist): usa `financial_cartao_*` com
+ *    `mes_ref = EXTRACT(MONTH FROM di::date)`.
+ * 3. Arquivo na pasta `Extratos_Cartoes/` muda de `.csv` para `.xlsx`.
+ * Arquivos: `server/routers/downloadContabilidadeXlsx.ts`, `server/routers/downloadPacoteContador.ts`.
+ *
  * Rev. 3731 — **XLSX EXTRATO BANCÁRIO · LAYOUT PRONUS EXATO — FORMATO ZERO "R$ 0,00" + LAYOUT COMPACTO (EMPRESA L1, BANCO L3-4, CABEÇALHO L5, DADOS L6+). BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Dois ajustes em `buildExtratoBancarioBuffer` (downloadContabilidadeXlsx.ts), que alimenta

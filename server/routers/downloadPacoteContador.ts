@@ -15,7 +15,7 @@ import type { Express, Request, Response } from "express";
 import archiver from "archiver";
 import { getDb } from "../db";
 import { sdk } from "../_core/sdk";
-import { buildExtratoBancarioBuffer } from "./downloadContabilidadeXlsx";
+import { buildExtratoBancarioBuffer, buildExtratCartaoBuffer } from "./downloadContabilidadeXlsx";
 
 const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho",
   "Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -130,19 +130,21 @@ async function queryData(db: any, companyId: number, di: string, df: string) {
       ORDER BY co.created_at ASC LIMIT 500
     `, [companyId, di, df]),
 
-    // Cartão de crédito (contas tipoConta ilike cartao)
+    // Cartão de crédito — itens das faturas do mês (financial_cartao_*)
     db.$client.query(`
-      SELECT bsl.data, bsl.descricao, bsl.valor::float AS valor, bsl.conciliado,
-             COALESCE(cba.apelido, cba.banco, '') AS conta_nome, cba.banco,
-             COALESCE(fn.numero_nf, '') AS fn_numero, fe.fornecedor_nome
-      FROM bank_statement_lines bsl
-      LEFT JOIN company_bank_accounts cba ON cba.id = bsl.conta_bancaria_id
-      LEFT JOIN financial_entries fe ON fe.id = bsl.entry_id
-      LEFT JOIN fiscal_notes fn ON fn.stmt_line_id = bsl.id
-      WHERE bsl.company_id = $1 AND bsl.data >= $2 AND bsl.data < $3
-        AND bsl.excluido_em IS NULL
-        AND cba."tipoConta" ILIKE '%cartao%'
-      ORDER BY bsl.data ASC, bsl.id ASC
+      SELECT ci.data, ci.descricao, ci.valor::float AS valor, ci.tipo,
+             UPPER(c.banco) || ' · final ' || c.final4 AS conta_nome, c.banco,
+             '' AS fn_numero, '' AS fornecedor_nome
+      FROM financial_cartao_itens ci
+      JOIN financial_cartao_faturas cf
+        ON cf.id = ci.fatura_id AND cf.company_id = ci.company_id AND cf.excluido_em IS NULL
+      JOIN financial_cartoes c
+        ON c.id = cf.cartao_id AND c.company_id = ci.company_id AND c.excluido_em IS NULL
+      WHERE ci.company_id = $1
+        AND ci.excluido_em IS NULL
+        AND cf.mes_ref = EXTRACT(MONTH FROM $2::date)
+        AND cf.ano_ref = EXTRACT(YEAR  FROM $2::date)
+      ORDER BY c.banco, c.final4, ci.data, ci.id
     `, [companyId, di, df]),
   ]);
 
@@ -417,7 +419,12 @@ export function registerPacoteContadorRoute(app: Express) {
         }
 
         // ── Extratos Cartões ──────────────────────────────────────────────────
-        archive.append(bom(buildCartaoCsv(cartao)), { name: `${f}/Extratos_Cartoes/Extrato_Cartao_${MESES[m-1]}_${ano}.csv` });
+        try {
+          const cartaoXlsx = await buildExtratCartaoBuffer(db, companyId, m, ano, empresa);
+          archive.append(cartaoXlsx, { name: `${f}/Extratos_Cartoes/Extrato_Cartao_${MESES[m-1]}_${ano}.xlsx` });
+        } catch (e: any) {
+          console.error("[PacoteContador] XLSX cartão erro:", e.message);
+        }
 
         // ── Compras / OCs ─────────────────────────────────────────────────────
         if (ocs.length > 0) {
