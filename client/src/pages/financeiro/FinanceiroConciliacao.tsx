@@ -432,10 +432,17 @@ export default function FinanceiroConciliacao() {
   }, [lancObras]);
   // Rev. 3417 — declarado AQUI (antes dos useMemos que dependem dele) para evitar TDZ
   const [lancForm, setLancForm] = useState({ data: "", valor: "", descricao: "", obraId: "", contaNome: "", contaId: "", centroCustoId: "", fornecedorNome: "", clienteId: "", clienteNome: "", formaPagamento: "", tipo: "despesa" });
+  // Rev. 3413 — texto digitado no combo de obra (declarado AQUI, antes de obrasParaLanc, p/ evitar TDZ)
+  const [lancObraDisplay, setLancObraDisplay] = useState("");
   // Rev. 3455 — obras filtradas pelo cliente selecionado (texto legado + junction table obra_clientes)
   const obrasParaLanc = useMemo(() => {
     const cn = (lancForm?.clienteNome ?? "").trim().toLowerCase();
     if (!cn) return obrasOpts;
+    // Rev. 3740 — quando o usuário ESTÁ DIGITANDO uma busca de obra, procura em TODAS as
+    // obras (não só as do cliente). O filtro por cliente vale como SUGESTÃO inicial (campo
+    // vazio); ao buscar, nenhuma obra existente pode ficar escondida (ex.: obra vinculada a
+    // outro cliente, ou cliente recém-criado ainda sem vínculo).
+    if ((lancObraDisplay ?? "").trim()) return obrasOpts;
     const normalize = (s: string) => s.toLowerCase().replace(/[.\s]+$/, "").trim();
     const cnNorm = normalize(cn);
     const textMatch = obrasOpts.filter(o => {
@@ -453,7 +460,7 @@ export default function FinanceiroConciliacao() {
     const allIds = new Set([...textMatch.map(o => o.id), ...junctionMatch.map(o => o.id)]);
     const merged = obrasOpts.filter(o => allIds.has(o.id));
     return merged.length > 0 ? merged : obrasOpts;
-  }, [obrasOpts, lancForm?.clienteNome, lancForm?.clienteId, obraClientesVinculos, clienteOpts]);
+  }, [obrasOpts, lancForm?.clienteNome, lancForm?.clienteId, obraClientesVinculos, clienteOpts, lancObraDisplay]);
   const catOpts: { id: number; nome: string; tipo: string; natureza: string | null; centroCustoId: number | null }[] = useMemo(() => {
     const out: { id: number; nome: string; tipo: string; natureza: string | null; centroCustoId: number | null }[] = [];
     for (const a of (Array.isArray(lancAccounts) ? lancAccounts : [])) {
@@ -523,7 +530,6 @@ export default function FinanceiroConciliacao() {
   const [conciliarPixEntry, setConciliarPixEntry] = useState<any | null>(null);
   const [buscaConciliarPix, setBuscaConciliarPix] = useState("");
   // Rev. 3413 — estados para comboboxes e dialog de nova obra
-  const [lancObraDisplay, setLancObraDisplay] = useState("");
   const [lancCCDisplay, setLancCCDisplay] = useState("");
   // Rev. 3415 — fornecedor só pode vir do cadastro; display ≠ valor confirmado
   const [lancFornDisplay, setLancFornDisplay] = useState("");
@@ -6344,7 +6350,7 @@ export default function FinanceiroConciliacao() {
                 )}
                 <div>
                   <div className="flex items-center justify-between mb-0.5">
-                    <Label className="text-xs">Obra{lancForm.clienteNome ? <span className="text-[10px] text-blue-600 font-normal ml-1">filtrado por cliente</span> : ""}</Label>
+                    <Label className="text-xs">Obra{lancForm.clienteNome ? <span className="text-[10px] text-blue-600 font-normal ml-1">sugerido por cliente · digite p/ buscar todas</span> : ""}</Label>
                     <button type="button" className="text-[11px] text-blue-600 hover:underline flex items-center gap-0.5"
                       onClick={() => { setLancNewObraNome(""); setLancNewObraOpen(true); }}>
                       <Plus className="w-3 h-3" />Nova obra

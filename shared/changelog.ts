@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3740 — **CONCILIAÇÃO · CAIXA INTERNO — COMBO DE OBRA NO "LANÇAR NO CONTAS A RECEBER" ESCONDIA A OBRA AO BUSCAR (FILTRO POR CLIENTE BLOQUEAVA OBRA DE OUTRO CLIENTE). AGORA, AO DIGITAR, BUSCA EM TODAS AS OBRAS. 100% FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Queixa do piloto FC: ao lançar no Contas a Receber via Caixa Interno, com o cliente "Qiu Xianquan"
+ * selecionado, a obra "Hotel Qiu 2 - Fase 4" NÃO aparecia ao digitar "hotel" — só "— Sem obra —".
+ *
+ * Causa-raiz (filtro por cliente bom demais + bug do `includes("")`): o combo de obra usa `obrasParaLanc`
+ * (Rev. 3455), que filtra as obras pelo cliente selecionado — por texto legado (`obras.cliente`) E pela
+ * junction `obra_clientes`. Com fallback: se NENHUMA obra casa, retorna TODAS. DOIS fatos combinados
+ * escondiam a obra: (1) ~28 obras estão SEM cliente cadastrado (`obras.cliente` = NULL → ""), e o teste
+ * `cnNorm.includes(oc)` com `oc = ""` é SEMPRE verdadeiro → todas essas obras entram em `textMatch` →
+ * `merged` fica não-vazio → o fallback "mostra todas" NUNCA dispara; (2) a obra "Hotel Qiu" está vinculada
+ * ao cliente "HOTEL J Q LTDA" (texto), diferente do "Qiu Xianquan" selecionado (cliente recém-criado, sem
+ * vínculo na junction) → fica fora de `merged` por design. Resultado: a obra existe, mas o filtro a esconde
+ * e o fallback não a resgata.
+ *
+ * Correção (Rev. 3740, 100% frontend): quando o usuário ESTÁ DIGITANDO uma busca no campo de obra
+ * (`lancObraDisplay` não-vazio), `obrasParaLanc` passa a retornar TODAS as obras (`obrasOpts`), deixando o
+ * `LancCombo` filtrar pelo texto digitado. O filtro por cliente passa a valer só como SUGESTÃO INICIAL
+ * (campo de obra vazio) — nenhuma obra existente pode mais ficar escondida ao buscar (seja por estar
+ * vinculada a outro cliente, seja por cliente recém-criado ainda sem vínculo). `lancObraDisplay` foi movido
+ * para ANTES do `useMemo` (evita TDZ, já que o memo agora o lê) e adicionado às deps. Label do campo
+ * ajustada de "filtrado por cliente" para "sugerido por cliente · digite p/ buscar todas".
+ *
+ * Arquivo: `client/src/pages/financeiro/FinanceiroConciliacao.tsx`. Sem alteração de backend/schema. Detalhe aqui.
+ *
  * Rev. 3739 — **CONCILIAÇÃO · CAIXA INTERNO — FORNECEDOR DIGITADO MANUALMENTE (SEM CONFIRMAR NO DROPDOWN) AGORA SALVA. 100% FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Queixa do piloto FC: na Conciliação do Caixa Interno, o fornecedor lançado manualmente "não está

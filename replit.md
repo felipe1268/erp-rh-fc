@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3740** — **CONCILIAÇÃO · CAIXA INTERNO — COMBO DE OBRA NO "LANÇAR NO CONTAS A RECEBER" ESCONDIA A OBRA AO BUSCAR (FILTRO POR CLIENTE BLOQUEAVA OBRA DE OUTRO CLIENTE). AGORA, AO DIGITAR, BUSCA EM TODAS AS OBRAS. 100% FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Com cliente "Qiu Xianquan" selecionado, a obra "Hotel Qiu" não aparecia ao digitar "hotel". Causa: `obrasParaLanc` filtra as obras pelo cliente (texto `obras.cliente` + junction `obra_clientes`); como ~28 obras estão SEM cliente cadastrado, `cnNorm.includes("")` (string vazia) faz TODAS casarem → `merged` não-vazio → o fallback "mostra todas" NUNCA dispara; e "Hotel Qiu" (vinculada ao cliente "HOTEL J Q LTDA", diferente do selecionado) ficava fora por design. Fix: quando o usuário ESTÁ DIGITANDO no campo de obra (`lancObraDisplay` não-vazio), `obrasParaLanc` retorna TODAS as obras — o filtro por cliente vale só como sugestão inicial (campo vazio). `lancObraDisplay` movido p/ antes do useMemo (evita TDZ) + deps. Label → "sugerido por cliente · digite p/ buscar todas". Arquivo: `client/src/pages/financeiro/FinanceiroConciliacao.tsx`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3739** — **CONCILIAÇÃO · CAIXA INTERNO — FORNECEDOR DIGITADO MANUALMENTE (SEM CONFIRMAR NO DROPDOWN) AGORA SALVA. 100% FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Lançamentos manuais do Caixa Interno apareciam como "Lançamento #N" sem o fornecedor. Causa: o form só gravava `fornecedorNome` quando o usuário CLICAVA num item do dropdown (`lancForm.fornecedorNome`); um nome só digitado (não cadastrado) ficava só no display (`lancFornDisplay`) e era descartado (`|| undefined`) → `fornecedor_nome` NULL → lista mostrava o fallback "Lançamento #id". Como `fornecedor_nome` é coluna de TEXTO (sem FK), texto livre é válido. Fix: no save de criação (`submitLancar`) e de edição (`salvarEdicaoEntry`) usa o texto digitado como FALLBACK quando não há confirmação — `lancForm.fornecedorNome.trim() || lancFornDisplay.trim()` (e o análogo no detEdit). Confirmar no dropdown segue valendo só p/ LIGAR ao cadastro. Arquivo: `client/src/pages/financeiro/FinanceiroConciliacao.tsx`. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3738** — **NF-e RECEBIDAS · SEFAZ — GATE DE COOLDOWN AGORA FICA ACIMA DO LIMITE DE 2h (FIM DO 656 INTERMITENTE POR CHAMADA CEDO DEMAIS). BACKEND PONTUAL (1 LINHA + COMENTÁRIO) · ZERO SCHEMA/ALTER/DROP/DELETE.** Continuação da Rev. 3737: com o reset de boot removido (NSU já avançava 9627→9634), o Log AINDA mostrava Rate Limit em algumas rodadas. Causa: `cooldownMin = intervaloHoras*60 - 2` (118 min p/ 2h) + cron a cada 15 min podia disparar a chamada em ~1h58–2h00 (ABAIXO de 2h) → SEFAZ 656 (Consumo Indevido) → re-armava backoff (656 intermitente mesmo com NSU certo). A folga de -2 min empurrava a chamada para BAIXO do limite. Fix: `cooldownMin = intervaloHoras*60 + 3` → janela SEMPRE acima do intervalo (chamada efetiva ~2h03–2h15), espaçamento > 2h/CNPJ garantido. Gate de `executarSyncNFe` é autoridade única (cron/syncNow/backfill passam por ele). Arquivo: `server/routers/sefaz.ts`. Detalhe: `shared/changelog.ts`.
-
 ### 5 one-liners
+
+- **Rev. 3738** — **NF-e RECEBIDAS · SEFAZ — GATE DE COOLDOWN ACIMA DO LIMITE DE 2h (`cooldownMin = intervalo*60 + 3`) → FIM DO 656 INTERMITENTE POR CHAMADA CEDO DEMAIS. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3737** — **NF-e RECEBIDAS · SEFAZ — FIM DO LOOP ETERNO DE RATE-LIMIT (cStat=656): REMOVIDO RESET DE NSU NO BOOT (Rev. 3596) QUE RE-ZERAVA O NSU BOM A CADA RESTART. BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3735** — **CONCILIAÇÃO · CAIXA INTERNO — ALERTA DE DUPLICIDADE NO "NOVO LANÇAMENTO" + BOTÃO EXCLUIR NAS LINHAS. BACKEND ADITIVO (1 QUERY READ-ONLY) + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3734** — **NF-e RECEBIDAS · CRONÔMETRO SEFAZ AGORA DISPARA A SYNC AO ZERAR (ANTES ERA SÓ VISUAL). 100% FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3733** — **PACOTE CONTADOR · XLSX EXTRATO (BANCÁRIO + CARTÃO) — IDENTIDADE VISUAL FC (AZUL-MARINHO + DOURADO) + LAYOUT DE APRESENTAÇÃO. 100% FORMATAÇÃO · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 ### Histórico completo
 
