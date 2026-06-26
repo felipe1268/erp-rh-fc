@@ -6799,13 +6799,32 @@ export const financialRouter = router({
     ];
     const entVals: any[] = [input.companyId, input.contaBancariaId];
     let ei = 3;
-    if (input.dataInicio) {
-      entConds.push(`COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) >= $${ei++}::date`);
-      entVals.push(input.dataInicio);
-    }
-    if (input.dataFim) {
-      entConds.push(`COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) <= $${ei++}::date`);
-      entVals.push(input.dataFim);
+    // Rev. 3736 — CHEQUES/BOLETOS COMPENSAM EM OUTRO MÊS. O Controle de Cheques lança o
+    // cheque/boleto na data "bom para" (parcela), mas a compensação no extrato pode cair
+    // num mês diferente (ex.: cheque de dez/fev compensando em jan). Por isso, além da
+    // janela ESTRITA do período (Rev. 3449, para os demais lançamentos), abrimos uma janela
+    // AMPLA de ±MESES_JANELA_CHEQUE meses SÓ para lançamentos com forma de pagamento
+    // cheque/boleto. As demais formas continuam estritas ao período analisado.
+    const MESES_JANELA_CHEQUE = 6;
+    const addMonthsIso = (iso: string, n: number): string => {
+      const d = new Date(iso.slice(0, 10) + "T00:00:00Z");
+      d.setUTCMonth(d.getUTCMonth() + n);
+      return d.toISOString().slice(0, 10);
+    };
+    const DT_ENT = `COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia)`;
+    const EH_CHEQUE_BOLETO_SQL = `LOWER(COALESCE(e.forma_pagamento,'')) IN ('cheque','boleto')`;
+    if (input.dataInicio && input.dataFim) {
+      const wIni = addMonthsIso(input.dataInicio, -MESES_JANELA_CHEQUE);
+      const wFim = addMonthsIso(input.dataFim, MESES_JANELA_CHEQUE);
+      // dbExecute liga params por ORDEM DE APARIÇÃO: estrito-ini, estrito-fim, amplo-ini, amplo-fim.
+      entConds.push(
+        `( (${DT_ENT} >= $${ei}::date AND ${DT_ENT} <= $${ei + 1}::date)
+           OR (${EH_CHEQUE_BOLETO_SQL} AND ${DT_ENT} >= $${ei + 2}::date AND ${DT_ENT} <= $${ei + 3}::date) )`);
+      entVals.push(input.dataInicio, input.dataFim, wIni, wFim);
+      ei += 4;
+    } else {
+      if (input.dataInicio) { entConds.push(`${DT_ENT} >= $${ei++}::date`); entVals.push(input.dataInicio); }
+      if (input.dataFim) { entConds.push(`${DT_ENT} <= $${ei++}::date`); entVals.push(input.dataFim); }
     }
     const entRes = await dbExecute(db,
       `SELECT e.id, e.tipo, e.valor_previsto AS "valorPrevisto", e.valor_realizado AS "valorRealizado",
@@ -6814,7 +6833,8 @@ export const financialRouter = router({
               e.conta_nome AS "contaNome", e.status, e.obra_nome AS "obraNome",
               e.comprovante_beneficiario AS "comprovanteBeneficiario",
               e.comprovante_documento AS "comprovanteDocumento",
-              e.comprovante_txid AS "comprovanteTxid"
+              e.comprovante_txid AS "comprovanteTxid",
+              e.forma_pagamento AS "formaPagamento"
        FROM financial_entries e
        WHERE ${entConds.join(" AND ")}`,
       entVals);
@@ -6880,6 +6900,10 @@ export const financialRouter = router({
     const cents = (v: any) => Math.round(Math.abs(Number(v) || 0) * 100);
     const entDate = (e: any) => toMs(e.dataPagamento) ?? toMs(e.dataVencimento) ?? toMs(e.dataCompetencia);
     const entCents = (e: any) => cents(e.valorRealizado ?? e.valorPrevisto);
+    // Rev. 3736 — lançamento cheque/boleto pode compensar fora do mês → no pareamento usa
+    // tolerância de data AMPLA (TOL_CHEQUE_DIAS cobre ±MESES_JANELA_CHEQUE meses).
+    const ehChequeBoletoEntry = (e: any) => /cheque|boleto/i.test(String(e.formaPagamento ?? ""));
+    const TOL_CHEQUE_DIAS = MESES_JANELA_CHEQUE * 31;
 
     const byCents = new Map<number, any[]>();
     for (const e of entries) { const k = entCents(e); if (!byCents.has(k)) byCents.set(k, []); byCents.get(k)!.push(e); }
@@ -6914,12 +6938,30 @@ export const financialRouter = router({
       if (lc === 0) continue;
       const dir = Number(ln.valor) >= 0 ? "receita" : "despesa";
       const lms = toMs(ln.data);
+      // Rev. 3736 — nº do cheque/doc na linha do extrato (p/ casar o cheque CERTO, não só por valor).
+      const lnDesc = String(ln.descricao ?? "");
+      const lnEhCheque = /cheq|compensa/i.test(lnDesc);
+      const lnNum = extrairNumCheque(lnDesc) ?? (lnEhCheque ? extrairDocCheque(lnDesc) : null);
       for (const e of (byCents.get(lc) ?? [])) {
         if (e.tipo !== dir && e.tipo !== "transferencia") continue;
         const ems = entDate(e);
         const delta = (lms != null && ems != null) ? Math.round(Math.abs(lms - ems) / 86400000) : 9999;
-        if (delta > tol) continue;
-        cands.push({ linha: ln, entry: e, delta, via: matchId(ln, e) });
+        let via = matchId(ln, e);
+        if (ehChequeBoletoEntry(e)) {
+          // Rev. 3736 — casa pelo NÚMERO do cheque/doc quando ambos os lados o expõem:
+          // números explícitos DIFERENTES ⇒ NÃO é o mesmo cheque (evita "903 = 902");
+          // mesmo número ⇒ casamento forte (autoritativo, ignora distância de data).
+          const eNum = extrairNumCheque(String(e.descricao ?? "")) ?? extrairDocCheque(String(e.descricao ?? ""));
+          if (lnNum && eNum) {
+            if (lnNum !== eNum) continue;
+            via = via ?? "cheque";
+          }
+          // Sem casamento por número: aceita o par com tolerância AMPLA (compensação fora do mês).
+          if (via !== "cheque" && delta > Math.max(tol, TOL_CHEQUE_DIAS)) continue;
+        } else {
+          if (delta > tol) continue;
+        }
+        cands.push({ linha: ln, entry: e, delta, via });
       }
     }
     const ambiguasPorLinha = new Map<number, number>();

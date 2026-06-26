@@ -1,6 +1,34 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3736 — **CONCILIAÇÃO BANCÁRIA · SUGESTÃO — CHEQUES/BOLETOS AGORA BUSCAM LANÇAMENTOS DE OUTROS MESES + CASAMENTO PELO Nº DO CHEQUE. BACKEND READ-ONLY (`sugerirConciliacao`) · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Contexto (queixa do piloto FC): no mesmo dia 06/01 dois cheques (902 e 903) foram compensados
+ * no extrato; ambos foram lançados no ERP, mas o motor sugeriu só 1 par — e ainda pareou a linha
+ * do cheque 903 (extrato) com o lançamento do cheque 902 (ERP), casando só por VALOR. Causa-raiz:
+ * (a) Rev. 3449 restringiu ESTRITAMENTE o pool de lançamentos ao período analisado, mas o Controle
+ * de Cheques lança cheque/boleto em parcelas na data "bom para" — um cheque de dez/fev pode
+ * compensar em jan, ficando fora do pool; (b) a checagem por par `delta > tol` (tol padrão 0)
+ * rejeitava qualquer par com datas em meses diferentes; (c) o pareamento era só por valor+direção,
+ * então 903 colava em 902.
+ *
+ * Correção cirúrgica em `sugerirConciliacao` (server/routers/financial.ts), SÓ para forma de
+ * pagamento cheque/boleto (demais lançamentos seguem estritos ao período, sem regressão):
+ *
+ * 1. POOL AMPLO (±6 meses). Além da janela estrita do período (Rev. 3449), o WHERE dos entries
+ *    ganhou um OR: `forma_pagamento IN ('cheque','boleto')` elegível na janela ±MESES_JANELA_CHEQUE
+ *    (6) meses. Construído respeitando o binding posicional do `dbExecute` (estrito-ini, estrito-fim,
+ *    amplo-ini, amplo-fim, todos `::date`). `forma_pagamento` adicionada ao SELECT.
+ *
+ * 2. TOLERÂNCIA AMPLA NO PAR. No pareamento, lançamento cheque/boleto usa `TOL_CHEQUE_DIAS`
+ *    (≈ 6 meses) em vez do `tol` estrito — assim a compensação fora do mês casa.
+ *
+ * 3. CASAMENTO PELO Nº DO CHEQUE/DOC (corrige "903 = 902"). Quando AMBOS os lados expõem um número
+ *    (extrato via `extrairNumCheque`/`extrairDocCheque`; lançamento via descrição): números
+ *    DIFERENTES ⇒ o par é descartado (903 nunca casa com 902); número IGUAL ⇒ casamento FORTE
+ *    (`via="cheque"`, confiança alta, ignora distância de data). Read-only — honra "conciliação só
+ *    sugestiva" (nada concilia/baixa sozinho). Detalhe completo aqui.
+ *
  * Rev. 3735 — **CONCILIAÇÃO · CAIXA INTERNO — ALERTA DE DUPLICIDADE NO "NOVO LANÇAMENTO" + BOTÃO EXCLUIR NAS LINHAS. BACKEND ADITIVO (1 QUERY READ-ONLY) + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Contexto (queixa do piloto FC): no Caixa Interno ADM o usuário criou via "Novo lançamento"

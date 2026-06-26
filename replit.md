@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3736** — **CONCILIAÇÃO BANCÁRIA · SUGESTÃO — CHEQUES/BOLETOS AGORA BUSCAM LANÇAMENTOS DE OUTROS MESES + CASAMENTO PELO Nº DO CHEQUE. BACKEND READ-ONLY (`sugerirConciliacao`) · ZERO SCHEMA/ALTER/DROP/DELETE.** Dois cheques (902/903) compensados no mesmo dia 06/01 mas o motor sugeria só 1 par e ainda colava o cheque 903 do extrato no lançamento 902 do ERP (casava só por valor). Causa: Rev. 3449 prendeu o pool de lançamentos ao mês, mas cheque/boleto do Controle de Cheques é lançado na data "bom para" (parcela) e pode compensar em outro mês; e o par só casava por valor. Correção SÓ p/ `forma_pagamento` cheque/boleto (demais seguem estritos): (1) pool com janela AMPLA ±6 meses via OR no WHERE (binding posicional do `dbExecute`, `::date`); (2) tolerância de data ampla no pareamento (`TOL_CHEQUE_DIAS`); (3) casamento pelo Nº do cheque/doc — números diferentes descartam o par (903≠902), número igual = casamento forte (`via="cheque"`, alta). Read-only. Arquivo: `financial.ts`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3735** — **CONCILIAÇÃO · CAIXA INTERNO — ALERTA DE DUPLICIDADE NO "NOVO LANÇAMENTO" + BOTÃO EXCLUIR NAS LINHAS. BACKEND ADITIVO (1 QUERY READ-ONLY) + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Piloto criava via "Novo lançamento" títulos já importados (mesmo valor/data) → "duplicatas" (na verdade re-digitação; `confirmarEntradaCaixa` é UPDATE puro, não cria). Novo `financial.checkDuplicataCaixaInterno` (read-only, mesma conta/valor/data, cast `::date`, `$4/$5` distintos) é chamado em `submitLancar` via `trpc.useUtils().fetch` só no standalone Caixa Interno; se houver match abre AlertDialog âmbar ("Cancelar" / "Criar mesmo assim" → `skipDupCheck=true`). Listas "A confirmar"/"Confirmadas" ganharam botão de lixeira reaproveitando o diálogo de exclusão existente (motivo ≥5 + auditoria) + `refetchCaixa()`; `deleteEntry` ganhou `_assertFinanceiroCompanyAccess`. Arquivos: `FinanceiroConciliacao.tsx`, `financial.ts`. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3734** — **NF-e RECEBIDAS · CRONÔMETRO SEFAZ AGORA DISPARA A SYNC AO ZERAR (ANTES ERA SÓ VISUAL). 100% FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Os cronômetros da aba Recebidas eram puramente de display — zeravam sem chamar `sefaz.syncNow`; o usuário ficava esperando o cron do backend (até ~30 min). Novo `useEffect` auto-dispara `sefazSyncMut.mutate` quando `countdownSec` chega a 0 (sync ligado + nada pendente), com guarda por janela de cota (`autoSyncFiredForTsRef`/`baseTs`) = 1 disparo por renovação; gate atômico por CNPJ do backend protege multi-aba. `onSuccess/onError` agora `refetch` da config (cronômetro reinicia + rearma). Card verde reflete "sincronizando automaticamente". Arquivo: `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
-
 ### 5 one-liners
+
+- **Rev. 3734** — **NF-e RECEBIDAS · CRONÔMETRO SEFAZ AGORA DISPARA A SYNC AO ZERAR (ANTES ERA SÓ VISUAL). 100% FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3733** — **PACOTE CONTADOR · XLSX EXTRATO (BANCÁRIO + CARTÃO) — IDENTIDADE VISUAL FC (AZUL-MARINHO + DOURADO) + LAYOUT DE APRESENTAÇÃO. 100% FORMATAÇÃO · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -63,14 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3731** — **XLSX EXTRATO BANCÁRIO · LAYOUT PRONUS EXATO — FORMATO ZERO "R$ 0,00" + LAYOUT COMPACTO (EMPRESA L1, BANCO L3-4, CABEÇALHO L5, DADOS L6+). BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3730** — **PACOTE CONTADOR · XLSX EXTRATO BANCÁRIO — BUGFIX LINHAS VAZIAS: buildExtratoBancarioBuffer EXPORTADA DE downloadContabilidadeXlsx.ts (query EXTRACT/MONTH/YEAR). BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3729** — **PACOTE CONTADOR · XLSX EXTRATO BANCÁRIO — LAYOUT PRONUS (CABEÇALHO ROXO #7030A0, LINHAS LAVANDA/BRANCO, SALDO VERDE/VERMELHO). BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3725** — **CONTABILIDADE · 3 BUGFIXES: BADGE NF-e RECEBIDAS ZERO + IMPORT NFS-e SPED CHAVE 50 DÍGITOS + TOAST ERRO DETALHADO. PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3724** — **NF-e RECEBIDAS · VISUALIZADOR DANFE EMBUTIDO — BOTÃO "VER DANFE" NO DIALOG. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3723** — **CONTABILIDADE · TABELA EXTRATO — COLUNA "VALOR" → ENTRADA | SAÍDA | SALDO ACUMULADO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 ### Histórico completo
 
