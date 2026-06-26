@@ -11939,6 +11939,336 @@ export const financialRouter = router({
     return { updated };
   }),
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // Rev. 3747 — VÍNCULO de cheque devolvido ↔ pagamento(s) substituto(s) (PIX/TED).
+  // Suporta 1→N vínculos parciais ancorados na LINHA DE DÉBITO do cheque no extrato
+  // (id estável; funciona SEM número). REGRA DE OURO: NUNCA cria/altera linha no
+  // extrato — só aponta uma linha que JÁ existe (qualquer conta) e marca o cheque.
+  // Quando a soma dos vínculos cobre o cheque, o par (débito+crédito) é auto-
+  // desconsiderado do % (marca automática, distinta do desconsiderar manual).
+  // ───────────────────────────────────────────────────────────────────────────
+  registrarVinculoChequeDevolvido: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    debitoLineId: z.number(),
+    creditoLineId: z.number().optional(),
+    chequeNumero: z.string().optional(),
+    tipo: z.enum(["pix", "ajuste"]).default("pix"),
+    pixLineId: z.number().optional(),
+    valor: z.number().positive(),
+    data: z.string().optional(),
+    descricao: z.string().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const MARCA_AUTO = "Vínculo PIX/TED (automático)";
+
+    // 1) valida a linha de DÉBITO (cheque devolvido) — empresa + é saída (valor<0)
+    const debSel = await dbExecute(db,
+      `SELECT id, valor, descricao, conta_bancaria_id AS "contaId"
+         FROM bank_statement_lines
+        WHERE id=$1 AND company_id=$2 AND excluido_em IS NULL`,
+      [input.debitoLineId, input.companyId]);
+    const deb = rows(debSel)[0] as any;
+    if (!deb) throw new TRPCError({ code: "BAD_REQUEST", message: "Linha do cheque (débito) não encontrada nesta empresa." });
+    if (Number(deb.valor) >= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "A linha do cheque deve ser um débito (saída) do extrato." });
+    const chequeCents = Math.round(Math.abs(Number(deb.valor)) * 100);
+
+    // 2) valida a linha do PIX/TED substituto (qualquer conta da empresa) p/ tipo 'pix'
+    let pixLine: any = null;
+    if (input.tipo === "pix") {
+      if (!input.pixLineId) throw new TRPCError({ code: "BAD_REQUEST", message: "Informe a linha do PIX/TED do extrato." });
+      if (Number(input.pixLineId) === Number(input.debitoLineId)) throw new TRPCError({ code: "BAD_REQUEST", message: "A linha do pagamento não pode ser a própria linha do cheque." });
+      const pixSel = await dbExecute(db,
+        `SELECT id, valor, descricao, to_char(data,'YYYY-MM-DD') AS data, conta_bancaria_id AS "contaId"
+           FROM bank_statement_lines
+          WHERE id=$1 AND company_id=$2 AND excluido_em IS NULL`,
+        [input.pixLineId, input.companyId]);
+      pixLine = rows(pixSel)[0] as any;
+      if (!pixLine) throw new TRPCError({ code: "BAD_REQUEST", message: "Linha do PIX/TED não encontrada nesta empresa." });
+      if (Number(pixLine.valor) >= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "O pagamento substituto deve ser um débito (saída) do extrato." });
+      const dupSel = await dbExecute(db,
+        `SELECT id FROM bank_cheque_vinculos
+          WHERE company_id=$1 AND debito_line_id=$2 AND pix_line_id=$3 AND estornado_em IS NULL
+          LIMIT 1`,
+        [input.companyId, input.debitoLineId, input.pixLineId]);
+      if (rows(dupSel).length) throw new TRPCError({ code: "BAD_REQUEST", message: "Esta linha do extrato já está vinculada a este cheque." });
+    }
+
+    // 2.5) valida a linha de CRÉDITO (devolução) do par, se informada — empresa + entrada (valor>0).
+    //      Sem isso, um creditoLineId arbitrário (mesmo da empresa) seria auto-desconsiderado ao quitar.
+    if (input.creditoLineId != null) {
+      if (Number(input.creditoLineId) === Number(input.debitoLineId)) throw new TRPCError({ code: "BAD_REQUEST", message: "A linha de devolução não pode ser a própria linha do cheque." });
+      const credSel = await dbExecute(db,
+        `SELECT id, valor FROM bank_statement_lines
+          WHERE id=$1 AND company_id=$2 AND excluido_em IS NULL`,
+        [input.creditoLineId, input.companyId]);
+      const cred = rows(credSel)[0] as any;
+      if (!cred) throw new TRPCError({ code: "BAD_REQUEST", message: "Linha de devolução (crédito) não encontrada nesta empresa." });
+      if (Number(cred.valor) <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "A linha de devolução deve ser um crédito (entrada) do extrato." });
+    }
+
+    // 3) cobertura atual + guard de saldo (não deixa vincular além do valor do cheque)
+    const covSel = await dbExecute(db,
+      `SELECT COALESCE(SUM(valor),0) AS acum FROM bank_cheque_vinculos
+        WHERE company_id=$1 AND debito_line_id=$2 AND estornado_em IS NULL`,
+      [input.companyId, input.debitoLineId]);
+    const acumAntesCents = Math.round(Number(rows(covSel)[0]?.acum ?? 0) * 100);
+    const novoCents = Math.round(input.valor * 100);
+    if (acumAntesCents + novoCents > chequeCents + 1) {
+      const saldo = Math.max(0, (chequeCents - acumAntesCents) / 100);
+      throw new TRPCError({ code: "BAD_REQUEST", message: `Valor excede o saldo do cheque (saldo: R$ ${saldo.toFixed(2)}).` });
+    }
+
+    const porNome = (ctx.user as any)?.nome ?? (ctx.user as any)?.name ?? null;
+    const dataVinc = input.data ?? (pixLine?.data ?? null);
+    const descVinc = input.descricao ?? (pixLine?.descricao ?? null);
+
+    // 4) insere o vínculo ($1..$12 distintos, na ordem de aparição = ordem do array)
+    const ins = await dbExecute(db,
+      `INSERT INTO bank_cheque_vinculos
+         (company_id, debito_line_id, credito_line_id, cheque_numero, tipo,
+          pix_line_id, pix_conta_bancaria_id, valor, data, descricao,
+          criado_por_id, criado_por_nome)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       RETURNING id`,
+      [input.companyId, input.debitoLineId, input.creditoLineId ?? null,
+       input.chequeNumero ?? null, input.tipo,
+       input.pixLineId ?? null, pixLine?.contaId ?? null, input.valor,
+       dataVinc, descVinc, ctx.user?.id ?? null, porNome]);
+    const vinculoId = rows(ins)[0]?.id;
+
+    // 5) se a cobertura fecha o cheque, AUTO-desconsidera o par (marca automática) e,
+    //    havendo número, marca o Controle de Cheques como compensado_pix.
+    const acumDepoisCents = acumAntesCents + novoCents;
+    const quitado = acumDepoisCents >= chequeCents - 1;
+    if (quitado) {
+      const parIds = [input.debitoLineId, ...(input.creditoLineId ? [input.creditoLineId] : [])];
+      await dbExecute(db,
+        `UPDATE bank_statement_lines
+            SET desconsiderado_em=NOW(), desconsiderado_por_id=NULL, desconsiderado_por_nome=$1
+          WHERE company_id=$2 AND excluido_em IS NULL AND desconsiderado_em IS NULL
+            AND id IN (${inlineIds(parIds)})`,
+        [MARCA_AUTO, input.companyId]);
+      if (input.chequeNumero) {
+        await dbExecute(db,
+          `UPDATE financial_cheques
+              SET status='compensado_pix',
+                  data_compensacao=COALESCE(data_compensacao, $1::date),
+                  updated_at=NOW()
+            WHERE company_id=$2 AND excluido_em IS NULL
+              AND regexp_replace(numero_cheque,'[^0-9]','','g') = regexp_replace($3,'[^0-9]','','g')
+              AND status NOT IN ('compensado','baixado','cancelado')`,
+          [dataVinc ?? null, input.companyId, input.chequeNumero]);
+      }
+    }
+    await createAuditLog({
+      action: "cheque_vinculo_registrado",
+      userId: ctx.user?.id,
+      companyId: input.companyId,
+      details: `Vínculo ${input.tipo} R$ ${input.valor.toFixed(2)} ao cheque devolvido (linha #${input.debitoLineId})${input.pixLineId ? ` ↔ extrato #${input.pixLineId}` : " (ajuste de saldo)"}${quitado ? " — cheque QUITADO por substituição" : ""}`,
+    });
+    return {
+      ok: true,
+      vinculoId,
+      acumulado: acumDepoisCents / 100,
+      saldo: Math.max(0, (chequeCents - acumDepoisCents)) / 100,
+      quitado,
+    };
+  }),
+
+  // Rev. 3747 — ESTORNA um vínculo (soft). Se o cheque deixar de estar coberto, RECONSIDERA
+  // o par de volta ao % — porém SÓ as linhas que foram desconsideradas pelo automático
+  // (preserva um "Desconsiderar" manual feito por uma pessoa).
+  estornarVinculoChequeDevolvido: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    vinculoId: z.number(),
+    motivo: z.string().optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const MARCA_AUTO = "Vínculo PIX/TED (automático)";
+    const sel = await dbExecute(db,
+      `SELECT id, debito_line_id AS "debitoLineId", credito_line_id AS "creditoLineId", valor
+         FROM bank_cheque_vinculos
+        WHERE id=$1 AND company_id=$2 AND estornado_em IS NULL`,
+      [input.vinculoId, input.companyId]);
+    const v = rows(sel)[0] as any;
+    if (!v) throw new TRPCError({ code: "BAD_REQUEST", message: "Vínculo não encontrado ou já estornado." });
+    const porNome = (ctx.user as any)?.nome ?? (ctx.user as any)?.name ?? null;
+    await dbExecute(db,
+      `UPDATE bank_cheque_vinculos
+          SET estornado_em=NOW(), estornado_por_id=$1, estornado_por_nome=$2,
+              descricao=CASE WHEN $3::text IS NULL THEN descricao
+                             ELSE COALESCE(descricao,'') || ' · estorno: ' || $4 END
+        WHERE id=$5 AND company_id=$6`,
+      [ctx.user?.id ?? null, porNome, input.motivo ?? null, input.motivo ?? null, input.vinculoId, input.companyId]);
+
+    const debitoLineId = Number(v.debitoLineId);
+    const debSel = await dbExecute(db,
+      `SELECT valor FROM bank_statement_lines WHERE id=$1 AND company_id=$2`,
+      [debitoLineId, input.companyId]);
+    const chequeCents = Math.round(Math.abs(Number(rows(debSel)[0]?.valor ?? 0)) * 100);
+    const covSel = await dbExecute(db,
+      `SELECT COALESCE(SUM(valor),0) AS acum FROM bank_cheque_vinculos
+        WHERE company_id=$1 AND debito_line_id=$2 AND estornado_em IS NULL`,
+      [input.companyId, debitoLineId]);
+    const acumCents = Math.round(Number(rows(covSel)[0]?.acum ?? 0) * 100);
+    const quitado = chequeCents > 0 && acumCents >= chequeCents - 1;
+    if (!quitado) {
+      const parIds = [debitoLineId, ...(v.creditoLineId ? [Number(v.creditoLineId)] : [])];
+      await dbExecute(db,
+        `UPDATE bank_statement_lines
+            SET desconsiderado_em=NULL, desconsiderado_por_id=NULL, desconsiderado_por_nome=NULL
+          WHERE company_id=$1 AND id IN (${inlineIds(parIds)})
+            AND desconsiderado_por_nome=$2`,
+        [input.companyId, MARCA_AUTO]);
+    }
+    await createAuditLog({
+      action: "cheque_vinculo_estornado",
+      userId: ctx.user?.id,
+      companyId: input.companyId,
+      details: `Estornou vínculo #${input.vinculoId} do cheque devolvido (linha #${debitoLineId})${input.motivo ? ` — ${input.motivo.slice(0, 120)}` : ""}`,
+    });
+    return { ok: true, acumulado: acumCents / 100, saldo: Math.max(0, (chequeCents - acumCents)) / 100, quitado };
+  }),
+
+  // Rev. 3747 — Para um lote de cheques devolvidos (por linha de débito), retorna os vínculos
+  // ativos (com a linha do PIX + apelido da conta), o acumulado/saldo, se está quitado e as
+  // SUGESTÕES automáticas: PIX/TED de VALOR EXATAMENTE IGUAL em TODAS as contas da empresa.
+  getChequeDevolvidoVinculacao: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    itens: z.array(z.object({
+      debitoLineId: z.number(),
+      creditoLineId: z.number().optional(),
+      valor: z.number(),      // valor absoluto do cheque (reais)
+      dataRef: z.string().optional(), // data do débito (YYYY-MM-DD)
+    })).max(300),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const mapa: Record<string, any> = {};
+    if (!input.itens.length) return { mapa };
+    const debIds = Array.from(new Set(input.itens.map((i) => Number(i.debitoLineId)).filter((n) => Number.isFinite(n) && n > 0)));
+    if (!debIds.length) return { mapa };
+
+    const vSel = await dbExecute(db,
+      `SELECT v.id, v.debito_line_id AS "debitoLineId", v.tipo, v.pix_line_id AS "pixLineId",
+              v.valor, to_char(v.data,'YYYY-MM-DD') AS data, v.descricao,
+              v.cheque_numero AS "chequeNumero", v.criado_por_nome AS "criadoPorNome",
+              v.created_at AS "createdAt",
+              to_char(p.data,'YYYY-MM-DD') AS "pixData", p.descricao AS "pixDescricao",
+              p.valor AS "pixValor", p.conta_bancaria_id AS "pixContaId",
+              cba.apelido AS "pixContaApelido", cba.banco AS "pixContaBanco", cba.conta AS "pixContaNum"
+         FROM bank_cheque_vinculos v
+         LEFT JOIN bank_statement_lines p ON p.id = v.pix_line_id
+         LEFT JOIN company_bank_accounts cba ON cba.id = v.pix_conta_bancaria_id
+        WHERE v.company_id=$1 AND v.estornado_em IS NULL
+          AND v.debito_line_id IN (${inlineIds(debIds)})
+        ORDER BY v.created_at ASC, v.id ASC`,
+      [input.companyId]);
+    const vinc = rows(vSel) as any[];
+
+    const valoresCents = Array.from(new Set(input.itens.map((i) => Math.round(Math.abs(Number(i.valor)) * 100)).filter((c) => c > 0)));
+    let candAll: any[] = [];
+    if (valoresCents.length) {
+      const sSel = await dbExecute(db,
+        `SELECT l.id, to_char(l.data,'YYYY-MM-DD') AS data, l.descricao, l.valor,
+                l.conta_bancaria_id AS "contaId", l.conciliado, l.entry_id AS "entryId",
+                cba.apelido AS "contaApelido", cba.banco AS "contaBanco", cba.conta AS "contaNum"
+           FROM bank_statement_lines l
+           LEFT JOIN company_bank_accounts cba ON cba.id = l.conta_bancaria_id
+          WHERE l.company_id=$1
+            AND l.excluido_em IS NULL
+            AND l.valor < 0
+            AND (UPPER(l.descricao) LIKE '%PIX%' OR UPPER(l.descricao) LIKE '%TED%'
+                 OR UPPER(l.descricao) LIKE '%TRANSF%' OR UPPER(l.descricao) LIKE '%DOC%')
+            AND ROUND(ABS(l.valor)*100) IN (${inlineIds(valoresCents)})
+          ORDER BY l.data DESC, l.id DESC
+          LIMIT 500`,
+        [input.companyId]);
+      candAll = rows(sSel) as any[];
+    }
+
+    const pvSel = await dbExecute(db,
+      `SELECT DISTINCT pix_line_id AS "pixLineId" FROM bank_cheque_vinculos
+        WHERE company_id=$1 AND estornado_em IS NULL AND pix_line_id IS NOT NULL`,
+      [input.companyId]);
+    const pixVinculados = new Set(rows(pvSel).map((r: any) => Number(r.pixLineId)));
+
+    for (const it of input.itens) {
+      const dbid = Number(it.debitoLineId);
+      const chequeCents = Math.round(Math.abs(Number(it.valor)) * 100);
+      const ref = it.dataRef ? String(it.dataRef).slice(0, 10) : null; // data do débito (YYYY-MM-DD)
+      const meus = vinc.filter((x) => Number(x.debitoLineId) === dbid);
+      const acumCents = meus.reduce((s, x) => s + Math.round(Number(x.valor) * 100), 0);
+      const pixDoCheque = new Set(meus.map((x) => Number(x.pixLineId)).filter(Boolean));
+      const sugestoes = candAll
+        .filter((c) => Math.round(Math.abs(Number(c.valor)) * 100) === chequeCents)
+        .filter((c) => Number(c.id) !== dbid && !pixDoCheque.has(Number(c.id)))
+        // o PIX substituto ocorre EM/APÓS a data do cheque devolvido (reforço temporal; comparação lexical YYYY-MM-DD)
+        .filter((c) => !ref || (c.data != null && String(c.data) >= ref))
+        .map((c) => ({ ...c, jaVinculado: pixVinculados.has(Number(c.id)) }))
+        .slice(0, 12);
+      mapa[String(dbid)] = {
+        vinculos: meus,
+        acumulado: acumCents / 100,
+        saldo: Math.max(0, (chequeCents - acumCents)) / 100,
+        quitado: chequeCents > 0 && acumCents >= chequeCents - 1,
+        sugestoes,
+      };
+    }
+    return { mapa };
+  }),
+
+  // Rev. 3747 — Busca PIX/TED/transf (débitos) em TODAS as contas da empresa p/ o vínculo
+  // MANUAL (casamento de valor divergente). Ordena por proximidade ao valor do cheque.
+  searchPixTedGlobal: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    dataRef: z.string(),
+    valorRef: z.number().optional(),
+    mesesAntes: z.number().min(0).max(24).default(3),
+    mesesDepois: z.number().min(0).max(24).default(12),
+    busca: z.string().optional(),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    // $N distintos por aparição (dbExecute liga por ORDEM): dataRef passado 2x.
+    const r = await dbExecute(db,
+      `SELECT l.id, to_char(l.data,'YYYY-MM-DD') AS data, l.descricao, l.valor,
+              l.conta_bancaria_id AS "contaId", l.conciliado, l.entry_id AS "entryId",
+              cba.apelido AS "contaApelido", cba.banco AS "contaBanco", cba.conta AS "contaNum"
+         FROM bank_statement_lines l
+         LEFT JOIN company_bank_accounts cba ON cba.id = l.conta_bancaria_id
+        WHERE l.company_id=$1
+          AND l.excluido_em IS NULL
+          AND l.valor < 0
+          AND (UPPER(l.descricao) LIKE '%PIX%' OR UPPER(l.descricao) LIKE '%TED%'
+               OR UPPER(l.descricao) LIKE '%TRANSF%' OR UPPER(l.descricao) LIKE '%DOC%')
+          AND l.data >= ($2::date - ($3 || ' months')::interval)::date
+          AND l.data <= ($4::date + ($5 || ' months')::interval)::date
+        ORDER BY ABS(l.valor + $6::numeric) ASC, l.data DESC, l.id DESC
+        LIMIT 300`,
+      [input.companyId, input.dataRef, String(input.mesesAntes),
+       input.dataRef, String(input.mesesDepois), String(input.valorRef ?? 0)]);
+    let linhas = rows(r) as any[];
+    // pix já vinculados a algum cheque → flag p/ a UI alertar
+    const pvSel = await dbExecute(db,
+      `SELECT DISTINCT pix_line_id AS "pixLineId" FROM bank_cheque_vinculos
+        WHERE company_id=$1 AND estornado_em IS NULL AND pix_line_id IS NOT NULL`,
+      [input.companyId]);
+    const pixVinculados = new Set(rows(pvSel).map((x: any) => Number(x.pixLineId)));
+    linhas = linhas.map((l) => ({ ...l, jaVinculado: pixVinculados.has(Number(l.id)) }));
+    if (input.busca) {
+      const b = input.busca.toLowerCase();
+      linhas = linhas.filter((l: any) => String(l.descricao ?? "").toLowerCase().includes(b));
+    }
+    return { linhas };
+  }),
+
   // Rev. 3454 — Cache persistente de análise IA da Conciliação Bancária.
   getAiConciliacaoCache: protectedProcedure
     .input(z.object({

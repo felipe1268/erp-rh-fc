@@ -859,6 +859,38 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3743: tabela financial_entry_baixas garantida (baixa parcial Contas a Pagar/Receber).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA financial_entry_baixas:`, e?.message || e); }
 
+        // Rev. 3747 — VÍNCULO de cheque devolvido ↔ pagamento(s) substituto(s) (PIX/TED).
+        // Ancorado na linha de DÉBITO do cheque no extrato (estável, funciona sem número).
+        // Suporta 1→N vínculos parciais + estorno por vínculo. NUNCA cria linha no extrato.
+        // CREATE TABLE IF NOT EXISTS — aditivo (R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS bank_cheque_vinculos (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              debito_line_id INTEGER NOT NULL,
+              credito_line_id INTEGER,
+              cheque_numero VARCHAR(30),
+              tipo TEXT DEFAULT 'pix' NOT NULL,
+              pix_line_id INTEGER,
+              pix_conta_bancaria_id INTEGER,
+              valor NUMERIC(15,2) NOT NULL,
+              data DATE,
+              descricao TEXT,
+              estornado_em TIMESTAMP,
+              estornado_por_id INTEGER,
+              estornado_por_nome VARCHAR(255),
+              criado_por_id INTEGER,
+              criado_por_nome VARCHAR(255),
+              created_at TIMESTAMP DEFAULT NOW() NOT NULL
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_bcv_company ON bank_cheque_vinculos(company_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_bcv_debito ON bank_cheque_vinculos(debito_line_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_bcv_pix ON bank_cheque_vinculos(pix_line_id)`);
+          console.log(`[SyncSchema+] Rev. 3747: tabela bank_cheque_vinculos garantida (vínculo cheque devolvido ↔ PIX/TED substituto).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA bank_cheque_vinculos:`, e?.message || e); }
+
         // Rev. 3352 — feriados.observado: a empresa ADOTA (segue) o feriado?
         // Cria a coluna SÓ se não existir (idempotente) e, NESSE ÚNICO momento, faz o
         // backfill dos facultativos → observado=0 (empresa decide se segue). Em boots

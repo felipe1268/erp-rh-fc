@@ -525,6 +525,25 @@ export default function FinanceiroConciliacao() {
       },
       { enabled: !!vincularPixOutrosMeses && !!vincularPixDlg && !!companyId && !!contaBancariaId }
     );
+  // Rev. 3747 — Vínculo de cheque devolvido ↔ PIX/TED: parcial (1→N), TODAS as contas.
+  // valor da parcela (editável; default = saldo); mutations registrar/estornar; busca global.
+  const [vincularPixValor, setVincularPixValor] = useState<string>("");
+  const registrarVinculoMut = (trpc as any).financial.registrarVinculoChequeDevolvido.useMutation();
+  const estornarVinculoMut = (trpc as any).financial.estornarVinculoChequeDevolvido.useMutation();
+  const { data: pixGlobalData, isFetching: pixGlobalFetching } =
+    (trpc as any).financial.searchPixTedGlobal.useQuery(
+      {
+        companyId: Number(companyId),
+        dataRef: String(vincularPixDlg?.cheque?.dataDebito ?? vincularPixDlg?.cheque?.dataCredito ?? "2000-01-01").slice(0, 10),
+        valorRef: vincularPixDlg?.cheque?.valor != null
+          ? Math.abs(Number(vincularPixDlg.cheque.valor))
+          : (vincularPixDlg?.cheque?.valorCents ? Number(vincularPixDlg.cheque.valorCents) / 100 : undefined),
+        mesesAntes: 3,
+        mesesDepois: 12,
+        busca: vincularPixBusca || undefined,
+      },
+      { enabled: !!vincularPixDlg && !!companyId }
+    );
   // Rev. 3419 — Conciliar PIX rápido a partir do card do cheque devolvido
   const [conciliarPixDlg, setConciliarPixDlg] = useState<{ cheque: any; pixLineId: number; pixLine: any | null } | null>(null);
   const [conciliarPixEntry, setConciliarPixEntry] = useState<any | null>(null);
@@ -1206,6 +1225,27 @@ export default function FinanceiroConciliacao() {
   const repExt: any[] = repExtRaw.filter((r) => !r.reversal && !r.reversalResolveGrupo);
   const repDevol: any[] = report?.chequesDevolvidos ?? [];
   const repLan: any[] = report?.lancamentosSemExtrato ?? [];
+  // Rev. 3747 — cobertura/sugestões de vínculo p/ TODOS os cheques devolvidos (em lote).
+  // Casa por VALOR EXATO em TODAS as contas; só sugere (nada vincula sem confirmação).
+  const vincItens = repDevol
+    .map((d: any) => ({
+      debitoLineId: Number(d.debitoId),
+      creditoLineId: d.creditoId != null ? Number(d.creditoId) : undefined,
+      valor: Math.abs(Number(d.valor) || (Number(d.valorCents) || 0) / 100),
+      dataRef: String(d.dataDebito ?? d.dataCredito ?? "").slice(0, 10) || undefined,
+    }))
+    .filter((x: any) => Number.isFinite(x.debitoLineId) && x.debitoLineId > 0);
+  const { data: vincLoteData } = (trpc as any).financial.getChequeDevolvidoVinculacao.useQuery(
+    { companyId: Number(companyId), itens: vincItens },
+    { enabled: !!companyId && vincItens.length > 0 }
+  );
+  const vincMap: Record<string, any> = vincLoteData?.mapa ?? {};
+  // Invalida todas as superfícies de % + a cobertura de vínculo após registrar/estornar.
+  const refreshAposVinculo = () => {
+    (utils as any).financial?.getChequeDevolvidoVinculacao?.invalidate?.();
+    refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true); refetchReport();
+    (utils as any).financial?.getConciliacaoResumoMensal?.invalidate?.();
+  };
   // Rev. 3219 — filtro de busca (texto livre) aplicado às DUAS listas de pendência.
   // Casa por descrição, fornecedor, obra, doc, data e valor (BRL formatado + número cru),
   // normalizando acentos e caixa. String vazia = sem filtro (mantém tudo).
@@ -5056,6 +5096,13 @@ export default function FinanceiroConciliacao() {
                   <div className="divide-y divide-gray-100 max-h-[460px] overflow-y-auto">
                     {repDevol.map((d: any) => {
                       const res = d.resolucao ?? { tipo: "pendente" };
+                      const vinfo = vincMap[String(d.debitoId)] ?? null;
+                      const vinTotalCents = Math.round(Math.abs(Number(d.valor) || (Number(d.valorCents) || 0) / 100) * 100);
+                      const vinAcumCents = vinfo ? Math.round(Number(vinfo.acumulado || 0) * 100) : 0;
+                      const vinSaldoCents = Math.max(0, vinTotalCents - vinAcumCents);
+                      const vinQuitado = !!vinfo?.quitado || (!!vinfo && vinSaldoCents <= 1 && vinAcumCents > 0);
+                      const vinSugN = vinfo?.sugestoes?.length ?? 0;
+                      const vinN = vinfo?.vinculos?.length ?? 0;
                       return (
                         <div key={d.grupoId} className={`px-4 py-3 ${d.desconsiderado ? "opacity-60 bg-gray-50/60" : ""}`}>
                           <div className="flex items-start justify-between gap-3">
@@ -5124,20 +5171,47 @@ export default function FinanceiroConciliacao() {
                                   </div>
                                 </div>
                               ) : (
-                                /* Rev. 3424 — botão ⚡ inline à direita da mensagem (não abaixo) */
+                                /* Rev. 3424/3747 — botão SEMPRE visível; dica de sugestão exata */
                                 <div className="mt-1 flex items-center gap-2">
-                                  <p className="text-[11px] text-amber-700 flex items-center gap-1 min-w-0 flex-1">
-                                    <AlertCircle className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Sem quitação identificada no período — analisar (reapresentar, cobrar ou substituir).</span>
+                                  <p className="text-[11px] flex items-center gap-1 min-w-0 flex-1">
+                                    {vinSugN > 0 ? (
+                                      <span className="text-blue-700 flex items-center gap-1 min-w-0"><Sparkles className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">{vinSugN} PIX/TED de valor exato no extrato — confira e vincule.</span></span>
+                                    ) : (
+                                      <span className="text-amber-700 flex items-center gap-1 min-w-0"><AlertCircle className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Sem quitação identificada no período — analisar (reapresentar, cobrar ou substituir).</span></span>
+                                    )}
                                   </p>
-                                  {(d.chequeNumero || d.doc) && (
-                                    <button
-                                      type="button"
-                                      className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
-                                      onClick={() => { setVincularPixSel(null); setVincularPixDlg({ cheque: d, pixPreSel: null }); }}
-                                    >
-                                      <Zap className="w-3 h-3" /> Vincular PIX/TED
-                                    </button>
-                                  )}
+                                  <button
+                                    type="button"
+                                    className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+                                    onClick={() => { setVincularPixSel(null); setVincularPixValor(""); setVincularPixBusca(""); setVincularPixDlg({ cheque: d, pixPreSel: null }); }}
+                                  >
+                                    <Zap className="w-3 h-3" /> Vincular PIX/TED
+                                  </button>
+                                </div>
+                              )}
+                              {/* Rev. 3747 — Cobertura por vínculo (parcial / quitado por substituição) + histórico/estorno */}
+                              {vinN > 0 && (
+                                <div className="mt-2 rounded-md border border-indigo-100 bg-indigo-50/50 px-2.5 py-1.5">
+                                  <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                                    {vinQuitado ? (
+                                      <span className="inline-flex items-center gap-1 px-1.5 py-px rounded-full font-semibold bg-emerald-100 text-emerald-700"><CheckCircle className="w-3 h-3" /> Quitado por substituição</span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 px-1.5 py-px rounded-full font-semibold bg-amber-100 text-amber-700"><ArrowLeftRight className="w-3 h-3" /> Parcial</span>
+                                    )}
+                                    <span className="text-gray-600">Vinculado <strong className="text-gray-800">{formatBRL(vinAcumCents / 100)}</strong> de {formatBRL(vinTotalCents / 100)}{!vinQuitado && vinSaldoCents > 0 ? <> · saldo <strong className="text-rose-600">{formatBRL(vinSaldoCents / 100)}</strong></> : null}</span>
+                                    <button type="button" className="ml-auto text-[11px] text-indigo-700 hover:text-indigo-900 underline" onClick={() => { setVincularPixSel(null); setVincularPixValor(""); setVincularPixBusca(""); setVincularPixDlg({ cheque: d, pixPreSel: null }); }}>Gerenciar vínculos</button>
+                                  </div>
+                                  <div className="mt-1 space-y-0.5">
+                                    {(vinfo.vinculos ?? []).map((v: any) => (
+                                      <div key={v.id} className="flex items-center gap-2 text-[11px] text-gray-600">
+                                        <span className="text-gray-400">{v.tipo === "ajuste" ? "Ajuste" : "PIX/TED"}</span>
+                                        <span className="font-medium text-gray-700">{formatBRL(Math.abs(Number(v.valor)))}</span>
+                                        {v.data ? <span className="text-gray-400">{fmtData(v.data)}</span> : null}
+                                        {v.pixContaApelido ? <span className="text-gray-400 truncate max-w-[140px]" title={v.pixContaApelido}>{v.pixContaApelido}</span> : null}
+                                        <button type="button" disabled={estornarVinculoMut.isPending} className="ml-auto text-rose-600 hover:text-rose-800 underline disabled:opacity-50" onClick={async () => { try { await estornarVinculoMut.mutateAsync({ companyId: Number(companyId), vinculoId: Number(v.id) }); toast({ title: "Vínculo estornado" }); refreshAposVinculo(); } catch (e: any) { toast({ title: "Erro ao estornar", description: String(e?.message ?? e), variant: "destructive" }); } }}>estornar</button>
+                                      </div>
+                                    ))}
+                                  </div>
                                 </div>
                               )}
                               {/* Rev. 3742 — Desconsiderar/Reconsiderar do cálculo do % (NÃO apaga o cheque) */}
@@ -6614,43 +6688,70 @@ export default function FinanceiroConciliacao() {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Rev. 3429 — Portal full-screen nativo (sem Radix Dialog) */}
+        {/* Rev. 3429/3747 — Portal full-screen nativo. Vínculo PARCIAL (1 cheque ↔ N pagamentos),
+            busca em TODAS as contas, histórico + estorno por vínculo, "Quitar saldo" (ajuste).
+            REGRA DE OURO: vincular NUNCA cria/altera linha no extrato — só marca o cheque. */}
         {vincularPixDlg != null && createPortal((() => {
           const chq = vincularPixDlg.cheque;
-          const valCents = chq.valorCents ?? Math.round(Math.abs(Number(chq.valor ?? 0)) * 100);
-          const limiarProxCents = Math.max(Math.round(valCents * 0.15), 200);
-          const pixRe = /pix|ted\b|transf/i;
-          const candidatasPix = repExtRaw
-            .filter((l: any) => Number(l.valor) < 0 && !l.reversal && pixRe.test(String(l.descricao ?? "")))
-            .sort((a: any, b: any) => {
-              const da = Math.abs(Math.abs(Math.round(Number(a.valor) * 100)) - valCents);
-              const db2 = Math.abs(Math.abs(Math.round(Number(b.valor) * 100)) - valCents);
-              return da - db2;
-            });
-          const buscaNorm = vincularPixBusca.trim().toLowerCase();
-          const candidatasFiltradas = candidatasPix.filter((l: any) => {
-            if (vincularPixSoProximos) {
-              if (Math.abs(Math.abs(Math.round(Number(l.valor) * 100)) - valCents) > limiarProxCents) return false;
+          const debId = Number(chq.debitoId);
+          const credId = chq.creditoId != null ? Number(chq.creditoId) : undefined;
+          const valCents = chq.valorCents != null ? Number(chq.valorCents) : Math.round(Math.abs(Number(chq.valor ?? 0)) * 100);
+          const info = vincMap[String(debId)] ?? { vinculos: [], acumulado: 0, saldo: valCents / 100, quitado: false, sugestoes: [] };
+          const vinculos: any[] = info.vinculos ?? [];
+          const acumCents = Math.round(Number(info.acumulado || 0) * 100);
+          const saldoCents = Math.max(0, valCents - acumCents);
+          const quitado = !!info.quitado || (saldoCents <= 1 && acumCents > 0);
+          const sugestoes: any[] = info.sugestoes ?? [];
+          const pctCob = valCents > 0 ? Math.min(100, Math.round((acumCents / valCents) * 100)) : 0;
+          const candidatas: any[] = (pixGlobalData?.linhas ?? []).filter((l: any) => Number(l.id) !== debId && (credId == null || Number(l.id) !== credId));
+          const parcelaCents = Math.round((parseFloat(String(vincularPixValor).replace(",", ".")) || 0) * 100);
+          const closeDialog = () => { setVincularPixDlg(null); setVincularPixSel(null); setVincularPixBusca(""); setVincularPixValor(""); setVincularPixSoProximos(false); setVincularPixOutrosMeses(false); };
+          const selecionar = (l: any) => {
+            setVincularPixSel(l);
+            const lineCents = Math.round(Math.abs(Number(l.valor ?? 0)) * 100);
+            const sugCents = Math.max(1, Math.min(saldoCents > 0 ? saldoCents : valCents, lineCents));
+            setVincularPixValor((sugCents / 100).toFixed(2));
+          };
+          const registrar = async (tipo: "pix" | "ajuste") => {
+            if (!companyId) return;
+            if (!(parcelaCents > 0)) { toast({ title: "Informe um valor válido para o vínculo.", variant: "destructive" }); return; }
+            if (tipo === "pix" && !vincularPixSel) { toast({ title: "Selecione o PIX/TED no extrato.", variant: "destructive" }); return; }
+            try {
+              const res = await registrarVinculoMut.mutateAsync({
+                companyId: Number(companyId),
+                debitoLineId: debId,
+                creditoLineId: credId,
+                chequeNumero: chq.chequeNumero ? String(chq.chequeNumero) : undefined,
+                tipo,
+                pixLineId: tipo === "pix" ? Number(vincularPixSel.id) : undefined,
+                valor: parcelaCents / 100,
+                data: tipo === "pix" && vincularPixSel?.data ? String(vincularPixSel.data).slice(0, 10) : undefined,
+                descricao: tipo === "pix" ? (vincularPixSel?.descricao ?? undefined) : "Quitação de saldo (ajuste manual)",
+              });
+              toast({
+                title: res.quitado ? "Cheque quitado por substituição" : "Vínculo registrado",
+                description: res.quitado
+                  ? "O par (compensação + devolução) saiu do cálculo do % automaticamente."
+                  : `Vinculado ${formatBRL(parcelaCents / 100)} · saldo restante ${formatBRL(Number(res.saldo))}.`,
+              });
+              refreshAposVinculo();
+              setVincularPixSel(null); setVincularPixValor("");
+              if (res.quitado) closeDialog();
+            } catch (err: any) {
+              toast({ title: "Erro ao vincular", description: String(err?.message ?? err), variant: "destructive" });
             }
-            if (!buscaNorm) return true;
-            return String(l.descricao ?? "").toLowerCase().includes(buscaNorm)
-              || String(fmtData(l.data)).includes(buscaNorm)
-              || String(formatBRL(Math.abs(Number(l.valor)))).includes(buscaNorm);
-          });
-          const nProximos = candidatasPix.filter((l: any) => Math.abs(Math.abs(Math.round(Number(l.valor) * 100)) - valCents) <= limiarProxCents).length;
-          // Mescla resultados de outros meses (sem duplicar IDs já presentes no período atual)
-          const idsAtual = new Set(candidatasPix.map((l: any) => l.id));
-          const linhasOutrosMeses: any[] = vincularPixOutrosMeses
-            ? (vincularPixOutrosMesesData?.linhas ?? [])
-                .filter((l: any) => !idsAtual.has(l.id))
-                .filter((l: any) => {
-                  if (!buscaNorm) return true;
-                  return String(l.descricao ?? "").toLowerCase().includes(buscaNorm)
-                    || String(fmtData(l.data)).includes(buscaNorm)
-                    || String(formatBRL(Math.abs(Number(l.valor)))).includes(buscaNorm);
-                })
-            : [];
-          const closeDialog = () => { setVincularPixDlg(null); setVincularPixSel(null); setVincularPixBusca(""); setVincularPixSoProximos(false); setVincularPixOutrosMeses(false); };
+          };
+          const estornar = async (v: any) => {
+            if (!companyId) return;
+            try {
+              await estornarVinculoMut.mutateAsync({ companyId: Number(companyId), vinculoId: Number(v.id) });
+              toast({ title: "Vínculo estornado", description: "O cheque volta ao % se deixar de estar coberto." });
+              refreshAposVinculo();
+            } catch (err: any) {
+              toast({ title: "Erro ao estornar", description: String(err?.message ?? err), variant: "destructive" });
+            }
+          };
+          const busy = registrarVinculoMut.isPending || estornarVinculoMut.isPending;
           return (
             <>
               {/* Backdrop */}
@@ -6666,207 +6767,180 @@ export default function FinanceiroConciliacao() {
                       </div>
                       <div>
                         <p style={{ fontWeight: 700, fontSize: 15, margin: 0 }}>Vincular cheque devolvido a PIX/TED</p>
-                        <p style={{ fontSize: 11, color: "#a5b4fc", margin: "2px 0 0" }}>Selecione o PIX/TED que substituiu este cheque</p>
+                        <p style={{ fontSize: 11, color: "#a5b4fc", margin: "2px 0 0", maxWidth: 520 }}>Vincule um ou vários pagamentos (todas as contas). Nenhuma linha do extrato é criada ou alterada — só marcamos o cheque e o tiramos do %.</p>
                       </div>
                     </div>
                     <button type="button" onClick={closeDialog} style={{ background: "rgba(255,255,255,0.1)", border: "none", borderRadius: 8, padding: 8, cursor: "pointer", color: "#fff", display: "flex", alignItems: "center" }}>
                       <X style={{ width: 20, height: 20 }} />
                     </button>
                   </div>
-                  {/* Card cheque */}
-                  <div style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 16, padding: "12px 16px", display: "flex", alignItems: "center", gap: 16 }}>
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <p style={{ fontWeight: 600, fontSize: 14, margin: 0 }}>Cheque Doc {chq.doc ?? chq.chequeNumero}</p>
-                      {chq.fornecedor && <p style={{ fontSize: 11, color: "#c7d2fe", margin: "2px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{chq.fornecedor}</p>}
-                      <p style={{ fontSize: 11, color: "#818cf8", margin: "2px 0 0" }}>Devolvido em {fmtData(chq.dataCredito)}</p>
+                  {/* Card cheque + progresso de cobertura */}
+                  <div style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 16, padding: "12px 16px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <p style={{ fontWeight: 600, fontSize: 14, margin: 0 }}>Cheque {chq.chequeNumero ? `nº ${chq.chequeNumero}` : (chq.doc ? `Doc ${chq.doc}` : "—")}</p>
+                        {chq.fornecedor && <p style={{ fontSize: 11, color: "#c7d2fe", margin: "2px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{chq.fornecedor}</p>}
+                        <p style={{ fontSize: 11, color: "#818cf8", margin: "2px 0 0" }}>Devolvido em {fmtData(chq.dataCredito)}</p>
+                      </div>
+                      <div style={{ textAlign: "right", flexShrink: 0 }}>
+                        <p style={{ fontWeight: 700, fontSize: 20, margin: 0, fontVariantNumeric: "tabular-nums" }}>{formatBRL(valCents / 100)}</p>
+                        <p style={{ fontSize: 10, color: "#818cf8", margin: "2px 0 0" }}>valor do cheque</p>
+                      </div>
                     </div>
-                    <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <p style={{ fontWeight: 700, fontSize: 20, margin: 0, fontVariantNumeric: "tabular-nums" }}>{formatBRL(Math.abs(Number(chq.valor ?? 0)))}</p>
-                      <p style={{ fontSize: 10, color: "#818cf8", margin: "2px 0 0" }}>valor do cheque</p>
+                    <div style={{ marginTop: 10 }}>
+                      <div style={{ height: 8, borderRadius: 999, background: "rgba(255,255,255,0.18)", overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${pctCob}%`, background: quitado ? "#34d399" : "#fbbf24", transition: "width .2s" }} />
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 11, fontVariantNumeric: "tabular-nums" }}>
+                        <span style={{ color: "#c7d2fe" }}>Vinculado <strong style={{ color: "#fff" }}>{formatBRL(acumCents / 100)}</strong></span>
+                        {quitado
+                          ? <span style={{ color: "#6ee7b7", fontWeight: 700 }}>✓ Quitado por substituição</span>
+                          : <span style={{ color: "#fde68a" }}>Saldo <strong style={{ color: "#fff" }}>{formatBRL(saldoCents / 100)}</strong></span>}
+                      </div>
                     </div>
-                  </div>
-                  {/* Busca */}
-                  <div style={{ position: "relative", marginTop: 12 }}>
-                    <Search style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", width: 16, height: 16, color: "rgba(255,255,255,0.4)", pointerEvents: "none" }} />
-                    <input
-                      type="text"
-                      placeholder="Buscar por descrição, data ou valor…"
-                      value={vincularPixBusca}
-                      onChange={e => setVincularPixBusca(e.target.value)}
-                      autoFocus
-                      style={{ width: "100%", boxSizing: "border-box", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 12, paddingLeft: 40, paddingRight: vincularPixBusca ? 36 : 14, paddingTop: 10, paddingBottom: 10, color: "#fff", fontSize: 14, outline: "none" }}
-                    />
-                    {vincularPixBusca && (
-                      <button type="button" onClick={() => setVincularPixBusca("")} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.5)", display: "flex" }}>
-                        <X style={{ width: 16, height: 16 }} />
-                      </button>
-                    )}
                   </div>
                 </div>
-                {/* ── FILTROS ── */}
-                <div style={{ flexShrink: 0, background: "#f9fafb", borderBottom: "1px solid #e5e7eb", padding: "8px 16px", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    onClick={() => setVincularPixSoProximos(v => !v)}
-                    style={{ display: "flex", alignItems: "center", gap: 5, borderRadius: 999, padding: "4px 10px", fontSize: 12, fontWeight: 500, border: `1px solid ${vincularPixSoProximos ? "#4f46e5" : "#d1d5db"}`, background: vincularPixSoProximos ? "#4f46e5" : "#fff", color: vincularPixSoProximos ? "#fff" : "#4b5563", cursor: "pointer" }}
-                  >
-                    {vincularPixSoProximos ? "✓" : "◎"} Só próximos ({nProximos})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setVincularPixOutrosMeses(v => !v)}
-                    style={{ display: "flex", alignItems: "center", gap: 5, borderRadius: 999, padding: "4px 10px", fontSize: 12, fontWeight: 500, border: `1px solid ${vincularPixOutrosMeses ? "#0891b2" : "#d1d5db"}`, background: vincularPixOutrosMeses ? "#0891b2" : "#fff", color: vincularPixOutrosMeses ? "#fff" : "#4b5563", cursor: "pointer" }}
-                  >
-                    {vincularPixOutrosMesesFetching ? "⏳" : vincularPixOutrosMeses ? "✓" : "🗓"} Outros meses
-                  </button>
-                  <span style={{ fontSize: 12, color: "#9ca3af", marginLeft: "auto" }}>
-                    {candidatasFiltradas.length} resultado{candidatasFiltradas.length !== 1 ? "s" : ""}{buscaNorm ? ` · "${vincularPixBusca}"` : ""}
-                  </span>
-                </div>
-                {/* ── SUGESTÃO ── */}
-                {vincularPixDlg.pixPreSel && !vincularPixSel && (
-                  <div style={{ flexShrink: 0, margin: "12px 16px 0", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 12, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
-                    <CheckCircle style={{ width: 16, height: 16, color: "#3b82f6", flexShrink: 0 }} />
-                    <div style={{ minWidth: 0, flex: 1, fontSize: 12, color: "#1e40af" }}>
-                      <p style={{ fontWeight: 600, margin: 0 }}>Sugestão automática</p>
-                      <p style={{ margin: "1px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#2563eb" }}>{vincularPixDlg.pixPreSel.descricao}</p>
-                    </div>
-                    <button type="button" style={{ fontSize: 12, color: "#1d4ed8", fontWeight: 600, textDecoration: "underline", background: "none", border: "none", cursor: "pointer", flexShrink: 0 }} onClick={() => setVincularPixSel(vincularPixDlg.pixPreSel)}>Usar</button>
-                  </div>
-                )}
-                {/* ── LISTA ── */}
-                <div style={{ flex: 1, overflowY: "auto", background: "#f9fafb", padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
-                  {candidatasFiltradas.length === 0 ? (
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 160, textAlign: "center", gap: 8 }}>
-                      <span style={{ fontSize: 32 }}>🔍</span>
-                      <p style={{ fontSize: 14, fontWeight: 500, color: "#4b5563", margin: 0 }}>{buscaNorm ? "Nenhum resultado para a busca" : vincularPixSoProximos ? "Nenhum PIX/TED próximo ao valor" : "Nenhum PIX/TED no extrato"}</p>
-                      {(buscaNorm || vincularPixSoProximos) && (
-                        <button type="button" style={{ fontSize: 12, color: "#4f46e5", textDecoration: "underline", background: "none", border: "none", cursor: "pointer" }} onClick={() => { setVincularPixBusca(""); setVincularPixSoProximos(false); }}>Limpar filtros</button>
-                      )}
-                    </div>
-                  ) : candidatasFiltradas.map((l: any) => {
-                    const isSelected = vincularPixSel?.id === l.id;
-                    const diffCents = Math.abs(Math.abs(Math.round(Number(l.valor) * 100)) - valCents);
-                    const isExact = diffCents === 0;
-                    const isProx = diffCents <= limiarProxCents;
-                    const pctDiff = valCents > 0 ? Math.round(diffCents / valCents * 100) : 0;
-                    const proximidadeLabel = isExact ? "= exato" : isProx ? `±${pctDiff}%` : null;
-                    const badgeStyle: React.CSSProperties = isExact
-                      ? { background: "#d1fae5", color: "#065f46", border: "1px solid #a7f3d0", borderRadius: 999, fontSize: 10, fontWeight: 600, padding: "1px 7px" }
-                      : isProx ? { background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a", borderRadius: 999, fontSize: 10, fontWeight: 600, padding: "1px 7px" }
-                      : { background: "#f3f4f6", color: "#6b7280", border: "1px solid #e5e7eb", borderRadius: 999, fontSize: 10, fontWeight: 600, padding: "1px 7px" };
-                    const cardBorder = isSelected ? "2px solid #4f46e5" : isExact ? "2px solid #6ee7b7" : isProx ? "2px solid #fde68a" : "2px solid #e5e7eb";
-                    const cardBg = isSelected ? "#eef2ff" : "#fff";
-                    return (
-                      <button
-                        key={l.id}
-                        type="button"
-                        style={{ width: "100%", textAlign: "left", border: cardBorder, borderRadius: 12, padding: "12px 14px", background: cardBg, cursor: "pointer", display: "flex", alignItems: "center", gap: 12, boxShadow: isSelected ? "0 2px 8px rgba(79,70,229,0.15)" : "none" }}
-                        onClick={() => setVincularPixSel(isSelected ? null : l)}
-                      >
-                        <div style={{ flexShrink: 0, width: 20, height: 20, borderRadius: "50%", border: `2px solid ${isSelected ? "#4f46e5" : "#d1d5db"}`, background: isSelected ? "#4f46e5" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          {isSelected && <Check style={{ width: 12, height: 12, color: "#fff" }} />}
-                        </div>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <p style={{ margin: 0, fontSize: 14, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: isSelected ? "#312e81" : "#111827" }}>{l.descricao}</p>
-                          <p style={{ margin: "2px 0 0", fontSize: 12, color: "#6b7280" }}>{fmtData(l.data)}</p>
-                        </div>
-                        <div style={{ flexShrink: 0, textAlign: "right" }}>
-                          <p style={{ margin: 0, fontSize: 14, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: isSelected ? "#4338ca" : isExact ? "#047857" : "#111827" }}>{formatBRL(Math.abs(Number(l.valor)))}</p>
-                          {proximidadeLabel && <span style={badgeStyle}>{proximidadeLabel}</span>}
-                        </div>
-                      </button>
-                    );
-                  })}
 
-                  {/* ── OUTROS MESES ── */}
-                  {vincularPixOutrosMeses && (
-                    <div style={{ marginTop: 12 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                        <div style={{ flex: 1, height: 1, background: "#e0f2fe" }} />
-                        <span style={{ fontSize: 11, fontWeight: 600, color: "#0891b2", whiteSpace: "nowrap" }}>
-                          {vincularPixOutrosMesesFetching ? "Buscando…" : `Outros meses (${linhasOutrosMeses.length})`}
-                        </span>
-                        <div style={{ flex: 1, height: 1, background: "#e0f2fe" }} />
-                      </div>
-                      {!vincularPixOutrosMesesFetching && linhasOutrosMeses.length === 0 && (
-                        <p style={{ textAlign: "center", fontSize: 12, color: "#9ca3af", margin: "8px 0" }}>Nenhum PIX/TED encontrado nos outros meses</p>
-                      )}
-                      {linhasOutrosMeses.map((l: any) => {
-                        const isSelected = vincularPixSel?.id === l.id;
-                        const diffCents = Math.abs(Math.abs(Math.round(Number(l.valor) * 100)) - valCents);
-                        const isExact = diffCents === 0;
-                        const isProx = diffCents <= limiarProxCents;
-                        const pctDiff = valCents > 0 ? Math.round(diffCents / valCents * 100) : 0;
-                        const proximidadeLabel = isExact ? "= exato" : isProx ? `±${pctDiff}%` : null;
-                        const badgeStyle: React.CSSProperties = isExact
-                          ? { background: "#d1fae5", color: "#065f46", border: "1px solid #a7f3d0", borderRadius: 999, fontSize: 10, fontWeight: 600, padding: "1px 7px" }
-                          : isProx ? { background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a", borderRadius: 999, fontSize: 10, fontWeight: 600, padding: "1px 7px" }
-                          : { background: "#f3f4f6", color: "#6b7280", border: "1px solid #e5e7eb", borderRadius: 999, fontSize: 10, fontWeight: 600, padding: "1px 7px" };
-                        const cardBorder = isSelected ? "2px solid #0891b2" : "2px solid #e0f2fe";
-                        const cardBg = isSelected ? "#ecfeff" : "#f0f9ff";
-                        return (
-                          <button
-                            key={`om-${l.id}`}
-                            type="button"
-                            style={{ width: "100%", textAlign: "left", border: cardBorder, borderRadius: 12, padding: "12px 14px", background: cardBg, cursor: "pointer", display: "flex", alignItems: "center", gap: 12, marginBottom: 8, boxShadow: isSelected ? "0 2px 8px rgba(8,145,178,0.15)" : "none" }}
-                            onClick={() => setVincularPixSel(isSelected ? null : l)}
-                          >
-                            <div style={{ flexShrink: 0, width: 20, height: 20, borderRadius: "50%", border: `2px solid ${isSelected ? "#0891b2" : "#a5f3fc"}`, background: isSelected ? "#0891b2" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                              {isSelected && <Check style={{ width: 12, height: 12, color: "#fff" }} />}
-                            </div>
+                {/* ── CORPO ── */}
+                <div style={{ flex: 1, overflowY: "auto", background: "#f9fafb", padding: "12px 16px", display: "flex", flexDirection: "column", gap: 14 }}>
+                  {/* Vínculos já registrados */}
+                  {vinculos.length > 0 && (
+                    <div>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: "#4338ca", textTransform: "uppercase", letterSpacing: 0.4, margin: "0 0 6px" }}>Vínculos registrados ({vinculos.length})</p>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {vinculos.map((v: any) => (
+                          <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 10, background: "#fff", border: "1px solid #e0e7ff", borderRadius: 10, padding: "8px 12px" }}>
+                            <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 999, background: v.tipo === "ajuste" ? "#fef3c7" : "#e0e7ff", color: v.tipo === "ajuste" ? "#92400e" : "#3730a3" }}>{v.tipo === "ajuste" ? "AJUSTE" : "PIX/TED"}</span>
                             <div style={{ minWidth: 0, flex: 1 }}>
-                              <p style={{ margin: 0, fontSize: 14, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: isSelected ? "#164e63" : "#0c4a6e" }}>{l.descricao}</p>
-                              <p style={{ margin: "2px 0 0", fontSize: 12, color: "#0e7490" }}>{fmtData(l.data)} {l.conciliado ? <span style={{ color: "#6b7280", fontSize: 10 }}>· já conciliado</span> : null}</p>
+                              <p style={{ margin: 0, fontSize: 13, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.pixDescricao ?? v.descricao ?? "Ajuste de saldo"}</p>
+                              <p style={{ margin: "1px 0 0", fontSize: 11, color: "#6b7280" }}>{[v.data ? fmtData(v.data) : null, v.pixContaApelido].filter(Boolean).join(" · ") || "—"}</p>
                             </div>
-                            <div style={{ flexShrink: 0, textAlign: "right" }}>
-                              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: isSelected ? "#0891b2" : "#0c4a6e" }}>{formatBRL(Math.abs(Number(l.valor)))}</p>
-                              {proximidadeLabel && <span style={badgeStyle}>{proximidadeLabel}</span>}
+                            <p style={{ flexShrink: 0, margin: 0, fontSize: 14, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: "#111827" }}>{formatBRL(Math.abs(Number(v.valor)))}</p>
+                            <button type="button" disabled={busy} onClick={() => estornar(v)} style={{ flexShrink: 0, background: "none", border: "none", cursor: "pointer", color: "#e11d48", fontSize: 12, fontWeight: 600, textDecoration: "underline", opacity: busy ? 0.5 : 1 }}>Estornar</button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {!quitado && (
+                    <>
+                      {/* Sugestões automáticas (valor EXATO, todas as contas) */}
+                      {sugestoes.length > 0 && (
+                        <div>
+                          <p style={{ fontSize: 11, fontWeight: 700, color: "#1d4ed8", textTransform: "uppercase", letterSpacing: 0.4, margin: "0 0 6px", display: "flex", alignItems: "center", gap: 6 }}>
+                            <Sparkles style={{ width: 13, height: 13 }} /> Sugestões de valor exato ({sugestoes.length})
+                          </p>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            {sugestoes.map((l: any) => {
+                              const isSel = vincularPixSel?.id === l.id;
+                              return (
+                                <button key={`sug-${l.id}`} type="button" onClick={() => selecionar(l)} style={{ width: "100%", textAlign: "left", border: isSel ? "2px solid #2563eb" : "2px solid #bfdbfe", borderRadius: 10, padding: "10px 12px", background: isSel ? "#eff6ff" : "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
+                                  <div style={{ flexShrink: 0, width: 18, height: 18, borderRadius: "50%", border: `2px solid ${isSel ? "#2563eb" : "#93c5fd"}`, background: isSel ? "#2563eb" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>{isSel && <Check style={{ width: 11, height: 11, color: "#fff" }} />}</div>
+                                  <div style={{ minWidth: 0, flex: 1 }}>
+                                    <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.descricao}</p>
+                                    <p style={{ margin: "1px 0 0", fontSize: 11, color: "#6b7280" }}>{[fmtData(l.data), l.contaApelido].filter(Boolean).join(" · ")}{l.conciliado ? " · já conciliado" : ""}{l.jaVinculado ? " · já vinculado a outro cheque" : ""}</p>
+                                  </div>
+                                  <p style={{ flexShrink: 0, margin: 0, fontSize: 14, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: "#047857" }}>{formatBRL(Math.abs(Number(l.valor)))}</p>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Busca manual em todas as contas */}
+                      <div>
+                        <p style={{ fontSize: 11, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: 0.4, margin: "0 0 6px" }}>Buscar pagamento (todas as contas)</p>
+                        <div style={{ position: "relative", marginBottom: 8 }}>
+                          <Search style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", width: 15, height: 15, color: "#9ca3af", pointerEvents: "none" }} />
+                          <input
+                            type="text"
+                            placeholder="Buscar por descrição do PIX/TED…"
+                            value={vincularPixBusca}
+                            onChange={e => setVincularPixBusca(e.target.value)}
+                            style={{ width: "100%", boxSizing: "border-box", background: "#fff", border: "1px solid #d1d5db", borderRadius: 10, paddingLeft: 36, paddingRight: vincularPixBusca ? 34 : 12, paddingTop: 9, paddingBottom: 9, color: "#111827", fontSize: 13, outline: "none" }}
+                          />
+                          {vincularPixBusca && (
+                            <button type="button" onClick={() => setVincularPixBusca("")} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#9ca3af", display: "flex" }}>
+                              <X style={{ width: 15, height: 15 }} />
+                            </button>
+                          )}
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          {pixGlobalFetching ? (
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "20px 0", color: "#6b7280", fontSize: 13 }}>
+                              <Loader2 style={{ width: 16, height: 16 }} className="animate-spin" /> Buscando pagamentos…
                             </div>
-                          </button>
-                        );
-                      })}
+                          ) : candidatas.length === 0 ? (
+                            <div style={{ textAlign: "center", padding: "20px 0", color: "#9ca3af", fontSize: 13 }}>Nenhum PIX/TED encontrado para os filtros atuais.</div>
+                          ) : candidatas.map((l: any) => {
+                            const isSel = vincularPixSel?.id === l.id;
+                            const lineCents = Math.round(Math.abs(Number(l.valor)) * 100);
+                            const isExact = lineCents === valCents;
+                            return (
+                              <button key={`cand-${l.id}`} type="button" onClick={() => selecionar(l)} style={{ width: "100%", textAlign: "left", border: isSel ? "2px solid #4f46e5" : isExact ? "2px solid #6ee7b7" : "2px solid #e5e7eb", borderRadius: 10, padding: "10px 12px", background: isSel ? "#eef2ff" : "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
+                                <div style={{ flexShrink: 0, width: 18, height: 18, borderRadius: "50%", border: `2px solid ${isSel ? "#4f46e5" : "#d1d5db"}`, background: isSel ? "#4f46e5" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>{isSel && <Check style={{ width: 11, height: 11, color: "#fff" }} />}</div>
+                                <div style={{ minWidth: 0, flex: 1 }}>
+                                  <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.descricao}</p>
+                                  <p style={{ margin: "1px 0 0", fontSize: 11, color: "#6b7280" }}>{[fmtData(l.data), l.contaApelido].filter(Boolean).join(" · ")}{l.conciliado ? " · já conciliado" : ""}{l.jaVinculado ? " · já vinculado a outro cheque" : ""}</p>
+                                </div>
+                                <div style={{ flexShrink: 0, textAlign: "right" }}>
+                                  <p style={{ margin: 0, fontSize: 14, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: isExact ? "#047857" : "#111827" }}>{formatBRL(Math.abs(Number(l.valor)))}</p>
+                                  {isExact && <span style={{ fontSize: 10, fontWeight: 600, color: "#047857" }}>= exato</span>}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {quitado && vinculos.length > 0 && (
+                    <div style={{ textAlign: "center", padding: "8px 0", color: "#059669", fontSize: 13, fontWeight: 600 }}>
+                      Cheque coberto pelos vínculos acima. Estorne algum vínculo para liberar saldo.
                     </div>
                   )}
                 </div>
+
                 {/* ── FOOTER ── */}
-                <div style={{ flexShrink: 0, borderTop: "1px solid #e5e7eb", background: "#fff", padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
-                  {vincularPixSel && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 12, padding: "8px 12px" }}>
-                      <CheckCircle style={{ width: 16, height: 16, color: "#16a34a", flexShrink: 0 }} />
-                      <div style={{ minWidth: 0, flex: 1, fontSize: 12, color: "#166534" }}>
-                        <p style={{ fontWeight: 600, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{vincularPixSel.descricao}</p>
-                        <p style={{ margin: "1px 0 0", color: "#16a34a" }}>{fmtData(vincularPixSel.data)} · {formatBRL(Math.abs(Number(vincularPixSel.valor)))}</p>
+                <div style={{ flexShrink: 0, borderTop: "1px solid #e5e7eb", background: "#fff", padding: "12px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+                  {!quitado && (
+                    <div style={{ display: "flex", alignItems: "flex-end", gap: 10, flexWrap: "wrap" }}>
+                      <div style={{ flex: "0 0 180px" }}>
+                        <label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Valor deste vínculo (R$)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={vincularPixValor}
+                          onChange={e => setVincularPixValor(e.target.value)}
+                          placeholder={(saldoCents / 100).toFixed(2)}
+                          style={{ width: "100%", boxSizing: "border-box", border: "1px solid #d1d5db", borderRadius: 10, padding: "9px 12px", fontSize: 14, fontVariantNumeric: "tabular-nums", outline: "none" }}
+                        />
                       </div>
-                      <button type="button" onClick={() => setVincularPixSel(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", display: "flex", flexShrink: 0 }}><X style={{ width: 16, height: 16 }} /></button>
+                      <button type="button" onClick={() => setVincularPixValor((saldoCents / 100).toFixed(2))} style={{ height: 38, padding: "0 12px", borderRadius: 10, border: "1px solid #c7d2fe", background: "#eef2ff", color: "#4338ca", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Usar saldo ({formatBRL(saldoCents / 100)})</button>
+                      <div style={{ flex: 1, minWidth: 8 }} />
+                      <Button
+                        variant="outline"
+                        style={{ height: 38 }}
+                        disabled={busy || !(parcelaCents > 0)}
+                        title="Lança um AJUSTE manual (arredondamento/divergência). Não cria nem altera linha no extrato."
+                        onClick={() => registrar("ajuste")}
+                      >
+                        Quitar saldo (ajuste)
+                      </Button>
+                      <Button
+                        style={{ height: 38, background: "#4f46e5", color: "#fff", fontWeight: 600 }}
+                        disabled={busy || !vincularPixSel || !(parcelaCents > 0)}
+                        onClick={() => registrar("pix")}
+                      >
+                        {registrarVinculoMut.isPending ? <><Loader2 style={{ width: 16, height: 16, marginRight: 4 }} className="animate-spin" />Salvando…</> : <>✓ Vincular pagamento</>}
+                      </Button>
                     </div>
                   )}
-                  <div style={{ display: "flex", gap: 12 }}>
-                    <Button variant="outline" style={{ flex: 1 }} onClick={closeDialog} disabled={vincularChequePix.isPending}>Cancelar</Button>
-                    <Button
-                      style={{ flex: 1, background: "#4f46e5", color: "#fff", fontWeight: 600 }}
-                      disabled={!vincularPixSel || vincularChequePix.isPending || !vincularPixDlg?.cheque?.chequeNumero}
-                      onClick={async () => {
-                        if (!vincularPixSel || !vincularPixDlg?.cheque?.chequeNumero || !companyId) return;
-                        try {
-                          const res = await vincularChequePix.mutateAsync({
-                            companyId: Number(companyId),
-                            numeroCheque: String(vincularPixDlg.cheque.chequeNumero),
-                            pixData: String(vincularPixSel.data ?? "").slice(0, 10),
-                            pixDescricao: vincularPixSel.descricao ?? undefined,
-                            pixValor: vincularPixSel.valor != null ? Math.abs(Number(vincularPixSel.valor)) : undefined,
-                          });
-                          toast({ title: "Cheque vinculado ao PIX/TED", description: `${res.updated > 0 ? "Controle de Cheques atualizado com sucesso." : "Nenhum cheque encontrado com este número."}` });
-                          closeDialog();
-                          setReportStale(true);
-                        } catch (err: any) {
-                          toast({ title: "Erro ao vincular", description: String(err?.message ?? err), variant: "destructive" });
-                        }
-                      }}
-                    >
-                      {vincularChequePix.isPending ? <><Loader2 style={{ width: 16, height: 16, marginRight: 4 }} className="animate-spin" />Salvando…</> : <>✓ Confirmar vínculo</>}
-                    </Button>
-                  </div>
+                  <Button variant="ghost" style={{ alignSelf: "flex-end" }} onClick={closeDialog} disabled={busy}>Fechar</Button>
                 </div>
               </div>
             </>

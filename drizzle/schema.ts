@@ -7322,6 +7322,38 @@ export const financialCheques = pgTable("financial_cheques", {
   index("idx_chq_status").on(t.status),
 ]);
 
+// Rev. 3747 — VÍNCULO de cheque devolvido a pagamento(s) substituto(s) (PIX/TED).
+// Ancorado na LINHA DE DÉBITO do cheque no extrato (`debito_line_id` = bank_statement_lines.id),
+// id estável que funciona ATÉ em cheque SEM número. Suporta 1→N vínculos (baixa parcial do
+// cheque: ex. cheque 3.000 = pix 2.000 + pix 1.000), cada vínculo separado, estorno por vínculo.
+// REGRA DE OURO: NÃO cria/altera linha no extrato — só aponta uma linha que JÁ existe (qualquer
+// conta da empresa) e marca o cheque. Cobertura = SUM(valor WHERE estornado_em IS NULL); quando
+// cobre o valor do cheque, o par compensação+devolução é auto-desconsiderado do % da conciliação.
+// `tipo='ajuste'` (pix_line_id NULL) = "Quitar saldo" manual p/ sobra/arredondamento/divergência.
+export const bankChequeVinculos = pgTable("bank_cheque_vinculos", {
+  id: serial().notNull(),
+  companyId: integer("company_id").notNull(),
+  debitoLineId: integer("debito_line_id").notNull(),
+  creditoLineId: integer("credito_line_id"),
+  chequeNumero: varchar("cheque_numero", { length: 30 }),
+  tipo: text("tipo").default("pix").notNull(), // pix | ajuste
+  pixLineId: integer("pix_line_id"),
+  pixContaBancariaId: integer("pix_conta_bancaria_id"),
+  valor: numeric("valor", { precision: 15, scale: 2 }).notNull(),
+  data: date("data", { mode: "string" }),
+  descricao: text("descricao"),
+  estornadoEm: timestamp("estornado_em", { mode: "string" }),
+  estornadoPorId: integer("estornado_por_id"),
+  estornadoPorNome: varchar("estornado_por_nome", { length: 255 }),
+  criadoPorId: integer("criado_por_id"),
+  criadoPorNome: varchar("criado_por_nome", { length: 255 }),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  index("idx_bcv_company").on(t.companyId),
+  index("idx_bcv_debito").on(t.debitoLineId),
+  index("idx_bcv_pix").on(t.pixLineId),
+]);
+
 // ─── Controle de Cartão de Crédito (cadastro + faturas + itens) ───────────────
 // Mesma filosofia do Controle de Cheques: CADASTRO/CONTROLE, NÃO vira lançamento.
 // Faturas (PDF) lidas por IA; cada COMPRA recebe obra + centro de custo + categoria.

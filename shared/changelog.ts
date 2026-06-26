@@ -1,6 +1,58 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3747 — **CONCILIAÇÃO BANCÁRIA · CHEQUES DEVOLVIDOS — VÍNCULO PIX/TED REFORMULADO: (1) BOTÃO "VINCULAR PIX/TED" SEMPRE AO LADO DE "DESCONSIDERAR" (ANTES SUMIA QUANDO O CHEQUE NÃO TINHA NÚMERO/DOC); (2) VARREDURA AUTOMÁTICA CRUZANDO O CHEQUE DEVOLVIDO PENDENTE COM O EXTRATO DE TODAS AS CONTAS DA EMPRESA, CASANDO SÓ POR VALOR EXATO (SUGESTÕES P/ CONFERÊNCIA); (3) VÍNCULO PARCIAL 1 CHEQUE ↔ N PAGAMENTOS (EX.: R$3.000 = PIX R$2.000 + PIX R$1.000), CADA VÍNCULO SEPARADO, COM HISTÓRICO E ESTORNO POR VÍNCULO + "QUITAR SALDO" (AJUSTE) P/ DIVERGÊNCIA/ARREDONDAMENTO. SCHEMA ADITIVO (1 TABELA NOVA) · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
+ *
+ * REGRA DE OURO (pedido explícito do piloto FC): vincular NUNCA cria nem altera linha no extrato — o
+ * extrato bancário é a base imutável. O vínculo apenas MARCA o cheque devolvido e o tira do cálculo do
+ * % de conciliação (auto-desconsidera o par débito+crédito quando a cobertura fecha). Conciliação segue
+ * SÓ SUGESTIVA: nada vincula/desconsidera sem confirmação explícita do usuário.
+ *
+ * Contexto: cheques devolvidos costumam ser repagos depois por PIX/TED (mesma conta ou outra). Antes,
+ * o botão de vincular só aparecia quando o cheque tinha número/doc, e o vínculo era 1:1 com gravação no
+ * Controle de Cheques (financial_cheques). Faltava: (a) vincular cheques sem número; (b) achar o PIX/TED
+ * substituto em QUALQUER conta da empresa; (c) repagamento parcelado (vários PIX para um cheque).
+ *
+ * ARQUITETURA — tabela aditiva `bank_cheque_vinculos` ANCORADA NA LINHA DE DÉBITO do cheque no extrato
+ * (`debito_line_id`, id estável; funciona mesmo sem número). Colunas: id, company_id, debito_line_id,
+ * credito_line_id, cheque_numero, tipo('pix'|'ajuste'), pix_line_id (NULL p/ ajuste), pix_conta_bancaria_id,
+ * valor, data, descricao, estornado_em/por_id/por_nome, criado_por_id/nome, created_at. Índices em
+ * company_id, debito_line_id, pix_line_id. Cobertura = SUM(valor WHERE estornado_em IS NULL) por
+ * debito_line_id; QUITADO quando cobertura_cents >= cheque_cents − 1 (tolerância de 1 centavo).
+ *
+ * BACKEND (`server/routers/financial.ts`, 4 endpoints novos, todos com guard de empresa
+ * `_assertFinanceiroCompanyAccess`):
+ *  • `registrarVinculoChequeDevolvido` — valida o débito (valor<0, empresa) e, p/ tipo 'pix', a linha do
+ *    PIX/TED (empresa, valor<0, ≠ a própria linha do cheque, não re-vincular o mesmo pix ao mesmo cheque);
+ *    guard de saldo (acumulado + novo ≤ valor do cheque + 1¢); insere o vínculo; se a cobertura fecha,
+ *    AUTO-desconsidera o par (debito+credito) com marca `desconsiderado_por_nome='Vínculo PIX/TED
+ *    (automático)'` e, havendo número, marca `financial_cheques.status='compensado_pix'`. Retorna
+ *    {acumulado, saldo, quitado}.
+ *  • `estornarVinculoChequeDevolvido` — soft-estorno (estornado_em) + recalc; se o cheque deixar de estar
+ *    coberto, RECONSIDERA de volta SÓ as linhas marcadas pelo automático (preserva um "Desconsiderar"
+ *    manual feito por uma pessoa).
+ *  • `getChequeDevolvidoVinculacao` — em LOTE (até 300 cheques): por debito_line_id retorna {vínculos
+ *    ativos +join da linha do pix + apelido da conta, acumulado, saldo, quitado, sugestões}. Sugestões =
+ *    PIX/TED/transf de débito com VALOR EXATAMENTE IGUAL em TODAS as contas da empresa, excluindo a própria
+ *    linha e os pix já vinculados a este cheque, com flag `jaVinculado` (usado em outro cheque).
+ *  • `searchPixTedGlobal` — busca manual de PIX/TED/transf (débitos) em TODAS as contas numa janela de
+ *    datas (default −3/+12 meses do débito), ordenada por proximidade ao valor do cheque, p/ casamento de
+ *    valor DIVERGENTE (parcial/manual). Reaproveita o helper `dbExecute` (liga params por ordem de
+ *    aparição dos $N; dataRef passada 2× com $N distintos).
+ *
+ * FRONTEND (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`): o botão "Vincular PIX/TED" passou a
+ * aparecer SEMPRE ao lado de "Desconsiderar" (removido o gate por número/doc). O card de cheque devolvido
+ * ganhou badge de cobertura (Parcial / Quitado por substituição) e dica de sugestão exata, alimentados por
+ * uma query em lote do `getChequeDevolvidoVinculacao` (vincMap, invalidada via `refreshAposVinculo`). O
+ * diálogo foi reescrito: barra de progresso total/vinculado/saldo, lista de vínculos registrados com
+ * estorno por linha, sugestões de valor exato (todas as contas), busca manual global, valor da parcela
+ * editável (botão "Usar saldo") e "Quitar saldo (ajuste)" p/ a sobra. Nenhuma ação grava no extrato.
+ *
+ * Self-heal: `bank_cheque_vinculos` criada no boot pelo bloco `[SyncSchema+]` (CREATE TABLE IF NOT EXISTS
+ * + índices), confirmada no Neon (17 colunas). Quirks respeitados: bank_statement_lines/financial_cheques
+ * snake_case; company_bank_accounts camelCase (`"companyId"`). Arquivos: `drizzle/schema.ts`,
+ * `server/_core/index.ts`, `server/routers/financial.ts`, `client/src/pages/financeiro/FinanceiroConciliacao.tsx`.
+ *
  * Rev. 3746 — **CONCILIAÇÃO BANCÁRIA · 2 BUGS APÓS VINCULAR CONTA NO RECEBIMENTO: (1) LANÇAMENTO RECEBIDO/BAIXADO COM CONTA INFORMADA CONTINUAVA EM "SEM CONTA BANCÁRIA DEFINIDA" — O ROLLUP DA BAIXA NÃO PROPAGAVA A CONTA PRO ENTRY; (2) "CONFIRMAR" NA CONCILIAÇÃO SEM-CONTA QUEBRAVA COM `42703 column "company_id" does not exist` (A COLUNA É `company_bank_accounts."companyId"`, camelCase). 100% BUGFIX · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Contexto: o piloto FC corrigiu 3 recebimentos (Projeto Sr. Julio R$24.370, Medição R$208.089,23,
