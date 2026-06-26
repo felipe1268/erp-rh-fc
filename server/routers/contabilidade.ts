@@ -89,7 +89,8 @@ export const contabilidadeRouter = router({
           `SELECT EXTRACT(MONTH FROM data_emissao)::int AS mes, COUNT(*) AS total
            FROM fiscal_notes
            WHERE company_id=$1 AND EXTRACT(YEAR FROM data_emissao)=$2
-             AND origem='sefaz_nfe'
+             AND (origem = 'sefaz_nfe' OR origem = 'xml_upload')
+             AND status != 'cancelada'
            GROUP BY 1`,
           [input.companyId, input.ano]
         ),

@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3725 — **CONTABILIDADE · 3 BUGFIXES: BADGE "NF-e RECEBIDAS" ZERO + IMPORT NFS-e SPED CHAVE 50 DÍGITOS + TOAST DE ERRO DETALHADO. 100% PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * (1) Badge "NF-e Recebidas" no painel mensal da Contabilidade mostrava 0 mesmo com notas presentes:
+ * query do calendário anual usava `origem='sefaz_nfe'` apenas, enquanto `getDocumentosMes` incluía
+ * `OR origem='xml_upload'`. Fix: alinhar os dois filtros → `(origem='sefaz_nfe' OR origem='xml_upload') AND status!='cancelada'`.
+ * (2) Import XML NFS-e Nacional SPED (Portal sped.fazenda.gov.br): chave de acesso tem 50 dígitos
+ * (não 44 como NF-e de produtos). Check `!== 44` rejeitava TODAS as NFS-e SPED → fix: `< 15`.
+ * Adicionado suporte a wrappers `nfseProc` e `compNfse`. Arquivo: `server/routers/sefaz.ts`, `contabilidade.ts`.
+ * (3) Toast de erro de import XML agora exibe o texto do primeiro erro (não só contagem).
+ *
  * Rev. 3724 — **NF-e RECEBIDAS · VISUALIZADOR DANFE EMBUTIDO — BOTÃO "VER DANFE" NO DIALOG DA NF-e. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Nova rota GET `/api/fiscal-notes/:id/danfe` gera HTML estilo DANFE server-side a partir do
