@@ -147,7 +147,8 @@ export function registerContabilidadeXlsxRoute(app: Express) {
         const contaDesc = [conta.conta_desc, conta.agencia, conta.conta].filter(Boolean).join(" · ");
 
         // ── Linhas do mês para esta conta ──────────────────────────────────
-        // fn1 = NF vinculada diretamente ao line (stmt_line_id); fn2 = NF vinculada ao lançamento
+        // fn1 = NF vinculada diretamente ao line (stmt_line_id)
+        // Fallback: fe.nota_fiscal_numero (campo texto em financial_entries)
         const linesQ = await db.$client.query(
           `SELECT
               bsl.data,
@@ -156,13 +157,11 @@ export function registerContabilidadeXlsxRoute(app: Express) {
               bsl.entry_id,
               fe.fornecedor_nome,
               fe.descricao      AS entry_desc,
-              COALESCE(fn1.numero_nf, fn2.numero_nf, '')                                            AS numero_nf,
-              COALESCE(fn1.emitente_cnpj, fn1.tomador_cnpj,
-                       fn2.emitente_cnpj, fn2.tomador_cnpj, '')                                    AS fornecedor_cnpj
+              COALESCE(fn1.numero_nf, fe.nota_fiscal_numero, '')  AS numero_nf,
+              COALESCE(fn1.emitente_cnpj, fn1.tomador_cnpj, '')   AS fornecedor_cnpj
              FROM bank_statement_lines bsl
              LEFT JOIN financial_entries fe  ON fe.id = bsl.entry_id
              LEFT JOIN fiscal_notes fn1      ON fn1.stmt_line_id = bsl.id
-             LEFT JOIN fiscal_notes fn2      ON fn2.id = fe.fiscal_note_id
             WHERE bsl.company_id = $1
               AND bsl.conta_bancaria_id = $2
               AND bsl.excluido_em IS NULL

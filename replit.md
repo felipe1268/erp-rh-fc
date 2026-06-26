@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3726** — **PLANILHA CONTADOR · BUGFIX "column fe.fiscal_note_id does not exist" — BOTÃO "PLANILHA CONTADOR" RETORNAVA ERRO. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** `fe.fiscal_note_id` não existe em `financial_entries`. Fix: remove JOIN fn2; usa `COALESCE(fn1.numero_nf, fe.nota_fiscal_numero)`. Arquivo: `downloadContabilidadeXlsx.ts`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3725** — **CONTABILIDADE · 3 BUGFIXES: BADGE NF-e RECEBIDAS ZERO + IMPORT NFS-e SPED CHAVE 50 DÍGITOS + TOAST ERRO DETALHADO. PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** (1) Badge "NF-e Recebidas" no painel mensal mostrava 0 mesmo com notas presentes: query do calendário usava `origem='sefaz_nfe'` apenas; `getDocumentosMes` usava `OR origem='xml_upload'`. Fix: alinhar filtros em `contabilidade.ts`. (2) Import XML NFS-e Nacional SPED: chave tem 50 dígitos (não 44). Check `!==44` rejeitava todas → fix: `<15`. Suporte a wrappers `nfseProc`/`compNfse`. (3) Toast exibe texto do primeiro erro. Arquivos: `contabilidade.ts`, `sefaz.ts`, `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3724** — **NF-e RECEBIDAS · VISUALIZADOR DANFE EMBUTIDO — BOTÃO "VER DANFE" NO DIALOG. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Rota `GET /api/fiscal-notes/:id/danfe` gera HTML DANFE server-side do `xml_payload` (emitente/dest/itens/impostos/protocolo); fallback sem XML. Dialog 5xl com iframe. Botão "Ver DANFE" (azul) + "Abrir em nova aba / Imprimir". Arquivo: `server/routers/danfeRoute.ts` + `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
