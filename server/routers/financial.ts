@@ -7005,6 +7005,7 @@ export const financialRouter = router({
               e.comprovante_beneficiario AS "comprovanteBeneficiario",
               e.comprovante_documento AS "comprovanteDocumento",
               e.comprovante_txid AS "comprovanteTxid",
+              e.cheque_numero AS "chequeNumero",
               e.forma_pagamento AS "formaPagamento"
        FROM financial_entries e
        WHERE ${entConds.join(" AND ")}`,
@@ -7043,6 +7044,22 @@ export const financialRouter = router({
     const extrairDocCheque = (descricao: any): string | null => {
       const m = String(descricao ?? "").match(/\bdoc(?:umento)?\.?\s*0*(\d{1,12})/i);
       if (m && m[1]) return m[1].replace(/^0+/, "") || m[1];
+      return null;
+    };
+    // Rev. 3748 — nº do cheque vindo dos CAMPOS ESTRUTURADOS do lançamento (não só da descrição).
+    // Sem isto, a trava "lnNum !== eNum ⇒ não é o mesmo cheque" não dispara quando o número
+    // mora em cheque_numero/comprovante_documento (e não no texto) → cheques de MESMO valor/data
+    // (ex.: JEFCAR 902 × 903, ambos R$2.050 em 06/01) cruzam errado.
+    const normNumDigits = (v: any): string | null => {
+      const d = String(v ?? "").replace(/[^0-9]/g, "");
+      if (!d) return null;
+      return d.replace(/^0+/, "") || d;
+    };
+    const extrairNumEstruturado = (e: any): string | null => {
+      const c = normNumDigits(e.chequeNumero); // campo dedicado: sempre vale como nº de cheque
+      if (c) return c;
+      const doc = normNumDigits(e.comprovanteDocumento); // só curto: longo = CNPJ/CPF (usado em matchId)
+      if (doc && doc.length <= 8) return doc;
       return null;
     };
     const identificarCheque = (ln: any): { numero: string; fornecedor: string } | null => {
@@ -7122,7 +7139,7 @@ export const financialRouter = router({
           // Rev. 3736 — casa pelo NÚMERO do cheque/doc quando ambos os lados o expõem:
           // números explícitos DIFERENTES ⇒ NÃO é o mesmo cheque (evita "903 = 902");
           // mesmo número ⇒ casamento forte (autoritativo, ignora distância de data).
-          const eNum = extrairNumCheque(String(e.descricao ?? "")) ?? extrairDocCheque(String(e.descricao ?? ""));
+          const eNum = extrairNumCheque(String(e.descricao ?? "")) ?? extrairDocCheque(String(e.descricao ?? "")) ?? extrairNumEstruturado(e);
           if (lnNum && eNum) {
             if (lnNum !== eNum) continue;
             via = via ?? "cheque";

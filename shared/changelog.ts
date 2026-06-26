@@ -1,6 +1,27 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3748 — **CONCILIAÇÃO BANCÁRIA · SUGESTÃO DE CHEQUE CRUZAVA O CHEQUE ERRADO QUANDO HÁ DOIS DO MESMO FORNECEDOR/VALOR/DATA (EX.: JEFCAR Nº 902 × 903, AMBOS R$2.050 EM 06/01): A LINHA DO 903 NO EXTRATO ERA CASADA COM O LANÇAMENTO DO 902. AGORA A TRAVA "NÚMERO DIFERENTE ⇒ NÃO É O MESMO CHEQUE" TAMBÉM LÊ O Nº ESTRUTURADO DO LANÇAMENTO (`cheque_numero`/`comprovante_documento`), NÃO SÓ O TEXTO DA DESCRIÇÃO. 100% BUGFIX · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Causa-raiz: em `getConciliacaoSugestoes` (server/routers/financial.ts), para lançamentos com forma de
+ * pagamento cheque/boleto, o motor já tinha a trava `lnNum !== eNum ⇒ continue` (descartar o par quando os
+ * números de cheque divergem, justamente p/ evitar "903 = 902"). Mas o número do LANÇAMENTO (`eNum`) era
+ * extraído SÓ do texto da descrição (`extrairNumCheque`/`extrairDocCheque` sobre `e.descricao`). Quando o
+ * lançamento guarda o número no campo ESTRUTURADO (`cheque_numero`) e/ou em `comprovante_documento`
+ * ("Doc 000902") — e não no texto — `eNum` ficava `null`, a trava `if (lnNum && eNum)` não disparava, e o
+ * lançamento entrava como candidato de QUALQUER linha de mesmo valor/data. Com 902 e 903 idênticos em valor
+ * (R$2.050) e data (06/01), a linha do 903 ficava AMBÍGUA (≥2 candidatos → `scoreConfianca`=55%) e o greedy
+ * escolhia o lançamento errado (902).
+ *
+ * Fix: a SELECT de `financial_entries` passou a trazer `cheque_numero AS "chequeNumero"` (além do
+ * `comprovante_documento` já existente). Novo helper `extrairNumEstruturado(e)` usado como fallback de `eNum`
+ * dentro do gate de cheque/boleto: prioriza `cheque_numero` (campo dedicado, qualquer tamanho) e, se vazio,
+ * aceita `comprovante_documento` SOMENTE quando curto (≤8 dígitos) — números longos são CNPJ/CPF (usados em
+ * `matchId` p/ PIX) e casariam errado. Normalização via `normNumDigits` (só dígitos, sem zeros à esquerda).
+ * Efeito: a linha do 903 deixa de casar com o lançamento do 902 (903≠902 ⇒ descartado) e fica livre p/ casar
+ * com o lançamento de número 903; pares de mesmo número viram casamento forte ("cheque", autoritativo).
+ * Conciliação segue SÓ SUGESTIVA — nada concilia sem confirmação. Arquivo: `server/routers/financial.ts`.
+ *
  * Rev. 3747 — **CONCILIAÇÃO BANCÁRIA · CHEQUES DEVOLVIDOS — VÍNCULO PIX/TED REFORMULADO: (1) BOTÃO "VINCULAR PIX/TED" SEMPRE AO LADO DE "DESCONSIDERAR" (ANTES SUMIA QUANDO O CHEQUE NÃO TINHA NÚMERO/DOC); (2) VARREDURA AUTOMÁTICA CRUZANDO O CHEQUE DEVOLVIDO PENDENTE COM O EXTRATO DE TODAS AS CONTAS DA EMPRESA, CASANDO SÓ POR VALOR EXATO (SUGESTÕES P/ CONFERÊNCIA); (3) VÍNCULO PARCIAL 1 CHEQUE ↔ N PAGAMENTOS (EX.: R$3.000 = PIX R$2.000 + PIX R$1.000), CADA VÍNCULO SEPARADO, COM HISTÓRICO E ESTORNO POR VÍNCULO + "QUITAR SALDO" (AJUSTE) P/ DIVERGÊNCIA/ARREDONDAMENTO. SCHEMA ADITIVO (1 TABELA NOVA) · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
  *
  * REGRA DE OURO (pedido explícito do piloto FC): vincular NUNCA cria nem altera linha no extrato — o
