@@ -589,14 +589,14 @@ export default function DashNotasFiscais() {
 
           <div className="grid grid-cols-3 gap-6 mb-5">
             <RingGauge pct={resumo?.coberturaNfseReceita ?? null} color={GREEN}  label="Receita c/ NFS-e"  sub="entradas bancárias" />
-            <RingGauge pct={resumo?.coberturaOcNfe       ?? null} color={BLUE}   label="OC c/ NF-e"        sub="ordens de compra" />
-            <RingGauge pct={resumo?.coberturaSaidaNfe    ?? null} color={VIOLET} label="Saída c/ nota"     sub="débitos bancários" />
+            <RingGauge pct={resumo?.coberturaOcNfe       ?? null} color={AMBER}  label="OC c/ NF-e"        sub="ordens de compra" />
+            <RingGauge pct={resumo?.coberturaSaidaNfe    ?? null} color={RED}    label="Saída c/ nota"     sub="débitos bancários" />
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-4 border-t border-slate-100">
             {[
-              { label: "NFS-e Emitidas",   val: resumo?.nfseEmitidas,       color: "text-violet-600"  },
-              { label: "NF-e Recebidas",   val: resumo?.nfeRecebidas,       color: "text-blue-600"    },
+              { label: "NFS-e Emitidas",   val: resumo?.nfseEmitidas,       color: "text-emerald-600" },
+              { label: "NF-e Recebidas",   val: resumo?.nfeRecebidas,       color: "text-rose-600"    },
               { label: "OCs (Compras)",    val: resumo?.totalOcs,           color: "text-amber-600"   },
               { label: "Entradas Banco",   val: resumo?.entradasBancarias,  color: "text-emerald-600" },
               { label: "Saídas Banco",     val: resumo?.saidasBancarias,    color: "text-rose-600"    },
@@ -632,12 +632,12 @@ export default function DashNotasFiscais() {
                 </div>
                 <div className="flex gap-6 shrink-0">
                   <div className="text-right">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-violet-400">Entradas</p>
-                    <p className="text-lg font-black text-violet-700 tabular-nums">{formatBRL(totalEnt)}</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">Entradas</p>
+                    <p className="text-lg font-black text-emerald-700 tabular-nums">{formatBRL(totalEnt)}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-blue-400">Saídas</p>
-                    <p className="text-lg font-black text-blue-700 tabular-nums">{formatBRL(totalSai)}</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-red-400">Saídas</p>
+                    <p className="text-lg font-black text-red-700 tabular-nums">{formatBRL(totalSai)}</p>
                   </div>
                   <div className="text-right border-l border-slate-100 pl-6">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Desvio</p>
@@ -678,8 +678,8 @@ export default function DashNotasFiscais() {
                           );
                         }} />
                         <Legend wrapperStyle={{ fontSize: 11, paddingTop: 6 }} />
-                        <Bar    yAxisId="val"    dataKey="Saídas (NF-e)"   fill={BLUE}   radius={[4,4,0,0]} maxBarSize={24} />
-                        <Bar    yAxisId="val"    dataKey="Entradas (NFS-e)" fill={VIOLET} radius={[4,4,0,0]} maxBarSize={24} />
+                        <Bar    yAxisId="val"    dataKey="Saídas (NF-e)"   fill={RED}   radius={[4,4,0,0]} maxBarSize={24} />
+                        <Bar    yAxisId="val"    dataKey="Entradas (NFS-e)" fill={GREEN} radius={[4,4,0,0]} maxBarSize={24} />
                         <Area   yAxisId="desvio" dataKey="Desvio" fill="url(#gradDesvio)" stroke="#10b981" strokeWidth={2.5}
                           dot={{ r: 3, fill: "#10b981", strokeWidth: 0 }} activeDot={{ r: 5 }}
                           strokeDasharray={totalSai === 0 ? "5 3" : undefined} />
@@ -713,12 +713,12 @@ export default function DashNotasFiscais() {
                 <ComposedChart data={composedDataMes} margin={{ top: 6, right: 16, bottom: 4, left: 8 }}>
                   <defs>
                     <linearGradient id="gradSai" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor={AMBER}  stopOpacity={0.25} />
-                      <stop offset="95%" stopColor={AMBER}  stopOpacity={0.02} />
+                      <stop offset="5%"  stopColor={RED}   stopOpacity={0.25} />
+                      <stop offset="95%" stopColor={RED}   stopOpacity={0.02} />
                     </linearGradient>
                     <linearGradient id="gradEnt" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor={GREEN}  stopOpacity={0.20} />
-                      <stop offset="95%" stopColor={GREEN}  stopOpacity={0.02} />
+                      <stop offset="5%"  stopColor={GREEN} stopOpacity={0.20} />
+                      <stop offset="95%" stopColor={GREEN} stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
@@ -726,10 +726,10 @@ export default function DashNotasFiscais() {
                   <YAxis tickFormatter={formatBRLCompact} tick={{ fontSize: 10, fill: "#94a3b8" }} width={68} axisLine={false} tickLine={false} />
                   <Tooltip content={<MultiTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-                  <Area dataKey="Saídas Banco"   fill="url(#gradSai)" stroke={AMBER}  strokeWidth={1.5} dot={false} activeDot={{ r: 4 }} />
-                  <Area dataKey="Entradas Banco" fill="url(#gradEnt)" stroke={GREEN}  strokeWidth={1.5} strokeDasharray="4 3" dot={false} activeDot={{ r: 4 }} />
-                  <Bar  dataKey="NF-e Recebidas" fill={BLUE}   radius={[4,4,0,0]} maxBarSize={20} />
-                  <Bar  dataKey="NFS-e Emitidas" fill={VIOLET} radius={[4,4,0,0]} maxBarSize={20} />
+                  <Area dataKey="Saídas Banco"   fill="url(#gradSai)" stroke={RED}   strokeWidth={1.5} dot={false} activeDot={{ r: 4 }} />
+                  <Area dataKey="Entradas Banco" fill="url(#gradEnt)" stroke={GREEN} strokeWidth={1.5} strokeDasharray="4 3" dot={false} activeDot={{ r: 4 }} />
+                  <Bar  dataKey="NF-e Recebidas" fill={RED}   radius={[4,4,0,0]} maxBarSize={20} />
+                  <Bar  dataKey="NFS-e Emitidas" fill={GREEN} radius={[4,4,0,0]} maxBarSize={20} />
                   <ReferenceLine y={0} stroke="#e2e8f0" />
                 </ComposedChart>
               </ResponsiveContainer>

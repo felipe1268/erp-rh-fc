@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3727 — **FINANCEIRO · PADRONIZAÇÃO DE CORES — ENTRADA=VERDE, SAÍDA=VERMELHO EM TODOS OS GRÁFICOS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Regra aplicada a todos os gráficos financeiros: entrada (receita) = verde (#10b981/#22c55e),
+ * saída (custo/despesa) = vermelho (#ef4444). Arquivos alterados:
+ * - `DashNotasFiscais.tsx`: barras "Saídas (NF-e)" BLUE→RED, "Entradas (NFS-e)" VIOLET→GREEN;
+ *   áreas "Saídas Banco" AMBER→RED; gradientes atualizados; KpiCard NFS-e Emitidas violet→emerald,
+ *   NF-e Recebidas blue→rose; legenda ENTRADAS violet→emerald, SAÍDAS blue→red;
+ *   RingGauge "Saída c/ nota" VIOLET→RED, "OC c/ NF-e" BLUE→AMBER.
+ * - `FinanceiroCronograma.tsx`: barra "Custo Previsto" orange→red.
+ * - `FinanceiroContasAReceber.tsx`: barra "previsto" light-blue→light-green.
+ * Já estavam corretos (inalterados): DashConciliacao, FinanceiroDashboard,
+ * FinanceiroAnaliseCFO, DashPagar, DashReceber.
+ *
  * Rev. 3726 — **PLANILHA CONTADOR · BUGFIX "column does not exist" — JOIN EM COLUNA INEXISTENTE EM financial_entries. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * `downloadContabilidadeXlsx.ts` (Rev. 3722) adicionou dois JOINs extras em `fiscal_notes`:

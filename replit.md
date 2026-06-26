@@ -50,23 +50,21 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3727** — **FINANCEIRO · PADRONIZAÇÃO DE CORES — ENTRADA=VERDE, SAÍDA=VERMELHO EM TODOS OS GRÁFICOS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Regra: entrada=verde (#10b981), saída=vermelho (#ef4444). DashNotasFiscais: barras NF-e Recebidas BLUE→RED, NFS-e Emitidas VIOLET→GREEN; áreas Saídas Banco AMBER→RED; KpiCards e legendas atualizados. FinanceiroCronograma: Custo Previsto orange→red. FinanceiroContasAReceber: barra previsto light-blue→light-green. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3726** — **PLANILHA CONTADOR · BUGFIX "column does not exist" — JOIN EM COLUNA INEXISTENTE EM financial_entries. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** `financial_entries` não tem FK p/ `fiscal_notes`. Fix: remove JOINs inválidos; mantém só `fn1 ON fn1.stmt_line_id = bsl.id`; `numero_nf = COALESCE(fn1.numero_nf, '')`. Arquivo: `downloadContabilidadeXlsx.ts`. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3725** — **CONTABILIDADE · 3 BUGFIXES: BADGE NF-e RECEBIDAS ZERO + IMPORT NFS-e SPED CHAVE 50 DÍGITOS + TOAST ERRO DETALHADO. PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** (1) Badge "NF-e Recebidas" no painel mensal mostrava 0 mesmo com notas presentes: query do calendário usava `origem='sefaz_nfe'` apenas; `getDocumentosMes` usava `OR origem='xml_upload'`. Fix: alinhar filtros em `contabilidade.ts`. (2) Import XML NFS-e Nacional SPED: chave tem 50 dígitos (não 44). Check `!==44` rejeitava todas → fix: `<15`. Suporte a wrappers `nfseProc`/`compNfse`. (3) Toast exibe texto do primeiro erro. Arquivos: `contabilidade.ts`, `sefaz.ts`, `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3724** — **NF-e RECEBIDAS · VISUALIZADOR DANFE EMBUTIDO — BOTÃO "VER DANFE" NO DIALOG. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Rota `GET /api/fiscal-notes/:id/danfe` gera HTML DANFE server-side do `xml_payload` (emitente/dest/itens/impostos/protocolo); fallback sem XML. Dialog 5xl com iframe. Botão "Ver DANFE" (azul) + "Abrir em nova aba / Imprimir". Arquivo: `server/routers/danfeRoute.ts` + `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
-
 ### 5 one-liners
+
+- **Rev. 3725** — **CONTABILIDADE · 3 BUGFIXES: BADGE NF-e RECEBIDAS ZERO + IMPORT NFS-e SPED CHAVE 50 DÍGITOS + TOAST ERRO DETALHADO. PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3724** — **NF-e RECEBIDAS · VISUALIZADOR DANFE EMBUTIDO — BOTÃO "VER DANFE" NO DIALOG. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3723** — **CONTABILIDADE · TABELA EXTRATO — COLUNA "VALOR" → ENTRADA | SAÍDA | SALDO ACUMULADO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3722** — **PLANILHA CONTABILIDADE · BUGFIX DATA "Fri Jan 02" → "02/01/2026" + JOIN DUPLO NF. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3721** — **IMPORT XML · SUPORTE A NFS-e NACIONAL SPED (Portal Nacional sped.fazenda.gov.br). BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3720** — **INTEGRAÇÃO OMIE · IMPORTAÇÃO NF-e RECEBIDAS COM TOGGLE HABILITAR/DESABILITAR. BACKEND ADITIVO + SCHEMA + FRONTEND · ZERO ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3719** — **CONTABILIDADE · PAINEL DE DOCUMENTOS COM ABAS ANTES DO DOWNLOAD. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 ### Histórico completo
 

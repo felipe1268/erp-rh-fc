@@ -252,7 +252,7 @@ export default function FinanceiroCronograma() {
                     <Legend wrapperStyle={{ fontSize: 12 }} />
                     <ReferenceLine y={0} stroke="#e5e7eb" />
                     <Bar dataKey="Receita Prevista" fill="#22c55e" opacity={0.85} radius={[2, 2, 0, 0]} />
-                    <Bar dataKey="Custo Previsto" fill="#f97316" opacity={0.85} radius={[2, 2, 0, 0]} />
+                    <Bar dataKey="Custo Previsto" fill="#ef4444" opacity={0.85} radius={[2, 2, 0, 0]} />
                     <Line
                       type="monotone"
                       dataKey="Resultado"

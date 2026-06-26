@@ -615,7 +615,7 @@ export default function FinanceiroContasAReceber() {
                   contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }}
                 />
                 {chartSeries.previsto && (
-                  <Bar dataKey="previsto" name="previsto" fill="#bfdbfe" radius={[3,3,0,0]} maxBarSize={34} />
+                  <Bar dataKey="previsto" name="previsto" fill="#bbf7d0" radius={[3,3,0,0]} maxBarSize={34} />
                 )}
                 {chartSeries.recebido && (
                   <Bar dataKey="recebido" name="recebido" fill="#22c55e" radius={[3,3,0,0]} maxBarSize={34} />
