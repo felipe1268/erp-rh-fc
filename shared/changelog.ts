@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3730 — **PACOTE CONTADOR · XLSX EXTRATO BANCÁRIO — BUGFIX LINHAS VAZIAS: buildExtratoBancarioBuffer EXPORTADA DE downloadContabilidadeXlsx.ts (query EXTRACT/MONTH/YEAR, layout Pronus correto). BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Causa raiz das linhas vazias: `buildExtratoBancarioXlsx` no pacote usava `bsl.data >= $3 AND bsl.data < $4`
+ * (comparação de string) enquanto `downloadContabilidadeXlsx.ts` (que FUNCIONAVA) usa
+ * `EXTRACT(MONTH FROM bsl.data) = $3 AND EXTRACT(YEAR FROM bsl.data) = $4`.
+ * Solução estrutural: a lógica de geração de XLSX foi extraída como função exportada
+ * `buildExtratoBancarioBuffer(db, companyId, mes, ano, empresaLabel)` em `downloadContabilidadeXlsx.ts`,
+ * e o pacote agora importa e reutiliza essa função. Elimina código duplicado e garante paridade total
+ * entre o download avulso e o XLSX dentro do ZIP do pacote.
+ * Arquivos: `server/routers/downloadContabilidadeXlsx.ts`, `server/routers/downloadPacoteContador.ts`.
+ *
  * Rev. 3729 — **PACOTE CONTADOR · XLSX EXTRATO BANCÁRIO — LAYOUT PRONUS COMPLETO (CABEÇALHO ROXO, LINHAS LAVANDA, SALDO VERDE/VERMELHO). 100% FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Reescrita completa de `buildExtratoBancarioXlsx` em `downloadPacoteContador.ts` para replicar

@@ -177,6 +177,172 @@ function addCell(ws: XLSX.WorkSheet, addr: string, v: any, t: "s"|"n"|"b", s: an
   ws[addr] = { v, t, s } as XLSX.CellObject;
 }
 
+// ── Função exportável (usada também pelo Pacote Contador) ────────────────────
+
+export async function buildExtratoBancarioBuffer(
+  db: any,
+  companyId: number,
+  mes: number,
+  ano: number,
+  empresaLabel: string,
+): Promise<Buffer> {
+  const tituloEmpresa = empresaLabel.toUpperCase();
+
+  // Contas com extrato no mês
+  const contasQ = await db.$client.query(
+    `SELECT DISTINCT bsl.conta_bancaria_id,
+            cba.banco,
+            cba.apelido   AS conta_desc,
+            cba.agencia,
+            cba.conta
+       FROM bank_statement_lines bsl
+       LEFT JOIN company_bank_accounts cba ON cba.id = bsl.conta_bancaria_id
+      WHERE bsl.company_id = $1
+        AND bsl.excluido_em IS NULL
+        AND EXTRACT(MONTH FROM bsl.data) = $2
+        AND EXTRACT(YEAR  FROM bsl.data) = $3
+      ORDER BY bsl.conta_bancaria_id`,
+    [companyId, mes, ano]
+  );
+
+  // Saldos de abertura
+  let openingMap: Record<number, { saldo: number; data: string }> = {};
+  try {
+    const obQ = await db.$client.query(
+      `SELECT conta_bancaria_id, saldo, data FROM financial_opening_balances WHERE company_id = $1`,
+      [companyId]
+    );
+    for (const r of obQ.rows) {
+      openingMap[Number(r.conta_bancaria_id)] = {
+        saldo: parseFloat(r.saldo ?? "0"),
+        data : r.data ? fmtDate(r.data) : "",
+      };
+    }
+  } catch { /* tabela pode não existir */ }
+
+  const wb = XLSX.utils.book_new();
+
+  for (const conta of contasQ.rows) {
+    const contaId    = Number(conta.conta_bancaria_id);
+    const banco      = (conta.banco || "Banco").toUpperCase();
+    const contaDesc  = conta.conta_desc || conta.conta || "";
+    const bancoLabel = `BANCO ${banco}`;
+
+    const ob = openingMap[contaId] ?? { saldo: 0, data: "" };
+    const saldoInicial    = ob.saldo;
+    const dataSaldoAnt    = ob.data || lastDayOfPrevMonth(mes, ano);
+
+    // Linhas do extrato para esta conta
+    const linesQ = await db.$client.query(
+      `SELECT
+          bsl.data,
+          bsl.descricao,
+          bsl.valor::float  AS valor,
+          bsl.entry_id,
+          fe.fornecedor_nome,
+          fe.descricao      AS entry_desc,
+          COALESCE(fn1.numero_nf, '')                         AS numero_nf,
+          COALESCE(fn1.emitente_cnpj, fn1.tomador_cnpj, '')  AS fornecedor_cnpj
+         FROM bank_statement_lines bsl
+         LEFT JOIN financial_entries fe  ON fe.id = bsl.entry_id
+         LEFT JOIN fiscal_notes fn1      ON fn1.stmt_line_id = bsl.id
+        WHERE bsl.company_id = $1
+          AND bsl.conta_bancaria_id = $2
+          AND bsl.excluido_em IS NULL
+          AND EXTRACT(MONTH FROM bsl.data) = $3
+          AND EXTRACT(YEAR  FROM bsl.data) = $4
+        ORDER BY bsl.data, bsl.id`,
+      [companyId, contaId, mes, ano]
+    );
+
+    const lines = linesQ.rows;
+    const ws: XLSX.WorkSheet = {};
+
+    addCell(ws, "A2", tituloEmpresa, "s", sTitle());
+
+    for (const addr of ["B5","C5","D5","E5","F5","A6","B6","C6","D6","E6","F6"]) {
+      addCell(ws, addr, "", "s", sBankEmpty());
+    }
+    addCell(ws, "A5", bancoLabel, "s", sBank());
+
+    addCell(ws, "G5", "Data Saldo Anterior", "s", sInfoLabel());
+    addCell(ws, "H5", dataSaldoAnt,           "s", sInfoDate());
+    addCell(ws, "G6", "Saldo Anterior",        "s", sInfoLabel());
+    addCell(ws, "H6", saldoInicial,            "n", sInfoMoney());
+
+    const hdrs = ["Data","Histórico do Banco","Histórico Real",
+                  "Nº Nota Fiscal","Nº CNPJ","Entrada","Saída","Saldo"];
+    const cols = ["A","B","C","D","E","F","G","H"];
+    hdrs.forEach((h, i) => addCell(ws, `${cols[i]}8`, h, "s", sHeader()));
+
+    let saldo = saldoInicial;
+    lines.forEach((line, idx) => {
+      const row   = idx + 9;
+      const valor = parseFloat(String(line.valor)) || 0;
+      const ent   = valor > 0 ? valor : 0;
+      const sai   = valor < 0 ? Math.abs(valor) : 0;
+      saldo += valor;
+
+      const histReal = line.fornecedor_nome || line.entry_desc || "";
+      const nf       = String(line.numero_nf || "");
+      const cnpj     = line.fornecedor_cnpj ? fmtCnpj(line.fornecedor_cnpj) : "";
+      const sSign    = saldo >= 0 ? "positive" : "negative";
+
+      addCell(ws, `A${row}`, fmtDate(line.data), "s", sDate());
+      addCell(ws, `B${row}`, line.descricao || "", "s", sText());
+      addCell(ws, `C${row}`, histReal,             "s", sText());
+      addCell(ws, `D${row}`, nf,                   "s", sText());
+      addCell(ws, `E${row}`, cnpj,                 "s", sText());
+      addCell(ws, `F${row}`, ent,  "n", sMoney("neutral"));
+      addCell(ws, `G${row}`, sai,  "n", sMoney("neutral"));
+      addCell(ws, `H${row}`, saldo,"n", sMoney(sSign));
+    });
+
+    const totalRow = lines.length + 9;
+    let totEnt = 0, totSai = 0;
+    lines.forEach(l => {
+      const v = parseFloat(String(l.valor)) || 0;
+      if (v > 0) totEnt += v; else totSai += Math.abs(v);
+    });
+
+    addCell(ws, `A${totalRow}`, "TOTAL", "s", sTotal(false));
+    ["B","C","D","E"].forEach(c => addCell(ws, `${c}${totalRow}`, "", "s", sTotal(false)));
+    addCell(ws, `F${totalRow}`, totEnt, "n", sTotal(true));
+    addCell(ws, `G${totalRow}`, totSai, "n", sTotal(true));
+    addCell(ws, `H${totalRow}`, saldo,  "n", sTotal(true));
+
+    ws["!ref"] = `A1:H${totalRow}`;
+    ws["!merges"] = [
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 7 } },
+      { s: { r: 4, c: 0 }, e: { r: 5, c: 5 } },
+    ];
+    ws["!cols"] = [
+      { wch: 12 }, { wch: 44 }, { wch: 34 },
+      { wch: 18 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 16 },
+    ];
+    ws["!rows"] = new Array(8).fill(null);
+    ws["!rows"][0] = { hpt: 8  };
+    ws["!rows"][1] = { hpt: 32 };
+    ws["!rows"][2] = { hpt: 6  };
+    ws["!rows"][3] = { hpt: 6  };
+    ws["!rows"][4] = { hpt: 22 };
+    ws["!rows"][5] = { hpt: 22 };
+    ws["!rows"][6] = { hpt: 8  };
+    ws["!rows"][7] = { hpt: 28 };
+
+    XLSX.utils.book_append_sheet(wb, ws, sheetName(banco, contaDesc));
+  }
+
+  if (wb.SheetNames.length === 0) {
+    const ws: XLSX.WorkSheet = {};
+    addCell(ws, "A1", "Nenhum lançamento bancário no período.", "s", sText());
+    ws["!ref"] = "A1:A1";
+    XLSX.utils.book_append_sheet(wb, ws, "Sem dados");
+  }
+
+  return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+}
+
 // ── Rota principal ───────────────────────────────────────────────────────────
 
 export function registerContabilidadeXlsxRoute(app: Express) {
@@ -204,205 +370,9 @@ export function registerContabilidadeXlsxRoute(app: Express) {
       );
       const razao   = empQ.rows[0]?.razaoSocial || `Empresa ${companyId}`;
       const fantasia = empQ.rows[0]?.nomeFantasia;
-      // Para o título usa nome fantasia (mais curto) ou razão social
-      const tituloEmpresa = (fantasia || razao).toUpperCase();
+      const empresaLabel = (fantasia || razao).toUpperCase();
 
-      // Contas com extrato no mês
-      const contasQ = await db.$client.query(
-        `SELECT DISTINCT bsl.conta_bancaria_id,
-                cba.banco,
-                cba.apelido   AS conta_desc,
-                cba.agencia,
-                cba.conta
-           FROM bank_statement_lines bsl
-           LEFT JOIN company_bank_accounts cba ON cba.id = bsl.conta_bancaria_id
-          WHERE bsl.company_id = $1
-            AND bsl.excluido_em IS NULL
-            AND EXTRACT(MONTH FROM bsl.data) = $2
-            AND EXTRACT(YEAR  FROM bsl.data) = $3
-          ORDER BY bsl.conta_bancaria_id`,
-        [companyId, mes, ano]
-      );
-
-      if (contasQ.rows.length === 0) {
-        res.status(404).json({ error: `Nenhuma linha de extrato para ${MESES[mes-1]} ${ano}.` });
-        return;
-      }
-
-      // Saldos de abertura
-      let openingMap: Record<number, { saldo: number; data: string }> = {};
-      try {
-        const obQ = await db.$client.query(
-          `SELECT conta_bancaria_id, saldo, data FROM financial_opening_balances WHERE company_id = $1`,
-          [companyId]
-        );
-        for (const r of obQ.rows) {
-          openingMap[Number(r.conta_bancaria_id)] = {
-            saldo: parseFloat(r.saldo ?? "0"),
-            data : r.data ? fmtDate(r.data) : "",
-          };
-        }
-      } catch { /* tabela pode não existir */ }
-
-      const wb = XLSX.utils.book_new();
-
-      for (const conta of contasQ.rows) {
-        const contaId    = Number(conta.conta_bancaria_id);
-        const banco      = (conta.banco || "Banco").toUpperCase();
-        const contaDesc  = conta.conta_desc || conta.conta || "";
-        const bancoLabel = `BANCO ${banco}`;
-
-        const ob = openingMap[contaId] ?? { saldo: 0, data: "" };
-        const saldoInicial    = ob.saldo;
-        const dataSaldoAnt    = ob.data || lastDayOfPrevMonth(mes, ano);
-
-        // Linhas do extrato para esta conta
-        const linesQ = await db.$client.query(
-          `SELECT
-              bsl.data,
-              bsl.descricao,
-              bsl.valor::float  AS valor,
-              bsl.entry_id,
-              fe.fornecedor_nome,
-              fe.descricao      AS entry_desc,
-              COALESCE(fn1.numero_nf, '')                         AS numero_nf,
-              COALESCE(fn1.emitente_cnpj, fn1.tomador_cnpj, '')  AS fornecedor_cnpj
-             FROM bank_statement_lines bsl
-             LEFT JOIN financial_entries fe  ON fe.id = bsl.entry_id
-             LEFT JOIN fiscal_notes fn1      ON fn1.stmt_line_id = bsl.id
-            WHERE bsl.company_id = $1
-              AND bsl.conta_bancaria_id = $2
-              AND bsl.excluido_em IS NULL
-              AND EXTRACT(MONTH FROM bsl.data) = $3
-              AND EXTRACT(YEAR  FROM bsl.data) = $4
-            ORDER BY bsl.data, bsl.id`,
-          [companyId, contaId, mes, ano]
-        );
-
-        const lines = linesQ.rows;
-        const ws: XLSX.WorkSheet = {};
-
-        // ─────────────────────────────────────────────────────────────────
-        // Row 1  : em branco (espaçamento)
-        // ─────────────────────────────────────────────────────────────────
-
-        // ─────────────────────────────────────────────────────────────────
-        // Row 2  : título da empresa — A2:H2 merged
-        // ─────────────────────────────────────────────────────────────────
-        addCell(ws, "A2", tituloEmpresa, "s", sTitle());
-
-        // ─────────────────────────────────────────────────────────────────
-        // Row 3-4: em branco
-        // ─────────────────────────────────────────────────────────────────
-
-        // ─────────────────────────────────────────────────────────────────
-        // Row 5-6: box do banco (A5:F6) + info saldo (G5:H6)
-        // ─────────────────────────────────────────────────────────────────
-        // Célula-âncora da merge (A5) leva o valor e o estilo completo
-        addCell(ws, "A5", bancoLabel, "s", sBank());
-        // Demais células da merge precisam ter border para que o Excel
-        // exiba a borda ao redor do bloco inteiro
-        for (const addr of ["B5","C5","D5","E5","F5","A6","B6","C6","D6","E6","F6"]) {
-          addCell(ws, addr, "", "s", sBankEmpty());
-        }
-
-        addCell(ws, "G5", "Data Saldo Anterior", "s", sInfoLabel());
-        addCell(ws, "H5", dataSaldoAnt,           "s", sInfoDate());
-        addCell(ws, "G6", "Saldo Anterior",        "s", sInfoLabel());
-        addCell(ws, "H6", saldoInicial,            "n", sInfoMoney());
-
-        // ─────────────────────────────────────────────────────────────────
-        // Row 7  : em branco
-        // ─────────────────────────────────────────────────────────────────
-
-        // ─────────────────────────────────────────────────────────────────
-        // Row 8  : cabeçalhos
-        // ─────────────────────────────────────────────────────────────────
-        const hdrs = ["Data","Histórico do Banco","Histórico Real",
-                      "Nº Nota Fiscal","Nº CNPJ","Entrada","Saída","Saldo"];
-        const cols = ["A","B","C","D","E","F","G","H"];
-        hdrs.forEach((h, i) => addCell(ws, `${cols[i]}8`, h, "s", sHeader()));
-
-        // ─────────────────────────────────────────────────────────────────
-        // Row 9+ : linhas de transação
-        // ─────────────────────────────────────────────────────────────────
-        let saldo = saldoInicial;
-        lines.forEach((line, idx) => {
-          const row   = idx + 9;
-          const valor = parseFloat(String(line.valor)) || 0;
-          const ent   = valor > 0 ? valor : 0;
-          const sai   = valor < 0 ? Math.abs(valor) : 0;
-          saldo += valor;
-
-          const histReal = line.fornecedor_nome || line.entry_desc || "";
-          const nf       = String(line.numero_nf || "");
-          const cnpj     = line.fornecedor_cnpj ? fmtCnpj(line.fornecedor_cnpj) : "";
-          const sSign    = saldo >= 0 ? "positive" : "negative";
-
-          addCell(ws, `A${row}`, fmtDate(line.data), "s", sDate());
-          addCell(ws, `B${row}`, line.descricao || "", "s", sText());
-          addCell(ws, `C${row}`, histReal,             "s", sText());
-          addCell(ws, `D${row}`, nf,                   "s", sText());
-          addCell(ws, `E${row}`, cnpj,                 "s", sText());
-          addCell(ws, `F${row}`, ent,  "n", sMoney("neutral"));
-          addCell(ws, `G${row}`, sai,  "n", sMoney("neutral"));
-          addCell(ws, `H${row}`, saldo,"n", sMoney(sSign));
-        });
-
-        // ─────────────────────────────────────────────────────────────────
-        // Linha de totais
-        // ─────────────────────────────────────────────────────────────────
-        const totalRow = lines.length + 9;
-        let totEnt = 0, totSai = 0;
-        lines.forEach(l => {
-          const v = parseFloat(String(l.valor)) || 0;
-          if (v > 0) totEnt += v; else totSai += Math.abs(v);
-        });
-
-        addCell(ws, `A${totalRow}`, "TOTAL", "s", sTotal(false));
-        ["B","C","D","E"].forEach(c => addCell(ws, `${c}${totalRow}`, "", "s", sTotal(false)));
-        addCell(ws, `F${totalRow}`, totEnt, "n", sTotal(true));
-        addCell(ws, `G${totalRow}`, totSai, "n", sTotal(true));
-        addCell(ws, `H${totalRow}`, saldo,  "n", sTotal(true));
-
-        // ─────────────────────────────────────────────────────────────────
-        // Metadados da worksheet
-        // ─────────────────────────────────────────────────────────────────
-        ws["!ref"] = `A1:H${totalRow}`;
-
-        // Merges: row e col são 0-indexed
-        ws["!merges"] = [
-          { s: { r: 1, c: 0 }, e: { r: 1, c: 7 } },  // A2:H2  — título empresa
-          { s: { r: 4, c: 0 }, e: { r: 5, c: 5 } },  // A5:F6  — box banco
-        ];
-
-        ws["!cols"] = [
-          { wch: 12 },  // A  Data
-          { wch: 44 },  // B  Histórico Banco
-          { wch: 34 },  // C  Histórico Real
-          { wch: 18 },  // D  Nº NF
-          { wch: 20 },  // E  CNPJ
-          { wch: 15 },  // F  Entrada
-          { wch: 15 },  // G  Saída
-          { wch: 16 },  // H  Saldo
-        ];
-
-        // Alturas das linhas fixas (0-indexed)
-        ws["!rows"] = new Array(8).fill(null);
-        ws["!rows"][0] = { hpt: 8  };   // Row 1 — espaço
-        ws["!rows"][1] = { hpt: 32 };   // Row 2 — título
-        ws["!rows"][2] = { hpt: 6  };   // Row 3 — espaço
-        ws["!rows"][3] = { hpt: 6  };   // Row 4 — espaço
-        ws["!rows"][4] = { hpt: 22 };   // Row 5 — banco (top)
-        ws["!rows"][5] = { hpt: 22 };   // Row 6 — banco (bot)
-        ws["!rows"][6] = { hpt: 8  };   // Row 7 — espaço
-        ws["!rows"][7] = { hpt: 28 };   // Row 8 — cabeçalhos
-
-        const sn = sheetName(banco, contaDesc);
-        XLSX.utils.book_append_sheet(wb, ws, sn);
-      }
-
-      const buffer   = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+      const buffer   = await buildExtratoBancarioBuffer(db, companyId, mes, ano, empresaLabel);
       const mesLabel = MESES[mes - 1];
       const filename = `Contabilidade_${razao.replace(/[^a-zA-Z0-9]/g, "_")}_${mesLabel}_${ano}.xlsx`;
 

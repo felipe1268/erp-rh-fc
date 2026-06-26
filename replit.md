@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3730** — **PACOTE CONTADOR · XLSX EXTRATO BANCÁRIO — BUGFIX LINHAS VAZIAS: buildExtratoBancarioBuffer EXPORTADA DE downloadContabilidadeXlsx.ts (query EXTRACT/MONTH/YEAR, layout Pronus). BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Causa: query de range `bsl.data >= $3` não retornava linhas; fix: usa `EXTRACT(MONTH/YEAR)` como o download avulso (que funciona). Solução estrutural: função exportada, zero duplicação. Arquivos: `downloadContabilidadeXlsx.ts`, `downloadPacoteContador.ts`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3729** — **PACOTE CONTADOR · XLSX EXTRATO BANCÁRIO — LAYOUT PRONUS (CABEÇALHO ROXO #7030A0, LINHAS LAVANDA/BRANCO, SALDO VERDE/VERMELHO, "R$ -" PARA ZERO). BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Nome banco A2:E2 mesclado; G2:H3 = Data Saldo Anterior + data último mês + saldo; cabeçalho roxo branco bold; linhas alternadas #EDE7F6; Saldo: verde (#C6EFCE/#375623) positivo, vermelho (#FFC7CE/#9C0006) negativo; TOTAL A:E merge. Arquivo: `downloadPacoteContador.ts`. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3728** — **PACOTE CONTADOR · BUGFIX "Erro interno ao gerar pacote" — JOINs INVÁLIDOS EM financial_entries NO downloadPacoteContador.ts. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** `financial_entries` não tem `numero_nf`/`fornecedor_cnpj`. Fix: 2 queries; JOIN `fiscal_notes fn ON fn.stmt_line_id = bsl.id`. Detalhe: `shared/changelog.ts`.
-
 ### 5 one-liners
+
+- **Rev. 3728** — **PACOTE CONTADOR · BUGFIX "Erro interno ao gerar pacote" — JOINs INVÁLIDOS EM financial_entries NO downloadPacoteContador.ts. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3727** — **FINANCEIRO · PADRONIZAÇÃO DE CORES — ENTRADA=VERDE, SAÍDA=VERMELHO EM TODOS OS GRÁFICOS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
