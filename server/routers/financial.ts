@@ -7257,41 +7257,74 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
-    let conciliados = 0;
-    for (const p of input.pares) {
-      // 1) RESERVA ATÔMICA da linha do extrato — o guard COALESCE(conciliado,0)=0 no próprio
-      //    UPDATE garante UM ÚNICO VENCEDOR sob concorrência (sem transação/lock explícito):
-      //    dois pedidos simultâneos p/ a MESMA linha → só o 1º grava; o 2º recebe 0 linhas e pula.
-      const lnRes = await dbExecute(db,
-        `UPDATE bank_statement_lines SET conciliado=1, entry_id=$1
-          WHERE id=$2 AND company_id=$3 AND COALESCE(conciliado,0)=0 AND excluido_em IS NULL
-          RETURNING data`,
-        [p.entryId, p.statementLineId, input.companyId]);
-      const ln = rows(lnRes)[0] as any;
-      if (!ln) continue; // linha já conciliada por outra requisição/par
-      const dataPg = typeof ln.data === "string" ? ln.data.slice(0, 10) : new Date(ln.data).toISOString().slice(0, 10);
-      // 2) Baixa do lançamento (guard idêntico → vencedor único do lado do lançamento também).
-      const upd = await dbExecute(db,
-        `UPDATE financial_entries
-            SET conciliado=1, data_conciliacao=CURRENT_DATE,
-                status = CASE WHEN tipo='receita' THEN 'recebido' ELSE 'pago' END,
-                data_pagamento = COALESCE(data_pagamento, $1::date),
-                valor_realizado = COALESCE(valor_realizado, valor_previsto),
-                conciliado_em = NOW(), conciliado_por_id = $2, conciliado_por_nome = $3
-          WHERE id=$4 AND company_id=$5 AND COALESCE(conciliado,0)=0 AND status <> 'cancelado'
-          RETURNING id`,
-        [dataPg, ctx.user?.id ?? null, ctx.user?.name ?? null, p.entryId, input.companyId]);
-      if (rows(upd).length === 0) {
-        // 3) Lançamento já estava conciliado/cancelado (ou tomado por outro par) → DESFAZ a reserva
-        //    da linha p/ não deixar a linha conciliada apontando p/ um lançamento sem baixa.
-        await dbExecute(db,
-          `UPDATE bank_statement_lines SET conciliado=0, entry_id=NULL
-            WHERE id=$1 AND company_id=$2 AND entry_id=$3`,
-          [p.statementLineId, input.companyId, p.entryId]);
-        continue;
-      }
-      conciliados++;
-    }
+    // Rev. 3749 — ATÔMICO + 1 ROUND-TRIP. ANTES: loop com 2-3 round-trips POR PAR
+    // (reserva linha → baixa lançamento → undo). Com VÁRIOS cheques o handler levava
+    // ~1s+ até o 1º byte e a resposta às vezes se PERDIA no proxy do preview ("Failed to
+    // execute 'json' on 'Response': Unexpected end of JSON input"), DEIXANDO estado PARCIAL
+    // (parte já conciliada, mas a UI nunca recebia o sucesso). Agora UM ÚNICO statement
+    // set-based (CTE) concilia todos os pares elegíveis de uma vez: idempotente (pula o que
+    // já está conciliado/cancelado/excluído), tenant-safe, sem sucesso parcial percebido.
+    // Elegibilidade exige AMBOS os lados livres (linha do extrato + lançamento) → não deixa
+    // linha conciliada apontando p/ lançamento sem baixa (substitui o antigo undo). Usa
+    // db.$client.query (raw pg) porque dbExecute liga params por ORDEM DE APARIÇÃO e aqui o
+    // $1/$2/$3 reaparecem fora de ordem em relação ao VALUES.
+    // Dedup defensivo: descarta pares que repetem uma linha OU um lançamento já visto.
+    // Sem isso, um line_id/entry_id duplicado no payload faria o `UPDATE ... FROM elig`
+    // ter mais de uma linha-fonte para o mesmo alvo (Postgres escolhe fonte indefinida →
+    // linha conciliada sem baixa correspondente). A UI mapeia 1 linha→1 lançamento, então
+    // na prática isto é um no-op de segurança.
+    const seenLine = new Set<number>();
+    const seenEntry = new Set<number>();
+    const pares = input.pares.filter((p) => {
+      if (seenLine.has(p.statementLineId) || seenEntry.has(p.entryId)) return false;
+      seenLine.add(p.statementLineId);
+      seenEntry.add(p.entryId);
+      return true;
+    });
+    if (pares.length === 0) return { ok: true, conciliados: 0, total: input.pares.length };
+    const params: unknown[] = [input.companyId, ctx.user?.id ?? null, ctx.user?.name ?? null];
+    const valuesSql = pares
+      .map((_, i) => `($${4 + i * 2}::int,$${5 + i * 2}::int)`)
+      .join(",");
+    for (const p of pares) params.push(p.statementLineId, p.entryId);
+    // `FOR UPDATE OF l, e` em `elig` SERIALIZA conciliações concorrentes do mesmo par: dois
+    // requests simultâneos sobre a mesma linha/lançamento bloqueiam até o 1º commitar; o 2º
+    // reavalia o guard (COALESCE(conciliado,0)=0) contra a versão já commitada → fica de fora
+    // → nada de "linha conciliada apontando p/ lançamento já baixado". Como elig trava+confirma
+    // ambos os lados, upd_l e upd_e aplicam SEMPRE os 2 juntos (sem o antigo undo).
+    const sqlText = `
+      WITH pares(line_id, entry_id) AS (VALUES ${valuesSql}),
+      elig AS (
+        SELECT p.line_id, p.entry_id, l.data AS ldata
+          FROM pares p
+          JOIN bank_statement_lines l ON l.id = p.line_id AND l.company_id = $1
+           AND COALESCE(l.conciliado,0) = 0 AND l.excluido_em IS NULL
+          JOIN financial_entries e ON e.id = p.entry_id AND e.company_id = $1
+           AND COALESCE(e.conciliado,0) = 0 AND e.status <> 'cancelado'
+         FOR UPDATE OF l, e
+      ),
+      upd_l AS (
+        UPDATE bank_statement_lines l SET conciliado = 1, entry_id = el.entry_id
+          FROM elig el
+         WHERE l.id = el.line_id AND l.company_id = $1
+           AND COALESCE(l.conciliado,0) = 0 AND l.excluido_em IS NULL
+        RETURNING l.entry_id AS entry_id
+      ),
+      upd_e AS (
+        UPDATE financial_entries fe
+           SET conciliado = 1, data_conciliacao = CURRENT_DATE,
+               status = CASE WHEN fe.tipo='receita' THEN 'recebido' ELSE 'pago' END,
+               data_pagamento = COALESCE(fe.data_pagamento, el.ldata::date),
+               valor_realizado = COALESCE(fe.valor_realizado, fe.valor_previsto),
+               conciliado_em = NOW(), conciliado_por_id = $2, conciliado_por_nome = $3
+          FROM elig el
+         WHERE fe.id = el.entry_id AND fe.company_id = $1
+           AND COALESCE(fe.conciliado,0) = 0 AND fe.status <> 'cancelado'
+        RETURNING fe.id AS entry_id
+      )
+      SELECT (SELECT count(*)::int FROM upd_l ul JOIN upd_e ue ON ue.entry_id = ul.entry_id) AS conciliados`;
+    const r = await db.$client.query<{ conciliados: number }>(sqlText, params);
+    const conciliados = Number(r.rows?.[0]?.conciliados ?? 0);
     return { ok: true, conciliados, total: input.pares.length };
   }),
 

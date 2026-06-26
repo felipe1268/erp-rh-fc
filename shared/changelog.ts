@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3749 — **CONCILIAÇÃO BANCÁRIA · "CONCILIAR SELECIONADAS (N)" COM MAIS DE UM PAGAMENTO FALHAVA COM TOAST "ERRO AO CONCILIAR / Failed to execute 'json' on 'Response': Unexpected end of JSON input", APESAR DE O SERVIDOR TER PROCESSADO E GRAVADO (SUCESSO PARCIAL SILENCIOSO). CONCILIAR 1 FUNCIONAVA. CAUSA: O HANDLER FAZIA 2-3 ROUND-TRIPS AO BANCO POR PAR, EM SÉRIE, ANTES DE ENVIAR O 1º BYTE; COM VÁRIOS CHEQUES A JANELA DE CONEXÃO ABERTA CRESCIA E A RESPOSTA SE PERDIA NO PROXY DO PREVIEW. AGORA TUDO EM UM ÚNICO STATEMENT SET-BASED (CTE), ATÔMICO E IDEMPOTENTE. 100% BUGFIX · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Sintoma: na Conciliação Bancária, selecionar 3 cheques compensados (ex.: Doc 001052→PIX HELIO com override
+ * MANUAL, 000939→RVAN, 000837→RONALDO, empresa 60002) e clicar "Conciliar selecionadas (3)" dava o toast de erro
+ * acima. Conciliar 1 por vez funcionava.
+ *
+ * Diagnóstico (via consulta direta ao Neon): o lote DAS 23:25 conciliou de fato 939 e 837 no servidor (1052 foi
+ * corretamente pulado — o override apontava p/ um lançamento PIX não elegível), retornando `{ok:true,conciliados:2,
+ * total:3}` — ou seja, o backend COMPLETOU e gravou, mas o client recebeu corpo VAZIO (daí "Unexpected end of JSON
+ * input" ao chamar `res.json()`). Descartados: rate limiter (retorna JSON 429 válido), OOM (sem markers no log),
+ * erro tRPC (seria logado pelo `onError`), crash/restart (servidor rodou contínuo no horário), `new Date(ln.data)`
+ * (coluna `data` é tipo `date`, retorna Date UTC-meia-noite válido) e SQL malformado (os 3 UPDATEs do loop tinham
+ * `$N` distintos). O timing medido no Neon (~145ms/round-trip; ~1.3s p/ 3 cheques contra ~0.4s p/ 1) mostrou que a
+ * latência ESCALAVA com a contagem de cheques: o `conciliarSugestoes` original (`protectedProcedure`) iterava
+ * `input.pares` fazendo, POR PAR, (1) reserva atômica da linha do extrato, (2) baixa do lançamento, (3) undo da
+ * reserva caso o lançamento não fosse elegível — 2-3 round-trips sequenciais cada. Como o handler só envia a
+ * resposta DEPOIS de todos os awaits, quanto mais cheques, maior a janela até o 1º byte e maior a chance de a
+ * resposta ser descartada na camada de transporte/proxy do preview (o servidor segue gravando → estado parcial
+ * que a UI nunca "vê", pois nunca recebe o success → o item continua na lista). Multi já tinha funcionado às 19:55
+ * (≈12 lançamentos em rajada), confirmando que NÃO é bug determinístico de SQL, e sim a janela de resposta.
+ *
+ * Fix: `conciliarSugestoes` reescrito para UM ÚNICO statement set-based (CTE) executado via `db.$client.query`
+ * (raw pg — necessário porque o helper `dbExecute` liga params por ORDEM DE APARIÇÃO e aqui `$1/$2/$3` reaparecem
+ * fora de ordem em relação ao `VALUES`). Estrutura: `pares(VALUES ...)` → `elig` (só pares com AMBOS os lados
+ * livres: linha `COALESCE(conciliado,0)=0 AND excluido_em IS NULL` + lançamento `COALESCE(conciliado,0)=0 AND
+ * status<>'cancelado'`, tudo escopado por `company_id`) → `upd_l` (marca a linha do extrato) + `upd_e` (baixa o
+ * lançamento: `status` recebido/pago por `tipo`, `data_pagamento = COALESCE(data_pagamento, data_do_extrato::date)`,
+ * `valor_realizado`, `conciliado_em/por`) → `SELECT count` do INNER JOIN `upd_l ⋈ upd_e` por `entry_id`. A
+ * elegibilidade exigir AMBOS os lados livres substitui o antigo "reserva + undo" (não deixa linha conciliada
+ * apontando p/ lançamento sem baixa) e o statement único é atômico (sem sucesso parcial) e de 1 round-trip
+ * (~155ms independente da quantidade — validado no Neon em transação com ROLLBACK: par happy aplicado e par já
+ * conciliado pulado idempotentemente). Concorrência: `elig` usa `FOR UPDATE OF l, e` → dois requests simultâneos
+ * sobre o mesmo par bloqueiam até o 1º commitar e o 2º reavalia o guard contra a versão já commitada (fica de
+ * fora), serializando sem precisar do undo; além disso o payload é DEDUPLICADO por linha E por lançamento antes
+ * do SQL (evita múltipla linha-fonte no `UPDATE ... FROM`, que no Postgres escolheria fonte indefinida). Hardening:
+ * `company_id` repetido nos WHERE de `upd_l/upd_e`. Conciliação segue SÓ SUGESTIVA — nada concilia sem confirmação
+ * explícita. Arquivo: `server/routers/financial.ts`.
+ *
  * Rev. 3748 — **CONCILIAÇÃO BANCÁRIA · SUGESTÃO DE CHEQUE CRUZAVA O CHEQUE ERRADO QUANDO HÁ DOIS DO MESMO FORNECEDOR/VALOR/DATA (EX.: JEFCAR Nº 902 × 903, AMBOS R$2.050 EM 06/01): A LINHA DO 903 NO EXTRATO ERA CASADA COM O LANÇAMENTO DO 902. AGORA A TRAVA "NÚMERO DIFERENTE ⇒ NÃO É O MESMO CHEQUE" TAMBÉM LÊ O Nº ESTRUTURADO DO LANÇAMENTO (`cheque_numero`/`comprovante_documento`), NÃO SÓ O TEXTO DA DESCRIÇÃO. 100% BUGFIX · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Causa-raiz: em `getConciliacaoSugestoes` (server/routers/financial.ts), para lançamentos com forma de
