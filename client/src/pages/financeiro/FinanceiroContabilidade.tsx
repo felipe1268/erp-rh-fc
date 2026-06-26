@@ -281,26 +281,40 @@ function PainelMes({
                             <th className="text-left px-4 py-2 font-medium">Data</th>
                             <th className="text-left px-4 py-2 font-medium">Conta</th>
                             <th className="text-left px-4 py-2 font-medium">Descrição</th>
-                            <th className="text-right px-4 py-2 font-medium">Valor</th>
+                            <th className="text-right px-4 py-2 font-medium">Entrada</th>
+                            <th className="text-right px-4 py-2 font-medium">Saída</th>
+                            <th className="text-right px-4 py-2 font-medium">Saldo</th>
                             <th className="text-center px-4 py-2 font-medium">Conc.</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {docs.extrato.map((e: any, i: number) => (
-                            <tr key={i} className="border-b border-slate-50 hover:bg-slate-50">
-                              <td className="px-4 py-1.5 text-slate-500">{fmtDate(e.data)}</td>
-                              <td className="px-4 py-1.5 text-slate-500 max-w-[100px] truncate" title={e.conta_nome}>{e.conta_nome || e.banco || "—"}</td>
-                              <td className="px-4 py-1.5 text-slate-700 max-w-[200px] truncate" title={e.descricao}>{e.descricao || "—"}</td>
-                              <td className={cn("px-4 py-1.5 text-right font-medium",
-                                e.valor >= 0 ? "text-green-700" : "text-red-700"
-                              )}>
-                                {fmtBRL(Math.abs(e.valor))}{e.valor < 0 ? " D" : " C"}
-                              </td>
-                              <td className="px-4 py-1.5 text-center">
-                                {e.conciliado ? <span className="text-green-600">✓</span> : <span className="text-slate-300">–</span>}
-                              </td>
-                            </tr>
-                          ))}
+                          {(() => {
+                            let saldo = 0;
+                            return docs.extrato.map((e: any, i: number) => {
+                              saldo += e.valor ?? 0;
+                              const entrada = (e.valor ?? 0) > 0 ? e.valor : null;
+                              const saida   = (e.valor ?? 0) < 0 ? Math.abs(e.valor) : null;
+                              return (
+                                <tr key={i} className="border-b border-slate-50 hover:bg-slate-50">
+                                  <td className="px-4 py-1.5 text-slate-500">{fmtDate(e.data)}</td>
+                                  <td className="px-4 py-1.5 text-slate-500 max-w-[100px] truncate" title={e.conta_nome}>{e.conta_nome || e.banco || "—"}</td>
+                                  <td className="px-4 py-1.5 text-slate-700 max-w-[200px] truncate" title={e.descricao}>{e.descricao || "—"}</td>
+                                  <td className="px-4 py-1.5 text-right font-medium text-green-700 tabular-nums">
+                                    {entrada != null ? fmtBRL(entrada) : <span className="text-slate-200">—</span>}
+                                  </td>
+                                  <td className="px-4 py-1.5 text-right font-medium text-red-700 tabular-nums">
+                                    {saida != null ? fmtBRL(saida) : <span className="text-slate-200">—</span>}
+                                  </td>
+                                  <td className={cn("px-4 py-1.5 text-right font-semibold tabular-nums", saldo >= 0 ? "text-blue-700" : "text-orange-700")}>
+                                    {fmtBRL(saldo)}
+                                  </td>
+                                  <td className="px-4 py-1.5 text-center">
+                                    {e.conciliado ? <span className="text-green-600">✓</span> : <span className="text-slate-300">–</span>}
+                                  </td>
+                                </tr>
+                              );
+                            });
+                          })()}
                         </tbody>
                       </table>
                     </div>

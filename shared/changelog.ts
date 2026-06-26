@@ -1,6 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3723 — **CONTABILIDADE · TABELA EXTRATO — COLUNA "VALOR" → ENTRADA | SAÍDA | SALDO ACUMULADO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Tabela do Extrato Bancário em `FinanceiroContabilidade.tsx` exibia coluna única "Valor (C/D)".
+ * Fix: coluna dividida em 3 — "Entrada" (verde, valor > 0), "Saída" (vermelho, |valor| < 0),
+ * "Saldo" (azul/laranja = acumulado corrente linha a linha via IIFE com variável `saldo`).
+ * Linhas sem entrada exibem "—" (slate-200); linhas sem saída idem; saldo negativo fica laranja.
+ * Arquivo: `client/src/pages/financeiro/FinanceiroContabilidade.tsx`.
+ *
  * Rev. 3722 — **PLANILHA CONTABILIDADE · BUGFIX DATA "Fri Jan 02" → "02/01/2026" + JOIN DUPLO NF (stmt_line + entry). BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * `fmtDate` recebia objeto `Date` do pg (coluna DATE retorna como Date JS meia-noite UTC) e fazia
