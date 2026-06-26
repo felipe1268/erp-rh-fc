@@ -1308,15 +1308,12 @@ export const sefazRouter = router({
           if (nfseRoot) {
             const infNFSe = nfseRoot["infNFSe"] || nfseRoot["infNfse"] || {};
             const idAttrRaw = infNFSe?.["@_Id"] ?? infNFSe?.["Id"] ?? infNFSe?.["@_id"] ?? "";
-            console.log(`[SefazXmlImport] NFS-e detectada — infNFSe keys:`, Object.keys(infNFSe).slice(0, 12), "Id=", String(idAttrRaw).slice(0, 20));
+            // NFS-e SPED: Id = "NFS" + chave (44 dígitos NF-e OU 50 dígitos NFS-e Nacional)
             const idRaw = String(idAttrRaw).replace(/^NFS/i, "");
             const chave = idRaw.replace(/\D/g, "");
-            if (chave.length !== 44) {
-              // Tentar extrair chave de nNFSe + cLocEmi como fallback
-              const nNFSe  = String(infNFSe?.["nNFSe"]  || "").replace(/\D/g, "").padStart(15, "0");
-              const cLoc   = String(infNFSe?.["cLocEmi"] || infNFSe?.["cLocPrestacao"] || "0").replace(/\D/g, "").padStart(7, "0");
-              console.log(`[SefazXmlImport] chave inválida (len=${chave.length}), fallback cLoc=${cLoc} nNFSe=${nNFSe}`);
-              erros.push(`${file.name}: NFS-e — Id="${String(idAttrRaw).slice(0,20)}" chave=${chave.slice(0,20)}... (${chave.length} dígitos, esperado 44)`);
+            console.log(`[SefazXmlImport] NFS-e detectada — chave len=${chave.length} Id=${String(idAttrRaw).slice(0,25)}`);
+            if (chave.length < 15) {
+              erros.push(`${file.name}: NFS-e — chave de acesso inválida (Id="${String(idAttrRaw).slice(0,30)}", ${chave.length} dígitos)`);
               continue;
             }
             const existeNfse = (await db.execute(sql`
