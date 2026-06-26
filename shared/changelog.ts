@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3739 — **CONCILIAÇÃO · CAIXA INTERNO — FORNECEDOR DIGITADO MANUALMENTE (SEM CONFIRMAR NO DROPDOWN) AGORA SALVA. 100% FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Queixa do piloto FC: na Conciliação do Caixa Interno, o fornecedor lançado manualmente "não está
+ * salvando" — os lançamentos manuais apareciam na lista como "Lançamento #886094" / "#886113" (rótulo
+ * de fallback), sem o nome do fornecedor.
+ *
+ * Causa-raiz (perda de dado por exigir confirmação): o combobox de fornecedor (`LancCombo`) mantém DOIS
+ * estados — `lancFornDisplay` (texto visível) e `lancForm.fornecedorNome` (valor "confirmado"). O
+ * `fornecedorNome` só era preenchido quando o usuário CLICAVA num item do dropdown (cadastro). Se o
+ * fornecedor não existe no cadastro (ou o usuário só digitou e não clicou), `fornecedorNome` ficava
+ * vazio e, no save, `lancForm.fornecedorNome.trim() || undefined` mandava `undefined` → `fornecedor_nome`
+ * gravava NULL. Como a lista mostra `fornecedorNome || descricao || "Lançamento #id"`, sem fornecedor E
+ * sem descrição o lançamento virava "Lançamento #N". O mesmo padrão existia na edição do lançamento
+ * (detEdit), que CLEARAVA o fornecedor ao salvar uma edição sem reconfirmar o nome.
+ *
+ * Correção (Rev. 3739, 100% frontend): no save de CRIAÇÃO (`submitLancar` → `createEntry`) e de EDIÇÃO
+ * (`salvarEdicaoEntry` → `updateEntryClassificacao`), passa a usar o texto digitado como FALLBACK quando
+ * não há confirmação no dropdown: `lancForm.fornecedorNome.trim() || lancFornDisplay.trim()` (e o
+ * análogo `detEditForm.fornecedorNome.trim() || detEditFornDisplay.trim()` na edição). `fornecedor_nome`
+ * é coluna de TEXTO (sem FK p/ cadastro), então um nome livre é perfeitamente válido — confirmar no
+ * dropdown continua valendo só para LIGAR ao cadastro, não é mais pré-requisito p/ salvar o nome. Só
+ * limpa o fornecedor quando display E valor confirmado estão ambos vazios.
+ *
+ * Arquivo: `client/src/pages/financeiro/FinanceiroConciliacao.tsx`. Backend inalterado (`createEntry` e
+ * `updateEntryClassificacao` já gravavam `fornecedor_nome` corretamente). Detalhe aqui.
+ *
  * Rev. 3738 — **NF-e RECEBIDAS · SEFAZ — GATE DE COOLDOWN AGORA FICA ACIMA DO LIMITE DE 2h (FIM DO 656 INTERMITENTE POR CHAMADA "UNS SEGUNDOS CEDO DEMAIS"). BACKEND PONTUAL (1 LINHA + COMENTÁRIO) · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Continuação do diagnóstico da Rev. 3737. Com o reset de NSU no boot já removido (NSU passou a

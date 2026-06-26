@@ -736,7 +736,10 @@ export default function FinanceiroConciliacao() {
           obraId: obra?.id, obraNome: obra?.nome,
           contaId: cat?.id, contaNome: lancForm.contaNome.trim() || undefined,
           centroCustoId: cc?.id, centroCustoNome: cc?.nome,
-          fornecedorNome: lancForm.fornecedorNome.trim() || undefined,
+          // Rev. 3739 — salva o fornecedor mesmo SEM confirmar no dropdown: se o usuário só
+          // digitou um nome (não existe no cadastro / não clicou no item), usa o texto digitado
+          // (lancFornDisplay). fornecedor_nome é coluna de TEXTO (sem FK), então texto livre é válido.
+          fornecedorNome: (lancForm.fornecedorNome.trim() || lancFornDisplay.trim()) || undefined,
           descricao: descricao || undefined,
           formaPagamento: lancForm.formaPagamento || undefined,
         });
@@ -1918,7 +1921,9 @@ export default function FinanceiroConciliacao() {
       obraNome: detEditForm.obraNome || null,
       contaBancariaId: detEditForm.contaBancariaId,
       formaPagamento: detEditForm.formaPagamento || null,
-      fornecedorNome: detEditForm.fornecedorNome || null,
+      // Rev. 3739 — idem ao "Novo lançamento": preserva o fornecedor digitado mesmo sem
+      // confirmar no dropdown (fallback p/ detEditFornDisplay); só limpa se ambos vazios.
+      fornecedorNome: (detEditForm.fornecedorNome.trim() || detEditFornDisplay.trim()) || null,
       descricao: detEditForm.descricao || null,
       observacoes: detEditForm.observacoes || null,
       tipo: (detEditForm.tipo as any) || undefined,

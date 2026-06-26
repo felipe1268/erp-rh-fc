@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3739** — **CONCILIAÇÃO · CAIXA INTERNO — FORNECEDOR DIGITADO MANUALMENTE (SEM CONFIRMAR NO DROPDOWN) AGORA SALVA. 100% FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Lançamentos manuais do Caixa Interno apareciam como "Lançamento #N" sem o fornecedor. Causa: o form só gravava `fornecedorNome` quando o usuário CLICAVA num item do dropdown (`lancForm.fornecedorNome`); um nome só digitado (não cadastrado) ficava só no display (`lancFornDisplay`) e era descartado (`|| undefined`) → `fornecedor_nome` NULL → lista mostrava o fallback "Lançamento #id". Como `fornecedor_nome` é coluna de TEXTO (sem FK), texto livre é válido. Fix: no save de criação (`submitLancar`) e de edição (`salvarEdicaoEntry`) usa o texto digitado como FALLBACK quando não há confirmação — `lancForm.fornecedorNome.trim() || lancFornDisplay.trim()` (e o análogo no detEdit). Confirmar no dropdown segue valendo só p/ LIGAR ao cadastro. Arquivo: `client/src/pages/financeiro/FinanceiroConciliacao.tsx`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3738** — **NF-e RECEBIDAS · SEFAZ — GATE DE COOLDOWN AGORA FICA ACIMA DO LIMITE DE 2h (FIM DO 656 INTERMITENTE POR CHAMADA CEDO DEMAIS). BACKEND PONTUAL (1 LINHA + COMENTÁRIO) · ZERO SCHEMA/ALTER/DROP/DELETE.** Continuação da Rev. 3737: com o reset de boot removido (NSU já avançava 9627→9634), o Log AINDA mostrava Rate Limit em algumas rodadas. Causa: `cooldownMin = intervaloHoras*60 - 2` (118 min p/ 2h) + cron a cada 15 min podia disparar a chamada em ~1h58–2h00 (ABAIXO de 2h) → SEFAZ 656 (Consumo Indevido) → re-armava backoff (656 intermitente mesmo com NSU certo). A folga de -2 min empurrava a chamada para BAIXO do limite. Fix: `cooldownMin = intervaloHoras*60 + 3` → janela SEMPRE acima do intervalo (chamada efetiva ~2h03–2h15), espaçamento > 2h/CNPJ garantido. Gate de `executarSyncNFe` é autoridade única (cron/syncNow/backfill passam por ele). Arquivo: `server/routers/sefaz.ts`. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3737** — **NF-e RECEBIDAS · SEFAZ — FIM DO LOOP ETERNO DE RATE-LIMIT (cStat=656). REMOVIDO RESET DE NSU NO BOOT (Rev. 3596) QUE RE-ZERAVA O NSU BOM A CADA RESTART. BACKEND (1 BLOCO DE STARTUP REMOVIDO) · ZERO SCHEMA/ALTER/DROP/DELETE.** Sync "só dava erro": Log mostrava Rate Limit em quase toda rodada com NSU inicial=0; Neon confirmou `ultimo_nsu=0` + `last_sync_result=NULL`. Causa: bloco `[SyncSchema+]` da Rev. 3596 rodava a CADA boot zerando `ultimo_nsu` de toda empresa com `nsuSalvo!=null` E `importadas=0` — premissa OBSOLETA, pois esse é o estado CORRETO após `cStat=656` (a SEFAZ devolve o ultNSU de retomada e importadas=0 é normal). Resultado: NSU bom → reset p/ 0 no boot → SEFAZ 656 de novo → loop infinito. Fix: removido o bloco de reset (substituído por comentário); nada mais zera o NSU no boot; o `ultimo_nsu=0` atual se auto-corrige com segurança na próxima sync (656 traz o ponto de retomada, que agora persiste). Empresa-piloto teve `ultimo_nsu` ajustado p/ `MAX(fiscal_notes.nsu_sefaz)`=9627 (retomada segura). Arquivo: `server/_core/index.ts`. Detalhe: `shared/changelog.ts`.
-
 ### 5 one-liners
+
+- **Rev. 3737** — **NF-e RECEBIDAS · SEFAZ — FIM DO LOOP ETERNO DE RATE-LIMIT (cStat=656): REMOVIDO RESET DE NSU NO BOOT (Rev. 3596) QUE RE-ZERAVA O NSU BOM A CADA RESTART. BACKEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3736** — **CONCILIAÇÃO BANCÁRIA · SUGESTÃO — CHEQUES/BOLETOS AGORA BUSCAM LANÇAMENTOS DE OUTROS MESES + CASAMENTO PELO Nº DO CHEQUE. BACKEND READ-ONLY (`sugerirConciliacao`) · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3734** — **NF-e RECEBIDAS · CRONÔMETRO SEFAZ AGORA DISPARA A SYNC AO ZERAR (ANTES ERA SÓ VISUAL). 100% FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3733** — **PACOTE CONTADOR · XLSX EXTRATO (BANCÁRIO + CARTÃO) — IDENTIDADE VISUAL FC (AZUL-MARINHO + DOURADO) + LAYOUT DE APRESENTAÇÃO. 100% FORMATAÇÃO · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3732** — **PACOTE CONTADOR · EXTRATO CARTÃO DE CRÉDITO — XLSX PRONUS (UMA ABA/FATURA) COM DADOS REAIS DE financial_cartao_*. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 ### Histórico completo
 
