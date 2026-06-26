@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3724** — **NF-e RECEBIDAS · VISUALIZADOR DANFE EMBUTIDO — BOTÃO "VER DANFE" NO DIALOG. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.** Rota `GET /api/fiscal-notes/:id/danfe` gera HTML DANFE server-side do `xml_payload` (emitente/dest/itens/impostos/protocolo); fallback sem XML. Dialog 5xl com iframe. Botão "Ver DANFE" (azul) + "Abrir em nova aba / Imprimir". Arquivo: `server/routers/danfeRoute.ts` + `FinanceiroNotasFiscais.tsx`. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3723** — **CONTABILIDADE · TABELA EXTRATO — COLUNA "VALOR" → ENTRADA | SAÍDA | SALDO ACUMULADO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Coluna "Valor (C/D)" dividida em 3: "Entrada" (verde), "Saída" (vermelho), "Saldo" (azul/laranja acumulado por linha via IIFE). Arquivo: `FinanceiroContabilidade.tsx`. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3722** — **PLANILHA CONTABILIDADE · BUGFIX DATA "Fri Jan 02" → "02/01/2026" + JOIN DUPLO NF. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.** `fmtDate` recebia Date object do pg → `String(date).slice(0,10)` dava dia da semana. Fix: `instanceof Date` → UTC getters. Query: JOIN duplo em `fiscal_notes` (via `stmt_line_id` + via `fe.fiscal_note_id`). Arquivo: `downloadContabilidadeXlsx.ts`. Detalhe: `shared/changelog.ts`.

@@ -13,6 +13,7 @@ import { registerDownloadSSTRoute } from "../routers/downloadSST";
 import { registerDownloadOCRoute } from "../routers/downloadOC";
 import { registerPacoteContadorRoute } from "../routers/downloadPacoteContador";
 import { registerContabilidadeXlsxRoute } from "../routers/downloadContabilidadeXlsx";
+import { registerDanfeRoute } from "../routers/danfeRoute";
 import { registerPortalDocumentosRoute } from "../routers/portalDocumentos";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
@@ -295,6 +296,7 @@ async function startServer() {
   registerDownloadOCRoute(app);
   registerPacoteContadorRoute(app);
   registerContabilidadeXlsxRoute(app);
+  registerDanfeRoute(app);
   registerPortalDocumentosRoute(app);
 
   // Upload multipart para documentos SST grandes (PGR/PCMSO/LTCAT — até 150MB)

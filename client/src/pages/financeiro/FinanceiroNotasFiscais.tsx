@@ -217,6 +217,7 @@ export default function FinanceiroNotasFiscais() {
   const [confirmHistorico, setConfirmHistorico] = useState(false);
   const [confirmHistoricoNfse, setConfirmHistoricoNfse] = useState(false);
   const [nfeRecDetalhe, setNfeRecDetalhe] = useState<any>(null);
+  const [danfeUrl, setDanfeUrl] = useState<string | null>(null);
   const [copiedChave, setCopiedChave] = useState(false);
   const [justRecusa, setJustRecusa] = useState("");
   const [showJustRecusa, setShowJustRecusa] = useState(false);
@@ -3742,35 +3743,74 @@ export default function FinanceiroNotasFiscais() {
 
                   {/* ── Footer ── */}
                   <div className="px-5 py-3 border-t bg-slate-50 flex flex-wrap items-center justify-between gap-2">
-                    {nf.chaveAcesso && String(nf.chaveAcesso).replace(/\D/g,"").length === 44 && (
+                    <div className="flex flex-wrap gap-2">
+                      {/* Botão Ver DANFE */}
                       <Button
                         variant="outline"
                         size="sm"
-                        className="gap-1.5 border-indigo-300 text-indigo-700 hover:bg-indigo-50"
-                        onClick={() => {
-                          const chave = String(nf.chaveAcesso).replace(/\D/g, "");
-                          // window.open PRIMEIRO — antes de qualquer await (iOS Safari bloqueia popup se chamado após await)
-                          window.open(
-                            `https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx?tipoConteudo=7PhJ%2BgAVw2g%3D&nfe=${chave}`,
-                            "_blank"
-                          );
-                          // clipboard: fire-and-forget, não bloqueia o popup
-                          navigator.clipboard?.writeText(chave).catch(() => {});
-                          toast({
-                            title: "Portal SEFAZ aberto",
-                            description: "Chave pré-preenchida no portal. Resolva o CAPTCHA para ver a nota.",
-                          });
-                        }}
+                        className="gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-50"
+                        onClick={() => setDanfeUrl(`/api/fiscal-notes/${nf.id}/danfe?companyId=${companyId}`)}
                       >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                        Consultar no SEFAZ
+                        <FileText className="w-3.5 h-3.5" />
+                        Ver DANFE
                       </Button>
-                    )}
+                      {nf.chaveAcesso && String(nf.chaveAcesso).replace(/\D/g,"").length === 44 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5 border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+                          onClick={() => {
+                            const chave = String(nf.chaveAcesso).replace(/\D/g, "");
+                            window.open(
+                              `https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx?tipoConteudo=7PhJ%2BgAVw2g%3D&nfe=${chave}`,
+                              "_blank"
+                            );
+                            navigator.clipboard?.writeText(chave).catch(() => {});
+                            toast({
+                              title: "Portal SEFAZ aberto",
+                              description: "Chave pré-preenchida no portal. Resolva o CAPTCHA para ver a nota.",
+                            });
+                          }}
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          Consultar no SEFAZ
+                        </Button>
+                      )}
+                    </div>
                     <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setNfeRecDetalhe(null)}>Fechar</Button>
                   </div>
                 </>
               );
             })()}
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Dialog DANFE (iframe) ── */}
+        <Dialog open={!!danfeUrl} onOpenChange={v => { if (!v) setDanfeUrl(null); }}>
+          <DialogContent className="max-w-5xl w-full p-0 gap-0 overflow-hidden rounded-2xl">
+            <div className="flex items-center justify-between px-4 py-3 border-b bg-blue-50">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-blue-600" />
+                <span className="font-semibold text-blue-800 text-sm">DANFE — Documento Auxiliar da Nota Fiscal Eletrônica</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {danfeUrl && (
+                  <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => window.open(danfeUrl!, "_blank")}>
+                    <ExternalLink className="w-3 h-3" />
+                    Abrir em nova aba / Imprimir
+                  </Button>
+                )}
+                <Button variant="ghost" size="sm" onClick={() => setDanfeUrl(null)}>Fechar</Button>
+              </div>
+            </div>
+            {danfeUrl && (
+              <iframe
+                src={danfeUrl}
+                className="w-full border-0"
+                style={{ height: "80svh" }}
+                title="DANFE"
+              />
+            )}
           </DialogContent>
         </Dialog>
 

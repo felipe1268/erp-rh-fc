@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3724 — **NF-e RECEBIDAS · VISUALIZADOR DANFE EMBUTIDO — BOTÃO "VER DANFE" NO DIALOG DA NF-e. BACKEND ADITIVO + FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Nova rota GET `/api/fiscal-notes/:id/danfe` gera HTML estilo DANFE server-side a partir do
+ * `xml_payload` armazenado (nfeProc completo): emitente/destinatário com endereço, tabela de itens
+ * (código, descrição, NCM, CST, CFOP, UN, qtd, v.unit., desconto, %ICMS, vICMS, total), cálculo de
+ * impostos (BC ICMS, ICMS, ST, IPI, PIS, COFINS, frete, desconto, total NF), duplicatas, informações
+ * complementares, protocolo de autorização. Fallback para `resNFe` (sem XML): exibe apenas metadados.
+ * Registro: `registerDanfeRoute` em `server/_core/index.ts`.
+ * Frontend: novo botão "Ver DANFE" (azul) no footer do dialog de detalhe da NF-e → abre Dialog 5xl
+ * com iframe (`/api/fiscal-notes/:id/danfe?companyId=X`) + botão "Abrir em nova aba / Imprimir".
+ * Estado: `danfeUrl` (string|null). Arquivo frontend: `FinanceiroNotasFiscais.tsx`.
+ * Novo arquivo backend: `server/routers/danfeRoute.ts`.
+ *
  * Rev. 3723 — **CONTABILIDADE · TABELA EXTRATO — COLUNA "VALOR" → ENTRADA | SAÍDA | SALDO ACUMULADO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Tabela do Extrato Bancário em `FinanceiroContabilidade.tsx` exibia coluna única "Valor (C/D)".
