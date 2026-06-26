@@ -139,11 +139,21 @@ async function _aplicarRollupBaixas(db: any, entryId: number, companyId: number)
   const dataPag = quitado
     ? (agg.ultima_data ? String(agg.ultima_data).slice(0, 10) : new Date().toISOString().slice(0, 10))
     : null;
+  // Propaga a conta bancária da última baixa ativa (com conta) para o ENTRY. Sem isto o
+  // lançamento fica conta_bancaria_id=NULL e cai em "Sem conta definida" na Conciliação,
+  // mesmo quando o recebimento/baixa informou a conta. COALESCE: nunca sobrescreve com NULL.
+  const contaRow: any = rows(await dbExecute(db,
+    `SELECT conta_bancaria_id AS "contaBancariaId" FROM financial_entry_baixas
+     WHERE entry_id=$1 AND company_id=$2 AND estornada_em IS NULL AND conta_bancaria_id IS NOT NULL
+     ORDER BY data DESC, id DESC LIMIT 1`,
+    [entryId, companyId]
+  ))[0] ?? {};
+  const ultimaConta = contaRow.contaBancariaId != null ? Number(contaRow.contaBancariaId) : null;
   await dbExecute(db,
     `UPDATE financial_entries
-     SET valor_realizado=$1, status=$2, data_pagamento=$3, updated_at=NOW()
-     WHERE id=$4 AND company_id=$5`,
-    [acumulado > 0 ? acumulado : null, novoStatus, dataPag, entryId, companyId]
+     SET valor_realizado=$1, status=$2, data_pagamento=$3, conta_bancaria_id=COALESCE($4, conta_bancaria_id), updated_at=NOW()
+     WHERE id=$5 AND company_id=$6`,
+    [acumulado > 0 ? acumulado : null, novoStatus, dataPag, ultimaConta, entryId, companyId]
   );
   return {
     acumulado, previsto, quitado, status: novoStatus,
@@ -5640,7 +5650,7 @@ export const financialRouter = router({
       // Rev. 3445 — sem conta: vincular à conta Caixa Interno informada e confirmar.
       if (!input.contaBancariaId) throw new TRPCError({ code: "BAD_REQUEST", message: "Informe a conta caixa para vincular este lançamento." });
       const cbaRes = await dbExecute(db,
-        `SELECT id FROM company_bank_accounts WHERE id=$1 AND company_id=$2 AND "caixaInterno"=1 LIMIT 1`,
+        `SELECT id FROM company_bank_accounts WHERE id=$1 AND "companyId"=$2 AND "caixaInterno"=1 LIMIT 1`,
         [input.contaBancariaId, input.companyId]);
       if (rows(cbaRes).length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Conta caixa inválida ou não é do tipo Caixa Interno." });
       await dbExecute(db,

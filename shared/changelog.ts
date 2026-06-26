@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3746 — **CONCILIAÇÃO BANCÁRIA · 2 BUGS APÓS VINCULAR CONTA NO RECEBIMENTO: (1) LANÇAMENTO RECEBIDO/BAIXADO COM CONTA INFORMADA CONTINUAVA EM "SEM CONTA BANCÁRIA DEFINIDA" — O ROLLUP DA BAIXA NÃO PROPAGAVA A CONTA PRO ENTRY; (2) "CONFIRMAR" NA CONCILIAÇÃO SEM-CONTA QUEBRAVA COM `42703 column "company_id" does not exist` (A COLUNA É `company_bank_accounts."companyId"`, camelCase). 100% BUGFIX · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Contexto: o piloto FC corrigiu 3 recebimentos (Projeto Sr. Julio R$24.370, Medição R$208.089,23,
+ * Faturamento LUCIANA R$100.000) ajustando datas e vinculando a conta CAIXA INTERNO ADM (id=22) via
+ * "Registrar recebimento". Mesmo assim, na Conciliação Bancária os três continuavam no balde
+ * "Sem conta bancária definida", e clicar "Confirmar" estourava erro no canto inferior.
+ *
+ * BUG #1 (conta não propaga) — `registrarBaixa` grava `conta_bancaria_id` apenas na linha do histórico
+ * (`financial_entry_baixas`), e o rollup `_aplicarRollupBaixas` recalculava `valor_realizado`, `status` e
+ * `data_pagamento` do entry, MAS nunca tocava em `financial_entries.conta_bancaria_id`. Resultado: o entry
+ * ficava com a conta NULL ainda que a baixa tivesse a conta correta → caía em "Sem conta definida". Fix:
+ * no rollup, buscar a conta da ÚLTIMA baixa ativa com conta (`ORDER BY data DESC, id DESC LIMIT 1`) e fazer
+ * `conta_bancaria_id = COALESCE(<conta da baixa>, conta_bancaria_id)` — propaga a conta sem nunca
+ * sobrescrever com NULL (baixa sem conta preserva o vínculo existente). Backfill pontual aplicado aos 3
+ * entries da company 60002 que estavam NULL com baixa ativa em conta 22.
+ *
+ * BUG #2 (42703) — na procedure `conciliarSemContaComExtrato`, o caminho que vincula a conta Caixa Interno
+ * informada validava a conta com `... WHERE id=$1 AND company_id=$2 AND "caixaInterno"=1`. A tabela
+ * `company_bank_accounts` é camelCase (`"companyId"`, `"caixaInterno"`, `"deletedAt"`), então `company_id`
+ * não existe → 42703. Era a ÚNICA referência errada do arquivo (as outras 14 já usavam `"companyId"`). Fix:
+ * `company_id` → `"companyId"`. Lição: `company_bank_accounts` é camelCase; `financial_entries` é snake_case
+ * (`company_id`, `conta_bancaria_id`) — não confundir as duas convenções no mesmo arquivo.
+ *
+ * Arquivos: `server/routers/financial.ts` (`_aplicarRollupBaixas`, `conciliarSemContaComExtrato`).
+ *
  * Rev. 3745 — **NF-e RECEBIDAS · SEFAZ AUTO-SYNC — CAUSA-RAIZ REAL DO "ZERA MAS NÃO SINCRONIZA" / "AGUARDE +413 MIN" QUANDO O ANEL JÁ MOSTRA ~4H: O GATE AUTORITATIVO CALCULAVA O `elapsed` EM JS (`Date.now() - new Date(last_sync_at)`), MAS A COLUNA É `timestamp without time zone` (GRAVA UTC) E O PROCESSO RODA EM `TZ=America/Sao_Paulo` → O node-pg INTERPRETAVA O VALOR 3H ADIANTADO → `elapsed` NEGATIVO → O GATE INFLAVA A ESPERA EM ~180 MIN E REJEITAVA A SYNC POR 3H A MAIS (MANUAL **E** CRON). AGORA O `elapsed` É CALCULADO EM SQL (`EXTRACT(EPOCH FROM NOW()-MAX(last_sync_at))`), TZ-SAFE. 100% BUGFIX · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Sintoma reportado pelo piloto FC (pós Rev. 3744): ao clicar "Sincronizar SEFAZ", o toast dizia
