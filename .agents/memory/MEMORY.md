@@ -129,3 +129,4 @@
 - [Confirm-combo dual-state data loss](confirm-combo-dual-state-dataloss.md) — combos de autocomplete que separam texto-digitado vs valor-confirmado descartam o texto livre no save; use `confirmado || display` como fallback em TODO save (criar+editar).
 - [Desconsiderar cheque devolvido do %](conciliacao-desconsiderar-cheque.md) — flag `desconsiderado_em` tira par do % sem apagar; mutation que retira lineIds do % precisa de guard de elegibilidade (par válido), não só tenant guard.
 - [Baixa parcial financeiro](financeiro-baixa-parcial.md) — rollup=SUM(baixas ativas); estornos LEGADOS devem soft-estornar baixas (senão órfãs inflam rollup); concorrência via advisory lock por entry em db.transaction.
+- [Caixa Interno conta única + UTC obra dup](caixa-interno-import.md) — caixa interno = conta_bancaria id=22 (company 60002); dedup por data+valor em financial_entries; existem 2 obras "UTC - UNIDADE DE COMPOSTAGEM" (60004 vazia, 120001 canônica c/ uso).
