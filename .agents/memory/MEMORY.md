@@ -73,6 +73,7 @@
 
 - [SyncSchema+ log capture vs dead-zone](syncschema-log-capture.md) — bloco roda TODOS os entries sequencialmente; log capturado antes do fim parece "morto" mas não é; dupla-corrupção SEFAZ chave_acesso+numero_nf = float64, irrecuperável sem XML.
 - [SEFAZ NSU rate-limit loop](sefaz-nsu-rate-limit-loop.md) — cStat=656 retorna ultNSU correto; NÃO salvar causa loop eterno independente de tempo de espera. Importação alternativa via XML disponível.
+- [SEFAZ gate formula parity](sefaz-gate-formula-parity.md) — as 4 fórmulas de gate (cliente countdown/auto-disparo, cron seleção, diagnóstico) DEVEM casar com o gate real `intervalo*60+3` ×backoff; divergir = "zera mas não sincroniza".
 - [Saldo inicial conta bancária](saldo-inicial-conta-bancaria.md) — saldo de abertura vive em `financial_opening_balances` (1 linha/conta), NÃO em coluna; Fluxo de Caixa soma p/ semear o Acumulado; mutações de conta precisam de tenant guard.
 - [Notification recipient tenancy](notification-recipient-tenancy.md) — notify queries must join `user_companies` (users has NO companyId; admin roles are global in getCompaniesForUser) or you leak across tenants.
 - [resolveCompanyIds trusts input](resolvecompanyids-no-intersect.md) — resolveCompanyIds/companyFilter don't intersect with user's allowed companies; per-company endpoints must call assert guard explicitly (loop every id for lists).

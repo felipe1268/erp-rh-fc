@@ -1064,7 +1064,7 @@ export function startSefazCron() {
         SELECT company_id, ativo, sync_enabled, ultimo_nsu, sync_intervalo_horas,
                last_sync_at,
                EXTRACT(EPOCH FROM (NOW() - last_sync_at))/60 AS elapsed_min,
-               COALESCE(sync_intervalo_horas, 1) * 60 - 2 AS cooldown_min,
+               COALESCE(sync_intervalo_horas, 1) * 60 + 3 AS cooldown_min,
                last_sync_result
         FROM company_nfe_config
       `)) as any;
@@ -1094,7 +1094,7 @@ export function startSefazCron() {
              >= COALESCE(sync_hora, 6) * 60 + COALESCE(sync_minuto, 0))
             OR
             (last_sync_at IS NOT NULL AND
-             last_sync_at < NOW() - (INTERVAL '1 minute' * (COALESCE(sync_intervalo_horas, 1) * 60 - 8)))
+             last_sync_at < NOW() - (INTERVAL '1 minute' * (COALESCE(sync_intervalo_horas, 1) * 60 + 3)))
           )
       `)) as any;
       const list = (rows?.rows ?? rows) as any[];
@@ -1154,7 +1154,7 @@ export function startSefazCron() {
   // dispute com o cron do próximo :15 mark (máx 15 min de espera pelo cron regular).
   setTimeout(() => { runHour().catch(e => console.error("[SefazSync] Startup run erro:", e?.message)); }, 3 * 60_000);
 
-  console.log("[SefazSync] Cron a cada 15 min agendado — gate de ~(intervalo-2)min garante ≤ 1 chamada/Xh/CNPJ no SEFAZ.");
+  console.log("[SefazSync] Cron a cada 15 min agendado — gate de (intervalo*60+3)min (×backoff) garante ≤ 1 chamada/Xh/CNPJ no SEFAZ.");
 }
 
 // ── tRPC Router ────────────────────────────────────────────────────────────────

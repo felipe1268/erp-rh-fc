@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3744 — **NF-e RECEBIDAS · SEFAZ AUTO-SYNC — "O CRONÔMETRO ZERA MAS NÃO SINCRONIZA": ALINHADAS AS 4 FÓRMULAS DE GATE (CLIENTE, AUTO-DISPARO, CRON, DIAGNÓSTICO) AO GATE REAL DO BACKEND (`intervalo*60 + 3` ×backoff). AGORA, AO RENOVAR A COTA/INTERVALO CONFIGURADO, O ERP EFETIVAMENTE CONSULTA A SEFAZ. 100% BUGFIX · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Pedido do piloto FC: na tela NF-e Recebidas, o cronômetro regressivo da sincronização SEFAZ contava
+ * até zero mas, quando zerava, NÃO disparava a consulta — ficava preso em "Cota renovada — sincronizando
+ * automaticamente" sem nunca importar nada. Causa-raiz: havia QUATRO fórmulas de gate inconsistentes
+ * espalhadas pelo código, e só UMA delas é a autoritativa (a que decide de fato se a SEFAZ é chamada).
+ *
+ * O gate REAL fica em `executarSyncNFe` (`server/routers/sefaz.ts`): `cooldownMin = intervaloHoras*60 + 3`
+ * (×backoff progressivo 1/2/4 conforme 656 consecutivos). As outras três usavam valores MENORES:
+ *   1) Cronômetro/auto-disparo do CLIENTE (`FinanceiroNotasFiscais.tsx`) = `intervalo*60 - 2` (×mult).
+ *   2) Seleção de empresas elegíveis do CRON (`sefaz.ts`, runHour) = `intervalo*60 - 8` (sem backoff).
+ *   3) Log de diagnóstico do cron = `intervalo*60 - 2`.
+ *
+ * Como o cliente zerava ~5min (×mult) ANTES do gate real abrir, o auto-disparo chamava `syncNow` cedo
+ * demais, o gate atômico REJEITAVA (retorna `aviso`, NÃO atualiza `last_sync_at`), e o guard de "1 disparo
+ * por janela" (`autoSyncFiredForTsRef`) marcava a janela como já-disparada → NUNCA re-tentava. Resultado:
+ * "zera mas não sincroniza". O cron também desperdiçava o primeiro tick (selecionava em -8, gate interno
+ * rejeitava até +3, só disparava num tick posterior).
+ *
+ * Fix: alinhar TODAS as fórmulas ao gate real `intervalo*60 + 3`. Cliente (countdown + ring de display) e
+ * cron (seleção + diagnóstico) agora usam exatamente a mesma base do gate autoritativo. Assim, quando o
+ * cronômetro zera, TANTO o auto-disparo (página aberta) QUANTO o cron (garantia, página fechada) batem num
+ * gate já ABERTO e a sincronização ocorre de fato. Adicionados +3s de folga no countdown do cliente p/
+ * absorver o arredondamento (floor) e jitter de relógio, garantindo que o cliente nunca dispare ~1s antes
+ * do servidor (o que desperdiçaria o disparo único). O backoff progressivo (Rev. 3738, anti-656) foi
+ * PRESERVADO — não foi mexido; ele continua estendendo o intervalo efetivo após rate-limits consecutivos,
+ * e o cliente já reflete o ×mult no cronômetro.
+ *
+ * Arquivos: `server/routers/sefaz.ts` (seleção do cron `runHour` + log de diagnóstico + string de boot),
+ * `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx` (gateMs do countdown + gateTotal do ring).
+ * Detalhe aqui.
+ *
  * Rev. 3743 — **CONTAS A PAGAR & A RECEBER (TÍTULOS) — BAIXA PARCIAL COM HISTÓRICO: AGORA DÁ P/ PAGAR/RECEBER UM TÍTULO EM VÁRIAS PARCELAS (DATAS/CONTAS DIFERENTES), VER O SALDO EM ABERTO + BADGE "PARCIAL", ESTORNAR CADA BAIXA INDIVIDUALMENTE, E "QUITAR SALDO" P/ FECHAR MANUALMENTE (OPÇÃO C). SCHEMA ADITIVO (1 TABELA NOVA) · ZERO ALTER DESTRUTIVO/DROP/DELETE.**
  *
  * Pedido do piloto FC: até então, baixar um título em Contas a Pagar era tudo-ou-nada (marcava "pago"

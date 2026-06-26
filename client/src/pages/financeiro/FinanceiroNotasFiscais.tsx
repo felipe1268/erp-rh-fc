@@ -354,7 +354,13 @@ export default function FinanceiroNotasFiscais() {
         // Backoff progressivo: mesmo cálculo do backend
         const consecutiveRl = result?.rateLimitedAt ? Math.max(1, result?.rateLimitConsecutive ?? 1) : 0;
         const rlMultiplier = consecutiveRl >= 4 ? 4 : consecutiveRl >= 2 ? 2 : 1;
-        const gateMs = (intervaloHoras * 60 - 2) * 60 * 1000 * rlMultiplier;
+        // DEVE casar EXATAMENTE com o gate real do backend (executarSyncNFe:
+        // cooldownMin = intervalo*60 + 3). Usar -2 fazia o cronômetro zerar ~5min
+        // (×backoff) ANTES do gate abrir → o auto-disparo batia no gate, era rejeitado
+        // e o guard de "1 disparo/janela" desperdiçava a tentativa ("zera mas não sincroniza").
+        // +3s de folga absorve o arredondamento (floor) do countdown e jitter de relógio,
+        // garantindo que o cliente só dispare DEPOIS do gate do servidor abrir (nunca ~1s antes).
+        const gateMs = (intervaloHoras * 60 + 3) * 60 * 1000 * rlMultiplier + 3000;
         const baseTs = result?.rateLimitedAt
           ? parseAsUTC(result.rateLimitedAt).getTime()
           : sefazCfg.last_sync_at
@@ -1151,7 +1157,7 @@ export default function FinanceiroNotasFiscais() {
                 const _rlResult = (() => { try { return JSON.parse(sefazCfg.last_sync_result || "{}"); } catch { return {}; } })();
                 const _consec = _rlResult?.rateLimitedAt ? Math.max(1, _rlResult?.rateLimitConsecutive ?? 1) : 0;
                 const _rlMult = _consec >= 4 ? 4 : _consec >= 2 ? 2 : 1;
-                const gateTotal = (Math.max(1, intervaloH) * 60 - 2) * 60 * _rlMult;
+                const gateTotal = (Math.max(1, intervaloH) * 60 + 3) * 60 * _rlMult;
                 return (
                   <div className={`rounded-xl border px-4 py-3 ${
                     !syncOn
