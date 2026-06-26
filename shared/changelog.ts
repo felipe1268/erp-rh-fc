@@ -1,6 +1,19 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3733 — **PACOTE CONTADOR · XLSX EXTRATO (BANCÁRIO + CARTÃO) — IDENTIDADE VISUAL FC (AZUL-MARINHO + DOURADO) + LAYOUT DE APRESENTAÇÃO. 100% FORMATAÇÃO · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Repaginação das planilhas para a marca FC (cores derivadas do tema do app via OKLCH→hex):
+ *  - NAVY `#0F3778` (primary), NAVY_DARK `#082047` (sidebar), GOLD `#E9AB2B` (accent), ZEBRA `#EEF2F9`.
+ *  - Título da empresa: faixa navy com texto branco + borda inferior dourada (antes texto preto sem fundo).
+ *  - Caixa banco/cartão: fundo navy escuro + texto branco (antes só borda).
+ *  - Cabeçalho de colunas: navy `#0F3778` (substitui o roxo `#7030A0` do Pronus).
+ *  - Linhas de dados: zebra striping (branco / azul-claro alternado) + grade azul-clara `#BBC7DC`.
+ *  - Saldo: fundo verde/vermelho SUAVE + texto colorido (antes verde/vermelho saturado).
+ *  - Linha TOTAL: fundo dourado + texto navy + borda navy.
+ * `sText`/`sDate`/`sMoney` ganharam param `alt` (paridade da linha). Aplica-se aos DOIS builders
+ * (`buildExtratoBancarioBuffer` + `buildExtratCartaoBuffer`). Arquivo: `downloadContabilidadeXlsx.ts`.
+ *
  * Rev. 3732 — **PACOTE CONTADOR · EXTRATO CARTÃO DE CRÉDITO — XLSX PRONUS (UMA ABA/FATURA) COM DADOS REAIS DE financial_cartao_*. BACKEND PONTUAL · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Causa raiz do CSV vazio: query usava `bank_statement_lines WHERE tipoConta ILIKE '%cartao%'`,

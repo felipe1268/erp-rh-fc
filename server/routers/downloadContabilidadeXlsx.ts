@@ -5,10 +5,10 @@
  * Gera planilha XLSX no formato exato do modelo contador (Pronus):
  *   Row 2  : [empresa] — negrito 18pt centralizado (A2:H2 merged)
  *   Row 5-6: [BANCO X] — box com borda (A5:F6 merged) + Data Saldo Anterior + Saldo Anterior
- *   Row 8  : cabeçalhos roxo (#7030A0) texto branco
+ *   Row 8  : cabeçalhos azul-marinho FC (#0F3778) texto branco
  *   Row 9+ : Data | Hist.Banco | Hist.Real | Nº NF | Nº CNPJ | Entrada | Saída | Saldo
- *   Saldo  : fundo verde (≥0) ou vermelho (<0)
- *   Moeda  : formato "R$ #,##0.00" com zero → "R$ -"
+ *   Saldo  : fundo verde suave (≥0) ou vermelho suave (<0)
+ *   Moeda  : formato "R$ #,##0.00" com zero → "R$ 0,00"
  */
 import type { Express, Request, Response } from "express";
 import * as XLSX from "xlsx";
@@ -49,16 +49,20 @@ function lastDayOfPrevMonth(mes: number, ano: number): string {
   return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
 }
 
-// ── Paleta ───────────────────────────────────────────────────────────────────
+// ── Paleta FC (azul-marinho + dourado da marca) ──────────────────────────────
 
 const C = {
-  PURPLE : "7030A0",
-  GREEN  : "92D050",
-  RED    : "FF4040",
-  WHITE  : "FFFFFF",
-  BLACK  : "000000",
-  GREY   : "D9D9D9",
-  LIGHT  : "F2F2F2",
+  NAVY     : "0F3778",   // FC primary (azul-marinho)
+  NAVY_DARK: "082047",   // FC sidebar (marinho escuro)
+  GOLD     : "E9AB2B",   // FC accent (dourado)
+  ZEBRA    : "EEF2F9",   // listra clara (azul-acinzentado)
+  WHITE    : "FFFFFF",
+  BLACK    : "000000",
+  GREEN_BG : "D6EBD8",   // saldo positivo (fundo verde suave)
+  GREEN_TX : "1E7B34",
+  RED_BG   : "F6D4D4",   // saldo negativo (fundo vermelho suave)
+  RED_TX   : "B02A2A",
+  GRID     : "BBC7DC",   // linhas de grade (azul claro)
 };
 
 // Formato BRL: positivo "R$ 10,00" | negativo "-R$ 10,00" | zero "R$ 0,00"
@@ -67,40 +71,46 @@ const BRL = '"R$ "#,##0.00;"-R$ "#,##0.00';
 // ── Builders de estilo ───────────────────────────────────────────────────────
 
 const borderThin = {
-  top:    { style: "thin",   color: { rgb: C.BLACK } },
-  bottom: { style: "thin",   color: { rgb: C.BLACK } },
-  left:   { style: "thin",   color: { rgb: C.BLACK } },
-  right:  { style: "thin",   color: { rgb: C.BLACK } },
+  top:    { style: "thin", color: { rgb: C.GRID } },
+  bottom: { style: "thin", color: { rgb: C.GRID } },
+  left:   { style: "thin", color: { rgb: C.GRID } },
+  right:  { style: "thin", color: { rgb: C.GRID } },
 };
-const borderMedium = {
-  top:    { style: "medium", color: { rgb: C.BLACK } },
-  bottom: { style: "medium", color: { rgb: C.BLACK } },
-  left:   { style: "medium", color: { rgb: C.BLACK } },
-  right:  { style: "medium", color: { rgb: C.BLACK } },
+const borderNavy = {
+  top:    { style: "medium", color: { rgb: C.NAVY } },
+  bottom: { style: "medium", color: { rgb: C.NAVY } },
+  left:   { style: "medium", color: { rgb: C.NAVY } },
+  right:  { style: "medium", color: { rgb: C.NAVY } },
 };
 
 function sTitle(): any {
   return {
-    font: { bold: true, sz: 18, color: { rgb: C.BLACK } },
+    font: { bold: true, sz: 18, color: { rgb: C.WHITE } },
+    fill: { patternType: "solid", fgColor: { rgb: C.NAVY } },
     alignment: { horizontal: "center", vertical: "center" },
+    border: { bottom: { style: "thick", color: { rgb: C.GOLD } } },
   };
 }
 
 function sBank(): any {
   return {
-    font: { bold: true, sz: 12, color: { rgb: C.BLACK } },
+    font: { bold: true, sz: 12, color: { rgb: C.WHITE } },
+    fill: { patternType: "solid", fgColor: { rgb: C.NAVY_DARK } },
     alignment: { horizontal: "center", vertical: "center" },
-    border: borderMedium,
+    border: borderNavy,
   };
 }
 
 function sBankEmpty(): any {
-  return { border: borderMedium };
+  return {
+    fill: { patternType: "solid", fgColor: { rgb: C.NAVY_DARK } },
+    border: borderNavy,
+  };
 }
 
 function sInfoLabel(): any {
   return {
-    font: { bold: true, sz: 10 },
+    font: { bold: true, sz: 10, color: { rgb: C.NAVY } },
     alignment: { horizontal: "left", vertical: "center" },
   };
 }
@@ -114,7 +124,7 @@ function sInfoDate(): any {
 
 function sInfoMoney(): any {
   return {
-    font: { sz: 10 },
+    font: { bold: true, sz: 10 },
     alignment: { horizontal: "right", vertical: "center" },
     numFmt: BRL,
   };
@@ -123,38 +133,44 @@ function sInfoMoney(): any {
 function sHeader(): any {
   return {
     font: { bold: true, sz: 11, color: { rgb: C.WHITE } },
-    fill: { patternType: "solid", fgColor: { rgb: C.PURPLE } },
+    fill: { patternType: "solid", fgColor: { rgb: C.NAVY } },
     alignment: { horizontal: "center", vertical: "center", wrapText: true },
     border: borderThin,
   };
 }
 
-function sText(bold = false): any {
+function sText(alt = false, bold = false): any {
   return {
-    font: { sz: 10, bold },
+    font: { sz: 10, bold, color: { rgb: C.BLACK } },
+    fill: { patternType: "solid", fgColor: { rgb: alt ? C.ZEBRA : C.WHITE } },
     alignment: { horizontal: "left", vertical: "center" },
     border: borderThin,
   };
 }
 
-function sDate(): any {
+function sDate(alt = false): any {
   return {
-    font: { sz: 10 },
+    font: { sz: 10, color: { rgb: C.BLACK } },
+    fill: { patternType: "solid", fgColor: { rgb: alt ? C.ZEBRA : C.WHITE } },
     alignment: { horizontal: "center", vertical: "center" },
     border: borderThin,
   };
 }
 
-function sMoney(saldoSign: "positive" | "negative" | "neutral", bold = false): any {
-  const fillMap: Record<string, string | undefined> = {
-    positive: C.GREEN,
-    negative: C.RED,
-    neutral : undefined,
+function sMoney(saldoSign: "positive" | "negative" | "neutral", bold = false, alt = false): any {
+  const bgMap: Record<string, string> = {
+    positive: C.GREEN_BG,
+    negative: C.RED_BG,
+    neutral : alt ? C.ZEBRA : C.WHITE,
   };
-  const fill = fillMap[saldoSign];
+  const txMap: Record<string, string> = {
+    positive: C.GREEN_TX,
+    negative: C.RED_TX,
+    neutral : C.BLACK,
+  };
   return {
-    font: { sz: 10, bold, color: { rgb: C.BLACK } },
-    ...(fill ? { fill: { patternType: "solid", fgColor: { rgb: fill } } } : {}),
+    font: { sz: 10, bold: bold || saldoSign !== "neutral", color: { rgb: txMap[saldoSign] } },
+    fill: { patternType: "solid", fgColor: { rgb: bgMap[saldoSign] } },
     alignment: { horizontal: "right", vertical: "center" },
     numFmt: BRL,
     border: borderThin,
@@ -163,11 +179,11 @@ function sMoney(saldoSign: "positive" | "negative" | "neutral", bold = false): a
 
 function sTotal(isMoney = false): any {
   return {
-    font: { bold: true, sz: 10 },
-    fill: { patternType: "solid", fgColor: { rgb: C.GREY } },
+    font: { bold: true, sz: 10, color: { rgb: C.NAVY_DARK } },
+    fill: { patternType: "solid", fgColor: { rgb: C.GOLD } },
     alignment: { horizontal: isMoney ? "right" : "left", vertical: "center" },
     ...(isMoney ? { numFmt: BRL } : {}),
-    border: borderThin,
+    border: borderNavy,
   };
 }
 
@@ -272,7 +288,7 @@ export async function buildExtratoBancarioBuffer(
     addCell(ws, "G4", "Saldo Anterior",        "s", sInfoLabel());
     addCell(ws, "H4", saldoInicial,            "n", sInfoMoney());
 
-    // Linha 5 — cabeçalho roxo
+    // Linha 5 — cabeçalho navy FC
     const hdrs = ["Data","Histórico do Banco","Histórico Real",
                   "Nº Nota Fiscal","Nº CNPJ","Entrada","Saída","Saldo"];
     const cols = ["A","B","C","D","E","F","G","H"];
@@ -291,15 +307,16 @@ export async function buildExtratoBancarioBuffer(
       const nf       = String(line.numero_nf || "");
       const cnpj     = line.fornecedor_cnpj ? fmtCnpj(line.fornecedor_cnpj) : "";
       const sSign    = saldo >= 0 ? "positive" : "negative";
+      const alt      = idx % 2 === 1;
 
-      addCell(ws, `A${row}`, fmtDate(line.data), "s", sDate());
-      addCell(ws, `B${row}`, line.descricao || "", "s", sText());
-      addCell(ws, `C${row}`, histReal,             "s", sText());
-      addCell(ws, `D${row}`, nf,                   "s", sText());
-      addCell(ws, `E${row}`, cnpj,                 "s", sText());
-      addCell(ws, `F${row}`, ent,  "n", sMoney("neutral"));
-      addCell(ws, `G${row}`, sai,  "n", sMoney("neutral"));
-      addCell(ws, `H${row}`, saldo,"n", sMoney(sSign));
+      addCell(ws, `A${row}`, fmtDate(line.data), "s", sDate(alt));
+      addCell(ws, `B${row}`, line.descricao || "", "s", sText(alt));
+      addCell(ws, `C${row}`, histReal,             "s", sText(alt));
+      addCell(ws, `D${row}`, nf,                   "s", sText(alt));
+      addCell(ws, `E${row}`, cnpj,                 "s", sText(alt));
+      addCell(ws, `F${row}`, ent,  "n", sMoney("neutral", false, alt));
+      addCell(ws, `G${row}`, sai,  "n", sMoney("neutral", false, alt));
+      addCell(ws, `H${row}`, saldo,"n", sMoney(sSign, false, alt));
     });
 
     // Linha TOTAL
@@ -448,7 +465,7 @@ export async function buildExtratCartaoBuffer(
     addCell(ws, "G4", "Total Fatura", "s", sInfoLabel());
     addCell(ws, "H4", meta.fatura_total, "n", sInfoMoney());
 
-    // Linha 5 — cabeçalho roxo
+    // Linha 5 — cabeçalho navy FC
     hdrs.forEach((h, i) => addCell(ws, `${cols[i]}5`, h, "s", sHeader()));
 
     // Linha 6+ — itens
@@ -462,16 +479,17 @@ export async function buildExtratCartaoBuffer(
       const tipo = item.tipo
         ? String(item.tipo).charAt(0).toUpperCase() + String(item.tipo).slice(1)
         : "Compra";
+      const alt = idx % 2 === 1;
 
-      addCell(ws, `A${row}`, fmtDate(item.data),                   "s", sDate());
-      addCell(ws, `B${row}`, item.descricao || "",                  "s", sText());
-      addCell(ws, `C${row}`, item.cidade || "",                     "s", sText());
-      addCell(ws, `D${row}`, tipo,                                  "s", sText());
-      addCell(ws, `E${row}`, parcela,                               "s", sText());
-      addCell(ws, `F${row}`, item.obra_nome || "",                  "s", sText());
+      addCell(ws, `A${row}`, fmtDate(item.data),                   "s", sDate(alt));
+      addCell(ws, `B${row}`, item.descricao || "",                  "s", sText(alt));
+      addCell(ws, `C${row}`, item.cidade || "",                     "s", sText(alt));
+      addCell(ws, `D${row}`, tipo,                                  "s", sText(alt));
+      addCell(ws, `E${row}`, parcela,                               "s", sText(alt));
+      addCell(ws, `F${row}`, item.obra_nome || "",                  "s", sText(alt));
       addCell(ws, `G${row}`, item.categoria_nome
-                          || item.centro_custo_nome || "",          "s", sText());
-      addCell(ws, `H${row}`, valor,                                 "n", sMoney("neutral"));
+                          || item.centro_custo_nome || "",          "s", sText(alt));
+      addCell(ws, `H${row}`, valor,                                 "n", sMoney("neutral", false, alt));
     });
 
     // Linha TOTAL
