@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3741 — **CONCILIAÇÃO · CAIXA INTERNO — NOVO LANÇAMENTO NÃO APARECIA NA LISTA SEM RECARREGAR A PÁGINA. AGORA A LISTA (A CONFIRMAR / CONFIRMADAS) ATUALIZA NA HORA. 100% FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Queixa do piloto FC: ao criar um lançamento no Caixa Interno ("Novo lançamento"), ele não entrava
+ * automaticamente na lista — era preciso recarregar a página (F5) para vê-lo em "A confirmar".
+ *
+ * Causa-raiz: a lista de Entradas/Saídas do Caixa Interno (blocos "A confirmar" e "Confirmadas") é
+ * alimentada pela query `financial.getEntradasCaixaInterno` (estado `caixaData` / `refetchCaixa`).
+ * O `submitLancar` (criação do lançamento) chamava `setReportStale(true)` — que, por design (Rev. 3478),
+ * apenas marca o RELATÓRIO de conciliação como desatualizado (badge) SEM refazer fetch automático — e
+ * limpava o form, mas NUNCA chamava `refetchCaixa()`. Como a query do Caixa Interno é normal (sem o
+ * `staleTime: Infinity` do relatório) e só era refeita no `confirmarEntradaCaixa`/`desconciliarEntradaCaixa`,
+ * a criação ficava invisível até o próximo carregamento da página.
+ *
+ * Correção (Rev. 3741, 100% frontend): ao final do caminho de SUCESSO do `submitLancar` (tanto na ramo
+ * ENTRADA → Contas a Receber quanto na SAÍDA → Contas a Pagar), após `setLancStatement(null)`, chama
+ * `refetchCaixa()`. É um no-op quando a query está desabilitada (fora do Caixa Interno), então não afeta
+ * o fluxo de conciliação com extrato. Sem TDZ: `submitLancar` é function declaration e só roda no clique,
+ * quando `refetchCaixa` (declarado depois) já está inicializado. O relatório segue controlado pelo botão
+ * "Atualizar" (comportamento Rev. 3478 preservado).
+ *
+ * Arquivo: `client/src/pages/financeiro/FinanceiroConciliacao.tsx`. Sem alteração de backend/schema. Detalhe aqui.
+ *
  * Rev. 3740 — **CONCILIAÇÃO · CAIXA INTERNO — COMBO DE OBRA NO "LANÇAR NO CONTAS A RECEBER" ESCONDIA A OBRA AO BUSCAR (FILTRO POR CLIENTE BLOQUEAVA OBRA DE OUTRO CLIENTE). AGORA, AO DIGITAR, BUSCA EM TODAS AS OBRAS. 100% FRONTEND · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Queixa do piloto FC: ao lançar no Contas a Receber via Caixa Interno, com o cliente "Qiu Xianquan"

@@ -716,6 +716,9 @@ export default function FinanceiroConciliacao() {
           if (!isStandalone && lancStatement?.id) setDismissedStmtIds(prev => new Set([...prev, Number(lancStatement.id)]));
         }
         setLancStatement(null);
+        // Rev. 3741 — atualiza a lista do Caixa Interno na hora (A confirmar/Confirmadas),
+        // sem precisar recarregar a página. refetchCaixa é no-op quando a query está desabilitada.
+        refetchCaixa();
       } catch (e: any) {
         if (lancCreatedRef.current?.stmtId === lancStatement.id) {
           toast({ title: "Recebível criado, mas a baixa/conciliação falhou", description: `${transportErrMsg(e)} — clique novamente para tentar conciliar (não recria o título) ou concilie manualmente.`, variant: "destructive" });
@@ -765,6 +768,9 @@ export default function FinanceiroConciliacao() {
         if (!isStandalone && lancStatement?.id) setDismissedStmtIds(prev => new Set([...prev, Number(lancStatement.id)]));
       }
       setLancStatement(null);
+      // Rev. 3741 — atualiza a lista do Caixa Interno na hora (A confirmar/Confirmadas),
+      // sem precisar recarregar a página. refetchCaixa é no-op quando a query está desabilitada.
+      refetchCaixa();
     } catch (e: any) {
       // Lançamento já criado + conciliação falhou: preserva o id; novo clique só concilia.
       if (lancCreatedRef.current?.stmtId === lancStatement.id) {
