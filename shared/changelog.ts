@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3761 — **FINANCEIRO · DRE — DEMONSTRATIVO DE RESULTADO · CADA LINHA DO DRE FICOU CLICÁVEL (DRILL-DOWN): AO CLICAR, ABRE UM DIÁLOGO COM OS VALORES QUE COMPÕEM AQUELA LINHA — NAS LINHAS-FOLHA (RECEITA BRUTA, RECEITAS FINANCEIRAS, CUSTOS DE OBRA, DESPESAS FIXAS/VARIÁVEIS, DESPESAS FINANCEIRAS, IMPOSTOS) MOSTRA OS LANÇAMENTOS REAIS AGRUPADOS POR CATEGORIA + LISTA DETALHADA; NAS LINHAS-TOTAL (RECEITA LÍQUIDA, LUCRO BRUTO, EBITDA, RESULTADO FINANCEIRO, LAIR, LUCRO LÍQUIDO) MOSTRA A FÓRMULA DE COMPOSIÇÃO; NAS MARGENS MOSTRA A DIVISÃO. O TOTAL DO DIÁLOGO SEMPRE FECHA COM A LINHA. BACKEND READ-ONLY · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Pedido do usuário (FC ENGENHARIA / company 60002, tela "DRE — Demonstrativo de Resultado"): "poder clicar e ver os
+ * valores pertinentes" de cada linha do DRE — ou seja, drill-down que revele os lançamentos/valores que compõem cada linha.
+ *
+ * FONTE ÚNICA (garante que o detalhe SOMA exatamente o total da linha):
+ * - `server/services/financialKpiService.ts`: extraí os 7 predicados SQL de cada linha do DRE para uma função única
+ *   `dreLinhaPredicate(linha: DRELinhaKey)` (consts `DRE_ORIGEM_OBRA`/`DRE_ORIGEM_FIN`). `calcularDRE` foi REFATORADA para
+ *   usar `dreLinhaPredicate(...)` nos 7 `FILTER(...)` — antes os predicados eram inline e poderiam divergir do detalhe.
+ *   Assim o detalhamento usa LITERALMENTE o mesmo predicado do total → nunca descasam.
+ * - Nova função `calcularDRELinhaDetalhe(companyId, periodo, tipoPeriodo, linha)`: reusa a MESMA CTE base de `calcularDRE`
+ *   (mesmos filtros-mãe: company, status≠cancelado, tipo≠transferencia, data_competencia, intervalo de competência) + colunas
+ *   extras p/ exibição; retorna `{ total, qtdTotal, porConta[], itens[] (top 1000 por valor), itensTruncados }`. Para a linha
+ *   `impostos` mescla as DUAS fontes (espelhando `calcularDRE`): lançamentos `origem='guia_tributaria'` + obrigações apuradas
+ *   em `financial_tax_obligations` (rotuladas via `TRIBUTO_LABELS`).
+ *
+ * BACKEND tRPC:
+ * - `server/routers/financial.ts`: nova procedure `getDRELinhaDetalhe` (protectedProcedure + `_assertFinanceiroCompanyAccess`,
+ *   mesmo guard de tenant do `getDRE`), input `{ companyId, periodo, tipoPeriodo, linha (enum das 7 chaves) }`.
+ *
+ * FRONTEND (`client/src/pages/financeiro/FinanceiroDRE.tsx`):
+ * - Cada `DRERow` ganhou metadado `drill` (4 tipos): `leaf` (busca o detalhe no backend), `composicao` (linhas-total — fórmula
+ *   montada do objeto `dre` já carregado, sem ida ao servidor), `ratio` (margens — divisão num/den) e `info` (Deduções = 0).
+ * - As linhas ficaram clicáveis (cursor, hover laranja, chevron, role/tabIndex/teclado) e abrem um `Dialog`. O botão de legenda
+ *   `Info` faz `stopPropagation` p/ não disparar o drill. Componente `DrillBody` renderiza cada tipo; o `leaf` chama
+ *   `trpc.financial.getDRELinhaDetalhe` (enabled só quando aberto) com skeleton/erro/empty e textos `break-words` (sem truncar).
+ *
+ * Validado: `tsc` limpo (filtrado FinanceiroDRE.tsx, financialKpiService.ts, financial.ts); app HTTP 200. Paridade do total
+ * garantida por construção (mesma CTE + mesmo predicado de `calcularDRE`).
+ *
+ * Arquivos: `client/src/pages/financeiro/FinanceiroDRE.tsx`, `server/services/financialKpiService.ts`, `server/routers/financial.ts`.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 3760 — **DASHBOARD · CONCILIAÇÃO BANCÁRIA · OS VALORES EM DINHEIRO QUE O USUÁRIO LÊ (RANKINGS, KPIs "TICKET MÉDIO/MAIOR ENTRADA/MAIOR SAÍDA" E O DETALHE D/R DO RANKING DE OBRAS) PASSAM A APARECER POR EXTENSO COM PONTO DE MILHAR E VÍRGULA DECIMAL (`formatBRL` → "R$ 928.000,00") EM VEZ DE ABREVIADO ("R$ 928 mil"/"R$ 2,4 mi"); E OS GRÁFICOS FICAM RESPONSIVOS (CHARTCARD ENCOLHE DENTRO DO GRID SEM ESTOURAR NA HORIZONTAL). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Pedido do usuário (FC ENGENHARIA / company 60002, prints da tela "Conciliação Bancária"): "Quero dinheiro em valor de

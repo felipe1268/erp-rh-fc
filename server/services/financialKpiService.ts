@@ -362,6 +362,45 @@ function dreRange(
   return [`${ano}-${mm}`, `${ano}-${mm}`];
 }
 
+// Origens de lançamento que compõem cada bucket do DRE. Ficam em UM lugar só
+// (módulo) p/ que o cálculo (calcularDRE) e o detalhamento clicável
+// (calcularDRELinhaDetalhe) usem EXATAMENTE a mesma classificação — o total da
+// linha sempre fecha com a soma dos itens do drill-down.
+const DRE_ORIGEM_OBRA = "('cronograma_atividade','compras','compra_oc','almoxarifado_saida')";
+const DRE_ORIGEM_FIN = "('despesa_financeira','juros','tarifa_bancaria','iof')";
+
+export type DRELinhaKey =
+  | "receitaBruta"
+  | "receitasFinanceiras"
+  | "custosObra"
+  | "impostos"
+  | "despesasFinanceiras"
+  | "despesasFixas"
+  | "despesasVariaveis";
+
+// Predicado SQL de CADA linha detalhável do DRE. Pressupõe que a query exponha
+// os aliases `origem` = LOWER(COALESCE(origem_modulo,'')) e
+// `conta` = LOWER(COALESCE(conta_nome,'')) — exatamente como a CTE `e` faz.
+// FONTE ÚNICA: calcularDRE usa estes mesmos predicados nos seus FILTER(...).
+function dreLinhaPredicate(linha: DRELinhaKey): string {
+  switch (linha) {
+    case "receitaBruta":
+      return `tipo='receita' AND origem NOT IN ('aplicacao_financeira','rendimento_financeiro') AND conta NOT LIKE '%juros%' AND conta NOT LIKE '%rendiment%'`;
+    case "receitasFinanceiras":
+      return `tipo='receita' AND (origem IN ('aplicacao_financeira','rendimento_financeiro') OR conta LIKE '%juros%' OR conta LIKE '%rendiment%')`;
+    case "custosObra":
+      return `tipo='despesa' AND origem IN ${DRE_ORIGEM_OBRA}`;
+    case "impostos":
+      return `tipo='despesa' AND origem='guia_tributaria'`;
+    case "despesasFinanceiras":
+      return `tipo='despesa' AND (origem IN ${DRE_ORIGEM_FIN} OR conta LIKE '%juros%' OR conta LIKE '%tarifa banc%' OR conta LIKE '%iof%')`;
+    case "despesasFixas":
+      return `tipo='despesa' AND natureza='fixo' AND origem NOT IN ${DRE_ORIGEM_OBRA} AND origem NOT IN ${DRE_ORIGEM_FIN} AND origem <> 'guia_tributaria' AND conta NOT LIKE '%juros%' AND conta NOT LIKE '%tarifa banc%' AND conta NOT LIKE '%iof%'`;
+    case "despesasVariaveis":
+      return `tipo='despesa' AND COALESCE(natureza,'') <> 'fixo' AND origem NOT IN ${DRE_ORIGEM_OBRA} AND origem NOT IN ${DRE_ORIGEM_FIN} AND origem <> 'guia_tributaria' AND conta NOT LIKE '%juros%' AND conta NOT LIKE '%tarifa banc%' AND conta NOT LIKE '%iof%'`;
+  }
+}
+
 // DRE no padrão CPC (gerencial) calculada a partir dos lançamentos financeiros.
 // Classificação dos lançamentos (financial_entries, status != cancelado, tipo != transferencia):
 //  - Receita Bruta: tipo='receita' (exceto receitas financeiras).
@@ -379,9 +418,6 @@ export async function calcularDRE(
   const db = await getDb();
   const [mesIni, mesFim] = dreRange(periodo, tipoPeriodo);
 
-  const ORIGEM_OBRA = "('cronograma_atividade','compras','compra_oc','almoxarifado_saida')";
-  const ORIGEM_FIN = "('despesa_financeira','juros','tarifa_bancaria','iof')";
-
   const res = await q(db!,
     `WITH e AS (
        SELECT tipo, natureza,
@@ -396,23 +432,13 @@ export async function calcularDRE(
          AND TO_CHAR(data_competencia,'YYYY-MM') BETWEEN $2 AND $3
      )
      SELECT
-       COALESCE(SUM(v) FILTER (WHERE tipo='receita'
-         AND origem NOT IN ('aplicacao_financeira','rendimento_financeiro')
-         AND conta NOT LIKE '%juros%' AND conta NOT LIKE '%rendiment%'),0) AS receita_bruta,
-       COALESCE(SUM(v) FILTER (WHERE tipo='receita'
-         AND (origem IN ('aplicacao_financeira','rendimento_financeiro')
-              OR conta LIKE '%juros%' OR conta LIKE '%rendiment%')),0) AS receitas_financeiras,
-       COALESCE(SUM(v) FILTER (WHERE tipo='despesa' AND origem IN ${ORIGEM_OBRA}),0) AS custos_obra,
-       COALESCE(SUM(v) FILTER (WHERE tipo='despesa' AND origem='guia_tributaria'),0) AS impostos_lanc,
-       COALESCE(SUM(v) FILTER (WHERE tipo='despesa'
-         AND (origem IN ${ORIGEM_FIN}
-              OR conta LIKE '%juros%' OR conta LIKE '%tarifa banc%' OR conta LIKE '%iof%')),0) AS despesas_financeiras,
-       COALESCE(SUM(v) FILTER (WHERE tipo='despesa' AND natureza='fixo'
-         AND origem NOT IN ${ORIGEM_OBRA} AND origem NOT IN ${ORIGEM_FIN} AND origem <> 'guia_tributaria'
-         AND conta NOT LIKE '%juros%' AND conta NOT LIKE '%tarifa banc%' AND conta NOT LIKE '%iof%'),0) AS despesas_fixas,
-       COALESCE(SUM(v) FILTER (WHERE tipo='despesa' AND COALESCE(natureza,'') <> 'fixo'
-         AND origem NOT IN ${ORIGEM_OBRA} AND origem NOT IN ${ORIGEM_FIN} AND origem <> 'guia_tributaria'
-         AND conta NOT LIKE '%juros%' AND conta NOT LIKE '%tarifa banc%' AND conta NOT LIKE '%iof%'),0) AS despesas_variaveis
+       COALESCE(SUM(v) FILTER (WHERE ${dreLinhaPredicate("receitaBruta")}),0) AS receita_bruta,
+       COALESCE(SUM(v) FILTER (WHERE ${dreLinhaPredicate("receitasFinanceiras")}),0) AS receitas_financeiras,
+       COALESCE(SUM(v) FILTER (WHERE ${dreLinhaPredicate("custosObra")}),0) AS custos_obra,
+       COALESCE(SUM(v) FILTER (WHERE ${dreLinhaPredicate("impostos")}),0) AS impostos_lanc,
+       COALESCE(SUM(v) FILTER (WHERE ${dreLinhaPredicate("despesasFinanceiras")}),0) AS despesas_financeiras,
+       COALESCE(SUM(v) FILTER (WHERE ${dreLinhaPredicate("despesasFixas")}),0) AS despesas_fixas,
+       COALESCE(SUM(v) FILTER (WHERE ${dreLinhaPredicate("despesasVariaveis")}),0) AS despesas_variaveis
      FROM e`,
     [companyId, mesIni, mesFim]
   );
@@ -465,6 +491,149 @@ export async function calcularDRE(
     impostos,
     lucroLiquido,
     margemLiquida: pct(lucroLiquido),
+    calculadoEm: new Date().toISOString(),
+  };
+}
+
+// Rótulos legíveis dos tributos apurados (financial_tax_obligations.tipo) para o
+// detalhamento da linha "Impostos sobre o Resultado".
+const TRIBUTO_LABELS: Record<string, string> = {
+  das_simples: "DAS (Simples Nacional)",
+  darf_irpj: "DARF — IRPJ",
+  darf_csll: "DARF — CSLL",
+  darf_pis: "DARF — PIS",
+  darf_cofins: "DARF — COFINS",
+  gps_inss: "GPS — INSS",
+  guia_fgts: "Guia FGTS",
+  iss: "ISS",
+  icms: "ICMS",
+};
+
+// Detalhamento (drill-down) de UMA linha do DRE: devolve os lançamentos que a
+// compõem, o agrupamento por categoria (conta) e o total — que SEMPRE fecha com
+// o valor exibido na linha, pois reusa o mesmo predicado de calcularDRE.
+// `itens` é limitado p/ não estourar o payload; `total`/`porConta` são exatos
+// (somados no banco sobre TODAS as linhas, sem o limite).
+export async function calcularDRELinhaDetalhe(
+  companyId: number,
+  periodo: string,
+  tipoPeriodo: "mensal" | "trimestral" | "semestral" | "anual",
+  linha: DRELinhaKey,
+) {
+  const db = await getDb();
+  const [mesIni, mesFim] = dreRange(periodo, tipoPeriodo);
+  const pred = dreLinhaPredicate(linha);
+  const ITENS_LIMITE = 1000;
+
+  // CTE base: mesmas regras-mãe de calcularDRE + aliases origem/conta p/ o predicado.
+  const baseCte = `
+    WITH e AS (
+      SELECT id, data_competencia, descricao, origem_descricao, obra_nome,
+             fornecedor_nome, cliente_nome, status,
+             COALESCE(NULLIF(conta_nome,''),'(Sem categoria)') AS conta_label,
+             LOWER(COALESCE(origem_modulo,'')) AS origem,
+             LOWER(COALESCE(conta_nome,'')) AS conta,
+             tipo, natureza,
+             COALESCE(valor_realizado, valor_previsto, 0)::numeric AS v
+      FROM financial_entries
+      WHERE company_id=$1
+        AND status NOT IN ('cancelado')
+        AND tipo <> 'transferencia'
+        AND data_competencia IS NOT NULL
+        AND TO_CHAR(data_competencia,'YYYY-MM') BETWEEN $2 AND $3
+    )`;
+
+  const grpRes = await q(db!,
+    `${baseCte}
+     SELECT conta_label AS conta, COUNT(*)::int AS qtd, COALESCE(SUM(v),0) AS total
+     FROM e WHERE ${pred}
+     GROUP BY conta_label
+     ORDER BY SUM(v) DESC`,
+    [companyId, mesIni, mesFim]
+  );
+  const porConta = r(grpRes).map((row: any) => ({
+    conta: row.conta as string,
+    qtd: Number(row.qtd) || 0,
+    total: n(row.total),
+  }));
+
+  const itensRes = await q(db!,
+    `${baseCte}
+     SELECT id, data_competencia AS data, descricao, origem_descricao, obra_nome,
+            fornecedor_nome, cliente_nome, status, conta_label AS conta, origem, v AS valor
+     FROM e WHERE ${pred}
+     ORDER BY v DESC, id DESC
+     LIMIT ${ITENS_LIMITE}`,
+    [companyId, mesIni, mesFim]
+  );
+  const itens = r(itensRes).map((row: any) => ({
+    id: Number(row.id),
+    data: row.data as string,
+    descricao: (row.descricao || row.origem_descricao || "—") as string,
+    conta: row.conta as string,
+    origem: (row.origem || "") as string,
+    contraparte: (row.fornecedor_nome || row.cliente_nome || null) as string | null,
+    obraNome: (row.obra_nome || null) as string | null,
+    status: (row.status || "") as string,
+    valor: n(row.valor),
+    fonte: "lancamento" as const,
+  }));
+
+  let total = porConta.reduce((s, c) => s + c.total, 0);
+  let qtdTotal = porConta.reduce((s, c) => s + c.qtd, 0);
+
+  // "Impostos" tem 2 fontes (espelhando calcularDRE): lançamentos guia_tributaria
+  // (já no predicado) + obrigações apuradas em financial_tax_obligations.
+  if (linha === "impostos") {
+    const tribRes = await q(db!,
+      `SELECT id, tipo, mes_competencia, COALESCE(valor_total,0) AS valor, data_vencimento, status
+       FROM financial_tax_obligations
+       WHERE company_id=$1 AND mes_competencia BETWEEN $2 AND $3
+       ORDER BY valor_total DESC`,
+      [companyId, mesIni, mesFim]
+    );
+    const tribs = r(tribRes);
+    let tribTotal = 0;
+    const grpTribMap = new Map<string, { conta: string; qtd: number; total: number }>();
+    for (const t of tribs) {
+      const valor = n(t.valor);
+      tribTotal += valor;
+      const label = TRIBUTO_LABELS[t.tipo] || `Tributo (${t.tipo})`;
+      itens.push({
+        id: Number(t.id),
+        data: (t.data_vencimento || `${t.mes_competencia}-01`) as string,
+        descricao: `${label} · competência ${t.mes_competencia}`,
+        conta: "Obrigações tributárias apuradas",
+        origem: "guia_tributaria_apurada",
+        contraparte: null,
+        obraNome: null,
+        status: (t.status || "") as string,
+        valor,
+        fonte: "lancamento",
+      } as any);
+      const g = grpTribMap.get(label) || { conta: `Apuração — ${label}`, qtd: 0, total: 0 };
+      g.qtd += 1;
+      g.total += valor;
+      grpTribMap.set(label, g);
+    }
+    for (const g of grpTribMap.values()) porConta.push(g);
+    porConta.sort((a, b) => b.total - a.total);
+    itens.sort((a, b) => b.valor - a.valor);
+    total += tribTotal;
+    qtdTotal += tribs.length;
+  }
+
+  return {
+    linha,
+    periodo,
+    tipoPeriodo,
+    mesIni,
+    mesFim,
+    total,
+    qtdTotal,
+    porConta,
+    itens,
+    itensTruncados: itens.length >= ITENS_LIMITE,
     calculadoEm: new Date().toISOString(),
   };
 }

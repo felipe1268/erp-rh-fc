@@ -29,6 +29,7 @@ import {
 import {
   calcularKpis,
   calcularDRE,
+  calcularDRELinhaDetalhe,
   dreDisponibilidade,
   projetarFluxoCaixa90Dias,
   gerarEFDReinf,
@@ -9611,6 +9612,26 @@ export const financialRouter = router({
       return dre;
     } catch (e: any) {
       throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: e?.message ?? "Erro ao calcular DRE" });
+    }
+  }),
+
+  // Detalhamento clicável (drill-down) de UMA linha do DRE — devolve os
+  // lançamentos que compõem a linha + agrupamento por categoria. O total fecha
+  // EXATAMENTE com a linha do DRE (mesmo predicado em financialKpiService).
+  getDRELinhaDetalhe: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    periodo: z.string(),
+    tipoPeriodo: z.enum(["mensal", "trimestral", "semestral", "anual"]).default("mensal"),
+    linha: z.enum([
+      "receitaBruta", "receitasFinanceiras", "custosObra", "impostos",
+      "despesasFinanceiras", "despesasFixas", "despesasVariaveis",
+    ]),
+  })).query(async ({ ctx, input }) => {
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    try {
+      return await calcularDRELinhaDetalhe(input.companyId, input.periodo, input.tipoPeriodo, input.linha);
+    } catch (e: any) {
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: e?.message ?? "Erro ao detalhar a linha do DRE" });
     }
   }),
 

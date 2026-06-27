@@ -6,13 +6,26 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import {
   BarChart2, TrendingUp, TrendingDown, RefreshCw, ChevronLeft, ChevronRight,
   CalendarDays, Sparkles, Info, BookOpen, ExternalLink, AlertTriangle,
   Lightbulb, Activity, ArrowUpRight, ArrowDownRight, Minus, ShieldCheck,
+  ChevronRight as ChevronRightIcon, Layers, ListTree, Calculator, Percent,
 } from "lucide-react";
+
+type DRELinhaKey =
+  | "receitaBruta" | "receitasFinanceiras" | "custosObra" | "impostos"
+  | "despesasFinanceiras" | "despesasFixas" | "despesasVariaveis";
+
+interface ComposicaoItem { label: string; contrib: number; }
+type DrillState =
+  | { kind: "leaf"; linha: DRELinhaKey; label: string; negativo: boolean }
+  | { kind: "composicao"; label: string; value: number; itens: ComposicaoItem[] }
+  | { kind: "ratio"; label: string; num: number; numLabel: string; den: number; denLabel: string; valuePct: number }
+  | { kind: "info"; label: string; texto: string };
 
 const NAVY = "#1B2A4A";
 
@@ -49,6 +62,7 @@ interface DRERow {
   percentOf?: number;
   highlight?: "green" | "red" | "blue";
   info?: string;
+  drill?: DrillState;
 }
 
 type Sel =
@@ -188,6 +202,7 @@ export default function FinanceiroDRE() {
   // streaming, então animamos uma curva que sobe e desacelera perto de ~95%
   // enquanto a IA processa, completando para 100% ao concluir.
   const [iaProgresso, setIaProgresso] = useState(0);
+  const [drill, setDrill] = useState<DrillState | null>(null);
   const IA_FASES = [
     { ate: 30, label: "Lendo os números do DRE" },
     { ate: 60, label: "Comparando com benchmarks do setor" },
@@ -225,27 +240,63 @@ export default function FinanceiroDRE() {
   }, [analiseMut.isError]);
 
   const rows: DRERow[] = dre ? [
-    { label: "1. RECEITA BRUTA", value: dre.receitaBruta, highlight: "green", info: "Total faturado no período (vendas e serviços), antes de qualquer dedução." },
-    { label: "  (-) Deduções da Receita", value: -dre.deducoes, indent: 1, isNegative: true, info: "Impostos sobre vendas, devoluções e abatimentos que reduzem a receita bruta." },
-    { label: "= RECEITA LÍQUIDA", value: dre.receitaLiquida, isTotal: true, highlight: "blue", info: "Receita bruta menos as deduções. É a base de cálculo de todas as margens." },
+    { label: "1. RECEITA BRUTA", value: dre.receitaBruta, highlight: "green", info: "Total faturado no período (vendas e serviços), antes de qualquer dedução.",
+      drill: { kind: "leaf", linha: "receitaBruta", label: "Receita Bruta", negativo: false } },
+    { label: "  (-) Deduções da Receita", value: -dre.deducoes, indent: 1, isNegative: true, info: "Impostos sobre vendas, devoluções e abatimentos que reduzem a receita bruta.",
+      drill: { kind: "info", label: "Deduções da Receita", texto: "Não há deduções lançadas neste período. Impostos sobre vendas, devoluções e abatimentos entrariam aqui, reduzindo a receita bruta." } },
+    { label: "= RECEITA LÍQUIDA", value: dre.receitaLiquida, isTotal: true, highlight: "blue", info: "Receita bruta menos as deduções. É a base de cálculo de todas as margens.",
+      drill: { kind: "composicao", label: "Receita Líquida", value: dre.receitaLiquida, itens: [
+        { label: "Receita Bruta", contrib: dre.receitaBruta },
+        { label: "(-) Deduções da Receita", contrib: -dre.deducoes },
+      ] } },
     { label: "", value: 0, isSeparator: true },
-    { label: "  (-) Custos Diretos das Obras", value: -dre.custosObra, indent: 1, isNegative: true, info: "Gastos diretamente ligados à execução das obras: material, mão de obra e subcontratos." },
-    { label: "= LUCRO BRUTO", value: dre.lucroBruto, isTotal: true, percentOf: dre.receitaLiquida, highlight: dre.lucroBruto >= 0 ? "green" : "red", info: "Receita líquida menos os custos diretos das obras." },
-    { label: "    Margem Bruta", value: dre.margemBruta, indent: 2, info: "Lucro bruto ÷ receita líquida. Mostra quanto sobra após os custos das obras." },
+    { label: "  (-) Custos Diretos das Obras", value: -dre.custosObra, indent: 1, isNegative: true, info: "Gastos diretamente ligados à execução das obras: material, mão de obra e subcontratos.",
+      drill: { kind: "leaf", linha: "custosObra", label: "Custos Diretos das Obras", negativo: true } },
+    { label: "= LUCRO BRUTO", value: dre.lucroBruto, isTotal: true, percentOf: dre.receitaLiquida, highlight: dre.lucroBruto >= 0 ? "green" : "red", info: "Receita líquida menos os custos diretos das obras.",
+      drill: { kind: "composicao", label: "Lucro Bruto", value: dre.lucroBruto, itens: [
+        { label: "Receita Líquida", contrib: dre.receitaLiquida },
+        { label: "(-) Custos Diretos das Obras", contrib: -dre.custosObra },
+      ] } },
+    { label: "    Margem Bruta", value: dre.margemBruta, indent: 2, info: "Lucro bruto ÷ receita líquida. Mostra quanto sobra após os custos das obras.",
+      drill: { kind: "ratio", label: "Margem Bruta", num: dre.lucroBruto, numLabel: "Lucro Bruto", den: dre.receitaLiquida, denLabel: "Receita Líquida", valuePct: dre.margemBruta } },
     { label: "", value: 0, isSeparator: true },
-    { label: "  (-) Despesas Fixas", value: -dre.despesasFixas, indent: 1, isNegative: true, info: "Gastos administrativos recorrentes (aluguel, salários do escritório, etc.)." },
-    { label: "  (-) Despesas Variáveis", value: -dre.despesasVariaveis, indent: 1, isNegative: true, info: "Gastos que variam com o nível de atividade (comissões, fretes, etc.)." },
-    { label: "= EBITDA", value: dre.ebitda, isTotal: true, percentOf: dre.receitaLiquida, highlight: dre.ebitda >= 0 ? "green" : "red", info: "Resultado operacional antes de juros, impostos, depreciação e amortização." },
-    { label: "    Margem EBITDA", value: dre.margemEbitda, indent: 2, info: "EBITDA ÷ receita líquida. Mede a eficiência operacional do negócio." },
+    { label: "  (-) Despesas Fixas", value: -dre.despesasFixas, indent: 1, isNegative: true, info: "Gastos administrativos recorrentes (aluguel, salários do escritório, etc.).",
+      drill: { kind: "leaf", linha: "despesasFixas", label: "Despesas Fixas", negativo: true } },
+    { label: "  (-) Despesas Variáveis", value: -dre.despesasVariaveis, indent: 1, isNegative: true, info: "Gastos que variam com o nível de atividade (comissões, fretes, etc.).",
+      drill: { kind: "leaf", linha: "despesasVariaveis", label: "Despesas Variáveis", negativo: true } },
+    { label: "= EBITDA", value: dre.ebitda, isTotal: true, percentOf: dre.receitaLiquida, highlight: dre.ebitda >= 0 ? "green" : "red", info: "Resultado operacional antes de juros, impostos, depreciação e amortização.",
+      drill: { kind: "composicao", label: "EBITDA", value: dre.ebitda, itens: [
+        { label: "Lucro Bruto", contrib: dre.lucroBruto },
+        { label: "(-) Despesas Fixas", contrib: -dre.despesasFixas },
+        { label: "(-) Despesas Variáveis", contrib: -dre.despesasVariaveis },
+      ] } },
+    { label: "    Margem EBITDA", value: dre.margemEbitda, indent: 2, info: "EBITDA ÷ receita líquida. Mede a eficiência operacional do negócio.",
+      drill: { kind: "ratio", label: "Margem EBITDA", num: dre.ebitda, numLabel: "EBITDA", den: dre.receitaLiquida, denLabel: "Receita Líquida", valuePct: dre.margemEbitda } },
     { label: "", value: 0, isSeparator: true },
-    { label: "  (+) Receitas Financeiras", value: dre.receitasFinanceiras, indent: 1, info: "Juros e rendimentos de aplicações financeiras." },
-    { label: "  (-) Despesas Financeiras", value: -dre.despesasFinanceiras, indent: 1, isNegative: true, info: "Juros, tarifas bancárias e IOF pagos no período." },
-    { label: "= RESULTADO FINANCEIRO", value: dre.resultadoFinanceiro, isTotal: true, highlight: dre.resultadoFinanceiro >= 0 ? "green" : "red", info: "Receitas financeiras menos despesas financeiras." },
+    { label: "  (+) Receitas Financeiras", value: dre.receitasFinanceiras, indent: 1, info: "Juros e rendimentos de aplicações financeiras.",
+      drill: { kind: "leaf", linha: "receitasFinanceiras", label: "Receitas Financeiras", negativo: false } },
+    { label: "  (-) Despesas Financeiras", value: -dre.despesasFinanceiras, indent: 1, isNegative: true, info: "Juros, tarifas bancárias e IOF pagos no período.",
+      drill: { kind: "leaf", linha: "despesasFinanceiras", label: "Despesas Financeiras", negativo: true } },
+    { label: "= RESULTADO FINANCEIRO", value: dre.resultadoFinanceiro, isTotal: true, highlight: dre.resultadoFinanceiro >= 0 ? "green" : "red", info: "Receitas financeiras menos despesas financeiras.",
+      drill: { kind: "composicao", label: "Resultado Financeiro", value: dre.resultadoFinanceiro, itens: [
+        { label: "Receitas Financeiras", contrib: dre.receitasFinanceiras },
+        { label: "(-) Despesas Financeiras", contrib: -dre.despesasFinanceiras },
+      ] } },
     { label: "", value: 0, isSeparator: true },
-    { label: "= LAIR (Antes dos Impostos)", value: dre.lair, isTotal: true, highlight: dre.lair >= 0 ? "green" : "red", info: "Lucro Antes do Imposto de Renda = EBITDA + resultado financeiro." },
-    { label: "  (-) Impostos sobre o Resultado", value: -dre.impostos, indent: 1, isNegative: true, info: "IRPJ, CSLL e demais tributos incidentes sobre o lucro." },
-    { label: "= LUCRO LÍQUIDO", value: dre.lucroLiquido, isTotal: true, highlight: dre.lucroLiquido >= 0 ? "green" : "red", info: "Resultado final do período, após todos os custos, despesas e impostos." },
-    { label: "    Margem Líquida", value: dre.margemLiquida, indent: 2, info: "Lucro líquido ÷ receita líquida. É a rentabilidade final do negócio." },
+    { label: "= LAIR (Antes dos Impostos)", value: dre.lair, isTotal: true, highlight: dre.lair >= 0 ? "green" : "red", info: "Lucro Antes do Imposto de Renda = EBITDA + resultado financeiro.",
+      drill: { kind: "composicao", label: "LAIR (Antes dos Impostos)", value: dre.lair, itens: [
+        { label: "EBITDA", contrib: dre.ebitda },
+        { label: "Resultado Financeiro", contrib: dre.resultadoFinanceiro },
+      ] } },
+    { label: "  (-) Impostos sobre o Resultado", value: -dre.impostos, indent: 1, isNegative: true, info: "IRPJ, CSLL e demais tributos incidentes sobre o lucro.",
+      drill: { kind: "leaf", linha: "impostos", label: "Impostos sobre o Resultado", negativo: true } },
+    { label: "= LUCRO LÍQUIDO", value: dre.lucroLiquido, isTotal: true, highlight: dre.lucroLiquido >= 0 ? "green" : "red", info: "Resultado final do período, após todos os custos, despesas e impostos.",
+      drill: { kind: "composicao", label: "Lucro Líquido", value: dre.lucroLiquido, itens: [
+        { label: "LAIR (Antes dos Impostos)", contrib: dre.lair },
+        { label: "(-) Impostos sobre o Resultado", contrib: -dre.impostos },
+      ] } },
+    { label: "    Margem Líquida", value: dre.margemLiquida, indent: 2, info: "Lucro líquido ÷ receita líquida. É a rentabilidade final do negócio.",
+      drill: { kind: "ratio", label: "Margem Líquida", num: dre.lucroLiquido, numLabel: "Lucro Líquido", den: dre.receitaLiquida, denLabel: "Receita Líquida", valuePct: dre.margemLiquida } },
   ] : [];
 
   const isPct = (row: DRERow) => row.label.includes("Margem");
@@ -411,10 +462,16 @@ export default function FinanceiroDRE() {
                   if (row.highlight === "blue") textColor = "text-blue-700";
                   if (isMargin) textColor = val >= 0 ? "text-emerald-600" : "text-red-600";
 
+                  const clickable = !!row.drill;
                   return (
                     <div
                       key={idx}
-                      className={`flex items-center justify-between px-5 py-2.5 ${row.isTotal ? "font-semibold bg-gray-50/80" : ""} hover:bg-orange-50/30 transition-colors`}
+                      role={clickable ? "button" : undefined}
+                      tabIndex={clickable ? 0 : undefined}
+                      onClick={clickable ? () => setDrill(row.drill!) : undefined}
+                      onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDrill(row.drill!); } } : undefined}
+                      title={clickable ? "Clique para ver os valores que compõem esta linha" : undefined}
+                      className={`group flex items-center justify-between px-5 py-2.5 ${row.isTotal ? "font-semibold bg-gray-50/80" : ""} ${clickable ? "cursor-pointer hover:bg-orange-50/60 focus:bg-orange-50/60 focus:outline-none" : "hover:bg-orange-50/30"} transition-colors`}
                       style={{ paddingLeft: `${20 + (row.indent ?? 0) * 20}px` }}
                     >
                       <span className={`text-sm flex items-center gap-1.5 ${row.isTotal ? "font-bold text-gray-800" : "text-gray-600"}`}>
@@ -422,7 +479,7 @@ export default function FinanceiroDRE() {
                         {row.info && (
                           <Popover>
                             <PopoverTrigger asChild>
-                              <button className="text-gray-300 hover:text-orange-500 transition-colors" aria-label="legenda">
+                              <button onClick={(e) => e.stopPropagation()} className="text-gray-300 hover:text-orange-500 transition-colors" aria-label="legenda">
                                 <Info className="w-3.5 h-3.5" />
                               </button>
                             </PopoverTrigger>
@@ -432,8 +489,13 @@ export default function FinanceiroDRE() {
                           </Popover>
                         )}
                       </span>
-                      <span className={`text-sm font-medium ${textColor} tabular-nums`}>
-                        {isMargin ? displayVal : (row.isNegative ? `(${displayVal})` : displayVal)}
+                      <span className="flex items-center gap-1.5">
+                        <span className={`text-sm font-medium ${textColor} tabular-nums`}>
+                          {isMargin ? displayVal : (row.isNegative ? `(${displayVal})` : displayVal)}
+                        </span>
+                        {clickable && (
+                          <ChevronRightIcon className="w-3.5 h-3.5 text-gray-300 group-hover:text-orange-500 transition-colors" />
+                        )}
                       </span>
                     </div>
                   );
@@ -681,6 +743,207 @@ export default function FinanceiroDRE() {
           </p>
         )}
       </div>
+
+      <Dialog open={!!drill} onOpenChange={(o) => { if (!o) setDrill(null); }}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col p-0">
+          {drill && (
+            <DrillBody
+              drill={drill}
+              companyId={companyId}
+              periodo={periodo}
+              tipoPeriodo={sel.tipo}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
+  );
+}
+
+function DrillBody({
+  drill, companyId, periodo, tipoPeriodo,
+}: {
+  drill: DrillState;
+  companyId: number | undefined;
+  periodo: string;
+  tipoPeriodo: "mensal" | "trimestral" | "semestral" | "anual";
+}) {
+  const isLeaf = drill.kind === "leaf";
+  const detalhe = trpc.financial.getDRELinhaDetalhe.useQuery(
+    {
+      companyId: companyId ?? 0,
+      periodo,
+      tipoPeriodo,
+      linha: isLeaf ? (drill as Extract<DrillState, { kind: "leaf" }>).linha : "receitaBruta",
+    },
+    { enabled: isLeaf && !!companyId, refetchOnWindowFocus: false },
+  );
+
+  if (drill.kind === "info") {
+    return (
+      <>
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-gray-100">
+          <DialogTitle className="flex items-center gap-2 text-gray-900">
+            <Info className="w-5 h-5 text-orange-500" /> {drill.label}
+          </DialogTitle>
+          <DialogDescription className="text-gray-500">Composição da linha do DRE</DialogDescription>
+        </DialogHeader>
+        <div className="px-6 py-8 text-sm text-gray-600 leading-relaxed break-words">{drill.texto}</div>
+      </>
+    );
+  }
+
+  if (drill.kind === "ratio") {
+    const pctTxt = `${drill.valuePct.toFixed(1).replace(".", ",")}%`;
+    return (
+      <>
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-gray-100">
+          <DialogTitle className="flex items-center gap-2 text-gray-900">
+            <Percent className="w-5 h-5 text-orange-500" /> {drill.label}
+          </DialogTitle>
+          <DialogDescription className="text-gray-500">Como esta margem é calculada</DialogDescription>
+        </DialogHeader>
+        <div className="px-6 py-6 space-y-4">
+          <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-4 space-y-2.5">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-600 break-words">{drill.numLabel}</span>
+              <span className={`font-semibold tabular-nums ${drill.num >= 0 ? "text-emerald-700" : "text-red-600"}`}>{formatBRL(drill.num)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-600 break-words">÷ {drill.denLabel}</span>
+              <span className="font-semibold tabular-nums text-gray-700">{formatBRL(drill.den)}</span>
+            </div>
+            <div className="border-t border-gray-200 pt-2.5 flex items-center justify-between">
+              <span className="text-sm font-bold text-gray-800">= {drill.label}</span>
+              <span className={`text-base font-extrabold tabular-nums ${drill.valuePct >= 0 ? "text-emerald-600" : "text-red-600"}`}>{pctTxt}</span>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 leading-relaxed">
+            A margem é a divisão de <strong>{drill.numLabel}</strong> pela <strong>{drill.denLabel}</strong>, expressa em percentual. Clique nas linhas de valor do DRE para ver os lançamentos que compõem cada parcela.
+          </p>
+        </div>
+      </>
+    );
+  }
+
+  if (drill.kind === "composicao") {
+    return (
+      <>
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-gray-100">
+          <DialogTitle className="flex items-center gap-2 text-gray-900">
+            <Calculator className="w-5 h-5 text-orange-500" /> {drill.label}
+          </DialogTitle>
+          <DialogDescription className="text-gray-500">Composição do resultado a partir das linhas anteriores</DialogDescription>
+        </DialogHeader>
+        <div className="px-6 py-6 space-y-3">
+          <div className="rounded-xl border border-gray-100 overflow-hidden">
+            {drill.itens.map((it, i) => (
+              <div key={i} className="flex items-center justify-between px-4 py-3 text-sm border-b border-gray-100 last:border-0">
+                <span className="text-gray-600 break-words">{it.label}</span>
+                <span className={`font-semibold tabular-nums ${it.contrib >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                  {it.contrib < 0 ? `(${formatBRL(Math.abs(it.contrib))})` : formatBRL(it.contrib)}
+                </span>
+              </div>
+            ))}
+            <div className="flex items-center justify-between px-4 py-3 bg-gray-50/80">
+              <span className="text-sm font-bold text-gray-800">= {drill.label}</span>
+              <span className={`text-base font-extrabold tabular-nums ${drill.value >= 0 ? "text-emerald-600" : "text-red-600"}`}>{formatBRL(drill.value)}</span>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 leading-relaxed">
+            Esta linha é um resultado calculado. Para ver os lançamentos individuais, clique nas linhas de receita, custo ou despesa que a compõem.
+          </p>
+        </div>
+      </>
+    );
+  }
+
+  // kind === "leaf"
+  const leaf = drill as Extract<DrillState, { kind: "leaf" }>;
+  const d = detalhe.data;
+  return (
+    <>
+      <DialogHeader className="px-6 pt-6 pb-4 border-b border-gray-100">
+        <DialogTitle className="flex items-center gap-2 text-gray-900">
+          <ListTree className="w-5 h-5 text-orange-500" /> {leaf.label}
+        </DialogTitle>
+        <DialogDescription className="text-gray-500">
+          Lançamentos que compõem esta linha no período selecionado
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+        <span className="text-sm text-gray-500">
+          {detalhe.isLoading ? "Carregando…" : `${(d?.qtdTotal ?? 0).toLocaleString("pt-BR")} lançamento(s)`}
+        </span>
+        <span className={`text-lg font-extrabold tabular-nums ${leaf.negativo ? "text-red-600" : "text-emerald-600"}`}>
+          {leaf.negativo ? `(${formatBRL(d?.total ?? 0)})` : formatBRL(d?.total ?? 0)}
+        </span>
+      </div>
+
+      <div className="overflow-y-auto flex-1 px-6 py-4 space-y-5">
+        {detalhe.isLoading && (
+          <div className="space-y-2">
+            {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
+          </div>
+        )}
+        {detalhe.isError && (
+          <div className="rounded-xl border border-red-100 bg-red-50/60 p-4 text-sm text-red-700 flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+            <span className="break-words">Não foi possível carregar o detalhamento. {detalhe.error?.message}</span>
+          </div>
+        )}
+        {!detalhe.isLoading && !detalhe.isError && d && (
+          <>
+            {d.porConta.length > 0 && (
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-2 flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5" /> Por categoria
+                </h4>
+                <div className="rounded-xl border border-gray-100 overflow-hidden">
+                  {d.porConta.map((c, i) => (
+                    <div key={i} className="flex items-center justify-between px-4 py-2.5 text-sm border-b border-gray-100 last:border-0">
+                      <span className="text-gray-600 break-words flex-1 min-w-0 pr-3">
+                        {c.conta} <span className="text-gray-400">· {c.qtd}</span>
+                      </span>
+                      <span className={`font-semibold tabular-nums shrink-0 ${leaf.negativo ? "text-red-600" : "text-emerald-700"}`}>{formatBRL(c.total)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {d.itens.length > 0 && (
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-2 flex items-center gap-1.5">
+                  <ListTree className="w-3.5 h-3.5" /> Lançamentos
+                  {d.itensTruncados && <span className="font-normal normal-case text-gray-400">(maiores {d.itens.length.toLocaleString("pt-BR")})</span>}
+                </h4>
+                <div className="rounded-xl border border-gray-100 overflow-hidden">
+                  {d.itens.map((it) => (
+                    <div key={`${it.id}-${it.descricao}`} className="flex items-start justify-between gap-3 px-4 py-2.5 text-sm border-b border-gray-100 last:border-0 hover:bg-gray-50/60">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-gray-700 break-words">{it.descricao}</p>
+                        <p className="text-xs text-gray-400 break-words">
+                          {it.data ? new Date(it.data).toLocaleDateString("pt-BR") : "—"}
+                          {it.conta ? ` · ${it.conta}` : ""}
+                          {it.contraparte ? ` · ${it.contraparte}` : ""}
+                          {it.obraNome ? ` · ${it.obraNome}` : ""}
+                        </p>
+                      </div>
+                      <span className={`font-semibold tabular-nums shrink-0 ${leaf.negativo ? "text-red-600" : "text-emerald-700"}`}>{formatBRL(it.valor)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {d.porConta.length === 0 && d.itens.length === 0 && (
+              <div className="py-10 text-center text-sm text-gray-400">Nenhum lançamento nesta linha para o período.</div>
+            )}
+          </>
+        )}
+      </div>
+    </>
   );
 }
