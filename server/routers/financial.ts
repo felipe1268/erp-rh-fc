@@ -12381,15 +12381,22 @@ export const financialRouter = router({
         const infSel = await dbExecute(db,
           `SELECT to_char(bsl.data,'DD/MM/YYYY') AS data,
                   COALESCE(cba.apelido, cba.banco, cba.conta) AS conta,
-                  bsl.descricao
+                  bcv.criado_por_nome AS autor,
+                  to_char(bcv.created_at AT TIME ZONE 'America/Sao_Paulo','DD/MM/YYYY HH24:MI') AS vinculado_em
              FROM bank_statement_lines bsl
              LEFT JOIN company_bank_accounts cba ON cba.id = bsl.conta_bancaria_id
-            WHERE bsl.id=$1 AND bsl.company_id=$2`,
+             LEFT JOIN bank_cheque_vinculos bcv
+               ON bcv.pix_line_id = bsl.id AND bcv.company_id = bsl.company_id AND bcv.estornado_em IS NULL
+            WHERE bsl.id=$1 AND bsl.company_id=$2
+            LIMIT 1`,
           [input.pixLineId, input.companyId]);
         const inf = rows(infSel)[0] as any;
-        const detalhe = inf
-          ? ` Conta: "${inf.conta ?? "—"}" · ${inf.data ?? "—"}.`
-          : "";
+        const partes: string[] = [];
+        if (inf?.conta)       partes.push(`Conta: "${inf.conta}"`);
+        if (inf?.data)        partes.push(`Data: ${inf.data}`);
+        if (inf?.autor)       partes.push(`Vinculado por: ${inf.autor}`);
+        if (inf?.vinculado_em) partes.push(`em ${inf.vinculado_em}`);
+        const detalhe = partes.length ? ` ${partes.join(" · ")}.` : "";
         throw new TRPCError({ code: "BAD_REQUEST", message: `Esta linha do extrato já está vinculada a este cheque.${detalhe} Verifique na tela de Conciliação Bancária desta conta.` });
       }
     }
