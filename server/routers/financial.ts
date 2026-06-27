@@ -8710,12 +8710,26 @@ export const financialRouter = router({
       // Rev. 3544 bugfix: $6 aparecia 2x na mesma query → dbExecute (split por $\d+)
       // atribuía params[6]=undefined ao 2º $6 → SQL: saldo_apos=) → 42601 syntax error.
       // Fix: segundo $6 virou $7 e salParam passado duas vezes no array.
+      // Rev. 3802 — dedup secundário por ID de transação: mesmo débito importado de
+      // formatos diferentes (PDF curto vs OFX longo) gera descrições distintas mas
+      // carrega o mesmo "Doc NNNNNN" ou código "E003..." → extrai e busca por ILIKE.
       const salParam = line.saldo ?? null;
       const existing = await dbExecute(db, 
         `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 AND ($6::numeric IS NULL OR saldo_apos=$7) AND excluido_em IS NULL LIMIT 1`,
         [input.companyId, input.contaBancariaId, line.data, line.descricao, line.valor, salParam, salParam]
       );
       if (rows(existing).length > 0) { skipped++; continue; }
+      // Dedup secundário: extrai ID canônico da descrição (E003... ou Doc NNNNNN)
+      const eCode = line.descricao?.match(/E[0-9A-Fa-f]{20,}/)?.[0];
+      const docCode = line.descricao?.match(/Doc\s+(\d{5,})/i)?.[1];
+      const txKey = eCode ?? (docCode ? `Doc ${docCode}` : null);
+      if (txKey) {
+        const fuzzy = await dbExecute(db,
+          `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND valor=$4 AND descricao ILIKE $5 AND excluido_em IS NULL LIMIT 1`,
+          [input.companyId, input.contaBancariaId, line.data, line.valor, `%${txKey}%`]
+        );
+        if (rows(fuzzy).length > 0) { skipped++; continue; }
+      }
       await dbExecute(db, 
         `INSERT INTO bank_statement_lines (company_id, conta_bancaria_id, data, descricao, valor, tipo, saldo_apos, conciliado, importado_em)
          VALUES ($1,$2,$3,$4,$5,$6,$7,0,$8)`,
@@ -8934,12 +8948,24 @@ export const financialRouter = router({
     for (const line of input.linhas) {
       // Rev. 3533 — mesmo fix da Fase 1: saldo_apos integra a chave de dedup.
       // Rev. 3544 bugfix: $6 aparecia 2x → segundo $6 virou $7 + salParam passado 2x.
+      // Rev. 3802 — dedup secundário por ID de transação (espelha Fase 1).
       const salParam = line.saldo ?? null;
       const existing = await dbExecute(db,
         `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 AND ($6::numeric IS NULL OR saldo_apos=$7) AND excluido_em IS NULL LIMIT 1`,
         [input.companyId, input.contaBancariaId, line.data, line.descricao, line.valor, salParam, salParam]
       );
       if (rows(existing).length > 0) { skipped++; continue; }
+      // Dedup secundário: extrai ID canônico da descrição (E003... ou Doc NNNNNN)
+      const eCode = line.descricao?.match(/E[0-9A-Fa-f]{20,}/)?.[0];
+      const docCode = line.descricao?.match(/Doc\s+(\d{5,})/i)?.[1];
+      const txKey = eCode ?? (docCode ? `Doc ${docCode}` : null);
+      if (txKey) {
+        const fuzzy = await dbExecute(db,
+          `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND valor=$4 AND descricao ILIKE $5 AND excluido_em IS NULL LIMIT 1`,
+          [input.companyId, input.contaBancariaId, line.data, line.valor, `%${txKey}%`]
+        );
+        if (rows(fuzzy).length > 0) { skipped++; continue; }
+      }
       await dbExecute(db,
         `INSERT INTO bank_statement_lines (company_id, conta_bancaria_id, data, descricao, valor, tipo, saldo_apos, conciliado, importado_em)
          VALUES ($1,$2,$3,$4,$5,$6,$7,0,$8)`,

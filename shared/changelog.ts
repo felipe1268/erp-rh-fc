@@ -1,6 +1,23 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3802 — **FINANCEIRO · CONCILIAÇÃO · FIX DEDUP DE IMPORTAÇÃO DE EXTRATO BANCÁRIO.**
+ * PROBLEMA: o dedup de bank_statement_lines usava descricao exata como chave. O mesmo débito
+ * bancário importado de formatos diferentes (ex: PDF da Caixa gera descrição curta "... · Doc 070824"
+ * enquanto OFX gera descrição longa "... - E003603...27 ... · Doc 070824") passava como linha nova,
+ * gerando duplicatas fantasmas. EXEMPLO REAL: PIX R$300 Ahmad (07/01/2026, Caixa FC Aparecida)
+ * tinha 3 linhas no extrato (BSL 2415, 12135, 12513) quando deveria ter só 1.
+ * FIX: dedup secundário em ambos os pontos de import (fase única + fase 2 em lote): extrai o
+ * código "E003..." (≥20 hex chars) ou "Doc NNNNNN" da descrição e faz busca ILIKE por esse
+ * ID canônico em linhas com mesmo (data, valor, conta). Se encontrar qualquer linha existente
+ * com aquele ID → skip (conta como duplicado). Isso cobre importações OFX×PDF, PDF×CSV, etc.
+ * REGRA DO USUÁRIO registrada: linhas já existentes (conciliadas ou não) NUNCA são sobrescritas
+ * ou duplicadas ao reimportar; só linhas genuinamente novas (fora do período já importado) entram.
+ * LIMPEZA DE DADOS: (1) entry 885425 PIX Ahmad R$300 categorizado → MONITORAMENTO E SEGURANÇA;
+ * (2) BSLs fantasmas 2415+12135 deletadas; (3) 5 entries CAMERAS R$0 (IDs 865959/865960/866096/
+ * 866106/866120) deletados. Arquivos: server/routers/financial.ts (2 pontos de INSERT).
+ * ZERO SCHEMA/ALTER/DROP/DELETE DE ESTRUTURA.
+ *
  * Rev. 3801 — **FINANCEIRO · CONCILIAÇÃO · REMOÇÃO DE LANÇAMENTO DUPLICADO POR BUG DE IMPORTAÇÃO: FERRI LORIGGIO LTDA R$5.769,60 DE 14/01/2026 APARECIA DUAS VEZES — UMA VEZ NA CAIXA JF (entry=885710, correto, mantido) E UMA VEZ NA CAIXA FC APARECIDA (entry=885854, importação errônea). AÇÃO: ENTRY 885854 DELETADA; LINHA DE EXTRATO 13062 DESCONCILIADA (entry_id=NULL, conciliado=0). ZERO SCHEMA/ALTER/DROP/DELETE DE ESTRUTURA.**
  *
  * Rev. 3800 — **FINANCEIRO · DRE · UNIFICAÇÃO "MONITORAMENTO VEICULAR" → "LICENÇAS E ASSINATURAS DE SOFTWARE": CONTA id=38 "MONITORAMENTO VEICULAR" (INFLEET — SOFTWARE DE RASTREAMENTO) APARECIA COMO LINHA SEPARADA DAS LICENÇAS. ENTRY 886027 (R$1.020,60 INFLEET) MOVIDO PARA conta_id=71 "LICENÇAS E ASSINATURAS DE SOFTWARE". CONTA 38 DESATIVADA (ativo=0). DADOS: UPDATE EM financial_entries + financial_accounts · ZERO SCHEMA/ALTER/DROP/DELETE.**
