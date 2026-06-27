@@ -12392,10 +12392,8 @@ export const financialRouter = router({
           [input.pixLineId, input.companyId]);
         const inf = rows(infSel)[0] as any;
         const partes: string[] = [];
-        if (inf?.conta)       partes.push(`Conta: "${inf.conta}"`);
-        if (inf?.data)        partes.push(`Data: ${inf.data}`);
-        if (inf?.autor)       partes.push(`Vinculado por: ${inf.autor}`);
-        if (inf?.vinculado_em) partes.push(`em ${inf.vinculado_em}`);
+        if (inf?.conta) partes.push(`Conta: "${inf.conta}"`);
+        if (inf?.data)  partes.push(`Data: ${inf.data}`);
         const detalhe = partes.length ? ` ${partes.join(" · ")}.` : "";
         throw new TRPCError({ code: "BAD_REQUEST", message: `Esta linha do extrato já está vinculada a este cheque.${detalhe} Verifique na tela de Conciliação Bancária desta conta.` });
       }
