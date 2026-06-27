@@ -2707,18 +2707,6 @@ export default function FinanceiroConciliacao() {
             <p className="text-sm text-gray-500 mt-1">Relacione os lançamentos do sistema com o extrato bancário</p>
           </div>
           <div className="flex items-center gap-2">
-            {/* Planilha Contador */}
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-9 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-              disabled={downloadingContabil || mesSel == null}
-              onClick={() => mesSel != null && downloadContabilidade(mesSel, ano)}
-              title={mesSel == null ? "Selecione um mês para baixar a planilha do contador" : `Baixar planilha contabilidade ${MESES_FULL[mesSel - 1]} ${ano}`}
-            >
-              <FileDown className="w-3.5 h-3.5 mr-1.5" />
-              {downloadingContabil ? "Gerando…" : "Planilha Contador"}
-            </Button>
             {/* Rev. 3398 — Modo Caixa Interno: sem extrato, sem consolidação */}
             {contaSelecionadaCaixaInterno ? (
               <>
