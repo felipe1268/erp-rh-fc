@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3769 — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · O DIÁLOGO "VINCULAR CHEQUE DEVOLVIDO A PIX/TED" VOLTA A MOSTRAR O VALOR JÁ VINCULADO NO CABEÇALHO ("VINCULADO R$ X / SALDO R$ Y") MESMO QUANDO O RELATÓRIO ACABOU DE SER RECARREGADO OU AINDA ESTÁ NO 1º CARREGAMENTO. ANTES, NESSES MOMENTOS, O CABEÇALHO LIA "VINCULADO R$ 0,00 / SALDO = VALOR DO CHEQUE" APESAR DE HAVER VÍNCULO ATIVO — E REVINCULAR O MESMO PIX DAVA "ESTA LINHA JÁ ESTÁ VINCULADA A ESTE CHEQUE". FRONTEND READ-ONLY · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * CONTEXTO / CAUSA-RAIZ (cheque Doc 1063 · PIER BRASIL · R$ 4.344,60 · conta 2 · vínculo parcial R$ 3.212,92):
+ * - SINTOMA: o cabeçalho do diálogo mostrava "Vinculado R$ 0,00 / Saldo R$ 4.344,60" mesmo existindo um
+ *   vínculo ativo (bank_cheque_vinculos id=1, R$ 3.212,92). Ao tentar revincular, o backend (cobertura
+ *   FRESCA por linha, `_coberturaChequeDevolvido`) ACHAVA o vínculo e barrava com "Esta linha do extrato
+ *   já está vinculada a este cheque". CONTRADIÇÃO: o registrar via o vínculo, o cabeçalho não.
+ * - DIAGNÓSTICO (validado por reprodução pg/tsx na raiz com os helpers reais): o BACKEND está 100% correto
+ *   — `getChequeDevolvidoVinculacao` para o item {debitoLineId:12868, doc:'1063', valor:4344.60} retorna
+ *   acumulado R$ 3.212,92. O cabeçalho NÃO lê essa cobertura fresca; ele lê o `vincMap` do LOTE, que é
+ *   chaveado por TODOS os cheques devolvidos do período. Esse lote (`useQuery` sem placeholderData) zera
+ *   `data` → `vincMap = {}` em duas janelas: (a) no 1º load, até a query resolver; (b) sempre que o report
+ *   refaz (após registrar/estornar, `refreshAposVinculo` chama `refetchReport()` → `repDevol`/`vincItens`
+ *   mudam de CONTEÚDO → o lote refetcha). Com `vincMap` vazio, tanto o selo "Parcial/Vinculado" da LINHA
+ *   quanto o cabeçalho do diálogo caíam para R$ 0,00; o fallback por identidade (Rev. 3767) varre o próprio
+ *   `vincMap` vazio e não tinha o que achar. O registrar, por usar cobertura fresca independente, seguia
+ *   enxergando o vínculo — daí a contradição.
+ *
+ * CORREÇÃO (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`, 100% frontend READ-ONLY):
+ * - (1) LOTE resiliente: a `useQuery` de `getChequeDevolvidoVinculacao` (vincMap) ganhou
+ *   `placeholderData: (prev) => prev` → mantém o mapa anterior enquanto o report refetcha, em vez de zerar.
+ *   Isso conserta o selo "Parcial/Vinculado" da LINHA do cheque sumindo durante o refetch.
+ * - (2) COBERTURA DEDICADA do cheque aberto: nova `useQuery` do MESMO endpoint, porém chaveada SÓ pelo
+ *   cheque do diálogo (`vincDlgItens` = [cheque congelado], enabled quando o diálogo está aberto, também
+ *   com placeholderData). Como a chave é estável e mínima, ela não é afetada pelo refetch do report e
+ *   resolve rápido. O resultado (`vincDlgInfo` = único valor do mapa) passa a ser a fonte AUTORITATIVA do
+ *   cabeçalho: `info = vincDlgInfo ?? vincMap[debId]` (cai p/ o lote só enquanto a dedicada não resolveu).
+ *   Usa o MESMO casamento por identidade (doc/nº + valor) do backend, então acha o vínculo id=1 mesmo que
+ *   a linha do extrato tenha trocado de id num re-import. O cabeçalho passa a sempre espelhar o que o
+ *   registrar enxerga — fim da contradição "0,00 no cabeçalho × já vinculada no registrar".
+ *
+ * REGRA DE OURO PRESERVADA: vincular NUNCA cria/altera/concilia linha de extrato; tudo aqui é leitura.
+ * `refreshAposVinculo` já invalida `getChequeDevolvidoVinculacao` (cobre lote + dedicada, mesmo endpoint).
+ *
  * Rev. 3768 — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · DIÁLOGOS "CONCILIAR PIX NO EXTRATO" E "TROCAR LANÇAMENTO VINCULADO" AGORA PRIORIZAM, NO TOPO DA LISTA "CHEQUES DO CONTROLE DE CHEQUES (SEM LANÇAMENTO)", OS CHEQUES CUJO VALOR BATE COM O DA LINHA/PIX QUE ESTÁ SENDO CONCILIADA. ANTES, FORNECEDOR COM CENTENAS DE CHEQUES (EX. FERRAGENS SANTA RITA = 928) FAZIA O CHEQUE-ALVO CAIR FORA DO TETO DE 30 LINHAS E SUMIR DA LISTA. BACKEND READ-ONLY · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * CONTEXTO / CAUSA-RAIZ (cheque Doc 860 · FERRAGENS SANTA RITA · R$ 7.852,16):

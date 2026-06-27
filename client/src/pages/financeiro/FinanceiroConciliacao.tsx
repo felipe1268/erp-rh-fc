@@ -1327,9 +1327,39 @@ export default function FinanceiroConciliacao() {
     .filter((x: any) => Number.isFinite(x.debitoLineId) && x.debitoLineId > 0);
   const { data: vincLoteData } = (trpc as any).financial.getChequeDevolvidoVinculacao.useQuery(
     { companyId: Number(companyId), itens: vincItens },
-    { enabled: !!companyId && vincItens.length > 0 }
+    // Rev. 3769 — placeholderData: mantém o mapa anterior enquanto o report refaz (após
+    // registrar/estornar, refreshAposVinculo refaz o report → repDevol/vincItens mudam de
+    // conteúdo → o lote refetcha). Sem isso, vincMap zera transitoriamente e a LINHA do
+    // cheque some o selo "Parcial/Vinculado" + o cabeçalho do diálogo lê "Vinculado R$ 0,00".
+    { enabled: !!companyId && vincItens.length > 0, placeholderData: (prev: any) => prev }
   );
   const vincMap: Record<string, any> = vincLoteData?.mapa ?? {};
+  // Rev. 3769 — COBERTURA DEDICADA do cheque aberto no diálogo "Vincular cheque devolvido".
+  // O lote (vincMap) é chaveado por TODOS os cheques do período e zera quando o report refaz
+  // (e fica vazio no 1º load até resolver). Isso fazia o cabeçalho mostrar "Vinculado R$ 0,00"
+  // mesmo havendo vínculo ativo, enquanto o REGISTRAR (cobertura fresca por linha) achava o
+  // vínculo e barrava com "Esta linha já vinculada a este cheque" — a contradição reportada.
+  // Esta query é chaveada SÓ pelo cheque aberto (chave estável), usa o MESMO casamento por
+  // identidade (doc/nº + valor) e por isso é AUTORITATIVA p/ o cabeçalho. READ-ONLY.
+  const vincDlgItens = vincularPixDlg?.cheque ? [{
+    debitoLineId: Number(vincularPixDlg.cheque.debitoId),
+    creditoLineId: vincularPixDlg.cheque.creditoId != null ? Number(vincularPixDlg.cheque.creditoId) : undefined,
+    valor: Math.abs(Number(vincularPixDlg.cheque.valor) || (Number(vincularPixDlg.cheque.valorCents) || 0) / 100),
+    dataRef: String(vincularPixDlg.cheque.dataDebito ?? vincularPixDlg.cheque.dataCredito ?? "").slice(0, 10) || undefined,
+    doc: vincularPixDlg.cheque.doc != null ? String(vincularPixDlg.cheque.doc) : undefined,
+    chequeNumero: vincularPixDlg.cheque.chequeNumero != null ? String(vincularPixDlg.cheque.chequeNumero) : undefined,
+  }].filter((x: any) => Number.isFinite(x.debitoLineId) && x.debitoLineId > 0) : [];
+  // NB: SEM placeholderData aqui de propósito. Ao TROCAR de cheque no diálogo a chave muda;
+  // com placeholderData o cabeçalho herdaria os números do cheque ANTERIOR até a nova resposta
+  // chegar (stale cross-cheque). Sem ele, `vincDlgData` zera na troca → `vincDlgInfo` vira null
+  // → o cabeçalho cai p/ `vincMap[debId]` (já do cheque CERTO, mantido vivo pelo placeholderData
+  // do lote) até a dedicada resolver. Refetch da MESMA chave (invalidação pós-vínculo) preserva
+  // `data` por padrão no RQ v5, então não pisca 0 no fluxo normal.
+  const { data: vincDlgData } = (trpc as any).financial.getChequeDevolvidoVinculacao.useQuery(
+    { companyId: Number(companyId), itens: vincDlgItens },
+    { enabled: !!companyId && !!vincularPixDlg && vincDlgItens.length > 0 }
+  );
+  const vincDlgInfo: any = vincDlgData?.mapa ? (Object.values(vincDlgData.mapa)[0] ?? null) : null;
   // Rev. 3762 — "resolvido" = cheque já tratado: quitação real (reapresentado / PIX-TED),
   // quitação por substituição (vínculos cobrem o valor) ou desconsiderado do %. Espelha
   // exatamente os selos exibidos na linha. Read-only — não muda contador nem cálculo.
@@ -6884,7 +6914,10 @@ export default function FinanceiroConciliacao() {
           // lia "Vinculado R$ 0,00" mesmo havendo vínculo gravado. Quando a entrada direta não
           // cobre, varre o mapa por identidade do cheque (mesmo valor + doc OU nº) e adota a chave
           // viva — assim o cabeçalho mostra o valor real e o registrar/estornar usam o id certo.
-          let info: any = vincMap[String(debId)];
+          // Rev. 3769 — fonte AUTORITATIVA = cobertura dedicada do cheque aberto (vincDlgInfo),
+          // chaveada só por este cheque e imune ao vincMap zerar durante refetch do report.
+          // Só cai p/ vincMap quando a dedicada ainda não resolveu (null).
+          let info: any = vincDlgInfo ?? vincMap[String(debId)];
           if (!info || (!(Number(info.acumulado) > 0) && !((info.vinculos ?? []).length))) {
             const normId = (v: any) => (v == null ? null : (String(v).replace(/^0+/, "") || String(v)));
             const wantDoc = chq.doc != null ? normId(chq.doc) : null;
