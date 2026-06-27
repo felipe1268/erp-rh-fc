@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3778** — **FINANCEIRO · 5 LANÇAMENTOS "FATURAMENTO DE OBRAS" → `id 479 · MEDIÇÃO DE OBRA`. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3777** — **FINANCEIRO · 13 LANÇAMENTOS DO ROSENDO NUNES ROSA MOVIDOS DE `ALUGUEL - OBRA` → `FRETES - OBRA`. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3776** — **FINANCEIRO · `id 488 · RENDIMENTO FINANCEIRO` DESATIVADA; LANÇAMENTO MIGRADO PARA `id 489 · JUROS E RENDIMENTOS RECEBIDOS`; ALIAS NO MAPA CANÔNICO. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
