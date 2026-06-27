@@ -782,44 +782,63 @@ function DrillBody({
   if (drill.kind === "info") {
     return (
       <>
-        <DialogHeader className="px-6 pt-6 pb-4 border-b border-gray-100">
-          <DialogTitle className="flex items-center gap-2 text-gray-900">
-            <Info className="w-5 h-5 text-orange-500" /> {drill.label}
-          </DialogTitle>
-          <DialogDescription className="text-gray-500">Composição da linha do DRE</DialogDescription>
-        </DialogHeader>
-        <div className="px-6 py-8 text-sm text-gray-600 leading-relaxed break-words">{drill.texto}</div>
+        <div className="rounded-t-2xl px-6 pt-6 pb-5 shrink-0"
+             style={{ background: "linear-gradient(135deg,#1B2A4A 0%,#243a63 100%)" }}>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
+              <Info className="w-5 h-5 text-orange-400" />
+            </div>
+            <div className="min-w-0">
+              <DialogTitle className="text-base font-bold text-white leading-tight break-words">{drill.label}</DialogTitle>
+              <DialogDescription className="text-xs text-white/55 mt-0.5">Composição da linha do DRE</DialogDescription>
+            </div>
+          </div>
+        </div>
+        <div className="px-6 py-8 text-sm text-gray-600 leading-relaxed break-words bg-gray-50/40 flex-1">
+          {drill.texto}
+        </div>
       </>
     );
   }
 
   if (drill.kind === "ratio") {
     const pctTxt = `${drill.valuePct.toFixed(1).replace(".", ",")}%`;
+    const isPos = drill.valuePct >= 0;
     return (
       <>
-        <DialogHeader className="px-6 pt-6 pb-4 border-b border-gray-100">
-          <DialogTitle className="flex items-center gap-2 text-gray-900">
-            <Percent className="w-5 h-5 text-orange-500" /> {drill.label}
-          </DialogTitle>
-          <DialogDescription className="text-gray-500">Como esta margem é calculada</DialogDescription>
-        </DialogHeader>
-        <div className="px-6 py-6 space-y-4">
-          <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-4 space-y-2.5">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-600 break-words">{drill.numLabel}</span>
-              <span className={`font-semibold tabular-nums ${drill.num >= 0 ? "text-emerald-700" : "text-red-600"}`}>{formatBRL(drill.num)}</span>
+        <div className="rounded-t-2xl px-6 pt-6 pb-5 shrink-0"
+             style={{ background: "linear-gradient(135deg,#1B2A4A 0%,#243a63 100%)" }}>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
+              <Percent className="w-5 h-5 text-orange-400" />
             </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-600 break-words">÷ {drill.denLabel}</span>
-              <span className="font-semibold tabular-nums text-gray-700">{formatBRL(drill.den)}</span>
-            </div>
-            <div className="border-t border-gray-200 pt-2.5 flex items-center justify-between">
-              <span className="text-sm font-bold text-gray-800">= {drill.label}</span>
-              <span className={`text-base font-extrabold tabular-nums ${drill.valuePct >= 0 ? "text-emerald-600" : "text-red-600"}`}>{pctTxt}</span>
+            <div className="min-w-0">
+              <DialogTitle className="text-base font-bold text-white leading-tight break-words">{drill.label}</DialogTitle>
+              <DialogDescription className="text-xs text-white/55 mt-0.5">Como esta margem é calculada</DialogDescription>
             </div>
           </div>
-          <p className="text-xs text-gray-500 leading-relaxed">
-            A margem é a divisão de <strong>{drill.numLabel}</strong> pela <strong>{drill.denLabel}</strong>, expressa em percentual. Clique nas linhas de valor do DRE para ver os lançamentos que compõem cada parcela.
+          <div className="pt-4 border-t border-white/10">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-white/40 mb-1">Resultado</p>
+            <p className={`text-2xl font-black tabular-nums ${isPos ? "text-emerald-400" : "text-red-400"}`}>{pctTxt}</p>
+          </div>
+        </div>
+        <div className="px-6 py-6 space-y-4 bg-gray-50/40 flex-1">
+          <div className="bg-white rounded-xl border border-gray-100 divide-y divide-gray-50 overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3.5 text-sm">
+              <span className="text-gray-500 break-words">{drill.numLabel}</span>
+              <span className={`font-bold tabular-nums ${drill.num >= 0 ? "text-emerald-700" : "text-red-600"}`}>{formatBRL(drill.num)}</span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3.5 text-sm">
+              <span className="text-gray-500 break-words">÷ {drill.denLabel}</span>
+              <span className="font-bold tabular-nums text-gray-700">{formatBRL(drill.den)}</span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3.5 bg-gray-50/80">
+              <span className="text-sm font-bold text-gray-800">= {drill.label}</span>
+              <span className={`text-base font-extrabold tabular-nums ${isPos ? "text-emerald-600" : "text-red-600"}`}>{pctTxt}</span>
+            </div>
+          </div>
+          <p className="text-xs text-gray-400 leading-relaxed">
+            A margem é a divisão de <strong className="text-gray-600">{drill.numLabel}</strong> pela <strong className="text-gray-600">{drill.denLabel}</strong>, expressa em percentual.
           </p>
         </div>
       </>
@@ -827,31 +846,42 @@ function DrillBody({
   }
 
   if (drill.kind === "composicao") {
+    const isPos = drill.value >= 0;
     return (
       <>
-        <DialogHeader className="px-6 pt-6 pb-4 border-b border-gray-100">
-          <DialogTitle className="flex items-center gap-2 text-gray-900">
-            <Calculator className="w-5 h-5 text-orange-500" /> {drill.label}
-          </DialogTitle>
-          <DialogDescription className="text-gray-500">Composição do resultado a partir das linhas anteriores</DialogDescription>
-        </DialogHeader>
-        <div className="px-6 py-6 space-y-3">
-          <div className="rounded-xl border border-gray-100 overflow-hidden">
+        <div className="rounded-t-2xl px-6 pt-6 pb-5 shrink-0"
+             style={{ background: "linear-gradient(135deg,#1B2A4A 0%,#243a63 100%)" }}>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
+              <Calculator className="w-5 h-5 text-orange-400" />
+            </div>
+            <div className="min-w-0">
+              <DialogTitle className="text-base font-bold text-white leading-tight break-words">{drill.label}</DialogTitle>
+              <DialogDescription className="text-xs text-white/55 mt-0.5">Composição do resultado a partir das linhas anteriores</DialogDescription>
+            </div>
+          </div>
+          <div className="pt-4 border-t border-white/10">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-white/40 mb-1">Resultado</p>
+            <p className={`text-2xl font-black tabular-nums ${isPos ? "text-emerald-400" : "text-red-400"}`}>{formatBRL(drill.value)}</p>
+          </div>
+        </div>
+        <div className="px-6 py-6 space-y-4 bg-gray-50/40 flex-1">
+          <div className="bg-white rounded-xl border border-gray-100 divide-y divide-gray-50 overflow-hidden">
             {drill.itens.map((it, i) => (
-              <div key={i} className="flex items-center justify-between px-4 py-3 text-sm border-b border-gray-100 last:border-0">
-                <span className="text-gray-600 break-words">{it.label}</span>
-                <span className={`font-semibold tabular-nums ${it.contrib >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+              <div key={i} className="flex items-center justify-between px-4 py-3.5 text-sm">
+                <span className="text-gray-500 break-words">{it.label}</span>
+                <span className={`font-bold tabular-nums ${it.contrib >= 0 ? "text-emerald-700" : "text-red-600"}`}>
                   {it.contrib < 0 ? `(${formatBRL(Math.abs(it.contrib))})` : formatBRL(it.contrib)}
                 </span>
               </div>
             ))}
-            <div className="flex items-center justify-between px-4 py-3 bg-gray-50/80">
+            <div className="flex items-center justify-between px-4 py-3.5 bg-gray-50/80">
               <span className="text-sm font-bold text-gray-800">= {drill.label}</span>
-              <span className={`text-base font-extrabold tabular-nums ${drill.value >= 0 ? "text-emerald-600" : "text-red-600"}`}>{formatBRL(drill.value)}</span>
+              <span className={`text-base font-extrabold tabular-nums ${isPos ? "text-emerald-600" : "text-red-600"}`}>{formatBRL(drill.value)}</span>
             </div>
           </div>
-          <p className="text-xs text-gray-500 leading-relaxed">
-            Esta linha é um resultado calculado. Para ver os lançamentos individuais, clique nas linhas de receita, custo ou despesa que a compõem.
+          <p className="text-xs text-gray-400 leading-relaxed">
+            Esta linha é um resultado calculado. Clique nas linhas de receita, custo ou despesa que a compõem para ver os lançamentos individuais.
           </p>
         </div>
       </>
@@ -861,77 +891,148 @@ function DrillBody({
   // kind === "leaf"
   const leaf = drill as Extract<DrillState, { kind: "leaf" }>;
   const d = detalhe.data;
+  const total = d?.total ?? 0;
+  const maxCat = d?.porConta?.length ? Math.max(...d.porConta.map((c: any) => c.total)) : 1;
+  const valorCls = leaf.negativo ? "text-red-400" : "text-emerald-400";
+  const barCls   = leaf.negativo ? "bg-red-400"   : "bg-emerald-400";
+
   return (
     <>
-      <DialogHeader className="px-6 pt-6 pb-4 border-b border-gray-100">
-        <DialogTitle className="flex items-center gap-2 text-gray-900">
-          <ListTree className="w-5 h-5 text-orange-500" /> {leaf.label}
-        </DialogTitle>
-        <DialogDescription className="text-gray-500">
-          Lançamentos que compõem esta linha no período selecionado
-        </DialogDescription>
-      </DialogHeader>
+      {/* ── Cabeçalho NAVY ── */}
+      <div className="rounded-t-2xl px-6 pt-6 pb-5 shrink-0"
+           style={{ background: "linear-gradient(135deg,#1B2A4A 0%,#243a63 100%)" }}>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
+            <ListTree className="w-5 h-5 text-orange-400" />
+          </div>
+          <div className="min-w-0">
+            <DialogTitle className="text-base font-bold text-white leading-tight break-words">{leaf.label}</DialogTitle>
+            <DialogDescription className="text-xs text-white/55 mt-0.5">
+              Lançamentos que compõem esta linha no período
+            </DialogDescription>
+          </div>
+        </div>
 
-      <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-        <span className="text-sm text-gray-500">
-          {detalhe.isLoading ? "Carregando…" : `${(d?.qtdTotal ?? 0).toLocaleString("pt-BR")} lançamento(s)`}
-        </span>
-        <span className={`text-lg font-extrabold tabular-nums ${leaf.negativo ? "text-red-600" : "text-emerald-600"}`}>
-          {leaf.negativo ? `(${formatBRL(d?.total ?? 0)})` : formatBRL(d?.total ?? 0)}
-        </span>
+        {/* KPI inline */}
+        <div className="flex items-end justify-between gap-4 pt-4 border-t border-white/10">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-white/40 mb-1">Total realizado</p>
+            {detalhe.isLoading
+              ? <div className="h-8 w-40 rounded-lg bg-white/10 animate-pulse" />
+              : <p className={`text-2xl font-black tabular-nums ${valorCls}`}>
+                  {leaf.negativo ? `(${formatBRL(total)})` : formatBRL(total)}
+                </p>
+            }
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-white/40 mb-1">Lançamentos</p>
+            {detalhe.isLoading
+              ? <div className="h-6 w-16 rounded-lg bg-white/10 animate-pulse" />
+              : <p className="text-lg font-bold text-white tabular-nums">
+                  {(d?.qtdTotal ?? 0).toLocaleString("pt-BR")}
+                </p>
+            }
+          </div>
+        </div>
       </div>
 
-      <div className="overflow-y-auto flex-1 px-6 py-4 space-y-5">
+      {/* ── Corpo scrollável ── */}
+      <div className="overflow-y-auto flex-1 px-5 py-5 space-y-6 bg-gray-50/40">
+
         {detalhe.isLoading && (
-          <div className="space-y-2">
-            {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
+          <div className="space-y-3 pt-1">
+            {Array.from({ length: 7 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <Skeleton className="h-4 flex-1" />
+                <Skeleton className="h-4 w-24 shrink-0" />
+              </div>
+            ))}
           </div>
         )}
+
         {detalhe.isError && (
-          <div className="rounded-xl border border-red-100 bg-red-50/60 p-4 text-sm text-red-700 flex items-start gap-2">
+          <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700 flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
             <span className="break-words">Não foi possível carregar o detalhamento. {detalhe.error?.message}</span>
           </div>
         )}
+
         {!detalhe.isLoading && !detalhe.isError && d && (
           <>
+            {/* ── Por categoria ── */}
             {d.porConta.length > 0 && (
               <div>
-                <h4 className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-2 flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5" /> Por categoria
-                </h4>
-                <div className="rounded-xl border border-gray-100 overflow-hidden">
-                  {d.porConta.map((c, i) => (
-                    <div key={i} className="flex items-center justify-between px-4 py-2.5 text-sm border-b border-gray-100 last:border-0">
-                      <span className="text-gray-600 break-words flex-1 min-w-0 pr-3">
-                        {c.conta} <span className="text-gray-400">· {c.qtd}</span>
-                      </span>
-                      <span className={`font-semibold tabular-nums shrink-0 ${leaf.negativo ? "text-red-600" : "text-emerald-700"}`}>{formatBRL(c.total)}</span>
-                    </div>
-                  ))}
+                <div className="flex items-center gap-2 mb-3">
+                  <Layers className="w-3.5 h-3.5 text-orange-500" />
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-gray-400">Por categoria</span>
+                </div>
+
+                <div className="space-y-2">
+                  {d.porConta.map((c: any, i: number) => {
+                    const pct = total > 0 ? (c.total / total) * 100 : 0;
+                    const barPct = maxCat > 0 ? (c.total / maxCat) * 100 : 0;
+                    return (
+                      <div key={i} className="bg-white rounded-xl border border-gray-100 px-4 py-3 hover:border-gray-200 transition-colors">
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <span className="text-sm text-gray-700 font-medium break-words flex-1 min-w-0 leading-snug">
+                            {c.conta}
+                          </span>
+                          <div className="text-right shrink-0">
+                            <p className={`text-sm font-bold tabular-nums ${leaf.negativo ? "text-red-600" : "text-emerald-700"}`}>
+                              {formatBRL(c.total)}
+                            </p>
+                            <p className="text-[10px] text-gray-400 mt-0.5">
+                              {c.qtd} lanç. · {pct.toFixed(1)}%
+                            </p>
+                          </div>
+                        </div>
+                        {/* barra de proporção */}
+                        <div className="h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${barCls} transition-all duration-500`}
+                            style={{ width: `${barPct}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
 
+            {/* ── Lançamentos individuais ── */}
             {d.itens.length > 0 && (
               <div>
-                <h4 className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-2 flex items-center gap-1.5">
-                  <ListTree className="w-3.5 h-3.5" /> Lançamentos
-                  {d.itensTruncados && <span className="font-normal normal-case text-gray-400">(maiores {d.itens.length.toLocaleString("pt-BR")})</span>}
-                </h4>
-                <div className="rounded-xl border border-gray-100 overflow-hidden">
-                  {d.itens.map((it) => (
-                    <div key={`${it.id}-${it.descricao}`} className="flex items-start justify-between gap-3 px-4 py-2.5 text-sm border-b border-gray-100 last:border-0 hover:bg-gray-50/60">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <ListTree className="w-3.5 h-3.5 text-orange-500" />
+                    <span className="text-[11px] font-bold uppercase tracking-widest text-gray-400">Lançamentos</span>
+                  </div>
+                  {d.itensTruncados && (
+                    <span className="text-[11px] text-gray-400 bg-gray-100 rounded-full px-2.5 py-0.5">
+                      maiores {d.itens.length.toLocaleString("pt-BR")}
+                    </span>
+                  )}
+                </div>
+
+                <div className="bg-white rounded-xl border border-gray-100 overflow-hidden divide-y divide-gray-50">
+                  {d.itens.map((it: any) => (
+                    <div key={`${it.id}-${it.descricao}`}
+                         className="flex items-start justify-between gap-3 px-4 py-3 hover:bg-gray-50/70 transition-colors">
                       <div className="min-w-0 flex-1">
-                        <p className="text-gray-700 break-words">{it.descricao}</p>
-                        <p className="text-xs text-gray-400 break-words">
+                        <p className="text-sm text-gray-800 font-medium break-words leading-snug">
+                          {it.descricao || "(Sem descrição)"}
+                        </p>
+                        <p className="text-[11px] text-gray-400 mt-0.5 break-words">
                           {it.data ? new Date(it.data).toLocaleDateString("pt-BR") : "—"}
                           {it.conta ? ` · ${it.conta}` : ""}
                           {it.contraparte ? ` · ${it.contraparte}` : ""}
                           {it.obraNome ? ` · ${it.obraNome}` : ""}
                         </p>
                       </div>
-                      <span className={`font-semibold tabular-nums shrink-0 ${leaf.negativo ? "text-red-600" : "text-emerald-700"}`}>{formatBRL(it.valor)}</span>
+                      <span className={`text-sm font-bold tabular-nums shrink-0 ${leaf.negativo ? "text-red-600" : "text-emerald-700"}`}>
+                        {formatBRL(it.valor)}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -939,7 +1040,10 @@ function DrillBody({
             )}
 
             {d.porConta.length === 0 && d.itens.length === 0 && (
-              <div className="py-10 text-center text-sm text-gray-400">Nenhum lançamento nesta linha para o período.</div>
+              <div className="py-14 text-center">
+                <ListTree className="w-8 h-8 text-gray-200 mx-auto mb-3" />
+                <p className="text-sm text-gray-400">Nenhum lançamento nesta linha para o período.</p>
+              </div>
             )}
           </>
         )}
