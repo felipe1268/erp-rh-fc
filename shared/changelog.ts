@@ -1,6 +1,8 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3773 — **FINANCEIRO · CONTAS DUPLICADAS DE MATERIAIS ELIMINADAS: `id 56 · Materiais e Insumos` E `id 218 · Materiais para Obra` DESATIVADAS; LANÇAMENTOS MIGRADOS PARA `id 281 · MATERIAIS DE OBRA`; MAPA CANÔNICO ATUALIZADO. ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
  * Rev. 3772 — **FINANCEIRO · CONTAS · `id 265 · VALE ALIMENTAÇÃO - OBRA` RENOMEADA PARA `VALE ALIMENTAÇÃO` (SEM "- OBRA"): CONTA ATUALIZADA EM `financial_accounts` + TODOS OS LANÇAMENTOS COM `conta_id=265` NORMALIZADOS + TODAS AS STRINGS DE IMPORT (financialIntegrationBridge, payrollProjectionBridge) ATUALIZADAS PARA O NOME CANÔNICO. ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * ARQUIVOS: financial_accounts id=265 (UPDATE nome), financial_entries (UPDATE conta_nome WHERE conta_id=265),

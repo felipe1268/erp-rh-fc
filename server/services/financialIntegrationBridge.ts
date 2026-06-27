@@ -76,6 +76,10 @@ export const CONTA_ID_BY_NOME: Record<string, number> = {
   "MÃO DE OBRA TERCEIRIZADA - OBRA": 23,
   "MÃO DE OBRA TERCEIRIZADA / SUBEMPREITEIRO": 23,
   "Subempreiteiros": 23,
+  // Materiais
+  "Materiais e Insumos": 281,
+  "Materiais para Obra": 281,
+  "MATERIAIS DE OBRA": 281,
   // Serviços / Jurídico / Marketing
   "SERV": 391,
   "PRESTAÇÃO DE SERVIÇO": 391,
