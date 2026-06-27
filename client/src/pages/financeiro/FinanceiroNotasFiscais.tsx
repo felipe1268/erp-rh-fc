@@ -349,7 +349,7 @@ export default function FinanceiroNotasFiscais() {
     if (!sefazCfg) { setCountdownSec(null); return; }
     const calcSecs = () => {
       try {
-        const intervaloHoras = Math.max(1, Number(sefazCfg.sync_intervalo_horas ?? 1));
+        const intervaloHoras = Math.max(2, Number(sefazCfg.sync_intervalo_horas ?? 2));
         const result = JSON.parse(sefazCfg.last_sync_result || "{}");
         // Backoff progressivo: mesmo cálculo do backend
         const consecutiveRl = result?.rateLimitedAt ? Math.max(1, result?.rateLimitConsecutive ?? 1) : 0;
@@ -1153,11 +1153,11 @@ export default function FinanceiroNotasFiscais() {
               {/* Cronômetro de próxima sync + controles rápidos */}
               {sefazCfg && (() => {
                 const syncOn = Boolean(Number(sefazCfg.sync_enabled));
-                const intervaloH = Number(sefazCfg.sync_intervalo_horas ?? 1);
+                const intervaloH = Math.max(2, Number(sefazCfg.sync_intervalo_horas ?? 2));
                 const _rlResult = (() => { try { return JSON.parse(sefazCfg.last_sync_result || "{}"); } catch { return {}; } })();
                 const _consec = _rlResult?.rateLimitedAt ? Math.max(1, _rlResult?.rateLimitConsecutive ?? 1) : 0;
                 const _rlMult = _consec >= 4 ? 4 : _consec >= 2 ? 2 : 1;
-                const gateTotal = (Math.max(1, intervaloH) * 60 + 3) * 60 * _rlMult;
+                const gateTotal = (intervaloH * 60 + 3) * 60 * _rlMult;
                 return (
                   <div className={`rounded-xl border px-4 py-3 ${
                     !syncOn
@@ -1282,7 +1282,7 @@ export default function FinanceiroNotasFiscais() {
                             ambiente: sefazCfg.ambiente ?? "producao",
                             syncEnabled: true,
                             syncHora: Number(sefazCfg.sync_hora ?? 6),
-                            syncIntervaloHoras: Number(sefazCfg.sync_intervalo_horas ?? 1),
+                            syncIntervaloHoras: Math.max(2, Number(sefazCfg.sync_intervalo_horas ?? 2)),
                           })}
                           disabled={sefazEnableSyncMut.isPending}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60 transition-colors"

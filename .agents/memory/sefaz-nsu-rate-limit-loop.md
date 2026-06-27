@@ -60,6 +60,16 @@ bater na SEFAZ poucos minutos após a anterior → 656 na hora + backoff escalad
 ajuste só `ultimo_nsu` (via MAX(nsu_sefaz)) e deixe o `last_sync_at` real intacto; a próxima sync
 bem-espaçada resolve. Resetar `rateLimitConsecutive` é ok, mas mantenha o espaçamento de 2h.
 
+## sync_intervalo_horas < 2 causa 656 sistemático
+`sync_intervalo_horas = 1.5` → cooldown base = 93 min, abaixo do teto SEFAZ de 120 min. Toda chamada
+sem backoff chega cedo demais → 656 → backoff escala → timer parece "não funcionar" (conta até 0,
+sincroniza, falha, reseta para valor maior). O CNPJ acumula violações e SEFAZ pode enforçar lockout
+mais longo que 2h. **Why:** a SEFAZ conta CHAMADAS, não só intervalo; um CNPJ com histórico de
+violações recentes fica bloqueado mesmo após gaps de 6h+. **How to apply:** `sync_intervalo_horas`
+nunca < 2; backend em `executarSyncNFe` usa `Math.max(2, intervalo)` + validação zod `.min(2)` +
+UI mostra aviso âmbar "mínimo 2h (exigência da SEFAZ)". Diagnose via: `SELECT sync_intervalo_horas
+FROM company_nfe_config WHERE company_id=X`.
+
 ## Importação alternativa via XML
 Para histórico 2018-2026: botão "Importar XML" na aba NF-e Recebidas aceita nfeProc/NFe XML.
 Endpoint `sefaz.importXml`; `listNFeRecebidas` filtra `IN ('sefaz_nfe', 'xml_upload')`.

@@ -106,7 +106,7 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
   const UF_LIST = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
   // ── SEFAZ state ──
-  const [sefazForm, setSefazForm] = useState({ cnpj: "", uf: "SP", ambiente: "producao", syncEnabled: true, syncHora: 6, syncMinuto: 0, syncIntervaloHoras: 1 });
+  const [sefazForm, setSefazForm] = useState({ cnpj: "", uf: "SP", ambiente: "producao", syncEnabled: true, syncHora: 6, syncMinuto: 0, syncIntervaloHoras: 2 });
   const [intervaloInput, setIntervaloInput] = useState("1");
   const [sefazPassword, setSefazPassword] = useState("");
   const [sefazCertName, setSefazCertName] = useState<string | null>(null);
@@ -125,9 +125,9 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
         syncEnabled: Number(sefazCfg.sync_enabled) === 1,
         syncHora: Number(sefazCfg.sync_hora ?? 6),
         syncMinuto: Number(sefazCfg.sync_minuto ?? 0),
-        syncIntervaloHoras: Number(sefazCfg.sync_intervalo_horas ?? 1),
+        syncIntervaloHoras: Math.max(2, Number(sefazCfg.sync_intervalo_horas ?? 2)),
       });
-      setIntervaloInput(String(Number(sefazCfg.sync_intervalo_horas ?? 1)));
+      setIntervaloInput(String(Math.max(2, Number(sefazCfg.sync_intervalo_horas ?? 2))));
     }
   }, [sefazCfg]);
 
@@ -577,7 +577,7 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
               <div className="flex-1 min-w-0">
                 <span className="text-sm font-medium text-gray-800">Sincronização automática</span>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Busca NF-e automaticamente a cada <strong>{fmtIntervalHoras(sefazForm.syncIntervaloHoras)}</strong> (limite SEFAZ: 1 chamada/hora/CNPJ — mínimo 1h).
+                  Busca NF-e automaticamente a cada <strong>{fmtIntervalHoras(sefazForm.syncIntervaloHoras)}</strong> (limite SEFAZ: 1 chamada a cada 2h por CNPJ — <strong className="text-amber-600">mínimo 2h</strong>).
                   O histórico completo é trazido aos poucos — até 50 NF-e por chamada, sem ação manual.
                 </p>
               </div>
@@ -599,7 +599,7 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
                 <div className="flex-1 min-w-0">
                   <span className="text-sm font-medium text-gray-800">Frequência de consulta à SEFAZ</span>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    Mínimo <strong>1h</strong>. Use decimal para frações — ex: <strong>1.5 = 1h 30min</strong>, 1.25 = 1h 15min.
+                    Mínimo <strong className="text-amber-600">2h</strong> (exigência da SEFAZ). Use decimal para frações — ex: <strong>2.5 = 2h 30min</strong>.
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-0.5 shrink-0">
@@ -612,13 +612,13 @@ export function FinanceiroConfigSection({ onManageSocios }: { onManageSocios?: (
                         const val = e.target.value.replace(",", ".");
                         setIntervaloInput(val);
                         const v = parseFloat(val);
-                        if (!isNaN(v) && v >= 1 && v <= 24) {
+                        if (!isNaN(v) && v >= 2 && v <= 24) {
                           setSefazForm(f => ({ ...f, syncIntervaloHoras: v }));
                         }
                       }}
                       onBlur={() => {
-                        const v = parseFloat(intervaloInput.replace(",", ".")) || 1;
-                        const snapped = Math.round(Math.max(1, Math.min(24, v)) * 4) / 4;
+                        const v = parseFloat(intervaloInput.replace(",", ".")) || 2;
+                        const snapped = Math.round(Math.max(2, Math.min(24, v)) * 4) / 4;
                         setIntervaloInput(String(snapped));
                         setSefazForm(f => ({ ...f, syncIntervaloHoras: snapped }));
                       }}
