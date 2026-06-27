@@ -1100,46 +1100,7 @@ function DrillBody({
               </div>
             )}
 
-            {/* ── Lançamentos individuais (todos) ── */}
-            {d.itens.length > 0 && (
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <ListTree className="w-3.5 h-3.5 text-orange-500" />
-                    <span className="text-[11px] font-bold uppercase tracking-widest text-gray-400">Todos os lançamentos</span>
-                  </div>
-                  {d.itensTruncados && (
-                    <span className="text-[11px] text-gray-400 bg-gray-100 rounded-full px-2.5 py-0.5">
-                      maiores {d.itens.length.toLocaleString("pt-BR")}
-                    </span>
-                  )}
-                </div>
-
-                <div className="bg-white rounded-xl border border-gray-100 overflow-hidden divide-y divide-gray-50">
-                  {d.itens.map((it: any) => (
-                    <div key={`${it.id}-${it.descricao}`}
-                         className="flex items-start justify-between gap-3 px-4 py-3 hover:bg-gray-50/70 transition-colors">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm text-gray-800 font-medium break-words leading-snug">
-                          {it.descricao || "(Sem descrição)"}
-                        </p>
-                        <p className="text-[11px] text-gray-400 mt-0.5 break-words">
-                          {it.data ? new Date(it.data).toLocaleDateString("pt-BR") : "—"}
-                          {it.conta ? ` · ${it.conta}` : ""}
-                          {it.contraparte ? ` · ${it.contraparte}` : ""}
-                          {it.obraNome ? ` · ${it.obraNome}` : ""}
-                        </p>
-                      </div>
-                      <span className={`text-sm font-bold tabular-nums shrink-0 ${leaf.negativo ? "text-red-600" : "text-emerald-700"}`}>
-                        {formatBRL(it.valor)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {d.porConta.length === 0 && d.itens.length === 0 && (
+            {d.porConta.length === 0 && (
               <div className="py-14 text-center">
                 <ListTree className="w-8 h-8 text-gray-200 mx-auto mb-3" />
                 <p className="text-sm text-gray-400">Nenhum lançamento nesta linha para o período.</p>
