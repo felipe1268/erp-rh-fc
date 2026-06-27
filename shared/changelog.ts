@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3809 — **FINANCEIRO · DRE · ROTEAMENTO CDO vs. FOLHA — PILOTO JAN/2026.**
+ * Contexto: a folha de Jan/2026 entrou no sistema via extrato bancário (sem dados por funcionário),
+ * então o retroativo parcial trata os 35 PIX individuais identificáveis por nome.
+ * (1) JOB_FUNCTION CORRIGIDA: COORDENADOR(A) DE PLANEJAMENTO (job_functions id=47) tinha
+ *     categoria_mo=NULL; corrigido para indireta_obra (Mariana, alocada em obra específica).
+ * (2) 33 PIX INDIVIDUAIS (R$54.651,50) RECLASSIFICADOS DE FOLHA (conta 506) PARA CDO:
+ *     - 21 entries funcionários direto → MÃO DE OBRA DIRETA (conta id=22) = R$27.385
+ *     - 12 entries funcionários indireta_obra → MÃO DE OBRA INDIRETA (conta id=21) = R$27.266
+ *     Critério: cruzamento nome no extrato × employees."nomeCompleto" → job_functions.categoria_mo.
+ *     Como 0 funcionários ativos são escritorio_central, toda ambiguidade de nome resolve para CDO.
+ * (3) OBRA_ID ATRIBUÍDO A 14 ENTRIES via time_records Jan/2026 (obraId disponível):
+ *     obras 90001 (Hotel Qiu 2 - Fase 4), 90005 (ESCRITÓRIO CENTRAL), 120001 (UTC Compostagem).
+ * (4) 2 ENTRIES SEM MATCH (R$2.503 — Priscila da Silva Monteiro + Myrielle Fialho Borges Arcanjo)
+ *     PERMANECEM EM CONTA 506 para resolução manual.
+ * Diagnóstico completo: 93 func direto, 32 func indireta_obra, 0 escritorio_central ativos.
+ * A partir de Mar/2026, folha será importada via módulo RH (folha_lancamentos/folha_itens)
+ * e o roteamento automático CDO vs. Folha ocorrerá via financialIntegrationBridge.ts.
+ * ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3808 — **FINANCEIRO · DRE · RECLASSIFICAÇÃO CONCEITUAL "CUSTOS DIRETOS DAS OBRAS" (CPC 17 + CPC 33).**
  * Análise fundamentada em CPC 17 (Contratos de Construção), CPC 33 (Benefícios a Empregados), TCPO/SINAPI
  * identificou 3 categorias equivocadas no CDO e 5 contas duplicadas/vazias para limpeza:
