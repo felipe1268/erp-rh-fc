@@ -278,6 +278,15 @@ export default function DashConciliacao() {
     { key: "conta", label: "Conta bancária" },
     { key: "descricao", label: "Descrição" },
     {
+      key: "_valorBruto", label: "Tipo", align: "center",
+      format: (_v: any, row: any) => {
+        const bruto = Number(row._valorBruto) || 0;
+        return bruto >= 0
+          ? <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium bg-emerald-100 text-emerald-700">Receita</span>
+          : <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium bg-red-100 text-red-700">Despesa</span>;
+      },
+    },
+    {
       key: "situacao", label: "Situação", align: "center",
       format: (v: any) => (
         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${v === "Conciliado" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
@@ -287,11 +296,11 @@ export default function DashConciliacao() {
     },
     {
       key: "valor", label: "Valor (R$)", align: "right",
-      format: (v: any) => {
-        const n = Number(v) || 0;
+      format: (v: any, row: any) => {
+        const bruto = Number(row._valorBruto) || 0;
         return (
-          <span className={`tabular-nums font-semibold ${lanc === "saidas" || n < 0 ? "text-red-600" : n > 0 ? "text-emerald-600" : "text-slate-500"}`}>
-            {formatBRL(n)}
+          <span className={`tabular-nums font-semibold ${bruto < 0 ? "text-red-600" : bruto > 0 ? "text-emerald-600" : "text-slate-500"}`}>
+            {formatBRL(Math.abs(Number(v) || 0))}
           </span>
         );
       },
