@@ -262,10 +262,30 @@ export function DetailDialog({
   const alignCls = (a?: string) => (a === "right" ? "text-right" : a === "center" ? "text-center" : "text-left");
 
   // Busca client-side genérica: casa em qualquer valor cru das colunas.
+  // Valores numéricos também são testados formatados como moeda BR (ex: "25.000,00").
   const filtered = useMemo(() => {
     const ql = q.trim().toLowerCase();
     if (!ql) return rows;
-    return rows.filter((r) => columns.some((c) => String(r[c.key] ?? "").toLowerCase().includes(ql)));
+    const fmtBR = (n: number) =>
+      Math.abs(n).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return rows.filter((r) =>
+      columns.some((c) => {
+        const raw = r[c.key];
+        const asStr = String(raw ?? "").toLowerCase();
+        if (asStr.includes(ql)) return true;
+        const n = Number(raw);
+        if (!isNaN(n) && n !== 0) {
+          if (fmtBR(n).includes(ql)) return true;
+        }
+        return false;
+      }) ||
+      // também testa _valorBruto e valor quando existem (campos numéricos extras)
+      ["_valorBruto", "valor", "valorPrevisto", "valorRealizado", "total"].some((k) => {
+        const n = Number(r[k]);
+        if (isNaN(n) || n === 0) return false;
+        return fmtBR(n).includes(ql);
+      })
+    );
   }, [q, rows, columns]);
 
   const totalAll = totalKey != null ? rows.reduce((s, r) => s + (Number(r[totalKey]) || 0), 0) : null;
@@ -314,7 +334,7 @@ export function DetailDialog({
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Buscar nos resultados…"
+                placeholder="Buscar por descrição, valor (ex: 25.000,00)…"
                 className="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
               />
             </div>
