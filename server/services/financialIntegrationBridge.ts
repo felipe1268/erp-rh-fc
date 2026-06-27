@@ -89,6 +89,10 @@ export const CONTA_ID_BY_NOME: Record<string, number> = {
   "Assessoria Jurídica": 271,
   "DESPESAS COM MARKETING": 9,
   "DESPESA COM MARKETING": 9,
+  // Receitas financeiras
+  "RENDIMENTO FINANCEIRO": 489,
+  "Rendimento Financeiro": 489,
+  "JUROS E RENDIMENTOS RECEBIDOS": 489,
   // Custos de obra (projeções de cronograma — NÃO mapear para evitar dupla contagem)
   // "Custos Diretos de Obra" → sem conta (cronograma_atividade)
   // "Custos Indiretos"       → sem conta (cronograma_atividade)
