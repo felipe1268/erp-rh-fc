@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3762 — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · CARD "CHEQUES DEVOLVIDOS NO BANCO" GANHOU O BOTÃO "OCULTAR RESOLVIDOS": ESCONDE DA TELA OS CHEQUES JÁ TRATADOS (QUITADO REAPRESENTADO / QUITADO POR OUTRO MEIO PIX-TED / QUITADO POR SUBSTITUIÇÃO VIA VÍNCULOS / DESCONSIDERADO DO %), MOSTRANDO SÓ OS PENDENTES. NÃO APAGA NADA, NÃO MUDA O CONTADOR DO CARD NEM O CÁLCULO DO %. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Pedido do usuário (FC ENGENHARIA / company 60002, tela "Conciliação Bancária"): o card "Cheques devolvidos no banco (28)"
+ * é uma LISTA DE CONFERÊNCIA — quando um cheque é resolvido ele NÃO some, só troca o selo (decisão de design: nada some sem
+ * confirmação, mantém o histórico do mês). O usuário pediu uma "lista mais limpa, só os que faltam resolver". Aceitou a
+ * sugestão de um botão "Ocultar resolvidos" que esconde da VISUALIZAÇÃO os já tratados, sem apagar nem mudar números.
+ *
+ * FRONTEND (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`), 100% client-side:
+ * - Novo estado `ocultarDevolResolvidos` (default false).
+ * - Helper `isDevolvidoResolvido(d)` que ESPELHA exatamente os selos exibidos na linha: `resolucao.tipo` ∈ {reapresentado, pix}
+ *   (quitação real), `d.desconsiderado` (desconsiderado do %), ou cobertura por vínculos quita o valor (`vincMap` → quitado/saldo≤1).
+ * - `repDevolView` = lista filtrada (esconde resolvidos quando o toggle está ligado); o `.map` do card passou a usar `repDevolView`.
+ * - Header: contador do card continua mostrando o TOTAL (`repDevol.length`) + subtítulo "N pendentes · M resolvidos"; botão
+ *   "Ocultar resolvidos" / "Mostrar todos" (só aparece quando há ≥1 resolvido) com ícone Eye/EyeOff e tooltip explicando que não
+ *   apaga nem muda o cálculo. Empty-state quando todos foram tratados (com atalho "Mostrar todos"). O PDF/relatório segue listando TUDO.
+ *
+ * Validado: `tsc` limpo (filtrado FinanceiroConciliacao.tsx); app HTTP 200.
+ *
+ * Arquivos: `client/src/pages/financeiro/FinanceiroConciliacao.tsx`.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 3761 — **FINANCEIRO · DRE — DEMONSTRATIVO DE RESULTADO · CADA LINHA DO DRE FICOU CLICÁVEL (DRILL-DOWN): AO CLICAR, ABRE UM DIÁLOGO COM OS VALORES QUE COMPÕEM AQUELA LINHA — NAS LINHAS-FOLHA (RECEITA BRUTA, RECEITAS FINANCEIRAS, CUSTOS DE OBRA, DESPESAS FIXAS/VARIÁVEIS, DESPESAS FINANCEIRAS, IMPOSTOS) MOSTRA OS LANÇAMENTOS REAIS AGRUPADOS POR CATEGORIA + LISTA DETALHADA; NAS LINHAS-TOTAL (RECEITA LÍQUIDA, LUCRO BRUTO, EBITDA, RESULTADO FINANCEIRO, LAIR, LUCRO LÍQUIDO) MOSTRA A FÓRMULA DE COMPOSIÇÃO; NAS MARGENS MOSTRA A DIVISÃO. O TOTAL DO DIÁLOGO SEMPRE FECHA COM A LINHA. BACKEND READ-ONLY · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Pedido do usuário (FC ENGENHARIA / company 60002, tela "DRE — Demonstrativo de Resultado"): "poder clicar e ver os

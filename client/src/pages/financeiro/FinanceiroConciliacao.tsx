@@ -267,6 +267,10 @@ export default function FinanceiroConciliacao() {
   const [filterExtTipo, setFilterExtTipo] = useState<"all" | "entrada" | "saida">("all");
   const [filterLanTipo, setFilterLanTipo] = useState<"all" | "entrada" | "saida">("all");
   const [filterConcTipo, setFilterConcTipo] = useState<"all" | "entrada" | "saida">("all");
+  // Rev. 3762 — "Ocultar resolvidos" no card de Cheques devolvidos: esconde da TELA os
+  // cheques já quitados (reapresentado / PIX-TED / por substituição) ou desconsiderados do %,
+  // mostrando só os pendentes. NÃO apaga nada nem muda contadores/cálculo do %.
+  const [ocultarDevolResolvidos, setOcultarDevolResolvidos] = useState(false);
   // Rev. 3511 — linha do extrato selecionada p/ exibir sheet de detalhe (duplo-clique/toque).
   const [stmtDetailRow, setStmtDetailRow] = useState<any | null>(null);
   // Rev. 3500 — IDs de linhas do extrato que já foram lançadas/conciliadas nesta sessão.
@@ -1326,6 +1330,21 @@ export default function FinanceiroConciliacao() {
     { enabled: !!companyId && vincItens.length > 0 }
   );
   const vincMap: Record<string, any> = vincLoteData?.mapa ?? {};
+  // Rev. 3762 — "resolvido" = cheque já tratado: quitação real (reapresentado / PIX-TED),
+  // quitação por substituição (vínculos cobrem o valor) ou desconsiderado do %. Espelha
+  // exatamente os selos exibidos na linha. Read-only — não muda contador nem cálculo.
+  const isDevolvidoResolvido = (d: any) => {
+    const tipoRes = d?.resolucao?.tipo ?? "pendente";
+    if (tipoRes === "reapresentado" || tipoRes === "pix") return true;
+    if (d?.desconsiderado) return true;
+    const vinfo = vincMap[String(d?.debitoId)] ?? null;
+    const totalCents = Math.round(Math.abs(Number(d?.valor) || (Number(d?.valorCents) || 0) / 100) * 100);
+    const acumCents = vinfo ? Math.round(Number(vinfo.acumulado || 0) * 100) : 0;
+    const saldoCents = Math.max(0, totalCents - acumCents);
+    return !!vinfo?.quitado || (!!vinfo && saldoCents <= 1 && acumCents > 0);
+  };
+  const repDevolResolvidosN = repDevol.filter(isDevolvidoResolvido).length;
+  const repDevolView: any[] = ocultarDevolResolvidos ? repDevol.filter((d) => !isDevolvidoResolvido(d)) : repDevol;
   // Invalida todas as superfícies de % + a cobertura de vínculo após registrar/estornar.
   const refreshAposVinculo = () => {
     (utils as any).financial?.getChequeDevolvidoVinculacao?.invalidate?.();
@@ -5190,16 +5209,43 @@ export default function FinanceiroConciliacao() {
                     <CardTitle className="text-sm flex items-center gap-2 flex-wrap">
                       <RotateCcw className="w-4 h-4 text-amber-500" />
                       Cheques devolvidos no banco ({formatInt(repDevol.length)})
+                      {repDevolResolvidosN > 0 && (
+                        <span className="font-normal text-[11px] text-gray-400">
+                          {formatInt(repDevol.length - repDevolResolvidosN)} pendente{repDevol.length - repDevolResolvidosN === 1 ? "" : "s"} · {formatInt(repDevolResolvidosN)} resolvido{repDevolResolvidosN === 1 ? "" : "s"}
+                        </span>
+                      )}
                       <span className="font-normal text-[11px] text-gray-400">tentativa de pagamento frustrada — saldo zero</span>
                     </CardTitle>
-                    <Button size="sm" variant="outline" className="h-7 shrink-0" onClick={gerarRelatorioDevolvidosPDF}>
-                      <FileDown className="w-3.5 h-3.5 mr-1" />PDF / Imprimir
-                    </Button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {repDevolResolvidosN > 0 && (
+                        <Button
+                          size="sm"
+                          variant={ocultarDevolResolvidos ? "default" : "outline"}
+                          className="h-7"
+                          onClick={() => setOcultarDevolResolvidos((v) => !v)}
+                          title="Esconde da tela os cheques já quitados ou desconsiderados. Não apaga nada nem muda o cálculo do %."
+                        >
+                          {ocultarDevolResolvidos ? <Eye className="w-3.5 h-3.5 mr-1" /> : <EyeOff className="w-3.5 h-3.5 mr-1" />}
+                          {ocultarDevolResolvidos ? "Mostrar todos" : "Ocultar resolvidos"}
+                        </Button>
+                      )}
+                      <Button size="sm" variant="outline" className="h-7" onClick={gerarRelatorioDevolvidosPDF}>
+                        <FileDown className="w-3.5 h-3.5 mr-1" />PDF / Imprimir
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="divide-y divide-gray-100 max-h-[460px] overflow-y-auto">
-                    {repDevol.map((d: any) => {
+                    {ocultarDevolResolvidos && repDevolView.length === 0 && (
+                      <div className="px-4 py-6 text-center text-[12px] text-gray-500">
+                        Todos os cheques devolvidos já foram tratados.{" "}
+                        <button type="button" className="text-amber-700 hover:text-amber-900 underline" onClick={() => setOcultarDevolResolvidos(false)}>
+                          Mostrar todos
+                        </button>
+                      </div>
+                    )}
+                    {repDevolView.map((d: any) => {
                       const res = d.resolucao ?? { tipo: "pendente" };
                       const vinfo = vincMap[String(d.debitoId)] ?? null;
                       const vinTotalCents = Math.round(Math.abs(Number(d.valor) || (Number(d.valorCents) || 0) / 100) * 100);
