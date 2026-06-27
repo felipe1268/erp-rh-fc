@@ -50,6 +50,19 @@ import {
 // MÓDULO FINANCEIRO — Router tRPC
 // ============================================================
 
+// Rev. 3803 — Normaliza nome de conta para detecção de similares:
+// remove acentos, preposições curtas e não-alfanuméricos.
+// "SEGURO DE VEÍCULOS" == "Seguro Veículos" == "seguroveiculos"
+function _normalizeAccountName(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+(de|do|da|dos|das|e|s|a|o)\s+/gi, " ")
+    .replace(/^(de|do|da|dos|das|e|s|a|o)\s+/gi, "")
+    .replace(/\s+(de|do|da|dos|das|e|s|a|o)$/gi, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
 function rows(res: any): any[] {
   return (res as any)?.rows ?? (res as any) ?? [];
 }
@@ -2024,6 +2037,38 @@ export const financialRouter = router({
       }
       // Mesmo escopo (ou escopo legado/indefinido): comportamento idempotente.
       return { id: dupe.id, alreadyExists: true };
+    }
+
+    // Rev. 3803 — Dedup por SIMILARIDADE: após o dedup exato, verifica se existe
+    // conta com nome normalizado idêntico (sem acentos, preposições, espaços).
+    // Impede "Seguro Veículos" coexistir com "SEGURO DE VEÍCULOS".
+    // Retorna a conta existente idempotentemente (mesmo comportamento do dedup exato).
+    const normalizedInput = _normalizeAccountName(input.nome);
+    if (normalizedInput.length >= 4) {
+      const allActive: any[] = rows(await dbExecute(db,
+        `SELECT id, nome, codigo FROM financial_accounts WHERE company_id=$1 AND ativo=1`,
+        [input.companyId]
+      ));
+      const similar = allActive.find(r =>
+        _normalizeAccountName(r.nome) === normalizedInput &&
+        r.nome.toLowerCase() !== input.nome.toLowerCase()
+      );
+      if (similar) {
+        const simIsAuto = /^AUTO-/i.test(String(similar.codigo || ""));
+        if (input.escopo === "plano" && simIsAuto) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Já existe uma Categoria com nome muito parecido: "${similar.nome}" (id #${similar.id}). Use-a em vez de criar uma nova.`,
+          });
+        }
+        if (input.escopo === "categoria" && !simIsAuto) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Já existe uma conta no Plano de Contas com nome muito parecido: "${similar.nome}" (id #${similar.id}). Use-a em vez de criar uma nova.`,
+          });
+        }
+        return { id: Number(similar.id), alreadyExists: true, mergedInto: similar.nome };
+      }
     }
 
     // Auto-gera código se não informado: `AUTO-{próximo}`.

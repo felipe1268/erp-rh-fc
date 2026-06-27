@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3803 — **FINANCEIRO · PLANO DE CONTAS · DEDUP POR SIMILARIDADE DE NOME.**
+ * PROBLEMA: createAccount bloqueava nomes EXATAMENTE iguais (case-insensitive), mas "Seguro Veículos"
+ * e "SEGURO DE VEÍCULOS" passavam como contas distintas, poluindo o DRE com linhas duplicadas.
+ * FIX: nova função _normalizeAccountName() normaliza ACENTOS (NFD+strip combining), PREPOSIÇÕES
+ * curtas (de/do/da/dos/das/e/s/a/o rodeadas de espaços) e CARACTERES não-alfanuméricos.
+ * Após o dedup exato, createAccount busca todas as contas ativas da empresa, normaliza cada nome
+ * e compara com o normalizado do input. Match → retorna a conta existente idempotentemente
+ * (mesma semântica do dedup exato). Escopos cruzados (plano×categoria) viram erro explicativo.
+ * LIMPEZA DE DADOS: conta id=411 "Seguro Veículos" unificada em id=443 "SEGURO DE VEÍCULOS":
+ * 33 entries migradas (conta_id=443, conta_nome padronizado), conta 411 desativada (ativo=0).
+ * Arquivo: server/routers/financial.ts (helper + bloco em createAccount). ZERO SCHEMA/ALTER/DROP.
+ *
  * Rev. 3802 — **FINANCEIRO · CONCILIAÇÃO · FIX DEDUP DE IMPORTAÇÃO DE EXTRATO BANCÁRIO.**
  * PROBLEMA: o dedup de bank_statement_lines usava descricao exata como chave. O mesmo débito
  * bancário importado de formatos diferentes (ex: PDF da Caixa gera descrição curta "... · Doc 070824"
