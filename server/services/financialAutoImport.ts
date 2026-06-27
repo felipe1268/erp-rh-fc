@@ -1,5 +1,6 @@
 import { getDb } from "../db";
 import { sql } from "drizzle-orm";
+import { resolveContaId } from "./financialIntegrationBridge";
 
 // ============================================================
 // AUTO-IMPORTAÇÃO FINANCEIRA
@@ -66,10 +67,10 @@ export async function importPayrollToFinancial(companyId: number, mesRef?: strin
 
     await dbExecute(db,
       `INSERT INTO financial_entries
-       (company_id, conta_nome, tipo, natureza,
+       (company_id, conta_id, conta_nome, tipo, natureza,
         valor_previsto, valor_realizado, data_competencia, data_vencimento, data_pagamento,
         status, origem_modulo, origem_id, origem_descricao, descricao, created_at, updated_at)
-       VALUES ($1,'Salários e Horas Extras (CLT)','despesa','fixo',
+       VALUES ($1,506,'Salários e Horas Extras (CLT)','despesa','fixo',
                $2,$3,$4,$5,$6,$7,'folha_clt',$8,$9,$10,NOW(),NOW())`,
       [
         companyId,
@@ -135,10 +136,10 @@ export async function importPJToFinancial(companyId: number, mesRef?: string): P
 
     await dbExecute(db,
       `INSERT INTO financial_entries
-       (company_id, conta_nome, tipo, natureza, valor_previsto, valor_realizado,
+       (company_id, conta_id, conta_nome, tipo, natureza, valor_previsto, valor_realizado,
         data_competencia, data_vencimento, data_pagamento, status, origem_modulo, origem_id,
         origem_descricao, descricao, created_at, updated_at)
-       VALUES ($1,'Serviços PJ / Terceirizados','despesa','variavel',$2,$3,$4,$5,$6,$7,
+       VALUES ($1,391,'Serviços PJ / Terceirizados','despesa','variavel',$2,$3,$4,$5,$6,$7,
                'pagamento_pj',$8,$9,$10,NOW(),NOW())`,
       [
         companyId,

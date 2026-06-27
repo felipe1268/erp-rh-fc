@@ -1,6 +1,17 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3770 — **FINANCEIRO · MAPEAMENTO DE CONTAS FLUTUANTES: (1) BATCH UPDATE EM PRODUÇÃO — 7 GRUPOS DE `financial_entries` COM `conta_id IS NULL` RECEBERAM `conta_id` + `conta_nome` NORMALIZADOS (SALÁRIO→506, FIN/FINANCIAMENTOS/Financiamento→264, SERV→391, MARKETING→9, JURÍDICA→271, COMBUSTÍVEIS→384, VALE REFEIÇÃO+ALIMENTAÇÃO→265). (2) MAPA CANÔNICO `CONTA_ID_BY_NOME` EXPORTADO EM `financialIntegrationBridge.ts` + HELPER `resolveContaId` — TODO NOVO INSERT VIA `insertEntry` RESOLVE `conta_id` AUTOMATICAMENTE PELO `conta_nome`. (3) `financialAutoImport.ts` CORRIGIDO: FOLHA CLT→506, PJ→391 HARDCODED NOS INSERTS. PROJEÇÕES DE CRONOGRAMA (`Custos Diretos de Obra`, `Custos Indiretos`) MANTIDAS SEM CONTA PARA EVITAR DUPLA CONTAGEM. ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * CONTEXTO: entradas com `conta_id IS NULL` ("flutuantes") não apareciam nos dashboards de conta.
+ * Após inventário completo, 7 grupos aprovados pelo usuário; 2 grupos de projeção excluídos do mapeamento
+ * por design (cronograma_atividade duplicaria com custo real); SALÁRIO-MÃO-DE-OBRA (conta_id=299→506)
+ * migrado para unificar com FOLHA DE PAGAMENTO.
+ *
+ * ARQUIVOS: `server/services/financialIntegrationBridge.ts` (CONTA_ID_BY_NOME, resolveContaId,
+ * insertEntry+conta_id), `server/services/financialAutoImport.ts` (folha CLT, PJ).
+ * Batch UPDATE direto em production Neon (7 UPDATE statements em transaction).
+ *
  * Rev. 3769 — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · O DIÁLOGO "VINCULAR CHEQUE DEVOLVIDO A PIX/TED" VOLTA A MOSTRAR O VALOR JÁ VINCULADO NO CABEÇALHO ("VINCULADO R$ X / SALDO R$ Y") MESMO QUANDO O RELATÓRIO ACABOU DE SER RECARREGADO OU AINDA ESTÁ NO 1º CARREGAMENTO. ANTES, NESSES MOMENTOS, O CABEÇALHO LIA "VINCULADO R$ 0,00 / SALDO = VALOR DO CHEQUE" APESAR DE HAVER VÍNCULO ATIVO — E REVINCULAR O MESMO PIX DAVA "ESTA LINHA JÁ ESTÁ VINCULADA A ESTE CHEQUE". FRONTEND READ-ONLY · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * CONTEXTO / CAUSA-RAIZ (cheque Doc 1063 · PIER BRASIL · R$ 4.344,60 · conta 2 · vínculo parcial R$ 3.212,92):

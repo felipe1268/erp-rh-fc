@@ -48,10 +48,52 @@ async function entryExists(db: any, companyId: number, origemModulo: string, ori
   return rows.length > 0;
 }
 
+// ─── Mapa canônico: conta_nome flutuante → conta_id ───────────────────────────
+// Usado por insertEntry (auto-resolve) e exportado para outros importadores.
+export const CONTA_ID_BY_NOME: Record<string, number> = {
+  // Folha / RH
+  "FOLHA DE PAGAMENTO": 506,
+  "SALÁRIO - MÃO DE OBRA": 506,
+  "Salários e Horas Extras (CLT)": 506,
+  "HORA EXTRA - OBRA": 387,
+  "VALE ADIANTAMENTO": 301,
+  "RESCISÃO - MÃO DE OBRA": 280,
+  // Benefícios
+  "Vale Refeição / Alimentação": 265,
+  "Vale Alimentação": 265,
+  "VALE ALIMENTAÇÃO": 265,
+  "Vale Refeição (Projeção)": 265,
+  "Vale Alimentação (Projeção)": 265,
+  // Frota
+  "Combustíveis e Lubrificantes": 384,
+  // Financiamentos
+  "FIN": 264,
+  "FINANCIAMENTOS": 264,
+  "Financiamento": 264,
+  // Serviços / Jurídico / Marketing
+  "SERV": 391,
+  "PRESTAÇÃO DE SERVIÇO": 391,
+  "Serviços PJ / Terceirizados": 391,
+  "DESPESA JURÍDICA": 271,
+  "Assessoria Jurídica": 271,
+  "DESPESAS COM MARKETING": 9,
+  "DESPESA COM MARKETING": 9,
+  // Custos de obra (projeções de cronograma — NÃO mapear para evitar dupla contagem)
+  // "Custos Diretos de Obra" → sem conta (cronograma_atividade)
+  // "Custos Indiretos"       → sem conta (cronograma_atividade)
+};
+
+/** Resolve conta_id a partir do conta_nome (case-sensitive, mapa canônico). */
+export function resolveContaId(contaNome: string | null | undefined): number | null {
+  if (!contaNome) return null;
+  return CONTA_ID_BY_NOME[contaNome] ?? null;
+}
+
 async function insertEntry(db: any, data: {
   companyId: number;
   obraId?: number | null;
   obraNome?: string | null;
+  contaId?: number | null;
   contaNome?: string | null;
   tipo: "receita" | "despesa";
   natureza: "fixo" | "variavel";
@@ -67,19 +109,21 @@ async function insertEntry(db: any, data: {
   descricao?: string;
   formaPagamento?: string | null;
 }): Promise<number | null> {
+  const resolvedContaId = data.contaId ?? resolveContaId(data.contaNome);
   const { rows } = await dbExecute(db,
     `INSERT INTO financial_entries
-     (company_id, obra_id, obra_nome, conta_nome, tipo, natureza,
+     (company_id, obra_id, obra_nome, conta_id, conta_nome, tipo, natureza,
       valor_previsto, valor_realizado, data_competencia, data_vencimento, data_pagamento,
       status, origem_modulo, origem_id, origem_descricao, descricao, forma_pagamento,
       created_at, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW(),NOW())
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW(),NOW())
      ON CONFLICT DO NOTHING
      RETURNING id`,
     [
       data.companyId,
       data.obraId ?? null,
       data.obraNome ?? null,
+      resolvedContaId,
       data.contaNome ?? null,
       data.tipo,
       data.natureza,
