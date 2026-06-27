@@ -7091,7 +7091,7 @@ export default function FinanceiroConciliacao() {
                           <Search style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", width: 15, height: 15, color: "#9ca3af", pointerEvents: "none" }} />
                           <input
                             type="text"
-                            placeholder="Buscar por descrição do PIX/TED…"
+                            placeholder="Buscar por descrição ou valor (ex: 4.344,60)…"
                             value={vincularPixBusca}
                             onChange={e => setVincularPixBusca(e.target.value)}
                             style={{ width: "100%", boxSizing: "border-box", background: "#fff", border: "1px solid #d1d5db", borderRadius: 10, paddingLeft: 36, paddingRight: vincularPixBusca ? 34 : 12, paddingTop: 9, paddingBottom: 9, color: "#111827", fontSize: 13, outline: "none" }}

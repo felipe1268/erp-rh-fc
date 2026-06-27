@@ -12276,8 +12276,16 @@ export const financialRouter = router({
        String(input.valorRef ?? 0)]);
     let linhas = rows(r) as any[];
     if (input.busca) {
-      const b = input.busca.toLowerCase();
-      linhas = linhas.filter((l: any) => String(l.descricao ?? "").toLowerCase().includes(b));
+      const b = input.busca.toLowerCase().replace(/\s/g, "");
+      linhas = linhas.filter((l: any) => {
+        if (String(l.descricao ?? "").toLowerCase().includes(b)) return true;
+        const abs = Math.abs(Number(l.valor) || 0);
+        if (abs > 0) {
+          const brFmt = abs.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\s/g, "");
+          if (brFmt.includes(b)) return true;
+        }
+        return false;
+      });
     }
     return { linhas };
   }),
@@ -12651,8 +12659,16 @@ export const financialRouter = router({
     const pixVinculados = new Set(rows(pvSel).map((x: any) => Number(x.pixLineId)));
     linhas = linhas.map((l) => ({ ...l, jaVinculado: pixVinculados.has(Number(l.id)) }));
     if (input.busca) {
-      const b = input.busca.toLowerCase();
-      linhas = linhas.filter((l: any) => String(l.descricao ?? "").toLowerCase().includes(b));
+      const b = input.busca.toLowerCase().replace(/\s/g, "");
+      linhas = linhas.filter((l: any) => {
+        if (String(l.descricao ?? "").toLowerCase().includes(b)) return true;
+        const abs = Math.abs(Number(l.valor) || 0);
+        if (abs > 0) {
+          const brFmt = abs.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\s/g, "");
+          if (brFmt.includes(b)) return true;
+        }
+        return false;
+      });
     }
     return { linhas };
   }),
