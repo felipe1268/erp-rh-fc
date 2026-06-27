@@ -359,13 +359,27 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       // Rev. 1763: compara também strippando query string das features cadastradas
       // (ex.: feature.route='/programas-sst?tab=PGR' precisa casar com basePath
       // '/programas-sst' quando o RouteGuard chama sem o ?tab=...).
-      const mod = MODULE_DEFINITIONS.find(m =>
+      // Procura o módulo dono desta rota pelas features registradas
+      let mod = MODULE_DEFINITIONS.find(m =>
         m.features.some(f => {
           const fBase = (f.route || "").split("?")[0];
           return f.route === route || f.route === basePath || fBase === basePath;
         })
       );
-      if (!mod) return false;
+
+      // Rev. 3795 — fallback por prefixo de URL:
+      // novas rotas adicionadas ao sidebar sem registro em shared/modules.ts
+      // são resolvidas pelo prefixo (ex: /financeiro/notas-fiscais → "financeiro").
+      // Regra: acesso ao módulo = acesso pleno por padrão; admin-master restringe depois.
+      if (!mod) {
+        mod = MODULE_DEFINITIONS.find(m =>
+          basePath === `/${m.id}` || basePath.startsWith(`/${m.id}/`)
+        ) ?? null;
+        if (!mod) return false;
+        const fallbackPerm = normalizedAccess[mod.id]
+          ?? (mod.id === 'juridico-trabalhista' ? normalizedAccess['juridico'] : null);
+        return !!fallbackPerm;
+      }
 
       const perm = normalizedAccess[mod.id]
         ?? (mod.id === 'juridico-trabalhista' ? normalizedAccess['juridico'] : null);
@@ -384,27 +398,23 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       if (!pageId) {
         // Rev. 1763: Se a rota base não tem entrada direta mas EXISTEM entradas de
         // tab pra ela (ex.: /programas-sst só está mapeado como ?tab=PGR/PCMSO/LTCAT),
-        // libera quando QUALQUER aba dessa base estiver granted. Sem isso o
-        // RouteGuard de /programas-sst nega tudo pra usuários custom.
+        // libera quando QUALQUER aba dessa base estiver granted.
         const tabPageIds = Object.entries(moduleRouteMap)
           .filter(([k]) => k.split("?")[0] === basePath && k.includes("?"))
           .map(([, v]) => v);
         if (tabPageIds.length > 0) {
-          // Rev. 2541 — se NENHUMA das abas existe na perm (todas novas), herda o
-          // acesso ao módulo SÓ quando o módulo está efetivamente acessível
-          // (alguma página com view:true); caso contrário respeita os flags.
           const anyPresent = tabPageIds.some(pid => perm.pages?.[pid] != null);
-          if (!anyPresent) return Object.values(perm.pages || {}).some(p => p.view === true);
+          // Rev. 3795 — aba sem registro explícito → libera por padrão
+          if (!anyPresent) return true;
           return tabPageIds.some(pid => perm.pages?.[pid]?.view === true);
         }
-        // Rota dentro do módulo sem mapeamento de página específico → nega por segurança
-        return false;
+        // Rev. 3795 — rota dentro do módulo sem pageId mapeado → libera por padrão
+        return true;
       }
-      // Rev. 2541 — página AUSENTE (= feature nova) herda o acesso ao módulo SÓ
-      // quando o módulo está efetivamente acessível (alguma página com view:true);
-      // página PRESENTE respeita o flag explícito (deny intencional continua deny).
-      // Sem o gate, um custom com TUDO negado abriria a rota nova por URL direta.
-      if (perm.pages?.[pageId] == null) return Object.values(perm.pages || {}).some(p => p.view === true);
+      // Página sem registro explícito na perm (= nova feature) → libera por padrão.
+      // Admin-master pode ir em Configurações e negar explicitamente depois.
+      // Página COM registro explícito respeita o flag (deny intencional permanece deny).
+      if (perm.pages?.[pageId] == null) return true;
       return perm.pages[pageId].view === true;
     }
 

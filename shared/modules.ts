@@ -460,6 +460,8 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "financeiro-cheques",           label: "Controle de Cheques",  route: "/financeiro/cheques",                icon: "Banknote" },
       { key: "financeiro-cartao",            label: "Cartão de Crédito",    route: "/financeiro/cartao",                 icon: "CreditCard" },
       { key: "financeiro-cronograma",        label: "Cronograma Financeiro",route: "/financeiro/cronograma",             icon: "CalendarRange" },
+      { key: "financeiro-notas-fiscais",    label: "Notas Fiscais (NF-e)",  route: "/financeiro/notas-fiscais",          icon: "FileText" },
+      { key: "financeiro-contas-bancarias",  label: "Contas Bancárias",      route: "/financeiro/contas-bancarias",       icon: "Landmark" },
       { key: "financeiro-configuracoes",     label: "Configurações",        route: "/financeiro/configuracoes",          icon: "Settings" },
     ],
   },
