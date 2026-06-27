@@ -1,6 +1,43 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3757 — **DASHBOARD · CONCILIAÇÃO BANCÁRIA · BUGFIX CRÍTICO: TODOS OS CARDS DE ANÁLISE ESTAVAM VAZIOS ("NENHUMA RECEITA/DESPESA CATEGORIZADA", "NENHUM FORNECEDOR IDENTIFICADO", "NENHUM LANÇAMENTO COM OBRA IDENTIFICADA") MESMO COM DADOS REAIS (R$ 2,24 MI EM RECEITAS, 12.894 DESPESAS, 123 CATEGORIAS). CAUSA: A QUERY #4 (TOP OBRAS) DO `getConciliacaoDashExtra` USAVA `ORDER BY (despesas+receitas)` REFERENCIANDO ALIASES DE SAÍDA DENTRO DE UMA EXPRESSÃO — O POSTGRES NÃO RESOLVE ALIAS DE SAÍDA EM EXPRESSÃO DE ORDER BY (SÓ SOZINHO), ENTÃO PROCURAVA UMA COLUNA DE ENTRADA "despesas" E LANÇAVA `column "despesas" does not exist`. AS 6 SUB-QUERIES SÃO `await`-ADAS EM SEQUÊNCIA SEM try/catch, ENTÃO ESSE THROW ABORTAVA TODO O ENDPOINT → `extra` UNDEFINED → TODOS OS CARDS CAÍAM PRO ESTADO VAZIO. 100% BUGFIX · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Sintoma reportado pelo usuário (prints da Conciliação Bancária, FC ENGENHARIA / company 60002, ano 2026): "os gráficos
+ * não podem estar vazios, o ERP deve estar usando a base de dados das categorias errada". A suspeita (categoria errada)
+ * não se confirmou — os dados e a categorização existem e estão corretos. O problema era um erro de runtime no endpoint.
+ *
+ * Diagnóstico (queries READ-ONLY direto no Neon, company 60002, 2026):
+ * - `financial_entries` 2026: 12.894 despesas (12.714 c/ conta_nome, 10.801 c/ obra_nome, 3.793 c/ fornecedor) +
+ *   47 receitas (46 c/ conta_nome) + 140 transferências → DADOS EXISTEM E ESTÃO CATEGORIZADOS.
+ * - Rodando a query EXATA de "Receitas por categoria" do endpoint → retorna 10 linhas (MEDIÇÃO DE OBRA R$ 1,58 mi;
+ *   Faturamento de Obras R$ 450 mil; etc.). Ou seja: a SQL de categorias FUNCIONA isoladamente.
+ * - Rodando as 6 sub-queries do endpoint uma a uma: a #4 (Top obras) lançava `column "despesas" does not exist`. Como o
+ *   endpoint não tem try/catch por query, o throw da #4 derrubava o endpoint inteiro e zerava TODOS os cards (mesmo os
+ *   das queries #1/#2/#3 que rodaram OK, pois seus resultados eram descartados pelo throw subsequente).
+ *
+ * Raiz técnica (PostgreSQL): em `ORDER BY`, um alias de coluna de saída só é reconhecido quando aparece SOZINHO
+ * (`ORDER BY despesas`). Dentro de uma EXPRESSÃO (`ORDER BY (despesas+receitas)`), o identificador é resolvido contra as
+ * colunas de ENTRADA do FROM/JOIN — e nem `financial_entries` nem `obras` têm colunas chamadas `despesas`/`receitas`
+ * (são apenas SUM(CASE...) agregados no SELECT). Daí o erro. (Provável regressão introduzida na Rev. 3628, quando o
+ * `LEFT JOIN obras o` + ORDER BY composto foram adicionados; desde então a aba "Análise" da Conciliação ficava vazia.)
+ *
+ * Fix (`server/routers/financial.ts`, `getConciliacaoDashExtra`, query #4 "Top obras"):
+ * - Envelopei a agregação numa subquery `(...) t` e movi o `ORDER BY (despesas + receitas) DESC LIMIT 15` para a query
+ *   EXTERNA, onde `despesas`/`receitas` já são COLUNAS REAIS da subquery → o ORDER BY composto passa a ser válido.
+ * - Nenhuma mudança de lógica/semântica: mesmas colunas, mesmo filtro de período (`periodo()`), mesmo COALESCE de nome
+ *   (`fe.obra_nome` → `obras.nome`), mesmo LIMIT. Só a forma do ORDER BY.
+ * - Validei a query corrigida direto no Neon: retorna 15 obras com valores reais (Hotel Qiu 2 – Fase 4 R$ 11,7 mi de
+ *   despesas; Igreja São Geraldo – Poita R$ 4,8 mi; Luciana – Final Bloco B desp R$ 1,85 mi / rec R$ 300 mil; etc.).
+ *
+ * Observação de robustez (não alterada nesta rev., candidata a follow-up): como as 6 sub-queries são sequenciais sem
+ * try/catch, QUALQUER erro futuro em qualquer uma volta a esvaziar TODO o dashboard. Um `Promise.allSettled` por bloco
+ * (ou try/catch por query devolvendo `[]`) tornaria a falha localizada em vez de catastrófica.
+ *
+ * Validação: `tsc --noEmit` limpo (filtrado a `financial.ts`); grep confirma que o único `ORDER BY (alias+alias)` do
+ * arquivo é justamente o corrigido (agora dentro da subquery, válido); app sobe (HTTP 200). Arquivo tocado:
+ * `server/routers/financial.ts`.
+ *
  * Rev. 3756 — **DASHBOARD · NOTAS FISCAIS (DashNotasFiscais) · NOVO CARD "MOVIMENTOS COM NOTA × SEM NOTA": COMPARATIVO VISUAL E DIRETO EM R$ MOSTRANDO QUANTO DAS ENTRADAS E SAÍDAS BANCÁRIAS TEM NOTA FISCAL IDENTIFICADA (VINCULADA VIA `stmt_line_id`/`fn_id`) VS QUANTO É NÃO IDENTIFICÁVEL. FEATURE · 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Pedido do usuário: "comparativo visual e claro dizendo que X valores de entrada e saída com notas identificadas, Y

@@ -12672,17 +12672,29 @@ export const financialRouter = router({
 
     // 4. Top obras por volume financeiro (despesas + receitas).
     // Rev. 3628 — JOIN em obras p/ recuperar nome quando obra_nome desnormalizado está nulo.
+    // Rev. 3757 — BUGFIX: o `ORDER BY (despesas+receitas)` referenciava os ALIASES de saída
+    // dentro de uma EXPRESSÃO. No PostgreSQL, alias de saída só é reconhecido em ORDER BY
+    // quando usado SOZINHO (ex.: `ORDER BY despesas`); dentro de uma expressão o nome resolve
+    // contra colunas de ENTRADA (financial_entries/obras), que não têm "despesas"/"receitas"
+    // → `column "despesas" does not exist`. Como as 6 queries são awaited em sequência SEM
+    // try/catch, esse throw abortava TODO o getConciliacaoDashExtra, deixando `extra` undefined
+    // e ESVAZIANDO todos os cards (categorias, fornecedores, obras). Fix: envelopar a agregação
+    // numa subquery, onde despesas/receitas viram colunas reais e o ORDER BY passa a funcionar.
     const obrasRes = await dbExecute(db,
-      `SELECT NULLIF(TRIM(COALESCE(fe.obra_nome, o.nome)),'') AS nome,
-              COUNT(*)::int AS qtd,
-              COALESCE(SUM(CASE WHEN fe.tipo='despesa' THEN ABS(COALESCE(fe.valor_realizado,fe.valor_previsto,0)) ELSE 0 END),0) AS despesas,
-              COALESCE(SUM(CASE WHEN fe.tipo='receita' THEN ABS(COALESCE(fe.valor_realizado,fe.valor_previsto,0)) ELSE 0 END),0) AS receitas
-         FROM financial_entries fe
-         LEFT JOIN obras o ON o.id = fe.obra_id
-        WHERE fe.company_id=${cid}
-          AND ${periodo("COALESCE(fe.data_competencia,fe.data_vencimento,fe.created_at::date)")}
-          AND NULLIF(TRIM(COALESCE(fe.obra_nome, o.nome)),'') IS NOT NULL
-        GROUP BY 1 ORDER BY (despesas+receitas) DESC LIMIT 15`,
+      `SELECT nome, qtd, despesas, receitas
+         FROM (
+           SELECT NULLIF(TRIM(COALESCE(fe.obra_nome, o.nome)),'') AS nome,
+                  COUNT(*)::int AS qtd,
+                  COALESCE(SUM(CASE WHEN fe.tipo='despesa' THEN ABS(COALESCE(fe.valor_realizado,fe.valor_previsto,0)) ELSE 0 END),0) AS despesas,
+                  COALESCE(SUM(CASE WHEN fe.tipo='receita' THEN ABS(COALESCE(fe.valor_realizado,fe.valor_previsto,0)) ELSE 0 END),0) AS receitas
+             FROM financial_entries fe
+             LEFT JOIN obras o ON o.id = fe.obra_id
+            WHERE fe.company_id=${cid}
+              AND ${periodo("COALESCE(fe.data_competencia,fe.data_vencimento,fe.created_at::date)")}
+              AND NULLIF(TRIM(COALESCE(fe.obra_nome, o.nome)),'') IS NOT NULL
+            GROUP BY 1
+         ) t
+        ORDER BY (despesas + receitas) DESC LIMIT 15`,
       []);
 
     // 5. Maior entrada e maior saída do extrato bancário no período.
