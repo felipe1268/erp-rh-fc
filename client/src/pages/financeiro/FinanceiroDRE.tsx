@@ -924,7 +924,7 @@ function DrillBody({
               <Receipt className="w-4.5 h-4.5 text-orange-400" />
             </div>
             <div className="min-w-0 flex-1">
-              <DialogTitle className="text-sm font-bold text-white leading-snug break-words">{catSel}</DialogTitle>
+              <DialogTitle className="text-sm font-bold text-white leading-snug break-words">{catSel?.toUpperCase()}</DialogTitle>
               <DialogDescription className="text-xs text-white/55 mt-0.5">
                 Lançamentos individuais · {leaf.label}
               </DialogDescription>
@@ -1072,7 +1072,7 @@ function DrillBody({
                       >
                         <div className="flex items-start justify-between gap-3 mb-2">
                           <span className="text-sm text-gray-700 font-medium break-words flex-1 min-w-0 leading-snug">
-                            {c.conta}
+                            {c.conta?.toUpperCase()}
                           </span>
                           <div className="text-right shrink-0 flex items-center gap-2">
                             <div>
