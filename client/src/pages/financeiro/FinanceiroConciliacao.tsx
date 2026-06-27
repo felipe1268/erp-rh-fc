@@ -2894,16 +2894,30 @@ export default function FinanceiroConciliacao() {
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs text-gray-500">Conta Bancária</p>
                   {periodoDefinido && (
-                    <button
-                      type="button"
-                      onClick={() => setShowLimparMesDlg(true)}
-                      disabled={limparExtratoMesMut.isPending}
-                      className="flex items-center gap-1 text-[11px] text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-0.5 rounded transition-colors disabled:opacity-50"
-                      title="Remove todos os extratos importados de todas as contas neste período. Os lançamentos do ERP ficam intactos."
-                    >
-                      <Trash2 className="w-3 h-3" />
-                      Limpar todos extratos do período
-                    </button>
+                    <div className="flex items-center gap-1">
+                      {contaBancariaId && (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmLimpar(true)}
+                          disabled={limparMut.isPending}
+                          className="flex items-center gap-1 text-[11px] text-red-400 hover:text-red-600 hover:bg-red-50 px-2 py-0.5 rounded transition-colors disabled:opacity-50"
+                          title="Remove apenas as linhas de extrato da conta selecionada neste período. Os lançamentos do ERP ficam intactos."
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          Limpar esta conta
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setShowLimparMesDlg(true)}
+                        disabled={limparExtratoMesMut.isPending}
+                        className="flex items-center gap-1 text-[11px] text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-0.5 rounded transition-colors disabled:opacity-50"
+                        title="Remove todos os extratos importados de todas as contas neste período. Os lançamentos do ERP ficam intactos."
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        Limpar todas as contas
+                      </button>
+                    </div>
                   )}
                 </div>
                 {(bankAccounts ?? []).length === 0 ? (
