@@ -12843,7 +12843,7 @@ export const financialRouter = router({
               AND NULLIF(TRIM(descricao),'') IS NOT NULL
          ) sub
         WHERE nome IS NOT NULL
-        GROUP BY 1 ORDER BY 3 DESC LIMIT 15`,
+        GROUP BY 1 ORDER BY 3 DESC`,
       []);
 
     // 3. Top categorias – receitas.

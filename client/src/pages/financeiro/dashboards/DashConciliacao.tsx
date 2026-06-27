@@ -83,9 +83,9 @@ function TopListCard({
 }) {
   const max = items[0]?.total ?? 0;
   return (
-    <ChartCard title={title} subtitle={subtitle} onOpen={onOpen} height={Math.max(220, items.length * 48 + 40)}>
+    <ChartCard title={title} subtitle={subtitle} onOpen={onOpen} height={Math.min(640, Math.max(220, items.length * 48 + 40))}>
       {items.length === 0 ? <EmptyState message={emptyMsg} /> : (
-        <div className="flex flex-col gap-2 py-1 overflow-y-auto max-h-[420px] pr-1">
+        <div className="flex flex-col gap-2 py-1 overflow-y-auto max-h-[600px] pr-1">
           {items.map((item, i) => (
             <div key={i}
               className={`space-y-1 rounded-lg transition-colors ${onItemClick ? "cursor-pointer px-1 -mx-1 hover:bg-indigo-50" : ""}`}
@@ -866,7 +866,7 @@ export default function DashConciliacao() {
                 <TopListCard
                   title="Ranking · Despesas por categoria"
                   subtitle={`Clique em uma categoria para ver os lançamentos · ${periodoLabel}`}
-                  items={topCategDesp.slice(0, 12)}
+                  items={topCategDesp}
                   color={RED}
                   onOpen={() => setDetCategDesp(true)}
                   onItemClick={(item) => setCategDrill({ nome: item.nome, tipo: "despesa" })}
