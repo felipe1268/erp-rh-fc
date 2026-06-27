@@ -1,6 +1,26 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3805 — **FINANCEIRO · DESPESAS FINANCEIRAS · REESTRUTURAÇÃO DE PLANO DE CONTAS.**
+ * 4 problemas corrigidos:
+ * (1) "Juros Recebidos" (id=87) RENOMEADO para "JUROS E MULTAS BANCÁRIAS" +
+ * classificacao_dre mudou de 'receita_financeira' para 'despesa_financeira': o conteúdo
+ * real eram JUROS DO LIMITE e MULTA MORATÓRIA pagos ao Santander (R$13.072 em Jan/2026),
+ * não receita. A classificação errada os tratava como CRÉDITO no DRE, distorcendo o resultado.
+ * (2) "Tarifas e Taxas Bancárias" (id=82, 55 entries, R$602) UNIFICADA em "DESPESAS BANCÁRIAS"
+ * (id=279): 55 entries migrados, conta_pai_id de 279 movido de 82→80 (DESPESAS FINANCEIRAS),
+ * conta 82 desativada. TÍTULO DE CAPITALIZAÇÃO (id=37) movido de pai 82→421 (Investimentos).
+ * (3) "Mútuos Intercompany" (id=493) classificacao_dre mudou de 'despesa_financeira' para
+ * 'outro': MÚTUO CONCEDIDO INTERCOMPANY (R$60.000) é empréstimo dado a outra empresa do
+ * grupo (ativo/recebível), NÃO despesa — inflava as Despesas Financeiras em 37%.
+ * (4) "Investimentos Financeiros" (id=421) classificacao_dre mudou de 'despesa_financeira'
+ * para 'outro': APLICAÇÕES E INVESTIMENTOS, CONSÓRCIO e TÍTULO DE CAPITALIZAÇÃO são saídas
+ * de caixa que geram ATIVOS, não despesas operacionais. Herdam agora classificação 'outro'.
+ * LIMPEZA: 42 entries zerados deletados de Despesas Financeiras Jan/2026 (Tarifas R$0,
+ * Juros de Empréstimos R$0, Juros Recebidos R$0, Título de Capitalização R$0, Investimentos R$0).
+ * Arquivo: financial_accounts (UPDATE nome/classificacao_dre/conta_pai_id/ativo) +
+ * financial_entries (UPDATE conta_id 82→279). ZERO SCHEMA/ALTER/DROP/DELETE de tabelas.
+ *
  * Rev. 3804 — **FINANCEIRO · CONCILIAÇÃO · DEDUP SECUNDÁRIO CROSS-CONTA NO IMPORT DE EXTRATO.**
  * PROBLEMA: o dedup secundário por Doc/E-code (introduzido na Rev. 3802) filtrava por
  * `conta_bancaria_id`, então o mesmo "Doc NNNNNN" ou código "E003..." importado
