@@ -8765,13 +8765,16 @@ export const financialRouter = router({
       );
       if (rows(existing).length > 0) { skipped++; continue; }
       // Dedup secundário: extrai ID canônico da descrição (E003... ou Doc NNNNNN)
+      // Rev. 3804 — dedup secundário agora é CROSS-CONTA: busca em toda a empresa
+      // (sem filtro conta_bancaria_id). Impede que o mesmo Doc/E-code importado
+      // acidentalmente para outra conta gere um lançamento duplicado.
       const eCode = line.descricao?.match(/E[0-9A-Fa-f]{20,}/)?.[0];
       const docCode = line.descricao?.match(/Doc\s+(\d{5,})/i)?.[1];
       const txKey = eCode ?? (docCode ? `Doc ${docCode}` : null);
       if (txKey) {
         const fuzzy = await dbExecute(db,
-          `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND valor=$4 AND descricao ILIKE $5 AND excluido_em IS NULL LIMIT 1`,
-          [input.companyId, input.contaBancariaId, line.data, line.valor, `%${txKey}%`]
+          `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND data=$2 AND valor=$3 AND descricao ILIKE $4 AND excluido_em IS NULL LIMIT 1`,
+          [input.companyId, line.data, line.valor, `%${txKey}%`]
         );
         if (rows(fuzzy).length > 0) { skipped++; continue; }
       }
@@ -8994,6 +8997,7 @@ export const financialRouter = router({
       // Rev. 3533 — mesmo fix da Fase 1: saldo_apos integra a chave de dedup.
       // Rev. 3544 bugfix: $6 aparecia 2x → segundo $6 virou $7 + salParam passado 2x.
       // Rev. 3802 — dedup secundário por ID de transação (espelha Fase 1).
+      // Rev. 3804 — dedup secundário cross-conta (espelha Fase 1).
       const salParam = line.saldo ?? null;
       const existing = await dbExecute(db,
         `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 AND ($6::numeric IS NULL OR saldo_apos=$7) AND excluido_em IS NULL LIMIT 1`,
@@ -9001,13 +9005,15 @@ export const financialRouter = router({
       );
       if (rows(existing).length > 0) { skipped++; continue; }
       // Dedup secundário: extrai ID canônico da descrição (E003... ou Doc NNNNNN)
+      // Rev. 3804 — cross-conta: remove conta_bancaria_id do filtro para bloquear
+      // o mesmo Doc/E-code sendo importado em uma conta diferente da empresa.
       const eCode = line.descricao?.match(/E[0-9A-Fa-f]{20,}/)?.[0];
       const docCode = line.descricao?.match(/Doc\s+(\d{5,})/i)?.[1];
       const txKey = eCode ?? (docCode ? `Doc ${docCode}` : null);
       if (txKey) {
         const fuzzy = await dbExecute(db,
-          `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND valor=$4 AND descricao ILIKE $5 AND excluido_em IS NULL LIMIT 1`,
-          [input.companyId, input.contaBancariaId, line.data, line.valor, `%${txKey}%`]
+          `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND data=$2 AND valor=$3 AND descricao ILIKE $4 AND excluido_em IS NULL LIMIT 1`,
+          [input.companyId, line.data, line.valor, `%${txKey}%`]
         );
         if (rows(fuzzy).length > 0) { skipped++; continue; }
       }

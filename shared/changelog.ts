@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3804 — **FINANCEIRO · CONCILIAÇÃO · DEDUP SECUNDÁRIO CROSS-CONTA NO IMPORT DE EXTRATO.**
+ * PROBLEMA: o dedup secundário por Doc/E-code (introduzido na Rev. 3802) filtrava por
+ * `conta_bancaria_id`, então o mesmo "Doc NNNNNN" ou código "E003..." importado
+ * acidentalmente para uma CONTA DIFERENTE da empresa passava sem bloqueio, gerando
+ * lançamentos duplicados inflando o DRE. CASO REAL: "DEB TARIFA · Doc 148476" (R$15.231,00)
+ * e "DEB TARIFA PIX ENVIADO · Doc 148476" (R$3.952,57) em 07/01/2026 existiam tanto no
+ * extrato Caixa JF (correto) quanto em Caixa FC Aparecida (errado — import indevido).
+ * FIX: dedup secundário agora é CROSS-CONTA (remove `AND conta_bancaria_id=$N` da query
+ * fuzzy): busca o Doc/E-code em QUALQUER conta da empresa no mesmo dia/valor. Aplicado em
+ * AMBOS os pontos de import (fase única `importarExtrato` + fase 2 em lote
+ * `insertBankStatementBatch`). Dedup primário (exato por conta+data+descricao+valor+saldo)
+ * permanece inalterado — só o secundário fuzzy virou cross-conta.
+ * LIMPEZA DE DADOS: entries 885874 (R$15.231) e 885876 (R$3.952,57) deletados (Caixa FC
+ * Aparecida, incorretos); BSLs 13055 e 13056 deletados. Entries 885705+885706 (Caixa JF)
+ * mantidos como corretos. TAMBÉM: 13 entries zerados da Folha de Pagamento Jan/2026
+ * deletados (IMP_PLANILHA_v2 sem valor, ADIANTAMENTO SALARIAL R$0, CONSIGNADO BANCO C6 R$0).
+ * RECLASSIFICAÇÕES: CONSIGNADO FUNCIONÁRIOS (id=377) movido de Despesas Financeiras para
+ * subcategoria de FOLHA DE PAGAMENTO; contas 26 "MONITORAMENTO E SEGURANÇA" e 288
+ * "Monitoramento e Segurança Eletrônica" unificadas em 259 "Segurança e Monitoramento"
+ * (7 entries migrados, contas 26+288 desativadas). CATEGORIZAÇÃO SEM CATEGORIA Jan/2026:
+ * 885411 R.M. RAMOS, 885412 MONTQUALY, 885694 VIDRAÇARIA FERRAZ, 886036 CASA DOS VIDROS,
+ * 886179 HELIO BASSANELI → MÃO DE OBRA TERCEIRIZADA; 885817 NEOBETEL → COMPRA EPIs OBRA;
+ * 886039 LUIZ AUGUSTO SOARES → Segurança e Monitoramento; 885414 MOSCARDI → ALUGUEL EQUIP
+ * OBRA; 886185 FERRAGENS SANTA RITA → CUSTOS DIRETOS DAS OBRAS.
+ * Arquivo: server/routers/financial.ts (2 pontos). ZERO SCHEMA/ALTER/DROP/DELETE extra.
+ *
  * Rev. 3803 — **FINANCEIRO · PLANO DE CONTAS · DEDUP POR SIMILARIDADE DE NOME.**
  * PROBLEMA: createAccount bloqueava nomes EXATAMENTE iguais (case-insensitive), mas "Seguro Veículos"
  * e "SEGURO DE VEÍCULOS" passavam como contas distintas, poluindo o DRE com linhas duplicadas.
