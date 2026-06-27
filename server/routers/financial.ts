@@ -1674,6 +1674,54 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
     });
     void minById;
 
+    // 2e) Rev. 3763 — CHEQUES DEVOLVIDOS JÁ CONCILIADOS. Quando as DUAS linhas de um cheque
+    // devolvido (compensação + devolução) já foram conciliadas, elas saem de `pendRes` e o
+    // par deixa de ser detectado — o cheque "some" do painel mesmo tendo voltado de verdade
+    // (e tendo sido substituído por PIX/TED). Para preservar o histórico, detectamos os pares
+    // de estorno TAMBÉM entre as linhas conciliadas (`concRes`) e os acrescentamos ao painel
+    // marcados como RESOLVIDOS (`resolucao.tipo="conciliado"`, `jaConciliado=true`). NÃO altera
+    // o cálculo do % (estas linhas já estão do lado conciliado) — é só visibilidade. READ-ONLY.
+    const concLinhas = rows(concRes) as any[];
+    const concById = new Map<any, any>(concLinhas.map((l: any) => [l.id, l]));
+    const concMin: LinhaEstornoMin[] = concLinhas.map((l: any) => ({
+      id: l.id,
+      valorCents: chqCents(l.valor),
+      isCredito: Number(l.valor) >= 0,
+      descricao: l.descricao,
+      data: chqDia(l.data),
+    }));
+    const paresConc = detectarParesEstorno(concMin);
+    const chequesDevolvidosConc = paresConc.map((p, idx) => {
+      const deb: any = concById.get(p.debitoId);
+      const cred: any = concById.get(p.creditoId);
+      const cMatch = deb ? matchChequeLinha(deb) : null;
+      return {
+        grupoId: `devc-${idx}`,
+        doc: p.doc,
+        chequeNumero: p.chequeNumero,
+        valor: deb?.valor ?? cred?.valor ?? null,
+        valorCents: p.valorCents,
+        motivoCodigo: p.motivo?.codigo ?? null,
+        motivoTexto: p.motivo?.motivo ?? null,
+        motivoGrupo: p.motivo?.grupo ?? null,
+        motivoSustado: !!p.motivo?.sustado,
+        motivoReapresentavel: p.motivo?.reapresentavel ?? null,
+        dataDebito: p.dataDebito,
+        dataCredito: p.dataCredito,
+        descricaoDebito: p.descricaoDebito,
+        descricaoCredito: p.descricaoCredito,
+        fornecedor: cMatch?.fornecedorNome ?? null,
+        obraNome: cMatch?.obraNome ?? null,
+        nf: cMatch?.nf ?? null,
+        debitoId: p.debitoId,
+        creditoId: p.creditoId,
+        resolucao: { tipo: "conciliado" },
+        desconsiderado: false,
+        jaConciliado: true,
+      };
+    });
+    if (chequesDevolvidosConc.length) chequesDevolvidos.push(...chequesDevolvidosConc);
+
     // 3) Lançamentos do sistema sem conciliação no período — APENAS desta conta.
     // Rev. 3188 — antes incluía também os lançamentos SEM conta (conta_bancaria_id IS
     // NULL), que apareciam (e eram contados) em TODAS as contas, inflando o KPI "ERP sem

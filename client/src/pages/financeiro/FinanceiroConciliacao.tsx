@@ -1335,7 +1335,8 @@ export default function FinanceiroConciliacao() {
   // exatamente os selos exibidos na linha. Read-only — não muda contador nem cálculo.
   const isDevolvidoResolvido = (d: any) => {
     const tipoRes = d?.resolucao?.tipo ?? "pendente";
-    if (tipoRes === "reapresentado" || tipoRes === "pix") return true;
+    if (tipoRes === "reapresentado" || tipoRes === "pix" || tipoRes === "conciliado") return true;
+    if (d?.jaConciliado) return true;
     if (d?.desconsiderado) return true;
     const vinfo = vincMap[String(d?.debitoId)] ?? null;
     const totalCents = Math.round(Math.abs(Number(d?.valor) || (Number(d?.valorCents) || 0) / 100) * 100);
@@ -5282,7 +5283,11 @@ export default function FinanceiroConciliacao() {
                                 {d.motivoReapresentavel === false ? " · não reapresentável" : ""}
                               </p>
                               {/* Resolução: quitação real encontrada ou pendência */}
-                              {res.tipo === "reapresentado" ? (
+                              {res.tipo === "conciliado" ? (
+                                <p className="text-[11px] text-emerald-700 mt-1 flex items-center gap-1">
+                                  <CheckCircle className="w-3.5 h-3.5 shrink-0" /> Já tratado: compensação e devolução deste cheque já foram conciliadas no extrato.
+                                </p>
+                              ) : res.tipo === "reapresentado" ? (
                                 <p className="text-[11px] text-emerald-700 mt-1 flex items-center gap-1">
                                   <CheckCircle className="w-3.5 h-3.5" /> Quitado: cheque reapresentado e compensado em {fmtData(res.data)}.
                                 </p>
@@ -5367,7 +5372,11 @@ export default function FinanceiroConciliacao() {
                               )}
                               {/* Rev. 3742 — Desconsiderar/Reconsiderar do cálculo do % (NÃO apaga o cheque) */}
                               <div className="mt-2 flex items-center gap-2 flex-wrap">
-                                {d.desconsiderado ? (
+                                {d.jaConciliado ? (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-px rounded-full text-[10px] font-medium bg-emerald-100 text-emerald-700" title="As duas linhas (compensação e devolução) deste cheque já foram conciliadas no extrato. Mostrado aqui apenas para histórico — não entra no cálculo do percentual.">
+                                    <CheckCircle className="w-3 h-3" /> Conciliado no extrato
+                                  </span>
+                                ) : d.desconsiderado ? (
                                   <>
                                     <span className="inline-flex items-center gap-1 px-1.5 py-px rounded-full text-[10px] font-medium bg-gray-200 text-gray-600" title="Este par foi tirado do cálculo do percentual de conciliação. O cheque continua registrado.">
                                       <EyeOff className="w-3 h-3" /> Desconsiderado do %

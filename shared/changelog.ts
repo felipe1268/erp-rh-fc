@@ -1,6 +1,33 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3763 — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · CHEQUES DEVOLVIDOS QUE JÁ TIVERAM AS 2 LINHAS (COMPENSAÇÃO + DEVOLUÇÃO) CONCILIADAS VOLTAM A APARECER NO CARD "CHEQUES DEVOLVIDOS NO BANCO" — MARCADOS COMO "CONCILIADO NO EXTRATO" (RESOLVIDO). ANTES SUMIAM POR COMPLETO (A DETECÇÃO DO PAR SÓ OLHAVA LINHAS PENDENTES), FAZENDO O USUÁRIO PERDER O HISTÓRICO DE QUE O CHEQUE FOI DEVOLVIDO. BACKEND READ-ONLY · NÃO ALTERA O CÁLCULO DO % · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Pedido do usuário (FC ENGENHARIA / company 60002, tela "Conciliação Bancária"): o cheque Doc 939 (R$ 4.227,50, devolvido
+ * 26/01, substituído pelo PIX da Vânia) NÃO aparecia na lista de devolvidos porque suas 2 linhas no extrato já tinham sido
+ * conciliadas — e a lista só era montada a partir de linhas PENDENTES. No momento em que as duas linhas de um cheque são
+ * conciliadas, o par "compensou + devolveu" deixa de ser detectado e o cheque some, mesmo tendo voltado de verdade. O usuário
+ * aprovou o "meio-termo": continuar mostrando o cheque devolvido mesmo conciliado, porém com selo de RESOLVIDO (não como
+ * pendente/alarme), preservando o histórico sem poluir a conferência — e podendo escondê-lo com o botão "Ocultar resolvidos" (Rev. 3762).
+ *
+ * BACKEND (`server/routers/financial.ts`, dentro do builder do relatório de conciliação), READ-ONLY:
+ * - Novo passo 2e: além de detectar os pares de estorno nas linhas PENDENTES (`pendRes`), agora roda `detectarParesEstorno`
+ *   TAMBÉM sobre as linhas CONCILIADAS (`concRes`, mesma fonte do bloco "Conciliados").
+ * - Cada par conciliado vira uma entrada de `chequesDevolvidos` com `resolucao.tipo="conciliado"` e `jaConciliado=true`, com
+ *   `grupoId="devc-N"` (namespace separado do `dev-N` dos pendentes). Motivo (alínea Bacen) + fornecedor/obra/NF resolvidos
+ *   como nas pendentes (`matchChequeLinha`). `desconsiderado=false` (essas linhas já estão do lado conciliado).
+ * - NÃO mexe no cálculo do %: as linhas conciliadas já contam como conciliadas; o painel é informativo e não subtrai nada.
+ *
+ * FRONTEND (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`):
+ * - `isDevolvidoResolvido(d)` passa a tratar `resolucao.tipo==="conciliado"` (e `d.jaConciliado`) como RESOLVIDO — assim o
+ *   botão "Ocultar resolvidos" também os esconde, e o subtítulo "N pendentes · M resolvidos" os conta corretamente.
+ * - Novo ramo de selo na resolução: "Já tratado: compensação e devolução deste cheque já foram conciliadas no extrato".
+ * - Bloco de "Desconsiderar/Reconsiderar do %" não se aplica a cheques já conciliados; para eles mostra apenas o badge
+ *   "Conciliado no extrato" (sem botões de %, que não fazem sentido aqui).
+ *
+ * Validado: `tsc` limpo (filtrado financial.ts + FinanceiroConciliacao.tsx); app HTTP 200; verificação contra o Neon REAL
+ * (company 60002, jan-fev/26) confirmou 4 pares de estorno conciliados detectados — incl. o Doc 939 (R$ 4.227,50) do caso do usuário.
+ *
  * Rev. 3762 — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · CARD "CHEQUES DEVOLVIDOS NO BANCO" GANHOU O BOTÃO "OCULTAR RESOLVIDOS": ESCONDE DA TELA OS CHEQUES JÁ TRATADOS (QUITADO REAPRESENTADO / QUITADO POR OUTRO MEIO PIX-TED / QUITADO POR SUBSTITUIÇÃO VIA VÍNCULOS / DESCONSIDERADO DO %), MOSTRANDO SÓ OS PENDENTES. NÃO APAGA NADA, NÃO MUDA O CONTADOR DO CARD NEM O CÁLCULO DO %. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Pedido do usuário (FC ENGENHARIA / company 60002, tela "Conciliação Bancária"): o card "Cheques devolvidos no banco (28)"
