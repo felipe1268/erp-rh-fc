@@ -6068,22 +6068,55 @@ export const financialRouter = router({
       [input.companyId, input.dataInicio, input.dataFim]);
     // Rev. 3423 — Caixa Interno: segunda query separada p/ evitar UNION ALL com params reutilizados
     // (dbExecute renumera $N sequencialmente; UNION ALL com $1/$2/$3 repetidos causa syntax error).
+    // Rev. 3758 — Caixa Interno tem lançamentos manuais em `financial_entries` (sem extrato),
+    // então PRECISA devolver os valores em R$ (entradas/saídas/conciliado) p/ aparecer nos
+    // gráficos "Por conta bancária" e nas KPIs — antes só vinha COUNT e o R$ ficava zerado,
+    // deixando a conta com barra vazia. Agregação ESPELHA o getEntradasCaixaInterno (fonte
+    // canônica da tela Caixa Interno): tipo receita/despesa, |valor_realizado ?? valor_previsto|,
+    // status<>'cancelado', filtrado por data_competencia. Valores numeric → soma direta em SQL.
     const resCi = await dbExecute(db,
       `SELECT e.conta_bancaria_id AS "contaBancariaId",
               COUNT(*)::int AS total,
-              SUM(CASE WHEN COALESCE(e.conciliado,0)=1 THEN 1 ELSE 0 END)::int AS conciliadas
+              SUM(CASE WHEN COALESCE(e.conciliado,0)=1 THEN 1 ELSE 0 END)::int AS conciliadas,
+              COALESCE(SUM(ABS(COALESCE(e.valor_realizado, e.valor_previsto, 0))),0) AS "valorTotal",
+              COALESCE(SUM(CASE WHEN COALESCE(e.conciliado,0)=1 THEN ABS(COALESCE(e.valor_realizado, e.valor_previsto, 0)) ELSE 0 END),0) AS "valorConciliado",
+              COALESCE(SUM(CASE WHEN e.tipo='receita' THEN ABS(COALESCE(e.valor_realizado, e.valor_previsto, 0)) ELSE 0 END),0) AS "valorEntradas",
+              COALESCE(SUM(CASE WHEN e.tipo='despesa' THEN ABS(COALESCE(e.valor_realizado, e.valor_previsto, 0)) ELSE 0 END),0) AS "valorSaidas",
+              COALESCE(SUM(CASE WHEN COALESCE(e.conciliado,0)=1 AND e.tipo='receita' THEN ABS(COALESCE(e.valor_realizado, e.valor_previsto, 0)) ELSE 0 END),0) AS "valorConciliadoEntradas",
+              COALESCE(SUM(CASE WHEN COALESCE(e.conciliado,0)=1 AND e.tipo='despesa' THEN ABS(COALESCE(e.valor_realizado, e.valor_previsto, 0)) ELSE 0 END),0) AS "valorConciliadoSaidas",
+              SUM(CASE WHEN COALESCE(e.conciliado,0)<>1 AND e.tipo='receita' THEN 1 ELSE 0 END)::int AS "pendentesEntradas",
+              SUM(CASE WHEN COALESCE(e.conciliado,0)<>1 AND e.tipo='despesa' THEN 1 ELSE 0 END)::int AS "pendentesSaidas"
          FROM financial_entries e
          JOIN company_bank_accounts cba ON cba.id=e.conta_bancaria_id
         WHERE e.company_id=$1
           AND cba."companyId"=$2
           AND cba."caixaInterno"=1
           AND cba."deletedAt" IS NULL
-          AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) >= $3::date
-          AND COALESCE(e.data_pagamento, e.data_vencimento, e.data_competencia) <= $4::date
+          AND e.status <> 'cancelado'
+          AND e.data_competencia >= $3::date
+          AND e.data_competencia <= $4::date
         GROUP BY e.conta_bancaria_id`,
       [input.companyId, input.companyId, input.dataInicio, input.dataFim]);
-    const ciMap: Record<number, { total: number; conciliadas: number }> = {};
-    for (const r of rows(resCi)) ciMap[Number(r.contaBancariaId)] = { total: Number(r.total) || 0, conciliadas: Number(r.conciliadas) || 0 };
+    type CiAgg = {
+      total: number; conciliadas: number;
+      valorTotal: number; valorConciliado: number;
+      valorEntradas: number; valorSaidas: number;
+      valorConciliadoEntradas: number; valorConciliadoSaidas: number;
+      pendentesEntradas: number; pendentesSaidas: number;
+    };
+    const ciMap: Record<number, CiAgg> = {};
+    for (const r of rows(resCi)) ciMap[Number(r.contaBancariaId)] = {
+      total: Number(r.total) || 0,
+      conciliadas: Number(r.conciliadas) || 0,
+      valorTotal: Number(r.valorTotal) || 0,
+      valorConciliado: Number(r.valorConciliado) || 0,
+      valorEntradas: Number(r.valorEntradas) || 0,
+      valorSaidas: Number(r.valorSaidas) || 0,
+      valorConciliadoEntradas: Number(r.valorConciliadoEntradas) || 0,
+      valorConciliadoSaidas: Number(r.valorConciliadoSaidas) || 0,
+      pendentesEntradas: Number(r.pendentesEntradas) || 0,
+      pendentesSaidas: Number(r.pendentesSaidas) || 0,
+    };
     const seenIds = new Set<number>();
     const mapped = rows(res).map((r: any) => {
       const id = Number(r.contaBancariaId);
@@ -6120,10 +6153,12 @@ export const financialRouter = router({
       mapped.push({
         contaBancariaId: id,
         total: ci.total, conciliadas: ci.conciliadas,
-        valorTotal: 0, valorConciliado: 0,
-        valorEntradas: 0, valorSaidas: 0,
-        valorConciliadoEntradas: 0, valorConciliadoSaidas: 0,
-        pendentesEntradas: 0, pendentesSaidas: 0,
+        // Rev. 3758 — R$ reais do Caixa Interno (antes zerado → barra vazia no gráfico).
+        valorTotal: ci.valorTotal, valorConciliado: ci.valorConciliado,
+        valorEntradas: ci.valorEntradas, valorSaidas: ci.valorSaidas,
+        valorConciliadoEntradas: ci.valorConciliadoEntradas, valorConciliadoSaidas: ci.valorConciliadoSaidas,
+        pendentesEntradas: ci.pendentesEntradas, pendentesSaidas: ci.pendentesSaidas,
+        // Caixa Interno não é extrato bancário → sem split de movimentação interna (tudo "caixa real").
         valorEntradasInternas: 0, valorSaidasInternas: 0,
         qtdEntradasInternas: 0, qtdSaidasInternas: 0,
         status: ci.total === 0 ? "vazio" : ci.conciliadas >= ci.total ? "consolidado" : "lancamento",

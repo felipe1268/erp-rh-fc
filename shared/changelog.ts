@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3758 — **DASHBOARD · CONCILIAÇÃO BANCÁRIA · BUGFIX: A CONTA "CAIXA INTERNO - ADM" (LANÇAMENTOS MANUAIS, SEM EXTRATO BANCÁRIO) APARECIA NO GRÁFICO "POR CONTA BANCÁRIA — CONCILIADO × PENDENTE (R$)" COM BARRA VAZIA (R$ 0,00), MESMO TENDO 31 LANÇAMENTOS CONFIRMADOS (R$ 332.459,23 ENTRADAS / R$ 237.953,46 SAÍDAS). 100% BUGFIX · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Sintoma reportado pelo usuário (prints da Conciliação Bancária, FC ENGENHARIA / company 60002, Jan/2026): "tem lançamento
+ * no caixa Adm mas nos gráficos não tá aparecendo". A tela "Conta Caixa Interno — sem extrato bancário" mostrava as 31
+ * confirmadas com R$ 332.459,23 de entradas e R$ 237.953,46 de saídas, mas o dashboard de Conciliação desenhava a conta
+ * com barra zerada.
+ *
+ * Causa: o Caixa Interno NÃO tem `bank_statement_lines` (extrato) — seus lançamentos vivem em `financial_entries` e são
+ * "confirmados" manualmente. O endpoint `getBankAccountsConciliacaoStatus` (que alimenta o dashboard DashConciliacao) já
+ * incluía as contas Caixa Interno desde a Rev. 3423, MAS a segunda query (resCi, sobre `financial_entries`) só computava
+ * COUNT (`total`/`conciliadas`); ao montar a linha da conta, TODOS os valores em R$ eram hardcoded em 0 (`valorTotal:0`,
+ * `valorEntradas:0`, `valorSaidas:0`, `valorConciliado:0`, ...). Como o gráfico "Por conta bancária" plota
+ * `valorConciliado`/`valorPendente`, a barra do Caixa Interno saía vazia (e o donut/KPIs também não somavam esse caixa).
+ *
+ * Fix (`server/routers/financial.ts`, `getBankAccountsConciliacaoStatus`, query resCi):
+ * - A agregação do Caixa Interno agora calcula os valores em R$ direto no SQL, ESPELHANDO a fonte canônica da tela Caixa
+ *   Interno (`getEntradasCaixaInterno`): `valorEntradas` = SUM(tipo='receita'), `valorSaidas` = SUM(tipo='despesa'),
+ *   usando `ABS(COALESCE(valor_realizado, valor_previsto, 0))` (colunas numeric → soma direta), `valorConciliado` =
+ *   SUM(conciliado=1), + os splits por direção (conciliadoEntradas/Saidas, pendentesEntradas/Saidas).
+ * - Para casar EXATAMENTE com os números que o usuário vê na tela Caixa Interno, o filtro foi alinhado: `status<>'cancelado'`
+ *   e janela por `data_competencia` (antes a resCi usava COALESCE(data_pagamento, data_vencimento, data_competencia) e não
+ *   filtrava cancelados).
+ * - `ciMap` passou a carregar todos esses campos e a linha empurrada (contas CI sem extrato) usa os valores reais em vez de
+ *   zeros. Caixa Interno não é extrato → mantém `valorEntradasInternas/valorSaidasInternas = 0` (tudo "caixa real"; o split
+ *   de movimentação interna é conceito de extrato, baseado em descrição/CNPJ).
+ * - Validado direto no Neon (Jan/2026, conta 22, company 60002): total 31, conciliadas 31, entradas R$ 332.459,23, saídas
+ *   R$ 237.953,46 — idêntico à tela Caixa Interno. `tsc` limpo (filtrado financial.ts); app HTTP 200.
+ *
+ * Arquivo: `server/routers/financial.ts`.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 3757 — **DASHBOARD · CONCILIAÇÃO BANCÁRIA · BUGFIX CRÍTICO: TODOS OS CARDS DE ANÁLISE ESTAVAM VAZIOS ("NENHUMA RECEITA/DESPESA CATEGORIZADA", "NENHUM FORNECEDOR IDENTIFICADO", "NENHUM LANÇAMENTO COM OBRA IDENTIFICADA") MESMO COM DADOS REAIS (R$ 2,24 MI EM RECEITAS, 12.894 DESPESAS, 123 CATEGORIAS). CAUSA: A QUERY #4 (TOP OBRAS) DO `getConciliacaoDashExtra` USAVA `ORDER BY (despesas+receitas)` REFERENCIANDO ALIASES DE SAÍDA DENTRO DE UMA EXPRESSÃO — O POSTGRES NÃO RESOLVE ALIAS DE SAÍDA EM EXPRESSÃO DE ORDER BY (SÓ SOZINHO), ENTÃO PROCURAVA UMA COLUNA DE ENTRADA "despesas" E LANÇAVA `column "despesas" does not exist`. AS 6 SUB-QUERIES SÃO `await`-ADAS EM SEQUÊNCIA SEM try/catch, ENTÃO ESSE THROW ABORTAVA TODO O ENDPOINT → `extra` UNDEFINED → TODOS OS CARDS CAÍAM PRO ESTADO VAZIO. 100% BUGFIX · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Sintoma reportado pelo usuário (prints da Conciliação Bancária, FC ENGENHARIA / company 60002, ano 2026): "os gráficos
