@@ -98,7 +98,12 @@ export default function FinanceiroFluxoCaixa() {
 
   // Rev. 2944 — Compõe os 2 endpoints já confiáveis dos módulos irmãos, garantindo
   // que os valores BATAM 1:1 com Contas a Receber e Contas a Pagar (por construção).
-  const receberQ = (trpc as any).financial.getContasReceberMatrix.useQuery(
+  // Rev. 3759 — Receitas = dinheiro REAL recebido/a receber (financial_entries
+  // tipo='receita'), espelhando Contas a Receber EXATAMENTE como as Despesas espelham
+  // Contas a Pagar. Antes vinha da matriz de Previsão de Faturamento (cronograma), que
+  // mostrava o forecast (~R$200k) em vez do caixa real (~R$2,24mi) e não fechava com o
+  // extrato. Decisão do usuário (Opção 1): mostrar o dinheiro real, igual às Despesas.
+  const receberQ = (trpc as any).financial.getContasAReceberByYear.useQuery(
     { companyId, ano }, { enabled: !!companyId }
   );
   const pagarQ = (trpc as any).financial.getContasAPagarByYear.useQuery(
@@ -127,35 +132,33 @@ export default function FinanceiroFluxoCaixa() {
     [ano]
   );
 
-  // ── RECEITAS — espelha a matriz de Contas a Receber ─────────────────────────
+  // ── RECEITAS — espelha Contas a Receber (financial_entries reais, igual às Despesas) ──
+  // Rev. 3759 — agrupa os títulos a receber por dataVencimento (mesma régua das
+  // Despesas/Contas a Pagar), separando Efetivo × Projeção por origem (isProjecaoOrigem,
+  // a MESMA régua do split de Despesas). "— já recebido em caixa" usa o valor realizado
+  // dos títulos com status recebido/pago (o que de fato entrou na conta).
   const { recTodos, recEfet, recProj, recReal } = useMemo(() => {
-    const totaisMes: Record<string, number> = receberQ.data?.totaisMes ?? {};
-    const projetos: any[] = receberQ.data?.projetos ?? [];
+    const rows: any[] = receberQ.data ?? [];
+    const recebido = new Set(["recebido", "recebido_total", "recebido_parcial", "pago"]);
     const efet = Array(12).fill(0);
     const proj = Array(12).fill(0);
     const real = Array(12).fill(0);
-    for (const p of projetos) {
-      for (let i = 0; i < 12; i++) {
-        const cell = p.meses?.[meses12[i]];
-        if (!cell) continue;
-        const st: string | null = cell.status;
-        // Efetivo = há medição/faturamento (status não-previsto); Projeção = cronograma puro
-        const isMed = !!st && st !== "previsto" && st !== "previsao_faturamento";
-        if (isMed) {
-          efet[i] += Number(cell.valorMedido || cell.valorPrevisto || 0) || 0;
-          if (st === "recebido_parcial" || st === "recebido_total") {
-            real[i] += Number(cell.valorRecebido || 0) || 0;
-          }
-        } else {
-          proj[i] += Number(cell.valorPrevisto || 0) || 0;
+    for (const c of rows) {
+      // Mês = dataVencimento (idêntico ao agrupamento do Contas a Pagar/Receber).
+      const key = String(c.dataVencimento ?? "").slice(0, 7);
+      const i = meses12.indexOf(key);
+      if (i < 0) continue;
+      const v = Number(c.valorPrevisto ?? 0) || 0;
+      if (isProjecaoOrigem(c.origemModulo)) {
+        proj[i] += v;
+      } else {
+        efet[i] += v;
+        if (recebido.has(String(c.status ?? ""))) {
+          real[i] += Number(c.valorRealizado ?? c.valorPrevisto ?? 0) || 0;
         }
       }
     }
-    // "Todos" usa o total oficial da matriz (idêntico ao headline de Contas a Receber)
-    const todos = meses12.map((k, i) => {
-      const oficial = totaisMes[k];
-      return oficial != null ? Number(oficial) || 0 : (efet[i] + proj[i]);
-    });
+    const todos = meses12.map((_, i) => efet[i] + proj[i]);
     return { recTodos: todos, recEfet: efet, recProj: proj, recReal: real };
   }, [receberQ.data, meses12]);
 
@@ -387,16 +390,16 @@ export default function FinanceiroFluxoCaixa() {
   const receitaRows: { label: string; vals: number[]; muted?: boolean }[] =
     natureza === "todos"
       ? [
-          { label: "Faturado / Recebido (Efetivo)", vals: recEfet },
-          { label: "Previsto / Cronograma (Projeção)", vals: recProj },
+          { label: "Contas a Receber (Efetivo)", vals: recEfet },
+          { label: "Receita Projetada", vals: recProj },
         ]
       : natureza === "efetivo"
       ? [
-          { label: "Faturado / Recebido", vals: recEfet },
+          { label: "Contas a Receber", vals: recEfet },
           { label: "— dos quais já recebido em caixa", vals: recReal, muted: true },
         ]
       : [
-          { label: "Previsto / Cronograma", vals: recProj },
+          { label: "Receita Projetada", vals: recProj },
         ];
 
   const NAT_OPTS: { v: Natureza; label: string }[] = [
@@ -425,7 +428,7 @@ export default function FinanceiroFluxoCaixa() {
             <AlertCircle className="w-5 h-5 text-rose-500 flex-shrink-0 mt-0.5" />
             <div className="space-y-2">
               <p className="font-semibold">Não foi possível carregar o fluxo de caixa.</p>
-              <p className="text-rose-700/80">Falha ao consultar Previsão de Faturamento e/ou Contas a Pagar.</p>
+              <p className="text-rose-700/80">Falha ao consultar Contas a Receber e/ou Contas a Pagar.</p>
               <Button variant="outline" size="sm" onClick={refetch} className="h-8 text-xs">
                 <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Tentar novamente
               </Button>
@@ -445,7 +448,7 @@ export default function FinanceiroFluxoCaixa() {
           <div>
             <h1 className="text-xl font-bold text-slate-900">Fluxo de Caixa</h1>
             <p className="text-xs text-slate-400 mt-0.5">
-              Espelha Previsão de Faturamento + Contas a Pagar · {ano}
+              Espelha Contas a Receber + Contas a Pagar · {ano}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -562,7 +565,7 @@ export default function FinanceiroFluxoCaixa() {
             <span className="w-2.5 h-2.5 rounded-sm bg-blue-100 border border-blue-300" />
             mês atual destacado
           </span>
-          <span>Receitas = matriz de Previsão de Faturamento</span>
+          <span>Receitas = lançamentos de Contas a Receber</span>
           <span>Despesas = lançamentos de Contas a Pagar</span>
           <span><strong>Efetivo</strong> = real · <strong>Projeção</strong> = forecast (cronograma/folha)</span>
         </div>

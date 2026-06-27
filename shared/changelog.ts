@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3759 — **FINANCEIRO · FLUXO DE CAIXA · A LINHA "ENTRADAS (RECEITAS)" PASSA A REFLETIR O DINHEIRO REAL DE CONTAS A RECEBER (financial_entries tipo='receita'), EXATAMENTE COMO AS DESPESAS REFLETEM CONTAS A PAGAR, PARA O CAIXA FECHAR COM O EXTRATO. ANTES VINHA DA MATRIZ DE PREVISÃO DE FATURAMENTO (CRONOGRAMA × ORÇAMENTO), QUE MOSTRAVA ~R$ 200 MIL DE FORECAST EM VEZ DOS ~R$ 2,24 MI EFETIVAMENTE A RECEBER/RECEBIDOS — RECEITAS E DESPESAS DESCASAVAM. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Pedido do usuário (FC ENGENHARIA / company 60002): no Fluxo de Caixa, a linha de Receitas deve refletir o DINHEIRO REAL
+ * que entra na conta — igual às Despesas — para conciliar com o extrato. Hoje as Despesas vinham do livro real
+ * (`getContasAPagarByYear` → `financial_entries` tipo='despesa', por vencimento) enquanto as Receitas vinham da MATRIZ de
+ * Previsão de Faturamento (`getContasReceberMatrix`, derivada do cruzamento cronograma×orçamento). Resultado: Receitas
+ * mostravam ~R$ 200 mil (forecast) e Despesas o real, então o caixa nunca fechava.
+ *
+ * Opções apresentadas ao usuário:
+ *   (1) [ESCOLHIDA] Mostrar o dinheiro REAL recebido/a receber (igual às Despesas).
+ *   (2) Manter a Previsão de Faturamento como está.
+ *   (3) Mostrar os dois, alternando pelo seletor Efetivo/Projeção.
+ * O usuário escolheu a Opção 1 (recomendada).
+ *
+ * Fix (100% frontend — `client/src/pages/financeiro/FinanceiroFluxoCaixa.tsx`):
+ * - A fonte das Receitas trocou de `financial.getContasReceberMatrix` para `financial.getContasAReceberByYear` — o
+ *   endpoint IRMÃO/SIMÉTRICO de `getContasAPagarByYear`, que lista os títulos reais a receber (`financial_entries`
+ *   tipo='receita', status<>'cancelado', por ano de `data_vencimento`/`created_at`, já aplicando `sqlNotProjecao()` quando
+ *   a TRAVA `FINANCEIRO_SOMENTE_REAL` está ligada).
+ * - O memo de Receitas foi reescrito ESPELHANDO o de Despesas: agrupa as linhas por `dataVencimento` (mesma régua de mês),
+ *   separa Efetivo × Projeção pela MESMA função `isProjecaoOrigem(origemModulo)` usada nas Despesas, e a sub-linha
+ *   "— dos quais já recebido em caixa" soma `COALESCE(valorRealizado, valorPrevisto)` dos títulos com status
+ *   recebido/recebido_total/recebido_parcial/pago (o que de fato entrou na conta).
+ * - Removida toda a dependência da forma da matriz (`totaisMes`/`projetos[].meses`/`status` por célula). KPIs (split
+ *   Efetivo×Projeção), seletor de escopo, Resultado/Saldo Acumulado/Margem e o Saldo Inicial das contas bancárias
+ *   permanecem intactos — só a alimentação da linha de Receitas mudou.
+ * - Textos atualizados: subtítulo do header ("Espelha Contas a Receber + Contas a Pagar"), legenda ("Receitas =
+ *   lançamentos de Contas a Receber"), mensagem de erro e rótulos das sub-linhas de receita.
+ * - Validado direto no Neon (company 60002, 2026): Contas a Receber = R$ 2.592.652,46 (Jan R$ 2.342.652,46), já recebido
+ *   em caixa = R$ 2.167.652,46 — vs. os ~R$ 200 mil da matriz antiga. `tsc` limpo (filtrado FinanceiroFluxoCaixa.tsx e
+ *   financial.ts); app HTTP 200.
+ *
+ * Arquivo: `client/src/pages/financeiro/FinanceiroFluxoCaixa.tsx`.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 3758 — **DASHBOARD · CONCILIAÇÃO BANCÁRIA · BUGFIX: A CONTA "CAIXA INTERNO - ADM" (LANÇAMENTOS MANUAIS, SEM EXTRATO BANCÁRIO) APARECIA NO GRÁFICO "POR CONTA BANCÁRIA — CONCILIADO × PENDENTE (R$)" COM BARRA VAZIA (R$ 0,00), MESMO TENDO 31 LANÇAMENTOS CONFIRMADOS (R$ 332.459,23 ENTRADAS / R$ 237.953,46 SAÍDAS). 100% BUGFIX · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Sintoma reportado pelo usuário (prints da Conciliação Bancária, FC ENGENHARIA / company 60002, Jan/2026): "tem lançamento
