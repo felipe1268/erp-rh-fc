@@ -423,10 +423,10 @@ export async function calcularDRE(
        SELECT tipo, natureza,
               LOWER(COALESCE(origem_modulo,'')) AS origem,
               LOWER(COALESCE(conta_nome,'')) AS conta,
-              COALESCE(valor_realizado, valor_previsto, 0)::numeric AS v
+              COALESCE(valor_realizado, 0)::numeric AS v
        FROM financial_entries
        WHERE company_id=$1
-         AND status NOT IN ('cancelado')
+         AND status NOT IN ('cancelado','estornado')
          AND tipo <> 'transferencia'
          AND data_competencia IS NOT NULL
          AND TO_CHAR(data_competencia,'YYYY-MM') BETWEEN $2 AND $3
@@ -534,10 +534,10 @@ export async function calcularDRELinhaDetalhe(
              LOWER(COALESCE(origem_modulo,'')) AS origem,
              LOWER(COALESCE(conta_nome,'')) AS conta,
              tipo, natureza,
-             COALESCE(valor_realizado, valor_previsto, 0)::numeric AS v
+             COALESCE(valor_realizado, 0)::numeric AS v
       FROM financial_entries
       WHERE company_id=$1
-        AND status NOT IN ('cancelado')
+        AND status NOT IN ('cancelado','estornado')
         AND tipo <> 'transferencia'
         AND data_competencia IS NOT NULL
         AND TO_CHAR(data_competencia,'YYYY-MM') BETWEEN $2 AND $3
