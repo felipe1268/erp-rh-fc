@@ -12762,6 +12762,8 @@ export const financialRouter = router({
             WHERE company_id=${cid} AND tipo='despesa'
               AND ${periodo("COALESCE(data_competencia,data_vencimento,created_at::date)")}
               AND NULLIF(TRIM(COALESCE(fornecedor_nome, comprovante_beneficiario)),'') IS NOT NULL
+              -- Excluir contas internas: folha, vales, adiantamento, rescisão, hora extra
+              AND COALESCE(conta_id, 0) NOT IN (506,387,280,301,265,285,264)
            UNION ALL
            SELECT NULLIF(TRIM(descricao),'') AS nome,
                   ABS(valor::numeric) AS total
