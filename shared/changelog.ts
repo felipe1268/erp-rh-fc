@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3756 — **DASHBOARD · NOTAS FISCAIS (DashNotasFiscais) · NOVO CARD "MOVIMENTOS COM NOTA × SEM NOTA": COMPARATIVO VISUAL E DIRETO EM R$ MOSTRANDO QUANTO DAS ENTRADAS E SAÍDAS BANCÁRIAS TEM NOTA FISCAL IDENTIFICADA (VINCULADA VIA `stmt_line_id`/`fn_id`) VS QUANTO É NÃO IDENTIFICÁVEL. FEATURE · 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Pedido do usuário: "comparativo visual e claro dizendo que X valores de entrada e saída com notas identificadas, Y
+ * entradas e saídas com notas não identificáveis (em R$, claro e direto)". O dashboard já tinha a seção "Saúde Fiscal"
+ * (gauges de cobertura) e o gráfico "Cobertura de NF-e nas Saídas" (só saídas, mês a mês), mas faltava a visão COMBINADA
+ * entradas+saídas, com X (com nota) e Y (sem nota) em reais explícitos.
+ *
+ * Mudanças (`client/src/pages/financeiro/dashboards/DashNotasFiscais.tsx`):
+ * 1) Novo card inserido logo após "Saúde Fiscal" (antes do gráfico "Entradas × Saídas — Notas Fiscais"). Usa os arrays já
+ *    retornados por `getPanoramaFiscal` (`entradasComNota`/`entradasSemNota`/`saidasComNota`/`saidasSemNota`, split por
+ *    `fn_id != null`) e o helper existente `sumB(arr)` (Σ |valor|). NENHUMA alteração de backend.
+ * 2) Layout: header com % "Identificado" (verde≥70 / âmbar≥40 / vermelho) + 2 grandes totais COM (verde) × SEM (vermelho)
+ *    em R$ e qtd/percentual; abaixo, 2 barras horizontais empilhadas (Entradas, Saídas), cada uma dividida verde/vermelho
+ *    com rótulo compacto in-bar (só quando o segmento ≥16% p/ não truncar) e linha de detalhe R$ + qtd c/nota / s/nota.
+ * 3) Interatividade: cada segmento é um `<button>` que abre o `DetailDialog` correspondente. Dois novos diálogos
+ *    (`saidasComNota`, `entradasComNota`) somados ao `DlgKey`, reaproveitando `COL_BANK`; os de "sem nota" reusam os
+ *    diálogos já existentes (`saidasSemNota`/`entradasSemNota`). Import de `AlertTriangle` adicionado.
+ * 4) Respeita o seletor de mês white-card já existente: todo o card usa `data` (escopo do período) + `periodoLabel`.
+ * Regra de ouro do usuário mantida (seletor de período = white-card; nada novo aqui). Sem truncamento em texto de bloco
+ * (break-words nos totais; truncate só no rótulo compacto in-bar, que é numérico e tem title= no botão).
+ * Validação: `tsc --noEmit` limpo (filtrado ao arquivo) + parse esbuild fresh do dashboard; app sobe (HTTP 200).
+ *
  * Rev. 3755 — **DASHBOARD · CONCILIAÇÃO BANCÁRIA · NOVO FILTRO "MÊS A MÊS": SELETOR DE PERÍODO WHITE-CARD (PADRÃO PERÍODO DO DashNotasFiscais) COM CHIPS "TUDO" + JAN…DEZ E DOT VERDE/CINZA "COM DADOS / SEM DADOS". SELECIONAR UM MÊS ESCOPA TODO O DASHBOARD (KPIs, RANKINGS, ANÁLISE POR CATEGORIA, POR OBRA, STATUS POR CONTA E DIÁLOGOS) PARA AQUELE MÊS; "TUDO" MANTÉM O ANO INTEIRO. OS GRÁFICOS MENSAIS (ENTRADAS×SAÍDAS, %CONCILIADO, SALDO ACUMULADO, COMPARATIVO ANO×ANO) SEGUEM YEAR-WIDE POR DESIGN. FEATURE · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Regra de ouro do usuário respeitada: seletor de período = WHITE-CARD (padrão PanoramaFiscal/DashNotasFiscais), o

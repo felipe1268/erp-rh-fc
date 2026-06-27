@@ -10,7 +10,7 @@ import {
 import {
   FileText, ShoppingCart, Receipt, Building2, CheckCircle2,
   ArrowDownLeft, ArrowUpRight, Banknote, Calculator, Percent,
-  TrendingUp, TrendingDown, Package, Users, BadgeDollarSign,
+  TrendingUp, TrendingDown, Package, Users, BadgeDollarSign, AlertTriangle,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import {
@@ -360,7 +360,7 @@ function OcNfeSection({ data, onOpenSem, onOpenCom, onOpenNfeSem }: { data: any;
 }
 
 /* ─────────────────── Main Dashboard ─────────────────── */
-type DlgKey = "nfeRecebidas"|"nfseEmitidas"|"saidasSemNota"|"entradasSemNota"|"ocsSemNota"|"ocsComNota"|"nfeSemOc"|"fornecedorDetail";
+type DlgKey = "nfeRecebidas"|"nfseEmitidas"|"saidasSemNota"|"entradasSemNota"|"saidasComNota"|"entradasComNota"|"ocsSemNota"|"ocsComNota"|"nfeSemOc"|"fornecedorDetail";
 
 export default function DashNotasFiscais() {
   const [, nav] = useLocation();
@@ -609,6 +609,127 @@ export default function DashNotasFiscais() {
             ))}
           </div>
         </Card>
+
+        {/* ── Movimentos COM nota × SEM nota — comparativo direto em R$ ───── */}
+        {(() => {
+          const entCom = sumB(data?.entradasComNota ?? []);
+          const entSem = sumB(data?.entradasSemNota ?? []);
+          const saiCom = sumB(data?.saidasComNota ?? []);
+          const saiSem = sumB(data?.saidasSemNota ?? []);
+          const entComQtd = data?.entradasComNota?.length ?? 0;
+          const entSemQtd = data?.entradasSemNota?.length ?? 0;
+          const saiComQtd = data?.saidasComNota?.length ?? 0;
+          const saiSemQtd = data?.saidasSemNota?.length ?? 0;
+          const totalCom  = entCom + saiCom;
+          const totalSem  = entSem + saiSem;
+          const totalGer  = totalCom + totalSem;
+          const pctCom    = totalGer > 0 ? Math.round((totalCom / totalGer) * 100) : 0;
+          const pctSem    = totalGer > 0 ? 100 - pctCom : 0;
+
+          const Linha = ({ label, icon: Icon, com, sem, comQtd, semQtd, onCom, onSem }: {
+            label: string; icon: any; com: number; sem: number; comQtd: number; semQtd: number;
+            onCom: () => void; onSem: () => void;
+          }) => {
+            const tot  = com + sem;
+            const pCom = tot > 0 ? (com / tot) * 100 : 0;
+            const pSem = tot > 0 ? (sem / tot) * 100 : 0;
+            return (
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
+                    <Icon className="w-4 h-4 text-slate-400" />{label}
+                  </span>
+                  <span className="text-xs text-slate-400 tabular-nums">{formatBRL(tot)}</span>
+                </div>
+                <div className="flex h-9 w-full rounded-lg overflow-hidden bg-slate-100">
+                  {com > 0 && (
+                    <button type="button" onClick={onCom}
+                      title={`Com nota identificada: ${formatBRL(com)} · ${comQtd} mov.`}
+                      className="h-full flex items-center justify-center bg-emerald-500 hover:bg-emerald-600 transition-colors text-white text-[11px] font-bold tabular-nums px-1 min-w-0"
+                      style={{ width: `${pCom}%` }}>
+                      {pCom >= 16 && <span className="truncate">{formatBRLCompact(com)}</span>}
+                    </button>
+                  )}
+                  {sem > 0 && (
+                    <button type="button" onClick={onSem}
+                      title={`Sem nota identificável: ${formatBRL(sem)} · ${semQtd} mov.`}
+                      className="h-full flex items-center justify-center bg-rose-500 hover:bg-rose-600 transition-colors text-white text-[11px] font-bold tabular-nums px-1 min-w-0"
+                      style={{ width: `${pSem}%` }}>
+                      {pSem >= 16 && <span className="truncate">{formatBRLCompact(sem)}</span>}
+                    </button>
+                  )}
+                  {tot === 0 && (
+                    <div className="h-full w-full flex items-center justify-center text-[11px] text-slate-400">
+                      Sem movimentos no período
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-between mt-1 text-[11px]">
+                  <span className="text-emerald-600 font-semibold tabular-nums">
+                    {formatBRL(com)} <span className="text-slate-400 font-normal">· {comQtd} c/ nota</span>
+                  </span>
+                  <span className="text-rose-600 font-semibold tabular-nums">
+                    {formatBRL(sem)} <span className="text-slate-400 font-normal">· {semQtd} s/ nota</span>
+                  </span>
+                </div>
+              </div>
+            );
+          };
+
+          return (
+            <Card className="p-5 border-slate-200">
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <h2 className="text-base font-bold text-slate-800">Movimentos com Nota × sem Nota — {periodoLabel}</h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Entradas e saídas bancárias com nota fiscal identificada vs não identificável (em R$)
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <span className={`text-3xl font-black tabular-nums ${pctCom >= 70 ? "text-emerald-600" : pctCom >= 40 ? "text-amber-600" : "text-red-600"}`}>
+                    {pctCom}%
+                  </span>
+                  <p className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">Identificado</p>
+                </div>
+              </div>
+
+              {/* Dois grandes totais — COM × SEM */}
+              <div className="grid grid-cols-2 gap-3 mb-5">
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
+                  <p className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wide flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" />Com nota identificada
+                  </p>
+                  <p className="text-2xl font-black text-emerald-700 tabular-nums mt-1 break-words">{formatBRL(totalCom)}</p>
+                  <p className="text-[11px] text-emerald-600/80 mt-0.5">{entComQtd + saiComQtd} movimento(s) · {pctCom}% do total</p>
+                </div>
+                <div className="rounded-xl border border-rose-200 bg-rose-50/60 p-3">
+                  <p className="text-[11px] font-semibold text-rose-700 uppercase tracking-wide flex items-center gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5" />Sem nota identificável
+                  </p>
+                  <p className="text-2xl font-black text-rose-700 tabular-nums mt-1 break-words">{formatBRL(totalSem)}</p>
+                  <p className="text-[11px] text-rose-600/80 mt-0.5">{entSemQtd + saiSemQtd} movimento(s) · {pctSem}% do total</p>
+                </div>
+              </div>
+
+              {/* Barras Entradas / Saídas */}
+              <div className="space-y-4">
+                <Linha label="Entradas" icon={ArrowDownLeft}
+                  com={entCom} sem={entSem} comQtd={entComQtd} semQtd={entSemQtd}
+                  onCom={() => setDlg("entradasComNota")} onSem={() => setDlg("entradasSemNota")} />
+                <Linha label="Saídas" icon={ArrowUpRight}
+                  com={saiCom} sem={saiSem} comQtd={saiComQtd} semQtd={saiSemQtd}
+                  onCom={() => setDlg("saidasComNota")} onSem={() => setDlg("saidasSemNota")} />
+              </div>
+
+              {/* Legenda */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-4 pt-3 border-t border-slate-100 text-[11px] text-slate-500">
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" />Com nota fiscal identificada</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-rose-500 inline-block" />Sem nota identificável</span>
+                <span className="text-slate-400">Clique nas barras para ver os lançamentos.</span>
+              </div>
+            </Card>
+          );
+        })()}
 
         {/* ── Gráfico PRINCIPAL: Entradas × Saídas com Desvio ─────────────── */}
         {(() => {
@@ -1491,6 +1612,20 @@ export default function DashNotasFiscais() {
           subtitle={`${data?.entradasSemNota?.length ?? 0} entradas sem nota de serviço vinculada`}
           columns={COL_BANK} rows={data?.entradasSemNota ?? []} totalKey="valor"
           icon={ArrowDownLeft}
+        />
+        <DetailDialog
+          open={dlg === "saidasComNota"} onOpenChange={o => !o && setDlg(null)}
+          title="Saídas Bancárias com NF-e Identificada"
+          subtitle={`${data?.saidasComNota?.length ?? 0} saídas com nota fiscal vinculada · ${periodoLabel}`}
+          columns={COL_BANK} rows={data?.saidasComNota ?? []} totalKey="valor"
+          icon={CheckCircle2}
+        />
+        <DetailDialog
+          open={dlg === "entradasComNota"} onOpenChange={o => !o && setDlg(null)}
+          title="Entradas Bancárias com NFS-e Identificada"
+          subtitle={`${data?.entradasComNota?.length ?? 0} entradas com nota fiscal vinculada · ${periodoLabel}`}
+          columns={COL_BANK} rows={data?.entradasComNota ?? []} totalKey="valor"
+          icon={CheckCircle2}
         />
         <DetailDialog
           open={dlg === "ocsSemNota"} onOpenChange={o => !o && setDlg(null)}
