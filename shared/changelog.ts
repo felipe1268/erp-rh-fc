@@ -1,6 +1,18 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3806 — **FINANCEIRO · LIMPEZA GLOBAL DE ZEROS ABSOLUTOS (realizado=0 E previsto=0).**
+ * Varredura em TODAS as categorias/meses do DRE identificou 8.759 entries com valor_realizado=0,
+ * dos quais 8.735 são orçamentos legítimos (valor_previsto>0) e 24 são absolutamente vazios
+ * (realizado=0 E previsto=0). Os 24 foram deletados:
+ * (1) 18 × MÃO DE OBRA TERCEIRIZADA — "Contrato elétrico" / Chlorum Solutions / importação_excel / Nov/2024.
+ * (2) 4 × DESPESAS COM MATERIAIS — OC-2026-0142/0529/0643 e 1 sem descrição / Jun/2026.
+ * (3) 2 × Materiais para Obra — importação_excel / PALES (Set/2025) e UTC (Jan/2026).
+ * IDs: 863104,861335,861338,861351,861358,861399,861410,861418,861423,861424,861444,
+ * 861454,861468,861484,861499,861517,861523,861526,861538,866723,885321,886106,886157,886160.
+ * Os 8.735 restantes com valor_previsto>0 representam orçamentos de obra e NÃO foram tocados.
+ * 100% BACKEND · ZERO SCHEMA/ALTER/DROP. Apenas DELETE em financial_entries.
+ *
  * Rev. 3805 — **FINANCEIRO · DESPESAS FINANCEIRAS · REESTRUTURAÇÃO DE PLANO DE CONTAS.**
  * 4 problemas corrigidos:
  * (1) "Juros Recebidos" (id=87) RENOMEADO para "JUROS E MULTAS BANCÁRIAS" +
