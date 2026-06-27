@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3765 — **FINANCEIRO · DASHBOARD · CONCILIAÇÃO BANCÁRIA · TODOS OS GRÁFICOS DA TELA GANHARAM DRILL-DOWN (CLIQUE): BARRAS DE MÊS NAVEGAM O SELETOR DE PERÍODO; BARRAS DE CONTA BANCÁRIA ABREM DIALOG COM OS LANÇAMENTOS FILTRADOS DA CONTA; BARRAS/LINHA DE FORNECEDOR ABREM DIALOG COM OS LANÇAMENTOS DO FORNECEDOR (MATCH POR DESCRIÇÃO); GRÁFICOS DE CATEGORIA E OBRA ABREM A LISTA AGRUPADA EXISTENTE. ITENS DOS TOPLISTCARDS (FORNECEDORES, CATEGORIAS, OBRAS) TAMBÉM FICARAM CLICÁVEIS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Pedido do usuário: clicar em qualquer gráfico do Dashboard · Conciliação Bancária e ver os lançamentos pertinentes.
+ *
+ * FRONTEND (`client/src/pages/financeiro/dashboards/DashConciliacao.tsx`):
+ * - Novo estado `drill: null | { title, subtitle, tipo, filterFn }` (define o contexto do drill-down ativo).
+ * - `lancamentos` (getConciliacaoLancamentos) passa a ficar habilitado quando `lanc !== null || drill !== null`.
+ * - `drillRows` (useMemo): filtra `lancArr` pelo `drill.filterFn` + tipo (entradas/saídas/todos) e mapeia p/ o formato do LANC_COLS.
+ * - `onMesClick(d)`: lê `activeLabel` do evento Recharts, localiza no array MESES e chama `setMes(i+1)` → navega mês.
+ * - `onContaClick(tipo)(d)`: extrai `name` do payload, localiza a conta por `nomeConta`, chama `setDrill` com filtro por `contaBancariaId`.
+ * - `onFornClick(nome)`: chama `setDrill` com filtro `includes(up)` sobre `l.descricao`.
+ * - `TopListCard`: ganhou prop `onItemClick?: (item) => void`; linhas ficam clicáveis quando a prop existe (hover indigo).
+ * - Gráficos de MÊS (BarChart Entradas/Saídas, ComposedChart % Conciliado, AreaChart Saldo acumulado): `onClick={onMesClick}` + cursor-pointer.
+ * - Gráficos de BANCO (Saídas/conta, Entradas/conta, Comparativo): `onClick={onContaClick("saidas"|"entradas"|"todos")}` + cursor hover colorido.
+ * - Gráficos de FORNECEDOR (BarChart top 10): `onClick → onFornClick(nome)` + cursor-pointer; TopListCard Ranking: `onItemClick → onFornClick`.
+ * - Gráficos de CATEGORIA (PieChart Despesas): `Pie onClick → setDetCategDesp(true)`; BarChart Receitas: `onClick → setDetCategRec(true)`.
+ *   TopListCard Despesas e Receitas: `onItemClick → setDetCategDesp/setDetCategRec` (categorias vêm de ERP, não do extrato → abre lista agrupada).
+ * - Gráficos de OBRA (BarChart): `onClick → setDetObras(true)`; TopListCard Ranking: `onItemClick → setDetObras(true)`.
+ * - Novo `<DetailDialog>` (drill): abre quando `drill !== null`; usa `LANC_COLS` (com o botão Classificar) e exibe `drillRows`.
+ * - Subtítulos de todos os gráficos atualizados para comunicar que são clicáveis.
+ * - READ-ONLY: nenhuma query nova no backend; zero schema/ALTER/DROP/DELETE.
+ *
+ * Validado: servidor HTTP 200, sem erros de compilação Vite no browser console.
+ *
  * Rev. 3764 — **FINANCEIRO · DASHBOARD · CONTROLE DE CHEQUES · GANHOU O FILTRO "MÊS A MÊS" (SELETOR WHITE-CARD "PERÍODO" COM CHIP "TUDO" + JAN…DEZ, DOT VERDE = COM DADOS / CINZA = SEM DADOS), IGUAL AO QUE JÁ EXISTE NA CONCILIAÇÃO BANCÁRIA. SELECIONAR UM MÊS REESCOPA OS KPIs, A CONFERÊNCIA CONTRA O EXTRATO, OS DEVOLVIDOS E TODOS OS RANKINGS/CARDS DE STATUS; OS GRÁFICOS MENSAIS (VALOR POR MÊS, EVOLUÇÃO DE STATUS, COMPARATIVO ANUAL) SEGUEM YEAR-WIDE POR DESIGN. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Pedido do usuário (FC ENGENHARIA / company 60002, tela "Dashboard · Controle de Cheques"): replicar aqui o mesmo seletor de

@@ -74,11 +74,12 @@ function MiniBar({ value, max, color = GREEN }: { value: number; max: number; co
 
 function TopListCard({
   title, subtitle, items, color = BLUE, onOpen,
-  emptyMsg = "Sem dados no período.",
+  emptyMsg = "Sem dados no período.", onItemClick,
 }: {
   title: string; subtitle?: string;
   items: { nome: string; total: number; qtd?: number; extra?: string }[];
   color?: string; onOpen?: () => void; emptyMsg?: string;
+  onItemClick?: (item: { nome: string; total: number; qtd?: number; extra?: string }) => void;
 }) {
   const max = items[0]?.total ?? 0;
   return (
@@ -86,7 +87,9 @@ function TopListCard({
       {items.length === 0 ? <EmptyState message={emptyMsg} /> : (
         <div className="flex flex-col gap-2 py-1 overflow-y-auto max-h-[420px] pr-1">
           {items.map((item, i) => (
-            <div key={i} className="space-y-1">
+            <div key={i}
+              className={`space-y-1 rounded-lg transition-colors ${onItemClick ? "cursor-pointer px-1 -mx-1 hover:bg-indigo-50" : ""}`}
+              onClick={onItemClick ? () => onItemClick(item) : undefined}>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="text-[10px] font-bold text-slate-400 w-5 shrink-0">{i + 1}</span>
@@ -157,8 +160,13 @@ export default function DashConciliacao() {
   const [detCategRec, setDetCategRec] = useState(false);
   const [detObras, setDetObras] = useState(false);
   const [lanc, setLanc] = useState<null | "entradas" | "saidas" | "todos" | "interno">(null);
+  const [drill, setDrill] = useState<null | {
+    title: string; subtitle: string;
+    tipo: "todos" | "entradas" | "saidas";
+    filterFn: (l: any) => boolean;
+  }>(null);
   const { data: lancamentos, isLoading: lancLoading, refetch: rLanc } = (trpc as any).financial.getConciliacaoLancamentos.useQuery(
-    { companyId, dataInicio, dataFim }, { enabled: !!companyId && lanc !== null }
+    { companyId, dataInicio, dataFim }, { enabled: !!companyId && (lanc !== null || drill !== null) }
   );
   const [ovRow, setOvRow] = useState<LancNaturezaLinha | null>(null);
 
@@ -304,6 +312,64 @@ export default function DashConciliacao() {
     : lanc === "saidas" ? "Saídas (débitos · caixa real) — todos os lançamentos"
     : lanc === "interno" ? "Movimentação interna — transf. entre contas, aplicação/resgate e intra-FC"
     : "Movimentação do extrato (caixa real) — todos os lançamentos";
+
+  // ── Drill-down de gráficos ────────────────────────────────────────────────
+  const drillRows = useMemo(() => {
+    if (!drill) return [];
+    return lancArr
+      .filter((l: any) => !l.interno)
+      .filter(drill.filterFn)
+      .filter((l: any) =>
+        drill.tipo === "entradas" ? Number(l.valor) > 0 :
+        drill.tipo === "saidas"  ? Number(l.valor) < 0 : true
+      )
+      .map((l: any) => {
+        const v = Number(l.valor) || 0;
+        return {
+          _id: Number(l.id), _interno: false,
+          _overrideNatureza: l.overrideNatureza ?? null, _overrideMotivo: l.overrideMotivo ?? null,
+          _valorBruto: v, _descricao: l.descricao || "—",
+          data: l.data, conta: nomeConta(Number(l.contaBancariaId)),
+          descricao: l.descricao || "—",
+          situacao: Number(l.conciliado) === 1 ? "Conciliado" : "Pendente",
+          valor: drill.tipo === "saidas" ? Math.abs(v) : v,
+        };
+      });
+  }, [drill, lancArr, contasArr]);
+
+  const onMesClick = (d: any) => {
+    const label: string = d?.activeLabel ?? d?.activePayload?.[0]?.payload?.mes ?? "";
+    const i = MESES.indexOf(label);
+    if (i >= 0) setMes(i + 1);
+  };
+
+  const onContaClick = (tipo: "entradas" | "saidas" | "todos") => (d: any) => {
+    const nome: string = d?.activePayload?.[0]?.payload?.name ?? d?.name ?? "";
+    if (!nome) return;
+    const contaObj = contasArr.find((c: any) => nomeConta(Number(c.id)) === nome);
+    const contaId  = contaObj ? Number(contaObj.id) : null;
+    const tipoLabel = tipo === "entradas" ? "Entradas" : tipo === "saidas" ? "Saídas" : "Movimentação";
+    setDrill({
+      title: `${tipoLabel} — ${nome}`,
+      subtitle: `Lançamentos do extrato · ${periodoLabel}`,
+      tipo,
+      filterFn: (l: any) =>
+        contaId != null
+          ? Number(l.contaBancariaId) === contaId
+          : nomeConta(Number(l.contaBancariaId)) === nome,
+    });
+  };
+
+  const onFornClick = (nome: string) => {
+    if (!nome) return;
+    const up = nome.toUpperCase();
+    setDrill({
+      title: `Fornecedor: ${nome}`,
+      subtitle: `Extrato bancário · ${periodoLabel} · correspondência por descrição da linha`,
+      tipo: "saidas",
+      filterFn: (l: any) => (l.descricao || "").toUpperCase().includes(up),
+    });
+  };
 
   // ── Gráficos existentes ──────────────────────────────────────────────────────
   const pizza = useMemo(() => ([
@@ -585,13 +651,13 @@ export default function DashConciliacao() {
 
             {/* ── Entradas vs Saídas por mês ── */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <ChartCard title={`Entradas vs Saídas por mês · ${ano}`} subtitle="Extrato bancário importado (caixa real)" height={280}>
+              <ChartCard title={`Entradas vs Saídas por mês · ${ano}`} subtitle="Caixa real · clique em uma barra para filtrar o mês" height={280}>
                 <ResponsiveContainer>
-                  <BarChart data={entradasSaidasMes} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
+                  <BarChart data={entradasSaidasMes} margin={{ top: 4, right: 12, left: 0, bottom: 0 }} onClick={onMesClick} className="cursor-pointer">
                     <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
                     <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#64748b" }} />
                     <YAxis tickFormatter={formatBRLCompact} tick={{ fontSize: 10, fill: "#64748b" }} width={62} />
-                    <Tooltip content={<BRLTooltip />} cursor={{ fill: "#f1f5f9" }} />
+                    <Tooltip content={<BRLTooltip />} cursor={{ fill: "#e0e7ff" }} />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
                     <Bar dataKey="Entradas" fill={GREEN} radius={[3, 3, 0, 0]} maxBarSize={22} />
                     <Bar dataKey="Saídas" fill={RED} radius={[3, 3, 0, 0]} maxBarSize={22} />
@@ -600,13 +666,13 @@ export default function DashConciliacao() {
                 </ResponsiveContainer>
               </ChartCard>
 
-              <ChartCard title={`% Conciliado por mês · ${ano}`} subtitle="Proporção do valor conciliado sobre o total movimentado" height={280}>
+              <ChartCard title={`% Conciliado por mês · ${ano}`} subtitle="Proporção do valor conciliado · clique em uma barra para filtrar o mês" height={280}>
                 <ResponsiveContainer>
-                  <ComposedChart data={pctConciliacaoMes} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
+                  <ComposedChart data={pctConciliacaoMes} margin={{ top: 4, right: 12, left: 0, bottom: 0 }} onClick={onMesClick} className="cursor-pointer">
                     <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
                     <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#64748b" }} />
                     <YAxis domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 10, fill: "#64748b" }} width={40} />
-                    <Tooltip formatter={(v: any) => [`${v}%`, "% Conciliado"]} cursor={{ fill: "#f1f5f9" }} />
+                    <Tooltip formatter={(v: any) => [`${v}%`, "% Conciliado"]} cursor={{ fill: "#e0e7ff" }} />
                     <Bar dataKey="% Conciliado" fill={BLUE} radius={[3, 3, 0, 0]} maxBarSize={28} />
                     <Line dataKey="% Conciliado" stroke={VIOLET} strokeWidth={2} dot={{ r: 3, fill: VIOLET }} type="monotone" />
                   </ComposedChart>
@@ -615,9 +681,9 @@ export default function DashConciliacao() {
             </div>
 
             {/* ── Saldo acumulado no ano ── */}
-            <ChartCard title={`Saldo acumulado ao longo de ${ano}`} subtitle="Soma das entradas menos saídas mês a mês (extrato · caixa real)" height={240}>
+            <ChartCard title={`Saldo acumulado ao longo de ${ano}`} subtitle="Soma das entradas menos saídas mês a mês · clique para filtrar o mês" height={240}>
               <ResponsiveContainer>
-                <AreaChart data={saldoAcumulado} margin={{ top: 4, right: 20, left: 0, bottom: 0 }}>
+                <AreaChart data={saldoAcumulado} margin={{ top: 4, right: 20, left: 0, bottom: 0 }} onClick={onMesClick} className="cursor-pointer">
                   <defs>
                     <linearGradient id="gradSaldo" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor={BLUE} stopOpacity={0.25} />
@@ -627,7 +693,7 @@ export default function DashConciliacao() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" />
                   <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#64748b" }} />
                   <YAxis tickFormatter={formatBRLCompact} tick={{ fontSize: 10, fill: "#64748b" }} width={68} />
-                  <Tooltip content={<BRLTooltip />} cursor={{ fill: "#f1f5f9" }} />
+                  <Tooltip content={<BRLTooltip />} cursor={{ fill: "#e0e7ff" }} />
                   <Area dataKey="Saldo acumulado" stroke={BLUE} strokeWidth={2.5} fill="url(#gradSaldo)" dot={{ r: 3, fill: BLUE }} type="monotone" />
                 </AreaChart>
               </ResponsiveContainer>
@@ -637,29 +703,29 @@ export default function DashConciliacao() {
             <div className="space-y-2">
               <SectionTitle>O que mais foi pago por banco (conta bancária)</SectionTitle>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <ChartCard title="Saídas por conta bancária (R$)" subtitle="Quanto cada banco debitou no período · caixa real (exclui mov. internas)" height={Math.max(220, saidasPorBanco.length * 44 + 40)} onOpen={ir}>
+                <ChartCard title="Saídas por conta bancária (R$)" subtitle="Clique em uma barra para ver os lançamentos da conta" height={Math.max(220, saidasPorBanco.length * 44 + 40)} onOpen={ir}>
                   {saidasPorBanco.length === 0 ? <EmptyState /> : (
                     <ResponsiveContainer>
-                      <BarChart data={saidasPorBanco} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
+                      <BarChart data={saidasPorBanco} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }} onClick={onContaClick("saidas")} className="cursor-pointer">
                         <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" horizontal={false} />
                         <XAxis type="number" tickFormatter={formatBRLCompact} tick={{ fontSize: 11, fill: "#64748b" }} />
                         <YAxis type="category" dataKey="name" width={155} tick={{ fontSize: 10, fill: "#475569" }} />
-                        <Tooltip content={<BRLTooltip />} cursor={{ fill: "#f1f5f9" }} />
-                        <Bar dataKey="Saídas" fill={RED} radius={[0, 4, 4, 0]} maxBarSize={26} />
+                        <Tooltip content={<BRLTooltip />} cursor={{ fill: "#fee2e2" }} />
+                        <Bar dataKey="Saídas" fill={RED} radius={[0, 4, 4, 0]} maxBarSize={26} className="cursor-pointer" />
                       </BarChart>
                     </ResponsiveContainer>
                   )}
                 </ChartCard>
 
-                <ChartCard title="Entradas por conta bancária (R$)" subtitle="Quanto cada banco creditou no período · caixa real (exclui mov. internas)" height={Math.max(220, saidasPorBanco.length * 44 + 40)} onOpen={ir}>
+                <ChartCard title="Entradas por conta bancária (R$)" subtitle="Clique em uma barra para ver os lançamentos da conta" height={Math.max(220, saidasPorBanco.length * 44 + 40)} onOpen={ir}>
                   {saidasPorBanco.length === 0 ? <EmptyState /> : (
                     <ResponsiveContainer>
-                      <BarChart data={saidasPorBanco} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
+                      <BarChart data={saidasPorBanco} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }} onClick={onContaClick("entradas")} className="cursor-pointer">
                         <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" horizontal={false} />
                         <XAxis type="number" tickFormatter={formatBRLCompact} tick={{ fontSize: 11, fill: "#64748b" }} />
                         <YAxis type="category" dataKey="name" width={155} tick={{ fontSize: 10, fill: "#475569" }} />
-                        <Tooltip content={<BRLTooltip />} cursor={{ fill: "#f1f5f9" }} />
-                        <Bar dataKey="Entradas" fill={GREEN} radius={[0, 4, 4, 0]} maxBarSize={26} />
+                        <Tooltip content={<BRLTooltip />} cursor={{ fill: "#d1fae5" }} />
+                        <Bar dataKey="Entradas" fill={GREEN} radius={[0, 4, 4, 0]} maxBarSize={26} className="cursor-pointer" />
                       </BarChart>
                     </ResponsiveContainer>
                   )}
@@ -667,17 +733,17 @@ export default function DashConciliacao() {
               </div>
 
               {/* Entradas + Saídas lado a lado por banco */}
-              <ChartCard title="Entradas × Saídas por conta bancária (R$)" subtitle="Comparativo direto por conta · caixa real (exclui mov. internas)" height={Math.max(220, saidasPorBanco.length * 52 + 40)} onOpen={ir}>
+              <ChartCard title="Entradas × Saídas por conta bancária (R$)" subtitle="Clique em uma barra para ver os lançamentos da conta" height={Math.max(220, saidasPorBanco.length * 52 + 40)} onOpen={ir}>
                 {saidasPorBanco.length === 0 ? <EmptyState /> : (
                   <ResponsiveContainer>
-                    <BarChart data={saidasPorBanco} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
+                    <BarChart data={saidasPorBanco} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }} onClick={onContaClick("todos")} className="cursor-pointer">
                       <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" horizontal={false} />
                       <XAxis type="number" tickFormatter={formatBRLCompact} tick={{ fontSize: 11, fill: "#64748b" }} />
                       <YAxis type="category" dataKey="name" width={155} tick={{ fontSize: 10, fill: "#475569" }} />
-                      <Tooltip content={<BRLTooltip />} cursor={{ fill: "#f1f5f9" }} />
+                      <Tooltip content={<BRLTooltip />} cursor={{ fill: "#e0e7ff" }} />
                       <Legend wrapperStyle={{ fontSize: 12 }} />
-                      <Bar dataKey="Entradas" fill={GREEN} maxBarSize={20} radius={[0, 3, 3, 0]} />
-                      <Bar dataKey="Saídas" fill={RED} maxBarSize={20} radius={[0, 3, 3, 0]} />
+                      <Bar dataKey="Entradas" fill={GREEN} maxBarSize={20} radius={[0, 3, 3, 0]} className="cursor-pointer" />
+                      <Bar dataKey="Saídas" fill={RED} maxBarSize={20} radius={[0, 3, 3, 0]} className="cursor-pointer" />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -690,24 +756,27 @@ export default function DashConciliacao() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <TopListCard
                   title="Ranking de fornecedores por valor pago"
-                  subtitle={`Saídas do extrato + lançamentos ERP · ${periodoLabel} · clique p/ ver detalhes`}
+                  subtitle={`Clique em um fornecedor para ver seus lançamentos · ${periodoLabel}`}
                   items={topFornecedores.slice(0, 15)}
                   color={BLUE}
                   onOpen={() => setDetForn(true)}
+                  onItemClick={(item) => onFornClick(item.nome)}
                   emptyMsg="Nenhum fornecedor identificado nos lançamentos do período."
                 />
 
-                <ChartCard title="Top 10 fornecedores · gráfico (R$)" subtitle="Valor total de despesas por fornecedor" height={Math.max(220, Math.min(topFornecedores.length, 10) * 44 + 40)}>
+                <ChartCard title="Top 10 fornecedores · gráfico (R$)" subtitle="Clique em uma barra para ver os lançamentos do fornecedor" height={Math.max(220, Math.min(topFornecedores.length, 10) * 44 + 40)}>
                   {topFornecedores.length === 0 ? <EmptyState message="Nenhum fornecedor identificado." /> : (
                     <ResponsiveContainer>
                       <BarChart
                         data={topFornecedores.slice(0, 10).map((f: any) => ({ name: f.nome, Valor: f.total }))}
-                        layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
+                        layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}
+                        onClick={(d: any) => { const nome = d?.activePayload?.[0]?.payload?.name ?? ""; onFornClick(nome); }}
+                        className="cursor-pointer">
                         <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" horizontal={false} />
                         <XAxis type="number" tickFormatter={formatBRLCompact} tick={{ fontSize: 11, fill: "#64748b" }} />
                         <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 10, fill: "#475569" }} />
-                        <Tooltip content={<BRLTooltip />} cursor={{ fill: "#f1f5f9" }} />
-                        <Bar dataKey="Valor" fill={BLUE} radius={[0, 4, 4, 0]} maxBarSize={26}>
+                        <Tooltip content={<BRLTooltip />} cursor={{ fill: "#e0e7ff" }} />
+                        <Bar dataKey="Valor" fill={BLUE} radius={[0, 4, 4, 0]} maxBarSize={26} className="cursor-pointer">
                           {topFornecedores.slice(0, 10).map((_: any, i: number) => (
                             <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                           ))}
@@ -723,12 +792,13 @@ export default function DashConciliacao() {
             <div className="space-y-2">
               <SectionTitle>Análise por categoria de lançamento</SectionTitle>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <ChartCard title="Top categorias — Despesas" subtitle={`Débitos do extrato + categorias ERP · ${periodoLabel}`} height={260} onOpen={() => setDetCategDesp(true)}>
+                <ChartCard title="Top categorias — Despesas" subtitle={`Clique em uma fatia para ver a lista de categorias · ${periodoLabel}`} height={260} onOpen={() => setDetCategDesp(true)}>
                   {catDespPie.length === 0 ? <EmptyState message="Nenhuma despesa categorizada no período." /> : (
                     <ResponsiveContainer>
                       <PieChart>
                         <Pie data={catDespPie} dataKey="value" nameKey="name"
-                          cx="50%" cy="50%" outerRadius={95} innerRadius={50} paddingAngle={2}>
+                          cx="50%" cy="50%" outerRadius={95} innerRadius={50} paddingAngle={2}
+                          onClick={() => setDetCategDesp(true)} className="cursor-pointer">
                           {catDespPie.map((_: any, i: number) => (
                             <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                           ))}
@@ -742,26 +812,28 @@ export default function DashConciliacao() {
 
                 <TopListCard
                   title="Ranking · Despesas por categoria"
-                  subtitle={`Clique p/ ver detalhe completo · ${periodoLabel}`}
+                  subtitle={`Clique em uma categoria para ver o detalhe completo · ${periodoLabel}`}
                   items={topCategDesp.slice(0, 12)}
                   color={RED}
                   onOpen={() => setDetCategDesp(true)}
+                  onItemClick={() => setDetCategDesp(true)}
                   emptyMsg="Nenhuma despesa categorizada no período."
                 />
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <ChartCard title="Top categorias — Receitas (R$)" subtitle={`Créditos do extrato + categorias ERP · ${periodoLabel}`} height={Math.max(220, Math.min(topCategRec.length, 10) * 44 + 40)} onOpen={() => setDetCategRec(true)}>
+                <ChartCard title="Top categorias — Receitas (R$)" subtitle={`Clique em uma barra para ver a lista de categorias · ${periodoLabel}`} height={Math.max(220, Math.min(topCategRec.length, 10) * 44 + 40)} onOpen={() => setDetCategRec(true)}>
                   {topCategRec.length === 0 ? <EmptyState message="Nenhuma receita categorizada no período." /> : (
                     <ResponsiveContainer>
                       <BarChart
                         data={topCategRec.slice(0, 10).map((c: any) => ({ name: c.nome, Valor: c.total }))}
-                        layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
+                        layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}
+                        onClick={() => setDetCategRec(true)} className="cursor-pointer">
                         <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" horizontal={false} />
                         <XAxis type="number" tickFormatter={formatBRLCompact} tick={{ fontSize: 11, fill: "#64748b" }} />
                         <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 10, fill: "#475569" }} />
-                        <Tooltip content={<BRLTooltip />} cursor={{ fill: "#f1f5f9" }} />
-                        <Bar dataKey="Valor" fill={TEAL} radius={[0, 4, 4, 0]} maxBarSize={26} />
+                        <Tooltip content={<BRLTooltip />} cursor={{ fill: "#ccfbf1" }} />
+                        <Bar dataKey="Valor" fill={TEAL} radius={[0, 4, 4, 0]} maxBarSize={26} className="cursor-pointer" />
                       </BarChart>
                     </ResponsiveContainer>
                   )}
@@ -769,10 +841,11 @@ export default function DashConciliacao() {
 
                 <TopListCard
                   title="Ranking · Receitas por categoria"
-                  subtitle={`Clique p/ ver detalhe completo · ${periodoLabel}`}
+                  subtitle={`Clique em uma categoria para ver o detalhe completo · ${periodoLabel}`}
                   items={topCategRec.slice(0, 12)}
                   color={TEAL}
                   onOpen={() => setDetCategRec(true)}
+                  onItemClick={() => setDetCategRec(true)}
                   emptyMsg="Nenhuma receita categorizada no período."
                 />
               </div>
@@ -782,17 +855,17 @@ export default function DashConciliacao() {
             <div className="space-y-2">
               <SectionTitle>Distribuição por obra / centro de custo</SectionTitle>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <ChartCard title="Despesas × Receitas por obra (R$)" subtitle={`Top obras com lançamentos financeiros · ${periodoLabel}`} height={Math.max(220, Math.min(obrasChart.length, 12) * 46 + 40)} onOpen={() => setDetObras(true)}>
+                <ChartCard title="Despesas × Receitas por obra (R$)" subtitle={`Clique em uma barra para ver o ranking de obras · ${periodoLabel}`} height={Math.max(220, Math.min(obrasChart.length, 12) * 46 + 40)} onOpen={() => setDetObras(true)}>
                   {obrasChart.length === 0 ? <EmptyState message="Nenhum lançamento com obra identificada." /> : (
                     <ResponsiveContainer>
-                      <BarChart data={obrasChart} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
+                      <BarChart data={obrasChart} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }} onClick={() => setDetObras(true)} className="cursor-pointer">
                         <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" horizontal={false} />
                         <XAxis type="number" tickFormatter={formatBRLCompact} tick={{ fontSize: 11, fill: "#64748b" }} />
                         <YAxis type="category" dataKey="name" width={155} tick={{ fontSize: 10, fill: "#475569" }} />
-                        <Tooltip content={<BRLTooltip />} cursor={{ fill: "#f1f5f9" }} />
+                        <Tooltip content={<BRLTooltip />} cursor={{ fill: "#fef3c7" }} />
                         <Legend wrapperStyle={{ fontSize: 12 }} />
-                        <Bar dataKey="Despesas" stackId="a" fill={RED} maxBarSize={24} />
-                        <Bar dataKey="Receitas" stackId="a" fill={GREEN} radius={[0, 4, 4, 0]} maxBarSize={24} />
+                        <Bar dataKey="Despesas" stackId="a" fill={RED} maxBarSize={24} className="cursor-pointer" />
+                        <Bar dataKey="Receitas" stackId="a" fill={GREEN} radius={[0, 4, 4, 0]} maxBarSize={24} className="cursor-pointer" />
                       </BarChart>
                     </ResponsiveContainer>
                   )}
@@ -800,7 +873,7 @@ export default function DashConciliacao() {
 
                 <TopListCard
                   title="Ranking de obras por volume financeiro"
-                  subtitle={`Despesas + receitas lançadas no ERP · ${periodoLabel}`}
+                  subtitle={`Clique em uma obra para ver o detalhe · ${periodoLabel}`}
                   items={topObras.slice(0, 12).map((o: any) => ({
                     nome: o.nome,
                     total: o.despesas + o.receitas,
@@ -809,6 +882,7 @@ export default function DashConciliacao() {
                   }))}
                   color={ORANGE}
                   onOpen={() => setDetObras(true)}
+                  onItemClick={() => setDetObras(true)}
                   emptyMsg="Nenhum lançamento com obra identificada."
                 />
               </div>
@@ -864,6 +938,13 @@ export default function DashConciliacao() {
           title="Distribuição por obra"
           subtitle={`Lançamentos financeiros com obra identificada · ${periodoLabel}`}
           columns={OBRAS_COLS} rows={topObras} onGoTo={ir} totalKey="despesas"
+        />
+        <DetailDialog
+          open={drill !== null} onOpenChange={(o) => { if (!o) setDrill(null); }}
+          icon={ArrowLeftRight}
+          title={lancLoading ? "Carregando lançamentos…" : (drill?.title ?? "Lançamentos")}
+          subtitle={`${drill?.subtitle ?? periodoLabel} · ${drillRows.length} lançamento(s)`}
+          columns={LANC_COLS} rows={drillRows} onGoTo={ir} totalKey="valor"
         />
         <NaturezaOverrideDialog
           open={!!ovRow} onOpenChange={(o) => { if (!o) setOvRow(null); }}
