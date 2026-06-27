@@ -50,21 +50,21 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3795** — **SISTEMA · PERMISSÕES · FIX SISTÊMICO DE PROPAGAÇÃO DE ROTAS: QUALQUER ROTA NOVA ADICIONADA AO SIDEBAR SÓ APARECIA PARA admin_master. CAUSA: groupCanAccessRoute RETORNAVA false EM 3 PONTOS QUANDO A ROTA NÃO ESTAVA REGISTRADA EM shared/modules.ts. FIX: (1) FALLBACK POR PREFIXO DE URL (/financeiro/* → MÓDULO "financeiro"); (2) ROTA SEM pageId MAPEADO → LIBERA POR PADRÃO; (3) PÁGINA NOVA SEM REGISTRO EXPLÍCITO → LIBERA POR PADRÃO. REGRA NOVA: ACESSO AO MÓDULO = ACESSO PLENO; ADMIN-MASTER RESTRINGE DEPOIS. NEGA APENAS COM DENY EXPLÍCITO. TAMBÉM REGISTRA financeiro-notas-fiscais E financeiro-contas-bancarias EM shared/modules.ts. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3796** — **FINANCEIRO · DRE · PADRONIZAÇÃO DE conta_nome: CATEGORIAS DUPLICADAS NO DRILL-DOWN ("PRO LABORE" + "PRÓ-LABORE" = MESMA CONTA id=29, NOMES GRAVADOS DIFERENTE). FIX: UPDATE SINCRONIZA conta_nome COM O NOME OFICIAL DE financial_accounts PARA OS 79 ENTRIES DIVERGENTES DA EMPRESA 60002. DADOS: APENAS UPDATE EM financial_entries.conta_nome · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3794** — **FINANCEIRO · DRE · AUDITORIA COMPLETA DE CLASSIFICAÇÃO: PREDICADOS dreLinhaPredicate ATUALIZADOS PARA RESPEITAR class_dre DO PLANO DE CONTAS (despesasFixas: natureza='fixo' OR class_dre='despesa_fixa'; despesasVariaveis EXCLUI class_dre IN ('despesa_fixa','despesa_financeira'); despesasFinanceiras ADICIONA OR class_dre='despesa_financeira'). 20 CONTAS RECLASSIFICADAS: custo_obra→{12 grupos de Obra — Fretes, Uniformes, EPIs, Aluguel, Alojamento, Viagens, Utilidades, Alimentação, Mobilização, Manutenção Equipamentos, Infraestrutura, Vale Transporte-Obra}; despesa_fixa→{Salários ADM, Honorários, Honorários Jurídicos, Materiais Consumo ADM, Seguro Veículos, Seguros Empresariais}; despesa_financeira→{Dívidas Bancárias, Limite/Ch.Especial, Investimentos Financeiros, Mútuos Intercompany}. IMPACTO JAN/2026: Despesas Variáveis R$1.094.438→R$63.027 (-94%); Despesas Fixas R$0→R$88.647; CDO R$1.155.441→R$1.362.829. DADOS: UPDATE EM financial_accounts · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3795** — **SISTEMA · PERMISSÕES · FIX SISTÊMICO DE PROPAGAÇÃO DE ROTAS: QUALQUER ROTA NOVA ADICIONADA AO SIDEBAR SÓ APARECIA PARA admin_master. CAUSA: groupCanAccessRoute RETORNAVA false EM 3 PONTOS QUANDO A ROTA NÃO ESTAVA REGISTRADA EM shared/modules.ts. FIX: (1) FALLBACK POR PREFIXO DE URL (/financeiro/* → MÓDULO "financeiro"); (2) ROTA SEM pageId MAPEADO → LIBERA POR PADRÃO; (3) PÁGINA NOVA SEM REGISTRO EXPLÍCITO → LIBERA POR PADRÃO. REGRA NOVA: ACESSO AO MÓDULO = ACESSO PLENO; ADMIN-MASTER RESTRINGE DEPOIS. NEGA APENAS COM DENY EXPLÍCITO. TAMBÉM REGISTRA financeiro-notas-fiscais E financeiro-contas-bancarias EM shared/modules.ts. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 ### 5 one-liners
 
+- **Rev. 3794** — **FINANCEIRO · DRE · AUDITORIA COMPLETA DE CLASSIFICAÇÃO: dreLinhaPredicate ATUALIZADO + 20 CONTAS RECLASSIFICADAS. VARIÁVEIS JAN/2026: R$1,09M→R$63K (-94%). DADOS: UPDATE EM financial_accounts · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3793** — **FINANCEIRO · DRE · DRILL-DOWN DE CATEGORIA CLICÁVEL — ABRE LANÇAMENTOS INDIVIDUAIS. ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3792** — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · CARD "CHEQUES DEVOLVIDOS" · CORREÇÃO DEFINITIVA: DOC 655 E DOC 1077 "PENDENTES" MESMO COM PIX/TED VINCULADO. BACKEND PRÉ-CARREGA bank_cheque_vinculos E CLASSIFICA resolucao.tipo="vinculado" POR IDENTIDADE. BACKEND READ-ONLY · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3792** — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · CARD "CHEQUES DEVOLVIDOS" · CORREÇÃO DEFINITIVA: DOC 655 E DOC 1077 "PENDENTES" MESMO COM PIX/TED VINCULADO. BACKEND READ-ONLY · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3791** — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · PAINEL DE SELEÇÃO DE CONTA GANHA DOIS BOTÕES DISTINTOS: "LIMPAR ESTA CONTA" E "LIMPAR TODAS AS CONTAS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3791** — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · PAINEL DE SELEÇÃO DE CONTA GANHA DOIS BOTÕES: "LIMPAR ESTA CONTA" E "LIMPAR TODAS AS CONTAS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3790** — **FINANCEIRO · DRE · DIALOGS DE DRILL-DOWN REDESENHADOS: CABEÇALHO NAVY+LARANJA, TOTAL EM DESTAQUE, BARRAS DE PROPORÇÃO POR CATEGORIA. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3789** — **FINANCEIRO · DRE · CORREÇÃO CRÍTICA: DRE PASSA A REFLETIR SOMENTE REALIZADOS. ANTES USAVA COALESCE(realizado,previsto) — INFLAVA DESPESAS VARIÁVEIS DE JAN/2026 DE R$2,2M PARA R$4,1M. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3790** — **FINANCEIRO · DRE · DIALOGS DE DRILL-DOWN REDESENHADOS: CABEÇALHO NAVY+LARANJA, TOTAL EM DESTAQUE, BARRAS DE PROPORÇÃO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 ### Histórico completo
 
