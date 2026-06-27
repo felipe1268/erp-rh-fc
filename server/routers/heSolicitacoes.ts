@@ -1158,7 +1158,7 @@ export const heSolicitacoesRouter = router({
       similaridade: verif.similaridade !== null ? String(verif.similaridade) : null,
     }).returning();
 
-    await createAuditLog(db, {
+    await createAuditLog({
       userId: ctx.user?.id,
       action: "he_confirmacao_presenca",
       entity: "he_solicitacao_confirmacoes",
@@ -1205,7 +1205,7 @@ export const heSolicitacoesRouter = router({
       updated++;
     }
 
-    await createAuditLog(db, {
+    await createAuditLog({
       userId: ctx.user?.id,
       action: "he_registro_comparecimento",
       entity: "he_solicitacoes",
@@ -1250,7 +1250,7 @@ export const heSolicitacoesRouter = router({
       .set({ assinaturaMemorial: null, assinaturaMemorialAt: null })
       .where(eq(employees.id, input.employeeId));
 
-    await createAuditLog(db, {
+    await createAuditLog({
       userId: ctx.user?.id,
       action: "limpar_assinatura_memorial",
       entity: "employees",
@@ -1291,7 +1291,7 @@ export const heSolicitacoesRouter = router({
     const [emp] = await db.select({ nome: employees.nomeCompleto })
       .from(employees).where(eq(employees.id, conf.employeeId));
 
-    await createAuditLog(db, {
+    await createAuditLog({
       userId: ctx.user?.id,
       action: "prova_alternativa_he",
       entity: "he_solicitacao_confirmacoes",

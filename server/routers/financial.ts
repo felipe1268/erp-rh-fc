@@ -7657,7 +7657,7 @@ export const financialRouter = router({
       afetados = rows(res).length;
     });
 
-    await createAuditLog(db, {
+    await createAuditLog({
       userId: ctx.user?.id,
       action: "bank_statement_clear",
       details: `Limpeza de extrato (conta ${input.contaBancariaId}, ${input.dataInicio}..${input.dataFim}): ${afetados} linha(s) removida(s)`,
@@ -7698,7 +7698,7 @@ export const financialRouter = router({
       afetados = rows(res).length;
     });
 
-    await createAuditLog(db, {
+    await createAuditLog({
       userId: ctx.user?.id,
       action: "bank_statement_clear_all",
       details: `Limpeza TOTAL de extrato (empresa ${input.companyId}, ${input.dataInicio}..${input.dataFim}): ${afetados} linha(s) removida(s)`,
@@ -7758,7 +7758,7 @@ export const financialRouter = router({
         [input.linhaId, input.companyId]);
     });
 
-    await createAuditLog(db, {
+    await createAuditLog({
       userId: ctx.user?.id,
       action: "bank_statement_line_delete",
       details: `Exclusão de linha de extrato #${input.linhaId} (conta ${linha.contaBancariaId})`,
@@ -8165,7 +8165,7 @@ export const financialRouter = router({
         [input.linhaId, input.companyId]);
     });
 
-    await createAuditLog(db, {
+    await createAuditLog({
       userId: ctx.user?.id,
       action: "bank_statement_line_desconciliar",
       details: `Desconciliação da linha #${input.linhaId} (entryId=${linha.entryId ?? "grupo"}) — linha mantida no extrato, lançamento revertido a pendente.`,
@@ -8432,7 +8432,7 @@ export const financialRouter = router({
        nextMonth.toISOString().split("T")[0],
        ctx.user?.id ?? null, ctx.user?.name ?? ctx.user?.email ?? null]
     );
-    await createAuditLog(db, {
+    await createAuditLog({
       userId: ctx.user?.id,
       userName: ctx.user?.name ?? ctx.user?.email,
       action: "financial_recurring_create",
@@ -8560,7 +8560,7 @@ export const financialRouter = router({
       inserted++;
     }
 
-    await createAuditLog(db, {
+    await createAuditLog({
       userId: ctx.user?.id,
       action: "bank_statement_import",
       details: `Importação ${input.formato.toUpperCase()}: ${inserted} inseridos, ${skipped} duplicados`,
@@ -8785,7 +8785,7 @@ export const financialRouter = router({
     }
 
     if (input.finalize) {
-      await createAuditLog(db, {
+      await createAuditLog({
         userId: ctx.user?.id,
         action: "bank_statement_import",
         details: `Importação ${input.formato.toUpperCase()}: ${(input.totalInseridos ?? 0) + inserted} inseridos, ${(input.totalDuplicados ?? 0) + skipped} duplicados`,

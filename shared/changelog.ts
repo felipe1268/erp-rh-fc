@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3754 — **AUDIT LOG · CORREÇÃO DO MESMO BUG LATENTE DO Rev. 3753 NOS DEMAIS CALL-SITES: 11 CHAMADAS DE `createAuditLog(db, {...})` (DOIS ARGUMENTOS) ESPALHADAS EM `financial.ts` (7) E `heSolicitacoes.ts` (4) PASSAVAM O OBJETO `db` COMO `data`, DESCARTANDO O PAYLOAD REAL E ENGOLINDO O INSERT NO try/catch → O LOG DE AUDITORIA NUNCA ERA GRAVADO. PADRONIZADAS P/ `createAuditLog({...})` (1 ARG). 100% BUGFIX · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Continuação do Rev. 3753 (que corrigiu só os 2 sites de desconsiderar/reconsiderar cheque). A assinatura real é
+ * `createAuditLog(data)` (1 argumento; obtém o `db` via `getDb()` internamente — `server/db.ts`). Os 11 call-sites restantes
+ * usavam a forma de 2 argumentos `createAuditLog(db, {...})`: o `db` era bindado em `data`, o payload de auditoria era
+ * ignorado e o INSERT caía no try/catch silencioso → a FEATURE seguia funcionando, mas o registro de auditoria NUNCA era
+ * gravado (invisível até inspecionar a tabela de audit).
+ *
+ * Sites corrigidos (remoção do 1º argumento `db`):
+ * - `server/routers/financial.ts`: bank_statement_clear, importações de extrato e demais ações financeiras (7 chamadas).
+ * - `server/routers/heSolicitacoes.ts`: confirmação de presença e demais ações de Horas Extras (4 chamadas).
+ * Fix uniforme: `await createAuditLog(db, {` → `await createAuditLog({` (objeto de dados inalterado). Nenhum dos objetos
+ * dependia do `db` posicional. Validação: `tsc --noEmit` limpo nos 2 arquivos; app sobe (HTTP 200). Não restam mais
+ * call-sites de 2 argumentos no repositório (`rg "createAuditLog\\(db"` = só a definição em db.ts).
+ *
  * Rev. 3753 — **CONCILIAÇÃO BANCÁRIA · "ERRO AO DESCONSIDERAR" — AO CLICAR EM "DESCONSIDERAR DA CONCILIAÇÃO" NUM CHEQUE DEVOLVIDO O TOAST MOSTRAVA "Failed to execute 'json' on 'Response': Unexpected end of JSON input" (CORPO DE RESPOSTA VAZIO = QUEDA DE TRANSPORTE, EX.: SERVIDOR REINICIANDO/CONEXÃO INSTÁVEL), MESMO QUANDO A ALTERAÇÃO PODE TER SIDO APLICADA. ALÉM DISSO, O LOG DE AUDITORIA DE DESCONSIDERAR/RECONSIDERAR NUNCA ERA GRAVADO. 100% BUGFIX · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Diagnóstico: o usuário (piloto FC) clicou em "Desconsiderar da conciliação" no card de um cheque devolvido (ex.: Doc 978,

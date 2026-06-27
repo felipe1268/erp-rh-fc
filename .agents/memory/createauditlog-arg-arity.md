@@ -17,5 +17,6 @@ audit table.
 transport drop, a separate failure mode.
 
 **How to apply:** always call `createAuditLog({ action, userId, companyId, details })` with
-ONE object. There are still ~7 latent 2-arg call sites in financial.ts (and 4 in
-heSolicitacoes.ts) as of mid-2026 — fix opportunistically when touching them.
+ONE object. As of mid-2026 ALL known 2-arg call sites were swept (financial.ts ×9 total +
+heSolicitacoes.ts ×4); `rg "createAuditLog\(db"` should match only the definition in db.ts.
+If a new 2-arg call appears, it's the same bug — drop the leading `db` arg.
