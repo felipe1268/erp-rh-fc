@@ -6973,7 +6973,15 @@ export default function FinanceiroConciliacao() {
               setVincularPixSel(null); setVincularPixValor("");
               if (res.quitado) closeDialog();
             } catch (err: any) {
-              toast({ title: "Erro ao vincular", description: String(err?.message ?? err), variant: "destructive" });
+              const msg = String(err?.message ?? err);
+              const [titulo, ...resto] = msg.split(". Verifique");
+              toast({
+                title: "Erro ao vincular",
+                description: resto.length
+                  ? <span>{titulo}.<br /><span className="font-medium">Verifique{resto.join(". Verifique")}</span></span>
+                  : msg,
+                variant: "destructive",
+              });
             }
           };
           const estornar = async (v: any) => {

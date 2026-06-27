@@ -12377,7 +12377,20 @@ export const financialRouter = router({
       // débito girou de id num re-import, o mesmo PIX não pode ser vinculado 2x ao cheque.
       const covDup = await _coberturaChequeDevolvido(db, input.companyId, input.debitoLineId);
       if (covDup.meus.some((v) => Number(v.pixLineId) === Number(input.pixLineId))) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Esta linha do extrato já está vinculada a este cheque." });
+        // Busca conta bancária da linha do PIX para informar o usuário onde está o vínculo.
+        const infSel = await dbExecute(db,
+          `SELECT to_char(bsl.data,'DD/MM/YYYY') AS data,
+                  COALESCE(cba.apelido, cba.banco, cba.conta) AS conta,
+                  bsl.descricao
+             FROM bank_statement_lines bsl
+             LEFT JOIN company_bank_accounts cba ON cba.id = bsl.conta_bancaria_id
+            WHERE bsl.id=$1 AND bsl.company_id=$2`,
+          [input.pixLineId, input.companyId]);
+        const inf = rows(infSel)[0] as any;
+        const detalhe = inf
+          ? ` Conta: "${inf.conta ?? "—"}" · ${inf.data ?? "—"}.`
+          : "";
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Esta linha do extrato já está vinculada a este cheque.${detalhe} Verifique na tela de Conciliação Bancária desta conta.` });
       }
     }
 
