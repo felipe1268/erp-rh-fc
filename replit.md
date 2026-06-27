@@ -50,11 +50,11 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3775** — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · CORREÇÃO DE DADOS: 2 VÍNCULOS "CHEQUE DEVOLVIDO ↔ PIX/TED" (DOC 655 · R$9.715 E DOC 1077 · R$7.278,45) ESTAVAM APONTANDO PARA A 1ª COMPENSAÇÃO; MOVIDOS PARA A 2ª COMPENSAÇÃO (MAIS RECENTE, VISÍVEL NA CONCILIAÇÃO). CABEÇALHO DO DIÁLOGO PASSA A MOSTRAR O VALOR CORRETO E O ERRO "JÁ VINCULADA" SOME. MENSAGEM DE ERRO APRIMORADA COM CONTA BANCÁRIA + DATA. APENAS UPDATE EM bank_cheque_vinculos. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3774** — **FINANCEIRO · `id 281` RENOMEADA PARA "Materiais para Obra": CONTA + LANÇAMENTOS + MAPA CANÔNICO. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3773** — **FINANCEIRO · CONTAS DUPLICADAS DE MATERIAIS ELIMINADAS: `id 56 · Materiais e Insumos` E `id 218 · Materiais para Obra` DESATIVADAS; LANÇAMENTOS MIGRADOS PARA `id 281`. MAPA CANÔNICO ATUALIZADO. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3772** — **FINANCEIRO · `id 265 · VALE ALIMENTAÇÃO - OBRA` → RENOMEADA PARA `VALE ALIMENTAÇÃO`: CONTA + LANÇAMENTOS + TODOS OS IMPORTADORES ATUALIZADOS. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3769** — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · O DIÁLOGO "VINCULAR CHEQUE DEVOLVIDO A PIX/TED" VOLTA A MOSTRAR O VALOR JÁ VINCULADO NO CABEÇALHO ("VINCULADO R$ X / SALDO R$ Y") MESMO QUANDO O RELATÓRIO ACABOU DE SER RECARREGADO OU AINDA ESTÁ NO 1º LOAD. ANTES, NESSES MOMENTOS, O CABEÇALHO LIA "VINCULADO R$ 0,00" APESAR DE HAVER VÍNCULO ATIVO — E REVINCULAR O MESMO PIX DAVA "ESTA LINHA JÁ ESTÁ VINCULADA A ESTE CHEQUE". FRONTEND READ-ONLY · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Caso (Doc 1063 · PIER BRASIL · R$ 4.344,60 · vínculo parcial R$ 3.212,92): o backend (cobertura fresca `_coberturaChequeDevolvido`, usada pelo registrar) ACHAVA o vínculo (daí o "já vinculada"), mas o cabeçalho lia o `vincMap` do LOTE, que zera `data` no 1º load e a cada refetch do report (`refreshAposVinculo` → `refetchReport` → `repDevol`/`vincItens` mudam → lote refetcha). Com `vincMap={}`, cabeçalho e selo "Parcial" da linha caíam a R$ 0,00. Fix (`FinanceiroConciliacao.tsx`): (1) `placeholderData:(prev)=>prev` no lote → mantém o mapa durante refetch (conserta o selo da linha); (2) nova `useQuery` DEDICADA chaveada SÓ pelo cheque aberto (`vincDlgItens`, mesmo endpoint, identidade doc/nº+valor) → `vincDlgInfo` vira fonte AUTORITATIVA do cabeçalho (`info = vincDlgInfo ?? vincMap[debId]`). Cabeçalho passa a espelhar o registrar. Regra de ouro preservada (read-only). Detalhe: `shared/changelog.ts`.
 
