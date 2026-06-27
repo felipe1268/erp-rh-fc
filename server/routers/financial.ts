@@ -1613,6 +1613,27 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
     const consumidos = new Set<any>();
     for (const p of paresEstorno) { consumidos.add(p.debitoId); consumidos.add(p.creditoId); }
     const livres = linhasMin.filter((l) => !consumidos.has(l.id));
+    // Rev. 3792 — Pré-carrega vínculos ativos (bank_cheque_vinculos) p/ classificar pares
+    // "pendente" cujo PIX substituto já foi conciliado (saiu de extratoSemLancamento mas
+    // o vínculo existe no controle de cheques). Casa por identidade: doc/nº + valor.
+    const _vincResRes = await dbExecute(db,
+      `SELECT v.id, v.debito_line_id AS "debitoLineId", v.valor,
+              to_char(v.data,'YYYY-MM-DD') AS data, v.descricao,
+              dl.descricao AS "debDescricao", dl.valor AS "debValor",
+              v.pix_line_id AS "pixLineId",
+              to_char(px.data,'YYYY-MM-DD') AS "pixData",
+              px.descricao AS "pixDescricao", px.valor AS "pixValor"
+         FROM bank_cheque_vinculos v
+         LEFT JOIN bank_statement_lines dl ON dl.id = v.debito_line_id
+         LEFT JOIN bank_statement_lines px ON px.id = v.pix_line_id
+        WHERE v.company_id=$1 AND v.estornado_em IS NULL`,
+      [companyId]);
+    const vincResRows = (rows(_vincResRes) as any[]).map((v) => ({
+      ...v,
+      _idDoc: parseDocNumero(v.debDescricao),
+      _idChq: parseChequeNumero(v.debDescricao),
+      _idCents: Math.round(Math.abs(Number(v.debValor ?? 0)) * 100),
+    }));
     const chequesDevolvidos = paresEstorno.map((p, idx) => {
       const grupoId = `dev-${idx}`;
       const deb: any = linhaById.get(p.debitoId);
@@ -1640,6 +1661,28 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
           consumidos.add(pix.id);
           if (pl) { pl.reversalResolveGrupo = grupoId; pl.reversalResolveTipo = "pix"; }
           resolucao = { tipo: "pix", lineId: pix.id, data: pl?.data ?? null, descricao: pl?.descricao ?? null, valor: pl?.valor ?? null };
+        }
+      }
+      // Rev. 3792 — (c) Vínculo registrado em bank_cheque_vinculos (cobre o caso em que o
+      // PIX/TED substituto já foi conciliado — saiu de extratoSemLancamento — mas o vínculo
+      // existe no controle de cheques). Isso resolve o caso de cheque devolvido MÚLTIPLAS
+      // VEZES: o vínculo está registrado numa das ocorrências; as demais são cobertas por
+      // identidade (doc/nº + valor). READ-ONLY — não grava nada.
+      if (resolucao.tipo === "pendente" && p.valorCents) {
+        const covering = vincResRows.filter((x: any) => _mesmoChequeDevolvido(
+          { debitoLineId: Number(p.debitoId), cents: p.valorCents, doc: p.doc ?? null, chq: p.chequeNumero ?? null },
+          { debitoLineId: Number(x.debitoLineId), cents: x._idCents, doc: x._idDoc, chq: x._idChq },
+        ));
+        const acumV = covering.reduce((s: number, x: any) => s + Math.round(Number(x.valor) * 100), 0);
+        if (acumV > 0 && acumV >= (p.valorCents - 1)) {
+          const best = covering[covering.length - 1];
+          resolucao = {
+            tipo: "vinculado",
+            lineId: best.pixLineId ?? null,
+            data: best.pixData ?? best.data ?? null,
+            descricao: best.pixDescricao ?? best.descricao ?? null,
+            valor: best.pixValor ?? best.valor ?? null,
+          };
         }
       }
       // Marca as duas linhas do par como estorno (saem da lista normal no front).

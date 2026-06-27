@@ -1365,7 +1365,7 @@ export default function FinanceiroConciliacao() {
   // exatamente os selos exibidos na linha. Read-only — não muda contador nem cálculo.
   const isDevolvidoResolvido = (d: any) => {
     const tipoRes = d?.resolucao?.tipo ?? "pendente";
-    if (tipoRes === "reapresentado" || tipoRes === "pix" || tipoRes === "conciliado") return true;
+    if (tipoRes === "reapresentado" || tipoRes === "pix" || tipoRes === "conciliado" || tipoRes === "vinculado") return true;
     if (d?.jaConciliado) return true;
     if (d?.desconsiderado) return true;
     const vinfo = vincMap[String(d?.debitoId)] ?? null;
@@ -5358,6 +5358,20 @@ export default function FinanceiroConciliacao() {
                                       </button>
                                     )}
                                   </div>
+                                </div>
+                              ) : res.tipo === "vinculado" ? (
+                                /* Rev. 3792 — PIX/TED conciliado + vínculo no controle de cheques */
+                                <div className="mt-1 flex items-center gap-2">
+                                  <p className="text-[11px] flex items-center gap-1 min-w-0 flex-1">
+                                    <span className="text-emerald-700 flex items-center gap-1 min-w-0"><CheckCircle className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Quitado por substituição (PIX/TED registrado){res.data ? ` em ${fmtData(res.data)}` : ""}{res.descricao ? ` — ${String(res.descricao).slice(0, 60)}` : ""}.</span></span>
+                                  </p>
+                                  <button
+                                    type="button"
+                                    className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-semibold bg-gray-200 text-gray-600 hover:bg-gray-300 transition-colors"
+                                    onClick={() => { setVincularPixSel(null); setVincularPixValor(""); setVincularPixBusca(""); setVincularPixDlg({ cheque: d, pixPreSel: null }); }}
+                                  >
+                                    <Zap className="w-3 h-3" /> Gerenciar vínculos
+                                  </button>
                                 </div>
                               ) : vinQuitado ? (
                                 /* Rev. 3786 — vínculo registrado cobre 100%: mostrar como quitado */
