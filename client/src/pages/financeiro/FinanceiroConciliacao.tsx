@@ -5344,6 +5344,20 @@ export default function FinanceiroConciliacao() {
                                     )}
                                   </div>
                                 </div>
+                              ) : vinQuitado ? (
+                                /* Rev. 3786 — vínculo registrado cobre 100%: mostrar como quitado */
+                                <div className="mt-1 flex items-center gap-2">
+                                  <p className="text-[11px] flex items-center gap-1 min-w-0 flex-1">
+                                    <span className="text-emerald-700 flex items-center gap-1 min-w-0"><CheckCircle className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Quitado por substituição (PIX/TED registrado no controle de cheques).</span></span>
+                                  </p>
+                                  <button
+                                    type="button"
+                                    className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-semibold bg-gray-200 text-gray-600 hover:bg-gray-300 transition-colors"
+                                    onClick={() => { setVincularPixSel(null); setVincularPixValor(""); setVincularPixBusca(""); setVincularPixDlg({ cheque: d, pixPreSel: null }); }}
+                                  >
+                                    <Zap className="w-3 h-3" /> Gerenciar vínculos
+                                  </button>
+                                </div>
                               ) : (
                                 /* Rev. 3424/3747 — botão SEMPRE visível; dica de sugestão exata */
                                 <div className="mt-1 flex items-center gap-2">
