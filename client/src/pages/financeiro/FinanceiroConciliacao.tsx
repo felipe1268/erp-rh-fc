@@ -23,6 +23,7 @@ import { NaturezaOverrideDialog, NaturezaBadge, type LancNaturezaLinha } from ".
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { MapaMovimentacaoInternaDialog } from "./_MapaMovimentacaoInterna";
 import { ConferirChequesExtratoDialog } from "./_ConferirChequesExtrato";
+import { parseChequeNumero, parseDocNumero } from "@shared/chequeMotivos";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -822,6 +823,16 @@ export default function FinanceiroConciliacao() {
     { companyId, busca: buscaConciliarPix.trim().length >= 1 ? buscaConciliarPix.trim() : (conciliarPixDlg?.cheque?.fornecedor ?? undefined), excluirCronograma: true, limit: 50 },
     { enabled: !!conciliarPixDlg }
   );
+  // Rev. 3752 — CHEQUES do Controle de Cheques como candidatos nos 2 diálogos (alguns
+  // cheques existem SÓ lá, sem lançamento de despesa → antes não apareciam na busca).
+  const { data: chequesTroca } = (trpc as any).financial.getChequesParaConciliacao.useQuery(
+    { companyId, busca: buscaTroca.trim().length >= 1 ? buscaTroca.trim() : undefined, limit: 30 },
+    { enabled: !!trocandoLine }
+  );
+  const { data: chequesConciliarPix } = (trpc as any).financial.getChequesParaConciliacao.useQuery(
+    { companyId, busca: buscaConciliarPix.trim().length >= 1 ? buscaConciliarPix.trim() : (conciliarPixDlg?.cheque?.fornecedor ?? undefined), limit: 30 },
+    { enabled: !!conciliarPixDlg }
+  );
 
   // Rev. 3365 — Status POR MÊS p/ pintar as bolinhas da timeline. Agora roda SEM exigir
   // conta selecionada: na visão "lista de contas" agrega o extrato de TODAS as contas da
@@ -905,6 +916,59 @@ export default function FinanceiroConciliacao() {
     },
     onError: (e: any) => toast({ title: "Erro ao conciliar PIX", description: e.message, variant: "destructive" }),
   });
+  // Rev. 3752 — Opção A: conciliar uma linha do extrato contra um CHEQUE do Controle de
+  // Cheques sem lançamento → CRIA a despesa (paga), concilia a linha e BAIXA o cheque.
+  // Serve aos 2 diálogos ("Conciliar PIX no extrato" e "Trocar lançamento vinculado").
+  const conciliarChequeMut = (trpc as any).financial.conciliarChequeComLinha.useMutation({
+    onSuccess: () => {
+      toast({ title: "Cheque conciliado!", description: "Despesa criada (paga), linha do extrato vinculada e cheque baixado no Controle de Cheques." });
+      setConciliarPixDlg(null); setConciliarPixEntry(null); setBuscaConciliarPix("");
+      setTrocandoLine(null); setBuscaTroca("");
+      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true); refetchReport();
+    },
+    onError: (e: any) => toast({ title: "Erro ao conciliar cheque", description: e.message, variant: "destructive" }),
+  });
+  // Rev. 3752 — nº do cheque/Doc de um LANÇAMENTO p/ exibir nos candidatos (assim o
+  // usuário enxerga QUAL cheque é cada candidato e não concilia o errado quando o valor
+  // repete). As colunas cheque_numero/comprovante_documento costumam vir vazias → cai no
+  // parse da descrição ("Cheque nº 903" / "Doc 000903").
+  const entryChequeIdent = (e: any): string | null => {
+    const direto = (e?.chequeNumero && String(e.chequeNumero).trim()) || (e?.comprovanteDocumento && String(e.comprovanteDocumento).trim()) || "";
+    if (direto) return direto.replace(/^0+/, "") || direto;
+    return parseChequeNumero(e?.descricao) || parseDocNumero(e?.descricao);
+  };
+  // Rev. 3752 — linha de um CHEQUE candidato (vindo do Controle de Cheques) nos diálogos.
+  const renderChequeCandidato = (chq: any, valRef: number, selected: boolean, onPick: () => void) => {
+    const valor = Math.abs(Number(chq.valor) || 0);
+    const exato = valRef > 0 && Math.abs(valor - valRef) < 0.015;
+    const diffPct = valRef > 0 && !exato ? Math.round(Math.abs(valor - valRef) / valRef * 100) : null;
+    return (
+      <button key={`chq-${chq.chequeId}`} type="button" onClick={onPick} disabled={conciliarChequeMut.isPending}
+        className={`w-full text-left px-4 py-3 transition-colors flex items-start gap-3 disabled:opacity-60 ${selected ? "bg-amber-50 ring-1 ring-inset ring-amber-300" : "hover:bg-amber-50/60"}`}
+      >
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-sm text-amber-800 break-words flex items-center gap-1.5 flex-wrap">
+            🪙 Cheque nº {chq.numeroCheque || "—"}
+            <span className="px-1 py-px rounded text-[9px] font-bold bg-amber-100 text-amber-700 uppercase tracking-wide">Controle de Cheques</span>
+          </div>
+          <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+            <span className="font-medium text-gray-700 break-words">{chq.fornecedorNome || "—"}</span>
+            <span className="text-gray-300">·</span>
+            <span className="tabular-nums font-medium text-gray-700">{formatBRL(valor)}</span>
+            {chq.dataVencimento && <><span className="text-gray-300">·</span><span>venc. {fmtData(chq.dataVencimento)}</span></>}
+            {chq.obraNome && <><span className="text-gray-300">·</span><span className="break-words">{chq.obraNome}</span></>}
+          </div>
+        </div>
+        <div className="shrink-0 mt-0.5">
+          {exato
+            ? <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">= valor exato</span>
+            : diffPct !== null
+              ? <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold tabular-nums ${diffPct <= 5 ? "bg-blue-100 text-blue-700" : diffPct <= 20 ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500"}`}>Δ {diffPct}%</span>
+              : null}
+        </div>
+      </button>
+    );
+  };
   // Rev. 3198 — conciliação do fluxo "Lançar": SEM onError próprio (o erro é tratado
   // no catch do submitLancar, preservando o id criado p/ não duplicar no retry).
   const lancConciliarMut = (trpc as any).financial.conciliarLancamento.useMutation({
@@ -7590,9 +7654,29 @@ export default function FinanceiroConciliacao() {
           )}
           <div className="max-h-[38vh] overflow-y-auto border-t mt-2">
             {entriesConciliarPixFetching && <div className="flex items-center gap-2 px-4 py-4 text-sm text-gray-400"><Loader2 className="w-4 h-4 animate-spin" /> Buscando…</div>}
-            {!entriesConciliarPixFetching && (entriesConciliarPix?.data ?? []).length === 0 && (
-              <div className="px-4 py-4 text-sm text-gray-400 text-center">Nenhum lançamento encontrado. Tente outro termo de busca.</div>
+            {!entriesConciliarPixFetching && (entriesConciliarPix?.data ?? []).length === 0 && (chequesConciliarPix?.data ?? []).length === 0 && (
+              <div className="px-4 py-4 text-sm text-gray-400 text-center">Nenhum lançamento ou cheque encontrado. Tente outro termo de busca.</div>
             )}
+            {/* Rev. 3752 — CHEQUES do Controle de Cheques (sem lançamento) como candidatos */}
+            {(() => {
+              const chqs = chequesConciliarPix?.data ?? [];
+              if (chqs.length === 0) return null;
+              const valRefPix = conciliarPixDlg ? Math.abs(Number(conciliarPixDlg.cheque.valor) || (conciliarPixDlg.cheque.valorCents ? conciliarPixDlg.cheque.valorCents / 100 : 0)) : 0;
+              return (
+                <div>
+                  <div className="px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border-b border-amber-100 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" /> Cheques do Controle de Cheques (sem lançamento)
+                  </div>
+                  <div className="divide-y">
+                    {chqs.map((chq: any) => renderChequeCandidato(
+                      chq, valRefPix,
+                      conciliarPixEntry?._cheque === true && conciliarPixEntry?.chequeId === chq.chequeId,
+                      () => setConciliarPixEntry((prev: any) => (prev?._cheque && prev?.chequeId === chq.chequeId) ? null : { _cheque: true, chequeId: chq.chequeId, id: `chq-${chq.chequeId}`, numeroCheque: chq.numeroCheque, fornecedorNome: `Cheque nº ${chq.numeroCheque || "—"} — ${chq.fornecedorNome || "Fornecedor"}`, valorRealizado: Math.abs(Number(chq.valor) || 0), dataVencimento: chq.dataVencimento }),
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
             <div className="divide-y">
               {(entriesConciliarPix?.data ?? []).map((e: any) => {
                 const nome = e.fornecedorNome || e.frotaFornecedor || e.pjFornecedor || e.descricao || "—";
@@ -7611,7 +7695,7 @@ export default function FinanceiroConciliacao() {
                       {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-white block" />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm text-blue-700 break-words">{nome}</div>
+                      <div className="font-medium text-sm text-blue-700 break-words flex items-center gap-1.5">{nome}{entryChequeIdent(e) && <span className="px-1 py-px rounded text-[9px] font-bold bg-amber-100 text-amber-700 shrink-0">🪙 nº {entryChequeIdent(e)}</span>}</div>
                       <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
                         <span className="tabular-nums font-medium text-gray-700">{formatBRL(valor)}</span>
                         {data && <><span className="text-gray-300">·</span><span>{fmtData(data)}</span></>}
@@ -7637,13 +7721,17 @@ export default function FinanceiroConciliacao() {
               <Button size="sm" variant="outline" onClick={() => { setConciliarPixDlg(null); setConciliarPixEntry(null); setBuscaConciliarPix(""); }}>Cancelar</Button>
               <Button size="sm"
                 className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                disabled={!conciliarPixEntry || !conciliarPixDlg?.pixLine || conciliarPixMut.isPending}
+                disabled={!conciliarPixEntry || !conciliarPixDlg?.pixLine || conciliarPixMut.isPending || conciliarChequeMut.isPending}
                 onClick={() => {
                   if (!conciliarPixEntry || !conciliarPixDlg?.pixLineId || !companyId) return;
-                  conciliarPixMut.mutate({ companyId, statementLineId: conciliarPixDlg.pixLineId, entryId: conciliarPixEntry.id });
+                  if (conciliarPixEntry._cheque) {
+                    conciliarChequeMut.mutate({ companyId, statementLineId: conciliarPixDlg.pixLineId, chequeId: conciliarPixEntry.chequeId });
+                  } else {
+                    conciliarPixMut.mutate({ companyId, statementLineId: conciliarPixDlg.pixLineId, entryId: conciliarPixEntry.id });
+                  }
                 }}
               >
-                {conciliarPixMut.isPending ? <><Loader2 className="w-4 h-4 animate-spin mr-1" />Conciliando…</> : <>⚡ Conciliar agora</>}
+                {(conciliarPixMut.isPending || conciliarChequeMut.isPending) ? <><Loader2 className="w-4 h-4 animate-spin mr-1" />Conciliando…</> : <>⚡ Conciliar agora</>}
               </Button>
             </div>
           </div>
@@ -7690,7 +7778,26 @@ export default function FinanceiroConciliacao() {
                 <Loader2 className="w-4 h-4 animate-spin" /> Buscando…
               </div>
             )}
-            {!entriesTrocaFetching && buscaTroca.trim().length >= 1 && (entriesTroca?.data ?? []).length === 0 && (
+            {/* Rev. 3752 — CHEQUES do Controle de Cheques (sem lançamento): clicar CRIA a despesa, concilia a linha e baixa o cheque */}
+            {!entriesTrocaFetching && (() => {
+              const chqs = chequesTroca?.data ?? [];
+              if (chqs.length === 0) return null;
+              const valRefChq = trocandoLine?.extratoValor ?? 0;
+              return (
+                <div>
+                  <div className="px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border-b border-amber-100 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" /> Cheques do Controle de Cheques · clicar cria a despesa e baixa o cheque
+                  </div>
+                  <div className="divide-y">
+                    {chqs.map((chq: any) => renderChequeCandidato(chq, valRefChq, false, () => {
+                      if (!trocandoLine || !companyId) return;
+                      conciliarChequeMut.mutate({ companyId, statementLineId: trocandoLine.statementLineId, chequeId: chq.chequeId });
+                    }))}
+                  </div>
+                </div>
+              );
+            })()}
+            {!entriesTrocaFetching && buscaTroca.trim().length >= 1 && (entriesTroca?.data ?? []).length === 0 && (chequesTroca?.data ?? []).length === 0 && (
               <div className="px-5 py-5 text-sm text-gray-400 text-center">Nenhum lançamento encontrado.</div>
             )}
             {!entriesTrocaFetching && (() => {
@@ -7718,7 +7825,7 @@ export default function FinanceiroConciliacao() {
                           }}
                         >
                           <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm text-blue-700 group-hover:underline truncate">{nome}</div>
+                            <div className="font-medium text-sm text-blue-700 group-hover:underline truncate flex items-center gap-1.5"><span className="truncate">{nome}</span>{entryChequeIdent(e) && <span className="px-1 py-px rounded text-[9px] font-bold bg-amber-100 text-amber-700 shrink-0">🪙 nº {entryChequeIdent(e)}</span>}</div>
                             <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
                               <span className="tabular-nums font-medium text-gray-700">{formatBRL(valor)}</span>
                               {data && <><span className="text-gray-300">·</span><span>{fmtData(data)}</span></>}
@@ -7772,7 +7879,7 @@ export default function FinanceiroConciliacao() {
                     }}
                   >
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm text-blue-700 group-hover:underline truncate">{nome}</div>
+                      <div className="font-medium text-sm text-blue-700 group-hover:underline truncate flex items-center gap-1.5"><span className="truncate">{nome}</span>{entryChequeIdent(e) && <span className="px-1 py-px rounded text-[9px] font-bold bg-amber-100 text-amber-700 shrink-0">🪙 nº {entryChequeIdent(e)}</span>}</div>
                       <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
                         <span className="tabular-nums font-medium text-gray-700">{formatBRL(valor)}</span>
                         {data && <><span className="text-gray-300">·</span><span>{fmtData(data)}</span></>}
@@ -7811,7 +7918,7 @@ export default function FinanceiroConciliacao() {
                       <div className="divide-y">{demais.map(e => renderEntry(e, false))}</div>
                     </>
                   )}
-                  {allEntries.length === 0 && (
+                  {allEntries.length === 0 && (chequesTroca?.data ?? []).length === 0 && (
                     <div className="px-5 py-5 text-sm text-gray-400 text-center">Digite para buscar lançamentos.</div>
                   )}
                 </>

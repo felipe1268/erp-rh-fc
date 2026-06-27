@@ -2174,6 +2174,10 @@ export const financialRouter = router({
               e.origem_descricao AS "origemDescricao", e.forma_pagamento AS "formaPagamento",
               e.descricao, e.observacoes, e.conciliado, e.parcela_numero AS "parcelaNumero",
               e.parcela_total AS "parcelaTotal", e.cheque_status AS "chequeStatus",
+              -- Rev. 3752 — nº do cheque/Doc do lançamento p/ os diálogos de conciliação
+              -- mostrarem QUAL cheque é cada candidato (evita conciliar o cheque errado
+              -- quando o valor se repete). Costumam vir vazios → o front cai no parse da descrição.
+              e.cheque_numero AS "chequeNumero", e.comprovante_documento AS "comprovanteDocumento",
               e.fornecedor_nome AS "fornecedorNome",
               -- Rev. 3155 — enriquece os lançamentos do módulo Frota com o POSTO
               -- (abastecimento) / FORNECEDOR (manutenção) que vive nas tabelas da Frota
@@ -2206,6 +2210,47 @@ export const financialRouter = router({
       data: rows(res),
       total: Number(rows(countRes)[0]?.total ?? 0),
     };
+  }),
+
+  // Rev. 3752 — CHEQUES do CONTROLE DE CHEQUES (financial_cheques) como CANDIDATOS de
+  // conciliação. Os diálogos "Conciliar PIX no extrato" e "Trocar lançamento vinculado"
+  // só buscavam `financial_entries` (OCs/lançamentos) → cheques rastreados SÓ no Controle
+  // de Cheques (sem lançamento de despesa — na empresa real, 0 de ~4,7 mil têm
+  // `lancamento_id`) NUNCA apareciam, e o usuário não via o nº do cheque/Doc p/ distinguir
+  // valores repetidos (risco de conciliar o cheque ERRADO: ex. JEFCAR 903 × 902 ambos
+  // R$2.050). Retorna só cheques AINDA não conciliados/vinculados. READ-ONLY · tenancy guard.
+  getChequesParaConciliacao: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    busca: z.string().optional(),
+    limit: z.number().default(30),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    // NB: `dbExecute` liga placeholders por ORDEM DE APARIÇÃO no texto ($N é cosmético) —
+    // por isso a ordem do array `vals` espelha 1:1 a ordem dos $N no texto.
+    const conds: string[] = [`c.company_id=$1`, `c.excluido_em IS NULL`, `COALESCE(c.conciliado,0)=0`, `c.lancamento_id IS NULL`];
+    const vals: any[] = [input.companyId];
+    let i = 2;
+    const busca = (input.busca ?? "").trim();
+    if (busca) {
+      const soNum = busca.replace(/\D/g, "").replace(/^0+/, "");
+      const clauses = [`c.fornecedor_nome ILIKE $${i++}`, `c.numero_cheque ILIKE $${i++}`];
+      vals.push(`%${busca}%`, `%${busca}%`);
+      if (soNum) { clauses.push(`REGEXP_REPLACE(COALESCE(c.numero_cheque,''),'^0+','') = $${i++}`); vals.push(soNum); }
+      conds.push(`(${clauses.join(" OR ")})`);
+    }
+    vals.push(input.limit);
+    const res = await dbExecute(db,
+      `SELECT c.id AS "chequeId", c.numero_cheque AS "numeroCheque", c.fornecedor_nome AS "fornecedorNome",
+              c.valor, c.data_vencimento AS "dataVencimento", c.data_compensacao AS "dataCompensacao",
+              c.obra_id AS "obraId", c.obra_nome AS "obraNome", c.status, c.conta_bancaria_id AS "contaBancariaId"
+         FROM financial_cheques c
+        WHERE ${conds.join(" AND ")}
+        ORDER BY c.data_compensacao DESC NULLS LAST, c.data_vencimento DESC NULLS LAST, c.id DESC
+        LIMIT $${i}`,
+      vals);
+    return { data: rows(res) };
   }),
 
   // Rev. 3145 — Totais AGREGADOS do período (Receitas/Despesas) somando TODOS os
@@ -6743,6 +6788,91 @@ export const financialRouter = router({
       [ctx.user?.id ?? null, ctx.user?.name ?? null, input.entryId, input.companyId]
     );
     return { ok: true };
+  }),
+
+  // Rev. 3752 — CONCILIAR uma LINHA do extrato contra um CHEQUE do Controle de Cheques que
+  // NÃO tem lançamento de despesa correspondente. Opção A (escolha do piloto FC): em vez de
+  // só vincular, CRIA a despesa (status "pago") espelhando o cheque, marca a linha do extrato
+  // como conciliada (entry_id = nova despesa) e BAIXA o cheque (conciliado=1 + lancamento_id).
+  // Tudo ATÔMICO (db.transaction): a despesa nasce, a linha reserva e o cheque baixa juntos —
+  // ou nada. Guard de concorrência (linha conciliado=0 → vencedor único) + tenancy. AÇÃO
+  // EXPLÍCITA do usuário ("conciliação só sugestiva": nada roda sozinho). ZERO ALTER/DROP/DELETE.
+  conciliarChequeComLinha: protectedProcedure.input(z.object({
+    statementLineId: z.number(),
+    chequeId: z.number(),
+    companyId: z.number(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    // 1) Cheque (tenancy + ainda NÃO conciliado/vinculado).
+    const chqRes = await dbExecute(db,
+      `SELECT id, numero_cheque AS "numeroCheque", fornecedor_nome AS "fornecedorNome",
+              valor, data_vencimento AS "dataVencimento", data_compensacao AS "dataCompensacao",
+              obra_id AS "obraId", obra_nome AS "obraNome", lancamento_id AS "lancamentoId",
+              COALESCE(conciliado,0) AS conciliado
+         FROM financial_cheques
+        WHERE id=$1 AND company_id=$2 AND excluido_em IS NULL`,
+      [input.chequeId, input.companyId]);
+    if (rows(chqRes).length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Cheque não encontrado nesta empresa." });
+    const chq: any = rows(chqRes)[0];
+    if (Number(chq.conciliado) === 1 || chq.lancamentoId != null) {
+      throw new TRPCError({ code: "CONFLICT", message: "Este cheque já está conciliado / vinculado a um lançamento." });
+    }
+    // 2) Linha do extrato (tenancy + não removida) → conta bancária + data do pagamento.
+    const lnRes = await dbExecute(db,
+      `SELECT conta_bancaria_id AS "contaBancariaId", data, COALESCE(conciliado,0) AS conciliado
+         FROM bank_statement_lines WHERE id=$1 AND company_id=$2 AND excluido_em IS NULL`,
+      [input.statementLineId, input.companyId]);
+    if (rows(lnRes).length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Linha do extrato não encontrada ou já removida." });
+    const ln: any = rows(lnRes)[0];
+    if (Number(ln.conciliado) === 1) throw new TRPCError({ code: "CONFLICT", message: "Esta linha do extrato já está conciliada." });
+    const lineConta = ln.contaBancariaId != null ? Number(ln.contaBancariaId) : null;
+    const dataPg = typeof ln.data === "string" ? ln.data.slice(0, 10) : (ln.data ? new Date(ln.data).toISOString().slice(0, 10) : null);
+    const valorNum = Math.abs(Number(chq.valor) || 0);
+    const dataComp = chq.dataVencimento || dataPg;
+    const desc = `Cheque nº ${chq.numeroCheque ?? "—"} — ${chq.fornecedorNome ?? "Fornecedor"}`.trim();
+    let entryId: any;
+    // NB: `dbExecute` liga params por ORDEM DE APARIÇÃO dos $N (o número é cosmético); o array
+    // espelha 1:1 a ordem textual. Literais ('despesa','variavel',1,NOW()…) NÃO consomem item.
+    await db.transaction(async (tx: any) => {
+      const insRes = await dbExecute(tx,
+        `INSERT INTO financial_entries
+           (company_id, obra_id, obra_nome, tipo, natureza, valor_previsto, valor_realizado,
+            data_competencia, data_vencimento, data_pagamento, status, conta_bancaria_id,
+            forma_pagamento, descricao, fornecedor_nome, cheque_numero, cheque_status,
+            origem_modulo, conciliado, data_conciliacao, conciliado_em, conciliado_por_id, conciliado_por_nome,
+            criado_por_id, criado_por_nome, created_at, updated_at)
+         VALUES ($1,$2,$3,'despesa','variavel',$4,$5,$6,$7,$8,'pago',$9,'cheque',$10,$11,$12,$13,
+                 'cheque_conciliacao',1,CURRENT_DATE,NOW(),$14,$15,$16,$17,NOW(),NOW())
+         RETURNING id`,
+        [input.companyId, chq.obraId ?? null, chq.obraNome ?? null,
+         valorNum, valorNum, dataComp, chq.dataVencimento ?? null, dataPg,
+         lineConta, desc, chq.fornecedorNome ?? null, chq.numeroCheque ?? null, chq.dataCompensacao ? "compensado" : null,
+         ctx.user?.id ?? null, ctx.user?.name ?? null, ctx.user?.id ?? null, ctx.user?.name ?? null]);
+      entryId = rows(insRes)[0]?.id;
+      if (!entryId) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Falha ao criar o lançamento do cheque." });
+      // Reserva ATÔMICA do CHEQUE primeiro (serializa por chequeId; vencedor único): se outra
+      // requisição já baixou este cheque, `lancamento_id IS NULL` falha → 0 linhas → rollback de
+      // tudo (despesa + linha). Sem checar rows-affected aqui, duas linhas distintas poderiam
+      // conciliar o MESMO cheque (cada uma criando sua despesa) e só a 1ª baixaria o cheque.
+      const updChq = await dbExecute(tx,
+        `UPDATE financial_cheques
+            SET conciliado=1, data_conciliacao=CURRENT_DATE, lancamento_id=$1, updated_at=NOW()
+          WHERE id=$2 AND company_id=$3 AND excluido_em IS NULL AND lancamento_id IS NULL
+          RETURNING id`,
+        [entryId, input.chequeId, input.companyId]);
+      if (rows(updChq).length === 0) throw new TRPCError({ code: "CONFLICT", message: "Este cheque já foi conciliado / vinculado a um lançamento." });
+      // Reserva ATÔMICA da linha (vencedor único; se outro já conciliou → rollback de tudo).
+      const updLn = await dbExecute(tx,
+        `UPDATE bank_statement_lines SET conciliado=1, entry_id=$1
+          WHERE id=$2 AND company_id=$3 AND excluido_em IS NULL AND COALESCE(conciliado,0)=0
+          RETURNING id`,
+        [entryId, input.statementLineId, input.companyId]);
+      if (rows(updLn).length === 0) throw new TRPCError({ code: "CONFLICT", message: "Linha do extrato já conciliada ou removida." });
+    });
+    await createAuditLog({ action: "financial_cheque_conciliado", userId: ctx.user?.id, companyId: input.companyId, details: `Cheque nº ${chq.numeroCheque ?? "?"} (${chq.fornecedorNome ?? "—"}) R$${valorNum} → despesa ${entryId} + linha ${input.statementLineId}` });
+    return { ok: true, entryId };
   }),
 
   // Rev. 3239 — CONCILIAÇÃO EM GRUPO (N lançamentos : 1 linha do extrato). Usada quando a

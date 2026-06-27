@@ -1,6 +1,44 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3752 — **CONCILIAÇÃO BANCÁRIA · OS DIÁLOGOS "CONCILIAR PIX NO EXTRATO" E "TROCAR LANÇAMENTO VINCULADO" SÓ BUSCAVAM EM `financial_entries` (LANÇAMENTOS/OCs) — CHEQUES QUE EXISTEM SÓ NO CONTROLE DE CHEQUES (`financial_cheques`), SEM LANÇAMENTO DE DESPESA, NUNCA APARECIAM COMO CANDIDATOS. AGORA: (1) OS CHEQUES PENDENTES ENTRAM NA BUSCA DOS 2 DIÁLOGOS, (2) CADA CANDIDATO (LANÇAMENTO **E** CHEQUE) MOSTRA O Nº DO CHEQUE/DOC P/ NÃO CONCILIAR O CHEQUE ERRADO QUANDO O VALOR REPETE, E (3) SELECIONAR UM CHEQUE SEM LANÇAMENTO + "CONCILIAR AGORA" CRIA A DESPESA (STATUS PAGO), CONCILIA A LINHA DO EXTRATO E BAIXA O CHEQUE — TUDO ATÔMICO. SCHEMA-NEUTRO · ZERO ALTER/DROP/DELETE.**
+ *
+ * Contexto: o piloto FC concilia muitos pagamentos por CHEQUE. Boa parte desses cheques é cadastrada no módulo
+ * "Controle de Cheques" (`financial_cheques`) sem que exista um lançamento de despesa correspondente em
+ * `financial_entries`. Como os dois diálogos de conciliação manual ("Conciliar PIX no extrato" e "Trocar lançamento
+ * vinculado") só consultavam `getEntries`, esses cheques eram invisíveis: o usuário via a linha do extrato mas não
+ * tinha contra o quê conciliá-la, e quando havia vários cheques de MESMO valor não dava p/ saber qual era qual.
+ *
+ * Mudanças:
+ * 1) BACKEND (`server/routers/financial.ts`):
+ *    - `getEntries`: o SELECT passa a expor `e.cheque_numero AS "chequeNumero"` e `e.comprovante_documento AS
+ *      "comprovanteDocumento"` p/ o frontend derivar e exibir o nº do cheque/Doc de cada lançamento candidato.
+ *    - NOVO `getChequesParaConciliacao({companyId, busca?, limit=30})` (READ-ONLY, guardado por tenancy via
+ *      `_assertFinanceiroCompanyAccess`): retorna cheques da empresa com `excluido_em IS NULL`, `conciliado=0` e
+ *      `lancamento_id IS NULL` (i.e. ainda não baixados/vinculados); busca casa fornecedor_nome/numero_cheque (ILIKE)
+ *      + nº "limpo" (REGEXP_REPLACE sem zeros à esquerda). Ordena por compensação/vencimento desc.
+ *    - NOVA mutation `conciliarChequeComLinha({statementLineId, chequeId, companyId})` (Opção A escolhida pelo
+ *      piloto): valida cheque (tenancy + ainda não conciliado/vinculado) e linha do extrato (tenancy + não removida +
+ *      `conciliado=0`); então, em `db.transaction`: (a) INSERT em `financial_entries` espelhando o cheque
+ *      (`tipo='despesa'`, `natureza='variavel'`, `status='pago'`, `forma_pagamento='cheque'`, `conciliado=1`,
+ *      `origem_modulo='cheque_conciliacao'`, conta bancária = a da linha, valor abs do cheque); (b) UPDATE ATÔMICO da
+ *      linha (`conciliado=1`, `entry_id=<nova despesa>` com guard `COALESCE(conciliado,0)=0` → vencedor único em
+ *      concorrência); (c) UPDATE do cheque (`conciliado=1`, `data_conciliacao=CURRENT_DATE`,
+ *      `lancamento_id=<nova despesa>`, idempotente via `lancamento_id IS NULL`). Tudo junto ou rollback. Audit log.
+ * 2) FRONTEND (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`):
+ *    - 2 queries `getChequesParaConciliacao` (uma por diálogo, habilitadas só com o diálogo aberto) + mutation
+ *      `conciliarChequeMut` (onSuccess: toast, fecha ambos os diálogos, refetch extrato/ano/status + report).
+ *    - Helper `entryChequeIdent(e)`: lê `chequeNumero`/`comprovanteDocumento` ou faz parse da descrição
+ *      (`parseChequeNumero`/`parseDocNumero` de `@shared/chequeMotivos`) — exibe um badge "🪙 nº N" em cada
+ *      lançamento candidato dos 2 diálogos.
+ *    - Helper `renderChequeCandidato(chq, valRef, selected, onPick)`: linha âmbar "🪙 Cheque nº N · fornecedor ·
+ *      valor · venc · obra" com badge "= valor exato"/"Δ %". Seção "Cheques do Controle de Cheques" no topo da lista
+ *      dos 2 diálogos. No "Conciliar PIX": selecionar cheque → "Conciliar agora" dispara `conciliarChequeMut`. No
+ *      "Trocar lançamento": clicar no cheque dispara a conciliação IMEDIATA. Empty-states agora consideram cheques.
+ * Regra mantida: conciliação SÓ SUGESTIVA — nada concilia/baixa sem ação explícita do usuário no diálogo.
+ * Validação: `tsc --noEmit` limpo nos 2 arquivos; app sobe (HTTP 200). `conta_bancaria_id` da nova despesa vem da
+ * linha do extrato; `data_pagamento`/`data_competencia` derivadas da linha/vencimento do cheque.
+ *
  * Rev. 3751 — **CONCILIAÇÃO BANCÁRIA · "JÁ CONCILIEI O CHEQUE E AO RECARREGAR A PÁGINA ELE VOLTA": A LINHA DE CHEQUE SUMIA DA LISTA AO CLICAR EM "CONCILIAR SELECIONADAS" MAS REAPARECIA NO RELOAD (EX.: CHEQUE COMPENSADO DOC 001052, −R$ 1.500,00, HELIO BASSANELI/BRAVO LOCAÇÕES, EMPRESA 60002, CONTA 2). CAUSA: SUCESSO-FALSO NO FRONTEND — O `onSuccess` ESCONDIA TODAS AS LINHAS SELECIONADAS INDEPENDENTE DE QUANTAS O BACKEND REALMENTE GRAVOU. AGORA O BACKEND RETORNA AS LINHAS EFETIVAMENTE CONCILIADAS E O FRONTEND ESCONDE SÓ ESSAS + AVISA + REANALISA AS QUE FALHARAM. 100% BUGFIX · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Sintoma: na Conciliação Bancária (empresa 60002, conta 2), o usuário seleciona a sugestão do "CHEQUE COMPENSADO ·
