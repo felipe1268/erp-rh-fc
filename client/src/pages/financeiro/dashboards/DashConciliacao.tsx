@@ -95,12 +95,15 @@ function TopListCard({
                   </span>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-[12px] font-bold tabular-nums text-slate-900">{formatBRLCompact(item.total)}</p>
+                  <p className="text-[12px] font-bold tabular-nums text-slate-900 whitespace-nowrap">{formatBRL(item.total)}</p>
                   {item.qtd != null && (
                     <p className="text-[10px] text-slate-400">{item.qtd} lçto{item.qtd !== 1 ? "s" : ""}</p>
                   )}
                 </div>
               </div>
+              {item.extra && (
+                <p className="text-[10px] text-slate-400 tabular-nums break-words pl-7">{item.extra}</p>
+              )}
               <MiniBar value={item.total} max={max} color={color} />
             </div>
           ))}
@@ -527,11 +530,11 @@ export default function DashConciliacao() {
         <div className="space-y-2">
           <SectionTitle>Métricas adicionais do extrato</SectionTitle>
           <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-            <KpiCard icon={Hash} label="Ticket médio" value={formatBRLCompact(kpis.ticketMedio)} tone="default"
+            <KpiCard icon={Hash} label="Ticket médio" value={formatBRL(kpis.ticketMedio)} tone="default"
               sub={`Sobre ${kpis.total} linhas do extrato`} />
-            <KpiCard icon={TrendingUp} label="Maior entrada" value={formatBRLCompact(maiorEntrada)} tone="good"
+            <KpiCard icon={TrendingUp} label="Maior entrada" value={formatBRL(maiorEntrada)} tone="good"
               sub="Único lançamento de crédito" />
-            <KpiCard icon={TrendingDown} label="Maior saída" value={formatBRLCompact(maiorSaida)} tone="bad"
+            <KpiCard icon={TrendingDown} label="Maior saída" value={formatBRL(maiorSaida)} tone="bad"
               sub="Único lançamento de débito" />
             <KpiCard icon={Wallet} label="Contas bancárias" value={`${contasAtivas}`} tone="default"
               sub={`${kpis.contas} contas com extrato`} onClick={() => setDet(true)} />
@@ -802,7 +805,7 @@ export default function DashConciliacao() {
                     nome: o.nome,
                     total: o.despesas + o.receitas,
                     qtd: o.qtd,
-                    extra: `D: ${formatBRLCompact(o.despesas)} · R: ${formatBRLCompact(o.receitas)}`,
+                    extra: `D: ${formatBRL(o.despesas)} · R: ${formatBRL(o.receitas)}`,
                   }))}
                   color={ORANGE}
                   onOpen={() => setDetObras(true)}

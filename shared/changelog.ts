@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3760 — **DASHBOARD · CONCILIAÇÃO BANCÁRIA · OS VALORES EM DINHEIRO QUE O USUÁRIO LÊ (RANKINGS, KPIs "TICKET MÉDIO/MAIOR ENTRADA/MAIOR SAÍDA" E O DETALHE D/R DO RANKING DE OBRAS) PASSAM A APARECER POR EXTENSO COM PONTO DE MILHAR E VÍRGULA DECIMAL (`formatBRL` → "R$ 928.000,00") EM VEZ DE ABREVIADO ("R$ 928 mil"/"R$ 2,4 mi"); E OS GRÁFICOS FICAM RESPONSIVOS (CHARTCARD ENCOLHE DENTRO DO GRID SEM ESTOURAR NA HORIZONTAL). 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Pedido do usuário (FC ENGENHARIA / company 60002, prints da tela "Conciliação Bancária"): "Quero dinheiro em valor de
+ * número separando por ponto e vírgula e quero os gráficos responsivos." Os cards de ranking e KPIs mostravam os valores
+ * abreviados (R$ 2,4 mi / R$ 916 mil), dificultando a leitura do número exato.
+ *
+ * Fix (100% frontend):
+ * - `client/src/pages/financeiro/dashboards/DashConciliacao.tsx`:
+ *   • `TopListCard` (usado por TODOS os rankings da tela — categorias de despesa/receita, fornecedores, obras): o valor
+ *     principal trocou `formatBRLCompact(item.total)` → `formatBRL(item.total)` (+ `whitespace-nowrap` p/ não quebrar).
+ *   • KPIs "Ticket médio", "Maior entrada" e "Maior saída": `formatBRLCompact` → `formatBRL` (os demais KPIs da tela já
+ *     usavam `formatBRL`, então agora ficam consistentes).
+ *   • O detalhe "D: … · R: …" do Ranking de obras já usava `formatBRLCompact`; trocado p/ `formatBRL` E AGORA É RENDERIZADO
+ *     (o `item.extra` existia no tipo do `TopListCard` mas nunca era exibido — code review apontou; passou a renderizar uma
+ *     linha secundária `text-[10px]` com `break-words`).
+ * - DECISÃO DE ESCOPO: os `tickFormatter` dos EIXOS dos gráficos (XAxis/YAxis) PERMANECEM `formatBRLCompact` de propósito —
+ *   são guia de escala (eixo estreito; full estouraria/sobreporia) e o `BRLTooltip` já mostra o valor completo no toque/hover.
+ *   Assim todo READOUT preciso que o usuário lê fica por extenso, sem quebrar a legibilidade dos eixos.
+ * - Responsividade (`client/src/pages/financeiro/dashboards/_kit.tsx`): o root do `ChartCard` ganhou `min-w-0 w-full` para
+ *   poder encolher dentro do CSS grid (`min-width:auto` padrão do item de grid travava o shrink e causava overflow horizontal
+ *   em telas estreitas / iPad em retrato). Melhoria compartilhada por todos os 5 dashboards financeiros, sem regressão visual.
+ * - Escopo restrito: NÃO mexi no `formatBRLCompact` global do `_kit` (afeta os outros dashboards) — só nas chamadas desta tela.
+ * - Validado: `tsc` limpo (filtrado DashConciliacao.tsx e dashboards/_kit.tsx); app HTTP 200; code review (architect) aprovado
+ *   após renderizar o `item.extra`.
+ *
+ * Arquivos: `client/src/pages/financeiro/dashboards/DashConciliacao.tsx`, `client/src/pages/financeiro/dashboards/_kit.tsx`.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ *
  * Rev. 3759 — **FINANCEIRO · FLUXO DE CAIXA · A LINHA "ENTRADAS (RECEITAS)" PASSA A REFLETIR O DINHEIRO REAL DE CONTAS A RECEBER (financial_entries tipo='receita'), EXATAMENTE COMO AS DESPESAS REFLETEM CONTAS A PAGAR, PARA O CAIXA FECHAR COM O EXTRATO. ANTES VINHA DA MATRIZ DE PREVISÃO DE FATURAMENTO (CRONOGRAMA × ORÇAMENTO), QUE MOSTRAVA ~R$ 200 MIL DE FORECAST EM VEZ DOS ~R$ 2,24 MI EFETIVAMENTE A RECEBER/RECEBIDOS — RECEITAS E DESPESAS DESCASAVAM. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Pedido do usuário (FC ENGENHARIA / company 60002): no Fluxo de Caixa, a linha de Receitas deve refletir o DINHEIRO REAL

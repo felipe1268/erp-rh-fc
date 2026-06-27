@@ -23,3 +23,17 @@ extenso in contracts (numeroExtenso.ts/contratoPjDocument.ts/ContratoPJView.tsx)
 **How to apply:** when widening a `<YAxis>` from compact→full, bump its `width` (~108, or ~116
 for accumulated/millions axes) or the full value clips. Always `rg` scoped to `client/src`
 (changelog.ts/*.md grep times out).
+
+**Readout vs axis tick (opposite of the sweep):** when a user asks for full BRL "com ponto e
+vírgula" in a dashboard, switch only the VALUE READOUTS they actually read (ranking lists,
+KPI cards, label/`extra` lines) `formatBRLCompact`→`formatBRL`. Keep the chart-axis
+`tickFormatter` COMPACT on purpose — axes are scale guides on a narrow track and the shared
+`BRLTooltip` already shows the full value on hover/tap; full numbers there overlap/clip.
+**Why:** done this way in the Conciliação dashboard so precise amounts are legible without
+breaking axis layout. **Scope trap:** `formatBRL`/`formatBRLCompact` live in
+`dashboards/_kit.tsx` and feed ALL 5 financial dashboards — edit the call sites in the one
+target screen, never the shared formatter, unless the change is meant to be global.
+
+**Recharts responsiveness:** `ResponsiveContainer` won't shrink inside a CSS grid cell unless
+the card root has `min-w-0` (grid items default `min-width:auto`), causing horizontal overflow
+on narrow/iPad-portrait. `ChartCard` root carries `min-w-0 w-full` for this reason.

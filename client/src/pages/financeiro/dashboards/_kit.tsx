@@ -133,7 +133,7 @@ export function ChartCard({
   height?: number; children: ReactNode; className?: string;
 }) {
   return (
-    <Card className={`p-4 border-slate-200 ${className}`}>
+    <Card className={`p-4 border-slate-200 min-w-0 w-full ${className}`}>
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="min-w-0">
           <h3 className="font-semibold text-slate-800 text-sm md:text-base leading-snug">{title}</h3>
