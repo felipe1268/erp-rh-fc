@@ -557,7 +557,7 @@ export async function importFolhaProjecao(companyId: number, opts?: { mesesAFren
         const vencVR = lastBusinessDayOrEarlier(ano, mNum, 5);
         await insertProjEntry(db, {
           companyId,
-          contaNome: "Vale Refeição (Projeção)",
+          contaNome: "VALE ALIMENTAÇÃO",
           valor: valVR,
           competencia,
           vencimento: vencVR,
@@ -575,7 +575,7 @@ export async function importFolhaProjecao(companyId: number, opts?: { mesesAFren
         const vencVA = lastBusinessDayOrEarlier(ano, mNum, 5);
         await insertProjEntry(db, {
           companyId,
-          contaNome: "Vale Alimentação (Projeção)",
+          contaNome: "VALE ALIMENTAÇÃO",
           valor: valVA,
           competencia,
           vencimento: vencVA,

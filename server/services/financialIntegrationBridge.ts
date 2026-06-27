@@ -62,6 +62,8 @@ export const CONTA_ID_BY_NOME: Record<string, number> = {
   "Vale Refeição / Alimentação": 265,
   "Vale Alimentação": 265,
   "VALE ALIMENTAÇÃO": 265,
+  "VALE ALIMENTAÇÃO - OBRA": 265,
+  "VALE ALIMENTAÇÃO - ADMINISTRATIVO": 285,
   "Vale Refeição (Projeção)": 265,
   "Vale Alimentação (Projeção)": 265,
   // Frota
@@ -403,7 +405,7 @@ export async function importBeneficiosToFinancial(companyId: number, mesRef?: st
         if (!(await entryExists(db, companyId, modulo, r.id))) {
           await insertEntry(db, {
             companyId,
-            contaNome: "Vale Refeição / Alimentação",
+            contaNome: "VALE ALIMENTAÇÃO",
             tipo: "despesa",
             natureza: "variavel",
             valorPrevisto: valorVR,
@@ -427,7 +429,7 @@ export async function importBeneficiosToFinancial(companyId: number, mesRef?: st
         if (!(await entryExists(db, companyId, modulo, r.id))) {
           await insertEntry(db, {
             companyId,
-            contaNome: "Vale Alimentação",
+            contaNome: "VALE ALIMENTAÇÃO",
             tipo: "despesa",
             natureza: "variavel",
             valorPrevisto: valorVA,

@@ -1,6 +1,12 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3772 — **FINANCEIRO · CONTAS · `id 265 · VALE ALIMENTAÇÃO - OBRA` RENOMEADA PARA `VALE ALIMENTAÇÃO` (SEM "- OBRA"): CONTA ATUALIZADA EM `financial_accounts` + TODOS OS LANÇAMENTOS COM `conta_id=265` NORMALIZADOS + TODAS AS STRINGS DE IMPORT (financialIntegrationBridge, payrollProjectionBridge) ATUALIZADAS PARA O NOME CANÔNICO. ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * ARQUIVOS: financial_accounts id=265 (UPDATE nome), financial_entries (UPDATE conta_nome WHERE conta_id=265),
+ * server/services/financialIntegrationBridge.ts (VR→VALE ALIMENTAÇÃO, VA→VALE ALIMENTAÇÃO, mapa),
+ * server/services/payrollProjectionBridge.ts (projeções VR/VA → VALE ALIMENTAÇÃO).
+ *
  * Rev. 3771 — **FINANCEIRO · CONTAS FLUTUANTES · DUPLICATA "MÃO DE OBRA TERCEIRIZADA - OBRA" × "MÃO DE OBRA TERCEIRIZADA / SUBEMPREITEIRO" ELIMINADA: 1.119 LANÇAMENTOS COM `conta_nome='MÃO DE OBRA TERCEIRIZADA - OBRA'` (conta_id=23) NORMALIZADOS PARA "MÃO DE OBRA TERCEIRIZADA / SUBEMPREITEIRO"; 28 LANÇAMENTOS "Subempreiteiros" (flutuantes) TAMBÉM UNIFICADOS (conta_id=23 + nome canônico); MAPA CANÔNICO ATUALIZADO + `financialAutoImport.ts` E `financialIntegrationBridge.ts` CORRIGIDOS. DASHBOARD PASSA A MOSTRAR UMA SÓ LINHA. ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * CONTEXTO: dashboard agrupava por conta_nome (string), não por conta_id → mesmo id=23 aparecia
