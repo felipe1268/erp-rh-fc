@@ -14,6 +14,7 @@ import {
   CalendarDays, Sparkles, Info, BookOpen, ExternalLink, AlertTriangle,
   Lightbulb, Activity, ArrowUpRight, ArrowDownRight, Minus, ShieldCheck,
   ChevronRight as ChevronRightIcon, Layers, ListTree, Calculator, Percent,
+  ArrowLeft, Receipt,
 } from "lucide-react";
 
 type DRELinhaKey =
@@ -778,6 +779,8 @@ function DrillBody({
     },
     { enabled: isLeaf && !!companyId, refetchOnWindowFocus: false },
   );
+  // Rev. 3793 — DEVE ficar ANTES dos early returns (Rules of Hooks).
+  const [catSel, setCatSel] = useState<string | null>(null);
 
   if (drill.kind === "info") {
     return (
@@ -896,6 +899,94 @@ function DrillBody({
   const valorCls = leaf.negativo ? "text-red-400" : "text-emerald-400";
   const barCls   = leaf.negativo ? "bg-red-400"   : "bg-emerald-400";
 
+  // Rev. 3793 — drill de categoria: filtrar lançamentos por categoria selecionada.
+  const itensCat = catSel != null ? (d?.itens ?? []).filter((it: any) => it.conta === catSel) : [];
+  const catInfo  = catSel != null ? (d?.porConta ?? []).find((c: any) => c.conta === catSel) : null;
+  const catTotal = catInfo?.total ?? 0;
+
+  // ── Vista de lançamentos de uma categoria (fullscreen dentro do dialog) ──
+  if (catSel != null) {
+    return (
+      <>
+        {/* Cabeçalho categoria */}
+        <div className="rounded-t-2xl px-5 pt-5 pb-4 shrink-0"
+             style={{ background: "linear-gradient(135deg,#1B2A4A 0%,#243a63 100%)" }}>
+          <button
+            type="button"
+            onClick={() => setCatSel(null)}
+            className="flex items-center gap-1.5 text-white/60 hover:text-white text-xs font-medium mb-3 transition-colors"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            Voltar para {leaf.label}
+          </button>
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center shrink-0 mt-0.5">
+              <Receipt className="w-4.5 h-4.5 text-orange-400" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="text-sm font-bold text-white leading-snug break-words">{catSel}</DialogTitle>
+              <DialogDescription className="text-xs text-white/55 mt-0.5">
+                Lançamentos individuais · {leaf.label}
+              </DialogDescription>
+            </div>
+          </div>
+          <div className="flex items-end justify-between gap-4 pt-3 mt-3 border-t border-white/10">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-white/40 mb-1">Total</p>
+              <p className={`text-xl font-black tabular-nums ${valorCls}`}>
+                {leaf.negativo ? `(${formatBRL(catTotal)})` : formatBRL(catTotal)}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-white/40 mb-1">Lançamentos</p>
+              <p className="text-base font-bold text-white tabular-nums">{itensCat.length.toLocaleString("pt-BR")}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Lista de lançamentos da categoria */}
+        <div className="overflow-y-auto flex-1 bg-gray-50/40">
+          {itensCat.length === 0 ? (
+            <div className="py-14 text-center">
+              <Receipt className="w-8 h-8 text-gray-200 mx-auto mb-3" />
+              <p className="text-sm text-gray-400">Nenhum lançamento encontrado para esta categoria.</p>
+            </div>
+          ) : (
+            <div className="bg-white divide-y divide-gray-50">
+              {itensCat.map((it: any, idx: number) => (
+                <div key={`${it.id}-${idx}`}
+                     className="flex items-start justify-between gap-3 px-5 py-3.5 hover:bg-gray-50/60 transition-colors">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-gray-800 font-medium break-words leading-snug">
+                      {it.descricao || "(Sem descrição)"}
+                    </p>
+                    <div className="flex flex-wrap gap-x-2 mt-1">
+                      {it.data && (
+                        <span className="text-[11px] text-gray-500 font-medium">
+                          {new Date(it.data).toLocaleDateString("pt-BR")}
+                        </span>
+                      )}
+                      {it.contraparte && (
+                        <span className="text-[11px] text-gray-400 truncate max-w-[160px]">{it.contraparte}</span>
+                      )}
+                      {it.obraNome && (
+                        <span className="text-[11px] text-blue-500/80 truncate max-w-[160px]">{it.obraNome}</span>
+                      )}
+                    </div>
+                  </div>
+                  <span className={`text-sm font-bold tabular-nums shrink-0 ${leaf.negativo ? "text-red-600" : "text-emerald-700"}`}>
+                    {formatBRL(it.valor)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </>
+    );
+  }
+
+  // ── Vista principal: lista de categorias + todos os lançamentos ──
   return (
     <>
       {/* ── Cabeçalho NAVY ── */}
@@ -959,12 +1050,13 @@ function DrillBody({
 
         {!detalhe.isLoading && !detalhe.isError && d && (
           <>
-            {/* ── Por categoria ── */}
+            {/* ── Por categoria (clicável) ── */}
             {d.porConta.length > 0 && (
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <Layers className="w-3.5 h-3.5 text-orange-500" />
                   <span className="text-[11px] font-bold uppercase tracking-widest text-gray-400">Por categoria</span>
+                  <span className="text-[10px] text-gray-300 ml-1">· toque para ver os lançamentos</span>
                 </div>
 
                 <div className="space-y-2">
@@ -972,18 +1064,26 @@ function DrillBody({
                     const pct = total > 0 ? (c.total / total) * 100 : 0;
                     const barPct = maxCat > 0 ? (c.total / maxCat) * 100 : 0;
                     return (
-                      <div key={i} className="bg-white rounded-xl border border-gray-100 px-4 py-3 hover:border-gray-200 transition-colors">
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setCatSel(c.conta)}
+                        className="w-full text-left bg-white rounded-xl border border-gray-100 px-4 py-3 hover:border-orange-300 hover:shadow-sm active:scale-[0.99] transition-all cursor-pointer"
+                      >
                         <div className="flex items-start justify-between gap-3 mb-2">
                           <span className="text-sm text-gray-700 font-medium break-words flex-1 min-w-0 leading-snug">
                             {c.conta}
                           </span>
-                          <div className="text-right shrink-0">
-                            <p className={`text-sm font-bold tabular-nums ${leaf.negativo ? "text-red-600" : "text-emerald-700"}`}>
-                              {formatBRL(c.total)}
-                            </p>
-                            <p className="text-[10px] text-gray-400 mt-0.5">
-                              {c.qtd} lanç. · {pct.toFixed(1)}%
-                            </p>
+                          <div className="text-right shrink-0 flex items-center gap-2">
+                            <div>
+                              <p className={`text-sm font-bold tabular-nums ${leaf.negativo ? "text-red-600" : "text-emerald-700"}`}>
+                                {formatBRL(c.total)}
+                              </p>
+                              <p className="text-[10px] text-gray-400 mt-0.5">
+                                {c.qtd} lanç. · {pct.toFixed(1)}%
+                              </p>
+                            </div>
+                            <ChevronRightIcon className="w-4 h-4 text-gray-300 shrink-0" />
                           </div>
                         </div>
                         {/* barra de proporção */}
@@ -993,20 +1093,20 @@ function DrillBody({
                             style={{ width: `${barPct}%` }}
                           />
                         </div>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
               </div>
             )}
 
-            {/* ── Lançamentos individuais ── */}
+            {/* ── Lançamentos individuais (todos) ── */}
             {d.itens.length > 0 && (
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <ListTree className="w-3.5 h-3.5 text-orange-500" />
-                    <span className="text-[11px] font-bold uppercase tracking-widest text-gray-400">Lançamentos</span>
+                    <span className="text-[11px] font-bold uppercase tracking-widest text-gray-400">Todos os lançamentos</span>
                   </div>
                   {d.itensTruncados && (
                     <span className="text-[11px] text-gray-400 bg-gray-100 rounded-full px-2.5 py-0.5">
