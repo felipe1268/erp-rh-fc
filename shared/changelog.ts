@@ -1,6 +1,35 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3767 — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · VÍNCULO DE CHEQUE DEVOLVIDO ↔ PIX/TED AGORA (a) APARECE DIRETO NA CONCILIAÇÃO (SELO "🔗 SUBSTITUI CHEQUE DEVOLVIDO DOC NNN · R$ X · VÍNCULO POR FULANO" NA LINHA CONCILIADA/PENDENTE DO EXTRATO, SEM PRECISAR ABRIR O PAINEL DE CHEQUES DEVOLVIDOS) E (b) O CABEÇALHO DO DIÁLOGO "VINCULAR CHEQUE DEVOLVIDO" PARA DE MOSTRAR "VINCULADO R$ 0,00" QUANDO O VÍNCULO EXISTE MAS A LINHA DO CHEQUE TROCOU DE ID NUM RE-IMPORT. BACKEND READ-ONLY · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * CONTEXTO / CAUSA-RAIZ (cheque Doc 001063 · PIER BRASIL · R$ 4.344,60):
+ * - "Conciliado" (linha do extrato ↔ financial_entry) e "Vínculo de cheque" (tabela separada
+ *   `bank_cheque_vinculos`) são DOIS processos INDEPENDENTES. A Tatiane conciliou o PIX (R$ 3.212,92)
+ *   a um lançamento (MATERIAIS DE OBRA); depois a Ana criou o vínculo cheque↔PIX. O vínculo ficava
+ *   invisível na conciliação (só aparecia dentro do diálogo do painel de cheques devolvidos) — mas o
+ *   usuário verifica DIRETO na conciliação bancária. Pedido: o vínculo deve aparecer/atualizar lá.
+ * - Bug do cabeçalho: o cheque foi re-importado (linhas 1418/1419 → 12868/12869). O diálogo congela a
+ *   ref do cheque na abertura; quando a re-resolução por identidade falhava, o `debId` caía num id
+ *   antigo que não é chave de `vincMap` → lia `acumulado=0` → "Vinculado R$ 0,00" mesmo com vínculo.
+ *
+ * BACKEND (`server/routers/financial.ts` · `_computeConciliacaoReport`, READ-ONLY):
+ * - Nova carga `vincPixRes`: SELECT em `bank_cheque_vinculos v` (estornado_em IS NULL, pix_line_id NOT NULL)
+ *   LEFT JOIN `bank_statement_lines dl` ON dl.id=v.debito_line_id, por empresa. Monta `vincByPix` (Map
+ *   pix_line_id → { doc:parseDocNumero(debDescricao), chequeNumero, valor, chequeValor, criadoPorNome, criadoEm }).
+ * - `_enrichVinc(r)` anexa `substituiChequeDevolvido` na linha quando `r.id` é pix_line_id de um vínculo ativo.
+ *   Aplicado a `conciliados` e `extratoSemLancamento` no return. Outer aggregator já espalha `...r` → flui.
+ *
+ * FRONTEND (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`):
+ * - Lista "Já conciliados" (repConcView): novo selo verde "🔗 Substitui cheque devolvido Doc NNN · R$ X ·
+ *   vínculo por <nome>" na linha quando `c.substituiChequeDevolvido` existe.
+ * - Diálogo "Vincular cheque devolvido": `debId`/`info` viraram `let`; quando `vincMap[debId]` não cobre
+ *   (sem acumulado>0 e sem vínculos), varre `Object.entries(vincMap)` por IDENTIDADE do cheque
+ *   (`_idCents===valCents` && (doc OU nº normalizados batem)) e adota a chave viva — cabeçalho passa a
+ *   mostrar o valor real e `registrar`/`estornar` usam o id correto.
+ *
+ * REGRA DE OURO preservada: vincular/exibir NUNCA cria/altera linha do extrato — tudo read-only.
+ *
  * Rev. 3766 — **FINANCEIRO · DASHBOARD · CONCILIAÇÃO BANCÁRIA · DRILL-DOWN POR ITEM ESPECÍFICO: CLICAR EM UMA FATIA/BARRA DE CATEGORIA (DESPESAS OU RECEITAS) OU EM UM ITEM DO RANKING ABRE UM DIALOG COM OS LANÇAMENTOS INDIVIDUAIS DAQUELA CATEGORIA; CLICAR EM UMA BARRA DE OBRA OU EM UM ITEM DO RANKING DE OBRAS ABRE OS LANÇAMENTOS INDIVIDUAIS DA OBRA. 2 NOVOS ENDPOINTS BACKEND (READ-ONLY) + FRONTEND. ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Pedido do usuário: clicar em "MEDIÇÃO DE OBRA" deve abrir apenas os lançamentos daquela categoria, não a lista agregada de todas.

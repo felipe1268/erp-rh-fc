@@ -5749,6 +5749,14 @@ export default function FinanceiroConciliacao() {
                               <p className="text-xs text-gray-500">{fmtData(c.data)}</p>
                               <p className="text-sm text-gray-700 break-words">{c.descricao || "—"}</p>
                               <p className="text-xs text-gray-400 break-words">↔ {c.entryFornecedor || c.entryDescricao || `Lançamento #${c.entryId ?? ""}`}</p>
+                              {c.substituiChequeDevolvido && (
+                                <p className="text-[11px] text-emerald-700 break-words mt-0.5">
+                                  🔗 Substitui <strong>cheque devolvido</strong>
+                                  {c.substituiChequeDevolvido.doc ? <> Doc {c.substituiChequeDevolvido.doc}</> : c.substituiChequeDevolvido.chequeNumero ? <> nº {c.substituiChequeDevolvido.chequeNumero}</> : null}
+                                  {" · "}{formatBRL(Number(c.substituiChequeDevolvido.valor || 0))}
+                                  {c.substituiChequeDevolvido.criadoPorNome ? <> · vínculo por {c.substituiChequeDevolvido.criadoPorNome}</> : null}
+                                </p>
+                              )}
                             </div>
                             <p className={`text-sm font-bold shrink-0 ${Number(c.valor) >= 0 ? "text-green-600" : "text-red-500"}`}>{formatBRL(Math.abs(Number(c.valor)))}</p>
                             {c.entryId && (
@@ -6868,10 +6876,29 @@ export default function FinanceiroConciliacao() {
             return Number(r.debitoId) === Number(chqFrozen.debitoId);
           });
           const chq = chqLive ?? chqFrozen;
-          const debId = Number(chq.debitoId);
+          let debId = Number(chq.debitoId);
           const credId = chq.creditoId != null ? Number(chq.creditoId) : undefined;
           const valCents = chq.valorCents != null ? Number(chq.valorCents) : Math.round(Math.abs(Number(chq.valor ?? 0)) * 100);
-          const info = vincMap[String(debId)] ?? { vinculos: [], acumulado: 0, saldo: valCents / 100, quitado: false, sugestoes: [] };
+          // Rev. 3767 — FALLBACK POR IDENTIDADE. Re-imports do extrato giram o id da linha do
+          // cheque (ex.: 1418→12868); se o debId resolvido não for chave de vincMap, o cabeçalho
+          // lia "Vinculado R$ 0,00" mesmo havendo vínculo gravado. Quando a entrada direta não
+          // cobre, varre o mapa por identidade do cheque (mesmo valor + doc OU nº) e adota a chave
+          // viva — assim o cabeçalho mostra o valor real e o registrar/estornar usam o id certo.
+          let info: any = vincMap[String(debId)];
+          if (!info || (!(Number(info.acumulado) > 0) && !((info.vinculos ?? []).length))) {
+            const normId = (v: any) => (v == null ? null : (String(v).replace(/^0+/, "") || String(v)));
+            const wantDoc = chq.doc != null ? normId(chq.doc) : null;
+            const wantChq = chq.chequeNumero != null ? normId(chq.chequeNumero) : null;
+            for (const [k, m] of Object.entries(vincMap)) {
+              const vs = (m as any).vinculos ?? [];
+              const hit = vs.some((v: any) =>
+                Number(v._idCents) === valCents &&
+                ((wantDoc && v._idDoc && normId(v._idDoc) === wantDoc) ||
+                  (wantChq && v._idChq && normId(v._idChq) === wantChq)));
+              if (hit) { info = m; debId = Number(k); break; }
+            }
+          }
+          info = info ?? { vinculos: [], acumulado: 0, saldo: valCents / 100, quitado: false, sugestoes: [] };
           const vinculos: any[] = info.vinculos ?? [];
           const acumCents = Math.round(Number(info.acumulado || 0) * 100);
           const saldoCents = Math.max(0, valCents - acumCents);

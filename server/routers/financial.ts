@@ -1846,9 +1846,35 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
       if (r.nome) supplierCycleMap.set(_normNomeConc(String(r.nome)), r);
     }
 
+    // Rev. 3767 — VÍNCULO CHEQUE DEVOLVIDO ↔ PIX/TED VISÍVEL NA CONCILIAÇÃO. O vínculo (gravado
+    // em bank_cheque_vinculos por um usuário) marca um PIX/TED como pagamento SUBSTITUTO de um
+    // cheque devolvido. Antes só aparecia dentro do diálogo do painel de cheques devolvidos; aqui
+    // anexamos a identidade do cheque (doc/nº + valor + quem vinculou) na PRÓPRIA linha do extrato
+    // (conciliada ou pendente) p/ a UI exibir um selo direto na conciliação. READ-ONLY.
+    const vincPixRes = await dbExecute(db,
+      `SELECT v.pix_line_id AS "pixLineId", v.valor, v.cheque_numero AS "chequeNumero",
+              v.criado_por_nome AS "criadoPorNome", to_char(v.created_at,'YYYY-MM-DD') AS "criadoEm",
+              dl.descricao AS "debDescricao", dl.valor AS "debValor"
+         FROM bank_cheque_vinculos v
+         LEFT JOIN bank_statement_lines dl ON dl.id = v.debito_line_id
+        WHERE v.company_id=$1 AND v.estornado_em IS NULL AND v.pix_line_id IS NOT NULL`,
+      [input.companyId]);
+    const vincByPix = new Map<number, any>();
+    for (const v of rows(vincPixRes) as any[]) {
+      vincByPix.set(Number(v.pixLineId), {
+        doc: parseDocNumero(v.debDescricao),
+        chequeNumero: v.chequeNumero ?? parseChequeNumero(v.debDescricao) ?? null,
+        valor: Number(v.valor),
+        chequeValor: Math.abs(Number(v.debValor ?? 0)) || null,
+        criadoPorNome: v.criadoPorNome ?? null,
+        criadoEm: v.criadoEm ?? null,
+      });
+    }
+    const _enrichVinc = (r: any) => ({ ...r, substituiChequeDevolvido: vincByPix.get(Number(r.id)) ?? null });
+
     return {
-      conciliados: rows(concRes),
-      extratoSemLancamento,
+      conciliados: rows(concRes).map(_enrichVinc),
+      extratoSemLancamento: extratoSemLancamento.map(_enrichVinc),
       chequesDevolvidos,
       // Rev. 3239 — UNIFICA VR (por mês) + combustível/manutenção (por fornecedor) nas duas
       // listas de pendência. SOMA preservada; só a contagem cai (lista enxuta).
