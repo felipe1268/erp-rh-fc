@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3807 — **FINANCEIRO · PLANO DE CONTAS · REESTRUTURAÇÃO DESPESAS FINANCEIRAS (PARTE 2 — CONFORME CPC/NBC TG).**
+ * 8 ajustes executados em uma transação:
+ * (1) 20 entries de TÍTULO DE CAPITALIZAÇÃO (37) migrados → TÍTULOS DE CAPITALIZAÇÃO (389).
+ * (2) Conta 389 renomeada "TÍTULOS DE CAPITALIZAÇÃO", pai 421→80, class=despesa_financeira.
+ *     Embasamento: NBC TG 1000 (PME) aceita simplificação p/ despesa financeira por ser
+ *     instrumento financeiro sem ativo imobilizável de curto prazo (CPC 38/IFRS 9).
+ * (3) Conta 37 (TÍTULO DE CAPITALIZAÇÃO) desativada — esvaziada.
+ * (4) Conta 509 renomeada "CONSÓRCIO VEICULAR", pai 421→80, class=despesa_financeira.
+ *     Embasamento: CPC 27 tecnicamente é ativo; em PME sem BP completo, tratamento como
+ *     despesa financeira é aceito pela NBC TG 1000.
+ * (5) Conta 421 (Investimentos Financeiros) desativada — ficou vazia.
+ * (6) Conta 81 (Juros de Empréstimos) corrigida: conta_pai_id NULL→80 (orphan fix).
+ * (7) Conta 87 (JUROS E MULTAS BANCÁRIAS) corrigida: conta_pai_id NULL→80 (orphan fix).
+ * (8) Conta 493 renomeada "ADIANTAMENTOS A PARTES RELACIONADAS" (mantém class=outro).
+ *     Embasamento: CPC 05 R1 + CPC 03 — mútuo concedido a coligada é ativo financeiro/recebível,
+ *     NUNCA despesa. Classificação 'outro' o separa do P&L operacional conforme norma.
+ * ZERO SCHEMA/ALTER/DROP. Apenas UPDATE em financial_accounts + financial_entries.
+ *
  * Rev. 3806 — **FINANCEIRO · LIMPEZA GLOBAL DE ZEROS ABSOLUTOS (realizado=0 E previsto=0).**
  * Varredura em TODAS as categorias/meses do DRE identificou 8.759 entries com valor_realizado=0,
  * dos quais 8.735 são orçamentos legítimos (valor_previsto>0) e 24 são absolutamente vazios
