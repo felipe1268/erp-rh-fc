@@ -270,7 +270,7 @@ export default function FinanceiroConciliacao() {
   // Rev. 3762 — "Ocultar resolvidos" no card de Cheques devolvidos: esconde da TELA os
   // cheques já quitados (reapresentado / PIX-TED / por substituição) ou desconsiderados do %,
   // mostrando só os pendentes. NÃO apaga nada nem muda contadores/cálculo do %.
-  const [ocultarDevolResolvidos, setOcultarDevolResolvidos] = useState(false);
+  const [ocultarDevolResolvidos, setOcultarDevolResolvidos] = useState(true);
   // Rev. 3511 — linha do extrato selecionada p/ exibir sheet de detalhe (duplo-clique/toque).
   const [stmtDetailRow, setStmtDetailRow] = useState<any | null>(null);
   // Rev. 3500 — IDs de linhas do extrato que já foram lançadas/conciliadas nesta sessão.
