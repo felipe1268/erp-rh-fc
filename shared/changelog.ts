@@ -1,6 +1,32 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3753 — **CONCILIAÇÃO BANCÁRIA · "ERRO AO DESCONSIDERAR" — AO CLICAR EM "DESCONSIDERAR DA CONCILIAÇÃO" NUM CHEQUE DEVOLVIDO O TOAST MOSTRAVA "Failed to execute 'json' on 'Response': Unexpected end of JSON input" (CORPO DE RESPOSTA VAZIO = QUEDA DE TRANSPORTE, EX.: SERVIDOR REINICIANDO/CONEXÃO INSTÁVEL), MESMO QUANDO A ALTERAÇÃO PODE TER SIDO APLICADA. ALÉM DISSO, O LOG DE AUDITORIA DE DESCONSIDERAR/RECONSIDERAR NUNCA ERA GRAVADO. 100% BUGFIX · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Diagnóstico: o usuário (piloto FC) clicou em "Desconsiderar da conciliação" no card de um cheque devolvido (ex.: Doc 978,
+ * PIER BRASIL, R$ 3.205,15) e recebeu o toast "Erro ao desconsiderar / Unexpected end of JSON input". Essa mensagem é o erro
+ * do CLIENTE tRPC ao tentar `Response.json()` sobre um corpo VAZIO — ou seja, a requisição caiu no TRANSPORTE (corpo não
+ * chegou), não é erro de regra de negócio (estes voltam como JSON com mensagem legível). A análise direta no Neon confirmou que
+ * o par É elegível e a mutation TERIA sucesso: a linha "CHEQUE COMPENSADO · Doc 000978" (id 12981, −3205,15) + "CHEQUE
+ * DEVOLVIDO MOT 11 · Doc 000978" (id 12982, +3205,15), ambas `conciliado=0`, casam exatamente o guard de elegibilidade. Logo a
+ * causa foi a queda de transporte (no dev, o servidor estava reiniciando — `[vite] server connection lost`).
+ *
+ * Achado secundário (bug real, latente): `desconsiderarChequeDevolvido` e `reconsiderarChequeDevolvido` chamavam
+ * `createAuditLog(db, {...})` (DOIS argumentos), mas a função aceita UM só (`createAuditLog(data)`, e obtém o `db`
+ * internamente). Com isso `data` recebia o objeto `db` e o payload real era ignorado → o INSERT do audit caía no try/catch
+ * (silencioso) e o log NUNCA era gravado. Todos os outros call-sites de `financial.ts` já usavam a forma de 1 argumento.
+ *
+ * Correções:
+ * 1) BACKEND (`server/routers/financial.ts`): `createAuditLog(db, {...})` → `createAuditLog({...})` nas 2 mutations
+ *    (desconsiderar/reconsiderar), restaurando a auditoria.
+ * 2) FRONTEND (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`): como as 2 mutations são IDEMPOTENTES (o UPDATE é
+ *    guardado por `desconsiderado_em IS NULL`/`IS NOT NULL`), o `onError` passou a distinguir QUEDA DE TRANSPORTE (mensagem
+ *    contém json/failed to fetch/load failed/networkerror/aborted) dos erros de negócio: na queda de transporte recarrega as
+ *    superfícies de % (`repintarConciliacao`) e mostra um aviso claro em PT ("Conexão instável — recarregamos os dados, confira
+ *    se foi aplicado; se não, tente novamente") em vez do erro técnico em inglês; erros de negócio seguem mostrando a mensagem
+ *    real. Helper `repintarConciliacao` extraído (antes os refetches eram repetidos inline em cada onSuccess).
+ * Validação: `tsc --noEmit` limpo nos 2 arquivos; app sobe (HTTP 200). Regra mantida: conciliação SÓ SUGESTIVA.
+ *
  * Rev. 3752 — **CONCILIAÇÃO BANCÁRIA · OS DIÁLOGOS "CONCILIAR PIX NO EXTRATO" E "TROCAR LANÇAMENTO VINCULADO" SÓ BUSCAVAM EM `financial_entries` (LANÇAMENTOS/OCs) — CHEQUES QUE EXISTEM SÓ NO CONTROLE DE CHEQUES (`financial_cheques`), SEM LANÇAMENTO DE DESPESA, NUNCA APARECIAM COMO CANDIDATOS. AGORA: (1) OS CHEQUES PENDENTES ENTRAM NA BUSCA DOS 2 DIÁLOGOS, (2) CADA CANDIDATO (LANÇAMENTO **E** CHEQUE) MOSTRA O Nº DO CHEQUE/DOC P/ NÃO CONCILIAR O CHEQUE ERRADO QUANDO O VALOR REPETE, E (3) SELECIONAR UM CHEQUE SEM LANÇAMENTO + "CONCILIAR AGORA" CRIA A DESPESA (STATUS PAGO), CONCILIA A LINHA DO EXTRATO E BAIXA O CHEQUE — TUDO ATÔMICO. SCHEMA-NEUTRO · ZERO ALTER/DROP/DELETE.**
  *
  * Contexto: o piloto FC concilia muitos pagamentos por CHEQUE. Boa parte desses cheques é cadastrada no módulo

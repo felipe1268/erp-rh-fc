@@ -6685,7 +6685,7 @@ export const financialRouter = router({
         RETURNING id`,
       [ctx.user?.id ?? null, porNome, input.companyId]);
     const afetados = rows(upd).length;
-    await createAuditLog(db, {
+    await createAuditLog({
       userId: ctx.user?.id,
       action: "bank_statement_line_desconsiderar",
       details: `Desconsiderou ${afetados} linha(s) de extrato da conciliação (cheque devolvido): #${ids.join(", #")}`,
@@ -6712,7 +6712,7 @@ export const financialRouter = router({
         RETURNING id`,
       [input.companyId]);
     const afetados = rows(upd).length;
-    await createAuditLog(db, {
+    await createAuditLog({
       userId: ctx.user?.id,
       action: "bank_statement_line_reconsiderar",
       details: `Reconsiderou ${afetados} linha(s) de extrato na conciliação: #${ids.join(", #")}`,

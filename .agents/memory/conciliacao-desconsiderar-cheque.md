@@ -23,3 +23,16 @@ mesmo valor absoluto, e espelhar os predicados de `detectarParesEstorno`
 (`pareceCompensacaoCheque` no débito, `pareceDevolucaoCheque` no crédito) — esses são os
 mesmos predicados que fazem o par aparecer na UI, então não geram falso-negativo p/ par legítimo.
 Bloquear se algum já `conciliado=1`.
+
+## "Erro ao desconsiderar / Unexpected end of JSON input" = queda de transporte, NÃO erro de regra
+
+Esse toast vem do cliente tRPC tentando `Response.json()` sobre um corpo HTTP VAZIO — a
+requisição caiu no transporte (servidor reiniciando, conexão instável), não é erro de
+negócio (erros de regra voltam JSON com mensagem legível). A alteração pode até ter sido
+aplicada. As mutations `desconsiderarChequeDevolvido`/`reconsiderarChequeDevolvido` são
+IDEMPOTENTES (UPDATE guardado por `desconsiderado_em IS NULL`/`IS NOT NULL`), então o
+tratamento certo no `onError` é: detectar a queda de transporte
+(json/failed to fetch/load failed/networkerror/aborted), RECARREGAR as superfícies de %
+(o estado real do servidor) e mostrar aviso PT "Conexão instável" em vez do erro técnico em
+inglês; erros de negócio seguem mostrando a mensagem real.
+**Why:** o usuário lia um erro críptico em inglês mesmo quando a ação possivelmente funcionou.

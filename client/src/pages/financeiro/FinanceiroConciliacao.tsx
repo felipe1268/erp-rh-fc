@@ -977,21 +977,40 @@ export default function FinanceiroConciliacao() {
   // Rev. 3742 — DESCONSIDERAR / RECONSIDERAR cheque devolvido do cálculo do %. NÃO apaga o
   // cheque: tira o par do percentual (cheque já pago por PIX/TED conciliado em OUTRA conta),
   // deixando o % chegar a 100%. Reversível. Repinta todas as superfícies de % (cards/meses).
+  const repintarConciliacao = () => {
+    refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true); refetchReport();
+    (utils as any).financial?.getConciliacaoResumoMensal?.invalidate?.();
+  };
+  // Rev. 3753 — estas mutations são IDEMPOTENTES (UPDATE guardado por desconsiderado_em).
+  // Quando a requisição cai por TRANSPORTE (servidor reiniciando/conexão instável), o fetch
+  // estoura "Unexpected end of JSON input" (corpo vazio) mesmo que a alteração TENHA sido
+  // aplicada. Nesse caso recarregamos os dados e mostramos um aviso claro em PT em vez do
+  // erro técnico em inglês.
+  const ehErroTransporte = (e: any) => {
+    const m = String(e?.message ?? "").toLowerCase();
+    return m.includes("json") || m.includes("failed to fetch") || m.includes("load failed") || m.includes("networkerror") || m.includes("aborted");
+  };
+  const onErroConciliacao = (acao: string, e: any) => {
+    if (ehErroTransporte(e)) {
+      repintarConciliacao();
+      toast({ title: "Conexão instável", description: `Não foi possível confirmar a resposta do servidor. Recarregamos os dados — confira se o cheque foi ${acao}. Se não, tente novamente.`, variant: "destructive" });
+    } else {
+      toast({ title: acao === "desconsiderado" ? "Erro ao desconsiderar" : "Erro ao reconsiderar", description: e?.message ?? String(e), variant: "destructive" });
+    }
+  };
   const desconsiderarChequeMut = (trpc as any).financial.desconsiderarChequeDevolvido.useMutation({
     onSuccess: (res: any) => {
       toast({ title: "Cheque desconsiderado da conciliação", description: `${formatInt(res?.afetados ?? 0)} linha(s) fora do cálculo do %.` });
-      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true); refetchReport();
-      (utils as any).financial?.getConciliacaoResumoMensal?.invalidate?.();
+      repintarConciliacao();
     },
-    onError: (e: any) => toast({ title: "Erro ao desconsiderar", description: e.message, variant: "destructive" }),
+    onError: (e: any) => onErroConciliacao("desconsiderado", e),
   });
   const reconsiderarChequeMut = (trpc as any).financial.reconsiderarChequeDevolvido.useMutation({
     onSuccess: (res: any) => {
       toast({ title: "Cheque reconsiderado", description: `${formatInt(res?.afetados ?? 0)} linha(s) de volta ao cálculo do %.` });
-      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(true); refetchReport();
-      (utils as any).financial?.getConciliacaoResumoMensal?.invalidate?.();
+      repintarConciliacao();
     },
-    onError: (e: any) => toast({ title: "Erro ao reconsiderar", description: e.message, variant: "destructive" }),
+    onError: (e: any) => onErroConciliacao("reconsiderado", e),
   });
 
   // Rev. 3175 — Importação em 2 fases com PROGRESSO REAL (0–100%): analisa (parse →
