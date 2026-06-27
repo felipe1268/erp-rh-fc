@@ -378,9 +378,10 @@ export type DRELinhaKey =
   | "despesasFixas"
   | "despesasVariaveis";
 
-// Predicado SQL de CADA linha detalhável do DRE. Pressupõe que a query exponha
-// os aliases `origem` = LOWER(COALESCE(origem_modulo,'')) e
-// `conta` = LOWER(COALESCE(conta_nome,'')) — exatamente como a CTE `e` faz.
+// Predicado SQL de CADA linha detalhável do DRE. Pressupõe que a query exponha:
+//   `origem`    = LOWER(COALESCE(origem_modulo,''))
+//   `conta`     = LOWER(COALESCE(conta_nome,''))
+//   `class_dre` = classificacao_dre resolvida via plano de contas (acct_class CTE)
 // FONTE ÚNICA: calcularDRE usa estes mesmos predicados nos seus FILTER(...).
 function dreLinhaPredicate(linha: DRELinhaKey): string {
   switch (linha) {
@@ -389,25 +390,50 @@ function dreLinhaPredicate(linha: DRELinhaKey): string {
     case "receitasFinanceiras":
       return `tipo='receita' AND (origem IN ('aplicacao_financeira','rendimento_financeiro') OR conta LIKE '%juros%' OR conta LIKE '%rendiment%')`;
     case "custosObra":
-      return `tipo='despesa' AND origem IN ${DRE_ORIGEM_OBRA}`;
+      // Captura via origem (módulos nativos) OU via classificacao_dre do plano de contas.
+      return `tipo='despesa' AND (origem IN ${DRE_ORIGEM_OBRA} OR class_dre='custo_obra')`;
     case "impostos":
       return `tipo='despesa' AND origem='guia_tributaria'`;
     case "despesasFinanceiras":
       return `tipo='despesa' AND (origem IN ${DRE_ORIGEM_FIN} OR conta LIKE '%juros%' OR conta LIKE '%tarifa banc%' OR conta LIKE '%iof%')`;
     case "despesasFixas":
-      return `tipo='despesa' AND natureza='fixo' AND origem NOT IN ${DRE_ORIGEM_OBRA} AND origem NOT IN ${DRE_ORIGEM_FIN} AND origem <> 'guia_tributaria' AND conta NOT LIKE '%juros%' AND conta NOT LIKE '%tarifa banc%' AND conta NOT LIKE '%iof%'`;
+      return `tipo='despesa' AND natureza='fixo' AND origem NOT IN ${DRE_ORIGEM_OBRA} AND origem NOT IN ${DRE_ORIGEM_FIN} AND origem <> 'guia_tributaria' AND conta NOT LIKE '%juros%' AND conta NOT LIKE '%tarifa banc%' AND conta NOT LIKE '%iof%' AND COALESCE(class_dre,'') <> 'custo_obra'`;
     case "despesasVariaveis":
-      return `tipo='despesa' AND COALESCE(natureza,'') <> 'fixo' AND origem NOT IN ${DRE_ORIGEM_OBRA} AND origem NOT IN ${DRE_ORIGEM_FIN} AND origem <> 'guia_tributaria' AND conta NOT LIKE '%juros%' AND conta NOT LIKE '%tarifa banc%' AND conta NOT LIKE '%iof%'`;
+      return `tipo='despesa' AND COALESCE(natureza,'') <> 'fixo' AND origem NOT IN ${DRE_ORIGEM_OBRA} AND origem NOT IN ${DRE_ORIGEM_FIN} AND origem <> 'guia_tributaria' AND conta NOT LIKE '%juros%' AND conta NOT LIKE '%tarifa banc%' AND conta NOT LIKE '%iof%' AND COALESCE(class_dre,'') <> 'custo_obra'`;
   }
 }
+
+// CTE que resolve classificacao_dre para cada conta no plano de contas, subindo
+// até 2 níveis na hierarquia (conta → pai → avô). Retorna apenas contas que
+// possuem classificação resolvida. Deve ser injetada como primeiro elemento do
+// WITH de qualquer query que use dreLinhaPredicate.
+const dreAcctClassCte = (companyParam: string) => `
+  acct_class AS (
+    SELECT id, classificacao_dre
+    FROM financial_accounts
+    WHERE company_id=${companyParam} AND classificacao_dre IS NOT NULL
+    UNION
+    SELECT fa.id, p.classificacao_dre
+    FROM financial_accounts fa
+    JOIN financial_accounts p ON fa.conta_pai_id=p.id AND p.company_id=${companyParam}
+    WHERE fa.company_id=${companyParam} AND fa.classificacao_dre IS NULL
+      AND p.classificacao_dre IS NOT NULL
+    UNION
+    SELECT fa.id, gp.classificacao_dre
+    FROM financial_accounts fa
+    JOIN financial_accounts p ON fa.conta_pai_id=p.id AND p.company_id=${companyParam}
+    JOIN financial_accounts gp ON p.conta_pai_id=gp.id AND gp.company_id=${companyParam}
+    WHERE fa.company_id=${companyParam} AND fa.classificacao_dre IS NULL
+      AND p.classificacao_dre IS NULL AND gp.classificacao_dre IS NOT NULL
+  )`;
 
 // DRE no padrão CPC (gerencial) calculada a partir dos lançamentos financeiros.
 // Classificação dos lançamentos (financial_entries, status != cancelado, tipo != transferencia):
 //  - Receita Bruta: tipo='receita' (exceto receitas financeiras).
-//  - Custos Diretos das Obras: despesa com origem de obra (cronograma_atividade/compras/compra_oc/almoxarifado_saida).
-//  - Despesas Fixas: demais despesas com `natureza='fixo'` (exceto obra/impostos/financeiras).
-//  - Despesas Variáveis: TODAS as demais despesas operacionais (natureza 'variavel', nula ou inesperada) —
-//    bucket RESIDUAL p/ não dropar silenciosamente lançamentos sem `natureza` (exceto obra/impostos/financeiras).
+//  - Custos Diretos das Obras: origem IN (cronograma_atividade/compras/compra_oc/almoxarifado_saida)
+//    OU classificacao_dre='custo_obra' no plano de contas (resolvida hierarquicamente via acct_class CTE).
+//  - Despesas Fixas: natureza='fixo', excl. obra/impostos/financeiras/custo_obra.
+//  - Despesas Variáveis: bucket RESIDUAL — demais despesas operacionais sem natureza='fixo', excl. custo_obra.
 //  - Receitas/Despesas Financeiras: marcadas por origem/conta (juros, tarifa, IOF, rendimento).
 //  - Impostos sobre o resultado: lançamentos `guia_tributaria` + obrigações em financial_tax_obligations.
 export async function calcularDRE(
@@ -419,17 +445,20 @@ export async function calcularDRE(
   const [mesIni, mesFim] = dreRange(periodo, tipoPeriodo);
 
   const res = await q(db!,
-    `WITH e AS (
-       SELECT tipo, natureza,
-              LOWER(COALESCE(origem_modulo,'')) AS origem,
-              LOWER(COALESCE(conta_nome,'')) AS conta,
-              COALESCE(valor_realizado, 0)::numeric AS v
-       FROM financial_entries
-       WHERE company_id=$1
-         AND status NOT IN ('cancelado','estornado')
-         AND tipo <> 'transferencia'
-         AND data_competencia IS NOT NULL
-         AND TO_CHAR(data_competencia,'YYYY-MM') BETWEEN $2 AND $3
+    `WITH ${dreAcctClassCte('$1')},
+     e AS (
+       SELECT fe.tipo, fe.natureza,
+              LOWER(COALESCE(fe.origem_modulo,'')) AS origem,
+              LOWER(COALESCE(fe.conta_nome,'')) AS conta,
+              COALESCE(fe.valor_realizado, 0)::numeric AS v,
+              ac.classificacao_dre AS class_dre
+       FROM financial_entries fe
+       LEFT JOIN acct_class ac ON ac.id = fe.conta_id
+       WHERE fe.company_id=$1
+         AND fe.status NOT IN ('cancelado','estornado')
+         AND fe.tipo <> 'transferencia'
+         AND fe.data_competencia IS NOT NULL
+         AND TO_CHAR(fe.data_competencia,'YYYY-MM') BETWEEN $2 AND $3
      )
      SELECT
        COALESCE(SUM(v) FILTER (WHERE ${dreLinhaPredicate("receitaBruta")}),0) AS receita_bruta,
@@ -525,22 +554,25 @@ export async function calcularDRELinhaDetalhe(
   const pred = dreLinhaPredicate(linha);
   const ITENS_LIMITE = 1000;
 
-  // CTE base: mesmas regras-mãe de calcularDRE + aliases origem/conta p/ o predicado.
+  // CTE base: mesmas regras-mãe de calcularDRE + aliases origem/conta/class_dre p/ o predicado.
   const baseCte = `
-    WITH e AS (
-      SELECT id, data_competencia, descricao, origem_descricao, obra_nome,
-             fornecedor_nome, cliente_nome, status,
-             COALESCE(NULLIF(conta_nome,''),'(Sem categoria)') AS conta_label,
-             LOWER(COALESCE(origem_modulo,'')) AS origem,
-             LOWER(COALESCE(conta_nome,'')) AS conta,
-             tipo, natureza,
-             COALESCE(valor_realizado, 0)::numeric AS v
-      FROM financial_entries
-      WHERE company_id=$1
-        AND status NOT IN ('cancelado','estornado')
-        AND tipo <> 'transferencia'
-        AND data_competencia IS NOT NULL
-        AND TO_CHAR(data_competencia,'YYYY-MM') BETWEEN $2 AND $3
+    WITH ${dreAcctClassCte('$1')},
+    e AS (
+      SELECT fe.id, fe.data_competencia, fe.descricao, fe.origem_descricao, fe.obra_nome,
+             fe.fornecedor_nome, fe.cliente_nome, fe.status,
+             COALESCE(NULLIF(fe.conta_nome,''),'(Sem categoria)') AS conta_label,
+             LOWER(COALESCE(fe.origem_modulo,'')) AS origem,
+             LOWER(COALESCE(fe.conta_nome,'')) AS conta,
+             fe.tipo, fe.natureza,
+             COALESCE(fe.valor_realizado, 0)::numeric AS v,
+             ac.classificacao_dre AS class_dre
+      FROM financial_entries fe
+      LEFT JOIN acct_class ac ON ac.id = fe.conta_id
+      WHERE fe.company_id=$1
+        AND fe.status NOT IN ('cancelado','estornado')
+        AND fe.tipo <> 'transferencia'
+        AND fe.data_competencia IS NOT NULL
+        AND TO_CHAR(fe.data_competencia,'YYYY-MM') BETWEEN $2 AND $3
     )`;
 
   const grpRes = await q(db!,
