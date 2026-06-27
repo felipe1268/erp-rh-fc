@@ -50,7 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3773** — **FINANCEIRO · CONTAS DUPLICADAS DE MATERIAIS ELIMINADAS: `id 56 · Materiais e Insumos` E `id 218 · Materiais para Obra` DESATIVADAS; LANÇAMENTOS MIGRADOS PARA `id 281 · MATERIAIS DE OBRA`. MAPA CANÔNICO ATUALIZADO. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3774** — **FINANCEIRO · `id 281` RENOMEADA PARA "Materiais para Obra": CONTA + LANÇAMENTOS + MAPA CANÔNICO. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3773** — **FINANCEIRO · CONTAS DUPLICADAS DE MATERIAIS ELIMINADAS: `id 56 · Materiais e Insumos` E `id 218 · Materiais para Obra` DESATIVADAS; LANÇAMENTOS MIGRADOS PARA `id 281`. MAPA CANÔNICO ATUALIZADO. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3772** — **FINANCEIRO · `id 265 · VALE ALIMENTAÇÃO - OBRA` → RENOMEADA PARA `VALE ALIMENTAÇÃO`: CONTA + LANÇAMENTOS + TODOS OS IMPORTADORES ATUALIZADOS. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
