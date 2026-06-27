@@ -7326,7 +7326,7 @@ export const financialRouter = router({
       seenEntry.add(p.entryId);
       return true;
     });
-    if (pares.length === 0) return { ok: true, conciliados: 0, total: input.pares.length };
+    if (pares.length === 0) return { ok: true, conciliados: 0, total: input.pares.length, conciliadosLineIds: [] as number[] };
     const params: unknown[] = [input.companyId, ctx.user?.id ?? null, ctx.user?.name ?? null];
     const valuesSql = pares
       .map((_, i) => `($${4 + i * 2}::int,$${5 + i * 2}::int)`)
@@ -7353,7 +7353,7 @@ export const financialRouter = router({
           FROM elig el
          WHERE l.id = el.line_id AND l.company_id = $1
            AND COALESCE(l.conciliado,0) = 0 AND l.excluido_em IS NULL
-        RETURNING l.entry_id AS entry_id
+        RETURNING l.id AS line_id, l.entry_id AS entry_id
       ),
       upd_e AS (
         UPDATE financial_entries fe
@@ -7366,11 +7366,22 @@ export const financialRouter = router({
          WHERE fe.id = el.entry_id AND fe.company_id = $1
            AND COALESCE(fe.conciliado,0) = 0 AND fe.status <> 'cancelado'
         RETURNING fe.id AS entry_id
+      ),
+      -- Rev. 3751 — só conta/retorna os pares em que AMBOS os lados foram efetivamente
+      -- gravados (linha conciliada E lançamento baixado). Retornar o array das LINHAS
+      -- realmente conciliadas (não só a contagem) deixa o frontend esconder APENAS o que
+      -- persistiu: pares pulados (lançamento já conciliado/indisponível p/ ex. cache de
+      -- sugestão defasado) continuam visíveis em vez de "sumir e voltar no reload".
+      ok AS (
+        SELECT ul.line_id FROM upd_l ul JOIN upd_e ue ON ue.entry_id = ul.entry_id
       )
-      SELECT (SELECT count(*)::int FROM upd_l ul JOIN upd_e ue ON ue.entry_id = ul.entry_id) AS conciliados`;
-    const r = await db.$client.query<{ conciliados: number }>(sqlText, params);
-    const conciliados = Number(r.rows?.[0]?.conciliados ?? 0);
-    return { ok: true, conciliados, total: input.pares.length };
+      SELECT (SELECT count(*)::int FROM ok) AS conciliados,
+             COALESCE((SELECT array_agg(line_id) FROM ok), ARRAY[]::int[]) AS "conciliadosLineIds"`;
+    const r = await db.$client.query<{ conciliados: number; conciliadosLineIds: number[] }>(sqlText, params);
+    const row = r.rows?.[0];
+    const conciliados = Number(row?.conciliados ?? 0);
+    const conciliadosLineIds = (row?.conciliadosLineIds ?? []).map(Number);
+    return { ok: true, conciliados, total: input.pares.length, conciliadosLineIds };
   }),
 
   // Rev. 3169 — CONSOLIDAR O MÊS: marca TODAS as linhas do extrato da conta+período

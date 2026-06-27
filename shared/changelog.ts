@@ -1,6 +1,47 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3751 — **CONCILIAÇÃO BANCÁRIA · "JÁ CONCILIEI O CHEQUE E AO RECARREGAR A PÁGINA ELE VOLTA": A LINHA DE CHEQUE SUMIA DA LISTA AO CLICAR EM "CONCILIAR SELECIONADAS" MAS REAPARECIA NO RELOAD (EX.: CHEQUE COMPENSADO DOC 001052, −R$ 1.500,00, HELIO BASSANELI/BRAVO LOCAÇÕES, EMPRESA 60002, CONTA 2). CAUSA: SUCESSO-FALSO NO FRONTEND — O `onSuccess` ESCONDIA TODAS AS LINHAS SELECIONADAS INDEPENDENTE DE QUANTAS O BACKEND REALMENTE GRAVOU. AGORA O BACKEND RETORNA AS LINHAS EFETIVAMENTE CONCILIADAS E O FRONTEND ESCONDE SÓ ESSAS + AVISA + REANALISA AS QUE FALHARAM. 100% BUGFIX · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Sintoma: na Conciliação Bancária (empresa 60002, conta 2), o usuário seleciona a sugestão do "CHEQUE COMPENSADO ·
+ * Doc 001052" (−R$ 1.500,00) pareada com um lançamento "Bravo Locações" e clica em "Conciliar selecionadas". A linha
+ * some da lista (parecendo conciliada), mas ao RECARREGAR a página ela VOLTA para a lista de pendentes.
+ *
+ * Diagnóstico (consulta direta ao Neon): a linha do extrato Doc 001052 foi re-importada (ids antigos 1443/1444
+ * soft-deletados em 18/06; atuais 12893=COMPENSADO −1500 e 12894=DEVOLVIDO +1500, importados 24/06, ambos
+ * `conciliado=0`, `entry_id=NULL`). NÃO há re-import a cada load — o report (`getConciliacao`/`pendRes`) é SOMENTE
+ * LEITURA, sem nenhum write que reverta `conciliado`. Os lançamentos "Bravo Locações" elegíveis (868517 conta 2;
+ * 867440 conta 4) seguem `a_pagar`/`conciliado=0`/`data_conciliacao=NULL` — ou seja, a conciliação NUNCA chegou a
+ * gravar. Testando o CTE de `conciliarSugestoes` em ROLLBACK: o par {12893, 868517} retorna `conciliados=1` (ambos
+ * os lados elegíveis), provando que QUANDO o par é válido a gravação funciona. Logo, a conciliação real devolveu 0
+ * para esta linha (par pulado) — mas a UI escondeu a linha mesmo assim.
+ *
+ * Causa-raiz (2 camadas):
+ * 1) FRONTEND (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`, `conciliarSugMut.onSuccess`): adicionava
+ *    TODOS os `variables.pares` (statementLineIds) ao set `conciliadosIds` — que filtra a lista via
+ *    `!conciliadosIds.has(s.statementLineId)` — INDEPENDENTE de `res.conciliados`. Então, quando o backend pulava um
+ *    par (sucesso parcial/zero), a linha sumia otimisticamente e só "voltava" no reload (quando a sugestão é
+ *    recomputada do banco). O toast já dizia "{conciliados} de {total}", mas a linha desaparecia de qualquer forma.
+ * 2) BACKEND (`server/routers/financial.ts`, `conciliarSugestoes`): o motor é SET-BASED (CTE, Rev. 3749) e exige
+ *    AMBOS os lados elegíveis (linha `conciliado=0`/não-excluída + lançamento `conciliado=0`/`status<>'cancelado'`).
+ *    Pares cujo lançamento já está conciliado/cancelado/indisponível (ex.: sugestão DEFASADA em cache do React Query
+ *    apontando p/ um lançamento que outra linha já consumiu — agravado pela ambiguidade do greedy quando há mais de
+ *    uma linha de mesmo valor disputando o único lançamento elegível da conta) são CORRETAMENTE pulados, mas o
+ *    endpoint só devolvia a CONTAGEM (`conciliados`), sem dizer QUAIS linhas persistiram — o frontend não tinha como
+ *    distinguir o que gravou do que falhou.
+ *
+ * Fix (zero schema; conciliação SEGUE SÓ SUGESTIVA — regra do piloto FC mantida):
+ * 1) BACKEND: o CTE agora tem um `RETURNING l.id AS line_id` em `upd_l` e um CTE final `ok` (JOIN upd_l⋈upd_e por
+ *    entry_id = pares em que AMBOS os lados gravaram). O endpoint retorna, além de `conciliados` (contagem) e `total`,
+ *    o array `conciliadosLineIds` com as LINHAS efetivamente conciliadas.
+ * 2) FRONTEND: `onSuccess` esconde APENAS as linhas em `res.conciliadosLineIds` (fallback: comportamento antigo se o
+ *    campo vier ausente). As linhas selecionadas que NÃO persistiram continuam visíveis; o usuário recebe um toast
+ *    destrutivo "{N} não puderam ser conciliadas (o lançamento já estava conciliado ou indisponível). Atualizei a
+ *    lista — confira e tente novamente." e a lista é REANALISADA (`refetchSug`), re-pareando as falhas com um
+ *    lançamento elegível para que a próxima tentativa efetivamente concilie.
+ * Validação: `tsc --noEmit` limpo nos 2 arquivos; CTE re-testado em ROLLBACK no Neon — {12893, 868517} →
+ * `{conciliados:1, conciliadosLineIds:[12893]}`; {12893, 6080 (cancelado)} → `{conciliados:0, conciliadosLineIds:[]}`.
+ *
  * Rev. 3750 — **CONCILIAÇÃO BANCÁRIA · "VINCULAR CHEQUE DEVOLVIDO A PIX/TED" (Rev. 3747): CHEQUE COM VÍNCULO ATIVO (RE-VINCULAR DAVA "ESTA LINHA DO EXTRATO JÁ ESTÁ VINCULADA A ESTE CHEQUE") MOSTRAVA O CABEÇALHO "VINCULADO R$ 0,00" / SALDO CHEIO E A SEÇÃO "VÍNCULOS REGISTRADOS" SUMIA. EX.: CHEQUE DOC 1063, PIER BRASIL, R$ 4.344,60 (VÍNCULO REAL R$ 3.212,92). CAUSA: A COBERTURA ERA ANCORADA NO `debito_line_id` (id VOLÁTIL de `bank_statement_lines`); RE-IMPORTS DE EXTRATO CRIAM LINHAS NOVAS E EXCLUEM AS ANTIGAS, ÓRFÃO DO VÍNCULO. AGORA A COBERTURA CASA POR IDENTIDADE DO CHEQUE (doc/nº + valor). 100% BUGFIX · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Sintoma: na Conciliação Bancária (empresa 60002), o diálogo "Vincular cheque devolvido a PIX/TED" do Cheque

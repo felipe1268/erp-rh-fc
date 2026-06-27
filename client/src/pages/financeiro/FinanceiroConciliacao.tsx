@@ -2013,14 +2013,33 @@ export default function FinanceiroConciliacao() {
 
   const conciliarSugMut = (trpc as any).financial.conciliarSugestoes.useMutation({
     onSuccess: (res: any, variables: any) => {
-      toast({ title: `${formatInt(res.conciliados)} de ${formatInt(res.total)} conciliados e baixados!` });
-      // Rev. 3411 — remove localmente os itens conciliados SEM re-rodar a análise completa.
-      // O usuário usa "Reanalisar" quando quiser uma nova análise do que sobrou.
-      const reconciliados = new Set<number>((variables?.pares ?? []).map((p: any) => Number(p.statementLineId)));
-      setConciliadosIds(prev => new Set([...prev, ...reconciliados]));
+      // Rev. 3751 — esconder APENAS as linhas que o backend confirmou ter conciliado
+      // (res.conciliadosLineIds), NUNCA todas as selecionadas. Antes, qualquer par pulado
+      // pelo backend (lançamento já conciliado/indisponível, ex.: sugestão defasada em cache)
+      // sumia da tela mesmo sem gravar e "voltava ao recarregar". Agora os pares que falharam
+      // ficam visíveis, o usuário é avisado e a lista é REANALISADA (re-pareia com lançamento
+      // elegível) para que a próxima tentativa efetivamente concilie.
+      const selecionadas = (variables?.pares ?? []).map((p: any) => Number(p.statementLineId));
+      const persistidas = new Set<number>(
+        Array.isArray(res?.conciliadosLineIds)
+          ? res.conciliadosLineIds.map((x: any) => Number(x))
+          : selecionadas, // fallback compat. (backend antigo): mantém comportamento prévio
+      );
+      const naoPersistidas = selecionadas.filter((id: number) => !persistidas.has(id));
+      setConciliadosIds(prev => new Set([...prev, ...persistidas]));
       setSelSug(new Set());
       setConfirmConciliar(false);
-      setOverrideSug(prev => { const n = { ...prev }; reconciliados.forEach(id => delete n[id]); return n; });
+      setOverrideSug(prev => { const n = { ...prev }; persistidas.forEach(id => delete n[id]); return n; });
+      if (naoPersistidas.length > 0) {
+        toast({
+          title: `${formatInt(res.conciliados)} de ${formatInt(res.total)} conciliados`,
+          description: `${formatInt(naoPersistidas.length)} não puderam ser conciliadas (o lançamento já estava conciliado ou indisponível). Atualizei a lista — confira e tente novamente.`,
+          variant: "destructive",
+        });
+        refetchSug(); // re-analisa para re-parear as que falharam com um lançamento elegível
+      } else {
+        toast({ title: `${formatInt(res.conciliados)} de ${formatInt(res.total)} conciliados e baixados!` });
+      }
       refetchSt();
       refetchStAno();
       refetchAccStatus();
