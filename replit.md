@@ -50,41 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3794** — **FINANCEIRO · DRE · AUDITORIA COMPLETA DE CLASSIFICAÇÃO: PREDICADOS dreLinhaPredicate ATUALIZADOS PARA RESPEITAR class_dre DO PLANO DE CONTAS (despesasFixas: natureza='fixo' OR class_dre='despesa_fixa'; despesasVariaveis EXCLUI class_dre IN ('despesa_fixa','despesa_financeira'); despesasFinanceiras ADICIONA OR class_dre='despesa_financeira'). 20 CONTAS RECLASSIFICADAS: custo_obra→{12 grupos de Obra — Fretes, Uniformes, EPIs, Aluguel, Alojamento, Viagens, Utilidades, Alimentação, Mobilização, Manutenção Equipamentos, Infraestrutura, Vale Transporte-Obra}; despesa_fixa→{Salários ADM, Honorários, Honorários Jurídicos, Materiais Consumo ADM, Seguro Veículos, Seguros Empresariais}; despesa_financeira→{Dívidas Bancárias, Limite/Ch.Especial, Investimentos Financeiros, Mútuos Intercompany}. IMPACTO JAN/2026: Despesas Variáveis R$1.094.438→R$63.027 (-94%); Despesas Fixas R$0→R$88.647; CDO R$1.155.441→R$1.362.829. DADOS: UPDATE EM financial_accounts · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3793** — **FINANCEIRO · DRE · DRILL-DOWN DE CATEGORIA: CADA CATEGORIA NO DIALOG DE DETALHAMENTO DO DRE PASSA A SER CLICÁVEL — ABRE VISTA FULLSCREEN COM OS LANÇAMENTOS INDIVIDUAIS DAQUELA CATEGORIA (DATA, DESCRIÇÃO, CONTRAPARTE, OBRA, VALOR). BOTÃO "VOLTAR" RETORNA À LISTA. ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3792** — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · CARD "CHEQUES DEVOLVIDOS" · CORREÇÃO DEFINITIVA: DOC 655 E DOC 1077 APARECIAM COMO "PENDENTES" MESMO COM PIX/TED VINCULADO. CAUSA: 2 PARES DE DEVOLUÇÃO NO EXTRATO (MOT 11 + MOT 22); PIX JÁ CONCILIADO SAIA DE extratoSemLancamento → RESOLVER AUTOMÁTICO NÃO ACHAVA. BACKEND AGORA PRÉ-CARREGA bank_cheque_vinculos E CLASSIFICA resolucao.tipo="vinculado" PARA PARES COBERTOS POR IDENTIDADE (doc+valor). BACKEND READ-ONLY · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3789** — **FINANCEIRO · DRE · CORREÇÃO CRÍTICA: DRE PASSA A REFLETIR SOMENTE REALIZADOS. ANTES USAVA COALESCE(realizado,previsto) — INCLUÍA CONTAS A PAGAR, INFLANDO DESPESAS VARIÁVEIS DE JAN/2026 DE R$2,2M PARA R$4,1M. FIX: REMOVER FALLBACK EM calcularDRE + calcularDRELinhaDetalhe. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3788** — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · BOTÃO "CONFERIR CHEQUES" REMOVIDO DO CABEÇALHO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3787** — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · CARD "CHEQUES DEVOLVIDOS": PADRÃO ALTERADO PARA "OCULTAR RESOLVIDOS" — AO ABRIR JÁ MOSTRA SÓ OS PENDENTES. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3786** — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · CARD "CHEQUES DEVOLVIDOS": CHEQUES COM VÍNCULO REGISTRADO (quitado=true) MAS resolucao.tipo="pendente" NA AUTO-DETECÇÃO AGORA MOSTRAM "✓ QUITADO POR SUBSTITUIÇÃO" EM VEZ DE "SEM QUITAÇÃO". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3785** — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · DADOS: CHEQUE DOC 655 FERRAGENS SANTA RITA R$9.715 VOLTAVA COMO "SEM QUITAÇÃO": VÍNCULO CORRETO (id=4 → debito 12926) RESTAURADO; DUPLICADO INCORRETO (id=14 → debito 12914 SUPERSEDIDO) ESTORNADO. APENAS UPDATE EM bank_cheque_vinculos. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3784** — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · BOTÃO "PLANILHA CONTADOR" REMOVIDO DO CABEÇALHO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3783** — **FINANCEIRO · AUDITORIA COMPLETA CATEGORIAS/CC/PLANO: FOLHA DE PAGAMENTO→CC-0005+FIXO; MEDIÇÃO PJ→CC-0002+3.1.3; PRÓ-LABORE DUPLICATA INATIVADA (1 LANÇAMENTO MIGRADO); BLOQUEIO JUDICIAL PLANO 10→10.1; 0 CATEGORIAS ATIVAS SEM CC OU PLANO. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3782** — **FINANCEIRO · PLANO DE CONTAS: "FOLHA DE PAGAMENTO" VINCULADA A "4.7.1 · SALÁRIOS, HORAS EXTRAS E RESCISÕES — ADMINISTRATIVO". ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3780** — **FINANCEIRO · LANÇAMENTO DUPLICADO REMOVIDO: PIX LACCA R$118.057,70 DE 08/01/2026 (id 885394) ESTAVA DUPLICADO DO id 885382; VÍNCULO DO EXTRATO (id 12570) MOVIDO PARA O ORIGINAL ANTES DA EXCLUSÃO. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3777** — **FINANCEIRO · 13 LANÇAMENTOS DO ROSENDO NUNES ROSA MOVIDOS DE `ALUGUEL - OBRA` → `FRETES - OBRA`. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3776** — **FINANCEIRO · `id 488 · RENDIMENTO FINANCEIRO` DESATIVADA; LANÇAMENTO MIGRADO PARA `id 489 · JUROS E RENDIMENTOS RECEBIDOS`; ALIAS NO MAPA CANÔNICO. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3775** — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · CORREÇÃO DE DADOS: 2 VÍNCULOS "CHEQUE DEVOLVIDO ↔ PIX/TED" (DOC 655 · R$9.715 E DOC 1077 · R$7.278,45) ESTAVAM APONTANDO PARA A 1ª COMPENSAÇÃO; MOVIDOS PARA A 2ª COMPENSAÇÃO (MAIS RECENTE, VISÍVEL NA CONCILIAÇÃO). CABEÇALHO DO DIÁLOGO PASSA A MOSTRAR O VALOR CORRETO E O ERRO "JÁ VINCULADA" SOME. MENSAGEM DE ERRO APRIMORADA COM CONTA BANCÁRIA + DATA. APENAS UPDATE EM bank_cheque_vinculos. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3774** — **FINANCEIRO · `id 281` RENOMEADA PARA "Materiais para Obra": CONTA + LANÇAMENTOS + MAPA CANÔNICO. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3773** — **FINANCEIRO · CONTAS DUPLICADAS DE MATERIAIS ELIMINADAS: `id 56 · Materiais e Insumos` E `id 218 · Materiais para Obra` DESATIVADAS; LANÇAMENTOS MIGRADOS PARA `id 281`. MAPA CANÔNICO ATUALIZADO. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3769** — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · O DIÁLOGO "VINCULAR CHEQUE DEVOLVIDO A PIX/TED" VOLTA A MOSTRAR O VALOR JÁ VINCULADO NO CABEÇALHO ("VINCULADO R$ X / SALDO R$ Y") MESMO QUANDO O RELATÓRIO ACABOU DE SER RECARREGADO OU AINDA ESTÁ NO 1º LOAD. ANTES, NESSES MOMENTOS, O CABEÇALHO LIA "VINCULADO R$ 0,00" APESAR DE HAVER VÍNCULO ATIVO — E REVINCULAR O MESMO PIX DAVA "ESTA LINHA JÁ ESTÁ VINCULADA A ESTE CHEQUE". FRONTEND READ-ONLY · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Caso (Doc 1063 · PIER BRASIL · R$ 4.344,60 · vínculo parcial R$ 3.212,92): o backend (cobertura fresca `_coberturaChequeDevolvido`, usada pelo registrar) ACHAVA o vínculo (daí o "já vinculada"), mas o cabeçalho lia o `vincMap` do LOTE, que zera `data` no 1º load e a cada refetch do report (`refreshAposVinculo` → `refetchReport` → `repDevol`/`vincItens` mudam → lote refetcha). Com `vincMap={}`, cabeçalho e selo "Parcial" da linha caíam a R$ 0,00. Fix (`FinanceiroConciliacao.tsx`): (1) `placeholderData:(prev)=>prev` no lote → mantém o mapa durante refetch (conserta o selo da linha); (2) nova `useQuery` DEDICADA chaveada SÓ pelo cheque aberto (`vincDlgItens`, mesmo endpoint, identidade doc/nº+valor) → `vincDlgInfo` vira fonte AUTORITATIVA do cabeçalho (`info = vincDlgInfo ?? vincMap[debId]`). Cabeçalho passa a espelhar o registrar. Regra de ouro preservada (read-only). Detalhe: `shared/changelog.ts`.
-
 ### 5 one-liners
+
+- **Rev. 3792** — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · CARD "CHEQUES DEVOLVIDOS" · CORREÇÃO DEFINITIVA: DOC 655 E DOC 1077 "PENDENTES" MESMO COM PIX/TED VINCULADO. BACKEND PRÉ-CARREGA bank_cheque_vinculos E CLASSIFICA resolucao.tipo="vinculado" POR IDENTIDADE. BACKEND READ-ONLY · ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3791** — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · PAINEL DE SELEÇÃO DE CONTA GANHA DOIS BOTÕES DISTINTOS: "LIMPAR ESTA CONTA" E "LIMPAR TODAS AS CONTAS". 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -93,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3789** — **FINANCEIRO · DRE · CORREÇÃO CRÍTICA: DRE PASSA A REFLETIR SOMENTE REALIZADOS. ANTES USAVA COALESCE(realizado,previsto) — INFLAVA DESPESAS VARIÁVEIS DE JAN/2026 DE R$2,2M PARA R$4,1M. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3788** — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · BOTÃO "CONFERIR CHEQUES" REMOVIDO DO CABEÇALHO. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3787** — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · CARD "CHEQUES DEVOLVIDOS": PADRÃO ALTERADO PARA "OCULTAR RESOLVIDOS" — AO ABRIR JÁ MOSTRA SÓ OS PENDENTES. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 ### Histórico completo
 

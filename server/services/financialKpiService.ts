@@ -395,11 +395,14 @@ function dreLinhaPredicate(linha: DRELinhaKey): string {
     case "impostos":
       return `tipo='despesa' AND origem='guia_tributaria'`;
     case "despesasFinanceiras":
-      return `tipo='despesa' AND (origem IN ${DRE_ORIGEM_FIN} OR conta LIKE '%juros%' OR conta LIKE '%tarifa banc%' OR conta LIKE '%iof%')`;
+      // Captura por origem/conta (juros, tarifa, IOF) OU por class_dre='despesa_financeira' no plano.
+      return `tipo='despesa' AND (origem IN ${DRE_ORIGEM_FIN} OR conta LIKE '%juros%' OR conta LIKE '%tarifa banc%' OR conta LIKE '%iof%' OR class_dre='despesa_financeira')`;
     case "despesasFixas":
-      return `tipo='despesa' AND natureza='fixo' AND origem NOT IN ${DRE_ORIGEM_OBRA} AND origem NOT IN ${DRE_ORIGEM_FIN} AND origem <> 'guia_tributaria' AND conta NOT LIKE '%juros%' AND conta NOT LIKE '%tarifa banc%' AND conta NOT LIKE '%iof%' AND COALESCE(class_dre,'') <> 'custo_obra'`;
+      // natureza='fixo' nas entradas OU class_dre='despesa_fixa' no plano (override); exclui custo_obra e financeiras.
+      return `tipo='despesa' AND (natureza='fixo' OR class_dre='despesa_fixa') AND COALESCE(class_dre,'') NOT IN ('custo_obra','despesa_financeira') AND origem NOT IN ${DRE_ORIGEM_OBRA} AND origem NOT IN ${DRE_ORIGEM_FIN} AND origem <> 'guia_tributaria' AND conta NOT LIKE '%juros%' AND conta NOT LIKE '%tarifa banc%' AND conta NOT LIKE '%iof%'`;
     case "despesasVariaveis":
-      return `tipo='despesa' AND COALESCE(natureza,'') <> 'fixo' AND origem NOT IN ${DRE_ORIGEM_OBRA} AND origem NOT IN ${DRE_ORIGEM_FIN} AND origem <> 'guia_tributaria' AND conta NOT LIKE '%juros%' AND conta NOT LIKE '%tarifa banc%' AND conta NOT LIKE '%iof%' AND COALESCE(class_dre,'') <> 'custo_obra'`;
+      // Bucket residual: tudo que não é fixo, não é custo_obra, não é financeira, não é fixo pelo plano.
+      return `tipo='despesa' AND COALESCE(natureza,'') <> 'fixo' AND COALESCE(class_dre,'') NOT IN ('custo_obra','despesa_fixa','despesa_financeira') AND origem NOT IN ${DRE_ORIGEM_OBRA} AND origem NOT IN ${DRE_ORIGEM_FIN} AND origem <> 'guia_tributaria' AND conta NOT LIKE '%juros%' AND conta NOT LIKE '%tarifa banc%' AND conta NOT LIKE '%iof%'`;
   }
 }
 
