@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3755 — **DASHBOARD · CONCILIAÇÃO BANCÁRIA · NOVO FILTRO "MÊS A MÊS": SELETOR DE PERÍODO WHITE-CARD (PADRÃO PERÍODO DO DashNotasFiscais) COM CHIPS "TUDO" + JAN…DEZ E DOT VERDE/CINZA "COM DADOS / SEM DADOS". SELECIONAR UM MÊS ESCOPA TODO O DASHBOARD (KPIs, RANKINGS, ANÁLISE POR CATEGORIA, POR OBRA, STATUS POR CONTA E DIÁLOGOS) PARA AQUELE MÊS; "TUDO" MANTÉM O ANO INTEIRO. OS GRÁFICOS MENSAIS (ENTRADAS×SAÍDAS, %CONCILIADO, SALDO ACUMULADO, COMPARATIVO ANO×ANO) SEGUEM YEAR-WIDE POR DESIGN. FEATURE · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Regra de ouro do usuário respeitada: seletor de período = WHITE-CARD (padrão PanoramaFiscal/DashNotasFiscais), o
+ * DashHeader gradiente segue só p/ o ANO. O subtítulo do header agora mostra `periodoLabel` (ex.: "Jun/2026" ou "2026").
+ *
+ * Mudanças:
+ * 1) BACKEND (`server/routers/financial.ts`, `getConciliacaoDashExtra`):
+ *    - Input ganhou `mes: z.number().int().min(0).max(12).optional()` (0/undefined = ano todo; 1-12 escopa o mês);
+ *      `companyId`/`ano` endurecidos p/ `.int()`.
+ *    - `yr`/`cid`/`mo` derivados via `Number(...)` (inteiros validados) + helper local `periodo(expr)` que monta
+ *      `EXTRACT(YEAR FROM <expr>)=<yr>` e, quando `mo>0`, adiciona `AND EXTRACT(MONTH FROM <expr>)=<mo>`.
+ *    - As 5 queries month-scoped (top fornecedores, top categorias despesa, top categorias receita, top obras, extremos
+ *      do extrato) foram INLINE-ADAS (`company_id=${cid}` + `${periodo(...)}`, params `[]`). A query 6 (`porContaMes`,
+ *      distribuição mensal por conta) foi mantida YEAR-WIDE (inline `cid`+`yr`, sem mês) por não ser consumida no dash.
+ *    - **Bônus (bug latente Rev. 3714)**: como `dbExecute` (financial.ts) liga parâmetros por ORDEM DE APARIÇÃO do
+ *      placeholder (split `/\$\d+/g`, ignorando o número do `$N`), as queries com UNION repetiam `$1/$2` na 2ª metade e
+ *      a segunda ocorrência recebia `undefined` → vinha como NULL silencioso. Ao inlinear `cid`/`yr`/`mo` (todos
+ *      inteiros validados, inlining seguro — sem string do usuário), esse caminho deixa de depender do binding posicional
+ *      e o fallback do UNION (descrição do extrato) volta a filtrar corretamente.
+ * 2) FRONTEND (`client/src/pages/financeiro/dashboards/DashConciliacao.tsx`):
+ *    - `const [mes, setMes] = useState(0)`; `pad2`; `dataInicio`/`dataFim` derivados (mês → 1º ao último dia via
+ *      `new Date(ano, mes, 0).getDate()`; ano todo → 01-01..12-31); `periodoLabel`. As queries que já filtram por
+ *      `dataInicio/dataFim` (`getBankAccountsConciliacaoStatus`, `getConciliacaoLancamentos`) passam a escopar por mês
+ *      sem alteração de assinatura; `getConciliacaoDashExtra` recebe `{ano, mes}`.
+ *    - Memo `mesesComDados` = Set dos meses com `valorTotal > 0` derivado do RESUMO MENSAL year-wide
+ *      (`getConciliacaoResumoMensal`), usado p/ pintar o dot verde/cinza de cada chip.
+ *    - White-card "PERÍODO" inserido entre o DashHeader e a 1ª seção (grid `grid-cols-7 sm:grid-cols-13`, chip "Tudo"
+ *      → `setMes(0)` + 12 meses; selecionado = violet-500; legenda Com dados/Sem dados).
+ *    - Subtítulos: blocos e diálogos month-scoped (rankings, categorias, obras, status por conta, lançamentos) trocados
+ *      p/ `${periodoLabel}`; os charts mensais comparativos mantêm `${ano}` (year-wide). Os prefixos "Ano ${ano}" dos
+ *      diálogos viraram "${periodoLabel}" p/ não ler "Ano Jun/2026" ao escolher um mês.
+ * Validação: `tsc --noEmit` limpo + parse esbuild fresh do arquivo do dashboard; app sobe (HTTP 200). Code review
+ * (architect): PASS. Regra mantida: conciliação SÓ SUGESTIVA (este é um dashboard de leitura, nada concilia/baixa aqui).
+ *
  * Rev. 3754 — **AUDIT LOG · CORREÇÃO DO MESMO BUG LATENTE DO Rev. 3753 NOS DEMAIS CALL-SITES: 11 CHAMADAS DE `createAuditLog(db, {...})` (DOIS ARGUMENTOS) ESPALHADAS EM `financial.ts` (7) E `heSolicitacoes.ts` (4) PASSAVAM O OBJETO `db` COMO `data`, DESCARTANDO O PAYLOAD REAL E ENGOLINDO O INSERT NO try/catch → O LOG DE AUDITORIA NUNCA ERA GRAVADO. PADRONIZADAS P/ `createAuditLog({...})` (1 ARG). 100% BUGFIX · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Continuação do Rev. 3753 (que corrigiu só os 2 sites de desconsiderar/reconsiderar cheque). A assinatura real é

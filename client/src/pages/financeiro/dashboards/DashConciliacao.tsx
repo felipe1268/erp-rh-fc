@@ -114,10 +114,13 @@ export default function DashConciliacao() {
   const { companyId } = useCompany();
   const [, setLocation] = useLocation();
   const [ano, setAno] = useState(new Date().getFullYear());
+  const [mes, setMes] = useState(0); // 0 = ano todo; 1-12 = mês específico
   const ir = () => setLocation(DESTINO);
 
-  const dataInicio = `${ano}-01-01`;
-  const dataFim = `${ano}-12-31`;
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  const dataInicio = mes === 0 ? `${ano}-01-01` : `${ano}-${pad2(mes)}-01`;
+  const dataFim = mes === 0 ? `${ano}-12-31` : `${ano}-${pad2(mes)}-${pad2(new Date(ano, mes, 0).getDate())}`;
+  const periodoLabel = mes === 0 ? `${ano}` : `${MESES[mes - 1]}/${ano}`;
 
   const { data: contas, refetch: r1 } = (trpc as any).financial.getBankAccounts.useQuery(
     { companyId }, { enabled: !!companyId }
@@ -132,7 +135,7 @@ export default function DashConciliacao() {
     { companyId, ano: ano - 1 }, { enabled: !!companyId }
   );
   const { data: extra, refetch: r4 } = (trpc as any).financial.getConciliacaoDashExtra.useQuery(
-    { companyId, ano }, { enabled: !!companyId }
+    { companyId, ano, mes }, { enabled: !!companyId }
   );
 
   const refetch = () => { r1(); r2(); r3(); r4(); };
@@ -314,6 +317,16 @@ export default function DashConciliacao() {
   const mensalArr = Array.isArray(mensal) ? mensal : [];
   const mensalPrevArr = Array.isArray(mensalPrev) ? mensalPrev : [];
 
+  // Dots "Com dados / Sem dados" do seletor de mês — derivados do resumo mensal (ano inteiro).
+  const mesesComDados = useMemo(() => {
+    const s = new Set<number>();
+    for (const m of mensalArr) {
+      const i = Number(m.mes);
+      if (i >= 1 && i <= 12 && (Number(m.valorTotal) || 0) > 0) s.add(i);
+    }
+    return s;
+  }, [mensalArr]);
+
   const serieAtual = useMemo(() => {
     const a = new Array(12).fill(0);
     for (const m of mensalArr) { const i = Number(m.mes); if (i >= 1 && i <= 12) a[i - 1] = (Number(m.valorEntradas) || 0) - (Number(m.valorSaidas) || 0); }
@@ -421,8 +434,47 @@ export default function DashConciliacao() {
       <div className="max-w-[1600px] mx-auto p-4 md:p-6 space-y-6">
         <DashHeader
           theme="blue" icon={ArrowLeftRight} title="Dashboard · Conciliação Bancária"
-          subtitle={`Valor movimentado no extrato × conciliado · ${ano}`} ano={ano} onAno={setAno} onRefresh={refetch}
+          subtitle={`Valor movimentado no extrato × conciliado · ${periodoLabel}`} ano={ano} onAno={setAno} onRefresh={refetch}
         />
+
+        {/* ── Seletor de período (mês) — white-card padrão PERÍODO (igual DashNotasFiscais) ── */}
+        <div className="rounded-2xl border border-slate-200 shadow-sm bg-white overflow-hidden">
+          <div className="px-4 pt-3 pb-1 flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Período</span>
+            <div className="flex items-center gap-3 text-xs text-gray-400">
+              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />Com dados</span>
+              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-gray-300 inline-block" />Sem dados</span>
+            </div>
+          </div>
+          <div className="px-4 py-3 grid grid-cols-7 sm:grid-cols-13 gap-1.5">
+            <button type="button"
+              onClick={() => setMes(0)}
+              className={`relative flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all
+                ${mes === 0
+                  ? "border-violet-500 bg-violet-50 text-violet-700 shadow-sm"
+                  : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50"}`}
+            >
+              <span>Tudo</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-transparent" />
+            </button>
+            {MESES.map((m, i) => {
+              const numMes = i + 1;
+              const isSelected = mes === numMes;
+              const dotColor = mesesComDados.has(numMes) ? "bg-emerald-500" : "bg-gray-300";
+              return (
+                <button key={m} type="button" onClick={() => setMes(numMes)}
+                  className={`relative flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all
+                    ${isSelected
+                      ? "border-violet-500 bg-violet-50 text-violet-700 shadow-sm"
+                      : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50"}`}
+                >
+                  <span>{m}</span>
+                  <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         {/* ── Movimentação do extrato ── */}
         <div className="space-y-2">
@@ -491,7 +543,7 @@ export default function DashConciliacao() {
         </div>
 
         {semDados ? (
-          <div className="py-20"><EmptyState message={`Nenhuma linha de extrato importada em ${ano}.`} /></div>
+          <div className="py-20"><EmptyState message={`Nenhuma linha de extrato importada em ${periodoLabel}.`} /></div>
         ) : (
           <>
             {/* ── Donut + Por conta stacked ── */}
@@ -635,7 +687,7 @@ export default function DashConciliacao() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <TopListCard
                   title="Ranking de fornecedores por valor pago"
-                  subtitle={`Saídas do extrato + lançamentos ERP · ano ${ano} · clique p/ ver detalhes`}
+                  subtitle={`Saídas do extrato + lançamentos ERP · ${periodoLabel} · clique p/ ver detalhes`}
                   items={topFornecedores.slice(0, 15)}
                   color={BLUE}
                   onOpen={() => setDetForn(true)}
@@ -668,7 +720,7 @@ export default function DashConciliacao() {
             <div className="space-y-2">
               <SectionTitle>Análise por categoria de lançamento</SectionTitle>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <ChartCard title="Top categorias — Despesas" subtitle={`Débitos do extrato + categorias ERP · ${ano}`} height={260} onOpen={() => setDetCategDesp(true)}>
+                <ChartCard title="Top categorias — Despesas" subtitle={`Débitos do extrato + categorias ERP · ${periodoLabel}`} height={260} onOpen={() => setDetCategDesp(true)}>
                   {catDespPie.length === 0 ? <EmptyState message="Nenhuma despesa categorizada no período." /> : (
                     <ResponsiveContainer>
                       <PieChart>
@@ -687,7 +739,7 @@ export default function DashConciliacao() {
 
                 <TopListCard
                   title="Ranking · Despesas por categoria"
-                  subtitle={`Clique p/ ver detalhe completo · ${ano}`}
+                  subtitle={`Clique p/ ver detalhe completo · ${periodoLabel}`}
                   items={topCategDesp.slice(0, 12)}
                   color={RED}
                   onOpen={() => setDetCategDesp(true)}
@@ -696,7 +748,7 @@ export default function DashConciliacao() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <ChartCard title="Top categorias — Receitas (R$)" subtitle={`Créditos do extrato + categorias ERP · ${ano}`} height={Math.max(220, Math.min(topCategRec.length, 10) * 44 + 40)} onOpen={() => setDetCategRec(true)}>
+                <ChartCard title="Top categorias — Receitas (R$)" subtitle={`Créditos do extrato + categorias ERP · ${periodoLabel}`} height={Math.max(220, Math.min(topCategRec.length, 10) * 44 + 40)} onOpen={() => setDetCategRec(true)}>
                   {topCategRec.length === 0 ? <EmptyState message="Nenhuma receita categorizada no período." /> : (
                     <ResponsiveContainer>
                       <BarChart
@@ -714,7 +766,7 @@ export default function DashConciliacao() {
 
                 <TopListCard
                   title="Ranking · Receitas por categoria"
-                  subtitle={`Clique p/ ver detalhe completo · ${ano}`}
+                  subtitle={`Clique p/ ver detalhe completo · ${periodoLabel}`}
                   items={topCategRec.slice(0, 12)}
                   color={TEAL}
                   onOpen={() => setDetCategRec(true)}
@@ -727,7 +779,7 @@ export default function DashConciliacao() {
             <div className="space-y-2">
               <SectionTitle>Distribuição por obra / centro de custo</SectionTitle>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <ChartCard title="Despesas × Receitas por obra (R$)" subtitle={`Top obras com lançamentos financeiros · ${ano}`} height={Math.max(220, Math.min(obrasChart.length, 12) * 46 + 40)} onOpen={() => setDetObras(true)}>
+                <ChartCard title="Despesas × Receitas por obra (R$)" subtitle={`Top obras com lançamentos financeiros · ${periodoLabel}`} height={Math.max(220, Math.min(obrasChart.length, 12) * 46 + 40)} onOpen={() => setDetObras(true)}>
                   {obrasChart.length === 0 ? <EmptyState message="Nenhum lançamento com obra identificada." /> : (
                     <ResponsiveContainer>
                       <BarChart data={obrasChart} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
@@ -745,7 +797,7 @@ export default function DashConciliacao() {
 
                 <TopListCard
                   title="Ranking de obras por volume financeiro"
-                  subtitle={`Despesas + receitas lançadas no ERP · ${ano}`}
+                  subtitle={`Despesas + receitas lançadas no ERP · ${periodoLabel}`}
                   items={topObras.slice(0, 12).map((o: any) => ({
                     nome: o.nome,
                     total: o.despesas + o.receitas,
@@ -772,42 +824,42 @@ export default function DashConciliacao() {
         {/* ── Dialogs ── */}
         <DetailDialog
           open={det} onOpenChange={setDet}
-          title="Conciliação por conta bancária" subtitle={`Ano ${ano} · valores em BRL`}
+          title="Conciliação por conta bancária" subtitle={`${periodoLabel} · valores em BRL`}
           columns={COLS} rows={detalheContas} onGoTo={ir} totalKey="saldo"
         />
         <DetailDialog
           open={lanc !== null} onOpenChange={(o) => setLanc(o ? lanc : null)}
           icon={ArrowLeftRight}
           title={lancLoading ? "Carregando lançamentos…" : lancTitle}
-          subtitle={`Ano ${ano} · ${lancRows.length} lançamento(s) · totalizador confere com o card`}
+          subtitle={`${periodoLabel} · ${lancRows.length} lançamento(s) · totalizador confere com o card`}
           columns={LANC_COLS} rows={lancRows} onGoTo={ir} totalKey="valor"
         />
         <DetailDialog
           open={detForn} onOpenChange={setDetForn}
           icon={Building2}
           title="Top fornecedores pagos"
-          subtitle={`Despesas lançadas no ERP · ${ano} · ordenado por valor total`}
+          subtitle={`Despesas lançadas no ERP · ${periodoLabel} · ordenado por valor total`}
           columns={FORN_COLS} rows={topFornecedores} onGoTo={ir} totalKey="total"
         />
         <DetailDialog
           open={detCategDesp} onOpenChange={setDetCategDesp}
           icon={Tag}
           title="Despesas por categoria"
-          subtitle={`Agrupado por conta do plano de contas · ${ano}`}
+          subtitle={`Agrupado por conta do plano de contas · ${periodoLabel}`}
           columns={CATEG_COLS} rows={topCategDesp} onGoTo={ir} totalKey="total"
         />
         <DetailDialog
           open={detCategRec} onOpenChange={setDetCategRec}
           icon={Tag}
           title="Receitas por categoria"
-          subtitle={`Agrupado por conta do plano de contas · ${ano}`}
+          subtitle={`Agrupado por conta do plano de contas · ${periodoLabel}`}
           columns={CATEG_COLS} rows={topCategRec} onGoTo={ir} totalKey="total"
         />
         <DetailDialog
           open={detObras} onOpenChange={setDetObras}
           icon={Layers}
           title="Distribuição por obra"
-          subtitle={`Lançamentos financeiros com obra identificada · ${ano}`}
+          subtitle={`Lançamentos financeiros com obra identificada · ${periodoLabel}`}
           columns={OBRAS_COLS} rows={topObras} onGoTo={ir} totalKey="despesas"
         />
         <NaturezaOverrideDialog

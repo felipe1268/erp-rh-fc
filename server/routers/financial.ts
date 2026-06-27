@@ -12572,14 +12572,23 @@ export const financialRouter = router({
   // quando financial_entries está vazio ou sem nome/categoria, usa descricao do extrato
   // como fallback (only lines with entry_id IS NULL to avoid double-counting conciliated items).
   getConciliacaoDashExtra: protectedProcedure.input(z.object({
-    companyId: z.number(),
-    ano: z.number(),
+    companyId: z.number().int(),
+    ano: z.number().int(),
+    mes: z.number().int().min(0).max(12).optional(), // Rev. 3755 — 0/undefined = ano todo; 1-12 escopa o mês
   })).query(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
-    const yr = input.ano;
-    const cid = input.companyId;
+    const yr = Number(input.ano);
+    const cid = Number(input.companyId);
+    // Rev. 3755 — filtro "mês a mês". mo=0 → ano inteiro. cid/yr/mo são inteiros validados
+    // (z.number()) → inlining seguro (sem placeholders). Isso também repara o bug latente do
+    // dbExecute nas queries UNION: a 2ª metade (extrato) reaproveitava $1/$2, mas o dbExecute
+    // liga params por ORDEM DE APARIÇÃO (split em /\$\d+/g), então a 2ª metade recebia
+    // params undefined→NULL e nunca retornava linhas. Inlining honra a intenção da Rev. 3714.
+    const mo = (typeof input.mes === "number" && input.mes >= 1 && input.mes <= 12) ? Number(input.mes) : 0;
+    const periodo = (expr: string) =>
+      `EXTRACT(YEAR FROM ${expr})=${yr}` + (mo ? ` AND EXTRACT(MONTH FROM ${expr})=${mo}` : "");
 
     // Helper p/ normalizar rows.
     const R = (r: any) => rows(r) as any[];
@@ -12592,22 +12601,22 @@ export const financialRouter = router({
            SELECT NULLIF(TRIM(COALESCE(fornecedor_nome, comprovante_beneficiario)),'') AS nome,
                   ABS(COALESCE(valor_realizado,valor_previsto,0)) AS total
              FROM financial_entries
-            WHERE company_id=$1 AND tipo='despesa'
-              AND EXTRACT(YEAR FROM COALESCE(data_competencia,data_vencimento,created_at::date))=$2
+            WHERE company_id=${cid} AND tipo='despesa'
+              AND ${periodo("COALESCE(data_competencia,data_vencimento,created_at::date)")}
               AND NULLIF(TRIM(COALESCE(fornecedor_nome, comprovante_beneficiario)),'') IS NOT NULL
            UNION ALL
            SELECT NULLIF(TRIM(descricao),'') AS nome,
                   ABS(valor::numeric) AS total
              FROM bank_statement_lines
-            WHERE company_id=$1 AND excluido_em IS NULL
-              AND EXTRACT(YEAR FROM data)=$2
+            WHERE company_id=${cid} AND excluido_em IS NULL
+              AND ${periodo("data")}
               AND valor < 0
               AND entry_id IS NULL
               AND NULLIF(TRIM(descricao),'') IS NOT NULL
          ) sub
         WHERE nome IS NOT NULL
         GROUP BY 1 ORDER BY 3 DESC LIMIT 20`,
-      [cid, yr]);
+      []);
 
     // 2. Top categorias – despesas.
     // Rev. 3714 — UNION: ERP entries (conta_nome) + extrato bancário (descricao, débitos sem entry_id).
@@ -12618,22 +12627,22 @@ export const financialRouter = router({
                   ABS(COALESCE(fe.valor_realizado,fe.valor_previsto,0)) AS total
              FROM financial_entries fe
              LEFT JOIN financial_accounts fa ON fa.id = fe.conta_id
-            WHERE fe.company_id=$1 AND fe.tipo='despesa'
-              AND EXTRACT(YEAR FROM COALESCE(fe.data_competencia,fe.data_vencimento,fe.created_at::date))=$2
+            WHERE fe.company_id=${cid} AND fe.tipo='despesa'
+              AND ${periodo("COALESCE(fe.data_competencia,fe.data_vencimento,fe.created_at::date)")}
               AND NULLIF(TRIM(COALESCE(fe.conta_nome, fa.nome)),'') IS NOT NULL
            UNION ALL
            SELECT NULLIF(TRIM(descricao),'') AS nome,
                   ABS(valor::numeric) AS total
              FROM bank_statement_lines
-            WHERE company_id=$1 AND excluido_em IS NULL
-              AND EXTRACT(YEAR FROM data)=$2
+            WHERE company_id=${cid} AND excluido_em IS NULL
+              AND ${periodo("data")}
               AND valor < 0
               AND entry_id IS NULL
               AND NULLIF(TRIM(descricao),'') IS NOT NULL
          ) sub
         WHERE nome IS NOT NULL
         GROUP BY 1 ORDER BY 3 DESC LIMIT 15`,
-      [cid, yr]);
+      []);
 
     // 3. Top categorias – receitas.
     // Rev. 3714 — UNION: ERP entries (conta_nome) + extrato bancário (descricao, créditos sem entry_id).
@@ -12644,22 +12653,22 @@ export const financialRouter = router({
                   ABS(COALESCE(fe.valor_realizado,fe.valor_previsto,0)) AS total
              FROM financial_entries fe
              LEFT JOIN financial_accounts fa ON fa.id = fe.conta_id
-            WHERE fe.company_id=$1 AND fe.tipo='receita'
-              AND EXTRACT(YEAR FROM COALESCE(fe.data_competencia,fe.data_vencimento,fe.created_at::date))=$2
+            WHERE fe.company_id=${cid} AND fe.tipo='receita'
+              AND ${periodo("COALESCE(fe.data_competencia,fe.data_vencimento,fe.created_at::date)")}
               AND NULLIF(TRIM(COALESCE(fe.conta_nome, fa.nome)),'') IS NOT NULL
            UNION ALL
            SELECT NULLIF(TRIM(descricao),'') AS nome,
                   ABS(valor::numeric) AS total
              FROM bank_statement_lines
-            WHERE company_id=$1 AND excluido_em IS NULL
-              AND EXTRACT(YEAR FROM data)=$2
+            WHERE company_id=${cid} AND excluido_em IS NULL
+              AND ${periodo("data")}
               AND valor > 0
               AND entry_id IS NULL
               AND NULLIF(TRIM(descricao),'') IS NOT NULL
          ) sub
         WHERE nome IS NOT NULL
         GROUP BY 1 ORDER BY 3 DESC LIMIT 15`,
-      [cid, yr]);
+      []);
 
     // 4. Top obras por volume financeiro (despesas + receitas).
     // Rev. 3628 — JOIN em obras p/ recuperar nome quando obra_nome desnormalizado está nulo.
@@ -12670,11 +12679,11 @@ export const financialRouter = router({
               COALESCE(SUM(CASE WHEN fe.tipo='receita' THEN ABS(COALESCE(fe.valor_realizado,fe.valor_previsto,0)) ELSE 0 END),0) AS receitas
          FROM financial_entries fe
          LEFT JOIN obras o ON o.id = fe.obra_id
-        WHERE fe.company_id=$1
-          AND EXTRACT(YEAR FROM COALESCE(fe.data_competencia,fe.data_vencimento,fe.created_at::date))=$2
+        WHERE fe.company_id=${cid}
+          AND ${periodo("COALESCE(fe.data_competencia,fe.data_vencimento,fe.created_at::date)")}
           AND NULLIF(TRIM(COALESCE(fe.obra_nome, o.nome)),'') IS NOT NULL
         GROUP BY 1 ORDER BY (despesas+receitas) DESC LIMIT 15`,
-      [cid, yr]);
+      []);
 
     // 5. Maior entrada e maior saída do extrato bancário no período.
     const extremosRes = await dbExecute(db,
@@ -12683,9 +12692,9 @@ export const financialRouter = router({
               COUNT(DISTINCT NULLIF(TRIM(descricao),''))    AS "descUnicas",
               COUNT(DISTINCT conta_bancaria_id)             AS "contasAtivas"
          FROM bank_statement_lines
-        WHERE company_id=$1 AND excluido_em IS NULL
-          AND EXTRACT(YEAR FROM data)=$2`,
-      [cid, yr]);
+        WHERE company_id=${cid} AND excluido_em IS NULL
+          AND ${periodo("data")}`,
+      []);
 
     // 6. Distribuição mensal de entradas e saídas POR CONTA BANCÁRIA
     //    (p/ o heatmap/sparkline de "o que mais foi pago por banco por mês").
@@ -12695,10 +12704,10 @@ export const financialRouter = router({
               COALESCE(SUM(CASE WHEN valor>0 THEN valor ELSE 0 END),0) AS entradas,
               COALESCE(SUM(CASE WHEN valor<0 THEN ABS(valor) ELSE 0 END),0) AS saidas
          FROM bank_statement_lines
-        WHERE company_id=$1 AND excluido_em IS NULL
-          AND EXTRACT(YEAR FROM data)=$2
+        WHERE company_id=${cid} AND excluido_em IS NULL
+          AND EXTRACT(YEAR FROM data)=${yr}
         GROUP BY 1,2 ORDER BY 1,2`,
-      [cid, yr]);
+      []);
 
     const ext = R(extremosRes)[0] ?? {};
     return {
