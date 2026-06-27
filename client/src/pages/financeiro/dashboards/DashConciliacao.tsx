@@ -821,20 +821,34 @@ export default function DashConciliacao() {
             <div className="space-y-2">
               <SectionTitle>Análise por categoria de lançamento</SectionTitle>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <ChartCard title="Top categorias — Despesas" subtitle={`Clique em uma fatia para ver os lançamentos da categoria · ${periodoLabel}`} height={260} onOpen={() => setDetCategDesp(true)}>
+                <ChartCard title="Top categorias — Despesas" subtitle={`Clique em uma fatia para ver os lançamentos da categoria · ${periodoLabel}`} height={380} onOpen={() => setDetCategDesp(true)}>
                   {catDespPie.length === 0 ? <EmptyState message="Nenhuma despesa categorizada no período." /> : (
                     <ResponsiveContainer>
                       <PieChart>
                         <Pie data={catDespPie} dataKey="value" nameKey="name"
-                          cx="50%" cy="50%" outerRadius={95} innerRadius={50} paddingAngle={2}
+                          cx="50%" cy="46%" outerRadius={130} innerRadius={68} paddingAngle={2}
                           onClick={(data: any) => data?.name ? setCategDrill({ nome: data.name, tipo: "despesa" }) : setDetCategDesp(true)}
-                          className="cursor-pointer">
+                          className="cursor-pointer"
+                          label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+                            if (percent < 0.04) return null;
+                            const RADIAN = Math.PI / 180;
+                            const r = innerRadius + (outerRadius - innerRadius) * 0.55;
+                            const x = cx + r * Math.cos(-midAngle * RADIAN);
+                            const y = cy + r * Math.sin(-midAngle * RADIAN);
+                            return (
+                              <text x={x} y={y} fill="#fff" textAnchor="middle" dominantBaseline="central"
+                                style={{ fontSize: 11, fontWeight: 600, pointerEvents: "none" }}>
+                                {`${(percent * 100).toFixed(0)}%`}
+                              </text>
+                            );
+                          }}
+                          labelLine={false}>
                           {catDespPie.map((_: any, i: number) => (
                             <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                           ))}
                         </Pie>
                         <Tooltip content={<BRLTooltip />} />
-                        <Legend wrapperStyle={{ fontSize: 11 }} formatter={(v) => v.length > 28 ? v.slice(0, 27) + "…" : v} />
+                        <Legend wrapperStyle={{ fontSize: 11 }} formatter={(v: string) => v.length > 28 ? v.slice(0, 27) + "…" : v} />
                       </PieChart>
                     </ResponsiveContainer>
                   )}
