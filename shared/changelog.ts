@@ -1,6 +1,13 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3771 — **FINANCEIRO · CONTAS FLUTUANTES · DUPLICATA "MÃO DE OBRA TERCEIRIZADA - OBRA" × "MÃO DE OBRA TERCEIRIZADA / SUBEMPREITEIRO" ELIMINADA: 1.119 LANÇAMENTOS COM `conta_nome='MÃO DE OBRA TERCEIRIZADA - OBRA'` (conta_id=23) NORMALIZADOS PARA "MÃO DE OBRA TERCEIRIZADA / SUBEMPREITEIRO"; 28 LANÇAMENTOS "Subempreiteiros" (flutuantes) TAMBÉM UNIFICADOS (conta_id=23 + nome canônico); MAPA CANÔNICO ATUALIZADO + `financialAutoImport.ts` E `financialIntegrationBridge.ts` CORRIGIDOS. DASHBOARD PASSA A MOSTRAR UMA SÓ LINHA. ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * CONTEXTO: dashboard agrupava por conta_nome (string), não por conta_id → mesmo id=23 aparecia
+ * como 2 categorias distintas. Batch UPDATE direto em Neon em transação. 1.193 entradas totais
+ * unificadas. 3 grafias eliminadas: "MÃO DE OBRA TERCEIRIZADA - OBRA", "Subempreiteiros" (flutuante),
+ * "Subempreiteiros" (bridge). Todas normalizadas para "MÃO DE OBRA TERCEIRIZADA / SUBEMPREITEIRO".
+ *
  * Rev. 3770 — **FINANCEIRO · MAPEAMENTO DE CONTAS FLUTUANTES: (1) BATCH UPDATE EM PRODUÇÃO — 7 GRUPOS DE `financial_entries` COM `conta_id IS NULL` RECEBERAM `conta_id` + `conta_nome` NORMALIZADOS (SALÁRIO→506, FIN/FINANCIAMENTOS/Financiamento→264, SERV→391, MARKETING→9, JURÍDICA→271, COMBUSTÍVEIS→384, VALE REFEIÇÃO+ALIMENTAÇÃO→265). (2) MAPA CANÔNICO `CONTA_ID_BY_NOME` EXPORTADO EM `financialIntegrationBridge.ts` + HELPER `resolveContaId` — TODO NOVO INSERT VIA `insertEntry` RESOLVE `conta_id` AUTOMATICAMENTE PELO `conta_nome`. (3) `financialAutoImport.ts` CORRIGIDO: FOLHA CLT→506, PJ→391 HARDCODED NOS INSERTS. PROJEÇÕES DE CRONOGRAMA (`Custos Diretos de Obra`, `Custos Indiretos`) MANTIDAS SEM CONTA PARA EVITAR DUPLA CONTAGEM. ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * CONTEXTO: entradas com `conta_id IS NULL` ("flutuantes") não apareciam nos dashboards de conta.

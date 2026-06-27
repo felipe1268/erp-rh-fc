@@ -70,6 +70,10 @@ export const CONTA_ID_BY_NOME: Record<string, number> = {
   "FIN": 264,
   "FINANCIAMENTOS": 264,
   "Financiamento": 264,
+  // Mão de obra terceirizada / subempreiteiros
+  "MÃO DE OBRA TERCEIRIZADA - OBRA": 23,
+  "MÃO DE OBRA TERCEIRIZADA / SUBEMPREITEIRO": 23,
+  "Subempreiteiros": 23,
   // Serviços / Jurídico / Marketing
   "SERV": 391,
   "PRESTAÇÃO DE SERVIÇO": 391,
@@ -244,7 +248,7 @@ export async function importParceirosToFinancial(companyId: number, mesRef?: str
       const dataVenc = targetMes + "-10";
       await insertEntry(db, {
         companyId,
-        contaNome: "Subempreiteiros",
+        contaNome: "MÃO DE OBRA TERCEIRIZADA / SUBEMPREITEIRO",
         tipo: "despesa",
         natureza: "variavel",
         valorPrevisto: valor,

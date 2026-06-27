@@ -188,7 +188,7 @@ export async function importParceiroLancamentosToFinancial(companyId: number, me
        (company_id, conta_nome, tipo, natureza, valor_previsto, valor_realizado,
         data_competencia, data_vencimento, data_pagamento, status, origem_modulo, origem_id,
         origem_descricao, descricao, created_at, updated_at)
-       VALUES ($1,'Subempreiteiros','despesa','variavel',$2,$3,$4,$5,$6,$7,
+       VALUES ($1,23,'MÃO DE OBRA TERCEIRIZADA / SUBEMPREITEIRO','despesa','variavel',$2,$3,$4,$5,$6,$7,
                'parceiro_lancamento',$8,$9,$10,NOW(),NOW())`,
       [
         companyId,
