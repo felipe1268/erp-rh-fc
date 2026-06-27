@@ -830,11 +830,11 @@ export default function FinanceiroConciliacao() {
   // Rev. 3752 — CHEQUES do Controle de Cheques como candidatos nos 2 diálogos (alguns
   // cheques existem SÓ lá, sem lançamento de despesa → antes não apareciam na busca).
   const { data: chequesTroca } = (trpc as any).financial.getChequesParaConciliacao.useQuery(
-    { companyId, busca: buscaTroca.trim().length >= 1 ? buscaTroca.trim() : undefined, limit: 30 },
+    { companyId, busca: buscaTroca.trim().length >= 1 ? buscaTroca.trim() : undefined, valorRef: trocandoLine?.extratoValor || undefined, limit: 30 },
     { enabled: !!trocandoLine }
   );
   const { data: chequesConciliarPix } = (trpc as any).financial.getChequesParaConciliacao.useQuery(
-    { companyId, busca: buscaConciliarPix.trim().length >= 1 ? buscaConciliarPix.trim() : (conciliarPixDlg?.cheque?.fornecedor ?? undefined), limit: 30 },
+    { companyId, busca: buscaConciliarPix.trim().length >= 1 ? buscaConciliarPix.trim() : (conciliarPixDlg?.cheque?.fornecedor ?? undefined), valorRef: (conciliarPixDlg ? (Math.abs(Number(conciliarPixDlg.cheque.valor) || (conciliarPixDlg.cheque.valorCents ? conciliarPixDlg.cheque.valorCents / 100 : 0)) || undefined) : undefined), limit: 30 },
     { enabled: !!conciliarPixDlg }
   );
 

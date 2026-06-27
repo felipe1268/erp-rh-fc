@@ -2297,6 +2297,10 @@ export const financialRouter = router({
   getChequesParaConciliacao: protectedProcedure.input(z.object({
     companyId: z.number(),
     busca: z.string().optional(),
+    // Rev. 3768 — valor de referência (PIX/linha do extrato): cheques de valor IGUAL
+    // sobem para o topo, garantindo que o cheque-alvo apareça mesmo quando o fornecedor
+    // tem centenas de cheques (FERRAGENS SANTA RITA = 928) e o teto `limit` o cortaria.
+    valorRef: z.number().optional(),
     limit: z.number().default(30),
   })).query(async ({ input, ctx }) => {
     const db = await getDb();
@@ -2315,6 +2319,14 @@ export const financialRouter = router({
       if (soNum) { clauses.push(`REGEXP_REPLACE(COALESCE(c.numero_cheque,''),'^0+','') = $${i++}`); vals.push(soNum); }
       conds.push(`(${clauses.join(" OR ")})`);
     }
+    // Rev. 3768 — prefixo de ordenação: 0 = casa pelo valor de referência (topo), 1 = demais.
+    // O placeholder aparece no texto ANTES do LIMIT, então empurra-se valorRef antes do limit.
+    let orderPrefix = "";
+    if (input.valorRef != null && input.valorRef > 0) {
+      orderPrefix = `CASE WHEN ABS(c.valor - $${i}) < 0.015 THEN 0 ELSE 1 END, `;
+      vals.push(input.valorRef);
+      i++;
+    }
     vals.push(input.limit);
     const res = await dbExecute(db,
       `SELECT c.id AS "chequeId", c.numero_cheque AS "numeroCheque", c.fornecedor_nome AS "fornecedorNome",
@@ -2322,7 +2334,7 @@ export const financialRouter = router({
               c.obra_id AS "obraId", c.obra_nome AS "obraNome", c.status, c.conta_bancaria_id AS "contaBancariaId"
          FROM financial_cheques c
         WHERE ${conds.join(" AND ")}
-        ORDER BY c.data_compensacao DESC NULLS LAST, c.data_vencimento DESC NULLS LAST, c.id DESC
+        ORDER BY ${orderPrefix}c.data_compensacao DESC NULLS LAST, c.data_vencimento DESC NULLS LAST, c.id DESC
         LIMIT $${i}`,
       vals);
     return { data: rows(res) };

@@ -1,6 +1,36 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3768 — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · DIÁLOGOS "CONCILIAR PIX NO EXTRATO" E "TROCAR LANÇAMENTO VINCULADO" AGORA PRIORIZAM, NO TOPO DA LISTA "CHEQUES DO CONTROLE DE CHEQUES (SEM LANÇAMENTO)", OS CHEQUES CUJO VALOR BATE COM O DA LINHA/PIX QUE ESTÁ SENDO CONCILIADA. ANTES, FORNECEDOR COM CENTENAS DE CHEQUES (EX. FERRAGENS SANTA RITA = 928) FAZIA O CHEQUE-ALVO CAIR FORA DO TETO DE 30 LINHAS E SUMIR DA LISTA. BACKEND READ-ONLY · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * CONTEXTO / CAUSA-RAIZ (cheque Doc 860 · FERRAGENS SANTA RITA · R$ 7.852,16):
+ * - O cheque devolvido foi corretamente auto-detectado como "Quitado por outro meio (PIX/TED) em
+ *   19/01/2026 — JA GANHEI PAPELARIA E SERVICOS LOTERICOS". Ao abrir "⚡ Conciliar PIX no extrato"
+ *   para fazer a vinculação manual, porém, o cheque-alvo (R$ 7.852,16) NÃO aparecia na lista de
+ *   candidatos "CHEQUES DO CONTROLE DE CHEQUES (SEM LANÇAMENTO)" — só apareciam outros cheques da
+ *   FERRAGENS SANTA RITA (nº 692, 589, 264, 373...).
+ * - DIAGNÓSTICO: o cheque (financial_cheques id 26) ESTÁ elegível (conciliado=0, lancamento_id NULL,
+ *   não excluído). O que o derrubava era o par TETO + ORDENAÇÃO: a query `getChequesParaConciliacao`
+ *   carrega no máximo `limit: 30` e ordena por `data_compensacao DESC`. FERRAGENS SANTA RITA tem 928
+ *   cheques elegíveis; o Doc 860 (compensado 19/01/2026) ficava na POSIÇÃO 71 → fora das 30 linhas.
+ *   A busca filtrava só pelo NOME do fornecedor, ignorando o VALOR do PIX (R$ 7.852,16), então não
+ *   havia como o cheque-alvo subir.
+ *
+ * BACKEND (`server/routers/financial.ts` · `getChequesParaConciliacao`, READ-ONLY):
+ * - Novo input opcional `valorRef: z.number().optional()`. Quando informado (>0), prefixa o ORDER BY com
+ *   `CASE WHEN ABS(c.valor - $N) < 0.015 THEN 0 ELSE 1 END` → cheques de valor IGUAL sobem para o topo
+ *   ANTES da ordenação por data, garantindo que entrem dentro do `limit`. Sem valorRef, comportamento
+ *   inalterado. NB: `dbExecute` liga placeholders por ORDEM DE APARIÇÃO — o placeholder do valorRef
+ *   aparece no texto ANTES do LIMIT, então `vals.push(valorRef)` vem ANTES de `vals.push(limit)`.
+ *
+ * FRONTEND (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`):
+ * - As 2 queries `getChequesParaConciliacao` agora enviam `valorRef`: o diálogo "Conciliar PIX"
+ *   manda `Math.abs(conciliarPixDlg.cheque.valor || valorCents/100)` (mesma expr do cabeçalho); o
+ *   diálogo "Trocar lançamento" manda `trocandoLine.extratoValor`. Tolerância de R$ 0,015 (1,5 centavo).
+ *
+ * REGRA DE OURO PRESERVADA: nada concilia/baixa sem confirmação explícita; isto só reordena a lista
+ * de candidatos (read-only), o usuário continua escolhendo e confirmando no "⚡ Conciliar agora".
+ *
  * Rev. 3767 — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · VÍNCULO DE CHEQUE DEVOLVIDO ↔ PIX/TED AGORA (a) APARECE DIRETO NA CONCILIAÇÃO (SELO "🔗 SUBSTITUI CHEQUE DEVOLVIDO DOC NNN · R$ X · VÍNCULO POR FULANO" NA LINHA CONCILIADA/PENDENTE DO EXTRATO, SEM PRECISAR ABRIR O PAINEL DE CHEQUES DEVOLVIDOS) E (b) O CABEÇALHO DO DIÁLOGO "VINCULAR CHEQUE DEVOLVIDO" PARA DE MOSTRAR "VINCULADO R$ 0,00" QUANDO O VÍNCULO EXISTE MAS A LINHA DO CHEQUE TROCOU DE ID NUM RE-IMPORT. BACKEND READ-ONLY · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * CONTEXTO / CAUSA-RAIZ (cheque Doc 001063 · PIER BRASIL · R$ 4.344,60):
