@@ -1,6 +1,37 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3766 — **FINANCEIRO · DASHBOARD · CONCILIAÇÃO BANCÁRIA · DRILL-DOWN POR ITEM ESPECÍFICO: CLICAR EM UMA FATIA/BARRA DE CATEGORIA (DESPESAS OU RECEITAS) OU EM UM ITEM DO RANKING ABRE UM DIALOG COM OS LANÇAMENTOS INDIVIDUAIS DAQUELA CATEGORIA; CLICAR EM UMA BARRA DE OBRA OU EM UM ITEM DO RANKING DE OBRAS ABRE OS LANÇAMENTOS INDIVIDUAIS DA OBRA. 2 NOVOS ENDPOINTS BACKEND (READ-ONLY) + FRONTEND. ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Pedido do usuário: clicar em "MEDIÇÃO DE OBRA" deve abrir apenas os lançamentos daquela categoria, não a lista agregada de todas.
+ *
+ * BACKEND (`server/routers/financial.ts`):
+ * - `getConciliacaoEntradasPorCategoria({ companyId, ano, mes?, contaNome, tipo })`: query em `financial_entries`
+ *   filtrando `TRIM(LOWER(conta_nome)) = TRIM(LOWER($2))` + período + tipo. LEFT JOIN com `financial_accounts`
+ *   para resolver conta pelo `conta_id` quando `conta_nome` está vazio. Retorna até 500 entradas ordenadas por
+ *   data DESC: id, data, descricao, valor (realizado > previsto), contaNome, fornecedorNome, obraNome, status, tipo.
+ *   dbExecute binding: $1=tipo, $2=contaNome; período via inteiros inline (seguros — z.number().int()).
+ * - `getConciliacaoEntradasPorObra({ companyId, ano, mes?, obraNome })`: mesmo padrão, filtrando
+ *   `TRIM(LOWER(obra_nome)) = TRIM(LOWER($1))` sem filtro de tipo (retorna despesas + receitas juntas).
+ *   dbExecute binding: $1=obraNome.
+ *
+ * FRONTEND (`client/src/pages/financeiro/dashboards/DashConciliacao.tsx`):
+ * - Novos estados: `categDrill: {nome, tipo} | null`, `obraDrill: {nome} | null`.
+ * - Queries lazy (enabled quando drill !== null): `getConciliacaoEntradasPorCategoria` e `getConciliacaoEntradasPorObra`.
+ * - `ENTRY_COLS`: nova definição de colunas para entries individuais — Data, Descrição, Valor (colorido ±),
+ *   Categoria, Fornecedor, Obra, Status.
+ * - Pie Chart (Despesas): `onClick={(data) => data?.name ? setCategDrill({nome, tipo:"despesa"}) : setDetCategDesp(true)}`.
+ * - BarChart Receitas: `onClick={(d) => d?.activeLabel ? setCategDrill({nome, tipo:"receita"}) : setDetCategRec(true)}`.
+ * - TopListCard Despesas/Receitas: `onItemClick={(item) => setCategDrill({nome:item.nome, tipo:...})}` — clicar
+ *   num item abre só os lançamentos daquela categoria.
+ * - BarChart Obras: `onClick={(d) => d?.activeLabel ? setObraDrill({nome}) : setDetObras(true)}`.
+ * - TopListCard Obras: `onItemClick={(item) => setObraDrill({nome:item.nome})}`.
+ * - 2 novos `<DetailDialog>`: "Receitas/Despesas — {nome}" e "Lançamentos — {obra}" usando `ENTRY_COLS`.
+ * - Botão "Abrir ↗" do ChartCard continua abrindo a lista AGREGADA (setDetCategDesp/Rec/Obras) por design.
+ * - Subtítulos atualizados: "ver os lançamentos da categoria / obra" (não mais "lista de categorias").
+ *
+ * Validado: sem erros de compilação Vite. READ-ONLY · ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3765 — **FINANCEIRO · DASHBOARD · CONCILIAÇÃO BANCÁRIA · TODOS OS GRÁFICOS DA TELA GANHARAM DRILL-DOWN (CLIQUE): BARRAS DE MÊS NAVEGAM O SELETOR DE PERÍODO; BARRAS DE CONTA BANCÁRIA ABREM DIALOG COM OS LANÇAMENTOS FILTRADOS DA CONTA; BARRAS/LINHA DE FORNECEDOR ABREM DIALOG COM OS LANÇAMENTOS DO FORNECEDOR (MATCH POR DESCRIÇÃO); GRÁFICOS DE CATEGORIA E OBRA ABREM A LISTA AGRUPADA EXISTENTE. ITENS DOS TOPLISTCARDS (FORNECEDORES, CATEGORIAS, OBRAS) TAMBÉM FICARAM CLICÁVEIS. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
  *
  * Pedido do usuário: clicar em qualquer gráfico do Dashboard · Conciliação Bancária e ver os lançamentos pertinentes.

@@ -12861,4 +12861,103 @@ export const financialRouter = router({
       })),
     };
   }),
+
+  // Rev. 3766 — DRILL-DOWN POR CATEGORIA: retorna os financial_entries individuais de uma
+  // conta do plano de contas (conta_nome) no período. READ-ONLY · ZERO SCHEMA/ALTER/DROP.
+  getConciliacaoEntradasPorCategoria: protectedProcedure.input(z.object({
+    companyId: z.number().int(),
+    ano: z.number().int(),
+    mes: z.number().int().min(0).max(12).optional(),
+    contaNome: z.string().min(1).max(200),
+    tipo: z.enum(["despesa", "receita"]),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const cid = Number(input.companyId);
+    const yr = Number(input.ano);
+    const mo = (typeof input.mes === "number" && input.mes >= 1 && input.mes <= 12) ? Number(input.mes) : 0;
+    const periodo = (expr: string) =>
+      `EXTRACT(YEAR FROM ${expr})=${yr}` + (mo ? ` AND EXTRACT(MONTH FROM ${expr})=${mo}` : "");
+    // dbExecute liga params por ORDEM DE APARIÇÃO: $1=tipo, $2=contaNome.
+    // periodo usa inteiros inline (seguros, validados por z.number().int()).
+    const res = await dbExecute(db,
+      `SELECT fe.id,
+              COALESCE(fe.data_competencia, fe.data_vencimento, fe.created_at::date) AS data,
+              fe.descricao,
+              COALESCE(fe.valor_realizado, fe.valor_previsto, 0) AS valor,
+              COALESCE(fe.conta_nome, fa.nome) AS "contaNome",
+              fe.fornecedor_nome AS "fornecedorNome",
+              fe.obra_nome AS "obraNome",
+              fe.status,
+              fe.tipo
+         FROM financial_entries fe
+         LEFT JOIN financial_accounts fa ON fa.id = fe.conta_id
+        WHERE fe.company_id=${cid}
+          AND fe.tipo=$1
+          AND ${periodo("COALESCE(fe.data_competencia, fe.data_vencimento, fe.created_at::date)")}
+          AND TRIM(LOWER(COALESCE(fe.conta_nome, fa.nome, ''))) = TRIM(LOWER($2))
+        ORDER BY COALESCE(fe.data_competencia, fe.data_vencimento, fe.created_at::date) DESC
+        LIMIT 500`,
+      [input.tipo, input.contaNome]);
+    return rows(res).map((r: any) => ({
+      id: Number(r.id),
+      data: r.data,
+      descricao: r.descricao || "—",
+      valor: Number(r.valor) || 0,
+      contaNome: r.contaNome || "—",
+      fornecedorNome: r.fornecedorNome || "—",
+      obraNome: r.obraNome || "—",
+      status: r.status || "—",
+      tipo: r.tipo || "",
+    }));
+  }),
+
+  // Rev. 3766 — DRILL-DOWN POR OBRA: retorna os financial_entries individuais de uma obra
+  // no período (despesas + receitas juntas). READ-ONLY · ZERO SCHEMA/ALTER/DROP.
+  getConciliacaoEntradasPorObra: protectedProcedure.input(z.object({
+    companyId: z.number().int(),
+    ano: z.number().int(),
+    mes: z.number().int().min(0).max(12).optional(),
+    obraNome: z.string().min(1).max(200),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const cid = Number(input.companyId);
+    const yr = Number(input.ano);
+    const mo = (typeof input.mes === "number" && input.mes >= 1 && input.mes <= 12) ? Number(input.mes) : 0;
+    const periodo = (expr: string) =>
+      `EXTRACT(YEAR FROM ${expr})=${yr}` + (mo ? ` AND EXTRACT(MONTH FROM ${expr})=${mo}` : "");
+    // dbExecute liga params por ORDEM DE APARIÇÃO: $1=obraNome.
+    const res = await dbExecute(db,
+      `SELECT fe.id,
+              COALESCE(fe.data_competencia, fe.data_vencimento, fe.created_at::date) AS data,
+              fe.descricao,
+              COALESCE(fe.valor_realizado, fe.valor_previsto, 0) AS valor,
+              COALESCE(fe.conta_nome, fa.nome) AS "contaNome",
+              fe.fornecedor_nome AS "fornecedorNome",
+              fe.obra_nome AS "obraNome",
+              fe.status,
+              fe.tipo
+         FROM financial_entries fe
+         LEFT JOIN financial_accounts fa ON fa.id = fe.conta_id
+        WHERE fe.company_id=${cid}
+          AND ${periodo("COALESCE(fe.data_competencia, fe.data_vencimento, fe.created_at::date)")}
+          AND TRIM(LOWER(COALESCE(fe.obra_nome, ''))) = TRIM(LOWER($1))
+        ORDER BY COALESCE(fe.data_competencia, fe.data_vencimento, fe.created_at::date) DESC
+        LIMIT 500`,
+      [input.obraNome]);
+    return rows(res).map((r: any) => ({
+      id: Number(r.id),
+      data: r.data,
+      descricao: r.descricao || "—",
+      valor: Number(r.valor) || 0,
+      contaNome: r.contaNome || "—",
+      fornecedorNome: r.fornecedorNome || "—",
+      obraNome: r.obraNome || "—",
+      status: r.status || "—",
+      tipo: r.tipo || "",
+    }));
+  }),
 });

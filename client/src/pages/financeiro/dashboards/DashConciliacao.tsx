@@ -165,8 +165,18 @@ export default function DashConciliacao() {
     tipo: "todos" | "entradas" | "saidas";
     filterFn: (l: any) => boolean;
   }>(null);
+  const [categDrill, setCategDrill] = useState<{ nome: string; tipo: "despesa" | "receita" } | null>(null);
+  const [obraDrill, setObraDrill] = useState<{ nome: string } | null>(null);
   const { data: lancamentos, isLoading: lancLoading, refetch: rLanc } = (trpc as any).financial.getConciliacaoLancamentos.useQuery(
     { companyId, dataInicio, dataFim }, { enabled: !!companyId && (lanc !== null || drill !== null) }
+  );
+  const { data: categDrillData, isLoading: categDrillLoading } = (trpc as any).financial.getConciliacaoEntradasPorCategoria.useQuery(
+    { companyId, ano, mes: mes || undefined, contaNome: categDrill?.nome ?? "", tipo: categDrill?.tipo ?? "despesa" },
+    { enabled: !!companyId && categDrill !== null }
+  );
+  const { data: obraDrillData, isLoading: obraDrillLoading } = (trpc as any).financial.getConciliacaoEntradasPorObra.useQuery(
+    { companyId, ano, mes: mes || undefined, obraNome: obraDrill?.nome ?? "" },
+    { enabled: !!companyId && obraDrill !== null }
   );
   const [ovRow, setOvRow] = useState<LancNaturezaLinha | null>(null);
 
@@ -495,6 +505,25 @@ export default function DashConciliacao() {
     { key: "despesas", label: "Despesas (R$)", align: "right", brl: true },
     { key: "receitas", label: "Receitas (R$)", align: "right", brl: true },
   ];
+  const ENTRY_COLS: DetailColumn[] = [
+    { key: "data", label: "Data", format: (v: any) => formatDate(v) },
+    { key: "descricao", label: "Descrição" },
+    {
+      key: "valor", label: "Valor (R$)", align: "right",
+      format: (v: any) => {
+        const n = Number(v) || 0;
+        return (
+          <span className={`tabular-nums font-semibold ${n < 0 ? "text-red-600" : "text-emerald-600"}`}>
+            {formatBRL(Math.abs(n))}
+          </span>
+        );
+      },
+    },
+    { key: "contaNome", label: "Categoria" },
+    { key: "fornecedorNome", label: "Fornecedor" },
+    { key: "obraNome", label: "Obra" },
+    { key: "status", label: "Status" },
+  ];
 
   const semDados = !isLoading && statusArr.length === 0;
 
@@ -792,13 +821,14 @@ export default function DashConciliacao() {
             <div className="space-y-2">
               <SectionTitle>Análise por categoria de lançamento</SectionTitle>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <ChartCard title="Top categorias — Despesas" subtitle={`Clique em uma fatia para ver a lista de categorias · ${periodoLabel}`} height={260} onOpen={() => setDetCategDesp(true)}>
+                <ChartCard title="Top categorias — Despesas" subtitle={`Clique em uma fatia para ver os lançamentos da categoria · ${periodoLabel}`} height={260} onOpen={() => setDetCategDesp(true)}>
                   {catDespPie.length === 0 ? <EmptyState message="Nenhuma despesa categorizada no período." /> : (
                     <ResponsiveContainer>
                       <PieChart>
                         <Pie data={catDespPie} dataKey="value" nameKey="name"
                           cx="50%" cy="50%" outerRadius={95} innerRadius={50} paddingAngle={2}
-                          onClick={() => setDetCategDesp(true)} className="cursor-pointer">
+                          onClick={(data: any) => data?.name ? setCategDrill({ nome: data.name, tipo: "despesa" }) : setDetCategDesp(true)}
+                          className="cursor-pointer">
                           {catDespPie.map((_: any, i: number) => (
                             <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                           ))}
@@ -812,23 +842,24 @@ export default function DashConciliacao() {
 
                 <TopListCard
                   title="Ranking · Despesas por categoria"
-                  subtitle={`Clique em uma categoria para ver o detalhe completo · ${periodoLabel}`}
+                  subtitle={`Clique em uma categoria para ver os lançamentos · ${periodoLabel}`}
                   items={topCategDesp.slice(0, 12)}
                   color={RED}
                   onOpen={() => setDetCategDesp(true)}
-                  onItemClick={() => setDetCategDesp(true)}
+                  onItemClick={(item) => setCategDrill({ nome: item.nome, tipo: "despesa" })}
                   emptyMsg="Nenhuma despesa categorizada no período."
                 />
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <ChartCard title="Top categorias — Receitas (R$)" subtitle={`Clique em uma barra para ver a lista de categorias · ${periodoLabel}`} height={Math.max(220, Math.min(topCategRec.length, 10) * 44 + 40)} onOpen={() => setDetCategRec(true)}>
+                <ChartCard title="Top categorias — Receitas (R$)" subtitle={`Clique em uma barra para ver os lançamentos da categoria · ${periodoLabel}`} height={Math.max(220, Math.min(topCategRec.length, 10) * 44 + 40)} onOpen={() => setDetCategRec(true)}>
                   {topCategRec.length === 0 ? <EmptyState message="Nenhuma receita categorizada no período." /> : (
                     <ResponsiveContainer>
                       <BarChart
                         data={topCategRec.slice(0, 10).map((c: any) => ({ name: c.nome, Valor: c.total }))}
                         layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}
-                        onClick={() => setDetCategRec(true)} className="cursor-pointer">
+                        onClick={(d: any) => { const nome = d?.activeLabel; if (nome) setCategDrill({ nome, tipo: "receita" }); else setDetCategRec(true); }}
+                        className="cursor-pointer">
                         <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" horizontal={false} />
                         <XAxis type="number" tickFormatter={formatBRLCompact} tick={{ fontSize: 11, fill: "#64748b" }} />
                         <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 10, fill: "#475569" }} />
@@ -841,11 +872,11 @@ export default function DashConciliacao() {
 
                 <TopListCard
                   title="Ranking · Receitas por categoria"
-                  subtitle={`Clique em uma categoria para ver o detalhe completo · ${periodoLabel}`}
+                  subtitle={`Clique em uma categoria para ver os lançamentos · ${periodoLabel}`}
                   items={topCategRec.slice(0, 12)}
                   color={TEAL}
                   onOpen={() => setDetCategRec(true)}
-                  onItemClick={() => setDetCategRec(true)}
+                  onItemClick={(item) => setCategDrill({ nome: item.nome, tipo: "receita" })}
                   emptyMsg="Nenhuma receita categorizada no período."
                 />
               </div>
@@ -855,10 +886,12 @@ export default function DashConciliacao() {
             <div className="space-y-2">
               <SectionTitle>Distribuição por obra / centro de custo</SectionTitle>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <ChartCard title="Despesas × Receitas por obra (R$)" subtitle={`Clique em uma barra para ver o ranking de obras · ${periodoLabel}`} height={Math.max(220, Math.min(obrasChart.length, 12) * 46 + 40)} onOpen={() => setDetObras(true)}>
+                <ChartCard title="Despesas × Receitas por obra (R$)" subtitle={`Clique em uma barra para ver os lançamentos da obra · ${periodoLabel}`} height={Math.max(220, Math.min(obrasChart.length, 12) * 46 + 40)} onOpen={() => setDetObras(true)}>
                   {obrasChart.length === 0 ? <EmptyState message="Nenhum lançamento com obra identificada." /> : (
                     <ResponsiveContainer>
-                      <BarChart data={obrasChart} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }} onClick={() => setDetObras(true)} className="cursor-pointer">
+                      <BarChart data={obrasChart} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}
+                        onClick={(d: any) => { const nome = d?.activeLabel; if (nome) setObraDrill({ nome }); else setDetObras(true); }}
+                        className="cursor-pointer">
                         <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" horizontal={false} />
                         <XAxis type="number" tickFormatter={formatBRLCompact} tick={{ fontSize: 11, fill: "#64748b" }} />
                         <YAxis type="category" dataKey="name" width={155} tick={{ fontSize: 10, fill: "#475569" }} />
@@ -873,7 +906,7 @@ export default function DashConciliacao() {
 
                 <TopListCard
                   title="Ranking de obras por volume financeiro"
-                  subtitle={`Clique em uma obra para ver o detalhe · ${periodoLabel}`}
+                  subtitle={`Clique em uma obra para ver os lançamentos · ${periodoLabel}`}
                   items={topObras.slice(0, 12).map((o: any) => ({
                     nome: o.nome,
                     total: o.despesas + o.receitas,
@@ -882,7 +915,7 @@ export default function DashConciliacao() {
                   }))}
                   color={ORANGE}
                   onOpen={() => setDetObras(true)}
-                  onItemClick={() => setDetObras(true)}
+                  onItemClick={(item) => setObraDrill({ nome: item.nome })}
                   emptyMsg="Nenhum lançamento com obra identificada."
                 />
               </div>
@@ -938,6 +971,20 @@ export default function DashConciliacao() {
           title="Distribuição por obra"
           subtitle={`Lançamentos financeiros com obra identificada · ${periodoLabel}`}
           columns={OBRAS_COLS} rows={topObras} onGoTo={ir} totalKey="despesas"
+        />
+        <DetailDialog
+          open={categDrill !== null} onOpenChange={(o) => { if (!o) setCategDrill(null); }}
+          icon={Tag}
+          title={categDrillLoading ? "Carregando lançamentos…" : `${categDrill?.tipo === "receita" ? "Receitas" : "Despesas"} — ${categDrill?.nome ?? ""}`}
+          subtitle={`${periodoLabel} · ${(categDrillData ?? []).length} lançamento(s)`}
+          columns={ENTRY_COLS} rows={categDrillData ?? []} onGoTo={ir} totalKey="valor"
+        />
+        <DetailDialog
+          open={obraDrill !== null} onOpenChange={(o) => { if (!o) setObraDrill(null); }}
+          icon={Layers}
+          title={obraDrillLoading ? "Carregando lançamentos…" : `Lançamentos — ${obraDrill?.nome ?? ""}`}
+          subtitle={`${periodoLabel} · ${(obraDrillData ?? []).length} lançamento(s)`}
+          columns={ENTRY_COLS} rows={obraDrillData ?? []} onGoTo={ir} totalKey="valor"
         />
         <DetailDialog
           open={drill !== null} onOpenChange={(o) => { if (!o) setDrill(null); }}
