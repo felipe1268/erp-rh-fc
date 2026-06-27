@@ -655,7 +655,7 @@ export default function DashCheques() {
                 </ResponsiveContainer>
               </ChartCard>
 
-              <ChartCard title="Fornecedores recorrentes" subtitle="Mais de um cheque no ano · vezes, meses e valor" onOpen={ir} height={320}>
+              <ChartCard title="Fornecedores recorrentes" subtitle={`Mais de um cheque ${mes === 0 ? "no ano" : "no mês"} · vezes, meses e valor`} onOpen={ir} height={320}>
                 {recorrentes.length === 0 ? <EmptyState message={`Nenhum fornecedor recorrente em ${periodoLabel}.`} /> : (
                   <div className="h-full overflow-auto rounded-lg border border-slate-200">
                     <table className="w-full text-xs">
