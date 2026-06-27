@@ -13,7 +13,7 @@ import { runAllAutoImports } from "../services/financialAutoImport";
 // flag global. Quando FINANCEIRO_SOMENTE_REAL, os endpoints de leitura escondem
 // TODAS as projeções (cronograma/PCP/folha projetada/etc.), não só o cronograma.
 import { sqlNotProjecao, FINANCEIRO_SOMENTE_REAL } from "../../shared/financeiroProjecao";
-import { detectarParesEstorno, pareceCompensacaoCheque, pareceDevolucaoCheque, type LinhaEstornoMin } from "../../shared/chequeMotivos";
+import { detectarParesEstorno, pareceCompensacaoCheque, pareceDevolucaoCheque, parseDocNumero, parseChequeNumero, type LinhaEstornoMin } from "../../shared/chequeMotivos";
 import {
   runAllDespesasImport,
   runAllReceitasImport,
@@ -207,6 +207,51 @@ async function dbExecute(db: any, query: string, params: unknown[] = []): Promis
 function inlineIds(ids: number[]): string {
   if (!ids || !ids.length) return "0";
   return ids.map(Number).join(",");
+}
+
+// Rev. 3750 — COBERTURA de cheque devolvido por IDENTIDADE do cheque (doc/nº + valor),
+// não pelo id volátil da linha do extrato. Re-imports de extrato CRIAM linhas novas e
+// EXCLUEM as antigas (rotação de bank_statement_lines.id); um vínculo ancorado numa linha
+// antiga ficava órfão e a cobertura lia 0 ("vinculado, mas valor zerado") mesmo com o
+// vínculo gravado. Aqui casamos os vínculos pela linha de débito EXATA (compat.) OU pela
+// mesma identidade de cheque (doc/nº parseado da descrição da linha de débito + valor abs).
+// READ-ONLY: só lê/soma; não cria/altera linha de extrato (regra de ouro Rev. 3747).
+async function _coberturaChequeDevolvido(db: any, companyId: number, debitoLineId: number) {
+  const dSel = await dbExecute(db,
+    `SELECT valor, descricao FROM bank_statement_lines WHERE id=$1 AND company_id=$2`,
+    [debitoLineId, companyId]);
+  const d = rows(dSel)[0] as any;
+  const cents = Math.round(Math.abs(Number(d?.valor ?? 0)) * 100);
+  const doc = parseDocNumero(d?.descricao);
+  const chq = parseChequeNumero(d?.descricao);
+  const vSel = await dbExecute(db,
+    `SELECT v.id, v.debito_line_id AS "debitoLineId", v.pix_line_id AS "pixLineId", v.valor,
+            dl.descricao AS "debDescricao", dl.valor AS "debValor"
+       FROM bank_cheque_vinculos v
+       LEFT JOIN bank_statement_lines dl ON dl.id = v.debito_line_id
+      WHERE v.company_id=$1 AND v.estornado_em IS NULL`,
+    [companyId]);
+  const todos = rows(vSel) as any[];
+  const meus = todos.filter((v) => _mesmoChequeDevolvido(
+    { debitoLineId, cents, doc, chq },
+    { debitoLineId: Number(v.debitoLineId), cents: Math.round(Math.abs(Number(v.debValor ?? 0)) * 100), doc: parseDocNumero(v.debDescricao), chq: parseChequeNumero(v.debDescricao) },
+  ));
+  const acumCents = meus.reduce((s, v) => s + Math.round(Number(v.valor) * 100), 0);
+  return { cents, doc, chq, meus, acumCents };
+}
+
+// Casa duas referências de cheque devolvido: mesma linha de débito (exata) OU mesma
+// identidade lógica (valor abs igual + mesmo doc OU mesmo nº de cheque). Usado tanto na
+// cobertura por linha (helper acima) quanto no lote (getChequeDevolvidoVinculacao).
+function _mesmoChequeDevolvido(
+  a: { debitoLineId: number; cents: number; doc: string | null; chq: string | null },
+  b: { debitoLineId: number; cents: number; doc: string | null; chq: string | null },
+): boolean {
+  if (Number.isFinite(a.debitoLineId) && a.debitoLineId === b.debitoLineId) return true;
+  if (!a.cents || a.cents !== b.cents) return false;
+  if (a.doc && b.doc && a.doc === b.doc) return true;
+  if (a.chq && b.chq && a.chq === b.chq) return true;
+  return false;
 }
 
 // Rev. 3239 — Normaliza nome de fornecedor p/ AGRUPAR variações de caixa/acento como
@@ -12037,12 +12082,12 @@ export const financialRouter = router({
       pixLine = rows(pixSel)[0] as any;
       if (!pixLine) throw new TRPCError({ code: "BAD_REQUEST", message: "Linha do PIX/TED não encontrada nesta empresa." });
       if (Number(pixLine.valor) >= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "O pagamento substituto deve ser um débito (saída) do extrato." });
-      const dupSel = await dbExecute(db,
-        `SELECT id FROM bank_cheque_vinculos
-          WHERE company_id=$1 AND debito_line_id=$2 AND pix_line_id=$3 AND estornado_em IS NULL
-          LIMIT 1`,
-        [input.companyId, input.debitoLineId, input.pixLineId]);
-      if (rows(dupSel).length) throw new TRPCError({ code: "BAD_REQUEST", message: "Esta linha do extrato já está vinculada a este cheque." });
+      // Rev. 3750 — dup por IDENTIDADE do cheque (não só pela linha exata): se a linha de
+      // débito girou de id num re-import, o mesmo PIX não pode ser vinculado 2x ao cheque.
+      const covDup = await _coberturaChequeDevolvido(db, input.companyId, input.debitoLineId);
+      if (covDup.meus.some((v) => Number(v.pixLineId) === Number(input.pixLineId))) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Esta linha do extrato já está vinculada a este cheque." });
+      }
     }
 
     // 2.5) valida a linha de CRÉDITO (devolução) do par, se informada — empresa + entrada (valor>0).
@@ -12058,12 +12103,10 @@ export const financialRouter = router({
       if (Number(cred.valor) <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "A linha de devolução deve ser um crédito (entrada) do extrato." });
     }
 
-    // 3) cobertura atual + guard de saldo (não deixa vincular além do valor do cheque)
-    const covSel = await dbExecute(db,
-      `SELECT COALESCE(SUM(valor),0) AS acum FROM bank_cheque_vinculos
-        WHERE company_id=$1 AND debito_line_id=$2 AND estornado_em IS NULL`,
-      [input.companyId, input.debitoLineId]);
-    const acumAntesCents = Math.round(Number(rows(covSel)[0]?.acum ?? 0) * 100);
+    // 3) cobertura atual + guard de saldo (não deixa vincular além do valor do cheque).
+    //    Rev. 3750 — soma por IDENTIDADE do cheque (resiliente à rotação de id de linha).
+    const covAntes = await _coberturaChequeDevolvido(db, input.companyId, input.debitoLineId);
+    const acumAntesCents = covAntes.acumCents;
     const novoCents = Math.round(input.valor * 100);
     if (acumAntesCents + novoCents > chequeCents + 1) {
       const saldo = Math.max(0, (chequeCents - acumAntesCents) / 100);
@@ -12156,15 +12199,10 @@ export const financialRouter = router({
       [ctx.user?.id ?? null, porNome, input.motivo ?? null, input.motivo ?? null, input.vinculoId, input.companyId]);
 
     const debitoLineId = Number(v.debitoLineId);
-    const debSel = await dbExecute(db,
-      `SELECT valor FROM bank_statement_lines WHERE id=$1 AND company_id=$2`,
-      [debitoLineId, input.companyId]);
-    const chequeCents = Math.round(Math.abs(Number(rows(debSel)[0]?.valor ?? 0)) * 100);
-    const covSel = await dbExecute(db,
-      `SELECT COALESCE(SUM(valor),0) AS acum FROM bank_cheque_vinculos
-        WHERE company_id=$1 AND debito_line_id=$2 AND estornado_em IS NULL`,
-      [input.companyId, debitoLineId]);
-    const acumCents = Math.round(Number(rows(covSel)[0]?.acum ?? 0) * 100);
+    // Rev. 3750 — cobertura por IDENTIDADE do cheque (já exclui o vínculo recém-estornado).
+    const covPos = await _coberturaChequeDevolvido(db, input.companyId, debitoLineId);
+    const chequeCents = covPos.cents;
+    const acumCents = covPos.acumCents;
     const quitado = chequeCents > 0 && acumCents >= chequeCents - 1;
     if (!quitado) {
       const parIds = [debitoLineId, ...(v.creditoLineId ? [Number(v.creditoLineId)] : [])];
@@ -12194,6 +12232,8 @@ export const financialRouter = router({
       creditoLineId: z.number().optional(),
       valor: z.number(),      // valor absoluto do cheque (reais)
       dataRef: z.string().optional(), // data do débito (YYYY-MM-DD)
+      doc: z.string().optional(),          // Rev. 3750 — doc do cheque (identidade estável)
+      chequeNumero: z.string().optional(), // Rev. 3750 — nº do cheque (identidade estável)
     })).max(300),
   })).query(async ({ input, ctx }) => {
     const db = await getDb();
@@ -12204,22 +12244,31 @@ export const financialRouter = router({
     const debIds = Array.from(new Set(input.itens.map((i) => Number(i.debitoLineId)).filter((n) => Number.isFinite(n) && n > 0)));
     if (!debIds.length) return { mapa };
 
+    // Rev. 3750 — NÃO filtra por debito_line_id IN (...): traz TODOS os vínculos ativos da
+    // empresa + a descrição/valor da linha de débito de cada um, p/ casar por IDENTIDADE do
+    // cheque (doc/nº + valor) e não só pelo id volátil da linha (que gira em re-imports).
     const vSel = await dbExecute(db,
       `SELECT v.id, v.debito_line_id AS "debitoLineId", v.tipo, v.pix_line_id AS "pixLineId",
               v.valor, to_char(v.data,'YYYY-MM-DD') AS data, v.descricao,
               v.cheque_numero AS "chequeNumero", v.criado_por_nome AS "criadoPorNome",
               v.created_at AS "createdAt",
+              dl.descricao AS "debDescricao", dl.valor AS "debValor",
               to_char(p.data,'YYYY-MM-DD') AS "pixData", p.descricao AS "pixDescricao",
               p.valor AS "pixValor", p.conta_bancaria_id AS "pixContaId",
               cba.apelido AS "pixContaApelido", cba.banco AS "pixContaBanco", cba.conta AS "pixContaNum"
          FROM bank_cheque_vinculos v
+         LEFT JOIN bank_statement_lines dl ON dl.id = v.debito_line_id
          LEFT JOIN bank_statement_lines p ON p.id = v.pix_line_id
          LEFT JOIN company_bank_accounts cba ON cba.id = v.pix_conta_bancaria_id
         WHERE v.company_id=$1 AND v.estornado_em IS NULL
-          AND v.debito_line_id IN (${inlineIds(debIds)})
         ORDER BY v.created_at ASC, v.id ASC`,
       [input.companyId]);
-    const vinc = rows(vSel) as any[];
+    const vinc = (rows(vSel) as any[]).map((v) => ({
+      ...v,
+      _idDoc: parseDocNumero(v.debDescricao),
+      _idChq: parseChequeNumero(v.debDescricao),
+      _idCents: Math.round(Math.abs(Number(v.debValor ?? 0)) * 100),
+    }));
 
     const valoresCents = Array.from(new Set(input.itens.map((i) => Math.round(Math.abs(Number(i.valor)) * 100)).filter((c) => c > 0)));
     let candAll: any[] = [];
@@ -12252,7 +12301,13 @@ export const financialRouter = router({
       const dbid = Number(it.debitoLineId);
       const chequeCents = Math.round(Math.abs(Number(it.valor)) * 100);
       const ref = it.dataRef ? String(it.dataRef).slice(0, 10) : null; // data do débito (YYYY-MM-DD)
-      const meus = vinc.filter((x) => Number(x.debitoLineId) === dbid);
+      // Rev. 3750 — casa por linha exata OU identidade do cheque (doc/nº + valor).
+      const itDoc = it.doc != null ? String(it.doc) : null;
+      const itChq = it.chequeNumero != null ? String(it.chequeNumero) : null;
+      const meus = vinc.filter((x) => _mesmoChequeDevolvido(
+        { debitoLineId: dbid, cents: chequeCents, doc: itDoc, chq: itChq },
+        { debitoLineId: Number(x.debitoLineId), cents: x._idCents, doc: x._idDoc, chq: x._idChq },
+      ));
       const acumCents = meus.reduce((s, x) => s + Math.round(Number(x.valor) * 100), 0);
       const pixDoCheque = new Set(meus.map((x) => Number(x.pixLineId)).filter(Boolean));
       const sugestoes = candAll

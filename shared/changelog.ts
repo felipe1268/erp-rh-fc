@@ -1,6 +1,42 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3750 — **CONCILIAÇÃO BANCÁRIA · "VINCULAR CHEQUE DEVOLVIDO A PIX/TED" (Rev. 3747): CHEQUE COM VÍNCULO ATIVO (RE-VINCULAR DAVA "ESTA LINHA DO EXTRATO JÁ ESTÁ VINCULADA A ESTE CHEQUE") MOSTRAVA O CABEÇALHO "VINCULADO R$ 0,00" / SALDO CHEIO E A SEÇÃO "VÍNCULOS REGISTRADOS" SUMIA. EX.: CHEQUE DOC 1063, PIER BRASIL, R$ 4.344,60 (VÍNCULO REAL R$ 3.212,92). CAUSA: A COBERTURA ERA ANCORADA NO `debito_line_id` (id VOLÁTIL de `bank_statement_lines`); RE-IMPORTS DE EXTRATO CRIAM LINHAS NOVAS E EXCLUEM AS ANTIGAS, ÓRFÃO DO VÍNCULO. AGORA A COBERTURA CASA POR IDENTIDADE DO CHEQUE (doc/nº + valor). 100% BUGFIX · ZERO SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Sintoma: na Conciliação Bancária (empresa 60002), o diálogo "Vincular cheque devolvido a PIX/TED" do Cheque
+ * Doc 1063 (PIER BRASIL, R$ 4.344,60) exibia "Vinculado R$ 0,00" e saldo integral, e a seção "Vínculos registrados"
+ * não aparecia — MAS tentar re-vincular o mesmo PIX dava "Esta linha do extrato já está vinculada a este cheque",
+ * provando que o vínculo EXISTIA (id=1, R$ 3.212,92).
+ *
+ * Causa-raiz (confirmada por consulta direta ao Neon): o vínculo é ancorado na LINHA DE DÉBITO do cheque no
+ * extrato (`bank_cheque_vinculos.debito_line_id`). Esse id NÃO é estável: a importação/re-importação de extrato
+ * recria as linhas (`bank_statement_lines`) com novos ids e exclui (soft-delete) as antigas — o histórico desta
+ * empresa tinha DEZENAS de linhas duplicadas excluídas, evidência da rotação. Quando a linha-âncora do vínculo
+ * (id 12868) é trocada por uma nova num re-import, o report passa a escolher um `debitoId` DIFERENTE para o mesmo
+ * cheque (via `detectarParesEstorno`/`escolherDebito`), e tanto `getChequeDevolvidoVinculacao(novoId)` quanto o
+ * cabeçalho do diálogo (`vincMap[debId]`) liam 0 — o vínculo virava órfão por id. Agravante de frontend: o objeto
+ * `chq` do diálogo é uma REF CONGELADA no momento da abertura (`vincularPixDlg.cheque`), enquanto `vincMap` é
+ * recalculado a partir do `repDevol` VIVO — após um re-fetch do report, a key congelada deixava de existir no mapa.
+ *
+ * Fix (zero schema; READ-ONLY — regra de ouro Rev. 3747 mantida: vincular NUNCA cria/altera linha do extrato):
+ * 1) BACKEND (`server/routers/financial.ts`): novo helper top-level `_coberturaChequeDevolvido(db, companyId,
+ *    debitoLineId)` + `_mesmoChequeDevolvido(a,b)` que casam vínculos pela linha de débito EXATA (compat.) OU pela
+ *    IDENTIDADE LÓGICA do cheque — valor absoluto igual E (mesmo `doc` OU mesmo `cheque_numero` parseados via
+ *    `parseDocNumero`/`parseChequeNumero` da DESCRIÇÃO da linha de débito de cada vínculo, lida por LEFT JOIN). Usado
+ *    em: `registrarVinculoChequeDevolvido` (dup-check vira "este PIX já está em ALGUM vínculo deste cheque" + guard
+ *    de saldo por identidade), `estornarVinculoChequeDevolvido` (re-cobertura por identidade) e
+ *    `getChequeDevolvidoVinculacao` (a query de vínculos deixou de filtrar por `debito_line_id IN (...)`: traz TODOS
+ *    os vínculos ativos da empresa + descrição/valor da linha de débito, e o loop casa por identidade — o `mapa`
+ *    segue keyed pelo `debitoLineId` do item, então o cheque resolve a cobertura mesmo com a linha-âncora rotacionada).
+ *    O schema dos itens ganhou `doc`/`chequeNumero` opcionais.
+ * 2) FRONTEND (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`): `vincItens` passa `doc`/`chequeNumero` do
+ *    cheque; e o diálogo resolve o cheque VIVO em `repDevol` (match por valorCents + doc/nº, fallback ao debitoId
+ *    congelado) antes de ler `vincMap`, de modo que `debId` seja sempre uma key viva do mapa.
+ * Validação: consulta ao Neon confirmou o vínculo id=1 (debito_line_id=12868, desc "CHEQUE COMPENSADO · Doc 001063",
+ * cheque −R$ 4.344,60, valor do vínculo R$ 3.212,92). `parseDocNumero` normaliza "001063"→"1063" nos dois lados;
+ * cents 434460 batem → cobertura volta a somar R$ 3.212,92 e a seção "Vínculos registrados" reaparece, agora imune à
+ * rotação de id de linha. Conciliação/vínculo seguem SÓ SUGESTIVOS.
+ *
  * Rev. 3749 — **CONCILIAÇÃO BANCÁRIA · "CONCILIAR SELECIONADAS (N)" COM MAIS DE UM PAGAMENTO FALHAVA COM TOAST "ERRO AO CONCILIAR / Failed to execute 'json' on 'Response': Unexpected end of JSON input", APESAR DE O SERVIDOR TER PROCESSADO E GRAVADO (SUCESSO PARCIAL SILENCIOSO). CONCILIAR 1 FUNCIONAVA. CAUSA: O HANDLER FAZIA 2-3 ROUND-TRIPS AO BANCO POR PAR, EM SÉRIE, ANTES DE ENVIAR O 1º BYTE; COM VÁRIOS CHEQUES A JANELA DE CONEXÃO ABERTA CRESCIA E A RESPOSTA SE PERDIA NO PROXY DO PREVIEW. AGORA TUDO EM UM ÚNICO STATEMENT SET-BASED (CTE), ATÔMICO E IDEMPOTENTE. 100% BUGFIX · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Sintoma: na Conciliação Bancária, selecionar 3 cheques compensados (ex.: Doc 001052→PIX HELIO com override

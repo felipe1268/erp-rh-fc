@@ -1233,6 +1233,9 @@ export default function FinanceiroConciliacao() {
       creditoLineId: d.creditoId != null ? Number(d.creditoId) : undefined,
       valor: Math.abs(Number(d.valor) || (Number(d.valorCents) || 0) / 100),
       dataRef: String(d.dataDebito ?? d.dataCredito ?? "").slice(0, 10) || undefined,
+      // Rev. 3750 — identidade estável do cheque (doc/nº) p/ cobertura resiliente à rotação de id de linha.
+      doc: d.doc != null ? String(d.doc) : undefined,
+      chequeNumero: d.chequeNumero != null ? String(d.chequeNumero) : undefined,
     }))
     .filter((x: any) => Number.isFinite(x.debitoLineId) && x.debitoLineId > 0);
   const { data: vincLoteData } = (trpc as any).financial.getChequeDevolvidoVinculacao.useQuery(
@@ -6692,7 +6695,22 @@ export default function FinanceiroConciliacao() {
             busca em TODAS as contas, histórico + estorno por vínculo, "Quitar saldo" (ajuste).
             REGRA DE OURO: vincular NUNCA cria/altera linha no extrato — só marca o cheque. */}
         {vincularPixDlg != null && createPortal((() => {
-          const chq = vincularPixDlg.cheque;
+          // Rev. 3750 — o cheque guardado no estado do diálogo é uma REF CONGELADA no momento
+          // da abertura; após um re-fetch do report a linha de débito pode trocar de id. Resolve
+          // o cheque VIVO em repDevol (por identidade doc/nº + valor) p/ que debId seja sempre
+          // uma chave viva de vincMap — senão o cabeçalho lê "Vinculado R$ 0,00" indevidamente.
+          const chqFrozen = vincularPixDlg.cheque;
+          const fCents = chqFrozen.valorCents != null ? Number(chqFrozen.valorCents) : Math.round(Math.abs(Number(chqFrozen.valor ?? 0)) * 100);
+          const fDoc = chqFrozen.doc != null ? String(chqFrozen.doc) : null;
+          const fChq = chqFrozen.chequeNumero != null ? String(chqFrozen.chequeNumero) : null;
+          const chqLive = repDevol.find((r: any) => {
+            const rCents = r.valorCents != null ? Number(r.valorCents) : Math.round(Math.abs(Number(r.valor ?? 0)) * 100);
+            if (rCents !== fCents) return false;
+            if (fDoc != null && r.doc != null) return String(r.doc) === fDoc;
+            if (fChq != null && r.chequeNumero != null) return String(r.chequeNumero) === fChq;
+            return Number(r.debitoId) === Number(chqFrozen.debitoId);
+          });
+          const chq = chqLive ?? chqFrozen;
           const debId = Number(chq.debitoId);
           const credId = chq.creditoId != null ? Number(chq.creditoId) : undefined;
           const valCents = chq.valorCents != null ? Number(chq.valorCents) : Math.round(Math.abs(Number(chq.valor ?? 0)) * 100);
