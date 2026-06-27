@@ -2750,6 +2750,7 @@ export default function FinanceiroConciliacao() {
                   className="h-9 border-teal-600 text-teal-700 hover:bg-teal-50"
                   onClick={() => setShowConferirCheques(true)}
                   title="Cheques compensados que conferem com o extrato e ainda não foram conciliados — revise e confirme em lote"
+                  style={{ display: "none" }}
                 >
                   <Link2 className="w-3.5 h-3.5 mr-1.5" />Conferir cheques
                 </Button>
