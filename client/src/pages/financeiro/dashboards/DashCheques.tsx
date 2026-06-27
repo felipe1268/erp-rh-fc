@@ -121,23 +121,40 @@ export default function DashCheques() {
   const { companyId } = useCompany();
   const [, setLocation] = useLocation();
   const [ano, setAno] = useState(new Date().getFullYear());
+  // Filtro mês a mês (0 = ano todo; 1-12 = mês específico). Mesmo padrão da Conciliação Bancária.
+  const [mes, setMes] = useState(0);
   const ir = () => setLocation(DESTINO);
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  const dataInicio = mes === 0 ? `${ano}-01-01` : `${ano}-${pad2(mes)}-01`;
+  const dataFim = mes === 0 ? `${ano}-12-31` : `${ano}-${pad2(mes)}-${pad2(new Date(ano, mes, 0).getDate())}`;
+  const periodoLabel = mes === 0 ? `${ano}` : `${MESES_ABREV[mes - 1]}/${ano}`;
 
-  const { data: resumo, refetch: r1 } = (trpc as any).cheques.resumo.useQuery({ companyId, ano }, { enabled: !!companyId });
-  const { data: verif, refetch: r2 } = (trpc as any).cheques.verificarExtratoResumo.useQuery({ companyId, ano }, { enabled: !!companyId });
+  // KPIs e conferência: agregados do backend, escopados ao período (mês quando selecionado).
+  const { data: resumo, refetch: r1 } = (trpc as any).cheques.resumo.useQuery({ companyId, ano, mes: mes || undefined }, { enabled: !!companyId });
+  const { data: verif, refetch: r2 } = (trpc as any).cheques.verificarExtratoResumo.useQuery({ companyId, ano, mes: mes || undefined }, { enabled: !!companyId });
+  // Lista do ANO inteiro (limit 2000) — alimenta os gráficos MENSAIS (year-wide por design) e a
+  // régua "com dados"; os cards de status/rankings filtram por mês no client (const `cheques`).
   const { data: lista, isLoading, refetch: r3 } = (trpc as any).cheques.listar.useQuery({ companyId, ano, limit: 2000 }, { enabled: !!companyId });
   const { data: listaPrev } = (trpc as any).cheques.listar.useQuery({ companyId, ano: ano - 1, limit: 2000 }, { enabled: !!companyId });
-  // Cheques devolvidos do ANO — motivos só existem no extrato (conciliação), não na tabela
-  // de cheques. Janela = ano inteiro. READ-ONLY (conciliação só sugestiva).
+  // Cheques devolvidos — motivos só existem no extrato (conciliação), não na tabela de cheques.
+  // Janela = período selecionado (mês ou ano). READ-ONLY (conciliação só sugestiva).
   const { data: devReport, refetch: r4 } = (trpc as any).financial.getConciliacaoReportGeral.useQuery(
-    { companyId, dataInicio: `${ano}-01-01`, dataFim: `${ano}-12-31` },
+    { companyId, dataInicio, dataFim },
     { enabled: !!companyId },
   );
   const refetch = () => { r1(); r2(); r3(); r4(); };
 
   const rowsResumo: any[] = Array.isArray(resumo) ? resumo : [];
-  const cheques: any[] = Array.isArray(lista) ? lista : [];
+  const chequesAno: any[] = Array.isArray(lista) ? lista : [];
   const chequesPrev: any[] = Array.isArray(listaPrev) ? listaPrev : [];
+  // Visão por mês (client-side) p/ os cards de status, rankings e análise gerencial.
+  const cheques = useMemo(() => (mes === 0 ? chequesAno : chequesAno.filter((c) => Number(c.mes) === mes)), [chequesAno, mes]);
+  // Régua "Com dados / Sem dados" — qualquer cheque no mês marca o dot verde.
+  const mesesComDados = useMemo(() => {
+    const s = new Set<number>();
+    for (const c of chequesAno) { const i = Number(c.mes); if (i >= 1 && i <= 12) s.add(i); }
+    return s;
+  }, [chequesAno]);
 
   const [det, setDet] = useState<{ title: string; subtitle?: string; rows: any[] } | null>(null);
   const abrir = (title: string, subtitle: string, list: any[]) => setDet({ title, subtitle, rows: list });
@@ -152,9 +169,9 @@ export default function DashCheques() {
 
   const serieAtual = useMemo(() => {
     const a = new Array(12).fill(0);
-    for (const c of cheques) { const m = Number(c.mes) || 0; if (m >= 1 && m <= 12) a[m - 1] += Number(c.valor) || 0; }
+    for (const c of chequesAno) { const m = Number(c.mes) || 0; if (m >= 1 && m <= 12) a[m - 1] += Number(c.valor) || 0; }
     return a;
-  }, [cheques]);
+  }, [chequesAno]);
   const seriePrev = useMemo(() => {
     const a = new Array(12).fill(0);
     for (const c of chequesPrev) { const m = Number(c.mes) || 0; if (m >= 1 && m <= 12) a[m - 1] += Number(c.valor) || 0; }
@@ -252,13 +269,13 @@ export default function DashCheques() {
 
   const statusKeys = useMemo(() => {
     const rank = (s: string) => { const t = String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim(); if (t.includes("compens")) return 0; if (t.includes("pend")) return 1; return 2; };
-    return Array.from(new Set(cheques.map((c) => statusEf(c)))).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
-  }, [cheques]);
+    return Array.from(new Set(chequesAno.map((c) => statusEf(c)))).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+  }, [chequesAno]);
   const evolStatus = useMemo(() => {
     const base = MESES_ABREV.map((m) => { const o: any = { mes: m }; statusKeys.forEach((k) => (o[cap(k)] = 0)); return o; });
-    for (const c of cheques) { const mi = (Number(c.mes) || 0) - 1; if (mi < 0 || mi > 11) continue; base[mi][cap(statusEf(c))] += Number(c.valor) || 0; }
+    for (const c of chequesAno) { const mi = (Number(c.mes) || 0) - 1; if (mi < 0 || mi > 11) continue; base[mi][cap(statusEf(c))] += Number(c.valor) || 0; }
     return base;
-  }, [cheques, statusKeys]);
+  }, [chequesAno, statusKeys]);
 
   const porBanco = useMemo(() => {
     const acc: Record<string, { value: number; qtd: number }> = {};
@@ -308,11 +325,50 @@ export default function DashCheques() {
       <div className="max-w-[1600px] mx-auto p-4 md:p-6 space-y-5">
         <DashHeader
           theme="violet" icon={Banknote} title="Dashboard · Controle de Cheques"
-          subtitle={`Emissão e conferência com o extrato · ${ano}`} ano={ano} onAno={setAno} onRefresh={refetch}
+          subtitle={`Emissão e conferência com o extrato · ${periodoLabel}`} ano={ano} onAno={setAno} onRefresh={refetch}
         />
 
+        {/* ── Seletor de período (mês) — white-card padrão PERÍODO (igual Conciliação Bancária) ── */}
+        <div className="rounded-2xl border border-slate-200 shadow-sm bg-white overflow-hidden">
+          <div className="px-4 pt-3 pb-1 flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Período</span>
+            <div className="flex items-center gap-3 text-xs text-gray-400">
+              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />Com dados</span>
+              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-gray-300 inline-block" />Sem dados</span>
+            </div>
+          </div>
+          <div className="px-4 py-3 grid grid-cols-7 sm:grid-cols-13 gap-1.5">
+            <button type="button"
+              onClick={() => setMes(0)}
+              className={`relative flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all
+                ${mes === 0
+                  ? "border-violet-500 bg-violet-50 text-violet-700 shadow-sm"
+                  : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50"}`}
+            >
+              <span>Tudo</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-transparent" />
+            </button>
+            {MESES_ABREV.map((m, i) => {
+              const numMes = i + 1;
+              const isSelected = mes === numMes;
+              const dotColor = mesesComDados.has(numMes) ? "bg-emerald-500" : "bg-gray-300";
+              return (
+                <button key={m} type="button" onClick={() => setMes(numMes)}
+                  className={`relative flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all
+                    ${isSelected
+                      ? "border-violet-500 bg-violet-50 text-violet-700 shadow-sm"
+                      : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50"}`}
+                >
+                  <span>{m}</span>
+                  <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <KpiCard icon={ListChecks} label="Cheques no ano" value={String(kpis.qtd)} sub={formatBRL(kpis.total)} onClick={ir} />
+          <KpiCard icon={ListChecks} label={mes === 0 ? "Cheques no ano" : "Cheques no mês"} value={String(kpis.qtd)} sub={formatBRL(kpis.total)} onClick={ir} />
           <KpiCard icon={CheckCircle2} label="Conferidos no extrato" value={formatBRL(Number(verif?.valorJaConferidos) || 0)} tone="good"
             sub={`${Number(verif?.jaConferidos) || 0} cheques`} onClick={() => abrir("Cheques conferidos no extrato", "Compensados e marcados", filtraConferencia("conferido"))} />
           <KpiCard icon={Wallet} label="Confere — falta marcar" value={formatBRL(Number(verif?.valorAConferir) || 0)} tone="warn"
@@ -322,7 +378,7 @@ export default function DashCheques() {
         </div>
 
         {semDados ? (
-          <div className="py-20"><EmptyState message={`Nenhum cheque encontrado em ${ano}.`} /></div>
+          <div className="py-20"><EmptyState message={`Nenhum cheque encontrado em ${periodoLabel}.`} /></div>
         ) : (
           <>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -375,8 +431,8 @@ export default function DashCheques() {
                 </div>
 
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  <KpiCard icon={AlertTriangle} label="Devolvidos no ano" value={String(devStats.qtd)} sub={formatBRL(devStats.total)} tone="bad"
-                    onClick={() => abrirDev("Cheques devolvidos", `Todos os devolvidos de ${ano}`, devolvidos)} />
+                  <KpiCard icon={AlertTriangle} label={mes === 0 ? "Devolvidos no ano" : "Devolvidos no mês"} value={String(devStats.qtd)} sub={formatBRL(devStats.total)} tone="bad"
+                    onClick={() => abrirDev("Cheques devolvidos", `Todos os devolvidos de ${periodoLabel}`, devolvidos)} />
                   <KpiCard icon={Ban} label="Sem fundos" value={String(devStats.semFundo.length)} sub={formatBRL(devStats.valSemFundo)} tone="bad"
                     onClick={() => abrirDev("Cheques sem fundos", "Motivo 11/12 — insuficiência de fundos", devStats.semFundo)} />
                   <KpiCard icon={XCircle} label="Sustados / contraordem" value={String(devStats.sustados.length)} sub={formatBRL(devStats.valSustados)} tone="warn"
@@ -426,7 +482,7 @@ export default function DashCheques() {
             <ChartCard title="Valor de cheques por mês" subtitle="Clique numa barra para ver os cheques do mês" onOpen={ir} height={300}>
               <ResponsiveContainer>
                 <BarChart data={porMes} margin={{ top: 8, right: 8, left: 4, bottom: 0 }}
-                  onClick={(st) => barClick(st, (l) => { const mi = MESES_ABREV.indexOf(l) + 1; abrir(`Cheques · ${l}/${ano}`, "Cheques do mês", cheques.filter((c) => Number(c.mes) === mi)); })}>
+                  onClick={(st) => barClick(st, (l) => { const mi = MESES_ABREV.indexOf(l) + 1; abrir(`Cheques · ${l}/${ano}`, "Cheques do mês", chequesAno.filter((c) => Number(c.mes) === mi)); })}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
                   <XAxis dataKey="mes" tick={{ fontSize: 11, fill: "#64748b" }} />
                   <YAxis tickFormatter={formatBRLCompact} tick={{ fontSize: 11, fill: "#64748b" }} width={70} />
@@ -441,7 +497,7 @@ export default function DashCheques() {
               subtitle={`Valor emitido em ${ano} vs ${ano - 1} · seta verde = caiu · ${ano - 1}: ${formatBRL(totalPrev)}`}
               serieAtual={serieAtual} seriePrev={seriePrev}
               anoAtual={ano} anoPrev={ano - 1} goodWhen="down" valorLabel="Cheques"
-              onOpenMes={(i) => abrir(`Cheques · ${MESES_ABREV[i]}/${ano}`, "Cheques do mês", cheques.filter((c) => Number(c.mes) === i + 1))}
+              onOpenMes={(i) => abrir(`Cheques · ${MESES_ABREV[i]}/${ano}`, "Cheques do mês", chequesAno.filter((c) => Number(c.mes) === i + 1))}
             />
 
             <ChartCard title="Top fornecedores (cheques)" subtitle="Clique numa barra para ver os cheques" onOpen={ir} height={Math.max(220, topFornecedores.length * 38)}>
@@ -504,7 +560,7 @@ export default function DashCheques() {
                           const l = d?.payload?.mes; if (l == null) return;
                           const mi = MESES_ABREV.indexOf(l) + 1;
                           abrir(`Cheques · ${l}/${ano} · ${cap(k)}`, "Cheques do mês nesta situação",
-                            cheques.filter((c) => Number(c.mes) === mi && cap(statusEf(c)) === cap(k)));
+                            chequesAno.filter((c) => Number(c.mes) === mi && cap(statusEf(c)) === cap(k)));
                         }}
                       />
                     ))}
@@ -600,7 +656,7 @@ export default function DashCheques() {
               </ChartCard>
 
               <ChartCard title="Fornecedores recorrentes" subtitle="Mais de um cheque no ano · vezes, meses e valor" onOpen={ir} height={320}>
-                {recorrentes.length === 0 ? <EmptyState message={`Nenhum fornecedor recorrente em ${ano}.`} /> : (
+                {recorrentes.length === 0 ? <EmptyState message={`Nenhum fornecedor recorrente em ${periodoLabel}.`} /> : (
                   <div className="h-full overflow-auto rounded-lg border border-slate-200">
                     <table className="w-full text-xs">
                       <thead className="sticky top-0 bg-slate-100 z-10">

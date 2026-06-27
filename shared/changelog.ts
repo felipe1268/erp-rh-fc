@@ -1,6 +1,31 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3764 — **FINANCEIRO · DASHBOARD · CONTROLE DE CHEQUES · GANHOU O FILTRO "MÊS A MÊS" (SELETOR WHITE-CARD "PERÍODO" COM CHIP "TUDO" + JAN…DEZ, DOT VERDE = COM DADOS / CINZA = SEM DADOS), IGUAL AO QUE JÁ EXISTE NA CONCILIAÇÃO BANCÁRIA. SELECIONAR UM MÊS REESCOPA OS KPIs, A CONFERÊNCIA CONTRA O EXTRATO, OS DEVOLVIDOS E TODOS OS RANKINGS/CARDS DE STATUS; OS GRÁFICOS MENSAIS (VALOR POR MÊS, EVOLUÇÃO DE STATUS, COMPARATIVO ANUAL) SEGUEM YEAR-WIDE POR DESIGN. 100% FRONTEND · ZERO BACKEND/SCHEMA/ALTER/DROP/DELETE.**
+ *
+ * Pedido do usuário (FC ENGENHARIA / company 60002, tela "Dashboard · Controle de Cheques"): replicar aqui o mesmo seletor de
+ * período mês-a-mês que já existe no Dashboard da Conciliação Bancária (Rev. 3755) — para conseguir analisar cheques de um mês
+ * específico, e não só do ano inteiro. Regra de ouro do usuário: seletor de período = white-card (padrão PanoramaFiscal), NUNCA
+ * o DashHeader em gradiente.
+ *
+ * FRONTEND (`client/src/pages/financeiro/dashboards/DashCheques.tsx`), 100% client-side / espelhando `DashConciliacao.tsx`:
+ * - Novo estado `mes` (0 = ano todo; 1-12 = mês). Helpers `pad2`/`dataInicio`/`dataFim`/`periodoLabel` (= ano OU "Mmm/AAAA").
+ * - Os 3 endpoints de cheques já aceitavam `mes`: `cheques.resumo` e `cheques.verificarExtratoResumo` passam a receber
+ *   `mes: mes || undefined` — assim os KPIs (Cheques no período, Conferidos/Confere/Divergências) ficam EXATOS via backend,
+ *   sem depender do limite de 2000 da lista. `getConciliacaoReportGeral` (devolvidos) passa a usar a janela `dataInicio/dataFim`.
+ * - A lista (`cheques.listar`) continua puxando o ANO INTEIRO (`chequesAno`, limit 2000) para alimentar os gráficos MENSAIS
+ *   (year-wide por design) e a régua "com dados"; uma `const cheques` (useMemo) filtra `chequesAno` pelo mês para os cards de
+ *   status, rankings (fornecedores/banco/obra), perfil de parcelas, faixas, prazos e recorrentes.
+ * - `mesesComDados` = Set dos meses com ≥1 cheque em `chequesAno` (pinta o dot verde/cinza dos chips).
+ * - Gráficos year-wide (`serieAtual`, `statusKeys`, `evolStatus`) e seus drill-downs (Valor por mês, Comparativo Anual,
+ *   Evolução de status) passaram a ler/filtrar `chequesAno`, para continuarem funcionando independentemente do mês selecionado.
+ * - UI do seletor inserida logo após o `<DashHeader/>`: white-card "PERÍODO" + grid `grid-cols-7 sm:grid-cols-13`, chip
+ *   selecionado em violet (border-violet-500/bg-violet-50), legenda Com dados/Sem dados. Subtítulos e empty-states trocaram
+ *   `${ano}` por `${periodoLabel}`; KPIs "Cheques no ano"/"Devolvidos no ano" viram "...no mês" quando há mês selecionado.
+ * - READ-ONLY: nada concilia/baixa; conciliação segue só sugestiva.
+ *
+ * Validado: `tsc --noEmit` limpo (filtrado DashCheques.tsx); app HTTP 200.
+ *
  * Rev. 3763 — **FINANCEIRO · CONCILIAÇÃO BANCÁRIA · CHEQUES DEVOLVIDOS QUE JÁ TIVERAM AS 2 LINHAS (COMPENSAÇÃO + DEVOLUÇÃO) CONCILIADAS VOLTAM A APARECER NO CARD "CHEQUES DEVOLVIDOS NO BANCO" — MARCADOS COMO "CONCILIADO NO EXTRATO" (RESOLVIDO). ANTES SUMIAM POR COMPLETO (A DETECÇÃO DO PAR SÓ OLHAVA LINHAS PENDENTES), FAZENDO O USUÁRIO PERDER O HISTÓRICO DE QUE O CHEQUE FOI DEVOLVIDO. BACKEND READ-ONLY · NÃO ALTERA O CÁLCULO DO % · ZERO SCHEMA/ALTER/DROP/DELETE.**
  *
  * Pedido do usuário (FC ENGENHARIA / company 60002, tela "Conciliação Bancária"): o cheque Doc 939 (R$ 4.227,50, devolvido
