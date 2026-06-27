@@ -12650,25 +12650,49 @@ export const financialRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
-    // $N distintos por aparição (dbExecute liga por ORDEM): dataRef passado 2x.
-    const r = await dbExecute(db,
-      `SELECT l.id, to_char(l.data,'YYYY-MM-DD') AS data, l.descricao, l.valor,
+    const colSelect = `SELECT l.id, to_char(l.data,'YYYY-MM-DD') AS data, l.descricao, l.valor,
               l.conta_bancaria_id AS "contaId", l.conciliado, l.entry_id AS "entryId",
               cba.apelido AS "contaApelido", cba.banco AS "contaBanco", cba.conta AS "contaNum"
          FROM bank_statement_lines l
-         LEFT JOIN company_bank_accounts cba ON cba.id = l.conta_bancaria_id
-        WHERE l.company_id=$1
+         LEFT JOIN company_bank_accounts cba ON cba.id = l.conta_bancaria_id`;
+    const whereBase = `WHERE l.company_id=$1
           AND l.excluido_em IS NULL
           AND l.valor < 0
           AND (UPPER(l.descricao) LIKE '%PIX%' OR UPPER(l.descricao) LIKE '%TED%'
                OR UPPER(l.descricao) LIKE '%TRANSF%' OR UPPER(l.descricao) LIKE '%DOC%')
           AND l.data >= ($2::date - ($3 || ' months')::interval)::date
-          AND l.data <= ($4::date + ($5 || ' months')::interval)::date
+          AND l.data <= ($4::date + ($5 || ' months')::interval)::date`;
+    // $N distintos por aparição (dbExecute liga por ORDEM): dataRef passado 2x.
+    const baseParams = [input.companyId, input.dataRef, String(input.mesesAntes),
+                        input.dataRef, String(input.mesesDepois), String(input.valorRef ?? 0)];
+    // Query 1: ordenada por proximidade de valor (LIMIT 300) — sempre executada
+    const r = await dbExecute(db,
+      `${colSelect} ${whereBase}
         ORDER BY ABS(l.valor + $6::numeric) ASC, l.data DESC, l.id DESC
         LIMIT 300`,
-      [input.companyId, input.dataRef, String(input.mesesAntes),
-       input.dataRef, String(input.mesesDepois), String(input.valorRef ?? 0)]);
+      baseParams);
     let linhas = rows(r) as any[];
+
+    // Query 2: quando há busca de TEXTO, rodar query separada com ILIKE p/ não ser
+    // cortada pelo LIMIT de proximidade de valor. Merge com dedup por id.
+    // (Busca por valor BR-formatado continua sendo tratada no filtro JS abaixo.)
+    if (input.busca && input.busca.trim()) {
+      const buscaLike = `%${input.busca.trim().toUpperCase()}%`;
+      // $N distintos: $1=companyId, $2=dataRef, $3=mesesAntes, $4=dataRef, $5=mesesDepois, $6=buscaLike
+      const r2 = await dbExecute(db,
+        `${colSelect} ${whereBase}
+            AND UPPER(l.descricao) LIKE $6
+          ORDER BY l.data DESC, l.id DESC
+          LIMIT 200`,
+        [input.companyId, input.dataRef, String(input.mesesAntes),
+         input.dataRef, String(input.mesesDepois), buscaLike]);
+      const extra = rows(r2) as any[];
+      const ids = new Set(linhas.map((l: any) => Number(l.id)));
+      for (const row of extra) {
+        if (!ids.has(Number(row.id))) { linhas.push(row); ids.add(Number(row.id)); }
+      }
+    }
+
     // pix já vinculados a algum cheque → flag p/ a UI alertar
     const pvSel = await dbExecute(db,
       `SELECT DISTINCT pix_line_id AS "pixLineId" FROM bank_cheque_vinculos
