@@ -1,6 +1,28 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3808 — **FINANCEIRO · DRE · RECLASSIFICAÇÃO CONCEITUAL "CUSTOS DIRETOS DAS OBRAS" (CPC 17 + CPC 33).**
+ * Análise fundamentada em CPC 17 (Contratos de Construção), CPC 33 (Benefícios a Empregados), TCPO/SINAPI
+ * identificou 3 categorias equivocadas no CDO e 5 contas duplicadas/vazias para limpeza:
+ * (1) ALIMENTAÇÃO — 2 entries IFood Benefícios/Zoop (R$99.789,76 + R$308 VR) migrados de
+ *     ALIMENTAÇÃO-OBRA (id=298, custo_obra) → VALE ALIMENTAÇÃO (id=265, Benefícios). Fundamento:
+ *     vale-refeição/alimentação via cartão = benefício trabalhista (CPC 33/IAS 19), NÃO custo de obra.
+ *     Refeição real no canteiro (restaurante, marmita) permanece em ALIMENTAÇÃO-OBRA.
+ * (2) PENSÃO ALIMENTÍCIA — conta id=28 movida do CDO (pai=52, Salários HE Rescisões-Obra) →
+ *     FOLHA DE PAGAMENTO (pai=506). Agora subcategoria de Folha (mesmo nível do Consignado).
+ *     Fundamento: pensão é retenção de folha repassada ao credor, não custo de obra da empresa.
+ * (3) UNIFORME - OBRA — contas id=35+232 reclassificadas custo_obra → despesa_variavel.
+ *     Fundamento: TCPO/SINAPI distinguem EPI (CDO ✓) de uniforme (indireto); NR-18 obriga EPI,
+ *     não uniforme. R$26.346,57 saem do CDO.
+ * (4) conta_nome desync corrigidos: 12 entries (7×APLICAÇÕES→TÍTULOS CAPITALIZAÇÃO;
+ *     4×Juros Recebidos→JUROS E MULTAS BANCÁRIAS; 1×CONSORCIO→CONSÓRCIO VEICULAR).
+ * (5) LIMPEZA DE CONTAS DUPLICADAS/VAZIAS: desativadas 4 contas —
+ *     285 (VALE ALIMENTAÇÃO-ADM, vazia), 385 (PENSÃO ALIM-FÉRIAS, vazia),
+ *     304 (Benefícios duplicado c/ espaço), 438 (COMBUSTÍVEL-EQUIPAMENTOS, filho espúrio de 224);
+ *     entry de 438 migrado → conta 224 (Combustível de Equipamentos).
+ * Impacto no DRE: CDO cai ~R$131.000 (IFood R$100k + Uniforme R$26k + Pensão R$5k);
+ * Benefícios/Folha sobem o equivalente. ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3807 — **FINANCEIRO · PLANO DE CONTAS · REESTRUTURAÇÃO DESPESAS FINANCEIRAS (PARTE 2 — CONFORME CPC/NBC TG).**
  * 8 ajustes executados em uma transação:
  * (1) 20 entries de TÍTULO DE CAPITALIZAÇÃO (37) migrados → TÍTULOS DE CAPITALIZAÇÃO (389).
