@@ -26,8 +26,9 @@ import { PlanejamentoConfigSection } from "@/pages/configuracoes/PlanejamentoCon
 import { MedicaoConfigSection } from "@/pages/configuracoes/MedicaoConfigSection";
 import { IAConfigSection } from "@/pages/configuracoes/IAConfigSection";
 import TemplatesDocsTab from "@/pages/configuracoes/TemplatesDocsTab";
+import XlsxTemplateTab from "@/pages/configuracoes/XlsxTemplateTab";
 import ContratoTemplate from "@/pages/terceiros/contratos/ContratoTemplate";
-import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, ChevronDown, Info, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink, Calculator, ShoppingCart, Warehouse, DollarSign, FolderOpen, FileBarChart, Hammer, Truck, Megaphone, Briefcase, Brain, SlidersHorizontal, GitBranch, Upload, ShieldCheck, ShieldAlert, UserCheck, Receipt } from "lucide-react";
+import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, ChevronDown, Info, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink, Calculator, ShoppingCart, Warehouse, DollarSign, FolderOpen, FileBarChart, Hammer, Truck, Megaphone, Briefcase, Brain, SlidersHorizontal, GitBranch, Upload, ShieldCheck, ShieldAlert, UserCheck, Receipt, FileSpreadsheet } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { removeAccents } from "@/lib/searchUtils";
@@ -93,7 +94,7 @@ const CATEGORIAS = [
   { key: "notificacoes_sistema", label: "Notificações do Sistema", icon: Bell, color: "text-pink-600", bgColor: "bg-pink-50", borderColor: "border-pink-200" },
 ];
 
-type TabKey = "criterios" | "senha" | "limpeza" | "regras" | "notificacoes" | "notif_contabil" | "contrato_pj" | "contrato_terceiros" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos" | "backup" | "terceiros" | "portal_cliente" | "templates_docs" | "socios" | "smtp_config";
+type TabKey = "criterios" | "senha" | "limpeza" | "regras" | "notificacoes" | "notif_contabil" | "contrato_pj" | "contrato_terceiros" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos" | "backup" | "terceiros" | "portal_cliente" | "templates_docs" | "socios" | "smtp_config" | "template_planilha";
 
 // Rev. 2403: mapa estático de cores das abas. CRÍTICO: Tailwind JIT só vê
 // classes LITERAIS no source — interpolação tipo `bg-${c}-500` não gera CSS.
@@ -348,6 +349,7 @@ export default function Configuracoes() {
     { key: "portal_cliente" as TabKey, label: "Portal do Cliente", icon: Shield, minRole: "admin", color: "purple" },
     { key: "limpeza" as TabKey, label: "Limpeza de Dados", icon: Trash2, minRole: "admin_master", color: "rose" },
     { key: "smtp_config" as TabKey, label: "Config. SMTP", icon: Mail, minRole: "admin_master", color: "slate" },
+    { key: "template_planilha" as TabKey, label: "Template de Planilha", icon: FileSpreadsheet, minRole: "admin", color: "emerald" },
     { key: "backup" as TabKey, label: "Backup & Sincronização", icon: Database, minRole: "admin", color: "slate" },
   ];
   const tabs = allTabs.filter(tab => {
@@ -494,6 +496,11 @@ export default function Configuracoes() {
         {/* TAB: Templates de Documentos (Rev. 2141) */}
         {activeTab === "templates_docs" && (
           <TemplatesDocsTab />
+        )}
+
+        {/* TAB: Template de Planilha XLSX (Rev. 3845) */}
+        {activeTab === "template_planilha" && (
+          <XlsxTemplateTab />
         )}
 
         {activeTab === "contrato_terceiros" && (

@@ -1,4 +1,54 @@
 /**
+ * Rev. 3845 — **TEMPLATE FC XLSX · SERVIÇO COMPARTILHADO + ABA "TEMPLATE DE PLANILHA" EM CONFIGURAÇÕES.**
+ *
+ * **O quê:**
+ * Padroniza todas as planilhas XLSX exportadas pelo ERP com o cabeçalho institucional FC
+ * (logo B2:C7 · título D2:lastCol4 · empresa/data row 5 · subtítulo/revisão row 6 · emitido-por row 7 ·
+ * cabeçalho de colunas roxo row 9 · dados row 10+), idêntico ao modelo já usado pelo Extrato Bancário.
+ *
+ * **Novo serviço compartilhado `server/services/excelFcTemplate.ts`:**
+ *   - `applyFcHeader(wb, ws, header, config)` — aplica o bloco logo+título ao worksheet
+ *   - `applyFcColumnHeader(ws, rowNum, startCol, endCol, cor)` — estiliza cabeçalho de colunas
+ *   - `getLogoBuffer()` — localiza e lê o logo FC (candidatos: logo-fc.jpg → logo-fc-branco-amarelo.png → logo_contabilidade.png)
+ *   - `loadFcXlsxConfig(companyId?)` — lê `xlsx_template_config` com cache 60s + fallback para defaults
+ *   - `invalidateFcXlsxConfigCache()` — invalida cache após saveXlsxTemplateConfig
+ *   - `gerarExemploTemplate(config)` — gera workbook de exemplo para preview
+ *   - Constantes exportadas: PURPLE, GREEN_BG, RED_BG, BRL, thin, medium, thinBorder, colLetter, colIndex
+ *
+ * **Nova tabela `xlsx_template_config` (SyncSchema+ Rev.3845):**
+ *   company_id, titulo_empresa, revisao, cor_cabecalho (hex 6 dígitos), aprovado_por, vigente_desde, notas
+ *
+ * **3 novos endpoints em `settings.*`:**
+ *   - `getXlsxTemplateConfig(companyId)` — lê config do banco (role ≥ admin)
+ *   - `saveXlsxTemplateConfig(...)` — upsert + invalida cache (role ≥ admin)
+ *   - `downloadXlsxTemplateExemplo(companyId)` — gera XLSX de exemplo base64 (role ≥ admin)
+ *
+ * **`folhaPagamento.exportarCustosObra` migrado para o template FC:**
+ *   - Antes: simples header azul escuro (#1E3A5F) na row 1 via ws.columns[header]
+ *   - Depois: bloco institucional completo (rows 1-8) + header roxo FC row 9 + dados row 10+
+ *   - Aba "Resumo" também recebe o template FC (colunas B-E, lastDataCol="E")
+ *
+ * **Nova aba "Template de Planilha" em Configurações do Sistema (key: template_planilha):**
+ *   - Formulário: nome empresa, código revisão, aprovado por, vigente desde, notas
+ *   - Paleta de 6 cores predefinidas + color picker customizado
+ *   - Pré-visualização inline da cor selecionada no cabeçalho de colunas
+ *   - Botão "Salvar Configurações" (dirty-check) + botão "Exemplo" (download XLSX de preview)
+ *   - Badge de última atualização (quem + quando)
+ *   - Lista de relatórios afetados pelo template
+ *
+ * **Arquivos tocados:**
+ *   server/services/excelFcTemplate.ts (NOVO)
+ *   server/_core/index.ts (SyncSchema+ Rev.3845)
+ *   server/routers.ts (3 endpoints em settings.*)
+ *   server/routers/folhaPagamento.ts (exportarCustosObra)
+ *   client/src/pages/configuracoes/XlsxTemplateTab.tsx (NOVO)
+ *   client/src/pages/Configuracoes.tsx (TabKey + allTabs + render)
+ *   shared/version.ts, shared/changelog.ts, replit.md
+ *
+ * **ZERO DELETE.** Todos os changes são aditivos.
+ */
+
+/**
  * Rev. 3844 — **PANORAMA FISCAL · AUTO-VÍNCULO NF-e × EXTRATO BANCÁRIO APÓS CONCILIAÇÃO.**
  *
  * Novo serviço `server/services/autoVincularNfService.ts` que, ao finalizar qualquer

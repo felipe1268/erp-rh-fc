@@ -2370,63 +2370,126 @@ export const folhaPagamentoRouter = router({
         }
       }
 
-      // Gerar Excel
+      // Gerar Excel — Rev. 3845: template padrão FC (logo + cabeçalho institucional)
+      const {
+        applyFcHeader, applyFcColumnHeader, loadFcXlsxConfig, thinBorder: fcThin, BRL: fcBRL,
+        GREEN_BG: fcGreen, RED_BG: fcRed, medium: fcMedium, PURPLE: fcPurple,
+      } = await import("../services/excelFcTemplate");
+      const fcConfig = await loadFcXlsxConfig(input.companyId);
+
       const workbook = new ExcelJS.Workbook();
       const mesLabel = input.mesReferencia.replace(/^(\d{4})-(\d{2})$/, (_, y: string, m: string) => {
         const meses = ['','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
         return `${meses[parseInt(m)]} ${y}`;
       });
 
+      // Colunas de dados (B–H): 7 colunas de conteúdo + coluna A vazia
+      const DATA_COLS = ["B","C","D","E","F","G","H"] as const;
+      const COL_HDRS  = ["Funcionário","Função","Horas Trab.","Horas Extras","% Aloc.","Custo Alocado","Vinc. Manual"];
+      const COL_WIDTHS = [40, 25, 15, 15, 12, 20, 15];
+
       for (const [obraNome, rows] of Array.from(obraRows.entries())) {
         const sheetName = obraNome.substring(0, 31).replace(/[\[\]\*\?\/\\:]/g, "-");
         const ws = workbook.addWorksheet(sheetName);
-        ws.columns = [
-          { header: 'Funcionário', key: 'nome', width: 40 },
-          { header: 'Função', key: 'funcao', width: 25 },
-          { header: 'Horas Trab.', key: 'horas', width: 15 },
-          { header: 'Horas Extras', key: 'he', width: 15 },
-          { header: '% Aloc.', key: 'pct', width: 12 },
-          { header: 'Custo Alocado', key: 'custo', width: 18 },
-          { header: 'Vinc. Manual', key: 'vinculacaoManual', width: 15 },
-        ];
-        // Estilizar header
-        ws.getRow(1).font = { bold: true };
-        ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
-        ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
 
+        // Larguras das colunas (A vazia + B-H dados)
+        ws.getColumn("A").width = 1.0;
+        DATA_COLS.forEach((c, i) => { ws.getColumn(c).width = COL_WIDTHS[i]; });
+
+        // Cabeçalho institucional FC (preenche rows 1-8, retorna 9)
+        applyFcHeader(workbook, ws, {
+          titulo:     "RELATÓRIO DE CUSTOS POR OBRA",
+          subtitulo:  `${mesLabel} · ${obraNome}`,
+          lastDataCol: "H",
+        }, fcConfig);
+
+        // Row 9 — cabeçalho das colunas (roxo FC)
+        COL_HDRS.forEach((h, i) => { ws.getCell(`${DATA_COLS[i]}9`).value = h; });
+        applyFcColumnHeader(ws, 9, "B", "H", fcConfig.corCabecalho || fcPurple);
+
+        // Dados a partir de row 10
+        let rowNum = 10;
         let totalCusto = 0;
         for (const row of rows.sort((a, b) => a.nome.localeCompare(b.nome))) {
-          ws.addRow({ nome: row.nome, funcao: row.funcao, horas: row.horas, he: row.he, pct: row.pct, custo: row.custo, vinculacaoManual: row.vinculacaoManual ? 'Sim' : '' });
+          const vals: (string | number)[] = [
+            row.nome, row.funcao, row.horas, row.he,
+            row.pct, row.custo, row.vinculacaoManual ? "Sim" : "",
+          ];
+          DATA_COLS.forEach((c, i) => {
+            const cell = ws.getCell(`${c}${rowNum}`);
+            cell.value  = vals[i];
+            cell.border = fcThin;
+            cell.font   = { name: "Calibri", size: 11 };
+            cell.alignment = { vertical: "middle" };
+          });
+          // Coluna Custo (G) como moeda BRL
+          ws.getCell(`G${rowNum}`).numFmt = fcBRL;
+          ws.getCell(`F${rowNum}`).numFmt = '0.0"%"';
           totalCusto += row.custo;
+          rowNum++;
         }
-        // Linha de total
-        const totalRow = ws.addRow({ nome: 'TOTAL', funcao: '', horas: '', he: '', pct: '', custo: totalCusto, vinculacaoManual: '' });
-        totalRow.font = { bold: true };
-        totalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } };
 
-        // Formatar coluna custo como moeda
-        ws.getColumn('custo').numFmt = '#,##0.00';
+        // Linha de total
+        const totalVals: (string | number)[] = ["TOTAL","","","","", totalCusto,""];
+        DATA_COLS.forEach((c, i) => {
+          const cell = ws.getCell(`${c}${rowNum}`);
+          cell.value  = totalVals[i];
+          cell.font   = { bold: true, name: "Calibri", size: 11 };
+          cell.fill   = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0F0F0" } };
+          cell.border = { top: fcMedium, bottom: fcMedium, left: i === 0 ? fcMedium : { style: "thin" as const, color: { argb: "FF000000" } }, right: i === DATA_COLS.length - 1 ? fcMedium : { style: "thin" as const, color: { argb: "FF000000" } } };
+          cell.alignment = { vertical: "middle" };
+        });
+        ws.getCell(`G${rowNum}`).numFmt = fcBRL;
       }
 
-      // Aba resumo
+      // Aba Resumo — também com template FC
       const resumoWs = workbook.addWorksheet('Resumo');
-      resumoWs.columns = [
-        { header: 'Obra', key: 'obra', width: 40 },
-        { header: 'Funcionários', key: 'qtd', width: 15 },
-        { header: 'Total Custo', key: 'custo', width: 20 },
-        { header: '% do Total', key: 'pct', width: 15 },
-      ];
-      resumoWs.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-      resumoWs.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A5F' } };
+      const RES_COLS  = ["B","C","D","E"] as const;
+      const RES_HDRS  = ["Obra","Funcionários","Total Custo","% do Total"];
+      const RES_WIDTHS = [50, 16, 22, 16];
+      resumoWs.getColumn("A").width = 1.0;
+      RES_COLS.forEach((c, i) => { resumoWs.getColumn(c).width = RES_WIDTHS[i]; });
+
+      applyFcHeader(workbook, resumoWs, {
+        titulo:     "RESUMO DE CUSTOS POR OBRA",
+        subtitulo:  mesLabel,
+        lastDataCol: "E",
+      }, fcConfig);
+
+      RES_HDRS.forEach((h, i) => { resumoWs.getCell(`${RES_COLS[i]}9`).value = h; });
+      applyFcColumnHeader(resumoWs, 9, "B", "E", fcConfig.corCabecalho || fcPurple);
+
       let grandTotal = 0;
       for (const [, rows] of Array.from(obraRows.entries())) grandTotal += rows.reduce((s, r) => s + r.custo, 0);
+
+      let rRow = 10;
       for (const [obraNome, rows] of Array.from(obraRows.entries()).sort((a, b) => b[1].reduce((s, r) => s + r.custo, 0) - a[1].reduce((s, r) => s + r.custo, 0))) {
         const custoObra = rows.reduce((s, r) => s + r.custo, 0);
-        resumoWs.addRow({ obra: obraNome, qtd: rows.length, custo: custoObra, pct: grandTotal > 0 ? Math.round(custoObra / grandTotal * 1000) / 10 : 0 });
+        const pctObra   = grandTotal > 0 ? Math.round(custoObra / grandTotal * 1000) / 10 : 0;
+        const vals      = [obraNome, rows.length, custoObra, pctObra];
+        RES_COLS.forEach((c, i) => {
+          const cell = resumoWs.getCell(`${c}${rRow}`);
+          cell.value  = vals[i];
+          cell.border = fcThin;
+          cell.font   = { name: "Calibri", size: 11 };
+          cell.alignment = { vertical: "middle" };
+        });
+        resumoWs.getCell(`D${rRow}`).numFmt = fcBRL;
+        resumoWs.getCell(`E${rRow}`).numFmt = '0.0"%"';
+        rRow++;
       }
-      const totalResumo = resumoWs.addRow({ obra: 'TOTAL GERAL', qtd: itens.filter(i => i.employeeId).length, custo: grandTotal, pct: 100 });
-      totalResumo.font = { bold: true };
-      resumoWs.getColumn('custo').numFmt = '#,##0.00';
+      // Total geral
+      const totVals = ["TOTAL GERAL", itens.filter(i => i.employeeId).length, grandTotal, 100];
+      RES_COLS.forEach((c, i) => {
+        const cell = resumoWs.getCell(`${c}${rRow}`);
+        cell.value  = totVals[i];
+        cell.font   = { bold: true, name: "Calibri", size: 11 };
+        cell.fill   = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0F0F0" } };
+        cell.border = { top: fcMedium, bottom: fcMedium, left: i === 0 ? fcMedium : { style: "thin" as const, color: { argb: "FF000000" } }, right: i === RES_COLS.length - 1 ? fcMedium : { style: "thin" as const, color: { argb: "FF000000" } } };
+        cell.alignment = { vertical: "middle" };
+      });
+      resumoWs.getCell(`D${rRow}`).numFmt = fcBRL;
+      resumoWs.getCell(`E${rRow}`).numFmt = '0.0"%"';
 
       const buffer = await workbook.xlsx.writeBuffer();
       const base64 = Buffer.from(buffer as ArrayBuffer).toString('base64');

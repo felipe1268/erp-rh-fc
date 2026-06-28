@@ -3018,6 +3018,73 @@ export const appRouter = router({
       const { verificarConexaoSMTP } = await import("./services/smtpService");
       return await verificarConexaoSMTP();
     }),
+
+    // Rev. 3845 — Template padrão FC para planilhas XLSX
+    getXlsxTemplateConfig: protectedProcedure
+      .input(z.object({ companyId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        if (!["admin", "admin_master"].includes(ctx.user.role ?? "")) throw new TRPCError({ code: "FORBIDDEN" });
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+        const rows = await db.$client.query(
+          `SELECT titulo_empresa, revisao, cor_cabecalho, aprovado_por, vigente_desde, notas, updated_at, updated_by
+             FROM xlsx_template_config
+            WHERE company_id = $1
+            ORDER BY id DESC LIMIT 1`,
+          [input.companyId]
+        );
+        if (rows.rows.length === 0) {
+          return { tituloEmpresa: "FC ENGENHARIA E CONSTRUÇÃO LTDA", revisao: "Rev. 01", corCabecalho: "7030A0", aprovadoPor: "Sistema", vigentDesde: null, notas: null, updatedAt: null, updatedBy: null };
+        }
+        const r = rows.rows[0] as any;
+        return { tituloEmpresa: r.titulo_empresa as string, revisao: r.revisao as string, corCabecalho: r.cor_cabecalho as string, aprovadoPor: r.aprovado_por as string | null, vigentDesde: r.vigente_desde as string | null, notas: r.notas as string | null, updatedAt: r.updated_at as string | null, updatedBy: r.updated_by as string | null };
+      }),
+
+    saveXlsxTemplateConfig: protectedProcedure
+      .input(z.object({
+        companyId:     z.number(),
+        tituloEmpresa: z.string().min(1),
+        revisao:       z.string().min(1),
+        corCabecalho:  z.string().regex(/^[0-9A-Fa-f]{6}$/, "Cor deve ser hex 6 dígitos"),
+        aprovadoPor:   z.string().optional(),
+        vigentDesde:   z.string().optional(),
+        notas:         z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        if (!["admin", "admin_master"].includes(ctx.user.role ?? "")) throw new TRPCError({ code: "FORBIDDEN" });
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+        const existing = await db.$client.query(`SELECT id FROM xlsx_template_config WHERE company_id = $1 ORDER BY id DESC LIMIT 1`, [input.companyId]);
+        const by = ctx.user.name || ctx.user.username || "Sistema";
+        if (existing.rows.length > 0) {
+          await db.$client.query(
+            `UPDATE xlsx_template_config SET titulo_empresa=$1, revisao=$2, cor_cabecalho=$3, aprovado_por=$4, vigente_desde=$5, notas=$6, updated_at=now(), updated_by=$7 WHERE id=$8`,
+            [input.tituloEmpresa, input.revisao, input.corCabecalho, input.aprovadoPor ?? null, input.vigentDesde ?? null, input.notas ?? null, by, existing.rows[0].id]
+          );
+        } else {
+          await db.$client.query(
+            `INSERT INTO xlsx_template_config (company_id, titulo_empresa, revisao, cor_cabecalho, aprovado_por, vigente_desde, notas, updated_at, updated_by) VALUES ($1,$2,$3,$4,$5,$6,$7,now(),$8)`,
+            [input.companyId, input.tituloEmpresa, input.revisao, input.corCabecalho, input.aprovadoPor ?? null, input.vigentDesde ?? null, input.notas ?? null, by]
+          );
+        }
+        // Invalida cache do serviço
+        const svc = await import("./services/excelFcTemplate");
+        svc.invalidateFcXlsxConfigCache();
+        await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "configuracoes", entityType: "xlsx_template_config", entityId: input.companyId, details: `Template XLSX atualizado: revisao=${input.revisao}, cor=${input.corCabecalho}` });
+        return { success: true };
+      }),
+
+    downloadXlsxTemplateExemplo: protectedProcedure
+      .input(z.object({ companyId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        if (!["admin", "admin_master"].includes(ctx.user.role ?? "")) throw new TRPCError({ code: "FORBIDDEN" });
+        const svc = await import("./services/excelFcTemplate");
+        const config = await svc.loadFcXlsxConfig(input.companyId);
+        const buf = await svc.gerarExemploTemplate(config);
+        return { base64: buf.toString("base64"), filename: "exemplo_template_fc.xlsx" };
+      }),
   }),
 
   // ============================================================

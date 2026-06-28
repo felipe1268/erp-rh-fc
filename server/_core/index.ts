@@ -4581,6 +4581,25 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3841: tabela smtp_config garantida (configurações SMTP editáveis via UI).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3841 smtp_config:`, e?.message || e); }
 
+        // Rev. 3845 — Tabela xlsx_template_config para configurações do template padrão FC de planilhas XLSX
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS xlsx_template_config (
+              id               SERIAL PRIMARY KEY,
+              company_id       INTEGER NOT NULL DEFAULT 0,
+              titulo_empresa   TEXT    NOT NULL DEFAULT 'FC ENGENHARIA E CONSTRUÇÃO LTDA',
+              revisao          TEXT    NOT NULL DEFAULT 'Rev. 01',
+              cor_cabecalho    TEXT    NOT NULL DEFAULT '7030A0',
+              aprovado_por     TEXT             DEFAULT 'Sistema',
+              vigente_desde    TEXT,
+              notas            TEXT,
+              updated_at       TIMESTAMP        DEFAULT NOW(),
+              updated_by       TEXT
+            )
+          `);
+          console.log(`[SyncSchema+] Rev. 3845: tabela xlsx_template_config garantida (template FC para planilhas XLSX).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3845 xlsx_template_config:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
