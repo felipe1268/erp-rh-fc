@@ -113,13 +113,13 @@ export async function buildExtratoBancarioBuffer(
   let openingMap: Record<number, { saldo: number; data: Date | null }> = {};
   try {
     const obQ = await db.$client.query(
-      `SELECT conta_bancaria_id, saldo, data FROM financial_opening_balances WHERE company_id = $1`,
+      `SELECT conta_bancaria_id, valor, data_abertura FROM financial_opening_balances WHERE company_id = $1`,
       [companyId]
     );
     for (const r of obQ.rows) {
       openingMap[Number(r.conta_bancaria_id)] = {
-        saldo: parseFloat(r.saldo ?? "0"),
-        data : r.data ? new Date(r.data) : null,
+        saldo: parseFloat(r.valor ?? "0"),
+        data : r.data_abertura ? new Date(r.data_abertura) : null,
       };
     }
   } catch { /* tabela pode não existir */ }
