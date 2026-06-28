@@ -1,4 +1,30 @@
 /**
+ * Rev. 3832 — **CONTABILIDADE · BUGFIX: BAIXAR PACOTE ZIP FALHAVA COM JSON DE ERRO.**
+ *
+ * SINTOMA: botão "Baixar Pacote ZIP" baixava `pacote-contador.json` (40 bytes) com
+ * `{"error":"Erro interno ao gerar pacote"}` em vez do arquivo ZIP correto.
+ *
+ * CAUSA-RAIZ (server/routers/downloadPacoteContador.ts):
+ *   1. `queryData` usava `Promise.all` com 6 queries. Se qualquer query falhasse
+ *      (ex.: tabela `financial_cartao_itens` não encontrada na instância dev, ou coluna
+ *      ausente), o `Promise.all` rejeitava inteiro → erro propagava ao `catch` externo →
+ *      resposta enviada como JSON em vez de ZIP.
+ *   2. O `res.setHeader("Content-Type", "application/zip")` + `archive.pipe(res)` eram
+ *      chamados APÓS `await processarMes()`. Se o processamento falhasse antes do pipe,
+ *      o browser recebia JSON sem Content-Disposition → salvava como `.json`.
+ *
+ * CORREÇÃO:
+ *   1. Substituído `Promise.all([queries])` por `Promise.all([safeQuery(...), ...])`.
+ *      `safeQuery` encapsula cada query individualmente: se falhar, loga aviso e retorna
+ *      `[]` (o pacote é gerado sem aquela seção, nunca falha completamente).
+ *   2. `res.setHeader` + `archive.pipe(res)` movidos para ANTES de `await processarMes()`.
+ *      O browser recebe `Content-Type: application/zip` desde o início do streaming — mesmo
+ *      que algum dado interno falhe, o arquivo já é um ZIP válido (possivelmente com menos
+ *      conteúdo, mas não um JSON de erro).
+ *
+ * ZERO DELETE · ZERO SCHEMA.
+ */
+/**
  * Rev. 3831 — **CONTABILIDADE · CONFIGURAÇÕES MOVIDAS PARA CONFIGURAÇÕES DO SISTEMA + ENVIO AUTOMÁTICO DIÁRIO.**
  *
  * PEDIDO (piloto FC): mover as configurações de alertas/destinatários da tela de Contabilidade

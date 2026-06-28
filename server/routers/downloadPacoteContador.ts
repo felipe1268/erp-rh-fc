@@ -50,10 +50,20 @@ function safeName(s: string): string {
 }
 
 // ── Queries ───────────────────────────────────────────────────────────────────
+async function safeQuery(db: any, sql: string, params: any[]): Promise<any[]> {
+  try {
+    const r = await db.$client.query(sql, params);
+    return r.rows ?? [];
+  } catch (e: any) {
+    console.warn("[PacoteContador] query falhou:", e?.message?.slice(0, 120));
+    return [];
+  }
+}
+
 async function queryData(db: any, companyId: number, di: string, df: string) {
-  const [nfseQ, nfeTomadaQ, nfeQ, bankQ, ocQ, cartaoQ] = await Promise.all([
+  const [nfseEmitidas, nfseTomadas, nfe, bank, ocs, cartao] = await Promise.all([
     // NFS-e emitidas (a empresa presta serviço)
-    db.$client.query(`
+    safeQuery(db, `
       SELECT id, numero_nf, tomador_razao_social, tomador_cnpj,
              valor_bruto, valor_liquido, iss_retido, retencao_inss, retencao_irrf,
              retencao_pis_cofins, data_emissao, data_competencia, status,
@@ -67,7 +77,7 @@ async function queryData(db: any, companyId: number, di: string, df: string) {
     `, [companyId, di, df]),
 
     // NFS-e tomadas (empresa toma serviço de terceiros)
-    db.$client.query(`
+    safeQuery(db, `
       SELECT id, numero_nf, emitente_nome, emitente_cnpj,
              valor_bruto, valor_liquido, iss_retido, retencao_inss, retencao_irrf,
              retencao_pis_cofins, data_emissao, data_competencia, status,
@@ -79,7 +89,7 @@ async function queryData(db: any, companyId: number, di: string, df: string) {
     `, [companyId, di, df]),
 
     // NF-e recebidas do SEFAZ (compras de produtos)
-    db.$client.query(`
+    safeQuery(db, `
       SELECT numero_nf, emitente_cnpj, emitente_nome,
              valor_bruto, data_emissao, status, chave_acesso
       FROM fiscal_notes
@@ -89,7 +99,7 @@ async function queryData(db: any, companyId: number, di: string, df: string) {
     `, [companyId, di, df]),
 
     // Extrato bancário (contas correntes)
-    db.$client.query(`
+    safeQuery(db, `
       SELECT bsl.id, bsl.data, bsl.descricao, bsl.valor::float AS valor, bsl.tipo, bsl.conciliado,
              bsl.entry_id, bsl.conta_bancaria_id,
              COALESCE(cba.apelido, cba.banco, '') AS conta_nome,
@@ -111,7 +121,7 @@ async function queryData(db: any, companyId: number, di: string, df: string) {
     `, [companyId, di, df]),
 
     // Ordens de compra
-    db.$client.query(`
+    safeQuery(db, `
       SELECT co.numero_oc AS numero,
              COALESCE(f.razao_social, co.fornecedor_nome, '') AS supplier_razao,
              co.total AS valor_total, co.status, co.created_at,
@@ -131,7 +141,7 @@ async function queryData(db: any, companyId: number, di: string, df: string) {
     `, [companyId, di, df]),
 
     // Cartão de crédito — itens das faturas do mês (financial_cartao_*)
-    db.$client.query(`
+    safeQuery(db, `
       SELECT ci.data, ci.descricao, ci.valor::float AS valor, ci.tipo,
              UPPER(c.banco) || ' · final ' || c.final4 AS conta_nome, c.banco,
              '' AS fn_numero, '' AS fornecedor_nome
@@ -148,14 +158,7 @@ async function queryData(db: any, companyId: number, di: string, df: string) {
     `, [companyId, di, df]),
   ]);
 
-  return {
-    nfseEmitidas: nfseQ.rows     as any[],
-    nfseTomadas:  nfeTomadaQ.rows as any[],
-    nfe:          nfeQ.rows       as any[],
-    bank:         bankQ.rows      as any[],
-    ocs:          ocQ.rows        as any[],
-    cartao:       cartaoQ.rows    as any[],
-  };
+  return { nfseEmitidas, nfseTomadas, nfe, bank, ocs, cartao };
 }
 
 // ── HTML espelho NFS-e ────────────────────────────────────────────────────────
@@ -435,20 +438,20 @@ export function registerPacoteContadorRoute(app: Express) {
       if (mes >= 1 && mes <= 12) {
         // Pacote mensal
         const folder = `${safeName(empresa)}_${MESES[mes-1]}_${ano}`;
-        await processarMes(mes, folder);
         const filename = `Pacote_Contador_${MESES[mes-1]}_${ano}.zip`;
         res.setHeader("Content-Type", "application/zip");
         res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
         archive.pipe(res);
+        await processarMes(mes, folder);
       } else {
         // Pacote anual
-        for (let m = 1; m <= 12; m++) {
-          await processarMes(m, `${String(m).padStart(2,"0")}_${MESES[m-1]}`);
-        }
         const filename = `Pacote_Contador_Anual_${ano}.zip`;
         res.setHeader("Content-Type", "application/zip");
         res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
         archive.pipe(res);
+        for (let m = 1; m <= 12; m++) {
+          await processarMes(m, `${String(m).padStart(2,"0")}_${MESES[m-1]}`);
+        }
       }
 
       await archive.finalize();
