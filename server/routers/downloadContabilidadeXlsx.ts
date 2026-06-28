@@ -2,15 +2,19 @@
  * server/routers/downloadContabilidadeXlsx.ts
  * GET /api/download/contabilidade-xlsx?companyId=&mes=&ano=
  *
- * Gera planilha XLSX no formato EXATO do modelo da contabilidade:
- *   Logo        → A1:B4 (imagem PNG da FC Engenharia)
- *   C1:H2       → nome da empresa (Calibri 24pt bold, center)
- *   A5:E6       → BANCO X (bold 11pt, center, sem fundo)
- *   G5 / H5     → "Data Saldo Anterior" / data
- *   G6 / H6     → "Saldo Anterior" / valor R$
- *   Row 8       → cabeçalhos (fundo roxo #7030A0, bold 11pt, center, bordas finas, h=24)
- *   Row 9+      → dados (H col = fórmula acumulada + fundo cinza claro)
- *   Larguras    → A=12.29 B=25.57 C=24.43 D=20 E=18.29 F=11.71 G=18.43 H=21.43
+ * Gera planilha XLSX no formato EXATO do modelo PLANILHA_MODELO_FC:
+ *   Coluna A    → vazia (sem largura explícita)
+ *   Larguras    → B=12.33 C=62.66 D=58.44 E=20 F=18.33 G=20.78 H=20.78 I=20.78
+ *   Alturas     → Row1=15 Row2=14.4 Row3=14.4 Row5-8=15 Row9=19.2
+ *   Logo        → B2:C7 (merge B2:C7, contorno medium)
+ *   D2:I5       → Nome empresa (Calibri 24pt bold, center, merge, borda medium exterior)
+ *   D6:G7       → Nome banco (bold 11pt, center, merge, borda medium exterior)
+ *   H6 / I6     → "Data Saldo Anterior" / data (borda medium tudo)
+ *   H7 / I7     → "Saldo Anterior" / valor R$ (borda medium bottom+left/right)
+ *   Row 8       → vazia, borda bottom medium B-I
+ *   Row 9       → cabeçalhos (roxo #7030A0, bold 11pt, white, center, h=19.2)
+ *   Row 10+     → dados (I col = fórmula + cond. format. verde/vermelho)
+ *   Saldo fml   → I10=I7+G10-H10; I{n}=I{n-1}+G{n}-H{n}
  */
 import type { Express, Request, Response } from "express";
 import ExcelJS from "exceljs";
@@ -229,7 +233,7 @@ export async function buildExtratoBancarioBuffer(
     const contaId   = Number(conta.conta_bancaria_id);
     const banco     = (conta.banco || "Banco").toUpperCase();
     const contaDesc = conta.conta_desc || conta.conta || "";
-    // Label completo: "BANCO SANTANDER – LOCNOW – APARECIDA"
+    // Label completo: "BANCO SANTANDER – LOCNOW – APARECIDA – 130051325"
     const bancoLabel = contaDesc
       ? `BANCO ${banco} – ${contaDesc.toUpperCase()}`
       : `BANCO ${banco}`;
@@ -267,79 +271,130 @@ export async function buildExtratoBancarioBuffer(
     const ws = wb.addWorksheet(sheetName(banco, contaDesc));
 
     // ── Larguras das colunas (exatas do modelo) ───────────────────────────────
-    ws.columns = [
-      { width: 12.29 },  // A - Data
-      { width: 25.57 },  // B - Histórico do Banco
-      { width: 24.43 },  // C - Histórico Real
-      { width: 20.00 },  // D - Nº Nota Fiscal
-      { width: 18.29 },  // E - Nº CNPJ
-      { width: 11.71 },  // F - Entrada
-      { width: 18.43 },  // G - Saída
-      { width: 21.43 },  // H - Saldo
-    ];
+    // A = vazia  B=Data  C=Hist.Banco  D=Hist.Real  E=NF  F=CNPJ  G=Entrada  H=Saída  I=Saldo
+    ws.getColumn("A").width = 1.0;
+    ws.getColumn("B").width = 12.33;
+    ws.getColumn("C").width = 62.66;
+    ws.getColumn("D").width = 58.44;
+    ws.getColumn("E").width = 20.00;
+    ws.getColumn("F").width = 18.33;
+    ws.getColumn("G").width = 20.78;
+    ws.getColumn("H").width = 20.78;
+    ws.getColumn("I").width = 20.78;
 
-    // ── Logo (A1:B4 — posição do modelo) ─────────────────────────────────────
+    // ── Alturas das linhas do cabeçalho ───────────────────────────────────────
+    ws.getRow(1).height = 15;
+    ws.getRow(2).height = 14.4;
+    ws.getRow(3).height = 14.4;
+    ws.getRow(5).height = 15;
+    ws.getRow(6).height = 15;
+    ws.getRow(7).height = 15;
+    ws.getRow(8).height = 15;
+    ws.getRow(9).height = 19.2;
+
+    // ── Logo: imagem em B2:C7 ─────────────────────────────────────────────────
     if (logoId !== null) {
       ws.addImage(logoId, {
-        tl: { col: 0.15, row: 0 } as any,
-        br: { col: 1.85, row: 4 } as any,
+        tl: { col: 1, row: 1 } as any,  // início de B2 (0-based)
+        br: { col: 3, row: 7 } as any,  // início de D8 → cobre B2:C7
         editAs: "oneCell",
       });
     }
 
-    // ── C1:H2 — Nome da empresa (Calibri 24pt bold, center) ──────────────────
-    ws.mergeCells("C1:H2");
-    const titleCell = ws.getCell("C1");
-    titleCell.value = tituloEmpresa;
-    titleCell.font  = { bold: true, size: 24, name: "Calibri" };
+    // ── Bordas do bloco logo B2:C7 (contorno medium) ─────────────────────────
+    ws.getCell("B2").border = { top: medium, left: medium };
+    ws.getCell("C2").border = { top: medium, right: medium };
+    for (const r of [3, 4, 5, 6]) {
+      ws.getCell(`B${r}`).border = { left: medium };
+      ws.getCell(`C${r}`).border = { right: medium };
+    }
+    ws.getCell("B7").border = { bottom: medium, left: medium };
+    ws.getCell("C7").border = { bottom: medium, right: medium };
+
+    // ── D2:I5 — Nome da empresa (merge, Calibri 24pt bold, center) ───────────
+    ws.mergeCells("D2:I5");
+    const titleCell = ws.getCell("D2");
+    titleCell.value     = tituloEmpresa;
+    titleCell.font      = { bold: true, size: 24, name: "Calibri" };
     titleCell.alignment = { horizontal: "center", vertical: "middle" };
+    // Bordas exteriores: top na row 2, left na col D, right na col I (rows 2-5)
+    ws.getCell("D2").border = { top: medium, left: medium };
+    for (const c of ["E","F","G","H"]) ws.getCell(`${c}2`).border = { top: medium };
+    ws.getCell("I2").border = { top: medium, right: medium };
+    for (const r of [3, 4, 5]) {
+      ws.getCell(`D${r}`).border = { left: medium };
+      ws.getCell(`I${r}`).border = { right: medium };
+    }
 
-    // ── A5:E6 — Nome do banco (bold 11pt, center, sem fundo) ─────────────────
-    ws.mergeCells("A5:E6");
-    const bankCell = ws.getCell("A5");
-    bankCell.value = bancoLabel;
-    bankCell.font  = { bold: true, size: 11, name: "Calibri" };
+    // ── D6:G7 — Nome do banco (merge, bold 11pt, center, borda medium exterior) ─
+    ws.mergeCells("D6:G7");
+    const bankCell  = ws.getCell("D6");
+    bankCell.value     = bancoLabel;
+    bankCell.font      = { bold: true, size: 11, name: "Calibri" };
     bankCell.alignment = { horizontal: "center", vertical: "middle" };
+    // Bordas: top row6, left col D, bottom row7
+    ws.getCell("D6").border = { top: medium, left: medium };
+    for (const c of ["E","F","G"]) ws.getCell(`${c}6`).border = { top: medium };
+    ws.getCell("D7").border = { bottom: medium, left: medium };
+    for (const c of ["E","F","G"]) ws.getCell(`${c}7`).border = { bottom: medium };
 
-    // ── G5 / H5 — Data Saldo Anterior ────────────────────────────────────────
-    ws.getCell("G5").value = "Data Saldo Anterior";
-    ws.getCell("G5").font  = { size: 11, name: "Calibri" };
+    // ── H6 — "Data Saldo Anterior" (bordas medium em todos os lados) ──────────
+    const cellH6 = ws.getCell("H6");
+    cellH6.value  = "Data Saldo Anterior";
+    cellH6.font   = { size: 11, name: "Calibri" };
+    cellH6.border = { top: medium, bottom: medium, left: medium, right: medium };
 
-    const h5 = ws.getCell("H5");
-    h5.value  = dataSaldoAnt;
-    h5.numFmt = "dd/mm/yyyy";
+    // ── I6 — data do saldo anterior ───────────────────────────────────────────
+    const cellI6 = ws.getCell("I6");
+    cellI6.value  = dataSaldoAnt;
+    cellI6.numFmt = "dd/mm/yyyy";
+    cellI6.font   = { size: 11, name: "Calibri" };
+    cellI6.border = { top: medium, bottom: medium, left: medium, right: medium };
 
-    // ── G6 / H6 — Saldo Anterior ─────────────────────────────────────────────
-    ws.getCell("G6").value = "Saldo Anterior";
-    ws.getCell("G6").font  = { size: 11, name: "Calibri" };
+    // ── H7 — "Saldo Anterior" label ───────────────────────────────────────────
+    const cellH7 = ws.getCell("H7");
+    cellH7.value  = "Saldo Anterior";
+    cellH7.font   = { size: 11, name: "Calibri" };
+    cellH7.border = { bottom: medium, left: medium };
 
-    const h6 = ws.getCell("H6");
-    h6.value  = saldoInicial;
-    h6.numFmt = BRL;
+    // ── I7 — valor do saldo anterior (âncora das fórmulas de saldo) ──────────
+    const cellI7 = ws.getCell("I7");
+    cellI7.value     = saldoInicial;
+    cellI7.numFmt    = BRL;
+    cellI7.font      = { size: 11, name: "Calibri" };
+    cellI7.alignment = { horizontal: "right", vertical: "middle" };
+    cellI7.border    = { bottom: medium, left: thin, right: medium };
 
-    // ── Linha 8 — Cabeçalhos (roxo, bold, center, bordas) ────────────────────
-    ws.getRow(8).height = 24;
-    const hdrs = [
-      "Data", "Histórico do Banco", "Histórico Real",
-      "Nº Nota Fiscal", "Nº CNPJ", "Entrada", "Saída", "Saldo",
+    // ── Row 8 — vazia, borda inferior medium (separa cabeçalho dos headers) ───
+    ws.getCell("B8").border = { bottom: medium, left: medium };
+    for (const c of ["C","D","E","F","G","H"]) ws.getCell(`${c}8`).border = { bottom: medium };
+    ws.getCell("I8").border = { bottom: medium, right: medium };
+
+    // ── Row 9 — Cabeçalhos (roxo #7030A0, bold 11pt, branco, centralizado) ───
+    const HDRS: [string, string][] = [
+      ["B","Data"], ["C","Histórico do Banco"], ["D","Histórico Real"],
+      ["E","Nº Nota Fiscal"], ["F","Nº CNPJ"],
+      ["G","Entrada"], ["H","Saída"], ["I","Saldo"],
     ];
-    ["A","B","C","D","E","F","G","H"].forEach((col, i) => {
-      const cell = ws.getCell(`${col}8`);
-      cell.value = hdrs[i];
-      cell.font  = { bold: true, size: 11, name: "Calibri", color: { argb: "FFFFFFFF" } };
-      cell.fill  = { type: "pattern", pattern: "solid", fgColor: { argb: PURPLE } };
+    HDRS.forEach(([col, label]) => {
+      const cell = ws.getCell(`${col}9`);
+      cell.value     = label;
+      cell.font      = { bold: true, size: 11, name: "Calibri", color: { argb: "FFFFFFFF" } };
+      cell.fill      = { type: "pattern", pattern: "solid", fgColor: { argb: PURPLE } };
       cell.alignment = { horizontal: "center", vertical: "middle" };
-      // bordas serão aplicadas via applyTableBorders ao final
+      cell.border    = {
+        bottom: thin,
+        left:   col === "B" ? medium : thin,
+        right:  col === "I" ? medium : thin,
+      };
     });
 
-    // ── Linhas 9+ — Dados ─────────────────────────────────────────────────────
-    // Rastreia NFs já usadas por cruzamento CNPJ+valor para evitar duplicatas
+    // ── Rows 10+ — Dados ──────────────────────────────────────────────────────
     const usedNfKeys = new Set<string>();
-
     let saldoAcum = saldoInicial;
 
     lines.forEach((line: any, idx: number) => {
-      const row   = idx + 9;
+      const row   = idx + 10;  // dados começam na row 10
       const valor = parseFloat(String(line.valor)) || 0;
       const ent   = valor > 0 ? valor : 0;
       const sai   = valor < 0 ? Math.abs(valor) : 0;
@@ -347,119 +402,107 @@ export async function buildExtratoBancarioBuffer(
 
       const histReal = line.fornecedor_nome || line.entry_desc || "";
 
-      // ── Cruzamento de NF (3 camadas) ────────────────────────────────────────
-      // 1ª: link direto stmt_line_id (já na query)
+      // ── Cruzamento NF (3 camadas) ────────────────────────────────────────────
       let nfNumero = String(line.numero_nf || "");
       let nfCnpj   = String(line.fornecedor_cnpj || "");
-
-      // 2ª: por entry_id
       if (!nfNumero && line.entry_id) {
         const byEntry = nfByEntryId.get(Number(line.entry_id));
         if (byEntry) { nfNumero = byEntry.numero_nf; nfCnpj = byEntry.cnpj; }
       }
-
-      // 3ª: por CNPJ (entry ou bsl) + valor (fallback)
       if (!nfNumero) {
         const cnpjRef = cleanDoc(line.entry_cnpj || line.fornecedor_cnpj || "");
         if (cnpjRef && Math.abs(valor) > 0) {
           const k = nfKey(cnpjRef, valor);
-          const candidates = nfByCnpjValor.get(k);
-          if (candidates) {
-            // Escolhe a primeira NF ainda não usada
-            const pick = candidates.find(c => !usedNfKeys.has(`${k}|${c.numero_nf}`));
-            if (pick) {
-              nfNumero = pick.numero_nf;
-              nfCnpj   = pick.cnpj;
-              usedNfKeys.add(`${k}|${pick.numero_nf}`);
-            }
+          const cands = nfByCnpjValor.get(k);
+          if (cands) {
+            const pick = cands.find(c => !usedNfKeys.has(`${k}|${c.numero_nf}`));
+            if (pick) { nfNumero = pick.numero_nf; nfCnpj = pick.cnpj; usedNfKeys.add(`${k}|${pick.numero_nf}`); }
           }
         }
       }
-
       const cnpjFmt = nfCnpj ? fmtCnpj(nfCnpj) : "";
 
-      // ── Células A–G (com bordas finas) ─────────────────────────────────────
-      // A — Data
-      const aCell = ws.getCell(`A${row}`);
+      // Todas as células de dados: thin em todos os lados,
+      // exceto B (left=medium) e I (right=medium)
+      const isLast = idx === lines.length - 1;
+      const btm    = isLast ? medium : thin;
+
+      // B — Data
+      const bCell = ws.getCell(`B${row}`);
       const rawDate = line.data;
       if (rawDate instanceof Date) {
-        aCell.value  = rawDate;
-        aCell.numFmt = "dd/mm/yyyy";
+        bCell.value  = rawDate;
+        bCell.numFmt = "dd/mm/yyyy";
       } else {
         const dstr = String(rawDate ?? "").slice(0, 10);
         if (/^\d{4}-\d{2}-\d{2}$/.test(dstr)) {
           const [yr, mo, dy] = dstr.split("-").map(Number);
-          aCell.value  = new Date(Date.UTC(yr, mo - 1, dy));
-          aCell.numFmt = "dd/mm/yyyy";
+          bCell.value  = new Date(Date.UTC(yr, mo - 1, dy));
+          bCell.numFmt = "dd/mm/yyyy";
         } else {
-          aCell.value = fmtDate(rawDate);
+          bCell.value = fmtDate(rawDate);
         }
       }
-      aCell.alignment = { horizontal: "left", vertical: "middle" };
+      bCell.font      = { size: 11, name: "Calibri" };
+      bCell.alignment = { horizontal: "left", vertical: "middle" };
+      bCell.border    = { top: thin, bottom: btm, left: medium, right: thin };
 
-      // B–E — Texto
-      const textData: Array<[string, string]> = [
-        ["B", line.descricao || ""],
-        ["C", histReal],
-        ["D", nfNumero],
-        ["E", cnpjFmt],
+      // C, D, E, F — Texto
+      const textCols: [string, string][] = [
+        ["C", line.descricao || ""],
+        ["D", histReal],
+        ["E", nfNumero],
+        ["F", cnpjFmt],
       ];
-      textData.forEach(([col, val]) => {
-        const cell = ws.getCell(`${col}${row}`);
-        cell.value = val;
+      textCols.forEach(([col, val]) => {
+        const cell  = ws.getCell(`${col}${row}`);
+        cell.value     = val;
+        cell.font      = { size: 11, name: "Calibri" };
         cell.alignment = { horizontal: "left", vertical: "middle" };
+        cell.border    = { top: thin, bottom: btm, left: thin, right: thin };
       });
 
-      // F — Entrada
-      const fCell = ws.getCell(`F${row}`);
-      fCell.value  = ent;
-      fCell.numFmt = BRL;
-      fCell.alignment = { horizontal: "right", vertical: "middle" };
-
-      // G — Saída
+      // G — Entrada
       const gCell = ws.getCell(`G${row}`);
-      gCell.value  = sai;
-      gCell.numFmt = BRL;
+      gCell.value     = ent;
+      gCell.numFmt    = BRL;
+      gCell.font      = { size: 11, name: "Calibri" };
       gCell.alignment = { horizontal: "right", vertical: "middle" };
+      gCell.border    = { top: thin, bottom: btm, left: thin, right: thin };
 
-      // H — Saldo acumulado + formatação condicional (verde/vermelho)
-      // Usa fórmula Excel: =H_prev + F_row - G_row  (H6 = Saldo Anterior)
-      const prevRef = idx === 0 ? "H6" : `H${row - 1}`;
+      // H — Saída
       const hCell = ws.getCell(`H${row}`);
-      hCell.value  = { formula: `=${prevRef}+F${row}-G${row}`, result: saldoAcum };
-      hCell.numFmt = BRL;
+      hCell.value     = sai;
+      hCell.numFmt    = BRL;
+      hCell.font      = { size: 11, name: "Calibri" };
       hCell.alignment = { horizontal: "right", vertical: "middle" };
+      hCell.border    = { top: thin, bottom: btm, left: thin, right: thin };
 
+      // I — Saldo (fórmula): I10=I7+G10-H10; In=I{n-1}+Gn-Hn
+      const prevRef = idx === 0 ? "I7" : `I${row - 1}`;
+      const iCell = ws.getCell(`I${row}`);
+      iCell.value     = { formula: `=${prevRef}+G${row}-H${row}`, result: saldoAcum };
+      iCell.numFmt    = BRL;
+      iCell.font      = { size: 11, name: "Calibri" };
+      iCell.alignment = { horizontal: "right", vertical: "middle" };
+      iCell.border    = { top: thin, bottom: btm, left: thin, right: medium };
     });
 
-    // ── Bordas: contorno externo (medium) + grade interna (thin) ─────────────
-    // Inclui cabeçalho (row 8) + todas as linhas de dados
-    const DATA_COLS = ["A","B","C","D","E","F","G","H"];
-    const lastDataRow = lines.length > 0 ? 8 + lines.length : 9;
-    applyTableBorders(ws, 8, lastDataRow, DATA_COLS);
-
-    // ── Formatação condicional nativa Excel na coluna Saldo (H) ──────────────
-    // Aplica-se a: $H$9:$H${lastDataRow}
-    // Regra 1: Valor < 0 → fundo vermelho + fonte branca
-    // Regra 2: Valor > 0 → fundo verde   + fonte branca
+    // ── Formatação condicional nativa Excel na coluna I (Saldo) ──────────────
+    // Aplica-se a: I10:I{lastDataRow}
+    const lastDataRow = lines.length > 0 ? 9 + lines.length : 10;
     ws.addConditionalFormatting({
-      ref: `H9:H${lastDataRow}`,
+      ref: `I10:I${lastDataRow}`,
       rules: [
         {
-          type: "cellIs",
-          operator: "lessThan",
-          formulae: [0],
-          priority: 1,
+          type: "cellIs", operator: "lessThan", formulae: [0], priority: 1,
           style: {
             fill: { type: "pattern", pattern: "solid", bgColor: { argb: RED_BG } },
             font: { color: { argb: "FFFFFFFF" }, name: "Calibri", size: 11 },
           },
         },
         {
-          type: "cellIs",
-          operator: "greaterThan",
-          formulae: [0],
-          priority: 2,
+          type: "cellIs", operator: "greaterThan", formulae: [0], priority: 2,
           style: {
             fill: { type: "pattern", pattern: "solid", bgColor: { argb: GREEN_BG } },
             font: { color: { argb: "FFFFFFFF" }, name: "Calibri", size: 11 },
@@ -469,13 +512,13 @@ export async function buildExtratoBancarioBuffer(
     } as any);
 
     if (lines.length === 0) {
-      ws.getCell("A9").value = "Nenhum lançamento no período.";
+      ws.getCell("B10").value = "Nenhum lançamento no período.";
     }
   }
 
   if (wb.worksheets.length === 0) {
     const ws = wb.addWorksheet("Sem dados");
-    ws.getCell("A1").value = "Nenhum lançamento bancário no período.";
+    ws.getCell("B1").value = "Nenhum lançamento bancário no período.";
   }
 
   const buf = await wb.xlsx.writeBuffer();

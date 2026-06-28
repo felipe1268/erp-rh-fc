@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3840** — **EXTRATO BANCÁRIO XLSX · REPLICAÇÃO 100% DO MODELO PLANILHA_MODELO_FC.** Análise pixel-a-pixel do arquivo modelo e reescrita completa do bloco Excel: colunas B–I (A vazia), larguras B=12.33/C=62.66/D=58.44/E=20/F=18.33/G=20.78/H=20.78/I=20.78; merges B2:C7 (logo), D2:I5 (empresa), D6:G7 (banco); bordas medium exatas em todo o cabeçalho; fórmula saldo I10=I7+G10-H10; cond.format. coluna I. `server/routers/downloadContabilidadeXlsx.ts`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3839** — **NF-E RECEBIDAS · MUDAR STATUS EM LOTE.** Botão "Mudar Status" adicionado na barra de seleção múltipla da aba "NF-e Recebidas" (existia só nas Emitidas). States `bulkRecStatusOpen`+`bulkRecStatusTarget`, mutation `bulkRecStatusMut` (reutiliza `fiscalNotes.bulkUpdateStatus`), AlertDialog com 5 opções de status. `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3838** — **EXTRATO BANCÁRIO XLSX · FORMATAÇÃO CONDICIONAL NATIVA EXCEL NA COLUNA SALDO.** `ws.addConditionalFormatting()`: regra `< 0` → vermelho (#FF0000) + fonte branca; regra `> 0` → verde (#00B050) + fonte branca; range `H9:H{lastDataRow}`. Cor muda automaticamente ao editar fórmulas no Excel. ZERO DELETE. Detalhe: `shared/changelog.ts`.

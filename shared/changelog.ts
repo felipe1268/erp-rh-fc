@@ -1,4 +1,35 @@
 /**
+ * Rev. 3840 — **EXTRATO BANCÁRIO XLSX · REPLICAÇÃO 100% DO MODELO PLANILHA_MODELO_FC.**
+ *
+ * Análise pixel-a-pixel do arquivo `PLANILHA_MODELO_-_FC_1782685248889.xlsx` e reescrita
+ * completa do bloco de montagem Excel em `buildExtratoBancarioBuffer`:
+ *
+ * **Estrutura de colunas (modelo):**
+ * - A = vazia (width=1)
+ * - B=12.33 (Data) · C=62.66 (Hist.Banco) · D=58.44 (Hist.Real)
+ * - E=20 (NF) · F=18.33 (CNPJ) · G=20.78 (Entrada) · H=20.78 (Saída) · I=20.78 (Saldo)
+ *
+ * **Alturas de linha:** Row1=15 · Row2=14.4 · Row3=14.4 · Rows5-8=15 · Row9=19.2
+ *
+ * **Layout do cabeçalho (merges e bordas medium exatas):**
+ * - `B2:C7` → Logo FC Engenharia (merge + contorno medium)
+ * - `D2:I5` → Nome empresa, Calibri 24pt bold, center (borda medium exterior)
+ * - `D6:G7` → Nome banco, 11pt bold, center (borda medium exterior)
+ * - `H6/I6` → "Data Saldo Anterior" / data (borda medium tudo)
+ * - `H7/I7` → "Saldo Anterior" / valor R$ (borda bottom+left/right medium)
+ * - Row 8   → vazia, borda bottom medium B:I
+ * - Row 9   → cabeçalhos roxo #7030A0, branco, bold
+ *
+ * **Fórmula de Saldo:**
+ * - Row 10 (1ª linha de dados): `=I7+G10-H10` (âncora no I7 = Saldo Anterior)
+ * - Row N: `=I{N-1}+G{N}-H{N}`
+ *
+ * **Bordas dos dados:** B = left:medium; I = right:medium; última linha bottom:medium.
+ * **Formatação condicional:** coluna I (antes H), range I10:I{lastRow}.
+ *
+ * ZERO DELETE · ZERO SCHEMA. Arquivo: `server/routers/downloadContabilidadeXlsx.ts`.
+ */
+/**
  * Rev. 3839 — **NF-E RECEBIDAS · MUDAR STATUS EM LOTE.**
  *
  * A barra de seleção múltipla da aba "NF-e Recebidas" (SEFAZ) ganhava o botão
