@@ -1,4 +1,18 @@
 /**
+ * Rev. 3834 — **EXTRATO BANCÁRIO XLSX: LOGO FC ENGENHARIA + CONTORNO EXTERNO (MEDIUM BORDER).**
+ *
+ * 1. LOGO: substituído logo da contabilidade pelo logo da FC Engenharia (`client/public/logo-fc.jpg`).
+ *    `getLogoBuffer()` agora retorna `{ buffer, extension }` (JPEG precisa de extension="jpeg") com
+ *    prioridade: logo-fc.jpg → logo-fc-branco-amarelo.png → logo_contabilidade.png (fallback).
+ *
+ * 2. CONTORNO EXTERNO (medium border): nova função `applyTableBorders(ws, firstRow, lastRow, cols)`
+ *    aplica bordas finas (thin) em todas as células internas e borda média (medium) no contorno externo
+ *    da tabela (topo, rodapé, coluna A, coluna H). Inclui cabeçalho (row 8) + todas as linhas de dados.
+ *    Substitui o antigo approach de `thinBorder` por célula (que não tinha contorno externo).
+ *
+ * ZERO DELETE · ZERO SCHEMA.
+ */
+/**
  * Rev. 3833 — **EXTRATO BANCÁRIO XLSX: FORMATAÇÃO CONDICIONAL SALDO + BORDAS + NF 100% CRUZADO.**
  *
  * Melhorias no `buildExtratoBancarioBuffer` (server/routers/downloadContabilidadeXlsx.ts):

@@ -63,21 +63,56 @@ const RED_BG    = "FFFF0000";  // saldo negativo
 /** Formato R$ contábil exato do modelo (numFmt 44) */
 const BRL = '_-"R$"\ * #,##0.00_-;\-"R$"\ * #,##0.00_-;_-"R$"\ * "-"??_-;_-@_-';
 
-const thin = { style: "thin" as const, color: { argb: "FF000000" } };
+const thin   = { style: "thin"   as const, color: { argb: "FF000000" } };
+const medium = { style: "medium" as const, color: { argb: "FF000000" } };
+
 const thinBorder: Partial<ExcelJS.Borders> = {
   top: thin, bottom: thin, left: thin, right: thin,
 };
 
+/** Aplica bordas com contorno externo (medium) para um range de células.
+ *  firstRow/lastRow são índices 1-based (igual ExcelJS).
+ *  firstCol/lastCol são letras ("A".."H").
+ */
+function applyTableBorders(
+  ws: ExcelJS.Worksheet,
+  firstRow: number,
+  lastRow: number,
+  cols: string[],
+) {
+  const firstCol = cols[0];
+  const lastCol  = cols[cols.length - 1];
+  for (let r = firstRow; r <= lastRow; r++) {
+    cols.forEach((col) => {
+      const cell = ws.getCell(`${col}${r}`);
+      const isTop    = r === firstRow;
+      const isBottom = r === lastRow;
+      const isLeft   = col === firstCol;
+      const isRight  = col === lastCol;
+      cell.border = {
+        top:    isTop    ? medium : thin,
+        bottom: isBottom ? medium : thin,
+        left:   isLeft   ? medium : thin,
+        right:  isRight  ? medium : thin,
+      };
+    });
+  }
+}
+
 // ── Caminho do logo ───────────────────────────────────────────────────────────
 
-function getLogoBuffer(): Buffer | null {
-  const candidates = [
-    path.join(process.cwd(), "server/assets/logo_contabilidade.png"),
-    path.join(process.cwd(), "attached_assets/logo_contabilidade.png"),
+interface LogoResult { buffer: Buffer; extension: "png" | "jpeg" }
+
+function getLogoBuffer(): LogoResult | null {
+  // Prioridade: logo FC Engenharia (colorido) > logo contabilidade (fallback)
+  const candidates: Array<{ p: string; extension: "png" | "jpeg" }> = [
+    { p: path.join(process.cwd(), "client/public/logo-fc.jpg"),  extension: "jpeg" },
+    { p: path.join(process.cwd(), "client/public/logo-fc-branco-amarelo.png"), extension: "png" },
+    { p: path.join(process.cwd(), "server/assets/logo_contabilidade.png"),     extension: "png" },
   ];
-  for (const p of candidates) {
+  for (const { p, extension } of candidates) {
     try {
-      if (fs.existsSync(p)) return fs.readFileSync(p);
+      if (fs.existsSync(p)) return { buffer: fs.readFileSync(p), extension };
     } catch { /* try next */ }
   }
   return null;
@@ -184,10 +219,10 @@ export async function buildExtratoBancarioBuffer(
 
   const wb = new ExcelJS.Workbook();
 
-  // Logo (opcional — se não encontrar, planilha sai sem logo)
-  const logoBuffer = getLogoBuffer();
-  const logoId = logoBuffer
-    ? wb.addImage({ buffer: logoBuffer, extension: "png" })
+  // Logo (FC Engenharia — opcional)
+  const logoResult = getLogoBuffer();
+  const logoId = logoResult
+    ? wb.addImage({ buffer: logoResult.buffer, extension: logoResult.extension })
     : null;
 
   for (const conta of contasQ.rows) {
@@ -294,7 +329,7 @@ export async function buildExtratoBancarioBuffer(
       cell.font  = { bold: true, size: 11, name: "Calibri", color: { argb: "FFFFFFFF" } };
       cell.fill  = { type: "pattern", pattern: "solid", fgColor: { argb: PURPLE } };
       cell.alignment = { horizontal: "center", vertical: "middle" };
-      cell.border = thinBorder;
+      // bordas serão aplicadas via applyTableBorders ao final
     });
 
     // ── Linhas 9+ — Dados ─────────────────────────────────────────────────────
@@ -361,7 +396,6 @@ export async function buildExtratoBancarioBuffer(
         }
       }
       aCell.alignment = { horizontal: "left", vertical: "middle" };
-      aCell.border = thinBorder;
 
       // B–E — Texto
       const textData: Array<[string, string]> = [
@@ -374,7 +408,6 @@ export async function buildExtratoBancarioBuffer(
         const cell = ws.getCell(`${col}${row}`);
         cell.value = val;
         cell.alignment = { horizontal: "left", vertical: "middle" };
-        cell.border = thinBorder;
       });
 
       // F — Entrada
@@ -382,20 +415,17 @@ export async function buildExtratoBancarioBuffer(
       fCell.value  = ent;
       fCell.numFmt = BRL;
       fCell.alignment = { horizontal: "right", vertical: "middle" };
-      fCell.border = thinBorder;
 
       // G — Saída
       const gCell = ws.getCell(`G${row}`);
       gCell.value  = sai;
       gCell.numFmt = BRL;
       gCell.alignment = { horizontal: "right", vertical: "middle" };
-      gCell.border = thinBorder;
 
       // H — Saldo acumulado + formatação condicional (verde/vermelho)
       const hCell = ws.getCell(`H${row}`);
       hCell.value  = saldoAcum;
       hCell.numFmt = BRL;
-      hCell.border = thinBorder;
       hCell.alignment = { horizontal: "right", vertical: "middle" };
 
       if (saldoAcum >= 0) {
@@ -406,6 +436,12 @@ export async function buildExtratoBancarioBuffer(
         hCell.font = { color: { argb: "FFFFFFFF" }, name: "Calibri", size: 11 };
       }
     });
+
+    // ── Bordas: contorno externo (medium) + grade interna (thin) ─────────────
+    // Inclui cabeçalho (row 8) + todas as linhas de dados
+    const DATA_COLS = ["A","B","C","D","E","F","G","H"];
+    const lastDataRow = lines.length > 0 ? 8 + lines.length : 9;
+    applyTableBorders(ws, 8, lastDataRow, DATA_COLS);
 
     if (lines.length === 0) {
       ws.getCell("A9").value = "Nenhum lançamento no período.";

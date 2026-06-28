@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3834** — **EXTRATO BANCÁRIO XLSX: LOGO FC ENGENHARIA + CONTORNO EXTERNO (MEDIUM BORDER).** Logo substituído: `logo-fc.jpg` (FC Engenharia colorido) no lugar do logo da contabilidade; `getLogoBuffer` retorna `{buffer,extension}` (JPEG precisa de `"jpeg"`). `applyTableBorders` aplica contorno externo medium + grade interna thin cobrindo cabeçalho+dados numa só passada. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3833** — **EXTRATO BANCÁRIO XLSX: FORMATAÇÃO CONDICIONAL SALDO + BORDAS + NF 100% CRUZADO.** Saldo calculado em JS (acumulado linha a linha): verde (#00B050) se ≥ 0, vermelho (#FF0000) se < 0, fonte branca em ambos. Bordas finas em TODAS as células de dados (A-H), não só no cabeçalho. NF cruzado em 3 camadas: stmt_line_id direto → entry_id pré-carregado → CNPJ+valor com dedup por usedNfKeys. Label do banco agora inclui apelido da conta ("BANCO SANTANDER – LOCNOW – APARECIDA"). ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3832** — **CONTABILIDADE · BUGFIX: BAIXAR PACOTE ZIP FALHAVA COM JSON DE ERRO.** `queryData` usava `Promise.all` sem fallback — qualquer query falhando (ex.: tabela de cartão ausente em dev) rejeitava tudo e o catch enviava JSON em vez de ZIP. Fix: `safeQuery` wrapper em cada query (`[]` no erro); `setHeader`+`archive.pipe(res)` movidos para ANTES de `processarMes` (browser recebe `application/zip` desde o início). ZERO DELETE. Detalhe: `shared/changelog.ts`.
