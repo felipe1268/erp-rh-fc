@@ -1,4 +1,21 @@
 /**
+ * Rev. 3829 — **EXTRATO BANCÁRIO XLSX: REESCRITA COMPLETA COM EXCELJS PARA IGUALAR TEMPLATE DA CONTABILIDADE.**
+ * Arquivo: server/routers/downloadContabilidadeXlsx.ts (função buildExtratoBancarioBuffer).
+ * Antes: xlsx-js-style com layout navy-blue FC, sem logo, sem fórmulas, colunas/merges incorretos.
+ * Agora: ExcelJS gerando layout EXATO do modelo Planilha_Modelo_Extratos:
+ *   — Logo PNG da FC (server/assets/logo_contabilidade.png) inserido como imagem em A1:B4.
+ *   — C1:H2 merged: nome da empresa, Calibri 24pt bold, center/middle.
+ *   — A5:E6 merged: BANCO X, bold 11pt, center/middle, sem fundo.
+ *   — G5/H5: Data Saldo Anterior / data (numFmt dd/mm/yyyy).
+ *   — G6/H6: Saldo Anterior / valor R$ (numFmt contábil).
+ *   — Row 8: cabeçalhos roxo #7030A0, bold 11pt, center, bordas finas pretas, height=24.
+ *   — Row 9+: dados; coluna H = fórmula acumulada (=F9-G9+H6, =F10-G10+H9…) + fundo EFEFEF.
+ *   — Larguras exatas: A=12.29 B=25.57 C=24.43 D=20 E=18.29 F=11.71 G=18.43 H=21.43.
+ *   — Formato R$ contábil (numFmt 44) em Entrada/Saída/Saldo.
+ * ZERO DELETE; buildExtratCartaoBuffer (xlsx-js-style) inalterado.
+ */
+
+/**
  * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
  * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
  * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.

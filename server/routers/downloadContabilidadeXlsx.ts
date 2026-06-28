@@ -2,23 +2,28 @@
  * server/routers/downloadContabilidadeXlsx.ts
  * GET /api/download/contabilidade-xlsx?companyId=&mes=&ano=
  *
- * Gera planilha XLSX no formato exato do modelo contador (Pronus):
- *   Row 2  : [empresa] — negrito 18pt centralizado (A2:H2 merged)
- *   Row 5-6: [BANCO X] — box com borda (A5:F6 merged) + Data Saldo Anterior + Saldo Anterior
- *   Row 8  : cabeçalhos azul-marinho FC (#0F3778) texto branco
- *   Row 9+ : Data | Hist.Banco | Hist.Real | Nº NF | Nº CNPJ | Entrada | Saída | Saldo
- *   Saldo  : fundo verde suave (≥0) ou vermelho suave (<0)
- *   Moeda  : formato "R$ #,##0.00" com zero → "R$ 0,00"
+ * Gera planilha XLSX no formato EXATO do modelo da contabilidade:
+ *   Logo        → A1:B4 (imagem PNG da FC Engenharia)
+ *   C1:H2       → nome da empresa (Calibri 24pt bold, center)
+ *   A5:E6       → BANCO X (bold 11pt, center, sem fundo)
+ *   G5 / H5     → "Data Saldo Anterior" / data
+ *   G6 / H6     → "Saldo Anterior" / valor R$
+ *   Row 8       → cabeçalhos (fundo roxo #7030A0, bold 11pt, center, bordas finas, h=24)
+ *   Row 9+      → dados (H col = fórmula acumulada + fundo cinza claro)
+ *   Larguras    → A=12.29 B=25.57 C=24.43 D=20 E=18.29 F=11.71 G=18.43 H=21.43
  */
 import type { Express, Request, Response } from "express";
+import ExcelJS from "exceljs";
 import * as XLSX from "xlsx";
+import * as fs from "fs";
+import * as path from "path";
 import { getDb } from "../db";
 import { sdk } from "../_core/sdk";
 
 const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho",
   "Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
-// ── Helpers de formatação ────────────────────────────────────────────────────
+// ── Helpers de formatação ─────────────────────────────────────────────────────
 
 function fmtDate(s: any): string {
   if (!s) return "";
@@ -44,156 +49,41 @@ function sheetName(banco: string, desc: string): string {
   return full.length > 31 ? full.slice(0, 31) : full;
 }
 
-function lastDayOfPrevMonth(mes: number, ano: number): string {
-  const d = new Date(ano, mes - 1, 0); // dia 0 do mês atual = último dia do mês anterior
-  return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+/** Retorna Date (UTC) do último dia do mês anterior ao período. */
+function prevMonthLastDate(mes: number, ano: number): Date {
+  return new Date(Date.UTC(ano, mes - 1, 0));
 }
 
-// ── Paleta FC (azul-marinho + dourado da marca) ──────────────────────────────
+// ── Constantes de estilo (modelo contabilidade) ───────────────────────────────
 
-const C = {
-  NAVY     : "0F3778",   // FC primary (azul-marinho)
-  NAVY_DARK: "082047",   // FC sidebar (marinho escuro)
-  GOLD     : "E9AB2B",   // FC accent (dourado)
-  ZEBRA    : "EEF2F9",   // listra clara (azul-acinzentado)
-  WHITE    : "FFFFFF",
-  BLACK    : "000000",
-  GREEN_BG : "D6EBD8",   // saldo positivo (fundo verde suave)
-  GREEN_TX : "1E7B34",
-  RED_BG   : "F6D4D4",   // saldo negativo (fundo vermelho suave)
-  RED_TX   : "B02A2A",
-  GRID     : "BBC7DC",   // linhas de grade (azul claro)
+const PURPLE   = "FF7030A0";  // roxo do cabeçalho (ARGB)
+const SALDO_BG = "FFEFEFEF";  // fundo cinza-claro coluna Saldo
+
+/** Formato R$ contábil exato do modelo (numFmt 44) */
+const BRL = '_-"R$"\ * #,##0.00_-;\-"R$"\ * #,##0.00_-;_-"R$"\ * "-"??_-;_-@_-';
+
+const thin = { style: "thin" as const, color: { argb: "FF000000" } };
+const thinBorder: Partial<ExcelJS.Borders> = {
+  top: thin, bottom: thin, left: thin, right: thin,
 };
 
-// Formato BRL: positivo "R$ 10,00" | negativo "-R$ 10,00" | zero "R$ 0,00"
-const BRL = '"R$ "#,##0.00;"-R$ "#,##0.00';
+// ── Caminho do logo ───────────────────────────────────────────────────────────
 
-// ── Builders de estilo ───────────────────────────────────────────────────────
-
-const borderThin = {
-  top:    { style: "thin", color: { rgb: C.GRID } },
-  bottom: { style: "thin", color: { rgb: C.GRID } },
-  left:   { style: "thin", color: { rgb: C.GRID } },
-  right:  { style: "thin", color: { rgb: C.GRID } },
-};
-const borderNavy = {
-  top:    { style: "medium", color: { rgb: C.NAVY } },
-  bottom: { style: "medium", color: { rgb: C.NAVY } },
-  left:   { style: "medium", color: { rgb: C.NAVY } },
-  right:  { style: "medium", color: { rgb: C.NAVY } },
-};
-
-function sTitle(): any {
-  return {
-    font: { bold: true, sz: 18, color: { rgb: C.WHITE } },
-    fill: { patternType: "solid", fgColor: { rgb: C.NAVY } },
-    alignment: { horizontal: "center", vertical: "center" },
-    border: { bottom: { style: "thick", color: { rgb: C.GOLD } } },
-  };
+function getLogoBuffer(): Buffer | null {
+  const candidates = [
+    path.join(process.cwd(), "server/assets/logo_contabilidade.png"),
+    path.join(__dirname, "../assets/logo_contabilidade.png"),
+    path.join(process.cwd(), "attached_assets/logo_contabilidade.png"),
+  ];
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p)) return fs.readFileSync(p);
+    } catch { /* try next */ }
+  }
+  return null;
 }
 
-function sBank(): any {
-  return {
-    font: { bold: true, sz: 12, color: { rgb: C.WHITE } },
-    fill: { patternType: "solid", fgColor: { rgb: C.NAVY_DARK } },
-    alignment: { horizontal: "center", vertical: "center" },
-    border: borderNavy,
-  };
-}
-
-function sBankEmpty(): any {
-  return {
-    fill: { patternType: "solid", fgColor: { rgb: C.NAVY_DARK } },
-    border: borderNavy,
-  };
-}
-
-function sInfoLabel(): any {
-  return {
-    font: { bold: true, sz: 10, color: { rgb: C.NAVY } },
-    alignment: { horizontal: "left", vertical: "center" },
-  };
-}
-
-function sInfoDate(): any {
-  return {
-    font: { sz: 10 },
-    alignment: { horizontal: "right", vertical: "center" },
-  };
-}
-
-function sInfoMoney(): any {
-  return {
-    font: { bold: true, sz: 10 },
-    alignment: { horizontal: "right", vertical: "center" },
-    numFmt: BRL,
-  };
-}
-
-function sHeader(): any {
-  return {
-    font: { bold: true, sz: 11, color: { rgb: C.WHITE } },
-    fill: { patternType: "solid", fgColor: { rgb: C.NAVY } },
-    alignment: { horizontal: "center", vertical: "center", wrapText: true },
-    border: borderThin,
-  };
-}
-
-function sText(alt = false, bold = false): any {
-  return {
-    font: { sz: 10, bold, color: { rgb: C.BLACK } },
-    fill: { patternType: "solid", fgColor: { rgb: alt ? C.ZEBRA : C.WHITE } },
-    alignment: { horizontal: "left", vertical: "center" },
-    border: borderThin,
-  };
-}
-
-function sDate(alt = false): any {
-  return {
-    font: { sz: 10, color: { rgb: C.BLACK } },
-    fill: { patternType: "solid", fgColor: { rgb: alt ? C.ZEBRA : C.WHITE } },
-    alignment: { horizontal: "center", vertical: "center" },
-    border: borderThin,
-  };
-}
-
-function sMoney(saldoSign: "positive" | "negative" | "neutral", bold = false, alt = false): any {
-  const bgMap: Record<string, string> = {
-    positive: C.GREEN_BG,
-    negative: C.RED_BG,
-    neutral : alt ? C.ZEBRA : C.WHITE,
-  };
-  const txMap: Record<string, string> = {
-    positive: C.GREEN_TX,
-    negative: C.RED_TX,
-    neutral : C.BLACK,
-  };
-  return {
-    font: { sz: 10, bold: bold || saldoSign !== "neutral", color: { rgb: txMap[saldoSign] } },
-    fill: { patternType: "solid", fgColor: { rgb: bgMap[saldoSign] } },
-    alignment: { horizontal: "right", vertical: "center" },
-    numFmt: BRL,
-    border: borderThin,
-  };
-}
-
-function sTotal(isMoney = false): any {
-  return {
-    font: { bold: true, sz: 10, color: { rgb: C.NAVY_DARK } },
-    fill: { patternType: "solid", fgColor: { rgb: C.GOLD } },
-    alignment: { horizontal: isMoney ? "right" : "left", vertical: "center" },
-    ...(isMoney ? { numFmt: BRL } : {}),
-    border: borderNavy,
-  };
-}
-
-// ── Helper para adicionar célula ─────────────────────────────────────────────
-
-function addCell(ws: XLSX.WorkSheet, addr: string, v: any, t: "s"|"n"|"b", s: any) {
-  ws[addr] = { v, t, s } as XLSX.CellObject;
-}
-
-// ── Função exportável (usada também pelo Pacote Contador) ────────────────────
+// ── Função exportável (usada também pelo Pacote Contador) ─────────────────────
 
 export async function buildExtratoBancarioBuffer(
   db: any,
@@ -204,7 +94,6 @@ export async function buildExtratoBancarioBuffer(
 ): Promise<Buffer> {
   const tituloEmpresa = empresaLabel.toUpperCase();
 
-  // Contas com extrato no mês
   const contasQ = await db.$client.query(
     `SELECT DISTINCT bsl.conta_bancaria_id,
             cba.banco,
@@ -221,8 +110,7 @@ export async function buildExtratoBancarioBuffer(
     [companyId, mes, ano]
   );
 
-  // Saldos de abertura
-  let openingMap: Record<number, { saldo: number; data: string }> = {};
+  let openingMap: Record<number, { saldo: number; data: Date | null }> = {};
   try {
     const obQ = await db.$client.query(
       `SELECT conta_bancaria_id, saldo, data FROM financial_opening_balances WHERE company_id = $1`,
@@ -231,24 +119,28 @@ export async function buildExtratoBancarioBuffer(
     for (const r of obQ.rows) {
       openingMap[Number(r.conta_bancaria_id)] = {
         saldo: parseFloat(r.saldo ?? "0"),
-        data : r.data ? fmtDate(r.data) : "",
+        data : r.data ? new Date(r.data) : null,
       };
     }
   } catch { /* tabela pode não existir */ }
 
-  const wb = XLSX.utils.book_new();
+  const wb = new ExcelJS.Workbook();
+
+  // Logo (opcional — se não encontrar, planilha sai sem logo)
+  const logoBuffer = getLogoBuffer();
+  const logoId = logoBuffer
+    ? wb.addImage({ buffer: logoBuffer, extension: "png" })
+    : null;
 
   for (const conta of contasQ.rows) {
-    const contaId    = Number(conta.conta_bancaria_id);
-    const banco      = (conta.banco || "Banco").toUpperCase();
-    const contaDesc  = conta.conta_desc || conta.conta || "";
-    const bancoLabel = `BANCO ${banco}`;
+    const contaId   = Number(conta.conta_bancaria_id);
+    const banco     = (conta.banco || "Banco").toUpperCase();
+    const contaDesc = conta.conta_desc || conta.conta || "";
 
-    const ob = openingMap[contaId] ?? { saldo: 0, data: "" };
-    const saldoInicial    = ob.saldo;
-    const dataSaldoAnt    = ob.data || lastDayOfPrevMonth(mes, ano);
+    const ob = openingMap[contaId] ?? { saldo: 0, data: null };
+    const saldoInicial = ob.saldo;
+    const dataSaldoAnt = ob.data ?? prevMonthLastDate(mes, ano);
 
-    // Linhas do extrato para esta conta
     const linesQ = await db.$client.query(
       `SELECT
           bsl.data,
@@ -272,97 +164,272 @@ export async function buildExtratoBancarioBuffer(
     );
 
     const lines = linesQ.rows;
-    const ws: XLSX.WorkSheet = {};
+    const ws = wb.addWorksheet(sheetName(banco, contaDesc));
 
-    // Linha 1 — título empresa (A1:H1)
-    addCell(ws, "A1", tituloEmpresa, "s", sTitle());
+    // ── Larguras das colunas (exatas do modelo) ───────────────────────────────
+    ws.columns = [
+      { width: 12.29 },  // A - Data
+      { width: 25.57 },  // B - Histórico do Banco
+      { width: 24.43 },  // C - Histórico Real
+      { width: 20.00 },  // D - Nº Nota Fiscal
+      { width: 18.29 },  // E - Nº CNPJ
+      { width: 11.71 },  // F - Entrada
+      { width: 18.43 },  // G - Saída
+      { width: 21.43 },  // H - Saldo
+    ];
 
-    // Linhas 3-4 — caixa banco (A3:F4 mesclado) + metadata saldo anterior
-    for (const addr of ["B3","C3","D3","E3","F3","A4","B4","C4","D4","E4","F4"]) {
-      addCell(ws, addr, "", "s", sBankEmpty());
+    // ── Logo (A1:B4 — posição do modelo) ─────────────────────────────────────
+    if (logoId !== null) {
+      ws.addImage(logoId, {
+        tl: { col: 0.15, row: 0 } as any,
+        br: { col: 1.85, row: 4 } as any,
+        editAs: "oneCell",
+      });
     }
-    addCell(ws, "A3", bancoLabel, "s", sBank());
 
-    addCell(ws, "G3", "Data Saldo Anterior", "s", sInfoLabel());
-    addCell(ws, "H3", dataSaldoAnt,           "s", sInfoDate());
-    addCell(ws, "G4", "Saldo Anterior",        "s", sInfoLabel());
-    addCell(ws, "H4", saldoInicial,            "n", sInfoMoney());
+    // ── C1:H2 — Nome da empresa (Calibri 24pt bold, center) ──────────────────
+    ws.mergeCells("C1:H2");
+    const titleCell = ws.getCell("C1");
+    titleCell.value = tituloEmpresa;
+    titleCell.font  = { bold: true, size: 24, name: "Calibri" };
+    titleCell.alignment = { horizontal: "center", vertical: "middle" };
 
-    // Linha 5 — cabeçalho navy FC
-    const hdrs = ["Data","Histórico do Banco","Histórico Real",
-                  "Nº Nota Fiscal","Nº CNPJ","Entrada","Saída","Saldo"];
-    const cols = ["A","B","C","D","E","F","G","H"];
-    hdrs.forEach((h, i) => addCell(ws, `${cols[i]}5`, h, "s", sHeader()));
+    // ── Linhas 3-4 — vazias (logo ocupa esta área) ───────────────────────────
 
-    // Linha 6+ — dados
-    let saldo = saldoInicial;
-    lines.forEach((line, idx) => {
-      const row   = idx + 6;
+    // ── A5:E6 — Nome do banco (bold 11pt, center, sem fundo) ─────────────────
+    ws.mergeCells("A5:E6");
+    const bankCell = ws.getCell("A5");
+    bankCell.value = `BANCO ${banco}`;
+    bankCell.font  = { bold: true, size: 11, name: "Calibri" };
+    bankCell.alignment = { horizontal: "center", vertical: "middle" };
+
+    // ── G5 / H5 — Data Saldo Anterior ────────────────────────────────────────
+    ws.getCell("G5").value = "Data Saldo Anterior";
+    ws.getCell("G5").font  = { size: 11, name: "Calibri" };
+
+    const h5 = ws.getCell("H5");
+    h5.value  = dataSaldoAnt;
+    h5.numFmt = "dd/mm/yyyy";
+
+    // ── G6 / H6 — Saldo Anterior ──────────────────────────────────────────────
+    ws.getCell("G6").value = "Saldo Anterior";
+    ws.getCell("G6").font  = { size: 11, name: "Calibri" };
+
+    const h6 = ws.getCell("H6");
+    h6.value  = saldoInicial;
+    h6.numFmt = BRL;
+
+    // ── Linha 7 — vazia (separação antes do cabeçalho) ───────────────────────
+
+    // ── Linha 8 — Cabeçalhos (roxo #7030A0, bold, center, bordas finas) ──────
+    ws.getRow(8).height = 24;
+    const hdrs = [
+      "Data", "Histórico do Banco", "Histórico Real",
+      "Nº Nota Fiscal ", "Nº CNPJ", "Entrada", "Saída", "Saldo",
+    ];
+    ["A","B","C","D","E","F","G","H"].forEach((col, i) => {
+      const cell = ws.getCell(`${col}8`);
+      cell.value = hdrs[i];
+      cell.font  = { bold: true, size: 11, name: "Calibri" };
+      cell.fill  = { type: "pattern", pattern: "solid", fgColor: { argb: PURPLE } };
+      cell.alignment = { horizontal: "center", vertical: "middle" };
+      cell.border = thinBorder;
+    });
+
+    // ── Linhas 9+ — Dados ─────────────────────────────────────────────────────
+    lines.forEach((line: any, idx: number) => {
+      const row   = idx + 9;
       const valor = parseFloat(String(line.valor)) || 0;
       const ent   = valor > 0 ? valor : 0;
       const sai   = valor < 0 ? Math.abs(valor) : 0;
-      saldo += valor;
 
       const histReal = line.fornecedor_nome || line.entry_desc || "";
       const nf       = String(line.numero_nf || "");
       const cnpj     = line.fornecedor_cnpj ? fmtCnpj(line.fornecedor_cnpj) : "";
-      const sSign    = saldo >= 0 ? "positive" : "negative";
-      const alt      = idx % 2 === 1;
 
-      addCell(ws, `A${row}`, fmtDate(line.data), "s", sDate(alt));
-      addCell(ws, `B${row}`, line.descricao || "", "s", sText(alt));
-      addCell(ws, `C${row}`, histReal,             "s", sText(alt));
-      addCell(ws, `D${row}`, nf,                   "s", sText(alt));
-      addCell(ws, `E${row}`, cnpj,                 "s", sText(alt));
-      addCell(ws, `F${row}`, ent,  "n", sMoney("neutral", false, alt));
-      addCell(ws, `G${row}`, sai,  "n", sMoney("neutral", false, alt));
-      addCell(ws, `H${row}`, saldo,"n", sMoney(sSign, false, alt));
+      // A — Data
+      const aCell = ws.getCell(`A${row}`);
+      const rawDate = line.data;
+      if (rawDate instanceof Date) {
+        aCell.value  = rawDate;
+        aCell.numFmt = "dd/mm/yyyy";
+      } else {
+        const dstr   = String(rawDate ?? "").slice(0, 10);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dstr)) {
+          const [yr, mo, dy] = dstr.split("-").map(Number);
+          aCell.value  = new Date(Date.UTC(yr, mo - 1, dy));
+          aCell.numFmt = "dd/mm/yyyy";
+        } else {
+          aCell.value = fmtDate(rawDate);
+        }
+      }
+      aCell.alignment = { horizontal: "left", vertical: "middle" };
+
+      // B–E — Texto
+      const textData: Array<[string, string]> = [
+        ["B", line.descricao || ""],
+        ["C", histReal],
+        ["D", nf],
+        ["E", cnpj],
+      ];
+      textData.forEach(([col, val]) => {
+        const cell = ws.getCell(`${col}${row}`);
+        cell.value = val;
+        cell.alignment = { horizontal: "left", vertical: "middle" };
+      });
+
+      // F — Entrada
+      const fCell = ws.getCell(`F${row}`);
+      fCell.value  = ent;
+      fCell.numFmt = BRL;
+      fCell.alignment = { horizontal: "left", vertical: "middle" };
+
+      // G — Saída
+      const gCell = ws.getCell(`G${row}`);
+      gCell.value  = sai;
+      gCell.numFmt = BRL;
+      gCell.alignment = { horizontal: "left", vertical: "middle" };
+
+      // H — Saldo (fórmula acumulada + fundo cinza claro)
+      const hCell   = ws.getCell(`H${row}`);
+      const prevRef = idx === 0 ? "H6" : `H${row - 1}`;
+      hCell.value   = { formula: `F${row}-G${row}+${prevRef}` };
+      hCell.numFmt  = BRL;
+      hCell.fill    = { type: "pattern", pattern: "solid", fgColor: { argb: SALDO_BG } };
+      hCell.alignment = { horizontal: "left", vertical: "middle" };
     });
 
-    // Linha TOTAL
-    const totalRow = lines.length + 6;
-    let totEnt = 0, totSai = 0;
-    lines.forEach(l => {
-      const v = parseFloat(String(l.valor)) || 0;
-      if (v > 0) totEnt += v; else totSai += Math.abs(v);
-    });
-
-    addCell(ws, `A${totalRow}`, "TOTAL", "s", sTotal(false));
-    ["B","C","D","E"].forEach(c => addCell(ws, `${c}${totalRow}`, "", "s", sTotal(false)));
-    addCell(ws, `F${totalRow}`, totEnt, "n", sTotal(true));
-    addCell(ws, `G${totalRow}`, totSai, "n", sTotal(true));
-    addCell(ws, `H${totalRow}`, saldo,  "n", sTotal(true));
-
-    ws["!ref"] = `A1:H${totalRow}`;
-    ws["!merges"] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } },  // A1:H1 — título
-      { s: { r: 2, c: 0 }, e: { r: 3, c: 5 } },  // A3:F4 — caixa banco
-    ];
-    ws["!cols"] = [
-      { wch: 12 }, { wch: 44 }, { wch: 34 },
-      { wch: 18 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 16 },
-    ];
-    ws["!rows"] = new Array(5).fill(null);
-    ws["!rows"][0] = { hpt: 32 };  // Linha 1 — título
-    ws["!rows"][1] = { hpt: 6  };  // Linha 2 — espaço
-    ws["!rows"][2] = { hpt: 22 };  // Linha 3 — banco (topo)
-    ws["!rows"][3] = { hpt: 22 };  // Linha 4 — banco (base)
-    ws["!rows"][4] = { hpt: 28 };  // Linha 5 — cabeçalho
-
-    XLSX.utils.book_append_sheet(wb, ws, sheetName(banco, contaDesc));
+    if (lines.length === 0) {
+      // Linha em branco para não gerar planilha totalmente vazia
+      ws.getCell("A9").value = "Nenhum lançamento no período.";
+    }
   }
 
-  if (wb.SheetNames.length === 0) {
-    const ws: XLSX.WorkSheet = {};
-    addCell(ws, "A1", "Nenhum lançamento bancário no período.", "s", sText());
-    ws["!ref"] = "A1:A1";
-    XLSX.utils.book_append_sheet(wb, ws, "Sem dados");
+  if (wb.worksheets.length === 0) {
+    const ws = wb.addWorksheet("Sem dados");
+    ws.getCell("A1").value = "Nenhum lançamento bancário no período.";
   }
 
-  return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+  const buf = await wb.xlsx.writeBuffer();
+  return Buffer.from(buf);
 }
 
-// ── Extrato Cartão de Crédito (XLSX Pronus) ──────────────────────────────────
+// ── Extrato Cartão de Crédito (XLSX — xlsx-js-style) ─────────────────────────
+// (mantém o modelo antigo por não ter template da contabilidade para cartões)
+
+const C = {
+  NAVY     : "0F3778",
+  NAVY_DARK: "082047",
+  GOLD     : "E9AB2B",
+  ZEBRA    : "EEF2F9",
+  WHITE    : "FFFFFF",
+  BLACK    : "000000",
+  GREEN_BG : "D6EBD8",
+  GREEN_TX : "1E7B34",
+  RED_BG   : "F6D4D4",
+  RED_TX   : "B02A2A",
+  GRID     : "BBC7DC",
+};
+
+const BRL_XLSX = '"R$ "#,##0.00;"-R$ "#,##0.00';
+
+const borderThin = {
+  top:    { style: "thin", color: { rgb: C.GRID } },
+  bottom: { style: "thin", color: { rgb: C.GRID } },
+  left:   { style: "thin", color: { rgb: C.GRID } },
+  right:  { style: "thin", color: { rgb: C.GRID } },
+};
+const borderNavy = {
+  top:    { style: "medium", color: { rgb: C.NAVY } },
+  bottom: { style: "medium", color: { rgb: C.NAVY } },
+  left:   { style: "medium", color: { rgb: C.NAVY } },
+  right:  { style: "medium", color: { rgb: C.NAVY } },
+};
+
+function sTitle(): any {
+  return {
+    font: { bold: true, sz: 18, color: { rgb: C.WHITE } },
+    fill: { patternType: "solid", fgColor: { rgb: C.NAVY } },
+    alignment: { horizontal: "center", vertical: "center" },
+    border: { bottom: { style: "thick", color: { rgb: C.GOLD } } },
+  };
+}
+function sBank(): any {
+  return {
+    font: { bold: true, sz: 12, color: { rgb: C.WHITE } },
+    fill: { patternType: "solid", fgColor: { rgb: C.NAVY_DARK } },
+    alignment: { horizontal: "center", vertical: "center" },
+    border: borderNavy,
+  };
+}
+function sBankEmpty(): any {
+  return {
+    fill: { patternType: "solid", fgColor: { rgb: C.NAVY_DARK } },
+    border: borderNavy,
+  };
+}
+function sInfoLabel(): any {
+  return {
+    font: { bold: true, sz: 10, color: { rgb: C.NAVY } },
+    alignment: { horizontal: "left", vertical: "center" },
+  };
+}
+function sInfoDate(): any {
+  return { font: { sz: 10 }, alignment: { horizontal: "right", vertical: "center" } };
+}
+function sInfoMoney(): any {
+  return {
+    font: { bold: true, sz: 10 },
+    alignment: { horizontal: "right", vertical: "center" },
+    numFmt: BRL_XLSX,
+  };
+}
+function sHeader(): any {
+  return {
+    font: { bold: true, sz: 11, color: { rgb: C.WHITE } },
+    fill: { patternType: "solid", fgColor: { rgb: C.NAVY } },
+    alignment: { horizontal: "center", vertical: "center", wrapText: true },
+    border: borderThin,
+  };
+}
+function sText(alt = false): any {
+  return {
+    font: { sz: 10, color: { rgb: C.BLACK } },
+    fill: { patternType: "solid", fgColor: { rgb: alt ? C.ZEBRA : C.WHITE } },
+    alignment: { horizontal: "left", vertical: "center" },
+    border: borderThin,
+  };
+}
+function sDate(alt = false): any {
+  return {
+    font: { sz: 10, color: { rgb: C.BLACK } },
+    fill: { patternType: "solid", fgColor: { rgb: alt ? C.ZEBRA : C.WHITE } },
+    alignment: { horizontal: "center", vertical: "center" },
+    border: borderThin,
+  };
+}
+function sMoney(alt = false): any {
+  return {
+    font: { sz: 10, color: { rgb: C.BLACK } },
+    fill: { patternType: "solid", fgColor: { rgb: alt ? C.ZEBRA : C.WHITE } },
+    alignment: { horizontal: "right", vertical: "center" },
+    numFmt: BRL_XLSX,
+    border: borderThin,
+  };
+}
+function sTotal(isMoney = false): any {
+  return {
+    font: { bold: true, sz: 10, color: { rgb: C.NAVY_DARK } },
+    fill: { patternType: "solid", fgColor: { rgb: C.GOLD } },
+    alignment: { horizontal: isMoney ? "right" : "left", vertical: "center" },
+    ...(isMoney ? { numFmt: BRL_XLSX } : {}),
+    border: borderNavy,
+  };
+}
+
+function addCell(ws: XLSX.WorkSheet, addr: string, v: any, t: "s"|"n"|"b", s: any) {
+  ws[addr] = { v, t, s } as XLSX.CellObject;
+}
 
 export async function buildExtratCartaoBuffer(
   db: any,
@@ -409,17 +476,16 @@ export async function buildExtratCartaoBuffer(
     [companyId, mes, ano]
   );
 
-  const wb = XLSX.utils.book_new();
+  const wbXlsx = XLSX.utils.book_new();
 
   if (itemsQ.rows.length === 0) {
     const ws: XLSX.WorkSheet = {};
     addCell(ws, "A1", "Nenhum lançamento de cartão de crédito no período.", "s", sText());
     ws["!ref"] = "A1:A1";
-    XLSX.utils.book_append_sheet(wb, ws, "Sem dados");
-    return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+    XLSX.utils.book_append_sheet(wbXlsx, ws, "Sem dados");
+    return XLSX.write(wbXlsx, { type: "buffer", bookType: "xlsx" }) as Buffer;
   }
 
-  // Agrupa por fatura
   const byFatura = new Map<number, { meta: any; items: any[] }>();
   for (const row of itemsQ.rows) {
     const fid = Number(row.fatura_id);
@@ -438,7 +504,6 @@ export async function buildExtratCartaoBuffer(
     byFatura.get(fid)!.items.push(row);
   }
 
-  // Uma aba por fatura
   const usedNames = new Set<string>();
   for (const [, fatura] of byFatura) {
     const { meta, items } = fatura;
@@ -452,25 +517,20 @@ export async function buildExtratCartaoBuffer(
     const hdrs = ["Data","Descrição","Cidade","Tipo","Parcela","Obra","Categoria","Valor"];
     const cols = ["A","B","C","D","E","F","G","H"];
 
-    // Linha 1 — título empresa (A1:H1)
     addCell(ws, "A1", tituloEmpresa, "s", sTitle());
-
-    // Linhas 3-4 — caixa cartão (A3:F4 mesclado) + metadata
     for (const addr of ["B3","C3","D3","E3","F3","A4","B4","C4","D4","E4","F4"]) {
       addCell(ws, addr, "", "s", sBankEmpty());
     }
     addCell(ws, "A3", meta.cartao_label, "s", sBank());
-    addCell(ws, "G3", "Vencimento",   "s", sInfoLabel());
-    addCell(ws, "H3", meta.vencimento, "s", sInfoDate());
-    addCell(ws, "G4", "Total Fatura", "s", sInfoLabel());
+    addCell(ws, "G3", "Vencimento",      "s", sInfoLabel());
+    addCell(ws, "H3", meta.vencimento,   "s", sInfoDate());
+    addCell(ws, "G4", "Total Fatura",    "s", sInfoLabel());
     addCell(ws, "H4", meta.fatura_total, "n", sInfoMoney());
 
-    // Linha 5 — cabeçalho navy FC
     hdrs.forEach((h, i) => addCell(ws, `${cols[i]}5`, h, "s", sHeader()));
 
-    // Linha 6+ — itens
     let totalValor = 0;
-    items.forEach((item, idx) => {
+    items.forEach((item: any, idx: number) => {
       const row   = idx + 6;
       const valor = parseFloat(String(item.valor)) || 0;
       totalValor += valor;
@@ -481,18 +541,16 @@ export async function buildExtratCartaoBuffer(
         : "Compra";
       const alt = idx % 2 === 1;
 
-      addCell(ws, `A${row}`, fmtDate(item.data),                   "s", sDate(alt));
-      addCell(ws, `B${row}`, item.descricao || "",                  "s", sText(alt));
-      addCell(ws, `C${row}`, item.cidade || "",                     "s", sText(alt));
-      addCell(ws, `D${row}`, tipo,                                  "s", sText(alt));
-      addCell(ws, `E${row}`, parcela,                               "s", sText(alt));
-      addCell(ws, `F${row}`, item.obra_nome || "",                  "s", sText(alt));
-      addCell(ws, `G${row}`, item.categoria_nome
-                          || item.centro_custo_nome || "",          "s", sText(alt));
-      addCell(ws, `H${row}`, valor,                                 "n", sMoney("neutral", false, alt));
+      addCell(ws, `A${row}`, fmtDate(item.data),     "s", sDate(alt));
+      addCell(ws, `B${row}`, item.descricao || "",    "s", sText(alt));
+      addCell(ws, `C${row}`, item.cidade || "",       "s", sText(alt));
+      addCell(ws, `D${row}`, tipo,                    "s", sText(alt));
+      addCell(ws, `E${row}`, parcela,                 "s", sText(alt));
+      addCell(ws, `F${row}`, item.obra_nome || "",    "s", sText(alt));
+      addCell(ws, `G${row}`, item.categoria_nome || item.centro_custo_nome || "", "s", sText(alt));
+      addCell(ws, `H${row}`, valor,                   "n", sMoney(alt));
     });
 
-    // Linha TOTAL
     const totalRow = items.length + 6;
     addCell(ws, `A${totalRow}`, "TOTAL", "s", sTotal(false));
     ["B","C","D","E","F","G"].forEach(c => addCell(ws, `${c}${totalRow}`, "", "s", sTotal(false)));
@@ -500,8 +558,8 @@ export async function buildExtratCartaoBuffer(
 
     ws["!ref"] = `A1:H${totalRow}`;
     ws["!merges"] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } },  // A1:H1 — título
-      { s: { r: 2, c: 0 }, e: { r: 3, c: 5 } },  // A3:F4 — caixa cartão
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } },
+      { s: { r: 2, c: 0 }, e: { r: 3, c: 5 } },
     ];
     ws["!cols"] = [
       { wch: 12 }, { wch: 40 }, { wch: 18 }, { wch: 12 },
@@ -514,13 +572,13 @@ export async function buildExtratCartaoBuffer(
     ws["!rows"][3] = { hpt: 22 };
     ws["!rows"][4] = { hpt: 28 };
 
-    XLSX.utils.book_append_sheet(wb, ws, sn);
+    XLSX.utils.book_append_sheet(wbXlsx, ws, sn);
   }
 
-  return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+  return XLSX.write(wbXlsx, { type: "buffer", bookType: "xlsx" }) as Buffer;
 }
 
-// ── Rota principal ───────────────────────────────────────────────────────────
+// ── Rota principal ────────────────────────────────────────────────────────────
 
 export function registerContabilidadeXlsxRoute(app: Express) {
   app.get("/api/download/contabilidade-xlsx", async (req: Request, res: Response) => {
@@ -541,17 +599,16 @@ export function registerContabilidadeXlsxRoute(app: Express) {
       const db = await getDb();
       if (!db) { res.status(500).json({ error: "DB indisponível" }); return; }
 
-      // Empresa
       const empQ = await db.$client.query(
         `SELECT "razaoSocial", "nomeFantasia" FROM companies WHERE id = $1`, [companyId]
       );
-      const razao   = empQ.rows[0]?.razaoSocial || `Empresa ${companyId}`;
-      const fantasia = empQ.rows[0]?.nomeFantasia;
+      const razao      = empQ.rows[0]?.razaoSocial || `Empresa ${companyId}`;
+      const fantasia   = empQ.rows[0]?.nomeFantasia;
       const empresaLabel = (fantasia || razao).toUpperCase();
 
       const buffer   = await buildExtratoBancarioBuffer(db, companyId, mes, ano, empresaLabel);
       const mesLabel = MESES[mes - 1];
-      const filename = `Contabilidade_${razao.replace(/[^a-zA-Z0-9]/g, "_")}_${mesLabel}_${ano}.xlsx`;
+      const filename = `Extrato_${razao.replace(/[^a-zA-Z0-9]/g, "_")}_${mesLabel}_${ano}.xlsx`;
 
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
