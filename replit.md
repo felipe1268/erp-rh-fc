@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3830** — **CONTABILIDADE · SISTEMA DE ALERTAS DE PRAZO + ENVIO POR E-MAIL.** Tabela `contabilidade_alertas_config` (SyncSchema+ Rev.3830): dia_fiscal/dia_contabil/emails_json/ativo. 4 endpoints novos em `contabilidade.ts`: `getAlertaStatus` (verifica pendência do mês anterior vs janela de prazo), `getConfig`/`saveConfig` (upsert com 3 e-mails Pronus pré-populados), `enviarPorEmail` (gera XLSX + envia via SMTP com anexo). Front: banner âmbar/vermelho entre header e seletor; botão "Configurações" no header (modal com prazos + lista de destinatários); botão "Enviar por E-mail" em cada PainelMes. Badge piscante no menu lateral (DashboardLayout) quando `temAlerta`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3829** — **EXTRATO BANCÁRIO XLSX: REESCRITA COMPLETA COM EXCELJS PARA IGUALAR TEMPLATE DA CONTABILIDADE.** `buildExtratoBancarioBuffer` reescrita em ExcelJS: logo PNG inserida em A1:B4; C1:H2 merged (empresa, Calibri 24pt bold); A5:E6 merged (BANCO X, bold); cabeçalhos roxo #7030A0 + bordas finas (row 8, h=24); coluna H com fórmula acumulada `=Fn-Gn+H(n-1)` e fundo EFEFEF; larguras exatas do modelo; numFmt R$ contábil. Arquivo logo em `server/assets/logo_contabilidade.png`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3828** — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS. 885359 (TED 08/01) e 885395 (PIX 16/01) cancelados; 3 entradas ativas restantes = R$60.000 total correto. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
-
 ### 5 one-liners
+
+- **Rev. 3828** — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS. 885359 (TED 08/01) e 885395 (PIX 16/01) cancelados; 3 entradas ativas restantes = R$60.000 total correto. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3827** — **REVERT Rev.3826 — TRANSPORTE DE EQUIPES volta a "Benefícios (VR/VA/Transporte)". ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3824** — **FINANCEIRO · LIMPEZA JAN/2026: 103 entradas PJ padronizadas; CCs RH→Obras; "MEDIÇÃO PJ"/"SUBEMPREITEIROS"→Terceiros e PJ. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3823** — **ANÁLISE DE CUSTOS · CLASSIFICADOR "OUTROS": keywords FOLHA/PRESTADORES PJ/TRANSPORTE EQUIPE/CHEQUE ESPECIAL/MÚTUO/CARTÓRIO/ALOJAMENTO/HOSPEDAGEM/HOTEL/TREINAMENTO/COMISSÃO/REEMBOLSO adicionadas; bucket "Outros" cai de ~R$576k para mínimo. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3817 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3823 e anteriores.
 
 ## User preferences
 

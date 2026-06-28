@@ -1,3 +1,5 @@
+- **Rev. 3823** — **ANÁLISE DE CUSTOS · CLASSIFICADOR "OUTROS": keywords FOLHA/PRESTADORES PJ/TRANSPORTE EQUIPE/CHEQUE ESPECIAL/MÚTUO/CARTÓRIO/ALOJAMENTO/HOSPEDAGEM/HOTEL/TREINAMENTO/COMISSÃO/REEMBOLSO adicionadas; bucket "Outros" cai de ~R$576k para mínimo. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3817** — **FINANCEIRO · PLANO DE CONTAS · REESTRUTURAÇÃO SUBEMPREITEIROS/PJ: conta 23 → "SUBEMPREITEIROS / EMPRESAS"; conta 491 → "PRESTADORES PJ INDIVIDUAIS"; contas 507+57 desativadas; 1.186 entries atualizadas. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3816** — **FINANCEIRO · DRE · LEGENDA "DRE GERENCIAL DE CAIXA" NO RODAPÉ: card fixo com comparativo DRE Gerencial × DRE Societário; explica status excluídos. ARQUIVO: `FinanceiroDRE.tsx`. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.

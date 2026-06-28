@@ -1,4 +1,50 @@
 /**
+ * Rev. 3830 — **CONTABILIDADE · SISTEMA DE ALERTAS DE PRAZO + ENVIO POR E-MAIL.**
+ *
+ * PEDIDO (piloto FC): alertas automáticos quando documentos do mês anterior estão pendentes
+ * perto dos prazos da Pronus (dia 5 = Fiscal, dia 8 = Contábil); cadastro de destinatários;
+ * envio do extrato XLSX por e-mail diretamente da tela de Contabilidade.
+ *
+ * BACK (server/routers/contabilidade.ts) — 4 novos endpoints:
+ *   · `getAlertaStatus`: verifica se o mês anterior está pendente + se hoje cai no janela de
+ *     alerta (dias 1–diaFiscal → ambos; dias diaFiscal+1–diaContabil → só Contábil). Retorna
+ *     contagem de alertas, dias restantes, tipo ("ambos"/"contabil") e statusMesAnt.
+ *   · `getConfig`: lê configuração por empresa (diaFiscal, diaContabil, emails JSON, ativo).
+ *     Sem registro → retorna defaults: dia 5, dia 8 + 3 e-mails pré-populados da Pronus
+ *     (contabil@pronustributario.com.br, fiscal@, trabalhista@).
+ *   · `saveConfig`: upsert na nova tabela `contabilidade_alertas_config`.
+ *   · `enviarPorEmail`: gera extrato XLSX via `buildExtratoBancarioBuffer` + envia via SMTP
+ *     para os destinatários configurados, com HTML profissional e arquivo em anexo.
+ *
+ * SCHEMA (server/_core/index.ts — SyncSchema+ Rev.3830):
+ *   CREATE TABLE IF NOT EXISTS contabilidade_alertas_config (
+ *     id, company_id UNIQUE, dia_fiscal SMALLINT DEFAULT 5,
+ *     dia_contabil SMALLINT DEFAULT 8, emails_json TEXT, ativo BOOL, created_at, updated_at
+ *   ).
+ *
+ * FRONT (client/src/pages/financeiro/FinanceiroContabilidade.tsx):
+ *   · Banner de alerta (âmbar/vermelho) entre o cabeçalho e o seletor de período: exibe prazo
+ *     iminente com dias restantes e botão "Ver {mês}" que abre o painel do mês diretamente.
+ *   · Botão "Configurações" no header: abre modal com campos de dia Fiscal/Contábil, lista de
+ *     destinatários editável (adicionar/remover) e toggle de ativo.
+ *   · Botão "Enviar por E-mail" no footer de cada PainelMes: abre dialog com lista dos
+ *     destinatários configurados, campo de mensagem adicional e botão de envio.
+ *
+ * BADGE (client/src/components/DashboardLayout.tsx):
+ *   · Query `contabilidade.getAlertaStatus` injetada no DashboardLayout (refetch a cada 5 min).
+ *   · Quando `temAlerta = true`, o item "/financeiro/contabilidade" recebe `badge + badgePulse`
+ *     vermelho piscante (padrão existente dos badges de Compras/SST).
+ *
+ * SMTP (server/services/smtpService.ts): já havia suporte a `attachments[]` adicionado na
+ * Rev.3829 (buffer, filename, contentType) — reutilizado aqui sem alteração adicional.
+ *
+ * ZERO SCHEMA/ALTER/DROP nos dados existentes. ZERO DELETE.
+ * Arquivos: server/routers/contabilidade.ts, server/_core/index.ts,
+ *           client/src/components/DashboardLayout.tsx,
+ *           client/src/pages/financeiro/FinanceiroContabilidade.tsx.
+ */
+
+/**
  * Rev. 3829 — **EXTRATO BANCÁRIO XLSX: REESCRITA COMPLETA COM EXCELJS PARA IGUALAR TEMPLATE DA CONTABILIDADE.**
  * Arquivo: server/routers/downloadContabilidadeXlsx.ts (função buildExtratoBancarioBuffer).
  * Antes: xlsx-js-style com layout navy-blue FC, sem logo, sem fórmulas, colunas/merges incorretos.

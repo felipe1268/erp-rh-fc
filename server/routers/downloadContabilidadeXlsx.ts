@@ -72,7 +72,6 @@ const thinBorder: Partial<ExcelJS.Borders> = {
 function getLogoBuffer(): Buffer | null {
   const candidates = [
     path.join(process.cwd(), "server/assets/logo_contabilidade.png"),
-    path.join(__dirname, "../assets/logo_contabilidade.png"),
     path.join(process.cwd(), "attached_assets/logo_contabilidade.png"),
   ];
   for (const p of candidates) {

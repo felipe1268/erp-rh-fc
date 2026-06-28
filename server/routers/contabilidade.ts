@@ -441,4 +441,199 @@ export const contabilidadeRouter = router({
       );
       return rows.rows;
     }),
+
+  // ── ALERTA STATUS: verifica prazo do mês anterior ────────────────────────
+  getAlertaStatus: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await assertAccess(ctx.user.id, ctx.user.role, input.companyId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      const now = new Date();
+      const dia = now.getDate();
+      const mes = now.getMonth() + 1;
+      const ano = now.getFullYear();
+
+      const cfgQ = await db.$client.query(
+        `SELECT dia_fiscal, dia_contabil FROM contabilidade_alertas_config WHERE company_id=$1`,
+        [input.companyId]
+      );
+      const diaFiscal   = Number(cfgQ.rows[0]?.dia_fiscal   ?? 5);
+      const diaContabil = Number(cfgQ.rows[0]?.dia_contabil ?? 8);
+
+      const mesAnt = mes === 1 ? 12 : mes - 1;
+      const anoAnt = mes === 1 ? ano - 1 : ano;
+      const envQ = await db.$client.query(
+        `SELECT status FROM contabilidade_envios WHERE company_id=$1 AND mes=$2 AND ano=$3`,
+        [input.companyId, mesAnt, anoAnt]
+      );
+      const statusMesAnt = envQ.rows[0]?.status ?? "pendente";
+      const pendente = statusMesAnt === "pendente";
+
+      let alertas = 0;
+      let tipo: string | null = null;
+      if (pendente && dia >= 1 && dia <= diaContabil) {
+        if (dia <= diaFiscal) { tipo = "ambos"; alertas = 2; }
+        else { tipo = "contabil"; alertas = 1; }
+      }
+
+      return {
+        temAlerta: alertas > 0,
+        alertas,
+        tipo,
+        pendente,
+        mesAnt,
+        anoAnt,
+        diasRestantesFiscal:   Math.max(0, diaFiscal   - dia),
+        diasRestantesContabil: Math.max(0, diaContabil - dia),
+        diaFiscal,
+        diaContabil,
+        statusMesAnt,
+      };
+    }),
+
+  // ── CONFIG: leitura ────────────────────────────────────────────────────────
+  getConfig: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await assertAccess(ctx.user.id, ctx.user.role, input.companyId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      const q = await db.$client.query(
+        `SELECT dia_fiscal, dia_contabil, emails_json, ativo FROM contabilidade_alertas_config WHERE company_id=$1`,
+        [input.companyId]
+      );
+      const defaultEmails = [
+        { nome: "Fabiane / Amanda", email: "contabil@pronustributario.com.br",  dept: "Contabilidade" },
+        { nome: "Tania / Ramatis",  email: "fiscal@pronustributario.com.br",    dept: "Fiscal" },
+        { nome: "Silvia / Adriana", email: "trabalhista@pronustributario.com.br", dept: "Pessoal" },
+      ];
+      if (!q.rows.length) {
+        return { diaFiscal: 5, diaContabil: 8, emails: defaultEmails, ativo: true };
+      }
+      const row = q.rows[0];
+      let emails: any[] = [];
+      try { emails = JSON.parse(row.emails_json ?? "[]"); } catch { emails = defaultEmails; }
+      return {
+        diaFiscal:   Number(row.dia_fiscal),
+        diaContabil: Number(row.dia_contabil),
+        emails,
+        ativo: Boolean(row.ativo),
+      };
+    }),
+
+  // ── CONFIG: escrita ────────────────────────────────────────────────────────
+  saveConfig: protectedProcedure
+    .input(z.object({
+      companyId:   z.number(),
+      diaFiscal:   z.number().int().min(1).max(28).default(5),
+      diaContabil: z.number().int().min(1).max(28).default(8),
+      emails: z.array(z.object({
+        nome:  z.string().min(1),
+        email: z.string().email(),
+        dept:  z.string().default(""),
+      })).max(20),
+      ativo: z.boolean().default(true),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await assertAccess(ctx.user.id, ctx.user.role, input.companyId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      await db.$client.query(
+        `INSERT INTO contabilidade_alertas_config (company_id, dia_fiscal, dia_contabil, emails_json, ativo, updated_at)
+         VALUES ($1,$2,$3,$4,$5,now())
+         ON CONFLICT (company_id) DO UPDATE SET
+           dia_fiscal=$2, dia_contabil=$3, emails_json=$4, ativo=$5, updated_at=now()`,
+        [input.companyId, input.diaFiscal, input.diaContabil, JSON.stringify(input.emails), input.ativo]
+      );
+      return { ok: true };
+    }),
+
+  // ── ENVIAR POR E-MAIL: extrato XLSX + resumo ──────────────────────────────
+  enviarPorEmail: protectedProcedure
+    .input(z.object({
+      companyId:      z.number(),
+      mes:            z.number().int().min(1).max(12),
+      ano:            z.number().int().min(2020).max(2035),
+      emailsDestino:  z.array(z.string().email()).min(1).max(10),
+      mensagem:       z.string().max(1000).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await assertAccess(ctx.user.id, ctx.user.role, input.companyId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      const empQ = await db.$client.query(
+        `SELECT "razaoSocial", "nomeFantasia" FROM companies WHERE id=$1`, [input.companyId]
+      );
+      const empresa = empQ.rows[0]?.nomeFantasia || empQ.rows[0]?.razaoSocial || `Empresa ${input.companyId}`;
+      const mesLabel = MESES[input.mes - 1];
+
+      const { buildExtratoBancarioBuffer } = await import("./downloadContabilidadeXlsx");
+      let xlsxBuf: Buffer | null = null;
+      try {
+        xlsxBuf = await buildExtratoBancarioBuffer(db, input.companyId, input.mes, input.ano, empresa);
+      } catch (e: any) {
+        console.error("[ContabilidadeEmail] erro xlsx:", e?.message);
+      }
+
+      const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<style>body{font-family:Arial,sans-serif;color:#111;margin:0;padding:0}
+.wrap{max-width:600px;margin:32px auto;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden}
+.header{background:#1e3a5f;color:#fff;padding:24px 28px}
+.header h1{margin:0;font-size:18px}
+.body{padding:24px 28px}
+table{width:100%;border-collapse:collapse;font-size:13px;margin:16px 0}
+th{background:#f3f4f6;text-align:left;padding:8px 10px;font-weight:600;color:#374151}
+td{padding:8px 10px;border-top:1px solid #f3f4f6}
+.footer{background:#f9fafb;padding:12px 28px;font-size:11px;color:#9ca3af;border-top:1px solid #e5e7eb}
+</style></head><body>
+<div class="wrap">
+  <div class="header">
+    <h1>📊 Documentos Contábeis — ${mesLabel} / ${input.ano}</h1>
+    <p style="margin:4px 0 0;font-size:13px;opacity:.85">Enviado por: ${empresa}</p>
+  </div>
+  <div class="body">
+    <p>Prezados,</p>
+    <p>Seguem em anexo os documentos contábeis referentes ao período <strong>${mesLabel} de ${input.ano}</strong>.</p>
+    ${input.mensagem ? `<p style="background:#f3f4f6;padding:12px;border-radius:6px;font-size:13px">${input.mensagem.replace(/\n/g, "<br>")}</p>` : ""}
+    <p><strong>Arquivos enviados:</strong></p>
+    <ul style="font-size:13px;line-height:1.8">
+      ${xlsxBuf ? `<li>✅ <strong>Extrato_Bancario_${mesLabel}_${input.ano}.xlsx</strong> — Planilha de extratos bancários (${Math.round(xlsxBuf.byteLength/1024)} KB)</li>` : ""}
+    </ul>
+    <p style="font-size:12px;color:#6b7280;margin-top:24px">
+      Para dúvidas ou informações adicionais, entre em contato conosco.<br>
+      <em>— Sistema ERP FC Engenharia</em>
+    </p>
+  </div>
+  <div class="footer">Este e-mail foi gerado automaticamente pelo ERP FC Engenharia.</div>
+</div>
+</body></html>`;
+
+      const { sendEmail } = await import("../services/smtpService");
+      let enviados = 0;
+      const erros: string[] = [];
+      for (const dest of input.emailsDestino) {
+        const r = await sendEmail({
+          to: dest,
+          subject: `Documentos Contábeis — ${empresa} — ${mesLabel}/${input.ano}`,
+          html,
+          attachments: xlsxBuf ? [{
+            filename: `Extrato_Bancario_${mesLabel}_${input.ano}.xlsx`,
+            content: xlsxBuf,
+            contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          }] : undefined,
+        });
+        if (r.success) enviados++;
+        else erros.push(dest);
+      }
+
+      if (enviados === 0) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Falha ao enviar para: ${erros.join(", ")}` });
+      }
+      return { ok: true, enviados, erros };
+    }),
 });

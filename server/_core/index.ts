@@ -4532,6 +4532,24 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3720: tabela omie_nfe_config garantida.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3720 omie_nfe_config:`, e?.message || e); }
 
+        // Rev. 3830 — Contabilidade: config de alertas de prazo + e-mails da contabilidade
+        try {
+          await db.$client.query(`
+            CREATE TABLE IF NOT EXISTS contabilidade_alertas_config (
+              id          SERIAL PRIMARY KEY,
+              company_id  INTEGER NOT NULL,
+              dia_fiscal  SMALLINT NOT NULL DEFAULT 5,
+              dia_contabil SMALLINT NOT NULL DEFAULT 8,
+              emails_json TEXT,
+              ativo       BOOLEAN NOT NULL DEFAULT true,
+              created_at  TIMESTAMP NOT NULL DEFAULT now(),
+              updated_at  TIMESTAMP NOT NULL DEFAULT now(),
+              UNIQUE(company_id)
+            )
+          `);
+          console.log(`[SyncSchema+] Rev. 3830: tabela contabilidade_alertas_config garantida.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3830 contabilidade_alertas_config:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

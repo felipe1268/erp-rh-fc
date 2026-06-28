@@ -1017,6 +1017,10 @@ function DashboardLayoutContent({
     { companyIds: badgeCompanyIds },
     { enabled: badgeCompanyIds.length > 0, refetchInterval: 60_000, staleTime: 30_000 }
   );
+  const contabilidadeAlertaQ = trpc.contabilidade.getAlertaStatus.useQuery(
+    { companyId: cId },
+    { enabled: cId > 0, refetchInterval: 300_000, staleTime: 120_000 }
+  );
   // Rev. 2450 — Banner global Rev. 2426 REMOVIDO. Substituído pelo
   // componente <AuditoriaAlmoxPendingAlert /> montado no SidebarProvider
   // (linhas ~948), que usa `auditoriaAlmoxarifado.minhasPendencias` com
@@ -1544,6 +1548,19 @@ function DashboardLayoutContent({
         items: s.items.map(item => {
           if (item.path === "/sst/integracao" && sb.pendentesAuto > 0) {
             return { ...item, badge: sb.pendentesAuto, badgePulse: true };
+          }
+          return item;
+        }),
+      }));
+    }
+
+    if (activeModule === "financeiro" && contabilidadeAlertaQ.data?.temAlerta) {
+      const ca = contabilidadeAlertaQ.data;
+      sections = sections.map(s => ({
+        ...s,
+        items: s.items.map(item => {
+          if (item.path === "/financeiro/contabilidade" && ca.alertas > 0) {
+            return { ...item, badge: ca.alertas, badgePulse: true };
           }
           return item;
         }),

@@ -39,6 +39,7 @@ export interface EmailOptions {
   subject: string;
   html: string;
   text?: string;
+  attachments?: { filename: string; content: Buffer; contentType?: string }[];
 }
 
 /**
@@ -53,6 +54,11 @@ export async function sendEmail(options: EmailOptions): Promise<{ success: boole
       subject: options.subject,
       html: options.html,
       text: options.text,
+      attachments: options.attachments?.map(a => ({
+        filename: a.filename,
+        content: a.content,
+        contentType: a.contentType ?? "application/octet-stream",
+      })),
     });
     console.log(`[SMTP] E-mail enviado para ${options.to} - MessageID: ${info.messageId}`);
     return { success: true, messageId: info.messageId };
