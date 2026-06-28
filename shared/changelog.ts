@@ -1,4 +1,27 @@
 /**
+ * Rev. 3835 — **NOTIFICAÇÕES CONTABILIDADE · BUGFIX: "UNEXPECTED END OF JSON INPUT".**
+ *
+ * Quatro correções em `server/routers/contabilidade.ts` e `client/src/pages/Configuracoes.tsx`:
+ *
+ * 1. `getConfig` SELECT adicionado `auto_envio` (estava omitido → `row.auto_envio = undefined` →
+ *    `Boolean(undefined) = false`, ignorando o valor real do banco).
+ *
+ * 2. `emails_json ?? "[]"` → `emails_json || "[]"`: o operador `??` só captura null/undefined;
+ *    se `emails_json = ""` (string vazia), `JSON.parse("")` lançava **"Unexpected end of JSON input"**.
+ *    O `||` captura falsy (null, undefined, "") antes de chamar JSON.parse.
+ *
+ * 3. Retorno padrão (sem row em `contabilidade_alertas_config`) adicionado `autoEnvio: false`,
+ *    tornando o shape consistente entre os dois caminhos de retorno.
+ *
+ * 4. Bug `mes` no botão "Enviar Teste": `now.getMonth()` é 0-indexado — em junho retornava 5
+ *    (maio) em vez de 6. Fix: `now.getMonth() + 1` no branch não-janeiro.
+ *
+ * 5. Import dinâmico `buildExtratoBancarioBuffer` movido para dentro do try/catch existente,
+ *    evitando crash não capturado caso o módulo falhe ao carregar.
+ *
+ * ZERO DELETE · ZERO SCHEMA.
+ */
+/**
  * Rev. 3834 — **EXTRATO BANCÁRIO XLSX: LOGO FC ENGENHARIA + CONTORNO EXTERNO (MEDIUM BORDER).**
  *
  * 1. LOGO: substituído logo da contabilidade pelo logo da FC Engenharia (`client/public/logo-fc.jpg`).

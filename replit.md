@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3835** — **NOTIFICAÇÕES CONTABILIDADE · BUGFIX: "UNEXPECTED END OF JSON INPUT".** `getConfig` SELECT adicionado `auto_envio` (estava omitido → valor DB ignorado). `emails_json ?? "[]"` → `|| "[]"` (string vazia `""` não é capturada por `??` → `JSON.parse("")` lançava o erro). Retorno padrão adicionado `autoEnvio: false`. Bug `mes` no "Enviar Teste": `now.getMonth()` 0-indexado → `+1`. Import dinâmico do XLSX movido para dentro do try/catch. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3834** — **EXTRATO BANCÁRIO XLSX: LOGO FC ENGENHARIA + CONTORNO EXTERNO (MEDIUM BORDER).** Logo substituído: `logo-fc.jpg` (FC Engenharia colorido) no lugar do logo da contabilidade; `getLogoBuffer` retorna `{buffer,extension}` (JPEG precisa de `"jpeg"`). `applyTableBorders` aplica contorno externo medium + grade interna thin cobrindo cabeçalho+dados numa só passada. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3833** — **EXTRATO BANCÁRIO XLSX: FORMATAÇÃO CONDICIONAL SALDO + BORDAS + NF 100% CRUZADO.** Saldo calculado em JS (acumulado linha a linha): verde (#00B050) se ≥ 0, vermelho (#FF0000) se < 0, fonte branca em ambos. Bordas finas em TODAS as células de dados (A-H), não só no cabeçalho. NF cruzado em 3 camadas: stmt_line_id direto → entry_id pré-carregado → CNPJ+valor com dedup por usedNfKeys. Label do banco agora inclui apelido da conta ("BANCO SANTANDER – LOCNOW – APARECIDA"). ZERO DELETE. Detalhe: `shared/changelog.ts`.

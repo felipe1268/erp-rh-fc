@@ -1799,7 +1799,7 @@ function NotificacoesContabilidadeTab({ companyId }: { companyId: number }) {
         <Button variant="outline" size="sm" disabled={!emails.length || enviarTesteMut.isPending}
           onClick={() => {
             const now = new Date();
-            const mes = now.getMonth() === 0 ? 12 : now.getMonth();
+            const mes = now.getMonth() === 0 ? 12 : now.getMonth() + 1;
             const ano = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
             enviarTesteMut.mutate({
               companyId, mes, ano,

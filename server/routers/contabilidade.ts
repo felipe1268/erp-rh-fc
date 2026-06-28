@@ -502,7 +502,7 @@ export const contabilidadeRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
       const q = await db.$client.query(
-        `SELECT dia_fiscal, dia_contabil, emails_json, ativo FROM contabilidade_alertas_config WHERE company_id=$1`,
+        `SELECT dia_fiscal, dia_contabil, emails_json, ativo, auto_envio FROM contabilidade_alertas_config WHERE company_id=$1`,
         [input.companyId]
       );
       const defaultEmails = [
@@ -511,11 +511,11 @@ export const contabilidadeRouter = router({
         { nome: "Silvia / Adriana", email: "trabalhista@pronustributario.com.br", dept: "Pessoal" },
       ];
       if (!q.rows.length) {
-        return { diaFiscal: 5, diaContabil: 8, emails: defaultEmails, ativo: true };
+        return { diaFiscal: 5, diaContabil: 8, emails: defaultEmails, ativo: true, autoEnvio: false };
       }
       const row = q.rows[0];
       let emails: any[] = [];
-      try { emails = JSON.parse(row.emails_json ?? "[]"); } catch { emails = defaultEmails; }
+      try { emails = JSON.parse(row.emails_json || "[]"); } catch { emails = defaultEmails; }
       return {
         diaFiscal:   Number(row.dia_fiscal),
         diaContabil: Number(row.dia_contabil),
@@ -574,9 +574,9 @@ export const contabilidadeRouter = router({
       const empresa = empQ.rows[0]?.nomeFantasia || empQ.rows[0]?.razaoSocial || `Empresa ${input.companyId}`;
       const mesLabel = MESES[input.mes - 1];
 
-      const { buildExtratoBancarioBuffer } = await import("./downloadContabilidadeXlsx");
       let xlsxBuf: Buffer | null = null;
       try {
+        const { buildExtratoBancarioBuffer } = await import("./downloadContabilidadeXlsx");
         xlsxBuf = await buildExtratoBancarioBuffer(db, input.companyId, input.mes, input.ano, empresa);
       } catch (e: any) {
         console.error("[ContabilidadeEmail] erro xlsx:", e?.message);
