@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3839** — **NF-E RECEBIDAS · MUDAR STATUS EM LOTE.** Botão "Mudar Status" adicionado na barra de seleção múltipla da aba "NF-e Recebidas" (existia só nas Emitidas). States `bulkRecStatusOpen`+`bulkRecStatusTarget`, mutation `bulkRecStatusMut` (reutiliza `fiscalNotes.bulkUpdateStatus`), AlertDialog com 5 opções de status. `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3838** — **EXTRATO BANCÁRIO XLSX · FORMATAÇÃO CONDICIONAL NATIVA EXCEL NA COLUNA SALDO.** `ws.addConditionalFormatting()`: regra `< 0` → vermelho (#FF0000) + fonte branca; regra `> 0` → verde (#00B050) + fonte branca; range `H9:H{lastDataRow}`. Cor muda automaticamente ao editar fórmulas no Excel. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3837** — **EXTRATO BANCÁRIO XLSX · COLUNA SALDO COM FÓRMULA EXCEL.** H(row 9)=`=H6+F9-G9`; H(row N)=`=H{N-1}+FN-GN`. Campo `result` pré-preenchido para abrir sem recalcular. Formatação condicional verde/vermelho inalterada. `server/routers/downloadContabilidadeXlsx.ts`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
@@ -58,7 +60,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3835** — **NOTIFICAÇÕES CONTABILIDADE · BUGFIX: "UNEXPECTED END OF JSON INPUT".** `getConfig` SELECT adicionado `auto_envio` (estava omitido → valor DB ignorado). `emails_json ?? "[]"` → `|| "[]"` (string vazia `""` não é capturada por `??` → `JSON.parse("")` lançava o erro). Retorno padrão adicionado `autoEnvio: false`. Bug `mes` no "Enviar Teste": `now.getMonth()` 0-indexado → `+1`. Import dinâmico do XLSX movido para dentro do try/catch. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3833** — **EXTRATO BANCÁRIO XLSX: FORMATAÇÃO CONDICIONAL SALDO + BORDAS + NF 100% CRUZADO.** Saldo calculado em JS (acumulado linha a linha): verde (#00B050) se ≥ 0, vermelho (#FF0000) se < 0, fonte branca em ambos. Bordas finas em TODAS as células de dados (A-H), não só no cabeçalho. NF cruzado em 3 camadas: stmt_line_id direto → entry_id pré-carregado → CNPJ+valor com dedup por usedNfKeys. Label do banco agora inclui apelido da conta ("BANCO SANTANDER – LOCNOW – APARECIDA"). ZERO DELETE. Detalhe: `shared/changelog.ts`.
+- **Rev. 3833** — **EXTRATO BANCÁRIO XLSX: FORMATAÇÃO CONDICIONAL SALDO + BORDAS + NF 100% CRUZADO.** ZERO DELETE. Detalhe: `shared/changelog.ts`. Saldo calculado em JS (acumulado linha a linha): verde (#00B050) se ≥ 0, vermelho (#FF0000) se < 0, fonte branca em ambos. Bordas finas em TODAS as células de dados (A-H), não só no cabeçalho. NF cruzado em 3 camadas: stmt_line_id direto → entry_id pré-carregado → CNPJ+valor com dedup por usedNfKeys. Label do banco agora inclui apelido da conta ("BANCO SANTANDER – LOCNOW – APARECIDA"). ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3832** — **CONTABILIDADE · BUGFIX: BAIXAR PACOTE ZIP FALHAVA COM JSON DE ERRO.** `queryData` usava `Promise.all` sem fallback — qualquer query falhando (ex.: tabela de cartão ausente em dev) rejeitava tudo e o catch enviava JSON em vez de ZIP. Fix: `safeQuery` wrapper em cada query (`[]` no erro); `setHeader`+`archive.pipe(res)` movidos para ANTES de `processarMes` (browser recebe `application/zip` desde o início). ZERO DELETE. Detalhe: `shared/changelog.ts`.
 

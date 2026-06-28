@@ -1,4 +1,22 @@
 /**
+ * Rev. 3839 — **NF-E RECEBIDAS · MUDAR STATUS EM LOTE.**
+ *
+ * A barra de seleção múltipla da aba "NF-e Recebidas" (SEFAZ) ganhava o botão
+ * "Mudar Status" que já existia na aba "Emitidas", mas estava ausente nas Recebidas.
+ *
+ * O que foi adicionado:
+ * - States `bulkRecStatusOpen` + `bulkRecStatusTarget` (padrão "recebida")
+ * - Mutation `bulkRecStatusMut` (reutiliza `fiscalNotes.bulkUpdateStatus` → UPDATE em lote
+ *   com guard de companyId + inArray, max 200 ids, retorna `{ updated: N }`)
+ * - Botão "Mudar Status" na barra roxa de seleção (entre "Desmarcar todas" e "Excluir N")
+ * - AlertDialog com grid 2×3 de opções de status (Pendente / Recebida / Validada /
+ *   Conciliada / Cancelada), botão "Aplicar" e refetch de `nfeRecQuery` ao concluir
+ *
+ * Backend `fiscalNotes.bulkUpdateStatus` já existia e já suportava os 5 status.
+ * Arquivo: `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`.
+ * ZERO DELETE · ZERO SCHEMA.
+ */
+/**
  * Rev. 3838 — **EXTRATO BANCÁRIO XLSX · FORMATAÇÃO CONDICIONAL NATIVA EXCEL NA COLUNA SALDO.**
  *
  * Substituído o preenchimento estático (calculado em JS) por regras nativas de formatação

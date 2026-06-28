@@ -201,6 +201,8 @@ export default function FinanceiroNotasFiscais() {
   const [conciliarMesOpen, setConciliarMesOpen] = useState(false);
   const [selectedRecIds, setSelectedRecIds] = useState<Set<number>>(new Set());
   const [bulkRecDeleteOpen, setBulkRecDeleteOpen] = useState(false);
+  const [bulkRecStatusOpen, setBulkRecStatusOpen] = useState(false);
+  const [bulkRecStatusTarget, setBulkRecStatusTarget] = useState<string>("recebida");
   const masterRecRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<any>(emptyForm());
   const [tab, setTab] = useState<"dados" | "tributacao" | "vinculo">("dados");
@@ -488,6 +490,16 @@ export default function FinanceiroNotasFiscais() {
       setSelectedIds(new Set());
       setBulkStatusOpen(false);
       listQuery.refetch();
+    },
+    onError: (e) => toast({ title: "Erro ao atualizar status", description: e.message, variant: "destructive" }),
+  });
+  const bulkRecStatusMut = trpc.fiscalNotes.bulkUpdateStatus.useMutation({
+    onSuccess: (r) => {
+      const st = STATUS_MAP[bulkRecStatusTarget]?.label ?? bulkRecStatusTarget;
+      toast({ title: `${r.updated} NF-e${r.updated !== 1 ? "s" : ""} marcada${r.updated !== 1 ? "s" : ""} como "${st}".` });
+      setSelectedRecIds(new Set());
+      setBulkRecStatusOpen(false);
+      nfeRecQuery.refetch();
     },
     onError: (e) => toast({ title: "Erro ao atualizar status", description: e.message, variant: "destructive" }),
   });
@@ -1484,6 +1496,14 @@ export default function FinanceiroNotasFiscais() {
                     onClick={() => setSelectedRecIds(new Set())}
                     className="text-xs px-2 py-1 rounded bg-white/20 hover:bg-white/30 transition-colors"
                   >Desmarcar todas</button>
+                  <button
+                    type="button"
+                    onClick={() => setBulkRecStatusOpen(true)}
+                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded bg-white/20 hover:bg-white/30 font-semibold transition-colors"
+                  >
+                    <CheckIcon className="w-3.5 h-3.5" />
+                    Mudar Status
+                  </button>
                   <button
                     type="button"
                     onClick={() => setBulkRecDeleteOpen(true)}
@@ -3030,6 +3050,48 @@ export default function FinanceiroNotasFiscais() {
             </Dialog>
           );
         })()}
+
+        {/* AlertDialog — mudar status NF-e Recebidas em lote */}
+        <AlertDialog open={bulkRecStatusOpen} onOpenChange={v => { if (!v) setBulkRecStatusOpen(false); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Mudar status de {selectedRecIds.size} NF-e{selectedRecIds.size !== 1 ? "s" : ""}</AlertDialogTitle>
+              <AlertDialogDescription>
+                Selecione o novo status a aplicar em todas as NF-es selecionadas.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="px-1 py-2 grid grid-cols-2 gap-2">
+              {(["pendente","recebida","validada","conciliada","cancelada"] as const).map(s => {
+                const info = STATUS_MAP[s];
+                return (
+                  <button
+                    key={s}
+                    onClick={() => setBulkRecStatusTarget(s)}
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${
+                      bulkRecStatusTarget === s
+                        ? "border-indigo-500 bg-indigo-50"
+                        : "border-slate-200 hover:border-slate-300 bg-white"
+                    }`}
+                  >
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border ${info.color}`}>
+                      {info.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setBulkRecStatusOpen(false)}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-indigo-600 hover:bg-indigo-700"
+                onClick={() => bulkRecStatusMut.mutate({ ids: Array.from(selectedRecIds), companyId: companyId!, status: bulkRecStatusTarget as any })}
+                disabled={bulkRecStatusMut.isPending}
+              >
+                {bulkRecStatusMut.isPending ? "Atualizando..." : `Aplicar "${STATUS_MAP[bulkRecStatusTarget]?.label ?? bulkRecStatusTarget}"`}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* AlertDialog — excluir NF-e Recebidas em lote */}
         <AlertDialog open={bulkRecDeleteOpen} onOpenChange={v => { if (!v) setBulkRecDeleteOpen(false); }}>
