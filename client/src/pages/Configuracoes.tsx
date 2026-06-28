@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -92,7 +93,7 @@ const CATEGORIAS = [
   { key: "notificacoes_sistema", label: "Notificações do Sistema", icon: Bell, color: "text-pink-600", bgColor: "bg-pink-50", borderColor: "border-pink-200" },
 ];
 
-type TabKey = "criterios" | "senha" | "limpeza" | "regras" | "notificacoes" | "contrato_pj" | "contrato_terceiros" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos" | "backup" | "terceiros" | "portal_cliente" | "templates_docs" | "socios";
+type TabKey = "criterios" | "senha" | "limpeza" | "regras" | "notificacoes" | "notif_contabil" | "contrato_pj" | "contrato_terceiros" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos" | "backup" | "terceiros" | "portal_cliente" | "templates_docs" | "socios";
 
 // Rev. 2403: mapa estático de cores das abas. CRÍTICO: Tailwind JIT só vê
 // classes LITERAIS no source — interpolação tipo `bg-${c}-500` não gera CSS.
@@ -337,6 +338,7 @@ export default function Configuracoes() {
     { key: "templates_docs" as TabKey, label: "Templates de Documentos", icon: FileText, minRole: "admin", color: "sky" },
     { key: "senha" as TabKey, label: "Minha Senha", icon: Key, minRole: "user", color: "emerald" },
     { key: "notificacoes" as TabKey, label: "Notificações E-mail", icon: Bell, minRole: "admin", color: "violet" },
+    { key: "notif_contabil" as TabKey, label: "Notificações Contabilidade", icon: Receipt, minRole: "admin", color: "indigo" },
     { key: "contrato_pj" as TabKey, label: "Contrato PJ", icon: FileText, minRole: "admin", color: "teal" },
     { key: "contrato_terceiros" as TabKey, label: "Contrato Terceiros", icon: Handshake, minRole: "admin", color: "rose" },
     { key: "sindical" as TabKey, label: "Sindical / Dissídio", icon: Landmark, minRole: "admin", color: "orange" },
@@ -856,6 +858,11 @@ export default function Configuracoes() {
         {/* TAB: Notificações E-mail */}
         {activeTab === "notificacoes" && (
           <NotificacoesEmailTab companyId={companyId} />
+        )}
+
+        {/* TAB: Notificações Contabilidade */}
+        {activeTab === "notif_contabil" && (
+          <NotificacoesContabilidadeTab companyId={companyId} />
         )}
 
         {/* TAB: Contrato PJ */}
@@ -1723,8 +1730,263 @@ function ContratoPJTab({ companyId, userName }: { companyId: number; userName: s
 }
 
 // ============================================================
-// COMPONENTE: Notificações por E-mail
+// COMPONENTE: Notificações Contabilidade (Tab em Configurações)
 // ============================================================
+function NotificacoesContabilidadeTab({ companyId }: { companyId: number }) {
+  const [diaFiscal, setDiaFiscal] = useState(5);
+  const [diaContabil, setDiaContabil] = useState(8);
+  const [autoEnvio, setAutoEnvio] = useState(false);
+  const [ativo, setAtivo] = useState(true);
+  const [emails, setEmails] = useState<{nome:string;email:string;dept:string}[]>([]);
+  const [novoNome, setNovoNome] = useState("");
+  const [novoEmail, setNovoEmail] = useState("");
+  const [novoDept, setNovoDept] = useState("");
+  const [carregado, setCarregado] = useState(false);
+
+  const configQ = trpc.contabilidade.getConfig.useQuery(
+    { companyId }, { enabled: companyId > 0, staleTime: 30_000 }
+  );
+  const alertaQ = trpc.contabilidade.getAlertaStatus.useQuery(
+    { companyId }, { enabled: companyId > 0, staleTime: 60_000 }
+  );
+  const saveMut = trpc.contabilidade.saveConfig.useMutation({
+    onSuccess: () => { toast.success("Configurações salvas!"); configQ.refetch(); alertaQ.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const enviarTesteMut = trpc.contabilidade.enviarPorEmail.useMutation({
+    onSuccess: (d) => toast.success(`Teste enviado para ${d.enviados} destinatário(s)!`),
+    onError: (e) => toast.error(e.message),
+  });
+
+  useEffect(() => {
+    if (configQ.data && !carregado) {
+      setDiaFiscal(configQ.data.diaFiscal);
+      setDiaContabil(configQ.data.diaContabil);
+      setAutoEnvio(configQ.data.autoEnvio ?? false);
+      setAtivo(configQ.data.ativo);
+      setEmails(configQ.data.emails ?? []);
+      setCarregado(true);
+    }
+  }, [configQ.data, carregado]);
+
+  const MESES_FULL = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+  const al = alertaQ.data;
+  const mesAntLabel = al ? `${MESES_FULL[(al.mesAnt ?? 1) - 1]}/${al.anoAnt}` : "—";
+
+  function handleSave() {
+    saveMut.mutate({ companyId, diaFiscal, diaContabil, emails, ativo, autoEnvio });
+  }
+
+  function adicionarEmail() {
+    if (!novoNome.trim() || !novoEmail.trim()) { toast.error("Nome e e-mail são obrigatórios"); return; }
+    setEmails(prev => [...prev, { nome: novoNome.trim(), email: novoEmail.trim(), dept: novoDept.trim() }]);
+    setNovoNome(""); setNovoEmail(""); setNovoDept("");
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Cabeçalho */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+            <Receipt className="w-5 h-5 text-indigo-600" />
+            Notificações Contabilidade
+          </h2>
+          <p className="text-sm text-gray-500">
+            Configure os destinatários e prazos para envio automático de documentos contábeis ao contador.
+          </p>
+        </div>
+        <Button variant="outline" size="sm" disabled={!emails.length || enviarTesteMut.isPending}
+          onClick={() => {
+            const now = new Date();
+            const mes = now.getMonth() === 0 ? 12 : now.getMonth();
+            const ano = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+            enviarTesteMut.mutate({
+              companyId, mes, ano,
+              emailsDestino: emails.filter(e => e.email).map(e => e.email),
+              mensagem: "E-mail de teste enviado pelas Configurações do Sistema.",
+            });
+          }}>
+          <Send className="w-4 h-4 mr-1" />
+          {enviarTesteMut.isPending ? "Enviando…" : "Enviar Teste"}
+        </Button>
+      </div>
+
+      {/* Status atual */}
+      {al && (
+        <div className={cn(
+          "rounded-lg border px-4 py-3 flex items-start gap-3 text-sm",
+          al.temAlerta ? "bg-amber-50 border-amber-200" : "bg-green-50 border-green-200"
+        )}>
+          <Bell className={cn("w-4 h-4 mt-0.5 shrink-0", al.temAlerta ? "text-amber-500" : "text-green-500")} />
+          <div>
+            <p className={cn("font-medium", al.temAlerta ? "text-amber-700" : "text-green-700")}>
+              {al.temAlerta
+                ? `Alerta ativo — ${mesAntLabel} ainda pendente (${al.diasRestantesContabil}d p/ prazo)`
+                : `Sem alertas ativos — ${mesAntLabel} ${al.statusMesAnt === "pendente" ? "pendente mas fora da janela" : al.statusMesAnt}`}
+            </p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Prazo Fiscal: dia {al.diaFiscal} · Prazo Contábil: dia {al.diaContabil}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {configQ.isLoading ? (
+        <div className="flex items-center gap-2 py-8 text-slate-400 text-sm justify-center">
+          <Loader2 className="w-4 h-4 animate-spin" /> Carregando…
+        </div>
+      ) : (
+        <>
+          {/* Prazos */}
+          <Card>
+            <CardContent className="p-5 space-y-4">
+              <h3 className="font-semibold text-gray-800">Prazos de entrega</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-medium text-gray-700">Prazo Fiscal (dia do mês)</Label>
+                  <Input type="number" min={1} max={28} value={diaFiscal}
+                    onChange={e => setDiaFiscal(Number(e.target.value))} className="mt-1" />
+                  <p className="text-xs text-gray-400 mt-1">Alerta ativo nos dias 1 até este dia. Padrão: 5.</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-gray-700">Prazo Contábil (dia do mês)</Label>
+                  <Input type="number" min={1} max={28} value={diaContabil}
+                    onChange={e => setDiaContabil(Number(e.target.value))} className="mt-1" />
+                  <p className="text-xs text-gray-400 mt-1">Alerta ativo nos dias 1 até este dia. Padrão: 8.</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Destinatários */}
+          <Card>
+            <CardContent className="p-5 space-y-4">
+              <h3 className="font-semibold text-gray-800">Destinatários</h3>
+
+              {/* Resumo */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-blue-700">{emails.length}</p>
+                  <p className="text-xs text-gray-500">Total</p>
+                </div>
+                <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-indigo-700">{emails.filter(e => e.dept?.toLowerCase().includes("fiscal") || e.dept?.toLowerCase().includes("fiscal")).length || emails.length}</p>
+                  <p className="text-xs text-gray-500">Recebem Extrato</p>
+                </div>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-green-700">{autoEnvio ? "SIM" : "NÃO"}</p>
+                  <p className="text-xs text-gray-500">Envio Auto</p>
+                </div>
+              </div>
+
+              {/* Lista */}
+              <div className="space-y-2">
+                {emails.length === 0 && (
+                  <p className="text-sm text-gray-400 italic py-2 text-center">Nenhum destinatário configurado ainda.</p>
+                )}
+                {emails.map((e, i) => (
+                  <div key={i} className="flex items-center gap-3 bg-gray-50 border rounded-lg px-4 py-2.5">
+                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm shrink-0">
+                      {e.nome.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-800 truncate">{e.nome}</p>
+                      <p className="text-xs text-indigo-600 truncate">{e.email}</p>
+                    </div>
+                    {e.dept && <span className="text-[10px] text-gray-400 bg-white border rounded px-2 py-0.5 shrink-0">{e.dept}</span>}
+                    <button className="text-gray-400 hover:text-red-500 shrink-0 ml-1"
+                      onClick={() => setEmails(prev => prev.filter((_, j) => j !== i))}>
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Adicionar */}
+              <div className="border border-dashed rounded-lg p-4 space-y-3">
+                <p className="text-sm font-medium text-gray-600">Adicionar destinatário</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700">Nome *</Label>
+                    <Input value={novoNome} onChange={e => setNovoNome(e.target.value)} placeholder="Ex: Fabiane / Amanda" className="mt-1" />
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700">Departamento</Label>
+                    <Input value={novoDept} onChange={e => setNovoDept(e.target.value)} placeholder="Ex: Contabilidade" className="mt-1" />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <Label className="text-sm font-medium text-gray-700">E-mail *</Label>
+                    <Input type="email" value={novoEmail} onChange={e => setNovoEmail(e.target.value)} placeholder="contador@escritorio.com.br" className="mt-1" />
+                  </div>
+                  <div className="flex items-end">
+                    <Button onClick={adicionarEmail} disabled={!novoNome || !novoEmail} className="bg-indigo-600 hover:bg-indigo-700 mb-0">
+                      <Plus className="w-4 h-4 mr-1" /> Adicionar
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Opções */}
+          <Card>
+            <CardContent className="p-5 space-y-4">
+              <h3 className="font-semibold text-gray-800">Opções</h3>
+              <div className="space-y-3">
+                <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                  <Switch checked={ativo} onCheckedChange={setAtivo} />
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Alertas de prazo ativos</p>
+                    <p className="text-xs text-gray-400">Exibe badge e banner na tela de Contabilidade quando o prazo se aproxima</p>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-indigo-50">
+                  <Switch checked={autoEnvio} onCheckedChange={setAutoEnvio} />
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Envio automático no dia do prazo</p>
+                    <p className="text-xs text-gray-400">
+                      No dia {diaFiscal} (Fiscal) e no dia {diaContabil} (Contábil), o sistema envia automaticamente o Extrato Bancário por e-mail para os destinatários acima — sem precisar abrir o ERP.
+                    </p>
+                  </div>
+                </label>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Info */}
+          <Card className="bg-indigo-50 border-indigo-200">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <Info className="w-5 h-5 text-indigo-600 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-indigo-800">
+                  <p className="font-medium mb-1">Como funciona o envio automático?</p>
+                  <ul className="space-y-1 text-xs text-indigo-700">
+                    <li>• O sistema verifica uma vez por hora se hoje é dia de prazo (Fiscal ou Contábil)</li>
+                    <li>• Se o mês anterior ainda estiver <strong>Pendente</strong> e o envio automático estiver ativo, dispara o e-mail automaticamente</li>
+                    <li>• Só envia <strong>uma vez por dia</strong> por empresa (evita duplicatas)</li>
+                    <li>• O arquivo enviado é o <strong>Extrato Bancário em XLSX</strong> (mesmo que o botão "Enviar por E-mail" na tela de Contabilidade)</li>
+                    <li>• Você também pode enviar manualmente a qualquer momento pelo botão na tela de Contabilidade</li>
+                  </ul>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Botão salvar */}
+          <div className="flex justify-end">
+            <Button onClick={handleSave} disabled={saveMut.isPending} className="bg-indigo-600 hover:bg-indigo-700 px-8">
+              {saveMut.isPending ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Salvando…</> : <><Save className="w-4 h-4 mr-2" />Salvar configurações</>}
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function NotificacoesEmailTab({ companyId }: { companyId: number }) {
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);

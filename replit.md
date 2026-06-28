@@ -50,13 +50,15 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3830** — **CONTABILIDADE · SISTEMA DE ALERTAS DE PRAZO + ENVIO POR E-MAIL.** Tabela `contabilidade_alertas_config` (SyncSchema+ Rev.3830): dia_fiscal/dia_contabil/emails_json/ativo. 4 endpoints novos em `contabilidade.ts`: `getAlertaStatus` (verifica pendência do mês anterior vs janela de prazo), `getConfig`/`saveConfig` (upsert com 3 e-mails Pronus pré-populados), `enviarPorEmail` (gera XLSX + envia via SMTP com anexo). Front: banner âmbar/vermelho entre header e seletor; botão "Configurações" no header (modal com prazos + lista de destinatários); botão "Enviar por E-mail" em cada PainelMes. Badge piscante no menu lateral (DashboardLayout) quando `temAlerta`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+- **Rev. 3831** — **CONTABILIDADE · CONFIGURAÇÕES MOVIDAS PARA CONFIGURAÇÕES DO SISTEMA + ENVIO AUTOMÁTICO DIÁRIO.** `contabilidade_alertas_config` ganha coluna `auto_envio BOOLEAN` (SyncSchema+ Rev.3831). `getConfig`/`saveConfig` atualizados para incluir `autoEnvio`. `verificarEnvioAutomaticoContabilidade()` adicionado ao `statusSyncJob.ts` (chamado em `syncWithRetry` com `.catch` isolado): verifica empresas com prazo ativo + autoEnvio + mês pendente, dispara e-mail e registra em `contabilidade_email_auto_log` (sem duplicata no mesmo dia). Front: nova aba "Notificações Contabilidade" (icon=Receipt, indigo) em `Configuracoes.tsx` com `NotificacoesContabilidadeTab` (status alerta, prazos, destinatários CRUD, toggles Ativo/Envio Auto, botão Teste). `FinanceiroContabilidade.tsx`: modal de config + estados removidos; botão vira link chip para `/configuracoes`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3829** — **EXTRATO BANCÁRIO XLSX: REESCRITA COMPLETA COM EXCELJS PARA IGUALAR TEMPLATE DA CONTABILIDADE.** `buildExtratoBancarioBuffer` reescrita em ExcelJS: logo PNG inserida em A1:B4; C1:H2 merged (empresa, Calibri 24pt bold); A5:E6 merged (BANCO X, bold); cabeçalhos roxo #7030A0 + bordas finas (row 8, h=24); coluna H com fórmula acumulada `=Fn-Gn+H(n-1)` e fundo EFEFEF; larguras exatas do modelo; numFmt R$ contábil. Arquivo logo em `server/assets/logo_contabilidade.png`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+- **Rev. 3830** — **CONTABILIDADE · SISTEMA DE ALERTAS DE PRAZO + ENVIO POR E-MAIL.** Tabela `contabilidade_alertas_config` (SyncSchema+ Rev.3830): dia_fiscal/dia_contabil/emails_json/ativo. 4 endpoints novos em `contabilidade.ts`: `getAlertaStatus` (verifica pendência do mês anterior vs janela de prazo), `getConfig`/`saveConfig` (upsert com 3 e-mails Pronus pré-populados), `enviarPorEmail` (gera XLSX + envia via SMTP com anexo). Front: banner âmbar/vermelho entre header e seletor; botão "Configurações" no header (modal com prazos + lista de destinatários); botão "Enviar por E-mail" em cada PainelMes. Badge piscante no menu lateral (DashboardLayout) quando `temAlerta`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 ### 5 one-liners
 
-- **Rev. 3828** — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS. 885359 (TED 08/01) e 885395 (PIX 16/01) cancelados; 3 entradas ativas restantes = R$60.000 total correto. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3829** — **EXTRATO BANCÁRIO XLSX: REESCRITA COMPLETA COM EXCELJS PARA IGUALAR TEMPLATE DA CONTABILIDADE.** ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3828** — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3827** — **REVERT Rev.3826 — TRANSPORTE DE EQUIPES volta a "Benefícios (VR/VA/Transporte)". ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 

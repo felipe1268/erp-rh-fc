@@ -4550,6 +4550,15 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3830: tabela contabilidade_alertas_config garantida.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3830 contabilidade_alertas_config:`, e?.message || e); }
 
+        // Rev. 3831 — coluna auto_envio em contabilidade_alertas_config
+        try {
+          await db.$client.query(`
+            ALTER TABLE contabilidade_alertas_config
+              ADD COLUMN IF NOT EXISTS auto_envio BOOLEAN NOT NULL DEFAULT false
+          `);
+          console.log(`[SyncSchema+] Rev. 3831: coluna auto_envio garantida em contabilidade_alertas_config.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3831 auto_envio:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

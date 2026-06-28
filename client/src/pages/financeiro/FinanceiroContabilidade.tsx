@@ -593,12 +593,6 @@ export default function FinanceiroContabilidade() {
   const anoAtual = new Date().getFullYear();
   const [ano, setAno] = useState(anoAtual);
   const [mesSel, setMesSel] = useState<number | null>(null);
-  const [dlgConfig, setDlgConfig] = useState(false);
-  const [cfgDiaFiscal, setCfgDiaFiscal] = useState(5);
-  const [cfgDiaContabil, setCfgDiaContabil] = useState(8);
-  const [cfgEmails, setCfgEmails] = useState<{nome:string;email:string;dept:string}[]>([]);
-  const [cfgAtivo, setCfgAtivo] = useState(true);
-  const [newEmail, setNewEmail] = useState({ nome: "", email: "", dept: "" });
 
   const anoQuery = trpc.contabilidade.getAno.useQuery(
     { companyId: companyId!, ano },
@@ -607,13 +601,6 @@ export default function FinanceiroContabilidade() {
   const alertaQ = trpc.contabilidade.getAlertaStatus.useQuery(
     { companyId: companyId! }, { enabled: !!companyId, refetchInterval: 300_000 }
   );
-  const configQ2 = trpc.contabilidade.getConfig.useQuery(
-    { companyId: companyId! }, { enabled: !!companyId && dlgConfig, staleTime: 60_000 }
-  );
-  const saveConfigMut = trpc.contabilidade.saveConfig.useMutation({
-    onSuccess: () => { toast({ title: "Configurações salvas!" }); setDlgConfig(false); alertaQ.refetch(); },
-    onError: (e) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
-  });
 
   const meses: MesData[] = anoQuery.data ?? [];
   const mesDados = mesSel ? meses.find(m => m.mes === mesSel) ?? null : null;
@@ -645,18 +632,9 @@ export default function FinanceiroContabilidade() {
               <RefreshCw className="w-3 h-3 animate-spin" /> Atualizando…
             </span>
           )}
-          <Button
-            variant="outline" size="sm" className="gap-1.5"
-            onClick={() => {
-              setCfgDiaFiscal(configQ2.data?.diaFiscal ?? 5);
-              setCfgDiaContabil(configQ2.data?.diaContabil ?? 8);
-              setCfgEmails(configQ2.data?.emails ?? []);
-              setCfgAtivo(configQ2.data?.ativo ?? true);
-              setDlgConfig(true);
-            }}
-          >
-            <Settings className="w-4 h-4" /> Configurações
-          </Button>
+          <a href="/configuracoes" className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded px-2.5 py-1.5 bg-white hover:bg-slate-50 transition-colors">
+            <Settings className="w-3.5 h-3.5" /> Configurações
+          </a>
         </div>
         <div className="flex flex-wrap gap-4 mt-3">
           <span className="flex items-center gap-1.5 text-sm text-gray-600">
@@ -776,119 +754,6 @@ export default function FinanceiroContabilidade() {
           <p className="text-sm">Selecione um mês para ver os documentos do período.</p>
         </div>
       )}
-
-      {/* ── Dialog: Configurações de alertas e e-mails ────────────────────── */}
-      <Dialog open={dlgConfig} onOpenChange={(v) => {
-        if (v && configQ2.data) {
-          setCfgDiaFiscal(configQ2.data.diaFiscal);
-          setCfgDiaContabil(configQ2.data.diaContabil);
-          setCfgEmails(configQ2.data.emails ?? []);
-          setCfgAtivo(configQ2.data.ativo);
-        }
-        setDlgConfig(v);
-      }}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Settings className="w-4 h-4 text-slate-600" />
-              Configurações — Alertas e E-mails da Contabilidade
-            </DialogTitle>
-          </DialogHeader>
-
-          {configQ2.isLoading ? (
-            <div className="flex items-center gap-2 py-8 text-slate-400 text-sm justify-center">
-              <Loader2 className="w-4 h-4 animate-spin" /> Carregando…
-            </div>
-          ) : (
-            <div className="space-y-5 py-2">
-
-              {/* Prazos */}
-              <div>
-                <p className="text-sm font-semibold text-slate-700 mb-2">Dias de prazo no mês</p>
-                <div className="flex gap-4">
-                  <div className="flex-1">
-                    <Label className="text-xs text-slate-500">Prazo Fiscal (dia do mês)</Label>
-                    <Input type="number" min={1} max={28} value={cfgDiaFiscal}
-                      onChange={e => setCfgDiaFiscal(Number(e.target.value))} className="mt-1" />
-                    <p className="text-[11px] text-slate-400 mt-0.5">Ex.: 5 = alerta ativo nos dias 1–5</p>
-                  </div>
-                  <div className="flex-1">
-                    <Label className="text-xs text-slate-500">Prazo Contábil (dia do mês)</Label>
-                    <Input type="number" min={1} max={28} value={cfgDiaContabil}
-                      onChange={e => setCfgDiaContabil(Number(e.target.value))} className="mt-1" />
-                    <p className="text-[11px] text-slate-400 mt-0.5">Ex.: 8 = alerta ativo nos dias 1–8</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* E-mails */}
-              <div>
-                <p className="text-sm font-semibold text-slate-700 mb-2">Destinatários (envio de documentos)</p>
-                <div className="space-y-1.5 mb-3">
-                  {cfgEmails.length === 0 && (
-                    <p className="text-xs text-slate-400 italic py-2">Nenhum destinatário configurado.</p>
-                  )}
-                  {cfgEmails.map((e, i) => (
-                    <div key={i} className="flex items-center gap-2 bg-slate-50 border rounded px-3 py-1.5">
-                      <Mail className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                      <span className="text-sm font-medium text-slate-700 min-w-[120px]">{e.nome}</span>
-                      <span className="text-sm text-blue-700 flex-1 break-all">{e.email}</span>
-                      {e.dept && <span className="text-[10px] text-slate-400 bg-white border rounded px-1.5 py-0.5 shrink-0">{e.dept}</span>}
-                      <button className="shrink-0 text-slate-400 hover:text-red-500 ml-1"
-                        onClick={() => setCfgEmails(cfgEmails.filter((_, j) => j !== i))}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                {/* Adicionar e-mail */}
-                <div className="border rounded-lg p-3 bg-slate-50 space-y-2">
-                  <p className="text-xs font-medium text-slate-600">Adicionar destinatário</p>
-                  <div className="flex gap-2">
-                    <Input placeholder="Nome" value={newEmail.nome} onChange={e => setNewEmail(p => ({...p, nome: e.target.value}))} className="flex-1 text-sm h-8" />
-                    <Input placeholder="Depto" value={newEmail.dept} onChange={e => setNewEmail(p => ({...p, dept: e.target.value}))} className="w-28 text-sm h-8" />
-                  </div>
-                  <div className="flex gap-2">
-                    <Input placeholder="e-mail@exemplo.com.br" type="email" value={newEmail.email} onChange={e => setNewEmail(p => ({...p, email: e.target.value}))} className="flex-1 text-sm h-8" />
-                    <Button size="sm" variant="outline" className="h-8 gap-1 shrink-0"
-                      disabled={!newEmail.nome || !newEmail.email}
-                      onClick={() => {
-                        if (!newEmail.nome || !newEmail.email) return;
-                        setCfgEmails(prev => [...prev, { ...newEmail }]);
-                        setNewEmail({ nome: "", email: "", dept: "" });
-                      }}>
-                      <Plus className="w-3.5 h-3.5" /> Adicionar
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Ativo */}
-              <div className="flex items-center gap-2">
-                <input type="checkbox" id="cfg-ativo" checked={cfgAtivo} onChange={e => setCfgAtivo(e.target.checked)} className="w-4 h-4 rounded accent-blue-600" />
-                <label htmlFor="cfg-ativo" className="text-sm text-slate-700">Alertas de prazo ativos</label>
-              </div>
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDlgConfig(false)}>Cancelar</Button>
-            <Button
-              className="bg-blue-600 hover:bg-blue-700"
-              disabled={saveConfigMut.isPending || configQ2.isLoading}
-              onClick={() => saveConfigMut.mutate({
-                companyId: companyId!,
-                diaFiscal: cfgDiaFiscal,
-                diaContabil: cfgDiaContabil,
-                emails: cfgEmails,
-                ativo: cfgAtivo,
-              })}
-            >
-              {saveConfigMut.isPending ? <><Loader2 className="w-4 h-4 animate-spin mr-1" />Salvando…</> : "Salvar configurações"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
     </div>
     </DashboardLayout>

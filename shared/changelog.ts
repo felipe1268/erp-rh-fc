@@ -1,4 +1,44 @@
 /**
+ * Rev. 3831 — **CONTABILIDADE · CONFIGURAÇÕES MOVIDAS PARA CONFIGURAÇÕES DO SISTEMA + ENVIO AUTOMÁTICO DIÁRIO.**
+ *
+ * PEDIDO (piloto FC): mover as configurações de alertas/destinatários da tela de Contabilidade
+ * para dentro de Configurações do Sistema (padrão igual a "Notificações E-mail" do RH),
+ * e adicionar disparo automático de e-mail no dia do prazo (Fiscal/Contábil) sem abrir o ERP.
+ *
+ * BACK (server/routers/contabilidade.ts):
+ *   · `getConfig` agora retorna campo `autoEnvio` (boolean) lido de `auto_envio` na tabela.
+ *   · `saveConfig` agora persiste `autoEnvio` via 6º parâmetro no upsert.
+ *
+ * BACK (server/_core/index.ts — SyncSchema+ Rev.3831):
+ *   · `ALTER TABLE contabilidade_alertas_config ADD COLUMN IF NOT EXISTS auto_envio BOOLEAN DEFAULT false`
+ *     garante a coluna sem recriar a tabela.
+ *
+ * BACK (server/services/statusSyncJob.ts):
+ *   · `verificarEnvioAutomaticoContabilidade()`: job horário que verifica se hoje é dia fiscal ou
+ *     contábil de alguma empresa com `ativo=true` + `auto_envio=true` e mês anterior pendente.
+ *     Dispara `enviarPorEmail` e registra na tabela `contabilidade_email_auto_log` (CREATE IF NOT EXISTS
+ *     dentro do job) — evita duplicata no mesmo dia com `ON CONFLICT (company_id, data_envio) DO NOTHING`.
+ *   · Chamado dentro de `syncWithRetry()` com `.catch()` isolado para não bloquear o loop principal.
+ *
+ * FRONT (client/src/pages/Configuracoes.tsx):
+ *   · Novo tipo `"notif_contabil"` adicionado ao `TabKey`.
+ *   · Nova entrada na `allTabs`: "Notificações Contabilidade" (icon=Receipt, color="indigo", minRole="admin").
+ *   · Novo bloco de render: `{activeTab === "notif_contabil" && <NotificacoesContabilidadeTab />}`.
+ *   · Novo componente `NotificacoesContabilidadeTab`: exibe status atual de alerta, edita diaFiscal/diaContabil,
+ *     gerencia destinatários (lista com avatar + delete, form de adicionar), toggle Ativo + toggle
+ *     Envio Automático (com explicação do ciclo), botão "Enviar Teste" e botão "Salvar configurações".
+ *     Carrega via `contabilidade.getConfig` e salva via `contabilidade.saveConfig`.
+ *   · Import `cn` from "@/lib/utils" adicionado (era o único faltante).
+ *
+ * FRONT (client/src/pages/financeiro/FinanceiroContabilidade.tsx):
+ *   · Removidos: estado `dlgConfig`, `cfgDiaFiscal`, `cfgDiaContabil`, `cfgEmails`, `cfgAtivo`, `newEmail`;
+ *     queries `configQ2` e `saveConfigMut`; botão "Configurações" com Dialog completo (formulário de
+ *     destinatários + prazos + save).
+ *   · Substituído por: link chip "Configurações" (âncora simples) apontando para `/configuracoes`.
+ *
+ * ZERO DELETE · ZERO DROP · ZERO SCHEMA DESTRUTIVO.
+ */
+/**
  * Rev. 3830 — **CONTABILIDADE · SISTEMA DE ALERTAS DE PRAZO + ENVIO POR E-MAIL.**
  *
  * PEDIDO (piloto FC): alertas automáticos quando documentos do mês anterior estão pendentes

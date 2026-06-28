@@ -520,7 +520,8 @@ export const contabilidadeRouter = router({
         diaFiscal:   Number(row.dia_fiscal),
         diaContabil: Number(row.dia_contabil),
         emails,
-        ativo: Boolean(row.ativo),
+        ativo:     Boolean(row.ativo),
+        autoEnvio: Boolean(row.auto_envio),
       };
     }),
 
@@ -535,7 +536,8 @@ export const contabilidadeRouter = router({
         email: z.string().email(),
         dept:  z.string().default(""),
       })).max(20),
-      ativo: z.boolean().default(true),
+      ativo:      z.boolean().default(true),
+      autoEnvio:  z.boolean().default(false),
     }))
     .mutation(async ({ input, ctx }) => {
       await assertAccess(ctx.user.id, ctx.user.role, input.companyId);
@@ -543,11 +545,11 @@ export const contabilidadeRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
       await db.$client.query(
-        `INSERT INTO contabilidade_alertas_config (company_id, dia_fiscal, dia_contabil, emails_json, ativo, updated_at)
-         VALUES ($1,$2,$3,$4,$5,now())
+        `INSERT INTO contabilidade_alertas_config (company_id, dia_fiscal, dia_contabil, emails_json, ativo, auto_envio, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,now())
          ON CONFLICT (company_id) DO UPDATE SET
-           dia_fiscal=$2, dia_contabil=$3, emails_json=$4, ativo=$5, updated_at=now()`,
-        [input.companyId, input.diaFiscal, input.diaContabil, JSON.stringify(input.emails), input.ativo]
+           dia_fiscal=$2, dia_contabil=$3, emails_json=$4, ativo=$5, auto_envio=$6, updated_at=now()`,
+        [input.companyId, input.diaFiscal, input.diaContabil, JSON.stringify(input.emails), input.ativo, input.autoEnvio]
       );
       return { ok: true };
     }),

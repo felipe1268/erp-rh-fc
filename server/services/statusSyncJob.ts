@@ -343,6 +343,9 @@ async function syncWithRetry(attempt = 0): Promise<void> {
   try {
     await syncEmployeeStatus();
     await processarNotificacoesPendentes();
+    await verificarEnvioAutomaticoContabilidade().catch(e =>
+      console.error("[ContabilAutoSend] Erro no job:", e?.message || e)
+    );
   } catch (e: any) {
     if (attempt < 2) {
       // Retry silencioso após 60s (máximo 2 tentativas)
@@ -414,4 +417,149 @@ export function startStatusSyncJob() {
   console.log("[StatusSync] Job de sincronização de status iniciado (verifica a cada 1h)");
   // Executar na primeira vez com delay de 2 min (aguarda ColFix e conexões estabilizarem)
   setTimeout(() => syncWithRetry(), 2 * 60 * 1000);
+}
+
+// ── Envio Automático de Contabilidade ───────────────────────────────────────
+// Roda diariamente (chamado pelo syncWithRetry) — verifica se hoje é dia de prazo
+// (Fiscal ou Contábil) para empresas com auto_envio=true e mês anterior pendente.
+const MESES_LABEL = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+                     "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+export async function verificarEnvioAutomaticoContabilidade(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  try {
+    const hoje = new Date();
+    const diaHoje = hoje.getDate();
+    const mesHoje = hoje.getMonth() + 1;
+    const anoHoje = hoje.getFullYear();
+    const mesAnt  = mesHoje === 1 ? 12 : mesHoje - 1;
+    const anoAnt  = mesHoje === 1 ? anoHoje - 1 : anoHoje;
+
+    // Buscar todas as empresas com auto_envio ativo
+    const cfgRows = await db.$client.query(
+      `SELECT company_id, dia_fiscal, dia_contabil, emails_json, ativo, auto_envio
+       FROM contabilidade_alertas_config
+       WHERE ativo = true AND auto_envio = true`
+    );
+    if (!cfgRows.rows.length) return;
+
+    for (const cfg of cfgRows.rows) {
+      const companyId  = cfg.company_id as number;
+      const diaFiscal  = Number(cfg.dia_fiscal ?? 5);
+      const diaContabil = Number(cfg.dia_contabil ?? 8);
+
+      // Só procede se hoje é um dos dias de prazo
+      const eDiaFiscal   = diaHoje === diaFiscal;
+      const eDiaContabil = diaHoje === diaContabil;
+      if (!eDiaFiscal && !eDiaContabil) continue;
+
+      // Verifica se o mês anterior ainda está pendente
+      const envQ = await db.$client.query(
+        `SELECT status FROM contabilidade_envios WHERE company_id=$1 AND mes=$2 AND ano=$3`,
+        [companyId, mesAnt, anoAnt]
+      );
+      const statusMesAnt = envQ.rows[0]?.status ?? "pendente";
+      if (statusMesAnt !== "pendente") continue;
+
+      // Verifica se já enviamos hoje para esta empresa (evitar duplo envio)
+      const jaEnvQ = await db.$client.query(
+        `SELECT id FROM contabilidade_email_auto_log
+         WHERE company_id=$1 AND mes=$2 AND ano=$3 AND data_envio::date = CURRENT_DATE`,
+        [companyId, mesAnt, anoAnt]
+      ).catch(() => ({ rows: [] })); // tabela pode não existir ainda
+      if (jaEnvQ.rows.length > 0) {
+        console.log(`[ContabilAutoSend] Empresa ${companyId}: e-mail já enviado hoje para ${mesAnt}/${anoAnt}. Pulando.`);
+        continue;
+      }
+
+      // Buscar nome da empresa
+      const empQ = await db.$client.query(
+        `SELECT "nomeFantasia","razaoSocial" FROM companies WHERE id=$1`, [companyId]
+      );
+      const empresa = empQ.rows[0]?.nomeFantasia || empQ.rows[0]?.razaoSocial || `Empresa ${companyId}`;
+
+      // Buscar destinatários
+      let emails: {nome:string; email:string}[] = [];
+      try { emails = JSON.parse(cfg.emails_json ?? "[]"); } catch { emails = []; }
+      const emailsValidos = emails.filter((e: any) => e?.email?.includes("@"));
+      if (!emailsValidos.length) {
+        console.log(`[ContabilAutoSend] Empresa ${companyId}: sem destinatários configurados. Pulando.`);
+        continue;
+      }
+
+      // Gerar XLSX
+      const { buildExtratoBancarioBuffer } = await import("../routers/downloadContabilidadeXlsx");
+      let xlsxBuf: Buffer | null = null;
+      try {
+        xlsxBuf = await buildExtratoBancarioBuffer(db, companyId, mesAnt, anoAnt, empresa);
+      } catch (e: any) {
+        console.error(`[ContabilAutoSend] Empresa ${companyId}: erro ao gerar XLSX:`, e?.message);
+      }
+
+      const mesLabel = MESES_LABEL[mesAnt - 1];
+      const tipoPrazo = eDiaFiscal && eDiaContabil
+        ? "Fiscal e Contábil"
+        : eDiaFiscal ? "Fiscal" : "Contábil";
+
+      const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<style>body{font-family:Arial,sans-serif;color:#111;margin:0;padding:0}
+.wrap{max-width:600px;margin:32px auto;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden}
+.header{background:#1e3a5f;color:#fff;padding:24px 28px}
+.body{padding:24px 28px}.footer{background:#f9fafb;padding:12px 28px;font-size:11px;color:#9ca3af;border-top:1px solid #e5e7eb}
+</style></head><body>
+<div class="wrap">
+  <div class="header">
+    <h1 style="margin:0;font-size:18px">📊 Envio Automático — Documentos Contábeis</h1>
+    <p style="margin:4px 0 0;font-size:13px;opacity:.85">${empresa} — ${mesLabel} / ${anoAnt}</p>
+  </div>
+  <div class="body">
+    <p>Prezados,</p>
+    <p>Segue em anexo o <strong>Extrato Bancário (${mesLabel}/${anoAnt})</strong> enviado automaticamente no prazo <strong>${tipoPrazo} (dia ${eDiaFiscal ? diaFiscal : diaContabil})</strong>.</p>
+    <p style="font-size:12px;color:#6b7280;margin-top:24px"><em>— ERP FC Engenharia (envio automático)</em></p>
+  </div>
+  <div class="footer">Este e-mail foi gerado automaticamente pelo ERP FC Engenharia. Para cancelar o envio automático, acesse Configurações → Notificações Contabilidade.</div>
+</div></body></html>`;
+
+      // Enviar para todos os destinatários
+      let enviados = 0;
+      for (const dest of emailsValidos) {
+        const r = await sendEmail({
+          to: dest.email,
+          subject: `[AUTOMÁTICO] Documentos Contábeis — ${empresa} — ${mesLabel}/${anoAnt}`,
+          html,
+          attachments: xlsxBuf ? [{
+            filename: `Extrato_Bancario_${mesLabel}_${anoAnt}.xlsx`,
+            content: xlsxBuf,
+            contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          }] : undefined,
+        });
+        if (r.success) enviados++;
+      }
+
+      // Registrar no log (tabela criada sob demanda)
+      try {
+        await db.$client.query(`
+          CREATE TABLE IF NOT EXISTS contabilidade_email_auto_log (
+            id SERIAL PRIMARY KEY, company_id INTEGER NOT NULL,
+            mes SMALLINT NOT NULL, ano SMALLINT NOT NULL,
+            data_envio TIMESTAMP NOT NULL DEFAULT now(),
+            enviados INTEGER NOT NULL DEFAULT 0,
+            tipo_prazo TEXT
+          )
+        `);
+        await db.$client.query(
+          `INSERT INTO contabilidade_email_auto_log (company_id,mes,ano,enviados,tipo_prazo) VALUES ($1,$2,$3,$4,$5)`,
+          [companyId, mesAnt, anoAnt, enviados, tipoPrazo]
+        );
+      } catch (e: any) {
+        console.error(`[ContabilAutoSend] Erro ao registrar log:`, e?.message);
+      }
+
+      console.log(`[ContabilAutoSend] Empresa ${companyId} (${empresa}): ${enviados}/${emailsValidos.length} e-mails enviados — ${mesLabel}/${anoAnt} (prazo ${tipoPrazo}).`);
+    }
+  } catch (e: any) {
+    console.error("[ContabilAutoSend] Erro geral:", e?.message || e);
+  }
 }
