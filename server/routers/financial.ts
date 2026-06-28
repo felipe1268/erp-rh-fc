@@ -2,6 +2,16 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, createAuditLog, getUserCompanyLinks, getCompaniesForUser } from "../db";
 import { resolveCompanyIds } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
+
+const CC_MINUSCULAS = new Set(["e","de","da","do","das","dos","em","a","o","as","os","por","para","com","ao","na","no","nas","nos"]);
+function normalizarNomeCC(nome: string): string {
+  return nome.trim().split(/\s+/).map((w, i) => {
+    const lower = w.toLowerCase();
+    return (i === 0 || !CC_MINUSCULAS.has(lower))
+      ? lower.charAt(0).toUpperCase() + lower.slice(1)
+      : lower;
+  }).join(" ");
+}
 import { z } from "zod";
 import { sql } from "drizzle-orm";
 import { storagePut, dbRetrieve } from "../storage";
@@ -5112,7 +5122,7 @@ export const financialRouter = router({
     const res = await dbExecute(db,
       `INSERT INTO financial_cost_centers (company_id, codigo, nome, tipo, obra_id, responsavel_nome, orcamento_mensal, ativo)
        VALUES ($1,$2,$3,$4,$5,$6,$7,1) RETURNING id, codigo`,
-      [input.companyId, codigo, input.nome, input.tipo, input.obraId ?? null,
+      [input.companyId, codigo, normalizarNomeCC(input.nome), input.tipo, input.obraId ?? null,
        input.responsavelNome ?? null, input.orcamentoMensal ?? null]
     );
     return { id: rows(res)[0]?.id, codigo: rows(res)[0]?.codigo };
@@ -5136,7 +5146,7 @@ export const financialRouter = router({
     const sets: string[] = [];
     const vals: any[] = [];
     let i = 1;
-    if (input.nome !== undefined)             { sets.push(`nome=$${i++}`);              vals.push(input.nome); }
+    if (input.nome !== undefined)             { sets.push(`nome=$${i++}`);              vals.push(normalizarNomeCC(input.nome)); }
     if (input.tipo !== undefined)             { sets.push(`tipo=$${i++}`);              vals.push(input.tipo); }
     if (input.obraId !== undefined)           { sets.push(`obra_id=$${i++}`);           vals.push(input.obraId); }
     if (input.responsavelNome !== undefined)  { sets.push(`responsavel_nome=$${i++}`);  vals.push(input.responsavelNome); }
