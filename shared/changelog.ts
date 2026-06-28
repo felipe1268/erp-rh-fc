@@ -1,4 +1,10 @@
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Changelog centralizado do ERP.
  *
  * Rev. 3827 — **ANÁLISE DE CUSTOS · REVERT Rev.3826 — TRANSPORTE DE EQUIPES volta a "Benefícios
@@ -15653,6 +15659,12 @@ export const _CHANGELOG_3297 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 3082 — **MEDIÇÕES · FECHAMENTO DO SESSION_PLAN (T003 + T007): (A) HISTÓRICO "JÁ MEDIDO" ACUMULADO
  * POR CONTRATO NO LEVANTAMENTO DE CAMPO (CINZA, REFERÊNCIA P/ NÃO REMEDIR O MESMO ITEM) E (B) A ABA
  * "MEDIÇÕES" DO CONTRATO DE TERCEIROS VIRA ESPELHO SÓ-LEITURA POR PADRÃO, COM TOGGLE "EDITAR NESTA ABA"
@@ -15695,6 +15707,12 @@ export const _CHANGELOG_3297 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 3081 — **HUB DE MÓDULOS (HOME) · O CARD ÚNICO "MEDIÇÃO" FOI DESDOBRADO NOS DOIS MÓDULOS DEDICADOS:
  * "MEDIÇÃO CLIENTE" (A RECEBER, % AUTO DO AVANÇO FÍSICO → `/medicao`) E "MEDIÇÃO TERCEIROS" (A PAGAR,
  * LEVANTAMENTO + DIVERGÊNCIA + FD + APROVAÇÃO 3 NÍVEIS → `/terceiros/medicoes`).**
@@ -15719,6 +15737,12 @@ export const _CHANGELOG_3297 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 3080 — **MEDIÇÃO DE TERCEIROS (A PAGAR) · MÓDULO DEDICADO `/terceiros/medicoes` ELEVADO AO FLUXO
  * COMPLETO: APROVAÇÃO EM 3 NÍVEIS (MEDE → GESTOR DA OBRA → SÓCIO ADM LIBERA FINANCEIRO) COM FALLBACK
  * 1-CLIQUE, BADGE DE ALERTA DE DIVERGÊNCIA, FD ABATIDO + LÍQUIDO A PAGAR E STRIP VISUAL DOS NÍVEIS — TUDO
@@ -15759,6 +15783,12 @@ export const _CHANGELOG_3297 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 3079 — **MEDIÇÃO DE TERCEIROS (A PAGAR) · BACKEND + UI DO FLUXO COMPLETO NA ABA "MEDIÇÕES" DO
  * CONTRATO: APROVAÇÃO EM 3 NÍVEIS (MEDE → GESTOR DA OBRA → SÓCIO ADM LIBERA O FINANCEIRO), PAINEL DE
  * "FD DO PERÍODO" (LANÇAMENTO MANUAL QUE ABATE OBRIGATORIAMENTE O VALOR A PAGAR, COM LÍQUIDO AO VIVO),
@@ -20478,6 +20508,12 @@ export const _CHANGELOG_3297 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2940 — **EFETIVO POR OBRA — AS LISTAS GERAIS "TODOS" E "SEM OBRA" AGORA MOSTRAM A FOTO DO
  * FUNCIONÁRIO NA COLUNA "FUNCIONÁRIO" (ANTES SÓ NOME + CPF) — IGUAL AO DRILL-DOWN "EQUIPE —
  * {OBRA}".**
@@ -20500,6 +20536,12 @@ export const _CHANGELOG_3297 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2939 — **EFETIVO POR OBRA — O DRILL-DOWN "EQUIPE — {OBRA}" AGORA É AUTO-AJUSTÁVEL: EM
  * TELAS GRANDES (lg+) CONTINUA A TABELA COMPLETA; EM TABLET/CELULAR (< lg) CADA FUNCIONÁRIO VIRA
  * UM CARD EMPILHADO COM TODAS AS INFORMAÇÕES — ACABA O CORTE DA COLUNA "AÇÕES" NO iPad (~768px).**
@@ -20527,6 +20569,12 @@ export const _CHANGELOG_3297 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2938 — **EFETIVO POR OBRA — AS ABAS "TODOS" E "SEM OBRA" AGORA MOSTRAM AS COLUNAS DE
  * INTEGRAÇÕES (POR CLIENTE) E NRs (TREINAMENTOS) — ANTES SÓ NO DRILL-DOWN "EQUIPE — {OBRA}" —
  * MAIS DOIS FILTROS COMBINÁVEIS (AND): FILTRAR POR INTEGRAÇÃO (CLIENTE) E POR NR (NORMA).**
@@ -20562,6 +20610,12 @@ export const _CHANGELOG_3297 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2937 — **EFETIVO POR OBRA — CADA CARD AGORA MOSTRA, ALÉM DO EFETIVO TOTAL, O EFETIVO
  * OPERACIONAL (100% DISPONÍVEL / "QUEM DÁ PRA CONTAR NA OBRA HOJE"), DESCONTANDO QUEM ESTÁ
  * INDISPONÍVEL (FÉRIAS, AFASTADO, ATESTADO/LICENÇA, DISPENSADO NO AVISO E RECLUSO).**
@@ -20587,6 +20641,12 @@ export const _CHANGELOG_3297 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2936 — **EQUIPE DA OBRA (DRILL-DOWN) — CLICAR NUM CHIP DE NR AGORA ABRE UM POPOVER COM
  * O RESUMO DO QUE A NORMA TRATA (+ NOME DO TREINAMENTO E VALIDADE), FACILITANDO A ANÁLISE DO
  * GESTOR — INCLUSIVE NO TABLET/CELULAR, ONDE O TOOLTIP DE HOVER (`title`) NÃO FUNCIONA AO TOQUE.**
@@ -37615,6 +37675,12 @@ export const _CHANGELOG_3297 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2486 — **ORDENS DE COMPRA · Form de itens agrupado por ETAPA (EAP) —
  * 1 EAP × N itens, em vez de 1 EAP por item.**
  *
@@ -37688,6 +37754,12 @@ export const _CHANGELOG_3297 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2485 — **ORDENS DE COMPRA · Reparo de DUPLICATAS EXISTENTES de
  * numeração (follow-up da Rev. 2483).**
  *
@@ -37755,6 +37827,12 @@ export const _CHANGELOG_3297 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2484 — **EFETIVO DA OBRA (Planejamento, `EfetivoObraView`) · SELEÇÃO
  * MÚLTIPLA + TRANSFERÊNCIA EM LOTE de funcionários entre obras.**
  *
@@ -41795,6 +41873,12 @@ export const _CHANGELOG_3297 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2416 — **ALMOXARIFADO / INVENTÁRIO VISUAL DE BAIAS ·
  * OPÇÃO "TODAS AS OBRAS" — visão consolidada dos insumos em
  * campo.**
@@ -41938,6 +42022,12 @@ export const _CHANGELOG_3297 = true;
 export const CHANGELOG_REV_2416 = "modo Todas as obras no Inventário Visual de Baias";
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2415 — **ALMOXARIFADO / INVENTÁRIO VISUAL DE BAIAS ·
  * AGREGADOS APARECEM AUTOMATICAMENTE — almoxarife não cadastra
  * baia, só dá baixa.**
@@ -42917,6 +43007,12 @@ export const CHANGELOG_REV_2416 = "modo Todas as obras no Inventário Visual de 
 export const CHANGELOG_2404 = "Rev. 2404 marker";
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2403 — **CONFIGURAÇÕES/UX · Abas viraram cards coloridos (cor
  * por módulo) num grid responsivo.**
  *
@@ -43935,6 +44031,12 @@ export const CHANGELOG_2404 = "Rev. 2404 marker";
 import "./version";
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Changelog centralizado do ERP.
  *
  * Rev. 2386 — **FEATURE · IA sugere categorias para itens "Sem categoria"
@@ -43988,6 +44090,12 @@ import "./version";
 import "./version";
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Changelog centralizado do ERP.
  *
  * Rev. 2385 — **UX · Filtro "⚠️ Sem categoria" no dropdown de categorias
@@ -44014,6 +44122,12 @@ import "./version";
 import "./version";
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Changelog centralizado do ERP.
  *
  * Rev. 2384 — **FIX/UX · Badges "X pra receber" do botão ENTRADA e do
@@ -44053,6 +44167,12 @@ import "./version";
 import "./version";
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Changelog centralizado do ERP.
  *
  * Rev. 2383 — **FEATURE · Multi-seleção também no view "Todos almoxarifados":
@@ -44087,6 +44207,12 @@ import "./version";
 import "./version";
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Changelog centralizado do ERP.
  *
  * Rev. 2382 — **FEATURE · Multi-seleção de itens no Almoxarifado: alterar
@@ -44143,6 +44269,12 @@ import "./version";
 import "./version";
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Changelog centralizado do ERP.
  *
  * Rev. 2381 — **FEATURE · Botão "Trocar foto" nos cards do Almoxarifado: user
@@ -44180,6 +44312,12 @@ import "./version";
 import "./version";
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Changelog centralizado do ERP.
  *
  * Rev. 2380 — **UX · Widget de progresso da "Busca de fotos na web" agora
@@ -44205,6 +44343,12 @@ import "./version";
 import "./version";
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Changelog centralizado do ERP.
  *
  * Rev. 2379 — **UX · Polimento do modal "Buscar fotos" + conversão do
@@ -44237,6 +44381,12 @@ import "./version";
 import "./version";
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Changelog centralizado do ERP.
  *
  * Rev. 2378 — **UX · Substituído `window.confirm()` por modal customizado no
@@ -44264,6 +44414,12 @@ import "./version";
 import "./version";
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Changelog centralizado do ERP.
  *
  * Rev. 2377 — **FEATURE · "Buscar fotos da web" no Almoxarifado (mesma
@@ -44305,6 +44461,12 @@ import "./version";
 import "./version";
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Changelog centralizado do ERP.
  *
  * Rev. 2376 — **UX/ALERTA · Botão "ENTRADA" do Almoxarifado também pisca
@@ -44337,6 +44499,12 @@ import "./version";
 import "./version";
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Changelog centralizado do ERP.
  *
  * Rev. 2375 — **UX/ALERTA · Botão "RECEBER LOCAÇÃO" do Almoxarifado agora
@@ -44374,6 +44542,12 @@ import "./version";
 import "./version";
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Changelog centralizado do ERP.
  *
  * Rev. 2374 — **FEATURE · Classificar equipamentos do Almoxarifado como
@@ -44481,6 +44655,12 @@ import "./version";
 import "./version";
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Changelog centralizado do ERP.
  *
  * Rev. 2373 — **FEATURE · "AB" (resposta do user) para controlar insumos a
@@ -46926,6 +47106,12 @@ import "./version";
 const _r2346 = null;
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2345 — **FEATURE/FILOSOFIA · Busca de fotos com IA agora GARANTE
  * COBERTURA 100% via fluxo em 3 fases (A: match preciso → B: busca ampla →
  * C: placeholder SVG por categoria). Inverte a filosofia da Rev. 2342 ("melhor
@@ -50619,6 +50805,12 @@ const _r2346 = null;
 export const CHANGELOG_PLACEHOLDER_2293 = true;
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2292 — **UX · Modal "Descartar solicitação?" redesenhado no padrão FC.**
  *
  * Pedido user (23/05/2026, IMG attached): "ajuste este layout, para
@@ -50651,6 +50843,12 @@ export const CHANGELOG_PLACEHOLDER_2293 = true;
 export const CHANGELOG_PLACEHOLDER_2292 = true;
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2291 — **HOTFIX/DX · Erro real do Postgres exposto no toast +
  * server log ao criar SC (locação de equipamento).**
  *
@@ -50687,6 +50885,12 @@ export const CHANGELOG_PLACEHOLDER_2292 = true;
 export const CHANGELOG_PLACEHOLDER_2291 = true;
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2290 — **FEAT · Locação de Equipamento indicada já na SC (não
  * só na OC). Suprimentos cota como aluguel, OC nasce com os dados,
  * almoxarifado recebe alertas de vencimento.**
@@ -50742,6 +50946,12 @@ export const CHANGELOG_PLACEHOLDER_2291 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2289 — **FEAT/UX · Filtro por VÍNCULO (CLT / PJ / TERCEIRO) na
  * tela Efetivo da Obra.**
  *
@@ -50771,6 +50981,12 @@ export const CHANGELOG_PLACEHOLDER_2291 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2288 — **HOTFIX · `ReferenceError: Can't find variable: fotoZoom`
  * na tela Efetivo da Obra.**
  *
@@ -50790,6 +51006,12 @@ export const CHANGELOG_PLACEHOLDER_2291 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2287 — **FEAT/UX · Foto do funcionário clicável (lightbox) na aba
  * "Efetivo da Obra".**
  *
@@ -50818,6 +51040,12 @@ export const CHANGELOG_PLACEHOLDER_2291 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2286 — **FEAT/UX · Histórico de Relatórios REFIS com seleção
  * múltipla + exclusão em lote (admin-only).**
  *
@@ -50866,6 +51094,12 @@ export const CHANGELOG_PLACEHOLDER_2291 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2285 — **FIX · TODA aba REFIS lê `realOficialRefis` (snapshot MSP
  * raiz UID=0) — eliminadas as últimas 3 ocorrências de `avancoRealAtual`
  * (ponderação local) que ainda apareciam em painéis/KPIs.**
@@ -50920,6 +51154,12 @@ export const CHANGELOG_PLACEHOLDER_2291 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2284 — **FIX · Aba REFIS abre na SEMANA-CUTOFF atual (Sex→Qui p/
  * cutoff=Qui), não na semana ISO (Seg→Dom).**
  *
@@ -50968,6 +51208,12 @@ export const CHANGELOG_PLACEHOLDER_2291 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2283 — **FIX CRÍTICO · emitirRefis() agora grava `realOficialRefis`
  * (snapshot MSP raiz UID=0) em vez de `avancoRealAtual` (cálculo local).**
  *
@@ -51029,6 +51275,12 @@ export const CHANGELOG_PLACEHOLDER_2291 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2282 — **FEAT/UX · HISTÓRICO DE RELATÓRIOS EMITIDOS (REFIS) vira
  * EXPANSÍVEL com painel de ANÁLISE COMPARATIVA vs semana anterior.**
  * Pedido user (23/05/2026, IMG_1058/1059, contexto direto da Rev. 2281):
@@ -51106,6 +51358,12 @@ export const CHANGELOG_PLACEHOLDER_2291 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2281 — **UX · REFIS Análise do Cronograma — redesign sweeping de 3
  * blocos visíveis na tela do relatório semanal: (A) HEADER de cada GROUP
  * CARD (Serviços Preliminares, Vitrais, Complementares…), (B) trio de KPIs
@@ -51211,6 +51469,12 @@ export const CHANGELOG_PLACEHOLDER_2291 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2280 — **FIX · LOTUS Programação Semanal: atividade ANTECIPADA / NÃO
  * PROGRAMADA na SEMANA CORRENTE não pintava célula r0+2 (faixa inferior =
  * REALIZADO) nem na UI nem no Excel exportado. Regressão da Rev. 1785 que
@@ -51307,6 +51571,12 @@ export const CHANGELOG_PLACEHOLDER_2291 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2279 — **CHORE · Solicitação de Equipamento (SE) DELETADA do ERP.
  * Página `/equipamentos/solicitacoes`, item de sidebar "Solicitações de
  * Locação (SE)", router subset (`solicitacoesListar` / `solicitacaoById` /
@@ -51399,6 +51669,12 @@ export const CHANGELOG_PLACEHOLDER_2291 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2278 — **FIX · Curva S Financeira: KPI "Faturamento Realizado
  * (Físico)" e linha verde do gráfico estavam usando `avancoRealAtual`
  * (ponderação local 4,61 %) em vez de `realOficialRefis` (snapshot MSP
@@ -52227,6 +52503,12 @@ export const CHANGELOG_PLACEHOLDER_2291 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2263 — **UX · Modal "Editar Revisão" adota layout moderno FC,
  * espelhando "Nova Revisão do Cronograma".**
  *
@@ -52271,6 +52553,12 @@ export const CHANGELOG_PLACEHOLDER_2291 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2262 — **FIX/REGRA DE OURO · Card "Avanço Físico" do topo espelha
  * snapshot MSP da raiz UID=0 (previsto Texto6/Texto10 + realizado AD/(AD+RD)),
  * ZERO cálculo no ERP quando o XML traz a foto.**
@@ -52364,6 +52652,12 @@ export const CHANGELOG_PLACEHOLDER_2291 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2261 — **BACKFILL · Propaga a leitura MSP da Rev. 2260 para todas
  * as obras já importadas, automaticamente no startup (idempotente).**
  *
@@ -52428,6 +52722,12 @@ export const CHANGELOG_PLACEHOLDER_2291 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2260 — **FIX · Importador MS Project lê `% PREVISTO` por atividade
  * via Texto6 (FieldID 188743746) como fallback de Texto10 — corrige
  * snapshot perdido em XMLs LOTUS R05.**
@@ -52490,6 +52790,12 @@ export const CHANGELOG_PLACEHOLDER_2291 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2259 — **REFACTOR · Solicitação de Equipamento (SE) migra para o
  * módulo Compras — Almoxarifado só gerencia recebimento/uso/devolução.**
  *
@@ -52538,6 +52844,12 @@ export const CHANGELOG_PLACEHOLDER_2291 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2258 — **FEATURE · Módulo Controle de Equipamentos (Fase 1 Sprint 3 —
  * páginas React: Hub + Próprios + Locados + Solicitações + Parâmetros CAPEX).**
  *
@@ -52633,6 +52945,12 @@ export const CHANGELOG_PLACEHOLDER_2291 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2257 — **FEATURE · Módulo Controle de Equipamentos (Fase 1 Sprint 2 —
  * tRPC router + auto-seed de parâmetros CAPEX).**
  *
@@ -52738,6 +53056,12 @@ export const CHANGELOG_PLACEHOLDER_2291 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2256 — **FEATURE · Módulo Controle de Equipamentos (Fase 1 Sprint 1 —
  * schema base) — fundação p/ acabar com perda recorrente de R$ 10-20k/mês
  * por locação descontrolada.**
@@ -52855,6 +53179,12 @@ export const CHANGELOG_PLACEHOLDER_2291 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2255 — **FIX · Barra superior "Avanço Físico" (Planejamento → Detalhe)
  * passa a refletir o avanço REAL desde a 1ª renderização — antes ficava em
  * 0% até o usuário clicar manualmente numa semana.**
@@ -52985,6 +53315,12 @@ export const CHANGELOG_PLACEHOLDER_2291 = true;
  * **R-001/R-007/R-010:** N/A (frontend only — zero SQL, zero schema).
  */
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2253 — **UX · Campo "Responsável" do modal "Nova Revisão" vira
  * FIXO (readOnly) — sempre exibe o engenheiro do cadastro da obra.**
  *
@@ -58273,6 +58609,12 @@ export const CHANGELOG_PLACEHOLDER_2291 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2136 — **Contrato de Experiência · validação consolidada de pré-
  * requisitos ANTES de gerar/enviar (substitui check único de Jornada).
  * Bloqueia se qualquer campo essencial estiver vazio e lista TODAS as
@@ -58331,6 +58673,12 @@ export const CHANGELOG_PLACEHOLDER_2291 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2135 — **FCSign · Cancelar sessão de contrato_experiencia também
  * REMOVE o registro de `employee_contracts` (criado em Rev. 2134), p/ sumir
  * da aba "Contratos CLT" do RAIO-X "como se nunca tivesse existido".**
@@ -58379,6 +58727,12 @@ export const CHANGELOG_PLACEHOLDER_2291 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2134 — **FCSign · Contrato de Experiência agora aparece em "Contratos
  * CLT" do RAIO-X JÁ NA CRIAÇÃO da sessão FCSign (não espera o último
  * signer) + backfill SQL p/ sessões pré-existentes (caso Lilian).**
@@ -63044,6 +63398,12 @@ export const CHANGELOG_PLACEHOLDER_2291 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2055 — SST · Integração · Nova aba "Reprovados" no menu de
  * navegação (entre Aprovados e Histórico), espelhando o padrão da aba
  * Aprovados (Rev. 2049) mas adaptada pro fluxo de reprovação.
@@ -63134,6 +63494,12 @@ export const CHANGELOG_PLACEHOLDER_2291 = true;
  */
 
 /**
+ * Rev. 3828 — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS.**
+ * DB (company 60002, jan/2026): 885359 (TED E003603… 08/01) e 885395 (PIX Doc 000001 16/01)
+ * cancelados como duplicatas confirmadas de 885354 e 885396 respectivamente.
+ * Resultado: 3 entradas ativas de MÚTUO RECEBIDO INTERCOMPANY → total correto R$60.000
+ * (885354 R$25k 08/01 + 885396 R$25k 16/01 + 885361 R$10k 21/01). ZERO DELETE.
+ *
  * Rev. 2054 — Fechamento de Ponto · Ranking "Menos Dias Trabalhados"
  * agora EXCLUI colaboradores que estavam em gozo de férias no período.
  *

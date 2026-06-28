@@ -2479,3 +2479,5 @@
 
 - **Rev. 2481** — EQUIPE DA OBRA (modal `ObraEfetivo.tsx`) · coluna FUNÇÃO mostra cargo do CADASTRO, não o override `funcaoNaObra`. Inverter prioridade em 5 spots: `f.employee?.cargo || f.employee?.funcao || f.funcaoNaObra`. Ver `shared/changelog.ts`.
 - **Rev. 3049** — CONFIGURAÇÕES · CRITÉRIO EXCLUSIVO DE SÓCIOS: DEFINIR O "SÓCIO ADMINISTRADOR ATUAL" QUE ASSINA TODOS OS CONTRATOS/DOCUMENTOS ONLINE (FCSIGN); FELIPE COSTA ALVES DEIXADO COMO TAL. `financial.ts` corrige `listSociosFromEmployees` (employees é camelCase) + NOVOS `getSocioAdministrador`/`setSocioAdministrador` (admin-only, UPSERT `system_criteria` societario/socio_administrador_employee_id); `compras.ts` `resolveSocioAdministradorSigner` (signatário "diretor" da OC usa nome+CPF do sócio); FRONT nova aba "Sócios / Administrador". Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3821** — **FINANCEIRO · PLANO DE CONTAS · CLASSIFICAÇÃO DRE EM MASSA: 28 contas corrigidas; DRE jan/2026 enxerga R$1,8M receita + R$699k CDO. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
