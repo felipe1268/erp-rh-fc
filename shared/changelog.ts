@@ -1,6 +1,16 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3824 — **FINANCEIRO · LIMPEZA JAN/2026: NOMES PJ, DUPLICATAS E CLASSIFICADOR.**
+ * Correções no banco (company 60002, jan/2026) e no classificador de custos:
+ * DB: Jerryaliton Augusto Bezerra padronizado (53 entradas); Agostinho Dijalma Ferreira
+ * padronizado + CC RH→Obras (4); Carlos Rafael de Goes Santos (CPF removido do nome, 3);
+ * Rodnei Alexandre (CC RH→Obras, 1); L H Alencar de Souza padronizado (10);
+ * Sergovale Construções Ltda padronizado (29); Helio Rodrigues Bassanelli padronizado (3).
+ * CÓDIGO: `shared/custosCategorias.ts` — adicionado "MEDIÇÃO PJ", "MEDICAO PJ" e
+ * "SUBEMPREITEIROS" ao bucket "Terceiros e PJ" (saem do balde residual "Outros").
+ * ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3823 — **ANÁLISE DE CUSTOS · CLASSIFICADOR "OUTROS" — COBERTURA DE KEYWORDS.**
  * Problema: a função `classificarGrupoCusto` em `shared/custosCategorias.ts` não
  * reconhecia vários nomes de conta comuns, jogando ~R$500k/mês no bucket residual "Outros".

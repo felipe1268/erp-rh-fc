@@ -50,11 +50,15 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3822** — **FINANCEIRO · DESACOPLAMENTO CRONOGRAMA × FINANCEIRO: 5.252 entries cronograma_atividade migradas a_pagar→previsto (−R$16,5M fictícios do Contas a Pagar); cronograma removido de DRE_ORIGEM_OBRA; 'previsto' adicionado à exclusão do DRE; bridge futuro usa status='previsto'; sidebar "Cronograma Financeiro"→"Previsão de Caixa". ZERO DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3824** — **FINANCEIRO · LIMPEZA JAN/2026: 103 entradas com nomes PJ padronizados (Jerryaliton, Agostinho, Carlos Rafael, L H Alencar, Sergovale, Helio Bassanelli); CCs RH→Obras corrigidos; "MEDIÇÃO PJ"/"SUBEMPREITEIROS" adicionados ao bucket "Terceiros e PJ" em custosCategorias.ts. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3821** — **FINANCEIRO · PLANO DE CONTAS · CLASSIFICAÇÃO DRE EM MASSA: 28 contas sem classificacao_dre corrigidas (receita_bruta/custo_obra/despesa_fixa/variavel/financeira/outro); entry [886185] conta 51→281; DRE jan/2026 enxerga R$1,8M receita + R$699k CDO. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3823** — **ANÁLISE DE CUSTOS · CLASSIFICADOR "OUTROS": keywords FOLHA/PRESTADORES PJ/TRANSPORTE EQUIPE/CHEQUE ESPECIAL/MÚTUO/CARTÓRIO/ALOJAMENTO/HOSPEDAGEM/HOTEL/TREINAMENTO/COMISSÃO/REEMBOLSO adicionadas; bucket "Outros" cai de ~R$576k para mínimo. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 ### 5 one-liners
+
+- **Rev. 3822** — **FINANCEIRO · DESACOPLAMENTO CRONOGRAMA × FINANCEIRO: 5.252 entries a_pagar→previsto; cronograma removido de DRE_ORIGEM_OBRA; sidebar renomeada. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3821** — **FINANCEIRO · PLANO DE CONTAS · CLASSIFICAÇÃO DRE EM MASSA: 28 contas corrigidas; DRE jan/2026 enxerga R$1,8M receita + R$699k CDO. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3820** — **FINANCEIRO · PLANO DE CONTAS · LIMPEZA GRUPO 4 (DESPESAS ADM/ESCRITÓRIO): 12 entries conta 60→258; contas 66 e 378 desativadas. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -62,13 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3818** — **FINANCEIRO · PLANO DE CONTAS · LIMPEZA GRUPO 2 (CLT/FOLHA/ENCARGOS): entry [866121] 52→280; 30 entries 414→270; 11 contas desativadas. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3817** — **FINANCEIRO · PLANO DE CONTAS · REESTRUTURAÇÃO SUBEMPREITEIROS/PJ: conta 23 → "SUBEMPREITEIROS / EMPRESAS"; conta 491 → "PRESTADORES PJ INDIVIDUAIS"; contas 507+57 desativadas; 1.186 entries atualizadas. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3816** — **FINANCEIRO · DRE · LEGENDA "DRE GERENCIAL DE CAIXA" NO RODAPÉ: card fixo com comparativo DRE Gerencial × DRE Societário; explica status excluídos. ARQUIVO: `FinanceiroDRE.tsx`. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3813 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3817 e anteriores.
 
 ## User preferences
 

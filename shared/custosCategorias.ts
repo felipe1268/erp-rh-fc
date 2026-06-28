@@ -114,8 +114,8 @@ export function classificarGrupoCusto(contaNome: any, origemModulo?: any): Grupo
     return "Benefícios (VR/VA/Transporte)";
   if (has("VALE ALIMENTACAO", "VALE REFEICAO", "VALE-ALIMENTACAO", "VALE-REFEICAO", "VALE TRANSPORTE", "VALE-TRANSPORTE", "BENEFICIO", "PLANO MEDICO", "PLANO DE SAUDE", "ALIMENTACAO", "EXAMES OCUPACIONAIS"))
     return "Benefícios (VR/VA/Transporte)";
-  // Rev. 3823 — PRESTADORES PJ INDIVIDUAIS antes do check geral de terceiros
-  if (has("PRESTADORES PJ", "PRESTADOR PJ"))
+  // Rev. 3824 — MEDIÇÃO PJ e PRESTADORES PJ antes do check geral de terceiros
+  if (has("PRESTADORES PJ", "PRESTADOR PJ", "MEDIÇÃO PJ", "MEDICAO PJ", "SUBEMPREITEIROS"))
     return "Terceiros e PJ";
   if (has("TERCERIZAD", "TERCEIRIZAD", "SUBEMPREITEIRO", "SERVICOS PJ", "PRESTACAO DE SERVICO", "SERVICOS DE TERCEIROS", "SERVICO DE TERCEIRO"))
     return "Terceiros e PJ";
