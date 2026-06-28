@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3818 — **FINANCEIRO · PLANO DE CONTAS · LIMPEZA GRUPO 2 (CLT / FOLHA / ENCARGOS).**
+ * Auditoria identificou: (1) lançamento direto em conta-pai 52 "Salários HE Rescisões Obra"
+ * (Rescisão Nathalya R$3.865,27); (2) conta 414 "Guias FGTS" duplicata conceitualmente de
+ * 270 "ENCARGOS SOCIAIS FGTS/INSS"; (3) 10 contas administrativas ativas sem nenhum
+ * lançamento histórico (uniformes, férias, EPI, salário, rescisão adm, parcelamentos FGTS).
+ * ALTERAÇÕES:
+ *   • Entry [866121] Rescisão Nathalya: conta_id 52→280 (RESCISÃO - MÃO DE OBRA);
+ *     conta_nome atualizado.
+ *   • Conta 414 "Guias FGTS": 30 entries migradas para conta 270 (ENCARGOS SOCIAIS
+ *     FGTS/INSS), totalizando R$1.751,64; conta 414 desativada (ativo=0).
+ *   • 10 contas desativadas (zero lançamentos históricos): 15 FÉRIAS ADMINISTRATIVO,
+ *     31 SALÁRIO ADMINISTRATIVO, 232 Uniformes de Obra, 244 Uniformes Administrativos,
+ *     245 EPIs Administrativos, 255 Férias e 13º Salário Administrativo, 294 RESCISÃO
+ *     ADMINISTRATIVO, 462 Parcelamento FGTS em Atraso, 470 PARCELAMENTO FGTS,
+ *     472 TRIBUTOS EM ATRASO PARCELAMENTO.
+ * Contas ativas e limpas após revisão: 22 MO Direta, 21 MO Indireta, 280 Rescisão,
+ * 284 Férias Obra, 387 HE Obra, 270 Encargos FGTS/INSS, 506 Folha, 35 Uniforme Obra,
+ * 292 EPI Obra, 377 Consignado, 28 Pensão Alimentícia. ZERO DELETE de lançamentos.
+ *
  * Rev. 3817 — **FINANCEIRO · PLANO DE CONTAS · REESTRUTURAÇÃO SUBEMPREITEIROS/PJ.**
  * Auditoria de janeiro/2026 revelou 3 contas ativas com sobreposição conceitual sob
  * "Serviços PJ / Terceirizados": conta 23 (MÃO DE OBRA TERCEIRIZADA / SUBEMPREITEIRO),

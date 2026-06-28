@@ -1,3 +1,5 @@
+- **Rev. 3811** — **FINANCEIRO · DRE · INVESTIMENTOS/CAPEX + EXEMPLOS EDUCATIVOS POR LINHA: SEÇÃO MEMO CAPEX + `calcularDRE` retorna `investimentoCapex`; `dreLinhaPredicate` exclui `'investimento'`; popover ℹ️ com exemplos "✓ Entra / ✗ Não entra" em todas as linhas. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3810** — **FINANCEIRO · DRE · ROTEAMENTO AUTOMÁTICO CDO vs. FOLHA — `importFolhaRHToFinancial`: REGRA: direto→conta 22 (CDO, variavel), indireta_obra→conta 21 (CDO, variavel), escritorio/NULL→conta 506 (fixo). CONSTANTE FOLHA_CATEGORIA_CONFIG + helper _folhaCatConfig. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3809** — **FINANCEIRO · DRE · ROTEAMENTO CDO vs. FOLHA — PILOTO JAN/2026: 33 PIX MIGRADOS DE FOLHA (506) PARA CDO (21+22, R$54.651); OBRA_ID EM 14 ENTRIES; 2 ENTRIES SEM MATCH (R$2.503) PERMANECEM EM 506. ZERO SCHEMA/ALTER/DROP.** Detalhe: `shared/changelog.ts`.

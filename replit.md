@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3818** — **FINANCEIRO · PLANO DE CONTAS · LIMPEZA GRUPO 2 (CLT/FOLHA/ENCARGOS): entry [866121] Rescisão Nathalya 52→280; 30 entries conta 414 "Guias FGTS"→270 (R$1.751,64); conta 414 desativada; 10 contas adm sem lançamentos desativadas (15,31,232,244,245,255,294,462,470,472). ZERO DELETE.** Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3817** — **FINANCEIRO · PLANO DE CONTAS · REESTRUTURAÇÃO SUBEMPREITEIROS/PJ: conta 23 → "SUBEMPREITEIROS / EMPRESAS"; conta 491 → "PRESTADORES PJ INDIVIDUAIS"; conta 507 "MEDIÇÃO PJ" desativada; conta 57 "Subempreiteiros" desativada; conta_nome atualizado em 1.186 entries históricas. ZERO SCHEMA/ALTER/DROP/DELETE de lançamentos.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3816** — **FINANCEIRO · DRE · LEGENDA "DRE GERENCIAL DE CAIXA" NO RODAPÉ: card fixo com comparativo DRE Gerencial (caixa, só realizados) × DRE Societário (competência, exigido por lei); explica status excluídos e redireciona projeções ao Fluxo de Caixa. ARQUIVO: `FinanceiroDRE.tsx`. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
 ### 5 one-liners
+
+- **Rev. 3816** — **FINANCEIRO · DRE · LEGENDA "DRE GERENCIAL DE CAIXA" NO RODAPÉ: card fixo com comparativo DRE Gerencial × DRE Societário; explica status excluídos. ARQUIVO: `FinanceiroDRE.tsx`. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3815** — **FINANCEIRO · DRE · REVERTE 3814 + EXCLUI `a_pagar`/`a_receber` DO DRE: só realizados no DRE; WHERE exclui `a_pagar`/`a_receber` em ambas as CTEs; valor = `COALESCE(valor_realizado, 0)`. ARQUIVO: `financialKpiService.ts`. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3813** — **FINANCEIRO · DRE · REMOVE BLOCO MEMO INVESTIMENTOS/CAPEX DO RODAPÉ: bloco removido de `FinanceiroDRE.tsx`; import `Landmark` removido. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3812** — **FINANCEIRO · DRE · RECLASSIFICAÇÃO CAPEX: CONTA 420 `classificacao_dre→'investimento'`; 12 ENTRIES VERSÁTIL (PRÓ-LABORE+CARTÓRIO+SEM CONTA) → CONTA 420; R$209.801,63 saem das Despesas Variáveis. PRÓ-LABORE SÓCIOS NÃO TOCADO. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3811** — **FINANCEIRO · DRE · INVESTIMENTOS/CAPEX + EXEMPLOS EDUCATIVOS POR LINHA: SEÇÃO MEMO CAPEX + `calcularDRE` retorna `investimentoCapex`; `dreLinhaPredicate` exclui `'investimento'`; popover ℹ️ com exemplos "✓ Entra / ✗ Não entra" em todas as linhas. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 ### Histórico completo
 
