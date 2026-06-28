@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3819** — **FINANCEIRO · PLANO DE CONTAS · LIMPEZA GRUPO 3 (VALE/TRANSPORTE/COMISSÃO): 6 entries conta 73→381 (comissões pai→filho); 3 entries conta 58→315 (transporte unificado); contas 58 e 36 desativadas. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3820** — **FINANCEIRO · PLANO DE CONTAS · LIMPEZA GRUPO 4 (DESPESAS ADM/ESCRITÓRIO): 12 entries conta 60→258 (agrupador→filho "Materiais e Consumos Adm"); contas 66 e 378 desativadas (zero hist, zero filhos). ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3818** — **FINANCEIRO · PLANO DE CONTAS · LIMPEZA GRUPO 2 (CLT/FOLHA/ENCARGOS): entry [866121] 52→280; 30 entries conta 414→270 (R$1.751); conta 414 desativada; 10 contas adm sem lançamentos desativadas. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3819** — **FINANCEIRO · PLANO DE CONTAS · LIMPEZA GRUPO 3 (VALE/TRANSPORTE/COMISSÃO): 6 entries conta 73→381; 3 entries conta 58→315; contas 58 e 36 desativadas. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
 ### 5 one-liners
+
+- **Rev. 3818** — **FINANCEIRO · PLANO DE CONTAS · LIMPEZA GRUPO 2 (CLT/FOLHA/ENCARGOS): entry [866121] 52→280; 30 entries conta 414→270; conta 414 + 10 contas adm desativadas. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3817** — **FINANCEIRO · PLANO DE CONTAS · REESTRUTURAÇÃO SUBEMPREITEIROS/PJ: conta 23 → "SUBEMPREITEIROS / EMPRESAS"; conta 491 → "PRESTADORES PJ INDIVIDUAIS"; contas 507+57 desativadas; 1.186 entries atualizadas. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
@@ -64,13 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3814** — **[REVERTIDO por 3815] FINANCEIRO · DRE · COALESCE(realizado, previsto, 0) — conceito incorreto.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3813** — **FINANCEIRO · DRE · REMOVE BLOCO MEMO INVESTIMENTOS/CAPEX DO RODAPÉ: bloco removido de `FinanceiroDRE.tsx`; import `Landmark` removido. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3812** — **FINANCEIRO · DRE · RECLASSIFICAÇÃO CAPEX: CONTA 420 `classificacao_dre→'investimento'`; 12 ENTRIES VERSÁTIL (PRÓ-LABORE+CARTÓRIO+SEM CONTA) → CONTA 420; R$209.801,63 saem das Despesas Variáveis. PRÓ-LABORE SÓCIOS NÃO TOCADO. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3810 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3813 e anteriores.
 
 ## User preferences
 

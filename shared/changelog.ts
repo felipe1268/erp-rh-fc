@@ -1,6 +1,23 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3820 — **FINANCEIRO · PLANO DE CONTAS · LIMPEZA GRUPO 4 (DESPESAS ADM / ESCRITÓRIO).**
+ * Auditoria identificou: (1) conta 60 "DESPESAS ADMINISTRATIVAS" (agrupador pai de 258)
+ * recebendo 12 lançamentos diretos — viola regra de conta agrupadora; (2) contas 66
+ * "Aluguel de Veículos Administrativos" e 378 "Aluguel de Veículos" ativas com zero
+ * lançamentos históricos e zero filhos.
+ * Contas que pareciam candidatas mas são agrupadores com filhos (mantidas):
+ *   64 Aluguéis e Locações (pai de 388), 65 Aluguel Escritório (pai de 1 filho),
+ *   67 Serviços de Terceiros (pai de 290), 68 Utilidades (pai de 5/14/17/256),
+ *   72 DESPESAS VARIÁVEIS (pai de 388/410/420/311/390), 79 Outras Despesas (pai filhos),
+ *   215 Honorários (pai de 247), 251 Seguros (pai de 1 filho), 61 Pró-labore (pai de 3).
+ * ALTERAÇÕES:
+ *   • 12 entries da conta 60 (DESPESAS ADMINISTRATIVAS pai) migradas para conta 258
+ *     (Materiais e Consumos Administrativos filho); conta 60 vira agrupador puro.
+ *   • Conta 66 "Aluguel de Veículos Administrativos": desativada (ativo=0; zero histórico).
+ *   • Conta 378 "Aluguel de Veículos": desativada (ativo=0; zero histórico).
+ * ZERO DELETE de lançamentos.
+ *
  * Rev. 3819 — **FINANCEIRO · PLANO DE CONTAS · LIMPEZA GRUPO 3 (VALE / TRANSPORTE / COMISSÃO).**
  * Auditoria identificou: (1) conta 73 "Comissões e Bonificações" (pai de 381) recebendo
  * 6 lançamentos diretos — viola regra de conta agrupadora; (2) conta 58 "Transporte e
