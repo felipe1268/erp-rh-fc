@@ -1,6 +1,11 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3813 — **FINANCEIRO · DRE · REMOVE BLOCO MEMO INVESTIMENTOS/CAPEX DO RODAPÉ.**
+ * Bloco informativo "Investimentos / CAPEX — Não entra no resultado" removido do rodapé
+ * do DRE (FinanceiroDRE.tsx). Import `Landmark` removido. Backend continua retornando
+ * `investimentoCapex` (sem breaking change). ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3812 — **FINANCEIRO · DRE · RECLASSIFICAÇÃO CAPEX: TERRENO TIZIANA + VERSÁTIL.**
  *
  * CONTEXTO: Parcelas de aquisição de imóveis e terrenos estavam entrando no DRE como

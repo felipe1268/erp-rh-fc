@@ -14,7 +14,7 @@ import {
   CalendarDays, Sparkles, Info, BookOpen, ExternalLink, AlertTriangle,
   Lightbulb, Activity, ArrowUpRight, ArrowDownRight, Minus, ShieldCheck,
   ChevronRight as ChevronRightIcon, Layers, ListTree, Calculator, Percent,
-  ArrowLeft, Receipt, CheckCircle2, XCircle, Landmark,
+  ArrowLeft, Receipt, CheckCircle2, XCircle,
 } from "lucide-react";
 
 type DRELinhaKey =
@@ -585,50 +585,6 @@ export default function FinanceiroDRE() {
             )}
           </CardContent>
         </Card>
-
-        {/* Investimentos / CAPEX — memo informativo (não afeta P&L) */}
-        {dre && (
-          <Card className="border-0 shadow-sm border-dashed">
-            <CardContent className="p-4">
-              <div className="flex items-start gap-3">
-                <span className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0 mt-0.5">
-                  <Landmark className="w-4 h-4 text-gray-400" />
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">
-                      Investimentos / CAPEX
-                    </p>
-                    <span className="text-[10px] font-medium text-gray-400 border border-gray-200 rounded px-1.5 py-0.5">
-                      Não entra no resultado
-                    </span>
-                  </div>
-                  {(dre.investimentoCapex ?? 0) > 0 ? (
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm text-gray-600">
-                        Compras de ativo imobilizado no período (conta classificada como <span className="font-medium text-gray-700">Investimento</span> no Plano de Contas)
-                      </p>
-                      <span className="text-sm font-semibold text-gray-600 tabular-nums ml-4 shrink-0">
-                        {formatBRL(dre.investimentoCapex)}
-                      </span>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-gray-500 leading-relaxed">
-                      Nenhum investimento classificado como CAPEX neste período.
-                    </p>
-                  )}
-                  <div className="mt-2.5 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-[11px] text-amber-800 leading-relaxed">
-                    <span className="font-semibold">Por que não aparece no DRE?</span>{" "}
-                    Compras de terreno, veículos e equipamentos são <em>conversão de caixa em patrimônio</em> —
-                    não são despesas do período. Elas vão ao <span className="font-medium">Balanço Patrimonial</span> como
-                    Ativo Imobilizado (CPC 27). Apenas a depreciação futura desses bens aparece no DRE como despesa.
-                    Para registrar, classifique a conta financeira como <span className="font-medium">Investimento / CAPEX</span> no Plano de Contas.
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Análise de IA — abaixo do DRE */}
         <Card className="border-0 shadow-sm overflow-hidden">
