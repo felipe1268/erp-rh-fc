@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3837** — **EXTRATO BANCÁRIO XLSX · COLUNA SALDO COM FÓRMULA EXCEL.** H(row 9)=`=H6+F9-G9`; H(row N)=`=H{N-1}+FN-GN`. Campo `result` pré-preenchido para abrir sem recalcular. Formatação condicional verde/vermelho inalterada. `server/routers/downloadContabilidadeXlsx.ts`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3836** — **EXTRATO BANCÁRIO XLSX · BUGFIX: "ERRO AO GERAR PLANILHA" (column fe.fornecedor_cnpj does not exist).** Causa-raiz: `linesQ` referenciava `fe.fornecedor_cnpj AS entry_cnpj` via LEFT JOIN com `financial_entries`, mas essa coluna não existe (a tabela só tem `fornecedor_nome` e `descricao`). Diagnosticado executando a query diretamente contra o Neon. Fix: `fe.fornecedor_cnpj` → `NULL::text AS entry_cnpj` (campo é só fallback de CNPJ na 3ª camada de cruzamento NF). Bônus: `[SyncSchema+] Rev.3836` garante `fiscal_notes.stmt_line_id INTEGER` via `ALTER TABLE ADD COLUMN IF NOT EXISTS`. Arquivos: `server/routers/downloadContabilidadeXlsx.ts`, `server/_core/index.ts`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3835** — **NOTIFICAÇÕES CONTABILIDADE · BUGFIX: "UNEXPECTED END OF JSON INPUT".** `getConfig` SELECT adicionado `auto_envio` (estava omitido → valor DB ignorado). `emails_json ?? "[]"` → `|| "[]"` (string vazia `""` não é capturada por `??` → `JSON.parse("")` lançava o erro). Retorno padrão adicionado `autoEnvio: false`. Bug `mes` no "Enviar Teste": `now.getMonth()` 0-indexado → `+1`. Import dinâmico do XLSX movido para dentro do try/catch. ZERO DELETE. Detalhe: `shared/changelog.ts`.

@@ -1,4 +1,18 @@
 /**
+ * Rev. 3837 — **EXTRATO BANCÁRIO XLSX · COLUNA SALDO COM FÓRMULA EXCEL.**
+ *
+ * A coluna H (Saldo) passou a usar fórmula Excel em vez de valor estático:
+ * - Primeira linha de dados (row 9): `=H6+F9-G9`  (H6 = Saldo Anterior)
+ * - Linhas seguintes (row N):        `=H{N-1}+FN-GN`
+ *
+ * O campo `result` é preenchido com o valor calculado em JS (para que o arquivo
+ * abra com o valor correto sem precisar recalcular). A formatação condicional
+ * (verde/vermelho) continua baseada no `saldoAcum` JS.
+ *
+ * Arquivo: `server/routers/downloadContabilidadeXlsx.ts`.
+ * ZERO DELETE · ZERO SCHEMA.
+ */
+/**
  * Rev. 3836 — **EXTRATO BANCÁRIO XLSX · BUGFIX: "ERRO AO GERAR PLANILHA" (column fe.fornecedor_cnpj does not exist).**
  *
  * CAUSA-RAIZ: o `linesQ` em `server/routers/downloadContabilidadeXlsx.ts` (linha 250) referenciava

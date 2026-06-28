@@ -423,8 +423,10 @@ export async function buildExtratoBancarioBuffer(
       gCell.alignment = { horizontal: "right", vertical: "middle" };
 
       // H — Saldo acumulado + formatação condicional (verde/vermelho)
+      // Usa fórmula Excel: =H_prev + F_row - G_row  (H6 = Saldo Anterior)
+      const prevRef = idx === 0 ? "H6" : `H${row - 1}`;
       const hCell = ws.getCell(`H${row}`);
-      hCell.value  = saldoAcum;
+      hCell.value  = { formula: `=${prevRef}+F${row}-G${row}`, result: saldoAcum };
       hCell.numFmt = BRL;
       hCell.alignment = { horizontal: "right", vertical: "middle" };
 
