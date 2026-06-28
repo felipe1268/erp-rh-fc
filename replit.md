@@ -50,13 +50,15 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3820** — **FINANCEIRO · PLANO DE CONTAS · LIMPEZA GRUPO 4 (DESPESAS ADM/ESCRITÓRIO): 12 entries conta 60→258 (agrupador→filho "Materiais e Consumos Adm"); contas 66 e 378 desativadas (zero hist, zero filhos). ZERO DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3821** — **FINANCEIRO · PLANO DE CONTAS · CLASSIFICAÇÃO DRE EM MASSA: 28 contas sem classificacao_dre corrigidas (receita_bruta/custo_obra/despesa_fixa/variavel/financeira/outro); entry [886185] conta 51→281; DRE jan/2026 agora enxerga R$1,8M receita + R$699k CDO + R$179k desp_var. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3819** — **FINANCEIRO · PLANO DE CONTAS · LIMPEZA GRUPO 3 (VALE/TRANSPORTE/COMISSÃO): 6 entries conta 73→381; 3 entries conta 58→315; contas 58 e 36 desativadas. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3820** — **FINANCEIRO · PLANO DE CONTAS · LIMPEZA GRUPO 4 (DESPESAS ADM/ESCRITÓRIO): 12 entries conta 60→258; contas 66 e 378 desativadas. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
 ### 5 one-liners
 
-- **Rev. 3818** — **FINANCEIRO · PLANO DE CONTAS · LIMPEZA GRUPO 2 (CLT/FOLHA/ENCARGOS): entry [866121] 52→280; 30 entries conta 414→270; conta 414 + 10 contas adm desativadas. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3819** — **FINANCEIRO · PLANO DE CONTAS · LIMPEZA GRUPO 3 (VALE/TRANSPORTE/COMISSÃO): 6 entries 73→381; 3 entries 58→315; contas 58 e 36 desativadas. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3818** — **FINANCEIRO · PLANO DE CONTAS · LIMPEZA GRUPO 2 (CLT/FOLHA/ENCARGOS): entry [866121] 52→280; 30 entries 414→270; 11 contas desativadas. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3817** — **FINANCEIRO · PLANO DE CONTAS · REESTRUTURAÇÃO SUBEMPREITEIROS/PJ: conta 23 → "SUBEMPREITEIROS / EMPRESAS"; conta 491 → "PRESTADORES PJ INDIVIDUAIS"; contas 507+57 desativadas; 1.186 entries atualizadas. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 

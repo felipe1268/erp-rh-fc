@@ -1,6 +1,30 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3821 — **FINANCEIRO · PLANO DE CONTAS · CLASSIFICAÇÃO DRE EM MASSA (GRUPO 5).**
+ * Auditoria identificou 28 contas ativas com lançamentos relevantes sem classificacao_dre —
+ * essas entradas estavam sumindo completamente do DRE (buckets receita/custo/despesa).
+ * Impacto: R$1,8M de medições, R$598k de materiais, R$29k de combustível e outros somavam
+ * zero no DRE antes desta correção.
+ * ALTERAÇÕES — classificacao_dre definida por lógica de hierarquia/natureza:
+ *   • receita_bruta (4): 479 MEDIÇÃO DE OBRA, 486 CONSULTORIA E PROJETOS,
+ *     487 RECEITAS DIVERSAS, 392 ESTORNO.
+ *   • custo_obra (6+2 agrupadores): 224 Combustível Equipamentos, 287 ENERGIA OBRA,
+ *     308 FRETES OBRA, 394 ALUGUEL OBRA, 7 ALUGUEL EQUIPAMENTOS OBRA, 281 Materiais para Obra;
+ *     agrupadores: Locação de Máquinas, Materiais para Obra.
+ *   • despesa_financeira (1): 279 DESPESAS BANCÁRIAS.
+ *   • despesa_fixa (4): 2 ALUGUEL ADMINISTRATIVO, 11 CONTABILIDADE, 29 PRÓ-LABORE,
+ *     259 Segurança e Monitoramento.
+ *   • despesa_variavel (5+1 agrupador): 311 OUTRAS DESPESAS, 390 CARTÃO EMPRESARIAL,
+ *     410 Hospedagem, 297 MANUTENÇÃO VEÍCULO, 384 COMBUSTÍVEL VEÍCULOS;
+ *     agrupador: Manutenção e Operação de Veículos.
+ *   • outro (4): 264 FINANCIAMENTOS, 497 MÚTUO CONCEDIDO, 498 MÚTUO RECEBIDO,
+ *     512 DEPOSITO EM CONTA (movimentos de balanço, não entram no P&L).
+ *   • Entry [886185] "Ferragens Santa Rita" R$7.852,16: conta_id 51 (CDO pai)→281 (Materiais).
+ * DRE jan/2026 após correção: Receita R$1.828.992 | CDO R$699.241 | Desp.Fixa R$59.614 |
+ * Desp.Variável R$178.971 | Desp.Financeira R$27.438 | Outro R$389.758 | Invest R$2.415.
+ * ZERO DELETE de lançamentos.
+ *
  * Rev. 3820 — **FINANCEIRO · PLANO DE CONTAS · LIMPEZA GRUPO 4 (DESPESAS ADM / ESCRITÓRIO).**
  * Auditoria identificou: (1) conta 60 "DESPESAS ADMINISTRATIVAS" (agrupador pai de 258)
  * recebendo 12 lançamentos diretos — viola regra de conta agrupadora; (2) contas 66
