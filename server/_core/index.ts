@@ -4565,6 +4565,22 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3836: fiscal_notes.stmt_line_id garantida (ou já existia).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3836 stmt_line_id:`, e?.message || e); }
 
+        // Rev. 3841 — Tabela smtp_config para configurações SMTP editáveis via UI (host, porta, email, senha)
+        try {
+          await db.$client.query(`
+            CREATE TABLE IF NOT EXISTS smtp_config (
+              id          SERIAL PRIMARY KEY,
+              host        VARCHAR(255) NOT NULL DEFAULT '',
+              port        INTEGER NOT NULL DEFAULT 465,
+              email       VARCHAR(255) NOT NULL DEFAULT '',
+              password    TEXT NOT NULL DEFAULT '',
+              updated_at  TIMESTAMPTZ DEFAULT now(),
+              updated_by  VARCHAR(255)
+            )
+          `);
+          console.log(`[SyncSchema+] Rev. 3841: tabela smtp_config garantida (configurações SMTP editáveis via UI).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3841 smtp_config:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

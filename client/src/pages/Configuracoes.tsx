@@ -93,7 +93,7 @@ const CATEGORIAS = [
   { key: "notificacoes_sistema", label: "Notificações do Sistema", icon: Bell, color: "text-pink-600", bgColor: "bg-pink-50", borderColor: "border-pink-200" },
 ];
 
-type TabKey = "criterios" | "senha" | "limpeza" | "regras" | "notificacoes" | "notif_contabil" | "contrato_pj" | "contrato_terceiros" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos" | "backup" | "terceiros" | "portal_cliente" | "templates_docs" | "socios";
+type TabKey = "criterios" | "senha" | "limpeza" | "regras" | "notificacoes" | "notif_contabil" | "contrato_pj" | "contrato_terceiros" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos" | "backup" | "terceiros" | "portal_cliente" | "templates_docs" | "socios" | "smtp_config";
 
 // Rev. 2403: mapa estático de cores das abas. CRÍTICO: Tailwind JIT só vê
 // classes LITERAIS no source — interpolação tipo `bg-${c}-500` não gera CSS.
@@ -347,6 +347,7 @@ export default function Configuracoes() {
     { key: "terceiros" as TabKey, label: "Terceiros / Gestores", icon: Building2, minRole: "admin", color: "fuchsia" },
     { key: "portal_cliente" as TabKey, label: "Portal do Cliente", icon: Shield, minRole: "admin", color: "purple" },
     { key: "limpeza" as TabKey, label: "Limpeza de Dados", icon: Trash2, minRole: "admin_master", color: "rose" },
+    { key: "smtp_config" as TabKey, label: "Config. SMTP", icon: Mail, minRole: "admin_master", color: "slate" },
     { key: "backup" as TabKey, label: "Backup & Sincronização", icon: Database, minRole: "admin", color: "slate" },
   ];
   const tabs = allTabs.filter(tab => {
@@ -863,6 +864,11 @@ export default function Configuracoes() {
         {/* TAB: Notificações Contabilidade */}
         {activeTab === "notif_contabil" && (
           <NotificacoesContabilidadeTab companyId={companyId} />
+        )}
+
+        {/* TAB: Config. SMTP */}
+        {activeTab === "smtp_config" && (
+          <SmtpConfigTab />
         )}
 
         {/* TAB: Contrato PJ */}
@@ -3669,6 +3675,184 @@ function RecontratacaoAprovadoresSection({ companyId, isMaster }: { companyId: n
                   {salvarMut.isPending ? "Salvando..." : "Salvar Suplentes"}
                 </Button>
               </div>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================================================
+// TAB: Configurações SMTP (admin_master only) — Rev. 3841
+// ============================================================
+function SmtpConfigTab() {
+  const configQ = trpc.settings.getSmtpConfig.useQuery(undefined, { retry: false });
+  const saveMut = trpc.settings.saveSmtpConfig.useMutation({
+    onSuccess: () => { toast.success("Configurações SMTP salvas com sucesso!"); configQ.refetch(); setDirty(false); setPassword(""); },
+    onError: (e) => toast.error("Erro ao salvar: " + e.message),
+  });
+  const testMut = trpc.settings.testSmtpConfig.useMutation({
+    onSuccess: (r) => r.success ? toast.success("Conexão SMTP OK! Credenciais validadas.") : toast.error("Falha na conexão: " + (r.error || "Erro desconhecido")),
+    onError: (e) => toast.error("Erro ao testar: " + e.message),
+  });
+
+  const [host, setHost] = useState("");
+  const [port, setPort] = useState<465 | 587>(465);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    if (configQ.data) {
+      setHost(configQ.data.host || "");
+      setPort((configQ.data.port === 587 ? 587 : 465) as 465 | 587);
+      setEmail(configQ.data.email || "");
+      setDirty(false);
+    }
+  }, [configQ.data]);
+
+  const handleChange = (setter: (v: any) => void) => (v: any) => { setter(v); setDirty(true); };
+
+  const handleSave = () => {
+    if (!host.trim()) return toast.error("Host SMTP obrigatório.");
+    if (!email.trim()) return toast.error("E-mail remetente obrigatório.");
+    saveMut.mutate({ host: host.trim(), port, email: email.trim(), password: password || undefined });
+  };
+
+  return (
+    <Card className="border-slate-200">
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2 text-slate-700">
+          <Mail className="w-5 h-5" />
+          Configurações SMTP
+        </CardTitle>
+        <CardDescription>
+          Defina o servidor de e-mail utilizado para enviar todas as notificações do sistema.
+          A senha é armazenada no banco de dados. Deixe o campo de senha vazio para manter a senha atual.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {configQ.isLoading ? (
+          <div className="flex items-center gap-2 text-slate-500 py-4"><Loader2 className="w-4 h-4 animate-spin" /> Carregando...</div>
+        ) : configQ.isError ? (
+          <div className="text-red-600 text-sm py-4">Erro ao carregar configurações: {configQ.error?.message}</div>
+        ) : (
+          <div className="space-y-5 max-w-xl">
+            {/* Origem atual */}
+            {configQ.data && (
+              <div className="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-600 flex items-start gap-2">
+                <Info className="w-4 h-4 mt-0.5 text-slate-400 shrink-0" />
+                <div>
+                  {configQ.data.updatedAt ? (
+                    <>Última alteração em <strong>{new Date(configQ.data.updatedAt).toLocaleString("pt-BR")}</strong>{configQ.data.updatedBy ? ` por ${configQ.data.updatedBy}` : ""}. Config salva no banco.</>
+                  ) : (
+                    <>Usando configuração das variáveis de ambiente (nenhuma config salva no banco ainda).</>
+                  )}
+                  {configQ.data.hasPassword ? (
+                    <span className="ml-1 text-emerald-600 font-medium">✓ Senha configurada.</span>
+                  ) : (
+                    <span className="ml-1 text-amber-600 font-medium">⚠ Sem senha — informe abaixo.</span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Host */}
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-slate-700">Servidor SMTP (host)</Label>
+              <Input
+                value={host}
+                onChange={e => handleChange(setHost)(e.target.value)}
+                placeholder="mail.fcengenhariacivil.com.br"
+                className="font-mono text-sm"
+              />
+              <p className="text-xs text-slate-500">Ex: mail.fcengenhariacivil.com.br ou smtp.gmail.com</p>
+            </div>
+
+            {/* Porta */}
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-slate-700">Porta</Label>
+              <Select value={String(port)} onValueChange={v => handleChange(setPort)(Number(v) as 465 | 587)}>
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="465">465 (SSL)</SelectItem>
+                  <SelectItem value="587">587 (TLS/STARTTLS)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-500">465 = SSL direto · 587 = STARTTLS (mais comum em Gmail/Office365)</p>
+            </div>
+
+            {/* E-mail remetente */}
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-slate-700">E-mail remetente</Label>
+              <Input
+                type="email"
+                value={email}
+                onChange={e => handleChange(setEmail)(e.target.value)}
+                placeholder="rh@fcengenhariacivil.com.br"
+                className="font-mono text-sm"
+              />
+              <p className="text-xs text-slate-500">Este é o endereço que aparece no campo "De:" dos e-mails enviados.</p>
+            </div>
+
+            {/* Senha */}
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-slate-700">Senha SMTP</Label>
+              <div className="relative">
+                <Input
+                  type={showPwd ? "text" : "password"}
+                  value={password}
+                  onChange={e => handleChange(setPassword)(e.target.value)}
+                  placeholder={configQ.data?.hasPassword ? "••••••••  (deixe vazio para manter a atual)" : "Informe a senha do servidor SMTP"}
+                  className="pr-10 font-mono text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPwd(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-xs text-slate-500">Deixe em branco para não alterar a senha atual.</p>
+            </div>
+
+            {/* Ações */}
+            <div className="flex items-center gap-3 pt-2">
+              <Button
+                onClick={handleSave}
+                disabled={saveMut.isPending || !dirty}
+                className="bg-slate-700 hover:bg-slate-800 text-white"
+              >
+                <Save className="w-4 h-4 mr-1.5" />
+                {saveMut.isPending ? "Salvando..." : "Salvar Configurações"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => testMut.mutate()}
+                disabled={testMut.isPending}
+              >
+                {testMut.isPending ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Send className="w-4 h-4 mr-1.5" />}
+                {testMut.isPending ? "Testando..." : "Testar Conexão"}
+              </Button>
+              {dirty && (
+                <span className="text-xs text-amber-600 flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5" /> Alterações não salvas
+                </span>
+              )}
+            </div>
+
+            {/* Aviso de segurança */}
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700 flex items-start gap-2 mt-2">
+              <Shield className="w-4 h-4 mt-0.5 shrink-0 text-amber-500" />
+              <span>
+                A senha é armazenada em texto no banco de dados (Neon). Certifique-se de que o acesso ao banco está restrito às equipes autorizadas.
+                Recomendamos usar uma senha de app específica (Google/Outlook) em vez da senha principal da caixa de e-mail.
+              </span>
             </div>
           </div>
         )}

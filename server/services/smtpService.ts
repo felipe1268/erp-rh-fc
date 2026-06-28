@@ -6,32 +6,60 @@ import { ENV } from "../_core/env";
 // ============================================================
 
 let transporter: nodemailer.Transporter | null = null;
+let cachedSmtpEmail: string | null = null;
 
-function getTransporter(): nodemailer.Transporter {
-  if (!transporter) {
-    if (!ENV.smtpHost || !ENV.smtpEmail || !ENV.smtpPassword) {
-      throw new Error("SMTP não configurado. Defina SMTP_HOST, SMTP_EMAIL e SMTP_PASSWORD.");
+/** Chamado após salvar nova config SMTP para forçar recriação do transporter */
+export function invalidateSmtpTransporter() {
+  if (transporter) {
+    try { transporter.close(); } catch { /* ignora */ }
+  }
+  transporter = null;
+  cachedSmtpEmail = null;
+}
+
+/** Lê config SMTP do banco (sobrescreve ENV). Fallback para ENV se não houver config no banco. */
+async function loadSmtpConfig(): Promise<{ host: string; port: number; email: string; password: string }> {
+  try {
+    const { getDb } = await import("../db");
+    const db = await getDb();
+    if (db) {
+      const rows = await db.$client.query(`SELECT host, port, email, password FROM smtp_config ORDER BY id DESC LIMIT 1`);
+      if (rows.rows.length > 0) {
+        const r = rows.rows[0];
+        if (r.host && r.email && r.password) {
+          return { host: r.host as string, port: r.port as number, email: r.email as string, password: r.password as string };
+        }
+      }
     }
+  } catch {
+    // Silencia erros de DB (ex.: tabela ainda não criada na primeira inicialização)
+  }
+  // Fallback para variáveis de ambiente
+  return { host: ENV.smtpHost, port: ENV.smtpPort, email: ENV.smtpEmail, password: ENV.smtpPassword };
+}
+
+async function getTransporter(): Promise<{ transport: nodemailer.Transporter; email: string }> {
+  if (!transporter) {
+    const config = await loadSmtpConfig();
+    if (!config.host || !config.email || !config.password) {
+      throw new Error("SMTP não configurado. Acesse Configurações → Config. SMTP para definir as credenciais.");
+    }
+    cachedSmtpEmail = config.email;
     transporter = nodemailer.createTransport({
-      host: ENV.smtpHost,
-      port: ENV.smtpPort,
-      secure: ENV.smtpPort === 465, // true for 465 (SSL), false for 587 (TLS)
-      auth: {
-        user: ENV.smtpEmail,
-        pass: ENV.smtpPassword,
-      },
-      tls: {
-        rejectUnauthorized: false, // Allow self-signed certificates
-      },
-      connectionTimeout: 30000, // 30s para conectar (Rev: era 10s e causava muitos "Connection timeout")
-      greetingTimeout: 30000,   // 30s para greeting
-      socketTimeout: 45000,     // 45s para socket idle
-      pool: true,               // Reusa conexões (reduz handshake repetido)
+      host: config.host,
+      port: config.port,
+      secure: config.port === 465,
+      auth: { user: config.email, pass: config.password },
+      tls: { rejectUnauthorized: false },
+      connectionTimeout: 30000,
+      greetingTimeout: 30000,
+      socketTimeout: 45000,
+      pool: true,
       maxConnections: 3,
       maxMessages: 50,
     });
   }
-  return transporter;
+  return { transport: transporter, email: cachedSmtpEmail! };
 }
 
 export interface EmailOptions {
@@ -47,9 +75,9 @@ export interface EmailOptions {
  */
 export async function sendEmail(options: EmailOptions): Promise<{ success: boolean; messageId?: string; error?: string }> {
   try {
-    const transport = getTransporter();
+    const { transport, email } = await getTransporter();
     const info = await transport.sendMail({
-      from: `"Gestão Integrada - RH" <${ENV.smtpEmail}>`,
+      from: `"Gestão Integrada - RH" <${email}>`,
       to: options.to,
       subject: options.subject,
       html: options.html,
@@ -82,19 +110,13 @@ export async function sendEmailToMultiple(
   const detalhes: { email: string; success: boolean; error?: string }[] = [];
 
   for (const recipient of recipients) {
-    const result = await sendEmail({
-      to: recipient.email,
-      subject,
-      html,
-      text,
-    });
+    const result = await sendEmail({ to: recipient.email, subject, html, text });
     if (result.success) {
       enviados++;
     } else {
       erros++;
     }
     detalhes.push({ email: recipient.email, success: result.success, error: result.error });
-    // Small delay between emails to avoid rate limiting
     if (recipients.length > 1) {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
@@ -104,11 +126,11 @@ export async function sendEmailToMultiple(
 }
 
 /**
- * Verifica a conexão SMTP
+ * Verifica a conexão SMTP (usa config atual do banco ou ENV)
  */
 export async function verificarConexaoSMTP(): Promise<{ success: boolean; error?: string }> {
   try {
-    const transport = getTransporter();
+    const { transport } = await getTransporter();
     await transport.verify();
     console.log("[SMTP] Conexão verificada com sucesso");
     return { success: true };

@@ -2958,6 +2958,66 @@ export const appRouter = router({
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "DELETE", module: "configuracoes", entityType: "database", entityId: 0, details: `Limpeza geral: ${input.modules.join(", ")} (${cleaned} tabelas)` });
       return { success: true, tablesCleared: cleaned };
     }),
+
+    // Rev. 3841 — Configurações SMTP editáveis via UI (admin_master only)
+    getSmtpConfig: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin master pode ver configurações SMTP" });
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const rows = await db.$client.query(`SELECT host, port, email, updated_at, updated_by FROM smtp_config ORDER BY id DESC LIMIT 1`);
+      if (rows.rows.length === 0) {
+        // Retorna os valores atuais das variáveis de ambiente (sem a senha)
+        const { ENV } = await import("./_core/env");
+        return { host: ENV.smtpHost || "mail.fcengenhariacivil.com.br", port: ENV.smtpPort || 465, email: ENV.smtpEmail || "", hasPassword: !!ENV.smtpPassword, updatedAt: null, updatedBy: null };
+      }
+      const r = rows.rows[0];
+      return { host: r.host as string, port: r.port as number, email: r.email as string, hasPassword: !!(r.password || ""), updatedAt: r.updated_at as string | null, updatedBy: r.updated_by as string | null };
+    }),
+
+    saveSmtpConfig: protectedProcedure.input(z.object({
+      host: z.string().min(1, "Host obrigatório"),
+      port: z.number().int().min(1).max(65535),
+      email: z.string().email("E-mail inválido"),
+      password: z.string().optional(), // vazio = não altera a senha atual
+    })).mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin master pode alterar configurações SMTP" });
+      const { getDb } = await import("./db");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      // Busca senha atual se não for informada nova senha
+      let finalPassword = input.password ?? "";
+      if (!finalPassword) {
+        const existing = await db.$client.query(`SELECT password FROM smtp_config ORDER BY id DESC LIMIT 1`);
+        if (existing.rows.length > 0) {
+          finalPassword = (existing.rows[0].password as string) || "";
+        }
+      }
+      // Upsert: sempre mantém apenas 1 linha (delete + insert ou update)
+      const existing = await db.$client.query(`SELECT id FROM smtp_config ORDER BY id DESC LIMIT 1`);
+      if (existing.rows.length > 0) {
+        await db.$client.query(
+          `UPDATE smtp_config SET host=$1, port=$2, email=$3, password=$4, updated_at=now(), updated_by=$5 WHERE id=$6`,
+          [input.host, input.port, input.email, finalPassword, ctx.user.name || ctx.user.username || "Sistema", existing.rows[0].id]
+        );
+      } else {
+        await db.$client.query(
+          `INSERT INTO smtp_config (host, port, email, password, updated_at, updated_by) VALUES ($1,$2,$3,$4,now(),$5)`,
+          [input.host, input.port, input.email, finalPassword, ctx.user.name || ctx.user.username || "Sistema"]
+        );
+      }
+      // Invalida o transporter do SMTP para que seja recriado com as novas credenciais
+      const smtpSvc = await import("./services/smtpService");
+      smtpSvc.invalidateSmtpTransporter();
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "configuracoes", entityType: "smtp_config", entityId: 0, details: `SMTP atualizado: host=${input.host}, port=${input.port}, email=${input.email}` });
+      return { success: true };
+    }),
+
+    testSmtpConfig: protectedProcedure.mutation(async ({ ctx }) => {
+      if (ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin master pode testar SMTP" });
+      const { verificarConexaoSMTP } = await import("./services/smtpService");
+      return await verificarConexaoSMTP();
+    }),
   }),
 
   // ============================================================

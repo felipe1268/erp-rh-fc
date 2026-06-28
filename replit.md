@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3840** — **EXTRATO BANCÁRIO XLSX · REPLICAÇÃO 100% DO MODELO PLANILHA_MODELO_FC.** Análise pixel-a-pixel do arquivo modelo e reescrita completa do bloco Excel: colunas B–I (A vazia), larguras B=12.33/C=62.66/D=58.44/E=20/F=18.33/G=20.78/H=20.78/I=20.78; merges B2:C7 (logo), D2:I5 (empresa), D6:G7 (banco); bordas medium exatas em todo o cabeçalho; fórmula saldo I10=I7+G10-H10; cond.format. coluna I. `server/routers/downloadContabilidadeXlsx.ts`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+- **Rev. 3841** — **CONFIG. SMTP VIA UI · ALTERAR E-MAIL E SENHA SEM EDITAR VARIÁVEL DE AMBIENTE.** Novo tab "Config. SMTP" em Configurações do Sistema (admin_master only). Tabela `smtp_config` via SyncSchema+ Rev.3841. `smtpService.ts` reescrito: lê config do banco primeiro, fallback para ENV; `invalidateSmtpTransporter()` força recriação imediata após salvar. 3 endpoints em `settings.*`: `getSmtpConfig`/`saveSmtpConfig`/`testSmtpConfig`. Frontend: campos host, porta (465/587), e-mail, senha (toggle visível), botões Salvar + Testar, banner de estado. `server/_core/index.ts`, `server/routers.ts`, `server/services/smtpService.ts`, `client/src/pages/Configuracoes.tsx`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3839** — **NF-E RECEBIDAS · MUDAR STATUS EM LOTE.** Botão "Mudar Status" adicionado na barra de seleção múltipla da aba "NF-e Recebidas" (existia só nas Emitidas). States `bulkRecStatusOpen`+`bulkRecStatusTarget`, mutation `bulkRecStatusMut` (reutiliza `fiscalNotes.bulkUpdateStatus`), AlertDialog com 5 opções de status. `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+- **Rev. 3840** — **EXTRATO BANCÁRIO XLSX · REPLICAÇÃO 100% DO MODELO PLANILHA_MODELO_FC.** Análise pixel-a-pixel do arquivo modelo e reescrita completa do bloco Excel: colunas B–I (A vazia), larguras B=12.33/C=62.66/D=58.44/E=20/F=18.33/G=20.78/H=20.78/I=20.78; merges B2:C7 (logo), D2:I5 (empresa), D6:G7 (banco); bordas medium exatas em todo o cabeçalho; fórmula saldo I10=I7+G10-H10; cond.format. coluna I. `server/routers/downloadContabilidadeXlsx.ts`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3838** — **EXTRATO BANCÁRIO XLSX · FORMATAÇÃO CONDICIONAL NATIVA EXCEL NA COLUNA SALDO.** `ws.addConditionalFormatting()`: regra `< 0` → vermelho (#FF0000) + fonte branca; regra `> 0` → verde (#00B050) + fonte branca; range `H9:H{lastDataRow}`. Cor muda automaticamente ao editar fórmulas no Excel. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
@@ -72,6 +72,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### 5 one-liners
 
+- **Rev. 3839** — **NF-E RECEBIDAS · MUDAR STATUS EM LOTE.** Botão "Mudar Status" na seleção múltipla (reusa `fiscalNotes.bulkUpdateStatus`). ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3834** — **EXTRATO BANCÁRIO XLSX: LOGO FC ENGENHARIA + CONTORNO EXTERNO (MEDIUM BORDER).** `getLogoBuffer` retorna `{buffer,extension}`; `applyTableBorders` medium outer + thin inner. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3829** — **EXTRATO BANCÁRIO XLSX: REESCRITA COMPLETA COM EXCELJS PARA IGUALAR TEMPLATE DA CONTABILIDADE.** ZERO DELETE. Detalhe: `shared/changelog.ts`.
@@ -79,8 +81,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3828** — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3827** — **REVERT Rev.3826 — TRANSPORTE DE EQUIPES volta a "Benefícios (VR/VA/Transporte)". ZERO DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3826** — **TRANSPORTE DE EQUIPES → Frota (revertido em 3827). ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
 ### Histórico completo
 

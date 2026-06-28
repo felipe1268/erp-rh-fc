@@ -1,4 +1,28 @@
 /**
+ * Rev. 3841 — **CONFIG. SMTP VIA UI · ALTERAR E-MAIL E SENHA SEM EDITAR VARIÁVEL DE AMBIENTE.**
+ *
+ * Novo tab "Config. SMTP" em Configurações do Sistema (visível apenas para admin_master).
+ * Permite alterar host, porta, e-mail remetente e senha do servidor SMTP diretamente pela interface,
+ * sem precisar editar variáveis de ambiente ou reiniciar o servidor.
+ *
+ * **Arquitetura:**
+ * - `smtp_config` (tabela nova via SyncSchema+ Rev.3841): 1 linha global com host/port/email/password/updated_at/updated_by.
+ * - `smtpService.ts` reescrito: lê config do banco na criação do transporter (fallback para ENV se tabela vazia).
+ *   `invalidateSmtpTransporter()` exportado — chamado pelo saveSmtpConfig para forçar recriação imediata.
+ * - 3 novos endpoints em `settings.*` (todos exigem `admin_master`):
+ *   - `getSmtpConfig` → retorna host/port/email/hasPassword/updatedAt (sem expor a senha)
+ *   - `saveSmtpConfig` → upsert (1 linha), senha omitida = mantém a atual; invalida transporter; audit log
+ *   - `testSmtpConfig` → chama `verificarConexaoSMTP()` com as credenciais atuais
+ * - Frontend: `SmtpConfigTab` no final de `Configuracoes.tsx`:
+ *   campos host, porta (select 465/587), e-mail, senha (toggle mostrar/ocultar);
+ *   banner de estado (config do banco vs. ENV); botões Salvar + Testar Conexão; aviso de segurança.
+ *
+ * **Arquivos:** `server/_core/index.ts` (SyncSchema+), `server/routers.ts` (3 endpoints),
+ * `server/services/smtpService.ts` (reescrito), `client/src/pages/Configuracoes.tsx` (tab + componente).
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3840 — **EXTRATO BANCÁRIO XLSX · REPLICAÇÃO 100% DO MODELO PLANILHA_MODELO_FC.**
  *
  * Análise pixel-a-pixel do arquivo `PLANILHA_MODELO_-_FC_1782685248889.xlsx` e reescrita
