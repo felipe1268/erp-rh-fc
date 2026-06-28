@@ -1,6 +1,23 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3823 — **ANÁLISE DE CUSTOS · CLASSIFICADOR "OUTROS" — COBERTURA DE KEYWORDS.**
+ * Problema: a função `classificarGrupoCusto` em `shared/custosCategorias.ts` não
+ * reconhecia vários nomes de conta comuns, jogando ~R$500k/mês no bucket residual "Outros".
+ * Causa-raiz: keywords como FOLHA, CARTÓRIO, TRANSPORTE DE EQUIPES, PRESTADORES PJ,
+ * CHEQUE ESPECIAL, MÚTUO, ALOJAMENTO, HOSPEDAGEM, COMISSÃO, TREINAMENTO/CURSO etc.
+ * não constavam nas listas de casamento — 100% client-side, zero banco.
+ * ALTERAÇÕES (arquivo: `shared/custosCategorias.ts`):
+ *   • FOLHA → "Salários e Folha" (maior impacto: entradas bancárias FOL PAGTO = R$320k/mês).
+ *   • PRESTADORES PJ / PRESTADOR PJ → "Terceiros e PJ".
+ *   • TRANSPORTE DE EQUIPES / DE PESSOAL / DE FUNCIONARIO → "Benefícios (VR/VA/Transporte)".
+ *   • CHEQUE ESPECIAL, MUTUO, CONSORTIO, TITULOS DE CAPITALIZACAO → "Despesas Financeiras".
+ *   • CARTORIO, ALOJAMENTO, HOSPEDAGEM, HOTEL, TREINAMENTO, CURSO, COMISSAO/COMISSOES,
+ *     REEMBOLSO, OUTRAS DESPESAS, TOPOGRAFIA, HONORARIO → "Despesas Administrativas".
+ *   • SEGURANÇA DO TRABALHO movida de Admin → "Encargos sobre Folha" (custo de SST).
+ * EFEITO: bucket "Outros" cai de ~R$576k para resíduo mínimo em jan/2026.
+ * ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3822 — **FINANCEIRO · DESACOPLAMENTO CRONOGRAMA × FINANCEIRO (OPÇÃO A).**
  * Problema: o bridge `importAtividadesCronogramaToFinancial` gravava projeções do
  * cronograma em `financial_entries` com `status='a_pagar'`, inflando Contas a Pagar
