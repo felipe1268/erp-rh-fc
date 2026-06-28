@@ -292,16 +292,16 @@ export async function buildExtratoBancarioBuffer(
     ws.getRow(8).height = 15;
     ws.getRow(9).height = 19.2;
 
-    // ── Logo: imagem em B2:C7 ─────────────────────────────────────────────────
+    // ── Logo: imagem em B2:C7 — tamanho FIXO (não estica para preencher a área) ─
     if (logoId !== null) {
       ws.addImage(logoId, {
-        tl: { col: 1, row: 1 } as any,  // início de B2 (0-based)
-        br: { col: 3, row: 7 } as any,  // início de D8 → cobre B2:C7
+        tl: { col: 1, row: 1 } as any,  // canto superior-esquerdo em B2 (0-based)
+        ext: { width: 185, height: 78 }, // dimensões fixas em pixels (não distorce)
         editAs: "oneCell",
       });
     }
 
-    // ── Bordas do bloco logo B2:C7 (contorno medium) ─────────────────────────
+    // ── Bordas do bloco logo B2:C7 (contorno medium completo) ────────────────
     ws.getCell("B2").border = { top: medium, left: medium };
     ws.getCell("C2").border = { top: medium, right: medium };
     for (const r of [3, 4, 5, 6]) {
@@ -317,14 +317,19 @@ export async function buildExtratoBancarioBuffer(
     titleCell.value     = tituloEmpresa;
     titleCell.font      = { bold: true, size: 24, name: "Calibri" };
     titleCell.alignment = { horizontal: "center", vertical: "middle" };
-    // Bordas exteriores: top na row 2, left na col D, right na col I (rows 2-5)
+    // Topo: D2=top+left, E-H2=top, I2=top+right
     ws.getCell("D2").border = { top: medium, left: medium };
     for (const c of ["E","F","G","H"]) ws.getCell(`${c}2`).border = { top: medium };
     ws.getCell("I2").border = { top: medium, right: medium };
-    for (const r of [3, 4, 5]) {
+    // Laterais rows 3-4: D=left, I=right
+    for (const r of [3, 4]) {
       ws.getCell(`D${r}`).border = { left: medium };
       ws.getCell(`I${r}`).border = { right: medium };
     }
+    // Borda inferior de D2:I5 (row 5) — COMPLETA: todos os cantos e lados
+    ws.getCell("D5").border = { left: medium, bottom: medium };
+    for (const c of ["E","F","G","H"]) ws.getCell(`${c}5`).border = { bottom: medium };
+    ws.getCell("I5").border = { right: medium, bottom: medium };
 
     // ── D6:G7 — Nome do banco (merge, bold 11pt, center, borda medium exterior) ─
     ws.mergeCells("D6:G7");
@@ -332,11 +337,16 @@ export async function buildExtratoBancarioBuffer(
     bankCell.value     = bancoLabel;
     bankCell.font      = { bold: true, size: 11, name: "Calibri" };
     bankCell.alignment = { horizontal: "center", vertical: "middle" };
-    // Bordas: top row6, left col D, bottom row7
+    // Topo row 6: D=top+left, E-F=top, G=top+right (fecha lado direito)
     ws.getCell("D6").border = { top: medium, left: medium };
-    for (const c of ["E","F","G"]) ws.getCell(`${c}6`).border = { top: medium };
+    ws.getCell("E6").border = { top: medium };
+    ws.getCell("F6").border = { top: medium };
+    ws.getCell("G6").border = { top: medium, right: medium };
+    // Base row 7: D=bottom+left, E-F=bottom, G=bottom+right (fecha lado direito)
     ws.getCell("D7").border = { bottom: medium, left: medium };
-    for (const c of ["E","F","G"]) ws.getCell(`${c}7`).border = { bottom: medium };
+    ws.getCell("E7").border = { bottom: medium };
+    ws.getCell("F7").border = { bottom: medium };
+    ws.getCell("G7").border = { bottom: medium, right: medium };
 
     // ── H6 — "Data Saldo Anterior" (bordas medium em todos os lados) ──────────
     const cellH6 = ws.getCell("H6");
@@ -355,7 +365,7 @@ export async function buildExtratoBancarioBuffer(
     const cellH7 = ws.getCell("H7");
     cellH7.value  = "Saldo Anterior";
     cellH7.font   = { size: 11, name: "Calibri" };
-    cellH7.border = { bottom: medium, left: medium };
+    cellH7.border = { bottom: medium, left: medium, right: medium };
 
     // ── I7 — valor do saldo anterior (âncora das fórmulas de saldo) ──────────
     const cellI7 = ws.getCell("I7");

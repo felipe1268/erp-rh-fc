@@ -1,4 +1,26 @@
 /**
+ * Rev. 3842 — **EXTRATO BANCÁRIO XLSX · LOGO TAMANHO CORRETO + BORDAS COMPLETAS NO CABEÇALHO.**
+ *
+ * Correção de 4 problemas visuais identificados pelo usuário (comparação imagem antes/depois):
+ *
+ * 1. **Logo muito grande** — substituído `br: {col:3, row:7}` (esticava a imagem para preencher
+ *    toda a área B2:C7, distorcendo as proporções) por `ext: {width:185, height:78}` (tamanho fixo
+ *    em pixels, mantém proporções naturais do logo FC Engenharia).
+ *
+ * 2. **Borda inferior de D2:I5 ausente** — a linha separadora entre o nome da empresa (D2:I5) e o
+ *    nome do banco (D6:G7) não estava sendo gerada. Adicionado `bottom: medium` explícito nas
+ *    células D5, E5, F5, G5, H5 e I5 (incluindo cantos com left/right).
+ *
+ * 3. **Borda direita de D6:G7 ausente** — o bloco do banco ficava sem fechar à direita.
+ *    G6 e G7 passaram a receber `right: medium` além do top/bottom já existentes.
+ *
+ * 4. **Borda direita de H7 ausente** — célula "Saldo Anterior" ficava sem fecha à direita.
+ *    H7 passa a ter `{bottom: medium, left: medium, right: medium}`.
+ *
+ * **Arquivo:** `server/routers/downloadContabilidadeXlsx.ts`. ZERO DELETE.
+ */
+
+/**
  * Rev. 3841 — **CONFIG. SMTP VIA UI · ALTERAR E-MAIL E SENHA SEM EDITAR VARIÁVEL DE AMBIENTE.**
  *
  * Novo tab "Config. SMTP" em Configurações do Sistema (visível apenas para admin_master).
