@@ -247,7 +247,7 @@ export async function buildExtratoBancarioBuffer(
           bsl.valor::float  AS valor,
           bsl.entry_id,
           fe.fornecedor_nome,
-          fe.fornecedor_cnpj  AS entry_cnpj,
+          NULL::text          AS entry_cnpj,
           fe.descricao        AS entry_desc,
           COALESCE(fn1.numero_nf, '')                         AS numero_nf,
           COALESCE(fn1.emitente_cnpj, fn1.tomador_cnpj, '')  AS fornecedor_cnpj

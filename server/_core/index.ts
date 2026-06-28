@@ -4559,6 +4559,12 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3831: coluna auto_envio garantida em contabilidade_alertas_config.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3831 auto_envio:`, e?.message || e); }
 
+        // Rev. 3836 — stmt_line_id em fiscal_notes (estava só no CREATE TABLE, nunca no ALTER TABLE)
+        try {
+          await db.$client.query(`ALTER TABLE fiscal_notes ADD COLUMN IF NOT EXISTS stmt_line_id INTEGER`);
+          console.log(`[SyncSchema+] Rev. 3836: fiscal_notes.stmt_line_id garantida (ou já existia).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3836 stmt_line_id:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

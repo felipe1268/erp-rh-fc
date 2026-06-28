@@ -1,4 +1,25 @@
 /**
+ * Rev. 3836 — **EXTRATO BANCÁRIO XLSX · BUGFIX: "ERRO AO GERAR PLANILHA" (column fe.fornecedor_cnpj does not exist).**
+ *
+ * CAUSA-RAIZ: o `linesQ` em `server/routers/downloadContabilidadeXlsx.ts` (linha 250) referenciava
+ * `fe.fornecedor_cnpj AS entry_cnpj` via LEFT JOIN com `financial_entries`, mas essa coluna não existe
+ * na tabela `financial_entries` (que tem `fornecedor_nome` e `descricao`, mas não `fornecedor_cnpj`).
+ * O erro era capturado pelo catch do route handler mas, por ter ocorrido em sessão anterior, o log não
+ * estava visível — diagnosticado executando a query diretamente contra o Neon.
+ *
+ * CORREÇÃO: `fe.fornecedor_cnpj AS entry_cnpj` → `NULL::text AS entry_cnpj`. O campo `entry_cnpj`
+ * é usado apenas como fallback de CNPJ para o cruzamento com NFs (3ª camada): a lógica de negócio
+ * continua intacta pois o `fornecedor_cnpj` direto vem da coluna `bsl.fornecedor_cnpj` via LEFT JOIN
+ * com `fiscal_notes fn1`.
+ *
+ * BÔNUS: adicionado `[SyncSchema+] Rev. 3836` para garantir `fiscal_notes.stmt_line_id INTEGER`
+ * via `ALTER TABLE ADD COLUMN IF NOT EXISTS` (a coluna já existia em Neon mas estava apenas no
+ * CREATE TABLE — idempotente em tabelas pré-existentes — sem o ALTER de segurança).
+ *
+ * Arquivos: `server/routers/downloadContabilidadeXlsx.ts`, `server/_core/index.ts`.
+ * ZERO DELETE · ZERO SCHEMA destrutivo.
+ */
+/**
  * Rev. 3835 — **NOTIFICAÇÕES CONTABILIDADE · BUGFIX: "UNEXPECTED END OF JSON INPUT".**
  *
  * Quatro correções em `server/routers/contabilidade.ts` e `client/src/pages/Configuracoes.tsx`:

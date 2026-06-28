@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3835** — **NOTIFICAÇÕES CONTABILIDADE · BUGFIX: "UNEXPECTED END OF JSON INPUT".** `getConfig` SELECT adicionado `auto_envio` (estava omitido → valor DB ignorado). `emails_json ?? "[]"` → `|| "[]"` (string vazia `""` não é capturada por `??` → `JSON.parse("")` lançava o erro). Retorno padrão adicionado `autoEnvio: false`. Bug `mes` no "Enviar Teste": `now.getMonth()` 0-indexado → `+1`. Import dinâmico do XLSX movido para dentro do try/catch. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+- **Rev. 3836** — **EXTRATO BANCÁRIO XLSX · BUGFIX: "ERRO AO GERAR PLANILHA" (column fe.fornecedor_cnpj does not exist).** Causa-raiz: `linesQ` referenciava `fe.fornecedor_cnpj AS entry_cnpj` via LEFT JOIN com `financial_entries`, mas essa coluna não existe (a tabela só tem `fornecedor_nome` e `descricao`). Diagnosticado executando a query diretamente contra o Neon. Fix: `fe.fornecedor_cnpj` → `NULL::text AS entry_cnpj` (campo é só fallback de CNPJ na 3ª camada de cruzamento NF). Bônus: `[SyncSchema+] Rev.3836` garante `fiscal_notes.stmt_line_id INTEGER` via `ALTER TABLE ADD COLUMN IF NOT EXISTS`. Arquivos: `server/routers/downloadContabilidadeXlsx.ts`, `server/_core/index.ts`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3834** — **EXTRATO BANCÁRIO XLSX: LOGO FC ENGENHARIA + CONTORNO EXTERNO (MEDIUM BORDER).** Logo substituído: `logo-fc.jpg` (FC Engenharia colorido) no lugar do logo da contabilidade; `getLogoBuffer` retorna `{buffer,extension}` (JPEG precisa de `"jpeg"`). `applyTableBorders` aplica contorno externo medium + grade interna thin cobrindo cabeçalho+dados numa só passada. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+- **Rev. 3835** — **NOTIFICAÇÕES CONTABILIDADE · BUGFIX: "UNEXPECTED END OF JSON INPUT".** `getConfig` SELECT adicionado `auto_envio` (estava omitido → valor DB ignorado). `emails_json ?? "[]"` → `|| "[]"` (string vazia `""` não é capturada por `??` → `JSON.parse("")` lançava o erro). Retorno padrão adicionado `autoEnvio: false`. Bug `mes` no "Enviar Teste": `now.getMonth()` 0-indexado → `+1`. Import dinâmico do XLSX movido para dentro do try/catch. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3833** — **EXTRATO BANCÁRIO XLSX: FORMATAÇÃO CONDICIONAL SALDO + BORDAS + NF 100% CRUZADO.** Saldo calculado em JS (acumulado linha a linha): verde (#00B050) se ≥ 0, vermelho (#FF0000) se < 0, fonte branca em ambos. Bordas finas em TODAS as células de dados (A-H), não só no cabeçalho. NF cruzado em 3 camadas: stmt_line_id direto → entry_id pré-carregado → CNPJ+valor com dedup por usedNfKeys. Label do banco agora inclui apelido da conta ("BANCO SANTANDER – LOCNOW – APARECIDA"). ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
@@ -64,6 +64,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### 5 one-liners
 
+- **Rev. 3834** — **EXTRATO BANCÁRIO XLSX: LOGO FC ENGENHARIA + CONTORNO EXTERNO (MEDIUM BORDER).** `getLogoBuffer` retorna `{buffer,extension}`; `applyTableBorders` medium outer + thin inner. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3829** — **EXTRATO BANCÁRIO XLSX: REESCRITA COMPLETA COM EXCELJS PARA IGUALAR TEMPLATE DA CONTABILIDADE.** ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3828** — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
@@ -71,10 +73,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3827** — **REVERT Rev.3826 — TRANSPORTE DE EQUIPES volta a "Benefícios (VR/VA/Transporte)". ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3826** — **TRANSPORTE DE EQUIPES → Frota (revertido em 3827). ZERO DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3825** — **ANÁLISE DE CUSTOS · CLASSIFICADOR BUGFIX + KEYWORDS FROTA/ADMIN: "CONSORTIO"→"CONSORCIO"; MANUTENÇÃO DE EQUIPAMENTO/PNEU/BORRACHARIA→Frota; CHAVEIRO→Admin. DB: MAGNUM TIRES/LEAO→Frota; CEF 885836+FIX PAY→DESPESAS BANCÁRIAS; LAMONIER→Materiais para Obra. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3824** — **FINANCEIRO · LIMPEZA JAN/2026: 103 entradas PJ padronizadas; CCs RH→Obras; "MEDIÇÃO PJ"/"SUBEMPREITEIROS"→Terceiros e PJ. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
 ### Histórico completo
 
