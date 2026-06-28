@@ -1,6 +1,10 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3827 — **ANÁLISE DE CUSTOS · REVERT Rev.3826 — TRANSPORTE DE EQUIPES volta a "Benefícios
+ * (VR/VA/Transporte)". Classificação original estava correta: MOVIDA/vans fretadas são custo
+ * de transporte de equipes, não manutenção veicular. ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3826 — **ANÁLISE DE CUSTOS · CLASSIFICADOR — TRANSPORTE DE EQUIPES → FROTA.**
  * "TRANSPORTE DE EQUIPE/PESSOAL/FUNCIONARIO" estava no bucket "Benefícios (VR/VA/Transporte)"
  * junto com iFood/restaurantes — não faz sentido. Movido para "Frota e Veículos" (MOVIDA,

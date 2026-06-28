@@ -50,7 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3826** — **ANÁLISE DE CUSTOS · CLASSIFICADOR — TRANSPORTE DE EQUIPES → FROTA: bucket "Benefícios (VR/VA/Transporte)" fica só com VR/VA/alimentação/VALE TRANSPORTE; MOVIDA/vans/Danilo Transportes migram para "Frota e Veículos". ZERO DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3827** — **REVERT Rev.3826 — TRANSPORTE DE EQUIPES volta a "Benefícios (VR/VA/Transporte)". Classificação original estava correta. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3826** — **TRANSPORTE DE EQUIPES → Frota (revertido em 3827).** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3825** — **ANÁLISE DE CUSTOS · CLASSIFICADOR BUGFIX + KEYWORDS FROTA/ADMIN: "CONSORTIO"→"CONSORCIO"; MANUTENÇÃO DE EQUIPAMENTO/PNEU/BORRACHARIA→Frota; CHAVEIRO→Admin. DB: MAGNUM TIRES/LEAO→Frota; CEF 885836+FIX PAY→DESPESAS BANCÁRIAS; LAMONIER→Materiais para Obra. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
