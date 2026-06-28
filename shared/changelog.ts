@@ -1,6 +1,21 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3819 — **FINANCEIRO · PLANO DE CONTAS · LIMPEZA GRUPO 3 (VALE / TRANSPORTE / COMISSÃO).**
+ * Auditoria identificou: (1) conta 73 "Comissões e Bonificações" (pai de 381) recebendo
+ * 6 lançamentos diretos — viola regra de conta agrupadora; (2) conta 58 "Transporte e
+ * Logística" (raiz, sem pai) sobreposição com 315 "TRANSPORTE DE EQUIPES"; (3) conta 36
+ * "VALE TRANSPORTE - ADMINISTRATIVO" sem nenhum lançamento histórico.
+ * ALTERAÇÕES:
+ *   • 6 entries da conta 73 (Comissões e Bonificações pai) migradas para conta 381
+ *     (COMISSÕES - PAGAMENTOS filho): jan R$1.984,61 + 3 a_pagar fev.
+ *   • 3 entries da conta 58 (Transporte e Logística) migradas para conta 315
+ *     (TRANSPORTE DE EQUIPES): jan R$3.000 + fev R$5.000 pago + 1 a_pagar.
+ *   • Conta 58 "Transporte e Logística": desativada (ativo=0).
+ *   • Conta 36 "VALE TRANSPORTE - ADMINISTRATIVO": desativada (ativo=0; zero histórico).
+ * Contas ativas limpas: 265 Vale Alimentação, 301 Vale Adiantamento, 298 Alimentação Obra,
+ * 315 Transporte de Equipes, 381 Comissões, 283 Vale Transporte Obra. ZERO DELETE.
+ *
  * Rev. 3818 — **FINANCEIRO · PLANO DE CONTAS · LIMPEZA GRUPO 2 (CLT / FOLHA / ENCARGOS).**
  * Auditoria identificou: (1) lançamento direto em conta-pai 52 "Salários HE Rescisões Obra"
  * (Rescisão Nathalya R$3.865,27); (2) conta 414 "Guias FGTS" duplicata conceitualmente de

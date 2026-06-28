@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3818** — **FINANCEIRO · PLANO DE CONTAS · LIMPEZA GRUPO 2 (CLT/FOLHA/ENCARGOS): entry [866121] Rescisão Nathalya 52→280; 30 entries conta 414 "Guias FGTS"→270 (R$1.751,64); conta 414 desativada; 10 contas adm sem lançamentos desativadas (15,31,232,244,245,255,294,462,470,472). ZERO DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3819** — **FINANCEIRO · PLANO DE CONTAS · LIMPEZA GRUPO 3 (VALE/TRANSPORTE/COMISSÃO): 6 entries conta 73→381 (comissões pai→filho); 3 entries conta 58→315 (transporte unificado); contas 58 e 36 desativadas. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3817** — **FINANCEIRO · PLANO DE CONTAS · REESTRUTURAÇÃO SUBEMPREITEIROS/PJ: conta 23 → "SUBEMPREITEIROS / EMPRESAS"; conta 491 → "PRESTADORES PJ INDIVIDUAIS"; conta 507 "MEDIÇÃO PJ" desativada; conta 57 "Subempreiteiros" desativada; conta_nome atualizado em 1.186 entries históricas. ZERO SCHEMA/ALTER/DROP/DELETE de lançamentos.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3818** — **FINANCEIRO · PLANO DE CONTAS · LIMPEZA GRUPO 2 (CLT/FOLHA/ENCARGOS): entry [866121] 52→280; 30 entries conta 414→270 (R$1.751); conta 414 desativada; 10 contas adm sem lançamentos desativadas. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
 ### 5 one-liners
+
+- **Rev. 3817** — **FINANCEIRO · PLANO DE CONTAS · REESTRUTURAÇÃO SUBEMPREITEIROS/PJ: conta 23 → "SUBEMPREITEIROS / EMPRESAS"; conta 491 → "PRESTADORES PJ INDIVIDUAIS"; contas 507+57 desativadas; 1.186 entries atualizadas. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3816** — **FINANCEIRO · DRE · LEGENDA "DRE GERENCIAL DE CAIXA" NO RODAPÉ: card fixo com comparativo DRE Gerencial × DRE Societário; explica status excluídos. ARQUIVO: `FinanceiroDRE.tsx`. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
