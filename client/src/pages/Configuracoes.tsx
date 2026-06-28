@@ -94,7 +94,7 @@ const CATEGORIAS = [
   { key: "notificacoes_sistema", label: "Notificações do Sistema", icon: Bell, color: "text-pink-600", bgColor: "bg-pink-50", borderColor: "border-pink-200" },
 ];
 
-type TabKey = "criterios" | "senha" | "limpeza" | "regras" | "notificacoes" | "notif_contabil" | "contrato_pj" | "contrato_terceiros" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos" | "backup" | "terceiros" | "portal_cliente" | "templates_docs" | "socios" | "smtp_config" | "template_planilha";
+type TabKey = "criterios" | "senha" | "limpeza" | "regras" | "notificacoes" | "contrato_pj" | "contrato_terceiros" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos" | "backup" | "terceiros" | "portal_cliente" | "templates_docs" | "socios" | "smtp_config" | "template_planilha";
 
 // Rev. 2403: mapa estático de cores das abas. CRÍTICO: Tailwind JIT só vê
 // classes LITERAIS no source — interpolação tipo `bg-${c}-500` não gera CSS.
@@ -339,7 +339,6 @@ export default function Configuracoes() {
     { key: "templates_docs" as TabKey, label: "Templates de Documentos", icon: FileText, minRole: "admin", color: "sky" },
     { key: "senha" as TabKey, label: "Minha Senha", icon: Key, minRole: "user", color: "emerald" },
     { key: "notificacoes" as TabKey, label: "Notificações E-mail", icon: Bell, minRole: "admin", color: "violet" },
-    { key: "notif_contabil" as TabKey, label: "Notificações Contabilidade", icon: Receipt, minRole: "admin", color: "indigo" },
     { key: "contrato_pj" as TabKey, label: "Contrato PJ", icon: FileText, minRole: "admin", color: "teal" },
     { key: "contrato_terceiros" as TabKey, label: "Contrato Terceiros", icon: Handshake, minRole: "admin", color: "rose" },
     { key: "sindical" as TabKey, label: "Sindical / Dissídio", icon: Landmark, minRole: "admin", color: "orange" },
@@ -863,14 +862,9 @@ export default function Configuracoes() {
           </Card>
         )}
 
-        {/* TAB: Notificações E-mail */}
+        {/* TAB: Notificações E-mail (unificado com subcategorias) */}
         {activeTab === "notificacoes" && (
-          <NotificacoesEmailTab companyId={companyId} />
-        )}
-
-        {/* TAB: Notificações Contabilidade */}
-        {activeTab === "notif_contabil" && (
-          <NotificacoesContabilidadeTab companyId={companyId} />
+          <NotificacoesUnificadaTab companyId={companyId} />
         )}
 
         {/* TAB: Config. SMTP */}
@@ -1743,6 +1737,67 @@ function ContratoPJTab({ companyId, userName }: { companyId: number; userName: s
 }
 
 // ============================================================
+// ============================================================
+// COMPONENTE UNIFICADO: Notificações E-mail com subcategorias
+// ============================================================
+const NOTIF_SUBCATS = [
+  { key: "rh", label: "RH", icon: Users, desc: "Contratações, demissões e movimentações de pessoal" },
+  { key: "contabilidade", label: "Contabilidade", icon: Receipt, desc: "Documentos e extratos para o contador" },
+] as const;
+type NotifSubcat = typeof NOTIF_SUBCATS[number]["key"];
+
+function NotificacoesUnificadaTab({ companyId }: { companyId: number }) {
+  const [subcat, setSubcat] = useState<NotifSubcat>("rh");
+  const current = NOTIF_SUBCATS.find(s => s.key === subcat)!;
+
+  return (
+    <div className="space-y-4">
+      {/* Cabeçalho da aba */}
+      <div>
+        <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+          <Bell className="w-5 h-5 text-violet-600" />
+          Notificações por E-mail
+        </h2>
+        <p className="text-sm text-gray-500">
+          Configure os destinatários para cada categoria de notificação.
+        </p>
+      </div>
+
+      {/* Seletor de subcategoria */}
+      <div className="flex gap-2 flex-wrap">
+        {NOTIF_SUBCATS.map(s => {
+          const Icon = s.icon;
+          const active = subcat === s.key;
+          return (
+            <button
+              key={s.key}
+              onClick={() => setSubcat(s.key)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border text-sm font-medium transition-all ${
+                active
+                  ? "bg-violet-600 border-violet-600 text-white shadow-sm"
+                  : "bg-white border-gray-200 text-gray-600 hover:border-violet-300 hover:text-violet-700"
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              {s.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Descrição da subcategoria ativa */}
+      <div className="text-xs text-gray-400 flex items-center gap-1.5 -mt-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-violet-400 inline-block" />
+        {current.desc}
+      </div>
+
+      {/* Conteúdo da subcategoria */}
+      {subcat === "rh" && <NotificacoesEmailTab companyId={companyId} />}
+      {subcat === "contabilidade" && <NotificacoesContabilidadeTab companyId={companyId} />}
+    </div>
+  );
+}
+
 // COMPONENTE: Notificações Contabilidade (Tab em Configurações)
 // ============================================================
 function NotificacoesContabilidadeTab({ companyId }: { companyId: number }) {
@@ -1798,17 +1853,8 @@ function NotificacoesContabilidadeTab({ companyId }: { companyId: number }) {
 
   return (
     <div className="space-y-6">
-      {/* Cabeçalho */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-            <Receipt className="w-5 h-5 text-indigo-600" />
-            Notificações Contabilidade
-          </h2>
-          <p className="text-sm text-gray-500">
-            Configure os destinatários e prazos para envio automático de documentos contábeis ao contador.
-          </p>
-        </div>
+      {/* Botão de teste */}
+      <div className="flex justify-end">
         <Button variant="outline" size="sm" disabled={!emails.length || enviarTesteMut.isPending}
           onClick={() => {
             const now = new Date();
@@ -2059,30 +2105,18 @@ function NotificacoesEmailTab({ companyId }: { companyId: number }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-            <Bell className="w-5 h-5 text-blue-600" />
-            Notificações por E-mail
-          </h2>
-          <p className="text-sm text-gray-500">
-            Cadastre os e-mails que devem receber avisos automáticos de contratação, demissão e outras movimentações.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm"
-            onClick={() => {
-              const el = document.getElementById('notif-historico-section');
-              if (el) el.scrollIntoView({ behavior: 'smooth' });
-              // Dispatch custom event to open preview
-              window.dispatchEvent(new CustomEvent('open-notif-preview'));
-            }}>
-            <Send className="w-4 h-4 mr-1" /> Enviar Teste
-          </Button>
-          <Button onClick={() => { resetForm(); setShowForm(true); }} className="bg-blue-600 hover:bg-blue-700">
-            <Plus className="w-4 h-4 mr-1" /> Novo Destinatário
-          </Button>
-        </div>
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="outline" size="sm"
+          onClick={() => {
+            const el = document.getElementById('notif-historico-section');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+            window.dispatchEvent(new CustomEvent('open-notif-preview'));
+          }}>
+          <Send className="w-4 h-4 mr-1" /> Enviar Teste
+        </Button>
+        <Button onClick={() => { resetForm(); setShowForm(true); }} className="bg-blue-600 hover:bg-blue-700">
+          <Plus className="w-4 h-4 mr-1" /> Novo Destinatário
+        </Button>
       </div>
 
       {/* Resumo */}

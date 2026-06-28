@@ -50,22 +50,14 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3846** — **CONFIGURAÇÕES · NOTIFICAÇÕES E-MAIL UNIFICADAS COM SUBCATEGORIAS.** Os dois tabs separados ("Notificações E-mail" e "Notificações Contabilidade") foram fundidos num único tab com seletor de subcategoria interno ([RH] | [Contabilidade]). RH = destinatários de movimentações de pessoal; Contabilidade = prazos e destinatários do extrato contábil. Estrutura extensível via array `NOTIF_SUBCATS`. Arquivo: `client/src/pages/Configuracoes.tsx`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3845** — **TEMPLATE FC XLSX · SERVIÇO COMPARTILHADO + ABA "TEMPLATE DE PLANILHA" EM CONFIGURAÇÕES.** Novo serviço `server/services/excelFcTemplate.ts`: `applyFcHeader(wb,ws,header,config)` aplica bloco logo+título (rows 1-8) idêntico ao Extrato Bancário; `applyFcColumnHeader` estiliza row 9 com cor configurável; `loadFcXlsxConfig` lê banco + cache 60s; `gerarExemploTemplate` gera XLSX de preview. Nova tabela `xlsx_template_config` (SyncSchema+ Rev.3845). 3 endpoints em `settings.*`: `getXlsxTemplateConfig`/`saveXlsxTemplateConfig`/`downloadXlsxTemplateExemplo`. `folhaPagamento.exportarCustosObra` migrado do header azul simples para o template FC completo. Nova aba "Template de Planilha" em Configurações (emerald, role=admin): paleta de cores, color picker, preview inline, dirty-check, download de exemplo. ZERO DELETE. Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3844** — **PANORAMA FISCAL · AUTO-VÍNCULO NF-e × EXTRATO BANCÁRIO APÓS CONCILIAÇÃO.** Novo serviço `autoVincularNfService.ts`: crédito → NFS-e emitida (valor ±2%, data ±60d, prefere CNPJ da descrição == tomador_cnpj); débito → NF-e recebida SEFAZ (exige CNPJ desc == emitente_cnpj + valor ±2%). Injetado em 3 pontos de `financial.ts` (`conciliarLancamento`, `conciliarGrupoLancamentos`, `conciliarSugestoes`) como fire-and-forget. Sem botão, sem interação do usuário. ZERO DELETE. Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3843** — **NF-E RECEBIDAS · BUGFIX: BOTÃO "MUDAR STATUS" NÃO ABRIA DIALOG.** `onClick` chamava estado das Emitidas; corrigido para `setBulkRecStatusOpen`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3841** — **CONFIG. SMTP VIA UI · ALTERAR E-MAIL E SENHA SEM EDITAR VARIÁVEL DE AMBIENTE.** Tab em Configurações (admin_master), smtp_config via SyncSchema+, smtpService lê DB primeiro. ZERO DELETE. Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3840** — **EXTRATO BANCÁRIO XLSX · REPLICAÇÃO 100% DO MODELO PLANILHA_MODELO_FC.** Colunas B–I, larguras/alturas/merges exatos, bordas medium, fórmula saldo, cond.format. ZERO DELETE. Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3839** — **NF-E RECEBIDAS · MUDAR STATUS EM LOTE.** Botão "Mudar Status" na seleção múltipla (reusa `fiscalNotes.bulkUpdateStatus`). ZERO DELETE. Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3838** — **EXTRATO BANCÁRIO XLSX · FORMATAÇÃO CONDICIONAL NATIVA EXCEL NA COLUNA SALDO.** `ws.addConditionalFormatting()` verde/vermelho. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 ### 5 one-liners
 
+- **Rev. 3844** — **PANORAMA FISCAL · AUTO-VÍNCULO NF-e × EXTRATO BANCÁRIO APÓS CONCILIAÇÃO.** `autoVincularNfService.ts` fire-and-forget em 3 pontos de `financial.ts`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3843** — **NF-E RECEBIDAS · BUGFIX: BOTÃO "MUDAR STATUS" NÃO ABRIA DIALOG.** `onClick` chamava estado das Emitidas; corrigido para `setBulkRecStatusOpen`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3841** — **CONFIG. SMTP VIA UI · ALTERAR E-MAIL E SENHA SEM EDITAR VARIÁVEL DE AMBIENTE.** Tab em Configurações (admin_master), smtp_config via SyncSchema+, smtpService lê DB primeiro. ZERO DELETE. Detalhe: `shared/changelog.ts`.
@@ -74,13 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3839** — **NF-E RECEBIDAS · MUDAR STATUS EM LOTE.** Botão "Mudar Status" na seleção múltipla (reusa `fiscalNotes.bulkUpdateStatus`). ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3834** — **EXTRATO BANCÁRIO XLSX: LOGO FC ENGENHARIA + CONTORNO EXTERNO (MEDIUM BORDER).** `getLogoBuffer` retorna `{buffer,extension}`; `applyTableBorders` medium outer + thin inner. ZERO DELETE. Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3829** — **EXTRATO BANCÁRIO XLSX: REESCRITA COMPLETA COM EXCELJS PARA IGUALAR TEMPLATE DA CONTABILIDADE.** ZERO DELETE. Detalhe: `shared/changelog.ts`.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3823 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3838 e anteriores.
 
 ## User preferences
 

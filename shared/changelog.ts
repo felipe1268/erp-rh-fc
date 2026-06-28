@@ -1,4 +1,26 @@
 /**
+ * Rev. 3846 — **CONFIGURAÇÕES · NOTIFICAÇÕES E-MAIL UNIFICADAS COM SUBCATEGORIAS.**
+ *
+ * **O quê:**
+ * Os dois tabs separados ("Notificações E-mail" e "Notificações Contabilidade") foram fundidos em
+ * um único tab "Notificações E-mail" com seletor de subcategoria interno ([RH] | [Contabilidade]).
+ * Ao clicar em "RH" aparece o painel de destinatários de movimentações de pessoal (contratação/
+ * demissão/transferência/afastamento). Ao clicar em "Contabilidade" aparece a configuração de
+ * prazos e destinatários do extrato contábil. A estrutura permite adicionar novas subcategorias
+ * no futuro editando apenas o array `NOTIF_SUBCATS`.
+ *
+ * **Por quê:** usuário pediu uma interface unificada com subcategorias em vez de dois itens
+ * separados na grade de abas de Configurações.
+ *
+ * **Arquivos:**
+ * - `client/src/pages/Configuracoes.tsx`: removido `notif_contabil` de `TabKey` e `allTabs`;
+ *   adicionado `NotificacoesUnificadaTab` + `NOTIF_SUBCATS`; headers internos redundantes
+ *   dos dois sub-componentes removidos (mantido botão "Enviar Teste" em ambos).
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3845 — **TEMPLATE FC XLSX · SERVIÇO COMPARTILHADO + ABA "TEMPLATE DE PLANILHA" EM CONFIGURAÇÕES.**
  *
  * **O quê:**

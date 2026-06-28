@@ -1,3 +1,9 @@
+- **Rev. 3838** — **EXTRATO BANCÁRIO XLSX · FORMATAÇÃO CONDICIONAL NATIVA EXCEL NA COLUNA SALDO.** `ws.addConditionalFormatting()` verde/vermelho. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3834** — **EXTRATO BANCÁRIO XLSX: LOGO FC ENGENHARIA + CONTORNO EXTERNO (MEDIUM BORDER).** `getLogoBuffer` retorna `{buffer,extension}`; `applyTableBorders` medium outer + thin inner. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3829** — **EXTRATO BANCÁRIO XLSX: REESCRITA COMPLETA COM EXCELJS PARA IGUALAR TEMPLATE DA CONTABILIDADE.** ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3828** — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3827** — **REVERT Rev.3826 — TRANSPORTE DE EQUIPES volta a "Benefícios (VR/VA/Transporte)". ZERO DELETE.** Detalhe: `shared/changelog.ts`.
