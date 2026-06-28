@@ -1,13 +1,6 @@
 /**
- * XlsxTemplateTab.tsx — Rev. 3845
+ * XlsxTemplateTab.tsx — Rev. 3847
  * Aba "Template de Planilha" em Configurações do Sistema.
- * Permite configurar o cabeçalho padrão FC para todas as planilhas XLSX exportadas:
- *   - Título/nome da empresa
- *   - Código de revisão (ISO)
- *   - Cor do cabeçalho de colunas
- *   - Aprovado por
- *   - Vigência e notas
- *   - Download de planilha-exemplo para pré-visualização
  */
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
@@ -18,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
   FileSpreadsheet, Palette, Save, Download, RefreshCw,
-  Calendar, User, StickyNote, Info, CheckCircle2,
+  Calendar, User, StickyNote, Info, CheckCircle2, Lock,
 } from "lucide-react";
 
 // Paleta de cores predefinidas (ARGB sem prefixo FF)
@@ -31,7 +24,22 @@ const COLOR_PRESETS: { label: string; hex: string; argb: string }[] = [
   { label: "Laranja",           hex: "#C55A11", argb: "C55A11" },
 ];
 
-export default function XlsxTemplateTab() {
+// Lista completa de relatórios XLSX gerados pelo sistema
+const RELATORIOS_XLSX = [
+  { nome: "Extrato Bancário",            modulo: "Contabilidade",        template: true  },
+  { nome: "Extrato de Cartão de Crédito",modulo: "Contabilidade",        template: false },
+  { nome: "Pacote do Contador (ZIP)",    modulo: "Contabilidade",        template: true  },
+  { nome: "Custos por Obra",             modulo: "Folha de Pagamento",   template: true  },
+  { nome: "Conformidade PJ",             modulo: "Controle PJ",          template: false },
+  { nome: "Pagamentos PJ",               modulo: "Controle PJ",          template: false },
+  { nome: "Exemplo de Template",         modulo: "Configurações",        template: true  },
+];
+
+interface Props {
+  userName?: string;
+}
+
+export default function XlsxTemplateTab({ userName }: Props) {
   const { companyId } = useCompany();
 
   const query = trpc.settings.getXlsxTemplateConfig.useQuery(
@@ -39,19 +47,31 @@ export default function XlsxTemplateTab() {
     { enabled: !!companyId, staleTime: 30_000 }
   );
 
-  const saveMutation  = trpc.settings.saveXlsxTemplateConfig.useMutation();
-  const previewMutation = trpc.settings.downloadXlsxTemplateExemplo.useMutation();
+  const saveMutation = trpc.settings.saveXlsxTemplateConfig.useMutation({
+    onSuccess: () => {
+      toast.success("Template de planilha salvo com sucesso!");
+      setDirty(false);
+      query.refetch();
+    },
+    onError: (e) => {
+      toast.error(e?.message ?? "Erro ao salvar template");
+    },
+  });
+
+  const previewMutation = trpc.settings.downloadXlsxTemplateExemplo.useMutation({
+    onError: (e) => toast.error(e?.message ?? "Erro ao gerar exemplo"),
+  });
 
   const [form, setForm] = useState({
     tituloEmpresa: "FC ENGENHARIA E CONSTRUÇÃO LTDA",
     revisao:       "Rev. 01",
     corCabecalho:  "7030A0",
-    aprovadoPor:   "Sistema",
     vigentDesde:   "",
     notas:         "",
   });
   const [colorInput, setColorInput] = useState("#7030A0");
   const [dirty, setDirty] = useState(false);
+  const [lastApprovedBy, setLastApprovedBy] = useState<string | null>(null);
 
   useEffect(() => {
     if (query.data) {
@@ -60,11 +80,11 @@ export default function XlsxTemplateTab() {
         tituloEmpresa: d.tituloEmpresa ?? "FC ENGENHARIA E CONSTRUÇÃO LTDA",
         revisao:       d.revisao       ?? "Rev. 01",
         corCabecalho:  d.corCabecalho  ?? "7030A0",
-        aprovadoPor:   d.aprovadoPor   ?? "Sistema",
         vigentDesde:   d.vigentDesde   ?? "",
         notas:         d.notas         ?? "",
       });
       setColorInput("#" + (d.corCabecalho ?? "7030A0"));
+      setLastApprovedBy(d.aprovadoPor ?? d.updatedBy ?? null);
       setDirty(false);
     }
   }, [query.data]);
@@ -87,33 +107,31 @@ export default function XlsxTemplateTab() {
     }
   };
 
-  const handleSave = async () => {
-    if (!companyId) return;
+  const handleSave = () => {
+    if (!companyId) {
+      toast.error("Selecione uma empresa antes de salvar.");
+      return;
+    }
     const clean = form.corCabecalho.replace(/^#/, "");
     if (!/^[0-9A-Fa-f]{6}$/.test(clean)) {
       toast.error("Cor inválida. Use formato hexadecimal (ex: 7030A0).");
       return;
     }
-    try {
-      await saveMutation.mutateAsync({
-        companyId,
-        tituloEmpresa: form.tituloEmpresa,
-        revisao:       form.revisao,
-        corCabecalho:  clean.toUpperCase(),
-        aprovadoPor:   form.aprovadoPor || undefined,
-        vigentDesde:   form.vigentDesde || undefined,
-        notas:         form.notas       || undefined,
-      });
-      toast.success("Template de planilha salvo com sucesso!");
-      setDirty(false);
-      query.refetch();
-    } catch (e: any) {
-      toast.error(e?.message ?? "Erro ao salvar");
-    }
+    // "Aprovado por" é sempre o usuário logado
+    const aprovadoPor = userName || "Sistema";
+    saveMutation.mutate({
+      companyId,
+      tituloEmpresa: form.tituloEmpresa,
+      revisao:       form.revisao,
+      corCabecalho:  clean.toUpperCase(),
+      aprovadoPor,
+      vigentDesde:   form.vigentDesde || undefined,
+      notas:         form.notas       || undefined,
+    });
   };
 
   const handlePreview = async () => {
-    if (!companyId) return;
+    if (!companyId) { toast.error("Selecione uma empresa."); return; }
     try {
       const res = await previewMutation.mutateAsync({ companyId });
       const bytes = Uint8Array.from(atob(res.base64), c => c.charCodeAt(0));
@@ -123,8 +141,8 @@ export default function XlsxTemplateTab() {
       a.href = url; a.download = res.filename; a.click();
       URL.revokeObjectURL(url);
       toast.success("Planilha-exemplo baixada!");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Erro ao gerar exemplo");
+    } catch {
+      // onError da mutation já exibiu o toast
     }
   };
 
@@ -140,6 +158,8 @@ export default function XlsxTemplateTab() {
     ? new Date(query.data.updatedAt).toLocaleString("pt-BR")
     : null;
 
+  const displayColor = colorInput.startsWith("#") ? colorInput : "#" + form.corCabecalho;
+
   return (
     <div className="space-y-6">
       {/* Cabeçalho da aba */}
@@ -148,8 +168,7 @@ export default function XlsxTemplateTab() {
           <FileSpreadsheet className="w-4 h-4" /> Template Padrão FC para Planilhas XLSX
         </p>
         <p className="text-xs text-green-700/80 mt-0.5">
-          Define o cabeçalho institucional aplicado automaticamente em todos os relatórios XLSX gerados pelo sistema
-          (Folha de Pagamento, Custos por Obra, Extrato Bancário, etc.).
+          Define o cabeçalho institucional aplicado automaticamente em todos os relatórios XLSX gerados pelo sistema.
           A planilha-exemplo permite visualizar o resultado antes de aplicar.
         </p>
       </div>
@@ -177,7 +196,7 @@ export default function XlsxTemplateTab() {
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="revisao" className="text-xs text-gray-600 flex items-center gap-1">
+              <Label htmlFor="revisao" className="text-xs text-gray-600">
                 Código de revisão (ISO)
               </Label>
               <Input
@@ -203,17 +222,23 @@ export default function XlsxTemplateTab() {
             </div>
           </div>
 
+          {/* Aprovado por — read-only, preenchido automaticamente */}
           <div className="space-y-1.5">
-            <Label htmlFor="aprovado_por" className="text-xs text-gray-600 flex items-center gap-1">
+            <Label className="text-xs text-gray-600 flex items-center gap-1">
               <User className="w-3 h-3" /> Aprovado por
             </Label>
-            <Input
-              id="aprovado_por"
-              value={form.aprovadoPor}
-              onChange={e => set("aprovadoPor", e.target.value)}
-              placeholder="Nome do responsável pela aprovação"
-              className="h-9 text-sm"
-            />
+            <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-input bg-gray-50 text-sm text-gray-700">
+              <Lock className="w-3 h-3 text-gray-400 shrink-0" />
+              <span className="flex-1 truncate">
+                {userName || "—"}
+              </span>
+              <span className="text-[10px] text-gray-400 shrink-0">(usuário logado)</span>
+            </div>
+            {lastApprovedBy && lastApprovedBy !== (userName || "Sistema") && (
+              <p className="text-[10px] text-gray-400">
+                Última aprovação: {lastApprovedBy}
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -263,7 +288,7 @@ export default function XlsxTemplateTab() {
             <div className="flex gap-2 items-center">
               <input
                 type="color"
-                value={colorInput.startsWith("#") ? colorInput : "#" + colorInput}
+                value={displayColor}
                 onChange={e => handleColorInput(e.target.value)}
                 className="h-9 w-12 rounded cursor-pointer border border-input"
               />
@@ -281,13 +306,13 @@ export default function XlsxTemplateTab() {
           <div className="rounded-lg overflow-hidden border border-gray-200">
             <div
               className="px-4 py-3 text-white text-xs font-bold flex items-center gap-2"
-              style={{ backgroundColor: colorInput.startsWith("#") ? colorInput : "#" + form.corCabecalho }}
+              style={{ backgroundColor: displayColor }}
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
               <span>Funcionário · Função · Horas Trab. · Custo Alocado</span>
             </div>
             <div className="px-4 py-2 bg-white text-xs text-gray-600 border-t border-gray-100">
-              <span className="font-medium">FC ENGENHARIA</span> · Janeiro 2026
+              <span className="font-medium">{form.tituloEmpresa || "FC ENGENHARIA"}</span> · Janeiro 2026
             </div>
           </div>
 
@@ -311,7 +336,7 @@ export default function XlsxTemplateTab() {
               ) : (
                 <Save className="w-4 h-4" />
               )}
-              {dirty ? "Salvar Configurações" : "Salvo"}
+              {saveMutation.isPending ? "Salvando…" : dirty ? "Salvar Configurações" : "Salvo ✓"}
             </Button>
 
             <Button
@@ -332,20 +357,32 @@ export default function XlsxTemplateTab() {
         </div>
       </div>
 
-      {/* Legenda de relatórios afetados */}
-      <div className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
-        <p className="text-xs font-semibold text-gray-600 mb-2">
-          Relatórios que usam este template:
+      {/* Lista de todos os relatórios XLSX do sistema */}
+      <div className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 space-y-2">
+        <p className="text-xs font-semibold text-gray-600">
+          Relatórios XLSX gerados pelo sistema:
         </p>
-        <div className="flex flex-wrap gap-1.5">
-          {[
-            "Extrato Bancário (Contabilidade)",
-            "Custos por Obra (Folha de Pagamento)",
-            "Exemplo de Template",
-          ].map(r => (
-            <span key={r} className="inline-flex items-center gap-1 bg-white border border-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded-full">
-              <FileSpreadsheet className="w-3 h-3 text-green-600" /> {r}
-            </span>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+          {RELATORIOS_XLSX.map(r => (
+            <div
+              key={r.nome}
+              className={`flex items-center gap-2 px-3 py-2 rounded-md border text-xs ${
+                r.template
+                  ? "bg-white border-green-200 text-gray-700"
+                  : "bg-white border-gray-200 text-gray-500"
+              }`}
+            >
+              <FileSpreadsheet className={`w-3.5 h-3.5 shrink-0 ${r.template ? "text-green-600" : "text-gray-400"}`} />
+              <div className="flex-1 min-w-0">
+                <span className="font-medium truncate block">{r.nome}</span>
+                <span className="text-gray-400">{r.modulo}</span>
+              </div>
+              {r.template ? (
+                <span className="shrink-0 text-[9px] font-semibold text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">usa template</span>
+              ) : (
+                <span className="shrink-0 text-[9px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">padrão</span>
+              )}
+            </div>
           ))}
         </div>
       </div>

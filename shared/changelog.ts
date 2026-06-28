@@ -1,4 +1,24 @@
 /**
+ * Rev. 3847 — **TEMPLATE XLSX · 3 CORREÇÕES: SAVE, APROVADO POR AUTOMÁTICO, LISTA COMPLETA DE RELATÓRIOS.**
+ *
+ * **O quê:**
+ * 1. Save silencioso corrigido: `if (!companyId) return` agora exibe toast; mutation usa
+ *    `onSuccess`/`onError` ao invés de try/catch opaco (não visível em mobile).
+ * 2. Campo "Aprovado por" torna-se read-only — preenchido automaticamente com o nome do
+ *    usuário logado (prop `userName` passada de Configuracoes.tsx via `user?.name`);
+ *    exibe quem aprovou na última vez que foi salvo.
+ * 3. Lista de relatórios expandida: todos os 7 XLSX gerados pelo sistema aparecem com badge
+ *    "usa template" (verde) ou "padrão" (cinza) — Extrato Bancário, Extrato Cartão,
+ *    Pacote do Contador, Custos por Obra, Conformidade PJ, Pagamentos PJ, Exemplo de Template.
+ *
+ * **Arquivos:**
+ * - `client/src/pages/configuracoes/XlsxTemplateTab.tsx` (reescrito)
+ * - `client/src/pages/Configuracoes.tsx` (passa `userName` p/ XlsxTemplateTab)
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3846 — **CONFIGURAÇÕES · NOTIFICAÇÕES E-MAIL UNIFICADAS COM SUBCATEGORIAS.**
  *
  * **O quê:**

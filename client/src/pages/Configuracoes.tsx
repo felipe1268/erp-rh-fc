@@ -499,7 +499,7 @@ export default function Configuracoes() {
 
         {/* TAB: Template de Planilha XLSX (Rev. 3845) */}
         {activeTab === "template_planilha" && (
-          <XlsxTemplateTab />
+          <XlsxTemplateTab userName={user?.name || user?.username || ""} />
         )}
 
         {activeTab === "contrato_terceiros" && (
