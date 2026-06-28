@@ -56,8 +56,9 @@ function prevMonthLastDate(mes: number, ano: number): Date {
 
 // ── Constantes de estilo (modelo contabilidade) ───────────────────────────────
 
-const PURPLE   = "FF7030A0";  // roxo do cabeçalho (ARGB)
-const SALDO_BG = "FFEFEFEF";  // fundo cinza-claro coluna Saldo
+const PURPLE    = "FF7030A0";  // roxo do cabeçalho (ARGB)
+const GREEN_BG  = "FF00B050";  // saldo positivo
+const RED_BG    = "FFFF0000";  // saldo negativo
 
 /** Formato R$ contábil exato do modelo (numFmt 44) */
 const BRL = '_-"R$"\ * #,##0.00_-;\-"R$"\ * #,##0.00_-;_-"R$"\ * "-"??_-;_-@_-';
@@ -82,6 +83,17 @@ function getLogoBuffer(): Buffer | null {
   return null;
 }
 
+// ── Helpers NF lookup ─────────────────────────────────────────────────────────
+
+function cleanDoc(v: any): string {
+  return String(v ?? "").replace(/\D/g, "");
+}
+
+/** Chave de cruzamento NF × extrato: cnpj_limpo|centavos_arredondados */
+function nfKey(cnpj: string, valor: number): string {
+  return `${cleanDoc(cnpj)}|${Math.round(Math.abs(valor) * 100)}`;
+}
+
 // ── Função exportável (usada também pelo Pacote Contador) ─────────────────────
 
 export async function buildExtratoBancarioBuffer(
@@ -93,6 +105,7 @@ export async function buildExtratoBancarioBuffer(
 ): Promise<Buffer> {
   const tituloEmpresa = empresaLabel.toUpperCase();
 
+  // ── 1. Contas com lançamentos no mês ──────────────────────────────────────
   const contasQ = await db.$client.query(
     `SELECT DISTINCT bsl.conta_bancaria_id,
             cba.banco,
@@ -109,6 +122,7 @@ export async function buildExtratoBancarioBuffer(
     [companyId, mes, ano]
   );
 
+  // ── 2. Saldo de abertura por conta ────────────────────────────────────────
   let openingMap: Record<number, { saldo: number; data: Date | null }> = {};
   try {
     const obQ = await db.$client.query(
@@ -123,6 +137,51 @@ export async function buildExtratoBancarioBuffer(
     }
   } catch { /* tabela pode não existir */ }
 
+  // ── 3. Pré-carregar TODAS as NFs do mês para cruzamento ──────────────────
+  // Mapas de cruzamento (fallback quando stmt_line_id não está preenchido):
+  //   nfByCnpjValor : cnpj_limpo|centavos → { numero_nf, cnpj }[]
+  //   nfByEntryId   : entry_id            → { numero_nf, cnpj }
+  interface NfInfo { numero_nf: string; cnpj: string }
+  const nfByCnpjValor = new Map<string, NfInfo[]>();
+  const nfByEntryId   = new Map<number, NfInfo>();
+
+  try {
+    const nfQ = await db.$client.query(
+      `SELECT id, numero_nf, entry_id,
+              COALESCE(emitente_cnpj, tomador_cnpj, '') AS cnpj,
+              valor_bruto::float AS valor
+         FROM fiscal_notes
+        WHERE company_id = $1
+          AND status != 'cancelada'
+          AND data_emissao >= $2 AND data_emissao < $3`,
+      [
+        companyId,
+        `${ano}-${String(mes).padStart(2,"0")}-01`,
+        mes === 12 ? `${ano+1}-01-01` : `${ano}-${String(mes+1).padStart(2,"0")}-01`,
+      ]
+    );
+
+    for (const r of nfQ.rows) {
+      const info: NfInfo = {
+        numero_nf: String(r.numero_nf || ""),
+        cnpj: String(r.cnpj || ""),
+      };
+      // por entry_id (link mais confiável)
+      if (r.entry_id) {
+        const eid = Number(r.entry_id);
+        if (!nfByEntryId.has(eid)) nfByEntryId.set(eid, info);
+      }
+      // por CNPJ + valor (fallback)
+      if (info.cnpj && r.valor) {
+        const k = nfKey(info.cnpj, parseFloat(String(r.valor)));
+        if (!nfByCnpjValor.has(k)) nfByCnpjValor.set(k, []);
+        nfByCnpjValor.get(k)!.push(info);
+      }
+    }
+  } catch (e: any) {
+    console.warn("[ExtratoXlsx] Não foi possível carregar NFs:", e?.message?.slice(0,80));
+  }
+
   const wb = new ExcelJS.Workbook();
 
   // Logo (opcional — se não encontrar, planilha sai sem logo)
@@ -135,19 +194,26 @@ export async function buildExtratoBancarioBuffer(
     const contaId   = Number(conta.conta_bancaria_id);
     const banco     = (conta.banco || "Banco").toUpperCase();
     const contaDesc = conta.conta_desc || conta.conta || "";
+    // Label completo: "BANCO SANTANDER – LOCNOW – APARECIDA"
+    const bancoLabel = contaDesc
+      ? `BANCO ${banco} – ${contaDesc.toUpperCase()}`
+      : `BANCO ${banco}`;
 
     const ob = openingMap[contaId] ?? { saldo: 0, data: null };
     const saldoInicial = ob.saldo;
     const dataSaldoAnt = ob.data ?? prevMonthLastDate(mes, ano);
 
+    // ── Lançamentos da conta (inclui links via stmt_line_id E entry_id) ──────
     const linesQ = await db.$client.query(
       `SELECT
+          bsl.id          AS bsl_id,
           bsl.data,
           bsl.descricao,
           bsl.valor::float  AS valor,
           bsl.entry_id,
           fe.fornecedor_nome,
-          fe.descricao      AS entry_desc,
+          fe.fornecedor_cnpj  AS entry_cnpj,
+          fe.descricao        AS entry_desc,
           COALESCE(fn1.numero_nf, '')                         AS numero_nf,
           COALESCE(fn1.emitente_cnpj, fn1.tomador_cnpj, '')  AS fornecedor_cnpj
          FROM bank_statement_lines bsl
@@ -193,12 +259,10 @@ export async function buildExtratoBancarioBuffer(
     titleCell.font  = { bold: true, size: 24, name: "Calibri" };
     titleCell.alignment = { horizontal: "center", vertical: "middle" };
 
-    // ── Linhas 3-4 — vazias (logo ocupa esta área) ───────────────────────────
-
     // ── A5:E6 — Nome do banco (bold 11pt, center, sem fundo) ─────────────────
     ws.mergeCells("A5:E6");
     const bankCell = ws.getCell("A5");
-    bankCell.value = `BANCO ${banco}`;
+    bankCell.value = bancoLabel;
     bankCell.font  = { bold: true, size: 11, name: "Calibri" };
     bankCell.alignment = { horizontal: "center", vertical: "middle" };
 
@@ -210,7 +274,7 @@ export async function buildExtratoBancarioBuffer(
     h5.value  = dataSaldoAnt;
     h5.numFmt = "dd/mm/yyyy";
 
-    // ── G6 / H6 — Saldo Anterior ──────────────────────────────────────────────
+    // ── G6 / H6 — Saldo Anterior ─────────────────────────────────────────────
     ws.getCell("G6").value = "Saldo Anterior";
     ws.getCell("G6").font  = { size: 11, name: "Calibri" };
 
@@ -218,34 +282,68 @@ export async function buildExtratoBancarioBuffer(
     h6.value  = saldoInicial;
     h6.numFmt = BRL;
 
-    // ── Linha 7 — vazia (separação antes do cabeçalho) ───────────────────────
-
-    // ── Linha 8 — Cabeçalhos (roxo #7030A0, bold, center, bordas finas) ──────
+    // ── Linha 8 — Cabeçalhos (roxo, bold, center, bordas) ────────────────────
     ws.getRow(8).height = 24;
     const hdrs = [
       "Data", "Histórico do Banco", "Histórico Real",
-      "Nº Nota Fiscal ", "Nº CNPJ", "Entrada", "Saída", "Saldo",
+      "Nº Nota Fiscal", "Nº CNPJ", "Entrada", "Saída", "Saldo",
     ];
     ["A","B","C","D","E","F","G","H"].forEach((col, i) => {
       const cell = ws.getCell(`${col}8`);
       cell.value = hdrs[i];
-      cell.font  = { bold: true, size: 11, name: "Calibri" };
+      cell.font  = { bold: true, size: 11, name: "Calibri", color: { argb: "FFFFFFFF" } };
       cell.fill  = { type: "pattern", pattern: "solid", fgColor: { argb: PURPLE } };
       cell.alignment = { horizontal: "center", vertical: "middle" };
       cell.border = thinBorder;
     });
 
     // ── Linhas 9+ — Dados ─────────────────────────────────────────────────────
+    // Rastreia NFs já usadas por cruzamento CNPJ+valor para evitar duplicatas
+    const usedNfKeys = new Set<string>();
+
+    let saldoAcum = saldoInicial;
+
     lines.forEach((line: any, idx: number) => {
       const row   = idx + 9;
       const valor = parseFloat(String(line.valor)) || 0;
       const ent   = valor > 0 ? valor : 0;
       const sai   = valor < 0 ? Math.abs(valor) : 0;
+      saldoAcum   = Math.round((saldoAcum + valor) * 100) / 100;
 
       const histReal = line.fornecedor_nome || line.entry_desc || "";
-      const nf       = String(line.numero_nf || "");
-      const cnpj     = line.fornecedor_cnpj ? fmtCnpj(line.fornecedor_cnpj) : "";
 
+      // ── Cruzamento de NF (3 camadas) ────────────────────────────────────────
+      // 1ª: link direto stmt_line_id (já na query)
+      let nfNumero = String(line.numero_nf || "");
+      let nfCnpj   = String(line.fornecedor_cnpj || "");
+
+      // 2ª: por entry_id
+      if (!nfNumero && line.entry_id) {
+        const byEntry = nfByEntryId.get(Number(line.entry_id));
+        if (byEntry) { nfNumero = byEntry.numero_nf; nfCnpj = byEntry.cnpj; }
+      }
+
+      // 3ª: por CNPJ (entry ou bsl) + valor (fallback)
+      if (!nfNumero) {
+        const cnpjRef = cleanDoc(line.entry_cnpj || line.fornecedor_cnpj || "");
+        if (cnpjRef && Math.abs(valor) > 0) {
+          const k = nfKey(cnpjRef, valor);
+          const candidates = nfByCnpjValor.get(k);
+          if (candidates) {
+            // Escolhe a primeira NF ainda não usada
+            const pick = candidates.find(c => !usedNfKeys.has(`${k}|${c.numero_nf}`));
+            if (pick) {
+              nfNumero = pick.numero_nf;
+              nfCnpj   = pick.cnpj;
+              usedNfKeys.add(`${k}|${pick.numero_nf}`);
+            }
+          }
+        }
+      }
+
+      const cnpjFmt = nfCnpj ? fmtCnpj(nfCnpj) : "";
+
+      // ── Células A–G (com bordas finas) ─────────────────────────────────────
       // A — Data
       const aCell = ws.getCell(`A${row}`);
       const rawDate = line.data;
@@ -253,7 +351,7 @@ export async function buildExtratoBancarioBuffer(
         aCell.value  = rawDate;
         aCell.numFmt = "dd/mm/yyyy";
       } else {
-        const dstr   = String(rawDate ?? "").slice(0, 10);
+        const dstr = String(rawDate ?? "").slice(0, 10);
         if (/^\d{4}-\d{2}-\d{2}$/.test(dstr)) {
           const [yr, mo, dy] = dstr.split("-").map(Number);
           aCell.value  = new Date(Date.UTC(yr, mo - 1, dy));
@@ -263,43 +361,53 @@ export async function buildExtratoBancarioBuffer(
         }
       }
       aCell.alignment = { horizontal: "left", vertical: "middle" };
+      aCell.border = thinBorder;
 
       // B–E — Texto
       const textData: Array<[string, string]> = [
         ["B", line.descricao || ""],
         ["C", histReal],
-        ["D", nf],
-        ["E", cnpj],
+        ["D", nfNumero],
+        ["E", cnpjFmt],
       ];
       textData.forEach(([col, val]) => {
         const cell = ws.getCell(`${col}${row}`);
         cell.value = val;
         cell.alignment = { horizontal: "left", vertical: "middle" };
+        cell.border = thinBorder;
       });
 
       // F — Entrada
       const fCell = ws.getCell(`F${row}`);
       fCell.value  = ent;
       fCell.numFmt = BRL;
-      fCell.alignment = { horizontal: "left", vertical: "middle" };
+      fCell.alignment = { horizontal: "right", vertical: "middle" };
+      fCell.border = thinBorder;
 
       // G — Saída
       const gCell = ws.getCell(`G${row}`);
       gCell.value  = sai;
       gCell.numFmt = BRL;
-      gCell.alignment = { horizontal: "left", vertical: "middle" };
+      gCell.alignment = { horizontal: "right", vertical: "middle" };
+      gCell.border = thinBorder;
 
-      // H — Saldo (fórmula acumulada + fundo cinza claro)
-      const hCell   = ws.getCell(`H${row}`);
-      const prevRef = idx === 0 ? "H6" : `H${row - 1}`;
-      hCell.value   = { formula: `F${row}-G${row}+${prevRef}` };
-      hCell.numFmt  = BRL;
-      hCell.fill    = { type: "pattern", pattern: "solid", fgColor: { argb: SALDO_BG } };
-      hCell.alignment = { horizontal: "left", vertical: "middle" };
+      // H — Saldo acumulado + formatação condicional (verde/vermelho)
+      const hCell = ws.getCell(`H${row}`);
+      hCell.value  = saldoAcum;
+      hCell.numFmt = BRL;
+      hCell.border = thinBorder;
+      hCell.alignment = { horizontal: "right", vertical: "middle" };
+
+      if (saldoAcum >= 0) {
+        hCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GREEN_BG } };
+        hCell.font = { color: { argb: "FFFFFFFF" }, name: "Calibri", size: 11 };
+      } else {
+        hCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: RED_BG } };
+        hCell.font = { color: { argb: "FFFFFFFF" }, name: "Calibri", size: 11 };
+      }
     });
 
     if (lines.length === 0) {
-      // Linha em branco para não gerar planilha totalmente vazia
       ws.getCell("A9").value = "Nenhum lançamento no período.";
     }
   }

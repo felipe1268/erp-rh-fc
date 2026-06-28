@@ -1,4 +1,30 @@
 /**
+ * Rev. 3833 — **EXTRATO BANCÁRIO XLSX: FORMATAÇÃO CONDICIONAL SALDO + BORDAS + NF 100% CRUZADO.**
+ *
+ * Melhorias no `buildExtratoBancarioBuffer` (server/routers/downloadContabilidadeXlsx.ts):
+ *
+ * 1. FORMATAÇÃO CONDICIONAL SALDO (coluna H): saldo é calculado em JS (acumulado linha a linha),
+ *    não mais como fórmula Excel. Fundo verde (#00B050) + texto branco se ≥ 0; fundo vermelho
+ *    (#FF0000) + texto branco se < 0. Replicação exata do template da contabilidade.
+ *
+ * 2. BORDAS EM TODAS AS LINHAS DE DADOS: anteriormente só o cabeçalho (row 8) tinha bordas finas.
+ *    Agora todas as células A-H das linhas 9+ recebem `thinBorder` (top/bottom/left/right preto).
+ *
+ * 3. Nº NOTA FISCAL 100% CRUZADO (3 camadas):
+ *    - Camada 1 (direta): `fiscal_notes.stmt_line_id = bsl.id` (já existia, mais confiável).
+ *    - Camada 2 (entry_id): pré-carrega NFs do mês → mapa `entry_id → NfInfo`; aplica quando
+ *      stmt_line_id não foi encontrado mas a entry tem link com a NF.
+ *    - Camada 3 (CNPJ+valor): mapa `cnpj_limpo|centavos → NfInfo[]`; para cada linha sem NF,
+ *      cruza pelo CNPJ do entry/fornecedor + valor absoluto em centavos. Rastreia NFs já usadas
+ *      por `usedNfKeys` para evitar duplicatas. Captura entradas e saídas que não têm link
+ *      direto (ex.: NFS-e sem stmt_line_id preenchido).
+ *
+ * 4. LABEL DO BANCO: corrigido de "BANCO SANTANDER" para "BANCO SANTANDER – LOCNOW – APARECIDA"
+ *    (concatena `banco` + `apelido` da conta, igualar ao template da contabilidade).
+ *
+ * ZERO DELETE · ZERO SCHEMA.
+ */
+/**
  * Rev. 3832 — **CONTABILIDADE · BUGFIX: BAIXAR PACOTE ZIP FALHAVA COM JSON DE ERRO.**
  *
  * SINTOMA: botão "Baixar Pacote ZIP" baixava `pacote-contador.json` (40 bytes) com
