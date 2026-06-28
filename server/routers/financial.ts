@@ -18,6 +18,7 @@ import { storagePut, dbRetrieve } from "../storage";
 import { invokeGeminiVision, invokeLLM } from "../_core/llm";
 import { assertAiModuleEnabled } from "../_core/aiConfig";
 import { seedPlanoDeConta, ensureTaxConfig } from "../services/financialSeedAccounts";
+import { autoVincularNfsPorLinhas } from "../services/autoVincularNfService";
 import { runAllAutoImports } from "../services/financialAutoImport";
 // Rev. 3147 — TRAVA "Financeiro só real": fonte única das origens de projeção +
 // flag global. Quando FINANCEIRO_SOMENTE_REAL, os endpoints de leitura escondem
@@ -7007,6 +7008,7 @@ export const financialRouter = router({
          AND COALESCE(sib.conciliado,0)=0`,
       [ctx.user?.id ?? null, ctx.user?.name ?? null, input.entryId, input.companyId]
     );
+    autoVincularNfsPorLinhas(input.companyId, [input.statementLineId]).catch(() => {});
     return { ok: true };
   }),
 
@@ -7194,6 +7196,7 @@ export const financialRouter = router({
       }
     });
     await createAuditLog({ action: "financial_conciliacao_grupo", userId: ctx.user?.id, companyId: input.companyId, details: `Linha ${input.statementLineId} conciliada com ${conciliados} lançamento(s) em grupo` });
+    autoVincularNfsPorLinhas(input.companyId, [input.statementLineId]).catch(() => {});
     return { ok: true, conciliados, total: ids.length };
   }),
 
@@ -7731,6 +7734,9 @@ export const financialRouter = router({
     const row = r.rows?.[0];
     const conciliados = Number(row?.conciliados ?? 0);
     const conciliadosLineIds = (row?.conciliadosLineIds ?? []).map(Number);
+    if (conciliadosLineIds.length > 0) {
+      autoVincularNfsPorLinhas(input.companyId, conciliadosLineIds).catch(() => {});
+    }
     return { ok: true, conciliados, total: input.pares.length, conciliadosLineIds };
   }),
 

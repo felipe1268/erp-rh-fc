@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3844** — **PANORAMA FISCAL · AUTO-VÍNCULO NF-e × EXTRATO BANCÁRIO APÓS CONCILIAÇÃO.** Novo serviço `autoVincularNfService.ts`: crédito → NFS-e emitida (valor ±2%, data ±60d, prefere CNPJ da descrição == tomador_cnpj); débito → NF-e recebida SEFAZ (exige CNPJ desc == emitente_cnpj + valor ±2%). Injetado em 3 pontos de `financial.ts` (`conciliarLancamento`, `conciliarGrupoLancamentos`, `conciliarSugestoes`) como fire-and-forget. Sem botão, sem interação do usuário. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3843** — **NF-E RECEBIDAS · BUGFIX: BOTÃO "MUDAR STATUS" NÃO ABRIA DIALOG.** Causa-raiz: `onClick` chamava `setBulkStatusOpen(true)` (dialog das Emitidas) em vez de `setBulkRecStatusOpen(true)` (dialog correto das Recebidas). Dialog já existia e funcionava — nunca era aberto. Fix de 1 linha em `FinanceiroNotasFiscais.tsx`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3842** — **EXTRATO BANCÁRIO XLSX · LOGO TAMANHO CORRETO + BORDAS COMPLETAS NO CABEÇALHO.** 4 correções: (1) logo usava `br` (esticava para preencher B2:C7) → `ext:{width:185,height:78}` tamanho fixo sem distorção; (2) borda inferior de D2:I5 (row 5, D-I) ausente → adicionado `bottom:medium` em D5/E5/F5/G5/H5/I5; (3) borda direita de D6:G7 ausente → G6+G7 recebem `right:medium`; (4) borda direita de H7 ("Saldo Anterior") ausente → adicionado `right:medium`. `server/routers/downloadContabilidadeXlsx.ts`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
@@ -73,6 +75,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3830** — **CONTABILIDADE · SISTEMA DE ALERTAS DE PRAZO + ENVIO POR E-MAIL.** Tabela `contabilidade_alertas_config` (SyncSchema+ Rev.3830): dia_fiscal/dia_contabil/emails_json/ativo. 4 endpoints novos em `contabilidade.ts`: `getAlertaStatus` (verifica pendência do mês anterior vs janela de prazo), `getConfig`/`saveConfig` (upsert com 3 e-mails Pronus pré-populados), `enviarPorEmail` (gera XLSX + envia via SMTP com anexo). Front: banner âmbar/vermelho entre header e seletor; botão "Configurações" no header (modal com prazos + lista de destinatários); botão "Enviar por E-mail" em cada PainelMes. Badge piscante no menu lateral (DashboardLayout) quando `temAlerta`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 ### 5 one-liners
+
+- **Rev. 3843** — **NF-E RECEBIDAS · BUGFIX: BOTÃO "MUDAR STATUS" NÃO ABRIA DIALOG.** `onClick` chamava estado das Emitidas; corrigido para `setBulkRecStatusOpen`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3841** — **CONFIG. SMTP VIA UI · ALTERAR E-MAIL E SENHA SEM EDITAR VARIÁVEL DE AMBIENTE.** Tab em Configurações (admin_master), smtp_config via SyncSchema+, smtpService lê DB primeiro. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 

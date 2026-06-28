@@ -1,4 +1,30 @@
 /**
+ * Rev. 3844 — **PANORAMA FISCAL · AUTO-VÍNCULO NF-e × EXTRATO BANCÁRIO APÓS CONCILIAÇÃO.**
+ *
+ * Novo serviço `server/services/autoVincularNfService.ts` que, ao finalizar qualquer
+ * conciliação bancária, tenta vincular automaticamente a NF-e correspondente à linha
+ * recém-conciliada, sem botão e sem interação do usuário.
+ *
+ * **Critérios de casamento:**
+ * - Crédito bancário → NFS-e emitida: valor ±2% + data ±60 dias.
+ *   Prefere candidata com CNPJ extraído da descrição == tomador_cnpj.
+ *   Fallback: único candidato com valor ±0,5% (sem CNPJ necessário).
+ * - Débito bancário → NF-e recebida (SEFAZ): exige CNPJ na descrição == emitente_cnpj
+ *   + valor ±2% + data ±60 dias (sem CNPJ não vincula — risco de falso-positivo alto).
+ *
+ * **Pontos de injeção em `financial.ts`** (fire-and-forget com `.catch(() => {})`):
+ * 1. `conciliarLancamento` (linha individual) — após confirmar entry + extrato.
+ * 2. `conciliarGrupoLancamentos` — após o commit da transação de grupo.
+ * 3. `conciliarSugestoes` (bulk) — com o array de `conciliadosLineIds`.
+ *
+ * Se não houver candidata ou o CNPJ não bater, nenhum vínculo é criado (falha silenciosa).
+ * O status da NF atualizada passa para `'conciliada'`.
+ *
+ * **Arquivos:** `server/services/autoVincularNfService.ts` (novo),
+ * `server/routers/financial.ts` (3 injeções). ZERO DELETE.
+ */
+
+/**
  * Rev. 3843 — **NF-E RECEBIDAS · BUGFIX: BOTÃO "MUDAR STATUS" NÃO ABRIA DIALOG.**
  *
  * Causa-raiz: o botão "Mudar Status" da barra de seleção múltipla das NF-e Recebidas
