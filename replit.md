@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3812** — **FINANCEIRO · DRE · RECLASSIFICAÇÃO CAPEX: TERRENO TIZIANA + VERSÁTIL. (1) CONTA 420 "Compra de Terreno": `classificacao_dre=null→'investimento'` — herdava classificação da conta-pai Despesas Variáveis e entrava no P&L; agora some do P&L e aparece na seção MEMO de CAPEX. (2) 12 ENTRIES VERSÁTIL MIGRADOS PARA CONTA 420: 10 boletos "VERSATIL/VERSATIL ENGENHARIA" estavam em PRÓ-LABORE (conta 29) — reclassificados para Compra de Terreno; 1 entry "VERSATIL TERRENO F" saiu de Serviços de Cartório; 1 "VERSATIL ENGENHARIA" sem conta. Resultado: R$209.801,63 (7×R$28.000 Tiziana + 12×R$1.108–1.836 Versátil) saem das Despesas Variáveis. PRÓ-LABORE de sócios (Felipe/Camila) NÃO tocado. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3811** — **FINANCEIRO · DRE · INVESTIMENTOS/CAPEX + EXEMPLOS EDUCATIVOS POR LINHA: (1) SEÇÃO MEMO "Investimentos / CAPEX" adicionada abaixo do = LUCRO LÍQUIDO — bloco âmbar cita CPC 27 (Ativo Imobilizado) e explica por que compra de terreno/veículos não entra no P&L; `calcularDRE` retorna `investimentoCapex` (sum `class_dre='investimento'`); `dreLinhaPredicate` exclui `'investimento'` de despesasFixas + despesasVariaveis; ZERO SCHEMA/ALTER/DROP/DELETE. (2) EXEMPLOS EDUCATIVOS "✓ Entra / ✗ Não entra" em todas as linhas detalhadas do DRE: interface DRERow estendida com `exemplos`; popover do ℹ️ redesenhado com seções verde/vermelha; bullets reais para Receita Bruta, CDO, Despesas Fixas/Variáveis, Receitas/Despesas Financeiras, Impostos.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3810** — **FINANCEIRO · DRE · ROTEAMENTO AUTOMÁTICO CDO vs. FOLHA — `importFolhaRHToFinancial`: REGRA: direto→conta 22 (CDO, variavel), indireta_obra→conta 21 (CDO, variavel), escritorio/NULL→conta 506 (fixo). PATH 1: folha_itens + JOIN job_functions + LATERAL manual_obra_assignments/time_records → agrupa por categoria_mo, até 3 entries/batch; obra primária = mais frequente no grupo; dedup por origemModulo (folha_rh_direto/indireta/adm)+lancId; fallback sem itens = legado conta 506. PATH 2: payroll table com JOIN employees+job_functions → mesma lógica por (tipoFolha, categoria_mo). CONSTANTE FOLHA_CATEGORIA_CONFIG + helper _folhaCatConfig. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
 ### 5 one-liners
+
+- **Rev. 3810** — **FINANCEIRO · DRE · ROTEAMENTO AUTOMÁTICO CDO vs. FOLHA — `importFolhaRHToFinancial`: REGRA: direto→conta 22 (CDO, variavel), indireta_obra→conta 21 (CDO, variavel), escritorio/NULL→conta 506 (fixo). PATH 1: folha_itens + JOIN job_functions + LATERAL; PATH 2: payroll table. CONSTANTE FOLHA_CATEGORIA_CONFIG + helper _folhaCatConfig. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3809** — **FINANCEIRO · DRE · ROTEAMENTO CDO vs. FOLHA — PILOTO JAN/2026: 33 PIX MIGRADOS DE FOLHA (506) PARA CDO (21+22, R$54.651); OBRA_ID EM 14 ENTRIES; 2 ENTRIES SEM MATCH (R$2.503) PERMANECEM EM 506. ZERO SCHEMA/ALTER/DROP.** Detalhe: `shared/changelog.ts`.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3806** — **FINANCEIRO · LIMPEZA GLOBAL DE ZEROS ABSOLUTOS: 8.759 entries varridos; 24 ABSOLUTAMENTE VAZIOS DELETADOS; 8.735 ORÇAMENTOS LEGÍTIMOS PRESERVADOS. ZERO SCHEMA/ALTER/DROP.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3805** — **FINANCEIRO · DESPESAS FINANCEIRAS · REESTRUTURAÇÃO: JUROS RECEBIDOS→BANCÁRIAS; TARIFAS (82)→DESPESAS BANCÁRIAS (279); MÚTUOS (493)→outro; INVESTIMENTOS (421)→outro. 42 ZEROS DELETADOS.** Detalhe: `shared/changelog.ts`.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3802 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3805 e anteriores.
 
 ## User preferences
 

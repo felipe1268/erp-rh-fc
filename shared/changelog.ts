@@ -1,6 +1,40 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3812 — **FINANCEIRO · DRE · RECLASSIFICAÇÃO CAPEX: TERRENO TIZIANA + VERSÁTIL.**
+ *
+ * CONTEXTO: Parcelas de aquisição de imóveis e terrenos estavam entrando no DRE como
+ * Despesas Variáveis (bucket P&L), distorcendo o resultado operacional. Com o backend
+ * de investimento/CAPEX criado na Rev. 3811 (`class_dre='investimento'`), bastava
+ * classificar as contas corretas para que saíssem do P&L e aparecessem na seção MEMO.
+ *
+ * MUDANÇA 1 — CONTA 420 "Compra de Terreno":
+ *   UPDATE financial_accounts SET classificacao_dre='investimento' WHERE id=420.
+ *   Conta antes herdava class=null do pai (conta 72 "DESPESAS VARIÁVEIS"),
+ *   caindo automaticamente no bucket despesasVariaveis do DRE.
+ *   Após: excluída do P&L, soma em investimentoCapex da seção MEMO.
+ *   ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
+ * MUDANÇA 2 — 12 ENTRIES "VERSÁTIL" RECLASSIFICADOS PARA CONTA 420:
+ *   • 10 entries do Excel ("VERSATIL" / "VERSATIL - TITULO PROTESTADO") estavam em
+ *     PRÓ-LABORE (conta 29) — conta claramente errada. São boletos mensais da
+ *     Versátil Engenharia LTDA (CNPJ 08.231.662/0001-84), parcelas de terreno.
+ *   • 1 entry "VERSATIL TERRENO F DEB PIX CHAVE" estava em Serviços de Cartório (290).
+ *   • 1 entry "VERSATIL ENGENHARIA..." sem conta (conta_id=null).
+ *   UPDATE financial_entries SET conta_id=420 WHERE id IN (866093,866094,867769,
+ *   867787,868354,868383,868892,868902,869383,869384,885417,885829) AND company_id=60002.
+ *   ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
+ * IMPACTO NO DRE:
+ *   Conta 420 agora tem 19 entries, R$209.801,63 totais:
+ *   • 7 × R$28.000 = R$196.000 → Terreno Tiziana (cheques mensais, set/2025–)
+ *   • 12 × R$1.108–1.836 = R$13.801 → Versátil (boletos de terreno, jan/2026–)
+ *   Todos saem das Despesas Variáveis e entram no bloco CAPEX/MEMO do DRE.
+ *   PRÓ-LABORE de sócios (Felipe Alves/Camila) NÃO foi tocado — permanecem na
+ *   conta de pró-labore, fora do escopo desta revisão.
+ *
+ * ARQUIVOS TOCADOS: shared/version.ts (bump 3811→3812). Toda correção é SQL puro no Neon.
+ *
  * Rev. 3811 — **FINANCEIRO · DRE · INVESTIMENTOS/CAPEX + EXEMPLOS EDUCATIVOS POR LINHA.**
  *
  * FEATURE 1 — SEÇÃO INVESTIMENTOS / CAPEX (MEMO NÃO-P&L):
