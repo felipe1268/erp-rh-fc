@@ -1,6 +1,14 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3816 — **FINANCEIRO · DRE · LEGENDA "DRE GERENCIAL DE CAIXA" NO RODAPÉ.**
+ * Card fixo no final da página explica o modelo adotado: DRE Gerencial de Caixa
+ * (só realizados, ideal para decisão operacional) vs DRE Societário de Competência
+ * (exigido por lei, reconhece receita quando prestado o serviço). Inclui comparativo
+ * lado-a-lado, explicação dos status excluídos (a_pagar/a_receber) e nota sobre o
+ * Fluxo de Caixa como destino das projeções. ARQUIVO: FinanceiroDRE.tsx.
+ * ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3815 — **FINANCEIRO · DRE · REVERTE 3814 + EXCLUI a_pagar/a_receber DO DRE.**
  * Rev. 3814 mostrava valor_previsto no DRE — conceito errado: DRE é Regime de Competência
  * sobre FATOS REALIZADOS, não projeções. Revertido para COALESCE(valor_realizado, 0).

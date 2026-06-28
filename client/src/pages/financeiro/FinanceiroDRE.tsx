@@ -817,12 +817,57 @@ export default function FinanceiroDRE() {
           </CardContent>
         </Card>
 
-        {dre && (
-          <p className="text-xs text-gray-400 text-center">
-            Dados calculados automaticamente com base nos lançamentos financeiros do período.
-            Valores entre parênteses representam saídas/deduções.
+        {/* Legenda do modelo contábil — fixo, sempre visível */}
+        <div className="rounded-2xl border border-gray-100 bg-gray-50/70 px-5 py-4 space-y-3">
+          {/* Título */}
+          <div className="flex items-center gap-2">
+            <Info className="w-4 h-4 text-gray-400 shrink-0" />
+            <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">
+              Sobre este relatório — DRE Gerencial de Caixa
+            </span>
+          </div>
+
+          {/* Explicação principal */}
+          <p className="text-xs text-gray-500 leading-relaxed">
+            Este DRE exibe <strong className="text-gray-700">apenas valores efetivamente realizados</strong> —
+            pagamentos confirmados (baixados) e recebimentos concluídos.
+            Lançamentos com status <em>a pagar</em> ou <em>a receber</em> não aparecem aqui,
+            pois ainda não representam fatos consumados.
           </p>
-        )}
+
+          {/* Comparativo em dois blocos */}
+          <div className="grid sm:grid-cols-2 gap-3 pt-1">
+            <div className="rounded-xl bg-white border border-gray-100 px-4 py-3 space-y-1.5">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-orange-600 flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5" /> DRE Gerencial de Caixa (este relatório)
+              </p>
+              <ul className="text-[11px] text-gray-600 space-y-1 leading-relaxed">
+                <li>✔ Mostra o que <strong>realmente entrou e saiu</strong> do caixa</li>
+                <li>✔ Ideal para <strong>decisão operacional</strong> do gestor</li>
+                <li>✔ Sem distorções de valores previstos ou inadimplências</li>
+                <li>✔ Pergunta que responde: <em>"Quanto geramos de resultado real?"</em></li>
+              </ul>
+            </div>
+            <div className="rounded-xl bg-white border border-gray-100 px-4 py-3 space-y-1.5">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600 flex items-center gap-1.5">
+                <Receipt className="w-3.5 h-3.5" /> DRE Societário de Competência (contábil)
+              </p>
+              <ul className="text-[11px] text-gray-600 space-y-1 leading-relaxed">
+                <li>✔ Exigido por lei (Lei 6.404/76 · CPC 26 · IFRS IAS 1)</li>
+                <li>✔ Reconhece receita quando o serviço é <strong>prestado</strong>, não pago</li>
+                <li>✔ Inclui contas a receber como receita do período</li>
+                <li>✔ Pergunta que responde: <em>"Quanto competiu a este mês?"</em></li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Nota de rodapé */}
+          <p className="text-[10px] text-gray-400 leading-relaxed pt-0.5">
+            Projeções e lançamentos pendentes ficam visíveis no <strong>Fluxo de Caixa</strong>.
+            Valores entre parênteses representam saídas ou deduções.
+            Dados calculados automaticamente com base nos lançamentos financeiros do período.
+          </p>
+        </div>
       </div>
 
       <Dialog open={!!drill} onOpenChange={(o) => { if (!o) setDrill(null); }}>
