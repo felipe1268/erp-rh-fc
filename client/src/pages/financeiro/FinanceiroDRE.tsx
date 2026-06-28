@@ -14,7 +14,7 @@ import {
   CalendarDays, Sparkles, Info, BookOpen, ExternalLink, AlertTriangle,
   Lightbulb, Activity, ArrowUpRight, ArrowDownRight, Minus, ShieldCheck,
   ChevronRight as ChevronRightIcon, Layers, ListTree, Calculator, Percent,
-  ArrowLeft, Receipt,
+  ArrowLeft, Receipt, CheckCircle2, XCircle, Landmark,
 } from "lucide-react";
 
 type DRELinhaKey =
@@ -63,6 +63,7 @@ interface DRERow {
   percentOf?: number;
   highlight?: "green" | "red" | "blue";
   info?: string;
+  exemplos?: { entra: string[]; naoEntra: string[] };
   drill?: DrillState;
 }
 
@@ -241,62 +242,111 @@ export default function FinanceiroDRE() {
   }, [analiseMut.isError]);
 
   const rows: DRERow[] = dre ? [
-    { label: "1. RECEITA BRUTA", value: dre.receitaBruta, highlight: "green", info: "Total faturado no período (vendas e serviços), antes de qualquer dedução.",
+    { label: "1. RECEITA BRUTA", value: dre.receitaBruta, highlight: "green",
+      info: "Total faturado no período (medições, contratos e serviços), antes de qualquer dedução.",
+      exemplos: {
+        entra: ["Medição de obra aprovada e faturada", "Contrato de engenharia executado", "Adiantamento de contrato recebido"],
+        naoEntra: ["Compra de terreno → é investimento, vai ao Balanço Patrimonial", "Transferência entre contas da empresa", "Devolução de fornecedor → classifique como 'Outros Ganhos'"],
+      },
       drill: { kind: "leaf", linha: "receitaBruta", label: "Receita Bruta", negativo: false } },
-    { label: "  (-) Deduções da Receita", value: -dre.deducoes, indent: 1, isNegative: true, info: "Impostos sobre vendas, devoluções e abatimentos que reduzem a receita bruta.",
+    { label: "  (-) Deduções da Receita", value: -dre.deducoes, indent: 1, isNegative: true,
+      info: "Impostos sobre vendas, devoluções e abatimentos que reduzem a receita bruta.",
+      exemplos: {
+        entra: ["ISS incidente sobre o faturamento", "PIS/COFINS em regime cumulativo", "Estorno de medição faturada indevidamente"],
+        naoEntra: ["IRPJ e CSLL → vão em 'Impostos sobre o Resultado'", "Multas contratuais → são despesas operacionais"],
+      },
       drill: { kind: "info", label: "Deduções da Receita", texto: "Não há deduções lançadas neste período. Impostos sobre vendas, devoluções e abatimentos entrariam aqui, reduzindo a receita bruta." } },
-    { label: "= RECEITA LÍQUIDA", value: dre.receitaLiquida, isTotal: true, highlight: "blue", info: "Receita bruta menos as deduções. É a base de cálculo de todas as margens.",
+    { label: "= RECEITA LÍQUIDA", value: dre.receitaLiquida, isTotal: true, highlight: "blue",
+      info: "Receita bruta menos as deduções. É a base de cálculo de todas as margens.",
       drill: { kind: "composicao", label: "Receita Líquida", value: dre.receitaLiquida, itens: [
         { label: "Receita Bruta", contrib: dre.receitaBruta },
         { label: "(-) Deduções da Receita", contrib: -dre.deducoes },
       ] } },
     { label: "", value: 0, isSeparator: true },
-    { label: "  (-) Custos Diretos das Obras", value: -dre.custosObra, indent: 1, isNegative: true, info: "Gastos diretamente ligados à execução das obras: material, mão de obra e subcontratos.",
+    { label: "  (-) Custos Diretos das Obras", value: -dre.custosObra, indent: 1, isNegative: true,
+      info: "Gastos diretamente ligados à execução das obras: material, mão de obra direta e subcontratos.",
+      exemplos: {
+        entra: ["Material comprado para a obra (via OC)", "Mão de obra direta (CDO — funcionários direto/indireta_obra)", "Subempreitadas e serviços de terceiros em obra", "Aluguel de equipamentos utilizados em canteiro"],
+        naoEntra: ["Salário do escritório → vai em Despesas Fixas", "Compra de veículo ou terreno → é investimento (CAPEX)", "IRPJ/CSLL → vão em Impostos sobre o Resultado"],
+      },
       drill: { kind: "leaf", linha: "custosObra", label: "Custos Diretos das Obras", negativo: true } },
-    { label: "= LUCRO BRUTO", value: dre.lucroBruto, isTotal: true, percentOf: dre.receitaLiquida, highlight: dre.lucroBruto >= 0 ? "green" : "red", info: "Receita líquida menos os custos diretos das obras.",
+    { label: "= LUCRO BRUTO", value: dre.lucroBruto, isTotal: true, percentOf: dre.receitaLiquida, highlight: dre.lucroBruto >= 0 ? "green" : "red",
+      info: "Receita líquida menos os custos diretos das obras. Quanto sobra antes das despesas administrativas.",
       drill: { kind: "composicao", label: "Lucro Bruto", value: dre.lucroBruto, itens: [
         { label: "Receita Líquida", contrib: dre.receitaLiquida },
         { label: "(-) Custos Diretos das Obras", contrib: -dre.custosObra },
       ] } },
-    { label: "    Margem Bruta", value: dre.margemBruta, indent: 2, info: "Lucro bruto ÷ receita líquida. Mostra quanto sobra após os custos das obras.",
+    { label: "    Margem Bruta", value: dre.margemBruta, indent: 2,
+      info: "Lucro bruto ÷ receita líquida. Mostra quanto sobra de cada R$ faturado após os custos das obras. No setor de construção civil, margens saudáveis ficam entre 20% e 35%.",
       drill: { kind: "ratio", label: "Margem Bruta", num: dre.lucroBruto, numLabel: "Lucro Bruto", den: dre.receitaLiquida, denLabel: "Receita Líquida", valuePct: dre.margemBruta } },
     { label: "", value: 0, isSeparator: true },
-    { label: "  (-) Despesas Fixas", value: -dre.despesasFixas, indent: 1, isNegative: true, info: "Gastos administrativos recorrentes (aluguel, salários do escritório, etc.).",
+    { label: "  (-) Despesas Fixas", value: -dre.despesasFixas, indent: 1, isNegative: true,
+      info: "Gastos administrativos recorrentes que existem independente do volume de obras (folha do escritório, aluguel, etc.).",
+      exemplos: {
+        entra: ["Aluguel do escritório/sede", "Folha de pagamento administrativo (escritório_central)", "Plano de saúde dos funcionários", "Honorários contábeis, jurídicos e de consultoria"],
+        naoEntra: ["Material para obra → vai em Custos Diretos", "Juros de empréstimo → vai em Despesas Financeiras", "Compra de computador ou mobiliário → é investimento (CAPEX)"],
+      },
       drill: { kind: "leaf", linha: "despesasFixas", label: "Despesas Fixas", negativo: true } },
-    { label: "  (-) Despesas Variáveis", value: -dre.despesasVariaveis, indent: 1, isNegative: true, info: "Gastos que variam com o nível de atividade (comissões, fretes, etc.).",
+    { label: "  (-) Despesas Variáveis", value: -dre.despesasVariaveis, indent: 1, isNegative: true,
+      info: "Gastos operacionais que variam com o nível de atividade da empresa.",
+      exemplos: {
+        entra: ["Combustível e pedágios", "Manutenção de veículos da frota", "Alimentação em obra (refeitório/marmita)", "Marketing, publicidade e eventos"],
+        naoEntra: ["Salário fixo → vai em Despesas Fixas", "Material para obra → vai em Custos Diretos", "Compra de terreno, veículo ou equipamento → é CAPEX"],
+      },
       drill: { kind: "leaf", linha: "despesasVariaveis", label: "Despesas Variáveis", negativo: true } },
-    { label: "= EBITDA", value: dre.ebitda, isTotal: true, percentOf: dre.receitaLiquida, highlight: dre.ebitda >= 0 ? "green" : "red", info: "Resultado operacional antes de juros, impostos, depreciação e amortização.",
+    { label: "= EBITDA", value: dre.ebitda, isTotal: true, percentOf: dre.receitaLiquida, highlight: dre.ebitda >= 0 ? "green" : "red",
+      info: "Resultado operacional antes de juros, impostos, depreciação e amortização. Mede a geração de caixa pura do negócio.",
       drill: { kind: "composicao", label: "EBITDA", value: dre.ebitda, itens: [
         { label: "Lucro Bruto", contrib: dre.lucroBruto },
         { label: "(-) Despesas Fixas", contrib: -dre.despesasFixas },
         { label: "(-) Despesas Variáveis", contrib: -dre.despesasVariaveis },
       ] } },
-    { label: "    Margem EBITDA", value: dre.margemEbitda, indent: 2, info: "EBITDA ÷ receita líquida. Mede a eficiência operacional do negócio.",
+    { label: "    Margem EBITDA", value: dre.margemEbitda, indent: 2,
+      info: "EBITDA ÷ receita líquida. Mede a eficiência operacional. Construção civil saudável: 8% a 15%.",
       drill: { kind: "ratio", label: "Margem EBITDA", num: dre.ebitda, numLabel: "EBITDA", den: dre.receitaLiquida, denLabel: "Receita Líquida", valuePct: dre.margemEbitda } },
     { label: "", value: 0, isSeparator: true },
-    { label: "  (+) Receitas Financeiras", value: dre.receitasFinanceiras, indent: 1, info: "Juros e rendimentos de aplicações financeiras.",
+    { label: "  (+) Receitas Financeiras", value: dre.receitasFinanceiras, indent: 1,
+      info: "Juros e rendimentos obtidos de aplicações financeiras ou atraso de clientes.",
+      exemplos: {
+        entra: ["Rendimento de CDB, LCI ou aplicação financeira", "Juros cobrados de cliente por atraso", "Desconto obtido na antecipação de pagamento"],
+        naoEntra: ["Receita de medição de obra → vai em Receita Bruta", "Venda de ativo (veículo, equipamento) → 'Outros Ganhos'"],
+      },
       drill: { kind: "leaf", linha: "receitasFinanceiras", label: "Receitas Financeiras", negativo: false } },
-    { label: "  (-) Despesas Financeiras", value: -dre.despesasFinanceiras, indent: 1, isNegative: true, info: "Juros, tarifas bancárias e IOF pagos no período.",
+    { label: "  (-) Despesas Financeiras", value: -dre.despesasFinanceiras, indent: 1, isNegative: true,
+      info: "Encargos do uso de capital de terceiros: juros, tarifas bancárias e IOF.",
+      exemplos: {
+        entra: ["Juros de empréstimo ou financiamento bancário", "Tarifas de manutenção de conta e TED/DOC", "IOF sobre operações de crédito", "Multas e mora bancária"],
+        naoEntra: ["Despesas operacionais (aluguel, salários) → vão em Fixas/Variáveis", "IRPJ e CSLL → vão em Impostos sobre o Resultado"],
+      },
       drill: { kind: "leaf", linha: "despesasFinanceiras", label: "Despesas Financeiras", negativo: true } },
-    { label: "= RESULTADO FINANCEIRO", value: dre.resultadoFinanceiro, isTotal: true, highlight: dre.resultadoFinanceiro >= 0 ? "green" : "red", info: "Receitas financeiras menos despesas financeiras.",
+    { label: "= RESULTADO FINANCEIRO", value: dre.resultadoFinanceiro, isTotal: true, highlight: dre.resultadoFinanceiro >= 0 ? "green" : "red",
+      info: "Receitas financeiras menos despesas financeiras. Negativo significa que a empresa paga mais em juros do que rende.",
       drill: { kind: "composicao", label: "Resultado Financeiro", value: dre.resultadoFinanceiro, itens: [
         { label: "Receitas Financeiras", contrib: dre.receitasFinanceiras },
         { label: "(-) Despesas Financeiras", contrib: -dre.despesasFinanceiras },
       ] } },
     { label: "", value: 0, isSeparator: true },
-    { label: "= LAIR (Antes dos Impostos)", value: dre.lair, isTotal: true, highlight: dre.lair >= 0 ? "green" : "red", info: "Lucro Antes do Imposto de Renda = EBITDA + resultado financeiro.",
+    { label: "= LAIR (Antes dos Impostos)", value: dre.lair, isTotal: true, highlight: dre.lair >= 0 ? "green" : "red",
+      info: "Lucro Antes do Imposto de Renda = EBITDA + resultado financeiro.",
       drill: { kind: "composicao", label: "LAIR (Antes dos Impostos)", value: dre.lair, itens: [
         { label: "EBITDA", contrib: dre.ebitda },
         { label: "Resultado Financeiro", contrib: dre.resultadoFinanceiro },
       ] } },
-    { label: "  (-) Impostos sobre o Resultado", value: -dre.impostos, indent: 1, isNegative: true, info: "IRPJ, CSLL e demais tributos incidentes sobre o lucro.",
+    { label: "  (-) Impostos sobre o Resultado", value: -dre.impostos, indent: 1, isNegative: true,
+      info: "IRPJ, CSLL e demais tributos incidentes sobre o lucro.",
+      exemplos: {
+        entra: ["DAS (Simples Nacional)", "DARF de IRPJ e CSLL (Lucro Real ou Presumido)", "DARF de PIS e COFINS (regime não-cumulativo)"],
+        naoEntra: ["ISS sobre faturamento → vai em Deduções da Receita", "INSS patronal e FGTS → vão em Custos Diretos ou Despesas Fixas", "Parcelamento de débito anterior → é passivo, não despesa do período"],
+      },
       drill: { kind: "leaf", linha: "impostos", label: "Impostos sobre o Resultado", negativo: true } },
-    { label: "= LUCRO LÍQUIDO", value: dre.lucroLiquido, isTotal: true, highlight: dre.lucroLiquido >= 0 ? "green" : "red", info: "Resultado final do período, após todos os custos, despesas e impostos.",
+    { label: "= LUCRO LÍQUIDO", value: dre.lucroLiquido, isTotal: true, highlight: dre.lucroLiquido >= 0 ? "green" : "red",
+      info: "Resultado final do período, após todos os custos, despesas e impostos. É o que efetivamente sobrou (ou faltou) para a empresa.",
       drill: { kind: "composicao", label: "Lucro Líquido", value: dre.lucroLiquido, itens: [
         { label: "LAIR (Antes dos Impostos)", contrib: dre.lair },
         { label: "(-) Impostos sobre o Resultado", contrib: -dre.impostos },
       ] } },
-    { label: "    Margem Líquida", value: dre.margemLiquida, indent: 2, info: "Lucro líquido ÷ receita líquida. É a rentabilidade final do negócio.",
+    { label: "    Margem Líquida", value: dre.margemLiquida, indent: 2,
+      info: "Lucro líquido ÷ receita líquida. Rentabilidade final. Construção civil saudável: 5% a 12%.",
       drill: { kind: "ratio", label: "Margem Líquida", num: dre.lucroLiquido, numLabel: "Lucro Líquido", den: dre.receitaLiquida, denLabel: "Receita Líquida", valuePct: dre.margemLiquida } },
   ] : [];
 
@@ -440,7 +490,7 @@ export default function FinanceiroDRE() {
         <Card className="border-0 shadow-sm">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
             <h2 className="text-base font-bold text-gray-900">DRE — {tituloPeriodo}</h2>
-            <Badge variant="outline" className="text-[11px] text-gray-500 font-normal">passe o mouse no <Info className="w-3 h-3 mx-1" /> para a legenda</Badge>
+            <Badge variant="outline" className="text-[11px] text-gray-500 font-normal">clique no <Info className="w-3 h-3 mx-1 inline" /> para legenda e exemplos</Badge>
           </div>
           <CardContent className="p-0">
             {isLoading ? (
@@ -484,8 +534,38 @@ export default function FinanceiroDRE() {
                                 <Info className="w-3.5 h-3.5" />
                               </button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-64 text-xs text-gray-600 leading-relaxed" align="start">
-                              {row.info}
+                            <PopoverContent className="w-72 p-0 overflow-hidden" align="start">
+                              <div className="px-3 py-2.5 border-b border-gray-100">
+                                <p className="text-xs text-gray-600 leading-relaxed">{row.info}</p>
+                              </div>
+                              {row.exemplos && (
+                                <div className="p-3 space-y-3">
+                                  <div>
+                                    <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wide mb-1.5 flex items-center gap-1">
+                                      <CheckCircle2 className="w-3 h-3" /> Entra aqui
+                                    </p>
+                                    <ul className="space-y-1">
+                                      {row.exemplos.entra.map((ex, i) => (
+                                        <li key={i} className="text-[11px] text-gray-600 flex gap-1.5">
+                                          <span className="text-emerald-500 shrink-0 mt-0.5">•</span>{ex}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] font-bold text-red-600 uppercase tracking-wide mb-1.5 flex items-center gap-1">
+                                      <XCircle className="w-3 h-3" /> Não entra
+                                    </p>
+                                    <ul className="space-y-1">
+                                      {row.exemplos.naoEntra.map((ex, i) => (
+                                        <li key={i} className="text-[11px] text-gray-500 flex gap-1.5">
+                                          <span className="text-red-400 shrink-0 mt-0.5">•</span>{ex}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                </div>
+                              )}
                             </PopoverContent>
                           </Popover>
                         )}
@@ -505,6 +585,50 @@ export default function FinanceiroDRE() {
             )}
           </CardContent>
         </Card>
+
+        {/* Investimentos / CAPEX — memo informativo (não afeta P&L) */}
+        {dre && (
+          <Card className="border-0 shadow-sm border-dashed">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <span className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0 mt-0.5">
+                  <Landmark className="w-4 h-4 text-gray-400" />
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+                      Investimentos / CAPEX
+                    </p>
+                    <span className="text-[10px] font-medium text-gray-400 border border-gray-200 rounded px-1.5 py-0.5">
+                      Não entra no resultado
+                    </span>
+                  </div>
+                  {(dre.investimentoCapex ?? 0) > 0 ? (
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-gray-600">
+                        Compras de ativo imobilizado no período (conta classificada como <span className="font-medium text-gray-700">Investimento</span> no Plano de Contas)
+                      </p>
+                      <span className="text-sm font-semibold text-gray-600 tabular-nums ml-4 shrink-0">
+                        {formatBRL(dre.investimentoCapex)}
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-500 leading-relaxed">
+                      Nenhum investimento classificado como CAPEX neste período.
+                    </p>
+                  )}
+                  <div className="mt-2.5 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-[11px] text-amber-800 leading-relaxed">
+                    <span className="font-semibold">Por que não aparece no DRE?</span>{" "}
+                    Compras de terreno, veículos e equipamentos são <em>conversão de caixa em patrimônio</em> —
+                    não são despesas do período. Elas vão ao <span className="font-medium">Balanço Patrimonial</span> como
+                    Ativo Imobilizado (CPC 27). Apenas a depreciação futura desses bens aparece no DRE como despesa.
+                    Para registrar, classifique a conta financeira como <span className="font-medium">Investimento / CAPEX</span> no Plano de Contas.
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Análise de IA — abaixo do DRE */}
         <Card className="border-0 shadow-sm overflow-hidden">

@@ -398,11 +398,11 @@ function dreLinhaPredicate(linha: DRELinhaKey): string {
       // Captura por origem/conta (juros, tarifa, IOF) OU por class_dre='despesa_financeira' no plano.
       return `tipo='despesa' AND (origem IN ${DRE_ORIGEM_FIN} OR conta LIKE '%juros%' OR conta LIKE '%tarifa banc%' OR conta LIKE '%iof%' OR class_dre='despesa_financeira')`;
     case "despesasFixas":
-      // natureza='fixo' nas entradas OU class_dre='despesa_fixa' no plano (override); exclui custo_obra e financeiras.
-      return `tipo='despesa' AND (natureza='fixo' OR class_dre='despesa_fixa') AND COALESCE(class_dre,'') NOT IN ('custo_obra','despesa_financeira') AND origem NOT IN ${DRE_ORIGEM_OBRA} AND origem NOT IN ${DRE_ORIGEM_FIN} AND origem <> 'guia_tributaria' AND conta NOT LIKE '%juros%' AND conta NOT LIKE '%tarifa banc%' AND conta NOT LIKE '%iof%'`;
+      // natureza='fixo' nas entradas OU class_dre='despesa_fixa' no plano (override); exclui custo_obra, financeiras e investimentos.
+      return `tipo='despesa' AND (natureza='fixo' OR class_dre='despesa_fixa') AND COALESCE(class_dre,'') NOT IN ('custo_obra','despesa_financeira','investimento') AND origem NOT IN ${DRE_ORIGEM_OBRA} AND origem NOT IN ${DRE_ORIGEM_FIN} AND origem <> 'guia_tributaria' AND conta NOT LIKE '%juros%' AND conta NOT LIKE '%tarifa banc%' AND conta NOT LIKE '%iof%'`;
     case "despesasVariaveis":
-      // Bucket residual: tudo que não é fixo, não é custo_obra, não é financeira, não é fixo pelo plano.
-      return `tipo='despesa' AND COALESCE(natureza,'') <> 'fixo' AND COALESCE(class_dre,'') NOT IN ('custo_obra','despesa_fixa','despesa_financeira') AND origem NOT IN ${DRE_ORIGEM_OBRA} AND origem NOT IN ${DRE_ORIGEM_FIN} AND origem <> 'guia_tributaria' AND conta NOT LIKE '%juros%' AND conta NOT LIKE '%tarifa banc%' AND conta NOT LIKE '%iof%'`;
+      // Bucket residual: tudo que não é fixo, não é custo_obra, não é financeira, não é investimento/CAPEX.
+      return `tipo='despesa' AND COALESCE(natureza,'') <> 'fixo' AND COALESCE(class_dre,'') NOT IN ('custo_obra','despesa_fixa','despesa_financeira','investimento') AND origem NOT IN ${DRE_ORIGEM_OBRA} AND origem NOT IN ${DRE_ORIGEM_FIN} AND origem <> 'guia_tributaria' AND conta NOT LIKE '%juros%' AND conta NOT LIKE '%tarifa banc%' AND conta NOT LIKE '%iof%'`;
   }
 }
 
@@ -470,7 +470,8 @@ export async function calcularDRE(
        COALESCE(SUM(v) FILTER (WHERE ${dreLinhaPredicate("impostos")}),0) AS impostos_lanc,
        COALESCE(SUM(v) FILTER (WHERE ${dreLinhaPredicate("despesasFinanceiras")}),0) AS despesas_financeiras,
        COALESCE(SUM(v) FILTER (WHERE ${dreLinhaPredicate("despesasFixas")}),0) AS despesas_fixas,
-       COALESCE(SUM(v) FILTER (WHERE ${dreLinhaPredicate("despesasVariaveis")}),0) AS despesas_variaveis
+       COALESCE(SUM(v) FILTER (WHERE ${dreLinhaPredicate("despesasVariaveis")}),0) AS despesas_variaveis,
+       COALESCE(SUM(v) FILTER (WHERE tipo='despesa' AND class_dre='investimento'),0) AS investimento_capex
      FROM e`,
     [companyId, mesIni, mesFim]
   );
@@ -501,6 +502,8 @@ export async function calcularDRE(
   const lucroLiquido = lair - impostos;
   const pct = (parte: number) => (receitaLiquida > 0 ? (parte / receitaLiquida) * 100 : 0);
 
+  const investimentoCapex = n(agg.investimento_capex);
+
   return {
     periodo,
     tipoPeriodo,
@@ -523,6 +526,7 @@ export async function calcularDRE(
     impostos,
     lucroLiquido,
     margemLiquida: pct(lucroLiquido),
+    investimentoCapex,
     calculadoEm: new Date().toISOString(),
   };
 }

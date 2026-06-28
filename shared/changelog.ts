@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3811 — **FINANCEIRO · DRE · INVESTIMENTOS/CAPEX + EXEMPLOS EDUCATIVOS POR LINHA.**
+ *
+ * FEATURE 1 — SEÇÃO INVESTIMENTOS / CAPEX (MEMO NÃO-P&L):
+ * Adicionada seção informativa abaixo do "= LUCRO LÍQUIDO" explicando por que
+ * compra de terreno, veículos e equipamentos não aparecem no DRE. O bloco âmbar
+ * cita o CPC 27 (Ativo Imobilizado) e orienta a classificar a conta como
+ * "Investimento / CAPEX" no Plano de Contas para rastrear o CAPEX do período.
+ * Backend: `calcularDRE` agora retorna `investimentoCapex` = soma de entradas com
+ * `class_dre='investimento'`; `dreLinhaPredicate` exclui essa classificação dos
+ * buckets de despesasFixas e despesasVariaveis (não afeta P&L).
+ * ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
+ * FEATURE 2 — EXEMPLOS EDUCATIVOS "✓ ENTRA / ✗ NÃO ENTRA" POR LINHA:
+ * Interface `DRERow` estendida com campo opcional `exemplos: { entra, naoEntra }`.
+ * Popover do ℹ️ redesenhado: mostra a legenda conceitual + seções verdes/vermelhas
+ * com bullets de exemplos reais (medição de obra, CDO, CAPEX, ISS, guia tributária, etc.).
+ * Badge do header atualizado para "clique no ℹ️ para legenda e exemplos".
+ * ARQUIVOS TOCADOS: server/services/financialKpiService.ts, client/src/pages/financeiro/FinanceiroDRE.tsx.
+ *
  * Rev. 3810 — **FINANCEIRO · DRE · ROTEAMENTO AUTOMÁTICO CDO vs. FOLHA — `importFolhaRHToFinancial`.**
  * Implementado roteamento automático na função `importFolhaRHToFinancial`
  * (server/services/financialIntegrationBridge.ts) para que, a partir do upload da folha de
