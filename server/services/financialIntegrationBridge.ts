@@ -1378,9 +1378,26 @@ export async function importComprasOrdensToFinancial(companyId: number, mesRef?:
 }
 
 // ─────────────────────────────────────────────────────────────
-// 2.14 — RH/DP — Folha de Pagamento (lançamentos consolidados → despesa pessoal)
+// 2.14 — RH/DP — Folha de Pagamento (lançamentos consolidados → CDO ou Folha)
 // Fundamentação: CLT Arts. 457-462; NBC TG 33 — benefícios a empregados
+// Roteamento automático (Rev. 3809):
+//   - categoria_mo 'direto'         → MÃO DE OBRA DIRETA (conta 22, CDO, variavel)
+//   - categoria_mo 'indireta_obra'  → MÃO DE OBRA INDIRETA (conta 21, CDO, variavel)
+//   - categoria_mo 'escritorio_central' ou NULL → FOLHA DE PAGAMENTO (conta 506, fixo)
 // ─────────────────────────────────────────────────────────────
+
+/** Configuração de conta por categoria_mo */
+const FOLHA_CATEGORIA_CONFIG: Record<string, { contaId: number; contaNome: string; natureza: "fixo" | "variavel" }> = {
+  direto:             { contaId: 22,  contaNome: "MÃO DE OBRA DIRETA",    natureza: "variavel" },
+  indireta_obra:      { contaId: 21,  contaNome: "MÃO DE OBRA INDIRETA",  natureza: "variavel" },
+  escritorio_central: { contaId: 506, contaNome: "FOLHA DE PAGAMENTO",    natureza: "fixo"     },
+  __default__:        { contaId: 506, contaNome: "FOLHA DE PAGAMENTO",    natureza: "fixo"     },
+};
+
+function _folhaCatConfig(cat: string | null | undefined) {
+  return FOLHA_CATEGORIA_CONFIG[cat ?? "__default__"] ?? FOLHA_CATEGORIA_CONFIG.__default__;
+}
+
 export async function importFolhaRHToFinancial(companyId: number, mesRef?: string): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
@@ -1389,7 +1406,7 @@ export async function importFolhaRHToFinancial(companyId: number, mesRef?: strin
   let erros = 0;
 
   try {
-    // Lançamentos consolidados da folha (summary por período)
+    // ── PATH 1: folha_lancamentos + folha_itens (PDF importado via módulo RH) ──
     const { rows } = await dbExecute(db,
       `SELECT fl.id, fl."mesReferencia", fl."tipoLancamento", fl.status,
               fl."totalProventos", fl."totalDescontos", fl."totalLiquido", fl."totalFuncionarios"
@@ -1400,75 +1417,206 @@ export async function importFolhaRHToFinancial(companyId: number, mesRef?: strin
          AND COALESCE(fl."totalProventos"::numeric, 0) > 0`,
       [companyId, targetMes]
     );
-    // rows extracted by dbExecute
 
     for (const r of rows) {
-      if (await entryExists(db, companyId, "folha_rh", r.id)) continue;
-      const valorBruto = parseFloat(r.totalProventos ?? r["totalProventos"] ?? "0");
+      const lancId = r.id as number;
+      const valorBruto = parseFloat(r.totalProventos ?? "0");
       if (valorBruto <= 0) continue;
-      const tipoLanc = r.tipoLancamento ?? r["tipoLancamento"] ?? "";
-      const tipo = tipoLanc === "vale" ? "Adiantamento/Vale Folha" :
-                   tipoLanc === "ferias" ? "Férias — RH" :
-                   tipoLanc === "decimo" ? "13° Salário — RH" : "Folha de Pagamento CLT";
-      const nFunc = r.totalFuncionarios ?? r["totalFuncionarios"] ?? 0;
-      await insertEntry(db, {
-        companyId,
-        contaNome: tipo,
-        tipo: "despesa",
-        natureza: "fixo",
-        valorPrevisto: valorBruto,
-        dataCompetencia: targetMes + "-01",
-        dataVencimento: targetMes + "-05",
-        status: r.status === "consolidado" ? "pendente" : "previsto",
-        origemModulo: "folha_rh",
-        origemId: r.id,
-        origemDescricao: `${tipo} — ${nFunc} funcionário(s)`,
-        descricao: `${tipo} ${targetMes}`,
-      });
-      imported++;
+      const tipoLanc = r.tipoLancamento ?? "";
+      const descTipo = tipoLanc === "vale"   ? "Adiantamento/Vale Folha" :
+                       tipoLanc === "ferias" ? "Férias — RH" :
+                       tipoLanc === "decimo" ? "13° Salário — RH" : "Folha de Pagamento CLT";
+      const entryStatus = r.status === "consolidado" ? "pendente" : "previsto";
+
+      // Carregar folha_itens com categoria_mo e obra de cada funcionário
+      const { rows: itens } = await dbExecute(db,
+        `SELECT fi."totalProventos",
+                fi."employeeId",
+                COALESCE(jf.categoria_mo, 'escritorio_central') AS categoria_mo,
+                COALESCE(moa."obraId", tr_obra."obraId")        AS obra_id,
+                (SELECT o.nome FROM obras o
+                 WHERE o.id = COALESCE(moa."obraId", tr_obra."obraId") LIMIT 1) AS obra_nome
+         FROM folha_itens fi
+         LEFT JOIN job_functions jf
+           ON LOWER(TRIM(jf.nome)) = LOWER(TRIM(fi.funcao))
+           AND jf."companyId" = fi."companyId"
+         LEFT JOIN LATERAL (
+           SELECT moa2."obraId" FROM manual_obra_assignments moa2
+           WHERE moa2."employeeId" = fi."employeeId"
+             AND moa2."mesReferencia" = $3
+             AND moa2."companyId"    = $1
+           ORDER BY moa2."createdAt" DESC LIMIT 1
+         ) moa ON true
+         LEFT JOIN LATERAL (
+           SELECT tr."obraId" FROM time_records tr
+           WHERE tr."employeeId"   = fi."employeeId"
+             AND tr."mesReferencia" = $3
+             AND tr."obraId"       IS NOT NULL
+             AND tr."companyId"    = $1
+           LIMIT 1
+         ) tr_obra ON true
+         WHERE fi."folhaLancamentoId" = $2
+           AND fi."companyId" = $1`,
+        [companyId, lancId, targetMes]
+      );
+
+      if (itens.length > 0) {
+        // Agrupar por categoria_mo (3 grupos no máximo)
+        const grupos: Record<string, {
+          cat: string; total: number; cnt: number;
+          obras: Record<number, number>; // obraId → count of employees
+        }> = {};
+        for (const item of itens) {
+          const cat = (item.categoria_mo as string) || "escritorio_central";
+          if (!grupos[cat]) grupos[cat] = { cat, total: 0, cnt: 0, obras: {} };
+          grupos[cat].total += parseFloat(item.totalProventos ?? "0");
+          grupos[cat].cnt++;
+          const oId = item.obra_id ? Number(item.obra_id) : null;
+          if (oId) grupos[cat].obras[oId] = (grupos[cat].obras[oId] ?? 0) + 1;
+        }
+
+        for (const [cat, grupo] of Object.entries(grupos)) {
+          if (grupo.total <= 0) continue;
+          const origemModulo = `folha_rh_${cat === "direto" ? "direto" : cat === "indireta_obra" ? "indireta" : "adm"}`;
+          if (await entryExists(db, companyId, origemModulo, lancId)) continue;
+
+          const cfg = _folhaCatConfig(cat);
+          const isCDO = cat === "direto" || cat === "indireta_obra";
+
+          // Obra primária = a mais frequente entre os funcionários do grupo
+          const obraEntries = Object.entries(grupo.obras) as [string, number][];
+          const primaryObraId = obraEntries.length === 0 ? null :
+            obraEntries.sort((a, b) => b[1] - a[1])[0][0];
+          const { rows: obraRows } = primaryObraId
+            ? await dbExecute(db, `SELECT nome FROM obras WHERE id=$1 LIMIT 1`, [Number(primaryObraId)])
+            : { rows: [] };
+          const primaryObraNome = obraRows[0]?.nome ?? null;
+
+          await insertEntry(db, {
+            companyId,
+            contaId:   cfg.contaId,
+            contaNome: cat === "escritorio_central" || cat === "__default__" ? descTipo : cfg.contaNome,
+            obraId:    isCDO ? (primaryObraId ? Number(primaryObraId) : null) : null,
+            obraNome:  isCDO ? primaryObraNome : null,
+            tipo:      "despesa",
+            natureza:  cfg.natureza,
+            valorPrevisto: grupo.total,
+            dataCompetencia: targetMes + "-01",
+            dataVencimento:  targetMes + "-05",
+            status: entryStatus,
+            origemModulo,
+            origemId: lancId,
+            origemDescricao: `${descTipo} — ${grupo.cnt} func. [${cat}]`,
+            descricao: `${descTipo} ${targetMes} (${cfg.contaNome})`,
+          });
+          imported++;
+        }
+      } else {
+        // Fallback: sem folha_itens → lançamento agregado em conta 506 (comportamento legado)
+        if (await entryExists(db, companyId, "folha_rh", lancId)) continue;
+        const nFunc = r.totalFuncionarios ?? 0;
+        await insertEntry(db, {
+          companyId,
+          contaNome: descTipo,
+          tipo: "despesa",
+          natureza: "fixo",
+          valorPrevisto: valorBruto,
+          dataCompetencia: targetMes + "-01",
+          dataVencimento:  targetMes + "-05",
+          status: entryStatus,
+          origemModulo: "folha_rh",
+          origemId: lancId,
+          origemDescricao: `${descTipo} — ${nFunc} funcionário(s)`,
+          descricao: `${descTipo} ${targetMes}`,
+        });
+        imported++;
+      }
     }
 
-    // Também importa registros individuais da payroll (funcionários com contracheque completo)
+    // ── PATH 2: tabela payroll (contracheques individuais do engine) ──
     const { rows: rows2 } = await dbExecute(db,
-      `SELECT p.id, p."mesReferencia", p."tipoFolha",
-              p."salarioBruto", p."totalProventos", p.inss, p.irrf, p.fgts
+      `SELECT p.id, p."mesReferencia", p."tipoFolha", p."employeeId",
+              p."salarioBruto", p."totalProventos", p.inss, p.irrf, p.fgts,
+              COALESCE(jf.categoria_mo, 'escritorio_central') AS categoria_mo,
+              COALESCE(moa."obraId", tr_obra."obraId")        AS obra_id
        FROM payroll p
+       LEFT JOIN employees e
+         ON e.id = p."employeeId" AND e."companyId" = p."companyId"
+       LEFT JOIN job_functions jf
+         ON LOWER(TRIM(jf.nome)) = LOWER(TRIM(e.funcao))
+         AND jf."companyId" = p."companyId"
+       LEFT JOIN LATERAL (
+         SELECT moa2."obraId" FROM manual_obra_assignments moa2
+         WHERE moa2."employeeId" = p."employeeId"
+           AND moa2."mesReferencia" = $2
+           AND moa2."companyId"    = $1
+         ORDER BY moa2."createdAt" DESC LIMIT 1
+       ) moa ON true
+       LEFT JOIN LATERAL (
+         SELECT tr."obraId" FROM time_records tr
+         WHERE tr."employeeId"   = p."employeeId"
+           AND tr."mesReferencia" = $2
+           AND tr."obraId"       IS NOT NULL
+           AND tr."companyId"    = $1
+         LIMIT 1
+       ) tr_obra ON true
        WHERE p."companyId" = $1
          AND p."mesReferencia" = $2
          AND COALESCE(p."salarioBruto"::numeric, 0) > 0`,
       [companyId, targetMes]
     );
 
-    // Agrupa payroll por tipo_folha para não gerar um lançamento por funcionário
-    const totaisPorTipo: Record<string, { total: number; fgts: number; inss: number; irrf: number; count: number }> = {};
+    // Agrupar por (tipoFolha, categoria_mo)
+    const gruposPay: Record<string, {
+      tipo: string; cat: string; total: number;
+      fgts: number; inss: number; irrf: number; count: number;
+      obras: Record<number, number>;
+    }> = {};
     for (const r of rows2) {
-      const tipo = r.tipoFolha ?? r["tipoFolha"] ?? "mensal";
-      if (!totaisPorTipo[tipo]) totaisPorTipo[tipo] = { total: 0, fgts: 0, inss: 0, irrf: 0, count: 0 };
-      totaisPorTipo[tipo].total += parseFloat(r.salarioBruto ?? r["salarioBruto"] ?? r.totalProventos ?? r["totalProventos"] ?? "0");
-      totaisPorTipo[tipo].fgts += parseFloat(r.fgts ?? "0");
-      totaisPorTipo[tipo].inss += parseFloat(r.inss ?? "0");
-      totaisPorTipo[tipo].irrf += parseFloat(r.irrf ?? "0");
-      totaisPorTipo[tipo].count++;
+      const tipo = r.tipoFolha ?? "mensal";
+      const cat  = (r.categoria_mo as string) || "escritorio_central";
+      const key  = `${tipo}|${cat}`;
+      if (!gruposPay[key]) gruposPay[key] = { tipo, cat, total: 0, fgts: 0, inss: 0, irrf: 0, count: 0, obras: {} };
+      gruposPay[key].total += parseFloat(r.salarioBruto ?? r.totalProventos ?? "0");
+      gruposPay[key].fgts  += parseFloat(r.fgts ?? "0");
+      gruposPay[key].inss  += parseFloat(r.inss ?? "0");
+      gruposPay[key].irrf  += parseFloat(r.irrf ?? "0");
+      gruposPay[key].count++;
+      const oId = r.obra_id ? Number(r.obra_id) : null;
+      if (oId) gruposPay[key].obras[oId] = (gruposPay[key].obras[oId] ?? 0) + 1;
     }
 
-    for (const [tipo, dados] of Object.entries(totaisPorTipo)) {
+    for (const [, dados] of Object.entries(gruposPay)) {
       if (dados.total <= 0) continue;
-      // Usa id sintético = hash de company+mes+tipo para deduplicação
-      const origemId = Math.abs((companyId * 1000) + parseInt(targetMes.replace("-", "")) % 10000 + tipo.length);
-      if (await entryExists(db, companyId, "payroll_agregado", origemId)) continue;
+      const origemModulo = `payroll_${dados.cat === "direto" ? "direto" : dados.cat === "indireta_obra" ? "indireta" : "adm"}`;
+      // origemId sintético: hash de company+mes+tipo+categoria
+      const catCode  = dados.cat === "direto" ? 1 : dados.cat === "indireta_obra" ? 2 : 0;
+      const origemId = Math.abs(
+        (companyId * 1000) + parseInt(targetMes.replace("-", "")) % 10000 + dados.tipo.length * 10 + catCode
+      );
+      if (await entryExists(db, companyId, origemModulo, origemId)) continue;
+
+      const cfg   = _folhaCatConfig(dados.cat);
+      const isCDO = dados.cat === "direto" || dados.cat === "indireta_obra";
+      const obraEntries = Object.entries(dados.obras) as [string, number][];
+      const primaryObraId = obraEntries.length === 0 ? null :
+        Number(obraEntries.sort((a, b) => b[1] - a[1])[0][0]);
+
       await insertEntry(db, {
         companyId,
-        contaNome: `Folha ${tipo} — RH/DP`,
+        contaId:   cfg.contaId,
+        contaNome: cfg.contaNome,
+        obraId:    isCDO ? primaryObraId : null,
         tipo: "despesa",
-        natureza: "fixo",
+        natureza:  cfg.natureza,
         valorPrevisto: dados.total,
         dataCompetencia: targetMes + "-01",
-        dataVencimento: targetMes + "-05",
+        dataVencimento:  targetMes + "-05",
         status: "pendente",
-        origemModulo: "payroll_agregado",
+        origemModulo,
         origemId,
-        origemDescricao: `Folha ${tipo} — ${dados.count} funcionário(s) — FGTS R$${dados.fgts.toFixed(2)}`,
-        descricao: `Folha ${tipo} ${targetMes} (${dados.count} func.)`,
+        origemDescricao: `Folha ${dados.tipo} — ${dados.count} func. [${dados.cat}] — FGTS R$${dados.fgts.toFixed(2)}`,
+        descricao: `Folha ${dados.tipo} ${targetMes} (${cfg.contaNome})`,
       });
       imported++;
     }

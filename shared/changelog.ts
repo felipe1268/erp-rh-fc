@@ -1,6 +1,38 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3810 — **FINANCEIRO · DRE · ROTEAMENTO AUTOMÁTICO CDO vs. FOLHA — `importFolhaRHToFinancial`.**
+ * Implementado roteamento automático na função `importFolhaRHToFinancial`
+ * (server/services/financialIntegrationBridge.ts) para que, a partir do upload da folha de
+ * março/2026 via módulo RH, cada funcionário seja roteado automaticamente à conta correta:
+ *
+ * REGRA DE ROTEAMENTO (via categoria_mo de job_functions):
+ *   - categoria_mo = 'direto'         → MÃO DE OBRA DIRETA (conta id=22, CDO, natureza=variavel)
+ *   - categoria_mo = 'indireta_obra'  → MÃO DE OBRA INDIRETA (conta id=21, CDO, natureza=variavel)
+ *   - categoria_mo = 'escritorio_central' ou NULL → FOLHA DE PAGAMENTO (conta id=506, natureza=fixo)
+ *
+ * IMPLEMENTAÇÃO:
+ * PATH 1 (folha_lancamentos + folha_itens — PDF importado via RH):
+ *   - Para cada folha_lancamento, carrega folha_itens com JOIN em job_functions (via funcao/nome)
+ *     e LEFT LATERAL JOIN em manual_obra_assignments + time_records para recuperar obra_id de cada funcionário.
+ *   - Agrupa por categoria_mo → até 3 entries por batch (uma por grupo não-vazio).
+ *   - Obra primária do grupo = obra_id mais frequente entre os funcionários (se só uma → define; se várias → null).
+ *   - Dedup por origemModulo (folha_rh_direto / folha_rh_indireta / folha_rh_adm) + lancamentoId.
+ *   - Fallback (sem folha_itens): comportamento legado — entry única em conta 506, origemModulo="folha_rh".
+ *
+ * PATH 2 (tabela payroll — engine de contracheque individual):
+ *   - Lê payroll com JOIN employees + job_functions + lateral obra.
+ *   - Agrupa por (tipoFolha, categoria_mo) → entries CDO/Folha.
+ *   - Dedup por origemModulo (payroll_direto / payroll_indireta / payroll_adm) + hash sintético.
+ *
+ * CONSTANTE NOVA: FOLHA_CATEGORIA_CONFIG (Record<categoria_mo, {contaId, contaNome, natureza}>).
+ * FUNÇÃO NOVA: _folhaCatConfig(cat) — helper de lookup com fallback __default__.
+ *
+ * IMPACTO:
+ *   - Jan/2026: sem folha_lancamentos (entrou por extrato) → não reprocessado (retroativo já feito na Rev. 3809).
+ *   - Mar/2026 em diante: ao consolidar e disparar o sync financeiro, o roteamento ocorre automaticamente.
+ *   - ZERO SCHEMA/ALTER/DROP/DELETE. 100% lógica de aplicação.
+ *
  * Rev. 3809 — **FINANCEIRO · DRE · ROTEAMENTO CDO vs. FOLHA — PILOTO JAN/2026.**
  * Contexto: a folha de Jan/2026 entrou no sistema via extrato bancário (sem dados por funcionário),
  * então o retroativo parcial trata os 35 PIX individuais identificáveis por nome.
