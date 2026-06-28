@@ -109,9 +109,7 @@ export function classificarGrupoCusto(contaNome: any, origemModulo?: any): Grupo
     return "Impostos e Tributos";
   if (has("PRO LABORE", "PRO-LABORE", "RETIRADA SOCIO", "RETIRADA DE SOCIO", "RETIRADA SOCIOS", "SOCIOS"))
     return "Pró-labore e Sócios";
-  // Rev. 3823 — TRANSPORTE DE EQUIPES antes do check geral de benefícios
-  if (has("TRANSPORTE DE EQUIPE", "TRANSPORTE DE PESSOAL", "TRANSPORTE DE FUNCIONARIO"))
-    return "Benefícios (VR/VA/Transporte)";
+  // Rev. 3826 — TRANSPORTE DE EQUIPES agora vai para Frota e Veículos (ver abaixo)
   if (has("VALE ALIMENTACAO", "VALE REFEICAO", "VALE-ALIMENTACAO", "VALE-REFEICAO", "VALE TRANSPORTE", "VALE-TRANSPORTE", "BENEFICIO", "PLANO MEDICO", "PLANO DE SAUDE", "ALIMENTACAO", "EXAMES OCUPACIONAIS"))
     return "Benefícios (VR/VA/Transporte)";
   // Rev. 3824 — MEDIÇÃO PJ e PRESTADORES PJ antes do check geral de terceiros
@@ -122,7 +120,8 @@ export function classificarGrupoCusto(contaNome: any, origemModulo?: any): Grupo
   // Rev. 3823 — FOLHA antes do check de MAO DE OBRA (banco envia conta_nome = FOLHA DE PAGAMENTO sem origem)
   if (has("FOLHA", "SALARIO", "MAO DE OBRA", "ADIANTAMENTO"))
     return "Salários e Folha";
-  if (has("VEICULO", "COMBUSTIVEL", "FROTA", "LOCACAO DE VEICULOS", "MANUTENCAO DE EQUIPAMENTO", "MANUTENÇÃO DE EQUIPAMENTO", "MAGNUM TIRES", "PNEU", "BORRACHARIA"))
+  // Rev. 3826 — TRANSPORTE DE EQUIPES movido de Benefícios → Frota (MOVIDA, vans fretadas ≠ VR/VA)
+  if (has("VEICULO", "COMBUSTIVEL", "FROTA", "LOCACAO DE VEICULOS", "MANUTENCAO DE EQUIPAMENTO", "MANUTENÇÃO DE EQUIPAMENTO", "MAGNUM TIRES", "PNEU", "BORRACHARIA", "TRANSPORTE DE EQUIPE", "TRANSPORTE DE PESSOAL", "TRANSPORTE DE FUNCIONARIO"))
     return "Frota e Veículos";
   if (has("MATERIAL", "MATERIAIS", "CONCRETO", "EPI", "UNIFORME", "FERRAMENTA", "COMPRA", "AQUISICAO", "FRETE", "RETIRADA DE ENTULHO", "ALMOXARIFADO"))
     return "Material e Almoxarifado";

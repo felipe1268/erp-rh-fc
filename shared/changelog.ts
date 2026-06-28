@@ -1,6 +1,12 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3826 — **ANÁLISE DE CUSTOS · CLASSIFICADOR — TRANSPORTE DE EQUIPES → FROTA.**
+ * "TRANSPORTE DE EQUIPE/PESSOAL/FUNCIONARIO" estava no bucket "Benefícios (VR/VA/Transporte)"
+ * junto com iFood/restaurantes — não faz sentido. Movido para "Frota e Veículos" (MOVIDA,
+ * vans fretadas, Danilo Transportes). Benefícios fica só com VR/VA/alimentação/transporte-
+ * benefício (VALE TRANSPORTE). ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3825 — **ANÁLISE DE CUSTOS · CLASSIFICADOR — BUGFIX + KEYWORDS FROTA/ADMIN.**
  * Bug: "CONSORTIO" era typo de "CONSORCIO" → CONSÓRCIO VEICULAR caía em "Outros".
  * Novos keywords: MANUTENÇÃO DE EQUIPAMENTO/PNEU/BORRACHARIA → "Frota e Veículos";
