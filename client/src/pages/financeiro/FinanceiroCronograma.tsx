@@ -115,10 +115,10 @@ export default function FinanceiroCronograma() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
               <TrendingUp className="w-6 h-6 text-blue-600" />
-              Cronograma Financeiro
+              Previsão de Caixa
             </h1>
             <p className="text-sm text-gray-500 mt-0.5">
-              Previsão de faturamento, custo e resultado por obra — base: cronograma físico-financeiro
+              Projeção de faturamento e custos por obra com base no cronograma físico-financeiro — isolada do caixa real
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">

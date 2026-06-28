@@ -1,6 +1,25 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3822 — **FINANCEIRO · DESACOPLAMENTO CRONOGRAMA × FINANCEIRO (OPÇÃO A).**
+ * Problema: o bridge `importAtividadesCronogramaToFinancial` gravava projeções do
+ * cronograma em `financial_entries` com `status='a_pagar'`, inflando Contas a Pagar
+ * (+R$16,5M), DRE CDO, Análise de Custos e Conciliação com valores fictícios.
+ * ALTERAÇÕES:
+ *   • DB: 5.252 entradas `origem_modulo='cronograma_atividade'` migradas
+ *     de `status='a_pagar'` → `'previsto'` (ZERO DELETE; dados preservados).
+ *   • financialKpiService.ts: 'cronograma_atividade' removido de DRE_ORIGEM_OBRA
+ *     (CDO agora capturado exclusivamente via class_dre='custo_obra' — Rev.3821).
+ *   • financialKpiService.ts: status 'previsto' adicionado à lista de exclusão em
+ *     calcularDRE e calcularDRELinhaDetalhe — DRE mostra só pago/recebido.
+ *   • financialIntegrationBridge.ts: INSERT futuro usa status='previsto' (4 spots);
+ *     DELETE de órfãos atualizado para casar com status='previsto'.
+ *   • Sidebar: "Cronograma Financeiro" → "Previsão de Caixa"; descrição da tela
+ *     atualizada para deixar claro que é visão isolada do caixa real.
+ * EFEITO: Contas a Pagar perde R$16,5M fictícios. DRE CDO passa a refletir
+ * exclusivamente compras/OC/almoxarifado realizados. Previsão fica em tela própria.
+ * ZERO SCHEMA/ALTER/DROP.
+ *
  * Rev. 3821 — **FINANCEIRO · PLANO DE CONTAS · CLASSIFICAÇÃO DRE EM MASSA (GRUPO 5).**
  * Auditoria identificou 28 contas ativas com lançamentos relevantes sem classificacao_dre —
  * essas entradas estavam sumindo completamente do DRE (buckets receita/custo/despesa).

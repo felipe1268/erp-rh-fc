@@ -2283,14 +2283,14 @@ export async function importAtividadesCronogramaToFinancial(
             await pgPool2.query(
               `DELETE FROM financial_entries
                WHERE company_id=$1 AND origem_modulo='cronograma_atividade'
-                 AND origem_id=$2 AND data_competencia=$3 AND status='a_pagar'`,
+                 AND origem_id=$2 AND data_competencia=$3 AND status='previsto'`,
               [companyId, origemIdNum, dataCompStr]
             );
           } else {
             await dbExecute(db,
               `DELETE FROM financial_entries
                WHERE company_id=$1 AND origem_modulo='cronograma_atividade'
-                 AND origem_id=$2 AND data_competencia=$3 AND status='a_pagar'`,
+                 AND origem_id=$2 AND data_competencia=$3 AND status='previsto'`,
               [companyId, origemIdNum, dataCompStr]
             );
           }
@@ -2313,7 +2313,7 @@ export async function importAtividadesCronogramaToFinancial(
           }).join(",");
           const params = batch.flatMap(e => [
             e.companyId, e.obraId, e.obraNome, e.contaNome, "despesa", "variavel",
-            e.valorMensal, null, e.dataComp, e.dataVenc, "a_pagar",
+            e.valorMensal, null, e.dataComp, e.dataVenc, "previsto",
             "cronograma_atividade", e.origemId, e.origemDesc, e.descricao
           ]);
           await pgPool.query(
@@ -2348,7 +2348,7 @@ export async function importAtividadesCronogramaToFinancial(
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW(),NOW())
              ON CONFLICT DO NOTHING`,
             [e.companyId, e.obraId, e.obraNome, e.contaNome, "despesa", "variavel",
-             e.valorMensal, null, e.dataComp, e.dataVenc, "a_pagar",
+             e.valorMensal, null, e.dataComp, e.dataVenc, "previsto",
              "cronograma_atividade", e.origemId, e.origemDesc, e.descricao]
           );
           imported++;

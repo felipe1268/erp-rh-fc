@@ -366,7 +366,10 @@ function dreRange(
 // (módulo) p/ que o cálculo (calcularDRE) e o detalhamento clicável
 // (calcularDRELinhaDetalhe) usem EXATAMENTE a mesma classificação — o total da
 // linha sempre fecha com a soma dos itens do drill-down.
-const DRE_ORIGEM_OBRA = "('cronograma_atividade','compras','compra_oc','almoxarifado_saida')";
+// Rev. 3822 — 'cronograma_atividade' removido: projeções do cronograma agora têm
+// status='previsto' e são excluídas pelo filtro de status abaixo. O CDO real é
+// capturado via class_dre='custo_obra' (plano de contas revisado na Rev. 3821).
+const DRE_ORIGEM_OBRA = "('compras','compra_oc','almoxarifado_saida')";
 const DRE_ORIGEM_FIN = "('despesa_financeira','juros','tarifa_bancaria','iof')";
 
 export type DRELinhaKey =
@@ -458,7 +461,7 @@ export async function calcularDRE(
        FROM financial_entries fe
        LEFT JOIN acct_class ac ON ac.id = fe.conta_id
        WHERE fe.company_id=$1
-         AND fe.status NOT IN ('cancelado','estornado','a_pagar','a_receber')
+         AND fe.status NOT IN ('cancelado','estornado','a_pagar','a_receber','previsto')
          AND fe.tipo <> 'transferencia'
          AND fe.data_competencia IS NOT NULL
          AND TO_CHAR(fe.data_competencia,'YYYY-MM') BETWEEN $2 AND $3
@@ -576,7 +579,7 @@ export async function calcularDRELinhaDetalhe(
       FROM financial_entries fe
       LEFT JOIN acct_class ac ON ac.id = fe.conta_id
       WHERE fe.company_id=$1
-        AND fe.status NOT IN ('cancelado','estornado','a_pagar','a_receber')
+        AND fe.status NOT IN ('cancelado','estornado','a_pagar','a_receber','previsto')
         AND fe.tipo <> 'transferencia'
         AND fe.data_competencia IS NOT NULL
         AND TO_CHAR(fe.data_competencia,'YYYY-MM') BETWEEN $2 AND $3
