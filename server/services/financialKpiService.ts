@@ -453,12 +453,12 @@ export async function calcularDRE(
        SELECT fe.tipo, fe.natureza,
               LOWER(COALESCE(fe.origem_modulo,'')) AS origem,
               LOWER(COALESCE(fe.conta_nome,'')) AS conta,
-              COALESCE(fe.valor_realizado, fe.valor_previsto, 0)::numeric AS v,
+              COALESCE(fe.valor_realizado, 0)::numeric AS v,
               ac.classificacao_dre AS class_dre
        FROM financial_entries fe
        LEFT JOIN acct_class ac ON ac.id = fe.conta_id
        WHERE fe.company_id=$1
-         AND fe.status NOT IN ('cancelado','estornado')
+         AND fe.status NOT IN ('cancelado','estornado','a_pagar','a_receber')
          AND fe.tipo <> 'transferencia'
          AND fe.data_competencia IS NOT NULL
          AND TO_CHAR(fe.data_competencia,'YYYY-MM') BETWEEN $2 AND $3
@@ -571,12 +571,12 @@ export async function calcularDRELinhaDetalhe(
              LOWER(COALESCE(fe.origem_modulo,'')) AS origem,
              LOWER(COALESCE(fe.conta_nome,'')) AS conta,
              fe.tipo, fe.natureza,
-             COALESCE(fe.valor_realizado, fe.valor_previsto, 0)::numeric AS v,
+             COALESCE(fe.valor_realizado, 0)::numeric AS v,
              ac.classificacao_dre AS class_dre
       FROM financial_entries fe
       LEFT JOIN acct_class ac ON ac.id = fe.conta_id
       WHERE fe.company_id=$1
-        AND fe.status NOT IN ('cancelado','estornado')
+        AND fe.status NOT IN ('cancelado','estornado','a_pagar','a_receber')
         AND fe.tipo <> 'transferencia'
         AND fe.data_competencia IS NOT NULL
         AND TO_CHAR(fe.data_competencia,'YYYY-MM') BETWEEN $2 AND $3

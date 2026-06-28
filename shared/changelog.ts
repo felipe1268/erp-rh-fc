@@ -1,14 +1,15 @@
 /**
  * Changelog centralizado do ERP.
  *
- * Rev. 3814 — **FINANCEIRO · DRE · FIX ZEROS NO DRILL-DOWN: COALESCE(realizado, previsto, 0).**
- * `calcularDRE` e `calcularDRELinhaDetalhe` usavam `COALESCE(fe.valor_realizado, 0)`,
- * mostrando R$0,00 para entradas com `valor_realizado=null` mesmo quando `valor_previsto`
- * tinha valor (status=a_pagar). Ambas as CTEs corrigidas para
- * `COALESCE(fe.valor_realizado, fe.valor_previsto, 0)` — agora o valor previsto aparece
- * quando não há realizado, e os totais do DRE e do drill-down permanecem consistentes.
- * ARQUIVO TOCADO: server/services/financialKpiService.ts (linhas 459 + 577).
- * ZERO SCHEMA/ALTER/DROP/DELETE.
+ * Rev. 3815 — **FINANCEIRO · DRE · REVERTE 3814 + EXCLUI a_pagar/a_receber DO DRE.**
+ * Rev. 3814 mostrava valor_previsto no DRE — conceito errado: DRE é Regime de Competência
+ * sobre FATOS REALIZADOS, não projeções. Revertido para COALESCE(valor_realizado, 0).
+ * Adicionalmente: WHERE exclui status IN ('a_pagar','a_receber') em AMBAS as CTEs
+ * (calcularDRE + calcularDRELinhaDetalhe). Entradas não baixadas somem do DRE e ficam
+ * visíveis apenas no Fluxo de Caixa. ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
+ * Rev. 3814 — **[REVERTIDO por 3815] FINANCEIRO · DRE · FIX ZEROS: COALESCE(realizado, previsto, 0).**
+ * Conceito incorreto: DRE deve mostrar só realizados. Mantido aqui para rastreabilidade.
  *
  * Rev. 3813 — **FINANCEIRO · DRE · REMOVE BLOCO MEMO INVESTIMENTOS/CAPEX DO RODAPÉ.**
  * Bloco informativo "Investimentos / CAPEX — Não entra no resultado" removido do rodapé

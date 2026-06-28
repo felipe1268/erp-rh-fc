@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3814** — **FINANCEIRO · DRE · FIX ZEROS NO DRILL-DOWN: `COALESCE(realizado, previsto, 0)`. `calcularDRE` e `calcularDRELinhaDetalhe` usavam `COALESCE(valor_realizado, 0)` — entradas `a_pagar` com `valor_previsto` apareciam como R$0,00 no drill-down e no total. Ambas as CTEs corrigidas para `COALESCE(valor_realizado, valor_previsto, 0)`. Totais do DRE e drill-down permanecem consistentes entre si. ARQUIVO: `financialKpiService.ts`. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3815** — **FINANCEIRO · DRE · REVERTE 3814 + EXCLUI `a_pagar`/`a_receber` DO DRE: DRE = só realizados (Regime de Competência sobre fatos consumados). WHERE agora exclui `status IN ('a_pagar','a_receber')` em ambas as CTEs; valor volta a `COALESCE(valor_realizado, 0)`. Previsto fica só no Fluxo de Caixa. ARQUIVO: `financialKpiService.ts`. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3813** — **FINANCEIRO · DRE · REMOVE BLOCO MEMO INVESTIMENTOS/CAPEX DO RODAPÉ: bloco informativo "Investimentos / CAPEX — Não entra no resultado" removido de `FinanceiroDRE.tsx`; import `Landmark` removido. Backend continua retornando `investimentoCapex`. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
+- **Rev. 3814** — **[REVERTIDO] FINANCEIRO · DRE · COALESCE(realizado, previsto, 0) — conceito incorreto, revertido em 3815.** Detalhe: `shared/changelog.ts`.
 
 ### 5 one-liners
+
+- **Rev. 3813** — **FINANCEIRO · DRE · REMOVE BLOCO MEMO INVESTIMENTOS/CAPEX DO RODAPÉ: bloco removido de `FinanceiroDRE.tsx`; import `Landmark` removido. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3812** — **FINANCEIRO · DRE · RECLASSIFICAÇÃO CAPEX: CONTA 420 `classificacao_dre→'investimento'`; 12 ENTRIES VERSÁTIL (PRÓ-LABORE+CARTÓRIO+SEM CONTA) → CONTA 420; R$209.801,63 saem das Despesas Variáveis. PRÓ-LABORE SÓCIOS NÃO TOCADO. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
