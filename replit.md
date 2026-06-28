@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3838** — **EXTRATO BANCÁRIO XLSX · FORMATAÇÃO CONDICIONAL NATIVA EXCEL NA COLUNA SALDO.** `ws.addConditionalFormatting()`: regra `< 0` → vermelho (#FF0000) + fonte branca; regra `> 0` → verde (#00B050) + fonte branca; range `H9:H{lastDataRow}`. Cor muda automaticamente ao editar fórmulas no Excel. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3837** — **EXTRATO BANCÁRIO XLSX · COLUNA SALDO COM FÓRMULA EXCEL.** H(row 9)=`=H6+F9-G9`; H(row N)=`=H{N-1}+FN-GN`. Campo `result` pré-preenchido para abrir sem recalcular. Formatação condicional verde/vermelho inalterada. `server/routers/downloadContabilidadeXlsx.ts`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3836** — **EXTRATO BANCÁRIO XLSX · BUGFIX: "ERRO AO GERAR PLANILHA" (column fe.fornecedor_cnpj does not exist).** Causa-raiz: `linesQ` referenciava `fe.fornecedor_cnpj AS entry_cnpj` via LEFT JOIN com `financial_entries`, mas essa coluna não existe (a tabela só tem `fornecedor_nome` e `descricao`). Diagnosticado executando a query diretamente contra o Neon. Fix: `fe.fornecedor_cnpj` → `NULL::text AS entry_cnpj` (campo é só fallback de CNPJ na 3ª camada de cruzamento NF). Bônus: `[SyncSchema+] Rev.3836` garante `fiscal_notes.stmt_line_id INTEGER` via `ALTER TABLE ADD COLUMN IF NOT EXISTS`. Arquivos: `server/routers/downloadContabilidadeXlsx.ts`, `server/_core/index.ts`. ZERO DELETE. Detalhe: `shared/changelog.ts`.

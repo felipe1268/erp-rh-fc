@@ -430,13 +430,6 @@ export async function buildExtratoBancarioBuffer(
       hCell.numFmt = BRL;
       hCell.alignment = { horizontal: "right", vertical: "middle" };
 
-      if (saldoAcum >= 0) {
-        hCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GREEN_BG } };
-        hCell.font = { color: { argb: "FFFFFFFF" }, name: "Calibri", size: 11 };
-      } else {
-        hCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: RED_BG } };
-        hCell.font = { color: { argb: "FFFFFFFF" }, name: "Calibri", size: 11 };
-      }
     });
 
     // ── Bordas: contorno externo (medium) + grade interna (thin) ─────────────
@@ -444,6 +437,36 @@ export async function buildExtratoBancarioBuffer(
     const DATA_COLS = ["A","B","C","D","E","F","G","H"];
     const lastDataRow = lines.length > 0 ? 8 + lines.length : 9;
     applyTableBorders(ws, 8, lastDataRow, DATA_COLS);
+
+    // ── Formatação condicional nativa Excel na coluna Saldo (H) ──────────────
+    // Aplica-se a: $H$9:$H${lastDataRow}
+    // Regra 1: Valor < 0 → fundo vermelho + fonte branca
+    // Regra 2: Valor > 0 → fundo verde   + fonte branca
+    ws.addConditionalFormatting({
+      ref: `H9:H${lastDataRow}`,
+      rules: [
+        {
+          type: "cellIs",
+          operator: "lessThan",
+          formulae: [0],
+          priority: 1,
+          style: {
+            fill: { type: "pattern", pattern: "solid", bgColor: { argb: RED_BG } },
+            font: { color: { argb: "FFFFFFFF" }, name: "Calibri", size: 11 },
+          },
+        },
+        {
+          type: "cellIs",
+          operator: "greaterThan",
+          formulae: [0],
+          priority: 2,
+          style: {
+            fill: { type: "pattern", pattern: "solid", bgColor: { argb: GREEN_BG } },
+            font: { color: { argb: "FFFFFFFF" }, name: "Calibri", size: 11 },
+          },
+        },
+      ],
+    } as any);
 
     if (lines.length === 0) {
       ws.getCell("A9").value = "Nenhum lançamento no período.";

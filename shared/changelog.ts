@@ -1,4 +1,20 @@
 /**
+ * Rev. 3838 — **EXTRATO BANCÁRIO XLSX · FORMATAÇÃO CONDICIONAL NATIVA EXCEL NA COLUNA SALDO.**
+ *
+ * Substituído o preenchimento estático (calculado em JS) por regras nativas de formatação
+ * condicional Excel via `ws.addConditionalFormatting()` (ExcelJS 4.4.0):
+ *
+ * - Regra 1 (priority 1): "Valor da Célula < 0" → fundo vermelho (#FF0000) + fonte branca
+ * - Regra 2 (priority 2): "Valor da Célula > 0" → fundo verde (#00B050) + fonte branca
+ * - Aplica-se a: `H9:H{lastDataRow}` (igual ao comportamento do Gerenciador de Regras do Excel)
+ *
+ * Com isso, se o usuário alterar qualquer Entrada ou Saída no Excel, a cor do Saldo
+ * muda automaticamente sem precisar de macro — comportamento idêntico ao modelo manual.
+ *
+ * Arquivo: `server/routers/downloadContabilidadeXlsx.ts`.
+ * ZERO DELETE · ZERO SCHEMA.
+ */
+/**
  * Rev. 3837 — **EXTRATO BANCÁRIO XLSX · COLUNA SALDO COM FÓRMULA EXCEL.**
  *
  * A coluna H (Saldo) passou a usar fórmula Excel em vez de valor estático:
