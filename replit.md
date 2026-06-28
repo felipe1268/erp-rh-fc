@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3843** — **NF-E RECEBIDAS · BUGFIX: BOTÃO "MUDAR STATUS" NÃO ABRIA DIALOG.** Causa-raiz: `onClick` chamava `setBulkStatusOpen(true)` (dialog das Emitidas) em vez de `setBulkRecStatusOpen(true)` (dialog correto das Recebidas). Dialog já existia e funcionava — nunca era aberto. Fix de 1 linha em `FinanceiroNotasFiscais.tsx`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3842** — **EXTRATO BANCÁRIO XLSX · LOGO TAMANHO CORRETO + BORDAS COMPLETAS NO CABEÇALHO.** 4 correções: (1) logo usava `br` (esticava para preencher B2:C7) → `ext:{width:185,height:78}` tamanho fixo sem distorção; (2) borda inferior de D2:I5 (row 5, D-I) ausente → adicionado `bottom:medium` em D5/E5/F5/G5/H5/I5; (3) borda direita de D6:G7 ausente → G6+G7 recebem `right:medium`; (4) borda direita de H7 ("Saldo Anterior") ausente → adicionado `right:medium`. `server/routers/downloadContabilidadeXlsx.ts`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3841** — **CONFIG. SMTP VIA UI · ALTERAR E-MAIL E SENHA SEM EDITAR VARIÁVEL DE AMBIENTE.** Novo tab "Config. SMTP" em Configurações do Sistema (admin_master only). Tabela `smtp_config` via SyncSchema+ Rev.3841. `smtpService.ts` reescrito: lê config do banco primeiro, fallback para ENV; `invalidateSmtpTransporter()` força recriação imediata após salvar. 3 endpoints em `settings.*`: `getSmtpConfig`/`saveSmtpConfig`/`testSmtpConfig`. Frontend: campos host, porta (465/587), e-mail, senha (toggle visível), botões Salvar + Testar, banner de estado. `server/_core/index.ts`, `server/routers.ts`, `server/services/smtpService.ts`, `client/src/pages/Configuracoes.tsx`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
@@ -72,6 +74,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### 5 one-liners
 
+- **Rev. 3841** — **CONFIG. SMTP VIA UI · ALTERAR E-MAIL E SENHA SEM EDITAR VARIÁVEL DE AMBIENTE.** Tab em Configurações (admin_master), smtp_config via SyncSchema+, smtpService lê DB primeiro. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3840** — **EXTRATO BANCÁRIO XLSX · REPLICAÇÃO 100% DO MODELO PLANILHA_MODELO_FC.** Colunas B–I, larguras/alturas/merges exatos, bordas medium, fórmula saldo, cond.format. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3839** — **NF-E RECEBIDAS · MUDAR STATUS EM LOTE.** Botão "Mudar Status" na seleção múltipla (reusa `fiscalNotes.bulkUpdateStatus`). ZERO DELETE. Detalhe: `shared/changelog.ts`.
@@ -79,10 +83,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3834** — **EXTRATO BANCÁRIO XLSX: LOGO FC ENGENHARIA + CONTORNO EXTERNO (MEDIUM BORDER).** `getLogoBuffer` retorna `{buffer,extension}`; `applyTableBorders` medium outer + thin inner. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3829** — **EXTRATO BANCÁRIO XLSX: REESCRITA COMPLETA COM EXCELJS PARA IGUALAR TEMPLATE DA CONTABILIDADE.** ZERO DELETE. Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3828** — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3827** — **REVERT Rev.3826 — TRANSPORTE DE EQUIPES volta a "Benefícios (VR/VA/Transporte)". ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
 ### Histórico completo
 

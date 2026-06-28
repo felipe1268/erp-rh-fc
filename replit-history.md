@@ -1,3 +1,7 @@
+- **Rev. 3828** — **FINANCEIRO · LIMPEZA JAN/2026: HOTEL CONSAGRADO MÚTUO — CANCELAMENTO DE DUPLICATAS. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3827** — **REVERT Rev.3826 — TRANSPORTE DE EQUIPES volta a "Benefícios (VR/VA/Transporte)". ZERO DELETE.** Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3825** — **ANÁLISE DE CUSTOS · CLASSIFICADOR BUGFIX + KEYWORDS FROTA/ADMIN: "CONSORTIO"→"CONSORCIO"; MANUTENÇÃO DE EQUIPAMENTO/PNEU/BORRACHARIA→Frota; CHAVEIRO→Admin. DB: MAGNUM TIRES/LEAO→Frota; CEF 885836+FIX PAY→DESPESAS BANCÁRIAS; LAMONIER→Materiais para Obra. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3824** — **FINANCEIRO · LIMPEZA JAN/2026: 103 entradas PJ padronizadas; CCs RH→Obras; "MEDIÇÃO PJ"/"SUBEMPREITEIROS"→Terceiros e PJ. ZERO DELETE.** Detalhe: `shared/changelog.ts`.

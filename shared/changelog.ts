@@ -1,4 +1,15 @@
 /**
+ * Rev. 3843 — **NF-E RECEBIDAS · BUGFIX: BOTÃO "MUDAR STATUS" NÃO ABRIA DIALOG.**
+ *
+ * Causa-raiz: o botão "Mudar Status" da barra de seleção múltipla das NF-e Recebidas
+ * chamava `setBulkStatusOpen(true)` (estado das **Emitidas**) em vez de
+ * `setBulkRecStatusOpen(true)` (estado das Recebidas). O dialog correto existia e
+ * funcionava, mas nunca era aberto. Correção de 1 linha.
+ *
+ * **Arquivo:** `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`. ZERO DELETE.
+ */
+
+/**
  * Rev. 3842 — **EXTRATO BANCÁRIO XLSX · LOGO TAMANHO CORRETO + BORDAS COMPLETAS NO CABEÇALHO.**
  *
  * Correção de 4 problemas visuais identificados pelo usuário (comparação imagem antes/depois):
