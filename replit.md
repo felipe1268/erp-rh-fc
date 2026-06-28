@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3825** — **ANÁLISE DE CUSTOS · CLASSIFICADOR BUGFIX + KEYWORDS FROTA/ADMIN: "CONSORTIO"→"CONSORCIO" (typo fazia CONSÓRCIO VEICULAR cair em Outros); MANUTENÇÃO DE EQUIPAMENTO/PNEU/BORRACHARIA→Frota; CHAVEIRO→Admin. DB jan/2026: MAGNUM TIRES/LEAO LUBRIFICANTES→MANUTENÇÃO DE VEÍCULO/Frota; CEF 885836+FIX PAY→DESPESAS BANCÁRIAS; LAMONIER→Materiais para Obra. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3824** — **FINANCEIRO · LIMPEZA JAN/2026: 103 entradas com nomes PJ padronizados (Jerryaliton, Agostinho, Carlos Rafael, L H Alencar, Sergovale, Helio Bassanelli); CCs RH→Obras corrigidos; "MEDIÇÃO PJ"/"SUBEMPREITEIROS" adicionados ao bucket "Terceiros e PJ" em custosCategorias.ts. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3823** — **ANÁLISE DE CUSTOS · CLASSIFICADOR "OUTROS": keywords FOLHA/PRESTADORES PJ/TRANSPORTE EQUIPE/CHEQUE ESPECIAL/MÚTUO/CARTÓRIO/ALOJAMENTO/HOSPEDAGEM/HOTEL/TREINAMENTO/COMISSÃO/REEMBOLSO adicionadas; bucket "Outros" cai de ~R$576k para mínimo. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
 ### 5 one-liners
+
+- **Rev. 3823** — **ANÁLISE DE CUSTOS · CLASSIFICADOR "OUTROS": keywords FOLHA/PRESTADORES PJ/TRANSPORTE EQUIPE/CHEQUE ESPECIAL/MÚTUO/CARTÓRIO/ALOJAMENTO/HOSPEDAGEM/HOTEL/TREINAMENTO/COMISSÃO/REEMBOLSO adicionadas; bucket "Outros" cai de ~R$576k para mínimo. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3822** — **FINANCEIRO · DESACOPLAMENTO CRONOGRAMA × FINANCEIRO: 5.252 entries a_pagar→previsto; cronograma removido de DRE_ORIGEM_OBRA; sidebar renomeada. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 

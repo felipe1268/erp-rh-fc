@@ -122,14 +122,14 @@ export function classificarGrupoCusto(contaNome: any, origemModulo?: any): Grupo
   // Rev. 3823 — FOLHA antes do check de MAO DE OBRA (banco envia conta_nome = FOLHA DE PAGAMENTO sem origem)
   if (has("FOLHA", "SALARIO", "MAO DE OBRA", "ADIANTAMENTO"))
     return "Salários e Folha";
-  if (has("VEICULO", "COMBUSTIVEL", "FROTA", "LOCACAO DE VEICULOS"))
+  if (has("VEICULO", "COMBUSTIVEL", "FROTA", "LOCACAO DE VEICULOS", "MANUTENCAO DE EQUIPAMENTO", "MANUTENÇÃO DE EQUIPAMENTO", "MAGNUM TIRES", "PNEU", "BORRACHARIA"))
     return "Frota e Veículos";
   if (has("MATERIAL", "MATERIAIS", "CONCRETO", "EPI", "UNIFORME", "FERRAMENTA", "COMPRA", "AQUISICAO", "FRETE", "RETIRADA DE ENTULHO", "ALMOXARIFADO"))
     return "Material e Almoxarifado";
   if (has("ALUGUEL", "LOCACAO"))
     return "Aluguéis e Equipamentos";
-  // Rev. 3823 — CHEQUE ESPECIAL e MUTUO antes do check geral financeiro
-  if (has("CHEQUE ESPECIAL", "MUTUO", "CONSORTIO", "CONSORCIOS", "TITULOS DE CAPITALIZACAO"))
+  // Rev. 3825 — fix CONSORTIO→CONSORCIO (typo); add MANUTENÇÃO DE EQUIPAMENTOS→Frota
+  if (has("CHEQUE ESPECIAL", "MUTUO", "CONSORCIO", "CONSORCIOS", "TITULOS DE CAPITALIZACAO"))
     return "Despesas Financeiras";
   if (has("BANCARIA", "JUROS", "MORA", "FINANCIAMENTO", "EMPRESTIMO", "CARTAO", "CONSIGNADO", "APLICAC", "TARIFA", "TAXAS OPERACIONAIS", "CAPITALIZACAO", "FINANCEIRA"))
     return "Despesas Financeiras";
@@ -142,7 +142,7 @@ export function classificarGrupoCusto(contaNome: any, origemModulo?: any): Grupo
     // Rev. 3823 — novos
     "CARTORIO", "ALOJAMENTO", "HOSPEDAGEM", "HOTEL", "TREINAMENTO", "CURSO",
     "COMISSAO", "COMISSOES", "REEMBOLSO", "OUTRAS DESPESAS", "TOPOGRAFIA",
-    "HONORARIO", "SERVICO DE CARTORIO", "SERVICOS DE CARTORIO",
+    "HONORARIO", "SERVICO DE CARTORIO", "SERVICOS DE CARTORIO", "CHAVEIRO",
   ))
     return "Despesas Administrativas";
 

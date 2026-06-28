@@ -1,6 +1,13 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3825 — **ANÁLISE DE CUSTOS · CLASSIFICADOR — BUGFIX + KEYWORDS FROTA/ADMIN.**
+ * Bug: "CONSORTIO" era typo de "CONSORCIO" → CONSÓRCIO VEICULAR caía em "Outros".
+ * Novos keywords: MANUTENÇÃO DE EQUIPAMENTO/PNEU/BORRACHARIA → "Frota e Veículos";
+ * CHAVEIRO → "Despesas Administrativas". DB jan/2026: MAGNUM TIRES → MANUTENÇÃO DE
+ * VEÍCULO/Frota; CEF MATRIZ 885836 → DESPESAS BANCÁRIAS; LAMONIER → Materiais para Obra;
+ * FIX PAY → DESPESAS BANCÁRIAS/Financeiro. ZERO SCHEMA/ALTER/DROP/DELETE.
+ *
  * Rev. 3824 — **FINANCEIRO · LIMPEZA JAN/2026: NOMES PJ, DUPLICATAS E CLASSIFICADOR.**
  * Correções no banco (company 60002, jan/2026) e no classificador de custos:
  * DB: Jerryaliton Augusto Bezerra padronizado (53 entradas); Agostinho Dijalma Ferreira
