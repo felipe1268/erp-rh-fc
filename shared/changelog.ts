@@ -1,6 +1,24 @@
 /**
  * Changelog centralizado do ERP.
  *
+ * Rev. 3817 — **FINANCEIRO · PLANO DE CONTAS · REESTRUTURAÇÃO SUBEMPREITEIROS/PJ.**
+ * Auditoria de janeiro/2026 revelou 3 contas ativas com sobreposição conceitual sob
+ * "Serviços PJ / Terceirizados": conta 23 (MÃO DE OBRA TERCEIRIZADA / SUBEMPREITEIRO),
+ * conta 491 (MÃO DE OBRA PJ) e conta 507 (MEDIÇÃO PJ). Decisão: separar em 2 buckets
+ * exclusivos por natureza do fornecedor.
+ * ALTERAÇÕES:
+ *   • Conta 23: renomeada → "SUBEMPREITEIROS / EMPRESAS" (empresas com CNPJ executando
+ *     serviços na obra: Montqualy, RM Ramos, LH Alencar, Alluck, etc.).
+ *   • Conta 491: renomeada → "PRESTADORES PJ INDIVIDUAIS" (pessoas físicas com MEI/CNPJ
+ *     próprio em contrato PJ mensal: Rodnei, Jose Carlos, Rafael Hara, etc.).
+ *   • Conta 507 "MEDIÇÃO PJ": desativada (ativo=0); lançamentos históricos preservados;
+ *     novos lançamentos devem usar conta 491 "PRESTADORES PJ INDIVIDUAIS".
+ *   • Conta 57 "Subempreiteiros": desativada (ativo=0); sem uso, redundante com conta 23.
+ *   • conta_nome atualizado em 1.179 entries (conta 23) e 7 entries (conta 491) para
+ *     refletir os nomes novos em relatórios históricos.
+ *   • Conta 55 "Serviços PJ / Terceirizados": mantida ativa como agrupador pai, sem lançamentos.
+ * ZERO SCHEMA/ALTER/DROP/DELETE de lançamentos financeiros.
+ *
  * Rev. 3816 — **FINANCEIRO · DRE · LEGENDA "DRE GERENCIAL DE CAIXA" NO RODAPÉ.**
  * Card fixo no final da página explica o modelo adotado: DRE Gerencial de Caixa
  * (só realizados, ideal para decisão operacional) vs DRE Societário de Competência

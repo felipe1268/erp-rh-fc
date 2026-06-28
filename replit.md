@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3817** — **FINANCEIRO · PLANO DE CONTAS · REESTRUTURAÇÃO SUBEMPREITEIROS/PJ: conta 23 → "SUBEMPREITEIROS / EMPRESAS"; conta 491 → "PRESTADORES PJ INDIVIDUAIS"; conta 507 "MEDIÇÃO PJ" desativada; conta 57 "Subempreiteiros" desativada; conta_nome atualizado em 1.186 entries históricas. ZERO SCHEMA/ALTER/DROP/DELETE de lançamentos.** Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3816** — **FINANCEIRO · DRE · LEGENDA "DRE GERENCIAL DE CAIXA" NO RODAPÉ: card fixo com comparativo DRE Gerencial (caixa, só realizados) × DRE Societário (competência, exigido por lei); explica status excluídos e redireciona projeções ao Fluxo de Caixa. ARQUIVO: `FinanceiroDRE.tsx`. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3815** — **FINANCEIRO · DRE · REVERTE 3814 + EXCLUI `a_pagar`/`a_receber` DO DRE: só realizados no DRE; WHERE exclui `a_pagar`/`a_receber` em ambas as CTEs; valor = `COALESCE(valor_realizado, 0)`. ARQUIVO: `financialKpiService.ts`. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
 ### 5 one-liners
+
+- **Rev. 3815** — **FINANCEIRO · DRE · REVERTE 3814 + EXCLUI `a_pagar`/`a_receber` DO DRE: só realizados no DRE; WHERE exclui `a_pagar`/`a_receber` em ambas as CTEs; valor = `COALESCE(valor_realizado, 0)`. ARQUIVO: `financialKpiService.ts`. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3814** — **[REVERTIDO por 3815] FINANCEIRO · DRE · COALESCE(realizado, previsto, 0) — conceito incorreto.** Detalhe: `shared/changelog.ts`.
 
@@ -64,19 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3811** — **FINANCEIRO · DRE · INVESTIMENTOS/CAPEX + EXEMPLOS EDUCATIVOS POR LINHA: SEÇÃO MEMO CAPEX + `calcularDRE` retorna `investimentoCapex`; `dreLinhaPredicate` exclui `'investimento'`; popover ℹ️ com exemplos "✓ Entra / ✗ Não entra" em todas as linhas. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3810** — **FINANCEIRO · DRE · ROTEAMENTO AUTOMÁTICO CDO vs. FOLHA — `importFolhaRHToFinancial`: REGRA: direto→conta 22 (CDO, variavel), indireta_obra→conta 21 (CDO, variavel), escritorio/NULL→conta 506 (fixo). PATH 1: folha_itens + JOIN job_functions + LATERAL; PATH 2: payroll table. CONSTANTE FOLHA_CATEGORIA_CONFIG + helper _folhaCatConfig. ZERO SCHEMA/ALTER/DROP/DELETE.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3809** — **FINANCEIRO · DRE · ROTEAMENTO CDO vs. FOLHA — PILOTO JAN/2026: 33 PIX MIGRADOS DE FOLHA (506) PARA CDO (21+22, R$54.651); OBRA_ID EM 14 ENTRIES; 2 ENTRIES SEM MATCH (R$2.503) PERMANECEM EM 506. ZERO SCHEMA/ALTER/DROP.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3808** — **FINANCEIRO · DRE · RECLASSIFICAÇÃO CONCEITUAL CDO (CPC 17 + CPC 33): ALIMENTAÇÃO → VALE ALIMENTAÇÃO (id=265); PENSÃO → FOLHA (506); UNIFORME custo_obra→despesa_variavel (R$26.346 SAEM DO CDO); 12 DESYNC CORRIGIDOS; 4 CONTAS DESATIVADAS. CDO CAI ~R$131.000. ZERO SCHEMA/ALTER/DROP.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3807** — **FINANCEIRO · PLANO DE CONTAS · REESTRUTURAÇÃO DESPESAS FINANCEIRAS PARTE 2: 20 ENTRIES 37→389; CONTA 389 "TÍTULOS DE CAPITALIZAÇÃO"; CONTA 509 "CONSÓRCIO VEICULAR"; CONTA 421 DESATIVADA; ORPHANS 81+87 CORRIGIDOS. ZERO SCHEMA/ALTER/DROP.** Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3806** — **FINANCEIRO · LIMPEZA GLOBAL DE ZEROS ABSOLUTOS: 8.759 entries varridos; 24 ABSOLUTAMENTE VAZIOS DELETADOS; 8.735 ORÇAMENTOS LEGÍTIMOS PRESERVADOS. ZERO SCHEMA/ALTER/DROP.** Detalhe: `shared/changelog.ts`.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3805 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3810 e anteriores.
 
 ## User preferences
 
