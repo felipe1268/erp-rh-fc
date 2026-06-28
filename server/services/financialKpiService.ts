@@ -453,7 +453,7 @@ export async function calcularDRE(
        SELECT fe.tipo, fe.natureza,
               LOWER(COALESCE(fe.origem_modulo,'')) AS origem,
               LOWER(COALESCE(fe.conta_nome,'')) AS conta,
-              COALESCE(fe.valor_realizado, 0)::numeric AS v,
+              COALESCE(fe.valor_realizado, fe.valor_previsto, 0)::numeric AS v,
               ac.classificacao_dre AS class_dre
        FROM financial_entries fe
        LEFT JOIN acct_class ac ON ac.id = fe.conta_id
@@ -571,7 +571,7 @@ export async function calcularDRELinhaDetalhe(
              LOWER(COALESCE(fe.origem_modulo,'')) AS origem,
              LOWER(COALESCE(fe.conta_nome,'')) AS conta,
              fe.tipo, fe.natureza,
-             COALESCE(fe.valor_realizado, 0)::numeric AS v,
+             COALESCE(fe.valor_realizado, fe.valor_previsto, 0)::numeric AS v,
              ac.classificacao_dre AS class_dre
       FROM financial_entries fe
       LEFT JOIN acct_class ac ON ac.id = fe.conta_id
