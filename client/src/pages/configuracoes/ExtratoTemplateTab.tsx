@@ -83,7 +83,7 @@ function fileToBase64(file: File): Promise<string> {
 // ── componente principal ──────────────────────────────────────────────────────
 
 export default function ExtratoTemplateTab() {
-  const { companyId } = useCompany();
+  const { companyIdNum: companyId } = useCompany();
   const utils = trpc.useUtils();
 
   const { data: templates = [], isLoading } = trpc.bankStatementTemplates.list.useQuery(

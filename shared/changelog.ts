@@ -1,4 +1,25 @@
 /**
+ * Rev. 3881 — **FIX TEMPLATES DE EXTRATO — companyId undefined.**
+ *
+ * ## Problema
+ * Ao abrir a aba "Templates de Extrato" em Configurações, o erro
+ * `Invalid input: expected number, received undefined` aparecia no console.
+ *
+ * ## Causa-raiz
+ * `ExtratoTemplateTab` desestruturava `companyId` de `useCompany()`, mas o
+ * `CompanyContext` não expõe uma chave `companyId` — ele expõe `companyIdNum`.
+ * O resultado era `companyId === undefined`, o que fazia o tRPC disparar erro
+ * de validação Zod mesmo com `enabled: !!companyId`.
+ *
+ * ## Solução
+ * Uma linha em `ExtratoTemplateTab.tsx`:
+ *   `const { companyIdNum: companyId } = useCompany();`
+ *
+ * ## Arquivos modificados
+ * - `client/src/pages/configuracoes/ExtratoTemplateTab.tsx`
+ */
+
+/**
  * Rev. 3880 — **FIX CONCILIAÇÃO BANCÁRIA — CONTAS NÃO LISTADAS.**
  *
  * ## Problema
