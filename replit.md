@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3873** — **FIX CHECKLIST DOCX — WORD "ERRO AO ABRIR".** Causa-raiz: `ImageRun.transformation` no docx v9 recebe PIXELS, não EMUs. `LOGO_W=1620000` (EMUs) × 9525 = `cx="15430500000"` (17 metros!) → Word rejeita o arquivo. Fix: `LOGO_W=170px` / `LOGO_H=78px` (≈4.5cm proporcional). `downloadPacoteContador.ts`. ZERO DELETE.
+
 - **Rev. 3872** — **FIX DATA NAS PLANILHAS XLSX — DD/MM/AAAA.** Causa-raiz: `fmtDate()` em `downloadPacoteContador.ts` não tratava objetos `Date` do Drizzle; `String(date).slice(0,10)` → `"Fri Jan 02"` cru no Excel. Fix: guard `instanceof Date` com UTC → DD/MM/AAAA. Cobre todos os 4 builders (ListaFaturas, NfeXlsx, ExtratoGeral, OcsXlsx). ZERO DELETE.
 
-- **Rev. 3871** — **FIX PARSER EXTRATO BB — VALORES E TIPO D/C CORRETOS.** Causa-raiz: pdf-parse colapsa nº de documento BB diretamente contra o valor sem espaço (`"616.6731,44 D0,00 C"`). `[CD]\b` falha quando D/C é seguido de dígito → valor ignorado, saldo capturado como valor. Fix: pré-strip `RE_BB_DOCNUM` (`\d{3}.\d{3}.\d{3}.\d{3}.\d{3}`); regex `(?<!\d)…[CD](?=[\s\d]|$)`. Validado: 4 lançamentos corretos (Tarifa 1,44D / PIX 2.100C / Tarifa 91,66D / Empréstimo 1.996,42D). ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3871** — **FIX PARSER EXTRATO BB — VALORES E TIPO D/C CORRETOS.** Pré-strip `RE_BB_DOCNUM`; regex `[CD](?=[\s\d]|$)`. ZERO DELETE.
 
 - **Rev. 3870** — **SEFAZ — CURAR RATE-LIMIT + FIX resetNSU SEGURO.** `resetNSU` usa MAX(nsu_sefaz); `curarRateLimit` desliga sync+NSU seguro; botão "⏸ Pausar" na UI. ZERO DELETE.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3866** — **PANORAMA FISCAL — EXTRATO UNIFICADO COM FILTROS.** `UnifiedBankTable` lista cronológica única; KPIs inline; filtros tipo/NF/banco; badge "NF# N". ZERO DELETE.
 
 - **Rev. 3865** — **PACOTE CONTABILIDADE — EXTRATO CARTÃO FC TEMPLATE + CHECKLIST A4 + TEMPLATES NAS CONFIGURAÇÕES.** `buildExtratCartaoBuffer` ExcelJS; `buildChecklistDocx` A4; `docx_template_config` + 3 endpoints; aba "Template de Word". ZERO DELETE.
-
-- **Rev. 3864** — **NF# NO EXTRATO — VÍNCULO BIDIRECIONAL NF-e ↔ EXTRATO BANCÁRIO.** `getPanoramaFiscal`: subquery fn_id/fn_numero cobre `stmt_line_id` OU `entry_id` chain; badge `NF# <número>` na Conciliação. ZERO DELETE.
 
 ### Histórico completo
 

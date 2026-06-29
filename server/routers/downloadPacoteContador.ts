@@ -825,9 +825,11 @@ async function buildChecklistDocx(label: string, empresa: string, d: ReturnType<
   for (const c of logoCandidates) {
     try { if (fs.existsSync(c.p)) { logoBuffer = fs.readFileSync(c.p); logoType = c.type; break; } } catch { /* próximo */ }
   }
-  // Logo 137×63px → exibir ~4.5cm largo (EMU: 1cm=360000)
-  const LOGO_W = 1620000; // ~4.5cm
-  const LOGO_H = 745000;  // proporcional 63/137
+  // Logo 137×63px → exibir ~4.5cm largo
+  // ATENÇÃO: docx v9 ImageRun.transformation usa PIXELS (não EMUs).
+  // 4.5cm @ 96dpi ≈ 170px; proporcional 63/137 * 170 ≈ 78px
+  const LOGO_W = 170; // pixels
+  const LOGO_H = 78;  // pixels (proporcional 63/137)
 
   // ── Medidas absolutas em twips (DXA) ──────────────────────────────────────
   // A4 retrato: 11906 × 16838 twips

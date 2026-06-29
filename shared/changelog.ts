@@ -1,4 +1,19 @@
 /**
+ * Rev. 3873 — **FIX CHECKLIST DOCX — IMAGEM COM DIMENSÕES INVÁLIDAS (Word "Erro ao abrir").**
+ *
+ * Causa-raiz: `ImageRun.transformation` no docx v9 recebe dimensões em **pixels**, não em EMUs.
+ * O código usava `LOGO_W = 1620000` (EMUs = 4.5cm), que o docx v9 multiplicava por 9525 EMU/px
+ * → `cx="15430500000"` no XML (≈17 metros de largura). O Word rejeita o arquivo inteiro com
+ * "Erro no Word ao tentar abrir o arquivo."
+ *
+ * Fix: `LOGO_W = 170px` e `LOGO_H = 78px` (≈4.5cm × 2.1cm @ 96dpi, proporcional 63/137).
+ * O docx v9 gera internamente `cx="1619250"` (≈4.5cm) — válido para o Word.
+ *
+ * Arquivo: `server/routers/downloadPacoteContador.ts` (constantes LOGO_W / LOGO_H).
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3872 — **FIX DATA NAS PLANILHAS XLSX — DD/MM/AAAA EM VEZ DE "Fri Jan 02".**
  *
  * Causa-raiz: `fmtDate()` em `downloadPacoteContador.ts` não tratava objetos `Date`
