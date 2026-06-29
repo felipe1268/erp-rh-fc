@@ -67,19 +67,26 @@ function extractTokens(nome: string | null | undefined): string[] {
 /** Score de compatibilidade entre uma NF-e e uma linha de extrato (0-100). */
 function calcScore(opts: {
   bslDescricao: string;
-  bslValor: number;     // valor ABSOLUTO da linha (positivo)
-  bslData: string;      // YYYY-MM-DD
+  bslValor: number;       // valor ABSOLUTO da linha (positivo)
+  bslData: string;        // YYYY-MM-DD
   fnCnpj: string | null;
   fnNome: string | null;
   fnValorLiquido: number;
-  fnDataEmissao: string; // YYYY-MM-DD
+  fnValorBruto?: number;  // alternativo: se pagador reteve ISS, banco pode receber valor bruto
+  fnDataEmissao: string;  // YYYY-MM-DD
 }): number {
-  const { bslDescricao, bslValor, bslData, fnCnpj, fnNome, fnValorLiquido, fnDataEmissao } = opts;
+  const { bslDescricao, bslValor, bslData, fnCnpj, fnNome, fnValorLiquido, fnValorBruto, fnDataEmissao } = opts;
   let score = 0;
 
-  // ── CNPJ ──────────────────────────────────────────────────────────────────
+  // ── CNPJ completo ─────────────────────────────────────────────────────────
   const bslCnpj = cnpjFromText(bslDescricao);
-  if (bslCnpj && fnCnpj && cnpjNorm(fnCnpj) === bslCnpj) score += 50;
+  const fnCnpjNorm = cnpjNorm(fnCnpj);
+  if (bslCnpj && fnCnpjNorm && fnCnpjNorm === bslCnpj) {
+    score += 50;
+  } else if (fnCnpjNorm.length === 14 && bslDescricao.includes(fnCnpjNorm.slice(0, 8))) {
+    // CNPJ-raiz (primeiros 8 dígitos): presença na descrição = +25
+    score += 25;
+  }
 
   // ── Nome (tokens) ─────────────────────────────────────────────────────────
   const tokens = extractTokens(fnNome);
@@ -90,26 +97,29 @@ function calcScore(opts: {
   else if (matchedTokens.length === 1 && matchedTokens[0].length >= 6) score += 20;
   else if (matchedTokens.length === 1) score += 12;
 
-  // ── Valor ─────────────────────────────────────────────────────────────────
-  if (fnValorLiquido > 0 && bslValor > 0) {
-    const base = Math.max(fnValorLiquido, bslValor);
-    const diff = Math.abs(fnValorLiquido - bslValor) / base;
-    if (diff <= 0.05) score += 20;
-    else if (diff <= 0.10) score += 12;
-    else if (diff <= 0.15) score += 6;
-    // > 15% → sem pontos de valor
+  // ── Valor (tenta líquido e bruto, usa o melhor) ───────────────────────────
+  function valorPoints(fnVal: number): number {
+    if (fnVal <= 0 || bslValor <= 0) return 0;
+    const base = Math.max(fnVal, bslValor);
+    const diff = Math.abs(fnVal - bslValor) / base;
+    if (diff <= 0.02) return 22;  // quase exato
+    if (diff <= 0.05) return 20;
+    if (diff <= 0.10) return 12;
+    if (diff <= 0.15) return 6;
+    return 0;
   }
+  const vptLiq = valorPoints(fnValorLiquido);
+  const vptBrt = fnValorBruto ? valorPoints(fnValorBruto) : 0;
+  score += Math.max(vptLiq, vptBrt);
 
   // ── Data ──────────────────────────────────────────────────────────────────
-  // Extrato deve ser APÓS emissão (pagamento esperado depois da fatura)
   const msPerDay = 86_400_000;
   const emissaoMs = new Date(fnDataEmissao).getTime();
   const bslMs     = new Date(bslData).getTime();
   const diffDays  = (bslMs - emissaoMs) / msPerDay;
-  if (diffDays >= -5 && diffDays <= 30)  score += 10; // janela ideal
-  else if (diffDays >= -5 && diffDays <= 60)  score += 7;
-  else if (diffDays >= -5 && diffDays <= 90)  score += 4;
-  // fora da janela → sem pontos
+  if (diffDays >= -5 && diffDays <= 30)  score += 10;
+  else if (diffDays >= -5 && diffDays <= 60) score += 7;
+  else if (diffDays >= -5 && diffDays <= 90) score += 4;
 
   return score;
 }
@@ -145,14 +155,16 @@ export async function autoVincularNfsPorLinhas(
     if (bslVal <= 0) continue;
 
     const q = await db.$client.query(`
-      SELECT id, ABS(valor_liquido)::float AS valor_liquido, tomador_cnpj, tomador_nome,
-             data_emissao::text
+      SELECT id, ABS(valor_liquido)::float AS valor_liquido,
+             ABS(valor_bruto)::float AS valor_bruto,
+             tomador_cnpj, tomador_nome, data_emissao::text
       FROM fiscal_notes
       WHERE company_id = $1
         AND stmt_line_id IS NULL
         AND origem LIKE 'nfse_%'
         AND status != 'cancelada'
-        AND ABS(valor_liquido::float) BETWEEN $2 * 0.82 AND $2 * 1.03
+        AND (ABS(valor_liquido::float) BETWEEN $2 * 0.82 AND $2 * 1.03
+          OR ABS(valor_bruto::float)   BETWEEN $2 * 0.82 AND $2 * 1.03)
         AND data_emissao BETWEEN ($3::date - interval '5 days')
                               AND ($3::date + interval '90 days')
       LIMIT 15
@@ -170,6 +182,7 @@ export async function autoVincularNfsPorLinhas(
         fnCnpj: r.tomador_cnpj,
         fnNome: r.tomador_nome,
         fnValorLiquido: parseFloat(r.valor_liquido),
+        fnValorBruto: parseFloat(r.valor_bruto),
         fnDataEmissao: r.data_emissao,
       }),
     })).sort((a, b) => b.score - a.score);
@@ -285,10 +298,11 @@ export async function obterSugestoesPeriodo(
   const credits = bslAll.filter((b) => parseFloat(b.valor) >= 0);
   const debits  = bslAll.filter((b) => parseFloat(b.valor) < 0);
 
-  // NF-e emitidas SEM vínculo
+  // NF-e emitidas SEM vínculo — traz AMBOS valor_liquido e valor_bruto
   const emitQ = await db.$client.query(`
     SELECT id, COALESCE(numero_nf::text, '') AS numero_nf,
            ABS(valor_liquido)::float AS valor_liquido,
+           ABS(valor_bruto)::float   AS valor_bruto,
            COALESCE(tomador_nome, '') AS tomador_nome,
            tomador_cnpj, data_emissao::text, origem
     FROM fiscal_notes
@@ -297,10 +311,11 @@ export async function obterSugestoesPeriodo(
       AND data_emissao BETWEEN $2 AND $3
   `, [companyId, dataInicio, dataFim]);
 
-  // NF-e recebidas SEM vínculo
+  // NF-e recebidas SEM vínculo — usa valor_bruto como referência de comparação com o débito
   const recQ = await db.$client.query(`
     SELECT id, COALESCE(numero_nf::text, '') AS numero_nf,
-           ABS(valor_bruto)::float AS valor_liquido,
+           ABS(valor_bruto)::float   AS valor_liquido,
+           ABS(valor_bruto)::float   AS valor_bruto,
            COALESCE(emitente_nome, '') AS tomador_nome,
            emitente_cnpj AS tomador_cnpj, data_emissao::text, origem
     FROM fiscal_notes
@@ -313,13 +328,18 @@ export async function obterSugestoesPeriodo(
 
   const processar = (fns: any[], bsls: any[]) => {
     for (const fn of fns) {
-      const fnVal = parseFloat(fn.valor_liquido);
+      const fnVal  = parseFloat(fn.valor_liquido);
+      const fnBrut = parseFloat(fn.valor_bruto ?? "0");
       if (fnVal <= 0) continue;
       for (const bsl of bsls) {
         const bslVal = parseFloat(bsl.abs_valor);
         if (bslVal <= 0) continue;
-        const base = Math.max(fnVal, bslVal);
-        if (Math.abs(fnVal - bslVal) / base > 0.15) continue;
+        // Pré-filtro: passa se líquido OU bruto dentro de 15%
+        const baseLiq = Math.max(fnVal, bslVal);
+        const baseBrt = Math.max(fnBrut, bslVal);
+        const okLiq = Math.abs(fnVal  - bslVal) / baseLiq <= 0.15;
+        const okBrt = fnBrut > 0 && Math.abs(fnBrut - bslVal) / baseBrt <= 0.15;
+        if (!okLiq && !okBrt) continue;
         const emissaoMs = new Date(fn.data_emissao).getTime();
         const bslMs     = new Date(bsl.data).getTime();
         const diffDays  = (bslMs - emissaoMs) / 86_400_000;
@@ -332,6 +352,7 @@ export async function obterSugestoesPeriodo(
           fnCnpj: fn.tomador_cnpj,
           fnNome: fn.tomador_nome,
           fnValorLiquido: fnVal,
+          fnValorBruto: fnBrut,
           fnDataEmissao: fn.data_emissao,
         });
         if (score < 30) continue;
@@ -404,6 +425,7 @@ export async function sincronizarNfsPeriodo(
   // ── 2. NF-e emitidas SEM vínculo no período ───────────────────────────────
   const emitQ = await db.$client.query(`
     SELECT id, ABS(valor_liquido)::float AS valor_liquido,
+           ABS(valor_bruto)::float AS valor_bruto,
            tomador_cnpj, tomador_nome, data_emissao::text
     FROM fiscal_notes
     WHERE company_id = $1
@@ -445,14 +467,18 @@ export async function sincronizarNfsPeriodo(
 
   // Emitidas × créditos
   for (const fn of emitidas) {
-    const fnVal = parseFloat(fn.valor_liquido);
+    const fnVal  = parseFloat(fn.valor_liquido);
+    const fnBrut = parseFloat(fn.valor_bruto ?? "0");
     if (fnVal <= 0) continue;
     for (const bsl of credits) {
       const bslVal = parseFloat(bsl.abs_valor);
-      const base = Math.max(fnVal, bslVal);
       if (bslVal <= 0) continue;
-      // Pré-filtro de valor para não calcular score em todo cruzamento
-      if (Math.abs(fnVal - bslVal) / base > 0.15) continue;
+      // Pré-filtro de valor: passa se líquido OU bruto está dentro de 15%
+      const baseLiq = Math.max(fnVal, bslVal);
+      const baseBrt = Math.max(fnBrut, bslVal);
+      const okLiq = Math.abs(fnVal  - bslVal) / baseLiq <= 0.15;
+      const okBrt = fnBrut > 0 && Math.abs(fnBrut - bslVal) / baseBrt <= 0.15;
+      if (!okLiq && !okBrt) continue;
       // Pré-filtro de data
       const emissaoMs = new Date(fn.data_emissao).getTime();
       const bslMs = new Date(bsl.data).getTime();
@@ -466,6 +492,7 @@ export async function sincronizarNfsPeriodo(
         fnCnpj: fn.tomador_cnpj,
         fnNome: fn.tomador_nome,
         fnValorLiquido: fnVal,
+        fnValorBruto: fnBrut,
         fnDataEmissao: fn.data_emissao,
       });
       if (score >= 40) {

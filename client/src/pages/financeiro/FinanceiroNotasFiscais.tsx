@@ -1715,10 +1715,26 @@ export default function FinanceiroNotasFiscais() {
                             <td className="px-3 py-2.5 text-slate-500 text-xs tabular-nums whitespace-nowrap">{nf.emitenteCnpj || "—"}</td>
                             <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-emerald-700 whitespace-nowrap">{formatBRL(nf.valorLiquido)}</td>
                             <td className="px-3 py-2.5">
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${st.color}`}>
-                                {st.label}
-                              </span>
-                              {nf.entryId && <CheckCircle className="w-3 h-3 text-emerald-500 ml-1 inline" />}
+                              <div className="flex flex-col gap-1">
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${st.color}`}>
+                                  {st.label}
+                                  {nf.entryId && <CheckCircle className="w-3 h-3 text-emerald-500 ml-0.5" />}
+                                </span>
+                                {nf.stmtLine ? (
+                                  <div className="rounded-lg border border-violet-200 bg-violet-50 px-2 py-1 text-xs space-y-0.5">
+                                    <div className="flex items-center gap-1 text-violet-700 font-semibold">
+                                      <Link className="h-3 w-3 shrink-0" />
+                                      <span className="truncate max-w-[160px]" title={nf.stmtLine.descricao}>{nf.stmtLine.descricao || `Extrato #${nf.stmtLineId}`}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-2 text-violet-600">
+                                      <span className="font-semibold tabular-nums">{formatBRL(Math.abs(parseFloat(nf.stmtLine.valor ?? "0")))}</span>
+                                      <span className="text-violet-400">{fmtDateBR(nf.stmtLine.data)}</span>
+                                    </div>
+                                  </div>
+                                ) : nf.stmtLineId ? (
+                                  <span className="inline-flex items-center gap-1 text-xs text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded border border-violet-200"><Link className="h-3 w-3" />Extrato #{nf.stmtLineId}</span>
+                                ) : null}
+                              </div>
                             </td>
                             <td className="px-3 py-2.5 text-slate-400 text-xs font-mono max-w-[180px]">
                               <span className="truncate block" title={nf.chaveAcesso ?? ""}>{nf.chaveAcesso ? nf.chaveAcesso.slice(0, 22) + "…" : "—"}</span>
@@ -2110,16 +2126,26 @@ export default function FinanceiroNotasFiscais() {
                           {st.label}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5">
-                        <div className="flex gap-1.5">
+                      <td className="px-3 py-2.5 max-w-[200px]">
+                        <div className="flex flex-col gap-1">
                           {nf.entryId
-                            ? <span className="inline-flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded"><Link className="h-3 w-3" />Lan.{nf.entryId}</span>
+                            ? <span className="inline-flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded"><Link className="h-3 w-3" />Lançamento #{nf.entryId}</span>
                             : <span className="text-xs text-slate-300">— lançamento</span>
                           }
-                          {nf.stmtLineId
-                            ? <span className="inline-flex items-center gap-1 text-xs text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded"><Link className="h-3 w-3" />Ext.{nf.stmtLineId}</span>
-                            : null
-                          }
+                          {nf.stmtLine ? (
+                            <div className="rounded-lg border border-violet-200 bg-violet-50 px-2 py-1.5 text-xs space-y-0.5">
+                              <div className="flex items-center gap-1 text-violet-700 font-semibold">
+                                <Link className="h-3 w-3 shrink-0" />
+                                <span className="truncate" title={nf.stmtLine.descricao}>{nf.stmtLine.descricao || `Extrato #${nf.stmtLineId}`}</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-2 text-violet-600">
+                                <span className="font-semibold tabular-nums">{formatBRL(Math.abs(parseFloat(nf.stmtLine.valor ?? "0")))}</span>
+                                <span className="text-violet-400">{fmtDateBR(nf.stmtLine.data)}</span>
+                              </div>
+                            </div>
+                          ) : nf.stmtLineId ? (
+                            <span className="inline-flex items-center gap-1 text-xs text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded border border-violet-200"><Link className="h-3 w-3" />Extrato #{nf.stmtLineId}</span>
+                          ) : null}
                         </div>
                       </td>
                       <td className="px-3 py-2.5">

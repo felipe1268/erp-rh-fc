@@ -1,4 +1,50 @@
 /**
+ * Rev. 3851 — **NF-e × EXTRATO · CARD DE VÍNCULO + SCORING DEFINITIVO COM valor_bruto E CNPJ-RAIZ.**
+ *
+ * **Problema reportado:** coluna VÍNCULOS exibia só "— lançamento" sem qualquer indicador de
+ * linha do extrato vinculada; o algoritmo de matching falhava silenciosamente porque comparava
+ * somente `valor_liquido` (após deduções ISS/IR) com o crédito bancário, que pode ser o bruto.
+ *
+ * **Correções definitivas:**
+ *
+ * `calcScore()` em `autoVincularNfService.ts`:
+ * - Novo parâmetro opcional `fnValorBruto`: tenta AMBOS líquido e bruto, usa o MELHOR resultado.
+ * - Novo patamar de pontuação: valor quase exato (≤ 2%) → +22 pts (antes só ≤5% dava +20).
+ * - CNPJ-raiz fallback: se CNPJ completo não bater, verifica os primeiros 8 dígitos na descrição
+ *   → +25 pts (antes: 0). Resolve descrições de extrato que trazem só o "CNPJ raiz" do pagador.
+ *
+ * `autoVincularNfsPorLinhas()`:
+ * - Query de NF-e emitidas agora seleciona `valor_bruto` além de `valor_liquido`.
+ * - Filtro SQL: `(valor_liquido OR valor_bruto) BETWEEN bslVal × 0.82 AND bslVal × 1.03`.
+ * - `calcScore` recebe `fnValorBruto` em todas as chamadas.
+ *
+ * `sincronizarNfsPeriodo()` (Fn3 retroativa):
+ * - Query emitidas inclui `valor_bruto`.
+ * - Pré-filtro duplo: passa se liquido OU bruto ≤ 15% do valor do extrato.
+ * - `calcScore` recebe `fnValorBruto`.
+ *
+ * `obterSugestoesPeriodo()` (Fn2 sugestões):
+ * - Mesma lógica de pré-filtro duplo e `fnValorBruto` passado ao `calcScore`.
+ *
+ * `fiscalNotes.list` (`server/routers/fiscalNotes.ts`):
+ * - Após filtrar as linhas, faz batch-fetch de `bank_statement_lines` para todos os
+ *   `stmtLineId` não-nulos. Retorna `stmtLine: { id, descricao, valor, data }` em cada item.
+ *
+ * `sefaz.listNFeRecebidas` (`server/routers/sefaz.ts`):
+ * - SELECT expandido com `stmt_line_id`.
+ * - Mesmo batch-fetch de `bank_statement_lines`; retorna `stmtLineId + stmtLine` em cada item.
+ *
+ * `FinanceiroNotasFiscais.tsx` — coluna VÍNCULOS (emitidas e recebidas):
+ * - Quando `nf.stmtLine` está presente: exibe **card** violeta com descrição (truncada,
+ *   título no hover), valor formatado e data.
+ * - Quando `stmtLineId` existe mas stmtLine é null: badge simplificado "Extrato #N".
+ * - Quando nenhum: sem exibição para extrato (comportamento anterior).
+ * - NF-e recebidas: mesma lógica de card na coluna STATUS, empilhado abaixo do badge.
+ *
+ * **ZERO DELETE. Detalhe: `shared/changelog.ts`.**
+ */
+
+/**
  * Rev. 3850 — **NF-e × EXTRATO · DIALOG "REVISAR SUGESTÕES" COM CONFIRMAÇÃO POR PAR + BOTÃO "VINCULAR TUDO DE ALTA CONFIANÇA".**
  *
  * **Contexto:**

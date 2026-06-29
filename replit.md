@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3851** — **NF-e × EXTRATO · CARD DE VÍNCULO + SCORING DEFINITIVO COM valor_bruto E CNPJ-RAIZ.** `calcScore` recebe `fnValorBruto` (melhor de líquido vs bruto) + CNPJ-raiz +25 pts + patamar ≤2% +22 pts. Pré-filtro duplo (líquido OR bruto ≤15%) em todas as 3 funções. `fiscalNotes.list` e `sefaz.listNFeRecebidas` enricidos com batch-fetch de `bank_statement_lines` → `stmtLine:{descricao,valor,data}`. VÍNCULOS (emitidas e recebidas): card violeta com descrição+valor+data quando vinculado. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3850** — **NF-e × EXTRATO · DIALOG "REVISAR SUGESTÕES": LISTA DE PARES PARA CONFIRMAR OU IGNORAR INDIVIDUALMENTE.** `obterSugestoesPeriodo` (read-only, score ≥ 30, até 200 pares). Endpoint `fiscalNotes.obterSugestoes`. Dialog max-w-4xl com badge Alta/Média/Baixa, botão [Vincular]/[Ignorar] por linha, delta % de valor, footer "Vincular todas de Alta Confiança". Botão "Revisar Sugestões" (cinza) em ambas as abas ao lado de "Vincular Automaticamente" (violeta). `FinanceiroNotasFiscais.tsx`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3849** — **NF-e × EXTRATO · VÍNCULO AUTOMÁTICO MELHORADO: NAME-TOKEN MATCHING + ±10% TOLERÂNCIA + VARREDURA RETROATIVA.** `autoVincularNfService.ts` reescrito: `extractTokens()`, `calcScore()` (0-100), `sincronizarNfsPeriodo` (greedy bipartite). Endpoint `fiscalNotes.sincronizarComExtrato`. Botão "Vincular Automaticamente" nas abas Emitidas e Recebidas. ZERO DELETE. Detalhe: `shared/changelog.ts`.
-
 ### 5 one-liners
+
+- **Rev. 3849** — **NF-e × EXTRATO · VÍNCULO AUTOMÁTICO MELHORADO: NAME-TOKEN MATCHING + ±10% TOLERÂNCIA + VARREDURA RETROATIVA.** `autoVincularNfService.ts` reescrito: `extractTokens()`, `calcScore()` (0-100), `sincronizarNfsPeriodo` (greedy bipartite). Endpoint `fiscalNotes.sincronizarComExtrato`. Botão "Vincular Automaticamente" nas abas Emitidas e Recebidas. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3848** — **CONCILIAÇÃO · CHEQUE DEVOLVIDO = MOVIMENTAÇÃO, NÃO ENTRADA.** Padrões `"cheque devol"` e `"dev.*cheq"` em `_INTERNO_PATTERNS`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3846** — **CONFIGURAÇÕES · NOTIFICAÇÕES E-MAIL UNIFICADAS COM SUBCATEGORIAS.** Os dois tabs fundidos num tab com seletor [RH] | [Contabilidade] via `NOTIF_SUBCATS`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3845** — **TEMPLATE FC XLSX · SERVIÇO COMPARTILHADO + ABA "TEMPLATE DE PLANILHA" EM CONFIGURAÇÕES.** `excelFcTemplate.ts` + tabela `xlsx_template_config` + 3 endpoints + `exportarCustosObra` migrado. ZERO DELETE. Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3844** — **PANORAMA FISCAL · AUTO-VÍNCULO NF-e × EXTRATO BANCÁRIO APÓS CONCILIAÇÃO.** `autoVincularNfService.ts` fire-and-forget em 3 pontos de `financial.ts`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 ### Histórico completo
 

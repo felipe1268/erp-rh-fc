@@ -1595,7 +1595,7 @@ export const sefazRouter = router({
         db.execute(sql`
           SELECT id, numero_nf, chave_acesso, data_emissao, emitente_cnpj, emitente_nome,
                  nsu_sefaz, valor_bruto, valor_liquido, status, descricao_servico,
-                 entry_id, created_at
+                 entry_id, stmt_line_id, created_at
           FROM fiscal_notes
           WHERE company_id = ${input.companyId}
             AND origem IN ('sefaz_nfe', 'xml_upload')
@@ -1622,23 +1622,43 @@ export const sefazRouter = router({
         `) as any,
       ]);
       const semXml = Number(((semXmlRows?.rows ?? semXmlRows)?.[0] as any)?.cnt ?? 0);
+      const rawItems: any[] = (rows?.rows ?? rows) as any[];
+      // Enriquecer com dados da linha do extrato vinculada
+      const stmtIdsRec = rawItems
+        .filter((r: any) => r.stmt_line_id != null)
+        .map((r: any) => Number(r.stmt_line_id));
+      const stmtMapRec: Record<number, { id: number; descricao: string; valor: string; data: string }> = {};
+      if (stmtIdsRec.length > 0) {
+        const stmtQ = await db.$client.query(
+          `SELECT id, descricao, valor::text, data::text FROM bank_statement_lines WHERE id = ANY($1::int[])`,
+          [stmtIdsRec]
+        );
+        for (const s of stmtQ.rows) {
+          stmtMapRec[Number(s.id)] = { id: Number(s.id), descricao: String(s.descricao ?? ""), valor: String(s.valor ?? "0"), data: String(s.data ?? "") };
+        }
+      }
       return {
         semXml,
-        items: ((rows?.rows ?? rows) as any[]).map((r: any) => ({
-          id: Number(r.id),
-          numeroNf: String(r.numero_nf || ""),
-          chaveAcesso: r.chave_acesso || null,
-          dataEmissao: r.data_emissao ? String(r.data_emissao).slice(0, 10) : null,
-          emitenteCnpj: r.emitente_cnpj || null,
-          emitenteNome: r.emitente_nome || null,
-          nsuSefaz: r.nsu_sefaz || null,
-          valorBruto: parseFloat(r.valor_bruto || "0") || 0,
-          valorLiquido: parseFloat(r.valor_liquido || "0") || 0,
-          status: String(r.status || "pendente"),
-          descricaoServico: r.descricao_servico || null,
-          entryId: r.entry_id ? Number(r.entry_id) : null,
-          createdAt: r.created_at ? String(r.created_at).slice(0, 10) : null,
-        })),
+        items: rawItems.map((r: any) => {
+          const sid = r.stmt_line_id ? Number(r.stmt_line_id) : null;
+          return {
+            id: Number(r.id),
+            numeroNf: String(r.numero_nf || ""),
+            chaveAcesso: r.chave_acesso || null,
+            dataEmissao: r.data_emissao ? String(r.data_emissao).slice(0, 10) : null,
+            emitenteCnpj: r.emitente_cnpj || null,
+            emitenteNome: r.emitente_nome || null,
+            nsuSefaz: r.nsu_sefaz || null,
+            valorBruto: parseFloat(r.valor_bruto || "0") || 0,
+            valorLiquido: parseFloat(r.valor_liquido || "0") || 0,
+            status: String(r.status || "pendente"),
+            descricaoServico: r.descricao_servico || null,
+            entryId: r.entry_id ? Number(r.entry_id) : null,
+            stmtLineId: sid,
+            stmtLine: sid ? (stmtMapRec[sid] ?? null) : null,
+            createdAt: r.created_at ? String(r.created_at).slice(0, 10) : null,
+          };
+        }),
       };
     }),
 

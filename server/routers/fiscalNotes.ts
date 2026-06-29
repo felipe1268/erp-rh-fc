@@ -176,7 +176,19 @@ export const fiscalNotesRouter = router({
         const mm = String(input.mes).padStart(2, "0");
         result = result.filter(r => r.dataEmissao?.slice(0, 7).endsWith(`-${mm}`));
       }
-      return result;
+      // Enriquecer com dados da linha do extrato vinculada
+      const stmtIds = result.filter(r => r.stmtLineId != null).map(r => r.stmtLineId!);
+      const stmtMap: Record<number, { id: number; descricao: string; valor: string; data: string }> = {};
+      if (stmtIds.length > 0) {
+        const stmtQ = await db.$client.query(
+          `SELECT id, descricao, valor::text, data::text FROM bank_statement_lines WHERE id = ANY($1::int[])`,
+          [stmtIds]
+        );
+        for (const s of stmtQ.rows) {
+          stmtMap[Number(s.id)] = { id: Number(s.id), descricao: String(s.descricao ?? ""), valor: String(s.valor ?? "0"), data: String(s.data ?? "") };
+        }
+      }
+      return result.map(r => ({ ...r, stmtLine: r.stmtLineId ? (stmtMap[r.stmtLineId] ?? null) : null }));
     }),
 
   getById: protectedProcedure
