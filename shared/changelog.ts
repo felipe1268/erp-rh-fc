@@ -1,4 +1,25 @@
 /**
+ * Rev. 3867 — **CHECKLIST DOCX — FIX LARGURA DAS TABELAS (DXA × PERCENTAGE).**
+ *
+ * **Causa-raiz:** `WidthType.PERCENTAGE` no docx v9 (OOXML `w:pct`) espera o valor
+ * em quinquagésimos de porcentagem (100% = 5000), não em 0–100. Usar `size: 100`
+ * com PERCENTAGE equivalia a 2% da largura → todas as tabelas colapsavam numa
+ * coluna estreita de ~190 twips, fazendo o texto "quebrar" em linhas de 1-2 palavras.
+ *
+ * **Correção:** substituição de TODOS os `WidthType.PERCENTAGE` por `WidthType.DXA`
+ * com valores absolutos em twips calculados da área de conteúdo A4:
+ *   - Página A4 retrato: 11906 twips de largura
+ *   - Margens L+R: 1134 + 1134 = 2268 twips
+ *   - Área útil: W = 9638 twips
+ *   - `columnWidths` adicionado em todas as tabelas (âncora de largura no XML)
+ *   - Tabela controle: W_LABEL=3000 / W_VALOR=6638
+ *   - Tabela resumo: W_DOC=7800 / W_QTD=1838
+ *   - Seções/banner: [W] (célula única, largura total)
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3866 — **PANORAMA FISCAL — EXTRATO UNIFICADO COM FILTROS.**
  *
  * **Problema:** a tela fragmentava entradas e saídas em 4 accordions separados

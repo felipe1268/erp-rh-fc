@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3867** — **CHECKLIST DOCX — FIX LARGURA DAS TABELAS (DXA × PERCENTAGE).** `WidthType.PERCENTAGE` com `size:100` = 2% no OOXML (pct em quinquagésimos) → tabelas em coluna de ~190 twips. Substituição completa por `WidthType.DXA` + `columnWidths` absolutos: W=9638, W_LABEL=3000, W_VALOR=6638, W_DOC=7800, W_QTD=1838. Tabelas preenchem A4 retrato corretamente. ZERO DELETE.
+
 - **Rev. 3866** — **PANORAMA FISCAL — EXTRATO UNIFICADO COM FILTROS.** `UnifiedBankTable`: mescla as 4 arrays (`entradasCom/Sem`, `saidasCom/Sem`) em lista cronológica única; KPIs inline (Total Entradas, Saídas, Com NF, Sem NF); filtros [Todos/Entradas/Saídas] + [Todas/Com NF/Sem NF] + chips de banco; cada linha mostra badge Tipo + ✓ verde + badge "NF# N". Accordions duplicados removidos. ZERO DELETE.
 
-- **Rev. 3865** — **PACOTE CONTABILIDADE — EXTRATO CARTÃO FC TEMPLATE + CHECKLIST A4 + TEMPLATES NAS CONFIGURAÇÕES.** `buildExtratCartaoBuffer`: reescrito em ExcelJS + `applyFcHeader`/`applyFcColumnHeader` (logo, cabeçalho, zebra, SUM total dourado, uma aba por fatura). `buildChecklistDocx`: A4 (`11906×16838`), `Header` corrente (FC + período), `Footer` com `PageNumber.CURRENT/TOTAL_PAGES`, título como tabela azul. Tabela `docx_template_config` + 3 endpoints (`getDocxTemplateConfig`, `saveDocxTemplateConfig`, `downloadDocxTemplateExemplo`). Nova aba "Template de Word" em Configurações. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3865** — **PACOTE CONTABILIDADE — EXTRATO CARTÃO FC TEMPLATE + CHECKLIST A4 + TEMPLATES NAS CONFIGURAÇÕES.** `buildExtratCartaoBuffer` ExcelJS; `buildChecklistDocx` A4; `docx_template_config` + 3 endpoints; aba "Template de Word". ZERO DELETE.
 
 - **Rev. 3864** — **NF# NO EXTRATO — VÍNCULO BIDIRECIONAL NF-e ↔ EXTRATO BANCÁRIO.** `getPanoramaFiscal`: subquery fn_id/fn_numero cobre `stmt_line_id` OU `entry_id` chain; badge `NF# <número>` na Conciliação. ZERO DELETE.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3862** — **CHECKLIST WORD + ABAS DE CATEGORIA + 6 TEMPLATES NOVOS.** `00_CHECKLIST.docx` via `docx` v9.7.1; abas RH/Financeiro/Planejamento/Contratos/Medições/Contabilidade; 6 tipos seed com `CATEGORIAS_DOCS`. ZERO DELETE.
 
 - **Rev. 3861** — **ENVIOS AO CONTADOR · BADGE DE STATUS POR LINHA EM NF-e RECEBIDAS.** Badge condicional: `conciliada`=verde, `enviada`=azul, demais=âmbar; linha conciliada ganha fundo `bg-green-50/30`. ZERO DELETE.
-
-- **Rev. 3860** — **EXTRATO BANCÁRIO XLSX · COLUNA "Nº NOTA FISCAL" CENTRALIZADA.** `textCols.forEach` em `downloadContabilidadeXlsx.ts`: `col === "E" ? "center" : "left"`. ZERO DELETE.
 
 ### Histórico completo
 

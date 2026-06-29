@@ -799,124 +799,157 @@ async function buildChecklistDocx(label: string, empresa: string, d: ReturnType<
   const geradoEm = new Date().toLocaleString("pt-BR");
   const temPendencias = entSemNF + saiSemNF + ocsSemNF > 0;
 
-  const AZUL = cfg.corPrincipal.replace(/^#/, ""); const CINZA = "64748B";
-  const VERDE = "166534"; const LARANJA = "B45309";
-  const FONTE = "Calibri";
-  const SEM = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" } as const;
-  const BRD = (c = "D0D5DD") => ({ style: BorderStyle.SINGLE, size: 4, color: c }) as const;
+  const AZUL   = cfg.corPrincipal.replace(/^#/, "");
+  const CINZA  = "64748B";
+  const VERDE  = "166534";
+  const LARANJA = "B45309";
+  const FONTE  = "Calibri";
 
-  function celulaLabel(txt: string) {
+  // ── Medidas absolutas em twips (DXA) ──────────────────────────────────────
+  // A4 retrato: 11906 × 16838 twips
+  // Margens: L=1134 R=1134 → área de conteúdo = 11906 - 1134 - 1134 = 9638 twips
+  const W = 9638;            // largura total do conteúdo
+  const W_LABEL = 3000;      // coluna "Rótulo" na tabela de controle
+  const W_VALOR = W - W_LABEL;  // coluna "Valor"
+  const W_DOC   = 7800;      // coluna "Tipo de Documento" no resumo
+  const W_QTD   = W - W_DOC; // coluna "Qtd."
+
+  const SEM = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" } as const;
+  const BRD = (c = "D0D5DD") => ({ style: BorderStyle.SINGLE, size: 6, color: c }) as const;
+
+  // ── Helpers de células ─────────────────────────────────────────────────────
+  function cLabel(txt: string) {
     return new TableCell({
-      shading: { type: ShadingType.SOLID, color: "F1F5F9", fill: "F1F5F9" },
-      margins: { top: 60, bottom: 60, left: 120, right: 120 },
+      shading: { type: ShadingType.SOLID, color: "EFF4FB", fill: "EFF4FB" },
+      margins: { top: 80, bottom: 80, left: 160, right: 160 },
       borders: { top: BRD(), bottom: BRD(), left: BRD(), right: BRD() },
-      width: { size: 32, type: WidthType.PERCENTAGE },
+      width: { size: W_LABEL, type: WidthType.DXA },
       children: [new Paragraph({ children: [new TextRun({ text: txt, bold: true, size: 18, color: CINZA, font: FONTE })] })],
     });
   }
-  function celulaValor(txt: string) {
+  function cValor(txt: string) {
     return new TableCell({
-      margins: { top: 60, bottom: 60, left: 120, right: 120 },
+      margins: { top: 80, bottom: 80, left: 160, right: 160 },
       borders: { top: BRD(), bottom: BRD(), left: BRD(), right: BRD() },
-      width: { size: 68, type: WidthType.PERCENTAGE },
+      width: { size: W_VALOR, type: WidthType.DXA },
       children: [new Paragraph({ children: [new TextRun({ text: txt, size: 18, font: FONTE })] })],
     });
   }
-  function celulaH(txt: string) {
+  function cHead(txt: string, w: number) {
     return new TableCell({
       shading: { type: ShadingType.SOLID, color: AZUL, fill: AZUL },
-      margins: { top: 80, bottom: 80, left: 120, right: 120 },
+      margins: { top: 100, bottom: 100, left: 160, right: 160 },
       borders: { top: BRD(AZUL), bottom: BRD(AZUL), left: BRD(AZUL), right: BRD(AZUL) },
+      width: { size: w, type: WidthType.DXA },
       children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: txt, bold: true, size: 18, color: "FFFFFF", font: FONTE })] })],
     });
   }
-  function celulaD(txt: string, center = false) {
+  function cData(txt: string, w: number, center = false) {
     return new TableCell({
-      margins: { top: 70, bottom: 70, left: 120, right: 120 },
+      margins: { top: 80, bottom: 80, left: 160, right: 160 },
       borders: { top: BRD(), bottom: BRD(), left: BRD(), right: BRD() },
+      width: { size: w, type: WidthType.DXA },
       children: [new Paragraph({ alignment: center ? AlignmentType.CENTER : AlignmentType.LEFT, children: [new TextRun({ text: txt, size: 20, font: FONTE, bold: center })] })],
     });
   }
 
+  // ── Seção colorida (faixa título) ─────────────────────────────────────────
   function secao(titulo: string) {
     return new Table({
-      width: { size: 100, type: WidthType.PERCENTAGE },
+      width: { size: W, type: WidthType.DXA },
+      columnWidths: [W],
       borders: { top: SEM, bottom: SEM, left: SEM, right: SEM, insideH: SEM, insideV: SEM },
       rows: [new TableRow({ children: [new TableCell({
         shading: { type: ShadingType.SOLID, color: AZUL, fill: AZUL },
-        margins: { top: 80, bottom: 80, left: 160, right: 160 },
+        margins: { top: 100, bottom: 100, left: 200, right: 200 },
         borders: { top: SEM, bottom: SEM, left: SEM, right: SEM },
+        width: { size: W, type: WidthType.DXA },
         children: [new Paragraph({ children: [new TextRun({ text: titulo, bold: true, size: 22, color: "FFFFFF", font: FONTE })] })],
       })]})],
     });
   }
 
-  function item(txt: string, ok = false, cor?: string) {
+  // ── Item de lista ─────────────────────────────────────────────────────────
+  function item(txt: string, ok = false) {
     const icone = ok ? "\u2611  " : "\u25A1  ";
     return new Paragraph({
       children: [
         new TextRun({ text: icone, size: 20, font: FONTE, color: ok ? VERDE : CINZA }),
-        new TextRun({ text: txt, size: 20, font: FONTE, color: cor }),
+        new TextRun({ text: txt,   size: 20, font: FONTE }),
       ],
-      spacing: { before: 80, after: 80 }, indent: { left: 400 },
+      spacing: { before: 80, after: 80 },
+      indent: { left: 480 },
     });
   }
+
+  // ── Pendência ─────────────────────────────────────────────────────────────
   function pend(txt: string, err: boolean) {
     return new Paragraph({
       children: [
-        new TextRun({ text: err ? "!  " : "\u2713  ", bold: true, size: 20, font: FONTE, color: err ? LARANJA : VERDE }),
+        new TextRun({ text: err ? "\u26A0  " : "\u2713  ", bold: true, size: 20, font: FONTE, color: err ? LARANJA : VERDE }),
         new TextRun({ text: txt, size: 20, font: FONTE, color: err ? LARANJA : VERDE }),
       ],
-      spacing: { before: 80, after: 80 }, indent: { left: 400 },
+      spacing: { before: 80, after: 80 },
+      indent: { left: 480 },
     });
   }
-  function esp(pts = 100) { return new Paragraph({ text: "", spacing: { before: pts, after: 0 } }); }
 
+  // ── Espaçador ─────────────────────────────────────────────────────────────
+  function esp(pts = 120) { return new Paragraph({ text: "", spacing: { before: pts, after: 0 } }); }
+
+  // ── Tabela de controle (cabeçalho do documento) ───────────────────────────
   const tblControle = new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
+    width: { size: W, type: WidthType.DXA },
+    columnWidths: [W_LABEL, W_VALOR],
     rows: [
-      new TableRow({ children: [celulaLabel("Empresa"),       celulaValor(empresa)] }),
-      new TableRow({ children: [celulaLabel("Período"),       celulaValor(label)] }),
-      new TableRow({ children: [celulaLabel("Documento Nº"), celulaValor("FC-CONT-001")] }),
-      new TableRow({ children: [celulaLabel("Gerado em"),     celulaValor(geradoEm)] }),
+      new TableRow({ children: [cLabel("Empresa"),       cValor(empresa)] }),
+      new TableRow({ children: [cLabel("Período"),       cValor(label)] }),
+      new TableRow({ children: [cLabel("Documento Nº"), cValor("FC-CONT-001")] }),
+      new TableRow({ children: [cLabel("Gerado em"),     cValor(geradoEm)] }),
     ],
   });
 
+  // ── Tabela de resumo ──────────────────────────────────────────────────────
   const tblResumo = new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
+    width: { size: W, type: WidthType.DXA },
+    columnWidths: [W_DOC, W_QTD],
     rows: [
-      new TableRow({ children: [celulaH("Tipo de Documento"), celulaH("Qtd.")] }),
-      new TableRow({ children: [celulaD("NFS-e emitidas (faturas)"), celulaD(String(nfseEmitidas.length), true)] }),
-      new TableRow({ children: [celulaD("NFS-e tomadas (serviços)"), celulaD(String(nfseTomadas.length), true)] }),
-      new TableRow({ children: [celulaD("NF-e recebidas (compras)"), celulaD(String(nfe.length), true)] }),
-      new TableRow({ children: [celulaD("Entradas bancárias"), celulaD(String(bank.filter((b: any) => b.tipo === "credito").length), true)] }),
-      new TableRow({ children: [celulaD("Saídas bancárias"), celulaD(String(bank.filter((b: any) => b.tipo === "debito").length), true)] }),
-      new TableRow({ children: [celulaD("Lançamentos de cartão"), celulaD(String(cartao.length), true)] }),
-      new TableRow({ children: [celulaD("Ordens de compra"), celulaD(String(ocs.length), true)] }),
+      new TableRow({ children: [cHead("Tipo de Documento", W_DOC), cHead("Qtd.", W_QTD)] }),
+      new TableRow({ children: [cData("NFS-e emitidas (faturas)",  W_DOC), cData(String(nfseEmitidas.length), W_QTD, true)] }),
+      new TableRow({ children: [cData("NFS-e tomadas (serviços)",  W_DOC), cData(String(nfseTomadas.length),  W_QTD, true)] }),
+      new TableRow({ children: [cData("NF-e recebidas (compras)",  W_DOC), cData(String(nfe.length),          W_QTD, true)] }),
+      new TableRow({ children: [cData("Entradas bancárias",        W_DOC), cData(String(bank.filter((b: any) => b.tipo === "credito").length), W_QTD, true)] }),
+      new TableRow({ children: [cData("Saídas bancárias",          W_DOC), cData(String(bank.filter((b: any) => b.tipo === "debito" ).length), W_QTD, true)] }),
+      new TableRow({ children: [cData("Lançamentos de cartão",     W_DOC), cData(String(cartao.length), W_QTD, true)] }),
+      new TableRow({ children: [cData("Ordens de compra",          W_DOC), cData(String(ocs.length),    W_QTD, true)] }),
     ],
   });
 
+  // ── Banner de título ──────────────────────────────────────────────────────
   const tituloDoc = new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
+    width: { size: W, type: WidthType.DXA },
+    columnWidths: [W],
     borders: { top: SEM, bottom: SEM, left: SEM, right: SEM, insideH: SEM, insideV: SEM },
     rows: [new TableRow({ children: [new TableCell({
       shading: { type: ShadingType.SOLID, color: AZUL, fill: AZUL },
-      margins: { top: 160, bottom: 160, left: 200, right: 200 },
+      margins: { top: 180, bottom: 180, left: 240, right: 240 },
       borders: { top: SEM, bottom: SEM, left: SEM, right: SEM },
+      width: { size: W, type: WidthType.DXA },
       children: [new Paragraph({
         alignment: AlignmentType.CENTER,
-        children: [new TextRun({ text: `CHECKLIST — PACOTE CONTABILIDADE  ·  ${label}`, bold: true, size: 28, color: "FFFFFF", font: FONTE })],
+        children: [new TextRun({ text: `CHECKLIST — PACOTE CONTABILIDADE  ·  ${label}`, bold: true, size: 30, color: "FFFFFF", font: FONTE })],
       })],
     })]})],
   });
 
+  // ── Documento ─────────────────────────────────────────────────────────────
   const doc = new Document({
     creator: "ERP FC Engenharia",
-    title: `Checklist Contabilidade — ${label}`,
+    title:   `Checklist Contabilidade — ${label}`,
     sections: [{
       properties: {
         page: {
-          size: { width: 11906, height: 16838 },
+          size:   { width: 11906, height: 16838 },
           margin: { top: 1440, right: 1134, bottom: 1134, left: 1134, header: 709, footer: 709 },
         },
       },
@@ -925,7 +958,7 @@ async function buildChecklistDocx(label: string, empresa: string, d: ReturnType<
           children: [new Paragraph({
             alignment: AlignmentType.RIGHT,
             border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: AZUL, space: 4 } },
-            spacing: { before: 0, after: 100 },
+            spacing: { before: 0, after: 80 },
             children: [
               new TextRun({ text: "FC ENGENHARIA  ·  PACOTE CONTABILIDADE  ·  ", size: 16, font: FONTE, color: CINZA }),
               new TextRun({ text: label, size: 16, font: FONTE, color: AZUL, bold: true }),
@@ -938,7 +971,7 @@ async function buildChecklistDocx(label: string, empresa: string, d: ReturnType<
           children: [new Paragraph({
             alignment: AlignmentType.CENTER,
             border: { top: { style: BorderStyle.SINGLE, size: 4, color: "D0D5DD", space: 4 } },
-            spacing: { before: 100, after: 0 },
+            spacing: { before: 80, after: 0 },
             children: [
               new TextRun({ text: `Gerado pelo ERP FC Engenharia  ·  ${geradoEm}  ·  Pág. `, size: 16, font: FONTE, color: "94A3B8" }),
               new TextRun({ children: [PageNumber.CURRENT], size: 16, font: FONTE, color: "94A3B8" }),
@@ -949,34 +982,54 @@ async function buildChecklistDocx(label: string, empresa: string, d: ReturnType<
         }),
       },
       children: [
-        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 80 }, children: [new TextRun({ text: "FC ENGENHARIA E CONSTRUÇÃO LTDA", bold: true, size: 36, color: AZUL, font: FONTE })] }),
-        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 240 }, children: [new TextRun({ text: "Sistema de Gestão da Qualidade  ·  ISO 9001", size: 18, color: CINZA, font: FONTE, italics: true })] }),
+        // ── Cabeçalho institucional ──────────────────────────────────────
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { before: 0, after: 60 },
+          children: [new TextRun({ text: "FC ENGENHARIA E CONSTRUÇÃO LTDA", bold: true, size: 36, color: AZUL, font: FONTE })],
+        }),
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { before: 0, after: 200 },
+          children: [new TextRun({ text: "Sistema de Gestão da Qualidade  ·  ISO 9001", size: 18, color: CINZA, font: FONTE, italics: true })],
+        }),
+        // ── Tabela de controle ───────────────────────────────────────────
         tblControle,
-        esp(160),
+        esp(180),
+        // ── Banner de título ─────────────────────────────────────────────
         tituloDoc,
-        esp(200),
-        secao("1. ESTRUTURA DO PACOTE"), esp(120),
-        item("Faturas_Emitidas/    →  NFS-e emitidas (espelho HTML + Lista_Faturas_Emitidas.xlsx)", true),
-        item("Servicos_Tomados/  →  NFS-e tomadas (HTML + Lista_Servicos_Tomados.xlsx)", true),
-        item("Servicos_Tomados/  →  NF-e recebidas compras (NF-e_Recebidas_Compras.xlsx)", true),
-        item("Extratos_Bancarios/ →  Extrato_Bancario_<Mes>.xlsx + Extrato_Completo.xlsx", true),
-        item("Extratos_Cartoes/   →  Extrato_Cartao_<Mes>.xlsx (cartão de crédito)", true),
-        item("02_OCs_NF-e.xlsx   →  Ordens de compra × NF-e vinculada", true),
-        esp(200),
-        secao("2. RESUMO DO PERÍODO"), esp(120),
+        esp(240),
+        // ── Seção 1 ──────────────────────────────────────────────────────
+        secao("1. ESTRUTURA DO PACOTE"),
+        esp(120),
+        item("Faturas_Emitidas/     →  NFS-e emitidas (espelho HTML + Lista_Faturas_Emitidas.xlsx)", true),
+        item("Servicos_Tomados/    →  NFS-e tomadas (HTML + Lista_Servicos_Tomados.xlsx)", true),
+        item("Servicos_Tomados/    →  NF-e recebidas compras (NF-e_Recebidas_Compras.xlsx)", true),
+        item("Extratos_Bancarios/  →  Extrato_Bancario_<Mes>.xlsx + Extrato_Completo.xlsx", true),
+        item("Extratos_Cartoes/    →  Extrato_Cartao_<Mes>.xlsx (cartão de crédito)", true),
+        item("02_OCs_NF-e.xlsx    →  Ordens de compra × NF-e vinculada", true),
+        esp(240),
+        // ── Seção 2 ──────────────────────────────────────────────────────
+        secao("2. RESUMO DO PERÍODO"),
+        esp(120),
         tblResumo,
-        esp(200),
-        secao(`3. PENDÊNCIAS${!temPendencias ? "  —  NENHUMA  \u2713" : ""}`), esp(120),
+        esp(240),
+        // ── Seção 3 ──────────────────────────────────────────────────────
+        secao(`3. PENDÊNCIAS${!temPendencias ? "  —  NENHUMA  \u2713" : ""}`),
+        esp(120),
         pend(entSemNF > 0 ? `${entSemNF} entrada(s) bancária(s) SEM NFS-e vinculada` : "Entradas bancárias — OK", entSemNF > 0),
         pend(saiSemNF > 0 ? `${saiSemNF} saída(s) bancária(s) SEM NF-e vinculada`   : "Saídas bancárias — OK",   saiSemNF > 0),
         pend(ocsSemNF > 0 ? `${ocsSemNF} OC(s) SEM NF-e correspondente`             : "Ordens de compra — OK",   ocsSemNF > 0),
-        esp(200),
-        secao(`4. CHECKLIST — ENVIAR AO CONTADOR  (${cfg.emailContador})`), esp(120),
+        esp(240),
+        // ── Seção 4 ──────────────────────────────────────────────────────
+        secao(`4. ENVIAR AO CONTADOR  (${cfg.emailContador})`),
+        esp(120),
         item("Este arquivo ZIP completo"),
         item("Guia de ISS recolhido (gerada no portal da prefeitura)"),
         item("Folha de pagamento assinada + holerites"),
         item("Comprovantes de pagamento FGTS / GPS"),
         item("Declaração de faturamento (se solicitado)"),
+        esp(240),
       ],
     }],
   });
