@@ -8,6 +8,7 @@
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
+import XlsxPrintPreview, { REPORT_PREVIEWS } from "./XlsxPrintPreview";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -142,7 +143,8 @@ interface Props {
 }
 
 export default function XlsxTemplateTab({ userName }: Props) {
-  const { companyIdNum: companyId } = useCompany();
+  const { companyIdNum: companyId, selectedCompany } = useCompany();
+  const companyLogoUrl: string | undefined = (selectedCompany as any)?.logoUrl ?? undefined;
 
   const query = trpc.settings.getXlsxTemplateConfig.useQuery(
     { companyId },
@@ -680,6 +682,24 @@ export default function XlsxTemplateTab({ userName }: Props) {
                         </tr>
                       </tfoot>
                     </table>
+
+                    {/* Botão de impressão completa */}
+                    {(() => {
+                      const def = REPORT_PREVIEWS.find(p => p.nome === r.nome);
+                      if (!def) return null;
+                      return (
+                        <div className="flex items-center justify-end px-3 py-2 border-t border-gray-100 bg-gray-50">
+                          <XlsxPrintPreview
+                            report={def}
+                            tituloEmpresa={form.tituloEmpresa}
+                            revisao={form.revisao}
+                            corCabecalho={form.corCabecalho}
+                            aprovadoPor={userName || "Sistema"}
+                            logoUrl={companyLogoUrl ?? "/logo-fc.jpg"}
+                          />
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
