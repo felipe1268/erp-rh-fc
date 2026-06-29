@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3868** — **CHECKLIST DOCX — LOGO FC + PASTAS ZIP NUMERADAS.** `ImageRun` com `logo-fc.jpg` (LOGO_W=1620000 EMU); tabela cabeçalho logo+nome com linha azul. ZIP: `01_Faturas_Emitidas/`, `02_Servicos_Tomados/`, `03_Extratos_Bancarios/`, `04_Extratos_Cartoes/`, `05_OCs_NF-e/` (pasta), `06_OS_Servico/` (nova). Checklist seção 1 atualizado. ZERO DELETE.
+- **Rev. 3869** — **ZIP PACOTE CONTADOR — PREFIXO 3 DÍGITOS (001_…006_).** Numeração `01_` → `001_` em todas as pastas e no checklist seção 1: `001_Faturas_Emitidas`, `002_Servicos_Tomados`, `003_Extratos_Bancarios`, `004_Extratos_Cartoes`, `005_OCs_NF-e`, `006_OS_Servico`. ZERO DELETE.
 
-- **Rev. 3867** — **CHECKLIST DOCX — FIX LARGURA DAS TABELAS (DXA × PERCENTAGE).** `WidthType.PERCENTAGE` com `size:100` = 2% no OOXML → tabelas em coluna de ~190 twips. DXA absoluto: W=9638, W_LABEL=3000, W_VALOR=6638, W_DOC=7800, W_QTD=1838. ZERO DELETE.
+- **Rev. 3868** — **CHECKLIST DOCX — LOGO FC + PASTAS ZIP NUMERADAS.** `ImageRun` logo-fc.jpg (1620000 EMU); tabela cabeçalho logo+nome+linha azul; ZIP com pastas `001_`…`006_`; `005_OCs_NF-e/` (pasta); `006_OS_Servico/` (nova). ZERO DELETE.
 
 ### 5 one-liners
 

@@ -1,4 +1,16 @@
 /**
+ * Rev. 3869 — **ZIP PACOTE CONTADOR — PREFIXO 3 DÍGITOS (001_…006_).**
+ *
+ * Ajuste do padrão de numeração das pastas de `01_` para `001_` em todo o
+ * `processarMes` e no texto do checklist (seção 1):
+ *   001_Faturas_Emitidas / 002_Servicos_Tomados / 003_Extratos_Bancarios /
+ *   004_Extratos_Cartoes / 005_OCs_NF-e / 006_OS_Servico
+ * Garante ordenação correta no Finder/Explorer para pacotes com 10+ entradas.
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3868 — **CHECKLIST DOCX — LOGO FC + PASTAS ZIP NUMERADAS.**
  *
  * Duas melhorias em `server/routers/downloadPacoteContador.ts`:

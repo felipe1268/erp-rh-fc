@@ -1045,13 +1045,13 @@ async function buildChecklistDocx(label: string, empresa: string, d: ReturnType<
         // ── Seção 1 ──────────────────────────────────────────────────────
         secao("1. ESTRUTURA DO PACOTE"),
         esp(120),
-        item("01_Faturas_Emitidas/     →  NFS-e emitidas (espelho HTML + Lista_Faturas_Emitidas.xlsx)", true),
-        item("02_Servicos_Tomados/    →  NFS-e tomadas (HTML + Lista_Servicos_Tomados.xlsx)", true),
-        item("02_Servicos_Tomados/    →  NF-e recebidas compras (NF-e_Recebidas_Compras.xlsx)", true),
-        item("03_Extratos_Bancarios/  →  Extrato_Bancario_<Mes>.xlsx + Extrato_Completo.xlsx", true),
-        item("04_Extratos_Cartoes/    →  Extrato_Cartao_<Mes>.xlsx (cartão de crédito)", true),
-        item("05_OCs_NF-e/             →  OCs_NF-e.xlsx (ordens de compra × NF-e vinculada)", true),
-        item("06_OS_Servico/           →  Ordens de Serviço emitidas no período", true),
+        item("001_Faturas_Emitidas/    →  NFS-e emitidas (espelho HTML + Lista_Faturas_Emitidas.xlsx)", true),
+        item("002_Servicos_Tomados/   →  NFS-e tomadas (HTML + Lista_Servicos_Tomados.xlsx)", true),
+        item("002_Servicos_Tomados/   →  NF-e recebidas compras (NF-e_Recebidas_Compras.xlsx)", true),
+        item("003_Extratos_Bancarios/ →  Extrato_Bancario_<Mes>.xlsx + Extrato_Completo.xlsx", true),
+        item("004_Extratos_Cartoes/   →  Extrato_Cartao_<Mes>.xlsx (cartão de crédito)", true),
+        item("005_OCs_NF-e/           →  OCs_NF-e.xlsx (ordens de compra × NF-e vinculada)", true),
+        item("006_OS_Servico/         →  Ordens de Serviço emitidas no período", true),
         esp(240),
         // ── Seção 2 ──────────────────────────────────────────────────────
         secao("2. RESUMO DO PERÍODO"),
@@ -1196,77 +1196,77 @@ export function registerPacoteContadorRoute(app: Express) {
         // ── 01 — Faturas Emitidas ─────────────────────────────────────────────
         for (const n of nfseEmitidas) {
           const nome = safeName(`NFS-e_${n.numero_nf || n.id}_${n.tomador_razao_social || "SemNome"}`);
-          archive.append(buildNfseHtml(n, "emitida", empresa), { name: `${f}/01_Faturas_Emitidas/${nome}.html` });
+          archive.append(buildNfseHtml(n, "emitida", empresa), { name: `${f}/001_Faturas_Emitidas/${nome}.html` });
         }
         try {
           const xlsxFat = await buildListaFaturasXlsx(nfseEmitidas, "emitida", label, fcConfig);
-          archive.append(xlsxFat, { name: `${f}/01_Faturas_Emitidas/Lista_Faturas_Emitidas.xlsx` });
+          archive.append(xlsxFat, { name: `${f}/001_Faturas_Emitidas/Lista_Faturas_Emitidas.xlsx` });
         } catch (e: any) {
           console.error("[PacoteContador] XLSX faturas emitidas erro:", e.message);
           if (nfseEmitidas.length === 0) {
-            archive.append(Buffer.from("Nenhuma NFS-e emitida no período.\n","utf8"), { name: `${f}/01_Faturas_Emitidas/sem_dados.txt` });
+            archive.append(Buffer.from("Nenhuma NFS-e emitida no período.\n","utf8"), { name: `${f}/001_Faturas_Emitidas/sem_dados.txt` });
           }
         }
 
-        // ── 02 — Serviços Tomados ─────────────────────────────────────────────
+        // ── 002 — Serviços Tomados ────────────────────────────────────────────
         for (const n of nfseTomadas) {
           const nome = safeName(`NFS-e_${n.numero_nf || n.id}_${n.emitente_nome || "SemNome"}`);
-          archive.append(buildNfseHtml(n, "tomada", empresa), { name: `${f}/02_Servicos_Tomados/${nome}.html` });
+          archive.append(buildNfseHtml(n, "tomada", empresa), { name: `${f}/002_Servicos_Tomados/${nome}.html` });
         }
         try {
           const xlsxSvc = await buildListaFaturasXlsx(nfseTomadas, "tomada", label, fcConfig);
-          archive.append(xlsxSvc, { name: `${f}/02_Servicos_Tomados/Lista_Servicos_Tomados.xlsx` });
+          archive.append(xlsxSvc, { name: `${f}/002_Servicos_Tomados/Lista_Servicos_Tomados.xlsx` });
         } catch (e: any) {
           console.error("[PacoteContador] XLSX serviços tomados erro:", e.message);
         }
         try {
           const xlsxNfe = await buildNfeXlsx(nfe, label, fcConfig);
-          archive.append(xlsxNfe, { name: `${f}/02_Servicos_Tomados/NF-e_Recebidas_Compras.xlsx` });
+          archive.append(xlsxNfe, { name: `${f}/002_Servicos_Tomados/NF-e_Recebidas_Compras.xlsx` });
         } catch (e: any) {
           console.error("[PacoteContador] XLSX NF-e recebidas erro:", e.message);
         }
         if (nfseTomadas.length + nfe.length === 0) {
-          archive.append(Buffer.from("Nenhuma NFS-e tomada ou NF-e recebida no período.\n","utf8"), { name: `${f}/02_Servicos_Tomados/sem_dados.txt` });
+          archive.append(Buffer.from("Nenhuma NFS-e tomada ou NF-e recebida no período.\n","utf8"), { name: `${f}/002_Servicos_Tomados/sem_dados.txt` });
         }
 
-        // ── 03 — Extratos Bancários ───────────────────────────────────────────
+        // ── 003 — Extratos Bancários ──────────────────────────────────────────
         try {
           const xlsxBuf = await buildExtratoBancarioBuffer(db, companyId, m, ano, empresa);
-          archive.append(xlsxBuf, { name: `${f}/03_Extratos_Bancarios/Extrato_Bancario_${MESES[m-1]}_${ano}.xlsx` });
+          archive.append(xlsxBuf, { name: `${f}/003_Extratos_Bancarios/Extrato_Bancario_${MESES[m-1]}_${ano}.xlsx` });
         } catch (e: any) {
           console.error("[PacoteContador] XLSX bancário erro:", e.message);
         }
         try {
           const xlsxExt = await buildExtratoGeralXlsx(bank, label, fcConfig);
-          archive.append(xlsxExt, { name: `${f}/03_Extratos_Bancarios/Extrato_Completo.xlsx` });
+          archive.append(xlsxExt, { name: `${f}/003_Extratos_Bancarios/Extrato_Completo.xlsx` });
         } catch (e: any) {
           console.error("[PacoteContador] XLSX extrato geral erro:", e.message);
           if (bank.length === 0) {
-            archive.append(Buffer.from("Nenhum extrato bancário importado no período.\n","utf8"), { name: `${f}/03_Extratos_Bancarios/sem_dados.txt` });
+            archive.append(Buffer.from("Nenhum extrato bancário importado no período.\n","utf8"), { name: `${f}/003_Extratos_Bancarios/sem_dados.txt` });
           }
         }
 
-        // ── 04 — Extratos Cartões ─────────────────────────────────────────────
+        // ── 004 — Extratos Cartões ────────────────────────────────────────────
         try {
           const cartaoXlsx = await buildExtratCartaoBuffer(db, companyId, m, ano, empresa);
-          archive.append(cartaoXlsx, { name: `${f}/04_Extratos_Cartoes/Extrato_Cartao_${MESES[m-1]}_${ano}.xlsx` });
+          archive.append(cartaoXlsx, { name: `${f}/004_Extratos_Cartoes/Extrato_Cartao_${MESES[m-1]}_${ano}.xlsx` });
         } catch (e: any) {
           console.error("[PacoteContador] XLSX cartão erro:", e.message);
         }
 
-        // ── 05 — Compras / OCs ───────────────────────────────────────────────
+        // ── 005 — Compras / OCs ──────────────────────────────────────────────
         try {
           const xlsxOcs = await buildOcsXlsx(ocs, label, fcConfig);
-          archive.append(xlsxOcs, { name: `${f}/05_OCs_NF-e/OCs_NF-e.xlsx` });
+          archive.append(xlsxOcs, { name: `${f}/005_OCs_NF-e/OCs_NF-e.xlsx` });
         } catch (e: any) {
           console.error("[PacoteContador] XLSX OCs erro:", e.message);
-          archive.append(Buffer.from("Nenhuma ordem de compra no período.\n","utf8"), { name: `${f}/05_OCs_NF-e/sem_dados.txt` });
+          archive.append(Buffer.from("Nenhuma ordem de compra no período.\n","utf8"), { name: `${f}/005_OCs_NF-e/sem_dados.txt` });
         }
 
-        // ── 06 — Ordens de Serviço ────────────────────────────────────────────
+        // ── 006 — Ordens de Serviço ───────────────────────────────────────────
         archive.append(
           Buffer.from(`Ordens de Serviço — ${label}\n\nEsta pasta destina-se às Ordens de Serviço (OS) emitidas no período.\nImporte ou adicione os arquivos de OS aqui antes de enviar ao contador.\n`, "utf8"),
-          { name: `${f}/06_OS_Servico/LEIA-ME.txt` }
+          { name: `${f}/006_OS_Servico/LEIA-ME.txt` }
         );
       };
 
