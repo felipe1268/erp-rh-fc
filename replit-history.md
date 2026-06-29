@@ -1,3 +1,5 @@
+- **Rev. 3858** — **CONTAS A RECEBER · CARDS KPI CLICÁVEIS FILTRAM A LISTA.** `KCard` ganha `onClick/active/activeRing`; `cardAtivo` + `ativarCard`; 4 cards filtram status+período; chip ✕; Select ganha "Em aberto"/"Vencidos". ZERO DELETE.
+
 - **Rev. 3857** — **NF-e × EXTRATO · JANELA DO EXTRATO REDUZIDA (±45 dias) + BADGE DE PERÍODO NO DIALOG.** `obterSugestoesPeriodo` +90→+45 dias; badge "Jan/2026 · Emitidas" no dialog header. ZERO DELETE.
 
 - **Rev. 3856** — **TEMPLATE XLSX · FIX SAVE + DATA AUTOMÁTICA + VISUALIZADOR INLINE.** Botão salvar sempre habilitado; `vigentDesde` automático = data do save; visualizador inline em tempo real. ZERO DELETE.

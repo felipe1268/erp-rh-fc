@@ -1,4 +1,35 @@
 /**
+ * Rev. 3865 — **PACOTE CONTABILIDADE — EXTRATO CARTÃO FC TEMPLATE + CHECKLIST A4 + TEMPLATES NAS CONFIGURAÇÕES.**
+ *
+ * **Problemas:** (1) `Extrato_Cartao_<Mes>.xlsx` usava xlsx-js-style antigo (NAVY/GOLD, sem logo, sem FC template);
+ * (2) `00_CHECKLIST.docx` sem tamanho de página A4, sem cabeçalho/rodapé corrente, formatação bagunçada;
+ * (3) nenhum dos dois templates era configurável pelo usuário.
+ *
+ * **Correções:**
+ * 1. `downloadContabilidadeXlsx.ts · buildExtratCartaoBuffer` — reescrito em ExcelJS + FC template:
+ *    `loadFcXlsxConfig` + `applyFcHeader` (logo + cabeçalho institucional, rows 2-7) +
+ *    `applyFcColumnHeader` (row 9, cor dinâmica do template); colunas B-H; linha TOTAL com
+ *    fórmula SUM(H10:Hn); zebra white/gray + total dourado; uma aba por fatura.
+ *    Imports adicionados: `applyFcHeader, applyFcColumnHeader, BRL, medium, thin`.
+ * 2. `downloadPacoteContador.ts · buildChecklistDocx` — tamanho A4 (`size: { width:11906, height:16838 }`);
+ *    `Header` corrente (FC ENGENHARIA + período, borda azul inferior); `Footer` com numeração
+ *    "Pág. N / Total" via `PageNumber.CURRENT/TOTAL_PAGES`; título principal vira tabela azul
+ *    (sem border no Paragraph que renderizava errado); espaçamentos corrigidos.
+ *    Cores e e-mail do contador vêm de `DocxTemplateConfig` (DB-driven, default hardcoded).
+ * 3. `server/_core/index.ts` — tabela `docx_template_config` (CREATE TABLE IF NOT EXISTS):
+ *    cor_principal, email_contador, nome_contador, notas, updated_at, updated_by.
+ * 4. `server/routers.ts` — 3 novos endpoints em `settings`:
+ *    `getDocxTemplateConfig`, `saveDocxTemplateConfig`, `downloadDocxTemplateExemplo`.
+ * 5. `client/src/pages/configuracoes/DocxTemplateTab.tsx` — nova aba "Template de Word":
+ *    paleta de 6 cores (azul FC padrão), input hex customizado, e-mail/nome do contador,
+ *    preview visual inline, botão "Baixar DOCX de exemplo".
+ * 6. `client/src/pages/Configuracoes.tsx` — nova aba `template_word` (TabKey + tab definition + render).
+ * 7. `XlsxTemplateTab.tsx` — "Extrato de Cartão de Crédito" corrigido para `template: true`.
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3864 — **NF# NO EXTRATO — VÍNCULO BIDIRECIONAL NF-e ↔ LANÇAMENTO BANCÁRIO.**
  *
  * **Problema:** a coluna "NF#" no Panorama Fiscal (tabela de movimentos bancários) mostrava "—"

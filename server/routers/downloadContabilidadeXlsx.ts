@@ -18,7 +18,14 @@
  */
 import type { Express, Request, Response } from "express";
 import ExcelJS from "exceljs";
-import { loadFcXlsxConfig } from "../services/excelFcTemplate";
+import {
+  loadFcXlsxConfig,
+  applyFcHeader,
+  applyFcColumnHeader,
+  BRL as FC_BRL,
+  medium as FC_MED,
+  thin as FC_THIN_STYLE,
+} from "../services/excelFcTemplate";
 import * as XLSX from "xlsx";
 import * as fs from "fs";
 import * as path from "path";
@@ -662,7 +669,7 @@ export async function buildExtratCartaoBuffer(
   ano: number,
   empresaLabel: string,
 ): Promise<Buffer> {
-  const tituloEmpresa = empresaLabel.toUpperCase();
+  const label = `${MESES[mes - 1]} ${ano}`;
 
   const itemsQ = await db.$client.query(
     `SELECT
@@ -700,14 +707,38 @@ export async function buildExtratCartaoBuffer(
     [companyId, mes, ano]
   );
 
-  const wbXlsx = XLSX.utils.book_new();
+  const fcConfig = await loadFcXlsxConfig(companyId);
+  const wb = new ExcelJS.Workbook();
+
+  const fillWhite = { type: "pattern" as const, pattern: "solid" as const, fgColor: { argb: "FFFFFFFF" } };
+  const fillZebra = { type: "pattern" as const, pattern: "solid" as const, fgColor: { argb: "FFF8FAFC" } };
+  const fillTotal = { type: "pattern" as const, pattern: "solid" as const, fgColor: { argb: "FFFFF2CC" } };
+
+  const DCOLS = ["B","C","D","E","F","G","H"] as const;
+  const HDRS  = ["Data","Descrição","Cidade","Tipo","Parcela","Obra / Categoria","Valor"];
 
   if (itemsQ.rows.length === 0) {
-    const ws: XLSX.WorkSheet = {};
-    addCell(ws, "A1", "Nenhum lançamento de cartão de crédito no período.", "s", sText());
-    ws["!ref"] = "A1:A1";
-    XLSX.utils.book_append_sheet(wbXlsx, ws, "Sem dados");
-    return XLSX.write(wbXlsx, { type: "buffer", bookType: "xlsx" }) as Buffer;
+    const ws = wb.addWorksheet("Sem dados");
+    ws.getColumn("B").width = 12;
+    ws.getColumn("C").width = 42;
+    ws.getColumn("D").width = 18;
+    ws.getColumn("E").width = 13;
+    ws.getColumn("F").width = 10;
+    ws.getColumn("G").width = 26;
+    ws.getColumn("H").width = 16;
+    applyFcHeader(wb, ws, {
+      titulo: "EXTRATO CARTÕES DE CRÉDITO",
+      subtitulo: label,
+      lastDataCol: "H",
+    }, fcConfig);
+    HDRS.forEach((h, i) => { ws.getCell(`${DCOLS[i]}9`).value = h; });
+    applyFcColumnHeader(ws, 9, "B", "H", fcConfig.corCabecalho);
+    const cell = ws.getCell("B10");
+    cell.value = "Nenhum lançamento de cartão de crédito no período.";
+    cell.font = { size: 11, name: "Calibri", italic: true };
+    cell.fill = fillWhite;
+    cell.border = { top: FC_THIN_STYLE, bottom: FC_THIN_STYLE, left: FC_MED, right: FC_THIN_STYLE };
+    return await wb.xlsx.writeBuffer() as Buffer;
   }
 
   const byFatura = new Map<number, { meta: any; items: any[] }>();
@@ -737,69 +768,101 @@ export async function buildExtratCartaoBuffer(
     while (usedNames.has(sn)) { sn = `${base.slice(0, 27)}(${n++})`; }
     usedNames.add(sn);
 
-    const ws: XLSX.WorkSheet = {};
-    const hdrs = ["Data","Descrição","Cidade","Tipo","Parcela","Obra","Categoria","Valor"];
-    const cols = ["A","B","C","D","E","F","G","H"];
+    const ws = wb.addWorksheet(sn);
 
-    addCell(ws, "A1", tituloEmpresa, "s", sTitle());
-    for (const addr of ["B3","C3","D3","E3","F3","A4","B4","C4","D4","E4","F4"]) {
-      addCell(ws, addr, "", "s", sBankEmpty());
-    }
-    addCell(ws, "A3", meta.cartao_label, "s", sBank());
-    addCell(ws, "G3", "Vencimento",      "s", sInfoLabel());
-    addCell(ws, "H3", meta.vencimento,   "s", sInfoDate());
-    addCell(ws, "G4", "Total Fatura",    "s", sInfoLabel());
-    addCell(ws, "H4", meta.fatura_total, "n", sInfoMoney());
+    ws.getColumn("B").width = 12;
+    ws.getColumn("C").width = 42;
+    ws.getColumn("D").width = 18;
+    ws.getColumn("E").width = 13;
+    ws.getColumn("F").width = 10;
+    ws.getColumn("G").width = 26;
+    ws.getColumn("H").width = 16;
 
-    hdrs.forEach((h, i) => addCell(ws, `${cols[i]}5`, h, "s", sHeader()));
+    applyFcHeader(wb, ws, {
+      titulo: `EXTRATO CARTÃO DE CRÉDITO — ${meta.cartao_label}`,
+      subtitulo: `${label}  ·  Venc.: ${meta.vencimento}`,
+      lastDataCol: "H",
+    }, fcConfig);
+
+    HDRS.forEach((h, i) => { ws.getCell(`${DCOLS[i]}9`).value = h; });
+    applyFcColumnHeader(ws, 9, "B", "H", fcConfig.corCabecalho);
+
+    const MONEY = new Set(["H"]);
+    const CENT  = new Set(["B","E","F"]);
 
     let totalValor = 0;
     items.forEach((item: any, idx: number) => {
-      const row   = idx + 6;
-      const valor = parseFloat(String(item.valor)) || 0;
-      totalValor += valor;
+      const r      = idx + 10;
+      const isLast = idx === items.length - 1;
+      const btm    = isLast ? FC_MED : FC_THIN_STYLE;
+      const fill   = idx % 2 === 0 ? fillWhite : fillZebra;
+
+      const valor   = parseFloat(String(item.valor)) || 0;
+      totalValor   += valor;
       const parcela = item.parcela_atual && item.parcela_total
         ? `${item.parcela_atual}/${item.parcela_total}` : "";
       const tipo = item.tipo
         ? String(item.tipo).charAt(0).toUpperCase() + String(item.tipo).slice(1)
         : "Compra";
-      const alt = idx % 2 === 1;
 
-      addCell(ws, `A${row}`, fmtDate(item.data),     "s", sDate(alt));
-      addCell(ws, `B${row}`, item.descricao || "",    "s", sText(alt));
-      addCell(ws, `C${row}`, item.cidade || "",       "s", sText(alt));
-      addCell(ws, `D${row}`, tipo,                    "s", sText(alt));
-      addCell(ws, `E${row}`, parcela,                 "s", sText(alt));
-      addCell(ws, `F${row}`, item.obra_nome || "",    "s", sText(alt));
-      addCell(ws, `G${row}`, item.categoria_nome || item.centro_custo_nome || "", "s", sText(alt));
-      addCell(ws, `H${row}`, valor,                   "n", sMoney(alt));
+      const vals: [string, any][] = [
+        ["B", fmtDate(item.data)],
+        ["C", item.descricao || ""],
+        ["D", item.cidade || ""],
+        ["E", tipo],
+        ["F", parcela],
+        ["G", item.obra_nome || item.categoria_nome || item.centro_custo_nome || ""],
+        ["H", valor],
+      ];
+
+      vals.forEach(([col, val]) => {
+        const cell = ws.getCell(`${col}${r}`);
+        cell.value = val;
+        if (MONEY.has(col)) cell.numFmt = FC_BRL;
+        cell.font      = { size: 11, name: "Calibri" };
+        cell.alignment = {
+          horizontal : MONEY.has(col) ? "right" : CENT.has(col) ? "center" : "left",
+          vertical   : "middle",
+        };
+        cell.fill   = fill;
+        cell.border = {
+          top    : FC_THIN_STYLE,
+          bottom : btm,
+          left   : col === "B" ? FC_MED : FC_THIN_STYLE,
+          right  : col === "H" ? FC_MED : FC_THIN_STYLE,
+        };
+      });
     });
 
-    const totalRow = items.length + 6;
-    addCell(ws, `A${totalRow}`, "TOTAL", "s", sTotal(false));
-    ["B","C","D","E","F","G"].forEach(c => addCell(ws, `${c}${totalRow}`, "", "s", sTotal(false)));
-    addCell(ws, `H${totalRow}`, totalValor, "n", sTotal(true));
+    const totRow = items.length + 10;
+    DCOLS.forEach(col => {
+      const cell = ws.getCell(`${col}${totRow}`);
+      if (col === "B") {
+        cell.value = "TOTAL";
+      } else if (col === "H") {
+        cell.value = { formula: `SUM(H10:H${totRow - 1})`, result: totalValor };
+        cell.numFmt = FC_BRL;
+      } else {
+        cell.value = "";
+      }
+      cell.font      = { bold: true, size: 11, name: "Calibri" };
+      cell.fill      = fillTotal;
+      cell.alignment = {
+        horizontal : col === "H" ? "right" : col === "B" ? "left" : "center",
+        vertical   : "middle",
+      };
+      cell.border = {
+        top    : FC_MED,
+        bottom : FC_MED,
+        left   : col === "B" ? FC_MED : FC_THIN_STYLE,
+        right  : col === "H" ? FC_MED : FC_THIN_STYLE,
+      };
+    });
 
-    ws["!ref"] = `A1:H${totalRow}`;
-    ws["!merges"] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } },
-      { s: { r: 2, c: 0 }, e: { r: 3, c: 5 } },
-    ];
-    ws["!cols"] = [
-      { wch: 12 }, { wch: 40 }, { wch: 18 }, { wch: 12 },
-      { wch: 10 }, { wch: 24 }, { wch: 22 }, { wch: 15 },
-    ];
-    ws["!rows"] = new Array(5).fill(null);
-    ws["!rows"][0] = { hpt: 32 };
-    ws["!rows"][1] = { hpt: 6  };
-    ws["!rows"][2] = { hpt: 22 };
-    ws["!rows"][3] = { hpt: 22 };
-    ws["!rows"][4] = { hpt: 28 };
-
-    XLSX.utils.book_append_sheet(wbXlsx, ws, sn);
+    ws.getRow(totRow).height = 20;
   }
 
-  return XLSX.write(wbXlsx, { type: "buffer", bookType: "xlsx" }) as Buffer;
+  return await wb.xlsx.writeBuffer() as Buffer;
 }
 
 // ── Rota principal ────────────────────────────────────────────────────────────

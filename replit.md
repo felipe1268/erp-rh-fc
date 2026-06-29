@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3865** — **PACOTE CONTABILIDADE — EXTRATO CARTÃO FC TEMPLATE + CHECKLIST A4 + TEMPLATES NAS CONFIGURAÇÕES.** `buildExtratCartaoBuffer`: reescrito em ExcelJS + `applyFcHeader`/`applyFcColumnHeader` (logo, cabeçalho, zebra, SUM total dourado, uma aba por fatura). `buildChecklistDocx`: A4 (`11906×16838`), `Header` corrente (FC + período), `Footer` com `PageNumber.CURRENT/TOTAL_PAGES`, título como tabela azul. Tabela `docx_template_config` + 3 endpoints (`getDocxTemplateConfig`, `saveDocxTemplateConfig`, `downloadDocxTemplateExemplo`). Nova aba "Template de Word" em Configurações. ZERO DELETE.
+
 - **Rev. 3864** — **NF# NO EXTRATO — VÍNCULO BIDIRECIONAL NF-e ↔ EXTRATO BANCÁRIO.** `getPanoramaFiscal`: subquery fn_id/fn_numero cobre `stmt_line_id` OU `entry_id` chain; `getBankStatements`: lookup secundário `db.$client.query` povoa `nfNumero` em cada linha de extrato; `FinanceiroConciliacaoWorkspace`: badge `NF# <número>` exibido abaixo da descrição. ZERO DELETE.
 
-- **Rev. 3863** — **PACOTE CONTABILIDADE — TODOS OS CSVs → XLSX COM TEMPLATE FC.** 5 novos builders ExcelJS: `buildListaFaturasXlsx` (NFS-e emitidas/tomadas, cols B–L, SUM + cond. fmt. status), `buildNfeXlsx` (NF-e recebidas, cols B–H), `buildExtratoGeralXlsx` (extrato geral, 3 totais SUMIF, cond. fmt. verde/vermelho), `buildOcsXlsx` (OCs, cols B–J); todos usam `loadFcXlsxConfig` → cor do cabeçalho = template configurado; `buildExtratoBancarioBuffer` também atualizado. ZERO DELETE. Detalhe: `shared/changelog.ts`.
-
 ### 5 one-liners
+
+- **Rev. 3863** — **PACOTE CONTABILIDADE — TODOS OS CSVs → XLSX COM TEMPLATE FC.** 5 novos builders ExcelJS: `buildListaFaturasXlsx`, `buildNfeXlsx`, `buildExtratoGeralXlsx`, `buildOcsXlsx`; todos usam `loadFcXlsxConfig`. ZERO DELETE.
 
 - **Rev. 3862** — **CHECKLIST WORD + ABAS DE CATEGORIA + 6 TEMPLATES NOVOS.** `00_CHECKLIST.docx` via `docx` v9.7.1; abas RH/Financeiro/Planejamento/Contratos/Medições/Contabilidade; 6 tipos seed com `CATEGORIAS_DOCS`. ZERO DELETE.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3860** — **EXTRATO BANCÁRIO XLSX · COLUNA "Nº NOTA FISCAL" CENTRALIZADA.** `textCols.forEach` em `downloadContabilidadeXlsx.ts`: `col === "E" ? "center" : "left"`. ZERO DELETE.
 
 - **Rev. 3859** — **TEMPLATE XLSX · BORDA SUPERIOR DO LOGO + LOGO CENTRALIZADO.** `ws.mergeCells("B2:C7")` → contorno completo; offset horizontal dinâmico via `nativeColOff` EMU. ZERO DELETE.
-
-- **Rev. 3858** — **CONTAS A RECEBER · CARDS KPI CLICÁVEIS FILTRAM A LISTA.** `KCard` ganha `onClick/active/activeRing`; `cardAtivo` + `ativarCard`; 4 cards filtram status+período; chip ✕; Select ganha "Em aberto"/"Vencidos". ZERO DELETE.
 
 ### Histórico completo
 

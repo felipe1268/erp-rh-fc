@@ -4600,6 +4600,23 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3845: tabela xlsx_template_config garantida (template FC para planilhas XLSX).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3845 xlsx_template_config:`, e?.message || e); }
 
+        // Rev. 3865 — Tabela docx_template_config para configurações do template padrão FC de documentos Word
+        try {
+          await db.$client.query(`
+            CREATE TABLE IF NOT EXISTS docx_template_config (
+              id               SERIAL PRIMARY KEY,
+              company_id       INTEGER NOT NULL DEFAULT 0,
+              cor_principal    TEXT    NOT NULL DEFAULT '1B2A4A',
+              email_contador   TEXT             DEFAULT 'contabil@pronustributario.com.br',
+              nome_contador    TEXT             DEFAULT 'Pronus Tributário',
+              notas            TEXT,
+              updated_at       TIMESTAMP        DEFAULT NOW(),
+              updated_by       TEXT
+            )
+          `);
+          console.log(`[SyncSchema+] Rev. 3865: tabela docx_template_config garantida (template FC para documentos Word).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3865 docx_template_config:`, e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

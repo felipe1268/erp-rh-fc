@@ -17,6 +17,7 @@ import archiver from "archiver";
 import {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
   WidthType, AlignmentType, BorderStyle, ShadingType,
+  Header, Footer, PageNumber,
 } from "docx";
 import { getDb } from "../db";
 import { sdk } from "../_core/sdk";
@@ -760,7 +761,37 @@ function buildOcsCsv(rows: any[]): string {
   );
 }
 
-async function buildChecklistDocx(label: string, empresa: string, d: ReturnType<typeof sumarizar>): Promise<Buffer> {
+export interface DocxTemplateConfig {
+  corPrincipal:  string;
+  emailContador: string;
+  nomeContador:  string;
+}
+
+export const DEFAULT_DOCX_CONFIG: DocxTemplateConfig = {
+  corPrincipal:  "1B2A4A",
+  emailContador: "contabil@pronustributario.com.br",
+  nomeContador:  "Pronus Tributário",
+};
+
+export async function buildChecklistDocxExemplo(empresa: string, cfg: DocxTemplateConfig): Promise<Buffer> {
+  const fakeData = {
+    nfseEmitidas: Array(5).fill({}),
+    nfseTomadas:  [],
+    nfe:          Array(12).fill({}),
+    bank:         [
+      ...Array(20).fill({ tipo: "credito", fn_numero: null }),
+      ...Array(48).fill({ tipo: "debito",  fn_numero: null }),
+      ...Array(10).fill({ tipo: "credito", fn_numero: "12345" }),
+      ...Array(5).fill({ tipo: "debito",   fn_numero: "67890" }),
+    ],
+    ocs:    Array(8).fill({ nfe_vinculada: true }),
+    cartao: Array(14).fill({}),
+  };
+  return buildChecklistDocx("Exemplo — Junho 2026", empresa, fakeData as any, cfg);
+}
+
+async function buildChecklistDocx(label: string, empresa: string, d: ReturnType<typeof sumarizar>, docxCfg?: DocxTemplateConfig): Promise<Buffer> {
+  const cfg = docxCfg ?? DEFAULT_DOCX_CONFIG;
   const { nfseEmitidas, nfseTomadas, nfe, bank, ocs, cartao } = d;
   const entSemNF = bank.filter((b: any) => b.tipo === "credito" && !b.fn_numero).length;
   const saiSemNF = bank.filter((b: any) => b.tipo === "debito"  && !b.fn_numero).length;
@@ -768,7 +799,7 @@ async function buildChecklistDocx(label: string, empresa: string, d: ReturnType<
   const geradoEm = new Date().toLocaleString("pt-BR");
   const temPendencias = entSemNF + saiSemNF + ocsSemNF > 0;
 
-  const AZUL = "1B2A4A"; const CINZA = "64748B";
+  const AZUL = cfg.corPrincipal.replace(/^#/, ""); const CINZA = "64748B";
   const VERDE = "166534"; const LARANJA = "B45309";
   const FONTE = "Calibri";
   const SEM = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" } as const;
@@ -821,25 +852,25 @@ async function buildChecklistDocx(label: string, empresa: string, d: ReturnType<
   }
 
   function item(txt: string, ok = false, cor?: string) {
-    const icone = ok ? "☑  " : "□  ";
+    const icone = ok ? "\u2611  " : "\u25A1  ";
     return new Paragraph({
       children: [
         new TextRun({ text: icone, size: 20, font: FONTE, color: ok ? VERDE : CINZA }),
         new TextRun({ text: txt, size: 20, font: FONTE, color: cor }),
       ],
-      spacing: { before: 60, after: 60 }, indent: { left: 400 },
+      spacing: { before: 80, after: 80 }, indent: { left: 400 },
     });
   }
   function pend(txt: string, err: boolean) {
     return new Paragraph({
       children: [
-        new TextRun({ text: err ? "!  " : "✓  ", bold: true, size: 20, font: FONTE, color: err ? LARANJA : VERDE }),
+        new TextRun({ text: err ? "!  " : "\u2713  ", bold: true, size: 20, font: FONTE, color: err ? LARANJA : VERDE }),
         new TextRun({ text: txt, size: 20, font: FONTE, color: err ? LARANJA : VERDE }),
       ],
-      spacing: { before: 60, after: 60 }, indent: { left: 400 },
+      spacing: { before: 80, after: 80 }, indent: { left: 400 },
     });
   }
-  function esp() { return new Paragraph({ text: "", spacing: { before: 80, after: 0 } }); }
+  function esp(pts = 100) { return new Paragraph({ text: "", spacing: { before: pts, after: 0 } }); }
 
   const tblControle = new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
@@ -865,49 +896,87 @@ async function buildChecklistDocx(label: string, empresa: string, d: ReturnType<
     ],
   });
 
+  const tituloDoc = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: { top: SEM, bottom: SEM, left: SEM, right: SEM, insideH: SEM, insideV: SEM },
+    rows: [new TableRow({ children: [new TableCell({
+      shading: { type: ShadingType.SOLID, color: AZUL, fill: AZUL },
+      margins: { top: 160, bottom: 160, left: 200, right: 200 },
+      borders: { top: SEM, bottom: SEM, left: SEM, right: SEM },
+      children: [new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text: `CHECKLIST — PACOTE CONTABILIDADE  ·  ${label}`, bold: true, size: 28, color: "FFFFFF", font: FONTE })],
+      })],
+    })]})],
+  });
+
   const doc = new Document({
     creator: "ERP FC Engenharia",
     title: `Checklist Contabilidade — ${label}`,
     sections: [{
-      properties: { page: { margin: { top: 1134, right: 1134, bottom: 1134, left: 1134 } } },
-      children: [
-        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 60 }, children: [new TextRun({ text: "FC ENGENHARIA E CONSTRUÇÃO LTDA", bold: true, size: 32, color: AZUL, font: FONTE })] }),
-        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 200 }, children: [new TextRun({ text: "Sistema de Gestão da Qualidade  ·  ISO 9001", size: 18, color: CINZA, font: FONTE, italics: true })] }),
-        tblControle,
-        esp(),
-        new Paragraph({
-          alignment: AlignmentType.CENTER, spacing: { before: 120, after: 200 },
-          border: { top: { style: BorderStyle.SINGLE, size: 12, color: AZUL, space: 6 }, bottom: { style: BorderStyle.SINGLE, size: 12, color: AZUL, space: 6 }, left: { style: BorderStyle.SINGLE, size: 12, color: AZUL, space: 6 }, right: { style: BorderStyle.SINGLE, size: 12, color: AZUL, space: 6 } },
-          children: [new TextRun({ text: `CHECKLIST — PACOTE CONTABILIDADE  ·  ${label}`, bold: true, size: 28, color: AZUL, font: FONTE })],
+      properties: {
+        page: {
+          size: { width: 11906, height: 16838 },
+          margin: { top: 1440, right: 1134, bottom: 1134, left: 1134, header: 709, footer: 709 },
+        },
+      },
+      headers: {
+        default: new Header({
+          children: [new Paragraph({
+            alignment: AlignmentType.RIGHT,
+            border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: AZUL, space: 4 } },
+            spacing: { before: 0, after: 100 },
+            children: [
+              new TextRun({ text: "FC ENGENHARIA  ·  PACOTE CONTABILIDADE  ·  ", size: 16, font: FONTE, color: CINZA }),
+              new TextRun({ text: label, size: 16, font: FONTE, color: AZUL, bold: true }),
+            ],
+          })],
         }),
-        secao("1. ESTRUTURA DO PACOTE"), esp(),
-        item("Faturas_Emitidas/       →  NFS-e emitidas (espelho HTML + Lista_Faturas_Emitidas.xlsx)", true),
-        item("Servicos_Tomados/      →  NFS-e tomadas (HTML + Lista_Servicos_Tomados.xlsx)", true),
-        item("Servicos_Tomados/      →  NF-e recebidas compras (NF-e_Recebidas_Compras.xlsx)", true),
-        item("Extratos_Bancarios/    →  Extrato_Bancario_<Mes>.xlsx + Extrato_Completo.xlsx", true),
-        item("Extratos_Cartoes/      →  Extrato_Cartao_<Mes>.xlsx (cartão de crédito)", true),
-        item("02_OCs_NF-e.xlsx       →  Ordens de compra × NF-e vinculada", true),
-        esp(),
-        secao("2. RESUMO DO PERÍODO"), esp(),
+      },
+      footers: {
+        default: new Footer({
+          children: [new Paragraph({
+            alignment: AlignmentType.CENTER,
+            border: { top: { style: BorderStyle.SINGLE, size: 4, color: "D0D5DD", space: 4 } },
+            spacing: { before: 100, after: 0 },
+            children: [
+              new TextRun({ text: `Gerado pelo ERP FC Engenharia  ·  ${geradoEm}  ·  Pág. `, size: 16, font: FONTE, color: "94A3B8" }),
+              new TextRun({ children: [PageNumber.CURRENT], size: 16, font: FONTE, color: "94A3B8" }),
+              new TextRun({ text: " / ", size: 16, font: FONTE, color: "94A3B8" }),
+              new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 16, font: FONTE, color: "94A3B8" }),
+            ],
+          })],
+        }),
+      },
+      children: [
+        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 80 }, children: [new TextRun({ text: "FC ENGENHARIA E CONSTRUÇÃO LTDA", bold: true, size: 36, color: AZUL, font: FONTE })] }),
+        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 240 }, children: [new TextRun({ text: "Sistema de Gestão da Qualidade  ·  ISO 9001", size: 18, color: CINZA, font: FONTE, italics: true })] }),
+        tblControle,
+        esp(160),
+        tituloDoc,
+        esp(200),
+        secao("1. ESTRUTURA DO PACOTE"), esp(120),
+        item("Faturas_Emitidas/    →  NFS-e emitidas (espelho HTML + Lista_Faturas_Emitidas.xlsx)", true),
+        item("Servicos_Tomados/  →  NFS-e tomadas (HTML + Lista_Servicos_Tomados.xlsx)", true),
+        item("Servicos_Tomados/  →  NF-e recebidas compras (NF-e_Recebidas_Compras.xlsx)", true),
+        item("Extratos_Bancarios/ →  Extrato_Bancario_<Mes>.xlsx + Extrato_Completo.xlsx", true),
+        item("Extratos_Cartoes/   →  Extrato_Cartao_<Mes>.xlsx (cartão de crédito)", true),
+        item("02_OCs_NF-e.xlsx   →  Ordens de compra × NF-e vinculada", true),
+        esp(200),
+        secao("2. RESUMO DO PERÍODO"), esp(120),
         tblResumo,
-        esp(),
-        secao(`3. PENDÊNCIAS${!temPendencias ? "  —  NENHUMA  ✓" : ""}`), esp(),
+        esp(200),
+        secao(`3. PENDÊNCIAS${!temPendencias ? "  —  NENHUMA  \u2713" : ""}`), esp(120),
         pend(entSemNF > 0 ? `${entSemNF} entrada(s) bancária(s) SEM NFS-e vinculada` : "Entradas bancárias — OK", entSemNF > 0),
         pend(saiSemNF > 0 ? `${saiSemNF} saída(s) bancária(s) SEM NF-e vinculada`   : "Saídas bancárias — OK",   saiSemNF > 0),
         pend(ocsSemNF > 0 ? `${ocsSemNF} OC(s) SEM NF-e correspondente`             : "Ordens de compra — OK",   ocsSemNF > 0),
-        esp(),
-        secao("4. CHECKLIST — ENVIAR À PRONUS  (contabil@pronustributario.com.br)"), esp(),
+        esp(200),
+        secao(`4. CHECKLIST — ENVIAR AO CONTADOR  (${cfg.emailContador})`), esp(120),
         item("Este arquivo ZIP completo"),
         item("Guia de ISS recolhido (gerada no portal da prefeitura)"),
         item("Folha de pagamento assinada + holerites"),
         item("Comprovantes de pagamento FGTS / GPS"),
         item("Declaração de faturamento (se solicitado)"),
-        new Paragraph({ text: "", spacing: { before: 240, after: 0 } }),
-        new Paragraph({
-          alignment: AlignmentType.CENTER,
-          border: { top: { style: BorderStyle.SINGLE, size: 4, color: "D0D5DD", space: 4 } },
-          children: [new TextRun({ text: `Gerado automaticamente pelo ERP FC Engenharia  ·  ${geradoEm}`, size: 16, font: FONTE, color: "94A3B8", italics: true })],
-        }),
       ],
     }],
   });
@@ -992,6 +1061,24 @@ export function registerPacoteContadorRoute(app: Express) {
 
       const fcConfig = await loadFcXlsxConfig(companyId);
 
+      // Carrega config do template Word (docx_template_config)
+      let docxConfig: import("./downloadPacoteContador").DocxTemplateConfig = DEFAULT_DOCX_CONFIG;
+      try {
+        const dcQ = await db.$client.query(
+          `SELECT cor_principal, email_contador, nome_contador FROM docx_template_config WHERE company_id=$1 ORDER BY id DESC LIMIT 1`,
+          [companyId]
+        );
+        if (dcQ.rows.length > 0) {
+          const dr = dcQ.rows[0] as any;
+          docxConfig = {
+            corPrincipal:  dr.cor_principal  ?? DEFAULT_DOCX_CONFIG.corPrincipal,
+            emailContador: dr.email_contador ?? DEFAULT_DOCX_CONFIG.emailContador,
+            nomeContador:  dr.nome_contador  ?? DEFAULT_DOCX_CONFIG.nomeContador,
+          };
+        }
+      } catch { /* fallback silencioso ao DEFAULT_DOCX_CONFIG */ }
+
+
       const processarMes = async (m: number, rootFolder: string) => {
         const di = `${ano}-${String(m).padStart(2,"0")}-01`;
         const mProx = m === 12 ? 1 : m + 1;
@@ -1007,7 +1094,7 @@ export function registerPacoteContadorRoute(app: Express) {
         const f = rootFolder;
 
         // ── 00_CHECKLIST ──────────────────────────────────────────────────────
-        archive.append(await buildChecklistDocx(label, empresa, data), { name: `${f}/00_CHECKLIST.docx` });
+        archive.append(await buildChecklistDocx(label, empresa, data, docxConfig), { name: `${f}/00_CHECKLIST.docx` });
 
         // ── Faturas Emitidas ──────────────────────────────────────────────────
         for (const n of nfseEmitidas) {

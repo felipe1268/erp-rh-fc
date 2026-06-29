@@ -47,7 +47,7 @@ const RELATORIOS_XLSX: {
     ],
   },
   {
-    nome: "Extrato de Cartão de Crédito", modulo: "Contabilidade", template: false,
+    nome: "Extrato de Cartão de Crédito", modulo: "Contabilidade", template: true,
     descricao: "Transações do cartão corporativo, agrupadas por categoria.",
     cols: ["Data", "Descrição", "Parcela", "Categoria", "Valor (R$)"],
     rows: [

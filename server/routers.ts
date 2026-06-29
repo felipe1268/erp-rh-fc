@@ -3085,6 +3085,81 @@ export const appRouter = router({
         const buf = await svc.gerarExemploTemplate(config);
         return { base64: buf.toString("base64"), filename: "exemplo_template_fc.xlsx" };
       }),
+
+    getDocxTemplateConfig: protectedProcedure
+      .input(z.object({ companyId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        if (!["admin", "admin_master"].includes(ctx.user.role ?? "")) throw new TRPCError({ code: "FORBIDDEN" });
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+        const rows = await db.$client.query(
+          `SELECT cor_principal, email_contador, nome_contador, notas, updated_at, updated_by
+             FROM docx_template_config
+            WHERE company_id = $1
+            ORDER BY id DESC LIMIT 1`,
+          [input.companyId]
+        );
+        if (rows.rows.length === 0) {
+          return { corPrincipal: "1B2A4A", emailContador: "contabil@pronustributario.com.br", nomeContador: "Pronus Tributário", notas: null, updatedAt: null, updatedBy: null };
+        }
+        const r = rows.rows[0] as any;
+        return { corPrincipal: r.cor_principal as string, emailContador: r.email_contador as string, nomeContador: r.nome_contador as string, notas: r.notas as string | null, updatedAt: r.updated_at as string | null, updatedBy: r.updated_by as string | null };
+      }),
+
+    saveDocxTemplateConfig: protectedProcedure
+      .input(z.object({
+        companyId:     z.number(),
+        corPrincipal:  z.string().regex(/^[0-9A-Fa-f]{6}$/, "Cor deve ser hex 6 dígitos"),
+        emailContador: z.string().email("E-mail inválido"),
+        nomeContador:  z.string().min(1),
+        notas:         z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        if (!["admin", "admin_master"].includes(ctx.user.role ?? "")) throw new TRPCError({ code: "FORBIDDEN" });
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+        const existing = await db.$client.query(`SELECT id FROM docx_template_config WHERE company_id = $1 ORDER BY id DESC LIMIT 1`, [input.companyId]);
+        const by = ctx.user.name || ctx.user.username || "Sistema";
+        if (existing.rows.length > 0) {
+          await db.$client.query(
+            `UPDATE docx_template_config SET cor_principal=$1, email_contador=$2, nome_contador=$3, notas=$4, updated_at=now(), updated_by=$5 WHERE id=$6`,
+            [input.corPrincipal, input.emailContador, input.nomeContador, input.notas ?? null, by, existing.rows[0].id]
+          );
+        } else {
+          await db.$client.query(
+            `INSERT INTO docx_template_config (company_id, cor_principal, email_contador, nome_contador, notas, updated_at, updated_by) VALUES ($1,$2,$3,$4,$5,now(),$6)`,
+            [input.companyId, input.corPrincipal, input.emailContador, input.nomeContador, input.notas ?? null, by]
+          );
+        }
+        await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "configuracoes", entityType: "docx_template_config", entityId: input.companyId, details: `Template Word atualizado: cor=${input.corPrincipal}, contador=${input.emailContador}` });
+        return { success: true };
+      }),
+
+    downloadDocxTemplateExemplo: protectedProcedure
+      .input(z.object({ companyId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        if (!["admin", "admin_master"].includes(ctx.user.role ?? "")) throw new TRPCError({ code: "FORBIDDEN" });
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+        const rows = await db.$client.query(
+          `SELECT cor_principal, email_contador, nome_contador FROM docx_template_config WHERE company_id=$1 ORDER BY id DESC LIMIT 1`,
+          [input.companyId]
+        );
+        const r = rows.rows[0] as any;
+        const docxConfig = {
+          corPrincipal:  r?.cor_principal  ?? "1B2A4A",
+          emailContador: r?.email_contador ?? "contabil@pronustributario.com.br",
+          nomeContador:  r?.nome_contador  ?? "Pronus Tributário",
+        };
+        const empQ = await db.$client.query(`SELECT "razaoSocial", "nomeFantasia" FROM companies WHERE id=$1`, [input.companyId]);
+        const empresa = empQ.rows[0]?.razaoSocial || empQ.rows[0]?.nomeFantasia || "FC Engenharia";
+        const { buildChecklistDocxExemplo } = await import("./routers/downloadPacoteContador");
+        const buf = await buildChecklistDocxExemplo(empresa, docxConfig);
+        return { base64: buf.toString("base64"), filename: "exemplo_template_word.docx" };
+      }),
   }),
 
   // ============================================================
