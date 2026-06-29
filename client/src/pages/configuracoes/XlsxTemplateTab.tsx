@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import {
   FileSpreadsheet, Palette, Save, Download, RefreshCw,
   Calendar, User, StickyNote, Info, CheckCircle2, Lock, Eye,
+  ChevronDown, ChevronUp,
 } from "lucide-react";
 
 // Paleta de cores predefinidas (ARGB sem prefixo FF)
@@ -27,15 +28,91 @@ const COLOR_PRESETS: { label: string; hex: string; argb: string }[] = [
   { label: "Laranja",           hex: "#C55A11", argb: "C55A11" },
 ];
 
-// Lista completa de relatórios XLSX gerados pelo sistema
-const RELATORIOS_XLSX = [
-  { nome: "Extrato Bancário",            modulo: "Contabilidade",        template: true  },
-  { nome: "Extrato de Cartão de Crédito",modulo: "Contabilidade",        template: false },
-  { nome: "Pacote do Contador (ZIP)",    modulo: "Contabilidade",        template: true  },
-  { nome: "Custos por Obra",             modulo: "Folha de Pagamento",   template: true  },
-  { nome: "Conformidade PJ",             modulo: "Controle PJ",          template: false },
-  { nome: "Pagamentos PJ",               modulo: "Controle PJ",          template: false },
-  { nome: "Exemplo de Template",         modulo: "Configurações",        template: true  },
+// Lista completa de relatórios XLSX gerados pelo sistema com preview de estrutura
+const RELATORIOS_XLSX: {
+  nome: string; modulo: string; template: boolean;
+  descricao: string; cols: string[]; rows: string[][];
+}[] = [
+  {
+    nome: "Extrato Bancário", modulo: "Contabilidade", template: true,
+    descricao: "Lançamentos do extrato bancário por período, com saldo acumulado.",
+    cols: ["Data", "Histórico / Descrição", "Documento", "Débito (R$)", "Crédito (R$)", "Saldo (R$)"],
+    rows: [
+      ["01/06/2026", "SALDO ANTERIOR",          "—",         "",              "",              "42.850,00"],
+      ["03/06/2026", "TED CLIENTE XYZ LTDA",    "4521",      "",              "18.500,00",     "61.350,00"],
+      ["05/06/2026", "FOLHA DE PAGAMENTO JUN",  "FOLHA",     "38.200,00",     "",              "23.150,00"],
+      ["10/06/2026", "PIX - FORNECEDOR ABC",    "PIX",       "4.200,00",      "",              "18.950,00"],
+      ["TOTAL", "", "", "42.400,00", "18.500,00", "18.950,00"],
+    ],
+  },
+  {
+    nome: "Extrato de Cartão de Crédito", modulo: "Contabilidade", template: false,
+    descricao: "Transações do cartão corporativo, agrupadas por categoria.",
+    cols: ["Data", "Descrição", "Parcela", "Categoria", "Valor (R$)"],
+    rows: [
+      ["02/06/2026", "POSTO IPIRANGA",          "À vista", "Combustível",   "280,00"   ],
+      ["04/06/2026", "HOTEL NACIONAL BSB",      "1/2",     "Hospedagem",    "1.200,00" ],
+      ["08/06/2026", "PAPELARIA CENTRO",        "À vista", "Material",      "156,50"   ],
+      ["12/06/2026", "RESTAURANTE EXECUTIVO",   "À vista", "Alimentação",   "320,00"   ],
+      ["TOTAL", "", "", "", "1.956,50"],
+    ],
+  },
+  {
+    nome: "Pacote do Contador (ZIP)", modulo: "Contabilidade", template: true,
+    descricao: "Arquivo ZIP com múltiplas planilhas (extrato, DRE, balancete) para o contador.",
+    cols: ["Planilha", "Descrição", "Período", "Linhas", "Status"],
+    rows: [
+      ["Extrato_Jun26",  "Extrato Bancário Consolidado", "Jun/2026", "47 lançamentos", "✓ Gerada"],
+      ["DRE_Jun26",      "Demonstrativo de Resultado",   "Jun/2026", "32 linhas",      "✓ Gerada"],
+      ["Balancete_Jun26","Balancete Mensal",             "Jun/2026", "18 contas",      "✓ Gerada"],
+      ["Impostos_Jun26", "Guias e Obrigações",           "Jun/2026", "6 tributos",     "✓ Gerada"],
+    ],
+  },
+  {
+    nome: "Custos por Obra", modulo: "Folha de Pagamento", template: true,
+    descricao: "Custo total de pessoal alocado por obra no mês de referência.",
+    cols: ["Funcionário", "Função", "Obra / CC", "H. Trab.", "H. Extra", "Custo Total (R$)"],
+    rows: [
+      ["Felipe C. Alves",  "Engenheiro Civil",   "UTC - Unidade",  "176", "0",  "8.500,00" ],
+      ["Carlos A. Souza",  "Técnico de Seg.",     "Escritório",     "160", "8",  "4.200,00" ],
+      ["Ana B. Lima",      "Administrativo",      "Escritório",     "176", "0",  "3.800,00" ],
+      ["Marcos R. Silva",  "Operador de Equip.",  "UTC - Unidade",  "176", "12", "5.100,00" ],
+      ["TOTAL", "", "", "688", "20", "21.600,00"],
+    ],
+  },
+  {
+    nome: "Conformidade PJ", modulo: "Controle PJ", template: false,
+    descricao: "Status documental de todos os prestadores PJ ativos no período.",
+    cols: ["Prestador", "CNPJ", "Contrato", "Certidões", "Vencimento", "Situação"],
+    rows: [
+      ["Consultoria ABC Ltda",  "12.345.678/0001-00", "CT-2024-012", "OK",       "30/09/2026", "✓ Regular"  ],
+      ["TecnoServ ME",          "98.765.432/0001-11", "CT-2025-003", "Pendente", "—",          "⚠ Pendente" ],
+      ["Construseg Ltda",       "55.444.333/0001-22", "CT-2024-018", "OK",       "15/08/2026", "✓ Regular"  ],
+      ["RH Soluções ME",        "11.222.333/0001-44", "CT-2025-007", "Vencida",  "01/06/2026", "✗ Irregular"],
+    ],
+  },
+  {
+    nome: "Pagamentos PJ", modulo: "Controle PJ", template: false,
+    descricao: "Relação de pagamentos a prestadores PJ com retenções aplicadas.",
+    cols: ["Prestador", "CNPJ", "Mês Ref.", "Valor Bruto (R$)", "Retenções (R$)", "Líquido (R$)"],
+    rows: [
+      ["Consultoria ABC Ltda", "12.345.678/0001-00", "Jun/2026", "8.000,00",  "1.040,00", "6.960,00" ],
+      ["TecnoServ ME",         "98.765.432/0001-11", "Jun/2026", "3.500,00",  "455,00",   "3.045,00" ],
+      ["Construseg Ltda",      "55.444.333/0001-22", "Jun/2026", "12.000,00", "1.560,00", "10.440,00"],
+      ["TOTAL", "", "", "23.500,00", "3.055,00", "20.445,00"],
+    ],
+  },
+  {
+    nome: "Exemplo de Template", modulo: "Configurações", template: true,
+    descricao: "Planilha-modelo que demonstra o cabeçalho institucional FC aplicado.",
+    cols: ["Coluna A", "Coluna B", "Coluna C", "Coluna D", "Coluna E"],
+    rows: [
+      ["Dado 1A", "Dado 1B", "Dado 1C", "Dado 1D", "100,00"],
+      ["Dado 2A", "Dado 2B", "Dado 2C", "Dado 2D", "200,00"],
+      ["Dado 3A", "Dado 3B", "Dado 3C", "Dado 3D", "300,00"],
+      ["TOTAL",   "",        "",         "",         "600,00"],
+    ],
+  },
 ];
 
 // Colunas de exemplo para o visualizador inline
@@ -96,6 +173,7 @@ export default function XlsxTemplateTab({ userName }: Props) {
   const [lastApprovedBy, setLastApprovedBy] = useState<string | null>(null);
   const [savedVigentDesde, setSavedVigentDesde] = useState<string | null>(null);
   const [showVisualizador, setShowVisualizador] = useState(false);
+  const [openReport, setOpenReport] = useState<string | null>(null);
 
   useEffect(() => {
     if (query.data) {
@@ -494,33 +572,119 @@ export default function XlsxTemplateTab({ userName }: Props) {
         </div>
       )}
 
-      {/* Lista de todos os relatórios XLSX do sistema */}
+      {/* Lista de todos os relatórios XLSX do sistema — clicáveis com preview */}
       <div className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 space-y-2">
         <p className="text-xs font-semibold text-gray-600">
-          Relatórios XLSX gerados pelo sistema:
+          Relatórios XLSX gerados pelo sistema — <span className="font-normal text-gray-400">clique em um relatório para visualizar sua estrutura</span>
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-          {RELATORIOS_XLSX.map(r => (
-            <div
-              key={r.nome}
-              className={`flex items-center gap-2 px-3 py-2 rounded-md border text-xs ${
-                r.template
-                  ? "bg-white border-green-200 text-gray-700"
-                  : "bg-white border-gray-200 text-gray-500"
-              }`}
-            >
-              <FileSpreadsheet className={`w-3.5 h-3.5 shrink-0 ${r.template ? "text-green-600" : "text-gray-400"}`} />
-              <div className="flex-1 min-w-0">
-                <span className="font-medium truncate block">{r.nome}</span>
-                <span className="text-gray-400">{r.modulo}</span>
+
+        <div className="space-y-1.5">
+          {RELATORIOS_XLSX.map(r => {
+            const isOpen = openReport === r.nome;
+            const isTotal = (row: string[]) => row[0] === "TOTAL";
+            return (
+              <div key={r.nome} className="rounded-md border overflow-hidden bg-white">
+
+                {/* Cabeçalho clicável */}
+                <button
+                  className={`w-full flex items-center gap-2 px-3 py-2.5 text-xs text-left transition-colors hover:bg-gray-50 ${
+                    isOpen
+                      ? r.template ? "bg-green-50/70 border-b border-green-100" : "bg-blue-50/50 border-b border-blue-100"
+                      : ""
+                  } ${r.template ? "border-green-200" : "border-gray-200"}`}
+                  onClick={() => setOpenReport(isOpen ? null : r.nome)}
+                >
+                  <FileSpreadsheet className={`w-3.5 h-3.5 shrink-0 ${r.template ? "text-green-600" : "text-gray-400"}`} />
+                  <div className="flex-1 min-w-0">
+                    <span className={`font-semibold block ${r.template ? "text-gray-700" : "text-gray-600"}`}>{r.nome}</span>
+                    <span className="text-gray-400">{r.modulo} · {r.descricao}</span>
+                  </div>
+                  {r.template ? (
+                    <span className="shrink-0 text-[9px] font-semibold text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">usa template</span>
+                  ) : (
+                    <span className="shrink-0 text-[9px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">padrão</span>
+                  )}
+                  {isOpen
+                    ? <ChevronUp className="w-3.5 h-3.5 shrink-0 text-gray-400" />
+                    : <ChevronDown className="w-3.5 h-3.5 shrink-0 text-gray-400" />
+                  }
+                </button>
+
+                {/* Preview expandível */}
+                {isOpen && (
+                  <div className="overflow-x-auto border-t border-gray-100">
+                    {/* Linha de título (só relatórios que usam template) */}
+                    {r.template && (
+                      <div
+                        className="px-3 py-1.5 text-[10px] font-bold border-b border-gray-200 bg-gray-50"
+                        style={{ letterSpacing: "0.04em" }}
+                      >
+                        {form.tituloEmpresa || "FC ENGENHARIA E CONSTRUÇÃO LTDA"}
+                        <span className="ml-2 font-normal text-gray-500">
+                          · {mesAnoBR()} · {form.revisao || "Rev. 01"}
+                          {userName ? ` · Aprovado por ${userName}` : ""}
+                        </span>
+                      </div>
+                    )}
+
+                    <table className="w-full border-collapse text-[11px] font-mono">
+                      <thead>
+                        <tr>
+                          {r.cols.map(col => (
+                            <th
+                              key={col}
+                              className="px-3 py-1.5 text-left font-bold border border-gray-200 whitespace-nowrap"
+                              style={
+                                r.template
+                                  ? { backgroundColor: displayColor, color: headerTextColor }
+                                  : { backgroundColor: "#374151", color: "#ffffff" }
+                              }
+                            >
+                              {col}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {r.rows.map((row, ri) => (
+                          <tr
+                            key={ri}
+                            className={
+                              isTotal(row)
+                                ? "font-bold"
+                                : ri % 2 === 0 ? "bg-white" : "bg-gray-50"
+                            }
+                            style={isTotal(row) ? { backgroundColor: (r.template ? displayColor : "#374151") + "18" } : {}}
+                          >
+                            {row.map((cell, ci) => (
+                              <td
+                                key={ci}
+                                className={`px-3 py-1 border border-gray-200 whitespace-nowrap ${
+                                  isTotal(row) ? "border-gray-300" : ""
+                                } ${ci >= r.cols.length - 2 && !isTotal(row) ? "text-right tabular-nums" : ""}`}
+                              >
+                                {cell}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr>
+                          <td
+                            colSpan={r.cols.length}
+                            className="px-3 py-1 text-[9px] text-gray-400 border border-gray-200 bg-gray-50 text-right"
+                          >
+                            Dados fictícios para visualização · ERP FC Engenharia · {todayBR()}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
               </div>
-              {r.template ? (
-                <span className="shrink-0 text-[9px] font-semibold text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">usa template</span>
-              ) : (
-                <span className="shrink-0 text-[9px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">padrão</span>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
