@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3872** — **FIX DATA NAS PLANILHAS XLSX — DD/MM/AAAA.** Causa-raiz: `fmtDate()` em `downloadPacoteContador.ts` não tratava objetos `Date` do Drizzle; `String(date).slice(0,10)` → `"Fri Jan 02"` cru no Excel. Fix: guard `instanceof Date` com UTC → DD/MM/AAAA. Cobre todos os 4 builders (ListaFaturas, NfeXlsx, ExtratoGeral, OcsXlsx). ZERO DELETE.
+
 - **Rev. 3871** — **FIX PARSER EXTRATO BB — VALORES E TIPO D/C CORRETOS.** Causa-raiz: pdf-parse colapsa nº de documento BB diretamente contra o valor sem espaço (`"616.6731,44 D0,00 C"`). `[CD]\b` falha quando D/C é seguido de dígito → valor ignorado, saldo capturado como valor. Fix: pré-strip `RE_BB_DOCNUM` (`\d{3}.\d{3}.\d{3}.\d{3}.\d{3}`); regex `(?<!\d)…[CD](?=[\s\d]|$)`. Validado: 4 lançamentos corretos (Tarifa 1,44D / PIX 2.100C / Tarifa 91,66D / Empréstimo 1.996,42D). ZERO DELETE.
 
-- **Rev. 3870** — **SEFAZ — CURAR RATE-LIMIT + FIX resetNSU SEGURO.** Causa-raiz: `resetNSU` zero NSU=0+last_sync_at=NULL → disparo imediato+656 → loop 8×. Fix: `resetNSU` usa MAX(nsu_sefaz); novo `curarRateLimit` desliga sync+NSU seguro+limpa backoff. Botão "⏸ Pausar" na UI quando bloqueado ≥2×. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3870** — **SEFAZ — CURAR RATE-LIMIT + FIX resetNSU SEGURO.** `resetNSU` usa MAX(nsu_sefaz); `curarRateLimit` desliga sync+NSU seguro; botão "⏸ Pausar" na UI. ZERO DELETE.
 
 - **Rev. 3869** — **ZIP PACOTE CONTADOR — PREFIXO 3 DÍGITOS (001_…006_).** Numeração `01_` → `001_` em todas as pastas e no checklist. ZERO DELETE.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3864** — **NF# NO EXTRATO — VÍNCULO BIDIRECIONAL NF-e ↔ EXTRATO BANCÁRIO.** `getPanoramaFiscal`: subquery fn_id/fn_numero cobre `stmt_line_id` OU `entry_id` chain; badge `NF# <número>` na Conciliação. ZERO DELETE.
 
-- **Rev. 3863** — **PACOTE CONTABILIDADE — TODOS OS CSVs → XLSX COM TEMPLATE FC.** 5 novos builders ExcelJS: `buildListaFaturasXlsx`, `buildNfeXlsx`, `buildExtratoGeralXlsx`, `buildOcsXlsx`; todos usam `loadFcXlsxConfig`. ZERO DELETE.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3862 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3863 e anteriores.
 
 ## User preferences
 

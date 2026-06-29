@@ -46,6 +46,13 @@ function fmtBRL(v: any): string {
 }
 function fmtDate(s: any): string {
   if (!s) return "";
+  // Neon/Drizzle pode devolver Date objects; sem este guard String(date) vira
+  // "Fri Jan 02 2026 ..." e .slice(0,10) = "Fri Jan 02" → sai cru no Excel.
+  if (s instanceof Date) {
+    const d = String(s.getUTCDate()).padStart(2, "0");
+    const m = String(s.getUTCMonth() + 1).padStart(2, "0");
+    return `${d}/${m}/${s.getUTCFullYear()}`;
+  }
   const str = String(s).slice(0, 10);
   if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str.split("-").reverse().join("/");
   return str;

@@ -1,3 +1,5 @@
+- **Rev. 3863** — **PACOTE CONTABILIDADE — TODOS OS CSVs → XLSX COM TEMPLATE FC.** 5 novos builders ExcelJS: `buildListaFaturasXlsx`, `buildNfeXlsx`, `buildExtratoGeralXlsx`, `buildOcsXlsx`; todos usam `loadFcXlsxConfig`. ZERO DELETE.
+
 - **Rev. 3862** — **CHECKLIST WORD + ABAS DE CATEGORIA + 6 TEMPLATES NOVOS.** `00_CHECKLIST.docx` via `docx` v9.7.1; abas RH/Financeiro/Planejamento/Contratos/Medições/Contabilidade; 6 tipos seed com `CATEGORIAS_DOCS`. ZERO DELETE.
 
 - **Rev. 3861** — **ENVIOS AO CONTADOR · BADGE DE STATUS POR LINHA EM NF-e RECEBIDAS.** Badge condicional: `conciliada`=verde, `enviada`=azul, demais=âmbar; linha conciliada ganha fundo `bg-green-50/30`. ZERO DELETE.

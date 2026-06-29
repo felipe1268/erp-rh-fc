@@ -1,4 +1,19 @@
 /**
+ * Rev. 3872 — **FIX DATA NAS PLANILHAS XLSX — DD/MM/AAAA EM VEZ DE "Fri Jan 02".**
+ *
+ * Causa-raiz: `fmtDate()` em `downloadPacoteContador.ts` não tratava objetos `Date`
+ * (retornados pelo Drizzle/Neon). `String(new Date(...)).slice(0,10)` produz
+ * `"Fri Jan 02"` que não bate no regex `^\d{4}-\d{2}-\d{2}$` e sai cru no Excel.
+ *
+ * Fix: adicionado guard `instanceof Date` com conversão UTC para DD/MM/AAAA —
+ * idêntico ao já existente em `downloadContabilidadeXlsx.ts`.
+ * Cobre todos os 4 builders: buildListaFaturasXlsx, buildNfeXlsx,
+ * buildExtratoGeralXlsx e buildOcsXlsx (todos usam a mesma `fmtDate`).
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3871 — **FIX PARSER EXTRATO BB — VALORES E TIPO D/C CORRETOS.**
  *
  * Causa-raiz: o pdf-parse colapsa o nº de documento do BB diretamente contra o valor
