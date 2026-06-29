@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3871** — **FIX PARSER EXTRATO BB — VALORES E TIPO D/C CORRETOS.** Causa-raiz: pdf-parse colapsa nº de documento BB diretamente contra o valor sem espaço (`"616.6731,44 D0,00 C"`). `[CD]\b` falha quando D/C é seguido de dígito → valor ignorado, saldo capturado como valor. Fix: pré-strip `RE_BB_DOCNUM` (`\d{3}.\d{3}.\d{3}.\d{3}.\d{3}`); regex `(?<!\d)…[CD](?=[\s\d]|$)`. Validado: 4 lançamentos corretos (Tarifa 1,44D / PIX 2.100C / Tarifa 91,66D / Empréstimo 1.996,42D). ZERO DELETE.
+
 - **Rev. 3870** — **SEFAZ — CURAR RATE-LIMIT + FIX resetNSU SEGURO.** Causa-raiz: `resetNSU` zero NSU=0+last_sync_at=NULL → disparo imediato+656 → loop 8×. Fix: `resetNSU` usa MAX(nsu_sefaz); novo `curarRateLimit` desliga sync+NSU seguro+limpa backoff. Botão "⏸ Pausar" na UI quando bloqueado ≥2×. ZERO DELETE.
 
-- **Rev. 3869** — **ZIP PACOTE CONTADOR — PREFIXO 3 DÍGITOS (001_…006_).** Numeração `01_` → `001_` em todas as pastas e no checklist seção 1: `001_Faturas_Emitidas`, `002_Servicos_Tomados`, `003_Extratos_Bancarios`, `004_Extratos_Cartoes`, `005_OCs_NF-e`, `006_OS_Servico`. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3869** — **ZIP PACOTE CONTADOR — PREFIXO 3 DÍGITOS (001_…006_).** Numeração `01_` → `001_` em todas as pastas e no checklist. ZERO DELETE.
 
 - **Rev. 3866** — **PANORAMA FISCAL — EXTRATO UNIFICADO COM FILTROS.** `UnifiedBankTable` lista cronológica única; KPIs inline; filtros tipo/NF/banco; badge "NF# N". ZERO DELETE.
 
@@ -64,13 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3863** — **PACOTE CONTABILIDADE — TODOS OS CSVs → XLSX COM TEMPLATE FC.** 5 novos builders ExcelJS: `buildListaFaturasXlsx`, `buildNfeXlsx`, `buildExtratoGeralXlsx`, `buildOcsXlsx`; todos usam `loadFcXlsxConfig`. ZERO DELETE.
 
-- **Rev. 3862** — **CHECKLIST WORD + ABAS DE CATEGORIA + 6 TEMPLATES NOVOS.** `00_CHECKLIST.docx` via `docx` v9.7.1; abas RH/Financeiro/Planejamento/Contratos/Medições/Contabilidade; 6 tipos seed com `CATEGORIAS_DOCS`. ZERO DELETE.
-
-- **Rev. 3861** — **ENVIOS AO CONTADOR · BADGE DE STATUS POR LINHA EM NF-e RECEBIDAS.** Badge condicional: `conciliada`=verde, `enviada`=azul, demais=âmbar; linha conciliada ganha fundo `bg-green-50/30`. ZERO DELETE.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3856 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3862 e anteriores.
 
 ## User preferences
 

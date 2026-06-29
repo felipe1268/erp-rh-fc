@@ -40,7 +40,18 @@ export interface BBParseResult {
 
 // ── Formato legado: valor como "9.999,99 C" ou "9.999,99 D" ─────────────────
 const RE_LINE_DATE = /^(\d{2}\/\d{2}\/\d{4})/;
-const RE_MONEY_CC = /(\d{1,3}(?:\.\d{3})*,\d{2})\s*([CD])\b/g;
+// FIX (Rev. 3871): pdf-parse do BB impresso no browser colapsa o nº de documento
+// com o valor sem espaço: "616.6731,44 D0,00 C" (esperado: "616.673 1,44 D 0,00 C").
+// Dois bugs resultantes:
+//   1. [CD]\b falha quando D/C é seguido de dígito (ex: "D0") → token de VALOR ignorado.
+//   2. Regex casa "712.100,00" dentro de "1712.100,00" → valor errado.
+// Solução:
+//   a. Pré-stripping do nº de documento (padrão fixo BBrasil: XXX.XXX.XXX.XXX.XXX = 15 dígitos).
+//   b. (?<!\d) lookbehind: não pode ser precedido de dígito → evita recorte parcial.
+//   c. (?=[\s\d]|$) em vez de \b: D/C pode ser seguido de dígito (saldo colado) ou espaço/fim.
+const RE_MONEY_CC = /(?<!\d)(\d{1,3}(?:\.\d{3})*,\d{2})\s*([CD])(?=[\s\d]|$)/g;
+// Padrão do nº de documento BB: 5 grupos de 3 dígitos separados por ponto (15 dígitos total).
+const RE_BB_DOCNUM = /\d{3}\.\d{3}\.\d{3}\.\d{3}\.\d{3}/g;
 
 // ── Formato novo: valor como "9.999,99 (+)" ou "9.999,99 (-)" ───────────────
 const RE_MONEY_PM = /(\d{1,3}(?:\.\d{3})*,\d{2})\s*\(([+-])\)/;
@@ -175,10 +186,15 @@ export async function parseBancoBrasilExtratoPdf(base64: string): Promise<BBPars
       // Linhas-resumo NÃO são transações.
       if (/Saldo Anterior|S\s*A\s*L\s*D\s*O|SALDO DIA/i.test(line)) continue;
 
+      // Pré-processa: remove nº de documento BB (XXX.XXX.XXX.XXX.XXX, 15 dígitos)
+      // que o pdf-parse colapsa diretamente contra o valor sem espaço separador.
+      RE_BB_DOCNUM.lastIndex = 0;
+      const cleanLine = line.replace(RE_BB_DOCNUM, " ");
+
       const monies: { v: number; dc: string }[] = [];
       let m: RegExpExecArray | null;
       RE_MONEY_CC.lastIndex = 0;
-      while ((m = RE_MONEY_CC.exec(line)) !== null) {
+      while ((m = RE_MONEY_CC.exec(cleanLine)) !== null) {
         monies.push({ v: moneyBR(m[1]), dc: m[2] });
       }
       if (monies.length === 0) continue;
@@ -189,8 +205,9 @@ export async function parseBancoBrasilExtratoPdf(base64: string): Promise<BBPars
       const valor = valorTok.dc === "D" ? -valorTok.v : valorTok.v;
 
       // Descrição: remove a data, os dígitos colados (ag+lote+histórico), os tokens
-      // monetários e o nº de documento residual (corrida de dígitos no fim).
-      let desc = line
+      // monetários e qualquer resíduo numérico no fim. Usa cleanLine (sem nº de doc).
+      RE_MONEY_CC.lastIndex = 0;
+      let desc = cleanLine
         .replace(RE_LINE_DATE, "")
         .replace(/^\d+/, "")
         .replace(RE_MONEY_CC, " ")

@@ -1,4 +1,30 @@
 /**
+ * Rev. 3871 — **FIX PARSER EXTRATO BB — VALORES E TIPO D/C CORRETOS.**
+ *
+ * Causa-raiz: o pdf-parse colapsa o nº de documento do BB diretamente contra o valor
+ * transacional SEM espaço separador: `"616.6731,44 D0,00 C"` em vez de `"616.673 1,44 D 0,00 C"`.
+ * Dois bugs resultantes:
+ *   1. `[CD]\b` falha quando D/C é seguido de dígito (`D0`, `D2`, `D1`) → o token de VALOR não
+ *      casa, somente o SALDO final (com `\b` válido) é capturado → valor errado + tipo "Entrada".
+ *   2. Regex recortava "712.100,00" de dentro de "1712.100,00" (nº de documento sem espaço antes
+ *      do valor do PIX) → R$ 712.100,00 importado em vez de R$ 2.100,00.
+ *
+ * Correções em `server/services/bbPdfParser.ts` (formato legado C/D):
+ *   a. Pré-stripping do nº de documento BB (`RE_BB_DOCNUM`: `\d{3}\.\d{3}\.\d{3}\.\d{3}\.\d{3}`)
+ *      antes de aplicar qualquer regex de valor → separa doc# do valor em `cleanLine`.
+ *   b. `RE_MONEY_CC`: `[CD]\b` → `[CD](?=[\s\d]|$)` (D/C pode ser seguido de dígito colado).
+ *   c. `RE_MONEY_CC`: adicionado `(?<!\d)` lookbehind → evita recorte parcial de números longos.
+ *
+ * Validado contra o PDF real (conta BB 37400-8, junho/2026):
+ *   15/06 Tarifa       1,44  D  → SAÍDA  R$ 1,44   ✓
+ *   17/06 Pix Recebido 2.100,00 C  → ENTRADA R$ 2.100,00 ✓
+ *   17/06 Tarifa       91,66 D  → SAÍDA  R$ 91,66  ✓
+ *   18/06 Empréstimo   1.996,42 D → SAÍDA  R$ 1.996,42 ✓
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3870 — **SEFAZ — CURAR RATE-LIMIT + FIX resetNSU SEGURO.**
  *
  * Causa-raiz identificada: `resetNSU` zeraba `ultimo_nsu='000000000000000'` + `last_sync_at=NULL`
