@@ -1,4 +1,27 @@
 /**
+ * Rev. 3848 — **CONCILIAÇÃO · CHEQUE DEVOLVIDO CLASSIFICADO COMO MOVIMENTAÇÃO (NÃO ENTRADA).**
+ *
+ * **O quê:**
+ * Adicionados os padrões `"cheque devol"` e `"dev.*cheq"` ao array `_INTERNO_PATTERNS` em
+ * `financial.ts`. Esse array alimenta simultaneamente o predicado SQL (`internoExpr` em
+ * `getBankAccountsConciliacaoStatus`) e a função JS (`_isLancInterno` / `_isLancInternoRow`)
+ * utilizados em todas as telas de conciliação e extrato.
+ *
+ * **Efeito:**
+ * Linhas "CHEQUE DEVOLVIDO MOT 11", "CHEQUE DEVOLUCAO", etc. (crédito E débito do par)
+ * passam a ser classificadas como `valorEntradasInternas` / `valorSaidasInternas`
+ * (movimentação), e saem do `valorEntradas` / `valorSaidas` real — idêntico ao tratamento
+ * de `aplica`/`resgate`. Net = 0, sem impacto no caixa real.
+ *
+ * **Base contábil:**
+ * NBC TG 03 (R4) / IAS 7 — cheque devolvido é estorno do par; nenhuma das duas pernas é
+ * receita operacional ou despesa real. A dupla contagem (crédito infla entrada + débito já
+ * foi registrado) distorce o Giro Bruto e o caixa real externo.
+ *
+ * **Arquivo:** `server/routers/financial.ts` (linha ~1076 — `_INTERNO_PATTERNS`). ZERO DELETE.
+ */
+
+/**
  * Rev. 3847 — **TEMPLATE XLSX · 3 CORREÇÕES: SAVE, APROVADO POR AUTOMÁTICO, LISTA COMPLETA DE RELATÓRIOS.**
  *
  * **O quê:**

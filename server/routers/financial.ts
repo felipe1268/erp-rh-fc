@@ -1066,6 +1066,11 @@ const _INTERNO_PATTERNS = [
   "transfer.*entre contas", "transf interna", "transferencia interna",
   "aplica", "resgate", "contamax", "\\yrdb\\y", "\\ycdb\\y",
   "fundo de invest", "fc engenharia",
+  // Rev. 3848 — CHEQUE DEVOLVIDO: par crédito+débito é estorno puro (net=0), não receita/despesa real.
+  // "cheque devol" captura "CHEQUE DEVOLVIDO MOT 11", "CHEQUE DEVOLUCAO", etc. de qualquer banco.
+  // "dev.*cheq" captura variantes invertidas (ex.: "DEVOLUCAO CHEQUE"). Ambas as pernas do par
+  // ficam em "movimentação interna" e saem do caixa real, idêntico ao tratamento de aplica/resgate.
+  "cheque devol", "dev.*cheq",
 ];
 const _INTERNO_REGEX_SRC = _INTERNO_PATTERNS.join("|");
 const _internoRegex = new RegExp(_INTERNO_REGEX_SRC, "i");
