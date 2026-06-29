@@ -371,11 +371,23 @@ export default function FinanceiroNotasFiscais() {
   const [vinclandoId, setVinclandoId] = useState<string | null>(null);
   const [semSugestoesOpen, setSemSugestoesOpen] = useState(false);
   const [recSemVinculo, setRecSemVinculo] = useState(false);
+  const [sugestoesPeriodo, setSugestoesPeriodo] = useState<{ dataInicio: string; dataFim: string; tipo: string } | null>(null);
+
+  const MESES_PT = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+  function formatarPeriodoSugestoes(di: string, df: string): string {
+    const d1 = new Date(di + "T12:00:00"), d2 = new Date(df + "T12:00:00");
+    if (d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth()) {
+      return `${MESES_PT[d1.getMonth()]}/${d1.getFullYear()}`;
+    }
+    if (d1.getFullYear() === d2.getFullYear()) return `${d1.getFullYear()}`;
+    return `${MESES_PT[d1.getMonth()]}/${d1.getFullYear()} – ${MESES_PT[d2.getMonth()]}/${d2.getFullYear()}`;
+  }
 
   const obterSugestoesMut = (trpc as any).fiscalNotes.obterSugestoes.useMutation({
-    onSuccess: (res: any) => {
+    onSuccess: (res: any, vars: any) => {
       setSugestoes(res.sugestoes ?? []);
       setSemSugestoes(res.semSugestoes ?? []);
+      setSugestoesPeriodo({ dataInicio: vars.dataInicio, dataFim: vars.dataFim, tipo: vars.tipo ?? "emitida" });
       setIgnorados(new Set());
       setSugestoesOpen(true);
     },
@@ -4146,6 +4158,12 @@ export default function FinanceiroNotasFiscais() {
                 <div className="flex items-center gap-2">
                   <Link className="w-4 h-4 text-violet-600" />
                   <h2 className="font-semibold text-violet-900 text-base">Sugestões de Vínculo NF-e × Extrato</h2>
+                  {sugestoesPeriodo && (
+                    <span className="text-[11px] font-semibold bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">
+                      {formatarPeriodoSugestoes(sugestoesPeriodo.dataInicio, sugestoesPeriodo.dataFim)}
+                      {" · "}{sugestoesPeriodo.tipo === "recebida" ? "Recebidas" : "Emitidas"}
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-violet-700 mt-0.5">
                   Revise cada correspondência encontrada e confirme ou ignore individualmente.

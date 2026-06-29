@@ -294,7 +294,7 @@ export async function obterSugestoesPeriodo(
   const extratoInicio = new Date(dataInicio);
   extratoInicio.setDate(extratoInicio.getDate() - 5);
   const extratoFim = new Date(dataFim);
-  extratoFim.setDate(extratoFim.getDate() + 90);
+  extratoFim.setDate(extratoFim.getDate() + 45);
   const extInStr  = extratoInicio.toISOString().slice(0, 10);
   const extFimStr = extratoFim.toISOString().slice(0, 10);
 
@@ -508,7 +508,7 @@ export async function sincronizarNfsPeriodo(
   const extratoInicio = new Date(dataInicio);
   extratoInicio.setDate(extratoInicio.getDate() - 5);
   const extratoFim = new Date(dataFim);
-  extratoFim.setDate(extratoFim.getDate() + 90);
+  extratoFim.setDate(extratoFim.getDate() + 45);
   const extInStr  = extratoInicio.toISOString().slice(0, 10);
   const extFimStr = extratoFim.toISOString().slice(0, 10);
 

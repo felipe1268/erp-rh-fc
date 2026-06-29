@@ -1,4 +1,23 @@
 /**
+ * Rev. 3857 — **NF-e × EXTRATO · JANELA DO EXTRATO REDUZIDA (±45 dias) + BADGE DE PERÍODO NO DIALOG.**
+ *
+ * **Problema:** `obterSugestoesPeriodo` expandia a busca do extrato em +90 dias a partir do fim
+ * do período selecionado. Ao analisar janeiro/2026, sugestões casavam NFs de janeiro com
+ * entradas do extrato de março/abril — ignorando o filtro de mês do usuário.
+ *
+ * **Correções:**
+ * - Backend (`autoVincularNfService.ts`): janela do extrato reduzida de `+90 dias` para `+45 dias`
+ *   (cobre prazos de pagamento típicos de 30–45 dias sem ultrapassar 2 meses além do período).
+ *   Corrigido em AMBAS as ocorrências (linha ~297 e ~511 do serviço).
+ * - Frontend (`FinanceiroNotasFiscais.tsx`): adicionado state `sugestoesPeriodo`; `onSuccess`
+ *   da mutation captura `vars.dataInicio/dataFim/tipo`; cabeçalho do dialog exibe badge
+ *   "Jan/2026 · Emitidas" (ou "2026 · Recebidas" para ano-todo) para total transparência.
+ *   Adicionada função `formatarPeriodoSugestoes` para formatar o intervalo de forma compacta.
+ *
+ * **ZERO DELETE. Detalhe: `shared/changelog.ts`.**
+ */
+
+/**
  * Rev. 3856 — **TEMPLATE XLSX · FIX SAVE + DATA AUTOMÁTICA + VISUALIZADOR INLINE.**
  *
  * **Problemas reportados:**
