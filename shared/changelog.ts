@@ -1,4 +1,51 @@
 /**
+ * Rev. 3877 — **TEMPLATES DE EXTRATO + PARSER SANTANDER IBPJ (INTERNET BANKING PJ).**
+ *
+ * ## Problema
+ * O Santander oferece dois formatos de extrato PDF distintos:
+ * 1. **Extrato Consolidado Inteligente** — já suportado pelo `santanderPdfParser.ts` (Rev. 3363).
+ * 2. **Internet Banking Empresarial (IBPJ)** — formato diferente: data completa `DD/MM/AAAA`
+ *    em cada linha, débitos com prefixo `"- R$"`, créditos com `"R$"` sem sinal. Este formato
+ *    caia no fallback de IA e consumia cota desnecessariamente.
+ *
+ * Além disso, outros bancos (Itaú, Bradesco, Sicredi…) que caem no fallback de IA não tinham
+ * como receber instruções extras de parsing sem modificar o código.
+ *
+ * ## Solução
+ *
+ * ### Parser Santander IBPJ (`server/services/santanderIbpjParser.ts`)
+ * - Identificação via `"Internet Banking Empresarial"` ou `"IBPJ"` no texto do PDF.
+ * - Ignora linhas `"Saldo do dia"`, cabeçalhos e rodapés via `SKIP_PREFIXES`.
+ * - Cada linha: `DD/MM/AAAA` + descrição + `[- ]R$ V.VVV,VV`.
+ * - Inserido como passo **2.7** na cadeia de `parseExtratoLines` (após Santander Consolidado,
+ *   antes do fallback de IA) — sem alterar os passos 1/2/2.5/3 existentes.
+ *
+ * ### Templates de Extrato (`bank_statement_templates`)
+ * - Nova tabela DB por empresa: banco_nome, palavras-chave, prefixos a ignorar, instruções IA.
+ * - CRUD em `server/routers/bankStatementTemplates.ts` (tRPC protectedProcedure + tenant guard).
+ * - Quando o fallback de IA é acionado, carrega o template matching da empresa e injeta
+ *   instruções extras no prompt (`extraInstructions` em `parseExtratoComIA`).
+ * - Settings → **"Templates de Extrato"** (aba nova em Configurações, cor sky, role admin).
+ * - UI: lista de cards com expand, botão de preset Santander IBPJ para cadastro rápido.
+ *
+ * ## DB
+ * - `bank_statement_templates`: CREATE TABLE IF NOT EXISTS via `[SyncSchema+]` Rev. 3877.
+ * - `drizzle/schema.ts`: tabela `bankStatementTemplates` + index `idx_bank_stmt_tmpl_company`.
+ *
+ * ## Arquivos principais
+ * - `server/services/santanderIbpjParser.ts` (NOVO)
+ * - `server/routers/bankStatementTemplates.ts` (NOVO)
+ * - `client/src/pages/configuracoes/ExtratoTemplateTab.tsx` (NOVO)
+ * - `server/routers/financial.ts`: importa IBPJ parser + step 2.7 + template lookup na IA
+ * - `server/services/extratoIaParser.ts`: `parseExtratoComIA` aceita `extraInstructions?`
+ * - `server/routers.ts`: registra `bankStatementTemplates`
+ * - `client/src/pages/Configuracoes.tsx`: tab "template_extrato"
+ *
+ * ZERO DELETE.
+ */
+export const changelog_3877 = null;
+
+/**
  * Rev. 3876 — **CHEQUE ESPECIAL — CONTROLE POR CONTA BANCÁRIA + ALERTA VISUAL NA CONCILIAÇÃO.**
  *
  * ## Problema

@@ -82,6 +82,7 @@ import { insuranceRouter } from "./routers/insurance";
 import { dixiPontoRouter } from "./routers/dixiPonto";
 import { heSolicitacoesRouter } from "./routers/heSolicitacoes";
 import { financialRouter } from "./routers/financial";
+import { bankStatementTemplatesRouter } from "./routers/bankStatementTemplates";
 import { chequesRouter } from "./routers/cheques";
 import { cartaoRouter } from "./routers/cartao";
 import { pontoDescontosRouter } from "./routers/pontoDescontos";
@@ -237,6 +238,7 @@ export const appRouter = router({
   acidentes: acidentesRouter,
   avaliacaoFuncionarios: avaliacaoFuncionariosRouter,
   systemDocumentTemplates: systemDocumentTemplatesRouter,
+  bankStatementTemplates: bankStatementTemplatesRouter,
   auth: router({
     me: publicProcedure.query(opts => {
       if (!opts.ctx.user) return null;

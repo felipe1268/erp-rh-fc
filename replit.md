@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3877** — **TEMPLATES DE EXTRATO BANCÁRIO + PARSER SANTANDER IBPJ.** Novo parser determinístico para Santander Internet Banking PJ (IBPJ): detecta `"Internet Banking Empresarial"`, ignora "Saldo do dia", parse de `DD/MM/AAAA` + `[- ]R$`. Inserido como passo 2.7 em `parseExtratoLines` (após Santander Consolidado, antes de IA). Nova tabela `bank_statement_templates` (por empresa: palavras-chave, skip-prefixes, instruções IA) + CRUD tRPC + aba "Templates de Extrato" em Configurações. `parseExtratoComIA` aceita `extraInstructions?` para injetar o template no prompt. ZERO DELETE.
+
 - **Rev. 3876** — **CHEQUE ESPECIAL — CONTROLE POR CONTA BANCÁRIA + ALERTA NA CONCILIAÇÃO.** Duas colunas novas em `company_bank_accounts` (`cheque_especial_ativo` + `cheque_especial_limite`). Self-heal no `[SyncSchema+]`. `getBankAccounts` SQL retorna `chequeEspecialAtivo`, `chequeEspecialLimite` e `saldoAtual` (saldo abertura + total extrato). Zod de `criarContaBancaria`/`atualizarContaBancaria` inclui novos campos. `ContasBancarias.tsx` ganha toggle + MoneyInput + badge laranja. `FinanceiroConciliacao.tsx` exibe badge "⚠ Ch. Especial" quando `chequeEspecialAtivo=1 && saldoAtual<0`. ZERO DELETE.
 
-- **Rev. 3875** — **CONCILIAÇÃO — REGRA DE OURO: LIMPAR NÃO DESTRÓI CONCILIADOS SEM CONFIRMAÇÃO.** `limparExtrato` e `limparExtratoMes` agora retornam `{ ok: false, conciliadosCount }` quando há linhas conciliadas (sem `force=true`). Client exibe bloco vermelho com contagem + checkbox obrigatório antes de liberar o botão com `force: true`. `excluirLinhaExtrato` lança CONFLICT se linha conciliada. Afeta `financial.ts`, `FinanceiroConciliacao.tsx`, `FinanceiroConciliacaoWorkspace.tsx`. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3875** — **CONCILIAÇÃO — REGRA DE OURO: LIMPAR NÃO DESTRÓI CONCILIADOS SEM CONFIRMAÇÃO.** `limparExtrato`/`limparExtratoMes` retornam `{ ok: false, conciliadosCount }` sem `force=true`; client exige checkbox. ZERO DELETE.
 
 - **Rev. 3874** — **DASH EPIs — CLIQUE NAS BARRAS DO GRÁFICO ABRE DETALHE.** `onChartClick` + state `detalheEpi` em `DashEpis.tsx`. ZERO DELETE.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3872** — **FIX DATA NAS PLANILHAS XLSX — DD/MM/AAAA.** Guard `instanceof Date` em `fmtDate()` → DD/MM/AAAA em vez de "Fri Jan 02". ZERO DELETE.
 
 - **Rev. 3871** — **FIX PARSER EXTRATO BB — VALORES E TIPO D/C CORRETOS.** Pré-strip `RE_BB_DOCNUM`; regex `[CD](?=[\s\d]|$)`. ZERO DELETE.
-
-- **Rev. 3870** — **SEFAZ — CURAR RATE-LIMIT + FIX resetNSU SEGURO.** `resetNSU` usa MAX(nsu_sefaz); `curarRateLimit` desliga sync+NSU seguro; botão "⏸ Pausar" na UI. ZERO DELETE.
 
 ### Histórico completo
 

@@ -28,6 +28,7 @@ import { IAConfigSection } from "@/pages/configuracoes/IAConfigSection";
 import TemplatesDocsTab from "@/pages/configuracoes/TemplatesDocsTab";
 import XlsxTemplateTab from "@/pages/configuracoes/XlsxTemplateTab";
 import DocxTemplateTab from "@/pages/configuracoes/DocxTemplateTab";
+import ExtratoTemplateTab from "@/pages/configuracoes/ExtratoTemplateTab";
 import ContratoTemplate from "@/pages/terceiros/contratos/ContratoTemplate";
 import { Settings, Users, Trash2, Key, Scale, Clock, FileText, AlertTriangle, Gift, Palmtree, UserX, RotateCcw, Save, ChevronRight, ChevronDown, Info, GripVertical, ArrowUp, ArrowDown, Eye, EyeOff, Shield, Bell, Mail, Plus, Check, X, ToggleLeft, ToggleRight, History, Send, CheckCheck, AlertCircle, RefreshCw, Pencil, Hash, HardHat, ClipboardList, Database, Download, Loader2, TrendingUp, Landmark, PlayCircle, UtensilsCrossed, Coffee, MapPin, Gavel, Star, Handshake, BadgeCheck, BookOpen, Building2, CalendarCheck, HardDrive, ExternalLink, Calculator, ShoppingCart, Warehouse, DollarSign, FolderOpen, FileBarChart, Hammer, Truck, Megaphone, Briefcase, Brain, SlidersHorizontal, GitBranch, Upload, ShieldCheck, ShieldAlert, UserCheck, Receipt, FileSpreadsheet } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
@@ -95,7 +96,7 @@ const CATEGORIAS = [
   { key: "notificacoes_sistema", label: "Notificações do Sistema", icon: Bell, color: "text-pink-600", bgColor: "bg-pink-50", borderColor: "border-pink-200" },
 ];
 
-type TabKey = "criterios" | "senha" | "limpeza" | "regras" | "notificacoes" | "contrato_pj" | "contrato_terceiros" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos" | "backup" | "terceiros" | "portal_cliente" | "templates_docs" | "socios" | "smtp_config" | "template_planilha" | "template_word";
+type TabKey = "criterios" | "senha" | "limpeza" | "regras" | "notificacoes" | "contrato_pj" | "contrato_terceiros" | "sync_he" | "sindical" | "beneficios_alimentacao" | "modulos" | "backup" | "terceiros" | "portal_cliente" | "templates_docs" | "socios" | "smtp_config" | "template_planilha" | "template_word" | "template_extrato";
 
 // Rev. 2403: mapa estático de cores das abas. CRÍTICO: Tailwind JIT só vê
 // classes LITERAIS no source — interpolação tipo `bg-${c}-500` não gera CSS.
@@ -351,6 +352,7 @@ export default function Configuracoes() {
     { key: "smtp_config" as TabKey, label: "Config. SMTP", icon: Mail, minRole: "admin_master", color: "slate" },
     { key: "template_planilha" as TabKey, label: "Template de Planilha", icon: FileSpreadsheet, minRole: "admin", color: "emerald" },
     { key: "template_word" as TabKey, label: "Template de Word", icon: FileText, minRole: "admin", color: "blue" },
+    { key: "template_extrato" as TabKey, label: "Templates de Extrato", icon: Landmark, minRole: "admin", color: "sky" },
     { key: "backup" as TabKey, label: "Backup & Sincronização", icon: Database, minRole: "admin", color: "slate" },
   ];
   const tabs = allTabs.filter(tab => {
@@ -507,6 +509,11 @@ export default function Configuracoes() {
         {/* TAB: Template de Word DOCX (Rev. 3865) */}
         {activeTab === "template_word" && (
           <DocxTemplateTab userName={user?.name || user?.username || ""} />
+        )}
+
+        {/* TAB: Templates de Extrato Bancário (Rev. 3877) */}
+        {activeTab === "template_extrato" && (
+          <ExtratoTemplateTab />
         )}
 
         {activeTab === "contrato_terceiros" && (

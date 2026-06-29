@@ -48,8 +48,10 @@ import {
 import { runFinancialJobNow } from "../services/financialAutoImportJob";
 import { parseCaixaExtratoPdf } from "../services/caixaPdfParser";
 import { parseSantanderExtratoPdf, type RendimentoAplicacao } from "../services/santanderPdfParser";
+import { parseSantanderIbpjPdf } from "../services/santanderIbpjParser";
 import { parseBancoBrasilExtratoPdf } from "../services/bbPdfParser";
 import { parseExtratoComIA } from "../services/extratoIaParser";
+import { detectarTemplateExtrato } from "./bankStatementTemplates";
 import {
   computeThreeWayMatch, blockPaymentByThreeWay, releasePaymentByThreeWay,
   parseOFX, parseCNAB, suggestReconciliation, applyReconciliation,
@@ -679,6 +681,7 @@ async function parseExtratoLines(input: {
   csvColunaDescricao?: number;
   csvColunaValor?: number;
   csvColunaSaldo?: number;
+  companyId?: number; // usado p/ carregar templates de extrato da empresa
 }): Promise<{ lines: ExtratoLine[]; rendimentoAplicacao: RendimentoAplicacao | null }> {
   let lines: ExtratoLine[] = [];
   let rendimentoAplicacao: RendimentoAplicacao | null = null;
@@ -740,11 +743,54 @@ async function parseExtratoLines(input: {
         // qualquer outra falha do parser Santander: segue pro fallback de IA.
       }
     }
-    // 3) FALLBACK IA: qualquer outro banco (Itaú, Bradesco...) tem layout
-    //    diferente e os parsers determinísticos devolvem 0 linhas. Aí lemos via IA.
+    // 2.7) SANTANDER IBPJ: "Internet Banking Empresarial" (IBPJ) — formato diferente
+    //    do Extrato Consolidado (data completa DD/MM/AAAA por linha, "- R$" = débito).
+    //    Deve rodar DEPOIS do Consolidado para não capturar PDFs do Consolidado que
+    //    por acaso tenham "IBPJ" no nome do arquivo, pois o Consolidado tem gating
+    //    próprio via "EXTRATO CONSOLIDADO INTELIGENTE".
     if (lines.length === 0) {
       try {
-        lines = await parseExtratoComIA(input.conteudo, "application/pdf");
+        const ibpj = await parseSantanderIbpjPdf(input.conteudo);
+        if (ibpj.isIbpj) {
+          lines = ibpj.lines.map(l => ({
+            data:      l.data,
+            descricao: l.descricao,
+            valor:     l.valor,
+            saldo:     l.saldo,
+          }));
+        }
+      } catch (ibpjErr: any) {
+        if (/não é um PDF válido/i.test(ibpjErr?.message || "")) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: ibpjErr.message });
+        }
+        // qualquer outra falha: segue pro fallback de IA.
+      }
+    }
+    // 3) FALLBACK IA: qualquer outro banco (Itaú, Bradesco...) tem layout
+    //    diferente e os parsers determinísticos devolvem 0 linhas. Aí lemos via IA.
+    //    Rev. 3877: carrega template cadastrado em Configurações p/ enriquecer o prompt.
+    if (lines.length === 0) {
+      // Extrai texto do PDF para detecção de template (sem re-parse pesado).
+      let extraInstructions: string | undefined;
+      if (input.companyId) {
+        try {
+          // Usamos o conteúdo base64 como chave: extrai texto via pdf-parse para detectar template.
+          const pdfParse: any = (await import("pdf-parse/lib/pdf-parse.js")).default;
+          const buf = Buffer.from(
+            input.conteudo.replace(/^data:[^,]*,/, "").trim(),
+            "base64"
+          );
+          const pdfData = await pdfParse(buf);
+          const template = await detectarTemplateExtrato(input.companyId, pdfData?.text || "");
+          if (template?.instrucoesIa) {
+            extraInstructions = `\n\n### Instruções específicas para este banco (${template.bancoNome}):\n${template.instrucoesIa}`;
+          }
+        } catch {
+          // falha silenciosa — fallback sem template
+        }
+      }
+      try {
+        lines = await parseExtratoComIA(input.conteudo, "application/pdf", extraInstructions);
       } catch (iaErr: any) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -8904,7 +8950,7 @@ export const financialRouter = router({
       throw new TRPCError({ code: "FORBIDDEN", message: "Conta bancária não pertence a esta empresa" });
     }
 
-    const { lines } = await parseExtratoLines(input);
+    const { lines } = await parseExtratoLines({ ...input, companyId: input.companyId });
 
     let inserted = 0;
     let skipped = 0;
@@ -8986,7 +9032,7 @@ export const financialRouter = router({
       throw new TRPCError({ code: "FORBIDDEN", message: "Conta bancária não pertence a esta empresa" });
     }
 
-    const { lines, rendimentoAplicacao } = await parseExtratoLines(input);
+    const { lines, rendimentoAplicacao } = await parseExtratoLines({ ...input, companyId: input.companyId });
     return { lines, total: lines.length, importadoEm: new Date().toISOString(), rendimentoAplicacao };
   }),
 

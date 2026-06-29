@@ -1045,6 +1045,30 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3384: colunas de contatos da agência garantidas em company_bank_accounts.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 3384 company_bank_accounts contatos:`, e?.message || e); }
 
+        // Rev. 3877 — Templates de extrato bancário por empresa (palavras-chave + skip + instruções IA).
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS bank_statement_templates (
+              id             SERIAL PRIMARY KEY,
+              company_id     INTEGER NOT NULL,
+              banco_nome     VARCHAR(100) NOT NULL,
+              palavras_chave TEXT NOT NULL DEFAULT '[]',
+              skip_prefixes  TEXT NOT NULL DEFAULT '[]',
+              instrucoes_ia  TEXT,
+              ativo          SMALLINT NOT NULL DEFAULT 1,
+              criado_em      TIMESTAMP DEFAULT NOW() NOT NULL,
+              atualizado_em  TIMESTAMP DEFAULT NOW() NOT NULL,
+              criado_por_id  INTEGER,
+              criado_por_nome VARCHAR(255)
+            )
+          `);
+          await db.execute(sql`
+            CREATE INDEX IF NOT EXISTS idx_bank_stmt_tmpl_company
+            ON bank_statement_templates (company_id)
+          `);
+          console.log(`[SyncSchema+] Rev. 3877: tabela bank_statement_templates garantida.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 3877 bank_statement_templates:`, e?.message || e); }
+
         // Rev. 3876 — Cheque especial por conta bancária: flag de controle (0/1) + limite disponível.
         // Quando ativo=1 e o saldo acumulado do extrato for negativo, a Conciliação exibe alerta visual.
         try {

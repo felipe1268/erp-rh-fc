@@ -10092,3 +10092,23 @@ export const comboDemissaoSimulacoes = pgTable("combo_demissao_simulacoes", {
 }, (table) => [
   index("idx_combo_demissao_company").on(table.companyId),
 ]);
+
+// Rev. 3877 — Templates de extrato bancário por empresa.
+// Cada template define palavras-chave de identificação automática, prefixos
+// de linha a ignorar e instruções extras para a IA de parsing de PDF.
+// Criado via self-heal (CREATE TABLE IF NOT EXISTS) — sem ALTER/DROP/DELETE.
+export const bankStatementTemplates = pgTable("bank_statement_templates", {
+  id:            serial("id").primaryKey(),
+  companyId:     integer("company_id").notNull(),
+  bancoNome:     varchar("banco_nome", { length: 100 }).notNull(),
+  palavrasChave: text("palavras_chave").notNull().default("[]"),  // JSON string[]
+  skipPrefixes:  text("skip_prefixes").notNull().default("[]"),   // JSON string[]
+  instrucoesIa:  text("instrucoes_ia"),
+  ativo:         smallint("ativo").notNull().default(1),
+  criadoEm:      timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+  atualizadoEm:  timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
+  criadoPorId:   integer("criado_por_id"),
+  criadoPorNome: varchar("criado_por_nome", { length: 255 }),
+}, (table) => [
+  index("idx_bank_stmt_tmpl_company").on(table.companyId),
+]);

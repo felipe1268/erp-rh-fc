@@ -91,12 +91,15 @@ function normData(v: any): string | null {
   return null;
 }
 
-async function invocarIA(base64: string, mimeType: string): Promise<string> {
+async function invocarIA(base64: string, mimeType: string, extraInstructions?: string): Promise<string> {
+  const prompt = extraInstructions
+    ? PROMPT_EXTRATO + extraInstructions
+    : PROMPT_EXTRATO;
   let geminiErr: any = null;
   if (process.env.GOOGLE_API_KEY) {
     try {
       return await invokeGeminiVision({
-        prompt: PROMPT_EXTRATO,
+        prompt,
         base64,
         mimeType,
         responseSchema: SCHEMA_EXTRATO as any,
@@ -110,7 +113,7 @@ async function invocarIA(base64: string, mimeType: string): Promise<string> {
   }
   try {
     return await invokeAnthropicVision({
-      prompt: PROMPT_EXTRATO + "\nResponda SOMENTE com JSON válido.",
+      prompt: prompt + "\nResponda SOMENTE com JSON válido.",
       files: [{ base64, mimeType }],
       maxTokens: 16384,
     });
@@ -122,14 +125,15 @@ async function invocarIA(base64: string, mimeType: string): Promise<string> {
 
 // Extrai as transações de um extrato bancário em PDF (qualquer banco) via IA.
 // Lança erro se nenhuma transação for reconhecida ou se a IA falhar.
-export async function parseExtratoComIA(base64: string, mimeType = "application/pdf"): Promise<ExtratoLine[]> {
+// Rev. 3877: aceita `extraInstructions` com instruções específicas do banco (de templates cadastrados).
+export async function parseExtratoComIA(base64: string, mimeType = "application/pdf", extraInstructions?: string): Promise<ExtratoLine[]> {
   const clean = base64.replace(/^data:[^,]*,/, "").trim();
   const buf = Buffer.from(clean, "base64");
   if (buf.length < 5 || buf.subarray(0, 5).toString("latin1") !== "%PDF-") {
     throw new Error("O arquivo enviado não é um PDF válido.");
   }
 
-  const txt = await invocarIA(clean, mimeType);
+  const txt = await invocarIA(clean, mimeType, extraInstructions);
   const raw = salvageJson(txt);
   const arr: any[] = Array.isArray(raw?.transacoes)
     ? raw.transacoes
