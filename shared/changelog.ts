@@ -1,4 +1,44 @@
 /**
+ * Rev. 3852 — **PANORAMA FISCAL · CHEQUE DEVOLVIDO EXCLUÍDO DAS "SAÍDAS SEM NF-e".**
+ *
+ * **Problema:** a tela Panorama Fiscal mostrava centenas de entradas "CHEQUE DEVOLVIDO MOT 11"
+ * na seção "Saídas sem NF-e recebida" (e no gauge "Saída c/ nota"), puxando o índice de Saúde
+ * Fiscal para baixo ilegitimamente. Cheque devolvido é uma devolução bancária de um cheque
+ * depositado que retornou — não é compra e nunca terá NF-e associada.
+ *
+ * **Causa-raiz:** o endpoint `fiscalNotes.getPanorama` fetachava TODOS os débitos do extrato
+ * sem filtrar (1) linhas marcadas como `desconsiderado_em IS NOT NULL` e (2) padrões de
+ * movimentação interna como "CHEQUE DEVOLVIDO", tarifas bancárias, transferências internas etc.
+ * O `_INTERNO_PATTERNS` existia só em `financial.ts` (conciliação) e não era aplicado aqui.
+ *
+ * **Correções em `server/routers/fiscalNotes.ts` — endpoint `getPanorama`:**
+ *
+ * 1. SQL `bankQ`: adicionado `AND bsl.desconsiderado_em IS NULL` — linhas já marcadas pelo
+ *    usuário como "desconsiderar" na Conciliação deixam de aparecer no Panorama.
+ *
+ * 2. Regex `_PANORAMA_INTERNO_RE` (espelho do `_INTERNO_PATTERNS` da Conciliação):
+ *    `cheque devol | dev.*cheq | tarifa banc | tarifa serv | encargo banc | juros banc |
+ *     transfer.*inter | transf.*prop | ted.*prop | pix.*prop | saldo anterior | iof | cpmf |
+ *     pagto.*boleto.*prop`
+ *
+ * 3. `bankDebitosReais` = débitos que NÃO casam com `_PANORAMA_INTERNO_RE`.
+ *    `bankInternos` = os que casam (para informação interna, não exibidos como pendência).
+ *
+ * 4. `saidasComNota` e `saidasSemNota` agora são derivadas de `bankDebitosReais` (excluídos
+ *    os internos), eliminando os CHEQUE DEVOLVIDO e tarifas da lista de pendências.
+ *
+ * 5. `resumo.saidasBancarias` agora reporta `{ qtd, total }` de `bankDebitosReais`.
+ *    `resumo.saidasInternas` reporta `{ qtd, total }` dos movimentos internos filtrados.
+ *    `coberturaSaidaNfe` usa `totDebitosReais` como denominador (sem internos).
+ *
+ * **Efeito imediato:** Panorama Fiscal de Jan/2026 deve mostrar substancialmente menos
+ * "Saídas sem NF-e" (apenas saídas reais que precisam de comprovante fiscal) e o gauge
+ * "Saída c/ nota" deve refletir a cobertura real de NF-e sobre compras efetivas.
+ *
+ * **ZERO DELETE. Detalhe: `shared/changelog.ts`.**
+ */
+
+/**
  * Rev. 3851 — **NF-e × EXTRATO · CARD DE VÍNCULO + SCORING DEFINITIVO COM valor_bruto E CNPJ-RAIZ.**
  *
  * **Problema reportado:** coluna VÍNCULOS exibia só "— lançamento" sem qualquer indicador de

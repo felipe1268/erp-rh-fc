@@ -50,21 +50,21 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3851** — **NF-e × EXTRATO · CARD DE VÍNCULO + SCORING DEFINITIVO COM valor_bruto E CNPJ-RAIZ.** `calcScore` recebe `fnValorBruto` (melhor de líquido vs bruto) + CNPJ-raiz +25 pts + patamar ≤2% +22 pts. Pré-filtro duplo (líquido OR bruto ≤15%) em todas as 3 funções. `fiscalNotes.list` e `sefaz.listNFeRecebidas` enricidos com batch-fetch de `bank_statement_lines` → `stmtLine:{descricao,valor,data}`. VÍNCULOS (emitidas e recebidas): card violeta com descrição+valor+data quando vinculado. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+- **Rev. 3852** — **PANORAMA FISCAL · CHEQUE DEVOLVIDO EXCLUÍDO DAS "SAÍDAS SEM NF-e".** `getPanorama`: SQL + `desconsiderado_em IS NULL`; regex `_PANORAMA_INTERNO_RE` (cheque devol, tarifas, TED/PIX próprio, etc.) → `bankDebitosReais` para `saidasSemNota`, `saidasBancarias` e `coberturaSaidaNfe`. `saidasInternas` retornado como campo informativo. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3850** — **NF-e × EXTRATO · DIALOG "REVISAR SUGESTÕES": LISTA DE PARES PARA CONFIRMAR OU IGNORAR INDIVIDUALMENTE.** `obterSugestoesPeriodo` (read-only, score ≥ 30, até 200 pares). Endpoint `fiscalNotes.obterSugestoes`. Dialog max-w-4xl com badge Alta/Média/Baixa, botão [Vincular]/[Ignorar] por linha, delta % de valor, footer "Vincular todas de Alta Confiança". Botão "Revisar Sugestões" (cinza) em ambas as abas ao lado de "Vincular Automaticamente" (violeta). `FinanceiroNotasFiscais.tsx`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+- **Rev. 3851** — **NF-e × EXTRATO · CARD DE VÍNCULO + SCORING DEFINITIVO COM valor_bruto E CNPJ-RAIZ.** `calcScore` recebe `fnValorBruto` (melhor de líquido vs bruto) + CNPJ-raiz +25 pts + patamar ≤2% +22 pts. Pré-filtro duplo (líquido OR bruto ≤15%) em todas as 3 funções. `fiscalNotes.list` e `sefaz.listNFeRecebidas` enricidos com batch-fetch de `bank_statement_lines` → `stmtLine:{descricao,valor,data}`. VÍNCULOS (emitidas e recebidas): card violeta com descrição+valor+data quando vinculado. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 ### 5 one-liners
 
-- **Rev. 3849** — **NF-e × EXTRATO · VÍNCULO AUTOMÁTICO MELHORADO: NAME-TOKEN MATCHING + ±10% TOLERÂNCIA + VARREDURA RETROATIVA.** `autoVincularNfService.ts` reescrito: `extractTokens()`, `calcScore()` (0-100), `sincronizarNfsPeriodo` (greedy bipartite). Endpoint `fiscalNotes.sincronizarComExtrato`. Botão "Vincular Automaticamente" nas abas Emitidas e Recebidas. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+- **Rev. 3850** — **NF-e × EXTRATO · DIALOG "REVISAR SUGESTÕES":** `obterSugestoesPeriodo`, endpoint `fiscalNotes.obterSugestoes`, dialog max-w-4xl badge Alta/Média/Baixa, [Vincular]/[Ignorar] por linha, "Vincular todas de Alta Confiança". ZERO DELETE.
 
-- **Rev. 3848** — **CONCILIAÇÃO · CHEQUE DEVOLVIDO = MOVIMENTAÇÃO, NÃO ENTRADA.** Padrões `"cheque devol"` e `"dev.*cheq"` em `_INTERNO_PATTERNS`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+- **Rev. 3849** — **NF-e × EXTRATO · VÍNCULO AUTOMÁTICO MELHORADO:** `extractTokens()`, `calcScore()` (0-100), `sincronizarNfsPeriodo` (greedy bipartite). Botão "Vincular Automaticamente". ZERO DELETE.
 
-- **Rev. 3847** — **TEMPLATE XLSX · SAVE CORRIGIDO + "APROVADO POR" AUTOMÁTICO + LISTA COMPLETA DE RELATÓRIOS.** `XlsxTemplateTab.tsx`, `Configuracoes.tsx`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+- **Rev. 3848** — **CONCILIAÇÃO · CHEQUE DEVOLVIDO = MOVIMENTAÇÃO, NÃO ENTRADA.** Padrões `"cheque devol"` e `"dev.*cheq"` em `_INTERNO_PATTERNS`. ZERO DELETE.
 
-- **Rev. 3846** — **CONFIGURAÇÕES · NOTIFICAÇÕES E-MAIL UNIFICADAS COM SUBCATEGORIAS.** Os dois tabs fundidos num tab com seletor [RH] | [Contabilidade] via `NOTIF_SUBCATS`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+- **Rev. 3847** — **TEMPLATE XLSX · SAVE CORRIGIDO + "APROVADO POR" AUTOMÁTICO + LISTA COMPLETA DE RELATÓRIOS.** `XlsxTemplateTab.tsx`, `Configuracoes.tsx`. ZERO DELETE.
 
-- **Rev. 3845** — **TEMPLATE FC XLSX · SERVIÇO COMPARTILHADO + ABA "TEMPLATE DE PLANILHA" EM CONFIGURAÇÕES.** `excelFcTemplate.ts` + tabela `xlsx_template_config` + 3 endpoints + `exportarCustosObra` migrado. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+- **Rev. 3846** — **CONFIGURAÇÕES · NOTIFICAÇÕES E-MAIL UNIFICADAS COM SUBCATEGORIAS.** Os dois tabs fundidos num tab com seletor [RH] | [Contabilidade] via `NOTIF_SUBCATS`. ZERO DELETE.
 
 ### Histórico completo
 

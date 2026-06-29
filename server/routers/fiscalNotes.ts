@@ -492,6 +492,7 @@ export const fiscalNotesRouter = router({
         WHERE bsl.company_id = $1
           AND bsl.data >= $2 AND bsl.data < $3
           AND bsl.excluido_em IS NULL
+          AND bsl.desconsiderado_em IS NULL
         ORDER BY conta_nome ASC, bsl.data ASC
         LIMIT 600
       `, [companyId, di, df]);
@@ -588,37 +589,60 @@ export const fiscalNotesRouter = router({
       // NF-e que não foram casadas com nenhuma OC do período
       const nfeSemOc = nfeList.filter((nfe: any) => !matchedNfeIds.has(nfe.id));
 
+      // Padrões de movimentação interna / bancária que NÃO exigem cobertura por NF-e.
+      // Espelha os mesmos padrões de _INTERNO_PATTERNS usados na Conciliação (financial.ts).
+      const _PANORAMA_INTERNO_RE = new RegExp(
+        [
+          "cheque devol", "dev.*cheq",          // cheque devolvido (qualquer motivo)
+          "transfer.*inter|transf.*prop",        // transferência interna / própria
+          "ted.*prop|pix.*prop",                 // TED/PIX para conta própria
+          "saldo anterior",                      // saldo inicial
+          "tarifa banc|tarifa serv|tarifa cobr", // tarifas bancárias
+          "encargo banc|juros banc|juros mora",  // encargos
+          "iof\\b|cpmf",                         // tributos bancários
+          "pagto.*boleto.*prop",                 // boleto próprio
+        ].join("|"),
+        "i"
+      );
+      const _isInterno = (b: any) =>
+        _PANORAMA_INTERNO_RE.test((b.descricao ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, ""));
+
       // Entradas/saídas bancárias com/sem NF
       const bankCreditos = bankList.filter((b: any) => b.tipo === "credito");
-      const bankDebitos  = bankList.filter((b: any) => b.tipo === "debito");
+      // Débitos REAIS = excluir movimentações internas (cheque devolvido, tarifas, etc.)
+      const bankDebitos       = bankList.filter((b: any) => b.tipo === "debito");
+      const bankDebitosReais  = bankDebitos.filter((b: any) => !_isInterno(b));
+      const bankInternos      = bankDebitos.filter((b: any) =>  _isInterno(b));
       const entradasComNota = bankCreditos.filter((b: any) => b.fn_id != null);
       const entradasSemNota = bankCreditos.filter((b: any) => b.fn_id == null);
-      const saidasComNota   = bankDebitos.filter((b: any) => b.fn_id != null);
-      const saidasSemNota   = bankDebitos.filter((b: any) => b.fn_id == null);
+      const saidasComNota   = bankDebitosReais.filter((b: any) => b.fn_id != null);
+      const saidasSemNota   = bankDebitosReais.filter((b: any) => b.fn_id == null);
 
       const sumV = (arr: any[], f = "valor") => arr.reduce((s: number, r: any) => s + Math.abs(parseFloat(r[f] ?? "0")), 0);
 
-      const totNfse       = sumV(nfseList, "valor_bruto");
-      const totNfe        = sumV(nfeList, "valor_bruto");
-      const totCreditos   = sumV(bankCreditos);
-      const totDebitos    = sumV(bankDebitos);
-      const totOcs        = sumV(ocList, "valor_total");
-      const totOcsNota    = sumV(ocsComNota, "valor_total");
-      const totSaiNota    = sumV(saidasComNota);
+      const totNfse        = sumV(nfseList, "valor_bruto");
+      const totNfe         = sumV(nfeList, "valor_bruto");
+      const totCreditos    = sumV(bankCreditos);
+      // Débitos REAIS (excluindo cheque devolvido, tarifas, movimentações internas)
+      const totDebitosReais = sumV(bankDebitosReais);
+      const totInternos    = sumV(bankInternos);
+      const totOcs         = sumV(ocList, "valor_total");
+      const totOcsNota     = sumV(ocsComNota, "valor_total");
+      const totSaiNota     = sumV(saidasComNota);
 
       return {
         periodo: { mes, ano },
         resumo: {
           nfseEmitidas:        { qtd: nfseList.length, total: totNfse },
           nfeRecebidas:        { qtd: nfeList.length,  total: totNfe  },
-          entradasBancarias:   { qtd: bankCreditos.length, total: totCreditos },
-          saidasBancarias:     { qtd: bankDebitos.length,  total: totDebitos  },
+          entradasBancarias:   { qtd: bankCreditos.length,    total: totCreditos     },
+          saidasBancarias:     { qtd: bankDebitosReais.length, total: totDebitosReais },
+          saidasInternas:      { qtd: bankInternos.length,    total: totInternos     },
           totalOcs:            { qtd: ocList.length,   total: totOcs  },
           coberturaNfseReceita: totCreditos > 0 ? Math.min(100, Math.round(totNfse / totCreditos * 100)) : null,
           coberturaOcNfe:       totOcs > 0 ? Math.round(totOcsNota / totOcs * 100) : null,
-          // Ratio de volume: NF-e recebidas / débitos bancários (mesmo padrão de coberturaNfseReceita)
-          // Não depende de conciliação manual (fn_id); reflete cobertura documental real.
-          coberturaSaidaNfe:    totDebitos > 0 ? Math.min(100, Math.round(totNfe / totDebitos * 100)) : null,
+          // Ratio de volume: NF-e recebidas / débitos reais (excl. cheque devolvido/tarifas)
+          coberturaSaidaNfe:    totDebitosReais > 0 ? Math.min(100, Math.round(totNfe / totDebitosReais * 100)) : null,
         },
         nfseEmitidas: nfseList,
         nfeRecebidas: nfeList,
