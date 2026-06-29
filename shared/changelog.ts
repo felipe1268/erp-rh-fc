@@ -1,4 +1,30 @@
 /**
+ * Rev. 3856 — **TEMPLATE XLSX · FIX SAVE + DATA AUTOMÁTICA + VISUALIZADOR INLINE.**
+ *
+ * **Problemas reportados:**
+ * 1. Botão "Salvar Configurações" ficava desabilitado se o usuário não alterava nada
+ *    (`disabled={!dirty}` bloqueava a primeira gravação após carregar a tela).
+ * 2. Campo "Vigente desde" exigia digitação manual — deveria ser a data do save.
+ *
+ * **Correções:**
+ * - Removido state `dirty`; botão sempre habilitado (só desabilitado durante `isPending`).
+ * - `vigentDesde` removido do `form`; `handleSave` calcula `todayBR()` automaticamente.
+ * - Campo "Vigente desde" vira display read-only com o valor salvo ("automático ao salvar").
+ * - "Vigente desde" atualiza visualmente após reload (via `savedVigentDesde` state).
+ *
+ * **Visualizador inline (novo):**
+ * - Botão **Visualizar** abre/fecha uma planilha mockup em tempo real na própria tela.
+ * - Mostra: linha de título (empresa + período + revisão + aprovado por), cabeçalho colorido,
+ *   3 linhas de dados fictícios + linha TOTAL, rodapé de geração.
+ * - Cor do cabeçalho e nome da empresa atualizam em tempo real conforme os controles.
+ * - Calcula luminância para decidir texto branco/preto automaticamente.
+ * - Botão "Baixar XLSX real" dentro do visualizador para confirmar e baixar o arquivo.
+ *
+ * **Arquivo:** `client/src/pages/configuracoes/XlsxTemplateTab.tsx`.
+ * **ZERO DELETE. Detalhe: `shared/changelog.ts`.**
+ */
+
+/**
  * Rev. 3855 — **CONCILIAÇÃO BANCÁRIA · TOLERÂNCIA PERCENTUAL NAS SUGESTÕES (≤15% RECEITA / ≤5% DESPESA).**
  *
  * **Problema:** `sugerirConciliacao` usava match exclusivamente por valor exato em centavos.

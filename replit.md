@@ -50,25 +50,25 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3855** — **CONCILIAÇÃO BANCÁRIA · TOLERÂNCIA PERCENTUAL NAS SUGESTÕES (≤15% RECEITA / ≤5% DESPESA).** `sugerirConciliacao`: 2ª passagem fuzzy após match exato; receita ≤15% (retenções ISS/IR), despesa ≤5% (paga valor exato); sort exato > fuzzy; `confianca="media"`, `scoreConfianca≤62`, `identificadoVia="Δ valor: X% — possível retenção"` no badge violeta. `matchFuzzy`+`diffPct` no payload. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+- **Rev. 3856** — **TEMPLATE XLSX · FIX SAVE + DATA AUTOMÁTICA + VISUALIZADOR INLINE.** Botão salvar sempre habilitado (removido `!dirty`); `vigentDesde` automático = data do save (removido do form); campo exibe valor salvo como read-only. Novo botão **Visualizar**: planilha mockup em tempo real (linha título+cor+dados+total+rodapé), luminância automática texto branco/preto, botão "Baixar XLSX real" inline. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3854** — **NF-e × EXTRATO · SCORING RIGOROSO + BOTÕES INDEPENDENTES + BARRA DE STATUS + SEM-MATCH.** `processarRecebidas` pré-filtro ≤5% (era ≤15%); `tipo?` independente; barra de progresso % vinculadas; filtro automático após vínculo; seção collapsible sem-match no dialog. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+- **Rev. 3855** — **CONCILIAÇÃO BANCÁRIA · TOLERÂNCIA PERCENTUAL NAS SUGESTÕES (≤15% RECEITA / ≤5% DESPESA).** `sugerirConciliacao`: 2ª passagem fuzzy; receita ≤15%, despesa ≤5%; sort exato > fuzzy; `confianca="media"`, badge "Δ valor: X% — possível retenção". ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 ### 5 one-liners
 
+- **Rev. 3854** — **NF-e × EXTRATO · SCORING RIGOROSO + BOTÕES INDEPENDENTES + BARRA DE STATUS + SEM-MATCH.** `processarRecebidas` pré-filtro ≤5%; `tipo?` independente; barra % vinculadas; sem-match collapsible. ZERO DELETE.
+
 - **Rev. 3853** — **HOTFIX · `autoVincularNfService`: `column "tomador_nome" does not exist`.** 3 queries → `tomador_razao_social AS tomador_nome`. ZERO DELETE.
 
-- **Rev. 3852** — **PANORAMA FISCAL · CHEQUE DEVOLVIDO EXCLUÍDO DAS "SAÍDAS SEM NF-e".** `getPanorama`: SQL + `desconsiderado_em IS NULL`; regex `_PANORAMA_INTERNO_RE` → `bankDebitosReais`. ZERO DELETE.
+- **Rev. 3852** — **PANORAMA FISCAL · CHEQUE DEVOLVIDO EXCLUÍDO DAS "SAÍDAS SEM NF-e".** `getPanorama`: SQL + `desconsiderado_em IS NULL`; regex `_PANORAMA_INTERNO_RE`. ZERO DELETE.
 
-- **Rev. 3851** — **NF-e × EXTRATO · CARD DE VÍNCULO + SCORING DEFINITIVO COM valor_bruto E CNPJ-RAIZ.** `calcScore` + `fnValorBruto` + CNPJ-raiz +25 pts + patamar ≤2% +22 pts. ZERO DELETE.
+- **Rev. 3851** — **NF-e × EXTRATO · CARD DE VÍNCULO + SCORING COM valor_bruto E CNPJ-RAIZ.** `calcScore` + CNPJ-raiz +25 pts + patamar ≤2% +22 pts. ZERO DELETE.
 
-- **Rev. 3850** — **NF-e × EXTRATO · DIALOG "REVISAR SUGESTÕES":** `obterSugestoesPeriodo`, endpoint `fiscalNotes.obterSugestoes`, dialog max-w-4xl badge Alta/Média/Baixa. ZERO DELETE.
-
-- **Rev. 3849** — **NF-e × EXTRATO · VÍNCULO AUTOMÁTICO MELHORADO:** `extractTokens()`, `calcScore()` (0-100), `sincronizarNfsPeriodo` (greedy bipartite). ZERO DELETE.
+- **Rev. 3850** — **NF-e × EXTRATO · DIALOG "REVISAR SUGESTÕES":** `obterSugestoesPeriodo`, badge Alta/Média/Baixa, [Vincular]/[Ignorar]. ZERO DELETE.
 
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3848 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3849 e anteriores.
 
 ## User preferences
 

@@ -1,6 +1,9 @@
 /**
- * XlsxTemplateTab.tsx — Rev. 3847
+ * XlsxTemplateTab.tsx — Rev. 3856
  * Aba "Template de Planilha" em Configurações do Sistema.
+ * - "Vigente desde" automático (data do save)
+ * - Botão salvar sempre habilitado
+ * - Visualizador inline da planilha (mockup em tempo real)
  */
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
@@ -11,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
   FileSpreadsheet, Palette, Save, Download, RefreshCw,
-  Calendar, User, StickyNote, Info, CheckCircle2, Lock,
+  Calendar, User, StickyNote, Info, CheckCircle2, Lock, Eye,
 } from "lucide-react";
 
 // Paleta de cores predefinidas (ARGB sem prefixo FF)
@@ -35,6 +38,28 @@ const RELATORIOS_XLSX = [
   { nome: "Exemplo de Template",         modulo: "Configurações",        template: true  },
 ];
 
+// Colunas de exemplo para o visualizador inline
+const PREVIEW_COLS = ["Funcionário", "Função", "Obra", "H. Trab.", "H. Extra", "Custo Alocado"];
+const PREVIEW_ROWS = [
+  ["Felipe Costa Alves", "Engenheiro Civil", "UTC - Unidade", "176", "0", "R$ 8.500,00"],
+  ["Carlos Souza",       "Técnico de Seg.",  "Escritório",    "160", "8", "R$ 4.200,00"],
+  ["Ana Lima",           "Administrativo",   "Escritório",    "176", "0", "R$ 3.800,00"],
+  ["TOTAL", "", "", "512", "8", "R$ 16.500,00"],
+];
+
+function todayBR(): string {
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+function mesAnoBR(): string {
+  const d = new Date();
+  return d.toLocaleString("pt-BR", { month: "long", year: "numeric" });
+}
+
 interface Props {
   userName?: string;
 }
@@ -50,7 +75,6 @@ export default function XlsxTemplateTab({ userName }: Props) {
   const saveMutation = trpc.settings.saveXlsxTemplateConfig.useMutation({
     onSuccess: () => {
       toast.success("Template de planilha salvo com sucesso!");
-      setDirty(false);
       query.refetch();
     },
     onError: (e) => {
@@ -66,12 +90,12 @@ export default function XlsxTemplateTab({ userName }: Props) {
     tituloEmpresa: "FC ENGENHARIA E CONSTRUÇÃO LTDA",
     revisao:       "Rev. 01",
     corCabecalho:  "7030A0",
-    vigentDesde:   "",
     notas:         "",
   });
   const [colorInput, setColorInput] = useState("#7030A0");
-  const [dirty, setDirty] = useState(false);
   const [lastApprovedBy, setLastApprovedBy] = useState<string | null>(null);
+  const [savedVigentDesde, setSavedVigentDesde] = useState<string | null>(null);
+  const [showVisualizador, setShowVisualizador] = useState(false);
 
   useEffect(() => {
     if (query.data) {
@@ -80,18 +104,16 @@ export default function XlsxTemplateTab({ userName }: Props) {
         tituloEmpresa: d.tituloEmpresa ?? "FC ENGENHARIA E CONSTRUÇÃO LTDA",
         revisao:       d.revisao       ?? "Rev. 01",
         corCabecalho:  d.corCabecalho  ?? "7030A0",
-        vigentDesde:   d.vigentDesde   ?? "",
         notas:         d.notas         ?? "",
       });
       setColorInput("#" + (d.corCabecalho ?? "7030A0"));
       setLastApprovedBy(d.aprovadoPor ?? d.updatedBy ?? null);
-      setDirty(false);
+      setSavedVigentDesde(d.vigentDesde ?? null);
     }
   }, [query.data]);
 
   const set = (k: keyof typeof form, v: string) => {
     setForm(f => ({ ...f, [k]: v }));
-    setDirty(true);
   };
 
   const handleColorPreset = (hex: string, argb: string) => {
@@ -117,16 +139,17 @@ export default function XlsxTemplateTab({ userName }: Props) {
       toast.error("Cor inválida. Use formato hexadecimal (ex: 7030A0).");
       return;
     }
-    // "Aprovado por" é sempre o usuário logado
     const aprovadoPor = userName || "Sistema";
+    // "Vigente desde" é sempre a data de hoje (automático)
+    const vigentDesde = todayBR();
     saveMutation.mutate({
       companyId,
       tituloEmpresa: form.tituloEmpresa,
       revisao:       form.revisao,
       corCabecalho:  clean.toUpperCase(),
       aprovadoPor,
-      vigentDesde:   form.vigentDesde || undefined,
-      notas:         form.notas       || undefined,
+      vigentDesde,
+      notas:         form.notas || undefined,
     });
   };
 
@@ -160,6 +183,14 @@ export default function XlsxTemplateTab({ userName }: Props) {
 
   const displayColor = colorInput.startsWith("#") ? colorInput : "#" + form.corCabecalho;
 
+  // Calcula luminância para decidir cor do texto (branco vs preto) no cabeçalho
+  const hexColor = displayColor.replace(/^#/, "");
+  const r = parseInt(hexColor.slice(0,2),16)/255;
+  const g = parseInt(hexColor.slice(2,4),16)/255;
+  const b = parseInt(hexColor.slice(4,6),16)/255;
+  const lum = 0.2126*r + 0.7152*g + 0.0722*b;
+  const headerTextColor = lum > 0.45 ? "#1a1a1a" : "#ffffff";
+
   return (
     <div className="space-y-6">
       {/* Cabeçalho da aba */}
@@ -169,7 +200,7 @@ export default function XlsxTemplateTab({ userName }: Props) {
         </p>
         <p className="text-xs text-green-700/80 mt-0.5">
           Define o cabeçalho institucional aplicado automaticamente em todos os relatórios XLSX gerados pelo sistema.
-          A planilha-exemplo permite visualizar o resultado antes de aplicar.
+          Clique em <strong>Visualizar</strong> para ver como a planilha ficará antes de salvar.
         </p>
       </div>
 
@@ -208,21 +239,21 @@ export default function XlsxTemplateTab({ userName }: Props) {
               />
             </div>
 
+            {/* Vigente desde — automático, só exibe */}
             <div className="space-y-1.5">
-              <Label htmlFor="vigente_desde" className="text-xs text-gray-600 flex items-center gap-1">
+              <Label className="text-xs text-gray-600 flex items-center gap-1">
                 <Calendar className="w-3 h-3" /> Vigente desde
               </Label>
-              <Input
-                id="vigente_desde"
-                value={form.vigentDesde}
-                onChange={e => set("vigentDesde", e.target.value)}
-                placeholder="DD/MM/AAAA"
-                className="h-9 text-sm"
-              />
+              <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-input bg-gray-50 text-sm text-gray-500">
+                <Calendar className="w-3 h-3 text-gray-400 shrink-0" />
+                <span className="flex-1 truncate text-xs">
+                  {savedVigentDesde || <span className="text-gray-400 italic">automático ao salvar</span>}
+                </span>
+              </div>
             </div>
           </div>
 
-          {/* Aprovado por — read-only, preenchido automaticamente */}
+          {/* Aprovado por — read-only */}
           <div className="space-y-1.5">
             <Label className="text-xs text-gray-600 flex items-center gap-1">
               <User className="w-3 h-3" /> Aprovado por
@@ -302,21 +333,21 @@ export default function XlsxTemplateTab({ userName }: Props) {
             </div>
           </div>
 
-          {/* Pré-visualização da cor */}
+          {/* Mini preview da cor */}
           <div className="rounded-lg overflow-hidden border border-gray-200">
             <div
-              className="px-4 py-3 text-white text-xs font-bold flex items-center gap-2"
-              style={{ backgroundColor: displayColor }}
+              className="px-4 py-3 text-xs font-bold flex items-center gap-2"
+              style={{ backgroundColor: displayColor, color: headerTextColor }}
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
               <span>Funcionário · Função · Horas Trab. · Custo Alocado</span>
             </div>
             <div className="px-4 py-2 bg-white text-xs text-gray-600 border-t border-gray-100">
-              <span className="font-medium">{form.tituloEmpresa || "FC ENGENHARIA"}</span> · Janeiro 2026
+              <span className="font-medium">{form.tituloEmpresa || "FC ENGENHARIA"}</span> · {mesAnoBR()}
             </div>
           </div>
 
-          {/* Status + ações */}
+          {/* Status */}
           {updatedAt && (
             <p className="text-xs text-gray-400 flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3 text-green-500" />
@@ -325,10 +356,11 @@ export default function XlsxTemplateTab({ userName }: Props) {
             </p>
           )}
 
+          {/* Botões */}
           <div className="flex gap-2 pt-2">
             <Button
               onClick={handleSave}
-              disabled={!dirty || saveMutation.isPending}
+              disabled={saveMutation.isPending}
               className="flex-1 gap-2 text-sm h-9"
             >
               {saveMutation.isPending ? (
@@ -336,14 +368,24 @@ export default function XlsxTemplateTab({ userName }: Props) {
               ) : (
                 <Save className="w-4 h-4" />
               )}
-              {saveMutation.isPending ? "Salvando…" : dirty ? "Salvar Configurações" : "Salvo ✓"}
+              {saveMutation.isPending ? "Salvando…" : "Salvar Configurações"}
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => setShowVisualizador(v => !v)}
+              className="gap-2 text-sm h-9"
+              title="Ver como a planilha ficará com este template"
+            >
+              <Eye className="w-4 h-4" />
+              {showVisualizador ? "Fechar" : "Visualizar"}
             </Button>
 
             <Button
               variant="outline"
               onClick={handlePreview}
               disabled={previewMutation.isPending}
-              className="gap-2 text-sm h-9"
+              className="gap-2 text-sm h-9 px-3"
               title="Baixar planilha-exemplo com o template atual"
             >
               {previewMutation.isPending ? (
@@ -351,11 +393,106 @@ export default function XlsxTemplateTab({ userName }: Props) {
               ) : (
                 <Download className="w-4 h-4" />
               )}
-              Exemplo
+              XLSX
             </Button>
           </div>
         </div>
       </div>
+
+      {/* ─── VISUALIZADOR INLINE ─────────────────────────────────────────── */}
+      {showVisualizador && (
+        <div className="rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+          <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-gray-200">
+            <span className="text-xs font-semibold text-gray-600 flex items-center gap-1.5">
+              <Eye className="w-3.5 h-3.5" /> Pré-visualização do Template — Relatório de Exemplo
+            </span>
+            <span className="text-[10px] text-gray-400">atualiza em tempo real conforme você altera as configurações</span>
+          </div>
+
+          {/* Planilha mockup */}
+          <div className="overflow-x-auto bg-white">
+            <table className="w-full border-collapse text-xs font-mono" style={{ minWidth: 560 }}>
+              {/* Linha 1: título da empresa (merged visualmente) */}
+              <tbody>
+                <tr>
+                  <td
+                    colSpan={PREVIEW_COLS.length}
+                    className="px-3 py-2 text-xs font-bold border border-gray-300 bg-gray-50"
+                    style={{ letterSpacing: "0.03em" }}
+                  >
+                    {form.tituloEmpresa || "FC ENGENHARIA E CONSTRUÇÃO LTDA"}
+                    <span className="ml-3 font-normal text-gray-500">
+                      · {mesAnoBR()} · {form.revisao || "Rev. 01"}
+                      {savedVigentDesde ? ` · Vigente desde ${savedVigentDesde}` : ""}
+                      {userName ? ` · Aprovado por ${userName}` : ""}
+                    </span>
+                  </td>
+                </tr>
+
+                {/* Linha 2: cabeçalho colorido */}
+                <tr>
+                  {PREVIEW_COLS.map(col => (
+                    <td
+                      key={col}
+                      className="px-3 py-2 font-bold border border-gray-400 whitespace-nowrap"
+                      style={{ backgroundColor: displayColor, color: headerTextColor }}
+                    >
+                      {col}
+                    </td>
+                  ))}
+                </tr>
+
+                {/* Linhas de dados */}
+                {PREVIEW_ROWS.map((row, ri) => {
+                  const isTotal = row[0] === "TOTAL";
+                  return (
+                    <tr
+                      key={ri}
+                      className={isTotal ? "font-bold" : ri % 2 === 0 ? "bg-white" : "bg-gray-50"}
+                      style={isTotal ? { backgroundColor: displayColor + "22" } : {}}
+                    >
+                      {row.map((cell, ci) => (
+                        <td
+                          key={ci}
+                          className={`px-3 py-1.5 border border-gray-200 whitespace-nowrap ${ci >= 3 && !isTotal ? "text-right text-gray-700" : ""} ${isTotal ? "border-gray-400" : ""}`}
+                        >
+                          {cell}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+
+                {/* Rodapé com metadados */}
+                <tr>
+                  <td
+                    colSpan={PREVIEW_COLS.length}
+                    className="px-3 py-1.5 text-[10px] text-gray-400 border border-gray-200 bg-gray-50 text-right"
+                  >
+                    Gerado em {todayBR()} · ERP FC Engenharia
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div className="px-4 py-2 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+            <span className="text-[10px] text-gray-400">
+              Este é um exemplo com dados fictícios. O arquivo real conterá os dados do período selecionado.
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handlePreview}
+              disabled={previewMutation.isPending}
+              className="h-7 text-xs gap-1.5"
+            >
+              {previewMutation.isPending ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+              Baixar XLSX real
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Lista de todos os relatórios XLSX do sistema */}
       <div className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 space-y-2">
