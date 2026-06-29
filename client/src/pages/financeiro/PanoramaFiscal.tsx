@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -7,6 +7,7 @@ import {
   FileSpreadsheet, AlertTriangle, CheckCircle2,
   Info, ChevronDown, ChevronUp, ArrowUpRight, ArrowDownLeft,
   ShoppingCart, FileWarning, Receipt, FolderArchive,
+  TrendingDown, TrendingUp, Filter, X as XIcon,
 } from "lucide-react";
 
 const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -153,13 +154,11 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
   const [ano, setAno] = useState(hoje.getFullYear());
   const [openSec, setOpenSec] = useState<Record<string, boolean>>({
     ocsComNota: false, ocsSemNota: true,
-    entComNota: false, entSemNota: true,
-    saiComNota: false, saiSemNota: true,
+    extrato: true,
     spedInfo: false,
   });
   const secOcsRef    = useRef<HTMLDivElement>(null);
-  const secEntRef    = useRef<HTMLDivElement>(null);
-  const secSaiRef    = useRef<HTMLDivElement>(null);
+  const secExtRef    = useRef<HTMLDivElement>(null);
   const printRef     = useRef<HTMLDivElement>(null);
 
   const toggle = (key: string) => setOpenSec(p => ({ ...p, [key]: !p[key] }));
@@ -323,9 +322,7 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
   const ocsSemQtd   = data?.ocsSemNota?.length ?? 0;
   const ocsSemTotal = (data?.ocsSemNota ?? []).reduce((s: number, o: any) => s + parseFloat(o.valor_total ?? "0"), 0);
   const entSemQtd   = data?.entradasSemNota?.length ?? 0;
-  const entSemTotal = (data?.entradasSemNota ?? []).reduce((s: number, b: any) => s + Math.abs(parseFloat(b.valor ?? "0")), 0);
   const saiSemQtd   = data?.saidasSemNota?.length ?? 0;
-  const saiSemTotal = (data?.saidasSemNota ?? []).reduce((s: number, b: any) => s + Math.abs(parseFloat(b.valor ?? "0")), 0);
 
   const totalAlerts = ocsSemQtd + entSemQtd + saiSemQtd;
   const saúde = (() => {
@@ -532,18 +529,20 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
                     <AlertCard
                       icon={<ArrowDownLeft className="h-5 w-5 text-amber-600" />}
                       title="Entradas sem NFS-e emitida"
-                      count={entSemQtd} total={entSemTotal}
+                      count={entSemQtd}
+                      total={(data.entradasSemNota ?? []).reduce((s: number, b: any) => s + Math.abs(parseFloat(b.valor ?? "0")), 0)}
                       variant={entSemQtd >= 5 ? "danger" : "warn"}
-                      onClick={() => jumpTo(secEntRef, "entSemNota")}
+                      onClick={() => jumpTo(secExtRef, "extrato")}
                     />
                   )}
                   {saiSemQtd > 0 && (
                     <AlertCard
                       icon={<ArrowUpRight className="h-5 w-5 text-rose-600" />}
                       title="Saídas sem NF-e recebida"
-                      count={saiSemQtd} total={saiSemTotal}
+                      count={saiSemQtd}
+                      total={(data.saidasSemNota ?? []).reduce((s: number, b: any) => s + Math.abs(parseFloat(b.valor ?? "0")), 0)}
                       variant="warn"
-                      onClick={() => jumpTo(secSaiRef, "saiSemNota")}
+                      onClick={() => jumpTo(secExtRef, "extrato")}
                     />
                   )}
                 </div>
@@ -582,39 +581,19 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
             </div>
 
             {/* ════════════════════════════════════════════════════════════
-                SEÇÃO 2 — Entradas bancárias × NFS-e
+                SEÇÃO 2 — EXTRATO BANCÁRIO UNIFICADO (Entradas + Saídas)
             ════════════════════════════════════════════════════════════ */}
-            <div ref={secEntRef} className="space-y-2">
-              <GroupHeading icon={<ArrowDownLeft className="h-4 w-4 text-emerald-600" />}
-                title="Entradas Bancárias × NFS-e Emitida" />
-
-              <SectionToggle title="Entradas com NFS-e vinculada" count={data.entradasComNota.length}
-                total={(data.entradasComNota ?? []).reduce((s: number, b: any) => s + Math.abs(parseFloat(b.valor ?? "0")), 0)}
-                open={openSec.entComNota} onToggle={() => toggle("entComNota")} variant="ok" />
-              {openSec.entComNota && <BankTable rows={data.entradasComNota} tipo="entrada" />}
-
-              <SectionToggle title="Entradas SEM NFS-e — verificar nota de serviço" count={data.entradasSemNota.length}
-                total={entSemTotal}
-                open={openSec.entSemNota} onToggle={() => toggle("entSemNota")} variant="warn" />
-              {openSec.entSemNota && <BankTable rows={data.entradasSemNota} tipo="entrada" />}
-            </div>
-
-            {/* ════════════════════════════════════════════════════════════
-                SEÇÃO 3 — Saídas bancárias × NF-e
-            ════════════════════════════════════════════════════════════ */}
-            <div ref={secSaiRef} className="space-y-2">
-              <GroupHeading icon={<ArrowUpRight className="h-4 w-4 text-rose-600" />}
-                title="Saídas Bancárias × NF-e Recebida" />
-
-              <SectionToggle title="Saídas com NF-e vinculada" count={data.saidasComNota.length}
-                total={(data.saidasComNota ?? []).reduce((s: number, b: any) => s + Math.abs(parseFloat(b.valor ?? "0")), 0)}
-                open={openSec.saiComNota} onToggle={() => toggle("saiComNota")} variant="ok" />
-              {openSec.saiComNota && <BankTable rows={data.saidasComNota} tipo="saida" />}
-
-              <SectionToggle title="Saídas SEM NF-e — verificar comprovante fiscal" count={data.saidasSemNota.length}
-                total={saiSemTotal}
-                open={openSec.saiSemNota} onToggle={() => toggle("saiSemNota")} variant="warn" />
-              {openSec.saiSemNota && <BankTable rows={data.saidasSemNota} tipo="saida" />}
+            <div ref={secExtRef} className="space-y-3">
+              <GroupHeading
+                icon={<Receipt className="h-4 w-4 text-slate-600" />}
+                title="Extrato Bancário × Notas Fiscais"
+              />
+              <UnifiedBankTable
+                entradasCom={data.entradasComNota ?? []}
+                entradasSem={data.entradasSemNota ?? []}
+                saidasCom={data.saidasComNota ?? []}
+                saidasSem={data.saidasSemNota ?? []}
+              />
             </div>
 
             {/* ════════════════════════════════════════════════════════════
@@ -685,7 +664,7 @@ function OcTable({ rows, variant }: { rows: any[]; variant: "ok" | "warn" }) {
   );
 }
 
-// paleta de cores por índice de banco (até 8 bancos distintos)
+// paleta de cores por banco (até 8 distintos)
 const BANK_COLORS = [
   { bg: "bg-blue-50",    border: "border-blue-200",    text: "text-blue-800",    dot: "bg-blue-500"    },
   { bg: "bg-violet-50",  border: "border-violet-200",  text: "text-violet-800",  dot: "bg-violet-500"  },
@@ -697,142 +676,309 @@ const BANK_COLORS = [
   { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-800", dot: "bg-emerald-500" },
 ];
 
-function BankTable({ rows, tipo }: { rows: any[]; tipo: "entrada" | "saida" }) {
-  const [filterConta, setFilterConta] = React.useState("__all__");
-  const ring = tipo === "entrada" ? "border-emerald-100" : "border-rose-100";
-  const head = tipo === "entrada" ? "bg-emerald-50/80 text-emerald-700" : "bg-rose-50/80 text-rose-700";
-  const valColor = tipo === "entrada" ? "text-emerald-700" : "text-rose-700";
+// ── Tabela Unificada de Extrato ─────────────────────────────────────────────
+type FiltroTipo  = "todas" | "entradas" | "saidas";
+type FiltroNota  = "todas" | "com" | "sem";
 
-  // monta grupos na ordem original do backend (conta_nome ASC, data ASC)
+function UnifiedBankTable({ entradasCom, entradasSem, saidasCom, saidasSem }: {
+  entradasCom: any[]; entradasSem: any[];
+  saidasCom:   any[]; saidasSem:   any[];
+}) {
+  const [filtroTipo,  setFiltroTipo]  = React.useState<FiltroTipo>("todas");
+  const [filtroNota,  setFiltroNota]  = React.useState<FiltroNota>("todas");
+  const [filtroConta, setFiltroConta] = React.useState("__all__");
+
+  // ── Mescla tudo em uma lista plana com metadados de tipo/nota ────────────
+  const allRows = useMemo(() => {
+    const tag = (arr: any[], tipo: "entrada"|"saida", temNota: boolean) =>
+      arr.map(r => ({ ...r, _tipo: tipo, _temNota: temNota }));
+    return [
+      ...tag(entradasCom, "entrada", true),
+      ...tag(entradasSem, "entrada", false),
+      ...tag(saidasCom,   "saida",   true),
+      ...tag(saidasSem,   "saida",   false),
+    ].sort((a, b) => {
+      const da = String(a.data || "").slice(0,10);
+      const db = String(b.data || "").slice(0,10);
+      return da < db ? -1 : da > db ? 1 : 0;
+    });
+  }, [entradasCom, entradasSem, saidasCom, saidasSem]);
+
+  // ── Filtros aplicados ────────────────────────────────────────────────────
+  const filtered = useMemo(() => {
+    return allRows.filter(r => {
+      if (filtroTipo === "entradas" && r._tipo !== "entrada") return false;
+      if (filtroTipo === "saidas"   && r._tipo !== "saida")   return false;
+      if (filtroNota === "com" && !r._temNota) return false;
+      if (filtroNota === "sem" &&  r._temNota) return false;
+      if (filtroConta !== "__all__" && (r.conta_nome || "—") !== filtroConta) return false;
+      return true;
+    });
+  }, [allRows, filtroTipo, filtroNota, filtroConta]);
+
+  // ── Cores por banco ───────────────────────────────────────────────────────
   const bankOrder: string[] = [];
-  const groups: Record<string, any[]> = {};
-  for (const b of rows) {
-    const key = b.conta_nome || "—";
-    if (!groups[key]) { groups[key] = []; bankOrder.push(key); }
-    groups[key].push(b);
+  const bankMeta:  Record<string, { agencia: string; conta: string }> = {};
+  for (const r of allRows) {
+    const k = r.conta_nome || "—";
+    if (!bankMeta[k]) { bankOrder.push(k); bankMeta[k] = { agencia: r.conta_agencia || "", conta: r.conta_numero || "" }; }
   }
   const colorIdx: Record<string, number> = {};
   bankOrder.forEach((name, i) => { colorIdx[name] = i % BANK_COLORS.length; });
 
-  // aplica filtro
-  const visibleBanks = filterConta === "__all__" ? bankOrder : bankOrder.filter(n => n === filterConta);
+  // ── KPIs rápidos (sobre os dados filtrados por tipo+nota, sem filtro de conta) ──
+  const kpiRows = allRows.filter(r => {
+    if (filtroTipo === "entradas" && r._tipo !== "entrada") return false;
+    if (filtroTipo === "saidas"   && r._tipo !== "saida")   return false;
+    if (filtroNota === "com" && !r._temNota) return false;
+    if (filtroNota === "sem" &&  r._temNota) return false;
+    return true;
+  });
+  const totalEntradas = kpiRows.filter(r => r._tipo === "entrada").reduce((s: number, r: any) => s + Math.abs(parseFloat(r.valor ?? "0")), 0);
+  const totalSaidas   = kpiRows.filter(r => r._tipo === "saida")  .reduce((s: number, r: any) => s + Math.abs(parseFloat(r.valor ?? "0")), 0);
+  const qtdComNota = kpiRows.filter(r =>  r._temNota).length;
+  const qtdSemNota = kpiRows.filter(r => !r._temNota).length;
+  const pctComNota = kpiRows.length > 0 ? Math.round(qtdComNota / kpiRows.length * 100) : 0;
 
-  const legendItems = bankOrder.map(name => ({
-    name,
-    color: BANK_COLORS[colorIdx[name]],
-    agencia: groups[name][0]?.conta_agencia || "",
-    conta:   groups[name][0]?.conta_numero  || "",
-    total:   groups[name].reduce((s: number, b: any) => s + Math.abs(parseFloat(b.valor ?? "0")), 0),
-    qtd:     groups[name].length,
-  }));
+  // ── Agrupamento por banco dentro da lista filtrada ───────────────────────
+  const bankOrderFiltered: string[] = [];
+  const groupsFiltered: Record<string, any[]> = {};
+  for (const r of filtered) {
+    const k = r.conta_nome || "—";
+    if (!groupsFiltered[k]) { groupsFiltered[k] = []; bankOrderFiltered.push(k); }
+    groupsFiltered[k].push(r);
+  }
+
+  // ── Chips de filtro helper ───────────────────────────────────────────────
+  const chipCls = (active: boolean, colorCls: string) =>
+    `inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all cursor-pointer select-none ${
+      active ? colorCls : "border-slate-200 bg-white text-slate-400 hover:bg-slate-50"
+    }`;
 
   return (
-    <div className="space-y-0">
-      {/* Barra: legenda + filtro */}
-      <div className="flex flex-wrap items-center gap-2 px-1 pb-3">
-        {/* Chips de legenda */}
-        {legendItems.map(l => (
-          <button
-            key={l.name}
-            type="button"
-            onClick={() => setFilterConta(prev => prev === l.name ? "__all__" : l.name)}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-medium transition-all
-              ${filterConta === l.name || filterConta === "__all__"
-                ? `${l.color.bg} ${l.color.border} ${l.color.text}`
-                : "bg-slate-50 border-slate-200 text-slate-400 opacity-50"
-              }`}
-          >
-            <span className={`w-2 h-2 rounded-full shrink-0 ${l.color.dot}`} />
-            <span className="font-semibold">{l.name}</span>
-            {(l.agencia || l.conta) && (
-              <span className="opacity-60 font-normal hidden sm:inline">
-                {l.agencia ? `Ag.${l.agencia}` : ""}{l.agencia && l.conta ? "/" : ""}
-                {l.conta ? `C.${l.conta}` : ""}
-              </span>
-            )}
-            <span className="opacity-70">· {l.qtd}</span>
-          </button>
-        ))}
-        {filterConta !== "__all__" && (
-          <button type="button" onClick={() => setFilterConta("__all__")}
-            className="text-[11px] text-slate-400 underline underline-offset-2 hover:text-slate-600 ml-1">
-            ver todos
-          </button>
-        )}
+    <div className="space-y-3">
+      {/* ── KPIs ──────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+          <p className="text-[10px] uppercase tracking-wide text-emerald-600 font-medium mb-0.5">Total Entradas</p>
+          <p className="text-base font-extrabold text-emerald-700">{fmtBRL(totalEntradas)}</p>
+          <p className="text-[10px] text-emerald-500">{kpiRows.filter((r: any) => r._tipo === "entrada").length} lançtos</p>
+        </div>
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5">
+          <p className="text-[10px] uppercase tracking-wide text-rose-600 font-medium mb-0.5">Total Saídas</p>
+          <p className="text-base font-extrabold text-rose-700">{fmtBRL(totalSaidas)}</p>
+          <p className="text-[10px] text-rose-500">{kpiRows.filter((r: any) => r._tipo === "saida").length} lançtos</p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+          <p className="text-[10px] uppercase tracking-wide text-slate-500 font-medium mb-0.5">Com Nota Fiscal</p>
+          <p className="text-base font-extrabold text-slate-800">{qtdComNota} <span className="text-sm font-normal text-slate-400">lançtos</span></p>
+          <p className="text-[10px] text-emerald-600 font-semibold">{pctComNota}% cobertos</p>
+        </div>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+          <p className="text-[10px] uppercase tracking-wide text-amber-600 font-medium mb-0.5">Sem Nota Fiscal</p>
+          <p className="text-base font-extrabold text-amber-700">{qtdSemNota} <span className="text-sm font-normal text-amber-500">lançtos</span></p>
+          <p className="text-[10px] text-amber-600">verificar vínculo</p>
+        </div>
       </div>
 
-      <div className={`overflow-x-auto rounded-xl border ${ring}`}>
+      {/* ── Barra de filtros ──────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-2 px-0.5">
+        {/* Filtro: tipo */}
+        <div className="flex items-center gap-1 border border-slate-200 rounded-lg p-0.5 bg-slate-50">
+          {([ ["todas","Todos"], ["entradas","↓ Entradas"], ["saidas","↑ Saídas"] ] as [FiltroTipo, string][]).map(([v, label]) => (
+            <button key={v} type="button" onClick={() => { setFiltroTipo(v); setFiltroConta("__all__"); }}
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+                filtroTipo === v
+                  ? v === "entradas" ? "bg-emerald-500 text-white shadow-sm"
+                  : v === "saidas"   ? "bg-rose-500 text-white shadow-sm"
+                  : "bg-slate-700 text-white shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <span className="text-slate-300 text-sm">|</span>
+
+        {/* Filtro: nota */}
+        <div className="flex items-center gap-1 border border-slate-200 rounded-lg p-0.5 bg-slate-50">
+          {([ ["todas","Todas"], ["com","✓ Com NF"], ["sem","○ Sem NF"] ] as [FiltroNota, string][]).map(([v, label]) => (
+            <button key={v} type="button" onClick={() => { setFiltroNota(v); setFiltroConta("__all__"); }}
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+                filtroNota === v
+                  ? v === "com" ? "bg-emerald-500 text-white shadow-sm"
+                  : v === "sem" ? "bg-amber-500 text-white shadow-sm"
+                  : "bg-slate-700 text-white shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Chips de banco */}
+        {bankOrder.map(name => {
+          const c = BANK_COLORS[colorIdx[name]];
+          const meta = bankMeta[name];
+          const active = filtroConta === name;
+          return (
+            <button key={name} type="button"
+              onClick={() => setFiltroConta(p => p === name ? "__all__" : name)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-medium transition-all ${
+                active || filtroConta === "__all__"
+                  ? `${c.bg} ${c.border} ${c.text} ${active ? "ring-2 ring-offset-1 ring-current" : ""}`
+                  : "bg-slate-50 border-slate-200 text-slate-400 opacity-40"
+              }`}>
+              <span className={`w-2 h-2 rounded-full shrink-0 ${c.dot}`} />
+              <span className="font-semibold">{name}</span>
+              {(meta.agencia || meta.conta) && (
+                <span className="opacity-60 font-normal hidden sm:inline">
+                  {meta.agencia ? `Ag.${meta.agencia}` : ""}{meta.agencia && meta.conta ? "/" : ""}{meta.conta ? `C.${meta.conta}` : ""}
+                </span>
+              )}
+            </button>
+          );
+        })}
+
+        {/* Limpar filtros */}
+        {(filtroTipo !== "todas" || filtroNota !== "todas" || filtroConta !== "__all__") && (
+          <button type="button"
+            onClick={() => { setFiltroTipo("todas"); setFiltroNota("todas"); setFiltroConta("__all__"); }}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] text-slate-400 hover:text-slate-600 border border-dashed border-slate-300 hover:border-slate-400 transition-colors">
+            <XIcon className="w-3 h-3" /> Limpar filtros
+          </button>
+        )}
+
+        <span className="ml-auto text-[11px] text-slate-400">{filtered.length} lançtos</span>
+      </div>
+
+      {/* ── Tabela ───────────────────────────────────────────────────────── */}
+      <div className="overflow-x-auto rounded-xl border border-slate-200">
         <table className="w-full text-xs">
-          <thead className={`${head} uppercase`}>
+          <thead className="bg-slate-50 text-slate-600 uppercase">
             <tr>
-              {["Data","Conta","Descrição","Valor","Conc.","NF#"].map(h => (
-                <th key={h} className="px-3 py-2.5 text-left font-semibold whitespace-nowrap tracking-wide">{h}</th>
-              ))}
+              <th className="px-3 py-2.5 text-left font-semibold tracking-wide whitespace-nowrap">Data</th>
+              <th className="px-3 py-2.5 text-left font-semibold tracking-wide whitespace-nowrap">Tipo</th>
+              <th className="px-3 py-2.5 text-left font-semibold tracking-wide whitespace-nowrap">Conta</th>
+              <th className="px-3 py-2.5 text-left font-semibold tracking-wide">Descrição</th>
+              <th className="px-3 py-2.5 text-right font-semibold tracking-wide whitespace-nowrap">Valor</th>
+              <th className="px-3 py-2.5 text-center font-semibold tracking-wide whitespace-nowrap">Conc.</th>
+              <th className="px-3 py-2.5 text-left font-semibold tracking-wide whitespace-nowrap">NF#</th>
             </tr>
           </thead>
           <tbody>
-            {visibleBanks.map(bankName => {
+            {bankOrderFiltered.map(bankName => {
               const c = BANK_COLORS[colorIdx[bankName]];
-              const bankRows = groups[bankName];
-              const subtotal = bankRows.reduce((s: number, b: any) => s + Math.abs(parseFloat(b.valor ?? "0")), 0);
-              const ag = bankRows[0]?.conta_agencia || "";
-              const ct = bankRows[0]?.conta_numero  || "";
+              const bankRows = groupsFiltered[bankName];
+              const meta = bankMeta[bankName];
+              const subEnt = bankRows.filter((r: any) => r._tipo === "entrada").reduce((s: number, r: any) => s + Math.abs(parseFloat(r.valor ?? "0")), 0);
+              const subSai = bankRows.filter((r: any) => r._tipo === "saida")  .reduce((s: number, r: any) => s + Math.abs(parseFloat(r.valor ?? "0")), 0);
               return (
                 <React.Fragment key={bankName}>
                   {/* Separador de banco */}
                   <tr className={`${c.bg} border-b ${c.border}`}>
-                    <td colSpan={6} className="px-3 py-2">
-                      <div className="flex items-center justify-between gap-2">
+                    <td colSpan={7} className="px-3 py-2">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
                         <div className="flex items-center gap-2">
                           <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${c.dot}`} />
                           <span className={`font-bold text-[12px] ${c.text}`}>{bankName}</span>
-                          {(ag || ct) && (
-                            <span className={`text-[11px] opacity-70 ${c.text}`}>
-                              {ag ? `Ag. ${ag}` : ""}{ag && ct ? " / " : ""}{ct ? `C. ${ct}` : ""}
+                          {(meta.agencia || meta.conta) && (
+                            <span className={`text-[11px] opacity-60 ${c.text}`}>
+                              {meta.agencia ? `Ag. ${meta.agencia}` : ""}{meta.agencia && meta.conta ? " / " : ""}{meta.conta ? `C. ${meta.conta}` : ""}
                             </span>
                           )}
                         </div>
-                        <span className={`text-[11px] font-semibold ${c.text} opacity-80`}>
-                          {bankRows.length} lançto{bankRows.length !== 1 ? "s" : ""} · {fmtBRL(subtotal)}
-                        </span>
+                        <div className="flex items-center gap-3">
+                          {subEnt > 0 && <span className="text-[11px] text-emerald-700 font-semibold">↓ {fmtBRL(subEnt)}</span>}
+                          {subSai > 0 && <span className="text-[11px] text-rose-700 font-semibold">↑ {fmtBRL(subSai)}</span>}
+                          <span className={`text-[11px] font-medium ${c.text} opacity-70`}>{bankRows.length} lançto{bankRows.length !== 1 ? "s" : ""}</span>
+                        </div>
                       </div>
                     </td>
                   </tr>
-                  {/* Linhas individuais com badge de conta */}
-                  {bankRows.map((b: any, i: number) => (
-                    <tr key={b.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/40"}>
-                      <td className="px-3 py-2 whitespace-nowrap text-slate-500 font-medium">{fmtDate(b.data)}</td>
-                      <td className="px-3 py-2 text-[11px] whitespace-nowrap">
-                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${c.bg} ${c.text} font-medium`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${c.dot} shrink-0`} />
-                          <span className="whitespace-nowrap">{b.conta_nome || "—"}</span>
-                        </span>
-                        {(b.conta_agencia || b.conta_numero) && (
-                          <span className="block text-slate-400 text-[10px] mt-0.5 pl-0.5">
-                            {b.conta_agencia ? `Ag.${b.conta_agencia}` : ""}{b.conta_agencia && b.conta_numero ? "/" : ""}{b.conta_numero || ""}
+                  {/* Linhas */}
+                  {bankRows.map((b: any, i: number) => {
+                    const isEntrada = b._tipo === "entrada";
+                    const hasNota   = b._temNota;
+                    return (
+                      <tr key={b.id ?? i}
+                        className={`border-b border-slate-50 transition-colors ${
+                          hasNota
+                            ? isEntrada ? "bg-emerald-50/20 hover:bg-emerald-50/40" : "bg-blue-50/20 hover:bg-blue-50/40"
+                            : i % 2 === 0 ? "bg-white hover:bg-slate-50/60" : "bg-slate-50/30 hover:bg-slate-50/60"
+                        }`}>
+                        {/* Data */}
+                        <td className="px-3 py-2.5 whitespace-nowrap text-slate-500 font-medium tabular-nums">
+                          {fmtDate(b.data)}
+                        </td>
+                        {/* Tipo badge */}
+                        <td className="px-3 py-2.5 whitespace-nowrap">
+                          {isEntrada
+                            ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold">
+                                <TrendingDown className="w-2.5 h-2.5" /> Entrada
+                              </span>
+                            : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[10px] font-bold">
+                                <TrendingUp className="w-2.5 h-2.5" /> Saída
+                              </span>
+                          }
+                        </td>
+                        {/* Conta */}
+                        <td className="px-3 py-2.5 whitespace-nowrap text-[11px]">
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${c.bg} ${c.text} font-medium`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${c.dot} shrink-0`} />
+                            {b.conta_nome || "—"}
                           </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 max-w-[220px] truncate text-slate-700" title={b.descricao}>{b.descricao}</td>
-                      <td className={`px-3 py-2 text-right font-bold whitespace-nowrap ${valColor}`}>{fmtBRL(b.valor)}</td>
-                      <td className="px-3 py-2 text-center">
-                        {b.conciliado
-                          ? <span className="text-emerald-500 text-sm">✓</span>
-                          : <span className="text-slate-300 text-sm">○</span>
-                        }
-                      </td>
-                      <td className="px-3 py-2 text-slate-400 font-mono text-[11px]">{b.fn_numero || "—"}</td>
-                    </tr>
-                  ))}
+                          {(b.conta_agencia || b.conta_numero) && (
+                            <span className="block text-slate-400 text-[10px] mt-0.5 pl-0.5">
+                              {b.conta_agencia ? `Ag.${b.conta_agencia}` : ""}{b.conta_agencia && b.conta_numero ? "/" : ""}{b.conta_numero || ""}
+                            </span>
+                          )}
+                        </td>
+                        {/* Descrição */}
+                        <td className="px-3 py-2.5 max-w-[200px]">
+                          <span className="truncate block text-slate-700" title={b.descricao}>{b.descricao}</span>
+                        </td>
+                        {/* Valor */}
+                        <td className={`px-3 py-2.5 text-right font-bold whitespace-nowrap tabular-nums ${isEntrada ? "text-emerald-700" : "text-rose-700"}`}>
+                          {isEntrada ? "+" : "−"} {fmtBRL(b.valor)}
+                        </td>
+                        {/* Conciliado */}
+                        <td className="px-3 py-2.5 text-center">
+                          {b.conciliado
+                            ? <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-100">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              </span>
+                            : <span className="inline-block w-4 h-4 rounded-full border-2 border-slate-200" />
+                          }
+                        </td>
+                        {/* NF# */}
+                        <td className="px-3 py-2.5 whitespace-nowrap">
+                          {b.fn_numero
+                            ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-[11px] font-bold">
+                                NF# {b.fn_numero}
+                              </span>
+                            : <span className="text-slate-300 text-[11px]">—</span>
+                          }
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </React.Fragment>
               );
             })}
           </tbody>
         </table>
-        {rows.length === 0 && (
-          <div className="flex items-center justify-center gap-2 py-6 text-slate-400">
-            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-            <span className="text-xs">Nenhum item nesta categoria</span>
+        {filtered.length === 0 && (
+          <div className="flex flex-col items-center justify-center gap-2 py-10 text-slate-400">
+            <Filter className="h-6 w-6 opacity-30" />
+            <span className="text-xs">Nenhum lançamento com estes filtros.</span>
+          </div>
+        )}
+        {allRows.length === 0 && (
+          <div className="flex flex-col items-center justify-center gap-2 py-10 text-slate-400">
+            <Receipt className="h-6 w-6 opacity-30" />
+            <span className="text-xs">Nenhum lançamento bancário no período.</span>
           </div>
         )}
       </div>

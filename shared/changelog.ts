@@ -1,4 +1,33 @@
 /**
+ * Rev. 3866 — **PANORAMA FISCAL — EXTRATO UNIFICADO COM FILTROS.**
+ *
+ * **Problema:** a tela fragmentava entradas e saídas em 4 accordions separados
+ * (com NF/sem NF × entrada/saída), tornando impossível ver o extrato completo de
+ * uma vez e confundindo onde estava a conciliação de cada linha.
+ *
+ * **Solução:** substituição das seções 2 e 3 (Entradas × NFS-e + Saídas × NF-e)
+ * por um bloco unificado **"Extrato Bancário × Notas Fiscais"**:
+ *
+ * 1. `UnifiedBankTable` — novo componente que mescla as 4 arrays
+ *    (`entradasCom`, `entradasSem`, `saidasCom`, `saidasSem`) em uma única lista
+ *    cronológica plana, com `_tipo` e `_temNota` como metadados internos.
+ * 2. **KPIs inline** — 4 cards no topo: Total Entradas, Total Saídas, Com Nota, Sem Nota.
+ * 3. **Filtros simples e visíveis:**
+ *    - Seletor de tipo: [Todos] [↓ Entradas] [↑ Saídas]
+ *    - Seletor de nota: [Todas] [✓ Com NF] [○ Sem NF]
+ *    - Chips de banco (clicáveis para filtrar por conta)
+ *    - Botão "Limpar filtros" aparece quando há filtro ativo
+ * 4. **Cada linha da tabela mostra:**
+ *    - Data | badge Tipo (↓ Entrada verde / ↑ Saída rosa) | Conta bancária |
+ *      Descrição | Valor colorido (+ entrada / − saída) |
+ *      ✓ verde (conciliado) ou ○ vazio (sem conciliação) | badge "NF# N" em índigo
+ * 5. Separadores por banco mantidos (subtotais de entrada + saída por conta).
+ * 6. Alertas de pendência (cards de ação) agora apontam para o extrato unificado.
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3865 — **PACOTE CONTABILIDADE — EXTRATO CARTÃO FC TEMPLATE + CHECKLIST A4 + TEMPLATES NAS CONFIGURAÇÕES.**
  *
  * **Problemas:** (1) `Extrato_Cartao_<Mes>.xlsx` usava xlsx-js-style antigo (NAVY/GOLD, sem logo, sem FC template);
