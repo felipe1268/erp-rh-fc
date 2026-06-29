@@ -65,7 +65,7 @@ interface Props {
 }
 
 export default function XlsxTemplateTab({ userName }: Props) {
-  const { companyId } = useCompany();
+  const { companyIdNum: companyId } = useCompany();
 
   const query = trpc.settings.getXlsxTemplateConfig.useQuery(
     { companyId },
