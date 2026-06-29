@@ -28,7 +28,7 @@ import {
   FileText, Plus, Pencil, Trash2, Save, X,
   ChevronDown, ChevronUp, Landmark, Search,
   Info, CheckCircle2, AlertCircle, Sparkles,
-  Upload, RotateCcw, Loader2, History,
+  Upload, RotateCcw, Loader2, History, Eye, EyeOff,
 } from "lucide-react";
 
 // ── tipos ────────────────────────────────────────────────────────────────────
@@ -107,12 +107,13 @@ export default function ExtratoTemplateTab() {
   const [iaSourced, setIaSourced]     = useState(false);  // veio da IA
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Estado do fluxo em lote (Rev. 3882)
+  // Estado do fluxo em lote (Rev. 3882 / Rev. 3883)
   const [batch, setBatch] = useState<{
     total: number;
     current: number;
     nome: string;
     ok: string[];
+    duplicatas: { arquivo: string; msg: string }[];
     erros: { nome: string; msg: string }[];
   } | null>(null);
 
@@ -201,10 +202,11 @@ export default function ExtratoTemplateTab() {
   }
 
   async function handleBatchFiles(files: File[]) {
-    setBatch({ total: files.length, current: 0, nome: "", ok: [], erros: [] });
+    setBatch({ total: files.length, current: 0, nome: "", ok: [], duplicatas: [], erros: [] });
     setAnalyzing(true);
 
     const ok: string[] = [];
+    const duplicatas: { arquivo: string; msg: string }[] = [];
     const erros: { nome: string; msg: string }[] = [];
 
     for (let i = 0; i < files.length; i++) {
@@ -214,7 +216,6 @@ export default function ExtratoTemplateTab() {
       try {
         const base64 = await fileToBase64(file);
         const result = await analisarMut.mutateAsync({ companyId, pdfBase64: base64 });
-        // Salva automaticamente sem abrir formulário
         await createMut.mutateAsync({
           companyId,
           bancoNome:     result.bancoNome,
@@ -226,26 +227,39 @@ export default function ExtratoTemplateTab() {
         });
         ok.push(result.bancoNome);
       } catch (err: any) {
-        erros.push({ nome: file.name, msg: err?.message || "Erro desconhecido" });
+        const msg: string = err?.message || "Erro desconhecido";
+        // CONFLICT = duplicata detectada pelo backend → trata separado (não é erro)
+        if (err?.data?.code === "CONFLICT" || msg.startsWith("Duplicata")) {
+          duplicatas.push({ arquivo: file.name, msg });
+        } else {
+          erros.push({ nome: file.name, msg });
+        }
       }
 
-      setBatch(b => b ? { ...b, ok, erros } : b);
+      setBatch(b => b ? { ...b, ok, duplicatas, erros } : b);
     }
 
     await utils.bankStatementTemplates.list.invalidate({ companyId });
     setAnalyzing(false);
 
     // Resumo final via toast
+    const parts: string[] = [];
+    if (ok.length > 0)         parts.push(`${ok.length} criado${ok.length > 1 ? "s" : ""}`);
+    if (duplicatas.length > 0) parts.push(`${duplicatas.length} duplicata${duplicatas.length > 1 ? "s" : ""} ignorada${duplicatas.length > 1 ? "s" : ""}`);
+    if (erros.length > 0)      parts.push(`${erros.length} erro${erros.length > 1 ? "s" : ""}`);
+
     if (ok.length > 0 && erros.length === 0) {
-      toast.success(`${ok.length} template${ok.length > 1 ? "s" : ""} criado${ok.length > 1 ? "s" : ""} com sucesso!`);
+      toast.success(parts.join(", ") + ".");
     } else if (ok.length > 0) {
-      toast.success(`${ok.length} criado${ok.length > 1 ? "s" : ""}, ${erros.length} com erro.`);
+      toast.warning(parts.join(", ") + ".");
+    } else if (duplicatas.length > 0 && erros.length === 0) {
+      toast.info("Todos os arquivos já têm templates cadastrados.");
     } else {
-      toast.error("Nenhum template pôde ser criado. Verifique os arquivos.");
+      toast.error("Nenhum template pôde ser criado.");
     }
 
-    // Mantém o resumo visível por 5s, depois limpa
-    setTimeout(() => setBatch(null), 5000);
+    // Mantém o resumo visível por 8s, depois limpa
+    setTimeout(() => setBatch(null), 8000);
   }
 
   // ── salvar ──────────────────────────────────────────────────────────────────
@@ -402,10 +416,13 @@ export default function ExtratoTemplateTab() {
                 {batch.nome}
               </p>
               {/* Resultados parciais */}
-              {(batch.ok.length > 0 || batch.erros.length > 0) && (
+              {(batch.ok.length > 0 || batch.duplicatas.length > 0 || batch.erros.length > 0) && (
                 <div className="flex justify-center gap-4 text-xs pt-1">
                   {batch.ok.length > 0 && (
                     <span className="text-green-600 font-medium">✓ {batch.ok.length} criado{batch.ok.length > 1 ? "s" : ""}</span>
+                  )}
+                  {batch.duplicatas.length > 0 && (
+                    <span className="text-amber-600 font-medium">⊘ {batch.duplicatas.length} duplicata{batch.duplicatas.length > 1 ? "s" : ""}</span>
                   )}
                   {batch.erros.length > 0 && (
                     <span className="text-red-500 font-medium">✗ {batch.erros.length} erro{batch.erros.length > 1 ? "s" : ""}</span>
@@ -425,19 +442,30 @@ export default function ExtratoTemplateTab() {
         </div>
       )}
 
-      {/* ── Resumo do lote (após conclusão, visível por 5s) ── */}
+      {/* ── Resumo do lote (após conclusão, visível por 8s) ── */}
       {!analyzing && batch && (
         <div className={`rounded-xl border px-5 py-4 shadow-sm space-y-2 ${
-          batch.erros.length === 0 ? "border-green-200 bg-green-50/60" : "border-amber-200 bg-amber-50/60"
+          batch.erros.length > 0 ? "border-red-200 bg-red-50/60"
+            : batch.duplicatas.length > 0 ? "border-amber-200 bg-amber-50/60"
+            : "border-green-200 bg-green-50/60"
         }`}>
-          <p className={`text-sm font-semibold flex items-center gap-2 ${
-            batch.erros.length === 0 ? "text-green-800" : "text-amber-800"
+          <p className={`text-sm font-semibold ${
+            batch.erros.length > 0 ? "text-red-800"
+              : batch.duplicatas.length > 0 ? "text-amber-800"
+              : "text-green-800"
           }`}>
-            {batch.erros.length === 0 ? "✓" : "⚠"} Lote concluído — {batch.ok.length} de {batch.total} criados
+            Lote concluído — {batch.ok.length} criado{batch.ok.length !== 1 ? "s" : ""},
+            {" "}{batch.duplicatas.length} duplicata{batch.duplicatas.length !== 1 ? "s" : ""} ignorada{batch.duplicatas.length !== 1 ? "s" : ""},
+            {" "}{batch.erros.length} erro{batch.erros.length !== 1 ? "s" : ""}
           </p>
           {batch.ok.length > 0 && (
             <ul className="text-xs text-green-700 space-y-0.5">
               {batch.ok.map((nome, i) => <li key={i}>✓ {nome}</li>)}
+            </ul>
+          )}
+          {batch.duplicatas.length > 0 && (
+            <ul className="text-xs text-amber-700 space-y-0.5">
+              {batch.duplicatas.map((d, i) => <li key={i} className="break-words">⊘ {d.arquivo}: {d.msg}</li>)}
             </ul>
           )}
           {batch.erros.length > 0 && (
@@ -679,8 +707,12 @@ function TemplateCard({
               <CheckCircle2 className="w-3 h-3" /> Ativo
             </span>
           )}
-          <button onClick={onExpand} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600" title="Ver detalhes">
-            {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          <button
+            onClick={onExpand}
+            className={`p-1.5 rounded-lg transition-colors ${expanded ? "bg-sky-100 text-sky-600" : "hover:bg-gray-100 text-gray-400 hover:text-gray-600"}`}
+            title={expanded ? "Fechar visualização" : "Visualizar configuração do template"}
+          >
+            {expanded ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
           <button onClick={onEdit} className="p-1.5 rounded-lg hover:bg-sky-50 text-gray-400 hover:text-sky-600" title="Editar">
             <Pencil className="w-4 h-4" />
@@ -691,56 +723,67 @@ function TemplateCard({
         </div>
       </div>
 
-      {/* Detalhes expandidos */}
+      {/* Preview expandido — "como o sistema vai ler este extrato" */}
       {expanded && (
-        <div className="border-t border-gray-100 px-4 py-3 space-y-3 bg-gray-50/50 rounded-b-xl">
-          {t.palavrasChave.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-gray-600 mb-1 flex items-center gap-1">
-                <Search className="w-3 h-3" /> Palavras-chave de detecção
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {t.palavrasChave.map((kw, i) => (
-                  <span key={i} className="text-xs bg-sky-100 text-sky-700 rounded px-2 py-0.5 font-mono break-all">{kw}</span>
-                ))}
+        <div className="border-t border-sky-100 px-4 py-4 space-y-4 bg-sky-50/30 rounded-b-xl">
+
+          {/* Identificação automática */}
+          <div>
+            <p className="text-[11px] font-semibold text-sky-700 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+              <Search className="w-3 h-3" /> Como o sistema identifica este extrato
+            </p>
+            {t.palavrasChave.length > 0 ? (
+              <div className="space-y-1">
+                <p className="text-xs text-gray-500">O parser busca estas frases no texto do PDF para reconhecer o layout:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {t.palavrasChave.map((kw, i) => (
+                    <span key={i} className="text-xs bg-sky-100 text-sky-800 border border-sky-200 rounded px-2 py-0.5 font-mono break-all">"{kw}"</span>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-          {t.skipPrefixes.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-gray-600 mb-1 flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" /> Linhas ignoradas (prefixos)
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {t.skipPrefixes.map((sp, i) => (
-                  <span key={i} className="text-xs bg-amber-100 text-amber-700 rounded px-2 py-0.5 font-mono break-all">{sp}</span>
-                ))}
+            ) : (
+              <p className="text-xs text-gray-400 italic">Nenhuma palavra-chave configurada — este template nunca será detectado automaticamente.</p>
+            )}
+          </div>
+
+          {/* Linhas ignoradas */}
+          <div>
+            <p className="text-[11px] font-semibold text-amber-700 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+              <AlertCircle className="w-3 h-3" /> Linhas que o parser vai ignorar
+            </p>
+            {t.skipPrefixes.length > 0 ? (
+              <div className="space-y-1">
+                <p className="text-xs text-gray-500">Linhas cujo início corresponda a qualquer um destes prefixos são descartadas:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {t.skipPrefixes.map((sp, i) => (
+                    <span key={i} className="text-xs bg-amber-100 text-amber-800 border border-amber-200 rounded px-2 py-0.5 font-mono break-all">"{sp}"</span>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            ) : (
+              <p className="text-xs text-gray-400 italic">Nenhum prefixo configurado — todas as linhas serão processadas.</p>
+            )}
+          </div>
+
+          {/* Instruções IA */}
           {t.instrucoesIa && (
             <div>
-              <p className="text-xs font-medium text-gray-600 mb-1 flex items-center gap-1">
-                <FileText className="w-3 h-3" /> Instruções para IA
+              <p className="text-[11px] font-semibold text-purple-700 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                <Sparkles className="w-3 h-3" /> Receita de extração para a IA
               </p>
-              <pre className="text-xs text-gray-600 whitespace-pre-wrap break-words font-sans bg-white border border-gray-200 rounded p-2">
+              <pre className="text-xs text-gray-700 whitespace-pre-wrap break-words font-sans bg-white border border-purple-100 rounded-lg p-3 shadow-sm leading-relaxed">
                 {t.instrucoesIa}
               </pre>
             </div>
           )}
-          {t.notasRevisao && (
-            <div>
-              <p className="text-xs font-medium text-gray-600 mb-1 flex items-center gap-1">
-                <History className="w-3 h-3" /> Notas da última revisão
-              </p>
-              <p className="text-xs text-gray-500 break-words">{t.notasRevisao}</p>
-            </div>
-          )}
-          <div className="flex items-center justify-between pt-1">
+
+          {/* Rodapé */}
+          <div className="flex items-center justify-between pt-1 border-t border-sky-100">
             <p className="text-xs text-gray-400">
               Atualizado em {new Date(t.atualizadoEm).toLocaleDateString("pt-BR")}
+              {t.notasRevisao && <span className="ml-2 text-gray-400">· {t.notasRevisao}</span>}
             </p>
-            <span className="text-xs text-gray-400 bg-gray-100 rounded px-2 py-0.5">Rev. {rev}</span>
+            <span className="text-xs font-medium text-sky-600 bg-sky-100 rounded px-2 py-0.5">Rev. {rev}</span>
           </div>
         </div>
       )}

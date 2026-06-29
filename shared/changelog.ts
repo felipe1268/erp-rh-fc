@@ -1,4 +1,37 @@
 /**
+ * Rev. 3883 — **TEMPLATES DE EXTRATO — EYE PREVIEW + DEDUP GUARD + PROMPT RIGOROSO.**
+ *
+ * ## Três melhorias em conjunto:
+ *
+ * ### 1. Eye icon + Preview enriquecido (frontend)
+ * Botão ChevronDown/Up substituído por Eye/EyeOff em cada card de template.
+ * Preview expandido reorganizado em 3 seções coloridas:
+ * - Azul: "Como o sistema identifica este extrato" (palavras-chave entre aspas)
+ * - Âmbar: "Linhas que o parser vai ignorar" (prefixos entre aspas)
+ * - Roxo: "Receita de extração para a IA" (instruções completas)
+ * Mensagens de fallback quando campo está vazio.
+ *
+ * ### 2. Dedup guard no backend (bankStatementTemplates.ts)
+ * Mutation `create` agora faz duas verificações antes do INSERT:
+ * a) Nome idêntico (LOWER+TRIM) → CONFLICT imediato.
+ * b) Sobreposição ≥ 50% de palavras-chave com qualquer template ativo → CONFLICT.
+ * Frontend (batch mode): captura erros CONFLICT e os exibe como "duplicatas
+ * ignoradas" (âmbar/⊘) separadamente dos erros reais (vermelho/✗).
+ * Painel de resumo pós-lote mostra 3 contadores: criados / duplicatas / erros.
+ *
+ * ### 3. Prompt de análise muito mais rigoroso (bankStatementTemplates.ts)
+ * PROMPT_ANALISAR_FORMATO reescrito: exige mín. 5 palavras-chave literais únicas
+ * (frases completas, siglas internas), mín. 6 skip prefixes (cobre TUDO que não
+ * é transação), instruções exaustivas em 9 tópicos (formato da data, estrutura
+ * de colunas, débitos/créditos, multi-linha, separadores, campo documento,
+ * particularidades, armadilhas). Formato do bancoNome inclui sistema/portal.
+ *
+ * ## Arquivos modificados
+ * - `server/routers/bankStatementTemplates.ts` (prompt + dedup create)
+ * - `client/src/pages/configuracoes/ExtratoTemplateTab.tsx` (Eye + preview + batch)
+ */
+
+/**
  * Rev. 3882 — **TEMPLATES DE EXTRATO — ANÁLISE EM LOTE (MÚLTIPLOS PDFs).**
  *
  * ## Objetivo

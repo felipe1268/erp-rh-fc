@@ -1,8 +1,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Router: Templates de Extrato Bancário
-// Rev. 3879 — Adicionada mutation analisarPdf: IA lê o PDF, identifica o banco
-// e propõe keywords/skip/instruções automaticamente. Coluna revisao adicionada
-// para rastreio ISO 9001. ZERO DELETE.
+// Rev. 3879 — analisarPdf mutation + revisao ISO 9001.
+// Rev. 3883 — Dedup guard no create (nome idêntico OU sobreposição ≥50% de
+//   palavras-chave). Prompt de análise mais rigoroso (5-8 kw, estrutura exata
+//   de colunas, multi-linha, variações ortográficas). ZERO DELETE.
 // ─────────────────────────────────────────────────────────────────────────────
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
@@ -65,27 +66,58 @@ function safeJson(v: any, fallback: any) {
 
 // ── prompt de análise de formato ─────────────────────────────────────────────
 
-const PROMPT_ANALISAR_FORMATO = `Você é um especialista em extratos bancários brasileiros.
-Analise o PDF de extrato bancário anexo e retorne SOMENTE um JSON descrevendo o FORMATO do extrato (não as transações).
+const PROMPT_ANALISAR_FORMATO = `Você é um especialista sênior em extratos bancários brasileiros com profundo conhecimento dos formatos de todos os bancos do país.
 
-JSON de saída (responda APENAS com este JSON, sem markdown, sem texto extra):
+Analise o PDF de extrato bancário anexo com MÁXIMA ATENÇÃO e retorne SOMENTE um JSON descrevendo o FORMATO EXATO deste extrato.
+NÃO liste transações. Descreva APENAS o formato/layout.
+
+JSON de saída (responda APENAS com este JSON, sem markdown, sem bloco de código, sem texto extra):
 {
-  "bancoNome": "Nome do banco + tipo de layout (ex: Caixa Econômica Federal — Extrato Online, Santander — Internet Banking Empresarial PJ, Banco do Brasil — Extrato Web)",
-  "palavrasChave": ["texto1", "texto2", "texto3"],
-  "skipPrefixes": ["prefixo1", "prefixo2"],
-  "instrucoesIa": "Instruções completas aqui"
+  "bancoNome": "Nome do banco + tipo de layout EXATO",
+  "palavrasChave": ["texto1", "texto2", "texto3", "texto4", "texto5"],
+  "skipPrefixes": ["prefixo1", "prefixo2", "prefixo3"],
+  "instrucoesIa": "Instruções detalhadas aqui"
 }
 
-Regras:
-• bancoNome: identifique banco + tipo de extrato. Seja específico (ex: não só "Santander", mas "Santander — Internet Banking PJ").
-• palavrasChave: 3–6 textos ÚNICOS que aparecem no cabeçalho/rodapé e diferenciam ESTE layout de outros bancos. NUNCA inclua número de conta ou agência (são específicos de cliente).
-• skipPrefixes: início exato de linhas que NÃO são transações: saldos diários, saldos anteriores, títulos de coluna, totalizadores, avisos. Inclua variações ortográficas que você viu.
-• instrucoesIa: descreva em detalhe como a IA deve extrair transações deste formato específico:
-  - Formato da data (DD/MM/AAAA, DD/MM, AAAA-MM-DD, etc.)
-  - Como débitos são marcados (ex: "- R$", prefixo "D", coluna separada, etc.)
-  - Como créditos são marcados (ex: "R$" sem sinal, prefixo "C", etc.)
-  - Estrutura geral das colunas (ex: Data | Histórico | Valor | Saldo)
-  - Qualquer particularidade deste banco que pode gerar erro de leitura`;
+═══════════════════════════════════════════════════
+REGRAS OBRIGATÓRIAS — leia com atenção:
+═══════════════════════════════════════════════════
+
+bancoNome:
+  • Banco + subtipo de extrato. Seja PRECISO e ESPECÍFICO.
+  • Exemplos corretos: "Caixa Econômica Federal — Extrato Online Gerenciador Caixa PJ",
+    "Santander — Internet Banking Empresarial PJ (IBPJ)",
+    "Banco do Brasil — Extrato Web Empresarial (autosserviço bb.com.br)",
+    "Itaú — Extrato de Conta Corrente PJ Internet Banking"
+  • Se houver um identificador de sistema/portal no cabeçalho (ex: "IBPJ", "Gerenciador Financeiro", "BB.com.br"), inclua-o no nome.
+  • NUNCA use apenas o nome do banco sem o tipo de layout.
+
+palavrasChave (mínimo 5, máximo 8):
+  • Textos LITERAIS copiados diretamente do cabeçalho, rodapé ou área de identificação do PDF.
+  • Devem ser ÚNICOS a este banco E a este subtipo de extrato — nunca genéricos como "Extrato" ou "Data".
+  • Prefira frases completas como "Internet Banking Empresarial PJ" em vez de palavras soltas.
+  • Inclua siglas/códigos internos do banco se aparecerem (ex: "IBPJ", "GCF", "CNAB").
+  • NUNCA inclua: número de conta, agência, CNPJ do cliente, datas, valores.
+  • Use variações: se o cabeçalho mostrar "Extrato de Conta Corrente" e também "Conta Corrente Empresarial", inclua ambas.
+
+skipPrefixes (mínimo 6, capture TUDO que não é transação):
+  • Início EXATO de linhas que NÃO são transações — copie literalmente o que vê no PDF.
+  • Inclua OBRIGATORIAMENTE: saldo anterior, saldo do dia, saldo final, saldo disponível,
+    cabeçalhos de coluna, totais (total de débitos, total de créditos), avisos, rodapé, legendas.
+  • Se a linha começa com espaços, inclua os espaços exatos.
+  • Inclua variações com e sem acentos se houver inconsistência no PDF.
+  • Prefira prefixos únicos de 4+ caracteres para evitar falsos positivos.
+
+instrucoesIa (seja EXAUSTIVO — descreva como se fosse ensinar um sistema que nunca viu extrato bancário):
+  1. FORMATO DA DATA: formato exato (DD/MM/AAAA, DD/MM/AA, AAAA-MM-DD, etc.), se está na mesma linha da transação ou em linha separada (algumas linhas agrupam transações do dia sob uma linha de data).
+  2. ESTRUTURA DE COLUNAS: descreva a ordem exata das colunas que aparecem. Ex: "Data | Documento | Descrição/Histórico | Valor (R$) | Saldo (R$)". Se os valores têm posições fixas no texto, mencione isso.
+  3. DÉBITOS: como são marcados exatamente. Ex: "valor precedido de sinal negativo", "coluna separada 'Débito'", "sufixo 'D' após o valor", "valor entre parênteses".
+  4. CRÉDITOS: como são marcados exatamente. Ex: "valor positivo sem marcação", "coluna separada 'Crédito'", "sufixo 'C' após o valor".
+  5. LINHAS MULTI-LINHA: se uma transação ocupa 2+ linhas (ex: primeira linha tem data+valor, segunda linha tem descrição), descreva o padrão.
+  6. SEPARADORES DECIMAIS: ponto ou vírgula? Ex: "1.234,56" ou "1,234.56".
+  7. CAMPO DOCUMENTO: se há número de documento/cheque/código de operação, em que posição e formato.
+  8. PARTICULARIDADES: qualquer comportamento especial — transações parceladas, tarifas com formato diferente, transferências PIX com estrutura própria, etc.
+  9. ARMADILHAS: o que pode confundir um parser ingênuo? Ex: "linhas de saldo do dia têm o mesmo formato visual que transações mas começam com 'Saldo do dia'".`;
 
 const SCHEMA_ANALISE = {
   type: "object",
@@ -184,6 +216,45 @@ export const bankStatementTemplatesRouter = router({
     .mutation(async ({ input, ctx }) => {
       await assertCompanyAccess(ctx, input.companyId);
       const db = await getDb();
+
+      // ── Rev. 3883: Dedup guard ────────────────────────────────────────────
+      // 1) Nome idêntico (case-insensitive, sem espaços extras) → CONFLICT
+      const sameNameRows = await db.execute(sql`
+        SELECT id, banco_nome FROM bank_statement_templates
+        WHERE company_id = ${input.companyId}
+          AND LOWER(TRIM(banco_nome)) = LOWER(TRIM(${input.bancoNome}))
+        LIMIT 1
+      `);
+      if ((sameNameRows.rows ?? []).length > 0) {
+        const dup = (sameNameRows.rows![0] as any).banco_nome as string;
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: `Duplicata: já existe um template com o nome "${dup}". Edite o existente ou use um nome diferente.`,
+        });
+      }
+
+      // 2) Sobreposição de palavras-chave ≥ 50% com qualquer template existente → CONFLICT
+      if (input.palavrasChave.length > 0) {
+        const allRows = await db.execute(sql`
+          SELECT id, banco_nome, palavras_chave FROM bank_statement_templates
+          WHERE company_id = ${input.companyId} AND ativo = 1
+        `);
+        for (const row of (allRows.rows ?? [])) {
+          const existingKws: string[] = safeJson((row as any).palavras_chave, []);
+          if (existingKws.length === 0) continue;
+          const newSet  = new Set(input.palavrasChave.map(k => k.toLowerCase().trim()));
+          const overlap = existingKws.filter(k => newSet.has(k.toLowerCase().trim())).length;
+          const pct     = overlap / Math.min(existingKws.length, input.palavrasChave.length);
+          if (pct >= 0.5) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: `Duplicata provável: ${Math.round(pct*100)}% das palavras-chave coincidem com "${(row as any).banco_nome}". Revise antes de salvar.`,
+            });
+          }
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
       const res = await db.execute(sql`
         INSERT INTO bank_statement_templates
           (company_id, banco_nome, palavras_chave, skip_prefixes,
