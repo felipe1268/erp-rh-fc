@@ -1,77 +1,69 @@
-import { Input } from "@/components/ui/input";
-import { useState, useEffect } from "react";
-
-/** Converte qualquer representação de número BR ("1.000,50" ou "1000.50") para number. */
-function toNumber(v: string | number | null | undefined): number {
-  if (v == null || v === "" || v === "-") return 0;
-  if (typeof v === "number") return v;
-  const s = String(v).trim();
-  // Já é numérico puro (ex: "1000.5" vindo do state interno)
-  if (/^-?\d+(\.\d+)?$/.test(s)) return parseFloat(s);
-  const isNeg = s.startsWith("-");
-  const clean = s.replace(/-/g, "").replace(/\./g, "").replace(",", ".");
-  const num = parseFloat(clean);
-  return isNaN(num) ? 0 : isNeg ? -num : num;
-}
-
 /**
- * Adiciona ponto de milhar na parte inteira sem depender de toLocaleString
- * (que pode cair em "en-US" no iOS Safari e usar vírgula como separador).
- *   "1000"   → "1.000"
- *   "100000" → "100.000"
+ * MoneyInput — modo centavos-primeiro (estilo caixa eletrônico / maquininha BR).
+ *
+ * Comportamento:
+ *   • A vírgula e os centavos aparecem desde o primeiro dígito.
+ *   • O cursor fica sempre no final — novos dígitos são sempre acrescentados à direita.
+ *   • Backspace apaga o último dígito; Delete limpa tudo.
+ *   • allowNegative: prefixar com "-" inverte o sinal.
+ *   • colorize: texto vermelho quando negativo, verde quando positivo.
+ *
+ * Exemplos (decimals=2):
+ *   digitar 1                → "0,01"
+ *   digitar 1,0,0            → "1,00"
+ *   digitar 1,0,0,0,0,0      → "1.000,00"
+ *   digitar (8 dígitos)      → "100.000,00"
  */
+
+import { Input } from "@/components/ui/input";
+import { useRef, useState, useEffect, useCallback } from "react";
+
+// ─── helpers ────────────────────────────────────────────────────────────────
+
+/** Pontos de milhar sem depender de toLocaleString (bug iOS Safari). */
 function addDots(intStr: string): string {
   return intStr.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 }
 
-/** Formata número para exibição BR com decimais fixos, ex: -100000 → "-100.000,00". */
-function fmtBRL(v: string | number | null | undefined, decimals = 2): string {
-  const num = toNumber(v);
-  if (num === 0) return "";
-  const isNeg = num < 0;
-  const abs = Math.abs(num);
-  const [intPart, decPart] = abs.toFixed(decimals).split(".");
-  return (isNeg ? "-" : "") + addDots(intPart) + "," + decPart;
+/** Buffer de dígitos inteiros → string de exibição BRL. */
+function digitsToDisplay(digits: string, neg: boolean, dec: number): string {
+  if (!digits) return "";
+  const padded = digits.padStart(dec + 1, "0");
+  const intPart = padded.slice(0, padded.length - dec);
+  const decPart = padded.slice(padded.length - dec);
+  const prefix = neg && parseInt(digits, 10) > 0 ? "-" : "";
+  return prefix + addDots(intPart) + "," + decPart;
 }
 
-/**
- * Formata ao vivo enquanto o usuário digita.
- * Retorna o display (com pontos de milhar) e o valor numérico interno (string "1000.5").
- */
-function fmtLive(raw: string, allowNegative: boolean): { display: string; numeric: string } {
-  const isNeg = allowNegative && raw.startsWith("-");
-  // Remove tudo que não é dígito nem vírgula
-  const stripped = raw.replace(/[^\d,]/g, "");
+/** Buffer de dígitos + sinal → valor numérico string para onChange. */
+function digitsToNumeric(digits: string, neg: boolean, dec: number): string {
+  if (!digits || parseInt(digits, 10) === 0) return "0";
+  const n = parseInt(digits, 10);
+  const val = n / Math.pow(10, dec);
+  return neg ? String(-val) : String(val);
+}
 
-  if (!stripped) {
-    return { display: isNeg ? "-" : "", numeric: "0" };
-  }
-
-  // Separa parte inteira de decimais (usa primeira vírgula apenas)
-  const commaIdx = stripped.indexOf(",");
-  let intStr: string;
-  let decStr: string | null;
-
-  if (commaIdx >= 0) {
-    intStr = stripped.slice(0, commaIdx);
-    decStr = stripped.slice(commaIdx + 1);
+/** Qualquer representação de número → { digits, neg }. */
+function valueToState(
+  v: string | number | null | undefined,
+  dec: number
+): { digits: string; neg: boolean } {
+  if (v == null || v === "" || v === "0" || v === 0) return { digits: "", neg: false };
+  const s = String(v).trim();
+  const neg = s.startsWith("-");
+  const abs = s.replace(/-/g, "");
+  let num: number;
+  if (/^\d+(\.\d+)?$/.test(abs)) {
+    num = parseFloat(abs);
   } else {
-    intStr = stripped;
-    decStr = null;
+    num = parseFloat(abs.replace(/\./g, "").replace(",", "."));
   }
-
-  const fmtInt = intStr === "" ? "0" : addDots(intStr);
-  let display = (isNeg ? "-" : "") + fmtInt;
-  if (decStr !== null) display += "," + decStr;
-
-  // Valor interno sem formatação (ponto decimal, sem pontos de milhar)
-  const numericStr =
-    (isNeg ? "-" : "") + (intStr || "0") + (decStr != null ? "." + decStr : "");
-  const num = parseFloat(numericStr);
-  const numeric = isNaN(num) ? "0" : String(num);
-
-  return { display, numeric };
+  if (isNaN(num) || num === 0) return { digits: "", neg: false };
+  const cents = Math.round(num * Math.pow(10, dec));
+  return { digits: String(cents), neg };
 }
+
+// ─── componente ─────────────────────────────────────────────────────────────
 
 export function MoneyInput({
   value,
@@ -87,55 +79,124 @@ export function MoneyInput({
   className?: string;
   placeholder?: string;
   decimals?: number;
-  /** Permite valores negativos (ex: saldo inicial). */
   allowNegative?: boolean;
-  /** Colore vermelho quando negativo, verde quando positivo. */
   colorize?: boolean;
 }) {
-  const [display, setDisplay] = useState(fmtBRL(value, decimals));
+  const init = valueToState(value, decimals);
+  const [digits, setDigits] = useState(init.digits);
+  const [neg, setNeg]       = useState(init.neg);
   const [focused, setFocused] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Guarda o comprimento do buffer de dígitos ANTES do último onChange,
+  // para detectar se o usuário adicionou ou removeu um dígito.
+  const prevDigitsLen = useRef(init.digits.length);
 
+  // Sincroniza state quando value muda externamente (ex: openEdit, reset)
   useEffect(() => {
-    if (!focused) setDisplay(fmtBRL(value, decimals));
+    if (!focused) {
+      const s = valueToState(value, decimals);
+      setDigits(s.digits);
+      setNeg(s.neg);
+      prevDigitsLen.current = s.digits.length;
+    }
   }, [value, focused, decimals]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { display: d, numeric } = fmtLive(e.target.value, allowNegative);
-    setDisplay(d);
-    onChange(numeric);
+  // Força cursor ao final (evita inserção no meio do texto)
+  const forceCursorEnd = useCallback(() => {
+    if (inputRef.current) {
+      const len = inputRef.current.value.length;
+      inputRef.current.setSelectionRange(len, len);
+    }
+  }, []);
+
+  const display = digitsToDisplay(digits, allowNegative && neg, decimals);
+
+  // ── keydown: backspace / delete / sinal ─────────────────────────────────
+  // Confiável em desktop e mobile iOS/Android para teclas especiais.
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace") {
+      e.preventDefault();
+      const nd = digits.slice(0, -1);
+      prevDigitsLen.current = nd.length;
+      setDigits(nd);
+      onChange(digitsToNumeric(nd, allowNegative && neg, decimals));
+      return;
+    }
+    if (e.key === "Delete") {
+      e.preventDefault();
+      prevDigitsLen.current = 0;
+      setDigits("");
+      setNeg(false);
+      onChange("0");
+      return;
+    }
+    if (e.key === "-" && allowNegative && digits !== "") {
+      e.preventDefault();
+      const newNeg = !neg;
+      setNeg(newNeg);
+      onChange(digitsToNumeric(digits, newNeg, decimals));
+      return;
+    }
+    // Para dígitos e demais teclas: deixa o browser atualizar o value e
+    // captura via onChange abaixo.
+    setTimeout(forceCursorEnd, 0);
   };
 
-  const handleBlur = () => {
-    setFocused(false);
-    const num = toNumber(display);
-    onChange(String(num));
-    setDisplay(num === 0 ? "" : fmtBRL(num, decimals));
+  // ── onChange: captura dígitos digitados (confiável em mobile) ────────────
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Extrai apenas os dígitos do novo valor do browser
+    const allDigits = e.target.value.replace(/\D/g, "");
+
+    if (allDigits.length > prevDigitsLen.current) {
+      // Dígito(s) adicionado(s).
+      // Como o cursor está sempre ao final, novos chars aparecem no fim da string.
+      const added = allDigits.slice(prevDigitsLen.current);
+      const nd = (digits + added).slice(-13); // máx 13 dígitos ≈ bilhões
+      prevDigitsLen.current = nd.length;
+      setDigits(nd);
+      onChange(digitsToNumeric(nd, allowNegative && neg, decimals));
+    } else if (allDigits.length < prevDigitsLen.current) {
+      // Dígito(s) removido(s) via mobile backspace (pode não gerar keydown).
+      const nd = allDigits;
+      prevDigitsLen.current = nd.length;
+      setDigits(nd);
+      onChange(digitsToNumeric(nd, allowNegative && neg, decimals));
+    }
+    // Se o comprimento for igual, apenas um caractere de formatação foi tocado → ignora.
+
+    setTimeout(forceCursorEnd, 0);
   };
 
   const handleFocus = () => {
     setFocused(true);
-    // Zera display apenas se o valor for exatamente 0
-    if (toNumber(display) === 0) setDisplay("");
+    setTimeout(forceCursorEnd, 0);
   };
 
-  const numericVal = toNumber(display);
+  const handleBlur = () => {
+    setFocused(false);
+    if (!digits || parseInt(digits, 10) === 0) setNeg(false);
+    onChange(digitsToNumeric(digits, allowNegative && neg, decimals));
+  };
+
+  const numericVal = parseFloat(digitsToNumeric(digits, allowNegative && neg, decimals)) || 0;
   const colorClass = colorize
-    ? numericVal > 0
-      ? "text-green-600 font-semibold"
-      : numericVal < 0
-      ? "text-red-500 font-semibold"
-      : ""
+    ? numericVal > 0 ? "text-green-600 font-semibold"
+    : numericVal < 0 ? "text-red-500 font-semibold"
+    : ""
     : "";
 
   return (
     <Input
+      ref={inputRef}
       className={`${className} ${colorClass}`}
       value={display}
       onChange={handleChange}
-      onBlur={handleBlur}
+      onKeyDown={handleKeyDown}
       onFocus={handleFocus}
+      onBlur={handleBlur}
+      onClick={() => setTimeout(forceCursorEnd, 0)}
       placeholder={placeholder}
-      inputMode="decimal"
+      inputMode="numeric"
     />
   );
 }
