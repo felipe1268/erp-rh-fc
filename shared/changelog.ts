@@ -1,4 +1,28 @@
 /**
+ * Rev. 3864 — **NF# NO EXTRATO — VÍNCULO BIDIRECIONAL NF-e ↔ LANÇAMENTO BANCÁRIO.**
+ *
+ * **Problema:** a coluna "NF#" no Panorama Fiscal (tabela de movimentos bancários) mostrava "—"
+ * para linhas já conciliadas. O backend `getPanoramaFiscal` só achava o número da NF via
+ * `fiscal_notes.stmt_line_id = bsl.id` (vínculo direto feito pelo painel de NF-e). Quando a
+ * conciliação era iniciada pelo extrato (ConciliacaoWorkspace → entry_id), o caminho indireto
+ * `bsl.entry_id → financial_entries ← fiscal_notes.entry_id` não era coberto.
+ *
+ * **Correções:**
+ * 1. `fiscalNotes.ts · getPanoramaFiscal` — subqueries de `fn_id` e `fn_numero` agora cobrem
+ *    os dois caminhos de vínculo: `fn.stmt_line_id = bsl.id` OU
+ *    `bsl.entry_id IS NOT NULL AND fn.entry_id = bsl.entry_id`; prefer stmt_line_id (ORDER BY).
+ * 2. `financial.ts · getBankStatements` — após a query principal (dbExecute com WHERE dinâmico),
+ *    faz lookup secundário via `db.$client.query` em `fiscal_notes` pelos `lineIds` e `entryIds`
+ *    do resultado; povoa `nfNumero` em cada linha sem alterar os parâmetros existentes.
+ * 3. `FinanceiroConciliacaoWorkspace.tsx` — extrato list agora exibe badge `NF# <numero>` abaixo
+ *    da descrição quando `s.nfNumero` está presente (itens conciliados que já têm NF vinculada).
+ *
+ * **ZERO DELETE.** Lógica CSV/builders anteriores intactos.
+ * **Arquivos:** `server/routers/fiscalNotes.ts`, `server/routers/financial.ts`,
+ * `client/src/pages/financeiro/FinanceiroConciliacaoWorkspace.tsx`.
+ */
+
+/**
  * Rev. 3863 — **PACOTE CONTABILIDADE — TODOS OS CSVs SUBSTITUÍDOS POR XLSX COM TEMPLATE FC.**
  *
  * **Contexto:** o Pacote do Contador gerava arquivos `.csv` sem formatação para a maioria dos

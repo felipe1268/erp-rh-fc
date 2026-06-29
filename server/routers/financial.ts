@@ -5739,7 +5739,32 @@ export const financialRouter = router({
        FROM bank_statement_lines WHERE ${conds.join(" AND ")} ORDER BY data DESC, id DESC`,
       vals
     );
-    return rows(res);
+    const stmtLines = rows(res);
+    // Rev. 3864 — enriquecer com NF# vinculada (stmt_line_id direto OU entry_id indireto)
+    if (stmtLines.length > 0) {
+      const lineIds = stmtLines.map((l: any) => Number(l.id)).filter(Boolean);
+      const entryIds = stmtLines.map((l: any) => Number(l.entryId)).filter(Boolean);
+      const nfQ = await db.$client.query(
+        `SELECT fn.stmt_line_id AS sid, fn.entry_id AS eid, fn.numero_nf AS "nfNumero"
+         FROM fiscal_notes fn
+         WHERE fn.company_id = $1
+           AND (fn.stmt_line_id = ANY($2::int[]) OR fn.entry_id = ANY($3::int[]))
+         ORDER BY (fn.stmt_line_id IS NOT NULL) DESC`,
+        [input.companyId, lineIds.length ? lineIds : [0], entryIds.length ? entryIds : [0]]
+      );
+      const byLine = new Map<number, string>();
+      const byEntry = new Map<number, string>();
+      for (const r of nfQ.rows) {
+        const sid = r.sid ? Number(r.sid) : null;
+        const eid = r.eid ? Number(r.eid) : null;
+        if (sid && !byLine.has(sid)) byLine.set(sid, r.nfNumero);
+        if (eid && !byEntry.has(eid)) byEntry.set(eid, r.nfNumero);
+      }
+      for (const s of stmtLines) {
+        (s as any).nfNumero = byLine.get(Number(s.id)) ?? (s.entryId ? byEntry.get(Number(s.entryId)) : null) ?? null;
+      }
+    }
+    return stmtLines;
   }),
 
   // Rev. 3365 — STATUS POR MÊS p/ pintar as bolinhas da timeline de meses. Antes a tela

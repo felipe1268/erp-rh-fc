@@ -485,8 +485,16 @@ export const fiscalNotesRouter = router({
           COALESCE(cba.apelido, cba.banco, '') AS conta_nome,
           COALESCE(cba.agencia, '') AS conta_agencia,
           COALESCE(cba.conta, '') AS conta_numero,
-          (SELECT fn.id      FROM fiscal_notes fn WHERE fn.stmt_line_id = bsl.id AND fn.company_id = $1 LIMIT 1) AS fn_id,
-          (SELECT fn.numero_nf FROM fiscal_notes fn WHERE fn.stmt_line_id = bsl.id AND fn.company_id = $1 LIMIT 1) AS fn_numero
+          (SELECT fn.id FROM fiscal_notes fn
+           WHERE fn.company_id = $1
+             AND (fn.stmt_line_id = bsl.id
+                  OR (bsl.entry_id IS NOT NULL AND fn.entry_id = bsl.entry_id))
+           ORDER BY (fn.stmt_line_id IS NOT NULL) DESC LIMIT 1) AS fn_id,
+          (SELECT fn.numero_nf FROM fiscal_notes fn
+           WHERE fn.company_id = $1
+             AND (fn.stmt_line_id = bsl.id
+                  OR (bsl.entry_id IS NOT NULL AND fn.entry_id = bsl.entry_id))
+           ORDER BY (fn.stmt_line_id IS NOT NULL) DESC LIMIT 1) AS fn_numero
         FROM bank_statement_lines bsl
         LEFT JOIN company_bank_accounts cba ON cba.id = bsl.conta_bancaria_id
         WHERE bsl.company_id = $1

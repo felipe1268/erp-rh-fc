@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3864** — **NF# NO EXTRATO — VÍNCULO BIDIRECIONAL NF-e ↔ EXTRATO BANCÁRIO.** `getPanoramaFiscal`: subquery fn_id/fn_numero cobre `stmt_line_id` OU `entry_id` chain; `getBankStatements`: lookup secundário `db.$client.query` povoa `nfNumero` em cada linha de extrato; `FinanceiroConciliacaoWorkspace`: badge `NF# <número>` exibido abaixo da descrição. ZERO DELETE.
+
 - **Rev. 3863** — **PACOTE CONTABILIDADE — TODOS OS CSVs → XLSX COM TEMPLATE FC.** 5 novos builders ExcelJS: `buildListaFaturasXlsx` (NFS-e emitidas/tomadas, cols B–L, SUM + cond. fmt. status), `buildNfeXlsx` (NF-e recebidas, cols B–H), `buildExtratoGeralXlsx` (extrato geral, 3 totais SUMIF, cond. fmt. verde/vermelho), `buildOcsXlsx` (OCs, cols B–J); todos usam `loadFcXlsxConfig` → cor do cabeçalho = template configurado; `buildExtratoBancarioBuffer` também atualizado. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3862** — **CHECKLIST WORD + ABAS DE CATEGORIA + 6 TEMPLATES NOVOS.** `00_CHECKLIST.docx` Word profissional (cabec. ISO 9001 + tabela controle + 4 seções coloridas) via `docx` v9.7.1; abas "RH · Financeiro · Planejamento · Contratos · Medições · Contabilidade" em `TemplatesDocsTab`; 6 novos tipos seed (Recibo, Comprovante, Adiantamento, Ata, OS, Proposta) com `CATEGORIAS_DOCS`/`getCategoriaFromDoc`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
-
 ### 5 one-liners
+
+- **Rev. 3862** — **CHECKLIST WORD + ABAS DE CATEGORIA + 6 TEMPLATES NOVOS.** `00_CHECKLIST.docx` via `docx` v9.7.1; abas RH/Financeiro/Planejamento/Contratos/Medições/Contabilidade; 6 tipos seed com `CATEGORIAS_DOCS`. ZERO DELETE.
 
 - **Rev. 3861** — **ENVIOS AO CONTADOR · BADGE DE STATUS POR LINHA EM NF-e RECEBIDAS.** Badge condicional: `conciliada`=verde, `enviada`=azul, demais=âmbar; linha conciliada ganha fundo `bg-green-50/30`. ZERO DELETE.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3859** — **TEMPLATE XLSX · BORDA SUPERIOR DO LOGO + LOGO CENTRALIZADO.** `ws.mergeCells("B2:C7")` → contorno completo; offset horizontal dinâmico via `nativeColOff` EMU. ZERO DELETE.
 
 - **Rev. 3858** — **CONTAS A RECEBER · CARDS KPI CLICÁVEIS FILTRAM A LISTA.** `KCard` ganha `onClick/active/activeRing`; `cardAtivo` + `ativarCard`; 4 cards filtram status+período; chip ✕; Select ganha "Em aberto"/"Vencidos". ZERO DELETE.
-
-- **Rev. 3857** — **NF-e × EXTRATO · JANELA DO EXTRATO REDUZIDA (±45 dias) + BADGE DE PERÍODO NO DIALOG.** `obterSugestoesPeriodo` +90→+45 dias; badge "Jan/2026 · Emitidas" no dialog header. ZERO DELETE.
 
 ### Histórico completo
 

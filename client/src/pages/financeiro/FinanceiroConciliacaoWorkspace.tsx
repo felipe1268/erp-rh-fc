@@ -676,6 +676,9 @@ export default function FinanceiroConciliacaoWorkspace() {
                           <div className="min-w-0">
                             <p className="text-xs text-gray-500">{s.data ? new Date(String(s.data).length > 10 ? s.data : s.data + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</p>
                             <p className="text-sm text-gray-700 truncate max-w-[200px]">{s.descricao}</p>
+                            {s.nfNumero && (
+                              <p className="text-[10px] text-indigo-600 font-mono mt-0.5">NF# {s.nfNumero}</p>
+                            )}
                           </div>
                           <p className={`text-sm font-bold shrink-0 ${Number(s.valor) >= 0 ? "text-green-600" : "text-red-500"}`}>{formatBRL(Number(s.valor))}</p>
                         </button>
