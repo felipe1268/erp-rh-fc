@@ -396,7 +396,7 @@ export default function ContasBancarias() {
                     {conta.saldoInicialData != null && (
                       <div className="flex items-center gap-2">
                         <span className="text-muted-foreground">Saldo inicial:</span>
-                        <span className="font-medium">
+                        <span className={`font-semibold ${Number(conta.saldoInicial ?? 0) < 0 ? "text-red-600" : Number(conta.saldoInicial ?? 0) > 0 ? "text-green-600" : ""}`}>
                           R$ {fmtNum(Number(conta.saldoInicial ?? 0))}
                           <span className="text-muted-foreground font-normal"> em {fmtDataBR(conta.saldoInicialData)}</span>
                         </span>
@@ -827,6 +827,8 @@ export default function ContasBancarias() {
                     value={form.saldoInicial}
                     onChange={(v) => setForm(f => ({ ...f, saldoInicial: v }))}
                     placeholder="0,00"
+                    allowNegative={true}
+                    colorize={true}
                   />
                 </div>
                 <div>
