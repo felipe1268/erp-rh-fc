@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3882** — **TEMPLATES DE EXTRATO — ANÁLISE EM LOTE (MÚLTIPLOS PDFs).** 1 PDF → fluxo original (formulário para revisão). 2+ PDFs → modo lote: processa sequencialmente, salva automaticamente cada template, barra de progresso "Analisando X de Y", contadores parciais ✓/✗ e painel de resumo pós-conclusão. `<input multiple>` + `handleBatchFiles`. ZERO DELETE.
+
 - **Rev. 3881** — **FIX TEMPLATES DE EXTRATO — companyId undefined.** `ExtratoTemplateTab` desestruturava `companyId` de `useCompany()`, mas o contexto expõe `companyIdNum` (não `companyId`) → `undefined` → erro Zod em todo acesso à aba. 1 linha corrigida em `ExtratoTemplateTab.tsx`. ZERO DELETE.
 
 - **Rev. 3880** — **FIX CONCILIAÇÃO BANCÁRIA — CONTAS NÃO LISTADAS.** `getBankAccounts` explodia com `42703: column "contaBancariaId" does not exist` — subquery em `financial_opening_balances` usava camelCase com aspas, mas a tabela tem colunas snake_case (`conta_bancaria_id`/`company_id`). 1 linha corrigida em `financial.ts`. ZERO DELETE.

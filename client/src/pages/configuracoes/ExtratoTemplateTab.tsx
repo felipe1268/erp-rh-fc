@@ -1,11 +1,10 @@
 /**
- * ExtratoTemplateTab.tsx — Rev. 3879
+ * ExtratoTemplateTab.tsx — Rev. 3882
  *
  * Aba "Templates de Extrato" em Configurações.
- * Fluxo principal: usuário sobe um PDF → IA analisa o formato do banco →
- * proposta editável → salvar. Zero código para novos bancos.
- *
- * Rev. 3879: analisarPdf mutation + revisão ISO 9001 + AlertDialog (sem window.confirm).
+ * Fluxo 1 PDF: usuário sobe um PDF → IA analisa → proposta editável → salvar.
+ * Fluxo lote (Rev. 3882): múltiplos PDFs → analisa sequencialmente → salva
+ *   automaticamente cada um → exibe resumo (criados / erros).
  */
 import { useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -108,6 +107,15 @@ export default function ExtratoTemplateTab() {
   const [iaSourced, setIaSourced]     = useState(false);  // veio da IA
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Estado do fluxo em lote (Rev. 3882)
+  const [batch, setBatch] = useState<{
+    total: number;
+    current: number;
+    nome: string;
+    ok: string[];
+    erros: { nome: string; msg: string }[];
+  } | null>(null);
+
   // Estado do AlertDialog de confirmação de exclusão
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; nome: string } | null>(null);
 
@@ -148,39 +156,96 @@ export default function ExtratoTemplateTab() {
   // ── fluxo de análise IA ─────────────────────────────────────────────────────
 
   async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!e.target) return;
-    // Limpar input para permitir selecionar o mesmo arquivo novamente
+    const files = Array.from(e.target.files ?? []);
+    // Limpar input para permitir selecionar os mesmos arquivos novamente
     (e.target as HTMLInputElement).value = "";
-    if (!file) return;
+    if (!files.length) return;
 
-    if (!file.name.toLowerCase().endsWith(".pdf")) {
-      toast.error("Selecione um arquivo PDF.");
+    // Validação básica de todos os arquivos antes de começar
+    for (const f of files) {
+      if (!f.name.toLowerCase().endsWith(".pdf")) {
+        toast.error(`"${f.name}" não é um PDF.`);
+        return;
+      }
+      if (f.size > 30 * 1024 * 1024) {
+        toast.error(`"${f.name}" é muito grande (limite: 30 MB por arquivo).`);
+        return;
+      }
+    }
+
+    // Arquivo único → fluxo original (abre formulário para revisão)
+    if (files.length === 1) {
+      setAnalyzing(true);
+      try {
+        const base64 = await fileToBase64(files[0]);
+        const result = await analisarMut.mutateAsync({ companyId, pdfBase64: base64 });
+        openNew({
+          bancoNome:     result.bancoNome,
+          palavrasChave: result.palavrasChave,
+          skipPrefixes:  result.skipPrefixes,
+          instrucoesIa:  result.instrucoesIa,
+          notasRevisao:  "Gerado automaticamente por análise de IA.",
+          ativo:         true,
+        });
+        toast.success(`Banco identificado: ${result.bancoNome}`);
+      } catch (err: any) {
+        toast.error(err?.message || "Erro na análise. Tente novamente.");
+      } finally {
+        setAnalyzing(false);
+      }
       return;
     }
-    if (file.size > 30 * 1024 * 1024) {
-      toast.error("O arquivo é muito grande (limite: 30 MB).");
-      return;
-    }
 
+    // Múltiplos arquivos → modo lote: analisa + salva automaticamente cada um
+    await handleBatchFiles(files);
+  }
+
+  async function handleBatchFiles(files: File[]) {
+    setBatch({ total: files.length, current: 0, nome: "", ok: [], erros: [] });
     setAnalyzing(true);
-    try {
-      const base64 = await fileToBase64(file);
-      const result = await analisarMut.mutateAsync({ companyId, pdfBase64: base64 });
-      openNew({
-        bancoNome:     result.bancoNome,
-        palavrasChave: result.palavrasChave,
-        skipPrefixes:  result.skipPrefixes,
-        instrucoesIa:  result.instrucoesIa,
-        notasRevisao:  "Gerado automaticamente por análise de IA.",
-        ativo:         true,
-      });
-      toast.success(`Banco identificado: ${result.bancoNome}`);
-    } catch (e: any) {
-      toast.error(e?.message || "Erro na análise. Tente novamente.");
-    } finally {
-      setAnalyzing(false);
+
+    const ok: string[] = [];
+    const erros: { nome: string; msg: string }[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      setBatch(b => b ? { ...b, current: i + 1, nome: file.name } : b);
+
+      try {
+        const base64 = await fileToBase64(file);
+        const result = await analisarMut.mutateAsync({ companyId, pdfBase64: base64 });
+        // Salva automaticamente sem abrir formulário
+        await createMut.mutateAsync({
+          companyId,
+          bancoNome:     result.bancoNome,
+          palavrasChave: result.palavrasChave,
+          skipPrefixes:  result.skipPrefixes,
+          instrucoesIa:  result.instrucoesIa,
+          notasRevisao:  "Gerado automaticamente por análise de IA (lote).",
+          ativo:         true,
+        });
+        ok.push(result.bancoNome);
+      } catch (err: any) {
+        erros.push({ nome: file.name, msg: err?.message || "Erro desconhecido" });
+      }
+
+      setBatch(b => b ? { ...b, ok, erros } : b);
     }
+
+    await utils.bankStatementTemplates.list.invalidate({ companyId });
+    setAnalyzing(false);
+
+    // Resumo final via toast
+    if (ok.length > 0 && erros.length === 0) {
+      toast.success(`${ok.length} template${ok.length > 1 ? "s" : ""} criado${ok.length > 1 ? "s" : ""} com sucesso!`);
+    } else if (ok.length > 0) {
+      toast.success(`${ok.length} criado${ok.length > 1 ? "s" : ""}, ${erros.length} com erro.`);
+    } else {
+      toast.error("Nenhum template pôde ser criado. Verifique os arquivos.");
+    }
+
+    // Mantém o resumo visível por 5s, depois limpa
+    setTimeout(() => setBatch(null), 5000);
   }
 
   // ── salvar ──────────────────────────────────────────────────────────────────
@@ -236,11 +301,12 @@ export default function ExtratoTemplateTab() {
 
   return (
     <div className="space-y-6">
-      {/* Input oculto para seleção de PDF */}
+      {/* Input oculto para seleção de PDF(s) — aceita múltiplos (Rev. 3882) */}
       <input
         ref={fileInputRef}
         type="file"
         accept=".pdf,application/pdf"
+        multiple
         className="hidden"
         onChange={handleFileSelected}
       />
@@ -282,16 +348,17 @@ export default function ExtratoTemplateTab() {
       {/* ── Botões de ação (fora do formulário) ── */}
       {editId === null && (
         <div className="flex flex-wrap gap-2">
-          {/* CTA principal: análise IA */}
+          {/* CTA principal: análise IA (1 ou vários PDFs) */}
           <Button
             size="sm"
             onClick={() => fileInputRef.current?.click()}
             disabled={analyzing}
             className="gap-2 bg-sky-600 hover:bg-sky-700"
+            title="Selecione um ou vários PDFs de extrato bancário. 1 arquivo = revise antes de salvar. Vários arquivos = salva automaticamente cada um."
           >
             {analyzing
-              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Analisando PDF...</>
-              : <><Sparkles className="w-3.5 h-3.5" /> Analisar extrato de novo banco</>
+              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Analisando...</>
+              : <><Sparkles className="w-3.5 h-3.5" /> Analisar extrato(s) de novo banco</>
             }
           </Button>
           {/* Secundário: criar manualmente */}
@@ -306,7 +373,7 @@ export default function ExtratoTemplateTab() {
         </div>
       )}
 
-      {/* ── Estado de carregamento da IA (faixa de progresso) ── */}
+      {/* ── Estado de carregamento da IA ── */}
       {analyzing && (
         <div className="rounded-xl border border-sky-200 bg-white px-5 py-6 text-center space-y-3 shadow-sm">
           <div className="flex justify-center">
@@ -317,12 +384,67 @@ export default function ExtratoTemplateTab() {
               <Loader2 className="w-5 h-5 text-sky-400 animate-spin absolute -bottom-1 -right-1 bg-white rounded-full" />
             </div>
           </div>
-          <div>
-            <p className="text-sm font-semibold text-gray-800">IA identificando o banco e mapeando o formato...</p>
-            <p className="text-xs text-gray-500 mt-1">
-              Analisando cabeçalho, estrutura de colunas, sinalização de débito/crédito e linhas a ignorar.
-            </p>
-          </div>
+
+          {/* Modo lote */}
+          {batch ? (
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-gray-800">
+                Analisando {batch.current} de {batch.total}...
+              </p>
+              {/* Barra de progresso */}
+              <div className="w-full bg-sky-100 rounded-full h-1.5 mx-auto max-w-xs">
+                <div
+                  className="bg-sky-500 h-1.5 rounded-full transition-all duration-300"
+                  style={{ width: `${Math.round((batch.current / batch.total) * 100)}%` }}
+                />
+              </div>
+              <p className="text-xs text-gray-500 truncate max-w-xs mx-auto" title={batch.nome}>
+                {batch.nome}
+              </p>
+              {/* Resultados parciais */}
+              {(batch.ok.length > 0 || batch.erros.length > 0) && (
+                <div className="flex justify-center gap-4 text-xs pt-1">
+                  {batch.ok.length > 0 && (
+                    <span className="text-green-600 font-medium">✓ {batch.ok.length} criado{batch.ok.length > 1 ? "s" : ""}</span>
+                  )}
+                  {batch.erros.length > 0 && (
+                    <span className="text-red-500 font-medium">✗ {batch.erros.length} erro{batch.erros.length > 1 ? "s" : ""}</span>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Modo arquivo único */
+            <div>
+              <p className="text-sm font-semibold text-gray-800">IA identificando o banco e mapeando o formato...</p>
+              <p className="text-xs text-gray-500 mt-1">
+                Analisando cabeçalho, estrutura de colunas, sinalização de débito/crédito e linhas a ignorar.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Resumo do lote (após conclusão, visível por 5s) ── */}
+      {!analyzing && batch && (
+        <div className={`rounded-xl border px-5 py-4 shadow-sm space-y-2 ${
+          batch.erros.length === 0 ? "border-green-200 bg-green-50/60" : "border-amber-200 bg-amber-50/60"
+        }`}>
+          <p className={`text-sm font-semibold flex items-center gap-2 ${
+            batch.erros.length === 0 ? "text-green-800" : "text-amber-800"
+          }`}>
+            {batch.erros.length === 0 ? "✓" : "⚠"} Lote concluído — {batch.ok.length} de {batch.total} criados
+          </p>
+          {batch.ok.length > 0 && (
+            <ul className="text-xs text-green-700 space-y-0.5">
+              {batch.ok.map((nome, i) => <li key={i}>✓ {nome}</li>)}
+            </ul>
+          )}
+          {batch.erros.length > 0 && (
+            <ul className="text-xs text-red-600 space-y-0.5">
+              {batch.erros.map((e, i) => <li key={i} className="break-words">✗ {e.nome}: {e.msg}</li>)}
+            </ul>
+          )}
         </div>
       )}
 

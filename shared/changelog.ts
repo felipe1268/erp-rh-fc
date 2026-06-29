@@ -1,4 +1,32 @@
 /**
+ * Rev. 3882 — **TEMPLATES DE EXTRATO — ANÁLISE EM LOTE (MÚLTIPLOS PDFs).**
+ *
+ * ## Objetivo
+ * Permitir selecionar vários PDFs de extratos bancários de uma só vez para
+ * criar múltiplos templates automaticamente sem intervenção manual por arquivo.
+ *
+ * ## Comportamento
+ * - **1 PDF selecionado:** fluxo original — abre formulário pré-preenchido pela
+ *   IA para o usuário revisar antes de salvar.
+ * - **2+ PDFs selecionados:** modo lote — processa sequencialmente, salva cada
+ *   template automaticamente após a análise, exibe barra de progresso
+ *   ("Analisando 2 de 5..."), contadores parciais (✓ criados / ✗ erros)
+ *   e resumo final visível por 5s.
+ *
+ * ## Implementação
+ * - `<input multiple>` no seletor de arquivo oculto.
+ * - `handleBatchFiles(files)`: loop sequencial, `analisarMut` + `createMut`
+ *   por arquivo; erros individuais não abortam o lote.
+ * - Estado `batch` rastreia progresso parcial e resultados.
+ * - Painel de loading bifurcado: modo único (texto simples) vs lote (barra +
+ *   contadores). Painel de resumo pós-lote (verde/âmbar).
+ * - ZERO DELETE.
+ *
+ * ## Arquivos modificados
+ * - `client/src/pages/configuracoes/ExtratoTemplateTab.tsx`
+ */
+
+/**
  * Rev. 3881 — **FIX TEMPLATES DE EXTRATO — companyId undefined.**
  *
  * ## Problema
