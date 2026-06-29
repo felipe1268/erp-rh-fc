@@ -375,8 +375,14 @@ export default function FinanceiroConciliacao() {
   const [demoConf, setDemoConf] = useState<any | null>(null);
   // Rev. 3179 — "Limpar extrato" (confirmação) + alerta de extrato de outro mês.
   const [confirmLimpar, setConfirmLimpar] = useState(false);
+  // REGRA DE OURO: conta quantas linhas conciliadas seriam destruídas ao limpar.
+  const [limparConciliadosCount, setLimparConciliadosCount] = useState(0);
+  const [confirmLimparForcado, setConfirmLimparForcado] = useState(false);
   // Rev. 3534 — "Limpar TODAS as contas do mês" (bulk).
   const [showLimparMesDlg, setShowLimparMesDlg] = useState(false);
+  // REGRA DE OURO (bulk): mesma proteção para "Limpar todas as contas".
+  const [limparMesConciliadosCount, setLimparMesConciliadosCount] = useState(0);
+  const [confirmLimparMesForcado, setConfirmLimparMesForcado] = useState(false);
   // Rev. 3386 — exclusão individual de linha do extrato
   const [confirmExcluirLinha, setConfirmExcluirLinha] = useState<{ id: number; descricao: string; valor: number; conciliado: boolean } | null>(null);
   // Rev. 3410 — troca manual de lançamento vinculado na sugestão
@@ -1037,19 +1043,32 @@ export default function FinanceiroConciliacao() {
     onError: (e: any) => toast({ title: "Erro ao desconsolidar", description: e.message, variant: "destructive" }),
   });
   // Rev. 3179 — Limpar extrato importado errado (conta+período). Soft-delete no backend.
+  // REGRA DE OURO (Rev. 3875): se houver linhas conciliadas, o server retorna ok=false +
+  // conciliadosCount; o client exibe aviso com contagem e exige checkbox antes de force=true.
   const limparMut = (trpc as any).financial.limparExtrato.useMutation({
     onSuccess: (res: any) => {
+      if (!res.ok) {
+        setLimparConciliadosCount(res.conciliadosCount ?? 0);
+        setConfirmLimparForcado(false);
+        return;
+      }
       toast({ title: res.afetados > 0 ? `Extrato limpo! ${formatInt(res.afetados)} linha(s) removida(s).` : "Nada para limpar neste período." });
-      setConfirmLimpar(false);
+      setConfirmLimpar(false); setLimparConciliadosCount(0); setConfirmLimparForcado(false);
       refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(false); refetchReport();
     },
     onError: (e: any) => toast({ title: "Erro ao limpar extrato", description: e.message, variant: "destructive" }),
   });
   // Rev. 3534 — Limpar extratos de TODAS as contas do mês (bulk — validação do sistema).
+  // REGRA DE OURO (Rev. 3875): mesma proteção — bloqueia se houver conciliados.
   const limparExtratoMesMut = (trpc as any).financial.limparExtratoMes.useMutation({
     onSuccess: (res: any) => {
+      if (!res.ok) {
+        setLimparMesConciliadosCount(res.conciliadosCount ?? 0);
+        setConfirmLimparMesForcado(false);
+        return;
+      }
       toast({ title: res.afetados > 0 ? `Extratos limpos! ${formatInt(res.afetados)} linha(s) removida(s) de todas as contas.` : "Nenhuma linha encontrada neste período." });
-      setShowLimparMesDlg(false);
+      setShowLimparMesDlg(false); setLimparMesConciliadosCount(0); setConfirmLimparMesForcado(false);
       refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(false); refetchReport();
     },
     onError: (e: any) => { toast({ title: "Erro ao limpar extratos", description: e.message, variant: "destructive" }); setShowLimparMesDlg(false); },
@@ -6177,31 +6196,59 @@ export default function FinanceiroConciliacao() {
           </AlertDialogContent>
         </AlertDialog>
 
-        <AlertDialog open={confirmLimpar} onOpenChange={(o: boolean) => { if (!o) setConfirmLimpar(false); }}>
+        <AlertDialog open={confirmLimpar} onOpenChange={(o: boolean) => { if (!o) { setConfirmLimpar(false); setLimparConciliadosCount(0); setConfirmLimparForcado(false); } }}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle className="flex items-center gap-2"><Trash2 className="w-5 h-5 text-red-600" />Limpar extrato importado?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Isso remove as <strong>{formatInt((statements ?? []).length)}</strong> linha(s) de extrato da conta selecionada no período de <strong>{periodoLabel}</strong>.
-                Os lançamentos do ERP que estavam conciliados com essas linhas voltam a ficar <strong>pendentes</strong> (nada é apagado do ERP).
-                Use quando importou o extrato errado e quer reimportar.
+              <AlertDialogDescription asChild>
+                <div className="space-y-2 text-sm text-gray-600">
+                  <p>
+                    Isso remove as <strong>{formatInt((statements ?? []).length)}</strong> linha(s) de extrato da conta selecionada no período de <strong>{periodoLabel}</strong>.
+                    Os lançamentos do ERP que estavam conciliados voltam a ficar <strong>pendentes</strong> (nada é apagado do ERP).
+                    Use quando importou o extrato errado e quer reimportar.
+                  </p>
+                  {limparConciliadosCount > 0 && (
+                    <div className="bg-red-50 border border-red-200 rounded-md px-3 py-2.5 space-y-2">
+                      <p className="text-red-700 font-semibold text-[13px] flex items-center gap-1.5">
+                        <span>⚠</span> ATENÇÃO — REGRA DE OURO DA CONCILIAÇÃO
+                      </p>
+                      <p className="text-red-700 text-[12px]">
+                        Existem <strong>{limparConciliadosCount}</strong> linha(s) JÁ CONCILIADAS neste período.
+                        Limpar destruirá essas conciliações permanentemente.
+                        Os lançamentos vinculados voltarão a pendente e precisarão ser reconciliados novamente.
+                      </p>
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 accent-red-600"
+                          checked={confirmLimparForcado}
+                          onChange={e => setConfirmLimparForcado(e.target.checked)}
+                        />
+                        <span className="text-red-700 text-[12px] font-medium">
+                          Entendo que vou perder <strong>{limparConciliadosCount}</strong> conciliação(ões) e desejo prosseguir mesmo assim.
+                        </span>
+                      </label>
+                    </div>
+                  )}
+                </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel disabled={limparMut.isPending}>Cancelar</AlertDialogCancel>
+              <AlertDialogCancel disabled={limparMut.isPending} onClick={() => { setLimparConciliadosCount(0); setConfirmLimparForcado(false); }}>Cancelar</AlertDialogCancel>
               <AlertDialogAction
-                className="bg-red-600 hover:bg-red-700"
-                disabled={limparMut.isPending}
-                onClick={(e: any) => { e.preventDefault(); limparMut.mutate({ companyId, contaBancariaId: parseInt(contaBancariaId), dataInicio, dataFim }); }}
+                className="bg-red-600 hover:bg-red-700 disabled:opacity-50"
+                disabled={limparMut.isPending || (limparConciliadosCount > 0 && !confirmLimparForcado)}
+                onClick={(e: any) => { e.preventDefault(); limparMut.mutate({ companyId, contaBancariaId: parseInt(contaBancariaId), dataInicio, dataFim, force: limparConciliadosCount > 0 ? true : undefined }); }}
               >
-                {limparMut.isPending ? "Limpando..." : "Sim, limpar extrato"}
+                {limparMut.isPending ? "Limpando..." : limparConciliadosCount > 0 ? "Sim, perder conciliações e limpar" : "Sim, limpar extrato"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
 
         {/* Rev. 3534 — Limpar TODOS os extratos do período (todas as contas). */}
-        <AlertDialog open={showLimparMesDlg} onOpenChange={(o: boolean) => { if (!o && !limparExtratoMesMut.isPending) setShowLimparMesDlg(false); }}>
+        {/* Rev. 3875 — REGRA DE OURO: bloqueia se houver conciliados sem checkbox. */}
+        <AlertDialog open={showLimparMesDlg} onOpenChange={(o: boolean) => { if (!o && !limparExtratoMesMut.isPending) { setShowLimparMesDlg(false); setLimparMesConciliadosCount(0); setConfirmLimparMesForcado(false); } }}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle className="flex items-center gap-2">
@@ -6219,17 +6266,40 @@ export default function FinanceiroConciliacao() {
                   <p className="text-amber-700 bg-amber-50 rounded px-3 py-2 text-[12px]">
                     ⚠ Use apenas para reimportar extratos durante a validação do sistema. Esta ação afeta <strong>todas as contas</strong> do período de uma vez.
                   </p>
+                  {limparMesConciliadosCount > 0 && (
+                    <div className="bg-red-50 border border-red-300 rounded-md px-3 py-2.5 space-y-2">
+                      <p className="text-red-700 font-semibold text-[13px] flex items-center gap-1.5">
+                        <span>🚫</span> REGRA DE OURO DA CONCILIAÇÃO — BLOQUEIO ATIVO
+                      </p>
+                      <p className="text-red-700 text-[12px]">
+                        Existem <strong>{limparMesConciliadosCount}</strong> linha(s) JÁ CONCILIADAS neste período, em uma ou mais contas.
+                        Prosseguir destruirá permanentemente todas essas conciliações.
+                        Os lançamentos vinculados voltarão a pendente.
+                      </p>
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 accent-red-600"
+                          checked={confirmLimparMesForcado}
+                          onChange={e => setConfirmLimparMesForcado(e.target.checked)}
+                        />
+                        <span className="text-red-700 text-[12px] font-medium">
+                          Entendo que vou perder <strong>{limparMesConciliadosCount}</strong> conciliação(ões) de TODAS as contas e desejo prosseguir mesmo assim.
+                        </span>
+                      </label>
+                    </div>
+                  )}
                 </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel disabled={limparExtratoMesMut.isPending}>Cancelar</AlertDialogCancel>
+              <AlertDialogCancel disabled={limparExtratoMesMut.isPending} onClick={() => { setLimparMesConciliadosCount(0); setConfirmLimparMesForcado(false); }}>Cancelar</AlertDialogCancel>
               <AlertDialogAction
-                className="bg-red-600 hover:bg-red-700"
-                disabled={limparExtratoMesMut.isPending}
-                onClick={(e: any) => { e.preventDefault(); limparExtratoMesMut.mutate({ companyId, dataInicio, dataFim }); }}
+                className="bg-red-600 hover:bg-red-700 disabled:opacity-50"
+                disabled={limparExtratoMesMut.isPending || (limparMesConciliadosCount > 0 && !confirmLimparMesForcado)}
+                onClick={(e: any) => { e.preventDefault(); limparExtratoMesMut.mutate({ companyId, dataInicio, dataFim, force: limparMesConciliadosCount > 0 ? true : undefined }); }}
               >
-                {limparExtratoMesMut.isPending ? "Limpando..." : "Sim, limpar todos os extratos"}
+                {limparExtratoMesMut.isPending ? "Limpando..." : limparMesConciliadosCount > 0 ? "Sim, perder conciliações e limpar tudo" : "Sim, limpar todos os extratos"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

@@ -1,4 +1,37 @@
 /**
+ * Rev. 3875 — **CONCILIAÇÃO — REGRA DE OURO: LIMPAR NÃO DESTRÓI CONCILIADOS SEM CONFIRMAÇÃO EXPLÍCITA.**
+ *
+ * ## Problema
+ * `limparExtrato` e `limparExtratoMes` apagavam silenciosamente linhas com `conciliado=1`
+ * toda vez que o usuário clicava "Limpar", destruindo o histórico de conciliação.
+ * `excluirLinhaExtrato` também permitia deletar linhas já conciliadas sem aviso.
+ *
+ * ## Regra implementada
+ * Uma linha conciliada SÓ pode ser desconciliada por ação MANUAL e EXPLÍCITA do usuário —
+ * nunca automaticamente. Nenhum "Limpar" pode destruir conciliações silenciosamente.
+ *
+ * ## Server (`server/routers/financial.ts`)
+ * - `limparExtrato`: conta linhas com `conciliado=1` antes de agir.
+ *   Sem `force=true` → retorna `{ ok: false, conciliadosCount: N }` (HTTP 200, sem destruir nada).
+ *   Com `force=true` → limpa tudo (usuário aceitou explicitamente).
+ * - `limparExtratoMes`: mesma lógica em bulk (todas as contas do mês).
+ * - `excluirLinhaExtrato`: lança `CONFLICT` se a linha tiver `conciliado=1`.
+ *
+ * ## Client
+ * - `FinanceiroConciliacao.tsx`:
+ *   - 4 novos states: `limparConciliadosCount`, `confirmLimparForcado`,
+ *     `limparMesConciliadosCount`, `confirmLimparMesForcado`.
+ *   - `limparMut.onSuccess` / `limparExtratoMesMut.onSuccess`: se `res.ok===false`,
+ *     armazena a contagem e retorna (dialog permanece aberto com aviso).
+ *   - Ambos os AlertDialogs agora exibem bloco vermelho com contagem + checkbox
+ *     "Entendo que vou perder N conciliações". Botão de confirmação fica desabilitado
+ *     até o checkbox ser marcado; ao confirmar, envia `force: true`.
+ * - `FinanceiroConciliacaoWorkspace.tsx`: mesma proteção para o `limparMut` do workspace.
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3874 — **DASH EPIs — CLIQUE NA BARRA DO GRÁFICO ABRE DIALOG DE DETALHE.**
  *
  * O gráfico "Vida Útil Esperada vs. Tempo Real de Troca" agora é interativo:

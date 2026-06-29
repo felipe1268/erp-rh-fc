@@ -7946,6 +7946,10 @@ export const financialRouter = router({
     contaBancariaId: z.number(),
     dataInicio: z.string(),
     dataFim: z.string(),
+    // REGRA DE OURO: force=true só depois que o usuário reconheceu explicitamente
+    // quantas conciliações serão perdidas. Sem ele, a mutation BLOQUEIA se houver
+    // linhas conciliadas no período — nunca destrói conciliações silenciosamente.
+    force: z.boolean().optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -7956,6 +7960,17 @@ export const financialRouter = router({
       [input.contaBancariaId, input.companyId]);
     if (rows(ownerCheck).length === 0) {
       throw new TRPCError({ code: "FORBIDDEN", message: "Conta bancária não pertence a esta empresa" });
+    }
+
+    // REGRA DE OURO — conta conciliados antes de destruir.
+    if (!input.force) {
+      const cRes = await dbExecute(db,
+        `SELECT COUNT(*)::int AS n FROM bank_statement_lines
+          WHERE company_id=$1 AND conta_bancaria_id=$2 AND data>=$3 AND data<=$4
+            AND excluido_em IS NULL AND COALESCE(conciliado,0)=1`,
+        [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim]);
+      const conciliadosCount = Number((rows(cRes)[0] as any)?.n ?? 0);
+      if (conciliadosCount > 0) return { ok: false as const, conciliadosCount, afetados: 0 };
     }
 
     let afetados = 0;
@@ -7997,10 +8012,25 @@ export const financialRouter = router({
     companyId: z.number(),
     dataInicio: z.string(),
     dataFim: z.string(),
+    // REGRA DE OURO: force=true só depois que o usuário reconheceu explicitamente
+    // quantas conciliações serão perdidas. Sem ele, a mutation BLOQUEIA se houver
+    // linhas conciliadas no período — nunca destrói conciliações silenciosamente.
+    force: z.boolean().optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+
+    // REGRA DE OURO — conta conciliados antes de destruir.
+    if (!input.force) {
+      const cRes = await dbExecute(db,
+        `SELECT COUNT(*)::int AS n FROM bank_statement_lines
+          WHERE company_id=$1 AND data>=$2 AND data<=$3
+            AND excluido_em IS NULL AND COALESCE(conciliado,0)=1`,
+        [input.companyId, input.dataInicio, input.dataFim]);
+      const conciliadosCount = Number((rows(cRes)[0] as any)?.n ?? 0);
+      if (conciliadosCount > 0) return { ok: false as const, conciliadosCount, afetados: 0 };
+    }
 
     let afetados = 0;
     await db.transaction(async (tx: any) => {
@@ -8050,6 +8080,15 @@ export const financialRouter = router({
       [input.linhaId, input.companyId]);
     const linha = rows(linhaRes)[0] as any;
     if (!linha) throw new TRPCError({ code: "NOT_FOUND", message: "Linha não encontrada ou já excluída" });
+
+    // REGRA DE OURO — linha conciliada só pode ser excluída após o usuário
+    // desfazer a conciliação manualmente. Nunca destruir conciliações silenciosamente.
+    if (Number(linha.conciliado) === 1) {
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Esta linha está conciliada. Desfaça a conciliação primeiro (botão 'desfazer') antes de excluí-la.",
+      });
+    }
 
     // Rev. 3393 — mesmo padrão do desconsolidarMes: checar a existência de
     // financial_conciliacao_grupo ANTES da transação (to_regclass), pois um statement

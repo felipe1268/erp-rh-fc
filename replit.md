@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3875** — **CONCILIAÇÃO — REGRA DE OURO: LIMPAR NÃO DESTRÓI CONCILIADOS SEM CONFIRMAÇÃO.** `limparExtrato` e `limparExtratoMes` agora retornam `{ ok: false, conciliadosCount }` quando há linhas conciliadas (sem `force=true`). Client exibe bloco vermelho com contagem + checkbox obrigatório antes de liberar o botão com `force: true`. `excluirLinhaExtrato` lança CONFLICT se linha conciliada. Afeta `financial.ts`, `FinanceiroConciliacao.tsx`, `FinanceiroConciliacaoWorkspace.tsx`. ZERO DELETE.
+
 - **Rev. 3874** — **DASH EPIs — CLIQUE NAS BARRAS DO GRÁFICO ABRE DETALHE.** Gráfico "Vida Útil vs. Real" agora interativo: clique em qualquer barra → Dialog com 4 KPIs, barra de %, tabela de funcionários (nome clicável abre ficha). `onChartClick` + state `detalheEpi` em `DashEpis.tsx`. ZERO DELETE.
 
-- **Rev. 3873** — **FIX CHECKLIST DOCX — WORD "ERRO AO ABRIR".** Causa-raiz: `ImageRun.transformation` no docx v9 recebe PIXELS, não EMUs. `LOGO_W=1620000` (EMUs) × 9525 = `cx="15430500000"` (17 metros!) → Word rejeita o arquivo. Fix: `LOGO_W=170px` / `LOGO_H=78px` (≈4.5cm proporcional). `downloadPacoteContador.ts`. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3873** — **FIX CHECKLIST DOCX — WORD "ERRO AO ABRIR".** `LOGO_W=170px`/`LOGO_H=78px` (pixels, não EMUs). `downloadPacoteContador.ts`. ZERO DELETE.
 
 - **Rev. 3872** — **FIX DATA NAS PLANILHAS XLSX — DD/MM/AAAA.** Guard `instanceof Date` em `fmtDate()` → DD/MM/AAAA em vez de "Fri Jan 02". ZERO DELETE.
 
@@ -63,10 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3870** — **SEFAZ — CURAR RATE-LIMIT + FIX resetNSU SEGURO.** `resetNSU` usa MAX(nsu_sefaz); `curarRateLimit` desliga sync+NSU seguro; botão "⏸ Pausar" na UI. ZERO DELETE.
 
 - **Rev. 3869** — **ZIP PACOTE CONTADOR — PREFIXO 3 DÍGITOS (001_…006_).** Numeração `01_` → `001_` em todas as pastas e no checklist. ZERO DELETE.
-
-- **Rev. 3866** — **PANORAMA FISCAL — EXTRATO UNIFICADO COM FILTROS.** `UnifiedBankTable` lista cronológica única; KPIs inline; filtros tipo/NF/banco; badge "NF# N". ZERO DELETE.
-
-- **Rev. 3865** — **PACOTE CONTABILIDADE — EXTRATO CARTÃO FC TEMPLATE + CHECKLIST A4 + TEMPLATES NAS CONFIGURAÇÕES.** `buildExtratCartaoBuffer` ExcelJS; `buildChecklistDocx` A4; `docx_template_config` + 3 endpoints; aba "Template de Word". ZERO DELETE.
 
 ### Histórico completo
 
