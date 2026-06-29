@@ -1,4 +1,47 @@
 /**
+ * Rev. 3878 — **FIX DROPDOWN DE CATEGORIAS — ALINHAMENTO TOTAL COM O CADASTRO.**
+ *
+ * ## Problema
+ * O dropdown "Categoria" no formulário "Lançar no Contas a Pagar" (FinanceiroConciliacao)
+ * aplicava um filtro silencioso por `tipo` (receita ou despesa) baseado na direção do
+ * lançamento:
+ * - Lançamento a partir de linha de extrato: `tipo = "despesa"` se valor < 0, `"receita"` se ≥ 0.
+ * - Lançamento manual: baseado em `lancForm.tipo`.
+ *
+ * Resultado: categorias com `tipo = "receita"` (ex.: "MEDIÇÃO DE OBRA") eram invisíveis
+ * no dropdown mesmo estando ativas no Cadastro de Categorias — gerando a ilusão de
+ * "categorias fantasmas" (existem no Cadastro, somem no lançamento).
+ *
+ * O mesmo filtro existia no `SearchableSelect` do dialog "Editar lançamento":
+ * `catOpts.filter(o => !detEditForm?.tipo || o.tipo === detEditForm.tipo)`.
+ *
+ * ## Causa Raiz
+ * O sistema de escopo (`escopo: "categoria"` → `codigo LIKE 'AUTO-%'`) já garante que
+ * somente categorias reais aparecem (não entradas do Plano de Contas). O filtro adicional
+ * por tipo era redundante e prejudicial — o usuário deve poder escolher qualquer categoria
+ * ativa independentemente do tipo do lançamento.
+ *
+ * ## Solução
+ * - **Formulário "Lançar"** (`FinanceiroConciliacao.tsx` linha 6824): removido o `.filter(c => c.tipo === ...)`;
+ *   agora usa `catOpts.map(c => ({ id: c.id, label: c.nome }))` — todas as categorias ativas.
+ * - **Dialog "Editar lançamento"** (linha 4848): removido `catOpts.filter(o => o.tipo === detEditForm.tipo)`;
+ *   agora usa `catOpts.map(o => ...)` — idem.
+ * - **Label corrigido** (linha 6809): "Categoria (Conta do Plano de Contas)" → "Categoria"
+ *   (o label anterior era enganoso; o dropdown serve categorias AUTO-*, não o Plano de Contas).
+ *
+ * ## Auditoria realizada
+ * - `getAccounts({ companyId, ativo: true, escopo: "categoria" })` — mesma consulta nos dois lados
+ *   (Cadastro + formulário). O `companyId` vem de `useCompany()` em ambos. Dados idênticos.
+ * - Único ponto de divergência era o filtro client-side por tipo, agora removido.
+ *
+ * ## Arquivos
+ * - `client/src/pages/financeiro/FinanceiroConciliacao.tsx` — 3 pontos alterados
+ * - `shared/version.ts`, `shared/changelog.ts`, `replit.md`
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3877 — **TEMPLATES DE EXTRATO + PARSER SANTANDER IBPJ (INTERNET BANKING PJ).**
  *
  * ## Problema

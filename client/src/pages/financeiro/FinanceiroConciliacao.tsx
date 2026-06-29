@@ -4845,7 +4845,7 @@ export default function FinanceiroConciliacao() {
                                 searchPlaceholder="Digitar para filtrar…"
                                 options={[
                                   { value: "__none__", label: "— Sem categoria —" },
-                                  ...catOpts.filter(o => !detEditForm?.tipo || o.tipo === detEditForm.tipo).map(o => ({ value: String(o.id), label: o.nome })),
+                                  ...catOpts.map(o => ({ value: String(o.id), label: o.nome })),
                                 ]}
                               />
                             </div>
@@ -6806,7 +6806,7 @@ export default function FinanceiroConciliacao() {
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-0.5">
-                    <Label className="text-xs">Categoria (Conta do Plano de Contas)</Label>
+                    <Label className="text-xs">Categoria</Label>
                     <button type="button" className="text-[11px] text-blue-600 hover:underline flex items-center gap-0.5"
                       onClick={() => { setLancNewCatNome(""); setLancNewCatTipo(lancStatement?.id == null ? (lancForm.tipo as "despesa"|"receita") : (Number(lancStatement.valor) < 0 ? "despesa" : "receita")); setLancNewCatOpen(true); }}>
                       <Plus className="w-3 h-3" />Nova categoria
@@ -6821,7 +6821,7 @@ export default function FinanceiroConciliacao() {
                       setLancForm(f => ({ ...f, contaId: String(opt.id), contaNome: opt.label, centroCustoId: catOpt?.centroCustoId != null && !f.centroCustoId ? String(catOpt.centroCustoId) : f.centroCustoId }));
                       if (catOpt?.centroCustoId != null) { const cc = ccOpts.find(c => c.id === catOpt.centroCustoId); if (cc) setLancCCDisplay(cc.nome); }
                     }}
-                    options={catOpts.filter(c => { const isEntrada = lancStatement?.id == null ? lancForm.tipo === "receita" : Number(lancStatement?.valor ?? 0) >= 0; return c.tipo === (isEntrada ? "receita" : "despesa"); }).map(c => ({ id: c.id, label: c.nome }))}
+                    options={catOpts.map(c => ({ id: c.id, label: c.nome }))}
                     placeholder="Pesquisar categoria…"
                     noneLabel="— Sem categoria —"
                     onClear={() => setLancForm(f => ({ ...f, contaId: "", contaNome: "" }))}
