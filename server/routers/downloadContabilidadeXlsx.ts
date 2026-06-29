@@ -468,7 +468,7 @@ export async function buildExtratoBancarioBuffer(
         const cell  = ws.getCell(`${col}${row}`);
         cell.value     = val;
         cell.font      = { size: 11, name: "Calibri" };
-        cell.alignment = { horizontal: "left", vertical: "middle" };
+        cell.alignment = { horizontal: col === "E" ? "center" : "left", vertical: "middle" };
         cell.border    = { top: thin, bottom: btm, left: thin, right: thin };
       });
 

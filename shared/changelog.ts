@@ -1,4 +1,21 @@
 /**
+ * Rev. 3860 — **EXTRATO BANCÁRIO XLSX · COLUNA "Nº NOTA FISCAL" CENTRALIZADA.**
+ *
+ * **Problema:** os valores da coluna E ("Nº Nota Fiscal") no relatório XLSX do
+ * Extrato Bancário ficavam alinhados à esquerda, igual às colunas de texto
+ * descritivo (Histórico do Banco, Histórico Real). O número da NF é um valor
+ * curto e fica muito melhor centralizado — igual ao cabeçalho da coluna.
+ *
+ * **Correção (`server/routers/downloadContabilidadeXlsx.ts`):**
+ * - No loop `textCols.forEach`, o `horizontal` era fixo `"left"` para todas as
+ *   colunas C, D, E, F.
+ * - Alterado para `col === "E" ? "center" : "left"` — somente a coluna E
+ *   (nfNumero) recebe `"center"`; as demais (C, D, F) continuam `"left"`.
+ *
+ * **ZERO DELETE. Detalhe: `shared/changelog.ts`.**
+ */
+
+/**
  * Rev. 3859 — **TEMPLATE XLSX · BORDA SUPERIOR DO LOGO + LOGO CENTRALIZADO.**
  *
  * **Problema:** na área do logo (células B2:C7) do cabeçalho padrão FC gerado

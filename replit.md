@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3859** — **TEMPLATE XLSX · BORDA SUPERIOR DO LOGO + LOGO CENTRALIZADO.** `ws.mergeCells("B2:C7")` substitui bordas por células individuais → contorno completo incluindo topo. Offset horizontal calculado dinamicamente: lê larguras reais das colunas B+C, converte chars→px (7,5 px/char), calcula `(areaW-185)/2` e aplica via `nativeColOff` em EMU. Logo 185×78 centralizado sem distorção. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+- **Rev. 3860** — **EXTRATO BANCÁRIO XLSX · COLUNA "Nº NOTA FISCAL" CENTRALIZADA.** `textCols.forEach` em `downloadContabilidadeXlsx.ts`: `col === "E" ? "center" : "left"` — somente a coluna E (nfNumero) centralizada; C, D, F continuam à esquerda. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3858** — **CONTAS A RECEBER · CARDS KPI CLICÁVEIS FILTRAM A LISTA.** `KCard` ganha `onClick/active/activeRing`; novo state `cardAtivo` + `ativarCard`; card 1 → `em_aberto` no mês, card 2 → `recebido` no mês, card 3 → ano todo em aberto, card 4 → vencidos; chip filtro com ✕ entre cards e filtro bar; Select ganha "Em aberto"/"Vencidos"; navegação de mês/ano limpa filtro. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+- **Rev. 3859** — **TEMPLATE XLSX · BORDA SUPERIOR DO LOGO + LOGO CENTRALIZADO.** `ws.mergeCells("B2:C7")` → contorno completo incluindo topo; offset horizontal dinâmico via `nativeColOff` em EMU centraliza logo 185×78. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 ### 5 one-liners
+
+- **Rev. 3858** — **CONTAS A RECEBER · CARDS KPI CLICÁVEIS FILTRAM A LISTA.** `KCard` ganha `onClick/active/activeRing`; `cardAtivo` + `ativarCard`; 4 cards filtram status+período; chip ✕; Select ganha "Em aberto"/"Vencidos". ZERO DELETE.
 
 - **Rev. 3857** — **NF-e × EXTRATO · JANELA DO EXTRATO REDUZIDA (±45 dias) + BADGE DE PERÍODO NO DIALOG.** `obterSugestoesPeriodo` +90→+45 dias; badge "Jan/2026 · Emitidas" no dialog header. ZERO DELETE.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3854** — **NF-e × EXTRATO · SCORING RIGOROSO + BOTÕES INDEPENDENTES + BARRA DE STATUS + SEM-MATCH.** `processarRecebidas` pré-filtro ≤5%; barra % vinculadas; sem-match collapsible. ZERO DELETE.
 
-- **Rev. 3853** — **HOTFIX · `autoVincularNfService`: `column "tomador_nome" does not exist`.** 3 queries → `tomador_razao_social AS tomador_nome`. ZERO DELETE.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3852 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3853 e anteriores.
 
 ## User preferences
 
