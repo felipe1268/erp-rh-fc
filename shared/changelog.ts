@@ -1,4 +1,31 @@
 /**
+ * Rev. 3880 — **FIX CONCILIAÇÃO BANCÁRIA — CONTAS NÃO LISTADAS.**
+ *
+ * ## Problema
+ * Tela de Conciliação Bancária mostrava "Nenhuma conta bancária cadastrada"
+ * mesmo havendo contas ativas no banco.
+ *
+ * ## Causa-raiz
+ * A query `getBankAccounts` (financial.ts) contém uma subquery para calcular
+ * o saldo de abertura de cada conta via `financial_opening_balances`. Essa
+ * subquery usava nomes de coluna em camelCase com aspas:
+ *   `WHERE "contaBancariaId"=cba.id AND "companyId"=cba."companyId"`
+ *
+ * A tabela `financial_opening_balances` foi criada via Drizzle com mapeamento
+ * explícito para snake_case (`integer("conta_bancaria_id")` / `integer("company_id")`),
+ * então as colunas reais no PostgreSQL são `conta_bancaria_id` e `company_id`.
+ * O erro 42703 ("column does not exist") fazia a query explodir, o tRPC retornava
+ * erro, e o `bankAccounts` ficava undefined na UI.
+ *
+ * ## Solução
+ * Uma linha alterada em `server/routers/financial.ts`:
+ *   `WHERE conta_bancaria_id=cba.id AND company_id=cba."companyId"`
+ *
+ * ## Arquivos modificados
+ * - `server/routers/financial.ts` (subquery saldo abertura em getBankAccounts)
+ */
+
+/**
  * Rev. 3879 — **GERADOR DE TEMPLATES DE EXTRATO BANCÁRIO POR IA — ZERO CÓDIGO.**
  *
  * ## Objetivo

@@ -5401,7 +5401,7 @@ export const financialRouter = router({
               COALESCE((SELECT SUM(valor) FROM bank_statement_lines
                          WHERE conta_bancaria_id=cba.id AND company_id=cba."companyId" AND excluido_em IS NULL), 0)
               + COALESCE((SELECT valor FROM financial_opening_balances
-                           WHERE "contaBancariaId"=cba.id AND "companyId"=cba."companyId" LIMIT 1), 0)
+                           WHERE conta_bancaria_id=cba.id AND company_id=cba."companyId" LIMIT 1), 0)
               AS "saldoAtual"
        FROM company_bank_accounts cba
        WHERE cba."companyId" IN (${inlineIds(ids)}) AND cba."deletedAt" IS NULL AND cba.ativo = 1

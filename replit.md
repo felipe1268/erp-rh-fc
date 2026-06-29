@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3880** — **FIX CONCILIAÇÃO BANCÁRIA — CONTAS NÃO LISTADAS.** `getBankAccounts` explodia com `42703: column "contaBancariaId" does not exist` — subquery em `financial_opening_balances` usava camelCase com aspas, mas a tabela tem colunas snake_case (`conta_bancaria_id`/`company_id`). 1 linha corrigida em `financial.ts`. ZERO DELETE.
+
 - **Rev. 3879** — **GERADOR DE TEMPLATES DE EXTRATO BANCÁRIO POR IA — ZERO CÓDIGO.** Upload de PDF → IA analisa o formato (Gemini Vision → fallback Anthropic) → proposta editável pré-preenchida → salvar. Mutation `analisarPdf` em `bankStatementTemplates.ts` valida PDF, chama IA com prompt de análise de formato, retorna `{ bancoNome, palavrasChave, skipPrefixes, instrucoesIa }`. Colunas `revisao` (ISO 9001, auto-incrementa no UPDATE) e `notas_revisao` adicionadas com self-heal. `ExtratoTemplateTab.tsx` reescrito: botão "Analisar extrato de novo banco", loading animado, formulário pré-preenchido, AlertDialog no delete (sem `window.confirm`). ZERO DELETE.
 
 - **Rev. 3878** — **FIX DROPDOWN DE CATEGORIAS — ALINHAMENTO TOTAL COM O CADASTRO.** O dropdown de "Categoria" nos formulários de lançamento (Conciliação: "Lançar" + "Editar lançamento") filtrava por `tipo` (receita/despesa) baseado na direção do lançamento — excluindo categorias válidas do Cadastro. Removido o filtro de tipo em `catOpts` nos dois pontos (`options={catOpts.map(...)}` e no `SearchableSelect` de edição). Label "Categoria (Conta do Plano de Contas)" corrigido para "Categoria". ZERO DELETE.
