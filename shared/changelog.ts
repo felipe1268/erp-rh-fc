@@ -1,4 +1,41 @@
 /**
+ * Rev. 3863 — **PACOTE CONTABILIDADE — TODOS OS CSVs SUBSTITUÍDOS POR XLSX COM TEMPLATE FC.**
+ *
+ * **Contexto:** o Pacote do Contador gerava arquivos `.csv` sem formatação para a maioria dos
+ * relatórios. O usuário solicitou que TODOS os arquivos do ZIP sigam o padrão FC (logo, cabeçalho
+ * institucional, cor do template configurada em Configurações → Template de Planilha, fórmulas
+ * SUM, formatação condicional por status e coluna de valor).
+ *
+ * **Arquivos substituídos (CSV → XLSX):**
+ * 1. `Faturas_Emitidas/Lista_Faturas_Emitidas.xlsx` — `buildListaFaturasXlsx` (tipo "emitida"):
+ *    colunas B–L; Valor Bruto, Líquido, ISS, INSS, IRRF, PIS/COF com SUM; Status com formatação
+ *    condicional (conciliada=verde, pendente=âmbar, cancelada=vermelho).
+ * 2. `Servicos_Tomados/Lista_Servicos_Tomados.xlsx` — `buildListaFaturasXlsx` (tipo "tomada"):
+ *    mesmo layout, coluna C = "Prestador".
+ * 3. `Servicos_Tomados/NF-e_Recebidas_Compras.xlsx` — `buildNfeXlsx`: colunas B–H;
+ *    NF#, Emitente, CNPJ, Valor Bruto (SUM), Emissão, Status (cond. format.), Chave de Acesso.
+ * 4. `Extratos_Bancarios/Extrato_Completo.xlsx` — `buildExtratoGeralXlsx`: colunas B–J;
+ *    3 linhas de total (Entradas=SUMIF>0, Saídas=ABS(SUMIF<0), Saldo Líquido=SUM); cond. format.
+ *    na col Valor (verde/vermelho) e col Tipo (Entrada=verde bold, Saída=vermelho bold).
+ * 5. `02_OCs_NF-e.xlsx` — `buildOcsXlsx`: colunas B–J; total SUM de Valor; cond. format. Status
+ *    (aprovada=verde, pendente=âmbar, cancelada=vermelho) + NF-e Vinculada (verde se preenchido).
+ *
+ * **Template FC dinâmico:**
+ * - `loadFcXlsxConfig(companyId)` lido UMA vez no início da rota e passado a todos os builders.
+ * - `applyFcHeader` + `applyFcColumnHeader` aplicam logo, empresa, data, código revisão e COR
+ *   do cabeçalho lida da tabela `xlsx_template_config`; alterar a cor em Configurações → Template
+ *   de Planilha reflete automaticamente em TODOS os relatórios do pacote.
+ * - `buildExtratoBancarioBuffer` (Extrato_Bancario_<Mes>.xlsx) também atualizado: usa
+ *   `HEADER_COLOR = fcCfg?.corCabecalho ?? PURPLE` em vez do roxo fixo.
+ *
+ * **ZERO DELETE:** builders CSV antigos (`buildNfseCsv`, `buildNfeCsv`, `buildExtratoGralCsv`,
+ * `buildOcsCsv`) permanecem no arquivo; apenas os appends do ZIP foram substituídos.
+ *
+ * **Arquivos principais:** `server/routers/downloadPacoteContador.ts`,
+ * `server/routers/downloadContabilidadeXlsx.ts`, `server/services/excelFcTemplate.ts`.
+ */
+
+/**
  * Rev. 3862 — **CHECKLIST WORD · ABAS DE CATEGORIA · 6 TEMPLATES FINANCEIRO/PLANEJAMENTO/CONTRATOS.**
  *
  * **Contexto:** três melhorias complementares na Central de Documentos e no Pacote Contabilidade.

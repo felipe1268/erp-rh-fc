@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3863** — **PACOTE CONTABILIDADE — TODOS OS CSVs → XLSX COM TEMPLATE FC.** 5 novos builders ExcelJS: `buildListaFaturasXlsx` (NFS-e emitidas/tomadas, cols B–L, SUM + cond. fmt. status), `buildNfeXlsx` (NF-e recebidas, cols B–H), `buildExtratoGeralXlsx` (extrato geral, 3 totais SUMIF, cond. fmt. verde/vermelho), `buildOcsXlsx` (OCs, cols B–J); todos usam `loadFcXlsxConfig` → cor do cabeçalho = template configurado; `buildExtratoBancarioBuffer` também atualizado. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3862** — **CHECKLIST WORD + ABAS DE CATEGORIA + 6 TEMPLATES NOVOS.** `00_CHECKLIST.docx` Word profissional (cabec. ISO 9001 + tabela controle + 4 seções coloridas) via `docx` v9.7.1; abas "RH · Financeiro · Planejamento · Contratos · Medições · Contabilidade" em `TemplatesDocsTab`; 6 novos tipos seed (Recibo, Comprovante, Adiantamento, Ata, OS, Proposta) com `CATEGORIAS_DOCS`/`getCategoriaFromDoc`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3861** — **ENVIOS AO CONTADOR · BADGE DE STATUS POR LINHA EM NF-e RECEBIDAS.** Badge condicional: `conciliada`=verde, `enviada`=azul, demais=âmbar; linha conciliada ganha fundo `bg-green-50/30`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
-
 ### 5 one-liners
+
+- **Rev. 3861** — **ENVIOS AO CONTADOR · BADGE DE STATUS POR LINHA EM NF-e RECEBIDAS.** Badge condicional: `conciliada`=verde, `enviada`=azul, demais=âmbar; linha conciliada ganha fundo `bg-green-50/30`. ZERO DELETE.
 
 - **Rev. 3860** — **EXTRATO BANCÁRIO XLSX · COLUNA "Nº NOTA FISCAL" CENTRALIZADA.** `textCols.forEach` em `downloadContabilidadeXlsx.ts`: `col === "E" ? "center" : "left"`. ZERO DELETE.
 
@@ -64,15 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3857** — **NF-e × EXTRATO · JANELA DO EXTRATO REDUZIDA (±45 dias) + BADGE DE PERÍODO NO DIALOG.** `obterSugestoesPeriodo` +90→+45 dias; badge "Jan/2026 · Emitidas" no dialog header. ZERO DELETE.
 
-- **Rev. 3856** — **TEMPLATE XLSX · FIX SAVE + DATA AUTOMÁTICA + VISUALIZADOR INLINE.** Botão salvar sempre habilitado; `vigentDesde` automático = data do save; visualizador inline em tempo real. ZERO DELETE.
-
-- **Rev. 3855** — **CONCILIAÇÃO BANCÁRIA · TOLERÂNCIA PERCENTUAL NAS SUGESTÕES (≤15% RECEITA / ≤5% DESPESA).** `sugerirConciliacao`: 2ª passagem fuzzy; receita ≤15%, despesa ≤5%; badge "Δ valor: X%". ZERO DELETE.
-
-- **Rev. 3854** — **NF-e × EXTRATO · SCORING RIGOROSO + BOTÕES INDEPENDENTES + BARRA DE STATUS + SEM-MATCH.** `processarRecebidas` pré-filtro ≤5%; barra % vinculadas; sem-match collapsible. ZERO DELETE.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3853 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3856 e anteriores.
 
 ## User preferences
 

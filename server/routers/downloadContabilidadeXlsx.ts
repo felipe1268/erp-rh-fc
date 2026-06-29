@@ -18,6 +18,7 @@
  */
 import type { Express, Request, Response } from "express";
 import ExcelJS from "exceljs";
+import { loadFcXlsxConfig } from "../services/excelFcTemplate";
 import * as XLSX from "xlsx";
 import * as fs from "fs";
 import * as path from "path";
@@ -143,6 +144,8 @@ export async function buildExtratoBancarioBuffer(
   empresaLabel: string,
 ): Promise<Buffer> {
   const tituloEmpresa = empresaLabel.toUpperCase();
+  const fcCfg = await loadFcXlsxConfig(companyId).catch(() => null);
+  const HEADER_COLOR = fcCfg?.corCabecalho ?? PURPLE;
 
   // ── 1. Contas com lançamentos no mês ──────────────────────────────────────
   const contasQ = await db.$client.query(
@@ -390,7 +393,7 @@ export async function buildExtratoBancarioBuffer(
       const cell = ws.getCell(`${col}9`);
       cell.value     = label;
       cell.font      = { bold: true, size: 11, name: "Calibri", color: { argb: "FFFFFFFF" } };
-      cell.fill      = { type: "pattern", pattern: "solid", fgColor: { argb: PURPLE } };
+      cell.fill      = { type: "pattern", pattern: "solid", fgColor: { argb: HEADER_COLOR } };
       cell.alignment = { horizontal: "center", vertical: "middle" };
       cell.border    = {
         bottom: thin,

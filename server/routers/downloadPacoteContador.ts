@@ -5,11 +5,12 @@
  * Gera ZIP no padrão solicitado pela contabilidade (Pronus):
  *
  *   FC_Engenharia_Jun_2026/
- *   ├── Faturas_Emitidas/           → espelho HTML por NFS-e + lista CSV
- *   ├── Servicos_Tomados/           → espelho HTML por NFS-e tomada + lista CSV
- *   ├── Extratos_Bancarios/         → 1 XLSX por conta + CSV geral
- *   ├── Extratos_Cartoes/           → CSV de lançamentos de cartão
- *   └── 00_CHECKLIST.txt / 01_Resumo.csv / 02_OCs.csv
+ *   ├── Faturas_Emitidas/           → espelho HTML por NFS-e + Lista_Faturas_Emitidas.xlsx (FC template)
+ *   ├── Servicos_Tomados/           → espelho HTML + Lista_Servicos_Tomados.xlsx + NF-e_Recebidas_Compras.xlsx
+ *   ├── Extratos_Bancarios/         → Extrato_Bancario_<Mes>.xlsx (por conta) + Extrato_Completo.xlsx
+ *   ├── Extratos_Cartoes/           → Extrato_Cartao_<Mes>.xlsx
+ *   ├── 00_CHECKLIST.docx
+ *   └── 02_OCs_NF-e.xlsx (FC template)
  */
 import type { Express, Request, Response } from "express";
 import archiver from "archiver";
@@ -20,6 +21,16 @@ import {
 import { getDb } from "../db";
 import { sdk } from "../_core/sdk";
 import { buildExtratoBancarioBuffer, buildExtratCartaoBuffer } from "./downloadContabilidadeXlsx";
+import ExcelJS from "exceljs";
+import {
+  applyFcHeader,
+  applyFcColumnHeader,
+  loadFcXlsxConfig,
+  BRL as FC_BRL,
+  medium as FC_MED,
+  thin as FC_THIN_STYLE,
+} from "../services/excelFcTemplate";
+import type { FcXlsxConfig } from "../services/excelFcTemplate";
 
 const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho",
   "Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -163,6 +174,461 @@ async function queryData(db: any, companyId: number, di: string, df: string) {
   ]);
 
   return { nfseEmitidas, nfseTomadas, nfe, bank, ocs, cartao };
+}
+
+// ── XLSX builders — padrão FC template ────────────────────────────────────────
+
+const XLSX_FILLS = {
+  white : { type: "pattern" as const, pattern: "solid" as const, fgColor: { argb: "FFFFFFFF" } },
+  zebra : { type: "pattern" as const, pattern: "solid" as const, fgColor: { argb: "FFF5F8FF" } },
+  total : { type: "pattern" as const, pattern: "solid" as const, fgColor: { argb: "FFFFF2CC" } },
+};
+
+async function buildListaFaturasXlsx(
+  rows: any[],
+  tipo: "emitida" | "tomada",
+  label: string,
+  fcConfig: FcXlsxConfig,
+): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet(tipo === "emitida" ? "Faturas Emitidas" : "Serviços Tomados");
+
+  ws.getColumn("B").width = 8;
+  ws.getColumn("C").width = 42;
+  ws.getColumn("D").width = 20;
+  ws.getColumn("E").width = 18;
+  ws.getColumn("F").width = 18;
+  ws.getColumn("G").width = 13;
+  ws.getColumn("H").width = 12;
+  ws.getColumn("I").width = 12;
+  ws.getColumn("J").width = 12;
+  ws.getColumn("K").width = 12;
+  ws.getColumn("L").width = 14;
+
+  applyFcHeader(wb, ws, {
+    titulo: tipo === "emitida"
+      ? "NFS-e EMITIDAS — FATURAS DE SERVIÇOS"
+      : "NFS-e TOMADAS — SERVIÇOS CONTRATADOS",
+    subtitulo: label,
+    lastDataCol: "L",
+  }, fcConfig);
+
+  const hdrs = tipo === "emitida"
+    ? ["NF#","Tomador","CNPJ Tomador","Valor Bruto","Valor Líquido","ISS Retido","INSS Ret.","IRRF Ret.","PIS/COF Ret.","Emissão","Status"]
+    : ["NF#","Prestador","CNPJ Prestador","Valor Bruto","Valor Líquido","ISS Retido","INSS Ret.","IRRF Ret.","PIS/COF Ret.","Emissão","Status"];
+  const DCOLS = ["B","C","D","E","F","G","H","I","J","K","L"];
+  hdrs.forEach((h, i) => { ws.getCell(`${DCOLS[i]}9`).value = h; });
+  applyFcColumnHeader(ws, 9, "B", "L", fcConfig.corCabecalho);
+
+  const MONEY = new Set(["E","F","G","H","I","J"]);
+  const CENT  = new Set(["B","K"]);
+
+  rows.forEach((n, idx) => {
+    const r   = idx + 10;
+    const btm = idx === rows.length - 1 ? FC_MED : FC_THIN_STYLE;
+    const fill = idx % 2 === 0 ? XLSX_FILLS.white : XLSX_FILLS.zebra;
+    const vals: [string, any][] = [
+      ["B", n.numero_nf ?? ""],
+      ["C", (tipo === "emitida" ? n.tomador_razao_social : n.emitente_nome) ?? ""],
+      ["D", fmtCnpj(tipo === "emitida" ? n.tomador_cnpj : n.emitente_cnpj)],
+      ["E", parseFloat(String(n.valor_bruto ?? 0)) || 0],
+      ["F", parseFloat(String(n.valor_liquido ?? n.valor_bruto ?? 0)) || 0],
+      ["G", parseFloat(String(n.iss_retido ?? 0)) || 0],
+      ["H", parseFloat(String(n.retencao_inss ?? 0)) || 0],
+      ["I", parseFloat(String(n.retencao_irrf ?? 0)) || 0],
+      ["J", parseFloat(String(n.retencao_pis_cofins ?? 0)) || 0],
+      ["K", fmtDate(n.data_emissao)],
+      ["L", n.status ?? ""],
+    ];
+    vals.forEach(([col, val]) => {
+      const cell = ws.getCell(`${col}${r}`);
+      cell.value = val;
+      if (MONEY.has(col)) cell.numFmt = FC_BRL;
+      cell.font = { size: 11, name: "Calibri" };
+      cell.alignment = {
+        horizontal: MONEY.has(col) ? "right" : CENT.has(col) ? "center" : "left",
+        vertical: "middle",
+      };
+      cell.fill = fill;
+      cell.border = {
+        top: FC_THIN_STYLE, bottom: btm,
+        left: col === "B" ? FC_MED : FC_THIN_STYLE,
+        right: col === "L" ? FC_MED : FC_THIN_STYLE,
+      };
+    });
+  });
+
+  const lastDataRow = rows.length > 0 ? rows.length + 9 : 9;
+  const totRow = lastDataRow + 1;
+  DCOLS.forEach(col => {
+    const cell = ws.getCell(`${col}${totRow}`);
+    if (col === "B") {
+      cell.value = "TOTAL";
+      cell.font = { bold: true, size: 11, name: "Calibri" };
+    } else if (MONEY.has(col) && rows.length > 0) {
+      cell.value = { formula: `SUM(${col}10:${col}${lastDataRow})`, result: 0 };
+      cell.numFmt = FC_BRL;
+      cell.font = { bold: true, size: 11, name: "Calibri" };
+      cell.alignment = { horizontal: "right", vertical: "middle" };
+    }
+    cell.fill = XLSX_FILLS.total;
+    cell.border = {
+      top: FC_MED, bottom: FC_MED,
+      left: col === "B" ? FC_MED : FC_THIN_STYLE,
+      right: col === "L" ? FC_MED : FC_THIN_STYLE,
+    };
+  });
+
+  if (rows.length > 0) {
+    ws.addConditionalFormatting({
+      ref: `L10:L${lastDataRow}`,
+      rules: [
+        { type: "containsText", operator: "containsText", text: "conciliada", priority: 1,
+          style: { fill: { type: "pattern", pattern: "solid", bgColor: { argb: "FF00B050" } }, font: { color: { argb: "FFFFFFFF" }, bold: true, name: "Calibri", size: 11 } } },
+        { type: "containsText", operator: "containsText", text: "pendente",   priority: 2,
+          style: { fill: { type: "pattern", pattern: "solid", bgColor: { argb: "FFFFC000" } }, font: { color: { argb: "FF7B3500" }, name: "Calibri", size: 11 } } },
+        { type: "containsText", operator: "containsText", text: "cancelada",  priority: 3,
+          style: { fill: { type: "pattern", pattern: "solid", bgColor: { argb: "FFFF0000" } }, font: { color: { argb: "FFFFFFFF" }, bold: true, name: "Calibri", size: 11 } } },
+      ],
+    } as any);
+  }
+  if (rows.length === 0) {
+    ws.getCell("B10").value = "Nenhuma nota fiscal no período.";
+    ws.getCell("B10").font = { italic: true, color: { argb: "FF64748B" }, name: "Calibri", size: 11 };
+  }
+  return Buffer.from(await wb.xlsx.writeBuffer() as ArrayBuffer);
+}
+
+async function buildNfeXlsx(
+  rows: any[],
+  label: string,
+  fcConfig: FcXlsxConfig,
+): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("NF-e Recebidas");
+
+  ws.getColumn("B").width = 10;
+  ws.getColumn("C").width = 38;
+  ws.getColumn("D").width = 20;
+  ws.getColumn("E").width = 18;
+  ws.getColumn("F").width = 12;
+  ws.getColumn("G").width = 14;
+  ws.getColumn("H").width = 48;
+
+  applyFcHeader(wb, ws, {
+    titulo: "NF-e RECEBIDAS — COMPRAS DE MATERIAIS/PRODUTOS",
+    subtitulo: label,
+    lastDataCol: "H",
+  }, fcConfig);
+
+  const hdrs = ["NF#","Emitente","CNPJ Emitente","Valor Bruto","Emissão","Status","Chave de Acesso"];
+  const DCOLS = ["B","C","D","E","F","G","H"];
+  hdrs.forEach((h, i) => { ws.getCell(`${DCOLS[i]}9`).value = h; });
+  applyFcColumnHeader(ws, 9, "B", "H", fcConfig.corCabecalho);
+
+  rows.forEach((n, idx) => {
+    const r   = idx + 10;
+    const btm = idx === rows.length - 1 ? FC_MED : FC_THIN_STYLE;
+    const fill = idx % 2 === 0 ? XLSX_FILLS.white : XLSX_FILLS.zebra;
+    const vals: [string, any][] = [
+      ["B", n.numero_nf ?? ""],
+      ["C", n.emitente_nome ?? ""],
+      ["D", fmtCnpj(n.emitente_cnpj)],
+      ["E", parseFloat(String(n.valor_bruto ?? 0)) || 0],
+      ["F", fmtDate(n.data_emissao)],
+      ["G", n.status ?? ""],
+      ["H", n.chave_acesso ?? ""],
+    ];
+    vals.forEach(([col, val]) => {
+      const cell = ws.getCell(`${col}${r}`);
+      cell.value = val;
+      if (col === "E") cell.numFmt = FC_BRL;
+      cell.font = { size: 10, name: "Calibri" };
+      cell.alignment = {
+        horizontal: col === "E" ? "right" : col === "B" || col === "F" ? "center" : "left",
+        vertical: "middle",
+        wrapText: col === "H",
+      };
+      cell.fill = fill;
+      cell.border = {
+        top: FC_THIN_STYLE, bottom: btm,
+        left: col === "B" ? FC_MED : FC_THIN_STYLE,
+        right: col === "H" ? FC_MED : FC_THIN_STYLE,
+      };
+    });
+  });
+
+  const lastDataRow = rows.length > 0 ? rows.length + 9 : 9;
+  const totRow = lastDataRow + 1;
+  DCOLS.forEach(col => {
+    const cell = ws.getCell(`${col}${totRow}`);
+    if (col === "B") {
+      cell.value = "TOTAL";
+      cell.font = { bold: true, size: 11, name: "Calibri" };
+    } else if (col === "E" && rows.length > 0) {
+      cell.value = { formula: `SUM(E10:E${lastDataRow})`, result: 0 };
+      cell.numFmt = FC_BRL;
+      cell.font = { bold: true, size: 11, name: "Calibri" };
+      cell.alignment = { horizontal: "right", vertical: "middle" };
+    }
+    cell.fill = XLSX_FILLS.total;
+    cell.border = {
+      top: FC_MED, bottom: FC_MED,
+      left: col === "B" ? FC_MED : FC_THIN_STYLE,
+      right: col === "H" ? FC_MED : FC_THIN_STYLE,
+    };
+  });
+
+  if (rows.length > 0) {
+    ws.addConditionalFormatting({
+      ref: `G10:G${lastDataRow}`,
+      rules: [
+        { type: "containsText", operator: "containsText", text: "conciliada", priority: 1,
+          style: { fill: { type: "pattern", pattern: "solid", bgColor: { argb: "FF00B050" } }, font: { color: { argb: "FFFFFFFF" }, bold: true, name: "Calibri", size: 10 } } },
+        { type: "containsText", operator: "containsText", text: "pendente",   priority: 2,
+          style: { fill: { type: "pattern", pattern: "solid", bgColor: { argb: "FFFFC000" } }, font: { color: { argb: "FF7B3500" }, name: "Calibri", size: 10 } } },
+        { type: "containsText", operator: "containsText", text: "cancelada",  priority: 3,
+          style: { fill: { type: "pattern", pattern: "solid", bgColor: { argb: "FFFF0000" } }, font: { color: { argb: "FFFFFFFF" }, bold: true, name: "Calibri", size: 10 } } },
+      ],
+    } as any);
+  }
+  if (rows.length === 0) {
+    ws.getCell("B10").value = "Nenhuma NF-e recebida no período.";
+    ws.getCell("B10").font = { italic: true, color: { argb: "FF64748B" }, name: "Calibri", size: 11 };
+  }
+  return Buffer.from(await wb.xlsx.writeBuffer() as ArrayBuffer);
+}
+
+async function buildExtratoGeralXlsx(
+  rows: any[],
+  label: string,
+  fcConfig: FcXlsxConfig,
+): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Extrato Completo");
+
+  ws.getColumn("B").width = 12;
+  ws.getColumn("C").width = 28;
+  ws.getColumn("D").width = 10;
+  ws.getColumn("E").width = 16;
+  ws.getColumn("F").width = 52;
+  ws.getColumn("G").width = 34;
+  ws.getColumn("H").width = 18;
+  ws.getColumn("I").width = 10;
+  ws.getColumn("J").width = 12;
+
+  applyFcHeader(wb, ws, {
+    titulo: "EXTRATO BANCÁRIO CONSOLIDADO",
+    subtitulo: label,
+    lastDataCol: "J",
+  }, fcConfig);
+
+  const hdrs = ["Data","Conta","Agência","Nº Conta","Descrição","Histórico Real","Valor","Tipo","Conciliado"];
+  const DCOLS = ["B","C","D","E","F","G","H","I","J"];
+  hdrs.forEach((h, i) => { ws.getCell(`${DCOLS[i]}9`).value = h; });
+  applyFcColumnHeader(ws, 9, "B", "J", fcConfig.corCabecalho);
+
+  rows.forEach((b, idx) => {
+    const r    = idx + 10;
+    const btm  = idx === rows.length - 1 ? FC_MED : FC_THIN_STYLE;
+    const fill = idx % 2 === 0 ? XLSX_FILLS.white : XLSX_FILLS.zebra;
+    const valor = parseFloat(String(b.valor)) || 0;
+    const tipo  = b.tipo === "credito" ? "Entrada" : "Saída";
+    const vals: [string, any][] = [
+      ["B", fmtDate(b.data)],
+      ["C", b.conta_nome ?? ""],
+      ["D", b.conta_agencia ?? ""],
+      ["E", b.conta_numero ?? ""],
+      ["F", b.descricao ?? ""],
+      ["G", b.fornecedor_nome ?? ""],
+      ["H", valor],
+      ["I", tipo],
+      ["J", b.conciliado ? "Sim" : "Não"],
+    ];
+    vals.forEach(([col, val]) => {
+      const cell = ws.getCell(`${col}${r}`);
+      cell.value = val;
+      if (col === "H") cell.numFmt = FC_BRL;
+      cell.font = { size: 11, name: "Calibri" };
+      cell.alignment = {
+        horizontal: col === "H" ? "right" : ["B","I","J"].includes(col) ? "center" : "left",
+        vertical: "middle",
+      };
+      cell.fill = fill;
+      cell.border = {
+        top: FC_THIN_STYLE, bottom: btm,
+        left: col === "B" ? FC_MED : FC_THIN_STYLE,
+        right: col === "J" ? FC_MED : FC_THIN_STYLE,
+      };
+    });
+  });
+
+  const lastDataRow = rows.length > 0 ? rows.length + 9 : 9;
+  const totRow1 = lastDataRow + 1;
+  const totRow2 = lastDataRow + 2;
+  const totRow3 = lastDataRow + 3;
+
+  const writeSumRow = (r: number, lbl: string, formula: string, isLast: boolean) => {
+    DCOLS.forEach(col => {
+      const cell = ws.getCell(`${col}${r}`);
+      if (col === "B") {
+        cell.value = lbl;
+        cell.font = { bold: true, size: 11, name: "Calibri" };
+      } else if (col === "H" && rows.length > 0) {
+        cell.value = { formula, result: 0 };
+        cell.numFmt = FC_BRL;
+        cell.font = { bold: true, size: 11, name: "Calibri" };
+        cell.alignment = { horizontal: "right", vertical: "middle" };
+      }
+      cell.fill = XLSX_FILLS.total;
+      cell.border = {
+        top: FC_THIN_STYLE,
+        bottom: isLast ? FC_MED : FC_THIN_STYLE,
+        left: col === "B" ? FC_MED : FC_THIN_STYLE,
+        right: col === "J" ? FC_MED : FC_THIN_STYLE,
+      };
+    });
+  };
+
+  writeSumRow(totRow1, "Total Entradas",  `SUMIF(H10:H${lastDataRow},">0")`, false);
+  writeSumRow(totRow2, "Total Saídas",    `ABS(SUMIF(H10:H${lastDataRow},"<0"))`, false);
+  writeSumRow(totRow3, "Saldo Líquido",   `SUM(H10:H${lastDataRow})`, true);
+
+  if (rows.length > 0) {
+    ws.addConditionalFormatting({
+      ref: `H10:H${lastDataRow}`,
+      rules: [
+        { type: "cellIs", operator: "greaterThan", formulae: [0], priority: 1,
+          style: { fill: { type: "pattern", pattern: "solid", bgColor: { argb: "FFE8F5E9" } }, font: { color: { argb: "FF1B5E20" }, name: "Calibri", size: 11 } } },
+        { type: "cellIs", operator: "lessThan",    formulae: [0], priority: 2,
+          style: { fill: { type: "pattern", pattern: "solid", bgColor: { argb: "FFFCE4D6" } }, font: { color: { argb: "FFB71C1C" }, name: "Calibri", size: 11 } } },
+      ],
+    } as any);
+    ws.addConditionalFormatting({
+      ref: `I10:I${lastDataRow}`,
+      rules: [
+        { type: "containsText", operator: "containsText", text: "Entrada", priority: 1,
+          style: { font: { color: { argb: "FF1B5E20" }, bold: true, name: "Calibri", size: 11 } } },
+        { type: "containsText", operator: "containsText", text: "Saída", priority: 2,
+          style: { font: { color: { argb: "FFB71C1C" }, bold: true, name: "Calibri", size: 11 } } },
+      ],
+    } as any);
+  }
+  if (rows.length === 0) {
+    ws.getCell("B10").value = "Nenhum lançamento bancário no período.";
+    ws.getCell("B10").font = { italic: true, color: { argb: "FF64748B" }, name: "Calibri", size: 11 };
+  }
+  return Buffer.from(await wb.xlsx.writeBuffer() as ArrayBuffer);
+}
+
+async function buildOcsXlsx(
+  rows: any[],
+  label: string,
+  fcConfig: FcXlsxConfig,
+): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Ordens de Compra");
+
+  ws.getColumn("B").width = 10;
+  ws.getColumn("C").width = 38;
+  ws.getColumn("D").width = 20;
+  ws.getColumn("E").width = 18;
+  ws.getColumn("F").width = 28;
+  ws.getColumn("G").width = 12;
+  ws.getColumn("H").width = 14;
+  ws.getColumn("I").width = 12;
+  ws.getColumn("J").width = 14;
+
+  applyFcHeader(wb, ws, {
+    titulo: "ORDENS DE COMPRA × NF-e",
+    subtitulo: label,
+    lastDataCol: "J",
+  }, fcConfig);
+
+  const hdrs = ["OC#","Fornecedor","CNPJ","Valor Total","Obra","Tipo","Status","Criado em","NF-e Vinculada"];
+  const DCOLS = ["B","C","D","E","F","G","H","I","J"];
+  hdrs.forEach((h, i) => { ws.getCell(`${DCOLS[i]}9`).value = h; });
+  applyFcColumnHeader(ws, 9, "B", "J", fcConfig.corCabecalho);
+
+  rows.forEach((o, idx) => {
+    const r   = idx + 10;
+    const btm = idx === rows.length - 1 ? FC_MED : FC_THIN_STYLE;
+    const fill = idx % 2 === 0 ? XLSX_FILLS.white : XLSX_FILLS.zebra;
+    const vals: [string, any][] = [
+      ["B", o.numero ?? ""],
+      ["C", o.supplier_razao ?? ""],
+      ["D", fmtCnpj(o.supplier_cnpj)],
+      ["E", parseFloat(String(o.valor_total ?? 0)) || 0],
+      ["F", o.obra_nome ?? ""],
+      ["G", o.tipo ?? ""],
+      ["H", o.status ?? ""],
+      ["I", fmtDate(o.created_at)],
+      ["J", o.nfe_vinculada ?? "—"],
+    ];
+    vals.forEach(([col, val]) => {
+      const cell = ws.getCell(`${col}${r}`);
+      cell.value = val;
+      if (col === "E") cell.numFmt = FC_BRL;
+      cell.font = { size: 11, name: "Calibri" };
+      cell.alignment = {
+        horizontal: col === "E" ? "right" : ["B","I"].includes(col) ? "center" : "left",
+        vertical: "middle",
+      };
+      cell.fill = fill;
+      cell.border = {
+        top: FC_THIN_STYLE, bottom: btm,
+        left: col === "B" ? FC_MED : FC_THIN_STYLE,
+        right: col === "J" ? FC_MED : FC_THIN_STYLE,
+      };
+    });
+  });
+
+  const lastDataRow = rows.length > 0 ? rows.length + 9 : 9;
+  const totRow = lastDataRow + 1;
+  DCOLS.forEach(col => {
+    const cell = ws.getCell(`${col}${totRow}`);
+    if (col === "B") {
+      cell.value = "TOTAL";
+      cell.font = { bold: true, size: 11, name: "Calibri" };
+    } else if (col === "E" && rows.length > 0) {
+      cell.value = { formula: `SUM(E10:E${lastDataRow})`, result: 0 };
+      cell.numFmt = FC_BRL;
+      cell.font = { bold: true, size: 11, name: "Calibri" };
+      cell.alignment = { horizontal: "right", vertical: "middle" };
+    }
+    cell.fill = XLSX_FILLS.total;
+    cell.border = {
+      top: FC_MED, bottom: FC_MED,
+      left: col === "B" ? FC_MED : FC_THIN_STYLE,
+      right: col === "J" ? FC_MED : FC_THIN_STYLE,
+    };
+  });
+
+  if (rows.length > 0) {
+    ws.addConditionalFormatting({
+      ref: `H10:H${lastDataRow}`,
+      rules: [
+        { type: "containsText", operator: "containsText", text: "aprovada", priority: 1,
+          style: { fill: { type: "pattern", pattern: "solid", bgColor: { argb: "FF00B050" } }, font: { color: { argb: "FFFFFFFF" }, bold: true, name: "Calibri", size: 11 } } },
+        { type: "containsText", operator: "containsText", text: "pendente", priority: 2,
+          style: { fill: { type: "pattern", pattern: "solid", bgColor: { argb: "FFFFC000" } }, font: { color: { argb: "FF7B3500" }, name: "Calibri", size: 11 } } },
+        { type: "containsText", operator: "containsText", text: "cancelada", priority: 3,
+          style: { fill: { type: "pattern", pattern: "solid", bgColor: { argb: "FFFF0000" } }, font: { color: { argb: "FFFFFFFF" }, bold: true, name: "Calibri", size: 11 } } },
+      ],
+    } as any);
+    ws.addConditionalFormatting({
+      ref: `J10:J${lastDataRow}`,
+      rules: [
+        { type: "notContainsText", operator: "notContains", text: "—", priority: 1,
+          style: { fill: { type: "pattern", pattern: "solid", bgColor: { argb: "FFE8F5E9" } }, font: { color: { argb: "FF1B5E20" }, name: "Calibri", size: 11 } } },
+      ],
+    } as any);
+  }
+  if (rows.length === 0) {
+    ws.getCell("B10").value = "Nenhuma ordem de compra no período.";
+    ws.getCell("B10").font = { italic: true, color: { argb: "FF64748B" }, name: "Calibri", size: 11 };
+  }
+  return Buffer.from(await wb.xlsx.writeBuffer() as ArrayBuffer);
 }
 
 // ── HTML espelho NFS-e ────────────────────────────────────────────────────────
@@ -415,12 +881,12 @@ async function buildChecklistDocx(label: string, empresa: string, d: ReturnType<
           children: [new TextRun({ text: `CHECKLIST — PACOTE CONTABILIDADE  ·  ${label}`, bold: true, size: 28, color: AZUL, font: FONTE })],
         }),
         secao("1. ESTRUTURA DO PACOTE"), esp(),
-        item("Faturas_Emitidas/       →  NFS-e emitidas (espelho HTML + lista CSV)", true),
-        item("Servicos_Tomados/      →  NFS-e tomadas + NF-e recebidas (HTML + CSV)", true),
-        item("Extratos_Bancarios/    →  Planilha XLSX por banco + CSV geral", true),
-        item("Extratos_Cartoes/      →  Lançamentos de cartão (XLSX)", true),
-        item("01_Resumo.csv            →  Totalizadores do período", true),
-        item("02_OCs_NF-e.csv        →  Ordens de compra × NF-e", true),
+        item("Faturas_Emitidas/       →  NFS-e emitidas (espelho HTML + Lista_Faturas_Emitidas.xlsx)", true),
+        item("Servicos_Tomados/      →  NFS-e tomadas (HTML + Lista_Servicos_Tomados.xlsx)", true),
+        item("Servicos_Tomados/      →  NF-e recebidas compras (NF-e_Recebidas_Compras.xlsx)", true),
+        item("Extratos_Bancarios/    →  Extrato_Bancario_<Mes>.xlsx + Extrato_Completo.xlsx", true),
+        item("Extratos_Cartoes/      →  Extrato_Cartao_<Mes>.xlsx (cartão de crédito)", true),
+        item("02_OCs_NF-e.xlsx       →  Ordens de compra × NF-e vinculada", true),
         esp(),
         secao("2. RESUMO DO PERÍODO"), esp(),
         tblResumo,
@@ -463,11 +929,11 @@ function buildChecklist(label: string, empresa: string, d: ReturnType<typeof sum
     `═══════════════════════════════════════════════════════════`,
     ``,
     `📂 ESTRUTURA DO PACOTE:`,
-    `  Faturas_Emitidas/          → NFS-e emitidas (espelho HTML + lista CSV)`,
-    `  Servicos_Tomados/          → NFS-e tomadas (espelho HTML + lista CSV)`,
-    `  Extratos_Bancarios/        → Planilha XLSX por banco + CSV geral`,
-    `  Extratos_Cartoes/          → Lançamentos de cartão de crédito`,
-    `  02_OCs_NF-e.csv            → Ordens de compra × NF-e`,
+    `  Faturas_Emitidas/          → NFS-e emitidas (espelho HTML + Lista_Faturas_Emitidas.xlsx)`,
+    `  Servicos_Tomados/          → NFS-e tomadas (HTML + Lista_Servicos_Tomados.xlsx + NF-e_Recebidas_Compras.xlsx)`,
+    `  Extratos_Bancarios/        → Extrato_Bancario_<Mes>.xlsx + Extrato_Completo.xlsx`,
+    `  Extratos_Cartoes/          → Extrato_Cartao_<Mes>.xlsx (lançamentos de cartão)`,
+    `  02_OCs_NF-e.xlsx           → Ordens de compra × NF-e`,
     ``,
     `📊 RESUMO DO PERÍODO:`,
     `  • NFS-e emitidas (faturas): ${nfseEmitidas.length} notas`,
@@ -524,6 +990,8 @@ export function registerPacoteContadorRoute(app: Express) {
         if (!res.headersSent) res.status(500).json({ error: "Erro ao gerar ZIP" });
       });
 
+      const fcConfig = await loadFcXlsxConfig(companyId);
+
       const processarMes = async (m: number, rootFolder: string) => {
         const di = `${ano}-${String(m).padStart(2,"0")}-01`;
         const mProx = m === 12 ? 1 : m + 1;
@@ -546,10 +1014,14 @@ export function registerPacoteContadorRoute(app: Express) {
           const nome = safeName(`NFS-e_${n.numero_nf || n.id}_${n.tomador_razao_social || "SemNome"}`);
           archive.append(buildNfseHtml(n, "emitida", empresa), { name: `${f}/Faturas_Emitidas/${nome}.html` });
         }
-        if (nfseEmitidas.length > 0) {
-          archive.append(bom(buildNfseCsv(nfseEmitidas, "emitida")), { name: `${f}/Faturas_Emitidas/Lista_Faturas_Emitidas.csv` });
-        } else {
-          archive.append(Buffer.from("Nenhuma NFS-e emitida no período.\n","utf8"), { name: `${f}/Faturas_Emitidas/sem_dados.txt` });
+        try {
+          const xlsxFat = await buildListaFaturasXlsx(nfseEmitidas, "emitida", label, fcConfig);
+          archive.append(xlsxFat, { name: `${f}/Faturas_Emitidas/Lista_Faturas_Emitidas.xlsx` });
+        } catch (e: any) {
+          console.error("[PacoteContador] XLSX faturas emitidas erro:", e.message);
+          if (nfseEmitidas.length === 0) {
+            archive.append(Buffer.from("Nenhuma NFS-e emitida no período.\n","utf8"), { name: `${f}/Faturas_Emitidas/sem_dados.txt` });
+          }
         }
 
         // ── Serviços Tomados ──────────────────────────────────────────────────
@@ -557,11 +1029,17 @@ export function registerPacoteContadorRoute(app: Express) {
           const nome = safeName(`NFS-e_${n.numero_nf || n.id}_${n.emitente_nome || "SemNome"}`);
           archive.append(buildNfseHtml(n, "tomada", empresa), { name: `${f}/Servicos_Tomados/${nome}.html` });
         }
-        if (nfseTomadas.length > 0) {
-          archive.append(bom(buildNfseCsv(nfseTomadas, "tomada")), { name: `${f}/Servicos_Tomados/Lista_Servicos_Tomados.csv` });
+        try {
+          const xlsxSvc = await buildListaFaturasXlsx(nfseTomadas, "tomada", label, fcConfig);
+          archive.append(xlsxSvc, { name: `${f}/Servicos_Tomados/Lista_Servicos_Tomados.xlsx` });
+        } catch (e: any) {
+          console.error("[PacoteContador] XLSX serviços tomados erro:", e.message);
         }
-        if (nfe.length > 0) {
-          archive.append(bom(buildNfeCsv(nfe)), { name: `${f}/Servicos_Tomados/NF-e_Recebidas_Compras.csv` });
+        try {
+          const xlsxNfe = await buildNfeXlsx(nfe, label, fcConfig);
+          archive.append(xlsxNfe, { name: `${f}/Servicos_Tomados/NF-e_Recebidas_Compras.xlsx` });
+        } catch (e: any) {
+          console.error("[PacoteContador] XLSX NF-e recebidas erro:", e.message);
         }
         if (nfseTomadas.length + nfe.length === 0) {
           archive.append(Buffer.from("Nenhuma NFS-e tomada ou NF-e recebida no período.\n","utf8"), { name: `${f}/Servicos_Tomados/sem_dados.txt` });
@@ -574,10 +1052,14 @@ export function registerPacoteContadorRoute(app: Express) {
         } catch (e: any) {
           console.error("[PacoteContador] XLSX bancário erro:", e.message);
         }
-        if (bank.length > 0) {
-          archive.append(bom(buildExtratoGralCsv(bank)), { name: `${f}/Extratos_Bancarios/Extrato_Completo.csv` });
-        } else {
-          archive.append(Buffer.from("Nenhum extrato bancário importado no período.\n","utf8"), { name: `${f}/Extratos_Bancarios/sem_dados.txt` });
+        try {
+          const xlsxExt = await buildExtratoGeralXlsx(bank, label, fcConfig);
+          archive.append(xlsxExt, { name: `${f}/Extratos_Bancarios/Extrato_Completo.xlsx` });
+        } catch (e: any) {
+          console.error("[PacoteContador] XLSX extrato geral erro:", e.message);
+          if (bank.length === 0) {
+            archive.append(Buffer.from("Nenhum extrato bancário importado no período.\n","utf8"), { name: `${f}/Extratos_Bancarios/sem_dados.txt` });
+          }
         }
 
         // ── Extratos Cartões ──────────────────────────────────────────────────
@@ -589,8 +1071,11 @@ export function registerPacoteContadorRoute(app: Express) {
         }
 
         // ── Compras / OCs ─────────────────────────────────────────────────────
-        if (ocs.length > 0) {
-          archive.append(bom(buildOcsCsv(ocs)), { name: `${f}/02_OCs_NF-e.csv` });
+        try {
+          const xlsxOcs = await buildOcsXlsx(ocs, label, fcConfig);
+          archive.append(xlsxOcs, { name: `${f}/02_OCs_NF-e.xlsx` });
+        } catch (e: any) {
+          console.error("[PacoteContador] XLSX OCs erro:", e.message);
         }
       };
 
