@@ -1,4 +1,33 @@
 /**
+ * Rev. 3859 — **TEMPLATE XLSX · BORDA SUPERIOR DO LOGO + LOGO CENTRALIZADO.**
+ *
+ * **Problema:** na área do logo (células B2:C7) do cabeçalho padrão FC gerado
+ * por `applyFcHeader`, a borda superior ficava invisível — o bloco parecia
+ * "aberto" no topo. Adicionalmente, a imagem do logo era ancorada no canto
+ * superior-esquerdo da célula, sem centralização horizontal.
+ *
+ * **Causa-raiz:** as bordas eram aplicadas em células individuais (B2, C2, B3…
+ * C7) sem mesclar o bloco, o que causava comportamento inconsistente no
+ * renderizador do Excel (borda top de B2 ficava coberta/ignorada). A imagem
+ * era posicionada com `tl: { col: 1, row: 1 }` sem offset horizontal.
+ *
+ * **Correção (`server/services/excelFcTemplate.ts`):**
+ * - `ws.mergeCells("B2:C7")` — cria uma única célula mesclada; o contorno
+ *   completo (top + bottom + left + right = medium) é aplicado à célula mestra
+ *   B2; não há mais bordas internas nem linha superior faltando.
+ * - Cálculo dinâmico do offset horizontal: lê `ws.getColumn("B").width` e
+ *   `ws.getColumn("C").width` (já definidos pelo caller antes de `applyFcHeader`),
+ *   converte chars → px (≈ 7,5 px/char Calibri 11pt) e calcula
+ *   `leftPx = (areaW - 185) / 2` para centralizar o logo de 185 px no espaço.
+ * - Offset aplicado via `nativeColOff` e `nativeRowOff` em EMU (9525 EMU/px @
+ *   96 DPI) no parâmetro `tl` do `addImage`.
+ * - Resultado: logo centralizado, borda superior visível, sem distorção da
+ *   imagem (dimensão fixa 185 × 78 px, editAs "oneCell").
+ *
+ * **ZERO DELETE. Detalhe: `shared/changelog.ts`.**
+ */
+
+/**
  * Rev. 3858 — **CONTAS A RECEBER · CARDS KPI CLICÁVEIS FILTRAM A LISTA.**
  *
  * **Problema:** os 4 cards de resumo ("A receber em Jan", "Recebido em Jan",

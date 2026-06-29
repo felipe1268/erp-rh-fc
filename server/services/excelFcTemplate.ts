@@ -192,25 +192,28 @@ export function applyFcHeader(
   ws.getRow(8).height = 8;
   ws.getRow(9).height = 19.2;
 
-  // Logo B2:C7
+  // Logo B2:C7 — células mescladas = contorno completo (top/left/right/bottom) sem linhas internas
+  ws.mergeCells("B2:C7");
+  ws.getCell("B2").border = { top: medium, bottom: medium, left: medium, right: medium };
+
   const logoResult = getLogoBuffer();
   if (logoResult) {
+    const LOGO_W = 185;
+    const LOGO_H = 78;
+    // Lê as larguras reais das colunas B e C (definidas pelo caller antes de applyFcHeader)
+    const bColW  = (ws.getColumn("B").width ?? 20) * 7.5; // chars → px (Calibri 11pt ≈ 7.5 px/char)
+    const cColW  = (ws.getColumn("C").width ?? 20) * 7.5;
+    const areaW  = bColW + cColW;
+    const leftPx = Math.max(0, Math.round((areaW - LOGO_W) / 2)); // offset p/ centralizar
+    const topPx  = 4; // padding vertical superior (px)
+    const EMU    = 9525; // 1 px = 9525 EMU @ 96 DPI
     const logoId = wb.addImage({ buffer: logoResult.buffer, extension: logoResult.extension });
     ws.addImage(logoId, {
-      tl: { col: 1, row: 1 } as any,
-      ext: { width: 185, height: 78 },
+      tl: { col: 1, row: 1, nativeColOff: leftPx * EMU, nativeRowOff: topPx * EMU } as any,
+      ext: { width: LOGO_W, height: LOGO_H },
       editAs: "oneCell",
     });
   }
-  // Bordas contorno logo B2:C7
-  ws.getCell("B2").border = { top: medium, left: medium };
-  ws.getCell("C2").border = { top: medium, right: medium };
-  for (const r of [3, 4, 5, 6]) {
-    ws.getCell(`B${r}`).border = { left: medium };
-    ws.getCell(`C${r}`).border = { right: medium };
-  }
-  ws.getCell("B7").border = { bottom: medium, left: medium };
-  ws.getCell("C7").border = { bottom: medium, right: medium };
 
   // D2:LCD4 — Título do relatório
   ws.mergeCells(`D2:${LCD}4`);

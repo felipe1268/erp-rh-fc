@@ -50,25 +50,25 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3858** — **CONTAS A RECEBER · CARDS KPI CLICÁVEIS FILTRAM A LISTA.** `KCard` ganha `onClick/active/activeRing`; novo state `cardAtivo` + `ativarCard`; card 1 → `em_aberto` no mês, card 2 → `recebido` no mês, card 3 → ano todo em aberto, card 4 → vencidos; chip filtro com ✕ entre cards e filtro bar; Select ganha "Em aberto"/"Vencidos"; navegação de mês/ano limpa filtro. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+- **Rev. 3859** — **TEMPLATE XLSX · BORDA SUPERIOR DO LOGO + LOGO CENTRALIZADO.** `ws.mergeCells("B2:C7")` substitui bordas por células individuais → contorno completo incluindo topo. Offset horizontal calculado dinamicamente: lê larguras reais das colunas B+C, converte chars→px (7,5 px/char), calcula `(areaW-185)/2` e aplica via `nativeColOff` em EMU. Logo 185×78 centralizado sem distorção. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3857** — **NF-e × EXTRATO · JANELA DO EXTRATO REDUZIDA (±45 dias) + BADGE DE PERÍODO NO DIALOG.** Backend: `obterSugestoesPeriodo` expandia o extrato em +90 dias → NFs de janeiro casavam com extrato de março/abril. Reduzido para +45 dias (cobre prazos típicos 30–45 dias). Frontend: badge "Jan/2026 · Emitidas" no cabeçalho do dialog mostra o período consultado. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+- **Rev. 3858** — **CONTAS A RECEBER · CARDS KPI CLICÁVEIS FILTRAM A LISTA.** `KCard` ganha `onClick/active/activeRing`; novo state `cardAtivo` + `ativarCard`; card 1 → `em_aberto` no mês, card 2 → `recebido` no mês, card 3 → ano todo em aberto, card 4 → vencidos; chip filtro com ✕ entre cards e filtro bar; Select ganha "Em aberto"/"Vencidos"; navegação de mês/ano limpa filtro. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 ### 5 one-liners
 
-- **Rev. 3856** — **TEMPLATE XLSX · FIX SAVE + DATA AUTOMÁTICA + VISUALIZADOR INLINE.** Botão salvar sempre habilitado (removido `!dirty`); `vigentDesde` automático = data do save (removido do form); campo exibe valor salvo como read-only. Novo botão **Visualizar**: planilha mockup em tempo real. ZERO DELETE.
+- **Rev. 3857** — **NF-e × EXTRATO · JANELA DO EXTRATO REDUZIDA (±45 dias) + BADGE DE PERÍODO NO DIALOG.** `obterSugestoesPeriodo` +90→+45 dias; badge "Jan/2026 · Emitidas" no dialog header. ZERO DELETE.
 
-- **Rev. 3855** — **CONCILIAÇÃO BANCÁRIA · TOLERÂNCIA PERCENTUAL NAS SUGESTÕES (≤15% RECEITA / ≤5% DESPESA).** `sugerirConciliacao`: 2ª passagem fuzzy; receita ≤15%, despesa ≤5%; sort exato > fuzzy; `confianca="media"`, badge "Δ valor: X% — possível retenção". ZERO DELETE.
+- **Rev. 3856** — **TEMPLATE XLSX · FIX SAVE + DATA AUTOMÁTICA + VISUALIZADOR INLINE.** Botão salvar sempre habilitado; `vigentDesde` automático = data do save; visualizador inline em tempo real. ZERO DELETE.
 
-- **Rev. 3854** — **NF-e × EXTRATO · SCORING RIGOROSO + BOTÕES INDEPENDENTES + BARRA DE STATUS + SEM-MATCH.** `processarRecebidas` pré-filtro ≤5%; `tipo?` independente; barra % vinculadas; sem-match collapsible. ZERO DELETE.
+- **Rev. 3855** — **CONCILIAÇÃO BANCÁRIA · TOLERÂNCIA PERCENTUAL NAS SUGESTÕES (≤15% RECEITA / ≤5% DESPESA).** `sugerirConciliacao`: 2ª passagem fuzzy; receita ≤15%, despesa ≤5%; badge "Δ valor: X%". ZERO DELETE.
+
+- **Rev. 3854** — **NF-e × EXTRATO · SCORING RIGOROSO + BOTÕES INDEPENDENTES + BARRA DE STATUS + SEM-MATCH.** `processarRecebidas` pré-filtro ≤5%; barra % vinculadas; sem-match collapsible. ZERO DELETE.
 
 - **Rev. 3853** — **HOTFIX · `autoVincularNfService`: `column "tomador_nome" does not exist`.** 3 queries → `tomador_razao_social AS tomador_nome`. ZERO DELETE.
 
-- **Rev. 3852** — **PANORAMA FISCAL · CHEQUE DEVOLVIDO EXCLUÍDO DAS "SAÍDAS SEM NF-e".** `getPanorama`: SQL + `desconsiderado_em IS NULL`; regex `_PANORAMA_INTERNO_RE`. ZERO DELETE.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3851 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3852 e anteriores.
 
 ## User preferences
 

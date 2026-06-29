@@ -1,3 +1,5 @@
+- **Rev. 3852** — **PANORAMA FISCAL · CHEQUE DEVOLVIDO EXCLUÍDO DAS "SAÍDAS SEM NF-e".** `getPanorama`: SQL + `desconsiderado_em IS NULL`; regex `_PANORAMA_INTERNO_RE`. ZERO DELETE.
+
 - **Rev. 3851** — **NF-e × EXTRATO · CARD DE VÍNCULO + SCORING COM valor_bruto E CNPJ-RAIZ.** `calcScore` + CNPJ-raiz +25 pts + patamar ≤2% +22 pts. ZERO DELETE.
 
 - **Rev. 3850** — **NF-e × EXTRATO · DIALOG "REVISAR SUGESTÕES":** `obterSugestoesPeriodo`, badge Alta/Média/Baixa, [Vincular]/[Ignorar]. ZERO DELETE.
