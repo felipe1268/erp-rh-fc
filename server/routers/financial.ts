@@ -5346,10 +5346,20 @@ export const financialRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const ids = resolveCompanyIds(input);
     for (const cid of ids) await _assertFinanceiroCompanyAccess(ctx.user, cid);
-    const res = await dbExecute(db, 
-      `SELECT id, "companyId", banco, "codigoBanco", agencia, conta,
-              "tipoConta" AS tipo, apelido AS descricao, ativo, "temTalao", "caixaInterno"
-       FROM company_bank_accounts WHERE "companyId" IN (${inlineIds(ids)}) AND "deletedAt" IS NULL AND ativo = 1 ORDER BY banco ASC`,
+    // Rev. 3876 — inclui cheque especial + saldo acumulado (saldo abertura + total extrato).
+    const res = await dbExecute(db,
+      `SELECT cba.id, cba."companyId", cba.banco, cba."codigoBanco", cba.agencia, cba.conta,
+              cba."tipoConta" AS tipo, cba.apelido AS descricao, cba.ativo, cba."temTalao", cba."caixaInterno",
+              COALESCE(cba.cheque_especial_ativo, 0) AS "chequeEspecialAtivo",
+              COALESCE(cba.cheque_especial_limite::numeric, 0)::float AS "chequeEspecialLimite",
+              COALESCE((SELECT SUM(valor) FROM bank_statement_lines
+                         WHERE conta_bancaria_id=cba.id AND company_id=cba."companyId" AND excluido_em IS NULL), 0)
+              + COALESCE((SELECT valor FROM financial_opening_balances
+                           WHERE "contaBancariaId"=cba.id AND "companyId"=cba."companyId" LIMIT 1), 0)
+              AS "saldoAtual"
+       FROM company_bank_accounts cba
+       WHERE cba."companyId" IN (${inlineIds(ids)}) AND cba."deletedAt" IS NULL AND cba.ativo = 1
+       ORDER BY cba.banco ASC`,
       []
     );
     return rows(res);

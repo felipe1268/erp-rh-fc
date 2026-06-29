@@ -2543,6 +2543,9 @@ export const folhaPagamentoRouter = router({
       emailGerente: z.string().max(150).optional(),
       enderecoAgencia: z.string().max(300).optional(),
       telefoneAgencia: z.string().max(30).optional(),
+      // Rev. 3876 — Cheque especial
+      chequeEspecialAtivo: z.number().optional(),
+      chequeEspecialLimite: z.number().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const { companyIds, saldoInicial, saldoInicialData, ...accountData } = input;
@@ -2582,6 +2585,9 @@ export const folhaPagamentoRouter = router({
       emailGerente: z.string().max(150).optional().nullable(),
       enderecoAgencia: z.string().max(300).optional().nullable(),
       telefoneAgencia: z.string().max(30).optional().nullable(),
+      // Rev. 3876 — Cheque especial
+      chequeEspecialAtivo: z.number().optional(),
+      chequeEspecialLimite: z.number().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const { id, saldoInicial, saldoInicialData, ...data } = input;

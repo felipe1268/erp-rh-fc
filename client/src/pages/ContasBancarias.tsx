@@ -38,6 +38,9 @@ type ContaForm = {
   emailGerente: string;
   enderecoAgencia: string;
   telefoneAgencia: string;
+  // Rev. 3876 — Cheque especial
+  chequeEspecialAtivo: boolean;
+  chequeEspecialLimite: string;
 };
 
 const emptyForm: ContaForm = {
@@ -56,6 +59,8 @@ const emptyForm: ContaForm = {
   emailGerente: "",
   enderecoAgencia: "",
   telefoneAgencia: "",
+  chequeEspecialAtivo: false,
+  chequeEspecialLimite: "",
 };
 
 function fmtDataBR(iso?: string | null): string {
@@ -143,6 +148,9 @@ export default function ContasBancarias() {
       emailGerente: conta.emailGerente || "",
       enderecoAgencia: conta.enderecoAgencia || "",
       telefoneAgencia: conta.telefoneAgencia || "",
+      chequeEspecialAtivo: Number(conta.chequeEspecialAtivo) === 1,
+      chequeEspecialLimite: conta.chequeEspecialLimite != null && Number(conta.chequeEspecialLimite) > 0
+        ? String(conta.chequeEspecialLimite) : "",
     });
     setDialogOpen(true);
   };
@@ -176,6 +184,11 @@ export default function ContasBancarias() {
       telefoneAgencia: form.telefoneAgencia.trim() || undefined,
     };
 
+    const chequeEspecialFields = {
+      chequeEspecialAtivo: form.chequeEspecialAtivo ? 1 : 0,
+      chequeEspecialLimite: form.chequeEspecialAtivo ? (parseFloat(form.chequeEspecialLimite) || 0) : 0,
+    };
+
     if (editingId) {
       updateMut.mutate({
         id: editingId,
@@ -189,6 +202,7 @@ export default function ContasBancarias() {
         caixaInterno: form.caixaInterno ? 1 : 0,
         ...saldoFields,
         ...contatoFields,
+        ...chequeEspecialFields,
       });
     } else {
       createMut.mutate({ companyId, companyIds, banco: form.banco,
@@ -201,6 +215,7 @@ export default function ContasBancarias() {
         caixaInterno: form.caixaInterno ? 1 : 0,
         ...saldoFields,
         ...contatoFields,
+        ...chequeEspecialFields,
       });
     }
   };
@@ -354,6 +369,11 @@ export default function ContasBancarias() {
                               <Wallet className="h-3 w-3" /> Caixa Interno
                             </Badge>
                           )}
+                          {Number(conta.chequeEspecialAtivo) === 1 && (
+                            <Badge variant="outline" className="text-xs border-orange-300 text-orange-700 gap-1">
+                              <CreditCard className="h-3 w-3" /> Cheque Especial
+                            </Badge>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -379,6 +399,14 @@ export default function ContasBancarias() {
                         <span className="font-medium">
                           R$ {fmtNum(Number(conta.saldoInicial ?? 0))}
                           <span className="text-muted-foreground font-normal"> em {fmtDataBR(conta.saldoInicialData)}</span>
+                        </span>
+                      </div>
+                    )}
+                    {Number(conta.chequeEspecialAtivo) === 1 && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">Limite cheque especial:</span>
+                        <span className="font-medium text-orange-600">
+                          R$ {fmtNum(Number(conta.chequeEspecialLimite ?? 0))}
                         </span>
                       </div>
                     )}
@@ -668,6 +696,45 @@ export default function ContasBancarias() {
                 </span>
                 {form.caixaInterno && (
                   <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold text-violet-700 bg-violet-100 rounded-full px-2 py-0.5">
+                    <Check className="h-3 w-3" /> Ativo
+                  </span>
+                )}
+              </label>
+
+              {/* Cheque Especial — Rev. 3876 */}
+              <label
+                className={`flex items-start gap-3 rounded-xl border-2 p-4 cursor-pointer transition ${
+                  form.chequeEspecialAtivo ? "border-orange-300 bg-orange-50/60" : "border-slate-200 bg-white hover:border-slate-300"
+                }`}
+              >
+                <Checkbox
+                  checked={form.chequeEspecialAtivo}
+                  onCheckedChange={(v) => setForm(f => ({ ...f, chequeEspecialAtivo: v === true }))}
+                  className="mt-0.5"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+                    <CreditCard className="h-4 w-4 text-orange-500" /> Controlar cheque especial
+                  </span>
+                  <span className="block text-xs text-muted-foreground mt-1 leading-relaxed">
+                    Informe o limite disponível pelo banco. Quando o saldo acumulado da conta ficar negativo,
+                    um <span className="font-medium text-orange-700">alerta visual laranja</span> aparecerá nos cards da tela de Conciliação
+                    indicando que a conta está utilizando o cheque especial.
+                  </span>
+                  {form.chequeEspecialAtivo && (
+                    <div className="mt-3" onClick={e => e.preventDefault()}>
+                      <p className="text-[11px] text-orange-700 font-medium mb-1.5">Limite disponível do cheque especial</p>
+                      <MoneyInput
+                        value={form.chequeEspecialLimite}
+                        onChange={(v: string) => setForm(f => ({ ...f, chequeEspecialLimite: v }))}
+                        placeholder="0,00"
+                        className="max-w-[220px]"
+                      />
+                    </div>
+                  )}
+                </span>
+                {form.chequeEspecialAtivo && (
+                  <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold text-orange-700 bg-orange-100 rounded-full px-2 py-0.5">
                     <Check className="h-3 w-3" /> Ativo
                   </span>
                 )}

@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3876** — **CHEQUE ESPECIAL — CONTROLE POR CONTA BANCÁRIA + ALERTA NA CONCILIAÇÃO.** Duas colunas novas em `company_bank_accounts` (`cheque_especial_ativo` + `cheque_especial_limite`). Self-heal no `[SyncSchema+]`. `getBankAccounts` SQL retorna `chequeEspecialAtivo`, `chequeEspecialLimite` e `saldoAtual` (saldo abertura + total extrato). Zod de `criarContaBancaria`/`atualizarContaBancaria` inclui novos campos. `ContasBancarias.tsx` ganha toggle + MoneyInput + badge laranja. `FinanceiroConciliacao.tsx` exibe badge "⚠ Ch. Especial" quando `chequeEspecialAtivo=1 && saldoAtual<0`. ZERO DELETE.
+
 - **Rev. 3875** — **CONCILIAÇÃO — REGRA DE OURO: LIMPAR NÃO DESTRÓI CONCILIADOS SEM CONFIRMAÇÃO.** `limparExtrato` e `limparExtratoMes` agora retornam `{ ok: false, conciliadosCount }` quando há linhas conciliadas (sem `force=true`). Client exibe bloco vermelho com contagem + checkbox obrigatório antes de liberar o botão com `force: true`. `excluirLinhaExtrato` lança CONFLICT se linha conciliada. Afeta `financial.ts`, `FinanceiroConciliacao.tsx`, `FinanceiroConciliacaoWorkspace.tsx`. ZERO DELETE.
 
-- **Rev. 3874** — **DASH EPIs — CLIQUE NAS BARRAS DO GRÁFICO ABRE DETALHE.** Gráfico "Vida Útil vs. Real" agora interativo: clique em qualquer barra → Dialog com 4 KPIs, barra de %, tabela de funcionários (nome clicável abre ficha). `onChartClick` + state `detalheEpi` em `DashEpis.tsx`. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3874** — **DASH EPIs — CLIQUE NAS BARRAS DO GRÁFICO ABRE DETALHE.** `onChartClick` + state `detalheEpi` em `DashEpis.tsx`. ZERO DELETE.
 
 - **Rev. 3873** — **FIX CHECKLIST DOCX — WORD "ERRO AO ABRIR".** `LOGO_W=170px`/`LOGO_H=78px` (pixels, não EMUs). `downloadPacoteContador.ts`. ZERO DELETE.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3870** — **SEFAZ — CURAR RATE-LIMIT + FIX resetNSU SEGURO.** `resetNSU` usa MAX(nsu_sefaz); `curarRateLimit` desliga sync+NSU seguro; botão "⏸ Pausar" na UI. ZERO DELETE.
 
-- **Rev. 3869** — **ZIP PACOTE CONTADOR — PREFIXO 3 DÍGITOS (001_…006_).** Numeração `01_` → `001_` em todas as pastas e no checklist. ZERO DELETE.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3863 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3869 e anteriores.
 
 ## User preferences
 

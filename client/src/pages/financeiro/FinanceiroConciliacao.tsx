@@ -3031,6 +3031,12 @@ export default function FinanceiroConciliacao() {
                                   {pctConcil}%
                                 </span>
                               )}
+                              {/* Rev. 3876 — alerta laranja quando conta usa cheque especial (saldo negativo) */}
+                              {Number(b.chequeEspecialAtivo) === 1 && Number(b.saldoAtual) < 0 && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-orange-100 text-orange-700">
+                                  <AlertCircle className="h-2.5 w-2.5" /> Ch. Especial
+                                </span>
+                              )}
                             </div>
                           </div>
                         </button>

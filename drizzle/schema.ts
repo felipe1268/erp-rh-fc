@@ -663,6 +663,9 @@ export const companyBankAccounts = pgTable("company_bank_accounts", {
         emailGerente: varchar("email_gerente", { length: 150 }),
         enderecoAgencia: varchar("endereco_agencia", { length: 300 }),
         telefoneAgencia: varchar("telefone_agencia", { length: 30 }),
+        // Rev. 3876 — Cheque especial: flag de controle (liga/desliga alerta) + limite disponível.
+        chequeEspecialAtivo: smallint("cheque_especial_ativo").default(0),
+        chequeEspecialLimite: numeric("cheque_especial_limite", { precision: 15, scale: 2 }).default("0"),
         ativo: smallint().default(1).notNull(),
         createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),

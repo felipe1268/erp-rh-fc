@@ -1045,6 +1045,14 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3384: colunas de contatos da agência garantidas em company_bank_accounts.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 3384 company_bank_accounts contatos:`, e?.message || e); }
 
+        // Rev. 3876 — Cheque especial por conta bancária: flag de controle (0/1) + limite disponível.
+        // Quando ativo=1 e o saldo acumulado do extrato for negativo, a Conciliação exibe alerta visual.
+        try {
+          await db.execute(sql`ALTER TABLE company_bank_accounts ADD COLUMN IF NOT EXISTS cheque_especial_ativo SMALLINT DEFAULT 0`);
+          await db.execute(sql`ALTER TABLE company_bank_accounts ADD COLUMN IF NOT EXISTS cheque_especial_limite NUMERIC(15,2) DEFAULT 0`);
+          console.log(`[SyncSchema+] Rev. 3876: cheque_especial_ativo + cheque_especial_limite garantidos em company_bank_accounts.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 3876 cheque_especial:`, e?.message || e); }
+
         // Rev. 3293 — Arredondamento p/ múltiplos de R$ 1 com CARRY-FORWARD auditável no
         // VALE e na FOLHA mensal. Nova tabela payroll_rounding_ledger (trilha de auditoria,
         // 1 linha por empresa×funcionário×origem×mês) + colunas de auditoria em

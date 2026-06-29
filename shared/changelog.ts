@@ -1,4 +1,45 @@
 /**
+ * Rev. 3876 — **CHEQUE ESPECIAL — CONTROLE POR CONTA BANCÁRIA + ALERTA VISUAL NA CONCILIAÇÃO.**
+ *
+ * ## Problema
+ * Contas com limite de cheque especial usavam saldo negativo sem qualquer controle ou visibilidade
+ * no ERP. O financeiro não sabia distinguir um saldo negativo "normal" (cheque especial contratado)
+ * de um problema de lançamento.
+ *
+ * ## Solução
+ * Duas colunas novas em `company_bank_accounts` (`cheque_especial_ativo` / `cheque_especial_limite`)
+ * controlam se a conta tem cheque especial. Quando ativo e o saldo acumulado ficar negativo,
+ * a Conciliação exibe badge laranja **"⚠ Ch. Especial"** no card da conta afetada.
+ *
+ * ## DB (`drizzle/schema.ts` + `server/_core/index.ts`)
+ * - `chequeEspecialAtivo`: `SMALLINT DEFAULT 0` — flag 0/1.
+ * - `chequeEspecialLimite`: `NUMERIC(15,2) DEFAULT 0` — limite em R$.
+ * - Self-heal via `ADD COLUMN IF NOT EXISTS` no bloco `[SyncSchema+]` (Rev. 3876).
+ *
+ * ## Server (`server/routers/financial.ts` + `server/routers/folhaPagamento.ts`)
+ * - `getBankAccounts` SQL: aliases `cba.*` + dois novos campos + subconsulta
+ *   `saldoAtual = opening_balance + SUM(bank_statement_lines)`.
+ * - `criarContaBancaria` / `atualizarContaBancaria`: zod schemas recebem
+ *   `chequeEspecialAtivo` (number) e `chequeEspecialLimite` (number), ambos opcionais.
+ *
+ * ## Client (`client/src/pages/ContasBancarias.tsx`)
+ * - `ContaForm` type + `emptyForm`: novos campos `chequeEspecialAtivo: boolean` e
+ *   `chequeEspecialLimite: string`.
+ * - `openEdit`: hidrata os campos ao editar.
+ * - `handleSave`: monta `chequeEspecialFields` e passa para create/update mutations.
+ * - Card de conta: badge laranja "Cheque Especial" quando `chequeEspecialAtivo=1`.
+ * - Card detalhe: exibe "Limite cheque especial: R$ X" quando ativo.
+ * - Dialog Recursos: novo bloco "Controlar cheque especial" com toggle + `MoneyInput`
+ *   inline (apenas quando ativado); esquema visual laranja (orange-300/orange-50).
+ *
+ * ## Client (`client/src/pages/financeiro/FinanceiroConciliacao.tsx`)
+ * - Cards de seleção de conta: badge **"⚠ Ch. Especial"** (bg-orange-100/text-orange-700)
+ *   exibido quando `b.chequeEspecialAtivo=1 && b.saldoAtual < 0`.
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3875 — **CONCILIAÇÃO — REGRA DE OURO: LIMPAR NÃO DESTRÓI CONCILIADOS SEM CONFIRMAÇÃO EXPLÍCITA.**
  *
  * ## Problema
