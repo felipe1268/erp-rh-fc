@@ -351,6 +351,48 @@ export default function FinanceiroNotasFiscais() {
     onError: (e: any) => toast({ title: "Erro ao vincular NF-e", description: e?.message || "Tente novamente.", variant: "destructive" }),
   });
 
+  // ── Sugestões de Vínculo (revisão antes de confirmar) ─────────────────────
+  type SugestaoItem = {
+    fnId: number; fnNumero: string; fnNome: string;
+    fnValorLiquido: number; fnDataEmissao: string; fnOrigem: string;
+    bslId: number; bslDescricao: string; bslValor: number; bslData: string;
+    score: number; confianca: "alta" | "media" | "baixa";
+  };
+  const [sugestoesOpen, setSugestoesOpen] = useState(false);
+  const [sugestoes, setSugestoes] = useState<SugestaoItem[]>([]);
+  const [ignorados, setIgnorados] = useState<Set<string>>(new Set());
+  const [vinclandoId, setVinclandoId] = useState<string | null>(null);
+
+  const obterSugestoesMut = (trpc as any).fiscalNotes.obterSugestoes.useMutation({
+    onSuccess: (res: any) => {
+      setSugestoes(res.sugestoes ?? []);
+      setIgnorados(new Set());
+      setSugestoesOpen(true);
+    },
+    onError: (e: any) => toast({ title: "Erro ao buscar sugestões", description: e?.message || "Tente novamente.", variant: "destructive" }),
+  });
+
+  const vincularSugestaoMut = (trpc as any).fiscalNotes.vincularExtrato.useMutation({
+    onSuccess: (_: any, vars: any) => {
+      const key = `${vars.id}-${vars.stmtLineId}`;
+      setIgnorados(prev => new Set([...prev, key]));
+      setVinclandoId(null);
+      listQuery.refetch();
+      nfeRecQuery.refetch();
+      toast({ title: "✅ NF-e vinculada ao extrato!" });
+    },
+    onError: (e: any) => { setVinclandoId(null); toast({ title: "Erro ao vincular", description: e?.message, variant: "destructive" }); },
+  });
+
+  function sugestoesVisiveis() {
+    return sugestoes.filter(s => !ignorados.has(`${s.fnId}-${s.bslId}`));
+  }
+
+  function vincularTodasAlta(periodo: { dataInicio: string; dataFim: string }) {
+    sincronizarNfMut.mutate({ companyId: companyId ?? 0, ...periodo });
+    setSugestoesOpen(false);
+  }
+
   const [syncHistoricoProgress, setSyncHistoricoProgress] = useState<{
     running: boolean; anoAtual: number; anoIdx: number; totalAnos: number;
     importadas: number; ignoradas: number;
@@ -1038,7 +1080,23 @@ export default function FinanceiroNotasFiscais() {
             <p className="text-sm text-slate-500 mt-0.5">Controle de NF-e e NFS-e — emitidas e recebidas</p>
           </div>
           {pageTab === "emitidas" && (
-            <div className="flex gap-2 shrink-0">
+            <div className="flex gap-2 shrink-0 flex-wrap">
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 h-9 border-slate-300 text-slate-600 hover:bg-slate-50"
+                disabled={obterSugestoesMut.isPending}
+                onClick={() => {
+                  const m = mesSel ?? 0;
+                  const dataInicio = m ? `${ano}-${String(m).padStart(2,"0")}-01` : `${ano}-01-01`;
+                  const dataFim = m ? `${ano}-${String(m).padStart(2,"0")}-${new Date(ano, m, 0).getDate()}` : `${ano}-12-31`;
+                  obterSugestoesMut.mutate({ companyId: companyId ?? 0, dataInicio, dataFim });
+                }}
+                title="Ver sugestões de vínculo para revisar antes de confirmar"
+              >
+                <Search className={`h-3.5 w-3.5 ${obterSugestoesMut.isPending ? "animate-pulse" : ""}`} />
+                {obterSugestoesMut.isPending ? "Buscando..." : "Revisar Sugestões"}
+              </Button>
               <Button
                 size="sm"
                 variant="outline"
@@ -1050,10 +1108,10 @@ export default function FinanceiroNotasFiscais() {
                   const dataFim = m ? `${ano}-${String(m).padStart(2,"0")}-${new Date(ano, m, 0).getDate()}` : `${ano}-12-31`;
                   sincronizarNfMut.mutate({ companyId: companyId ?? 0, dataInicio, dataFim });
                 }}
-                title="Busca correspondências entre as NF-e emitidas e as linhas do extrato bancário do período selecionado"
+                title="Vincula automaticamente as correspondências de alta confiança sem revisão"
               >
                 <Link className={`h-3.5 w-3.5 ${sincronizarNfMut.isPending ? "animate-pulse" : ""}`} />
-                {sincronizarNfMut.isPending ? "Vinculando..." : "Vincular com Extrato"}
+                {sincronizarNfMut.isPending ? "Vinculando..." : "Vincular Automaticamente"}
               </Button>
             </div>
           )}
@@ -1108,6 +1166,22 @@ export default function FinanceiroNotasFiscais() {
               <Button
                 size="sm"
                 variant="outline"
+                className="gap-1.5 h-9 border-slate-300 text-slate-600 hover:bg-slate-50"
+                disabled={obterSugestoesMut.isPending}
+                onClick={() => {
+                  const m = recMes ?? 0;
+                  const dataInicio = m ? `${recAno}-${String(m).padStart(2,"0")}-01` : `${recAno}-01-01`;
+                  const dataFim = m ? `${recAno}-${String(m).padStart(2,"0")}-${new Date(recAno, m, 0).getDate()}` : `${recAno}-12-31`;
+                  obterSugestoesMut.mutate({ companyId: companyId ?? 0, dataInicio, dataFim });
+                }}
+                title="Ver sugestões de vínculo para revisar antes de confirmar"
+              >
+                <Search className={`h-3.5 w-3.5 ${obterSugestoesMut.isPending ? "animate-pulse" : ""}`} />
+                {obterSugestoesMut.isPending ? "Buscando..." : "Revisar Sugestões"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
                 className="gap-1.5 h-9 border-violet-300 text-violet-700 hover:bg-violet-50"
                 disabled={sincronizarNfMut.isPending}
                 onClick={() => {
@@ -1116,10 +1190,10 @@ export default function FinanceiroNotasFiscais() {
                   const dataFim = m ? `${recAno}-${String(m).padStart(2,"0")}-${new Date(recAno, m, 0).getDate()}` : `${recAno}-12-31`;
                   sincronizarNfMut.mutate({ companyId: companyId ?? 0, dataInicio, dataFim });
                 }}
-                title="Busca correspondências entre as NF-e recebidas e as linhas do extrato bancário do período selecionado"
+                title="Vincula automaticamente as correspondências de alta confiança sem revisão"
               >
                 <Link className={`h-3.5 w-3.5 ${sincronizarNfMut.isPending ? "animate-pulse" : ""}`} />
-                {sincronizarNfMut.isPending ? "Vinculando..." : "Vincular com Extrato"}
+                {sincronizarNfMut.isPending ? "Vinculando..." : "Vincular Automaticamente"}
               </Button>
             </div>
           )}
@@ -3972,6 +4046,156 @@ export default function FinanceiroNotasFiscais() {
           </DialogContent>
         </Dialog>
 
+
+        {/* ── Dialog: Revisar Sugestões de Vínculo NF-e × Extrato ─────────────── */}
+        <Dialog open={sugestoesOpen} onOpenChange={v => { if (!v) setSugestoesOpen(false); }}>
+          <DialogContent className="max-w-4xl w-full p-0 gap-0 overflow-hidden rounded-2xl flex flex-col max-h-[90svh]">
+            {/* Header */}
+            <div className="px-5 py-4 border-b bg-violet-50 flex items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Link className="w-4 h-4 text-violet-600" />
+                  <h2 className="font-semibold text-violet-900 text-base">Sugestões de Vínculo NF-e × Extrato</h2>
+                </div>
+                <p className="text-xs text-violet-700 mt-0.5">
+                  Revise cada correspondência encontrada e confirme ou ignore individualmente.
+                  Confiança <span className="font-semibold">Alta</span> = valor + nome batem bem.
+                </p>
+              </div>
+              {(() => {
+                const vis = sugestoesVisiveis();
+                const alta  = vis.filter(s => s.confianca === "alta").length;
+                const media = vis.filter(s => s.confianca === "media").length;
+                const baixa = vis.filter(s => s.confianca === "baixa").length;
+                return (
+                  <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                    {alta  > 0 && <span className="text-[11px] font-semibold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">{alta} Alta</span>}
+                    {media > 0 && <span className="text-[11px] font-semibold bg-amber-100  text-amber-700  px-2 py-0.5 rounded-full">{media} Média</span>}
+                    {baixa > 0 && <span className="text-[11px] font-semibold bg-slate-100  text-slate-600  px-2 py-0.5 rounded-full">{baixa} Baixa</span>}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+              {sugestoesVisiveis().length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-slate-400 gap-2">
+                  <CheckCircle className="w-10 h-10 text-emerald-400" />
+                  <p className="font-medium text-slate-500">Nenhuma sugestão pendente</p>
+                  <p className="text-sm">Todas as correspondências foram confirmadas ou ignoradas.</p>
+                </div>
+              ) : sugestoesVisiveis().map((s) => {
+                const key = `${s.fnId}-${s.bslId}`;
+                const isVinculando = vinclandoId === key;
+                const confBg   = s.confianca === "alta"  ? "bg-emerald-100 text-emerald-700"
+                               : s.confianca === "media" ? "bg-amber-100 text-amber-700"
+                               :                           "bg-slate-100 text-slate-500";
+                const confLabel = s.confianca === "alta" ? "Alta" : s.confianca === "media" ? "Média" : "Baixa";
+                const isEmit = s.fnOrigem?.startsWith("nfse_");
+                return (
+                  <div key={key} className="px-4 py-3 hover:bg-slate-50 transition-colors">
+                    <div className="flex items-start gap-3">
+                      {/* Badge confiança */}
+                      <span className={`mt-0.5 shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded ${confBg}`}>{confLabel}</span>
+
+                      {/* NF-e */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                          <span className="text-[11px] font-semibold text-violet-700 uppercase tracking-wide">
+                            {isEmit ? "NFS-e Emitida" : "NF-e Recebida"}
+                            {s.fnNumero ? ` #${s.fnNumero}` : ""}
+                          </span>
+                          <span className="text-xs font-medium text-slate-700 truncate max-w-[200px]">{s.fnNome || "—"}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                          <span className="text-xs text-slate-500">NF: <span className="font-semibold text-slate-700">{formatBRL(s.fnValorLiquido)}</span></span>
+                          <span className="text-xs text-slate-400">{fmtDateBR(s.fnDataEmissao)}</span>
+                        </div>
+                      </div>
+
+                      {/* Seta */}
+                      <div className="shrink-0 text-slate-300 mt-1">→</div>
+
+                      {/* Linha extrato */}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[11px] font-semibold text-indigo-700 uppercase tracking-wide mb-0.5">Extrato bancário</div>
+                        <div className="text-xs text-slate-600 truncate" title={s.bslDescricao}>{s.bslDescricao || "—"}</div>
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                          <span className="text-xs text-slate-500">Valor: <span className="font-semibold text-slate-700">{formatBRL(s.bslValor)}</span></span>
+                          <span className="text-xs text-slate-400">{fmtDateBR(s.bslData)}</span>
+                          {Math.abs(s.fnValorLiquido - s.bslValor) > 0.01 && (
+                            <span className="text-xs text-amber-600">
+                              Δ {(Math.abs(s.fnValorLiquido - s.bslValor) / Math.max(s.fnValorLiquido, s.bslValor) * 100).toFixed(1)}%
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Ações */}
+                      <div className="shrink-0 flex items-center gap-1.5 ml-2">
+                        <Button
+                          size="sm"
+                          className="h-7 px-2.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1"
+                          disabled={isVinculando || vincularSugestaoMut.isPending}
+                          onClick={() => {
+                            setVinclandoId(key);
+                            vincularSugestaoMut.mutate({
+                              id: s.fnId,
+                              companyId: companyId ?? 0,
+                              stmtLineId: s.bslId,
+                            });
+                          }}
+                        >
+                          {isVinculando ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckIcon className="w-3 h-3" />}
+                          Vincular
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 text-xs text-slate-400 hover:text-red-500"
+                          onClick={() => setIgnorados(prev => new Set([...prev, key]))}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer */}
+            <div className="px-4 py-3 border-t bg-slate-50 flex items-center justify-between gap-2 flex-wrap">
+              <p className="text-xs text-slate-500">
+                {sugestoesVisiveis().filter(s => s.confianca === "alta").length > 0
+                  ? `${sugestoesVisiveis().filter(s => s.confianca === "alta").length} sugestão(ões) de alta confiança prontas para vincular`
+                  : "Nenhuma sugestão de alta confiança — revise as de média/baixa manualmente se desejar"}
+              </p>
+              <div className="flex items-center gap-2">
+                {sugestoesVisiveis().filter(s => s.confianca === "alta").length > 0 && (
+                  <Button
+                    size="sm"
+                    className="gap-1.5 bg-violet-600 hover:bg-violet-700 text-white"
+                    disabled={sincronizarNfMut.isPending}
+                    onClick={() => {
+                      const tab = pageTab;
+                      const m = tab === "recebidas" ? (recMes ?? 0) : (mesSel ?? 0);
+                      const yr = tab === "recebidas" ? recAno : ano;
+                      const dataInicio = m ? `${yr}-${String(m).padStart(2,"0")}-01` : `${yr}-01-01`;
+                      const dataFim = m ? `${yr}-${String(m).padStart(2,"0")}-${new Date(yr, m, 0).getDate()}` : `${yr}-12-31`;
+                      vincularTodasAlta({ dataInicio, dataFim });
+                    }}
+                  >
+                    <Link className="w-3.5 h-3.5" />
+                    {sincronizarNfMut.isPending ? "Vinculando..." : "Vincular todas de Alta Confiança"}
+                  </Button>
+                )}
+                <Button size="sm" variant="outline" onClick={() => setSugestoesOpen(false)}>Fechar</Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* ═══════════════════════════════════════════════════════════════════════
             ABA: PANORAMA FISCAL

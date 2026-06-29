@@ -1,4 +1,53 @@
 /**
+ * Rev. 3850 — **NF-e × EXTRATO · DIALOG "REVISAR SUGESTÕES" COM CONFIRMAÇÃO POR PAR + BOTÃO "VINCULAR TUDO DE ALTA CONFIANÇA".**
+ *
+ * **Contexto:**
+ * Rev. 3849 introduziu vinculação automática silenciosa ("Vincular Automaticamente"). O usuário
+ * solicitou uma etapa de revisão: ver a lista de correspondências propostas e aprovar ou rejeitar
+ * cada par individualmente antes de confirmar.
+ *
+ * **O que foi implementado:**
+ *
+ * `autoVincularNfService.ts`:
+ * - Interface `SugestaoVinculo` exportada (fnId/fnNumero/fnNome/fnValorLiquido/fnDataEmissao/
+ *   fnOrigem/bslId/bslDescricao/bslValor/bslData/score/confianca).
+ * - `obterSugestoesPeriodo(companyId, dataInicio, dataFim)`: NOVA função read-only. Carrega NF-e
+ *   emitidas + recebidas sem stmt_line_id e linhas do extrato sem vínculo; calcula `calcScore`
+ *   para cada par; filtra score ≥ 30; ordena por score desc; limita a 200 pares; retorna sem
+ *   efetuar nenhum UPDATE. `confianca`: alta ≥ 80, media ≥ 55, baixa < 55.
+ *
+ * `fiscalNotes.ts`:
+ * - Import `obterSugestoesPeriodo`.
+ * - Novo endpoint `fiscalNotes.obterSugestoes` (mutation, mesmo input de sincronizarComExtrato):
+ *   chama `obterSugestoesPeriodo` e retorna `{ sugestoes }`.
+ *
+ * `FinanceiroNotasFiscais.tsx`:
+ * - Estado: `sugestoesOpen`, `sugestoes`, `ignorados` (Set de chaves `fnId-bslId` ignoradas
+ *   localmente por sessão de dialog), `vinclandoId` (animação de loading por linha).
+ * - Mutations: `obterSugestoesMut` (busca sugestões), `vincularSugestaoMut` (vincularExtrato
+ *   por par, remove linha do dialog via `ignorados` ao concluir).
+ * - Helper `sugestoesVisiveis()` filtra `ignorados` do array.
+ * - Helper `vincularTodasAlta(periodo)` chama sincronizarNfMut e fecha o dialog.
+ * - Botões nos headers de Emitidas e Recebidas:
+ *     · **"Revisar Sugestões"** (cinza, lupa) → busca e abre o dialog de revisão.
+ *     · **"Vincular Automaticamente"** (violeta) → vincula direto (comportamento anterior).
+ * - **Dialog "Sugestões de Vínculo NF-e × Extrato"** (max-w-4xl, 90svh):
+ *     · Header: título + badges de contagem (Alta/Média/Baixa) atualizados dinamicamente.
+ *     · Body scrollável: uma linha por par com:
+ *         – Badge de confiança (verde/âmbar/cinza).
+ *         – Lado esquerdo: NFS-e/NF-e emitida ou recebida, número, nome, valor, data.
+ *         – Seta →.
+ *         – Lado direito: descrição do extrato, valor, data, delta % se diferença > 0.
+ *         – Botão **"Vincular"** (verde, checkmark) → chama vincularSugestaoMut, remove linha.
+ *         – Botão **"Ignorar"** (X, ghost) → oculta linha localmente.
+ *     · Estado vazio: ícone + mensagem quando todos pares confirmados ou ignorados.
+ *     · Footer: contagem de alta confiança + botão **"Vincular todas de Alta Confiança"**
+ *       (aparece só se houver ≥ 1 de alta) + botão "Fechar".
+ *
+ * **ZERO DELETE. Detalhe: `shared/changelog.ts`.**
+ */
+
+/**
  * Rev. 3849 — **NF-e × EXTRATO · VÍNCULO AUTOMÁTICO MELHORADO: NAME-TOKEN MATCHING + ±10% TOLERÂNCIA + VARREDURA RETROATIVA + BOTÃO "VINCULAR COM EXTRATO".**
  *
  * **Contexto:**

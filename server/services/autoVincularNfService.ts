@@ -237,7 +237,132 @@ export async function autoVincularNfsPorLinhas(
   return { vinculados };
 }
 
-// ── Função 2: Retroativa — varre TODO o período ───────────────────────────────
+// ── Função 2: Sugestões (apenas leitura — sem vincular) ───────────────────────
+
+export interface SugestaoVinculo {
+  fnId: number;
+  fnNumero: string;
+  fnNome: string;
+  fnValorLiquido: number;
+  fnDataEmissao: string;
+  fnOrigem: string;
+  bslId: number;
+  bslDescricao: string;
+  bslValor: number;
+  bslData: string;
+  score: number;
+  confianca: "alta" | "media" | "baixa";
+}
+
+export async function obterSugestoesPeriodo(
+  companyId: number,
+  dataInicio: string,
+  dataFim: string
+): Promise<{ sugestoes: SugestaoVinculo[] }> {
+  const db = await getDb();
+
+  const extratoInicio = new Date(dataInicio);
+  extratoInicio.setDate(extratoInicio.getDate() - 5);
+  const extratoFim = new Date(dataFim);
+  extratoFim.setDate(extratoFim.getDate() + 90);
+  const extInStr  = extratoInicio.toISOString().slice(0, 10);
+  const extFimStr = extratoFim.toISOString().slice(0, 10);
+
+  // Linhas do extrato SEM vínculo
+  const bslQ = await db.$client.query(`
+    SELECT b.id, b.valor, ABS(b.valor)::float AS abs_valor, b.descricao, b.data::text
+    FROM bank_statement_lines b
+    WHERE b.company_id = $1
+      AND b.data BETWEEN $2 AND $3
+      AND b.excluido_em IS NULL
+      AND b.desconsiderado_em IS NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM fiscal_notes fn WHERE fn.stmt_line_id = b.id AND fn.company_id = $1
+      )
+    ORDER BY b.data ASC
+  `, [companyId, extInStr, extFimStr]);
+  const bslAll: any[] = bslQ.rows;
+  const credits = bslAll.filter((b) => parseFloat(b.valor) >= 0);
+  const debits  = bslAll.filter((b) => parseFloat(b.valor) < 0);
+
+  // NF-e emitidas SEM vínculo
+  const emitQ = await db.$client.query(`
+    SELECT id, COALESCE(numero_nf::text, '') AS numero_nf,
+           ABS(valor_liquido)::float AS valor_liquido,
+           COALESCE(tomador_nome, '') AS tomador_nome,
+           tomador_cnpj, data_emissao::text, origem
+    FROM fiscal_notes
+    WHERE company_id = $1 AND stmt_line_id IS NULL
+      AND origem LIKE 'nfse_%' AND status != 'cancelada'
+      AND data_emissao BETWEEN $2 AND $3
+  `, [companyId, dataInicio, dataFim]);
+
+  // NF-e recebidas SEM vínculo
+  const recQ = await db.$client.query(`
+    SELECT id, COALESCE(numero_nf::text, '') AS numero_nf,
+           ABS(valor_bruto)::float AS valor_liquido,
+           COALESCE(emitente_nome, '') AS tomador_nome,
+           emitente_cnpj AS tomador_cnpj, data_emissao::text, origem
+    FROM fiscal_notes
+    WHERE company_id = $1 AND stmt_line_id IS NULL
+      AND (origem = 'sefaz_nfe' OR origem = 'xml_upload') AND status != 'cancelada'
+      AND data_emissao BETWEEN $2 AND $3
+  `, [companyId, dataInicio, dataFim]);
+
+  const sugestoes: SugestaoVinculo[] = [];
+
+  const processar = (fns: any[], bsls: any[]) => {
+    for (const fn of fns) {
+      const fnVal = parseFloat(fn.valor_liquido);
+      if (fnVal <= 0) continue;
+      for (const bsl of bsls) {
+        const bslVal = parseFloat(bsl.abs_valor);
+        if (bslVal <= 0) continue;
+        const base = Math.max(fnVal, bslVal);
+        if (Math.abs(fnVal - bslVal) / base > 0.15) continue;
+        const emissaoMs = new Date(fn.data_emissao).getTime();
+        const bslMs     = new Date(bsl.data).getTime();
+        const diffDays  = (bslMs - emissaoMs) / 86_400_000;
+        if (diffDays < -5 || diffDays > 90) continue;
+
+        const score = calcScore({
+          bslDescricao: bsl.descricao ?? "",
+          bslValor: bslVal,
+          bslData: bsl.data,
+          fnCnpj: fn.tomador_cnpj,
+          fnNome: fn.tomador_nome,
+          fnValorLiquido: fnVal,
+          fnDataEmissao: fn.data_emissao,
+        });
+        if (score < 30) continue;
+
+        sugestoes.push({
+          fnId: fn.id,
+          fnNumero: fn.numero_nf,
+          fnNome: fn.tomador_nome,
+          fnValorLiquido: fnVal,
+          fnDataEmissao: fn.data_emissao,
+          fnOrigem: fn.origem,
+          bslId: bsl.id,
+          bslDescricao: bsl.descricao ?? "",
+          bslValor: bslVal,
+          bslData: bsl.data,
+          score,
+          confianca: score >= 80 ? "alta" : score >= 55 ? "media" : "baixa",
+        });
+      }
+    }
+  };
+
+  processar(emitQ.rows, credits);
+  processar(recQ.rows, debits);
+
+  // Ordenar por score desc, limitar a 200 sugestões
+  sugestoes.sort((a, b) => b.score - a.score);
+  return { sugestoes: sugestoes.slice(0, 200) };
+}
+
+// ── Função 3: Retroativa — varre TODO o período ───────────────────────────────
 
 export async function sincronizarNfsPeriodo(
   companyId: number,
