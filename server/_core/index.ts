@@ -1076,6 +1076,13 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3879: revisao + notas_revisao garantidos em bank_statement_templates.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 3879 bank_statement_templates.revisao:`, e?.message || e); }
 
+        // Rev. 3885 — Rastreabilidade de quem atualizou templates de extrato.
+        try {
+          await db.execute(sql`ALTER TABLE bank_statement_templates ADD COLUMN IF NOT EXISTS atualizado_por_id INTEGER`);
+          await db.execute(sql`ALTER TABLE bank_statement_templates ADD COLUMN IF NOT EXISTS atualizado_por_nome VARCHAR(255)`);
+          console.log(`[SyncSchema+] Rev. 3885: atualizado_por_id + atualizado_por_nome garantidos em bank_statement_templates.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 3885 bank_statement_templates.atualizado_por:`, e?.message || e); }
+
         // Rev. 3876 — Cheque especial por conta bancária: flag de controle (0/1) + limite disponível.
         // Quando ativo=1 e o saldo acumulado do extrato for negativo, a Conciliação exibe alerta visual.
         try {

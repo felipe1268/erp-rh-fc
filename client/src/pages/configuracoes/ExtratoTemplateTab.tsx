@@ -9,6 +9,7 @@
 import { useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -85,6 +86,10 @@ interface Template {
   notasRevisao: string;
   criadoEm: string;
   atualizadoEm: string;
+  criadoPorId:       number | null;
+  criadoPorNome:     string | null;
+  atualizadoPorId:   number | null;
+  atualizadoPorNome: string | null;
 }
 
 interface FormState {
@@ -121,8 +126,25 @@ function fileToBase64(file: File): Promise<string> {
 
 // ── componente principal ──────────────────────────────────────────────────────
 
+// Formata timestamp UTC (ex: "2026-06-29 20:30:00") → "29/06/2026 às 17:30 (Brasília)"
+function fmtBrasilia(raw: string | null | undefined): string {
+  if (!raw) return "";
+  try {
+    // Postgres retorna "YYYY-MM-DD HH:MM:SS" sem tz → interpreta como UTC
+    const normalized = raw.replace(" ", "T") + (raw.includes("T") ? "" : "Z");
+    return new Date(normalized).toLocaleString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      day: "2-digit", month: "2-digit", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    });
+  } catch { return raw; }
+}
+
 export default function ExtratoTemplateTab() {
   const { companyIdNum: companyId } = useCompany();
+  const { user } = useAuth();
+  const isMaster = user?.role === "admin_master";
+  const isAdmin  = user?.role === "admin" || isMaster;
   const utils = trpc.useUtils();
 
   const { data: templates = [], isLoading } = trpc.bankStatementTemplates.list.useQuery(
@@ -399,10 +421,9 @@ export default function ExtratoTemplateTab() {
         </p>
       </div>
 
-      {/* ── Botões de ação (fora do formulário) ── */}
-      {editId === null && (
+      {/* ── Botões de ação (fora do formulário) — apenas admin ── */}
+      {editId === null && isAdmin && (
         <div className="flex flex-wrap gap-2">
-          {/* CTA principal: análise IA (1 ou vários PDFs) */}
           <Button
             size="sm"
             onClick={() => fileInputRef.current?.click()}
@@ -415,7 +436,6 @@ export default function ExtratoTemplateTab() {
               : <><Sparkles className="w-3.5 h-3.5" /> Analisar extrato(s) de novo banco</>
             }
           </Button>
-          {/* Secundário: criar manualmente */}
           <Button
             size="sm" variant="outline"
             onClick={() => openNew()}
@@ -424,6 +444,14 @@ export default function ExtratoTemplateTab() {
           >
             <Plus className="w-3.5 h-3.5" /> Criar manualmente
           </Button>
+        </div>
+      )}
+
+      {/* Aviso para usuário sem permissão de escrita */}
+      {editId === null && !isAdmin && (
+        <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+          Visualização somente leitura. Apenas administradores podem criar, editar ou excluir templates.
         </div>
       )}
 
@@ -720,6 +748,7 @@ export default function ExtratoTemplateTab() {
                       key={t.id}
                       t={t}
                       banco={banco}
+                      isAdmin={isAdmin}
                       expanded={expandId === t.id}
                       onExpand={() => setExpandId(expandId === t.id ? null : t.id)}
                       onEdit={() => openEdit(t)}
@@ -739,10 +768,11 @@ export default function ExtratoTemplateTab() {
 // ── sub-componente: card de template ─────────────────────────────────────────
 
 function TemplateCard({
-  t, banco, expanded, onExpand, onEdit, onDelete,
+  t, banco, isAdmin, expanded, onExpand, onEdit, onDelete,
 }: {
   t: Template;
   banco: string;
+  isAdmin: boolean;
   expanded: boolean;
   onExpand: () => void;
   onEdit: () => void;
@@ -797,6 +827,29 @@ function TemplateCard({
           )}
         </div>
 
+        {/* Auditoria — quem criou / quem atualizou por último */}
+        <div className="text-[10px] text-gray-400 space-y-0.5 mb-3">
+          {t.criadoPorNome && (
+            <p className="flex items-center gap-1 truncate" title={`Criado por ${t.criadoPorNome} em ${fmtBrasilia(t.criadoEm)}`}>
+              <span className="font-medium text-gray-500">Criado por</span>
+              <span className="truncate">{t.criadoPorNome}</span>
+              <span>·</span>
+              <span className="flex-shrink-0">{fmtBrasilia(t.criadoEm)}</span>
+            </p>
+          )}
+          {t.atualizadoPorNome && t.atualizadoPorNome !== t.criadoPorNome && (
+            <p className="flex items-center gap-1 truncate" title={`Atualizado por ${t.atualizadoPorNome} em ${fmtBrasilia(t.atualizadoEm)}`}>
+              <span className="font-medium text-gray-500">Editado por</span>
+              <span className="truncate">{t.atualizadoPorNome}</span>
+              <span>·</span>
+              <span className="flex-shrink-0">{fmtBrasilia(t.atualizadoEm)}</span>
+            </p>
+          )}
+          {!t.criadoPorNome && (
+            <p className="italic">Cadastrado antes do rastreio de usuário.</p>
+          )}
+        </div>
+
         {/* Ações */}
         <div className="flex items-center gap-1.5 border-t border-gray-100 pt-3">
           <button
@@ -814,20 +867,24 @@ function TemplateCard({
 
           <div className="flex-1" />
 
-          <button
-            onClick={onEdit}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-sky-600 hover:bg-sky-50 transition-colors"
-            title="Editar template"
-          >
-            <Pencil className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={onDelete}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-            title="Excluir template"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {isAdmin && (
+            <>
+              <button
+                onClick={onEdit}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-sky-600 hover:bg-sky-50 transition-colors"
+                title="Editar template"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={onDelete}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                title="Excluir template"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </>
+          )}
         </div>
       </div>
 

@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3885** — **TEMPLATES DE EXTRATO — AUDITORIA (QUEM/QUANDO) + ACESSO RESTRITO A ADMIN.** Novas colunas `atualizado_por_id`/`atualizado_por_nome` via self-heal Rev. 3885. Mutation `update` grava o usuário da sessão. Cards exibem rodapé "Criado por / Editado por · data Brasília". Backend: `assertAdminRole` em `create`, `update`, `delete` e `analisarPdf` (FORBIDDEN para role=user). Frontend: botões de criação/edição/exclusão ocultados para não-admins; banner amber "somente leitura" no lugar. ZERO DELETE.
+
 - **Rev. 3884** — **TEMPLATES DE EXTRATO — REDESIGN: AGRUPADO POR BANCO + CARDS EM GRADE.** Templates agrupados por banco com cabeçalho colorido (bolinha + paleta automática). Cards em grade 2-colunas com faixa de cor no topo, pills de stats (kws/skip/IA), botão "Visualizar" textual e painel expandido com seções coloridas. ZERO DELETE.
 
 - **Rev. 3883** — **TEMPLATES DE EXTRATO — EYE PREVIEW + DEDUP GUARD + PROMPT RIGOROSO.** Eye/EyeOff icon com preview colorido em 3 seções (detecção/skip/IA). Backend: dedup no `create` (nome idêntico + overlap ≥50% de kws → CONFLICT). Batch: captura duplicatas separado de erros, painel 3 contadores. Prompt IA reescrito: mín. 5 kws literais + mín. 6 skip prefixes + 9 tópicos de instrução obrigatórios. ZERO DELETE.
@@ -62,9 +64,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3879** — **GERADOR DE TEMPLATES DE EXTRATO BANCÁRIO POR IA — ZERO CÓDIGO.** Upload de PDF → IA analisa o formato (Gemini Vision → fallback Anthropic) → proposta editável pré-preenchida → salvar. Mutation `analisarPdf` em `bankStatementTemplates.ts` valida PDF, chama IA com prompt de análise de formato, retorna `{ bancoNome, palavrasChave, skipPrefixes, instrucoesIa }`. Colunas `revisao` (ISO 9001, auto-incrementa no UPDATE) e `notas_revisao` adicionadas com self-heal. `ExtratoTemplateTab.tsx` reescrito: botão "Analisar extrato de novo banco", loading animado, formulário pré-preenchido, AlertDialog no delete (sem `window.confirm`). ZERO DELETE.
 
-- **Rev. 3878** — **FIX DROPDOWN DE CATEGORIAS — ALINHAMENTO TOTAL COM O CADASTRO.** O dropdown de "Categoria" nos formulários de lançamento (Conciliação: "Lançar" + "Editar lançamento") filtrava por `tipo` (receita/despesa) baseado na direção do lançamento — excluindo categorias válidas do Cadastro. Removido o filtro de tipo em `catOpts` nos dois pontos (`options={catOpts.map(...)}` e no `SearchableSelect` de edição). Label "Categoria (Conta do Plano de Contas)" corrigido para "Categoria". ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3878** — **FIX DROPDOWN DE CATEGORIAS — ALINHAMENTO TOTAL COM O CADASTRO.** Removido filtro por `tipo` em `catOpts` nos dois pontos do formulário de lançamento (Conciliação). ZERO DELETE.
 
 - **Rev. 3877** — **TEMPLATES DE EXTRATO BANCÁRIO + PARSER SANTANDER IBPJ.** Nova tabela `bank_statement_templates` + CRUD tRPC + aba em Configurações. Parser Santander IBPJ. ZERO DELETE.
 
@@ -74,13 +76,11 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3874** — **DASH EPIs — CLIQUE NAS BARRAS DO GRÁFICO ABRE DETALHE.** `onChartClick` + state `detalheEpi` em `DashEpis.tsx`. ZERO DELETE.
 
-- **Rev. 3873** — **FIX CHECKLIST DOCX — WORD "ERRO AO ABRIR".** `LOGO_W=170px`/`LOGO_H=78px` (pixels, não EMUs). `downloadPacoteContador.ts`. ZERO DELETE.
-
-- **Rev. 3872** — one-liner demovido; ver `replit-history.md`.
+- **Rev. 3873** — one-liner demovido; ver `replit-history.md`.
 
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3869 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3872 e anteriores.
 
 ## User preferences
 

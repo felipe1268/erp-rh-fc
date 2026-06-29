@@ -1,4 +1,38 @@
 /**
+ * Rev. 3885 — **TEMPLATES DE EXTRATO — AUDITORIA (QUEM/QUANDO) + ACESSO RESTRITO A ADMIN.**
+ *
+ * ## Auditoria de alterações (quem criou / quem editou)
+ * - Novas colunas `atualizado_por_id` (INTEGER) e `atualizado_por_nome` (VARCHAR 255)
+ *   adicionadas via `[SyncSchema+]` Rev. 3885 (`ALTER TABLE IF NOT EXISTS`).
+ * - Mutation `update` agora grava `atualizado_por_id` e `atualizado_por_nome` a partir
+ *   do `ctx.user` da sessão, junto com o `atualizado_em = NOW()` já existente.
+ * - `mapRow` e `getTemplates` já expunham `criadoPorId`/`criadoPorNome`; agora expõem
+ *   também `atualizadoPorId`/`atualizadoPorNome`.
+ * - Frontend: cada card exibe rodapé de auditoria em fonte [10px] cinza:
+ *   "Criado por <nome> · DD/MM/YYYY HH:MM" e "Editado por <nome> · ..." (horário de
+ *   Brasília via `toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })`).
+ *   Templates antigos (sem `criadoPorNome`) mostram aviso "Cadastrado antes do rastreio
+ *   de usuário."
+ *
+ * ## Controle de acesso — somente admin/admin_master pode criar/editar/excluir
+ * - Backend: helper `assertAdminRole(ctx)` (lança FORBIDDEN se role ∉ admin|admin_master)
+ *   aplicado a `create`, `update`, `delete` e `analisarPdf`.
+ * - Frontend: botões "Analisar extrato de novo banco" e "Criar manualmente" ocultados
+ *   para role `user`; banner amber "somente leitura" exibido em seu lugar.
+ *   Botões de lápis e lixo dentro de cada card também ocultados para não-admins.
+ *   Todos usam `isAdmin = user.role === "admin" || user.role === "admin_master"` via
+ *   `useAuth()` (`@/_core/hooks/useAuth`).
+ *
+ * ## Arquivos alterados
+ * - `server/routers/bankStatementTemplates.ts` — assertAdminRole em 4 mutations + update SET.
+ * - `server/_core/index.ts` — self-heal ALTER TABLE Rev. 3885.
+ * - `client/src/pages/configuracoes/ExtratoTemplateTab.tsx` — auditoria + role gating.
+ * - `shared/version.ts` → Rev. 3885.
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3884 — **TEMPLATES DE EXTRATO — REDESIGN DE LAYOUT: AGRUPADO POR BANCO.**
  *
  * Lista refeita do zero para ser mais intuitiva:

@@ -10110,8 +10110,11 @@ export const bankStatementTemplates = pgTable("bank_statement_templates", {
   notasRevisao:  text("notas_revisao"),
   criadoEm:      timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
   atualizadoEm:  timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
-  criadoPorId:   integer("criado_por_id"),
-  criadoPorNome: varchar("criado_por_nome", { length: 255 }),
+  criadoPorId:        integer("criado_por_id"),
+  criadoPorNome:      varchar("criado_por_nome", { length: 255 }),
+  // Rev. 3885 — Rastreabilidade de quem atualizou por último.
+  atualizadoPorId:    integer("atualizado_por_id"),
+  atualizadoPorNome:  varchar("atualizado_por_nome", { length: 255 }),
 }, (table) => [
   index("idx_bank_stmt_tmpl_company").on(table.companyId),
 ]);

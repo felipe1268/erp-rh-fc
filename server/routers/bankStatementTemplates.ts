@@ -26,6 +26,17 @@ async function assertCompanyAccess(ctx: { user: { id: number; role?: string | nu
   }
 }
 
+// Apenas admin ou admin_master podem criar/editar/excluir templates
+function assertAdminRole(ctx: { user: { role?: string | null } }) {
+  const role = ctx.user?.role;
+  if (role !== "admin" && role !== "admin_master") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Apenas administradores podem gerenciar templates de extrato bancário.",
+    });
+  }
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 async function getTemplates(companyId: number) {
@@ -33,7 +44,9 @@ async function getTemplates(companyId: number) {
   const rows = await db.execute(sql`
     SELECT id, company_id, banco_nome, palavras_chave, skip_prefixes,
            instrucoes_ia, ativo, revisao, notas_revisao,
-           criado_em, atualizado_em, criado_por_id, criado_por_nome
+           criado_em, atualizado_em,
+           criado_por_id, criado_por_nome,
+           atualizado_por_id, atualizado_por_nome
     FROM bank_statement_templates
     WHERE company_id = ${companyId}
     ORDER BY banco_nome ASC
@@ -43,19 +56,21 @@ async function getTemplates(companyId: number) {
 
 function mapRow(r: any) {
   return {
-    id:             r.id as number,
-    companyId:      r.company_id as number,
-    bancoNome:      r.banco_nome as string,
-    palavrasChave:  safeJson(r.palavras_chave, []) as string[],
-    skipPrefixes:   safeJson(r.skip_prefixes,  []) as string[],
-    instrucoesIa:   (r.instrucoes_ia as string | null) ?? "",
-    ativo:          (r.ativo as number) === 1,
-    revisao:        (r.revisao as number) ?? 1,
-    notasRevisao:   (r.notas_revisao as string | null) ?? "",
-    criadoEm:       r.criado_em as string,
-    atualizadoEm:   r.atualizado_em as string,
-    criadoPorId:    r.criado_por_id as number | null,
-    criadoPorNome:  r.criado_por_nome as string | null,
+    id:                r.id as number,
+    companyId:         r.company_id as number,
+    bancoNome:         r.banco_nome as string,
+    palavrasChave:     safeJson(r.palavras_chave, []) as string[],
+    skipPrefixes:      safeJson(r.skip_prefixes,  []) as string[],
+    instrucoesIa:      (r.instrucoes_ia as string | null) ?? "",
+    ativo:             (r.ativo as number) === 1,
+    revisao:           (r.revisao as number) ?? 1,
+    notasRevisao:      (r.notas_revisao as string | null) ?? "",
+    criadoEm:          r.criado_em as string,
+    atualizadoEm:      r.atualizado_em as string,
+    criadoPorId:       r.criado_por_id as number | null,
+    criadoPorNome:     r.criado_por_nome as string | null,
+    atualizadoPorId:   r.atualizado_por_id as number | null,
+    atualizadoPorNome: r.atualizado_por_nome as string | null,
   };
 }
 
@@ -214,6 +229,7 @@ export const bankStatementTemplatesRouter = router({
   create: protectedProcedure
     .input(templateInput)
     .mutation(async ({ input, ctx }) => {
+      assertAdminRole(ctx);
       await assertCompanyAccess(ctx, input.companyId);
       const db = await getDb();
 
@@ -281,6 +297,7 @@ export const bankStatementTemplatesRouter = router({
   update: protectedProcedure
     .input(templateInput.extend({ id: z.number() }))
     .mutation(async ({ input, ctx }) => {
+      assertAdminRole(ctx);
       await assertCompanyAccess(ctx, input.companyId);
       const db = await getDb();
       const check = await db.execute(sql`
@@ -291,16 +308,20 @@ export const bankStatementTemplatesRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Template não encontrado." });
       }
       const revisaoAtual = ((check.rows[0] as any)?.revisao as number) ?? 1;
+      const userName = (ctx.user as any).name ?? (ctx.user as any).username ?? null;
+      const userId   = (ctx.user as any).id ?? null;
       await db.execute(sql`
         UPDATE bank_statement_templates SET
-          banco_nome     = ${input.bancoNome},
-          palavras_chave = ${JSON.stringify(input.palavrasChave)},
-          skip_prefixes  = ${JSON.stringify(input.skipPrefixes)},
-          instrucoes_ia  = ${input.instrucoesIa || null},
-          ativo          = ${input.ativo ? 1 : 0},
-          revisao        = ${revisaoAtual + 1},
-          notas_revisao  = ${input.notasRevisao ?? null},
-          atualizado_em  = NOW()
+          banco_nome          = ${input.bancoNome},
+          palavras_chave      = ${JSON.stringify(input.palavrasChave)},
+          skip_prefixes       = ${JSON.stringify(input.skipPrefixes)},
+          instrucoes_ia       = ${input.instrucoesIa || null},
+          ativo               = ${input.ativo ? 1 : 0},
+          revisao             = ${revisaoAtual + 1},
+          notas_revisao       = ${input.notasRevisao ?? null},
+          atualizado_em       = NOW(),
+          atualizado_por_id   = ${userId},
+          atualizado_por_nome = ${userName}
         WHERE id = ${input.id} AND company_id = ${input.companyId}
       `);
       return { ok: true, revisao: revisaoAtual + 1 };
@@ -309,6 +330,7 @@ export const bankStatementTemplatesRouter = router({
   delete: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
     .mutation(async ({ input, ctx }) => {
+      assertAdminRole(ctx);
       await assertCompanyAccess(ctx, input.companyId);
       const db = await getDb();
       await db.execute(sql`
@@ -327,6 +349,7 @@ export const bankStatementTemplatesRouter = router({
       pdfBase64: z.string().min(10),
     }))
     .mutation(async ({ input, ctx }) => {
+      assertAdminRole(ctx);
       await assertCompanyAccess(ctx, input.companyId);
       const clean = input.pdfBase64.replace(/^data:[^,]*,/, "").trim();
       const buf = Buffer.from(clean, "base64");
