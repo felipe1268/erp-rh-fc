@@ -50,27 +50,25 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3854** — **NF-e × EXTRATO · SCORING RIGOROSO + BOTÕES INDEPENDENTES + BARRA DE STATUS + SEM-MATCH.** `processarRecebidas` pré-filtro ≤5% (era ≤15%); parâmetro `tipo?` em `obterSugestoesPeriodo`+`sincronizarNfsPeriodo`+router; botões independentes por aba (emitidas vs recebidas); barra de progresso % vinculadas em ambas as abas com botão "Só pendentes"; filtro automático após vínculo manual; seção collapsible "Sem correspondência no extrato" no dialog com candidato próximo. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3853** — **HOTFIX · `autoVincularNfService`: `column "tomador_nome" does not exist`.** 3 queries corrigidas para `tomador_razao_social AS tomador_nome` (emitidas em autoVincular, obterSugestoes, sincronizar). ZERO DELETE. Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3852** — **PANORAMA FISCAL · CHEQUE DEVOLVIDO EXCLUÍDO DAS "SAÍDAS SEM NF-e".** `getPanorama`: SQL + `desconsiderado_em IS NULL`; regex `_PANORAMA_INTERNO_RE` (cheque devol, tarifas, TED/PIX próprio, etc.) → `bankDebitosReais` para `saidasSemNota`, `saidasBancarias` e `coberturaSaidaNfe`. `saidasInternas` retornado como campo informativo. ZERO DELETE. Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3851** — **NF-e × EXTRATO · CARD DE VÍNCULO + SCORING DEFINITIVO COM valor_bruto E CNPJ-RAIZ.** `calcScore` recebe `fnValorBruto` (melhor de líquido vs bruto) + CNPJ-raiz +25 pts + patamar ≤2% +22 pts. Pré-filtro duplo (líquido OR bruto ≤15%) em todas as 3 funções. `fiscalNotes.list` e `sefaz.listNFeRecebidas` enricidos com batch-fetch de `bank_statement_lines` → `stmtLine:{descricao,valor,data}`. VÍNCULOS (emitidas e recebidas): card violeta com descrição+valor+data quando vinculado. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 ### 5 one-liners
 
-- **Rev. 3850** — **NF-e × EXTRATO · DIALOG "REVISAR SUGESTÕES":** `obterSugestoesPeriodo`, endpoint `fiscalNotes.obterSugestoes`, dialog max-w-4xl badge Alta/Média/Baixa, [Vincular]/[Ignorar] por linha, "Vincular todas de Alta Confiança". ZERO DELETE.
+- **Rev. 3852** — **PANORAMA FISCAL · CHEQUE DEVOLVIDO EXCLUÍDO DAS "SAÍDAS SEM NF-e".** `getPanorama`: SQL + `desconsiderado_em IS NULL`; regex `_PANORAMA_INTERNO_RE` → `bankDebitosReais`. ZERO DELETE.
+
+- **Rev. 3851** — **NF-e × EXTRATO · CARD DE VÍNCULO + SCORING DEFINITIVO COM valor_bruto E CNPJ-RAIZ.** `calcScore` + `fnValorBruto` + CNPJ-raiz +25 pts + patamar ≤2% +22 pts. Pré-filtro duplo (líquido OR bruto ≤15%). ZERO DELETE.
+
+- **Rev. 3850** — **NF-e × EXTRATO · DIALOG "REVISAR SUGESTÕES":** `obterSugestoesPeriodo`, endpoint `fiscalNotes.obterSugestoes`, dialog max-w-4xl badge Alta/Média/Baixa, [Vincular]/[Ignorar] por linha. ZERO DELETE.
 
 - **Rev. 3849** — **NF-e × EXTRATO · VÍNCULO AUTOMÁTICO MELHORADO:** `extractTokens()`, `calcScore()` (0-100), `sincronizarNfsPeriodo` (greedy bipartite). Botão "Vincular Automaticamente". ZERO DELETE.
 
 - **Rev. 3848** — **CONCILIAÇÃO · CHEQUE DEVOLVIDO = MOVIMENTAÇÃO, NÃO ENTRADA.** Padrões `"cheque devol"` e `"dev.*cheq"` em `_INTERNO_PATTERNS`. ZERO DELETE.
 
-- **Rev. 3847** — **TEMPLATE XLSX · SAVE CORRIGIDO + "APROVADO POR" AUTOMÁTICO + LISTA COMPLETA DE RELATÓRIOS.** `XlsxTemplateTab.tsx`, `Configuracoes.tsx`. ZERO DELETE.
-
-- **Rev. 3846** — **CONFIGURAÇÕES · NOTIFICAÇÕES E-MAIL UNIFICADAS COM SUBCATEGORIAS.** Os dois tabs fundidos num tab com seletor [RH] | [Contabilidade] via `NOTIF_SUBCATS`. ZERO DELETE.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3838 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3847 e anteriores.
 
 ## User preferences
 

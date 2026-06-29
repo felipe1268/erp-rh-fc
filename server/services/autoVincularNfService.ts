@@ -267,11 +267,28 @@ export interface SugestaoVinculo {
   confianca: "alta" | "media" | "baixa";
 }
 
+export interface SemSugestao {
+  fnId: number;
+  fnNumero: string;
+  fnNome: string;
+  fnValorLiquido: number;
+  fnDataEmissao: string;
+  fnOrigem: string;
+  motivoSemMatch: string;
+  candidatoProximo?: {
+    bslDescricao: string;
+    bslValor: number;
+    bslData: string;
+    deltaPct: number;
+  };
+}
+
 export async function obterSugestoesPeriodo(
   companyId: number,
   dataInicio: string,
-  dataFim: string
-): Promise<{ sugestoes: SugestaoVinculo[] }> {
+  dataFim: string,
+  tipo?: "emitida" | "recebida"
+): Promise<{ sugestoes: SugestaoVinculo[]; semSugestoes: SemSugestao[] }> {
   const db = await getDb();
 
   const extratoInicio = new Date(dataInicio);
@@ -298,35 +315,46 @@ export async function obterSugestoesPeriodo(
   const credits = bslAll.filter((b) => parseFloat(b.valor) >= 0);
   const debits  = bslAll.filter((b) => parseFloat(b.valor) < 0);
 
-  // NF-e emitidas SEM vínculo — traz AMBOS valor_liquido e valor_bruto
-  const emitQ = await db.$client.query(`
-    SELECT id, COALESCE(numero_nf::text, '') AS numero_nf,
-           ABS(valor_liquido)::float AS valor_liquido,
-           ABS(valor_bruto)::float   AS valor_bruto,
-           COALESCE(tomador_razao_social, '') AS tomador_nome,
-           tomador_cnpj, data_emissao::text, origem
-    FROM fiscal_notes
-    WHERE company_id = $1 AND stmt_line_id IS NULL
-      AND origem LIKE 'nfse_%' AND status != 'cancelada'
-      AND data_emissao BETWEEN $2 AND $3
-  `, [companyId, dataInicio, dataFim]);
+  // NF-e emitidas SEM vínculo
+  let emitRows: any[] = [];
+  if (tipo !== "recebida") {
+    const emitQ = await db.$client.query(`
+      SELECT id, COALESCE(numero_nf::text, '') AS numero_nf,
+             ABS(valor_liquido)::float AS valor_liquido,
+             ABS(valor_bruto)::float   AS valor_bruto,
+             COALESCE(tomador_razao_social, '') AS tomador_nome,
+             tomador_cnpj, data_emissao::text, origem
+      FROM fiscal_notes
+      WHERE company_id = $1 AND stmt_line_id IS NULL
+        AND origem LIKE 'nfse_%' AND status != 'cancelada'
+        AND data_emissao BETWEEN $2 AND $3
+    `, [companyId, dataInicio, dataFim]);
+    emitRows = emitQ.rows;
+  }
 
   // NF-e recebidas SEM vínculo — usa valor_bruto como referência de comparação com o débito
-  const recQ = await db.$client.query(`
-    SELECT id, COALESCE(numero_nf::text, '') AS numero_nf,
-           ABS(valor_bruto)::float   AS valor_liquido,
-           ABS(valor_bruto)::float   AS valor_bruto,
-           COALESCE(emitente_nome, '') AS tomador_nome,
-           emitente_cnpj AS tomador_cnpj, data_emissao::text, origem
-    FROM fiscal_notes
-    WHERE company_id = $1 AND stmt_line_id IS NULL
-      AND (origem = 'sefaz_nfe' OR origem = 'xml_upload') AND status != 'cancelada'
-      AND data_emissao BETWEEN $2 AND $3
-  `, [companyId, dataInicio, dataFim]);
+  let recRows: any[] = [];
+  if (tipo !== "emitida") {
+    const recQ = await db.$client.query(`
+      SELECT id, COALESCE(numero_nf::text, '') AS numero_nf,
+             ABS(valor_bruto)::float   AS valor_liquido,
+             ABS(valor_bruto)::float   AS valor_bruto,
+             COALESCE(emitente_nome, '') AS tomador_nome,
+             emitente_cnpj AS tomador_cnpj, data_emissao::text, origem
+      FROM fiscal_notes
+      WHERE company_id = $1 AND stmt_line_id IS NULL
+        AND (origem = 'sefaz_nfe' OR origem = 'xml_upload') AND status != 'cancelada'
+        AND data_emissao BETWEEN $2 AND $3
+    `, [companyId, dataInicio, dataFim]);
+    recRows = recQ.rows;
+  }
 
   const sugestoes: SugestaoVinculo[] = [];
+  // Rastreia quais fnIds tiveram ao menos uma sugestão
+  const fnComSugestao = new Set<number>();
 
-  const processar = (fns: any[], bsls: any[]) => {
+  // ── Emitidas × créditos: tolerância ≤15% (desconto pode ser até 18% via retenções) ──
+  const processarEmitidas = (fns: any[], bsls: any[]) => {
     for (const fn of fns) {
       const fnVal  = parseFloat(fn.valor_liquido);
       const fnBrut = parseFloat(fn.valor_bruto ?? "0");
@@ -334,7 +362,6 @@ export async function obterSugestoesPeriodo(
       for (const bsl of bsls) {
         const bslVal = parseFloat(bsl.abs_valor);
         if (bslVal <= 0) continue;
-        // Pré-filtro: passa se líquido OU bruto dentro de 15%
         const baseLiq = Math.max(fnVal, bslVal);
         const baseBrt = Math.max(fnBrut, bslVal);
         const okLiq = Math.abs(fnVal  - bslVal) / baseLiq <= 0.15;
@@ -356,31 +383,114 @@ export async function obterSugestoesPeriodo(
           fnDataEmissao: fn.data_emissao,
         });
         if (score < 30) continue;
-
+        fnComSugestao.add(fn.id);
         sugestoes.push({
-          fnId: fn.id,
-          fnNumero: fn.numero_nf,
-          fnNome: fn.tomador_nome,
-          fnValorLiquido: fnVal,
-          fnDataEmissao: fn.data_emissao,
-          fnOrigem: fn.origem,
-          bslId: bsl.id,
-          bslDescricao: bsl.descricao ?? "",
-          bslValor: bslVal,
-          bslData: bsl.data,
-          score,
-          confianca: score >= 80 ? "alta" : score >= 55 ? "media" : "baixa",
+          fnId: fn.id, fnNumero: fn.numero_nf, fnNome: fn.tomador_nome,
+          fnValorLiquido: fnVal, fnDataEmissao: fn.data_emissao, fnOrigem: fn.origem,
+          bslId: bsl.id, bslDescricao: bsl.descricao ?? "", bslValor: bslVal, bslData: bsl.data,
+          score, confianca: score >= 80 ? "alta" : score >= 55 ? "media" : "baixa",
         });
       }
     }
   };
 
-  processar(emitQ.rows, credits);
-  processar(recQ.rows, debits);
+  // ── Recebidas × débitos: tolerância ≤5% (valor da compra deve bater com precisão)
+  //    Para NF-e de compra o extrato não tem nome do fornecedor — o critério é valor.
+  //    Toleramos até 5% para caber descontos pontuais; acima disso não é confiável.
+  const processarRecebidas = (fns: any[], bsls: any[]) => {
+    for (const fn of fns) {
+      const fnVal = parseFloat(fn.valor_liquido);
+      if (fnVal <= 0) continue;
+      let melhorCandidatoFora: { bslDescricao: string; bslValor: number; bslData: string; deltaPct: number } | undefined;
+
+      for (const bsl of bsls) {
+        const bslVal = parseFloat(bsl.abs_valor);
+        if (bslVal <= 0) continue;
+        const base = Math.max(fnVal, bslVal);
+        const deltaPct = Math.abs(fnVal - bslVal) / base;
+
+        // Guardar candidato mais próximo mesmo fora do limite (para semSugestoes)
+        if (deltaPct <= 0.30) {
+          const emissaoMs = new Date(fn.data_emissao).getTime();
+          const bslMs = new Date(bsl.data).getTime();
+          const diffDays = (bslMs - emissaoMs) / 86_400_000;
+          if (diffDays >= -5 && diffDays <= 90) {
+            if (!melhorCandidatoFora || deltaPct < melhorCandidatoFora.deltaPct) {
+              melhorCandidatoFora = {
+                bslDescricao: bsl.descricao ?? "", bslValor: bslVal,
+                bslData: bsl.data, deltaPct,
+              };
+            }
+          }
+        }
+
+        // Pré-filtro rigoroso: ≤5% para não gerar falsos positivos
+        if (deltaPct > 0.05) continue;
+        const emissaoMs = new Date(fn.data_emissao).getTime();
+        const bslMs     = new Date(bsl.data).getTime();
+        const diffDays  = (bslMs - emissaoMs) / 86_400_000;
+        if (diffDays < -5 || diffDays > 90) continue;
+
+        const score = calcScore({
+          bslDescricao: bsl.descricao ?? "",
+          bslValor: bslVal,
+          bslData: bsl.data,
+          fnCnpj: fn.tomador_cnpj,
+          fnNome: fn.tomador_nome,
+          fnValorLiquido: fnVal,
+          fnValorBruto: fnVal,
+          fnDataEmissao: fn.data_emissao,
+        });
+        if (score < 22) continue; // threshold mínimo: ao menos pontos de valor
+        fnComSugestao.add(fn.id);
+        sugestoes.push({
+          fnId: fn.id, fnNumero: fn.numero_nf, fnNome: fn.tomador_nome,
+          fnValorLiquido: fnVal, fnDataEmissao: fn.data_emissao, fnOrigem: fn.origem,
+          bslId: bsl.id, bslDescricao: bsl.descricao ?? "", bslValor: bslVal, bslData: bsl.data,
+          score, confianca: score >= 70 ? "alta" : score >= 44 ? "media" : "baixa",
+        });
+      }
+
+      // Se não encontrou nenhuma sugestão, guardar info de candidato mais próximo
+      if (!fnComSugestao.has(fn.id)) {
+        (fn as any)._melhorCandidato = melhorCandidatoFora;
+      }
+    }
+  };
+
+  processarEmitidas(emitRows, credits);
+  processarRecebidas(recRows, debits);
+
+  // ── Montar semSugestoes ────────────────────────────────────────────────────
+  const semSugestoes: SemSugestao[] = [];
+  const todasFns = [...emitRows, ...recRows];
+  for (const fn of todasFns) {
+    if (fnComSugestao.has(fn.id)) continue;
+    const isRec = fn.origem === "sefaz_nfe" || fn.origem === "xml_upload";
+    const candidato = (fn as any)._melhorCandidato as typeof semSugestoes[number]["candidatoProximo"];
+    let motivoSemMatch = "";
+    if (!candidato) {
+      motivoSemMatch = isRec
+        ? "Nenhum débito no período com valor próximo (±30%)"
+        : "Nenhum crédito no período com valor próximo (±30%)";
+    } else {
+      const pct = (candidato.deltaPct * 100).toFixed(1);
+      motivoSemMatch = isRec
+        ? `Candidato mais próximo: Δ${pct}% — acima do limite de 5% para recebidas`
+        : `Candidato mais próximo: Δ${pct}% — acima do limite de 15% ou score insuficiente`;
+    }
+    semSugestoes.push({
+      fnId: fn.id, fnNumero: fn.numero_nf, fnNome: fn.tomador_nome,
+      fnValorLiquido: parseFloat(fn.valor_liquido),
+      fnDataEmissao: fn.data_emissao, fnOrigem: fn.origem,
+      motivoSemMatch,
+      candidatoProximo: candidato,
+    });
+  }
 
   // Ordenar por score desc, limitar a 200 sugestões
   sugestoes.sort((a, b) => b.score - a.score);
-  return { sugestoes: sugestoes.slice(0, 200) };
+  return { sugestoes: sugestoes.slice(0, 200), semSugestoes: semSugestoes.slice(0, 100) };
 }
 
 // ── Função 3: Retroativa — varre TODO o período ───────────────────────────────
@@ -388,7 +498,8 @@ export async function obterSugestoesPeriodo(
 export async function sincronizarNfsPeriodo(
   companyId: number,
   dataInicio: string,
-  dataFim: string
+  dataFim: string,
+  tipo?: "emitida" | "recebida"
 ): Promise<{ vinculados: number; candidatosAnalised: number }> {
   const db = await getDb();
   const now = new Date().toISOString();
@@ -423,33 +534,39 @@ export async function sincronizarNfsPeriodo(
   const debits  = bslAll.filter((b) => parseFloat(b.valor) < 0);
 
   // ── 2. NF-e emitidas SEM vínculo no período ───────────────────────────────
-  const emitQ = await db.$client.query(`
-    SELECT id, ABS(valor_liquido)::float AS valor_liquido,
-           ABS(valor_bruto)::float AS valor_bruto,
-           tomador_cnpj, tomador_razao_social AS tomador_nome, data_emissao::text
-    FROM fiscal_notes
-    WHERE company_id = $1
-      AND stmt_line_id IS NULL
-      AND origem LIKE 'nfse_%'
-      AND status != 'cancelada'
-      AND data_emissao BETWEEN $2 AND $3
-    ORDER BY data_emissao ASC
-  `, [companyId, dataInicio, dataFim]);
-  const emitidas: any[] = emitQ.rows;
+  let emitidas: any[] = [];
+  if (tipo !== "recebida") {
+    const emitQ = await db.$client.query(`
+      SELECT id, ABS(valor_liquido)::float AS valor_liquido,
+             ABS(valor_bruto)::float AS valor_bruto,
+             tomador_cnpj, tomador_razao_social AS tomador_nome, data_emissao::text
+      FROM fiscal_notes
+      WHERE company_id = $1
+        AND stmt_line_id IS NULL
+        AND origem LIKE 'nfse_%'
+        AND status != 'cancelada'
+        AND data_emissao BETWEEN $2 AND $3
+      ORDER BY data_emissao ASC
+    `, [companyId, dataInicio, dataFim]);
+    emitidas = emitQ.rows;
+  }
 
   // ── 3. NF-e recebidas SEM vínculo no período ─────────────────────────────
-  const recQ = await db.$client.query(`
-    SELECT id, ABS(valor_bruto)::float AS valor_bruto,
-           emitente_cnpj, emitente_nome, data_emissao::text
-    FROM fiscal_notes
-    WHERE company_id = $1
-      AND stmt_line_id IS NULL
-      AND (origem = 'sefaz_nfe' OR origem = 'xml_upload')
-      AND status != 'cancelada'
-      AND data_emissao BETWEEN $2 AND $3
-    ORDER BY data_emissao ASC
-  `, [companyId, dataInicio, dataFim]);
-  const recebidas: any[] = recQ.rows;
+  let recebidas: any[] = [];
+  if (tipo !== "emitida") {
+    const recQ = await db.$client.query(`
+      SELECT id, ABS(valor_bruto)::float AS valor_bruto,
+             emitente_cnpj, emitente_nome, data_emissao::text
+      FROM fiscal_notes
+      WHERE company_id = $1
+        AND stmt_line_id IS NULL
+        AND (origem = 'sefaz_nfe' OR origem = 'xml_upload')
+        AND status != 'cancelada'
+        AND data_emissao BETWEEN $2 AND $3
+      ORDER BY data_emissao ASC
+    `, [companyId, dataInicio, dataFim]);
+    recebidas = recQ.rows;
+  }
 
   // ── 4. Bipartite matching greedy (score decrescente) ─────────────────────
   interface ScoredPair {

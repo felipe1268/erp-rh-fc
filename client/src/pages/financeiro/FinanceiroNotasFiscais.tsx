@@ -358,14 +358,24 @@ export default function FinanceiroNotasFiscais() {
     bslId: number; bslDescricao: string; bslValor: number; bslData: string;
     score: number; confianca: "alta" | "media" | "baixa";
   };
+  type SemSugestaoItem = {
+    fnId: number; fnNumero: string; fnNome: string;
+    fnValorLiquido: number; fnDataEmissao: string; fnOrigem: string;
+    motivoSemMatch: string;
+    candidatoProximo?: { bslDescricao: string; bslValor: number; bslData: string; deltaPct: number };
+  };
   const [sugestoesOpen, setSugestoesOpen] = useState(false);
   const [sugestoes, setSugestoes] = useState<SugestaoItem[]>([]);
+  const [semSugestoes, setSemSugestoes] = useState<SemSugestaoItem[]>([]);
   const [ignorados, setIgnorados] = useState<Set<string>>(new Set());
   const [vinclandoId, setVinclandoId] = useState<string | null>(null);
+  const [semSugestoesOpen, setSemSugestoesOpen] = useState(false);
+  const [recSemVinculo, setRecSemVinculo] = useState(false);
 
   const obterSugestoesMut = (trpc as any).fiscalNotes.obterSugestoes.useMutation({
     onSuccess: (res: any) => {
       setSugestoes(res.sugestoes ?? []);
+      setSemSugestoes(res.semSugestoes ?? []);
       setIgnorados(new Set());
       setSugestoesOpen(true);
     },
@@ -379,6 +389,9 @@ export default function FinanceiroNotasFiscais() {
       setVinclandoId(null);
       listQuery.refetch();
       nfeRecQuery.refetch();
+      // Após vincular, mostrar apenas pendentes
+      if (pageTab === "emitidas") setFilterSemVinculo(true);
+      if (pageTab === "recebidas") setRecSemVinculo(true);
       toast({ title: "✅ NF-e vinculada ao extrato!" });
     },
     onError: (e: any) => { setVinclandoId(null); toast({ title: "Erro ao vincular", description: e?.message, variant: "destructive" }); },
@@ -389,7 +402,8 @@ export default function FinanceiroNotasFiscais() {
   }
 
   function vincularTodasAlta(periodo: { dataInicio: string; dataFim: string }) {
-    sincronizarNfMut.mutate({ companyId: companyId ?? 0, ...periodo });
+    const tipo = pageTab === "emitidas" ? "emitida" : pageTab === "recebidas" ? "recebida" : undefined;
+    sincronizarNfMut.mutate({ companyId: companyId ?? 0, ...periodo, tipo });
     setSugestoesOpen(false);
   }
 
@@ -1090,9 +1104,9 @@ export default function FinanceiroNotasFiscais() {
                   const m = mesSel ?? 0;
                   const dataInicio = m ? `${ano}-${String(m).padStart(2,"0")}-01` : `${ano}-01-01`;
                   const dataFim = m ? `${ano}-${String(m).padStart(2,"0")}-${new Date(ano, m, 0).getDate()}` : `${ano}-12-31`;
-                  obterSugestoesMut.mutate({ companyId: companyId ?? 0, dataInicio, dataFim });
+                  obterSugestoesMut.mutate({ companyId: companyId ?? 0, dataInicio, dataFim, tipo: "emitida" });
                 }}
-                title="Ver sugestões de vínculo para revisar antes de confirmar"
+                title="Ver sugestões de vínculo NFS-e emitidas × créditos do extrato"
               >
                 <Search className={`h-3.5 w-3.5 ${obterSugestoesMut.isPending ? "animate-pulse" : ""}`} />
                 {obterSugestoesMut.isPending ? "Buscando..." : "Revisar Sugestões"}
@@ -1106,9 +1120,9 @@ export default function FinanceiroNotasFiscais() {
                   const m = mesSel ?? 0;
                   const dataInicio = m ? `${ano}-${String(m).padStart(2,"0")}-01` : `${ano}-01-01`;
                   const dataFim = m ? `${ano}-${String(m).padStart(2,"0")}-${new Date(ano, m, 0).getDate()}` : `${ano}-12-31`;
-                  sincronizarNfMut.mutate({ companyId: companyId ?? 0, dataInicio, dataFim });
+                  sincronizarNfMut.mutate({ companyId: companyId ?? 0, dataInicio, dataFim, tipo: "emitida" });
                 }}
-                title="Vincula automaticamente as correspondências de alta confiança sem revisão"
+                title="Vincula automaticamente NFS-e emitidas × créditos de alta confiança"
               >
                 <Link className={`h-3.5 w-3.5 ${sincronizarNfMut.isPending ? "animate-pulse" : ""}`} />
                 {sincronizarNfMut.isPending ? "Vinculando..." : "Vincular Automaticamente"}
@@ -1172,9 +1186,9 @@ export default function FinanceiroNotasFiscais() {
                   const m = recMes ?? 0;
                   const dataInicio = m ? `${recAno}-${String(m).padStart(2,"0")}-01` : `${recAno}-01-01`;
                   const dataFim = m ? `${recAno}-${String(m).padStart(2,"0")}-${new Date(recAno, m, 0).getDate()}` : `${recAno}-12-31`;
-                  obterSugestoesMut.mutate({ companyId: companyId ?? 0, dataInicio, dataFim });
+                  obterSugestoesMut.mutate({ companyId: companyId ?? 0, dataInicio, dataFim, tipo: "recebida" });
                 }}
-                title="Ver sugestões de vínculo para revisar antes de confirmar"
+                title="Ver sugestões de vínculo NF-e recebidas × débitos do extrato"
               >
                 <Search className={`h-3.5 w-3.5 ${obterSugestoesMut.isPending ? "animate-pulse" : ""}`} />
                 {obterSugestoesMut.isPending ? "Buscando..." : "Revisar Sugestões"}
@@ -1188,9 +1202,9 @@ export default function FinanceiroNotasFiscais() {
                   const m = recMes ?? 0;
                   const dataInicio = m ? `${recAno}-${String(m).padStart(2,"0")}-01` : `${recAno}-01-01`;
                   const dataFim = m ? `${recAno}-${String(m).padStart(2,"0")}-${new Date(recAno, m, 0).getDate()}` : `${recAno}-12-31`;
-                  sincronizarNfMut.mutate({ companyId: companyId ?? 0, dataInicio, dataFim });
+                  sincronizarNfMut.mutate({ companyId: companyId ?? 0, dataInicio, dataFim, tipo: "recebida" });
                 }}
-                title="Vincula automaticamente as correspondências de alta confiança sem revisão"
+                title="Vincula automaticamente NF-e recebidas × débitos de alta confiança"
               >
                 <Link className={`h-3.5 w-3.5 ${sincronizarNfMut.isPending ? "animate-pulse" : ""}`} />
                 {sincronizarNfMut.isPending ? "Vinculando..." : "Vincular Automaticamente"}
@@ -1522,6 +1536,36 @@ export default function FinanceiroNotasFiscais() {
                 ))}
               </div>
 
+              {/* Barra de status — % vinculadas (recebidas) */}
+              {recTotais.total > 0 && (() => {
+                const vinc = recTotais.total - recTotais.pendentes;
+                const pct = Math.round((vinc / recTotais.total) * 100);
+                return (
+                  <div className="flex items-center gap-3 px-1">
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-1 text-xs text-slate-500">
+                        <span><span className="font-semibold text-emerald-600">{vinc}</span> vinculadas</span>
+                        <span>
+                          <span className="font-semibold text-amber-600">{recTotais.pendentes}</span> pendentes · <span className="font-semibold">{pct}%</span>
+                          {recTotais.pendentes > 0 && (
+                            <button
+                              type="button"
+                              className={`ml-2 text-[10px] px-1.5 py-0.5 rounded border transition-colors ${recSemVinculo ? "bg-amber-100 text-amber-700 border-amber-300" : "bg-white text-slate-500 border-slate-200 hover:border-amber-300"}`}
+                              onClick={() => setRecSemVinculo(v => !v)}
+                            >
+                              {recSemVinculo ? "← Ver todas" : "Só pendentes"}
+                            </button>
+                          )}
+                        </span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                        <div className="h-full rounded-full bg-emerald-400 transition-all" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Aviso: sem certificado → ação necessária | com cert mas sem notas → informativo */}
               {nfeRec.length === 0 && !nfeRecQuery.isLoading && !sefazCfg?.tem_certificado && (
                 <Card className="border-0 shadow-sm ring-1 ring-amber-100 bg-amber-50/60">
@@ -1679,7 +1723,7 @@ export default function FinanceiroNotasFiscais() {
                           </td>
                         </tr>
                       )}
-                      {nfeRec.map((nf: any) => {
+                      {(recSemVinculo ? nfeRec.filter((n: any) => n.status === "pendente") : nfeRec).map((nf: any) => {
                         const st = STATUS_MAP[nf.status] ?? { label: nf.status, color: "bg-gray-100 text-gray-700 border-gray-200" };
                         const isRecSelected = selectedRecIds.has(nf.id);
                         return (
@@ -1890,6 +1934,26 @@ export default function FinanceiroNotasFiscais() {
             </Card>
           ))}
         </div>
+
+        {/* Barra de status — % vinculadas (emitidas) */}
+        {totais.total > 0 && (() => {
+          const vinc = totais.conciliada + totais.recebida + totais.validada;
+          const pct = Math.round((vinc / totais.total) * 100);
+          const pend = totais.pendente;
+          return (
+            <div className="flex items-center gap-3 px-1">
+              <div className="flex-1">
+                <div className="flex items-center justify-between mb-1 text-xs text-slate-500">
+                  <span><span className="font-semibold text-emerald-600">{vinc}</span> vinculadas</span>
+                  <span><span className="font-semibold text-amber-600">{pend}</span> pendentes · <span className="font-semibold">{pct}%</span></span>
+                </div>
+                <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                  <div className="h-full rounded-full bg-emerald-400 transition-all" style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Timeline Ano / Mês */}
         <Card className="border-0 shadow-sm">
@@ -4189,6 +4253,57 @@ export default function FinanceiroNotasFiscais() {
                   </div>
                 );
               })}
+
+              {/* Seção: Sem correspondência no extrato */}
+              {semSugestoes.length > 0 && (
+                <div className="border-t border-slate-200 bg-slate-50">
+                  <button
+                    type="button"
+                    className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
+                    onClick={() => setSemSugestoesOpen(v => !v)}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-amber-500">⚠</span>
+                      {semSugestoes.length} NF-e sem correspondência no extrato
+                    </span>
+                    <span className="text-slate-400">{semSugestoesOpen ? "▲" : "▼"}</span>
+                  </button>
+                  {semSugestoesOpen && (
+                    <div className="divide-y divide-slate-100">
+                      {semSugestoes.map(s => {
+                        const isEmit = s.fnOrigem?.startsWith("nfse_");
+                        return (
+                          <div key={s.fnId} className="px-4 py-2.5 hover:bg-white transition-colors">
+                            <div className="flex items-start gap-3">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+                                    {isEmit ? "NFS-e Emitida" : "NF-e Recebida"}
+                                    {s.fnNumero ? ` #${s.fnNumero}` : ""}
+                                  </span>
+                                  <span className="text-xs text-slate-700 truncate max-w-[220px]">{s.fnNome || "—"}</span>
+                                </div>
+                                <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                                  <span className="text-xs text-slate-500">NF: <span className="font-semibold">{formatBRL(s.fnValorLiquido)}</span></span>
+                                  <span className="text-xs text-slate-400">{fmtDateBR(s.fnDataEmissao)}</span>
+                                </div>
+                              </div>
+                              <div className="flex-1 min-w-0 text-right">
+                                <p className="text-[11px] text-amber-700">{s.motivoSemMatch}</p>
+                                {s.candidatoProximo && (
+                                  <p className="text-[10px] text-slate-400 mt-0.5">
+                                    Mais próximo: {s.candidatoProximo.bslDescricao.slice(0, 40)} · {formatBRL(s.candidatoProximo.bslValor)} · {fmtDateBR(s.candidatoProximo.bslData)}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Footer */}

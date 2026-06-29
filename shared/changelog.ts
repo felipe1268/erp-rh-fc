@@ -1,4 +1,41 @@
 /**
+ * Rev. 3854 — **NF-e × EXTRATO · SCORING RIGOROSO + BOTÕES INDEPENDENTES + BARRA DE STATUS + SEM-MATCH.**
+ *
+ * **Problema:** sugestões de vínculo para NF-e recebidas linkavam nomes e valores sem relação
+ * (ex: "COIMBRA MATERIAIS" sendo vinculada a "DEB PIX CHAVE - Nayara Aparecida" com Δ2%).
+ * O pré-filtro de 15% era excessivo para compras — o extrato bancário de débitos não traz
+ * nome do fornecedor, portanto o critério único confiável é valor preciso.
+ *
+ * **Mudanças:**
+ *
+ * 1. **Scoring rigoroso para recebidas** (`autoVincularNfService.ts`):
+ *    - `processarRecebidas`: pré-filtro de ≤5% (antes ≤15%); candidatos 5–30% aparecem como
+ *      "candidato próximo" no semSugestoes, mas NÃO como sugestão vinculável.
+ *    - `processarEmitidas`: mantém ≤15% (emitidas têm retenções de ISS/IR que podem chegar a 18%).
+ *
+ * 2. **`SemSugestao` interface + retorno de `semSugestoes`**: para cada NF-e sem match, retorna
+ *    `motivoSemMatch` + `candidatoProximo` (Δ% + descrição + valor + data).
+ *
+ * 3. **Parâmetro `tipo?: "emitida" | "recebida"`** em `obterSugestoesPeriodo` e
+ *    `sincronizarNfsPeriodo` (e nos endpoints do router):
+ *    - Botão Emitidas: `tipo: "emitida"` → varre SOMENTE créditos vs NFS-e emitidas.
+ *    - Botão Recebidas: `tipo: "recebida"` → varre SOMENTE débitos vs NF-e recebidas.
+ *    - `sincronizarNfsPeriodo`: gatea loops internos pelo `tipo`.
+ *
+ * 4. **Barra de status % vinculadas** (emitidas + recebidas): barra de progresso verde
+ *    após os KPI cards, mostrando "X vinculadas / Y pendentes · Z%".
+ *    Recebidas: botão "Só pendentes / ← Ver todas" inline.
+ *
+ * 5. **Filtro automático para pendentes após vínculo manual**: `vincularSugestaoMut.onSuccess`
+ *    seta `filterSemVinculo(true)` (emitidas) ou `setRecSemVinculo(true)` (recebidas).
+ *
+ * 6. **Seção "Sem correspondência no extrato" no dialog**: collapsible abaixo das sugestões,
+ *    lista NF-e com zero match + motivo + parâmetro mais próximo para investigar manualmente.
+ *
+ * **ZERO DELETE. Detalhe: `shared/changelog.ts`.**
+ */
+
+/**
  * Rev. 3853 — **HOTFIX · `autoVincularNfService`: coluna `tomador_nome` não existe.**
  *
  * Erro reportado: `column "tomador_nome" does not exist` ao clicar em "Vincular Automaticamente"

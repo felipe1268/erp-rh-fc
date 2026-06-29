@@ -936,6 +936,7 @@ export const fiscalNotesRouter = router({
       companyId: z.number(),
       dataInicio: z.string(),
       dataFim: z.string(),
+      tipo: z.enum(["emitida", "recebida"]).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       await _assertNfAccess(ctx.user, input.companyId);
@@ -943,6 +944,7 @@ export const fiscalNotesRouter = router({
         input.companyId,
         input.dataInicio,
         input.dataFim,
+        input.tipo,
       );
       return result;
     }),
@@ -952,6 +954,7 @@ export const fiscalNotesRouter = router({
       companyId: z.number(),
       dataInicio: z.string(),
       dataFim: z.string(),
+      tipo: z.enum(["emitida", "recebida"]).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       await _assertNfAccess(ctx.user, input.companyId);
@@ -959,6 +962,7 @@ export const fiscalNotesRouter = router({
         input.companyId,
         input.dataInicio,
         input.dataFim,
+        input.tipo,
       );
     }),
 });
