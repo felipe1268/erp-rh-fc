@@ -1,4 +1,21 @@
 /**
+ * Rev. 3853 — **HOTFIX · `autoVincularNfService`: coluna `tomador_nome` não existe.**
+ *
+ * Erro reportado: `column "tomador_nome" does not exist` ao clicar em "Vincular Automaticamente"
+ * e "Revisar Sugestões". O nome real da coluna no schema é `tomador_razao_social`.
+ *
+ * Corrigi as 3 queries SQL em `autoVincularNfService.ts` que referenciavam `tomador_nome` direto:
+ * - `autoVincularNfsPorLinhas` (loop de créditos): `tomador_razao_social AS tomador_nome`
+ * - `obterSugestoesPeriodo` (query emitidas): `COALESCE(tomador_razao_social, '') AS tomador_nome`
+ * - `sincronizarNfsPeriodo` (query emitidas Fn3): `tomador_razao_social AS tomador_nome`
+ *
+ * As referencias JS `r.tomador_nome` / `fn.tomador_nome` estavam corretas (usam o alias).
+ * Não havia nenhuma coluna física `tomador_nome` na tabela `fiscal_notes`.
+ *
+ * **ZERO DELETE. Detalhe: `shared/changelog.ts`.**
+ */
+
+/**
  * Rev. 3852 — **PANORAMA FISCAL · CHEQUE DEVOLVIDO EXCLUÍDO DAS "SAÍDAS SEM NF-e".**
  *
  * **Problema:** a tela Panorama Fiscal mostrava centenas de entradas "CHEQUE DEVOLVIDO MOT 11"

@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3853** — **HOTFIX · `autoVincularNfService`: `column "tomador_nome" does not exist`.** 3 queries corrigidas para `tomador_razao_social AS tomador_nome` (emitidas em autoVincular, obterSugestoes, sincronizar). ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3852** — **PANORAMA FISCAL · CHEQUE DEVOLVIDO EXCLUÍDO DAS "SAÍDAS SEM NF-e".** `getPanorama`: SQL + `desconsiderado_em IS NULL`; regex `_PANORAMA_INTERNO_RE` (cheque devol, tarifas, TED/PIX próprio, etc.) → `bankDebitosReais` para `saidasSemNota`, `saidasBancarias` e `coberturaSaidaNfe`. `saidasInternas` retornado como campo informativo. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3851** — **NF-e × EXTRATO · CARD DE VÍNCULO + SCORING DEFINITIVO COM valor_bruto E CNPJ-RAIZ.** `calcScore` recebe `fnValorBruto` (melhor de líquido vs bruto) + CNPJ-raiz +25 pts + patamar ≤2% +22 pts. Pré-filtro duplo (líquido OR bruto ≤15%) em todas as 3 funções. `fiscalNotes.list` e `sefaz.listNFeRecebidas` enricidos com batch-fetch de `bank_statement_lines` → `stmtLine:{descricao,valor,data}`. VÍNCULOS (emitidas e recebidas): card violeta com descrição+valor+data quando vinculado. ZERO DELETE. Detalhe: `shared/changelog.ts`.

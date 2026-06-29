@@ -157,7 +157,7 @@ export async function autoVincularNfsPorLinhas(
     const q = await db.$client.query(`
       SELECT id, ABS(valor_liquido)::float AS valor_liquido,
              ABS(valor_bruto)::float AS valor_bruto,
-             tomador_cnpj, tomador_nome, data_emissao::text
+             tomador_cnpj, tomador_razao_social AS tomador_nome, data_emissao::text
       FROM fiscal_notes
       WHERE company_id = $1
         AND stmt_line_id IS NULL
@@ -303,7 +303,7 @@ export async function obterSugestoesPeriodo(
     SELECT id, COALESCE(numero_nf::text, '') AS numero_nf,
            ABS(valor_liquido)::float AS valor_liquido,
            ABS(valor_bruto)::float   AS valor_bruto,
-           COALESCE(tomador_nome, '') AS tomador_nome,
+           COALESCE(tomador_razao_social, '') AS tomador_nome,
            tomador_cnpj, data_emissao::text, origem
     FROM fiscal_notes
     WHERE company_id = $1 AND stmt_line_id IS NULL
@@ -426,7 +426,7 @@ export async function sincronizarNfsPeriodo(
   const emitQ = await db.$client.query(`
     SELECT id, ABS(valor_liquido)::float AS valor_liquido,
            ABS(valor_bruto)::float AS valor_bruto,
-           tomador_cnpj, tomador_nome, data_emissao::text
+           tomador_cnpj, tomador_razao_social AS tomador_nome, data_emissao::text
     FROM fiscal_notes
     WHERE company_id = $1
       AND stmt_line_id IS NULL
