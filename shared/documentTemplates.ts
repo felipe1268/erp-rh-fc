@@ -1,7 +1,10 @@
 /**
  * Rev. 2141 — Templates institucionais FC (metadados compartilhados).
+ * Rev. 3862 — Adicionado campo `categoria` na meta + 6 novos tipos (Financeiro,
+ *              Planejamento, Contratos). `getCategoriaFromDoc` deriva categoria
+ *              de tipos custom pelo prefixo do código ISO.
  *
- * Define os 7 tipos de documento gerenciáveis na aba
+ * Define os tipos de documento gerenciáveis na aba
  * "Templates de Documentos" em Configurações, junto com a lista de
  * placeholders disponíveis para cada tipo. Usado tanto pelo backend
  * (validação + render) quanto pelo frontend (editor WYSIWYG + sidebar
@@ -9,13 +12,54 @@
  */
 
 export type DocumentTemplateTipo =
+  // RH
   | "contrato_experiencia"
   | "termo_responsabilidade"
   | "comunicado_interno"
   | "advertencia"
   | "aviso_previo"
   | "termo_rescisao"
-  | "carta_mdo";
+  | "carta_mdo"
+  // Financeiro
+  | "recibo_pagamento"
+  | "comprovante_pagamento"
+  | "recibo_adiantamento"
+  // Planejamento
+  | "ata_reuniao"
+  // Contratos
+  | "ordem_servico"
+  | "proposta_comercial";
+
+// ── Categorias canônicas ─────────────────────────────────────────────────────
+export const CATEGORIAS_DOCS = [
+  { id: "rh",            label: "RH" },
+  { id: "financeiro",    label: "Financeiro" },
+  { id: "planejamento",  label: "Planejamento" },
+  { id: "contratos",     label: "Contratos" },
+  { id: "medicoes",      label: "Medições" },
+  { id: "contabilidade", label: "Contabilidade" },
+] as const;
+
+export type CategoriaDoc = (typeof CATEGORIAS_DOCS)[number]["id"];
+
+/**
+ * Retorna a categoria de um documento.
+ * - Para tipos fixos: usa o campo `categoria` da meta.
+ * - Para tipos custom: deriva do prefixo do código ISO (FC-FIN → financeiro, etc.).
+ */
+export function getCategoriaFromDoc(tipo: string, codigo?: string | null): string {
+  const meta = DOCUMENT_TEMPLATES_META.find(m => m.tipo === tipo);
+  if (meta?.categoria) return meta.categoria;
+  if (codigo) {
+    const u = codigo.toUpperCase();
+    if (u.startsWith("FC-FIN"))  return "financeiro";
+    if (u.startsWith("FC-PL"))   return "planejamento";
+    if (u.startsWith("FC-MED"))  return "medicoes";
+    if (u.startsWith("FC-CON"))  return "contratos";
+    if (u.startsWith("FC-CONT")) return "contabilidade";
+  }
+  return "rh";
+}
 
 export type PlaceholderDef = {
   chave: string;        // ex: "empNome" → render como {{empNome}}
@@ -29,6 +73,7 @@ export type DocumentTemplateMeta = {
   titulo: string;
   descricao: string;
   icone: string;        // nome do ícone lucide-react
+  categoria: string;    // "rh" | "financeiro" | "planejamento" | "contratos" | "medicoes" | "contabilidade"
   placeholders: PlaceholderDef[];
 };
 
@@ -60,13 +105,45 @@ const PH_OBRA: PlaceholderDef[] = [
   { chave: "obraEndereco", rotulo: "Endereço da Obra", exemplo: "RUA DAS PALMEIRAS, 100 - GUARATINGUETÁ/SP", grupo: "Obra" },
 ];
 
-// ── 7 tipos de documento institucional FC ───────────────────────────────────
+// ── Placeholders financeiros ─────────────────────────────────────────────────
+const PH_FINANCEIRO: PlaceholderDef[] = [
+  { chave: "valor",          rotulo: "Valor (R$)",            exemplo: "R$ 5.000,00",                  grupo: "Financeiro" },
+  { chave: "valorExtenso",   rotulo: "Valor por extenso",     exemplo: "cinco mil reais",               grupo: "Financeiro" },
+  { chave: "referente",      rotulo: "Referente a",           exemplo: "Salário de Junho/2026",         grupo: "Financeiro" },
+  { chave: "dataPagamento",  rotulo: "Data de Pagamento",     exemplo: "30/06/2026",                    grupo: "Financeiro" },
+  { chave: "formaPagamento", rotulo: "Forma de Pagamento",    exemplo: "Transferência Bancária (PIX)",  grupo: "Financeiro" },
+  { chave: "mesRef",         rotulo: "Mês de Referência",     exemplo: "Junho/2026",                    grupo: "Financeiro" },
+];
+
+// ── Placeholders de reunião ───────────────────────────────────────────────────
+const PH_REUNIAO: PlaceholderDef[] = [
+  { chave: "dataReuniao",   rotulo: "Data da Reunião",       exemplo: "19/05/2026",              grupo: "Reunião" },
+  { chave: "localReuniao",  rotulo: "Local",                 exemplo: "Sede FC Engenharia",      grupo: "Reunião" },
+  { chave: "horaInicio",    rotulo: "Hora de Início",        exemplo: "09h00",                   grupo: "Reunião" },
+  { chave: "horaFim",       rotulo: "Hora de Término",       exemplo: "11h00",                   grupo: "Reunião" },
+  { chave: "pauta",         rotulo: "Pauta",                 exemplo: "(itens da pauta)",        grupo: "Reunião" },
+  { chave: "participantes", rotulo: "Participantes",         exemplo: "(lista de participantes)", grupo: "Reunião" },
+  { chave: "deliberacoes",  rotulo: "Deliberações / Ações",  exemplo: "(ações decididas)",       grupo: "Reunião" },
+];
+
+// ── Placeholders de OS/Proposta ───────────────────────────────────────────────
+const PH_OS: PlaceholderDef[] = [
+  { chave: "clienteNome",    rotulo: "Nome do Cliente",      exemplo: "CONSTRUTORA ALPHA S/A",   grupo: "OS" },
+  { chave: "clienteCnpj",    rotulo: "CNPJ do Cliente",      exemplo: "12.345.678/0001-99",      grupo: "OS" },
+  { chave: "descricaoServico", rotulo: "Descrição do Serviço", exemplo: "Execução de fundações e estrutura de concreto armado", grupo: "OS" },
+  { chave: "prazoExecucao",  rotulo: "Prazo de Execução",    exemplo: "60 dias corridos",        grupo: "OS" },
+  { chave: "dataInicio",     rotulo: "Data de Início",       exemplo: "01/07/2026",              grupo: "OS" },
+  { chave: "valorTotal",     rotulo: "Valor Total",          exemplo: "R$ 150.000,00",           grupo: "OS" },
+];
+
+// ── 7 tipos RH + 6 tipos novos (Financeiro/Planejamento/Contratos) ────────────
 export const DOCUMENT_TEMPLATES_META: DocumentTemplateMeta[] = [
   {
     tipo: "contrato_experiencia",
     titulo: "Contrato de Experiência",
     descricao: "Contrato CLT por prazo determinado (experiência) — 45+45 dias.",
     icone: "FileSignature",
+    categoria: "rh",
     placeholders: [
       ...PH_COLABORADOR,
       ...PH_EMPRESA,
@@ -88,6 +165,7 @@ export const DOCUMENT_TEMPLATES_META: DocumentTemplateMeta[] = [
     titulo: "Termo de Responsabilidade",
     descricao: "Entrega de equipamentos, EPIs e veículos sob responsabilidade do colaborador.",
     icone: "ShieldCheck",
+    categoria: "rh",
     placeholders: [
       ...PH_COLABORADOR,
       ...PH_EMPRESA,
@@ -100,6 +178,7 @@ export const DOCUMENT_TEMPLATES_META: DocumentTemplateMeta[] = [
     titulo: "Comunicado Interno",
     descricao: "Comunicado oficial da empresa para colaborador(es).",
     icone: "Megaphone",
+    categoria: "rh",
     placeholders: [
       ...PH_COLABORADOR,
       ...PH_EMPRESA,
@@ -113,6 +192,7 @@ export const DOCUMENT_TEMPLATES_META: DocumentTemplateMeta[] = [
     titulo: "Advertência",
     descricao: "Advertência disciplinar (verbal/escrita/suspensão).",
     icone: "AlertTriangle",
+    categoria: "rh",
     placeholders: [
       ...PH_COLABORADOR,
       ...PH_EMPRESA,
@@ -128,6 +208,7 @@ export const DOCUMENT_TEMPLATES_META: DocumentTemplateMeta[] = [
     titulo: "Aviso Prévio",
     descricao: "Aviso prévio de rescisão (trabalhado ou indenizado).",
     icone: "BellRing",
+    categoria: "rh",
     placeholders: [
       ...PH_COLABORADOR,
       ...PH_EMPRESA,
@@ -144,6 +225,7 @@ export const DOCUMENT_TEMPLATES_META: DocumentTemplateMeta[] = [
     titulo: "Termo de Rescisão",
     descricao: "Termo de rescisão do contrato de trabalho.",
     icone: "UserX",
+    categoria: "rh",
     placeholders: [
       ...PH_COLABORADOR,
       ...PH_EMPRESA,
@@ -158,12 +240,94 @@ export const DOCUMENT_TEMPLATES_META: DocumentTemplateMeta[] = [
     titulo: "Carta MDO (Mão de Obra)",
     descricao: "Carta de apresentação de mão de obra para obras/clientes.",
     icone: "Hammer",
+    categoria: "rh",
     placeholders: [
       ...PH_COLABORADOR,
       ...PH_EMPRESA,
       ...PH_DOCUMENTO,
       ...PH_OBRA,
       { chave: "clienteNome", rotulo: "Nome do Cliente", exemplo: "CONSTRUTORA ALPHA S/A", grupo: "Específicos" },
+    ],
+  },
+  // ── Financeiro ──────────────────────────────────────────────────────────────
+  {
+    tipo: "recibo_pagamento",
+    titulo: "Recibo de Pagamento",
+    descricao: "Recibo de quitação de pagamento (salário, rescisão, serviços, etc.).",
+    icone: "FileText",
+    categoria: "financeiro",
+    placeholders: [
+      ...PH_COLABORADOR,
+      ...PH_EMPRESA,
+      ...PH_DOCUMENTO,
+      ...PH_FINANCEIRO,
+    ],
+  },
+  {
+    tipo: "comprovante_pagamento",
+    titulo: "Comprovante de Pagamento",
+    descricao: "Comprovante de transferência / pagamento bancário para colaborador ou fornecedor.",
+    icone: "BadgeCheck",
+    categoria: "financeiro",
+    placeholders: [
+      ...PH_COLABORADOR,
+      ...PH_EMPRESA,
+      ...PH_DOCUMENTO,
+      ...PH_FINANCEIRO,
+    ],
+  },
+  {
+    tipo: "recibo_adiantamento",
+    titulo: "Recibo de Adiantamento",
+    descricao: "Recibo de adiantamento salarial ou de viagem.",
+    icone: "FileText",
+    categoria: "financeiro",
+    placeholders: [
+      ...PH_COLABORADOR,
+      ...PH_EMPRESA,
+      ...PH_DOCUMENTO,
+      ...PH_FINANCEIRO,
+    ],
+  },
+  // ── Planejamento ────────────────────────────────────────────────────────────
+  {
+    tipo: "ata_reuniao",
+    titulo: "Ata de Reunião",
+    descricao: "Ata de reunião interna ou com cliente / partes interessadas.",
+    icone: "FileText",
+    categoria: "planejamento",
+    placeholders: [
+      ...PH_EMPRESA,
+      ...PH_DOCUMENTO,
+      ...PH_OBRA,
+      ...PH_REUNIAO,
+    ],
+  },
+  // ── Contratos ───────────────────────────────────────────────────────────────
+  {
+    tipo: "ordem_servico",
+    titulo: "Ordem de Serviço",
+    descricao: "Ordem de serviço para contratação de mão de obra ou serviços especializados.",
+    icone: "Hammer",
+    categoria: "contratos",
+    placeholders: [
+      ...PH_EMPRESA,
+      ...PH_DOCUMENTO,
+      ...PH_OBRA,
+      ...PH_OS,
+    ],
+  },
+  {
+    tipo: "proposta_comercial",
+    titulo: "Proposta Comercial",
+    descricao: "Proposta comercial de prestação de serviços de engenharia.",
+    icone: "FileText",
+    categoria: "contratos",
+    placeholders: [
+      ...PH_EMPRESA,
+      ...PH_DOCUMENTO,
+      ...PH_OBRA,
+      ...PH_OS,
     ],
   },
 ];
@@ -254,8 +418,9 @@ export const DOC_STATUS_LABELS: Record<DocStatus, string> = {
   obsoleto: "Obsoleto",
 };
 
-/** Código documental ISO (controle de documentos) por tipo — FC-RH-NNN. */
+/** Código documental ISO (controle de documentos) por tipo. */
 export const DEFAULT_CODIGOS: Record<DocumentTemplateTipo, string> = {
+  // RH
   contrato_experiencia:   "FC-RH-001",
   termo_responsabilidade: "FC-RH-002",
   comunicado_interno:     "FC-RH-003",
@@ -263,6 +428,15 @@ export const DEFAULT_CODIGOS: Record<DocumentTemplateTipo, string> = {
   aviso_previo:           "FC-RH-005",
   termo_rescisao:         "FC-RH-006",
   carta_mdo:              "FC-RH-007",
+  // Financeiro
+  recibo_pagamento:       "FC-FIN-001",
+  comprovante_pagamento:  "FC-FIN-002",
+  recibo_adiantamento:    "FC-FIN-003",
+  // Planejamento
+  ata_reuniao:            "FC-PL-001",
+  // Contratos
+  ordem_servico:          "FC-CON-001",
+  proposta_comercial:     "FC-CON-002",
 };
 
 // ── Corpos-semente (apenas o CORPO; o cabeçalho/faixa/assinaturas vêm do
@@ -391,7 +565,171 @@ const SEED_CARTA_MDO = `
 <p style="margin-top:14px">Desde já agradecemos a atenção e colocamo-nos à disposição para eventuais esclarecimentos.</p>
 `;
 
+// ── Seeds Financeiro ──────────────────────────────────────────────────────────
+const SEED_RECIBO_PAGAMENTO = `
+<p style="text-align:center;font-size:13pt;margin-bottom:16px"><strong>RECIBO DE PAGAMENTO</strong></p>
+<p style="margin-bottom:12px;text-align:justify">Eu, <strong>{{empNome}}</strong>, portador(a) do CPF nº <strong>{{empCpf}}</strong>, ocupante da função de <strong>{{empFuncao}}</strong> na empresa <strong>{{empresaRazaoSocial}}</strong>, inscrita no CNPJ sob o nº <strong>{{empresaCnpj}}</strong>, declaro que recebi a importância de <strong>{{valor}}</strong> (<em>{{valorExtenso}}</em>), referente a: <strong>{{referente}}</strong>, relativo ao período de <strong>{{mesRef}}</strong>.</p>
+<table style="width:100%;border-collapse:collapse;margin:14px 0;font-size:10.5pt">
+  <tr>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px;background:#F8FAFC;font-weight:bold;width:35%">Referente a</td>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px">{{referente}}</td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px;background:#F8FAFC;font-weight:bold">Valor</td>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px"><strong>{{valor}}</strong> ({{valorExtenso}})</td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px;background:#F8FAFC;font-weight:bold">Forma de Pagamento</td>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px">{{formaPagamento}}</td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px;background:#F8FAFC;font-weight:bold">Data de Pagamento</td>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px">{{dataPagamento}}</td>
+  </tr>
+</table>
+<p style="margin-top:12px;text-align:justify">Dou plena quitação da importância acima recebida, para nada mais reclamar a respeito do período de <strong>{{mesRef}}</strong>.</p>
+`;
+
+const SEED_COMPROVANTE_PAGAMENTO = `
+<p style="margin-bottom:12px;text-align:justify">A empresa <strong>{{empresaRazaoSocial}}</strong>, inscrita no CNPJ sob o nº <strong>{{empresaCnpj}}</strong>, com sede em <strong>{{empresaEndereco}}</strong>, declara, para os devidos fins, que efetuou o pagamento ao(à) beneficiário(a) <strong>{{empNome}}</strong>, CPF nº <strong>{{empCpf}}</strong>, conforme detalhado abaixo:</p>
+<table style="width:100%;border-collapse:collapse;margin:14px 0;font-size:10.5pt">
+  <tr>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px;background:#F8FAFC;font-weight:bold;width:35%">Beneficiário</td>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px">{{empNome}}</td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px;background:#F8FAFC;font-weight:bold">CPF</td>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px">{{empCpf}}</td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px;background:#F8FAFC;font-weight:bold">Referente a</td>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px">{{referente}}</td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px;background:#F8FAFC;font-weight:bold">Valor</td>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px"><strong>{{valor}}</strong> ({{valorExtenso}})</td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px;background:#F8FAFC;font-weight:bold">Forma de Pagamento</td>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px">{{formaPagamento}}</td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px;background:#F8FAFC;font-weight:bold">Data do Pagamento</td>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px">{{dataPagamento}}</td>
+  </tr>
+</table>
+<p style="margin-top:12px">O presente comprovante é emitido a pedido do interessado para fins de comprovação de quitação.</p>
+`;
+
+const SEED_RECIBO_ADIANTAMENTO = `
+<p style="text-align:center;font-size:13pt;margin-bottom:16px"><strong>RECIBO DE ADIANTAMENTO</strong></p>
+<p style="margin-bottom:12px;text-align:justify">Eu, <strong>{{empNome}}</strong>, portador(a) do CPF nº <strong>{{empCpf}}</strong>, ocupante da função de <strong>{{empFuncao}}</strong>, declaro que recebi da empresa <strong>{{empresaRazaoSocial}}</strong>, CNPJ <strong>{{empresaCnpj}}</strong>, o valor de <strong>{{valor}}</strong> (<em>{{valorExtenso}}</em>) a título de <strong>ADIANTAMENTO</strong>, referente a: <strong>{{referente}}</strong>.</p>
+<table style="width:100%;border-collapse:collapse;margin:14px 0;font-size:10.5pt">
+  <tr>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px;background:#F8FAFC;font-weight:bold;width:35%">Referente a</td>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px">{{referente}}</td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px;background:#F8FAFC;font-weight:bold">Valor do Adiantamento</td>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px"><strong>{{valor}}</strong> ({{valorExtenso}})</td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px;background:#F8FAFC;font-weight:bold">Forma de Pagamento</td>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px">{{formaPagamento}}</td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px;background:#F8FAFC;font-weight:bold">Data</td>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px">{{dataPagamento}}</td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px;background:#F8FAFC;font-weight:bold">Mês de Referência</td>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px">{{mesRef}}</td>
+  </tr>
+</table>
+<p style="margin-top:12px;text-align:justify">Declaro estar ciente de que o valor recebido como adiantamento será descontado na folha de pagamento do período de competência correspondente, conforme autorização expressa contida neste documento.</p>
+`;
+
+// ── Seeds Planejamento ─────────────────────────────────────────────────────────
+const SEED_ATA_REUNIAO = `
+<p style="margin-bottom:10px;text-align:justify">Aos <strong>{{dataReuniao}}</strong>, às <strong>{{horaInicio}}</strong>, reuniram-se em <strong>{{localReuniao}}</strong>, os representantes abaixo identificados, para tratar dos assuntos constantes da pauta previamente divulgada.</p>
+
+<h3 style="font-size:11pt;font-weight:bold;color:#1B2A4A;border-left:3px solid #1B2A4A;padding-left:8px;margin:16px 0 8px">PARTICIPANTES</h3>
+<div style="margin-bottom:10px">{{participantes}}</div>
+
+<h3 style="font-size:11pt;font-weight:bold;color:#1B2A4A;border-left:3px solid #1B2A4A;padding-left:8px;margin:16px 0 8px">PAUTA</h3>
+<div style="margin-bottom:10px">{{pauta}}</div>
+
+<h3 style="font-size:11pt;font-weight:bold;color:#1B2A4A;border-left:3px solid #1B2A4A;padding-left:8px;margin:16px 0 8px">DELIBERAÇÕES E AÇÕES</h3>
+<div style="margin-bottom:10px">{{deliberacoes}}</div>
+
+<p style="margin-top:14px;text-align:justify">Nada mais havendo a tratar, encerrou-se a reunião às <strong>{{horaFim}}</strong>, da qual a presente ata foi lavrada e, após lida e aprovada, segue assinada pelos presentes.</p>
+`;
+
+// ── Seeds Contratos ────────────────────────────────────────────────────────────
+const SEED_ORDEM_SERVICO = `
+<p style="text-align:center;font-size:13pt;margin-bottom:16px"><strong>ORDEM DE SERVIÇO Nº {{docNumero}}</strong></p>
+<p style="margin-bottom:10px;text-align:justify">A empresa <strong>{{empresaRazaoSocial}}</strong>, inscrita no CNPJ sob o nº <strong>{{empresaCnpj}}</strong>, com sede em <strong>{{empresaEndereco}}</strong>, doravante denominada <strong>CONTRATANTE</strong>, e a empresa / pessoa física <strong>{{clienteNome}}</strong>, CNPJ/CPF nº <strong>{{clienteCnpj}}</strong>, doravante denominada <strong>CONTRATADA</strong>, firmam a presente Ordem de Serviço nas seguintes condições:</p>
+
+<h3 style="font-size:11pt;font-weight:bold;color:#1B2A4A;border-left:3px solid #1B2A4A;padding-left:8px;margin:16px 0 8px">OBJETO</h3>
+<p style="margin-bottom:8px;text-align:justify">{{descricaoServico}}</p>
+
+<h3 style="font-size:11pt;font-weight:bold;color:#1B2A4A;border-left:3px solid #1B2A4A;padding-left:8px;margin:16px 0 8px">CONDIÇÕES</h3>
+<table style="width:100%;border-collapse:collapse;margin:8px 0;font-size:10.5pt">
+  <tr>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px;background:#F8FAFC;font-weight:bold;width:35%">Local de Execução</td>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px">{{obraNome}} — {{obraEndereco}}</td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px;background:#F8FAFC;font-weight:bold">Data de Início</td>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px">{{dataInicio}}</td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px;background:#F8FAFC;font-weight:bold">Prazo de Execução</td>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px">{{prazoExecucao}}</td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px;background:#F8FAFC;font-weight:bold">Valor Total</td>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px"><strong>{{valorTotal}}</strong></td>
+  </tr>
+</table>
+
+<p style="margin-top:14px;text-align:justify">A CONTRATADA obriga-se a executar os serviços conforme especificações técnicas fornecidas pela CONTRATANTE, respeitando as normas de segurança e qualidade exigidas.</p>
+`;
+
+const SEED_PROPOSTA_COMERCIAL = `
+<p style="margin-bottom:10px">À Empresa: <strong>{{clienteNome}}</strong></p>
+<p style="margin-bottom:10px">Prezados Senhores,</p>
+<p style="margin-bottom:10px;text-align:justify">A empresa <strong>{{empresaRazaoSocial}}</strong>, inscrita no CNPJ sob o nº <strong>{{empresaCnpj}}</strong>, com sede em <strong>{{empresaEndereco}}</strong>, vem por meio desta apresentar proposta comercial para a execução dos serviços abaixo descritos:</p>
+
+<h3 style="font-size:11pt;font-weight:bold;color:#1B2A4A;border-left:3px solid #1B2A4A;padding-left:8px;margin:16px 0 8px">OBJETO</h3>
+<p style="margin-bottom:8px;text-align:justify">{{descricaoServico}}</p>
+
+<h3 style="font-size:11pt;font-weight:bold;color:#1B2A4A;border-left:3px solid #1B2A4A;padding-left:8px;margin:16px 0 8px">LOCAL DE EXECUÇÃO</h3>
+<p style="margin-bottom:8px">{{obraNome}} — {{obraEndereco}}</p>
+
+<h3 style="font-size:11pt;font-weight:bold;color:#1B2A4A;border-left:3px solid #1B2A4A;padding-left:8px;margin:16px 0 8px">CONDIÇÕES COMERCIAIS</h3>
+<table style="width:100%;border-collapse:collapse;margin:8px 0;font-size:10.5pt">
+  <tr>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px;background:#F8FAFC;font-weight:bold;width:35%">Prazo de Execução</td>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px">{{prazoExecucao}}</td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px;background:#F8FAFC;font-weight:bold">Início Previsto</td>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px">{{dataInicio}}</td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px;background:#F8FAFC;font-weight:bold">Valor Total</td>
+    <td style="border:1px solid #D0D5DD;padding:7px 12px"><strong>{{valorTotal}}</strong></td>
+  </tr>
+</table>
+
+<p style="margin-top:14px;text-align:justify">A presente proposta tem validade de 30 (trinta) dias corridos a contar da data de emissão. Permanecemos à disposição para quaisquer esclarecimentos.</p>
+<p style="margin-top:10px">Atenciosamente,</p>
+<p><strong>{{empresaRazaoSocial}}</strong></p>
+`;
+
 export const SEED_BODIES: Record<DocumentTemplateTipo, string> = {
+  // RH
   contrato_experiencia:   SEED_CONTRATO_EXPERIENCIA.trim(),
   termo_responsabilidade: SEED_TERMO_RESPONSABILIDADE.trim(),
   comunicado_interno:     SEED_COMUNICADO_INTERNO.trim(),
@@ -399,6 +737,15 @@ export const SEED_BODIES: Record<DocumentTemplateTipo, string> = {
   aviso_previo:           SEED_AVISO_PREVIO.trim(),
   termo_rescisao:         SEED_TERMO_RESCISAO.trim(),
   carta_mdo:              SEED_CARTA_MDO.trim(),
+  // Financeiro
+  recibo_pagamento:       SEED_RECIBO_PAGAMENTO.trim(),
+  comprovante_pagamento:  SEED_COMPROVANTE_PAGAMENTO.trim(),
+  recibo_adiantamento:    SEED_RECIBO_ADIANTAMENTO.trim(),
+  // Planejamento
+  ata_reuniao:            SEED_ATA_REUNIAO.trim(),
+  // Contratos
+  ordem_servico:          SEED_ORDEM_SERVICO.trim(),
+  proposta_comercial:     SEED_PROPOSTA_COMERCIAL.trim(),
 };
 
 /** Seed completo (código ISO + corpo) de um tipo, p/ seedDefaults idempotente. */

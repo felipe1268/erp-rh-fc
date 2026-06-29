@@ -30,6 +30,7 @@ import {
 import RichTextEditor, { type RichTextEditorHandle } from "@/components/RichTextEditor";
 import {
   DOCUMENT_TEMPLATES_META,
+  CATEGORIAS_DOCS,
   renderTemplate,
   getDocMetaOrFallback,
   isCustomTipo,
@@ -193,6 +194,7 @@ export default function TemplatesDocsTab() {
   // Busca/filtro da lista de documentos (coluna esquerda)
   const [buscaDoc, setBuscaDoc] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<string>("todos");
+  const [categoriaSelecionada, setCategoriaSelecionada] = useState<string>("todos");
   // Sugestões de melhoria devolvidas pela IA ao ler um PDF
   const [iaSugestoes, setIaSugestoes] = useState<string[]>([]);
   const editorRef = useRef<RichTextEditorHandle>(null);
@@ -252,11 +254,15 @@ export default function TemplatesDocsTab() {
     return base.filter((row: any) => {
       const st = row.status ?? "ausente";
       if (filtroStatus !== "todos" && st !== filtroStatus) return false;
+      if (categoriaSelecionada !== "todos") {
+        const cat = (row as any).categoria ?? "rh";
+        if (cat !== categoriaSelecionada) return false;
+      }
       if (!q) return true;
       const cod = (row.codigo ?? "").toString().toLowerCase();
       return row.titulo.toLowerCase().includes(q) || cod.includes(q);
     });
-  }, [listAllQuery.data, buscaDoc, filtroStatus]);
+  }, [listAllQuery.data, buscaDoc, filtroStatus, categoriaSelecionada]);
 
   const STATUS_FILTROS: { value: string; label: string }[] = [
     { value: "todos", label: "Todos" },
@@ -572,6 +578,24 @@ export default function TemplatesDocsTab() {
 
       {/* SELETOR HORIZONTAL NO TOPO — substitui a antiga coluna lateral de documentos */}
       <div className="bg-white border rounded-lg p-3">
+        {/* Abas de categoria */}
+        <div className="flex gap-1 flex-wrap mb-3 pb-2.5 border-b border-gray-100">
+          <button
+            onClick={() => setCategoriaSelecionada("todos")}
+            className={`text-[11px] px-2.5 py-1 rounded border font-medium transition-colors ${categoriaSelecionada === "todos" ? "bg-slate-700 text-white border-slate-700" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}
+          >
+            Todos
+          </button>
+          {CATEGORIAS_DOCS.map(cat => (
+            <button
+              key={cat.id}
+              onClick={() => setCategoriaSelecionada(cat.id)}
+              className={`text-[11px] px-2.5 py-1 rounded border font-medium transition-colors ${categoriaSelecionada === cat.id ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}
+            >
+              {cat.label}
+            </button>
+          ))}
+        </div>
         <div className="flex items-center gap-3 flex-wrap mb-3">
           <div className="text-xs font-semibold text-gray-600 uppercase mr-1">Documentos</div>
           <div className="relative flex-1 min-w-[220px] max-w-md">

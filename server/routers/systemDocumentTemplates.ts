@@ -23,6 +23,7 @@ import {
   slugifyDocTipo,
   isCustomTipo,
   DEFAULT_CODIGOS,
+  getCategoriaFromDoc,
   type DocumentTemplateTipo,
 } from "../../shared/documentTemplates";
 import { invokeLLM, invokeAnthropicVision } from "../_core/llm";
@@ -125,6 +126,7 @@ export const systemDocumentTemplatesRouter = router({
         aprovadoEm: row?.aprovadoEm ?? null,
         dataVigencia: row?.dataVigencia ?? null,
         proximaRevisao: row?.proximaRevisao ?? null,
+        categoria: meta.categoria ?? "rh",
       };
     });
     // (2) Documentos CUSTOM (Rev. 2751): qualquer linha cujo tipo não é fixo.
@@ -148,6 +150,7 @@ export const systemDocumentTemplatesRouter = router({
         aprovadoEm: row.aprovadoEm ?? null,
         dataVigencia: row.dataVigencia ?? null,
         proximaRevisao: row.proximaRevisao ?? null,
+        categoria: getCategoriaFromDoc(row.tipo, row.codigo),
       }))
       .sort((a, b) => a.titulo.localeCompare(b.titulo, "pt-BR"));
     return [...fixos, ...customs];

@@ -1,4 +1,47 @@
 /**
+ * Rev. 3862 — **CHECKLIST WORD · ABAS DE CATEGORIA · 6 TEMPLATES FINANCEIRO/PLANEJAMENTO/CONTRATOS.**
+ *
+ * **Contexto:** três melhorias complementares na Central de Documentos e no Pacote Contabilidade.
+ *
+ * **1 — CHECKLIST WORD (downloadPacoteContador.ts)**
+ * O checklist do ZIP do contador era um `.txt` simples. Substituído por um
+ * documento Word (.docx) profissional (`00_CHECKLIST.docx`) gerado via `docx` v9.7.1:
+ * - Cabeçalho "FC ENGENHARIA E CONSTRUÇÃO LTDA · Sistema de Gestão da Qualidade · ISO 9001".
+ * - Tabela de controle: empresa, período, Nº do documento (FC-CONT-001), gerado em.
+ * - Título com borda dupla azul: "CHECKLIST — PACOTE CONTABILIDADE · <período>".
+ * - Seção 1 — Estrutura do pacote (itens com ☑ auto-marcados).
+ * - Seção 2 — Resumo do período (tabela dinâmica: NFS-e, NF-e, extratos, OCs).
+ * - Seção 3 — Pendências (entradas/saídas sem NF + OCs sem NF; "✓ OK" ou "! N pendência(s)").
+ * - Seção 4 — Checklist de envio à Pronus (itens ☐ para marcar manualmente).
+ * - Rodapé "Gerado automaticamente pelo ERP FC Engenharia · <data/hora>".
+ * - Cores: azul FC (#1B2A4A), verde (#166534), laranja (#B45309).
+ * - Arquivo: `server/routers/downloadPacoteContador.ts` — import `docx`, `buildChecklistDocx`.
+ *
+ * **2 — ABAS DE CATEGORIA (TemplatesDocsTab.tsx)**
+ * A Central de Documentos agora tem abas horizontais acima da barra de busca:
+ * "Todos · RH · Financeiro · Planejamento · Contratos · Medições · Contabilidade".
+ * - `categoriaSelecionada` state filtra `docsLista` junto com `filtroStatus` e `buscaDoc`.
+ * - `CATEGORIAS_DOCS` (array `as const`) define as abas e é re-exportado de `shared/documentTemplates.ts`.
+ * - `listAll` em `systemDocumentTemplates.ts` agora retorna `categoria` (fixos: `meta.categoria`;
+ *   customs: `getCategoriaFromDoc(tipo, codigo)`).
+ *
+ * **3 — 6 NOVOS TEMPLATES SEED (shared/documentTemplates.ts)**
+ * - `DocumentTemplateTipo` union: +6 (`recibo_pagamento`, `comprovante_pagamento`,
+ *   `recibo_adiantamento`, `ata_reuniao`, `ordem_servico`, `proposta_comercial`).
+ * - `DocumentTemplateMeta` tipo: novo campo `categoria: string`.
+ * - Todos os 7 metas existentes recebem `categoria: "rh"`.
+ * - Novos metas com placeholders próprios (`PH_FINANCEIRO`, `PH_REUNIAO`, `PH_OS`).
+ * - `DEFAULT_CODIGOS`: +6 entradas (`FC-FIN-001..003`, `FC-PL-001`, `FC-CON-001..002`).
+ * - `SEED_BODIES`: +6 corpos HTML institucionais prontos para uso imediato.
+ * - `getCategoriaFromDoc`: nova função — usa `meta.categoria` para fixos; deriva do
+ *   prefixo do código ISO para customs (`FC-FIN→financeiro`, `FC-PL→planejamento`, etc.).
+ * - `CATEGORIAS_DOCS` + `CategoriaDoc`: novos exports para as abas de UI.
+ *
+ * **ZERO DELETE. Arquivos:** `shared/documentTemplates.ts`, `server/routers/downloadPacoteContador.ts`,
+ * `server/routers/systemDocumentTemplates.ts`, `client/src/pages/configuracoes/TemplatesDocsTab.tsx`.
+ */
+
+/**
  * Rev. 3861 — **ENVIOS AO CONTADOR · BADGE DE STATUS POR LINHA EM NF-e RECEBIDAS.**
  *
  * **Problema:** na aba "NF-e Recebidas" do módulo "Envios ao Contador", o badge

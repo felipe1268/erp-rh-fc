@@ -13,6 +13,10 @@
  */
 import type { Express, Request, Response } from "express";
 import archiver from "archiver";
+import {
+  Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+  WidthType, AlignmentType, BorderStyle, ShadingType,
+} from "docx";
 import { getDb } from "../db";
 import { sdk } from "../_core/sdk";
 import { buildExtratoBancarioBuffer, buildExtratCartaoBuffer } from "./downloadContabilidadeXlsx";
@@ -290,6 +294,161 @@ function buildOcsCsv(rows: any[]): string {
   );
 }
 
+async function buildChecklistDocx(label: string, empresa: string, d: ReturnType<typeof sumarizar>): Promise<Buffer> {
+  const { nfseEmitidas, nfseTomadas, nfe, bank, ocs, cartao } = d;
+  const entSemNF = bank.filter((b: any) => b.tipo === "credito" && !b.fn_numero).length;
+  const saiSemNF = bank.filter((b: any) => b.tipo === "debito"  && !b.fn_numero).length;
+  const ocsSemNF = ocs.filter((o: any) => !o.nfe_vinculada).length;
+  const geradoEm = new Date().toLocaleString("pt-BR");
+  const temPendencias = entSemNF + saiSemNF + ocsSemNF > 0;
+
+  const AZUL = "1B2A4A"; const CINZA = "64748B";
+  const VERDE = "166534"; const LARANJA = "B45309";
+  const FONTE = "Calibri";
+  const SEM = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" } as const;
+  const BRD = (c = "D0D5DD") => ({ style: BorderStyle.SINGLE, size: 4, color: c }) as const;
+
+  function celulaLabel(txt: string) {
+    return new TableCell({
+      shading: { type: ShadingType.SOLID, color: "F1F5F9", fill: "F1F5F9" },
+      margins: { top: 60, bottom: 60, left: 120, right: 120 },
+      borders: { top: BRD(), bottom: BRD(), left: BRD(), right: BRD() },
+      width: { size: 32, type: WidthType.PERCENTAGE },
+      children: [new Paragraph({ children: [new TextRun({ text: txt, bold: true, size: 18, color: CINZA, font: FONTE })] })],
+    });
+  }
+  function celulaValor(txt: string) {
+    return new TableCell({
+      margins: { top: 60, bottom: 60, left: 120, right: 120 },
+      borders: { top: BRD(), bottom: BRD(), left: BRD(), right: BRD() },
+      width: { size: 68, type: WidthType.PERCENTAGE },
+      children: [new Paragraph({ children: [new TextRun({ text: txt, size: 18, font: FONTE })] })],
+    });
+  }
+  function celulaH(txt: string) {
+    return new TableCell({
+      shading: { type: ShadingType.SOLID, color: AZUL, fill: AZUL },
+      margins: { top: 80, bottom: 80, left: 120, right: 120 },
+      borders: { top: BRD(AZUL), bottom: BRD(AZUL), left: BRD(AZUL), right: BRD(AZUL) },
+      children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: txt, bold: true, size: 18, color: "FFFFFF", font: FONTE })] })],
+    });
+  }
+  function celulaD(txt: string, center = false) {
+    return new TableCell({
+      margins: { top: 70, bottom: 70, left: 120, right: 120 },
+      borders: { top: BRD(), bottom: BRD(), left: BRD(), right: BRD() },
+      children: [new Paragraph({ alignment: center ? AlignmentType.CENTER : AlignmentType.LEFT, children: [new TextRun({ text: txt, size: 20, font: FONTE, bold: center })] })],
+    });
+  }
+
+  function secao(titulo: string) {
+    return new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: { top: SEM, bottom: SEM, left: SEM, right: SEM, insideH: SEM, insideV: SEM },
+      rows: [new TableRow({ children: [new TableCell({
+        shading: { type: ShadingType.SOLID, color: AZUL, fill: AZUL },
+        margins: { top: 80, bottom: 80, left: 160, right: 160 },
+        borders: { top: SEM, bottom: SEM, left: SEM, right: SEM },
+        children: [new Paragraph({ children: [new TextRun({ text: titulo, bold: true, size: 22, color: "FFFFFF", font: FONTE })] })],
+      })]})],
+    });
+  }
+
+  function item(txt: string, ok = false, cor?: string) {
+    const icone = ok ? "☑  " : "□  ";
+    return new Paragraph({
+      children: [
+        new TextRun({ text: icone, size: 20, font: FONTE, color: ok ? VERDE : CINZA }),
+        new TextRun({ text: txt, size: 20, font: FONTE, color: cor }),
+      ],
+      spacing: { before: 60, after: 60 }, indent: { left: 400 },
+    });
+  }
+  function pend(txt: string, err: boolean) {
+    return new Paragraph({
+      children: [
+        new TextRun({ text: err ? "!  " : "✓  ", bold: true, size: 20, font: FONTE, color: err ? LARANJA : VERDE }),
+        new TextRun({ text: txt, size: 20, font: FONTE, color: err ? LARANJA : VERDE }),
+      ],
+      spacing: { before: 60, after: 60 }, indent: { left: 400 },
+    });
+  }
+  function esp() { return new Paragraph({ text: "", spacing: { before: 80, after: 0 } }); }
+
+  const tblControle = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [
+      new TableRow({ children: [celulaLabel("Empresa"),       celulaValor(empresa)] }),
+      new TableRow({ children: [celulaLabel("Período"),       celulaValor(label)] }),
+      new TableRow({ children: [celulaLabel("Documento Nº"), celulaValor("FC-CONT-001")] }),
+      new TableRow({ children: [celulaLabel("Gerado em"),     celulaValor(geradoEm)] }),
+    ],
+  });
+
+  const tblResumo = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [
+      new TableRow({ children: [celulaH("Tipo de Documento"), celulaH("Qtd.")] }),
+      new TableRow({ children: [celulaD("NFS-e emitidas (faturas)"), celulaD(String(nfseEmitidas.length), true)] }),
+      new TableRow({ children: [celulaD("NFS-e tomadas (serviços)"), celulaD(String(nfseTomadas.length), true)] }),
+      new TableRow({ children: [celulaD("NF-e recebidas (compras)"), celulaD(String(nfe.length), true)] }),
+      new TableRow({ children: [celulaD("Entradas bancárias"), celulaD(String(bank.filter((b: any) => b.tipo === "credito").length), true)] }),
+      new TableRow({ children: [celulaD("Saídas bancárias"), celulaD(String(bank.filter((b: any) => b.tipo === "debito").length), true)] }),
+      new TableRow({ children: [celulaD("Lançamentos de cartão"), celulaD(String(cartao.length), true)] }),
+      new TableRow({ children: [celulaD("Ordens de compra"), celulaD(String(ocs.length), true)] }),
+    ],
+  });
+
+  const doc = new Document({
+    creator: "ERP FC Engenharia",
+    title: `Checklist Contabilidade — ${label}`,
+    sections: [{
+      properties: { page: { margin: { top: 1134, right: 1134, bottom: 1134, left: 1134 } } },
+      children: [
+        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 60 }, children: [new TextRun({ text: "FC ENGENHARIA E CONSTRUÇÃO LTDA", bold: true, size: 32, color: AZUL, font: FONTE })] }),
+        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 200 }, children: [new TextRun({ text: "Sistema de Gestão da Qualidade  ·  ISO 9001", size: 18, color: CINZA, font: FONTE, italics: true })] }),
+        tblControle,
+        esp(),
+        new Paragraph({
+          alignment: AlignmentType.CENTER, spacing: { before: 120, after: 200 },
+          border: { top: { style: BorderStyle.SINGLE, size: 12, color: AZUL, space: 6 }, bottom: { style: BorderStyle.SINGLE, size: 12, color: AZUL, space: 6 }, left: { style: BorderStyle.SINGLE, size: 12, color: AZUL, space: 6 }, right: { style: BorderStyle.SINGLE, size: 12, color: AZUL, space: 6 } },
+          children: [new TextRun({ text: `CHECKLIST — PACOTE CONTABILIDADE  ·  ${label}`, bold: true, size: 28, color: AZUL, font: FONTE })],
+        }),
+        secao("1. ESTRUTURA DO PACOTE"), esp(),
+        item("Faturas_Emitidas/       →  NFS-e emitidas (espelho HTML + lista CSV)", true),
+        item("Servicos_Tomados/      →  NFS-e tomadas + NF-e recebidas (HTML + CSV)", true),
+        item("Extratos_Bancarios/    →  Planilha XLSX por banco + CSV geral", true),
+        item("Extratos_Cartoes/      →  Lançamentos de cartão (XLSX)", true),
+        item("01_Resumo.csv            →  Totalizadores do período", true),
+        item("02_OCs_NF-e.csv        →  Ordens de compra × NF-e", true),
+        esp(),
+        secao("2. RESUMO DO PERÍODO"), esp(),
+        tblResumo,
+        esp(),
+        secao(`3. PENDÊNCIAS${!temPendencias ? "  —  NENHUMA  ✓" : ""}`), esp(),
+        pend(entSemNF > 0 ? `${entSemNF} entrada(s) bancária(s) SEM NFS-e vinculada` : "Entradas bancárias — OK", entSemNF > 0),
+        pend(saiSemNF > 0 ? `${saiSemNF} saída(s) bancária(s) SEM NF-e vinculada`   : "Saídas bancárias — OK",   saiSemNF > 0),
+        pend(ocsSemNF > 0 ? `${ocsSemNF} OC(s) SEM NF-e correspondente`             : "Ordens de compra — OK",   ocsSemNF > 0),
+        esp(),
+        secao("4. CHECKLIST — ENVIAR À PRONUS  (contabil@pronustributario.com.br)"), esp(),
+        item("Este arquivo ZIP completo"),
+        item("Guia de ISS recolhido (gerada no portal da prefeitura)"),
+        item("Folha de pagamento assinada + holerites"),
+        item("Comprovantes de pagamento FGTS / GPS"),
+        item("Declaração de faturamento (se solicitado)"),
+        new Paragraph({ text: "", spacing: { before: 240, after: 0 } }),
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          border: { top: { style: BorderStyle.SINGLE, size: 4, color: "D0D5DD", space: 4 } },
+          children: [new TextRun({ text: `Gerado automaticamente pelo ERP FC Engenharia  ·  ${geradoEm}`, size: 16, font: FONTE, color: "94A3B8", italics: true })],
+        }),
+      ],
+    }],
+  });
+
+  return await Packer.toBuffer(doc);
+}
+
 function buildChecklist(label: string, empresa: string, d: ReturnType<typeof sumarizar>): Buffer {
   const { nfseEmitidas, nfseTomadas, nfe, bank, ocs, cartao } = d;
   const entSemNF = bank.filter(b => b.tipo === "credito" && !b.fn_numero).length;
@@ -380,7 +539,7 @@ export function registerPacoteContadorRoute(app: Express) {
         const f = rootFolder;
 
         // ── 00_CHECKLIST ──────────────────────────────────────────────────────
-        archive.append(buildChecklist(label, empresa, data), { name: `${f}/00_CHECKLIST.txt` });
+        archive.append(await buildChecklistDocx(label, empresa, data), { name: `${f}/00_CHECKLIST.docx` });
 
         // ── Faturas Emitidas ──────────────────────────────────────────────────
         for (const n of nfseEmitidas) {
