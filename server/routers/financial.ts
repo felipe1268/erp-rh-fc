@@ -7522,7 +7522,9 @@ export const financialRouter = router({
       return null;
     };
 
-    type Cand = { linha: any; entry: any; delta: number; via: string | null };
+    // Rev. 3855 — tipo estendido: diffPct presente quando o match é por tolerância percentual
+    // (≤15% receita / ≤5% despesa) em vez de centavos exatos.
+    type Cand = { linha: any; entry: any; delta: number; via: string | null; diffPct?: number };
     const cands: Cand[] = [];
     for (const ln of linhas) {
       const lc = cents(ln.valor);
@@ -7555,12 +7557,60 @@ export const financialRouter = router({
         cands.push({ linha: ln, entry: e, delta, via });
       }
     }
+
+    // Rev. 3855 — PASSAGEM 2: tolerância percentual para linhas sem match exato.
+    // Créditos (receita = NFS-e emitidas): ≤15% — cliente pode reter ISS+IR, reduzindo
+    //   o crédito em até ~15% vs o valor bruto da nota.
+    // Débitos (despesa = NF-e recebidas): ≤5% — você paga o valor exato da nota; aceita
+    //   pequena variação só por arredondamento bancário ou multa/desconto mínimo.
+    // Apenas entradas e linhas que NÃO tiveram match exato entram nessa passagem (evita
+    // competição com os pares já fechados). Cheques/boletos mantêm a lógica de nº.
+    {
+      const exatoLinhaIds = new Set(cands.map(c => c.linha.id));
+      const exatoEntryIds = new Set(cands.map(c => c.entry.id));
+      for (const ln of linhas) {
+        if (exatoLinhaIds.has(ln.id)) continue;
+        const lc = cents(ln.valor);
+        if (lc === 0) continue;
+        const dir = Number(ln.valor) >= 0 ? "receita" : "despesa";
+        // receita = emitidas (retenções ISS/IR chegam a 15%); despesa = recebidas (paga exato → 5%)
+        const tolPct = dir === "receita" ? 0.15 : 0.05;
+        const lms = toMs(ln.data);
+        const lnDesc2 = String(ln.descricao ?? "");
+        const lnEhCheque2 = /cheq|compensa/i.test(lnDesc2);
+        const lnNum2 = extrairNumCheque(lnDesc2) ?? (lnEhCheque2 ? extrairDocCheque(lnDesc2) : null);
+        for (const e of entries) {
+          if (exatoEntryIds.has(e.id)) continue;
+          if (e.tipo !== dir && e.tipo !== "transferencia") continue;
+          const ec = entCents(e);
+          if (ec === 0) continue;
+          const diff = Math.abs(lc - ec) / Math.max(lc, ec);
+          if (diff === 0 || diff > tolPct) continue; // diff=0 = exato (já tratado), diff>tol = fora
+          const ems = entDate(e);
+          const delta = (lms != null && ems != null) ? Math.round(Math.abs(lms - ems) / 86400000) : 9999;
+          if (ehChequeBoletoEntry(e)) {
+            const eNum2 = extrairNumCheque(String(e.descricao ?? "")) ?? extrairDocCheque(String(e.descricao ?? "")) ?? extrairNumEstruturado(e);
+            if (lnNum2 && eNum2 && lnNum2 !== eNum2) continue;
+            if (delta > TOL_CHEQUE_DIAS) continue;
+          } else {
+            if (delta > tol) continue;
+          }
+          cands.push({ linha: ln, entry: e, delta, via: matchId(ln, e), diffPct: diff });
+        }
+      }
+    }
+
     const ambiguasPorLinha = new Map<number, number>();
     for (const c of cands) ambiguasPorLinha.set(c.linha.id, (ambiguasPorLinha.get(c.linha.id) ?? 0) + 1);
 
-    // Ordena PRIORIZANDO os identificados pelo comprovante (via != null), depois menor
-    // distância de data, depois id — o greedy abaixo então fecha primeiro os pares "alta".
-    cands.sort((a, b) => (a.via ? 0 : 1) - (b.via ? 0 : 1) || a.delta - b.delta || a.linha.id - b.linha.id);
+    // Ordena: comprovante (via) primeiro → match exato antes do fuzzy → menor delta → id.
+    // O greedy abaixo fecha primeiro os pares de maior confiança.
+    cands.sort((a, b) =>
+      (a.via ? 0 : 1) - (b.via ? 0 : 1) ||
+      (a.diffPct ? 1 : 0) - (b.diffPct ? 1 : 0) ||
+      a.delta - b.delta ||
+      a.linha.id - b.linha.id
+    );
     const usadasLinha = new Set<number>(), usadasEntry = new Set<number>();
     const sugestoes: any[] = [];
     for (const c of cands) {
@@ -7569,12 +7619,28 @@ export const financialRouter = router({
       const ambiguo = (ambiguasPorLinha.get(c.linha.id) ?? 1) > 1;
       const ems = entDate(c.entry);
       const viaLabel = c.via === "txid" ? "ID da transação" : c.via === "documento" ? "CNPJ/CPF" : c.via === "beneficiario" ? "beneficiário" : null;
-      // Rev. 3405 — score numérico de confiança (0-100)
+      // Rev. 3405 — score numérico de confiança (0-100).
+      // Rev. 3855 — match fuzzy (diffPct > 0) penaliza score; nunca chega a "alta".
+      const diffPctVal = (c as any).diffPct as number | undefined;
       const scoreConfianca = c.via
         ? Math.max(70, 95 - c.delta * 3)
-        : ambiguo
-          ? Math.max(40, 55 - c.delta * 3)
-          : c.delta === 0 ? 85 : c.delta === 1 ? 78 : c.delta <= 3 ? 70 : Math.max(50, 65 - c.delta * 2);
+        : diffPctVal != null
+          // fuzzy: desconta pelo Δ% de valor + distância de data (teto 62, piso 30)
+          ? Math.max(30, 62 - Math.round(diffPctVal * 100) * 2 - c.delta * 2)
+          : ambiguo
+            ? Math.max(40, 55 - c.delta * 3)
+            : c.delta === 0 ? 85 : c.delta === 1 ? 78 : c.delta <= 3 ? 70 : Math.max(50, 65 - c.delta * 2);
+      // Rev. 3855 — confiança fuzzy: sempre "media" (usuário deve confirmar que a diferença
+      // de valor é retenção/desconto legítima, nunca auto-confirmar como "alta").
+      const confianca = c.via
+        ? "alta"
+        : diffPctVal != null
+          ? "media"
+          : (!ambiguo && c.delta === 0 ? "alta" : "media");
+      // Rótulo informativo do Δ% para matches fuzzy (ex.: "Δ valor: 6,3% — possível retenção")
+      const diffLabel = diffPctVal != null
+        ? `Δ valor: ${(diffPctVal * 100).toFixed(1)}% — ${(Number(c.linha.valor) >= 0 ? "possível retenção (ISS/IR)" : "possível desconto/multa")}`
+        : null;
       sugestoes.push({
         statementLineId: c.linha.id, entryId: c.entry.id,
         extratoData: c.linha.data, extratoDescricao: c.linha.descricao, extratoValor: Number(c.linha.valor),
@@ -7583,11 +7649,12 @@ export const financialRouter = router({
         entryData: ems ? new Date(ems).toISOString().slice(0, 10) : null,
         entryValor: Number(c.entry.valorRealizado ?? c.entry.valorPrevisto), entryTipo: c.entry.tipo,
         deltaDias: c.delta,
-        // Identificado pelo comprovante → "alta" mesmo que o valor fosse ambíguo.
-        confianca: c.via ? "alta" : (!ambiguo && c.delta === 0 ? "alta" : "media"),
+        confianca,
         scoreConfianca,
-        identificadoVia: viaLabel,
+        identificadoVia: diffLabel ?? viaLabel,
         entryComprovanteBeneficiario: c.entry.comprovanteBeneficiario ?? null,
+        matchFuzzy: diffPctVal != null,
+        diffPct: diffPctVal != null ? Math.round(diffPctVal * 1000) / 10 : null,
       });
     }
     // Enriquece as SUGESTÕES já pareadas: se a linha é compensação de cheque e bate

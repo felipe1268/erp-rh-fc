@@ -50,25 +50,25 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3854** — **NF-e × EXTRATO · SCORING RIGOROSO + BOTÕES INDEPENDENTES + BARRA DE STATUS + SEM-MATCH.** `processarRecebidas` pré-filtro ≤5% (era ≤15%); parâmetro `tipo?` em `obterSugestoesPeriodo`+`sincronizarNfsPeriodo`+router; botões independentes por aba (emitidas vs recebidas); barra de progresso % vinculadas em ambas as abas com botão "Só pendentes"; filtro automático após vínculo manual; seção collapsible "Sem correspondência no extrato" no dialog com candidato próximo. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+- **Rev. 3855** — **CONCILIAÇÃO BANCÁRIA · TOLERÂNCIA PERCENTUAL NAS SUGESTÕES (≤15% RECEITA / ≤5% DESPESA).** `sugerirConciliacao`: 2ª passagem fuzzy após match exato; receita ≤15% (retenções ISS/IR), despesa ≤5% (paga valor exato); sort exato > fuzzy; `confianca="media"`, `scoreConfianca≤62`, `identificadoVia="Δ valor: X% — possível retenção"` no badge violeta. `matchFuzzy`+`diffPct` no payload. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3853** — **HOTFIX · `autoVincularNfService`: `column "tomador_nome" does not exist`.** 3 queries corrigidas para `tomador_razao_social AS tomador_nome` (emitidas em autoVincular, obterSugestoes, sincronizar). ZERO DELETE. Detalhe: `shared/changelog.ts`.
+- **Rev. 3854** — **NF-e × EXTRATO · SCORING RIGOROSO + BOTÕES INDEPENDENTES + BARRA DE STATUS + SEM-MATCH.** `processarRecebidas` pré-filtro ≤5% (era ≤15%); `tipo?` independente; barra de progresso % vinculadas; filtro automático após vínculo; seção collapsible sem-match no dialog. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 ### 5 one-liners
 
+- **Rev. 3853** — **HOTFIX · `autoVincularNfService`: `column "tomador_nome" does not exist`.** 3 queries → `tomador_razao_social AS tomador_nome`. ZERO DELETE.
+
 - **Rev. 3852** — **PANORAMA FISCAL · CHEQUE DEVOLVIDO EXCLUÍDO DAS "SAÍDAS SEM NF-e".** `getPanorama`: SQL + `desconsiderado_em IS NULL`; regex `_PANORAMA_INTERNO_RE` → `bankDebitosReais`. ZERO DELETE.
 
-- **Rev. 3851** — **NF-e × EXTRATO · CARD DE VÍNCULO + SCORING DEFINITIVO COM valor_bruto E CNPJ-RAIZ.** `calcScore` + `fnValorBruto` + CNPJ-raiz +25 pts + patamar ≤2% +22 pts. Pré-filtro duplo (líquido OR bruto ≤15%). ZERO DELETE.
+- **Rev. 3851** — **NF-e × EXTRATO · CARD DE VÍNCULO + SCORING DEFINITIVO COM valor_bruto E CNPJ-RAIZ.** `calcScore` + `fnValorBruto` + CNPJ-raiz +25 pts + patamar ≤2% +22 pts. ZERO DELETE.
 
-- **Rev. 3850** — **NF-e × EXTRATO · DIALOG "REVISAR SUGESTÕES":** `obterSugestoesPeriodo`, endpoint `fiscalNotes.obterSugestoes`, dialog max-w-4xl badge Alta/Média/Baixa, [Vincular]/[Ignorar] por linha. ZERO DELETE.
+- **Rev. 3850** — **NF-e × EXTRATO · DIALOG "REVISAR SUGESTÕES":** `obterSugestoesPeriodo`, endpoint `fiscalNotes.obterSugestoes`, dialog max-w-4xl badge Alta/Média/Baixa. ZERO DELETE.
 
-- **Rev. 3849** — **NF-e × EXTRATO · VÍNCULO AUTOMÁTICO MELHORADO:** `extractTokens()`, `calcScore()` (0-100), `sincronizarNfsPeriodo` (greedy bipartite). Botão "Vincular Automaticamente". ZERO DELETE.
-
-- **Rev. 3848** — **CONCILIAÇÃO · CHEQUE DEVOLVIDO = MOVIMENTAÇÃO, NÃO ENTRADA.** Padrões `"cheque devol"` e `"dev.*cheq"` em `_INTERNO_PATTERNS`. ZERO DELETE.
+- **Rev. 3849** — **NF-e × EXTRATO · VÍNCULO AUTOMÁTICO MELHORADO:** `extractTokens()`, `calcScore()` (0-100), `sincronizarNfsPeriodo` (greedy bipartite). ZERO DELETE.
 
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3847 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3848 e anteriores.
 
 ## User preferences
 

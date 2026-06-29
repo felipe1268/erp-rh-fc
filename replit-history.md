@@ -1,3 +1,5 @@
+- **Rev. 3848** — **CONCILIAÇÃO · CHEQUE DEVOLVIDO = MOVIMENTAÇÃO, NÃO ENTRADA.** Padrões `"cheque devol"` e `"dev.*cheq"` em `_INTERNO_PATTERNS`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3847** — **TEMPLATE XLSX · SAVE CORRIGIDO + "APROVADO POR" AUTOMÁTICO + LISTA COMPLETA DE RELATÓRIOS.** `XlsxTemplateTab.tsx`, `Configuracoes.tsx`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3846** — **CONFIGURAÇÕES · NOTIFICAÇÕES E-MAIL UNIFICADAS COM SUBCATEGORIAS.** Os dois tabs fundidos num tab com seletor [RH] | [Contabilidade] via `NOTIF_SUBCATS`. ZERO DELETE. Detalhe: `shared/changelog.ts`.

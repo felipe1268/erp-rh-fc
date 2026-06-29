@@ -1,4 +1,31 @@
 /**
+ * Rev. 3855 — **CONCILIAÇÃO BANCÁRIA · TOLERÂNCIA PERCENTUAL NAS SUGESTÕES (≤15% RECEITA / ≤5% DESPESA).**
+ *
+ * **Problema:** `sugerirConciliacao` usava match exclusivamente por valor exato em centavos.
+ * Quando uma NFS-e emitida de R$10.000 tem ISS retido pelo cliente e entra R$9.350 no banco,
+ * nunca encontrava o lançamento correspondente — ficava "sem match". Idem para descontos/multas
+ * em pagamentos, que diferem ligeiramente do valor da nota.
+ *
+ * **Solução (Passagem 2 — tolerância percentual):**
+ * - Após o match exato (centavos), uma segunda iteração percorre todas as linhas sem match
+ *   e todos os lançamentos sem match exato.
+ * - **Receita (crédito = NFS-e emitidas):** tolera ≤15% de diferença — retenções ISS+IR
+ *   chegam a ~15% sobre o valor bruto.
+ * - **Despesa (débito = NF-e recebidas):** tolera ≤5% — você paga o valor exato da nota;
+ *   aceita só arredondamento bancário mínimo ou pequenas multas/descontos.
+ * - Cheques/boletos mantêm a lógica de nº (Rev. 3736).
+ * - Pares exatos têm prioridade no greedy (sort: exato antes de fuzzy).
+ * - Matches fuzzy: `confianca` sempre `"media"` (nunca auto-confirma como "alta");
+ *   `scoreConfianca` ≤ 62 (penalizado pelo Δ% + distância de data).
+ * - `identificadoVia` = `"Δ valor: 6,3% — possível retenção (ISS/IR)"` → exibido no badge
+ *   violeta já existente na tela de Conciliação.
+ * - Campos novos no payload: `matchFuzzy: boolean`, `diffPct: number | null`.
+ *
+ * **Arquivos:** `server/routers/financial.ts` (função `sugerirConciliacao`).
+ * **ZERO DELETE. Detalhe: `shared/changelog.ts`.**
+ */
+
+/**
  * Rev. 3854 — **NF-e × EXTRATO · SCORING RIGOROSO + BOTÕES INDEPENDENTES + BARRA DE STATUS + SEM-MATCH.**
  *
  * **Problema:** sugestões de vínculo para NF-e recebidas linkavam nomes e valores sem relação
