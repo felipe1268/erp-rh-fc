@@ -337,6 +337,20 @@ export default function FinanceiroNotasFiscais() {
     },
   });
 
+  const sincronizarNfMut = (trpc as any).fiscalNotes.sincronizarComExtrato.useMutation({
+    onSuccess: (res: any) => {
+      listQuery.refetch();
+      nfeRecQuery.refetch();
+      yearQuery.refetch();
+      if (res.vinculados > 0) {
+        toast({ title: `✅ ${res.vinculados} NF-e vinculada${res.vinculados !== 1 ? "s" : ""} ao extrato bancário!`, description: `${res.candidatosAnalised} correspondência${res.candidatosAnalised !== 1 ? "s" : ""} analisada${res.candidatosAnalised !== 1 ? "s" : ""}.` });
+      } else {
+        toast({ title: "ℹ️ Nenhuma NF-e nova vinculada", description: "Todas as NF-e já estão vinculadas ou não foram encontradas correspondências no extrato.", duration: 7000 } as any);
+      }
+    },
+    onError: (e: any) => toast({ title: "Erro ao vincular NF-e", description: e?.message || "Tente novamente.", variant: "destructive" }),
+  });
+
   const [syncHistoricoProgress, setSyncHistoricoProgress] = useState<{
     running: boolean; anoAtual: number; anoIdx: number; totalAnos: number;
     importadas: number; ignoradas: number;
@@ -1025,6 +1039,22 @@ export default function FinanceiroNotasFiscais() {
           </div>
           {pageTab === "emitidas" && (
             <div className="flex gap-2 shrink-0">
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 h-9 border-violet-300 text-violet-700 hover:bg-violet-50"
+                disabled={sincronizarNfMut.isPending}
+                onClick={() => {
+                  const m = mesSel ?? 0;
+                  const dataInicio = m ? `${ano}-${String(m).padStart(2,"0")}-01` : `${ano}-01-01`;
+                  const dataFim = m ? `${ano}-${String(m).padStart(2,"0")}-${new Date(ano, m, 0).getDate()}` : `${ano}-12-31`;
+                  sincronizarNfMut.mutate({ companyId: companyId ?? 0, dataInicio, dataFim });
+                }}
+                title="Busca correspondências entre as NF-e emitidas e as linhas do extrato bancário do período selecionado"
+              >
+                <Link className={`h-3.5 w-3.5 ${sincronizarNfMut.isPending ? "animate-pulse" : ""}`} />
+                {sincronizarNfMut.isPending ? "Vinculando..." : "Vincular com Extrato"}
+              </Button>
             </div>
           )}
           {pageTab === "recebidas" && (
@@ -1074,6 +1104,22 @@ export default function FinanceiroNotasFiscais() {
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${sefazResetNsuMut.isPending ? "animate-spin" : ""}`} />
                 {sefazResetNsuMut.isPending ? "Baixando..." : "Histórico completo"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 h-9 border-violet-300 text-violet-700 hover:bg-violet-50"
+                disabled={sincronizarNfMut.isPending}
+                onClick={() => {
+                  const m = recMes ?? 0;
+                  const dataInicio = m ? `${recAno}-${String(m).padStart(2,"0")}-01` : `${recAno}-01-01`;
+                  const dataFim = m ? `${recAno}-${String(m).padStart(2,"0")}-${new Date(recAno, m, 0).getDate()}` : `${recAno}-12-31`;
+                  sincronizarNfMut.mutate({ companyId: companyId ?? 0, dataInicio, dataFim });
+                }}
+                title="Busca correspondências entre as NF-e recebidas e as linhas do extrato bancário do período selecionado"
+              >
+                <Link className={`h-3.5 w-3.5 ${sincronizarNfMut.isPending ? "animate-pulse" : ""}`} />
+                {sincronizarNfMut.isPending ? "Vinculando..." : "Vincular com Extrato"}
               </Button>
             </div>
           )}

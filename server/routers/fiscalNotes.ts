@@ -6,6 +6,7 @@ import { eq, and, desc, ilike, or, isNull, notInArray, inArray } from "drizzle-o
 import { TRPCError } from "@trpc/server";
 import { getUserCompanyLinks } from "../db";
 import { invokeGeminiVision, invokeAnthropicVision } from "../_core/llm";
+import { sincronizarNfsPeriodo } from "../services/autoVincularNfService";
 
 // ─── Prompt e helpers para parsing de DANFSe ───────────────────────────────
 
@@ -892,5 +893,21 @@ export const fiscalNotesRouter = router({
           menorNf: p(f.menor_nf), maiorNf: p(f.maior_nf),
         },
       };
+    }),
+
+  sincronizarComExtrato: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      dataInicio: z.string(),
+      dataFim: z.string(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await _assertNfAccess(ctx.user, input.companyId);
+      const result = await sincronizarNfsPeriodo(
+        input.companyId,
+        input.dataInicio,
+        input.dataFim,
+      );
+      return result;
     }),
 });

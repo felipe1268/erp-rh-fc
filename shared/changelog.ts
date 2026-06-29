@@ -1,4 +1,52 @@
 /**
+ * Rev. 3849 — **NF-e × EXTRATO · VÍNCULO AUTOMÁTICO MELHORADO: NAME-TOKEN MATCHING + ±10% TOLERÂNCIA + VARREDURA RETROATIVA + BOTÃO "VINCULAR COM EXTRATO".**
+ *
+ * **Contexto:**
+ * O serviço anterior (`autoVincularNfService.ts`) só disparava reativamente (ao conciliar uma
+ * linha do extrato), usava tolerância de ±2% no valor_liquido e exigia CNPJ na descrição do
+ * extrato para NF-e recebidas — condição raramente satisfeita no layout da Caixa Econômica Federal.
+ * Resultado: ≈80% das NF-e ficavam sem vínculo mesmo com extrato conciliado.
+ *
+ * **Causa-raiz dos vínculos perdidos (3 fatores):**
+ * 1. **Tolerância insuficiente (±2%)**: retenções na fonte (ISS local + IR + PIS/COFINS/CSLL)
+ *    aplicadas pelo tomador sobre valor_liquido chegam a 10-15%; um pagamento de R$59.945 pode
+ *    chegar no banco como R$53.344 (diferença de 11%).
+ * 2. **Exigência de CNPJ no extrato**: descrições do banco raramente contêm o CNPJ — só o nome
+ *    abreviado ("SANTUARIO NACIONAL DE NOSSA S...", "CREDITO TRANSF INTERNET - ARQ...").
+ * 3. **Processamento apenas reativo**: NF-e importadas após conciliação nunca eram varridas.
+ *
+ * **Solução (Rev. 3849):**
+ *
+ * `autoVincularNfService.ts` — reescrita completa:
+ * - `extractTokens(nome)`: extrai tokens ≥4 chars sem stopwords, sem acento, uppercase
+ *   (ex.: "ARQUIDIOCESE DE APARECIDA" → ["ARQUIDIOCESE", "APARECIDA"]).
+ * - `calcScore(opts)`: pontuação 0-100 por par (NF-e, linha extrato):
+ *     · CNPJ exato na descrição: +50 pts
+ *     · Token do nome na descrição (≥2 tokens OU 1 token ≥6 chars): +20-30 pts
+ *     · Valor dentro de ±5%/±10%/±15% do valor_liquido: +20/+12/+6 pts
+ *     · Data dentro de 30/60/90 dias após emissão: +10/+7/+4 pts
+ * - `autoVincularNfsPorLinhas`: modo reativo (disparado pela conciliação). Threshold:
+ *     emitidas ≥60, recebidas ≥70. Consulta SQL com pré-filtro de valor (±18%) e data (90 dias).
+ * - `sincronizarNfsPeriodo`: NOVA função retroativa. Carrega TODAS as NF-e sem stmt_line_id
+ *   do período + TODAS as linhas do extrato sem vínculo → calcula scores → greedy bipartite
+ *   matching (ordena pares por score desc, atribui sem repetir NF-e ou linha já usada).
+ *
+ * `fiscalNotes.ts` (router):
+ * - Import `sincronizarNfsPeriodo`.
+ * - Novo endpoint `fiscalNotes.sincronizarComExtrato` (mutation): recebe companyId + dataInicio
+ *   + dataFim, chama `sincronizarNfsPeriodo`, retorna `{ vinculados, candidatosAnalised }`.
+ *
+ * `FinanceiroNotasFiscais.tsx`:
+ * - Mutation `sincronizarNfMut` (fiscalNotes.sincronizarComExtrato).
+ * - Botão **"Vincular com Extrato"** (violeta, outline) no header da aba **Emitidas** (usa `ano`+`mesSel`).
+ * - Botão **"Vincular com Extrato"** no header da aba **Recebidas** (usa `recAno`+`recMes`).
+ * - Toast com resultado: "X NF-e vinculadas" ou "Nenhuma nova".
+ * - Refetch automático de `listQuery`, `nfeRecQuery`, `yearQuery` ao concluir.
+ *
+ * **ZERO DELETE. Detalhe: `shared/changelog.ts`.**
+ */
+
+/**
  * Rev. 3848 — **CONCILIAÇÃO · CHEQUE DEVOLVIDO CLASSIFICADO COMO MOVIMENTAÇÃO (NÃO ENTRADA).**
  *
  * **O quê:**

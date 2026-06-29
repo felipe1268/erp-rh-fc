@@ -1,31 +1,44 @@
 /**
- * autoVincularNfService.ts
+ * autoVincularNfService.ts — Rev. 3849
  *
- * Após uma linha de extrato ser conciliada (conciliado=1), tenta vincular
- * automaticamente uma NF-e correspondente:
- *   crédito bancário  →  NFS-e emitida pela FC  (stmt_line_id em fiscal_notes)
- *   débito bancário   →  NF-e recebida (SEFAZ)  (stmt_line_id em fiscal_notes)
+ * Vinculação automática NF-e ↔ Extrato Bancário.
  *
- * Critérios de casamento (em ordem de prioridade):
- *   1. CNPJ + valor ±2% + data ±60 dias  → alta confiança → vincula
- *   2. Valor ±0.5% + data ±15 dias (sem CNPJ) → vincula só p/ créditos
- *   3. Sem CNPJ + débito → não vincula (risco de falso-positivo alto)
+ * Duas funções principais:
+ *   autoVincularNfsPorLinhas  — reativa: disparada após conciliação de linhas
+ *   sincronizarNfsPeriodo     — retroativa: varre TODO o período sob demanda
  *
- * Chamado de forma SÍNCRONA após cada conciliação com .catch(() => {}) para
- * nunca bloquear nem reverter o fluxo principal de conciliação.
+ * Algoritmo de pontuação (score 0-100):
+ *   CNPJ exato na descrição do extrato          → +50 pts
+ *   Token do nome do tomador/emitente na desc.  → +30 pts
+ *   Valor dentro de ±5 % do valor_liquido       → +20 pts
+ *   Valor dentro de ±10%                        → +12 pts
+ *   Valor dentro de ±15%                        →  +6 pts
+ *   Data dentro de 30 dias após emissão         → +10 pts
+ *   Data dentro de 60 dias                      →  +7 pts
+ *   Data dentro de 90 dias                      →  +4 pts
+ *
+ * Threshold de vínculo automático:
+ *   emitidas  (créditos) : score >= 60  OU  candidato único com score >= 40
+ *   recebidas (débitos)  : score >= 70  (critério mais rígido p/ evitar falsos positivos)
+ *
+ * Por que usar valor_liquido:
+ *   O extrato bancário registra o valor LÍQUIDO recebido — já descontados ISS, IR,
+ *   PIS/COFINS/CSLL retidos na fonte pelo tomador (0-15 %). valor_liquido da NF-e
+ *   captura as retenções declaradas; a margem de ±10-15 % cobre retenções adicionais
+ *   que o cliente aplica fora da nota (ISS local de alguns municípios, IR escalonado).
  */
 
 import { getDb } from "../db";
 
+// ── Utilidades ────────────────────────────────────────────────────────────────
+
 function cnpjFromText(text: string): string | null {
   if (!text) return null;
-  // Formato XX.XXX.XXX/XXXX-XX (com ou sem pontuação parcial)
   const m1 = text.match(/\d{2}\.?\d{3}\.?\d{3}\/?(?:\d{4})-?\d{2}/);
   if (m1) {
-    const digits = m1[0].replace(/\D/g, "");
-    if (digits.length === 14) return digits;
+    const d = m1[0].replace(/\D/g, "");
+    if (d.length === 14) return d;
   }
-  // 14 dígitos consecutivos como "palavra" (sem letras adjacentes)
   const m2 = text.match(/(?<!\d)(\d{14})(?!\d)/);
   if (m2) return m2[1];
   return null;
@@ -35,10 +48,74 @@ function cnpjNorm(cnpj: string | null | undefined): string {
   return (cnpj ?? "").replace(/\D/g, "");
 }
 
-/**
- * Recebe uma lista de stmt_line_ids recém-conciliados e tenta vincular NFs.
- * Seguro: erros internos são absorvidos no catch do chamador.
- */
+/** Extrai tokens significativos do nome de uma empresa para busca textual. */
+function extractTokens(nome: string | null | undefined): string[] {
+  if (!nome) return [];
+  const STOP = new Set([
+    "ltda","eireli","epp","me","sa","sas","de","da","do","dos","das",
+    "para","com","e","ou","na","no","nas","nos","a","o","um","uma",
+    "construtora","engenharia","comercio","servicos","materiais",
+  ]);
+  return nome
+    .toUpperCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((t) => t.length >= 4 && !STOP.has(t.toLowerCase()));
+}
+
+/** Score de compatibilidade entre uma NF-e e uma linha de extrato (0-100). */
+function calcScore(opts: {
+  bslDescricao: string;
+  bslValor: number;     // valor ABSOLUTO da linha (positivo)
+  bslData: string;      // YYYY-MM-DD
+  fnCnpj: string | null;
+  fnNome: string | null;
+  fnValorLiquido: number;
+  fnDataEmissao: string; // YYYY-MM-DD
+}): number {
+  const { bslDescricao, bslValor, bslData, fnCnpj, fnNome, fnValorLiquido, fnDataEmissao } = opts;
+  let score = 0;
+
+  // ── CNPJ ──────────────────────────────────────────────────────────────────
+  const bslCnpj = cnpjFromText(bslDescricao);
+  if (bslCnpj && fnCnpj && cnpjNorm(fnCnpj) === bslCnpj) score += 50;
+
+  // ── Nome (tokens) ─────────────────────────────────────────────────────────
+  const tokens = extractTokens(fnNome);
+  const descUpper = bslDescricao.toUpperCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const matchedTokens = tokens.filter((t) => descUpper.includes(t));
+  if (matchedTokens.length >= 2) score += 30;
+  else if (matchedTokens.length === 1 && matchedTokens[0].length >= 6) score += 20;
+  else if (matchedTokens.length === 1) score += 12;
+
+  // ── Valor ─────────────────────────────────────────────────────────────────
+  if (fnValorLiquido > 0 && bslValor > 0) {
+    const base = Math.max(fnValorLiquido, bslValor);
+    const diff = Math.abs(fnValorLiquido - bslValor) / base;
+    if (diff <= 0.05) score += 20;
+    else if (diff <= 0.10) score += 12;
+    else if (diff <= 0.15) score += 6;
+    // > 15% → sem pontos de valor
+  }
+
+  // ── Data ──────────────────────────────────────────────────────────────────
+  // Extrato deve ser APÓS emissão (pagamento esperado depois da fatura)
+  const msPerDay = 86_400_000;
+  const emissaoMs = new Date(fnDataEmissao).getTime();
+  const bslMs     = new Date(bslData).getTime();
+  const diffDays  = (bslMs - emissaoMs) / msPerDay;
+  if (diffDays >= -5 && diffDays <= 30)  score += 10; // janela ideal
+  else if (diffDays >= -5 && diffDays <= 60)  score += 7;
+  else if (diffDays >= -5 && diffDays <= 90)  score += 4;
+  // fora da janela → sem pontos
+
+  return score;
+}
+
+// ── Função 1: Reativa (disparada após conciliação) ────────────────────────────
+
 export async function autoVincularNfsPorLinhas(
   companyId: number,
   stmtLineIds: number[]
@@ -48,9 +125,9 @@ export async function autoVincularNfsPorLinhas(
   const db = await getDb();
   const now = new Date().toISOString();
 
-  // 1. Carregar as linhas recém-conciliadas
   const linesQ = await db.$client.query(`
-    SELECT id, tipo, descricao, ABS(valor)::float AS valor, data::text
+    SELECT id, CASE WHEN valor>=0 THEN 'credito' ELSE 'debito' END AS tipo,
+           descricao, ABS(valor)::float AS valor, data::text
     FROM bank_statement_lines
     WHERE id = ANY($1::int[]) AND company_id = $2 AND excluido_em IS NULL
   `, [stmtLineIds, companyId]);
@@ -60,95 +137,278 @@ export async function autoVincularNfsPorLinhas(
 
   const credits = lines.filter((l) => l.tipo === "credito");
   const debits  = lines.filter((l) => l.tipo === "debito");
-
   let vinculados = 0;
 
   // ── Créditos → NFS-e emitidas ─────────────────────────────────────────────
   for (const bsl of credits) {
-    const bslCnpj = cnpjFromText(bsl.descricao ?? "");
-    const bslVal  = parseFloat(bsl.valor);
+    const bslVal = parseFloat(bsl.valor);
     if (bslVal <= 0) continue;
 
-    // Candidatas: valor ±2%, data ±60 dias, sem vínculo, não cancelada
     const q = await db.$client.query(`
-      SELECT id, ABS(valor_liquido)::float AS valor, tomador_cnpj
+      SELECT id, ABS(valor_liquido)::float AS valor_liquido, tomador_cnpj, tomador_nome,
+             data_emissao::text
       FROM fiscal_notes
       WHERE company_id = $1
         AND stmt_line_id IS NULL
         AND origem LIKE 'nfse_%'
         AND status != 'cancelada'
-        AND ABS(ABS(valor_liquido::float) - $2) / NULLIF(GREATEST(ABS(valor_liquido::float), $2), 0) < 0.02
-        AND data_emissao BETWEEN ($3::date - interval '60 days')
-                              AND ($3::date + interval '60 days')
-      ORDER BY ABS(ABS(valor_liquido::float) - $2) ASC
-      LIMIT 10
+        AND ABS(valor_liquido::float) BETWEEN $2 * 0.82 AND $2 * 1.03
+        AND data_emissao BETWEEN ($3::date - interval '5 days')
+                              AND ($3::date + interval '90 days')
+      LIMIT 15
     `, [companyId, bslVal, bsl.data]);
 
     if (q.rows.length === 0) continue;
 
-    // Preferência: CNPJ bater exato
-    let best: any = null;
-    if (bslCnpj) {
-      best = (q.rows as any[]).find(
-        (r) => cnpjNorm(r.tomador_cnpj) === bslCnpj
-      );
-    }
-    // Fallback p/ créditos: valor muito próximo (±0.5%) + data próxima (já filtrada)
-    if (!best) {
-      const strict = (q.rows as any[]).filter((r) => {
-        const diff = Math.abs(parseFloat(r.valor) - bslVal) / Math.max(parseFloat(r.valor), bslVal);
-        return diff < 0.005;
-      });
-      if (strict.length === 1) best = strict[0]; // único candidato exato → safe
-    }
+    // Pontuar cada candidata
+    const scored = (q.rows as any[]).map((r) => ({
+      ...r,
+      score: calcScore({
+        bslDescricao: bsl.descricao ?? "",
+        bslValor: bslVal,
+        bslData: bsl.data,
+        fnCnpj: r.tomador_cnpj,
+        fnNome: r.tomador_nome,
+        fnValorLiquido: parseFloat(r.valor_liquido),
+        fnDataEmissao: r.data_emissao,
+      }),
+    })).sort((a, b) => b.score - a.score);
 
-    if (best) {
-      const res = await db.$client.query(`
-        UPDATE fiscal_notes
-           SET stmt_line_id = $1, status = 'conciliada', updated_at = $2
-         WHERE id = $3 AND company_id = $4 AND stmt_line_id IS NULL
-         RETURNING id
-      `, [bsl.id, now, best.id, companyId]);
-      if ((res.rowCount ?? 0) > 0) vinculados++;
-    }
+    const best = scored[0];
+    const autoLink = best.score >= 60 || (scored.length === 1 && best.score >= 40);
+    if (!autoLink) continue;
+
+    const res = await db.$client.query(`
+      UPDATE fiscal_notes
+         SET stmt_line_id = $1, status = 'conciliada', updated_at = $2
+       WHERE id = $3 AND company_id = $4 AND stmt_line_id IS NULL
+       RETURNING id
+    `, [bsl.id, now, best.id, companyId]);
+    if ((res.rowCount ?? 0) > 0) vinculados++;
   }
 
   // ── Débitos → NF-e recebidas ──────────────────────────────────────────────
   for (const bsl of debits) {
-    const bslCnpj = cnpjFromText(bsl.descricao ?? "");
-    const bslVal  = parseFloat(bsl.valor);
+    const bslVal = parseFloat(bsl.valor);
     if (bslVal <= 0) continue;
-    // Para débitos exigimos CNPJ (muito risco de falso-positivo com valor apenas)
-    if (!bslCnpj) continue;
 
     const q = await db.$client.query(`
-      SELECT id, ABS(valor_bruto)::float AS valor, emitente_cnpj
+      SELECT id, ABS(valor_bruto)::float AS valor_liquido, emitente_cnpj, emitente_nome,
+             data_emissao::text
       FROM fiscal_notes
       WHERE company_id = $1
         AND stmt_line_id IS NULL
         AND (origem = 'sefaz_nfe' OR origem = 'xml_upload')
         AND status != 'cancelada'
-        AND ABS(ABS(valor_bruto::float) - $2) / NULLIF(GREATEST(ABS(valor_bruto::float), $2), 0) < 0.02
-        AND data_emissao BETWEEN ($3::date - interval '60 days')
-                              AND ($3::date + interval '60 days')
-        AND REPLACE(REPLACE(REPLACE(REPLACE(emitente_cnpj,'.',''),'/',''),'-',''),' ','') = $4
-      ORDER BY ABS(ABS(valor_bruto::float) - $2) ASC
-      LIMIT 5
-    `, [companyId, bslVal, bsl.data, bslCnpj]);
+        AND ABS(valor_bruto::float) BETWEEN $2 * 0.88 AND $2 * 1.05
+        AND data_emissao BETWEEN ($3::date - interval '5 days')
+                              AND ($3::date + interval '90 days')
+      LIMIT 10
+    `, [companyId, bslVal, bsl.data]);
 
     if (q.rows.length === 0) continue;
 
-    const best = (q.rows as any[])[0];
-    if (best) {
-      const res = await db.$client.query(`
-        UPDATE fiscal_notes
-           SET stmt_line_id = $1, status = 'conciliada', updated_at = $2
-         WHERE id = $3 AND company_id = $4 AND stmt_line_id IS NULL
-         RETURNING id
-      `, [bsl.id, now, best.id, companyId]);
-      if ((res.rowCount ?? 0) > 0) vinculados++;
-    }
+    const scored = (q.rows as any[]).map((r) => ({
+      ...r,
+      score: calcScore({
+        bslDescricao: bsl.descricao ?? "",
+        bslValor: bslVal,
+        bslData: bsl.data,
+        fnCnpj: r.emitente_cnpj,
+        fnNome: r.emitente_nome,
+        fnValorLiquido: parseFloat(r.valor_liquido),
+        fnDataEmissao: r.data_emissao,
+      }),
+    })).sort((a, b) => b.score - a.score);
+
+    const best = scored[0];
+    // Débitos: critério mais rígido (falso positivo é pior)
+    if (best.score < 70) continue;
+
+    const res = await db.$client.query(`
+      UPDATE fiscal_notes
+         SET stmt_line_id = $1, status = 'conciliada', updated_at = $2
+       WHERE id = $3 AND company_id = $4 AND stmt_line_id IS NULL
+       RETURNING id
+    `, [bsl.id, now, best.id, companyId]);
+    if ((res.rowCount ?? 0) > 0) vinculados++;
   }
 
   return { vinculados };
+}
+
+// ── Função 2: Retroativa — varre TODO o período ───────────────────────────────
+
+export async function sincronizarNfsPeriodo(
+  companyId: number,
+  dataInicio: string,
+  dataFim: string
+): Promise<{ vinculados: number; candidatosAnalised: number }> {
+  const db = await getDb();
+  const now = new Date().toISOString();
+
+  // Período expandido para o extrato (90 dias antes e depois)
+  const extratoInicio = new Date(dataInicio);
+  extratoInicio.setDate(extratoInicio.getDate() - 5);
+  const extratoFim = new Date(dataFim);
+  extratoFim.setDate(extratoFim.getDate() + 90);
+  const extInStr  = extratoInicio.toISOString().slice(0, 10);
+  const extFimStr = extratoFim.toISOString().slice(0, 10);
+
+  // ── 1. Linhas do extrato SEM vínculo com NF-e ─────────────────────────────
+  const bslQ = await db.$client.query(`
+    SELECT b.id, b.valor, ABS(b.valor)::float AS abs_valor,
+           b.descricao, b.data::text
+    FROM bank_statement_lines b
+    WHERE b.company_id = $1
+      AND b.data BETWEEN $2 AND $3
+      AND b.excluido_em IS NULL
+      AND b.desconsiderado_em IS NULL
+      -- não está vinculada a nenhuma NF
+      AND NOT EXISTS (
+        SELECT 1 FROM fiscal_notes fn
+        WHERE fn.stmt_line_id = b.id AND fn.company_id = $1
+      )
+    ORDER BY b.data ASC
+  `, [companyId, extInStr, extFimStr]);
+  const bslAll: any[] = bslQ.rows;
+
+  const credits = bslAll.filter((b) => parseFloat(b.valor) >= 0);
+  const debits  = bslAll.filter((b) => parseFloat(b.valor) < 0);
+
+  // ── 2. NF-e emitidas SEM vínculo no período ───────────────────────────────
+  const emitQ = await db.$client.query(`
+    SELECT id, ABS(valor_liquido)::float AS valor_liquido,
+           tomador_cnpj, tomador_nome, data_emissao::text
+    FROM fiscal_notes
+    WHERE company_id = $1
+      AND stmt_line_id IS NULL
+      AND origem LIKE 'nfse_%'
+      AND status != 'cancelada'
+      AND data_emissao BETWEEN $2 AND $3
+    ORDER BY data_emissao ASC
+  `, [companyId, dataInicio, dataFim]);
+  const emitidas: any[] = emitQ.rows;
+
+  // ── 3. NF-e recebidas SEM vínculo no período ─────────────────────────────
+  const recQ = await db.$client.query(`
+    SELECT id, ABS(valor_bruto)::float AS valor_bruto,
+           emitente_cnpj, emitente_nome, data_emissao::text
+    FROM fiscal_notes
+    WHERE company_id = $1
+      AND stmt_line_id IS NULL
+      AND (origem = 'sefaz_nfe' OR origem = 'xml_upload')
+      AND status != 'cancelada'
+      AND data_emissao BETWEEN $2 AND $3
+    ORDER BY data_emissao ASC
+  `, [companyId, dataInicio, dataFim]);
+  const recebidas: any[] = recQ.rows;
+
+  // ── 4. Bipartite matching greedy (score decrescente) ─────────────────────
+  interface ScoredPair {
+    fnId: number;
+    bslId: number;
+    score: number;
+    tipo: "emitida" | "recebida";
+    fnValorLiquido: number;
+    fnDataEmissao: string;
+    fnCnpj: string | null;
+    fnNome: string | null;
+  }
+
+  const pairs: ScoredPair[] = [];
+
+  // Emitidas × créditos
+  for (const fn of emitidas) {
+    const fnVal = parseFloat(fn.valor_liquido);
+    if (fnVal <= 0) continue;
+    for (const bsl of credits) {
+      const bslVal = parseFloat(bsl.abs_valor);
+      const base = Math.max(fnVal, bslVal);
+      if (bslVal <= 0) continue;
+      // Pré-filtro de valor para não calcular score em todo cruzamento
+      if (Math.abs(fnVal - bslVal) / base > 0.15) continue;
+      // Pré-filtro de data
+      const emissaoMs = new Date(fn.data_emissao).getTime();
+      const bslMs = new Date(bsl.data).getTime();
+      const diffDays = (bslMs - emissaoMs) / 86_400_000;
+      if (diffDays < -5 || diffDays > 90) continue;
+
+      const score = calcScore({
+        bslDescricao: bsl.descricao ?? "",
+        bslValor: bslVal,
+        bslData: bsl.data,
+        fnCnpj: fn.tomador_cnpj,
+        fnNome: fn.tomador_nome,
+        fnValorLiquido: fnVal,
+        fnDataEmissao: fn.data_emissao,
+      });
+      if (score >= 40) {
+        pairs.push({ fnId: fn.id, bslId: bsl.id, score, tipo: "emitida",
+                     fnValorLiquido: fnVal, fnDataEmissao: fn.data_emissao,
+                     fnCnpj: fn.tomador_cnpj, fnNome: fn.tomador_nome });
+      }
+    }
+  }
+
+  // Recebidas × débitos
+  for (const fn of recebidas) {
+    const fnVal = parseFloat(fn.valor_bruto);
+    if (fnVal <= 0) continue;
+    for (const bsl of debits) {
+      const bslVal = parseFloat(bsl.abs_valor);
+      const base = Math.max(fnVal, bslVal);
+      if (bslVal <= 0) continue;
+      if (Math.abs(fnVal - bslVal) / base > 0.15) continue;
+      const emissaoMs = new Date(fn.data_emissao).getTime();
+      const bslMs = new Date(bsl.data).getTime();
+      const diffDays = (bslMs - emissaoMs) / 86_400_000;
+      if (diffDays < -5 || diffDays > 90) continue;
+
+      const score = calcScore({
+        bslDescricao: bsl.descricao ?? "",
+        bslValor: bslVal,
+        bslData: bsl.data,
+        fnCnpj: fn.emitente_cnpj,
+        fnNome: fn.emitente_nome,
+        fnValorLiquido: fnVal,
+        fnDataEmissao: fn.data_emissao,
+      });
+      if (score >= 40) {
+        pairs.push({ fnId: fn.id, bslId: bsl.id, score, tipo: "recebida",
+                     fnValorLiquido: fnVal, fnDataEmissao: fn.data_emissao,
+                     fnCnpj: fn.emitente_cnpj, fnNome: fn.emitente_nome });
+      }
+    }
+  }
+
+  // Ordenar por score decrescente → greedy bipartite
+  pairs.sort((a, b) => b.score - a.score);
+
+  const usedFn  = new Set<number>();
+  const usedBsl = new Set<number>();
+  let vinculados = 0;
+
+  for (const p of pairs) {
+    if (usedFn.has(p.fnId) || usedBsl.has(p.bslId)) continue;
+
+    // Threshold: emitidas >=60; recebidas >=70
+    const minScore = p.tipo === "emitida" ? 60 : 70;
+    if (p.score < minScore) continue;
+
+    const res = await db.$client.query(`
+      UPDATE fiscal_notes
+         SET stmt_line_id = $1, status = 'conciliada', updated_at = $2
+       WHERE id = $3 AND company_id = $4 AND stmt_line_id IS NULL
+       RETURNING id
+    `, [p.bslId, now, p.fnId, companyId]);
+
+    if ((res.rowCount ?? 0) > 0) {
+      usedFn.add(p.fnId);
+      usedBsl.add(p.bslId);
+      vinculados++;
+    }
+  }
+
+  return { vinculados, candidatosAnalised: pairs.length };
 }

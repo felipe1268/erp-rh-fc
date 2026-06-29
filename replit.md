@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3849** — **NF-e × EXTRATO · VÍNCULO AUTOMÁTICO MELHORADO: NAME-TOKEN MATCHING + ±10% TOLERÂNCIA + VARREDURA RETROATIVA + BOTÃO "VINCULAR COM EXTRATO".** `autoVincularNfService.ts` reescrito com: `extractTokens()` (tokens ≥4 chars sem acento/stopwords), `calcScore()` (pontuação 0-100: CNPJ+50, token+30, valor±5%+20, data+10), função retroativa `sincronizarNfsPeriodo` (greedy bipartite matching). Novo endpoint `fiscalNotes.sincronizarComExtrato`. Botão "Vincular com Extrato" (violeta) nas abas Emitidas e Recebidas de `FinanceiroNotasFiscais.tsx`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3848** — **CONCILIAÇÃO · CHEQUE DEVOLVIDO = MOVIMENTAÇÃO, NÃO ENTRADA.** Padrões `"cheque devol"` e `"dev.*cheq"` adicionados a `_INTERNO_PATTERNS` em `financial.ts`. Par crédito+débito ("CHEQUE DEVOLVIDO MOT 11") vai para `valorEntradasInternas`/`valorSaidasInternas` (movimentação), saindo do caixa real — idêntico ao tratamento de `aplica`/`resgate`. Base: NBC TG 03/IAS 7 (estorno puro, net=0). Arquivo: `financial.ts`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3847** — **TEMPLATE XLSX · SAVE CORRIGIDO + "APROVADO POR" AUTOMÁTICO + LISTA COMPLETA DE RELATÓRIOS.** (1) Save silencioso corrigido: companyId=0 agora exibe toast; mutation usa `onSuccess`/`onError` (toast visível em mobile). (2) "Aprovado por" vira read-only preenchido com o nome do usuário logado (prop `userName` de `useAuth`). (3) Lista completa de 7 relatórios XLSX com badge "usa template". Arquivos: `XlsxTemplateTab.tsx`, `Configuracoes.tsx`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
-
 ### 5 one-liners
+
+- **Rev. 3847** — **TEMPLATE XLSX · SAVE CORRIGIDO + "APROVADO POR" AUTOMÁTICO + LISTA COMPLETA DE RELATÓRIOS.** `XlsxTemplateTab.tsx`, `Configuracoes.tsx`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3846** — **CONFIGURAÇÕES · NOTIFICAÇÕES E-MAIL UNIFICADAS COM SUBCATEGORIAS.** Os dois tabs fundidos num tab com seletor [RH] | [Contabilidade] via `NOTIF_SUBCATS`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3844** — **PANORAMA FISCAL · AUTO-VÍNCULO NF-e × EXTRATO BANCÁRIO APÓS CONCILIAÇÃO.** `autoVincularNfService.ts` fire-and-forget em 3 pontos de `financial.ts`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3843** — **NF-E RECEBIDAS · BUGFIX: BOTÃO "MUDAR STATUS" NÃO ABRIA DIALOG.** `onClick` chamava estado das Emitidas; corrigido para `setBulkRecStatusOpen`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
-
-- **Rev. 3841** — **CONFIG. SMTP VIA UI · ALTERAR E-MAIL E SENHA SEM EDITAR VARIÁVEL DE AMBIENTE.** Tab em Configurações (admin_master), smtp_config via SyncSchema+, smtpService lê DB primeiro. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 ### Histórico completo
 
