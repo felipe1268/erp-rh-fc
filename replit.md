@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3874** — **DASH EPIs — CLIQUE NAS BARRAS DO GRÁFICO ABRE DETALHE.** Gráfico "Vida Útil vs. Real" agora interativo: clique em qualquer barra → Dialog com 4 KPIs, barra de %, tabela de funcionários (nome clicável abre ficha). `onChartClick` + state `detalheEpi` em `DashEpis.tsx`. ZERO DELETE.
+
 - **Rev. 3873** — **FIX CHECKLIST DOCX — WORD "ERRO AO ABRIR".** Causa-raiz: `ImageRun.transformation` no docx v9 recebe PIXELS, não EMUs. `LOGO_W=1620000` (EMUs) × 9525 = `cx="15430500000"` (17 metros!) → Word rejeita o arquivo. Fix: `LOGO_W=170px` / `LOGO_H=78px` (≈4.5cm proporcional). `downloadPacoteContador.ts`. ZERO DELETE.
 
-- **Rev. 3872** — **FIX DATA NAS PLANILHAS XLSX — DD/MM/AAAA.** Causa-raiz: `fmtDate()` em `downloadPacoteContador.ts` não tratava objetos `Date` do Drizzle; `String(date).slice(0,10)` → `"Fri Jan 02"` cru no Excel. Fix: guard `instanceof Date` com UTC → DD/MM/AAAA. Cobre todos os 4 builders (ListaFaturas, NfeXlsx, ExtratoGeral, OcsXlsx). ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3872** — **FIX DATA NAS PLANILHAS XLSX — DD/MM/AAAA.** Guard `instanceof Date` em `fmtDate()` → DD/MM/AAAA em vez de "Fri Jan 02". ZERO DELETE.
 
 - **Rev. 3871** — **FIX PARSER EXTRATO BB — VALORES E TIPO D/C CORRETOS.** Pré-strip `RE_BB_DOCNUM`; regex `[CD](?=[\s\d]|$)`. ZERO DELETE.
 

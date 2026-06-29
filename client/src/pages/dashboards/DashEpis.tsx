@@ -120,6 +120,7 @@ export default function DashEpis() {
   const kpiDetailRef = useRef<HTMLDivElement>(null);
   const [activeKpi, setActiveKpi] = useState<string | null>(null);
   const [expandedEpiId, setExpandedEpiId] = useState<number | null>(null);
+  const [detalheEpi, setDetalheEpi] = useState<any | null>(null);
   const [fichaModal, setFichaModal] = useState<{ employeeId: number; employeeName: string; epiNome: string } | null>(null);
   const fichaDeliveriesRaw = trpc.epis.listDeliveries.useQuery(
     { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}), employeeId: fichaModal?.employeeId, limit: 200, offset: 0 },
@@ -833,6 +834,7 @@ export default function DashEpis() {
                           },
                         ]}
                         height={Math.max(250, analise.length * 40)}
+                        onChartClick={(info) => setDetalheEpi(analise[info.dataIndex] ?? null)}
                       />
                     </CardContent>
                   </Card>
@@ -1473,6 +1475,155 @@ export default function DashEpis() {
           </div>
         )}
     </DashboardLayout>
+
+      {/* ── Dialog: Detalhe do EPI clicado no gráfico ─────────────────────── */}
+      <Dialog open={!!detalheEpi} onOpenChange={() => setDetalheEpi(null)}>
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-3xl max-h-[calc(100vh-4rem)] flex flex-col overflow-hidden">
+          <DialogHeader className="pb-3 border-b shrink-0">
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <div className={`p-1.5 rounded-lg ${detalheEpi?.status === 'critico' ? 'bg-red-50' : detalheEpi?.status === 'atencao' ? 'bg-yellow-50' : 'bg-green-50'}`}>
+                <Activity className={`h-5 w-5 ${detalheEpi?.status === 'critico' ? 'text-red-600' : detalheEpi?.status === 'atencao' ? 'text-yellow-600' : 'text-green-600'}`} />
+              </div>
+              <div className="min-w-0">
+                <span className="break-words">{detalheEpi?.nome}</span>
+                <p className="text-xs font-normal text-muted-foreground mt-0.5">{detalheEpi?.categoria}</p>
+              </div>
+              <Badge
+                variant={detalheEpi?.status === 'critico' ? 'destructive' : 'outline'}
+                className={`ml-auto shrink-0 text-xs ${detalheEpi?.status === 'atencao' ? 'border-yellow-500 text-yellow-700 bg-yellow-50' : detalheEpi?.status === 'ok' ? 'bg-green-100 text-green-700 border-green-300' : ''}`}
+              >
+                {detalheEpi?.status === 'critico' ? 'CRÍTICO' : detalheEpi?.status === 'atencao' ? 'ATENÇÃO' : 'OK'}
+              </Badge>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="overflow-y-auto flex-1 space-y-4 pt-3">
+            {/* KPIs de durabilidade */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="rounded-lg border bg-green-50 p-3 text-center">
+                <p className="text-xs text-muted-foreground mb-1">Vida Útil Esperada</p>
+                <p className="text-2xl font-bold text-green-700">{detalheEpi?.esperado}d</p>
+              </div>
+              <div className={`rounded-lg border p-3 text-center ${detalheEpi?.status === 'critico' ? 'bg-red-50' : detalheEpi?.status === 'atencao' ? 'bg-yellow-50' : 'bg-blue-50'}`}>
+                <p className="text-xs text-muted-foreground mb-1">Tempo Médio Real</p>
+                <p className={`text-2xl font-bold ${detalheEpi?.status === 'critico' ? 'text-red-600' : detalheEpi?.status === 'atencao' ? 'text-yellow-700' : 'text-blue-600'}`}>{detalheEpi?.mediaReal}d</p>
+              </div>
+              <div className="rounded-lg border bg-muted/40 p-3 text-center">
+                <p className="text-xs text-muted-foreground mb-1">Diferença</p>
+                {detalheEpi && (
+                  <p className={`text-2xl font-bold flex items-center justify-center gap-1 ${detalheEpi.mediaReal < detalheEpi.esperado ? 'text-red-600' : 'text-green-600'}`}>
+                    {detalheEpi.mediaReal < detalheEpi.esperado
+                      ? <><ArrowDown className="h-5 w-5" />{detalheEpi.esperado - detalheEpi.mediaReal}d</>
+                      : <><ArrowUp className="h-5 w-5" />+{detalheEpi.mediaReal - detalheEpi.esperado}d</>}
+                  </p>
+                )}
+              </div>
+              <div className="rounded-lg border bg-muted/40 p-3 text-center">
+                <p className="text-xs text-muted-foreground mb-1">Total Entregas</p>
+                <p className="text-2xl font-bold text-foreground">{detalheEpi?.totalEntregas}</p>
+              </div>
+            </div>
+
+            {/* Barra visual de % */}
+            {detalheEpi && (
+              <div className="rounded-lg border p-3">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs text-muted-foreground">Tempo real vs. esperado</span>
+                  <span className={`text-xs font-bold ${detalheEpi.percentual < 50 ? 'text-red-600' : detalheEpi.percentual < 80 ? 'text-yellow-700' : 'text-green-700'}`}>
+                    {detalheEpi.percentual?.toFixed(0)}%
+                  </span>
+                </div>
+                <div className="h-3 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${detalheEpi.percentual < 50 ? 'bg-red-500' : detalheEpi.percentual < 80 ? 'bg-yellow-400' : 'bg-green-500'}`}
+                    style={{ width: `${Math.min(detalheEpi.percentual ?? 0, 100)}%` }}
+                  />
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {detalheEpi.percentual < 50
+                    ? 'Desgaste crítico — durando menos da metade da vida esperada'
+                    : detalheEpi.percentual < 80
+                    ? 'Desgaste acima do esperado — monitorar'
+                    : 'Durabilidade dentro do esperado'}
+                </p>
+              </div>
+            )}
+
+            {/* Tabela de funcionários */}
+            {detalheEpi?.funcDetalhe?.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-foreground mb-2 flex items-center gap-1.5">
+                  <Users className="h-3.5 w-3.5" />
+                  Funcionários que receberam este EPI
+                  <span className="font-normal text-muted-foreground">({detalheEpi.funcDetalhe.length} funcionário{detalheEpi.funcDetalhe.length !== 1 ? 's' : ''})</span>
+                </p>
+                <div className="overflow-x-auto rounded-lg border">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-muted/40 text-left text-muted-foreground border-b">
+                        <th className="py-2 px-3 font-medium">Funcionário</th>
+                        <th className="py-2 px-3 font-medium">Função</th>
+                        <th className="py-2 px-3 font-medium text-center">Entregas</th>
+                        <th className="py-2 px-3 font-medium text-center">Média (dias)</th>
+                        <th className="py-2 px-3 font-medium">Datas das Entregas</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(() => {
+                        const MOTIVO_LABELS: Record<string, string> = {
+                          regular: 'Entrega regular', desgaste: 'Desgaste', perda: 'Perda',
+                          dano: 'Dano', extravio: 'Extravio', vencido: 'Vencido',
+                          troca_tamanho: 'Troca tamanho', novo_funcionario: 'Novo funcionário',
+                        };
+                        return detalheEpi.funcDetalhe.map((f: any, fi: number) => (
+                          <tr key={fi} className="border-b border-border/30 hover:bg-muted/20">
+                            <td className="py-2 px-3 font-medium">
+                              <button
+                                className="text-left hover:text-blue-600 hover:underline cursor-pointer transition-colors"
+                                onClick={() => {
+                                  setDetalheEpi(null);
+                                  setFichaModal({ employeeId: f.employeeId, employeeName: f.nome, epiNome: detalheEpi.nome });
+                                }}
+                              >
+                                <EmpNameWithStatus nome={f.nome} isDesligado={f.isDesligado} maxWidth="max-w-[180px]" />
+                              </button>
+                            </td>
+                            <td className="py-2 px-3 text-muted-foreground">{f.funcao}</td>
+                            <td className="py-2 px-3 text-center">{f.entregas}</td>
+                            <td className="py-2 px-3 text-center">
+                              {f.entregas >= 2 ? (
+                                <span className={`font-bold ${f.diasReal < detalheEpi.esperado * 0.5 ? 'text-red-600' : f.diasReal < detalheEpi.esperado ? 'text-yellow-600' : 'text-green-600'}`}>
+                                  {f.diasReal}d
+                                </span>
+                              ) : <span className="text-muted-foreground">—</span>}
+                            </td>
+                            <td className="py-2 px-3">
+                              <div className="flex flex-wrap gap-1">
+                                {(f.datasEntrega || []).map((dt: string, di: number) => (
+                                  <span key={di} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-background border text-[10px]">
+                                    {fmtDate(dt)}
+                                    {f.motivos?.[di] && f.motivos[di] !== 'regular' && (
+                                      <span className="text-muted-foreground">· {MOTIVO_LABELS[f.motivos[di]] || f.motivos[di]}</span>
+                                    )}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        ));
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {(!detalheEpi?.funcDetalhe?.length) && (
+              <p className="text-xs text-muted-foreground text-center py-4">Sem detalhamento por funcionário disponível para este EPI.</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!fichaModal} onOpenChange={() => setFichaModal(null)}>
         <DialogContent resizable={false} className="w-[calc(100vw-2rem)] max-w-[calc(100vw-2rem)] h-[calc(100vh-2rem)] max-h-[calc(100vh-2rem)] flex flex-col">

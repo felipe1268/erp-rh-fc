@@ -1,4 +1,20 @@
 /**
+ * Rev. 3874 — **DASH EPIs — CLIQUE NA BARRA DO GRÁFICO ABRE DIALOG DE DETALHE.**
+ *
+ * O gráfico "Vida Útil Esperada vs. Tempo Real de Troca" agora é interativo:
+ * clicar em qualquer barra (EPI) abre um Dialog com:
+ *   - 4 KPIs: Vida Útil Esperada / Tempo Médio Real / Diferença / Total Entregas
+ *   - Barra visual de % (real vs. esperado) com cor por status
+ *   - Tabela completa de funcionários que receberam o EPI (nome clicável → ficha)
+ *     com colunas: Funcionário, Função, Entregas, Média (dias), Datas das Entregas + motivo
+ *
+ * Implementação: `onChartClick` já suportado pelo `DashChart`; novo state `detalheEpi`
+ * + `<Dialog>` inserido em `client/src/pages/dashboards/DashEpis.tsx`.
+ * Clicar no nome do funcionário dentro do detalhe abre a ficha completa de entregas.
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3873 — **FIX CHECKLIST DOCX — IMAGEM COM DIMENSÕES INVÁLIDAS (Word "Erro ao abrir").**
  *
  * Causa-raiz: `ImageRun.transformation` no docx v9 recebe dimensões em **pixels**, não em EMUs.
