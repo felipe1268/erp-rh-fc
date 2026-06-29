@@ -1,40 +1,53 @@
 import { Input } from "@/components/ui/input";
 import { useState, useEffect } from "react";
 
+/** Converte qualquer representação de número BR ("1.000,50" ou "1000.50") para number. */
 function toNumber(v: string | number | null | undefined): number {
   if (v == null || v === "" || v === "-") return 0;
   if (typeof v === "number") return v;
   const s = String(v).trim();
-  if (/^-?\d+([.]\d+)?$/.test(s)) return parseFloat(s);
+  // Já é numérico puro (ex: "1000.5" vindo do state interno)
+  if (/^-?\d+(\.\d+)?$/.test(s)) return parseFloat(s);
   const isNeg = s.startsWith("-");
   const clean = s.replace(/-/g, "").replace(/\./g, "").replace(",", ".");
   const num = parseFloat(clean);
-  return isNaN(num) ? 0 : (isNeg ? -num : num);
-}
-
-function fmtBRL(v: string | number | null | undefined, decimals = 2): string {
-  const num = toNumber(v);
-  if (num === 0) return "";
-  return num.toLocaleString("pt-BR", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
+  return isNaN(num) ? 0 : isNeg ? -num : num;
 }
 
 /**
- * Formata enquanto o usuário digita:
- * - Aplica pontos de milhar na parte inteira em tempo real
- * - Mantém a vírgula e decimais livres enquanto foca
- * - No blur formata completamente
+ * Adiciona ponto de milhar na parte inteira sem depender de toLocaleString
+ * (que pode cair em "en-US" no iOS Safari e usar vírgula como separador).
+ *   "1000"   → "1.000"
+ *   "100000" → "100.000"
+ */
+function addDots(intStr: string): string {
+  return intStr.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
+/** Formata número para exibição BR com decimais fixos, ex: -100000 → "-100.000,00". */
+function fmtBRL(v: string | number | null | undefined, decimals = 2): string {
+  const num = toNumber(v);
+  if (num === 0) return "";
+  const isNeg = num < 0;
+  const abs = Math.abs(num);
+  const [intPart, decPart] = abs.toFixed(decimals).split(".");
+  return (isNeg ? "-" : "") + addDots(intPart) + "," + decPart;
+}
+
+/**
+ * Formata ao vivo enquanto o usuário digita.
+ * Retorna o display (com pontos de milhar) e o valor numérico interno (string "1000.5").
  */
 function fmtLive(raw: string, allowNegative: boolean): { display: string; numeric: string } {
   const isNeg = allowNegative && raw.startsWith("-");
+  // Remove tudo que não é dígito nem vírgula
   const stripped = raw.replace(/[^\d,]/g, "");
 
   if (!stripped) {
     return { display: isNeg ? "-" : "", numeric: "0" };
   }
 
+  // Separa parte inteira de decimais (usa primeira vírgula apenas)
   const commaIdx = stripped.indexOf(",");
   let intStr: string;
   let decStr: string | null;
@@ -47,16 +60,13 @@ function fmtLive(raw: string, allowNegative: boolean): { display: string; numeri
     decStr = null;
   }
 
-  const intNum = intStr === "" ? 0 : parseInt(intStr, 10);
-  const fmtInt = intStr === "" ? "" : isNaN(intNum) ? intStr : intNum.toLocaleString("pt-BR");
-
+  const fmtInt = intStr === "" ? "0" : addDots(intStr);
   let display = (isNeg ? "-" : "") + fmtInt;
   if (decStr !== null) display += "," + decStr;
 
+  // Valor interno sem formatação (ponto decimal, sem pontos de milhar)
   const numericStr =
-    (isNeg ? "-" : "") +
-    (intStr || "0") +
-    (decStr !== null ? "." + decStr : "");
+    (isNeg ? "-" : "") + (intStr || "0") + (decStr != null ? "." + decStr : "");
   const num = parseFloat(numericStr);
   const numeric = isNaN(num) ? "0" : String(num);
 
@@ -77,9 +87,9 @@ export function MoneyInput({
   className?: string;
   placeholder?: string;
   decimals?: number;
-  /** Permite valores negativos (saldo inicial, etc.) */
+  /** Permite valores negativos (ex: saldo inicial). */
   allowNegative?: boolean;
-  /** Colore vermelho quando negativo, verde quando positivo */
+  /** Colore vermelho quando negativo, verde quando positivo. */
   colorize?: boolean;
 }) {
   const [display, setDisplay] = useState(fmtBRL(value, decimals));
@@ -90,8 +100,7 @@ export function MoneyInput({
   }, [value, focused, decimals]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value;
-    const { display: d, numeric } = fmtLive(raw, allowNegative);
+    const { display: d, numeric } = fmtLive(e.target.value, allowNegative);
     setDisplay(d);
     onChange(numeric);
   };
@@ -105,8 +114,8 @@ export function MoneyInput({
 
   const handleFocus = () => {
     setFocused(true);
-    const num = toNumber(display);
-    if (num === 0) setDisplay(allowNegative ? "" : "");
+    // Zera display apenas se o valor for exatamente 0
+    if (toNumber(display) === 0) setDisplay("");
   };
 
   const numericVal = toNumber(display);
