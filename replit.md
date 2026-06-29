@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3861** — **ENVIOS AO CONTADOR · BADGE DE STATUS POR LINHA EM NF-e RECEBIDAS.** Badge condicional: `conciliada`=verde, `enviada`=azul, demais=âmbar; linha conciliada ganha fundo `bg-green-50/30`. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3860** — **EXTRATO BANCÁRIO XLSX · COLUNA "Nº NOTA FISCAL" CENTRALIZADA.** `textCols.forEach` em `downloadContabilidadeXlsx.ts`: `col === "E" ? "center" : "left"` — somente a coluna E (nfNumero) centralizada; C, D, F continuam à esquerda. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3859** — **TEMPLATE XLSX · BORDA SUPERIOR DO LOGO + LOGO CENTRALIZADO.** `ws.mergeCells("B2:C7")` → contorno completo incluindo topo; offset horizontal dinâmico via `nativeColOff` em EMU centraliza logo 185×78. ZERO DELETE. Detalhe: `shared/changelog.ts`.
-
 ### 5 one-liners
+
+- **Rev. 3859** — **TEMPLATE XLSX · BORDA SUPERIOR DO LOGO + LOGO CENTRALIZADO.** `ws.mergeCells("B2:C7")` → contorno completo incluindo topo; offset horizontal dinâmico via `nativeColOff` em EMU centraliza logo 185×78. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3858** — **CONTAS A RECEBER · CARDS KPI CLICÁVEIS FILTRAM A LISTA.** `KCard` ganha `onClick/active/activeRing`; `cardAtivo` + `ativarCard`; 4 cards filtram status+período; chip ✕; Select ganha "Em aberto"/"Vencidos". ZERO DELETE.
 

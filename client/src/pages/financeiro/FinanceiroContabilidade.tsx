@@ -249,14 +249,19 @@ function PainelMes({
                         </thead>
                         <tbody>
                           {docs.nfeRecebidas.map((n: any, i: number) => (
-                            <tr key={i} className="border-b border-slate-50 hover:bg-slate-50">
+                            <tr key={i} className={cn("border-b border-slate-50 hover:bg-slate-50", n.status === "conciliada" && "bg-green-50/30")}>
                               <td className="px-4 py-2 font-medium text-blue-700">{n.numero_nf || "—"}</td>
                               <td className="px-4 py-2 text-slate-700 max-w-[160px] truncate" title={n.emitente_nome}>{n.emitente_nome || "—"}</td>
                               <td className="px-4 py-2 text-slate-500 font-mono">{n.emitente_cnpj || "—"}</td>
                               <td className="px-4 py-2 text-slate-500">{fmtDate(n.data_emissao)}</td>
                               <td className="px-4 py-2 text-right font-medium text-slate-700">{fmtBRL(n.valor_bruto)}</td>
                               <td className="px-4 py-2 text-center">
-                                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700">{n.status}</span>
+                                <span className={cn(
+                                  "px-1.5 py-0.5 rounded text-[10px] font-medium",
+                                  n.status === "conciliada" ? "bg-green-100 text-green-700" :
+                                  n.status === "enviada"    ? "bg-blue-100 text-blue-700" :
+                                  "bg-amber-50 text-amber-700"
+                                )}>{n.status}</span>
                               </td>
                             </tr>
                           ))}

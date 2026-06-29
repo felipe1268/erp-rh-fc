@@ -1,4 +1,21 @@
 /**
+ * Rev. 3861 — **ENVIOS AO CONTADOR · BADGE DE STATUS POR LINHA EM NF-e RECEBIDAS.**
+ *
+ * **Problema:** na aba "NF-e Recebidas" do módulo "Envios ao Contador", o badge
+ * de status usava a mesma cor azul para todos os valores ("conciliada",
+ * "pendente", "enviada"), impossibilitando identificar visualmente quais notas
+ * tinham sido conciliadas com o extrato bancário.
+ *
+ * **Correção (`client/src/pages/financeiro/FinanceiroContabilidade.tsx`):**
+ * - Badge condicional: `conciliada` → verde (`bg-green-100 text-green-700`);
+ *   `enviada` → azul; demais → âmbar (`bg-amber-50 text-amber-700`).
+ * - Linha conciliada recebe fundo levemente verde (`bg-green-50/30`) para
+ *   destaque visual imediato sem distorcer a leitura das demais colunas.
+ *
+ * **ZERO DELETE. Detalhe: `shared/changelog.ts`.**
+ */
+
+/**
  * Rev. 3860 — **EXTRATO BANCÁRIO XLSX · COLUNA "Nº NOTA FISCAL" CENTRALIZADA.**
  *
  * **Problema:** os valores da coluna E ("Nº Nota Fiscal") no relatório XLSX do
