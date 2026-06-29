@@ -202,6 +202,7 @@ export default function FinanceiroNotasFiscais() {
   const [selectedRecIds, setSelectedRecIds] = useState<Set<number>>(new Set());
   const [bulkRecDeleteOpen, setBulkRecDeleteOpen] = useState(false);
   const [bulkRecStatusOpen, setBulkRecStatusOpen] = useState(false);
+  const [curarRateLimitOpen, setCurarRateLimitOpen] = useState(false);
   const [bulkRecStatusTarget, setBulkRecStatusTarget] = useState<string>("recebida");
   const masterRecRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState<any>(emptyForm());
@@ -672,11 +673,22 @@ export default function FinanceiroNotasFiscais() {
   }, [sefazSyncMut.isPending]);
   const importXmlMut = (trpc as any).sefaz.importXml.useMutation();
   const sefazResetNsuMut = (trpc as any).sefaz.resetNSU.useMutation({
-    onSuccess: () => {
-      toast({ title: "NSU zerado. Clique em 'Sincronizar SEFAZ' para iniciar o download do histórico.", duration: 8000 });
+    onSuccess: (r: any) => {
+      toast({ title: `✅ NSU restaurado (${Number(r?.nsuUsado ?? 0).toLocaleString("pt-BR")}). Próxima sync em ~5 min.`, duration: 8000 });
       sefazCfgQuery.refetch();
     },
     onError: (e: any) => toast({ title: "Erro ao resetar NSU", description: e.message, variant: "destructive" }),
+  });
+  const sefazCurarMut = (trpc as any).sefaz.curarRateLimit.useMutation({
+    onSuccess: (r: any) => {
+      toast({
+        title: "✅ Sync pausado — CNPJ em repouso",
+        description: `NSU salvo: ${Number(r?.nsuUsado ?? 0).toLocaleString("pt-BR")}. Aguarde 24-48h antes de religar o sync automático para o SEFAZ desbloquear o CNPJ.`,
+        duration: 12000,
+      });
+      sefazCfgQuery.refetch();
+    },
+    onError: (e: any) => toast({ title: "Erro ao pausar sync", description: e.message, variant: "destructive" }),
   });
   const nfeDetalhesQuery = (trpc as any).sefaz.getDetalhesNFe.useQuery(
     { id: nfeRecDetalhe?.id ?? 0, companyId: companyId ?? 0 },
@@ -1429,6 +1441,27 @@ export default function FinanceiroNotasFiscais() {
                         </div>
                       )}
                     </div>
+                    {/* CTA: pausar e curar rate-limit (quando bloqueado 2+ vezes) */}
+                    {syncOn && _consec >= 2 && (
+                      <div className="mt-3 pt-3 border-t border-amber-200 flex flex-col gap-2">
+                        <div className="flex items-start gap-2">
+                          <span className="text-amber-700 mt-0.5">⚠️</span>
+                          <p className="text-xs text-amber-800 leading-relaxed">
+                            <strong>CNPJ bloqueado no SEFAZ.</strong> A única saída é parar todas as chamadas por 24–48h para o servidor do SEFAZ desbloquear o CNPJ. Clique abaixo para pausar o sync, aguarde 48h e então religue o sync automático.
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setCurarRateLimitOpen(true)}
+                          disabled={sefazCurarMut.isPending}
+                          className="self-start inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-60 transition-colors"
+                        >
+                          {sefazCurarMut.isPending
+                            ? <><span className="animate-spin inline-block w-3 h-3 border border-white border-t-transparent rounded-full" /> Pausando…</>
+                            : <>⏸ Pausar sync e curar rate-limit</>
+                          }
+                        </button>
+                      </div>
+                    )}
                     {/* CTA: ligar sync automático direto aqui */}
                     {!syncOn && sefazCfg?.tem_certificado && (
                       <div className="mt-3 pt-3 border-t border-slate-200 flex items-center gap-3">
@@ -3451,6 +3484,28 @@ export default function FinanceiroNotasFiscais() {
 
         </>}
         {/* fim aba emitidas */}
+
+        {/* ─── AlertDialog: Pausar sync e curar rate-limit ─────────────────── */}
+        <AlertDialog open={curarRateLimitOpen} onOpenChange={v => { if (!v) setCurarRateLimitOpen(false); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Pausar sync e curar bloqueio no SEFAZ?</AlertDialogTitle>
+              <AlertDialogDescription className="space-y-2">
+                <span className="block">O sync automático será <strong>desligado agora</strong>. O sistema <strong>não vai mais tentar contato com o SEFAZ</strong>, permitindo que o CNPJ seja desbloqueado pelo servidor da Receita Federal.</span>
+                <span className="block">Após <strong>24 a 48 horas</strong>, vá em <strong>Configurações → Financeiro → NF-e</strong> e religue o sync automático. A primeira sincronização após a espera deve funcionar normalmente.</span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-red-600 hover:bg-red-700"
+                onClick={() => { setCurarRateLimitOpen(false); sefazCurarMut.mutate({ companyId: companyId ?? 0 }); }}
+              >
+                ⏸ Pausar e curar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* ─── AlertDialog Histórico Completo SEFAZ (fora de qualquer aba) ─── */}
         <AlertDialog open={confirmHistorico} onOpenChange={setConfirmHistorico}>

@@ -1,6 +1,6 @@
 ---
 name: SEFAZ NSU rate-limit loop
-description: cStat=656 retorna ultNSU correto — salvar esse NSU é crítico; ignorar causa loop eterno.
+description: cStat=656 → salvar ultNSU é crítico; resetNSU zerava NSU=0+last_sync_at=NULL → loop eterno; curarRateLimit é o procedimento correto de recuperação.
 ---
 
 # SEFAZ NSU após rate-limit (cStat=656)
@@ -38,12 +38,31 @@ Resultado: NSU bom → reset p/ 0 no boot → 656 de novo → loop, independente
 TODO bloco de boot/migration que escreve em `ultimo_nsu`/`last_sync_result`. `importadas=0` NUNCA é
 sinal de corrupção por si só.
 
+## Causa-raiz confirmada (Rev. 3870 — 29/06/2026): botão resetNSU era a bomba
+O endpoint `resetNSU` zeraba: `ultimo_nsu='000000000000000'` + `last_sync_at=NULL`.
+- `last_sync_at=NULL` → gate trata como "primeiro sync" → disparo **imediato** (sem espera)
+- `ultimo_nsu='000000000000000'` → NSU=0 enviado ao SEFAZ → cStat=656 garantido
+- Loop: 656 → backoff escalou 1×→2×→4×; 8 violações consecutivas bloquearam o CNPJ >8h no SEFAZ
+- Mesmo tentativas com 8h de intervalo continuavam recebendo 656 (SEFAZ mantém lockout por CNPJ)
+
+**Fix (Rev. 3870):**
+- `resetNSU` agora usa `MAX(nsu_sefaz) FROM fiscal_notes WHERE origem='sefaz_nfe'` como NSU seguro
+- `resetNSU` seta `last_sync_at = NOW() - INTERVAL '2 hours 5 minutes'` (nunca NULL)
+- Novo `curarRateLimit`: desliga `sync_enabled=0` + NSU=MAX + limpa `last_sync_result` + `last_sync_at=NOW()`
+
 ## Resume point seguro (heal manual sem pular documentos)
 Para curar `ultimo_nsu=0` na mão sem risco de PULAR NF-e: derive o ponto de retomada dos NOSSOS
 próprios dados — `MAX(nsu_sefaz)` em `fiscal_notes` (origem `sefaz_nfe`). Temos provadamente tudo
 até esse NSU, então `ultimo_nsu = MAX(nsu_sefaz)` faz a próxima sync pedir o próximo e nada é pulado.
 NUNCA chutar o NSU de um screenshot/log (pode ser maxNSU = docs ainda NÃO consumidos → pula notas).
 Limpar `last_sync_at` + `last_sync_result` zera cooldown/backoff p/ a próxima cron rodar já.
+
+## Procedimento correto de recuperação quando CNPJ bloqueado >2× no SEFAZ
+1. Clicar "⏸ Pausar sync e curar rate-limit" na UI (aba NF-e Recebidas, card do countdown)
+   — isso chama `curarRateLimit`: sync_enabled=0, NSU=MAX, last_sync_result=NULL, last_sync_at=NOW()
+2. Aguardar 24-48h SEM fazer qualquer chamada manual ou automática ao SEFAZ
+3. Ir em Configurações → Financeiro → NF-e → "Ligar sync automático"
+4. Primeira sync será limpa: NSU correto, sem backoff, sem violação recente
 
 ## Margem do gate de cooldown deve ficar ACIMA do limite SEFAZ, não abaixo
 Mesmo com NSU correto, dá 656 intermitente se o gate de tempo permitir uma chamada um pouco ANTES

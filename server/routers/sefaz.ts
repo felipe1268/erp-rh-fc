@@ -1281,14 +1281,55 @@ export const sefazRouter = router({
     .mutation(async ({ input, ctx }) => {
       if (ctx.user?.role !== "admin_master" && ctx.user?.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
-      // Zera NSU E limpa last_sync_result (inclui rateLimitedAt) para que o cooldown
-      // não bloqueie a próxima chamada explícita do usuário.
-      await db.execute(sql`
+      // Usa o maior NSU já importado como ponto de retomada seguro.
+      // NUNCA zera para '000000000000000': enviar NSU=0 garante cStat=656.
+      // NUNCA limpa last_sync_at para NULL: disparo imediato → 656 na hora.
+      const nsuRows = await db.$client.query(`
+        SELECT COALESCE(MAX(nsu_sefaz),'000000000000000') AS max_nsu
+        FROM fiscal_notes
+        WHERE company_id = $1 AND origem = 'sefaz_nfe'
+      `, [input.companyId]);
+      const maxNsu = String(nsuRows.rows?.[0]?.max_nsu ?? "000000000000000");
+      await db.$client.query(`
         UPDATE company_nfe_config
-        SET ultimo_nsu = '000000000000000', last_sync_result = NULL, last_sync_at = NULL
-        WHERE company_id = ${input.companyId}
-      `);
-      return { ok: true };
+        SET ultimo_nsu = $2,
+            last_sync_result = NULL,
+            last_sync_at = NOW() - INTERVAL '2 hours 5 minutes'
+        WHERE company_id = $1
+      `, [input.companyId, maxNsu]);
+      console.log(`[SefazReset] company=${input.companyId} NSU seguro=${maxNsu} — backoff zerado, próxima sync em ~5min`);
+      return { ok: true, nsuUsado: maxNsu };
+    }),
+
+  // ── Curar rate-limit: pausa o sync por 48h e restaura estado limpo ───────────
+  // Propósito: quando o CNPJ está bloqueado no SEFAZ por excesso de violações,
+  // a única saída é PARAR TODAS as chamadas por ≥24h. Este endpoint:
+  //   1. Desliga sync_enabled (para o cron de seleção e o auto-disparo do cliente)
+  //   2. Usa MAX(nsu_sefaz) como ponto de retomada (nunca NSU=0)
+  //   3. Limpa last_sync_result (zera contador de backoff)
+  //   4. Seta last_sync_at = NOW() (a contagem de 2h começa do zero ao re-ligar)
+  // Após 24–48h, o usuário religa o sync automático e a primeira tentativa é limpa.
+  curarRateLimit: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.user?.role !== "admin_master" && ctx.user?.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      const nsuRows = await db.$client.query(`
+        SELECT COALESCE(MAX(nsu_sefaz),'000000000000000') AS max_nsu
+        FROM fiscal_notes
+        WHERE company_id = $1 AND origem = 'sefaz_nfe'
+      `, [input.companyId]);
+      const maxNsu = String(nsuRows.rows?.[0]?.max_nsu ?? "000000000000000");
+      await db.$client.query(`
+        UPDATE company_nfe_config
+        SET sync_enabled    = 0,
+            ultimo_nsu      = $2,
+            last_sync_result = NULL,
+            last_sync_at    = NOW()
+        WHERE company_id = $1
+      `, [input.companyId, maxNsu]);
+      console.log(`[SefazCura] company=${input.companyId} sync PAUSADO — NSU=${maxNsu} backoff zerado — aguardando 48h`);
+      return { ok: true, nsuUsado: maxNsu };
     }),
 
   // ── Importação por upload de XML (histórico 2018-2026) ───────────────────────

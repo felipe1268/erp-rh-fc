@@ -1,4 +1,23 @@
 /**
+ * Rev. 3870 — **SEFAZ — CURAR RATE-LIMIT + FIX resetNSU SEGURO.**
+ *
+ * Causa-raiz identificada: `resetNSU` zeraba `ultimo_nsu='000000000000000'` + `last_sync_at=NULL`
+ * → disparo imediato com NSU=0 → cStat=656 garantido → loop eterno que acumulou 8 violações
+ * consecutivas e bloqueou o CNPJ no servidor da SEFAZ por >8h.
+ *
+ * Correções:
+ * 1. `resetNSU` agora usa `MAX(nsu_sefaz) FROM fiscal_notes` como ponto de retomada (nunca NSU=0)
+ *    e seta `last_sync_at = NOW()-2h5min` (nunca NULL — NULL = disparo imediato).
+ * 2. Novo endpoint `curarRateLimit`: desliga `sync_enabled`, NSU=MAX seguro, limpa `last_sync_result`,
+ *    seta `last_sync_at=NOW()` — permite que o CNPJ fique em repouso por 24-48h.
+ * 3. UI: botão "⏸ Pausar sync e curar rate-limit" aparece no card de countdown quando
+ *    `rateLimitConsecutive ≥ 2`; AlertDialog explica o passo-a-passo ao usuário.
+ * 4. Após 24-48h: usuário religa em Configurações → Financeiro → NF-e → "Ligar sync automático".
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3869 — **ZIP PACOTE CONTADOR — PREFIXO 3 DÍGITOS (001_…006_).**
  *
  * Ajuste do padrão de numeração das pastas de `01_` para `001_` em todo o

@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3869** — **ZIP PACOTE CONTADOR — PREFIXO 3 DÍGITOS (001_…006_).** Numeração `01_` → `001_` em todas as pastas e no checklist seção 1: `001_Faturas_Emitidas`, `002_Servicos_Tomados`, `003_Extratos_Bancarios`, `004_Extratos_Cartoes`, `005_OCs_NF-e`, `006_OS_Servico`. ZERO DELETE.
+- **Rev. 3870** — **SEFAZ — CURAR RATE-LIMIT + FIX resetNSU SEGURO.** Causa-raiz: `resetNSU` zero NSU=0+last_sync_at=NULL → disparo imediato+656 → loop 8×. Fix: `resetNSU` usa MAX(nsu_sefaz); novo `curarRateLimit` desliga sync+NSU seguro+limpa backoff. Botão "⏸ Pausar" na UI quando bloqueado ≥2×. ZERO DELETE.
 
-- **Rev. 3868** — **CHECKLIST DOCX — LOGO FC + PASTAS ZIP NUMERADAS.** `ImageRun` logo-fc.jpg (1620000 EMU); tabela cabeçalho logo+nome+linha azul; ZIP com pastas `001_`…`006_`; `005_OCs_NF-e/` (pasta); `006_OS_Servico/` (nova). ZERO DELETE.
+- **Rev. 3869** — **ZIP PACOTE CONTADOR — PREFIXO 3 DÍGITOS (001_…006_).** Numeração `01_` → `001_` em todas as pastas e no checklist seção 1: `001_Faturas_Emitidas`, `002_Servicos_Tomados`, `003_Extratos_Bancarios`, `004_Extratos_Cartoes`, `005_OCs_NF-e`, `006_OS_Servico`. ZERO DELETE.
 
 ### 5 one-liners
 
