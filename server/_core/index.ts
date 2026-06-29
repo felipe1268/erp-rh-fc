@@ -1069,6 +1069,13 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3877: tabela bank_statement_templates garantida.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 3877 bank_statement_templates:`, e?.message || e); }
 
+        // Rev. 3879 — Controle de revisão ISO 9001 em bank_statement_templates.
+        try {
+          await db.execute(sql`ALTER TABLE bank_statement_templates ADD COLUMN IF NOT EXISTS revisao INTEGER NOT NULL DEFAULT 1`);
+          await db.execute(sql`ALTER TABLE bank_statement_templates ADD COLUMN IF NOT EXISTS notas_revisao TEXT`);
+          console.log(`[SyncSchema+] Rev. 3879: revisao + notas_revisao garantidos em bank_statement_templates.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 3879 bank_statement_templates.revisao:`, e?.message || e); }
+
         // Rev. 3876 — Cheque especial por conta bancária: flag de controle (0/1) + limite disponível.
         // Quando ativo=1 e o saldo acumulado do extrato for negativo, a Conciliação exibe alerta visual.
         try {

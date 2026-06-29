@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3879** — **GERADOR DE TEMPLATES DE EXTRATO BANCÁRIO POR IA — ZERO CÓDIGO.** Upload de PDF → IA analisa o formato (Gemini Vision → fallback Anthropic) → proposta editável pré-preenchida → salvar. Mutation `analisarPdf` em `bankStatementTemplates.ts` valida PDF, chama IA com prompt de análise de formato, retorna `{ bancoNome, palavrasChave, skipPrefixes, instrucoesIa }`. Colunas `revisao` (ISO 9001, auto-incrementa no UPDATE) e `notas_revisao` adicionadas com self-heal. `ExtratoTemplateTab.tsx` reescrito: botão "Analisar extrato de novo banco", loading animado, formulário pré-preenchido, AlertDialog no delete (sem `window.confirm`). ZERO DELETE.
+
 - **Rev. 3878** — **FIX DROPDOWN DE CATEGORIAS — ALINHAMENTO TOTAL COM O CADASTRO.** O dropdown de "Categoria" nos formulários de lançamento (Conciliação: "Lançar" + "Editar lançamento") filtrava por `tipo` (receita/despesa) baseado na direção do lançamento — excluindo categorias válidas do Cadastro. Removido o filtro de tipo em `catOpts` nos dois pontos (`options={catOpts.map(...)}` e no `SearchableSelect` de edição). Label "Categoria (Conta do Plano de Contas)" corrigido para "Categoria". ZERO DELETE.
 
-- **Rev. 3877** — **TEMPLATES DE EXTRATO BANCÁRIO + PARSER SANTANDER IBPJ.** Novo parser determinístico para Santander Internet Banking PJ (IBPJ): detecta `"Internet Banking Empresarial"`, ignora "Saldo do dia", parse de `DD/MM/AAAA` + `[- ]R$`. Inserido como passo 2.7 em `parseExtratoLines` (após Santander Consolidado, antes de IA). Nova tabela `bank_statement_templates` (por empresa: palavras-chave, skip-prefixes, instruções IA) + CRUD tRPC + aba "Templates de Extrato" em Configurações. `parseExtratoComIA` aceita `extraInstructions?` para injetar o template no prompt. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3877** — **TEMPLATES DE EXTRATO BANCÁRIO + PARSER SANTANDER IBPJ.** Nova tabela `bank_statement_templates` + CRUD tRPC + aba em Configurações. Parser Santander IBPJ. ZERO DELETE.
 
 - **Rev. 3876** — **CHEQUE ESPECIAL — CONTROLE POR CONTA BANCÁRIA + ALERTA NA CONCILIAÇÃO.** Duas colunas novas em `company_bank_accounts`. Self-heal `[SyncSchema+]`. Badge "⚠ Ch. Especial" quando `chequeEspecialAtivo=1 && saldoAtual<0`. ZERO DELETE.
 
@@ -64,11 +66,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3873** — **FIX CHECKLIST DOCX — WORD "ERRO AO ABRIR".** `LOGO_W=170px`/`LOGO_H=78px` (pixels, não EMUs). `downloadPacoteContador.ts`. ZERO DELETE.
 
-- **Rev. 3872** — **FIX DATA NAS PLANILHAS XLSX — DD/MM/AAAA.** Guard `instanceof Date` em `fmtDate()` → DD/MM/AAAA em vez de "Fri Jan 02". ZERO DELETE.
-
-- **Rev. 3871** — **FIX PARSER EXTRATO BB — VALORES E TIPO D/C CORRETOS.** Pré-strip `RE_BB_DOCNUM`; regex `[CD](?=[\s\d]|$)`. ZERO DELETE.
-
-- **Rev. 3870** — one-liner demovido; ver `replit-history.md`.
+- **Rev. 3872** — one-liner demovido; ver `replit-history.md`.
 
 ### Histórico completo
 

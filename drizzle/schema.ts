@@ -10105,6 +10105,9 @@ export const bankStatementTemplates = pgTable("bank_statement_templates", {
   skipPrefixes:  text("skip_prefixes").notNull().default("[]"),   // JSON string[]
   instrucoesIa:  text("instrucoes_ia"),
   ativo:         smallint("ativo").notNull().default(1),
+  // Rev. 3879 — Controle de revisão ISO 9001: auto-incrementado a cada UPDATE.
+  revisao:       integer("revisao").notNull().default(1),
+  notasRevisao:  text("notas_revisao"),
   criadoEm:      timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
   atualizadoEm:  timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
   criadoPorId:   integer("criado_por_id"),

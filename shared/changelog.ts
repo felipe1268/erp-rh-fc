@@ -1,4 +1,53 @@
 /**
+ * Rev. 3879 — **GERADOR DE TEMPLATES DE EXTRATO BANCÁRIO POR IA — ZERO CÓDIGO.**
+ *
+ * ## Objetivo
+ * Eliminar a necessidade de qualquer alteração de código para adicionar suporte
+ * a novos bancos na leitura automática de extratos em PDF.
+ *
+ * ## Fluxo do usuário
+ * 1. Configurações → Templates de Extrato → "Analisar extrato de novo banco"
+ * 2. Seleciona um PDF de extrato (qualquer banco)
+ * 3. IA (Gemini Vision → fallback Anthropic) analisa o FORMATO do extrato —
+ *    não extrai transações, foca em: nome do banco, palavras-chave de
+ *    identificação, linhas a ignorar, formato de data, sinalização de D/C.
+ * 4. Formulário pré-preenchido aparece para revisão/edição.
+ * 5. Usuário ajusta se necessário e clica em "Salvar template".
+ *    A partir daí, todos os extratos daquele banco usam as instruções geradas.
+ *
+ * ## Backend — mutation `analisarPdf`
+ * - Arquivo: `server/routers/bankStatementTemplates.ts`
+ * - Valida que o arquivo é PDF (magic bytes `%PDF-`).
+ * - Chama `invokeGeminiVision` com prompt de análise de formato (SCHEMA_ANALISE).
+ * - Fallback automático para `invokeAnthropicVision` se Gemini falhar/cota.
+ * - Retorna `{ bancoNome, palavrasChave[], skipPrefixes[], instrucoesIa }`.
+ * - Erro 429 → mensagem amigável sobre cota temporária.
+ *
+ * ## Schema — colunas ISO 9001
+ * - `revisao INTEGER DEFAULT 1 NOT NULL` — auto-incrementado a cada UPDATE.
+ * - `notas_revisao TEXT` — anotação opcional sobre o que mudou na revisão.
+ * - Self-heal em `[SyncSchema+]` (ADD COLUMN IF NOT EXISTS).
+ * - `drizzle/schema.ts` atualizado com as duas colunas.
+ *
+ * ## Frontend — ExtratoTemplateTab.tsx (reescrito)
+ * - Botão primário "Analisar extrato de novo banco" (ícone Sparkles, azul).
+ * - File input oculto com `accept=".pdf"` → FileReader → base64 → mutation.
+ * - Estado de loading animado durante análise da IA.
+ * - Formulário pré-preenchido com badge "Proposta gerada pela IA — revise e salve".
+ * - Campo "Notas desta revisão" (texto livre opcional).
+ * - Cards mostram "Rev. N" e notas da última revisão ao expandir.
+ * - AlertDialog substitui `window.confirm` na exclusão (per memory rule).
+ * - ZERO DELETE de qualquer código existente.
+ *
+ * ## Arquivos modificados
+ * - `server/routers/bankStatementTemplates.ts` (nova mutation analisarPdf + revisao)
+ * - `drizzle/schema.ts` (colunas revisao + notasRevisao)
+ * - `server/_core/index.ts` (self-heal Rev. 3879)
+ * - `client/src/pages/configuracoes/ExtratoTemplateTab.tsx` (reescrito)
+ * - `shared/version.ts` / `shared/changelog.ts` / `replit.md`
+ */
+
+/**
  * Rev. 3878 — **FIX DROPDOWN DE CATEGORIAS — ALINHAMENTO TOTAL COM O CADASTRO.**
  *
  * ## Problema
