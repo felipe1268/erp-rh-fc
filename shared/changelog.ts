@@ -1,4 +1,22 @@
 /**
+ * Rev. 3884 — **TEMPLATES DE EXTRATO — REDESIGN DE LAYOUT: AGRUPADO POR BANCO.**
+ *
+ * Lista refeita do zero para ser mais intuitiva:
+ * - Templates agrupados por banco (Banco do Brasil / Caixa / Santander…)
+ * - Cabeçalho de grupo com bolinha colorida por banco (paleta automática)
+ * - Cards em grade 2-colunas (em vez de lista plana)
+ * - Faixa colorida no topo de cada card identifica visualmente o banco
+ * - Layout/variante como título principal; stats como pills coloridos (
+ *   🔵 palavras-chave, 🟡 linhas ignoradas, 🟣 IA configurada)
+ * - Botão "Visualizar / Fechar" textual no rodapé do card (Eye label explícito)
+ * - Painel de detalhes expandido com seções coloridas e scroll interno nas instruções
+ * - Paleta por banco: BB=amarelo, Caixa=azul, Santander=vermelho, Itaú=laranja…
+ * - Helpers: `bankColor`, `splitBankLayout`, `groupByBank`
+ *
+ * Arquivos: `client/src/pages/configuracoes/ExtratoTemplateTab.tsx`
+ */
+
+/**
  * Rev. 3883 — **TEMPLATES DE EXTRATO — EYE PREVIEW + DEDUP GUARD + PROMPT RIGOROSO.**
  *
  * ## Três melhorias em conjunto:

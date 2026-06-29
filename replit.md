@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3884** — **TEMPLATES DE EXTRATO — REDESIGN: AGRUPADO POR BANCO + CARDS EM GRADE.** Templates agrupados por banco com cabeçalho colorido (bolinha + paleta automática). Cards em grade 2-colunas com faixa de cor no topo, pills de stats (kws/skip/IA), botão "Visualizar" textual e painel expandido com seções coloridas. ZERO DELETE.
+
 - **Rev. 3883** — **TEMPLATES DE EXTRATO — EYE PREVIEW + DEDUP GUARD + PROMPT RIGOROSO.** Eye/EyeOff icon com preview colorido em 3 seções (detecção/skip/IA). Backend: dedup no `create` (nome idêntico + overlap ≥50% de kws → CONFLICT). Batch: captura duplicatas separado de erros, painel 3 contadores. Prompt IA reescrito: mín. 5 kws literais + mín. 6 skip prefixes + 9 tópicos de instrução obrigatórios. ZERO DELETE.
 
 - **Rev. 3882** — **TEMPLATES DE EXTRATO — ANÁLISE EM LOTE (MÚLTIPLOS PDFs).** 1 PDF → fluxo original (formulário para revisão). 2+ PDFs → modo lote: processa sequencialmente, salva automaticamente cada template, barra de progresso "Analisando X de Y", contadores parciais ✓/✗ e painel de resumo pós-conclusão. `<input multiple>` + `handleBatchFiles`. ZERO DELETE.

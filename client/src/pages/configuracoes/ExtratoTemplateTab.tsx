@@ -26,10 +26,50 @@ import {
 import { toast } from "sonner";
 import {
   FileText, Plus, Pencil, Trash2, Save, X,
-  ChevronDown, ChevronUp, Landmark, Search,
+  Landmark, Search,
   Info, CheckCircle2, AlertCircle, Sparkles,
   Upload, RotateCcw, Loader2, History, Eye, EyeOff,
+  KeyRound, ShieldOff, Bot, ChevronRight,
 } from "lucide-react";
+
+// Paleta por banco — fallback cinza
+const BANK_COLORS: Record<string, { bg: string; text: string; border: string; dot: string }> = {
+  "banco do brasil":          { bg: "bg-yellow-50",  text: "text-yellow-800",  border: "border-yellow-200", dot: "bg-yellow-400"  },
+  "caixa econômica federal":  { bg: "bg-blue-50",    text: "text-blue-800",    border: "border-blue-200",   dot: "bg-blue-500"    },
+  "caixa":                    { bg: "bg-blue-50",    text: "text-blue-800",    border: "border-blue-200",   dot: "bg-blue-500"    },
+  "santander":                { bg: "bg-red-50",     text: "text-red-800",     border: "border-red-200",    dot: "bg-red-500"     },
+  "itaú":                     { bg: "bg-orange-50",  text: "text-orange-800",  border: "border-orange-200", dot: "bg-orange-500"  },
+  "itau":                     { bg: "bg-orange-50",  text: "text-orange-800",  border: "border-orange-200", dot: "bg-orange-500"  },
+  "bradesco":                 { bg: "bg-red-50",     text: "text-red-800",     border: "border-red-200",    dot: "bg-red-600"     },
+  "sicredi":                  { bg: "bg-green-50",   text: "text-green-800",   border: "border-green-200",  dot: "bg-green-500"   },
+  "sicoob":                   { bg: "bg-teal-50",    text: "text-teal-800",    border: "border-teal-200",   dot: "bg-teal-500"    },
+  "nubank":                   { bg: "bg-purple-50",  text: "text-purple-800",  border: "border-purple-200", dot: "bg-purple-500"  },
+};
+const DEFAULT_COLOR = { bg: "bg-slate-50", text: "text-slate-800", border: "border-slate-200", dot: "bg-slate-400" };
+
+function bankColor(nome: string) {
+  const key = nome.trim().toLowerCase();
+  for (const [k, v] of Object.entries(BANK_COLORS)) {
+    if (key.startsWith(k)) return v;
+  }
+  return DEFAULT_COLOR;
+}
+
+function splitBankLayout(nome: string): [string, string] {
+  const parts = nome.split(/\s*[—–-]\s*/);
+  if (parts.length > 1) return [parts[0].trim(), parts.slice(1).join(" — ").trim()];
+  return [nome.trim(), ""];
+}
+
+function groupByBank(templates: Template[]): Map<string, Template[]> {
+  const map = new Map<string, Template[]>();
+  for (const t of templates) {
+    const [banco] = splitBankLayout(t.bancoNome);
+    if (!map.has(banco)) map.set(banco, []);
+    map.get(banco)!.push(t);
+  }
+  return map;
+}
 
 // ── tipos ────────────────────────────────────────────────────────────────────
 
@@ -631,43 +671,65 @@ export default function ExtratoTemplateTab() {
 
       {/* ── Lista de templates ── */}
       {isLoading ? (
-        <div className="flex items-center gap-2 text-sm text-gray-500 py-4">
+        <div className="flex items-center gap-2 text-sm text-gray-500 py-6">
           <Loader2 className="w-4 h-4 animate-spin" /> Carregando templates...
         </div>
       ) : templates.length === 0 && editId === null && !analyzing ? (
-        <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-6 py-10 text-center space-y-3">
+        /* Estado vazio */
+        <div className="rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50/60 px-6 py-14 text-center space-y-4">
           <div className="flex justify-center">
-            <div className="w-14 h-14 rounded-full bg-sky-50 border-2 border-sky-200 flex items-center justify-center">
-              <Upload className="w-6 h-6 text-sky-400" />
+            <div className="w-16 h-16 rounded-2xl bg-sky-100 border-2 border-sky-200 flex items-center justify-center">
+              <Landmark className="w-7 h-7 text-sky-500" />
             </div>
           </div>
           <div>
-            <p className="text-sm font-semibold text-gray-700">Nenhum template cadastrado</p>
-            <p className="text-xs text-gray-500 mt-1 max-w-xs mx-auto">
-              Suba um PDF de extrato bancário acima. A IA detecta o banco e configura tudo automaticamente — sem código.
+            <p className="text-sm font-semibold text-gray-700">Nenhum banco configurado ainda</p>
+            <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto leading-relaxed">
+              Suba um PDF de extrato bancário. A IA detecta o banco e configura tudo automaticamente — sem código.
             </p>
           </div>
           <Button
             size="sm"
             onClick={() => fileInputRef.current?.click()}
             disabled={analyzing}
-            className="gap-2 bg-sky-600 hover:bg-sky-700 mx-auto"
+            className="gap-2 bg-sky-600 hover:bg-sky-700"
           >
             <Sparkles className="w-3.5 h-3.5" /> Analisar extrato de novo banco
           </Button>
         </div>
       ) : (
-        <div className="space-y-3">
-          {(templates as Template[]).map((t: Template) => (
-            <TemplateCard
-              key={t.id}
-              t={t}
-              expanded={expandId === t.id}
-              onExpand={() => setExpandId(expandId === t.id ? null : t.id)}
-              onEdit={() => openEdit(t)}
-              onDelete={() => setDeleteTarget({ id: t.id, nome: t.bancoNome })}
-            />
-          ))}
+        /* Lista agrupada por banco */
+        <div className="space-y-6">
+          {Array.from(groupByBank(templates as Template[])).map(([banco, items]) => {
+            const color = bankColor(banco);
+            return (
+              <div key={banco}>
+                {/* Cabeçalho do grupo */}
+                <div className={`flex items-center gap-2.5 px-3 py-2 rounded-xl ${color.bg} ${color.border} border mb-3`}>
+                  <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${color.dot}`} />
+                  <span className={`text-sm font-bold ${color.text}`}>{banco}</span>
+                  <span className={`ml-auto text-xs font-medium ${color.text} opacity-60`}>
+                    {items.length} layout{items.length > 1 ? "s" : ""}
+                  </span>
+                </div>
+
+                {/* Cards do grupo */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-1">
+                  {items.map(t => (
+                    <TemplateCard
+                      key={t.id}
+                      t={t}
+                      banco={banco}
+                      expanded={expandId === t.id}
+                      onExpand={() => setExpandId(expandId === t.id ? null : t.id)}
+                      onEdit={() => openEdit(t)}
+                      onDelete={() => setDeleteTarget({ id: t.id, nome: t.bancoNome })}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -677,91 +739,135 @@ export default function ExtratoTemplateTab() {
 // ── sub-componente: card de template ─────────────────────────────────────────
 
 function TemplateCard({
-  t, expanded, onExpand, onEdit, onDelete,
+  t, banco, expanded, onExpand, onEdit, onDelete,
 }: {
   t: Template;
+  banco: string;
   expanded: boolean;
   onExpand: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const [, layout] = splitBankLayout(t.bancoNome);
   const rev = t.revisao ?? 1;
+  const color = bankColor(banco);
+
   return (
-    <div className={`rounded-xl border ${t.ativo ? "border-gray-200 bg-white" : "border-gray-100 bg-gray-50 opacity-70"} shadow-sm`}>
-      {/* Cabeçalho do card */}
-      <div className="flex items-center gap-3 px-4 py-3">
-        <div className={`flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center ${t.ativo ? "bg-sky-100" : "bg-gray-100"}`}>
-          <Landmark className={`w-4 h-4 ${t.ativo ? "text-sky-600" : "text-gray-400"}`} />
+    <div className={`rounded-2xl border shadow-sm overflow-hidden transition-all ${
+      t.ativo ? "border-gray-200 bg-white" : "border-gray-100 bg-gray-50/80"
+    } ${expanded ? "ring-2 ring-sky-300 ring-offset-0" : ""}`}>
+
+      {/* Faixa colorida no topo */}
+      <div className={`h-1 w-full ${color.dot}`} />
+
+      {/* Corpo do card */}
+      <div className="px-4 pt-3 pb-3">
+
+        {/* Layout / variante */}
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-gray-800 break-words leading-snug">
+              {layout || banco}
+            </p>
+            {!t.ativo && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5 mt-1">
+                Inativo
+              </span>
+            )}
+          </div>
+          <span className="flex-shrink-0 text-[10px] font-semibold text-gray-400 bg-gray-100 rounded-full px-2 py-0.5 mt-0.5">
+            Rev.{rev}
+          </span>
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-gray-800 break-words">{t.bancoNome}</p>
-          <p className="text-xs text-gray-500">
-            {t.palavrasChave.length} palavra(s)-chave · {t.skipPrefixes.length} prefixo(s) ignorado(s)
-            <span className="ml-2 text-gray-400">Rev. {rev}</span>
-            {!t.ativo && <span className="ml-2 text-amber-600 font-medium">· Inativo</span>}
-          </p>
-        </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
-          {t.ativo && (
-            <span className="hidden sm:inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
-              <CheckCircle2 className="w-3 h-3" /> Ativo
+
+        {/* Métricas */}
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          <span className="inline-flex items-center gap-1 text-[11px] font-medium bg-sky-50 text-sky-700 border border-sky-200 rounded-full px-2 py-0.5">
+            <KeyRound className="w-2.5 h-2.5" />
+            {t.palavrasChave.length} palavra{t.palavrasChave.length !== 1 ? "s" : ""}-chave
+          </span>
+          <span className="inline-flex items-center gap-1 text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5">
+            <ShieldOff className="w-2.5 h-2.5" />
+            {t.skipPrefixes.length} linha{t.skipPrefixes.length !== 1 ? "s" : ""} ignorada{t.skipPrefixes.length !== 1 ? "s" : ""}
+          </span>
+          {t.instrucoesIa && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-medium bg-purple-50 text-purple-700 border border-purple-200 rounded-full px-2 py-0.5">
+              <Bot className="w-2.5 h-2.5" /> IA configurada
             </span>
           )}
+        </div>
+
+        {/* Ações */}
+        <div className="flex items-center gap-1.5 border-t border-gray-100 pt-3">
           <button
             onClick={onExpand}
-            className={`p-1.5 rounded-lg transition-colors ${expanded ? "bg-sky-100 text-sky-600" : "hover:bg-gray-100 text-gray-400 hover:text-gray-600"}`}
-            title={expanded ? "Fechar visualização" : "Visualizar configuração do template"}
+            className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors ${
+              expanded
+                ? "bg-sky-100 text-sky-700 hover:bg-sky-200"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+            title={expanded ? "Fechar visualização" : "Ver configuração completa"}
           >
-            {expanded ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            {expanded ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            {expanded ? "Fechar" : "Visualizar"}
           </button>
-          <button onClick={onEdit} className="p-1.5 rounded-lg hover:bg-sky-50 text-gray-400 hover:text-sky-600" title="Editar">
-            <Pencil className="w-4 h-4" />
+
+          <div className="flex-1" />
+
+          <button
+            onClick={onEdit}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-sky-600 hover:bg-sky-50 transition-colors"
+            title="Editar template"
+          >
+            <Pencil className="w-3.5 h-3.5" />
           </button>
-          <button onClick={onDelete} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500" title="Excluir">
-            <Trash2 className="w-4 h-4" />
+          <button
+            onClick={onDelete}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+            title="Excluir template"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
-      {/* Preview expandido — "como o sistema vai ler este extrato" */}
+      {/* Painel de detalhes expandido */}
       {expanded && (
-        <div className="border-t border-sky-100 px-4 py-4 space-y-4 bg-sky-50/30 rounded-b-xl">
+        <div className="border-t border-gray-100 bg-gray-50/60 px-4 py-4 space-y-4">
 
-          {/* Identificação automática */}
+          {/* Palavras-chave */}
           <div>
             <p className="text-[11px] font-semibold text-sky-700 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-              <Search className="w-3 h-3" /> Como o sistema identifica este extrato
+              <KeyRound className="w-3 h-3" /> Identificação automática
             </p>
             {t.palavrasChave.length > 0 ? (
-              <div className="space-y-1">
-                <p className="text-xs text-gray-500">O parser busca estas frases no texto do PDF para reconhecer o layout:</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {t.palavrasChave.map((kw, i) => (
-                    <span key={i} className="text-xs bg-sky-100 text-sky-800 border border-sky-200 rounded px-2 py-0.5 font-mono break-all">"{kw}"</span>
-                  ))}
-                </div>
+              <div className="flex flex-wrap gap-1.5">
+                {t.palavrasChave.map((kw, i) => (
+                  <span key={i} className="text-xs bg-white text-sky-800 border border-sky-200 rounded-lg px-2 py-1 font-mono break-all shadow-sm">
+                    {kw}
+                  </span>
+                ))}
               </div>
             ) : (
-              <p className="text-xs text-gray-400 italic">Nenhuma palavra-chave configurada — este template nunca será detectado automaticamente.</p>
+              <p className="text-xs text-gray-400 italic">Nenhuma palavra-chave — não será detectado automaticamente.</p>
             )}
           </div>
 
-          {/* Linhas ignoradas */}
+          {/* Skip prefixes */}
           <div>
             <p className="text-[11px] font-semibold text-amber-700 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-              <AlertCircle className="w-3 h-3" /> Linhas que o parser vai ignorar
+              <ShieldOff className="w-3 h-3" /> Linhas descartadas pelo parser
             </p>
             {t.skipPrefixes.length > 0 ? (
-              <div className="space-y-1">
-                <p className="text-xs text-gray-500">Linhas cujo início corresponda a qualquer um destes prefixos são descartadas:</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {t.skipPrefixes.map((sp, i) => (
-                    <span key={i} className="text-xs bg-amber-100 text-amber-800 border border-amber-200 rounded px-2 py-0.5 font-mono break-all">"{sp}"</span>
-                  ))}
-                </div>
+              <div className="flex flex-wrap gap-1.5">
+                {t.skipPrefixes.map((sp, i) => (
+                  <span key={i} className="text-xs bg-white text-amber-800 border border-amber-200 rounded-lg px-2 py-1 font-mono break-all shadow-sm">
+                    {sp}
+                  </span>
+                ))}
               </div>
             ) : (
-              <p className="text-xs text-gray-400 italic">Nenhum prefixo configurado — todas as linhas serão processadas.</p>
+              <p className="text-xs text-gray-400 italic">Nenhum prefixo — todas as linhas são processadas.</p>
             )}
           </div>
 
@@ -769,21 +875,18 @@ function TemplateCard({
           {t.instrucoesIa && (
             <div>
               <p className="text-[11px] font-semibold text-purple-700 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                <Sparkles className="w-3 h-3" /> Receita de extração para a IA
+                <Bot className="w-3 h-3" /> Instruções para a IA
               </p>
-              <pre className="text-xs text-gray-700 whitespace-pre-wrap break-words font-sans bg-white border border-purple-100 rounded-lg p-3 shadow-sm leading-relaxed">
+              <pre className="text-xs text-gray-700 whitespace-pre-wrap break-words font-sans bg-white border border-purple-100 rounded-xl p-3 shadow-sm leading-relaxed max-h-52 overflow-y-auto">
                 {t.instrucoesIa}
               </pre>
             </div>
           )}
 
           {/* Rodapé */}
-          <div className="flex items-center justify-between pt-1 border-t border-sky-100">
-            <p className="text-xs text-gray-400">
-              Atualizado em {new Date(t.atualizadoEm).toLocaleDateString("pt-BR")}
-              {t.notasRevisao && <span className="ml-2 text-gray-400">· {t.notasRevisao}</span>}
-            </p>
-            <span className="text-xs font-medium text-sky-600 bg-sky-100 rounded px-2 py-0.5">Rev. {rev}</span>
+          <div className="flex items-center justify-between pt-1 border-t border-gray-200 text-[10px] text-gray-400">
+            <span>Atualizado em {new Date(t.atualizadoEm).toLocaleDateString("pt-BR")}</span>
+            {t.notasRevisao && <span className="truncate max-w-[60%] text-right" title={t.notasRevisao}>{t.notasRevisao}</span>}
           </div>
         </div>
       )}
