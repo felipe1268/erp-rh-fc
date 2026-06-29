@@ -1,3 +1,5 @@
+- **Rev. 3851** — **NF-e × EXTRATO · CARD DE VÍNCULO + SCORING COM valor_bruto E CNPJ-RAIZ.** `calcScore` + CNPJ-raiz +25 pts + patamar ≤2% +22 pts. ZERO DELETE.
+
 - **Rev. 3850** — **NF-e × EXTRATO · DIALOG "REVISAR SUGESTÕES":** `obterSugestoesPeriodo`, badge Alta/Média/Baixa, [Vincular]/[Ignorar]. ZERO DELETE.
 
 - **Rev. 3849** — **NF-e × EXTRATO · VÍNCULO AUTOMÁTICO MELHORADO:** `extractTokens()`, `calcScore()` (0-100), `sincronizarNfsPeriodo` (greedy bipartite). Botão "Vincular Automaticamente". ZERO DELETE. Detalhe: `shared/changelog.ts`.

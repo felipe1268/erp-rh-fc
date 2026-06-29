@@ -107,11 +107,22 @@ const STATUS_META: Record<string, { label: string; cls: string; dot: string }> =
   recebido:         { label: "Recebido",   cls: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
 };
 
-function KCard({ label, value, sub, icon, accent, valueColor }: { label: string; value: string; sub?: ReactNode; icon: ReactNode; accent: string; valueColor: string }) {
+function KCard({ label, value, sub, icon, accent, valueColor, onClick, active, activeRing }: {
+  label: string; value: string; sub?: ReactNode; icon: ReactNode; accent: string; valueColor: string;
+  onClick?: () => void; active?: boolean; activeRing?: string;
+}) {
   return (
-    <Card className={`border-0 shadow-sm border-l-4 ${accent}`}>
+    <Card
+      className={`border-0 shadow-sm border-l-4 ${accent} transition-all
+        ${onClick ? "cursor-pointer hover:shadow-md hover:-translate-y-0.5" : ""}
+        ${active ? `ring-2 ring-offset-2 ${activeRing ?? "ring-slate-400"}` : ""}
+      `}
+      onClick={onClick}
+    >
       <CardContent className="p-4">
-        <p className="text-xs text-gray-500 mb-1 flex items-center gap-1">{icon}{label}</p>
+        <p className="text-xs text-gray-500 mb-1 flex items-center gap-1">{icon}{label}
+          {active && <span className="ml-auto text-[10px] font-semibold bg-slate-800/10 px-1.5 py-0.5 rounded">filtrado</span>}
+        </p>
         <p className={`text-lg font-bold ${valueColor}`}>{value}</p>
         {sub && <p className="text-xs text-gray-400">{sub}</p>}
       </CardContent>
@@ -129,9 +140,31 @@ export default function FinanceiroContasAReceberTitulos() {
   const [clienteFiltro, setClienteFiltro] = useState<string>("todos");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
+  const [cardAtivo, setCardAtivo] = useState<"a_receber_mes" | "recebido_mes" | "em_aberto_ano" | "vencidos_ano" | null>(null);
+
   const [showBaixa, setShowBaixa] = useState<any>(null);
   const [showNovo, setShowNovo] = useState(false);
   const [showAnexo, setShowAnexo] = useState<any>(null);
+
+  function ativarCard(card: "a_receber_mes" | "recebido_mes" | "em_aberto_ano" | "vencidos_ano") {
+    if (cardAtivo === card) {
+      setCardAtivo(null);
+      setStatusFiltro("todos");
+      return;
+    }
+    setCardAtivo(card);
+    if (card === "a_receber_mes") {
+      setStatusFiltro("em_aberto");
+    } else if (card === "recebido_mes") {
+      setStatusFiltro("recebido");
+    } else if (card === "em_aberto_ano") {
+      setMesSel(0);
+      setStatusFiltro("em_aberto");
+    } else if (card === "vencidos_ano") {
+      setMesSel(0);
+      setStatusFiltro("vencido");
+    }
+  }
 
   const { data: titulos, isLoading, refetch } = (trpc as any).financial.getContasAReceberByYear.useQuery(
     { companyId, ano },
@@ -191,7 +224,14 @@ export default function FinanceiroContasAReceberTitulos() {
   const filtradas = useMemo(() => {
     const q = busca.trim().toLowerCase();
     return mesData.filter((t) => {
-      if (statusFiltro !== "todos" && t.status !== statusFiltro) return false;
+      if (statusFiltro === "em_aberto") {
+        if (t.status === "recebido") return false;
+      } else if (statusFiltro === "vencido") {
+        if (t.status === "recebido") return false;
+        if (!(num(t.diasAtraso) > 0)) return false;
+      } else if (statusFiltro !== "todos" && t.status !== statusFiltro) {
+        return false;
+      }
       const cli = (t.clienteNome || "Sem cliente").trim();
       if (clienteFiltro !== "todos" && cli !== clienteFiltro) return false;
       if (q) {
@@ -298,16 +338,16 @@ export default function FinanceiroContasAReceberTitulos() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <button onClick={() => setAno((a) => a - 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                <button onClick={() => { setAno((a) => a - 1); setCardAtivo(null); setStatusFiltro("todos"); }} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
                   <ChevronLeft className="w-4 h-4" />
                 </button>
                 <span className="text-base font-bold text-gray-800 min-w-[3.5rem] text-center">{ano}</span>
-                <button onClick={() => setAno((a) => a + 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                <button onClick={() => { setAno((a) => a + 1); setCardAtivo(null); setStatusFiltro("todos"); }} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
                   <ChevronRight className="w-4 h-4" />
                 </button>
                 {/* Rev. 3180 — atalho "Ano todo": vê TODOS os lançamentos do ano de uma vez. */}
                 <button
-                  onClick={() => setMesSel((m) => (m === 0 ? new Date().getMonth() + 1 : 0))}
+                  onClick={() => { setMesSel((m) => (m === 0 ? new Date().getMonth() + 1 : 0)); setCardAtivo(null); setStatusFiltro("todos"); }}
                   className={`ml-1 px-3 py-1 rounded-lg border text-xs font-semibold transition-all
                     ${mesSel === 0
                       ? "border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm"
@@ -331,7 +371,7 @@ export default function FinanceiroContasAReceberTitulos() {
                 return (
                   <button
                     key={m}
-                    onClick={() => setMesSel(numMes)}
+                    onClick={() => { setMesSel(numMes); setCardAtivo(null); setStatusFiltro("todos"); }}
                     className={`relative flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all
                       ${isSelected
                         ? "border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm"
@@ -351,15 +391,69 @@ export default function FinanceiroContasAReceberTitulos() {
           </CardContent>
         </Card>
 
-        {/* ───────────── KPIs (padrão Contas a Pagar) ───────────── */}
+        {/* ───────────── KPIs — cards clicáveis filtram a lista abaixo ───────────── */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <KCard label={mesSel === 0 ? "A receber no ano" : `A receber em ${MESES[mesSel - 1]}`} value={formatBRL(kpis.abertoMes)} icon={<Clock className="w-3 h-3 text-amber-500" />} accent="border-l-amber-500" valueColor="text-amber-600"
-            sub={kpis.parcialMes > 0 ? <span className="text-blue-600">parcial {formatBRL(kpis.parcialMes)}</span> : undefined} />
-          <KCard label={mesSel === 0 ? "Recebido no ano" : `Recebido em ${MESES[mesSel - 1]}`} value={formatBRL(kpis.recebidoMes)} icon={<CheckCircle className="w-3 h-3 text-emerald-500" />} accent="border-l-emerald-500" valueColor="text-emerald-700" />
-          <KCard label="Em aberto (ano)" value={formatBRL(acum.aberto)} icon={<TrendingUp className="w-3 h-3 text-indigo-500" />} accent="border-l-indigo-500" valueColor="text-indigo-700"
-            sub={acum.vencido > 0 ? <span className="text-red-600 font-medium">{formatBRL(acum.vencido)} vencido</span> : "em dia"} />
-          <KCard label="Títulos vencidos (ano)" value={String(acum.qtdVenc)} icon={<AlertTriangle className="w-3 h-3 text-red-500" />} accent="border-l-red-500" valueColor="text-red-600" />
+          <KCard
+            label={mesSel === 0 ? "A receber no ano" : `A receber em ${MESES[mesSel - 1]}`}
+            value={formatBRL(kpis.abertoMes)}
+            icon={<Clock className="w-3 h-3 text-amber-500" />}
+            accent="border-l-amber-500" valueColor="text-amber-600"
+            sub={kpis.parcialMes > 0 ? <span className="text-blue-600">parcial {formatBRL(kpis.parcialMes)}</span> : undefined}
+            onClick={() => ativarCard("a_receber_mes")}
+            active={cardAtivo === "a_receber_mes"}
+            activeRing="ring-amber-400"
+          />
+          <KCard
+            label={mesSel === 0 ? "Recebido no ano" : `Recebido em ${MESES[mesSel - 1]}`}
+            value={formatBRL(kpis.recebidoMes)}
+            icon={<CheckCircle className="w-3 h-3 text-emerald-500" />}
+            accent="border-l-emerald-500" valueColor="text-emerald-700"
+            onClick={() => ativarCard("recebido_mes")}
+            active={cardAtivo === "recebido_mes"}
+            activeRing="ring-emerald-400"
+          />
+          <KCard
+            label="Em aberto (ano)"
+            value={formatBRL(acum.aberto)}
+            icon={<TrendingUp className="w-3 h-3 text-indigo-500" />}
+            accent="border-l-indigo-500" valueColor="text-indigo-700"
+            sub={acum.vencido > 0 ? <span className="text-red-600 font-medium">{formatBRL(acum.vencido)} vencido</span> : "em dia"}
+            onClick={() => ativarCard("em_aberto_ano")}
+            active={cardAtivo === "em_aberto_ano"}
+            activeRing="ring-indigo-400"
+          />
+          <KCard
+            label="Títulos vencidos (ano)"
+            value={String(acum.qtdVenc)}
+            icon={<AlertTriangle className="w-3 h-3 text-red-500" />}
+            accent="border-l-red-500" valueColor="text-red-600"
+            onClick={() => ativarCard("vencidos_ano")}
+            active={cardAtivo === "vencidos_ano"}
+            activeRing="ring-red-400"
+          />
         </div>
+
+        {/* ── Chip de filtro ativo (via card) ────────────────────────────────── */}
+        {cardAtivo && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500">Filtro ativo:</span>
+            <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border
+              ${cardAtivo === "a_receber_mes"  ? "bg-amber-50  text-amber-700  border-amber-200"  : ""}
+              ${cardAtivo === "recebido_mes"   ? "bg-emerald-50 text-emerald-700 border-emerald-200" : ""}
+              ${cardAtivo === "em_aberto_ano"  ? "bg-indigo-50 text-indigo-700 border-indigo-200" : ""}
+              ${cardAtivo === "vencidos_ano"   ? "bg-red-50    text-red-700    border-red-200"    : ""}
+            `}>
+              {cardAtivo === "a_receber_mes"  && <><Clock className="w-3 h-3" />{mesSel > 0 ? `A receber em ${MESES[mesSel - 1]}` : "A receber no ano"}</>}
+              {cardAtivo === "recebido_mes"   && <><CheckCircle className="w-3 h-3" />{mesSel > 0 ? `Recebido em ${MESES[mesSel - 1]}` : "Recebido no ano"}</>}
+              {cardAtivo === "em_aberto_ano"  && <><TrendingUp className="w-3 h-3" />Em aberto — ano todo</>}
+              {cardAtivo === "vencidos_ano"   && <><AlertTriangle className="w-3 h-3" />Títulos vencidos — ano todo</>}
+              <button onClick={() => { setCardAtivo(null); setStatusFiltro("todos"); }} className="ml-1 hover:text-slate-900">
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+            <span className="text-xs text-slate-400">{filtradas.length} título{filtradas.length !== 1 ? "s" : ""}</span>
+          </div>
+        )}
 
         {/* ───────────── FILTROS ───────────── */}
         <Card className="border-slate-200/80 shadow-sm">
@@ -375,13 +469,15 @@ export default function FinanceiroContasAReceberTitulos() {
                 {clienteNomes.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Select value={statusFiltro} onValueChange={setStatusFiltro}>
+            <Select value={statusFiltro} onValueChange={(v) => { setStatusFiltro(v); setCardAtivo(null); }}>
               <SelectTrigger className="w-[160px]"><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos os status</SelectItem>
+                <SelectItem value="em_aberto">Em aberto</SelectItem>
                 <SelectItem value="a_receber">A receber</SelectItem>
                 <SelectItem value="recebido_parcial">Parcial</SelectItem>
                 <SelectItem value="recebido">Recebido</SelectItem>
+                <SelectItem value="vencido">Vencidos</SelectItem>
               </SelectContent>
             </Select>
           </CardContent>

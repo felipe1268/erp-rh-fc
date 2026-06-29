@@ -1,4 +1,32 @@
 /**
+ * Rev. 3858 — **CONTAS A RECEBER · CARDS KPI CLICÁVEIS FILTRAM A LISTA.**
+ *
+ * **Problema:** os 4 cards de resumo ("A receber em Jan", "Recebido em Jan",
+ * "Em aberto (ano)", "Títulos vencidos (ano)") eram informativos apenas; o usuário
+ * não conseguia clicar para filtrar a lista abaixo sem usar os seletores manuais.
+ *
+ * **Implementação (`FinanceiroContasAReceberTitulos.tsx`):**
+ * - `KCard` recebe props `onClick`, `active` e `activeRing`; quando ativo: ring
+ *   colorido + badge "filtrado" + hover elevado.
+ * - Novo state `cardAtivo` rastreia qual card está selecionado.
+ * - Função `ativarCard`: toggle de ativação, define `statusFiltro` e `mesSel`
+ *   automaticamente por card:
+ *   • "A receber em Jan" → `statusFiltro = "em_aberto"` (a_receber + parcial), mantém mês
+ *   • "Recebido em Jan"  → `statusFiltro = "recebido"`, mantém mês
+ *   • "Em aberto (ano)"  → `mesSel = 0` + `statusFiltro = "em_aberto"`
+ *   • "Vencidos (ano)"   → `mesSel = 0` + `statusFiltro = "vencido"`
+ * - `filtradas` useMemo estendido: trata `"em_aberto"` (≠ recebido) e
+ *   `"vencido"` (≠ recebido + diasAtraso > 0).
+ * - Select de status ganha opções "Em aberto" e "Vencidos"; ao trocar manualmente
+ *   limpa `cardAtivo`.
+ * - Chip de filtro ativo aparece entre os cards e o filtro bar; exibe rótulo
+ *   colorido + contador de títulos + botão ✕ para desfazer.
+ * - Botões de mês, "Ano todo" e navegação de ano limpam `cardAtivo` + resetam status.
+ *
+ * **ZERO DELETE. Detalhe: `shared/changelog.ts`.**
+ */
+
+/**
  * Rev. 3857 — **NF-e × EXTRATO · JANELA DO EXTRATO REDUZIDA (±45 dias) + BADGE DE PERÍODO NO DIALOG.**
  *
  * **Problema:** `obterSugestoesPeriodo` expandia a busca do extrato em +90 dias a partir do fim

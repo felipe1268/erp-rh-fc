@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3858** — **CONTAS A RECEBER · CARDS KPI CLICÁVEIS FILTRAM A LISTA.** `KCard` ganha `onClick/active/activeRing`; novo state `cardAtivo` + `ativarCard`; card 1 → `em_aberto` no mês, card 2 → `recebido` no mês, card 3 → ano todo em aberto, card 4 → vencidos; chip filtro com ✕ entre cards e filtro bar; Select ganha "Em aberto"/"Vencidos"; navegação de mês/ano limpa filtro. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
 - **Rev. 3857** — **NF-e × EXTRATO · JANELA DO EXTRATO REDUZIDA (±45 dias) + BADGE DE PERÍODO NO DIALOG.** Backend: `obterSugestoesPeriodo` expandia o extrato em +90 dias → NFs de janeiro casavam com extrato de março/abril. Reduzido para +45 dias (cobre prazos típicos 30–45 dias). Frontend: badge "Jan/2026 · Emitidas" no cabeçalho do dialog mostra o período consultado. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
-- **Rev. 3856** — **TEMPLATE XLSX · FIX SAVE + DATA AUTOMÁTICA + VISUALIZADOR INLINE.** Botão salvar sempre habilitado (removido `!dirty`); `vigentDesde` automático = data do save (removido do form); campo exibe valor salvo como read-only. Novo botão **Visualizar**: planilha mockup em tempo real (linha título+cor+dados+total+rodapé), luminância automática texto branco/preto, botão "Baixar XLSX real" inline. ZERO DELETE. Detalhe: `shared/changelog.ts`.
-
 ### 5 one-liners
+
+- **Rev. 3856** — **TEMPLATE XLSX · FIX SAVE + DATA AUTOMÁTICA + VISUALIZADOR INLINE.** Botão salvar sempre habilitado (removido `!dirty`); `vigentDesde` automático = data do save (removido do form); campo exibe valor salvo como read-only. Novo botão **Visualizar**: planilha mockup em tempo real. ZERO DELETE.
 
 - **Rev. 3855** — **CONCILIAÇÃO BANCÁRIA · TOLERÂNCIA PERCENTUAL NAS SUGESTÕES (≤15% RECEITA / ≤5% DESPESA).** `sugerirConciliacao`: 2ª passagem fuzzy; receita ≤15%, despesa ≤5%; sort exato > fuzzy; `confianca="media"`, badge "Δ valor: X% — possível retenção". ZERO DELETE.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3852** — **PANORAMA FISCAL · CHEQUE DEVOLVIDO EXCLUÍDO DAS "SAÍDAS SEM NF-e".** `getPanorama`: SQL + `desconsiderado_em IS NULL`; regex `_PANORAMA_INTERNO_RE`. ZERO DELETE.
 
-- **Rev. 3851** — **NF-e × EXTRATO · CARD DE VÍNCULO + SCORING COM valor_bruto E CNPJ-RAIZ.** `calcScore` + CNPJ-raiz +25 pts + patamar ≤2% +22 pts. ZERO DELETE.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3849 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3851 e anteriores.
 
 ## User preferences
 
