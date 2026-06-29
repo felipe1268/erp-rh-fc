@@ -1,4 +1,28 @@
 /**
+ * Rev. 3868 — **CHECKLIST DOCX — LOGO FC + PASTAS ZIP NUMERADAS.**
+ *
+ * Duas melhorias em `server/routers/downloadPacoteContador.ts`:
+ *
+ * 1. **Logo no DOCX**: `ImageRun` com `logo-fc.jpg` (137×63px, LOGO_W=1620000 EMU,
+ *    LOGO_H=745000 EMU). Tabela de cabeçalho 2 colunas: logo à esquerda (W_LOGO=3000dxa),
+ *    nome+certificação alinhado à direita (W_NOME=6638dxa), linha inferior azul separadora.
+ *    Fallback para texto se nenhum arquivo de logo for encontrado.
+ *    Imports adicionados: `fs`, `path`, `ImageRun` do docx.
+ *
+ * 2. **ZIP com pastas numeradas**: estrutura reorganizada em sequência lógica:
+ *    - `00_CHECKLIST.docx` (raiz)
+ *    - `01_Faturas_Emitidas/`
+ *    - `02_Servicos_Tomados/`
+ *    - `03_Extratos_Bancarios/`
+ *    - `04_Extratos_Cartoes/`
+ *    - `05_OCs_NF-e/` (era arquivo solto, agora pasta com `OCs_NF-e.xlsx` dentro)
+ *    - `06_OS_Servico/` (nova pasta para Ordens de Serviço, c/ `LEIA-ME.txt`)
+ *    Checklist seção 1 atualizado para espelhar os novos nomes numerados.
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3867 — **CHECKLIST DOCX — FIX LARGURA DAS TABELAS (DXA × PERCENTAGE).**
  *
  * **Causa-raiz:** `WidthType.PERCENTAGE` no docx v9 (OOXML `w:pct`) espera o valor

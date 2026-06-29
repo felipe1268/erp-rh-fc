@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3867** — **CHECKLIST DOCX — FIX LARGURA DAS TABELAS (DXA × PERCENTAGE).** `WidthType.PERCENTAGE` com `size:100` = 2% no OOXML (pct em quinquagésimos) → tabelas em coluna de ~190 twips. Substituição completa por `WidthType.DXA` + `columnWidths` absolutos: W=9638, W_LABEL=3000, W_VALOR=6638, W_DOC=7800, W_QTD=1838. Tabelas preenchem A4 retrato corretamente. ZERO DELETE.
+- **Rev. 3868** — **CHECKLIST DOCX — LOGO FC + PASTAS ZIP NUMERADAS.** `ImageRun` com `logo-fc.jpg` (LOGO_W=1620000 EMU); tabela cabeçalho logo+nome com linha azul. ZIP: `01_Faturas_Emitidas/`, `02_Servicos_Tomados/`, `03_Extratos_Bancarios/`, `04_Extratos_Cartoes/`, `05_OCs_NF-e/` (pasta), `06_OS_Servico/` (nova). Checklist seção 1 atualizado. ZERO DELETE.
 
-- **Rev. 3866** — **PANORAMA FISCAL — EXTRATO UNIFICADO COM FILTROS.** `UnifiedBankTable`: mescla as 4 arrays (`entradasCom/Sem`, `saidasCom/Sem`) em lista cronológica única; KPIs inline (Total Entradas, Saídas, Com NF, Sem NF); filtros [Todos/Entradas/Saídas] + [Todas/Com NF/Sem NF] + chips de banco; cada linha mostra badge Tipo + ✓ verde + badge "NF# N". Accordions duplicados removidos. ZERO DELETE.
+- **Rev. 3867** — **CHECKLIST DOCX — FIX LARGURA DAS TABELAS (DXA × PERCENTAGE).** `WidthType.PERCENTAGE` com `size:100` = 2% no OOXML → tabelas em coluna de ~190 twips. DXA absoluto: W=9638, W_LABEL=3000, W_VALOR=6638, W_DOC=7800, W_QTD=1838. ZERO DELETE.
 
 ### 5 one-liners
+
+- **Rev. 3866** — **PANORAMA FISCAL — EXTRATO UNIFICADO COM FILTROS.** `UnifiedBankTable` lista cronológica única; KPIs inline; filtros tipo/NF/banco; badge "NF# N". ZERO DELETE.
 
 - **Rev. 3865** — **PACOTE CONTABILIDADE — EXTRATO CARTÃO FC TEMPLATE + CHECKLIST A4 + TEMPLATES NAS CONFIGURAÇÕES.** `buildExtratCartaoBuffer` ExcelJS; `buildChecklistDocx` A4; `docx_template_config` + 3 endpoints; aba "Template de Word". ZERO DELETE.
 

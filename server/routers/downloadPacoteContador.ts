@@ -14,10 +14,12 @@
  */
 import type { Express, Request, Response } from "express";
 import archiver from "archiver";
+import fs from "fs";
+import path from "path";
 import {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
   WidthType, AlignmentType, BorderStyle, ShadingType,
-  Header, Footer, PageNumber,
+  Header, Footer, PageNumber, ImageRun,
 } from "docx";
 import { getDb } from "../db";
 import { sdk } from "../_core/sdk";
@@ -805,10 +807,27 @@ async function buildChecklistDocx(label: string, empresa: string, d: ReturnType<
   const LARANJA = "B45309";
   const FONTE  = "Calibri";
 
+  // ── Logo da empresa ────────────────────────────────────────────────────────
+  const logoCandidates = [
+    { p: path.join(process.cwd(), "client/public/logo-fc.jpg"),               type: "jpg"  as const },
+    { p: path.join(process.cwd(), "client/public/logo-fc-branco-amarelo.png"), type: "png"  as const },
+    { p: path.join(process.cwd(), "server/assets/logo_contabilidade.png"),     type: "png"  as const },
+  ];
+  let logoBuffer: Buffer | null = null;
+  let logoType: "jpg" | "png" = "jpg";
+  for (const c of logoCandidates) {
+    try { if (fs.existsSync(c.p)) { logoBuffer = fs.readFileSync(c.p); logoType = c.type; break; } } catch { /* próximo */ }
+  }
+  // Logo 137×63px → exibir ~4.5cm largo (EMU: 1cm=360000)
+  const LOGO_W = 1620000; // ~4.5cm
+  const LOGO_H = 745000;  // proporcional 63/137
+
   // ── Medidas absolutas em twips (DXA) ──────────────────────────────────────
   // A4 retrato: 11906 × 16838 twips
   // Margens: L=1134 R=1134 → área de conteúdo = 11906 - 1134 - 1134 = 9638 twips
   const W = 9638;            // largura total do conteúdo
+  const W_LOGO = 3000;       // coluna logo no cabeçalho
+  const W_NOME = W - W_LOGO; // coluna nome empresa no cabeçalho
   const W_LABEL = 3000;      // coluna "Rótulo" na tabela de controle
   const W_VALOR = W - W_LABEL;  // coluna "Valor"
   const W_DOC   = 7800;      // coluna "Tipo de Documento" no resumo
@@ -982,17 +1001,41 @@ async function buildChecklistDocx(label: string, empresa: string, d: ReturnType<
         }),
       },
       children: [
-        // ── Cabeçalho institucional ──────────────────────────────────────
-        new Paragraph({
-          alignment: AlignmentType.CENTER,
-          spacing: { before: 0, after: 60 },
-          children: [new TextRun({ text: "FC ENGENHARIA E CONSTRUÇÃO LTDA", bold: true, size: 36, color: AZUL, font: FONTE })],
+        // ── Cabeçalho com logo ────────────────────────────────────────────
+        new Table({
+          width: { size: W, type: WidthType.DXA },
+          columnWidths: [W_LOGO, W_NOME],
+          borders: { top: SEM, bottom: { style: BorderStyle.SINGLE, size: 8, color: AZUL }, left: SEM, right: SEM, insideH: SEM, insideV: SEM },
+          rows: [new TableRow({ children: [
+            // ── Logo ──────────────────────────────────────────────────────
+            new TableCell({
+              borders: { top: SEM, bottom: SEM, left: SEM, right: SEM },
+              margins: { top: 60, bottom: 60, left: 0, right: 160 },
+              width: { size: W_LOGO, type: WidthType.DXA },
+              verticalAlign: "center" as any,
+              children: [new Paragraph({
+                alignment: AlignmentType.LEFT,
+                children: logoBuffer ? [new ImageRun({
+                  data: logoBuffer,
+                  transformation: { width: LOGO_W, height: LOGO_H },
+                  type: logoType,
+                } as any)] : [new TextRun({ text: "FC ENGENHARIA", bold: true, size: 28, color: AZUL, font: FONTE })],
+              })],
+            }),
+            // ── Nome + certificação ───────────────────────────────────────
+            new TableCell({
+              borders: { top: SEM, bottom: SEM, left: SEM, right: SEM },
+              margins: { top: 60, bottom: 60, left: 160, right: 0 },
+              width: { size: W_NOME, type: WidthType.DXA },
+              verticalAlign: "center" as any,
+              children: [
+                new Paragraph({ alignment: AlignmentType.RIGHT, spacing: { before: 0, after: 40 }, children: [new TextRun({ text: "FC ENGENHARIA E CONSTRUÇÃO LTDA", bold: true, size: 28, color: AZUL, font: FONTE })] }),
+                new Paragraph({ alignment: AlignmentType.RIGHT, spacing: { before: 0, after: 0  }, children: [new TextRun({ text: "Sistema de Gestão da Qualidade  ·  ISO 9001", size: 16, color: CINZA, font: FONTE, italics: true })] }),
+              ],
+            }),
+          ]})],
         }),
-        new Paragraph({
-          alignment: AlignmentType.CENTER,
-          spacing: { before: 0, after: 200 },
-          children: [new TextRun({ text: "Sistema de Gestão da Qualidade  ·  ISO 9001", size: 18, color: CINZA, font: FONTE, italics: true })],
-        }),
+        esp(180),
         // ── Tabela de controle ───────────────────────────────────────────
         tblControle,
         esp(180),
@@ -1002,12 +1045,13 @@ async function buildChecklistDocx(label: string, empresa: string, d: ReturnType<
         // ── Seção 1 ──────────────────────────────────────────────────────
         secao("1. ESTRUTURA DO PACOTE"),
         esp(120),
-        item("Faturas_Emitidas/     →  NFS-e emitidas (espelho HTML + Lista_Faturas_Emitidas.xlsx)", true),
-        item("Servicos_Tomados/    →  NFS-e tomadas (HTML + Lista_Servicos_Tomados.xlsx)", true),
-        item("Servicos_Tomados/    →  NF-e recebidas compras (NF-e_Recebidas_Compras.xlsx)", true),
-        item("Extratos_Bancarios/  →  Extrato_Bancario_<Mes>.xlsx + Extrato_Completo.xlsx", true),
-        item("Extratos_Cartoes/    →  Extrato_Cartao_<Mes>.xlsx (cartão de crédito)", true),
-        item("02_OCs_NF-e.xlsx    →  Ordens de compra × NF-e vinculada", true),
+        item("01_Faturas_Emitidas/     →  NFS-e emitidas (espelho HTML + Lista_Faturas_Emitidas.xlsx)", true),
+        item("02_Servicos_Tomados/    →  NFS-e tomadas (HTML + Lista_Servicos_Tomados.xlsx)", true),
+        item("02_Servicos_Tomados/    →  NF-e recebidas compras (NF-e_Recebidas_Compras.xlsx)", true),
+        item("03_Extratos_Bancarios/  →  Extrato_Bancario_<Mes>.xlsx + Extrato_Completo.xlsx", true),
+        item("04_Extratos_Cartoes/    →  Extrato_Cartao_<Mes>.xlsx (cartão de crédito)", true),
+        item("05_OCs_NF-e/             →  OCs_NF-e.xlsx (ordens de compra × NF-e vinculada)", true),
+        item("06_OS_Servico/           →  Ordens de Serviço emitidas no período", true),
         esp(240),
         // ── Seção 2 ──────────────────────────────────────────────────────
         secao("2. RESUMO DO PERÍODO"),
@@ -1149,74 +1193,81 @@ export function registerPacoteContadorRoute(app: Express) {
         // ── 00_CHECKLIST ──────────────────────────────────────────────────────
         archive.append(await buildChecklistDocx(label, empresa, data, docxConfig), { name: `${f}/00_CHECKLIST.docx` });
 
-        // ── Faturas Emitidas ──────────────────────────────────────────────────
+        // ── 01 — Faturas Emitidas ─────────────────────────────────────────────
         for (const n of nfseEmitidas) {
           const nome = safeName(`NFS-e_${n.numero_nf || n.id}_${n.tomador_razao_social || "SemNome"}`);
-          archive.append(buildNfseHtml(n, "emitida", empresa), { name: `${f}/Faturas_Emitidas/${nome}.html` });
+          archive.append(buildNfseHtml(n, "emitida", empresa), { name: `${f}/01_Faturas_Emitidas/${nome}.html` });
         }
         try {
           const xlsxFat = await buildListaFaturasXlsx(nfseEmitidas, "emitida", label, fcConfig);
-          archive.append(xlsxFat, { name: `${f}/Faturas_Emitidas/Lista_Faturas_Emitidas.xlsx` });
+          archive.append(xlsxFat, { name: `${f}/01_Faturas_Emitidas/Lista_Faturas_Emitidas.xlsx` });
         } catch (e: any) {
           console.error("[PacoteContador] XLSX faturas emitidas erro:", e.message);
           if (nfseEmitidas.length === 0) {
-            archive.append(Buffer.from("Nenhuma NFS-e emitida no período.\n","utf8"), { name: `${f}/Faturas_Emitidas/sem_dados.txt` });
+            archive.append(Buffer.from("Nenhuma NFS-e emitida no período.\n","utf8"), { name: `${f}/01_Faturas_Emitidas/sem_dados.txt` });
           }
         }
 
-        // ── Serviços Tomados ──────────────────────────────────────────────────
+        // ── 02 — Serviços Tomados ─────────────────────────────────────────────
         for (const n of nfseTomadas) {
           const nome = safeName(`NFS-e_${n.numero_nf || n.id}_${n.emitente_nome || "SemNome"}`);
-          archive.append(buildNfseHtml(n, "tomada", empresa), { name: `${f}/Servicos_Tomados/${nome}.html` });
+          archive.append(buildNfseHtml(n, "tomada", empresa), { name: `${f}/02_Servicos_Tomados/${nome}.html` });
         }
         try {
           const xlsxSvc = await buildListaFaturasXlsx(nfseTomadas, "tomada", label, fcConfig);
-          archive.append(xlsxSvc, { name: `${f}/Servicos_Tomados/Lista_Servicos_Tomados.xlsx` });
+          archive.append(xlsxSvc, { name: `${f}/02_Servicos_Tomados/Lista_Servicos_Tomados.xlsx` });
         } catch (e: any) {
           console.error("[PacoteContador] XLSX serviços tomados erro:", e.message);
         }
         try {
           const xlsxNfe = await buildNfeXlsx(nfe, label, fcConfig);
-          archive.append(xlsxNfe, { name: `${f}/Servicos_Tomados/NF-e_Recebidas_Compras.xlsx` });
+          archive.append(xlsxNfe, { name: `${f}/02_Servicos_Tomados/NF-e_Recebidas_Compras.xlsx` });
         } catch (e: any) {
           console.error("[PacoteContador] XLSX NF-e recebidas erro:", e.message);
         }
         if (nfseTomadas.length + nfe.length === 0) {
-          archive.append(Buffer.from("Nenhuma NFS-e tomada ou NF-e recebida no período.\n","utf8"), { name: `${f}/Servicos_Tomados/sem_dados.txt` });
+          archive.append(Buffer.from("Nenhuma NFS-e tomada ou NF-e recebida no período.\n","utf8"), { name: `${f}/02_Servicos_Tomados/sem_dados.txt` });
         }
 
-        // ── Extratos Bancários ────────────────────────────────────────────────
+        // ── 03 — Extratos Bancários ───────────────────────────────────────────
         try {
           const xlsxBuf = await buildExtratoBancarioBuffer(db, companyId, m, ano, empresa);
-          archive.append(xlsxBuf, { name: `${f}/Extratos_Bancarios/Extrato_Bancario_${MESES[m-1]}_${ano}.xlsx` });
+          archive.append(xlsxBuf, { name: `${f}/03_Extratos_Bancarios/Extrato_Bancario_${MESES[m-1]}_${ano}.xlsx` });
         } catch (e: any) {
           console.error("[PacoteContador] XLSX bancário erro:", e.message);
         }
         try {
           const xlsxExt = await buildExtratoGeralXlsx(bank, label, fcConfig);
-          archive.append(xlsxExt, { name: `${f}/Extratos_Bancarios/Extrato_Completo.xlsx` });
+          archive.append(xlsxExt, { name: `${f}/03_Extratos_Bancarios/Extrato_Completo.xlsx` });
         } catch (e: any) {
           console.error("[PacoteContador] XLSX extrato geral erro:", e.message);
           if (bank.length === 0) {
-            archive.append(Buffer.from("Nenhum extrato bancário importado no período.\n","utf8"), { name: `${f}/Extratos_Bancarios/sem_dados.txt` });
+            archive.append(Buffer.from("Nenhum extrato bancário importado no período.\n","utf8"), { name: `${f}/03_Extratos_Bancarios/sem_dados.txt` });
           }
         }
 
-        // ── Extratos Cartões ──────────────────────────────────────────────────
+        // ── 04 — Extratos Cartões ─────────────────────────────────────────────
         try {
           const cartaoXlsx = await buildExtratCartaoBuffer(db, companyId, m, ano, empresa);
-          archive.append(cartaoXlsx, { name: `${f}/Extratos_Cartoes/Extrato_Cartao_${MESES[m-1]}_${ano}.xlsx` });
+          archive.append(cartaoXlsx, { name: `${f}/04_Extratos_Cartoes/Extrato_Cartao_${MESES[m-1]}_${ano}.xlsx` });
         } catch (e: any) {
           console.error("[PacoteContador] XLSX cartão erro:", e.message);
         }
 
-        // ── Compras / OCs ─────────────────────────────────────────────────────
+        // ── 05 — Compras / OCs ───────────────────────────────────────────────
         try {
           const xlsxOcs = await buildOcsXlsx(ocs, label, fcConfig);
-          archive.append(xlsxOcs, { name: `${f}/02_OCs_NF-e.xlsx` });
+          archive.append(xlsxOcs, { name: `${f}/05_OCs_NF-e/OCs_NF-e.xlsx` });
         } catch (e: any) {
           console.error("[PacoteContador] XLSX OCs erro:", e.message);
+          archive.append(Buffer.from("Nenhuma ordem de compra no período.\n","utf8"), { name: `${f}/05_OCs_NF-e/sem_dados.txt` });
         }
+
+        // ── 06 — Ordens de Serviço ────────────────────────────────────────────
+        archive.append(
+          Buffer.from(`Ordens de Serviço — ${label}\n\nEsta pasta destina-se às Ordens de Serviço (OS) emitidas no período.\nImporte ou adicione os arquivos de OS aqui antes de enviar ao contador.\n`, "utf8"),
+          { name: `${f}/06_OS_Servico/LEIA-ME.txt` }
+        );
       };
 
       if (mes >= 1 && mes <= 12) {
