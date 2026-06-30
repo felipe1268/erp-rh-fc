@@ -1,4 +1,44 @@
 /**
+ * Rev. 3887 — **EPI — FOTO DO FUNCIONÁRIO NAS ENTREGAS + ALERTA DE KIT POR FUNÇÃO + MOTIVO PADRONIZADO (DROPDOWN) + NORMALIZAÇÃO DE DADOS.**
+ *
+ * ## 1. Foto do funcionário + quem entregou na listagem de entregas
+ * - `listDeliveries` (epis.ts) agora seleciona `fotoUrl: employees.fotoUrl`.
+ * - Coluna "Funcionário" na tabela de entregas: ícone `<User>` substituído por avatar
+ *   circular (foto real se disponível, fallback iniciais em fundo azul).
+ * - Sub-linha "Entregue por: [nome]" aparece quando `assinaturaResponsavelNome` está
+ *   preenchido — válido tanto em linhas de entrega agrupada (grupoEntregaId) quanto individuais.
+ * - Cabeçalho da coluna atualizado: "Funcionário / Entregue por".
+ *
+ * ## 2. Alerta de validação de kit por função (nova_entrega)
+ * - Nova query `kitsNovaEntregaQ` (trpc.epiAvancado.kitsList) carregada no modo nova_entrega.
+ * - Quando funcionário tem função mapeada em um kit e o EPI selecionado NÃO está no kit:
+ *   banner amber com lista dos EPIs previstos no kit (obrigatórios marcados com *).
+ * - Quando EPI selecionado está no kit: banner verde confirmando adequação.
+ * - Comparação por `funcao.toLowerCase().trim()` (case-insensitive, tolerante a espaços).
+ *
+ * ## 3. Motivo da entrega: free-text → Select padronizado
+ * - Campo "Motivo / Observações" (Input livre) convertido em Select com 7 opções canonicas:
+ *   Entrega Regular, Primeira Aquisição, Kit Admissão, Desgaste Normal,
+ *   Descarte / Expirado, Reposição, Visita Técnica.
+ * - Evita entradas livres que fragmentam o gráfico de pizza no Dashboard EPI.
+ *
+ * ## 4. Normalização de motivos no banco de dados (startup — idempotente)
+ * - Bloco `[NormalizaMotivosEPI]` em server/_core/index.ts roda t=8s após startup.
+ * - Normaliza dados históricos: trim de espaços, unifica variantes (desgaste_normal →
+ *   "Desgaste Normal", "entrega regular" → "Entrega Regular", variantes de maiúsculas
+ *   em máscaras → "Descarte / Expirado", etc.).
+ * - ZERO DELETE: apenas UPDATEs idempotentes.
+ *
+ * ## Arquivos modificados
+ * - `server/routers/epis.ts` — +fotoUrl em listDeliveries
+ * - `server/_core/index.ts` — bloco NormalizaMotivosEPI
+ * - `client/src/pages/Epis.tsx` — kitsNovaEntregaQ, Select motivo, alerta kit, avatares
+ *
+ * @version 3887
+ * @date 2026-06-30
+ */
+
+/**
  * Rev. 3886 — **TEMPLATES DE EXTRATO — PREVIEW FULLSCREEN + COLAPSO DE GRUPOS + DEDUP FRONTEND + GATE DE TEMPLATE NA CONCILIAÇÃO.**
  *
  * ## 1. Preview fullscreen (olhinho → Dialog)

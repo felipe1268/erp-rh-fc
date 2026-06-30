@@ -6022,6 +6022,24 @@ Regras:
     delay(150_000).then(() =>
       import("../services/syncMonitorJob").then(m => m.startSyncMonitorJob()).catch(e => console.error("[SyncMonitor] Erro:", e))
     );
+
+    // Rev. 3887 — Normalização de motivos de entrega EPI (idempotente; sem dano em rodar todo start)
+    delay(8_000).then(() =>
+      import("../db").then(async ({ getDb }) => {
+        try {
+          const db = await getDb();
+          if (!db) return;
+          const { sql } = await import("drizzle-orm");
+          await db.execute(sql`UPDATE epi_deliveries SET motivo = TRIM(motivo) WHERE motivo IS NOT NULL AND motivo <> TRIM(motivo)`);
+          await db.execute(sql`UPDATE epi_deliveries SET motivo = 'Desgaste Normal'     WHERE LOWER(TRIM(COALESCE(motivo,''))) IN ('desgaste_normal','desgaste normal')`);
+          await db.execute(sql`UPDATE epi_deliveries SET motivo = 'Entrega Regular'     WHERE LOWER(TRIM(COALESCE(motivo,''))) IN ('entrega regular','entrega_regular')`);
+          await db.execute(sql`UPDATE epi_deliveries SET motivo = 'Primeira Aquisição'  WHERE LOWER(TRIM(COALESCE(motivo,''))) IN ('primeira aquisição','primeira aquisicao')`);
+          await db.execute(sql`UPDATE epi_deliveries SET motivo = 'Kit Admissão'        WHERE LOWER(TRIM(COALESCE(motivo,''))) IN ('kit admissão','kit admissao','kit de admissão','kit de admissao')`);
+          await db.execute(sql`UPDATE epi_deliveries SET motivo = 'Descarte / Expirado' WHERE LOWER(TRIM(COALESCE(motivo,''))) LIKE '%mascara%descart%' OR LOWER(TRIM(COALESCE(motivo,''))) LIKE '%máscara%descart%'`);
+          console.log("[NormalizaMotivosEPI] Normalização concluída.");
+        } catch (e: any) { console.error("[NormalizaMotivosEPI] Erro:", e?.message || e); }
+      }).catch(e => console.error("[NormalizaMotivosEPI] Falha ao iniciar:", e))
+    );
   });
 }
 

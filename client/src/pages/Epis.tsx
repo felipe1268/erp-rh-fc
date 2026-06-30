@@ -229,6 +229,7 @@ export default function Epis() {
   const statsQ = trpc.epis.stats.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
   const employeesQ = trpc.employees.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, excludeTerminated: true }, { enabled: hasValidCompany && (viewMode === "nova_entrega" || viewMode === "ficha_epi") });
   const bdiQ = trpc.epis.getBdi.useQuery({ companyId: queryCompanyId }, { enabled: hasValidCompany && (viewMode === "nova_entrega" || viewMode === "ficha_epi" || viewMode === "config") });
+  const kitsNovaEntregaQ = trpc.epiAvancado.kitsList.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany && viewMode === "nova_entrega" });
   const formTextQ = trpc.epis.getFormText.useQuery({ companyId: queryCompanyId }, { enabled: hasValidCompany && (viewMode === "ficha_epi" || viewMode === "config") });
   const fornecedoresQ = trpc.epis.fornecedoresList.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany && (viewMode === "novo_epi" || viewMode === "editar_epi" || viewMode === "config") });
   const obrasQ = trpc.obras.listActive.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
@@ -1557,8 +1558,19 @@ export default function Epis() {
                   <Input type="date" value={entregaForm.dataEntrega} onChange={e => setEntregaForm(f => ({ ...f, dataEntrega: e.target.value }))} />
                 </div>
                 <div>
-                  <Label>Motivo / Observações</Label>
-                  <Input value={entregaForm.motivo} onChange={e => setEntregaForm(f => ({ ...f, motivo: e.target.value }))} placeholder="Observações gerais" />
+                  <Label>Motivo da Entrega</Label>
+                  <Select value={entregaForm.motivo || ""} onValueChange={v => setEntregaForm(f => ({ ...f, motivo: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Selecione o motivo" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Entrega Regular">Entrega Regular</SelectItem>
+                      <SelectItem value="Primeira Aquisição">Primeira Aquisição</SelectItem>
+                      <SelectItem value="Kit Admissão">Kit Admissão</SelectItem>
+                      <SelectItem value="Desgaste Normal">Desgaste Normal</SelectItem>
+                      <SelectItem value="Descarte / Expirado">Descarte / Expirado</SelectItem>
+                      <SelectItem value="Reposição">Reposição</SelectItem>
+                      <SelectItem value="Visita Técnica">Visita Técnica</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
@@ -1583,6 +1595,41 @@ export default function Epis() {
                 )}
                 <p className="text-[10px] text-muted-foreground mt-1">Tire uma foto do EPI sendo entregue para comprovação</p>
               </div>
+
+              {/* Rev. 3887 — Alerta de kit: EPI selecionado não pertence ao kit da função */}
+              {(() => {
+                const kitsList = kitsNovaEntregaQ.data ?? [];
+                const empSel2 = (employeesQ.data ?? []).find((e: any) => String(e.id) === entregaForm.employeeId);
+                const kitFuncao = empSel2?.funcao ? kitsList.find((k: any) => k.ativo !== 0 && k.funcao?.toLowerCase().trim() === empSel2.funcao.toLowerCase().trim()) : null;
+                const epiForaKit = kitFuncao && entregaForm.epiId ? !kitFuncao.items.some((i: any) => String(i.epiId) === entregaForm.epiId) : false;
+                const epiNoKit = kitFuncao && entregaForm.epiId ? kitFuncao.items.some((i: any) => String(i.epiId) === entregaForm.epiId) : false;
+                return (
+                  <>
+                    {epiForaKit && kitFuncao && (
+                      <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                        <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                        <div className="text-xs">
+                          <p className="font-semibold text-amber-800">EPI fora do kit da função</p>
+                          <p className="text-amber-700 mt-0.5">O kit <strong>{kitFuncao.nome}</strong> (função: <strong>{kitFuncao.funcao}</strong>) não inclui este EPI. EPIs previstos:</p>
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {kitFuncao.items.map((item: any) => (
+                              <Badge key={item.id} variant="outline" className="text-[10px] border-amber-300 text-amber-800">
+                                {item.nomeEpi}{item.obrigatorio ? " *" : ""}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {epiNoKit && kitFuncao && (
+                      <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">
+                        <ShieldCheck className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+                        <span className="text-xs text-emerald-700">EPI previsto no kit <strong>{kitFuncao.nome}</strong> para esta função</span>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
 
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 space-y-3">
                 <p className="text-sm font-semibold text-gray-700 flex items-center gap-2"><Plus className="h-4 w-4" /> Adicionar EPI</p>
@@ -2598,7 +2645,7 @@ export default function Epis() {
                           />
                         </th>
                         <th className="p-3 text-left font-medium">Data</th>
-                        <th className="p-3 text-left font-medium">Funcionário</th>
+                        <th className="p-3 text-left font-medium">Funcionário / Entregue por</th>
                         <th className="p-3 text-left font-medium">EPI</th>
                         <th className="p-3 text-center font-medium">Qtd</th>
                         <th className="p-3 text-left font-medium">Motivo Troca</th>
@@ -2691,10 +2738,19 @@ export default function Epis() {
                                 </td>
                                 <td className="p-3">
                                   <div className="flex items-center gap-2">
-                                    <User className="h-3.5 w-3.5 text-blue-600" />
+                                    {first.fotoUrl ? (
+                                      <img src={first.fotoUrl} alt={first.nomeFunc || ""} className="h-8 w-8 rounded-full object-cover border border-gray-200 flex-shrink-0" />
+                                    ) : (
+                                      <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                        <span className="text-[10px] font-bold text-blue-700">{(first.nomeFunc || "?").split(" ").filter(Boolean).map((n: string) => n[0]).slice(0, 2).join("")}</span>
+                                      </div>
+                                    )}
                                     <div>
                                       <span className="font-medium text-xs">{first.nomeFunc || "—"}</span>
                                       {first.funcaoFunc && <span className="text-[10px] text-muted-foreground ml-1">({first.funcaoFunc})</span>}
+                                      {first.assinaturaResponsavelNome && (
+                                        <div className="text-[10px] text-slate-500 mt-0.5">Entregue por: <span className="font-medium">{first.assinaturaResponsavelNome}</span></div>
+                                      )}
                                     </div>
                                   </div>
                                 </td>
@@ -2780,10 +2836,19 @@ export default function Epis() {
                             </td>
                             <td className="p-3">
                               <div className="flex items-center gap-2">
-                                <User className="h-3.5 w-3.5 text-blue-600" />
+                                {d.fotoUrl ? (
+                                  <img src={d.fotoUrl} alt={d.nomeFunc || ""} className="h-8 w-8 rounded-full object-cover border border-gray-200 flex-shrink-0" />
+                                ) : (
+                                  <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                    <span className="text-[10px] font-bold text-blue-700">{(d.nomeFunc || "?").split(" ").filter(Boolean).map((n: string) => n[0]).slice(0, 2).join("")}</span>
+                                  </div>
+                                )}
                                 <div>
                                   <span className="font-medium text-xs">{d.nomeFunc || "—"}</span>
                                   {d.funcaoFunc && <span className="text-[10px] text-muted-foreground ml-1">({d.funcaoFunc})</span>}
+                                  {d.assinaturaResponsavelNome && (
+                                    <div className="text-[10px] text-slate-500 mt-0.5">Entregue por: <span className="font-medium">{d.assinaturaResponsavelNome}</span></div>
+                                  )}
                                 </div>
                               </div>
                             </td>
