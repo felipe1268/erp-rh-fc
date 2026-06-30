@@ -1,4 +1,23 @@
 /**
+ * Rev. 3901 — **APR — ANÁLISE PRELIMINAR DE RISCO 100% DIGITAL.**
+ *
+ * Novo módulo SST: APR totalmente digital com matriz de risco P×G colorida.
+ * - Tabelas `apr_analises` + `apr_riscos` criadas via ColFix Rev.3901 + direto no Neon.
+ * - Router `aprAnalises`: list/stats/proximoNumero/getById/create/upsertRiscos/update/aprovar/concluir/cancelar/excluir.
+ * - Wizard 3 passos: Dados Gerais (obra, atividade, local, equipe) → Tabela de Riscos → EPIs & Aprovação.
+ * - Tabela de riscos dinâmica: múltiplas linhas por APR, cada uma com etapa/perigo/risco/tipo/P×G/medidas/responsável/prazo.
+ * - Matriz de risco P×G (1-5 × 1-5): Baixo (≤4), Médio (5-9), Alto (10-16), Crítico (17-25) — cor automática.
+ * - Alerta automático quando há riscos críticos (P×G > 16) no detalhe da APR.
+ * - 12 EPIs selecionáveis por chips coloridos (toggle).
+ * - Assinatura canvas do aprovador (técnico/engenheiro SST) com pad touch/mouse.
+ * - Fluxo: em_analise → aprovada → concluida (+ cancelada).
+ * - Numeração automática APR-001, APR-002...
+ * - Cards KPI clicáveis: Total, Em Análise, Aprovadas, Concluídas.
+ * - Rota `/sst/apr` com lazy-load; sidebar SST "APR — Análise de Risco".
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3900 — **PT — PERMISSÃO DE TRABALHO (NR-35) 100% DIGITAL.**
  *
  * Novo módulo SST: Permissão de Trabalho em Altura (NR-35) totalmente digital.

@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3901** — **APR — ANÁLISE PRELIMINAR DE RISCO 100% DIGITAL.** Novo módulo SST; tabelas `apr_analises` + `apr_riscos` via ColFix; wizard 3 passos (Dados Gerais, Tabela de Riscos dinâmica, EPIs & Aprovação); matriz P×G 1-5×1-5 colorida (Baixo/Médio/Alto/Crítico); alerta automático riscos críticos; 12 EPIs chips; canvas pad aprovador; fluxo em_analise → aprovada → concluida; rota `/sst/apr`; sidebar SST atualizado. ZERO DELETE.
+
 - **Rev. 3900** — **PT — PERMISSÃO DE TRABALHO (NR-35) 100% DIGITAL.** Novo módulo SST; tabelas `pt_permissoes` + `pt_assinaturas` via ColFix; wizard 4 passos (Solicitação, Descrição, Checklist 15 itens NR-35, Envolvidos); assinaturas canvas pad por worker (touch/mouse); fluxo em_andamento → liberada → concluida; stats cards clicáveis; rota `/sst/pt`; sidebar SST atualizado. ZERO DELETE.
 
-- **Rev. 3899** — **NF-e EMITIDAS — STATUS SEGUE SEFAZ + CONSOLIDAR MÊS.** "Conciliada" só aparece quando há extrato bancário vinculado (stmtLineId); status base de notas = "Emitida"; vincular lançamento financeiro não muda mais status; desvincular extrato → "Emitida"; botão renomeado "Consolidar Mês" grava flag em `fiscal_notes_meses_consolidados` sem alterar NF-e individuais; STATUS_MAP + filtros + bulk status atualizados; 204 notas incorretas + 717 pendentes corrigidas no Neon. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3899** — **NF-e EMITIDAS — STATUS SEGUE SEFAZ + CONSOLIDAR MÊS.** ZERO DELETE.
 
 - **Rev. 3898** — **CONTRATOS PJ — EDIÇÃO DE CLÁUSULAS POR CONTRATO.** ZERO DELETE.
 
@@ -62,11 +64,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3895** — **EPI — DIAGNÓSTICO DE FUNÇÕES NO DIALOG DE KIT + BOTÃO GERAR E SALVAR TODOS.** ZERO DELETE.
 
-- **Rev. 3894** — **EPI — KIT COBRE FUNÇÕES SIMILARES (CARPINTEIRO I, II, III → 1 KIT).** Nova coluna `funcoes_cobertas_json` em `epi_kits`; ColFix garante coluna; dialog exibe chips "Cobre funções similares"; card mostra "+N similares". ZERO DELETE.
-
-- **Rev. 3893** — **EPI — CAMPO FUNÇÃO DO KIT VIRA SELECT COM FUNÇÕES SEM KIT.** Endpoint `funcoesDisponiveis`: cruza `job_functions` ativas com `epi_kits` ativos e retorna só as funções que ainda não têm kit. Dialog "Novo Kit" substitui Input por Select; loading state; refetch automático. ZERO DELETE.
-
-- **Rev. 3892** — **EPI — SUGESTÃO DE KITS POR ESTOQUE REAL + ITENS FALTANTES EM VERMELHO.** Novo endpoint `iaSugerirKitsComEstoque`; IA retorna `disponivel` por item; painel verde/vermelho; badge "Comprar". ZERO DELETE.
+- **Rev. 3894** — **EPI — KIT COBRE FUNÇÕES SIMILARES (CARPINTEIRO I, II, III → 1 KIT).** ZERO DELETE.
 
 - **Rev. 3891** — **EPI — BOTÃO IA DENTRO DO DIALOG DE KIT: PREENCHE ITENS POR FUNÇÃO.** `iaKitsDialogMut` preenche nome/descrição/itens do form; dialog 3 passos; box gradiente violeta; loading "Consultando NR-6/NR-18". ZERO DELETE.
 

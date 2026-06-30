@@ -10215,3 +10215,60 @@ export const ptAssinaturas = pgTable("pt_assinaturas", {
   index("idx_pt_assin_pt").on(table.ptId),
   index("idx_pt_assin_company").on(table.companyId),
 ]);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rev. 3901 — APR — Análise Preliminar de Risco
+// Matriz de risco P×G, múltiplos itens por análise, assinatura canvas.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const aprAnalises = pgTable("apr_analises", {
+  id:                serial("id").primaryKey(),
+  companyId:         integer("company_id").notNull(),
+  obraId:            integer("obra_id"),
+  employeeId:        integer("employee_id").notNull(),
+  numero:            varchar("numero", { length: 30 }).notNull(),
+  status:            varchar("status", { length: 20 }).notNull().default("rascunho"),
+  dataEmissao:       varchar("data_emissao", { length: 10 }),
+  atividade:         varchar("atividade", { length: 500 }),
+  localServico:      varchar("local_servico", { length: 255 }),
+  equipeJson:        text("equipe_json"),
+  epiJson:           text("epi_json"),
+  observacoes:       text("observacoes"),
+  aprovadoPorNome:   varchar("aprovado_por_nome", { length: 255 }),
+  aprovadoPorAss:    text("aprovado_por_ass"),
+  aprovadoEm:        timestamp("aprovado_em", { mode: "string" }),
+  fcSignSessionId:   integer("fc_sign_session_id"),
+  criadoPorId:       integer("criado_por_id"),
+  criadoPorNome:     varchar("criado_por_nome", { length: 255 }),
+  createdAt:         timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt:         timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+  deletedAt:         timestamp("deleted_at", { mode: "string" }),
+}, (table) => [
+  index("idx_apr_company").on(table.companyId),
+  index("idx_apr_obra").on(table.obraId),
+  index("idx_apr_employee").on(table.employeeId),
+  index("idx_apr_status").on(table.companyId, table.status),
+]);
+
+export const aprRiscos = pgTable("apr_riscos", {
+  id:               serial("id").primaryKey(),
+  aprId:            integer("apr_id").notNull(),
+  companyId:        integer("company_id").notNull(),
+  ordem:            integer("ordem").notNull().default(0),
+  etapaAtividade:   varchar("etapa_atividade", { length: 500 }),
+  perigo:           varchar("perigo", { length: 500 }),
+  risco:            varchar("risco", { length: 500 }),
+  tipoRisco:        varchar("tipo_risco", { length: 30 }),
+  probabilidade:    integer("probabilidade"),
+  gravidade:        integer("gravidade"),
+  nivelRisco:       integer("nivel_risco"),
+  medidasControle:  text("medidas_controle"),
+  tipoMedida:       varchar("tipo_medida", { length: 30 }),
+  responsavelNome:  varchar("responsavel_nome", { length: 255 }),
+  prazo:            varchar("prazo", { length: 10 }),
+  situacao:         varchar("situacao", { length: 20 }).default("aberta"),
+  createdAt:        timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+  index("idx_apr_riscos_apr").on(table.aprId),
+  index("idx_apr_riscos_company").on(table.companyId),
+]);

@@ -4703,7 +4703,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v3900-2026-06-30-pt-permissoes";
+    const COLFIX_VERSION = "v3901-2026-06-30-apr-analises";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -6072,6 +6072,61 @@ Regras:
         `);
         console.log("[ColFix Rev.3900] pt_permissoes + pt_assinaturas garantidas.");
       } catch (e: any) { console.warn("[ColFix Rev.3900] pt falhou (não-fatal):", e?.message ?? e); }
+
+      // Rev. 3901 — apr_analises + apr_riscos (APR - Análise Preliminar de Risco)
+      try {
+        await db!.$client.query(`
+          CREATE TABLE IF NOT EXISTS apr_analises (
+            id               serial PRIMARY KEY,
+            company_id       integer NOT NULL,
+            obra_id          integer,
+            employee_id      integer NOT NULL,
+            numero           varchar(30) NOT NULL,
+            status           varchar(20) NOT NULL DEFAULT 'rascunho',
+            data_emissao     varchar(10),
+            atividade        varchar(500),
+            local_servico    varchar(255),
+            equipe_json      text,
+            epi_json         text,
+            observacoes      text,
+            aprovado_por_nome varchar(255),
+            aprovado_por_ass  text,
+            aprovado_em      timestamp,
+            fc_sign_session_id integer,
+            criado_por_id    integer,
+            criado_por_nome  varchar(255),
+            created_at       timestamp DEFAULT now() NOT NULL,
+            updated_at       timestamp DEFAULT now() NOT NULL,
+            deleted_at       timestamp
+          );
+          CREATE INDEX IF NOT EXISTS idx_apr_company  ON apr_analises(company_id);
+          CREATE INDEX IF NOT EXISTS idx_apr_obra     ON apr_analises(obra_id);
+          CREATE INDEX IF NOT EXISTS idx_apr_employee ON apr_analises(employee_id);
+          CREATE INDEX IF NOT EXISTS idx_apr_status   ON apr_analises(company_id, status);
+          CREATE TABLE IF NOT EXISTS apr_riscos (
+            id               serial PRIMARY KEY,
+            apr_id           integer NOT NULL,
+            company_id       integer NOT NULL,
+            ordem            integer NOT NULL DEFAULT 0,
+            etapa_atividade  varchar(500),
+            perigo           varchar(500),
+            risco            varchar(500),
+            tipo_risco       varchar(30),
+            probabilidade    integer,
+            gravidade        integer,
+            nivel_risco      integer,
+            medidas_controle text,
+            tipo_medida      varchar(30),
+            responsavel_nome varchar(255),
+            prazo            varchar(10),
+            situacao         varchar(20) DEFAULT 'aberta',
+            created_at       timestamp DEFAULT now() NOT NULL
+          );
+          CREATE INDEX IF NOT EXISTS idx_apr_riscos_apr     ON apr_riscos(apr_id);
+          CREATE INDEX IF NOT EXISTS idx_apr_riscos_company ON apr_riscos(company_id);
+        `);
+        console.log("[ColFix Rev.3901] apr_analises + apr_riscos garantidas.");
+      } catch (e: any) { console.warn("[ColFix Rev.3901] apr falhou (não-fatal):", e?.message ?? e); }
 
       // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos
       import("../services/startupCache").then(({ setCache }) =>
