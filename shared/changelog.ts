@@ -1,4 +1,29 @@
 /**
+ * Rev. 3897 — **ORÇAMENTO — FIX IMPORTAÇÃO: SPLIT MAT/MO CORRETO EM LINHAS DE AGRUPAMENTO.**
+ *
+ * ## Problema
+ * Importação de planilha XLSM com colunas duplas ("Preço Total Material/MO" + "Custo Materiais/M.O")
+ * produzia cuTotalMat=0 e cuTotalMdo=0 para todas as linhas de agrupamento/subtotal (01, 03, 03.01, etc.).
+ * O override pós-detecção remapeava cuTotalMat→col30 e cuTotalMdo→col31 ("Custo Materiais"/"Custo M.O"),
+ * mas essas colunas são vazias nas linhas de grupo — apenas as folhas têm valor nelas.
+ * Os totais (Custo) batiam pois col24 ("Custo") estava correta, mas o split Mat×MO ficava zerado.
+ *
+ * ## Causa-raiz
+ * parsearAbaCorcamento aplicava o override de forma global (colMap['cuTotalMat'] = col30 para TODAS as
+ * linhas), sem fallback para linhas onde col30 é vazia mas col22 ("Preço Total Material") tem valor.
+ *
+ * ## Fix aplicado (server/routers/orcamento.ts)
+ * 1. Salvar origCuTotalMatIdx / origCuTotalMdoIdx ANTES do bloco de override (linha ~597).
+ * 2. No loop de leitura de cada item (linha ~689-699): se col30=0 e origIdx≠overrideIdx, usar col22
+ *    como fallback. Mesmo para cuTotalMdo (col31 vazia → col23).
+ * Resultado: 428 itens OK, 0 mismatches vs col22/23 do Excel. Totais inalterados (col24 sempre correto).
+ *
+ * ## Arquivos
+ * - server/routers/orcamento.ts (+12 linhas de fallback)
+ * - shared/version.ts → 3897
+ */
+
+/**
  * Rev. 3896 — **EPI — PROGRESSO 0→100% NO BOTÃO "GERAR KITS PARA TODAS AS FUNÇÕES".**
  *
  * ## Problema

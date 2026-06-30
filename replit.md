@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3897** — **ORÇAMENTO — FIX IMPORTAÇÃO: SPLIT MAT/MO CORRETO EM LINHAS DE AGRUPAMENTO.** Planilhas com colunas duplas ("Preço Total Material" col 22 + "Custo Materiais" col 30) perdiam cuTotalMat/cuTotalMdo=0 nas linhas de grupo porque o override mapeava para col 30 (vazia nesses grupos). Fix: salvar origCuTotalMatIdx/origCuTotalMdoIdx antes do override; fallback para col 22/23 quando col 30/31 = 0. 428 itens OK, 0 mismatches. ZERO DELETE.
+
 - **Rev. 3896** — **EPI — PROGRESSO 0→100% NO BOTÃO "GERAR KITS PARA TODAS AS FUNÇÕES".** Barra de fundo `bg-white/15` cresce via `style={{ width: pct% }}`; fase IA (0→33%) simulada via interval; fase de salvamento (35→100%) com progresso real por kit; texto "Gerando e salvando... XX%"; regra de ouro salva em User preferences. ZERO DELETE.
 
-- **Rev. 3895** — **EPI — DIAGNÓSTICO DE FUNÇÕES NO DIALOG DE KIT + BOTÃO GERAR E SALVAR TODOS.** `funcoesDisponiveis` retorna `totalFuncoesCadastradas`; 3 branches distintas no dialog (isError→Input, total=0→"sem funções no RH", todas com kit→mensagem precisa); botão "✨ Gerar Kits para Todas as Funções" chama IA e persiste todos os kits sem revisão manual. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3895** — **EPI — DIAGNÓSTICO DE FUNÇÕES NO DIALOG DE KIT + BOTÃO GERAR E SALVAR TODOS.** ZERO DELETE.
 
 - **Rev. 3894** — **EPI — KIT COBRE FUNÇÕES SIMILARES (CARPINTEIRO I, II, III → 1 KIT).** Nova coluna `funcoes_cobertas_json` em `epi_kits`; ColFix garante coluna; dialog exibe chips "Cobre funções similares"; card mostra "+N similares". ZERO DELETE.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3892** — **EPI — SUGESTÃO DE KITS POR ESTOQUE REAL + ITENS FALTANTES EM VERMELHO.** Novo endpoint `iaSugerirKitsComEstoque`; IA retorna `disponivel` por item; painel verde/vermelho; badge "Comprar". ZERO DELETE.
 
 - **Rev. 3891** — **EPI — BOTÃO IA DENTRO DO DIALOG DE KIT: PREENCHE ITENS POR FUNÇÃO.** `iaKitsDialogMut` preenche nome/descrição/itens do form; dialog 3 passos; box gradiente violeta; loading "Consultando NR-6/NR-18". ZERO DELETE.
-
-- **Rev. 3890** — **EPI — FOTO DO COLABORADOR EM TODAS AS TABELAS DO MÓDULO EPI.** `getDashEpis` adicionou `fotoUrl`; avatar circular em DashEpis + EpiDrillDown. ZERO DELETE.
 
 - **Rev. 3889** — **EPI — OBSERVAÇÃO OBRIGATÓRIA QUANDO EPI FORA DO KIT + FLAG `fora_do_kit` + BADGE.** Coluna `fora_do_kit`; server valida observação obrigatória; textarea + badge ⚠ âmbar. ZERO DELETE.
 

@@ -589,6 +589,11 @@ function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: nu
   // ─── Pós-detecção: priorizar colunas "Custo Material"/"Custo M.O" sobre "Preço Total" ───
   // Planilhas FC podem ter colunas "Preço Total Material/MO" E "Custo Material/M.O"
   // As colunas "Custo" são os valores reais de custo — devem prevalecer.
+  // IMPORTANTE: salvar índices originais ANTES do override para usar como fallback em linhas
+  // de agrupamento onde a coluna "Custo Materiais" é vazia mas "Preço Total Material" tem valor.
+  const origCuTotalMatIdx = colMap['cuTotalMat'];
+  const origCuTotalMdoIdx = colMap['cuTotalMdo'];
+
   if (!overrideColMap || Object.keys(overrideColMap).length === 0) {
     const custoMatAliases = ['customaterial', 'customat', 'custodemateria'];
     const custoMoAliases  = ['customo', 'customaodeobra', 'customdo', 'customodeobra'];
@@ -679,7 +684,16 @@ function parsearAbaCorcamento(rows: any[][], metaPerc: number, bdiPercentual: nu
     const custoUnitTotal = custoUnitMat + custoUnitMdo + custoUnitEquipRaw;
 
     let custoTotalMat  = toNum(col(row, 'cuTotalMat'));
+    // Fallback: se a coluna "Custo Materiais" (override) estiver vazia na linha (ex: linhas de
+    // agrupamento/subtotal que só têm valor em "Preço Total Material"), usar coluna original.
+    if (custoTotalMat === 0 && origCuTotalMatIdx !== undefined && origCuTotalMatIdx !== colMap['cuTotalMat']) {
+      custoTotalMat = toNum(row[origCuTotalMatIdx]);
+    }
     let custoTotalMdo  = toNum(col(row, 'cuTotalMdo'));
+    // Idem para MO
+    if (custoTotalMdo === 0 && origCuTotalMdoIdx !== undefined && origCuTotalMdoIdx !== colMap['cuTotalMdo']) {
+      custoTotalMdo = toNum(row[origCuTotalMdoIdx]);
+    }
     let custoTotalEquip = toNum(col(row, 'cuTotalEquip'));
     let   custoTotal     = toNum(col(row, 'custoTotal'));
 
