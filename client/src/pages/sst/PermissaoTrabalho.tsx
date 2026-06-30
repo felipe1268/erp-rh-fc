@@ -289,6 +289,10 @@ function WizardNovaPT({
     { obraId: form.obraId! },
     { enabled: open && !!form.obraId }
   );
+  const obraTerceirosQ = trpc.terceiros.funcionarios.list.useQuery(
+    { companyId, obraId: form.obraId! },
+    { enabled: open && !!form.obraId }
+  );
   const createMut = trpc.ptPermissoes.create.useMutation();
 
   const upd = (patch: Partial<NovaPTState>) => setForm(f => ({ ...f, ...patch }));
@@ -676,47 +680,78 @@ function WizardNovaPT({
                   <Users className="h-3.5 w-3.5" /> Envolvidos
                 </p>
                 {form.obraId ? (
-                  <span className="text-xs text-emerald-600 font-medium">Funcionários da obra</span>
+                  <span className="text-xs text-emerald-600 font-medium">Efetivo da obra (próprios + terceiros)</span>
                 ) : (
                   <span className="text-xs text-slate-400">até 6 pessoas</span>
                 )}
               </div>
 
-              {/* Com obra: checklist de funcionários */}
+              {/* Com obra: checklist de funcionários próprios + terceiros */}
               {form.obraId ? (
-                obraFuncsQ.isLoading ? (
-                  <div className="flex items-center gap-2 text-xs text-slate-400 py-2"><Loader2 className="h-3 w-3 animate-spin" /> Carregando funcionários da obra…</div>
-                ) : (obraFuncsQ.data as any[] ?? []).length === 0 ? (
-                  <p className="text-xs text-slate-400 italic py-1">Nenhum funcionário alocado nesta obra.</p>
-                ) : (
-                  <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
-                    {(obraFuncsQ.data as any[] ?? []).map((emp: any) => {
-                      const isSelected = form.envolvidos.some(e => e.nome === emp.nomeCompleto);
-                      return (
-                        <label key={emp.id} className={`flex items-center gap-2.5 cursor-pointer rounded-lg px-3 py-2 border transition-colors ${
-                          isSelected ? "bg-emerald-50 border-emerald-200" : "bg-white border-slate-200 hover:border-emerald-200"
-                        }`}>
-                          <input type="checkbox" checked={isSelected} className="accent-emerald-600 rounded"
-                            onChange={e => {
-                              if (e.target.checked) {
-                                const blanks = form.envolvidos.filter(e => !e.nome.trim());
-                                const filled = form.envolvidos.filter(e => e.nome.trim());
-                                const newEntry = { nome: emp.nomeCompleto, funcao: emp.cargo || emp.funcao || "" };
-                                upd({ envolvidos: [...filled, newEntry, ...blanks].slice(0, 20) });
-                              } else {
-                                upd({ envolvidos: form.envolvidos.filter(e => e.nome !== emp.nomeCompleto) });
-                              }
-                            }} />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium text-slate-800 truncate">{emp.nomeCompleto}</p>
-                            {(emp.cargo || emp.funcao) && <p className="text-xs text-slate-500">{emp.cargo || emp.funcao}</p>}
+                (obraFuncsQ.isLoading || obraTerceirosQ.isLoading) ? (
+                  <div className="flex items-center gap-2 text-xs text-slate-400 py-2"><Loader2 className="h-3 w-3 animate-spin" /> Carregando efetivo da obra…</div>
+                ) : (() => {
+                  const proprios: { key: string; nome: string; funcao: string; badge?: string }[] =
+                    (obraFuncsQ.data as any[] ?? []).map((emp: any) => ({
+                      key: `p-${emp.id}`,
+                      nome: emp.nomeCompleto,
+                      funcao: emp.cargo || emp.funcao || "",
+                    }));
+                  const terceiros: { key: string; nome: string; funcao: string; badge?: string }[] =
+                    (obraTerceirosQ.data as any[] ?? []).map((t: any) => ({
+                      key: `t-${t.id}`,
+                      nome: t.nome,
+                      funcao: t.funcao || "",
+                      badge: "Terceiro",
+                    }));
+                  const todos = [...proprios, ...terceiros];
+                  if (todos.length === 0) return (
+                    <p className="text-xs text-slate-400 italic py-1">Nenhum efetivo alocado nesta obra.</p>
+                  );
+                  const renderItem = (item: typeof todos[number]) => {
+                    const isSelected = form.envolvidos.some(e => e.nome === item.nome);
+                    return (
+                      <label key={item.key} className={`flex items-center gap-2.5 cursor-pointer rounded-lg px-3 py-2 border transition-colors ${
+                        isSelected ? "bg-emerald-50 border-emerald-200" : "bg-white border-slate-200 hover:border-emerald-200"
+                      }`}>
+                        <input type="checkbox" checked={isSelected} className="accent-emerald-600 rounded"
+                          onChange={e => {
+                            if (e.target.checked) {
+                              const blanks = form.envolvidos.filter(e => !e.nome.trim());
+                              const filled = form.envolvidos.filter(e => e.nome.trim());
+                              upd({ envolvidos: [...filled, { nome: item.nome, funcao: item.funcao }, ...blanks].slice(0, 30) });
+                            } else {
+                              upd({ envolvidos: form.envolvidos.filter(e => e.nome !== item.nome) });
+                            }
+                          }} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-medium text-slate-800 truncate">{item.nome}</p>
+                            {item.badge && <span className="text-[10px] bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded shrink-0">{item.badge}</span>}
                           </div>
-                          {isSelected && <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />}
-                        </label>
-                      );
-                    })}
-                  </div>
-                )
+                          {item.funcao && <p className="text-xs text-slate-500">{item.funcao}</p>}
+                        </div>
+                        {isSelected && <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />}
+                      </label>
+                    );
+                  };
+                  return (
+                    <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                      {proprios.length > 0 && (
+                        <>
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide px-1">Efetivo próprio ({proprios.length})</p>
+                          {proprios.map(renderItem)}
+                        </>
+                      )}
+                      {terceiros.length > 0 && (
+                        <>
+                          <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-wide px-1 mt-2">Terceiros ({terceiros.length})</p>
+                          {terceiros.map(renderItem)}
+                        </>
+                      )}
+                    </div>
+                  );
+                })()
               ) : (
                 /* Sem obra: campos de texto livres */
                 <div className="space-y-2">
