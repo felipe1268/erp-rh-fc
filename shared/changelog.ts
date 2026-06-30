@@ -1,4 +1,32 @@
 /**
+ * Rev. 3910 — **SST — PT WIZARD STEP 1: UX EXECUÇÃO — CARDS MÃO DE OBRA + FORMULÁRIOS COMPLEMENTARES EXPLICADOS.**
+ *
+ * PEDIDO: "Interna/Externa" não estava claro; "Há outros formulários vinculados?" era confuso.
+ * Usuário confirmou: externa = empresa terceirizada contratada; formulários complementares =
+ * quando a instalação/cliente exige PT ou APR própria (ex.: refinaria, indústria) e você
+ * precisa vincular o número/doc deles ao seu.
+ *
+ * SOLUÇÃO — client/src/pages/sst/PermissaoTrabalho.tsx:
+ *
+ * Seção "Execução" completamente redesenhada:
+ * · Título mudou de "Execução / Mão de Obra" → "Quem vai executar o serviço?"
+ * · Select dropDown substituído por 2 cards clicáveis side-by-side (sm:grid-cols-2):
+ *     👷 Equipe própria — "Funcionários da própria empresa (CLT / quadro próprio)"
+ *     🏗️ Empresa contratada — "Uma empresa terceirizada ou contratada externa"
+ *   Selecionado: borda + fundo emerald, badge "✓ Selecionado".
+ * · Campos CNPJ/Nome da empresa contratada surgem só ao selecionar "externa"
+ *   (comportamento mantido), layout agora flex-row em vez de grid-cols-2.
+ * · Checkbox "Há outros formulários vinculados?" renomeado para:
+ *     "A instalação/contratante exige PT ou documento próprio?"
+ *   Com texto explicativo: "Marque se o local do serviço (ex.: indústria, refinaria,
+ *   condomínio) exige que você também preencha a PT ou APR deles. Você poderá registrar
+ *   o número ou identificação do documento deles aqui para vincular ao seu."
+ * · Placeholder do campo de descrição: "Ex.: PT Petrobras nº 2024-001, APR da instalação nº 87-B…"
+ *
+ * ZERO DELETE. Valor persistido "interna"/"externa" inalterado (retrocompatível).
+ */
+
+/**
  * Rev. 3909 — **SST — PT WIZARD STEP 1: FIX LAYOUT PERÍODO + HORA ATUAL PRÉ-PREENCHIDA.**
  *
  * PEDIDO: (1) Campo de hora sobreposto pelo balão nativo do browser; (2) hora de início

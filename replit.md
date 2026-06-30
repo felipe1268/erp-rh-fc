@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3909** — **SST — PT WIZARD: FIX LAYOUT PERÍODO + HORA ATUAL PRÉ-PREENCHIDA.** `grid-cols-3` → `flex flex-col sm:flex-row` (empilha no mobile, sem sobreposição do balão nativo). `horaInicio` pré-preenchido com hora atual (America/Sao_Paulo). ZERO DELETE.
+- **Rev. 3910** — **SST — PT WIZARD: UX EXECUÇÃO — CARDS MÃO DE OBRA + FORMULÁRIOS EXPLICADOS.** Select → 2 cards clicáveis (👷 Equipe própria / 🏗️ Empresa contratada) com descrição em cada um. Checkbox renomeado + texto explicativo sobre PT da instalação/contratante. ZERO DELETE.
 
-- **Rev. 3908** — **SST — PT: EDIÇÃO INDIVIDUAL + EXCLUSÃO MÚLTIPLA.** Novo `PTEditDialog` edita dataEmissao/horas/maoDeObra/supervisor/descrição/empresa. Multi-select nos cards com checkbox + barra de ação azul "Excluir N". Backend: `excluirLote` soft-delete em lote. ZERO DELETE.
+- **Rev. 3909** — **SST — PT WIZARD: FIX LAYOUT PERÍODO + HORA ATUAL PRÉ-PREENCHIDA.** `grid-cols-3` → `flex flex-col sm:flex-row` (empilha no mobile, sem sobreposição do balão nativo). `horaInicio` pré-preenchido com hora atual (America/Sao_Paulo). ZERO DELETE.
 
 ### 5 one-liners
 

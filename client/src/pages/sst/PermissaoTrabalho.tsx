@@ -529,45 +529,85 @@ function WizardNovaPT({
             </div>
 
             {/* 4 — Execução */}
-            <div className="bg-slate-50 rounded-xl p-4 space-y-3 border border-slate-100">
+            <div className="bg-slate-50 rounded-xl p-4 space-y-4 border border-slate-100">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
-                <Building2 className="h-3.5 w-3.5" /> Execução
+                <Building2 className="h-3.5 w-3.5" /> Quem vai executar o serviço?
               </p>
-              <div>
-                <label className="text-xs font-medium text-slate-600 mb-1.5 block">Mão de Obra</label>
-                <Select value={form.maoDeObra} onValueChange={v => upd({ maoDeObra: v })}>
-                  <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="interna">Interna — Setor Responsável</SelectItem>
-                    <SelectItem value="externa">Externa — Empresa Executante</SelectItem>
-                  </SelectContent>
-                </Select>
+
+              {/* Cards de seleção de tipo de mão de obra */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {[
+                  {
+                    value: "interna",
+                    title: "Equipe própria",
+                    desc: "Funcionários da própria empresa (CLT / quadro próprio) executarão o trabalho em altura.",
+                    icon: "👷",
+                  },
+                  {
+                    value: "externa",
+                    title: "Empresa contratada",
+                    desc: "Uma empresa terceirizada ou contratada externa será responsável pela execução.",
+                    icon: "🏗️",
+                  },
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => upd({ maoDeObra: opt.value })}
+                    className={`flex items-start gap-3 p-3 rounded-xl border-2 text-left transition-all
+                      ${form.maoDeObra === opt.value
+                        ? "border-emerald-500 bg-emerald-50 shadow-sm"
+                        : "border-slate-200 bg-white hover:border-slate-300"}`}>
+                    <span className="text-xl mt-0.5 select-none">{opt.icon}</span>
+                    <div>
+                      <p className={`text-sm font-semibold ${form.maoDeObra === opt.value ? "text-emerald-800" : "text-slate-700"}`}>
+                        {opt.title}
+                        {form.maoDeObra === opt.value && <span className="ml-1.5 text-xs font-normal text-emerald-600">✓ Selecionado</span>}
+                      </p>
+                      <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{opt.desc}</p>
+                    </div>
+                  </button>
+                ))}
               </div>
+
+              {/* Campos da empresa contratada */}
               {form.maoDeObra === "externa" && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-medium text-slate-600 mb-1.5 block">Empresa executante</label>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="flex-1">
+                    <label className="text-xs font-medium text-slate-600 mb-1.5 block">Nome da empresa contratada</label>
                     <Input value={form.empresaExecutanteNome} onChange={e => upd({ empresaExecutanteNome: e.target.value })}
-                      placeholder="Nome da empresa" className="bg-white" />
+                      placeholder="Razão social da empresa" className="bg-white" />
                   </div>
-                  <div>
+                  <div className="sm:w-48">
                     <label className="text-xs font-medium text-slate-600 mb-1.5 block">CNPJ</label>
                     <Input value={form.empresaExecutanteCnpj} onChange={e => upd({ empresaExecutanteCnpj: e.target.value })}
-                      placeholder="00.000.000/0000-00" className="bg-white" />
+                      placeholder="00.000.000/0001-00" className="bg-white" />
                   </div>
                 </div>
               )}
-              <label className="flex items-center gap-2.5 text-sm text-slate-700 cursor-pointer bg-white rounded-lg px-3 py-2.5 border border-slate-200 hover:border-emerald-300 transition-colors">
-                <input type="checkbox" checked={form.outrosFormularios}
-                  onChange={e => upd({ outrosFormularios: e.target.checked })}
-                  className="rounded border-slate-300 accent-emerald-600" />
-                Há outros formulários vinculados a este?
-              </label>
-              {form.outrosFormularios && (
-                <Input value={form.outrosFormulariosDesc}
-                  onChange={e => upd({ outrosFormulariosDesc: e.target.value })}
-                  placeholder="Especifique os formulários vinculados" className="bg-white" />
-              )}
+
+              {/* Formulários complementares */}
+              <div className="space-y-2">
+                <label className="flex items-start gap-2.5 cursor-pointer bg-white rounded-lg px-3 py-3 border border-slate-200 hover:border-emerald-300 transition-colors">
+                  <input type="checkbox" checked={form.outrosFormularios}
+                    onChange={e => upd({ outrosFormularios: e.target.checked })}
+                    className="mt-0.5 rounded border-slate-300 accent-emerald-600 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">A instalação/contratante exige PT ou documento próprio?</p>
+                    <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                      Marque se o local do serviço (ex.: indústria, refinaria, condomínio) exige que você
+                      também preencha a PT ou APR <em>deles</em>. Você poderá registrar o número ou
+                      identificação do documento deles aqui para vincular ao seu.
+                    </p>
+                  </div>
+                </label>
+                {form.outrosFormularios && (
+                  <Input value={form.outrosFormulariosDesc}
+                    onChange={e => upd({ outrosFormulariosDesc: e.target.value })}
+                    placeholder="Ex.: PT Petrobras nº 2024-001, APR da instalação nº 87-B…"
+                    className="bg-white" />
+                )}
+              </div>
             </div>
           </div>
           );
