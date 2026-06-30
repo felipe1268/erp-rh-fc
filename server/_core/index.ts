@@ -6038,7 +6038,7 @@ Regras:
           await db.execute(sql`UPDATE epi_deliveries SET motivo = 'Descarte / Expirado' WHERE LOWER(TRIM(COALESCE(motivo,''))) LIKE '%mascara%descart%' OR LOWER(TRIM(COALESCE(motivo,''))) LIKE '%máscara%descart%'`);
           // Rev. 3887-b: unificação de one-offs → 'Entrega Regular' (aprovado pelo piloto FC)
           await db.execute(sql`UPDATE epi_deliveries SET motivo = 'Entrega Regular' WHERE motivo IN ('Referente aos uniformes e EPis que coletou antes de iniciar o serviço','Utilizada para organização do depósito do escritório.','Utilizando para o levantamento de estoque','Para pintura da cozinha','Arrumar o estoque do escritório-centro')`);
-          await db.execute(sql`UPDATE epi_deliveries SET motivo = 'Primeira Aquisição' WHERE LOWER(TRIM(COALESCE(motivo,''))) IN ('primeira','primeira aquisicao')`);
+          await db.execute(sql`UPDATE epi_deliveries SET motivo = 'Kit Admissão' WHERE LOWER(TRIM(COALESCE(motivo,''))) = 'primeira'`);
           await db.execute(sql`UPDATE epi_deliveries SET motivo = 'Entrega Regular' WHERE LOWER(TRIM(COALESCE(motivo,''))) IN ('só tinha um uniforme.','so tinha um uniforme.')`);
 
           console.log("[NormalizaMotivosEPI] Normalização concluída.");
