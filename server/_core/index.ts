@@ -930,6 +930,13 @@ Regras:
           console.log(`[SyncSchema+] coluna jornada_trabalho garantida em obras (jornada da obra prevalece sobre a do funcionário).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA obras.jornada_trabalho:`, e?.message || e); }
 
+        // Rev. 3904 — TST e Encarregado por obra (NR-35 PT Wizard)
+        try {
+          await db.execute(sql`ALTER TABLE obras ADD COLUMN IF NOT EXISTS tst_id INTEGER`);
+          await db.execute(sql`ALTER TABLE obras ADD COLUMN IF NOT EXISTS encarregado_id INTEGER`);
+          console.log(`[SyncSchema+] Rev. 3904: tst_id + encarregado_id garantidos em obras.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA obras.tst_id/encarregado_id:`, e?.message || e); }
+
         // Rev. 3278 — DISSÍDIO com DATA DE VIGÊNCIA + DIFERENÇA SALARIAL retroativa.
         // Colunas aditivas (R-001/R-007/R-010 OK — ADD COLUMN IF NOT EXISTS).
         try {
@@ -4703,7 +4710,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v3904-2026-06-30-obras-tst-encarregado";
+    const COLFIX_VERSION = "v3904b-2026-06-30-obras-tst-encarregado";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -6128,14 +6135,13 @@ Regras:
         console.log("[ColFix Rev.3901] apr_analises + apr_riscos garantidas.");
       } catch (e: any) { console.warn("[ColFix Rev.3901] apr falhou (não-fatal):", e?.message ?? e); }
 
-      // Rev. 3904 — TST e Encarregado por obra (para PT NR-35)
+      // Rev. 3904b — TST e Encarregado por obra (para PT NR-35)
       try {
-        await db.execute(sql`
-          ALTER TABLE obras ADD COLUMN IF NOT EXISTS tst_id INTEGER;
-          ALTER TABLE obras ADD COLUMN IF NOT EXISTS encarregado_id INTEGER;
-        `);
-        console.log("[ColFix Rev.3904] tst_id + encarregado_id garantidos em obras.");
-      } catch (e: any) { console.warn("[ColFix Rev.3904] obras tst/encarregado falhou (não-fatal):", e?.message ?? e); }
+        const _db3904 = (await getDb())!;
+        await _db3904.$client.query(`ALTER TABLE obras ADD COLUMN IF NOT EXISTS tst_id INTEGER`);
+        await _db3904.$client.query(`ALTER TABLE obras ADD COLUMN IF NOT EXISTS encarregado_id INTEGER`);
+        console.log("[ColFix Rev.3904b] tst_id + encarregado_id garantidos em obras.");
+      } catch (e: any) { console.warn("[ColFix Rev.3904b] obras tst/encarregado falhou:", e?.message ?? e); }
 
       // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos
       import("../services/startupCache").then(({ setCache }) =>
