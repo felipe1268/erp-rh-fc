@@ -390,6 +390,17 @@ export const ptPermissoesRouter = router({
       return { ok: true };
     }),
 
+  // ── Excluir lote (soft) ────────────────────────────────────────────────────
+  excluirLote: protectedProcedure
+    .input(z.object({ ids: z.array(z.number()).min(1), companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      assertCompany(ctx, input.companyId);
+      const db = (await getDb())!;
+      await db.update(ptPermissoes).set({ deletedAt: new Date().toISOString() } as any)
+        .where(and(inArray(ptPermissoes.id, input.ids), eq(ptPermissoes.companyId, input.companyId)));
+      return { ok: true, count: input.ids.length };
+    }),
+
   // ── Alertas para Painel SST ───────────────────────────────────────────────
   alertas: protectedProcedure
     .input(z.object({ companyId: z.number() }))

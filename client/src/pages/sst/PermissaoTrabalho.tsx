@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useConfirm } from "@/hooks/useConfirm";
 import { toast } from "sonner";
 import {
@@ -19,7 +20,7 @@ import {
   Loader2, HardHat, Users, AlertTriangle, CheckCircle2, Clock,
   ShieldCheck, FileText, MapPin, User, PenLine, Eraser,
   ChevronDown, ChevronUp, Eye, Pencil, Ban, ArrowRight, Building2,
-  RefreshCw, Printer, Wrench, Info,
+  RefreshCw, Printer, Wrench, Info, Trash2, SquarePen,
 } from "lucide-react";
 
 // ── Checklist NR-35 — 15 itens ────────────────────────────────────────────────
@@ -1379,15 +1380,54 @@ export default function PermissaoTrabalho() {
   const [selectedPT, setSelectedPT] = useState<number | null>(null);
   const [detalheOpen, setDetalheOpen] = useState(false);
   const [statusFiltro, setStatusFiltro] = useState<string>("");
+  // seleção múltipla
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  // edição
+  const [editPtId, setEditPtId] = useState<number | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const statsQ = trpc.ptPermissoes.stats.useQuery({ companyId }, { staleTime: 30_000 });
   const listQ  = trpc.ptPermissoes.list.useQuery(
     { companyId, status: statusFiltro || undefined },
     { staleTime: 15_000 },
   );
+  const excluirLoteMut = trpc.ptPermissoes.excluirLote.useMutation();
 
   const pts = (listQ.data as any[]) ?? [];
   const stats = statsQ.data;
+
+  const toggleId = (id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleAll = () => {
+    if (selectedIds.size === pts.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(pts.map((p: any) => p.id)));
+  };
+  const exitSelectMode = () => { setSelectMode(false); setSelectedIds(new Set()); };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    const ok = await confirm({
+      title: `Excluir ${selectedIds.size} PT${selectedIds.size > 1 ? "s" : ""}?`,
+      description: "As Permissões de Trabalho selecionadas serão removidas. Esta ação não pode ser desfeita.",
+      tone: "destructive",
+      confirmText: "Excluir",
+    });
+    if (!ok) return;
+    try {
+      await excluirLoteMut.mutateAsync({ ids: Array.from(selectedIds), companyId });
+      toast.success(`${selectedIds.size} PT${selectedIds.size > 1 ? "s" : ""} excluída${selectedIds.size > 1 ? "s" : ""}.`);
+      exitSelectMode();
+      listQ.refetch(); statsQ.refetch();
+    } catch (e: any) { toast.error(e?.message ?? "Erro ao excluir."); }
+  };
 
   const handleCreated = (id: number) => {
     listQ.refetch();
@@ -1423,6 +1463,16 @@ export default function PermissaoTrabalho() {
               className="border-slate-200">
               <RefreshCw className={`h-4 w-4 ${listQ.isFetching ? "animate-spin" : ""}`} />
             </Button>
+            {selectMode ? (
+              <Button variant="outline" size="sm" onClick={exitSelectMode} className="border-slate-200 text-slate-600">
+                <XIcon className="h-4 w-4 mr-1" /> Cancelar seleção
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" onClick={() => setSelectMode(true)} className="border-slate-200 text-slate-600">
+                <Checkbox className="h-4 w-4 mr-1 pointer-events-none" />
+                Selecionar
+              </Button>
+            )}
             <Button onClick={() => setNovaPTOpen(true)}
               className="bg-emerald-600 hover:bg-emerald-700 text-white">
               <Plus className="h-4 w-4 mr-1" />
@@ -1457,6 +1507,28 @@ export default function PermissaoTrabalho() {
           </div>
         )}
 
+        {/* Barra de ação em modo seleção */}
+        {selectMode && (
+          <div className="flex items-center gap-3 px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-xl">
+            <button onClick={toggleAll} className="text-sm text-blue-700 font-medium hover:text-blue-900 underline">
+              {selectedIds.size === pts.length ? "Desmarcar todos" : "Selecionar todos"}
+            </button>
+            <span className="text-sm text-blue-600">
+              {selectedIds.size > 0 ? `${selectedIds.size} selecionada${selectedIds.size > 1 ? "s" : ""}` : "Nenhuma selecionada"}
+            </span>
+            <div className="flex-1" />
+            {selectedIds.size > 0 && (
+              <Button size="sm" onClick={handleBulkDelete} disabled={excluirLoteMut.isPending}
+                className="bg-red-600 hover:bg-red-700 text-white">
+                {excluirLoteMut.isPending
+                  ? <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  : <Trash2 className="h-4 w-4 mr-1" />}
+                Excluir {selectedIds.size}
+              </Button>
+            )}
+          </div>
+        )}
+
         {/* Lista de PTs */}
         {listQ.isLoading ? (
           <div className="flex items-center justify-center py-16">
@@ -1475,6 +1547,10 @@ export default function PermissaoTrabalho() {
                 key={pt.id}
                 pt={pt}
                 onClick={() => { setSelectedPT(pt.id); setDetalheOpen(true); }}
+                selectMode={selectMode}
+                selected={selectedIds.has(pt.id)}
+                onToggle={toggleId}
+                onEdit={(id) => { setEditPtId(id); setEditOpen(true); }}
               />
             ))}
           </div>
@@ -1497,24 +1573,184 @@ export default function PermissaoTrabalho() {
         onOpenChange={setDetalheOpen}
         onRefresh={() => { listQ.refetch(); statsQ.refetch(); }}
       />
+
+      {/* Edição */}
+      <PTEditDialog
+        ptId={editPtId}
+        companyId={companyId}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        onSaved={() => { listQ.refetch(); statsQ.refetch(); }}
+      />
+
+      <ConfirmDialog />
     </DashboardLayout>
   );
 }
 
+// ── Dialog de Edição de PT ──────────────────────────────────────────────────────
+function PTEditDialog({ ptId, companyId, open, onOpenChange, onSaved }: {
+  ptId: number | null; companyId: number;
+  open: boolean; onOpenChange: (v: boolean) => void;
+  onSaved: () => void;
+}) {
+  const ptQ = trpc.ptPermissoes.getById.useQuery(
+    { id: ptId!, companyId },
+    { enabled: open && ptId !== null, staleTime: 0 },
+  );
+  const atualizarMut = trpc.ptPermissoes.atualizar.useMutation();
+  const [form, setForm] = useState({
+    dataEmissao: "", horaInicio: "", horaTermino: "",
+    maoDeObra: "interna", supervisorNome: "",
+    descricaoTrabalho: "",
+    empresaExecutanteCnpj: "", empresaExecutanteNome: "",
+  });
+
+  const pt = ptQ.data as any;
+  useEffect(() => {
+    if (!pt) return;
+    setForm({
+      dataEmissao:           pt.dataEmissao ?? "",
+      horaInicio:            pt.horaInicio ?? "",
+      horaTermino:           pt.horaTermino ?? "",
+      maoDeObra:             pt.maoDeObra ?? "interna",
+      supervisorNome:        pt.supervisorNome ?? "",
+      descricaoTrabalho:     pt.descricaoTrabalho ?? "",
+      empresaExecutanteCnpj: pt.empresaExecutanteCnpj ?? "",
+      empresaExecutanteNome: pt.empresaExecutanteNome ?? "",
+    });
+  }, [pt?.id, open]);
+
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setForm(f => ({ ...f, [k]: e.target.value }));
+
+  const handleSave = async () => {
+    if (!ptId) return;
+    try {
+      await atualizarMut.mutateAsync({ id: ptId, companyId, data: form });
+      toast.success("PT atualizada com sucesso!");
+      onSaved();
+      onOpenChange(false);
+    } catch (e: any) { toast.error(e?.message ?? "Erro ao salvar."); }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-slate-800">
+            <SquarePen className="h-5 w-5 text-blue-600" />
+            Editar PT {pt?.numero ?? "…"}
+          </DialogTitle>
+        </DialogHeader>
+        {ptQ.isLoading ? (
+          <div className="flex items-center justify-center py-10">
+            <Loader2 className="h-7 w-7 animate-spin text-slate-400" />
+          </div>
+        ) : (
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs font-medium text-slate-600 mb-1 block">Data</label>
+                <Input type="date" value={form.dataEmissao} onChange={set("dataEmissao")} />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-600 mb-1 block">Hora início</label>
+                <Input type="time" value={form.horaInicio} onChange={set("horaInicio")} />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-600 mb-1 block">Hora término</label>
+                <Input type="time" value={form.horaTermino} onChange={set("horaTermino")} />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">Tipo de mão de obra</label>
+              <Select value={form.maoDeObra} onValueChange={v => setForm(f => ({ ...f, maoDeObra: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="interna">Interna</SelectItem>
+                  <SelectItem value="externa">Externa</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">Supervisor</label>
+              <Input value={form.supervisorNome} onChange={set("supervisorNome")} placeholder="Nome do supervisor" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">Descrição do trabalho</label>
+              <Textarea value={form.descricaoTrabalho} onChange={set("descricaoTrabalho")}
+                placeholder="Descreva o trabalho a ser executado" rows={3} />
+            </div>
+            {form.maoDeObra === "externa" && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-slate-600 mb-1 block">Empresa executante (CNPJ)</label>
+                  <Input value={form.empresaExecutanteCnpj} onChange={set("empresaExecutanteCnpj")} placeholder="00.000.000/0001-00" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600 mb-1 block">Empresa executante (Nome)</label>
+                  <Input value={form.empresaExecutanteNome} onChange={set("empresaExecutanteNome")} placeholder="Razão social" />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button onClick={handleSave} disabled={atualizarMut.isPending || ptQ.isLoading}
+            className="bg-blue-600 hover:bg-blue-700 text-white">
+            {atualizarMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-1" />Salvando…</> : "Salvar alterações"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Card de PT ─────────────────────────────────────────────────────────────────
-function PTCard({ pt, onClick }: { pt: any; onClick: () => void }) {
+function PTCard({ pt, onClick, selectMode, selected, onToggle, onEdit }: {
+  pt: any; onClick: () => void;
+  selectMode?: boolean; selected?: boolean;
+  onToggle?: (id: number) => void;
+  onEdit?: (id: number, e: React.MouseEvent) => void;
+}) {
   const assinados = (pt.envolvidos ?? []).filter((e: any) => e.nome).length;
   const tipos: string[] = pt.tiposTrabalho ?? [];
 
+  const handleClick = (e: React.MouseEvent) => {
+    if (selectMode && onToggle) { onToggle(pt.id); return; }
+    onClick();
+  };
+
   return (
-    <button onClick={onClick}
-      className="group flex flex-col gap-3 p-4 bg-white rounded-xl border border-slate-100 shadow-sm
-        hover:shadow-md hover:border-emerald-200 transition-all text-left">
+    <div
+      onClick={handleClick}
+      className={`group relative flex flex-col gap-3 p-4 bg-white rounded-xl border-2 shadow-sm
+        transition-all text-left cursor-pointer
+        ${selected ? "border-blue-400 bg-blue-50 shadow-md" : "border-slate-100 hover:shadow-md hover:border-emerald-200"}`}>
+      {/* Checkbox de seleção */}
+      {selectMode && (
+        <div className="absolute top-3 right-3" onClick={e => { e.stopPropagation(); onToggle?.(pt.id); }}>
+          <Checkbox checked={!!selected} className="h-5 w-5 border-2 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600" />
+        </div>
+      )}
+      {/* Botões de ação (hover, só fora do modo seleção) */}
+      {!selectMode && (
+        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={e => { e.stopPropagation(); onEdit?.(pt.id, e); }}
+            className="p-1.5 rounded-md bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-300 shadow-sm"
+            title="Editar PT">
+            <SquarePen className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
       {/* Cabeçalho */}
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-2 pr-6">
         <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0">
-            <HardHat className="h-5 w-5 text-emerald-600" />
+          <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${selected ? "bg-blue-100" : "bg-emerald-100"}`}>
+            <HardHat className={`h-5 w-5 ${selected ? "text-blue-600" : "text-emerald-600"}`} />
           </div>
           <div>
             <p className="font-bold text-slate-800 text-sm">{pt.numero}</p>
@@ -1562,8 +1798,8 @@ function PTCard({ pt, onClick }: { pt: any; onClick: () => void }) {
             {pt.horaInicio ?? "—"} – {pt.horaTermino ?? "—"}
           </span>
         )}
-        <ArrowRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 text-emerald-500 transition-all" />
+        {!selectMode && <ArrowRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 text-emerald-500 transition-all" />}
       </div>
-    </button>
+    </div>
   );
 }

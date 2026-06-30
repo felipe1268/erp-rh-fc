@@ -1,4 +1,43 @@
 /**
+ * Rev. 3908 — **SST — PT: EDIÇÃO INDIVIDUAL + EXCLUSÃO MÚLTIPLA (MULTI-SELECT).**
+ *
+ * PEDIDO: (1) Editar cada PT individualmente; (2) selecionar e excluir múltiplas PTs de uma vez.
+ *
+ * SOLUÇÃO:
+ *
+ * Backend — server/routers/ptPermissoes.ts:
+ *   · Nova procedure `excluirLote`: recebe `{ ids: number[], companyId }` e faz soft-delete em lote
+ *     via `inArray(ptPermissoes.id, ids)` + tenant guard `assertCompany`. ZERO DELETE.
+ *
+ * Frontend — client/src/pages/sst/PermissaoTrabalho.tsx:
+ *
+ * PTEditDialog (novo componente):
+ *   · Busca PT via `getById` (staleTime=0 para sempre dados frescos).
+ *   · Formulário pré-preenchido: dataEmissao, horaInicio, horaTermino, maoDeObra,
+ *     supervisorNome, descricaoTrabalho, empresaExecutanteCnpj/Nome (visível só p/ externa).
+ *   · Salva via `ptPermissoes.atualizar` (procedure já existia).
+ *   · Ícone SquarePen (azul) + dialog max-w-lg com scroll interno.
+ *
+ * PTCard (modificado):
+ *   · Convertido de `<button>` para `<div>` com onClick gerenciado.
+ *   · Novas props: `selectMode`, `selected`, `onToggle`, `onEdit`.
+ *   · Modo seleção: clique no card = toggle; checkbox Radix no canto superior direito.
+ *   · Fora do modo seleção: botão lápis (SquarePen) aparece no hover no canto superior direito.
+ *   · Borda azul + fundo azul-50 quando selecionado; ícone muda para azul.
+ *
+ * Página principal (PermissaoTrabalho):
+ *   · Estados: `selectMode`, `selectedIds` (Set<number>), `editPtId`, `editOpen`.
+ *   · Mutation: `excluirLoteMut` (ptPermissoes.excluirLote).
+ *   · Botão "Selecionar" no header (com Checkbox inline); quando ativo → "Cancelar seleção".
+ *   · Barra de ação azul aparece quando selectMode=true: "Selecionar todos / Desmarcar todos",
+ *     contagem selecionada, botão "Excluir N" em vermelho.
+ *   · Exclusão em lote: AlertDialog de confirmação via `useConfirm`, depois `excluirLote`.
+ *   · PTEditDialog + ConfirmDialog montados no return.
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3907 — **SST — PT DIALOG: FIX CONFIRM DIALOG EM BRANCO + REMOVER BOTÃO FCSIGN.**
  *
  * PEDIDO: (1) Clicar "Cancelar PT" abre dialog vazio (só ? e botões sem texto);

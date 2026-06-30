@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3908** — **SST — PT: EDIÇÃO INDIVIDUAL + EXCLUSÃO MÚLTIPLA.** Novo `PTEditDialog` edita dataEmissao/horas/maoDeObra/supervisor/descrição/empresa. Multi-select nos cards com checkbox + barra de ação azul "Excluir N". Backend: `excluirLote` soft-delete em lote. ZERO DELETE.
+
 - **Rev. 3907** — **SST — PT DIALOG: FIX CONFIRM EM BRANCO + REMOVER FCSIGN.** `confirm()` chamado com 2 strings mas hook espera objeto `{title,description,tone}` → AlertDialog sem texto. Corrigido. Botão "Enviar FCSign" + dialog removidos da UI (backend preservado). Invalidações `remover` corrigidas. ZERO DELETE.
 
-- **Rev. 3906** — **SST — PT: FIX ASSINATURA + STATUS QUEM ASSINOU + CORES AZUL + LOGO NO PDF.** Bug root cause: `posicao: max(6)` rejeitava envolvidos nas posições 7-30 (zod BAD_REQUEST silencioso) + invalidate com chave errada (`ptId` vs `id`). Fixes: `max(30)`, chave correta. Banner de progresso: "X de N assinaturas coletadas" + barra + lista "Falta assinar". PDF: cores verde → azul FC (#1e3a5f) + logo da empresa no cabeçalho. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3906** — **SST — PT: FIX ASSINATURA + STATUS QUEM ASSINOU + CORES AZUL + LOGO NO PDF.** Bug root cause: `posicao: max(6)` rejeitava envolvidos nas posições 7-30 (zod BAD_REQUEST silencioso) + invalidate com chave errada (`ptId` vs `id`). Fixes: `max(30)`, chave correta. Banner de progresso: "X de N assinaturas coletadas" + barra + lista "Falta assinar". PDF: cores verde → azul FC (#1e3a5f) + logo da empresa no cabeçalho. ZERO DELETE.
 
 - **Rev. 3905** — **SST — PT WIZARD: GATES DE CHECKLIST + ENVOLVIDOS COM TERCEIROS.** Step 2: banners bloqueio + gate "Próximo". Step 3: terceiros da obra + badge âmbar "Terceiro"; limite 20→30. ZERO DELETE.
 
