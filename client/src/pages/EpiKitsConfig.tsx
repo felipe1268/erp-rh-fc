@@ -75,13 +75,19 @@ export default function EpiKitsConfig() {
     onError: (err) => toast.error(err.message),
   });
 
+  const iaErrMsg = (err: { message?: string }) => {
+    const m = err?.message ?? "";
+    if (m === "Load failed" || m === "Failed to fetch") return "Conexão perdida. Verifique sua rede e tente novamente.";
+    return "Erro na IA: " + m;
+  };
+
   // IA Mutations
   const iaKitsMut = trpc.epiAvancado.iaSugerirKitsPorFuncao.useMutation({
     onSuccess: (data) => {
       setIaSugestaoKits(data.kits || []);
       toast.success(`IA gerou ${data.kits?.length || 0} sugestões de kits!`);
     },
-    onError: (err) => toast.error("Erro ao gerar sugestões: " + err.message),
+    onError: (err) => toast.error(iaErrMsg(err)),
   });
 
   const iaKitsEstoqueMut = trpc.epiAvancado.iaSugerirKitsComEstoque.useMutation({
@@ -91,7 +97,7 @@ export default function EpiKitsConfig() {
       const semEstoque = (data.kits || []).flatMap((k: any) => k.items || []).filter((i: any) => !i.disponivel).length;
       toast.success(`IA gerou ${total} kits! ${semEstoque > 0 ? `${semEstoque} itens precisam ser providenciados.` : "Tudo disponível em estoque."}`);
     },
-    onError: (err) => toast.error("Erro: " + err.message),
+    onError: (err) => toast.error(iaErrMsg(err)),
   });
 
   // IA mutation for use inside the kit form dialog (specific function)
@@ -112,28 +118,28 @@ export default function EpiKitsConfig() {
       }));
       toast.success(`IA sugeriu ${kit.items?.length || 0} EPIs para ${kit.funcao}!`);
     },
-    onError: (err) => toast.error("Erro na IA: " + err.message),
+    onError: (err) => toast.error(iaErrMsg(err)),
   });
   const iaCoresMut = trpc.epiAvancado.iaSugerirCoresCapacete.useMutation({
     onSuccess: (data) => {
       setIaSugestaoCores(data.cores || []);
       toast.success(`IA gerou ${data.cores?.length || 0} sugestões de cores!`);
     },
-    onError: (err) => toast.error("Erro ao gerar sugestões: " + err.message),
+    onError: (err) => toast.error(iaErrMsg(err)),
   });
   const iaVidaMut = trpc.epiAvancado.iaSugerirVidaUtil.useMutation({
     onSuccess: (data) => {
       setIaSugestaoVida(data.items || []);
       toast.success(`IA gerou ${data.items?.length || 0} sugestões de vida útil!`);
     },
-    onError: (err) => toast.error("Erro ao gerar sugestões: " + err.message),
+    onError: (err) => toast.error(iaErrMsg(err)),
   });
   const iaTreinoMut = trpc.epiAvancado.iaSugerirTreinamentos.useMutation({
     onSuccess: (data) => {
       setIaSugestaoTreino(data.items || []);
       toast.success(`IA gerou ${data.items?.length || 0} sugestões de treinamentos!`);
     },
-    onError: (err) => toast.error("Erro ao gerar sugestões: " + err.message),
+    onError: (err) => toast.error(iaErrMsg(err)),
   });
 
   const kits = kitsQ.data ?? [];

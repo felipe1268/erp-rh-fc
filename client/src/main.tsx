@@ -171,10 +171,21 @@ const trpcClient = trpc.createClient({
         const controller = new AbortController();
         // 5 minutos para suportar importações pesadas (orçamentos, planilhas grandes)
         const timeoutId = setTimeout(() => controller.abort(new DOMException("Tempo limite de 5 minutos excedido. Tente novamente.", "TimeoutError")), 300000);
-        return globalThis.fetch(input, {
+        const doFetch = () => globalThis.fetch(input, {
           ...(init ?? {}),
           credentials: "include",
           signal: controller.signal,
+        });
+        return doFetch().catch(err => {
+          // iOS Safari dropa requisições longas (LLM) com "Load failed"
+          // Retry automático único após 800 ms
+          const msg = String(err?.message ?? "");
+          if (msg === "Load failed" || msg === "Failed to fetch") {
+            return new Promise<Response>((resolve, reject) =>
+              setTimeout(() => doFetch().then(resolve, reject), 800)
+            );
+          }
+          throw err;
         }).finally(() => clearTimeout(timeoutId));
       },
     }),
