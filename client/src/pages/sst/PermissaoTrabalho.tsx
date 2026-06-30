@@ -301,6 +301,12 @@ function WizardNovaPT({
     if (user?.employeeId && !form.employeeId) upd({ employeeId: user.employeeId });
   }, [user?.employeeId]);
 
+  // Auto-fill supervisor com encarregado da obra
+  useEffect(() => {
+    const enc = (obraSSTQ.data as any)?.encarregadoNome ?? null;
+    if (enc) upd({ supervisorNome: enc });
+  }, [(obraSSTQ.data as any)?.encarregadoNome]);
+
   // Checklist: conta respostas
   const checkCount = useMemo(() => {
     let s = 0, n = 0, na = 0, blank = 0;
