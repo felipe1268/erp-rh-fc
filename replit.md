@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3916** — **SST — PT PDF REDESIGN: 3 LOGOS + SOLICITANTE AUTO + CHECKLIST COM REFS NR.** Cabeçalho triplo: logo FC (esq) + badge NR-35 / Portaria MTE 313/2012 (centro) + logos do CLIENTE e GERENCIADORA da obra (dir, condicionais). Solicitante passou a usar `criadoPorNome` (ctx.user.name gravado na criação) com fallback no employee — o nome do login sempre aparece. Checklist ganhou coluna "Referência NR" (NR-35/35.X, NR-7, NR-10, NR-6, NR-26) em layout tabular zebrado. Status como pill colorido, seções com badge de norma, envolvidos com badge "Terceiro" âmbar. ZERO DELETE.
+
 - **Rev. 3915** — **CONCILIAÇÃO BANCÁRIA CEF JAN/2026: PARES ZERO-LÍQUIDO DESCONSIDERADOS + FIX REAPRESENTADOS NA LISTA.** 12 linhas de 6 pares zero-líquido (cheques que voltaram 1 ou 2 vezes, saldo neto = R$0) desconsideradas diretamente no banco. Filtro `repExt` corrigido: linhas de reapresentação com `reversalResolveGrupo` agora aparecem em "No extrato, sem lançamento" quando `desconsideradoEm` é nulo. Resultado: card e workspace ambos em 97% (115/119). 4 débitos reais restam pendentes. ZERO DELETE.
 
-- **Rev. 3914** — **CONCILIAÇÃO BANCÁRIA: FIX BARRA DE PROGRESSO (100% FALSO) + SUGESTÕES COM LINHAS DESCONSIDERADAS.** `totLinhas` passou a usar `accConciliadasMap[contaBancariaId]` (mesma fonte do card superior) → paridade entre barra de progresso e card. `sugerirConciliacao` ganhou `desconsiderado_em IS NULL` → 33 linhas fantasmas somem das sugestões. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3914** — **CONCILIAÇÃO BANCÁRIA: FIX BARRA DE PROGRESSO (100% FALSO) + SUGESTÕES COM LINHAS DESCONSIDERADAS.** `totLinhas` passou a usar `accConciliadasMap[contaBancariaId]`; `sugerirConciliacao` ganhou `desconsiderado_em IS NULL`. ZERO DELETE.
 
 - **Rev. 3913** — **SST — APR EXPANDIDA: 10 TIPOS DE ATIVIDADE COM CHECKLIST POR NR.** Wizard 3→5 steps: Tipo (10 cards) → Dados → Checklist (Sim/Não/NA) → Riscos (pré-populados) → EPIs+Aprovação. Schema +tipo_atividade+checklist_json (ColFix v3913). Detail dialog exibe checklist respondido. ZERO DELETE.
 
@@ -62,11 +64,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3907** — **SST — PT DIALOG: FIX CONFIRM EM BRANCO + REMOVER FCSIGN.** `confirm()` chamado com 2 strings mas hook espera objeto `{title,description,tone}` → AlertDialog sem texto. Corrigido. Botão "Enviar FCSign" + dialog removidos da UI (backend preservado). Invalidações `remover` corrigidas. ZERO DELETE.
 
-- **Rev. 3906** — **SST — PT: FIX ASSINATURA + STATUS QUEM ASSINOU + CORES AZUL + LOGO NO PDF.** Bug root cause: `posicao: max(6)` rejeitava envolvidos nas posições 7-30 (zod BAD_REQUEST silencioso) + invalidate com chave errada (`ptId` vs `id`). Fixes: `max(30)`, chave correta. Banner de progresso: "X de N assinaturas coletadas" + barra + lista "Falta assinar". PDF: cores verde → azul FC (#1e3a5f) + logo da empresa no cabeçalho. ZERO DELETE.
-
-- **Rev. 3905** — **SST — PT WIZARD: GATES DE CHECKLIST + ENVOLVIDOS COM TERCEIROS.** Step 2: banners bloqueio + gate "Próximo". Step 3: terceiros da obra + badge âmbar "Terceiro"; limite 20→30. ZERO DELETE.
-
-- **Rev. 3904** — **SST — PT WIZARD: OBRA PRIMEIRO + TST/ENCARREGADO NO CADASTRO DE OBRAS.** Schema obras: +`tst_id`/`encarregado_id` (ColFix v3904). Novo procedure `ptPermissoes.getObraSST`. Step 0 redesenhado: Obra PRIMEIRO → 3 cards SST auto-fill. ZERO DELETE.
+- **Rev. 3906** — **SST — PT: FIX ASSINATURA + STATUS QUEM ASSINOU + CORES AZUL + LOGO NO PDF.** Bug root cause: `posicao: max(6)` rejeitava envolvidos nas posições 7-30 (zod BAD_REQUEST silencioso) + invalidate com chave errada (`ptId` vs `id`). Fixes: `max(30)`, chave correta. Banner de progresso. PDF: cores azul FC + logo. ZERO DELETE.
 
 ### Histórico completo
 

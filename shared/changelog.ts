@@ -1,4 +1,26 @@
 /**
+ * Rev. 3916 — **SST — PT PDF REDESIGN: 3 LOGOS (FC + CLIENTE + GERENCIADORA) + SOLICITANTE AUTO (LOGIN) + CHECKLIST COM REFS NR.**
+ *
+ * CONTEXTO: PDF da Permissão de Trabalho (NR-35) tinha layout básico — 1 logo, checklist sem referências
+ * de norma, "Solicitante" usando nome do employee vinculado (às vezes vazio).
+ *
+ * REDESIGN (gerarHtml — ptPermissoes.ts):
+ * 1. CABEÇALHO TRIPLO: faixa de logos com 3 colunas — (a) logo FC Engenharia/Executora (VITE_APP_LOGO),
+ *    (b) badge NR-35 / Portaria MTE nº 313/2012 centralizado, (c) logos do CLIENTE e da GERENCIADORA
+ *    puxados de obras.clienteLogoUrl e obras.gerenciadoraLogoUrl + nomes. Logos só aparecem se preenchidos
+ *    na obra. Faixa azul escura (#1e3a5f) com título "PERMISSÃO DE TRABALHO EM ALTURA" abaixo dos logos.
+ * 2. SOLICITANTE AUTO: usa pt.criadoPorNome (ctx.user.name gravado na criação) como fonte primária;
+ *    fallback no employee vinculado. Assim o nome do login sempre aparece sem depender de vínculo employee.
+ * 3. CHECKLIST COM REFS NR: cada um dos 15 itens ganhou coluna "Referência NR" (NR-35/35.X, NR-7,
+ *    NR-10, NR-6, NR-26). Layout tabular com cabeçalho e zebra (linhas pares levemente cinza).
+ * 4. LAYOUT GERAL: seções com título + badge de norma à direita; grid4 p/ campos de data/hora;
+ *    envolvidos com badge "Terceiro" (âmbar) quando ehTerceiro=true; rodapé bicolor com PT nº + obra.
+ * 5. STATUS COLORIDO: pill verde/azul/vermelho/cinza conforme status do PT.
+ *
+ * ZERO DELETE. Apenas server/routers/ptPermissoes.ts (gerarHtml) + shared/version.ts.
+ */
+
+/**
  * Rev. 3915 — **CONCILIAÇÃO BANCÁRIA CEF JAN/2026 — DESCONSIDERAÇÃO DE PARES ZERO-LÍQUIDO + FIX REAPRESENTADOS NA LISTA.**
  *
  * CONTEXTO: Conta CEF Ag.0306 (id=2, company 60002) mostrava 88% no card enquanto o workspace

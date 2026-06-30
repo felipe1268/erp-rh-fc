@@ -2573,3 +2573,7 @@
 - **Rev. 3821** — **FINANCEIRO · PLANO DE CONTAS · CLASSIFICAÇÃO DRE EM MASSA: 28 contas corrigidas; DRE jan/2026 enxerga R$1,8M receita + R$699k CDO. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3822** — **FINANCEIRO · DESACOPLAMENTO CRONOGRAMA × FINANCEIRO: 5.252 entries a_pagar→previsto; cronograma removido de DRE_ORIGEM_OBRA; sidebar renomeada. ZERO DELETE.** Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3904** — **SST — PT WIZARD: OBRA PRIMEIRO + TST/ENCARREGADO NO CADASTRO DE OBRAS.** Schema obras: +`tst_id`/`encarregado_id` (ColFix v3904). Novo procedure `ptPermissoes.getObraSST`. Step 0 redesenhado: Obra PRIMEIRO → 3 cards SST auto-fill. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
+- **Rev. 3905** — **SST — PT WIZARD: GATES DE CHECKLIST + ENVOLVIDOS COM TERCEIROS.** Step 2: banners bloqueio + gate "Próximo". Step 3: terceiros da obra + badge âmbar "Terceiro"; limite 20→30. ZERO DELETE. Detalhe: `shared/changelog.ts`.

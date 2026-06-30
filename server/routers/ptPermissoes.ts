@@ -484,20 +484,38 @@ export const ptPermissoesRouter = router({
       if (!pt) throw new TRPCError({ code: "NOT_FOUND" });
 
       let obraNome = "";
+      let obraClienteLogoUrl: string | null = null;
+      let obraGerenciadoraLogoUrl: string | null = null;
+      let obraGerenciadoraNome: string | null = null;
+      let obraClienteNome: string | null = null;
       if (pt.obraId) {
-        const [ob] = await db.select({ nome: obras.nome }).from(obras).where(eq(obras.id, pt.obraId)).limit(1);
+        const [ob] = await db.select({
+          nome: obras.nome,
+          clienteLogoUrl: obras.clienteLogoUrl,
+          gerenciadoraLogoUrl: obras.gerenciadoraLogoUrl,
+          gerenciadoraNome: obras.gerenciadoraNome,
+          cliente: obras.cliente,
+        }).from(obras).where(eq(obras.id, pt.obraId)).limit(1);
         obraNome = ob?.nome ?? "";
+        obraClienteLogoUrl = ob?.clienteLogoUrl ?? null;
+        obraGerenciadoraLogoUrl = ob?.gerenciadoraLogoUrl ?? null;
+        obraGerenciadoraNome = ob?.gerenciadoraNome ?? null;
+        obraClienteNome = ob?.cliente ?? null;
       }
-      let solicitanteNome = "";
-      if (pt.employeeId) {
+
+      // Solicitante: usa criadoPorNome (usuário logado na criação) com fallback no employee
+      let solicitanteNome = pt.criadoPorNome ?? "";
+      if (!solicitanteNome && pt.employeeId) {
         const [emp] = await db.select({ nomeCompleto: employees.nomeCompleto }).from(employees).where(eq(employees.id, pt.employeeId)).limit(1);
         solicitanteNome = emp?.nomeCompleto ?? "";
       }
+
       const assinaturas = await db.select().from(ptAssinaturas)
         .where(and(eq(ptAssinaturas.ptId, input.id), eq(ptAssinaturas.companyId, input.companyId)))
         .orderBy(ptAssinaturas.posicao);
 
       const esc = (s: any) => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      const escAttr = (s: any) => String(s ?? "").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
       let checklist: any[] = [];
       try { checklist = JSON.parse(pt.checklistJson ?? "[]"); } catch {}
       let envolvidos: any[] = [];
@@ -505,133 +523,222 @@ export const ptPermissoesRouter = router({
       let tipos: any[] = [];
       try { tipos = JSON.parse(pt.tiposTrabalhoJson ?? "[]"); } catch {}
 
-      const checklistItems = [
-        "Todas as pessoas envolvidas possuem treinamento de trabalho em altura?",
-        "Todas as pessoas possuem ASO atualizado?",
-        "As condições climáticas são propícias para o trabalho em altura?",
-        "Foi determinado um supervisor para execução do serviço?",
-        "Todos os recursos necessários foram previstos e estão disponíveis?",
-        "Foi estabelecida a equipe de atendimento/resgate de emergência?",
-        "Foi estabelecido um plano de comunicação entre os envolvidos?",
-        "Os pontos de fixação dos sistemas de proteção foram aprovados?",
-        "Foi elaborado plano de trabalho para prevenção de queda de materiais?",
-        "A proximidade com pontos de energia foi avaliada e os riscos controlados?",
-        "O serviço de Contratada — a PT foi devidamente preenchida?",
-        "Todos os EPIs foram inspecionados?",
-        "Todo local do serviço está isolado e sinalizado?",
-        "Existe procedimento específico escrito, testado e aprovado?",
-        "As pessoas envolvidas estão usando todos os EPIs necessários?",
+      // [item, NR referência]
+      const checklistItems: [string, string][] = [
+        ["Todas as pessoas envolvidas possuem treinamento de NR-35 vigente?",           "NR-35 / 35.3.1"],
+        ["Todas as pessoas possuem ASO atualizado (aptidão médica)?",                   "NR-7 / NR-35 35.4"],
+        ["As condições climáticas são propícias para o trabalho em altura?",            "NR-35 / 35.6.1"],
+        ["Foi designado um supervisor responsável pela execução do serviço?",           "NR-35 / 35.5"],
+        ["Todos os recursos, equipamentos e EPI foram verificados e estão disponíveis?","NR-35 / 35.6.3"],
+        ["Foi estabelecida equipe de atendimento e resgate de emergência?",             "NR-35 / 35.7"],
+        ["Foi estabelecido plano de comunicação entre os envolvidos?",                  "NR-35 / 35.5.2"],
+        ["Os pontos de fixação / ancoragem dos sistemas de proteção foram aprovados?",  "NR-35 / 35.6.4"],
+        ["Foi elaborado plano para prevenção de queda de materiais e ferramentas?",     "NR-35 / 35.6.2"],
+        ["A proximidade com pontos de energia elétrica foi avaliada e controlada?",     "NR-10 / NR-35 35.6.5"],
+        ["Serviço de Contratada: a PT está devidamente preenchida e autorizada?",       "NR-35 / 35.5.3"],
+        ["Todos os EPIs foram inspecionados (cinturão, talabarte, capacete, etc.)?",    "NR-35 / 35.6.3 / NR-6"],
+        ["O local do serviço está devidamente isolado e sinalizado?",                   "NR-26 / NR-35"],
+        ["Existe procedimento específico escrito, testado e aprovado para a tarefa?",   "NR-35 / 35.5.1"],
+        ["Todos os envolvidos estão usando corretamente os EPIs obrigatórios?",         "NR-6 / NR-35 35.6.3"],
       ];
 
       const assMap = new Map(assinaturas.map(a => [a.posicao, a]));
 
-      const logoUrl = input.logoUrl ?? null;
+      const fcLogoUrl = input.logoUrl ?? null;
+
+      const statusLabel: Record<string, string> = {
+        rascunho: "Rascunho", em_andamento: "Em Andamento", liberada: "Liberada",
+        concluida: "Concluída", cancelada: "Cancelada",
+      };
+      const statusColor: Record<string, string> = {
+        rascunho: "#64748b", em_andamento: "#1d4ed8", liberada: "#15803d",
+        concluida: "#166534", cancelada: "#9f1239",
+      };
+      const statusBg: Record<string, string> = {
+        rascunho: "#f1f5f9", em_andamento: "#dbeafe", liberada: "#dcfce7",
+        concluida: "#dcfce7", cancelada: "#ffe4e6",
+      };
+      const stLabel = statusLabel[pt.status] ?? pt.status;
+      const stColor = statusColor[pt.status] ?? "#1e3a5f";
+      const stBg = statusBg[pt.status] ?? "#f1f5f9";
+
+      const logoBlock = (url: string | null, label: string, nome: string | null, align: "left" | "right") => {
+        if (!url && !nome) return `<div style="flex:1;min-width:0"></div>`;
+        const textAlign = align === "left" ? "left" : "right";
+        const alignItems = align === "left" ? "flex-start" : "flex-end";
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:${alignItems};gap:3px;min-width:0">
+          <span style="font-size:6.5pt;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:0.6px">${esc(label)}</span>
+          ${url ? `<img src="${escAttr(url)}" alt="${escAttr(label)}" style="max-height:44px;max-width:160px;object-fit:contain" />` : ""}
+          ${nome ? `<span style="font-size:8pt;color:#475569;font-weight:600;text-align:${textAlign};word-break:break-word">${esc(nome)}</span>` : ""}
+        </div>`;
+      };
+
       const html = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
 <title>Permissão de Trabalho — ${esc(pt.numero)}</title>
 <style>
-  @page { margin: 15mm; size: A4; }
+  @page { margin: 14mm 16mm; size: A4; }
   * { box-sizing: border-box; }
-  body { font-family: Arial, sans-serif; font-size: 10pt; color: #1e293b; margin: 0; }
-  h1 { font-size: 14pt; text-align: center; margin: 0 0 4px; color: #1e3a5f; }
-  h2 { font-size: 10pt; background: #1e3a5f; color: white; padding: 4px 8px; margin: 8px 0 4px; }
-  h3 { font-size: 9pt; background: #dbeafe; color: #1e3a5f; padding: 3px 6px; margin: 6px 0 3px; border-left: 3px solid #2563eb; }
-  .header { display: flex; align-items: center; gap: 12px; border: 2px solid #1e3a5f; padding: 8px 12px; margin-bottom: 8px; border-radius: 4px; }
-  .header-logo { flex-shrink: 0; }
-  .header-logo img { height: 48px; width: auto; object-fit: contain; }
-  .header-text { flex: 1; text-align: center; }
-  .subtitle { font-size: 8pt; color: #64748b; }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 4px; }
-  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-bottom: 4px; }
-  .field { border: 1px solid #cbd5e1; padding: 3px 6px; border-radius: 3px; }
-  .field-label { font-size: 7pt; color: #64748b; display: block; }
-  .field-value { font-size: 9pt; font-weight: bold; }
-  .checklist-row { display: flex; gap: 6px; align-items: center; padding: 2px 4px; font-size: 8.5pt; border-bottom: 1px solid #f1f5f9; }
-  .check-badge { width: 22px; text-align: center; font-weight: bold; font-size: 8pt; padding: 1px; border-radius: 3px; flex-shrink: 0; }
-  .check-S { background: #dbeafe; color: #1e3a5f; }
-  .check-N { background: #fee2e2; color: #991b1b; }
-  .check-NA { background: #f1f5f9; color: #64748b; }
-  .sig-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 4px; }
-  .sig-box { border: 1px solid #bfdbfe; border-radius: 4px; padding: 4px; text-align: center; min-height: 70px; }
-  .sig-box img { max-width: 100%; max-height: 50px; object-fit: contain; }
-  .sig-name { font-size: 8pt; font-weight: bold; margin-top: 2px; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 9.5pt; color: #1e293b; margin: 0; }
+  /* ── Cabeçalho ───────────────────────────────────────────── */
+  .pt-header { border: 2px solid #1e3a5f; border-radius: 5px; overflow: hidden; margin-bottom: 8px; }
+  .pt-header-logos { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 8px 12px 6px; background: #fff; }
+  .pt-header-title { background: #1e3a5f; color: #fff; text-align: center; padding: 5px 8px 4px; }
+  .pt-header-title h1 { font-size: 12pt; font-weight: 800; margin: 0; letter-spacing: 0.5px; }
+  .pt-header-title .sub { font-size: 8pt; opacity: 0.85; margin-top: 2px; }
+  .pt-header-meta { display: flex; align-items: center; justify-content: center; gap: 14px; background: #f0f4ff; padding: 4px 12px; font-size: 8pt; color: #1e3a5f; border-top: 1px solid #bfdbfe; }
+  .status-pill { display: inline-block; font-size: 7.5pt; font-weight: 700; padding: 1.5px 9px; border-radius: 10px; background: ${stBg}; color: ${stColor}; border: 1px solid ${stColor}40; }
+  /* ── Seções ──────────────────────────────────────────────── */
+  .sec-title { font-size: 9pt; background: #1e3a5f; color: white; padding: 3px 8px; margin: 7px 0 4px; font-weight: 700; letter-spacing: 0.3px; display: flex; align-items: center; gap: 5px; }
+  .sec-title-nr { font-size: 7pt; font-weight: 400; opacity: 0.75; margin-left: auto; }
+  /* ── Campos ──────────────────────────────────────────────── */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; margin-bottom: 3px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3px; margin-bottom: 3px; }
+  .grid4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 3px; margin-bottom: 3px; }
+  .field { border: 1px solid #cbd5e1; padding: 3px 6px; border-radius: 3px; background: #fafafa; }
+  .fl { font-size: 6.5pt; color: #64748b; display: block; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 1px; }
+  .fv { font-size: 9pt; font-weight: 700; color: #0f172a; }
+  .field-wide { border: 1px solid #cbd5e1; padding: 4px 6px; border-radius: 3px; background: #fafafa; min-height: 36px; margin-bottom: 3px; }
+  /* ── Checklist ───────────────────────────────────────────── */
+  .cl-header { display: grid; grid-template-columns: 26px 1fr 80px 36px; gap: 4px; padding: 2px 4px; background: #1e3a5f; color: #fff; font-size: 7pt; font-weight: 700; margin-bottom: 2px; border-radius: 2px; }
+  .cl-row { display: grid; grid-template-columns: 26px 1fr 80px 36px; gap: 4px; align-items: center; padding: 2.5px 4px; border-bottom: 1px solid #f1f5f9; font-size: 8pt; }
+  .cl-row:nth-child(even) { background: #f8fafc; }
+  .cl-num { font-weight: 700; color: #64748b; font-size: 7.5pt; text-align: center; }
+  .cl-nr { font-size: 6.5pt; color: #64748b; }
+  .check-badge { width: 30px; text-align: center; font-weight: 800; font-size: 7.5pt; padding: 2px 0; border-radius: 3px; }
+  .check-S  { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+  .check-N  { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+  .check-NA { background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; }
+  /* ── Assinaturas ─────────────────────────────────────────── */
+  .sig-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 4px; }
+  .sig-box { border: 1px solid #bfdbfe; border-radius: 4px; padding: 5px; text-align: center; min-height: 80px; background: #f8fafc; }
+  .sig-box img { max-width: 100%; max-height: 52px; object-fit: contain; }
+  .sig-img-empty { height: 52px; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 7.5pt; border-bottom: 1px dashed #cbd5e1; margin-bottom: 4px; }
+  .sig-name { font-size: 8pt; font-weight: 700; margin-top: 3px; color: #1e293b; }
   .sig-label { font-size: 7pt; color: #64748b; }
-  .status-chip { display: inline-block; font-size: 8pt; font-weight: bold; padding: 2px 8px; border-radius: 12px; background: #dbeafe; color: #1e3a5f; }
+  .sig-date { font-size: 6.5pt; color: #94a3b8; margin-top: 1px; }
+  /* ── Impressão ───────────────────────────────────────────── */
   @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 </style>
 </head>
 <body>
-<div class="header">
-  ${logoUrl ? `<div class="header-logo"><img src="${logoUrl}" alt="Logo" /></div>` : ""}
-  <div class="header-text">
-    <h1>PERMISSÃO DE TRABALHO EM ALTURA — NR-35</h1>
-    <div class="subtitle">FC Engenharia &nbsp;|&nbsp; ${esc(pt.numero)} &nbsp;|&nbsp; <span class="status-chip">${esc(pt.status.toUpperCase().replace("_"," "))}</span></div>
+
+<!-- ═══════════════════════ CABEÇALHO ═══════════════════════ -->
+<div class="pt-header">
+  <div class="pt-header-logos">
+    ${logoBlock(fcLogoUrl, "Executora", "FC Engenharia", "left")}
+    <div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:2px;text-align:center;min-width:0">
+      <span style="font-size:7pt;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:0.6px">Norma</span>
+      <span style="font-size:9pt;font-weight:800;color:#1e3a5f;letter-spacing:1px">NR-35</span>
+      <span style="font-size:6.5pt;color:#64748b">Portaria MTE nº 313/2012</span>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:row;align-items:flex-start;justify-content:flex-end;gap:10px;min-width:0">
+      ${obraClienteLogoUrl || obraClienteNome ? logoBlock(obraClienteLogoUrl, "Cliente", obraClienteNome, "right") : ""}
+      ${obraGerenciadoraLogoUrl || obraGerenciadoraNome ? logoBlock(obraGerenciadoraLogoUrl, "Gerenciadora", obraGerenciadoraNome, "right") : ""}
+    </div>
+  </div>
+  <div class="pt-header-title">
+    <h1>PERMISSÃO DE TRABALHO EM ALTURA</h1>
+    <div class="sub">Trabalho em Altura — Conforme NR-35 (Portaria MTE nº 313/2012)</div>
+  </div>
+  <div class="pt-header-meta">
+    <span><strong>PT Nº:</strong> ${esc(pt.numero)}</span>
+    <span>|</span>
+    <span><strong>Obra:</strong> ${esc(obraNome || "—")}</span>
+    <span>|</span>
+    <span><strong>Status:</strong> <span class="status-pill">${esc(stLabel.toUpperCase())}</span></span>
+    <span>|</span>
+    <span><strong>Emissão:</strong> ${esc(pt.dataEmissao || "—")}</span>
   </div>
 </div>
 
-<h2>1. SOLICITAÇÃO</h2>
-<div class="grid3">
-  <div class="field"><span class="field-label">Número PT</span><span class="field-value">${esc(pt.numero)}</span></div>
-  <div class="field"><span class="field-label">Data de Emissão</span><span class="field-value">${esc(pt.dataEmissao)}</span></div>
-  <div class="field"><span class="field-label">Tipo de Mão de Obra</span><span class="field-value">${esc(pt.maoDeObra)}</span></div>
+<!-- ═══════════════════════ 1. IDENTIFICAÇÃO ═══════════════════════ -->
+<div class="sec-title">1. IDENTIFICAÇÃO <span class="sec-title-nr">NR-35, item 35.5</span></div>
+<div class="grid4">
+  <div class="field"><span class="fl">Número PT</span><span class="fv">${esc(pt.numero)}</span></div>
+  <div class="field"><span class="fl">Data de Emissão</span><span class="fv">${esc(pt.dataEmissao || "—")}</span></div>
+  <div class="field"><span class="fl">Hora Início</span><span class="fv">${esc(pt.horaInicio || "—")}</span></div>
+  <div class="field"><span class="fl">Hora Término</span><span class="fv">${esc(pt.horaTermino || "—")}</span></div>
 </div>
 <div class="grid3">
-  <div class="field"><span class="field-label">Hora Início</span><span class="field-value">${esc(pt.horaInicio)}</span></div>
-  <div class="field"><span class="field-label">Hora Término</span><span class="field-value">${esc(pt.horaTermino)}</span></div>
-  <div class="field"><span class="field-label">Obra</span><span class="field-value">${esc(obraNome)}</span></div>
+  <div class="field"><span class="fl">Solicitante / Emissor</span><span class="fv">${esc(solicitanteNome || "—")}</span></div>
+  <div class="field"><span class="fl">Supervisor Responsável</span><span class="fv">${esc(pt.supervisorNome || "—")}</span></div>
+  <div class="field"><span class="fl">Tipo de Mão de Obra</span><span class="fv">${esc(pt.maoDeObra || "—")}</span></div>
 </div>
 <div class="grid2">
-  <div class="field"><span class="field-label">Solicitante</span><span class="field-value">${esc(solicitanteNome)}</span></div>
-  <div class="field"><span class="field-label">Supervisor</span><span class="field-value">${esc(pt.supervisorNome)}</span></div>
-</div>
-<div class="field"><span class="field-label">Tipos de Trabalho</span><span class="field-value">${tipos.join(", ") || "—"}</span></div>
-
-<h2>2. DESCRIÇÃO DO TRABALHO</h2>
-<div class="field" style="min-height:40px"><span class="field-label">Descrição</span><span class="field-value">${esc(pt.descricaoTrabalho)}</span></div>
-<div class="grid2" style="margin-top:4px">
-  <div class="field"><span class="field-label">Empresa Executante (CNPJ)</span><span class="field-value">${esc(pt.empresaExecutanteCnpj)}</span></div>
-  <div class="field"><span class="field-label">Empresa Executante (Nome)</span><span class="field-value">${esc(pt.empresaExecutanteNome)}</span></div>
+  <div class="field"><span class="fl">Obra / Local do Serviço</span><span class="fv">${esc(obraNome || "—")}</span></div>
+  <div class="field"><span class="fl">Tipos de Trabalho em Altura</span><span class="fv">${tipos.length ? tipos.join(", ") : "—"}</span></div>
 </div>
 
-<h2>3. CHECKLIST NR-35</h2>
-${checklistItems.map((item, i) => {
+<!-- ═══════════════════════ 2. DESCRIÇÃO DO SERVIÇO ═══════════════════════ -->
+<div class="sec-title">2. DESCRIÇÃO DO SERVIÇO <span class="sec-title-nr">NR-35, item 35.5.1</span></div>
+<div class="field-wide"><span class="fl">Descrição detalhada do trabalho a ser executado</span><span class="fv">${esc(pt.descricaoTrabalho || "—")}</span></div>
+<div class="grid3">
+  <div class="field"><span class="fl">Empresa Executante (CNPJ)</span><span class="fv">${esc(pt.empresaExecutanteCnpj || "—")}</span></div>
+  <div class="field" style="grid-column:span 2"><span class="fl">Empresa Executante (Razão Social)</span><span class="fv">${esc(pt.empresaExecutanteNome || "—")}</span></div>
+</div>
+
+<!-- ═══════════════════════ 3. CHECKLIST DE SEGURANÇA — NR-35 ═══════════════════════ -->
+<div class="sec-title">3. CHECKLIST DE SEGURANÇA — NR-35 <span class="sec-title-nr">S = Sim &nbsp;|&nbsp; N = Não &nbsp;|&nbsp; NA = Não Aplica</span></div>
+<div class="cl-header">
+  <span style="text-align:center">Nº</span>
+  <span>Verificação</span>
+  <span>Referência NR</span>
+  <span style="text-align:center">Resp.</span>
+</div>
+${checklistItems.map(([item, nr], i) => {
   const resp = checklist[i] ?? "NA";
-  return `<div class="checklist-row"><span class="check-badge check-${resp}">${resp}</span><span>${i+1}. ${esc(item)}</span></div>`;
+  return `<div class="cl-row">
+    <span class="cl-num">${i+1}</span>
+    <span>${esc(item)}</span>
+    <span class="cl-nr">${esc(nr)}</span>
+    <span style="text-align:center"><span class="check-badge check-${resp}">${resp}</span></span>
+  </div>`;
 }).join("")}
 
-<h2>4. LIBERAÇÃO</h2>
+<!-- ═══════════════════════ 4. LIBERAÇÃO ═══════════════════════ -->
+<div class="sec-title">4. LIBERAÇÃO PARA EXECUÇÃO <span class="sec-title-nr">NR-35, item 35.5.3</span></div>
 <div class="grid3">
-  <div class="field"><span class="field-label">Responsável da Área</span><span class="field-value">${esc(pt.responsavelAreaNome)}</span></div>
-  <div class="field"><span class="field-label">Responsável pela Liberação</span><span class="field-value">${esc(pt.responsavelLiberacaoNome)}</span></div>
-  <div class="field"><span class="field-label">Responsável pela Execução</span><span class="field-value">${esc(pt.executanteNome)}</span></div>
+  <div class="field"><span class="fl">Responsável da Área</span><span class="fv">${esc(pt.responsavelAreaNome || "—")}</span></div>
+  <div class="field"><span class="fl">Responsável pela Liberação</span><span class="fv">${esc(pt.responsavelLiberacaoNome || "—")}</span></div>
+  <div class="field"><span class="fl">Responsável pela Execução</span><span class="fv">${esc(pt.executanteNome || "—")}</span></div>
 </div>
 
-<h2>5. ENVOLVIDOS E ASSINATURAS</h2>
+<!-- ═══════════════════════ 5. ENVOLVIDOS E ASSINATURAS ═══════════════════════ -->
+<div class="sec-title">5. ENVOLVIDOS E ASSINATURAS <span class="sec-title-nr">NR-35, item 35.5 / 35.3.1</span></div>
 <div class="sig-grid">
 ${envolvidos.map((env: any, i: number) => {
   const pos = i + 1;
   const ass = assMap.get(pos);
+  const terceiro = env.ehTerceiro ? `<div style="font-size:6pt;background:#fef3c7;color:#92400e;border-radius:3px;padding:1px 4px;margin-top:2px;display:inline-block">Terceiro</div>` : "";
   return `<div class="sig-box">
-    ${ass?.assinaturaImg ? `<img src="${ass.assinaturaImg}" alt="Assinatura" />` : `<div style="height:50px;background:#f8fafc;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:8pt">Sem assinatura</div>`}
+    ${ass?.assinaturaImg
+      ? `<img src="${escAttr(ass.assinaturaImg)}" alt="Assinatura" />`
+      : `<div class="sig-img-empty">Aguardando assinatura</div>`}
     <div class="sig-name">${esc(env.nome || `Envolvido ${pos}`)}</div>
     <div class="sig-label">${esc(env.funcao || "")}</div>
-    ${ass?.assinadoEm ? `<div style="font-size:6.5pt;color:#64748b">${new Date(ass.assinadoEm).toLocaleString("pt-BR")}</div>` : ""}
+    ${terceiro}
+    ${ass?.assinadoEm ? `<div class="sig-date">${new Date(ass.assinadoEm).toLocaleString("pt-BR")}</div>` : ""}
   </div>`;
-}).join("") || '<div style="color:#94a3b8;font-size:9pt;grid-column:span 3;text-align:center">Nenhum envolvido cadastrado</div>'}
+}).join("") || `<div style="color:#94a3b8;font-size:9pt;grid-column:span 3;text-align:center;padding:12px">Nenhum envolvido cadastrado</div>`}
 </div>
 
 ${pt.conclusaoData ? `
-<h2>6. CONCLUSÃO</h2>
-<div class="grid3">
-  <div class="field"><span class="field-label">Solicitante</span><span class="field-value">${esc(pt.conclusaoSolicitanteNome)}</span></div>
-  <div class="field"><span class="field-label">Data</span><span class="field-value">${esc(pt.conclusaoData)}</span></div>
-  <div class="field"><span class="field-label">Período</span><span class="field-value">${esc(pt.conclusaoHoraInicio)} — ${esc(pt.conclusaoHoraFim)}</span></div>
+<!-- ═══════════════════════ 6. CONCLUSÃO ═══════════════════════ -->
+<div class="sec-title">6. CONCLUSÃO / ENCERRAMENTO <span class="sec-title-nr">NR-35, item 35.5.4</span></div>
+<div class="grid4">
+  <div class="field" style="grid-column:span 2"><span class="fl">Solicitante do Encerramento</span><span class="fv">${esc(pt.conclusaoSolicitanteNome || "—")}</span></div>
+  <div class="field"><span class="fl">Data</span><span class="fv">${esc(pt.conclusaoData)}</span></div>
+  <div class="field"><span class="fl">Período</span><span class="fv">${esc(pt.conclusaoHoraInicio || "—")} — ${esc(pt.conclusaoHoraFim || "—")}</span></div>
 </div>` : ""}
 
-<div style="margin-top:12px;padding-top:6px;border-top:1px solid #e2e8f0;font-size:7pt;color:#94a3b8;text-align:center">
-  Documento gerado em ${new Date().toLocaleString("pt-BR")} &nbsp;|&nbsp; FC Engenharia &nbsp;|&nbsp; PT ${esc(pt.numero)} &nbsp;|&nbsp; Sistema ERP
+<!-- ═══════════════════════ RODAPÉ ═══════════════════════ -->
+<div style="margin-top:10px;padding-top:5px;border-top:1.5px solid #1e3a5f;display:flex;justify-content:space-between;align-items:center;font-size:6.5pt;color:#94a3b8">
+  <span>FC Engenharia — Sistema ERP</span>
+  <span style="font-weight:700;color:#1e3a5f">PT Nº ${esc(pt.numero)} &nbsp;|&nbsp; ${esc(obraNome || "Sem obra vinculada")}</span>
+  <span>Gerado em ${new Date().toLocaleString("pt-BR")}</span>
 </div>
 </body>
 </html>`;
