@@ -1253,7 +1253,7 @@ function InfoChip({ label, value, className = "" }: { label: string; value: stri
 
 // ── Página principal ──────────────────────────────────────────────────────────
 export default function PermissaoTrabalho() {
-  const { companyId } = useCompany();
+  const { companyIdNum: companyId } = useCompany();
   const [novaPTOpen, setNovaPTOpen] = useState(false);
   const [selectedPT, setSelectedPT] = useState<number | null>(null);
   const [detalheOpen, setDetalheOpen] = useState(false);
