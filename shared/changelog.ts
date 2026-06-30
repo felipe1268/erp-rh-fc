@@ -1,4 +1,36 @@
 /**
+ * Rev. 3892 — **EPI — SUGESTÃO DE KITS POR ESTOQUE REAL + ITENS FALTANTES EM VERMELHO.**
+ *
+ * ## Problema
+ * O botão "Sugerir Kits com IA" gerava kits genéricos sem considerar o que a empresa
+ * realmente possui em estoque. O resultado frequentemente listava EPIs não cadastrados,
+ * dificultando a compra dos itens ausentes e não aproveitando o estoque existente.
+ *
+ * ## Solução
+ * - **Novo endpoint `iaSugerirKitsComEstoque`** em `epiAvancado.ts`:
+ *   1. Lê todas as funções cadastradas em `job_functions` (com CBO e descrição).
+ *   2. Lê todo o catálogo de EPIs com `quantidadeEstoque`, consolidando por nome
+ *      (múltiplos tamanhos somados) para saber o que há e o que está zerado.
+ *   3. Envia prompt estruturado à IA com 3 listas: (a) EPIs com estoque, (b) EPIs
+ *      sem estoque mas no catálogo, (c) EPIs obrigatórios NR-6/NR-18 não cadastrados.
+ *   4. IA retorna `disponivel: boolean` + `noCatalogo: boolean` por item, ordenando
+ *      disponíveis primeiro.
+ * - **Novo botão "🏭 Sugerir pelo Meu Estoque"** na aba Kits de Configuração de EPI.
+ * - **Painel de sugestões com estoque** (verde/vermelho):
+ *   - Itens disponíveis: ícone ✓ verde, listagem normal.
+ *   - Itens indisponíveis: fundo vermelho, borda vermelha, badge "Comprar" — sinaliza
+ *     claramente o que precisa ser providenciado.
+ *   - Banner informativo com contagem "X a providenciar".
+ *   - Ações Aceitar / Editar / Descartar por kit + "Aceitar Todos".
+ *
+ * ## Arquivos
+ * - `server/routers/epiAvancado.ts` — novo endpoint `iaSugerirKitsComEstoque`
+ * - `client/src/pages/EpiKitsConfig.tsx` — botão + painel de sugestões com estoque
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3891 — **EPI — BOTÃO IA DENTRO DO DIALOG DE KIT: PREENCHE ITENS POR FUNÇÃO.**
  *
  * ## Problema

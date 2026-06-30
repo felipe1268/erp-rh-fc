@@ -2496,4 +2496,93 @@ Retorne JSON com: { "items": [ { "nomeEpi": string, "normaExigida": string, "nom
       const content = response.choices?.[0]?.message?.content;
       return safeParseJson(content, "treinamentos");
     }),
+
+  // Sugere kits cruzando funções cadastradas com o estoque real da empresa
+  iaSugerirKitsComEstoque: protectedProcedure
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))
+    .mutation(async ({ input }) => {
+      await assertAiModuleEnabled(input.companyId, "sst");
+      const db = (await getDb())!;
+
+      // 1. Funções cadastradas
+      const funcoes = await db.select({ nome: jobFunctions.nome, descricao: jobFunctions.descricao, cbo: jobFunctions.cbo })
+        .from(jobFunctions)
+        .where(and(companyFilter(jobFunctions.companyId, input), eq(jobFunctions.isActive, 1), isNull(jobFunctions.deletedAt)));
+
+      if (funcoes.length === 0) throw new Error("Nenhuma função cadastrada encontrada. Cadastre funções em Recursos Humanos > Funções.");
+
+      // 2. Catálogo de EPIs com estoque central
+      const episCatalogo = await db.select({
+        nome: epis.nome,
+        categoria: epis.categoria,
+        quantidadeEstoque: epis.quantidadeEstoque,
+      })
+        .from(epis)
+        .where(companyFilter(epis.companyId, input))
+        .orderBy(epis.nome);
+
+      // Consolida por nome (pode ter tamanhos diferentes)
+      const estoqueMap: Record<string, { categoria: string; total: number }> = {};
+      for (const e of episCatalogo) {
+        const key = (e.nome || "").trim().toLowerCase();
+        if (!estoqueMap[key]) estoqueMap[key] = { categoria: e.categoria || "EPI", total: 0 };
+        estoqueMap[key].total += Number(e.quantidadeEstoque || 0);
+      }
+
+      const episComEstoque = Object.entries(estoqueMap)
+        .filter(([, v]) => v.total > 0)
+        .map(([nome, v]) => `${nome} (${v.categoria}, estoque: ${v.total})`);
+      const episSemEstoque = Object.entries(estoqueMap)
+        .filter(([, v]) => v.total === 0)
+        .map(([nome, v]) => `${nome} (${v.categoria})`);
+      const nomesCatalogo = Object.keys(estoqueMap);
+
+      // 3. Kits já existentes
+      const kitsExistentes = await db.select({ nome: epiKits.nome, funcao: epiKits.funcao })
+        .from(epiKits)
+        .where(and(companyFilter(epiKits.companyId, input), eq(epiKits.ativo, 1)));
+
+      // 4. Monta prompt
+      const prompt = `Você é um especialista em Segurança do Trabalho para construção civil brasileira.
+
+FUNÇÕES CADASTRADAS NA EMPRESA:
+${funcoes.map(f => `- ${f.nome}${f.cbo ? ` (CBO: ${f.cbo})` : ''}${f.descricao ? `: ${f.descricao}` : ''}`).join('\n')}
+
+CATÁLOGO DE EPIs COM ESTOQUE DISPONÍVEL (quantidade > 0):
+${episComEstoque.length > 0 ? episComEstoque.join('\n') : 'Nenhum EPI em estoque'}
+
+EPIs NO CATÁLOGO MAS SEM ESTOQUE DISPONÍVEL (estoque = 0):
+${episSemEstoque.length > 0 ? episSemEstoque.join('\n') : 'Nenhum'}
+
+KITS JÁ EXISTENTES (não recrie):
+${kitsExistentes.length > 0 ? kitsExistentes.map(k => `${k.nome} (${k.funcao})`).join(', ') : 'Nenhum'}
+
+MISSÃO: Crie um kit de EPI para CADA função cadastrada acima.
+
+REGRAS OBRIGATÓRIAS:
+1. Use PREFERENCIALMENTE os EPIs que estão no catálogo (com ou sem estoque). Se o item está no catálogo, use o nome EXATO como aparece na lista acima.
+2. Para cada item, informe se está disponível no estoque: campo "disponivel": true se estoque > 0, false se estoque = 0 ou item não está no catálogo.
+3. Itens essenciais pela NR-6/NR-18 que NÃO estão no catálogo devem ser incluídos com "disponivel": false e "noCatalogo": false — isso sinaliza que precisam ser comprados.
+4. Itens essenciais que estão no catálogo mas sem estoque: incluir com "disponivel": false e "noCatalogo": true.
+5. Ordene os itens: primeiro os disponíveis (disponivel=true), depois os indisponíveis.
+6. Retorne APENAS JSON válido no formato abaixo.
+
+CATÁLOGO COMPLETO (todos os nomes exatos para referência):
+${nomesCatalogo.slice(0, 80).join(', ')}
+
+Formato de resposta:
+{ "kits": [ { "nome": string, "funcao": string, "descricao": string, "items": [ { "nomeEpi": string, "categoria": "EPI"|"Uniforme"|"Calcado", "quantidade": number, "obrigatorio": boolean, "disponivel": boolean, "noCatalogo": boolean } ] } ] }`;
+
+      const response = await invokeLLM({
+        messages: [
+          { role: "system", content: "Você é um especialista em SST para construção civil brasileira. Responda APENAS com JSON válido, sem texto adicional, sem markdown." },
+          { role: "user", content: prompt },
+        ],
+        maxTokens: 12000,
+        response_format: { type: "json_object" },
+      });
+
+      const content = response.choices?.[0]?.message?.content;
+      return safeParseJson(content, "kits");
+    }),
 });

@@ -27,6 +27,7 @@ export default function EpiKitsConfig() {
 
   // IA suggestion states
   const [iaSugestaoKits, setIaSugestaoKits] = useState<any[] | null>(null);
+  const [iaSugestaoKitsEstoque, setIaSugestaoKitsEstoque] = useState<any[] | null>(null);
   const [iaSugestaoCores, setIaSugestaoCores] = useState<any[] | null>(null);
   const [iaSugestaoVida, setIaSugestaoVida] = useState<any[] | null>(null);
   const [iaSugestaoTreino, setIaSugestaoTreino] = useState<any[] | null>(null);
@@ -77,6 +78,16 @@ export default function EpiKitsConfig() {
       toast.success(`IA gerou ${data.kits?.length || 0} sugestões de kits!`);
     },
     onError: (err) => toast.error("Erro ao gerar sugestões: " + err.message),
+  });
+
+  const iaKitsEstoqueMut = trpc.epiAvancado.iaSugerirKitsComEstoque.useMutation({
+    onSuccess: (data) => {
+      setIaSugestaoKitsEstoque(data.kits || []);
+      const total = (data.kits || []).length;
+      const semEstoque = (data.kits || []).flatMap((k: any) => k.items || []).filter((i: any) => !i.disponivel).length;
+      toast.success(`IA gerou ${total} kits! ${semEstoque > 0 ? `${semEstoque} itens precisam ser providenciados.` : "Tudo disponível em estoque."}`);
+    },
+    onError: (err) => toast.error("Erro: " + err.message),
   });
 
   // IA mutation for use inside the kit form dialog (specific function)
@@ -288,12 +299,25 @@ export default function EpiKitsConfig() {
       {/* ============================================================ */}
       {tab === "kits" && (
         <div className="space-y-3">
-          <div className="flex justify-between items-center">
-            <IAButton
-              loading={iaKitsMut.isPending}
-              onClick={() => iaKitsMut.mutate({ companyId })}
-              label="Sugerir Kits com IA"
-            />
+          <div className="flex flex-wrap justify-between items-center gap-2">
+            <div className="flex flex-wrap gap-2">
+              <IAButton
+                loading={iaKitsMut.isPending}
+                onClick={() => iaKitsMut.mutate({ companyId })}
+                label="Sugerir Kits com IA"
+              />
+              <button
+                disabled={iaKitsEstoqueMut.isPending}
+                onClick={() => iaKitsEstoqueMut.mutate({ companyId })}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
+              >
+                {iaKitsEstoqueMut.isPending ? (
+                  <><span className="animate-spin mr-1">⏳</span> Consultando estoque...</>
+                ) : (
+                  <><span>🏭</span> Sugerir pelo Meu Estoque</>
+                )}
+              </button>
+            </div>
             <Button size="sm" onClick={() => { resetKitForm(); setShowKitForm(true); }}>
               <Plus className="h-4 w-4 mr-1" /> Novo Kit
             </Button>
@@ -376,6 +400,138 @@ export default function EpiKitsConfig() {
                     </div>
                   </Card>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* IA Sugestões COM ESTOQUE */}
+          {iaSugestaoKitsEstoque && iaSugestaoKitsEstoque.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🏭</span>
+                  <div>
+                    <p className="text-xs font-semibold text-emerald-800">
+                      {iaSugestaoKitsEstoque.length} kits sugeridos com base no seu estoque
+                    </p>
+                    <p className="text-[11px] text-emerald-700">
+                      Itens em <span className="text-red-600 font-semibold">vermelho</span> não estão disponíveis — precisam ser comprados.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button size="sm" variant="ghost" className="h-7 text-xs text-emerald-700 hover:bg-emerald-100" onClick={async () => {
+                    for (const kit of iaSugestaoKitsEstoque) {
+                      try {
+                        await createKitMut.mutateAsync({
+                          companyId, companyIds,
+                          nome: kit.nome, funcao: kit.funcao, descricao: kit.descricao || undefined,
+                          items: kit.items.map((i: any) => ({
+                            nomeEpi: i.nomeEpi,
+                            categoria: (i.categoria === "Uniforme" || i.categoria === "Calcado") ? i.categoria : "EPI",
+                            quantidade: i.quantidade || 1,
+                            obrigatorio: i.obrigatorio !== false,
+                          })),
+                        });
+                      } catch {}
+                    }
+                    setIaSugestaoKitsEstoque(null);
+                  }}>
+                    <Check className="h-3 w-3 mr-1" /> Aceitar Todos
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs text-gray-500 hover:bg-gray-100" onClick={() => setIaSugestaoKitsEstoque(null)}>
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {iaSugestaoKitsEstoque.map((kit: any, kidx: number) => {
+                  const itemsOk = (kit.items || []).filter((i: any) => i.disponivel);
+                  const itemsNok = (kit.items || []).filter((i: any) => !i.disponivel);
+                  return (
+                    <Card key={kidx} className="border-emerald-200 overflow-hidden">
+                      <div className="p-3 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center text-lg">🏗️</div>
+                          <div>
+                            <h4 className="font-semibold text-sm">{kit.nome}</h4>
+                            <p className="text-xs text-muted-foreground">
+                              Função: {kit.funcao} &bull; {itemsOk.length} disponíveis
+                              {itemsNok.length > 0 && <span className="text-red-600 font-medium"> &bull; {itemsNok.length} a providenciar</span>}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button size="sm" variant="ghost" className="h-7 text-xs text-blue-600 hover:bg-blue-50" onClick={() => {
+                            setEditingKit(null);
+                            setKitForm({
+                              nome: kit.nome, funcao: kit.funcao, descricao: kit.descricao || "",
+                              items: kit.items?.map((i: any) => ({
+                                nomeEpi: i.nomeEpi,
+                                categoria: (i.categoria === "Uniforme" || i.categoria === "Calcado") ? i.categoria : "EPI" as any,
+                                quantidade: i.quantidade || 1,
+                                obrigatorio: i.obrigatorio !== false,
+                              })) || [],
+                            });
+                            setShowKitForm(true);
+                          }}>
+                            <Pencil className="h-3 w-3 mr-1" /> Editar
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 text-xs text-green-600 hover:bg-green-50" onClick={async () => {
+                            try {
+                              await createKitMut.mutateAsync({
+                                companyId, companyIds, nome: kit.nome, funcao: kit.funcao,
+                                descricao: kit.descricao || undefined,
+                                items: kit.items.map((i: any) => ({
+                                  nomeEpi: i.nomeEpi,
+                                  categoria: (i.categoria === "Uniforme" || i.categoria === "Calcado") ? i.categoria : "EPI",
+                                  quantidade: i.quantidade || 1,
+                                  obrigatorio: i.obrigatorio !== false,
+                                })),
+                              });
+                              setIaSugestaoKitsEstoque(prev => prev?.filter((_, i) => i !== kidx) || null);
+                            } catch {}
+                          }}>
+                            <Check className="h-3 w-3 mr-1" /> Aceitar
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 text-red-500 hover:bg-red-50" onClick={() => setIaSugestaoKitsEstoque(prev => prev?.filter((_, i) => i !== kidx) || null)}>
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                      {/* Items grid — disponíveis e indisponíveis */}
+                      <div className="border-t border-emerald-100 px-3 py-2 bg-gray-50/50 space-y-1">
+                        {itemsOk.length > 0 && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1">
+                            {itemsOk.map((item: any, idx: number) => (
+                              <div key={idx} className="flex items-center gap-1.5 text-xs py-0.5">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                                <span className="font-medium truncate">{item.nomeEpi}</span>
+                                <span className="text-muted-foreground shrink-0">x{item.quantidade}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {itemsNok.length > 0 && (
+                          <>
+                            {itemsOk.length > 0 && <div className="border-t border-red-200 my-1.5" />}
+                            <p className="text-[10px] font-semibold text-red-600 uppercase tracking-wide mb-1">⚠ Providenciar — sem estoque</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1">
+                              {itemsNok.map((item: any, idx: number) => (
+                                <div key={idx} className="flex items-center gap-1.5 text-xs py-0.5 bg-red-50 rounded px-1.5 border border-red-200">
+                                  <span className="text-red-500 shrink-0">✕</span>
+                                  <span className="font-semibold text-red-700 truncate">{item.nomeEpi}</span>
+                                  <span className="text-red-500 shrink-0">x{item.quantidade}</span>
+                                  {!item.noCatalogo && <Badge variant="outline" className="text-[9px] px-1 border-red-300 text-red-600 shrink-0">Comprar</Badge>}
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </Card>
+                  );
+                })}
               </div>
             </div>
           )}
