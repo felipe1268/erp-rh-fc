@@ -28,6 +28,72 @@ const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', cur
 const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString('pt-BR') : '-';
 const fmtPct = (v: number) => `${v.toFixed(1)}%`;
 
+// Artigos e preposições que ficam em minúsculas no meio da frase (PT-BR)
+const PT_LOWER = new Set(["a","o","as","os","um","uma","uns","umas","de","do","da","dos","das","em","no","na","nos","nas","por","para","com","sem","sob","sobre","entre","até","desde","após","ante","e","ou","que","ao","aos","à","às","se"]);
+// Siglas que devem aparecer em MAIÚSCULAS mesmo após title-case
+const ACRONYMS = new Set(["EPI","NR","CA","CNPJ","CPF","CIPA","PJ","CLT","OS","NF"]);
+
+const MOTIVO_MAP: Record<string, string> = {
+  regular: "Entrega Regular",
+  entrega_regular: "Entrega Regular",
+  "entrega regular": "Entrega Regular",
+  desgaste: "Desgaste",
+  desgaste_normal: "Desgaste Normal",
+  "desgaste normal": "Desgaste Normal",
+  perda: "Perda",
+  dano: "Dano",
+  extravio: "Extravio",
+  vencido: "Vencido",
+  troca_tamanho: "Troca de Tamanho",
+  "troca tamanho": "Troca de Tamanho",
+  novo_funcionario: "Novo Funcionário",
+  "novo funcionario": "Novo Funcionário",
+  mau_uso: "Mau Uso",
+  "mau uso": "Mau Uso",
+  descarte: "Descarte",
+  descarte_expirado: "Descarte / Expirado",
+  "descarte / expirado": "Descarte / Expirado",
+  kit_admissao: "Kit Admissão",
+  "kit admissao": "Kit Admissão",
+  primeira_aquisicao: "Primeira Aquisição",
+  "primeira aquisicao": "Primeira Aquisição",
+  visita_tecnica: "Visita Técnica",
+  "visita tecnica": "Visita Técnica",
+};
+
+function formatMotivo(raw: string): string {
+  if (!raw) return "—";
+  const key = raw.trim().toLowerCase().replace(/_/g, " ");
+  if (MOTIVO_MAP[key]) return MOTIVO_MAP[key];
+  // Generic: replace underscores, apply PT-BR title-case
+  const words = raw.replace(/_/g, " ").trim().split(/\s+/);
+  const result = words.map((w, i) => {
+    const up = w.toUpperCase();
+    if (ACRONYMS.has(up)) return up;
+    const lo = w.toLowerCase();
+    if (i > 0 && PT_LOWER.has(lo)) return lo;
+    return lo.charAt(0).toUpperCase() + lo.slice(1);
+  }).join(" ");
+  // Fix known acronyms that may end up as "Epi", "Nr", etc.
+  return result.replace(/\bEpi\b/g, "EPI").replace(/\bNr\b/g, "NR").replace(/\bCa\b/g, "CA");
+}
+
+// Agrupa porMotivo normalizando labels (funde "Entrega regular" + "Entrega Regular" etc.)
+function buildPorMotivoNormalized(raw: Record<string, number>): { labels: string[]; data: number[]; rawByLabel: Record<string, string[]> } {
+  const acc: Record<string, { count: number; raws: string[] }> = {};
+  for (const [key, count] of Object.entries(raw)) {
+    const label = formatMotivo(key);
+    if (!acc[label]) acc[label] = { count: 0, raws: [] };
+    acc[label].count += count;
+    acc[label].raws.push(key);
+  }
+  const labels = Object.keys(acc);
+  const data = labels.map(l => acc[l].count);
+  const rawByLabel: Record<string, string[]> = {};
+  for (const [l, v] of Object.entries(acc)) rawByLabel[l] = v.raws;
+  return { labels, data, rawByLabel };
+}
+
 // Descontos de EPI foram movidos para Folha de Pagamento > Descontos EPI
 
 // Gera lista de meses dos últimos 24 meses para o filtro de período
@@ -866,14 +932,14 @@ export default function DashEpis() {
                               const isExpanded = expandedEpiId === a.epiId;
                               const hasFuncs = a.funcDetalhe?.length > 0;
                               const MOTIVO_LABELS: Record<string, string> = {
-                                regular: 'Entrega regular',
-                                desgaste: 'Desgaste',
-                                perda: 'Perda',
-                                dano: 'Dano',
-                                extravio: 'Extravio',
-                                vencido: 'Vencido',
-                                troca_tamanho: 'Troca tamanho',
-                                novo_funcionario: 'Novo funcionário',
+                                regular: formatMotivo('regular'),
+                                desgaste: formatMotivo('desgaste'),
+                                perda: formatMotivo('perda'),
+                                dano: formatMotivo('dano'),
+                                extravio: formatMotivo('extravio'),
+                                vencido: formatMotivo('vencido'),
+                                troca_tamanho: formatMotivo('troca_tamanho'),
+                                novo_funcionario: formatMotivo('novo_funcionario'),
                               };
                               return (
                                 <Fragment key={i}>
@@ -970,7 +1036,7 @@ export default function DashEpis() {
                                                           <span key={di} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-background border text-[10px]">
                                                             {fmtDate(dt)}
                                                             {f.motivos?.[di] && f.motivos[di] !== 'regular' && (
-                                                              <span className="text-muted-foreground">· {MOTIVO_LABELS[f.motivos[di]] || f.motivos[di]}</span>
+                                                              <span className="text-muted-foreground">· {formatMotivo(f.motivos[di])}</span>
                                                             )}
                                                           </span>
                                                         ))}
@@ -1000,32 +1066,39 @@ export default function DashEpis() {
             {/* ============================================================ */}
             {/* GRÁFICO: Entregas por Motivo */}
             {/* ============================================================ */}
-            {data.porMotivo && Object.keys(data.porMotivo).length > 0 && (
-              <DashChart
-                title="Todas as Entregas por Motivo — clique em uma fatia para ver detalhes"
-                type="doughnut"
-                labels={Object.keys(data.porMotivo)}
-                datasets={[{
-                  label: "Entregas",
-                  data: Object.values(data.porMotivo) as number[],
-                  backgroundColor: [CHART_PALETTE[0], CHART_PALETTE[3], CHART_PALETTE[2], CHART_PALETTE[1], CHART_PALETTE[4], CHART_PALETTE[6]],
-                }]}
-                height={260}
-                onChartClick={(info: ChartClickInfo) => {
-                  const newVal = selectedMotivo === info.label ? null : info.label;
-                  setSelectedMotivo(newVal);
-                  if (newVal) {
-                    setTimeout(() => motivoDetailRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 100);
-                  }
-                }}
-              />
-            )}
+            {data.porMotivo && Object.keys(data.porMotivo).length > 0 && (() => {
+              const { labels: mLabels, data: mData, rawByLabel } = buildPorMotivoNormalized(data.porMotivo as Record<string, number>);
+              return (
+                <DashChart
+                  title="Todas as Entregas por Motivo — clique em uma fatia para ver detalhes"
+                  type="doughnut"
+                  labels={mLabels}
+                  datasets={[{
+                    label: "Entregas",
+                    data: mData,
+                    backgroundColor: [CHART_PALETTE[0], CHART_PALETTE[3], CHART_PALETTE[2], CHART_PALETTE[1], CHART_PALETTE[4], CHART_PALETTE[6]],
+                  }]}
+                  height={260}
+                  onChartClick={(info: ChartClickInfo) => {
+                    const newVal = selectedMotivo === info.label ? null : info.label;
+                    setSelectedMotivo(newVal);
+                    if (newVal) {
+                      setTimeout(() => motivoDetailRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 100);
+                    }
+                  }}
+                />
+              );
+            })()}
 
             {/* ============================================================ */}
             {/* PAINEL DETALHE: Entregas filtradas por motivo */}
             {/* ============================================================ */}
             {selectedMotivo && data?.entregasDetalhe && (() => {
-              const rows = (data.entregasDetalhe as any[]).filter(r => r.motivo === selectedMotivo);
+              const rawKeys = (() => {
+                const { rawByLabel } = buildPorMotivoNormalized(data.porMotivo as Record<string, number>);
+                return rawByLabel[selectedMotivo] || [selectedMotivo];
+              })();
+              const rows = (data.entregasDetalhe as any[]).filter(r => rawKeys.includes(r.motivo) || formatMotivo(r.motivo) === selectedMotivo);
               const totalQtd = rows.reduce((s: number, r: any) => s + r.quantidade, 0);
               const totalVal = rows.reduce((s: number, r: any) => s + (r.valorCobrado || 0), 0);
               return (
@@ -1470,7 +1543,7 @@ export default function DashEpis() {
                               <td className="py-2 px-3 text-right font-medium text-amber-700">
                                 {fmtBRL(parseFloat(String(d.valorCobrado || d.valorProdutoEpi || 0)) * (d.quantidade || 1))}
                               </td>
-                              <td className="py-2 px-3 text-muted-foreground text-xs">{d.motivo || d.motivoTroca || "-"}</td>
+                              <td className="py-2 px-3 text-muted-foreground text-xs">{formatMotivo(d.motivo || d.motivoTroca || "")}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1578,11 +1651,7 @@ export default function DashEpis() {
                     </thead>
                     <tbody>
                       {(() => {
-                        const MOTIVO_LABELS: Record<string, string> = {
-                          regular: 'Entrega regular', desgaste: 'Desgaste', perda: 'Perda',
-                          dano: 'Dano', extravio: 'Extravio', vencido: 'Vencido',
-                          troca_tamanho: 'Troca tamanho', novo_funcionario: 'Novo funcionário',
-                        };
+                        const MOTIVO_LABELS: Record<string, string> = {}; // formatMotivo handles all keys
                         return detalheEpi.funcDetalhe.map((f: any, fi: number) => (
                           <tr key={fi} className="border-b border-border/30 hover:bg-muted/20">
                             <td className="py-2 px-3 font-medium">
@@ -1618,7 +1687,7 @@ export default function DashEpis() {
                                   <span key={di} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-background border text-[10px]">
                                     {fmtDate(dt)}
                                     {f.motivos?.[di] && f.motivos[di] !== 'regular' && (
-                                      <span className="text-muted-foreground">· {MOTIVO_LABELS[f.motivos[di]] || f.motivos[di]}</span>
+                                      <span className="text-muted-foreground">· {formatMotivo(f.motivos[di])}</span>
                                     )}
                                   </span>
                                 ))}
@@ -1707,7 +1776,7 @@ export default function DashEpis() {
                                 <td className="py-3 px-4 text-center font-mono">{d.quantidade || 1}</td>
                                 <td className="py-3 px-4">
                                   {d.motivo || d.motivoTroca ? (
-                                    <Badge variant="secondary" className="text-xs">{d.motivo || d.motivoTroca}</Badge>
+                                    <Badge variant="secondary" className="text-xs">{formatMotivo(d.motivo || d.motivoTroca)}</Badge>
                                   ) : <span className="text-muted-foreground">-</span>}
                                 </td>
                                 <td className="py-3 px-4 text-center">

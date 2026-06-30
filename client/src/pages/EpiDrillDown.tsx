@@ -10,6 +10,32 @@ import {
 } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 
+const _PT_LW = new Set(["a","o","as","os","um","uma","de","do","da","dos","das","em","no","na","nos","nas","por","para","com","sem","entre","e","ou","que","ao","aos","à","às","se"]);
+const _ACRO = new Set(["EPI","NR","CA","CNPJ","CPF","OS"]);
+const _MMAP: Record<string, string> = {
+  "regular":"Entrega Regular","entrega regular":"Entrega Regular","entrega_regular":"Entrega Regular",
+  "desgaste":"Desgaste","desgaste normal":"Desgaste Normal","desgaste_normal":"Desgaste Normal",
+  "perda":"Perda","dano":"Dano","extravio":"Extravio","vencido":"Vencido",
+  "troca tamanho":"Troca de Tamanho","troca_tamanho":"Troca de Tamanho",
+  "novo funcionario":"Novo Funcionário","novo_funcionario":"Novo Funcionário",
+  "mau uso":"Mau Uso","mau_uso":"Mau Uso",
+  "descarte":"Descarte","descarte expirado":"Descarte / Expirado","descarte_expirado":"Descarte / Expirado",
+  "kit admissao":"Kit Admissão","kit_admissao":"Kit Admissão",
+  "primeira aquisicao":"Primeira Aquisição","primeira_aquisicao":"Primeira Aquisição",
+  "visita tecnica":"Visita Técnica","visita_tecnica":"Visita Técnica",
+};
+function formatMotivo(raw: string): string {
+  if (!raw) return "—";
+  const key = raw.trim().toLowerCase().replace(/_/g," ");
+  if (_MMAP[key]) return _MMAP[key];
+  const result = raw.replace(/_/g," ").trim().split(/\s+/).map((w,i)=>{
+    const up=w.toUpperCase(); if(_ACRO.has(up))return up;
+    const lo=w.toLowerCase(); if(i>0&&_PT_LW.has(lo))return lo;
+    return lo.charAt(0).toUpperCase()+lo.slice(1);
+  }).join(" ");
+  return result.replace(/\bEpi\b/g,"EPI").replace(/\bNr\b/g,"NR");
+}
+
 type DrillDownType = "totalEpis" | "estoqueTotal" | "estoqueBaixo" | "caVencido" | "totalEntregas" | "entregasMes" | "valorInventario" | null;
 
 interface EpiDrillDownProps {
@@ -381,7 +407,7 @@ export default function EpiDrillDown({ type, onClose }: EpiDrillDownProps) {
                       </span>
                       <span className="font-medium">{formatCurrency(d.valorCobrado)}</span>
                     </div>
-                    {d.motivo && <Badge variant="secondary" className="text-[10px]">{d.motivo}</Badge>}
+                    {d.motivo && <Badge variant="secondary" className="text-[10px]">{formatMotivo(d.motivo)}</Badge>}
                   </div>
                 ))}
               </div>
@@ -419,7 +445,7 @@ export default function EpiDrillDown({ type, onClose }: EpiDrillDownProps) {
                       </td>
                       <td className="p-3 text-right">{formatCurrency(d.valorCobrado)}</td>
                       <td className="p-3 text-center">
-                        <Badge variant="secondary" className="text-xs">{d.motivo || d.motivoTroca || "Entrega regular"}</Badge>
+                        <Badge variant="secondary" className="text-xs">{formatMotivo(d.motivo || d.motivoTroca || "regular")}</Badge>
                       </td>
                     </tr>
                   ))}
