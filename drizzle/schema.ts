@@ -5147,6 +5147,7 @@ export const epiKits = pgTable("epi_kits", {
         companyId: integer().notNull(),
         nome: varchar({ length: 255 }).notNull(),
         funcao: varchar({ length: 100 }).notNull(),
+        funcoesCobertasJson: text("funcoes_cobertas_json"),
         descricao: text(),
         ativo: smallint().default(1).notNull(),
         createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),

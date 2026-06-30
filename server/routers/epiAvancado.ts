@@ -156,6 +156,7 @@ export const epiAvancadoRouter = router({
   kitsCreate: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), nome: z.string(),
       funcao: z.string(),
+      funcoesCobertasJson: z.array(z.string()).optional(),
       descricao: z.string().optional(),
       items: z.array(z.object({
         nomeEpi: z.string(),
@@ -172,6 +173,7 @@ export const epiAvancadoRouter = router({
         companyId: input.companyId,
         nome: input.nome,
         funcao: input.funcao,
+        funcoesCobertasJson: input.funcoesCobertasJson?.length ? JSON.stringify(input.funcoesCobertasJson) : null,
         descricao: input.descricao || null,
       }).returning({ id: epiKits.id });
       const kitId = result.id;
@@ -197,6 +199,7 @@ export const epiAvancadoRouter = router({
       id: z.number(),
       nome: z.string().optional(),
       funcao: z.string().optional(),
+      funcoesCobertasJson: z.array(z.string()).optional(),
       descricao: z.string().optional(),
       ativo: z.boolean().optional(),
       items: z.array(z.object({
@@ -213,6 +216,7 @@ export const epiAvancadoRouter = router({
       const updateData: any = {};
       if (input.nome !== undefined) updateData.nome = input.nome;
       if (input.funcao !== undefined) updateData.funcao = input.funcao;
+      if (input.funcoesCobertasJson !== undefined) updateData.funcoesCobertasJson = input.funcoesCobertasJson.length ? JSON.stringify(input.funcoesCobertasJson) : null;
       if (input.descricao !== undefined) updateData.descricao = input.descricao;
       if (input.ativo !== undefined) updateData.ativo = input.ativo ? 1 : 0;
       
@@ -2499,7 +2503,7 @@ Retorne JSON com: { "items": [ { "nomeEpi": string, "normaExigida": string, "nom
 
   // Funções ativas sem kit cadastrado (para o select do dialog de Novo Kit)
   funcoesDisponiveis: protectedProcedure
-    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), funcaoAtual: z.string().optional() }))
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), funcaoAtual: z.string().optional(), funcoesCobertasAtuais: z.array(z.string()).optional() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
 
@@ -2508,15 +2512,29 @@ Retorne JSON com: { "items": [ { "nomeEpi": string, "normaExigida": string, "nom
         .where(and(companyFilter(jobFunctions.companyId, input), eq(jobFunctions.isActive, 1), isNull(jobFunctions.deletedAt)))
         .orderBy(jobFunctions.nome);
 
-      const kitsAtivos = await db.select({ funcao: epiKits.funcao })
+      const kitsAtivos = await db.select({ funcao: epiKits.funcao, funcoesCobertasJson: epiKits.funcoesCobertasJson })
         .from(epiKits)
         .where(and(companyFilter(epiKits.companyId, input), eq(epiKits.ativo, 1)));
 
-      const funcoesComKit = new Set(kitsAtivos.map(k => k.funcao.toLowerCase().trim()));
+      const funcoesComKit = new Set<string>();
+      for (const k of kitsAtivos) {
+        funcoesComKit.add(k.funcao.toLowerCase().trim());
+        if (k.funcoesCobertasJson) {
+          try {
+            const extras: string[] = JSON.parse(k.funcoesCobertasJson);
+            for (const e of extras) funcoesComKit.add(e.toLowerCase().trim());
+          } catch {}
+        }
+      }
+
+      // Re-include: a função principal + funções cobertas do kit sendo editado
+      const reincluir = new Set<string>();
+      if (input.funcaoAtual) reincluir.add(input.funcaoAtual.toLowerCase().trim());
+      for (const f of (input.funcoesCobertasAtuais ?? [])) reincluir.add(f.toLowerCase().trim());
 
       const disponiveis = todasFuncoes.filter(f =>
         !funcoesComKit.has(f.nome.toLowerCase().trim()) ||
-        (input.funcaoAtual && f.nome.toLowerCase().trim() === input.funcaoAtual.toLowerCase().trim())
+        reincluir.has(f.nome.toLowerCase().trim())
       );
 
       return { funcoes: disponiveis.map(f => f.nome) };

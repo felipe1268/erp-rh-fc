@@ -1,4 +1,33 @@
 /**
+ * Rev. 3894 — **EPI — KIT COBRE FUNÇÕES SIMILARES (CARPINTEIRO I, II, III → 1 KIT).**
+ *
+ * ## Problema
+ * "CARPINTEIRO", "CARPINTEIRO I", "CARPINTEIRO II", "CARPINTEIRO III" são a mesma
+ * atividade, mas o ERP exigia um kit separado para cada variante, causando duplicação
+ * e obrigando o gestor a manter vários kits idênticos.
+ *
+ * ## Solução
+ * - **Nova coluna `funcoes_cobertas_json` (text)** em `epi_kits`: armazena JSON array
+ *   com as funções similares vinculadas ao kit (ex: `["CARPINTEIRO I","CARPINTEIRO II"]`).
+ * - **ColFix Rev.3894**: `ALTER TABLE epi_kits ADD COLUMN IF NOT EXISTS funcoes_cobertas_json text`.
+ * - **`funcoesDisponiveis`**: ao calcular funções disponíveis, exclui tanto `funcao` quanto
+ *   todas as entradas de `funcoes_cobertas_json` de kits ativos.
+ * - **`kitsCreate` / `kitsUpdate`**: aceitam `funcoesCobertasJson: string[]`, salvam como JSON.
+ * - **Dialog "Novo Kit"**: após selecionar a função principal, aparece seção
+ *   "Cobre funções similares" com chips clicáveis (toggle azul = selecionada). Só aparece
+ *   quando há outras funções sem kit disponíveis. Chips saem da lista ao salvar o kit.
+ * - **Card do kit**: exibe "+N similar(es)" ao lado da função principal quando houver cobertas.
+ *
+ * ## Arquivos
+ * - `drizzle/schema.ts` — coluna `funcoesCobertasJson`
+ * - `server/_core/index.ts` — ColFix + COLFIX_VERSION bump
+ * - `server/routers/epiAvancado.ts` — funcoesDisponiveis / kitsCreate / kitsUpdate
+ * - `client/src/pages/EpiKitsConfig.tsx` — kitForm state, chips UI, card display
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3893 — **EPI — CAMPO FUNÇÃO DO KIT VIRA SELECT COM FUNÇÕES SEM KIT.**
  *
  * ## Problema

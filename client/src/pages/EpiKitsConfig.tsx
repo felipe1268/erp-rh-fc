@@ -35,7 +35,7 @@ export default function EpiKitsConfig() {
   // Queries
   const kitsQ = trpc.epiAvancado.kitsList.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
   const funcoesDisponiveisQ = trpc.epiAvancado.funcoesDisponiveis.useQuery(
-    { companyId, companyIds, funcaoAtual: editingKit?.funcao },
+    { companyId, companyIds, funcaoAtual: editingKit?.funcao, funcoesCobertasAtuais: kitForm.funcoesCobertasJson },
     { enabled: showKitForm && (!!companyId || (companyIds?.length ?? 0) > 0) }
   );
   const coresQ = trpc.epiAvancado.coresCapaceteList.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
@@ -151,12 +151,12 @@ export default function EpiKitsConfig() {
 
   // Kit Form State
   const [kitForm, setKitForm] = useState({
-    nome: "", funcao: "", descricao: "",
+    nome: "", funcao: "", descricao: "", funcoesCobertasJson: [] as string[],
     items: [{ nomeEpi: "", categoria: "EPI" as "EPI" | "Uniforme" | "Calcado", quantidade: 1, obrigatorio: true }],
   });
 
   function resetKitForm() {
-    setKitForm({ nome: "", funcao: "", descricao: "", items: [{ nomeEpi: "", categoria: "EPI", quantidade: 1, obrigatorio: true }] });
+    setKitForm({ nome: "", funcao: "", descricao: "", funcoesCobertasJson: [], items: [{ nomeEpi: "", categoria: "EPI", quantidade: 1, obrigatorio: true }] });
     setEditingKit(null);
   }
 
@@ -571,7 +571,11 @@ export default function EpiKitsConfig() {
                       </div>
                       <div>
                         <h4 className="font-semibold text-sm">{kit.nome}</h4>
-                        <p className="text-xs text-muted-foreground">Função: {kit.funcao} | {kit.items?.length || 0} itens</p>
+                        <p className="text-xs text-muted-foreground">
+                          Função: {kit.funcao}
+                          {(() => { try { const c = JSON.parse(kit.funcoesCobertasJson || "[]"); return c.length > 0 ? ` +${c.length} similar${c.length > 1 ? "es" : ""}` : ""; } catch { return ""; } })()}
+                          {" "}| {kit.items?.length || 0} itens
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -579,8 +583,10 @@ export default function EpiKitsConfig() {
                       <Button size="sm" variant="ghost" onClick={(e) => {
                         e.stopPropagation();
                         setEditingKit(kit);
+                        const cobertasExistentes: string[] = (() => { try { return JSON.parse(kit.funcoesCobertasJson || "[]"); } catch { return []; } })();
                         setKitForm({
                           nome: kit.nome, funcao: kit.funcao, descricao: kit.descricao || "",
+                          funcoesCobertasJson: cobertasExistentes,
                           items: kit.items?.map((i: any) => ({ nomeEpi: i.nomeEpi, categoria: i.categoria, quantidade: i.quantidade, obrigatorio: !!i.obrigatorio })) || [],
                         });
                         setShowKitForm(true);
@@ -707,6 +713,54 @@ export default function EpiKitsConfig() {
                     )}
                   </div>
 
+                  {/* Funções similares (opcional) */}
+                  {kitForm.funcao.trim() && (() => {
+                    const opcoesSimil = (funcoesDisponiveisQ.data?.funcoes || []).filter(f => f !== kitForm.funcao);
+                    if (opcoesSimil.length === 0) return null;
+                    return (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <Label className="text-xs font-medium text-slate-700">Cobre funções similares</Label>
+                          <Badge variant="outline" className="text-[10px] border-slate-300 text-slate-500">Opcional</Badge>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          Marque funções com a mesma atividade (ex.: Carpinteiro I, II, III) — elas usarão este mesmo kit.
+                        </p>
+                        <div className="rounded-md border border-slate-200 bg-slate-50/60 p-2 flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
+                          {opcoesSimil.map(nome => {
+                            const selecionada = kitForm.funcoesCobertasJson.includes(nome);
+                            return (
+                              <button
+                                key={nome}
+                                type="button"
+                                onClick={() => setKitForm(f => ({
+                                  ...f,
+                                  funcoesCobertasJson: selecionada
+                                    ? f.funcoesCobertasJson.filter(x => x !== nome)
+                                    : [...f.funcoesCobertasJson, nome],
+                                }))}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-medium transition-colors ${
+                                  selecionada
+                                    ? "bg-blue-600 border-blue-600 text-white"
+                                    : "bg-white border-slate-300 text-slate-600 hover:border-blue-400"
+                                }`}
+                              >
+                                {selecionada && <Check className="h-2.5 w-2.5" />}
+                                {nome}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {kitForm.funcoesCobertasJson.length > 0 && (
+                          <p className="text-[11px] text-blue-700 flex items-center gap-1">
+                            <CheckCircle2 className="h-3 w-3" />
+                            {kitForm.funcoesCobertasJson.length} função(ões) similar(es) vinculada(s) a este kit.
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   {/* Nome do Kit */}
                   <div className="space-y-1.5">
                     <div className="flex items-center gap-1.5">
@@ -799,9 +853,9 @@ export default function EpiKitsConfig() {
                       const validItems = kitForm.items.filter(i => i.nomeEpi.trim());
                       if (validItems.length === 0) return toast.error("Adicione pelo menos um item ao kit");
                       if (editingKit) {
-                        updateKitMut.mutate({ id: editingKit.id, nome: kitForm.nome, funcao: kitForm.funcao, descricao: kitForm.descricao || undefined, items: validItems });
+                        updateKitMut.mutate({ id: editingKit.id, nome: kitForm.nome, funcao: kitForm.funcao, funcoesCobertasJson: kitForm.funcoesCobertasJson, descricao: kitForm.descricao || undefined, items: validItems });
                       } else {
-                        createKitMut.mutate({ companyId, companyIds, nome: kitForm.nome, funcao: kitForm.funcao, descricao: kitForm.descricao || undefined, items: validItems });
+                        createKitMut.mutate({ companyId, companyIds, nome: kitForm.nome, funcao: kitForm.funcao, funcoesCobertasJson: kitForm.funcoesCobertasJson, descricao: kitForm.descricao || undefined, items: validItems });
                       }
                     }}>
                     {(createKitMut.isPending || updateKitMut.isPending) ? (
