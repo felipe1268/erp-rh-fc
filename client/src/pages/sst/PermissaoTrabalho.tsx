@@ -711,8 +711,8 @@ function WizardNovaPT({
                   const proprios: { key: string; nome: string; funcao: string; badge?: string }[] =
                     (obraFuncsQ.data as any[] ?? []).map((emp: any) => ({
                       key: `p-${emp.id}`,
-                      nome: emp.nomeCompleto,
-                      funcao: emp.cargo || emp.funcao || "",
+                      nome: emp.employee?.nomeCompleto || emp.nomeCompleto || "",
+                      funcao: emp.employee?.cargo || emp.cargo || emp.employee?.funcao || emp.funcao || "",
                     }));
                   const terceiros: { key: string; nome: string; funcao: string; badge?: string }[] =
                     (obraTerceirosQ.data as any[] ?? []).map((t: any) => ({
