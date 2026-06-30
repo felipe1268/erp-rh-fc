@@ -98,6 +98,8 @@ function lazyWithRetry<T extends ComponentType<any>>(
         msg.includes("Loading chunk") ||
         msg.includes("is not a valid JavaScript MIME type") ||
         msg.includes("text/html") ||
+        msg === "Load failed" ||
+        msg.toLowerCase().includes("load failed") ||
         err?.name === "ChunkLoadError"
       );
     };
