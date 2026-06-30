@@ -305,10 +305,10 @@ function WizardNovaPT({
     if (user?.employeeId && !form.employeeId) upd({ employeeId: user.employeeId });
   }, [user?.employeeId]);
 
-  // Auto-fill supervisor com encarregado da obra
+  // Auto-fill supervisor + responsável da área com encarregado da obra
   useEffect(() => {
     const enc = (obraSSTQ.data as any)?.encarregadoNome ?? null;
-    if (enc) upd({ supervisorNome: enc });
+    if (enc) upd({ supervisorNome: enc, responsavelAreaNome: enc });
   }, [(obraSSTQ.data as any)?.encarregadoNome]);
 
   // Checklist: conta respostas
@@ -708,30 +708,40 @@ function WizardNovaPT({
                 (obraFuncsQ.isLoading || obraTerceirosQ.isLoading) ? (
                   <div className="flex items-center gap-2 text-xs text-slate-400 py-2"><Loader2 className="h-3 w-3 animate-spin" /> Carregando efetivo da obra…</div>
                 ) : (() => {
-                  const proprios: { key: string; nome: string; funcao: string; badge?: string }[] =
-                    (obraFuncsQ.data as any[] ?? []).map((emp: any) => ({
+                  const proprios: any[] = (obraFuncsQ.data as any[] ?? []).map((emp: any) => {
+                    const nr35 = (emp.nrs ?? []).find((n: any) => n.norma === "NR-35");
+                    return {
                       key: `p-${emp.id}`,
                       nome: emp.employee?.nomeCompleto || emp.nomeCompleto || "",
                       funcao: emp.employee?.cargo || emp.cargo || emp.employee?.funcao || emp.funcao || "",
-                    }));
-                  const terceiros: { key: string; nome: string; funcao: string; badge?: string }[] =
-                    (obraTerceirosQ.data as any[] ?? []).map((t: any) => ({
-                      key: `t-${t.id}`,
-                      nome: t.nome,
-                      funcao: t.funcao || "",
-                      badge: "Terceiro",
-                    }));
+                      fotoUrl: emp.employee?.fotoUrl || null,
+                      nr35Status: nr35 ? (nr35.vencida ? "vencida" : "ok") : "sem",
+                      isCipa: !!emp.cipaAtivo,
+                      emAviso: emp.employee?.status === "Aviso" || emp.employee?.status === "AvisoDispensado",
+                      terceiro: false,
+                    };
+                  });
+                  const terceiros: any[] = (obraTerceirosQ.data as any[] ?? []).map((t: any) => ({
+                    key: `t-${t.id}`,
+                    nome: t.nome,
+                    funcao: t.funcao || "",
+                    fotoUrl: null,
+                    nr35Status: null,
+                    isCipa: false,
+                    emAviso: false,
+                    terceiro: true,
+                  }));
                   const todos = [...proprios, ...terceiros];
                   if (todos.length === 0) return (
                     <p className="text-xs text-slate-400 italic py-1">Nenhum efetivo alocado nesta obra.</p>
                   );
-                  const renderItem = (item: typeof todos[number]) => {
+                  const renderItem = (item: any) => {
                     const isSelected = form.envolvidos.some(e => e.nome === item.nome);
                     return (
-                      <label key={item.key} className={`flex items-center gap-2.5 cursor-pointer rounded-lg px-3 py-2 border transition-colors ${
-                        isSelected ? "bg-emerald-50 border-emerald-200" : "bg-white border-slate-200 hover:border-emerald-200"
+                      <label key={item.key} className={`flex items-start gap-2.5 cursor-pointer rounded-lg px-3 py-2.5 border transition-colors ${
+                        isSelected ? "bg-emerald-50 border-emerald-300" : "bg-white border-slate-200 hover:border-emerald-200"
                       }`}>
-                        <input type="checkbox" checked={isSelected} className="accent-emerald-600 rounded"
+                        <input type="checkbox" checked={isSelected} className="accent-emerald-600 rounded mt-2.5 shrink-0"
                           onChange={e => {
                             if (e.target.checked) {
                               const blanks = form.envolvidos.filter(e => !e.nome.trim());
@@ -741,14 +751,44 @@ function WizardNovaPT({
                               upd({ envolvidos: form.envolvidos.filter(e => e.nome !== item.nome) });
                             }
                           }} />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <p className="text-sm font-medium text-slate-800 truncate">{item.nome}</p>
-                            {item.badge && <span className="text-[10px] bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded shrink-0">{item.badge}</span>}
-                          </div>
-                          {item.funcao && <p className="text-xs text-slate-500">{item.funcao}</p>}
+                        {/* Avatar */}
+                        <div className="shrink-0 mt-0.5">
+                          {item.fotoUrl ? (
+                            <img src={item.fotoUrl} alt="" className="h-9 w-9 rounded-full object-cover border-2 border-white shadow-sm" />
+                          ) : (
+                            <div className="h-9 w-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-sm font-bold text-slate-400 shadow-sm">
+                              {(item.nome || "?").charAt(0).toUpperCase()}
+                            </div>
+                          )}
                         </div>
-                        {isSelected && <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />}
+                        {/* Info */}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <p className="text-sm font-medium text-slate-800 truncate">{item.nome}</p>
+                            {item.terceiro && (
+                              <span className="text-[9px] bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full font-bold shrink-0">TERCEIRO</span>
+                            )}
+                            {item.isCipa && (
+                              <span className="text-[9px] bg-blue-100 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded-full font-bold shrink-0">CIPA</span>
+                            )}
+                            {item.emAviso && (
+                              <span className="text-[9px] bg-orange-100 text-orange-700 border border-orange-200 px-1.5 py-0.5 rounded-full font-bold shrink-0">AVISO PRÉVIO</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                            {item.funcao && <p className="text-xs text-slate-500">{item.funcao}</p>}
+                            {item.nr35Status === "ok" && (
+                              <span className="text-[9px] bg-green-100 text-green-700 border border-green-200 px-1.5 py-0.5 rounded-full font-bold shrink-0">✓ NR-35</span>
+                            )}
+                            {item.nr35Status === "vencida" && (
+                              <span className="text-[9px] bg-red-100 text-red-700 border border-red-200 px-1.5 py-0.5 rounded-full font-bold shrink-0">⚠ NR-35 VENCIDA</span>
+                            )}
+                            {item.nr35Status === "sem" && (
+                              <span className="text-[9px] bg-red-100 text-red-700 border border-red-200 px-1.5 py-0.5 rounded-full font-bold shrink-0">SEM NR-35</span>
+                            )}
+                          </div>
+                        </div>
+                        {isSelected && <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-2.5" />}
                       </label>
                     );
                   };
@@ -823,9 +863,8 @@ function WizardNovaPT({
                   {(() => {
                     const sst3 = obraSSTQ.data as any;
                     const opts = sst3 ? [
-                      sst3.encarregadoNome ? { label: `Encarregado — ${sst3.encarregadoNome}`, value: sst3.encarregadoNome } : null,
-                      sst3.tstNome        ? { label: `TST — ${sst3.tstNome}`,                 value: sst3.tstNome }         : null,
-                      sst3.responsavelNome? { label: `Engenheiro — ${sst3.responsavelNome}`,  value: sst3.responsavelNome } : null,
+                      sst3.tstNome        ? { label: `TST — ${sst3.tstNome}`,                value: sst3.tstNome }        : null,
+                      sst3.responsavelNome? { label: `Engenheiro — ${sst3.responsavelNome}`, value: sst3.responsavelNome } : null,
                     ].filter(Boolean) as { label: string; value: string }[] : [];
                     const isCustom = form.responsavelLiberacaoNome !== "" && !opts.some(o => o.value === form.responsavelLiberacaoNome);
                     return opts.length > 0 ? (
