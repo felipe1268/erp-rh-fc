@@ -1,4 +1,22 @@
 /**
+ * Rev. 3898 — **CONTRATOS PJ — EDIÇÃO DE CLÁUSULAS POR CONTRATO.**
+ *
+ * ## Funcionalidade
+ * Cada contrato PJ pode ter seu próprio texto de cláusulas, independente do modelo global.
+ *
+ * ## Implementação
+ * - Nova coluna clausulas_customizadas (TEXT) em pj_contracts via ColFix Rev.3898
+ * - Mutation pj.salvarClausulas: valida companyId + UPDATE
+ * - getById agora retorna clausulasCustomizadas
+ * - ContratoPJView.tsx: botão Editar Clausulas (verde) + dialog textarea + restaurar padrao + badge
+ * - Rendering usa clausulasCustomizadas || modeloPadrao.modelo (placeholders continuam funcionando)
+ *
+ * ## Arquivos
+ * - drizzle/schema.ts, server/_core/index.ts, server/routers/pjContracts.ts
+ * - client/src/pages/ContratoPJView.tsx, shared/version.ts
+ */
+
+/**
  * Rev. 3897 — **ORÇAMENTO — FIX IMPORTAÇÃO: SPLIT MAT/MO CORRETO EM LINHAS DE AGRUPAMENTO.**
  *
  * ## Problema

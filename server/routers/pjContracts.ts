@@ -539,6 +539,7 @@ export const pjContractsRouter = router({
           observacoes: pjContracts.observacoes,
           revisao: pjContracts.revisao,
           revisaoMotivo: pjContracts.revisaoMotivo,
+          clausulasCustomizadas: pjContracts.clausulasCustomizadas,
           createdAt: pjContracts.createdAt,
           employeeName: employees.nomeCompleto,
           employeeCpf: employees.cpf,
@@ -1315,6 +1316,29 @@ export const pjContractsRouter = router({
   modeloContrato: protectedProcedure.query(() => {
     return { modelo: MODELO_CONTRATO_PJ };
   }),
+
+  salvarClausulas: protectedProcedure
+    .input(z.object({
+      contractId: z.number(),
+      companyId: z.number(),
+      clausulasTexto: z.string(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const [contrato] = await db.select({ id: pjContracts.id, companyId: pjContracts.companyId })
+        .from(pjContracts)
+        .where(eq(pjContracts.id, input.contractId));
+      if (!contrato || contrato.companyId !== input.companyId)
+        throw new TRPCError({ code: "NOT_FOUND" });
+      await db.execute(sql`
+        UPDATE pj_contracts
+           SET clausulas_customizadas = ${input.clausulasTexto},
+               "updatedAt" = NOW()
+         WHERE id = ${input.contractId} AND "companyId" = ${input.companyId}
+      `);
+      console.log(`[PJ] Cláusulas customizadas salvas no contrato ${input.contractId} por ${ctx.user.name}`);
+      return { ok: true };
+    }),
 
   // ============================================================
   // DOCUMENTOS DO PRESTADOR PJ

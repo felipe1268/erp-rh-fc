@@ -2743,6 +2743,7 @@ export const pjContracts = pgTable("pj_contracts", {
         valorRetido: numeric("valor_retido", { precision: 14, scale: 2 }).default("0"),
         limiteFd: numeric("limite_fd", { precision: 14, scale: 2 }),
         fdConsumido: numeric("fd_consumido", { precision: 14, scale: 2 }).default("0"),
+        clausulasCustomizadas: text("clausulas_customizadas"),
         createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
         deletedAt: timestamp({ mode: 'string' }),

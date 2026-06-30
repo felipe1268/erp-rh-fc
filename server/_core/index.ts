@@ -4703,7 +4703,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v3895-2026-06-30-epi-funcoes-cobertas-fix";
+    const COLFIX_VERSION = "v3898-2026-06-30-pj-clausulas-customizadas";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -5992,6 +5992,15 @@ Regras:
         `);
         console.log("[ColFix Rev.3893] epi_kits.funcoes_cobertas_json garantida.");
       } catch (e: any) { console.warn("[ColFix Rev.3893] funcoes_cobertas_json falhou (não-fatal):", e?.message ?? e); }
+
+      // Rev. 3898 — pj_contracts: clausulas_customizadas (texto personalizado das cláusulas por contrato)
+      try {
+        await db.execute(sql`
+          ALTER TABLE IF EXISTS pj_contracts
+            ADD COLUMN IF NOT EXISTS clausulas_customizadas text;
+        `);
+        console.log("[ColFix Rev.3898] pj_contracts.clausulas_customizadas garantida.");
+      } catch (e: any) { console.warn("[ColFix Rev.3898] clausulas_customizadas falhou (não-fatal):", e?.message ?? e); }
 
       // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos
       import("../services/startupCache").then(({ setCache }) =>

@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Printer, Loader2, FilePlus2, Check, X } from "lucide-react";
+import { ArrowLeft, Printer, Loader2, FilePlus2, Check, Pencil, RotateCcw } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useCompany } from "@/contexts/CompanyContext";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
@@ -116,6 +116,10 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
   const [novoTextoClausulas, setNovoTextoClausulas] = useState<Record<string, string>>({});
   const [dataAditivo, setDataAditivo] = useState(new Date().toISOString().split('T')[0]);
 
+  // Edição de cláusulas
+  const [showEditClausulas, setShowEditClausulas] = useState(false);
+  const [editClausulasTexto, setEditClausulasTexto] = useState("");
+
   // Rev. 1340: auto-save de rascunho do aditivo no navegador (localStorage)
   const draftKey = `pj-aditivo-draft-${contratoId}`;
   // Restaura rascunho ao abrir o modal
@@ -159,6 +163,23 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
     { enabled: !!contratoId && companyId > 0 },
   );
   const aditivosExistentes: Array<{ id: number; numeroAditivo: number; dataAditivo: string }> = aditivosListQ.data ?? [];
+
+  const utils = trpc.useUtils();
+  const salvarClausulasMut = (trpc as any).pj.salvarClausulas.useMutation({
+    onSuccess: () => {
+      toast.success("Cláusulas salvas com sucesso!");
+      setShowEditClausulas(false);
+      utils.pj.contratos.getById.invalidate({ id: contratoId });
+    },
+    onError: (err: any) => toast.error(err.message || "Erro ao salvar cláusulas"),
+  });
+
+  // Pré-carrega o editor com o texto atual ao abrir
+  useEffect(() => {
+    if (!showEditClausulas) return;
+    const textoAtual = (contrato as any)?.clausulasCustomizadas || modeloPadrao?.modelo || "";
+    setEditClausulasTexto(textoAtual);
+  }, [showEditClausulas]);
 
   const criarAditivo = (trpc as any).pj.aditivos.create.useMutation({
     onSuccess: (data: any) => {
@@ -328,7 +349,8 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
     });
   }
 
-  const templateText = modeloPadrao?.modelo || '';
+  const templateText = (contrato as any)?.clausulasCustomizadas || modeloPadrao?.modelo || '';
+  const temClausulasCustomizadas = !!(contrato as any)?.clausulasCustomizadas;
 
   return (
     <>
@@ -359,6 +381,9 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
               ))}
             </div>
           )}
+          <Button variant="ghost" size="sm" onClick={() => setShowEditClausulas(true)} className="text-white hover:bg-white/20 gap-1.5 border border-green-300/50 text-green-200">
+            <Pencil className="h-4 w-4" /> Editar Cláusulas
+          </Button>
           <Button variant="ghost" size="sm" onClick={() => setShowAditivoModal(true)} className="text-white hover:bg-white/20 gap-1.5 border border-amber-300/50 text-amber-200">
             <FilePlus2 className="h-4 w-4" /> Criar Aditivo
           </Button>
@@ -401,6 +426,12 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
           </div>
 
           {/* CORPO DO CONTRATO - Renderizado a partir do template */}
+          {temClausulasCustomizadas && (
+            <div className="print:hidden mb-4 flex items-center gap-2 rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-800">
+              <Pencil className="h-4 w-4 shrink-0 text-green-600" />
+              <span>Este contrato possui <strong>cláusulas personalizadas</strong>. Clique em "Editar Cláusulas" para modificar.</span>
+            </div>
+          )}
           <div className="contract-content">
             {templateText ? (
               renderContractText(templateText)
@@ -560,7 +591,62 @@ function ContratoPJViewInner({ routeContratoId }: { routeContratoId: number }) {
         </DialogContent>
       </Dialog>
 
-      {/* CSS DE IMPRESSÃO */}
+      {/* MODAL EDITAR CLÁUSULAS */}
+      <Dialog open={showEditClausulas} onOpenChange={setShowEditClausulas}>
+        <DialogContent className="max-w-3xl w-[95vw] max-h-[90vh] flex flex-col" style={{ background: '#ffffff', color: '#111827' }}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg text-gray-900">
+              <Pencil className="h-5 w-5 text-green-600" />
+              Editar Cláusulas do Contrato
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 flex-1 overflow-y-auto">
+            <div className="rounded-lg border-2 border-green-200 bg-green-50 p-3">
+              <p className="text-sm text-green-800">
+                Edite o texto das cláusulas diretamente abaixo. Os placeholders como <code className="bg-green-100 px-1 rounded">[VALOR_MENSAL]</code>, <code className="bg-green-100 px-1 rounded">[DATA_INICIO]</code> e outros serão substituídos automaticamente ao visualizar/imprimir.
+              </p>
+            </div>
+            {temClausulasCustomizadas && (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const original = modeloPadrao?.modelo || "";
+                    setEditClausulasTexto(original);
+                  }}
+                  className="flex items-center gap-1.5 text-xs text-red-600 hover:text-red-800 hover:underline"
+                >
+                  <RotateCcw className="h-3 w-3" /> Restaurar modelo padrão
+                </button>
+              </div>
+            )}
+            <textarea
+              value={editClausulasTexto}
+              onChange={e => setEditClausulasTexto(e.target.value)}
+              rows={24}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-green-500 focus:border-green-500 resize-y"
+              placeholder="Cole ou edite o texto das cláusulas aqui..."
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-3 border-t border-gray-100 shrink-0">
+            <Button variant="outline" onClick={() => setShowEditClausulas(false)} className="text-gray-600">
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                const textoFinal = editClausulasTexto.trim();
+                if (!textoFinal) { toast.error("O texto das cláusulas não pode ser vazio."); return; }
+                salvarClausulasMut.mutate({ contractId: contratoId, companyId, clausulasTexto: textoFinal });
+              }}
+              disabled={salvarClausulasMut.isPending}
+              className="bg-green-600 hover:bg-green-700 text-white gap-2"
+            >
+              {salvarClausulasMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</> : <><Check className="h-4 w-4" /> Salvar Cláusulas</>}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <style>{`
         @media print {
           body > *:not(#root) { display: none !important; }
