@@ -78,6 +78,27 @@ export default function EpiKitsConfig() {
     },
     onError: (err) => toast.error("Erro ao gerar sugestões: " + err.message),
   });
+
+  // IA mutation for use inside the kit form dialog (specific function)
+  const iaKitsDialogMut = trpc.epiAvancado.iaSugerirKitsPorFuncao.useMutation({
+    onSuccess: (data) => {
+      const kit = data.kits?.[0];
+      if (!kit) { toast.error("IA não retornou sugestões para essa função."); return; }
+      setKitForm(f => ({
+        ...f,
+        nome: f.nome.trim() || kit.nome || `Kit ${f.funcao}`,
+        descricao: f.descricao.trim() || kit.descricao || "",
+        items: (kit.items || []).map((i: any) => ({
+          nomeEpi: i.nomeEpi || "",
+          categoria: (i.categoria === "Uniforme" || i.categoria === "Calcado") ? i.categoria : "EPI" as any,
+          quantidade: i.quantidade || 1,
+          obrigatorio: i.obrigatorio !== false,
+        })),
+      }));
+      toast.success(`IA sugeriu ${kit.items?.length || 0} EPIs para ${kit.funcao}!`);
+    },
+    onError: (err) => toast.error("Erro na IA: " + err.message),
+  });
   const iaCoresMut = trpc.epiAvancado.iaSugerirCoresCapacete.useMutation({
     onSuccess: (data) => {
       setIaSugestaoCores(data.cores || []);
@@ -432,79 +453,172 @@ export default function EpiKitsConfig() {
 
           {/* Kit Form Dialog */}
           {showKitForm && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-              <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 p-6 max-h-[85vh] overflow-auto">
-                <h3 className="text-lg font-bold text-[#1B3A5C] mb-4">
-                  {editingKit ? "Editar Kit" : "Novo Kit de EPI"}
-                </h3>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label>Nome do Kit *</Label>
-                      <Input value={kitForm.nome} onChange={e => setKitForm(f => ({ ...f, nome: e.target.value }))} placeholder="Ex: Kit Eletricista" />
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full flex flex-col max-h-[90vh]">
+                {/* Dialog header */}
+                <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center">
+                      <Package className="h-5 w-5 text-blue-700" />
                     </div>
                     <div>
-                      <Label>Função *</Label>
-                      <Input value={kitForm.funcao} onChange={e => setKitForm(f => ({ ...f, funcao: e.target.value }))} placeholder="Ex: Eletricista" />
+                      <h3 className="text-base font-bold text-[#1B3A5C]">
+                        {editingKit ? "Editar Kit de EPI" : "Novo Kit de EPI"}
+                      </h3>
+                      <p className="text-xs text-muted-foreground">Defina a função e use IA para sugerir os EPIs automaticamente</p>
                     </div>
                   </div>
-                  <div>
-                    <Label>Descrição</Label>
-                    <Input value={kitForm.descricao} onChange={e => setKitForm(f => ({ ...f, descricao: e.target.value }))} placeholder="Descrição do kit..." />
-                  </div>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setShowKitForm(false); resetKitForm(); }}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
 
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <Label>Itens do Kit</Label>
-                      <Button size="sm" variant="outline" onClick={() => setKitForm(f => ({
-                        ...f, items: [...f.items, { nomeEpi: "", categoria: "EPI", quantidade: 1, obrigatorio: true }]
-                      }))}>
-                        <Plus className="h-3 w-3 mr-1" /> Item
+                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+                  {/* Função + IA highlight box */}
+                  <div className="rounded-xl border-2 border-violet-200 bg-gradient-to-br from-violet-50 to-indigo-50 p-4 space-y-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Wand2 className="h-4 w-4 text-violet-600" />
+                      <span className="text-sm font-semibold text-violet-800">Função do Trabalhador</span>
+                      <Badge variant="outline" className="text-[10px] border-violet-300 text-violet-600">Passo 1</Badge>
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        value={kitForm.funcao}
+                        onChange={e => setKitForm(f => ({ ...f, funcao: e.target.value }))}
+                        placeholder="Ex: Pedreiro, Servente, Eletricista..."
+                        className="flex-1 border-violet-200 focus-visible:ring-violet-400 bg-white"
+                      />
+                      <Button
+                        onClick={() => {
+                          if (!kitForm.funcao.trim()) { toast.error("Preencha a Função antes de gerar com IA"); return; }
+                          iaKitsDialogMut.mutate({ companyId, funcao: kitForm.funcao });
+                        }}
+                        disabled={iaKitsDialogMut.isPending || !kitForm.funcao.trim()}
+                        className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white shrink-0"
+                        size="sm"
+                      >
+                        {iaKitsDialogMut.isPending ? (
+                          <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Gerando...</>
+                        ) : (
+                          <><Sparkles className="h-3.5 w-3.5 mr-1.5" /> Gerar com IA</>
+                        )}
                       </Button>
                     </div>
-                    <div className="space-y-2 max-h-60 overflow-auto">
-                      {kitForm.items.map((item, idx) => (
-                        <div key={idx} className="flex gap-2 items-center">
-                          <Input className="flex-1 h-8 text-xs" value={item.nomeEpi}
-                            onChange={e => { const items = [...kitForm.items]; items[idx].nomeEpi = e.target.value; setKitForm(f => ({ ...f, items })); }}
-                            placeholder="Nome do EPI" />
-                          <Select value={item.categoria} onValueChange={v => { const items = [...kitForm.items]; items[idx].categoria = v as any; setKitForm(f => ({ ...f, items })); }}>
-                            <SelectTrigger className="w-28 h-8 text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="EPI">EPI</SelectItem>
-                              <SelectItem value="Uniforme">Uniforme</SelectItem>
-                              <SelectItem value="Calcado">Calçado</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <Input type="number" className="w-16 h-8 text-xs" min={1} value={item.quantidade}
-                            onChange={e => { const items = [...kitForm.items]; items[idx].quantidade = parseInt(e.target.value) || 1; setKitForm(f => ({ ...f, items })); }} />
-                          <Button size="sm" variant="ghost" className="h-8 text-red-500" onClick={() => {
-                            setKitForm(f => ({ ...f, items: f.items.filter((_, i) => i !== idx) }));
-                          }}>
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
+                    {iaKitsDialogMut.isPending && (
+                      <p className="text-xs text-violet-600 flex items-center gap-1.5">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Consultando NR-6 e NR-18 do Ministério do Trabalho...
+                      </p>
+                    )}
+                    {!iaKitsDialogMut.isPending && kitForm.funcao.trim() && kitForm.items.length > 0 && (
+                      <p className="text-xs text-violet-600 flex items-center gap-1.5">
+                        <CheckCircle2 className="h-3 w-3" />
+                        {kitForm.items.length} item(ns) carregado(s). Edite abaixo conforme necessário.
+                      </p>
+                    )}
                   </div>
 
-                  <div className="flex gap-2 pt-2">
-                    <Button variant="outline" className="flex-1" onClick={() => { setShowKitForm(false); resetKitForm(); }}>Cancelar</Button>
-                    <Button className="flex-1 bg-[#1B2A4A] hover:bg-[#243660]"
-                      disabled={createKitMut.isPending || updateKitMut.isPending}
-                      onClick={() => {
-                        if (!kitForm.nome.trim() || !kitForm.funcao.trim()) return toast.error("Nome e função são obrigatórios");
-                        const validItems = kitForm.items.filter(i => i.nomeEpi.trim());
-                        if (validItems.length === 0) return toast.error("Adicione pelo menos um item ao kit");
-                        if (editingKit) {
-                          updateKitMut.mutate({ id: editingKit.id, nome: kitForm.nome, funcao: kitForm.funcao, descricao: kitForm.descricao || undefined, items: validItems });
-                        } else {
-                          createKitMut.mutate({ companyId, companyIds, nome: kitForm.nome, funcao: kitForm.funcao, descricao: kitForm.descricao || undefined, items: validItems });
-                        }
-                      }}>
-                      {(createKitMut.isPending || updateKitMut.isPending) ? "Salvando..." : editingKit ? "Atualizar" : "Criar Kit"}
-                    </Button>
+                  {/* Nome do Kit */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <Label className="text-xs font-medium">Nome do Kit *</Label>
+                      <Badge variant="outline" className="text-[10px]">Passo 2</Badge>
+                    </div>
+                    <Input
+                      value={kitForm.nome}
+                      onChange={e => setKitForm(f => ({ ...f, nome: e.target.value }))}
+                      placeholder="Ex: Kit Pedreiro Completo"
+                      className="h-9"
+                    />
                   </div>
+
+                  {/* Descrição */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Descrição</Label>
+                    <Input value={kitForm.descricao} onChange={e => setKitForm(f => ({ ...f, descricao: e.target.value }))} placeholder="Descrição do kit..." className="h-9" />
+                  </div>
+
+                  {/* Itens */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-1.5">
+                        <Label className="text-xs font-medium">Itens do Kit</Label>
+                        <Badge variant="outline" className="text-[10px]">Passo 3</Badge>
+                        {kitForm.items.length > 0 && (
+                          <Badge className="text-[10px] bg-blue-100 text-blue-700 border-0">{kitForm.items.length}</Badge>
+                        )}
+                      </div>
+                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setKitForm(f => ({
+                        ...f, items: [...f.items, { nomeEpi: "", categoria: "EPI", quantidade: 1, obrigatorio: true }]
+                      }))}>
+                        <Plus className="h-3 w-3 mr-1" /> Adicionar Item
+                      </Button>
+                    </div>
+
+                    {kitForm.items.length === 0 ? (
+                      <div className="border-2 border-dashed border-gray-200 rounded-lg py-8 text-center">
+                        <ShieldCheck className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                        <p className="text-xs text-muted-foreground">Preencha a Função e clique em <strong>Gerar com IA</strong></p>
+                        <p className="text-xs text-muted-foreground">ou adicione itens manualmente</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
+                        {kitForm.items.map((item, idx) => (
+                          <div key={idx} className="flex gap-2 items-center bg-gray-50 rounded-lg px-2 py-1.5">
+                            <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                              <span className="text-[9px] font-bold text-blue-700">{idx + 1}</span>
+                            </div>
+                            <Input className="flex-1 h-7 text-xs border-0 bg-transparent focus-visible:ring-0 p-0" value={item.nomeEpi}
+                              onChange={e => { const items = [...kitForm.items]; items[idx].nomeEpi = e.target.value; setKitForm(f => ({ ...f, items })); }}
+                              placeholder="Nome do EPI" />
+                            <Select value={item.categoria} onValueChange={v => { const items = [...kitForm.items]; items[idx].categoria = v as any; setKitForm(f => ({ ...f, items })); }}>
+                              <SelectTrigger className="w-24 h-7 text-xs border-gray-200"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="EPI">EPI</SelectItem>
+                                <SelectItem value="Uniforme">Uniforme</SelectItem>
+                                <SelectItem value="Calcado">Calçado</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Input type="number" className="w-14 h-7 text-xs border-gray-200" min={1} value={item.quantidade}
+                              onChange={e => { const items = [...kitForm.items]; items[idx].quantidade = parseInt(e.target.value) || 1; setKitForm(f => ({ ...f, items })); }} />
+                            <Badge
+                              variant={item.obrigatorio ? "default" : "secondary"}
+                              className={`text-[10px] cursor-pointer shrink-0 ${item.obrigatorio ? "bg-green-100 text-green-700 border-green-200 hover:bg-green-200" : "hover:bg-gray-200"}`}
+                              onClick={() => { const items = [...kitForm.items]; items[idx].obrigatorio = !items[idx].obrigatorio; setKitForm(f => ({ ...f, items })); }}
+                            >
+                              {item.obrigatorio ? "Obrig." : "Opc."}
+                            </Badge>
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-600 hover:bg-red-50" onClick={() => {
+                              setKitForm(f => ({ ...f, items: f.items.filter((_, i) => i !== idx) }));
+                            }}>
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Dialog footer */}
+                <div className="flex gap-3 px-6 pb-5 pt-3 border-t shrink-0">
+                  <Button variant="outline" className="flex-1" onClick={() => { setShowKitForm(false); resetKitForm(); }}>Cancelar</Button>
+                  <Button className="flex-1 bg-[#1B2A4A] hover:bg-[#243660]"
+                    disabled={createKitMut.isPending || updateKitMut.isPending}
+                    onClick={() => {
+                      if (!kitForm.nome.trim() || !kitForm.funcao.trim()) return toast.error("Nome e função são obrigatórios");
+                      const validItems = kitForm.items.filter(i => i.nomeEpi.trim());
+                      if (validItems.length === 0) return toast.error("Adicione pelo menos um item ao kit");
+                      if (editingKit) {
+                        updateKitMut.mutate({ id: editingKit.id, nome: kitForm.nome, funcao: kitForm.funcao, descricao: kitForm.descricao || undefined, items: validItems });
+                      } else {
+                        createKitMut.mutate({ companyId, companyIds, nome: kitForm.nome, funcao: kitForm.funcao, descricao: kitForm.descricao || undefined, items: validItems });
+                      }
+                    }}>
+                    {(createKitMut.isPending || updateKitMut.isPending) ? (
+                      <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Salvando...</>
+                    ) : editingKit ? "Atualizar Kit" : "Criar Kit"}
+                  </Button>
                 </div>
               </div>
             </div>

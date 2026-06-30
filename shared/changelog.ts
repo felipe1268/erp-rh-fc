@@ -1,4 +1,25 @@
 /**
+ * Rev. 3891 — **EPI — BOTÃO IA DENTRO DO DIALOG DE KIT: PREENCHE ITENS POR FUNÇÃO.**
+ *
+ * ## Problema
+ * O botão "Sugerir Kits com IA" na lista gerava kits para TODAS as funções sem kit de uma vez.
+ * Não havia como, ao criar um kit manualmente, pedir à IA que preenchesse os itens para
+ * aquela função específica. O dialog de criação era básico, sem orientação de fluxo.
+ *
+ * ## Solução
+ * - **Novo mutation `iaKitsDialogMut`** (mesmo endpoint `iaSugerirKitsPorFuncao` com param
+ *   `funcao`): ao receber o primeiro kit sugerido, preenche automaticamente nome, descrição
+ *   e todos os itens do formulário.
+ * - **Dialog redesenhado**: layout em 3 passos (Função → Nome → Itens), header com ícone e
+ *   subtítulo, box em gradiente violeta destaca o campo Função + botão IA lado a lado.
+ *   Estado de loading mostra "Consultando NR-6 e NR-18..."; estado pós-IA mostra count de
+ *   itens carregados. Items agora têm indicador de número, toggle Obrigatório/Opcional
+ *   clicável e area vazia com instrução quando não há itens.
+ * - Botão IA desabilitado enquanto Função estiver vazia; não interfere com o fluxo de lista.
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3890 — **EPI — FOTO DO COLABORADOR EM TODAS AS TABELAS DO MÓDULO EPI.**
  *
  * ## Problema

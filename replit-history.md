@@ -1,3 +1,5 @@
+- **Rev. 3884** — **TEMPLATES DE EXTRATO — REDESIGN: AGRUPADO POR BANCO + CARDS EM GRADE.** Templates agrupados por banco; cards 2-colunas com faixa de cor; pills de stats. ZERO DELETE.
+
 - **Rev. 3883** — **TEMPLATES DE EXTRATO — EYE PREVIEW + DEDUP GUARD + PROMPT RIGOROSO.** Preview colorido 3 seções; dedup no create (overlap ≥50%); prompt IA reescrito. ZERO DELETE.
 
 - **Rev. 3882** — **TEMPLATES DE EXTRATO — ANÁLISE EM LOTE (MÚLTIPLOS PDFs).** 2+ PDFs → modo lote sequencial com barra de progresso e painel de resumo. ZERO DELETE.

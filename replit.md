@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3891** — **EPI — BOTÃO IA DENTRO DO DIALOG DE KIT: PREENCHE ITENS POR FUNÇÃO.** Novo `iaKitsDialogMut` (mesmo endpoint com param `funcao`): ao receber sugestão, preenche nome/descrição/itens do form. Dialog redesenhado em 3 passos — box gradiente violeta destaca Função + botão IA lado a lado; loading mostra "Consultando NR-6 e NR-18..."; items têm numeração, toggle Obrig/Opc clicável, área vazia instrucional. ZERO DELETE.
+
 - **Rev. 3890** — **EPI — FOTO DO COLABORADOR EM TODAS AS TABELAS DO MÓDULO EPI.** `getDashEpis` adicionou `fotoUrl` no select de `allEmps`; campo incluído no tipo e nos 2 `funcDetalhe.push`. `DashEpis.tsx`: avatar circular (h-7/h-8) antes do nome no accordion de durabilidade e no drawer de detalhe. `EpiDrillDown.tsx`: avatar h-6 (mobile) e h-8 (desktop) substituindo ícone `<Users>` genérico na coluna Funcionário. ZERO DELETE.
 
-- **Rev. 3889** — **EPI — OBSERVAÇÃO OBRIGATÓRIA QUANDO EPI FORA DO KIT + FLAG `fora_do_kit` + BADGE NA TABELA.** Nova coluna `fora_do_kit` em `epi_deliveries` (self-heal Rev. 3889). `createDelivery` valida server-side: `foraDoKit=true` sem `observacoes` → BAD_REQUEST. Formulário de nova entrega ganha Textarea `Observação` (borda vermelha + asterisco quando EPI fora do kit, obrigatória). `addEntregaItem` persiste flag por item para entregas multi-EPI. `handleSubmitEntrega` bloqueia submit se qualquer item fora do kit sem observação. Tabela de entregas exibe badge ⚠ "Fora do Kit" em âmbar. Rastreabilidade completa: gestor sempre justifica. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3889** — **EPI — OBSERVAÇÃO OBRIGATÓRIA QUANDO EPI FORA DO KIT + FLAG `fora_do_kit` + BADGE.** Coluna `fora_do_kit`; server valida observação obrigatória; textarea + badge ⚠ âmbar. ZERO DELETE.
 
 - **Rev. 3888** — **EPI — CATÁLOGO GERENCIADO DE MOTIVOS (ADMIN-ONLY WRITE) + EDIT DIALOG VIRA SELECT.** Nova tabela `epi_motivos`; self-heal semeia 7 canônicos; tRPC listMotivos/create/update; `EpiMotivosConfig.tsx`. ZERO DELETE.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3886** — **TEMPLATES DE EXTRATO — PREVIEW FULLSCREEN + COLAPSO DE GRUPOS + DEDUP FRONTEND + GATE DE TEMPLATE NA CONCILIAÇÃO.** Dialog fullscreen; grupos colapsáveis; dedup por nome normalizado; gate na Conciliação. ZERO DELETE.
 
 - **Rev. 3885** — **TEMPLATES DE EXTRATO — AUDITORIA (QUEM/QUANDO) + ACESSO RESTRITO A ADMIN.** Colunas `atualizado_por_id/nome`; `assertAdminRole` em create/update/delete/analisarPdf; botões ocultos p/ não-admin. ZERO DELETE.
-
-- **Rev. 3884** — **TEMPLATES DE EXTRATO — REDESIGN: AGRUPADO POR BANCO + CARDS EM GRADE.** Templates agrupados por banco; cards 2-colunas com faixa de cor; pills de stats. ZERO DELETE.
 
 ### Histórico completo
 
