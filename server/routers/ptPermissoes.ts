@@ -324,7 +324,7 @@ export const ptPermissoesRouter = router({
     .input(z.object({
       ptId:          z.number(),
       companyId:     z.number(),
-      posicao:       z.number().min(1).max(6),
+      posicao:       z.number().min(1).max(30),
       nomeManual:    z.string().optional().nullable(),
       funcaoManual:  z.string().optional().nullable(),
       employeeId:    z.number().optional().nullable(),
@@ -462,7 +462,7 @@ export const ptPermissoesRouter = router({
 
   // ── Gerar HTML para impressão ─────────────────────────────────────────────
   gerarHtml: protectedProcedure
-    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .input(z.object({ id: z.number(), companyId: z.number(), logoUrl: z.string().optional().nullable() }))
     .query(async ({ input, ctx }) => {
       assertCompany(ctx, input.companyId);
       const db = (await getDb())!;
@@ -512,6 +512,7 @@ export const ptPermissoesRouter = router({
 
       const assMap = new Map(assinaturas.map(a => [a.posicao, a]));
 
+      const logoUrl = input.logoUrl ?? null;
       const html = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -521,10 +522,13 @@ export const ptPermissoesRouter = router({
   @page { margin: 15mm; size: A4; }
   * { box-sizing: border-box; }
   body { font-family: Arial, sans-serif; font-size: 10pt; color: #1e293b; margin: 0; }
-  h1 { font-size: 14pt; text-align: center; margin: 0 0 4px; color: #065f46; }
-  h2 { font-size: 10pt; background: #065f46; color: white; padding: 4px 8px; margin: 8px 0 4px; }
-  h3 { font-size: 9pt; background: #d1fae5; color: #065f46; padding: 3px 6px; margin: 6px 0 3px; border-left: 3px solid #10b981; }
-  .header { text-align: center; border: 2px solid #065f46; padding: 8px; margin-bottom: 8px; border-radius: 4px; }
+  h1 { font-size: 14pt; text-align: center; margin: 0 0 4px; color: #1e3a5f; }
+  h2 { font-size: 10pt; background: #1e3a5f; color: white; padding: 4px 8px; margin: 8px 0 4px; }
+  h3 { font-size: 9pt; background: #dbeafe; color: #1e3a5f; padding: 3px 6px; margin: 6px 0 3px; border-left: 3px solid #2563eb; }
+  .header { display: flex; align-items: center; gap: 12px; border: 2px solid #1e3a5f; padding: 8px 12px; margin-bottom: 8px; border-radius: 4px; }
+  .header-logo { flex-shrink: 0; }
+  .header-logo img { height: 48px; width: auto; object-fit: contain; }
+  .header-text { flex: 1; text-align: center; }
   .subtitle { font-size: 8pt; color: #64748b; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 4px; }
   .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-bottom: 4px; }
@@ -533,22 +537,25 @@ export const ptPermissoesRouter = router({
   .field-value { font-size: 9pt; font-weight: bold; }
   .checklist-row { display: flex; gap: 6px; align-items: center; padding: 2px 4px; font-size: 8.5pt; border-bottom: 1px solid #f1f5f9; }
   .check-badge { width: 22px; text-align: center; font-weight: bold; font-size: 8pt; padding: 1px; border-radius: 3px; flex-shrink: 0; }
-  .check-S { background: #d1fae5; color: #065f46; }
+  .check-S { background: #dbeafe; color: #1e3a5f; }
   .check-N { background: #fee2e2; color: #991b1b; }
   .check-NA { background: #f1f5f9; color: #64748b; }
   .sig-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 4px; }
-  .sig-box { border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px; text-align: center; min-height: 70px; }
+  .sig-box { border: 1px solid #bfdbfe; border-radius: 4px; padding: 4px; text-align: center; min-height: 70px; }
   .sig-box img { max-width: 100%; max-height: 50px; object-fit: contain; }
   .sig-name { font-size: 8pt; font-weight: bold; margin-top: 2px; }
   .sig-label { font-size: 7pt; color: #64748b; }
-  .status-chip { display: inline-block; font-size: 8pt; font-weight: bold; padding: 2px 8px; border-radius: 12px; background: #d1fae5; color: #065f46; }
+  .status-chip { display: inline-block; font-size: 8pt; font-weight: bold; padding: 2px 8px; border-radius: 12px; background: #dbeafe; color: #1e3a5f; }
   @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 </style>
 </head>
 <body>
 <div class="header">
-  <h1>PERMISSÃO DE TRABALHO EM ALTURA — NR-35</h1>
-  <div class="subtitle">FC Engenharia &nbsp;|&nbsp; ${esc(pt.numero)} &nbsp;|&nbsp; <span class="status-chip">${esc(pt.status.toUpperCase().replace("_"," "))}</span></div>
+  ${logoUrl ? `<div class="header-logo"><img src="${logoUrl}" alt="Logo" /></div>` : ""}
+  <div class="header-text">
+    <h1>PERMISSÃO DE TRABALHO EM ALTURA — NR-35</h1>
+    <div class="subtitle">FC Engenharia &nbsp;|&nbsp; ${esc(pt.numero)} &nbsp;|&nbsp; <span class="status-chip">${esc(pt.status.toUpperCase().replace("_"," "))}</span></div>
+  </div>
 </div>
 
 <h2>1. SOLICITAÇÃO</h2>

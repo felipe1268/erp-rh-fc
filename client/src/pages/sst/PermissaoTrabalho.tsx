@@ -156,7 +156,7 @@ function AssinaturaPad({
     const dataUrl = c.toDataURL("image/png");
     try {
       await salvarMut.mutateAsync({ ptId, companyId, posicao, assinaturaImg: dataUrl });
-      utils.ptPermissoes.getById.invalidate({ ptId, companyId });
+      utils.ptPermissoes.getById.invalidate({ id: ptId, companyId });
       toast.success("Assinatura salva!");
       onOpenChange(false);
     } catch (e: any) { toast.error(e?.message ?? "Erro ao salvar assinatura."); }
@@ -985,7 +985,8 @@ function PTDetalheDialog({
     if (!ptId) return;
     setPrintLoading(true);
     try {
-      const res = await utils.ptPermissoes.gerarHtml.fetch({ id: ptId, companyId });
+      const logoUrl = (import.meta as any).env?.VITE_APP_LOGO ?? null;
+      const res = await utils.ptPermissoes.gerarHtml.fetch({ id: ptId, companyId, logoUrl });
       const w = window.open("", "_blank");
       if (w) { w.document.write(res.html); w.document.close(); setTimeout(() => w.print(), 400); }
     } catch (e: any) { toast.error(e?.message ?? "Erro ao gerar PDF."); }
@@ -1150,37 +1151,86 @@ function PTDetalheDialog({
                 )}
 
                 {/* Envolvidos + assinaturas */}
-                <div>
-                  <p className="text-xs font-semibold text-slate-500 mb-2 flex items-center gap-1">
-                    <Users className="h-3.5 w-3.5" /> ENVOLVIDOS E ASSINATURAS
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {(envolvidos.length > 0 ? envolvidos : Array.from({ length: 6 }, () => ({ nome: "", funcao: "" }))).map((env, idx) => {
-                      const pos = idx + 1;
-                      const signed = assinaturasMap.has(pos);
-                      return (
-                        <button
-                          key={pos}
-                          onClick={() => setAssinarPad({ posicao: pos, nome: env.nome || `Envolvido ${pos}` })}
-                          className={`flex items-center gap-3 p-3 rounded-lg border-2 text-left transition-all
-                            ${signed
-                              ? "border-emerald-300 bg-emerald-50 hover:bg-emerald-100"
-                              : "border-dashed border-slate-200 hover:border-slate-300 bg-white"}`}>
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0
-                            ${signed ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-400"}`}>
-                            {signed ? <Check className="h-4 w-4" /> : <PenLine className="h-4 w-4" />}
+                {(() => {
+                  const lista = envolvidos.length > 0 ? envolvidos : [] as any[];
+                  const totalEnv = lista.length;
+                  const totalSigned = lista.filter((_: any, i: number) => assinaturasMap.has(i + 1)).length;
+                  const allSigned = totalEnv > 0 && totalSigned === totalEnv;
+                  const pendentes = lista.filter((_: any, i: number) => !assinaturasMap.has(i + 1)).map((e: any) => e.nome || `Envolvido ${lista.indexOf(e) + 1}`);
+                  return (
+                    <div>
+                      <p className="text-xs font-semibold text-slate-500 mb-2 flex items-center gap-1">
+                        <Users className="h-3.5 w-3.5" /> ENVOLVIDOS E ASSINATURAS
+                      </p>
+
+                      {/* Banner de status de assinaturas */}
+                      {totalEnv > 0 && (
+                        <div className={`mb-3 rounded-lg border px-4 py-3 ${allSigned ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`}>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className={`text-sm font-semibold ${allSigned ? "text-emerald-700" : "text-amber-700"}`}>
+                              {allSigned
+                                ? "✅ Todas as assinaturas coletadas"
+                                : `⏳ ${totalSigned} de ${totalEnv} assinatura${totalEnv > 1 ? "s" : ""} coletada${totalSigned !== 1 ? "s" : ""}`}
+                            </span>
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${allSigned ? "bg-emerald-200 text-emerald-800" : "bg-amber-200 text-amber-800"}`}>
+                              {totalSigned}/{totalEnv}
+                            </span>
                           </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-slate-700 truncate">
-                              {env.nome || <span className="text-slate-400 italic">Posição {pos}</span>}
+                          {/* Barra de progresso */}
+                          <div className="w-full h-1.5 bg-white/70 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all ${allSigned ? "bg-emerald-500" : "bg-amber-500"}`}
+                              style={{ width: totalEnv > 0 ? `${(totalSigned / totalEnv) * 100}%` : "0%" }}
+                            />
+                          </div>
+                          {/* Faltam assinar */}
+                          {!allSigned && pendentes.length > 0 && (
+                            <p className="text-xs text-amber-700 mt-1.5">
+                              <span className="font-medium">Falta assinar: </span>
+                              {pendentes.join(" · ")}
                             </p>
-                            <p className="text-xs text-slate-400">{env.funcao || (signed ? "Assinado" : "Aguardando assinatura")}</p>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {lista.map((env: any, idx: number) => {
+                          const pos = idx + 1;
+                          const signed = assinaturasMap.has(pos);
+                          const assSig = pt.assinaturas?.find((a: any) => a.posicao === pos);
+                          return (
+                            <button
+                              key={pos}
+                              onClick={() => setAssinarPad({ posicao: pos, nome: env.nome || `Envolvido ${pos}` })}
+                              className={`flex items-center gap-3 p-3 rounded-lg border-2 text-left transition-all
+                                ${signed
+                                  ? "border-emerald-300 bg-emerald-50 hover:bg-emerald-100"
+                                  : "border-dashed border-slate-200 hover:border-slate-300 bg-white"}`}>
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0
+                                ${signed ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-400"}`}>
+                                {signed ? <Check className="h-4 w-4" /> : <PenLine className="h-4 w-4" />}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium text-slate-700 truncate">
+                                  {env.nome || <span className="text-slate-400 italic">Posição {pos}</span>}
+                                </p>
+                                <p className="text-xs text-slate-400">{env.funcao || ""}</p>
+                                {signed && assSig?.assinadoEm && (
+                                  <p className="text-xs text-emerald-600 mt-0.5">
+                                    ✓ {new Date(assSig.assinadoEm).toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })}
+                                  </p>
+                                )}
+                                {!signed && (
+                                  <p className="text-xs text-amber-500 mt-0.5">⏳ Aguardando assinatura</p>
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Liberação */}
                 {(pt.responsavelAreaNome || pt.responsavelLiberacaoNome || pt.executanteNome) && (

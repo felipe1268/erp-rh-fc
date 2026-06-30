@@ -50,21 +50,21 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3905** — **SST — PT WIZARD: GATES DE CHECKLIST + ENVOLVIDOS COM TERCEIROS.** Step 2 (Checklist): banner âmbar se perguntas sem resposta + banner vermelho se N > 0; botão "Próximo" disabled até tudo preenchido E sem não-conformidades (alinhado NR-35). Step 3 (Envolvidos): query `obraTerceirosQ` (terceiros.funcionarios.list com obraId) agrega efetivo próprio + terceiros em seções separadas; badge âmbar "Terceiro"; limite 20→30. ZERO DELETE.
+- **Rev. 3906** — **SST — PT: FIX ASSINATURA + STATUS QUEM ASSINOU + CORES AZUL + LOGO NO PDF.** Bug root cause: `posicao: max(6)` rejeitava envolvidos nas posições 7-30 (zod BAD_REQUEST silencioso) + invalidate com chave errada (`ptId` vs `id`). Fixes: `max(30)`, chave correta. Banner de progresso: "X de N assinaturas coletadas" + barra + lista "Falta assinar". PDF: cores verde → azul FC (#1e3a5f) + logo da empresa no cabeçalho. ZERO DELETE.
 
-- **Rev. 3904** — **SST — PT WIZARD: OBRA PRIMEIRO + TST/ENCARREGADO NO CADASTRO DE OBRAS.** Schema obras: +`tst_id`/`encarregado_id` (ColFix v3904). Novo procedure `ptPermissoes.getObraSST`. Obras.tsx: campos TST + Encarregado com autocomplete de liderancas. PT Wizard Step 0 redesenhado: Obra PRIMEIRO → 3 cards SST auto-fill (Engenheiro/TST/Encarregado) → gate NR-35 amber se usuário não é TST/Engenheiro. Step 3: checklist de funcionários da obra (checkbox por nome) vs texto livre sem obra. ZERO DELETE.
+- **Rev. 3905** — **SST — PT WIZARD: GATES DE CHECKLIST + ENVOLVIDOS COM TERCEIROS.** Step 2 (Checklist): banner âmbar se perguntas sem resposta + banner vermelho se N > 0; botão "Próximo" disabled até tudo preenchido E sem não-conformidades (alinhado NR-35). Step 3 (Envolvidos): query `obraTerceirosQ` (terceiros.funcionarios.list com obraId) agrega efetivo próprio + terceiros em seções separadas; badge âmbar "Terceiro"; limite 20→30. ZERO DELETE.
 
 ### 5 one-liners
 
-- **Rev. 3903** — **SST — PT WIZARD: FIX OBRAS + LAYOUT MODERNO.** Bug fix: `trpc.getObrasByCompanyActive` (inexistente) → `trpc.obras.listActive` (obras agora aparecem). Redesign: header gradiente emerald, stepper horizontal com pills + check, conteúdo scrollável + footer fixo, 3 cards seccionados com ícones no passo 0 (Responsáveis/Local/Execução), idem passos 1 e 3. ZERO DELETE.
+- **Rev. 3904** — **SST — PT WIZARD: OBRA PRIMEIRO + TST/ENCARREGADO NO CADASTRO DE OBRAS.** Schema obras: +`tst_id`/`encarregado_id` (ColFix v3904). Novo procedure `ptPermissoes.getObraSST`. Step 0 redesenhado: Obra PRIMEIRO → 3 cards SST auto-fill. ZERO DELETE.
+
+- **Rev. 3903** — **SST — PT WIZARD: FIX OBRAS + LAYOUT MODERNO.** Bug fix: `trpc.getObrasByCompanyActive` (inexistente) → `trpc.obras.listActive`. Redesign: header gradiente emerald, stepper horizontal com pills. ZERO DELETE.
 
 - **Rev. 3902** — **SST — PDF IMPRIMÍVEL PT/APR + FCSIGN PT + ALERTA PT VENCIDAS NO PAINEL.** Três features follow-up. ZERO DELETE.
 
 - **Rev. 3901** — **APR — ANÁLISE PRELIMINAR DE RISCO 100% DIGITAL.** Wizard 3 passos; matriz P×G; canvas pad; rota `/sst/apr`. ZERO DELETE.
 
 - **Rev. 3900** — **PT — PERMISSÃO DE TRABALHO (NR-35) 100% DIGITAL.** Wizard 4 passos; canvas pad; FCSign; rota `/sst/pt`. ZERO DELETE.
-
-- **Rev. 3899** — **NF-e EMITIDAS — STATUS SEGUE SEFAZ + CONSOLIDAR MÊS.** ZERO DELETE.
 
 ### Histórico completo
 

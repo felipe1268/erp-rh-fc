@@ -1,4 +1,31 @@
 /**
+ * Rev. 3906 — **SST — PT: FIX ASSINATURA + STATUS QUEM ASSINOU + CORES AZUL + LOGO NO PDF.**
+ *
+ * PEDIDO: (1) Assinatura clicada não salvava; (2) mostrar alerta de quem assinou/falta;
+ * (3) mudar cores do PDF para azul FC Engenharia + adicionar logo.
+ *
+ * CAUSA RAIZ (assinatura): `posicao: z.number().max(6)` no backend rejeitava qualquer envolvido
+ * na posição 7+ (até 30 suportados no wizard), lançando BAD_REQUEST silencioso.
+ * Adicionalmente, `utils.ptPermissoes.getById.invalidate({ ptId, companyId })` usava chave
+ * errada (ptId vs id) então o dialog não refetchava após salvar com sucesso.
+ *
+ * SOLUÇÃO:
+ * - server/routers/ptPermissoes.ts:
+ *   · addAssinatura: `max(6)` → `max(30)`.
+ *   · gerarHtml: aceita `logoUrl?: string` opcional no input; HTML usa cores azul FC
+ *     (#1e3a5f escuro, #2563eb accent, #dbeafe claro) em substituição ao verde anterior;
+ *     header inclui `<img>` do logo quando logoUrl fornecida.
+ * - client/src/pages/sst/PermissaoTrabalho.tsx:
+ *   · AssinaturaPad.salvar: invalidate corrigido para `{ id: ptId, companyId }`.
+ *   · handlePrint: passa `logoUrl = import.meta.env.VITE_APP_LOGO` para gerarHtml.
+ *   · PTDetalheDialog — seção Envolvidos: banner âmbar/verde com "X de N assinaturas
+ *     coletadas", barra de progresso, lista "Falta assinar: Nome · Nome" para pendentes;
+ *     card de cada envolvido exibe horário de assinatura (verde) ou "Aguardando" (âmbar).
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3905 — **SST — PT WIZARD: GATES DE CHECKLIST + ENVOLVIDOS COM TERCEIROS.**
  *
  * PEDIDO: (1) Checklist deve bloquear avanço se houver perguntas sem resposta OU respostas "Não"
