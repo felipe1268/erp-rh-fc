@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import {
   ShieldAlert, Plus, ChevronRight, ChevronLeft, Check, X as XIcon,
   Loader2, AlertTriangle, CheckCircle2, Clock, FileText, MapPin,
-  User, PenLine, Eraser, Trash2, Eye, Pencil, Ban, HardHat,
+  User, PenLine, Eraser, Trash2, Eye, Pencil, Ban, HardHat, Printer,
   RefreshCw, AlertCircle, BarChart3, ArrowRight, Building2,
 } from "lucide-react";
 
@@ -507,8 +507,21 @@ function NovaAprDialog({
 function AprDetalheDialog({
   open, onOpenChange, aprId, companyId, onRefetch,
 }: { open: boolean; onOpenChange: (v: boolean) => void; aprId: number | null; companyId: number; onRefetch: () => void; }) {
-  const utils      = trpc.useUtils();
+  const utils       = trpc.useUtils();
   const { confirm } = useConfirm();
+
+  const [printLoading, setPrintLoading] = useState(false);
+
+  const handlePrint = async () => {
+    if (!aprId) return;
+    setPrintLoading(true);
+    try {
+      const res = await utils.aprAnalises.gerarHtml.fetch({ id: aprId, companyId });
+      const w = window.open("", "_blank");
+      if (w) { w.document.write(res.html); w.document.close(); setTimeout(() => w.print(), 400); }
+    } catch (e: any) { toast.error(e?.message ?? "Erro ao gerar PDF."); }
+    finally { setPrintLoading(false); }
+  };
 
   const detQ = trpc.aprAnalises.getById.useQuery(
     { id: aprId!, companyId },
@@ -656,6 +669,12 @@ function AprDetalheDialog({
         )}
 
         <DialogFooter className="flex flex-wrap gap-2 justify-end pt-2">
+          {/* Imprimir — disponível em qualquer status */}
+          <Button variant="outline" size="sm" onClick={handlePrint} disabled={printLoading}
+            className="border-slate-200 text-slate-600 hover:bg-slate-50">
+            {printLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Printer className="h-4 w-4 mr-1" />}
+            {printLoading ? "Gerando..." : "Imprimir / PDF"}
+          </Button>
           {apr?.status === "em_analise" && (
             <>
               <Button variant="outline" size="sm" onClick={handleCancelar} className="text-red-600 border-red-300 hover:bg-red-50">

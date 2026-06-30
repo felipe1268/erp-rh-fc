@@ -300,4 +300,160 @@ export const aprAnalisesRouter = router({
         .where(and(eq(aprAnalises.id, input.id), eq(aprAnalises.companyId, input.companyId)));
       return { ok: true };
     }),
+
+  // ── Gerar HTML para impressão ─────────────────────────────────────────────
+  gerarHtml: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      assertCompany(ctx, input.companyId);
+      const db = (await getDb())!;
+      const [apr] = await db.select().from(aprAnalises)
+        .where(and(eq(aprAnalises.id, input.id), eq(aprAnalises.companyId, input.companyId), isNull(aprAnalises.deletedAt))).limit(1);
+      if (!apr) throw new TRPCError({ code: "NOT_FOUND" });
+
+      let obraNome = "";
+      if (apr.obraId) {
+        const [ob] = await db.select({ nome: obras.nome }).from(obras).where(eq(obras.id, apr.obraId)).limit(1);
+        obraNome = ob?.nome ?? "";
+      }
+      let responsavelNome = "";
+      if (apr.employeeId) {
+        const [emp] = await db.select({ nome: employees.nome }).from(employees).where(eq(employees.id, apr.employeeId)).limit(1);
+        responsavelNome = emp?.nome ?? "";
+      }
+      const riscos = await db.select().from(aprRiscos)
+        .where(and(eq(aprRiscos.aprId, input.id), eq(aprRiscos.companyId, input.companyId)))
+        .orderBy(aprRiscos.ordem);
+
+      const esc = (s: any) => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      let equipe: string[] = [];
+      try { equipe = JSON.parse(apr.equipeJson ?? "[]"); } catch {}
+      let epis: string[] = [];
+      try { epis = JSON.parse(apr.epiJson ?? "[]"); } catch {}
+
+      const NIVEIS: Record<number, { label: string; bg: string; color: string }> = {};
+      for (let p = 1; p <= 5; p++) for (let g = 1; g <= 5; g++) {
+        const n = p * g;
+        NIVEIS[n] = n <= 4 ? { label: "BAIXO", bg: "#d1fae5", color: "#065f46" }
+                  : n <= 9 ? { label: "MÉDIO", bg: "#fef9c3", color: "#854d0e" }
+                  : n <= 16 ? { label: "ALTO", bg: "#ffedd5", color: "#9a3412" }
+                  : { label: "CRÍTICO", bg: "#fee2e2", color: "#991b1b" };
+      }
+
+      const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>APR — ${esc(apr.numero)}</title>
+<style>
+  @page { margin: 12mm; size: A4 landscape; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; font-size: 9pt; color: #1e293b; margin: 0; }
+  h1 { font-size: 13pt; text-align: center; margin: 0 0 4px; color: #9a3412; }
+  h2 { font-size: 9pt; background: #9a3412; color: white; padding: 4px 8px; margin: 8px 0 4px; }
+  .header { text-align: center; border: 2px solid #9a3412; padding: 8px; margin-bottom: 8px; border-radius: 4px; }
+  .subtitle { font-size: 8pt; color: #64748b; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 4px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-bottom: 4px; }
+  .field { border: 1px solid #cbd5e1; padding: 3px 6px; border-radius: 3px; }
+  .field-label { font-size: 7pt; color: #64748b; display: block; }
+  .field-value { font-size: 9pt; font-weight: bold; }
+  table { width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 8pt; }
+  th { background: #9a3412; color: white; padding: 4px; text-align: left; font-size: 7.5pt; }
+  td { border: 1px solid #e2e8f0; padding: 3px 5px; vertical-align: top; }
+  tr:nth-child(even) td { background: #fafafa; }
+  .nivel-chip { font-weight: bold; font-size: 7pt; padding: 1px 6px; border-radius: 10px; display: inline-block; }
+  .epi-chip { background: #ffedd5; color: #9a3412; font-size: 7.5pt; padding: 2px 6px; border-radius: 10px; display: inline-block; margin: 1px; }
+  .sig-box { border: 1px solid #cbd5e1; border-radius: 4px; padding: 6px; text-align: center; min-height: 60px; }
+  .sig-line { border-bottom: 1px solid #94a3b8; margin: 20px 10px 4px; }
+  .sig-label { font-size: 7pt; color: #64748b; }
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>ANÁLISE PRELIMINAR DE RISCO — APR</h1>
+  <div class="subtitle">FC Engenharia &nbsp;|&nbsp; ${esc(apr.numero)} &nbsp;|&nbsp; Status: ${esc(apr.status.toUpperCase())}</div>
+</div>
+
+<h2>1. IDENTIFICAÇÃO</h2>
+<div class="grid3">
+  <div class="field"><span class="field-label">Número APR</span><span class="field-value">${esc(apr.numero)}</span></div>
+  <div class="field"><span class="field-label">Data</span><span class="field-value">${esc(apr.dataEmissao)}</span></div>
+  <div class="field"><span class="field-label">Obra / Unidade</span><span class="field-value">${esc(obraNome)}</span></div>
+</div>
+<div class="grid2">
+  <div class="field"><span class="field-label">Atividade / Serviço</span><span class="field-value">${esc(apr.atividade)}</span></div>
+  <div class="field"><span class="field-label">Local do Serviço</span><span class="field-value">${esc(apr.localServico)}</span></div>
+</div>
+<div class="grid2">
+  <div class="field"><span class="field-label">Responsável</span><span class="field-value">${esc(responsavelNome)}</span></div>
+  <div class="field"><span class="field-label">Equipe</span><span class="field-value">${equipe.join(", ") || "—"}</span></div>
+</div>
+
+<h2>2. MATRIZ DE RISCOS (P × G)</h2>
+<table>
+  <thead>
+    <tr>
+      <th style="width:5%">#</th>
+      <th style="width:15%">Etapa/Atividade</th>
+      <th style="width:14%">Perigo</th>
+      <th style="width:14%">Risco</th>
+      <th style="width:6%">Tipo</th>
+      <th style="width:4%">P</th>
+      <th style="width:4%">G</th>
+      <th style="width:6%">Nível</th>
+      <th style="width:22%">Medidas de Controle</th>
+      <th style="width:7%">Tipo Medida</th>
+      <th style="width:10%">Responsável</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${riscos.map((r, i) => {
+      const nivel = (r.probabilidade ?? 0) * (r.gravidade ?? 0);
+      const nc = nivel > 0 ? (NIVEIS[nivel] ?? { label: String(nivel), bg: "#f1f5f9", color: "#334155" }) : null;
+      return `<tr>
+        <td>${i+1}</td>
+        <td>${esc(r.etapaAtividade)}</td>
+        <td>${esc(r.perigo)}</td>
+        <td>${esc(r.risco)}</td>
+        <td>${esc(r.tipoRisco)}</td>
+        <td style="text-align:center">${r.probabilidade ?? "—"}</td>
+        <td style="text-align:center">${r.gravidade ?? "—"}</td>
+        <td style="text-align:center">${nc ? `<span class="nivel-chip" style="background:${nc.bg};color:${nc.color}">${nc.label}</span>` : "—"}</td>
+        <td>${esc(r.medidasControle)}</td>
+        <td>${esc(r.tipoMedida)}</td>
+        <td>${esc(r.responsavelNome)}</td>
+      </tr>`;
+    }).join("")}
+  </tbody>
+</table>
+
+${epis.length ? `<h2>3. EPIs NECESSÁRIOS</h2>
+<div>${epis.map(e => `<span class="epi-chip">✓ ${esc(e)}</span>`).join(" ")}</div>` : ""}
+
+${apr.observacoes ? `<h2>4. OBSERVAÇÕES</h2><div class="field">${esc(apr.observacoes)}</div>` : ""}
+
+<h2>5. APROVAÇÃO</h2>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px">
+  <div class="sig-box">
+    ${apr.aprovadoPorAss ? `<img src="${apr.aprovadoPorAss}" style="max-width:100%;max-height:45px;object-fit:contain" alt="Assinatura" />` : `<div class="sig-line"></div>`}
+    <div style="font-weight:bold;font-size:8pt">${esc(apr.aprovadoPorNome) || "Aprovador SST"}</div>
+    <div class="sig-label">Técnico / Engenheiro de SST</div>
+    ${apr.aprovadoEm ? `<div style="font-size:7pt;color:#64748b">${new Date(apr.aprovadoEm).toLocaleString("pt-BR")}</div>` : ""}
+  </div>
+  <div class="sig-box">
+    <div class="sig-line"></div>
+    <div style="font-weight:bold;font-size:8pt">Responsável pela Execução</div>
+    <div class="sig-label">Nome / Assinatura</div>
+  </div>
+</div>
+
+<div style="margin-top:12px;padding-top:6px;border-top:1px solid #e2e8f0;font-size:7pt;color:#94a3b8;text-align:center">
+  Documento gerado em ${new Date().toLocaleString("pt-BR")} &nbsp;|&nbsp; FC Engenharia &nbsp;|&nbsp; APR ${esc(apr.numero)} &nbsp;|&nbsp; Sistema ERP
+</div>
+</body>
+</html>`;
+      return { html };
+    }),
 });

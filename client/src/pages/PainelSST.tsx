@@ -12,7 +12,8 @@ import { trpc } from "@/lib/trpc";
 import {
   Shield, HardHat, HeartPulse, FileWarning, AlertTriangle,
   ChevronRight, BarChart3, ShieldCheck, ClipboardList,
-  Clock, Users, Search, Filter, X, UserPlus, Camera, Fingerprint
+  Clock, Users, Search, Filter, X, UserPlus, Camera, Fingerprint,
+  ClipboardCheck, AlertCircle,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -47,6 +48,12 @@ export default function PainelSST() {
   const { data: capData } = trpc.epiAvancado.capacidadeContratacao.useQuery(
     { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}) },
     { enabled: hasValidCompany }
+  );
+
+  // PTs Vencidas / Em Andamento
+  const { data: ptAlertas } = trpc.ptPermissoes.alertas.useQuery(
+    { companyId: queryCompanyId },
+    { enabled: hasValidCompany && queryCompanyId > 0, refetchInterval: 60000 }
   );
 
   const [showAlertasDialog, setShowAlertasDialog] = useState(false);
@@ -278,6 +285,73 @@ export default function PainelSST() {
                     )}
                   </CardContent>
                 </Card>
+
+                {/* Card PT Vencidas / Em Andamento */}
+                {canSee("/sst/pt") && (
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <ClipboardCheck className="h-4 w-4 text-emerald-600" />
+                          Permissões de Trabalho (PT)
+                          {(ptAlertas?.totalVencidas ?? 0) > 0 && (
+                            <Badge variant="destructive" className="text-[10px]">
+                              {ptAlertas!.totalVencidas} vencida{ptAlertas!.totalVencidas !== 1 ? "s" : ""}
+                            </Badge>
+                          )}
+                        </CardTitle>
+                        <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => navigate("/sst/pt")}>
+                          Ver todas <ChevronRight className="h-3 w-3 ml-1" />
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      {!ptAlertas || (ptAlertas.totalEmAndamento === 0 && ptAlertas.totalVencidas === 0) ? (
+                        <div className="flex flex-col items-center py-6">
+                          <ShieldCheck className="h-10 w-10 text-green-400 mb-2" />
+                          <p className="text-sm font-medium text-green-600">Nenhuma PT ativa no momento</p>
+                          <p className="text-xs text-muted-foreground">Todas as permissões estão encerradas</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {/* Resumo */}
+                          <div className="flex gap-2">
+                            {ptAlertas.totalEmAndamento > 0 && (
+                              <div className="flex-1 flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                                <Clock className="h-4 w-4 text-emerald-600 shrink-0" />
+                                <div>
+                                  <p className="text-xs font-bold text-emerald-700">{ptAlertas.totalEmAndamento}</p>
+                                  <p className="text-[10px] text-emerald-600">Em andamento</p>
+                                </div>
+                              </div>
+                            )}
+                            {ptAlertas.totalVencidas > 0 && (
+                              <div className="flex-1 flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                                <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
+                                <div>
+                                  <p className="text-xs font-bold text-red-700">{ptAlertas.totalVencidas}</p>
+                                  <p className="text-[10px] text-red-600">Vencidas (liberadas)</p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          {/* Lista vencidas */}
+                          {ptAlertas.vencidas.length > 0 && (
+                            <div className="space-y-1 mt-1">
+                              <p className="text-[10px] font-semibold text-red-600 uppercase tracking-wide">PTs com prazo vencido:</p>
+                              {ptAlertas.vencidas.map((pt: any) => (
+                                <div key={pt.id} className="flex items-center justify-between text-xs px-2 py-1.5 rounded bg-red-50 border border-red-100">
+                                  <span className="font-medium">{pt.numero}</span>
+                                  <span className="text-[10px] text-red-600 font-mono">{pt.horaTermino ?? "—"}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Rev. 2246 — Card "Ocorrências de Segurança" REMOVIDO.
                     Listava advertências disciplinares (verbal/escrita) com nome

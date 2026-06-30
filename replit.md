@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3902** — **SST — PDF IMPRIMÍVEL PT/APR + FCSIGN PT + ALERTA PT VENCIDAS NO PAINEL.** Três features follow-up: (1) `gerarHtml` em PT e APR → window.open + print (A4 PT / A4-landscape APR); (2) `enviarFCSign` cria sessão FCSign (3 signatários: empregador/contratante/contratado) + vincula `fc_sign_session_id`; (3) query `alertas` + card "Permissões de Trabalho" no Painel SST com badge de vencidas e atualização 60s. ZERO DELETE.
+
 - **Rev. 3901** — **APR — ANÁLISE PRELIMINAR DE RISCO 100% DIGITAL.** Novo módulo SST; tabelas `apr_analises` + `apr_riscos` via ColFix; wizard 3 passos (Dados Gerais, Tabela de Riscos dinâmica, EPIs & Aprovação); matriz P×G 1-5×1-5 colorida (Baixo/Médio/Alto/Crítico); alerta automático riscos críticos; 12 EPIs chips; canvas pad aprovador; fluxo em_analise → aprovada → concluida; rota `/sst/apr`; sidebar SST atualizado. ZERO DELETE.
 
-- **Rev. 3900** — **PT — PERMISSÃO DE TRABALHO (NR-35) 100% DIGITAL.** Novo módulo SST; tabelas `pt_permissoes` + `pt_assinaturas` via ColFix; wizard 4 passos (Solicitação, Descrição, Checklist 15 itens NR-35, Envolvidos); assinaturas canvas pad por worker (touch/mouse); fluxo em_andamento → liberada → concluida; stats cards clicáveis; rota `/sst/pt`; sidebar SST atualizado. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3900** — **PT — PERMISSÃO DE TRABALHO (NR-35) 100% DIGITAL.** Wizard 4 passos; canvas pad; FCSign; rota `/sst/pt`. ZERO DELETE.
 
 - **Rev. 3899** — **NF-e EMITIDAS — STATUS SEGUE SEFAZ + CONSOLIDAR MÊS.** ZERO DELETE.
 
@@ -64,15 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3895** — **EPI — DIAGNÓSTICO DE FUNÇÕES NO DIALOG DE KIT + BOTÃO GERAR E SALVAR TODOS.** ZERO DELETE.
 
-- **Rev. 3894** — **EPI — KIT COBRE FUNÇÕES SIMILARES (CARPINTEIRO I, II, III → 1 KIT).** ZERO DELETE.
-
-- **Rev. 3891** — **EPI — BOTÃO IA DENTRO DO DIALOG DE KIT: PREENCHE ITENS POR FUNÇÃO.** `iaKitsDialogMut` preenche nome/descrição/itens do form; dialog 3 passos; box gradiente violeta; loading "Consultando NR-6/NR-18". ZERO DELETE.
-
-- **Rev. 3889** — **EPI — OBSERVAÇÃO OBRIGATÓRIA QUANDO EPI FORA DO KIT + FLAG `fora_do_kit` + BADGE.** Coluna `fora_do_kit`; server valida observação obrigatória; textarea + badge ⚠ âmbar. ZERO DELETE.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3887 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3894 e anteriores.
 
 ## User preferences
 

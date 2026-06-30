@@ -1,3 +1,9 @@
+- **Rev. 3894** — **EPI — KIT COBRE FUNÇÕES SIMILARES (CARPINTEIRO I, II, III → 1 KIT).** ZERO DELETE.
+
+- **Rev. 3891** — **EPI — BOTÃO IA DENTRO DO DIALOG DE KIT: PREENCHE ITENS POR FUNÇÃO.** `iaKitsDialogMut` preenche nome/descrição/itens do form; dialog 3 passos; box gradiente violeta; loading "Consultando NR-6/NR-18". ZERO DELETE.
+
+- **Rev. 3889** — **EPI — OBSERVAÇÃO OBRIGATÓRIA QUANDO EPI FORA DO KIT + FLAG `fora_do_kit` + BADGE.** Coluna `fora_do_kit`; server valida observação obrigatória; textarea + badge ⚠ âmbar. ZERO DELETE.
+
 - **Rev. 3886** — **TEMPLATES DE EXTRATO — PREVIEW FULLSCREEN + COLAPSO DE GRUPOS + DEDUP FRONTEND + GATE DE TEMPLATE NA CONCILIAÇÃO.** Dialog fullscreen; grupos colapsáveis; dedup por nome normalizado; gate na Conciliação. ZERO DELETE.
 
 - **Rev. 3885** — **TEMPLATES DE EXTRATO — AUDITORIA (QUEM/QUANDO) + ACESSO RESTRITO A ADMIN.** Colunas `atualizado_por_id/nome`; `assertAdminRole` em create/update/delete/analisarPdf; botões ocultos p/ não-admin. ZERO DELETE.

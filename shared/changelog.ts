@@ -1,4 +1,45 @@
 /**
+ * Rev. 3902 — **SST — PDF IMPRIMÍVEL PT/APR + FCSIGN PT + ALERTA PT VENCIDAS NO PAINEL.**
+ *
+ * Três features de follow-up para os módulos SST PT (Rev.3900) e APR (Rev.3901).
+ *
+ * ## 1. PDF Imprimível — PT e APR
+ * - Endpoint `ptPermissoes.gerarHtml` gera HTML A4 completo com todos os dados da PT:
+ *   identificação, checklist NR-35 (S/N/NA colorido), quadro de assinaturas com imagens
+ *   canvas pad, liberação, conclusão. Print CSS com `@page A4`.
+ * - Endpoint `aprAnalises.gerarHtml` gera HTML A4 landscape com tabela de riscos P×G
+ *   colorida, chips de EPIs, assinatura do aprovador, cabeçalho institucional.
+ * - Client: botão "Imprimir / PDF" em cada dialog de detalhe — chama a query via
+ *   `utils.<router>.gerarHtml.fetch()`, abre `window.open()` + `w.print()` após 400ms.
+ *
+ * ## 2. FCSign para Liberação Formal de PT
+ * - Endpoint `ptPermissoes.enviarFCSign` cria sessão FCSign diretamente em
+ *   `signature_sessions` + `signature_signers` (3 signatários: empregador=Resp.Área,
+ *   contratante=Resp.Liberação, contratado=Executante) e vincula `fc_sign_session_id`.
+ * - Importa `signatureSessions`/`signatureSigners` do schema + `randomBytes`/`createHash`.
+ * - Botão "Enviar FCSign" aparece apenas para status=`em_andamento` e sem sessão prévia.
+ *   Dialog pré-popula nomes da PT; após envio mostra badge "FCSign enviado".
+ * - Guard de dedup: pt.fcSignSessionId já preenchido → lança CONFLICT.
+ *
+ * ## 3. Card PT Vencidas no Painel SST
+ * - Endpoint `ptPermissoes.alertas` conta PTs `em_andamento` (todas) e `liberada` com
+ *   `hora_termino < horaAtual` (vencidas, comparação hora HH:MM). Retorna listas de
+ *   até 5 de cada. Atualiza a cada 60s no Painel.
+ * - Card "Permissões de Trabalho (PT)" no grid do Painel SST: badge vermelho com count
+ *   de vencidas, chips contadores verde/vermelho, lista das PTs vencidas com número e
+ *   hora. Visível apenas se `canSee("/sst/pt")`.
+ *
+ * ## Arquivos
+ * - `server/routers/ptPermissoes.ts` — alertas, gerarHtml, enviarFCSign (3 endpoints novos)
+ * - `server/routers/aprAnalises.ts` — gerarHtml (1 endpoint novo)
+ * - `client/src/pages/sst/PermissaoTrabalho.tsx` — print button + FCSign button + dialog
+ * - `client/src/pages/sst/AprAnalise.tsx` — print button
+ * - `client/src/pages/PainelSST.tsx` — card PT vencidas + query ptPermissoes.alertas
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3901 — **APR — ANÁLISE PRELIMINAR DE RISCO 100% DIGITAL.**
  *
  * Novo módulo SST: APR totalmente digital com matriz de risco P×G colorida.

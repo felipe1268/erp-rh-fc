@@ -19,7 +19,7 @@ import {
   Loader2, HardHat, Users, AlertTriangle, CheckCircle2, Clock,
   ShieldCheck, FileText, MapPin, User, PenLine, Eraser,
   ChevronDown, ChevronUp, Eye, Pencil, Ban, ArrowRight, Building2,
-  RefreshCw,
+  RefreshCw, Printer, Send,
 } from "lucide-react";
 
 // ── Checklist NR-35 — 15 itens ────────────────────────────────────────────────
@@ -653,6 +653,13 @@ function PTDetalheDialog({
   const [assinarPad, setAssinarPad] = useState<{ posicao: number; nome: string } | null>(null);
   const [concluirOpen, setConcluirOpen] = useState(false);
   const [liberarOpen, setLiberarOpen] = useState(false);
+  const [fcSignOpen, setFcSignOpen] = useState(false);
+  const [printLoading, setPrintLoading] = useState(false);
+  const [fcSignSigners, setFcSignSigners] = useState([
+    { role: "empregador" as const, label: "Responsável da Área", nome: "", cpf: "" },
+    { role: "contratante" as const, label: "Responsável pela Liberação", nome: "", cpf: "" },
+    { role: "contratado" as const, label: "Responsável pela Execução", nome: "", cpf: "" },
+  ]);
   const [concluirForm, setConcluirForm] = useState({
     conclusaoSolicitanteNome: "", conclusaoData: new Date().toISOString().slice(0, 10),
     conclusaoHoraInicio: "", conclusaoHoraFim: "",
@@ -666,12 +673,44 @@ function PTDetalheDialog({
     { enabled: open && ptId !== null },
   );
   const utils = trpc.useUtils();
-  const liberarMut  = trpc.ptPermissoes.liberar.useMutation();
-  const concluirMut = trpc.ptPermissoes.concluir.useMutation();
-  const cancelarMut = trpc.ptPermissoes.cancelar.useMutation();
+  const liberarMut    = trpc.ptPermissoes.liberar.useMutation();
+  const concluirMut   = trpc.ptPermissoes.concluir.useMutation();
+  const cancelarMut   = trpc.ptPermissoes.cancelar.useMutation();
+  const fcSignMut     = trpc.ptPermissoes.enviarFCSign.useMutation();
 
   const pt = ptQ.data as any;
   if (!open || ptId === null) return null;
+
+  const handlePrint = async () => {
+    if (!ptId) return;
+    setPrintLoading(true);
+    try {
+      const res = await utils.ptPermissoes.gerarHtml.fetch({ id: ptId, companyId });
+      const w = window.open("", "_blank");
+      if (w) { w.document.write(res.html); w.document.close(); setTimeout(() => w.print(), 400); }
+    } catch (e: any) { toast.error(e?.message ?? "Erro ao gerar PDF."); }
+    finally { setPrintLoading(false); }
+  };
+
+  const handleFcSign = async () => {
+    if (!pt) return;
+    setFcSignSigners(s => s.map((sg, i) => ({
+      ...sg,
+      nome: i === 0 ? (pt.responsavelAreaNome ?? "") : i === 1 ? (pt.responsavelLiberacaoNome ?? "") : (pt.executanteNome ?? ""),
+    })));
+    setFcSignOpen(true);
+  };
+
+  const handleFcSignSubmit = async () => {
+    const signers = fcSignSigners.filter(s => s.nome.trim());
+    if (!signers.length) { toast.error("Informe ao menos um signatário."); return; }
+    try {
+      await fcSignMut.mutateAsync({ id: ptId, companyId, signers: signers.map(s => ({ role: s.role, nome: s.nome.trim(), cpf: s.cpf.trim() || null })) });
+      toast.success("Sessão FCSign criada! Os responsáveis receberão o link para assinar.");
+      setFcSignOpen(false);
+      utils.ptPermissoes.getById.invalidate({ id: ptId, companyId });
+    } catch (e: any) { toast.error(e?.message ?? "Erro ao enviar para FCSign."); }
+  };
 
   const checklist: ChecklistState = pt?.checklist ?? {};
   const assinaturasMap = new Map<number, boolean>(
@@ -872,9 +911,15 @@ function PTDetalheDialog({
                 )}
 
                 {/* Ações */}
-                {(pt.status === "em_andamento" || pt.status === "liberada") && (
-                  <div className="flex flex-wrap gap-2 pt-2 border-t">
-                    {pt.status === "em_andamento" && (
+                <div className="flex flex-wrap gap-2 pt-2 border-t">
+                  {/* Imprimir — disponível em qualquer status com dados carregados */}
+                  <Button variant="outline" onClick={handlePrint} disabled={printLoading}
+                    className="border-slate-200 text-slate-600 hover:bg-slate-50">
+                    {printLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Printer className="h-4 w-4 mr-1" />}
+                    {printLoading ? "Gerando..." : "Imprimir / PDF"}
+                  </Button>
+                  {(pt.status === "em_andamento" || pt.status === "liberada") && (<>
+                    {pt.status === "em_andamento" && (<>
                       <Button onClick={() => {
                         setLiberarForm({
                           responsavelAreaNome: pt.responsavelAreaNome ?? "",
@@ -886,7 +931,19 @@ function PTDetalheDialog({
                         className="bg-emerald-600 hover:bg-emerald-700 text-white">
                         <ShieldCheck className="h-4 w-4 mr-1" /> Liberar PT
                       </Button>
-                    )}
+                      {/* FCSign — só mostra quando ainda não tem sessão */}
+                      {!pt.fcSignSessionId && (
+                        <Button variant="outline" onClick={handleFcSign}
+                          className="border-violet-200 text-violet-700 hover:bg-violet-50">
+                          <Send className="h-4 w-4 mr-1" /> Enviar FCSign
+                        </Button>
+                      )}
+                      {pt.fcSignSessionId && (
+                        <span className="inline-flex items-center gap-1 text-xs text-violet-600 font-medium px-2 py-1 bg-violet-50 border border-violet-200 rounded-md">
+                          <CheckCircle2 className="h-3.5 w-3.5" /> FCSign enviado
+                        </span>
+                      )}
+                    </>)}
                     {pt.status === "liberada" && (
                       <Button onClick={() => {
                         setConcluirForm({ conclusaoSolicitanteNome: pt.solicitanteNome ?? "", conclusaoData: new Date().toISOString().slice(0, 10), conclusaoHoraInicio: "", conclusaoHoraFim: "" });
@@ -901,11 +958,48 @@ function PTDetalheDialog({
                       className="border-red-200 text-red-600 hover:bg-red-50">
                       <Ban className="h-4 w-4 mr-1" /> Cancelar PT
                     </Button>
-                  </div>
-                )}
+                  </>)}
+                </div>
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog FCSign — Liberação Formal */}
+      <Dialog open={fcSignOpen} onOpenChange={setFcSignOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-violet-700">
+              <Send className="h-5 w-5" /> Enviar para Assinatura — FCSign
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-slate-500 -mt-1">Informe os responsáveis que assinarão digitalmente a liberação desta PT via FCSign.</p>
+          <div className="space-y-3">
+            {fcSignSigners.map((signer, i) => (
+              <div key={i} className="border rounded-lg p-3 space-y-2 bg-slate-50">
+                <p className="text-xs font-semibold text-slate-700">{signer.label}</p>
+                <Input
+                  placeholder="Nome completo"
+                  value={signer.nome}
+                  onChange={e => setFcSignSigners(s => s.map((x, j) => j === i ? { ...x, nome: e.target.value } : x))}
+                />
+                <Input
+                  placeholder="CPF (opcional)"
+                  value={signer.cpf}
+                  onChange={e => setFcSignSigners(s => s.map((x, j) => j === i ? { ...x, cpf: e.target.value } : x))}
+                />
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFcSignOpen(false)}>Cancelar</Button>
+            <Button onClick={handleFcSignSubmit} disabled={fcSignMut.isPending}
+              className="bg-violet-600 hover:bg-violet-700 text-white">
+              {fcSignMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}
+              Enviar para FCSign
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
