@@ -10234,6 +10234,8 @@ export const aprAnalises = pgTable("apr_analises", {
   dataEmissao:       varchar("data_emissao", { length: 10 }),
   atividade:         varchar("atividade", { length: 500 }),
   localServico:      varchar("local_servico", { length: 255 }),
+  tipoAtividade:     varchar("tipo_atividade", { length: 50 }),
+  checklistJson:     text("checklist_json"),
   equipeJson:        text("equipe_json"),
   epiJson:           text("epi_json"),
   observacoes:       text("observacoes"),

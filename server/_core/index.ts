@@ -4710,7 +4710,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v3904b-2026-06-30-obras-tst-encarregado";
+    const COLFIX_VERSION = "v3913-2026-06-30-apr-tipo-checklist";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -6142,6 +6142,14 @@ Regras:
         await _db3904.$client.query(`ALTER TABLE obras ADD COLUMN IF NOT EXISTS encarregado_id INTEGER`);
         console.log("[ColFix Rev.3904b] tst_id + encarregado_id garantidos em obras.");
       } catch (e: any) { console.warn("[ColFix Rev.3904b] obras tst/encarregado falhou:", e?.message ?? e); }
+
+      // Rev. 3913 — APR: tipo_atividade + checklist_json
+      try {
+        const _db3913 = (await getDb())!;
+        await _db3913.$client.query(`ALTER TABLE apr_analises ADD COLUMN IF NOT EXISTS tipo_atividade varchar(50)`);
+        await _db3913.$client.query(`ALTER TABLE apr_analises ADD COLUMN IF NOT EXISTS checklist_json text`);
+        console.log("[ColFix Rev.3913] apr_analises: tipo_atividade + checklist_json garantidos.");
+      } catch (e: any) { console.warn("[ColFix Rev.3913] apr tipo/checklist falhou (não-fatal):", e?.message ?? e); }
 
       // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos
       import("../services/startupCache").then(({ setCache }) =>

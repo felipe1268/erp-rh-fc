@@ -1,4 +1,48 @@
 /**
+ * Rev. 3913 — **SST — APR EXPANDIDA: 10 TIPOS DE ATIVIDADE COM CHECKLIST ESPECÍFICO POR NR.**
+ *
+ * PEDIDO: A APR deve ser geral — não apenas para NR-35/altura. Ao iniciar uma APR, o usuário
+ * escolhe o tipo de atividade (altura, espaço confinado, escavação, andaime, elétrica, etc.);
+ * o sistema carrega o checklist pertinente (Sim/Não/N/A por item) e os riscos/EPIs pré-definidos.
+ *
+ * IMPLEMENTAÇÃO:
+ *
+ * Schema: drizzle/schema.ts + ColFix v3913
+ *   - `apr_analises.tipo_atividade varchar(50)` — ID do tipo selecionado
+ *   - `apr_analises.checklist_json text` — JSON dos itens respondidos {pergunta, resposta}[]
+ *
+ * Backend: server/routers/aprAnalises.ts
+ *   - `create` input: +tipoAtividade, +checklistJson
+ *   - getById já retorna as novas colunas via select()
+ *
+ * Frontend: client/src/pages/sst/AprAnalise.tsx
+ *
+ * 10 tipos de atividade (construção civil):
+ *   altura (NR-35), espaco_confinado (NR-33), escavacao (NR-18), andaime (NR-35/18),
+ *   eletrica (NR-10), demolicao (NR-18), icamento (NR-11), soldagem (NR-18),
+ *   cobertura (NR-18/35), geral (NR-18)
+ *
+ * Cada tipo carrega:
+ *   · 10 perguntas de checklist específicas para a NR
+ *   · 2-3 riscos pré-populados na tabela de riscos (editáveis)
+ *   · EPIs pré-selecionados específicos para o tipo
+ *
+ * Wizard redesenhado: 3 steps → 5 steps
+ *   0. Tipo de Atividade — grid de 10 cards com emoji, label, NR, nº de itens
+ *      Clicar no card já avança para step 1 e pré-preenche tudo
+ *   1. Dados Gerais — igual ao anterior (atividade pré-preenchida com label do tipo)
+ *   2. Checklist — perguntas do tipo; cada item: botões Sim/Não/N/A coloridos
+ *      Gate: todos os itens precisam ser respondidos para avançar
+ *      Alerta se há itens "Não" (não bloqueia, mas exige ciência)
+ *   3. Tabela de Riscos — pré-populada com riscos típicos do tipo (editável, adicionável)
+ *   4. EPIs + Aprovação — EPIs pré-selecionados do tipo (editável) + assinatura canvas
+ *
+ * Dialog de detalhe: exibe checklist respondido com ícones (✓/✗/—) e badge de não-conformes.
+ *
+ * ZERO DELETE. Wizard antigo de 3 steps substituído por 5 steps (sem remover nenhuma tabela/rota).
+ */
+
+/**
  * Rev. 3912 — **SST — PT WIZARD STEP 3: BLOQUEIO DE SELEÇÃO PARA FUNCIONÁRIOS SEM NR-35 VÁLIDA.**
  *
  * PEDIDO: Funcionário sem NR-35 ou com NR-35 vencida não pode ser selecionado como envolvido

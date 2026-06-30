@@ -19,6 +19,7 @@ import {
   Loader2, AlertTriangle, CheckCircle2, Clock, FileText, MapPin,
   User, PenLine, Eraser, Trash2, Eye, Pencil, Ban, HardHat, Printer,
   RefreshCw, AlertCircle, BarChart3, ArrowRight, Building2,
+  ListChecks, Layers, CircleCheck, CircleX, Minus,
 } from "lucide-react";
 
 // ── Probabilidade / Gravidade ────────────────────────────────────────────────
@@ -60,6 +61,240 @@ const EPI_SUGESTOES = [
   "Luvas de borracha", "Calçado de segurança", "Protetor auricular",
   "Máscara PFF2", "Cinto de segurança", "Talabarte", "Trava-quedas",
   "Colete refletivo", "Uniforme de trabalho",
+];
+
+// ── Tipos de Atividade APR (construção civil) ────────────────────────────────
+type ChecklistResposta = "sim" | "nao" | "na" | "";
+type ChecklistItem = { pergunta: string; resposta: ChecklistResposta };
+
+type AprTipo = {
+  id: string; label: string; nr: string; emoji: string;
+  colorBg: string; colorBorder: string; colorText: string; colorBtn: string;
+  descricao: string; checklist: string[]; episSugeridos: string[];
+  riscosPredef: Array<Partial<RiscoItem>>;
+};
+
+const APR_TIPOS: AprTipo[] = [
+  {
+    id: "altura", label: "Trabalho em Altura", nr: "NR-35", emoji: "⬆️",
+    colorBg: "bg-blue-50", colorBorder: "border-blue-300", colorText: "text-blue-800", colorBtn: "bg-blue-600 hover:bg-blue-700",
+    descricao: "Atividades realizadas acima de 2m com risco de queda",
+    checklist: [
+      "Trabalhador possui treinamento NR-35 válido (não vencido)?",
+      "Cinturão de segurança tipo paraquedista e talabarte duplo disponíveis e inspecionados?",
+      "Trava-quedas (auto-retrátil ou de cabo guia) disponível e certificado?",
+      "Pontos de ancoragem identificados e estruturalmente seguros?",
+      "Linha de vida instalada e homologada pelo responsável técnico?",
+      "Área abaixo isolada e sinalizada contra queda de objetos?",
+      "Plano de resgate para trabalho em altura elaborado?",
+      "Condições meteorológicas favoráveis (sem chuva, raio ou vento forte)?",
+      "Escadas, andaimes ou plataformas em boas condições?",
+      "Comunicação com equipe de resgate estabelecida?",
+    ],
+    episSugeridos: ["Capacete de segurança", "Cinturão tipo paraquedista", "Talabarte duplo", "Trava-quedas", "Linha de vida", "Luvas de vaqueta", "Calçado de segurança", "Colete refletivo"],
+    riscosPredef: [
+      { etapaAtividade: "Acesso/Descida", perigo: "Trabalho em altura", risco: "Queda de nível diferente", tipoRisco: "seguranca", probabilidade: 4, gravidade: 5, tipoMedida: "epc", medidasControle: "Utilizar sistema de proteção contra queda (linha de vida + talabarte duplo). Instalar guarda-corpo quando aplicável.", responsavelNome: "", prazo: "", situacao: "aberta" },
+      { etapaAtividade: "Execução", perigo: "Queda de ferramentas/materiais", risco: "Impacto em pessoa no nível inferior", tipoRisco: "seguranca", probabilidade: 3, gravidade: 4, tipoMedida: "epc", medidasControle: "Isolar área abaixo. Usar sacolas porta-ferramentas. Instalar tela/bandeja de proteção.", responsavelNome: "", prazo: "", situacao: "aberta" },
+    ],
+  },
+  {
+    id: "espaco_confinado", label: "Espaço Confinado", nr: "NR-33", emoji: "🕳️",
+    colorBg: "bg-purple-50", colorBorder: "border-purple-300", colorText: "text-purple-800", colorBtn: "bg-purple-600 hover:bg-purple-700",
+    descricao: "Entrada e trabalho em espaços com acesso e saída restritos",
+    checklist: [
+      "Permissão de Entrada e Trabalho (PET) emitida e assinada pelo supervisor?",
+      "Identificação e avaliação dos riscos atmosféricos realizada?",
+      "Análise atmosférica (O₂, CO, H₂S, LEL) realizada antes da entrada?",
+      "Ventilação forçada instalada e operando durante o trabalho?",
+      "Vigias treinados em NR-33 posicionados no exterior?",
+      "Sistema de resgate (tripé, talha, cabo de vida) preparado e testado?",
+      "Bloqueio e etiquetagem (LOTO) de energias perigosas aplicados?",
+      "Comunicação entre equipe interna e vigia estabelecida?",
+      "EPIs específicos (máscara SCBA ou ar puro, arnês) disponíveis?",
+      "Plano de resgate de emergência definido e comunicado a todos?",
+    ],
+    episSugeridos: ["Capacete de segurança", "Arnês completo", "Máscara de ar puro (SCBA)", "Detector de gases portátil", "Luvas de borracha", "Calçado de segurança", "Colete refletivo", "Lanterna ou iluminação de emergência"],
+    riscosPredef: [
+      { etapaAtividade: "Entrada no espaço", perigo: "Atmosfera deficiente de O₂ / contaminada", risco: "Asfixia ou intoxicação", tipoRisco: "seguranca", probabilidade: 4, gravidade: 5, tipoMedida: "epc", medidasControle: "Análise atmosférica antes e durante. Ventilação forçada contínua. EPIs respiratórios.", responsavelNome: "", prazo: "", situacao: "aberta" },
+      { etapaAtividade: "Resgate", perigo: "Dificuldade de acesso", risco: "Agravamento por demora no resgate", tipoRisco: "seguranca", probabilidade: 3, gravidade: 5, tipoMedida: "epc", medidasControle: "Tripé de resgate montado. Vigia treinado. Plano de resgate testado.", responsavelNome: "", prazo: "", situacao: "aberta" },
+    ],
+  },
+  {
+    id: "escavacao", label: "Escavação / Fundação", nr: "NR-18", emoji: "⛏️",
+    colorBg: "bg-amber-50", colorBorder: "border-amber-300", colorText: "text-amber-800", colorBtn: "bg-amber-600 hover:bg-amber-700",
+    descricao: "Escavações, valas, fundações e rebaixamento de terreno",
+    checklist: [
+      "Sondagem e análise do tipo de solo realizada por profissional habilitado?",
+      "Levantamento de interferências (água, esgoto, gás, elétrica) concluído?",
+      "Inclinação dos taludes ou escoramento adequado instalado?",
+      "Sinalização, barricadas e telas de proteção instaladas ao redor?",
+      "Plataformas de acesso (escadas) instaladas a cada 3m de profundidade?",
+      "Maquinário pesado a distância segura das bordas da escavação?",
+      "Sistema de drenagem/esgotamento disponível (bomba)?",
+      "Inspeção visual das paredes realizada antes de cada turno?",
+      "EPIs adequados disponíveis (capacete, bota, colete)?",
+      "Plano de emergência para solapamento/desmoronamento elaborado?",
+    ],
+    episSugeridos: ["Capacete de segurança", "Calçado de segurança (impermeável)", "Luvas de vaqueta", "Óculos de proteção", "Colete refletivo", "Protetor auricular"],
+    riscosPredef: [
+      { etapaAtividade: "Escavação", perigo: "Instabilidade de talude/parede", risco: "Solapamento ou desmoronamento sobre trabalhador", tipoRisco: "seguranca", probabilidade: 3, gravidade: 5, tipoMedida: "epc", medidasControle: "Escoramento ou taludes conforme projeto. Inspeção diária.", responsavelNome: "", prazo: "", situacao: "aberta" },
+      { etapaAtividade: "Operação de equipamentos", perigo: "Maquinário pesado em movimento", risco: "Atropelamento ou colisão com trabalhador", tipoRisco: "seguranca", probabilidade: 2, gravidade: 5, tipoMedida: "admin", medidasControle: "Delimitar área de operação. Sinaleiro presente durante operação.", responsavelNome: "", prazo: "", situacao: "aberta" },
+    ],
+  },
+  {
+    id: "andaime", label: "Montagem de Andaime", nr: "NR-35 / NR-18", emoji: "🏗️",
+    colorBg: "bg-sky-50", colorBorder: "border-sky-300", colorText: "text-sky-800", colorBtn: "bg-sky-600 hover:bg-sky-700",
+    descricao: "Montagem, uso e desmontagem de andaimes tubulares",
+    checklist: [
+      "Projeto ou esquema de montagem aprovado pelo responsável técnico?",
+      "Travamentos horizontais e diagonais instalados conforme projeto?",
+      "Plataformas de trabalho com guarda-corpo (mínimo 1,20m) e rodapé?",
+      "Fixações à estrutura verificadas (a cada 4m de altura)?",
+      "Capacidade de carga máxima identificada e respeitada?",
+      "Trabalhadores possuem treinamento NR-35 válido?",
+      "Acesso ao andaime seguro (escada interna ou gato-de-obra fixo)?",
+      "Área ao redor isolada e sinalizada?",
+      "Andaime inspecionado por profissional habilitado antes do uso?",
+      "EPIs de trabalho em altura disponíveis para todos?",
+    ],
+    episSugeridos: ["Capacete de segurança", "Cinturão tipo paraquedista", "Talabarte duplo", "Trava-quedas", "Luvas de vaqueta", "Calçado de segurança", "Colete refletivo"],
+    riscosPredef: [
+      { etapaAtividade: "Montagem/Desmontagem", perigo: "Trabalho em altura", risco: "Queda de trabalhador", tipoRisco: "seguranca", probabilidade: 3, gravidade: 5, tipoMedida: "epc", medidasControle: "EPI de proteção contra queda obrigatório. Linha de vida durante montagem.", responsavelNome: "", prazo: "", situacao: "aberta" },
+      { etapaAtividade: "Uso do andaime", perigo: "Sobrecarga estrutural", risco: "Colapso do andaime com trabalhadores", tipoRisco: "seguranca", probabilidade: 2, gravidade: 5, tipoMedida: "epc", medidasControle: "Respeitar carga máxima. Inspeção diária. Travamentos verificados.", responsavelNome: "", prazo: "", situacao: "aberta" },
+    ],
+  },
+  {
+    id: "eletrica", label: "Instalação Elétrica", nr: "NR-10", emoji: "⚡",
+    colorBg: "bg-yellow-50", colorBorder: "border-yellow-300", colorText: "text-yellow-800", colorBtn: "bg-yellow-600 hover:bg-yellow-700",
+    descricao: "Serviços em instalações e equipamentos elétricos",
+    checklist: [
+      "Trabalhadores possuem treinamento NR-10 válido (SEP se aplicável)?",
+      "Sistema elétrico bloqueado e etiquetado (LOTO) antes do início?",
+      "Ausência de tensão verificada com multímetro certificado?",
+      "EPIs elétricos (luvas isolantes, botas isolantes, óculos) disponíveis?",
+      "EPC (barreiras, isolamentos temporários) instalados?",
+      "Distâncias de segurança de partes energizadas respeitadas?",
+      "Ferramentas com isolamento adequado certificadas (1000V)?",
+      "Ponto de aterramento instalado e verificado?",
+      "Iluminação adequada no local do serviço?",
+      "Plano de emergência para choque elétrico elaborado?",
+    ],
+    episSugeridos: ["Luvas isolantes (classe compatível com tensão)", "Botas isolantes", "Óculos de proteção", "Capacete de segurança (Classe B)", "Colete refletivo"],
+    riscosPredef: [
+      { etapaAtividade: "Execução elétrica", perigo: "Contato com parte energizada", risco: "Choque elétrico / eletrocução", tipoRisco: "seguranca", probabilidade: 3, gravidade: 5, tipoMedida: "epc", medidasControle: "LOTO completo. Verificação de tensão zero. EPIs dielétricos certificados.", responsavelNome: "", prazo: "", situacao: "aberta" },
+      { etapaAtividade: "Execução elétrica", perigo: "Arco elétrico", risco: "Queimaduras graves por flash elétrico", tipoRisco: "seguranca", probabilidade: 2, gravidade: 5, tipoMedida: "epi", medidasControle: "EPI adequado à categoria de risco de arco. Distâncias de segurança.", responsavelNome: "", prazo: "", situacao: "aberta" },
+    ],
+  },
+  {
+    id: "demolicao", label: "Demolição", nr: "NR-18", emoji: "🔨",
+    colorBg: "bg-red-50", colorBorder: "border-red-300", colorText: "text-red-800", colorBtn: "bg-red-600 hover:bg-red-700",
+    descricao: "Demolição total ou parcial de estruturas civis",
+    checklist: [
+      "Laudo técnico de demolição elaborado por responsável técnico habilitado?",
+      "Desligamento de todas as redes de utilidades (gás, elétrica, água) confirmado?",
+      "Área de demolição isolada com raio de segurança adequado?",
+      "Estruturas adjacentes monitoradas e/ou escoradas?",
+      "Método de demolição definido no laudo técnico?",
+      "Plano de remoção de entulho e resíduos elaborado?",
+      "EPIs específicos disponíveis (capacete, óculos, respirador, protetor auricular)?",
+      "Estabilidade estrutural residual verificada antes de cada etapa?",
+      "Plano de emergência para colapso estrutural elaborado?",
+      "Vizinhança notificada sobre os trabalhos de demolição?",
+    ],
+    episSugeridos: ["Capacete de segurança", "Óculos de proteção (vedação total)", "Respirador PFF2", "Protetor auricular", "Luvas de vaqueta", "Calçado de segurança", "Colete refletivo"],
+    riscosPredef: [
+      { etapaAtividade: "Demolição", perigo: "Instabilidade estrutural", risco: "Colapso não controlado sobre trabalhadores", tipoRisco: "seguranca", probabilidade: 3, gravidade: 5, tipoMedida: "admin", medidasControle: "Seguir sequência definida no laudo. Inspeção antes de cada etapa.", responsavelNome: "", prazo: "", situacao: "aberta" },
+      { etapaAtividade: "Demolição", perigo: "Poeira e partículas", risco: "Doenças respiratórias e lesões oculares", tipoRisco: "saude", probabilidade: 4, gravidade: 3, tipoMedida: "epi", medidasControle: "Umectação da área. Respirador PFF2. Óculos de proteção.", responsavelNome: "", prazo: "", situacao: "aberta" },
+    ],
+  },
+  {
+    id: "icamento", label: "Içamento de Cargas", nr: "NR-11", emoji: "🏋️",
+    colorBg: "bg-green-50", colorBorder: "border-green-300", colorText: "text-green-800", colorBtn: "bg-green-600 hover:bg-green-700",
+    descricao: "Movimentação, içamento e transporte de cargas pesadas",
+    checklist: [
+      "Operador de guincho/guindaste/grua com habilitação válida?",
+      "Capacidade de carga do equipamento verificada e dentro dos limites?",
+      "Inspeção pré-operacional do equipamento realizada?",
+      "Acessórios de içamento (cintas, manilhas, ganchos) inspecionados e certificados?",
+      "Área de içamento sinalizada e livre de pessoas durante a operação?",
+      "Rigger treinado e responsável pelo encalhe (slinging) da carga?",
+      "Condições de vento favoráveis para içamento (< 42 km/h)?",
+      "Plano de içamento com rotas e área de segurança definidos?",
+      "Comunicação entre operador e rigger estabelecida (rádio/sinal)?",
+      "Carga inspecionada e eslingada sem risco de queda de partes?",
+    ],
+    episSugeridos: ["Capacete de segurança", "Luvas de vaqueta", "Calçado de segurança", "Colete refletivo", "Óculos de proteção"],
+    riscosPredef: [
+      { etapaAtividade: "Içamento", perigo: "Queda da carga", risco: "Esmagamento de trabalhador", tipoRisco: "seguranca", probabilidade: 3, gravidade: 5, tipoMedida: "epc", medidasControle: "Área livre de pessoas. Cintas/manilhas certificadas. Inspeção do encalhe.", responsavelNome: "", prazo: "", situacao: "aberta" },
+      { etapaAtividade: "Içamento", perigo: "Tombamento do equipamento", risco: "Colapso do guindaste sobre trabalhadores", tipoRisco: "seguranca", probabilidade: 2, gravidade: 5, tipoMedida: "admin", medidasControle: "Verificar capacidade e estabilidade do terreno. Plano de içamento aprovado.", responsavelNome: "", prazo: "", situacao: "aberta" },
+    ],
+  },
+  {
+    id: "soldagem", label: "Soldagem / Corte a Quente", nr: "NR-18", emoji: "🔥",
+    colorBg: "bg-orange-50", colorBorder: "border-orange-300", colorText: "text-orange-800", colorBtn: "bg-orange-600 hover:bg-orange-700",
+    descricao: "Soldagem elétrica, oxicorte e trabalhos com chama aberta",
+    checklist: [
+      "Área de soldagem/corte isolada e ventilada adequadamente?",
+      "Materiais combustíveis e inflamáveis removidos da área (raio mínimo 10m)?",
+      "Extintores de incêndio disponíveis e operantes na área?",
+      "EPIs de soldagem disponíveis (máscara, avental, luvas, perneiras, respirador)?",
+      "Cilindros de gás armazenados verticalmente e afastados de fontes de calor?",
+      "Trabalhadores com treinamento para trabalho a quente?",
+      "Vigias de incêndio designados durante e 30 min após o serviço?",
+      "Permissão de Trabalho a Quente (hot work permit) emitida?",
+      "Sistema elétrico de soldagem inspecionado e aterrado?",
+      "Plano de emergência para incêndio elaborado e comunicado?",
+    ],
+    episSugeridos: ["Máscara de solda (escurecimento automático)", "Avental de couro", "Luvas de solda (raspa)", "Perneiras de couro", "Respirador para fumos metálicos", "Capacete de segurança", "Calçado de segurança", "Colete refletivo"],
+    riscosPredef: [
+      { etapaAtividade: "Soldagem/Corte", perigo: "Fumos metálicos e gases", risco: "Intoxicação por inalação", tipoRisco: "saude", probabilidade: 4, gravidade: 3, tipoMedida: "epc", medidasControle: "Ventilação forçada ou local ventilado. Respirador para fumos.", responsavelNome: "", prazo: "", situacao: "aberta" },
+      { etapaAtividade: "Soldagem/Corte", perigo: "Faíscas e respingos", risco: "Incêndio ou queimadura", tipoRisco: "seguranca", probabilidade: 3, gravidade: 4, tipoMedida: "epi", medidasControle: "Remover combustíveis. EPIs de soldagem completos. Vigia de incêndio.", responsavelNome: "", prazo: "", situacao: "aberta" },
+    ],
+  },
+  {
+    id: "cobertura", label: "Serviços em Cobertura / Telhado", nr: "NR-18 / NR-35", emoji: "🏠",
+    colorBg: "bg-teal-50", colorBorder: "border-teal-300", colorText: "text-teal-800", colorBtn: "bg-teal-600 hover:bg-teal-700",
+    descricao: "Substituição, reparo e impermeabilização de coberturas",
+    checklist: [
+      "Trabalhadores possuem treinamento NR-35 válido?",
+      "Sistema de proteção coletiva (guarda-corpo, tela perimetral) instalado?",
+      "Linha de vida horizontal instalada em estrutura resistente?",
+      "Materiais e ferramentas transportados com sacola/balde (sem arremessar)?",
+      "Telhas verificadas quanto à capacidade de suporte antes de pisá-las?",
+      "Plataformas temporárias sobre telhas frágeis (fibrocimento, vidro) instaladas?",
+      "Área abaixo isolada contra queda de materiais?",
+      "Condições meteorológicas verificadas (sem chuva, raio ou vento forte)?",
+      "EPIs completos disponíveis (cinto paraquedista, talabarte, capacete)?",
+      "Inspeção da cobertura após chuva ou período sem uso realizada?",
+    ],
+    episSugeridos: ["Capacete de segurança", "Cinturão tipo paraquedista", "Talabarte duplo", "Trava-quedas", "Calçado antiderrapante", "Luvas de vaqueta", "Colete refletivo"],
+    riscosPredef: [
+      { etapaAtividade: "Trabalho em cobertura", perigo: "Telha frágil ou desgastada", risco: "Queda por rompimento de telha", tipoRisco: "seguranca", probabilidade: 3, gravidade: 5, tipoMedida: "epc", medidasControle: "Usar plataformas de distribuição de carga. EPI contra queda obrigatório.", responsavelNome: "", prazo: "", situacao: "aberta" },
+      { etapaAtividade: "Trabalho em cobertura", perigo: "Borda desprotegida", risco: "Queda do nível da cobertura", tipoRisco: "seguranca", probabilidade: 3, gravidade: 5, tipoMedida: "epc", medidasControle: "Guarda-corpo perimetral + linha de vida + talabarte.", responsavelNome: "", prazo: "", situacao: "aberta" },
+    ],
+  },
+  {
+    id: "geral", label: "Atividade Geral de Construção Civil", nr: "NR-18", emoji: "🦺",
+    colorBg: "bg-slate-50", colorBorder: "border-slate-300", colorText: "text-slate-800", colorBtn: "bg-slate-600 hover:bg-slate-700",
+    descricao: "Serviços gerais de obra sem classificação específica acima",
+    checklist: [
+      "PCMSO e PPRA/PGR da obra atualizados e disponíveis?",
+      "Trabalhadores com ASO (Atestado de Saúde Ocupacional) em vigor?",
+      "Ferramentas e equipamentos em bom estado de conservação?",
+      "EPIs básicos disponíveis para todos (capacete, colete, bota de segurança)?",
+      "Área de trabalho sinalizada e organizada (Housekeeping / 5S)?",
+      "Vias de circulação livres e desobstruídas?",
+      "Primeiros socorros e extintores disponíveis no canteiro?",
+      "DDS (Diálogo Diário de Segurança) realizado antes do início?",
+      "Descarte correto de resíduos da construção organizado?",
+      "Terceiros e visitantes com EPIs básicos e acompanhados por responsável?",
+    ],
+    episSugeridos: ["Capacete de segurança", "Calçado de segurança", "Colete refletivo", "Luvas de vaqueta", "Óculos de proteção"],
+    riscosPredef: [
+      { etapaAtividade: "Geral", perigo: "Ferramentas e materiais no piso", risco: "Queda no mesmo nível / tropeço", tipoRisco: "seguranca", probabilidade: 4, gravidade: 2, tipoMedida: "admin", medidasControle: "Organização do canteiro. Remoção de obstáculos e resíduos.", responsavelNome: "", prazo: "", situacao: "aberta" },
+      { etapaAtividade: "Geral", perigo: "Esforço físico / postura inadequada", risco: "Lesões musculoesqueléticas (LER/DORT)", tipoRisco: "saude", probabilidade: 3, gravidade: 2, tipoMedida: "admin", medidasControle: "Treinamento em ergonomia. Ginástica laboral. Rodízio de funções.", responsavelNome: "", prazo: "", situacao: "aberta" },
+    ],
+  },
 ];
 
 // ── Status helpers ─────────────────────────────────────────────────────────
@@ -262,36 +497,42 @@ function NovaAprDialog({
   companyId: number; employeeId: number; onCreated: () => void;
 }) {
   const [step, setStep] = useState(0);
-  const STEPS = ["Dados Gerais", "Tabela de Riscos", "EPIs & Aprovação"];
+  const STEPS = ["Tipo", "Dados Gerais", "Checklist", "Riscos", "EPIs & Aprovação"];
 
-  // Step 0
-  const [obraId, setObraId]           = useState<string>("");
-  const [dataEmissao, setDataEmissao] = useState(new Date().toISOString().slice(0, 10));
-  const [atividade, setAtividade]     = useState("");
+  // Step 0 — tipo de atividade
+  const [tipoId, setTipoId] = useState("");
+
+  // Step 1 — dados gerais
+  const [obraId, setObraId]             = useState<string>("");
+  const [dataEmissao, setDataEmissao]   = useState(new Date().toISOString().slice(0, 10));
+  const [atividade, setAtividade]       = useState("");
   const [localServico, setLocalServico] = useState("");
-  const [equipe, setEquipe]           = useState<string[]>([""]);
+  const [equipe, setEquipe]             = useState<string[]>([""]);
 
-  // Step 1
+  // Step 2 — checklist específico
+  const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
+
+  // Step 3 — tabela de riscos
   const [riscos, setRiscos] = useState<RiscoItem[]>([novoRisco()]);
 
-  // Step 2
+  // Step 4 — EPIs + aprovação
   const [epis, setEpis]               = useState<string[]>([]);
   const [observacoes, setObservacoes] = useState("");
   const [aprovNome, setAprovNome]     = useState("");
   const [aprovAss, setAprovAss]       = useState<string | null>(null);
   const [padOpen, setPadOpen]         = useState(false);
 
-  const obrasQ = trpc.obras.list.useQuery({ companyId }, { enabled: open });
+  const obrasQ  = trpc.obras.list.useQuery({ companyId }, { enabled: open });
   const createM = trpc.aprAnalises.create.useMutation({
     onSuccess: () => { toast.success("APR criada com sucesso!"); onCreated(); onOpenChange(false); resetForm(); },
     onError: e => toast.error(e.message),
   });
 
   function resetForm() {
-    setStep(0); setObraId(""); setDataEmissao(new Date().toISOString().slice(0, 10));
+    setStep(0); setTipoId(""); setObraId(""); setDataEmissao(new Date().toISOString().slice(0, 10));
     setAtividade(""); setLocalServico(""); setEquipe([""]);
-    setRiscos([novoRisco()]); setEpis([]); setObservacoes("");
-    setAprovNome(""); setAprovAss(null);
+    setChecklist([]); setRiscos([novoRisco()]); setEpis([]);
+    setObservacoes(""); setAprovNome(""); setAprovAss(null);
   }
 
   function novoRisco(): RiscoItem {
@@ -300,13 +541,30 @@ function NovaAprDialog({
       responsavelNome:"", prazo:"", situacao:"aberta" };
   }
 
+  function handleSelectTipo(id: string) {
+    const tipo = APR_TIPOS.find(t => t.id === id);
+    if (!tipo) return;
+    setTipoId(id);
+    setAtividade(tipo.label);
+    setChecklist(tipo.checklist.map(p => ({ pergunta: p, resposta: "" as ChecklistResposta })));
+    setRiscos(tipo.riscosPredef.map(r => ({ ...novoRisco(), ...r })));
+    setEpis(tipo.episSugeridos);
+    setStep(1);
+  }
+
+  function setChecklistResposta(idx: number, resposta: ChecklistResposta) {
+    setChecklist(prev => prev.map((item, i) => i === idx ? { ...item, resposta } : item));
+  }
+
   function toggleEpi(epi: string) {
     setEpis(prev => prev.includes(epi) ? prev.filter(e => e !== epi) : [...prev, epi]);
   }
 
   function canNext() {
-    if (step === 0) return atividade.trim().length > 0;
-    if (step === 1) return riscos.length > 0;
+    if (step === 0) return tipoId !== "";
+    if (step === 1) return atividade.trim().length > 0;
+    if (step === 2) return checklist.every(c => c.resposta !== "");
+    if (step === 3) return riscos.length > 0;
     return aprovNome.trim().length > 0;
   }
 
@@ -314,21 +572,31 @@ function NovaAprDialog({
     const riscosValid = riscos.filter(r => r.perigo || r.risco || r.etapaAtividade);
     createM.mutate({
       companyId,
-      obraId:      obraId ? Number(obraId) : null,
+      obraId:        obraId ? Number(obraId) : null,
       employeeId,
+      tipoAtividade: tipoId || null,
+      checklistJson: checklist.length ? JSON.stringify(checklist) : null,
       dataEmissao,
       atividade,
       localServico,
-      equipeJson:   JSON.stringify(equipe.filter(Boolean)),
-      epiJson:      JSON.stringify(epis),
-      observacoes:  observacoes || null,
-      riscos:       riscosValid.map((r, i) => ({
+      equipeJson:    JSON.stringify(equipe.filter(Boolean)),
+      epiJson:       JSON.stringify(epis),
+      observacoes:   observacoes || null,
+      riscos:        riscosValid.map((r, i) => ({
         ...r, ordem: i,
         probabilidade: r.probabilidade || null,
         gravidade:     r.gravidade || null,
       })),
     });
   }
+
+  const tipoSelecionado = APR_TIPOS.find(t => t.id === tipoId);
+  const naoConformes    = checklist.filter(c => c.resposta === "nao");
+
+  // Todos os EPIs (pré-selecionados + genéricos sem duplicar)
+  const todosEpis = tipoSelecionado
+    ? [...new Set([...tipoSelecionado.episSugeridos, ...EPI_SUGESTOES])]
+    : EPI_SUGESTOES;
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) resetForm(); onOpenChange(v); }}>
@@ -337,28 +605,70 @@ function NovaAprDialog({
           <DialogTitle className="flex items-center gap-2">
             <ShieldAlert className="h-5 w-5 text-orange-600" />
             Nova Análise Preliminar de Risco
+            {tipoSelecionado && (
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ml-1 ${tipoSelecionado.colorBg} ${tipoSelecionado.colorBorder} ${tipoSelecionado.colorText}`}>
+                {tipoSelecionado.emoji} {tipoSelecionado.label}
+              </span>
+            )}
           </DialogTitle>
         </DialogHeader>
 
-        {/* Progress */}
-        <div className="flex items-center gap-2 py-2">
+        {/* ── Stepper ── */}
+        <div className="flex items-center gap-1 py-2 overflow-x-auto">
           {STEPS.map((s, i) => (
-            <div key={i} className="flex items-center gap-2 flex-1">
-              <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold border-2 transition-all
+            <div key={i} className="flex items-center gap-1 shrink-0">
+              <div className={`flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold border-2 transition-all
                 ${i < step ? "bg-orange-600 border-orange-600 text-white"
                 : i === step ? "bg-white border-orange-600 text-orange-600"
-                : "bg-white border-slate-300 text-slate-400"}`}>
-                {i < step ? <Check className="h-4 w-4" /> : i + 1}
+                : "bg-white border-slate-200 text-slate-400"}`}>
+                {i < step ? <Check className="h-3 w-3" /> : i + 1}
               </div>
-              <span className={`text-xs font-medium whitespace-nowrap hidden sm:block
-                ${i === step ? "text-orange-700" : i < step ? "text-orange-500" : "text-slate-400"}`}>{s}</span>
-              {i < STEPS.length - 1 && <div className={`flex-1 h-0.5 ${i < step ? "bg-orange-400" : "bg-slate-200"}`} />}
+              <span className={`text-[10px] font-medium hidden sm:block whitespace-nowrap
+                ${i === step ? "text-orange-700" : i < step ? "text-orange-400" : "text-slate-400"}`}>{s}</span>
+              {i < STEPS.length - 1 && <div className={`w-4 h-0.5 shrink-0 ${i < step ? "bg-orange-400" : "bg-slate-200"}`} />}
             </div>
           ))}
         </div>
 
-        {/* ── Step 0: Dados Gerais ── */}
+        {/* ── Step 0: Tipo de Atividade ── */}
         {step === 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 mb-1">
+              <Layers className="h-4 w-4 text-orange-600" />
+              <p className="text-sm font-semibold text-slate-700">Selecione o tipo de atividade</p>
+            </div>
+            <p className="text-xs text-slate-500">O sistema carregará o checklist e os riscos típicos para o tipo selecionado.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[420px] overflow-y-auto pr-1">
+              {APR_TIPOS.map(tipo => (
+                <button key={tipo.id} type="button"
+                  onClick={() => handleSelectTipo(tipo.id)}
+                  className={`text-left p-3 rounded-xl border-2 transition-all hover:shadow-sm
+                    ${tipoId === tipo.id
+                      ? `${tipo.colorBg} ${tipo.colorBorder}`
+                      : "bg-white border-slate-200 hover:border-slate-300"
+                    }`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xl">{tipo.emoji}</span>
+                    <div className="min-w-0">
+                      <p className={`text-sm font-semibold leading-tight ${tipoId === tipo.id ? tipo.colorText : "text-slate-800"}`}>
+                        {tipo.label}
+                      </p>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${tipoId === tipo.id ? `${tipo.colorBg} ${tipo.colorText}` : "bg-slate-100 text-slate-500"}`}>
+                        {tipo.nr}
+                      </span>
+                    </div>
+                    {tipoId === tipo.id && <Check className={`h-4 w-4 ml-auto shrink-0 ${tipo.colorText}`} />}
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-snug">{tipo.descricao}</p>
+                  <p className="text-[10px] text-slate-400 mt-1">{tipo.checklist.length} itens de checklist • {tipo.riscosPredef.length} riscos pré-definidos</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 1: Dados Gerais ── */}
+        {step === 1 && (
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -406,19 +716,80 @@ function NovaAprDialog({
           </div>
         )}
 
-        {/* ── Step 1: Tabela de Riscos ── */}
-        {step === 1 && (
+        {/* ── Step 2: Checklist específico ── */}
+        {step === 2 && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 mb-1">
+              <ListChecks className="h-4 w-4 text-orange-600" />
+              <p className="text-sm font-semibold text-slate-700">
+                Checklist — {tipoSelecionado?.label ?? "Atividade"}
+                <span className="ml-2 text-xs font-normal text-slate-400">(todos os itens precisam ser respondidos)</span>
+              </p>
+            </div>
+
+            {naoConformes.length > 0 && (
+              <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-xl">
+                <AlertTriangle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-red-800 font-medium">
+                  {naoConformes.length} item(ns) não conforme(s). Aplique medidas corretivas antes de iniciar o serviço.
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+              {checklist.map((item, idx) => (
+                <div key={idx} className={`rounded-xl border p-3 transition-colors ${
+                  item.resposta === "sim" ? "bg-green-50 border-green-200"
+                  : item.resposta === "nao" ? "bg-red-50 border-red-200"
+                  : item.resposta === "na"  ? "bg-slate-50 border-slate-200"
+                  : "bg-white border-slate-200"
+                }`}>
+                  <p className="text-xs text-slate-700 font-medium mb-2 leading-snug">
+                    <span className="text-slate-400 mr-1">{idx + 1}.</span>{item.pergunta}
+                  </p>
+                  <div className="flex gap-1.5">
+                    <button type="button"
+                      onClick={() => setChecklistResposta(idx, "sim")}
+                      className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-all
+                        ${item.resposta === "sim" ? "bg-green-600 text-white border-green-600" : "bg-white text-green-700 border-green-300 hover:bg-green-50"}`}>
+                      <CircleCheck className="h-3.5 w-3.5" />Sim
+                    </button>
+                    <button type="button"
+                      onClick={() => setChecklistResposta(idx, "nao")}
+                      className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-all
+                        ${item.resposta === "nao" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-700 border-red-300 hover:bg-red-50"}`}>
+                      <CircleX className="h-3.5 w-3.5" />Não
+                    </button>
+                    <button type="button"
+                      onClick={() => setChecklistResposta(idx, "na")}
+                      className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-all
+                        ${item.resposta === "na" ? "bg-slate-500 text-white border-slate-500" : "bg-white text-slate-500 border-slate-300 hover:bg-slate-50"}`}>
+                      <Minus className="h-3.5 w-3.5" />N/A
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Progresso */}
+            <div className="text-xs text-slate-500 text-right">
+              {checklist.filter(c => c.resposta !== "").length} / {checklist.length} respondidos
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 3: Tabela de Riscos ── */}
+        {step === 3 && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-sm text-slate-600">Adicione todos os perigos identificados para a atividade.</p>
-              <div className="flex gap-2">
-                {/* Legenda rápida */}
-                <div className="flex items-center gap-1 text-xs text-slate-500">
-                  <span className="w-3 h-3 rounded-full bg-green-400 inline-block" />Baixo
-                  <span className="w-3 h-3 rounded-full bg-yellow-400 inline-block ml-1" />Médio
-                  <span className="w-3 h-3 rounded-full bg-orange-400 inline-block ml-1" />Alto
-                  <span className="w-3 h-3 rounded-full bg-red-500 inline-block ml-1" />Crítico
-                </div>
+              <p className="text-sm text-slate-600">
+                Riscos pré-carregados para <strong>{tipoSelecionado?.label}</strong>. Revise, edite e adicione mais se necessário.
+              </p>
+              <div className="flex items-center gap-1 text-xs text-slate-500">
+                <span className="w-3 h-3 rounded-full bg-green-400 inline-block" />Baixo
+                <span className="w-3 h-3 rounded-full bg-yellow-400 inline-block ml-1" />Médio
+                <span className="w-3 h-3 rounded-full bg-orange-400 inline-block ml-1" />Alto
+                <span className="w-3 h-3 rounded-full bg-red-500 inline-block ml-1" />Crítico
               </div>
             </div>
             {riscos.map((r, i) => (
@@ -433,13 +804,16 @@ function NovaAprDialog({
           </div>
         )}
 
-        {/* ── Step 2: EPIs + Aprovação ── */}
-        {step === 2 && (
+        {/* ── Step 4: EPIs + Aprovação ── */}
+        {step === 4 && (
           <div className="space-y-5">
             <div>
-              <label className="text-sm font-medium text-slate-700 mb-2 block">EPIs Necessários</label>
+              <label className="text-sm font-medium text-slate-700 mb-2 block">
+                EPIs Necessários
+                {tipoSelecionado && <span className="ml-1 text-xs font-normal text-slate-400">(pré-selecionados para {tipoSelecionado.label})</span>}
+              </label>
               <div className="flex flex-wrap gap-2">
-                {EPI_SUGESTOES.map(epi => (
+                {todosEpis.map(epi => (
                   <button key={epi} type="button"
                     onClick={() => toggleEpi(epi)}
                     className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all
@@ -485,7 +859,7 @@ function NovaAprDialog({
           <Button variant="outline" onClick={() => step > 0 ? setStep(step - 1) : onOpenChange(false)}>
             {step > 0 ? <><ChevronLeft className="h-4 w-4 mr-1" />Voltar</> : "Cancelar"}
           </Button>
-          {step < STEPS.length - 1 ? (
+          {step === 0 ? null : step < STEPS.length - 1 ? (
             <Button onClick={() => setStep(step + 1)} disabled={!canNext()}
               className="bg-orange-600 hover:bg-orange-700">
               Próximo<ChevronRight className="h-4 w-4 ml-1" />
@@ -599,6 +973,56 @@ function AprDetalheDialog({
                 </div>
               </div>
             )}
+
+            {/* Checklist */}
+            {(() => {
+              const cl: ChecklistItem[] = (() => { try { return JSON.parse(apr.checklistJson ?? "[]"); } catch { return []; } })();
+              const tipoAPR = APR_TIPOS.find(t => t.id === apr.tipoAtividade);
+              if (!cl.length) return null;
+              const naoConf = cl.filter((c: ChecklistItem) => c.resposta === "nao");
+              return (
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
+                    <ListChecks className="h-4 w-4 text-orange-600" />
+                    Checklist
+                    {tipoAPR && (
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${tipoAPR.colorBg} ${tipoAPR.colorText}`}>
+                        {tipoAPR.emoji} {tipoAPR.label} — {tipoAPR.nr}
+                      </span>
+                    )}
+                  </h4>
+                  {naoConf.length > 0 && (
+                    <div className="flex items-center gap-2 p-2.5 bg-red-50 border border-red-200 rounded-xl mb-2">
+                      <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
+                      <p className="text-xs text-red-800 font-medium">{naoConf.length} item(ns) não conforme(s) registrado(s).</p>
+                    </div>
+                  )}
+                  <div className="space-y-1.5">
+                    {cl.map((item: ChecklistItem, i: number) => (
+                      <div key={i} className={`flex items-start gap-2.5 rounded-lg border px-3 py-2 text-xs
+                        ${item.resposta === "sim" ? "bg-green-50 border-green-200"
+                        : item.resposta === "nao" ? "bg-red-50 border-red-200"
+                        : "bg-slate-50 border-slate-200"}`}>
+                        <span className="shrink-0 mt-0.5">
+                          {item.resposta === "sim" ? <CircleCheck className="h-3.5 w-3.5 text-green-600" />
+                          : item.resposta === "nao" ? <CircleX className="h-3.5 w-3.5 text-red-600" />
+                          : <Minus className="h-3.5 w-3.5 text-slate-400" />}
+                        </span>
+                        <span className={`flex-1 leading-snug ${item.resposta === "nao" ? "text-red-800 font-medium" : "text-slate-700"}`}>
+                          <span className="text-slate-400 mr-1">{i + 1}.</span>{item.pergunta}
+                        </span>
+                        <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full
+                          ${item.resposta === "sim" ? "bg-green-100 text-green-700"
+                          : item.resposta === "nao" ? "bg-red-100 text-red-700"
+                          : "bg-slate-100 text-slate-500"}`}>
+                          {item.resposta === "sim" ? "SIM" : item.resposta === "nao" ? "NÃO" : "N/A"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Tabela de riscos */}
             <div>

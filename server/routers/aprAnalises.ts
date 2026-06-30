@@ -163,34 +163,38 @@ export const aprAnalisesRouter = router({
   // ── Create ─────────────────────────────────────────────────────────────────
   create: protectedProcedure
     .input(z.object({
-      companyId:    z.number(),
-      obraId:       z.number().optional().nullable(),
-      employeeId:   z.number(),
-      dataEmissao:  z.string().optional().nullable(),
-      atividade:    z.string().optional().nullable(),
-      localServico: z.string().optional().nullable(),
-      equipeJson:   z.string().optional().nullable(),
-      epiJson:      z.string().optional().nullable(),
-      observacoes:  z.string().optional().nullable(),
-      riscos:       riscosInputSchema.optional(),
+      companyId:      z.number(),
+      obraId:         z.number().optional().nullable(),
+      employeeId:     z.number(),
+      tipoAtividade:  z.string().optional().nullable(),
+      checklistJson:  z.string().optional().nullable(),
+      dataEmissao:    z.string().optional().nullable(),
+      atividade:      z.string().optional().nullable(),
+      localServico:   z.string().optional().nullable(),
+      equipeJson:     z.string().optional().nullable(),
+      epiJson:        z.string().optional().nullable(),
+      observacoes:    z.string().optional().nullable(),
+      riscos:         riscosInputSchema.optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       assertCompany(ctx, input.companyId);
       const db = (await getDb())!;
       const numero = await proximoNumero(db, input.companyId);
       const [apr] = await db.insert(aprAnalises).values({
-        companyId:    input.companyId,
-        obraId:       input.obraId ?? null,
-        employeeId:   input.employeeId,
+        companyId:     input.companyId,
+        obraId:        input.obraId ?? null,
+        employeeId:    input.employeeId,
         numero,
-        status:       "em_analise",
-        dataEmissao:  input.dataEmissao ?? null,
-        atividade:    input.atividade ?? null,
-        localServico: input.localServico ?? null,
-        equipeJson:   input.equipeJson ?? null,
-        epiJson:      input.epiJson ?? null,
-        observacoes:  input.observacoes ?? null,
-        criadoPorId:  ctx.user.id,
+        status:        "em_analise",
+        tipoAtividade: input.tipoAtividade ?? null,
+        checklistJson: input.checklistJson ?? null,
+        dataEmissao:   input.dataEmissao ?? null,
+        atividade:     input.atividade ?? null,
+        localServico:  input.localServico ?? null,
+        equipeJson:    input.equipeJson ?? null,
+        epiJson:       input.epiJson ?? null,
+        observacoes:   input.observacoes ?? null,
+        criadoPorId:   ctx.user.id,
         criadoPorNome: ctx.user.name ?? "Sistema",
       }).returning();
       if (input.riscos?.length) {
