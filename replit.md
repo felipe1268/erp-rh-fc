@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3911** — **SST — PT WIZARD STEP 4: EMPRESA AUTO-PREENCHIDA + RESPONSÁVEL DA LISTA DE ENVOLVIDOS.** `empresaSetorExecutante` pré-preenchido com `nomeFantasia||razaoSocial` da empresa selecionada. Campo `executanteNome` vira Select com os envolvidos convocados + "Outro" para digitar. ZERO DELETE.
+- **Rev. 3912** — **SST — PT WIZARD: BLOQUEIO NR-35 NO STEP DE ENVOLVIDOS.** Funcionários sem NR-35 ou com NR-35 vencida ficam bloqueados (card vermelho + ícone Ban + mensagem + line-through no nome). Click retorna sem ação. Terceiros não bloqueados. ZERO DELETE.
 
-- **Rev. 3910** — **SST — PT WIZARD: UX EXECUÇÃO — CARDS MÃO DE OBRA + FORMULÁRIOS EXPLICADOS.** Select → 2 cards clicáveis (👷 Equipe própria / 🏗️ Empresa contratada) com descrição em cada um. Checkbox renomeado + texto explicativo sobre PT da instalação/contratante. ZERO DELETE.
+- **Rev. 3911** — **SST — PT WIZARD STEP 4: EMPRESA AUTO-PREENCHIDA + RESPONSÁVEL DA LISTA DE ENVOLVIDOS.** `empresaSetorExecutante` pré-preenchido com `nomeFantasia||razaoSocial` da empresa selecionada. Campo `executanteNome` vira Select com os envolvidos convocados + "Outro" para digitar. ZERO DELETE.
 
 ### 5 one-liners
 

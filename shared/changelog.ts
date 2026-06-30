@@ -1,4 +1,34 @@
 /**
+ * Rev. 3912 — **SST — PT WIZARD STEP 3: BLOQUEIO DE SELEÇÃO PARA FUNCIONÁRIOS SEM NR-35 VÁLIDA.**
+ *
+ * PEDIDO: Funcionário sem NR-35 ou com NR-35 vencida não pode ser selecionado como envolvido
+ * na PT. O sistema deve bloqueá-lo visualmente e impedir a seleção.
+ *
+ * SOLUÇÃO — client/src/pages/sst/PermissaoTrabalho.tsx (renderItem no Step 3):
+ *
+ * · Lógica de bloqueio:
+ *   `isBlocked = !item.terceiro && (nr35Status === "sem" || nr35Status === "vencida")`
+ *   Terceiros não são bloqueados pois não controlamos o treinamento deles no ERP.
+ *
+ * · Visual do card bloqueado:
+ *   - Fundo vermelho claro (bg-red-50) + borda vermelha (border-red-200) + opacity-70
+ *   - cursor-not-allowed no container
+ *   - Ícone Ban (🚫) vermelho no lugar do checkbox
+ *   - Nome do funcionário com line-through + texto vermelho
+ *   - Avatar em grayscale (foto) ou fundo vermelho (inicial)
+ *   - Mensagem inline abaixo do nome: "Não habilitado para trabalho em altura — regularize o treinamento NR-35."
+ *     com ícone AlertTriangle amarelo
+ *   - Tooltip nativo (title=) com mensagem ao passar o mouse
+ *
+ * · Bloqueio de interação:
+ *   - Convertido de <label>+<input> para <div> com onClick gerenciado
+ *   - onClick faz early return se isBlocked — não há como marcar via JS
+ *   - Checkbox fica readOnly + pointer-events-none (só visual quando habilitado)
+ *
+ * ZERO DELETE. Badges "SEM NR-35" / "⚠ NR-35 VENCIDA" mantidos inalterados.
+ */
+
+/**
  * Rev. 3911 — **SST — PT WIZARD STEP 4: EMPRESA AUTO-PREENCHIDA + RESPONSÁVEL PELA EXECUÇÃO DA LISTA DE ENVOLVIDOS.**
  *
  * PEDIDO: (1) "Empresa / Setor executante" devia vir preenchido automaticamente (é a FC Engenharia);

@@ -793,26 +793,50 @@ function WizardNovaPT({
                   );
                   const renderItem = (item: any) => {
                     const isSelected = form.envolvidos.some(e => e.nome === item.nome);
+                    // Bloquear seleção se NR-35 ausente ou vencida (só funcionários próprios)
+                    const isBlocked = !item.terceiro && (item.nr35Status === "sem" || item.nr35Status === "vencida");
+                    const bloqMsg = item.nr35Status === "vencida"
+                      ? "NR-35 vencida — colaborador não habilitado para trabalho em altura"
+                      : "Sem NR-35 — colaborador não habilitado para trabalho em altura";
+
                     return (
-                      <label key={item.key} className={`flex items-start gap-2.5 cursor-pointer rounded-lg px-3 py-2.5 border transition-colors ${
-                        isSelected ? "bg-emerald-50 border-emerald-300" : "bg-white border-slate-200 hover:border-emerald-200"
-                      }`}>
-                        <input type="checkbox" checked={isSelected} className="accent-emerald-600 rounded mt-2.5 shrink-0"
-                          onChange={e => {
-                            if (e.target.checked) {
-                              const blanks = form.envolvidos.filter(e => !e.nome.trim());
-                              const filled = form.envolvidos.filter(e => e.nome.trim());
-                              upd({ envolvidos: [...filled, { nome: item.nome, funcao: item.funcao }, ...blanks].slice(0, 30) });
-                            } else {
-                              upd({ envolvidos: form.envolvidos.filter(e => e.nome !== item.nome) });
-                            }
-                          }} />
+                      <div key={item.key}
+                        title={isBlocked ? bloqMsg : undefined}
+                        className={`flex items-start gap-2.5 rounded-lg px-3 py-2.5 border transition-colors
+                          ${isBlocked
+                            ? "bg-red-50 border-red-200 opacity-70 cursor-not-allowed"
+                            : isSelected
+                              ? "bg-emerald-50 border-emerald-300 cursor-pointer"
+                              : "bg-white border-slate-200 hover:border-emerald-200 cursor-pointer"
+                          }`}
+                        onClick={() => {
+                          if (isBlocked) return;
+                          if (isSelected) {
+                            upd({ envolvidos: form.envolvidos.filter(e => e.nome !== item.nome) });
+                          } else {
+                            const blanks = form.envolvidos.filter(e => !e.nome.trim());
+                            const filled = form.envolvidos.filter(e => e.nome.trim());
+                            upd({ envolvidos: [...filled, { nome: item.nome, funcao: item.funcao }, ...blanks].slice(0, 30) });
+                          }
+                        }}>
+                        {/* Checkbox / ícone de bloqueio */}
+                        <div className="shrink-0 mt-2.5">
+                          {isBlocked ? (
+                            <div className="w-4 h-4 rounded flex items-center justify-center">
+                              <Ban className="h-4 w-4 text-red-400" />
+                            </div>
+                          ) : (
+                            <input type="checkbox" checked={isSelected} readOnly
+                              className="accent-emerald-600 rounded pointer-events-none" />
+                          )}
+                        </div>
                         {/* Avatar */}
                         <div className="shrink-0 mt-0.5">
                           {item.fotoUrl ? (
-                            <img src={item.fotoUrl} alt="" className="h-9 w-9 rounded-full object-cover border-2 border-white shadow-sm" />
+                            <img src={item.fotoUrl} alt="" className={`h-9 w-9 rounded-full object-cover border-2 shadow-sm ${isBlocked ? "border-red-200 grayscale" : "border-white"}`} />
                           ) : (
-                            <div className="h-9 w-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-sm font-bold text-slate-400 shadow-sm">
+                            <div className={`h-9 w-9 rounded-full border flex items-center justify-center text-sm font-bold shadow-sm
+                              ${isBlocked ? "bg-red-100 border-red-200 text-red-400" : "bg-slate-100 border-slate-200 text-slate-400"}`}>
                               {(item.nome || "?").charAt(0).toUpperCase()}
                             </div>
                           )}
@@ -820,7 +844,7 @@ function WizardNovaPT({
                         {/* Info */}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1 flex-wrap">
-                            <p className="text-sm font-medium text-slate-800 truncate">{item.nome}</p>
+                            <p className={`text-sm font-medium truncate ${isBlocked ? "text-red-700 line-through" : "text-slate-800"}`}>{item.nome}</p>
                             {item.terceiro && (
                               <span className="text-[9px] bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-full font-bold shrink-0">TERCEIRO</span>
                             )}
@@ -843,9 +867,16 @@ function WizardNovaPT({
                               <span className="text-[9px] bg-red-100 text-red-700 border border-red-200 px-1.5 py-0.5 rounded-full font-bold shrink-0">SEM NR-35</span>
                             )}
                           </div>
+                          {/* Mensagem de bloqueio inline */}
+                          {isBlocked && (
+                            <p className="text-[10px] text-red-600 font-medium mt-1 flex items-center gap-1">
+                              <AlertTriangle className="h-3 w-3 shrink-0" />
+                              Não habilitado para trabalho em altura — regularize o treinamento NR-35.
+                            </p>
+                          )}
                         </div>
-                        {isSelected && <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-2.5" />}
-                      </label>
+                        {isSelected && !isBlocked && <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-2.5" />}
+                      </div>
                     );
                   };
                   return (
