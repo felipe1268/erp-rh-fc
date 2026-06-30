@@ -632,12 +632,29 @@ function WizardNovaPT({
                 )}
               </div>
             </div>
+            {/* Banners de bloqueio — impedem avançar para o passo 4 */}
+            {checkCount.blank > 0 && (
+              <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-300 rounded-lg mb-2">
+                <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-xs font-semibold text-amber-800">
+                    {checkCount.blank} pergunta{checkCount.blank > 1 ? "s" : ""} sem resposta
+                  </p>
+                  <p className="text-xs text-amber-700 mt-0.5">Responda todas as perguntas para continuar.</p>
+                </div>
+              </div>
+            )}
             {checkCount.n > 0 && (
-              <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg mb-3">
-                <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                <p className="text-xs text-amber-700">
-                  Se houver resposta "Não", regularize a situação antes de liberar a Permissão de Trabalho em Altura.
-                </p>
+              <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-300 rounded-lg mb-2">
+                <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-xs font-semibold text-red-800">
+                    PT não pode prosseguir — {checkCount.n} não conformidade{checkCount.n > 1 ? "s" : ""} detectada{checkCount.n > 1 ? "s" : ""}
+                  </p>
+                  <p className="text-xs text-red-700 mt-0.5">
+                    Regularize todas as respostas "Não" antes de liberar a Permissão de Trabalho em Altura (NR-35).
+                  </p>
+                </div>
               </div>
             )}
             {CHECKLIST_ITENS.map((item, idx) => {
@@ -858,12 +875,23 @@ function WizardNovaPT({
           <div className="flex-1" />
           <span className="text-xs text-slate-400 self-center">Passo {step + 1} de {steps.length}</span>
           <div className="flex-1" />
-          {step < steps.length - 1 ? (
-            <Button onClick={() => setStep(s => s + 1)}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1">
-              Próximo <ChevronRight className="h-4 w-4" />
-            </Button>
-          ) : (
+          {step < steps.length - 1 ? (() => {
+            const isChecklist = step === 2;
+            const blocked = isChecklist && (checkCount.blank > 0 || checkCount.n > 0);
+            const tip = isChecklist
+              ? checkCount.blank > 0
+                ? `${checkCount.blank} pergunta${checkCount.blank > 1 ? "s" : ""} sem resposta`
+                : checkCount.n > 0
+                  ? `${checkCount.n} não conformidade${checkCount.n > 1 ? "s" : ""} — regularize antes de prosseguir`
+                  : undefined
+              : undefined;
+            return (
+              <Button onClick={() => setStep(s => s + 1)} disabled={blocked} title={tip}
+                className={`gap-1 ${blocked ? "opacity-40 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700"} text-white bg-emerald-600`}>
+                Próximo <ChevronRight className="h-4 w-4" />
+              </Button>
+            );
+          })() : (
             <Button onClick={handleCreate} disabled={createMut.isPending || !form.employeeId}
               className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1">
               {createMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Criando...</> : <><Check className="h-4 w-4" /> Criar PT</>}

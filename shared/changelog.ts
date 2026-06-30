@@ -1,4 +1,25 @@
 /**
+ * Rev. 3905 — **SST — PT WIZARD: GATES DE CHECKLIST + ENVOLVIDOS COM TERCEIROS.**
+ *
+ * PEDIDO: (1) Checklist deve bloquear avanço se houver perguntas sem resposta OU respostas "Não"
+ * (não conformidades); (2) Envolvidos deve listar também os funcionários de terceiros alocados
+ * na obra, não apenas o efetivo próprio.
+ *
+ * SOLUÇÃO:
+ * - client/src/pages/sst/PermissaoTrabalho.tsx (WizardNovaPT):
+ *   · Step 2 (Checklist): adicionados dois banners de bloqueio — âmbar para perguntas sem resposta
+ *     ("X pergunta(s) sem resposta — responda todas para continuar") e vermelho para não conformidades
+ *     ("PT não pode prosseguir — X não conformidade(s) detectada(s) — regularize antes de liberar").
+ *   · Botão "Próximo" no footer: quando step === 2, disabled se checkCount.blank > 0 OU checkCount.n > 0;
+ *     title= tooltip explica o motivo do bloqueio.
+ *   · Step 3 (Envolvidos): adicionada query `obraTerceirosQ` (trpc.terceiros.funcionarios.list com obraId);
+ *     checklist fundiu efetivo próprio (seção cinza) + terceiros (seção âmbar com badge "Terceiro") em
+ *     grupos separados com contagem; limite de envolvidos aumentado de 20 → 30; label do cabeçalho
+ *     atualizado para "Efetivo da obra (próprios + terceiros)".
+ *
+ * ZERO DELETE.
+ */
+/**
  * Rev. 3904 — **SST — PT WIZARD: OBRA PRIMEIRO + TST/ENCARREGADO NO CADASTRO DE OBRAS.**
  *
  * PEDIDO: (1) Adicionar campos TST e Encarregado ao cadastro de Obras; (2) redesenhar PT Wizard

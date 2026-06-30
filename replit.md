@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3905** — **SST — PT WIZARD: GATES DE CHECKLIST + ENVOLVIDOS COM TERCEIROS.** Step 2 (Checklist): banner âmbar se perguntas sem resposta + banner vermelho se N > 0; botão "Próximo" disabled até tudo preenchido E sem não-conformidades (alinhado NR-35). Step 3 (Envolvidos): query `obraTerceirosQ` (terceiros.funcionarios.list com obraId) agrega efetivo próprio + terceiros em seções separadas; badge âmbar "Terceiro"; limite 20→30. ZERO DELETE.
+
 - **Rev. 3904** — **SST — PT WIZARD: OBRA PRIMEIRO + TST/ENCARREGADO NO CADASTRO DE OBRAS.** Schema obras: +`tst_id`/`encarregado_id` (ColFix v3904). Novo procedure `ptPermissoes.getObraSST`. Obras.tsx: campos TST + Encarregado com autocomplete de liderancas. PT Wizard Step 0 redesenhado: Obra PRIMEIRO → 3 cards SST auto-fill (Engenheiro/TST/Encarregado) → gate NR-35 amber se usuário não é TST/Engenheiro. Step 3: checklist de funcionários da obra (checkbox por nome) vs texto livre sem obra. ZERO DELETE.
 
-- **Rev. 3903** — **SST — PT WIZARD: FIX OBRAS + LAYOUT MODERNO.** Bug fix: `trpc.getObrasByCompanyActive` (inexistente) → `trpc.obras.listActive` (obras agora aparecem). Redesign: header gradiente emerald, stepper horizontal com pills + check, conteúdo scrollável + footer fixo, 3 cards seccionados com ícones no passo 0 (Responsáveis/Local/Execução), idem passos 1 e 3. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3903** — **SST — PT WIZARD: FIX OBRAS + LAYOUT MODERNO.** Bug fix: `trpc.getObrasByCompanyActive` (inexistente) → `trpc.obras.listActive` (obras agora aparecem). Redesign: header gradiente emerald, stepper horizontal com pills + check, conteúdo scrollável + footer fixo, 3 cards seccionados com ícones no passo 0 (Responsáveis/Local/Execução), idem passos 1 e 3. ZERO DELETE.
 
 - **Rev. 3902** — **SST — PDF IMPRIMÍVEL PT/APR + FCSIGN PT + ALERTA PT VENCIDAS NO PAINEL.** Três features follow-up. ZERO DELETE.
 
