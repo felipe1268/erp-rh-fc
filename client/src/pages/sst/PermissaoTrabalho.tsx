@@ -278,9 +278,17 @@ function WizardNovaPT({
   const [form, setForm] = useState<NovaPTState>(initialState);
   const { user } = useAuth();
 
-  const obrasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: open });
-  const empsQ  = trpc.getEmployees.useQuery({ companyId }, { enabled: open });
-  const numQ   = trpc.ptPermissoes.proximoNumero.useQuery({ companyId }, { enabled: open });
+  const obrasQ    = trpc.obras.listActive.useQuery({ companyId }, { enabled: open });
+  const empsQ     = trpc.getEmployees.useQuery({ companyId }, { enabled: open });
+  const numQ      = trpc.ptPermissoes.proximoNumero.useQuery({ companyId }, { enabled: open });
+  const obraSSTQ  = trpc.ptPermissoes.getObraSST.useQuery(
+    { companyId, obraId: form.obraId! },
+    { enabled: open && !!form.obraId }
+  );
+  const obraFuncsQ = trpc.obras.funcionarios.useQuery(
+    { obraId: form.obraId! },
+    { enabled: open && !!form.obraId }
+  );
   const createMut = trpc.ptPermissoes.create.useMutation();
 
   const upd = (patch: Partial<NovaPTState>) => setForm(f => ({ ...f, ...patch }));
@@ -388,9 +396,70 @@ function WizardNovaPT({
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
 
         {/* ── Passo 0: Solicitação ────────────────────────────── */}
-        {step === 0 && (
+        {step === 0 && (() => {
+          const sst = obraSSTQ.data;
+          const userEmpId = user?.employeeId ?? null;
+          const isAuthorized = !sst || !form.obraId || (
+            (sst.tstId && sst.tstId === userEmpId) ||
+            (sst.responsavelId && sst.responsavelId === userEmpId)
+          );
+          return (
           <div className="space-y-4">
-            {/* Responsáveis */}
+            {/* 1 — Obra (primeiro campo obrigatório) */}
+            <div className="bg-slate-50 rounded-xl p-4 space-y-3 border border-slate-100">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
+                <MapPin className="h-3.5 w-3.5" /> Obra <span className="text-red-500 normal-case font-bold">*</span>
+              </p>
+              <Select
+                value={form.obraId?.toString() ?? "_none"}
+                onValueChange={v => upd({ obraId: v === "_none" ? null : Number(v) })}
+              >
+                <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">— Sem obra vinculada —</SelectItem>
+                  {obras.map((o: any) => <SelectItem key={o.id} value={o.id.toString()}>{o.nome}</SelectItem>)}
+                </SelectContent>
+              </Select>
+
+              {/* SST da obra: TST + Engenheiro auto-fill */}
+              {form.obraId && (
+                obraSSTQ.isLoading ? (
+                  <div className="flex items-center gap-2 text-xs text-slate-400 py-1"><Loader2 className="h-3 w-3 animate-spin" /> Carregando dados da obra…</div>
+                ) : sst ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                    {[
+                      { label: "Engenheiro Responsável", icon: <ShieldCheck className="h-3 w-3 text-emerald-600" />, nome: sst.responsavelNome, id: sst.responsavelId, color: "emerald" },
+                      { label: "TST", icon: <ShieldCheck className="h-3 w-3 text-orange-500" />, nome: sst.tstNome, id: sst.tstId, color: "orange" },
+                      { label: "Encarregado", icon: <HardHat className="h-3 w-3 text-yellow-600" />, nome: sst.encarregadoNome, id: sst.encarregadoId, color: "yellow" },
+                    ].map(item => (
+                      <div key={item.label} className={`rounded-lg border px-3 py-2 flex items-start gap-2 ${item.id ? "bg-white border-slate-200" : "bg-slate-50 border-dashed border-slate-200"}`}>
+                        <div className="mt-0.5">{item.icon}</div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide leading-tight">{item.label}</p>
+                          <p className={`text-xs font-medium mt-0.5 break-words ${item.nome ? "text-slate-800" : "text-slate-400 italic"}`}>{item.nome || "Não definido"}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null
+              )}
+
+              {/* Gate NR-35: somente TST ou Engenheiro pode emitir */}
+              {form.obraId && sst && !isAuthorized && (
+                <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
+                  <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs font-semibold text-amber-800">Atenção — NR-35</p>
+                    <p className="text-xs text-amber-700 mt-0.5">
+                      Segundo a NR-35, a Permissão de Trabalho deve ser emitida pelo Engenheiro responsável ou pelo TST da obra.
+                      Seu usuário não está configurado como TST nem como Engenheiro desta obra. A PT pode ser salva, mas pode requerer validação adicional.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 2 — Responsáveis */}
             <div className="bg-slate-50 rounded-xl p-4 space-y-3 border border-slate-100">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
                 <User className="h-3.5 w-3.5" /> Responsáveis
@@ -411,21 +480,11 @@ function WizardNovaPT({
               </div>
             </div>
 
-            {/* Local e período */}
+            {/* 3 — Local e período */}
             <div className="bg-slate-50 rounded-xl p-4 space-y-3 border border-slate-100">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
-                <MapPin className="h-3.5 w-3.5" /> Local e Período
+                <Clock className="h-3.5 w-3.5" /> Período
               </p>
-              <div>
-                <label className="text-xs font-medium text-slate-600 mb-1.5 block">Obra</label>
-                <Select value={form.obraId?.toString() ?? "_none"} onValueChange={v => upd({ obraId: v === "_none" ? null : Number(v) })}>
-                  <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione a obra (opcional)" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_none">— Sem obra vinculada —</SelectItem>
-                    {obras.map((o: any) => <SelectItem key={o.id} value={o.id.toString()}>{o.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="text-xs font-medium text-slate-600 mb-1.5 block">Data</label>
@@ -442,7 +501,7 @@ function WizardNovaPT({
               </div>
             </div>
 
-            {/* Execução */}
+            {/* 4 — Execução */}
             <div className="bg-slate-50 rounded-xl p-4 space-y-3 border border-slate-100">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
                 <Building2 className="h-3.5 w-3.5" /> Execução
@@ -484,7 +543,8 @@ function WizardNovaPT({
               )}
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* ── Passo 1: Descrição do trabalho ─────────────────── */}
         {step === 1 && (
@@ -599,31 +659,75 @@ function WizardNovaPT({
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
                   <Users className="h-3.5 w-3.5" /> Envolvidos
                 </p>
-                <span className="text-xs text-slate-400">até 6 pessoas</span>
+                {form.obraId ? (
+                  <span className="text-xs text-emerald-600 font-medium">Funcionários da obra</span>
+                ) : (
+                  <span className="text-xs text-slate-400">até 6 pessoas</span>
+                )}
               </div>
-              <div className="space-y-2">
-                {form.envolvidos.map((env, idx) => (
-                  <div key={idx} className="flex gap-2 items-center">
-                    <span className="text-xs text-slate-400 font-bold w-5 shrink-0">{idx + 1}.</span>
-                    <Input value={env.nome}
-                      onChange={e => {
-                        const next = [...form.envolvidos];
-                        next[idx] = { ...next[idx], nome: e.target.value };
-                        upd({ envolvidos: next });
-                      }}
-                      placeholder={`Nome do envolvido ${idx + 1}`}
-                      className="flex-1 text-sm bg-white" />
-                    <Input value={env.funcao}
-                      onChange={e => {
-                        const next = [...form.envolvidos];
-                        next[idx] = { ...next[idx], funcao: e.target.value };
-                        upd({ envolvidos: next });
-                      }}
-                      placeholder="Função"
-                      className="w-32 text-sm bg-white" />
+
+              {/* Com obra: checklist de funcionários */}
+              {form.obraId ? (
+                obraFuncsQ.isLoading ? (
+                  <div className="flex items-center gap-2 text-xs text-slate-400 py-2"><Loader2 className="h-3 w-3 animate-spin" /> Carregando funcionários da obra…</div>
+                ) : (obraFuncsQ.data as any[] ?? []).length === 0 ? (
+                  <p className="text-xs text-slate-400 italic py-1">Nenhum funcionário alocado nesta obra.</p>
+                ) : (
+                  <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                    {(obraFuncsQ.data as any[] ?? []).map((emp: any) => {
+                      const isSelected = form.envolvidos.some(e => e.nome === emp.nomeCompleto);
+                      return (
+                        <label key={emp.id} className={`flex items-center gap-2.5 cursor-pointer rounded-lg px-3 py-2 border transition-colors ${
+                          isSelected ? "bg-emerald-50 border-emerald-200" : "bg-white border-slate-200 hover:border-emerald-200"
+                        }`}>
+                          <input type="checkbox" checked={isSelected} className="accent-emerald-600 rounded"
+                            onChange={e => {
+                              if (e.target.checked) {
+                                const blanks = form.envolvidos.filter(e => !e.nome.trim());
+                                const filled = form.envolvidos.filter(e => e.nome.trim());
+                                const newEntry = { nome: emp.nomeCompleto, funcao: emp.cargo || emp.funcao || "" };
+                                upd({ envolvidos: [...filled, newEntry, ...blanks].slice(0, 20) });
+                              } else {
+                                upd({ envolvidos: form.envolvidos.filter(e => e.nome !== emp.nomeCompleto) });
+                              }
+                            }} />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-slate-800 truncate">{emp.nomeCompleto}</p>
+                            {(emp.cargo || emp.funcao) && <p className="text-xs text-slate-500">{emp.cargo || emp.funcao}</p>}
+                          </div>
+                          {isSelected && <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />}
+                        </label>
+                      );
+                    })}
                   </div>
-                ))}
-              </div>
+                )
+              ) : (
+                /* Sem obra: campos de texto livres */
+                <div className="space-y-2">
+                  {form.envolvidos.map((env, idx) => (
+                    <div key={idx} className="flex gap-2 items-center">
+                      <span className="text-xs text-slate-400 font-bold w-5 shrink-0">{idx + 1}.</span>
+                      <Input value={env.nome}
+                        onChange={e => {
+                          const next = [...form.envolvidos];
+                          next[idx] = { ...next[idx], nome: e.target.value };
+                          upd({ envolvidos: next });
+                        }}
+                        placeholder={`Nome do envolvido ${idx + 1}`}
+                        className="flex-1 text-sm bg-white" />
+                      <Input value={env.funcao}
+                        onChange={e => {
+                          const next = [...form.envolvidos];
+                          next[idx] = { ...next[idx], funcao: e.target.value };
+                          upd({ envolvidos: next });
+                        }}
+                        placeholder="Função"
+                        className="w-32 text-sm bg-white" />
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <p className="text-xs text-slate-400 flex items-center gap-1">
                 <Info className="h-3 w-3" /> Assinaturas coletadas após criar a PT.
               </p>

@@ -4703,7 +4703,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v3901-2026-06-30-apr-analises";
+    const COLFIX_VERSION = "v3904-2026-06-30-obras-tst-encarregado";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -6127,6 +6127,15 @@ Regras:
         `);
         console.log("[ColFix Rev.3901] apr_analises + apr_riscos garantidas.");
       } catch (e: any) { console.warn("[ColFix Rev.3901] apr falhou (não-fatal):", e?.message ?? e); }
+
+      // Rev. 3904 — TST e Encarregado por obra (para PT NR-35)
+      try {
+        await db.execute(sql`
+          ALTER TABLE obras ADD COLUMN IF NOT EXISTS tst_id INTEGER;
+          ALTER TABLE obras ADD COLUMN IF NOT EXISTS encarregado_id INTEGER;
+        `);
+        console.log("[ColFix Rev.3904] tst_id + encarregado_id garantidos em obras.");
+      } catch (e: any) { console.warn("[ColFix Rev.3904] obras tst/encarregado falhou (não-fatal):", e?.message ?? e); }
 
       // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos
       import("../services/startupCache").then(({ setCache }) =>

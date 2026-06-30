@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
-import { Plus, Search, Pencil, Trash2, Landmark, MapPin, Calendar, Loader2, Wifi, X, AlertCircle, CheckCircle, ArrowLeft, FileText, Brain, BookOpen, Wrench, UserCheck, ChevronDown, Merge, Upload, Image as ImageIcon, Building, PackageOpen, ArrowLeftRight, ShieldCheck } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Landmark, MapPin, Calendar, Loader2, Wifi, X, AlertCircle, CheckCircle, ArrowLeft, FileText, Brain, BookOpen, Wrench, UserCheck, ChevronDown, Merge, Upload, Image as ImageIcon, Building, PackageOpen, ArrowLeftRight, ShieldCheck, HardHat } from "lucide-react";
 import ModalAprovadoresEstoque from "@/components/obras/ModalAprovadoresEstoque";
 import { TimeCombobox, ENTRADA_OPTIONS, INTERVALO_OPTIONS, SAIDA_OPTIONS } from "@/components/TimeCombobox";
 import { useLocation } from "wouter";
@@ -63,6 +63,10 @@ type ObraForm = {
   cliente: string;
   responsavel: string;
   responsavelId: number | null;
+  tstId: number | null;
+  tstNome: string;
+  encarregadoId: number | null;
+  encarregadoNome: string;
   status: string; cep: string; endereco: string;
   dataInicio: string; dataPrevisaoFim: string; observacoes: string;
   usarConvencaoMatriz: number; convencaoId: number | null;
@@ -94,6 +98,10 @@ const emptyForm: ObraForm = {
   cliente: "",
   responsavel: "",
   responsavelId: null,
+  tstId: null,
+  tstNome: "",
+  encarregadoId: null,
+  encarregadoNome: "",
   status: "Planejamento", cep: "", endereco: "",
   dataInicio: "", dataPrevisaoFim: "", observacoes: "",
   usarConvencaoMatriz: 1, convencaoId: null,
@@ -339,7 +347,7 @@ export default function Obras() {
     return list;
   }, [obras, search, statusFilter, snsByObra]);
 
-  const openNew = () => { setEditingId(null); setForm(emptyForm); setJornadaForm({}); setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false }); setPendingSns([]); setNomeError(false); setClienteOpen(false); setClienteBusca(""); setResponsavelOpen(false); setResponsavelBusca(""); setDialogOpen(true); };
+  const openNew = () => { setEditingId(null); setForm(emptyForm); setJornadaForm({}); setNewSn(""); setNewSnApelido(""); setSnValidation({ checking: false }); setPendingSns([]); setNomeError(false); setClienteOpen(false); setClienteBusca(""); setResponsavelOpen(false); setResponsavelBusca(""); setTstOpen(false); setTstBusca(""); setEncarregadoOpen(false); setEncarregadoBusca(""); setDialogOpen(true); };
   const openEdit = (obra: any) => {
     setEditingId(obra.id);
     setForm({
@@ -348,6 +356,10 @@ export default function Obras() {
       cliente: obra.cliente || "",
       responsavel: obra.responsavel || "",
       responsavelId: obra.responsavelId ?? null,
+      tstId: obra.tstId ?? null,
+      tstNome: obra.tstNome || "",
+      encarregadoId: obra.encarregadoId ?? null,
+      encarregadoNome: obra.encarregadoNome || "",
       status: STATUS_OPTIONS.some(s => s.value === obra.status) ? obra.status : "Planejamento",
       cep: obra.cep || "", endereco: obra.endereco || "",
       dataInicio: obra.dataInicio || "", dataPrevisaoFim: obra.dataPrevisaoFim || "",
@@ -420,6 +432,10 @@ export default function Obras() {
 
   const [responsavelOpen, setResponsavelOpen] = useState(false);
   const [responsavelBusca, setResponsavelBusca] = useState("");
+  const [tstOpen, setTstOpen] = useState(false);
+  const [tstBusca, setTstBusca] = useState("");
+  const [encarregadoOpen, setEncarregadoOpen] = useState(false);
+  const [encarregadoBusca, setEncarregadoBusca] = useState("");
   const responsavelRef = useRef<HTMLDivElement>(null);
   const liderancasFiltradas = useMemo(() => {
     const q = responsavelBusca.toLowerCase();
@@ -1220,6 +1236,78 @@ export default function Obras() {
                         </button>
                       ))
                     )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ── TST ── */}
+            <div className="sm:col-span-2">
+              <Label className="flex items-center gap-1.5">
+                <ShieldCheck className="h-3.5 w-3.5 text-orange-500" />
+                Técnico de Segurança do Trabalho (TST)
+              </Label>
+              <div className="relative mt-1">
+                <Input
+                  value={tstOpen ? tstBusca : form.tstNome}
+                  onChange={e => { setTstBusca(e.target.value); setForm(f => ({ ...f, tstNome: e.target.value, tstId: null })); setTstOpen(true); }}
+                  onFocus={() => { setTstBusca(form.tstNome); setTstOpen(true); }}
+                  placeholder="Selecione o TST..."
+                  className="pr-8"
+                />
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 cursor-pointer" onClick={() => { setTstBusca(""); setTstOpen(o => !o); }} />
+                {form.tstNome && !tstOpen && (
+                  <button type="button" className="absolute right-7 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" onClick={() => { setForm(f => ({ ...f, tstNome: "", tstId: null })); setTstBusca(""); }}>
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                {tstOpen && (
+                  <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
+                    {liderancas.filter((l: any) => !tstBusca || l.nomeCompleto?.toLowerCase().includes(tstBusca.toLowerCase())).length === 0 ? (
+                      <div className="px-3 py-5 text-center text-sm text-slate-400">Nenhum colaborador encontrado</div>
+                    ) : liderancas.filter((l: any) => !tstBusca || l.nomeCompleto?.toLowerCase().includes(tstBusca.toLowerCase())).map((l: any) => (
+                      <button key={l.id} type="button" className="w-full text-left px-3 py-2.5 hover:bg-orange-50 flex items-center gap-2.5 border-b border-slate-50 last:border-0"
+                        onClick={() => { setForm(f => ({ ...f, tstNome: l.nomeCompleto, tstId: l.id })); setTstOpen(false); }}>
+                        <div className="h-7 w-7 rounded-full bg-orange-100 flex items-center justify-center shrink-0"><ShieldCheck className="h-3.5 w-3.5 text-orange-500" /></div>
+                        <div><p className="text-sm font-medium text-slate-800">{l.nomeCompleto}</p>{(l.funcao || l.cargo) && <p className="text-xs text-slate-500">{l.funcao || l.cargo}</p>}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ── ENCARREGADO ── */}
+            <div className="sm:col-span-2">
+              <Label className="flex items-center gap-1.5">
+                <HardHat className="h-3.5 w-3.5 text-yellow-600" />
+                Encarregado
+              </Label>
+              <div className="relative mt-1">
+                <Input
+                  value={encarregadoOpen ? encarregadoBusca : form.encarregadoNome}
+                  onChange={e => { setEncarregadoBusca(e.target.value); setForm(f => ({ ...f, encarregadoNome: e.target.value, encarregadoId: null })); setEncarregadoOpen(true); }}
+                  onFocus={() => { setEncarregadoBusca(form.encarregadoNome); setEncarregadoOpen(true); }}
+                  placeholder="Selecione o encarregado..."
+                  className="pr-8"
+                />
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 cursor-pointer" onClick={() => { setEncarregadoBusca(""); setEncarregadoOpen(o => !o); }} />
+                {form.encarregadoNome && !encarregadoOpen && (
+                  <button type="button" className="absolute right-7 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600" onClick={() => { setForm(f => ({ ...f, encarregadoNome: "", encarregadoId: null })); setEncarregadoBusca(""); }}>
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                {encarregadoOpen && (
+                  <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
+                    {liderancas.filter((l: any) => !encarregadoBusca || l.nomeCompleto?.toLowerCase().includes(encarregadoBusca.toLowerCase())).length === 0 ? (
+                      <div className="px-3 py-5 text-center text-sm text-slate-400">Nenhum colaborador encontrado</div>
+                    ) : liderancas.filter((l: any) => !encarregadoBusca || l.nomeCompleto?.toLowerCase().includes(encarregadoBusca.toLowerCase())).map((l: any) => (
+                      <button key={l.id} type="button" className="w-full text-left px-3 py-2.5 hover:bg-yellow-50 flex items-center gap-2.5 border-b border-slate-50 last:border-0"
+                        onClick={() => { setForm(f => ({ ...f, encarregadoNome: l.nomeCompleto, encarregadoId: l.id })); setEncarregadoOpen(false); }}>
+                        <div className="h-7 w-7 rounded-full bg-yellow-100 flex items-center justify-center shrink-0"><HardHat className="h-3.5 w-3.5 text-yellow-600" /></div>
+                        <div><p className="text-sm font-medium text-slate-800">{l.nomeCompleto}</p>{(l.funcao || l.cargo) && <p className="text-xs text-slate-500">{l.funcao || l.cargo}</p>}</div>
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>

@@ -432,6 +432,34 @@ export const ptPermissoesRouter = router({
       };
     }),
 
+  // ── Info SST da obra (TST + Engenheiro + Encarregado) ─────────────────────
+  getObraSST: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      assertCompany(ctx, input.companyId);
+      const db = (await getDb())!;
+      const rows = await db.$client.query(`
+        SELECT
+          o.responsavel_id        AS "responsavelId",
+          e1."nomeCompleto"       AS "responsavelNome",
+          o.tst_id                AS "tstId",
+          e2."nomeCompleto"       AS "tstNome",
+          o.encarregado_id        AS "encarregadoId",
+          e3."nomeCompleto"       AS "encarregadoNome"
+        FROM obras o
+        LEFT JOIN employees e1 ON e1.id = o.responsavel_id
+        LEFT JOIN employees e2 ON e2.id = o.tst_id
+        LEFT JOIN employees e3 ON e3.id = o.encarregado_id
+        WHERE o.id = $1 AND o."companyId" = $2
+        LIMIT 1
+      `, [input.obraId, input.companyId]);
+      return (rows.rows[0] ?? null) as {
+        responsavelId: number | null; responsavelNome: string | null;
+        tstId: number | null; tstNome: string | null;
+        encarregadoId: number | null; encarregadoNome: string | null;
+      } | null;
+    }),
+
   // ── Gerar HTML para impressão ─────────────────────────────────────────────
   gerarHtml: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))

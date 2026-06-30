@@ -50,21 +50,19 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3904** — **SST — PT WIZARD: OBRA PRIMEIRO + TST/ENCARREGADO NO CADASTRO DE OBRAS.** Schema obras: +`tst_id`/`encarregado_id` (ColFix v3904). Novo procedure `ptPermissoes.getObraSST`. Obras.tsx: campos TST + Encarregado com autocomplete de liderancas. PT Wizard Step 0 redesenhado: Obra PRIMEIRO → 3 cards SST auto-fill (Engenheiro/TST/Encarregado) → gate NR-35 amber se usuário não é TST/Engenheiro. Step 3: checklist de funcionários da obra (checkbox por nome) vs texto livre sem obra. ZERO DELETE.
+
 - **Rev. 3903** — **SST — PT WIZARD: FIX OBRAS + LAYOUT MODERNO.** Bug fix: `trpc.getObrasByCompanyActive` (inexistente) → `trpc.obras.listActive` (obras agora aparecem). Redesign: header gradiente emerald, stepper horizontal com pills + check, conteúdo scrollável + footer fixo, 3 cards seccionados com ícones no passo 0 (Responsáveis/Local/Execução), idem passos 1 e 3. ZERO DELETE.
 
-- **Rev. 3902** — **SST — PDF IMPRIMÍVEL PT/APR + FCSIGN PT + ALERTA PT VENCIDAS NO PAINEL.** Três features follow-up: (1) `gerarHtml` em PT e APR → window.open + print (A4 PT / A4-landscape APR); (2) `enviarFCSign` cria sessão FCSign (3 signatários: empregador/contratante/contratado) + vincula `fc_sign_session_id`; (3) query `alertas` + card "Permissões de Trabalho" no Painel SST com badge de vencidas e atualização 60s. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3902** — **SST — PDF IMPRIMÍVEL PT/APR + FCSIGN PT + ALERTA PT VENCIDAS NO PAINEL.** Três features follow-up. ZERO DELETE.
 
 - **Rev. 3901** — **APR — ANÁLISE PRELIMINAR DE RISCO 100% DIGITAL.** Wizard 3 passos; matriz P×G; canvas pad; rota `/sst/apr`. ZERO DELETE.
 
 - **Rev. 3900** — **PT — PERMISSÃO DE TRABALHO (NR-35) 100% DIGITAL.** Wizard 4 passos; canvas pad; FCSign; rota `/sst/pt`. ZERO DELETE.
 
 - **Rev. 3899** — **NF-e EMITIDAS — STATUS SEGUE SEFAZ + CONSOLIDAR MÊS.** ZERO DELETE.
-
-- **Rev. 3898** — **CONTRATOS PJ — EDIÇÃO DE CLÁUSULAS POR CONTRATO.** ZERO DELETE.
-
-- **Rev. 3897** — **ORÇAMENTO — FIX IMPORTAÇÃO: SPLIT MAT/MO CORRETO EM LINHAS DE AGRUPAMENTO.** ZERO DELETE.
 
 ### Histórico completo
 

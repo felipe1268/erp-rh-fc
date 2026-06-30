@@ -2626,6 +2626,9 @@ export const obras = pgTable("obras", {
         // Quando preenchida, PREVALECE sobre a jornada do funcionário para todos
         // os alocados (dia vazio = folga). Vazia/null → vale a jornada do funcionário.
         jornadaTrabalho: text("jornada_trabalho"),
+        // Rev. 3904 — TST e Encarregado da obra (SST / PT NR-35)
+        tstId: integer("tst_id"),
+        encarregadoId: integer("encarregado_id"),
 },
 (table) => [
         index("idx_obra_company").on(table.companyId),

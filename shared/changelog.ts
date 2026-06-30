@@ -1,4 +1,31 @@
 /**
+ * Rev. 3904 — **SST — PT WIZARD: OBRA PRIMEIRO + TST/ENCARREGADO NO CADASTRO DE OBRAS.**
+ *
+ * PEDIDO: (1) Adicionar campos TST e Encarregado ao cadastro de Obras; (2) redesenhar PT Wizard
+ * Step 0 para colocar Obra como primeiro campo obrigatório, com auto-fill de TST/Engenheiro/Encarregado,
+ * gate NR-35 (alerta se usuário logado não é TST nem Engenheiro da obra) e Envolvidos via
+ * checklist de funcionários da obra.
+ *
+ * SOLUÇÃO:
+ * - drizzle/schema.ts: adicionados `tst_id` e `encarregado_id` à tabela `obras`.
+ * - server/_core/index.ts: ColFix v3904-2026-06-30-obras-tst-encarregado com ALTER TABLE IF NOT EXISTS.
+ * - server/routers.ts (obras.create/update): aceita tstId/encarregadoId como campos opcionais.
+ * - server/routers/ptPermissoes.ts: novo procedure `getObraSST` — retorna responsavelId/Nome,
+ *   tstId/Nome, encarregadoId/Nome via JOIN de obras+employees (usa db.$client.query).
+ * - client/src/pages/Obras.tsx: ObraForm type + emptyForm + openNew/openEdit + estado de autocomplete
+ *   (tstOpen/tstBusca/encarregadoOpen/encarregadoBusca) + campos TST e Encarregado com dropdown
+ *   filtrado de liderancas; ícones ShieldCheck+HardHat adicionados ao import lucide.
+ * - client/src/pages/sst/PermissaoTrabalho.tsx (WizardNovaPT): 
+ *   · queries `obraSSTQ` (ptPermissoes.getObraSST) e `obraFuncsQ` (obras.funcionarios).
+ *   · Step 0 redesenhado: Obra vem PRIMEIRO (com label obrigatório); ao selecionar, exibe 3 cards
+ *     inline (Engenheiro/TST/Encarregado) auto-preenchidos; gate NR-35 exibe alerta amber se o
+ *     usuário logado não é TST nem Engenheiro da obra; Responsáveis/Período/Execução vêm depois.
+ *   · Step 3 redesenhado: com obra → checklist de funcionários da obra (checkbox, marca/desmarca,
+ *     copia nomeCompleto+cargo automaticamente); sem obra → campos de texto livres como antes.
+ *
+ * ZERO DELETE.
+ */
+/**
  * Rev. 3903 — **SST — PT WIZARD: FIX OBRAS + LAYOUT MODERNO.**
  *
  * PEDIDO: obras não apareciam no dropdown do wizard PT + layout estava básico.
