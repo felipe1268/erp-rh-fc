@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3903** — **SST — PT WIZARD: FIX OBRAS + LAYOUT MODERNO.** Bug fix: `trpc.getObrasByCompanyActive` (inexistente) → `trpc.obras.listActive` (obras agora aparecem). Redesign: header gradiente emerald, stepper horizontal com pills + check, conteúdo scrollável + footer fixo, 3 cards seccionados com ícones no passo 0 (Responsáveis/Local/Execução), idem passos 1 e 3. ZERO DELETE.
+
 - **Rev. 3902** — **SST — PDF IMPRIMÍVEL PT/APR + FCSIGN PT + ALERTA PT VENCIDAS NO PAINEL.** Três features follow-up: (1) `gerarHtml` em PT e APR → window.open + print (A4 PT / A4-landscape APR); (2) `enviarFCSign` cria sessão FCSign (3 signatários: empregador/contratante/contratado) + vincula `fc_sign_session_id`; (3) query `alertas` + card "Permissões de Trabalho" no Painel SST com badge de vencidas e atualização 60s. ZERO DELETE.
 
-- **Rev. 3901** — **APR — ANÁLISE PRELIMINAR DE RISCO 100% DIGITAL.** Novo módulo SST; tabelas `apr_analises` + `apr_riscos` via ColFix; wizard 3 passos (Dados Gerais, Tabela de Riscos dinâmica, EPIs & Aprovação); matriz P×G 1-5×1-5 colorida (Baixo/Médio/Alto/Crítico); alerta automático riscos críticos; 12 EPIs chips; canvas pad aprovador; fluxo em_analise → aprovada → concluida; rota `/sst/apr`; sidebar SST atualizado. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3901** — **APR — ANÁLISE PRELIMINAR DE RISCO 100% DIGITAL.** Wizard 3 passos; matriz P×G; canvas pad; rota `/sst/apr`. ZERO DELETE.
 
 - **Rev. 3900** — **PT — PERMISSÃO DE TRABALHO (NR-35) 100% DIGITAL.** Wizard 4 passos; canvas pad; FCSign; rota `/sst/pt`. ZERO DELETE.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3898** — **CONTRATOS PJ — EDIÇÃO DE CLÁUSULAS POR CONTRATO.** ZERO DELETE.
 
 - **Rev. 3897** — **ORÇAMENTO — FIX IMPORTAÇÃO: SPLIT MAT/MO CORRETO EM LINHAS DE AGRUPAMENTO.** ZERO DELETE.
-
-- **Rev. 3895** — **EPI — DIAGNÓSTICO DE FUNÇÕES NO DIALOG DE KIT + BOTÃO GERAR E SALVAR TODOS.** ZERO DELETE.
 
 ### Histórico completo
 

@@ -1,4 +1,30 @@
 /**
+ * Rev. 3903 — **SST — PT WIZARD: FIX OBRAS + LAYOUT MODERNO.**
+ *
+ * PEDIDO: obras não apareciam no dropdown do wizard PT + layout estava básico.
+ *
+ * CAUSA-RAIZ: `WizardNovaPT` usava `trpc.getObrasByCompanyActive` (procedure inexistente
+ * no roteador tRPC — só existe como função utilitária de DB). Resultado: query silenciosa
+ * sempre retornava undefined → dropdown vazio.
+ *
+ * SOLUÇÃO:
+ * - Corrigido para `trpc.obras.listActive` (procedure real, usada por DDSGuia/IntegracaoSST).
+ * - Wizard redesenhado com layout moderno:
+ *   · Header gradiente emerald com ícone + número da PT.
+ *   · Stepper horizontal com pills numeradas, check para passos concluídos, labels.
+ *   · Conteúdo scrollável isolado (flex-1 overflow-y-auto) + footer fixo fora do scroll.
+ *   · Passo 0: 3 cards seccionados (Responsáveis / Local e Período / Execução) com ícones
+ *     User, MapPin, Building2; data+hora em grid 3 cols; campos com bg-white em bg-slate-50.
+ *   · Passo 1: cards seccionados (Tipo de trabalho / Descrição detalhada) com Wrench/FileText.
+ *   · Passo 2: checklist NR-35 sem mudanças (já era bom).
+ *   · Passo 3: cards seccionados (Envolvidos / Liberação) em grid 2 cols melhorado.
+ *   · Footer: Cancelar | "Passo N de 4" | Próximo/Criar PT.
+ * - Ícones novos: Wrench, Info adicionados ao import.
+ *
+ * Arquivo: `client/src/pages/sst/PermissaoTrabalho.tsx`.
+ * ZERO DELETE · ZERO schema change.
+ */
+/**
  * Rev. 3902 — **SST — PDF IMPRIMÍVEL PT/APR + FCSIGN PT + ALERTA PT VENCIDAS NO PAINEL.**
  *
  * Três features de follow-up para os módulos SST PT (Rev.3900) e APR (Rev.3901).

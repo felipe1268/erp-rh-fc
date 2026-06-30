@@ -19,7 +19,7 @@ import {
   Loader2, HardHat, Users, AlertTriangle, CheckCircle2, Clock,
   ShieldCheck, FileText, MapPin, User, PenLine, Eraser,
   ChevronDown, ChevronUp, Eye, Pencil, Ban, ArrowRight, Building2,
-  RefreshCw, Printer, Send,
+  RefreshCw, Printer, Send, Wrench, Info,
 } from "lucide-react";
 
 // ── Checklist NR-35 — 15 itens ────────────────────────────────────────────────
@@ -278,7 +278,7 @@ function WizardNovaPT({
   const [form, setForm] = useState<NovaPTState>(initialState);
   const { user } = useAuth();
 
-  const obrasQ = trpc.getObrasByCompanyActive.useQuery({ companyId }, { enabled: open });
+  const obrasQ = trpc.obras.listActive.useQuery({ companyId }, { enabled: open });
   const empsQ  = trpc.getEmployees.useQuery({ companyId }, { enabled: open });
   const numQ   = trpc.ptPermissoes.proximoNumero.useQuery({ companyId }, { enabled: open });
   const createMut = trpc.ptPermissoes.create.useMutation();
@@ -344,107 +344,144 @@ function WizardNovaPT({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-lg font-bold">
-            <HardHat className="h-5 w-5 text-emerald-600" />
-            Nova PT — {numQ.data?.numero ?? "PT-???"}
-          </DialogTitle>
-        </DialogHeader>
-
-        {/* Indicador de passos */}
-        <div className="flex items-center gap-1 mb-4">
-          {steps.map((s, i) => (
-            <div key={i} className="flex items-center gap-1 flex-1">
-              <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold border-2 transition-all
-                ${i < step ? "bg-emerald-600 border-emerald-600 text-white"
-                  : i === step ? "bg-white border-emerald-600 text-emerald-700"
-                  : "bg-white border-slate-200 text-slate-400"}`}>
-                {i < step ? <Check className="h-3.5 w-3.5" /> : i + 1}
-              </div>
-              <span className={`text-xs font-medium hidden sm:block ${i === step ? "text-emerald-700" : "text-slate-400"}`}>{s}</span>
-              {i < steps.length - 1 && <div className={`flex-1 h-0.5 mx-1 ${i < step ? "bg-emerald-500" : "bg-slate-200"}`} />}
+      <DialogContent className="max-w-2xl max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0">
+        {/* ── Header gradiente ─────────────────────────────────── */}
+        <div className="bg-gradient-to-r from-emerald-700 to-emerald-500 px-6 py-4 rounded-t-xl flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="bg-white/20 p-2 rounded-lg">
+              <HardHat className="h-5 w-5 text-white" />
             </div>
-          ))}
+            <div>
+              <p className="text-white font-bold text-base leading-tight">Nova Permissão de Trabalho</p>
+              <p className="text-emerald-100 text-xs">{numQ.data?.numero ?? "PT-???"} · NR-35</p>
+            </div>
+          </div>
+          <button onClick={() => onOpenChange(false)} className="text-white/70 hover:text-white transition-colors p-1">
+            <XIcon className="h-4 w-4" />
+          </button>
         </div>
+
+        {/* ── Stepper ──────────────────────────────────────────── */}
+        <div className="px-6 pt-4 pb-0 shrink-0">
+          <div className="flex items-center">
+            {steps.map((s, i) => (
+              <div key={i} className="flex items-center flex-1 last:flex-none">
+                <div className="flex flex-col items-center gap-0.5">
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold transition-all shadow-sm
+                    ${i < step ? "bg-emerald-600 text-white shadow-emerald-200"
+                      : i === step ? "bg-emerald-50 border-2 border-emerald-500 text-emerald-700"
+                      : "bg-slate-100 border border-slate-200 text-slate-400"}`}>
+                    {i < step ? <Check className="h-3.5 w-3.5" /> : i + 1}
+                  </div>
+                  <span className={`text-[10px] font-semibold hidden sm:block whitespace-nowrap
+                    ${i === step ? "text-emerald-700" : i < step ? "text-emerald-500" : "text-slate-400"}`}>{s}</span>
+                </div>
+                {i < steps.length - 1 && (
+                  <div className={`flex-1 h-0.5 mx-2 mb-3 rounded-full transition-all ${i < step ? "bg-emerald-400" : "bg-slate-200"}`} />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Conteúdo scrollável ──────────────────────────────── */}
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
 
         {/* ── Passo 0: Solicitação ────────────────────────────── */}
         {step === 0 && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
-                <label className="text-xs font-semibold text-slate-600 mb-1 block">Solicitante *</label>
+            {/* Responsáveis */}
+            <div className="bg-slate-50 rounded-xl p-4 space-y-3 border border-slate-100">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
+                <User className="h-3.5 w-3.5" /> Responsáveis
+              </p>
+              <div>
+                <label className="text-xs font-medium text-slate-600 mb-1.5 block">Solicitante <span className="text-red-500">*</span></label>
                 <Select value={form.employeeId?.toString() ?? ""} onValueChange={v => upd({ employeeId: Number(v) })}>
-                  <SelectTrigger><SelectValue placeholder="Selecione o solicitante" /></SelectTrigger>
+                  <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione o solicitante" /></SelectTrigger>
                   <SelectContent>
                     {emps.map((e: any) => <SelectItem key={e.id} value={e.id.toString()}>{e.nome}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="col-span-2">
-                <label className="text-xs font-semibold text-slate-600 mb-1 block">Obra</label>
+              <div>
+                <label className="text-xs font-medium text-slate-600 mb-1.5 block">Supervisor responsável</label>
+                <Input value={form.supervisorNome} onChange={e => upd({ supervisorNome: e.target.value })}
+                  placeholder="Nome do supervisor" className="bg-white" />
+              </div>
+            </div>
+
+            {/* Local e período */}
+            <div className="bg-slate-50 rounded-xl p-4 space-y-3 border border-slate-100">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
+                <MapPin className="h-3.5 w-3.5" /> Local e Período
+              </p>
+              <div>
+                <label className="text-xs font-medium text-slate-600 mb-1.5 block">Obra</label>
                 <Select value={form.obraId?.toString() ?? "_none"} onValueChange={v => upd({ obraId: v === "_none" ? null : Number(v) })}>
-                  <SelectTrigger><SelectValue placeholder="Selecione a obra (opcional)" /></SelectTrigger>
+                  <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione a obra (opcional)" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="_none">— Sem obra vinculada —</SelectItem>
                     {obras.map((o: any) => <SelectItem key={o.id} value={o.id.toString()}>{o.nome}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <label className="text-xs font-semibold text-slate-600 mb-1 block">Data</label>
-                <Input type="date" value={form.dataEmissao} onChange={e => upd({ dataEmissao: e.target.value })} />
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-slate-600 mb-1.5 block">Data</label>
+                  <Input type="date" value={form.dataEmissao} onChange={e => upd({ dataEmissao: e.target.value })} className="bg-white" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600 mb-1.5 block">Início</label>
+                  <Input type="time" value={form.horaInicio} onChange={e => upd({ horaInicio: e.target.value })} className="bg-white" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-600 mb-1.5 block">Término</label>
+                  <Input type="time" value={form.horaTermino} onChange={e => upd({ horaTermino: e.target.value })} className="bg-white" />
+                </div>
               </div>
+            </div>
+
+            {/* Execução */}
+            <div className="bg-slate-50 rounded-xl p-4 space-y-3 border border-slate-100">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
+                <Building2 className="h-3.5 w-3.5" /> Execução
+              </p>
               <div>
-                <label className="text-xs font-semibold text-slate-600 mb-1 block">Mão de Obra</label>
+                <label className="text-xs font-medium text-slate-600 mb-1.5 block">Mão de Obra</label>
                 <Select value={form.maoDeObra} onValueChange={v => upd({ maoDeObra: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="interna">Interna — Setor Responsável</SelectItem>
                     <SelectItem value="externa">Externa — Empresa Executante</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <label className="text-xs font-semibold text-slate-600 mb-1 block">Hora de Início</label>
-                <Input type="time" value={form.horaInicio} onChange={e => upd({ horaInicio: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-slate-600 mb-1 block">Hora de Término</label>
-                <Input type="time" value={form.horaTermino} onChange={e => upd({ horaTermino: e.target.value })} />
-              </div>
-              <div className="col-span-2">
-                <label className="text-xs font-semibold text-slate-600 mb-1 block">Supervisor responsável</label>
-                <Input value={form.supervisorNome} onChange={e => upd({ supervisorNome: e.target.value })}
-                  placeholder="Nome do supervisor" />
-              </div>
               {form.maoDeObra === "externa" && (
-                <>
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs font-semibold text-slate-600 mb-1 block">Empresa executante</label>
+                    <label className="text-xs font-medium text-slate-600 mb-1.5 block">Empresa executante</label>
                     <Input value={form.empresaExecutanteNome} onChange={e => upd({ empresaExecutanteNome: e.target.value })}
-                      placeholder="Nome da empresa" />
+                      placeholder="Nome da empresa" className="bg-white" />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-600 mb-1 block">CNPJ</label>
+                    <label className="text-xs font-medium text-slate-600 mb-1.5 block">CNPJ</label>
                     <Input value={form.empresaExecutanteCnpj} onChange={e => upd({ empresaExecutanteCnpj: e.target.value })}
-                      placeholder="00.000.000/0000-00" />
+                      placeholder="00.000.000/0000-00" className="bg-white" />
                   </div>
-                </>
+                </div>
               )}
-              <div className="col-span-2">
-                <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                  <input type="checkbox" checked={form.outrosFormularios}
-                    onChange={e => upd({ outrosFormularios: e.target.checked })}
-                    className="rounded border-slate-300" />
-                  Há outros formulários vinculados a este?
-                </label>
-                {form.outrosFormularios && (
-                  <Input className="mt-2" value={form.outrosFormulariosDesc}
-                    onChange={e => upd({ outrosFormulariosDesc: e.target.value })}
-                    placeholder="Especifique os formulários vinculados" />
-                )}
-              </div>
+              <label className="flex items-center gap-2.5 text-sm text-slate-700 cursor-pointer bg-white rounded-lg px-3 py-2.5 border border-slate-200 hover:border-emerald-300 transition-colors">
+                <input type="checkbox" checked={form.outrosFormularios}
+                  onChange={e => upd({ outrosFormularios: e.target.checked })}
+                  className="rounded border-slate-300 accent-emerald-600" />
+                Há outros formulários vinculados a este?
+              </label>
+              {form.outrosFormularios && (
+                <Input value={form.outrosFormulariosDesc}
+                  onChange={e => upd({ outrosFormulariosDesc: e.target.value })}
+                  placeholder="Especifique os formulários vinculados" className="bg-white" />
+              )}
             </div>
           </div>
         )}
@@ -452,15 +489,18 @@ function WizardNovaPT({
         {/* ── Passo 1: Descrição do trabalho ─────────────────── */}
         {step === 1 && (
           <div className="space-y-4">
-            <div>
-              <label className="text-xs font-semibold text-slate-600 mb-2 block">Tipo de trabalho (selecione todos que se aplicam)</label>
+            <div className="bg-slate-50 rounded-xl p-4 space-y-3 border border-slate-100">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
+                <Wrench className="h-3.5 w-3.5" /> Tipo de trabalho
+              </p>
+              <p className="text-xs text-slate-400">Selecione todos que se aplicam</p>
               <div className="grid grid-cols-2 gap-2">
                 {TIPOS_TRABALHO.map(t => (
                   <label key={t.key}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 cursor-pointer transition-all text-sm
+                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border-2 cursor-pointer transition-all text-sm
                       ${form.tiposTrabalho.includes(t.key)
                         ? "border-emerald-500 bg-emerald-50 text-emerald-800 font-semibold"
-                        : "border-slate-200 hover:border-slate-300 text-slate-700"}`}>
+                        : "border-slate-200 bg-white hover:border-slate-300 text-slate-700"}`}>
                     <input type="checkbox" className="hidden"
                       checked={form.tiposTrabalho.includes(t.key)}
                       onChange={e => {
@@ -478,14 +518,14 @@ function WizardNovaPT({
                 ))}
               </div>
             </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-600 mb-1 block">
-                Descrição do trabalho, local e entorno
-              </label>
+            <div className="bg-slate-50 rounded-xl p-4 space-y-3 border border-slate-100">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5" /> Descrição detalhada
+              </p>
               <Textarea value={form.descricaoTrabalho}
                 onChange={e => upd({ descricaoTrabalho: e.target.value })}
-                placeholder="Descreva detalhadamente o trabalho a ser executado, o local e as condições do entorno..."
-                rows={5} className="text-sm resize-none" />
+                placeholder="Descreva o trabalho a ser executado, o local e as condições do entorno..."
+                rows={5} className="text-sm resize-none bg-white" />
             </div>
           </div>
         )}
@@ -554,14 +594,17 @@ function WizardNovaPT({
         {/* ── Passo 3: Envolvidos e liberação ────────────────── */}
         {step === 3 && (
           <div className="space-y-4">
-            <div>
-              <label className="text-xs font-semibold text-slate-600 mb-2 block flex items-center gap-1">
-                <Users className="h-3.5 w-3.5" /> Envolvidos (até 6 pessoas)
-              </label>
+            <div className="bg-slate-50 rounded-xl p-4 space-y-3 border border-slate-100">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
+                  <Users className="h-3.5 w-3.5" /> Envolvidos
+                </p>
+                <span className="text-xs text-slate-400">até 6 pessoas</span>
+              </div>
               <div className="space-y-2">
                 {form.envolvidos.map((env, idx) => (
                   <div key={idx} className="flex gap-2 items-center">
-                    <span className="text-xs text-slate-400 font-semibold w-5">{idx + 1}.</span>
+                    <span className="text-xs text-slate-400 font-bold w-5 shrink-0">{idx + 1}.</span>
                     <Input value={env.nome}
                       onChange={e => {
                         const next = [...form.envolvidos];
@@ -569,7 +612,7 @@ function WizardNovaPT({
                         upd({ envolvidos: next });
                       }}
                       placeholder={`Nome do envolvido ${idx + 1}`}
-                      className="flex-1 text-sm" />
+                      className="flex-1 text-sm bg-white" />
                     <Input value={env.funcao}
                       onChange={e => {
                         const next = [...form.envolvidos];
@@ -577,66 +620,72 @@ function WizardNovaPT({
                         upd({ envolvidos: next });
                       }}
                       placeholder="Função"
-                      className="w-32 text-sm" />
+                      className="w-32 text-sm bg-white" />
                   </div>
                 ))}
               </div>
-              <p className="text-xs text-slate-400 mt-1">
-                As assinaturas dos envolvidos serão coletadas após criar a PT.
+              <p className="text-xs text-slate-400 flex items-center gap-1">
+                <Info className="h-3 w-3" /> Assinaturas coletadas após criar a PT.
               </p>
             </div>
 
-            <div className="border-t pt-4">
-              <label className="text-xs font-semibold text-slate-600 mb-2 block flex items-center gap-1">
+            <div className="bg-slate-50 rounded-xl p-4 space-y-3 border border-slate-100">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
                 <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> Liberação da Permissão
-              </label>
-              <div className="grid grid-cols-1 gap-3">
-                <div>
-                  <label className="text-xs text-slate-500 mb-1 block">Empresa / Setor executante do serviço</label>
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="text-xs font-medium text-slate-600 mb-1.5 block">Empresa / Setor executante</label>
                   <Input value={form.empresaSetorExecutante}
                     onChange={e => upd({ empresaSetorExecutante: e.target.value })}
-                    placeholder="Empresa ou setor" />
+                    placeholder="Empresa ou setor" className="bg-white" />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-500 mb-1 block">Responsável da área do serviço</label>
+                  <label className="text-xs font-medium text-slate-600 mb-1.5 block">Responsável da área</label>
                   <Input value={form.responsavelAreaNome}
                     onChange={e => upd({ responsavelAreaNome: e.target.value })}
-                    placeholder="Nome do responsável" />
+                    placeholder="Nome" className="bg-white" />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-500 mb-1 block">Responsável pela liberação</label>
+                  <label className="text-xs font-medium text-slate-600 mb-1.5 block">Responsável pela liberação</label>
                   <Input value={form.responsavelLiberacaoNome}
                     onChange={e => upd({ responsavelLiberacaoNome: e.target.value })}
-                    placeholder="Nome do responsável pela liberação" />
+                    placeholder="Nome" className="bg-white" />
                 </div>
-                <div>
-                  <label className="text-xs text-slate-500 mb-1 block">Responsável pela execução</label>
+                <div className="col-span-2">
+                  <label className="text-xs font-medium text-slate-600 mb-1.5 block">Responsável pela execução</label>
                   <Input value={form.executanteNome}
                     onChange={e => upd({ executanteNome: e.target.value })}
-                    placeholder="Nome do responsável pela execução" />
+                    placeholder="Nome do responsável pela execução" className="bg-white" />
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        <DialogFooter className="flex gap-2 mt-4 pt-4 border-t">
-          <Button variant="outline" onClick={() => step > 0 ? setStep(s => s - 1) : onOpenChange(false)}>
+        </div>{/* fim scroll */}
+
+        {/* ── Footer fixo ──────────────────────────────────────── */}
+        <div className="flex gap-2 px-6 py-4 border-t bg-white rounded-b-xl shrink-0">
+          <Button variant="outline" onClick={() => step > 0 ? setStep(s => s - 1) : onOpenChange(false)}
+            className="gap-1">
             {step > 0 ? <><ChevronLeft className="h-4 w-4" /> Anterior</> : "Cancelar"}
           </Button>
           <div className="flex-1" />
+          <span className="text-xs text-slate-400 self-center">Passo {step + 1} de {steps.length}</span>
+          <div className="flex-1" />
           {step < steps.length - 1 ? (
             <Button onClick={() => setStep(s => s + 1)}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white">
+              className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1">
               Próximo <ChevronRight className="h-4 w-4" />
             </Button>
           ) : (
             <Button onClick={handleCreate} disabled={createMut.isPending || !form.employeeId}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white">
+              className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1">
               {createMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Criando...</> : <><Check className="h-4 w-4" /> Criar PT</>}
             </Button>
           )}
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );
