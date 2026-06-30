@@ -122,6 +122,7 @@ export default function DashEpis() {
   const [expandedEpiId, setExpandedEpiId] = useState<number | null>(null);
   const [detalheEpi, setDetalheEpi] = useState<any | null>(null);
   const [fichaModal, setFichaModal] = useState<{ employeeId: number; employeeName: string; epiNome: string } | null>(null);
+  const [fotoAmpliada, setFotoAmpliada] = useState<{ url: string; nome: string } | null>(null);
   const fichaDeliveriesRaw = trpc.epis.listDeliveries.useQuery(
     { companyId: queryCompanyId, ...(isConstrutoras ? { companyIds } : {}), employeeId: fichaModal?.employeeId, limit: 200, offset: 0 },
     { enabled: !!fichaModal }
@@ -943,7 +944,7 @@ export default function DashEpis() {
                                                         onClick={(e) => { e.stopPropagation(); setFichaModal({ employeeId: f.employeeId, employeeName: f.nome, epiNome: a.nome }); }}
                                                       >
                                                         {f.fotoUrl ? (
-                                                          <img src={f.fotoUrl} alt={f.nome} className="h-7 w-7 rounded-full object-cover border border-gray-200 flex-shrink-0" />
+                                                          <img src={f.fotoUrl} alt={f.nome} onClick={(e) => { e.stopPropagation(); setFotoAmpliada({ url: f.fotoUrl, nome: f.nome }); }} className="h-7 w-7 rounded-full object-cover border border-gray-200 flex-shrink-0 cursor-zoom-in hover:ring-2 hover:ring-blue-400 transition-all" />
                                                         ) : (
                                                           <div className="h-7 w-7 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
                                                             <span className="text-[9px] font-bold text-blue-700">{(f.nome || "?").split(" ").filter(Boolean).map((n: string) => n[0]).slice(0, 2).join("")}</span>
@@ -1593,7 +1594,7 @@ export default function DashEpis() {
                                 }}
                               >
                                 {f.fotoUrl ? (
-                                  <img src={f.fotoUrl} alt={f.nome} className="h-8 w-8 rounded-full object-cover border border-gray-200 flex-shrink-0" />
+                                  <img src={f.fotoUrl} alt={f.nome} onClick={(e) => { e.stopPropagation(); setFotoAmpliada({ url: f.fotoUrl, nome: f.nome }); }} className="h-8 w-8 rounded-full object-cover border border-gray-200 flex-shrink-0 cursor-zoom-in hover:ring-2 hover:ring-blue-400 transition-all" />
                                 ) : (
                                   <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
                                     <span className="text-[10px] font-bold text-blue-700">{(f.nome || "?").split(" ").filter(Boolean).map((n: string) => n[0]).slice(0, 2).join("")}</span>
@@ -1733,6 +1734,30 @@ export default function DashEpis() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Lightbox foto funcionário */}
+      {fotoAmpliada && (
+        <div
+          onClick={() => setFotoAmpliada(null)}
+          className="fixed inset-0 z-[200] bg-black/85 flex items-center justify-center p-4 cursor-zoom-out"
+        >
+          <div className="relative flex flex-col items-center gap-3" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={fotoAmpliada.url}
+              alt={fotoAmpliada.nome}
+              className="max-w-[90vw] max-h-[80vh] object-contain rounded-2xl shadow-2xl border-4 border-white"
+            />
+            <div className="bg-white/95 px-5 py-2.5 rounded-xl shadow-lg">
+              <p className="font-bold text-slate-800 text-center text-base">{fotoAmpliada.nome}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFotoAmpliada(null)}
+              className="absolute -top-3 -right-3 w-9 h-9 rounded-full bg-white text-slate-800 shadow-lg hover:bg-slate-100 flex items-center justify-center text-lg font-bold border border-slate-300"
+            >✕</button>
+          </div>
+        </div>
+      )}
     </>
   );
 }

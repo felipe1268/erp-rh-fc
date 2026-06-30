@@ -33,6 +33,7 @@ export default function EpiDrillDown({ type, onClose }: EpiDrillDownProps) {
   const companyIds = isConstrutoras ? getCompanyIdsForQuery() : undefined;
   const queryCompanyId = isConstrutoras ? (companyIds?.[0] || companyId) : companyId;
   const [search, setSearch] = useState("");
+  const [fotoAmpliada, setFotoAmpliada] = useState<{ url: string; nome: string } | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
   const episQ = trpc.epis.list.useQuery({ companyId: queryCompanyId, companyIds, limit: 200, offset: 0 }, { enabled: !!queryCompanyId });
@@ -366,7 +367,7 @@ export default function EpiDrillDown({ type, onClose }: EpiDrillDownProps) {
                     </div>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       {d.fotoUrl ? (
-                        <img src={d.fotoUrl} alt={d.nomeFunc || ""} className="h-6 w-6 rounded-full object-cover border border-gray-200 flex-shrink-0" />
+                        <img src={d.fotoUrl} alt={d.nomeFunc || ""} onClick={() => setFotoAmpliada({ url: d.fotoUrl, nome: d.nomeFunc || "" })} className="h-6 w-6 rounded-full object-cover border border-gray-200 flex-shrink-0 cursor-zoom-in hover:ring-2 hover:ring-blue-400 transition-all" />
                       ) : (
                         <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
                           <span className="text-[8px] font-bold text-blue-700">{(d.nomeFunc || "?").split(" ").filter(Boolean).map((n: string) => n[0]).slice(0, 2).join("")}</span>
@@ -403,7 +404,7 @@ export default function EpiDrillDown({ type, onClose }: EpiDrillDownProps) {
                       <td className="p-3">
                         <div className="flex items-center gap-2">
                           {d.fotoUrl ? (
-                            <img src={d.fotoUrl} alt={d.nomeFunc || ""} className="h-8 w-8 rounded-full object-cover border border-gray-200 flex-shrink-0" />
+                            <img src={d.fotoUrl} alt={d.nomeFunc || ""} onClick={() => setFotoAmpliada({ url: d.fotoUrl, nome: d.nomeFunc || "" })} className="h-8 w-8 rounded-full object-cover border border-gray-200 flex-shrink-0 cursor-zoom-in hover:ring-2 hover:ring-blue-400 transition-all" />
                           ) : (
                             <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
                               <span className="text-[10px] font-bold text-blue-700">{(d.nomeFunc || "?").split(" ").filter(Boolean).map((n: string) => n[0]).slice(0, 2).join("")}</span>
@@ -545,6 +546,30 @@ export default function EpiDrillDown({ type, onClose }: EpiDrillDownProps) {
           )}
         </div>
       </div>
+
+      {/* Lightbox foto funcionário */}
+      {fotoAmpliada && (
+        <div
+          onClick={() => setFotoAmpliada(null)}
+          className="fixed inset-0 z-[200] bg-black/85 flex items-center justify-center p-4 cursor-zoom-out"
+        >
+          <div className="relative flex flex-col items-center gap-3" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={fotoAmpliada.url}
+              alt={fotoAmpliada.nome}
+              className="max-w-[90vw] max-h-[80vh] object-contain rounded-2xl shadow-2xl border-4 border-white"
+            />
+            <div className="bg-white/95 px-5 py-2.5 rounded-xl shadow-lg">
+              <p className="font-bold text-slate-800 text-center text-base">{fotoAmpliada.nome}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFotoAmpliada(null)}
+              className="absolute -top-3 -right-3 w-9 h-9 rounded-full bg-white text-slate-800 shadow-lg hover:bg-slate-100 flex items-center justify-center text-lg font-bold border border-slate-300"
+            >✕</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
