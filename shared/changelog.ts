@@ -1,4 +1,28 @@
 /**
+ * Rev. 3907 — **SST — PT DIALOG: FIX CONFIRM DIALOG EM BRANCO + REMOVER BOTÃO FCSIGN.**
+ *
+ * PEDIDO: (1) Clicar "Cancelar PT" abre dialog vazio (só ? e botões sem texto);
+ * (2) remover botão "Enviar FCSign" — assinaturas já são coletadas direto na PT.
+ *
+ * CAUSA RAIZ (dialog em branco): `useConfirm` foi atualizado para aceitar
+ * `confirm(options: ConfirmOptions)` (objeto), mas os callers ainda chamavam
+ * `confirm("título", "descrição")` (dois strings). `opts.title` = `undefined`
+ * quando string é passada como objeto → AlertDialog renderiza sem texto.
+ *
+ * SOLUÇÃO:
+ * - client/src/pages/sst/PermissaoTrabalho.tsx:
+ *   · handleCancelar: `confirm("Cancelar PT?", "...")` → `confirm({ title, description, tone:"destructive" })`.
+ *   · AssinaturaPad.remover: idem.
+ *   · Removidos: botão "Enviar FCSign" + badge "FCSign enviado" + Dialog FCSign inteiro.
+ *   · Removidos: state `fcSignOpen`, `fcSignSigners`; mutation `fcSignMut`;
+ *     funções `handleFcSign`, `handleFcSignSubmit`; import `Send`.
+ *   · Corrigida invalidação em `remover`: `{ ptId }` → `{ id: ptId }`.
+ *   · Backend `enviarFCSign` mantido (ZERO DELETE).
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3906 — **SST — PT: FIX ASSINATURA + STATUS QUEM ASSINOU + CORES AZUL + LOGO NO PDF.**
  *
  * PEDIDO: (1) Assinatura clicada não salvava; (2) mostrar alerta de quem assinou/falta;

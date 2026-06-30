@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3907** — **SST — PT DIALOG: FIX CONFIRM EM BRANCO + REMOVER FCSIGN.** `confirm()` chamado com 2 strings mas hook espera objeto `{title,description,tone}` → AlertDialog sem texto. Corrigido. Botão "Enviar FCSign" + dialog removidos da UI (backend preservado). Invalidações `remover` corrigidas. ZERO DELETE.
+
 - **Rev. 3906** — **SST — PT: FIX ASSINATURA + STATUS QUEM ASSINOU + CORES AZUL + LOGO NO PDF.** Bug root cause: `posicao: max(6)` rejeitava envolvidos nas posições 7-30 (zod BAD_REQUEST silencioso) + invalidate com chave errada (`ptId` vs `id`). Fixes: `max(30)`, chave correta. Banner de progresso: "X de N assinaturas coletadas" + barra + lista "Falta assinar". PDF: cores verde → azul FC (#1e3a5f) + logo da empresa no cabeçalho. ZERO DELETE.
 
-- **Rev. 3905** — **SST — PT WIZARD: GATES DE CHECKLIST + ENVOLVIDOS COM TERCEIROS.** Step 2 (Checklist): banner âmbar se perguntas sem resposta + banner vermelho se N > 0; botão "Próximo" disabled até tudo preenchido E sem não-conformidades (alinhado NR-35). Step 3 (Envolvidos): query `obraTerceirosQ` (terceiros.funcionarios.list com obraId) agrega efetivo próprio + terceiros em seções separadas; badge âmbar "Terceiro"; limite 20→30. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3905** — **SST — PT WIZARD: GATES DE CHECKLIST + ENVOLVIDOS COM TERCEIROS.** Step 2: banners bloqueio + gate "Próximo". Step 3: terceiros da obra + badge âmbar "Terceiro"; limite 20→30. ZERO DELETE.
 
 - **Rev. 3904** — **SST — PT WIZARD: OBRA PRIMEIRO + TST/ENCARREGADO NO CADASTRO DE OBRAS.** Schema obras: +`tst_id`/`encarregado_id` (ColFix v3904). Novo procedure `ptPermissoes.getObraSST`. Step 0 redesenhado: Obra PRIMEIRO → 3 cards SST auto-fill. ZERO DELETE.
 
