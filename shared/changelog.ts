@@ -1,4 +1,33 @@
 /**
+ * Rev. 3915 — **CONCILIAÇÃO BANCÁRIA CEF JAN/2026 — DESCONSIDERAÇÃO DE PARES ZERO-LÍQUIDO + FIX REAPRESENTADOS NA LISTA.**
+ *
+ * CONTEXTO: Conta CEF Ag.0306 (id=2, company 60002) mostrava 88% no card enquanto o workspace
+ * exibia 100% e "Todo o extrato está conciliado". Causa-raiz: 16 linhas com conciliado=0 e
+ * desconsiderado_em IS NULL referentes a 6 cheques que passaram pelo banco mais de uma vez.
+ *
+ * FIX 1 — DADOS (12 linhas desconsideradas diretamente no banco):
+ * 6 pares zero-líquido (débito+crédito, saldo=0,00 cada) tinham desconsiderado_em NULL:
+ *   – Docs 000655 e 001077: voltaram 2x (MOT 11 + MOT 22); 1º par já desconsiderado, 2º não.
+ *   – Docs 000789, 000844, 000943, 001003: voltaram 1x e passaram na 2ª apresentação; o
+ *     1º par (zero-líquido) não estava desconsiderado.
+ * UPDATE bank_statement_lines SET desconsiderado_em=NOW() WHERE id IN (12885,12886,12926,12927,
+ * 12934,12935,12937,12938,12995,12996,12997,12998). Resultado: 115/119 = 96,6%.
+ *
+ * FIX 2 — CÓDIGO (FinanceiroConciliacao.tsx): filtro `repExt` escondia TODAS as linhas com
+ * `reversalResolveGrupo` (linhas de reapresentação detectadas pelo motor de pares), inclusive
+ * as 4 que representam débitos reais ainda sem lançamento ERP (12910, 12958, 13004, 13018).
+ * Novo comportamento: `reversalResolveGrupo` só oculta a linha se `desconsideradoEm` estiver
+ * preenchido; senão ela aparece em "No extrato, sem lançamento" com botão "Lançar no ERP".
+ * Efeito: workspace passa a mostrar 97% (115/119) em paridade com o card. As 4 linhas
+ * (Docs 000789/08jan, 000844/19jan, 000943/28jan, 001003/29jan) ficam visíveis para ação.
+ *
+ * PENDENTE (ação do usuário): criar lançamento ERP para cada uma das 4 linhas via
+ * "Lançar no ERP" → ao conciliar todas, chegarão a 100%.
+ *
+ * ARQUIVOS: client/src/pages/financeiro/FinanceiroConciliacao.tsx (l.1329–1343). ZERO DELETE.
+ */
+
+/**
  * Rev. 3914 — **CONCILIAÇÃO BANCÁRIA — FIX BARRA DE PROGRESSO (100% FALSO) + SUGESTÕES COM LINHAS DESCONSIDERADAS.**
  *
  * PROBLEMA 1 — Barra de progresso mostrava 100% enquanto o card superior mostrava 97–98%.

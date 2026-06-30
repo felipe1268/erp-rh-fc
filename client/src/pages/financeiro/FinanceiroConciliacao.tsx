@@ -1327,9 +1327,17 @@ export default function FinanceiroConciliacao() {
   // devolução do MESMO cheque) NÃO entram na lista normal "no extrato, sem lançamento":
   // o par tem saldo zero (tentativa de pagamento frustrada) e é tratado num bloco próprio
   // ("Cheques devolvidos"). A linha de quitação real (reapresentação/PIX) também sai da
-  // lista crua porque é exibida amarrada ao par.
+  // lista crua quando a quitação está devidamente resolvida.
+  // Rev. 3915 — Exceção: linha de reapresentação (reversalResolveGrupo) que NÃO está
+  // desconsiderada representa um débito real que saiu da conta e ainda precisa de
+  // lançamento ERP. Ela DEVE aparecer em "No extrato, sem lançamento" p/ que o usuário
+  // possa usar "Lançar no ERP". Só fica oculta quando desconsideradoEm está preenchido.
   const repExtRaw: any[] = (report?.extratoSemLancamento ?? []).filter((r: any) => !dismissedStmtIds.has(Number(r.id)));
-  const repExt: any[] = repExtRaw.filter((r) => !r.reversal && !r.reversalResolveGrupo);
+  const repExt: any[] = repExtRaw.filter((r) => {
+    if (r.reversal) return false; // par COMP+DEV → vai para "Cheques devolvidos"
+    if (r.reversalResolveGrupo) return !r.desconsideradoEm; // reapresentação: mostra se não desconsiderada
+    return true;
+  });
   const repDevol: any[] = report?.chequesDevolvidos ?? [];
   const repLan: any[] = report?.lancamentosSemExtrato ?? [];
   // Rev. 3747 — cobertura/sugestões de vínculo p/ TODOS os cheques devolvidos (em lote).

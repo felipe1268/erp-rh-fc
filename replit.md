@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3915** — **CONCILIAÇÃO BANCÁRIA CEF JAN/2026: PARES ZERO-LÍQUIDO DESCONSIDERADOS + FIX REAPRESENTADOS NA LISTA.** 12 linhas de 6 pares zero-líquido (cheques que voltaram 1 ou 2 vezes, saldo neto = R$0) desconsideradas diretamente no banco. Filtro `repExt` corrigido: linhas de reapresentação com `reversalResolveGrupo` agora aparecem em "No extrato, sem lançamento" quando `desconsideradoEm` é nulo. Resultado: card e workspace ambos em 97% (115/119). 4 débitos reais restam pendentes. ZERO DELETE.
+
 - **Rev. 3914** — **CONCILIAÇÃO BANCÁRIA: FIX BARRA DE PROGRESSO (100% FALSO) + SUGESTÕES COM LINHAS DESCONSIDERADAS.** `totLinhas` passou a usar `accConciliadasMap[contaBancariaId]` (mesma fonte do card superior) → paridade entre barra de progresso e card. `sugerirConciliacao` ganhou `desconsiderado_em IS NULL` → 33 linhas fantasmas somem das sugestões. ZERO DELETE.
 
-- **Rev. 3913** — **SST — APR EXPANDIDA: 10 TIPOS DE ATIVIDADE COM CHECKLIST POR NR.** Wizard 3→5 steps: Tipo (10 cards) → Dados → Checklist (Sim/Não/NA) → Riscos (pré-populados) → EPIs+Aprovação. Schema +tipo_atividade+checklist_json (ColFix v3913). Detail dialog exibe checklist respondido. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3913** — **SST — APR EXPANDIDA: 10 TIPOS DE ATIVIDADE COM CHECKLIST POR NR.** Wizard 3→5 steps: Tipo (10 cards) → Dados → Checklist (Sim/Não/NA) → Riscos (pré-populados) → EPIs+Aprovação. Schema +tipo_atividade+checklist_json (ColFix v3913). Detail dialog exibe checklist respondido. ZERO DELETE.
 
 - **Rev. 3912** — **SST — PT WIZARD: BLOQUEIO NR-35 NO STEP DE ENVOLVIDOS.** Funcionários sem NR-35 ou com NR-35 vencida ficam bloqueados (card vermelho + ícone Ban + mensagem + line-through no nome). Click retorna sem ação. Terceiros não bloqueados. ZERO DELETE.
 
@@ -68,7 +70,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3903 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3904 e anteriores.
 
 ## User preferences
 
