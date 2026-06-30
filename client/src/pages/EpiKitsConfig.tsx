@@ -242,8 +242,11 @@ export default function EpiKitsConfig() {
   const [savingKits, setSavingKits] = useState(false);
   const [autoGenerating, setAutoGenerating] = useState(false);
 
-  async function createKitsFromArray(kitsArr: any[]) {
-    for (const kit of kitsArr) {
+  const [autoGenProgress, setAutoGenProgress] = useState(0);
+
+  async function createKitsFromArray(kitsArr: any[], onProgress?: (pct: number) => void) {
+    for (let i = 0; i < kitsArr.length; i++) {
+      const kit = kitsArr[i];
       await createKitMut.mutateAsync({ companyId, companyIds, nome: kit.nome,
         funcao: kit.funcao,
         descricao: kit.descricao || undefined,
@@ -254,6 +257,7 @@ export default function EpiKitsConfig() {
           obrigatorio: i.obrigatorio !== false,
         })),
       });
+      onProgress?.(Math.round(((i + 1) / kitsArr.length) * 100));
     }
   }
 
@@ -275,19 +279,30 @@ export default function EpiKitsConfig() {
 
   async function generateAndSaveAllKits() {
     setAutoGenerating(true);
+    setAutoGenProgress(0);
+    // Phase 1 (0→35%): IA gerando — progresso simulado enquanto aguarda
+    const interval = setInterval(() => {
+      setAutoGenProgress(p => p < 33 ? p + 1 : p);
+    }, 300);
     try {
       const data = await iaKitsMut.mutateAsync({ companyId });
+      clearInterval(interval);
       const kits = data?.kits ?? [];
-      if (kits.length === 0) { toast.error("IA não retornou kits. Tente novamente."); return; }
-      await createKitsFromArray(kits);
+      if (kits.length === 0) { toast.error("IA não retornou kits. Tente novamente."); setAutoGenProgress(0); return; }
+      setAutoGenProgress(35);
+      // Phase 2 (35→100%): salvando cada kit
+      await createKitsFromArray(kits, pct => setAutoGenProgress(35 + Math.round(pct * 0.65)));
+      setAutoGenProgress(100);
       toast.success(`${kits.length} kit(s) gerado(s) e salvo(s) automaticamente!`);
       setIaSugestaoKits(null);
       kitsQ.refetch();
       funcoesDisponiveisQ.refetch();
     } catch (err: any) {
+      clearInterval(interval);
       toast.error(iaErrMsg(err));
     } finally {
-      setAutoGenerating(false);
+      clearInterval(interval);
+      setTimeout(() => { setAutoGenerating(false); setAutoGenProgress(0); }, 800);
     }
   }
 
@@ -339,13 +354,22 @@ export default function EpiKitsConfig() {
               <button
                 disabled={autoGenerating || iaKitsMut.isPending}
                 onClick={generateAndSaveAllKits}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#1B2A4A] text-white border border-[#1B2A4A] hover:bg-[#243660] disabled:opacity-50 transition-colors"
+                className="relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#1B2A4A] text-white border border-[#1B2A4A] hover:bg-[#243660] disabled:opacity-80 transition-colors overflow-hidden min-w-[200px]"
               >
-                {autoGenerating ? (
-                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Gerando e salvando...</>
-                ) : (
-                  <><Sparkles className="h-3.5 w-3.5" /> Gerar Kits para Todas as Funções</>
+                {autoGenerating && (
+                  <span
+                    className="absolute inset-0 bg-white/15 transition-all duration-300"
+                    style={{ width: `${autoGenProgress}%` }}
+                  />
                 )}
+                <span className="relative flex items-center gap-1.5">
+                  {autoGenerating ? (
+                    <><Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
+                    <span>Gerando e salvando... {autoGenProgress}%</span></>
+                  ) : (
+                    <><Sparkles className="h-3.5 w-3.5 shrink-0" /> Gerar Kits para Todas as Funções</>
+                  )}
+                </span>
               </button>
               <IAButton
                 loading={iaKitsMut.isPending}

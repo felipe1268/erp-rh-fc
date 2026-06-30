@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3895** — **EPI — DIAGNÓSTICO DE FUNÇÕES NO DIALOG DE KIT + BOTÃO GERAR E SALVAR TODOS.** `funcoesDisponiveis` retorna `totalFuncoesCadastradas`; 3 branches distintas no dialog (isError→Input, total=0→"sem funções no RH", todas com kit→mensagem precisa); botão "✨ Gerar Kits para Todas as Funções" chama IA e persiste todos os kits sem revisão manual; helper `createKitsFromArray`. ZERO DELETE.
+- **Rev. 3896** — **EPI — PROGRESSO 0→100% NO BOTÃO "GERAR KITS PARA TODAS AS FUNÇÕES".** Barra de fundo `bg-white/15` cresce via `style={{ width: pct% }}`; fase IA (0→33%) simulada via interval; fase de salvamento (35→100%) com progresso real por kit; texto "Gerando e salvando... XX%"; regra de ouro salva em User preferences. ZERO DELETE.
 
-- **Rev. 3894** — **EPI — KIT COBRE FUNÇÕES SIMILARES (CARPINTEIRO I, II, III → 1 KIT).** Nova coluna `funcoes_cobertas_json` em `epi_kits`; ColFix garante coluna; `funcoesDisponiveis` exclui cobertas de kits ativos; `kitsCreate`/`kitsUpdate` salvam JSON; dialog exibe chips clicáveis "Cobre funções similares"; card mostra "+N similares". ZERO DELETE.
+- **Rev. 3895** — **EPI — DIAGNÓSTICO DE FUNÇÕES NO DIALOG DE KIT + BOTÃO GERAR E SALVAR TODOS.** `funcoesDisponiveis` retorna `totalFuncoesCadastradas`; 3 branches distintas no dialog (isError→Input, total=0→"sem funções no RH", todas com kit→mensagem precisa); botão "✨ Gerar Kits para Todas as Funções" chama IA e persiste todos os kits sem revisão manual. ZERO DELETE.
 
 ### 5 one-liners
+
+- **Rev. 3894** — **EPI — KIT COBRE FUNÇÕES SIMILARES (CARPINTEIRO I, II, III → 1 KIT).** Nova coluna `funcoes_cobertas_json` em `epi_kits`; ColFix garante coluna; dialog exibe chips "Cobre funções similares"; card mostra "+N similares". ZERO DELETE.
 
 - **Rev. 3893** — **EPI — CAMPO FUNÇÃO DO KIT VIRA SELECT COM FUNÇÕES SEM KIT.** Endpoint `funcoesDisponiveis`: cruza `job_functions` ativas com `epi_kits` ativos e retorna só as funções que ainda não têm kit. Dialog "Novo Kit" substitui Input por Select; loading state; refetch automático. ZERO DELETE.
 
@@ -75,3 +77,4 @@ Ver `replit-history.md` para revisões Rev. 3887 e anteriores.
 - Seletor de período nos dashboards = white-card (padrão PanoramaFiscal), NUNCA DashHeader gradiente.
 - Dialogs nunca truncam texto; use break-words/break-all.
 - Commits/revisões seguem convenção acima; detalhe sempre em `shared/changelog.ts`.
+- **REGRA DE OURO — Botões de carregamento longo:** todo botão que dispara operação assíncrona longa (IA, geração em lote, salvamento sequencial) DEVE mostrar percentual 0→100% no próprio botão. Padrão: barra de fundo `bg-white/15` crescendo via `style={{ width: pct% }}` + texto `"Ação... XX%"`. Fase IA (não-determinística) usa intervalo simulado até ~33%; fase de salvamento por item usa progresso real ((i+1)/total). Estado: `[progress, setProgress] = useState(0)`; limpar com `setTimeout(..., 800)` após 100% para o usuário ver o completado.

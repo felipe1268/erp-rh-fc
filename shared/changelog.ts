@@ -1,4 +1,28 @@
 /**
+ * Rev. 3896 — **EPI — PROGRESSO 0→100% NO BOTÃO "GERAR KITS PARA TODAS AS FUNÇÕES".**
+ *
+ * ## Problema
+ * Botão mostrava apenas spinner genérico ("Gerando e salvando...") sem indicação
+ * de quanto da operação havia sido concluído.
+ *
+ * ## Solução
+ * - Barra de progresso visual: faixa semitransparente `bg-white/15` cresce via
+ *   `style={{ width: `${pct}%` }}` dentro do próprio botão (overflow-hidden).
+ * - Texto dinâmico: "Gerando e salvando... XX%" atualizado em tempo real.
+ * - Fase 1 (0→33%): IA gerando — progresso simulado via setInterval (300ms/passo).
+ * - Fase 2 (35→100%): salvando cada kit — progresso real: 35 + (i+1)/total × 65.
+ * - Após 100%: estado limpo em 800ms para o usuário ver a conclusão.
+ * - Salvo como **REGRA DE OURO** em replit.md: todo botão de operação longa
+ *   (IA, lote, salvamento sequencial) deve exibir percentual 0→100%.
+ *
+ * ## Arquivos tocados
+ * - `client/src/pages/EpiKitsConfig.tsx` — progresso no botão + função refatorada
+ * - `replit.md` — regra de ouro persistida em User preferences
+ *
+ * ## ZERO DELETE
+ */
+
+/**
  * Rev. 3895 — **EPI — DIAGNÓSTICO DE FUNÇÕES NO DIALOG DE KIT + BOTÃO GERAR E SALVAR TODOS.**
  *
  * ## Problema
