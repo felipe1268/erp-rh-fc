@@ -224,6 +224,7 @@ const PainelSST = lazyWithRetry(() => import("./pages/PainelSST"));
 const ProgramasSST = lazyWithRetry(() => import("./pages/ProgramasSST"));
 const IntegracaoSST = lazyWithRetry(() => import("./pages/sst/IntegracaoSST"));
 const DDSGuia = lazyWithRetry(() => import("./pages/sst/DDSGuia"));
+const PermissaoTrabalho = lazyWithRetry(() => import("./pages/sst/PermissaoTrabalho"));
 const DDSDashboard = lazyWithRetry(() => import("./pages/sst/DDSDashboard"));
 const DashboardAtestadosAcidentes = lazyWithRetry(() => import("./pages/sst/DashboardAtestadosAcidentes"));
 const RegistroAcidentes = lazyWithRetry(() => import("./pages/sst/RegistroAcidentes"));
@@ -481,6 +482,7 @@ function Router() {
         <Route path={"/cipa"} component={() => <RouteGuard component={CipaCompleta} route="/cipa" />} />
         <Route path={"/programas-sst"} component={() => <RouteGuard component={ProgramasSST} route="/programas-sst" />} />
         <Route path={"/sst/integracao"} component={() => <RouteGuard component={IntegracaoSST} route="/sst/integracao" />} />
+        <Route path={"/sst/pt"} component={() => <RouteGuard component={PermissaoTrabalho} route="/sst/pt" />} />
         <Route path={"/sst/dds"} component={() => <RouteGuard component={DDSGuia} route="/sst/dds" />} />
         <Route path={"/sst/dds-dashboard"} component={() => <RouteGuard component={DDSDashboard} route="/sst/dds-dashboard" />} />
         <Route path={"/sst/dashboard-atestados-acidentes"} component={() => <RouteGuard component={DashboardAtestadosAcidentes} route="/sst/dashboard-atestados-acidentes" />} />

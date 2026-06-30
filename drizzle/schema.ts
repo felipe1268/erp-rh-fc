@@ -10130,3 +10130,88 @@ export const bankStatementTemplates = pgTable("bank_statement_templates", {
 }, (table) => [
   index("idx_bank_stmt_tmpl_company").on(table.companyId),
 ]);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Rev. 3900 — PT — Permissão de Trabalho (NR-35 / trabalho em altura)
+// Workflow digital: rascunho → em_andamento → liberada → concluida.
+// Assinaturas dos envolvidos via canvas pad (pt_assinaturas) +
+// liberação formal via FCSign (tipo "pt_altura").
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const ptPermissoes = pgTable("pt_permissoes", {
+  id:                       serial("id").primaryKey(),
+  companyId:                integer("company_id").notNull(),
+  obraId:                   integer("obra_id"),
+  employeeId:               integer("employee_id").notNull(),
+
+  numero:                   varchar("numero", { length: 30 }).notNull(),
+  status:                   varchar("status", { length: 20 }).notNull().default("rascunho"),
+  // rascunho | em_andamento | liberada | concluida | cancelada
+
+  dataEmissao:              varchar("data_emissao", { length: 10 }),
+  horaInicio:               varchar("hora_inicio", { length: 5 }),
+  horaTermino:              varchar("hora_termino", { length: 5 }),
+  maoDeObra:                varchar("mao_de_obra", { length: 20 }),
+  supervisorNome:           varchar("supervisor_nome", { length: 255 }),
+  empresaExecutanteCnpj:    varchar("empresa_executante_cnpj", { length: 20 }),
+  empresaExecutanteNome:    varchar("empresa_executante_nome", { length: 255 }),
+  outrosFormularios:        smallint("outros_formularios").default(0),
+  outrosFormulariosDesc:    text("outros_formularios_desc"),
+
+  tiposTrabalhoJson:        text("tipos_trabalho_json"),
+  descricaoTrabalho:        text("descricao_trabalho"),
+
+  checklistJson:            text("checklist_json"),
+
+  envolvidosJson:           text("envolvidos_json"),
+
+  empresaSetorExecutante:   varchar("empresa_setor_executante", { length: 255 }),
+  responsavelAreaNome:      varchar("responsavel_area_nome", { length: 255 }),
+  responsavelAreaAss:       text("responsavel_area_ass"),
+  responsavelLiberacaoNome: varchar("responsavel_liberacao_nome", { length: 255 }),
+  responsavelLiberacaoAss:  text("responsavel_liberacao_ass"),
+  executanteNome:           varchar("executante_nome", { length: 255 }),
+  executanteAss:            text("executante_ass"),
+
+  conclusaoSolicitanteNome: varchar("conclusao_solicitante_nome", { length: 255 }),
+  conclusaoData:            varchar("conclusao_data", { length: 10 }),
+  conclusaoHoraInicio:      varchar("conclusao_hora_inicio", { length: 5 }),
+  conclusaoHoraFim:         varchar("conclusao_hora_fim", { length: 5 }),
+
+  revalidacaoNome:          varchar("revalidacao_nome", { length: 255 }),
+  revalidacaoData:          varchar("revalidacao_data", { length: 10 }),
+  revalidacaoHoraInicio:    varchar("revalidacao_hora_inicio", { length: 5 }),
+  revalidacaoHoraFim:       varchar("revalidacao_hora_fim", { length: 5 }),
+  revalidacaoResponsavel:   varchar("revalidacao_responsavel", { length: 255 }),
+
+  fcSignSessionId:          integer("fc_sign_session_id"),
+
+  criadoPorId:              integer("criado_por_id"),
+  criadoPorNome:            varchar("criado_por_nome", { length: 255 }),
+  createdAt:                timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+  updatedAt:                timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),
+  deletedAt:                timestamp("deleted_at", { mode: "string" }),
+}, (table) => [
+  index("idx_pt_company").on(table.companyId),
+  index("idx_pt_employee").on(table.employeeId),
+  index("idx_pt_obra").on(table.obraId),
+  index("idx_pt_status").on(table.companyId, table.status),
+  index("idx_pt_numero").on(table.companyId, table.numero),
+]);
+
+export const ptAssinaturas = pgTable("pt_assinaturas", {
+  id:             serial("id").primaryKey(),
+  ptId:           integer("pt_id").notNull(),
+  companyId:      integer("company_id").notNull(),
+  posicao:        integer("posicao").notNull(),
+  nomeManual:     varchar("nome_manual", { length: 255 }),
+  funcaoManual:   varchar("funcao_manual", { length: 255 }),
+  employeeId:     integer("employee_id"),
+  assinaturaImg:  text("assinatura_img"),
+  assinadoEm:     timestamp("assinado_em", { mode: "string" }),
+  ip:             varchar("ip", { length: 45 }),
+  createdAt:      timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+  index("idx_pt_assin_pt").on(table.ptId),
+  index("idx_pt_assin_company").on(table.companyId),
+]);

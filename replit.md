@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3900** — **PT — PERMISSÃO DE TRABALHO (NR-35) 100% DIGITAL.** Novo módulo SST; tabelas `pt_permissoes` + `pt_assinaturas` via ColFix; wizard 4 passos (Solicitação, Descrição, Checklist 15 itens NR-35, Envolvidos); assinaturas canvas pad por worker (touch/mouse); fluxo em_andamento → liberada → concluida; stats cards clicáveis; rota `/sst/pt`; sidebar SST atualizado. ZERO DELETE.
+
 - **Rev. 3899** — **NF-e EMITIDAS — STATUS SEGUE SEFAZ + CONSOLIDAR MÊS.** "Conciliada" só aparece quando há extrato bancário vinculado (stmtLineId); status base de notas = "Emitida"; vincular lançamento financeiro não muda mais status; desvincular extrato → "Emitida"; botão renomeado "Consolidar Mês" grava flag em `fiscal_notes_meses_consolidados` sem alterar NF-e individuais; STATUS_MAP + filtros + bulk status atualizados; 204 notas incorretas + 717 pendentes corrigidas no Neon. ZERO DELETE.
 
-- **Rev. 3898** — **CONTRATOS PJ — EDIÇÃO DE CLÁUSULAS POR CONTRATO.** Nova coluna `clausulas_customizadas` em `pj_contracts` (ColFix Rev.3898); botão "Editar Cláusulas" (verde) na barra do `ContratoPJView` e no `ModuloPJ.tsx`; dialog editor com textarea + placeholder hints + botão "Restaurar modelo padrão"; rendering usa `clausulasCustomizadas || modeloPadrao` com badge info quando personalizado. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3898** — **CONTRATOS PJ — EDIÇÃO DE CLÁUSULAS POR CONTRATO.** ZERO DELETE.
 
 - **Rev. 3897** — **ORÇAMENTO — FIX IMPORTAÇÃO: SPLIT MAT/MO CORRETO EM LINHAS DE AGRUPAMENTO.** ZERO DELETE.
 

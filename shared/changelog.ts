@@ -1,4 +1,20 @@
 /**
+ * Rev. 3900 — **PT — PERMISSÃO DE TRABALHO (NR-35) 100% DIGITAL.**
+ *
+ * Novo módulo SST: Permissão de Trabalho em Altura (NR-35) totalmente digital.
+ * - Tabelas `pt_permissoes` + `pt_assinaturas` criadas via ColFix Rev.3900.
+ * - Router `ptPermissoes` com list/stats/getById/create/update/liberar/concluir/cancelar/excluir
+ *   + endpoints de assinatura canvas (addAssinatura/getAssinaturaImg/removeAssinatura).
+ * - Wizard 4 passos: Solicitação → Descrição do Trabalho → Checklist 15 itens NR-35 → Envolvidos.
+ * - Checklist interativo S/N/NA com alerta visual quando há resposta "N" (trabalho não pode ser liberado).
+ * - Assinaturas dos envolvidos via canvas pad (touch/mouse) no próprio dispositivo.
+ * - Fluxo de status: em_andamento → liberada → concluida (+ cancelada).
+ * - Sidebar SST "Permissão de Trabalho (PT)" em Programas Legais.
+ * - Rota `/sst/pt` com lazy-load.
+ * - Integração Raio-X: PTs aparecem via FCSign sessions (tipo "pt_altura") futuramente.
+ * ZERO DELETE.
+ */
+/**
  * Rev. 3899 — **NF-e EMITIDAS — STATUS SEGUE SEFAZ + CONSOLIDAR MÊS.**
  *
  * ## Problema corrigido

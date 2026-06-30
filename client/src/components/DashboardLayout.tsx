@@ -200,6 +200,7 @@ const menuSectionsSST: MenuSection[] = [
       { icon: FileText, label: "PCMSO", path: "/programas-sst?tab=PCMSO" },
       { icon: FileText, label: "LTCAT", path: "/programas-sst?tab=LTCAT" },
       { icon: ClipboardCheck, label: "DDS — Diálogo Diário", path: "/sst/dds" },
+      { icon: FileText, label: "Permissão de Trabalho (PT)", path: "/sst/pt" },
     ],
   },
   {

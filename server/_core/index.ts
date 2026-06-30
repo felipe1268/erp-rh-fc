@@ -4703,7 +4703,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v3898b-2026-06-30-pj-clausulas-customizadas";
+    const COLFIX_VERSION = "v3900-2026-06-30-pt-permissoes";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -6001,6 +6001,77 @@ Regras:
         `);
         console.log("[ColFix Rev.3898] pj_contracts.clausulas_customizadas garantida.");
       } catch (e: any) { console.warn("[ColFix Rev.3898] clausulas_customizadas falhou (não-fatal):", e?.message ?? e); }
+
+      // Rev. 3900 — pt_permissoes + pt_assinaturas (PT - Permissão de Trabalho NR-35)
+      try {
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS pt_permissoes (
+            id                        serial PRIMARY KEY,
+            company_id                integer NOT NULL,
+            obra_id                   integer,
+            employee_id               integer NOT NULL,
+            numero                    varchar(30) NOT NULL,
+            status                    varchar(20) NOT NULL DEFAULT 'rascunho',
+            data_emissao              varchar(10),
+            hora_inicio               varchar(5),
+            hora_termino              varchar(5),
+            mao_de_obra               varchar(20),
+            supervisor_nome           varchar(255),
+            empresa_executante_cnpj   varchar(20),
+            empresa_executante_nome   varchar(255),
+            outros_formularios        smallint DEFAULT 0,
+            outros_formularios_desc   text,
+            tipos_trabalho_json       text,
+            descricao_trabalho        text,
+            checklist_json            text,
+            envolvidos_json           text,
+            empresa_setor_executante  varchar(255),
+            responsavel_area_nome     varchar(255),
+            responsavel_area_ass      text,
+            responsavel_liberacao_nome varchar(255),
+            responsavel_liberacao_ass  text,
+            executante_nome           varchar(255),
+            executante_ass            text,
+            conclusao_solicitante_nome varchar(255),
+            conclusao_data            varchar(10),
+            conclusao_hora_inicio     varchar(5),
+            conclusao_hora_fim        varchar(5),
+            revalidacao_nome          varchar(255),
+            revalidacao_data          varchar(10),
+            revalidacao_hora_inicio   varchar(5),
+            revalidacao_hora_fim      varchar(5),
+            revalidacao_responsavel   varchar(255),
+            fc_sign_session_id        integer,
+            criado_por_id             integer,
+            criado_por_nome           varchar(255),
+            created_at                timestamp DEFAULT now() NOT NULL,
+            updated_at                timestamp DEFAULT now() NOT NULL,
+            deleted_at                timestamp
+          );
+          CREATE INDEX IF NOT EXISTS idx_pt_company  ON pt_permissoes(company_id);
+          CREATE INDEX IF NOT EXISTS idx_pt_employee ON pt_permissoes(employee_id);
+          CREATE INDEX IF NOT EXISTS idx_pt_obra     ON pt_permissoes(obra_id);
+          CREATE INDEX IF NOT EXISTS idx_pt_status   ON pt_permissoes(company_id, status);
+          CREATE INDEX IF NOT EXISTS idx_pt_numero   ON pt_permissoes(company_id, numero);
+
+          CREATE TABLE IF NOT EXISTS pt_assinaturas (
+            id             serial PRIMARY KEY,
+            pt_id          integer NOT NULL,
+            company_id     integer NOT NULL,
+            posicao        integer NOT NULL,
+            nome_manual    varchar(255),
+            funcao_manual  varchar(255),
+            employee_id    integer,
+            assinatura_img text,
+            assinado_em    timestamp,
+            ip             varchar(45),
+            created_at     timestamp DEFAULT now() NOT NULL
+          );
+          CREATE INDEX IF NOT EXISTS idx_pt_assin_pt      ON pt_assinaturas(pt_id);
+          CREATE INDEX IF NOT EXISTS idx_pt_assin_company ON pt_assinaturas(company_id);
+        `);
+        console.log("[ColFix Rev.3900] pt_permissoes + pt_assinaturas garantidas.");
+      } catch (e: any) { console.warn("[ColFix Rev.3900] pt falhou (não-fatal):", e?.message ?? e); }
 
       // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos
       import("../services/startupCache").then(({ setCache }) =>
