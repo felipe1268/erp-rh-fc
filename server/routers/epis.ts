@@ -2386,4 +2386,47 @@ Exemplos de referência:
         mensagem: `SC ${sc.numeroSc} criada com ${itensSC.length} ${itensSC.length === 1 ? 'item' : 'itens'} para reposição.`,
       };
     }),
+
+  // ============================================================
+  // Rev. 3888 — Catálogo gerenciado de motivos de entrega de EPI
+  // Leitura: todos; Escrita: admin / admin_master apenas.
+  // ZERO DELETE: desativar = ativo=0 (soft).
+  // ============================================================
+  listMotivos: protectedProcedure
+    .query(async () => {
+      const db = (await getDb())!;
+      const rows = await db.execute(sql`SELECT id, nome, ativo, ordem FROM epi_motivos ORDER BY ordem, nome`);
+      return (rows?.rows ?? rows ?? []) as { id: number; nome: string; ativo: number; ordem: number }[];
+    }),
+
+  createMotivo: protectedProcedure
+    .input(z.object({ nome: z.string().min(1).max(255) }))
+    .mutation(async ({ input, ctx }) => {
+      if (!['admin', 'admin_master'].includes(ctx.user.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas administradores podem gerenciar os motivos de entrega.' });
+      }
+      const db = (await getDb())!;
+      const exists = await db.execute(sql`SELECT id FROM epi_motivos WHERE LOWER(TRIM(nome)) = LOWER(TRIM(${input.nome})) LIMIT 1`);
+      if ((exists?.rows ?? exists as any[] ?? []).length > 0) {
+        throw new TRPCError({ code: 'CONFLICT', message: 'Já existe um motivo com esse nome.' });
+      }
+      await db.execute(sql`INSERT INTO epi_motivos (nome, ordem) VALUES (${input.nome.trim()}, COALESCE((SELECT MAX(ordem) FROM epi_motivos), 0) + 1)`);
+      return { ok: true };
+    }),
+
+  updateMotivo: protectedProcedure
+    .input(z.object({ id: z.number(), nome: z.string().min(1).max(255).optional(), ativo: z.number().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      if (!['admin', 'admin_master'].includes(ctx.user.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas administradores podem gerenciar os motivos de entrega.' });
+      }
+      const db = (await getDb())!;
+      if (input.nome !== undefined) {
+        await db.execute(sql`UPDATE epi_motivos SET nome = ${input.nome.trim()} WHERE id = ${input.id}`);
+      }
+      if (input.ativo !== undefined) {
+        await db.execute(sql`UPDATE epi_motivos SET ativo = ${input.ativo} WHERE id = ${input.id}`);
+      }
+      return { ok: true };
+    }),
 });

@@ -40,6 +40,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { usePermissions } from "@/contexts/PermissionsContext";
 
 import EpiKitsConfig from "./EpiKitsConfig";
+import EpiMotivosConfig from "./EpiMotivosConfig";
 import EpiChecklist from "./EpiChecklist";
 import EpiValidade from "./EpiValidade";
 import EpiRelatorioCusto from "./EpiRelatorioCusto";
@@ -230,6 +231,8 @@ export default function Epis() {
   const employeesQ = trpc.employees.list.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined, excludeTerminated: true }, { enabled: hasValidCompany && (viewMode === "nova_entrega" || viewMode === "ficha_epi") });
   const bdiQ = trpc.epis.getBdi.useQuery({ companyId: queryCompanyId }, { enabled: hasValidCompany && (viewMode === "nova_entrega" || viewMode === "ficha_epi" || viewMode === "config") });
   const kitsNovaEntregaQ = trpc.epiAvancado.kitsList.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany && viewMode === "nova_entrega" });
+  const epiMotivosQ = trpc.epis.listMotivos.useQuery(undefined, { enabled: hasValidCompany });
+  const epiMotivosAtivos = (epiMotivosQ.data ?? []).filter(m => m.ativo === 1);
   const formTextQ = trpc.epis.getFormText.useQuery({ companyId: queryCompanyId }, { enabled: hasValidCompany && (viewMode === "ficha_epi" || viewMode === "config") });
   const fornecedoresQ = trpc.epis.fornecedoresList.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany && (viewMode === "novo_epi" || viewMode === "editar_epi" || viewMode === "config") });
   const obrasQ = trpc.obras.listActive.useQuery({ companyId: queryCompanyId, companyIds: isConstrutoras ? companyIds : undefined }, { enabled: hasValidCompany });
@@ -1562,13 +1565,18 @@ export default function Epis() {
                   <Select value={entregaForm.motivo || ""} onValueChange={v => setEntregaForm(f => ({ ...f, motivo: v }))}>
                     <SelectTrigger><SelectValue placeholder="Selecione o motivo" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Entrega Regular">Entrega Regular</SelectItem>
-                      <SelectItem value="Primeira Aquisição">Primeira Aquisição</SelectItem>
-                      <SelectItem value="Kit Admissão">Kit Admissão</SelectItem>
-                      <SelectItem value="Desgaste Normal">Desgaste Normal</SelectItem>
-                      <SelectItem value="Descarte / Expirado">Descarte / Expirado</SelectItem>
-                      <SelectItem value="Reposição">Reposição</SelectItem>
-                      <SelectItem value="Visita Técnica">Visita Técnica</SelectItem>
+                      {epiMotivosAtivos.length > 0
+                        ? epiMotivosAtivos.map(m => <SelectItem key={m.id} value={m.nome}>{m.nome}</SelectItem>)
+                        : <>
+                            <SelectItem value="Entrega Regular">Entrega Regular</SelectItem>
+                            <SelectItem value="Kit Admissão">Kit Admissão</SelectItem>
+                            <SelectItem value="Desgaste Normal">Desgaste Normal</SelectItem>
+                            <SelectItem value="Descarte / Expirado">Descarte / Expirado</SelectItem>
+                            <SelectItem value="Primeira Aquisição">Primeira Aquisição</SelectItem>
+                            <SelectItem value="Reposição">Reposição</SelectItem>
+                            <SelectItem value="Visita Técnica">Visita Técnica</SelectItem>
+                          </>
+                      }
                     </SelectContent>
                   </Select>
                 </div>
@@ -2994,9 +3002,23 @@ export default function Epis() {
               </div>
               <div>
                 <Label>Motivo / Justificativa</Label>
-                <Input value={editDeliveryForm.motivo || ""}
-                  onChange={(e) => setEditDeliveryForm((f: any) => ({ ...f, motivo: e.target.value }))}
-                  placeholder="Ex: Entrega regular, substituição..." />
+                <Select value={editDeliveryForm.motivo || ""} onValueChange={v => setEditDeliveryForm((f: any) => ({ ...f, motivo: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Selecione o motivo" /></SelectTrigger>
+                  <SelectContent>
+                    {epiMotivosAtivos.length > 0
+                      ? epiMotivosAtivos.map(m => <SelectItem key={m.id} value={m.nome}>{m.nome}</SelectItem>)
+                      : <>
+                          <SelectItem value="Entrega Regular">Entrega Regular</SelectItem>
+                          <SelectItem value="Kit Admissão">Kit Admissão</SelectItem>
+                          <SelectItem value="Desgaste Normal">Desgaste Normal</SelectItem>
+                          <SelectItem value="Descarte / Expirado">Descarte / Expirado</SelectItem>
+                          <SelectItem value="Primeira Aquisição">Primeira Aquisição</SelectItem>
+                          <SelectItem value="Reposição">Reposição</SelectItem>
+                          <SelectItem value="Visita Técnica">Visita Técnica</SelectItem>
+                        </>
+                    }
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label>Observações</Label>
@@ -3824,7 +3846,7 @@ export default function Epis() {
       {/* ============================================================ */}
       {/* NOVAS ABAS - COMPONENTES AVANÇADOS */}
       {/* ============================================================ */}
-      {viewMode === "config" && <EpiKitsConfig />}
+      {viewMode === "config" && <><EpiKitsConfig /><EpiMotivosConfig /></>}
       {viewMode === "checklist" && <EpiChecklist />}
       {viewMode === "validade" && <EpiValidade />}
       {viewMode === "custos" && <EpiRelatorioCusto />}

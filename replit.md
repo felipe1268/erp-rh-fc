@@ -50,37 +50,23 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3887** — **EPI — FOTO DO FUNCIONÁRIO NAS ENTREGAS + ALERTA DE KIT POR FUNÇÃO + MOTIVO PADRONIZADO.** `listDeliveries` passa `fotoUrl` do funcionário; tabela de entregas exibe avatar circular (foto real ou iniciais) + sub-linha "Entregue por: [nome]" quando `assinaturaResponsavelNome` preenchido. Nova query `kitsNovaEntregaQ` na nova_entrega: banner amber quando EPI selecionado não está no kit da função, banner verde quando está. Campo "Motivo" convertido de Input livre para Select com 7 opções canônicas (Entrega Regular, Primeira Aquisição, Kit Admissão, Desgaste Normal, Descarte / Expirado, Reposição, Visita Técnica). Bloco `[NormalizaMotivosEPI]` no startup normaliza dados históricos (desgaste_normal → "Desgaste Normal", trim de espaços, variantes de capitalização). ZERO DELETE.
+- **Rev. 3888** — **EPI — CATÁLOGO GERENCIADO DE MOTIVOS (ADMIN-ONLY WRITE) + EDIT DIALOG VIRA SELECT.** Nova tabela `epi_motivos` (global, sem companyId); self-heal Rev. 3888 cria + semeia os 7 canônicos. tRPC `listMotivos`/`createMotivo`/`updateMotivo` — escrita bloqueada p/ usuário comum (FORBIDDEN). Nova entrega e edição de entrega populam Select do banco (fallback hardcoded). `EpiMotivosConfig.tsx`: painel na aba Config (abaixo de Kits); ADM vê Novo/Renomear/Desativar + AlertDialog de confirmação; usuário vê somente a lista com cadeado. Normalização adicional: "Primeira"→Kit Admissão; "Só tinha um uniforme."→Entrega Regular; 5 one-offs→Entrega Regular. ZERO DELETE.
 
-- **Rev. 3886** — **TEMPLATES DE EXTRATO — PREVIEW FULLSCREEN + COLAPSO DE GRUPOS + DEDUP FRONTEND + GATE DE TEMPLATE NA CONCILIAÇÃO.** Botão "Visualizar" abre Dialog fullscreen (faixa do banco, seções kw/skip/IA, auditoria, botões admin). Cabeçalho de cada grupo virou botão com ChevronDown/Up para colapsar. Banner amber detecta duplicados no frontend (por nome normalizado) com botão "Remover duplicados". Gate na Conciliação: se empresa tem templates mas PDF não casa com nenhum → fecha import, abre Dialog vermelho com passo-a-passo 4 etapas. Backend: `parseExtratoLines` rastreia `templateDetectado` (null/true/false) + COUNT de templates ativos. ZERO DELETE.
+- **Rev. 3887** — **EPI — FOTO DO FUNCIONÁRIO NAS ENTREGAS + ALERTA DE KIT POR FUNÇÃO + MOTIVO PADRONIZADO.** `listDeliveries` passa `fotoUrl` do funcionário; tabela de entregas exibe avatar circular (foto real ou iniciais) + sub-linha "Entregue por: [nome]" quando `assinaturaResponsavelNome` preenchido. Nova query `kitsNovaEntregaQ` na nova_entrega: banner amber quando EPI selecionado não está no kit da função, banner verde quando está. Campo "Motivo" convertido de Input livre para Select com 7 opções canônicas (Entrega Regular, Primeira Aquisição, Kit Admissão, Desgaste Normal, Descarte / Expirado, Reposição, Visita Técnica). Bloco `[NormalizaMotivosEPI]` no startup normaliza dados históricos (desgaste_normal → "Desgaste Normal", trim de espaços, variantes de capitalização). ZERO DELETE.
 
 - **Rev. 3885** — **TEMPLATES DE EXTRATO — AUDITORIA (QUEM/QUANDO) + ACESSO RESTRITO A ADMIN.** Novas colunas `atualizado_por_id`/`atualizado_por_nome` via self-heal Rev. 3885. Mutation `update` grava o usuário da sessão. Cards exibem rodapé "Criado por / Editado por · data Brasília". Backend: `assertAdminRole` em `create`, `update`, `delete` e `analisarPdf` (FORBIDDEN para role=user). Frontend: botões de criação/edição/exclusão ocultados para não-admins; banner amber "somente leitura" no lugar. ZERO DELETE.
 
-- **Rev. 3884** — **TEMPLATES DE EXTRATO — REDESIGN: AGRUPADO POR BANCO + CARDS EM GRADE.** Templates agrupados por banco com cabeçalho colorido (bolinha + paleta automática). Cards em grade 2-colunas com faixa de cor no topo, pills de stats (kws/skip/IA), botão "Visualizar" textual e painel expandido com seções coloridas. ZERO DELETE.
-
-- **Rev. 3883** — **TEMPLATES DE EXTRATO — EYE PREVIEW + DEDUP GUARD + PROMPT RIGOROSO.** Eye/EyeOff icon com preview colorido em 3 seções (detecção/skip/IA). Backend: dedup no `create` (nome idêntico + overlap ≥50% de kws → CONFLICT). Batch: captura duplicatas separado de erros, painel 3 contadores. Prompt IA reescrito: mín. 5 kws literais + mín. 6 skip prefixes + 9 tópicos de instrução obrigatórios. ZERO DELETE.
-
-- **Rev. 3882** — **TEMPLATES DE EXTRATO — ANÁLISE EM LOTE (MÚLTIPLOS PDFs).** 1 PDF → fluxo original (formulário para revisão). 2+ PDFs → modo lote: processa sequencialmente, salva automaticamente cada template, barra de progresso "Analisando X de Y", contadores parciais ✓/✗ e painel de resumo pós-conclusão. `<input multiple>` + `handleBatchFiles`. ZERO DELETE.
-
-- **Rev. 3881** — **FIX TEMPLATES DE EXTRATO — companyId undefined.** `ExtratoTemplateTab` desestruturava `companyId` de `useCompany()`, mas o contexto expõe `companyIdNum` (não `companyId`) → `undefined` → erro Zod em todo acesso à aba. 1 linha corrigida em `ExtratoTemplateTab.tsx`. ZERO DELETE.
-
-- **Rev. 3880** — **FIX CONCILIAÇÃO BANCÁRIA — CONTAS NÃO LISTADAS.** `getBankAccounts` explodia com `42703: column "contaBancariaId" does not exist` — subquery em `financial_opening_balances` usava camelCase com aspas, mas a tabela tem colunas snake_case (`conta_bancaria_id`/`company_id`). 1 linha corrigida em `financial.ts`. ZERO DELETE.
-
-- **Rev. 3879** — **GERADOR DE TEMPLATES DE EXTRATO BANCÁRIO POR IA — ZERO CÓDIGO.** Upload de PDF → IA analisa o formato (Gemini Vision → fallback Anthropic) → proposta editável pré-preenchida → salvar. Mutation `analisarPdf` em `bankStatementTemplates.ts` valida PDF, chama IA com prompt de análise de formato, retorna `{ bancoNome, palavrasChave, skipPrefixes, instrucoesIa }`. Colunas `revisao` (ISO 9001, auto-incrementa no UPDATE) e `notas_revisao` adicionadas com self-heal. `ExtratoTemplateTab.tsx` reescrito: botão "Analisar extrato de novo banco", loading animado, formulário pré-preenchido, AlertDialog no delete (sem `window.confirm`). ZERO DELETE.
-
 ### 5 one-liners
 
-- **Rev. 3878** — **FIX DROPDOWN DE CATEGORIAS — ALINHAMENTO TOTAL COM O CADASTRO.** Removido filtro por `tipo` em `catOpts` nos dois pontos do formulário de lançamento (Conciliação). ZERO DELETE.
+- **Rev. 3886** — **TEMPLATES DE EXTRATO — PREVIEW FULLSCREEN + COLAPSO DE GRUPOS + DEDUP FRONTEND + GATE DE TEMPLATE NA CONCILIAÇÃO.** Dialog fullscreen; grupos colapsáveis; dedup por nome normalizado; gate na Conciliação (PDF sem template → Dialog vermelho 4 etapas). ZERO DELETE.
 
-- **Rev. 3877** — **TEMPLATES DE EXTRATO BANCÁRIO + PARSER SANTANDER IBPJ.** Nova tabela `bank_statement_templates` + CRUD tRPC + aba em Configurações. Parser Santander IBPJ. ZERO DELETE.
+- **Rev. 3885** — **TEMPLATES DE EXTRATO — AUDITORIA (QUEM/QUANDO) + ACESSO RESTRITO A ADMIN.** Colunas `atualizado_por_id/nome`; `assertAdminRole` em create/update/delete/analisarPdf; botões ocultos p/ não-admin. ZERO DELETE.
 
-- **Rev. 3876** — **CHEQUE ESPECIAL — CONTROLE POR CONTA BANCÁRIA + ALERTA NA CONCILIAÇÃO.** Duas colunas novas em `company_bank_accounts`. Self-heal `[SyncSchema+]`. Badge "⚠ Ch. Especial" quando `chequeEspecialAtivo=1 && saldoAtual<0`. ZERO DELETE.
+- **Rev. 3884** — **TEMPLATES DE EXTRATO — REDESIGN: AGRUPADO POR BANCO + CARDS EM GRADE.** Templates agrupados por banco; cards 2-colunas com faixa de cor; pills de stats. ZERO DELETE.
 
-- **Rev. 3875** — **CONCILIAÇÃO — REGRA DE OURO: LIMPAR NÃO DESTRÓI CONCILIADOS SEM CONFIRMAÇÃO.** `limparExtrato`/`limparExtratoMes` retornam `{ ok: false, conciliadosCount }` sem `force=true`; client exige checkbox. ZERO DELETE.
+- **Rev. 3883** — **TEMPLATES DE EXTRATO — EYE PREVIEW + DEDUP GUARD + PROMPT RIGOROSO.** Preview colorido 3 seções; dedup no create (overlap ≥50%); prompt IA reescrito. ZERO DELETE.
 
-- **Rev. 3874** — **DASH EPIs — CLIQUE NAS BARRAS DO GRÁFICO ABRE DETALHE.** `onChartClick` + state `detalheEpi` em `DashEpis.tsx`. ZERO DELETE.
-
-- **Rev. 3873** — one-liner demovido; ver `replit-history.md`.
+- **Rev. 3882** — **TEMPLATES DE EXTRATO — ANÁLISE EM LOTE (MÚLTIPLOS PDFs).** 2+ PDFs → modo lote sequencial com barra de progresso e painel de resumo. ZERO DELETE.
 
 ### Histórico completo
 

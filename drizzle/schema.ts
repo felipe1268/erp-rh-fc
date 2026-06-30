@@ -1420,6 +1420,15 @@ export const epiDeliveries = pgTable("epi_deliveries", {
         index("idx_ed_obra").on(table.obraId),
 ]);
 
+// Rev. 3888 — Catálogo gerenciado de motivos de entrega (admin-only write)
+export const epiMotivos = pgTable("epi_motivos", {
+  id: serial().primaryKey(),
+  nome: varchar({ length: 255 }).notNull(),
+  ativo: integer().default(1).notNull(),
+  ordem: integer().default(0).notNull(),
+  createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+});
+
 export const epiDiscountAlerts = pgTable("epi_discount_alerts", {
         id: serial().notNull(),
         companyId: integer().notNull(),

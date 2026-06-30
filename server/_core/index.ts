@@ -3560,6 +3560,32 @@ Regras:
           console.log(`[SyncSchema+] Rev. 2192: colunas assinatura_responsavel_{url,nome,em} garantidas em epi_deliveries.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2192 epi_deliveries.assinatura_responsavel_*:`, e?.message || e); }
 
+        // Rev. 3888 — Catálogo de motivos de entrega de EPI (admin-only write, global)
+        try {
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS epi_motivos (
+            id SERIAL PRIMARY KEY,
+            nome VARCHAR(255) NOT NULL,
+            ativo INTEGER NOT NULL DEFAULT 1,
+            ordem INTEGER NOT NULL DEFAULT 0,
+            "createdAt" TIMESTAMP DEFAULT NOW() NOT NULL
+          )`);
+          // Seed canônicos apenas se a tabela estiver vazia
+          await db.execute(sql`
+            INSERT INTO epi_motivos (nome, ordem)
+            SELECT v.nome, v.ord FROM (VALUES
+              ('Entrega Regular',    1),
+              ('Kit Admissão',       2),
+              ('Desgaste Normal',    3),
+              ('Descarte / Expirado',4),
+              ('Primeira Aquisição', 5),
+              ('Reposição',          6),
+              ('Visita Técnica',     7)
+            ) AS v(nome, ord)
+            WHERE NOT EXISTS (SELECT 1 FROM epi_motivos LIMIT 1)
+          `);
+          console.log('[SyncSchema+] Rev. 3888: tabela epi_motivos garantida (catálogo de motivos de entrega).');
+        } catch (e: any) { console.error('[SyncSchema+] FALHA Rev.3888 epi_motivos:', e?.message || e); }
+
         // Rev. 2195: Encargos Sociais sobre Folha — tabela nova pra upload
         // de guias DCTFWeb (DARF INSS/IRRF/Terceiros) e FGTS Digital que
         // a contabilidade terceirizada envia mensalmente. Bloco isolado

@@ -1,4 +1,41 @@
 /**
+ * Rev. 3888 — **EPI — CATÁLOGO GERENCIADO DE MOTIVOS DE ENTREGA (ADMIN-ONLY WRITE) + MOTIVO NO EDIT DIALOG VIRA SELECT.**
+ *
+ * ## Problema
+ * Cada operador digitava livremente o motivo da entrega, fragmentando o gráfico de pizza em
+ * 13+ fatias. Rev. 3887 corrigiu o formulário de nova entrega (Select hardcoded), mas o
+ * formulário de **edição** continuava com Input livre. Além disso, os 7 canônicos estavam
+ * gravados somente no código frontend — qualquer deploy poderia alterar a lista sem controle.
+ *
+ * ## Solução
+ * 1. **Tabela `epi_motivos`** (drizzle/schema.ts): catálogo global de motivos, colunas `id`,
+ *    `nome`, `ativo`, `ordem`, `"createdAt"`. Sem companyId (catalog normativo = global).
+ * 2. **Self-heal `[SyncSchema+] Rev. 3888`** (server/_core/index.ts): cria a tabela via
+ *    `CREATE TABLE IF NOT EXISTS` e semeia os 7 canônicos se a tabela estiver vazia.
+ * 3. **tRPC** (epis.ts): `listMotivos` (público read), `createMotivo` e `updateMotivo`
+ *    (admin/admin_master only — FORBIDDEN para usuário comum). ZERO DELETE: desativar = `ativo=0`.
+ * 4. **Nova entrega**: Select populado dinamicamente de `trpc.epis.listMotivos` (fallback
+ *    hardcoded se a query ainda não carregou).
+ * 5. **Edição de entrega**: Input livre → Select idêntico ao da nova entrega.
+ * 6. **Aba Configurações EPI** (`EpiMotivosConfig.tsx`): painel abaixo de EpiKitsConfig.
+ *    ADM vê botões Novo/Renomear/Desativar; usuário comum vê somente a lista (cadeado).
+ *    AlertDialog confirma antes de desativar (ZERO window.confirm).
+ *
+ * ## Normalização adicional (dados históricos — startup idempotente)
+ * - `'Primeira'` → `'Kit Admissão'` (1 registro corrigido).
+ * - `'Só tinha um uniforme.'` → `'Entrega Regular'`.
+ * - 5 one-offs (escritório/depósito/estoque/pintura) → `'Entrega Regular'` (Rev. 3887-b).
+ *
+ * ZERO DELETE · só UPDATEs + CREATE TABLE IF NOT EXISTS + INSERT … WHERE NOT EXISTS.
+ *
+ * @revision 3888
+ * @date 30/06/2026
+ * @author main_agent
+ * @type feature
+ * @summary EPI — CATÁLOGO GERENCIADO DE MOTIVOS DE ENTREGA (ADMIN-ONLY WRITE) + EDIT DIALOG VIRA SELECT.
+ */
+
+/**
  * Rev. 3887 — **EPI — FOTO DO FUNCIONÁRIO NAS ENTREGAS + ALERTA DE KIT POR FUNÇÃO + MOTIVO PADRONIZADO (DROPDOWN) + NORMALIZAÇÃO DE DADOS.**
  *
  * ## 1. Foto do funcionário + quem entregou na listagem de entregas
