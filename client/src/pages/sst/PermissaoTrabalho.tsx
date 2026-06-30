@@ -383,10 +383,10 @@ function WizardNovaPT({
               </div>
               <div className="col-span-2">
                 <label className="text-xs font-semibold text-slate-600 mb-1 block">Obra</label>
-                <Select value={form.obraId?.toString() ?? ""} onValueChange={v => upd({ obraId: v ? Number(v) : null })}>
+                <Select value={form.obraId?.toString() ?? "_none"} onValueChange={v => upd({ obraId: v === "_none" ? null : Number(v) })}>
                   <SelectTrigger><SelectValue placeholder="Selecione a obra (opcional)" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">— Sem obra vinculada —</SelectItem>
+                    <SelectItem value="_none">— Sem obra vinculada —</SelectItem>
                     {obras.map((o: any) => <SelectItem key={o.id} value={o.id.toString()}>{o.nome}</SelectItem>)}
                   </SelectContent>
                 </Select>
