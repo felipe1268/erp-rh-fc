@@ -7446,7 +7446,11 @@ export const financialRouter = router({
     const tol = input.toleranciaDias ?? 0;
 
     // dbExecute liga params por ORDEM DE APARIÇÃO ($N é cosmético) → manter ascendente.
-    const stConds = [`company_id=$1`, `conta_bancaria_id=$2`, `COALESCE(conciliado,0)=0`, `excluido_em IS NULL`];
+    // Rev. 3914 — `desconsiderado_em IS NULL`: exclui linhas desconsideradas do % de
+    // conciliação (cheques par devolvidos marcados como "desconsiderar"). Sem este filtro,
+    // o engine sugeria conciliar linhas que já foram excluídas do cálculo, exibindo falsos
+    // "33 linhas sem correspondência" no painel de sugestões.
+    const stConds = [`company_id=$1`, `conta_bancaria_id=$2`, `COALESCE(conciliado,0)=0`, `excluido_em IS NULL`, `desconsiderado_em IS NULL`];
     const stVals: any[] = [input.companyId, input.contaBancariaId];
     let si = 3;
     if (input.dataInicio) { stConds.push(`data>=$${si++}`); stVals.push(input.dataInicio); }

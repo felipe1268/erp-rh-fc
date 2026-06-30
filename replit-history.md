@@ -1,3 +1,11 @@
+- **Rev. 3903** — **SST — PT WIZARD: FIX OBRAS + LAYOUT MODERNO.** Bug fix: `trpc.getObrasByCompanyActive` (inexistente) → `trpc.obras.listActive`. Redesign: header gradiente emerald, stepper horizontal com pills. ZERO DELETE.
+
+- **Rev. 3902** — **SST — PDF IMPRIMÍVEL PT/APR + FCSIGN PT + ALERTA PT VENCIDAS NO PAINEL.** Três features follow-up. ZERO DELETE.
+
+- **Rev. 3901** — **APR — ANÁLISE PRELIMINAR DE RISCO 100% DIGITAL.** Wizard 3 passos; matriz P×G; canvas pad; rota `/sst/apr`. ZERO DELETE.
+
+- **Rev. 3900** — **PT — PERMISSÃO DE TRABALHO (NR-35) 100% DIGITAL.** Wizard 4 passos; canvas pad; FCSign; rota `/sst/pt`. ZERO DELETE.
+
 - **Rev. 3895** — **EPI — DIAGNÓSTICO DE FUNÇÕES NO DIALOG DE KIT + BOTÃO GERAR E SALVAR TODOS.** ZERO DELETE.
 
 - **Rev. 3894** — **EPI — KIT COBRE FUNÇÕES SIMILARES (CARPINTEIRO I, II, III → 1 KIT).** ZERO DELETE.

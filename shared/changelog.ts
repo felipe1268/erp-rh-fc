@@ -1,4 +1,26 @@
 /**
+ * Rev. 3914 — **CONCILIAÇÃO BANCÁRIA — FIX BARRA DE PROGRESSO (100% FALSO) + SUGESTÕES COM LINHAS DESCONSIDERADAS.**
+ *
+ * PROBLEMA 1 — Barra de progresso mostrava 100% enquanto o card superior mostrava 97–98%.
+ * ROOT CAUSE: `totLinhas = repConc.length + repExt.length`. `repExt` é filtrado no frontend
+ * por `!r.reversal && !r.reversalResolveGrupo` (remove linhas de cheques devolvidos e PIX
+ * substitutos do par), fazendo `repExt = 0` e `totLinhas = 115`. O card superior usa
+ * `getBankAccountsConciliacaoStatus` que conta TODAS as linhas não-desconsideradas → denominador
+ * real era 118–119. FIX: `totLinhas` passa a ler `accConciliadasMap[contaBancariaId]` — a mesma
+ * fonte do card — garantindo paridade.
+ *
+ * PROBLEMA 2 — Painel de sugestões exibia "33 linhas de extrato sem lançamento correspondente"
+ * mesmo com o KPI "Extrato sem lançamento: 0".
+ * ROOT CAUSE: `sugerirConciliacao` buscava `bank_statement_lines WHERE COALESCE(conciliado,0)=0`
+ * SEM filtrar `desconsiderado_em IS NULL`, incluindo 33 linhas que o usuário já havia marcado
+ * como "desconsiderar" no painel de cheques devolvidos. FIX: adicionar `desconsiderado_em IS NULL`
+ * ao `stConds` de `sugerirConciliacao`.
+ *
+ * ARQUIVOS: client/src/pages/financeiro/FinanceiroConciliacao.tsx (l.1457–1464),
+ *           server/routers/financial.ts (l.7451–7456). ZERO DELETE.
+ */
+
+/**
  * Rev. 3913 — **SST — APR EXPANDIDA: 10 TIPOS DE ATIVIDADE COM CHECKLIST ESPECÍFICO POR NR.**
  *
  * PEDIDO: A APR deve ser geral — não apenas para NR-35/altura. Ao iniciar uma APR, o usuário

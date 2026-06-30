@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3914** — **CONCILIAÇÃO BANCÁRIA: FIX BARRA DE PROGRESSO (100% FALSO) + SUGESTÕES COM LINHAS DESCONSIDERADAS.** `totLinhas` passou a usar `accConciliadasMap[contaBancariaId]` (mesma fonte do card superior) → paridade entre barra de progresso e card. `sugerirConciliacao` ganhou `desconsiderado_em IS NULL` → 33 linhas fantasmas somem das sugestões. ZERO DELETE.
+
 - **Rev. 3913** — **SST — APR EXPANDIDA: 10 TIPOS DE ATIVIDADE COM CHECKLIST POR NR.** Wizard 3→5 steps: Tipo (10 cards) → Dados → Checklist (Sim/Não/NA) → Riscos (pré-populados) → EPIs+Aprovação. Schema +tipo_atividade+checklist_json (ColFix v3913). Detail dialog exibe checklist respondido. ZERO DELETE.
 
-- **Rev. 3912** — **SST — PT WIZARD: BLOQUEIO NR-35 NO STEP DE ENVOLVIDOS.** Funcionários sem NR-35 ou com NR-35 vencida ficam bloqueados (card vermelho + ícone Ban + mensagem + line-through no nome). Click retorna sem ação. Terceiros não bloqueados. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3912** — **SST — PT WIZARD: BLOQUEIO NR-35 NO STEP DE ENVOLVIDOS.** Funcionários sem NR-35 ou com NR-35 vencida ficam bloqueados (card vermelho + ícone Ban + mensagem + line-through no nome). Click retorna sem ação. Terceiros não bloqueados. ZERO DELETE.
 
 - **Rev. 3907** — **SST — PT DIALOG: FIX CONFIRM EM BRANCO + REMOVER FCSIGN.** `confirm()` chamado com 2 strings mas hook espera objeto `{title,description,tone}` → AlertDialog sem texto. Corrigido. Botão "Enviar FCSign" + dialog removidos da UI (backend preservado). Invalidações `remover` corrigidas. ZERO DELETE.
 
@@ -64,17 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3904** — **SST — PT WIZARD: OBRA PRIMEIRO + TST/ENCARREGADO NO CADASTRO DE OBRAS.** Schema obras: +`tst_id`/`encarregado_id` (ColFix v3904). Novo procedure `ptPermissoes.getObraSST`. Step 0 redesenhado: Obra PRIMEIRO → 3 cards SST auto-fill. ZERO DELETE.
 
-- **Rev. 3903** — **SST — PT WIZARD: FIX OBRAS + LAYOUT MODERNO.** Bug fix: `trpc.getObrasByCompanyActive` (inexistente) → `trpc.obras.listActive`. Redesign: header gradiente emerald, stepper horizontal com pills. ZERO DELETE.
-
-- **Rev. 3902** — **SST — PDF IMPRIMÍVEL PT/APR + FCSIGN PT + ALERTA PT VENCIDAS NO PAINEL.** Três features follow-up. ZERO DELETE.
-
-- **Rev. 3901** — **APR — ANÁLISE PRELIMINAR DE RISCO 100% DIGITAL.** Wizard 3 passos; matriz P×G; canvas pad; rota `/sst/apr`. ZERO DELETE.
-
-- **Rev. 3900** — **PT — PERMISSÃO DE TRABALHO (NR-35) 100% DIGITAL.** Wizard 4 passos; canvas pad; FCSign; rota `/sst/pt`. ZERO DELETE.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3894 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3903 e anteriores.
 
 ## User preferences
 

@@ -1451,7 +1451,13 @@ export default function FinanceiroConciliacao() {
   const repSemConta: any[] = report?.lancamentosSemConta ?? [];
   const absSum = (arr: any[]) => arr.reduce((a, r) => a + Math.abs(Number(r.valor) || 0), 0);
   const vConc = absSum(repConc), vExt = absSum(repExt), vLan = absSum(repLan), vSemConta = absSum(repSemConta);
-  const totLinhas = repConc.length + repExt.length;
+  // Rev. 3914 — usar `accConciliadasMap` como fonte canônica do total de linhas.
+  // `repExt` exclui linhas com `reversal`/`reversalResolveGrupo` (cheques devolvidos e
+  // PIX substitutos) → denominador ficava `repConc.length` → pctConc sempre 100% mesmo
+  // quando havia linhas pendentes. `accConciliadasMap` conta TODAS as linhas não-desconsideradas
+  // da conta (= mesma lógica do card superior), garantindo paridade entre os dois indicadores.
+  const _accPct = contaBancariaId ? accConciliadasMap[Number(contaBancariaId)] : undefined;
+  const totLinhas = _accPct && _accPct.total > 0 ? _accPct.total : repConc.length + repExt.length;
   const pctConc = totLinhas > 0 ? Math.round((repConc.length / totLinhas) * 100) : 0;
 
   // Rev. 3187 — Anexar comprovante (PIX/boleto/recibo) a um lançamento "sem extrato",
