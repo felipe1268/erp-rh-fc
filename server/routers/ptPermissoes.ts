@@ -86,9 +86,9 @@ export const ptPermissoesRouter = router({
         oRows.forEach((o: any) => obrasMap.set(o.id, o.nome));
       }
       if (empIds.length) {
-        const eRows = await db.select({ id: employees.id, nome: employees.nome }).from(employees)
+        const eRows = await db.select({ id: employees.id, nomeCompleto: employees.nomeCompleto }).from(employees)
           .where(inArray(employees.id, empIds));
-        eRows.forEach((e: any) => empsMap.set(e.id, e.nome));
+        eRows.forEach((e: any) => empsMap.set(e.id, e.nomeCompleto));
       }
 
       return rows.map(r => ({
@@ -144,8 +144,8 @@ export const ptPermissoesRouter = router({
       }
       let solicitanteNome: string | null = null;
       if (pt.employeeId) {
-        const [emp] = await db.select({ nome: employees.nome }).from(employees).where(eq(employees.id, pt.employeeId)).limit(1);
-        solicitanteNome = emp?.nome ?? null;
+        const [emp] = await db.select({ nomeCompleto: employees.nomeCompleto }).from(employees).where(eq(employees.id, pt.employeeId)).limit(1);
+        solicitanteNome = emp?.nomeCompleto ?? null;
       }
 
       return {
@@ -477,8 +477,8 @@ export const ptPermissoesRouter = router({
       }
       let solicitanteNome = "";
       if (pt.employeeId) {
-        const [emp] = await db.select({ nome: employees.nome }).from(employees).where(eq(employees.id, pt.employeeId)).limit(1);
-        solicitanteNome = emp?.nome ?? "";
+        const [emp] = await db.select({ nomeCompleto: employees.nomeCompleto }).from(employees).where(eq(employees.id, pt.employeeId)).limit(1);
+        solicitanteNome = emp?.nomeCompleto ?? "";
       }
       const assinaturas = await db.select().from(ptAssinaturas)
         .where(and(eq(ptAssinaturas.ptId, input.id), eq(ptAssinaturas.companyId, input.companyId)))
