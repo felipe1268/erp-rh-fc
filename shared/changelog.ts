@@ -1,4 +1,30 @@
 /**
+ * Rev. 3893 — **EPI — CAMPO FUNÇÃO DO KIT VIRA SELECT COM FUNÇÕES SEM KIT.**
+ *
+ * ## Problema
+ * O campo "Função do Trabalhador" no dialog "Novo Kit de EPI" era um texto livre,
+ * permitindo erros de digitação, funções inexistentes ou duplicação de kits para a
+ * mesma função com grafia diferente.
+ *
+ * ## Solução
+ * - **Novo endpoint `funcoesDisponiveis`** em `epiAvancado.ts`:
+ *   - Lê todas as funções ativas (`job_functions` com `isActive=1` e `deletedAt IS NULL`).
+ *   - Exclui as funções que já têm pelo menos um kit ativo em `epi_kits`.
+ *   - Aceita `funcaoAtual` (edição): inclui de volta a função do kit sendo editado.
+ * - Campo "Função" substituído por `<Select>` com as funções filtradas.
+ * - Estado de loading ("Carregando funções...") durante a query.
+ * - Estado vazio ambar ("Todas as funções já possuem kit.") quando não sobrar nenhuma.
+ * - `funcoesDisponiveisQ.refetch()` nos `onSuccess` de create/update/delete para
+ *   atualizar a lista em tempo real.
+ *
+ * ## Arquivos
+ * - `server/routers/epiAvancado.ts` — novo query `funcoesDisponiveis`
+ * - `client/src/pages/EpiKitsConfig.tsx` — Select + query + refetch nos mutations
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3892 — **EPI — SUGESTÃO DE KITS POR ESTOQUE REAL + ITENS FALTANTES EM VERMELHO.**
  *
  * ## Problema

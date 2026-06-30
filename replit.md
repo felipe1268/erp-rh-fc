@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3893** — **EPI — CAMPO FUNÇÃO DO KIT VIRA SELECT COM FUNÇÕES SEM KIT.** Endpoint `funcoesDisponiveis`: cruza `job_functions` ativas com `epi_kits` ativos e retorna só as funções que ainda não têm kit. Dialog "Novo Kit" substitui Input por Select; loading state; mensagem âmbar quando todas já têm kit; refetch automático após criar/editar/excluir. ZERO DELETE.
+
 - **Rev. 3892** — **EPI — SUGESTÃO DE KITS POR ESTOQUE REAL + ITENS FALTANTES EM VERMELHO.** Novo endpoint `iaSugerirKitsComEstoque`: lê funções cadastradas + catálogo EPI com `quantidadeEstoque`; IA retorna `disponivel` por item. Botão "🏭 Sugerir pelo Meu Estoque" na Config; painel verde/vermelho — itens ausentes em vermelho com badge "Comprar". ZERO DELETE.
 
-- **Rev. 3891** — **EPI — BOTÃO IA DENTRO DO DIALOG DE KIT: PREENCHE ITENS POR FUNÇÃO.** Novo `iaKitsDialogMut` (mesmo endpoint com param `funcao`): ao receber sugestão, preenche nome/descrição/itens do form. Dialog redesenhado em 3 passos — box gradiente violeta destaca Função + botão IA lado a lado; loading mostra "Consultando NR-6 e NR-18..."; items têm numeração, toggle Obrig/Opc clicável, área vazia instrucional. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3891** — **EPI — BOTÃO IA DENTRO DO DIALOG DE KIT: PREENCHE ITENS POR FUNÇÃO.** `iaKitsDialogMut` preenche nome/descrição/itens do form; dialog 3 passos; box gradiente violeta; loading "Consultando NR-6/NR-18". ZERO DELETE.
 
 - **Rev. 3890** — **EPI — FOTO DO COLABORADOR EM TODAS AS TABELAS DO MÓDULO EPI.** `getDashEpis` adicionou `fotoUrl`; avatar circular em DashEpis + EpiDrillDown. ZERO DELETE.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3888** — **EPI — CATÁLOGO GERENCIADO DE MOTIVOS (ADMIN-ONLY WRITE) + EDIT DIALOG VIRA SELECT.** Nova tabela `epi_motivos`; self-heal semeia 7 canônicos; tRPC listMotivos/create/update; `EpiMotivosConfig.tsx`. ZERO DELETE.
 
 - **Rev. 3887** — **EPI — FOTO DO FUNCIONÁRIO NAS ENTREGAS + ALERTA DE KIT POR FUNÇÃO + MOTIVO PADRONIZADO.** Avatar circular + "Entregue por"; banner amber/verde por kit; Select 7 motivos canônicos; `[NormalizaMotivosEPI]`. ZERO DELETE.
-
-- **Rev. 3886** — **TEMPLATES DE EXTRATO — PREVIEW FULLSCREEN + COLAPSO DE GRUPOS + DEDUP FRONTEND + GATE DE TEMPLATE NA CONCILIAÇÃO.** Dialog fullscreen; grupos colapsáveis; dedup por nome normalizado; gate na Conciliação. ZERO DELETE.
 
 ### Histórico completo
 

@@ -2497,6 +2497,31 @@ Retorne JSON com: { "items": [ { "nomeEpi": string, "normaExigida": string, "nom
       return safeParseJson(content, "treinamentos");
     }),
 
+  // Funções ativas sem kit cadastrado (para o select do dialog de Novo Kit)
+  funcoesDisponiveis: protectedProcedure
+    .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), funcaoAtual: z.string().optional() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+
+      const todasFuncoes = await db.select({ nome: jobFunctions.nome })
+        .from(jobFunctions)
+        .where(and(companyFilter(jobFunctions.companyId, input), eq(jobFunctions.isActive, 1), isNull(jobFunctions.deletedAt)))
+        .orderBy(jobFunctions.nome);
+
+      const kitsAtivos = await db.select({ funcao: epiKits.funcao })
+        .from(epiKits)
+        .where(and(companyFilter(epiKits.companyId, input), eq(epiKits.ativo, 1)));
+
+      const funcoesComKit = new Set(kitsAtivos.map(k => k.funcao.toLowerCase().trim()));
+
+      const disponiveis = todasFuncoes.filter(f =>
+        !funcoesComKit.has(f.nome.toLowerCase().trim()) ||
+        (input.funcaoAtual && f.nome.toLowerCase().trim() === input.funcaoAtual.toLowerCase().trim())
+      );
+
+      return { funcoes: disponiveis.map(f => f.nome) };
+    }),
+
   // Sugere kits cruzando funções cadastradas com o estoque real da empresa
   iaSugerirKitsComEstoque: protectedProcedure
     .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional() }))

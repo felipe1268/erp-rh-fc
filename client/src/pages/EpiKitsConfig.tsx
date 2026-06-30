@@ -34,6 +34,10 @@ export default function EpiKitsConfig() {
 
   // Queries
   const kitsQ = trpc.epiAvancado.kitsList.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
+  const funcoesDisponiveisQ = trpc.epiAvancado.funcoesDisponiveis.useQuery(
+    { companyId, companyIds, funcaoAtual: editingKit?.funcao },
+    { enabled: showKitForm && (!!companyId || (companyIds?.length ?? 0) > 0) }
+  );
   const coresQ = trpc.epiAvancado.coresCapaceteList.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
   const vidaUtilQ = trpc.epiAvancado.vidaUtilList.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
   const treinamentosQ = trpc.epiAvancado.treinamentosVinculadosList.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
@@ -47,15 +51,15 @@ export default function EpiKitsConfig() {
     onError: (err) => toast.error(err.message),
   });
   const createKitMut = trpc.epiAvancado.kitsCreate.useMutation({
-    onSuccess: () => { kitsQ.refetch(); setShowKitForm(false); toast.success("Kit criado!"); },
+    onSuccess: () => { kitsQ.refetch(); funcoesDisponiveisQ.refetch(); setShowKitForm(false); toast.success("Kit criado!"); },
     onError: (err) => toast.error(err.message),
   });
   const updateKitMut = trpc.epiAvancado.kitsUpdate.useMutation({
-    onSuccess: () => { kitsQ.refetch(); setEditingKit(null); setShowKitForm(false); toast.success("Kit atualizado!"); },
+    onSuccess: () => { kitsQ.refetch(); funcoesDisponiveisQ.refetch(); setEditingKit(null); setShowKitForm(false); toast.success("Kit atualizado!"); },
     onError: (err) => toast.error(err.message),
   });
   const deleteKitMut = trpc.epiAvancado.kitsDelete.useMutation({
-    onSuccess: () => { kitsQ.refetch(); toast.success("Kit removido!"); },
+    onSuccess: () => { kitsQ.refetch(); funcoesDisponiveisQ.refetch(); toast.success("Kit removido!"); },
     onError: (err) => toast.error(err.message),
   });
   const coresUpsertMut = trpc.epiAvancado.coresCapaceteUpsert.useMutation({
@@ -638,15 +642,38 @@ export default function EpiKitsConfig() {
                       <Badge variant="outline" className="text-[10px] border-violet-300 text-violet-600">Passo 1</Badge>
                     </div>
                     <div className="flex gap-2">
-                      <Input
-                        value={kitForm.funcao}
-                        onChange={e => setKitForm(f => ({ ...f, funcao: e.target.value }))}
-                        placeholder="Ex: Pedreiro, Servente, Eletricista..."
-                        className="flex-1 border-violet-200 focus-visible:ring-violet-400 bg-white"
-                      />
+                      <div className="flex-1">
+                        {funcoesDisponiveisQ.isLoading ? (
+                          <div className="h-9 flex items-center px-3 rounded-md border border-violet-200 bg-white text-xs text-muted-foreground gap-2">
+                            <Loader2 className="h-3 w-3 animate-spin text-violet-400" /> Carregando funções...
+                          </div>
+                        ) : (funcoesDisponiveisQ.data?.funcoes?.length ?? 0) === 0 && !editingKit ? (
+                          <div className="h-9 flex items-center px-3 rounded-md border border-violet-200 bg-amber-50 text-xs text-amber-700 gap-1.5">
+                            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                            Todas as funções cadastradas já possuem kit.
+                          </div>
+                        ) : (
+                          <Select
+                            value={kitForm.funcao}
+                            onValueChange={v => setKitForm(f => ({ ...f, funcao: v }))}
+                          >
+                            <SelectTrigger className="border-violet-200 focus:ring-violet-400 bg-white h-9 text-sm">
+                              <SelectValue placeholder="Selecione a função..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(funcoesDisponiveisQ.data?.funcoes || []).map(nome => (
+                                <SelectItem key={nome} value={nome}>{nome}</SelectItem>
+                              ))}
+                              {(funcoesDisponiveisQ.data?.funcoes?.length ?? 0) === 0 && editingKit && (
+                                <SelectItem value={kitForm.funcao}>{kitForm.funcao}</SelectItem>
+                              )}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </div>
                       <Button
                         onClick={() => {
-                          if (!kitForm.funcao.trim()) { toast.error("Preencha a Função antes de gerar com IA"); return; }
+                          if (!kitForm.funcao.trim()) { toast.error("Selecione a Função antes de gerar com IA"); return; }
                           iaKitsDialogMut.mutate({ companyId, funcao: kitForm.funcao });
                         }}
                         disabled={iaKitsDialogMut.isPending || !kitForm.funcao.trim()}
