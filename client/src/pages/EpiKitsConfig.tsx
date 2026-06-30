@@ -32,6 +32,12 @@ export default function EpiKitsConfig() {
   const [iaSugestaoVida, setIaSugestaoVida] = useState<any[] | null>(null);
   const [iaSugestaoTreino, setIaSugestaoTreino] = useState<any[] | null>(null);
 
+  // Kit Form State — deve ficar ANTES das queries (TDZ: funcoesDisponiveisQ usa kitForm)
+  const [kitForm, setKitForm] = useState({
+    nome: "", funcao: "", descricao: "", funcoesCobertasJson: [] as string[],
+    items: [{ nomeEpi: "", categoria: "EPI" as "EPI" | "Uniforme" | "Calcado", quantidade: 1, obrigatorio: true }],
+  });
+
   // Queries
   const kitsQ = trpc.epiAvancado.kitsList.useQuery({ companyId, companyIds }, { enabled: !!companyId || companyIds?.length > 0 });
   const funcoesDisponiveisQ = trpc.epiAvancado.funcoesDisponiveis.useQuery(
@@ -148,12 +154,6 @@ export default function EpiKitsConfig() {
   const treinamentos = treinamentosQ.data ?? [];
 
   const hasData = kits.length > 0 || cores.length > 0 || vidaUtil.length > 0 || treinamentos.length > 0;
-
-  // Kit Form State
-  const [kitForm, setKitForm] = useState({
-    nome: "", funcao: "", descricao: "", funcoesCobertasJson: [] as string[],
-    items: [{ nomeEpi: "", categoria: "EPI" as "EPI" | "Uniforme" | "Calcado", quantidade: 1, obrigatorio: true }],
-  });
 
   function resetKitForm() {
     setKitForm({ nome: "", funcao: "", descricao: "", funcoesCobertasJson: [], items: [{ nomeEpi: "", categoria: "EPI", quantidade: 1, obrigatorio: true }] });
