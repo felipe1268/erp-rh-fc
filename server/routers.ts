@@ -244,10 +244,29 @@ export const appRouter = router({
   systemDocumentTemplates: systemDocumentTemplatesRouter,
   bankStatementTemplates: bankStatementTemplatesRouter,
   auth: router({
-    me: publicProcedure.query(opts => {
+    me: publicProcedure.query(async opts => {
       if (!opts.ctx.user) return null;
       const { password, ...safeUser } = opts.ctx.user as any;
       // Rev. 2388 — expor flag para o frontend saber se exige senha em ações sensíveis.
+      // Rev. 3904 — enrich com employeeId p/ usuários de login local (JWT não carrega o campo).
+      if (!safeUser.employeeId) {
+        try {
+          const { getDb } = await import("./db");
+          const db = await getDb();
+          if (db) {
+            const { employees } = await import("../drizzle/schema");
+            const { ilike } = await import("drizzle-orm");
+            const userName = (safeUser.name ?? safeUser.username ?? "").trim();
+            if (userName) {
+              const [emp] = await db.select({ id: employees.id })
+                .from(employees)
+                .where(ilike(employees.nomeCompleto, userName))
+                .limit(1);
+              if (emp) safeUser.employeeId = emp.id;
+            }
+          }
+        } catch { /* silencioso — employeeId continua nulo */ }
+      }
       return { ...safeUser, hasLocalPassword: !!password };
     }),
     logout: publicProcedure.mutation(({ ctx }) => {
