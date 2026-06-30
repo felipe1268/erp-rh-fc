@@ -365,8 +365,14 @@ export default function EpiDrillDown({ type, onClose }: EpiDrillDownProps) {
                       <Badge variant="outline" className="text-[10px]">x{d.quantidade || 1}</Badge>
                     </div>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Users className="h-3 w-3" />
-                      <span>{d.nomeFunc || "—"}</span>
+                      {d.fotoUrl ? (
+                        <img src={d.fotoUrl} alt={d.nomeFunc || ""} className="h-6 w-6 rounded-full object-cover border border-gray-200 flex-shrink-0" />
+                      ) : (
+                        <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                          <span className="text-[8px] font-bold text-blue-700">{(d.nomeFunc || "?").split(" ").filter(Boolean).map((n: string) => n[0]).slice(0, 2).join("")}</span>
+                        </div>
+                      )}
+                      <span className="font-medium text-foreground">{d.nomeFunc || "—"}</span>
                     </div>
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-muted-foreground">
@@ -394,7 +400,18 @@ export default function EpiDrillDown({ type, onClose }: EpiDrillDownProps) {
                   {filteredData.map((d: any) => (
                     <tr key={d.id} className="hover:bg-muted/30">
                       <td className="p-3 font-medium">{d.nomeEpi}</td>
-                      <td className="p-3">{d.nomeFunc || "—"}</td>
+                      <td className="p-3">
+                        <div className="flex items-center gap-2">
+                          {d.fotoUrl ? (
+                            <img src={d.fotoUrl} alt={d.nomeFunc || ""} className="h-8 w-8 rounded-full object-cover border border-gray-200 flex-shrink-0" />
+                          ) : (
+                            <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                              <span className="text-[10px] font-bold text-blue-700">{(d.nomeFunc || "?").split(" ").filter(Boolean).map((n: string) => n[0]).slice(0, 2).join("")}</span>
+                            </div>
+                          )}
+                          <span className="font-medium text-sm">{d.nomeFunc || "—"}</span>
+                        </div>
+                      </td>
                       <td className="p-3 text-center">{d.quantidade || 1}</td>
                       <td className="p-3 text-center">
                         {d.dataEntrega ? new Date(d.dataEntrega + "T00:00:00").toLocaleDateString("pt-BR") : "—"}

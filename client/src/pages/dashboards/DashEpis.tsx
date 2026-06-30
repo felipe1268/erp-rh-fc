@@ -939,10 +939,17 @@ export default function DashEpis() {
                                                   <tr key={fi} className="border-t border-border/30">
                                                     <td className="py-1.5 pr-3 font-medium">
                                                       <button
-                                                        className="text-left hover:text-blue-600 hover:underline cursor-pointer transition-colors"
+                                                        className="text-left hover:text-blue-600 hover:underline cursor-pointer transition-colors flex items-center gap-2"
                                                         onClick={(e) => { e.stopPropagation(); setFichaModal({ employeeId: f.employeeId, employeeName: f.nome, epiNome: a.nome }); }}
                                                       >
-                                                        <EmpNameWithStatus nome={f.nome} isDesligado={f.isDesligado} maxWidth="max-w-[200px]" />
+                                                        {f.fotoUrl ? (
+                                                          <img src={f.fotoUrl} alt={f.nome} className="h-7 w-7 rounded-full object-cover border border-gray-200 flex-shrink-0" />
+                                                        ) : (
+                                                          <div className="h-7 w-7 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                                            <span className="text-[9px] font-bold text-blue-700">{(f.nome || "?").split(" ").filter(Boolean).map((n: string) => n[0]).slice(0, 2).join("")}</span>
+                                                          </div>
+                                                        )}
+                                                        <EmpNameWithStatus nome={f.nome} isDesligado={f.isDesligado} maxWidth="max-w-[180px]" />
                                                       </button>
                                                     </td>
                                                     <td className="py-1.5 pr-3 text-muted-foreground">{f.funcao}</td>
@@ -1579,13 +1586,20 @@ export default function DashEpis() {
                           <tr key={fi} className="border-b border-border/30 hover:bg-muted/20">
                             <td className="py-2 px-3 font-medium">
                               <button
-                                className="text-left hover:text-blue-600 hover:underline cursor-pointer transition-colors"
+                                className="text-left hover:text-blue-600 hover:underline cursor-pointer transition-colors flex items-center gap-2"
                                 onClick={() => {
                                   setDetalheEpi(null);
                                   setFichaModal({ employeeId: f.employeeId, employeeName: f.nome, epiNome: detalheEpi.nome });
                                 }}
                               >
-                                <EmpNameWithStatus nome={f.nome} isDesligado={f.isDesligado} maxWidth="max-w-[180px]" />
+                                {f.fotoUrl ? (
+                                  <img src={f.fotoUrl} alt={f.nome} className="h-8 w-8 rounded-full object-cover border border-gray-200 flex-shrink-0" />
+                                ) : (
+                                  <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                    <span className="text-[10px] font-bold text-blue-700">{(f.nome || "?").split(" ").filter(Boolean).map((n: string) => n[0]).slice(0, 2).join("")}</span>
+                                  </div>
+                                )}
+                                <EmpNameWithStatus nome={f.nome} isDesligado={f.isDesligado} maxWidth="max-w-[160px]" />
                               </button>
                             </td>
                             <td className="py-2 px-3 text-muted-foreground">{f.funcao}</td>

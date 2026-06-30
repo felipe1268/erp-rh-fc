@@ -1,4 +1,29 @@
 /**
+ * Rev. 3890 — **EPI — FOTO DO COLABORADOR EM TODAS AS TABELAS DO MÓDULO EPI.**
+ *
+ * ## Problema
+ * O nome do funcionário aparecia sem foto em 3 views do módulo EPI:
+ * 1. EpiDrillDown (Total de Entregas / Entregas do Mês) — mobile e desktop.
+ * 2. DashEpis — sub-tabela "Funcionários que receberam — {EPI}" no accordion de durabilidade.
+ * 3. DashEpis — tabela "Funcionários que receberam este EPI" no drawer de detalhe do EPI.
+ *
+ * ## Causa-raiz
+ * `getDashEpis` em dashboards.ts selecionava apenas id/nome/funcao/status para `allEmps`
+ * — sem `fotoUrl`. O array `funcDetalhe` gerado a partir desse mapa também omitia a foto.
+ * `EpiDrillDown` consumia `listDeliveries` (que já trazia `fotoUrl`) mas não renderizava.
+ *
+ * ## Solução
+ * - **`server/routers/dashboards.ts`**: adicionado `fotoUrl: employees.fotoUrl` no
+ *   `db.select` de `allEmps`; campo incluído no tipo `funcDetalhe` e nos dois `push`.
+ * - **`client/src/pages/dashboards/DashEpis.tsx`**: avatar circular (foto ou iniciais)
+ *   adicionado antes do `EmpNameWithStatus` nos dois pontos de renderização:
+ *   accordion (h-7) e drawer (h-8).
+ * - **`client/src/pages/EpiDrillDown.tsx`**: coluna Funcionário ganha avatar h-6 (mobile)
+ *   e h-8 (desktop) substituindo o ícone `<Users>` genérico.
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3889 — **EPI — OBSERVAÇÃO OBRIGATÓRIA QUANDO EPI FORA DO KIT + FLAG `fora_do_kit` + BADGE NA TABELA.**
  *
  * ## Problema

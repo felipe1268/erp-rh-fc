@@ -1393,7 +1393,7 @@ async function getDashEpis(companyId: number, companyIds?: number[]) {
   const [allEpis, allDel, allEmps, epiEmpObraAlocs, allObras] = await Promise.all([
     db.select().from(epis).where(companyFilter),
     db.select().from(epiDeliveries).where(and(delFilter, isNull(epiDeliveries.deletedAt))),
-    db.select({ id: employees.id, nome: employees.nomeCompleto, funcao: employees.funcao, status: employees.status })
+    db.select({ id: employees.id, nome: employees.nomeCompleto, funcao: employees.funcao, status: employees.status, fotoUrl: employees.fotoUrl })
       .from(employees).where(and(empFilter, isNull(employees.deletedAt))),
     db.select({ employeeId: obraFuncionarios.employeeId, obraId: obraFuncionarios.obraId })
       .from(obraFuncionarios).where(and(ids.length === 1 ? eq(obraFuncionarios.companyId, ids[0]) : inArray(obraFuncionarios.companyId, ids), eq(obraFuncionarios.isActive, 1))),
@@ -1747,7 +1747,7 @@ async function getDashEpis(companyId: number, companyIds?: number[]) {
         }
 
         const intervalos: number[] = [];
-        const funcDetalhe: { employeeId: number; nome: string; funcao: string; isDesligado: boolean; diasReal: number; entregas: number; datasEntrega: string[]; motivos: string[] }[] = [];
+        const funcDetalhe: { employeeId: number; nome: string; funcao: string; fotoUrl: string | null; isDesligado: boolean; diasReal: number; entregas: number; datasEntrega: string[]; motivos: string[] }[] = [];
 
         for (const [empIdStr, info] of Object.entries(porFunc)) {
           const empId = Number(empIdStr);
@@ -1758,6 +1758,7 @@ async function getDashEpis(companyId: number, companyIds?: number[]) {
               employeeId: empId,
               nome: emp?.nome || `Func. ${empId}`,
               funcao: emp?.funcao || '-',
+              fotoUrl: emp?.fotoUrl || null,
               isDesligado: isDesligadoStatus(emp?.status),
               diasReal: 0,
               entregas: datas.length,
@@ -1782,6 +1783,7 @@ async function getDashEpis(companyId: number, companyIds?: number[]) {
             employeeId: empId,
             nome: emp?.nome || `Func. ${empId}`,
             funcao: emp?.funcao || '-',
+            fotoUrl: emp?.fotoUrl || null,
             isDesligado: isDesligadoStatus(emp?.status),
             diasReal: count > 0 ? Math.round(somaIntervalo / count) : 0,
             entregas: datas.length,
