@@ -1060,10 +1060,11 @@ function WizardNovaPT({
 
 // ── Dialog de detalhes / assinaturas / liberação ──────────────────────────────
 function PTDetalheDialog({
-  ptId, companyId, open, onOpenChange, onRefresh,
+  ptId, companyId, open, onOpenChange, onRefresh, onEdit,
 }: {
   ptId: number | null; companyId: number; open: boolean;
   onOpenChange: (v: boolean) => void; onRefresh: () => void;
+  onEdit?: (id: number) => void;
 }) {
   const { confirm, ConfirmDialog } = useConfirm();
   const [assinarPad, setAssinarPad] = useState<{ posicao: number; nome: string } | null>(null);
@@ -1086,6 +1087,7 @@ function PTDetalheDialog({
   const liberarMut    = trpc.ptPermissoes.liberar.useMutation();
   const concluirMut   = trpc.ptPermissoes.concluir.useMutation();
   const cancelarMut   = trpc.ptPermissoes.cancelar.useMutation();
+  const excluirMut    = trpc.ptPermissoes.excluir.useMutation();
 
   const pt = ptQ.data as any;
   if (!open || ptId === null) return null;
@@ -1142,6 +1144,24 @@ function PTDetalheDialog({
       onOpenChange(false);
       onRefresh();
     } catch (e: any) { toast.error(e?.message ?? "Erro ao cancelar."); }
+  };
+
+  const handleExcluir = async () => {
+    const ok = await confirm({
+      title: "Excluir PT permanentemente?",
+      description: `A PT ${pt?.numero ?? ""} será removida. Esta ação não pode ser desfeita.`,
+      tone: "destructive",
+      confirmText: "Excluir",
+    });
+    if (!ok) return;
+    try {
+      await excluirMut.mutateAsync({ id: ptId!, companyId });
+      toast.success("PT excluída.");
+      utils.ptPermissoes.list.invalidate({ companyId });
+      utils.ptPermissoes.stats.invalidate({ companyId });
+      onOpenChange(false);
+      onRefresh();
+    } catch (e: any) { toast.error(e?.message ?? "Erro ao excluir."); }
   };
 
   const envolvidos: { nome: string; funcao: string }[] = pt?.envolvidos ?? [];
@@ -1357,35 +1377,45 @@ function PTDetalheDialog({
                     {printLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Printer className="h-4 w-4 mr-1" />}
                     {printLoading ? "Gerando..." : "Imprimir / PDF"}
                   </Button>
-                  {(pt.status === "em_andamento" || pt.status === "liberada") && (<>
-                    {pt.status === "em_andamento" && (<>
-                      <Button onClick={() => {
-                        setLiberarForm({
-                          responsavelAreaNome: pt.responsavelAreaNome ?? "",
-                          responsavelLiberacaoNome: pt.responsavelLiberacaoNome ?? "",
-                          executanteNome: pt.executanteNome ?? "",
-                        });
-                        setLiberarOpen(true);
-                      }}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                        <ShieldCheck className="h-4 w-4 mr-1" /> Liberar PT
-                      </Button>
-                    </>)}
-                    {pt.status === "liberada" && (
-                      <Button onClick={() => {
-                        setConcluirForm({ conclusaoSolicitanteNome: pt.solicitanteNome ?? "", conclusaoData: new Date().toISOString().slice(0, 10), conclusaoHoraInicio: "", conclusaoHoraFim: "" });
-                        setConcluirOpen(true);
-                      }}
-                        className="bg-blue-600 hover:bg-blue-700 text-white">
-                        <CheckCircle2 className="h-4 w-4 mr-1" /> Concluir PT
-                      </Button>
-                    )}
+                  {pt.status === "em_andamento" && (<>
+                    {/* Editar — só disponível para PT em andamento */}
+                    <Button variant="outline" onClick={() => { onOpenChange(false); onEdit?.(ptId!); }}
+                      className="border-blue-200 text-blue-700 hover:bg-blue-50">
+                      <SquarePen className="h-4 w-4 mr-1" /> Editar PT
+                    </Button>
+                    <Button onClick={() => {
+                      setLiberarForm({
+                        responsavelAreaNome: pt.responsavelAreaNome ?? "",
+                        responsavelLiberacaoNome: pt.responsavelLiberacaoNome ?? "",
+                        executanteNome: pt.executanteNome ?? "",
+                      });
+                      setLiberarOpen(true);
+                    }}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                      <ShieldCheck className="h-4 w-4 mr-1" /> Liberar PT
+                    </Button>
                     <Button variant="outline" onClick={handleCancelar}
                       disabled={cancelarMut.isPending}
                       className="border-red-200 text-red-600 hover:bg-red-50">
                       <Ban className="h-4 w-4 mr-1" /> Cancelar PT
                     </Button>
+                    {/* Excluir — remove a PT definitivamente */}
+                    <Button variant="outline" onClick={handleExcluir}
+                      disabled={excluirMut.isPending}
+                      className="border-red-300 text-red-700 hover:bg-red-50">
+                      {excluirMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
+                      Excluir PT
+                    </Button>
                   </>)}
+                  {pt.status === "liberada" && (
+                    <Button onClick={() => {
+                      setConcluirForm({ conclusaoSolicitanteNome: pt.solicitanteNome ?? "", conclusaoData: new Date().toISOString().slice(0, 10), conclusaoHoraInicio: "", conclusaoHoraFim: "" });
+                      setConcluirOpen(true);
+                    }}
+                      className="bg-blue-600 hover:bg-blue-700 text-white">
+                      <CheckCircle2 className="h-4 w-4 mr-1" /> Concluir PT
+                    </Button>
+                  )}
                 </div>
               </div>
             </>
@@ -1687,6 +1717,7 @@ export default function PermissaoTrabalho() {
         open={detalheOpen}
         onOpenChange={setDetalheOpen}
         onRefresh={() => { listQ.refetch(); statsQ.refetch(); }}
+        onEdit={(id) => { setEditPtId(id); setEditOpen(true); }}
       />
 
       {/* Edição */}
