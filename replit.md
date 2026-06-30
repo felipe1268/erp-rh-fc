@@ -50,13 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3889** — **EPI — OBSERVAÇÃO OBRIGATÓRIA QUANDO EPI FORA DO KIT + FLAG `fora_do_kit` + BADGE NA TABELA.** Nova coluna `fora_do_kit` em `epi_deliveries` (self-heal Rev. 3889). `createDelivery` valida server-side: `foraDoKit=true` sem `observacoes` → BAD_REQUEST. Formulário de nova entrega ganha Textarea `Observação` (borda vermelha + asterisco quando EPI fora do kit, obrigatória). `addEntregaItem` persiste flag por item para entregas multi-EPI. `handleSubmitEntrega` bloqueia submit se qualquer item fora do kit sem observação. Tabela de entregas exibe badge ⚠ "Fora do Kit" em âmbar. Rastreabilidade completa: gestor sempre justifica. ZERO DELETE.
+
 - **Rev. 3888** — **EPI — CATÁLOGO GERENCIADO DE MOTIVOS (ADMIN-ONLY WRITE) + EDIT DIALOG VIRA SELECT.** Nova tabela `epi_motivos` (global, sem companyId); self-heal Rev. 3888 cria + semeia os 7 canônicos. tRPC `listMotivos`/`createMotivo`/`updateMotivo` — escrita bloqueada p/ usuário comum (FORBIDDEN). Nova entrega e edição de entrega populam Select do banco (fallback hardcoded). `EpiMotivosConfig.tsx`: painel na aba Config (abaixo de Kits); ADM vê Novo/Renomear/Desativar + AlertDialog de confirmação; usuário vê somente a lista com cadeado. Normalização adicional: "Primeira"→Kit Admissão; "Só tinha um uniforme."→Entrega Regular; 5 one-offs→Entrega Regular. ZERO DELETE.
 
-- **Rev. 3887** — **EPI — FOTO DO FUNCIONÁRIO NAS ENTREGAS + ALERTA DE KIT POR FUNÇÃO + MOTIVO PADRONIZADO.** `listDeliveries` passa `fotoUrl` do funcionário; tabela de entregas exibe avatar circular (foto real ou iniciais) + sub-linha "Entregue por: [nome]" quando `assinaturaResponsavelNome` preenchido. Nova query `kitsNovaEntregaQ` na nova_entrega: banner amber quando EPI selecionado não está no kit da função, banner verde quando está. Campo "Motivo" convertido de Input livre para Select com 7 opções canônicas (Entrega Regular, Primeira Aquisição, Kit Admissão, Desgaste Normal, Descarte / Expirado, Reposição, Visita Técnica). Bloco `[NormalizaMotivosEPI]` no startup normaliza dados históricos (desgaste_normal → "Desgaste Normal", trim de espaços, variantes de capitalização). ZERO DELETE.
-
-- **Rev. 3885** — **TEMPLATES DE EXTRATO — AUDITORIA (QUEM/QUANDO) + ACESSO RESTRITO A ADMIN.** Novas colunas `atualizado_por_id`/`atualizado_por_nome` via self-heal Rev. 3885. Mutation `update` grava o usuário da sessão. Cards exibem rodapé "Criado por / Editado por · data Brasília". Backend: `assertAdminRole` em `create`, `update`, `delete` e `analisarPdf` (FORBIDDEN para role=user). Frontend: botões de criação/edição/exclusão ocultados para não-admins; banner amber "somente leitura" no lugar. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3887** — **EPI — FOTO DO FUNCIONÁRIO NAS ENTREGAS + ALERTA DE KIT POR FUNÇÃO + MOTIVO PADRONIZADO.** Avatar circular + "Entregue por"; banner amber/verde por kit; Select 7 motivos canônicos; `[NormalizaMotivosEPI]`. ZERO DELETE.
 
 - **Rev. 3886** — **TEMPLATES DE EXTRATO — PREVIEW FULLSCREEN + COLAPSO DE GRUPOS + DEDUP FRONTEND + GATE DE TEMPLATE NA CONCILIAÇÃO.** Dialog fullscreen; grupos colapsáveis; dedup por nome normalizado; gate na Conciliação (PDF sem template → Dialog vermelho 4 etapas). ZERO DELETE.
 
@@ -65,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3884** — **TEMPLATES DE EXTRATO — REDESIGN: AGRUPADO POR BANCO + CARDS EM GRADE.** Templates agrupados por banco; cards 2-colunas com faixa de cor; pills de stats. ZERO DELETE.
 
 - **Rev. 3883** — **TEMPLATES DE EXTRATO — EYE PREVIEW + DEDUP GUARD + PROMPT RIGOROSO.** Preview colorido 3 seções; dedup no create (overlap ≥50%); prompt IA reescrito. ZERO DELETE.
-
-- **Rev. 3882** — **TEMPLATES DE EXTRATO — ANÁLISE EM LOTE (MÚLTIPLOS PDFs).** 2+ PDFs → modo lote sequencial com barra de progresso e painel de resumo. ZERO DELETE.
 
 ### Histórico completo
 

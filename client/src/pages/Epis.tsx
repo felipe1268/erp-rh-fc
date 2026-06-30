@@ -5,6 +5,7 @@ import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -1313,7 +1314,12 @@ export default function Epis() {
     const addEntregaItem = () => {
       if (!entregaForm.epiId) return toast.error("Selecione o EPI primeiro");
       if (entregaItens.some(i => i.epiId === entregaForm.epiId)) return toast.error("Este EPI já foi adicionado à lista");
-      setEntregaItens(prev => [...prev, { epiId: entregaForm.epiId, quantidade: entregaForm.quantidade, motivoTroca: entregaForm.motivoTroca }]);
+      // Rev. 3889 — marca foraDoKit no momento de adicionar o item
+      const kl = kitsNovaEntregaQ.data ?? [];
+      const empA = (employeesQ.data ?? []).find((e: any) => String(e.id) === entregaForm.employeeId);
+      const kfA = empA?.funcao ? kl.find((k: any) => k.ativo !== 0 && k.funcao?.toLowerCase().trim() === empA.funcao.toLowerCase().trim()) : null;
+      const itemForaKit = kfA ? !kfA.items.some((i: any) => String(i.epiId) === entregaForm.epiId) : false;
+      setEntregaItens(prev => [...prev, { epiId: entregaForm.epiId, quantidade: entregaForm.quantidade, motivoTroca: entregaForm.motivoTroca, foraDoKit: itemForaKit }]);
       setEntregaForm(f => ({ ...f, epiId: "", quantidade: 1, motivoTroca: "" }));
     };
 
@@ -1327,11 +1333,25 @@ export default function Epis() {
 
     const handleSubmitEntrega = async () => {
       const allItens = entregaForm.epiId
-        ? [...entregaItens, { epiId: entregaForm.epiId, quantidade: entregaForm.quantidade, motivoTroca: entregaForm.motivoTroca }]
+        ? [...entregaItens, { epiId: entregaForm.epiId, quantidade: entregaForm.quantidade, motivoTroca: entregaForm.motivoTroca, foraDoKit: false }]
         : entregaItens;
       if (allItens.length === 0) return toast.error("Adicione pelo menos um EPI");
       if (!entregaForm.employeeId) return toast.error("Selecione o funcionário");
       if (entregaForm.origemEntrega === 'obra' && !entregaForm.origemObraId) return toast.error("Selecione a obra de origem do estoque");
+
+      // Rev. 3889 — kit check: calcular foraDoKit para o EPI ainda no form (não adicionado à lista)
+      const klSub = kitsNovaEntregaQ.data ?? [];
+      const empSub = (employeesQ.data ?? []).find((e: any) => String(e.id) === entregaForm.employeeId);
+      const kfSub = empSub?.funcao ? klSub.find((k: any) => k.ativo !== 0 && k.funcao?.toLowerCase().trim() === empSub.funcao.toLowerCase().trim()) : null;
+      const currentEpiForaKit = kfSub && entregaForm.epiId ? !kfSub.items.some((i: any) => String(i.epiId) === entregaForm.epiId) : false;
+      // Mapeia foraDoKit por epiId considerando: itens já adicionados + item atual do form
+      const foraKitMap = new Map<string, boolean>();
+      for (const item of entregaItens) foraKitMap.set(item.epiId, (item as any).foraDoKit || false);
+      if (entregaForm.epiId) foraKitMap.set(entregaForm.epiId, currentEpiForaKit);
+      const anyForaKit = Array.from(foraKitMap.values()).some(Boolean);
+      if (anyForaKit && !entregaForm.observacoes.trim()) {
+        return toast.error("Observação obrigatória: há EPI(s) fora do kit da função. Preencha o campo de observação antes de confirmar.");
+      }
 
       let fotoBase64: string | undefined;
       let fotoFileName: string | undefined;
@@ -1368,6 +1388,7 @@ export default function Epis() {
               ? parseInt(entregaForm.origemObraId)
               : (entregaForm.obraId ? parseInt(entregaForm.obraId) : undefined),
             grupoEntregaId,
+            foraDoKit: foraKitMap.get(item.epiId) || false,
           });
           createdResults.push({ ...result, item });
           successCount++;
@@ -1636,6 +1657,32 @@ export default function Epis() {
                       </div>
                     )}
                   </>
+                );
+              })()}
+
+              {/* Rev. 3889 — Observação (obrigatória quando EPI fora do kit) */}
+              {(() => {
+                const klObs = kitsNovaEntregaQ.data ?? [];
+                const empObs = (employeesQ.data ?? []).find((e: any) => String(e.id) === entregaForm.employeeId);
+                const kfObs = empObs?.funcao ? klObs.find((k: any) => k.ativo !== 0 && k.funcao?.toLowerCase().trim() === empObs.funcao.toLowerCase().trim()) : null;
+                const curForaKit = kfObs && entregaForm.epiId ? !kfObs.items.some((i: any) => String(i.epiId) === entregaForm.epiId) : false;
+                const anyItemForaKit = entregaItens.some((i: any) => i.foraDoKit);
+                const isForaKit = curForaKit || anyItemForaKit;
+                const missingObs = isForaKit && !entregaForm.observacoes.trim();
+                return (
+                  <div>
+                    <Label className={`flex items-center gap-1 ${missingObs ? "text-red-600" : ""}`}>
+                      Observação {isForaKit && <span className="text-red-500 font-bold">*</span>}
+                      {isForaKit && <span className="text-[10px] text-red-600 font-normal ml-1">(obrigatória — EPI fora do kit da função)</span>}
+                    </Label>
+                    <Textarea
+                      value={entregaForm.observacoes}
+                      onChange={e => setEntregaForm(f => ({ ...f, observacoes: e.target.value }))}
+                      placeholder={isForaKit ? "Explique o motivo pelo qual este EPI está sendo entregue fora do kit da função..." : "Observações opcionais sobre esta entrega..."}
+                      rows={2}
+                      className={`mt-1 resize-none ${missingObs ? "border-red-500 focus-visible:ring-red-400" : ""}`}
+                    />
+                  </div>
                 );
               })()}
 
@@ -2776,13 +2823,21 @@ export default function Epis() {
                                 </td>
                                 <td className="p-3 text-center font-bold">{items.reduce((s: number, d: any) => s + (d.quantidade || 1), 0)}</td>
                                 <td className="p-3 text-xs">
-                                  {first.motivoTroca ? (
-                                    <Badge variant={['perda', 'mau_uso', 'furto'].includes(first.motivoTroca) ? "destructive" : "secondary"} className="text-[10px]">
-                                      {motivoLabel[first.motivoTroca] || first.motivoTroca}
-                                    </Badge>
-                                  ) : (
-                                    <span className="text-muted-foreground">Entrega regular</span>
-                                  )}
+                                  <div className="space-y-1">
+                                    {first.motivoTroca ? (
+                                      <Badge variant={['perda', 'mau_uso', 'furto'].includes(first.motivoTroca) ? "destructive" : "secondary"} className="text-[10px]">
+                                        {motivoLabel[first.motivoTroca] || first.motivoTroca}
+                                      </Badge>
+                                    ) : (
+                                      <span className="text-muted-foreground">Entrega regular</span>
+                                    )}
+                                    {items.some((d: any) => d.foraDoKit) && (
+                                      <div className="flex items-center gap-1">
+                                        <AlertTriangle className="h-3 w-3 text-amber-600" />
+                                        <span className="text-[10px] text-amber-700 font-semibold">Fora do Kit</span>
+                                      </div>
+                                    )}
+                                  </div>
                                 </td>
                                 <td className="p-3 text-center text-xs">
                                   {items.some((d: any) => d.valorCobrado) ? (

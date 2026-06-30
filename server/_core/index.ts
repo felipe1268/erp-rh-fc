@@ -3586,6 +3586,16 @@ Regras:
           console.log('[SyncSchema+] Rev. 3888: tabela epi_motivos garantida (catálogo de motivos de entrega).');
         } catch (e: any) { console.error('[SyncSchema+] FALHA Rev.3888 epi_motivos:', e?.message || e); }
 
+        // Rev. 3889 — flag fora_do_kit em entregas de EPI
+        // Marca quais entregas foram feitas fora do kit previsto para a função,
+        // obrigando o gestor a informar observação no momento da entrega.
+        try {
+          await db.execute(sql`
+            ALTER TABLE epi_deliveries ADD COLUMN IF NOT EXISTS fora_do_kit smallint DEFAULT 0 NOT NULL
+          `);
+          console.log('[SyncSchema+] Rev. 3889: coluna fora_do_kit garantida em epi_deliveries.');
+        } catch (e: any) { console.error('[SyncSchema+] FALHA Rev.3889 fora_do_kit:', e?.message || e); }
+
         // Rev. 2195: Encargos Sociais sobre Folha — tabela nova pra upload
         // de guias DCTFWeb (DARF INSS/IRRF/Terceiros) e FGTS Digital que
         // a contabilidade terceirizada envia mensalmente. Bloco isolado

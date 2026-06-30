@@ -1,4 +1,43 @@
 /**
+ * Rev. 3889 — **EPI — OBSERVAÇÃO OBRIGATÓRIA QUANDO EPI FORA DO KIT + FLAG `fora_do_kit` + BADGE NA TABELA.**
+ *
+ * ## Problema
+ * O banner amber de "EPI fora do kit da função" (Rev. 3887) era apenas informativo — o gestor
+ * podia ignorar o aviso e confirmar a entrega sem justificar. Não havia rastreabilidade de
+ * quais entregas fugiam do padrão, nem obrigação formal de registrar o motivo.
+ *
+ * ## Solução
+ * 1. **Coluna `fora_do_kit`** em `epi_deliveries` (drizzle/schema.ts + self-heal `[SyncSchema+]
+ *    Rev. 3889`): `ALTER TABLE epi_deliveries ADD COLUMN IF NOT EXISTS fora_do_kit smallint
+ *    DEFAULT 0 NOT NULL`. Marca automaticamente cada entrega cujo EPI não constava no kit da
+ *    função do funcionário no momento da gravação.
+ * 2. **tRPC `createDelivery`** (epis.ts): novo campo `foraDoKit` no input; validação server-side
+ *    bloqueia com `BAD_REQUEST` se `foraDoKit=true` e `observacoes` vazio; INSERT grava
+ *    `fora_do_kit=1`. `listDeliveries` retorna `foraDoKit` para o frontend.
+ * 3. **Frontend `nova_entrega`** (Epis.tsx):
+ *    - Campo Textarea `Observação` adicionado ao formulário (antes era invisível, só no estado).
+ *    - Quando EPI está fora do kit: borda vermelha + asterisco + helper "obrigatória — EPI fora do kit da função".
+ *    - `addEntregaItem` persiste `foraDoKit` por item para cobrir entregas multi-EPI.
+ *    - `handleSubmitEntrega` bloqueia com toast se qualquer item estiver fora do kit e
+ *      `observacoes` vazio; passa `foraDoKit` correto por item ao `createDeliveryMut`.
+ * 4. **Tabela de entregas**: badge ⚠ "Fora do Kit" em âmbar nas linhas onde `items.some(d => d.foraDoKit)`.
+ *
+ * ## Rastreabilidade
+ * Com `fora_do_kit=1` no banco, será possível filtrar, exportar e auditar todas as entregas
+ * não-padronizadas, entender padrões por gestor/função/EPI e embasar decisões sobre atualização
+ * de kits.
+ *
+ * ## Arquivos
+ * - `drizzle/schema.ts` — `foraDoKit` em `epiDeliveries`
+ * - `server/_core/index.ts` — self-heal `[SyncSchema+] Rev. 3889`
+ * - `server/routers/epis.ts` — `createDelivery` input + validação + INSERT; `listDeliveries` SELECT
+ * - `client/src/pages/Epis.tsx` — Textarea observacoes, validação submit, badge tabela
+ * - `shared/version.ts` — 3889
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3888 — **EPI — CATÁLOGO GERENCIADO DE MOTIVOS DE ENTREGA (ADMIN-ONLY WRITE) + MOTIVO NO EDIT DIALOG VIRA SELECT.**
  *
  * ## Problema

@@ -1411,6 +1411,7 @@ export const epiDeliveries = pgTable("epi_deliveries", {
         biometriaCapturadaEm: timestamp("biometria_capturada_em", { mode: 'string' }),
         modoIdentificacao: varchar("modo_identificacao", { length: 20 }).default('manual'),
         grupoEntregaId: varchar("grupo_entrega_id", { length: 36 }),
+        foraDoKit: smallint("fora_do_kit").default(0).notNull(),
 },
 (table) => [
         index("idx_ed_company").on(table.companyId),

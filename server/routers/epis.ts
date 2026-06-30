@@ -583,6 +583,7 @@ export const episRouter = router({
           assinaturaResponsavelNome: epiDeliveries.assinaturaResponsavelNome,
           assinaturaResponsavelEm: epiDeliveries.assinaturaResponsavelEm,
           fotoUrl: employees.fotoUrl,
+          foraDoKit: epiDeliveries.foraDoKit,
         })
           .from(epiDeliveries)
           .leftJoin(epis, eq(epiDeliveries.epiId, epis.id))
@@ -690,6 +691,7 @@ export const episRouter = router({
       origemEntrega: z.enum(['central','obra']).default('central'),
       obraId: z.number().optional(),
       grupoEntregaId: z.string().optional(),
+      foraDoKit: z.boolean().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
@@ -697,6 +699,14 @@ export const episRouter = router({
       if (input.motivoTroca && ['desgaste_normal', 'mau_uso'].includes(input.motivoTroca) && !input.fotoEstadoBase64) {
         const motivoLabel = input.motivoTroca === 'desgaste_normal' ? 'desgaste normal' : 'mau uso';
         throw new Error(`Foto do EPI danificado é obrigatória para troca por ${motivoLabel}.`);
+      }
+
+      // Rev. 3889 — observação obrigatória quando EPI não consta no kit da função
+      if (input.foraDoKit && !input.observacoes?.trim()) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Observação obrigatória: este EPI não pertence ao kit da função. Registre o motivo antes de confirmar a entrega.',
+        });
       }
 
       // Upload foto do estado do EPI se fornecida
@@ -741,6 +751,7 @@ export const episRouter = router({
         origemEntrega: input.origemEntrega,
         obraId: input.obraId || null,
         grupoEntregaId: input.grupoEntregaId || null,
+        foraDoKit: input.foraDoKit ? 1 : 0,
       } as any).returning();
 
       // Update stock based on origin
