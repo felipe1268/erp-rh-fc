@@ -1698,7 +1698,7 @@ export default function PermissaoTrabalho() {
         onSaved={() => { listQ.refetch(); statsQ.refetch(); }}
       />
 
-      <ConfirmDialog />
+      {ConfirmDialog}
     </DashboardLayout>
   );
 }
