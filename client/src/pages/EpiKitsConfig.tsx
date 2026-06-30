@@ -240,29 +240,54 @@ export default function EpiKitsConfig() {
 
   // Save all IA kit suggestions
   const [savingKits, setSavingKits] = useState(false);
+  const [autoGenerating, setAutoGenerating] = useState(false);
+
+  async function createKitsFromArray(kitsArr: any[]) {
+    for (const kit of kitsArr) {
+      await createKitMut.mutateAsync({ companyId, companyIds, nome: kit.nome,
+        funcao: kit.funcao,
+        descricao: kit.descricao || undefined,
+        items: (kit.items || []).map((i: any) => ({
+          nomeEpi: i.nomeEpi,
+          categoria: (i.categoria === "Uniforme" || i.categoria === "Calcado") ? i.categoria : "EPI",
+          quantidade: i.quantidade || 1,
+          obrigatorio: i.obrigatorio !== false,
+        })),
+      });
+    }
+  }
+
   async function saveAllIAKits() {
     if (!iaSugestaoKits || iaSugestaoKits.length === 0) return;
     setSavingKits(true);
     try {
-      for (const kit of iaSugestaoKits) {
-        await createKitMut.mutateAsync({ companyId, companyIds, nome: kit.nome,
-          funcao: kit.funcao,
-          descricao: kit.descricao || undefined,
-          items: kit.items.map((i: any) => ({
-            nomeEpi: i.nomeEpi,
-            categoria: (i.categoria === "Uniforme" || i.categoria === "Calcado") ? i.categoria : "EPI",
-            quantidade: i.quantidade || 1,
-            obrigatorio: i.obrigatorio !== false,
-          })),
-        });
-      }
+      await createKitsFromArray(iaSugestaoKits);
       toast.success(`${iaSugestaoKits.length} kits salvos com sucesso!`);
       setIaSugestaoKits(null);
       kitsQ.refetch();
+      funcoesDisponiveisQ.refetch();
     } catch (err: any) {
       toast.error("Erro ao salvar kits: " + err.message);
     } finally {
       setSavingKits(false);
+    }
+  }
+
+  async function generateAndSaveAllKits() {
+    setAutoGenerating(true);
+    try {
+      const data = await iaKitsMut.mutateAsync({ companyId });
+      const kits = data?.kits ?? [];
+      if (kits.length === 0) { toast.error("IA não retornou kits. Tente novamente."); return; }
+      await createKitsFromArray(kits);
+      toast.success(`${kits.length} kit(s) gerado(s) e salvo(s) automaticamente!`);
+      setIaSugestaoKits(null);
+      kitsQ.refetch();
+      funcoesDisponiveisQ.refetch();
+    } catch (err: any) {
+      toast.error(iaErrMsg(err));
+    } finally {
+      setAutoGenerating(false);
     }
   }
 
@@ -311,10 +336,21 @@ export default function EpiKitsConfig() {
         <div className="space-y-3">
           <div className="flex flex-wrap justify-between items-center gap-2">
             <div className="flex flex-wrap gap-2">
+              <button
+                disabled={autoGenerating || iaKitsMut.isPending}
+                onClick={generateAndSaveAllKits}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#1B2A4A] text-white border border-[#1B2A4A] hover:bg-[#243660] disabled:opacity-50 transition-colors"
+              >
+                {autoGenerating ? (
+                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Gerando e salvando...</>
+                ) : (
+                  <><Sparkles className="h-3.5 w-3.5" /> Gerar Kits para Todas as Funções</>
+                )}
+              </button>
               <IAButton
                 loading={iaKitsMut.isPending}
                 onClick={() => iaKitsMut.mutate({ companyId })}
-                label="Sugerir Kits com IA"
+                label="Sugerir (revisar antes)"
               />
               <button
                 disabled={iaKitsEstoqueMut.isPending}
@@ -659,10 +695,17 @@ export default function EpiKitsConfig() {
                           <div className="h-9 flex items-center px-3 rounded-md border border-violet-200 bg-white text-xs text-muted-foreground gap-2">
                             <Loader2 className="h-3 w-3 animate-spin text-violet-400" /> Carregando funções...
                           </div>
+                        ) : funcoesDisponiveisQ.isError ? (
+                          <Input
+                            value={kitForm.funcao}
+                            onChange={e => setKitForm(f => ({ ...f, funcao: e.target.value }))}
+                            placeholder="Digite a função (ex: Pedreiro)..."
+                            className="flex-1 border-violet-200 focus-visible:ring-violet-400 bg-white h-9"
+                          />
                         ) : (funcoesDisponiveisQ.data?.funcoes?.length ?? 0) === 0 && !editingKit ? (
                           <div className="h-9 flex items-center px-3 rounded-md border border-violet-200 bg-amber-50 text-xs text-amber-700 gap-1.5">
                             <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                            Todas as funções cadastradas já possuem kit.
+                            Todas as funções cadastradas já possuem kit. Edite um kit existente para ajustá-lo.
                           </div>
                         ) : (
                           <Select
