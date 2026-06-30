@@ -50,13 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3898** — **CONTRATOS PJ — EDIÇÃO DE CLÁUSULAS POR CONTRATO.** Nova coluna `clausulas_customizadas` em `pj_contracts` (ColFix Rev.3898); botão "Editar Cláusulas" (verde) na barra do `ContratoPJView`; dialog editor com textarea + placeholder hints + botão "Restaurar modelo padrão"; rendering usa `clausulasCustomizadas || modeloPadrao` com badge info quando personalizado. ZERO DELETE.
+- **Rev. 3899** — **NF-e EMITIDAS — STATUS SEGUE SEFAZ + CONSOLIDAR MÊS.** "Conciliada" só aparece quando há extrato bancário vinculado (stmtLineId); status base de notas = "Emitida"; vincular lançamento financeiro não muda mais status; desvincular extrato → "Emitida"; botão renomeado "Consolidar Mês" grava flag em `fiscal_notes_meses_consolidados` sem alterar NF-e individuais; STATUS_MAP + filtros + bulk status atualizados; 204 notas incorretas + 717 pendentes corrigidas no Neon. ZERO DELETE.
 
-- **Rev. 3897** — **ORÇAMENTO — FIX IMPORTAÇÃO: SPLIT MAT/MO CORRETO EM LINHAS DE AGRUPAMENTO.** Planilhas com colunas duplas ("Preço Total Material" col 22 + "Custo Materiais" col 30) perdiam cuTotalMat/cuTotalMdo=0 nas linhas de grupo porque o override mapeava para col 30 (vazia nesses grupos). Fix: salvar origCuTotalMatIdx/origCuTotalMdoIdx antes do override; fallback para col 22/23 quando col 30/31 = 0. 428 itens OK, 0 mismatches. ZERO DELETE.
+- **Rev. 3898** — **CONTRATOS PJ — EDIÇÃO DE CLÁUSULAS POR CONTRATO.** Nova coluna `clausulas_customizadas` em `pj_contracts` (ColFix Rev.3898); botão "Editar Cláusulas" (verde) na barra do `ContratoPJView` e no `ModuloPJ.tsx`; dialog editor com textarea + placeholder hints + botão "Restaurar modelo padrão"; rendering usa `clausulasCustomizadas || modeloPadrao` com badge info quando personalizado. ZERO DELETE.
 
 ### 5 one-liners
 
-- **Rev. 3896** — **EPI — PROGRESSO 0→100% NO BOTÃO "GERAR KITS PARA TODAS AS FUNÇÕES".** ZERO DELETE.
+- **Rev. 3897** — **ORÇAMENTO — FIX IMPORTAÇÃO: SPLIT MAT/MO CORRETO EM LINHAS DE AGRUPAMENTO.** ZERO DELETE.
 
 - **Rev. 3895** — **EPI — DIAGNÓSTICO DE FUNÇÕES NO DIALOG DE KIT + BOTÃO GERAR E SALVAR TODOS.** ZERO DELETE.
 

@@ -233,7 +233,7 @@ export const fiscalNotesRouter = router({
         retencaoIrrf:       String(input.retencaoIrrf ?? 0),
         retencaoPisCofins:  String(input.retencaoPisCofins ?? 0),
         valorLiquido:       String(input.valorLiquido),
-        status:             "pendente",
+        status:             "emitida",
         entryId:            input.entryId ?? null,
         stmtLineId:         input.stmtLineId ?? null,
         arquivoUrl:         input.arquivoUrl ?? null,
@@ -291,14 +291,10 @@ export const fiscalNotesRouter = router({
       await _assertNfAccess(ctx.user, input.companyId);
       const db = await getDb();
       const now = new Date().toISOString();
-      const [cur] = await db.select({ stmtLineId: fiscalNotes.stmtLineId })
-        .from(fiscalNotes)
-        .where(and(eq(fiscalNotes.id, input.id), eq(fiscalNotes.companyId, input.companyId)));
-      const novoStatus = input.entryId != null && cur?.stmtLineId != null
-        ? "conciliada"
-        : input.entryId != null ? "recebida" : "pendente";
+      // Status NÃO muda ao vincular lançamento — segue o status do SEFAZ.
+      // Apenas "conciliada" quando houver extrato bancário vinculado (vincularExtrato).
       await db.update(fiscalNotes)
-        .set({ entryId: input.entryId, status: novoStatus, updatedAt: now })
+        .set({ entryId: input.entryId, updatedAt: now })
         .where(and(eq(fiscalNotes.id, input.id), eq(fiscalNotes.companyId, input.companyId)));
       return { success: true };
     }),
@@ -309,13 +305,8 @@ export const fiscalNotesRouter = router({
       await _assertNfAccess(ctx.user, input.companyId);
       const db = await getDb();
       const now = new Date().toISOString();
-      const [cur] = await db.select({ entryId: fiscalNotes.entryId })
-        .from(fiscalNotes)
-        .where(and(eq(fiscalNotes.id, input.id), eq(fiscalNotes.companyId, input.companyId)));
-      // Vincular ao extrato → sempre conciliada; desvincular → recebida
-      const novoStatus = input.stmtLineId != null
-        ? "conciliada"
-        : cur?.entryId != null ? "recebida" : "pendente";
+      // Vincular extrato → "conciliada"; desvincular → volta para "emitida"
+      const novoStatus = input.stmtLineId != null ? "conciliada" : "emitida";
       await db.update(fiscalNotes)
         .set({ stmtLineId: input.stmtLineId, status: novoStatus, updatedAt: now })
         .where(and(eq(fiscalNotes.id, input.id), eq(fiscalNotes.companyId, input.companyId)));
@@ -338,7 +329,7 @@ export const fiscalNotesRouter = router({
     .input(z.object({
       ids: z.array(z.number()).min(1).max(200),
       companyId: z.number(),
-      status: z.enum(["pendente","recebida","validada","conciliada","cancelada"]),
+      status: z.enum(["emitida","substituida","pendente","recebida","validada","conciliada","cancelada"]),
     }))
     .mutation(async ({ input, ctx }) => {
       await _assertNfAccess(ctx.user, input.companyId);
@@ -351,6 +342,8 @@ export const fiscalNotesRouter = router({
       return { updated: result.length };
     }),
 
+  // Consolida o mês fiscalmente: grava um flag de "mês revisado" sem alterar status das NF-e individuais.
+  // Status das notas segue o SEFAZ; "Conciliada" só aparece quando há extrato bancário vinculado.
   conciliarMes: protectedProcedure
     .input(z.object({
       companyId: z.number(),
@@ -360,22 +353,30 @@ export const fiscalNotesRouter = router({
     .mutation(async ({ input, ctx }) => {
       await _assertNfAccess(ctx.user, input.companyId);
       const db = await getDb();
-      const mm = String(input.mes).padStart(2, "0");
-      const dataInicio = `${input.ano}-${mm}-01`;
-      const proxMes = input.mes === 12 ? 1 : input.mes + 1;
-      const proxAno = input.mes === 12 ? input.ano + 1 : input.ano;
-      const dataFim = `${proxAno}-${String(proxMes).padStart(2, "0")}-01`;
-      const result = await db.$client.query(
-        `UPDATE fiscal_notes
-            SET status = 'conciliada', updated_at = NOW()
-          WHERE company_id = $1
-            AND data_emissao >= $2
-            AND data_emissao <  $3
-            AND status != 'cancelada'
-          RETURNING id`,
-        [input.companyId, dataInicio, dataFim]
+      const porNome = (ctx.user as any)?.name ?? null;
+      await db.$client.query(
+        `INSERT INTO fiscal_notes_meses_consolidados(company_id, ano, mes, consolidado_em, consolidado_por)
+         VALUES($1, $2, $3, NOW(), $4)
+         ON CONFLICT(company_id, ano, mes) DO UPDATE
+           SET consolidado_em = NOW(), consolidado_por = EXCLUDED.consolidado_por`,
+        [input.companyId, input.ano, input.mes, porNome]
       );
-      return { updated: result.rowCount ?? 0 };
+      return { success: true };
+    }),
+
+  // Retorna os meses (1-12) já consolidados para um dado ano/empresa
+  mesesConsolidados: protectedProcedure
+    .input(z.object({ companyId: z.number(), ano: z.number().int() }))
+    .query(async ({ input, ctx }) => {
+      await _assertNfAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const rows = await db.$client.query(
+        `SELECT mes, consolidado_em, consolidado_por
+         FROM fiscal_notes_meses_consolidados
+         WHERE company_id = $1 AND ano = $2`,
+        [input.companyId, input.ano]
+      );
+      return rows.rows as { mes: number; consolidado_em: string; consolidado_por: string | null }[];
     }),
 
   excluirLote: protectedProcedure

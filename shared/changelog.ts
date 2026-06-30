@@ -1,4 +1,36 @@
 /**
+ * Rev. 3899 — **NF-e EMITIDAS — STATUS SEGUE SEFAZ + CONSOLIDAR MÊS.**
+ *
+ * ## Problema corrigido
+ * Notas emitidas apareciam incorretamente como "Conciliada" — o botão "Conciliar Mês"
+ * fazia um UPDATE em massa em todos os status sem verificar se havia extrato vinculado.
+ *
+ * ## Novas regras de status
+ * - "Conciliada" → SOMENTE quando há extrato bancário vinculado (stmtLineId != null)
+ * - "Emitida" → status base de todas as NF-e (substituiu "pendente"/"recebida"/"validada")
+ * - "Substituída" → novo status SEFAZ suportado na UI
+ * - Vincular lançamento financeiro (entryId) NÃO altera mais o status
+ * - Desvincular extrato → volta para "Emitida" (não mais "recebida")
+ *
+ * ## Botão "Consolidar Mês" (antes "Conciliar Mês")
+ * - Renomeado para "Consolidar Mês"
+ * - Não altera mais status das notas individuais
+ * - Grava flag na nova tabela fiscal_notes_meses_consolidados(company_id, ano, mes)
+ * - Ponto verde no calendário = mês explicitamente consolidado (flag separado)
+ *
+ * ## Correção de dados (Neon)
+ * - 204 notas "conciliada" sem extrato → "emitida"
+ * - 717 notas "pendente"/"recebida"/"validada" → "emitida"
+ * - Status finais: 921 emitida, 71 cancelada, 34 conciliada (com extrato), 26 duplicata
+ *
+ * ## Arquivos
+ * - server/routers/fiscalNotes.ts: vincularLancamento, vincularExtrato, conciliarMes, mesesConsolidados
+ * - client/src/pages/financeiro/FinanceiroNotasFiscais.tsx: STATUS_MAP, mesesStatus, filtros, dialog
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3898 — **CONTRATOS PJ — EDIÇÃO DE CLÁUSULAS POR CONTRATO.**
  *
  * ## Funcionalidade

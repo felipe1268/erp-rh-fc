@@ -65,11 +65,14 @@ function isoToInput(s: string | null | undefined) {
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
+  emitida:       { label: "Emitida",       color: "bg-sky-100 text-sky-800 border-sky-200" },
+  substituida:   { label: "Substituída",   color: "bg-orange-100 text-orange-700 border-orange-200" },
   pendente:      { label: "Pendente",      color: "bg-amber-100 text-amber-800 border-amber-200" },
   recebida:      { label: "Recebida",      color: "bg-blue-100 text-blue-800 border-blue-200" },
   validada:      { label: "Validada",      color: "bg-violet-100 text-violet-800 border-violet-200" },
   conciliada:    { label: "Conciliada",    color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
   cancelada:     { label: "Cancelada",     color: "bg-red-100 text-red-700 border-red-200" },
+  duplicata:     { label: "Duplicata",     color: "bg-yellow-100 text-yellow-800 border-yellow-200" },
   acatada:       { label: "✓ Acatada",     color: "bg-green-100 text-green-800 border-green-200" },
   recusada:      { label: "✗ Recusada",    color: "bg-red-100 text-red-800 border-red-200" },
   desconhecida:  { label: "? Desconhecida",color: "bg-slate-100 text-slate-700 border-slate-300" },
@@ -197,7 +200,7 @@ export default function FinanceiroNotasFiscais() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
-  const [bulkStatusTarget, setBulkStatusTarget] = useState<string>("recebida");
+  const [bulkStatusTarget, setBulkStatusTarget] = useState<string>("emitida");
   const [conciliarMesOpen, setConciliarMesOpen] = useState(false);
   const [selectedRecIds, setSelectedRecIds] = useState<Set<number>>(new Set());
   const [bulkRecDeleteOpen, setBulkRecDeleteOpen] = useState(false);
@@ -525,25 +528,33 @@ export default function FinanceiroNotasFiscais() {
     { enabled: !!companyId, staleTime: 60_000 }
   );
 
+  // Query dos meses já consolidados (flag independente do status das NF-e)
+  const mesesConsolidadosQuery = (trpc as any).fiscalNotes.mesesConsolidados.useQuery(
+    { companyId: companyId ?? 0, ano },
+    { enabled: !!companyId, staleTime: 30_000 }
+  );
+  const mesesConsolidadosSet = useMemo(() => {
+    const s = new Set<number>();
+    for (const r of (mesesConsolidadosQuery.data ?? []) as { mes: number }[]) s.add(r.mes);
+    return s;
+  }, [mesesConsolidadosQuery.data]);
+
   const nfs: NF[] = useMemo(() => (listQuery.data ?? []) as NF[], [listQuery.data]);
 
-  // Bolinha por mês: verde=todas conciliadas, azul=tem NF em aberto, cinza=sem NFs.
+  // Bolinha por mês: verde=mês consolidado explicitamente, azul=tem NFs, cinza=sem NFs.
   const mesesStatus = useMemo((): Record<number, "consolidado" | "lancamento" | "vazio"> => {
     const map: Record<number, "consolidado" | "lancamento" | "vazio"> = {};
-    for (let m = 1; m <= 12; m++) map[m] = "vazio";
+    for (let m = 1; m <= 12; m++) {
+      map[m] = mesesConsolidadosSet.has(m) ? "consolidado" : "vazio";
+    }
     for (const nf of (yearQuery.data ?? []) as NF[]) {
       const d = String(nf.dataEmissao).slice(0, 10);
       const m = parseInt(d.split("-")[1] ?? "0", 10);
-      if (!m) continue;
-      if (nf.status === "cancelada") continue;
-      if (map[m] === "vazio") {
-        map[m] = nf.status === "conciliada" ? "consolidado" : "lancamento";
-      } else if (map[m] === "consolidado" && nf.status !== "conciliada") {
-        map[m] = "lancamento";
-      }
+      if (!m || nf.status === "cancelada") continue;
+      if (map[m] === "vazio") map[m] = "lancamento";
     }
     return map;
-  }, [yearQuery.data]);
+  }, [yearQuery.data, mesesConsolidadosSet]);
 
   const criarMut = trpc.fiscalNotes.criar.useMutation({
     onSuccess: () => { toast({ title: "NF-e cadastrada!" }); setDialogOpen(false); listQuery.refetch(); },
@@ -587,11 +598,12 @@ export default function FinanceiroNotasFiscais() {
     onError: (e) => toast({ title: "Erro ao atualizar status", description: e.message, variant: "destructive" }),
   });
   const conciliarMesMut = (trpc as any).fiscalNotes.conciliarMes.useMutation({
-    onSuccess: (r: { updated: number }) => {
+    onSuccess: () => {
       const nomeMes = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][mesSel! - 1];
-      toast({ title: `${r.updated} nota${r.updated !== 1 ? "s" : ""} de ${nomeMes}/${ano} marcada${r.updated !== 1 ? "s" : ""} como Conciliada.` });
+      toast({ title: `${nomeMes}/${ano} consolidado com sucesso.`, description: "O mês aparece com o ponto verde no calendário. Status das notas não foram alterados." });
       setConciliarMesOpen(false);
-      listQuery.refetch();
+      mesesConsolidadosQuery.refetch();
+      yearQuery.refetch();
     },
     onError: (e: any) => toast({ title: "Erro ao conciliar mês", description: e.message, variant: "destructive" }),
   });
@@ -2074,11 +2086,13 @@ export default function FinanceiroNotasFiscais() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos</SelectItem>
+              <SelectItem value="emitida">Emitida</SelectItem>
+              <SelectItem value="conciliada">Conciliada</SelectItem>
+              <SelectItem value="cancelada">Cancelada</SelectItem>
+              <SelectItem value="substituida">Substituída</SelectItem>
               <SelectItem value="pendente">Pendente</SelectItem>
               <SelectItem value="recebida">Recebida</SelectItem>
               <SelectItem value="validada">Validada</SelectItem>
-              <SelectItem value="conciliada">Conciliada</SelectItem>
-              <SelectItem value="cancelada">Cancelada</SelectItem>
             </SelectContent>
           </Select>
           <Button
@@ -2101,7 +2115,7 @@ export default function FinanceiroNotasFiscais() {
               onClick={() => setConciliarMesOpen(true)}
             >
               <CheckCircle className="h-3.5 w-3.5" />
-              Conciliar Mês
+              Consolidar Mês
             </Button>
           )}
         </div>
@@ -3371,18 +3385,17 @@ export default function FinanceiroNotasFiscais() {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Dialog — Conciliar mês inteiro */}
+        {/* Dialog — Consolidar mês */}
         <AlertDialog open={conciliarMesOpen} onOpenChange={v => { if (!v) setConciliarMesOpen(false); }}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>
-                Conciliar {mesSel !== null ? ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"][mesSel - 1] : ""}/{ano}
+                Consolidar {mesSel !== null ? ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"][mesSel - 1] : ""}/{ano}
               </AlertDialogTitle>
               <AlertDialogDescription>
-                Todas as NFS-e emitidas neste mês (exceto as canceladas) serão marcadas como <strong>Conciliada</strong>.
-                O mês aparecerá com o ponto verde <span className="inline-block w-2 h-2 rounded-full bg-green-500 align-middle mx-0.5" /> no calendário.
+                O mês será marcado como <strong>Consolidado</strong> <span className="inline-block w-2 h-2 rounded-full bg-green-500 align-middle mx-0.5" /> no calendário.
                 <br /><br />
-                Esta ação pode ser desfeita manualmente nota a nota ou usando a seleção em lote.
+                O status individual de cada nota <strong>não será alterado</strong> — cada nota continua com seu status SEFAZ (Emitida, Cancelada, etc.) e apenas as notas efetivamente vinculadas ao extrato bancário aparecem como <strong>Conciliada</strong>.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -3392,7 +3405,7 @@ export default function FinanceiroNotasFiscais() {
                 disabled={conciliarMesMut.isPending}
                 onClick={() => conciliarMesMut.mutate({ companyId: companyId!, ano, mes: mesSel! })}
               >
-                {conciliarMesMut.isPending ? "Conciliando..." : "Confirmar Conciliação"}
+                {conciliarMesMut.isPending ? "Consolidando..." : "Confirmar Consolidação"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -3407,7 +3420,7 @@ export default function FinanceiroNotasFiscais() {
               </AlertDialogDescription>
             </AlertDialogHeader>
             <div className="px-1 py-2 grid grid-cols-2 gap-2">
-              {(["pendente","recebida","validada","conciliada","cancelada"] as const).map(s => {
+              {(["emitida","substituida","cancelada"] as const).map(s => {
                 const info = STATUS_MAP[s];
                 return (
                   <button
