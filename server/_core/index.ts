@@ -4710,7 +4710,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v3913-2026-06-30-apr-tipo-checklist";
+    const COLFIX_VERSION = "v3914-2026-06-30-pt-apt-anexo";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -6150,6 +6150,13 @@ Regras:
         await _db3913.$client.query(`ALTER TABLE apr_analises ADD COLUMN IF NOT EXISTS checklist_json text`);
         console.log("[ColFix Rev.3913] apr_analises: tipo_atividade + checklist_json garantidos.");
       } catch (e: any) { console.warn("[ColFix Rev.3913] apr tipo/checklist falhou (não-fatal):", e?.message ?? e); }
+
+      // Rev. 3914 — PT: outros_formularios_anexo_url (anexo APT da contratante)
+      try {
+        const _db3914 = (await getDb())!;
+        await _db3914.$client.query(`ALTER TABLE pt_permissoes ADD COLUMN IF NOT EXISTS outros_formularios_anexo_url text`);
+        console.log("[ColFix Rev.3914] pt_permissoes: outros_formularios_anexo_url garantida.");
+      } catch (e: any) { console.warn("[ColFix Rev.3914] pt apt_anexo falhou (não-fatal):", e?.message ?? e); }
 
       // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos
       import("../services/startupCache").then(({ setCache }) =>

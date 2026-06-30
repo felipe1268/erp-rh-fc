@@ -21,6 +21,7 @@ import {
   ShieldCheck, FileText, MapPin, User, PenLine, Eraser,
   ChevronDown, ChevronUp, Eye, Pencil, Ban, ArrowRight, Building2,
   RefreshCw, Printer, Wrench, Info, Trash2, SquarePen,
+  Paperclip, Camera,
 } from "lucide-react";
 
 // ── Checklist NR-35 — 15 itens ────────────────────────────────────────────────
@@ -240,6 +241,7 @@ interface NovaPTState {
   empresaExecutanteNome: string;
   outrosFormularios: boolean;
   outrosFormulariosDesc: string;
+  outrosFormulariosAnexoUrl: string;
   // Passo 2
   tiposTrabalho: string[];
   descricaoTrabalho: string;
@@ -264,7 +266,7 @@ function initialState(): NovaPTState {
     dataEmissao: today, horaInicio: horaAtual, horaTermino: "",
     maoDeObra: "interna", supervisorNome: "",
     empresaExecutanteCnpj: "", empresaExecutanteNome: "",
-    outrosFormularios: false, outrosFormulariosDesc: "",
+    outrosFormularios: false, outrosFormulariosDesc: "", outrosFormulariosAnexoUrl: "",
     tiposTrabalho: [], descricaoTrabalho: "",
     checklist: {},
     envolvidos: Array.from({ length: 6 }, () => ({ nome: "", funcao: "" })),
@@ -302,6 +304,29 @@ function WizardNovaPT({
   const createMut = trpc.ptPermissoes.create.useMutation();
 
   const upd = (patch: Partial<NovaPTState>) => setForm(f => ({ ...f, ...patch }));
+
+  const [aptUploading, setAptUploading] = useState(false);
+  const aptFileRef = useRef<HTMLInputElement>(null);
+  const aptCamRef  = useRef<HTMLInputElement>(null);
+
+  const handleAptUpload = async (file: File) => {
+    setAptUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("tipo", "apt");
+      fd.append("companyId", String(companyId));
+      const r = await fetch("/api/upload/sst-document", { method: "POST", body: fd, credentials: "include" });
+      if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err?.error ?? "Falha no upload"); }
+      const { url } = await r.json();
+      upd({ outrosFormulariosAnexoUrl: url });
+      toast.success("Documento APT anexado!");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Erro ao enviar arquivo.");
+    } finally {
+      setAptUploading(false);
+    }
+  };
 
   useEffect(() => {
     if (open) {
@@ -355,6 +380,7 @@ function WizardNovaPT({
         empresaExecutanteNome: form.empresaExecutanteNome || null,
         outrosFormularios: form.outrosFormularios ? 1 : 0,
         outrosFormulariosDesc: form.outrosFormulariosDesc || null,
+        outrosFormulariosAnexoUrl: form.outrosFormulariosAnexoUrl || null,
         tiposTrabalhoJson: JSON.stringify(form.tiposTrabalho),
         descricaoTrabalho: form.descricaoTrabalho || null,
         checklistJson: JSON.stringify(form.checklist),
@@ -611,10 +637,45 @@ function WizardNovaPT({
                   </div>
                 </label>
                 {form.outrosFormularios && (
-                  <Input value={form.outrosFormulariosDesc}
-                    onChange={e => upd({ outrosFormulariosDesc: e.target.value })}
-                    placeholder="Ex.: PT Petrobras nº 2024-001, APR da instalação nº 87-B…"
-                    className="bg-white" />
+                  <div className="space-y-2">
+                    <Input value={form.outrosFormulariosDesc}
+                      onChange={e => upd({ outrosFormulariosDesc: e.target.value })}
+                      placeholder="Ex.: PT Petrobras nº 2024-001, APR da instalação nº 87-B…"
+                      className="bg-white" />
+                    {/* Anexo do documento APT da contratante */}
+                    <input ref={aptFileRef} type="file" accept=".pdf,image/*" className="hidden"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) handleAptUpload(f); e.target.value = ""; }} />
+                    <input ref={aptCamRef} type="file" accept="image/*" capture="environment" className="hidden"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) handleAptUpload(f); e.target.value = ""; }} />
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button type="button" disabled={aptUploading}
+                        onClick={() => aptFileRef.current?.click()}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-slate-600 hover:border-emerald-400 hover:text-emerald-700 transition-colors disabled:opacity-50">
+                        <Paperclip className="h-3.5 w-3.5" />
+                        Anexar PDF / imagem
+                      </button>
+                      <button type="button" disabled={aptUploading}
+                        onClick={() => aptCamRef.current?.click()}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-slate-600 hover:border-emerald-400 hover:text-emerald-700 transition-colors disabled:opacity-50">
+                        <Camera className="h-3.5 w-3.5" />
+                        Tirar foto
+                      </button>
+                      {aptUploading && <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />}
+                    </div>
+                    {form.outrosFormulariosAnexoUrl && (
+                      <div className="flex items-center gap-2 p-2 bg-emerald-50 rounded-lg border border-emerald-200">
+                        <FileText className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+                        <a href={form.outrosFormulariosAnexoUrl} target="_blank" rel="noopener noreferrer"
+                          className="text-xs text-emerald-700 underline truncate flex-1 min-w-0">
+                          {decodeURIComponent(form.outrosFormulariosAnexoUrl.split("/").pop()?.split("?")[0] ?? "Ver documento")}
+                        </a>
+                        <button type="button" onClick={() => upd({ outrosFormulariosAnexoUrl: "" })}
+                          className="p-0.5 rounded hover:bg-red-100 text-slate-400 hover:text-red-500 flex-shrink-0">
+                          <XIcon className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -1234,6 +1295,25 @@ function PTDetalheDialog({
                   </div>
                 )}
 
+                {/* Documento APT da contratante */}
+                {!!pt.outrosFormularios && (
+                  <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 space-y-2">
+                    <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide flex items-center gap-1.5">
+                      <FileText className="h-3.5 w-3.5" /> Documento exigido pela instalação/contratante
+                    </p>
+                    {pt.outrosFormulariosDesc && (
+                      <p className="text-sm text-slate-700 break-words">{pt.outrosFormulariosDesc}</p>
+                    )}
+                    {pt.outrosFormulariosAnexoUrl && (
+                      <a href={pt.outrosFormulariosAnexoUrl} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs text-blue-600 underline hover:text-blue-800">
+                        <Paperclip className="h-3.5 w-3.5" />
+                        {decodeURIComponent(pt.outrosFormulariosAnexoUrl.split("/").pop()?.split("?")[0] ?? "Ver documento APT")}
+                      </a>
+                    )}
+                  </div>
+                )}
+
                 {/* Checklist resumido */}
                 {Object.keys(checklist).length > 0 && (
                   <div>
@@ -1750,30 +1830,64 @@ function PTEditDialog({ ptId, companyId, open, onOpenChange, onSaved }: {
     maoDeObra: "interna", supervisorNome: "",
     descricaoTrabalho: "",
     empresaExecutanteCnpj: "", empresaExecutanteNome: "",
+    outrosFormularios: false, outrosFormulariosDesc: "", outrosFormulariosAnexoUrl: "",
   });
 
   const pt = ptQ.data as any;
   useEffect(() => {
     if (!pt) return;
     setForm({
-      dataEmissao:           pt.dataEmissao ?? "",
-      horaInicio:            pt.horaInicio ?? "",
-      horaTermino:           pt.horaTermino ?? "",
-      maoDeObra:             pt.maoDeObra ?? "interna",
-      supervisorNome:        pt.supervisorNome ?? "",
-      descricaoTrabalho:     pt.descricaoTrabalho ?? "",
-      empresaExecutanteCnpj: pt.empresaExecutanteCnpj ?? "",
-      empresaExecutanteNome: pt.empresaExecutanteNome ?? "",
+      dataEmissao:              pt.dataEmissao ?? "",
+      horaInicio:               pt.horaInicio ?? "",
+      horaTermino:              pt.horaTermino ?? "",
+      maoDeObra:                pt.maoDeObra ?? "interna",
+      supervisorNome:           pt.supervisorNome ?? "",
+      descricaoTrabalho:        pt.descricaoTrabalho ?? "",
+      empresaExecutanteCnpj:    pt.empresaExecutanteCnpj ?? "",
+      empresaExecutanteNome:    pt.empresaExecutanteNome ?? "",
+      outrosFormularios:        !!pt.outrosFormularios,
+      outrosFormulariosDesc:    pt.outrosFormulariosDesc ?? "",
+      outrosFormulariosAnexoUrl: pt.outrosFormulariosAnexoUrl ?? "",
     });
   }, [pt?.id, open]);
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
 
+  const [editAptUploading, setEditAptUploading] = useState(false);
+  const editAptFileRef = useRef<HTMLInputElement>(null);
+  const editAptCamRef  = useRef<HTMLInputElement>(null);
+
+  const handleEditAptUpload = async (file: File) => {
+    setEditAptUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("tipo", "apt");
+      fd.append("companyId", String(companyId));
+      const r = await fetch("/api/upload/sst-document", { method: "POST", body: fd, credentials: "include" });
+      if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err?.error ?? "Falha no upload"); }
+      const { url } = await r.json();
+      setForm(f => ({ ...f, outrosFormulariosAnexoUrl: url }));
+      toast.success("Documento APT anexado!");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Erro ao enviar arquivo.");
+    } finally {
+      setEditAptUploading(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!ptId) return;
     try {
-      await atualizarMut.mutateAsync({ id: ptId, companyId, data: form });
+      await atualizarMut.mutateAsync({
+        id: ptId, companyId,
+        data: {
+          ...form,
+          outrosFormularios: form.outrosFormularios ? 1 : 0,
+          outrosFormulariosAnexoUrl: form.outrosFormulariosAnexoUrl || null,
+        },
+      });
       toast.success("PT atualizada com sucesso!");
       onSaved();
       onOpenChange(false);
@@ -1840,6 +1954,53 @@ function PTEditDialog({ ptId, companyId, open, onOpenChange, onSaved }: {
                 </div>
               </div>
             )}
+            {/* Documento APT da contratante */}
+            <div className="space-y-2 pt-1 border-t border-slate-100">
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input type="checkbox" checked={form.outrosFormularios}
+                  onChange={e => setForm(f => ({ ...f, outrosFormularios: e.target.checked }))}
+                  className="mt-0.5 rounded border-slate-300 accent-emerald-600 flex-shrink-0" />
+                <span className="text-sm font-medium text-slate-700">A instalação/contratante exige PT ou documento próprio?</span>
+              </label>
+              {form.outrosFormularios && (
+                <div className="space-y-2 pl-6">
+                  <Input value={form.outrosFormulariosDesc} onChange={set("outrosFormulariosDesc")}
+                    placeholder="Ex.: PT Petrobras nº 2024-001, APR da instalação nº 87-B…"
+                    className="bg-white" />
+                  <input ref={editAptFileRef} type="file" accept=".pdf,image/*" className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleEditAptUpload(f); e.target.value = ""; }} />
+                  <input ref={editAptCamRef} type="file" accept="image/*" capture="environment" className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleEditAptUpload(f); e.target.value = ""; }} />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button type="button" disabled={editAptUploading}
+                      onClick={() => editAptFileRef.current?.click()}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-slate-600 hover:border-emerald-400 hover:text-emerald-700 transition-colors disabled:opacity-50">
+                      <Paperclip className="h-3.5 w-3.5" /> Anexar PDF / imagem
+                    </button>
+                    <button type="button" disabled={editAptUploading}
+                      onClick={() => editAptCamRef.current?.click()}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-slate-600 hover:border-emerald-400 hover:text-emerald-700 transition-colors disabled:opacity-50">
+                      <Camera className="h-3.5 w-3.5" /> Tirar foto
+                    </button>
+                    {editAptUploading && <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />}
+                  </div>
+                  {form.outrosFormulariosAnexoUrl && (
+                    <div className="flex items-center gap-2 p-2 bg-emerald-50 rounded-lg border border-emerald-200">
+                      <FileText className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+                      <a href={form.outrosFormulariosAnexoUrl} target="_blank" rel="noopener noreferrer"
+                        className="text-xs text-emerald-700 underline truncate flex-1 min-w-0">
+                        {decodeURIComponent(form.outrosFormulariosAnexoUrl.split("/").pop()?.split("?")[0] ?? "Ver documento")}
+                      </a>
+                      <button type="button"
+                        onClick={() => setForm(f => ({ ...f, outrosFormulariosAnexoUrl: "" }))}
+                        className="p-0.5 rounded hover:bg-red-100 text-slate-400 hover:text-red-500 flex-shrink-0">
+                        <XIcon className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
         <DialogFooter>

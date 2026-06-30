@@ -10160,6 +10160,7 @@ export const ptPermissoes = pgTable("pt_permissoes", {
   empresaExecutanteNome:    varchar("empresa_executante_nome", { length: 255 }),
   outrosFormularios:        smallint("outros_formularios").default(0),
   outrosFormulariosDesc:    text("outros_formularios_desc"),
+  outrosFormulariosAnexoUrl: text("outros_formularios_anexo_url"),
 
   tiposTrabalhoJson:        text("tipos_trabalho_json"),
   descricaoTrabalho:        text("descricao_trabalho"),
