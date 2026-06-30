@@ -1,4 +1,36 @@
 /**
+ * Rev. 3895 — **EPI — DIAGNÓSTICO DE FUNÇÕES NO DIALOG DE KIT + BOTÃO GERAR E SALVAR TODOS.**
+ *
+ * ## Problema
+ * O dialog "Novo Kit" mostrava "Todas as funções cadastradas já possuem kit" mesmo quando
+ * a empresa não tinha nenhuma função cadastrada no RH, ou quando a query falhava por erro
+ * de coluna. A mensagem era idêntica nos três cenários distintos.
+ *
+ * ## Causa-raiz
+ * `funcoesDisponiveis` retornava `{ funcoes: [] }` (sucesso) tanto quando `todasFuncoes`
+ * era vazio (zero funções no RH) quanto quando todas tinham kit. O frontend não conseguia
+ * distinguir os dois casos. Além disso, `isError` não era tratado explicitamente — ao falhar
+ * (ex: coluna ainda não existia no Neon), caia direto na branch "length=0".
+ *
+ * ## Solução
+ * - Backend: `funcoesDisponiveis` agora retorna `{ funcoes, totalFuncoesCadastradas }`.
+ * - Frontend: 3 branches distintas:
+ *   1. `isError` → Input de texto livre como fallback
+ *   2. `totalFuncoesCadastradas === 0` → "Nenhuma função no RH. Cadastre em Colaboradores."
+ *   3. `funcoes.length === 0 && total > 0` → "Todas as N funções já têm kit."
+ * - Novo botão azul escuro "✨ Gerar Kits para Todas as Funções": chama `iaKitsMut` e
+ *   persiste TODOS os kits sugeridos automaticamente sem etapa de revisão.
+ * - `createKitsFromArray` extraído como helper compartilhado entre auto-save e save-all.
+ * - "Sugerir Kits com IA" renomeado para "Sugerir (revisar antes)".
+ *
+ * ## Arquivos tocados
+ * - `server/routers/epiAvancado.ts` — retorna `totalFuncoesCadastradas`
+ * - `client/src/pages/EpiKitsConfig.tsx` — 3 branches de erro + botão auto-gerar + helper
+ *
+ * ## ZERO DELETE
+ */
+
+/**
  * Rev. 3894 — **EPI — KIT COBRE FUNÇÕES SIMILARES (CARPINTEIRO I, II, III → 1 KIT).**
  *
  * ## Problema

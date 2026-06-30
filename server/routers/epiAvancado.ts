@@ -2537,7 +2537,7 @@ Retorne JSON com: { "items": [ { "nomeEpi": string, "normaExigida": string, "nom
         reincluir.has(f.nome.toLowerCase().trim())
       );
 
-      return { funcoes: disponiveis.map(f => f.nome) };
+      return { funcoes: disponiveis.map(f => f.nome), totalFuncoesCadastradas: todasFuncoes.length };
     }),
 
   // Sugere kits cruzando funções cadastradas com o estoque real da empresa

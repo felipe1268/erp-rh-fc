@@ -703,10 +703,17 @@ export default function EpiKitsConfig() {
                             className="flex-1 border-violet-200 focus-visible:ring-violet-400 bg-white h-9"
                           />
                         ) : (funcoesDisponiveisQ.data?.funcoes?.length ?? 0) === 0 && !editingKit ? (
-                          <div className="h-9 flex items-center px-3 rounded-md border border-violet-200 bg-amber-50 text-xs text-amber-700 gap-1.5">
-                            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                            Todas as funções cadastradas já possuem kit. Edite um kit existente para ajustá-lo.
-                          </div>
+                          funcoesDisponiveisQ.data?.totalFuncoesCadastradas === 0 ? (
+                            <div className="h-9 flex items-center px-3 rounded-md border border-orange-200 bg-orange-50 text-xs text-orange-700 gap-1.5">
+                              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                              Nenhuma função cadastrada no RH. Cadastre funções em Colaboradores → Funções.
+                            </div>
+                          ) : (
+                            <div className="h-9 flex items-center px-3 rounded-md border border-violet-200 bg-amber-50 text-xs text-amber-700 gap-1.5">
+                              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                              Todas as {funcoesDisponiveisQ.data?.totalFuncoesCadastradas} funções já possuem kit. Edite um kit existente ou use "Funções Similares".
+                            </div>
+                          )
                         ) : (
                           <Select
                             value={kitForm.funcao}
