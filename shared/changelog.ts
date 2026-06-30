@@ -1,4 +1,26 @@
 /**
+ * Rev. 3917 — **SST — PT WIZARD + EDIT DIALOG: CNPJ AUTO-FILL DA RAZÃO SOCIAL VIA BRASILAPI.**
+ *
+ * CONTEXTO: Ao criar ou editar uma PT com mão-de-obra externa, o usuário precisava digitar
+ * manualmente a razão social da empresa contratada. Nenhuma busca automática existia.
+ *
+ * IMPLEMENTAÇÃO:
+ * 1. Helper `formatCNPJ` (module-level): formata incrementalmente enquanto o usuário digita
+ *    (XX.XXX.XXX/XXXX-XX), limitando a 18 caracteres visuais / 14 dígitos.
+ * 2. WizardNovaPT: `trpc.compras.buscarCNPJ.useQuery` habilitado quando `maoDeObra === "externa"`
+ *    e CNPJ tem 14 dígitos limpos. `staleTime=5min`, `retry:false`. Estado `cnpjAutoFilled`
+ *    controla se o nome foi preenchido automaticamente (para limpar ao mudar o CNPJ).
+ *    useEffect auto-preenche `empresaExecutanteNome` com `razaoSocial || nomeFantasia`.
+ *    Campo CNPJ aparece primeiro (antes do nome) com spinner enquanto carrega e ✓ verde quando
+ *    preenchido. Mensagem de erro "CNPJ não encontrado" quando a API falha.
+ * 3. PTEditDialog: mesma lógica com estados `editCnpjAutoFilled` / `editCnpjQ` independentes.
+ *    Ao editar o CNPJ, o nome auto-preenchido é limpo para evitar dado defasado.
+ * 4. ZERO DELETE — sem mudanças de schema, sem remoção de funcionalidade existente.
+ *
+ * ARQUIVOS: client/src/pages/sst/PermissaoTrabalho.tsx
+ */
+
+/**
  * Rev. 3916 — **SST — PT PDF REDESIGN: 3 LOGOS (FC + CLIENTE + GERENCIADORA) + SOLICITANTE AUTO (LOGIN) + CHECKLIST COM REFS NR.**
  *
  * CONTEXTO: PDF da Permissão de Trabalho (NR-35) tinha layout básico — 1 logo, checklist sem referências

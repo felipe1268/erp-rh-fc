@@ -227,6 +227,16 @@ function AssinaturaPad({
   );
 }
 
+// ── Utilitário: formata CNPJ enquanto o usuário digita ───────────────────────
+const formatCNPJ = (v: string) => {
+  const d = v.replace(/\D/g, "").slice(0, 14);
+  if (d.length <= 2)  return d;
+  if (d.length <= 5)  return `${d.slice(0,2)}.${d.slice(2)}`;
+  if (d.length <= 8)  return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5)}`;
+  if (d.length <= 12) return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8)}`;
+  return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12)}`;
+};
+
 // ── Wizard Nova PT ─────────────────────────────────────────────────────────────
 interface NovaPTState {
   // Passo 1
@@ -305,6 +315,14 @@ function WizardNovaPT({
 
   const upd = (patch: Partial<NovaPTState>) => setForm(f => ({ ...f, ...patch }));
 
+  // ── CNPJ auto-fill ─────────────────────────────────────────────────────────
+  const [cnpjAutoFilled, setCnpjAutoFilled] = useState(false);
+  const cnpjLimpoW = form.empresaExecutanteCnpj.replace(/\D/g, "");
+  const cnpjQ = trpc.compras.buscarCNPJ.useQuery(
+    { cnpj: cnpjLimpoW },
+    { enabled: form.maoDeObra === "externa" && cnpjLimpoW.length === 14, staleTime: 5 * 60 * 1000, retry: false },
+  );
+
   const [aptUploading, setAptUploading] = useState(false);
   const aptFileRef = useRef<HTMLInputElement>(null);
   const aptCamRef  = useRef<HTMLInputElement>(null);
@@ -349,6 +367,17 @@ function WizardNovaPT({
     const enc = (obraSSTQ.data as any)?.encarregadoNome ?? null;
     if (enc) upd({ supervisorNome: enc, responsavelAreaNome: enc });
   }, [(obraSSTQ.data as any)?.encarregadoNome]);
+
+  // Auto-fill razão social quando o CNPJ completo retorna da API
+  useEffect(() => {
+    if (!cnpjQ.data) return;
+    const nome = (cnpjQ.data as any).razaoSocial || (cnpjQ.data as any).nomeFantasia || "";
+    if (nome && (!form.empresaExecutanteNome || cnpjAutoFilled)) {
+      upd({ empresaExecutanteNome: nome });
+      setCnpjAutoFilled(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cnpjQ.data]);
 
   // Checklist: conta respostas
   const checkCount = useMemo(() => {
@@ -607,16 +636,49 @@ function WizardNovaPT({
 
               {/* Campos da empresa contratada */}
               {form.maoDeObra === "externa" && (
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <div className="flex-1">
-                    <label className="text-xs font-medium text-slate-600 mb-1.5 block">Nome da empresa contratada</label>
-                    <Input value={form.empresaExecutanteNome} onChange={e => upd({ empresaExecutanteNome: e.target.value })}
-                      placeholder="Razão social da empresa" className="bg-white" />
+                <div className="space-y-2.5">
+                  <div className="sm:w-56">
+                    <label className="text-xs font-medium text-slate-600 mb-1.5 block">CNPJ <span className="text-slate-400 font-normal">(preencha para buscar automaticamente)</span></label>
+                    <div className="relative">
+                      <Input
+                        value={form.empresaExecutanteCnpj}
+                        onChange={e => {
+                          const formatted = formatCNPJ(e.target.value);
+                          const prevClean = form.empresaExecutanteCnpj.replace(/\D/g, "");
+                          const newClean  = formatted.replace(/\D/g, "");
+                          if (newClean !== prevClean && cnpjAutoFilled) {
+                            upd({ empresaExecutanteCnpj: formatted, empresaExecutanteNome: "" });
+                            setCnpjAutoFilled(false);
+                          } else {
+                            upd({ empresaExecutanteCnpj: formatted });
+                          }
+                        }}
+                        placeholder="00.000.000/0001-00"
+                        className="bg-white pr-8"
+                        maxLength={18}
+                      />
+                      {cnpjQ.isFetching && (
+                        <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 animate-spin" />
+                      )}
+                      {cnpjAutoFilled && !cnpjQ.isFetching && (
+                        <CheckCircle2 className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500" />
+                      )}
+                    </div>
+                    {cnpjQ.isError && cnpjLimpoW.length === 14 && (
+                      <p className="text-xs text-rose-500 mt-1">CNPJ não encontrado na Receita Federal</p>
+                    )}
                   </div>
-                  <div className="sm:w-48">
-                    <label className="text-xs font-medium text-slate-600 mb-1.5 block">CNPJ</label>
-                    <Input value={form.empresaExecutanteCnpj} onChange={e => upd({ empresaExecutanteCnpj: e.target.value })}
-                      placeholder="00.000.000/0001-00" className="bg-white" />
+                  <div>
+                    <label className="text-xs font-medium text-slate-600 mb-1.5 block">
+                      Nome da empresa contratada
+                      {cnpjAutoFilled && <span className="ml-1.5 text-[10px] text-emerald-600 font-normal">✓ Preenchido automaticamente</span>}
+                    </label>
+                    <Input
+                      value={form.empresaExecutanteNome}
+                      onChange={e => { upd({ empresaExecutanteNome: e.target.value }); setCnpjAutoFilled(false); }}
+                      placeholder="Razão social da empresa"
+                      className="bg-white"
+                    />
                   </div>
                 </div>
               )}
@@ -1833,6 +1895,14 @@ function PTEditDialog({ ptId, companyId, open, onOpenChange, onSaved }: {
     outrosFormularios: false, outrosFormulariosDesc: "", outrosFormulariosAnexoUrl: "",
   });
 
+  // ── CNPJ auto-fill (edit dialog) ───────────────────────────────────────────
+  const [editCnpjAutoFilled, setEditCnpjAutoFilled] = useState(false);
+  const editCnpjLimpo = form.empresaExecutanteCnpj.replace(/\D/g, "");
+  const editCnpjQ = trpc.compras.buscarCNPJ.useQuery(
+    { cnpj: editCnpjLimpo },
+    { enabled: form.maoDeObra === "externa" && editCnpjLimpo.length === 14, staleTime: 5 * 60 * 1000, retry: false },
+  );
+
   const pt = ptQ.data as any;
   useEffect(() => {
     if (!pt) return;
@@ -1853,6 +1923,17 @@ function PTEditDialog({ ptId, companyId, open, onOpenChange, onSaved }: {
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
+
+  // Auto-fill razão social no dialog de edição
+  useEffect(() => {
+    if (!editCnpjQ.data) return;
+    const nome = (editCnpjQ.data as any).razaoSocial || (editCnpjQ.data as any).nomeFantasia || "";
+    if (nome && (!form.empresaExecutanteNome || editCnpjAutoFilled)) {
+      setForm(f => ({ ...f, empresaExecutanteNome: nome }));
+      setEditCnpjAutoFilled(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editCnpjQ.data]);
 
   const [editAptUploading, setEditAptUploading] = useState(false);
   const editAptFileRef = useRef<HTMLInputElement>(null);
@@ -1943,14 +2024,48 @@ function PTEditDialog({ ptId, companyId, open, onOpenChange, onSaved }: {
                 placeholder="Descreva o trabalho a ser executado" rows={3} />
             </div>
             {form.maoDeObra === "externa" && (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-medium text-slate-600 mb-1 block">Empresa executante (CNPJ)</label>
-                  <Input value={form.empresaExecutanteCnpj} onChange={set("empresaExecutanteCnpj")} placeholder="00.000.000/0001-00" />
+              <div className="space-y-2">
+                <div className="sm:w-56">
+                  <label className="text-xs font-medium text-slate-600 mb-1 block">CNPJ <span className="text-slate-400 font-normal">(busca automática)</span></label>
+                  <div className="relative">
+                    <Input
+                      value={form.empresaExecutanteCnpj}
+                      onChange={e => {
+                        const formatted = formatCNPJ(e.target.value);
+                        const newClean  = formatted.replace(/\D/g, "");
+                        const prevClean = form.empresaExecutanteCnpj.replace(/\D/g, "");
+                        if (newClean !== prevClean && editCnpjAutoFilled) {
+                          setForm(f => ({ ...f, empresaExecutanteCnpj: formatted, empresaExecutanteNome: "" }));
+                          setEditCnpjAutoFilled(false);
+                        } else {
+                          setForm(f => ({ ...f, empresaExecutanteCnpj: formatted }));
+                        }
+                      }}
+                      placeholder="00.000.000/0001-00"
+                      className="pr-8"
+                      maxLength={18}
+                    />
+                    {editCnpjQ.isFetching && (
+                      <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 animate-spin" />
+                    )}
+                    {editCnpjAutoFilled && !editCnpjQ.isFetching && (
+                      <CheckCircle2 className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500" />
+                    )}
+                  </div>
+                  {editCnpjQ.isError && editCnpjLimpo.length === 14 && (
+                    <p className="text-xs text-rose-500 mt-1">CNPJ não encontrado na Receita Federal</p>
+                  )}
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-slate-600 mb-1 block">Empresa executante (Nome)</label>
-                  <Input value={form.empresaExecutanteNome} onChange={set("empresaExecutanteNome")} placeholder="Razão social" />
+                  <label className="text-xs font-medium text-slate-600 mb-1 block">
+                    Empresa executante (Nome)
+                    {editCnpjAutoFilled && <span className="ml-1.5 text-[10px] text-emerald-600 font-normal">✓ Preenchido automaticamente</span>}
+                  </label>
+                  <Input
+                    value={form.empresaExecutanteNome}
+                    onChange={e => { setForm(f => ({ ...f, empresaExecutanteNome: e.target.value })); setEditCnpjAutoFilled(false); }}
+                    placeholder="Razão social"
+                  />
                 </div>
               </div>
             )}
