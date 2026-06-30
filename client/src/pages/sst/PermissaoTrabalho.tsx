@@ -254,10 +254,14 @@ interface NovaPTState {
 }
 
 function initialState(): NovaPTState {
-  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const today = now.toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" }); // YYYY-MM-DD
+  const horaAtual = now.toLocaleTimeString("pt-BR", {
+    hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo", hour12: false,
+  });
   return {
     employeeId: null, obraId: null,
-    dataEmissao: today, horaInicio: "", horaTermino: "",
+    dataEmissao: today, horaInicio: horaAtual, horaTermino: "",
     maoDeObra: "interna", supervisorNome: "",
     empresaExecutanteCnpj: "", empresaExecutanteNome: "",
     outrosFormularios: false, outrosFormulariosDesc: "",
@@ -506,18 +510,20 @@ function WizardNovaPT({
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
                 <Clock className="h-3.5 w-3.5" /> Período
               </p>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex-1">
                   <label className="text-xs font-medium text-slate-600 mb-1.5 block">Data</label>
-                  <Input type="date" value={form.dataEmissao} onChange={e => upd({ dataEmissao: e.target.value })} className="bg-white" />
+                  <Input type="date" value={form.dataEmissao} onChange={e => upd({ dataEmissao: e.target.value })} className="bg-white w-full" />
                 </div>
-                <div>
-                  <label className="text-xs font-medium text-slate-600 mb-1.5 block">Início</label>
-                  <Input type="time" value={form.horaInicio} onChange={e => upd({ horaInicio: e.target.value })} className="bg-white" />
+                <div className="sm:w-36">
+                  <label className="text-xs font-medium text-slate-600 mb-1.5 block">
+                    Início <span className="text-emerald-600 font-normal">(pré-preenchido)</span>
+                  </label>
+                  <Input type="time" value={form.horaInicio} onChange={e => upd({ horaInicio: e.target.value })} className="bg-white w-full" />
                 </div>
-                <div>
+                <div className="sm:w-36">
                   <label className="text-xs font-medium text-slate-600 mb-1.5 block">Término</label>
-                  <Input type="time" value={form.horaTermino} onChange={e => upd({ horaTermino: e.target.value })} className="bg-white" />
+                  <Input type="time" value={form.horaTermino} onChange={e => upd({ horaTermino: e.target.value })} className="bg-white w-full" />
                 </div>
               </div>
             </div>

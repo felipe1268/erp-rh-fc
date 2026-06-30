@@ -1,4 +1,28 @@
 /**
+ * Rev. 3909 — **SST — PT WIZARD STEP 1: FIX LAYOUT PERÍODO + HORA ATUAL PRÉ-PREENCHIDA.**
+ *
+ * PEDIDO: (1) Campo de hora sobreposto pelo balão nativo do browser; (2) hora de início
+ * deveria vir pré-preenchida com a data/hora atual.
+ *
+ * CAUSA RAIZ (sobreposição): `grid grid-cols-3` em mobile deixa cada campo com ~100px de
+ * largura; o dropdown nativo do <input type="time"> no Safari/Chrome mobile não cabe
+ * e sobrepõe o campo vizinho.
+ *
+ * SOLUÇÃO:
+ * - client/src/pages/sst/PermissaoTrabalho.tsx:
+ *   · Seção PERÍODO: substituído `grid grid-cols-3` por `flex flex-col sm:flex-row`.
+ *     "Data" usa `flex-1` (ocupa toda a largura livre); "Início" e "Término" usam `sm:w-36`.
+ *     No mobile (< sm) os 3 campos empilham em coluna — sem sobreposição.
+ *   · `initialState()`: `horaInicio` agora é calculado na criação via
+ *     `toLocaleTimeString("pt-BR", { hour12:false, timeZone:"America/Sao_Paulo" })`
+ *     → formato HH:MM compatível com <input type="time">.
+ *   · Data continua usando `toLocaleDateString("sv-SE")` = YYYY-MM-DD (já existia).
+ *   · Label "Início" ganha nota "(pré-preenchido)" em verde para clareza.
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3908 — **SST — PT: EDIÇÃO INDIVIDUAL + EXCLUSÃO MÚLTIPLA (MULTI-SELECT).**
  *
  * PEDIDO: (1) Editar cada PT individualmente; (2) selecionar e excluir múltiplas PTs de uma vez.
