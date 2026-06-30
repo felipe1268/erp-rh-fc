@@ -466,12 +466,22 @@ function WizardNovaPT({
               </p>
               <div>
                 <label className="text-xs font-medium text-slate-600 mb-1.5 block">Solicitante <span className="text-red-500">*</span></label>
-                <Select value={form.employeeId?.toString() ?? ""} onValueChange={v => upd({ employeeId: Number(v) })}>
-                  <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione o solicitante" /></SelectTrigger>
-                  <SelectContent>
-                    {emps.map((e: any) => <SelectItem key={e.id} value={e.id.toString()}>{e.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                {user?.employeeId ? (
+                  <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-md px-3 py-2 text-sm text-slate-800 min-h-[38px]">
+                    <User className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                    <span className="font-medium flex-1 min-w-0 truncate">
+                      {emps.find((e: any) => e.id === user.employeeId)?.nome ?? (user as any).name ?? "Usuário logado"}
+                    </span>
+                    <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded shrink-0">Você</span>
+                  </div>
+                ) : (
+                  <Select value={form.employeeId?.toString() ?? ""} onValueChange={v => upd({ employeeId: Number(v) })}>
+                    <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione o solicitante" /></SelectTrigger>
+                    <SelectContent>
+                      {emps.map((e: any) => <SelectItem key={e.id} value={e.id.toString()}>{e.nome}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
               <div>
                 <label className="text-xs font-medium text-slate-600 mb-1.5 block">Supervisor responsável</label>
@@ -752,9 +762,38 @@ function WizardNovaPT({
                 </div>
                 <div>
                   <label className="text-xs font-medium text-slate-600 mb-1.5 block">Responsável pela liberação</label>
-                  <Input value={form.responsavelLiberacaoNome}
-                    onChange={e => upd({ responsavelLiberacaoNome: e.target.value })}
-                    placeholder="Nome" className="bg-white" />
+                  {(() => {
+                    const sst3 = obraSSTQ.data as any;
+                    const opts = sst3 ? [
+                      sst3.encarregadoNome ? { label: `Encarregado — ${sst3.encarregadoNome}`, value: sst3.encarregadoNome } : null,
+                      sst3.tstNome        ? { label: `TST — ${sst3.tstNome}`,                 value: sst3.tstNome }         : null,
+                      sst3.responsavelNome? { label: `Engenheiro — ${sst3.responsavelNome}`,  value: sst3.responsavelNome } : null,
+                    ].filter(Boolean) as { label: string; value: string }[] : [];
+                    const isCustom = form.responsavelLiberacaoNome !== "" && !opts.some(o => o.value === form.responsavelLiberacaoNome);
+                    return opts.length > 0 ? (
+                      <div className="space-y-1.5">
+                        <Select
+                          value={isCustom ? "_outro" : (form.responsavelLiberacaoNome || "")}
+                          onValueChange={v => { if (v !== "_outro") upd({ responsavelLiberacaoNome: v }); else upd({ responsavelLiberacaoNome: "" }); }}
+                        >
+                          <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                          <SelectContent>
+                            {opts.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                            <SelectItem value="_outro">Outro (digitar)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {isCustom && (
+                          <Input value={form.responsavelLiberacaoNome}
+                            onChange={e => upd({ responsavelLiberacaoNome: e.target.value })}
+                            placeholder="Nome" className="bg-white" autoFocus />
+                        )}
+                      </div>
+                    ) : (
+                      <Input value={form.responsavelLiberacaoNome}
+                        onChange={e => upd({ responsavelLiberacaoNome: e.target.value })}
+                        placeholder="Nome" className="bg-white" />
+                    );
+                  })()}
                 </div>
                 <div className="col-span-2">
                   <label className="text-xs font-medium text-slate-600 mb-1.5 block">Responsável pela execução</label>
