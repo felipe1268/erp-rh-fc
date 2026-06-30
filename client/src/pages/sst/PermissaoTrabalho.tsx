@@ -282,6 +282,7 @@ function WizardNovaPT({
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<NovaPTState>(initialState);
   const { user } = useAuth();
+  const { selectedCompany } = useCompany();
 
   const obrasQ    = trpc.obras.listActive.useQuery({ companyId }, { enabled: open });
   const empsQ     = trpc.getEmployees.useQuery({ companyId }, { enabled: open });
@@ -303,7 +304,15 @@ function WizardNovaPT({
   const upd = (patch: Partial<NovaPTState>) => setForm(f => ({ ...f, ...patch }));
 
   useEffect(() => {
-    if (open) { setStep(0); setForm(s => ({ ...initialState(), employeeId: s.employeeId ?? (user?.employeeId ?? null) })); }
+    if (open) {
+      const companyName = (selectedCompany as any)?.nomeFantasia || (selectedCompany as any)?.razaoSocial || "";
+      setStep(0);
+      setForm(s => ({
+        ...initialState(),
+        employeeId: s.employeeId ?? (user?.employeeId ?? null),
+        empresaSetorExecutante: companyName,
+      }));
+    }
   }, [open]);
 
   useEffect(() => {
@@ -940,10 +949,39 @@ function WizardNovaPT({
                   })()}
                 </div>
                 <div className="col-span-2">
-                  <label className="text-xs font-medium text-slate-600 mb-1.5 block">Responsável pela execução</label>
-                  <Input value={form.executanteNome}
-                    onChange={e => upd({ executanteNome: e.target.value })}
-                    placeholder="Nome do responsável pela execução" className="bg-white" />
+                  <label className="text-xs font-medium text-slate-600 mb-1.5 block">
+                    Responsável pela execução
+                    <span className="ml-1 font-normal text-slate-400">(líder / encarregado da equipe)</span>
+                  </label>
+                  {(() => {
+                    const envolvidosOpts = form.envolvidos
+                      .filter(e => e.nome.trim())
+                      .map(e => ({ label: `${e.nome}${e.funcao ? ` — ${e.funcao}` : ""}`, value: e.nome }));
+                    const isCustom = form.executanteNome !== "" && !envolvidosOpts.some(o => o.value === form.executanteNome);
+                    return envolvidosOpts.length > 0 ? (
+                      <div className="space-y-1.5">
+                        <Select
+                          value={isCustom ? "_outro" : (form.executanteNome || "")}
+                          onValueChange={v => { if (v !== "_outro") upd({ executanteNome: v }); else upd({ executanteNome: "" }); }}
+                        >
+                          <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione o responsável…" /></SelectTrigger>
+                          <SelectContent>
+                            {envolvidosOpts.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                            <SelectItem value="_outro">Outro (digitar nome)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {isCustom && (
+                          <Input value={form.executanteNome}
+                            onChange={e => upd({ executanteNome: e.target.value })}
+                            placeholder="Nome do responsável pela execução" className="bg-white" autoFocus />
+                        )}
+                      </div>
+                    ) : (
+                      <Input value={form.executanteNome}
+                        onChange={e => upd({ executanteNome: e.target.value })}
+                        placeholder="Nome do responsável pela execução" className="bg-white" />
+                    );
+                  })()}
                 </div>
               </div>
             </div>

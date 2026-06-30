@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3910** — **SST — PT WIZARD: UX EXECUÇÃO — CARDS MÃO DE OBRA + FORMULÁRIOS EXPLICADOS.** Select → 2 cards clicáveis (👷 Equipe própria / 🏗️ Empresa contratada) com descrição em cada um. Checkbox renomeado + texto explicativo sobre PT da instalação/contratante. ZERO DELETE.
+- **Rev. 3911** — **SST — PT WIZARD STEP 4: EMPRESA AUTO-PREENCHIDA + RESPONSÁVEL DA LISTA DE ENVOLVIDOS.** `empresaSetorExecutante` pré-preenchido com `nomeFantasia||razaoSocial` da empresa selecionada. Campo `executanteNome` vira Select com os envolvidos convocados + "Outro" para digitar. ZERO DELETE.
 
-- **Rev. 3909** — **SST — PT WIZARD: FIX LAYOUT PERÍODO + HORA ATUAL PRÉ-PREENCHIDA.** `grid-cols-3` → `flex flex-col sm:flex-row` (empilha no mobile, sem sobreposição do balão nativo). `horaInicio` pré-preenchido com hora atual (America/Sao_Paulo). ZERO DELETE.
+- **Rev. 3910** — **SST — PT WIZARD: UX EXECUÇÃO — CARDS MÃO DE OBRA + FORMULÁRIOS EXPLICADOS.** Select → 2 cards clicáveis (👷 Equipe própria / 🏗️ Empresa contratada) com descrição em cada um. Checkbox renomeado + texto explicativo sobre PT da instalação/contratante. ZERO DELETE.
 
 ### 5 one-liners
 

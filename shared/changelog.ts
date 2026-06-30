@@ -1,4 +1,30 @@
 /**
+ * Rev. 3911 — **SST — PT WIZARD STEP 4: EMPRESA AUTO-PREENCHIDA + RESPONSÁVEL PELA EXECUÇÃO DA LISTA DE ENVOLVIDOS.**
+ *
+ * PEDIDO: (1) "Empresa / Setor executante" devia vir preenchido automaticamente (é a FC Engenharia);
+ * (2) "Responsável pela execução" devia listar as pessoas da atividade convocadas, não campo livre.
+ *
+ * SOLUÇÃO — client/src/pages/sst/PermissaoTrabalho.tsx (WizardNovaPT):
+ *
+ * 1. Auto-preenchimento da empresa:
+ *    · Adicionado `const { selectedCompany } = useCompany()` no wizard.
+ *    · useEffect([open]): ao abrir o wizard seta `empresaSetorExecutante`
+ *      com `selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || ""`.
+ *    · Campo continua editável (usuário pode sobrescrever para setor específico).
+ *
+ * 2. Responsável pela execução — Select dinâmico:
+ *    · Campo `executanteNome` substituído por lógica IIFE igual à do "Responsável pela liberação".
+ *    · Se existem envolvidos preenchidos no Step 3 (`form.envolvidos.filter(e => e.nome.trim())`),
+ *      renderiza um Select com cada um no formato "NOME — FUNÇÃO".
+ *    · Opção "Outro (digitar nome)" revela Input livre (isCustom pattern).
+ *    · Se não há envolvidos ainda (acesso direto ao step 4 sem preencher step 3),
+ *      renderiza o Input livre como fallback.
+ *    · Label ganha subtítulo "(líder / encarregado da equipe)".
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3910 — **SST — PT WIZARD STEP 1: UX EXECUÇÃO — CARDS MÃO DE OBRA + FORMULÁRIOS COMPLEMENTARES EXPLICADOS.**
  *
  * PEDIDO: "Interna/Externa" não estava claro; "Há outros formulários vinculados?" era confuso.
