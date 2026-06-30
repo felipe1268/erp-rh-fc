@@ -5910,7 +5910,7 @@ export default function FinanceiroConciliacao() {
               <ol className="space-y-3">
                 {[
                   { n: 1, text: "Acesse Configurações → aba Extratos Bancários." },
-                  { n: 2, text: "Clique em "Analisar extrato de novo banco" e suba este mesmo PDF." },
+                  { n: 2, text: 'Clique em "Analisar extrato de novo banco" e suba este mesmo PDF.' },
                   { n: 3, text: "A IA detecta o layout e pré-preenche o formulário — revise e salve." },
                   { n: 4, text: "Volte à Conciliação e importe o extrato novamente." },
                 ].map(({ n, text }) => (

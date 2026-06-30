@@ -1699,7 +1699,7 @@ function PlanoAtaque({ plano }: { plano: any }) {
 
 /* ── Legenda interativa: "Como ler esta análise" (colapsável) ───────────── */
 const LEGENDA_ITENS: { t: string; d: string }[] = [
-  { t: "Atual × Sugerido", d: "“Atual” é quem está alocado hoje; “Sugerido” é o que a IA recomenda para dar conta do cronograma." },
+  { t: "Atual × Sugerido", d: '"Atual" é quem está alocado hoje; "Sugerido" é o que a IA recomenda para dar conta do cronograma.' },
   { t: "Δ (delta)", d: "Diferença Sugerido − Atual. Positivo (verde) = falta gente; negativo (âmbar) = há folga." },
   { t: "Contratar / Reduzir / Manter", d: "Ação recomendada por função, considerando as frentes em andamento e das próximas 8 semanas." },
   { t: "Categoria", d: "Direto = mão de obra de produção; Indireto = apoio (engenharia, encarregado, almoxarife, administrativo)." },
