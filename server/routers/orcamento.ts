@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
-import { getDb } from "../db";
+import { getDb, getEffectiveAllowedObraIds } from "../db";
 import {
   orcamentos,
   orcamentoItens,
@@ -1687,6 +1687,28 @@ async function processarImportacaoComposicoesBackground(
 }
 
 // ============================================================
+// HELPER DE SEGURANÇA — acesso por obra
+// ============================================================
+
+/**
+ * Verifica se o usuário tem acesso ao orçamento pela sua obra vinculada.
+ * Admin (allowed===null) acessa qualquer um.
+ * Usuário restrito só acessa orçamentos cujo obraId está em sua lista.
+ * Orçamento sem obraId (flutuante) → somente admins.
+ */
+async function assertOrcamentoObraAccess(
+  orc: { id: number; obraId?: number | null },
+  ctx: { user: { id: number; role: string } }
+): Promise<void> {
+  const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+  if (allowed === null) return; // admin_master / admin → acesso total
+  const obraId = orc.obraId ? Number(orc.obraId) : null;
+  if (obraId === null || !allowed.includes(obraId)) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem permissão para acessar este orçamento.' });
+  }
+}
+
+// ============================================================
 // ROUTER
 // ============================================================
 
@@ -1698,14 +1720,20 @@ export const orcamentoRouter = router({
       companyId: z.number(),
       obraId:    z.number().optional(),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) return [];
       const conditions: any[] = [
         eq(orcamentos.companyId, input.companyId),
         isNull(orcamentos.deletedAt),
       ];
-      if (input.obraId) conditions.push(eq(orcamentos.obraId, input.obraId));
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      if (input.obraId) {
+        if (allowed !== null && !allowed.includes(input.obraId)) return [];
+        conditions.push(eq(orcamentos.obraId, input.obraId));
+      } else if (allowed !== null) {
+        conditions.push(allowed.length > 0 ? inArray(orcamentos.obraId, allowed) : eq(orcamentos.obraId, -1));
+      }
       const rows = await db.select().from(orcamentos).where(and(...conditions)).orderBy(desc(orcamentos.createdAt));
 
       const orcIds = rows.map(r => r.id);
@@ -1723,11 +1751,12 @@ export const orcamentoRouter = router({
   // ── Buscar orçamento por ID com itens / insumos / BDI ─────
   getById: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) return null;
       const [orc] = await db.select().from(orcamentos).where(eq(orcamentos.id, input.id));
       if (!orc) return null;
+      await assertOrcamentoObraAccess(orc, ctx);
       const [itens, insumos, bdiLinhas, tcLinhas] = await Promise.all([
         db.select().from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, input.id)).orderBy(orcamentoItens.ordem),
         db.select().from(orcamentoInsumos).where(eq(orcamentoInsumos.orcamentoId, input.id)).orderBy(desc(orcamentoInsumos.percentualTotal)),
@@ -2155,6 +2184,7 @@ export const orcamentoRouter = router({
 
       const [orc] = await db.select().from(orcamentos).where(eq(orcamentos.id, input.id));
       if (!orc) throw new TRPCError({ code: 'NOT_FOUND', message: 'Orçamento não encontrado.' });
+      await assertOrcamentoObraAccess(orc, ctx);
       if (orc.status === 'fechado') throw new TRPCError({ code: 'FORBIDDEN', message: 'Orçamento fechado não pode ser alterado.' });
 
       const totalCusto = parseFloat(orc.totalCusto || '0');
@@ -2195,9 +2225,12 @@ export const orcamentoRouter = router({
       id:             z.number(),
       valorNegociado: z.number().nullable(), // null = limpar/usar valor calculado
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
+      const [orc] = await db.select({ id: orcamentos.id, obraId: orcamentos.obraId }).from(orcamentos).where(eq(orcamentos.id, input.id));
+      if (!orc) throw new TRPCError({ code: 'NOT_FOUND', message: 'Orçamento não encontrado.' });
+      await assertOrcamentoObraAccess(orc, ctx);
       await db.update(orcamentos)
         .set({ valorNegociado: input.valorNegociado !== null ? fix2(input.valorNegociado) : null })
         .where(eq(orcamentos.id, input.id));
@@ -2215,13 +2248,14 @@ export const orcamentoRouter = router({
       forceUpdate:    z.boolean().optional().default(false),
       updatePrices:   z.boolean().optional().default(false),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
 
       const [orc] = await db.select().from(orcamentos).where(eq(orcamentos.id, input.orcamentoId));
       if (!orc) throw new TRPCError({ code: 'NOT_FOUND', message: 'Orçamento não encontrado.' });
       if (Number(orc.companyId) !== Number(input.companyId)) throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem permissão.' });
+      await assertOrcamentoObraAccess(orc, ctx);
 
       const existingItems = await db.select({ id: orcamentoItens.id })
         .from(orcamentoItens).where(eq(orcamentoItens.orcamentoId, input.orcamentoId));
@@ -2776,11 +2810,12 @@ export const orcamentoRouter = router({
       obraId:        z.number().nullable().optional(),
       tempoObraMeses: z.number().nullable().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
       const [orc] = await db.select().from(orcamentos).where(eq(orcamentos.id, input.id));
       if (!orc) throw new TRPCError({ code: 'NOT_FOUND', message: 'Orçamento não encontrado.' });
+      await assertOrcamentoObraAccess(orc, ctx);
       if (orc.status === 'fechado') throw new TRPCError({ code: 'FORBIDDEN', message: 'Orçamento fechado não pode ser alterado.' });
       await db.update(orcamentos).set({
         codigo:        input.codigo,
@@ -2802,11 +2837,12 @@ export const orcamentoRouter = router({
       id:     z.number(),
       status: z.enum(['rascunho', 'aguardando_aprovacao', 'aprovado', 'fechado']),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
       const [orc] = await db.select().from(orcamentos).where(eq(orcamentos.id, input.id));
       if (!orc) throw new TRPCError({ code: 'NOT_FOUND', message: 'Orçamento não encontrado.' });
+      await assertOrcamentoObraAccess(orc, ctx);
       if (orc.status === 'fechado' && input.status !== 'fechado') throw new TRPCError({ code: 'FORBIDDEN', message: 'Orçamento base fechado não pode ser reaberto.' });
       await db.update(orcamentos).set({ status: input.status }).where(eq(orcamentos.id, input.id));
       return { success: true };
@@ -2818,11 +2854,12 @@ export const orcamentoRouter = router({
       id:     z.number(),
       status: z.enum(['rascunho', 'aguardando_aprovacao', 'aprovado', 'fechado']),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
       const [orc] = await db.select().from(orcamentos).where(eq(orcamentos.id, input.id));
       if (!orc) throw new TRPCError({ code: 'NOT_FOUND', message: 'Orçamento não encontrado.' });
+      await assertOrcamentoObraAccess(orc, ctx);
       if (orc.status === 'fechado' && input.status !== 'fechado') throw new TRPCError({ code: 'FORBIDDEN', message: 'Orçamento fechado não pode ser reaberto.' });
       await db.update(orcamentos).set({ status: input.status }).where(eq(orcamentos.id, input.id));
       return { success: true };
@@ -2834,7 +2871,7 @@ export const orcamentoRouter = router({
       id:        z.number(),
       companyId: z.number(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
 
@@ -2842,6 +2879,7 @@ export const orcamentoRouter = router({
       if (!orc) throw new TRPCError({ code: 'NOT_FOUND', message: 'Orçamento não encontrado.' });
       if (Number(orc.companyId) !== Number(input.companyId))
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem permissão para excluir este orçamento.' });
+      await assertOrcamentoObraAccess(orc, ctx);
 
       const oid = input.id;
 
@@ -2897,13 +2935,14 @@ export const orcamentoRouter = router({
       fileBase64:  z.string(),
       fileName:    z.string(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
 
       const [orc] = await db.select().from(orcamentos).where(eq(orcamentos.id, input.orcamentoId));
       if (!orc) throw new TRPCError({ code: 'NOT_FOUND', message: 'Orçamento não encontrado.' });
       if (Number(orc.companyId) !== Number(input.companyId)) throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem permissão.' });
+      await assertOrcamentoObraAccess(orc, ctx);
 
       const XLSX = await import('xlsx');
       const buffer = Buffer.from(input.fileBase64, 'base64');
@@ -3055,10 +3094,13 @@ export const orcamentoRouter = router({
   // ── Buscar todos os dados detalhados BDI de um orçamento ──────
   getBdiDetalhes: protectedProcedure
     .input(z.object({ orcamentoId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
       const oid = input.orcamentoId;
+      const [orcRow] = await db.select({ id: orcamentos.id, obraId: orcamentos.obraId }).from(orcamentos).where(eq(orcamentos.id, oid));
+      if (!orcRow) throw new TRPCError({ code: 'NOT_FOUND', message: 'Orçamento não encontrado.' });
+      await assertOrcamentoObraAccess(orcRow, ctx);
       const [bdi, indiretos, fd, adm, despFinanc, tributos, taxaComercializacao] = await Promise.all([
         db.select().from(orcamentoBdi)           .where(eq(orcamentoBdi.orcamentoId,           oid)).orderBy(orcamentoBdi.ordem),
         db.select().from(bdiIndiretos)           .where(eq(bdiIndiretos.orcamentoId,           oid)).orderBy(bdiIndiretos.ordem),
@@ -3074,9 +3116,12 @@ export const orcamentoRouter = router({
   // ── QUADRO 01 + 02: buscar parâmetros do orçamento ─────────────
   getBdiOrcamentoParams: protectedProcedure
     .input(z.object({ orcamentoId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
+      const [orcCheck] = await db.select({ id: orcamentos.id, obraId: orcamentos.obraId }).from(orcamentos).where(eq(orcamentos.id, input.orcamentoId));
+      if (!orcCheck) return null;
+      await assertOrcamentoObraAccess(orcCheck, ctx);
       const rows = await db.execute(
         `SELECT id, "tempoObraMeses", data_inicio, eventual_atraso_meses,
                 dissidio_pct, dissidio_data, dissidio_incidencia_meses,
@@ -3515,7 +3560,7 @@ export const orcamentoRouter = router({
       orcamentoId:   z.number(),
       bdiPercentual: z.number(),   // decimal fraction: 0.2456 = 24.56%
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
 
@@ -3523,8 +3568,10 @@ export const orcamentoRouter = router({
       const itens = await db.select().from(orcamentoItens)
         .where(eq(orcamentoItens.orcamentoId, input.orcamentoId));
 
-      const [orc] = await db.select({ obraId: orcamentos.obraId }).from(orcamentos)
+      const [orc] = await db.select({ id: orcamentos.id, obraId: orcamentos.obraId }).from(orcamentos)
         .where(eq(orcamentos.id, input.orcamentoId));
+      if (!orc) throw new TRPCError({ code: 'NOT_FOUND', message: 'Orçamento não encontrado.' });
+      await assertOrcamentoObraAccess(orc, ctx);
       let tipoContrato = 'global';
       if (orc?.obraId) {
         const obraRows = await db.execute(sql`SELECT tipo_contrato FROM obras WHERE id = ${orc.obraId} LIMIT 1`);
@@ -3588,11 +3635,12 @@ export const orcamentoRouter = router({
   // ── Deletar (soft delete) ─────────────────────────────────
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Banco não disponível.' });
       const [orc] = await db.select().from(orcamentos).where(eq(orcamentos.id, input.id));
       if (!orc) throw new TRPCError({ code: 'NOT_FOUND', message: 'Orçamento não encontrado.' });
+      await assertOrcamentoObraAccess(orc, ctx);
       if (orc.status === 'fechado') throw new TRPCError({ code: 'FORBIDDEN', message: 'Orçamento fechado não pode ser excluído.' });
 
       const projsVinculados = await db.select({ id: planejamentoProjetos.id })
@@ -4515,15 +4563,20 @@ export const orcamentoRouter = router({
   // ── Resumo para o painel ──────────────────────────────────
   painel: protectedProcedure
     .input(z.object({ companyId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) return {
         total: 0, totalVenda: 0, totalCusto: 0, totalMeta: 0, totalMat: 0, totalMdo: 0, totalEquip: 0,
         bdiMedio: 0, margemMedia: 0, recentes: [], porStatus: [], porCliente: [], porBdi: [], porMargem: [], lista: [],
       };
 
+      const allowed = await getEffectiveAllowedObraIds(ctx.user.id, ctx.user.role);
+      const whereClause = allowed !== null
+        ? and(eq(orcamentos.companyId, input.companyId), isNull(orcamentos.deletedAt),
+            allowed.length > 0 ? inArray(orcamentos.obraId, allowed) : eq(orcamentos.obraId, -1))
+        : and(eq(orcamentos.companyId, input.companyId), isNull(orcamentos.deletedAt));
       const lista = await db.select().from(orcamentos)
-        .where(and(eq(orcamentos.companyId, input.companyId), isNull(orcamentos.deletedAt)))
+        .where(whereClause)
         .orderBy(desc(orcamentos.createdAt));
 
       const n = (v: any) => parseFloat(v || '0');
