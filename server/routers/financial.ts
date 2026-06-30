@@ -682,9 +682,13 @@ async function parseExtratoLines(input: {
   csvColunaValor?: number;
   csvColunaSaldo?: number;
   companyId?: number; // usado p/ carregar templates de extrato da empresa
-}): Promise<{ lines: ExtratoLine[]; rendimentoAplicacao: RendimentoAplicacao | null }> {
+}): Promise<{ lines: ExtratoLine[]; rendimentoAplicacao: RendimentoAplicacao | null; templateDetectado: boolean | null }> {
   let lines: ExtratoLine[] = [];
   let rendimentoAplicacao: RendimentoAplicacao | null = null;
+  // null = N/A (OFX/CSV ou parser determinístico, sem gate de template)
+  // true = template encontrado (ou parser determinístico reconheceu o banco)
+  // false = empresa tem templates mas nenhum bateu → bloquear import
+  let templateDetectado: boolean | null = null;
 
   if (input.formato === "pdf") {
     // 1) Caminho determinístico: layout em colunas da CAIXA (rápido, sem IA).
@@ -781,9 +785,25 @@ async function parseExtratoLines(input: {
             "base64"
           );
           const pdfData = await pdfParse(buf);
-          const template = await detectarTemplateExtrato(input.companyId, pdfData?.text || "");
+          const pdfText = pdfData?.text || "";
+          const template = await detectarTemplateExtrato(input.companyId, pdfText);
           if (template?.instrucoesIa) {
             extraInstructions = `\n\n### Instruções específicas para este banco (${template.bancoNome}):\n${template.instrucoesIa}`;
+          }
+          // Rev. 3886 — gate de template: se empresa tem templates mas nenhum bateu → false.
+          if (template) {
+            templateDetectado = true;
+          } else {
+            // Verifica se a empresa tem algum template ativo cadastrado.
+            try {
+              const db2 = await getDb();
+              const cr = await db2.execute(sql`
+                SELECT COUNT(*) as cnt FROM bank_statement_templates
+                WHERE company_id = ${input.companyId} AND ativo = 1
+              `);
+              const nTemplates = parseInt((cr.rows?.[0] as any)?.cnt ?? "0", 10);
+              templateDetectado = nTemplates > 0 ? false : null;
+            } catch { /* falha silenciosa, não gateia */ }
           }
         } catch {
           // falha silenciosa — fallback sem template
@@ -868,7 +888,7 @@ async function parseExtratoLines(input: {
   if (lines.length === 0) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhuma linha válida encontrada no arquivo" });
   }
-  return { lines, rendimentoAplicacao };
+  return { lines, rendimentoAplicacao, templateDetectado };
 }
 
 // ─────────────────── Rev. 3193 — LEITURA DE COMPROVANTE (IA de visão) ───────────────────
@@ -9032,8 +9052,8 @@ export const financialRouter = router({
       throw new TRPCError({ code: "FORBIDDEN", message: "Conta bancária não pertence a esta empresa" });
     }
 
-    const { lines, rendimentoAplicacao } = await parseExtratoLines({ ...input, companyId: input.companyId });
-    return { lines, total: lines.length, importadoEm: new Date().toISOString(), rendimentoAplicacao };
+    const { lines, rendimentoAplicacao, templateDetectado } = await parseExtratoLines({ ...input, companyId: input.companyId });
+    return { lines, total: lines.length, importadoEm: new Date().toISOString(), rendimentoAplicacao, templateDetectado };
   }),
 
   // ─────────── Rev. 3363 — LANÇAR RENDIMENTO DE APLICAÇÃO/RESGATE AUTOMÁTICO ───────────

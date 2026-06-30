@@ -30,8 +30,14 @@ import {
   Landmark, Search,
   Info, CheckCircle2, AlertCircle, Sparkles,
   Upload, RotateCcw, Loader2, History, Eye, EyeOff,
-  KeyRound, ShieldOff, Bot, ChevronRight,
+  KeyRound, ShieldOff, Bot, ChevronDown, ChevronUp,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 // Paleta por banco — fallback cinza
 const BANK_COLORS: Record<string, { bg: string; text: string; border: string; dot: string }> = {
@@ -70,6 +76,34 @@ function groupByBank(templates: Template[]): Map<string, Template[]> {
     map.get(banco)!.push(t);
   }
   return map;
+}
+
+// ── dedup ─────────────────────────────────────────────────────────────────────
+function normalizeBancoNome(s: string) {
+  return s.toLowerCase()
+    .replace(/[()[\]{}\-–—_]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function findDuplicates(templates: Template[]): Template[] {
+  const groups = new Map<string, Template[]>();
+  for (const t of templates) {
+    const key = normalizeBancoNome(t.bancoNome);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(t);
+  }
+  const dupes: Template[] = [];
+  for (const [, grp] of groups) {
+    if (grp.length <= 1) continue;
+    // mantém o mais completo (maior soma kw+skip+revisao), deleta os demais
+    const sorted = [...grp].sort((a, b) =>
+      (b.palavrasChave.length + b.skipPrefixes.length + b.revisao) -
+      (a.palavrasChave.length + a.skipPrefixes.length + a.revisao)
+    );
+    dupes.push(...sorted.slice(1));
+  }
+  return dupes;
 }
 
 // ── tipos ────────────────────────────────────────────────────────────────────
@@ -158,11 +192,20 @@ export default function ExtratoTemplateTab() {
   const analisarMut = trpc.bankStatementTemplates.analisarPdf.useMutation();
 
   // Estado do formulário de criar/editar
-  const [editId, setEditId]     = useState<number | "new" | null>(null);
-  const [form, setForm]         = useState<FormState>(EMPTY);
-  const [kwText, setKwText]     = useState("");
-  const [spText, setSpText]     = useState("");
-  const [expandId, setExpandId] = useState<number | null>(null);
+  const [editId, setEditId]           = useState<number | "new" | null>(null);
+  const [form, setForm]               = useState<FormState>(EMPTY);
+  const [kwText, setKwText]           = useState("");
+  const [spText, setSpText]           = useState("");
+  const [previewTemplate, setPreview] = useState<Template | null>(null);
+  const [collapsedBanks, setCollapsed] = useState<Set<string>>(new Set());
+
+  function toggleBankCollapse(banco: string) {
+    setCollapsed(prev => {
+      const next = new Set(prev);
+      if (next.has(banco)) next.delete(banco); else next.add(banco);
+      return next;
+    });
+  }
 
   // Estado do fluxo de análise IA
   const [analyzing, setAnalyzing]     = useState(false);
@@ -727,40 +770,232 @@ export default function ExtratoTemplateTab() {
         </div>
       ) : (
         /* Lista agrupada por banco */
-        <div className="space-y-6">
+        <div className="space-y-4">
+          {/* Banner de duplicados */}
+          {(() => {
+            const dupes = findDuplicates(templates as Template[]);
+            if (dupes.length === 0 || !isAdmin) return null;
+            return (
+              <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-amber-800">
+                    {dupes.length} template{dupes.length > 1 ? "s duplicados" : " duplicado"} detectado{dupes.length > 1 ? "s" : ""}
+                  </p>
+                  <p className="text-xs text-amber-700 mt-0.5">
+                    Os mais completos (mais palavras-chave) são mantidos automaticamente.
+                  </p>
+                  <ul className="mt-1.5 space-y-0.5">
+                    {dupes.map(d => (
+                      <li key={d.id} className="text-xs text-amber-700 font-mono">• {d.bancoNome}</li>
+                    ))}
+                  </ul>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0 border-amber-300 text-amber-800 hover:bg-amber-100 text-xs h-8 px-3"
+                  onClick={async () => {
+                    for (const d of dupes) {
+                      await deleteMut.mutateAsync({ id: d.id, companyId });
+                    }
+                    await utils.bankStatementTemplates.list.invalidate();
+                    toast.success(`${dupes.length} duplicado${dupes.length > 1 ? "s" : ""} removido${dupes.length > 1 ? "s" : ""}.`);
+                  }}
+                  disabled={deleteMut.isPending}
+                >
+                  {deleteMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3 mr-1" />}
+                  Remover duplicados
+                </Button>
+              </div>
+            );
+          })()}
+
           {Array.from(groupByBank(templates as Template[])).map(([banco, items]) => {
             const color = bankColor(banco);
+            const collapsed = collapsedBanks.has(banco);
             return (
               <div key={banco}>
-                {/* Cabeçalho do grupo */}
-                <div className={`flex items-center gap-2.5 px-3 py-2 rounded-xl ${color.bg} ${color.border} border mb-3`}>
+                {/* Cabeçalho do grupo — clicável para colapsar/expandir */}
+                <button
+                  type="button"
+                  onClick={() => toggleBankCollapse(banco)}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl ${color.bg} ${color.border} border mb-3 hover:opacity-90 transition-opacity`}
+                >
                   <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${color.dot}`} />
                   <span className={`text-sm font-bold ${color.text}`}>{banco}</span>
-                  <span className={`ml-auto text-xs font-medium ${color.text} opacity-60`}>
+                  <span className={`ml-auto text-xs font-medium ${color.text} opacity-60 mr-1`}>
                     {items.length} layout{items.length > 1 ? "s" : ""}
                   </span>
-                </div>
+                  {collapsed
+                    ? <ChevronDown className={`w-4 h-4 ${color.text} opacity-50`} />
+                    : <ChevronUp   className={`w-4 h-4 ${color.text} opacity-50`} />
+                  }
+                </button>
 
                 {/* Cards do grupo */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-1">
-                  {items.map(t => (
-                    <TemplateCard
-                      key={t.id}
-                      t={t}
-                      banco={banco}
-                      isAdmin={isAdmin}
-                      expanded={expandId === t.id}
-                      onExpand={() => setExpandId(expandId === t.id ? null : t.id)}
-                      onEdit={() => openEdit(t)}
-                      onDelete={() => setDeleteTarget({ id: t.id, nome: t.bancoNome })}
-                    />
-                  ))}
-                </div>
+                {!collapsed && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-1">
+                    {items.map(t => (
+                      <TemplateCard
+                        key={t.id}
+                        t={t}
+                        banco={banco}
+                        isAdmin={isAdmin}
+                        onPreview={() => setPreview(t)}
+                        onEdit={() => openEdit(t)}
+                        onDelete={() => setDeleteTarget({ id: t.id, nome: t.bancoNome })}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
       )}
+
+      {/* ── Dialog de preview full-screen ── */}
+      <Dialog open={!!previewTemplate} onOpenChange={(o) => { if (!o) setPreview(null); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col gap-0 p-0 overflow-hidden">
+          {previewTemplate && (() => {
+            const color = bankColor(splitBankLayout(previewTemplate.bancoNome)[0]);
+            const [banco, layout] = splitBankLayout(previewTemplate.bancoNome);
+            return (
+              <>
+                {/* Faixa colorida */}
+                <div className={`h-1.5 w-full ${color.dot}`} />
+                <DialogHeader className={`px-6 pt-5 pb-4 border-b border-gray-100 ${color.bg}`}>
+                  <DialogTitle className="flex items-start gap-3">
+                    <div className={`w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center border ${color.border} ${color.bg}`}>
+                      <Landmark className={`w-5 h-5 ${color.text}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-base font-bold ${color.text} leading-tight`}>{banco}</p>
+                      <p className="text-sm text-gray-600 mt-0.5">{layout || "Layout padrão"}</p>
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        <span className="text-[11px] font-semibold bg-white/70 border border-sky-200 text-sky-700 rounded-full px-2 py-0.5">
+                          Rev.{previewTemplate.revisao}
+                        </span>
+                        {!previewTemplate.ativo && (
+                          <span className="text-[11px] font-semibold bg-amber-100 border border-amber-200 text-amber-700 rounded-full px-2 py-0.5">
+                            Inativo
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </DialogTitle>
+                </DialogHeader>
+
+                <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+                  {/* Palavras-chave */}
+                  <div>
+                    <p className="text-[11px] font-bold text-sky-700 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                      <KeyRound className="w-3.5 h-3.5" /> Identificação automática
+                    </p>
+                    <p className="text-xs text-gray-500 mb-2">
+                      O sistema reconhece que um extrato pertence a este layout quando encontra pelo menos uma dessas expressões no texto:
+                    </p>
+                    {previewTemplate.palavrasChave.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {previewTemplate.palavrasChave.map((kw, i) => (
+                          <span key={i} className="text-xs bg-sky-50 text-sky-800 border border-sky-200 rounded-lg px-3 py-1.5 font-mono shadow-sm">
+                            "{kw}"
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-400 italic">Nenhuma palavra-chave — não detectado automaticamente.</p>
+                    )}
+                  </div>
+
+                  {/* Linhas descartadas */}
+                  <div>
+                    <p className="text-[11px] font-bold text-amber-700 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                      <ShieldOff className="w-3.5 h-3.5" /> Linhas descartadas pelo parser
+                    </p>
+                    <p className="text-xs text-gray-500 mb-2">
+                      Linhas do PDF que começam com estes prefixos são ignoradas (cabeçalhos, saldos, rodapés):
+                    </p>
+                    {previewTemplate.skipPrefixes.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {previewTemplate.skipPrefixes.map((sp, i) => (
+                          <span key={i} className="text-xs bg-amber-50 text-amber-800 border border-amber-200 rounded-lg px-3 py-1.5 font-mono shadow-sm">
+                            "{sp}"
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-400 italic">Nenhum prefixo — todas as linhas são processadas.</p>
+                    )}
+                  </div>
+
+                  {/* Instruções IA */}
+                  {previewTemplate.instrucoesIa ? (
+                    <div>
+                      <p className="text-[11px] font-bold text-purple-700 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                        <Bot className="w-3.5 h-3.5" /> Receita para a IA de extração
+                      </p>
+                      <p className="text-xs text-gray-500 mb-2">
+                        A IA usa estas instruções específicas ao processar PDFs deste banco:
+                      </p>
+                      <pre className="text-xs text-gray-700 whitespace-pre-wrap break-words font-sans bg-purple-50 border border-purple-100 rounded-xl p-4 leading-relaxed">
+                        {previewTemplate.instrucoesIa}
+                      </pre>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-gray-200 px-4 py-3 text-xs text-gray-400 italic">
+                      Sem instruções IA — o sistema usa o prompt genérico de extração.
+                    </div>
+                  )}
+
+                  {/* Auditoria */}
+                  <div className="border-t border-gray-100 pt-4 space-y-1 text-[11px] text-gray-400">
+                    {previewTemplate.criadoPorNome && (
+                      <p>Criado por <span className="font-medium text-gray-600">{previewTemplate.criadoPorNome}</span> em {fmtBrasilia(previewTemplate.criadoEm)}</p>
+                    )}
+                    {previewTemplate.atualizadoPorNome && (
+                      <p>Última edição por <span className="font-medium text-gray-600">{previewTemplate.atualizadoPorNome}</span> em {fmtBrasilia(previewTemplate.atualizadoEm)}</p>
+                    )}
+                    {previewTemplate.notasRevisao && (
+                      <p className="italic">Nota: {previewTemplate.notasRevisao}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Rodapé com botões de ação */}
+                <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/50">
+                  {isAdmin && (
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm" variant="outline"
+                        className="gap-1.5"
+                        onClick={() => { setPreview(null); openEdit(previewTemplate); }}
+                      >
+                        <Pencil className="w-3.5 h-3.5" /> Editar
+                      </Button>
+                      <Button
+                        size="sm" variant="outline"
+                        className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50"
+                        onClick={() => { setPreview(null); setDeleteTarget({ id: previewTemplate.id, nome: previewTemplate.bancoNome }); }}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Excluir
+                      </Button>
+                    </div>
+                  )}
+                  <Button
+                    size="sm"
+                    className="ml-auto"
+                    onClick={() => setPreview(null)}
+                  >
+                    Fechar
+                  </Button>
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -768,13 +1003,12 @@ export default function ExtratoTemplateTab() {
 // ── sub-componente: card de template ─────────────────────────────────────────
 
 function TemplateCard({
-  t, banco, isAdmin, expanded, onExpand, onEdit, onDelete,
+  t, banco, isAdmin, onPreview, onEdit, onDelete,
 }: {
   t: Template;
   banco: string;
   isAdmin: boolean;
-  expanded: boolean;
-  onExpand: () => void;
+  onPreview: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -785,7 +1019,7 @@ function TemplateCard({
   return (
     <div className={`rounded-2xl border shadow-sm overflow-hidden transition-all ${
       t.ativo ? "border-gray-200 bg-white" : "border-gray-100 bg-gray-50/80"
-    } ${expanded ? "ring-2 ring-sky-300 ring-offset-0" : ""}`}>
+    }`}>
 
       {/* Faixa colorida no topo */}
       <div className={`h-1 w-full ${color.dot}`} />
@@ -853,16 +1087,12 @@ function TemplateCard({
         {/* Ações */}
         <div className="flex items-center gap-1.5 border-t border-gray-100 pt-3">
           <button
-            onClick={onExpand}
-            className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors ${
-              expanded
-                ? "bg-sky-100 text-sky-700 hover:bg-sky-200"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-            title={expanded ? "Fechar visualização" : "Ver configuração completa"}
+            onClick={onPreview}
+            className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors bg-gray-100 text-gray-600 hover:bg-sky-100 hover:text-sky-700"
+            title="Ver configuração completa"
           >
-            {expanded ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-            {expanded ? "Fechar" : "Visualizar"}
+            <Eye className="w-3.5 h-3.5" />
+            Visualizar
           </button>
 
           <div className="flex-1" />
@@ -887,66 +1117,6 @@ function TemplateCard({
           )}
         </div>
       </div>
-
-      {/* Painel de detalhes expandido */}
-      {expanded && (
-        <div className="border-t border-gray-100 bg-gray-50/60 px-4 py-4 space-y-4">
-
-          {/* Palavras-chave */}
-          <div>
-            <p className="text-[11px] font-semibold text-sky-700 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-              <KeyRound className="w-3 h-3" /> Identificação automática
-            </p>
-            {t.palavrasChave.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5">
-                {t.palavrasChave.map((kw, i) => (
-                  <span key={i} className="text-xs bg-white text-sky-800 border border-sky-200 rounded-lg px-2 py-1 font-mono break-all shadow-sm">
-                    {kw}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-gray-400 italic">Nenhuma palavra-chave — não será detectado automaticamente.</p>
-            )}
-          </div>
-
-          {/* Skip prefixes */}
-          <div>
-            <p className="text-[11px] font-semibold text-amber-700 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-              <ShieldOff className="w-3 h-3" /> Linhas descartadas pelo parser
-            </p>
-            {t.skipPrefixes.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5">
-                {t.skipPrefixes.map((sp, i) => (
-                  <span key={i} className="text-xs bg-white text-amber-800 border border-amber-200 rounded-lg px-2 py-1 font-mono break-all shadow-sm">
-                    {sp}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-gray-400 italic">Nenhum prefixo — todas as linhas são processadas.</p>
-            )}
-          </div>
-
-          {/* Instruções IA */}
-          {t.instrucoesIa && (
-            <div>
-              <p className="text-[11px] font-semibold text-purple-700 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                <Bot className="w-3 h-3" /> Instruções para a IA
-              </p>
-              <pre className="text-xs text-gray-700 whitespace-pre-wrap break-words font-sans bg-white border border-purple-100 rounded-xl p-3 shadow-sm leading-relaxed max-h-52 overflow-y-auto">
-                {t.instrucoesIa}
-              </pre>
-            </div>
-          )}
-
-          {/* Rodapé */}
-          <div className="flex items-center justify-between pt-1 border-t border-gray-200 text-[10px] text-gray-400">
-            <span>Atualizado em {new Date(t.atualizadoEm).toLocaleDateString("pt-BR")}</span>
-            {t.notasRevisao && <span className="truncate max-w-[60%] text-right" title={t.notasRevisao}>{t.notasRevisao}</span>}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

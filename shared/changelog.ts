@@ -1,4 +1,53 @@
 /**
+ * Rev. 3886 — **TEMPLATES DE EXTRATO — PREVIEW FULLSCREEN + COLAPSO DE GRUPOS + DEDUP FRONTEND + GATE DE TEMPLATE NA CONCILIAÇÃO.**
+ *
+ * ## 1. Preview fullscreen (olhinho → Dialog)
+ * - `TemplateCard` agora tem `onPreview` em vez de `expanded`/`onExpand`.
+ * - Clique em "Visualizar" abre `<Dialog>` fullscreen (max-w-2xl, overflow-y-auto) com:
+ *   faixa colorida do banco, nome/layout, badges (Rev. N, Inativo), seção "Identificação
+ *   automática" (palavras-chave), "Linhas descartadas pelo parser" (skip prefixes),
+ *   "Receita para a IA" (pré-formatado), rodapé de auditoria.
+ *   Admin: botões Editar e Excluir no footer do Dialog (fecha o preview antes de abrir o form).
+ * - Estado: `previewTemplate: Template | null` no componente principal.
+ * - Inline expand panel removido do TemplateCard (código limpo, zero DELETE de template).
+ *
+ * ## 2. Colapso/expansão de grupos de banco
+ * - Cabeçalho de cada grupo virou `<button>` com chevron (ChevronUp quando aberto,
+ *   ChevronDown quando fechado). Estado: `collapsedBanks: Set<string>`.
+ * - `toggleBankCollapse(banco)` adiciona/remove o banco do Set.
+ * - Cards do grupo só renderizam quando `!collapsedBanks.has(banco)`.
+ *
+ * ## 3. Detecção e remoção de duplicados no frontend
+ * - `normalizeBancoNome(s)` → lowercase + remove `()[]-–—_` + colapsa espaços.
+ * - `findDuplicates(templates)` → agrupa por nome normalizado; dentro de cada grupo,
+ *   ordena por `palavrasChave.length + skipPrefixes.length + revisao` desc; os da posição
+ *   [1..] são "duplicados" a remover.
+ * - Banner amber no topo da lista quando há duplicados e usuário é admin:
+ *   lista os nomes, botão "Remover duplicados" (usa `deleteMut.mutateAsync` em sequência,
+ *   invalida cache, toast de confirmação).
+ *
+ * ## 4. Gate de template na Conciliação Bancária (Rev. 3886)
+ * - `parseExtratoLines` (financial.ts) rastreia `templateDetectado: boolean | null`:
+ *   `null` = OFX/CSV ou parser determinístico (Caixa/BB/Santander); `true` = template
+ *   detectado pela IA; `false` = empresa tem templates ativos mas nenhum casou com o PDF.
+ * - Lógica: após detecção de template na rota AI-fallback, se `template` retornar nulo,
+ *   consulta `COUNT(*) FROM bank_statement_templates WHERE company_id=? AND ativo=1`;
+ *   se `nTemplates > 0` → `templateDetectado = false`; senão → `null` (sem gate).
+ * - `analyzeBankStatement` propaga `templateDetectado` no retorno tRPC.
+ * - Frontend `handleImport`: se `analysis.templateDetectado === false && f.formato === "pdf"`:
+ *   fecha Dialog de import, zera `importRunning`, abre `templateGateError` Dialog.
+ * - Dialog do gate: faixa vermelha, ícone AlertCircle, passo-a-passo numerado em 4 etapas
+ *   (Configurações → Analisar PDF → revisar/salvar → reimportar), nota sobre admin.
+ *   Botão "Entendi" fecha o Dialog.
+ *
+ * ## Arquivos alterados
+ * - `server/routers/financial.ts` — parseExtratoLines (return type + templateDetectado tracking) + analyzeBankStatement (spread templateDetectado).
+ * - `client/src/pages/configuracoes/ExtratoTemplateTab.tsx` — Dialog import, ChevronDown/Up, XCircle; normalizeBancoNome; findDuplicates; previewTemplate state; collapsedBanks state; toggleBankCollapse; banner dedup; group header colapso; TemplateCard onPreview; Preview Dialog fullscreen; remoção do inline expand.
+ * - `client/src/pages/financeiro/FinanceiroConciliacao.tsx` — templateGateError state; handleImport gate check; template gate Dialog.
+ * - `shared/version.ts` → Rev. 3886.
+ */
+
+/**
  * Rev. 3885 — **TEMPLATES DE EXTRATO — AUDITORIA (QUEM/QUANDO) + ACESSO RESTRITO A ADMIN.**
  *
  * ## Auditoria de alterações (quem criou / quem editou)

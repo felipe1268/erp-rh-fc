@@ -283,6 +283,7 @@ export default function FinanceiroConciliacao() {
   // Rev. 3205 — expandir uma das listas de pendência em tela cheia p/ analisar melhor.
   const [expandedList, setExpandedList] = useState<"extrato" | "erp" | null>(null);
   const [showImport, setShowImport] = useState(false);
+  const [templateGateError, setTemplateGateError] = useState(false);
   const [importFormato, setImportFormato] = useState<"ofx" | "csv" | "pdf">("ofx");
   const [importConta, setImportConta] = useState("");
   const [importContent, setImportContent] = useState("");
@@ -2332,6 +2333,14 @@ export default function FinanceiroConciliacao() {
           conteudo: f.conteudo,
           csvSeparador: f.formato === "csv" ? csvSeparador : undefined,
         });
+        // Rev. 3886 — gate de template: PDF sem template cadastrado → exibe Dialog orientador.
+        if (analysis?.templateDetectado === false && f.formato === "pdf") {
+          setImportRunning(false);
+          setShowImport(false);
+          setTemplateGateError(true);
+          return;
+        }
+
         const linhas: any[] = analysis?.lines ?? [];
         const total = linhas.length;
         const importadoEm: string = analysis?.importadoEm;
@@ -5875,6 +5884,53 @@ export default function FinanceiroConciliacao() {
         )}
 
         <input ref={comprovInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.heic,.heif,.doc,.docx" onChange={onComprovanteFile} className="hidden" />
+
+        {/* ── Rev. 3886 — Gate de template: PDF importado sem template cadastrado ── */}
+        <Dialog open={templateGateError} onOpenChange={setTemplateGateError}>
+          <DialogContent className="max-w-md p-0 gap-0 overflow-hidden">
+            <div className="h-1.5 w-full bg-red-500" />
+            <DialogHeader className="px-6 pt-5 pb-4 border-b border-gray-100">
+              <DialogTitle className="flex items-start gap-3 text-left">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
+                  <AlertCircle className="w-5 h-5" />
+                </span>
+                <span className="flex flex-col justify-center">
+                  <span className="text-base font-semibold text-gray-900 leading-tight">Banco não reconhecido</span>
+                  <span className="text-xs font-normal text-gray-500 leading-snug mt-1">
+                    Nenhum template cadastrado bate com este extrato
+                  </span>
+                </span>
+              </DialogTitle>
+            </DialogHeader>
+            <div className="px-6 py-5 space-y-4">
+              <p className="text-sm text-gray-700 leading-relaxed">
+                Sua empresa já tem templates configurados, mas o PDF enviado não correspondeu a nenhum deles.
+                Para importar este extrato, cadastre um template para o banco correspondente.
+              </p>
+              <ol className="space-y-3">
+                {[
+                  { n: 1, text: "Acesse Configurações → aba Extratos Bancários." },
+                  { n: 2, text: "Clique em "Analisar extrato de novo banco" e suba este mesmo PDF." },
+                  { n: 3, text: "A IA detecta o layout e pré-preenche o formulário — revise e salve." },
+                  { n: 4, text: "Volte à Conciliação e importe o extrato novamente." },
+                ].map(({ n, text }) => (
+                  <li key={n} className="flex items-start gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-red-100 text-red-700 text-xs font-bold flex items-center justify-center">
+                      {n}
+                    </span>
+                    <span className="text-sm text-gray-700 leading-snug pt-0.5">{text}</span>
+                  </li>
+                ))}
+              </ol>
+              <p className="text-xs text-gray-400 italic">
+                Só administradores podem cadastrar templates. Se não tiver acesso, solicite ao responsável.
+              </p>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end">
+              <Button size="sm" onClick={() => setTemplateGateError(false)}>Entendi</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={showImport} onOpenChange={(o) => { setShowImport(o); if (!o) { setImportContent(""); setImportFileName(""); setImportFiles([]); } }}>
           <DialogContent className="max-w-md max-h-[90vh] flex flex-col overflow-hidden p-0 gap-0">

@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3886** — **TEMPLATES DE EXTRATO — PREVIEW FULLSCREEN + COLAPSO DE GRUPOS + DEDUP FRONTEND + GATE DE TEMPLATE NA CONCILIAÇÃO.** Botão "Visualizar" abre Dialog fullscreen (faixa do banco, seções kw/skip/IA, auditoria, botões admin). Cabeçalho de cada grupo virou botão com ChevronDown/Up para colapsar. Banner amber detecta duplicados no frontend (por nome normalizado) com botão "Remover duplicados". Gate na Conciliação: se empresa tem templates mas PDF não casa com nenhum → fecha import, abre Dialog vermelho com passo-a-passo 4 etapas. Backend: `parseExtratoLines` rastreia `templateDetectado` (null/true/false) + COUNT de templates ativos. ZERO DELETE.
+
 - **Rev. 3885** — **TEMPLATES DE EXTRATO — AUDITORIA (QUEM/QUANDO) + ACESSO RESTRITO A ADMIN.** Novas colunas `atualizado_por_id`/`atualizado_por_nome` via self-heal Rev. 3885. Mutation `update` grava o usuário da sessão. Cards exibem rodapé "Criado por / Editado por · data Brasília". Backend: `assertAdminRole` em `create`, `update`, `delete` e `analisarPdf` (FORBIDDEN para role=user). Frontend: botões de criação/edição/exclusão ocultados para não-admins; banner amber "somente leitura" no lugar. ZERO DELETE.
 
 - **Rev. 3884** — **TEMPLATES DE EXTRATO — REDESIGN: AGRUPADO POR BANCO + CARDS EM GRADE.** Templates agrupados por banco com cabeçalho colorido (bolinha + paleta automática). Cards em grade 2-colunas com faixa de cor no topo, pills de stats (kws/skip/IA), botão "Visualizar" textual e painel expandido com seções coloridas. ZERO DELETE.
