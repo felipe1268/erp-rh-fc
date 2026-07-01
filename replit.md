@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3933** — **SST — APR: BUG LISTA + ASSINATURAS DA EQUIPE.** Bug: `employees.nome` → `employees.nomeCompleto` (crashava list/getById silenciosamente → lista vazia). Fix `gerarHtml` equipe para objetos. Feature: nova coluna `assinaturas_equipe_json`; cada membro da equipe ganha card com pad de assinatura no detalhe da APR; `AssinaturaPad` modal reutilizado; `updateM` persiste. ColFix v3933. ZERO DELETE.
+
 - **Rev. 3932** — **SST — APR: EQUIPE — NR × ATIVIDADE + CIPA + AVISO PRÉVIO + BLOQUEIO.** Cross-check dinâmico: `tipoSelecionado.nr` parseado em array de NRs exigidas; cada funcionário próprio verificado em `emp.nrs` → badge verde ✓ (ok) / âmbar ⚠ (vencida, bloqueia) / vermelho ✗ (ausente, bloqueia). NRs extras exibidas em cinza. CIPA badge (rosa). Aviso Prévio badge (âmbar). Bloqueado: grayscale + Ban sobreposto + mensagem "⛔ NR-35 ausente". Terceiros não bloqueados. ZERO DELETE.
 
-- **Rev. 3931** — **SST — APR: EQUIPE — PHOTO-GRID PICKER (CLT + PJ + TERCEIROS DA OBRA).** Step 1 substituiu inputs livres por grid de cards com fotos; `obras.funcionarios` + `terceiros.funcionarios.list`; `equipeJson` agora `[{nome, fotoUrl, tipo, funcao}]`; compat. reversa com `string[]`. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3931** — **SST — APR: EQUIPE — PHOTO-GRID PICKER (CLT + PJ + TERCEIROS DA OBRA).** Step 1 substituiu inputs livres por grid de cards com fotos; `obras.funcionarios` + `terceiros.funcionarios.list`; `equipeJson` agora `[{nome, fotoUrl, tipo, funcao}]`; compat. reversa com `string[]`. ZERO DELETE.
 
 - **Rev. 3930** — **SST — APR: REDESIGN COMPLETO FULL-SCREEN + AUTO-FILLS + HORA INÍCIO.** Wizard full-screen, 2 painéis, auto-fills (data/hora/TST), coluna `hora_inicio`, ColFix v3930. ZERO DELETE.
 

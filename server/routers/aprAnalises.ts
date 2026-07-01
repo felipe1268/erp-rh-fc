@@ -75,7 +75,7 @@ export const aprAnalisesRouter = router({
           .forEach((o: any) => obrasMap.set(o.id, o.nome));
       }
       if (empIds.length) {
-        (await db.select({ id: employees.id, nome: employees.nome }).from(employees).where(inArray(employees.id, empIds)))
+        (await db.select({ id: employees.id, nome: employees.nomeCompleto }).from(employees).where(inArray(employees.id, empIds)))
           .forEach((e: any) => empsMap.set(e.id, e.nome));
       }
 
@@ -148,15 +148,17 @@ export const aprAnalisesRouter = router({
       }
       let responsavelNome: string | null = null;
       if (apr.employeeId) {
-        const [emp] = await db.select({ nome: employees.nome }).from(employees).where(eq(employees.id, apr.employeeId)).limit(1);
+        const [emp] = await db.select({ nome: employees.nomeCompleto }).from(employees).where(eq(employees.id, apr.employeeId)).limit(1);
         responsavelNome = emp?.nome ?? null;
       }
+      const parseJson = (s: string | null | undefined) => { try { return JSON.parse(s ?? "[]"); } catch { return []; } };
       return {
         ...apr,
         obraNome, responsavelNome,
         riscos,
-        equipe: apr.equipeJson ? (() => { try { return JSON.parse(apr.equipeJson); } catch { return []; } })() : [],
-        epis:   apr.epiJson   ? (() => { try { return JSON.parse(apr.epiJson);   } catch { return []; } })() : [],
+        equipe:              parseJson(apr.equipeJson),
+        epis:                parseJson(apr.epiJson),
+        assinaturasEquipe:   parseJson((apr as any).assinaturasEquipeJson),
       };
     }),
 
@@ -181,6 +183,20 @@ export const aprAnalisesRouter = router({
       assertCompany(ctx, input.companyId);
       const db = (await getDb())!;
       const numero = await proximoNumero(db, input.companyId);
+      // Inicializa assinaturas da equipe a partir do equipeJson (sem ass ainda)
+      let assinaturasEquipeJson: string | null = null;
+      if (input.equipeJson) {
+        try {
+          const membros = JSON.parse(input.equipeJson);
+          assinaturasEquipeJson = JSON.stringify(
+            membros.map((m: any) => ({
+              nome: typeof m === "string" ? m : (m?.nome ?? ""),
+              ass: null, assinadoEm: null,
+            })).filter((m: any) => m.nome)
+          );
+        } catch {}
+      }
+
       const [apr] = await db.insert(aprAnalises).values({
         companyId:     input.companyId,
         obraId:        input.obraId ?? null,
@@ -194,11 +210,12 @@ export const aprAnalisesRouter = router({
         atividade:     input.atividade ?? null,
         localServico:  input.localServico ?? null,
         equipeJson:    input.equipeJson ?? null,
+        assinaturasEquipeJson,
         epiJson:       input.epiJson ?? null,
         observacoes:   input.observacoes ?? null,
         criadoPorId:   ctx.user.id,
         criadoPorNome: ctx.user.name ?? "Sistema",
-      }).returning();
+      } as any).returning();
       if (input.riscos?.length) {
         await db.insert(aprRiscos).values(input.riscos.map((r, i) => ({
           aprId: apr.id, companyId: input.companyId, ordem: r.ordem ?? i,
@@ -246,7 +263,7 @@ export const aprAnalisesRouter = router({
       assertCompany(ctx, input.companyId);
       const db = (await getDb())!;
       const allowed = ["obraId","employeeId","dataEmissao","horaInicio","atividade","localServico",
-        "equipeJson","epiJson","observacoes","aprovadoPorNome","aprovadoPorAss","aprovadoEm","status","fcSignSessionId"];
+        "equipeJson","assinaturasEquipeJson","epiJson","observacoes","aprovadoPorNome","aprovadoPorAss","aprovadoEm","status","fcSignSessionId"];
       const patch: Record<string, unknown> = { updatedAt: new Date().toISOString() };
       for (const k of allowed) { if (k in input.data) patch[k] = (input.data as any)[k]; }
       await db.update(aprAnalises).set(patch as any)
@@ -332,8 +349,10 @@ export const aprAnalisesRouter = router({
         .orderBy(aprRiscos.ordem);
 
       const esc = (s: any) => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-      let equipe: string[] = [];
-      try { equipe = JSON.parse(apr.equipeJson ?? "[]"); } catch {}
+      let equipeRaw: any[] = [];
+      try { equipeRaw = JSON.parse(apr.equipeJson ?? "[]"); } catch {}
+      const equipeNomes = equipeRaw.map((m: any) => typeof m === "string" ? m : (m?.nome ?? "")).filter(Boolean);
+      const equipe = equipeNomes; // alias para compatibilidade com template
       let epis: string[] = [];
       try { epis = JSON.parse(apr.epiJson ?? "[]"); } catch {}
 
@@ -397,7 +416,7 @@ export const aprAnalisesRouter = router({
 </div>
 <div class="grid2">
   <div class="field"><span class="field-label">Responsável</span><span class="field-value">${esc(responsavelNome)}</span></div>
-  <div class="field"><span class="field-label">Equipe</span><span class="field-value">${equipe.join(", ") || "—"}</span></div>
+  <div class="field"><span class="field-label">Equipe</span><span class="field-value">${equipeNomes.join(", ") || "—"}</span></div>
 </div>
 
 <h2>2. MATRIZ DE RISCOS (P × G)</h2>

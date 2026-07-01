@@ -4710,7 +4710,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v3930-2026-07-01-apr-hora-inicio";
+    const COLFIX_VERSION = "v3933-2026-07-01-apr-assinaturas-equipe";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -6164,6 +6164,13 @@ Regras:
         await _db3930.$client.query(`ALTER TABLE apr_analises ADD COLUMN IF NOT EXISTS hora_inicio varchar(5)`);
         console.log("[ColFix Rev.3930] apr_analises: hora_inicio garantida.");
       } catch (e: any) { console.warn("[ColFix Rev.3930] apr hora_inicio falhou (não-fatal):", e?.message ?? e); }
+
+      // Rev. 3933 — APR: assinaturas_equipe_json
+      try {
+        const _db3933 = (await getDb())!;
+        await _db3933.$client.query(`ALTER TABLE apr_analises ADD COLUMN IF NOT EXISTS assinaturas_equipe_json text`);
+        console.log("[ColFix Rev.3933] apr_analises: assinaturas_equipe_json garantida.");
+      } catch (e: any) { console.warn("[ColFix Rev.3933] apr assinaturas_equipe falhou (não-fatal):", e?.message ?? e); }
 
       // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos
       import("../services/startupCache").then(({ setCache }) =>

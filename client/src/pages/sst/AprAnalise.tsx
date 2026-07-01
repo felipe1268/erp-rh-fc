@@ -18,7 +18,7 @@ import {
   RefreshCw, AlertCircle, BarChart3, Building2,
   ListChecks, Layers, CircleCheck, CircleX, Minus,
   HardHat, Ban, Calendar, Timer, Zap, Info, ChevronDown, ChevronUp,
-  Shield, Activity, Clipboard,
+  Shield, Activity, Clipboard, Users,
 } from "lucide-react";
 
 // ── Probabilidade / Gravidade ────────────────────────────────────────────────
@@ -1319,6 +1319,9 @@ function AprDetalheFullscreen({
   const concluirM = trpc.aprAnalises.concluir.useMutation({ onSuccess: () => { detQ.refetch(); onRefetch(); toast.success("APR concluída!"); } });
   const cancelarM = trpc.aprAnalises.cancelar.useMutation({ onSuccess: () => { detQ.refetch(); onRefetch(); toast.success("APR cancelada."); } });
   const excluirM  = trpc.aprAnalises.excluir.useMutation({ onSuccess: () => { onRefetch(); onClose(); toast.success("APR excluída."); } });
+  const updateM   = trpc.aprAnalises.update.useMutation({ onSuccess: () => detQ.refetch() });
+
+  const [sigMembroIdx, setSigMembroIdx] = useState<number | null>(null);
 
   const apr = detQ.data;
 
@@ -1340,6 +1343,11 @@ function AprDetalheFullscreen({
   }
 
   if (!open) return null;
+
+  // Membros da equipe com slot de assinatura
+  const membrosEquipe: Array<{ nome: string; ass: string | null; assinadoEm: string | null }> =
+    apr?.assinaturasEquipe?.length ? apr.assinaturasEquipe
+    : (apr?.equipe ?? []).map((m: any) => ({ nome: typeof m === "string" ? m : (m?.nome ?? ""), ass: null, assinadoEm: null })).filter((m: any) => m.nome);
 
   const tipoAPR         = APR_TIPOS.find(t => t.id === apr?.tipoAtividade);
   const riscosCriticos  = (apr?.riscos ?? []).filter((r: any) => (r.probabilidade ?? 0) * (r.gravidade ?? 0) > 16);
@@ -1567,6 +1575,39 @@ function AprDetalheFullscreen({
               </div>
             )}
 
+            {/* Assinaturas da Equipe */}
+            {membrosEquipe.length > 0 && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-2xl">
+                <h3 className="text-sm font-bold text-blue-800 mb-3 flex items-center gap-2">
+                  <Users className="h-4 w-4" />Assinaturas da Equipe
+                </h3>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {membrosEquipe.map((m, idx) => (
+                    <div key={idx} className="bg-white border border-blue-100 rounded-xl p-3 flex flex-col items-center gap-1.5">
+                      <p className="text-xs font-semibold text-slate-700 text-center line-clamp-2">{m.nome}</p>
+                      {m.ass ? (
+                        <>
+                          <img src={m.ass} alt="Assinatura" className="h-12 w-full object-contain border border-slate-100 rounded-lg bg-white" />
+                          {m.assinadoEm && (
+                            <p className="text-[10px] text-slate-400">{new Date(m.assinadoEm).toLocaleString("pt-BR")}</p>
+                          )}
+                          <Button variant="ghost" size="sm" className="h-6 text-[10px] text-blue-600 px-2"
+                            onClick={() => setSigMembroIdx(idx)}>
+                            Reassinar
+                          </Button>
+                        </>
+                      ) : (
+                        <Button size="sm" className="h-7 text-xs bg-blue-600 hover:bg-blue-700 w-full mt-1"
+                          onClick={() => setSigMembroIdx(idx)}>
+                          Assinar
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Aprovação */}
             {(apr.aprovadoPorNome || apr.aprovadoPorAss) && (
               <div className="p-4 bg-green-50 border-2 border-green-200 rounded-2xl">
@@ -1607,6 +1648,23 @@ function AprDetalheFullscreen({
           </Button>
         )}
       </div>
+
+      {/* Modal de assinatura para membro da equipe */}
+      <AssinaturaPad
+        open={sigMembroIdx !== null}
+        onClose={() => setSigMembroIdx(null)}
+        title={sigMembroIdx !== null ? `Assinatura — ${membrosEquipe[sigMembroIdx]?.nome ?? ""}` : "Assinatura"}
+        onSave={(dataUrl) => {
+          if (sigMembroIdx === null || !apr) return;
+          const updated = membrosEquipe.map((m, i) =>
+            i === sigMembroIdx ? { ...m, ass: dataUrl, assinadoEm: new Date().toISOString() } : m
+          );
+          updateM.mutate(
+            { id: apr.id, companyId, data: { assinaturasEquipeJson: JSON.stringify(updated) } },
+            { onSuccess: () => { setSigMembroIdx(null); toast.success("Assinatura registrada!"); } }
+          );
+        }}
+      />
     </div>
   );
 }

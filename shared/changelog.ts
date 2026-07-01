@@ -1,4 +1,40 @@
 /**
+ * Rev. 3933 — **SST — APR: BUG LISTA + ASSINATURAS DA EQUIPE.**
+ *
+ * PROBLEMA 1: Lista de APRs mostrava "Nenhuma APR encontrada" mesmo com registros no banco.
+ * Causa: `server/routers/aprAnalises.ts` usava `employees.nome` mas o schema tem `employees.nomeCompleto`.
+ * Isso causava crash silencioso na query de list e getById. Fix: `employees.nome` → `employees.nomeCompleto`
+ * nas duas ocorrências (list ~L81, getById ~L154). Também corrigido `gerarHtml`: `equipe.join(", ")` quebrava
+ * pois equipeJson agora guarda objetos — fixado para mapear `m?.nome ?? m` antes do join.
+ *
+ * PROBLEMA 2 / FEATURE: Apenas o TST assinava a APR; usuário pediu campo de assinatura para cada
+ * membro da equipe listado.
+ *
+ * SOLUÇÃO:
+ * 1. **Nova coluna** `assinaturas_equipe_json text` em `apr_analises` (ColFix v3933 + schema Drizzle).
+ *    Estrutura: `[{nome, ass: string|null, assinadoEm: string|null}]`.
+ * 2. **Create**: inicializa `assinaturasEquipeJson` a partir de `equipeJson` (todos com `ass: null`).
+ * 3. **Update**: `assinaturasEquipeJson` adicionado à whitelist `allowed`.
+ * 4. **getById**: retorna `assinaturasEquipe` (parsed).
+ * 5. **Frontend `AprDetalheFullscreen`**:
+ *    - `membrosEquipe` derivado no nível do componente (de `assinaturasEquipe` ou fallback de `equipe`).
+ *    - Nova seção "Assinaturas da Equipe" (bg-blue-50) com grid 2×3 de cards por membro.
+ *    - Cada card: nome, imagem da assinatura (se houver) + data, botão "Assinar" / "Reassinar".
+ *    - `AssinaturaPad` modal (já existente no componente) reutilizado com `open={sigMembroIdx !== null}`.
+ *    - `updateM` (trpc.aprAnalises.update) salva `assinaturasEquipeJson` atualizado no banco.
+ *    - Import `Users` adicionado do lucide-react.
+ *
+ * ARQUIVOS:
+ * - `server/routers/aprAnalises.ts` (bug employees.nome, gerarHtml equipe, create+update+getById)
+ * - `drizzle/schema.ts` (nova coluna assinaturasEquipeJson)
+ * - `server/_core/index.ts` (ColFix v3933)
+ * - `client/src/pages/sst/AprAnalise.tsx` (membrosEquipe, seção Assinaturas, AssinaturaPad modal)
+ * - `shared/version.ts`
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3932 — **SST — APR: EQUIPE — NR × ATIVIDADE + CIPA + AVISO PRÉVIO + BLOQUEIO SEM TREINAMENTO.**
  *
  * PROBLEMA: Cards da equipe mostravam apenas foto, nome e função. Nenhuma indicação de habilitação
