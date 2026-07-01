@@ -1,4 +1,14 @@
 /**
+ * Rev. 3928 — **SST — PT PRINT: MARGEM MÍNIMA 2 CM EM TODAS AS BORDAS.**
+ *
+ * Margem da folha impressa (CSS `@page`) ajustada de `14mm 16mm` (top/bottom × left/right)
+ * para `20mm` uniformes em todos os quatro lados — garante que o conteúdo não "sangre"
+ * na borda da folha ao imprimir ou exportar para PDF.
+ * Arquivo: `server/routers/ptPermissoes.ts`.
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3927 — **SST — PT DETALHE + PRINT: FIX LOGO FC ENGENHARIA QUEBRADO.**
  *
  * PROBLEMA: logo da empresa aparecia como imagem quebrada tanto no dialog quanto no PDF impresso.

@@ -597,7 +597,7 @@ export const ptPermissoesRouter = router({
 <meta charset="UTF-8">
 <title>Permissão de Trabalho — ${esc(pt.numero)}</title>
 <style>
-  @page { margin: 14mm 16mm; size: A4; }
+  @page { margin: 20mm; size: A4; }
   * { box-sizing: border-box; }
   body { font-family: Arial, Helvetica, sans-serif; font-size: 9.5pt; color: #1e293b; margin: 0; }
   /* ── Cabeçalho ───────────────────────────────────────────── */

@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3927** — **SST — PT DETALHE + PRINT: FIX LOGO FC ENGENHARIA QUEBRADO.** `VITE_APP_LOGO` contém URL stale/inválida; por estar primeiro no `||`, sobrepunha `selectedCompany?.logoUrl` correto. Fix: invertida a prioridade em 2 pontos (`fcLogoUrl` no dialog + `handlePrint` PDF) para `selectedCompany?.logoUrl || VITE_APP_LOGO || null`. Antes o print usava `VITE_APP_LOGO ?? null` sem fallback algum. ZERO DELETE.
+- **Rev. 3928** — **SST — PT PRINT: MARGEM MÍNIMA 2 CM EM TODAS AS BORDAS.** `@page { margin: 14mm 16mm }` → `margin: 20mm` uniforme nos 4 lados — conteúdo não sangra na borda da folha ao imprimir/PDF. `server/routers/ptPermissoes.ts`. ZERO DELETE.
 
-- **Rev. 3926** — **CONCILIAÇÃO BANCÁRIA: FIX CARD CI MOSTRANDO 31/32 APÓS CONFIRMAR TUDO.** Mutations `confirmarEntradaCaixa` e `desconciliarEntradaCaixa` só chamavam `refetchCaixa()` (detalhe), nunca `refetchAccStatus()` (cards do dashboard). Card ficava stale em 97% mesmo com tudo confirmado. Fix: `refetchAccStatus()` adicionado no `onSuccess` de ambas. ZERO DELETE.
+- **Rev. 3927** — **SST — PT DETALHE + PRINT: FIX LOGO FC ENGENHARIA QUEBRADO.** `VITE_APP_LOGO` contém URL stale/inválida; por estar primeiro no `||`, sobrepunha `selectedCompany?.logoUrl` correto. Fix: prioridade invertida em 2 pontos (dialog + handlePrint). ZERO DELETE.
 
 ### 5 one-liners
 
