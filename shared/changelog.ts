@@ -1,4 +1,15 @@
 /**
+ * Rev. 3929 — **SST — PT PRINT: MARGEM 1,5 CM + PADDING DE TELA 15MM.**
+ *
+ * 1. Margem de impressão reduzida de 20mm → 15mm (`@page { margin: 15mm }`).
+ * 2. Visualização em tela (nova aba antes do print) estava "sangrando" — sem recuo lateral.
+ *    Fix: `@media screen { body { padding: 15mm; max-width: 210mm; margin: 0 auto; } }`
+ *    — aplica 15mm de padding só na visualização de tela (não duplica a margem de impressão).
+ *    `max-width: 210mm` + `margin: auto` centraliza o conteúdo em monitores largos.
+ * Arquivo: `server/routers/ptPermissoes.ts`. ZERO DELETE.
+ */
+
+/**
  * Rev. 3928 — **SST — PT PRINT: MARGEM MÍNIMA 2 CM EM TODAS AS BORDAS.**
  *
  * Margem da folha impressa (CSS `@page`) ajustada de `14mm 16mm` (top/bottom × left/right)

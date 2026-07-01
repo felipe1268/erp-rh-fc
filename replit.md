@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3928** — **SST — PT PRINT: MARGEM MÍNIMA 2 CM EM TODAS AS BORDAS.** `@page { margin: 14mm 16mm }` → `margin: 20mm` uniforme nos 4 lados — conteúdo não sangra na borda da folha ao imprimir/PDF. `server/routers/ptPermissoes.ts`. ZERO DELETE.
+- **Rev. 3929** — **SST — PT PRINT: MARGEM 1,5 CM + PADDING DE TELA 15MM.** `@page margin: 20mm → 15mm`. Visualização em tela ("sangrando"): `@media screen { body { padding: 15mm; max-width: 210mm; margin: 0 auto } }` — recuo só na tela, não duplica margem de impressão. ZERO DELETE.
 
-- **Rev. 3927** — **SST — PT DETALHE + PRINT: FIX LOGO FC ENGENHARIA QUEBRADO.** `VITE_APP_LOGO` contém URL stale/inválida; por estar primeiro no `||`, sobrepunha `selectedCompany?.logoUrl` correto. Fix: prioridade invertida em 2 pontos (dialog + handlePrint). ZERO DELETE.
+- **Rev. 3928** — **SST — PT PRINT: MARGEM MÍNIMA 2 CM EM TODAS AS BORDAS.** `@page { margin: 14mm 16mm }` → `margin: 20mm` uniforme nos 4 lados. `server/routers/ptPermissoes.ts`. ZERO DELETE.
 
 ### 5 one-liners
 
