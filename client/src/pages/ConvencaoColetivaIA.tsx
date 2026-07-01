@@ -236,7 +236,7 @@ export default function ConvencaoColetivaIA() {
 
       {/* Dialog Upload */}
       <Dialog open={showUpload} onOpenChange={(o) => { if (!processarMut.isPending) setShowUpload(o); }}>
-        <DialogContent className="p-0 overflow-hidden max-w-lg gap-0 w-full">
+        <DialogContent className="p-0 overflow-hidden gap-0 w-[640px] max-w-[calc(100vw-2rem)]" resizable={false} maximizable={false}>
           {/* Header colorido */}
           <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 px-6 py-5 flex items-start justify-between">
             <div className="flex items-center gap-3">
