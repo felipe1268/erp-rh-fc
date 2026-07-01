@@ -1,4 +1,27 @@
 /**
+ * Rev. 3947 — **CONVENÇÃO COLETIVA IA: REDESIGN DIALOG "NOVA ANÁLISE" — COMPACTO SEM SCROLL.**
+ *
+ * PROBLEMA:
+ *   Dialog "Nova Análise por IA" tinha barra de rolagem horizontal (scrollbar)
+ *   e layout desatualizado (zona de upload grande, aviso verbose).
+ *
+ * SOLUÇÃO:
+ *   - `DialogContent` com `p-0 overflow-hidden max-w-md`.
+ *   - Header gradient `from-indigo-600 to-indigo-800` com ícone + subtítulo.
+ *   - Ano + seletor de PDF em linha única (flex items-end gap-3):
+ *     input `w-28` para o ano; seletor inline `h-9 border-dashed` para o arquivo
+ *     (muda para verde/indigo com nome truncado quando selecionado).
+ *   - Aviso amber compacto (1 linha, ícone menor).
+ *   - Footer com `bg-slate-50 border-t` e botões menores (size="sm").
+ *   - Barra de progresso 0→100% mantida no botão Analisar.
+ *
+ * ARQUIVOS:
+ *   client/src/pages/ConvencaoColetivaIA.tsx
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3946 — **CONVENÇÃO COLETIVA IA: FIX COLUNAS SNAKE_CASE NAS TABELAS DRIZZLE.**
  *
  * PROBLEMA:

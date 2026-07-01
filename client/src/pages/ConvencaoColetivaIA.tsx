@@ -236,39 +236,79 @@ export default function ConvencaoColetivaIA() {
 
       {/* Dialog Upload */}
       <Dialog open={showUpload} onOpenChange={(o) => { if (!processarMut.isPending) setShowUpload(o); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Brain className="w-5 h-5 text-indigo-600" /> Nova Análise por IA</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div>
-              <Label className="text-xs">Ano de referência</Label>
-              <Input type="number" value={ano} onChange={(e) => setAno(parseInt(e.target.value) || ano)} className="mt-1" />
-            </div>
-            <div>
-              <Label className="text-xs">PDF da Convenção / Circular</Label>
-              <div
-                onClick={() => fileRef.current?.click()}
-                className="mt-1 border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:bg-muted/50 transition-colors"
-              >
-                <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                <p className="text-sm">{file ? file.name : "Clique para selecionar o PDF"}</p>
-                {file && <p className="text-xs text-muted-foreground mt-1">{(file.size / 1024 / 1024).toFixed(2)} MB</p>}
+        <DialogContent className="p-0 overflow-hidden max-w-md gap-0">
+          {/* Header colorido */}
+          <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 px-6 py-5 flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                <Brain className="w-5 h-5 text-white" />
               </div>
-              <input ref={fileRef} type="file" accept="application/pdf,.pdf" className="hidden"
-                onChange={(e) => setFile(e.target.files?.[0] || null)} />
-            </div>
-            <div className="flex items-start gap-2 text-xs text-muted-foreground bg-amber-50 border border-amber-200 rounded-lg p-3">
-              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-              <span>A IA lê o documento e extrai os valores. Revise tudo no relatório antes de aplicar — nada é alterado automaticamente.</span>
+              <div>
+                <h2 className="text-white font-semibold text-base leading-tight">Nova Análise por IA</h2>
+                <p className="text-indigo-200 text-xs mt-0.5">Extração automática da CCT/Circular</p>
+              </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowUpload(false)} disabled={processarMut.isPending}>Cancelar</Button>
+
+          {/* Corpo */}
+          <div className="px-6 pt-5 pb-4 space-y-4">
+
+            {/* Ano + upload lado a lado */}
+            <div className="flex items-end gap-3">
+              <div className="w-28 shrink-0">
+                <Label className="text-xs font-medium text-slate-600">Ano de referência</Label>
+                <Input
+                  type="number"
+                  value={ano}
+                  onChange={(e) => setAno(parseInt(e.target.value) || ano)}
+                  className="mt-1 h-9 text-center font-semibold text-slate-800"
+                />
+              </div>
+              <div className="flex-1">
+                <Label className="text-xs font-medium text-slate-600">PDF da Convenção / Circular</Label>
+                <div
+                  onClick={() => fileRef.current?.click()}
+                  className={`mt-1 h-9 flex items-center gap-2 px-3 rounded-md border-2 border-dashed cursor-pointer transition-all text-sm
+                    ${file
+                      ? "border-indigo-400 bg-indigo-50 text-indigo-700"
+                      : "border-slate-300 bg-slate-50 text-slate-500 hover:border-indigo-300 hover:bg-indigo-50/40"
+                    }`}
+                >
+                  {file ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 shrink-0 text-indigo-500" />
+                      <span className="truncate font-medium text-xs">{file.name}</span>
+                      <span className="text-xs text-indigo-400 shrink-0">{(file.size / 1024 / 1024).toFixed(1)} MB</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4 shrink-0" />
+                      <span className="text-xs">Selecionar arquivo PDF</span>
+                    </>
+                  )}
+                </div>
+                <input ref={fileRef} type="file" accept="application/pdf,.pdf" className="hidden"
+                  onChange={(e) => setFile(e.target.files?.[0] || null)} />
+              </div>
+            </div>
+
+            {/* Aviso compacto */}
+            <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+              <p className="text-xs text-amber-700">A IA extrai os valores — revise no relatório antes de aplicar. Nada muda automaticamente.</p>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-end gap-2 px-6 py-3 bg-slate-50 border-t border-slate-100">
+            <Button variant="ghost" size="sm" onClick={() => setShowUpload(false)} disabled={processarMut.isPending} className="text-slate-600">
+              Cancelar
+            </Button>
             <Button
               onClick={handleUpload}
               disabled={processarMut.isPending || !file}
-              className="relative overflow-hidden bg-indigo-600 hover:bg-indigo-700 min-w-[160px]"
+              size="sm"
+              className="relative overflow-hidden bg-indigo-600 hover:bg-indigo-700 min-w-[150px]"
             >
               {processarMut.isPending && (
                 <span
@@ -276,14 +316,14 @@ export default function ConvencaoColetivaIA() {
                   style={{ width: `${analiseProgress}%` }}
                 />
               )}
-              <span className="relative flex items-center gap-2">
+              <span className="relative flex items-center gap-1.5">
                 {processarMut.isPending
-                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Analisando… {Math.round(analiseProgress)}%</>
-                  : <><Brain className="w-4 h-4" /> Analisar com IA</>
+                  ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Analisando… {Math.round(analiseProgress)}%</>
+                  : <><Brain className="w-3.5 h-3.5" /> Analisar com IA</>
                 }
               </span>
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
