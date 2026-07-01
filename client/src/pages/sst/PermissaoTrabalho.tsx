@@ -590,7 +590,7 @@ function WizardNovaPT({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0">
+      <DialogContent className="max-w-4xl max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0">
         {/* ── Header gradiente ─────────────────────────────────── */}
         <div className="bg-gradient-to-r from-emerald-700 to-emerald-500 px-6 py-4 rounded-t-xl flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
@@ -1235,17 +1235,21 @@ function WizardNovaPT({
                     );
                   };
                   return (
-                    <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                    <div className="max-h-[480px] overflow-y-auto pr-1 space-y-3">
                       {proprios.length > 0 && (
                         <>
                           <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide px-1">Efetivo próprio ({proprios.length})</p>
-                          {proprios.map(renderItem)}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                            {proprios.map(renderItem)}
+                          </div>
                         </>
                       )}
                       {terceiros.length > 0 && (
                         <>
-                          <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-wide px-1 mt-2">Terceiros ({terceiros.length})</p>
-                          {terceiros.map(renderItem)}
+                          <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-wide px-1 mt-1">Terceiros ({terceiros.length})</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                            {terceiros.map(renderItem)}
+                          </div>
                         </>
                       )}
                     </div>
