@@ -9080,13 +9080,19 @@ export const financialRouter = router({
       // Rev. 3804 — dedup secundário agora é CROSS-CONTA: busca em toda a empresa
       // (sem filtro conta_bancaria_id). Impede que o mesmo Doc/E-code importado
       // acidentalmente para outra conta gere um lançamento duplicado.
+      // Rev. 3949 — FIX: dedup secundário também verifica saldo_apos (igual ao
+      // primário). Sem isso, N lançamentos legítimos com o mesmo Doc/E-code no
+      // mesmo dia (ex.: 7x DEBITO CAPITALIZACAO "Doc 369639") eram copiados apenas
+      // 1x — o fuzzy match no 2º disparo encontrava o 1º inserido e descartava os
+      // demais. Com saldo_apos na guarda, cada entrada com saldo distinto passa.
+      // Regra: $5 e $6 distintos (evita bug dbExecute dup-placeholder → 42601).
       const eCode = line.descricao?.match(/E[0-9A-Fa-f]{20,}/)?.[0];
       const docCode = line.descricao?.match(/Doc\s+(\d{5,})/i)?.[1];
       const txKey = eCode ?? (docCode ? `Doc ${docCode}` : null);
       if (txKey) {
         const fuzzy = await dbExecute(db,
-          `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND data=$2 AND valor=$3 AND descricao ILIKE $4 AND excluido_em IS NULL LIMIT 1`,
-          [input.companyId, line.data, line.valor, `%${txKey}%`]
+          `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND data=$2 AND valor=$3 AND descricao ILIKE $4 AND ($5::numeric IS NULL OR saldo_apos=$6) AND excluido_em IS NULL LIMIT 1`,
+          [input.companyId, line.data, line.valor, `%${txKey}%`, salParam, salParam]
         );
         if (rows(fuzzy).length > 0) { skipped++; continue; }
       }
@@ -9319,13 +9325,15 @@ export const financialRouter = router({
       // Dedup secundário: extrai ID canônico da descrição (E003... ou Doc NNNNNN)
       // Rev. 3804 — cross-conta: remove conta_bancaria_id do filtro para bloquear
       // o mesmo Doc/E-code sendo importado em uma conta diferente da empresa.
+      // Rev. 3949 — FIX: espelha fix da Fase 1 — saldo_apos na guarda do fuzzy match
+      // para não descartar N lançamentos legítimos com mesmo Doc/E-code no mesmo dia.
       const eCode = line.descricao?.match(/E[0-9A-Fa-f]{20,}/)?.[0];
       const docCode = line.descricao?.match(/Doc\s+(\d{5,})/i)?.[1];
       const txKey = eCode ?? (docCode ? `Doc ${docCode}` : null);
       if (txKey) {
         const fuzzy = await dbExecute(db,
-          `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND data=$2 AND valor=$3 AND descricao ILIKE $4 AND excluido_em IS NULL LIMIT 1`,
-          [input.companyId, line.data, line.valor, `%${txKey}%`]
+          `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND data=$2 AND valor=$3 AND descricao ILIKE $4 AND ($5::numeric IS NULL OR saldo_apos=$6) AND excluido_em IS NULL LIMIT 1`,
+          [input.companyId, line.data, line.valor, `%${txKey}%`, salParam, salParam]
         );
         if (rows(fuzzy).length > 0) { skipped++; continue; }
       }

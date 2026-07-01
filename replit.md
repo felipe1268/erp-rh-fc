@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3949** — **CONCILIAÇÃO: FIX DEDUP SECUNDÁRIO DESCARTA LANÇAMENTOS COM MESMO DOC.** 7x DEBITO CAPITALIZACAO R$109,83 no mesmo dia → só 1 importado. Causa: dedup secundário (Rev.3802) fazia `ILIKE '%Doc 369639%'` sem checar `saldo_apos`. Fix: adicionado `($5::numeric IS NULL OR saldo_apos=$6)` em Fase 1 + Fase 2. Saldo distinto = transação distinta. ZERO DELETE.
+
 - **Rev. 3948** — **CONVENÇÃO COLETIVA IA: DATAS BR + CORES + AVISO DISSÍDIO + FIX PISO IA.** `sanitizarExtracao()` normaliza valores numéricos da IA (fix "2.302.75"→230275 via parseBRL bug); datas mostram DD/MM/AAAA via `isoToBR/brToISO`; tabela simulação com ▲ vermelho/▼ verde; banner âmbar se dissídio existente; banner vermelho se piso > 10k. ZERO DELETE.
 
-- **Rev. 3947** — **CONVENÇÃO COLETIVA IA: REDESIGN DIALOG "NOVA ANÁLISE".** Header gradient indigo + ícone; ano + upload em linha única (seletor `h-9` inline com nome truncado ao selecionar); aviso amber compacto; footer `bg-slate-50`; sem scrollbar. Barra 0→100% mantida. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3947** — **CONVENÇÃO COLETIVA IA: REDESIGN DIALOG "NOVA ANÁLISE".** Header gradient indigo + ícone; ano + upload em linha única (seletor `h-9` inline com nome truncado ao selecionar); aviso amber compacto; footer `bg-slate-50`; sem scrollbar. Barra 0→100% mantida. ZERO DELETE.
 
 - **Rev. 3946** — **CONVENÇÃO COLETIVA IA: FIX COLUNAS SNAKE_CASE (Drizzle).** `convencaoIA.listar` e `processarPdf` falhavam com `column "companyId" does not exist` — tabela criada via SyncSchema+ usa `company_id`; schema Drizzle não tinha mapeamento → `"companyId"` (camelCase com aspas). Fix: nome explícito em TODOS os campos camelCase de `convencaoAnalises` + `convencaoAnaliseItens`. ZERO DELETE.
 

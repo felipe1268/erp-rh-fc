@@ -1,4 +1,41 @@
 /**
+ * Rev. 3949 — **CONCILIAÇÃO: FIX DEDUP SECUNDÁRIO DESCARTA LANÇAMENTOS COM MESMO DOC NO MESMO DIA.**
+ *
+ * PROBLEMA:
+ *   O importador de extrato (Fase 1 e Fase 2) tem dois níveis de dedup:
+ *   - Primário: (data + descricao + valor + saldo_apos) — correto.
+ *   - Secundário (Rev. 3802/3804): extrai txKey = "Doc NNNNNN" ou "E003..." da
+ *     descrição e faz `ILIKE '%<txKey>%'` sem checar saldo_apos.
+ *
+ *   No extrato da Caixa de junho/2026, há 7 lançamentos de R$109,83 no dia
+ *   01/06/2026 — todos DEBITO CAPITALIZACAO com número de documento 369639
+ *   (XS4 Capitalização). O parser inclui "· Doc 369639" na descrição de todos.
+ *   Ao importar:
+ *     1. 1º lançamento inserido corretamente.
+ *     2. 2º lançamento: primary dedup = miss (hora na trail difere 00:52 ≠ 19:33).
+ *        Secondary dedup: `ILIKE '%Doc 369639%'` → encontra o 1º → SKIP!
+ *     3. 3º–7º: mesma situação → apenas 1 dos 7 entrava no banco.
+ *
+ * CAUSA-RAIZ:
+ *   O dedup secundário não tinha saldo_apos na guarda. Doc NNNNNN identifica o
+ *   CONTRATO/SETUP do débito automático, não a transação individual — pode haver
+ *   N cobranças distintas no mesmo dia com o mesmo número de documento.
+ *
+ * SOLUÇÃO:
+ *   Adicionado `AND ($5::numeric IS NULL OR saldo_apos=$6)` ao fuzzy match em
+ *   AMBAS as fases (importBankStatement Fase 1 + saveBankStatementBatch Fase 2).
+ *   - Se saldo_apos difere → transações distintas → todas inseridas.
+ *   - Se saldo_apos é NULL (OFX sem saldo) → `NULL IS NULL = TRUE` → comportamento
+ *     anterior mantido (ainda protege re-import do mesmo arquivo).
+ *   Parâmetros $5 e $6 distintos (evita bug dbExecute dup-placeholder → 42601).
+ *
+ * ARQUIVOS:
+ *   server/routers/financial.ts (2 locais: ~linha 9096 e ~linha 9338)
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3948 — **CONVENÇÃO COLETIVA IA: DATAS BR + CORES + AVISO DISSÍDIO + FIX PISO IA.**
  *
  * PROBLEMA:
