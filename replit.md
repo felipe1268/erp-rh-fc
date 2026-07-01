@@ -50,13 +50,15 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3917** — **SST — PT WIZARD + EDIT DIALOG: CNPJ AUTO-FILL DA RAZÃO SOCIAL VIA BRASILAPI.** Ao selecionar "Empresa contratada" e digitar o CNPJ (14 dígitos), a razão social é buscada automaticamente via `compras.buscarCNPJ` (BrasilAPI → ReceitaWS fallback). Helper `formatCNPJ` formata incrementalmente. Spinner durante a busca, ✓ verde + badge "Preenchido automaticamente" quando Ok, mensagem de erro quando CNPJ não encontrado. Mudar o CNPJ limpa o nome auto-preenchido. Funciona no wizard e no dialog de edição. ZERO DELETE.
+- **Rev. 3918** — **CONCILIAÇÃO BANCÁRIA: FIX CHIP DE MÊS MOSTRANDO 100% FALSO (ARREDONDAMENTO).** `mesesPct` usava `Math.round`: 829/833 linhas = 99,52% arredondava para 100% mesmo com 4 pendentes na CEF. Fix: `conciliadas >= total ? 100 : Math.floor(...)` — 100% SÓ quando não há nenhuma linha pendente. ZERO DELETE.
 
-- **Rev. 3916** — **SST — PT PDF REDESIGN: 3 LOGOS + SOLICITANTE AUTO + CHECKLIST COM REFS NR.** Cabeçalho triplo: logo FC (esq) + badge NR-35 / Portaria MTE 313/2012 (centro) + logos do CLIENTE e GERENCIADORA da obra (dir, condicionais). Solicitante passou a usar `criadoPorNome` (ctx.user.name gravado na criação) com fallback no employee — o nome do login sempre aparece. Checklist ganhou coluna "Referência NR" (NR-35/35.X, NR-7, NR-10, NR-6, NR-26) em layout tabular zebrado. Status como pill colorido, seções com badge de norma, envolvidos com badge "Terceiro" âmbar. ZERO DELETE.
+- **Rev. 3917** — **SST — PT WIZARD + EDIT DIALOG: CNPJ AUTO-FILL DA RAZÃO SOCIAL VIA BRASILAPI.** Ao selecionar "Empresa contratada" e digitar o CNPJ (14 dígitos), a razão social é buscada automaticamente via `compras.buscarCNPJ` (BrasilAPI → ReceitaWS fallback). Helper `formatCNPJ` formata incrementalmente. Spinner durante a busca, ✓ verde + badge "Preenchido automaticamente" quando Ok, mensagem de erro quando CNPJ não encontrado. Mudar o CNPJ limpa o nome auto-preenchido. Funciona no wizard e no dialog de edição. ZERO DELETE.
 
 ### 5 one-liners
 
-- **Rev. 3915** — **CONCILIAÇÃO BANCÁRIA CEF JAN/2026: PARES ZERO-LÍQUIDO DESCONSIDERADOS + FIX REAPRESENTADOS NA LISTA.** 12 linhas de 6 pares zero-líquido desconsideradas diretamente no banco. Filtro `repExt` corrigido. Resultado: 97% (115/119). ZERO DELETE.
+- **Rev. 3916** — **SST — PT PDF REDESIGN: 3 LOGOS + SOLICITANTE AUTO + CHECKLIST COM REFS NR.** Cabeçalho triplo + badge NR-35 + logos cliente/gerenciadora da obra. Solicitante = criadoPorNome. Checklist com coluna "Referência NR". ZERO DELETE.
+
+- **Rev. 3915** — **CONCILIAÇÃO BANCÁRIA CEF JAN/2026: PARES ZERO-LÍQUIDO DESCONSIDERADOS + FIX REAPRESENTADOS NA LISTA.** 12 linhas de 6 pares zero-líquido desconsideradas. Filtro `repExt` corrigido. Resultado: 97% (115/119). ZERO DELETE.
 
 - **Rev. 3914** — **CONCILIAÇÃO BANCÁRIA: FIX BARRA DE PROGRESSO (100% FALSO) + SUGESTÕES COM LINHAS DESCONSIDERADAS.** `totLinhas` passou a usar `accConciliadasMap[contaBancariaId]`; `sugerirConciliacao` ganhou `desconsiderado_em IS NULL`. ZERO DELETE.
 

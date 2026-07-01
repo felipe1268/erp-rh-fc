@@ -886,6 +886,9 @@ export default function FinanceiroConciliacao() {
     return map;
   }, [statementsAno]);
   // Rev. 3421 — % de conciliação por mês (todas as contas agregadas), para o pill do mês
+  // Rev. 3918 — usa floor quando há pendências para evitar 100% falso por arredondamento
+  // (ex: 829/833 = 99,5% → Math.round = 100% mesmo com 4 linhas pendentes numa conta).
+  // Regra: 100% APENAS quando conciliadas >= total (sem pendências reais).
   const mesesPct: Record<number, number> = useMemo(() => {
     const map: Record<number, number> = {};
     for (const r of (statementsAno ?? [])) {
@@ -893,7 +896,9 @@ export default function FinanceiroConciliacao() {
       if (!m || m < 1 || m > 12) continue;
       const total = Number(r.total) || 0;
       const conciliadas = Number(r.conciliadas) || 0;
-      map[m] = total > 0 ? Math.round(conciliadas / total * 100) : 0;
+      map[m] = total > 0
+        ? (conciliadas >= total ? 100 : Math.floor(conciliadas / total * 100))
+        : 0;
     }
     return map;
   }, [statementsAno]);

@@ -1,4 +1,25 @@
 /**
+ * Rev. 3918 — **CONCILIAÇÃO BANCÁRIA: FIX CHIP DE MÊS MOSTRANDO 100% FALSO (ARREDONDAMENTO).**
+ *
+ * RAIZ DO BUG: `mesesPct` usava `Math.round(conciliadas / total * 100)`. Quando todas as contas
+ * são agregadas para o mês, a proporção pode ser 99,5% (ex.: 829 conciliadas / 833 total = 99,52%)
+ * e `Math.round` arredondava para 100% — mesmo com 4 linhas pendentes na CEF (97%).
+ * O backend já retornava `status = "lancamento"` (correto), mas o frontend mostrava "100%" em
+ * vez de "99%", enganando o usuário de que o mês estava totalmente fechado.
+ *
+ * FIX (FinanceiroConciliacao.tsx — `mesesPct` useMemo):
+ * - Regra: `conciliadas >= total ? 100 : Math.floor(conciliadas / total * 100)`
+ * - 100% SOMENTE quando literalmente não há nenhuma linha pendente.
+ * - 829/833 → `Math.floor(99.52)` = 99% ✓ (antes mostrava 100%)
+ * - 833/833 → 100% ✓ (sem mudança)
+ * - A lógica do `mesesStatus` (cor do dot verde/azul) não foi alterada — ela já usava o
+ *   `status` retornado pelo backend que sempre foi correto.
+ * - ZERO DELETE.
+ *
+ * ARQUIVOS: client/src/pages/financeiro/FinanceiroConciliacao.tsx
+ */
+
+/**
  * Rev. 3917 — **SST — PT WIZARD + EDIT DIALOG: CNPJ AUTO-FILL DA RAZÃO SOCIAL VIA BRASILAPI.**
  *
  * CONTEXTO: Ao criar ou editar uma PT com mão-de-obra externa, o usuário precisava digitar
