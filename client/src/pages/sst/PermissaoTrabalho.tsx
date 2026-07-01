@@ -1528,7 +1528,7 @@ function PTDetalheDialog({
     if (!ptId) return;
     setPrintLoading(true);
     try {
-      const logoUrl = (import.meta as any).env?.VITE_APP_LOGO ?? null;
+      const logoUrl = selectedCompany?.logoUrl || (import.meta as any).env?.VITE_APP_LOGO || null;
       const res = await utils.ptPermissoes.gerarHtml.fetch({ id: ptId, companyId, logoUrl });
       const w = window.open("", "_blank");
       if (w) { w.document.write(res.html); w.document.close(); setTimeout(() => w.print(), 400); }
@@ -1622,7 +1622,7 @@ function PTDetalheDialog({
             </div>
           )}
           {pt && (() => {
-            const fcLogoUrl = (import.meta as any).env?.VITE_APP_LOGO || selectedCompany?.logoUrl || null;
+            const fcLogoUrl = selectedCompany?.logoUrl || (import.meta as any).env?.VITE_APP_LOGO || null;
             const companyName = selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || "";
             const tiposPt: string[] = (() => { try { return JSON.parse(pt.tiposTrabalhoJson ?? "[]"); } catch { return []; } })();
             const isNewFormat = Object.keys(checklist).some(k => k.includes(":"));

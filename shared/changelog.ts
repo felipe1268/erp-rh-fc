@@ -1,4 +1,24 @@
 /**
+ * Rev. 3927 — **SST — PT DETALHE + PRINT: FIX LOGO FC ENGENHARIA QUEBRADO.**
+ *
+ * PROBLEMA: logo da empresa aparecia como imagem quebrada tanto no dialog quanto no PDF impresso.
+ * CAUSA: `VITE_APP_LOGO` env var está configurada com uma URL stale/inválida. Como estava sendo
+ * testada PRIMEIRO (com `||`), seu valor truthy-mas-quebrado sobrepunha o `selectedCompany?.logoUrl`
+ * correto (que vem da DB e é válido). O fallback para `selectedCompany?.logoUrl` nunca era
+ * atingido porque `VITE_APP_LOGO` não é null/undefined — é uma string não-vazia com URL errada.
+ *
+ * FIX em 2 pontos de `PermissaoTrabalho.tsx`:
+ * 1. **Dialog header** (`fcLogoUrl` linha ~1628): invertida a ordem de prioridade para
+ *    `selectedCompany?.logoUrl || VITE_APP_LOGO || null` — DB sempre vem primeiro.
+ * 2. **Função `handlePrint`** (geração do PDF linha ~1534): mesma inversão +
+ *    substituído `??` por `||` (corrige o mesmo problema de string vazia ignorada).
+ *    Antes: `VITE_APP_LOGO ?? null` — sem nenhum fallback para `selectedCompany?.logoUrl`.
+ *
+ * Resultado: logo da empresa carregado corretamente da DB em ambas as superfícies.
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3926 — **CONCILIAÇÃO BANCÁRIA: FIX CARD CAIXA INTERNO MOSTRANDO 31/32 APÓS CONFIRMAR TUDO.**
  *
  * PROBLEMA: card "CAIXA INTERNO - ADM" no dashboard de Conciliação ficava travado em 97%
