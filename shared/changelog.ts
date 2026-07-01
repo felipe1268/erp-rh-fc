@@ -1,4 +1,54 @@
 /**
+ * Rev. 3953 — **DFC PDF: DEMONSTRAÇÃO DO FLUXO DE CAIXA DIDÁTICA.**
+ *
+ * MOTIVAÇÃO:
+ *   Usuário leigo observou divergência entre resultado do DRE e saldo bancário e
+ *   queria um documento PDF educativo que explicasse a diferença de forma acessível,
+ *   seguindo a literatura contábil (NBC TG 03 R3 / CPC 03 — método indireto).
+ *
+ * SOLUÇÃO:
+ *   PDF gerado client-side via jsPDF, estruturado em 4 seções didáticas:
+ *
+ *   Seção 1 — "Ponto de Partida": waterfall do DRE completo (Receita Bruta →
+ *   Lucro Líquido) com cor verde/vermelho por linha. Explicação do regime de
+ *   competência vs. caixa em linguagem acessível.
+ *
+ *   Seção 2 — "Ajustes fora do DRE": tabela por conta de todos os lançamentos
+ *   classificados como 'nao_operacional' (financiamentos/mútuos recebidos,
+ *   amortizações) e 'investimento' (CAPEX, compra de ativos) — itens que
+ *   movimentam o banco mas NÃO entram no DRE. Pill colorido (Recebimento/Pagamento
+ *   VERDE/VERMELHO), subtotais por grupo, coluna "O que representa?".
+ *
+ *   Seção 3 — "Reconciliação Final": bridge table (Lucro Líquido + Financiamentos
+ *   + Investimento = Variação Calculada vs. Saldo Real do Extrato). Linha de
+ *   diferença residual (capital de giro + timing) com cor âmbar se > R$5k.
+ *   Nota explicativa quando o resíduo é significativo (causas típicas do gap).
+ *
+ *   Seção 4 — "O que isso significa?": caixa contextual colorido com 4 cenários:
+ *   DRE+ + banco+ (verde, solidez); DRE- + banco- (vermelho, atenção);
+ *   DRE- + banco+ (azul, dívida sustentando o caixa); DRE+ + banco- (âmbar, CAPEX).
+ *
+ *   Rodapé: "NBC TG 03 R3 · Uso interno · não substitui demonstrações formais" + pág N/N.
+ *
+ * BACKEND:
+ *   Novo endpoint `financial.getDFCData` (query):
+ *   - CTE acct_class 3 níveis para resolver class_dre herdada (pai/avô)
+ *   - Items 'nao_operacional' + 'investimento' agrupados por conta+tipo
+ *   - Regime de competência: receitas a_receber + despesas a_pagar do período
+ *   - FIX: dbExecute repete $N → cada ocorrência de companyId usa $1..$7 distintos
+ *     (ver memory dbexecute-duplicate-placeholder.md)
+ *
+ * FRONTEND:
+ *   - `client/src/lib/dfcPdf.ts` — gerador jsPDF puro (~420 linhas)
+ *   - `FinanceiroDRE.tsx` — query getDFCData + botão "Exportar DFC (PDF)"
+ *     (laranja, ao lado do botão Atualizar, disabled até DRE+banco+dfcData carregarem)
+ *   - Import lazy do dfcPdf (dynamic import para não inflar o chunk principal)
+ *
+ * ZERO DELETE. Arquivos: server/routers/financial.ts (getDFCData endpoint),
+ * client/src/lib/dfcPdf.ts (novo), client/src/pages/financeiro/FinanceiroDRE.tsx.
+ */
+
+/**
  * Rev. 3952 — **DRE: CORREÇÃO DE CLASSIFICAÇÃO + CARD CONTEXTUAL DRE × CAIXA.**
  *
  * PROBLEMA 1 — FINANCIAMENTOS inflando Despesas Fixas:

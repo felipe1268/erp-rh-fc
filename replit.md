@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3952** — **DRE: CORREÇÃO DE CLASSIFICAÇÃO + CARD CONTEXTUAL DRE × CAIXA.** Auditoria detectou 2 erros: FINANCIAMENTOS (R$69.758) entrava como Despesa Fixa (amortização de principal não é despesa); MÚTUO INTERCOMPANY (R$60.000) entrava como Receita (passivo, não receita). Fix: `classificacao_dre` → 'investimento'/'nao_operacional'; novo predicado exclui 'nao_operacional' de receitaBruta. Novo endpoint `getDREBankComparison` + card dinâmico no DRE explicando divergência DRE × caixa bancário em 3 cenários (azul/âmbar/verde). ZERO DELETE.
+- **Rev. 3953** — **DFC PDF: DEMONSTRAÇÃO DO FLUXO DE CAIXA DIDÁTICA.** PDF client-side (jsPDF) com 4 seções: waterfall DRE, ajustes fora do DRE (nao_operacional + investimento por conta), reconciliação final (bridge table) e interpretação contextual 4 cenários. Novo endpoint `getDFCData`; botão "Exportar DFC (PDF)" no header do DRE. FIX: dbExecute `$N` repetido → params distintos $1..$7. ZERO DELETE.
 
-- **Rev. 3951** — **CONCILIAÇÃO: BOTÃO "CONSOLIDAR MÊS" NO PANORAMA GERAL.** Botão "Consolidar mês" só existia dentro da view por conta individual. Novo endpoint `financial.consolidarTodasContas` fecha TODAS as contas em uma chamada; botão verde no header do panorama (só em modo mês+mês selecionado). ZERO DELETE.
+- **Rev. 3952** — **DRE: CORREÇÃO DE CLASSIFICAÇÃO + CARD CONTEXTUAL DRE × CAIXA.** Auditoria detectou 2 erros: FINANCIAMENTOS (R$69.758) entrava como Despesa Fixa (amortização de principal não é despesa); MÚTUO INTERCOMPANY (R$60.000) entrava como Receita (passivo, não receita). Fix: `classificacao_dre` → 'investimento'/'nao_operacional'; novo predicado exclui 'nao_operacional' de receitaBruta. Novo endpoint `getDREBankComparison` + card dinâmico no DRE explicando divergência DRE × caixa bancário em 3 cenários (azul/âmbar/verde). ZERO DELETE.
 
 ### 5 one-liners
 

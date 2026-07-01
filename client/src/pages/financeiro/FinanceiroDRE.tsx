@@ -14,7 +14,7 @@ import {
   CalendarDays, Sparkles, Info, BookOpen, ExternalLink, AlertTriangle,
   Lightbulb, Activity, ArrowUpRight, ArrowDownRight, Minus, ShieldCheck,
   ChevronRight as ChevronRightIcon, Layers, ListTree, Calculator, Percent,
-  ArrowLeft, Receipt, CheckCircle2, XCircle, Building2, Scale,
+  ArrowLeft, Receipt, CheckCircle2, XCircle, Building2, Scale, FileDown,
 } from "lucide-react";
 
 type DRELinhaKey =
@@ -185,6 +185,26 @@ export default function FinanceiroDRE() {
     { companyId, periodo, tipoPeriodo },
     { enabled: !!companyId }
   );
+
+  // Rev. 3953 — dados detalhados para o PDF da DFC
+  const { data: dfcData } = (trpc as any).financial.getDFCData.useQuery(
+    { companyId, periodo, tipoPeriodo },
+    { enabled: !!companyId }
+  );
+  const [dfcLoading, setDfcLoading] = useState(false);
+
+  const handleExportarDFC = async () => {
+    if (!dre || !bankComp || !dfcData || dfcLoading) return;
+    setDfcLoading(true);
+    try {
+      const { gerarDFCPdf } = await import("@/lib/dfcPdf");
+      await gerarDFCPdf({ dre, bankComp, dfcData, periodo, tipoPeriodo });
+    } catch (e) {
+      console.error("Erro ao gerar DFC PDF:", e);
+    } finally {
+      setDfcLoading(false);
+    }
+  };
   // Prioriza o resultado recém-gerado SÓ se for do período atualmente
   // selecionado (mutation.data persiste entre renders; ao trocar de período
   // sem refazer, deve cair para a análise SALVA do novo período).
@@ -392,9 +412,24 @@ export default function FinanceiroDRE() {
                 <p className="text-sm text-white/70 mt-0.5">Demonstração do Exercício (Lei 6.404/76 art. 187 · CPC 26) com análise inteligente</p>
               </div>
             </div>
-            <Button variant="outline" size="sm" onClick={() => refetch()} className="self-start sm:self-auto bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white">
-              <RefreshCw className="w-4 h-4 mr-1.5" /> Atualizar
-            </Button>
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <Button
+                variant="outline" size="sm"
+                onClick={handleExportarDFC}
+                disabled={dfcLoading || !dre || !bankComp || !dfcData}
+                className="relative overflow-hidden bg-orange-500/20 border-orange-400/40 text-white hover:bg-orange-500/30 hover:text-white"
+                title="Baixar PDF com a Demonstração do Fluxo de Caixa (reconciliação DRE × banco)"
+              >
+                {dfcLoading && (
+                  <span className="absolute inset-0 bg-white/10 animate-pulse rounded" />
+                )}
+                <FileDown className="w-4 h-4 mr-1.5" />
+                {dfcLoading ? "Gerando…" : "Exportar DFC (PDF)"}
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => refetch()} className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white">
+                <RefreshCw className="w-4 h-4 mr-1.5" /> Atualizar
+              </Button>
+            </div>
           </div>
         </div>
 

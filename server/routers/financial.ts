@@ -10225,6 +10225,82 @@ export const financialRouter = router({
     };
   }),
 
+  // Rev. 3953 — Dados detalhados para a DFC (Demonstração do Fluxo de Caixa).
+  // Retorna itens classificados como 'nao_operacional' (financiamentos) e 'investimento'
+  // (CAPEX/amortizações) com detalhamento por conta + resumo de regime de competência.
+  getDFCData: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    periodo: z.string(),
+    tipoPeriodo: z.enum(["mensal", "trimestral", "semestral", "anual"]).default("mensal"),
+  })).query(async ({ ctx, input }) => {
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const [mesIni, mesFim] = dreRange(input.periodo, input.tipoPeriodo);
+
+    // Itens nao_operacional + investimento realizados (constam no banco; excluídos do DRE)
+    // NOTA: dbExecute liga $N por ordem de aparição (left-to-right), NÃO pelo número.
+    // Cada ocorrência de companyId precisa de um $N distinto (ver drizzle-execute-no-param-bind.md).
+    const itensRes = await dbExecute(db, `
+      WITH acct_class AS (
+        SELECT id, classificacao_dre, nome FROM financial_accounts
+        WHERE company_id=$1 AND classificacao_dre IN ('nao_operacional','investimento')
+        UNION ALL
+        SELECT fa.id, p.classificacao_dre, fa.nome FROM financial_accounts fa
+        JOIN financial_accounts p ON fa.conta_pai_id=p.id AND p.company_id=$2
+        WHERE fa.company_id=$3 AND fa.classificacao_dre IS NULL
+          AND p.classificacao_dre IN ('nao_operacional','investimento')
+        UNION ALL
+        SELECT fa.id, gp.classificacao_dre, fa.nome FROM financial_accounts fa
+        JOIN financial_accounts p ON fa.conta_pai_id=p.id AND p.company_id=$4
+        JOIN financial_accounts gp ON p.conta_pai_id=gp.id AND gp.company_id=$5
+        WHERE fa.company_id=$6 AND fa.classificacao_dre IS NULL AND p.classificacao_dre IS NULL
+          AND gp.classificacao_dre IN ('nao_operacional','investimento')
+      )
+      SELECT
+        COALESCE(ac.nome, fe.conta_nome, 'Sem categoria') AS conta_nome,
+        fe.tipo,
+        ac.classificacao_dre AS classificacao,
+        ROUND(COALESCE(SUM(fe.valor_realizado),0)::numeric,2) AS total
+      FROM financial_entries fe
+      LEFT JOIN acct_class ac ON ac.id = fe.conta_id
+      WHERE fe.company_id=$7
+        AND fe.status NOT IN ('cancelado','estornado','a_pagar','a_receber','previsto')
+        AND TO_CHAR(fe.data_competencia,'YYYY-MM') BETWEEN $8 AND $9
+        AND (ac.classificacao_dre IN ('nao_operacional','investimento'))
+      GROUP BY COALESCE(ac.nome, fe.conta_nome, 'Sem categoria'), fe.tipo, ac.classificacao_dre
+      ORDER BY ac.classificacao_dre, fe.tipo DESC, total DESC
+    `, [
+      input.companyId, input.companyId, input.companyId,
+      input.companyId, input.companyId, input.companyId,
+      input.companyId, mesIni, mesFim,
+    ]);
+
+    // Regime de competência: lançamentos a_receber / a_pagar reconhecidos no período mas
+    // ainda não movimentaram o banco (DRE NÃO os inclui; banco ainda NÃO os tem)
+    const regimeRes = await dbExecute(db, `
+      SELECT
+        ROUND(COALESCE(SUM(valor_realizado) FILTER (WHERE tipo='receita' AND status='a_receber'),0)::numeric,2) AS receitas_a_receber,
+        ROUND(COALESCE(SUM(valor_realizado) FILTER (WHERE tipo='despesa'  AND status='a_pagar'),0)::numeric,2) AS despesas_a_pagar
+      FROM financial_entries
+      WHERE company_id=$1
+        AND status NOT IN ('cancelado','estornado')
+        AND TO_CHAR(data_competencia,'YYYY-MM') BETWEEN $2 AND $3
+    `, [input.companyId, mesIni, mesFim]);
+
+    const regime = (regimeRes as any[])[0] ?? {};
+    return {
+      itens: (itensRes as any[]).map(r => ({
+        contaNome: String(r.conta_nome),
+        tipo: String(r.tipo) as "receita" | "despesa",
+        classificacao: String(r.classificacao) as "nao_operacional" | "investimento",
+        total: Number(r.total),
+      })),
+      receitasAReceber: Number(regime.receitas_a_receber ?? 0),
+      despesasAPagar: Number(regime.despesas_a_pagar ?? 0),
+    };
+  }),
+
   analiseDRE: protectedProcedure.input(z.object({
     companyId: z.number(),
     periodo: z.string(),
