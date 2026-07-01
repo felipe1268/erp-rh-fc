@@ -1618,7 +1618,7 @@ function PTDetalheDialog({
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden p-0 flex flex-col gap-0">
           {ptQ.isLoading && (
             <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+              <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
             </div>
           )}
           {pt && (() => {
@@ -1631,48 +1631,51 @@ function PTDetalheDialog({
             return (
               <>
                 {/* ── Cabeçalho documento ─────────────────────────────────── */}
-                <div className="bg-blue-900 text-white shrink-0">
+                <div className="bg-emerald-800 text-white shrink-0">
                   {/* Linha 1: Logo FC + Título + Status */}
                   <div className="flex items-center gap-4 px-6 py-4">
-                    {fcLogoUrl ? (
-                      <img src={fcLogoUrl} alt="Logo FC" className="h-14 w-auto max-w-[100px] object-contain bg-white rounded-lg p-1.5 shrink-0" />
-                    ) : (
-                      <div className="h-14 w-14 bg-white/15 rounded-xl flex items-center justify-center shrink-0 border border-white/20">
-                        <HardHat className="h-8 w-8 text-white/80" />
-                      </div>
-                    )}
+                    {/* Logo FC — container fixo 56×56 para não estourar */}
+                    <div className="w-14 h-14 rounded-xl bg-white/15 border border-white/20 overflow-hidden shrink-0 flex items-center justify-center">
+                      {fcLogoUrl
+                        ? <img src={fcLogoUrl} alt="Logo FC" className="w-full h-full object-contain p-1.5" />
+                        : <HardHat className="h-8 w-8 text-white/80" />}
+                    </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[10px] font-bold text-blue-300 uppercase tracking-[0.2em]">Permissão de Trabalho</p>
+                      <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-[0.2em]">Permissão de Trabalho</p>
                       <h1 className="text-2xl font-black tracking-tight leading-none mt-0.5">{pt.numero}</h1>
-                      {companyName && <p className="text-xs text-blue-300 mt-1 font-medium truncate">{companyName}</p>}
+                      {companyName && <p className="text-xs text-emerald-300 mt-1 font-medium truncate">{companyName}</p>}
                     </div>
                     <div className="shrink-0">
                       <StatusBadge status={pt.status} />
                     </div>
                   </div>
 
-                  {/* Linha 2: Logos cliente + gerenciadora */}
+                  {/* Linha 2: Logos cliente + gerenciadora — containers fixos para não estourar */}
                   {hasObraLogos && (
                     <div className="flex flex-wrap items-center gap-3 px-6 pb-3 border-t border-white/10 pt-3">
                       {(pt.obraClienteLogoUrl || pt.obraClienteNome) && (
-                        <div className="flex items-center gap-2.5 bg-white/10 rounded-xl px-3 py-2 border border-white/15">
+                        <div className="flex items-center gap-2 bg-white/10 rounded-lg px-2.5 py-2 border border-white/15">
                           {pt.obraClienteLogoUrl && (
-                            <img src={pt.obraClienteLogoUrl} alt="Logo Cliente" className="h-9 w-auto max-w-[80px] object-contain bg-white rounded p-0.5 shrink-0" />
+                            <div className="w-10 h-8 rounded overflow-hidden shrink-0 bg-white flex items-center justify-center">
+                              <img src={pt.obraClienteLogoUrl} alt="Cliente" className="w-full h-full object-contain p-0.5" />
+                            </div>
                           )}
                           <div className="min-w-0">
-                            <p className="text-[9px] text-blue-300 font-bold uppercase tracking-wider">Cliente</p>
-                            {pt.obraClienteNome && <p className="text-xs text-white font-semibold leading-tight truncate max-w-[140px]">{pt.obraClienteNome}</p>}
+                            <p className="text-[9px] text-emerald-300 font-bold uppercase tracking-wider leading-none">Cliente</p>
+                            {pt.obraClienteNome && <p className="text-[11px] text-white font-semibold truncate max-w-[120px] leading-tight mt-0.5">{pt.obraClienteNome}</p>}
                           </div>
                         </div>
                       )}
                       {(pt.obraGerenciadoraLogoUrl || pt.obraGerenciadoraNome) && (
-                        <div className="flex items-center gap-2.5 bg-white/10 rounded-xl px-3 py-2 border border-white/15">
+                        <div className="flex items-center gap-2 bg-white/10 rounded-lg px-2.5 py-2 border border-white/15">
                           {pt.obraGerenciadoraLogoUrl && (
-                            <img src={pt.obraGerenciadoraLogoUrl} alt="Logo Gerenciadora" className="h-9 w-auto max-w-[80px] object-contain bg-white rounded p-0.5 shrink-0" />
+                            <div className="w-10 h-8 rounded overflow-hidden shrink-0 bg-white flex items-center justify-center">
+                              <img src={pt.obraGerenciadoraLogoUrl} alt="Gerenciadora" className="w-full h-full object-contain p-0.5" />
+                            </div>
                           )}
                           <div className="min-w-0">
-                            <p className="text-[9px] text-blue-300 font-bold uppercase tracking-wider">Gerenciadora</p>
-                            {pt.obraGerenciadoraNome && <p className="text-xs text-white font-semibold leading-tight truncate max-w-[140px]">{pt.obraGerenciadoraNome}</p>}
+                            <p className="text-[9px] text-emerald-300 font-bold uppercase tracking-wider leading-none">Gerenciadora</p>
+                            {pt.obraGerenciadoraNome && <p className="text-[11px] text-white font-semibold truncate max-w-[120px] leading-tight mt-0.5">{pt.obraGerenciadoraNome}</p>}
                           </div>
                         </div>
                       )}
@@ -1688,7 +1691,7 @@ function PTDetalheDialog({
                           <span key={t} className="inline-flex items-center gap-1 px-2.5 py-1 bg-white/15 text-white rounded-full text-xs font-semibold border border-white/20">
                             {cfg?.emoji && <span>{cfg.emoji}</span>}
                             {cfg?.label ?? t}
-                            {cfg?.nr && <span className="text-blue-300 text-[10px] ml-0.5">{cfg.nr}</span>}
+                            {cfg?.nr && <span className="text-emerald-300 text-[10px] ml-0.5">{cfg.nr}</span>}
                           </span>
                         );
                       })}
@@ -1789,7 +1792,7 @@ function PTDetalheDialog({
                   {Object.keys(checklist).length > 0 && (
                     <div className="border-b border-slate-200">
                       <div className="px-6 pt-4 pb-2 flex items-center gap-2">
-                        <ShieldCheck className="h-4 w-4 text-blue-600" />
+                        <ShieldCheck className="h-4 w-4 text-emerald-600" />
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Checklist de Segurança</p>
                       </div>
                       {isNewFormat ? (() => {
@@ -1806,7 +1809,7 @@ function PTDetalheDialog({
                                   <div className="flex items-center gap-2 mb-2">
                                     {tipoInfo && <span className="text-base">{tipoInfo.emoji}</span>}
                                     <span className="text-xs font-bold text-slate-600">{tipoInfo?.label ?? key}</span>
-                                    {tipoInfo?.nr && <span className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{tipoInfo.nr}</span>}
+                                    {tipoInfo?.nr && <span className="text-[10px] font-mono font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">{tipoInfo.nr}</span>}
                                   </div>
                                   <div className="border border-slate-200 rounded-lg overflow-hidden">
                                     <table className="w-full text-xs border-collapse">
@@ -1823,12 +1826,12 @@ function PTDetalheDialog({
                                           if (!v) return null;
                                           return (
                                             <tr key={idx} className={`border-b border-slate-100 last:border-0
-                                              ${v === "S" ? "bg-green-50/60" : v === "N" ? "bg-red-50/50" : "bg-slate-50/50"}`}>
+                                              ${v === "S" ? "bg-emerald-50/50" : v === "N" ? "bg-red-50/50" : "bg-slate-50/50"}`}>
                                               <td className="px-3 py-2.5 text-slate-400 font-semibold align-top">{idx + 1}.</td>
-                                              <td className={`px-3 py-2.5 break-words leading-relaxed ${v === "S" ? "text-green-900" : v === "N" ? "text-red-800" : "text-slate-600"}`}>{item}</td>
+                                              <td className={`px-3 py-2.5 break-words leading-relaxed ${v === "S" ? "text-emerald-800" : v === "N" ? "text-red-800" : "text-slate-600"}`}>{item}</td>
                                               <td className="px-3 py-2.5 text-center align-top">
                                                 <span className={`inline-flex items-center justify-center w-6 h-6 rounded font-bold text-xs
-                                                  ${v === "S" ? "bg-green-600 text-white" : v === "N" ? "bg-red-500 text-white" : "bg-slate-300 text-slate-700"}`}>{v}</span>
+                                                  ${v === "S" ? "bg-emerald-500 text-white" : v === "N" ? "bg-red-500 text-white" : "bg-slate-300 text-slate-700"}`}>{v}</span>
                                               </td>
                                             </tr>
                                           );
@@ -1850,7 +1853,7 @@ function PTDetalheDialog({
                             <div className="flex items-center gap-2 mb-2">
                               {tipoInfo && <span className="text-base">{tipoInfo.emoji}</span>}
                               <span className="text-xs font-bold text-slate-600">{tipoInfo?.label ?? "Geral"}</span>
-                              {tipoInfo?.nr && <span className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{tipoInfo.nr}</span>}
+                              {tipoInfo?.nr && <span className="text-[10px] font-mono font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">{tipoInfo.nr}</span>}
                             </div>
                             <div className="border border-slate-200 rounded-lg overflow-hidden">
                               <table className="w-full text-xs border-collapse">
@@ -1868,12 +1871,12 @@ function PTDetalheDialog({
                                     if (!v) return null;
                                     return (
                                       <tr key={i} className={`border-b border-slate-100 last:border-0
-                                        ${v === "S" ? "bg-green-50/60" : v === "N" ? "bg-red-50/50" : "bg-slate-50/50"}`}>
+                                        ${v === "S" ? "bg-emerald-50/50" : v === "N" ? "bg-red-50/50" : "bg-slate-50/50"}`}>
                                         <td className="px-3 py-2.5 text-slate-400 font-semibold align-top">{i}.</td>
-                                        <td className={`px-3 py-2.5 break-words leading-relaxed ${v === "S" ? "text-green-900" : v === "N" ? "text-red-800" : "text-slate-600"}`}>{item}</td>
+                                        <td className={`px-3 py-2.5 break-words leading-relaxed ${v === "S" ? "text-emerald-800" : v === "N" ? "text-red-800" : "text-slate-600"}`}>{item}</td>
                                         <td className="px-3 py-2.5 text-center align-top">
                                           <span className={`inline-flex items-center justify-center w-6 h-6 rounded font-bold text-xs
-                                            ${v === "S" ? "bg-green-600 text-white" : v === "N" ? "bg-red-500 text-white" : "bg-slate-300 text-slate-700"}`}>{v}</span>
+                                            ${v === "S" ? "bg-emerald-500 text-white" : v === "N" ? "bg-red-500 text-white" : "bg-slate-300 text-slate-700"}`}>{v}</span>
                                         </td>
                                       </tr>
                                     );
@@ -1904,17 +1907,17 @@ function PTDetalheDialog({
                           </div>
 
                           {/* Banner status */}
-                          <div className={`rounded-xl border px-4 py-3 mb-4 ${allSigned ? "bg-blue-50 border-blue-200" : "bg-amber-50 border-amber-200"}`}>
+                          <div className={`rounded-xl border px-4 py-3 mb-4 ${allSigned ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`}>
                             <div className="flex items-center justify-between mb-2">
-                              <span className={`text-sm font-bold ${allSigned ? "text-blue-700" : "text-amber-700"}`}>
+                              <span className={`text-sm font-bold ${allSigned ? "text-emerald-700" : "text-amber-700"}`}>
                                 {allSigned ? "✅ Todas as assinaturas coletadas" : `⏳ ${totalSigned} de ${totalEnv} assinatura${totalEnv > 1 ? "s" : ""} coletada${totalSigned !== 1 ? "s" : ""}`}
                               </span>
-                              <span className={`text-xs font-black px-2.5 py-1 rounded-full ${allSigned ? "bg-blue-200 text-blue-800" : "bg-amber-200 text-amber-800"}`}>
+                              <span className={`text-xs font-black px-2.5 py-1 rounded-full ${allSigned ? "bg-emerald-200 text-emerald-800" : "bg-amber-200 text-amber-800"}`}>
                                 {totalSigned}/{totalEnv}
                               </span>
                             </div>
                             <div className="w-full h-2 bg-white/70 rounded-full overflow-hidden">
-                              <div className={`h-full rounded-full transition-all ${allSigned ? "bg-blue-500" : "bg-amber-400"}`}
+                              <div className={`h-full rounded-full transition-all ${allSigned ? "bg-emerald-500" : "bg-amber-400"}`}
                                 style={{ width: `${(totalSigned / totalEnv) * 100}%` }} />
                             </div>
                             {!allSigned && pendentes.length > 0 && (
@@ -1933,9 +1936,9 @@ function PTDetalheDialog({
                                 <button key={pos}
                                   onClick={() => setAssinarPad({ posicao: pos, nome: env.nome || `Envolvido ${pos}` })}
                                   className={`flex items-center gap-3 p-3.5 rounded-xl border-2 text-left transition-all group
-                                    ${signed ? "border-blue-300 bg-blue-50 hover:bg-blue-100" : "border-dashed border-slate-200 hover:border-blue-300 bg-white hover:bg-slate-50"}`}>
+                                    ${signed ? "border-emerald-300 bg-emerald-50 hover:bg-emerald-100" : "border-dashed border-slate-200 hover:border-emerald-300 bg-white hover:bg-slate-50"}`}>
                                   <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-colors
-                                    ${signed ? "bg-blue-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-blue-100 group-hover:text-blue-600"}`}>
+                                    ${signed ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-emerald-100 group-hover:text-emerald-600"}`}>
                                     {signed ? <Check className="h-5 w-5" /> : <PenLine className="h-4 w-4" />}
                                   </div>
                                   <div className="min-w-0 flex-1">
@@ -1944,7 +1947,7 @@ function PTDetalheDialog({
                                     </p>
                                     {env.funcao && <p className="text-xs text-slate-400 truncate">{env.funcao}</p>}
                                     {signed && assSig?.assinadoEm ? (
-                                      <p className="text-xs text-blue-600 mt-0.5 font-medium">
+                                      <p className="text-xs text-emerald-600 mt-0.5 font-medium">
                                         ✓ {new Date(assSig.assinadoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                                       </p>
                                     ) : (
@@ -1965,7 +1968,7 @@ function PTDetalheDialog({
                     <div className="border-b border-slate-200">
                       <div className="px-6 pt-4 pb-4">
                         <div className="flex items-center gap-2 mb-3">
-                          <ShieldCheck className="h-4 w-4 text-blue-600" />
+                          <ShieldCheck className="h-4 w-4 text-emerald-600" />
                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Liberação da Permissão</p>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -1988,9 +1991,9 @@ function PTDetalheDialog({
                             </div>
                           )}
                           {pt.executanteNome && (
-                            <div className="p-3 bg-blue-50 rounded-xl border border-blue-200">
-                              <p className="text-[10px] text-blue-600 font-semibold uppercase tracking-wide mb-0.5">Resp. Execução</p>
-                              <p className="text-sm font-semibold text-blue-800 break-words">{pt.executanteNome}</p>
+                            <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200">
+                              <p className="text-[10px] text-emerald-600 font-semibold uppercase tracking-wide mb-0.5">Resp. Execução</p>
+                              <p className="text-sm font-semibold text-emerald-800 break-words">{pt.executanteNome}</p>
                             </div>
                           )}
                         </div>
@@ -2044,7 +2047,7 @@ function PTDetalheDialog({
                         executanteNome: pt.executanteNome ?? "",
                       });
                       setLiberarOpen(true);
-                    }} className="bg-blue-600 hover:bg-blue-700 text-white">
+                    }} className="bg-emerald-600 hover:bg-emerald-700 text-white">
                       <ShieldCheck className="h-4 w-4 mr-1.5" /> Liberar PT
                     </Button>
                     <Button variant="outline" onClick={handleCancelar} disabled={cancelarMut.isPending}

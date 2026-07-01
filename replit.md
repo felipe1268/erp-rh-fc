@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3923** — **SST — PT DETALHE: PALETA FC AZUL + 3 LOGOS (FC + CLIENTE + GERENCIADORA).** `getById` expandido: `obraClienteLogoUrl`, `obraGerenciadoraLogoUrl`, `obraGerenciadoraNome`, `obraClienteNome` da obra. Cabeçalho `bg-blue-900`: logo FC + linha de logos do cliente/gerenciadora (cards `bg-white/10 rounded-xl`) + chips NR `text-blue-300`. Todas as cores de marca emerald→blue no corpo do dialog (banner assinaturas, cards envolvidos, ícones, botão "Liberar PT", spinner). Badge S do checklist mantém green (semântico). ZERO DELETE.
+- **Rev. 3924** — **SST — PT DETALHE: FIX LOGOS ENORMES + REVERT CORES PARA EMERALD.** Rev. 3923 havia trocado todas as cores para azul (indesejado) e os logos renderizavam no tamanho natural da imagem. Fix: revertidas TODAS as cores de marca para emerald (header emerald-800, badges, botões, ícones). Logos da obra agora usam container fixo `w-10 h-8 overflow-hidden` + `img w-full h-full object-contain` — imagem confinada ao box sem estourar. ZERO DELETE.
 
-- **Rev. 3922** — **SST — PT DETALHE: REDESIGN LAYOUT DOCUMENTO OFICIAL.** Header emerald-800 com logo da empresa + número PT font-black + chips de tipo no sub-header. Faixa amarela safety-stripe. Tabela de dados (border-collapse 4 colunas). Checklist em tabela com coluna #/Item/Resp. (badge S=emerald/N=red/NA=slate). Cards rounded-xl para Liberação e Conclusão. Layout flex-col overflow-hidden (body scrollável, header+footer fixos). ZERO DELETE.
+- **Rev. 3923** — **SST — PT DETALHE: PALETA FC AZUL + 3 LOGOS (FC + CLIENTE + GERENCIADORA).** `getById` expandido: `obraClienteLogoUrl`, `obraGerenciadoraLogoUrl`, `obraGerenciadoraNome`, `obraClienteNome` da obra. Cabeçalho com logo FC + linha de logos do cliente/gerenciadora (cards `bg-white/10 rounded-xl`). ZERO DELETE.
 
 ### 5 one-liners
+
+- **Rev. 3922** — **SST — PT DETALHE: REDESIGN LAYOUT DOCUMENTO OFICIAL.** Header emerald-800 + logo empresa + número PT font-black + chips de tipo. Faixa amarela safety-stripe. Tabela de dados 4 colunas. Checklist em tabela #/Item/Resp. Cards rounded-xl Liberação/Conclusão. Layout flex-col overflow-hidden. ZERO DELETE.
 
 - **Rev. 3921** — **SST — PT WIZARD: FOTO DO FUNCIONÁRIO NO SELETOR DE RESPONSÁVEL PELA EXECUÇÃO.** Dropdown customizado substitui `<Select>` no campo "Responsável pela execução" (Step 4). `fotoMap` de `obraFuncsQ`. `executanteDropOpen` + ref + click-outside. ZERO DELETE.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3918** — **CONCILIAÇÃO BANCÁRIA: FIX CHIP DE MÊS MOSTRANDO 100% FALSO (ARREDONDAMENTO).** `mesesPct` usava `Math.round`: 829/833 = 99,52% arredondava para 100%. Fix: `conciliadas >= total ? 100 : Math.floor(...)`. ZERO DELETE.
 
-- **Rev. 3917** — **SST — PT WIZARD + EDIT DIALOG: CNPJ AUTO-FILL DA RAZÃO SOCIAL VIA BRASILAPI.** `compras.buscarCNPJ`, helper `formatCNPJ`, spinner/✓/erro, limpa ao mudar CNPJ. ZERO DELETE.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3916 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3917 e anteriores.
 
 ## User preferences
 

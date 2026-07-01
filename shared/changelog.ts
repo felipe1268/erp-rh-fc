@@ -1,4 +1,30 @@
 /**
+ * Rev. 3924 — **SST — PT DETALHE: FIX LOGOS ENORMES + REVERT CORES PARA EMERALD.**
+ *
+ * PROBLEMA: Rev. 3923 trocou todas as cores de marca de emerald para azul (indesejado) e os
+ * logos da obra renderizavam no tamanho natural da imagem (sem constraint de container),
+ * ocupando quase toda a tela do dialog.
+ *
+ * SOLUÇÃO:
+ * 1. Revertidas TODAS as mudanças de cor de marca (azul → emerald) no PTDetalheDialog:
+ *    - Header: bg-blue-900 → bg-emerald-800; subtextos text-blue-300 → text-emerald-300
+ *    - Checklist: NR badge, S-row bg/text/badge → emerald (S=emerald-500, N=red)
+ *    - Banner allSigned, cards envolvidos, ícone check, hover-group, timestamp → emerald
+ *    - ShieldCheck seções, Resp. Execução card, botão "Liberar PT", spinner → emerald
+ *
+ * 2. Fix logos da obra (cliente + gerenciadora): substituído `<img h-9 w-auto max-w-[80px]>`
+ *    (sem constraint no container pai → estoura) por container de tamanho FIXO com overflow-hidden:
+ *    `<div className="w-10 h-8 rounded overflow-hidden bg-white flex items-center justify-center">`
+ *    + `<img className="w-full h-full object-contain p-0.5">` — imagem confinada ao box 40×32px.
+ *
+ * 3. Fix logo FC: container fixo `w-14 h-14 overflow-hidden` com `w-full h-full object-contain`.
+ *
+ * Resultado: logos compactos e corretamente proporcionados no cabeçalho do document,
+ * todo o resto do dialog com as cores originais do Rev. 3922 (emerald).
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3923 — **SST — PT DETALHE: PALETA FC AZUL + 3 LOGOS (FC + CLIENTE + GERENCIADORA).**
  *
  * PEDIDO: "Reformule o PTDetalheDialog para usar as cores azuis da marca FC e exiba os 3 logos
