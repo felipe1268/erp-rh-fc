@@ -1,4 +1,45 @@
 /**
+ * Rev. 3922 — **SST — PT DETALHE: REDESIGN PARA LAYOUT DE DOCUMENTO OFICIAL DE PT.**
+ *
+ * PEDIDO: "Reformula esse layout de forma que fique mais bonito, apareça o nosso logo na tela,
+ * fique um layout moderno e bem similar a uma PT de trabalho normatizado."
+ *
+ * SOLUÇÃO — FRONT-ONLY (PTDetalheDialog em PermissaoTrabalho.tsx):
+ *
+ * 1. Cabeçalho documento (bg-emerald-800):
+ *    - Logo da empresa via `VITE_APP_LOGO ?? selectedCompany?.logoUrl` (fallback: ícone HardHat)
+ *    - "PERMISSÃO DE TRABALHO" em tracking widest + número PT em font-black/2xl
+ *    - Nome da empresa abaixo
+ *    - StatusBadge alinhado à direita
+ *    - Chips dos tipos de trabalho com emoji + NR (bg-white/15, rounded-full) no sub-header
+ *
+ * 2. Faixa de segurança amarela (h-1.5 gradient yellow-500→yellow-300→yellow-500) —
+ *    padrão visual de formulários de segurança normatizados.
+ *
+ * 3. Tabela de dados da PT (border-collapse, dividida por linhas):
+ *    - Linha 1: Data | Início | Término | Mão de Obra (4 colunas iguais)
+ *    - Linha 2: Obra (colspan=2) | Solicitante (colspan=2)
+ *    - Linhas condicionais: Supervisor, Empresa Executante
+ *
+ * 4. Checklist em tabela com cabeçalho # / Item / Resp. e badge colorido (S=emerald/N=red/NA=slate).
+ *
+ * 5. Envolvidos: banner de status modernizado + cards com border-radius-xl e efeito hover group.
+ *
+ * 6. Liberação: 3-4 cards rounded-xl (bg-slate-50/emerald-50).
+ *
+ * 7. Conclusão: cards bg-blue-50 rounded-xl.
+ *
+ * 8. Layout: `overflow-hidden p-0 flex flex-col` — corpo scrollável independente do cabeçalho
+ *    e rodapé de ações (sempre visíveis).
+ *
+ * 9. Adicionado `useCompany()` no PTDetalheDialog para acessar logo + razaoSocial.
+ *
+ * ZERO DELETE. ZERO BACKEND.
+ *
+ * ARQUIVOS: client/src/pages/sst/PermissaoTrabalho.tsx
+ */
+
+/**
  * Rev. 3921 — **SST — PT WIZARD: FOTO DO FUNCIONÁRIO NO SELETOR DE RESPONSÁVEL PELA EXECUÇÃO.**
  *
  * PEDIDO: "Quero que apareça a foto do funcionário aqui embaixo também, quando eu tiver que

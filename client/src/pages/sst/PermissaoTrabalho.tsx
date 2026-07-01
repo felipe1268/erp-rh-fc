@@ -1497,6 +1497,7 @@ function PTDetalheDialog({
   onOpenChange: (v: boolean) => void; onRefresh: () => void;
   onEdit?: (id: number) => void;
 }) {
+  const { selectedCompany } = useCompany();
   const { confirm, ConfirmDialog } = useConfirm();
   const [assinarPad, setAssinarPad] = useState<{ posicao: number; nome: string } | null>(null);
   const [concluirOpen, setConcluirOpen] = useState(false);
@@ -1614,275 +1615,397 @@ function PTDetalheDialog({
       )}
 
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden p-0 flex flex-col gap-0">
           {ptQ.isLoading && (
-            <div className="flex items-center justify-center py-12">
+            <div className="flex items-center justify-center py-16">
               <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
             </div>
           )}
-          {pt && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center justify-between">
-                  <span className="flex items-center gap-2">
-                    <HardHat className="h-5 w-5 text-emerald-600" />
-                    {pt.numero}
-                  </span>
-                  <StatusBadge status={pt.status} />
-                </DialogTitle>
-              </DialogHeader>
+          {pt && (() => {
+            const logoUrl = (import.meta as any).env?.VITE_APP_LOGO ?? selectedCompany?.logoUrl ?? null;
+            const companyName = selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || "";
+            const tiposPt: string[] = (() => { try { return JSON.parse(pt.tiposTrabalhoJson ?? "[]"); } catch { return []; } })();
+            const isNewFormat = Object.keys(checklist).some(k => k.includes(":"));
 
-              <div className="space-y-5">
-                {/* Infos básicas */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-slate-50 rounded-lg">
-                  <InfoChip label="Data" value={pt.dataEmissao ?? "—"} />
-                  <InfoChip label="Início" value={pt.horaInicio ?? "—"} />
-                  <InfoChip label="Término" value={pt.horaTermino ?? "—"} />
-                  <InfoChip label="Mão de Obra" value={pt.maoDeObra === "externa" ? "Externa" : "Interna"} />
-                  {pt.obraNome && <InfoChip label="Obra" value={pt.obraNome} className="col-span-2" />}
-                  {pt.solicitanteNome && <InfoChip label="Solicitante" value={pt.solicitanteNome} className="col-span-2" />}
-                  {pt.supervisorNome && <InfoChip label="Supervisor" value={pt.supervisorNome} className="col-span-2" />}
-                  {pt.empresaExecutanteNome && <InfoChip label="Empresa executante" value={pt.empresaExecutanteNome} className="col-span-2" />}
-                </div>
-
-                {/* Tipos de trabalho */}
-                {pt.tiposTrabalho?.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-slate-500 mb-2">TIPO DE TRABALHO</p>
-                    <div className="flex flex-wrap gap-2">
-                      {(pt.tiposTrabalho as string[]).map(t => {
+            return (
+              <>
+                {/* ── Cabeçalho documento ─────────────────────────────────── */}
+                <div className="bg-emerald-800 text-white shrink-0">
+                  <div className="flex items-center gap-4 px-6 py-4">
+                    {/* Logo empresa */}
+                    {logoUrl ? (
+                      <img src={logoUrl} alt="Logo" className="h-14 w-auto max-w-[100px] object-contain bg-white rounded-lg p-1.5 shrink-0" />
+                    ) : (
+                      <div className="h-14 w-14 bg-white/15 rounded-xl flex items-center justify-center shrink-0 border border-white/20">
+                        <HardHat className="h-8 w-8 text-white/80" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-[0.2em]">Permissão de Trabalho</p>
+                      <h1 className="text-2xl font-black tracking-tight leading-none mt-0.5">{pt.numero}</h1>
+                      {companyName && <p className="text-xs text-emerald-300 mt-1 font-medium truncate">{companyName}</p>}
+                    </div>
+                    <div className="shrink-0">
+                      <StatusBadge status={pt.status} />
+                    </div>
+                  </div>
+                  {/* Tipos de trabalho em chips no header */}
+                  {pt.tiposTrabalho?.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 px-6 pb-4">
+                      {(pt.tiposTrabalho as string[]).map((t: string) => {
                         const cfg = TIPOS_TRABALHO.find(x => x.key === t);
-                        return <span key={t} className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs font-medium">{cfg?.label ?? t}</span>;
+                        return (
+                          <span key={t} className="inline-flex items-center gap-1 px-2.5 py-1 bg-white/15 text-white rounded-full text-xs font-semibold border border-white/20">
+                            {cfg?.emoji && <span>{cfg.emoji}</span>}
+                            {cfg?.label ?? t}
+                            {cfg?.nr && <span className="text-emerald-300 text-[10px] ml-0.5">{cfg.nr}</span>}
+                          </span>
+                        );
                       })}
                     </div>
+                  )}
+                </div>
+
+                {/* Faixa de segurança amarela */}
+                <div className="h-1.5 bg-gradient-to-r from-yellow-500 via-yellow-300 to-yellow-500 shrink-0" />
+
+                {/* ── Corpo scrollável ────────────────────────────────────── */}
+                <div className="flex-1 overflow-y-auto">
+                  {/* Tabela de dados da PT */}
+                  <div className="border-b border-slate-200">
+                    <div className="px-6 pt-4 pb-1">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Dados da Permissão</p>
+                    </div>
+                    <table className="w-full text-sm border-collapse">
+                      <tbody>
+                        <tr className="border-b border-slate-100">
+                          <td className="px-6 py-2.5 border-r border-slate-100 w-1/4">
+                            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Data</p>
+                            <p className="font-semibold text-slate-800">{pt.dataEmissao ?? "—"}</p>
+                          </td>
+                          <td className="px-6 py-2.5 border-r border-slate-100 w-1/4">
+                            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Início</p>
+                            <p className="font-semibold text-slate-800">{pt.horaInicio ?? "—"}</p>
+                          </td>
+                          <td className="px-6 py-2.5 border-r border-slate-100 w-1/4">
+                            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Término</p>
+                            <p className="font-semibold text-slate-800">{pt.horaTermino ?? "—"}</p>
+                          </td>
+                          <td className="px-6 py-2.5 w-1/4">
+                            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Mão de Obra</p>
+                            <p className="font-semibold text-slate-800">{pt.maoDeObra === "externa" ? "Externa" : "Interna"}</p>
+                          </td>
+                        </tr>
+                        {(pt.obraNome || pt.solicitanteNome) && (
+                          <tr className="border-b border-slate-100">
+                            <td colSpan={2} className="px-6 py-2.5 border-r border-slate-100">
+                              <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Obra</p>
+                              <p className="font-semibold text-slate-800 break-words">{pt.obraNome ?? "—"}</p>
+                            </td>
+                            <td colSpan={2} className="px-6 py-2.5">
+                              <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Solicitante</p>
+                              <p className="font-semibold text-slate-800 break-words">{pt.solicitanteNome ?? "—"}</p>
+                            </td>
+                          </tr>
+                        )}
+                        {pt.supervisorNome && (
+                          <tr className="border-b border-slate-100">
+                            <td colSpan={4} className="px-6 py-2.5">
+                              <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Supervisor</p>
+                              <p className="font-semibold text-slate-800 break-words">{pt.supervisorNome}</p>
+                            </td>
+                          </tr>
+                        )}
+                        {pt.empresaExecutanteNome && (
+                          <tr>
+                            <td colSpan={4} className="px-6 py-2.5">
+                              <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Empresa Executante</p>
+                              <p className="font-semibold text-slate-800 break-words">{pt.empresaExecutanteNome}</p>
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
                   </div>
-                )}
 
-                {pt.descricaoTrabalho && (
-                  <div>
-                    <p className="text-xs font-semibold text-slate-500 mb-1">DESCRIÇÃO DO TRABALHO</p>
-                    <p className="text-sm text-slate-700 break-words">{pt.descricaoTrabalho}</p>
-                  </div>
-                )}
+                  {/* Descrição */}
+                  {pt.descricaoTrabalho && (
+                    <div className="px-6 py-4 border-b border-slate-200">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Descrição do Trabalho</p>
+                      <p className="text-sm text-slate-700 break-words leading-relaxed">{pt.descricaoTrabalho}</p>
+                    </div>
+                  )}
 
-                {/* Documento APT da contratante */}
-                {!!pt.outrosFormularios && (
-                  <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 space-y-2">
-                    <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide flex items-center gap-1.5">
-                      <FileText className="h-3.5 w-3.5" /> Documento exigido pela instalação/contratante
-                    </p>
-                    {pt.outrosFormulariosDesc && (
-                      <p className="text-sm text-slate-700 break-words">{pt.outrosFormulariosDesc}</p>
-                    )}
-                    {pt.outrosFormulariosAnexoUrl && (
-                      <a href={pt.outrosFormulariosAnexoUrl} target="_blank" rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs text-blue-600 underline hover:text-blue-800">
-                        <Paperclip className="h-3.5 w-3.5" />
-                        {decodeURIComponent(pt.outrosFormulariosAnexoUrl.split("/").pop()?.split("?")[0] ?? "Ver documento APT")}
-                      </a>
-                    )}
-                  </div>
-                )}
+                  {/* Documento APT */}
+                  {!!pt.outrosFormularios && (
+                    <div className="mx-6 my-4 p-3 bg-amber-50 rounded-lg border border-amber-200 space-y-1.5">
+                      <p className="text-xs font-bold text-amber-700 uppercase tracking-wide flex items-center gap-1.5">
+                        <FileText className="h-3.5 w-3.5" /> Documento exigido pela instalação/contratante
+                      </p>
+                      {pt.outrosFormulariosDesc && (
+                        <p className="text-sm text-slate-700 break-words">{pt.outrosFormulariosDesc}</p>
+                      )}
+                      {pt.outrosFormulariosAnexoUrl && (
+                        <a href={pt.outrosFormulariosAnexoUrl} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-xs text-blue-600 underline hover:text-blue-800">
+                          <Paperclip className="h-3.5 w-3.5" />
+                          {decodeURIComponent(pt.outrosFormulariosAnexoUrl.split("/").pop()?.split("?")[0] ?? "Ver documento APT")}
+                        </a>
+                      )}
+                    </div>
+                  )}
 
-                {/* Checklist resumido — suporta formato antigo (chave numérica) e novo ("tipo:idx") */}
-                {Object.keys(checklist).length > 0 && (() => {
-                  const tiposPt: string[] = (() => { try { return JSON.parse(pt.tiposTrabalhoJson ?? "[]"); } catch { return []; } })();
-                  const isNewFormat = Object.keys(checklist).some(k => k.includes(":"));
-
-                  if (isNewFormat) {
-                    // Novo formato: seções por tipo
-                    const types = tiposPt.length > 0 ? tiposPt : ["geral"];
-                    return (
-                      <div className="space-y-3">
-                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Checklist de segurança</p>
-                        {types.map(key => {
-                          const tipoInfo = TIPOS_TRABALHO.find(t => t.key === key);
-                          const items = PT_CHECKLISTS[key] ?? PT_CHECKLISTS.geral;
-                          const hasAnswers = items.some((_, idx) => checklist[`${key}:${idx + 1}`]);
-                          if (!hasAnswers) return null;
-                          return (
-                            <div key={key}>
-                              <p className="text-xs font-semibold text-slate-500 mb-1.5 flex items-center gap-1.5">
-                                {tipoInfo && <span>{tipoInfo.emoji}</span>}
-                                {tipoInfo ? tipoInfo.label : key}
-                                {tipoInfo && <span className="font-mono text-emerald-600 text-[10px]">{tipoInfo.nr}</span>}
-                              </p>
-                              <div className="space-y-1">
-                                {items.map((item, idx) => {
-                                  const v = checklist[`${key}:${idx + 1}`];
-                                  if (!v) return null;
-                                  return (
-                                    <div key={idx} className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded
-                                      ${v === "S" ? "bg-green-50 text-green-700" : v === "N" ? "bg-red-50 text-red-700" : "bg-slate-50 text-slate-500"}`}>
-                                      <span className="font-bold w-4">{idx + 1}.</span>
-                                      <span className="flex-1 break-words">{item}</span>
-                                      <span className={`font-bold px-1.5 py-0.5 rounded text-xs
-                                        ${v === "S" ? "bg-green-200" : v === "N" ? "bg-red-200" : "bg-slate-200"}`}>{v}</span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
+                  {/* Checklist de segurança */}
+                  {Object.keys(checklist).length > 0 && (
+                    <div className="border-b border-slate-200">
+                      <div className="px-6 pt-4 pb-2 flex items-center gap-2">
+                        <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Checklist de Segurança</p>
+                      </div>
+                      {isNewFormat ? (() => {
+                        const types = tiposPt.length > 0 ? tiposPt : ["geral"];
+                        return (
+                          <div className="pb-4 space-y-4">
+                            {types.map(key => {
+                              const tipoInfo = TIPOS_TRABALHO.find(t => t.key === key);
+                              const items = PT_CHECKLISTS[key] ?? PT_CHECKLISTS.geral;
+                              const hasAnswers = items.some((_, idx) => checklist[`${key}:${idx + 1}`]);
+                              if (!hasAnswers) return null;
+                              return (
+                                <div key={key} className="px-6">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    {tipoInfo && <span className="text-base">{tipoInfo.emoji}</span>}
+                                    <span className="text-xs font-bold text-slate-600">{tipoInfo?.label ?? key}</span>
+                                    {tipoInfo?.nr && <span className="text-[10px] font-mono font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">{tipoInfo.nr}</span>}
+                                  </div>
+                                  <div className="border border-slate-200 rounded-lg overflow-hidden">
+                                    <table className="w-full text-xs border-collapse">
+                                      <thead>
+                                        <tr className="bg-slate-50 border-b border-slate-200">
+                                          <th className="px-3 py-2 text-left font-semibold text-slate-500 w-8">#</th>
+                                          <th className="px-3 py-2 text-left font-semibold text-slate-500">Item</th>
+                                          <th className="px-3 py-2 text-center font-semibold text-slate-500 w-12">Resp.</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {items.map((item, idx) => {
+                                          const v = checklist[`${key}:${idx + 1}`];
+                                          if (!v) return null;
+                                          return (
+                                            <tr key={idx} className={`border-b border-slate-100 last:border-0
+                                              ${v === "S" ? "bg-emerald-50/50" : v === "N" ? "bg-red-50/50" : "bg-slate-50/50"}`}>
+                                              <td className="px-3 py-2.5 text-slate-400 font-semibold align-top">{idx + 1}.</td>
+                                              <td className={`px-3 py-2.5 break-words leading-relaxed ${v === "S" ? "text-emerald-800" : v === "N" ? "text-red-800" : "text-slate-600"}`}>{item}</td>
+                                              <td className="px-3 py-2.5 text-center align-top">
+                                                <span className={`inline-flex items-center justify-center w-6 h-6 rounded font-bold text-xs
+                                                  ${v === "S" ? "bg-emerald-500 text-white" : v === "N" ? "bg-red-500 text-white" : "bg-slate-300 text-slate-700"}`}>{v}</span>
+                                              </td>
+                                            </tr>
+                                          );
+                                        })}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })() : (() => {
+                        const primaryKey = tiposPt[0];
+                        const tipoInfo = TIPOS_TRABALHO.find(t => t.key === primaryKey);
+                        const checklistItems = PT_CHECKLISTS[primaryKey ?? ""] ?? PT_CHECKLISTS.geral;
+                        return (
+                          <div className="px-6 pb-4">
+                            <div className="flex items-center gap-2 mb-2">
+                              {tipoInfo && <span className="text-base">{tipoInfo.emoji}</span>}
+                              <span className="text-xs font-bold text-slate-600">{tipoInfo?.label ?? "Geral"}</span>
+                              {tipoInfo?.nr && <span className="text-[10px] font-mono font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">{tipoInfo.nr}</span>}
                             </div>
-                          );
-                        })}
+                            <div className="border border-slate-200 rounded-lg overflow-hidden">
+                              <table className="w-full text-xs border-collapse">
+                                <thead>
+                                  <tr className="bg-slate-50 border-b border-slate-200">
+                                    <th className="px-3 py-2 text-left font-semibold text-slate-500 w-8">#</th>
+                                    <th className="px-3 py-2 text-left font-semibold text-slate-500">Item</th>
+                                    <th className="px-3 py-2 text-center font-semibold text-slate-500 w-12">Resp.</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {checklistItems.map((item, idx) => {
+                                    const i = idx + 1;
+                                    const v = checklist[i];
+                                    if (!v) return null;
+                                    return (
+                                      <tr key={i} className={`border-b border-slate-100 last:border-0
+                                        ${v === "S" ? "bg-emerald-50/50" : v === "N" ? "bg-red-50/50" : "bg-slate-50/50"}`}>
+                                        <td className="px-3 py-2.5 text-slate-400 font-semibold align-top">{i}.</td>
+                                        <td className={`px-3 py-2.5 break-words leading-relaxed ${v === "S" ? "text-emerald-800" : v === "N" ? "text-red-800" : "text-slate-600"}`}>{item}</td>
+                                        <td className="px-3 py-2.5 text-center align-top">
+                                          <span className={`inline-flex items-center justify-center w-6 h-6 rounded font-bold text-xs
+                                            ${v === "S" ? "bg-emerald-500 text-white" : v === "N" ? "bg-red-500 text-white" : "bg-slate-300 text-slate-700"}`}>{v}</span>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {/* Envolvidos + assinaturas */}
+                  {(() => {
+                    const lista = envolvidos.length > 0 ? envolvidos : [] as any[];
+                    const totalEnv = lista.length;
+                    const totalSigned = lista.filter((_: any, i: number) => assinaturasMap.has(i + 1)).length;
+                    const allSigned = totalEnv > 0 && totalSigned === totalEnv;
+                    const pendentes = lista.filter((_: any, i: number) => !assinaturasMap.has(i + 1)).map((e: any) => e.nome || `Envolvido ${lista.indexOf(e) + 1}`);
+                    if (lista.length === 0) return null;
+                    return (
+                      <div className="border-b border-slate-200">
+                        <div className="px-6 pt-4 pb-3">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Users className="h-4 w-4 text-slate-500" />
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Envolvidos e Assinaturas</p>
+                          </div>
+
+                          {/* Banner status */}
+                          <div className={`rounded-xl border px-4 py-3 mb-4 ${allSigned ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`}>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className={`text-sm font-bold ${allSigned ? "text-emerald-700" : "text-amber-700"}`}>
+                                {allSigned ? "✅ Todas as assinaturas coletadas" : `⏳ ${totalSigned} de ${totalEnv} assinatura${totalEnv > 1 ? "s" : ""} coletada${totalSigned !== 1 ? "s" : ""}`}
+                              </span>
+                              <span className={`text-xs font-black px-2.5 py-1 rounded-full ${allSigned ? "bg-emerald-200 text-emerald-800" : "bg-amber-200 text-amber-800"}`}>
+                                {totalSigned}/{totalEnv}
+                              </span>
+                            </div>
+                            <div className="w-full h-2 bg-white/70 rounded-full overflow-hidden">
+                              <div className={`h-full rounded-full transition-all ${allSigned ? "bg-emerald-500" : "bg-amber-400"}`}
+                                style={{ width: `${(totalSigned / totalEnv) * 100}%` }} />
+                            </div>
+                            {!allSigned && pendentes.length > 0 && (
+                              <p className="text-xs text-amber-700 mt-2">
+                                <span className="font-semibold">Falta assinar: </span>{pendentes.join(" · ")}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            {lista.map((env: any, idx: number) => {
+                              const pos = idx + 1;
+                              const signed = assinaturasMap.has(pos);
+                              const assSig = pt.assinaturas?.find((a: any) => a.posicao === pos);
+                              return (
+                                <button key={pos}
+                                  onClick={() => setAssinarPad({ posicao: pos, nome: env.nome || `Envolvido ${pos}` })}
+                                  className={`flex items-center gap-3 p-3.5 rounded-xl border-2 text-left transition-all group
+                                    ${signed ? "border-emerald-300 bg-emerald-50 hover:bg-emerald-100" : "border-dashed border-slate-200 hover:border-emerald-300 bg-white hover:bg-slate-50"}`}>
+                                  <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-colors
+                                    ${signed ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-emerald-100 group-hover:text-emerald-600"}`}>
+                                    {signed ? <Check className="h-5 w-5" /> : <PenLine className="h-4 w-4" />}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-semibold text-slate-800 truncate">
+                                      {env.nome || <span className="text-slate-400 italic">Posição {pos}</span>}
+                                    </p>
+                                    {env.funcao && <p className="text-xs text-slate-400 truncate">{env.funcao}</p>}
+                                    {signed && assSig?.assinadoEm ? (
+                                      <p className="text-xs text-emerald-600 mt-0.5 font-medium">
+                                        ✓ {new Date(assSig.assinadoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                                      </p>
+                                    ) : (
+                                      <p className="text-xs text-amber-500 mt-0.5">⏳ Aguardando assinatura</p>
+                                    )}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
                       </div>
                     );
-                  }
+                  })()}
 
-                  // Formato antigo: chave numérica (primaryKey only)
-                  const primaryKey = tiposPt[0];
-                  const tipoInfo = TIPOS_TRABALHO.find(t => t.key === primaryKey);
-                  const checklistItems = PT_CHECKLISTS[primaryKey ?? ""] ?? PT_CHECKLISTS.geral;
-                  return (
-                    <div>
-                      <p className="text-xs font-semibold text-slate-500 mb-2 flex items-center gap-1.5">
-                        {tipoInfo ? (
-                          <><span>{tipoInfo.emoji}</span>CHECKLIST — {tipoInfo.label}<span className="font-mono text-emerald-600">{tipoInfo.nr}</span></>
-                        ) : "CHECKLIST DE SEGURANÇA"}
-                      </p>
-                      <div className="space-y-1">
-                        {checklistItems.map((item, idx) => {
-                          const i = idx + 1;
-                          const v = checklist[i];
-                          if (!v) return null;
-                          return (
-                            <div key={i} className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded
-                              ${v === "S" ? "bg-green-50 text-green-700" : v === "N" ? "bg-red-50 text-red-700" : "bg-slate-50 text-slate-500"}`}>
-                              <span className="font-bold w-4">{i}.</span>
-                              <span className="flex-1 break-words">{item}</span>
-                              <span className={`font-bold px-1.5 py-0.5 rounded text-xs
-                                ${v === "S" ? "bg-green-200" : v === "N" ? "bg-red-200" : "bg-slate-200"}`}>{v}</span>
+                  {/* Liberação */}
+                  {(pt.responsavelAreaNome || pt.responsavelLiberacaoNome || pt.executanteNome) && (
+                    <div className="border-b border-slate-200">
+                      <div className="px-6 pt-4 pb-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Liberação da Permissão</p>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          {pt.empresaSetorExecutante && (
+                            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                              <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide mb-0.5">Empresa / Setor</p>
+                              <p className="text-sm font-semibold text-slate-800 break-words">{pt.empresaSetorExecutante}</p>
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Envolvidos + assinaturas */}
-                {(() => {
-                  const lista = envolvidos.length > 0 ? envolvidos : [] as any[];
-                  const totalEnv = lista.length;
-                  const totalSigned = lista.filter((_: any, i: number) => assinaturasMap.has(i + 1)).length;
-                  const allSigned = totalEnv > 0 && totalSigned === totalEnv;
-                  const pendentes = lista.filter((_: any, i: number) => !assinaturasMap.has(i + 1)).map((e: any) => e.nome || `Envolvido ${lista.indexOf(e) + 1}`);
-                  return (
-                    <div>
-                      <p className="text-xs font-semibold text-slate-500 mb-2 flex items-center gap-1">
-                        <Users className="h-3.5 w-3.5" /> ENVOLVIDOS E ASSINATURAS
-                      </p>
-
-                      {/* Banner de status de assinaturas */}
-                      {totalEnv > 0 && (
-                        <div className={`mb-3 rounded-lg border px-4 py-3 ${allSigned ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`}>
-                          <div className="flex items-center justify-between mb-1.5">
-                            <span className={`text-sm font-semibold ${allSigned ? "text-emerald-700" : "text-amber-700"}`}>
-                              {allSigned
-                                ? "✅ Todas as assinaturas coletadas"
-                                : `⏳ ${totalSigned} de ${totalEnv} assinatura${totalEnv > 1 ? "s" : ""} coletada${totalSigned !== 1 ? "s" : ""}`}
-                            </span>
-                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${allSigned ? "bg-emerald-200 text-emerald-800" : "bg-amber-200 text-amber-800"}`}>
-                              {totalSigned}/{totalEnv}
-                            </span>
-                          </div>
-                          {/* Barra de progresso */}
-                          <div className="w-full h-1.5 bg-white/70 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all ${allSigned ? "bg-emerald-500" : "bg-amber-500"}`}
-                              style={{ width: totalEnv > 0 ? `${(totalSigned / totalEnv) * 100}%` : "0%" }}
-                            />
-                          </div>
-                          {/* Faltam assinar */}
-                          {!allSigned && pendentes.length > 0 && (
-                            <p className="text-xs text-amber-700 mt-1.5">
-                              <span className="font-medium">Falta assinar: </span>
-                              {pendentes.join(" · ")}
-                            </p>
+                          )}
+                          {pt.responsavelAreaNome && (
+                            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                              <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide mb-0.5">Resp. da Área</p>
+                              <p className="text-sm font-semibold text-slate-800 break-words">{pt.responsavelAreaNome}</p>
+                            </div>
+                          )}
+                          {pt.responsavelLiberacaoNome && (
+                            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                              <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide mb-0.5">Resp. Liberação</p>
+                              <p className="text-sm font-semibold text-slate-800 break-words">{pt.responsavelLiberacaoNome}</p>
+                            </div>
+                          )}
+                          {pt.executanteNome && (
+                            <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200">
+                              <p className="text-[10px] text-emerald-600 font-semibold uppercase tracking-wide mb-0.5">Resp. Execução</p>
+                              <p className="text-sm font-semibold text-emerald-800 break-words">{pt.executanteNome}</p>
+                            </div>
                           )}
                         </div>
-                      )}
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {lista.map((env: any, idx: number) => {
-                          const pos = idx + 1;
-                          const signed = assinaturasMap.has(pos);
-                          const assSig = pt.assinaturas?.find((a: any) => a.posicao === pos);
-                          return (
-                            <button
-                              key={pos}
-                              onClick={() => setAssinarPad({ posicao: pos, nome: env.nome || `Envolvido ${pos}` })}
-                              className={`flex items-center gap-3 p-3 rounded-lg border-2 text-left transition-all
-                                ${signed
-                                  ? "border-emerald-300 bg-emerald-50 hover:bg-emerald-100"
-                                  : "border-dashed border-slate-200 hover:border-slate-300 bg-white"}`}>
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0
-                                ${signed ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-400"}`}>
-                                {signed ? <Check className="h-4 w-4" /> : <PenLine className="h-4 w-4" />}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-sm font-medium text-slate-700 truncate">
-                                  {env.nome || <span className="text-slate-400 italic">Posição {pos}</span>}
-                                </p>
-                                <p className="text-xs text-slate-400">{env.funcao || ""}</p>
-                                {signed && assSig?.assinadoEm && (
-                                  <p className="text-xs text-emerald-600 mt-0.5">
-                                    ✓ {new Date(assSig.assinadoEm).toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })}
-                                  </p>
-                                )}
-                                {!signed && (
-                                  <p className="text-xs text-amber-500 mt-0.5">⏳ Aguardando assinatura</p>
-                                )}
-                              </div>
-                            </button>
-                          );
-                        })}
                       </div>
                     </div>
-                  );
-                })()}
+                  )}
 
-                {/* Liberação */}
-                {(pt.responsavelAreaNome || pt.responsavelLiberacaoNome || pt.executanteNome) && (
-                  <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
-                    <p className="text-xs font-semibold text-emerald-700 mb-2 flex items-center gap-1">
-                      <ShieldCheck className="h-3.5 w-3.5" /> LIBERAÇÃO DA PERMISSÃO
-                    </p>
-                    <div className="grid grid-cols-3 gap-3">
-                      {pt.empresaSetorExecutante && <InfoChip label="Empresa/Setor" value={pt.empresaSetorExecutante} />}
-                      {pt.responsavelAreaNome && <InfoChip label="Resp. da área" value={pt.responsavelAreaNome} />}
-                      {pt.responsavelLiberacaoNome && <InfoChip label="Resp. liberação" value={pt.responsavelLiberacaoNome} />}
-                      {pt.executanteNome && <InfoChip label="Resp. execução" value={pt.executanteNome} />}
+                  {/* Conclusão */}
+                  {pt.conclusaoData && (
+                    <div className="px-6 py-4 border-b border-slate-200">
+                      <div className="flex items-center gap-2 mb-3">
+                        <CheckCircle2 className="h-4 w-4 text-blue-600" />
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Conclusão</p>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {[
+                          { label: "Solicitante", val: pt.conclusaoSolicitanteNome },
+                          { label: "Data", val: pt.conclusaoData },
+                          { label: "Início", val: pt.conclusaoHoraInicio },
+                          { label: "Fim", val: pt.conclusaoHoraFim },
+                        ].map(({ label, val }) => val ? (
+                          <div key={label} className="p-3 bg-blue-50 rounded-xl border border-blue-100">
+                            <p className="text-[10px] text-blue-400 font-semibold uppercase tracking-wide mb-0.5">{label}</p>
+                            <p className="text-sm font-semibold text-blue-900 break-words">{val}</p>
+                          </div>
+                        ) : null)}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Conclusão */}
-                {pt.conclusaoData && (
-                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <p className="text-xs font-semibold text-blue-700 mb-2">CONCLUSÃO</p>
-                    <div className="grid grid-cols-3 gap-3">
-                      <InfoChip label="Solicitante" value={pt.conclusaoSolicitanteNome ?? "—"} />
-                      <InfoChip label="Data" value={pt.conclusaoData ?? "—"} />
-                      <InfoChip label="Início" value={pt.conclusaoHoraInicio ?? "—"} />
-                      <InfoChip label="Fim" value={pt.conclusaoHoraFim ?? "—"} />
-                    </div>
-                  </div>
-                )}
+                  {/* Espaço inferior */}
+                  <div className="h-4" />
+                </div>
 
-                {/* Ações */}
-                <div className="flex flex-wrap gap-2 pt-2 border-t">
-                  {/* Imprimir — disponível em qualquer status com dados carregados */}
+                {/* ── Barra de ações (fixa no rodapé) ────────────────────── */}
+                <div className="shrink-0 flex flex-wrap gap-2 px-6 py-3.5 border-t border-slate-200 bg-white">
                   <Button variant="outline" onClick={handlePrint} disabled={printLoading}
                     className="border-slate-200 text-slate-600 hover:bg-slate-50">
-                    {printLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Printer className="h-4 w-4 mr-1" />}
+                    {printLoading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Printer className="h-4 w-4 mr-1.5" />}
                     {printLoading ? "Gerando..." : "Imprimir / PDF"}
                   </Button>
                   {pt.status === "em_andamento" && (<>
-                    {/* Editar — só disponível para PT em andamento */}
                     <Button variant="outline" onClick={() => { onOpenChange(false); onEdit?.(ptId!); }}
                       className="border-blue-200 text-blue-700 hover:bg-blue-50">
-                      <SquarePen className="h-4 w-4 mr-1" /> Editar PT
+                      <SquarePen className="h-4 w-4 mr-1.5" /> Editar PT
                     </Button>
                     <Button onClick={() => {
                       setLiberarForm({
@@ -1891,20 +2014,16 @@ function PTDetalheDialog({
                         executanteNome: pt.executanteNome ?? "",
                       });
                       setLiberarOpen(true);
-                    }}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                      <ShieldCheck className="h-4 w-4 mr-1" /> Liberar PT
+                    }} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                      <ShieldCheck className="h-4 w-4 mr-1.5" /> Liberar PT
                     </Button>
-                    <Button variant="outline" onClick={handleCancelar}
-                      disabled={cancelarMut.isPending}
+                    <Button variant="outline" onClick={handleCancelar} disabled={cancelarMut.isPending}
                       className="border-red-200 text-red-600 hover:bg-red-50">
-                      <Ban className="h-4 w-4 mr-1" /> Cancelar PT
+                      <Ban className="h-4 w-4 mr-1.5" /> Cancelar PT
                     </Button>
-                    {/* Excluir — remove a PT definitivamente */}
-                    <Button variant="outline" onClick={handleExcluir}
-                      disabled={excluirMut.isPending}
+                    <Button variant="outline" onClick={handleExcluir} disabled={excluirMut.isPending}
                       className="border-red-300 text-red-700 hover:bg-red-50">
-                      {excluirMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
+                      {excluirMut.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1.5" />}
                       Excluir PT
                     </Button>
                   </>)}
@@ -1912,15 +2031,14 @@ function PTDetalheDialog({
                     <Button onClick={() => {
                       setConcluirForm({ conclusaoSolicitanteNome: pt.solicitanteNome ?? "", conclusaoData: new Date().toISOString().slice(0, 10), conclusaoHoraInicio: "", conclusaoHoraFim: "" });
                       setConcluirOpen(true);
-                    }}
-                      className="bg-blue-600 hover:bg-blue-700 text-white">
-                      <CheckCircle2 className="h-4 w-4 mr-1" /> Concluir PT
+                    }} className="bg-blue-600 hover:bg-blue-700 text-white">
+                      <CheckCircle2 className="h-4 w-4 mr-1.5" /> Concluir PT
                     </Button>
                   )}
                 </div>
-              </div>
-            </>
-          )}
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 

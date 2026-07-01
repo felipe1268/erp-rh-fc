@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3922** — **SST — PT DETALHE: REDESIGN LAYOUT DOCUMENTO OFICIAL.** Header emerald-800 com logo da empresa + número PT font-black + chips de tipo no sub-header. Faixa amarela safety-stripe. Tabela de dados (border-collapse 4 colunas). Checklist em tabela com coluna #/Item/Resp. (badge S=emerald/N=red/NA=slate). Cards rounded-xl para Liberação e Conclusão. Layout flex-col overflow-hidden (body scrollável, header+footer fixos). ZERO DELETE.
+
 - **Rev. 3921** — **SST — PT WIZARD: FOTO DO FUNCIONÁRIO NO SELETOR DE RESPONSÁVEL PELA EXECUÇÃO.** Dropdown customizado substitui `<Select>` texto-puro no campo "Responsável pela execução" (Step 4). Trigger: avatar + nome + função. Lista: foto real ou inicial colorida + badge selecionado (emerald border-left + ✓). `fotoMap` monta `nome→fotoUrl` a partir de `obraFuncsQ` já carregado. `executanteDropOpen` + ref + click-outside. ZERO DELETE.
 
-- **Rev. 3920** — **SST — PT WIZARD: CHECKLIST POR SEÇÕES (UMA POR NR) + BLOQUEIO NR-33 EXCLUSIVA.** `ChecklistState` mudou para chave string `"typeKey:idx"`. `activeChecklistSections` substitui `activeChecklistItems` (uma seção por tipo selecionado). Accordion por seção com borda verde/vermelha/cinza + counts. `nr33Conflito` bloqueia "Próximo" citando NR-33.3.3.4 (MTE). PTDetalheDialog com compat retroativa. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3920** — **SST — PT WIZARD: CHECKLIST POR SEÇÕES (UMA POR NR) + BLOQUEIO NR-33 EXCLUSIVA.** `ChecklistState` mudou para chave string `"typeKey:idx"`. `activeChecklistSections` substitui `activeChecklistItems`. Accordion por seção. `nr33Conflito` bloqueia "Próximo" (NR-33.3.3.4 MTE). PTDetalheDialog compat retroativa. ZERO DELETE.
 
 - **Rev. 3919** — **SST — PT WIZARD: 10 TIPOS DE TRABALHO COM CHECKLIST DINÂMICO POR NR.** `TIPOS_TRABALHO` expandido 6→10. `PT_CHECKLISTS`: 10 checklists por NR. `activeChecklistItems` useMemo. `checkCount` corrigido (15 → length dinâmico). ZERO DELETE.
 
