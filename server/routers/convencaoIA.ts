@@ -161,6 +161,32 @@ function hasValue(v: string | null | undefined): boolean {
   return v != null && String(v).trim() !== "" && num(v) > 0;
 }
 
+// Campos numéricos monetários/percentuais que devem ser normalizados após extração da IA.
+// O LLM às vezes retorna "2.302,75" ou "2.302.75" mesmo com o prompt instruindo ponto decimal.
+// parseBRL("2.302.75") → 230275 (bug: múltiplos pontos = milhar BR).
+// Solução: parseBRL → número → toFixed(2), garantindo formato US limpo.
+const NUMERIC_FIELDS: (keyof Extracao)[] = [
+  "percentualReajuste", "pisoSalarial", "pisoSalarialAnterior",
+  "valeAlimentacao", "valeRefeicao", "valeTransporte", "cestaBasica",
+  "auxilioFarmacia", "seguroVida", "adicionalInsalubridade",
+  "adicionalPericulosidade", "adicionalNoturno",
+  "horaExtraDiurna", "horaExtraNoturna", "horaExtraDomingo",
+  "contribuicaoAssistencial",
+];
+
+function sanitizarExtracao(e: Extracao): Extracao {
+  const out = { ...e };
+  for (const k of NUMERIC_FIELDS) {
+    const raw = (out as any)[k];
+    if (raw == null || raw === "") continue;
+    const n = parseBRL(String(raw));
+    if (!isNaN(n) && n > 0) {
+      (out as any)[k] = n.toFixed(2);
+    }
+  }
+  return out;
+}
+
 export const convencaoIARouter = router({
   // ── Histórico de análises por empresa (ano desc) ──────────────────────────
   listar: protectedProcedure
@@ -221,7 +247,7 @@ export const convencaoIARouter = router({
 
       let extracao: Extracao;
       try {
-        extracao = await extrairCctComIA(input.fileBase64, mimeType);
+        extracao = sanitizarExtracao(await extrairCctComIA(input.fileBase64, mimeType));
       } catch (e: any) {
         // Persiste a análise com status de erro (sem fallback silencioso)
         const [errRow] = await db.insert(convencaoAnalises).values({
@@ -309,6 +335,18 @@ export const convencaoIARouter = router({
         }
       }
 
+      // Verificar se já existe dissídio cadastrado para o ano da análise
+      const [dissidioExistente] = await db.select({
+        id: dissidios.id,
+        anoReferencia: dissidios.anoReferencia,
+        percentualReajuste: dissidios.percentualReajuste,
+        status: dissidios.status,
+        aplicadoPor: dissidios.aplicadoPor,
+        dataAplicacao: dissidios.dataAplicacao,
+      }).from(dissidios)
+        .where(and(eq(dissidios.companyId, input.companyId), eq(dissidios.anoReferencia, a.anoReferencia)))
+        .limit(1);
+
       const beneficiosCct = BENEFIT_FIELDS.map(b => ({
         key: b.key,
         label: b.label,
@@ -363,6 +401,7 @@ export const convencaoIARouter = router({
         mesesRetroativos: mesesRetro,
         beneficiosCct,
         simulacao,
+        dissidioExistente: dissidioExistente ?? null,
         resumo: {
           totalFuncionarios: simulacao.length,
           totalDiferencaMensal: totalDiferencaMensal.toFixed(2),

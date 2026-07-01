@@ -19,14 +19,14 @@ import {
 type ViewMode = "lista" | "relatorio";
 
 // Campos extraídos exibidos no relatório (label + agrupamento)
-const CAMPOS_EXTRACAO: { key: string; label: string; grupo: string; mono?: boolean }[] = [
+const CAMPOS_EXTRACAO: { key: string; label: string; grupo: string; mono?: boolean; isDate?: boolean }[] = [
   { key: "sindicato", label: "Sindicato", grupo: "Identificação" },
   { key: "cnpjSindicato", label: "CNPJ do Sindicato", grupo: "Identificação" },
   { key: "numeroCct", label: "Nº da CCT", grupo: "Identificação" },
-  { key: "dataBase", label: "Data-base", grupo: "Identificação" },
-  { key: "vigenciaInicio", label: "Vigência início", grupo: "Identificação" },
-  { key: "vigenciaFim", label: "Vigência fim", grupo: "Identificação" },
-  { key: "dataRetroativoInicio", label: "Retroativo desde", grupo: "Identificação" },
+  { key: "dataBase", label: "Data-base", grupo: "Identificação", isDate: true },
+  { key: "vigenciaInicio", label: "Vigência início", grupo: "Identificação", isDate: true },
+  { key: "vigenciaFim", label: "Vigência fim", grupo: "Identificação", isDate: true },
+  { key: "dataRetroativoInicio", label: "Retroativo desde", grupo: "Identificação", isDate: true },
   { key: "percentualReajuste", label: "% Reajuste", grupo: "Salário", mono: true },
   { key: "pisoSalarial", label: "Piso salarial (novo)", grupo: "Salário", mono: true },
   { key: "pisoSalarialAnterior", label: "Piso anterior", grupo: "Salário", mono: true },
@@ -46,6 +46,20 @@ const CAMPOS_EXTRACAO: { key: string; label: string; grupo: string; mono?: boole
 ];
 
 const GRUPOS = ["Identificação", "Salário", "Benefícios", "Adicionais", "Sindical"];
+
+// Converte YYYY-MM-DD → DD/MM/AAAA para exibição
+function isoToBR(v: string | undefined): string {
+  if (!v) return "";
+  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+  return v;
+}
+// Converte DD/MM/AAAA → YYYY-MM-DD para armazenamento
+function brToISO(v: string): string {
+  const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  return v;
+}
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   processando: { label: "Processando", cls: "bg-blue-100 text-blue-700 border-blue-200" },
@@ -468,22 +482,39 @@ function RelatorioView({ analiseId, companyId, companyIds, isMaster, onVoltar }:
         <CardContent className="space-y-5">
           {GRUPOS.map((grupo) => {
             const campos = CAMPOS_EXTRACAO.filter((c) => c.grupo === grupo);
+            // Grupos prioritários recebem destaque visual
+            const isPriority = grupo === "Salário" || grupo === "Benefícios" || grupo === "Adicionais";
             return (
               <div key={grupo}>
-                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{grupo}</h4>
+                <h4 className={`text-xs font-semibold uppercase tracking-wide mb-2 ${isPriority ? "text-indigo-700" : "text-muted-foreground"}`}>
+                  {isPriority && <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-400 mr-1.5 mb-0.5" />}
+                  {grupo}
+                </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {campos.map((c) => (
-                    <div key={c.key}>
-                      <Label className="text-xs">{c.label}</Label>
-                      <Input
-                        value={extracao[c.key] ?? ""}
-                        onChange={(e) => setCampo(c.key, e.target.value)}
-                        disabled={aplicado}
-                        className={`mt-1 ${c.mono ? "font-mono" : ""}`}
-                        placeholder="—"
-                      />
-                    </div>
-                  ))}
+                  {campos.map((c) => {
+                    const rawVal = (extracao as any)[c.key] ?? "";
+                    const displayVal = c.isDate ? isoToBR(rawVal) : rawVal;
+                    const numVal = c.mono && !c.isDate ? Number(rawVal) : null;
+                    const isHighValue = numVal !== null && numVal > 10000;
+                    return (
+                      <div key={c.key}>
+                        <Label className="text-xs">{c.label}</Label>
+                        <Input
+                          value={displayVal}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setCampo(c.key, c.isDate ? brToISO(v) : v);
+                          }}
+                          disabled={aplicado}
+                          className={`mt-1 ${c.mono ? "font-mono" : ""} ${isHighValue ? "border-red-400 bg-red-50 text-red-700" : ""}`}
+                          placeholder={c.isDate ? "DD/MM/AAAA" : "—"}
+                        />
+                        {isHighValue && (
+                          <p className="text-[10px] text-red-600 mt-0.5">⚠ Valor elevado — confirme se está correto</p>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -495,6 +526,33 @@ function RelatorioView({ analiseId, companyId, companyIds, isMaster, onVoltar }:
           )}
         </CardContent>
       </Card>
+
+      {/* Aviso dissídio já existente */}
+      {sim?.dissidioExistente && (
+        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm">
+          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <span className="font-semibold text-amber-800">Dissídio {sim.dissidioExistente.anoReferencia} já cadastrado em Configurações</span>
+            <span className="text-amber-700 ml-1">({sim.dissidioExistente.percentualReajuste}% — {sim.dissidioExistente.status === "aplicado" ? "aplicado" : "rascunho"}
+            {sim.dissidioExistente.aplicadoPor ? ` por ${sim.dissidioExistente.aplicadoPor}` : ""}
+            {sim.dissidioExistente.dataAplicacao ? ` em ${isoToBR(sim.dissidioExistente.dataAplicacao)}` : ""}).</span>
+            <span className="block text-amber-600 text-xs mt-0.5">Ao aplicar esta análise, o dissídio existente será reaproveitado (sem duplicata).</span>
+          </div>
+        </div>
+      )}
+
+      {/* Aviso de piso suspeito */}
+      {sim && Number(sim.pisoNovo) > 10000 && (
+        <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm">
+          <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+          <div>
+            <span className="font-semibold text-red-800">Piso salarial suspeito: R$ {brl(sim.pisoNovo)}</span>
+            <span className="block text-red-700 text-xs mt-0.5">
+              Verifique o campo "Piso salarial (novo)" acima — o valor extraído parece muito alto (possível erro de formatação da IA). Corrija antes de aplicar.
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Resumo simulação */}
       {sim && (
@@ -551,25 +609,52 @@ function RelatorioView({ analiseId, companyId, companyIds, isMaster, onVoltar }:
                   {simulacao.map((f: any) => {
                     const excluded = excludedFuncs.has(f.employeeId);
                     const benMuda = (f.beneficios || []).filter((b: any) => b.muda);
+                    const difNum = Number(f.diferenca);
+                    const isIncrease = difNum > 0;
                     return (
-                      <tr key={f.employeeId} className={`border-b hover:bg-muted/50 ${excluded ? "opacity-40" : ""}`}>
+                      <tr key={f.employeeId} className={`border-b hover:bg-muted/30 ${excluded ? "opacity-40" : ""}`}>
                         {!aplicado && (
                           <td className="py-2 px-2"><Checkbox checked={!excluded} onCheckedChange={() => toggleFunc(f.employeeId)} /></td>
                         )}
-                        <td className="py-2 px-2 font-medium">{f.nome}</td>
-                        <td className="py-2 px-2 text-muted-foreground">{f.funcao || "—"}</td>
-                        <td className="py-2 px-2 text-right">R$ {brl(f.salarioAtual)}</td>
-                        <td className="py-2 px-2 text-right font-semibold text-green-600">{f.salarioMuda ? `R$ ${brl(f.salarioNovo)}` : "—"}</td>
-                        <td className="py-2 px-2 text-right text-primary">{Number(f.diferenca) > 0 ? `+R$ ${brl(f.diferenca)}` : "—"}</td>
-                        <td className="py-2 px-2 text-right">{Number(f.valorRetroativo) > 0 ? `R$ ${brl(f.valorRetroativo)}` : "—"}</td>
+                        <td className="py-2 px-2 font-medium text-sm">{f.nome}</td>
+                        <td className="py-2 px-2 text-muted-foreground text-xs">{f.funcao || "—"}</td>
+                        <td className="py-2 px-2 text-right text-sm tabular-nums">R$ {brl(f.salarioAtual)}</td>
+                        <td className="py-2 px-2 text-right text-sm tabular-nums">
+                          {f.salarioMuda
+                            ? <span className="font-semibold text-red-600">R$ {brl(f.salarioNovo)}</span>
+                            : <span className="text-muted-foreground">—</span>
+                          }
+                        </td>
+                        <td className="py-2 px-2 text-right text-sm tabular-nums">
+                          {isIncrease
+                            ? <span className="inline-flex items-center gap-0.5 text-red-600 font-medium">▲ +R$ {brl(f.diferenca)}</span>
+                            : <span className="text-muted-foreground">—</span>
+                          }
+                        </td>
+                        <td className="py-2 px-2 text-right text-sm tabular-nums text-muted-foreground">
+                          {Number(f.valorRetroativo) > 0 ? `R$ ${brl(f.valorRetroativo)}` : "—"}
+                        </td>
                         <td className="py-2 px-2">
                           <div className="flex flex-wrap gap-1">
-                            {benMuda.length === 0 ? <span className="text-muted-foreground text-xs">—</span> :
-                              benMuda.map((b: any) => (
-                                <Badge key={b.key} variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px]">
-                                  {b.label}: {brl(b.atual)}→{brl(b.novo)}
-                                </Badge>
-                              ))}
+                            {benMuda.length === 0
+                              ? <span className="text-muted-foreground text-xs">—</span>
+                              : benMuda.map((b: any) => {
+                                  const novoNum = Number(b.novo);
+                                  const atualNum = Number(b.atual);
+                                  const isUp = novoNum > atualNum;
+                                  const isDown = novoNum < atualNum;
+                                  const badgeCls = isUp
+                                    ? "bg-red-50 text-red-700 border-red-200"
+                                    : isDown
+                                      ? "bg-green-50 text-green-700 border-green-200"
+                                      : "bg-slate-50 text-slate-600 border-slate-200";
+                                  const arrow = isUp ? "▲" : isDown ? "▼" : "=";
+                                  return (
+                                    <Badge key={b.key} variant="outline" className={`${badgeCls} text-[10px] font-medium`}>
+                                      {arrow} {b.label}: {atualNum > 0 ? brl(b.atual) : "—"} → {brl(b.novo)}
+                                    </Badge>
+                                  );
+                                })}
                           </div>
                         </td>
                       </tr>

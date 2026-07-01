@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3948** — **CONVENÇÃO COLETIVA IA: DATAS BR + CORES + AVISO DISSÍDIO + FIX PISO IA.** `sanitizarExtracao()` normaliza valores numéricos da IA (fix "2.302.75"→230275 via parseBRL bug); datas mostram DD/MM/AAAA via `isoToBR/brToISO`; tabela simulação com ▲ vermelho/▼ verde; banner âmbar se dissídio existente; banner vermelho se piso > 10k. ZERO DELETE.
+
 - **Rev. 3947** — **CONVENÇÃO COLETIVA IA: REDESIGN DIALOG "NOVA ANÁLISE".** Header gradient indigo + ícone; ano + upload em linha única (seletor `h-9` inline com nome truncado ao selecionar); aviso amber compacto; footer `bg-slate-50`; sem scrollbar. Barra 0→100% mantida. ZERO DELETE.
 
-- **Rev. 3946** — **CONVENÇÃO COLETIVA IA: FIX COLUNAS SNAKE_CASE (Drizzle).** `convencaoIA.listar` e `processarPdf` falhavam com `column "companyId" does not exist` — tabela criada via SyncSchema+ usa `company_id`; schema Drizzle não tinha mapeamento → `"companyId"` (camelCase com aspas). Fix: nome explícito em TODOS os campos camelCase de `convencaoAnalises` + `convencaoAnaliseItens`. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3946** — **CONVENÇÃO COLETIVA IA: FIX COLUNAS SNAKE_CASE (Drizzle).** `convencaoIA.listar` e `processarPdf` falhavam com `column "companyId" does not exist` — tabela criada via SyncSchema+ usa `company_id`; schema Drizzle não tinha mapeamento → `"companyId"` (camelCase com aspas). Fix: nome explícito em TODOS os campos camelCase de `convencaoAnalises` + `convencaoAnaliseItens`. ZERO DELETE.
 
 - **Rev. 3945** — **CONVENÇÃO COLETIVA IA: BOTÃO "ANALISANDO" COM % 0→100.** Regra de Ouro: `setInterval` simulado 0→90% (fase IA, 700ms/tick); `onSuccess` salta p/ 100% e limpa em 800ms; `onError` zera. Botão `overflow-hidden` + `bg-white/15` crescendo via `width: X%` + texto "Analisando… XX%". ZERO DELETE.
 

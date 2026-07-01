@@ -1,4 +1,39 @@
 /**
+ * Rev. 3948 — **CONVENÇÃO COLETIVA IA: DATAS BR + CORES + AVISO DISSÍDIO + FIX PISO IA.**
+ *
+ * PROBLEMA:
+ *   1. Datas exibidas em ISO (YYYY-MM-DD) em vez de DD/MM/AAAA.
+ *   2. A IA retorna ocasionalmente "2.302.75" (dois pontos) → parseBRL trata como
+ *      milhar BR → pisoSalarial = 230275 → todos abaixo do piso viram R$ 230k.
+ *   3. Sem diferenciação visual do que aumentou/diminuiu na simulação.
+ *   4. Sem aviso quando dissídio do ano já está cadastrado em Configurações.
+ *
+ * SOLUÇÃO:
+ *   Backend (convencaoIA.ts):
+ *   - `sanitizarExtracao()`: após extração da IA, normaliza TODOS os campos numéricos
+ *     (percentualReajuste, pisoSalarial, benefícios, adicionais) via parseBRL → toFixed(2),
+ *     eliminando "2.302.75" → 230275. Aplicado logo após `extrairCctComIA()`.
+ *   - `simular`: busca `dissidioExistente` da empresa + ano e inclui no retorno.
+ *
+ *   Frontend (ConvencaoColetivaIA.tsx):
+ *   - `CAMPOS_EXTRACAO` com flag `isDate: true` nos 4 campos de data.
+ *   - `isoToBR` / `brToISO` helpers; inputs de data mostram DD/MM/AAAA e converte
+ *     para ISO no setCampo (backend só lê ISO).
+ *   - Campos numéricos > 10000: borda vermelha + aviso "Valor elevado — confirme".
+ *   - Grupos prioritários (Salário/Benefícios/Adicionais) com marcador indigo.
+ *   - Tabela de simulação: salário novo e ▲ diferença em vermelho (aumento de custo);
+ *     benefícios com badge ▲ vermelho / ▼ verde / = cinza.
+ *   - Banner âmbar quando dissídio já existe (informa que será reaproveitado).
+ *   - Banner vermelho quando pisoNovo > 10000 (alerta de extração suspeita).
+ *
+ * ARQUIVOS:
+ *   server/routers/convencaoIA.ts
+ *   client/src/pages/ConvencaoColetivaIA.tsx
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3947 — **CONVENÇÃO COLETIVA IA: REDESIGN DIALOG "NOVA ANÁLISE" — COMPACTO SEM SCROLL.**
  *
  * PROBLEMA:
