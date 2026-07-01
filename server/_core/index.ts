@@ -816,6 +816,14 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3742: colunas desconsiderado_em/por_id/por_nome garantidas em bank_statement_lines (desconsiderar da conciliação).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA bank_statement_lines.desconsiderado_*:`, e?.message || e); }
 
+        // Rev. 3940 — IGNORAR SUGESTÃO de conciliação: persiste a decisão do usuário de
+        // não sugerir automaticamente um determinado par extrato↔lançamento.  A linha
+        // permanece visível no painel e no cálculo do % — só sai do engine de sugestões.
+        try {
+          await db.execute(sql`ALTER TABLE bank_statement_lines ADD COLUMN IF NOT EXISTS sugestao_ignorada_em TIMESTAMP`);
+          console.log(`[SyncSchema+] Rev. 3940: coluna sugestao_ignorada_em garantida em bank_statement_lines (ignorar sugestão de conciliação).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA bank_statement_lines.sugestao_ignorada_em:`, e?.message || e); }
+
         // Rev. 3743 — BAIXA PARCIAL de Contas a Pagar/Receber: histórico 1→N baixas por
         // título (datas/contas/formas diferentes). O valor_realizado do entry é o ROLLUP
         // (SUM das baixas ativas); status derivado (parcial vs quitado). Estorno SOFT

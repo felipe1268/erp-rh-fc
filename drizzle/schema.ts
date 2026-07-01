@@ -7626,6 +7626,13 @@ export const bankStatementLines = pgTable("bank_statement_lines", {
   desconsideradoEm: timestamp("desconsiderado_em", { mode: "string" }),
   desconsideradoPorId: integer("desconsiderado_por_id"),
   desconsideradoPorNome: varchar("desconsiderado_por_nome", { length: 255 }),
+  // Rev. 3940 — IGNORAR SUGESTÃO de conciliação automática. Persiste a decisão do
+  // usuário de não parear esta linha de extrato com nenhum lançamento sugerido.
+  // Diferente de desconsiderado_em (que retira do % de conciliação): esta coluna
+  // apenas exclui a linha do ENGINE de sugestões; ela continua visível no painel
+  // em "No extrato, sem lançamento" e entra normalmente no cálculo do %.
+  // NULL = elegível para sugestão; preenchido = excluída do engine de sugestões.
+  sugestaoIgnoradaEm: timestamp("sugestao_ignorada_em", { mode: "string" }),
 }, (t) => [
   index("idx_bsl_company").on(t.companyId),
   index("idx_bsl_conta").on(t.contaBancariaId),

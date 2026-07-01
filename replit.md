@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3939** — **SST — APR: SELEÇÃO MÚLTIPLA + EXCLUSÃO EM LOTE.** Botão "Selecionar" ativa modo; cards ganham checkbox; barra flutuante com "Abrir" (1 selecionada) + "Excluir N APRs"; backend `excluirBatch` soft-delete em lote. ZERO DELETE.
+- **Rev. 3940** — **CONCILIAÇÃO BANCÁRIA: FIX "IGNORAR" SUGESTÃO NÃO PERSISTE.** `sugDescartadas` era estado local puro → resetava no reload. Fix: nova coluna `sugestao_ignorada_em` em `bank_statement_lines` (SyncSchema+); engine filtra `IS NULL`; mutations `ignorarSugestao`/`restaurarSugestao`; frontend usa optimistic hide + mutation. ZERO DELETE.
 
-- **Rev. 3938** — **SST — APR: FIX CHECKLIST PDF VAZIO + RESET WIZARD.** `gerarHtml` lia `c.texto` → vazio; fix: `c.pergunta ?? c.texto`. Wizard: `useEffect([open]) → resetForm()` para não persistir estado entre aberturas. ZERO DELETE.
+- **Rev. 3939** — **SST — APR: SELEÇÃO MÚLTIPLA + EXCLUSÃO EM LOTE.** Botão "Selecionar" ativa modo; cards ganham checkbox; barra flutuante com "Abrir" (1 selecionada) + "Excluir N APRs"; backend `excluirBatch` soft-delete em lote. ZERO DELETE.
 
 - **Rev. 3937** — **SST — APR PDF: REDESIGN AZUL FC + 3 LOGOS + CHECKLIST + TODAS AS ASSINATURAS.** Cabeçalho azul #1e3a8a com logo FC + cliente + gerenciadora. Seções por NR-01. Checklist table. Todos os envolvidos com caixa (equipe+responsável APR+aprovador). ZERO DELETE.
 

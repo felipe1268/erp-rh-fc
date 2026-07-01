@@ -1,4 +1,47 @@
 /**
+ * Rev. 3940 — **CONCILIAÇÃO BANCÁRIA: FIX "IGNORAR" SUGESTÃO NÃO PERSISTE.**
+ *
+ * PROBLEMA:
+ *   O botão "ignorar" nas sugestões automáticas de conciliação usava apenas
+ *   estado React local (`sugDescartadas: useState<Set<number>>`). Ao recarregar
+ *   a página, mudar de período ou clicar em "Reanalisar", o Set resetava para
+ *   vazio e todas as sugestões ignoradas voltavam à lista.
+ *
+ * CAUSA-RAIZ:
+ *   `setSugDescartadas` nunca escrevia no banco — era puramente client-side.
+ *   O "Reanalisar" inclusive chamava `setSugDescartadas(new Set())` explicitamente,
+ *   zerando tudo de propósito.
+ *
+ * SOLUÇÃO:
+ *   1. Nova coluna `sugestao_ignorada_em TIMESTAMP` em `bank_statement_lines`
+ *      (mesma convenção de `desconsiderado_em`; NULL = elegível, preenchido = ignorado).
+ *   2. SyncSchema+ Rev. 3940 adiciona a coluna via `ALTER TABLE … ADD COLUMN IF NOT EXISTS`.
+ *   3. Engine de sugestões (`suggestReconciliation`, `sugerirConciliacao`) filtra
+ *      `sugestao_ignorada_em IS NULL` ao montar o pool de linhas do extrato.
+ *   4. Dois novos endpoints:
+ *      - `ignorarSugestao({ companyId, statementLineId })` → seta `sugestao_ignorada_em=NOW()`.
+ *      - `restaurarSugestao({ companyId, statementLineId })` → zera (desfazer).
+ *   5. Frontend: `sugDescartadas` substituído por `sugIgnoradasOtimistas` (esconde
+ *      imediatamente para evitar flicker) + mutation `ignorarSugestaoM` que persiste
+ *      e faz `refetchSug` ao concluir. A linha NÃO volta no próximo reload.
+ *
+ * COMPORTAMENTO APÓS FIX:
+ *   - Clicar "ignorar" → linha some da lista imediatamente (optimistic) E é gravada no banco.
+ *   - Ao recarregar / mudar período / Reanalisar → linha permanece fora das sugestões.
+ *   - A linha continua visível no painel em "No extrato, sem lançamento" e no % de conciliação.
+ *   - "Reanalisar" limpa só o Set optimista (itens novos que ainda não gravaram); os já
+ *     gravados no banco ficam excluídos pelo filtro server-side.
+ *
+ * ARQUIVOS:
+ * - `drizzle/schema.ts` (coluna sugestaoIgnoradaEm em bankStatementLines)
+ * - `server/_core/index.ts` (SyncSchema+ ALTER TABLE)
+ * - `server/routers/financial.ts` (stConds + ignorarSugestao + restaurarSugestao)
+ * - `client/src/pages/financeiro/FinanceiroConciliacao.tsx` (mutation + optimistic)
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3939 — **SST — APR: SELEÇÃO MÚLTIPLA + EXCLUSÃO EM LOTE.**
  *
  * FUNCIONALIDADE:

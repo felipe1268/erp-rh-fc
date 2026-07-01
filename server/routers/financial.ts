@@ -7048,6 +7048,51 @@ export const financialRouter = router({
     return { ok: true, afetados };
   }),
 
+  // Rev. 3940 — IGNORAR SUGESTÃO: persiste a decisão do usuário de não sugerir
+  // automaticamente esta linha do extrato. A linha continua visível no painel e
+  // no cálculo do %, mas sai do engine de sugestões automáticas.
+  ignorarSugestao: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    statementLineId: z.number(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const id = Number(input.statementLineId);
+    if (!Number.isFinite(id) || id <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "ID inválido." });
+    const upd = await dbExecute(db,
+      `UPDATE bank_statement_lines
+          SET sugestao_ignorada_em = NOW()
+        WHERE company_id=$1 AND id=$2 AND excluido_em IS NULL AND sugestao_ignorada_em IS NULL
+        RETURNING id`,
+      [input.companyId, id]);
+    if (rows(upd).length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Linha não encontrada ou já ignorada." });
+    await createAuditLog({
+      userId: ctx.user?.id,
+      action: "bank_statement_line_ignorar_sugestao",
+      details: `Ignorou sugestão de conciliação para linha de extrato #${id}`,
+      companyId: input.companyId,
+    });
+    return { ok: true };
+  }),
+
+  // Rev. 3940 — RESTAURAR SUGESTÃO: desfaz o "ignorar" — a linha volta a aparecer
+  // no engine de sugestões automáticas no próximo "Reanalisar".
+  restaurarSugestao: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    statementLineId: z.number(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const id = Number(input.statementLineId);
+    if (!Number.isFinite(id) || id <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "ID inválido." });
+    await dbExecute(db,
+      `UPDATE bank_statement_lines SET sugestao_ignorada_em = NULL WHERE company_id=$1 AND id=$2`,
+      [input.companyId, id]);
+    return { ok: true };
+  }),
+
   conciliarLancamento: protectedProcedure.input(z.object({
     statementLineId: z.number(),
     entryId: z.number(),
@@ -7450,7 +7495,9 @@ export const financialRouter = router({
     // conciliação (cheques par devolvidos marcados como "desconsiderar"). Sem este filtro,
     // o engine sugeria conciliar linhas que já foram excluídas do cálculo, exibindo falsos
     // "33 linhas sem correspondência" no painel de sugestões.
-    const stConds = [`company_id=$1`, `conta_bancaria_id=$2`, `COALESCE(conciliado,0)=0`, `excluido_em IS NULL`, `desconsiderado_em IS NULL`];
+    // Rev. 3940 — `sugestao_ignorada_em IS NULL`: exclui linhas em que o usuário clicou
+    // "ignorar" na sugestão (persiste no banco; não volta no reload).
+    const stConds = [`company_id=$1`, `conta_bancaria_id=$2`, `COALESCE(conciliado,0)=0`, `excluido_em IS NULL`, `desconsiderado_em IS NULL`, `sugestao_ignorada_em IS NULL`];
     const stVals: any[] = [input.companyId, input.contaBancariaId];
     let si = 3;
     if (input.dataInicio) { stConds.push(`data>=$${si++}`); stVals.push(input.dataInicio); }

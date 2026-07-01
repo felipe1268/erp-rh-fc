@@ -308,8 +308,20 @@ export default function FinanceiroConciliacao() {
     return Array.from(set).sort((a, b) => a - b);
   }, [diasDoMes]);
   const [selSug, setSelSug] = useState<Set<number>>(new Set());
-  // Rev. 3447 — IDs de sugestões descartadas pelo usuário (local; limpa no Reanalisar)
-  const [sugDescartadas, setSugDescartadas] = useState<Set<number>>(new Set());
+  // Rev. 3940 — IDs ignorados optimisticamente (enquanto o refetch não chega).
+  // O estado real vive no banco (sugestao_ignorada_em); este Set só esconde a linha
+  // imediatamente após o clique para evitar flicker antes do refetch.
+  const [sugIgnoradasOtimistas, setSugIgnoradasOtimistas] = useState<Set<number>>(new Set());
+
+  const ignorarSugestaoM = (trpc as any).financial.ignorarSugestao.useMutation({
+    onSuccess: () => { refetchSug(); },
+    onError: (err: any) => {
+      toast({ title: "Erro ao ignorar sugestão", description: err?.message ?? "Tente novamente.", variant: "destructive" });
+    },
+  });
+  const restaurarSugestaoM = (trpc as any).financial.restaurarSugestao.useMutation({
+    onSuccess: () => { refetchSug(); },
+  });
   // Rev. 3177 — clicar no lançamento das sugestões abre um detalhe CONSULTIVO (read-only).
   const [detalheEntryId, setDetalheEntryId] = useState<number | null>(null);
   // Rev. 3264 — clicar TAMBÉM no item do extrato abre o detalhe + bloco de conferência (extrato × ERP) p/ validar a conciliação.
@@ -1151,8 +1163,9 @@ export default function FinanceiroConciliacao() {
     { enabled: !!companyId && !!contaBancariaId && mostrarSugestoes }
   );
   // Rev. 3411 — filtra localmente as linhas já conciliadas (sem re-análise automática)
-  // Rev. 3447 — também exclui linhas descartadas manualmente pelo usuário
-  const sugestoes: any[] = (sugData?.sugestoes ?? []).filter((s: any) => !conciliadosIds.has(s.statementLineId) && !sugDescartadas.has(s.statementLineId));
+  // Rev. 3940 — sugIgnoradasOtimistas: esconde imediatamente após o clique (antes do
+  // refetch); o filtro real é server-side (sugestao_ignorada_em IS NULL na query).
+  const sugestoes: any[] = (sugData?.sugestoes ?? []).filter((s: any) => !conciliadosIds.has(s.statementLineId) && !sugIgnoradasOtimistas.has(s.statementLineId));
   const semMatch: any[] = sugData?.semMatch ?? [];
   // Rev. 3201 — fonte ÚNICA dos pares selecionados (contador + render do diálogo + payload),
   // p/ o número exibido nunca divergir do que será efetivamente enviado.
@@ -4087,7 +4100,7 @@ export default function FinanceiroConciliacao() {
                       <Button
                         size="sm"
                         variant={mostrarSugestoes ? "outline" : "default"}
-                        onClick={() => { setMostrarSugestoes(true); setSelSug(new Set()); setConciliadosIds(new Set()); setSugDescartadas(new Set()); if (mostrarSugestoes) refetchSug(); }}
+                        onClick={() => { setMostrarSugestoes(true); setSelSug(new Set()); setConciliadosIds(new Set()); setSugIgnoradasOtimistas(new Set()); if (mostrarSugestoes) refetchSug(); }}
                         disabled={sugLoading}
                       >
                         <Sparkles className="w-4 h-4 mr-1" />
@@ -4333,9 +4346,13 @@ export default function FinanceiroConciliacao() {
                                   type="button"
                                   onClick={(e) => {
                                     e.preventDefault(); e.stopPropagation();
-                                    setSugDescartadas(prev => new Set([...prev, s.statementLineId]));
+                                    setSugIgnoradasOtimistas(prev => new Set([...prev, s.statementLineId]));
                                     setSelSug(prev => { const n = new Set(prev); n.delete(s.statementLineId); return n; });
-                                    toast({ title: "Sugestão descartada", description: "A linha aparece agora em \"No extrato, sem lançamento\"." });
+                                    ignorarSugestaoM.mutate({ companyId, statementLineId: s.statementLineId });
+                                    toast({
+                                      title: "Sugestão ignorada",
+                                      description: "A linha não voltará nas próximas análises. Clique em Reanalisar para restaurar.",
+                                    });
                                   }}
                                   title="Descartar esta sugestão — a linha volta para 'No extrato, sem lançamento'"
                                   className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold transition-colors border bg-white border-red-200 text-red-400 hover:bg-red-50 hover:text-red-600"
