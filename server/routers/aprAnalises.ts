@@ -2,7 +2,7 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
-import { aprAnalises, aprRiscos, employees, obras } from "../../drizzle/schema";
+import { aprAnalises, aprRiscos, employees, obras, companies } from "../../drizzle/schema";
 import { eq, and, desc, sql, isNull, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
@@ -339,7 +339,7 @@ export const aprAnalisesRouter = router({
       return { ok: true };
     }),
 
-  // ── Gerar HTML para impressão ─────────────────────────────────────────────
+  // ── Gerar HTML para impressão (Rev. 3937 — layout azul FC, logos, checklist, assinaturas completas) ──
   gerarHtml: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
     .query(async ({ input, ctx }) => {
@@ -349,10 +349,26 @@ export const aprAnalisesRouter = router({
         .where(and(eq(aprAnalises.id, input.id), eq(aprAnalises.companyId, input.companyId), isNull(aprAnalises.deletedAt))).limit(1);
       if (!apr) throw new TRPCError({ code: "NOT_FOUND" });
 
-      let obraNome = "";
+      // ── Dados complementares ──────────────────────────────────────────────
+      const [comp] = await db.select({ nome: companies.nomeFantasia, razao: companies.razaoSocial, logo: companies.logoUrl })
+        .from(companies).where(eq(companies.id, input.companyId)).limit(1);
+      const companyName = comp?.nome || comp?.razao || "FC Engenharia";
+      const companyLogo = comp?.logo ?? null;
+
+      let obraNome = "", obraClienteNome = "", obraClienteLogoUrl: string | null = null,
+          obraGerenciadoraNome = "", obraGerenciadoraLogoUrl: string | null = null;
       if (apr.obraId) {
-        const [ob] = await db.select({ nome: obras.nome }).from(obras).where(eq(obras.id, apr.obraId)).limit(1);
-        obraNome = ob?.nome ?? "";
+        const [ob] = await db.select({
+          nome: obras.nome, cliente: obras.cliente,
+          clienteLogoUrl: obras.clienteLogoUrl,
+          gerenciadoraNome: obras.gerenciadoraNome,
+          gerenciadoraLogoUrl: obras.gerenciadoraLogoUrl,
+        }).from(obras).where(eq(obras.id, apr.obraId)).limit(1);
+        obraNome              = ob?.nome ?? "";
+        obraClienteNome       = ob?.cliente ?? "";
+        obraClienteLogoUrl    = ob?.clienteLogoUrl ?? null;
+        obraGerenciadoraNome  = ob?.gerenciadoraNome ?? "";
+        obraGerenciadoraLogoUrl = ob?.gerenciadoraLogoUrl ?? null;
       }
       let responsavelNome = "";
       if (apr.employeeId) {
@@ -363,22 +379,73 @@ export const aprAnalisesRouter = router({
         .where(and(eq(aprRiscos.aprId, input.id), eq(aprRiscos.companyId, input.companyId)))
         .orderBy(aprRiscos.ordem);
 
+      // ── Parsers ───────────────────────────────────────────────────────────
       const esc = (s: any) => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-      let equipeRaw: any[] = [];
-      try { equipeRaw = JSON.parse(apr.equipeJson ?? "[]"); } catch {}
-      const equipeNomes = equipeRaw.map((m: any) => typeof m === "string" ? m : (m?.nome ?? "")).filter(Boolean);
-      const equipe = equipeNomes; // alias para compatibilidade com template
-      let epis: string[] = [];
-      try { epis = JSON.parse(apr.epiJson ?? "[]"); } catch {}
+      const pj = (s: any) => { try { return JSON.parse(s ?? "[]"); } catch { return []; } };
+      let epis: string[] = pj(apr.epiJson);
+      // equipe com assinaturas (preferencial) ou raw
+      let assEquipe: Array<{ nome: string; ass: string | null; assinadoEm: string | null }> = [];
+      const assRaw = pj((apr as any).assinaturasEquipeJson);
+      const equipeRaw = pj(apr.equipeJson);
+      if (assRaw.length > 0) {
+        assEquipe = assRaw.map((m: any) => ({ nome: m?.nome ?? "", ass: m?.ass ?? null, assinadoEm: m?.assinadoEm ?? null })).filter((m: any) => m.nome);
+      } else {
+        assEquipe = equipeRaw.map((m: any) => ({ nome: typeof m === "string" ? m : (m?.nome ?? ""), ass: null, assinadoEm: null })).filter((m: any) => m.nome);
+      }
+      let checklist: Array<{ id: string; texto: string; resposta: string | null }> = pj(apr.checklistJson);
 
       const NIVEIS: Record<number, { label: string; bg: string; color: string }> = {};
       for (let p = 1; p <= 5; p++) for (let g = 1; g <= 5; g++) {
         const n = p * g;
-        NIVEIS[n] = n <= 4 ? { label: "BAIXO", bg: "#d1fae5", color: "#065f46" }
-                  : n <= 9 ? { label: "MÉDIO", bg: "#fef9c3", color: "#854d0e" }
-                  : n <= 16 ? { label: "ALTO", bg: "#ffedd5", color: "#9a3412" }
-                  : { label: "CRÍTICO", bg: "#fee2e2", color: "#991b1b" };
+        NIVEIS[n] = n <= 4 ? { label: "BAIXO",   bg: "#d1fae5", color: "#065f46" }
+                  : n <= 9 ? { label: "MÉDIO",   bg: "#fef9c3", color: "#854d0e" }
+                  : n <= 16? { label: "ALTO",    bg: "#ffedd5", color: "#9a3412" }
+                  :           { label: "CRÍTICO", bg: "#fee2e2", color: "#991b1b" };
       }
+
+      // ── Seção de assinaturas: equipe + responsável APR + aprovador ────────
+      const sigBoxes: Array<{ nome: string; papel: string; ass: string | null; em: string | null }> = [
+        ...assEquipe.map(m => ({ nome: m.nome, papel: "Membro da Equipe", ass: m.ass, em: m.assinadoEm })),
+        { nome: responsavelNome || (apr.criadoPorNome ?? ""), papel: "Responsável pela APR", ass: null, em: null },
+        { nome: apr.aprovadoPorNome ?? "", papel: "Aprovador SST", ass: (apr as any).aprovadoPorAss ?? null, em: (apr as any).aprovadoEm ?? null },
+      ].filter(b => b.nome);
+
+      const sigHtml = sigBoxes.map(b => `
+        <div class="sig-box">
+          ${b.ass
+            ? `<div class="sig-img-wrap"><img src="${b.ass}" class="sig-img" alt="Assinatura" /></div>`
+            : `<div class="sig-line"></div>`}
+          <div class="sig-nome">${esc(b.nome)}</div>
+          <div class="sig-papel">${esc(b.papel)}</div>
+          ${b.em ? `<div class="sig-em">${new Date(b.em).toLocaleString("pt-BR")}</div>` : ""}
+        </div>`).join("");
+
+      // ── Checklist HTML ────────────────────────────────────────────────────
+      const respLabel: Record<string, string> = { sim: "SIM", nao: "NÃO", na: "N/A" };
+      const respStyle: Record<string, string> = {
+        sim: "background:#d1fae5;color:#065f46",
+        nao: "background:#fee2e2;color:#991b1b",
+        na:  "background:#f1f5f9;color:#64748b",
+      };
+      const checklistHtml = checklist.length ? `
+<h2>3. CHECKLIST DE VERIFICAÇÃO</h2>
+<table>
+  <thead><tr><th style="width:5%">#</th><th>Item de Verificação</th><th style="width:8%;text-align:center">Resposta</th></tr></thead>
+  <tbody>
+    ${checklist.map((c, i) => {
+      const r = c.resposta ?? "na";
+      return `<tr>
+        <td style="text-align:center">${i+1}</td>
+        <td>${esc(c.texto)}</td>
+        <td style="text-align:center"><span class="nivel-chip" style="${respStyle[r] ?? respStyle.na}">${respLabel[r] ?? "N/A"}</span></td>
+      </tr>`;
+    }).join("")}
+  </tbody>
+</table>` : "";
+
+      // ── Logo helpers ──────────────────────────────────────────────────────
+      const logoImg = (url: string | null, alt: string, h = 36) =>
+        url ? `<img src="${url}" alt="${esc(alt)}" style="height:${h}px;max-width:90px;object-fit:contain;display:block" />` : "";
 
       const html = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -386,43 +453,112 @@ export const aprAnalisesRouter = router({
 <meta charset="UTF-8">
 <title>APR — ${esc(apr.numero)}</title>
 <style>
-  @page { margin: 15mm; size: A4 landscape; }
+  @page { margin: 15mm; size: A4 portrait; }
   * { box-sizing: border-box; }
-  body { font-family: Arial, sans-serif; font-size: 9pt; color: #1e293b; margin: 0; }
-  @media screen { body { padding: 15mm; max-width: 297mm; margin: 0 auto; } }
-  h1 { font-size: 13pt; text-align: center; margin: 0 0 4px; color: #9a3412; }
-  h2 { font-size: 9pt; background: #9a3412; color: white; padding: 4px 8px; margin: 8px 0 4px; }
-  .header { text-align: center; border: 2px solid #9a3412; padding: 8px; margin-bottom: 8px; border-radius: 4px; }
-  .subtitle { font-size: 8pt; color: #64748b; }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 4px; }
-  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-bottom: 4px; }
-  .grid4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 4px; margin-bottom: 4px; }
-  .field { border: 1px solid #cbd5e1; padding: 3px 6px; border-radius: 3px; }
-  .field-label { font-size: 7pt; color: #64748b; display: block; }
-  .field-value { font-size: 9pt; font-weight: bold; }
-  table { width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 8pt; }
-  th { background: #9a3412; color: white; padding: 4px; text-align: left; font-size: 7.5pt; }
-  td { border: 1px solid #e2e8f0; padding: 3px 5px; vertical-align: top; }
-  tr:nth-child(even) td { background: #fafafa; }
-  .nivel-chip { font-weight: bold; font-size: 7pt; padding: 1px 6px; border-radius: 10px; display: inline-block; }
-  .epi-chip { background: #ffedd5; color: #9a3412; font-size: 7.5pt; padding: 2px 6px; border-radius: 10px; display: inline-block; margin: 1px; }
-  .sig-box { border: 1px solid #cbd5e1; border-radius: 4px; padding: 6px; text-align: center; min-height: 60px; }
-  .sig-line { border-bottom: 1px solid #94a3b8; margin: 20px 10px 4px; }
-  .sig-label { font-size: 7pt; color: #64748b; }
-  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  body { font-family: Arial, sans-serif; font-size: 8.5pt; color: #1e293b; margin: 0; }
+  @media screen { body { padding: 15mm; max-width: 210mm; margin: 0 auto; } }
+
+  /* ── Header ── */
+  .hdr { display:grid; grid-template-columns:auto 1fr auto; gap:8px; align-items:center;
+         background:#1e3a8a; color:white; padding:10px 14px; border-radius:4px; margin-bottom:8px; }
+  .hdr-title { text-align:center; }
+  .hdr-title h1 { font-size:13pt; font-weight:900; letter-spacing:.5px; margin:0 0 2px; color:white; }
+  .hdr-title .sub { font-size:8pt; opacity:.85; }
+  .hdr-logos { display:flex; gap:8px; align-items:center; justify-content:flex-end; }
+  .hdr-logo-badge { background:white; border-radius:4px; padding:3px 6px; display:flex; flex-direction:column; align-items:center; gap:1px; }
+  .hdr-logo-badge .lbl { font-size:6pt; color:#64748b; text-transform:uppercase; letter-spacing:.3px; }
+  .hdr-logo-badge .nm { font-size:7pt; font-weight:bold; color:#1e293b; max-width:80px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  /* ── Sections ── */
+  h2 { font-size:8.5pt; background:#1d4ed8; color:white; padding:3px 8px; margin:7px 0 4px; border-radius:2px; }
+  h3 { font-size:8pt; color:#1e3a8a; margin:5px 0 3px; font-weight:bold; }
+
+  /* ── Fields grid ── */
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:3px; margin-bottom:3px; }
+  .grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:3px; margin-bottom:3px; }
+  .grid4 { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:3px; margin-bottom:3px; }
+  .field { border:1px solid #cbd5e1; padding:2px 5px; border-radius:2px; }
+  .field-label { font-size:6.5pt; color:#64748b; display:block; }
+  .field-value { font-size:8.5pt; font-weight:bold; }
+
+  /* ── Table ── */
+  table { width:100%; border-collapse:collapse; margin-top:3px; font-size:7.5pt; }
+  th { background:#1d4ed8; color:white; padding:3px 4px; text-align:left; font-size:7pt; }
+  td { border:1px solid #e2e8f0; padding:2px 4px; vertical-align:top; }
+  tr:nth-child(even) td { background:#f8fafc; }
+  .nivel-chip { font-weight:bold; font-size:6.5pt; padding:1px 5px; border-radius:8px; display:inline-block; white-space:nowrap; }
+
+  /* ── EPIs ── */
+  .epi-chip { background:#dbeafe; color:#1e3a8a; border:1px solid #bfdbfe; font-size:7.5pt; padding:2px 7px; border-radius:10px; display:inline-block; margin:1px; }
+
+  /* ── Assinaturas ── */
+  .sig-grid { display:grid; gap:6px; margin-top:5px; }
+  .sig-grid-3 { grid-template-columns:1fr 1fr 1fr; }
+  .sig-grid-2 { grid-template-columns:1fr 1fr; }
+  .sig-grid-1 { grid-template-columns:1fr; }
+  .sig-box { border:1px solid #bfdbfe; border-radius:4px; padding:6px; text-align:center; min-height:70px;
+             background:#f0f7ff; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; }
+  .sig-img-wrap { flex:1; display:flex; align-items:center; justify-content:center; width:100%; min-height:40px; }
+  .sig-img { max-height:44px; max-width:100%; object-fit:contain; }
+  .sig-line { border-bottom:1px solid #93c5fd; width:80%; margin:0 auto 4px; margin-top:40px; }
+  .sig-nome { font-weight:bold; font-size:7.5pt; color:#1e3a8a; margin-top:2px; }
+  .sig-papel { font-size:6.5pt; color:#64748b; }
+  .sig-em { font-size:6pt; color:#94a3b8; }
+  .sig-checked { color:#16a34a; font-size:8pt; font-weight:bold; }
+
+  /* ── Declaração ── */
+  .declaracao { background:#eff6ff; border:1px solid #bfdbfe; border-left:3px solid #1d4ed8;
+                padding:6px 10px; font-size:7.5pt; color:#1e40af; border-radius:2px; margin-bottom:6px; }
+
+  /* ── Footer ── */
+  .footer { margin-top:10px; padding-top:5px; border-top:1px solid #e2e8f0;
+            font-size:6.5pt; color:#94a3b8; text-align:center; }
+
+  @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
 </style>
 </head>
 <body>
-<div class="header">
-  <h1>ANÁLISE PRELIMINAR DE RISCO — APR</h1>
-  <div class="subtitle">FC Engenharia &nbsp;|&nbsp; ${esc(apr.numero)} &nbsp;|&nbsp; Status: ${esc(apr.status.toUpperCase())}</div>
+
+<!-- ═══════════════ HEADER ═══════════════ -->
+<div class="hdr">
+  <!-- Logo FC -->
+  <div class="hdr-logo-badge">
+    ${logoImg(companyLogo, companyName, 32)}
+    ${!companyLogo ? `<div class="nm">${esc(companyName)}</div>` : ""}
+  </div>
+
+  <!-- Título central -->
+  <div class="hdr-title">
+    <h1>ANÁLISE PRELIMINAR DE RISCO — APR</h1>
+    <div class="sub">${esc(companyName)} &nbsp;|&nbsp; ${esc(apr.numero)} &nbsp;|&nbsp; Status: ${esc(apr.status.toUpperCase())}</div>
+    ${obraClienteNome || obraGerenciadoraNome ? `<div class="sub" style="margin-top:2px;font-size:7pt">
+      ${obraClienteNome ? `Cliente: ${esc(obraClienteNome)}` : ""}
+      ${obraClienteNome && obraGerenciadoraNome ? " &nbsp;|&nbsp; " : ""}
+      ${obraGerenciadoraNome ? `Gerenciadora: ${esc(obraGerenciadoraNome)}` : ""}
+    </div>` : ""}
+  </div>
+
+  <!-- Logos cliente + gerenciadora -->
+  <div class="hdr-logos">
+    ${obraClienteLogoUrl || obraClienteNome ? `<div class="hdr-logo-badge">
+      <div class="lbl">Cliente</div>
+      ${logoImg(obraClienteLogoUrl, obraClienteNome, 28)}
+      ${!obraClienteLogoUrl && obraClienteNome ? `<div class="nm">${esc(obraClienteNome)}</div>` : ""}
+    </div>` : ""}
+    ${obraGerenciadoraLogoUrl || obraGerenciadoraNome ? `<div class="hdr-logo-badge">
+      <div class="lbl">Gerenciadora</div>
+      ${logoImg(obraGerenciadoraLogoUrl, obraGerenciadoraNome, 28)}
+      ${!obraGerenciadoraLogoUrl && obraGerenciadoraNome ? `<div class="nm">${esc(obraGerenciadoraNome)}</div>` : ""}
+    </div>` : ""}
+  </div>
 </div>
 
+<!-- ═══════════════ 1. IDENTIFICAÇÃO ═══════════════ -->
 <h2>1. IDENTIFICAÇÃO</h2>
 <div class="grid4">
   <div class="field"><span class="field-label">Número APR</span><span class="field-value">${esc(apr.numero)}</span></div>
   <div class="field"><span class="field-label">Data de Emissão</span><span class="field-value">${esc(apr.dataEmissao)}</span></div>
-  <div class="field"><span class="field-label">Hora Início</span><span class="field-value">${esc((apr as any).horaInicio || "—")}</span></div>
+  <div class="field"><span class="field-label">Hora de Início</span><span class="field-value">${esc((apr as any).horaInicio || "—")}</span></div>
   <div class="field"><span class="field-label">Obra / Unidade</span><span class="field-value">${esc(obraNome)}</span></div>
 </div>
 <div class="grid2">
@@ -430,24 +566,25 @@ export const aprAnalisesRouter = router({
   <div class="field"><span class="field-label">Local do Serviço</span><span class="field-value">${esc(apr.localServico)}</span></div>
 </div>
 <div class="grid2">
-  <div class="field"><span class="field-label">Responsável</span><span class="field-value">${esc(responsavelNome)}</span></div>
-  <div class="field"><span class="field-label">Equipe</span><span class="field-value">${equipeNomes.join(", ") || "—"}</span></div>
+  <div class="field"><span class="field-label">Elaborado por (Responsável APR)</span><span class="field-value">${esc(responsavelNome || (apr.criadoPorNome ?? ""))}</span></div>
+  <div class="field"><span class="field-label">Equipe de Trabalho</span><span class="field-value">${assEquipe.map(m => esc(m.nome)).join(", ") || "—"}</span></div>
 </div>
 
-<h2>2. MATRIZ DE RISCOS (P × G)</h2>
+<!-- ═══════════════ 2. MATRIZ DE RISCOS ═══════════════ -->
+<h2>2. IDENTIFICAÇÃO E AVALIAÇÃO DE RISCOS — MATRIZ P × G (NR-01)</h2>
 <table>
   <thead>
     <tr>
-      <th style="width:5%">#</th>
-      <th style="width:15%">Etapa/Atividade</th>
-      <th style="width:14%">Perigo</th>
-      <th style="width:14%">Risco</th>
+      <th style="width:4%">#</th>
+      <th style="width:13%">Etapa / Atividade</th>
+      <th style="width:12%">Fonte de Perigo</th>
+      <th style="width:13%">Risco</th>
       <th style="width:6%">Tipo</th>
-      <th style="width:4%">P</th>
-      <th style="width:4%">G</th>
-      <th style="width:6%">Nível</th>
-      <th style="width:22%">Medidas de Controle</th>
-      <th style="width:7%">Tipo Medida</th>
+      <th style="width:3%;text-align:center">P</th>
+      <th style="width:3%;text-align:center">G</th>
+      <th style="width:6%;text-align:center">Nível</th>
+      <th style="width:24%">Medidas de Controle</th>
+      <th style="width:6%">Tipo</th>
       <th style="width:10%">Responsável</th>
     </tr>
   </thead>
@@ -456,7 +593,7 @@ export const aprAnalisesRouter = router({
       const nivel = (r.probabilidade ?? 0) * (r.gravidade ?? 0);
       const nc = nivel > 0 ? (NIVEIS[nivel] ?? { label: String(nivel), bg: "#f1f5f9", color: "#334155" }) : null;
       return `<tr>
-        <td>${i+1}</td>
+        <td style="text-align:center">${i+1}</td>
         <td>${esc(r.etapaAtividade)}</td>
         <td>${esc(r.perigo)}</td>
         <td>${esc(r.risco)}</td>
@@ -472,28 +609,26 @@ export const aprAnalisesRouter = router({
   </tbody>
 </table>
 
-${epis.length ? `<h2>3. EPIs NECESSÁRIOS</h2>
-<div>${epis.map(e => `<span class="epi-chip">✓ ${esc(e)}</span>`).join(" ")}</div>` : ""}
+${checklistHtml}
 
-${apr.observacoes ? `<h2>4. OBSERVAÇÕES</h2><div class="field">${esc(apr.observacoes)}</div>` : ""}
+${epis.length ? `<h2>${checklist.length ? "4" : "3"}. EPIs / EPCs NECESSÁRIOS</h2>
+<div style="margin-top:3px">${epis.map(e => `<span class="epi-chip">✓ ${esc(e)}</span>`).join(" ")}</div>` : ""}
 
-<h2>5. APROVAÇÃO</h2>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px">
-  <div class="sig-box">
-    ${apr.aprovadoPorAss ? `<img src="${apr.aprovadoPorAss}" style="max-width:100%;max-height:45px;object-fit:contain" alt="Assinatura" />` : `<div class="sig-line"></div>`}
-    <div style="font-weight:bold;font-size:8pt">${esc(apr.aprovadoPorNome) || "Aprovador SST"}</div>
-    <div class="sig-label">Técnico / Engenheiro de SST</div>
-    ${apr.aprovadoEm ? `<div style="font-size:7pt;color:#64748b">${new Date(apr.aprovadoEm).toLocaleString("pt-BR")}</div>` : ""}
-  </div>
-  <div class="sig-box">
-    <div class="sig-line"></div>
-    <div style="font-weight:bold;font-size:8pt">Responsável pela Execução</div>
-    <div class="sig-label">Nome / Assinatura</div>
-  </div>
+${apr.observacoes ? `<h2>${checklist.length ? (epis.length ? "5" : "4") : (epis.length ? "4" : "3")}. OBSERVAÇÕES</h2>
+<div class="field" style="padding:4px 6px;font-size:8pt">${esc(apr.observacoes)}</div>` : ""}
+
+<!-- ═══════════════ ASSINATURAS ═══════════════ -->
+<h2>DECLARAÇÃO E ASSINATURAS DOS ENVOLVIDOS</h2>
+<div class="declaracao">
+  Declaro que fui devidamente orientado(a) sobre os riscos e perigos inerentes à atividade descrita nesta APR, bem como sobre as medidas de controle e os EPIs/EPCs necessários para a execução segura dos serviços. Comprometo-me a cumprir integralmente as disposições desta Análise Preliminar de Risco.
 </div>
 
-<div style="margin-top:12px;padding-top:6px;border-top:1px solid #e2e8f0;font-size:7pt;color:#94a3b8;text-align:center">
-  Documento gerado em ${new Date().toLocaleString("pt-BR")} &nbsp;|&nbsp; FC Engenharia &nbsp;|&nbsp; APR ${esc(apr.numero)} &nbsp;|&nbsp; Sistema ERP
+<div class="sig-grid ${sigBoxes.length <= 2 ? "sig-grid-2" : sigBoxes.length === 4 ? "sig-grid-2" : "sig-grid-3"}">
+  ${sigHtml}
+</div>
+
+<div class="footer">
+  Documento gerado em ${new Date().toLocaleString("pt-BR")} &nbsp;|&nbsp; ${esc(companyName)} &nbsp;|&nbsp; APR ${esc(apr.numero)} &nbsp;|&nbsp; Sistema ERP &nbsp;|&nbsp; Conforme NR-01 (Portaria MTE n.º 1.419/2024)
 </div>
 </body>
 </html>`;

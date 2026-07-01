@@ -1,4 +1,40 @@
 /**
+ * Rev. 3937 — **SST — APR PDF: REDESIGN COMPLETO — AZUL FC + 3 LOGOS + CHECKLIST + TODAS AS ASSINATURAS.**
+ *
+ * REQUISITOS DO USUÁRIO:
+ *   - Layout totalmente reorganizado com cor azul FC (#1e3a8a / #1d4ed8)
+ *   - Logo da empresa FC + logo do cliente + logo da gerenciadora no cabeçalho
+ *   - Seções conforme normas do Ministério do Trabalho (NR-01 Portaria 1.419/2024)
+ *   - Todos os envolvidos com caixa de assinatura lado a lado
+ *   - Responsável pela APR (quem elaborou) com caixa própria
+ *   - Aprovador SST com caixa própria
+ *   - Checklist de verificação visível
+ *
+ * MUDANÇAS NO gerarHtml:
+ *   1. Import `companies` adicionado ao router para buscar logo+nome da empresa.
+ *   2. `gerarHtml` agora busca: company(nome/logo), obra(cliente/gerenciadora logos+nomes),
+ *      responsável(nomeCompleto), riscos, epis, checklist, equipeAssinaturas.
+ *   3. Cabeçalho 3 colunas: [logo FC] | [título + número/status + cliente/gerenciadora texto] | [badges logo cliente + gerenciadora]
+ *   4. Seções numeradas por Ministério: 1.Identificação → 2.Matriz P×G (NR-01) → 3.Checklist → 4.EPIs → 5.Obs → Assinaturas
+ *   5. Checklist: tabela #/item/resposta com chips coloridos SIM(verde)/NÃO(vermelho)/N/A(cinza)
+ *   6. Seção de assinaturas:
+ *      - Declaração azul NR-compliant
+ *      - TODOS os membros da equipe (com imagem real se já assinaram, linha em branco se não)
+ *      - Responsável pela APR (responsavelNome || criadoPorNome) — caixa separada
+ *      - Aprovador SST — caixa com imagem real se aprovado
+ *      - Grid dinâmico: 2 colunas se ≤2 ou 4, 3 colunas caso contrário
+ *   7. EPIs: chips azuis (dbeafe/1e3a8a) em vez de laranja
+ *   8. Tabela de riscos: headers azuis (#1d4ed8)
+ *   9. Footer com referência normativa
+ *
+ * ARQUIVOS:
+ * - `server/routers/aprAnalises.ts` (import companies + gerarHtml completo)
+ * - `shared/version.ts`
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3936 — **SST — APR: HOTFIX ASSINATURA — z.record Zod v4.**
  *
  * RAIZ: Projeto usa Zod v4.3.6. Em Zod v4, `z.record(singleArg)` usa o argumento

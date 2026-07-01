@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3937** — **SST — APR PDF: REDESIGN AZUL FC + 3 LOGOS + CHECKLIST + TODAS AS ASSINATURAS.** Cabeçalho azul #1e3a8a com logo FC + cliente + gerenciadora. Seções por NR-01. Checklist table. Todos os envolvidos com caixa (equipe+responsável APR+aprovador). ZERO DELETE.
+
 - **Rev. 3936** — **SST — APR: HOTFIX z.record Zod v4.** `z.record(z.unknown())` em Zod v4 usa o arg como KEY (não value) → valueType=undefined → `_zod` crash ao assinar. Fix: `z.record(z.string(), z.unknown())`. ZERO DELETE.
 
 - **Rev. 3935** — **SST — APR: 4 BUGS + IMPRIMIR + REGRA ASSINATURAS.** `gerarHtml` ainda usava `employees.nome` → erro PDF; `confirm("string")` em vez de `ConfirmOptions`; `updateM` sem `onError`; botão Imprimir faltando no footer. Regra: bloquear Aprovar se algum membro não assinou. ZERO DELETE.
