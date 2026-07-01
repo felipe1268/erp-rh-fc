@@ -50,31 +50,25 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3922** — **SST — PT DETALHE: REDESIGN LAYOUT DOCUMENTO OFICIAL.** Header emerald-800 com logo da empresa + número PT font-black + chips de tipo no sub-header. Faixa amarela safety-stripe. Tabela de dados (border-collapse 4 colunas). Checklist em tabela com coluna #/Item/Resp. (badge S=emerald/N=red/NA=slate). Cards rounded-xl para Liberação e Conclusão. Layout flex-col overflow-hidden (body scrollável, header+footer fixos). ZERO DELETE.
+- **Rev. 3923** — **SST — PT DETALHE: PALETA FC AZUL + 3 LOGOS (FC + CLIENTE + GERENCIADORA).** `getById` expandido: `obraClienteLogoUrl`, `obraGerenciadoraLogoUrl`, `obraGerenciadoraNome`, `obraClienteNome` da obra. Cabeçalho `bg-blue-900`: logo FC + linha de logos do cliente/gerenciadora (cards `bg-white/10 rounded-xl`) + chips NR `text-blue-300`. Todas as cores de marca emerald→blue no corpo do dialog (banner assinaturas, cards envolvidos, ícones, botão "Liberar PT", spinner). Badge S do checklist mantém green (semântico). ZERO DELETE.
 
-- **Rev. 3921** — **SST — PT WIZARD: FOTO DO FUNCIONÁRIO NO SELETOR DE RESPONSÁVEL PELA EXECUÇÃO.** Dropdown customizado substitui `<Select>` texto-puro no campo "Responsável pela execução" (Step 4). Trigger: avatar + nome + função. Lista: foto real ou inicial colorida + badge selecionado (emerald border-left + ✓). `fotoMap` monta `nome→fotoUrl` a partir de `obraFuncsQ` já carregado. `executanteDropOpen` + ref + click-outside. ZERO DELETE.
+- **Rev. 3922** — **SST — PT DETALHE: REDESIGN LAYOUT DOCUMENTO OFICIAL.** Header emerald-800 com logo da empresa + número PT font-black + chips de tipo no sub-header. Faixa amarela safety-stripe. Tabela de dados (border-collapse 4 colunas). Checklist em tabela com coluna #/Item/Resp. (badge S=emerald/N=red/NA=slate). Cards rounded-xl para Liberação e Conclusão. Layout flex-col overflow-hidden (body scrollável, header+footer fixos). ZERO DELETE.
 
 ### 5 one-liners
 
-- **Rev. 3920** — **SST — PT WIZARD: CHECKLIST POR SEÇÕES (UMA POR NR) + BLOQUEIO NR-33 EXCLUSIVA.** `ChecklistState` mudou para chave string `"typeKey:idx"`. `activeChecklistSections` substitui `activeChecklistItems`. Accordion por seção. `nr33Conflito` bloqueia "Próximo" (NR-33.3.3.4 MTE). PTDetalheDialog compat retroativa. ZERO DELETE.
+- **Rev. 3921** — **SST — PT WIZARD: FOTO DO FUNCIONÁRIO NO SELETOR DE RESPONSÁVEL PELA EXECUÇÃO.** Dropdown customizado substitui `<Select>` no campo "Responsável pela execução" (Step 4). `fotoMap` de `obraFuncsQ`. `executanteDropOpen` + ref + click-outside. ZERO DELETE.
 
-- **Rev. 3919** — **SST — PT WIZARD: 10 TIPOS DE TRABALHO COM CHECKLIST DINÂMICO POR NR.** `TIPOS_TRABALHO` expandido 6→10. `PT_CHECKLISTS`: 10 checklists por NR. `activeChecklistItems` useMemo. `checkCount` corrigido (15 → length dinâmico). ZERO DELETE.
+- **Rev. 3920** — **SST — PT WIZARD: CHECKLIST POR SEÇÕES (UMA POR NR) + BLOQUEIO NR-33 EXCLUSIVA.** `ChecklistState` mudou para chave string `"typeKey:idx"`. `activeChecklistSections`. Accordion por seção. `nr33Conflito` bloqueia "Próximo". PTDetalheDialog compat retroativa. ZERO DELETE.
+
+- **Rev. 3919** — **SST — PT WIZARD: 10 TIPOS DE TRABALHO COM CHECKLIST DINÂMICO POR NR.** `TIPOS_TRABALHO` expandido 6→10. `PT_CHECKLISTS`: 10 checklists por NR. `activeChecklistItems` useMemo. `checkCount` corrigido. ZERO DELETE.
 
 - **Rev. 3918** — **CONCILIAÇÃO BANCÁRIA: FIX CHIP DE MÊS MOSTRANDO 100% FALSO (ARREDONDAMENTO).** `mesesPct` usava `Math.round`: 829/833 = 99,52% arredondava para 100%. Fix: `conciliadas >= total ? 100 : Math.floor(...)`. ZERO DELETE.
 
 - **Rev. 3917** — **SST — PT WIZARD + EDIT DIALOG: CNPJ AUTO-FILL DA RAZÃO SOCIAL VIA BRASILAPI.** `compras.buscarCNPJ`, helper `formatCNPJ`, spinner/✓/erro, limpa ao mudar CNPJ. ZERO DELETE.
 
-- **Rev. 3916** — **SST — PT PDF REDESIGN: 3 LOGOS + SOLICITANTE AUTO + CHECKLIST COM REFS NR.** Cabeçalho triplo + badge NR-35 + logos cliente/gerenciadora da obra. Solicitante = criadoPorNome. Checklist com coluna "Referência NR". ZERO DELETE.
-
-- **Rev. 3915** — **CONCILIAÇÃO BANCÁRIA CEF JAN/2026: PARES ZERO-LÍQUIDO DESCONSIDERADOS + FIX REAPRESENTADOS NA LISTA.** 12 linhas de 6 pares zero-líquido desconsideradas. Filtro `repExt` corrigido. Resultado: 97% (115/119). ZERO DELETE.
-
-- **Rev. 3914** — **CONCILIAÇÃO BANCÁRIA: FIX BARRA DE PROGRESSO (100% FALSO) + SUGESTÕES COM LINHAS DESCONSIDERADAS.** `totLinhas` passou a usar `accConciliadasMap[contaBancariaId]`; `sugerirConciliacao` ganhou `desconsiderado_em IS NULL`. ZERO DELETE.
-
-- **Rev. 3913** — **SST — APR EXPANDIDA: 10 TIPOS DE ATIVIDADE COM CHECKLIST POR NR.** Wizard 3→5 steps: Tipo (10 cards) → Dados → Checklist (Sim/Não/NA) → Riscos (pré-populados) → EPIs+Aprovação. Schema +tipo_atividade+checklist_json (ColFix v3913). Detail dialog exibe checklist respondido. ZERO DELETE.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3904 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3916 e anteriores.
 
 ## User preferences
 

@@ -1,4 +1,48 @@
 /**
+ * Rev. 3923 — **SST — PT DETALHE: PALETA FC AZUL + 3 LOGOS (FC + CLIENTE + GERENCIADORA).**
+ *
+ * PEDIDO: "Reformule o PTDetalheDialog para usar as cores azuis da marca FC e exiba os 3 logos
+ * (FC Engenharia, cliente e gerenciadora) conforme cadastrado na obra."
+ *
+ * SOLUÇÃO:
+ *
+ * BACKEND (ptPermissoes.ts › getById):
+ * - Query da obra expandida: além de `nome`, agora retorna `clienteLogoUrl`, `gerenciadoraLogoUrl`,
+ *   `gerenciadoraNome`, `cliente` (obras.cliente).
+ * - Novos campos no retorno: `obraClienteLogoUrl`, `obraGerenciadoraLogoUrl`,
+ *   `obraGerenciadoraNome`, `obraClienteNome`.
+ *
+ * FRONTEND (PermissaoTrabalho.tsx › PTDetalheDialog):
+ * 1. Cabeçalho (bg-emerald-800 → bg-blue-900):
+ *    - `fcLogoUrl` (era `logoUrl`): `VITE_APP_LOGO ?? selectedCompany?.logoUrl` logo da FC.
+ *    - Subtextos: `text-emerald-300` → `text-blue-300`.
+ *    - Chips NR: `text-emerald-300` → `text-blue-300`.
+ *
+ * 2. Linha de logos de obra (nova, condicional `hasObraLogos`):
+ *    - Aparece entre a linha título e os chips, separada por `border-t border-white/10`.
+ *    - Card "Cliente": logo (bg-white rounded) + label "CLIENTE" + `obraClienteNome`.
+ *    - Card "Gerenciadora": logo + label "GERENCIADORA" + `obraGerenciadoraNome`.
+ *    - Ambos com `bg-white/10 rounded-xl border border-white/15`.
+ *    - Visíveis apenas se a obra tiver pelo menos um desses campos preenchido.
+ *
+ * 3. Cores de marca no corpo do dialog (emerald → blue):
+ *    - NR badge do checklist: `text-emerald-600 bg-emerald-50` → `text-blue-600 bg-blue-50`.
+ *    - Checklist S-row: `bg-emerald-50/50 text-emerald-800 bg-emerald-500` →
+ *      `bg-green-50/60 text-green-900 bg-green-600` (verde semântico vs brand azul).
+ *    - Banner assinaturas allSigned: emerald → blue completo.
+ *    - Cards envolvidos assinados: `border-emerald-300 bg-emerald-50/100` → blue-300/50/100.
+ *    - Ícone check assinado e hover-group: emerald → blue.
+ *    - Timestamp assinado: `text-emerald-600` → `text-blue-600`.
+ *    - ShieldCheck ícone seções "Checklist" e "Liberação": `text-emerald-600` → `text-blue-600`.
+ *    - Card Resp. Execução: `bg-emerald-50 border-emerald-200 text-emerald-6/800` → blue.
+ *    - Botão "Liberar PT": `bg-emerald-600 hover:bg-emerald-700` → `bg-blue-600 hover:bg-blue-700`.
+ *    - Spinner de carregamento: `text-emerald-500` → `text-blue-500`.
+ *
+ * Arquivos: server/routers/ptPermissoes.ts, client/src/pages/sst/PermissaoTrabalho.tsx
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3922 — **SST — PT DETALHE: REDESIGN PARA LAYOUT DE DOCUMENTO OFICIAL DE PT.**
  *
  * PEDIDO: "Reformula esse layout de forma que fique mais bonito, apareça o nosso logo na tela,

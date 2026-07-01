@@ -138,9 +138,23 @@ export const ptPermissoesRouter = router({
         .where(and(eq(ptAssinaturas.ptId, input.id), eq(ptAssinaturas.companyId, input.companyId)));
 
       let obraNome: string | null = null;
+      let obraClienteLogoUrl: string | null = null;
+      let obraGerenciadoraLogoUrl: string | null = null;
+      let obraGerenciadoraNome: string | null = null;
+      let obraClienteNome: string | null = null;
       if (pt.obraId) {
-        const [ob] = await db.select({ nome: obras.nome }).from(obras).where(eq(obras.id, pt.obraId)).limit(1);
+        const [ob] = await db.select({
+          nome: obras.nome,
+          clienteLogoUrl: obras.clienteLogoUrl,
+          gerenciadoraLogoUrl: obras.gerenciadoraLogoUrl,
+          gerenciadoraNome: obras.gerenciadoraNome,
+          cliente: obras.cliente,
+        }).from(obras).where(eq(obras.id, pt.obraId)).limit(1);
         obraNome = ob?.nome ?? null;
+        obraClienteLogoUrl = ob?.clienteLogoUrl ?? null;
+        obraGerenciadoraLogoUrl = ob?.gerenciadoraLogoUrl ?? null;
+        obraGerenciadoraNome = ob?.gerenciadoraNome ?? null;
+        obraClienteNome = ob?.cliente ?? null;
       }
       let solicitanteNome: string | null = null;
       if (pt.employeeId) {
@@ -151,6 +165,10 @@ export const ptPermissoesRouter = router({
       return {
         ...pt,
         obraNome,
+        obraClienteLogoUrl,
+        obraGerenciadoraLogoUrl,
+        obraGerenciadoraNome,
+        obraClienteNome,
         solicitanteNome,
         assinaturas: assinaturas.map(a => ({ ...a, assinaturaImg: undefined })),
         envolvidos: pt.envolvidosJson ? (() => { try { return JSON.parse(pt.envolvidosJson); } catch { return []; } })() : [],

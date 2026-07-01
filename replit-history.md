@@ -1,3 +1,11 @@
+- **Rev. 3916** — **SST — PT PDF REDESIGN: 3 LOGOS + SOLICITANTE AUTO + CHECKLIST COM REFS NR.** Cabeçalho triplo + badge NR-35 + logos cliente/gerenciadora da obra. Solicitante = criadoPorNome. Checklist com coluna "Referência NR". ZERO DELETE.
+
+- **Rev. 3915** — **CONCILIAÇÃO BANCÁRIA CEF JAN/2026: PARES ZERO-LÍQUIDO DESCONSIDERADOS + FIX REAPRESENTADOS NA LISTA.** 12 linhas de 6 pares zero-líquido desconsideradas. Filtro `repExt` corrigido. Resultado: 97% (115/119). ZERO DELETE.
+
+- **Rev. 3914** — **CONCILIAÇÃO BANCÁRIA: FIX BARRA DE PROGRESSO (100% FALSO) + SUGESTÕES COM LINHAS DESCONSIDERADAS.** `totLinhas` passou a usar `accConciliadasMap[contaBancariaId]`; `sugerirConciliacao` ganhou `desconsiderado_em IS NULL`. ZERO DELETE.
+
+- **Rev. 3913** — **SST — APR EXPANDIDA: 10 TIPOS DE ATIVIDADE COM CHECKLIST POR NR.** Wizard 3→5 steps: Tipo (10 cards) → Dados → Checklist (Sim/Não/NA) → Riscos (pré-populados) → EPIs+Aprovação. Schema +tipo_atividade+checklist_json (ColFix v3913). Detail dialog exibe checklist respondido. ZERO DELETE.
+
 - **Rev. 3912** — **SST — PT WIZARD: BLOQUEIO NR-35 NO STEP DE ENVOLVIDOS.** Funcionários sem NR-35 ou com NR-35 vencida ficam bloqueados (card vermelho + ícone Ban + mensagem + line-through no nome). Click retorna sem ação. Terceiros não bloqueados. ZERO DELETE.
 
 - **Rev. 3907** — **SST — PT DIALOG: FIX CONFIRM EM BRANCO + REMOVER FCSIGN.** `confirm()` chamado com 2 strings mas hook espera objeto `{title,description,tone}` → AlertDialog sem texto. Corrigido. Botão "Enviar FCSign" + dialog removidos da UI (backend preservado). Invalidações `remover` corrigidas. ZERO DELETE.
