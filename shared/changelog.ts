@@ -1,4 +1,51 @@
 /**
+ * Rev. 3919 — **SST — PT WIZARD: 10 TIPOS DE TRABALHO COM CHECKLIST DINÂMICO POR NR.**
+ *
+ * CONTEXTO: O wizard de PT (Permissão de Trabalho) tinha apenas 6 tipos de trabalho
+ * restritos a trabalho em altura (NR-35) com 1 checklist fixo de 15 itens. O usuário
+ * solicitou que a PT cobrisse todo o escopo de atividades, igual ao que foi feito na APR.
+ *
+ * O QUE MUDOU (PermissaoTrabalho.tsx):
+ *
+ * 1. `TIPOS_TRABALHO` expandido de 6 para 10 tipos com emoji e NR de referência:
+ *    ⬆️ Trabalho em Altura (NR-35), 🕳️ Espaço Confinado (NR-33), ⛏️ Escavação/Fundação (NR-18),
+ *    🏗️ Montagem de Andaime (NR-35/18), ⚡ Instalação Elétrica (NR-10), 🔨 Demolição (NR-18),
+ *    🪝 Içamento de Cargas (NR-11), 🔥 Soldagem/Corte a Quente (NR-18),
+ *    🏚️ Cobertura/Telhado (NR-18/35), 🦺 Atividade Geral (NR-18).
+ *
+ * 2. `PT_CHECKLISTS`: mapa com 10 checklists específicos por tipo (10–15 itens por tipo),
+ *    cada um com perguntas específicas da NR aplicável. Substitui o array `CHECKLIST_ITENS`
+ *    genérico.
+ *
+ * 3. `activeChecklistItems` (useMemo): derivado do primeiro tipo selecionado (tipo "principal").
+ *    Se nenhum tipo selecionado → exibe checklist "geral". Alterar a seleção limpa as respostas
+ *    anteriores (evita respostas de NR-35 indexadas para um checklist de NR-33).
+ *
+ * 4. `checkCount` corrigido: usava `for (let i=1; i<=15; i++)` hardcoded → agora usa
+ *    `activeChecklistItems.length` para contar corretamente qualquer tamanho de checklist.
+ *
+ * 5. Step 1 (Descrição) redesenhado:
+ *    - Cada tipo exibe emoji + label + NR badge.
+ *    - Tipo principal (primeiro selecionado) ganha badge "Principal" em verde.
+ *    - Instrução: "O primeiro selecionado determina o checklist de segurança."
+ *
+ * 6. Step 2 (Checklist) atualizado:
+ *    - Header mostra emoji + label + badge NR do tipo principal.
+ *    - Itens vêm de `activeChecklistItems` (não mais `CHECKLIST_ITENS`).
+ *    - Banner de erro removeu menção hardcoded a "NR-35".
+ *
+ * 7. `PTDetalheDialog`: checklist exibido com título dinâmico (emoji + label + NR) derivado de
+ *    `pt.tiposTrabalhoJson`. Compatível retroativamente (tipos antigos caem no fallback "geral").
+ *
+ * 8. Header do wizard: subtítulo "NR-35" → dinâmico: mostra NR do tipo selecionado ou
+ *    "Permissão de Trabalho" se nenhum tipo ainda escolhido.
+ *
+ * ZERO DELETE.
+ *
+ * ARQUIVOS: client/src/pages/sst/PermissaoTrabalho.tsx
+ */
+
+/**
  * Rev. 3918 — **CONCILIAÇÃO BANCÁRIA: FIX CHIP DE MÊS MOSTRANDO 100% FALSO (ARREDONDAMENTO).**
  *
  * RAIZ DO BUG: `mesesPct` usava `Math.round(conciliadas / total * 100)`. Quando todas as contas

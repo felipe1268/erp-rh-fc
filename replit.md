@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3919** — **SST — PT WIZARD: 10 TIPOS DE TRABALHO COM CHECKLIST DINÂMICO POR NR.** `TIPOS_TRABALHO` expandido de 6 para 10 tipos (⬆️ Altura NR-35, 🕳️ Espaço Confinado NR-33, ⛏️ Escavação NR-18, 🏗️ Andaime NR-35/18, ⚡ Elétrica NR-10, 🔨 Demolição, 🪝 Içamento NR-11, 🔥 Soldagem, 🏚️ Cobertura, 🦺 Geral). `PT_CHECKLISTS`: 10 checklists específicos por NR substituem o array fixo de 15 itens NR-35. `activeChecklistItems` (useMemo) deriva do tipo principal selecionado. `checkCount` corrigido (hardcoded 15 → length dinâmico). Detalhe da PT e header do wizard atualizados. ZERO DELETE.
+
 - **Rev. 3918** — **CONCILIAÇÃO BANCÁRIA: FIX CHIP DE MÊS MOSTRANDO 100% FALSO (ARREDONDAMENTO).** `mesesPct` usava `Math.round`: 829/833 linhas = 99,52% arredondava para 100% mesmo com 4 pendentes na CEF. Fix: `conciliadas >= total ? 100 : Math.floor(...)` — 100% SÓ quando não há nenhuma linha pendente. ZERO DELETE.
 
-- **Rev. 3917** — **SST — PT WIZARD + EDIT DIALOG: CNPJ AUTO-FILL DA RAZÃO SOCIAL VIA BRASILAPI.** Ao selecionar "Empresa contratada" e digitar o CNPJ (14 dígitos), a razão social é buscada automaticamente via `compras.buscarCNPJ` (BrasilAPI → ReceitaWS fallback). Helper `formatCNPJ` formata incrementalmente. Spinner durante a busca, ✓ verde + badge "Preenchido automaticamente" quando Ok, mensagem de erro quando CNPJ não encontrado. Mudar o CNPJ limpa o nome auto-preenchido. Funciona no wizard e no dialog de edição. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3917** — **SST — PT WIZARD + EDIT DIALOG: CNPJ AUTO-FILL DA RAZÃO SOCIAL VIA BRASILAPI.** `compras.buscarCNPJ`, helper `formatCNPJ`, spinner/✓/erro, limpa ao mudar CNPJ. ZERO DELETE.
 
 - **Rev. 3916** — **SST — PT PDF REDESIGN: 3 LOGOS + SOLICITANTE AUTO + CHECKLIST COM REFS NR.** Cabeçalho triplo + badge NR-35 + logos cliente/gerenciadora da obra. Solicitante = criadoPorNome. Checklist com coluna "Referência NR". ZERO DELETE.
 
@@ -63,12 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3914** — **CONCILIAÇÃO BANCÁRIA: FIX BARRA DE PROGRESSO (100% FALSO) + SUGESTÕES COM LINHAS DESCONSIDERADAS.** `totLinhas` passou a usar `accConciliadasMap[contaBancariaId]`; `sugerirConciliacao` ganhou `desconsiderado_em IS NULL`. ZERO DELETE.
 
 - **Rev. 3913** — **SST — APR EXPANDIDA: 10 TIPOS DE ATIVIDADE COM CHECKLIST POR NR.** Wizard 3→5 steps: Tipo (10 cards) → Dados → Checklist (Sim/Não/NA) → Riscos (pré-populados) → EPIs+Aprovação. Schema +tipo_atividade+checklist_json (ColFix v3913). Detail dialog exibe checklist respondido. ZERO DELETE.
-
-- **Rev. 3912** — **SST — PT WIZARD: BLOQUEIO NR-35 NO STEP DE ENVOLVIDOS.** Funcionários sem NR-35 ou com NR-35 vencida ficam bloqueados (card vermelho + ícone Ban + mensagem + line-through no nome). Click retorna sem ação. Terceiros não bloqueados. ZERO DELETE.
-
-- **Rev. 3907** — **SST — PT DIALOG: FIX CONFIRM EM BRANCO + REMOVER FCSIGN.** `confirm()` chamado com 2 strings mas hook espera objeto `{title,description,tone}` → AlertDialog sem texto. Corrigido. Botão "Enviar FCSign" + dialog removidos da UI (backend preservado). Invalidações `remover` corrigidas. ZERO DELETE.
-
-- **Rev. 3906** — **SST — PT: FIX ASSINATURA + STATUS QUEM ASSINOU + CORES AZUL + LOGO NO PDF.** Bug root cause: `posicao: max(6)` rejeitava envolvidos nas posições 7-30 (zod BAD_REQUEST silencioso) + invalidate com chave errada (`ptId` vs `id`). Fixes: `max(30)`, chave correta. Banner de progresso. PDF: cores azul FC + logo. ZERO DELETE.
 
 ### Histórico completo
 

@@ -494,15 +494,22 @@ function WizardNovaPT({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cnpjQ.data]);
 
-  // Checklist: conta respostas
+  // Checklist: itens dinâmicos baseados no primeiro tipo selecionado
+  const activeChecklistItems = useMemo(() => {
+    const primaryType = form.tiposTrabalho[0];
+    if (!primaryType) return PT_CHECKLISTS.geral;
+    return PT_CHECKLISTS[primaryType] ?? PT_CHECKLISTS.geral;
+  }, [form.tiposTrabalho]);
+
+  // Checklist: conta respostas para os itens ativos
   const checkCount = useMemo(() => {
     let s = 0, n = 0, na = 0, blank = 0;
-    for (let i = 1; i <= 15; i++) {
+    for (let i = 1; i <= activeChecklistItems.length; i++) {
       const v = form.checklist[i];
       if (v === "S") s++; else if (v === "N") n++; else if (v === "NA") na++; else blank++;
     }
     return { s, n, na, blank };
-  }, [form.checklist]);
+  }, [form.checklist, activeChecklistItems]);
 
   const setCheck = (i: number, v: ChecklistResp) => {
     setForm(f => ({ ...f, checklist: { ...f.checklist, [i]: f.checklist[i] === v ? undefined : v } }));
@@ -555,7 +562,13 @@ function WizardNovaPT({
             </div>
             <div>
               <p className="text-white font-bold text-base leading-tight">Nova Permissão de Trabalho</p>
-              <p className="text-emerald-100 text-xs">{numQ.data?.numero ?? "PT-???"} · NR-35</p>
+              <p className="text-emerald-100 text-xs">
+                {numQ.data?.numero ?? "PT-???"} · {(() => {
+                  const pk = form.tiposTrabalho[0];
+                  const t = TIPOS_TRABALHO.find(x => x.key === pk);
+                  return t ? `${t.emoji} ${t.nr}` : "Permissão de Trabalho";
+                })()}
+              </p>
             </div>
           </div>
           <button onClick={() => onOpenChange(false)} className="text-white/70 hover:text-white transition-colors p-1">
@@ -866,29 +879,42 @@ function WizardNovaPT({
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
                 <Wrench className="h-3.5 w-3.5" /> Tipo de trabalho
               </p>
-              <p className="text-xs text-slate-400">Selecione todos que se aplicam</p>
+              <p className="text-xs text-slate-400">Selecione todos que se aplicam. O <strong>primeiro selecionado</strong> determina o checklist de segurança.</p>
               <div className="grid grid-cols-2 gap-2">
-                {TIPOS_TRABALHO.map(t => (
-                  <label key={t.key}
-                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border-2 cursor-pointer transition-all text-sm
-                      ${form.tiposTrabalho.includes(t.key)
-                        ? "border-emerald-500 bg-emerald-50 text-emerald-800 font-semibold"
-                        : "border-slate-200 bg-white hover:border-slate-300 text-slate-700"}`}>
-                    <input type="checkbox" className="hidden"
-                      checked={form.tiposTrabalho.includes(t.key)}
-                      onChange={e => {
-                        const next = e.target.checked
-                          ? [...form.tiposTrabalho, t.key]
-                          : form.tiposTrabalho.filter(x => x !== t.key);
-                        upd({ tiposTrabalho: next });
-                      }} />
-                    <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0
-                      ${form.tiposTrabalho.includes(t.key) ? "bg-emerald-500 border-emerald-500" : "border-slate-300"}`}>
-                      {form.tiposTrabalho.includes(t.key) && <Check className="h-3 w-3 text-white" />}
-                    </div>
-                    {t.label}
-                  </label>
-                ))}
+                {TIPOS_TRABALHO.map((t, idx) => {
+                  const sel = form.tiposTrabalho.includes(t.key);
+                  const isPrimary = form.tiposTrabalho[0] === t.key;
+                  return (
+                    <label key={t.key}
+                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border-2 cursor-pointer transition-all text-sm
+                        ${sel
+                          ? isPrimary
+                            ? "border-emerald-600 bg-emerald-50 text-emerald-800 font-semibold shadow-sm"
+                            : "border-emerald-400 bg-emerald-50/60 text-emerald-700 font-medium"
+                          : "border-slate-200 bg-white hover:border-slate-300 text-slate-700"}`}>
+                      <input type="checkbox" className="hidden"
+                        checked={sel}
+                        onChange={e => {
+                          const next = e.target.checked
+                            ? [...form.tiposTrabalho, t.key]
+                            : form.tiposTrabalho.filter(x => x !== t.key);
+                          upd({ tiposTrabalho: next, checklist: {} });
+                        }} />
+                      <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0
+                        ${sel ? "bg-emerald-500 border-emerald-500" : "border-slate-300"}`}>
+                        {sel && <Check className="h-3 w-3 text-white" />}
+                      </div>
+                      <span className="text-base leading-none select-none">{t.emoji}</span>
+                      <div className="flex-1 min-w-0">
+                        <span className="block leading-tight">{t.label}</span>
+                        <span className={`text-[10px] font-mono ${sel ? "text-emerald-600" : "text-slate-400"}`}>{t.nr}</span>
+                      </div>
+                      {isPrimary && (
+                        <span className="text-[9px] bg-emerald-600 text-white px-1 py-0.5 rounded font-bold shrink-0">Principal</span>
+                      )}
+                    </label>
+                  );
+                })}
               </div>
             </div>
             <div className="bg-slate-50 rounded-xl p-4 space-y-3 border border-slate-100">
@@ -903,11 +929,27 @@ function WizardNovaPT({
           </div>
         )}
 
-        {/* ── Passo 2: Checklist 15 itens ────────────────────── */}
+        {/* ── Passo 2: Checklist dinâmico por tipo ────────────── */}
         {step === 2 && (
           <div className="space-y-2">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-sm text-slate-500">Avaliação e controle dos riscos de queda com diferença de nível</p>
+              {(() => {
+                const primaryType = form.tiposTrabalho[0];
+                const tipo = TIPOS_TRABALHO.find(t => t.key === primaryType);
+                return (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {tipo ? (
+                      <>
+                        <span className="text-sm">{tipo.emoji}</span>
+                        <span className="text-sm font-medium text-slate-700">{tipo.label}</span>
+                        <span className="text-xs bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full font-mono">{tipo.nr}</span>
+                      </>
+                    ) : (
+                      <span className="text-sm text-slate-500">🦺 Checklist geral de segurança</span>
+                    )}
+                  </div>
+                );
+              })()}
               <div className="flex gap-2">
                 <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
                   ✓ {checkCount.s} S
@@ -945,12 +987,12 @@ function WizardNovaPT({
                     PT não pode prosseguir — {checkCount.n} não conformidade{checkCount.n > 1 ? "s" : ""} detectada{checkCount.n > 1 ? "s" : ""}
                   </p>
                   <p className="text-xs text-red-700 mt-0.5">
-                    Regularize todas as respostas "Não" antes de liberar a Permissão de Trabalho em Altura (NR-35).
+                    Regularize todas as respostas "Não" antes de liberar a Permissão de Trabalho.
                   </p>
                 </div>
               </div>
             )}
-            {CHECKLIST_ITENS.map((item, idx) => {
+            {activeChecklistItems.map((item, idx) => {
               const i = idx + 1;
               const val = form.checklist[i];
               return (
@@ -1491,29 +1533,43 @@ function PTDetalheDialog({
                 )}
 
                 {/* Checklist resumido */}
-                {Object.keys(checklist).length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-slate-500 mb-2">CHECKLIST NR-35</p>
-                    <div className="space-y-1">
-                      {CHECKLIST_ITENS.map((item, idx) => {
-                        const i = idx + 1;
-                        const v = checklist[i];
-                        if (!v) return null;
-                        return (
-                          <div key={i} className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded
-                            ${v === "S" ? "bg-green-50 text-green-700"
-                              : v === "N" ? "bg-red-50 text-red-700"
-                              : "bg-slate-50 text-slate-500"}`}>
-                            <span className="font-bold w-4">{i}.</span>
-                            <span className="flex-1 break-words">{item}</span>
-                            <span className={`font-bold px-1.5 py-0.5 rounded text-xs
-                              ${v === "S" ? "bg-green-200" : v === "N" ? "bg-red-200" : "bg-slate-200"}`}>{v}</span>
-                          </div>
-                        );
-                      })}
+                {Object.keys(checklist).length > 0 && (() => {
+                  const tiposPt: string[] = (() => { try { return JSON.parse(pt.tiposTrabalhoJson ?? "[]"); } catch { return []; } })();
+                  const primaryKey = tiposPt[0];
+                  const tipoInfo = TIPOS_TRABALHO.find(t => t.key === primaryKey);
+                  const checklistItems = PT_CHECKLISTS[primaryKey ?? ""] ?? PT_CHECKLISTS.geral;
+                  return (
+                    <div>
+                      <p className="text-xs font-semibold text-slate-500 mb-2 flex items-center gap-1.5">
+                        {tipoInfo ? (
+                          <>
+                            <span>{tipoInfo.emoji}</span>
+                            CHECKLIST — {tipoInfo.label}
+                            <span className="font-mono text-emerald-600">{tipoInfo.nr}</span>
+                          </>
+                        ) : "CHECKLIST DE SEGURANÇA"}
+                      </p>
+                      <div className="space-y-1">
+                        {checklistItems.map((item, idx) => {
+                          const i = idx + 1;
+                          const v = checklist[i];
+                          if (!v) return null;
+                          return (
+                            <div key={i} className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded
+                              ${v === "S" ? "bg-green-50 text-green-700"
+                                : v === "N" ? "bg-red-50 text-red-700"
+                                : "bg-slate-50 text-slate-500"}`}>
+                              <span className="font-bold w-4">{i}.</span>
+                              <span className="flex-1 break-words">{item}</span>
+                              <span className={`font-bold px-1.5 py-0.5 rounded text-xs
+                                ${v === "S" ? "bg-green-200" : v === "N" ? "bg-red-200" : "bg-slate-200"}`}>{v}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* Envolvidos + assinaturas */}
                 {(() => {
