@@ -1,4 +1,39 @@
 /**
+ * Rev. 3921 — **SST — PT WIZARD: FOTO DO FUNCIONÁRIO NO SELETOR DE RESPONSÁVEL PELA EXECUÇÃO.**
+ *
+ * PEDIDO: "Quero que apareça a foto do funcionário aqui embaixo também, quando eu tiver que
+ * clicar no responsável pela atividade." (Step 4 — Liberação da Permissão).
+ *
+ * RAIZ: O campo "Responsável pela execução" usava shadcn `<Select>/<SelectItem>` (texto puro),
+ * sem suporte a conteúdo visual. As fotos dos funcionários já eram carregadas em `obraFuncsQ`
+ * para o bloco de Envolvidos acima, mas não chegavam ao seletor de executante.
+ *
+ * SOLUÇÃO — FRONT-ONLY (PermissaoTrabalho.tsx):
+ *
+ * 1. `executanteDropOpen` (useState) + `executanteDropRef` (useRef<HTMLDivElement>) + useEffect
+ *    de click-outside: controla abertura/fechamento do dropdown customizado.
+ *
+ * 2. `fotoMap` (local no IIFE do seletor): `obraFuncsQ.data` é iterado para montar
+ *    `Record<nome, fotoUrl|null>` — mesmo dado já carregado para o bloco de envolvidos,
+ *    sem query adicional.
+ *
+ * 3. `envolvidosOpts` agora carrega `{ nome, funcao, fotoUrl }` (antes era `{ label, value }`).
+ *
+ * 4. Trigger customizado: botão que exibe o selecionado com avatar (foto real ou inicial) +
+ *    nome em `font-medium` + função em `text-[10px]` + chevron. Placeholder quando vazio.
+ *
+ * 5. Lista dropdown (absolute, z-50): exibe cada envolvido com foto (h-8/w-8 rounded-full,
+ *    border+shadow) ou inicial colorida. Item selecionado: bg-emerald-50 + border-left-emerald
+ *    + ícone Check. "Outro (digitar nome)" ao final com ícone PenLine.
+ *
+ * 6. Campo de texto livre `isCustom` preservado (quando "Outro" é escolhido).
+ *
+ * ZERO DELETE. ZERO BACKEND.
+ *
+ * ARQUIVOS: client/src/pages/sst/PermissaoTrabalho.tsx
+ */
+
+/**
  * Rev. 3920 — **SST — PT WIZARD: CHECKLIST POR SEÇÕES (UMA POR NR) + BLOQUEIO NR-33 EXCLUSIVA.**
  *
  * CONTEXTO: O usuário perguntou se, ao selecionar múltiplos tipos, os checklists deveriam ser

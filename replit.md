@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3920** — **SST — PT WIZARD: CHECKLIST POR SEÇÕES (UMA POR NR) + BLOQUEIO NR-33 EXCLUSIVA.** `ChecklistState` mudou para chave string `"typeKey:idx"`. `activeChecklistSections` substitui `activeChecklistItems` (uma seção por tipo selecionado). Accordion: header clicável por seção com borda verde/vermelha/cinza + counts. `nr33Conflito` bloqueia "Próximo" do Step 1 com alerta vermelho citando NR-33.3.3.4 (MTE). PTDetalheDialog com compat retroativa (chave numérica = formato antigo). ZERO DELETE.
+- **Rev. 3921** — **SST — PT WIZARD: FOTO DO FUNCIONÁRIO NO SELETOR DE RESPONSÁVEL PELA EXECUÇÃO.** Dropdown customizado substitui `<Select>` texto-puro no campo "Responsável pela execução" (Step 4). Trigger: avatar + nome + função. Lista: foto real ou inicial colorida + badge selecionado (emerald border-left + ✓). `fotoMap` monta `nome→fotoUrl` a partir de `obraFuncsQ` já carregado. `executanteDropOpen` + ref + click-outside. ZERO DELETE.
 
-- **Rev. 3919** — **SST — PT WIZARD: 10 TIPOS DE TRABALHO COM CHECKLIST DINÂMICO POR NR.** `TIPOS_TRABALHO` expandido de 6 para 10 tipos (⬆️ Altura NR-35, 🕳️ Espaço Confinado NR-33, ⛏️ Escavação NR-18, 🏗️ Andaime NR-35/18, ⚡ Elétrica NR-10, 🔨 Demolição, 🪝 Içamento NR-11, 🔥 Soldagem, 🏚️ Cobertura, 🦺 Geral). `PT_CHECKLISTS`: 10 checklists específicos por NR substituem o array fixo de 15 itens NR-35. `activeChecklistItems` (useMemo) deriva do tipo principal selecionado. `checkCount` corrigido (hardcoded 15 → length dinâmico). Detalhe da PT e header do wizard atualizados. ZERO DELETE.
+- **Rev. 3920** — **SST — PT WIZARD: CHECKLIST POR SEÇÕES (UMA POR NR) + BLOQUEIO NR-33 EXCLUSIVA.** `ChecklistState` mudou para chave string `"typeKey:idx"`. `activeChecklistSections` substitui `activeChecklistItems` (uma seção por tipo selecionado). Accordion por seção com borda verde/vermelha/cinza + counts. `nr33Conflito` bloqueia "Próximo" citando NR-33.3.3.4 (MTE). PTDetalheDialog com compat retroativa. ZERO DELETE.
 
 ### 5 one-liners
+
+- **Rev. 3919** — **SST — PT WIZARD: 10 TIPOS DE TRABALHO COM CHECKLIST DINÂMICO POR NR.** `TIPOS_TRABALHO` expandido 6→10. `PT_CHECKLISTS`: 10 checklists por NR. `activeChecklistItems` useMemo. `checkCount` corrigido (15 → length dinâmico). ZERO DELETE.
 
 - **Rev. 3918** — **CONCILIAÇÃO BANCÁRIA: FIX CHIP DE MÊS MOSTRANDO 100% FALSO (ARREDONDAMENTO).** `mesesPct` usava `Math.round`: 829/833 = 99,52% arredondava para 100%. Fix: `conciliadas >= total ? 100 : Math.floor(...)`. ZERO DELETE.
 

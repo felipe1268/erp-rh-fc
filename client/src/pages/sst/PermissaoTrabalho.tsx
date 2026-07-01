@@ -531,6 +531,20 @@ function WizardNovaPT({
 
   // Seções do accordion: abertas por padrão ao entrar no checklist
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
+
+  // Dropdown customizado para "Responsável pela execução" (com foto)
+  const [executanteDropOpen, setExecutanteDropOpen] = useState(false);
+  const executanteDropRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!executanteDropOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (executanteDropRef.current && !executanteDropRef.current.contains(e.target as Node)) {
+        setExecutanteDropOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [executanteDropOpen]);
   useEffect(() => {
     if (step === 2) {
       setOpenSections(new Set(activeChecklistSections.map(s => s.key)));
@@ -1326,32 +1340,103 @@ function WizardNovaPT({
                     <span className="ml-1 font-normal text-slate-400">(líder / encarregado da equipe)</span>
                   </label>
                   {(() => {
+                    // Monta mapa nome → fotoUrl cruzando envolvidos com o efetivo da obra
+                    const fotoMap: Record<string, string | null> = {};
+                    (obraFuncsQ.data as any[] ?? []).forEach((emp: any) => {
+                      const nome = emp.employee?.nomeCompleto || emp.nomeCompleto || "";
+                      if (nome) fotoMap[nome] = emp.employee?.fotoUrl ?? null;
+                    });
                     const envolvidosOpts = form.envolvidos
                       .filter(e => e.nome.trim())
-                      .map(e => ({ label: `${e.nome}${e.funcao ? ` — ${e.funcao}` : ""}`, value: e.nome }));
-                    const isCustom = form.executanteNome !== "" && !envolvidosOpts.some(o => o.value === form.executanteNome);
-                    return envolvidosOpts.length > 0 ? (
+                      .map(e => ({ nome: e.nome, funcao: e.funcao, fotoUrl: fotoMap[e.nome] ?? null }));
+                    const isCustom = form.executanteNome !== "" && !envolvidosOpts.some(o => o.nome === form.executanteNome);
+                    const selectedOpt = envolvidosOpts.find(o => o.nome === form.executanteNome);
+
+                    if (envolvidosOpts.length === 0) {
+                      return (
+                        <Input value={form.executanteNome}
+                          onChange={e => upd({ executanteNome: e.target.value })}
+                          placeholder="Nome do responsável pela execução" className="bg-white" />
+                      );
+                    }
+                    return (
                       <div className="space-y-1.5">
-                        <Select
-                          value={isCustom ? "_outro" : (form.executanteNome || "")}
-                          onValueChange={v => { if (v !== "_outro") upd({ executanteNome: v }); else upd({ executanteNome: "" }); }}
-                        >
-                          <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione o responsável…" /></SelectTrigger>
-                          <SelectContent>
-                            {envolvidosOpts.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                            <SelectItem value="_outro">Outro (digitar nome)</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        {/* Trigger customizado com foto */}
+                        <div ref={executanteDropRef} className="relative">
+                          <button type="button"
+                            onClick={() => setExecutanteDropOpen(o => !o)}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 bg-white border border-slate-200 rounded-md hover:border-slate-300 transition-colors text-left">
+                            {selectedOpt ? (
+                              <>
+                                {selectedOpt.fotoUrl ? (
+                                  <img src={selectedOpt.fotoUrl} alt="" className="h-7 w-7 rounded-full object-cover border border-slate-200 shrink-0" />
+                                ) : (
+                                  <div className="h-7 w-7 rounded-full bg-emerald-100 border border-emerald-200 flex items-center justify-center text-xs font-bold text-emerald-700 shrink-0">
+                                    {selectedOpt.nome.charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-slate-800 truncate">{selectedOpt.nome}</p>
+                                  {selectedOpt.funcao && <p className="text-[10px] text-slate-400 truncate">{selectedOpt.funcao}</p>}
+                                </div>
+                              </>
+                            ) : isCustom ? (
+                              <>
+                                <div className="h-7 w-7 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-xs font-bold text-slate-500 shrink-0">
+                                  {form.executanteNome.charAt(0).toUpperCase()}
+                                </div>
+                                <span className="text-sm text-slate-700 flex-1 truncate">{form.executanteNome}</span>
+                              </>
+                            ) : (
+                              <span className="text-sm text-slate-400 flex-1">Selecione o responsável…</span>
+                            )}
+                            <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
+                          </button>
+
+                          {/* Lista dropdown */}
+                          {executanteDropOpen && (
+                            <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden max-h-64 overflow-y-auto">
+                              {envolvidosOpts.map(opt => {
+                                const isSel = form.executanteNome === opt.nome;
+                                return (
+                                  <button key={opt.nome} type="button"
+                                    onClick={() => { upd({ executanteNome: opt.nome }); setExecutanteDropOpen(false); }}
+                                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors
+                                      ${isSel ? "bg-emerald-50 border-l-2 border-emerald-500" : "hover:bg-slate-50"}`}>
+                                    {opt.fotoUrl ? (
+                                      <img src={opt.fotoUrl} alt="" className="h-8 w-8 rounded-full object-cover border-2 border-white shadow shrink-0" />
+                                    ) : (
+                                      <div className="h-8 w-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-sm font-bold text-slate-500 shrink-0">
+                                        {opt.nome.charAt(0).toUpperCase()}
+                                      </div>
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                      <p className={`text-sm font-medium truncate ${isSel ? "text-emerald-800" : "text-slate-800"}`}>{opt.nome}</p>
+                                      {opt.funcao && <p className="text-[10px] text-slate-400 truncate">{opt.funcao}</p>}
+                                    </div>
+                                    {isSel && <Check className="h-4 w-4 text-emerald-600 shrink-0" />}
+                                  </button>
+                                );
+                              })}
+                              <button type="button"
+                                onClick={() => { upd({ executanteNome: "" }); setExecutanteDropOpen(false); }}
+                                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-slate-50 border-t border-slate-100">
+                                <div className="h-8 w-8 rounded-full bg-slate-50 border border-dashed border-slate-300 flex items-center justify-center shrink-0">
+                                  <PenLine className="h-3.5 w-3.5 text-slate-400" />
+                                </div>
+                                <span className="text-sm text-slate-500">Outro (digitar nome)</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Campo de texto livre quando "Outro" selecionado */}
                         {isCustom && (
                           <Input value={form.executanteNome}
                             onChange={e => upd({ executanteNome: e.target.value })}
                             placeholder="Nome do responsável pela execução" className="bg-white" autoFocus />
                         )}
                       </div>
-                    ) : (
-                      <Input value={form.executanteNome}
-                        onChange={e => upd({ executanteNome: e.target.value })}
-                        placeholder="Nome do responsável pela execução" className="bg-white" />
                     );
                   })()}
                 </div>
