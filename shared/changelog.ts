@@ -1,4 +1,26 @@
 /**
+ * Rev. 3939 — **SST — APR: SELEÇÃO MÚLTIPLA + EXCLUSÃO EM LOTE.**
+ *
+ * FUNCIONALIDADE:
+ *   - Botão "Selecionar" no header ativa modo seleção (laranja, toggle).
+ *   - Clique nos cards em modo seleção → checkbox liga/desliga (borda laranja).
+ *   - "Selecionar todos / Desmarcar todos" acima da lista.
+ *   - Barra flutuante no rodapé: "N APRs selecionadas" + botão "Abrir" (só 1 selecionada) + "Excluir N APRs".
+ *   - Exclusão em lote abre AlertDialog de confirmação destrutiva antes de prosseguir.
+ *   - Cancelar seleção (X na barra ou botão do header) limpa estado.
+ *
+ * BACKEND:
+ *   - `excluirBatch`: mutation que recebe `ids[]` + `companyId`, soft-delete em lote
+ *     via `UPDATE WHERE id IN (...) AND companyId = ? AND deletedAt IS NULL`.
+ *
+ * ARQUIVOS:
+ * - `server/routers/aprAnalises.ts` (excluirBatch)
+ * - `client/src/pages/sst/AprAnalise.tsx` (seleção múltipla)
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3938 — **SST — APR: FIX CHECKLIST PDF (pergunta vazio) + RESET WIZARD AO ABRIR.**
  *
  * BUG 1 — PDF Checklist em branco:

@@ -339,6 +339,16 @@ export const aprAnalisesRouter = router({
       return { ok: true };
     }),
 
+  excluirBatch: protectedProcedure
+    .input(z.object({ ids: z.array(z.number()).min(1), companyId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      assertCompany(ctx, input.companyId);
+      const db = (await getDb())!;
+      await db.update(aprAnalises).set({ deletedAt: new Date().toISOString() } as any)
+        .where(and(inArray(aprAnalises.id, input.ids), eq(aprAnalises.companyId, input.companyId), isNull(aprAnalises.deletedAt)));
+      return { ok: true, count: input.ids.length };
+    }),
+
   // ── Gerar HTML para impressão (Rev. 3937 — layout azul FC, logos, checklist, assinaturas completas) ──
   gerarHtml: protectedProcedure
     .input(z.object({ id: z.number(), companyId: z.number() }))
