@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3936** — **SST — APR: HOTFIX z.record Zod v4.** `z.record(z.unknown())` em Zod v4 usa o arg como KEY (não value) → valueType=undefined → `_zod` crash ao assinar. Fix: `z.record(z.string(), z.unknown())`. ZERO DELETE.
+
 - **Rev. 3935** — **SST — APR: 4 BUGS + IMPRIMIR + REGRA ASSINATURAS.** `gerarHtml` ainda usava `employees.nome` → erro PDF; `confirm("string")` em vez de `ConfirmOptions`; `updateM` sem `onError`; botão Imprimir faltando no footer. Regra: bloquear Aprovar se algum membro não assinou. ZERO DELETE.
 
 - **Rev. 3934** — **SST — APR: FIX APROVAR + HEADER AZUL FC.** Aprovar não funcionava: `ConfirmDialog` nunca renderizado + AlertDialog em `z-50` atrás do overlay `z-[100]` → bumped para `z-[300]` em `alert-dialog.tsx`. Header substituído: `bg-blue-800` + logo FC + linha 2 logos cliente/gerenciadora (idêntico à PT). Router `getById` busca logos da obra. ZERO DELETE.

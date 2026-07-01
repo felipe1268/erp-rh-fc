@@ -1,4 +1,19 @@
 /**
+ * Rev. 3936 — **SST — APR: HOTFIX ASSINATURA — z.record Zod v4.**
+ *
+ * RAIZ: Projeto usa Zod v4.3.6. Em Zod v4, `z.record(singleArg)` usa o argumento
+ * como tipo de KEY (não de value). `z.record(z.unknown())` → keyType=unknown, valueType=undefined.
+ * Quando tRPC tenta introspectar o schema e acessa `valueType._zod`, leva
+ * "Cannot read properties of undefined (reading '_zod')".
+ *
+ * Fix: `z.record(z.unknown())` → `z.record(z.string(), z.unknown())` na procedure
+ * `update` de `server/routers/aprAnalises.ts` (assinatura, equipe, status, etc.).
+ *
+ * ARQUIVOS: `server/routers/aprAnalises.ts`, `shared/version.ts`.
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3935 — **SST — APR: 4 BUGS + BOTÃO IMPRIMIR + REGRA ASSINATURAS.**
  *
  * BUG 1 — gerarHtml "Cannot convert undefined or null to object":

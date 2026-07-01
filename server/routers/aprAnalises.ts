@@ -273,7 +273,7 @@ export const aprAnalisesRouter = router({
 
   // ── Update ─────────────────────────────────────────────────────────────────
   update: protectedProcedure
-    .input(z.object({ id: z.number(), companyId: z.number(), data: z.record(z.unknown()) }))
+    .input(z.object({ id: z.number(), companyId: z.number(), data: z.record(z.string(), z.unknown()) }))
     .mutation(async ({ input, ctx }) => {
       assertCompany(ctx, input.companyId);
       const db = (await getDb())!;
