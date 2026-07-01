@@ -1076,7 +1076,16 @@ export default function DashEpis() {
                   datasets={[{
                     label: "Entregas",
                     data: mData,
-                    backgroundColor: [CHART_PALETTE[0], CHART_PALETTE[3], CHART_PALETTE[2], CHART_PALETTE[1], CHART_PALETTE[4], CHART_PALETTE[6]],
+                    backgroundColor: [
+                      "#1D6FE3", // azul vivo
+                      "#F97316", // laranja
+                      "#16A34A", // verde
+                      "#9333EA", // roxo
+                      "#EF4444", // vermelho
+                      "#0891B2", // teal
+                      "#CA8A04", // âmbar escuro
+                      "#EC4899", // rosa
+                    ],
                   }]}
                   height={260}
                   onChartClick={(info: ChartClickInfo) => {
