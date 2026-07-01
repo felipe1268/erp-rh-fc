@@ -1,4 +1,43 @@
 /**
+ * Rev. 3952 — **DRE: CORREÇÃO DE CLASSIFICAÇÃO + CARD CONTEXTUAL DRE × CAIXA.**
+ *
+ * PROBLEMA 1 — FINANCIAMENTOS inflando Despesas Fixas:
+ *   financial_accounts id=264 (FINANCIAMENTOS) tinha classificacao_dre='outro' e
+ *   natureza='fixo', fazendo as parcelas de empréstimo (R$69.758 em Jan/2026)
+ *   entrar como Despesa Fixa no DRE. Amortização de principal é quitação de dívida
+ *   (balanço patrimonial), NÃO despesa operacional.
+ *   FIX: classificacao_dre → 'investimento' → entra no bucket CAPEX (excluído do P&L).
+ *
+ * PROBLEMA 2 — MÚTUO RECEBIDO INTERCOMPANY inflando Receita Bruta:
+ *   financial_accounts id=498 (MÚTUO RECEBIDO INTERCOMPANY) tinha classificacao_dre='outro'
+ *   e tipo='receita', fazendo empréstimos intercompany (R$60.000 em Jan/2026) aparecer
+ *   como Receita Bruta. Mútuo é passivo (dívida), não receita operacional.
+ *   FIX: classificacao_dre → 'nao_operacional' (novo classificador).
+ *   FIX2: dreLinhaPredicate receitaBruta e receitasFinanceiras passam a excluir
+ *   class_dre='nao_operacional' — qualquer conta marcada assim sai do DRE.
+ *
+ * IMPACTO NOS NÚMEROS (Jan/2026):
+ *   Receita Bruta: R$1.888.628 → R$1.828.628 (-R$60.000)
+ *   Despesas Fixas: R$557.090 → R$487.332 (-R$69.758)
+ *   Lucro Líquido: -R$643.076 → -R$632.617 (melhora R$10.459 — antes os erros
+ *   parcialmente se cancelavam, agora ambos são corrigidos).
+ *
+ * NOVO CARD "DRE × CAIXA" na tela FinanceiroDRE:
+ *   Novo endpoint getDREBankComparison que retorna entradas/saídas/saldo bancário
+ *   do período. Card dinâmico inserido entre os KPIs e a tabela DRE:
+ *   - DRE < 0 e banco > 0 → azul: "Por que o DRE mostra prejuízo se o caixa ficou positivo?"
+ *   - DRE > 0 e banco < 0 → âmbar: "Por que o DRE mostra lucro se o caixa caiu?"
+ *   - Mesma direção → verde: "DRE e caixa estão alinhados"
+ *   Cada cenário explica as 3 causas da divergência (empréstimos, CAPEX, timing)
+ *   em linguagem acessível para leigos, com mensagem final "✓ Os dados estão corretos".
+ *
+ * ZERO DELETE. Arquivos: financial_accounts (UPDATE classificacao_dre x2),
+ * server/services/financialKpiService.ts (export dreRange + predicados receitaBruta/Financial),
+ * server/routers/financial.ts (import dreRange + getDREBankComparison endpoint),
+ * client/src/pages/financeiro/FinanceiroDRE.tsx (bankComp query + card JSX).
+ */
+
+/**
  * Rev. 3951 — **CONCILIAÇÃO: BOTÃO "CONSOLIDAR MÊS" NO PANORAMA GERAL.**
  *
  * PROBLEMA:

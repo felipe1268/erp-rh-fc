@@ -44,6 +44,7 @@ import {
   dreDisponibilidade,
   projetarFluxoCaixa90Dias,
   gerarEFDReinf,
+  dreRange,
 } from "../services/financialKpiService";
 import { runFinancialJobNow } from "../services/financialAutoImportJob";
 import { parseCaixaExtratoPdf } from "../services/caixaPdfParser";
@@ -10187,6 +10188,41 @@ export const financialRouter = router({
     } catch (e: any) {
       throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: e?.message ?? "Erro ao detalhar a linha do DRE" });
     }
+  }),
+
+  // Rev. 3952 — Compara o saldo bancário do período com o resultado do DRE.
+  // Alimenta o card explicativo no DRE (leigos confundem prejuízo operacional
+  // com saldo bancário positivo). Não usa a detecção de movimentação interna
+  // porque ela cancela ao somar todas as contas: transfer A→B = +R$ em B, -R$ em A → líquido zero.
+  getDREBankComparison: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    periodo: z.string(),
+    tipoPeriodo: z.enum(["mensal", "trimestral", "semestral", "anual"]).default("mensal"),
+  })).query(async ({ ctx, input }) => {
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const [mesIni, mesFim] = dreRange(input.periodo, input.tipoPeriodo);
+    const dataInicio = `${mesIni}-01`;
+    const [anoFim, mFim] = mesFim.split("-").map(Number);
+    const dataFim = new Date(anoFim, mFim, 0).toISOString().slice(0, 10);
+    const res = await dbExecute(db,
+      `SELECT
+         COALESCE(SUM(CASE WHEN valor > 0 THEN valor ELSE 0 END), 0) AS entradas,
+         COALESCE(SUM(CASE WHEN valor < 0 THEN ABS(valor) ELSE 0 END), 0) AS saidas
+       FROM bank_statement_lines
+       WHERE company_id=$1 AND data>=$2 AND data<=$3
+         AND excluido_em IS NULL AND desconsiderado_em IS NULL`,
+      [input.companyId, dataInicio, dataFim]
+    );
+    const row = (res as any[])[0] ?? {};
+    return {
+      bankEntradas: Number(row.entradas ?? 0),
+      bankSaidas: Number(row.saidas ?? 0),
+      bankSaldo: Number(row.entradas ?? 0) - Number(row.saidas ?? 0),
+      dataInicio,
+      dataFim,
+    };
   }),
 
   analiseDRE: protectedProcedure.input(z.object({

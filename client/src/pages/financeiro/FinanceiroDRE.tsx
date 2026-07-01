@@ -14,7 +14,7 @@ import {
   CalendarDays, Sparkles, Info, BookOpen, ExternalLink, AlertTriangle,
   Lightbulb, Activity, ArrowUpRight, ArrowDownRight, Minus, ShieldCheck,
   ChevronRight as ChevronRightIcon, Layers, ListTree, Calculator, Percent,
-  ArrowLeft, Receipt, CheckCircle2, XCircle,
+  ArrowLeft, Receipt, CheckCircle2, XCircle, Building2, Scale,
 } from "lucide-react";
 
 type DRELinhaKey =
@@ -176,6 +176,12 @@ export default function FinanceiroDRE() {
   // trocar de período, lemos a versão persistida; o botão regenera/atualiza.
   const analiseMut = (trpc as any).financial.analiseDRE.useMutation();
   const { data: analiseSalva, refetch: refetchSalva } = (trpc as any).financial.getAnaliseDRESalva.useQuery(
+    { companyId, periodo, tipoPeriodo },
+    { enabled: !!companyId }
+  );
+
+  // Rev. 3952 — comparação DRE × saldo bancário para card explicativo
+  const { data: bankComp } = (trpc as any).financial.getDREBankComparison.useQuery(
     { companyId, periodo, tipoPeriodo },
     { enabled: !!companyId }
   );
@@ -485,6 +491,96 @@ export default function FinanceiroDRE() {
             })}
           </div>
         )}
+
+        {/* Rev. 3952 — Card contexto DRE × Caixa: explica divergência para leigos */}
+        {dre && bankComp && (() => {
+          const dreNet = dre.lucroLiquido;
+          const bankNet = bankComp.bankSaldo;
+          const hasBankData = bankComp.bankEntradas > 0 || bankComp.bankSaidas > 0;
+          if (!hasBankData) return null;
+
+          const drePos = dreNet >= 0;
+          const bankPos = bankNet >= 0;
+          const divergente = drePos !== bankPos;
+
+          if (!divergente) {
+            return (
+              <div className="flex items-center gap-2.5 rounded-xl border border-emerald-100 bg-emerald-50/60 px-4 py-3">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <p className="text-xs text-emerald-800 leading-relaxed">
+                  <span className="font-semibold">DRE e caixa estão alinhados</span> — resultado operacional e fluxo bancário apontam na mesma direção para o período.
+                  <span className="text-emerald-700"> DRE: <strong>{formatBRL(dreNet)}</strong> · Caixa bancário: <strong>{formatBRL(bankNet)}</strong></span>
+                </p>
+              </div>
+            );
+          }
+
+          const dreNegBankPos = !drePos && bankPos;
+          return (
+            <div className={`rounded-xl border px-5 py-4 space-y-3 ${dreNegBankPos ? "border-blue-100 bg-blue-50/50" : "border-amber-100 bg-amber-50/50"}`}>
+              {/* Cabeçalho */}
+              <div className="flex items-start gap-3">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${dreNegBankPos ? "bg-blue-100" : "bg-amber-100"}`}>
+                  <Scale className={`w-4 h-4 ${dreNegBankPos ? "text-blue-600" : "text-amber-600"}`} />
+                </div>
+                <div className="min-w-0">
+                  <p className={`text-sm font-bold ${dreNegBankPos ? "text-blue-900" : "text-amber-900"}`}>
+                    {dreNegBankPos
+                      ? "Por que o DRE mostra prejuízo se o caixa ficou positivo?"
+                      : "Por que o DRE mostra lucro se o caixa caiu?"}
+                  </p>
+                  <p className={`text-xs mt-0.5 ${dreNegBankPos ? "text-blue-700" : "text-amber-700"}`}>
+                    Isso é normal — DRE e saldo bancário medem coisas diferentes
+                  </p>
+                </div>
+              </div>
+
+              {/* Comparativo lado a lado */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg bg-white border border-gray-100 px-4 py-3">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <BarChart2 className="w-3.5 h-3.5 text-gray-400" />
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Resultado DRE</span>
+                  </div>
+                  <p className={`text-lg font-bold tabular-nums ${drePos ? "text-emerald-600" : "text-red-600"}`}>{formatBRL(dreNet)}</p>
+                  <p className="text-[11px] text-gray-500 mt-0.5">Receitas × Despesas operacionais</p>
+                </div>
+                <div className="rounded-lg bg-white border border-gray-100 px-4 py-3">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Building2 className="w-3.5 h-3.5 text-gray-400" />
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Caixa Bancário</span>
+                  </div>
+                  <p className={`text-lg font-bold tabular-nums ${bankPos ? "text-emerald-600" : "text-red-600"}`}>{formatBRL(bankNet)}</p>
+                  <p className="text-[11px] text-gray-500 mt-0.5">Total entradas − saídas do período</p>
+                </div>
+              </div>
+
+              {/* Explicação */}
+              <div className="rounded-lg bg-white/80 border border-gray-100 px-4 py-3 space-y-2">
+                <p className="text-xs font-semibold text-gray-700">Por que eles divergem?</p>
+                <ul className="text-xs text-gray-600 space-y-1.5 leading-relaxed">
+                  {dreNegBankPos ? (
+                    <>
+                      <li className="flex items-start gap-2"><span className="text-blue-500 font-bold mt-0.5">→</span><span><strong>O DRE só conta operação:</strong> receitas de obras e serviços versus todos os custos e despesas. Se os gastos superaram as receitas, o resultado é negativo — independente do caixa.</span></li>
+                      <li className="flex items-start gap-2"><span className="text-blue-500 font-bold mt-0.5">→</span><span><strong>O caixa inclui tudo:</strong> empréstimos recebidos, aportes de sócios, pagamentos de clientes atrasados — dinheiro que entrou no banco mas <em>não é receita operacional</em> e não aparece no DRE.</span></li>
+                      <li className="flex items-start gap-2"><span className="text-blue-500 font-bold mt-0.5">→</span><span><strong>Conclusão:</strong> o caixa está positivo porque a empresa recebeu financiamentos ou transferências que sustentaram o saldo. O DRE negativo indica que a <em>operação</em> precisa de atenção.</span></li>
+                    </>
+                  ) : (
+                    <>
+                      <li className="flex items-start gap-2"><span className="text-amber-500 font-bold mt-0.5">→</span><span><strong>O DRE registra receitas quando realizadas:</strong> uma obra faturada e recebida entra como receita, mesmo que o dinheiro já tenha saído para pagar fornecedores do mês anterior.</span></li>
+                      <li className="flex items-start gap-2"><span className="text-amber-500 font-bold mt-0.5">→</span><span><strong>O caixa pode cair mesmo com lucro</strong> se a empresa fez investimentos (CAPEX), pagou dívidas antigas ou financiamentos, ou teve saídas que não são despesas do DRE.</span></li>
+                      <li className="flex items-start gap-2"><span className="text-amber-500 font-bold mt-0.5">→</span><span><strong>Conclusão:</strong> acompanhe o Fluxo de Caixa para entender onde o dinheiro foi — o lucro existe, mas está sendo usado em outros fins.</span></li>
+                    </>
+                  )}
+                </ul>
+              </div>
+
+              <p className={`text-[11px] ${dreNegBankPos ? "text-blue-600/70" : "text-amber-600/70"}`}>
+                ✓ Os dados estão corretos — não é inconsistência. Use o DRE para avaliar a operação e a Conciliação Bancária para o fluxo de caixa real.
+              </p>
+            </div>
+          );
+        })()}
 
         {/* Tabela DRE */}
         <Card className="border-0 shadow-sm">

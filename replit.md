@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3951** — **CONCILIAÇÃO: BOTÃO "CONSOLIDAR MÊS" NO PANORAMA GERAL.** Botão "Consolidar mês" só existia dentro da view por conta individual. Novo endpoint `financial.consolidarTodasContas` fecha TODAS as contas em uma chamada; botão verde no header do panorama (só em modo mês+mês selecionado). ZERO DELETE.
+- **Rev. 3952** — **DRE: CORREÇÃO DE CLASSIFICAÇÃO + CARD CONTEXTUAL DRE × CAIXA.** Auditoria detectou 2 erros: FINANCIAMENTOS (R$69.758) entrava como Despesa Fixa (amortização de principal não é despesa); MÚTUO INTERCOMPANY (R$60.000) entrava como Receita (passivo, não receita). Fix: `classificacao_dre` → 'investimento'/'nao_operacional'; novo predicado exclui 'nao_operacional' de receitaBruta. Novo endpoint `getDREBankComparison` + card dinâmico no DRE explicando divergência DRE × caixa bancário em 3 cenários (azul/âmbar/verde). ZERO DELETE.
 
-- **Rev. 3950** — **DISSÍDIO: RECALCULAR DIFERENÇAS RETROATIVAS (dissídio aplicado antes da Rev.3278).** Diagnóstico: dissídio 2026 aplicado antes do motor retroativo existir → `mesesRetroativos=0`/`valorRetroativo="0"` em todos registros → botão "Diferenças Dissídio" retorna vazio. Solução: endpoint `sindical.recalcularDiferencas` recalcula usando `salarioAnterior+dataBaseInicio+dataAplicacao`; botão "Recalcular Difs." (amber) no card Configurações; campo Vigência exibido no card. ZERO DELETE.
+- **Rev. 3951** — **CONCILIAÇÃO: BOTÃO "CONSOLIDAR MÊS" NO PANORAMA GERAL.** Botão "Consolidar mês" só existia dentro da view por conta individual. Novo endpoint `financial.consolidarTodasContas` fecha TODAS as contas em uma chamada; botão verde no header do panorama (só em modo mês+mês selecionado). ZERO DELETE.
 
 ### 5 one-liners
 

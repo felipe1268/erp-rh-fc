@@ -338,7 +338,7 @@ export async function calcularKpis(
 // Resolve o intervalo [mesIni, mesFim] (formato 'YYYY-MM') a partir do período + tipo.
 // mensal: o próprio mês. trimestral: o trimestre que contém o mês.
 // semestral: o semestre que contém o mês (1º=Jan-Jun, 2º=Jul-Dez). anual: ano inteiro.
-function dreRange(
+export function dreRange(
   periodo: string,
   tipoPeriodo: "mensal" | "trimestral" | "semestral" | "anual",
 ): [string, string] {
@@ -389,9 +389,11 @@ export type DRELinhaKey =
 function dreLinhaPredicate(linha: DRELinhaKey): string {
   switch (linha) {
     case "receitaBruta":
-      return `tipo='receita' AND origem NOT IN ('aplicacao_financeira','rendimento_financeiro') AND conta NOT LIKE '%juros%' AND conta NOT LIKE '%rendiment%'`;
+      // Rev. 3952 — exclui class_dre='nao_operacional' (mútuos intercompany, aportes): são
+      // passivos/transferências de capital, não receita operacional.
+      return `tipo='receita' AND origem NOT IN ('aplicacao_financeira','rendimento_financeiro') AND conta NOT LIKE '%juros%' AND conta NOT LIKE '%rendiment%' AND COALESCE(class_dre,'') <> 'nao_operacional'`;
     case "receitasFinanceiras":
-      return `tipo='receita' AND (origem IN ('aplicacao_financeira','rendimento_financeiro') OR conta LIKE '%juros%' OR conta LIKE '%rendiment%')`;
+      return `tipo='receita' AND COALESCE(class_dre,'') <> 'nao_operacional' AND (origem IN ('aplicacao_financeira','rendimento_financeiro') OR conta LIKE '%juros%' OR conta LIKE '%rendiment%')`;
     case "custosObra":
       // Captura via origem (módulos nativos) OU via classificacao_dre do plano de contas.
       return `tipo='despesa' AND (origem IN ${DRE_ORIGEM_OBRA} OR class_dre='custo_obra')`;
