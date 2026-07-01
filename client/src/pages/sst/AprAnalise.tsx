@@ -19,7 +19,7 @@ import {
   ListChecks, Layers, CircleCheck, CircleX, Minus,
   HardHat, Ban, Calendar, Timer, Zap, Info, ChevronDown, ChevronUp,
   Shield, Activity, Clipboard, Users,
-  CheckSquare, Square, MousePointerClick,
+  CheckSquare, Square,
 } from "lucide-react";
 
 // ── Probabilidade / Gravidade ────────────────────────────────────────────────
@@ -1742,7 +1742,6 @@ export default function AprAnalise() {
   const [novaOpen, setNovaOpen]           = useState(false);
   const [detalheId, setDetalheId]         = useState<number | null>(null);
   const [detalheOpen, setDetalheOpen]     = useState(false);
-  const [selecaoAtiva, setSelecaoAtiva]   = useState(false);
   const [selectedIds, setSelectedIds]     = useState<Set<number>>(new Set());
   const { confirm, ConfirmDialog: ConfirmBatch } = useConfirm();
 
@@ -1755,7 +1754,6 @@ export default function AprAnalise() {
     onSuccess: (res) => {
       toast.success(`${res.count} APR${res.count !== 1 ? "s" : ""} excluída${res.count !== 1 ? "s" : ""} com sucesso.`);
       setSelectedIds(new Set());
-      setSelecaoAtiva(false);
       refetch();
     },
     onError: e => toast.error(e.message),
@@ -1764,24 +1762,14 @@ export default function AprAnalise() {
   function refetch() { statsQ.refetch(); listQ.refetch(); }
   function abrirDetalhe(id: number) { setDetalheId(id); setDetalheOpen(true); }
 
-  function toggleSelecao(id: number) {
+  function toggleSelecao(e: React.MouseEvent, id: number) {
+    e.stopPropagation();
     setSelectedIds(prev => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
   }
-
-  function toggleTodos() {
-    const todos = (listQ.data ?? []).map((a: any) => a.id);
-    if (selectedIds.size === todos.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(todos));
-    }
-  }
-
-  function cancelarSelecao() { setSelecaoAtiva(false); setSelectedIds(new Set()); }
 
   async function handleExcluirSelecionados() {
     const ids = Array.from(selectedIds);
@@ -1797,8 +1785,6 @@ export default function AprAnalise() {
 
   const stats = statsQ.data ?? { total: 0, rascunho: 0, em_analise: 0, aprovada: 0, concluida: 0, cancelada: 0 };
   const listaAprs = listQ.data ?? [];
-  const todosIds  = listaAprs.map((a: any) => a.id);
-  const todosSelecionados = selectedIds.size === todosIds.length && todosIds.length > 0;
 
   const CARDS = [
     { key: null,         label: "Total",      value: stats.total,      color: "from-orange-500 to-orange-600", icon: ShieldAlert },
@@ -1809,7 +1795,7 @@ export default function AprAnalise() {
 
   return (
     <DashboardLayout>
-      <div className="p-6 space-y-6 max-w-6xl mx-auto pb-32">
+      <div className="p-6 space-y-6 max-w-6xl mx-auto pb-28">
         {/* Header */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
@@ -1823,20 +1809,9 @@ export default function AprAnalise() {
             <Button variant="outline" size="sm" onClick={refetch} disabled={listQ.isFetching}>
               <RefreshCw className={`h-4 w-4 ${listQ.isFetching ? "animate-spin" : ""}`} />
             </Button>
-            {/* Botão selecionar */}
-            <Button
-              variant={selecaoAtiva ? "default" : "outline"}
-              size="sm"
-              onClick={() => selecaoAtiva ? cancelarSelecao() : setSelecaoAtiva(true)}
-              className={selecaoAtiva ? "bg-orange-600 hover:bg-orange-700" : ""}>
-              <MousePointerClick className="h-4 w-4 mr-1.5" />
-              {selecaoAtiva ? "Cancelar seleção" : "Selecionar"}
+            <Button onClick={() => setNovaOpen(true)} className="bg-orange-600 hover:bg-orange-700">
+              <Plus className="h-4 w-4 mr-1.5" />Nova APR
             </Button>
-            {!selecaoAtiva && (
-              <Button onClick={() => setNovaOpen(true)} className="bg-orange-600 hover:bg-orange-700">
-                <Plus className="h-4 w-4 mr-1.5" />Nova APR
-              </Button>
-            )}
           </div>
         </div>
 
@@ -1861,24 +1836,13 @@ export default function AprAnalise() {
           })}
         </div>
 
-        {/* Barra de filtro / seleção */}
-        <div className="flex items-center gap-3 flex-wrap">
-          {filtroStatus && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-slate-600">Filtrando:</span>
-              <StatusBadge status={filtroStatus} />
-              <button onClick={() => setFiltroStatus(null)} className="text-xs text-slate-400 hover:text-slate-600 underline">limpar</button>
-            </div>
-          )}
-          {selecaoAtiva && listaAprs.length > 0 && (
-            <button type="button" onClick={toggleTodos}
-              className="flex items-center gap-1.5 text-sm font-medium text-orange-700 hover:text-orange-900 ml-auto">
-              {todosSelecionados
-                ? <><CheckSquare className="h-4 w-4" />Desmarcar todos</>
-                : <><Square className="h-4 w-4" />Selecionar todos ({listaAprs.length})</>}
-            </button>
-          )}
-        </div>
+        {filtroStatus && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-slate-600">Filtrando:</span>
+            <StatusBadge status={filtroStatus} />
+            <button onClick={() => setFiltroStatus(null)} className="text-xs text-slate-400 hover:text-slate-600 underline">limpar</button>
+          </div>
+        )}
 
         {/* Lista */}
         {listQ.isLoading && (
@@ -1906,25 +1870,29 @@ export default function AprAnalise() {
             const selecionado = selectedIds.has(apr.id);
             return (
               <div key={apr.id}
-                onClick={() => selecaoAtiva ? toggleSelecao(apr.id) : abrirDetalhe(apr.id)}
+                onClick={() => abrirDetalhe(apr.id)}
                 className={`relative bg-white border-2 rounded-2xl p-4 shadow-sm transition-all cursor-pointer group
-                  ${selecaoAtiva
-                    ? selecionado
-                      ? "border-orange-500 ring-2 ring-orange-400 ring-offset-1 bg-orange-50"
-                      : "border-slate-200 hover:border-orange-300"
+                  ${selecionado
+                    ? "border-orange-500 ring-2 ring-orange-400 ring-offset-1 bg-orange-50/40"
                     : "border-slate-200 hover:shadow-md hover:-translate-y-0.5"
                   }`}>
 
-                {/* Checkbox overlay (modo seleção) */}
-                {selecaoAtiva && (
-                  <div className={`absolute top-3 right-3 rounded-full transition-all ${selecionado ? "text-orange-600" : "text-slate-300"}`}>
-                    {selecionado
-                      ? <CheckSquare className="h-5 w-5" />
-                      : <Square className="h-5 w-5" />}
-                  </div>
-                )}
+                {/* Checkbox no canto superior esquerdo */}
+                <button
+                  type="button"
+                  onClick={e => toggleSelecao(e, apr.id)}
+                  className={`absolute top-3 left-3 z-10 rounded transition-all focus:outline-none
+                    ${selecionado
+                      ? "text-orange-600 opacity-100"
+                      : "text-slate-300 opacity-0 group-hover:opacity-100"
+                    }`}
+                  title={selecionado ? "Desmarcar" : "Selecionar"}>
+                  {selecionado
+                    ? <CheckSquare className="h-4.5 w-4.5 h-[18px] w-[18px]" />
+                    : <Square     className="h-[18px] w-[18px]" />}
+                </button>
 
-                <div className={`flex items-start justify-between mb-3 ${selecaoAtiva ? "pr-6" : ""}`}>
+                <div className={`flex items-start justify-between mb-3 ${selecionado ? "pl-6" : "group-hover:pl-6"} transition-all`}>
                   <div className="flex items-center gap-2 min-w-0">
                     {tipoApr && <span className="text-lg shrink-0">{tipoApr.emoji}</span>}
                     <div className="min-w-0">
@@ -1932,8 +1900,7 @@ export default function AprAnalise() {
                       <h3 className="font-semibold text-slate-800 text-sm line-clamp-1">{apr.atividade || "Sem atividade"}</h3>
                     </div>
                   </div>
-                  {!selecaoAtiva && <StatusBadge status={apr.status} />}
-                  {selecaoAtiva && <StatusBadge status={apr.status} />}
+                  <StatusBadge status={apr.status} />
                 </div>
 
                 {tipoApr && (
@@ -1962,16 +1929,9 @@ export default function AprAnalise() {
 
                 <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
                   <span>{apr.totalRiscos ?? 0} risco{(apr.totalRiscos ?? 0) !== 1 ? "s" : ""} mapeado{(apr.totalRiscos ?? 0) !== 1 ? "s" : ""}</span>
-                  {!selecaoAtiva && (
-                    <span className="group-hover:text-orange-600 transition-colors flex items-center gap-0.5">
-                      Ver detalhes <ChevronRight className="h-3 w-3" />
-                    </span>
-                  )}
-                  {selecaoAtiva && (
-                    <span className={`font-semibold ${selecionado ? "text-orange-600" : "text-slate-300"}`}>
-                      {selecionado ? "Selecionada" : "Clique para selecionar"}
-                    </span>
-                  )}
+                  <span className="group-hover:text-orange-600 transition-colors flex items-center gap-0.5">
+                    Ver detalhes <ChevronRight className="h-3 w-3" />
+                  </span>
                 </div>
               </div>
             );
@@ -1980,17 +1940,17 @@ export default function AprAnalise() {
       </div>
 
       {/* ── Barra flutuante de ações em lote ── */}
-      {selecaoAtiva && selectedIds.size > 0 && (
+      {selectedIds.size > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50
           flex items-center gap-3 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl
-          border border-white/10 backdrop-blur-sm animate-in slide-in-from-bottom-4 duration-200">
+          border border-white/10 animate-in slide-in-from-bottom-4 duration-200">
           <span className="text-sm font-semibold text-white/90">
             {selectedIds.size} APR{selectedIds.size !== 1 ? "s" : ""} selecionada{selectedIds.size !== 1 ? "s" : ""}
           </span>
           <div className="w-px h-5 bg-white/20" />
           {selectedIds.size === 1 && (
             <Button size="sm"
-              onClick={() => { const [id] = Array.from(selectedIds); abrirDetalhe(id); cancelarSelecao(); }}
+              onClick={() => { const [id] = Array.from(selectedIds); abrirDetalhe(id); setSelectedIds(new Set()); }}
               className="bg-blue-600 hover:bg-blue-700 h-8 text-xs">
               <Eye className="h-3.5 w-3.5 mr-1" />Abrir
             </Button>
@@ -2003,8 +1963,8 @@ export default function AprAnalise() {
               : <Trash2 className="h-3.5 w-3.5 mr-1" />}
             Excluir {selectedIds.size > 1 ? `${selectedIds.size} APRs` : "APR"}
           </Button>
-          <button type="button" onClick={cancelarSelecao}
-            className="text-white/50 hover:text-white ml-1">
+          <button type="button" onClick={() => setSelectedIds(new Set())}
+            className="text-white/50 hover:text-white ml-1" title="Limpar seleção">
             <XIcon className="h-4 w-4" />
           </button>
         </div>
