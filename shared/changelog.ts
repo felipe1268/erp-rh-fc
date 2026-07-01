@@ -1,4 +1,31 @@
 /**
+ * Rev. 3946 — **CONVENÇÃO COLETIVA IA: FIX COLUNAS SNAKE_CASE NAS TABELAS DRIZZLE.**
+ *
+ * PROBLEMA:
+ *   `convencaoIA.listar` e `convencaoIA.processarPdf` falhavam com
+ *   `DB error: column "companyId" does not exist` /
+ *   `column "companyId" of relation "convencao_analises" does not exist`.
+ *
+ * CAUSA-RAIZ:
+ *   Tabelas criadas via SyncSchema+ usam snake_case (`company_id`, `ano_referencia`
+ *   etc.). O schema Drizzle em `drizzle/schema.ts` não tinha mapeamento explícito,
+ *   então `companyId: integer()` gerava SQL com `"companyId"` (camelCase com aspas)
+ *   → coluna inexistente no Postgres.
+ *   (Ver memória: drizzle-selfheal-column-casing.md)
+ *
+ * SOLUÇÃO:
+ *   Adicionado primeiro argumento de nome explícito em TODOS os campos camelCase
+ *   de `convencaoAnalises` e `convencaoAnaliseItens`:
+ *     `companyId: integer("company_id")`, `anoReferencia: integer("ano_referencia")`,
+ *     `extracaoBrutaJson: text("extracao_bruta_json")`, etc.
+ *
+ * ARQUIVOS:
+ *   drizzle/schema.ts  (convencaoAnalises + convencaoAnaliseItens)
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3945 — **CONVENÇÃO COLETIVA IA: BOTÃO "ANALISANDO" COM % 0→100.**
  *
  * PROBLEMA:

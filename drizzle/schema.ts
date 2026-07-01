@@ -928,30 +928,30 @@ export const dissidios = pgTable("dissidios", {
 // ============================================================
 export const convencaoAnalises = pgTable("convencao_analises", {
         id: serial().notNull(),
-        companyId: integer().notNull(),
-        anoReferencia: integer().notNull(),
-        documentoUrl: text(),
-        documentoNome: varchar({ length: 255 }),
+        companyId: integer("company_id").notNull(),
+        anoReferencia: integer("ano_referencia").notNull(),
+        documentoUrl: text("documento_url"),
+        documentoNome: varchar("documento_nome", { length: 255 }),
         // JSON bruto retornado pela IA
-        extracaoBrutaJson: text(),
+        extracaoBrutaJson: text("extracao_bruta_json"),
         // JSON normalizado/revisado pelo usuário antes de aplicar
-        extracaoRevisadaJson: text(),
+        extracaoRevisadaJson: text("extracao_revisada_json"),
         // processando | analisado | aplicado | erro
         status: text().default('processando').notNull(),
-        erroMensagem: text(),
+        erroMensagem: text("erro_mensagem"),
         // metadados rápidos pra listagem
         sindicato: varchar({ length: 255 }),
-        numeroCct: varchar({ length: 100 }),
-        percentualReajuste: varchar({ length: 10 }),
-        pisoSalarial: varchar({ length: 20 }),
+        numeroCct: varchar("numero_cct", { length: 100 }),
+        percentualReajuste: varchar("percentual_reajuste", { length: 10 }),
+        pisoSalarial: varchar("piso_salarial", { length: 20 }),
         // vínculo com o dissídio criado na aplicação (salário)
-        dissidioId: integer(),
-        criadoPor: varchar({ length: 255 }),
-        criadoPorUserId: integer(),
-        aplicadoPor: varchar({ length: 255 }),
-        aplicadoEm: timestamp({ mode: 'string' }),
-        createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
-        updatedAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+        dissidioId: integer("dissidio_id"),
+        criadoPor: varchar("criado_por", { length: 255 }),
+        criadoPorUserId: integer("criado_por_user_id"),
+        aplicadoPor: varchar("aplicado_por", { length: 255 }),
+        aplicadoEm: timestamp("aplicado_em", { mode: 'string' }),
+        createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+        updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
 },
 (table) => [
         index("ca_company_ano").on(table.companyId, table.anoReferencia),
@@ -960,15 +960,15 @@ export const convencaoAnalises = pgTable("convencao_analises", {
 
 export const convencaoAnaliseItens = pgTable("convencao_analise_itens", {
         id: serial().notNull(),
-        analiseId: integer().notNull(),
-        companyId: integer().notNull(),
-        employeeId: integer().notNull(),
+        analiseId: integer("analise_id").notNull(),
+        companyId: integer("company_id").notNull(),
+        employeeId: integer("employee_id").notNull(),
         // salario | va | vr | vt | seguroVida | auxFarmacia
         campo: varchar({ length: 30 }).notNull(),
-        valorAnterior: varchar({ length: 30 }),
-        valorNovo: varchar({ length: 30 }),
-        aplicadoEm: timestamp({ mode: 'string' }),
-        createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+        valorAnterior: varchar("valor_anterior", { length: 30 }),
+        valorNovo: varchar("valor_novo", { length: 30 }),
+        aplicadoEm: timestamp("aplicado_em", { mode: 'string' }),
+        createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 },
 (table) => [
         index("cai_analise").on(table.analiseId),
