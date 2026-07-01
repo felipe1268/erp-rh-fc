@@ -1187,11 +1187,11 @@ export default function FinanceiroConciliacao() {
     { enabled: !!companyId && !!contaBancariaId && contaSelecionadaCaixaInterno, retry: false }
   );
   const confirmarEntradaMut = (trpc as any).financial.confirmarEntradaCaixa.useMutation({
-    onSuccess: () => { toast({ title: "Entrada confirmada!" }); refetchCaixa(); },
+    onSuccess: () => { toast({ title: "Entrada confirmada!" }); refetchCaixa(); refetchAccStatus(); },
     onError: (e: any) => { toast({ title: "Erro", description: e.message, variant: "destructive" }); },
   });
   const desconciliarEntradaMut = (trpc as any).financial.desconciliarEntradaCaixa.useMutation({
-    onSuccess: () => { toast({ title: "Confirmação desfeita." }); refetchCaixa(); },
+    onSuccess: () => { toast({ title: "Confirmação desfeita." }); refetchCaixa(); refetchAccStatus(); },
     onError: (e: any) => { toast({ title: "Erro", description: e.message, variant: "destructive" }); },
   });
 

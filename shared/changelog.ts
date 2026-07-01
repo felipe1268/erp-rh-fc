@@ -1,4 +1,26 @@
 /**
+ * Rev. 3926 — **CONCILIAÇÃO BANCÁRIA: FIX CARD CAIXA INTERNO MOSTRANDO 31/32 APÓS CONFIRMAR TUDO.**
+ *
+ * PROBLEMA: card "CAIXA INTERNO - ADM" no dashboard de Conciliação ficava travado em 97%
+ * (31/32 confirmados) mesmo depois de todas as 32 entradas terem sido confirmadas na tela
+ * de detalhe. A tela de detalhe mostrava corretamente "Confirmadas: 32 / A confirmar: 0",
+ * mas o card do dashboard não atualizava.
+ *
+ * CAUSA RAIZ: stale cache. As mutations `confirmarEntradaCaixa` e `desconciliarEntradaCaixa`
+ * chamavam apenas `refetchCaixa()` (query `getEntradasCaixaInterno` — o detalhe) no `onSuccess`,
+ * mas NÃO chamavam `refetchAccStatus()` (query `getBankAccountsConciliacaoStatus` — os cards
+ * do dashboard). Assim, o card permanecia com o snapshot anterior até o usuário navegar para
+ * outra tela e voltar.
+ *
+ * FIX: adicionado `refetchAccStatus()` no `onSuccess` de ambas as mutations em
+ * `FinanceiroConciliacao.tsx`. Agora, ao confirmar OU desfazer uma confirmação, AMBAS as
+ * queries são re-executadas em sequência, mantendo o card e o detalhe sempre sincronizados.
+ *
+ * Arquivo: `client/src/pages/financeiro/FinanceiroConciliacao.tsx`.
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3925 — **SST — PT DETALHE: HEADER AZUL (PADRÃO FC) + FIX LOGO FC SUMINDO.**
  *
  * PROBLEMA 1: Header ficou verde (emerald-800) — usuário confirmou que o padrão FC é azul.

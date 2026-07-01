@@ -50,21 +50,21 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3925** — **SST — PT DETALHE: HEADER AZUL (PADRÃO FC) + FIX LOGO FC SUMINDO.** `bg-emerald-800` → `bg-blue-800` no header + subtextos `text-blue-300`. Corpo do dialog (checklist, cards, botões) permanece emerald. Fix logo FC: `??` → `||` na derivação de `fcLogoUrl` — string vazia do `VITE_APP_LOGO` não bloqueava mais o fallback para `selectedCompany?.logoUrl`. ZERO DELETE.
+- **Rev. 3926** — **CONCILIAÇÃO BANCÁRIA: FIX CARD CI MOSTRANDO 31/32 APÓS CONFIRMAR TUDO.** Mutations `confirmarEntradaCaixa` e `desconciliarEntradaCaixa` chamavam só `refetchCaixa()` (detalhe) no `onSuccess`, mas não `refetchAccStatus()` (cards do dashboard). Card ficava stale em 97% (31/32) mesmo com tudo confirmado. Fix: `refetchAccStatus()` adicionado no `onSuccess` de ambas as mutations. ZERO DELETE.
 
-- **Rev. 3924** — **SST — PT DETALHE: FIX LOGOS ENORMES + REVERT CORES PARA EMERALD.** Rev. 3923 havia trocado todas as cores para azul (indesejado) e os logos renderizavam no tamanho natural da imagem. Fix: revertidas TODAS as cores de marca para emerald. Logos da obra: container fixo `w-10 h-8 overflow-hidden` + `img w-full h-full object-contain`. ZERO DELETE.
+- **Rev. 3925** — **SST — PT DETALHE: HEADER AZUL (PADRÃO FC) + FIX LOGO FC SUMINDO.** `bg-emerald-800` → `bg-blue-800` no header + subtextos `text-blue-300`. Corpo do dialog (checklist, cards, botões) permanece emerald. Fix logo FC: `??` → `||` na derivação de `fcLogoUrl`. ZERO DELETE.
 
 ### 5 one-liners
 
-- **Rev. 3923** — **SST — PT DETALHE: PALETA FC AZUL + 3 LOGOS (FC + CLIENTE + GERENCIADORA).** `getById` expandido: `obraClienteLogoUrl`, `obraGerenciadoraLogoUrl`, `obraGerenciadoraNome`, `obraClienteNome` da obra. Cabeçalho com logo FC + linha de logos do cliente/gerenciadora (cards `bg-white/10 rounded-xl`). ZERO DELETE.
+- **Rev. 3924** — **SST — PT DETALHE: FIX LOGOS ENORMES + REVERT CORES PARA EMERALD.** Rev. 3923 havia trocado todas as cores para azul e logos renderizavam no tamanho natural. Fix: todas as cores de marca para emerald. Logos: container fixo `w-10 h-8 overflow-hidden`. ZERO DELETE.
 
-- **Rev. 3922** — **SST — PT DETALHE: REDESIGN LAYOUT DOCUMENTO OFICIAL.** Header emerald-800 + logo empresa + número PT font-black + chips de tipo. Faixa amarela safety-stripe. Tabela de dados 4 colunas. Checklist em tabela #/Item/Resp. Cards rounded-xl Liberação/Conclusão. Layout flex-col overflow-hidden. ZERO DELETE.
+- **Rev. 3923** — **SST — PT DETALHE: PALETA FC AZUL + 3 LOGOS (FC + CLIENTE + GERENCIADORA).** `getById` expandido: `obraClienteLogoUrl`, `obraGerenciadoraLogoUrl`, `obraGerenciadoraNome`, `obraClienteNome` da obra. Cabeçalho com logo FC + linha de logos do cliente/gerenciadora. ZERO DELETE.
+
+- **Rev. 3922** — **SST — PT DETALHE: REDESIGN LAYOUT DOCUMENTO OFICIAL.** Header emerald-800 + logo empresa + número PT font-black + chips de tipo. Faixa amarela safety-stripe. Tabela de dados 4 colunas. Checklist em tabela #/Item/Resp. Cards rounded-xl Liberação/Conclusão. ZERO DELETE.
 
 - **Rev. 3921** — **SST — PT WIZARD: FOTO DO FUNCIONÁRIO NO SELETOR DE RESPONSÁVEL PELA EXECUÇÃO.** Dropdown customizado substitui `<Select>` no campo "Responsável pela execução" (Step 4). `fotoMap` de `obraFuncsQ`. `executanteDropOpen` + ref + click-outside. ZERO DELETE.
 
-- **Rev. 3920** — **SST — PT WIZARD: CHECKLIST POR SEÇÕES (UMA POR NR) + BLOQUEIO NR-33 EXCLUSIVA.** `ChecklistState` mudou para chave string `"typeKey:idx"`. `activeChecklistSections`. Accordion por seção. `nr33Conflito` bloqueia "Próximo". PTDetalheDialog compat retroativa. ZERO DELETE.
-
-- **Rev. 3919** — **SST — PT WIZARD: 10 TIPOS DE TRABALHO COM CHECKLIST DINÂMICO POR NR.** `TIPOS_TRABALHO` expandido 6→10. `PT_CHECKLISTS`: 10 checklists por NR. `activeChecklistItems` useMemo. `checkCount` corrigido. ZERO DELETE.
+- **Rev. 3920** — **SST — PT WIZARD: CHECKLIST POR SEÇÕES (UMA POR NR) + BLOQUEIO NR-33 EXCLUSIVA.** `ChecklistState` mudou para chave string `"typeKey:idx"`. `activeChecklistSections`. Accordion por seção. `nr33Conflito` bloqueia "Próximo". ZERO DELETE.
 
 ### Histórico completo
 
