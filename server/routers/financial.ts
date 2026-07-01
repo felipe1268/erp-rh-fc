@@ -8020,6 +8020,28 @@ export const financialRouter = router({
     return { ok: true, afetados: rows(res).length };
   }),
 
+  // Rev. 3951 — CONSOLIDAR TODAS AS CONTAS DO MÊS: marca TODAS as linhas pendentes do
+  // extrato (qualquer conta) no período como conciliado=1, fechando o mês de uma vez a
+  // partir do PANORAMA GERAL (sem precisar entrar em cada conta individualmente).
+  // Mesma lógica de consolidarMes, mas sem filtrar por conta_bancaria_id.
+  // Tenant-safe. ZERO ALTER/DROP/DELETE.
+  consolidarTodasContas: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    dataInicio: z.string(),
+    dataFim: z.string(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const res = await dbExecute(db,
+      `UPDATE bank_statement_lines SET conciliado=1
+        WHERE company_id=$1 AND data>=$2 AND data<=$3
+          AND COALESCE(conciliado,0)=0 AND excluido_em IS NULL
+        RETURNING id`,
+      [input.companyId, input.dataInicio, input.dataFim]);
+    return { ok: true, afetados: rows(res).length };
+  }),
+
   // Rev. 3169 — DESCONSOLIDAR O MÊS: reabre o mês marcando TODAS as linhas conciliadas
   // da conta+período como conciliado=0. Para as linhas que estavam PAREADAS a um
   // lançamento (entry_id), também REVERTE o flag de conciliação do lançamento

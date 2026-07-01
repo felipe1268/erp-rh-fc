@@ -1060,6 +1060,11 @@ export default function FinanceiroConciliacao() {
     onSuccess: (res: any) => { toast({ title: `Mês reaberto! ${formatInt(res.afetados)} lançamento(s) desmarcado(s).` }); refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(false); refetchReport(); },
     onError: (e: any) => toast({ title: "Erro ao desconsolidar", description: e.message, variant: "destructive" }),
   });
+  // Rev. 3951 — Consolidar TODAS as contas do mês de uma vez no panorama geral.
+  const consolidarTodasMut = (trpc as any).financial.consolidarTodasContas.useMutation({
+    onSuccess: (res: any) => { toast({ title: `Mês consolidado! ${formatInt(res.afetados)} lançamento(s) marcado(s) em todas as contas.` }); refetchGeral(); refetchStAno(); refetchAccStatus(); },
+    onError: (e: any) => toast({ title: "Erro ao consolidar", description: e.message, variant: "destructive" }),
+  });
   // Rev. 3179 — Limpar extrato importado errado (conta+período). Soft-delete no backend.
   // REGRA DE OURO (Rev. 3875): se houver linhas conciliadas, o server retorna ok=false +
   // conciliadosCount; o client exibe aviso com contagem e exige checkbox antes de force=true.
@@ -3126,10 +3131,25 @@ export default function FinanceiroConciliacao() {
                       <p className="text-xs text-gray-500">Todas as contas com extrato em {periodoLabel}. Clique numa conta para conciliar.</p>
                     </div>
                   </div>
-                  <Button size="sm" variant="outline" onClick={() => refetchGeral()} disabled={geralLoading} className="h-8 text-xs">
-                    {geralLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <RefreshCw className="w-3.5 h-3.5 mr-1" />}
-                    Atualizar
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {modoData === "mes" && mesSel != null && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-xs border-green-600 text-green-700 hover:bg-green-50"
+                        disabled={consolidarTodasMut.isPending || geralLoading || geralContas.length === 0}
+                        onClick={() => consolidarTodasMut.mutate({ companyId, dataInicio, dataFim })}
+                        title="Marca todas as linhas pendentes do extrato do mês como consolidadas em todas as contas"
+                      >
+                        <CheckCircle className="w-3.5 h-3.5 mr-1" />
+                        {consolidarTodasMut.isPending ? "Consolidando..." : `Consolidar ${MESES[mesSel - 1]}`}
+                      </Button>
+                    )}
+                    <Button size="sm" variant="outline" onClick={() => refetchGeral()} disabled={geralLoading} className="h-8 text-xs">
+                      {geralLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <RefreshCw className="w-3.5 h-3.5 mr-1" />}
+                      Atualizar
+                    </Button>
+                  </div>
                 </div>
 
                 {geralLoading ? (

@@ -1,3 +1,9 @@
+- **Rev. 3944** — **CONTAS A RECEBER: MULTI-SELEÇÃO + AJUSTE EM LOTE.** Botão "Selecionar", checkboxes, barra flutuante, `BulkAjustarDialog` 3 abas, endpoint `bulkAtualizarVencimento`. ZERO DELETE.
+
+- **Rev. 3942** — **CONVENÇÃO COLETIVA IA: FIX "SELECIONE UMA EMPRESA".** `selectedCompany` é OBJETO → `parseInt(obj)=NaN=0` → guard disparava. Fix: `companyIdNum` (já coerced). ZERO DELETE.
+
+- **Rev. 3941** — **CONTAS A RECEBER: BADGE DUPLICATA + FIX ESTORNO-CHEQUE.** Window function `COUNT(*) OVER (PARTITION BY company_id, valor, data_vencimento)`; badge âmbar "⚠ Possível duplicata". Fix `_INTERNO_PATTERNS` cheque-estorno. ZERO DELETE.
+
 - **Rev. 3916** — **SST — PT PDF REDESIGN: 3 LOGOS + SOLICITANTE AUTO + CHECKLIST COM REFS NR.** Cabeçalho triplo + badge NR-35 + logos cliente/gerenciadora da obra. Solicitante = criadoPorNome. Checklist com coluna "Referência NR". ZERO DELETE.
 
 - **Rev. 3915** — **CONCILIAÇÃO BANCÁRIA CEF JAN/2026: PARES ZERO-LÍQUIDO DESCONSIDERADOS + FIX REAPRESENTADOS NA LISTA.** 12 linhas de 6 pares zero-líquido desconsideradas. Filtro `repExt` corrigido. Resultado: 97% (115/119). ZERO DELETE.

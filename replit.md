@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3951** — **CONCILIAÇÃO: BOTÃO "CONSOLIDAR MÊS" NO PANORAMA GERAL.** Botão "Consolidar mês" só existia dentro da view por conta individual. Novo endpoint `financial.consolidarTodasContas` fecha TODAS as contas em uma chamada; botão verde no header do panorama (só em modo mês+mês selecionado). ZERO DELETE.
+
 - **Rev. 3950** — **DISSÍDIO: RECALCULAR DIFERENÇAS RETROATIVAS (dissídio aplicado antes da Rev.3278).** Diagnóstico: dissídio 2026 aplicado antes do motor retroativo existir → `mesesRetroativos=0`/`valorRetroativo="0"` em todos registros → botão "Diferenças Dissídio" retorna vazio. Solução: endpoint `sindical.recalcularDiferencas` recalcula usando `salarioAnterior+dataBaseInicio+dataAplicacao`; botão "Recalcular Difs." (amber) no card Configurações; campo Vigência exibido no card. ZERO DELETE.
 
-- **Rev. 3949** — **CONCILIAÇÃO: FIX DEDUP SECUNDÁRIO DESCARTA LANÇAMENTOS COM MESMO DOC.** 7x DEBITO CAPITALIZACAO R$109,83 no mesmo dia → só 1 importado. Causa: dedup secundário (Rev.3802) fazia `ILIKE '%Doc 369639%'` sem checar `saldo_apos`. Fix: adicionado `($5::numeric IS NULL OR saldo_apos=$6)` em Fase 1 + Fase 2. Saldo distinto = transação distinta. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3949** — **CONCILIAÇÃO: FIX DEDUP SECUNDÁRIO DESCARTA LANÇAMENTOS COM MESMO DOC.** Fase 1+2 receberam `($5::numeric IS NULL OR saldo_apos=$6)`. Saldo distinto = transação distinta. ZERO DELETE.
 
 - **Rev. 3948** — **CONVENÇÃO COLETIVA IA: DATAS BR + CORES + AVISO DISSÍDIO + FIX PISO IA.** `sanitizarExtracao()` normaliza valores numéricos da IA; datas DD/MM/AAAA; tabela simulação ▲▼; banner dissídio/piso. ZERO DELETE.
 
@@ -63,12 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3946** — **CONVENÇÃO COLETIVA IA: FIX COLUNAS SNAKE_CASE (Drizzle).** `convencaoIA.listar`/`processarPdf` falhavam com `column "companyId" does not exist` — fix: nome explícito em TODOS os campos camelCase. ZERO DELETE.
 
 - **Rev. 3945** — **CONVENÇÃO COLETIVA IA: BOTÃO "ANALISANDO" COM % 0→100.** Regra de Ouro: `setInterval` 0→90%; `onSuccess` salta p/ 100%; `onError` zera. ZERO DELETE.
-
-- **Rev. 3944** — **CONTAS A RECEBER: MULTI-SELEÇÃO + AJUSTE EM LOTE.** Botão "Selecionar", checkboxes, barra flutuante, `BulkAjustarDialog` 3 abas, endpoint `bulkAtualizarVencimento`. ZERO DELETE.
-
-- **Rev. 3942** — **CONVENÇÃO COLETIVA IA: FIX "SELECIONE UMA EMPRESA".** `selectedCompany` é OBJETO → `parseInt(obj)=NaN=0` → guard disparava. Fix: `companyIdNum` (já coerced). ZERO DELETE.
-
-- **Rev. 3941** — **CONTAS A RECEBER: BADGE DUPLICATA + FIX ESTORNO-CHEQUE.** Window function `COUNT(*) OVER (PARTITION BY company_id, valor, data_vencimento)`; badge âmbar "⚠ Possível duplicata". Fix `_INTERNO_PATTERNS` cheque-estorno. ZERO DELETE.
 
 ### Histórico completo
 

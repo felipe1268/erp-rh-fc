@@ -1,4 +1,22 @@
 /**
+ * Rev. 3951 — **CONCILIAÇÃO: BOTÃO "CONSOLIDAR MÊS" NO PANORAMA GERAL.**
+ *
+ * PROBLEMA:
+ *   Botão "Consolidar mês" só aparecia dentro da view de UMA conta específica.
+ *   No panorama geral (todas as contas), o botão não existia, obrigando o usuário
+ *   a entrar em cada conta individualmente para fechar o mês.
+ *
+ * SOLUÇÃO:
+ *   - Backend: novo endpoint `financial.consolidarTodasContas` (companyId + dataInicio + dataFim)
+ *     → UPDATE bank_statement_lines sem filtro de conta → fecha TODAS as contas do período.
+ *   - Frontend: botão "Consolidar {mês}" (verde, outline) no header do panorama geral,
+ *     visível quando modoData==="mes" e mesSel!=null. Fica desabilitado se ainda carregando
+ *     ou se não há contas com extrato.
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3950 — **DISSÍDIO: RECALCULAR DIFERENÇAS RETROATIVAS (dissídio aplicado antes da Rev.3278).**
  *
  * PROBLEMA:
