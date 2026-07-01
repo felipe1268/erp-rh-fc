@@ -50,21 +50,21 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3949** — **CONCILIAÇÃO: FIX DEDUP SECUNDÁRIO DESCARTA LANÇAMENTOS COM MESMO DOC.** 7x DEBITO CAPITALIZACAO R$109,83 no mesmo dia → só 1 importado. Causa: dedup secundário (Rev.3802) fazia `ILIKE '%Doc 369639%'` sem checar `saldo_apos`. Fix: adicionado `($5::numeric IS NULL OR saldo_apos=$6)` em Fase 1 + Fase 2. Saldo distinto = transação distinta. ZERO DELETE.
+- **Rev. 3950** — **DISSÍDIO: RECALCULAR DIFERENÇAS RETROATIVAS (dissídio aplicado antes da Rev.3278).** Diagnóstico: dissídio 2026 aplicado antes do motor retroativo existir → `mesesRetroativos=0`/`valorRetroativo="0"` em todos registros → botão "Diferenças Dissídio" retorna vazio. Solução: endpoint `sindical.recalcularDiferencas` recalcula usando `salarioAnterior+dataBaseInicio+dataAplicacao`; botão "Recalcular Difs." (amber) no card Configurações; campo Vigência exibido no card. ZERO DELETE.
 
-- **Rev. 3948** — **CONVENÇÃO COLETIVA IA: DATAS BR + CORES + AVISO DISSÍDIO + FIX PISO IA.** `sanitizarExtracao()` normaliza valores numéricos da IA (fix "2.302.75"→230275 via parseBRL bug); datas mostram DD/MM/AAAA via `isoToBR/brToISO`; tabela simulação com ▲ vermelho/▼ verde; banner âmbar se dissídio existente; banner vermelho se piso > 10k. ZERO DELETE.
+- **Rev. 3949** — **CONCILIAÇÃO: FIX DEDUP SECUNDÁRIO DESCARTA LANÇAMENTOS COM MESMO DOC.** 7x DEBITO CAPITALIZACAO R$109,83 no mesmo dia → só 1 importado. Causa: dedup secundário (Rev.3802) fazia `ILIKE '%Doc 369639%'` sem checar `saldo_apos`. Fix: adicionado `($5::numeric IS NULL OR saldo_apos=$6)` em Fase 1 + Fase 2. Saldo distinto = transação distinta. ZERO DELETE.
 
 ### 5 one-liners
 
-- **Rev. 3947** — **CONVENÇÃO COLETIVA IA: REDESIGN DIALOG "NOVA ANÁLISE".** Header gradient indigo + ícone; ano + upload em linha única (seletor `h-9` inline com nome truncado ao selecionar); aviso amber compacto; footer `bg-slate-50`; sem scrollbar. Barra 0→100% mantida. ZERO DELETE.
+- **Rev. 3948** — **CONVENÇÃO COLETIVA IA: DATAS BR + CORES + AVISO DISSÍDIO + FIX PISO IA.** `sanitizarExtracao()` normaliza valores numéricos da IA; datas DD/MM/AAAA; tabela simulação ▲▼; banner dissídio/piso. ZERO DELETE.
 
-- **Rev. 3946** — **CONVENÇÃO COLETIVA IA: FIX COLUNAS SNAKE_CASE (Drizzle).** `convencaoIA.listar` e `processarPdf` falhavam com `column "companyId" does not exist` — tabela criada via SyncSchema+ usa `company_id`; schema Drizzle não tinha mapeamento → `"companyId"` (camelCase com aspas). Fix: nome explícito em TODOS os campos camelCase de `convencaoAnalises` + `convencaoAnaliseItens`. ZERO DELETE.
+- **Rev. 3947** — **CONVENÇÃO COLETIVA IA: REDESIGN DIALOG "NOVA ANÁLISE".** Header gradient indigo; ano+upload em linha; aviso amber; footer `bg-slate-50`. Barra 0→100% mantida. ZERO DELETE.
 
-- **Rev. 3945** — **CONVENÇÃO COLETIVA IA: BOTÃO "ANALISANDO" COM % 0→100.** Regra de Ouro: `setInterval` simulado 0→90% (fase IA, 700ms/tick); `onSuccess` salta p/ 100% e limpa em 800ms; `onError` zera. Botão `overflow-hidden` + `bg-white/15` crescendo via `width: X%` + texto "Analisando… XX%". ZERO DELETE.
+- **Rev. 3946** — **CONVENÇÃO COLETIVA IA: FIX COLUNAS SNAKE_CASE (Drizzle).** `convencaoIA.listar`/`processarPdf` falhavam com `column "companyId" does not exist` — fix: nome explícito em TODOS os campos camelCase. ZERO DELETE.
 
-- **Rev. 3944** — **CONTAS A RECEBER: MULTI-SELEÇÃO + AJUSTE EM LOTE.** Botão "Selecionar" expande grupos, checkboxes nas linhas, barra flutuante com valor total, `BulkAjustarDialog` 3 abas (Categoria/Obra, Vencimento, Receber em lote). Novo endpoint `bulkAtualizarVencimento`. ZERO DELETE.
+- **Rev. 3945** — **CONVENÇÃO COLETIVA IA: BOTÃO "ANALISANDO" COM % 0→100.** Regra de Ouro: `setInterval` 0→90%; `onSuccess` salta p/ 100%; `onError` zera. ZERO DELETE.
 
-- **Rev. 3943** — **CONVENÇÃO COLETIVA IA: ADICIONA BARRA LATERAL.** Faltava `DashboardLayout` no componente. Envolvidos os 2 returns (lista + relatório). ZERO DELETE.
+- **Rev. 3944** — **CONTAS A RECEBER: MULTI-SELEÇÃO + AJUSTE EM LOTE.** Botão "Selecionar", checkboxes, barra flutuante, `BulkAjustarDialog` 3 abas, endpoint `bulkAtualizarVencimento`. ZERO DELETE.
 
 - **Rev. 3942** — **CONVENÇÃO COLETIVA IA: FIX "SELECIONE UMA EMPRESA".** `selectedCompany` é OBJETO → `parseInt(obj)=NaN=0` → guard disparava. Fix: `companyIdNum` (já coerced). ZERO DELETE.
 

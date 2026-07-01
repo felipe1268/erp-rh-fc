@@ -1,4 +1,40 @@
 /**
+ * Rev. 3950 — **DISSÍDIO: RECALCULAR DIFERENÇAS RETROATIVAS (dissídio aplicado antes da Rev.3278).**
+ *
+ * PROBLEMA:
+ *   Botão "Diferenças Dissídio" na Folha retorna "Nenhuma diferença salarial gerada para 2026"
+ *   mesmo após dissídio de 5,15% aplicado em 18/06/2026.
+ *
+ * DIAGNÓSTICO:
+ *   O dissídio id=2 (2026) foi APLICADO antes da Rev. 3278 ser deployed (quando a lógica de
+ *   diferença retroativa ainda não existia no sindical.aplicar). O campo data_vigencia ficou NULL
+ *   no banco (coluna criada depois via SyncSchema+), e todos os registros em dissidio_funcionarios
+ *   foram gravados com mesesRetroativos=0 / valorRetroativo="0". O relatorioDiferencas filtra
+ *   por valorRetroativo > 0 → retorna vazio.
+ *   dataBaseInicio="2026-05-01", dataAplicacao="2026-06-18" → vigência maio, aplicado junho →
+ *   1 mês retroativo (maio/2026) → valorRetroativo = salarioAnterior × 5,15% por funcionário.
+ *
+ * SOLUÇÃO:
+ *   1. Novo endpoint `sindical.recalcularDiferencas` (server/routers/sindical.ts):
+ *      - Guard: admin_master + dissídio já aplicado + nenhuma diff existente (valorRetroativo=0).
+ *      - Calcula mesesRetro = mesesRetroativosEntre(dataVigencia||dataBaseInicio, dataAplicacao).
+ *      - Carrega payroll/HE/férias dos meses retroativos (mesmo motor de aplicar).
+ *      - UPDATE em dissidio_funcionarios: mesesRetroativos, valorRetroativo, diferencaMesPagamento,
+ *        diferencaBaseVerbas, diferencaBreakdownJson, diferencaTipo='folha'.
+ *      - Retorna { atualizados, mesesRetro, mesPagamento, totalDiferencas }.
+ *   2. Configurações → Sindical/Dissídio: botão "Recalcular Difs." no card de dissídios aplicados
+ *      (amber outline, visível só p/ admin_master). Toast com resumo (N func, meses, R$ total).
+ *   3. Campo "Vigência" exibido no card (mm/aaaa) para o usuário ver qual data foi registrada.
+ *
+ * ARQUIVOS:
+ *   server/routers/sindical.ts (+recalcularDiferencas endpoint, ~75 linhas)
+ *   client/src/pages/Configuracoes.tsx (recalcularMutation hook + botão + campo Vigência no card)
+ *   shared/version.ts → Rev. 3950
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3949 — **CONCILIAÇÃO: FIX DEDUP SECUNDÁRIO DESCARTA LANÇAMENTOS COM MESMO DOC NO MESMO DIA.**
  *
  * PROBLEMA:

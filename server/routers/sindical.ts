@@ -413,6 +413,113 @@ export const sindicalRouter = router({
     };
   }),
 
+  // Rev. 3950 — RECALCULAR diferenças retroativas para dissídio aplicado antes
+  // da Rev. 3278 (quando o motor de retroação ainda não existia). Todos os campos
+  // de diferença ficaram como zero/null. Este endpoint os preenche usando os dados
+  // já gravados (salarioAnterior + dataBaseInicio + dataAplicacao + verbas do mês).
+  recalcularDiferencas: protectedProcedure.input(z.object({
+    companyId: z.number(), companyIds: z.array(z.number()).optional(),
+    anoReferencia: z.number(),
+  })).mutation(async ({ input, ctx }) => {
+    if (ctx.user.role !== 'admin_master') throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas Admin Master pode recalcular diferenças' });
+    await assertCompanyAccess(ctx.user, input);
+    const db = (await getDb())!;
+
+    const [dissidio] = await db.select().from(dissidios)
+      .where(and(
+        companyFilter(dissidios.companyId, input),
+        eq(dissidios.anoReferencia, input.anoReferencia),
+      ));
+    if (!dissidio) throw new TRPCError({ code: 'NOT_FOUND', message: `Dissídio ${input.anoReferencia} não encontrado` });
+    if (dissidio.status !== 'aplicado') throw new TRPCError({ code: 'BAD_REQUEST', message: 'Dissídio ainda não foi aplicado' });
+
+    const vigenciaStr = (dissidio.dataVigencia || dissidio.dataBaseInicio || '').slice(0, 7);
+    const dataAplicacaoYM = (dissidio.dataAplicacao || '').slice(0, 7);
+    if (!vigenciaStr || !dataAplicacaoYM) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Data de vigência ou aplicação não disponível no registro' });
+
+    const mesesRetro = mesesRetroativosEntre(vigenciaStr, dataAplicacaoYM);
+    if (mesesRetro.length === 0) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: `Vigência ${vigenciaStr} não é anterior ao mês de aplicação ${dataAplicacaoYM} — sem período retroativo.` });
+    }
+
+    const funcs = await db.select().from(dissidioFuncionarios)
+      .where(and(
+        eq(dissidioFuncionarios.dissidioId, dissidio.id),
+        companyFilter(dissidioFuncionarios.companyId, input),
+      ));
+    if (funcs.length === 0) throw new TRPCError({ code: 'NOT_FOUND', message: 'Nenhum registro de funcionário para este dissídio' });
+
+    const jaTemDiffs = funcs.some(f => parseFloat(f.valorRetroativo || '0') > 0);
+    if (jaTemDiffs) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Diferenças retroativas já foram calculadas para este dissídio' });
+
+    const percentual = parseFloat(dissidio.percentualReajuste);
+    const mesPagamento = dataAplicacaoYM;
+
+    const salarioMap = new Map<number, number>();
+    const heMap = new Map<number, number>();
+    const feriasMap = new Map<number, number>();
+
+    const salarioRaw = await db.select({ employeeId: payrollPayments.employeeId, v: payrollPayments.salarioBrutoMes })
+      .from(payrollPayments)
+      .where(and(companyFilter(payrollPayments.companyId, input), inArray(payrollPayments.mesReferencia, mesesRetro)));
+    for (const r of salarioRaw) salarioMap.set(r.employeeId, (salarioMap.get(r.employeeId) || 0) + parseBRL(r.v));
+
+    const heRaw = await db.select({ employeeId: hePeriodEmployees.employeeId, v: hePeriodEmployees.valorHETotal })
+      .from(hePeriodEmployees)
+      .innerJoin(hePeriods, eq(hePeriods.id, hePeriodEmployees.hePeriodId))
+      .where(and(
+        companyFilter(hePeriodEmployees.companyId, input),
+        inArray(hePeriods.mesReferencia, mesesRetro),
+        inArray(hePeriods.status, ['aprovado', 'pago']),
+      ));
+    for (const r of heRaw) heMap.set(r.employeeId, (heMap.get(r.employeeId) || 0) + parseBRL(r.v as any));
+
+    const feriasRaw = await db.select({ employeeId: vacationPeriods.employeeId, v: vacationPeriods.valorTotal })
+      .from(vacationPeriods)
+      .where(and(
+        companyFilter(vacationPeriods.companyId, input),
+        inArray(sql`to_char(${vacationPeriods.dataPagamento}, 'YYYY-MM')`, mesesRetro),
+      ));
+    for (const r of feriasRaw) feriasMap.set(r.employeeId, (feriasMap.get(r.employeeId) || 0) + parseBRL(r.v));
+
+    let atualizados = 0;
+    let totalDiferencas = 0;
+
+    for (const func of funcs) {
+      const salarioAnterior = parseBRL(func.salarioAnterior);
+      const baseSalarioFonte = salarioMap.get(func.employeeId);
+      const usouFallback = baseSalarioFonte == null;
+      const baseSalario = usouFallback ? salarioAnterior * mesesRetro.length : baseSalarioFonte!;
+      const baseHE = heMap.get(func.employeeId) || 0;
+      const baseFerias = feriasMap.get(func.employeeId) || 0;
+      const baseVerbas = baseSalario + baseHE + baseFerias;
+      const valorRetroativo = baseVerbas * (percentual / 100);
+      if (valorRetroativo <= 0) continue;
+      const breakdown = {
+        meses: mesesRetro,
+        mesPagamento,
+        salario: Number(baseSalario.toFixed(2)),
+        horasExtras: Number(baseHE.toFixed(2)),
+        ferias: Number(baseFerias.toFixed(2)),
+        baseVerbas: Number(baseVerbas.toFixed(2)),
+        percentual,
+        fonteSalario: usouFallback ? 'salario_base' : 'folha_consolidada',
+      };
+      await db.update(dissidioFuncionarios).set({
+        mesesRetroativos: mesesRetro.length,
+        valorRetroativo: valorRetroativo.toFixed(2),
+        diferencaMesPagamento: mesPagamento,
+        diferencaBaseVerbas: baseVerbas.toFixed(2),
+        diferencaBreakdownJson: breakdown,
+        diferencaTipo: 'folha',
+      }).where(eq(dissidioFuncionarios.id, func.id));
+      atualizados++;
+      totalDiferencas += valorRetroativo;
+    }
+
+    return { atualizados, totalFuncionarios: funcs.length, mesesRetro, mesPagamento, totalDiferencas: Number(totalDiferencas.toFixed(2)) };
+  }),
+
   // Excluir dissídio (apenas rascunho)
   excluir: protectedProcedure.input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), anoReferencia: z.number(),
   })).mutation(async ({ input, ctx }) => {

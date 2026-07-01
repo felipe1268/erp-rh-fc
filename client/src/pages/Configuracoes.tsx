@@ -1068,6 +1068,14 @@ function SindicalDissidioTab({ companyId, isMaster }: { companyId: number; isMas
     onError: (err: any) => toast.error(err.message),
   });
 
+  const recalcularMutation = trpc.sindical.recalcularDiferencas.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Diferenças recalculadas: ${data.atualizados} funcionários — ${data.mesesRetro.join(', ')} — Total R$ ${data.totalDiferencas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
+      listaQuery.refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   const excluirMutation = trpc.sindical.excluir.useMutation({
     onSuccess: () => {
       toast.success("Dissídio excluído");
@@ -1212,6 +1220,19 @@ function SindicalDissidioTab({ companyId, isMaster }: { companyId: number; isMas
                         <p className="text-[10px] text-gray-500 uppercase font-medium">Reajuste</p>
                       </div>
 
+                      {/* Vigência */}
+                      <div className="text-center min-w-[90px]">
+                        <p className="text-sm font-semibold text-gray-700">
+                          {(() => {
+                            const v = d.dataVigencia || d.dataBaseInicio;
+                            if (!v) return '—';
+                            const dt = new Date(v + 'T00:00:00');
+                            return dt.toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' });
+                          })()}
+                        </p>
+                        <p className="text-[10px] text-gray-500 uppercase font-medium">Vigência</p>
+                      </div>
+
                       {/* Status */}
                       <div>
                         {isAplicado ? (
@@ -1234,6 +1255,19 @@ function SindicalDissidioTab({ companyId, isMaster }: { companyId: number; isMas
 
                     {/* Ações */}
                     <div className="flex items-center gap-2">
+                      {isAplicado && isMaster && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+                          onClick={() => recalcularMutation.mutate({ companyId, anoReferencia: d.anoReferencia })}
+                          disabled={recalcularMutation.isPending}
+                          title="Recalcula diferenças retroativas para dissídios aplicados antes da Rev. 3278 (valores zero)"
+                        >
+                          {recalcularMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                          Recalcular Difs.
+                        </Button>
+                      )}
                       {isRascunho && isMaster && (
                         <>
                           {isConfirmando ? (
