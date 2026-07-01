@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3934** — **SST — APR: FIX APROVAR + HEADER AZUL FC.** Aprovar não funcionava: `ConfirmDialog` nunca renderizado + AlertDialog em `z-50` atrás do overlay `z-[100]` → bumped para `z-[300]` em `alert-dialog.tsx`. Header substituído: `bg-blue-800` + logo FC + linha 2 logos cliente/gerenciadora (idêntico à PT). Router `getById` busca logos da obra. ZERO DELETE.
+
 - **Rev. 3933** — **SST — APR: BUG LISTA + ASSINATURAS DA EQUIPE.** Bug: `employees.nome` → `employees.nomeCompleto` (crashava list/getById silenciosamente → lista vazia). Fix `gerarHtml` equipe para objetos. Feature: nova coluna `assinaturas_equipe_json`; cada membro da equipe ganha card com pad de assinatura no detalhe da APR; `AssinaturaPad` modal reutilizado; `updateM` persiste. ColFix v3933. ZERO DELETE.
 
-- **Rev. 3932** — **SST — APR: EQUIPE — NR × ATIVIDADE + CIPA + AVISO PRÉVIO + BLOQUEIO.** Cross-check dinâmico: `tipoSelecionado.nr` parseado em array de NRs exigidas; cada funcionário próprio verificado em `emp.nrs` → badge verde ✓ (ok) / âmbar ⚠ (vencida, bloqueia) / vermelho ✗ (ausente, bloqueia). NRs extras exibidas em cinza. CIPA badge (rosa). Aviso Prévio badge (âmbar). Bloqueado: grayscale + Ban sobreposto + mensagem "⛔ NR-35 ausente". Terceiros não bloqueados. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3932** — **SST — APR: EQUIPE — NR × ATIVIDADE + CIPA + AVISO PRÉVIO + BLOQUEIO.** Cross-check dinâmico: `tipoSelecionado.nr` parseado em array de NRs exigidas; cada funcionário próprio verificado em `emp.nrs` → badge verde ✓ (ok) / âmbar ⚠ (vencida, bloqueia) / vermelho ✗ (ausente, bloqueia). NRs extras exibidas em cinza. CIPA badge (rosa). Aviso Prévio badge (âmbar). Bloqueado: grayscale + Ban sobreposto + mensagem "⛔ NR-35 ausente". Terceiros não bloqueados. ZERO DELETE.
 
 - **Rev. 3931** — **SST — APR: EQUIPE — PHOTO-GRID PICKER (CLT + PJ + TERCEIROS DA OBRA).** Step 1 substituiu inputs livres por grid de cards com fotos; `obras.funcionarios` + `terceiros.funcionarios.list`; `equipeJson` agora `[{nome, fotoUrl, tipo, funcao}]`; compat. reversa com `string[]`. ZERO DELETE.
 

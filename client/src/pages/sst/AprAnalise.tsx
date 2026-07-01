@@ -1299,8 +1299,9 @@ function AprWizardFullscreen({
 function AprDetalheFullscreen({
   open, onClose, aprId, companyId, onRefetch,
 }: { open: boolean; onClose: () => void; aprId: number | null; companyId: number; onRefetch: () => void; }) {
-  const utils       = trpc.useUtils();
-  const { confirm } = useConfirm();
+  const utils                       = trpc.useUtils();
+  const { confirm, ConfirmDialog }  = useConfirm();
+  const { selectedCompany }         = useCompany();
   const [printLoading, setPrintLoading] = useState(false);
 
   const handlePrint = async () => {
@@ -1354,46 +1355,83 @@ function AprDetalheFullscreen({
   const checklistParsed: ChecklistItem[] = (() => { try { return JSON.parse(apr?.checklistJson ?? "[]"); } catch { return []; } })();
   const naoConformDet   = checklistParsed.filter(c => c.resposta === "nao");
 
-  const statusCfg = STATUS_CONFIG[apr?.status ?? "rascunho"] ?? STATUS_CONFIG.rascunho;
-  const headerBg =
-    apr?.status === "aprovada"   ? "from-green-600 to-green-500"
-    : apr?.status === "concluida" ? "from-blue-600 to-blue-500"
-    : apr?.status === "cancelada" ? "from-red-600 to-red-500"
-    : "from-amber-500 to-orange-500";
+  const fcLogoUrl   = selectedCompany?.logoUrl || (import.meta as any).env?.VITE_APP_LOGO || null;
+  const companyName = selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || "";
+  const hasObraLogos = !!(apr?.obraClienteLogoUrl || apr?.obraGerenciadoraLogoUrl || apr?.obraGerenciadoraNome);
 
   return (
     <div className="fixed inset-0 z-[100] bg-white flex flex-col">
-      {/* Header */}
-      <div className={`bg-gradient-to-r ${headerBg} text-white px-5 py-3.5 flex items-center gap-4 shrink-0 shadow-lg`}>
-        <ShieldAlert className="h-6 w-6 shrink-0" />
-        <div className="flex-1 min-w-0">
-          {detQ.isLoading ? (
-            <div className="h-5 w-48 bg-white/20 rounded animate-pulse" />
-          ) : (
-            <>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-black text-base tracking-wide">{apr?.numero}</span>
-                <StatusBadge status={apr?.status ?? "rascunho"} />
-                {tipoAPR && (
-                  <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full font-medium">
-                    {tipoAPR.emoji} {tipoAPR.label}
-                  </span>
+      {/* Header — padrão FC azul (igual à PT) */}
+      <div className="bg-blue-800 text-white shrink-0 shadow-lg">
+        {/* Linha 1: Logo FC + número/status + botões */}
+        <div className="flex items-center gap-4 px-5 py-3.5">
+          <div className="w-12 h-12 rounded-xl bg-white/15 border border-white/20 overflow-hidden shrink-0 flex items-center justify-center">
+            {fcLogoUrl
+              ? <img src={fcLogoUrl} alt="Logo FC" className="w-full h-full object-contain p-1" />
+              : <ShieldAlert className="h-7 w-7 text-white/80" />}
+          </div>
+          <div className="flex-1 min-w-0">
+            {detQ.isLoading ? (
+              <div className="h-5 w-48 bg-white/20 rounded animate-pulse" />
+            ) : (
+              <>
+                <p className="text-[10px] font-bold text-blue-300 uppercase tracking-[0.2em]">Análise Preliminar de Risco</p>
+                <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                  <span className="text-xl font-black tracking-tight leading-none">{apr?.numero}</span>
+                  <StatusBadge status={apr?.status ?? "rascunho"} />
+                  {tipoAPR && (
+                    <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full font-medium border border-white/20">
+                      {tipoAPR.emoji} {tipoAPR.label}
+                    </span>
+                  )}
+                </div>
+                {companyName && <p className="text-xs text-blue-300 mt-0.5 font-medium truncate">{companyName}</p>}
+              </>
+            )}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button variant="outline" size="sm" onClick={handlePrint} disabled={printLoading}
+              className="bg-white/10 border-white/30 text-white hover:bg-white/20">
+              {printLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+              <span className="ml-1.5 hidden sm:inline">{printLoading ? "Gerando..." : "PDF"}</span>
+            </Button>
+            <button onClick={onClose} className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors">
+              <XIcon className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Linha 2: Logos cliente + gerenciadora */}
+        {hasObraLogos && (
+          <div className="flex flex-wrap items-center gap-3 px-5 pb-3 border-t border-white/10 pt-3">
+            {(apr?.obraClienteLogoUrl || apr?.obraClienteNome) && (
+              <div className="flex items-center gap-2 bg-white/10 rounded-lg px-2.5 py-2 border border-white/15">
+                {apr?.obraClienteLogoUrl && (
+                  <div className="w-10 h-8 rounded overflow-hidden shrink-0 bg-white flex items-center justify-center">
+                    <img src={apr.obraClienteLogoUrl} alt="Cliente" className="w-full h-full object-contain p-0.5" />
+                  </div>
                 )}
+                <div className="min-w-0">
+                  <p className="text-[9px] text-blue-300 font-bold uppercase tracking-wider leading-none">Cliente</p>
+                  {apr?.obraClienteNome && <p className="text-[11px] text-white font-semibold truncate max-w-[120px] leading-tight mt-0.5">{apr.obraClienteNome}</p>}
+                </div>
               </div>
-              <p className="text-sm text-white/80 truncate mt-0.5">{apr?.atividade ?? "—"}</p>
-            </>
-          )}
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Button variant="outline" size="sm" onClick={handlePrint} disabled={printLoading}
-            className="bg-white/10 border-white/30 text-white hover:bg-white/20">
-            {printLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
-            <span className="ml-1.5 hidden sm:inline">{printLoading ? "Gerando..." : "PDF"}</span>
-          </Button>
-          <button onClick={onClose} className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors">
-            <XIcon className="h-5 w-5" />
-          </button>
-        </div>
+            )}
+            {(apr?.obraGerenciadoraLogoUrl || apr?.obraGerenciadoraNome) && (
+              <div className="flex items-center gap-2 bg-white/10 rounded-lg px-2.5 py-2 border border-white/15">
+                {apr?.obraGerenciadoraLogoUrl && (
+                  <div className="w-10 h-8 rounded overflow-hidden shrink-0 bg-white flex items-center justify-center">
+                    <img src={apr.obraGerenciadoraLogoUrl} alt="Gerenciadora" className="w-full h-full object-contain p-0.5" />
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <p className="text-[9px] text-blue-300 font-bold uppercase tracking-wider leading-none">Gerenciadora</p>
+                  {apr?.obraGerenciadoraNome && <p className="text-[11px] text-white font-semibold truncate max-w-[120px] leading-tight mt-0.5">{apr.obraGerenciadoraNome}</p>}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Body */}
@@ -1648,6 +1686,8 @@ function AprDetalheFullscreen({
           </Button>
         )}
       </div>
+
+      {ConfirmDialog}
 
       {/* Modal de assinatura para membro da equipe */}
       <AssinaturaPad

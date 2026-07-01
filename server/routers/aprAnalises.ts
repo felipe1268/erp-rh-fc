@@ -142,9 +142,23 @@ export const aprAnalisesRouter = router({
         .where(and(eq(aprRiscos.aprId, input.id), eq(aprRiscos.companyId, input.companyId)))
         .orderBy(aprRiscos.ordem);
       let obraNome: string | null = null;
+      let obraClienteLogoUrl: string | null = null;
+      let obraGerenciadoraLogoUrl: string | null = null;
+      let obraGerenciadoraNome: string | null = null;
+      let obraClienteNome: string | null = null;
       if (apr.obraId) {
-        const [ob] = await db.select({ nome: obras.nome }).from(obras).where(eq(obras.id, apr.obraId)).limit(1);
-        obraNome = ob?.nome ?? null;
+        const [ob] = await db.select({
+          nome: obras.nome,
+          clienteLogoUrl: obras.clienteLogoUrl,
+          gerenciadoraLogoUrl: obras.gerenciadoraLogoUrl,
+          gerenciadoraNome: obras.gerenciadoraNome,
+          cliente: obras.cliente,
+        }).from(obras).where(eq(obras.id, apr.obraId)).limit(1);
+        obraNome               = ob?.nome ?? null;
+        obraClienteLogoUrl     = ob?.clienteLogoUrl ?? null;
+        obraGerenciadoraLogoUrl = ob?.gerenciadoraLogoUrl ?? null;
+        obraGerenciadoraNome   = ob?.gerenciadoraNome ?? null;
+        obraClienteNome        = ob?.cliente ?? null;
       }
       let responsavelNome: string | null = null;
       if (apr.employeeId) {
@@ -155,6 +169,7 @@ export const aprAnalisesRouter = router({
       return {
         ...apr,
         obraNome, responsavelNome,
+        obraClienteLogoUrl, obraGerenciadoraLogoUrl, obraGerenciadoraNome, obraClienteNome,
         riscos,
         equipe:              parseJson(apr.equipeJson),
         epis:                parseJson(apr.epiJson),

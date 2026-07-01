@@ -1,4 +1,37 @@
 /**
+ * Rev. 3934 — **SST — APR: FIX BOTÃO APROVAR + HEADER AZUL FC (LOGOS CLIENTE/GERENCIADORA).**
+ *
+ * PROBLEMA 1 — "Aprovar não faz nada":
+ *   Causa A: `AprDetalheFullscreen` chamava `const { confirm } = useConfirm()` mas nunca
+ *   desestruturava `ConfirmDialog` e nunca o renderizava no JSX → o dialog da confirmação
+ *   nunca estava no DOM, então `await confirm(...)` resolvia imediatamente como `false`.
+ *   Fix: `const { confirm, ConfirmDialog } = useConfirm()` + `{ConfirmDialog}` no return.
+ *
+ *   Causa B: `AlertDialog` (shadcn/Radix) usa `z-50` por padrão, que fica atrás do overlay
+ *   da APR em `z-[100]`. Fix: bumped overlay e content para `z-[300]` em `alert-dialog.tsx`.
+ *   (Beneficia todos os AlertDialogs — eles devem sempre sobrepor qualquer modal.)
+ *
+ * PROBLEMA 2 / FEATURE — Header da APR precisa seguir padrão visual FC:
+ *   Header substituído de gradiente amber/verde/vermelho para `bg-blue-800` com estrutura
+ *   idêntica à da PT (Permissão de Trabalho):
+ *   - Linha 1: logo FC (selectedCompany.logoUrl | VITE_APP_LOGO | ícone ShieldAlert) + número
+ *     + StatusBadge + tipo + nome da empresa.
+ *   - Linha 2 (condicional): badge cliente (logo + nome) + badge gerenciadora (logo + nome),
+ *     somente se a obra tiver ao menos um desses campos preenchido.
+ *   Router `getById` atualizado para buscar `clienteLogoUrl`, `gerenciadoraLogoUrl`,
+ *   `gerenciadoraNome`, `cliente` da tabela obras (mesmo padrão do ptPermissoes.getById).
+ *   Hook `useCompany` adicionado ao `AprDetalheFullscreen` para acessar o logo FC.
+ *
+ * ARQUIVOS:
+ * - `client/src/components/ui/alert-dialog.tsx` (z-50 → z-[300])
+ * - `client/src/pages/sst/AprAnalise.tsx` (ConfirmDialog render, useCompany, header blue)
+ * - `server/routers/aprAnalises.ts` (getById: logos da obra)
+ * - `shared/version.ts`
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3933 — **SST — APR: BUG LISTA + ASSINATURAS DA EQUIPE.**
  *
  * PROBLEMA 1: Lista de APRs mostrava "Nenhuma APR encontrada" mesmo com registros no banco.
