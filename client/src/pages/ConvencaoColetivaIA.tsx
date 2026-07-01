@@ -236,7 +236,7 @@ export default function ConvencaoColetivaIA() {
 
       {/* Dialog Upload */}
       <Dialog open={showUpload} onOpenChange={(o) => { if (!processarMut.isPending) setShowUpload(o); }}>
-        <DialogContent className="p-0 overflow-hidden max-w-md gap-0">
+        <DialogContent className="p-0 overflow-hidden max-w-lg gap-0 w-full">
           {/* Header colorido */}
           <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 px-6 py-5 flex items-start justify-between">
             <div className="flex items-center gap-3">
@@ -307,8 +307,7 @@ export default function ConvencaoColetivaIA() {
             <Button
               onClick={handleUpload}
               disabled={processarMut.isPending || !file}
-              size="sm"
-              className="relative overflow-hidden bg-indigo-600 hover:bg-indigo-700 min-w-[150px]"
+              className="relative overflow-hidden bg-indigo-600 hover:bg-indigo-700 min-w-[160px]"
             >
               {processarMut.isPending && (
                 <span
