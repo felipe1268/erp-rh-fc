@@ -1320,26 +1320,35 @@ function AprDetalheFullscreen({
   const concluirM = trpc.aprAnalises.concluir.useMutation({ onSuccess: () => { detQ.refetch(); onRefetch(); toast.success("APR concluída!"); } });
   const cancelarM = trpc.aprAnalises.cancelar.useMutation({ onSuccess: () => { detQ.refetch(); onRefetch(); toast.success("APR cancelada."); } });
   const excluirM  = trpc.aprAnalises.excluir.useMutation({ onSuccess: () => { onRefetch(); onClose(); toast.success("APR excluída."); } });
-  const updateM   = trpc.aprAnalises.update.useMutation({ onSuccess: () => detQ.refetch() });
+  const updateM   = trpc.aprAnalises.update.useMutation({
+    onSuccess: () => detQ.refetch(),
+    onError: (e) => toast.error(e?.message ?? "Erro ao salvar."),
+  });
 
   const [sigMembroIdx, setSigMembroIdx] = useState<number | null>(null);
 
   const apr = detQ.data;
 
   async function handleAprovar() {
-    if (!await confirm("Confirmar aprovação desta APR?")) return;
+    // Regra: todos os membros da equipe devem ter assinado
+    const semAss = membrosEquipe.filter(m => !m.ass);
+    if (semAss.length > 0) {
+      toast.error(`Faltam assinaturas: ${semAss.map(m => m.nome).join(", ")}`);
+      return;
+    }
+    if (!await confirm({ title: "Aprovar APR?", description: "Confirmar aprovação desta APR. Todos os membros assinaram.", tone: "info", confirmText: "Aprovar" })) return;
     aprovarM.mutate({ id: apr!.id, companyId });
   }
   async function handleConcluir() {
-    if (!await confirm("Confirmar conclusão desta APR?")) return;
+    if (!await confirm({ title: "Concluir APR?", description: "Marcar esta APR como concluída.", confirmText: "Concluir" })) return;
     concluirM.mutate({ id: apr!.id, companyId });
   }
   async function handleCancelar() {
-    if (!await confirm("Cancelar esta APR? Esta ação não pode ser desfeita.")) return;
+    if (!await confirm({ title: "Cancelar APR?", description: "Esta ação não pode ser desfeita.", tone: "destructive", confirmText: "Cancelar APR" })) return;
     cancelarM.mutate({ id: apr!.id, companyId });
   }
   async function handleExcluir() {
-    if (!await confirm("Excluir permanentemente esta APR?")) return;
+    if (!await confirm({ title: "Excluir APR?", description: "A APR será removida permanentemente.", tone: "destructive", confirmText: "Excluir" })) return;
     excluirM.mutate({ id: apr!.id, companyId });
   }
 
@@ -1662,7 +1671,12 @@ function AprDetalheFullscreen({
       </div>
 
       {/* Footer actions */}
-      <div className="border-t bg-white px-5 py-4 flex flex-wrap items-center gap-3 justify-end shrink-0 shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
+      <div className="border-t bg-white px-5 py-4 flex flex-wrap items-center gap-3 shrink-0 shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
+        {/* Imprimir — sempre visível */}
+        <Button variant="outline" size="sm" onClick={handlePrint} disabled={printLoading} className="mr-auto">
+          {printLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Printer className="h-4 w-4 mr-1" />}
+          {printLoading ? "Gerando..." : "Imprimir / PDF"}
+        </Button>
         {apr?.status === "em_analise" && (
           <>
             <Button variant="outline" size="sm" onClick={handleCancelar}

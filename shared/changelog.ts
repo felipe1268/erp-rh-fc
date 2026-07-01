@@ -1,4 +1,43 @@
 /**
+ * Rev. 3935 — **SST — APR: 4 BUGS + BOTÃO IMPRIMIR + REGRA ASSINATURAS.**
+ *
+ * BUG 1 — gerarHtml "Cannot convert undefined or null to object":
+ *   `employees.nome` (coluna inexistente no schema Drizzle) → Drizzle resolve como
+ *   `undefined` → `db.select({ nome: undefined })` lança o erro.
+ *   Fix: `employees.nomeCompleto` em `server/routers/aprAnalises.ts` (gerarHtml).
+ *   (Idêntico ao fix de Rev. 3933 em list/getById; gerarHtml ficou para trás.)
+ *
+ * BUG 2 — confirm() chamado com string em vez de ConfirmOptions:
+ *   `confirm("Confirmar aprovação...")` → `useConfirm` espera `{ title: string }`.
+ *   Embora o JS não crash, `opts.title` ficava undefined → AlertDialog renderizava com
+ *   título vazio, prejudicando UX e possivelmente causando comportamento indefinido.
+ *   Fix: todos os 4 handlers (handleAprovar/Concluir/Cancelar/Excluir) agora usam
+ *   `confirm({ title, description, tone, confirmText })`.
+ *
+ * BUG 3 — updateM sem onError (assinaturas falhavam silenciosamente):
+ *   `updateM.mutate(...)` não tinha `onError` no nível da mutation. Qualquer falha
+ *   do servidor ficava invisível ao usuário. Fix: `onError: (e) => toast.error(...)`.
+ *
+ * BUG 4 — botão "Imprimir" faltando no footer:
+ *   Existia apenas o botão "PDF" no header. Adicionado botão "Imprimir / PDF" no
+ *   footer (sempre visível, mr-auto à esquerda dos botões de status).
+ *   Usa o mesmo `handlePrint` existente: gera HTML via `gerarHtml`, abre nova aba,
+ *   chama `window.print()` automaticamente.
+ *
+ * FEATURE — Regra: só aprovar depois que todos os membros assinarem:
+ *   `handleAprovar` verifica `membrosEquipe.filter(m => !m.ass)`.
+ *   Se houver membros sem assinatura, exibe `toast.error("Faltam assinaturas: ...")`
+ *   com os nomes e aborta antes de abrir o dialog de confirmação.
+ *
+ * ARQUIVOS:
+ * - `server/routers/aprAnalises.ts` (gerarHtml: nomeCompleto)
+ * - `client/src/pages/sst/AprAnalise.tsx` (onError, confirm fix, Imprimir, regra)
+ * - `shared/version.ts`
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3934 — **SST — APR: FIX BOTÃO APROVAR + HEADER AZUL FC (LOGOS CLIENTE/GERENCIADORA).**
  *
  * PROBLEMA 1 — "Aprovar não faz nada":

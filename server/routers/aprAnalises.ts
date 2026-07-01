@@ -356,7 +356,7 @@ export const aprAnalisesRouter = router({
       }
       let responsavelNome = "";
       if (apr.employeeId) {
-        const [emp] = await db.select({ nome: employees.nome }).from(employees).where(eq(employees.id, apr.employeeId)).limit(1);
+        const [emp] = await db.select({ nome: employees.nomeCompleto }).from(employees).where(eq(employees.id, apr.employeeId)).limit(1);
         responsavelNome = emp?.nome ?? "";
       }
       const riscos = await db.select().from(aprRiscos)
