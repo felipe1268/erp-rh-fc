@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef } from "react";
+import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -111,18 +112,21 @@ export default function ConvencaoColetivaIA() {
   // ===================== RELATÓRIO =====================
   if (viewMode === "relatorio" && selectedId) {
     return (
-      <RelatorioView
-        analiseId={selectedId}
-        companyId={companyId}
-        companyIds={companyIds}
-        isMaster={isMaster}
-        onVoltar={() => { setViewMode("lista"); setSelectedId(null); utils.convencaoIA.listar.invalidate(); }}
-      />
+      <DashboardLayout>
+        <RelatorioView
+          analiseId={selectedId}
+          companyId={companyId}
+          companyIds={companyIds}
+          isMaster={isMaster}
+          onVoltar={() => { setViewMode("lista"); setSelectedId(null); utils.convencaoIA.listar.invalidate(); }}
+        />
+      </DashboardLayout>
     );
   }
 
   // ===================== LISTA / HISTÓRICO =====================
   return (
+    <DashboardLayout>
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
@@ -244,6 +248,7 @@ export default function ConvencaoColetivaIA() {
         </DialogContent>
       </Dialog>
     </div>
+    </DashboardLayout>
   );
 }
 

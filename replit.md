@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3943** — **CONVENÇÃO COLETIVA IA: ADICIONA BARRA LATERAL.** Página renderizava sem sidebar pois faltava `DashboardLayout` no componente. Envolvidos os 2 returns (lista + relatório). ZERO DELETE.
+
 - **Rev. 3942** — **CONVENÇÃO COLETIVA IA: FIX "SELECIONE UMA EMPRESA".** `selectedCompany` do context é um OBJETO → `parseInt(objeto)` = NaN = 0 → guard disparava mesmo com empresa selecionada no topo. Fix: trocar por `companyIdNum` (número já coerced, Rev. 2022). ZERO DELETE.
 
 - **Rev. 3941** — **CONTAS A RECEBER: BADGE DUPLICATA + FIX ESTORNO-CHEQUE NO ENGINE DE SUGESTÕES.** Window function `COUNT(*) OVER (PARTITION BY company_id, valor, data_vencimento)` retorna `dupCount`; badge âmbar "⚠ Possível duplicata" quando `dupCount > 1`. Fix `_INTERNO_PATTERNS`: adicionados `estorn.*cheq`, `cheq.*estorn`, `cheq.*sust`, `sust.*cheq` — sync com `pareceDevolucaoCheque`. ZERO DELETE.

@@ -1,4 +1,26 @@
 /**
+ * Rev. 3943 — **CONVENÇÃO COLETIVA IA: ADICIONA BARRA LATERAL (DashboardLayout).**
+ *
+ * PROBLEMA:
+ *   A página /convencao-ia renderizava sem a barra lateral de navegação,
+ *   diferente de todas as outras páginas do ERP.
+ *
+ * CAUSA-RAIZ:
+ *   O componente ConvencaoColetivaIA não estava envolvido por DashboardLayout
+ *   (ao contrário de ConvencoesColetivas.tsx, que tem o wrapper). A rota usa
+ *   RouteGuard que renderiza o componente diretamente sem layout próprio.
+ *
+ * SOLUÇÃO:
+ *   Importar DashboardLayout e envolver os dois returns do componente
+ *   (modo lista e modo relatório) com <DashboardLayout>.
+ *
+ * ARQUIVOS:
+ *   client/src/pages/ConvencaoColetivaIA.tsx
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3942 — **CONVENÇÃO COLETIVA IA: FIX "SELECIONE UMA EMPRESA".**
  *
  * PROBLEMA:
