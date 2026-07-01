@@ -605,6 +605,12 @@ function AprWizardFullscreen({
     onError: e => toast.error(e.message),
   });
 
+  // Resetar wizard inteiro ao abrir (evita estado residual de sessão anterior)
+  useEffect(() => {
+    if (open) resetForm();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   useEffect(() => {
     if (obraSstQ.data?.tstNome) setAprovNome(obraSstQ.data.tstNome);
   }, [obraSstQ.data]);

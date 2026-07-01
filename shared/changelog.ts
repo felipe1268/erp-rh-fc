@@ -1,4 +1,24 @@
 /**
+ * Rev. 3938 — **SST — APR: FIX CHECKLIST PDF (pergunta vazio) + RESET WIZARD AO ABRIR.**
+ *
+ * BUG 1 — PDF Checklist em branco:
+ *   `gerarHtml` lia `c.texto` mas ChecklistItem armazena `c.pergunta`.
+ *   Fix: `const texto = c.pergunta ?? c.texto ?? ""` (compat. com dados legados).
+ *
+ * BUG 2 — Wizard estado persistente:
+ *   `if (!open) return null` não desmonta o componente → estado do passo anterior
+ *   persiste ao reabrir. Ex: usuário ia até step 3 → fechava → reabria no step 3 sem tipo.
+ *   Fix: `useEffect(() => { if (open) resetForm(); }, [open])`.
+ *   `resetForm` já existia (chamada no onSuccess); agora também é chamada ao abrir.
+ *
+ * ARQUIVOS:
+ * - `server/routers/aprAnalises.ts` (gerarHtml checklist)
+ * - `client/src/pages/sst/AprAnalise.tsx` (useEffect reset)
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3937 — **SST — APR PDF: REDESIGN COMPLETO — AZUL FC + 3 LOGOS + CHECKLIST + TODAS AS ASSINATURAS.**
  *
  * REQUISITOS DO USUÁRIO:

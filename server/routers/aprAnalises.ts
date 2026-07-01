@@ -432,11 +432,12 @@ export const aprAnalisesRouter = router({
 <table>
   <thead><tr><th style="width:5%">#</th><th>Item de Verificação</th><th style="width:8%;text-align:center">Resposta</th></tr></thead>
   <tbody>
-    ${checklist.map((c, i) => {
+    ${checklist.map((c: any, i: number) => {
       const r = c.resposta ?? "na";
+      const texto = c.pergunta ?? c.texto ?? "";
       return `<tr>
         <td style="text-align:center">${i+1}</td>
-        <td>${esc(c.texto)}</td>
+        <td>${esc(texto)}</td>
         <td style="text-align:center"><span class="nivel-chip" style="${respStyle[r] ?? respStyle.na}">${respLabel[r] ?? "N/A"}</span></td>
       </tr>`;
     }).join("")}
