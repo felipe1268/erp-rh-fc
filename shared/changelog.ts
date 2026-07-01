@@ -1,4 +1,50 @@
 /**
+ * Rev. 3941 — **CONTAS A RECEBER: BADGE DUPLICATA + FIX ESTORNO-CHEQUE NO ENGINE DE SUGESTÕES.**
+ *
+ * PROBLEMA 1 — VALORES DUPLICADOS:
+ *   Entradas de `tipo='receita'` criadas mais de uma vez para o mesmo crédito bancário
+ *   (mesma descrição, mesmo valor, mesma data de vencimento) inflavam o total "Recebido"
+ *   no Contas a Receber sem qualquer aviso visual.
+ *
+ * CAUSA-RAIZ 1:
+ *   A query `getContasAReceberByYear` não tinha nenhuma lógica de detecção de duplicatas.
+ *   Entradas manuais criadas duas vezes (ou criadas por dois fluxos distintos para o mesmo
+ *   crédito bancário) apareciam como se fossem títulos independentes.
+ *
+ * SOLUÇÃO 1:
+ *   Window function `COUNT(*) OVER (PARTITION BY company_id, ROUND(valor_previsto,2),
+ *   data_vencimento::date)` retorna `dupCount` em cada linha. Quando `dupCount > 1`,
+ *   o frontend exibe um badge âmbar "⚠ Possível duplicata" com tooltip explicando que
+ *   o usuário deve conferir e estornar o desnecessário.
+ *
+ * PROBLEMA 2 — CHEQUE DEVOLVIDO APARECIA COMO RECEITA:
+ *   O engine de sugestões de conciliação (`_INTERNO_PATTERNS`) só reconhecia como
+ *   movimentação interna as descrições com "cheque devol" e "dev.*cheq". Porém, vários
+ *   bancos descrevem o crédito de devolução como "ESTORNO CHEQUE XXXX" ou "CHEQUE
+ *   ESTORNADO" / "CHEQUE SUSTADO" — padrões que `pareceDevolucaoCheque` (shared/)
+ *   já capturava corretamente, mas que `_INTERNO_PATTERNS` ignorava.
+ *
+ * CAUSA-RAIZ 2:
+ *   `_INTERNO_PATTERNS` (servidor) e `pareceDevolucaoCheque` (shared) estavam desalinhados.
+ *   A linha de crédito do banco ("ESTORNO CHEQUE 1052") passava pelo engine como se fosse
+ *   uma entrada de caixa real e aparecia no Contas a Receber como "Recebido".
+ *
+ * SOLUÇÃO 2:
+ *   Adicionados quatro padrões à `_INTERNO_PATTERNS` para sincronia completa com
+ *   `pareceDevolucaoCheque`:
+ *     - `"estorn.*cheq"` — captura "ESTORNO CHEQUE", "ESTORNO DO CHEQUE"
+ *     - `"cheq.*estorn"` — captura "CHEQUE ESTORNADO"
+ *     - `"cheq.*sust"`  — captura "CHEQUE SUSTADO"
+ *     - `"sust.*cheq"`  — captura "SUSTADO CHEQUE"
+ *
+ * ARQUIVOS:
+ *   server/routers/financial.ts (_INTERNO_PATTERNS + getContasAReceberByYear)
+ *   client/src/pages/financeiro/FinanceiroContasAReceberTitulos.tsx (badge dupCount)
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3940 — **CONCILIAÇÃO BANCÁRIA: FIX "IGNORAR" SUGESTÃO NÃO PERSISTE.**
  *
  * PROBLEMA:

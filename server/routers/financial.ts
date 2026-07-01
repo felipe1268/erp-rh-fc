@@ -1137,6 +1137,11 @@ const _INTERNO_PATTERNS = [
   // "dev.*cheq" captura variantes invertidas (ex.: "DEVOLUCAO CHEQUE"). Ambas as pernas do par
   // ficam em "movimentação interna" e saem do caixa real, idêntico ao tratamento de aplica/resgate.
   "cheque devol", "dev.*cheq",
+  // Rev. 3941 — sync com pareceDevolucaoCheque: bancos que descrevem como "ESTORNO CHEQUE" ou
+  // "CHEQUE ESTORNADO" / "CHEQUE SUSTADO" não eram capturados → crédito aparecia como receita
+  // real no engine de sugestões. Alinhado com a regex de pareceDevolucaoCheque (shared/).
+  "estorn.*cheq", "cheq.*estorn",
+  "cheq.*sust", "sust.*cheq",
 ];
 const _INTERNO_REGEX_SRC = _INTERNO_PATTERNS.join("|");
 const _internoRegex = new RegExp(_INTERNO_REGEX_SRC, "i");
@@ -9374,7 +9379,13 @@ export const financialRouter = router({
               comprovante_url AS "comprovanteUrl",
               conta_bancaria_id AS "contaBancariaId",
               observacoes, tipo,
-              CASE WHEN data_vencimento < CURRENT_DATE AND status NOT IN ('recebido','cancelado') THEN CURRENT_DATE - data_vencimento ELSE 0 END AS "diasAtraso"
+              CASE WHEN data_vencimento < CURRENT_DATE AND status NOT IN ('recebido','cancelado') THEN CURRENT_DATE - data_vencimento ELSE 0 END AS "diasAtraso",
+              -- Rev. 3941: detectar possíveis duplicatas — mesmo empresa+valor+data de vencimento.
+              COUNT(*) OVER (
+                PARTITION BY company_id,
+                             ROUND(valor_previsto::numeric, 2),
+                             data_vencimento::date
+              )::int AS "dupCount"
        FROM financial_entries
        WHERE company_id IN (${inlineIds(ids)})
          AND tipo = 'receita'

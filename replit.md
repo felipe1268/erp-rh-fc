@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3941** — **CONTAS A RECEBER: BADGE DUPLICATA + FIX ESTORNO-CHEQUE NO ENGINE DE SUGESTÕES.** Window function `COUNT(*) OVER (PARTITION BY company_id, valor, data_vencimento)` retorna `dupCount`; badge âmbar "⚠ Possível duplicata" quando `dupCount > 1`. Fix `_INTERNO_PATTERNS`: adicionados `estorn.*cheq`, `cheq.*estorn`, `cheq.*sust`, `sust.*cheq` — sync com `pareceDevolucaoCheque`. ZERO DELETE.
+
 - **Rev. 3940** — **CONCILIAÇÃO BANCÁRIA: FIX "IGNORAR" SUGESTÃO NÃO PERSISTE.** `sugDescartadas` era estado local puro → resetava no reload. Fix: nova coluna `sugestao_ignorada_em` em `bank_statement_lines` (SyncSchema+); engine filtra `IS NULL`; mutations `ignorarSugestao`/`restaurarSugestao`; frontend usa optimistic hide + mutation. ZERO DELETE.
 
 - **Rev. 3939** — **SST — APR: SELEÇÃO MÚLTIPLA + EXCLUSÃO EM LOTE.** Botão "Selecionar" ativa modo; cards ganham checkbox; barra flutuante com "Abrir" (1 selecionada) + "Excluir N APRs"; backend `excluirBatch` soft-delete em lote. ZERO DELETE.
@@ -60,9 +62,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3935** — **SST — APR: 4 BUGS + IMPRIMIR + REGRA ASSINATURAS.** `gerarHtml` ainda usava `employees.nome` → erro PDF; `confirm("string")` em vez de `ConfirmOptions`; `updateM` sem `onError`; botão Imprimir faltando no footer. Regra: bloquear Aprovar se algum membro não assinou. ZERO DELETE.
 
-- **Rev. 3934** — **SST — APR: FIX APROVAR + HEADER AZUL FC.** Aprovar não funcionava: `ConfirmDialog` nunca renderizado + AlertDialog em `z-50` atrás do overlay `z-[100]` → bumped para `z-[300]` em `alert-dialog.tsx`. Header substituído: `bg-blue-800` + logo FC + linha 2 logos cliente/gerenciadora (idêntico à PT). Router `getById` busca logos da obra. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3934** — **SST — APR: FIX APROVAR + HEADER AZUL FC.** Aprovar não funcionava: `ConfirmDialog` nunca renderizado + AlertDialog em `z-50` atrás do overlay `z-[100]` → bumped para `z-[300]` em `alert-dialog.tsx`. Header substituído: `bg-blue-800` + logo FC + linha 2 logos cliente/gerenciadora (idêntico à PT). Router `getById` busca logos da obra. ZERO DELETE.
 
 - **Rev. 3933** — **SST — APR: BUG LISTA + ASSINATURAS DA EQUIPE.** Bug: `employees.nome` → `employees.nomeCompleto` (crashava list/getById silenciosamente → lista vazia). Fix `gerarHtml` equipe para objetos. Feature: nova coluna `assinaturas_equipe_json`; cada membro da equipe ganha card com pad de assinatura no detalhe da APR; `AssinaturaPad` modal reutilizado; `updateM` persiste. ColFix v3933. ZERO DELETE.
 

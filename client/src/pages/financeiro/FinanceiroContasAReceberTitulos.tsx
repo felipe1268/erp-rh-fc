@@ -544,6 +544,11 @@ export default function FinanceiroContasAReceberTitulos() {
                                 {t.descricao || t.origemDescricao || "Título"}
                                 {t.parcelaTotal > 1 && <Badge variant="outline" className="text-[10px]">{t.parcelaNumero}/{t.parcelaTotal}</Badge>}
                                 {t.origemModulo === "revenue" && <Badge variant="outline" className="text-[10px] text-indigo-600 border-indigo-200 bg-indigo-50">Medição</Badge>}
+                                {Number(t.dupCount) > 1 && (
+                                  <Badge variant="outline" className="text-[10px] text-amber-700 border-amber-300 bg-amber-50" title={`${t.dupCount} títulos com mesmo valor e vencimento — verifique se há duplicata e estorne o desnecessário.`}>
+                                    ⚠ Possível duplicata
+                                  </Badge>
+                                )}
                               </div>
                               <div className="text-[11px] text-slate-500">{t.obraNome ?? "—"}{t.contaNome ? ` · ${t.contaNome}` : ""}</div>
                             </div>
