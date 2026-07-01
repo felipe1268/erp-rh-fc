@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3945** — **CONVENÇÃO COLETIVA IA: BOTÃO "ANALISANDO" COM % 0→100.** Regra de Ouro: `setInterval` simulado 0→90% (fase IA, 700ms/tick); `onSuccess` salta p/ 100% e limpa em 800ms; `onError` zera. Botão `overflow-hidden` com `<span>` absoluta `bg-white/15` crescendo por `width: X%` + texto "Analisando… XX%". ZERO DELETE.
+
 - **Rev. 3944** — **CONTAS A RECEBER: MULTI-SELEÇÃO + AJUSTE EM LOTE.** Botão "Selecionar" expande todos os grupos e ativa checkboxes nas linhas. Barra de seleção mostra contador + total. Barra flutuante aparece com N títulos selecionados, valor total e botão "Ajustar seleção". `BulkAjustarDialog` com 3 abas: Categoria/Obra (`bulkReclassificar`), Vencimento (`bulkAtualizarVencimento` — novo endpoint), Receber em lote (`bulkBaixa`). ZERO DELETE.
 
-- **Rev. 3943** — **CONVENÇÃO COLETIVA IA: ADICIONA BARRA LATERAL.** Página renderizava sem sidebar pois faltava `DashboardLayout` no componente. Envolvidos os 2 returns (lista + relatório). ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3943** — **CONVENÇÃO COLETIVA IA: ADICIONA BARRA LATERAL.** Página renderizava sem sidebar pois faltava `DashboardLayout` no componente. Envolvidos os 2 returns (lista + relatório). ZERO DELETE.
 
 - **Rev. 3942** — **CONVENÇÃO COLETIVA IA: FIX "SELECIONE UMA EMPRESA".** `selectedCompany` do context é um OBJETO → `parseInt(objeto)` = NaN = 0 → guard disparava mesmo com empresa selecionada no topo. Fix: trocar por `companyIdNum` (número já coerced, Rev. 2022). ZERO DELETE.
 

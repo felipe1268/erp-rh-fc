@@ -72,12 +72,31 @@ export default function ConvencaoColetivaIA() {
   const [ano, setAno] = useState(new Date().getFullYear());
   const [file, setFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [analiseProgress, setAnaliseProgress] = useState(0);
+  const analiseIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const utils = trpc.useUtils();
   const listaQuery = trpc.convencaoIA.listar.useQuery({ companyId, companyIds }, { enabled: !!companyId });
 
+  function _stopAnaliseInterval() {
+    if (analiseIntervalRef.current) { clearInterval(analiseIntervalRef.current); analiseIntervalRef.current = null; }
+  }
+  function _startAnaliseInterval() {
+    _stopAnaliseInterval();
+    setAnaliseProgress(0);
+    analiseIntervalRef.current = setInterval(() => {
+      setAnaliseProgress((p) => {
+        if (p >= 90) return p;
+        return Math.min(90, p + (0.4 + Math.random() * 1.2));
+      });
+    }, 700);
+  }
+
   const processarMut = trpc.convencaoIA.processarPdf.useMutation({
     onSuccess: (data) => {
+      _stopAnaliseInterval();
+      setAnaliseProgress(100);
+      setTimeout(() => setAnaliseProgress(0), 800);
       toast.success("PDF analisado pela IA com sucesso!");
       utils.convencaoIA.listar.invalidate();
       setShowUpload(false);
@@ -85,12 +104,17 @@ export default function ConvencaoColetivaIA() {
       setSelectedId(data.id);
       setViewMode("relatorio");
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => {
+      _stopAnaliseInterval();
+      setAnaliseProgress(0);
+      toast.error(e.message);
+    },
   });
 
   const handleUpload = async () => {
     if (!file) return toast.error("Selecione o PDF da convenção.");
     if (!companyId) return toast.error("Selecione uma empresa.");
+    _startAnaliseInterval();
     const reader = new FileReader();
     reader.onload = () => {
       const result = reader.result as string;
@@ -103,7 +127,7 @@ export default function ConvencaoColetivaIA() {
         mimeType: file.type || "application/pdf",
       });
     };
-    reader.onerror = () => toast.error("Falha ao ler o arquivo.");
+    reader.onerror = () => { _stopAnaliseInterval(); setAnaliseProgress(0); toast.error("Falha ao ler o arquivo."); };
     reader.readAsDataURL(file);
   };
 
@@ -241,8 +265,23 @@ export default function ConvencaoColetivaIA() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowUpload(false)} disabled={processarMut.isPending}>Cancelar</Button>
-            <Button onClick={handleUpload} disabled={processarMut.isPending || !file} className="bg-indigo-600 hover:bg-indigo-700">
-              {processarMut.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Analisando…</> : <><Brain className="w-4 h-4 mr-2" /> Analisar com IA</>}
+            <Button
+              onClick={handleUpload}
+              disabled={processarMut.isPending || !file}
+              className="relative overflow-hidden bg-indigo-600 hover:bg-indigo-700 min-w-[160px]"
+            >
+              {processarMut.isPending && (
+                <span
+                  className="absolute inset-0 bg-white/15 transition-all duration-700"
+                  style={{ width: `${analiseProgress}%` }}
+                />
+              )}
+              <span className="relative flex items-center gap-2">
+                {processarMut.isPending
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Analisando… {Math.round(analiseProgress)}%</>
+                  : <><Brain className="w-4 h-4" /> Analisar com IA</>
+                }
+              </span>
             </Button>
           </DialogFooter>
         </DialogContent>

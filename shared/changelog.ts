@@ -1,4 +1,26 @@
 /**
+ * Rev. 3945 — **CONVENÇÃO COLETIVA IA: BOTÃO "ANALISANDO" COM % 0→100.**
+ *
+ * PROBLEMA:
+ *   Botão "Analisar com IA" mostrava só spinner sem feedback de progresso,
+ *   deixando o usuário sem referência do tempo restante (IA leva ~15–60s).
+ *
+ * SOLUÇÃO (Regra de Ouro):
+ *   - `analiseProgress` state + `analiseIntervalRef` para o setInterval.
+ *   - `_startAnaliseInterval()` em `handleUpload`: incrementa 0.4–1.6% a cada 700ms
+ *     até ~90% (fase IA não-determinística, estimada).
+ *   - `onSuccess`: para o intervalo, salta para 100%, limpa após 800ms.
+ *   - `onError` / `reader.onerror`: para o intervalo, zera.
+ *   - Botão: `overflow-hidden` + `<span>` absoluta `bg-white/15` crescendo via
+ *     `style={{ width: analiseProgress% }}` + texto "Analisando… XX%".
+ *
+ * ARQUIVOS:
+ *   client/src/pages/ConvencaoColetivaIA.tsx
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3944 — **CONTAS A RECEBER: MULTI-SELEÇÃO + AJUSTE EM LOTE.**
  *
  * PROBLEMA:
