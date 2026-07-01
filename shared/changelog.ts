@@ -1,4 +1,22 @@
 /**
+ * Rev. 3925 — **SST — PT DETALHE: HEADER AZUL (PADRÃO FC) + FIX LOGO FC SUMINDO.**
+ *
+ * PROBLEMA 1: Header ficou verde (emerald-800) — usuário confirmou que o padrão FC é azul.
+ * Fix: `bg-emerald-800` → `bg-blue-800`; subtextos do header `text-emerald-300` → `text-blue-300`
+ * (labels "Permissão de Trabalho", empresa, "Cliente", "Gerenciadora"). Corpo do dialog
+ * (checklist, cards envolvidos, botões, ícones) permanece emerald — padrão de estado/saúde.
+ *
+ * PROBLEMA 2: Logo da FC Engenharia não aparecia mesmo com logo cadastrado na empresa.
+ * Causa: `??` (null-coalescing) não ignora string vazia; se `VITE_APP_LOGO=""` o operador
+ * mantém `""` como valor, que é falsy → condição `{fcLogoUrl ? <img> : <HardHat>}` cai no
+ * fallback. Fix: trocado `??` por `||` (strict falsy) em ambos os operadores da linha:
+ * `(VITE_APP_LOGO || selectedCompany?.logoUrl || null)`.
+ *
+ * Arquivos: `client/src/pages/sst/PermissaoTrabalho.tsx`.
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3924 — **SST — PT DETALHE: FIX LOGOS ENORMES + REVERT CORES PARA EMERALD.**
  *
  * PROBLEMA: Rev. 3923 trocou todas as cores de marca de emerald para azul (indesejado) e os

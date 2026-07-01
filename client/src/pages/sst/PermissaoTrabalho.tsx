@@ -1622,7 +1622,7 @@ function PTDetalheDialog({
             </div>
           )}
           {pt && (() => {
-            const fcLogoUrl = (import.meta as any).env?.VITE_APP_LOGO ?? selectedCompany?.logoUrl ?? null;
+            const fcLogoUrl = (import.meta as any).env?.VITE_APP_LOGO || selectedCompany?.logoUrl || null;
             const companyName = selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || "";
             const tiposPt: string[] = (() => { try { return JSON.parse(pt.tiposTrabalhoJson ?? "[]"); } catch { return []; } })();
             const isNewFormat = Object.keys(checklist).some(k => k.includes(":"));
@@ -1631,7 +1631,7 @@ function PTDetalheDialog({
             return (
               <>
                 {/* ── Cabeçalho documento ─────────────────────────────────── */}
-                <div className="bg-emerald-800 text-white shrink-0">
+                <div className="bg-blue-800 text-white shrink-0">
                   {/* Linha 1: Logo FC + Título + Status */}
                   <div className="flex items-center gap-4 px-6 py-4">
                     {/* Logo FC — container fixo 56×56 para não estourar */}
@@ -1641,9 +1641,9 @@ function PTDetalheDialog({
                         : <HardHat className="h-8 w-8 text-white/80" />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-[0.2em]">Permissão de Trabalho</p>
+                      <p className="text-[10px] font-bold text-blue-300 uppercase tracking-[0.2em]">Permissão de Trabalho</p>
                       <h1 className="text-2xl font-black tracking-tight leading-none mt-0.5">{pt.numero}</h1>
-                      {companyName && <p className="text-xs text-emerald-300 mt-1 font-medium truncate">{companyName}</p>}
+                      {companyName && <p className="text-xs text-blue-300 mt-1 font-medium truncate">{companyName}</p>}
                     </div>
                     <div className="shrink-0">
                       <StatusBadge status={pt.status} />
@@ -1661,7 +1661,7 @@ function PTDetalheDialog({
                             </div>
                           )}
                           <div className="min-w-0">
-                            <p className="text-[9px] text-emerald-300 font-bold uppercase tracking-wider leading-none">Cliente</p>
+                            <p className="text-[9px] text-blue-300 font-bold uppercase tracking-wider leading-none">Cliente</p>
                             {pt.obraClienteNome && <p className="text-[11px] text-white font-semibold truncate max-w-[120px] leading-tight mt-0.5">{pt.obraClienteNome}</p>}
                           </div>
                         </div>
@@ -1674,7 +1674,7 @@ function PTDetalheDialog({
                             </div>
                           )}
                           <div className="min-w-0">
-                            <p className="text-[9px] text-emerald-300 font-bold uppercase tracking-wider leading-none">Gerenciadora</p>
+                            <p className="text-[9px] text-blue-300 font-bold uppercase tracking-wider leading-none">Gerenciadora</p>
                             {pt.obraGerenciadoraNome && <p className="text-[11px] text-white font-semibold truncate max-w-[120px] leading-tight mt-0.5">{pt.obraGerenciadoraNome}</p>}
                           </div>
                         </div>
