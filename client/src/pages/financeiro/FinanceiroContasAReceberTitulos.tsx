@@ -17,6 +17,7 @@ import {
   ChevronLeft, ChevronRight, Search, Building2, CheckCircle, Clock,
   AlertTriangle, TrendingUp, Plus, Paperclip, Trash2, RotateCcw, Loader2,
   HandCoins, Users, Wallet, CalendarDays, ChevronsUpDown, Check, Tag,
+  X, CheckSquare, SlidersHorizontal,
 } from "lucide-react";
 
 // Rev. 3007 — categorias de Contas a Receber (literatura de gestão de contratos
@@ -145,6 +146,9 @@ export default function FinanceiroContasAReceberTitulos() {
   const [showBaixa, setShowBaixa] = useState<any>(null);
   const [showNovo, setShowNovo] = useState(false);
   const [showAnexo, setShowAnexo] = useState<any>(null);
+  const [modoSelecao, setModoSelecao] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [showBulkAjustar, setShowBulkAjustar] = useState(false);
 
   function ativarCard(card: "a_receber_mes" | "recebido_mes" | "em_aberto_ano" | "vencidos_ano") {
     if (cardAtivo === card) {
@@ -307,6 +311,36 @@ export default function FinanceiroContasAReceberTitulos() {
     onSuccess: () => { toast({ title: "Documento anexado!" }); setShowAnexo(null); refetch(); },
     onError: (e: any) => toast({ title: "Erro ao anexar", description: e.message, variant: "destructive" }),
   });
+  const bulkReclassificarMut = (trpc as any).financial.bulkReclassificar.useMutation({
+    onSuccess: (r: any) => { toast({ title: `${r.changed} título(s) reclassificado(s)!` }); setShowBulkAjustar(false); setSelectedIds(new Set()); refetch(); },
+    onError: (e: any) => toast({ title: "Erro ao reclassificar", description: e.message, variant: "destructive" }),
+  });
+  const bulkVencimentoMut = (trpc as any).financial.bulkAtualizarVencimento.useMutation({
+    onSuccess: (r: any) => { toast({ title: `Vencimento atualizado em ${r.changed} título(s)!` }); setShowBulkAjustar(false); setSelectedIds(new Set()); refetch(); },
+    onError: (e: any) => toast({ title: "Erro ao atualizar vencimento", description: e.message, variant: "destructive" }),
+  });
+  const bulkBaixaMut = (trpc as any).financial.bulkBaixa.useMutation({
+    onSuccess: (r: any) => { toast({ title: `${r.updated ?? 0} título(s) marcado(s) como recebido!` }); setShowBulkAjustar(false); setSelectedIds(new Set()); refetch(); },
+    onError: (e: any) => toast({ title: "Erro ao receber em lote", description: e.message, variant: "destructive" }),
+  });
+
+  const itensSelecionados = useMemo(() => linhas.filter((t) => selectedIds.has(t.id)), [linhas, selectedIds]);
+  const valorSelecionado = useMemo(() => itensSelecionados.reduce((s, t) => s + num(t.valorPrevisto), 0), [itensSelecionados]);
+
+  function toggleSelecao() {
+    setModoSelecao((p) => {
+      if (p) setSelectedIds(new Set());
+      else setExpanded(new Set(grupos.map((g) => g.cliente)));
+      return !p;
+    });
+  }
+  function toggleItem(id: number) {
+    setSelectedIds((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+  function selecionarTodos() {
+    setSelectedIds(new Set(filtradas.map((t: any) => t.id)));
+  }
+  function deselecionarTodos() { setSelectedIds(new Set()); }
 
   function onEstornar(t: any) {
     if (!confirm(`Estornar o recebimento do título "${t.descricao}"?`)) return;
@@ -328,9 +362,19 @@ export default function FinanceiroContasAReceberTitulos() {
             <h1 className="text-2xl font-bold text-gray-900">Contas a Receber</h1>
             <p className="text-sm text-gray-500 mt-1">Títulos por cliente — medições (automático) e lançamentos manuais.</p>
           </div>
-          <Button onClick={() => setShowNovo(true)} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white">
-            <Plus className="h-4 w-4" /> Novo título
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant={modoSelecao ? "default" : "outline"}
+              onClick={toggleSelecao}
+              className={`gap-1.5 ${modoSelecao ? "bg-slate-800 hover:bg-slate-900 text-white" : ""}`}
+            >
+              <CheckSquare className="h-4 w-4" />
+              {modoSelecao ? `Selecionando${selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}` : "Selecionar"}
+            </Button>
+            <Button onClick={() => setShowNovo(true)} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white">
+              <Plus className="h-4 w-4" /> Novo título
+            </Button>
+          </div>
         </div>
 
         {/* ───────────── NAVEGAÇÃO ANO + MESES (padrão Contas a Pagar) ───────────── */}
@@ -483,6 +527,19 @@ export default function FinanceiroContasAReceberTitulos() {
           </CardContent>
         </Card>
 
+        {/* ───────────── BARRA SELECIONAR TODOS ───────────── */}
+        {modoSelecao && (
+          <div className="flex items-center gap-3 px-3 py-2 bg-slate-800 text-white rounded-lg text-sm">
+            <CheckSquare className="h-4 w-4 text-slate-300" />
+            <span className="font-medium">{selectedIds.size} de {filtradas.length} selecionado{filtradas.length !== 1 ? "s" : ""}</span>
+            <button onClick={selecionarTodos} className="text-xs text-emerald-300 hover:text-emerald-200 underline">Selecionar todos</button>
+            {selectedIds.size > 0 && <button onClick={deselecionarTodos} className="text-xs text-slate-400 hover:text-slate-200 underline">Limpar</button>}
+            {selectedIds.size > 0 && (
+              <span className="ml-auto text-emerald-300 font-mono text-sm font-semibold">{formatBRL(valorSelecionado)}</span>
+            )}
+          </div>
+        )}
+
         {/* ───────────── LISTA POR CLIENTE ───────────── */}
         {isLoading ? (
           <div className="flex items-center justify-center py-16 text-slate-400"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Carregando...</div>
@@ -537,8 +594,21 @@ export default function FinanceiroContasAReceberTitulos() {
                         const meta = STATUS_META[t.status] ?? { label: t.status, cls: "bg-slate-50 text-slate-700 border-slate-200", dot: "bg-slate-400" };
                         const vencido = num(t.diasAtraso) > 0;
                         const isManual = t.origemModulo === "manual_receber" || !t.origemModulo;
+                        const isSelected = selectedIds.has(t.id);
                         return (
-                          <div key={t.id} className="px-4 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 hover:bg-slate-50/70">
+                          <div
+                            key={t.id}
+                            className={`px-4 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 hover:bg-slate-50/70 transition-colors ${isSelected ? "bg-emerald-50/60" : ""} ${modoSelecao ? "cursor-pointer" : ""}`}
+                            onClick={modoSelecao ? () => toggleItem(t.id) : undefined}
+                          >
+                            {modoSelecao && (
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => toggleItem(t.id)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="shrink-0"
+                              />
+                            )}
                             <div className="flex-1 min-w-[200px]">
                               <div className="text-sm font-medium text-slate-800 flex items-center gap-2 flex-wrap">
                                 {t.descricao || t.origemDescricao || "Título"}
@@ -597,6 +667,39 @@ export default function FinanceiroContasAReceberTitulos() {
       {showBaixa && <BaixaDialog titulo={showBaixa} companyId={companyId} contasBancarias={contasBancarias} onClose={() => setShowBaixa(null)} onSubmit={(p: any) => baixaMut.mutate(p)} pending={baixaMut.isPending} onRefetch={refetch} />}
       {showNovo && <NovoTituloDialog companyId={companyId} clientesOpts={clientesOpts} onClose={() => setShowNovo(false)} onSubmit={(p: any) => criarMut.mutate(p)} pending={criarMut.isPending} />}
       {showAnexo && <AnexoDialog titulo={showAnexo} companyId={companyId} onClose={() => setShowAnexo(null)} onSubmit={(p: any) => anexarMut.mutate(p)} pending={anexarMut.isPending} />}
+      {showBulkAjustar && (
+        <BulkAjustarDialog
+          companyId={companyId}
+          itens={itensSelecionados}
+          bulkReclassificarMut={bulkReclassificarMut}
+          bulkVencimentoMut={bulkVencimentoMut}
+          bulkBaixaMut={bulkBaixaMut}
+          onClose={() => setShowBulkAjustar(false)}
+        />
+      )}
+
+      {/* ───────────── BARRA FLUTUANTE DE SELEÇÃO ───────────── */}
+      {modoSelecao && selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-slate-900 text-white rounded-2xl px-5 py-3 shadow-2xl border border-white/10">
+          <span className="text-sm font-semibold">{selectedIds.size} título{selectedIds.size !== 1 ? "s" : ""}</span>
+          <span className="text-slate-500 text-xs">·</span>
+          <span className="text-emerald-300 font-mono text-sm font-semibold">{formatBRL(valorSelecionado)}</span>
+          <Button
+            size="sm"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+            onClick={() => setShowBulkAjustar(true)}
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" /> Ajustar seleção
+          </Button>
+          <button
+            onClick={deselecionarTodos}
+            className="text-slate-400 hover:text-white transition-colors"
+            title="Limpar seleção"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
     </DashboardLayout>
   );
 }
@@ -1076,6 +1179,166 @@ function NovoTituloDialog({ companyId, clientesOpts, onClose, onSubmit, pending 
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
           <Button onClick={submit} disabled={pending} className="bg-emerald-600 hover:bg-emerald-700">{pending && <Loader2 className="h-4 w-4 animate-spin mr-1" />} Criar título</Button>
         </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─────────────────────────── AJUSTE EM LOTE ───────────────────────────
+function BulkAjustarDialog({ companyId, itens, bulkReclassificarMut, bulkVencimentoMut, bulkBaixaMut, onClose }: any) {
+  const { toast } = useToast();
+  const [aba, setAba] = useState<"classificar" | "vencimento" | "receber">("classificar");
+  const [contaNome, setContaNome] = useState("");
+  const [obraNome, setObraNome] = useState("");
+  const [dataVenc, setDataVenc] = useState("");
+  const [dataReceber, setDataReceber] = useState(new Date().toISOString().slice(0, 10));
+  const [forma, setForma] = useState("");
+
+  const ids = itens.map((t: any) => t.id);
+  const naoRecebidos = itens.filter((t: any) => t.status !== "recebido");
+  const isPending = bulkReclassificarMut.isPending || bulkVencimentoMut.isPending || bulkBaixaMut.isPending;
+
+  function submitClassificar() {
+    if (!contaNome.trim() && !obraNome.trim()) {
+      toast({ title: "Preencha ao menos Categoria ou Obra", variant: "destructive" }); return;
+    }
+    bulkReclassificarMut.mutate({
+      companyId, ids,
+      ...(contaNome.trim() ? { contaNome: contaNome.trim(), contaId: null } : {}),
+      ...(obraNome.trim() ? { obraNome: obraNome.trim(), obraId: null } : {}),
+    });
+  }
+  function submitVencimento() {
+    if (!dataVenc) { toast({ title: "Informe a nova data de vencimento", variant: "destructive" }); return; }
+    bulkVencimentoMut.mutate({ companyId, ids, dataVencimento: dataVenc });
+  }
+  function submitReceber() {
+    if (naoRecebidos.length === 0) { toast({ title: "Todos já estão recebidos", variant: "destructive" }); return; }
+    bulkBaixaMut.mutate({
+      companyId,
+      ids: naoRecebidos.map((t: any) => t.id),
+      dataPagamento: dataReceber,
+      ...(forma ? { formaPagamento: forma } : {}),
+    });
+  }
+
+  const ABAS = [
+    { key: "classificar", label: "Categoria / Obra" },
+    { key: "vencimento",  label: "Vencimento" },
+    { key: "receber",     label: `Receber (${naoRecebidos.length})` },
+  ] as const;
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <SlidersHorizontal className="h-5 w-5 text-emerald-600" />
+            Ajustar {itens.length} título{itens.length !== 1 ? "s" : ""}
+          </DialogTitle>
+          <p className="text-xs text-slate-500">Total: {formatBRL(itens.reduce((s: number, t: any) => s + num(t.valorPrevisto), 0))}</p>
+        </DialogHeader>
+
+        {/* Abas */}
+        <div className="flex gap-1 border-b pb-0">
+          {ABAS.map((a) => (
+            <button
+              key={a.key}
+              onClick={() => setAba(a.key)}
+              className={`px-3 py-2 text-sm font-medium rounded-t-md transition-colors border-b-2 -mb-px ${
+                aba === a.key
+                  ? "border-emerald-600 text-emerald-700 bg-emerald-50/50"
+                  : "border-transparent text-slate-500 hover:text-slate-700"
+              }`}
+            >{a.label}</button>
+          ))}
+        </div>
+
+        <div className="space-y-4 pt-1">
+          {aba === "classificar" && (
+            <>
+              <p className="text-xs text-slate-500">Altera categoria e/ou obra dos {itens.length} títulos. Deixe em branco o que não quiser alterar.</p>
+              <div>
+                <Label className="text-xs">Categoria (conta)</Label>
+                <Combobox
+                  value={contaNome}
+                  onChange={setContaNome}
+                  options={CATEGORIAS_RECEBER.map((c) => ({ value: c, label: c }))}
+                  placeholder="Manter atual"
+                  searchPlaceholder="Buscar categoria..."
+                  allowCustom
+                  icon={<Tag className="h-3.5 w-3.5 text-slate-400" />}
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Obra / Centro de custo</Label>
+                <Input
+                  placeholder="Manter atual"
+                  value={obraNome}
+                  onChange={(e) => setObraNome(e.target.value)}
+                />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={onClose} disabled={isPending}>Cancelar</Button>
+                <Button onClick={submitClassificar} disabled={isPending || (!contaNome.trim() && !obraNome.trim())} className="bg-emerald-600 hover:bg-emerald-700">
+                  {isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />} Aplicar classificação
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+
+          {aba === "vencimento" && (
+            <>
+              <p className="text-xs text-slate-500">Define a mesma data de vencimento para todos os {itens.length} títulos selecionados.</p>
+              <div>
+                <Label className="text-xs">Nova data de vencimento</Label>
+                <Input type="date" value={dataVenc} onChange={(e) => setDataVenc(e.target.value)} className="mt-1" />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={onClose} disabled={isPending}>Cancelar</Button>
+                <Button onClick={submitVencimento} disabled={isPending || !dataVenc} className="bg-emerald-600 hover:bg-emerald-700">
+                  {isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />} Atualizar vencimento
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+
+          {aba === "receber" && (
+            <>
+              {naoRecebidos.length === 0 ? (
+                <p className="text-sm text-slate-500 py-2 text-center">Todos os títulos selecionados já estão recebidos.</p>
+              ) : (
+                <>
+                  <p className="text-xs text-slate-500">Marca {naoRecebidos.length} título{naoRecebidos.length !== 1 ? "s" : ""} como recebido (valor total: {formatBRL(naoRecebidos.reduce((s: number, t: any) => s + num(t.valorPrevisto), 0))}).</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Data de recebimento</Label>
+                      <Input type="date" value={dataReceber} onChange={(e) => setDataReceber(e.target.value)} className="mt-1" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Forma de pagamento</Label>
+                      <Combobox
+                        value={forma}
+                        onChange={setForma}
+                        options={["PIX","Transferência","Boleto","Dinheiro","Cheque","Cartão"].map((f) => ({ value: f, label: f }))}
+                        placeholder="—"
+                        searchPlaceholder="Buscar..."
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+              <DialogFooter>
+                <Button variant="outline" onClick={onClose} disabled={isPending}>Cancelar</Button>
+                {naoRecebidos.length > 0 && (
+                  <Button onClick={submitReceber} disabled={isPending || !dataReceber} className="bg-emerald-600 hover:bg-emerald-700">
+                    {isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />} Marcar recebido
+                  </Button>
+                )}
+              </DialogFooter>
+            </>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );

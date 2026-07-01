@@ -50,43 +50,21 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3944** — **CONTAS A RECEBER: MULTI-SELEÇÃO + AJUSTE EM LOTE.** Botão "Selecionar" expande todos os grupos e ativa checkboxes nas linhas. Barra de seleção mostra contador + total. Barra flutuante aparece com N títulos selecionados, valor total e botão "Ajustar seleção". `BulkAjustarDialog` com 3 abas: Categoria/Obra (`bulkReclassificar`), Vencimento (`bulkAtualizarVencimento` — novo endpoint), Receber em lote (`bulkBaixa`). ZERO DELETE.
+
 - **Rev. 3943** — **CONVENÇÃO COLETIVA IA: ADICIONA BARRA LATERAL.** Página renderizava sem sidebar pois faltava `DashboardLayout` no componente. Envolvidos os 2 returns (lista + relatório). ZERO DELETE.
-
-- **Rev. 3942** — **CONVENÇÃO COLETIVA IA: FIX "SELECIONE UMA EMPRESA".** `selectedCompany` do context é um OBJETO → `parseInt(objeto)` = NaN = 0 → guard disparava mesmo com empresa selecionada no topo. Fix: trocar por `companyIdNum` (número já coerced, Rev. 2022). ZERO DELETE.
-
-- **Rev. 3941** — **CONTAS A RECEBER: BADGE DUPLICATA + FIX ESTORNO-CHEQUE NO ENGINE DE SUGESTÕES.** Window function `COUNT(*) OVER (PARTITION BY company_id, valor, data_vencimento)` retorna `dupCount`; badge âmbar "⚠ Possível duplicata" quando `dupCount > 1`. Fix `_INTERNO_PATTERNS`: adicionados `estorn.*cheq`, `cheq.*estorn`, `cheq.*sust`, `sust.*cheq` — sync com `pareceDevolucaoCheque`. ZERO DELETE.
-
-- **Rev. 3940** — **CONCILIAÇÃO BANCÁRIA: FIX "IGNORAR" SUGESTÃO NÃO PERSISTE.** `sugDescartadas` era estado local puro → resetava no reload. Fix: nova coluna `sugestao_ignorada_em` em `bank_statement_lines` (SyncSchema+); engine filtra `IS NULL`; mutations `ignorarSugestao`/`restaurarSugestao`; frontend usa optimistic hide + mutation. ZERO DELETE.
-
-- **Rev. 3939** — **SST — APR: SELEÇÃO MÚLTIPLA + EXCLUSÃO EM LOTE.** Botão "Selecionar" ativa modo; cards ganham checkbox; barra flutuante com "Abrir" (1 selecionada) + "Excluir N APRs"; backend `excluirBatch` soft-delete em lote. ZERO DELETE.
-
-- **Rev. 3937** — **SST — APR PDF: REDESIGN AZUL FC + 3 LOGOS + CHECKLIST + TODAS AS ASSINATURAS.** Cabeçalho azul #1e3a8a com logo FC + cliente + gerenciadora. Seções por NR-01. Checklist table. Todos os envolvidos com caixa (equipe+responsável APR+aprovador). ZERO DELETE.
-
-- **Rev. 3936** — **SST — APR: HOTFIX z.record Zod v4.** `z.record(z.unknown())` em Zod v4 usa o arg como KEY (não value) → valueType=undefined → `_zod` crash ao assinar. Fix: `z.record(z.string(), z.unknown())`. ZERO DELETE.
-
-- **Rev. 3935** — **SST — APR: 4 BUGS + IMPRIMIR + REGRA ASSINATURAS.** `gerarHtml` ainda usava `employees.nome` → erro PDF; `confirm("string")` em vez de `ConfirmOptions`; `updateM` sem `onError`; botão Imprimir faltando no footer. Regra: bloquear Aprovar se algum membro não assinou. ZERO DELETE.
 
 ### 5 one-liners
 
-- **Rev. 3934** — **SST — APR: FIX APROVAR + HEADER AZUL FC.** Aprovar não funcionava: `ConfirmDialog` nunca renderizado + AlertDialog em `z-50` atrás do overlay `z-[100]` → bumped para `z-[300]` em `alert-dialog.tsx`. Header substituído: `bg-blue-800` + logo FC + linha 2 logos cliente/gerenciadora (idêntico à PT). Router `getById` busca logos da obra. ZERO DELETE.
+- **Rev. 3942** — **CONVENÇÃO COLETIVA IA: FIX "SELECIONE UMA EMPRESA".** `selectedCompany` do context é um OBJETO → `parseInt(objeto)` = NaN = 0 → guard disparava mesmo com empresa selecionada no topo. Fix: trocar por `companyIdNum` (número já coerced, Rev. 2022). ZERO DELETE.
 
-- **Rev. 3933** — **SST — APR: BUG LISTA + ASSINATURAS DA EQUIPE.** Bug: `employees.nome` → `employees.nomeCompleto` (crashava list/getById silenciosamente → lista vazia). Fix `gerarHtml` equipe para objetos. Feature: nova coluna `assinaturas_equipe_json`; cada membro da equipe ganha card com pad de assinatura no detalhe da APR; `AssinaturaPad` modal reutilizado; `updateM` persiste. ColFix v3933. ZERO DELETE.
+- **Rev. 3941** — **CONTAS A RECEBER: BADGE DUPLICATA + FIX ESTORNO-CHEQUE NO ENGINE DE SUGESTÕES.** Window function `COUNT(*) OVER (PARTITION BY company_id, valor, data_vencimento)` retorna `dupCount`; badge âmbar "⚠ Possível duplicata" quando `dupCount > 1`. ZERO DELETE.
 
-- **Rev. 3932** — **SST — APR: EQUIPE — NR × ATIVIDADE + CIPA + AVISO PRÉVIO + BLOQUEIO.** Cross-check dinâmico: `tipoSelecionado.nr` parseado em array de NRs exigidas; cada funcionário próprio verificado em `emp.nrs` → badge verde ✓ (ok) / âmbar ⚠ (vencida, bloqueia) / vermelho ✗ (ausente, bloqueia). NRs extras exibidas em cinza. CIPA badge (rosa). Aviso Prévio badge (âmbar). Bloqueado: grayscale + Ban sobreposto + mensagem "⛔ NR-35 ausente". Terceiros não bloqueados. ZERO DELETE.
+- **Rev. 3940** — **CONCILIAÇÃO BANCÁRIA: FIX "IGNORAR" SUGESTÃO NÃO PERSISTE.** `sugDescartadas` era estado local puro → resetava no reload. Fix: nova coluna `sugestao_ignorada_em` em `bank_statement_lines` (SyncSchema+); engine filtra `IS NULL`. ZERO DELETE.
 
-- **Rev. 3931** — **SST — APR: EQUIPE — PHOTO-GRID PICKER (CLT + PJ + TERCEIROS DA OBRA).** Step 1 substituiu inputs livres por grid de cards com fotos; `obras.funcionarios` + `terceiros.funcionarios.list`; `equipeJson` agora `[{nome, fotoUrl, tipo, funcao}]`; compat. reversa com `string[]`. ZERO DELETE.
+- **Rev. 3939** — **SST — APR: SELEÇÃO MÚLTIPLA + EXCLUSÃO EM LOTE.** Botão "Selecionar" ativa modo; cards ganham checkbox; barra flutuante com "Abrir" (1 selecionada) + "Excluir N APRs"; backend `excluirBatch` soft-delete em lote. ZERO DELETE.
 
-- **Rev. 3930** — **SST — APR: REDESIGN COMPLETO FULL-SCREEN + AUTO-FILLS + HORA INÍCIO.** Wizard full-screen, 2 painéis, auto-fills (data/hora/TST), coluna `hora_inicio`, ColFix v3930. ZERO DELETE.
-
-- **Rev. 3929** — **SST — PT PRINT: MARGEM 1,5 CM + PADDING DE TELA 15MM.** `@page margin: 20mm → 15mm`. `@media screen { body { padding: 15mm } }`. ZERO DELETE.
-
-- **Rev. 3928** — **SST — PT PRINT: MARGEM MÍNIMA 2 CM EM TODAS AS BORDAS.** `@page { margin: 14mm 16mm }` → `margin: 20mm` uniforme nos 4 lados. ZERO DELETE.
-
-- **Rev. 3925** — **SST — PT DETALHE: HEADER AZUL (PADRÃO FC) + FIX LOGO FC SUMINDO.** `bg-emerald-800` → `bg-blue-800` no header. Fix logo FC: `??` → `||`. ZERO DELETE.
-
-- **Rev. 3924** — **SST — PT DETALHE: FIX LOGOS ENORMES + REVERT CORES PARA EMERALD.** Logos: container fixo `w-10 h-8 overflow-hidden`; cores de marca para emerald. ZERO DELETE.
-
-- **Rev. 3923** — **SST — PT DETALHE: PALETA FC AZUL + 3 LOGOS (FC + CLIENTE + GERENCIADORA).** `getById` expandido com logos do cliente e gerenciadora da obra. ZERO DELETE.
+- **Rev. 3937** — **SST — APR PDF: REDESIGN AZUL FC + 3 LOGOS + CHECKLIST + TODAS AS ASSINATURAS.** Cabeçalho azul #1e3a8a com logo FC + cliente + gerenciadora. Seções por NR-01. Checklist table. ZERO DELETE.
 
 ### Histórico completo
 

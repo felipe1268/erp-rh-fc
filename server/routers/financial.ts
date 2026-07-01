@@ -4452,6 +4452,34 @@ export const financialRouter = router({
     return { ok: true, changed };
   }),
 
+  // Rev. 3944 — ATUALIZAR VENCIMENTO EM MASSA (Contas a Receber multi-seleção).
+  // Permite corrigir data_vencimento de vários títulos de uma vez, inclusive
+  // recebidos (é metadado; não toca valor/status). Cancela são excluídos.
+  bulkAtualizarVencimento: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    ids: z.array(z.number().int().positive()).min(1).max(1000),
+    dataVencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  })).mutation(async ({ input, ctx }) => {
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const idList = Array.from(new Set(input.ids)).join(",");
+    const res: any = await dbExecute(db,
+      `UPDATE financial_entries SET data_vencimento=$1, updated_at=NOW()
+       WHERE company_id=$2 AND id IN (${idList}) AND status <> 'cancelado'
+       RETURNING id`,
+      [input.dataVencimento, input.companyId]
+    );
+    const changed = rows(res).length;
+    await createAuditLog({
+      action: "financial_entries_bulk_vencimento",
+      userId: ctx.user?.id,
+      companyId: input.companyId,
+      details: `Vencimento em massa de ${changed}/${input.ids.length} → ${input.dataVencimento} por ${ctx.user?.name ?? "?"}`,
+    });
+    return { ok: true, changed };
+  }),
+
   // Rev. 2657 — ANEXAR documento (boleto/NF/foto) a um título do Contas a Pagar.
   // Grava anexo_url/anexo_nome (já feito o upload via uploadComprovante → storagePut).
   // Diferente do comprovante_url (que é o comprovante DE PAGAMENTO, gravado na baixa):

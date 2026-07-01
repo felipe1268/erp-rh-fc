@@ -1,4 +1,34 @@
 /**
+ * Rev. 3944 — **CONTAS A RECEBER: MULTI-SELEÇÃO + AJUSTE EM LOTE.**
+ *
+ * PROBLEMA:
+ *   Usuário precisava alterar categoria/obra, vencimento ou baixar vários títulos
+ *   de uma vez, mas só havia ação individual (linha a linha).
+ *
+ * SOLUÇÃO:
+ *   Botão "Selecionar" no header ativa modo de seleção múltipla:
+ *   — Todos os grupos se expandem automaticamente.
+ *   — Cada linha ganha checkbox; clicar na linha também alterna seleção.
+ *   — Barra "N de X selecionados" com "Selecionar todos" / "Limpar".
+ *   — Barra flutuante fixa na base da tela mostra N títulos + valor total +
+ *     botão "Ajustar seleção" + X para limpar.
+ *   — BulkAjustarDialog com 3 abas:
+ *       1. Categoria / Obra   → bulkReclassificar (contaNome + obraNome)
+ *       2. Vencimento         → bulkAtualizarVencimento (nova data)
+ *       3. Receber (N)        → bulkBaixa (data + forma, filtra só não-recebidos)
+ *
+ * NOVO ENDPOINT (server):
+ *   financial.bulkAtualizarVencimento — UPDATE data_vencimento WHERE status<>'cancelado';
+ *   retorna { ok, changed }.
+ *
+ * ARQUIVOS:
+ *   client/src/pages/financeiro/FinanceiroContasAReceberTitulos.tsx
+ *   server/routers/financial.ts  (bulkAtualizarVencimento)
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3943 — **CONVENÇÃO COLETIVA IA: ADICIONA BARRA LATERAL (DashboardLayout).**
  *
  * PROBLEMA:
