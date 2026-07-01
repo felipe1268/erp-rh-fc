@@ -1,4 +1,52 @@
 /**
+ * Rev. 3920 — **SST — PT WIZARD: CHECKLIST POR SEÇÕES (UMA POR NR) + BLOQUEIO NR-33 EXCLUSIVA.**
+ *
+ * CONTEXTO: O usuário perguntou se, ao selecionar múltiplos tipos, os checklists deveriam ser
+ * unificados. Resposta: sim, cada NR tem seus itens específicos e todos devem ser verificados.
+ * Além disso: NR-33 (Espaço Confinado) exige PET exclusiva por lei (NR-33.3.3.4 — MTE), não
+ * pode ser combinada com outros tipos em uma única PT.
+ *
+ * MUDANÇAS (PermissaoTrabalho.tsx):
+ *
+ * 1. `ChecklistState`: tipo mudou de `Record<number, ChecklistResp>` para `Record<string, ChecklistResp>`.
+ *    Chave agora é `"typeKey:itemIndex"` (ex.: `"altura:1"`, `"eletrica:3"`). Compatibilidade
+ *    retroativa: registros antigos usam chave numérica pura (sem ":") → detectado via `k.includes(":")`.
+ *
+ * 2. `nr33Conflito` (useMemo): true quando `espaco_confinado` está selecionado junto com qualquer
+ *    outro tipo. Bloqueia o botão "Próximo" do Step 1 com tooltip explicativo.
+ *
+ * 3. Alerta proibitivo NR-33 no Step 1: card vermelho com borda dupla exibido quando `nr33Conflito`.
+ *    Conteúdo: fundamento legal (MTE), citação textual da NR-33, item 33.3.3.4, instrução de ação.
+ *
+ * 4. `activeChecklistSections` (useMemo): substituiu `activeChecklistItems`. Retorna array de
+ *    `{ key, tipo, items }` — uma entrada por tipo selecionado (ou "geral" se nenhum).
+ *
+ * 5. `checkCount`: iteração sobre TODAS as seções ativas. Conta respostas com chave `"typeKey:idx"`.
+ *
+ * 6. `setCheck(typeKey, i, v)`: assinatura atualizada para receber o typeKey da seção.
+ *
+ * 7. `openSections` (useState<Set<string>>): estado de abertura das seções do accordion.
+ *    useEffect abre todas as seções automaticamente ao entrar no step 2.
+ *
+ * 8. Step 2 reformulado com accordion por seção:
+ *    - Header clicável por seção: emoji + label + NR badge + contador de pendentes/OK.
+ *    - Borda verde quando seção OK, vermelha quando há "N", cinza quando pendente.
+ *    - Itens dentro de cada seção com botões S/N/NA individuais.
+ *    - Totalizador global no topo (soma de todas as seções).
+ *
+ * 9. Footer bloqueado: Step 1 bloqueia "Próximo" quando `nr33Conflito`; Step 2 mantém o bloqueio
+ *    existente por respostas em branco ou "N".
+ *
+ * 10. PTDetalheDialog — compat retroativa:
+ *     - Se qualquer chave do checklist contém ":" → formato novo (seções por tipo).
+ *     - Caso contrário → formato antigo (exibição flat com índice numérico).
+ *
+ * ZERO DELETE.
+ *
+ * ARQUIVOS: client/src/pages/sst/PermissaoTrabalho.tsx
+ */
+
+/**
  * Rev. 3919 — **SST — PT WIZARD: 10 TIPOS DE TRABALHO COM CHECKLIST DINÂMICO POR NR.**
  *
  * CONTEXTO: O wizard de PT (Permissão de Trabalho) tinha apenas 6 tipos de trabalho

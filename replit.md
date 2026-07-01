@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3920** — **SST — PT WIZARD: CHECKLIST POR SEÇÕES (UMA POR NR) + BLOQUEIO NR-33 EXCLUSIVA.** `ChecklistState` mudou para chave string `"typeKey:idx"`. `activeChecklistSections` substitui `activeChecklistItems` (uma seção por tipo selecionado). Accordion: header clicável por seção com borda verde/vermelha/cinza + counts. `nr33Conflito` bloqueia "Próximo" do Step 1 com alerta vermelho citando NR-33.3.3.4 (MTE). PTDetalheDialog com compat retroativa (chave numérica = formato antigo). ZERO DELETE.
+
 - **Rev. 3919** — **SST — PT WIZARD: 10 TIPOS DE TRABALHO COM CHECKLIST DINÂMICO POR NR.** `TIPOS_TRABALHO` expandido de 6 para 10 tipos (⬆️ Altura NR-35, 🕳️ Espaço Confinado NR-33, ⛏️ Escavação NR-18, 🏗️ Andaime NR-35/18, ⚡ Elétrica NR-10, 🔨 Demolição, 🪝 Içamento NR-11, 🔥 Soldagem, 🏚️ Cobertura, 🦺 Geral). `PT_CHECKLISTS`: 10 checklists específicos por NR substituem o array fixo de 15 itens NR-35. `activeChecklistItems` (useMemo) deriva do tipo principal selecionado. `checkCount` corrigido (hardcoded 15 → length dinâmico). Detalhe da PT e header do wizard atualizados. ZERO DELETE.
 
-- **Rev. 3918** — **CONCILIAÇÃO BANCÁRIA: FIX CHIP DE MÊS MOSTRANDO 100% FALSO (ARREDONDAMENTO).** `mesesPct` usava `Math.round`: 829/833 linhas = 99,52% arredondava para 100% mesmo com 4 pendentes na CEF. Fix: `conciliadas >= total ? 100 : Math.floor(...)` — 100% SÓ quando não há nenhuma linha pendente. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3918** — **CONCILIAÇÃO BANCÁRIA: FIX CHIP DE MÊS MOSTRANDO 100% FALSO (ARREDONDAMENTO).** `mesesPct` usava `Math.round`: 829/833 = 99,52% arredondava para 100%. Fix: `conciliadas >= total ? 100 : Math.floor(...)`. ZERO DELETE.
 
 - **Rev. 3917** — **SST — PT WIZARD + EDIT DIALOG: CNPJ AUTO-FILL DA RAZÃO SOCIAL VIA BRASILAPI.** `compras.buscarCNPJ`, helper `formatCNPJ`, spinner/✓/erro, limpa ao mudar CNPJ. ZERO DELETE.
 
