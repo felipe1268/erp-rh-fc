@@ -1,4 +1,36 @@
 /**
+ * Rev. 3932 — **SST — APR: EQUIPE — NR × ATIVIDADE + CIPA + AVISO PRÉVIO + BLOQUEIO SEM TREINAMENTO.**
+ *
+ * PROBLEMA: Cards da equipe mostravam apenas foto, nome e função. Nenhuma indicação de habilitação
+ * para a atividade específica — TST não conseguia validar se o efetivo tinha NR requerida.
+ *
+ * SOLUÇÃO — Cross-check dinâmico de treinamentos no picker da equipe:
+ *
+ * 1. **NR × atividade selecionada**: `tipoSelecionado.nr` é parseado (split `" / "`) para extrair
+ *    as NRs exigidas (ex.: "NR-35 / NR-18" → ["NR-35", "NR-18"]). Para cada funcionário próprio,
+ *    cada NR exigida é verificada no array `emp.nrs` retornado por `obras.funcionarios`.
+ *    - `ok` → badge verde com ✓ (habilitado)
+ *    - `vencida` → badge âmbar com ⚠ + card BLOQUEADO (cursor-not-allowed, opacity 80%, vermelho)
+ *    - `ausente` → badge vermelho com ✗ + card BLOQUEADO
+ *    Mensagem de bloqueio sob o nome: "⛔ NR-35 ausente — treinamento necessário"
+ *
+ * 2. **NRs extras exibidas** (possui mas não exigida pela atividade): badge cinza informativo.
+ *
+ * 3. **Tag CIPA** (rosa/pink): exibida quando `emp.cipaAtivo = true`.
+ *
+ * 4. **Tag Aviso Prévio** (âmbar): exibida quando `employee.status` ∈ {"Aviso","AvisoDispensado"}.
+ *
+ * 5. **Terceiros**: sem NR tracking no sistema → não bloqueados, sem tags de NR.
+ *
+ * 6. **Avatar bloqueado**: grayscale + ícone Ban vermelho sobreposto.
+ *
+ * 7. **Tipo WorkerCard** local (IIFE): estende EquipeMembro com `nrs, isCipa, emAviso`.
+ *    Ao selecionar, `nrs/isCipa/emAviso` são excluídos via destructuring antes do store.
+ *
+ * ARQUIVOS: `client/src/pages/sst/AprAnalise.tsx` (picker section only). ZERO DELETE.
+ */
+
+/**
  * Rev. 3931 — **SST — APR: EQUIPE — PHOTO-GRID PICKER (CLT + PJ + TERCEIROS DA OBRA).**
  *
  * PROBLEMA: Step 1 do wizard APR usava campos de texto livres para a equipe de trabalho,

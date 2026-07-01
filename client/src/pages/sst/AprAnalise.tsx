@@ -1,4 +1,4 @@
-// Rev. 3931 — APR equipe: photo-grid picker (obras.funcionarios + terceiros) substitui inputs manuais
+// Rev. 3932 — APR equipe: NR check × atividade + tags CIPA + Aviso Prévio + bloqueio sem treinamento
 import { useState, useRef, useEffect, useCallback } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
@@ -870,21 +870,38 @@ function AprWizardFullscreen({
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />Carregando efetivo da obra…
                         </div>
                       ) : (() => {
-                        const proprios: EquipeMembro[] = (obraFuncsQ.data as any[] ?? []).map((emp: any) => ({
+                        // NRs exigidas pela atividade selecionada
+                        const requiredNrs: string[] = tipoSelecionado
+                          ? tipoSelecionado.nr.split(/\s*\/\s*/).map((s: string) => s.trim()).filter(Boolean)
+                          : [];
+
+                        type WorkerCard = EquipeMembro & {
+                          nrs: Array<{norma: string; vencida: boolean}>;
+                          isCipa: boolean;
+                          emAviso: boolean;
+                        };
+
+                        const proprios: WorkerCard[] = (obraFuncsQ.data as any[] ?? []).map((emp: any) => ({
                           nome: emp.employee?.nomeCompleto || emp.nomeCompleto || "",
                           fotoUrl: emp.employee?.fotoUrl || emp.fotoUrl || null,
                           tipo: "proprio" as const,
                           funcao: emp.employee?.cargo || emp.employee?.funcao || emp.cargo || emp.funcao || "",
-                        })).filter((m: EquipeMembro) => m.nome);
+                          nrs: emp.nrs ?? [],
+                          isCipa: !!emp.cipaAtivo,
+                          emAviso: emp.employee?.status === "Aviso" || emp.employee?.status === "AvisoDispensado",
+                        })).filter((m: WorkerCard) => m.nome);
 
-                        const terceiros: EquipeMembro[] = (obraTercQ.data as any[] ?? []).map((t: any) => ({
+                        const terceiros: WorkerCard[] = (obraTercQ.data as any[] ?? []).map((t: any) => ({
                           nome: t.nome || "",
                           fotoUrl: null,
                           tipo: "terceiro" as const,
                           funcao: t.funcao || "",
-                        })).filter((m: EquipeMembro) => m.nome);
+                          nrs: [],
+                          isCipa: false,
+                          emAviso: false,
+                        })).filter((m: WorkerCard) => m.nome);
 
-                        const todos = [...proprios, ...terceiros];
+                        const todos: WorkerCard[] = [...proprios, ...terceiros];
 
                         if (todos.length === 0) return (
                           <p className="text-xs text-slate-400 italic py-2">Nenhum funcionário alocado nesta obra. Use o campo manual abaixo.</p>
@@ -894,36 +911,128 @@ function AprWizardFullscreen({
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             {todos.map((m, i) => {
                               const selecionado = equipeSelecao.some(s => s.nome === m.nome);
+
+                              // Calcular status de cada NR exigida (só para próprios)
+                              const nrChecks = m.tipo === "proprio" ? requiredNrs.map(norma => {
+                                const found = m.nrs.find((n: any) => n.norma === norma);
+                                if (!found)         return { norma, status: "ausente" as const };
+                                if (found.vencida)  return { norma, status: "vencida" as const };
+                                return               { norma, status: "ok" as const };
+                              }) : [];
+
+                              // NRs que o trabalhador tem (para exibir mesmo que não exigidas)
+                              const nrsExtras = m.nrs.filter((n: any) =>
+                                !requiredNrs.includes(n.norma)
+                              );
+
+                              const isBlocked = nrChecks.some(c => c.status !== "ok");
+                              const bloqMsg = isBlocked
+                                ? nrChecks.filter(c => c.status !== "ok")
+                                    .map(c => c.status === "vencida"
+                                      ? `${c.norma} vencida`
+                                      : `${c.norma} ausente`)
+                                    .join(" • ")
+                                : "";
+
                               return (
-                                <button key={`${m.tipo}-${i}`} type="button"
-                                  onClick={() => {
-                                    if (selecionado) {
-                                      setEquipeSelecao(prev => prev.filter(s => s.nome !== m.nome));
-                                    } else {
-                                      setEquipeSelecao(prev => [...prev, m]);
-                                    }
-                                  }}
-                                  className={`flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-all
-                                    ${selecionado
-                                      ? "bg-orange-50 border-orange-400 shadow-sm"
-                                      : "bg-white border-slate-200 hover:border-orange-200 hover:bg-orange-50/40"}`}>
-                                  <div className="relative shrink-0">
-                                    <AvatarCircle nome={m.nome} fotoUrl={m.fotoUrl} size="md" />
-                                    {selecionado && (
-                                      <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-orange-600 rounded-full flex items-center justify-center">
-                                        <Check className="h-2.5 w-2.5 text-white" />
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className={`text-sm font-semibold leading-tight truncate ${selecionado ? "text-orange-900" : "text-slate-800"}`}>{m.nome}</p>
-                                    {m.funcao && <p className="text-[11px] text-slate-500 truncate mt-0.5">{m.funcao}</p>}
-                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded mt-1 inline-block
-                                      ${m.tipo === "terceiro" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
-                                      {m.tipo === "terceiro" ? "Terceiro" : "FC Eng."}
-                                    </span>
-                                  </div>
-                                </button>
+                                <div key={`${m.tipo}-${i}`} title={isBlocked ? bloqMsg : undefined}>
+                                  <button type="button"
+                                    disabled={isBlocked}
+                                    onClick={() => {
+                                      if (isBlocked) return;
+                                      if (selecionado) {
+                                        setEquipeSelecao(prev => prev.filter(s => s.nome !== m.nome));
+                                      } else {
+                                        const { nrs: _n, isCipa: _c, emAviso: _a, ...toStore } = m as any;
+                                        setEquipeSelecao(prev => [...prev, toStore]);
+                                      }
+                                    }}
+                                    className={`w-full flex items-start gap-3 p-3 rounded-xl border-2 text-left transition-all
+                                      ${isBlocked
+                                        ? "bg-red-50 border-red-200 cursor-not-allowed opacity-80"
+                                        : selecionado
+                                          ? "bg-orange-50 border-orange-400 shadow-sm"
+                                          : "bg-white border-slate-200 hover:border-orange-200 hover:bg-orange-50/40"}`}>
+                                    {/* Avatar */}
+                                    <div className="relative shrink-0 mt-0.5">
+                                      <div className={isBlocked ? "grayscale opacity-60" : ""}>
+                                        <AvatarCircle nome={m.nome} fotoUrl={m.fotoUrl} size="md" />
+                                      </div>
+                                      {isBlocked && (
+                                        <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
+                                          <Ban className="h-2.5 w-2.5 text-white" />
+                                        </span>
+                                      )}
+                                      {!isBlocked && selecionado && (
+                                        <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-orange-600 rounded-full flex items-center justify-center">
+                                          <Check className="h-2.5 w-2.5 text-white" />
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    {/* Conteúdo */}
+                                    <div className="flex-1 min-w-0">
+                                      <p className={`text-sm font-semibold leading-tight truncate
+                                        ${isBlocked ? "text-red-700" : selecionado ? "text-orange-900" : "text-slate-800"}`}>
+                                        {m.nome}
+                                      </p>
+                                      {m.funcao && <p className="text-[11px] text-slate-500 truncate mt-0.5">{m.funcao}</p>}
+
+                                      {/* Tags */}
+                                      <div className="flex flex-wrap gap-1 mt-1.5">
+                                        {/* Tipo (FC Eng / Terceiro) */}
+                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded
+                                          ${m.tipo === "terceiro" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
+                                          {m.tipo === "terceiro" ? "Terceiro" : "FC Eng."}
+                                        </span>
+
+                                        {/* NRs exigidas pela atividade */}
+                                        {nrChecks.map(c => (
+                                          <span key={c.norma} className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5
+                                            ${c.status === "ok"
+                                              ? "bg-emerald-100 text-emerald-700"
+                                              : c.status === "vencida"
+                                                ? "bg-amber-100 text-amber-700"
+                                                : "bg-red-100 text-red-700"}`}>
+                                            {c.norma}
+                                            {c.status === "ok"      && <Check   className="h-2.5 w-2.5" />}
+                                            {c.status === "vencida" && <span>⚠</span>}
+                                            {c.status === "ausente" && <XIcon   className="h-2.5 w-2.5" />}
+                                          </span>
+                                        ))}
+
+                                        {/* NRs extras que o trabalhador possui (além das exigidas) */}
+                                        {nrsExtras.map((n: any) => (
+                                          <span key={n.norma} className={`text-[10px] px-1.5 py-0.5 rounded flex items-center gap-0.5
+                                            ${n.vencida ? "bg-amber-50 text-amber-600" : "bg-slate-100 text-slate-500"}`}>
+                                            {n.norma}{n.vencida ? " ⚠" : ""}
+                                          </span>
+                                        ))}
+
+                                        {/* CIPA */}
+                                        {m.isCipa && (
+                                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-pink-100 text-pink-700 flex items-center gap-0.5">
+                                            <Shield className="h-2.5 w-2.5" />CIPA
+                                          </span>
+                                        )}
+
+                                        {/* Aviso Prévio */}
+                                        {m.emAviso && (
+                                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 flex items-center gap-0.5">
+                                            <AlertTriangle className="h-2.5 w-2.5" />Aviso
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      {/* Mensagem de bloqueio */}
+                                      {isBlocked && (
+                                        <p className="text-[10px] text-red-600 mt-1 font-medium leading-tight">
+                                          ⛔ {bloqMsg} — treinamento necessário
+                                        </p>
+                                      )}
+                                    </div>
+                                  </button>
+                                </div>
                               );
                             })}
                           </div>

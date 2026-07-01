@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3931** — **SST — APR: EQUIPE — PHOTO-GRID PICKER (CLT + PJ + TERCEIROS DA OBRA).** Step 1 do wizard APR substituiu os inputs de texto livres por seletor visual com fotos. Queries `obras.funcionarios` + `terceiros.funcionarios.list` ativadas ao selecionar obra. Grid de cards (foto circular, nome, função, badge FC Eng./Terceiro); tap alterna seleção com borda laranja + ✓. Fallback manual sempre disponível (input + Enter). `equipeJson` agora armazena `[{nome, fotoUrl, tipo, funcao}]`; helpers `getMembroNome/Foto/Tipo` garantem compat. reversa com `string[]` antigas. Display atualizado no detalhe (grid 2×3) e nos cards da lista (avatars sobrepostos com foto). `AvatarCircle` componente reutilizável. ZERO DELETE.
+- **Rev. 3932** — **SST — APR: EQUIPE — NR × ATIVIDADE + CIPA + AVISO PRÉVIO + BLOQUEIO.** Cross-check dinâmico: `tipoSelecionado.nr` parseado em array de NRs exigidas; cada funcionário próprio verificado em `emp.nrs` → badge verde ✓ (ok) / âmbar ⚠ (vencida, bloqueia) / vermelho ✗ (ausente, bloqueia). NRs extras exibidas em cinza. CIPA badge (rosa). Aviso Prévio badge (âmbar). Bloqueado: grayscale + Ban sobreposto + mensagem "⛔ NR-35 ausente". Terceiros não bloqueados. ZERO DELETE.
 
-- **Rev. 3930** — **SST — APR: REDESIGN COMPLETO FULL-SCREEN + AUTO-FILLS + HORA INÍCIO.** Wizard full-screen (`fixed inset-0 z-[100]`) substitui Dialog. Layout 2 painéis: sidebar esquerda (etapas + guia contextual por step) + área principal scrollable. Auto-fills: `dataEmissao`=hoje, `horaInicio`=agora, `aprovNome`=user.name; ao selecionar obra → busca TST via `ptPermissoes.getObraSST`. Detalhe também full-screen com header colorido por status. Nova coluna `hora_inicio varchar(5)` + ColFix v3930 + router atualizado. 10 tipos de atividade com NR, checklist, riscos e EPIs pré-definidos. ZERO DELETE.
+- **Rev. 3931** — **SST — APR: EQUIPE — PHOTO-GRID PICKER (CLT + PJ + TERCEIROS DA OBRA).** Step 1 substituiu inputs livres por grid de cards com fotos; `obras.funcionarios` + `terceiros.funcionarios.list`; `equipeJson` agora `[{nome, fotoUrl, tipo, funcao}]`; compat. reversa com `string[]`. ZERO DELETE.
 
 ### 5 one-liners
+
+- **Rev. 3930** — **SST — APR: REDESIGN COMPLETO FULL-SCREEN + AUTO-FILLS + HORA INÍCIO.** Wizard full-screen, 2 painéis, auto-fills (data/hora/TST), coluna `hora_inicio`, ColFix v3930. ZERO DELETE.
 
 - **Rev. 3929** — **SST — PT PRINT: MARGEM 1,5 CM + PADDING DE TELA 15MM.** `@page margin: 20mm → 15mm`. `@media screen { body { padding: 15mm } }`. ZERO DELETE.
 
