@@ -59,8 +59,8 @@ const brl = (v: any) => {
 };
 
 export default function ConvencaoColetivaIA() {
-  const { selectedCompany, getCompanyIdsForQuery } = useCompany();
-  const companyId = selectedCompany ? parseInt(selectedCompany) : 0;
+  const { companyIdNum, getCompanyIdsForQuery } = useCompany();
+  const companyId = companyIdNum;
   const companyIds = getCompanyIdsForQuery();
   const { user } = useAuth();
   const isMaster = user?.role === "admin_master";

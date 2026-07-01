@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3942** — **CONVENÇÃO COLETIVA IA: FIX "SELECIONE UMA EMPRESA".** `selectedCompany` do context é um OBJETO → `parseInt(objeto)` = NaN = 0 → guard disparava mesmo com empresa selecionada no topo. Fix: trocar por `companyIdNum` (número já coerced, Rev. 2022). ZERO DELETE.
+
 - **Rev. 3941** — **CONTAS A RECEBER: BADGE DUPLICATA + FIX ESTORNO-CHEQUE NO ENGINE DE SUGESTÕES.** Window function `COUNT(*) OVER (PARTITION BY company_id, valor, data_vencimento)` retorna `dupCount`; badge âmbar "⚠ Possível duplicata" quando `dupCount > 1`. Fix `_INTERNO_PATTERNS`: adicionados `estorn.*cheq`, `cheq.*estorn`, `cheq.*sust`, `sust.*cheq` — sync com `pareceDevolucaoCheque`. ZERO DELETE.
 
 - **Rev. 3940** — **CONCILIAÇÃO BANCÁRIA: FIX "IGNORAR" SUGESTÃO NÃO PERSISTE.** `sugDescartadas` era estado local puro → resetava no reload. Fix: nova coluna `sugestao_ignorada_em` em `bank_statement_lines` (SyncSchema+); engine filtra `IS NULL`; mutations `ignorarSugestao`/`restaurarSugestao`; frontend usa optimistic hide + mutation. ZERO DELETE.

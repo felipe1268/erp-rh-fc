@@ -1,4 +1,28 @@
 /**
+ * Rev. 3942 — **CONVENÇÃO COLETIVA IA: FIX "SELECIONE UMA EMPRESA".**
+ *
+ * PROBLEMA:
+ *   Clicar em "Analisar com IA" com empresa já selecionada no topo do ERP
+ *   disparava toast "Selecione uma empresa." e abortava o processamento.
+ *
+ * CAUSA-RAIZ:
+ *   O código usava `selectedCompany` do CompanyContext, que é o OBJETO da
+ *   empresa (retorno de `companies.find(...)`). Ao chamar
+ *   `parseInt(selectedCompany)` em um objeto, o resultado é sempre NaN → 0
+ *   (falsy), mesmo com empresa selecionada no seletor global do ERP.
+ *
+ * SOLUÇÃO:
+ *   Substituir `selectedCompany` + `parseInt(...)` por `companyIdNum`, que
+ *   já é o número coerced pronto para uso (introduzido na Rev. 2022
+ *   exatamente para evitar este tipo de bug). Uma linha de mudança.
+ *
+ * ARQUIVOS:
+ *   client/src/pages/ConvencaoColetivaIA.tsx
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3941 — **CONTAS A RECEBER: BADGE DUPLICATA + FIX ESTORNO-CHEQUE NO ENGINE DE SUGESTÕES.**
  *
  * PROBLEMA 1 — VALORES DUPLICADOS:
