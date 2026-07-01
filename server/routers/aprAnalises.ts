@@ -169,6 +169,7 @@ export const aprAnalisesRouter = router({
       tipoAtividade:  z.string().optional().nullable(),
       checklistJson:  z.string().optional().nullable(),
       dataEmissao:    z.string().optional().nullable(),
+      horaInicio:     z.string().optional().nullable(),
       atividade:      z.string().optional().nullable(),
       localServico:   z.string().optional().nullable(),
       equipeJson:     z.string().optional().nullable(),
@@ -189,6 +190,7 @@ export const aprAnalisesRouter = router({
         tipoAtividade: input.tipoAtividade ?? null,
         checklistJson: input.checklistJson ?? null,
         dataEmissao:   input.dataEmissao ?? null,
+        horaInicio:    input.horaInicio ?? null,
         atividade:     input.atividade ?? null,
         localServico:  input.localServico ?? null,
         equipeJson:    input.equipeJson ?? null,
@@ -243,7 +245,7 @@ export const aprAnalisesRouter = router({
     .mutation(async ({ input, ctx }) => {
       assertCompany(ctx, input.companyId);
       const db = (await getDb())!;
-      const allowed = ["obraId","employeeId","dataEmissao","atividade","localServico",
+      const allowed = ["obraId","employeeId","dataEmissao","horaInicio","atividade","localServico",
         "equipeJson","epiJson","observacoes","aprovadoPorNome","aprovadoPorAss","aprovadoEm","status","fcSignSessionId"];
       const patch: Record<string, unknown> = { updatedAt: new Date().toISOString() };
       for (const k of allowed) { if (k in input.data) patch[k] = (input.data as any)[k]; }
@@ -350,15 +352,17 @@ export const aprAnalisesRouter = router({
 <meta charset="UTF-8">
 <title>APR — ${esc(apr.numero)}</title>
 <style>
-  @page { margin: 12mm; size: A4 landscape; }
+  @page { margin: 15mm; size: A4 landscape; }
   * { box-sizing: border-box; }
   body { font-family: Arial, sans-serif; font-size: 9pt; color: #1e293b; margin: 0; }
+  @media screen { body { padding: 15mm; max-width: 297mm; margin: 0 auto; } }
   h1 { font-size: 13pt; text-align: center; margin: 0 0 4px; color: #9a3412; }
   h2 { font-size: 9pt; background: #9a3412; color: white; padding: 4px 8px; margin: 8px 0 4px; }
   .header { text-align: center; border: 2px solid #9a3412; padding: 8px; margin-bottom: 8px; border-radius: 4px; }
   .subtitle { font-size: 8pt; color: #64748b; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 4px; }
   .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-bottom: 4px; }
+  .grid4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 4px; margin-bottom: 4px; }
   .field { border: 1px solid #cbd5e1; padding: 3px 6px; border-radius: 3px; }
   .field-label { font-size: 7pt; color: #64748b; display: block; }
   .field-value { font-size: 9pt; font-weight: bold; }
@@ -381,9 +385,10 @@ export const aprAnalisesRouter = router({
 </div>
 
 <h2>1. IDENTIFICAÇÃO</h2>
-<div class="grid3">
+<div class="grid4">
   <div class="field"><span class="field-label">Número APR</span><span class="field-value">${esc(apr.numero)}</span></div>
-  <div class="field"><span class="field-label">Data</span><span class="field-value">${esc(apr.dataEmissao)}</span></div>
+  <div class="field"><span class="field-label">Data de Emissão</span><span class="field-value">${esc(apr.dataEmissao)}</span></div>
+  <div class="field"><span class="field-label">Hora Início</span><span class="field-value">${esc((apr as any).horaInicio || "—")}</span></div>
   <div class="field"><span class="field-label">Obra / Unidade</span><span class="field-value">${esc(obraNome)}</span></div>
 </div>
 <div class="grid2">

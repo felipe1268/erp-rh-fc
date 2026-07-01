@@ -10233,6 +10233,7 @@ export const aprAnalises = pgTable("apr_analises", {
   numero:            varchar("numero", { length: 30 }).notNull(),
   status:            varchar("status", { length: 20 }).notNull().default("rascunho"),
   dataEmissao:       varchar("data_emissao", { length: 10 }),
+  horaInicio:        varchar("hora_inicio", { length: 5 }),
   atividade:         varchar("atividade", { length: 500 }),
   localServico:      varchar("local_servico", { length: 255 }),
   tipoAtividade:     varchar("tipo_atividade", { length: 50 }),

@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3930** — **SST — APR: REDESIGN COMPLETO FULL-SCREEN + AUTO-FILLS + HORA INÍCIO.** Wizard full-screen (`fixed inset-0 z-[100]`) substitui Dialog. Layout 2 painéis: sidebar esquerda (etapas + guia contextual por step) + área principal scrollable. Auto-fills: `dataEmissao`=hoje, `horaInicio`=agora, `aprovNome`=user.name; ao selecionar obra → busca TST via `ptPermissoes.getObraSST`. Detalhe também full-screen com header colorido por status. Nova coluna `hora_inicio varchar(5)` + ColFix v3930 + router atualizado. 10 tipos de atividade com NR, checklist, riscos e EPIs pré-definidos. ZERO DELETE.
+
 - **Rev. 3929** — **SST — PT PRINT: MARGEM 1,5 CM + PADDING DE TELA 15MM.** `@page margin: 20mm → 15mm`. Visualização em tela ("sangrando"): `@media screen { body { padding: 15mm; max-width: 210mm; margin: 0 auto } }` — recuo só na tela, não duplica margem de impressão. ZERO DELETE.
 
-- **Rev. 3928** — **SST — PT PRINT: MARGEM MÍNIMA 2 CM EM TODAS AS BORDAS.** `@page { margin: 14mm 16mm }` → `margin: 20mm` uniforme nos 4 lados. `server/routers/ptPermissoes.ts`. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3928** — **SST — PT PRINT: MARGEM MÍNIMA 2 CM EM TODAS AS BORDAS.** `@page { margin: 14mm 16mm }` → `margin: 20mm` uniforme nos 4 lados. `server/routers/ptPermissoes.ts`. ZERO DELETE.
 
 - **Rev. 3925** — **SST — PT DETALHE: HEADER AZUL (PADRÃO FC) + FIX LOGO FC SUMINDO.** `bg-emerald-800` → `bg-blue-800` no header + subtextos `text-blue-300`. Corpo permanece emerald. Fix logo FC: `??` → `||` na derivação de `fcLogoUrl`. ZERO DELETE.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3923** — **SST — PT DETALHE: PALETA FC AZUL + 3 LOGOS (FC + CLIENTE + GERENCIADORA).** `getById` expandido: `obraClienteLogoUrl`, `obraGerenciadoraLogoUrl`, `obraGerenciadoraNome`, `obraClienteNome` da obra. Cabeçalho com logo FC + linha de logos do cliente/gerenciadora. ZERO DELETE.
 
 - **Rev. 3922** — **SST — PT DETALHE: REDESIGN LAYOUT DOCUMENTO OFICIAL.** Header azul + logo empresa + número PT font-black + chips de tipo. Faixa amarela safety-stripe. Tabela de dados 4 colunas. Checklist em tabela #/Item/Resp. Cards rounded-xl Liberação/Conclusão. ZERO DELETE.
-
-- **Rev. 3921** — **SST — PT WIZARD: FOTO DO FUNCIONÁRIO NO SELETOR DE RESPONSÁVEL PELA EXECUÇÃO.** Dropdown customizado substitui `<Select>` no campo "Responsável pela execução" (Step 4). `fotoMap` de `obraFuncsQ`. `executanteDropOpen` + ref + click-outside. ZERO DELETE.
 
 ### Histórico completo
 

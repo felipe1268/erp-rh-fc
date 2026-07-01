@@ -1,7 +1,5 @@
-// Rev. 3901 — APR Análise Preliminar de Risco
-// Wizard 3 passos: Dados Gerais → Tabela de Riscos → EPIs + Aprovação
-// Matriz de risco P×G colorida, assinatura canvas do aprovador
-import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+// Rev. 3930 — APR full-screen redesign: wizard tela cheia, auto-fills, TST da obra, hora início
+import { useState, useRef, useEffect, useCallback } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -10,16 +8,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { useConfirm } from "@/hooks/useConfirm";
 import { toast } from "sonner";
 import {
   ShieldAlert, Plus, ChevronRight, ChevronLeft, Check, X as XIcon,
   Loader2, AlertTriangle, CheckCircle2, Clock, FileText, MapPin,
-  User, PenLine, Eraser, Trash2, Eye, Pencil, Ban, HardHat, Printer,
-  RefreshCw, AlertCircle, BarChart3, ArrowRight, Building2,
+  User, PenLine, Eraser, Trash2, Eye, Printer,
+  RefreshCw, AlertCircle, BarChart3, Building2,
   ListChecks, Layers, CircleCheck, CircleX, Minus,
+  HardHat, Ban, Calendar, Timer, Zap, Info, ChevronDown, ChevronUp,
+  Shield, Activity, Clipboard,
 } from "lucide-react";
 
 // ── Probabilidade / Gravidade ────────────────────────────────────────────────
@@ -32,28 +31,26 @@ const GRAV_LABELS: Record<number, string> = {
   4: "4 — Maior", 5: "5 — Catastrófica",
 };
 
-function nivelRisco(p: number, g: number) { return p * g; }
-
 function nivelConfig(nivel: number) {
-  if (nivel <= 4)  return { label: "Baixo",    bg: "bg-green-100",  text: "text-green-800",  border: "border-green-300" };
-  if (nivel <= 9)  return { label: "Médio",    bg: "bg-yellow-100", text: "text-yellow-800", border: "border-yellow-300" };
-  if (nivel <= 16) return { label: "Alto",     bg: "bg-orange-100", text: "text-orange-800", border: "border-orange-300" };
-  return                  { label: "Crítico",  bg: "bg-red-100",    text: "text-red-800",    border: "border-red-300" };
+  if (nivel <= 4)  return { label: "Baixo",   bg: "bg-green-100",  text: "text-green-800",  border: "border-green-300",  dot: "bg-green-500" };
+  if (nivel <= 9)  return { label: "Médio",   bg: "bg-yellow-100", text: "text-yellow-800", border: "border-yellow-300", dot: "bg-yellow-500" };
+  if (nivel <= 16) return { label: "Alto",    bg: "bg-orange-100", text: "text-orange-800", border: "border-orange-300", dot: "bg-orange-500" };
+  return               { label: "Crítico", bg: "bg-red-100",    text: "text-red-800",    border: "border-red-300",    dot: "bg-red-600" };
 }
 
 const TIPO_RISCO_OPTS = [
-  { value: "seguranca",      label: "🦺 Segurança" },
-  { value: "saude",          label: "🏥 Saúde" },
-  { value: "meio_ambiente",  label: "🌿 Meio Ambiente" },
-  { value: "qualidade",      label: "✅ Qualidade" },
+  { value: "seguranca",     label: "🦺 Segurança" },
+  { value: "saude",         label: "🏥 Saúde" },
+  { value: "meio_ambiente", label: "🌿 Meio Ambiente" },
+  { value: "qualidade",     label: "✅ Qualidade" },
 ];
 
 const TIPO_MEDIDA_OPTS = [
-  { value: "eliminacao",    label: "Eliminação" },
-  { value: "substituicao",  label: "Substituição" },
-  { value: "epc",           label: "EPC" },
-  { value: "admin",         label: "Adm. / Proc." },
-  { value: "epi",           label: "EPI" },
+  { value: "eliminacao",   label: "Eliminação" },
+  { value: "substituicao", label: "Substituição" },
+  { value: "epc",          label: "EPC" },
+  { value: "admin",        label: "Adm. / Proc." },
+  { value: "epi",          label: "EPI" },
 ];
 
 const EPI_SUGESTOES = [
@@ -63,22 +60,24 @@ const EPI_SUGESTOES = [
   "Colete refletivo", "Uniforme de trabalho",
 ];
 
-// ── Tipos de Atividade APR (construção civil) ────────────────────────────────
 type ChecklistResposta = "sim" | "nao" | "na" | "";
 type ChecklistItem = { pergunta: string; resposta: ChecklistResposta };
 
 type AprTipo = {
   id: string; label: string; nr: string; emoji: string;
-  colorBg: string; colorBorder: string; colorText: string; colorBtn: string;
+  colorBg: string; colorBorder: string; colorText: string; colorBtn: string; colorAccent: string;
   descricao: string; checklist: string[]; episSugeridos: string[];
   riscosPredef: Array<Partial<RiscoItem>>;
+  guia: string;
 };
 
 const APR_TIPOS: AprTipo[] = [
   {
     id: "altura", label: "Trabalho em Altura", nr: "NR-35", emoji: "⬆️",
-    colorBg: "bg-blue-50", colorBorder: "border-blue-300", colorText: "text-blue-800", colorBtn: "bg-blue-600 hover:bg-blue-700",
+    colorBg: "bg-blue-50", colorBorder: "border-blue-300", colorText: "text-blue-800",
+    colorBtn: "bg-blue-600 hover:bg-blue-700", colorAccent: "#2563eb",
     descricao: "Atividades realizadas acima de 2m com risco de queda",
+    guia: "NR-35 exige capacitação periódica, plano de resgate e supervisão. Todos os pontos de ancoragem devem ser verificados antes do início.",
     checklist: [
       "Trabalhador possui treinamento NR-35 válido (não vencido)?",
       "Cinturão de segurança tipo paraquedista e talabarte duplo disponíveis e inspecionados?",
@@ -99,8 +98,10 @@ const APR_TIPOS: AprTipo[] = [
   },
   {
     id: "espaco_confinado", label: "Espaço Confinado", nr: "NR-33", emoji: "🕳️",
-    colorBg: "bg-purple-50", colorBorder: "border-purple-300", colorText: "text-purple-800", colorBtn: "bg-purple-600 hover:bg-purple-700",
+    colorBg: "bg-purple-50", colorBorder: "border-purple-300", colorText: "text-purple-800",
+    colorBtn: "bg-purple-600 hover:bg-purple-700", colorAccent: "#7c3aed",
     descricao: "Entrada e trabalho em espaços com acesso e saída restritos",
+    guia: "NR-33 exige PET (Permissão de Entrada e Trabalho) assinada, análise atmosférica prévia com detector 4-gases e vigia treinado posicionado externamente.",
     checklist: [
       "Permissão de Entrada e Trabalho (PET) emitida e assinada pelo supervisor?",
       "Identificação e avaliação dos riscos atmosféricos realizada?",
@@ -121,8 +122,10 @@ const APR_TIPOS: AprTipo[] = [
   },
   {
     id: "escavacao", label: "Escavação / Fundação", nr: "NR-18", emoji: "⛏️",
-    colorBg: "bg-amber-50", colorBorder: "border-amber-300", colorText: "text-amber-800", colorBtn: "bg-amber-600 hover:bg-amber-700",
+    colorBg: "bg-amber-50", colorBorder: "border-amber-300", colorText: "text-amber-800",
+    colorBtn: "bg-amber-600 hover:bg-amber-700", colorAccent: "#d97706",
     descricao: "Escavações, valas, fundações e rebaixamento de terreno",
+    guia: "NR-18 exige sondagem prévia, levantamento de interferências (redes de utilidade) e escoramento para valas com mais de 1,25m de profundidade.",
     checklist: [
       "Sondagem e análise do tipo de solo realizada por profissional habilitado?",
       "Levantamento de interferências (água, esgoto, gás, elétrica) concluído?",
@@ -143,8 +146,10 @@ const APR_TIPOS: AprTipo[] = [
   },
   {
     id: "andaime", label: "Montagem de Andaime", nr: "NR-35 / NR-18", emoji: "🏗️",
-    colorBg: "bg-sky-50", colorBorder: "border-sky-300", colorText: "text-sky-800", colorBtn: "bg-sky-600 hover:bg-sky-700",
+    colorBg: "bg-sky-50", colorBorder: "border-sky-300", colorText: "text-sky-800",
+    colorBtn: "bg-sky-600 hover:bg-sky-700", colorAccent: "#0284c7",
     descricao: "Montagem, uso e desmontagem de andaimes tubulares",
+    guia: "Andaime deve ter projeto ou esquema de montagem aprovado por responsável técnico. Inspeção por profissional habilitado antes do primeiro uso é obrigatória (NR-35 item 35.7).",
     checklist: [
       "Projeto ou esquema de montagem aprovado pelo responsável técnico?",
       "Travamentos horizontais e diagonais instalados conforme projeto?",
@@ -165,8 +170,10 @@ const APR_TIPOS: AprTipo[] = [
   },
   {
     id: "eletrica", label: "Instalação Elétrica", nr: "NR-10", emoji: "⚡",
-    colorBg: "bg-yellow-50", colorBorder: "border-yellow-300", colorText: "text-yellow-800", colorBtn: "bg-yellow-600 hover:bg-yellow-700",
+    colorBg: "bg-yellow-50", colorBorder: "border-yellow-300", colorText: "text-yellow-800",
+    colorBtn: "bg-yellow-600 hover:bg-yellow-700", colorAccent: "#ca8a04",
     descricao: "Serviços em instalações e equipamentos elétricos",
+    guia: "NR-10 exige o procedimento LOTO (bloqueio e etiquetagem) antes de qualquer intervenção. Verificação de ausência de tensão com instrumento homologado é mandatória.",
     checklist: [
       "Trabalhadores possuem treinamento NR-10 válido (SEP se aplicável)?",
       "Sistema elétrico bloqueado e etiquetado (LOTO) antes do início?",
@@ -187,8 +194,10 @@ const APR_TIPOS: AprTipo[] = [
   },
   {
     id: "demolicao", label: "Demolição", nr: "NR-18", emoji: "🔨",
-    colorBg: "bg-red-50", colorBorder: "border-red-300", colorText: "text-red-800", colorBtn: "bg-red-600 hover:bg-red-700",
+    colorBg: "bg-red-50", colorBorder: "border-red-300", colorText: "text-red-800",
+    colorBtn: "bg-red-600 hover:bg-red-700", colorAccent: "#dc2626",
     descricao: "Demolição total ou parcial de estruturas civis",
+    guia: "NR-18 item 18.9 exige laudo técnico de demolição por responsável técnico (ART/RRT). Desligamento de TODAS as redes de utilidade antes do início é obrigatório.",
     checklist: [
       "Laudo técnico de demolição elaborado por responsável técnico habilitado?",
       "Desligamento de todas as redes de utilidades (gás, elétrica, água) confirmado?",
@@ -209,8 +218,10 @@ const APR_TIPOS: AprTipo[] = [
   },
   {
     id: "icamento", label: "Içamento de Cargas", nr: "NR-11", emoji: "🏋️",
-    colorBg: "bg-green-50", colorBorder: "border-green-300", colorText: "text-green-800", colorBtn: "bg-green-600 hover:bg-green-700",
+    colorBg: "bg-green-50", colorBorder: "border-green-300", colorText: "text-green-800",
+    colorBtn: "bg-green-600 hover:bg-green-700", colorAccent: "#16a34a",
     descricao: "Movimentação, içamento e transporte de cargas pesadas",
+    guia: "NR-11 exige operador habilitado com certificação. Rigger (Encalhe) deve ser treinado. Área de içamento deve ser completamente isolada e livre de pessoas durante a operação.",
     checklist: [
       "Operador de guincho/guindaste/grua com habilitação válida?",
       "Capacidade de carga do equipamento verificada e dentro dos limites?",
@@ -231,8 +242,10 @@ const APR_TIPOS: AprTipo[] = [
   },
   {
     id: "soldagem", label: "Soldagem / Corte a Quente", nr: "NR-18", emoji: "🔥",
-    colorBg: "bg-orange-50", colorBorder: "border-orange-300", colorText: "text-orange-800", colorBtn: "bg-orange-600 hover:bg-orange-700",
+    colorBg: "bg-orange-50", colorBorder: "border-orange-300", colorText: "text-orange-800",
+    colorBtn: "bg-orange-600 hover:bg-orange-700", colorAccent: "#ea580c",
     descricao: "Soldagem elétrica, oxicorte e trabalhos com chama aberta",
+    guia: "Todo trabalho a quente próximo a materiais combustíveis exige Permissão de Trabalho a Quente. Vigia de incêndio deve permanecer no local por no mínimo 30 min após o término.",
     checklist: [
       "Área de soldagem/corte isolada e ventilada adequadamente?",
       "Materiais combustíveis e inflamáveis removidos da área (raio mínimo 10m)?",
@@ -252,9 +265,11 @@ const APR_TIPOS: AprTipo[] = [
     ],
   },
   {
-    id: "cobertura", label: "Serviços em Cobertura / Telhado", nr: "NR-18 / NR-35", emoji: "🏠",
-    colorBg: "bg-teal-50", colorBorder: "border-teal-300", colorText: "text-teal-800", colorBtn: "bg-teal-600 hover:bg-teal-700",
+    id: "cobertura", label: "Serviços em Cobertura", nr: "NR-18 / NR-35", emoji: "🏠",
+    colorBg: "bg-teal-50", colorBorder: "border-teal-300", colorText: "text-teal-800",
+    colorBtn: "bg-teal-600 hover:bg-teal-700", colorAccent: "#0d9488",
     descricao: "Substituição, reparo e impermeabilização de coberturas",
+    guia: "Combina NR-35 (trabalho em altura) com NR-18 (obras civis). Atenção especial para telhas de fibrocimento — nunca pisar diretamente. Exige plataformas distribuidoras de carga.",
     checklist: [
       "Trabalhadores possuem treinamento NR-35 válido?",
       "Sistema de proteção coletiva (guarda-corpo, tela perimetral) instalado?",
@@ -274,9 +289,11 @@ const APR_TIPOS: AprTipo[] = [
     ],
   },
   {
-    id: "geral", label: "Atividade Geral de Construção Civil", nr: "NR-18", emoji: "🦺",
-    colorBg: "bg-slate-50", colorBorder: "border-slate-300", colorText: "text-slate-800", colorBtn: "bg-slate-600 hover:bg-slate-700",
+    id: "geral", label: "Atividade Geral de Obra", nr: "NR-18", emoji: "🦺",
+    colorBg: "bg-slate-50", colorBorder: "border-slate-300", colorText: "text-slate-800",
+    colorBtn: "bg-slate-600 hover:bg-slate-700", colorAccent: "#475569",
     descricao: "Serviços gerais de obra sem classificação específica acima",
+    guia: "NR-18 é a norma base para canteiros de obra. Verifique PCMSO/PGR atualizados, ASOs válidos para todos os trabalhadores e DDS realizado antes do início dos trabalhos.",
     checklist: [
       "PCMSO e PPRA/PGR da obra atualizados e disponíveis?",
       "Trabalhadores com ASO (Atestado de Saúde Ocupacional) em vigor?",
@@ -299,44 +316,41 @@ const APR_TIPOS: AprTipo[] = [
 
 // ── Status helpers ─────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: any }> = {
-  em_analise: { label: "Em Análise",  color: "text-amber-700",  bg: "bg-amber-50 border-amber-200",  icon: Clock },
-  aprovada:   { label: "Aprovada",    color: "text-green-700",  bg: "bg-green-50 border-green-200",  icon: CheckCircle2 },
-  concluida:  { label: "Concluída",   color: "text-blue-700",   bg: "bg-blue-50 border-blue-200",    icon: Check },
-  cancelada:  { label: "Cancelada",   color: "text-red-700",    bg: "bg-red-50 border-red-200",      icon: Ban },
-  rascunho:   { label: "Rascunho",    color: "text-slate-600",  bg: "bg-slate-50 border-slate-200",  icon: FileText },
+  em_analise: { label: "Em Análise", color: "text-amber-700",  bg: "bg-amber-50 border-amber-200",  icon: Clock },
+  aprovada:   { label: "Aprovada",   color: "text-green-700",  bg: "bg-green-50 border-green-200",  icon: CheckCircle2 },
+  concluida:  { label: "Concluída",  color: "text-blue-700",   bg: "bg-blue-50 border-blue-200",    icon: Check },
+  cancelada:  { label: "Cancelada",  color: "text-red-700",    bg: "bg-red-50 border-red-200",      icon: Ban },
+  rascunho:   { label: "Rascunho",   color: "text-slate-600",  bg: "bg-slate-50 border-slate-200",  icon: FileText },
 };
 
 function StatusBadge({ status }: { status: string }) {
   const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.rascunho;
   const Icon = cfg.icon;
   return (
-    <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.color}`}>
+    <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${cfg.bg} ${cfg.color}`}>
       <Icon className="h-3 w-3" />{cfg.label}
     </span>
   );
 }
 
-// ── Canvas de assinatura do aprovador ────────────────────────────────────────
-function AssinaturaPadApr({
-  open, onOpenChange, onSave,
-}: { open: boolean; onOpenChange: (v: boolean) => void; onSave: (dataUrl: string) => void; }) {
+// ── Assinatura canvas ─────────────────────────────────────────────────────
+function AssinaturaPad({ open, onClose, onSave, title = "Assinatura" }: {
+  open: boolean; onClose: () => void; onSave: (url: string) => void; title?: string;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing   = useRef(false);
 
   function getCtx() {
     const c = canvasRef.current; if (!c) return null;
     const ctx = c.getContext("2d")!;
-    ctx.strokeStyle = "#1e293b"; ctx.lineWidth = 2.5;
-    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.strokeStyle = "#1e293b"; ctx.lineWidth = 2.5; ctx.lineCap = "round"; ctx.lineJoin = "round";
     return ctx;
   }
-
   function getPos(e: React.MouseEvent | React.TouchEvent) {
     const c = canvasRef.current!; const rect = c.getBoundingClientRect();
     const src = "touches" in e ? (e as React.TouchEvent).touches[0] : (e as React.MouseEvent);
-    return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+    return { x: (src.clientX - rect.left) * (c.width / rect.width), y: (src.clientY - rect.top) * (c.height / rect.height) };
   }
-
   function onStart(e: React.MouseEvent | React.TouchEvent) {
     e.preventDefault(); drawing.current = true;
     const ctx = getCtx()!; const { x, y } = getPos(e);
@@ -347,42 +361,38 @@ function AssinaturaPadApr({
     const ctx = getCtx()!; const { x, y } = getPos(e);
     ctx.lineTo(x, y); ctx.stroke();
   }
-  function onEnd() { drawing.current = false; }
-
-  function limpar() {
-    const c = canvasRef.current; if (!c) return;
-    c.getContext("2d")!.clearRect(0, 0, c.width, c.height);
-  }
-
+  function limpar() { const c = canvasRef.current; if (c) c.getContext("2d")!.clearRect(0, 0, c.width, c.height); }
   function salvar() {
     const c = canvasRef.current; if (!c) return;
-    const blank = document.createElement("canvas");
-    blank.width = c.width; blank.height = c.height;
+    const blank = document.createElement("canvas"); blank.width = c.width; blank.height = c.height;
     if (c.toDataURL() === blank.toDataURL()) { toast.error("Desenhe a assinatura primeiro."); return; }
-    onSave(c.toDataURL("image/png"));
-    onOpenChange(false);
+    onSave(c.toDataURL("image/png")); onClose();
   }
 
+  if (!open) return null;
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>Assinatura do Aprovador</DialogTitle></DialogHeader>
-        <div className="border-2 border-dashed border-slate-300 rounded-lg overflow-hidden bg-slate-50">
-          <canvas ref={canvasRef} width={380} height={160} className="block w-full cursor-crosshair touch-none"
-            onMouseDown={onStart} onMouseMove={onMove} onMouseUp={onEnd} onMouseLeave={onEnd}
-            onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd} />
+    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/60 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-slate-800 flex items-center gap-2"><PenLine className="h-4 w-4 text-orange-600" />{title}</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><XIcon className="h-5 w-5" /></button>
         </div>
-        <p className="text-xs text-slate-500 text-center">Assine acima com o dedo ou mouse</p>
-        <DialogFooter className="gap-2">
-          <Button variant="outline" size="sm" onClick={limpar}><Eraser className="h-4 w-4 mr-1" />Limpar</Button>
-          <Button size="sm" onClick={salvar} className="bg-green-600 hover:bg-green-700"><PenLine className="h-4 w-4 mr-1" />Confirmar</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <div className="border-2 border-dashed border-slate-300 rounded-xl overflow-hidden bg-slate-50">
+          <canvas ref={canvasRef} width={460} height={180} className="block w-full cursor-crosshair touch-none"
+            onMouseDown={onStart} onMouseMove={onMove} onMouseUp={() => { drawing.current = false; }} onMouseLeave={() => { drawing.current = false; }}
+            onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={() => { drawing.current = false; }} />
+        </div>
+        <p className="text-xs text-center text-slate-400">Assine com o dedo ou mouse</p>
+        <div className="flex gap-3">
+          <Button variant="outline" className="flex-1" onClick={limpar}><Eraser className="h-4 w-4 mr-1" />Limpar</Button>
+          <Button className="flex-1 bg-orange-600 hover:bg-orange-700" onClick={salvar}><Check className="h-4 w-4 mr-1" />Confirmar</Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
-// ── Linha de risco (tabela) ──────────────────────────────────────────────────
+// ── RiscoRow ──────────────────────────────────────────────────────────────
 type RiscoItem = {
   id?: number; etapaAtividade: string; perigo: string; risco: string;
   tipoRisco: string; probabilidade: number; gravidade: number;
@@ -390,155 +400,181 @@ type RiscoItem = {
   prazo: string; situacao: string;
 };
 
-function RiscoRow({
-  risco, index, onChange, onRemove, readOnly,
-}: { risco: RiscoItem; index: number; onChange: (r: RiscoItem) => void; onRemove: () => void; readOnly?: boolean }) {
-  const nivel = risco.probabilidade && risco.gravidade ? nivelRisco(risco.probabilidade, risco.gravidade) : null;
-  const cfg   = nivel ? nivelConfig(nivel) : null;
+function novoRisco(): RiscoItem {
+  return { etapaAtividade: "", perigo: "", risco: "", tipoRisco: "seguranca",
+    probabilidade: 0, gravidade: 0, medidasControle: "", tipoMedida: "epc",
+    responsavelNome: "", prazo: "", situacao: "aberta" };
+}
 
+function RiscoRow({ risco, index, onChange, onRemove, readOnly }: {
+  risco: RiscoItem; index: number; onChange: (r: RiscoItem) => void; onRemove: () => void; readOnly?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  const nivel = risco.probabilidade && risco.gravidade ? risco.probabilidade * risco.gravidade : null;
+  const cfg   = nivel ? nivelConfig(nivel) : null;
   function upd(patch: Partial<RiscoItem>) { onChange({ ...risco, ...patch }); }
 
   return (
-    <div className="border border-slate-200 rounded-xl p-4 space-y-3 bg-white shadow-sm">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Risco #{index + 1}</span>
-        <div className="flex items-center gap-2">
+    <div className={`border-2 rounded-2xl overflow-hidden transition-all ${cfg ? `${cfg.border}` : "border-slate-200"}`}>
+      <div
+        className={`flex items-center justify-between px-4 py-3 cursor-pointer select-none ${cfg ? cfg.bg : "bg-slate-50"}`}
+        onClick={() => setExpanded(v => !v)}>
+        <div className="flex items-center gap-3 min-w-0">
+          {cfg && <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${cfg.dot}`} />}
+          <span className="text-xs font-bold text-slate-500 shrink-0">#{index + 1}</span>
+          <span className="text-sm font-semibold text-slate-800 truncate">
+            {risco.perigo || risco.risco || "Novo risco"}
+          </span>
           {nivel && cfg && (
-            <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.text} ${cfg.border}`}>
-              {nivel} — {cfg.label}
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 hidden sm:inline-flex ${cfg.bg} ${cfg.text} ${cfg.border}`}>
+              P{risco.probabilidade}×G{risco.gravidade}={nivel} — {cfg.label}
             </span>
           )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
           {!readOnly && (
-            <button type="button" onClick={onRemove} className="text-slate-400 hover:text-red-500 transition-colors">
+            <button type="button" onClick={e => { e.stopPropagation(); onRemove(); }}
+              className="text-slate-300 hover:text-red-500 transition-colors p-1">
               <Trash2 className="h-4 w-4" />
             </button>
           )}
+          {expanded ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div>
-          <label className="text-xs text-slate-500 font-medium mb-1 block">Etapa / Atividade</label>
-          <Input value={risco.etapaAtividade} disabled={readOnly} placeholder="Ex.: Concretagem de pilar"
-            onChange={e => upd({ etapaAtividade: e.target.value })} />
-        </div>
-        <div>
-          <label className="text-xs text-slate-500 font-medium mb-1 block">Perigo</label>
-          <Input value={risco.perigo} disabled={readOnly} placeholder="Ex.: Trabalho em altura"
-            onChange={e => upd({ perigo: e.target.value })} />
-        </div>
-        <div>
-          <label className="text-xs text-slate-500 font-medium mb-1 block">Risco</label>
-          <Input value={risco.risco} disabled={readOnly} placeholder="Ex.: Queda de nível diferente"
-            onChange={e => upd({ risco: e.target.value })} />
-        </div>
-      </div>
+      {expanded && (
+        <div className="px-4 pb-4 pt-3 bg-white space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="text-xs text-slate-500 font-medium mb-1 block">Etapa / Atividade</label>
+              <Input value={risco.etapaAtividade} disabled={readOnly} placeholder="Ex.: Concretagem de pilar"
+                onChange={e => upd({ etapaAtividade: e.target.value })} className="text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 font-medium mb-1 block">Perigo / Fonte</label>
+              <Input value={risco.perigo} disabled={readOnly} placeholder="Ex.: Trabalho em altura"
+                onChange={e => upd({ perigo: e.target.value })} className="text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 font-medium mb-1 block">Risco / Consequência</label>
+              <Input value={risco.risco} disabled={readOnly} placeholder="Ex.: Queda de nível diferente"
+                onChange={e => upd({ risco: e.target.value })} className="text-sm" />
+            </div>
+          </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div>
-          <label className="text-xs text-slate-500 font-medium mb-1 block">Tipo</label>
-          <Select value={risco.tipoRisco} disabled={readOnly} onValueChange={v => upd({ tipoRisco: v })}>
-            <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Tipo" /></SelectTrigger>
-            <SelectContent>{TIPO_RISCO_OPTS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
-        <div>
-          <label className="text-xs text-slate-500 font-medium mb-1 block">Probabilidade</label>
-          <Select value={String(risco.probabilidade || "")} disabled={readOnly}
-            onValueChange={v => upd({ probabilidade: Number(v) })}>
-            <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="P" /></SelectTrigger>
-            <SelectContent>{[1,2,3,4,5].map(n => <SelectItem key={n} value={String(n)}>{PROB_LABELS[n]}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
-        <div>
-          <label className="text-xs text-slate-500 font-medium mb-1 block">Gravidade</label>
-          <Select value={String(risco.gravidade || "")} disabled={readOnly}
-            onValueChange={v => upd({ gravidade: Number(v) })}>
-            <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="G" /></SelectTrigger>
-            <SelectContent>{[1,2,3,4,5].map(n => <SelectItem key={n} value={String(n)}>{GRAV_LABELS[n]}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
-        <div>
-          <label className="text-xs text-slate-500 font-medium mb-1 block">Tipo de Medida</label>
-          <Select value={risco.tipoMedida} disabled={readOnly} onValueChange={v => upd({ tipoMedida: v })}>
-            <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Medida" /></SelectTrigger>
-            <SelectContent>{TIPO_MEDIDA_OPTS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
-      </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div>
+              <label className="text-xs text-slate-500 font-medium mb-1 block">Tipo de Risco</label>
+              <Select value={risco.tipoRisco} disabled={readOnly} onValueChange={v => upd({ tipoRisco: v })}>
+                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Tipo" /></SelectTrigger>
+                <SelectContent>{TIPO_RISCO_OPTS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 font-medium mb-1 block">Probabilidade (P)</label>
+              <Select value={String(risco.probabilidade || "")} disabled={readOnly}
+                onValueChange={v => upd({ probabilidade: Number(v) })}>
+                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="1–5" /></SelectTrigger>
+                <SelectContent>{[1,2,3,4,5].map(n => <SelectItem key={n} value={String(n)}>{PROB_LABELS[n]}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 font-medium mb-1 block">Gravidade (G)</label>
+              <Select value={String(risco.gravidade || "")} disabled={readOnly}
+                onValueChange={v => upd({ gravidade: Number(v) })}>
+                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="1–5" /></SelectTrigger>
+                <SelectContent>{[1,2,3,4,5].map(n => <SelectItem key={n} value={String(n)}>{GRAV_LABELS[n]}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 font-medium mb-1 block">Tipo de Medida</label>
+              <Select value={risco.tipoMedida} disabled={readOnly} onValueChange={v => upd({ tipoMedida: v })}>
+                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Medida" /></SelectTrigger>
+                <SelectContent>{TIPO_MEDIDA_OPTS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          </div>
 
-      <div>
-        <label className="text-xs text-slate-500 font-medium mb-1 block">Medidas de Controle</label>
-        <Textarea value={risco.medidasControle} disabled={readOnly} rows={2}
-          placeholder="Descreva as medidas de controle para eliminar ou reduzir o risco..."
-          onChange={e => upd({ medidasControle: e.target.value })} />
-      </div>
+          <div>
+            <label className="text-xs text-slate-500 font-medium mb-1 block">Medidas de Controle</label>
+            <Textarea value={risco.medidasControle} disabled={readOnly} rows={2} className="text-sm"
+              placeholder="Descreva as medidas para eliminar ou reduzir este risco..."
+              onChange={e => upd({ medidasControle: e.target.value })} />
+          </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="text-xs text-slate-500 font-medium mb-1 block">Responsável</label>
-          <Input value={risco.responsavelNome} disabled={readOnly} placeholder="Nome do responsável"
-            onChange={e => upd({ responsavelNome: e.target.value })} />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-slate-500 font-medium mb-1 block">Responsável</label>
+              <Input value={risco.responsavelNome} disabled={readOnly} placeholder="Nome do responsável" className="text-sm"
+                onChange={e => upd({ responsavelNome: e.target.value })} />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500 font-medium mb-1 block">Prazo de Implantação</label>
+              <Input type="date" value={risco.prazo} disabled={readOnly} onChange={e => upd({ prazo: e.target.value })} className="text-sm" />
+            </div>
+          </div>
         </div>
-        <div>
-          <label className="text-xs text-slate-500 font-medium mb-1 block">Prazo</label>
-          <Input type="date" value={risco.prazo} disabled={readOnly} onChange={e => upd({ prazo: e.target.value })} />
-        </div>
-      </div>
+      )}
     </div>
   );
 }
 
-// ── Wizard de criação ────────────────────────────────────────────────────────
-function NovaAprDialog({
-  open, onOpenChange, companyId, employeeId, onCreated,
-}: {
-  open: boolean; onOpenChange: (v: boolean) => void;
-  companyId: number; employeeId: number; onCreated: () => void;
-}) {
-  const [step, setStep] = useState(0);
-  const STEPS = ["Tipo", "Dados Gerais", "Checklist", "Riscos", "EPIs & Aprovação"];
+// ── Guia por step ────────────────────────────────────────────────────────
+const STEP_GUIDES: Record<number, { title: string; text: string; icon: any }> = {
+  0: { title: "Escolha a Atividade", icon: Layers, text: "Selecione o tipo de atividade. O checklist, riscos típicos e EPIs obrigatórios serão carregados automaticamente conforme a NR correspondente." },
+  1: { title: "Dados Gerais", icon: Clipboard, text: "Data, hora e responsável são preenchidos automaticamente. Ao selecionar a obra, o TST e encarregado são carregados do cadastro." },
+  2: { title: "Checklist de Segurança", icon: ListChecks, text: "Responda todos os itens:\n• SIM = Condição atendida\n• NÃO = Não conformidade — registre e corrija antes de iniciar\n• N/A = Não se aplica a esta atividade" },
+  3: { title: "Matriz de Riscos P×G", icon: Activity, text: "Probabilidade × Gravidade = Nível de Risco\n• ≤4 Baixo (verde)\n• ≤9 Médio (amarelo)\n• ≤16 Alto (laranja)\n• >16 Crítico (vermelho)\n\nCadastre medidas de controle para todo risco Alto ou Crítico." },
+  4: { title: "EPIs & Aprovação", icon: Shield, text: "Selecione todos os EPIs necessários para a atividade. A assinatura do Técnico ou Engenheiro de SST é obrigatória para aprovação do documento." },
+};
 
-  // Step 0 — tipo de atividade
+// ── Wizard Full-Screen ───────────────────────────────────────────────────
+function AprWizardFullscreen({
+  open, onClose, companyId, employeeId, userName, onCreated,
+}: {
+  open: boolean; onClose: () => void;
+  companyId: number; employeeId: number; userName: string; onCreated: () => void;
+}) {
+  const STEPS = ["Tipo", "Dados Gerais", "Checklist", "Riscos", "EPIs & Aprovação"];
+  const [step, setStep]     = useState(0);
   const [tipoId, setTipoId] = useState("");
 
-  // Step 1 — dados gerais
-  const [obraId, setObraId]             = useState<string>("");
-  const [dataEmissao, setDataEmissao]   = useState(new Date().toISOString().slice(0, 10));
-  const [atividade, setAtividade]       = useState("");
+  const now = new Date();
+  const [dataEmissao, setDataEmissao] = useState(now.toISOString().slice(0, 10));
+  const [horaInicio, setHoraInicio]   = useState(now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
+  const [obraId, setObraId]           = useState<string>("");
+  const [atividade, setAtividade]     = useState("");
   const [localServico, setLocalServico] = useState("");
-  const [equipe, setEquipe]             = useState<string[]>([""]);
-
-  // Step 2 — checklist específico
-  const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
-
-  // Step 3 — tabela de riscos
-  const [riscos, setRiscos] = useState<RiscoItem[]>([novoRisco()]);
-
-  // Step 4 — EPIs + aprovação
+  const [equipe, setEquipe]           = useState<string[]>([""]);
+  const [checklist, setChecklist]     = useState<ChecklistItem[]>([]);
+  const [riscos, setRiscos]           = useState<RiscoItem[]>([novoRisco()]);
   const [epis, setEpis]               = useState<string[]>([]);
   const [observacoes, setObservacoes] = useState("");
-  const [aprovNome, setAprovNome]     = useState("");
+  const [aprovNome, setAprovNome]     = useState(userName);
   const [aprovAss, setAprovAss]       = useState<string | null>(null);
   const [padOpen, setPadOpen]         = useState(false);
 
-  const obrasQ  = trpc.obras.list.useQuery({ companyId }, { enabled: open });
-  const createM = trpc.aprAnalises.create.useMutation({
-    onSuccess: () => { toast.success("APR criada com sucesso!"); onCreated(); onOpenChange(false); resetForm(); },
+  const obrasQ   = trpc.obras.list.useQuery({ companyId }, { enabled: open });
+  const obraSstQ = trpc.ptPermissoes.getObraSST.useQuery(
+    { companyId, obraId: Number(obraId) },
+    { enabled: open && !!obraId && Number(obraId) > 0 }
+  );
+  const createM  = trpc.aprAnalises.create.useMutation({
+    onSuccess: () => { toast.success("APR criada com sucesso!"); onCreated(); onClose(); resetForm(); },
     onError: e => toast.error(e.message),
   });
 
+  useEffect(() => {
+    if (obraSstQ.data?.tstNome) setAprovNome(obraSstQ.data.tstNome);
+  }, [obraSstQ.data]);
+
   function resetForm() {
-    setStep(0); setTipoId(""); setObraId(""); setDataEmissao(new Date().toISOString().slice(0, 10));
+    const n = new Date();
+    setStep(0); setTipoId(""); setObraId(""); setDataEmissao(n.toISOString().slice(0, 10));
+    setHoraInicio(n.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
     setAtividade(""); setLocalServico(""); setEquipe([""]);
     setChecklist([]); setRiscos([novoRisco()]); setEpis([]);
-    setObservacoes(""); setAprovNome(""); setAprovAss(null);
-  }
-
-  function novoRisco(): RiscoItem {
-    return { etapaAtividade:"", perigo:"", risco:"", tipoRisco:"seguranca",
-      probabilidade:0, gravidade:0, medidasControle:"", tipoMedida:"epc",
-      responsavelNome:"", prazo:"", situacao:"aberta" };
+    setObservacoes(""); setAprovNome(userName); setAprovAss(null);
   }
 
   function handleSelectTipo(id: string) {
@@ -556,10 +592,6 @@ function NovaAprDialog({
     setChecklist(prev => prev.map((item, i) => i === idx ? { ...item, resposta } : item));
   }
 
-  function toggleEpi(epi: string) {
-    setEpis(prev => prev.includes(epi) ? prev.filter(e => e !== epi) : [...prev, epi]);
-  }
-
   function canNext() {
     if (step === 0) return tipoId !== "";
     if (step === 1) return atividade.trim().length > 0;
@@ -571,319 +603,438 @@ function NovaAprDialog({
   function handleSubmit() {
     const riscosValid = riscos.filter(r => r.perigo || r.risco || r.etapaAtividade);
     createM.mutate({
-      companyId,
-      obraId:        obraId ? Number(obraId) : null,
-      employeeId,
-      tipoAtividade: tipoId || null,
-      checklistJson: checklist.length ? JSON.stringify(checklist) : null,
-      dataEmissao,
-      atividade,
-      localServico,
-      equipeJson:    JSON.stringify(equipe.filter(Boolean)),
-      epiJson:       JSON.stringify(epis),
-      observacoes:   observacoes || null,
-      riscos:        riscosValid.map((r, i) => ({
-        ...r, ordem: i,
-        probabilidade: r.probabilidade || null,
-        gravidade:     r.gravidade || null,
-      })),
+      companyId, obraId: obraId ? Number(obraId) : null, employeeId,
+      tipoAtividade: tipoId || null, checklistJson: checklist.length ? JSON.stringify(checklist) : null,
+      dataEmissao, horaInicio: horaInicio || null, atividade, localServico,
+      equipeJson: JSON.stringify(equipe.filter(Boolean)),
+      epiJson: JSON.stringify(epis), observacoes: observacoes || null,
+      riscos: riscosValid.map((r, i) => ({ ...r, ordem: i, probabilidade: r.probabilidade || null, gravidade: r.gravidade || null })),
     });
   }
 
   const tipoSelecionado = APR_TIPOS.find(t => t.id === tipoId);
   const naoConformes    = checklist.filter(c => c.resposta === "nao");
-
-  // Todos os EPIs (pré-selecionados + genéricos sem duplicar)
-  const todosEpis = tipoSelecionado
+  const todosEpis       = tipoSelecionado
     ? [...new Set([...tipoSelecionado.episSugeridos, ...EPI_SUGESTOES])]
     : EPI_SUGESTOES;
+  const guide = STEP_GUIDES[step];
+  const GuideIcon = guide?.icon ?? Info;
+
+  if (!open) return null;
 
   return (
-    <Dialog open={open} onOpenChange={v => { if (!v) resetForm(); onOpenChange(v); }}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <ShieldAlert className="h-5 w-5 text-orange-600" />
-            Nova Análise Preliminar de Risco
+    <div className="fixed inset-0 z-[100] bg-white flex flex-col">
+      {/* ── Header ── */}
+      <div className="bg-gradient-to-r from-orange-600 to-orange-500 text-white px-5 py-3.5 flex items-center gap-4 shrink-0 shadow-lg">
+        <ShieldAlert className="h-6 w-6 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-bold text-base">Nova APR</span>
             {tipoSelecionado && (
-              <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ml-1 ${tipoSelecionado.colorBg} ${tipoSelecionado.colorBorder} ${tipoSelecionado.colorText}`}>
-                {tipoSelecionado.emoji} {tipoSelecionado.label}
+              <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full font-medium">
+                {tipoSelecionado.emoji} {tipoSelecionado.label} — {tipoSelecionado.nr}
               </span>
             )}
-          </DialogTitle>
-        </DialogHeader>
-
-        {/* ── Stepper ── */}
-        <div className="flex items-center gap-1 py-2 overflow-x-auto">
-          {STEPS.map((s, i) => (
-            <div key={i} className="flex items-center gap-1 shrink-0">
-              <div className={`flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold border-2 transition-all
-                ${i < step ? "bg-orange-600 border-orange-600 text-white"
-                : i === step ? "bg-white border-orange-600 text-orange-600"
-                : "bg-white border-slate-200 text-slate-400"}`}>
-                {i < step ? <Check className="h-3 w-3" /> : i + 1}
+          </div>
+          {/* Step dots */}
+          <div className="flex items-center gap-1.5 mt-1.5">
+            {STEPS.map((s, i) => (
+              <div key={i} className="flex items-center gap-1">
+                <div className={`flex items-center justify-center rounded-full text-[9px] font-bold transition-all ${
+                  i < step ? "w-5 h-5 bg-white text-orange-600"
+                  : i === step ? "w-5 h-5 bg-white/30 border-2 border-white text-white"
+                  : "w-4 h-4 bg-white/15 text-white/60"
+                }`}>
+                  {i < step ? <Check className="h-2.5 w-2.5" /> : i + 1}
+                </div>
+                <span className={`text-[10px] hidden sm:block font-medium ${i === step ? "text-white" : i < step ? "text-orange-200" : "text-white/40"}`}>{s}</span>
+                {i < STEPS.length - 1 && <div className={`w-3 h-px shrink-0 ${i < step ? "bg-white/60" : "bg-white/20"}`} />}
               </div>
-              <span className={`text-[10px] font-medium hidden sm:block whitespace-nowrap
-                ${i === step ? "text-orange-700" : i < step ? "text-orange-400" : "text-slate-400"}`}>{s}</span>
-              {i < STEPS.length - 1 && <div className={`w-4 h-0.5 shrink-0 ${i < step ? "bg-orange-400" : "bg-slate-200"}`} />}
+            ))}
+          </div>
+        </div>
+        <button onClick={() => { onClose(); resetForm(); }}
+          className="shrink-0 p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors">
+          <XIcon className="h-5 w-5" />
+        </button>
+      </div>
+
+      {/* ── Body ── */}
+      <div className="flex-1 overflow-hidden flex min-h-0">
+        {/* Left sidebar (desktop only) */}
+        <div className="w-72 border-r bg-slate-50 overflow-y-auto shrink-0 hidden lg:flex flex-col">
+          {/* Step list */}
+          <div className="p-4 border-b">
+            {STEPS.map((s, i) => (
+              <div key={i} className={`flex items-center gap-3 py-2.5 px-3 rounded-xl mb-1 transition-all ${
+                i === step ? "bg-orange-50 border border-orange-200" : i < step ? "opacity-60" : "opacity-40"
+              }`}>
+                <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold shrink-0 ${
+                  i < step ? "bg-orange-500 text-white" : i === step ? "bg-orange-100 text-orange-700 border-2 border-orange-400" : "bg-slate-200 text-slate-400"
+                }`}>
+                  {i < step ? <Check className="h-3.5 w-3.5" /> : i + 1}
+                </div>
+                <div className="min-w-0">
+                  <p className={`text-sm font-semibold leading-tight ${i === step ? "text-orange-800" : "text-slate-600"}`}>{s}</p>
+                  {i === 2 && checklist.length > 0 && (
+                    <p className="text-[10px] text-slate-400">{checklist.filter(c => c.resposta !== "").length}/{checklist.length} respondidos</p>
+                  )}
+                  {i === 3 && (
+                    <p className="text-[10px] text-slate-400">{riscos.length} risco{riscos.length !== 1 ? "s" : ""}</p>
+                  )}
+                  {i === 4 && (
+                    <p className="text-[10px] text-slate-400">{epis.length} EPI{epis.length !== 1 ? "s" : ""} selecionado{epis.length !== 1 ? "s" : ""}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          {/* Guide text */}
+          {guide && (
+            <div className="p-4 flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <GuideIcon className="h-4 w-4 text-orange-600" />
+                <h4 className="text-sm font-semibold text-slate-700">{guide.title}</h4>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed whitespace-pre-line">{guide.text}</p>
+              {tipoSelecionado && step > 0 && (
+                <div className={`mt-4 p-3 rounded-xl border ${tipoSelecionado.colorBg} ${tipoSelecionado.colorBorder}`}>
+                  <p className={`text-xs font-semibold ${tipoSelecionado.colorText} mb-1`}>
+                    {tipoSelecionado.emoji} {tipoSelecionado.label}
+                  </p>
+                  <p className="text-[11px] text-slate-600 leading-snug">{tipoSelecionado.guia}</p>
+                </div>
+              )}
+              {step === 1 && obraSstQ.data && (
+                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                  <p className="text-xs font-semibold text-blue-800 mb-1 flex items-center gap-1"><Zap className="h-3 w-3" />Auto-preenchido da obra</p>
+                  {obraSstQ.data.tstNome && <p className="text-[11px] text-blue-700">TST: {obraSstQ.data.tstNome}</p>}
+                  {obraSstQ.data.encarregadoNome && <p className="text-[11px] text-blue-700">Encarregado: {obraSstQ.data.encarregadoNome}</p>}
+                  {obraSstQ.data.responsavelNome && <p className="text-[11px] text-blue-700">Resp. obra: {obraSstQ.data.responsavelNome}</p>}
+                </div>
+              )}
             </div>
-          ))}
+          )}
         </div>
 
-        {/* ── Step 0: Tipo de Atividade ── */}
-        {step === 0 && (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 mb-1">
-              <Layers className="h-4 w-4 text-orange-600" />
-              <p className="text-sm font-semibold text-slate-700">Selecione o tipo de atividade</p>
-            </div>
-            <p className="text-xs text-slate-500">O sistema carregará o checklist e os riscos típicos para o tipo selecionado.</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[420px] overflow-y-auto pr-1">
-              {APR_TIPOS.map(tipo => (
-                <button key={tipo.id} type="button"
-                  onClick={() => handleSelectTipo(tipo.id)}
-                  className={`text-left p-3 rounded-xl border-2 transition-all hover:shadow-sm
-                    ${tipoId === tipo.id
-                      ? `${tipo.colorBg} ${tipo.colorBorder}`
-                      : "bg-white border-slate-200 hover:border-slate-300"
-                    }`}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xl">{tipo.emoji}</span>
-                    <div className="min-w-0">
-                      <p className={`text-sm font-semibold leading-tight ${tipoId === tipo.id ? tipo.colorText : "text-slate-800"}`}>
-                        {tipo.label}
-                      </p>
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${tipoId === tipo.id ? `${tipo.colorBg} ${tipo.colorText}` : "bg-slate-100 text-slate-500"}`}>
-                        {tipo.nr}
-                      </span>
-                    </div>
-                    {tipoId === tipo.id && <Check className={`h-4 w-4 ml-auto shrink-0 ${tipo.colorText}`} />}
-                  </div>
-                  <p className="text-[11px] text-slate-500 leading-snug">{tipo.descricao}</p>
-                  <p className="text-[10px] text-slate-400 mt-1">{tipo.checklist.length} itens de checklist • {tipo.riscosPredef.length} riscos pré-definidos</p>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Main form */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-2xl mx-auto px-5 py-6 space-y-5">
 
-        {/* ── Step 1: Dados Gerais ── */}
-        {step === 1 && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-slate-700 mb-1.5 block">Obra / Unidade</label>
-                <Select value={obraId} onValueChange={setObraId}>
-                  <SelectTrigger><SelectValue placeholder="Selecione (opcional)" /></SelectTrigger>
-                  <SelectContent>
-                    {(obrasQ.data ?? []).map((o: any) => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-slate-700 mb-1.5 block">Data da Emissão</label>
-                <Input type="date" value={dataEmissao} onChange={e => setDataEmissao(e.target.value)} />
-              </div>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 mb-1.5 block">Atividade / Serviço <span className="text-red-500">*</span></label>
-              <Input value={atividade} onChange={e => setAtividade(e.target.value)}
-                placeholder="Ex.: Concretagem de pilares do 2º pavimento" />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 mb-1.5 block">Local do Serviço</label>
-              <Input value={localServico} onChange={e => setLocalServico(e.target.value)}
-                placeholder="Ex.: Bloco A, 2º pavimento" />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 mb-1.5 block">Equipe Envolvida</label>
-              <div className="space-y-2">
-                {equipe.map((m, i) => (
-                  <div key={i} className="flex gap-2">
-                    <Input value={m} placeholder={`Membro ${i + 1}`}
-                      onChange={e => { const n = [...equipe]; n[i] = e.target.value; setEquipe(n); }} />
-                    {equipe.length > 1 && (
-                      <button type="button" onClick={() => setEquipe(equipe.filter((_, j) => j !== i))}
-                        className="text-slate-400 hover:text-red-500"><XIcon className="h-4 w-4" /></button>
-                    )}
-                  </div>
-                ))}
-                <Button type="button" variant="outline" size="sm" onClick={() => setEquipe([...equipe, ""])}>
-                  <Plus className="h-4 w-4 mr-1" />Adicionar membro
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── Step 2: Checklist específico ── */}
-        {step === 2 && (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 mb-1">
-              <ListChecks className="h-4 w-4 text-orange-600" />
-              <p className="text-sm font-semibold text-slate-700">
-                Checklist — {tipoSelecionado?.label ?? "Atividade"}
-                <span className="ml-2 text-xs font-normal text-slate-400">(todos os itens precisam ser respondidos)</span>
-              </p>
-            </div>
-
-            {naoConformes.length > 0 && (
-              <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-xl">
-                <AlertTriangle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
-                <p className="text-xs text-red-800 font-medium">
-                  {naoConformes.length} item(ns) não conforme(s). Aplique medidas corretivas antes de iniciar o serviço.
-                </p>
+            {/* ── Step 0: Tipo ── */}
+            {step === 0 && (
+              <div className="space-y-4">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900">Tipo de Atividade</h2>
+                  <p className="text-sm text-slate-500 mt-0.5">Selecione para carregar o checklist e riscos da NR correspondente</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {APR_TIPOS.map(tipo => (
+                    <button key={tipo.id} type="button" onClick={() => handleSelectTipo(tipo.id)}
+                      className={`text-left p-4 rounded-2xl border-2 transition-all hover:shadow-md active:scale-[0.98]
+                        ${tipoId === tipo.id ? `${tipo.colorBg} ${tipo.colorBorder} shadow-sm` : "bg-white border-slate-200 hover:border-slate-300"}`}>
+                      <div className="flex items-start gap-3">
+                        <span className="text-2xl">{tipo.emoji}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-1">
+                            <p className={`font-semibold text-sm leading-tight ${tipoId === tipo.id ? tipo.colorText : "text-slate-800"}`}>{tipo.label}</p>
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${tipoId === tipo.id ? `${tipo.colorBg} ${tipo.colorText}` : "bg-slate-100 text-slate-500"}`}>{tipo.nr}</span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-1 leading-snug">{tipo.descricao}</p>
+                          <p className="text-[10px] text-slate-400 mt-1.5">
+                            {tipo.checklist.length} itens checklist · {tipo.riscosPredef.length} riscos pré-definidos
+                          </p>
+                        </div>
+                        {tipoId === tipo.id && <Check className={`h-4 w-4 shrink-0 mt-0.5 ${tipo.colorText}`} />}
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
-            <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
-              {checklist.map((item, idx) => (
-                <div key={idx} className={`rounded-xl border p-3 transition-colors ${
-                  item.resposta === "sim" ? "bg-green-50 border-green-200"
-                  : item.resposta === "nao" ? "bg-red-50 border-red-200"
-                  : item.resposta === "na"  ? "bg-slate-50 border-slate-200"
-                  : "bg-white border-slate-200"
-                }`}>
-                  <p className="text-xs text-slate-700 font-medium mb-2 leading-snug">
-                    <span className="text-slate-400 mr-1">{idx + 1}.</span>{item.pergunta}
-                  </p>
-                  <div className="flex gap-1.5">
-                    <button type="button"
-                      onClick={() => setChecklistResposta(idx, "sim")}
-                      className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-all
-                        ${item.resposta === "sim" ? "bg-green-600 text-white border-green-600" : "bg-white text-green-700 border-green-300 hover:bg-green-50"}`}>
-                      <CircleCheck className="h-3.5 w-3.5" />Sim
-                    </button>
-                    <button type="button"
-                      onClick={() => setChecklistResposta(idx, "nao")}
-                      className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-all
-                        ${item.resposta === "nao" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-700 border-red-300 hover:bg-red-50"}`}>
-                      <CircleX className="h-3.5 w-3.5" />Não
-                    </button>
-                    <button type="button"
-                      onClick={() => setChecklistResposta(idx, "na")}
-                      className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-all
-                        ${item.resposta === "na" ? "bg-slate-500 text-white border-slate-500" : "bg-white text-slate-500 border-slate-300 hover:bg-slate-50"}`}>
-                      <Minus className="h-3.5 w-3.5" />N/A
-                    </button>
+            {/* ── Step 1: Dados Gerais ── */}
+            {step === 1 && (
+              <div className="space-y-5">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900">Dados Gerais</h2>
+                  <p className="text-sm text-slate-500 mt-0.5">Campos marcados com ★ foram preenchidos automaticamente</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-slate-700 mb-1.5 flex items-center gap-1 block">
+                      <Calendar className="h-3.5 w-3.5 text-orange-500" />Data de Emissão ★
+                    </label>
+                    <Input type="date" value={dataEmissao} onChange={e => setDataEmissao(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-slate-700 mb-1.5 flex items-center gap-1 block">
+                      <Timer className="h-3.5 w-3.5 text-orange-500" />Hora de Início ★
+                    </label>
+                    <Input type="time" value={horaInicio} onChange={e => setHoraInicio(e.target.value)} />
                   </div>
                 </div>
-              ))}
-            </div>
 
-            {/* Progresso */}
-            <div className="text-xs text-slate-500 text-right">
-              {checklist.filter(c => c.resposta !== "").length} / {checklist.length} respondidos
-            </div>
-          </div>
-        )}
+                <div>
+                  <label className="text-sm font-medium text-slate-700 mb-1.5 block">Obra / Unidade</label>
+                  <Select value={obraId} onValueChange={v => { setObraId(v); }}>
+                    <SelectTrigger><SelectValue placeholder="Selecione (opcional)" /></SelectTrigger>
+                    <SelectContent>
+                      {(obrasQ.data ?? []).map((o: any) => <SelectItem key={o.id} value={String(o.id)}>{o.nome}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {obraSstQ.isFetching && <p className="text-xs text-slate-400 mt-1 flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" />Buscando TST e encarregado...</p>}
+                  {obraSstQ.data?.tstNome && (
+                    <p className="text-xs text-blue-700 mt-1 flex items-center gap-1"><Zap className="h-3 w-3" />TST: <strong>{obraSstQ.data.tstNome}</strong> — carregado automaticamente como aprovador</p>
+                  )}
+                </div>
 
-        {/* ── Step 3: Tabela de Riscos ── */}
-        {step === 3 && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-slate-600">
-                Riscos pré-carregados para <strong>{tipoSelecionado?.label}</strong>. Revise, edite e adicione mais se necessário.
-              </p>
-              <div className="flex items-center gap-1 text-xs text-slate-500">
-                <span className="w-3 h-3 rounded-full bg-green-400 inline-block" />Baixo
-                <span className="w-3 h-3 rounded-full bg-yellow-400 inline-block ml-1" />Médio
-                <span className="w-3 h-3 rounded-full bg-orange-400 inline-block ml-1" />Alto
-                <span className="w-3 h-3 rounded-full bg-red-500 inline-block ml-1" />Crítico
-              </div>
-            </div>
-            {riscos.map((r, i) => (
-              <RiscoRow key={i} risco={r} index={i}
-                onChange={upd => setRiscos(riscos.map((x, j) => j === i ? upd : x))}
-                onRemove={() => setRiscos(riscos.filter((_, j) => j !== i))} />
-            ))}
-            <Button type="button" variant="outline" className="w-full border-dashed border-orange-300 text-orange-700 hover:bg-orange-50"
-              onClick={() => setRiscos([...riscos, novoRisco()])}>
-              <Plus className="h-4 w-4 mr-1" />Adicionar Risco
-            </Button>
-          </div>
-        )}
+                <div>
+                  <label className="text-sm font-medium text-slate-700 mb-1.5 block">
+                    Atividade / Serviço <span className="text-red-500">*</span>
+                    <span className="text-xs font-normal text-orange-600 ml-1">★ carregada do tipo selecionado</span>
+                  </label>
+                  <Input value={atividade} onChange={e => setAtividade(e.target.value)}
+                    placeholder="Descrição da atividade a ser executada" />
+                </div>
 
-        {/* ── Step 4: EPIs + Aprovação ── */}
-        {step === 4 && (
-          <div className="space-y-5">
-            <div>
-              <label className="text-sm font-medium text-slate-700 mb-2 block">
-                EPIs Necessários
-                {tipoSelecionado && <span className="ml-1 text-xs font-normal text-slate-400">(pré-selecionados para {tipoSelecionado.label})</span>}
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {todosEpis.map(epi => (
-                  <button key={epi} type="button"
-                    onClick={() => toggleEpi(epi)}
-                    className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all
-                      ${epis.includes(epi) ? "bg-orange-600 text-white border-orange-600" : "bg-white text-slate-700 border-slate-300 hover:border-orange-400"}`}>
-                    {epis.includes(epi) && <Check className="h-3 w-3 inline mr-1" />}{epi}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700 mb-1.5 block">Observações</label>
-              <Textarea value={observacoes} rows={3} onChange={e => setObservacoes(e.target.value)}
-                placeholder="Condições especiais, instruções adicionais..." />
-            </div>
-            <div className="border border-orange-200 rounded-xl p-4 bg-orange-50 space-y-3">
-              <p className="text-sm font-semibold text-orange-800 flex items-center gap-2">
-                <PenLine className="h-4 w-4" />Aprovação do Técnico/Engenheiro de SST
-              </p>
-              <div>
-                <label className="text-xs font-medium text-slate-700 mb-1 block">Nome do Aprovador <span className="text-red-500">*</span></label>
-                <Input value={aprovNome} onChange={e => setAprovNome(e.target.value)}
-                  placeholder="Nome completo do aprovador" />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-slate-700 mb-1 block">Assinatura</label>
-                {aprovAss ? (
-                  <div className="relative border rounded-lg overflow-hidden bg-white">
-                    <img src={aprovAss} alt="Assinatura" className="h-16 object-contain mx-auto block" />
-                    <button type="button" onClick={() => setAprovAss(null)}
-                      className="absolute top-1 right-1 text-slate-400 hover:text-red-500"><XIcon className="h-4 w-4" /></button>
+                <div>
+                  <label className="text-sm font-medium text-slate-700 mb-1.5 block">Local do Serviço</label>
+                  <Input value={localServico} onChange={e => setLocalServico(e.target.value)}
+                    placeholder="Ex.: Bloco A, 2º pavimento, eixo 3-4" />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-slate-700 mb-1.5 block">Equipe de Trabalho</label>
+                  <div className="space-y-2">
+                    {equipe.map((m, i) => (
+                      <div key={i} className="flex gap-2 items-center">
+                        <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 shrink-0">{i + 1}</div>
+                        <Input value={m} placeholder={`Nome do trabalhador ${i + 1}`}
+                          onChange={e => { const n = [...equipe]; n[i] = e.target.value; setEquipe(n); }} />
+                        {equipe.length > 1 && (
+                          <button type="button" onClick={() => setEquipe(equipe.filter((_, j) => j !== i))}
+                            className="text-slate-300 hover:text-red-500 shrink-0"><XIcon className="h-4 w-4" /></button>
+                        )}
+                      </div>
+                    ))}
+                    <Button type="button" variant="outline" size="sm" onClick={() => setEquipe([...equipe, ""])}
+                      className="border-dashed border-orange-300 text-orange-700 hover:bg-orange-50">
+                      <Plus className="h-4 w-4 mr-1" />Adicionar membro
+                    </Button>
                   </div>
-                ) : (
-                  <Button type="button" variant="outline" className="w-full border-dashed" onClick={() => setPadOpen(true)}>
-                    <PenLine className="h-4 w-4 mr-2" />Coletar Assinatura Canvas
-                  </Button>
-                )}
+                </div>
               </div>
-            </div>
-          </div>
-        )}
+            )}
 
-        <DialogFooter className="flex justify-between gap-2 pt-2">
-          <Button variant="outline" onClick={() => step > 0 ? setStep(step - 1) : onOpenChange(false)}>
-            {step > 0 ? <><ChevronLeft className="h-4 w-4 mr-1" />Voltar</> : "Cancelar"}
-          </Button>
-          {step === 0 ? null : step < STEPS.length - 1 ? (
-            <Button onClick={() => setStep(step + 1)} disabled={!canNext()}
-              className="bg-orange-600 hover:bg-orange-700">
+            {/* ── Step 2: Checklist ── */}
+            {step === 2 && (
+              <div className="space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-900">Checklist de Segurança</h2>
+                    <p className="text-sm text-slate-500 mt-0.5">{tipoSelecionado?.label} — {tipoSelecionado?.nr}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="text-2xl font-bold text-orange-600">{checklist.filter(c => c.resposta !== "").length}</span>
+                    <span className="text-sm text-slate-400">/{checklist.length}</span>
+                    <p className="text-[10px] text-slate-400">respondidos</p>
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-orange-500 rounded-full transition-all"
+                    style={{ width: `${checklist.length ? (checklist.filter(c => c.resposta !== "").length / checklist.length) * 100 : 0}%` }} />
+                </div>
+
+                {naoConformes.length > 0 && (
+                  <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-xl">
+                    <AlertTriangle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
+                    <p className="text-xs text-red-800 font-medium">
+                      {naoConformes.length} não conformidade{naoConformes.length > 1 ? "s" : ""}. Aplique medidas corretivas antes de iniciar.
+                    </p>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  {checklist.map((item, idx) => (
+                    <div key={idx} className={`rounded-2xl border-2 p-4 transition-all ${
+                      item.resposta === "sim" ? "bg-green-50 border-green-200"
+                      : item.resposta === "nao" ? "bg-red-50 border-red-200"
+                      : item.resposta === "na"  ? "bg-slate-50 border-slate-200"
+                      : "bg-white border-slate-200"
+                    }`}>
+                      <p className="text-sm text-slate-700 mb-3 leading-relaxed">
+                        <span className="text-slate-400 mr-2 font-bold">{idx + 1}.</span>{item.pergunta}
+                      </p>
+                      <div className="flex gap-2">
+                        {(["sim","nao","na"] as ChecklistResposta[]).map(resp => (
+                          <button key={resp} type="button" onClick={() => setChecklistResposta(idx, resp)}
+                            className={`flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-xl border-2 transition-all flex-1 justify-center
+                              ${item.resposta === resp
+                                ? resp === "sim" ? "bg-green-600 text-white border-green-600"
+                                : resp === "nao" ? "bg-red-600 text-white border-red-600"
+                                : "bg-slate-500 text-white border-slate-500"
+                                : resp === "sim" ? "bg-white text-green-700 border-green-300 hover:bg-green-50"
+                                : resp === "nao" ? "bg-white text-red-700 border-red-300 hover:bg-red-50"
+                                : "bg-white text-slate-500 border-slate-300 hover:bg-slate-50"
+                              }`}>
+                            {resp === "sim" ? <><CircleCheck className="h-4 w-4" />Sim</>
+                             : resp === "nao" ? <><CircleX className="h-4 w-4" />Não</>
+                             : <><Minus className="h-4 w-4" />N/A</>}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── Step 3: Riscos ── */}
+            {step === 3 && (
+              <div className="space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-900">Matriz de Riscos</h2>
+                    <p className="text-sm text-slate-500 mt-0.5">Pré-carregados para <strong>{tipoSelecionado?.label}</strong>. Revise e adicione mais.</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[11px] shrink-0 flex-wrap justify-end">
+                    {[{ l:"Baixo",d:"bg-green-500"},{l:"Médio",d:"bg-yellow-500"},{l:"Alto",d:"bg-orange-500"},{l:"Crítico",d:"bg-red-600"}].map(n => (
+                      <span key={n.l} className="flex items-center gap-1"><span className={`w-2 h-2 rounded-full ${n.d}`}/>{n.l}</span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {riscos.map((r, i) => (
+                    <RiscoRow key={i} risco={r} index={i}
+                      onChange={upd => setRiscos(riscos.map((x, j) => j === i ? upd : x))}
+                      onRemove={() => setRiscos(riscos.filter((_, j) => j !== i))} />
+                  ))}
+                </div>
+
+                <Button type="button" variant="outline"
+                  className="w-full border-dashed border-orange-300 text-orange-700 hover:bg-orange-50 py-3 rounded-2xl"
+                  onClick={() => setRiscos([...riscos, novoRisco()])}>
+                  <Plus className="h-4 w-4 mr-2" />Adicionar Risco
+                </Button>
+              </div>
+            )}
+
+            {/* ── Step 4: EPIs + Aprovação ── */}
+            {step === 4 && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900">EPIs & Aprovação</h2>
+                  <p className="text-sm text-slate-500 mt-0.5">Selecione os EPIs necessários e colha a assinatura do responsável SST</p>
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2 block">
+                    <HardHat className="h-4 w-4 text-orange-600" />EPIs Necessários
+                    <span className="text-xs font-normal text-slate-400">({epis.length} selecionados)</span>
+                    {tipoSelecionado && <span className="text-xs font-normal text-orange-600">★ pré-selecionados para {tipoSelecionado.label}</span>}
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {todosEpis.map(epi => (
+                      <button key={epi} type="button"
+                        onClick={() => setEpis(prev => prev.includes(epi) ? prev.filter(e => e !== epi) : [...prev, epi])}
+                        className={`text-sm px-4 py-2 rounded-xl border-2 font-medium transition-all
+                          ${epis.includes(epi) ? "bg-orange-600 text-white border-orange-600 shadow-sm" : "bg-white text-slate-700 border-slate-200 hover:border-orange-300 hover:bg-orange-50"}`}>
+                        {epis.includes(epi) && <Check className="h-3.5 w-3.5 inline mr-1.5" />}{epi}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-slate-700 mb-1.5 block">Observações Adicionais</label>
+                  <Textarea value={observacoes} rows={3} onChange={e => setObservacoes(e.target.value)}
+                    placeholder="Condições especiais, restrições, instruções adicionais..." className="resize-none" />
+                </div>
+
+                <div className="border-2 border-orange-200 rounded-2xl p-5 bg-orange-50 space-y-4">
+                  <h3 className="text-sm font-bold text-orange-900 flex items-center gap-2">
+                    <Shield className="h-4 w-4" />Aprovação — Técnico / Engenheiro de SST
+                  </h3>
+                  <div>
+                    <label className="text-sm font-medium text-slate-700 mb-1.5 flex items-center gap-1 block">
+                      Nome do Aprovador <span className="text-red-500">*</span>
+                      {obraSstQ.data?.tstNome && <span className="text-xs text-blue-600 font-normal ml-1 flex items-center gap-1"><Zap className="h-3 w-3" />TST da obra</span>}
+                    </label>
+                    <Input value={aprovNome} onChange={e => setAprovNome(e.target.value)} placeholder="Nome completo" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-slate-700 mb-1.5 block">Assinatura Digital</label>
+                    {aprovAss ? (
+                      <div className="relative border-2 border-orange-200 rounded-xl overflow-hidden bg-white p-2">
+                        <img src={aprovAss} alt="Assinatura" className="h-16 object-contain mx-auto block" />
+                        <button type="button" onClick={() => setAprovAss(null)}
+                          className="absolute top-2 right-2 bg-white/80 rounded-full p-1 text-slate-400 hover:text-red-500">
+                          <XIcon className="h-4 w-4" />
+                        </button>
+                        <p className="text-center text-xs text-green-600 mt-1 font-medium">✓ Assinatura registrada</p>
+                      </div>
+                    ) : (
+                      <Button type="button" variant="outline"
+                        className="w-full border-dashed border-orange-300 text-orange-700 hover:bg-orange-100 py-8 rounded-xl"
+                        onClick={() => setPadOpen(true)}>
+                        <PenLine className="h-5 w-5 mr-2" />Coletar Assinatura
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Footer ── */}
+      <div className="border-t bg-white px-5 py-4 flex items-center justify-between shrink-0 shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
+        <Button variant="outline" onClick={() => step > 0 ? setStep(step - 1) : (onClose(), resetForm())}
+          className="border-slate-200">
+          <ChevronLeft className="h-4 w-4 mr-1" />{step > 0 ? "Voltar" : "Cancelar"}
+        </Button>
+
+        <div className="flex items-center gap-3">
+          {step === 2 && (
+            <span className="text-xs text-slate-500 hidden sm:block">
+              {checklist.filter(c => c.resposta !== "").length}/{checklist.length} respondidos
+            </span>
+          )}
+          {step < STEPS.length - 1 ? (
+            <Button onClick={() => setStep(step + 1)} disabled={!canNext()} className="bg-orange-600 hover:bg-orange-700 px-6">
               Próximo<ChevronRight className="h-4 w-4 ml-1" />
             </Button>
           ) : (
             <Button onClick={handleSubmit} disabled={!canNext() || createM.isPending}
-              className="bg-orange-600 hover:bg-orange-700 min-w-[120px]">
-              {createM.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Check className="h-4 w-4 mr-1" />Criar APR</>}
+              className="bg-orange-600 hover:bg-orange-700 px-6 min-w-[140px]">
+              {createM.isPending ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Salvando...</>
+              ) : (
+                <><Check className="h-4 w-4 mr-2" />Criar APR</>
+              )}
             </Button>
           )}
-        </DialogFooter>
-      </DialogContent>
-      <AssinaturaPadApr open={padOpen} onOpenChange={setPadOpen} onSave={url => setAprovAss(url)} />
-    </Dialog>
+        </div>
+      </div>
+
+      <AssinaturaPad open={padOpen} onClose={() => setPadOpen(false)}
+        onSave={url => setAprovAss(url)} title="Assinatura do Aprovador SST" />
+    </div>
   );
 }
 
-// ── Detalhe de uma APR ───────────────────────────────────────────────────────
-function AprDetalheDialog({
-  open, onOpenChange, aprId, companyId, onRefetch,
-}: { open: boolean; onOpenChange: (v: boolean) => void; aprId: number | null; companyId: number; onRefetch: () => void; }) {
+// ── Detalhe Full-Screen ───────────────────────────────────────────────────
+function AprDetalheFullscreen({
+  open, onClose, aprId, companyId, onRefetch,
+}: { open: boolean; onClose: () => void; aprId: number | null; companyId: number; onRefetch: () => void; }) {
   const utils       = trpc.useUtils();
   const { confirm } = useConfirm();
-
   const [printLoading, setPrintLoading] = useState(false);
 
   const handlePrint = async () => {
@@ -897,175 +1048,231 @@ function AprDetalheDialog({
     finally { setPrintLoading(false); }
   };
 
-  const detQ = trpc.aprAnalises.getById.useQuery(
-    { id: aprId!, companyId },
-    { enabled: open && aprId !== null }
-  );
+  const detQ      = trpc.aprAnalises.getById.useQuery({ id: aprId!, companyId }, { enabled: open && aprId !== null });
   const aprovarM  = trpc.aprAnalises.aprovar.useMutation({ onSuccess: () => { detQ.refetch(); onRefetch(); toast.success("APR aprovada!"); } });
   const concluirM = trpc.aprAnalises.concluir.useMutation({ onSuccess: () => { detQ.refetch(); onRefetch(); toast.success("APR concluída!"); } });
   const cancelarM = trpc.aprAnalises.cancelar.useMutation({ onSuccess: () => { detQ.refetch(); onRefetch(); toast.success("APR cancelada."); } });
+  const excluirM  = trpc.aprAnalises.excluir.useMutation({ onSuccess: () => { onRefetch(); onClose(); toast.success("APR excluída."); } });
 
   const apr = detQ.data;
-  if (!apr) return null;
-
-  const riscosCriticos = (apr.riscos ?? []).filter((r: any) => (r.probabilidade ?? 0) * (r.gravidade ?? 0) > 16);
 
   async function handleAprovar() {
-    const ok = await confirm("Confirmar aprovação desta APR?");
-    if (!ok) return;
-    aprovarM.mutate({ id: apr.id, companyId });
+    if (!await confirm("Confirmar aprovação desta APR?")) return;
+    aprovarM.mutate({ id: apr!.id, companyId });
   }
   async function handleConcluir() {
-    const ok = await confirm("Confirmar conclusão desta APR?");
-    if (!ok) return;
-    concluirM.mutate({ id: apr.id, companyId });
+    if (!await confirm("Confirmar conclusão desta APR?")) return;
+    concluirM.mutate({ id: apr!.id, companyId });
   }
   async function handleCancelar() {
-    const ok = await confirm("Cancelar esta APR? Esta ação não pode ser desfeita.");
-    if (!ok) return;
-    cancelarM.mutate({ id: apr.id, companyId });
-    onOpenChange(false);
+    if (!await confirm("Cancelar esta APR? Esta ação não pode ser desfeita.")) return;
+    cancelarM.mutate({ id: apr!.id, companyId });
+  }
+  async function handleExcluir() {
+    if (!await confirm("Excluir permanentemente esta APR?")) return;
+    excluirM.mutate({ id: apr!.id, companyId });
   }
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex items-start justify-between gap-3">
-            <DialogTitle className="flex items-center gap-2">
-              <ShieldAlert className="h-5 w-5 text-orange-600" />
-              {apr.numero} — {apr.atividade}
-            </DialogTitle>
-            <StatusBadge status={apr.status} />
-          </div>
-        </DialogHeader>
+  if (!open) return null;
 
-        {detQ.isLoading && <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-orange-500" /></div>}
+  const tipoAPR         = APR_TIPOS.find(t => t.id === apr?.tipoAtividade);
+  const riscosCriticos  = (apr?.riscos ?? []).filter((r: any) => (r.probabilidade ?? 0) * (r.gravidade ?? 0) > 16);
+  const checklistParsed: ChecklistItem[] = (() => { try { return JSON.parse(apr?.checklistJson ?? "[]"); } catch { return []; } })();
+  const naoConformDet   = checklistParsed.filter(c => c.resposta === "nao");
+
+  const statusCfg = STATUS_CONFIG[apr?.status ?? "rascunho"] ?? STATUS_CONFIG.rascunho;
+  const headerBg =
+    apr?.status === "aprovada"   ? "from-green-600 to-green-500"
+    : apr?.status === "concluida" ? "from-blue-600 to-blue-500"
+    : apr?.status === "cancelada" ? "from-red-600 to-red-500"
+    : "from-amber-500 to-orange-500";
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-white flex flex-col">
+      {/* Header */}
+      <div className={`bg-gradient-to-r ${headerBg} text-white px-5 py-3.5 flex items-center gap-4 shrink-0 shadow-lg`}>
+        <ShieldAlert className="h-6 w-6 shrink-0" />
+        <div className="flex-1 min-w-0">
+          {detQ.isLoading ? (
+            <div className="h-5 w-48 bg-white/20 rounded animate-pulse" />
+          ) : (
+            <>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-black text-base tracking-wide">{apr?.numero}</span>
+                <StatusBadge status={apr?.status ?? "rascunho"} />
+                {tipoAPR && (
+                  <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full font-medium">
+                    {tipoAPR.emoji} {tipoAPR.label}
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-white/80 truncate mt-0.5">{apr?.atividade ?? "—"}</p>
+            </>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button variant="outline" size="sm" onClick={handlePrint} disabled={printLoading}
+            className="bg-white/10 border-white/30 text-white hover:bg-white/20">
+            {printLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+            <span className="ml-1.5 hidden sm:inline">{printLoading ? "Gerando..." : "PDF"}</span>
+          </Button>
+          <button onClick={onClose} className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors">
+            <XIcon className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto">
+        {detQ.isLoading && (
+          <div className="flex items-center justify-center py-24">
+            <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+          </div>
+        )}
 
         {apr && (
-          <div className="space-y-5">
-            {/* Cabeçalho */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-slate-50 rounded-xl border text-sm">
-              <div><span className="text-slate-500 block text-xs">Data</span><span className="font-medium">{apr.dataEmissao || "—"}</span></div>
-              <div><span className="text-slate-500 block text-xs">Responsável</span><span className="font-medium">{apr.responsavelNome || "—"}</span></div>
-              <div><span className="text-slate-500 block text-xs">Obra</span><span className="font-medium">{apr.obraNome || "—"}</span></div>
-              <div><span className="text-slate-500 block text-xs">Local</span><span className="font-medium">{apr.localServico || "—"}</span></div>
-            </div>
+          <div className="max-w-3xl mx-auto px-5 py-6 space-y-6">
 
-            {/* Alerta riscos críticos */}
+            {/* Faixa de alerta */}
             {riscosCriticos.length > 0 && (
-              <div className="flex items-center gap-3 p-3 bg-red-50 border border-red-200 rounded-xl">
+              <div className="flex items-center gap-3 p-4 bg-red-50 border-2 border-red-200 rounded-2xl">
                 <AlertTriangle className="h-5 w-5 text-red-600 shrink-0" />
-                <p className="text-sm text-red-800 font-medium">
-                  {riscosCriticos.length} risco{riscosCriticos.length > 1 ? "s" : ""} crítico{riscosCriticos.length > 1 ? "s" : ""} identificado{riscosCriticos.length > 1 ? "s" : ""}. Medidas de controle obrigatórias antes de iniciar o serviço.
+                <p className="text-sm text-red-800 font-semibold">
+                  ⚠️ {riscosCriticos.length} risco{riscosCriticos.length > 1 ? "s" : ""} crítico{riscosCriticos.length > 1 ? "s" : ""} — medidas de controle obrigatórias antes de iniciar.
                 </p>
               </div>
             )}
 
+            {/* Identificação */}
+            <div className="bg-slate-50 rounded-2xl border border-slate-200 p-4">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Identificação</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <span className="text-slate-400 block text-xs mb-0.5 flex items-center gap-1"><Calendar className="h-3 w-3" />Data</span>
+                  <span className="font-semibold">{apr.dataEmissao || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-xs mb-0.5 flex items-center gap-1"><Timer className="h-3 w-3" />Hora Início</span>
+                  <span className="font-semibold">{(apr as any).horaInicio || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-xs mb-0.5 flex items-center gap-1"><User className="h-3 w-3" />Elaborado por</span>
+                  <span className="font-semibold">{apr.responsavelNome ?? apr.criadoPorNome ?? "—"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-xs mb-0.5 flex items-center gap-1"><MapPin className="h-3 w-3" />Obra</span>
+                  <span className="font-semibold">{apr.obraNome || "—"}</span>
+                </div>
+                {apr.localServico && (
+                  <div className="col-span-2">
+                    <span className="text-slate-400 block text-xs mb-0.5 flex items-center gap-1"><Building2 className="h-3 w-3" />Local do Serviço</span>
+                    <span className="font-semibold">{apr.localServico}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Equipe */}
             {(apr.equipe ?? []).length > 0 && (
               <div>
-                <h4 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1"><User className="h-4 w-4" />Equipe</h4>
+                <h3 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+                  <User className="h-4 w-4 text-orange-600" />Equipe de Trabalho
+                </h3>
                 <div className="flex flex-wrap gap-2">
                   {apr.equipe.map((m: string, i: number) => (
-                    <span key={i} className="text-xs bg-slate-100 border border-slate-200 rounded-full px-3 py-1 font-medium">{m}</span>
+                    <span key={i} className="flex items-center gap-1.5 text-sm bg-slate-100 border border-slate-200 rounded-full px-3 py-1 font-medium">
+                      <span className="w-5 h-5 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center text-[10px] font-bold">{i+1}</span>
+                      {m}
+                    </span>
                   ))}
                 </div>
               </div>
             )}
 
             {/* Checklist */}
-            {(() => {
-              const cl: ChecklistItem[] = (() => { try { return JSON.parse(apr.checklistJson ?? "[]"); } catch { return []; } })();
-              const tipoAPR = APR_TIPOS.find(t => t.id === apr.tipoAtividade);
-              if (!cl.length) return null;
-              const naoConf = cl.filter((c: ChecklistItem) => c.resposta === "nao");
-              return (
-                <div>
-                  <h4 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
-                    <ListChecks className="h-4 w-4 text-orange-600" />
-                    Checklist
-                    {tipoAPR && (
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${tipoAPR.colorBg} ${tipoAPR.colorText}`}>
-                        {tipoAPR.emoji} {tipoAPR.label} — {tipoAPR.nr}
-                      </span>
-                    )}
-                  </h4>
-                  {naoConf.length > 0 && (
-                    <div className="flex items-center gap-2 p-2.5 bg-red-50 border border-red-200 rounded-xl mb-2">
-                      <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
-                      <p className="text-xs text-red-800 font-medium">{naoConf.length} item(ns) não conforme(s) registrado(s).</p>
-                    </div>
+            {checklistParsed.length > 0 && (
+              <div>
+                <h3 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+                  <ListChecks className="h-4 w-4 text-orange-600" />Checklist de Segurança
+                  {naoConformDet.length > 0 && (
+                    <span className="text-xs bg-red-100 text-red-700 border border-red-200 px-2 py-0.5 rounded-full font-semibold ml-1">
+                      {naoConformDet.length} não conforme{naoConformDet.length > 1 ? "s" : ""}
+                    </span>
                   )}
-                  <div className="space-y-1.5">
-                    {cl.map((item: ChecklistItem, i: number) => (
-                      <div key={i} className={`flex items-start gap-2.5 rounded-lg border px-3 py-2 text-xs
-                        ${item.resposta === "sim" ? "bg-green-50 border-green-200"
-                        : item.resposta === "nao" ? "bg-red-50 border-red-200"
-                        : "bg-slate-50 border-slate-200"}`}>
-                        <span className="shrink-0 mt-0.5">
-                          {item.resposta === "sim" ? <CircleCheck className="h-3.5 w-3.5 text-green-600" />
-                          : item.resposta === "nao" ? <CircleX className="h-3.5 w-3.5 text-red-600" />
-                          : <Minus className="h-3.5 w-3.5 text-slate-400" />}
-                        </span>
-                        <span className={`flex-1 leading-snug ${item.resposta === "nao" ? "text-red-800 font-medium" : "text-slate-700"}`}>
-                          <span className="text-slate-400 mr-1">{i + 1}.</span>{item.pergunta}
-                        </span>
-                        <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full
-                          ${item.resposta === "sim" ? "bg-green-100 text-green-700"
-                          : item.resposta === "nao" ? "bg-red-100 text-red-700"
-                          : "bg-slate-100 text-slate-500"}`}>
-                          {item.resposta === "sim" ? "SIM" : item.resposta === "nao" ? "NÃO" : "N/A"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                </h3>
+                <div className="space-y-1.5">
+                  {checklistParsed.map((item: ChecklistItem, i: number) => (
+                    <div key={i} className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 text-sm
+                      ${item.resposta === "sim" ? "bg-green-50 border-green-200"
+                      : item.resposta === "nao" ? "bg-red-50 border-red-200"
+                      : "bg-slate-50 border-slate-200"}`}>
+                      <span className="shrink-0 mt-0.5">
+                        {item.resposta === "sim" ? <CircleCheck className="h-4 w-4 text-green-600" />
+                        : item.resposta === "nao" ? <CircleX className="h-4 w-4 text-red-600" />
+                        : <Minus className="h-4 w-4 text-slate-400" />}
+                      </span>
+                      <span className={`flex-1 leading-snug ${item.resposta === "nao" ? "text-red-800 font-medium" : "text-slate-700"}`}>
+                        <span className="text-slate-400 mr-1">{i + 1}.</span>{item.pergunta}
+                      </span>
+                      <span className={`shrink-0 text-[11px] font-bold px-2 py-0.5 rounded-full
+                        ${item.resposta === "sim" ? "bg-green-100 text-green-700"
+                        : item.resposta === "nao" ? "bg-red-100 text-red-700"
+                        : "bg-slate-100 text-slate-500"}`}>
+                        {item.resposta === "sim" ? "SIM" : item.resposta === "nao" ? "NÃO" : "N/A"}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              );
-            })()}
+              </div>
+            )}
 
-            {/* Tabela de riscos */}
-            <div>
-              <h4 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1">
-                <BarChart3 className="h-4 w-4 text-orange-600" />Matriz de Riscos
-              </h4>
-              <div className="space-y-3">
-                {(apr.riscos ?? []).map((r: any, i: number) => {
-                  const nivel = (r.probabilidade ?? 0) * (r.gravidade ?? 0);
-                  const cfg = nivel > 0 ? nivelConfig(nivel) : null;
-                  return (
-                    <div key={i} className={`border rounded-xl p-3 ${cfg ? `${cfg.bg} ${cfg.border}` : "bg-white border-slate-200"}`}>
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <div>
-                          <span className="text-xs font-bold text-slate-600 uppercase">#{i + 1} — {r.etapaAtividade || "—"}</span>
-                          <p className="text-sm font-semibold">{r.perigo} → {r.risco}</p>
+            {/* Matriz de Riscos */}
+            {(apr.riscos ?? []).length > 0 && (
+              <div>
+                <h3 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-orange-600" />Matriz de Riscos
+                  <span className="text-xs font-normal text-slate-400">{apr.riscos.length} risco{apr.riscos.length !== 1 ? "s" : ""}</span>
+                </h3>
+                <div className="space-y-2">
+                  {(apr.riscos ?? []).map((r: any, i: number) => {
+                    const nivel = (r.probabilidade ?? 0) * (r.gravidade ?? 0);
+                    const cfg = nivel > 0 ? nivelConfig(nivel) : null;
+                    return (
+                      <div key={i} className={`border-2 rounded-2xl p-4 ${cfg ? `${cfg.bg} ${cfg.border}` : "bg-white border-slate-200"}`}>
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <div>
+                            <span className="text-xs font-bold text-slate-500 uppercase">#{i+1} — {r.etapaAtividade || "—"}</span>
+                            <p className="text-sm font-bold mt-0.5">{r.perigo} <span className="text-slate-400 font-normal">→</span> {r.risco}</p>
+                          </div>
+                          {cfg && (
+                            <span className={`text-xs font-bold px-2.5 py-1 rounded-full border shrink-0 ${cfg.bg} ${cfg.text} ${cfg.border}`}>
+                              P{r.probabilidade}×G{r.gravidade}={nivel} {cfg.label}
+                            </span>
+                          )}
                         </div>
-                        {cfg && (
-                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full border shrink-0 ${cfg.bg} ${cfg.text} ${cfg.border}`}>
-                            P{r.probabilidade}×G{r.gravidade}={nivel} {cfg.label}
-                          </span>
+                        {r.medidasControle && (
+                          <p className="text-sm text-slate-700"><span className="font-semibold">Controle:</span> {r.medidasControle}</p>
+                        )}
+                        {r.responsavelNome && (
+                          <p className="text-xs text-slate-500 mt-1"><span className="font-semibold">Resp.:</span> {r.responsavelNome}{r.prazo ? ` | Prazo: ${r.prazo}` : ""}</p>
                         )}
                       </div>
-                      {r.medidasControle && (
-                        <p className="text-xs text-slate-600"><span className="font-semibold">Controle:</span> {r.medidasControle}</p>
-                      )}
-                      {r.responsavelNome && (
-                        <p className="text-xs text-slate-500 mt-1"><span className="font-semibold">Resp.:</span> {r.responsavelNome} {r.prazo ? `| Prazo: ${r.prazo}` : ""}</p>
-                      )}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* EPIs */}
             {(apr.epis ?? []).length > 0 && (
               <div>
-                <h4 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1"><HardHat className="h-4 w-4 text-orange-600" />EPIs Necessários</h4>
+                <h3 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+                  <HardHat className="h-4 w-4 text-orange-600" />EPIs Necessários
+                </h3>
                 <div className="flex flex-wrap gap-2">
                   {apr.epis.map((e: string, i: number) => (
-                    <span key={i} className="text-xs bg-orange-50 border border-orange-200 text-orange-800 rounded-full px-3 py-1 font-medium">
-                      <Check className="h-3 w-3 inline mr-1" />{e}
+                    <span key={i} className="flex items-center gap-1.5 text-sm bg-orange-50 border border-orange-200 text-orange-800 rounded-xl px-3 py-1.5 font-medium">
+                      <Check className="h-3.5 w-3.5" />{e}
                     </span>
                   ))}
                 </div>
@@ -1074,58 +1281,63 @@ function AprDetalheDialog({
 
             {/* Observações */}
             {apr.observacoes && (
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700">
-                <span className="font-semibold block text-xs text-slate-500 mb-1">Observações</span>
-                {apr.observacoes}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+                <h3 className="text-xs font-bold text-slate-500 uppercase mb-2">Observações</h3>
+                <p className="text-sm text-slate-700 whitespace-pre-wrap">{apr.observacoes}</p>
               </div>
             )}
 
             {/* Aprovação */}
             {(apr.aprovadoPorNome || apr.aprovadoPorAss) && (
-              <div className="p-4 bg-green-50 border border-green-200 rounded-xl">
-                <h4 className="text-sm font-semibold text-green-800 mb-2">Aprovado por</h4>
-                <p className="text-sm font-medium">{apr.aprovadoPorNome}</p>
-                {apr.aprovadoPorAss && <img src={apr.aprovadoPorAss} alt="Assinatura" className="h-14 object-contain mt-2" />}
+              <div className="p-4 bg-green-50 border-2 border-green-200 rounded-2xl">
+                <h3 className="text-sm font-bold text-green-800 mb-2 flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4" />Aprovado por
+                </h3>
+                <p className="text-sm font-bold">{apr.aprovadoPorNome}</p>
+                {apr.aprovadoPorAss && <img src={apr.aprovadoPorAss} alt="Assinatura" className="h-14 object-contain mt-2 border border-green-200 rounded-lg bg-white px-2" />}
                 {apr.aprovadoEm && <p className="text-xs text-green-600 mt-1">{new Date(apr.aprovadoEm).toLocaleString("pt-BR")}</p>}
               </div>
             )}
           </div>
         )}
+      </div>
 
-        <DialogFooter className="flex flex-wrap gap-2 justify-end pt-2">
-          {/* Imprimir — disponível em qualquer status */}
-          <Button variant="outline" size="sm" onClick={handlePrint} disabled={printLoading}
-            className="border-slate-200 text-slate-600 hover:bg-slate-50">
-            {printLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Printer className="h-4 w-4 mr-1" />}
-            {printLoading ? "Gerando..." : "Imprimir / PDF"}
-          </Button>
-          {apr?.status === "em_analise" && (
-            <>
-              <Button variant="outline" size="sm" onClick={handleCancelar} className="text-red-600 border-red-300 hover:bg-red-50">
-                <Ban className="h-4 w-4 mr-1" />Cancelar APR
-              </Button>
-              <Button size="sm" onClick={handleAprovar} className="bg-green-600 hover:bg-green-700">
-                <CheckCircle2 className="h-4 w-4 mr-1" />Aprovar APR
-              </Button>
-            </>
-          )}
-          {apr?.status === "aprovada" && (
-            <Button size="sm" onClick={handleConcluir} className="bg-blue-600 hover:bg-blue-700">
-              <Check className="h-4 w-4 mr-1" />Concluir APR
+      {/* Footer actions */}
+      <div className="border-t bg-white px-5 py-4 flex flex-wrap items-center gap-3 justify-end shrink-0 shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
+        {apr?.status === "em_analise" && (
+          <>
+            <Button variant="outline" size="sm" onClick={handleCancelar}
+              className="text-red-600 border-red-200 hover:bg-red-50">
+              <Ban className="h-4 w-4 mr-1" />Cancelar APR
             </Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            <Button size="sm" onClick={handleAprovar} className="bg-green-600 hover:bg-green-700">
+              <CheckCircle2 className="h-4 w-4 mr-1" />Aprovar APR
+            </Button>
+          </>
+        )}
+        {apr?.status === "aprovada" && (
+          <Button size="sm" onClick={handleConcluir} className="bg-blue-600 hover:bg-blue-700">
+            <Check className="h-4 w-4 mr-1" />Concluir APR
+          </Button>
+        )}
+        {(apr?.status === "cancelada" || apr?.status === "concluida") && (
+          <Button variant="outline" size="sm" onClick={handleExcluir}
+            className="text-red-600 border-red-200 hover:bg-red-50">
+            <Trash2 className="h-4 w-4 mr-1" />Excluir
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }
 
-// ── Página principal ─────────────────────────────────────────────────────────
+// ── Página principal ──────────────────────────────────────────────────────
 export default function AprAnalise() {
   const { selectedCompany } = useCompany();
   const { user }            = useAuth();
   const companyId           = selectedCompany?.id ?? 0;
   const employeeId          = (user as any)?.employeeId ?? 0;
+  const userName            = (user as any)?.name ?? (user as any)?.username ?? "";
 
   const [filtroStatus, setFiltroStatus] = useState<string | null>(null);
   const [novaOpen, setNovaOpen]         = useState(false);
@@ -1139,16 +1351,15 @@ export default function AprAnalise() {
   );
 
   function refetch() { statsQ.refetch(); listQ.refetch(); }
-
   function abrirDetalhe(id: number) { setDetalheId(id); setDetalheOpen(true); }
 
   const stats = statsQ.data ?? { total: 0, rascunho: 0, em_analise: 0, aprovada: 0, concluida: 0, cancelada: 0 };
 
   const CARDS = [
-    { key: null,        label: "Total",      value: stats.total,       color: "from-orange-500 to-orange-600", icon: ShieldAlert },
-    { key: "em_analise",label: "Em Análise", value: stats.em_analise,  color: "from-amber-500 to-amber-600",   icon: Clock },
-    { key: "aprovada",  label: "Aprovadas",  value: stats.aprovada,    color: "from-green-500 to-green-600",   icon: CheckCircle2 },
-    { key: "concluida", label: "Concluídas", value: stats.concluida,   color: "from-blue-500 to-blue-600",     icon: Check },
+    { key: null,         label: "Total",      value: stats.total,      color: "from-orange-500 to-orange-600", icon: ShieldAlert },
+    { key: "em_analise", label: "Em Análise", value: stats.em_analise, color: "from-amber-500 to-amber-600",   icon: Clock },
+    { key: "aprovada",   label: "Aprovadas",  value: stats.aprovada,   color: "from-green-500 to-green-600",   icon: CheckCircle2 },
+    { key: "concluida",  label: "Concluídas", value: stats.concluida,  color: "from-blue-500 to-blue-600",     icon: Check },
   ];
 
   return (
@@ -1185,7 +1396,7 @@ export default function AprAnalise() {
                 <div className={`absolute inset-0 bg-gradient-to-br ${card.color} opacity-90`} />
                 <div className="relative text-white">
                   <Icon className="h-5 w-5 mb-1 opacity-80" />
-                  <div className="text-2xl font-bold">{card.value}</div>
+                  <div className="text-3xl font-black">{card.value}</div>
                   <div className="text-xs font-medium opacity-80">{card.label}</div>
                 </div>
                 {active && <div className="absolute top-2 right-2 bg-white/30 rounded-full p-0.5"><Check className="h-3 w-3 text-white" /></div>}
@@ -1194,10 +1405,9 @@ export default function AprAnalise() {
           })}
         </div>
 
-        {/* Filter label */}
         {filtroStatus && (
           <div className="flex items-center gap-2">
-            <span className="text-sm text-slate-600">Filtrando por:</span>
+            <span className="text-sm text-slate-600">Filtrando:</span>
             <StatusBadge status={filtroStatus} />
             <button onClick={() => setFiltroStatus(null)} className="text-xs text-slate-400 hover:text-slate-600 underline">limpar</button>
           </div>
@@ -1212,9 +1422,11 @@ export default function AprAnalise() {
 
         {!listQ.isLoading && (listQ.data ?? []).length === 0 && (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <ShieldAlert className="h-16 w-16 text-slate-200 mb-4" />
+            <div className="w-20 h-20 rounded-2xl bg-orange-50 flex items-center justify-center mb-4">
+              <ShieldAlert className="h-10 w-10 text-orange-200" />
+            </div>
             <h3 className="text-lg font-semibold text-slate-600">Nenhuma APR encontrada</h3>
-            <p className="text-slate-400 text-sm mt-1 mb-4">Crie uma nova APR para identificar e controlar os riscos da atividade.</p>
+            <p className="text-slate-400 text-sm mt-1 mb-5">Crie uma APR para identificar e controlar riscos da atividade.</p>
             <Button onClick={() => setNovaOpen(true)} className="bg-orange-600 hover:bg-orange-700">
               <Plus className="h-4 w-4 mr-1" />Nova APR
             </Button>
@@ -1223,45 +1435,49 @@ export default function AprAnalise() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {(listQ.data ?? []).map((apr: any) => {
-            const cfg = STATUS_CONFIG[apr.status] ?? STATUS_CONFIG.rascunho;
+            const tipoApr = APR_TIPOS.find(t => t.id === apr.tipoAtividade);
             return (
               <div key={apr.id}
-                className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all cursor-pointer group"
+                className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all cursor-pointer group hover:-translate-y-0.5"
                 onClick={() => abrirDetalhe(apr.id)}>
                 <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <span className="text-xs font-bold text-orange-600 tracking-wide">{apr.numero}</span>
-                    <h3 className="font-semibold text-slate-800 text-sm mt-0.5 line-clamp-2">{apr.atividade || "Sem atividade"}</h3>
+                  <div className="flex items-center gap-2 min-w-0">
+                    {tipoApr && <span className="text-lg shrink-0">{tipoApr.emoji}</span>}
+                    <div className="min-w-0">
+                      <span className="text-xs font-bold text-orange-600 tracking-wide block">{apr.numero}</span>
+                      <h3 className="font-semibold text-slate-800 text-sm line-clamp-1">{apr.atividade || "Sem atividade"}</h3>
+                    </div>
                   </div>
                   <StatusBadge status={apr.status} />
                 </div>
 
+                {tipoApr && (
+                  <div className={`text-[10px] font-bold px-2 py-0.5 rounded inline-block mb-2 ${tipoApr.colorBg} ${tipoApr.colorText}`}>
+                    {tipoApr.nr}
+                  </div>
+                )}
+
                 <div className="space-y-1 text-xs text-slate-500">
-                  {apr.obraNome && (
-                    <div className="flex items-center gap-1"><MapPin className="h-3 w-3" />{apr.obraNome}</div>
-                  )}
-                  {apr.localServico && (
-                    <div className="flex items-center gap-1"><Building2 className="h-3 w-3" />{apr.localServico}</div>
-                  )}
-                  <div className="flex items-center gap-1"><User className="h-3 w-3" />{apr.responsavelNome ?? apr.criadoPorNome ?? "—"}</div>
-                  {apr.dataEmissao && (
-                    <div className="flex items-center gap-1"><Clock className="h-3 w-3" />{apr.dataEmissao}</div>
-                  )}
+                  {apr.obraNome && <div className="flex items-center gap-1"><MapPin className="h-3 w-3 shrink-0" /><span className="truncate">{apr.obraNome}</span></div>}
+                  {apr.localServico && <div className="flex items-center gap-1"><Building2 className="h-3 w-3 shrink-0" /><span className="truncate">{apr.localServico}</span></div>}
+                  <div className="flex items-center gap-1"><User className="h-3 w-3 shrink-0" /><span className="truncate">{apr.responsavelNome ?? apr.criadoPorNome ?? "—"}</span></div>
+                  {apr.dataEmissao && <div className="flex items-center gap-1"><Calendar className="h-3 w-3 shrink-0" />{apr.dataEmissao}</div>}
                 </div>
 
-                <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
-                  <div className="flex items-center gap-3 text-xs text-slate-500">
-                    <span className="flex items-center gap-1">
-                      <AlertTriangle className="h-3.5 w-3.5 text-orange-500" />
-                      {apr.totalRiscos} risco{apr.totalRiscos !== 1 ? "s" : ""}
-                    </span>
-                    {(apr.equipe ?? []).length > 0 && (
-                      <span className="flex items-center gap-1">
-                        <User className="h-3.5 w-3.5" />{apr.equipe.length} membro{apr.equipe.length !== 1 ? "s" : ""}
-                      </span>
-                    )}
+                {(apr.equipe ?? []).length > 0 && (
+                  <div className="mt-3 flex items-center gap-1">
+                    <div className="flex -space-x-1">
+                      {apr.equipe.slice(0, 3).map((_: any, i: number) => (
+                        <div key={i} className="w-5 h-5 rounded-full bg-orange-100 border border-white flex items-center justify-center text-[9px] font-bold text-orange-700">{i+1}</div>
+                      ))}
+                    </div>
+                    <span className="text-[10px] text-slate-400 ml-1">{apr.equipe.length} membro{apr.equipe.length !== 1 ? "s" : ""}</span>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-orange-500 transition-colors" />
+                )}
+
+                <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
+                  <span>{apr.totalRiscos ?? 0} risco{(apr.totalRiscos ?? 0) !== 1 ? "s" : ""} mapeado{(apr.totalRiscos ?? 0) !== 1 ? "s" : ""}</span>
+                  <span className="group-hover:text-orange-600 transition-colors flex items-center gap-0.5">Ver detalhes <ChevronRight className="h-3 w-3" /></span>
                 </div>
               </div>
             );
@@ -1269,14 +1485,14 @@ export default function AprAnalise() {
         </div>
       </div>
 
-      <NovaAprDialog
-        open={novaOpen} onOpenChange={setNovaOpen}
-        companyId={companyId} employeeId={employeeId}
+      <AprWizardFullscreen
+        open={novaOpen} onClose={() => setNovaOpen(false)}
+        companyId={companyId} employeeId={employeeId} userName={userName}
         onCreated={refetch}
       />
 
-      <AprDetalheDialog
-        open={detalheOpen} onOpenChange={setDetalheOpen}
+      <AprDetalheFullscreen
+        open={detalheOpen} onClose={() => setDetalheOpen(false)}
         aprId={detalheId} companyId={companyId} onRefetch={refetch}
       />
     </DashboardLayout>

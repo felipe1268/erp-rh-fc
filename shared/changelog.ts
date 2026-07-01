@@ -1,4 +1,51 @@
 /**
+ * Rev. 3930 — **SST — APR: REDESIGN COMPLETO FULL-SCREEN + AUTO-FILLS + HORA INÍCIO.**
+ *
+ * PROBLEMA: APR usava Dialog (modal pequeno), difícil de preencher no campo (tablet/celular).
+ * Sem auto-preenchimento de data, hora ou responsável TST da obra.
+ *
+ * SOLUÇÃO — Redesign completo do módulo APR (`client/src/pages/sst/AprAnalise.tsx`):
+ *
+ * 1. **Wizard full-screen** — `fixed inset-0 z-[100] bg-white flex flex-col` substitui Dialog.
+ *    Layout: header gradiente laranja (passos chips + fechar) + body dois painéis:
+ *    - Sidebar esquerda (desktop 280px): lista vertical de etapas + guia contextual por step.
+ *    - Área principal: `flex-1 overflow-y-auto max-w-2xl mx-auto`.
+ *    Footer sticky: voltar / próximo / salvar.
+ *
+ * 2. **Detalhe full-screen** — mesmo padrão `fixed inset-0 z-[100]` para AprDetalheFullscreen.
+ *    Header colorido por status (verde=aprovada, azul=concluída, vermelho=cancelada, âmbar=em_análise).
+ *    Ações no rodapé: aprovar, concluir, cancelar, excluir.
+ *
+ * 3. **Auto-fills na criação**:
+ *    - `dataEmissao` = hoje (automático).
+ *    - `horaInicio` = hora atual (`toLocaleTimeString "pt-BR" HH:MM`) — marcado com ★ na UI.
+ *    - `aprovNome` = nome do usuário logado (pré-preenchido).
+ *    - Ao selecionar obra: `ptPermissoes.getObraSST` → auto-preenche `aprovNome` com TST da obra.
+ *
+ * 4. **Nova coluna `hora_inicio` varchar(5)** na tabela `apr_analises`:
+ *    - `drizzle/schema.ts`: coluna `horaInicio` adicionada.
+ *    - `server/_core/index.ts`: ColFix bumped para `v3930-2026-07-01-apr-hora-inicio` +
+ *      `ALTER TABLE apr_analises ADD COLUMN IF NOT EXISTS hora_inicio varchar(5)`.
+ *    - `server/routers/aprAnalises.ts`: campo em `create` input/values, `update` allowed,
+ *      `gerarHtml` (grid4 no bloco Identificação, @media screen padding).
+ *
+ * 5. **Guia contextual por etapa** na sidebar desktop:
+ *    - Step 0 (Tipo): orientação sobre o carregamento do checklist e riscos por NR.
+ *    - Step 1 (Dados): informa auto-fills e exibe TST/encarregado carregado da obra.
+ *    - Step 2 (Checklist): legenda SIM/NÃO/N/A + contagem.
+ *    - Step 3 (Riscos): legenda da matriz P×G (Baixo/Médio/Alto/Crítico).
+ *    - Step 4 (EPIs): EPIs pré-selecionados conforme tipo da atividade.
+ *
+ * 6. **10 tipos de atividade** com emoji, NR, guia específico, checklist, riscos pré-definidos
+ *    e EPIs sugeridos: altura, espaço confinado, escavação, andaime, elétrica, demolição,
+ *    içamento, soldagem, cobertura, geral.
+ *
+ * Arquivos: `client/src/pages/sst/AprAnalise.tsx`, `drizzle/schema.ts`,
+ * `server/_core/index.ts`, `server/routers/aprAnalises.ts`.
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3929 — **SST — PT PRINT: MARGEM 1,5 CM + PADDING DE TELA 15MM.**
  *
  * 1. Margem de impressão reduzida de 20mm → 15mm (`@page { margin: 15mm }`).

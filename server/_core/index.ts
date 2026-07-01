@@ -4710,7 +4710,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v3914-2026-06-30-pt-apt-anexo";
+    const COLFIX_VERSION = "v3930-2026-07-01-apr-hora-inicio";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -6157,6 +6157,13 @@ Regras:
         await _db3914.$client.query(`ALTER TABLE pt_permissoes ADD COLUMN IF NOT EXISTS outros_formularios_anexo_url text`);
         console.log("[ColFix Rev.3914] pt_permissoes: outros_formularios_anexo_url garantida.");
       } catch (e: any) { console.warn("[ColFix Rev.3914] pt apt_anexo falhou (não-fatal):", e?.message ?? e); }
+
+      // Rev. 3930 — APR: hora_inicio
+      try {
+        const _db3930 = (await getDb())!;
+        await _db3930.$client.query(`ALTER TABLE apr_analises ADD COLUMN IF NOT EXISTS hora_inicio varchar(5)`);
+        console.log("[ColFix Rev.3930] apr_analises: hora_inicio garantida.");
+      } catch (e: any) { console.warn("[ColFix Rev.3930] apr hora_inicio falhou (não-fatal):", e?.message ?? e); }
 
       // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos
       import("../services/startupCache").then(({ setCache }) =>
