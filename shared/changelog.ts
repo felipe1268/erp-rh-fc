@@ -1,4 +1,36 @@
 /**
+ * Rev. 3931 — **SST — APR: EQUIPE — PHOTO-GRID PICKER (CLT + PJ + TERCEIROS DA OBRA).**
+ *
+ * PROBLEMA: Step 1 do wizard APR usava campos de texto livres para a equipe de trabalho,
+ * obrigando digitar nome por nome sem nenhuma referência ao efetivo real da obra.
+ *
+ * SOLUÇÃO — Substituição dos inputs manuais por seletor visual com fotos:
+ *
+ * 1. **Queries adicionadas ao wizard**: `trpc.obras.funcionarios` + `trpc.terceiros.funcionarios.list`,
+ *    habilitadas ao selecionar obra (exato mesmo padrão do PT — PermissaoTrabalho.tsx).
+ *
+ * 2. **Grid visual de cards**: cada card mostra avatar/foto circular, nome (truncado), função e badge
+ *    de tipo (FC Eng. = azul / Terceiro = roxo). Tap/click alterna seleção — borda laranja + ✓.
+ *
+ * 3. **Sem obra selecionada**: placeholder informativo ("Selecione uma obra para carregar o efetivo").
+ *
+ * 4. **Fallback manual sempre disponível**: input "Adicionar trabalhador manualmente…" + botão +
+ *    (ou Enter); armazena com `tipo: "manual"` (badge cinza).
+ *
+ * 5. **Formato de armazenamento atualizado**: `equipeJson` agora serializa array de objetos
+ *    `[{nome, fotoUrl, tipo, funcao}]` em vez de `string[]`. Compatibilidade reversa garantida:
+ *    helpers `getMembroNome/getMembroFoto/getMembroTipo` tratam tanto `string` quanto objeto.
+ *
+ * 6. **Display atualizado**: detalhe full-screen exibe grid 2×3 com avatar+badge+nome;
+ *    cards da lista mostram até 4 avatars sobrepostos (-space-x-1.5) com foto real.
+ *
+ * 7. **AvatarCircle** — componente reutilizável: `<img>` com `onError` fallback para inicial.
+ *
+ * ARQUIVOS: `client/src/pages/sst/AprAnalise.tsx` (equipe state, queries, UI picker, display).
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3930 — **SST — APR: REDESIGN COMPLETO FULL-SCREEN + AUTO-FILLS + HORA INÍCIO.**
  *
  * PROBLEMA: APR usava Dialog (modal pequeno), difícil de preencher no campo (tablet/celular).

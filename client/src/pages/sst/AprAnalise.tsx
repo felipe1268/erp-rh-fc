@@ -1,4 +1,4 @@
-// Rev. 3930 — APR full-screen redesign: wizard tela cheia, auto-fills, TST da obra, hora início
+// Rev. 3931 — APR equipe: photo-grid picker (obras.funcionarios + terceiros) substitui inputs manuais
 import { useState, useRef, useEffect, useCallback } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
@@ -522,11 +522,43 @@ function RiscoRow({ risco, index, onChange, onRemove, readOnly }: {
 // ── Guia por step ────────────────────────────────────────────────────────
 const STEP_GUIDES: Record<number, { title: string; text: string; icon: any }> = {
   0: { title: "Escolha a Atividade", icon: Layers, text: "Selecione o tipo de atividade. O checklist, riscos típicos e EPIs obrigatórios serão carregados automaticamente conforme a NR correspondente." },
-  1: { title: "Dados Gerais", icon: Clipboard, text: "Data, hora e responsável são preenchidos automaticamente. Ao selecionar a obra, o TST e encarregado são carregados do cadastro." },
+  1: { title: "Dados Gerais", icon: Clipboard, text: "Data, hora e responsável são preenchidos automaticamente. Ao selecionar a obra:\n• TST e encarregado → carregados como aprovador\n• Efetivo (CLT, PJ e terceiros) com fotos → selecionável direto na equipe" },
   2: { title: "Checklist de Segurança", icon: ListChecks, text: "Responda todos os itens:\n• SIM = Condição atendida\n• NÃO = Não conformidade — registre e corrija antes de iniciar\n• N/A = Não se aplica a esta atividade" },
   3: { title: "Matriz de Riscos P×G", icon: Activity, text: "Probabilidade × Gravidade = Nível de Risco\n• ≤4 Baixo (verde)\n• ≤9 Médio (amarelo)\n• ≤16 Alto (laranja)\n• >16 Crítico (vermelho)\n\nCadastre medidas de controle para todo risco Alto ou Crítico." },
   4: { title: "EPIs & Aprovação", icon: Shield, text: "Selecione todos os EPIs necessários para a atividade. A assinatura do Técnico ou Engenheiro de SST é obrigatória para aprovação do documento." },
 };
+
+// ── Tipo de membro da equipe ─────────────────────────────────────────────
+type EquipeMembro = {
+  nome: string;
+  fotoUrl?: string | null;
+  tipo?: "proprio" | "terceiro" | "manual";
+  funcao?: string;
+};
+
+function getMembroNome(m: any): string {
+  return typeof m === "string" ? m : (m?.nome ?? "—");
+}
+function getMembroFoto(m: any): string | null {
+  return typeof m === "object" && m !== null ? (m.fotoUrl ?? null) : null;
+}
+function getMembroTipo(m: any): string | null {
+  return typeof m === "object" && m !== null ? (m.tipo ?? null) : null;
+}
+
+function AvatarCircle({ nome, fotoUrl, size = "md" }: { nome: string; fotoUrl?: string | null; size?: "sm" | "md" | "lg" }) {
+  const dim = size === "sm" ? "w-8 h-8 text-xs" : size === "lg" ? "w-14 h-14 text-lg" : "w-10 h-10 text-sm";
+  if (fotoUrl) return (
+    <img src={fotoUrl} alt={nome}
+      className={`${dim} rounded-full object-cover shrink-0 border-2 border-white shadow-sm`}
+      onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+  );
+  return (
+    <div className={`${dim} rounded-full bg-orange-100 border-2 border-white shadow-sm flex items-center justify-center font-bold text-orange-700 shrink-0`}>
+      {nome.charAt(0).toUpperCase()}
+    </div>
+  );
+}
 
 // ── Wizard Full-Screen ───────────────────────────────────────────────────
 function AprWizardFullscreen({
@@ -545,7 +577,8 @@ function AprWizardFullscreen({
   const [obraId, setObraId]           = useState<string>("");
   const [atividade, setAtividade]     = useState("");
   const [localServico, setLocalServico] = useState("");
-  const [equipe, setEquipe]           = useState<string[]>([""]);
+  const [equipeSelecao, setEquipeSelecao] = useState<EquipeMembro[]>([]);
+  const [equipeManual, setEquipeManual]   = useState("");
   const [checklist, setChecklist]     = useState<ChecklistItem[]>([]);
   const [riscos, setRiscos]           = useState<RiscoItem[]>([novoRisco()]);
   const [epis, setEpis]               = useState<string[]>([]);
@@ -554,8 +587,16 @@ function AprWizardFullscreen({
   const [aprovAss, setAprovAss]       = useState<string | null>(null);
   const [padOpen, setPadOpen]         = useState(false);
 
-  const obrasQ   = trpc.obras.list.useQuery({ companyId }, { enabled: open });
-  const obraSstQ = trpc.ptPermissoes.getObraSST.useQuery(
+  const obrasQ      = trpc.obras.list.useQuery({ companyId }, { enabled: open });
+  const obraSstQ    = trpc.ptPermissoes.getObraSST.useQuery(
+    { companyId, obraId: Number(obraId) },
+    { enabled: open && !!obraId && Number(obraId) > 0 }
+  );
+  const obraFuncsQ  = trpc.obras.funcionarios.useQuery(
+    { obraId: Number(obraId) },
+    { enabled: open && !!obraId && Number(obraId) > 0 }
+  );
+  const obraTercQ   = trpc.terceiros.funcionarios.list.useQuery(
     { companyId, obraId: Number(obraId) },
     { enabled: open && !!obraId && Number(obraId) > 0 }
   );
@@ -572,7 +613,7 @@ function AprWizardFullscreen({
     const n = new Date();
     setStep(0); setTipoId(""); setObraId(""); setDataEmissao(n.toISOString().slice(0, 10));
     setHoraInicio(n.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }));
-    setAtividade(""); setLocalServico(""); setEquipe([""]);
+    setAtividade(""); setLocalServico(""); setEquipeSelecao([]); setEquipeManual("");
     setChecklist([]); setRiscos([novoRisco()]); setEpis([]);
     setObservacoes(""); setAprovNome(userName); setAprovAss(null);
   }
@@ -606,7 +647,7 @@ function AprWizardFullscreen({
       companyId, obraId: obraId ? Number(obraId) : null, employeeId,
       tipoAtividade: tipoId || null, checklistJson: checklist.length ? JSON.stringify(checklist) : null,
       dataEmissao, horaInicio: horaInicio || null, atividade, localServico,
-      equipeJson: JSON.stringify(equipe.filter(Boolean)),
+      equipeJson: JSON.stringify(equipeSelecao),
       epiJson: JSON.stringify(epis), observacoes: observacoes || null,
       riscos: riscosValid.map((r, i) => ({ ...r, ordem: i, probabilidade: r.probabilidade || null, gravidade: r.gravidade || null })),
     });
@@ -806,24 +847,140 @@ function AprWizardFullscreen({
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-slate-700 mb-1.5 block">Equipe de Trabalho</label>
-                  <div className="space-y-2">
-                    {equipe.map((m, i) => (
-                      <div key={i} className="flex gap-2 items-center">
-                        <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 shrink-0">{i + 1}</div>
-                        <Input value={m} placeholder={`Nome do trabalhador ${i + 1}`}
-                          onChange={e => { const n = [...equipe]; n[i] = e.target.value; setEquipe(n); }} />
-                        {equipe.length > 1 && (
-                          <button type="button" onClick={() => setEquipe(equipe.filter((_, j) => j !== i))}
-                            className="text-slate-300 hover:text-red-500 shrink-0"><XIcon className="h-4 w-4" /></button>
-                        )}
-                      </div>
-                    ))}
-                    <Button type="button" variant="outline" size="sm" onClick={() => setEquipe([...equipe, ""])}
-                      className="border-dashed border-orange-300 text-orange-700 hover:bg-orange-50">
-                      <Plus className="h-4 w-4 mr-1" />Adicionar membro
+                  <label className="text-sm font-medium text-slate-700 mb-2 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <User className="h-4 w-4 text-orange-600" />Equipe de Trabalho
+                      {equipeSelecao.length > 0 && (
+                        <span className="text-xs font-bold bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
+                          {equipeSelecao.length} selecionado{equipeSelecao.length !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </span>
+                    {equipeSelecao.length > 0 && (
+                      <button type="button" onClick={() => setEquipeSelecao([])}
+                        className="text-xs text-slate-400 hover:text-red-500 underline">limpar seleção</button>
+                    )}
+                  </label>
+
+                  {/* Com obra: grid visual de funcionários */}
+                  {obraId && Number(obraId) > 0 ? (
+                    <div className="space-y-3">
+                      {(obraFuncsQ.isLoading || obraTercQ.isLoading) ? (
+                        <div className="flex items-center gap-2 text-xs text-slate-400 py-3">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />Carregando efetivo da obra…
+                        </div>
+                      ) : (() => {
+                        const proprios: EquipeMembro[] = (obraFuncsQ.data as any[] ?? []).map((emp: any) => ({
+                          nome: emp.employee?.nomeCompleto || emp.nomeCompleto || "",
+                          fotoUrl: emp.employee?.fotoUrl || emp.fotoUrl || null,
+                          tipo: "proprio" as const,
+                          funcao: emp.employee?.cargo || emp.employee?.funcao || emp.cargo || emp.funcao || "",
+                        })).filter((m: EquipeMembro) => m.nome);
+
+                        const terceiros: EquipeMembro[] = (obraTercQ.data as any[] ?? []).map((t: any) => ({
+                          nome: t.nome || "",
+                          fotoUrl: null,
+                          tipo: "terceiro" as const,
+                          funcao: t.funcao || "",
+                        })).filter((m: EquipeMembro) => m.nome);
+
+                        const todos = [...proprios, ...terceiros];
+
+                        if (todos.length === 0) return (
+                          <p className="text-xs text-slate-400 italic py-2">Nenhum funcionário alocado nesta obra. Use o campo manual abaixo.</p>
+                        );
+
+                        return (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {todos.map((m, i) => {
+                              const selecionado = equipeSelecao.some(s => s.nome === m.nome);
+                              return (
+                                <button key={`${m.tipo}-${i}`} type="button"
+                                  onClick={() => {
+                                    if (selecionado) {
+                                      setEquipeSelecao(prev => prev.filter(s => s.nome !== m.nome));
+                                    } else {
+                                      setEquipeSelecao(prev => [...prev, m]);
+                                    }
+                                  }}
+                                  className={`flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-all
+                                    ${selecionado
+                                      ? "bg-orange-50 border-orange-400 shadow-sm"
+                                      : "bg-white border-slate-200 hover:border-orange-200 hover:bg-orange-50/40"}`}>
+                                  <div className="relative shrink-0">
+                                    <AvatarCircle nome={m.nome} fotoUrl={m.fotoUrl} size="md" />
+                                    {selecionado && (
+                                      <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-orange-600 rounded-full flex items-center justify-center">
+                                        <Check className="h-2.5 w-2.5 text-white" />
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className={`text-sm font-semibold leading-tight truncate ${selecionado ? "text-orange-900" : "text-slate-800"}`}>{m.nome}</p>
+                                    {m.funcao && <p className="text-[11px] text-slate-500 truncate mt-0.5">{m.funcao}</p>}
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded mt-1 inline-block
+                                      ${m.tipo === "terceiro" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}`}>
+                                      {m.tipo === "terceiro" ? "Terceiro" : "FC Eng."}
+                                    </span>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Selecionados (mini-lista de confirmação) */}
+                      {equipeSelecao.length > 0 && (
+                        <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl">
+                          <p className="text-xs font-semibold text-orange-800 mb-2">✓ Equipe selecionada ({equipeSelecao.length})</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {equipeSelecao.map((m, i) => (
+                              <span key={i} className="flex items-center gap-1 text-xs bg-white border border-orange-200 text-orange-800 px-2 py-1 rounded-full font-medium">
+                                <AvatarCircle nome={m.nome} fotoUrl={m.fotoUrl} size="sm" />
+                                {m.nome}
+                                <button type="button" onClick={() => setEquipeSelecao(prev => prev.filter((_, j) => j !== i))}
+                                  className="text-orange-300 hover:text-red-500 ml-0.5">
+                                  <XIcon className="h-3 w-3" />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* Sem obra: exibe aviso */
+                    <div className="flex items-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500">
+                      <Info className="h-4 w-4 shrink-0" />
+                      Selecione uma obra acima para carregar o efetivo com fotos.
+                    </div>
+                  )}
+
+                  {/* Adicionar manualmente (sempre disponível) */}
+                  <div className="flex gap-2 mt-2">
+                    <Input value={equipeManual} placeholder="Adicionar trabalhador manualmente..."
+                      className="text-sm"
+                      onChange={e => setEquipeManual(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter" && equipeManual.trim()) {
+                          e.preventDefault();
+                          setEquipeSelecao(prev => [...prev, { nome: equipeManual.trim(), tipo: "manual" }]);
+                          setEquipeManual("");
+                        }
+                      }} />
+                    <Button type="button" variant="outline" size="sm"
+                      disabled={!equipeManual.trim()}
+                      onClick={() => {
+                        if (!equipeManual.trim()) return;
+                        setEquipeSelecao(prev => [...prev, { nome: equipeManual.trim(), tipo: "manual" }]);
+                        setEquipeManual("");
+                      }}
+                      className="shrink-0 border-orange-300 text-orange-700 hover:bg-orange-50">
+                      <Plus className="h-4 w-4" />
                     </Button>
                   </div>
+                  <p className="text-[10px] text-slate-400 mt-1">Ou pressione Enter para adicionar</p>
                 </div>
               </div>
             )}
@@ -1175,16 +1332,30 @@ function AprDetalheFullscreen({
             {/* Equipe */}
             {(apr.equipe ?? []).length > 0 && (
               <div>
-                <h3 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
                   <User className="h-4 w-4 text-orange-600" />Equipe de Trabalho
+                  <span className="text-xs font-normal text-slate-400">{apr.equipe.length} membro{apr.equipe.length !== 1 ? "s" : ""}</span>
                 </h3>
-                <div className="flex flex-wrap gap-2">
-                  {apr.equipe.map((m: string, i: number) => (
-                    <span key={i} className="flex items-center gap-1.5 text-sm bg-slate-100 border border-slate-200 rounded-full px-3 py-1 font-medium">
-                      <span className="w-5 h-5 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center text-[10px] font-bold">{i+1}</span>
-                      {m}
-                    </span>
-                  ))}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {apr.equipe.map((m: any, i: number) => {
+                    const nome  = getMembroNome(m);
+                    const foto  = getMembroFoto(m);
+                    const tipo  = getMembroTipo(m);
+                    return (
+                      <div key={i} className="flex items-center gap-2.5 p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                        <AvatarCircle nome={nome} fotoUrl={foto} size="md" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-slate-800 truncate leading-tight">{nome}</p>
+                          {tipo && (
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded inline-block mt-0.5
+                              ${tipo === "terceiro" ? "bg-purple-100 text-purple-700" : tipo === "manual" ? "bg-slate-100 text-slate-500" : "bg-blue-100 text-blue-700"}`}>
+                              {tipo === "terceiro" ? "Terceiro" : tipo === "manual" ? "Manual" : "FC Eng."}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -1465,13 +1636,13 @@ export default function AprAnalise() {
                 </div>
 
                 {(apr.equipe ?? []).length > 0 && (
-                  <div className="mt-3 flex items-center gap-1">
-                    <div className="flex -space-x-1">
-                      {apr.equipe.slice(0, 3).map((_: any, i: number) => (
-                        <div key={i} className="w-5 h-5 rounded-full bg-orange-100 border border-white flex items-center justify-center text-[9px] font-bold text-orange-700">{i+1}</div>
+                  <div className="mt-3 flex items-center gap-1.5">
+                    <div className="flex -space-x-1.5">
+                      {apr.equipe.slice(0, 4).map((m: any, i: number) => (
+                        <AvatarCircle key={i} nome={getMembroNome(m)} fotoUrl={getMembroFoto(m)} size="sm" />
                       ))}
                     </div>
-                    <span className="text-[10px] text-slate-400 ml-1">{apr.equipe.length} membro{apr.equipe.length !== 1 ? "s" : ""}</span>
+                    <span className="text-[10px] text-slate-400">{apr.equipe.length} membro{apr.equipe.length !== 1 ? "s" : ""}</span>
                   </div>
                 )}
 

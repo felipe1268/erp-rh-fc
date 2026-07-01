@@ -50,21 +50,21 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3930** — **SST — APR: REDESIGN COMPLETO FULL-SCREEN + AUTO-FILLS + HORA INÍCIO.** Wizard full-screen (`fixed inset-0 z-[100]`) substitui Dialog. Layout 2 painéis: sidebar esquerda (etapas + guia contextual por step) + área principal scrollable. Auto-fills: `dataEmissao`=hoje, `horaInicio`=agora, `aprovNome`=user.name; ao selecionar obra → busca TST via `ptPermissoes.getObraSST`. Detalhe também full-screen com header colorido por status. Nova coluna `hora_inicio varchar(5)` + ColFix v3930 + router atualizado. 10 tipos de atividade com NR, checklist, riscos e EPIs pré-definidos. ZERO DELETE.
+- **Rev. 3931** — **SST — APR: EQUIPE — PHOTO-GRID PICKER (CLT + PJ + TERCEIROS DA OBRA).** Step 1 do wizard APR substituiu os inputs de texto livres por seletor visual com fotos. Queries `obras.funcionarios` + `terceiros.funcionarios.list` ativadas ao selecionar obra. Grid de cards (foto circular, nome, função, badge FC Eng./Terceiro); tap alterna seleção com borda laranja + ✓. Fallback manual sempre disponível (input + Enter). `equipeJson` agora armazena `[{nome, fotoUrl, tipo, funcao}]`; helpers `getMembroNome/Foto/Tipo` garantem compat. reversa com `string[]` antigas. Display atualizado no detalhe (grid 2×3) e nos cards da lista (avatars sobrepostos com foto). `AvatarCircle` componente reutilizável. ZERO DELETE.
 
-- **Rev. 3929** — **SST — PT PRINT: MARGEM 1,5 CM + PADDING DE TELA 15MM.** `@page margin: 20mm → 15mm`. Visualização em tela ("sangrando"): `@media screen { body { padding: 15mm; max-width: 210mm; margin: 0 auto } }` — recuo só na tela, não duplica margem de impressão. ZERO DELETE.
+- **Rev. 3930** — **SST — APR: REDESIGN COMPLETO FULL-SCREEN + AUTO-FILLS + HORA INÍCIO.** Wizard full-screen (`fixed inset-0 z-[100]`) substitui Dialog. Layout 2 painéis: sidebar esquerda (etapas + guia contextual por step) + área principal scrollable. Auto-fills: `dataEmissao`=hoje, `horaInicio`=agora, `aprovNome`=user.name; ao selecionar obra → busca TST via `ptPermissoes.getObraSST`. Detalhe também full-screen com header colorido por status. Nova coluna `hora_inicio varchar(5)` + ColFix v3930 + router atualizado. 10 tipos de atividade com NR, checklist, riscos e EPIs pré-definidos. ZERO DELETE.
 
 ### 5 one-liners
 
-- **Rev. 3928** — **SST — PT PRINT: MARGEM MÍNIMA 2 CM EM TODAS AS BORDAS.** `@page { margin: 14mm 16mm }` → `margin: 20mm` uniforme nos 4 lados. `server/routers/ptPermissoes.ts`. ZERO DELETE.
+- **Rev. 3929** — **SST — PT PRINT: MARGEM 1,5 CM + PADDING DE TELA 15MM.** `@page margin: 20mm → 15mm`. `@media screen { body { padding: 15mm } }`. ZERO DELETE.
 
-- **Rev. 3925** — **SST — PT DETALHE: HEADER AZUL (PADRÃO FC) + FIX LOGO FC SUMINDO.** `bg-emerald-800` → `bg-blue-800` no header + subtextos `text-blue-300`. Corpo permanece emerald. Fix logo FC: `??` → `||` na derivação de `fcLogoUrl`. ZERO DELETE.
+- **Rev. 3928** — **SST — PT PRINT: MARGEM MÍNIMA 2 CM EM TODAS AS BORDAS.** `@page { margin: 14mm 16mm }` → `margin: 20mm` uniforme nos 4 lados. ZERO DELETE.
 
-- **Rev. 3924** — **SST — PT DETALHE: FIX LOGOS ENORMES + REVERT CORES PARA EMERALD.** Rev. 3923 havia trocado todas as cores para azul e logos renderizavam no tamanho natural. Fix: todas as cores de marca para emerald. Logos: container fixo `w-10 h-8 overflow-hidden`. ZERO DELETE.
+- **Rev. 3925** — **SST — PT DETALHE: HEADER AZUL (PADRÃO FC) + FIX LOGO FC SUMINDO.** `bg-emerald-800` → `bg-blue-800` no header. Fix logo FC: `??` → `||`. ZERO DELETE.
 
-- **Rev. 3923** — **SST — PT DETALHE: PALETA FC AZUL + 3 LOGOS (FC + CLIENTE + GERENCIADORA).** `getById` expandido: `obraClienteLogoUrl`, `obraGerenciadoraLogoUrl`, `obraGerenciadoraNome`, `obraClienteNome` da obra. Cabeçalho com logo FC + linha de logos do cliente/gerenciadora. ZERO DELETE.
+- **Rev. 3924** — **SST — PT DETALHE: FIX LOGOS ENORMES + REVERT CORES PARA EMERALD.** Logos: container fixo `w-10 h-8 overflow-hidden`; cores de marca para emerald. ZERO DELETE.
 
-- **Rev. 3922** — **SST — PT DETALHE: REDESIGN LAYOUT DOCUMENTO OFICIAL.** Header azul + logo empresa + número PT font-black + chips de tipo. Faixa amarela safety-stripe. Tabela de dados 4 colunas. Checklist em tabela #/Item/Resp. Cards rounded-xl Liberação/Conclusão. ZERO DELETE.
+- **Rev. 3923** — **SST — PT DETALHE: PALETA FC AZUL + 3 LOGOS (FC + CLIENTE + GERENCIADORA).** `getById` expandido com logos do cliente e gerenciadora da obra. ZERO DELETE.
 
 ### Histórico completo
 
