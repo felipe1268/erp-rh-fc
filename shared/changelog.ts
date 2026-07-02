@@ -1,4 +1,27 @@
 /**
+ * Rev. 3975 — **FECHAMENTO PONTO: SELETOR DE PERÍODO NO UPLOAD DIXI.**
+ *
+ * CAUSA-RAIZ: ao fechar o período 15/05–14/06, o arquivo DIXI pode conter batidas de
+ * 15/06 (início do próximo ciclo) ainda incompletas. O sistema importava tudo → batida
+ * sem par no dia 15/06 gerava falta indevida no fechamento atual.
+ *
+ * CORREÇÃO:
+ *   - Dialog de upload DIXI agora exibe bloco âmbar "Período a considerar" com dois
+ *     campos De / Até (obrigatórios) antes do botão Importar.
+ *   - Botão "Importar" fica desabilitado enquanto as datas não estiverem preenchidas e
+ *     válidas (De ≤ Até).
+ *   - Campos `periodoInicio`/`periodoFim` adicionados ao schema do `uploadDixi` (backend).
+ *   - Após `processRecords` + reassignment de SN compartilhado, filtro descarta em memória
+ *     todos os `timeRecordsToInsert`, `inconsistencies` e `unmatchedRecordsToInsert` cujo
+ *     campo `data` esteja fora do intervalo → nenhum registro fora do período é gravado.
+ *   - Os 3 caminhos de chamada da mutation passam o período: upload direto, selective e
+ *     replace_all (via `handleUploadSelective`).
+ *   - Toda outra lógica DIXI (SN, obra, critérios, aviso prévio, férias, etc.) inalterada.
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3974 — **FOLHA: AUTO-RECONCILIAR FALTA ÓRFÃ DO ESCURO CONTRA REGISTRO MANUAL.**
  *
  * CAUSA-RAIZ: `payroll_adjustments` gerados pela aferição do escuro (tipo='falta',

@@ -629,6 +629,8 @@ export default function FechamentoPonto() {
     }
   }, [urlMes]);
   const [showUploadDialog, setShowUploadDialog] = useState(false);
+  const [uploadPeriodoDe, setUploadPeriodoDe] = useState("");
+  const [uploadPeriodoAte, setUploadPeriodoAte] = useState("");
   const [showManualDialog, setShowManualDialog] = useState(false);
   const [showResolveDialog, setShowResolveDialog] = useState(false);
   const [showClearDialog, setShowClearDialog] = useState(false);
@@ -1318,6 +1320,12 @@ export default function FechamentoPonto() {
     if (validationResult && !validationResult.allValid) {
       return toast.error("Corrija os problemas de SN antes de importar.");
     }
+    if (!uploadPeriodoDe || !uploadPeriodoAte) {
+      return toast.error("Informe o período (De e Até) antes de importar.");
+    }
+    if (uploadPeriodoDe > uploadPeriodoAte) {
+      return toast.error("A data inicial do período não pode ser maior que a data final.");
+    }
     setPreviewLoading(true);
     try {
       const filesData = await getFilesBase64();
@@ -1333,7 +1341,7 @@ export default function FechamentoPonto() {
       } else {
         setUploading(true);
         setUploadResult(null);
-        await uploadMut.mutateAsync({ companyId, companyIds, files: filesData });
+        await uploadMut.mutateAsync({ companyId, companyIds, files: filesData, periodoInicio: uploadPeriodoDe, periodoFim: uploadPeriodoAte });
       }
     } catch (e: any) {
       toast.error(e?.message || "Erro ao processar arquivo");
@@ -1352,6 +1360,8 @@ export default function FechamentoPonto() {
         companyId, companyIds, files: filesData,
         mode,
         selectedEmployeeIds: mode === "selective" ? Array.from(selectedEmployeeIds) : undefined,
+        periodoInicio: uploadPeriodoDe || undefined,
+        periodoFim: uploadPeriodoAte || undefined,
       });
     } catch (e) { /* handled */ } finally {
       setUploading(false);
@@ -1621,7 +1631,7 @@ export default function FechamentoPonto() {
           </div>
 
           {!isConsolidado && (
-            <Button onClick={() => { setShowUploadDialog(true); setUploadFiles([]); setUploadResult(null); setValidationResult(null); }} className="bg-[#1B2A4A] hover:bg-[#243660]">
+            <Button onClick={() => { setShowUploadDialog(true); setUploadFiles([]); setUploadResult(null); setValidationResult(null); setUploadPeriodoDe(""); setUploadPeriodoAte(""); }} className="bg-[#1B2A4A] hover:bg-[#243660]">
               <Upload className="h-4 w-4 mr-2" /> Upload DIXI
             </Button>
           )}
@@ -1907,7 +1917,7 @@ export default function FechamentoPonto() {
                   <h3 className="font-semibold text-lg">Nenhum registro de ponto</h3>
                   <p className="text-muted-foreground text-sm mt-1">Faça o upload dos arquivos DIXI para importar os registros de ponto.</p>
                   {!isConsolidado && (
-                    <Button onClick={() => { setShowUploadDialog(true); setUploadFiles([]); setUploadResult(null); setValidationResult(null); }} className="mt-4 bg-[#1B2A4A] hover:bg-[#243660]">
+                    <Button onClick={() => { setShowUploadDialog(true); setUploadFiles([]); setUploadResult(null); setValidationResult(null); setUploadPeriodoDe(""); setUploadPeriodoAte(""); }} className="mt-4 bg-[#1B2A4A] hover:bg-[#243660]">
                       <Upload className="h-4 w-4 mr-2" /> Upload DIXI
                     </Button>
                   )}
@@ -5226,6 +5236,44 @@ export default function FechamentoPonto() {
                   Validando arquivos (SN e datas)...
                 </div>
               )}
+              {/* ===== PERÍODO A CONSIDERAR ===== */}
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-3">
+                <div className="flex items-start gap-2">
+                  <CalendarDays className="h-4 w-4 text-amber-700 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold text-amber-800">Período a considerar <span className="text-red-500">*</span></p>
+                    <p className="text-xs text-amber-700 mt-0.5">
+                      Somente registros <strong>dentro deste intervalo</strong> serão importados. Batidas fora do período serão ignoradas (ex: registros do próximo fechamento).
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <div className="flex flex-col gap-1 min-w-[160px]">
+                    <Label className="text-xs text-amber-800 font-medium">De</Label>
+                    <input
+                      type="date"
+                      value={uploadPeriodoDe}
+                      onChange={e => setUploadPeriodoDe(e.target.value)}
+                      className="border border-amber-300 rounded px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1 min-w-[160px]">
+                    <Label className="text-xs text-amber-800 font-medium">Até</Label>
+                    <input
+                      type="date"
+                      value={uploadPeriodoAte}
+                      onChange={e => setUploadPeriodoAte(e.target.value)}
+                      className="border border-amber-300 rounded px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    />
+                  </div>
+                </div>
+                {uploadPeriodoDe && uploadPeriodoAte && uploadPeriodoDe <= uploadPeriodoAte && (
+                  <p className="text-xs text-amber-700 font-medium">
+                    ✓ Serão considerados apenas registros de {new Date(uploadPeriodoDe + "T12:00:00").toLocaleDateString("pt-BR")} até {new Date(uploadPeriodoAte + "T12:00:00").toLocaleDateString("pt-BR")}.
+                  </p>
+                )}
+              </div>
+
               {validationResult && !uploadResult && (
                 <div className="space-y-2">
                   {validationResult.results.map((r: any, i: number) => (
@@ -5289,7 +5337,16 @@ export default function FechamentoPonto() {
             <div className="flex justify-end gap-3 mt-6 pt-4 border-t">
               <Button variant="outline" onClick={() => setShowUploadDialog(false)}>Fechar</Button>
               {!uploadResult && (
-                <Button onClick={handleUpload} disabled={uploading || previewLoading || uploadFiles.length === 0 || validating || (validationResult && !validationResult.allValid)} className="bg-[#1B2A4A] hover:bg-[#243660]">
+                <Button
+                  onClick={handleUpload}
+                  disabled={
+                    uploading || previewLoading || uploadFiles.length === 0 || validating ||
+                    (validationResult && !validationResult.allValid) ||
+                    !uploadPeriodoDe || !uploadPeriodoAte || uploadPeriodoDe > uploadPeriodoAte
+                  }
+                  className="bg-[#1B2A4A] hover:bg-[#243660]"
+                  title={!uploadPeriodoDe || !uploadPeriodoAte ? "Informe o período (De e Até) antes de importar" : undefined}
+                >
                   {uploading ? "Processando..." : previewLoading ? "Analisando arquivo..." : "Importar"}
                 </Button>
               )}

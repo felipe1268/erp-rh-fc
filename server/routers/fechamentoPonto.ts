@@ -999,6 +999,8 @@ export const fechamentoPontoRouter = router({
       })),
       mode: z.enum(["replace_all", "selective"]).optional(),
       selectedEmployeeIds: z.array(z.number()).optional(),
+      periodoInicio: z.string().optional(),
+      periodoFim: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
@@ -1251,6 +1253,30 @@ export const fechamentoPontoRouter = router({
             const resolvedIncons = inconsistencies.filter(i => !skippedEmployeeIds.has(i.employeeId));
             inconsistencies.length = 0;
             inconsistencies.push(...resolvedIncons);
+          }
+        }
+
+        // ===== FILTRO DE PERÍODO DO USUÁRIO =====
+        // Se o usuário informou periodoInicio/periodoFim, descartar registros fora do intervalo.
+        // Isso evita que batidas do próximo ciclo (ex: 15/06 num arquivo que cobre 15/05-14/06)
+        // gerem faltas indevidas no fechamento atual.
+        if (input.periodoInicio || input.periodoFim) {
+          const de = input.periodoInicio || "0000-01-01";
+          const ate = input.periodoFim || "9999-12-31";
+          const beforeRec = timeRecordsToInsert.length;
+          const beforeInc = inconsistencies.length;
+          const filteredRec = timeRecordsToInsert.filter((r: any) => r.data >= de && r.data <= ate);
+          const filteredInc = inconsistencies.filter((i: any) => i.data >= de && i.data <= ate);
+          const filteredUnm = unmatchedRecordsToInsert.filter((r: any) => r.data >= de && r.data <= ate);
+          timeRecordsToInsert.length = 0;
+          timeRecordsToInsert.push(...filteredRec);
+          inconsistencies.length = 0;
+          inconsistencies.push(...filteredInc);
+          unmatchedRecordsToInsert.length = 0;
+          unmatchedRecordsToInsert.push(...filteredUnm);
+          const ignorados = beforeRec - filteredRec.length;
+          if (ignorados > 0) {
+            console.log(`[DIXI período ${de}→${ate}] ${ignorados} registro(s) ignorados por estar fora do período (${beforeInc - filteredInc.length} inconsistências também descartadas)`);
           }
         }
 
