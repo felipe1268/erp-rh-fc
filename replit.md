@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3972** — **AUTO-PONTO: FÉRIAS NÃO GERAM FALTA NO FECHAMENTO DA FOLHA.** Loop do `simulaFolha` marcava `isFalta=1` em todos os dias úteis sem `time_record`, incluindo dias de gozo de férias. Corrigido: pré-carrega `vacation_periods` que intersectam o período do ponto; dias de férias recebem `tipoDia='ferias'`, bloqueando os guards `if (tipoDia==='util') isFalta=1`. Padrão idêntico ao da fase do escuro. ZERO DELETE.
+
 - **Rev. 3971** — **CONVÊNIOS: FIX COLUNA VAZIA NA FOLHA (`competencia_desconto` NULL).** `aprovar` mutation nunca gravava `competenciaDesconto` no update — agora persiste `competenciaSelecionada` do RH. ColFix v3971 backfilla todos os aprovados antigos com `competencia_desconto IS NULL` pela regra dia-15/16. ZERO DELETE.
 
-- **Rev. 3970** — **REFIS: FIX CARDS INFERIORES PREVISTO/REALIZADO (DELTA → ACUMULADO).** `rPrevSem`/`rRealSem` (deltas com fontes misturadas: MSP vs ponderação local) substituídos por `rPrev`/`rReal` (valores acumulados, mesma fonte das barras superiores); barra interna de progresso ajustada (`*10` → `Math.min(val,100)`); legenda "Ponderado por duração" → "Snapshot MSP". ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3970** — **REFIS: FIX CARDS INFERIORES PREVISTO/REALIZADO (DELTA → ACUMULADO).** `rPrevSem`/`rRealSem` substituídos por `rPrev`/`rReal` (acumulados); barra de progresso ajustada; legenda → "Snapshot MSP". ZERO DELETE.
 
 - **Rev. 3969** — **DISSÍDIO: FIX DIFERENÇAS RETROATIVAS QUANDO VIGÊNCIA == MÊS DE APLICAÇÃO.** `mesesRetroativosEntre("2026-05","2026-05")` retornava `[]`; guard inclui o próprio mês quando vigência == aplicação; `recalcularDiferencas` corrigido igual; botão "Calcular Diferenças Retroativas" adicionado no dialog da Folha. ZERO DELETE.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3967** — **EFETIVO OBRA: FIX ÚLTIMO GRUPO CORTADO NA TABELA EQUIPE.** `p-4` → `p-4 pb-16` no container scroll da FullScreenDialog; último grupo de funções não ficava mais visível. ZERO DELETE.
 
 - **Rev. 3966** — **EFETIVO OBRA: LIGHTBOX DE FOTO AO CLICAR NA TABELA "EQUIPE — {OBRA}".** `EmpAvatar` recebe `onClick`; Dialog shadcn 256×256 abre ao clicar na miniatura; iniciais sem foto não são clicáveis. ZERO DELETE.
-
-- **Rev. 3965** — **EFETIVO OBRA: FOTO DO FUNCIONÁRIO NA TABELA "EQUIPE — {OBRA}".** `EmpAvatar` inline (foto circular ou iniciais) adicionado na coluna Nome da tabela agrupada por função em DashEfetivoObra. Backend já retornava `fotoUrl` — só frontend alterado. ZERO DELETE.
 
 ### Histórico completo
 

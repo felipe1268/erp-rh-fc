@@ -1,4 +1,22 @@
 /**
+ * Rev. 3972 — **AUTO-PONTO: FÉRIAS NÃO GERAM FALTA NO FECHAMENTO DA FOLHA.**
+ *
+ * CAUSA-RAIZ: o loop do auto-ponto (`SimPag simulaFolha`) iterava todos os dias úteis
+ * do período de ponto (ex: 15/05→14/06) e marcava `isFalta=1` em qualquer dia sem
+ * `time_record`, **mesmo dias de gozo de férias**. A fase do "escuro" já tinha esse guard
+ * (`feriasDateSet`), mas o loop do período normal não.
+ *
+ * CORREÇÃO (`server/routers/payrollEngine.ts`):
+ *   - Antes do loop principal, pré-carrega `vacation_periods` que intersectam o período
+ *     do ponto (status NOT IN 'cancelada'/'pendente'; inclui periodo2 e periodo3).
+ *   - No loop, se `autoPontoFeriasDateSet.has(empId-dateStr)` → `tipoDia = 'ferias'`,
+ *     o que bloqueia TODOS os `if (tipoDia === 'util') { isFalta = 1 }`.
+ *   - Padrão idêntico ao guard da fase do escuro (linhas ~1268-1296).
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3971 — **CONVÊNIOS: FIX COLUNA VAZIA NA FOLHA (competencia_desconto NULL).**
  *
  * CAUSA-RAIZ: a mutation `parceiros.lancamentos.aprovar` recebia `competenciaSelecionada`

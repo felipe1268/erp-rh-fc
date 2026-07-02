@@ -3593,6 +3593,41 @@ export const payrollEngineRouter = router({
               AND "resolucaoTipo" IS NULL
           `);
 
+          // Rev. 3972 — Pré-carregar datas de férias do período do ponto para não gerar
+          // isFalta=1 em dias que o funcionário está em gozo de férias.
+          // Padrão idêntico ao da fase do escuro (linhas ~1268-1296).
+          const autoPontoFeriasDateSet = new Set<string>();
+          {
+            const empIdsSqlAP = sql.join(empList.map((e: any) => sql`${e.id}`), sql`,`);
+            const feriasAutoRows = ((await db.execute(sql`
+              SELECT "employeeId", "dataInicio", "dataFim",
+                     "periodo2Inicio", "periodo2Fim", "periodo3Inicio", "periodo3Fim"
+              FROM vacation_periods
+              WHERE "employeeId" IN (${empIdsSqlAP})
+                AND status NOT IN ('cancelada', 'pendente')
+                AND "dataInicio" IS NOT NULL AND "dataFim" IS NOT NULL
+                AND "dataFim" >= ${pontoInicioAP} AND "dataInicio" <= ${pontoFimAP}
+            `)) as any).rows || [];
+            for (const vp of feriasAutoRows) {
+              const periods = [
+                { ini: vp.dataInicio, fim: vp.dataFim },
+                { ini: vp.periodo2Inicio, fim: vp.periodo2Fim },
+                { ini: vp.periodo3Inicio, fim: vp.periodo3Fim },
+              ];
+              for (const p of periods) {
+                if (!p.ini || !p.fim) continue;
+                const start = new Date(String(p.ini).slice(0, 10) + 'T12:00:00Z');
+                const end   = new Date(String(p.fim).slice(0, 10) + 'T12:00:00Z');
+                for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+                  autoPontoFeriasDateSet.add(`${vp.employeeId}-${d.toISOString().slice(0, 10)}`);
+                }
+              }
+            }
+            if (autoPontoFeriasDateSet.size > 0) {
+              console.log(`[SimPag AUTO-PONTO] ${autoPontoFeriasDateSet.size} datas de férias carregadas (não serão marcadas como falta)`);
+            }
+          }
+
           let autoFaltas = 0, autoAtrasos = 0;
           const insertVals: any[] = [];
 
@@ -3604,6 +3639,8 @@ export const payrollEngineRouter = router({
               if (dow === 0) continue;
               let tipoDia = 'util';
               if (dow === 6) tipoDia = criteria.jornadaSabadoTipo === 'compensado' ? 'compensado' : 'sabado';
+              // Dias em gozo de férias não geram falta
+              if (autoPontoFeriasDateSet.has(`${emp.id}-${dateStr}`)) tipoDia = 'ferias';
 
               const key = `${emp.id}-${dateStr}`;
               const recs = autoRecordMap.get(key) || [];
