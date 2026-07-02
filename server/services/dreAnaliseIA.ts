@@ -19,7 +19,7 @@ function getAnthropicDirect(): Anthropic {
   throw new Error("Anthropic não configurado. Ative a integração Anthropic no Replit ou configure ANTHROPIC_API_KEY.");
 }
 
-async function callOpus(system: string, userMsg: string, maxTokens = 4000): Promise<string> {
+async function callOpus(system: string, userMsg: string, maxTokens = 8000): Promise<string> {
   const client = getAnthropicDirect();
   const resp = await client.messages.create({
     model: OPUS_MODEL,

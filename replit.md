@@ -50,25 +50,21 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3958** — **DRE IA: PÁGINA FULL-SCREEN + FIX JSON TRUNCADO (maxTokens 4000→8000) + PARETO RECHARTS.** Causa-raiz do JSON error: maxTokens=4000 tokens ≠ chars → Opus truncava a resposta no meio do array. Fix: maxTokens=8000 em `callOpus`. Nova página `FinanceiroDREAnalise.tsx` em `/financeiro/dre-analise` (full-screen, seletor white-card, barra 0→100%, pareto recharts horizontal + tabela acumulada, indicadores × benchmarks, plano de ação, fontes). Botão DRE navega via `abrirAnaliseIA()` (wouter). ZERO DELETE.
+
 - **Rev. 3957** — **DRE IA: CLAUDE OPUS 4-5 DIRETO + DIALOG POPUP (FIX 95% TRAVADO).** Causa-raiz: `invokeLLM` usava Sonnet 4-6 com 6k tokens → timeout iOS antes de retornar → barra presa em 95%. Fix: `callOpus()` chama Anthropic SDK direto com `claude-opus-4-5` (maxTokens 4000). Sheet lateral da análise virou Dialog centralizado (`max-w-4xl`), com badge "Claude Opus 4-5" no título. ZERO DELETE.
 
-- **Rev. 3956** — **DFC: PÁGINA DEDICADA `/financeiro/dfc` (ROTA EXCLUSIVA, FULL-SCREEN).** Usuário rejeitou o Sheet lateral como "simplista demais". Nova página `FinanceiroDFC.tsx` com seletor white-card, 4 KPI cards, card executivo, 4 seções aprofundadas (waterfall DRE, ajustes 2-col, bridge reconciliação, indicadores + ações). App.tsx ganhou import lazy + rota. Botão "Ver DFC" no DRE agora navega via `useLocation` (wouter) passando `?ano&mes&tipo` na query string. Sheet DFC antigo preservado com `{false && ...}` (ZERO DELETE).
-
-- **Rev. 3955** — **DFC: VISUALIZAÇÃO IN-APP (SHEET) SUBSTITUINDO O PDF.** Botão "Exportar DFC (PDF)" → "Ver DFC" (abre Sheet lateral). Sheet com 4 seções em React: (1) waterfall DRE simplificado, (2) ajustes de financiamento/investimento com pills, (3) bridge de reconciliação com cores, (4) diagnóstico 4 cenários. Fix: getDFCData `itensRes.map is not a function` (dbExecute retorna `{rows}`, não array). ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3956** — **DFC: PÁGINA DEDICADA `/financeiro/dfc` (ROTA EXCLUSIVA, FULL-SCREEN).** `FinanceiroDFC.tsx`; seletor white-card; 4 KPIs; waterfall/ajustes/bridge/indicadores. ZERO DELETE.
+
+- **Rev. 3955** — **DFC: VISUALIZAÇÃO IN-APP (SHEET) SUBSTITUINDO O PDF.** Sheet 4 seções; fix getDFCData `.rows`. ZERO DELETE.
 
 - **Rev. 3954** — **ANÁLISE IA DO DRE: PARETO DE CUSTOS + PLANO DE AÇÃO.** dreAnaliseIA.ts reescrito; Pareto top 15; prompt "CFO de empreitada"; resposta com `planoAcao[]`+`paretoCustos[]`; UI cards. ZERO DELETE.
 
 - **Rev. 3952** — **DRE: CORREÇÃO DE CLASSIFICAÇÃO + CARD CONTEXTUAL DRE × CAIXA.** Fix: FINANCIAMENTOS → 'investimento'; MÚTUO INTERCOMPANY → 'nao_operacional'; predicado exclui nao_operacional de receitaBruta. Novo getDREBankComparison + card azul/âmbar/verde. ZERO DELETE.
 
 - **Rev. 3949** — **CONCILIAÇÃO: FIX DEDUP SECUNDÁRIO DESCARTA LANÇAMENTOS COM MESMO DOC.** Fase 1+2 receberam `($5::numeric IS NULL OR saldo_apos=$6)`. Saldo distinto = transação distinta. ZERO DELETE.
-
-- **Rev. 3948** — **CONVENÇÃO COLETIVA IA: DATAS BR + CORES + AVISO DISSÍDIO + FIX PISO IA.** `sanitizarExtracao()` normaliza valores numéricos da IA; datas DD/MM/AAAA; tabela simulação ▲▼; banner dissídio/piso. ZERO DELETE.
-
-- **Rev. 3947** — **CONVENÇÃO COLETIVA IA: REDESIGN DIALOG "NOVA ANÁLISE".** Header gradient indigo; ano+upload em linha; aviso amber; footer `bg-slate-50`. Barra 0→100% mantida. ZERO DELETE.
-
-- **Rev. 3946** — **CONVENÇÃO COLETIVA IA: FIX COLUNAS SNAKE_CASE (Drizzle).** `convencaoIA.listar`/`processarPdf` falhavam com `column "companyId" does not exist` — fix: nome explícito em TODOS os campos camelCase. ZERO DELETE.
 
 ### Histórico completo
 

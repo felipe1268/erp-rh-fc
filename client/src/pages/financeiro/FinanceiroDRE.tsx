@@ -200,6 +200,14 @@ export default function FinanceiroDRE() {
     navigateTo(`/financeiro/dfc?${params.toString()}`);
   };
 
+  const abrirAnaliseIA = () => {
+    const params = new URLSearchParams({ ano: String(ano), tipo: sel.tipo });
+    if (sel.tipo === "mensal") params.set("mes", String((sel as any).mes));
+    else if (sel.tipo === "trimestral") params.set("tri", String((sel as any).tri));
+    else if (sel.tipo === "semestral") params.set("sem", String((sel as any).sem));
+    navigateTo(`/financeiro/dre-analise?${params.toString()}`);
+  };
+
   // Prioriza o resultado recém-gerado SÓ se for do período atualmente
   // selecionado (mutation.data persiste entre renders; ao trocar de período
   // sem refazer, deve cair para a análise SALVA do novo período).
@@ -423,10 +431,10 @@ export default function FinanceiroDRE() {
               </Button>
               <Button
                 variant="outline" size="sm"
-                onClick={() => { if (analise) { setAnaliseOpen(true); } else { gerarAnalise(); } }}
+                onClick={abrirAnaliseIA}
                 disabled={!dre}
                 className="relative overflow-hidden bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white"
-                title="Abrir análise inteligente do DRE com diagnóstico, Pareto de custos e plano de ação"
+                title="Abrir análise inteligente em tela cheia"
               >
                 <Sparkles className="w-4 h-4 mr-1.5 text-orange-300" />
                 {analise ? "Ver análise IA" : "Analisar com IA"}

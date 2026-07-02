@@ -1,4 +1,33 @@
 /**
+ * Rev. 3958 — **DRE IA: PÁGINA FULL-SCREEN `/financeiro/dre-analise` + FIX JSON TRUNCADO (maxTokens 4000→8000) + PARETO RECHARTS.**
+ *
+ * PROBLEMA RELATADO:
+ *   (1) Análise trava em 95% e exibe "Expected ',' or ']' after array element in JSON at position 10277".
+ *       Causa: maxTokens=4000 tokens ≠ 4000 chars; o JSON do Opus supera 4000 tokens e trunca no meio,
+ *       produzindo JSON inválido. Fix: bumpar maxTokens para 8000 em `callOpus`.
+ *   (2) Usuário quer tela full-screen, não popup/dialog fracionado.
+ *
+ * SOLUÇÃO:
+ *   - `server/services/dreAnaliseIA.ts`: parâmetro default `maxTokens` 4000 → 8000.
+ *   - `client/src/pages/financeiro/FinanceiroDREAnalise.tsx` (NOVO):
+ *       Página dedicada `/financeiro/dre-analise?ano=X&mes=Y&tipo=Z`, full-screen.
+ *       Seletor de período white-card (padrão PanoramaFiscal).
+ *       Barra de progresso 0→100% no botão (Regra de Ouro).
+ *       5 fases de progresso com labels e dots animados.
+ *       Resumo executivo + badge de saúde.
+ *       Indicadores × benchmarks em grid 3 colunas.
+ *       Diagrama de Pareto com `recharts` (BarChart horizontal) + tabela acumulada com linha 80%.
+ *       Riscos e Recomendações em grid 2 colunas.
+ *       Plano de Ação com prioridade, prazo, impacto, área e % de eficácia.
+ *       Fontes citadas (SINDUSCON, IBGE-PAIC, Damodaran/NYU, CBIC, FGV INCC, Bacen,
+ *       Assaf Neto, Matarazzo, Brigham & Houston, CPC 26/Lei 6.404).
+ *   - `client/src/App.tsx`: import lazy `FinanceiroDREAnalise` + rota `/financeiro/dre-analise`.
+ *   - `client/src/pages/financeiro/FinanceiroDRE.tsx`: botão "Ver análise IA / Analisar com IA"
+ *       agora chama `abrirAnaliseIA()` → navega via wouter (NUNCA mais abre Dialog). ZERO DELETE.
+ *
+ * ZERO DELETE.
+ */
+/**
  * Rev. 3957 — **DRE IA: CLAUDE OPUS 4-5 DIRETO + DIALOG POPUP (FIX 95% TRAVADO).**
  *
  * CAUSA-RAIZ DO 95% TRAVADO:
