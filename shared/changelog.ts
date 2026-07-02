@@ -1,4 +1,31 @@
 /**
+ * Rev. 3976 — **TERCEIROS: TRIPLE-FIX NOS DOCUMENTOS DE FUNCIONÁRIOS TERCEIROS.**
+ *
+ * CAUSA-RAIZ (3 bugs combinados):
+ *
+ * 1) **Validade fecha a página** — `updateMut.onSuccess` tem `setShowForm(false)` + toast
+ *    "Funcionário atualizado!". O `onChange` do campo Validade chamava `updateMut.mutate(...)`
+ *    diretamente → ao selecionar qualquer data de validade o formulário fechava sozinho.
+ *    Fix: trocado para `bulkUpdateMut.mutate(...)` que é o mesmo `update` sem callbacks.
+ *
+ * 2) **Upload não reflete na UI** — `uploadMut.onSuccess` chamava apenas `refetch()` (que
+ *    atualiza o cache da query), mas `form` é estado local independente. Após o upload o
+ *    banco continha a URL correta, mas `form[doc.urlField]` continuava `null` → UI mostrava
+ *    "Nenhum documento" → usuário achava que o arquivo não tinha sido salvo.
+ *    Fix: `onSuccess` passa a fazer `setForm(f => ({ ...f, [vars.field]: data.url }))` antes
+ *    do refetch. Adicionado também `onError` com toast de erro.
+ *
+ * 3) **Validade de NR-10/NR-33/NR-35 e outros campos não salvava** — schema do `update`
+ *    só tinha `asoValidade` e `treinamentoNrValidade`. Campos como `nr10Validade`,
+ *    `nr33Validade`, `nr35Validade`, `nr10DocUrl`, `nr33DocUrl`, `nr35DocUrl`,
+ *    `integracaoDocUrl`, `integracaoClienteDocUrl`, `fichaEpiUrl`, `ordemServicoUrl`,
+ *    `registroFuncionarioUrl` eram descartados pelo Zod sem erro visível.
+ *    Fix: todos os 11 campos ausentes adicionados ao schema (`.nullish()`).
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3975 — **FECHAMENTO PONTO: SELETOR DE PERÍODO NO UPLOAD DIXI.**
  *
  * CAUSA-RAIZ: ao fechar o período 15/05–14/06, o arquivo DIXI pode conter batidas de

@@ -378,7 +378,14 @@ export default function FuncionariosTerceiros() {
   // Rev. 2300 — bulk update silencioso (sem toast/refetch por item — usado pela barra de ações múltipla).
   const bulkUpdateMut = trpc.terceiros.funcionarios.update.useMutation();
   const deleteMut = trpc.terceiros.funcionarios.delete.useMutation({ onSuccess: () => { refetch(); toast.success("Funcionário excluído!"); } });
-  const uploadMut = trpc.terceiros.funcionarios.uploadDoc.useMutation({ onSuccess: () => { refetch(); toast.success("Documento enviado!"); } });
+  const uploadMut = trpc.terceiros.funcionarios.uploadDoc.useMutation({
+    onSuccess: (data: any, vars: any) => {
+      setForm((f: any) => ({ ...f, [vars.field]: data.url }));
+      refetch();
+      toast.success("Documento enviado!");
+    },
+    onError: (e: any) => toast.error("Erro ao enviar documento: " + (e?.message || "Falha no upload")),
+  });
   // Rev. 2031 — Documentos avulsos por categoria
   // Rev. 2031 (hotfix) — ref pra evitar vazamento de extras entre funcionários:
   // se o usuário trocar de funcionário antes do callback voltar, NÃO aplicamos
@@ -1134,7 +1141,7 @@ export default function FuncionariosTerceiros() {
                                         value={validade ? String(validade).slice(0, 10) : ""}
                                         onChange={(e) => {
                                           setForm({ ...form, [doc.validadeField!]: e.target.value });
-                                          if (editingId) updateMut.mutate({ id: editingId, [doc.validadeField!]: e.target.value });
+                                          if (editingId) bulkUpdateMut.mutate({ id: editingId, [doc.validadeField!]: e.target.value });
                                         }}
                                       />
                                     </div>
