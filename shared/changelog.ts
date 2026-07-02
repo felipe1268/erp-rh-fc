@@ -1,4 +1,26 @@
 /**
+ * Rev. 3963 — **CARTÃO DE PONTO: FOTO DO FUNCIONÁRIO NOS RANKINGS DE FALTAS E ATRASOS.**
+ *
+ * PEDIDO: exibir a foto do funcionário nos rankings "Top 10 Faltas" e "Top 10 Atrasos"
+ * do Dashboard Cartão de Ponto.
+ *
+ * BACKEND (`server/routers/dashboards.ts` — `getDashCartaoPonto`):
+ *   - Adicionado `fotoUrl: employees.fotoUrl` ao `db.select` de `allEmps` (linha da
+ *     query de funcionários já existente no Promise.all).
+ *   - Campo `fotoUrl` propagado nos dois `.map()` de ranking: `rankingFaltas` e
+ *     `rankingAtrasos` via `emp?.fotoUrl ?? null`.
+ *
+ * FRONTEND (`client/src/pages/dashboards/DashCartaoPonto.tsx`):
+ *   - Novo componente inline `EmpAvatar({ nome, fotoUrl, size })`:
+ *     · Se `fotoUrl` presente → `<img>` circular (object-cover, border) com onError
+ *       (esconde a img quebrada graciosamente).
+ *     · Sem foto → círculo `bg-slate-200` com iniciais (2 primeiras palavras do nome).
+ *   - Avatar inserido entre o badge numérico e o bloco nome/função em ambas as listas
+ *     (Ranking de Faltas e Ranking de Atrasos).
+ *
+ * ZERO DELETE.
+ */
+/**
  * Rev. 3962 — **WHITE-CARD PERIOD SELECTOR: PADRÃO ERP EM TODOS OS DASHBOARDS RH.**
  *
  * PEDIDO: padronizar todos os dashboards do módulo RH com o mesmo seletor de período

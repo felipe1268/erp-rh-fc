@@ -354,7 +354,7 @@ async function getDashCartaoPonto(companyId: number, mesRef?: string, companyIds
   const [registros, allEmps] = await Promise.all([
     db.select().from(timeRecords)
       .where(and(companyWhere(timeRecords, companyId, companyIds), eq(timeRecords.mesReferencia, mes))),
-    db.select({ id: employees.id, nome: employees.nomeCompleto, funcao: employees.funcao, setor: employees.setor, status: employees.status })
+    db.select({ id: employees.id, nome: employees.nomeCompleto, funcao: employees.funcao, setor: employees.setor, status: employees.status, fotoUrl: employees.fotoUrl })
       .from(employees).where(and(companyWhere(employees, companyId, companyIds), sql`${employees.deletedAt} IS NULL`)),
   ]);
   const empMap = new Map(allEmps.map(e => [e.id, e]));
@@ -439,6 +439,7 @@ async function getDashCartaoPonto(companyId: number, mesRef?: string, companyIds
       return {
         employeeId: Number(empId), nome: emp?.nome || `Func. ${empId}`,
         funcao: emp?.funcao || "-", isDesligado: isDesligadoStatus(emp?.status),
+        fotoUrl: emp?.fotoUrl ?? null,
         faltasDias: d.faltasDias, faltasHoras: d.faltas,
         faltasDatas, // ex: ["2026-04-02","2026-04-07"]
       };
@@ -451,7 +452,7 @@ async function getDashCartaoPonto(companyId: number, mesRef?: string, companyIds
       const emp = empMap.get(Number(empId));
       const horas = Math.floor(d.atrasosMinutos / 60);
       const minutos = d.atrasosMinutos % 60;
-      return { employeeId: Number(empId), nome: emp?.nome || `Func. ${empId}`, funcao: emp?.funcao || "-", isDesligado: isDesligadoStatus(emp?.status), atrasosMinutos: d.atrasosMinutos, atrasosFormatado: `${horas}h${minutos > 0 ? String(minutos).padStart(2, '0') + 'min' : ''}` };
+      return { employeeId: Number(empId), nome: emp?.nome || `Func. ${empId}`, funcao: emp?.funcao || "-", isDesligado: isDesligadoStatus(emp?.status), fotoUrl: emp?.fotoUrl ?? null, atrasosMinutos: d.atrasosMinutos, atrasosFormatado: `${horas}h${minutos > 0 ? String(minutos).padStart(2, '0') + 'min' : ''}` };
     }).sort((a, b) => b.atrasosMinutos - a.atrasosMinutos).slice(0, 10);
 
   // Horas por dia da semana

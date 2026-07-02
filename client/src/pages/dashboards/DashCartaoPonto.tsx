@@ -16,6 +16,29 @@ import { Link, useLocation } from "wouter";
 import { useState, useMemo } from "react";
 
 // ── helpers ────────────────────────────────────────────────────────────────────
+function EmpAvatar({ nome, fotoUrl, size = 28 }: { nome: string; fotoUrl?: string | null; size?: number }) {
+  const initials = nome.split(" ").filter(Boolean).slice(0, 2).map(p => p[0].toUpperCase()).join("");
+  if (fotoUrl) {
+    return (
+      <img
+        src={fotoUrl}
+        alt={nome}
+        style={{ width: size, height: size }}
+        className="rounded-full object-cover shrink-0 border border-border/50"
+        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+      />
+    );
+  }
+  return (
+    <div
+      style={{ width: size, height: size, fontSize: size * 0.36 }}
+      className="rounded-full bg-slate-200 text-slate-600 font-semibold flex items-center justify-center shrink-0"
+    >
+      {initials}
+    </div>
+  );
+}
+
 const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const MESES_PT = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
@@ -953,6 +976,7 @@ export default function DashCartaoPonto() {
                         >
                           <div className="flex items-center gap-2.5">
                             <span className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${i < 3 ? "bg-red-100 text-red-700" : "bg-muted text-muted-foreground"}`}>{i + 1}</span>
+                            <EmpAvatar nome={r.nome} fotoUrl={r.fotoUrl} />
                             <div className="min-w-0">
                               <p className="text-sm font-medium"><EmpNameWithStatus nome={r.nome} isDesligado={r.isDesligado} /></p>
                               <p className="text-xs text-muted-foreground">{r.funcao}</p>
@@ -997,6 +1021,7 @@ export default function DashCartaoPonto() {
                         >
                           <div className="flex items-center gap-2.5">
                             <span className={`text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${i < 3 ? "bg-amber-100 text-amber-700" : "bg-muted text-muted-foreground"}`}>{i + 1}</span>
+                            <EmpAvatar nome={r.nome} fotoUrl={r.fotoUrl} />
                             <div className="min-w-0">
                               <p className="text-sm font-medium"><EmpNameWithStatus nome={r.nome} isDesligado={r.isDesligado} /></p>
                               <p className="text-xs text-muted-foreground">{r.funcao}</p>

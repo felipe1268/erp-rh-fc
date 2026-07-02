@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3963** — **CARTÃO DE PONTO: FOTO DO FUNCIONÁRIO NOS RANKINGS DE FALTAS E ATRASOS.** Backend: `fotoUrl` adicionado ao select de `allEmps` em `getDashCartaoPonto` e propagado para `rankingFaltas`/`rankingAtrasos`. Frontend: novo componente `EmpAvatar` (foto circular ou iniciais como fallback) inserido entre o badge numérico e o nome nas duas listas Top 10. ZERO DELETE.
+
 - **Rev. 3962** — **WHITE-CARD PERIOD SELECTOR: PADRÃO ERP EM TODOS OS DASHBOARDS RH.** Novo `PeriodSelectorCard.tsx` (12 pills mensais + nav de ano, `border-2 border-slate-800` no selecionado). Substituiu MonthSelector, seletores inline e dropdowns em 8 dashboards: DashCartaoPonto, DashFolhaPagamento, DashHorasExtras (estado YYYY-MM → ano+mes+mesStr), DashFerias, DashAvisoPrevio, DashFuncionarios, DashApontamentos, DashEfetivoObra. PrintActions permanece no header; PeriodSelectorCard logo abaixo. ZERO DELETE.
 
-- **Rev. 3961** — **AVISO PRÉVIO / RESCISÃO: FILTRO CLT — PJ E SÓCIOS BLOQUEADOS.** Frontend: `activeEmployees` memo exclui `tipoContrato === "PJ"/"Socio"/"Sócio"` → não aparecem no seletor. Backend: guard em `avisoPrevio.create` após buscar employee → `TRPCError BAD_REQUEST` se PJ/Sócio mesmo por chamada direta. Padrão idêntico ao filtro de férias (Rev. 1613). ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3961** — **AVISO PRÉVIO / RESCISÃO: FILTRO CLT — PJ E SÓCIOS BLOQUEADOS.** Frontend: `activeEmployees` memo exclui `tipoContrato === "PJ"/"Socio"/"Sócio"`. Backend: guard `TRPCError BAD_REQUEST` em `avisoPrevio.create`. ZERO DELETE.
 
 - **Rev. 3960** — **DRE IA: FIX DEFINITIVO JSON TRUNCADO.** `callOpus(sys, prompt, 4000)` explícito → sem arg (usa default 8000); `repairTruncatedJson` fecha stack aberta. ZERO DELETE.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3958** — **DRE IA: PÁGINA FULL-SCREEN `/financeiro/dre-analise` + maxTokens 4000→8000 (default) + PARETO RECHARTS.** ZERO DELETE.
 
 - **Rev. 3957** — **DRE IA: CLAUDE OPUS 4-5 DIRETO + DIALOG POPUP (FIX 95% TRAVADO).** `callOpus()` direto, maxTokens 4000, badge no título. ZERO DELETE.
-
-- **Rev. 3956** — **DFC: PÁGINA DEDICADA `/financeiro/dfc` (ROTA EXCLUSIVA, FULL-SCREEN).** `FinanceiroDFC.tsx`; seletor white-card; 4 KPIs; waterfall/ajustes/bridge/indicadores. ZERO DELETE.
 
 ### Histórico completo
 

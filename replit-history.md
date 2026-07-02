@@ -1,3 +1,5 @@
+- **Rev. 3956** — **DFC: PÁGINA DEDICADA `/financeiro/dfc` (ROTA EXCLUSIVA, FULL-SCREEN).** `FinanceiroDFC.tsx`; seletor white-card; 4 KPIs; waterfall/ajustes/bridge/indicadores. ZERO DELETE.
+
 - **Rev. 3944** — **CONTAS A RECEBER: MULTI-SELEÇÃO + AJUSTE EM LOTE.** Botão "Selecionar", checkboxes, barra flutuante, `BulkAjustarDialog` 3 abas, endpoint `bulkAtualizarVencimento`. ZERO DELETE.
 
 - **Rev. 3942** — **CONVENÇÃO COLETIVA IA: FIX "SELECIONE UMA EMPRESA".** `selectedCompany` é OBJETO → `parseInt(obj)=NaN=0` → guard disparava. Fix: `companyIdNum` (já coerced). ZERO DELETE.
