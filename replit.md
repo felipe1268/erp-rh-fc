@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3977** — **BANCO DE HORAS: MULTIPLICADOR 1,5x, EXCEÇÃO POR FUNCIONÁRIO E RESCISÃO.** (1) Crédito de HE no banco de horas agora aplica ×1,5. (2) Atraso/falta debita minutos do banco (em vez de desconto monetário) quando a empresa usa banco de horas, com exceção por funcionário (`employees.bancoHorasExcecao`) e reversão idempotente. (3) Critério `he_banco_horas` ↔ `companies.heDestinoPadrao` sincronizados bidirecionalmente. (4) Novas listas de alerta MENSAL (saldo negativo) e TRIMESTRAL (saldo positivo) na página Banco de Horas, sem baixa automática. (5) Rescisão passa a incluir o saldo do banco de horas: positivo = provento (×1,5), negativo = desconto (valor cheio, sem multiplicador) — plugado nos 8 pontos de cálculo de `avisoPrevioFerias.ts` e exibido em `PainelRH.tsx`. ZERO DELETE.
+
 - **Rev. 3976** — **TERCEIROS: TRIPLE-FIX NOS DOCUMENTOS DE FUNCIONÁRIOS TERCEIROS.** (1) Validade fechava a página: `updateMut.onSuccess` tem `setShowForm(false)` → trocado para `bulkUpdateMut` no onChange inline. (2) Upload não refletia na UI: `onSuccess` agora faz `setForm(f=>({...f,[field]:url}))` antes do refetch + `onError` com toast. (3) Validade de NR-10/NR-33/NR-35 e 8 outros campos nunca salvava: Zod descartava silenciosamente → 11 campos adicionados ao schema do `update`. ZERO DELETE.
 
-- **Rev. 3975** — **FECHAMENTO PONTO: SELETOR DE PERÍODO NO UPLOAD DIXI.** Batidas do próximo ciclo (ex: 15/06 em arquivo 15/05–14/06) geravam falta indevida. Fix: dialog de upload exibe bloco âmbar "Período a considerar" (campos De/Até obrigatórios); botão Importar bloqueado sem período válido; backend filtra em memória todos os registros fora do intervalo após `processRecords`, antes de gravar. Lógica DIXI inalterada. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3975** — **FECHAMENTO PONTO: SELETOR DE PERÍODO NO UPLOAD DIXI.** Batidas do próximo ciclo (ex: 15/06 em arquivo 15/05–14/06) geravam falta indevida. Fix: dialog de upload exibe bloco âmbar "Período a considerar" (campos De/Até obrigatórios); botão Importar bloqueado sem período válido; backend filtra em memória todos os registros fora do intervalo após `processRecords`, antes de gravar. Lógica DIXI inalterada. ZERO DELETE.
 
 - **Rev. 3974** — **FOLHA: AUTO-RECONCILIAR FALTA ÓRFÃ DO ESCURO CONTRA REGISTRO MANUAL.** Fix: após auto-ponto, UPDATE-CTE cancela adjustments órfãos + limpa `adjMap` em memória. ZERO DELETE.
 
@@ -65,12 +67,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3971** — **CONVÊNIOS: FIX COLUNA VAZIA NA FOLHA (`competencia_desconto` NULL).** `aprovar` mutation nunca gravava `competenciaDesconto` no update — agora persiste `competenciaSelecionada` do RH. ColFix v3971 backfilla todos os aprovados antigos com `competencia_desconto IS NULL` pela regra dia-15/16. ZERO DELETE.
 
 - **Rev. 3970** — **REFIS: FIX CARDS INFERIORES PREVISTO/REALIZADO (DELTA → ACUMULADO).** `rPrevSem`/`rRealSem` substituídos por `rPrev`/`rReal` (acumulados); barra de progresso ajustada; legenda → "Snapshot MSP". ZERO DELETE.
-
-- **Rev. 3969** — **DISSÍDIO: FIX DIFERENÇAS RETROATIVAS QUANDO VIGÊNCIA == MÊS DE APLICAÇÃO.** `mesesRetroativosEntre("2026-05","2026-05")` retornava `[]`; guard inclui o próprio mês quando vigência == aplicação; `recalcularDiferencas` corrigido igual; botão "Calcular Diferenças Retroativas" adicionado no dialog da Folha. ZERO DELETE.
-
-- **Rev. 3968** — **VALE ALIMENTAÇÃO: SELETOR PERÍODO → PADRÃO WHITE-CARD.** `MonthSelector` → `PeriodSelectorCard` nas 3 abas (lancamento/por_obra/alertas_faltas); `mesAno` → `ano`+`mes`+`mesStr`; todas as queries e mutations atualizadas. ZERO DELETE.
-
-- **Rev. 3967** — **EFETIVO OBRA: FIX ÚLTIMO GRUPO CORTADO NA TABELA EQUIPE.** `p-4` → `p-4 pb-16` no container scroll da FullScreenDialog; último grupo de funções não ficava mais visível. ZERO DELETE.
 
 ### Histórico completo
 

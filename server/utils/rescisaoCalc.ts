@@ -353,6 +353,15 @@ export function calcularRescisaoCompleta(params: {
    * "rescisao_aplicar_multa_fgts"). Default true = comportamento CLT padrão.
    * Quando false, a multa 40% é ZERADA (empresas que não pagam a multa). */
   incluirMultaFgts?: boolean;
+  /** Rev. 3977 — Saldo do Banco de Horas do empregado (em minutos) no momento da
+   * rescisão. Positivo = crédito a favor do empregado (paga como PROVENTO, com o
+   * mesmo multiplicador 1,5x aplicado ao crédito normal de HE). Negativo = débito
+   * do empregado (DESCONTO no acerto, valor CHEIO, SEM multiplicador — dívida não
+   * é "hora extra"). Omitido/0 → nenhuma linha é gerada (compat retroativa). */
+  saldoBancoHorasMinutos?: number;
+  /** Valor da hora normal do empregado, usado para converter o saldo do banco de
+   * horas em R$ na rescisão. Obrigatório quando `saldoBancoHorasMinutos` != 0. */
+  valorHoraBancoHoras?: number;
 }) {
   const { salarioBase, dataAdmissao, dataDesligamento, tipo, vrDiario, diasTrabalhadosMes } = params;
   const descontarAvisoNaoCumprido = !!params.descontarAvisoNaoCumprido;
@@ -461,7 +470,19 @@ export function calcularRescisaoCompleta(params: {
   const podeDescontarAviso = tipo === 'empregado_indenizado' && descontarAvisoNaoCumprido;
   const descontoAvisoNaoCumprido = podeDescontarAviso ? salarioBase : 0;
 
-  const total = saldoSalario + totalFerias + feriasVencidas + decimoTerceiroProporcional + avisoPrevioIndenizado + vrProporcional + multaFGTS - descontoAvisoNaoCumprido;
+  // 10. Banco de Horas — saldo vira PROVENTO (crédito, 1,5x) ou DESCONTO (débito, valor
+  // cheio, sem multiplicador) no acerto rescisório. Ver JSDoc do parâmetro acima.
+  const saldoBancoHorasMinutos = params.saldoBancoHorasMinutos || 0;
+  const valorHoraBancoHoras = params.valorHoraBancoHoras || 0;
+  const valorHoraBancoHorasMinuto = valorHoraBancoHoras / 60;
+  const bancoHorasProvento = saldoBancoHorasMinutos > 0
+    ? saldoBancoHorasMinutos * valorHoraBancoHorasMinuto * 1.5
+    : 0;
+  const bancoHorasDesconto = saldoBancoHorasMinutos < 0
+    ? Math.abs(saldoBancoHorasMinutos) * valorHoraBancoHorasMinuto
+    : 0;
+
+  const total = saldoSalario + totalFerias + feriasVencidas + decimoTerceiroProporcional + avisoPrevioIndenizado + vrProporcional + multaFGTS - descontoAvisoNaoCumprido + bancoHorasProvento - bancoHorasDesconto;
 
   return {
     salarioBase: salarioBase.toFixed(2),
@@ -496,6 +517,10 @@ export function calcularRescisaoCompleta(params: {
     multaFGTS: multaFGTS.toFixed(2),
     descontoAvisoNaoCumprido: descontoAvisoNaoCumprido.toFixed(2),
     descontarAvisoNaoCumprido: podeDescontarAviso,
+    saldoBancoHorasMinutos,
+    valorHoraBancoHoras: valorHoraBancoHoras.toFixed(2),
+    bancoHorasProvento: bancoHorasProvento.toFixed(2),
+    bancoHorasDesconto: bancoHorasDesconto.toFixed(2),
     total: total.toFixed(2),
     mesesTotais,
     dataRefCalculo: dataSaida,

@@ -1,3 +1,9 @@
+- **Rev. 3969** — **DISSÍDIO: FIX DIFERENÇAS RETROATIVAS QUANDO VIGÊNCIA == MÊS DE APLICAÇÃO.** `mesesRetroativosEntre("2026-05","2026-05")` retornava `[]`; guard inclui o próprio mês quando vigência == aplicação; `recalcularDiferencas` corrigido igual; botão "Calcular Diferenças Retroativas" adicionado no dialog da Folha. ZERO DELETE.
+
+- **Rev. 3968** — **VALE ALIMENTAÇÃO: SELETOR PERÍODO → PADRÃO WHITE-CARD.** `MonthSelector` → `PeriodSelectorCard` nas 3 abas (lancamento/por_obra/alertas_faltas); `mesAno` → `ano`+`mes`+`mesStr`; todas as queries e mutations atualizadas. ZERO DELETE.
+
+- **Rev. 3967** — **EFETIVO OBRA: FIX ÚLTIMO GRUPO CORTADO NA TABELA EQUIPE.** `p-4` → `p-4 pb-16` no container scroll da FullScreenDialog; último grupo de funções não ficava mais visível. ZERO DELETE.
+
 - **Rev. 3966** — **EFETIVO OBRA: LIGHTBOX DE FOTO AO CLICAR NA TABELA "EQUIPE — {OBRA}".** `EmpAvatar` recebe `onClick`; Dialog shadcn 256×256 abre ao clicar na miniatura; iniciais sem foto não são clicáveis. ZERO DELETE.
 
 - **Rev. 3965** — **EFETIVO OBRA: FOTO DO FUNCIONÁRIO NA TABELA "EQUIPE — {OBRA}".** `EmpAvatar` inline (foto circular ou iniciais) adicionado na coluna Nome da tabela agrupada por função em DashEfetivoObra. Backend já retornava `fotoUrl` — só frontend alterado. ZERO DELETE.

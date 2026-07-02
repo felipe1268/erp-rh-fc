@@ -4718,7 +4718,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v3971-2026-07-02-convenio-competencia-backfill";
+    const COLFIX_VERSION = "v3977-2026-07-02-banco-horas-excecao";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -6200,6 +6200,13 @@ Regras:
         await _db3933.$client.query(`ALTER TABLE apr_analises ADD COLUMN IF NOT EXISTS assinaturas_equipe_json text`);
         console.log("[ColFix Rev.3933] apr_analises: assinaturas_equipe_json garantida.");
       } catch (e: any) { console.warn("[ColFix Rev.3933] apr assinaturas_equipe falhou (não-fatal):", e?.message ?? e); }
+
+      // Rev. 3977 — Banco de Horas: exceção bidirecional por funcionário
+      try {
+        const _db3977 = (await getDb())!;
+        await _db3977.$client.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS banco_horas_excecao smallint NOT NULL DEFAULT 0`);
+        console.log("[ColFix Rev.3977] employees: banco_horas_excecao garantida.");
+      } catch (e: any) { console.warn("[ColFix Rev.3977] employees banco_horas_excecao falhou (não-fatal):", e?.message ?? e); }
 
       // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos
       import("../services/startupCache").then(({ setCache }) =>

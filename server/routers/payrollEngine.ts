@@ -3379,6 +3379,8 @@ export const payrollEngineRouter = router({
         // empresa paga o colaborador). É a CHAVE de agrupamento da remessa por
         // banco — NÃO o banco pessoal do funcionário.
         contaBancariaEmpresaId: employees.contaBancariaEmpresaId,
+        // Rev. 3977 — Banco de Horas: exceção bidirecional por funcionário
+        bancoHorasExcecao: employees.bancoHorasExcecao,
       }).from(employees).where(
         and(
           companyFilter(employees.companyId, input),
@@ -3887,6 +3889,31 @@ export const payrollEngineRouter = router({
         DELETE FROM payroll_payments WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
       `);
 
+      // Rev. 3977 — Banco de Horas: reverter débitos de atraso/falta desta mesma competência antes
+      // de recalcular (idempotência entre recálculos do mesmo período). Débito é marcado com
+      // tipo='debito_atraso_falta' e a competência embutida na descrição (não há coluna dedicada).
+      {
+        const _debitoMarker977 = `Débito atraso/falta ${input.mesReferencia}`;
+        const _oldDebitos977 = ((await db.execute(sql`
+          SELECT id, "employeeId", "companyId", minutos FROM banco_horas_lancamentos
+          WHERE "companyId" IN (${allCompanyIdsSql}) AND tipo = 'debito_atraso_falta'
+            AND descricao LIKE ${_debitoMarker977 + '%'}
+        `)) as any).rows || [];
+        for (const d of _oldDebitos977) {
+          await db.execute(sql`
+            UPDATE banco_horas_saldo SET "saldoMinutos" = "saldoMinutos" - ${Number(d.minutos)}, "atualizadoEm" = NOW()
+            WHERE "employeeId" = ${d.employeeId} AND "companyId" = ${d.companyId}
+          `);
+        }
+        if (_oldDebitos977.length > 0) {
+          await db.execute(sql`
+            DELETE FROM banco_horas_lancamentos
+            WHERE "companyId" IN (${allCompanyIdsSql}) AND tipo = 'debito_atraso_falta'
+              AND descricao LIKE ${_debitoMarker977 + '%'}
+          `);
+        }
+      }
+
       // Reseta ajustes que estavam vinculados aos payments deletados de volta para 'pendente'
       // para que sejam re-aplicados consistentemente nesta nova simulação.
       await db.execute(sql`
@@ -4058,6 +4085,10 @@ export const payrollEngineRouter = router({
       // Dias reais do mês para cálculo proporcional do horista (220h = ref 30 dias)
       const diasNoMesSim = new Date(year, month, 0).getDate();
 
+      // Rev. 3977 — Banco de Horas: acumula débitos de atraso/falta redirecionados
+      // (aplicados em lote após o loop principal, uma vez que o period foi limpo acima).
+      const bancoHorasDebitosBatch: { employeeId: number; companyId: number; minutos: number }[] = [];
+
       for (const emp of empList) {
         const valorHora = parseBRL(emp.valorHora);
         // CLT horista: 220h = referência de 30 dias. Proporcional ao número real de dias do mês.
@@ -4126,9 +4157,28 @@ export const payrollEngineRouter = router({
         // DSR perdido (Lei 605/49 Art. 6º) — apenas DSR Falta (decisão RH FC, Rev. 1194)
         const dsrInfo = dsrMap.get(emp.id) || { qtdFalta: 0, valorFalta: 0 };
         const dsrFaltaValorAplicado = aplicarDsrFalta ? dsrInfo.valorFalta : 0;
+
+        // Rev. 3977 — Banco de Horas: quando a empresa usa banco de horas (he_banco_horas=Sim)
+        // e o funcionário NÃO tem a exceção bidirecional marcada, o valor que seria descontado
+        // de atraso/falta é redirecionado como DÉBITO no saldo do banco de horas (valor cheio,
+        // sem multiplicador), em vez de desconto monetário na folha. DSR-falta continua monetário
+        // (não é "atraso/falta" em si, é consequência legal separada).
+        const usaBancoHorasAtrasoFalta = criteria.heBancoHoras && Number((emp as any).bancoHorasExcecao || 0) !== 1;
+        let minutosDebitoBancoHoras = 0;
+        if (usaBancoHorasAtrasoFalta && valorHora > 0 && (descontoFaltasBase > 0 || descontoAtrasosBase > 0)) {
+          minutosDebitoBancoHoras = Math.round(((descontoFaltasBase + descontoAtrasosBase) / valorHora) * 60);
+          if (minutosDebitoBancoHoras > 0) {
+            bancoHorasDebitosBatch.push({
+              employeeId: emp.id,
+              companyId: (emp as any).companyId ?? input.companyId,
+              minutos: minutosDebitoBancoHoras,
+            });
+          }
+        }
+
         // Soma o DSR aplicado na coluna FALTAS (mesma natureza CLT)
-        const descontoFaltas  = descontoFaltasBase + dsrFaltaValorAplicado;
-        const descontoAtrasos = descontoAtrasosBase;
+        const descontoFaltas  = usaBancoHorasAtrasoFalta ? dsrFaltaValorAplicado : (descontoFaltasBase + dsrFaltaValorAplicado);
+        const descontoAtrasos = usaBancoHorasAtrasoFalta ? 0 : descontoAtrasosBase;
 
         // PENSÃO ALIMENTÍCIA: cálculo dinâmico direto do cadastro do funcionário (Rev. 1205).
         // Não depende mais de payroll_adjustments nem de aprovação RH (a configuração da pensão
@@ -4375,6 +4425,27 @@ export const payrollEngineRouter = router({
             "valorExato", "saldoAnterior", "ajusteAplicado", "valorPago", "residualGerado")
           VALUES ${sql.join(ledgerInsertRowsFolha, sql`,`)}
         `);
+      }
+
+      // Rev. 3977 — Banco de Horas: grava débitos de atraso/falta redirecionados (idempotente —
+      // débitos antigos desta competência já foram revertidos/apagados no início da simulação).
+      if (bancoHorasDebitosBatch.length > 0) {
+        const _debitoDescricao977 = `Débito atraso/falta ${input.mesReferencia} (banco de horas)`;
+        const _dataFimMes977 = `${year}-${String(month).padStart(2, '0')}-${String(diasNoMesSim).padStart(2, '0')}`;
+        for (const d of bancoHorasDebitosBatch) {
+          await db.execute(sql`
+            INSERT INTO banco_horas_saldo ("employeeId", "companyId", "saldoMinutos", "atualizadoEm")
+            VALUES (${d.employeeId}, ${d.companyId}, ${-d.minutos}, NOW())
+            ON CONFLICT ("employeeId", "companyId") DO UPDATE SET
+              "saldoMinutos" = banco_horas_saldo."saldoMinutos" + EXCLUDED."saldoMinutos",
+              "atualizadoEm" = NOW()
+          `);
+          await db.execute(sql`
+            INSERT INTO banco_horas_lancamentos ("employeeId", "companyId", tipo, minutos, "minutosBase", "minutosAcrescimo", descricao, data, "criadoPor")
+            VALUES (${d.employeeId}, ${d.companyId}, 'debito_atraso_falta', ${-d.minutos}, ${-d.minutos}, 0,
+              ${_debitoDescricao977}, ${_dataFimMes977}::date, 'Sistema (folha)')
+          `);
+        }
       }
 
       // Vale fora da folha: funcionários com vale calculado mas não incluídos na folha mensal

@@ -1487,6 +1487,8 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
       proventos.push({ label: 'Multa 40% FGTS', value: previsao.multaFGTS });
     if (parseFloat(previsao.vrProporcional || '0') > 0)
       proventos.push({ label: `VR/VA Proporcional (${previsao.diasTrabalhadosMes || '?'} dias × R$ ${fmt(previsao.vrDiario)})`, value: previsao.vrProporcional });
+    if (parseFloat(previsao.bancoHorasProvento || '0') > 0)
+      proventos.push({ label: `Banco de Horas — Saldo Credor (${((previsao.saldoBancoHorasMinutos || 0) / 60).toFixed(1)}h × 1,5)`, value: previsao.bancoHorasProvento });
     // Descontos
     if (parseFloat(previsao.inssDesconto || '0') > 0)
       descontos.push({ label: `INSS${previsao.inssFaixa ? ` (${previsao.inssFaixa})` : ''}`, value: previsao.inssDesconto });
@@ -1494,6 +1496,8 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
       descontos.push({ label: `IRRF${previsao.irrfFaixa ? ` (${previsao.irrfFaixa})` : ''}`, value: previsao.irrfDesconto });
     if (parseFloat(previsao.adiantamentoDesconto || '0') > 0)
       descontos.push({ label: 'Adiantamento Salarial', value: previsao.adiantamentoDesconto });
+    if (parseFloat(previsao.bancoHorasDesconto || '0') > 0)
+      descontos.push({ label: `Banco de Horas — Saldo Devedor (${(Math.abs(previsao.saldoBancoHorasMinutos || 0) / 60).toFixed(1)}h)`, value: previsao.bancoHorasDesconto });
   }
 
   const totalProventos = proventos.reduce((s, r) => s + parseFloat(r.value || '0'), 0);
@@ -1527,6 +1531,10 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
       grupoA.push({ label: '13º Salário Proporcional (provisionado até a demissão)', value: (num('decimoTerceiroProporcional') - d13Proj).toFixed(2) });
     if (num('vrProporcional') > 0)
       grupoA.push({ label: 'VR/VA Proporcional', value: previsao.vrProporcional });
+    if (num('bancoHorasProvento') > 0)
+      grupoA.push({ label: `Banco de Horas — Saldo Credor (${((previsao.saldoBancoHorasMinutos || 0) / 60).toFixed(1)}h × 1,5)`, value: previsao.bancoHorasProvento });
+    if (num('bancoHorasDesconto') > 0)
+      grupoA.push({ label: `Banco de Horas — Saldo Devedor (${(Math.abs(previsao.saldoBancoHorasMinutos || 0) / 60).toFixed(1)}h)`, value: (-num('bancoHorasDesconto')).toFixed(2) });
     if (num('avisoPrevioIndenizado') > 0)
       grupoB.push({ label: diasAvisoIndenizadosLabel(previsao), value: previsao.avisoPrevioIndenizado });
     if (num('multaFGTS') > 0)
@@ -1563,6 +1571,8 @@ function AvisoRescisaoDialog({ avisoId, onClose }: { avisoId: number | null; onC
       items.push({ label: 'Multa 40% FGTS', value: prev.multaFGTS });
     if (parseFloat(prev.vrProporcional || '0') > 0)
       items.push({ label: 'VR/VA Proporcional', value: prev.vrProporcional });
+    if (parseFloat(prev.bancoHorasProvento || '0') > 0)
+      items.push({ label: 'Banco de Horas — Saldo Credor (×1,5)', value: prev.bancoHorasProvento });
     return items;
   };
 

@@ -28,6 +28,19 @@ import {
 import { getIncluirMultaFgts, carregarMultaFgtsPorEmpresa } from "../utils/rescisaoMultaCfg";
 import { corrigirPontoFuncionario } from "../utils/pontoCorrecaoAuto";
 import { storagePut } from "../storage";
+import { bancoHorasSaldo } from "../../drizzle/schema";
+
+/**
+ * Rev. 3977 — Lê o saldo (em minutos) do Banco de Horas do empregado, usado para
+ * compor o acerto rescisório (provento se positivo, desconto se negativo). Sem
+ * linha na tabela = saldo 0 (empregado nunca usou banco de horas).
+ */
+async function getSaldoBancoHorasParaRescisao(db: any, employeeId: number): Promise<number> {
+  const [row] = await db.select({ saldoMinutos: bancoHorasSaldo.saldoMinutos })
+    .from(bancoHorasSaldo)
+    .where(eq(bancoHorasSaldo.employeeId, employeeId));
+  return row?.saldoMinutos || 0;
+}
 
 /**
  * Constrói o contexto de descontos da rescisão para um único empregado.
@@ -435,10 +448,13 @@ export async function criarAvisoPrevioInterno(
   const saldoVencCreate = await getFeriasVencidasSaldo(db, emp.id, dataFim);
 
   const incluirMultaFgtsCreate = await getIncluirMultaFgts(db, params.companyId);
+  const saldoBhCreate = await getSaldoBancoHorasParaRescisao(db, emp.id);
   const previsao = calcularRescisaoCompleta({
     salarioBase,
     dataAdmissao,
     dataDesligamento,
+    saldoBancoHorasMinutos: saldoBhCreate,
+    valorHoraBancoHoras: parseBRL(emp.valorHora),
     dataFimAviso: dataFim, // TÉRMINO do aviso para férias, 13º, FGTS
     tipo: params.tipo,
     vrDiario: params.vrDiario ?? 0,
@@ -681,11 +697,14 @@ export const avisoPrevioFeriasRouter = router({
               const periodosVencidosRealList = vpPeriodosMap.has(vkey) ? vpPeriodosMap.get(vkey)! : undefined;
               const diasVencidosRealList = vpDiasMap.has(vkey) ? vpDiasMap.get(vkey)! : undefined;
 
+              const saldoBhList = await getSaldoBancoHorasParaRescisao(db, r.employeeId);
               const previsao = calcularRescisaoCompleta({
                 salarioBase,
                 dataAdmissao,
                 dataDesligamento: r.dataInicio,
                 dataFimAviso: r.dataFim,
+                saldoBancoHorasMinutos: saldoBhList,
+                valorHoraBancoHoras: parseBRL(emp.valorHora),
                 tipo: r.tipo,
                 vrDiario: 0,
                 diasTrabalhadosMes,
@@ -763,11 +782,14 @@ export const avisoPrevioFeriasRouter = router({
             const periodosVencidosRealById = saldoVencById.periodosVencidos;
 
             const incluirMultaFgtsById = await getIncluirMultaFgts(db, emp.companyId);
+            const saldoBhById = await getSaldoBancoHorasParaRescisao(db, row.employeeId);
             const previsao = calcularRescisaoCompleta({
               salarioBase,
               dataAdmissao,
               dataDesligamento: row.dataInicio,
               dataFimAviso: dataFimParaCalculo,
+              saldoBancoHorasMinutos: saldoBhById,
+              valorHoraBancoHoras: parseBRL(emp.valorHora),
               tipo: row.tipo,
               vrDiario: 0,
               diasTrabalhadosMes: diasTrabMes,
@@ -1032,11 +1054,14 @@ export const avisoPrevioFeriasRouter = router({
         // CÁLCULO DAS VERBAS RESCISÓRIAS
         // ============================================================
         const incluirMultaFgtsGerar = await getIncluirMultaFgts(db, emp.companyId);
+        const saldoBhGerar = await getSaldoBancoHorasParaRescisao(db, input.employeeId);
         const previsao = calcularRescisaoCompleta({
           salarioBase,
           dataAdmissao,
           dataDesligamento,
           dataFimAviso,
+          saldoBancoHorasMinutos: saldoBhGerar,
+          valorHoraBancoHoras: parseBRL(emp.valorHora),
           tipo: input.tipo,
           vrDiario,
           diasTrabalhadosMes,
@@ -1256,6 +1281,7 @@ export const avisoPrevioFeriasRouter = router({
         const diasTrabMesTrab = Math.max(0, dtFimTrab.getDate() - diasFeriasMesTrab);
 
         const incluirMultaFgtsComp = await getIncluirMultaFgts(db, emp.companyId);
+        const saldoBhComp = await getSaldoBancoHorasParaRescisao(db, input.employeeId);
         const prevTrab = calcularRescisaoCompleta({
           salarioBase, dataAdmissao, dataDesligamento: input.dataDesligamento,
           dataFimAviso: dataFimTrab, tipo: 'empregador_trabalhado',
@@ -1263,6 +1289,8 @@ export const avisoPrevioFeriasRouter = router({
           periodosVencidosOverride: periodosVencidosRealComp,
           diasVencidosOverride: saldoVencComp.diasVencidos,
           incluirMultaFgts: incluirMultaFgtsComp,
+          saldoBancoHorasMinutos: saldoBhComp,
+          valorHoraBancoHoras: parseBRL(emp.valorHora),
         });
         const totalBrutoTrab = parseFloat(prevTrab.total);
         const totalLiquidoTrab = totalBrutoTrab - totalDescontos;
@@ -1295,6 +1323,8 @@ export const avisoPrevioFeriasRouter = router({
           periodosVencidosOverride: periodosVencidosRealComp,
           diasVencidosOverride: saldoVencComp.diasVencidos,
           incluirMultaFgts: incluirMultaFgtsComp,
+          saldoBancoHorasMinutos: saldoBhComp,
+          valorHoraBancoHoras: parseBRL(emp.valorHora),
         });
         const totalBrutoInd = parseFloat(prevInd.total);
         const totalLiquidoInd = totalBrutoInd - totalDescontos;
@@ -1581,6 +1611,7 @@ export const avisoPrevioFeriasRouter = router({
             ? input.descontarAvisoNaoCumprido
             : !!aviso.descontarAvisoNaoCumprido;
           const incluirMultaFgtsUpd = await getIncluirMultaFgts(db, emp.companyId);
+          const saldoBhUpd = await getSaldoBancoHorasParaRescisao(db, aviso.employeeId);
           const previsao = calcularRescisaoCompleta({
             salarioBase,
             dataAdmissao,
@@ -1592,6 +1623,8 @@ export const avisoPrevioFeriasRouter = router({
             periodosVencidosOverride: periodosVencidosRealUpd,
             diasVencidosOverride: saldoVencUpd.diasVencidos,
             descontarAvisoNaoCumprido: descontarAvisoFlag,
+            saldoBancoHorasMinutos: saldoBhUpd,
+            valorHoraBancoHoras: parseBRL(emp.valorHora),
             incluirMultaFgts: incluirMultaFgtsUpd,
           });
 
@@ -1697,6 +1730,7 @@ export const avisoPrevioFeriasRouter = router({
             const saldoVencRec = await getFeriasVencidasSaldo(db, aviso.employeeId, dataFim);
             const periodosVencidosRealRec = saldoVencRec.periodosVencidos;
 
+            const saldoBhRec = await getSaldoBancoHorasParaRescisao(db, aviso.employeeId);
             const previsao = calcularRescisaoCompleta({
               salarioBase,
               dataAdmissao,
@@ -1709,6 +1743,8 @@ export const avisoPrevioFeriasRouter = router({
               diasVencidosOverride: saldoVencRec.diasVencidos,
               descontarAvisoNaoCumprido: !!(aviso as any).descontarAvisoNaoCumprido,
               incluirMultaFgts: multaMapRec.get(Number(aviso.companyId)) ?? true,
+              saldoBancoHorasMinutos: saldoBhRec,
+              valorHoraBancoHoras: parseBRL(emp.valorHora),
             });
 
             // Rescisão complementar (uso interno) — só para quem tem complemento.

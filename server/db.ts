@@ -940,9 +940,11 @@ export async function updateEmployee(id: number, companyId: number, data: Partia
     // Cargo de Confiança / Isenção Art. 62 CLT (Rev. 1874: + inciso + observação)
     "cargoConfianca", "cargoConfiancaDesde", "cargoConfiancaGratificacao",
     "cargoConfiancaInciso", "cargoConfiancaObservacao",
+    // Rev. 3977 — Banco de Horas: exceção bidirecional por funcionário
+    "bancoHorasExcecao",
   ]);
   // Campos booleanos armazenados como smallint (0/1) no banco
-  const booleanFields = new Set(["listaNegra", "recebeComplemento", "acordoHoraExtra", "pensaoAlimenticia", "licencaMaternidade", "ddsParticipacao", "cargoConfianca", "experienciaNaoRenovar"]);
+  const booleanFields = new Set(["listaNegra", "recebeComplemento", "acordoHoraExtra", "pensaoAlimenticia", "licencaMaternidade", "ddsParticipacao", "cargoConfianca", "experienciaNaoRenovar", "bancoHorasExcecao"]);
   // Campos inteiros
   const intFields = new Set(["contaBancariaEmpresaId", "desligadoUserId", "listaNegraUserId", "dependentesIR"]);
   // Campos string de HE (são varchar no banco, não int)

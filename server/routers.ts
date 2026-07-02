@@ -3245,6 +3245,15 @@ export const appRouter = router({
             .set({ valor: c.valor, atualizadoPor: ctx.user.name ?? "Sistema" })
             .where(eq(systemCriteria.id, existing[0].id));
           updated++;
+          // Rev. 3977 — sincroniza he_banco_horas com companies.heDestinoPadrao (fonte única
+          // percebida pelo usuário: mudar em Configurações reflete no toggle da página Banco de Horas).
+          if (c.chave === "he_banco_horas") {
+            const destino = c.valor === "1" ? "banco_horas" : "pagamento";
+            const targetCompanyId = existing[0].companyId ?? input.companyId;
+            await db.execute(sql`
+              UPDATE companies SET "heDestinoPadrao" = ${destino} WHERE id = ${targetCompanyId}
+            `);
+          }
         }
       }
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "configuracoes", entityType: "criterios", entityId: input.companyId, details: `Atualizado ${updated} critérios` });

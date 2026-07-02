@@ -595,7 +595,7 @@ export const horasExtrasRouter = router({
       }
 
       const empRows = ((await db.execute(sql`
-        SELECT id, "nomeCompleto", "valorHora", "salarioBase", "horasMensais", funcao
+        SELECT id, "nomeCompleto", "valorHora", "salarioBase", "horasMensais", funcao, "banco_horas_excecao"
         FROM employees
         WHERE id IN (${sql.join(empIds.map(id => sql`${id}`), sql`,`)})
       `)) as any).rows || [];
@@ -644,6 +644,7 @@ export const horasExtrasRouter = router({
             salarioBruto: parseFloat(String(emp.salarioBase || "0")),
             valorHora,
             origem,
+            bancoHorasExcecao: Number(emp.banco_horas_excecao || 0) === 1,
           });
         }
       }
@@ -684,15 +685,22 @@ export const horasExtrasRouter = router({
       const destPadraoRows = ((await db.execute(sql`
         SELECT "heDestinoPadrao" FROM companies WHERE id = ${input.companyId}
       `)) as any).rows || [];
-      const destinoPadrao = (destPadraoRows[0]?.heDestinoPadrao as string) || "pagamento";
+      const destinoPadraoEmpresa = (destPadraoRows[0]?.heDestinoPadrao as string) || "pagamento";
 
       if (empResults.length > 0) {
-        const empInsertRows = empResults.map(e => sql`(
+        // Rev. 3977 — resolução por funcionário: mestre=pagamento → sempre pagamento;
+        // mestre=banco_horas → banco de horas, EXCETO funcionário com exceção bidirecional marcada.
+        const empInsertRows = empResults.map(e => {
+          const destinoResolvido = destinoPadraoEmpresa === "banco_horas" && e.bancoHorasExcecao
+            ? "pagamento"
+            : destinoPadraoEmpresa;
+          return sql`(
           ${hePeriodId}, ${input.companyId}, ${e.empId}, ${e.nome},
           ${e.heUtil}, ${e.heFim}, ${e.heTotal},
           ${e.valorHEUtil}, ${e.valorHEFim}, ${e.valorHETotal},
-          ${e.salarioBruto}, ${e.valorHora}, ${destinoPadrao}, ${e.origem}
-        )`);
+          ${e.salarioBruto}, ${e.valorHora}, ${destinoResolvido}, ${e.origem}
+        )`;
+        });
         await db.execute(sql`
           INSERT INTO he_period_employees
             ("hePeriodId", "companyId", "employeeId", nome,
@@ -1055,7 +1063,8 @@ export const horasExtrasRouter = router({
           const mins = Number(emp.heTotalMins || 0);
           if (mins <= 0) continue;
           const minutosBase = mins;
-          const minutosAcrescimo = 0;
+          // Rev. 3977 — multiplicador de 1,5x no crédito do banco de horas (excedente pago como acréscimo).
+          const minutosAcrescimo = Math.round(minutosBase * 0.5);
           const totalComAcrescimo = minutosBase + minutosAcrescimo;
           await db.execute(sql`
             INSERT INTO banco_horas_saldo ("employeeId", "companyId", "saldoMinutos", "atualizadoEm")
@@ -1244,6 +1253,50 @@ export const horasExtrasRouter = router({
       return rows;
     }),
 
+  // Rev. 3977 — Alerta MENSAL: funcionários com saldo NEGATIVO no banco de horas (débito de
+  // atraso/falta acumulado). Apenas alerta — NÃO gera pagamento/desconto automático.
+  getAlertasSaldoNegativo: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const rows = ((await db.execute(sql`
+        SELECT bhs."employeeId", e."nomeCompleto", bhs."saldoMinutos", bhs."atualizadoEm"
+        FROM banco_horas_saldo bhs
+        JOIN employees e ON e.id = bhs."employeeId"
+        WHERE bhs."companyId" = ${input.companyId}
+          AND bhs."saldoMinutos" < 0
+        ORDER BY bhs."saldoMinutos" ASC
+      `)) as any).rows || [];
+      return rows;
+    }),
+
+  // Rev. 3977 — Alerta TRIMESTRAL: funcionários com saldo POSITIVO elevado (acumulado há pelo
+  // menos 1 trimestre) — apenas alerta informativo p/ RH avaliar compensação, SEM auto-payout.
+  getAlertasSaldoPositivoTrimestral: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const cutoff = new Date();
+      cutoff.setMonth(cutoff.getMonth() - 3);
+      const cutoffStr = cutoff.toISOString().slice(0, 10);
+      const rows = ((await db.execute(sql`
+        SELECT bhl."employeeId", e."nomeCompleto", bhs."saldoMinutos",
+          MIN(bhl.data) as "creditoMaisAntigo"
+        FROM banco_horas_lancamentos bhl
+        JOIN employees e ON e.id = bhl."employeeId"
+        JOIN banco_horas_saldo bhs ON bhs."employeeId" = bhl."employeeId" AND bhs."companyId" = bhl."companyId"
+        WHERE bhl."companyId" = ${input.companyId}
+          AND bhl.tipo = 'credito'
+          AND bhl.data < ${cutoffStr}::date
+          AND bhs."saldoMinutos" > 0
+        GROUP BY bhl."employeeId", e."nomeCompleto", bhs."saldoMinutos"
+        ORDER BY bhs."saldoMinutos" DESC
+      `)) as any).rows || [];
+      return rows;
+    }),
+
   getHeDestinoPadrao: protectedProcedure
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input }) => {
@@ -1266,6 +1319,29 @@ export const horasExtrasRouter = router({
       await db.execute(sql`
         UPDATE companies SET "heDestinoPadrao" = ${input.destino} WHERE id = ${input.companyId}
       `);
+      // Rev. 3977 — sincroniza com o parâmetro he_banco_horas (Configurações do Sistema),
+      // fonte única percebida pelo usuário nos dois pontos de edição.
+      const heBancoHorasValor = input.destino === "banco_horas" ? "1" : "0";
+      const { systemCriteria } = await import("../../drizzle/schema");
+      const { eq, and } = await import("drizzle-orm");
+      const existing = await db.select().from(systemCriteria)
+        .where(and(eq(systemCriteria.companyId, input.companyId), eq(systemCriteria.chave, "he_banco_horas")))
+        .limit(1);
+      if (existing.length > 0) {
+        await db.update(systemCriteria)
+          .set({ valor: heBancoHorasValor })
+          .where(eq(systemCriteria.id, existing[0].id));
+      } else {
+        await db.insert(systemCriteria).values({
+          companyId: input.companyId,
+          categoria: "horas_extras",
+          chave: "he_banco_horas",
+          valor: heBancoHorasValor,
+          descricao: "Empresa utiliza banco de horas (0=Não, 1=Sim)",
+          valorPadraoClt: "0",
+          unidade: "bool",
+        } as any);
+      }
       return { ok: true, destino: input.destino };
     }),
 });

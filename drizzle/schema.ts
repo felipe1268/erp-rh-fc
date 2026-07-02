@@ -1333,6 +1333,11 @@ export const employees = pgTable("employees", {
         convencaoColetiva: varchar({ length: 255 }),
         // you can use { mode: 'date' }, if you want to have Date as type for this column
         convencaoVigencia: date({ mode: 'string' }),
+        // Rev. 3977 — Banco de Horas: exceção BIDIRECIONAL por funcionário (crédito E débito).
+        // Quando =1, o funcionário NUNCA usa banco de horas (nem para HE excedente, nem para
+        // atraso/falta), seguindo sempre o padrão de pagamento — independente do parâmetro
+        // mestre da empresa (he_banco_horas / companies.heDestinoPadrao).
+        bancoHorasExcecao: smallint("banco_horas_excecao").default(0).notNull(),
         cargoConfianca: smallint("cargo_confianca").default(0).notNull(),
         cargoConfiancaDesde: date("cargo_confianca_desde", { mode: "string" }),
         cargoConfiancaGratificacao: varchar("cargo_confianca_gratificacao", { length: 20 }),

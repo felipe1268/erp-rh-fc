@@ -1,4 +1,46 @@
 /**
+ * Rev. 3977 — **BANCO DE HORAS: MULTIPLICADOR 1,5x, EXCEÇÃO POR FUNCIONÁRIO E RESCISÃO.**
+ *
+ * CAUSA-RAIZ / ESCOPO (Task #97 — 5 frentes):
+ *
+ * 1) **Multiplicador 1,5x no crédito** — quando a empresa usa Banco de Horas como
+ *    destino padrão de HE (`companies.heDestinoPadrao`), o crédito lançado em
+ *    `banco_horas_lancamentos`/`banco_horas_saldo` agora aplica ×1,5 sobre os minutos
+ *    de HE apurados (mesma lógica de hora extra monetária, só que em minutos).
+ *
+ * 2) **Débito automático de atraso/falta** — quando a empresa usa Banco de Horas,
+ *    atraso/falta do funcionário deixa de gerar desconto monetário e passa a debitar
+ *    minutos do banco (`minutosDebito = round((descontoFaltasBase+descontoAtrasosBase)
+ *    /valorHora*60)`), com bloco idempotente de reversão (`payrollEngine.ts`).
+ *    Exceção por funcionário: `employees.bancoHorasExcecao` (flag bidirecional) força
+ *    o funcionário a permanecer no desconto monetário tradicional mesmo com a empresa
+ *    no banco de horas. Gerenciável em "Exceções por Funcionário" (Banco de Horas →
+ *    Configuração).
+ *
+ * 3) **Sincronia bidirecional do toggle mestre** — critério `he_banco_horas` (aba
+ *    Critérios) e `companies.heDestinoPadrao` agora ficam sempre em sincronia (mudar
+ *    um lado reflete no outro).
+ *
+ * 4) **Alertas de saldo (sem pagamento automático)** — Banco de Horas ganhou 2 novas
+ *    listas de alerta, junto da existente de expiração em 12 meses: MENSAL (saldo
+ *    NEGATIVO — funcionário devendo horas) e TRIMESTRAL (saldo POSITIVO acumulado —
+ *    revisão de acúmulo). Apenas informativo: nenhuma baixa/pagamento é disparado
+ *    automaticamente a partir desses alertas.
+ *
+ * 5) **Rescisão inclui o saldo do Banco de Horas** — `calcularRescisaoCompleta` ganhou
+ *    `saldoBancoHorasMinutos`/`valorHoraBancoHoras`: saldo POSITIVO vira PROVENTO (×1,5,
+ *    mesmo multiplicador do crédito normal); saldo NEGATIVO vira DESCONTO (valor CHEIO,
+ *    SEM multiplicador — dívida não é hora extra). Lido de `banco_horas_saldo` em TODOS
+ *    os 8 pontos de cálculo de rescisão em `avisoPrevioFerias.ts` (criação, listagem,
+ *    getById, geração oficial, comparativo trabalhado×indenizado, atualização e
+ *    recálculo em lote) via helper `getSaldoBancoHorasParaRescisao`. Exibido em
+ *    `PainelRH.tsx` como linha própria em proventos/descontos e no detalhamento
+ *    Grupo A/B.
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3976 — **TERCEIROS: TRIPLE-FIX NOS DOCUMENTOS DE FUNCIONÁRIOS TERCEIROS.**
  *
  * CAUSA-RAIZ (3 bugs combinados):

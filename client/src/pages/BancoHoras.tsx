@@ -50,6 +50,20 @@ export default function BancoHoras() {
     { companyId },
     { enabled: canAccess && companyId > 0 }
   );
+  // Rev. 3977 — lista de funcionários CLT ativos para gestão da exceção bidirecional
+  // (funcionário específico foge da regra padrão da empresa no destino de HE / débito de banco).
+  const empListaExcecao = trpc.employees.list.useQuery(
+    { companyId, status: "Ativo", excludeTerminated: true },
+    { enabled: canAccess && companyId > 0 }
+  );
+  const [excecaoSearch, setExcecaoSearch] = useState("");
+  const setExcecaoMut = trpc.employees.update.useMutation({
+    onSuccess: () => {
+      toast.success("Exceção atualizada.");
+      empListaExcecao.refetch();
+    },
+    onError: (err) => toast.error(err.message),
+  });
   const setDestinoPadraoMut = trpc.horasExtras.setHeDestinoPadrao.useMutation({
     onSuccess: (data) => {
       toast.success(data.destino === "banco_horas"
@@ -66,6 +80,16 @@ export default function BancoHoras() {
     { enabled: canAccess && companyId > 0 }
   );
   const alertasExpiracao = trpc.horasExtras.getAlertasExpiracao.useQuery(
+    { companyId },
+    { enabled: canAccess && companyId > 0 }
+  );
+  // Rev. 3977 — alerta mensal de saldo negativo (débito de atraso/falta) e alerta
+  // trimestral de saldo positivo elevado — apenas informativos, SEM auto-payout.
+  const alertasSaldoNegativo = trpc.horasExtras.getAlertasSaldoNegativo.useQuery(
+    { companyId },
+    { enabled: canAccess && companyId > 0 }
+  );
+  const alertasSaldoPositivoTrimestral = trpc.horasExtras.getAlertasSaldoPositivoTrimestral.useQuery(
     { companyId },
     { enabled: canAccess && companyId > 0 }
   );
@@ -115,6 +139,15 @@ export default function BancoHoras() {
 
   const saldos = useMemo(() => (saldoBanco.data ?? []) as any[], [saldoBanco.data]);
   const alertas = useMemo(() => (alertasExpiracao.data ?? []) as any[], [alertasExpiracao.data]);
+  const alertasNegativos = useMemo(() => (alertasSaldoNegativo.data ?? []) as any[], [alertasSaldoNegativo.data]);
+  const alertasPositivosTri = useMemo(() => (alertasSaldoPositivoTrimestral.data ?? []) as any[], [alertasSaldoPositivoTrimestral.data]);
+  const empExcecaoList = useMemo(() => {
+    const list = (empListaExcecao.data ?? []) as any[];
+    const cltOnly = list.filter((e: any) => e.tipoContrato === "CLT");
+    if (!excecaoSearch.trim()) return cltOnly;
+    const s = excecaoSearch.toLowerCase();
+    return cltOnly.filter((e: any) => String(e.nomeCompleto || "").toLowerCase().includes(s));
+  }, [empListaExcecao.data, excecaoSearch]);
   const lancamentosSaldosList = useMemo(() => (lancamentosSaldos.data ?? []) as any[], [lancamentosSaldos.data]);
   const lancamentosExtratoList = useMemo(() => (lancamentosExtrato.data ?? []) as any[], [lancamentosExtrato.data]);
   const totalBancoMins = useMemo(() => saldos.reduce((acc: number, s: any) => acc + Number(s.saldoMinutos || 0), 0), [saldos]);
@@ -167,7 +200,7 @@ export default function BancoHoras() {
   const tabs: { id: TabView; label: string; icon: any; count?: number }[] = [
     { id: "saldos", label: "Saldos", icon: Users, count: saldos.length },
     { id: "extrato", label: "Extrato Mensal", icon: FileText },
-    { id: "alertas", label: "Alertas", icon: AlertTriangle, count: alertas.length },
+    { id: "alertas", label: "Alertas", icon: AlertTriangle, count: alertas.length + alertasNegativos.length + alertasPositivosTri.length },
     { id: "configuracao", label: "Regras & Orientação", icon: Scale },
   ];
 
@@ -255,7 +288,7 @@ export default function BancoHoras() {
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
           <Card className="border-blue-200">
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground">Total em Banco</p>
@@ -274,7 +307,21 @@ export default function BancoHoras() {
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground">Alertas de Expiração</p>
               <p className={`text-2xl font-bold mt-1 ${alertas.length > 0 ? "text-amber-600" : "text-gray-400"}`}>{alertas.length}</p>
-              <p className="text-xs text-muted-foreground mt-1">créditos a vencer</p>
+              <p className="text-xs text-muted-foreground mt-1">créditos a vencer (12 meses)</p>
+            </CardContent>
+          </Card>
+          <Card className={alertasNegativos.length > 0 ? "border-red-300 bg-red-50/30" : "border-gray-200"}>
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">Saldo Negativo (mensal)</p>
+              <p className={`text-2xl font-bold mt-1 ${alertasNegativos.length > 0 ? "text-red-600" : "text-gray-400"}`}>{alertasNegativos.length}</p>
+              <p className="text-xs text-muted-foreground mt-1">funcionários devendo horas</p>
+            </CardContent>
+          </Card>
+          <Card className={alertasPositivosTri.length > 0 ? "border-sky-300 bg-sky-50/30" : "border-gray-200"}>
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">Saldo Positivo (trimestral)</p>
+              <p className={`text-2xl font-bold mt-1 ${alertasPositivosTri.length > 0 ? "text-sky-600" : "text-gray-400"}`}>{alertasPositivosTri.length}</p>
+              <p className="text-xs text-muted-foreground mt-1">créditos há +3 meses</p>
             </CardContent>
           </Card>
         </div>
@@ -840,6 +887,93 @@ export default function BancoHoras() {
                 <p className="text-muted-foreground">Todos os créditos estão dentro do prazo de compensação.</p>
               </div>
             )}
+
+            {/* Rev. 3977 — Alerta MENSAL: saldo negativo (débito de atraso/falta acumulado) */}
+            {alertasNegativos.length > 0 ? (
+              <Card className="border-red-300">
+                <CardContent className="p-5">
+                  <p className="font-semibold text-sm mb-4 flex items-center gap-2 text-red-700">
+                    <AlertTriangle className="h-4 w-4" /> Saldo Negativo no Banco de Horas (Alerta Mensal)
+                  </p>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    Funcionários com débito de atraso/falta acumulado no banco de horas (empresa configurada para
+                    debitar atraso/falta do banco em vez de desconto na folha). Apenas informativo — nenhum
+                    desconto ou pagamento é gerado automaticamente a partir deste alerta.
+                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b-2 border-red-200 bg-red-50/50">
+                          <th className="text-left py-2 px-3">Funcionário</th>
+                          <th className="text-right py-2 px-3">Saldo</th>
+                          <th className="text-right py-2 px-3">Última Movimentação</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {alertasNegativos.map((a: any, i: number) => (
+                          <tr key={i} className="border-b border-red-100 hover:bg-red-50/40">
+                            <td className="py-2.5 px-3 font-medium">{a.nomeCompleto}</td>
+                            <td className="text-right py-2.5 px-3 font-bold text-red-700">{minsToHHMM(Number(a.saldoMinutos))}</td>
+                            <td className="text-right py-2.5 px-3 text-xs text-muted-foreground">
+                              {a.atualizadoEm ? new Date(a.atualizadoEm).toLocaleDateString("pt-BR") : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-8 text-center text-sm">
+                <div className="h-10 w-10 rounded-full bg-green-100 text-green-600 flex items-center justify-center mx-auto mb-3">✓</div>
+                <p className="font-medium text-green-700 mb-1">Nenhum saldo negativo</p>
+                <p className="text-muted-foreground">Nenhum funcionário está devendo horas ao banco.</p>
+              </div>
+            )}
+
+            {/* Rev. 3977 — Alerta TRIMESTRAL: saldo positivo elevado (créditos há mais de 3 meses) */}
+            {alertasPositivosTri.length > 0 ? (
+              <Card className="border-sky-300">
+                <CardContent className="p-5">
+                  <p className="font-semibold text-sm mb-4 flex items-center gap-2 text-sky-700">
+                    <AlertTriangle className="h-4 w-4" /> Saldo Positivo Acumulado (Alerta Trimestral)
+                  </p>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    Funcionários com créditos no banco de horas há mais de 3 meses. Apenas informativo, para o RH
+                    avaliar a compensação (folga) junto ao colaborador — nenhum pagamento automático é gerado.
+                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b-2 border-sky-200 bg-sky-50/50">
+                          <th className="text-left py-2 px-3">Funcionário</th>
+                          <th className="text-right py-2 px-3">Saldo</th>
+                          <th className="text-right py-2 px-3">Crédito Mais Antigo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {alertasPositivosTri.map((a: any, i: number) => (
+                          <tr key={i} className="border-b border-sky-100 hover:bg-sky-50/40">
+                            <td className="py-2.5 px-3 font-medium">{a.nomeCompleto}</td>
+                            <td className="text-right py-2.5 px-3 font-bold text-sky-700">{minsToHHMM(Number(a.saldoMinutos))}</td>
+                            <td className="text-right py-2.5 px-3 text-xs text-muted-foreground">
+                              {a.creditoMaisAntigo ? new Date(a.creditoMaisAntigo).toLocaleDateString("pt-BR") : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-8 text-center text-sm">
+                <div className="h-10 w-10 rounded-full bg-green-100 text-green-600 flex items-center justify-center mx-auto mb-3">✓</div>
+                <p className="font-medium text-green-700 mb-1">Nenhum saldo positivo acima de 3 meses</p>
+                <p className="text-muted-foreground">Nenhum crédito com mais de um trimestre acumulado.</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -898,6 +1032,82 @@ export default function BancoHoras() {
                     </div>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-gray-200">
+              <CardContent className="p-6">
+                <h3 className="font-bold text-base mb-1 flex items-center gap-2">
+                  <ShieldAlert className="h-5 w-5 text-gray-500" />
+                  Exceções por Funcionário
+                </h3>
+                <p className="text-xs text-muted-foreground mb-4">
+                  A regra padrão da empresa (Hora Extra × Banco de Horas, e o débito de atraso/falta no banco)
+                  vale para todos os funcionários CLT. Marque a exceção para que um funcionário específico
+                  siga a regra OPOSTA — tanto para o destino de HE quanto para o débito de atraso/falta.
+                  {!isBancoAtivo && (
+                    <span className="block mt-1 text-orange-600 font-medium">
+                      A empresa está com "Hora Extra" (pagamento) como padrão — enquanto isso, exceções não têm
+                      efeito, pois toda a empresa usa pagamento padrão.
+                    </span>
+                  )}
+                </p>
+                <div className="relative mb-3 max-w-sm">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar funcionário..."
+                    value={excecaoSearch}
+                    onChange={e => setExcecaoSearch(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+                {empListaExcecao.isLoading ? (
+                  <div className="text-center py-6 text-muted-foreground text-sm">Carregando funcionários...</div>
+                ) : empExcecaoList.length > 0 ? (
+                  <div className="overflow-x-auto border rounded-lg">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b-2 border-gray-200 bg-gray-50/50">
+                          <th className="text-left py-2 px-3 font-semibold">Funcionário</th>
+                          <th className="text-left py-2 px-3 font-semibold">Cargo</th>
+                          <th className="text-center py-2 px-3 font-semibold">Exceção (regra oposta à empresa)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {empExcecaoList.map((e: any) => {
+                          const isExcecao = Number(e.bancoHorasExcecao || 0) === 1;
+                          return (
+                            <tr key={e.id} className="border-b border-gray-100 hover:bg-gray-50">
+                              <td className="py-2 px-3 font-medium">{e.nomeCompleto}</td>
+                              <td className="py-2 px-3 text-xs text-muted-foreground">{e.funcao || e.cargo || "—"}</td>
+                              <td className="text-center py-2 px-3">
+                                <Checkbox
+                                  aria-label={`Exceção para ${e.nomeCompleto}`}
+                                  checked={isExcecao}
+                                  disabled={setExcecaoMut.isPending}
+                                  onCheckedChange={(c) => {
+                                    setExcecaoMut.mutate({
+                                      id: e.id,
+                                      companyId,
+                                      bancoHorasExcecao: c ? 1 : 0,
+                                    });
+                                  }}
+                                />
+                                {isExcecao && (
+                                  <span className="ml-2 text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-bold align-middle">
+                                    EXCEÇÃO ATIVA
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-muted-foreground text-sm">Nenhum funcionário CLT encontrado.</div>
+                )}
               </CardContent>
             </Card>
 
