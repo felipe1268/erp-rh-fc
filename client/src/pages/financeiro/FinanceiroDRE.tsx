@@ -15,8 +15,8 @@ import {
   CalendarDays, Sparkles, Info, BookOpen, ExternalLink, AlertTriangle,
   Lightbulb, Activity, ArrowUpRight, ArrowDownRight, Minus, ShieldCheck,
   ChevronRight as ChevronRightIcon, Layers, ListTree, Calculator, Percent,
-  ArrowLeft, Receipt, CheckCircle2, XCircle, Building2, Scale, FileDown,
-  Target, Zap,
+  ArrowLeft, Receipt, CheckCircle2, XCircle, Building2, Scale,
+  Target, Zap, Eye, TrendingUp as TrendUp, Banknote, GitMerge, HelpCircle,
 } from "lucide-react";
 
 type DRELinhaKey =
@@ -194,20 +194,19 @@ export default function FinanceiroDRE() {
     { companyId, periodo, tipoPeriodo },
     { enabled: !!companyId }
   );
-  const [dfcLoading, setDfcLoading] = useState(false);
+  const [dfcOpen, setDfcOpen] = useState(false);
 
-  const handleExportarDFC = async () => {
-    if (!dre || dfcLoading) return;
-    setDfcLoading(true);
-    try {
-      const { gerarDFCPdf } = await import("@/lib/dfcPdf");
-      await gerarDFCPdf({ dre, bankComp, dfcData, periodo, tipoPeriodo });
-    } catch (e) {
-      console.error("Erro ao gerar DFC PDF:", e);
-    } finally {
-      setDfcLoading(false);
-    }
-  };
+  // Cálculos da DFC (Método Indireto Simplificado)
+  const dfcFinancNaoOp = (dfcData?.itens ?? []).filter((i: any) => i.classificacao === "nao_operacional");
+  const dfcInvestCapex = (dfcData?.itens ?? []).filter((i: any) => i.classificacao === "investimento");
+  const dfcStFinanc = dfcFinancNaoOp.reduce((s: number, i: any) => s + (i.tipo === "receita" ? i.total : -i.total), 0);
+  const dfcStInvest = dfcInvestCapex.reduce((s: number, i: any) => s + (i.tipo === "receita" ? i.total : -i.total), 0);
+  const dfcVarCalc = (dre?.lucroLiquido ?? 0) + dfcStFinanc + dfcStInvest;
+  const dfcResidual = (bankComp?.bankSaldo ?? 0) - dfcVarCalc;
+  const dfcDrePos = (dre?.lucroLiquido ?? 0) >= 0;
+  const dfcBankPos = (bankComp?.bankSaldo ?? 0) >= 0;
+  const dfcDivergente = dfcDrePos !== dfcBankPos;
+
   // Prioriza o resultado recém-gerado SÓ se for do período atualmente
   // selecionado (mutation.data persiste entre renders; ao trocar de período
   // sem refazer, deve cair para a análise SALVA do novo período).
@@ -421,16 +420,13 @@ export default function FinanceiroDRE() {
             <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
               <Button
                 variant="outline" size="sm"
-                onClick={handleExportarDFC}
-                disabled={dfcLoading || !dre}
-                className="relative overflow-hidden bg-orange-500/20 border-orange-400/40 text-white hover:bg-orange-500/30 hover:text-white"
-                title="Baixar PDF com a Demonstração do Fluxo de Caixa (reconciliação DRE × banco)"
+                onClick={() => setDfcOpen(true)}
+                disabled={!dre}
+                className="bg-orange-500/20 border-orange-400/40 text-white hover:bg-orange-500/30 hover:text-white"
+                title="Visualizar Demonstração do Fluxo de Caixa — reconciliação DRE × banco"
               >
-                {dfcLoading && (
-                  <span className="absolute inset-0 bg-white/10 animate-pulse rounded" />
-                )}
-                <FileDown className="w-4 h-4 mr-1.5" />
-                {dfcLoading ? "Gerando…" : "Exportar DFC (PDF)"}
+                <Eye className="w-4 h-4 mr-1.5" />
+                Ver DFC
               </Button>
               <Button
                 variant="outline" size="sm"
@@ -1091,6 +1087,268 @@ export default function FinanceiroDRE() {
                   </p>
                 </div>
               )}
+            </div>
+          </SheetContent>
+        </Sheet>
+
+        {/* ──────────────────────────────────────────────────────────
+            DFC — Demonstração do Fluxo de Caixa (visualização)
+        ────────────────────────────────────────────────────────── */}
+        <Sheet open={dfcOpen} onOpenChange={setDfcOpen}>
+          <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto p-0">
+            {/* Cabeçalho sticky */}
+            <SheetHeader className="sticky top-0 z-10 bg-white border-b border-gray-100 px-5 py-4">
+              <div className="flex items-center gap-3">
+                <span className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
+                  <GitMerge className="w-5 h-5 text-blue-600" />
+                </span>
+                <div className="min-w-0">
+                  <SheetTitle className="text-sm font-bold text-gray-900 leading-tight">
+                    DFC — Demonstração do Fluxo de Caixa
+                  </SheetTitle>
+                  <p className="text-[11px] text-gray-400 mt-0.5">
+                    Método Indireto Simplificado · NBC TG 03 R3 · {tituloPeriodo}
+                  </p>
+                </div>
+              </div>
+            </SheetHeader>
+
+            <div className="p-5 space-y-5">
+
+              {/* ── SEÇÃO 1 ── */}
+              <div>
+                <div className="rounded-xl px-4 py-3 mb-3" style={{ background: "#1B3A6B" }}>
+                  <p className="text-white font-bold text-sm">SEÇÃO 1 — PONTO DE PARTIDA: Resultado da Operação</p>
+                  <p className="text-white/70 text-xs mt-0.5">O DRE mede o desempenho econômico — quanto a empresa ganhou ou perdeu nas atividades normais.</p>
+                </div>
+
+                {/* Caixa explicativa */}
+                <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 mb-3 text-xs text-blue-800 leading-relaxed">
+                  <strong>ℹ Regime de Competência vs. Regime de Caixa:</strong> O DRE registra receitas quando realizadas e despesas quando incorridas — independente de quando o dinheiro movimentou o banco. Por isso o resultado do DRE quase nunca é igual ao saldo bancário do período.
+                </div>
+
+                {/* Tabela waterfall simplificada */}
+                <div className="rounded-xl border border-gray-100 overflow-hidden">
+                  <div className="grid grid-cols-2 px-4 py-2 bg-gray-50 border-b border-gray-100">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Linha</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 text-right">R$ (valores em reais)</span>
+                  </div>
+                  {dre && ([
+                    { label: "1. RECEITA BRUTA", v: dre.receitaBruta, indent: false, total: false },
+                    { label: "  (–) Custos Diretos de Obra", v: -dre.custosObra, indent: true, total: false },
+                    { label: "= LUCRO BRUTO", v: dre.lucroBruto, indent: false, total: true },
+                    { label: "  (–) Despesas Fixas", v: -dre.despesasFixas, indent: true, total: false },
+                    { label: "  (–) Despesas Variáveis", v: -dre.despesasVariaveis, indent: true, total: false },
+                    { label: "= EBITDA", v: dre.ebitda, indent: false, total: true },
+                    { label: "  (±) Resultado Financeiro", v: dre.resultadoFinanceiro, indent: true, total: false },
+                    { label: "= LAIR (Antes dos Impostos)", v: dre.lair, indent: false, total: true },
+                    { label: "  (–) Impostos sobre o Resultado", v: -dre.impostos, indent: true, total: false },
+                    { label: "= LUCRO LÍQUIDO  ← ponto de partida da DFC", v: dre.lucroLiquido, indent: false, total: true, destaque: true },
+                  ] as { label: string; v: number; indent: boolean; total: boolean; destaque?: boolean }[]).map((row, i) => (
+                    <div
+                      key={i}
+                      className={`grid grid-cols-2 px-4 py-2.5 border-b border-gray-50 last:border-0 ${
+                        row.destaque ? "bg-blue-50" : row.total ? "bg-gray-50/70" : i % 2 === 0 ? "bg-white" : "bg-gray-50/30"
+                      }`}
+                    >
+                      <span className={`text-xs ${row.indent ? "pl-4 text-gray-500" : row.destaque ? "font-bold text-blue-800" : row.total ? "font-semibold text-gray-700" : "text-gray-700"}`}>
+                        {row.label}
+                      </span>
+                      <span className={`text-xs text-right font-mono tabular-nums ${
+                        row.destaque ? "font-bold text-blue-700" :
+                        row.total ? (row.v >= 0 ? "font-semibold text-emerald-600" : "font-semibold text-red-600") :
+                        (row.v >= 0 ? "text-gray-600" : "text-red-500")
+                      }`}>
+                        {row.v >= 0 ? formatBRL(row.v) : `(${formatBRL(Math.abs(row.v))})`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── SEÇÃO 2 ── */}
+              <div>
+                <div className="rounded-xl px-4 py-3 mb-3" style={{ background: "#1D4ED8" }}>
+                  <p className="text-white font-bold text-sm">SEÇÃO 2 — AJUSTES: Movimentações fora do DRE</p>
+                  <p className="text-white/70 text-xs mt-0.5">Entradas e saídas que aparecem no banco mas que a contabilidade NÃO registra como receita ou despesa operacional.</p>
+                </div>
+
+                <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 mb-3 text-xs text-blue-800 leading-relaxed">
+                  <strong>ℹ Dois tipos de movimento ficam fora do DRE:</strong> (1) Atividades de Financiamento — empréstimos recebidos entram no banco, mas são dívida, não receita; parcelas pagas saem do banco mas são quitação de dívida, não despesa. (2) Atividades de Investimento — compra de equipamentos, veículos, obras (CAPEX). O dinheiro sai mas o bem fica no ativo da empresa.
+                </div>
+
+                {/* Grupo Financiamento */}
+                {dfcFinancNaoOp.length > 0 && (
+                  <div className="mb-4">
+                    <div className="bg-gray-50 border border-gray-100 rounded-xl overflow-hidden">
+                      <div className="px-4 py-2.5 bg-gray-100 border-b border-gray-200">
+                        <p className="text-xs font-bold uppercase tracking-wider text-gray-600">Atividades de Financiamento · Empréstimos · Mútuos · Aportes</p>
+                      </div>
+                      <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 px-4 py-1.5 border-b border-gray-100">
+                        <span className="text-[10px] font-semibold text-gray-400 uppercase">Conta</span>
+                        <span className="text-[10px] font-semibold text-gray-400 uppercase">Atividade</span>
+                        <span className="text-[10px] font-semibold text-gray-400 uppercase text-right">Valor (R$)</span>
+                      </div>
+                      {dfcFinancNaoOp.map((item: any, i: number) => (
+                        <div key={i} className="grid grid-cols-[1fr_auto_auto] gap-x-3 px-4 py-2.5 border-b border-gray-50 last:border-0 items-center">
+                          <span className="text-xs text-gray-700 truncate" title={item.contaNome}>{item.contaNome}</span>
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${item.tipo === "receita" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
+                            {item.tipo === "receita" ? "Recebimento" : "Pagamento"}
+                          </span>
+                          <span className={`text-xs font-mono tabular-nums text-right ${item.tipo === "receita" ? "text-emerald-600" : "text-red-600"}`}>
+                            {item.tipo === "receita" ? "+" : "–"}{formatBRL(item.total)}
+                          </span>
+                        </div>
+                      ))}
+                      <div className="grid grid-cols-[1fr_auto] gap-x-3 px-4 py-2.5 bg-blue-50 border-t border-blue-100">
+                        <span className="text-xs font-bold text-blue-800">SUBTOTAL</span>
+                        <span className={`text-xs font-bold font-mono tabular-nums ${dfcStFinanc >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                          {dfcStFinanc >= 0 ? formatBRL(dfcStFinanc) : `(${formatBRL(Math.abs(dfcStFinanc))})`}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Grupo Investimento */}
+                {dfcInvestCapex.length > 0 && (
+                  <div className="mb-4">
+                    <div className="bg-gray-50 border border-gray-100 rounded-xl overflow-hidden">
+                      <div className="px-4 py-2.5 bg-gray-100 border-b border-gray-200">
+                        <p className="text-xs font-bold uppercase tracking-wider text-gray-600">Atividades de Investimento · CAPEX · Aquisição de Ativos</p>
+                      </div>
+                      <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 px-4 py-1.5 border-b border-gray-100">
+                        <span className="text-[10px] font-semibold text-gray-400 uppercase">Conta</span>
+                        <span className="text-[10px] font-semibold text-gray-400 uppercase">Atividade</span>
+                        <span className="text-[10px] font-semibold text-gray-400 uppercase text-right">Valor (R$)</span>
+                      </div>
+                      {dfcInvestCapex.map((item: any, i: number) => (
+                        <div key={i} className="grid grid-cols-[1fr_auto_auto] gap-x-3 px-4 py-2.5 border-b border-gray-50 last:border-0 items-center">
+                          <span className="text-xs text-gray-700 truncate" title={item.contaNome}>{item.contaNome}</span>
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${item.tipo === "receita" ? "bg-emerald-100 text-emerald-700" : "bg-orange-100 text-orange-700"}`}>
+                            {item.tipo === "receita" ? "Venda de Ativo" : "Compra/CAPEX"}
+                          </span>
+                          <span className={`text-xs font-mono tabular-nums text-right ${item.tipo === "receita" ? "text-emerald-600" : "text-orange-600"}`}>
+                            {item.tipo === "receita" ? "+" : "–"}{formatBRL(item.total)}
+                          </span>
+                        </div>
+                      ))}
+                      <div className="grid grid-cols-[1fr_auto] gap-x-3 px-4 py-2.5 bg-blue-50 border-t border-blue-100">
+                        <span className="text-xs font-bold text-blue-800">SUBTOTAL</span>
+                        <span className={`text-xs font-bold font-mono tabular-nums ${dfcStInvest >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                          {dfcStInvest >= 0 ? formatBRL(dfcStInvest) : `(${formatBRL(Math.abs(dfcStInvest))})`}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {dfcFinancNaoOp.length === 0 && dfcInvestCapex.length === 0 && (
+                  <div className="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-400">
+                    Nenhuma movimentação fora do DRE identificada neste período.
+                  </div>
+                )}
+              </div>
+
+              {/* ── SEÇÃO 3 ── */}
+              <div>
+                <div className="rounded-xl px-4 py-3 mb-3" style={{ background: "#065F46" }}>
+                  <p className="text-white font-bold text-sm">SEÇÃO 3 — A CONTA FECHA: Reconciliação Final</p>
+                  <p className="text-white/70 text-xs mt-0.5">Somando o resultado operacional com os ajustes chegamos à variação real de caixa do período.</p>
+                </div>
+
+                <div className="rounded-xl border border-gray-100 overflow-hidden">
+                  {([
+                    { label: "Lucro Líquido (DRE)", sub: "Resultado da operação — receitas, custos e despesas", v: dre?.lucroLiquido ?? 0, variant: "normal" as const },
+                    { label: "(+) Atividades de Financiamento", sub: "Empréstimos recebidos menos amortizações pagas", v: dfcStFinanc, variant: "normal" as const },
+                    { label: "(+) Atividades de Investimento", sub: "CAPEX e aquisições de ativo", v: dfcStInvest, variant: "normal" as const },
+                    { label: "= Variação de Caixa (Calculada)", sub: "Somatório das três linhas acima", v: dfcVarCalc, variant: "total" as const },
+                    { label: "Saldo Bancário Real (Extrato Conciliado)", sub: `Entradas ${formatBRL(bankComp?.bankEntradas ?? 0)} · Saídas ${formatBRL(bankComp?.bankSaidas ?? 0)}`, v: bankComp?.bankSaldo ?? 0, variant: "bank" as const },
+                    { label: "Diferença Residual (Capital de Giro + Timing)", sub: "Regime de competência, prazos de recebimento, outros ajustes", v: dfcResidual, variant: "final" as const },
+                  ] as { label: string; sub: string; v: number; variant: "normal" | "total" | "bank" | "final" }[]).map((row, i) => {
+                    const bg =
+                      row.variant === "bank" ? "bg-emerald-50" :
+                      row.variant === "total" ? "bg-blue-50/60" :
+                      row.variant === "final" ? (Math.abs(dfcResidual) > 5000 ? "bg-amber-50" : "bg-green-50") :
+                      i % 2 === 0 ? "bg-white" : "bg-gray-50/40";
+                    const lblCls =
+                      row.variant === "bank" ? "font-bold text-emerald-700" :
+                      row.variant === "total" ? "font-bold text-blue-700" :
+                      row.variant === "final" ? (Math.abs(dfcResidual) > 5000 ? "font-bold text-amber-800" : "font-bold text-emerald-700") :
+                      "text-gray-700";
+                    return (
+                      <div key={i} className={`${bg} px-4 py-3 ${i < 5 ? "border-b border-gray-100" : ""}`}>
+                        <div className="flex items-start justify-between gap-3">
+                          <span className={`text-xs ${lblCls}`}>{row.label}</span>
+                          <span className={`text-xs font-mono tabular-nums font-semibold shrink-0 ${row.v >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                            {row.v >= 0 ? formatBRL(row.v) : `(${formatBRL(Math.abs(row.v))})`}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-0.5">{row.sub}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* ── SEÇÃO 4 ── */}
+              <div>
+                <div className="rounded-xl px-4 py-3 mb-3" style={{ background: "#92400E" }}>
+                  <p className="text-white font-bold text-sm">SEÇÃO 4 — O QUE ISSO SIGNIFICA?</p>
+                  <p className="text-white/70 text-xs mt-0.5">Interpretação dos números em linguagem objetiva.</p>
+                </div>
+
+                {(() => {
+                  let icon = "✓";
+                  let bgCls = "bg-green-50 border-green-200";
+                  let txtCls = "text-green-800";
+                  let titulo = "SITUAÇÃO POSITIVA";
+                  let texto = "";
+                  if (!dfcDivergente && dfcDrePos) {
+                    icon = "✓"; bgCls = "bg-green-50 border-green-200"; txtCls = "text-green-800";
+                    titulo = "SITUAÇÃO POSITIVA";
+                    texto = "A empresa tanto gerou resultado operacional positivo (DRE) quanto manteve o caixa bancário positivo. Os dois indicadores estão alinhados, o que demonstra solidez financeira no período. Continue monitorando a margem EBITDA e a geração de caixa.";
+                  } else if (!dfcDivergente && !dfcDrePos) {
+                    icon = "⚠"; bgCls = "bg-red-50 border-red-200"; txtCls = "text-red-800";
+                    titulo = "SITUAÇÃO DESAFIADORA";
+                    texto = "Tanto o resultado operacional (DRE) quanto o caixa bancário ficaram negativos. A operação está consumindo mais recursos do que gera. Atenção: revise custos, melhore o prazo de recebimento e avalie o nível de endividamento.";
+                  } else if (!dfcDrePos && dfcBankPos) {
+                    icon = "ℹ"; bgCls = "bg-blue-50 border-blue-200"; txtCls = "text-blue-800";
+                    titulo = "RESULTADO NEGATIVO, CAIXA POSITIVO";
+                    texto = "A operação (DRE) apresentou prejuízo, mas o caixa ficou positivo porque a empresa recebeu entradas externas — empréstimos, aportes ou mútuos intercompany. Atenção: o caixa positivo é temporário e vem de dívida, não de geração de valor. O foco deve ser reverter o resultado operacional.";
+                  } else {
+                    icon = "⚠"; bgCls = "bg-amber-50 border-amber-200"; txtCls = "text-amber-900";
+                    titulo = "RESULTADO POSITIVO, CAIXA NEGATIVO";
+                    texto = "A operação (DRE) foi lucrativa, mas o caixa caiu porque a empresa fez investimentos (CAPEX) ou pagou amortizações de dívidas. Isso é saudável se os investimentos gerarem retorno futuro. Monitore o caixa operacional para garantir que a empresa não fique descapitalizada.";
+                  }
+                  return (
+                    <div className={`rounded-xl border px-4 py-4 ${bgCls}`}>
+                      <p className={`text-xs font-bold mb-1.5 ${txtCls}`}>{icon} Diagnóstico do Período — {titulo}</p>
+                      <p className={`text-xs leading-relaxed ${txtCls}`}>{texto}</p>
+                    </div>
+                  );
+                })()}
+
+                {Math.abs(dfcResidual) > 1000 && (
+                  <div className={`mt-3 rounded-xl border px-4 py-3 ${Math.abs(dfcResidual) > 5000 ? "bg-amber-50 border-amber-200" : "bg-gray-50 border-gray-200"}`}>
+                    <p className={`text-[11px] font-semibold mb-1 ${Math.abs(dfcResidual) > 5000 ? "text-amber-800" : "text-gray-700"}`}>
+                      ℹ Sobre a Diferença Residual de {formatBRL(Math.abs(dfcResidual))}
+                      {bankComp?.bankSaldo !== 0 && (
+                        <> ({Math.abs(dfcResidual / (bankComp?.bankSaldo !== 0 ? bankComp!.bankSaldo : 1) * 100).toFixed(1)}% do saldo bancário)</>
+                      )}
+                    </p>
+                    <p className={`text-[11px] leading-relaxed ${Math.abs(dfcResidual) > 5000 ? "text-amber-700" : "text-gray-500"}`}>
+                      Representa variações no capital de giro e diferenças de timing entre o regime de competência e o regime de caixa. Causas típicas: (a) receitas reconhecidas no DRE ainda não recebidas; (b) despesas pagas antecipadamente (pré-pagas); (c) variações em estoques; (d) recebimentos de clientes de períodos anteriores que entraram no banco agora. Para decompor com precisão, é necessária uma análise do Balanço Patrimonial.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Rodapé */}
+              <div className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3 text-[10px] text-gray-400 leading-relaxed">
+                DFC Simplificada · NBC TG 03 R3 · Método Indireto · Uso interno — não substitui demonstrações contábeis formais. Período: {tituloPeriodo}.
+              </div>
+
             </div>
           </SheetContent>
         </Sheet>

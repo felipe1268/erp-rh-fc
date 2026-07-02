@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3954** — **ANÁLISE IA DO DRE: PARETO DE CUSTOS + PLANO DE AÇÃO (EMPREITADA DE OBRA).** dreAnaliseIA.ts reescrito para diagnóstico cirúrgico: nova fn `calcularDRECustoPorConta` (Pareto top 15 por valor com pct% acumulado); prompt "CFO de empreitada" com benchmarks específicos (CDO 65-80%, Overhead máx 15%, Folha Indireta/CDO máx 18%); resposta com `planoAcao[]` (5-8 ações com prioridade/prazo/impacto/probabilidade) e `paretoCustos[]`; UI: Pareto horizontal + Plano de Ação com cards. ZERO DELETE.
+- **Rev. 3955** — **DFC: VISUALIZAÇÃO IN-APP (SHEET) SUBSTITUINDO O PDF.** Botão "Exportar DFC (PDF)" → "Ver DFC" (abre Sheet lateral). Sheet com 4 seções em React: (1) waterfall DRE simplificado, (2) ajustes de financiamento/investimento com pills, (3) bridge de reconciliação com cores, (4) diagnóstico 4 cenários. Fix: getDFCData `itensRes.map is not a function` (dbExecute retorna `{rows}`, não array). ZERO DELETE.
 
-- **Rev. 3953** — **DFC PDF: DEMONSTRAÇÃO DO FLUXO DE CAIXA DIDÁTICA.** PDF client-side (jsPDF) com 4 seções: waterfall DRE, ajustes fora do DRE (nao_operacional + investimento por conta), reconciliação final (bridge table) e interpretação contextual 4 cenários. Novo endpoint `getDFCData`; botão "Exportar DFC (PDF)" no header do DRE. FIX: dbExecute `$N` repetido → params distintos $1..$7. ZERO DELETE.
+- **Rev. 3954** — **ANÁLISE IA DO DRE: PARETO DE CUSTOS + PLANO DE AÇÃO (EMPREITADA DE OBRA).** dreAnaliseIA.ts reescrito para diagnóstico cirúrgico: nova fn `calcularDRECustoPorConta` (Pareto top 15 por valor com pct% acumulado); prompt "CFO de empreitada" com benchmarks específicos (CDO 65-80%, Overhead máx 15%, Folha Indireta/CDO máx 18%); resposta com `planoAcao[]` (5-8 ações com prioridade/prazo/impacto/probabilidade) e `paretoCustos[]`; UI: Pareto horizontal + Plano de Ação com cards. ZERO DELETE.
 
 ### 5 one-liners
 

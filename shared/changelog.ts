@@ -1,4 +1,27 @@
 /**
+ * Rev. 3955 — **DFC: VISUALIZAÇÃO IN-APP (SHEET) EM SUBSTITUIÇÃO AO PDF.**
+ *
+ * MOTIVAÇÃO:
+ *   PDF gerado pelo jsPDF apresentava problemas de formatação (texto espaçado
+ *   com letter-spacing, overflow em caixas de texto, layout zoado no iOS/Chrome).
+ *   Usuário solicitou substituição por visualização in-app (sheet lateral) com a
+ *   mesma estrutura de 4 seções mas renderizado em HTML/React limpo.
+ *
+ * MUDANÇAS:
+ *   - FinanceiroDRE.tsx: botão "Exportar DFC (PDF)" → "Ver DFC" (abre Sheet);
+ *     removidos dfcLoading, handleExportarDFC e import dinâmico do dfcPdf;
+ *     adicionado dfcOpen state + cálculos DFC (stFinanc, stInvest, variacaoCalculada,
+ *     residual, drePos, bankPos, divergente) antes do return;
+ *     Sheet DFC com 4 seções: (1) waterfall DRE simplificado, (2) ajustes fora do
+ *     DRE agrupados por financiamento/investimento com pills de atividade, (3) bridge
+ *     de reconciliação com cores contextuais, (4) diagnóstico interpretativo 4 cenários
+ *     + nota sobre diferença residual se > R$1.000.
+ *   - server/routers/financial.ts getDFCData: fix itensRes.map is not a function
+ *     (dbExecute retorna { rows } não array; fix: .rows ?? fallback).
+ *
+ * ZERO DELETE.
+ */
+/**
  * Rev. 3954 — **ANÁLISE IA DO DRE: PARETO DE CUSTOS + PLANO DE AÇÃO (EMPREITADA DE OBRA).**
  *
  * MOTIVAÇÃO:
