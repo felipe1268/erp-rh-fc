@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3958** — **DRE IA: PÁGINA FULL-SCREEN + FIX JSON TRUNCADO (maxTokens 4000→8000) + PARETO RECHARTS.** Causa-raiz do JSON error: maxTokens=4000 tokens ≠ chars → Opus truncava a resposta no meio do array. Fix: maxTokens=8000 em `callOpus`. Nova página `FinanceiroDREAnalise.tsx` em `/financeiro/dre-analise` (full-screen, seletor white-card, barra 0→100%, pareto recharts horizontal + tabela acumulada, indicadores × benchmarks, plano de ação, fontes). Botão DRE navega via `abrirAnaliseIA()` (wouter). ZERO DELETE.
+- **Rev. 3959** — **NF-e: PAUSAR/RETOMAR SYNC + PRORROGAR (+2h/+4h/+8h/+24h).** Backend: `toggleSync` (só `sync_enabled`) + `prorrogarSync` (seta `last_sync_at` para exatamente N horas restantes via fórmula `NOW() - gate_min + N horas`). Card countdown ganhou footer unificado sempre visível: ⏸ Pausar · ▶ Retomar · Prorrogar +2h|+4h|+8h|+24h · 🔧 Curar rate-limit (só em bloqueio). ZERO DELETE.
 
-- **Rev. 3957** — **DRE IA: CLAUDE OPUS 4-5 DIRETO + DIALOG POPUP (FIX 95% TRAVADO).** Causa-raiz: `invokeLLM` usava Sonnet 4-6 com 6k tokens → timeout iOS antes de retornar → barra presa em 95%. Fix: `callOpus()` chama Anthropic SDK direto com `claude-opus-4-5` (maxTokens 4000). Sheet lateral da análise virou Dialog centralizado (`max-w-4xl`), com badge "Claude Opus 4-5" no título. ZERO DELETE.
+- **Rev. 3958** — **DRE IA: PÁGINA FULL-SCREEN + FIX JSON TRUNCADO (maxTokens 4000→8000) + PARETO RECHARTS.** Causa-raiz do JSON error: maxTokens=4000 tokens ≠ chars → Opus truncava a resposta no meio do array. Fix: maxTokens=8000 em `callOpus`. Nova página `FinanceiroDREAnalise.tsx` em `/financeiro/dre-analise` (full-screen, seletor white-card, barra 0→100%, pareto recharts horizontal + tabela acumulada, indicadores × benchmarks, plano de ação, fontes). ZERO DELETE.
 
 ### 5 one-liners
+
+- **Rev. 3957** — **DRE IA: CLAUDE OPUS 4-5 DIRETO + DIALOG POPUP (FIX 95% TRAVADO).** `callOpus()` direto, maxTokens 4000, badge no título. ZERO DELETE.
 
 - **Rev. 3956** — **DFC: PÁGINA DEDICADA `/financeiro/dfc` (ROTA EXCLUSIVA, FULL-SCREEN).** `FinanceiroDFC.tsx`; seletor white-card; 4 KPIs; waterfall/ajustes/bridge/indicadores. ZERO DELETE.
 
@@ -62,9 +64,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3954** — **ANÁLISE IA DO DRE: PARETO DE CUSTOS + PLANO DE AÇÃO.** dreAnaliseIA.ts reescrito; Pareto top 15; prompt "CFO de empreitada"; resposta com `planoAcao[]`+`paretoCustos[]`; UI cards. ZERO DELETE.
 
-- **Rev. 3952** — **DRE: CORREÇÃO DE CLASSIFICAÇÃO + CARD CONTEXTUAL DRE × CAIXA.** Fix: FINANCIAMENTOS → 'investimento'; MÚTUO INTERCOMPANY → 'nao_operacional'; predicado exclui nao_operacional de receitaBruta. Novo getDREBankComparison + card azul/âmbar/verde. ZERO DELETE.
-
-- **Rev. 3949** — **CONCILIAÇÃO: FIX DEDUP SECUNDÁRIO DESCARTA LANÇAMENTOS COM MESMO DOC.** Fase 1+2 receberam `($5::numeric IS NULL OR saldo_apos=$6)`. Saldo distinto = transação distinta. ZERO DELETE.
+- **Rev. 3952** — **DRE: CORREÇÃO DE CLASSIFICAÇÃO + CARD CONTEXTUAL DRE × CAIXA.** Fix: FINANCIAMENTOS → 'investimento'; MÚTUO INTERCOMPANY → 'nao_operacional'. ZERO DELETE.
 
 ### Histórico completo
 

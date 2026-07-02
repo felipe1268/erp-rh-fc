@@ -702,6 +702,30 @@ export default function FinanceiroNotasFiscais() {
     },
     onError: (e: any) => toast({ title: "Erro ao pausar sync", description: e.message, variant: "destructive" }),
   });
+  const sefazToggleMut = (trpc as any).sefaz.toggleSync.useMutation({
+    onSuccess: (r: any) => {
+      toast({
+        title: r?.enabled ? "▶ Sync automático ligado" : "⏸ Sync automático pausado",
+        description: r?.enabled
+          ? "O sistema voltará a sincronizar com a SEFAZ automaticamente."
+          : "Nenhuma chamada será feita ao SEFAZ até você religar.",
+        duration: 6000,
+      });
+      sefazCfgQuery.refetch();
+    },
+    onError: (e: any) => toast({ title: "Erro ao alterar sync", description: e.message, variant: "destructive" }),
+  });
+  const sefazProrrogarMut = (trpc as any).sefaz.prorrogarSync.useMutation({
+    onSuccess: (r: any) => {
+      toast({
+        title: `⏳ Próxima sync em ${r?.horasRestantes}h`,
+        description: "O contador foi reiniciado. Nenhuma chamada ao SEFAZ será feita por este período.",
+        duration: 6000,
+      });
+      sefazCfgQuery.refetch();
+    },
+    onError: (e: any) => toast({ title: "Erro ao prorrogar", description: e.message, variant: "destructive" }),
+  });
   const nfeDetalhesQuery = (trpc as any).sefaz.getDetalhesNFe.useQuery(
     { id: nfeRecDetalhe?.id ?? 0, companyId: companyId ?? 0 },
     { enabled: !!nfeRecDetalhe && !!companyId }
@@ -1453,51 +1477,83 @@ export default function FinanceiroNotasFiscais() {
                         </div>
                       )}
                     </div>
-                    {/* CTA: pausar e curar rate-limit (quando bloqueado 2+ vezes) */}
-                    {syncOn && _consec >= 2 && (
-                      <div className="mt-3 pt-3 border-t border-amber-200 flex flex-col gap-2">
-                        <div className="flex items-start gap-2">
+                    {/* ── Controles sempre visíveis: pausar / retomar / prorrogar ── */}
+                    <div className={`mt-3 pt-3 border-t ${syncOn ? "border-amber-200" : "border-slate-200"} flex flex-col gap-2`}>
+                      {/* Alerta de bloqueio SEFAZ (≥2 erros consecutivos) */}
+                      {syncOn && _consec >= 2 && (
+                        <div className="flex items-start gap-2 mb-1">
                           <span className="text-amber-700 mt-0.5">⚠️</span>
                           <p className="text-xs text-amber-800 leading-relaxed">
-                            <strong>CNPJ bloqueado no SEFAZ.</strong> A única saída é parar todas as chamadas por 24–48h para o servidor do SEFAZ desbloquear o CNPJ. Clique abaixo para pausar o sync, aguarde 48h e então religue o sync automático.
+                            <strong>CNPJ bloqueado no SEFAZ.</strong> Pause o sync e aguarde 24–48h para o SEFAZ desbloquear o CNPJ. Use "Curar rate-limit" para limpar o contador de bloqueios.
                           </p>
                         </div>
-                        <button
-                          onClick={() => setCurarRateLimitOpen(true)}
-                          disabled={sefazCurarMut.isPending}
-                          className="self-start inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-60 transition-colors"
-                        >
-                          {sefazCurarMut.isPending
-                            ? <><span className="animate-spin inline-block w-3 h-3 border border-white border-t-transparent rounded-full" /> Pausando…</>
-                            : <>⏸ Pausar sync e curar rate-limit</>
-                          }
-                        </button>
+                      )}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Botão principal: Pausar / Retomar */}
+                        {syncOn ? (
+                          <button
+                            onClick={() => sefazToggleMut.mutate({ companyId: companyId!, enabled: false })}
+                            disabled={sefazToggleMut.isPending}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-700 text-white hover:bg-slate-800 disabled:opacity-60 transition-colors"
+                          >
+                            {sefazToggleMut.isPending
+                              ? <><span className="animate-spin inline-block w-3 h-3 border border-white border-t-transparent rounded-full" /> Pausando…</>
+                              : <>⏸ Pausar sync</>
+                            }
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => sefazToggleMut.mutate({ companyId: companyId!, enabled: true })}
+                            disabled={sefazToggleMut.isPending}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60 transition-colors"
+                          >
+                            {sefazToggleMut.isPending
+                              ? <><span className="animate-spin inline-block w-3 h-3 border border-white border-t-transparent rounded-full" /> Ligando…</>
+                              : <>▶ Retomar sync</>
+                            }
+                          </button>
+                        )}
+                        {/* Prorrogar: só quando sync ligado — empurra a próxima chamada X horas */}
+                        {syncOn && (
+                          <>
+                            <span className="text-xs text-slate-400 font-medium">Prorrogar:</span>
+                            {[2, 4, 8, 24].map(h => (
+                              <button
+                                key={h}
+                                onClick={() => sefazProrrogarMut.mutate({ companyId: companyId!, horasRestantes: h })}
+                                disabled={sefazProrrogarMut.isPending}
+                                title={`Reiniciar countdown: próxima sync daqui ${h}h`}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-400 disabled:opacity-50 transition-colors"
+                              >
+                                {sefazProrrogarMut.isPending && (sefazProrrogarMut as any).variables?.horasRestantes === h
+                                  ? <span className="animate-spin inline-block w-3 h-3 border border-slate-500 border-t-transparent rounded-full" />
+                                  : `+${h}h`
+                                }
+                              </button>
+                            ))}
+                          </>
+                        )}
+                        {/* Curar rate-limit: ação mais agressiva (zera NSU, reseta backoff) */}
+                        {syncOn && _consec >= 2 && (
+                          <button
+                            onClick={() => setCurarRateLimitOpen(true)}
+                            disabled={sefazCurarMut.isPending}
+                            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-60 transition-colors"
+                          >
+                            {sefazCurarMut.isPending
+                              ? <><span className="animate-spin inline-block w-3 h-3 border border-white border-t-transparent rounded-full" /> Curando…</>
+                              : <>🔧 Curar rate-limit</>
+                            }
+                          </button>
+                        )}
                       </div>
-                    )}
-                    {/* CTA: ligar sync automático direto aqui */}
-                    {!syncOn && sefazCfg?.tem_certificado && (
-                      <div className="mt-3 pt-3 border-t border-slate-200 flex items-center gap-3">
-                        <button
-                          onClick={() => sefazEnableSyncMut.mutate({
-                            companyId: companyId!,
-                            cnpj: sefazCfg.cnpj ?? "",
-                            uf: sefazCfg.uf ?? "SP",
-                            ambiente: sefazCfg.ambiente ?? "producao",
-                            syncEnabled: true,
-                            syncHora: Number(sefazCfg.sync_hora ?? 6),
-                            syncIntervaloHoras: Math.max(2, Number(sefazCfg.sync_intervalo_horas ?? 2)),
-                          })}
-                          disabled={sefazEnableSyncMut.isPending}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60 transition-colors"
-                        >
-                          {sefazEnableSyncMut.isPending
-                            ? <><span className="animate-spin inline-block w-3 h-3 border border-white border-t-transparent rounded-full" /> Ativando…</>
-                            : <><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg> Ligar sync automático</>
-                          }
-                        </button>
-                        <span className="text-xs text-slate-400">Importa novas NF-e automaticamente a cada hora.</span>
-                      </div>
-                    )}
+                      <p className="text-[10px] text-slate-400 leading-relaxed">
+                        {syncOn
+                          ? "⏸ Pausar interrompe todas as chamadas ao SEFAZ. Prorrogar (+Xh) reinicia o contador sem chamar a API, garantindo que o próximo ciclo ocorra somente depois do tempo escolhido."
+                          : "▶ Retomar religa o auto-sync. A primeira chamada ocorrerá quando a cota reabrir."
+                        }
+                      </p>
+                    </div>
                   </div>
                 );
               })()}

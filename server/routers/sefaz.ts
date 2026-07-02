@@ -1332,6 +1332,46 @@ export const sefazRouter = router({
       return { ok: true, nsuUsado: maxNsu };
     }),
 
+  // ── Toggle rápido do sync automático (sem precisar de todos os campos de saveConfig) ──
+  // Permite ligar/desligar o auto-sync diretamente do card de countdown, sem abrir Configurações.
+  toggleSync: protectedProcedure
+    .input(z.object({ companyId: z.number(), enabled: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.user?.role !== "admin_master" && ctx.user?.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      await db.$client.query(`
+        UPDATE company_nfe_config
+        SET sync_enabled = $2
+        WHERE company_id = $1
+      `, [input.companyId, input.enabled ? 1 : 0]);
+      console.log(`[SefazToggle] company=${input.companyId} sync_enabled=${input.enabled}`);
+      return { ok: true, enabled: input.enabled };
+    }),
+
+  // ── Prorrogar pausa: empurra o próximo sync N horas pra frente sem chamar o SEFAZ ──
+  // Define last_sync_at de forma que o tempo restante no countdown = horasRestantes.
+  // Fórmula: last_sync_at = NOW() - gate_min_minutos + horasRestantes horas
+  //   → remaining = gate - (NOW - last_sync_at) = gate - gate + horasRestantes = horasRestantes ✓
+  prorrogarSync: protectedProcedure
+    .input(z.object({ companyId: z.number(), horasRestantes: z.number().min(2).max(48) }))
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.user?.role !== "admin_master" && ctx.user?.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      const cfgRows = await db.$client.query(`
+        SELECT COALESCE(sync_intervalo_horas, 2)::numeric AS intervalo
+        FROM company_nfe_config WHERE company_id = $1
+      `, [input.companyId]);
+      const intervalo = Math.max(2, Number(cfgRows.rows?.[0]?.intervalo ?? 2));
+      const gateMin = intervalo * 60 + 3; // mesmo gate do backend
+      await db.$client.query(`
+        UPDATE company_nfe_config
+        SET last_sync_at = NOW() - ($2 * INTERVAL '1 minute') + ($3 * INTERVAL '1 hour')
+        WHERE company_id = $1
+      `, [input.companyId, gateMin, input.horasRestantes]);
+      console.log(`[SefazProrrogar] company=${input.companyId} → próxima sync em ${input.horasRestantes}h`);
+      return { ok: true, horasRestantes: input.horasRestantes };
+    }),
+
   // ── Importação por upload de XML (histórico 2018-2026) ───────────────────────
   importXml: protectedProcedure
     .input(z.object({

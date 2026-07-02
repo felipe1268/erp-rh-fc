@@ -1,4 +1,30 @@
 /**
+ * Rev. 3959 — **NF-e: BOTÕES PAUSAR/RETOMAR SYNC + PRORROGAR (+2h/+4h/+8h/+24h) NO CARD DO COUNTDOWN.**
+ *
+ * PEDIDO: botão visível no card "Próxima sync em X" para pausar o sincronismo automático com a
+ * SEFAZ e prorrogar o próximo disparo sem chamar a API (garantir que o CNPJ não seja penalizado).
+ *
+ * BACKEND (`server/routers/sefaz.ts`):
+ *   - `toggleSync(companyId, enabled)`: endpoint dedicado que só toca `sync_enabled` sem exigir
+ *     todos os campos do `saveConfig`. Admin/admin_master only.
+ *   - `prorrogarSync(companyId, horasRestantes)`: empurra a próxima sync N horas para frente
+ *     sem chamar o SEFAZ. Fórmula: `last_sync_at = NOW() - gate_minutos + horasRestantes horas`.
+ *     → O countdown exibirá exatamente `horasRestantes` horas restantes após o clique.
+ *
+ * FRONTEND (`client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`):
+ *   - `sefazToggleMut` (toggleSync): liga/desliga direto do card com toast de confirmação.
+ *   - `sefazProrrogarMut` (prorrogarSync): botões +2h · +4h · +8h · +24h.
+ *   - Card de countdown ganhou footer SEMPRE VISÍVEL com:
+ *       · ⏸ Pausar sync (quando ligado) / ▶ Retomar sync (quando desligado)
+ *       · Prorrogar +2h | +4h | +8h | +24h (só quando ligado)
+ *       · 🔧 Curar rate-limit (só quando ≥2 bloqueios consecutivos, ação drástica)
+ *       · Texto explicativo de 1 linha abaixo dos botões.
+ *   - Substituiu os dois CTAs condicionais anteriores (ligar/pausar separados) por seção unificada.
+ *     ZERO DELETE.
+ *
+ * ZERO DELETE.
+ */
+/**
  * Rev. 3958 — **DRE IA: PÁGINA FULL-SCREEN `/financeiro/dre-analise` + FIX JSON TRUNCADO (maxTokens 4000→8000) + PARETO RECHARTS.**
  *
  * PROBLEMA RELATADO:
