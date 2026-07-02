@@ -695,7 +695,7 @@ export default function FolhaPagamento() {
     const logo = `${window.location.origin}/logo-fc.jpg`;
     const emissaoBR = new Date().toLocaleDateString('pt-BR');
     const rowsHtml = [...data.rows]
-      .sort((a: any, b: any) => (b.valorRetroativo || 0) - (a.valorRetroativo || 0))
+      .sort((a: any, b: any) => (a.employeeName || '').localeCompare(b.employeeName || '', 'pt-BR'))
       .map((r: any, i: number) => `
       <tr>
         <td style="text-align:center;color:#64748b">${i + 1}</td>
@@ -6559,7 +6559,7 @@ export default function FolhaPagamento() {
                       </tr>
                     </thead>
                     <tbody>
-                      {dissidioRelQuery.data.rows.map((r: any) => (
+                      {[...dissidioRelQuery.data.rows].sort((a: any, b: any) => (a.employeeName || '').localeCompare(b.employeeName || '', 'pt-BR')).map((r: any) => (
                         <tr key={r.id} className="border-b border-emerald-100 hover:bg-emerald-50/40">
                           <td className="py-1.5 px-2 font-medium">{r.employeeName || `#${r.employeeId}`}</td>
                           <td className="py-1.5 px-2 text-muted-foreground">{r.anoReferencia ?? '—'}</td>

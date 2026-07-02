@@ -1,3 +1,5 @@
+- **Rev. 3975** — **FECHAMENTO PONTO: SELETOR DE PERÍODO NO UPLOAD DIXI.** Batidas do próximo ciclo (ex: 15/06 em arquivo 15/05–14/06) geravam falta indevida. Fix: dialog de upload exibe bloco âmbar "Período a considerar" (campos De/Até obrigatórios); botão Importar bloqueado sem período válido; backend filtra em memória todos os registros fora do intervalo após `processRecords`, antes de gravar. Lógica DIXI inalterada. ZERO DELETE.
+
 - **Rev. 3974** — **FOLHA: AUTO-RECONCILIAR FALTA ÓRFÃ DO ESCURO CONTRA REGISTRO MANUAL.** Fix: após auto-ponto, UPDATE-CTE cancela adjustments órfãos + limpa `adjMap` em memória. ZERO DELETE.
 
 - **Rev. 3972** — **AUTO-PONTO: FÉRIAS NÃO GERAM FALTA NO FECHAMENTO DA FOLHA.** Pré-carrega `vacation_periods` que intersectam o período; dias de férias recebem `tipoDia='ferias'`, bloqueando `isFalta=1`. Padrão idêntico ao da fase do escuro. ZERO DELETE.

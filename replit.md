@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3982** — **DISSÍDIO: RELATÓRIO DE DIFERENÇAS RETROATIVAS — ORDEM ALFABÉTICA.** Usuário confirmou que o layout de impressão (Rev. 3980) ficou bom, mas a lista não estava em ordem alfabética — vinha ordenada por `valorRetroativo` decrescente (ordem do backend). Fix: `[...rows].sort((a,b)=>a.employeeName.localeCompare(b.employeeName,'pt-BR'))` aplicado tanto na tabela on-screen do Dialog quanto em `handlePrintDissidioRel` (`FolhaPagamento.tsx`), mantendo tela e impressão consistentes. Sem mudança de backend. ZERO DELETE · ZERO ALTER.
+
 - **Rev. 3981** — **VALE ALIMENTAÇÃO: BOTÃO "CALCULAR REAJUSTE" PELO % DO DISSÍDIO.** Campos de VA/café/lanche em Configurações já existiam (`meal_benefit_configs`). Novo: aba "Configuração" de `ValeAlimentacao.tsx` ganha botão "Calcular Reajuste" que abre Dialog com prévia atual→novo de café/lanche/VA/janta calculada com o `percentualReajuste` do `dissidios` do ano informado (data-base maio). Backend: `previewReajusteBeneficios` (query) + `aplicarReajusteBeneficios` (mutation, UPDATE em `meal_benefit_configs` + recalcula `totalVA_iFood`) em `avisoPrevioFerias.ts`. Sem dissídio/percentual inválido → erro explícito. Marca "[Reajuste dissídio ANO: X%]" anexada em `observacoes` p/ rastreabilidade (não bloqueia reaplicação). ZERO DELETE · ZERO ALTER.
 
-- **Rev. 3980** — **DISSÍDIO: LAYOUT DE IMPRESSÃO FEIO/COM COLUNAS CORTADAS — CORRIGIDO.** Feedback do usuário: impressão do relatório "Diferenças Salariais Retroativas (Dissídio)" (Rev. 3979) saía com colunas da esquerda cortadas e sem estilo. Causa: `.print-only`+`window.print()` imprime AINDA DENTRO do Dialog Radix (`position:fixed`+scroll interno) — tabela larga era cortada em vez de refluir. Fix: `handlePrintDissidioRel` reescrito pro padrão já usado em `DashAvisoPrevio.tsx` (`gerarRelatorioCombo`) — HTML auto-contido (timbre, cards, tabela estilizada, `@page A4 landscape`) aberto via `window.open('', '_blank')`+`document.write`+`window.print()`. Wrapper `#dissidio-print-area` removido. Sem mudança de backend. ZERO DELETE · ZERO ALTER.
-
 ### 5 one-liners
+
+- **Rev. 3980** — **DISSÍDIO: LAYOUT DE IMPRESSÃO FEIO/COM COLUNAS CORTADAS — CORRIGIDO.** `handlePrintDissidioRel` reescrito pro padrão de `DashAvisoPrevio.tsx` (HTML auto-contido via `window.open`+`document.write`), corrigindo colunas cortadas por imprimir dentro do Dialog Radix. ZERO DELETE · ZERO ALTER.
 
 - **Rev. 3979** — **DISSÍDIO: BOTÃO IMPRIMIR / PDF NO RELATÓRIO DE DIFERENÇAS RETROATIVAS.** Dialog "Diferenças Salariais Retroativas (Dissídio)" (`FolhaPagamento.tsx`) ganha botão "Imprimir / PDF" no header, seguindo convenção de `DashAvisoPrevio.tsx` (`print-only`+`window.print()`). Sem mudança de backend. ZERO DELETE · ZERO ALTER. *(Superado pela Rev. 3980 — abordagem de impressão trocada.)*
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3976** — **TERCEIROS: TRIPLE-FIX NOS DOCUMENTOS DE FUNCIONÁRIOS TERCEIROS.** (1) Validade fechava a página: `updateMut.onSuccess` tem `setShowForm(false)` → trocado para `bulkUpdateMut` no onChange inline. (2) Upload não refletia na UI: `onSuccess` agora faz `setForm(f=>({...f,[field]:url}))` antes do refetch + `onError` com toast. (3) Validade de NR-10/NR-33/NR-35 e 8 outros campos nunca salvava: Zod descartava silenciosamente → 11 campos adicionados ao schema do `update`. ZERO DELETE.
 
-- **Rev. 3975** — **FECHAMENTO PONTO: SELETOR DE PERÍODO NO UPLOAD DIXI.** Batidas do próximo ciclo (ex: 15/06 em arquivo 15/05–14/06) geravam falta indevida. Fix: dialog de upload exibe bloco âmbar "Período a considerar" (campos De/Até obrigatórios); botão Importar bloqueado sem período válido; backend filtra em memória todos os registros fora do intervalo após `processRecords`, antes de gravar. Lógica DIXI inalterada. ZERO DELETE.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3974 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3975 e anteriores.
 
 ## User preferences
 

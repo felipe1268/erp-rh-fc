@@ -1,4 +1,21 @@
 /**
+ * Rev. 3982 — **DISSÍDIO: RELATÓRIO DE DIFERENÇAS RETROATIVAS — ORDEM ALFABÉTICA.**
+ *
+ * PEDIDO: usuário confirmou que o novo layout de impressão (Rev. 3980) ficou bom, mas apontou que a
+ * lista de funcionários não estava em ordem alfabética.
+ *
+ * CAUSA-RAIZ: tanto a tabela on-screen do Dialog quanto `handlePrintDissidioRel` renderizavam
+ * `dissidioRelQuery.data.rows` na ordem bruta devolvida pelo backend (que vem ordenada por
+ * `valorRetroativo` decrescente, não por nome).
+ *
+ * FIX: `[...data.rows].sort((a,b) => a.employeeName.localeCompare(b.employeeName,'pt-BR'))` aplicado
+ * em AMBOS os pontos de renderização (tabela do Dialog em `FolhaPagamento.tsx` + `rowsHtml` do
+ * `handlePrintDissidioRel`) para manter consistência entre tela e impressão. Sem mudança de backend.
+ *
+ * ZERO DELETE · ZERO ALTER.
+ */
+
+/**
  * Rev. 3981 — **VALE ALIMENTAÇÃO: BOTÃO "CALCULAR REAJUSTE" PELO % DO DISSÍDIO.**
  *
  * PEDIDO: usuário pediu (1) campos para lançar valores de VA/café/lanche em Configurações — JÁ
