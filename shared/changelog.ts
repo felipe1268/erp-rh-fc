@@ -1,4 +1,39 @@
 /**
+ * Rev. 3978 — **DISSÍDIO: DIFERENÇA RETROATIVA SAI DA FOLHA MENSAL E GANHA ENCARGOS PRÓPRIOS.**
+ *
+ * PEDIDO: a diferença salarial retroativa do dissídio ("DIFERENÇA SALARIAL") estava sendo
+ * somada dentro do total de proventos da folha mensal — mas ela é PAGA SEPARADAMENTE (guia
+ * própria), então não deveria se misturar aos totais da folha. Além disso, o relatório da
+ * diferença mostrava só o valor BRUTO, sem descontar INSS/IRRF (encargos nunca calculados
+ * sobre essa verba).
+ *
+ * CAUSA-RAIZ: `payrollEngine.ts` lia `dissidio_funcionarios` (linhas tipo 'folha' do mês) e
+ * somava o valor retroativo direto em `totalProventos`/`adicionaisValor` da folha mensal — o
+ * INSS da folha (`calcularINSS(salarioBruto)`) nunca incluía esse adicional, então a diferença
+ * saía sem NENHUM desconto, e ainda inflava o "bruto" exibido na folha do mês.
+ *
+ * SOLUÇÃO:
+ * - `server/routers/payrollEngine.ts`: removida a leitura de `dissidio_funcionarios` e a soma
+ *   em `totalProventos` do cálculo mensal da folha; `adicionaisValor`/`adicionaisDetalhes`
+ *   ficam zerados/null (mantidos só por compatibilidade de schema/UI — ZERO ALTER).
+ * - `client/src/pages/FolhaPagamento.tsx`: removida a sub-linha "+ R$ X dissídio" da coluna de
+ *   proventos da tabela da folha (não existe mais essa mistura).
+ * - `server/routers/sindical.ts` (`relatorioDiferencas`): nova função `calcularEncargosDiferenca`
+ *   reaproveita `calcularINSSProgressivo`/`calcularIRRFProgressivo` de `rescisaoCalc.ts`. Linhas
+ *   tipo 'folha' (ativos) tratam o valor retroativo como verba salarial isolada (INSS+IRRF sobre
+ *   o valor cheio). Linhas tipo 'rescisao_complementar' (desligados) usam o breakdown já salvo
+ *   (`diferencaBreakdownJson`) para aplicar incidência por verba: saldo de salário e 13º sofrem
+ *   INSS; saldo+férias entram na base de IRRF (13º com base separada, `semReducao=true`); aviso
+ *   prévio indenizado fica ISENTO de INSS/IRRF/FGTS (Súmulas 125/136 TST). FGTS 8% é só
+ *   informativo (custo do empregador, não desconta do líquido do funcionário). Query retorna
+ *   `inss`/`irrf`/`fgts`/`valorLiquido` por linha + totais agregados.
+ * - `client/src/pages/FolhaPagamento.tsx` (dialog "Relatório de Diferenças Salariais"): novos
+ *   cards de Total INSS/IRRF/Líquido/FGTS e colunas Bruto/INSS/IRRF/Líquido na tabela.
+ *
+ * ZERO DELETE · ZERO ALTER de schema (colunas antigas mantidas, só passam a ficar sempre 0/null).
+ */
+
+/**
  * Rev. 3977 — **BANCO DE HORAS: MULTIPLICADOR 1,5x, EXCEÇÃO POR FUNCIONÁRIO E RESCISÃO.**
  *
  * CAUSA-RAIZ / ESCOPO (Task #97 — 5 frentes):

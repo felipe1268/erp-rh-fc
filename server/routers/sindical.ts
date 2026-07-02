@@ -6,7 +6,56 @@ import { dissidios, dissidioFuncionarios, employees, payrollPayments, hePeriods,
 import { eq, and, sql, desc, inArray, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { parseBRL } from "../utils/parseBRL";
-import { calcularRescisaoComplementar } from "../utils/rescisaoCalc";
+import { calcularRescisaoComplementar, calcularINSSProgressivo, calcularIRRFProgressivo } from "../utils/rescisaoCalc";
+
+// Rev. 3978 — ENCARGOS sobre a diferença retroativa do dissídio (paga À PARTE da
+// folha mensal, com guia própria). Espelha o padrão já usado na rescisão: cada
+// verba tem sua PRÓPRIA incidência (INSS/IRRF calculados isoladamente sobre a
+// base, não empilhados sobre o salário do mês — aproximação padrão para verba
+// paga em separado).
+// - tipo 'folha' (ativos): diferença é natureza salarial pura → INSS + IRRF
+//   incidem sobre o valor cheio.
+// - tipo 'rescisao_complementar' (desligados): usa o breakdown já calculado por
+//   `calcularRescisaoComplementar` para aplicar a incidência correta por verba —
+//   saldo de salário e 13º sofrem INSS; salário+férias sofrem IRRF (13º com base
+//   separada, sem redutor simplificado); aviso prévio indenizado é ISENTO de
+//   INSS/IRRF/FGTS (Súmulas 125/136 TST).
+function calcularEncargosDiferenca(r: { diferencaTipo: string | null; valorRetroativo: string | null; diferencaBreakdownJson: any }) {
+  const bruto = parseBRL(r.valorRetroativo);
+  if (bruto <= 0) return { inss: 0, irrf: 0, fgts: 0, liquido: 0 };
+
+  if (r.diferencaTipo === 'rescisao_complementar') {
+    const bk = r.diferencaBreakdownJson || {};
+    const saldoSalario = parseBRL(bk.saldoSalario);
+    const decimo = parseBRL(bk.decimoTerceiroProporcional);
+    const ferias = parseBRL(bk.totalFerias) + parseBRL(bk.feriasVencidas);
+    // aviso prévio indenizado: isento — não entra em nenhuma base.
+    const inss = calcularINSSProgressivo(saldoSalario) + calcularINSSProgressivo(decimo);
+    const baseIrSaldo = saldoSalario + ferias;
+    const irrf = calcularIRRFProgressivo(baseIrSaldo, baseIrSaldo)
+      + calcularIRRFProgressivo(decimo, decimo, true);
+    const fgts = (saldoSalario + decimo) * 0.08;
+    const liquido = Math.max(0, bruto - inss - irrf);
+    return {
+      inss: Number(inss.toFixed(2)),
+      irrf: Number(irrf.toFixed(2)),
+      fgts: Number(fgts.toFixed(2)),
+      liquido: Number(liquido.toFixed(2)),
+    };
+  }
+
+  // tipo 'folha' (padrão) — verba salarial isolada.
+  const inss = calcularINSSProgressivo(bruto);
+  const irrf = calcularIRRFProgressivo(bruto, bruto);
+  const fgts = bruto * 0.08;
+  const liquido = Math.max(0, bruto - inss - irrf);
+  return {
+    inss: Number(inss.toFixed(2)),
+    irrf: Number(irrf.toFixed(2)),
+    fgts: Number(fgts.toFixed(2)),
+    liquido: Number(liquido.toFixed(2)),
+  };
+}
 
 // Rev. 3278 — guard de tenant: nega acesso a empresa fora do escopo do usuário.
 // admin/admin_master = global; usuário com vínculos só pode tocar as suas; sem
@@ -405,18 +454,33 @@ export const sindicalRouter = router({
       .where(and(...conds))
       .orderBy(desc(dissidios.anoReferencia), employees.nomeCompleto);
 
-    const totalGeral = rows.reduce((s, r) => s + (parseFloat(r.valorRetroativo || '0') || 0), 0);
-    const totalFolha = rows.filter(r => r.diferencaTipo === 'folha')
+    // Rev. 3978 — encargos (INSS/IRRF/FGTS) por linha; agora paga em separado da
+    // folha, então cada diferença precisa da SUA própria guia de recolhimento.
+    const rowsComEncargos = rows.map((r) => {
+      const enc = calcularEncargosDiferenca(r);
+      return { ...r, inss: enc.inss, irrf: enc.irrf, fgts: enc.fgts, valorLiquido: enc.liquido };
+    });
+
+    const totalGeral = rowsComEncargos.reduce((s, r) => s + (parseFloat(r.valorRetroativo || '0') || 0), 0);
+    const totalFolha = rowsComEncargos.filter(r => r.diferencaTipo === 'folha')
       .reduce((s, r) => s + (parseFloat(r.valorRetroativo || '0') || 0), 0);
-    const totalComplementar = rows.filter(r => r.diferencaTipo === 'rescisao_complementar')
+    const totalComplementar = rowsComEncargos.filter(r => r.diferencaTipo === 'rescisao_complementar')
       .reduce((s, r) => s + (parseFloat(r.valorRetroativo || '0') || 0), 0);
+    const totalInss = rowsComEncargos.reduce((s, r) => s + r.inss, 0);
+    const totalIrrf = rowsComEncargos.reduce((s, r) => s + r.irrf, 0);
+    const totalFgts = rowsComEncargos.reduce((s, r) => s + r.fgts, 0);
+    const totalLiquido = rowsComEncargos.reduce((s, r) => s + r.valorLiquido, 0);
 
     return {
-      rows,
+      rows: rowsComEncargos,
       totalGeral: Number(totalGeral.toFixed(2)),
       totalFolha: Number(totalFolha.toFixed(2)),
       totalComplementar: Number(totalComplementar.toFixed(2)),
-      qtdFuncionarios: new Set(rows.map(r => r.employeeId)).size,
+      totalInss: Number(totalInss.toFixed(2)),
+      totalIrrf: Number(totalIrrf.toFixed(2)),
+      totalFgts: Number(totalFgts.toFixed(2)),
+      totalLiquido: Number(totalLiquido.toFixed(2)),
+      qtdFuncionarios: new Set(rowsComEncargos.map(r => r.employeeId)).size,
     };
   }),
 

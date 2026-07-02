@@ -4577,14 +4577,6 @@ export default function FolhaPagamento() {
                           <td className="text-right py-2 px-2 text-green-700">{f.valorHE > 0 ? formatBRL(f.valorHE) : '—'}</td>
                           <td className="text-right py-2 px-2 font-semibold text-green-800">
                             {formatBRL(f.totalProventos)}
-                            {f.adicionaisValor > 0 && (
-                              <span
-                                className="block text-[9px] font-normal text-emerald-600 whitespace-nowrap"
-                                title={(Array.isArray(f.adicionaisDetalhes) && f.adicionaisDetalhes[0]?.label) || 'Diferença salarial (dissídio)'}
-                              >
-                                + {formatBRL(f.adicionaisValor)} dissídio
-                              </span>
-                            )}
                           </td>
                           <DescontoCell f={f} campo="vale" valor={valVale} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="border-l border-red-100 text-orange-600 text-right" />
                           <DescontoCell f={f} campo="inss" valor={valInss} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="text-red-600 text-right" />
@@ -6368,7 +6360,7 @@ export default function FolhaPagamento() {
                 Diferenças Salariais Retroativas (Dissídio) — {fmtNum(anoSelecionado)}
               </DialogTitle>
               <DialogDescription>
-                Diferenças geradas ao aplicar um dissídio com data de vigência no passado (ex.: data-base 01/05). A coluna "Pagto" indica o mês em que cada diferença é paga na folha.
+                Diferenças geradas ao aplicar um dissídio com data de vigência no passado (ex.: data-base 01/05). Paga À PARTE da folha mensal (guia própria de INSS/IRRF) — NÃO entra nos totais da folha.
               </DialogDescription>
             </DialogHeader>
             {dissidioRelQuery.isLoading ? (
@@ -6387,11 +6379,25 @@ export default function FolhaPagamento() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-2">
                   <div className="bg-emerald-50 rounded-md p-2 border border-emerald-100">
-                    <p className="text-[10px] text-gray-500 uppercase">Total Geral</p>
+                    <p className="text-[10px] text-gray-500 uppercase">Total Bruto</p>
                     <p className="text-sm font-bold text-emerald-700">{formatBRL(dissidioRelQuery.data.totalGeral)}</p>
                   </div>
+                  <div className="bg-red-50 rounded-md p-2 border border-red-100">
+                    <p className="text-[10px] text-gray-500 uppercase">Total INSS</p>
+                    <p className="text-sm font-bold text-red-700">{formatBRL(dissidioRelQuery.data.totalInss ?? 0)}</p>
+                  </div>
+                  <div className="bg-red-50 rounded-md p-2 border border-red-100">
+                    <p className="text-[10px] text-gray-500 uppercase">Total IRRF</p>
+                    <p className="text-sm font-bold text-red-700">{formatBRL(dissidioRelQuery.data.totalIrrf ?? 0)}</p>
+                  </div>
+                  <div className="bg-blue-50 rounded-md p-2 border border-blue-100">
+                    <p className="text-[10px] text-gray-500 uppercase">Total Líquido</p>
+                    <p className="text-sm font-bold text-blue-700">{formatBRL(dissidioRelQuery.data.totalLiquido ?? 0)}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
                   <div className="bg-emerald-50 rounded-md p-2 border border-emerald-100">
                     <p className="text-[10px] text-gray-500 uppercase">Na Folha</p>
                     <p className="text-sm font-bold text-emerald-700">{formatBRL(dissidioRelQuery.data.totalFolha)}</p>
@@ -6399,6 +6405,10 @@ export default function FolhaPagamento() {
                   <div className="bg-emerald-50 rounded-md p-2 border border-emerald-100">
                     <p className="text-[10px] text-gray-500 uppercase">Resc. Complementar</p>
                     <p className="text-sm font-bold text-amber-700">{formatBRL(dissidioRelQuery.data.totalComplementar)}</p>
+                  </div>
+                  <div className="bg-amber-50 rounded-md p-2 border border-amber-100">
+                    <p className="text-[10px] text-gray-500 uppercase">Total FGTS (informativo)</p>
+                    <p className="text-sm font-bold text-amber-700">{formatBRL(dissidioRelQuery.data.totalFgts ?? 0)}</p>
                   </div>
                   <div className="bg-emerald-50 rounded-md p-2 border border-emerald-100">
                     <p className="text-[10px] text-gray-500 uppercase">Funcionários</p>
@@ -6415,7 +6425,10 @@ export default function FolhaPagamento() {
                         <th className="text-center py-1.5 px-2">Pagto</th>
                         <th className="text-right py-1.5 px-2">%</th>
                         <th className="text-right py-1.5 px-2">Base (verbas)</th>
-                        <th className="text-right py-1.5 px-2">Diferença</th>
+                        <th className="text-right py-1.5 px-2">Bruto</th>
+                        <th className="text-right py-1.5 px-2">INSS</th>
+                        <th className="text-right py-1.5 px-2">IRRF</th>
+                        <th className="text-right py-1.5 px-2">Líquido</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -6434,6 +6447,9 @@ export default function FolhaPagamento() {
                           <td className="py-1.5 px-2 text-right">{r.percentualAplicado}%</td>
                           <td className="py-1.5 px-2 text-right text-muted-foreground">{r.diferencaBaseVerbas ? formatBRL(r.diferencaBaseVerbas) : '—'}</td>
                           <td className="py-1.5 px-2 text-right font-semibold text-emerald-700">{formatBRL(r.valorRetroativo)}</td>
+                          <td className="py-1.5 px-2 text-right text-red-600">{r.inss > 0 ? `- ${formatBRL(r.inss)}` : '—'}</td>
+                          <td className="py-1.5 px-2 text-right text-red-600">{r.irrf > 0 ? `- ${formatBRL(r.irrf)}` : '—'}</td>
+                          <td className="py-1.5 px-2 text-right font-semibold text-blue-700">{formatBRL(r.valorLiquido)}</td>
                         </tr>
                       ))}
                     </tbody>
