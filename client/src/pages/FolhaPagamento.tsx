@@ -647,6 +647,16 @@ export default function FolhaPagamento() {
   // Identidade do período já hidratado (declarada aqui, ANTES das mutações que
   // precisam forçar re-hidratação — ver effect de hidratação mais abaixo).
   const lastLoadedPeriodId = useRef<number | "none" | null>(null);
+  // Rev. 3969 — Recalcular diferenças salariais retroativas do dissídio (caso não
+  // tenham sido geradas na aplicação por vigência == mês de aplicação).
+  const recalcularDifsMut = trpc.sindical.recalcularDiferencas.useMutation({
+    onSuccess: (data: any) => {
+      toast.success(`Diferenças recalculadas: ${data?.atualizados ?? 0} funcionário(s).`);
+      dissidioRelQuery.refetch();
+    },
+    onError: (e: any) => toast.error(e.message || 'Erro ao recalcular diferenças'),
+  });
+
   const arredondarMut = trpc.payrollEngine.arredondarLote.useMutation({
     onSuccess: (data: any) => {
       toast.success(data?.message || "Arredondamento aplicado.");
@@ -6366,7 +6376,15 @@ export default function FolhaPagamento() {
                 <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" /> Carregando relatório...
               </div>
             ) : !dissidioRelQuery.data || dissidioRelQuery.data.rows.length === 0 ? (
-              <p className="text-sm text-gray-500 py-8 text-center">Nenhuma diferença salarial gerada para {fmtNum(anoSelecionado)}. Diferenças surgem ao aplicar um dissídio com data de vigência no passado (Configurações › Sindical/Dissídio).</p>
+              <div className="py-8 text-center space-y-3">
+                <p className="text-sm text-gray-500">Nenhuma diferença salarial gerada para {fmtNum(anoSelecionado)}. Diferenças surgem ao aplicar um dissídio com data de vigência no passado (Configurações › Sindical/Dissídio).</p>
+                <p className="text-xs text-gray-400">Se o dissídio foi aplicado no mesmo mês da vigência (ex.: vigência 01/05 aplicada em maio), use o botão abaixo para calcular as diferenças retroativas.</p>
+                <Button size="sm" variant="outline" className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                  disabled={recalcularDifsMut.isPending}
+                  onClick={() => recalcularDifsMut.mutate({ companyId, companyIds, anoReferencia: anoSelecionado })}>
+                  {recalcularDifsMut.isPending ? <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Calculando...</> : <><RefreshCw className="h-3 w-3 mr-1" /> Calcular Diferenças Retroativas</>}
+                </Button>
+              </div>
             ) : (
               <>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">

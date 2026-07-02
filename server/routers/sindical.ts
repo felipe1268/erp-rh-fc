@@ -147,6 +147,13 @@ export const sindicalRouter = router({
     const mesAplicacao = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
     const vigenciaStr = (dissidio.dataVigencia || dissidio.dataBaseInicio || '').slice(0, 7);
     const mesesRetro = vigenciaStr ? mesesRetroativosEntre(vigenciaStr, mesAplicacao) : [];
+    // Rev. 3969 — Se vigência == mês de aplicação, a folha daquele mês pode já ter
+    // sido fechada/paga com o salário ANTIGO (ex.: dissídio vigente a partir de 01/05
+    // mas aplicado no sistema ainda em maio, após o fechamento da folha). Nesses casos
+    // inclui o próprio mês de vigência na lista retroativa.
+    if (mesesRetro.length === 0 && vigenciaStr && vigenciaStr === mesAplicacao) {
+      mesesRetro.push(vigenciaStr);
+    }
     // A diferença é PAGA na folha do mês de aplicação (ex.: vigência maio,
     // aplicado em junho → linha "DIFERENÇA SALARIAL (ref. maio)" na folha de junho).
     const mesPagamento = mesAplicacao;
@@ -439,7 +446,13 @@ export const sindicalRouter = router({
 
     const mesesRetro = mesesRetroativosEntre(vigenciaStr, dataAplicacaoYM);
     if (mesesRetro.length === 0) {
-      throw new TRPCError({ code: 'BAD_REQUEST', message: `Vigência ${vigenciaStr} não é anterior ao mês de aplicação ${dataAplicacaoYM} — sem período retroativo.` });
+      // Rev. 3969 — vigência no mesmo mês da aplicação: folha desse mês pode já ter
+      // sido fechada com salário antigo → incluir como retroativo em vez de bloquear.
+      if (vigenciaStr && vigenciaStr === dataAplicacaoYM) {
+        mesesRetro.push(vigenciaStr);
+      } else {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: `Vigência ${vigenciaStr} não é anterior ao mês de aplicação ${dataAplicacaoYM} — sem período retroativo.` });
+      }
     }
 
     const funcs = await db.select().from(dissidioFuncionarios)

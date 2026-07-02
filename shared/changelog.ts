@@ -1,4 +1,27 @@
 /**
+ * Rev. 3969 — **DISSÍDIO: FIX DIFERENÇAS RETROATIVAS QUANDO VIGÊNCIA == MÊS DE APLICAÇÃO.**
+ *
+ * CAUSA-RAIZ: `mesesRetroativosEntre("2026-05", "2026-05")` retorna `[]` porque o
+ * limite superior é EXCLUSIVO. Quando o dissídio tem vigência 01/05 e é aplicado no
+ * sistema ainda em maio (após o fechamento da folha), a lista retroativa fica vazia →
+ * nenhuma diferença é gerada → diálogo mostra "Nenhuma diferença salarial gerada".
+ *
+ * CORREÇÃO (`server/routers/sindical.ts`):
+ *   - Em `aplicar`: após `mesesRetroativosEntre`, guard `if (mesesRetro.length === 0
+ *     && vigenciaStr === mesAplicacao)` → `mesesRetro.push(vigenciaStr)`. O mês de
+ *     vigência é incluído porque a folha daquele mês já foi paga com salário antigo.
+ *   - Em `recalcularDiferencas`: mesmo guard antes do throw; em vez de lançar
+ *     "sem período retroativo", inclui o mês de vigência e continua o cálculo.
+ *
+ * FRONTEND (`client/src/pages/FolhaPagamento.tsx`):
+ *   - Adicionada mutation `recalcularDifsMut` (sindical.recalcularDiferencas).
+ *   - Estado vazio do dialog "Diferenças Salariais Retroativas" ganhou botão
+ *     "Calcular Diferenças Retroativas" para o usuário acionar o recálculo no
+ *     dissídio já aplicado sem diferenças (ex.: dissídio 2026 aplicado em maio).
+ *
+ * ZERO DELETE.
+ */
+/**
  * Rev. 3968 — **VALE ALIMENTAÇÃO: SELETOR PERÍODO → PADRÃO WHITE-CARD (PeriodSelectorCard).**
  *
  * PEDIDO: substituir o MonthSelector antigo (`< Julho 2026 >`) pelo padrão ERP

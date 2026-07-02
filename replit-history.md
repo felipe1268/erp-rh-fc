@@ -1,3 +1,11 @@
+- **Rev. 3962** — **WHITE-CARD PERIOD SELECTOR: PADRÃO ERP EM TODOS OS DASHBOARDS RH.** `PeriodSelectorCard.tsx` (12 pills + nav ano) substituiu MonthSelector/seletores em 8 dashboards RH; estado YYYY-MM → ano+mes+mesStr nos 3 com query mensal. ZERO DELETE.
+
+- **Rev. 3961** — **AVISO PRÉVIO / RESCISÃO: FILTRO CLT — PJ E SÓCIOS BLOQUEADOS.** Frontend: `activeEmployees` memo exclui `tipoContrato === "PJ"/"Socio"/"Sócio"`. Backend: guard `TRPCError BAD_REQUEST` em `avisoPrevio.create`. ZERO DELETE.
+
+- **Rev. 3960** — **DRE IA: FIX DEFINITIVO JSON TRUNCADO.** `callOpus(sys, prompt, 4000)` explícito → sem arg (usa default 8000); `repairTruncatedJson` fecha stack aberta. ZERO DELETE.
+
+- **Rev. 3959** — **NF-e: PAUSAR/RETOMAR SYNC + PRORROGAR (+2h/+4h/+8h/+24h).** `toggleSync` + `prorrogarSync` backend; footer unificado no card countdown. ZERO DELETE.
+
 - **Rev. 3958** — **DRE IA: PÁGINA FULL-SCREEN `/financeiro/dre-analise` + maxTokens 4000→8000 (default) + PARETO RECHARTS.** ZERO DELETE.
 
 - **Rev. 3957** — **DRE IA: CLAUDE OPUS 4-5 DIRETO + DIALOG POPUP (FIX 95% TRAVADO).** `callOpus()` direto, maxTokens 4000, badge no título. ZERO DELETE.
