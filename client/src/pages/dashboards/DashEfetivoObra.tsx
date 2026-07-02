@@ -26,6 +26,29 @@ import { Button } from "@/components/ui/button";
 
 const MESES_NOMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
+function EmpAvatar({ nome, fotoUrl, size = 28 }: { nome: string; fotoUrl?: string | null; size?: number }) {
+  const initials = nome.split(" ").filter(Boolean).slice(0, 2).map(p => p[0].toUpperCase()).join("");
+  if (fotoUrl) {
+    return (
+      <img
+        src={fotoUrl}
+        alt={nome}
+        style={{ width: size, height: size }}
+        className="rounded-full object-cover shrink-0 border border-border/50"
+        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+      />
+    );
+  }
+  return (
+    <div
+      style={{ width: size, height: size, fontSize: size * 0.36 }}
+      className="rounded-full bg-slate-200 text-slate-600 font-semibold flex items-center justify-center shrink-0"
+    >
+      {initials}
+    </div>
+  );
+}
+
 export default function DashEfetivoObra() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const companyId = Number(selectedCompanyId) || 0;
@@ -938,7 +961,12 @@ function EquipeFullScreenDialog({ open, onClose, obraNome, equipeData, loading }
                     const sc = STATUS_COLORS[emp.status] || { bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200' };
                     return (
                       <TableRow key={emp.id}>
-                        <TableCell className="font-medium text-sm">{emp.nomeCompleto}</TableCell>
+                        <TableCell className="font-medium text-sm">
+                          <div className="flex items-center gap-2.5">
+                            <EmpAvatar nome={emp.nomeCompleto || ""} fotoUrl={emp.fotoUrl} />
+                            <span>{emp.nomeCompleto}</span>
+                          </div>
+                        </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{emp.setor || '—'}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className={`text-[10px] ${sc.bg} ${sc.text} ${sc.border}`}

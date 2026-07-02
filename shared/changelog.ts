@@ -1,4 +1,22 @@
 /**
+ * Rev. 3965 — **EFETIVO OBRA: FOTO DO FUNCIONÁRIO NA TABELA "EQUIPE — {OBRA}".**
+ *
+ * PEDIDO: exibir a foto do funcionário na tela "Equipe — {obra}" do Dashboard
+ * Efetivo por Obra (DashEfetivoObra), na coluna "Nome" da tabela agrupada por função.
+ *
+ * BACKEND: `getEquipeObra` (`server/db.ts`) já selecionava `fotoUrl: employees.fotoUrl`
+ * desde a criação — sem alteração necessária no backend.
+ *
+ * FRONTEND (`client/src/pages/dashboards/DashEfetivoObra.tsx`):
+ *   - Novo componente inline `EmpAvatar({ nome, fotoUrl, size })` idêntico ao padrão
+ *     estabelecido no DashCartaoPonto (Rev. 3963): foto circular se `fotoUrl` disponível,
+ *     fallback com iniciais (`bg-slate-200`) caso contrário.
+ *   - `<TableCell>` da coluna "Nome" atualizado para `flex items-center gap-2.5` +
+ *     `<EmpAvatar>` antes do `<span>{emp.nomeCompleto}</span>`.
+ *
+ * ZERO DELETE.
+ */
+/**
  * Rev. 3964 — **FOLHA DE PAGAMENTO: FIX `mes.split is not a function` (REGRESSÃO Rev. 3962).**
  *
  * CAUSA: Rev. 3962 converteu o estado `mes` de YYYY-MM string para número 1-12,

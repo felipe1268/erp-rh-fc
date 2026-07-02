@@ -1,3 +1,5 @@
+- **Rev. 3958** — **DRE IA: PÁGINA FULL-SCREEN `/financeiro/dre-analise` + maxTokens 4000→8000 (default) + PARETO RECHARTS.** ZERO DELETE.
+
 - **Rev. 3957** — **DRE IA: CLAUDE OPUS 4-5 DIRETO + DIALOG POPUP (FIX 95% TRAVADO).** `callOpus()` direto, maxTokens 4000, badge no título. ZERO DELETE.
 
 - **Rev. 3956** — **DFC: PÁGINA DEDICADA `/financeiro/dfc` (ROTA EXCLUSIVA, FULL-SCREEN).** `FinanceiroDFC.tsx`; seletor white-card; 4 KPIs; waterfall/ajustes/bridge/indicadores. ZERO DELETE.

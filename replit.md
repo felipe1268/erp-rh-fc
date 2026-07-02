@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3965** — **EFETIVO OBRA: FOTO DO FUNCIONÁRIO NA TABELA "EQUIPE — {OBRA}".** `EmpAvatar` inline (foto circular ou iniciais) adicionado na coluna Nome da tabela agrupada por função em DashEfetivoObra. Backend já retornava `fotoUrl` — só frontend alterado. ZERO DELETE.
+
 - **Rev. 3964** — **FOLHA DE PAGAMENTO: FIX `mes.split is not a function` (REGRESSÃO Rev. 3962).** `mes.split("-")[0]` no título da TabelaComparativaAnual → `ano`. ZERO DELETE.
 
-- **Rev. 3963** — **CARTÃO DE PONTO: FOTO DO FUNCIONÁRIO NOS RANKINGS DE FALTAS E ATRASOS.** Backend: `fotoUrl` adicionado ao select de `allEmps` em `getDashCartaoPonto` e propagado para `rankingFaltas`/`rankingAtrasos`. Frontend: novo componente `EmpAvatar` (foto circular ou iniciais como fallback) inserido entre o badge numérico e o nome nas duas listas Top 10. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3963** — **CARTÃO DE PONTO: FOTO DO FUNCIONÁRIO NOS RANKINGS DE FALTAS E ATRASOS.** `fotoUrl` adicionado ao select de allEmps; `EmpAvatar` (foto/iniciais) inserido entre badge numérico e nome nos dois Top 10. ZERO DELETE.
 
 - **Rev. 3962** — **WHITE-CARD PERIOD SELECTOR: PADRÃO ERP EM TODOS OS DASHBOARDS RH.** `PeriodSelectorCard.tsx` (12 pills + nav ano) substituiu MonthSelector/seletores em 8 dashboards RH; estado YYYY-MM → ano+mes+mesStr nos 3 com query mensal. ZERO DELETE.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3960** — **DRE IA: FIX DEFINITIVO JSON TRUNCADO.** `callOpus(sys, prompt, 4000)` explícito → sem arg (usa default 8000); `repairTruncatedJson` fecha stack aberta. ZERO DELETE.
 
 - **Rev. 3959** — **NF-e: PAUSAR/RETOMAR SYNC + PRORROGAR (+2h/+4h/+8h/+24h).** `toggleSync` + `prorrogarSync` backend; footer unificado no card countdown. ZERO DELETE.
-
-- **Rev. 3958** — **DRE IA: PÁGINA FULL-SCREEN `/financeiro/dre-analise` + maxTokens 4000→8000 (default) + PARETO RECHARTS.** ZERO DELETE.
 
 ### Histórico completo
 
