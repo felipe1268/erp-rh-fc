@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import {
@@ -133,6 +134,7 @@ export default function FinanceiroDRE() {
   const hoje = new Date();
   const [ano, setAno] = useState(hoje.getFullYear());
   const [sel, setSel] = useState<Sel>({ tipo: "mensal", mes: hoje.getMonth() + 1 });
+  const [analiseOpen, setAnaliseOpen] = useState(false);
 
   const tipoPeriodo: "mensal" | "trimestral" | "semestral" | "anual" = sel.tipo;
   const periodo =
@@ -222,10 +224,12 @@ export default function FinanceiroDRE() {
   (analise?.fontes ?? []).forEach((f: Fonte) => { fontesMap[f.id] = f; });
   const analiseDesatualizada = analise && analise.periodo !== (dre?.periodo ?? periodo);
 
-  const gerarAnalise = () =>
+  const gerarAnalise = () => {
+    setAnaliseOpen(true);
     analiseMut.mutate({ companyId, periodo, tipoPeriodo }, {
       onSuccess: () => { refetchSalva(); },
     });
+  };
 
   // Rev. 2863 — barra de progresso 0→100% da Análise IA. O backend não faz
   // streaming, então animamos uma curva que sobe e desacelera perto de ~95%
@@ -414,7 +418,7 @@ export default function FinanceiroDRE() {
                 <p className="text-sm text-white/70 mt-0.5">Demonstração do Exercício (Lei 6.404/76 art. 187 · CPC 26) com análise inteligente</p>
               </div>
             </div>
-            <div className="flex items-center gap-2 self-start sm:self-auto">
+            <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
               <Button
                 variant="outline" size="sm"
                 onClick={handleExportarDFC}
@@ -427,6 +431,21 @@ export default function FinanceiroDRE() {
                 )}
                 <FileDown className="w-4 h-4 mr-1.5" />
                 {dfcLoading ? "Gerando…" : "Exportar DFC (PDF)"}
+              </Button>
+              <Button
+                variant="outline" size="sm"
+                onClick={() => { if (analise) { setAnaliseOpen(true); } else { gerarAnalise(); } }}
+                disabled={!dre}
+                className="relative overflow-hidden bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white"
+                title="Abrir análise inteligente do DRE com diagnóstico, Pareto de custos e plano de ação"
+              >
+                <Sparkles className="w-4 h-4 mr-1.5 text-orange-300" />
+                {analise ? "Ver análise IA" : "Analisar com IA"}
+                {nota !== null && (
+                  <span className="ml-1.5 text-[10px] font-bold tabular-nums" style={{ color: notaCor(nota) === "#dc2626" ? "#fca5a5" : notaCor(nota) === "#d97706" ? "#fcd34d" : notaCor(nota) === "#2563eb" ? "#93c5fd" : "#6ee7b7" }}>
+                    {nota}
+                  </span>
+                )}
               </Button>
               <Button variant="outline" size="sm" onClick={() => refetch()} className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white">
                 <RefreshCw className="w-4 h-4 mr-1.5" /> Atualizar
@@ -719,358 +738,362 @@ export default function FinanceiroDRE() {
           </CardContent>
         </Card>
 
-        {/* Análise de IA — abaixo do DRE */}
-        <Card className="border-0 shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-orange-50/60 to-transparent">
-            <div className="flex items-center gap-2.5">
-              <span className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-orange-500" />
-              </span>
-              <div>
-                <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2 flex-wrap">
-                  Análise Inteligente
-                  {analise?.saude && (
-                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${saudeMap[analise.saude]?.cls ?? ""}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${saudeMap[analise.saude]?.dot ?? "bg-gray-400"}`} /> {saudeMap[analise.saude]?.label ?? analise.saude}
-                    </span>
-                  )}
-                </h2>
-                <p className="text-xs text-gray-500">Diagnóstico do resultado com benchmarks do setor de construção e fontes citadas</p>
-                {!analiseMut.isPending && analiseSalvaEm && (
-                  <p className="text-[11px] text-gray-400 mt-0.5">
-                    Salva em {parseAsUTC(analiseSalvaEm).toLocaleString("pt-BR")}
-                    {(analise as any)?.geradoPorNome ? ` · por ${(analise as any).geradoPorNome}` : ""}
-                  </p>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-3 shrink-0">
-              {nota !== null && !analiseMut.isPending && (
-                <div className="flex flex-col items-center" title="Nota geral de saúde financeira (0 a 100)">
-                  <div
-                    className="w-14 h-14 rounded-full flex items-center justify-center font-extrabold text-base tabular-nums border-4"
-                    style={{
-                      color: notaCor(nota),
-                      borderColor: notaCor(nota),
-                      background: `${notaCor(nota)}14`,
-                    }}
-                  >
-                    {nota}
+        {/* Sheet — Análise de IA */}
+        <Sheet open={analiseOpen} onOpenChange={setAnaliseOpen}>
+          <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto p-0">
+            <SheetHeader className="sticky top-0 z-10 bg-white border-b border-gray-100 px-5 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center shrink-0">
+                    <Sparkles className="w-5 h-5 text-orange-500" />
+                  </span>
+                  <div>
+                    <SheetTitle className="text-sm font-bold text-gray-900 flex items-center gap-2 flex-wrap">
+                      Análise Inteligente · {tituloPeriodo}
+                      {analise?.saude && !analiseMut.isPending && (
+                        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${saudeMap[analise.saude]?.cls ?? ""}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${saudeMap[analise.saude]?.dot ?? "bg-gray-400"}`} /> {saudeMap[analise.saude]?.label ?? analise.saude}
+                        </span>
+                      )}
+                    </SheetTitle>
+                    {!analiseMut.isPending && analiseSalvaEm && (
+                      <p className="text-[11px] text-gray-400 mt-0.5">
+                        Salva em {parseAsUTC(analiseSalvaEm).toLocaleString("pt-BR")}
+                        {(analise as any)?.geradoPorNome ? ` · por ${(analise as any).geradoPorNome}` : ""}
+                      </p>
+                    )}
                   </div>
-                  <span className="text-[10px] text-gray-400 mt-0.5 font-medium">NOTA /100</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {nota !== null && !analiseMut.isPending && (
+                    <div
+                      className="w-11 h-11 rounded-full flex items-center justify-center font-extrabold text-sm tabular-nums border-4"
+                      style={{ color: notaCor(nota), borderColor: notaCor(nota), background: `${notaCor(nota)}14` }}
+                      title="Nota geral de saúde financeira (0 a 100)"
+                    >
+                      {nota}
+                    </div>
+                  )}
+                  <Button
+                    size="sm"
+                    onClick={gerarAnalise}
+                    disabled={analiseMut.isPending || !dre}
+                    className="bg-orange-500 hover:bg-orange-600 text-white"
+                  >
+                    <Sparkles className="w-4 h-4 mr-1.5" />
+                    {analiseMut.isPending ? `${Math.round(iaProgresso)}%` : analise ? "Refazer" : "Analisar"}
+                  </Button>
+                </div>
+              </div>
+            </SheetHeader>
+
+            <div className="p-5 space-y-5">
+              {analiseMut.isPending || iaProgresso > 0 ? (
+                <div className="space-y-5">
+                  <div className="rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50/80 to-amber-50/40 p-5">
+                    <div className="flex items-end justify-between gap-3 mb-2">
+                      <div className="flex items-center gap-2.5">
+                        <span className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-orange-100">
+                          <Sparkles className="w-5 h-5 text-orange-500" />
+                          {iaProgresso < 100 && (
+                            <span className="absolute inset-0 rounded-xl ring-2 ring-orange-300/60 animate-ping" />
+                          )}
+                        </span>
+                        <div>
+                          <p className="text-sm font-bold text-gray-900">
+                            {iaProgresso >= 100 ? "Análise concluída" : "Analisando com IA…"}
+                          </p>
+                          <p className="text-xs text-orange-700/80 font-medium">{iaProgresso >= 100 ? "Pronto!" : iaFase.label}</p>
+                        </div>
+                      </div>
+                      <span className="text-2xl font-extrabold tabular-nums text-orange-600 leading-none">
+                        {Math.round(iaProgresso)}%
+                      </span>
+                    </div>
+                    <div className="h-2.5 w-full overflow-hidden rounded-full bg-orange-100">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-orange-400 to-orange-600 transition-all duration-300 ease-out"
+                        style={{ width: `${iaProgresso}%` }}
+                      />
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+                      {IA_FASES.map((f, i) => {
+                        const ini = i === 0 ? 0 : IA_FASES[i - 1].ate;
+                        const feito = iaProgresso >= f.ate || iaProgresso >= 100;
+                        const ativo = !feito && iaProgresso >= ini;
+                        return (
+                          <span
+                            key={f.label}
+                            className={`inline-flex items-center gap-1.5 text-[11px] font-medium ${
+                              feito ? "text-emerald-600" : ativo ? "text-orange-600" : "text-gray-400"
+                            }`}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${
+                              feito ? "bg-emerald-500" : ativo ? "bg-orange-500 animate-pulse" : "bg-gray-300"
+                            }`} />
+                            {f.label}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-2/3" />
+                    <div className="grid sm:grid-cols-2 gap-3 pt-2">
+                      <Skeleton className="h-20 w-full rounded-xl" />
+                      <Skeleton className="h-20 w-full rounded-xl" />
+                    </div>
+                  </div>
+                </div>
+              ) : analiseMut.isError ? (
+                <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
+                  Não foi possível gerar a análise. Verifique se o módulo de IA está habilitado e tente novamente.
+                </div>
+              ) : !analise ? (
+                <div className="text-center py-10">
+                  <Sparkles className="w-10 h-10 text-orange-300 mx-auto mb-3" />
+                  <p className="text-sm text-gray-600 font-medium mb-1">Diagnóstico com IA</p>
+                  <p className="text-xs text-gray-400 max-w-xs mx-auto mb-4">
+                    Receba um diagnóstico de <span className="font-medium">{tituloPeriodo}</span> com benchmarks de empreitada, Pareto de custos e plano de ação.
+                  </p>
+                  <Button onClick={gerarAnalise} disabled={!dre} className="bg-orange-500 hover:bg-orange-600 text-white">
+                    <Sparkles className="w-4 h-4 mr-1.5" /> Gerar análise agora
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {analiseDesatualizada && (
+                    <div className="flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
+                      <Info className="w-3.5 h-3.5 shrink-0" />
+                      Esta análise é do período <strong>{analise.periodo}</strong>. Clique em "Refazer" para o período selecionado.
+                    </div>
+                  )}
+
+                  {/* Resumo executivo */}
+                  <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-4">
+                    <div className="flex items-center gap-1.5 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                      <ShieldCheck className="w-3.5 h-3.5" /> Resumo executivo
+                    </div>
+                    <p className="text-sm text-gray-700 leading-relaxed">{analise.resumoExecutivo}</p>
+                  </div>
+
+                  {/* Indicadores x setor */}
+                  {analise.indicadores?.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                        <Activity className="w-3.5 h-3.5" /> Indicadores x setor
+                      </div>
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        {analise.indicadores.map((ind: any, i: number) => {
+                          const st = statusInd[ind.status] ?? statusInd.dentro;
+                          const StIcon = st.Icon;
+                          return (
+                            <div key={i} className="rounded-xl border border-gray-100 p-3.5 hover:border-gray-200 transition-colors">
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <p className="text-sm font-semibold text-gray-800">{ind.nome}</p>
+                                  <p className="text-lg font-bold tabular-nums" style={{ color: NAVY }}>
+                                    {ind.unidade === "%" ? formatPct(ind.valor) : formatBRL(ind.valor)}
+                                  </p>
+                                </div>
+                                <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${st.cls}`}>
+                                  <StIcon className="w-3 h-3" /> {st.txt}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-gray-400 mt-1">Setor: <span className="font-medium text-gray-500">{ind.benchmarkSetor}</span></p>
+                              <p className="text-xs text-gray-600 leading-relaxed mt-1.5">{ind.leitura}</p>
+                              <FonteChips ids={ind.fontes} map={fontesMap} />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Riscos + Recomendações */}
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {analise.riscos?.length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-1.5 mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> Riscos identificados
+                        </div>
+                        <div className="space-y-2.5">
+                          {analise.riscos.map((r: any, i: number) => (
+                            <div key={i} className="rounded-xl border border-gray-100 p-3">
+                              <div className="flex items-start gap-2">
+                                <span className={`mt-0.5 inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${sevMap[r.severidade] ?? sevMap.media}`}>{r.severidade}</span>
+                                <p className="text-xs text-gray-700 leading-relaxed">{r.texto}</p>
+                              </div>
+                              <FonteChips ids={r.fontes} map={fontesMap} />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {analise.recomendacoes?.length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-1.5 mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                          <Lightbulb className="w-3.5 h-3.5 text-orange-500" /> Recomendações
+                        </div>
+                        <div className="space-y-2.5">
+                          {analise.recomendacoes.map((r: any, i: number) => (
+                            <div key={i} className="rounded-xl border border-gray-100 p-3">
+                              <div className="flex items-start gap-2">
+                                <Lightbulb className="w-3.5 h-3.5 text-orange-400 mt-0.5 shrink-0" />
+                                <p className="text-xs text-gray-700 leading-relaxed">{r.texto}</p>
+                              </div>
+                              <FonteChips ids={r.fontes} map={fontesMap} />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Pareto de Custos */}
+                  {analise.paretoCustos?.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                        <BarChart2 className="w-3.5 h-3.5 text-orange-500" /> Pareto de Custos — Top Ofensores
+                        <span className="ml-auto text-[10px] font-normal text-gray-400 normal-case tracking-normal">barras = % custo total · % Rec. = peso na receita</span>
+                      </div>
+                      <div className="rounded-xl border border-gray-100 overflow-hidden">
+                        <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-4 py-2 bg-gray-50/80 border-b border-gray-100">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Conta</span>
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 w-14 text-right">% Rec.</span>
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 w-24 text-right hidden sm:block">Valor</span>
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 w-14 text-right">Acum.</span>
+                        </div>
+                        {analise.paretoCustos.map((item: any, i: number) => {
+                          const catColor = item.categoria === "custo_obra" ? "#ef4444" : item.categoria === "despesa_fixa" ? "#f59e0b" : "#6366f1";
+                          const crossed80 = item.pctAcumulado >= 80 && (i === 0 || analise.paretoCustos[i - 1].pctAcumulado < 80);
+                          return (
+                            <div key={i}>
+                              {crossed80 && (
+                                <div className="px-4 py-1.5 bg-amber-50 border-y border-amber-100 text-[10px] font-semibold text-amber-700 flex items-center gap-1.5">
+                                  <Zap className="w-3 h-3" /> 80% do custo total acumulado aqui — foco nestas contas dá maior retorno
+                                </div>
+                              )}
+                              <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-4 py-2.5 border-b border-gray-50 last:border-0 hover:bg-gray-50/40 transition-colors">
+                                <div className="flex flex-col gap-1.5 min-w-0">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: catColor }} />
+                                    <span className="text-xs font-medium text-gray-800 truncate">{item.conta}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 pr-1">
+                                    <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                                      <div
+                                        className="h-full rounded-full"
+                                        style={{ width: `${Math.min(100, item.pctCustoTotal)}%`, background: catColor, opacity: 0.85 }}
+                                      />
+                                    </div>
+                                    <span className="text-[10px] text-gray-400 w-8 text-right shrink-0">{item.pctCustoTotal.toFixed(1)}%</span>
+                                  </div>
+                                </div>
+                                <span className="text-xs tabular-nums font-semibold text-gray-700 w-14 text-right self-center">{item.pctReceita.toFixed(1)}%</span>
+                                <span className="text-xs tabular-nums text-gray-500 w-24 text-right self-center hidden sm:block">{formatBRL(item.valor)}</span>
+                                <span className={`text-xs tabular-nums font-medium w-14 text-right self-center ${item.pctAcumulado >= 80 ? "text-amber-600" : "text-gray-400"}`}>
+                                  {item.pctAcumulado.toFixed(0)}%
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="flex flex-wrap gap-4 mt-2 px-1">
+                        <span className="text-[10px] text-gray-400 flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500" /> Custo direto de obra</span>
+                        <span className="text-[10px] text-gray-400 flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-500" /> Despesa fixa / overhead</span>
+                        <span className="text-[10px] text-gray-400 flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-indigo-500" /> Despesa variável</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Plano de Ação */}
+                  {analise.planoAcao?.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                        <Target className="w-3.5 h-3.5 text-orange-500" /> Plano de Ação
+                        <span className="ml-auto text-[10px] font-normal text-gray-400 normal-case tracking-normal">{analise.planoAcao.length} ações em ordem de prioridade</span>
+                      </div>
+                      <div className="space-y-2.5">
+                        {analise.planoAcao.map((item: any, i: number) => {
+                          const prazoMap: Record<string, { label: string; cls: string }> = {
+                            imediato: { label: "Imediato", cls: "bg-red-50 text-red-700 border-red-200" },
+                            "30d": { label: "30 dias", cls: "bg-orange-50 text-orange-700 border-orange-200" },
+                            "90d": { label: "90 dias", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+                            "180d": { label: "6 meses", cls: "bg-blue-50 text-blue-700 border-blue-200" },
+                          };
+                          const impactoCls: Record<string, string> = {
+                            alto: "bg-red-50 text-red-700 border-red-200",
+                            medio: "bg-amber-50 text-amber-700 border-amber-200",
+                            baixo: "bg-gray-50 text-gray-600 border-gray-200",
+                          };
+                          const prazo = prazoMap[item.prazo] ?? prazoMap["90d"];
+                          const probColor = item.probabilidadeEficacia >= 70 ? "#059669" : item.probabilidadeEficacia >= 50 ? "#d97706" : "#dc2626";
+                          return (
+                            <div key={i} className="rounded-xl border border-gray-100 p-3.5 hover:border-orange-100 transition-colors">
+                              <div className="flex items-start gap-3">
+                                <div
+                                  className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-extrabold shrink-0 mt-0.5 text-white"
+                                  style={{ background: NAVY }}
+                                >
+                                  {item.prioridade}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${prazo.cls}`}>
+                                      {prazo.label}
+                                    </span>
+                                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${impactoCls[item.impacto] ?? impactoCls.medio}`}>
+                                      Impacto {item.impacto}
+                                    </span>
+                                    {item.area && (
+                                      <span className="text-[10px] bg-gray-100 text-gray-600 rounded-full px-2 py-0.5 font-medium">{item.area}</span>
+                                    )}
+                                    <span
+                                      className="ml-auto text-[11px] font-bold tabular-nums"
+                                      style={{ color: probColor }}
+                                      title="Probabilidade de eficácia baseada em literatura setorial"
+                                    >
+                                      {item.probabilidadeEficacia}% eficácia
+                                    </span>
+                                  </div>
+                                  <p className="text-sm font-semibold text-gray-900 leading-snug">{item.acao}</p>
+                                  {item.justificativa && (
+                                    <p className="text-xs text-gray-500 leading-relaxed mt-1">{item.justificativa}</p>
+                                  )}
+                                  <FonteChips ids={item.fontes} map={fontesMap} />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Todas as fontes citadas */}
+                  {analise.fontes?.length > 0 && (
+                    <div className="pt-3 border-t border-gray-100">
+                      <div className="flex items-center gap-1.5 mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                        <BookOpen className="w-3.5 h-3.5" /> Fontes citadas ({analise.fontes.length})
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {analise.fontes.map((f: Fonte) => <FonteChip key={f.id} fonte={f} />)}
+                      </div>
+                    </div>
+                  )}
+
+                  <p className="text-[11px] text-gray-400 italic">
+                    Análise gerada por IA com base nos lançamentos do período e em fontes públicas do setor. Use como apoio à decisão, não como aconselhamento contábil/fiscal definitivo.
+                  </p>
                 </div>
               )}
-              <Button
-                size="sm"
-                onClick={gerarAnalise}
-                disabled={analiseMut.isPending || !dre}
-                className="bg-orange-500 hover:bg-orange-600 text-white"
-              >
-                <Sparkles className="w-4 h-4 mr-1.5" />
-                {analiseMut.isPending ? `Analisando… ${Math.round(iaProgresso)}%` : analise ? "Refazer análise" : "Analisar com IA"}
-              </Button>
             </div>
-          </div>
-
-          <CardContent className="p-5">
-            {analiseMut.isPending || iaProgresso > 0 ? (
-              <div className="space-y-5">
-                <div className="rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50/80 to-amber-50/40 p-5">
-                  <div className="flex items-end justify-between gap-3 mb-2">
-                    <div className="flex items-center gap-2.5">
-                      <span className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-orange-100">
-                        <Sparkles className="w-5 h-5 text-orange-500" />
-                        {iaProgresso < 100 && (
-                          <span className="absolute inset-0 rounded-xl ring-2 ring-orange-300/60 animate-ping" />
-                        )}
-                      </span>
-                      <div>
-                        <p className="text-sm font-bold text-gray-900">
-                          {iaProgresso >= 100 ? "Análise concluída" : "Analisando com IA…"}
-                        </p>
-                        <p className="text-xs text-orange-700/80 font-medium">{iaProgresso >= 100 ? "Pronto!" : iaFase.label}</p>
-                      </div>
-                    </div>
-                    <span className="text-2xl font-extrabold tabular-nums text-orange-600 leading-none">
-                      {Math.round(iaProgresso)}%
-                    </span>
-                  </div>
-                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-orange-100">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-orange-400 to-orange-600 transition-all duration-300 ease-out"
-                      style={{ width: `${iaProgresso}%` }}
-                    />
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
-                    {IA_FASES.map((f, i) => {
-                      const ini = i === 0 ? 0 : IA_FASES[i - 1].ate;
-                      const feito = iaProgresso >= f.ate || iaProgresso >= 100;
-                      const ativo = !feito && iaProgresso >= ini;
-                      return (
-                        <span
-                          key={f.label}
-                          className={`inline-flex items-center gap-1.5 text-[11px] font-medium ${
-                            feito ? "text-emerald-600" : ativo ? "text-orange-600" : "text-gray-400"
-                          }`}
-                        >
-                          <span className={`w-1.5 h-1.5 rounded-full ${
-                            feito ? "bg-emerald-500" : ativo ? "bg-orange-500 animate-pulse" : "bg-gray-300"
-                          }`} />
-                          {f.label}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-2/3" />
-                  <div className="grid sm:grid-cols-2 gap-3 pt-2">
-                    <Skeleton className="h-20 w-full rounded-xl" />
-                    <Skeleton className="h-20 w-full rounded-xl" />
-                  </div>
-                </div>
-              </div>
-            ) : analiseMut.isError ? (
-              <p className="text-sm text-red-600">Não foi possível gerar a análise. Tente novamente em instantes.</p>
-            ) : !analise ? (
-              <div className="text-center py-6">
-                <p className="text-sm text-gray-500 max-w-md mx-auto">
-                  Clique em <span className="font-semibold text-orange-600">Analisar com IA</span> para receber um diagnóstico do resultado de <span className="font-medium">{tituloPeriodo}</span>, comparado aos indicadores do setor de construção e fundamentado em literatura financeira.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-5">
-                {analiseDesatualizada && (
-                  <div className="flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
-                    <Info className="w-3.5 h-3.5 shrink-0" />
-                    Esta análise é do período <strong>{analise.periodo}</strong>. Refaça para o período selecionado.
-                  </div>
-                )}
-
-                {/* Resumo executivo */}
-                <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-4">
-                  <div className="flex items-center gap-1.5 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-                    <ShieldCheck className="w-3.5 h-3.5" /> Resumo executivo
-                  </div>
-                  <p className="text-sm text-gray-700 leading-relaxed">{analise.resumoExecutivo}</p>
-                </div>
-
-                {/* Indicadores x setor */}
-                {analise.indicadores?.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-1.5 mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-                      <Activity className="w-3.5 h-3.5" /> Indicadores x setor
-                    </div>
-                    <div className="grid sm:grid-cols-2 gap-3">
-                      {analise.indicadores.map((ind: any, i: number) => {
-                        const st = statusInd[ind.status] ?? statusInd.dentro;
-                        const StIcon = st.Icon;
-                        return (
-                          <div key={i} className="rounded-xl border border-gray-100 p-3.5 hover:border-gray-200 transition-colors">
-                            <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <p className="text-sm font-semibold text-gray-800">{ind.nome}</p>
-                                <p className="text-lg font-bold tabular-nums" style={{ color: NAVY }}>
-                                  {ind.unidade === "%" ? formatPct(ind.valor) : formatBRL(ind.valor)}
-                                </p>
-                              </div>
-                              <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${st.cls}`}>
-                                <StIcon className="w-3 h-3" /> {st.txt}
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-gray-400 mt-1">Setor: <span className="font-medium text-gray-500">{ind.benchmarkSetor}</span></p>
-                            <p className="text-xs text-gray-600 leading-relaxed mt-1.5">{ind.leitura}</p>
-                            <FonteChips ids={ind.fontes} map={fontesMap} />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Riscos + Recomendações */}
-                <div className="grid md:grid-cols-2 gap-4">
-                  {analise.riscos?.length > 0 && (
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-                        <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> Riscos identificados
-                      </div>
-                      <div className="space-y-2.5">
-                        {analise.riscos.map((r: any, i: number) => (
-                          <div key={i} className="rounded-xl border border-gray-100 p-3">
-                            <div className="flex items-start gap-2">
-                              <span className={`mt-0.5 inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${sevMap[r.severidade] ?? sevMap.media}`}>{r.severidade}</span>
-                              <p className="text-xs text-gray-700 leading-relaxed">{r.texto}</p>
-                            </div>
-                            <FonteChips ids={r.fontes} map={fontesMap} />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {analise.recomendacoes?.length > 0 && (
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-                        <Lightbulb className="w-3.5 h-3.5 text-orange-500" /> Recomendações
-                      </div>
-                      <div className="space-y-2.5">
-                        {analise.recomendacoes.map((r: any, i: number) => (
-                          <div key={i} className="rounded-xl border border-gray-100 p-3">
-                            <div className="flex items-start gap-2">
-                              <Lightbulb className="w-3.5 h-3.5 text-orange-400 mt-0.5 shrink-0" />
-                              <p className="text-xs text-gray-700 leading-relaxed">{r.texto}</p>
-                            </div>
-                            <FonteChips ids={r.fontes} map={fontesMap} />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Pareto de Custos */}
-                {analise.paretoCustos?.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-1.5 mb-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-                      <BarChart2 className="w-3.5 h-3.5 text-orange-500" /> Pareto de Custos — Top Ofensores
-                      <span className="ml-auto text-[10px] font-normal text-gray-400 normal-case tracking-normal">As barras mostram % do custo total; a coluna "% Rec." mostra o peso sobre a receita</span>
-                    </div>
-                    <div className="rounded-xl border border-gray-100 overflow-hidden">
-                      <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-4 py-2 bg-gray-50/80 border-b border-gray-100">
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Conta</span>
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 w-14 text-right">% Rec.</span>
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 w-24 text-right hidden sm:block">Valor</span>
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 w-14 text-right">Acum.</span>
-                      </div>
-                      {analise.paretoCustos.map((item: any, i: number) => {
-                        const catColor = item.categoria === "custo_obra" ? "#ef4444" : item.categoria === "despesa_fixa" ? "#f59e0b" : "#6366f1";
-                        const crossed80 = item.pctAcumulado >= 80 && (i === 0 || analise.paretoCustos[i - 1].pctAcumulado < 80);
-                        return (
-                          <div key={i}>
-                            {crossed80 && (
-                              <div className="px-4 py-1.5 bg-amber-50 border-y border-amber-100 text-[10px] font-semibold text-amber-700 flex items-center gap-1.5">
-                                <Zap className="w-3 h-3" /> 80% do custo total acumulado até aqui — foco nestas contas gera o maior retorno
-                              </div>
-                            )}
-                            <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-4 py-2.5 border-b border-gray-50 last:border-0 hover:bg-gray-50/40 transition-colors">
-                              <div className="flex flex-col gap-1.5 min-w-0">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: catColor }} />
-                                  <span className="text-xs font-medium text-gray-800 truncate">{item.conta}</span>
-                                </div>
-                                <div className="flex items-center gap-2 pr-1">
-                                  <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                                    <div
-                                      className="h-full rounded-full"
-                                      style={{ width: `${Math.min(100, item.pctCustoTotal)}%`, background: catColor, opacity: 0.85 }}
-                                    />
-                                  </div>
-                                  <span className="text-[10px] text-gray-400 w-8 text-right shrink-0">{item.pctCustoTotal.toFixed(1)}%</span>
-                                </div>
-                              </div>
-                              <span className="text-xs tabular-nums font-semibold text-gray-700 w-14 text-right self-center">{item.pctReceita.toFixed(1)}%</span>
-                              <span className="text-xs tabular-nums text-gray-500 w-24 text-right self-center hidden sm:block">{formatBRL(item.valor)}</span>
-                              <span className={`text-xs tabular-nums font-medium w-14 text-right self-center ${item.pctAcumulado >= 80 ? "text-amber-600" : "text-gray-400"}`}>
-                                {item.pctAcumulado.toFixed(0)}%
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="flex flex-wrap gap-4 mt-2 px-1">
-                      <span className="text-[10px] text-gray-400 flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500" /> Custo direto de obra</span>
-                      <span className="text-[10px] text-gray-400 flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-500" /> Despesa fixa / overhead</span>
-                      <span className="text-[10px] text-gray-400 flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-indigo-500" /> Despesa variável</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Plano de Ação */}
-                {analise.planoAcao?.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-1.5 mb-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-                      <Target className="w-3.5 h-3.5 text-orange-500" /> Plano de Ação
-                      <span className="ml-auto text-[10px] font-normal text-gray-400 normal-case tracking-normal">{analise.planoAcao.length} ações em ordem de prioridade</span>
-                    </div>
-                    <div className="space-y-2.5">
-                      {analise.planoAcao.map((item: any, i: number) => {
-                        const prazoMap: Record<string, { label: string; cls: string }> = {
-                          imediato: { label: "Imediato", cls: "bg-red-50 text-red-700 border-red-200" },
-                          "30d": { label: "30 dias", cls: "bg-orange-50 text-orange-700 border-orange-200" },
-                          "90d": { label: "90 dias", cls: "bg-amber-50 text-amber-700 border-amber-200" },
-                          "180d": { label: "6 meses", cls: "bg-blue-50 text-blue-700 border-blue-200" },
-                        };
-                        const impactoCls: Record<string, string> = {
-                          alto: "bg-red-50 text-red-700 border-red-200",
-                          medio: "bg-amber-50 text-amber-700 border-amber-200",
-                          baixo: "bg-gray-50 text-gray-600 border-gray-200",
-                        };
-                        const prazo = prazoMap[item.prazo] ?? prazoMap["90d"];
-                        const probColor = item.probabilidadeEficacia >= 70 ? "#059669" : item.probabilidadeEficacia >= 50 ? "#d97706" : "#dc2626";
-                        return (
-                          <div key={i} className="rounded-xl border border-gray-100 p-3.5 hover:border-orange-100 transition-colors">
-                            <div className="flex items-start gap-3">
-                              <div
-                                className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-extrabold shrink-0 mt-0.5 text-white"
-                                style={{ background: NAVY }}
-                              >
-                                {item.prioridade}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex flex-wrap items-center gap-1.5 mb-2">
-                                  <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${prazo.cls}`}>
-                                    {prazo.label}
-                                  </span>
-                                  <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${impactoCls[item.impacto] ?? impactoCls.medio}`}>
-                                    Impacto {item.impacto}
-                                  </span>
-                                  {item.area && (
-                                    <span className="text-[10px] bg-gray-100 text-gray-600 rounded-full px-2 py-0.5 font-medium">{item.area}</span>
-                                  )}
-                                  <span
-                                    className="ml-auto text-[11px] font-bold tabular-nums"
-                                    style={{ color: probColor }}
-                                    title="Probabilidade de eficácia baseada em literatura setorial"
-                                  >
-                                    {item.probabilidadeEficacia}% eficácia
-                                  </span>
-                                </div>
-                                <p className="text-sm font-semibold text-gray-900 leading-snug">{item.acao}</p>
-                                {item.justificativa && (
-                                  <p className="text-xs text-gray-500 leading-relaxed mt-1">{item.justificativa}</p>
-                                )}
-                                <FonteChips ids={item.fontes} map={fontesMap} />
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Todas as fontes citadas */}
-                {analise.fontes?.length > 0 && (
-                  <div className="pt-3 border-t border-gray-100">
-                    <div className="flex items-center gap-1.5 mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-                      <BookOpen className="w-3.5 h-3.5" /> Fontes citadas ({analise.fontes.length})
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {analise.fontes.map((f: Fonte) => <FonteChip key={f.id} fonte={f} />)}
-                    </div>
-                  </div>
-                )}
-
-                <p className="text-[11px] text-gray-400 italic">
-                  Análise gerada por IA com base nos lançamentos do período e em fontes públicas do setor. Use como apoio à decisão, não como aconselhamento contábil/fiscal definitivo.
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+          </SheetContent>
+        </Sheet>
 
         {/* Legenda do modelo contábil — fixo, sempre visível */}
         <div className="rounded-2xl border border-gray-100 bg-gray-50/70 px-5 py-4 space-y-3">
