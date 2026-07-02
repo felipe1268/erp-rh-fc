@@ -4718,7 +4718,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v3933-2026-07-01-apr-assinaturas-equipe";
+    const COLFIX_VERSION = "v3971-2026-07-02-convenio-competencia-backfill";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -5059,6 +5059,27 @@ Regras:
           END $$
         `);
         console.log("[ColFix] Bloco principal de ALTER TABLE OK");
+
+        // Rev. 3971 — Backfill competencia_desconto de lancamentos_parceiros aprovados
+        // que ficaram com NULL (aprovados antes do fix do aprovar que não gravava a competência).
+        // Regra: dia <= 15 → mês da compra; dia >= 16 → mês seguinte. Idempotente.
+        try {
+          const { rowCount: convBackfill } = await db.$client.query(`
+            UPDATE lancamentos_parceiros
+            SET competencia_desconto = (
+              CASE
+                WHEN EXTRACT(DAY FROM data_compra::date) <= 15
+                  THEN TO_CHAR(data_compra::date, 'YYYY-MM')
+                ELSE TO_CHAR((data_compra::date + INTERVAL '1 month'), 'YYYY-MM')
+              END
+            )
+            WHERE competencia_desconto IS NULL
+              AND status = 'aprovado'
+          `);
+          if ((convBackfill ?? 0) > 0) console.log(`[ColFix] Backfill competencia_desconto: ${convBackfill} lançamentos de convênio corrigidos`);
+        } catch (e: any) {
+          console.warn("[ColFix] Backfill competencia_desconto falhou (não-fatal):", e?.message || e);
+        }
 
         // Índice + backfill do ciclo da folha em ponto_consolidacao (Task #29 / #38)
         // O ciclo correto vai do (diaCorte+1) do mês anterior até o (diaCorte) do mês.

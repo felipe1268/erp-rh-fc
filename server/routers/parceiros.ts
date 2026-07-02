@@ -413,6 +413,11 @@ export const parceirosRouter = router({
         };
         if (!input.aprovado && input.motivoRejeicao) updateData.motivoRejeicao = input.motivoRejeicao;
         if (comentarioAdmin) updateData.comentarioAdmin = comentarioAdmin;
+        // Persiste a competência escolhida pelo RH para que a query da Folha
+        // (AND lp.competencia_desconto = mesReferencia) encontre o registro.
+        if (input.aprovado && input.competenciaSelecionada) {
+          updateData.competenciaDesconto = input.competenciaSelecionada;
+        }
         await db.update(lancamentosParceiros).set(updateData).where(eq(lancamentosParceiros.id, input.id));
         return { success: true };
       }),

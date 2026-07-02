@@ -1,4 +1,23 @@
 /**
+ * Rev. 3971 — **CONVÊNIOS: FIX COLUNA VAZIA NA FOLHA (competencia_desconto NULL).**
+ *
+ * CAUSA-RAIZ: a mutation `parceiros.lancamentos.aprovar` recebia `competenciaSelecionada`
+ * do RH mas NUNCA gravava no campo `competencia_desconto` do registro. A query da Folha
+ * (`AND lp.competencia_desconto = mesReferencia`) sempre encontrava 0 linhas → coluna "—".
+ *
+ * CORREÇÃO (`server/routers/parceiros.ts`):
+ *   - No `aprovar`: quando `aprovado=true` e `competenciaSelecionada` presente, grava
+ *     `competenciaDesconto = competenciaSelecionada` no updateData.
+ *
+ * BACKFILL (`server/_core/index.ts` — ColFix v3971):
+ *   - UPDATE `lancamentos_parceiros` WHERE `competencia_desconto IS NULL AND status='aprovado'`
+ *     preenchendo pela regra dia-15/16 (dia<=15 → mês da compra; dia>=16 → mês seguinte).
+ *   - Idempotente. Usa `db.$client.query` diretamente.
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3970 — **REFIS: FIX CARDS INFERIORES PREVISTO/REALIZADO (DELTA → ACUMULADO).**
  *
  * CAUSA-RAIZ: os dois primeiros KPI cards da faixa inferior do REFIS exibiam

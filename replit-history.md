@@ -1,3 +1,5 @@
+- **Rev. 3964** — **FOLHA DE PAGAMENTO: FIX `mes.split is not a function` (REGRESSÃO Rev. 3962).** `mes.split("-")[0]` no título da TabelaComparativaAnual → `ano`. ZERO DELETE.
+
 - **Rev. 3963** — **CARTÃO DE PONTO: FOTO DO FUNCIONÁRIO NOS RANKINGS DE FALTAS E ATRASOS.** `fotoUrl` adicionado ao select de allEmps; `EmpAvatar` (foto/iniciais) inserido entre badge numérico e nome nos dois Top 10. ZERO DELETE.
 
 - **Rev. 3962** — **WHITE-CARD PERIOD SELECTOR: PADRÃO ERP EM TODOS OS DASHBOARDS RH.** `PeriodSelectorCard.tsx` (12 pills + nav ano) substituiu MonthSelector/seletores em 8 dashboards RH; estado YYYY-MM → ano+mes+mesStr nos 3 com query mensal. ZERO DELETE.
