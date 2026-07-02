@@ -63,12 +63,12 @@ export interface DFCItem {
 
 export interface DFCPdfParams {
   dre: DREDataForDFC;
-  bankComp: BankCompData;
-  dfcData: {
+  bankComp?: BankCompData | null;
+  dfcData?: {
     itens: DFCItem[];
     receitasAReceber: number;
     despesasAPagar: number;
-  };
+  } | null;
   periodo: string;      // "2026-01" | "2026" | etc.
   tipoPeriodo: string;  // "mensal" | "trimestral" | "semestral" | "anual"
   companyName?: string;
@@ -122,7 +122,9 @@ async function fetchLogo(origin: string): Promise<string | null> {
 // Gerador principal
 // ─────────────────────────────────────────────────────────────
 export async function gerarDFCPdf(params: DFCPdfParams): Promise<void> {
-  const { dre, bankComp, dfcData, periodo, tipoPeriodo, companyName } = params;
+  const { dre, periodo, tipoPeriodo, companyName } = params;
+  const bankComp: BankCompData = params.bankComp ?? { bankEntradas: 0, bankSaidas: 0, bankSaldo: 0 };
+  const dfcData = params.dfcData ?? { itens: [], receitasAReceber: 0, despesasAPagar: 0 };
 
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const W = 210;

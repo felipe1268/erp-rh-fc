@@ -10288,9 +10288,9 @@ export const financialRouter = router({
         AND TO_CHAR(data_competencia,'YYYY-MM') BETWEEN $2 AND $3
     `, [input.companyId, mesIni, mesFim]);
 
-    const regime = (regimeRes as any[])[0] ?? {};
+    const regime = (regimeRes as any).rows?.[0] ?? (regimeRes as any[])[0] ?? {};
     return {
-      itens: (itensRes as any[]).map(r => ({
+      itens: ((itensRes as any).rows ?? itensRes as any[]).map((r: any) => ({
         contaNome: String(r.conta_nome),
         tipo: String(r.tipo) as "receita" | "despesa",
         classificacao: String(r.classificacao) as "nao_operacional" | "investimento",

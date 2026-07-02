@@ -197,7 +197,7 @@ export default function FinanceiroDRE() {
   const [dfcLoading, setDfcLoading] = useState(false);
 
   const handleExportarDFC = async () => {
-    if (!dre || !bankComp || !dfcData || dfcLoading) return;
+    if (!dre || dfcLoading) return;
     setDfcLoading(true);
     try {
       const { gerarDFCPdf } = await import("@/lib/dfcPdf");
@@ -422,7 +422,7 @@ export default function FinanceiroDRE() {
               <Button
                 variant="outline" size="sm"
                 onClick={handleExportarDFC}
-                disabled={dfcLoading || !dre || !bankComp || !dfcData}
+                disabled={dfcLoading || !dre}
                 className="relative overflow-hidden bg-orange-500/20 border-orange-400/40 text-white hover:bg-orange-500/30 hover:text-white"
                 title="Baixar PDF com a Demonstração do Fluxo de Caixa (reconciliação DRE × banco)"
               >
