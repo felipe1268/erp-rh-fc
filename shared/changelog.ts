@@ -1,4 +1,35 @@
 /**
+ * Rev. 3988 — **FOLHA: "GERAR REMESSA CNAB" GANHA SELEÇÃO MÚLTIPLA — 1 ARQUIVO POR BANCO
+ * MARCADO, NUM SÓ CLIQUE.**
+ *
+ * PEDIDO: usuário pediu que, ao gerar remessa CNAB, o sistema gere 1 remessa PARA CADA BANCO
+ * selecionado (screenshot mostrando os cards "Por Banco" na aba Cálculo do Pagamento, cada um já
+ * com botão individual "Gerar Remessa CNAB"). Antes, só existia o botão por card — gerar remessa de
+ * vários bancos exigia clicar um por um.
+ *
+ * IMPLEMENTAÇÃO (frontend puro, `client/src/pages/FolhaPagamento.tsx` · subview "Por Banco"):
+ * novo estado `contasRemessaSelecionadas` (Set de `contaBancariaId`); checkbox em cada card-resumo
+ * (topo) e em cada card-detalhe (por banco), habilitado só quando a conta é elegível (mesmo gate do
+ * botão individual: `codigoBanco` resolvido + `meta.id` numérico). Barra de ação no topo com
+ * "Selecionar todos os bancos (N)" + botão "Gerar Remessas Selecionadas (N)". Nova função
+ * `gerarRemessasSelecionadas` dispara `gerarRemessaCnab` SEQUENCIALMENTE (1 chamada por conta
+ * marcada, com pequeno delay de 250ms entre downloads para não colidir no navegador) reusando a
+ * mesma mutation/endpoint existente — CADA banco continua gerando seu PRÓPRIO arquivo .rem
+ * (`gerarRemessaCnab` já agrupa e nomeia por conta-empresa desde a Rev. 2768), nunca um arquivo
+ * combinado. Falhas individuais (ex.: conta sem cadastro bancário) são coletadas e reportadas no
+ * toast final sem interromper as demais contas selecionadas. Botão individual por card continua
+ * funcionando como antes (não removido) para gerar 1 banco isoladamente.
+ *
+ * SEM MUDANÇA DE BACKEND: `gerarRemessaCnab` (server/routers/payrollEngine.ts) não foi tocado —
+ * a seleção múltipla é só uma orquestração client-side de chamadas já existentes.
+ *
+ * ARQUIVOS: `client/src/pages/FolhaPagamento.tsx` (+`Checkbox` import, +estado de seleção,
+ * +`baixarArquivoRemessa`/`gerarRemessasSelecionadas`, +checkboxes e barra de ação na subview "Por
+ * Banco"), `shared/version.ts`→3988.
+ *
+ * ZERO DELETE · ZERO ALTER.
+ */
+/**
  * Rev. 3987 — **FOLHA: COLUNA "FALTAS" NÃO MISTURA MAIS VR/VT — VR SAI DA FOLHA (SÓ NO VALE
  * ALIMENTAÇÃO), VT DE FALTA VAI PRA COLUNA VT.**
  *

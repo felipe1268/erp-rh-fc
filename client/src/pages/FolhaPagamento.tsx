@@ -30,6 +30,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { fmtNum } from "@/lib/formatters";
 import AlertaDivergenciaFolha from "@/components/AlertaDivergenciaFolha";
 
@@ -560,6 +561,8 @@ export default function FolhaPagamento() {
   const [valeSubView, setValeSubView] = useState<"geral" | "por_banco">("geral");
   const [pagamentoSearch, setPagamentoSearch] = useState("");
   const [pagamentoFuncao, setPagamentoFuncao] = useState<string>("__all__");
+  const [contasRemessaSelecionadas, setContasRemessaSelecionadas] = useState<Set<number>>(new Set());
+  const [gerandoRemessasLote, setGerandoRemessasLote] = useState(false);
 
   // Views
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -1500,21 +1503,56 @@ export default function FolhaPagamento() {
     onSuccess: () => { toast.success("Pagamento desconsolidado."); payrollPeriod.refetch(); },
     onError: (e) => toast.error(e.message),
   });
+  function baixarArquivoRemessa(data: { arquivo: string; nomeArquivo: string }) {
+    const blob = new Blob([data.arquivo], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = data.nomeArquivo;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
   const gerarRemessaMut = trpc.payrollEngine.gerarRemessaCnab.useMutation({
     onSuccess: (data) => {
-      const blob = new Blob([data.arquivo], { type: 'text/plain;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = data.nomeArquivo;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      baixarArquivoRemessa(data);
       toast.success(`Remessa ${data.banco} gerada: ${data.totalFuncionarios} funcionários, ${formatBRL(data.totalValor)}`);
     },
     onError: (e) => toast.error(e.message),
   });
+  // Rev. — "Gerar Remessas Selecionadas": usuário marca N bancos e o sistema gera
+  // 1 arquivo .rem POR BANCO marcado (nunca um único arquivo combinado). Reusa a
+  // mesma mutation gerarRemessaCnab (que já agrupa por conta-empresa), disparando
+  // sequencialmente para não estourar o gate de sessão do backend nem embaralhar
+  // downloads simultâneos no navegador.
+  async function gerarRemessasSelecionadas(contas: Array<{ id: number; codigoBanco: string }>) {
+    if (contas.length === 0) return;
+    setGerandoRemessasLote(true);
+    let sucesso = 0;
+    const falhas: string[] = [];
+    try {
+      for (const conta of contas) {
+        try {
+          const data = await gerarRemessaMut.mutateAsync({
+            companyId,
+            mesReferencia: mesAno,
+            codigoBanco: conta.codigoBanco,
+            contaBancariaId: conta.id,
+          });
+          baixarArquivoRemessa(data);
+          sucesso++;
+          await new Promise((r) => setTimeout(r, 250));
+        } catch (e: any) {
+          falhas.push(e?.message || `Conta ${conta.id}`);
+        }
+      }
+    } finally {
+      setGerandoRemessasLote(false);
+    }
+    if (sucesso > 0) toast.success(`${sucesso} remessa${sucesso !== 1 ? "s" : ""} gerada${sucesso !== 1 ? "s" : ""} (1 arquivo por banco).`);
+    if (falhas.length > 0) toast.error(`${falhas.length} falha(s): ${falhas.join(" | ")}`);
+  }
   const excluirMut = trpc.folha.excluirLancamento.useMutation({
     onSuccess: () => { toast.success("Lançamento excluído!"); statusMes.refetch(); lancamentos.refetch(); mesesComLanc.refetch(); setViewMode("resumo"); },
   });
@@ -4599,8 +4637,52 @@ export default function FolhaPagamento() {
               if (meta.conta) parts.push(`Cc ${meta.conta}`);
               return parts.length ? parts.join(' • ') : null;
             }
+            // Rev. — Contas elegíveis para remessa CNAB (mesmo gate do botão individual:
+            // precisa de meta + codigoBanco + id numérico). Usado pela seleção em lote.
+            const contasElegiveis: Array<{ key: string; id: number; codigoBanco: string; banco: string }> = acctKeys
+              .map(key => {
+                const meta = acctMeta[key];
+                if (!meta) return null;
+                const codigoBanco = meta.codigoBanco || getBankCode(meta.banco);
+                if (!codigoBanco || !Number.isFinite(Number(meta.id))) return null;
+                return { key, id: Number(meta.id), codigoBanco, banco: acctLabel(meta) };
+              })
+              .filter((c): c is { key: string; id: number; codigoBanco: string; banco: string } => c !== null);
+            const todasSelecionadas = contasElegiveis.length > 0 && contasElegiveis.every(c => contasRemessaSelecionadas.has(c.id));
+            function toggleConta(id: number) {
+              setContasRemessaSelecionadas(prev => {
+                const next = new Set(prev);
+                if (next.has(id)) next.delete(id); else next.add(id);
+                return next;
+              });
+            }
+            function toggleTodas() {
+              setContasRemessaSelecionadas(prev => {
+                if (todasSelecionadas) return new Set();
+                return new Set(contasElegiveis.map(c => c.id));
+              });
+            }
             return (
               <div className="space-y-4">
+                {contasElegiveis.length > 0 && (
+                  <div className="flex items-center justify-between gap-3 bg-white border rounded-lg p-3 print:hidden">
+                    <label className="flex items-center gap-2 text-xs font-medium cursor-pointer select-none">
+                      <Checkbox checked={todasSelecionadas} onCheckedChange={toggleTodas} />
+                      Selecionar todos os bancos ({contasElegiveis.length})
+                    </label>
+                    <Button
+                      size="sm"
+                      className="text-xs h-8"
+                      disabled={contasRemessaSelecionadas.size === 0 || gerandoRemessasLote}
+                      onClick={() => gerarRemessasSelecionadas(contasElegiveis.filter(c => contasRemessaSelecionadas.has(c.id)))}
+                    >
+                      <FileDown className="h-3.5 w-3.5 mr-1" />
+                      {gerandoRemessasLote
+                        ? "Gerando remessas..."
+                        : `Gerar Remessas Selecionadas${contasRemessaSelecionadas.size > 0 ? ` (${contasRemessaSelecionadas.size})` : ""}`}
+                    </Button>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {acctKeys.map(key => {
                     const meta = acctMeta[key];
@@ -4608,9 +4690,17 @@ export default function FolhaPagamento() {
                     const totalLiq = bkFuncs.reduce((s: number, f: any) => s + (f.salarioLiquido || 0), 0);
                     const dotColor = dotColorFor(meta);
                     const subtitle = acctSubtitle(meta);
+                    const elegivel = meta && Number.isFinite(Number(meta.id)) && contasElegiveis.some(c => c.id === Number(meta.id));
                     return (
                       <div key={key} className="bg-white border rounded-lg p-3">
                         <div className="flex items-center gap-2 mb-1">
+                          {elegivel && (
+                            <Checkbox
+                              className="print:hidden"
+                              checked={contasRemessaSelecionadas.has(Number(meta.id))}
+                              onCheckedChange={() => toggleConta(Number(meta.id))}
+                            />
+                          )}
                           <div className={`h-3 w-3 rounded-full ${dotColor}`} />
                           <span className="text-sm font-semibold">{acctLabel(meta)}</span>
                         </div>
@@ -4631,10 +4721,18 @@ export default function FolhaPagamento() {
                   const dotColor = dotColorFor(meta);
                   const subtitle = acctSubtitle(meta);
                   const codigoBanco = meta ? (meta.codigoBanco || getBankCode(meta.banco)) : null;
+                  const elegivelCard = meta && codigoBanco && Number.isFinite(Number(meta.id));
                   return (
                     <Card key={key} className="overflow-hidden">
                       <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b">
                         <div className="flex items-center gap-2 min-w-0">
+                          {elegivelCard && (
+                            <Checkbox
+                              className="print:hidden shrink-0"
+                              checked={contasRemessaSelecionadas.has(Number(meta.id))}
+                              onCheckedChange={() => toggleConta(Number(meta.id))}
+                            />
+                          )}
                           <div className={`h-3.5 w-3.5 rounded-full shrink-0 ${dotColor}`} />
                           <h3 className="font-semibold text-sm truncate">{acctLabel(meta)}</h3>
                           {subtitle && <span className="text-[10px] text-muted-foreground font-mono truncate hidden sm:inline">{subtitle}</span>}
