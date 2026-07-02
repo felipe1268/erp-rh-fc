@@ -1,7 +1,7 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb, createAuditLog, encerrarContratosPjDoFuncionario, userCanSeeAvisoStatus, getCompaniesForUser } from "../db";
-import { terminationNotices, vacationPeriods, employees, companies, obras, obraFuncionarios, hePeriods, hePeriodEmployees, pontoDescontosResumo, employeeTerminationChecklist, comboDemissaoSimulacoes, cipaMembers, cipaElections } from "../../drizzle/schema";
+import { terminationNotices, vacationPeriods, employees, companies, obras, obraFuncionarios, hePeriods, hePeriodEmployees, pontoDescontosResumo, employeeTerminationChecklist, comboDemissaoSimulacoes, cipaMembers, cipaElections, dissidios } from "../../drizzle/schema";
 import { eq, and, sql, isNull, lte, gte, desc, asc, inArray } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
@@ -1499,6 +1499,116 @@ export const avisoPrevioFeriasRouter = router({
         const db = (await getDb())!;
         await db.execute(sql`DELETE FROM meal_benefit_configs WHERE id = ${input.id}`);
         return { success: true };
+      }),
+
+    /**
+     * Rev. 3981 — Prévia do reajuste de benefícios (café/lanche/VA) pelo % do
+     * Dissídio do ano informado (mesma data-base do reajuste salarial).
+     * Não altera nada — só simula café/lanche/VA/janta com o novo valor
+     * (arredondado a 2 casas) para o usuário conferir antes de aplicar.
+     */
+    previewReajusteBeneficios: protectedProcedure
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), ano: z.number() }))
+      .query(async ({ input }) => {
+        const db = (await getDb())!;
+        const [dissidio] = await db.select().from(dissidios).where(and(
+          companyFilter(dissidios.companyId, input),
+          eq(dissidios.anoReferencia, input.ano),
+        ));
+        if (!dissidio) {
+          return { dissidio: null, percentual: 0, configs: [] };
+        }
+        const percentual = parseFloat(dissidio.percentualReajuste) || 0;
+        const rows = ((await db.execute(
+          sql`SELECT mbc.*, o.nome as "obraNome" FROM meal_benefit_configs mbc LEFT JOIN obras o ON mbc."obraId" = o.id
+              WHERE mbc."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND mbc.ativo = 1
+              ORDER BY mbc."obraId" IS NULL DESC, o.nome ASC`
+        )) as any).rows || [];
+        const aplicar = (v: any) => {
+          const atual = parseBRL(v);
+          const novo = atual * (1 + percentual / 100);
+          return { atual: atual.toFixed(2).replace('.', ','), novo: novo.toFixed(2).replace('.', ',') };
+        };
+        const configs = rows.map((cfg: any) => ({
+          id: cfg.id,
+          nome: cfg.nome,
+          obraId: cfg.obraId,
+          obraNome: cfg.obraNome,
+          cafeManhaDia: aplicar(cfg.cafeManhaDia),
+          lancheTardeDia: aplicar(cfg.lancheTardeDia),
+          valeAlimentacaoMes: aplicar(cfg.valeAlimentacaoMes),
+          jantaDia: aplicar(cfg.jantaDia),
+          jaReajustado: String(cfg.observacoes || '').includes(`[Reajuste dissídio ${input.ano}`),
+        }));
+        return {
+          dissidio: { id: dissidio.id, anoReferencia: dissidio.anoReferencia, mesDataBase: dissidio.mesDataBase, status: dissidio.status, titulo: dissidio.titulo },
+          percentual,
+          configs,
+        };
+      }),
+
+    /**
+     * Rev. 3981 — Aplica o reajuste de benefícios (café/lanche/VA/janta) com o
+     * % do Dissídio do ano informado, em todas as configurações ativas da(s)
+     * empresa(s). Registra a marca "[Reajuste dissídio ANO: X%]" em
+     * `observacoes` para rastreabilidade e para impedir duplo-reajuste
+     * acidental (o preview sinaliza `jaReajustado`, mas a aplicação em si não
+     * bloqueia — decisão fica com o usuário, igual ao dissídio salarial).
+     */
+    aplicarReajusteBeneficios: protectedProcedure
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), ano: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const db = (await getDb())!;
+        const [dissidio] = await db.select().from(dissidios).where(and(
+          companyFilter(dissidios.companyId, input),
+          eq(dissidios.anoReferencia, input.ano),
+        ));
+        if (!dissidio) throw new TRPCError({ code: 'NOT_FOUND', message: `Nenhum dissídio cadastrado para o ano ${input.ano}` });
+        const percentual = parseFloat(dissidio.percentualReajuste) || 0;
+        if (percentual <= 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Percentual de reajuste do dissídio é inválido (0% ou negativo)' });
+
+        const rows = ((await db.execute(
+          sql`SELECT * FROM meal_benefit_configs WHERE "companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND ativo = 1`
+        )) as any).rows || [];
+
+        const dataHoje = new Date().toLocaleDateString('pt-BR');
+        const nota = `[Reajuste dissídio ${input.ano}: +${percentual}% em ${dataHoje}]`;
+        let atualizados = 0;
+        for (const cfg of rows) {
+          const dias = cfg.diasUteisRef || 22;
+          const novoCafe = (parseBRL(cfg.cafeManhaDia) * (1 + percentual / 100)).toFixed(2).replace('.', ',');
+          const novoLanche = (parseBRL(cfg.lancheTardeDia) * (1 + percentual / 100)).toFixed(2).replace('.', ',');
+          const novoVa = (parseBRL(cfg.valeAlimentacaoMes) * (1 + percentual / 100)).toFixed(2).replace('.', ',');
+          const novoJanta = (parseBRL(cfg.jantaDia) * (1 + percentual / 100)).toFixed(2).replace('.', ',');
+          const totalVA = (parseFloat(novoCafe.replace(',', '.')) * dias) + (parseFloat(novoLanche.replace(',', '.')) * dias) + parseFloat(novoVa.replace(',', '.'));
+          const novasObs = `${cfg.observacoes ? cfg.observacoes + ' ' : ''}${nota}`;
+          await db.execute(
+            sql`UPDATE meal_benefit_configs SET
+              "cafeManhaDia" = ${novoCafe},
+              "lancheTardeDia" = ${novoLanche},
+              "valeAlimentacaoMes" = ${novoVa},
+              "jantaDia" = ${novoJanta},
+              "totalVA_iFood" = ${totalVA.toFixed(2).replace('.', ',')},
+              observacoes = ${novasObs},
+              "updatedAt" = now()
+            WHERE id = ${cfg.id}`
+          );
+          atualizados++;
+        }
+
+        try {
+          await createAuditLog({
+            userId: (ctx as any)?.user?.id,
+            userName: (ctx as any)?.user?.name ?? 'Sistema',
+            companyId: input.companyId,
+            action: 'REAJUSTE_BENEFICIOS_ALIMENTACAO',
+            module: 'vale_alimentacao',
+            entityType: 'meal_benefit_configs',
+            details: `Reajuste de ${percentual}% (Dissídio ${input.ano}) aplicado a ${atualizados} configuração(ões) de benefícios.`,
+          });
+        } catch { /* auditoria é best-effort */ }
+
+        return { success: true, atualizados, percentual };
       }),
 
     create: protectedProcedure

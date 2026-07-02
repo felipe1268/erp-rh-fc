@@ -1,4 +1,31 @@
 /**
+ * Rev. 3981 — **VALE ALIMENTAÇÃO: BOTÃO "CALCULAR REAJUSTE" PELO % DO DISSÍDIO.**
+ *
+ * PEDIDO: usuário pediu (1) campos para lançar valores de VA/café/lanche em Configurações — JÁ
+ * EXISTIAM (`BeneficiosAlimentacaoTab.tsx` + aba "Configuração" de `ValeAlimentacao.tsx`, ambos lendo/
+ * gravando `meal_benefit_configs`) — e (2) um botão "Calcular Reajuste" no menu VALE ALIMENTAÇÃO que
+ * aplica o % de reajuste salarial do Dissídio (data-base maio) sobre esses valores de benefícios.
+ *
+ * IMPLEMENTAÇÃO: 2 novos procedures em `avisoPrevioFerias.ts` (mesmo grupo dos demais procedures de
+ * meal benefit config): `previewReajusteBeneficios` (query, sem side-effect — busca o `dissidios` do
+ * ano informado via `companyFilter`, calcula `novoValor = atual*(1+percentual/100)` para café/lanche/
+ * VA/janta de cada config ATIVA e retorna atual→novo para conferência) e `aplicarReajusteBeneficios`
+ * (mutation — repete o cálculo e faz UPDATE em `meal_benefit_configs`, recalculando também
+ * `totalVA_iFood`). Sem dissídio cadastrado para o ano ou percentual ≤0 → erro explícito, sem fallback
+ * silencioso. Marca de rastreabilidade "[Reajuste dissídio ANO: X% em DATA]" é ANEXADA (não substitui)
+ * ao campo `observacoes` existente — não bloqueia reaplicação (decisão fica com o usuário, como no
+ * dissídio salarial), mas o preview sinaliza `jaReajustado` quando já há a marca daquele ano.
+ *
+ * FRONTEND: botão "Calcular Reajuste" (ícone `Calculator`) adicionado ao lado de "Nova Configuração"
+ * na aba "Configuração" de `ValeAlimentacao.tsx`; abre Dialog com campo Ano, mostra dados do dissídio
+ * encontrado (título/status/% ) e tabela de prévia atual→novo por configuração; aplicação passa pelo
+ * `confirmAction` (AlertDialog) já usado na página antes de disparar a mutation.
+ *
+ * ZERO DELETE · ZERO ALTER (nenhuma coluna/tabela nova — reaproveita `meal_benefit_configs` e
+ * `dissidios` existentes).
+ */
+
+/**
  * Rev. 3980 — **DISSÍDIO: LAYOUT DE IMPRESSÃO FEIO/COM COLUNAS CORTADAS — CORRIGIDO.**
  *
  * PEDIDO: usuário reportou ("melhora o layout de impressão, está horrível!!") que a impressão do

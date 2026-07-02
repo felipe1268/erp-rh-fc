@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3981** — **VALE ALIMENTAÇÃO: BOTÃO "CALCULAR REAJUSTE" PELO % DO DISSÍDIO.** Campos de VA/café/lanche em Configurações já existiam (`meal_benefit_configs`). Novo: aba "Configuração" de `ValeAlimentacao.tsx` ganha botão "Calcular Reajuste" que abre Dialog com prévia atual→novo de café/lanche/VA/janta calculada com o `percentualReajuste` do `dissidios` do ano informado (data-base maio). Backend: `previewReajusteBeneficios` (query) + `aplicarReajusteBeneficios` (mutation, UPDATE em `meal_benefit_configs` + recalcula `totalVA_iFood`) em `avisoPrevioFerias.ts`. Sem dissídio/percentual inválido → erro explícito. Marca "[Reajuste dissídio ANO: X%]" anexada em `observacoes` p/ rastreabilidade (não bloqueia reaplicação). ZERO DELETE · ZERO ALTER.
+
 - **Rev. 3980** — **DISSÍDIO: LAYOUT DE IMPRESSÃO FEIO/COM COLUNAS CORTADAS — CORRIGIDO.** Feedback do usuário: impressão do relatório "Diferenças Salariais Retroativas (Dissídio)" (Rev. 3979) saía com colunas da esquerda cortadas e sem estilo. Causa: `.print-only`+`window.print()` imprime AINDA DENTRO do Dialog Radix (`position:fixed`+scroll interno) — tabela larga era cortada em vez de refluir. Fix: `handlePrintDissidioRel` reescrito pro padrão já usado em `DashAvisoPrevio.tsx` (`gerarRelatorioCombo`) — HTML auto-contido (timbre, cards, tabela estilizada, `@page A4 landscape`) aberto via `window.open('', '_blank')`+`document.write`+`window.print()`. Wrapper `#dissidio-print-area` removido. Sem mudança de backend. ZERO DELETE · ZERO ALTER.
 
-- **Rev. 3979** — **DISSÍDIO: BOTÃO IMPRIMIR / PDF NO RELATÓRIO DE DIFERENÇAS RETROATIVAS.** Dialog "Diferenças Salariais Retroativas (Dissídio)" (`FolhaPagamento.tsx`) ganha botão "Imprimir / PDF" no header. Segue convenção já usada em dashboards com conteúdo em Dialog Radix (`DashAvisoPrevio.tsx`): marca o container `#dissidio-print-area` com a classe `print-only` (regra global do `index.css` esconde o resto da árvore), chama `window.print()`, remove a classe no `afterprint` (+ fallback 5s). Cabeçalho impresso só visível via `print:block`. Sem mudança de backend — reaproveita `dissidioRelQuery`. ZERO DELETE · ZERO ALTER. *(Superado pela Rev. 3980 — abordagem de impressão trocada.)*
-
 ### 5 one-liners
+
+- **Rev. 3979** — **DISSÍDIO: BOTÃO IMPRIMIR / PDF NO RELATÓRIO DE DIFERENÇAS RETROATIVAS.** Dialog "Diferenças Salariais Retroativas (Dissídio)" (`FolhaPagamento.tsx`) ganha botão "Imprimir / PDF" no header, seguindo convenção de `DashAvisoPrevio.tsx` (`print-only`+`window.print()`). Sem mudança de backend. ZERO DELETE · ZERO ALTER. *(Superado pela Rev. 3980 — abordagem de impressão trocada.)*
 
 - **Rev. 3978** — **DISSÍDIO: DIFERENÇA RETROATIVA SAI DA FOLHA MENSAL E GANHA ENCARGOS PRÓPRIOS.** A diferença salarial retroativa do dissídio deixou de ser somada em `totalProventos` da folha mensal (`payrollEngine.ts`) — é paga separadamente, com guia própria. O relatório de diferenças agora calcula INSS/IRRF e valor líquido por linha. FGTS 8% informativo. ZERO DELETE · ZERO ALTER.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3975** — **FECHAMENTO PONTO: SELETOR DE PERÍODO NO UPLOAD DIXI.** Batidas do próximo ciclo (ex: 15/06 em arquivo 15/05–14/06) geravam falta indevida. Fix: dialog de upload exibe bloco âmbar "Período a considerar" (campos De/Até obrigatórios); botão Importar bloqueado sem período válido; backend filtra em memória todos os registros fora do intervalo após `processRecords`, antes de gravar. Lógica DIXI inalterada. ZERO DELETE.
 
-- **Rev. 3974** — **FOLHA: AUTO-RECONCILIAR FALTA ÓRFÃ DO ESCURO CONTRA REGISTRO MANUAL.** Fix: após auto-ponto, UPDATE-CTE cancela adjustments órfãos + limpa `adjMap` em memória. ZERO DELETE.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3973 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3974 e anteriores.
 
 ## User preferences
 

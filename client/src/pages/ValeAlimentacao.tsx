@@ -163,6 +163,8 @@ export default function ValeAlimentacao() {
   const [expandedRowId, setExpandedRowId] = useState<number | null>(null);
   const [progressState, setProgressState] = useState<{ active: boolean; percent: number; phase: string; } | null>(null);
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [showReajusteDialog, setShowReajusteDialog] = useState(false);
+  const [reajusteAno, setReajusteAno] = useState(now.getFullYear());
 
   // Queries
   const statsQ = trpc.valeAlimentacao.getStats.useQuery({ companyId, companyIds, mesReferencia: mesStr }, { enabled: !!companyId || companyIds?.length > 0 });
@@ -179,6 +181,10 @@ export default function ValeAlimentacao() {
   );
   const employeesQ = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true }, { enabled: (!!companyId || companyIds?.length > 0) && tab === "historico" });
   const alertasQ = trpc.valeAlimentacao.listarAlertasFaltas.useQuery({ companyId, companyIds, mesReferencia: mesStr, status: alertaFilter }, { enabled: (!!companyId || companyIds?.length > 0) && tab === "alertas_faltas" });
+  const previewReajusteQ = trpc.avisoPrevio.avisoPrevio.previewReajusteBeneficios.useQuery(
+    { companyId, companyIds, ano: reajusteAno },
+    { enabled: (!!companyId || companyIds?.length > 0) && showReajusteDialog }
+  );
 
   // Mutations
   const gerarMut = trpc.valeAlimentacao.gerarMes.useMutation({
@@ -299,6 +305,15 @@ export default function ValeAlimentacao() {
     onSuccess: () => {
       toast.success("Configuração excluída!");
       configsQ.refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const aplicarReajusteMut = trpc.avisoPrevio.avisoPrevio.aplicarReajusteBeneficios.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Reajuste de ${data.percentual}% aplicado a ${data.atualizados} configuração(ões)!`);
+      configsQ.refetch();
+      previewReajusteQ.refetch();
+      setShowReajusteDialog(false);
     },
     onError: (e) => toast.error(e.message),
   });
@@ -1270,32 +1285,40 @@ export default function ValeAlimentacao() {
                 <h2 className="text-lg font-semibold">Configurações de Benefícios</h2>
                 <p className="text-sm text-muted-foreground">Defina os valores de café, lanche, jantar e VA por obra ou como padrão da empresa.</p>
               </div>
-              <Button className="bg-orange-600 hover:bg-orange-700 text-white gap-2" onClick={() => {
-                setEditingConfigId(null);
-                setConfigForm({
-                  companyId,
-                  obraId: null,
-                  nome: "Padrão",
-                  cafeManhaDia: "0",
-                  lancheTardeDia: "0",
-                  valeAlimentacaoMes: "0",
-                  jantaDia: "0",
-                  totalVA_iFood: "0",
-                  diasUteisRef: 22,
-                  cafeAtivo: true,
-                  lancheAtivo: true,
-                  jantaAtivo: false,
-                  descontoVaPercentual: "0",
-                  cafeTotalMes: "",
-                  lancheTotalMes: "",
-                  jantaTotalMes: "",
-                  vaTotalMes: "",
-                  observacoes: "",
-                });
-                setShowConfigDialog(true);
-              }}>
-                <Plus className="h-4 w-4" /> Nova Configuração
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" className="gap-2" onClick={() => {
+                  setReajusteAno(ano);
+                  setShowReajusteDialog(true);
+                }}>
+                  <Calculator className="h-4 w-4" /> Calcular Reajuste
+                </Button>
+                <Button className="bg-orange-600 hover:bg-orange-700 text-white gap-2" onClick={() => {
+                  setEditingConfigId(null);
+                  setConfigForm({
+                    companyId,
+                    obraId: null,
+                    nome: "Padrão",
+                    cafeManhaDia: "0",
+                    lancheTardeDia: "0",
+                    valeAlimentacaoMes: "0",
+                    jantaDia: "0",
+                    totalVA_iFood: "0",
+                    diasUteisRef: 22,
+                    cafeAtivo: true,
+                    lancheAtivo: true,
+                    jantaAtivo: false,
+                    descontoVaPercentual: "0",
+                    cafeTotalMes: "",
+                    lancheTotalMes: "",
+                    jantaTotalMes: "",
+                    vaTotalMes: "",
+                    observacoes: "",
+                  });
+                  setShowConfigDialog(true);
+                }}>
+                  <Plus className="h-4 w-4" /> Nova Configuração
+                </Button>
+              </div>
             </div>
 
             {configs.length === 0 ? (
@@ -1795,6 +1818,97 @@ export default function ValeAlimentacao() {
               });
             }}>
               {saveConfigMut.isPending ? "Salvando..." : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== DIALOG: CALCULAR REAJUSTE (DISSÍDIO) ===== */}
+      <Dialog open={showReajusteDialog} onOpenChange={setShowReajusteDialog}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Calculator className="h-5 w-5 text-orange-600" /> Calcular Reajuste dos Benefícios</DialogTitle>
+            <DialogDescription>
+              Aplica o percentual de reajuste do Dissídio (data-base de maio) sobre café, lanche, VA e janta de todas as configurações ativas.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <Label className="whitespace-nowrap">Ano do Dissídio</Label>
+              <Input
+                type="number"
+                className="w-32"
+                value={reajusteAno}
+                onChange={(e) => setReajusteAno(parseInt(e.target.value, 10) || now.getFullYear())}
+              />
+            </div>
+
+            {previewReajusteQ.isFetching ? (
+              <div className="py-8 text-center text-muted-foreground">
+                <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" /> Carregando dados do dissídio...
+              </div>
+            ) : !previewReajusteQ.data?.dissidio ? (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                Nenhum dissídio cadastrado para {reajusteAno}. Cadastre o dissídio (menu Folha de Pagamento → Dissídio) antes de calcular o reajuste.
+              </div>
+            ) : (
+              <>
+                <div className="rounded-lg border bg-orange-50 border-orange-200 p-3 text-sm flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-orange-900">{previewReajusteQ.data.dissidio.titulo || `Dissídio ${previewReajusteQ.data.dissidio.anoReferencia}`}</p>
+                    <p className="text-xs text-orange-700">Status: {previewReajusteQ.data.dissidio.status} · Data-base: mês {previewReajusteQ.data.dissidio.mesDataBase}</p>
+                  </div>
+                  <div className="text-2xl font-bold text-orange-700">+{previewReajusteQ.data.percentual}%</div>
+                </div>
+
+                {previewReajusteQ.data.configs.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">Nenhuma configuração de benefícios ativa encontrada.</p>
+                ) : (
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="text-left p-2">Configuração</th>
+                          <th className="text-right p-2">Café</th>
+                          <th className="text-right p-2">Lanche</th>
+                          <th className="text-right p-2">VA/mês</th>
+                          <th className="text-right p-2">Janta</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {previewReajusteQ.data.configs.map((cfg: any) => (
+                          <tr key={cfg.id} className="border-t">
+                            <td className="p-2">
+                              {cfg.nome} {cfg.obraNome ? `(${cfg.obraNome})` : "(Padrão)"}
+                              {cfg.jaReajustado && <span className="ml-2 text-xs text-amber-600">já reajustado neste ano</span>}
+                            </td>
+                            <td className="p-2 text-right">R$ {cfg.cafeManhaDia.atual} <span className="text-muted-foreground">→</span> <span className="font-medium text-green-700">R$ {cfg.cafeManhaDia.novo}</span></td>
+                            <td className="p-2 text-right">R$ {cfg.lancheTardeDia.atual} <span className="text-muted-foreground">→</span> <span className="font-medium text-green-700">R$ {cfg.lancheTardeDia.novo}</span></td>
+                            <td className="p-2 text-right">R$ {cfg.valeAlimentacaoMes.atual} <span className="text-muted-foreground">→</span> <span className="font-medium text-green-700">R$ {cfg.valeAlimentacaoMes.novo}</span></td>
+                            <td className="p-2 text-right">R$ {cfg.jantaDia.atual} <span className="text-muted-foreground">→</span> <span className="font-medium text-green-700">R$ {cfg.jantaDia.novo}</span></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowReajusteDialog(false)}>Cancelar</Button>
+            <Button
+              className="bg-orange-600 hover:bg-orange-700 text-white"
+              disabled={!previewReajusteQ.data?.dissidio || !previewReajusteQ.data?.configs?.length || aplicarReajusteMut.isPending}
+              onClick={() => {
+                setConfirmAction({
+                  msg: `Aplicar reajuste de +${previewReajusteQ.data?.percentual}% (Dissídio ${reajusteAno}) em ${previewReajusteQ.data?.configs.length} configuração(ões) de benefícios? Esta ação atualiza os valores diretamente.`,
+                  onConfirm: () => aplicarReajusteMut.mutate({ companyId, companyIds, ano: reajusteAno }),
+                });
+              }}
+            >
+              {aplicarReajusteMut.isPending ? "Aplicando..." : "Aplicar Reajuste"}
             </Button>
           </DialogFooter>
         </DialogContent>
