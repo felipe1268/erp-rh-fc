@@ -147,3 +147,4 @@
 - [Card cheques devolvidos — pendente vs conciliado](cheque-devolvido-card-conciliado-source.md) — par de estorno detectado SÓ em linhas pendentes some ao conciliar as 2 linhas; rode também sobre concRes como RESOLVIDO (devc-N), sem mexer no %.
 - [DRE drill-down single-source](dre-drilldown-single-source.md) — detalhe clicável da linha do DRE reusa `dreLinhaPredicate` + a MESMA CTE de calcularDRE p/ o total fechar; impostos tem 2 fontes (guia_tributaria + financial_tax_obligations) a espelhar.
 - [Diálogo lê mapa de LOTE que zera](conciliacao-dialog-batch-query-stale.md) — cabeçalho de diálogo NÃO deve ler query de LOTE (volátil); use query DEDICADA do item aberto. placeholderData só no lote, NÃO na dedicada (senão stale cross-item na troca).
+- [Print from inside a Dialog](print-dialog-fixed-clip.md) — `.print-only`+window.print() clips columns/pages inside a fixed-position Dialog; use self-contained HTML in window.open() instead (proven pattern).

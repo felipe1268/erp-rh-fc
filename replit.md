@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3979** — **DISSÍDIO: BOTÃO IMPRIMIR / PDF NO RELATÓRIO DE DIFERENÇAS RETROATIVAS.** Dialog "Diferenças Salariais Retroativas (Dissídio)" (`FolhaPagamento.tsx`) ganha botão "Imprimir / PDF" no header. Segue convenção já usada em dashboards com conteúdo em Dialog Radix (`DashAvisoPrevio.tsx`): marca o container `#dissidio-print-area` com a classe `print-only` (regra global do `index.css` esconde o resto da árvore), chama `window.print()`, remove a classe no `afterprint` (+ fallback 5s). Cabeçalho impresso só visível via `print:block`. Sem mudança de backend — reaproveita `dissidioRelQuery`. ZERO DELETE · ZERO ALTER.
+- **Rev. 3980** — **DISSÍDIO: LAYOUT DE IMPRESSÃO FEIO/COM COLUNAS CORTADAS — CORRIGIDO.** Feedback do usuário: impressão do relatório "Diferenças Salariais Retroativas (Dissídio)" (Rev. 3979) saía com colunas da esquerda cortadas e sem estilo. Causa: `.print-only`+`window.print()` imprime AINDA DENTRO do Dialog Radix (`position:fixed`+scroll interno) — tabela larga era cortada em vez de refluir. Fix: `handlePrintDissidioRel` reescrito pro padrão já usado em `DashAvisoPrevio.tsx` (`gerarRelatorioCombo`) — HTML auto-contido (timbre, cards, tabela estilizada, `@page A4 landscape`) aberto via `window.open('', '_blank')`+`document.write`+`window.print()`. Wrapper `#dissidio-print-area` removido. Sem mudança de backend. ZERO DELETE · ZERO ALTER.
 
-- **Rev. 3978** — **DISSÍDIO: DIFERENÇA RETROATIVA SAI DA FOLHA MENSAL E GANHA ENCARGOS PRÓPRIOS.** A diferença salarial retroativa do dissídio deixou de ser somada em `totalProventos` da folha mensal (`payrollEngine.ts`) — é paga separadamente, com guia própria. Sub-linha "+ R$ X dissídio" removida da tabela da folha (`FolhaPagamento.tsx`). O relatório de diferenças (`sindical.relatorioDiferencas`) agora calcula INSS/IRRF (via `calcularINSSProgressivo`/`calcularIRRFProgressivo` de `rescisaoCalc.ts`) e valor líquido por linha — folha trata o valor como verba isolada; rescisão complementar aplica incidência por verba do breakdown salvo (aviso prévio isento). FGTS 8% informativo. Novas colunas/cards no dialog do relatório. ZERO DELETE · ZERO ALTER.
+- **Rev. 3979** — **DISSÍDIO: BOTÃO IMPRIMIR / PDF NO RELATÓRIO DE DIFERENÇAS RETROATIVAS.** Dialog "Diferenças Salariais Retroativas (Dissídio)" (`FolhaPagamento.tsx`) ganha botão "Imprimir / PDF" no header. Segue convenção já usada em dashboards com conteúdo em Dialog Radix (`DashAvisoPrevio.tsx`): marca o container `#dissidio-print-area` com a classe `print-only` (regra global do `index.css` esconde o resto da árvore), chama `window.print()`, remove a classe no `afterprint` (+ fallback 5s). Cabeçalho impresso só visível via `print:block`. Sem mudança de backend — reaproveita `dissidioRelQuery`. ZERO DELETE · ZERO ALTER. *(Superado pela Rev. 3980 — abordagem de impressão trocada.)*
 
 ### 5 one-liners
+
+- **Rev. 3978** — **DISSÍDIO: DIFERENÇA RETROATIVA SAI DA FOLHA MENSAL E GANHA ENCARGOS PRÓPRIOS.** A diferença salarial retroativa do dissídio deixou de ser somada em `totalProventos` da folha mensal (`payrollEngine.ts`) — é paga separadamente, com guia própria. O relatório de diferenças agora calcula INSS/IRRF e valor líquido por linha. FGTS 8% informativo. ZERO DELETE · ZERO ALTER.
 
 - **Rev. 3977** — **BANCO DE HORAS: MULTIPLICADOR 1,5x, EXCEÇÃO POR FUNCIONÁRIO E RESCISÃO.** (1) Crédito de HE no banco de horas agora aplica ×1,5. (2) Atraso/falta debita minutos do banco (em vez de desconto monetário) quando a empresa usa banco de horas, com exceção por funcionário (`employees.bancoHorasExcecao`) e reversão idempotente. (3) Critério `he_banco_horas` ↔ `companies.heDestinoPadrao` sincronizados bidirecionalmente. (4) Novas listas de alerta MENSAL (saldo negativo) e TRIMESTRAL (saldo positivo) na página Banco de Horas, sem baixa automática. (5) Rescisão passa a incluir o saldo do banco de horas: positivo = provento (×1,5), negativo = desconto (valor cheio, sem multiplicador) — plugado nos 8 pontos de cálculo de `avisoPrevioFerias.ts` e exibido em `PainelRH.tsx`. ZERO DELETE.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3974** — **FOLHA: AUTO-RECONCILIAR FALTA ÓRFÃ DO ESCURO CONTRA REGISTRO MANUAL.** Fix: após auto-ponto, UPDATE-CTE cancela adjustments órfãos + limpa `adjMap` em memória. ZERO DELETE.
 
-- **Rev. 3973** — **AUTO-PONTO: TURNO INCOMPLETO COMPUTA DÉFICIT TOTAL COMO ATRASO.** Fix: após cálculo de HE, `if actualMins < expectedMins → minutosAtraso = max(minutosAtraso, deficit)`. Guard `isFalta===0` evita dupla contagem. ZERO DELETE.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3972 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3973 e anteriores.
 
 ## User preferences
 

@@ -1,4 +1,32 @@
 /**
+ * Rev. 3980 — **DISSÍDIO: LAYOUT DE IMPRESSÃO FEIO/COM COLUNAS CORTADAS — CORRIGIDO.**
+ *
+ * PEDIDO: usuário reportou ("melhora o layout de impressão, está horrível!!") que a impressão do
+ * relatório "Diferenças Salariais Retroativas (Dissídio)" (introduzida na Rev. 3979) saía com as
+ * colunas da esquerda (Funcionário/Ano/Tipo/Pagto) cortadas e sem nenhum estilo visual (sem bordas,
+ * sem cor de cabeçalho).
+ *
+ * CAUSA-RAIZ: a abordagem `.print-only` + `window.print()` (convenção usada em outros dashboards)
+ * imprime o conteúdo AINDA DENTRO do `DialogContent` do Radix (`position:fixed` + scroll interno);
+ * mesmo com o fix anterior de liberar o `position:fixed` no CSS de impressão, a tabela larga
+ * continuava sendo cortada pela caixa com scroll em vez de refluir para múltiplas páginas/colunas.
+ *
+ * SOLUÇÃO: `handlePrintDissidioRel` reescrito para seguir o padrão JÁ USADO e comprovado em
+ * `DashAvisoPrevio.tsx` (`gerarRelatorioCombo`) — gera um HTML totalmente auto-contido (próprio
+ * `<style>`, `esc()` para sanitização XSS, timbre com logo FC Engenharia, cards de totais, tabela
+ * com cabeçalho colorido/zebra, `@page { size: A4 landscape }`) e abre em `window.open('', '_blank')`
+ * + `document.write` + `window.print()`. Isso elimina toda a fragilidade de imprimir a partir de um
+ * Dialog com `overflow`/`position:fixed`, dando controle total sobre paisagem/fontes/cores. Removido
+ * o wrapper `#dissidio-print-area` (não é mais usado). Sem mudança de backend — reaproveita
+ * `dissidioRelQuery`.
+ *
+ * Ver `.agents/memory/print-dialog-fixed-clip.md` — decisão registrada como padrão para QUALQUER
+ * relatório impresso a partir de dentro de um Dialog daqui pra frente.
+ *
+ * ZERO DELETE · ZERO ALTER.
+ */
+
+/**
  * Rev. 3979 — **DISSÍDIO: BOTÃO IMPRIMIR / PDF NO RELATÓRIO DE DIFERENÇAS RETROATIVAS.**
  *
  * PEDIDO: gerar PDF/imprimir o dialog "Diferenças Salariais Retroativas (Dissídio)"

@@ -679,21 +679,103 @@ export default function FolhaPagamento() {
     onError: (e: any) => toast.error(e.message || 'Erro ao recalcular diferenças'),
   });
 
-  // Rev. 3979 — Imprimir / PDF do relatório de Diferenças Salariais (Dissídio).
-  // Convenção do codebase (ver DashAvisoPrevio.tsx): marca o container com
-  // `print-only` (regra global em index.css oculta todo o resto da árvore),
-  // chama window.print() e remove a classe no afterprint (+ fallback timeout).
+  // Rev. 3982 — Imprimir / PDF do relatório de Diferenças Salariais (Dissídio).
+  // Trocado de `print-only`+window.print() (Rev. 3979) para janela nova com
+  // HTML auto-contido — mesmo padrão de `gerarRelatorioCombo` em
+  // DashAvisoPrevio.tsx. Motivo: a tabela dentro de um Dialog (`position:fixed`
+  // + `overflow-y-auto`) cortava colunas/páginas na impressão (layout "feio"
+  // reportado pelo usuário); com HTML próprio temos controle total do layout
+  // (paisagem, cabeçalho com logo, zebra, cores) sem herdar CSS/overflow da SPA.
   const handlePrintDissidioRel = () => {
-    const el = document.getElementById('dissidio-print-area');
-    if (!el) return;
-    el.classList.add('print-only');
-    const cleanup = () => {
-      el.classList.remove('print-only');
-      window.removeEventListener('afterprint', cleanup);
-    };
-    window.addEventListener('afterprint', cleanup);
-    setTimeout(cleanup, 5000);
-    window.print();
+    const data = dissidioRelQuery.data;
+    if (!data || data.rows.length === 0) return;
+    const esc = (s: any) => String(s ?? '').replace(/[&<>"']/g, (c) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string
+    ));
+    const logo = `${window.location.origin}/logo-fc.jpg`;
+    const emissaoBR = new Date().toLocaleDateString('pt-BR');
+    const rowsHtml = [...data.rows]
+      .sort((a: any, b: any) => (b.valorRetroativo || 0) - (a.valorRetroativo || 0))
+      .map((r: any, i: number) => `
+      <tr>
+        <td style="text-align:center;color:#64748b">${i + 1}</td>
+        <td style="font-weight:600">${esc(r.employeeName || `#${r.employeeId}`)}</td>
+        <td style="text-align:center">${esc(r.anoReferencia ?? '—')}</td>
+        <td style="text-align:center">${r.diferencaTipo === 'rescisao_complementar' ? 'Resc. Compl.' : 'Folha'}</td>
+        <td style="text-align:center;white-space:nowrap">${esc(r.diferencaMesPagamento || '—')}</td>
+        <td style="text-align:right">${esc(r.percentualAplicado)}%</td>
+        <td style="text-align:right;white-space:nowrap">${r.diferencaBaseVerbas ? formatBRL(r.diferencaBaseVerbas) : '—'}</td>
+        <td style="text-align:right;white-space:nowrap;font-weight:600;color:#15803d">${formatBRL(r.valorRetroativo)}</td>
+        <td style="text-align:right;white-space:nowrap;color:#b91c1c">${r.inss > 0 ? `− ${formatBRL(r.inss)}` : '—'}</td>
+        <td style="text-align:right;white-space:nowrap;color:#b91c1c">${r.irrf > 0 ? `− ${formatBRL(r.irrf)}` : '—'}</td>
+        <td style="text-align:right;white-space:nowrap;font-weight:700;color:#1d4ed8">${formatBRL(r.valorLiquido)}</td>
+      </tr>`).join('');
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8" />
+      <title>Diferenças Salariais Retroativas (Dissídio) — ${fmtNum(anoSelecionado)}</title>
+      <style>
+        * { box-sizing: border-box; }
+        body { font-family: Arial, Helvetica, sans-serif; color: #1e293b; margin: 24px; font-size: 11px; }
+        .hdr { text-align:center; margin-bottom: 8px; }
+        .hdr img { height: 64px; object-fit: contain; }
+        .hdr h1 { font-size: 15px; margin: 6px 0 2px; letter-spacing: .5px; }
+        .hdr .sub { font-size: 10px; color:#64748b; }
+        .faixa { background:#1B2A4A; color:#fff; padding:9px 14px; margin:14px 0 10px; border-radius:4px;
+                 font-size:12px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; text-align:center;
+                 -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .meta { display:flex; justify-content:space-between; font-size:10px; color:#475569; margin-bottom:10px; }
+        .cards { display:flex; gap:8px; margin: 6px 0 14px; flex-wrap: wrap; }
+        .card { flex:1; min-width:100px; border:1px solid #cbd5e1; border-radius:6px; padding:8px; text-align:center; }
+        .card .v { font-size:14px; font-weight:700; }
+        .card .l { font-size:8px; color:#64748b; text-transform:uppercase; letter-spacing:.3px; margin-top:2px; }
+        .green { color:#15803d; } .red { color:#b91c1c; } .blue { color:#1d4ed8; } .amber { color:#b45309; }
+        table { width:100%; border-collapse: collapse; margin-bottom: 10px; }
+        th, td { border:1px solid #cbd5e1; padding:5px 6px; }
+        thead th { background:#1B2A4A; color:#fff; font-size:9px; text-transform:uppercase; letter-spacing:.3px;
+                   -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        tbody tr:nth-child(even) td { background:#f8fafc; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .nota { font-size:9px; color:#64748b; font-style: italic; margin-top:6px; }
+        @page { size: A4 landscape; margin: 12mm; }
+        @media print { body { margin: 0; } }
+      </style></head>
+      <body>
+        <div class="hdr">
+          <img src="${logo}" alt="FC Engenharia" />
+          <h1>FC ENGENHARIA</h1>
+          <div class="sub">Diferenças Salariais Retroativas (Dissídio)</div>
+        </div>
+        <div class="faixa">Relatório de Diferenças Salariais Retroativas (Dissídio) — Ano ${fmtNum(anoSelecionado)}</div>
+        <div class="meta">
+          <span><strong>Funcionários:</strong> ${fmtNum(data.qtdFuncionarios)}</span>
+          <span><strong>Emissão:</strong> ${emissaoBR}</span>
+        </div>
+        <div class="cards">
+          <div class="card"><div class="v green">${formatBRL(data.totalGeral)}</div><div class="l">Total Bruto</div></div>
+          <div class="card"><div class="v red">${formatBRL(data.totalInss ?? 0)}</div><div class="l">Total INSS</div></div>
+          <div class="card"><div class="v red">${formatBRL(data.totalIrrf ?? 0)}</div><div class="l">Total IRRF</div></div>
+          <div class="card"><div class="v blue">${formatBRL(data.totalLiquido ?? 0)}</div><div class="l">Total Líquido</div></div>
+          <div class="card"><div class="v green">${formatBRL(data.totalFolha)}</div><div class="l">Na Folha</div></div>
+          <div class="card"><div class="v amber">${formatBRL(data.totalComplementar)}</div><div class="l">Resc. Complementar</div></div>
+          <div class="card"><div class="v amber">${formatBRL(data.totalFgts ?? 0)}</div><div class="l">FGTS (informativo)</div></div>
+        </div>
+        <table>
+          <thead><tr>
+            <th>#</th><th>Funcionário</th><th>Ano</th><th>Tipo</th><th>Pagto</th>
+            <th>%</th><th>Base (verbas)</th><th>Bruto</th><th>INSS</th><th>IRRF</th><th>Líquido</th>
+          </tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+        <p class="nota">Diferenças geradas ao aplicar um dissídio com data de vigência no passado. Pago à parte da folha mensal (guia própria de INSS/IRRF) — não entra nos totais da folha.</p>
+      </body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) {
+      alert('Não foi possível abrir a janela do relatório. Habilite pop-ups para este site e tente novamente.');
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => { try { w.print(); } catch { /* usuário pode imprimir manualmente */ } }, 300);
   };
 
   const arredondarMut = trpc.payrollEngine.arredondarLote.useMutation({
@@ -6423,10 +6505,7 @@ export default function FolhaPagamento() {
                 </Button>
               </div>
             ) : (
-              <div id="dissidio-print-area">
-                <p className="hidden print:block text-sm font-semibold mb-2">
-                  Diferenças Salariais Retroativas (Dissídio) — {fmtNum(anoSelecionado)}
-                </p>
+              <div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-2">
                   <div className="bg-emerald-50 rounded-md p-2 border border-emerald-100">
                     <p className="text-[10px] text-gray-500 uppercase">Total Bruto</p>
