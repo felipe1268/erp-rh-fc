@@ -2500,12 +2500,9 @@ export default function FolhaPagamento() {
                         <tr className="border-b text-left bg-muted/50">
                           <th className="p-2.5 font-medium">Cód.</th>
                           <th className="p-2.5 font-medium">Colaborador</th>
-                          <th className="p-2.5 font-medium">Função</th>
                           <th className="p-2.5 font-medium text-center">Match</th>
-                          <th className="p-2.5 font-medium text-right">Líquido</th>
-                          <th className="p-2.5 font-medium">Sal. Folha</th>
-                          <th className="p-2.5 font-medium">Sal. Cadastro</th>
-                          <th className="p-2.5 font-medium">Ponto</th>
+                          <th className="p-2.5 font-medium text-right">Líquido Folha</th>
+                          <th className="p-2.5 font-medium text-right">Líquido ERP</th>
                           <th className="p-2.5 font-medium">Alertas</th>
                         </tr>
                       </thead>
@@ -2521,20 +2518,13 @@ export default function FolhaPagamento() {
                           <tr key={v.id} className={`border-b last:border-0 hover:bg-muted/30 ${v.alertas.length > 0 ? "bg-red-50/30" : ""}`}>
                             <td className="p-2.5 font-mono text-xs">{v.codigo || "—"}</td>
                             <td className="p-2.5 font-medium">{v.nome}</td>
-                            <td className="p-2.5 text-xs text-muted-foreground">{v.funcao || "—"}</td>
                             <td className="p-2.5 text-center">
                               {v.matchStatus === "matched" && <CheckCircle className="h-4 w-4 text-green-600 mx-auto" />}
                               {v.matchStatus === "divergente" && <AlertTriangle className="h-4 w-4 text-amber-600 mx-auto" />}
                               {v.matchStatus === "unmatched" && <XCircle className="h-4 w-4 text-red-600 mx-auto" />}
                             </td>
                             <td className="p-2.5 text-right font-bold">{formatBRL(v.liquido)}</td>
-                            <td className="p-2.5">{v.salarioFolha ? formatBRL(v.salarioFolha) : "—"}</td>
-                            <td className="p-2.5">{v.salarioCadastro ? formatBRL(v.salarioCadastro) : "—"}</td>
-                            <td className="p-2.5 text-xs">
-                              {v.ponto ? (
-                                <span>{v.ponto.diasTrabalhados}d / {v.ponto.totalHoras}h{v.ponto.faltas > 0 && <span className="text-red-600 ml-1">({v.ponto.faltas} faltas)</span>}</span>
-                              ) : <span className="text-muted-foreground">—</span>}
-                            </td>
+                            <td className="p-2.5 text-right">{v.liquidoErp ? formatBRL(v.liquidoErp) : <span className="text-muted-foreground">—</span>}</td>
                             <td className="p-2.5">
                               {v.alertas.length > 0 ? (
                                 <div className="space-y-0.5">

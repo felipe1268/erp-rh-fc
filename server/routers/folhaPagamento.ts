@@ -1421,6 +1421,22 @@ export const folhaPagamentoRouter = router({
       }
       const empMap = new Map(emps.map(e => [e.id, e]));
 
+      // Rev. 3987 — Verificação Cruzada passou a comparar SÓ colaborador (match de
+      // identidade) + valor líquido; salário/função/descontos detalhados por verba
+      // ficaram exclusivos do relatório "Comparativo Folha × ERP" (evita duplicar a
+      // mesma divergência em 2 telas com semânticas diferentes). Líquido é comparado
+      // contra o ERP (payroll_payments) quando já existe simulação/consolidação pro mês.
+      const pagamentosErp = empIds.length > 0 ? ((await db.execute(sql`
+        SELECT "employeeId", "salarioLiquido"
+        FROM payroll_payments
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+          AND "employeeId" IN (${sql.join(empIds.map(id => sql`${id}`), sql`,`)})
+      `)) as any).rows || [] : [];
+      const liquidoErpMap = new Map<number, number>();
+      for (const p of pagamentosErp as any[]) {
+        liquidoErpMap.set(Number(p.employeeId), parseBRL(p.salarioLiquido));
+      }
+
       // Build verification results
       const verificacoes = itens.map(item => {
         const emp = item.employeeId ? empMap.get(item.employeeId) : null;
@@ -1431,41 +1447,10 @@ export const folhaPagamentoRouter = router({
           alertas.push("Funcionário não vinculado ao cadastro");
         }
 
-        if (emp && emp.status !== "Ativo") {
-          alertas.push(`Funcionário com status "${emp.status}"`);
-        }
-
-        if (emp && item.salarioBase && emp.salarioBase) {
-          const salFolha = parseBRL(item.salarioBase);
-          const salCadastro = parseBRL(emp.salarioBase);
-          if (salFolha > 0 && salCadastro > 0) {
-            if (salFolha < 100) {
-              const salMensal = salFolha * 220;
-              if (Math.abs(salMensal - salCadastro) > 50) {
-                alertas.push(`Salário divergente: Folha R$ ${item.salarioBase}/h ≠ Cadastro R$ ${emp.salarioBase}`);
-              }
-            } else if (Math.abs(salFolha - salCadastro) > 1) {
-              alertas.push(`Salário divergente: Folha R$ ${item.salarioBase} ≠ Cadastro R$ ${emp.salarioBase}`);
-            }
-          }
-        }
-
-        if (emp && item.funcao && emp.funcao) {
-          const funcFolha = normalizeNome(item.funcao);
-          const funcCadastro = normalizeNome(emp.funcao);
-          if (funcFolha.length > 3 && funcCadastro.length > 3 &&
-              !funcFolha.startsWith(funcCadastro.substring(0, 6)) &&
-              !funcCadastro.startsWith(funcFolha.substring(0, 6))) {
-            alertas.push(`Função divergente: Folha "${item.funcao}" ≠ Cadastro "${emp.funcao}"`);
-          }
-        }
-
-        if (ponto) {
-          if (ponto.faltas > 0) {
-            alertas.push(`${ponto.faltas} falta(s) registrada(s) no ponto`);
-          }
-        } else if (item.employeeId) {
-          alertas.push("Sem registros de ponto para este mês");
+        const liquidoFolha = parseBRL(item.liquido);
+        const liquidoErp = item.employeeId ? liquidoErpMap.get(item.employeeId) : undefined;
+        if (liquidoErp !== undefined && Math.abs(liquidoFolha - liquidoErp) > 1) {
+          alertas.push(`Líquido divergente: Folha R$ ${item.liquido} ≠ ERP R$ ${liquidoErp.toFixed(2)}`);
         }
 
         return {
@@ -1477,6 +1462,7 @@ export const folhaPagamentoRouter = router({
           funcaoCadastro: emp?.funcao,
           matchStatus: item.matchStatus,
           liquido: item.liquido,
+          liquidoErp: liquidoErp !== undefined ? liquidoErp.toFixed(2) : null,
           salarioFolha: item.salarioBase,
           salarioCadastro: emp?.salarioBase,
           statusEmpregado: emp?.status,

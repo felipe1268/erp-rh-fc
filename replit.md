@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3986** — **FOLHA: "VERIFICAÇÃO CRUZADA" PASSA A COMPARAR SÓ COLABORADOR + LÍQUIDO — RESTO FICA NO "COMPARATIVO FOLHA × ERP".** Usuário apontou sobreposição entre os 2 relatórios de conferência: Verificação Cruzada mostrava alertas de Salário/Função divergente, território do "Comparativo Folha × ERP (verba por verba)". Backend (`verificacaoCruzada` em `folhaPagamento.ts`) removeu esses alertas + os de status/ponto do cadastro, mantendo só "não vinculado ao cadastro" (identidade) e um novo alerta de "Líquido divergente" (Folha × `payroll_payments.salarioLiquido` do ERP, tolerância R$1). Frontend perdeu colunas Função/Sal. Folha/Sal. Cadastro e ganhou coluna "Líquido ERP". Comparativo Folha × ERP não foi tocado (já cobria tudo mais). ZERO DELETE · ZERO ALTER.
+
 - **Rev. 3985** — **BENEFÍCIOS DE ALIMENTAÇÃO: VIGÊNCIA EXPLÍCITA (INÍCIO/FIM) — REAJUSTE DE DISSÍDIO NUNCA MAIS SOBRESCREVE O HISTÓRICO.** `meal_benefit_configs` ganhou `vigencia_inicio`/`vigencia_fim` (date, nullable) + índice composto; novo `server/services/mealBenefitResolver.ts` centraliza a leitura com fallback em 3 níveis (obra vigente na data → empresa vigente na data → qualquer config, nunca zera VR) e foi adotado em TODOS os ~9 pontos de leitura (rescisão, vale, dashboards, projeção de folha). `saveMealBenefitConfig` ao criar (sem `id`) encerra automaticamente a config em aberto do mesmo escopo; `aplicarReajusteBeneficios` deixou de fazer UPDATE in-place — agora ENCERRA a config vigente na véspera da data-base do dissídio e INSERE uma nova versão com os valores reajustados, preservando o histórico para consultas retroativas. Frontend (`ValeAlimentacao.tsx`) ganhou campos de vigência no dialog + badge vigente/encerrada nos cards. ZERO DELETE · ZERO ALTER.
 
-- **Rev. 3984** — **FOLHA: PJ NUNCA NA FOLHA + ALERTA "PAGAR OU NÃO?" P/ AVISO PRÉVIO ENCERRANDO NO MÊS.** (1) Vazamento de PJ localizado em `custosPorObra` (`folhaPagamento.ts`) — relatório por obra cruzava `folhaItens` (import de PDF) com `employees` sem checar `tipoContrato`; agora filtra só CLT. (`simularPagamento` já era estrito). (2) Funcionário com aviso prévio ENCERRANDO no mês de referência não entra mais silenciosamente na folha: nova tabela `payroll_folha_decisoes` guarda a decisão do RH; sem decisão, o funcionário fica FORA dos totais e aparece num Card de alerta amarelo em `FolhaPagamento.tsx` ("Aviso Prévio Encerrando no Mês") com botões Pagar/Não Pagar (individual e em lote), espelhando o padrão do alerta de Vale. Nova mutation `decidirFolhaAviso`. ZERO DELETE · ZERO ALTER.
-
 ### 5 one-liners
+
+- **Rev. 3984** — **FOLHA: PJ NUNCA NA FOLHA + ALERTA "PAGAR OU NÃO?" P/ AVISO PRÉVIO ENCERRANDO NO MÊS.** (1) Vazamento de PJ localizado em `custosPorObra` (`folhaPagamento.ts`) — relatório por obra cruzava `folhaItens` (import de PDF) com `employees` sem checar `tipoContrato`; agora filtra só CLT. (`simularPagamento` já era estrito). (2) Funcionário com aviso prévio ENCERRANDO no mês de referência não entra mais silenciosamente na folha: nova tabela `payroll_folha_decisoes` guarda a decisão do RH; sem decisão, o funcionário fica FORA dos totais e aparece num Card de alerta amarelo em `FolhaPagamento.tsx` ("Aviso Prévio Encerrando no Mês") com botões Pagar/Não Pagar (individual e em lote), espelhando o padrão do alerta de Vale. Nova mutation `decidirFolhaAviso`. ZERO DELETE · ZERO ALTER.
 
 - **Rev. 3983** — **BANCO DE HORAS: DSR PERDIDO TAMBÉM VIRA DÉBITO DE HORAS (SEPARADO DE ATRASO/FALTA).** A Rev. 3977 já redirecionava atraso/falta para débito no banco de horas; agora o DSR perdido (Lei 605/49 Art. 6º) decorrente dessas faltas também vira débito de horas, num lançamento PRÓPRIO (`tipo='debito_dsr'`, mirror do `'debito_atraso_falta'`), discriminado do atraso/falta. Conversão fixa: cada DSR perdido = 440min (7h33 = 220h/30d), independente do dia da semana. Regra de QUANDO se perde 1 DSR (1/semana com falta injustificada) não mudou. `descontoFaltas` zera (em vez de receber o valor do DSR) quando a empresa usa banco de horas e o funcionário não tem exceção. Frontend (`BancoHoras.tsx`): extrato agora distingue 4 badges (crédito/débito atraso-falta/débito DSR/débito manual), rodapé corrigido para somar TODO débito (bug antigo só contava `tipo==='debito'`), e novos cards de resumo por tipo. ZERO DELETE · ZERO ALTER.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3980** — **DISSÍDIO: LAYOUT DE IMPRESSÃO FEIO/COM COLUNAS CORTADAS — CORRIGIDO.** `handlePrintDissidioRel` reescrito pro padrão de `DashAvisoPrevio.tsx` (HTML auto-contido via `window.open`+`document.write`), corrigindo colunas cortadas por imprimir dentro do Dialog Radix. ZERO DELETE · ZERO ALTER.
 
-- **Rev. 3979** — **DISSÍDIO: BOTÃO IMPRIMIR / PDF NO RELATÓRIO DE DIFERENÇAS RETROATIVAS.** Dialog "Diferenças Salariais Retroativas (Dissídio)" (`FolhaPagamento.tsx`) ganha botão "Imprimir / PDF" no header, seguindo convenção de `DashAvisoPrevio.tsx` (`print-only`+`window.print()`). Sem mudança de backend. ZERO DELETE · ZERO ALTER. *(Superado pela Rev. 3980 — abordagem de impressão trocada.)*
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3978 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3979 e anteriores.
 
 ## User preferences
 

@@ -1,4 +1,33 @@
 /**
+ * Rev. 3986 — **FOLHA: "VERIFICAÇÃO CRUZADA" PASSA A COMPARAR SÓ COLABORADOR + LÍQUIDO — RESTO FICA NO
+ * "COMPARATIVO FOLHA × ERP".**
+ *
+ * PEDIDO: usuário apontou que os dois relatórios de conferência da Folha estavam sobrepostos —
+ * "Verificação Cruzada" já mostrava alertas de Salário divergente e Função divergente (colunas
+ * Sal. Folha/Sal. Cadastro/Função), o mesmo território do relatório dedicado "Comparativo Folha × ERP
+ * (verba por verba)". Regra definida: Verificação Cruzada = SÓ identidade do colaborador (match
+ * nome/cadastro) + valor líquido; toda comparação verba-a-verba (salário, nome, função, descontos etc.)
+ * é exclusividade do Comparativo Folha × ERP.
+ *
+ * BACKEND (`server/routers/folhaPagamento.ts` `verificacaoCruzada`): removidos os alertas de "Salário
+ * divergente" e "Função divergente" (cadastro) e os de ponto/status ("Funcionário com status X",
+ * faltas, sem registro de ponto) — não fazem parte do escopo colaborador+líquido pedido. Mantido o
+ * alerta de "Funcionário não vinculado ao cadastro" (é sobre identidade do colaborador). Novo: busca
+ * `payroll_payments` do mês pra comparar o líquido da Folha (PDF) × líquido calculado pelo ERP
+ * (`salarioLiquido`), gerando alerta "Líquido divergente" quando a diferença passa de R$ 1 — antes o
+ * líquido só era exibido, nunca comparado contra nada. Campos salarioFolha/salarioCadastro/funcaoFolha/
+ * ponto continuam no payload (consumidos pelo `RelatorioConsolidadoView`, painel único de divergências,
+ * que é um terceiro relatório fora do escopo deste pedido).
+ *
+ * FRONTEND (`client/src/pages/FolhaPagamento.tsx`): tabela da tela "Verificação Cruzada" perdeu as
+ * colunas Função/Sal. Folha/Sal. Cadastro; ganhou coluna "Líquido ERP" ao lado de "Líquido Folha" pra
+ * exibir a comparação nova. "Comparativo Folha × ERP" não foi tocado — já cobria salário/HE/descontos/
+ * líquido verba a verba via `ComparativoFolhaErpView`.
+ *
+ * ZERO DELETE · ZERO ALTER.
+ */
+
+/**
  * Rev. 3985 — **BENEFÍCIOS DE ALIMENTAÇÃO: VIGÊNCIA EXPLÍCITA (INÍCIO/FIM) — REAJUSTE DE DISSÍDIO NUNCA
  * MAIS SOBRESCREVE O HISTÓRICO.**
  *
