@@ -1,6 +1,7 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import DashChart, { DashKpi } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
+import PeriodSelectorCard from "@/components/PeriodSelectorCard";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -73,6 +74,7 @@ const MESES_LABELS: Record<string, string> = {
 export default function DashApontamentos() {
   const { selectedCompanyId, isConstrutoras, getCompanyIdsForQuery } = useCompany();
   const [ano, setAno] = useState(new Date().getFullYear());
+  const [mes, setMes] = useState(new Date().getMonth() + 1);
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
 
@@ -152,23 +154,13 @@ export default function DashApontamentos() {
           <PrintActions title="Dashboard Apontamentos de Campo" />
         </div>
 
-        {/* Filtros */}
+        {/* Seletor de período — padrão ERP */}
+        <PeriodSelectorCard ano={ano} mes={mes} onAno={setAno} onMes={setMes} />
+
+        {/* Filtros de data */}
         <Card>
           <CardContent className="p-4">
             <div className="flex flex-wrap gap-4 items-end">
-              <div>
-                <Label className="text-xs text-muted-foreground">Ano</Label>
-                <Select value={String(ano)} onValueChange={(v) => setAno(Number(v))}>
-                  <SelectTrigger className="w-[100px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {[2024, 2025, 2026, 2027].map(a => (
-                      <SelectItem key={a} value={String(a)}>{a}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
               <div>
                 <Label className="text-xs text-muted-foreground">Data Início</Label>
                 <Input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className="w-[160px]" />

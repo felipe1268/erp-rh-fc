@@ -5,6 +5,7 @@ import DashChart, { DashKpi, ChartClickInfo } from "@/components/DashChart";
 import MapaFuncionariosInterativo from "@/components/MapaFuncionariosInterativo";
 import DrillDownModal from "@/components/DrillDownModal";
 import PrintActions from "@/components/PrintActions";
+import PeriodSelectorCard from "@/components/PeriodSelectorCard";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -94,6 +95,7 @@ export default function DashFuncionarios() {
   const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
   const anoAtual = new Date().getFullYear();
   const [anoAnalise, setAnoAnalise] = useState(anoAtual);
+  const [mesAnalise, setMesAnalise] = useState(new Date().getMonth() + 1);
   const isAnoAtual = anoAnalise === anoAtual;
   const { data, isLoading, isError } = trpc.dashboards.funcionarios.useQuery({ companyId: queryCompanyId, ano: anoAnalise, ...(isConstrutoras ? { companyIds } : {}) }, { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 });
   const { data: comparativo, isLoading: loadingComp } = trpc.dashboards.funcionariosComparativo.useQuery(
@@ -197,22 +199,11 @@ export default function DashFuncionarios() {
             <h1 className="text-2xl font-bold tracking-tight">Dashboard de Funcionários</h1>
             <p className="text-muted-foreground text-sm mt-1">Análise completa do quadro de pessoal</p>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-1.5">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground hidden sm:inline">Ano de análise:</span>
-              <Select value={String(anoAnalise)} onValueChange={(v) => setAnoAnalise(Number(v))}>
-                <SelectTrigger className="w-[110px] h-9"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {anosDisponiveis.map(a => (
-                    <SelectItem key={a} value={String(a)}>{a}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <PrintActions title="Dashboard Funcionários" />
-          </div>
+          <PrintActions title="Dashboard Funcionários" />
         </div>
+
+        {/* Seletor de período — padrão ERP */}
+        <PeriodSelectorCard ano={anoAnalise} mes={mesAnalise} onAno={setAnoAnalise} onMes={setMesAnalise} />
 
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

@@ -3,7 +3,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import DashChart, { DashKpi } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
-import MonthSelector from "@/components/MonthSelector";
+import PeriodSelectorCard from "@/components/PeriodSelectorCard";
 import { EmpNameWithStatus } from "@/components/EmpStatusBadge";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -791,24 +791,23 @@ export default function DashCartaoPonto() {
   const companyId = Number(selectedCompanyId) || 0;
   const companyIds = getCompanyIdsForQuery();
   const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
-  const [mesRef] = useState(() => new Date().toISOString().slice(0, 7));
-  const [mes, setMes] = useState(mesRef);
+  const _now = new Date();
+  const [ano, setAno] = useState(_now.getFullYear());
+  const [mes, setMes] = useState(_now.getMonth() + 1);
+  const mesStr = useMemo(() => `${ano}-${String(mes).padStart(2, "0")}`, [ano, mes]);
   const { data, isLoading } = trpc.dashboards.cartaoPonto.useQuery(
-    { companyId: queryCompanyId, mesReferencia: mes, ...(isConstrutoras ? { companyIds } : {}) },
+    { companyId: queryCompanyId, mesReferencia: mesStr, ...(isConstrutoras ? { companyIds } : {}) },
     { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
   // Rev. 1777 — comparativo do ano corrente (Jan → mês atual)
   const { data: compData, isLoading: compLoading } = trpc.dashboards.cartaoPontoComparativo.useQuery(
-    { companyId: queryCompanyId, mesReferencia: mes, ...(isConstrutoras ? { companyIds } : {}) },
+    { companyId: queryCompanyId, mesReferencia: mesStr, ...(isConstrutoras ? { companyIds } : {}) },
     { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
   const [, navigate] = useLocation();
   const [faltasDetalhe, setFaltasDetalhe] = useState<any>(null);
 
-  const mesLabel = useMemo(() => {
-    const [y, m] = mes.split("-");
-    return `${MESES_PT[parseInt(m) - 1]}/${y}`;
-  }, [mes]);
+  const mesLabel = useMemo(() => `${MESES_PT[mes - 1]}/${ano}`, [ano, mes]);
 
   if (isLoading) return (
     <DashboardLayout>
@@ -828,11 +827,11 @@ export default function DashCartaoPonto() {
             <h1 className="text-2xl font-bold tracking-tight">Dashboard Cartão de Ponto</h1>
             <p className="text-muted-foreground text-sm mt-1">Análise de frequência, faltas e atrasos — {mesLabel}</p>
           </div>
-          <div className="flex items-center gap-3">
-            <MonthSelector value={mes} onChange={setMes} />
-            <PrintActions title="Dashboard Cartão de Ponto" />
-          </div>
+          <PrintActions title="Dashboard Cartão de Ponto" />
         </div>
+
+        {/* Seletor de período — padrão ERP */}
+        <PeriodSelectorCard ano={ano} mes={mes} onAno={setAno} onMes={setMes} />
 
         {!data ? (
           <div className="text-center py-16 text-muted-foreground">Selecione uma empresa para visualizar o dashboard.</div>

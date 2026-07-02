@@ -3,7 +3,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import DashChart, { DashKpi } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
-import MonthSelector from "@/components/MonthSelector";
+import PeriodSelectorCard from "@/components/PeriodSelectorCard";
 import { EmpNameWithStatus } from "@/components/EmpStatusBadge";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -58,29 +58,26 @@ export default function DashHorasExtras() {
   const companyIds = getCompanyIdsForQuery();
   const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
 
-  // Seletor de mês simples (igual Folha de Pagamento)
-  const now = new Date();
-  const [mesRef, setMesRef] = useState(() => `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
-
-  const [yearStr, monthStr] = mesRef.split("-");
-  const year = parseInt(yearStr);
-  const month = parseInt(monthStr);
+  const _now = new Date();
+  const [ano, setAno] = useState(_now.getFullYear());
+  const [mes, setMes] = useState(_now.getMonth() + 1);
+  const mesRef = useMemo(() => `${ano}-${String(mes).padStart(2, "0")}`, [ano, mes]);
 
   const queryInput = useMemo(() => ({
     companyId: queryCompanyId,
-    year,
+    year: ano,
     periodoTipo: "mes" as const,
-    periodoValor: String(month),
+    periodoValor: String(mes),
     ...(isConstrutoras ? { companyIds } : {}),
-  }), [queryCompanyId, year, month, isConstrutoras, companyIds]);
+  }), [queryCompanyId, ano, mes, isConstrutoras, companyIds]);
 
   const { data, isLoading } = trpc.dashboards.horasExtras.useQuery(queryInput, { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 });
   const { data: comparativo, isLoading: loadingComp } = trpc.dashboards.horasExtrasComparativo.useQuery(
-    { companyId: queryCompanyId, ano: year, ...(isConstrutoras ? { companyIds } : {}) },
+    { companyId: queryCompanyId, ano, ...(isConstrutoras ? { companyIds } : {}) },
     { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
 
-  const periodoLabel = `${MESES_FULL[month - 1]} ${year}`;
+  const periodoLabel = `${MESES_FULL[mes - 1]} ${ano}`;
 
   if (isLoading) return (
     <DashboardLayout>
@@ -98,13 +95,13 @@ export default function DashHorasExtras() {
               <Link href="/dashboards" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"><ArrowLeft className="w-4 h-4" /> Voltar aos Dashboards</Link>
             </div>
             <h1 className="text-2xl font-bold tracking-tight">Dashboard Horas Extras</h1>
-            <p className="text-muted-foreground text-sm mt-1">Análise detalhada de horas extras — {MESES_FULL[month - 1].slice(0, 3)}/{year}</p>
+            <p className="text-muted-foreground text-sm mt-1">Análise detalhada de horas extras — {MESES_FULL[mes - 1].slice(0, 3)}/{ano}</p>
           </div>
-          <div className="flex items-center gap-2">
-            <MonthSelector value={mesRef} onChange={setMesRef} />
-            <PrintActions title="Dashboard Horas Extras" />
-          </div>
+          <PrintActions title="Dashboard Horas Extras" />
         </div>
+
+        {/* Seletor de período — padrão ERP */}
+        <PeriodSelectorCard ano={ano} mes={mes} onAno={setAno} onMes={setMes} />
 
         {!data ? (
           <div className="text-center py-16 text-muted-foreground">Selecione uma empresa para visualizar o dashboard.</div>
@@ -302,7 +299,7 @@ export default function DashHorasExtras() {
               meses={comparativo?.meses || []}
               indicadores={HE_INDICADORES}
               isLoading={loadingComp}
-              titulo={`Tendência mês-a-mês — ${year}`}
+              titulo={`Tendência mês-a-mês — ${ano}`}
               subtitulo="Janeiro até o mês de referência · clique em qualquer linha para análise aprofundada"
             />
           </>

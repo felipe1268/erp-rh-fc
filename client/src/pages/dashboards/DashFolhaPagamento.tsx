@@ -3,7 +3,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import DashChart from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
-import MonthSelector from "@/components/MonthSelector";
+import PeriodSelectorCard from "@/components/PeriodSelectorCard";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
 import TabelaComparativaAnual, { type LinhaInd } from "@/components/TabelaComparativaAnual";
@@ -111,14 +111,16 @@ export default function DashFolhaPagamento() {
   const companyId = Number(selectedCompanyId) || 0;
   const companyIds = getCompanyIdsForQuery();
   const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
-  const [mesRef] = useState(() => new Date().toISOString().slice(0, 7));
-  const [mes, setMes] = useState(mesRef);
+  const _now = new Date();
+  const [ano, setAno] = useState(_now.getFullYear());
+  const [mes, setMes] = useState(_now.getMonth() + 1);
+  const mesStr = useMemo(() => `${ano}-${String(mes).padStart(2, "0")}`, [ano, mes]);
   const { data, isLoading } = trpc.dashboards.folhaPagamento.useQuery(
-    { companyId: queryCompanyId, mesReferencia: mes, ...(isConstrutoras ? { companyIds } : {}) },
+    { companyId: queryCompanyId, mesReferencia: mesStr, ...(isConstrutoras ? { companyIds } : {}) },
     { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
   const { data: comparativoAnual, isLoading: loadingCompAnual } = trpc.dashboards.folhaPagamentoComparativo.useQuery(
-    { companyId: queryCompanyId, mesReferencia: mes, ...(isConstrutoras ? { companyIds } : {}) },
+    { companyId: queryCompanyId, mesReferencia: mesStr, ...(isConstrutoras ? { companyIds } : {}) },
     { enabled: isConstrutoras ? companyIds.length > 0 : companyId > 0 }
   );
   const [, navigate] = useLocation();
@@ -127,10 +129,9 @@ export default function DashFolhaPagamento() {
   const [mesDetalhe, setMesDetalhe] = useState<string | null>(null);
 
   const mesLabel = useMemo(() => {
-    const [y, m] = mes.split("-");
     const meses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-    return `${meses[parseInt(m) - 1]}/${y}`;
-  }, [mes]);
+    return `${meses[mes - 1]}/${ano}`;
+  }, [ano, mes]);
 
   // Tabela comparativa mês a mês — proventos, descontos, líquido, FGTS, INSS
   // com delta (R$ + %) vs mês anterior. Usado tanto pela tabela quanto pelos
@@ -305,11 +306,11 @@ export default function DashFolhaPagamento() {
             <h1 className="text-2xl font-bold tracking-tight">Dashboard Folha de Pagamento</h1>
             <p className="text-muted-foreground text-sm mt-1">Análise de custos e encargos — {mesLabel}</p>
           </div>
-          <div className="flex items-center gap-3">
-            <MonthSelector value={mes} onChange={setMes} />
-            <PrintActions title="Dashboard Folha de Pagamento" />
-          </div>
+          <PrintActions title="Dashboard Folha de Pagamento" />
         </div>
+
+        {/* Seletor de período — padrão ERP */}
+        <PeriodSelectorCard ano={ano} mes={mes} onAno={setAno} onMes={setMes} />
 
         {!data ? (
           <div className="text-center py-16 text-muted-foreground">Selecione uma empresa para visualizar o dashboard.</div>
@@ -334,7 +335,7 @@ export default function DashFolhaPagamento() {
             </div>
 
             {/* Alerta de Divergência */}
-            <AlertaDivergenciaFolha mesReferencia={mes} mesLabel={mesLabel} variant="compact" />
+            <AlertaDivergenciaFolha mesReferencia={mesStr} mesLabel={mesLabel} variant="compact" />
 
             {/* Evolução mensal */}
             {data.evolucaoMensal.length > 0 && (

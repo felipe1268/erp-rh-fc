@@ -3,6 +3,7 @@ import { CHART_PALETTE, getChartColors } from "@/lib/chartColors";
 import DashboardLayout from "@/components/DashboardLayout";
 import DashChart, { DashKpi, ChartClickInfo } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
+import PeriodSelectorCard from "@/components/PeriodSelectorCard";
 import PrintHeader from "@/components/PrintHeader";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { trpc } from "@/lib/trpc";
@@ -246,33 +247,11 @@ export default function DashEfetivoObra() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3 flex-wrap">
-            {/* Seletor de Mês */}
-            <div className="flex items-center gap-1 bg-muted rounded-lg px-2 py-1">
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={prevMonth}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <div className="flex items-center gap-1 min-w-[8rem] justify-center">
-                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-sm font-bold">{MESES_NOMES[mes - 1]} {ano}</span>
-              </div>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={nextMonth} disabled={ano === currentYear && mes >= currentMonth}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-            {/* Seletor de Ano (para gráfico evolução) */}
-            <div className="flex items-center gap-1 bg-muted rounded-lg px-2 py-1">
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setAno(a => a - 1)}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-sm font-bold min-w-[3rem] text-center">{ano}</span>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setAno(a => a + 1)} disabled={ano >= currentYear}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-            <PrintActions title="Efetivo por Obra" />
-          </div>
+          <PrintActions title="Efetivo por Obra" />
         </div>
+
+        {/* Seletor de período — padrão ERP */}
+        <PeriodSelectorCard ano={ano} mes={mes} onAno={setAno} onMes={setMes} />
 
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

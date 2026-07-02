@@ -3,6 +3,7 @@ import { useState, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import DashChart, { DashKpi, ChartClickInfo } from "@/components/DashChart";
 import PrintActions from "@/components/PrintActions";
+import PeriodSelectorCard from "@/components/PeriodSelectorCard";
 import PrintFooterLGPD from "@/components/PrintFooterLGPD";
 import { trpc } from "@/lib/trpc";
 import TabelaComparativaAnual, { type LinhaInd } from "@/components/TabelaComparativaAnual";
@@ -66,6 +67,7 @@ export default function DashFerias() {
   const companyIds = getCompanyIdsForQuery();
   const queryCompanyId = isConstrutoras ? (companyIds[0] || 0) : companyId;
   const [ano, setAno] = useState(new Date().getFullYear());
+  const [mes, setMes] = useState(new Date().getMonth() + 1);
   const [drillDialog, setDrillDialog] = useState<{ title: string; items: any[] } | null>(null);
   const [drillSearch, setDrillSearch] = useState("");
   const [drillStatusFilter, setDrillStatusFilter] = useState<string>("todos");
@@ -296,19 +298,11 @@ export default function DashFerias() {
             Visão completa dos períodos aquisitivos, concessivos e financeiro — CLT Art. 129-145
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 bg-white border border-[#E2E8F0] rounded-lg px-2">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setAno(a => a - 1)}>
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            <span className="text-sm font-semibold text-[#0F172A] min-w-[50px] text-center">{ano}</span>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setAno(a => a + 1)}>
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-          </div>
-          <PrintActions title={`Dashboard Férias — ${ano}`} />
-        </div>
+        <PrintActions title={`Dashboard Férias — ${ano}`} />
       </div>
+
+      {/* Seletor de período — padrão ERP */}
+      <PeriodSelectorCard ano={ano} mes={mes} onAno={setAno} onMes={setMes} />
 
       {/* Alertas */}
       {(alertas.vencendo30dias > 0 || kpis.vencidas > 0) && (

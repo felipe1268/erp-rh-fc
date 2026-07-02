@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3962** — **WHITE-CARD PERIOD SELECTOR: PADRÃO ERP EM TODOS OS DASHBOARDS RH.** Novo `PeriodSelectorCard.tsx` (12 pills mensais + nav de ano, `border-2 border-slate-800` no selecionado). Substituiu MonthSelector, seletores inline e dropdowns em 8 dashboards: DashCartaoPonto, DashFolhaPagamento, DashHorasExtras (estado YYYY-MM → ano+mes+mesStr), DashFerias, DashAvisoPrevio, DashFuncionarios, DashApontamentos, DashEfetivoObra. PrintActions permanece no header; PeriodSelectorCard logo abaixo. ZERO DELETE.
+
 - **Rev. 3961** — **AVISO PRÉVIO / RESCISÃO: FILTRO CLT — PJ E SÓCIOS BLOQUEADOS.** Frontend: `activeEmployees` memo exclui `tipoContrato === "PJ"/"Socio"/"Sócio"` → não aparecem no seletor. Backend: guard em `avisoPrevio.create` após buscar employee → `TRPCError BAD_REQUEST` se PJ/Sócio mesmo por chamada direta. Padrão idêntico ao filtro de férias (Rev. 1613). ZERO DELETE.
 
 ### 5 one-liners

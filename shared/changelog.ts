@@ -1,4 +1,38 @@
 /**
+ * Rev. 3962 — **WHITE-CARD PERIOD SELECTOR: PADRÃO ERP EM TODOS OS DASHBOARDS RH.**
+ *
+ * PEDIDO: padronizar todos os dashboards do módulo RH com o mesmo seletor de período
+ * white-card (12 pills mensais + navegação de ano por chevrons) já utilizado na
+ * PanoramaFiscal — substituindo MonthSelector (seta "Julho 2026"), seletores de ano
+ * com chevrons inline e dropdowns Select de ano.
+ *
+ * NOVO COMPONENTE:
+ *   `client/src/components/PeriodSelectorCard.tsx`
+ *   Props: { ano, mes (1-12), onAno, onMes, actions?, className? }
+ *   Renderiza: card `rounded-2xl border border-slate-200 shadow-sm bg-white`
+ *   Row 1: chevrons + ano bold | Row 2: 12 pills Jan-Dez
+ *   Pill selecionada: `border-2 border-slate-800 bg-slate-50 font-semibold`
+ *
+ * DASHBOARDS ATUALIZADOS (8 arquivos):
+ *   1. DashCartaoPonto.tsx   — MonthSelector (YYYY-MM) → PeriodSelectorCard; estado
+ *      decomposto em ano + mes (1-12) + mesStr (derivado useMemo).
+ *   2. DashFolhaPagamento.tsx — idem; AlertaDivergenciaFolha atualizado para mesStr.
+ *   3. DashHorasExtras.tsx   — idem; queryInput year/periodoValor apontam para ano/mes.
+ *   4. DashFerias.tsx         — seletor de ano inline → PeriodSelectorCard; mes state
+ *      adicionado (visual; backend permanece ano-only).
+ *   5. DashAvisoPrevio.tsx   — idem DashFerias.
+ *   6. DashFuncionarios.tsx  — Select dropdown de ano → PeriodSelectorCard.
+ *   7. DashApontamentos.tsx  — Select dropdown de ano removido do card de filtros;
+ *      PeriodSelectorCard inserido antes do card de datas.
+ *   8. DashEfetivoObra.tsx   — dois navs manuais (mês+ano) → um único PeriodSelectorCard.
+ *
+ * PADRÃO DE POSICIONAMENTO: logo após o `<div className="flex items-center
+ * justify-between...">` (header com título + PrintActions), antes do conteúdo/KPIs.
+ * PrintActions permanece no cabeçalho; MonthSelector completamente removido dos navs.
+ *
+ * ZERO DELETE — MonthSelector.tsx preservado (pode ser usado em outros contextos).
+ */
+/**
  * Rev. 3961 — **AVISO PRÉVIO / RESCISÃO: FILTRO CLT — PJ E SÓCIOS BLOQUEADOS.**
  *
  * PEDIDO: colaboradores PJ não podem entrar no cálculo de rescisão; só CLT.
