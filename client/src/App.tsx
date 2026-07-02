@@ -186,6 +186,7 @@ const FinanceiroContasAPagar  = lazyWithRetry(() => import("./pages/financeiro/F
 const FinanceiroContasAReceber= lazyWithRetry(() => import("./pages/financeiro/FinanceiroContasAReceber"));
 const FinanceiroContasAReceberTitulos = lazyWithRetry(() => import("./pages/financeiro/FinanceiroContasAReceberTitulos"));
 const FinanceiroDRE           = lazyWithRetry(() => import("./pages/financeiro/FinanceiroDRE"));
+const FinanceiroDFC           = lazyWithRetry(() => import("./pages/financeiro/FinanceiroDFC"));
 const FinanceiroFluxoCaixa    = lazyWithRetry(() => import("./pages/financeiro/FinanceiroFluxoCaixa"));
 const FinanceiroObrigacoesFiscais = lazyWithRetry(() => import("./pages/financeiro/FinanceiroObrigacoesFiscais"));
 const FinanceiroPlanoDeConta  = lazyWithRetry(() => import("./pages/financeiro/FinanceiroPlanoDeConta"));
@@ -508,6 +509,7 @@ function Router() {
         <Route path="/financeiro/contas-a-receber" component={() => <RouteGuard component={FinanceiroContasAReceber} route="/financeiro/contas-a-receber" />} />
         <Route path="/financeiro/contas-a-receber-titulos" component={() => <RouteGuard component={FinanceiroContasAReceberTitulos} route="/financeiro/contas-a-receber-titulos" />} />
         <Route path="/financeiro/dre" component={() => <RouteGuard component={FinanceiroDRE} route="/financeiro/dre" />} />
+        <Route path="/financeiro/dfc" component={() => <RouteGuard component={FinanceiroDFC} route="/financeiro/dre" />} />
         <Route path="/financeiro/fluxo-de-caixa" component={() => <RouteGuard component={FinanceiroFluxoCaixa} route="/financeiro/fluxo-de-caixa" />} />
         <Route path="/financeiro/obrigacoes-fiscais" component={() => <RouteGuard component={FinanceiroObrigacoesFiscais} route="/financeiro/obrigacoes-fiscais" />} />
         <Route path="/financeiro/plano-de-contas" component={() => <RouteGuard component={FinanceiroPlanoDeConta} route="/financeiro/plano-de-contas" />} />

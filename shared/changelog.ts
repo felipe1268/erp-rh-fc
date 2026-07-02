@@ -1,4 +1,31 @@
 /**
+ * Rev. 3956 — **DFC: PÁGINA DEDICADA `/financeiro/dfc` (ROTA EXCLUSIVA).**
+ *
+ * MOTIVAÇÃO:
+ *   Usuário considerou o Sheet lateral "simplista demais" para uma análise tão
+ *   importante quanto o Fluxo de Caixa. Solicitou uma tela exclusiva, completa,
+ *   com indicadores detalhados, diagnósticos e recomendações acionáveis.
+ *
+ * MUDANÇAS:
+ *   - client/src/pages/financeiro/FinanceiroDFC.tsx (NOVO): página full-screen
+ *     com seletor de período white-card (padrão PanoramaFiscal), 4 KPI cards
+ *     (Lucro Líquido, Caixa Operacional, Ajustes Não-Op, Variação de Caixa),
+ *     card de diagnóstico executivo, 4 seções aprofundadas:
+ *       1. Waterfall DRE simplificado com barras de % e badges de margem;
+ *       2. Ajustes em 2 colunas (Financiamento / Investimento) com explicações;
+ *       3. Bridge de reconciliação visual DRE × Banco;
+ *       4. Indicadores avançados + análise residual + cenário + ações prioritárias.
+ *   - client/src/App.tsx: import lazy + rota `/financeiro/dfc` (RouteGuard
+ *     reutiliza permissão de `/financeiro/dre`).
+ *   - client/src/pages/financeiro/FinanceiroDRE.tsx: botão "Ver DFC" agora navega
+ *     para `/financeiro/dfc?ano=X&mes=Y&tipo=Z` via wouter (useLocation + abrirDFC);
+ *     bloco DFC Sheet preservado com `{false && ...}` (ZERO DELETE); variáveis
+ *     dfcOpen/dfcXxx/dfcData substituídas por `navigateTo` + `abrirDFC`.
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3955 — **DFC: VISUALIZAÇÃO IN-APP (SHEET) EM SUBSTITUIÇÃO AO PDF.**
  *
  * MOTIVAÇÃO:

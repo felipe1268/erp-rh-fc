@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3956** — **DFC: PÁGINA DEDICADA `/financeiro/dfc` (ROTA EXCLUSIVA, FULL-SCREEN).** Usuário rejeitou o Sheet lateral como "simplista demais". Nova página `FinanceiroDFC.tsx` com seletor white-card, 4 KPI cards, card executivo, 4 seções aprofundadas (waterfall DRE, ajustes 2-col, bridge reconciliação, indicadores + ações). App.tsx ganhou import lazy + rota. Botão "Ver DFC" no DRE agora navega via `useLocation` (wouter) passando `?ano&mes&tipo` na query string. Sheet DFC antigo preservado com `{false && ...}` (ZERO DELETE).
+
 - **Rev. 3955** — **DFC: VISUALIZAÇÃO IN-APP (SHEET) SUBSTITUINDO O PDF.** Botão "Exportar DFC (PDF)" → "Ver DFC" (abre Sheet lateral). Sheet com 4 seções em React: (1) waterfall DRE simplificado, (2) ajustes de financiamento/investimento com pills, (3) bridge de reconciliação com cores, (4) diagnóstico 4 cenários. Fix: getDFCData `itensRes.map is not a function` (dbExecute retorna `{rows}`, não array). ZERO DELETE.
 
-- **Rev. 3954** — **ANÁLISE IA DO DRE: PARETO DE CUSTOS + PLANO DE AÇÃO (EMPREITADA DE OBRA).** dreAnaliseIA.ts reescrito para diagnóstico cirúrgico: nova fn `calcularDRECustoPorConta` (Pareto top 15 por valor com pct% acumulado); prompt "CFO de empreitada" com benchmarks específicos (CDO 65-80%, Overhead máx 15%, Folha Indireta/CDO máx 18%); resposta com `planoAcao[]` (5-8 ações com prioridade/prazo/impacto/probabilidade) e `paretoCustos[]`; UI: Pareto horizontal + Plano de Ação com cards. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3954** — **ANÁLISE IA DO DRE: PARETO DE CUSTOS + PLANO DE AÇÃO.** dreAnaliseIA.ts reescrito; Pareto top 15; prompt "CFO de empreitada"; resposta com `planoAcao[]`+`paretoCustos[]`; UI cards. ZERO DELETE.
 
 - **Rev. 3952** — **DRE: CORREÇÃO DE CLASSIFICAÇÃO + CARD CONTEXTUAL DRE × CAIXA.** Fix: FINANCIAMENTOS → 'investimento'; MÚTUO INTERCOMPANY → 'nao_operacional'; predicado exclui nao_operacional de receitaBruta. Novo getDREBankComparison + card azul/âmbar/verde. ZERO DELETE.
 
@@ -65,8 +67,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3947** — **CONVENÇÃO COLETIVA IA: REDESIGN DIALOG "NOVA ANÁLISE".** Header gradient indigo; ano+upload em linha; aviso amber; footer `bg-slate-50`. Barra 0→100% mantida. ZERO DELETE.
 
 - **Rev. 3946** — **CONVENÇÃO COLETIVA IA: FIX COLUNAS SNAKE_CASE (Drizzle).** `convencaoIA.listar`/`processarPdf` falhavam com `column "companyId" does not exist` — fix: nome explícito em TODOS os campos camelCase. ZERO DELETE.
-
-- **Rev. 3945** — **CONVENÇÃO COLETIVA IA: BOTÃO "ANALISANDO" COM % 0→100.** Regra de Ouro: `setInterval` 0→90%; `onSuccess` salta p/ 100%; `onError` zera. ZERO DELETE.
 
 ### Histórico completo
 

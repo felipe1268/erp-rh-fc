@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { parseAsUTC } from "@/lib/dateUtils";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -189,23 +190,15 @@ export default function FinanceiroDRE() {
     { enabled: !!companyId }
   );
 
-  // Rev. 3953 — dados detalhados para o PDF da DFC
-  const { data: dfcData } = (trpc as any).financial.getDFCData.useQuery(
-    { companyId, periodo, tipoPeriodo },
-    { enabled: !!companyId }
-  );
-  const [dfcOpen, setDfcOpen] = useState(false);
+  const [, navigateTo] = useLocation();
 
-  // Cálculos da DFC (Método Indireto Simplificado)
-  const dfcFinancNaoOp = (dfcData?.itens ?? []).filter((i: any) => i.classificacao === "nao_operacional");
-  const dfcInvestCapex = (dfcData?.itens ?? []).filter((i: any) => i.classificacao === "investimento");
-  const dfcStFinanc = dfcFinancNaoOp.reduce((s: number, i: any) => s + (i.tipo === "receita" ? i.total : -i.total), 0);
-  const dfcStInvest = dfcInvestCapex.reduce((s: number, i: any) => s + (i.tipo === "receita" ? i.total : -i.total), 0);
-  const dfcVarCalc = (dre?.lucroLiquido ?? 0) + dfcStFinanc + dfcStInvest;
-  const dfcResidual = (bankComp?.bankSaldo ?? 0) - dfcVarCalc;
-  const dfcDrePos = (dre?.lucroLiquido ?? 0) >= 0;
-  const dfcBankPos = (bankComp?.bankSaldo ?? 0) >= 0;
-  const dfcDivergente = dfcDrePos !== dfcBankPos;
+  const abrirDFC = () => {
+    const params = new URLSearchParams({ ano: String(ano), tipo: sel.tipo });
+    if (sel.tipo === "mensal") params.set("mes", String((sel as any).mes));
+    else if (sel.tipo === "trimestral") params.set("tri", String((sel as any).tri));
+    else if (sel.tipo === "semestral") params.set("sem", String((sel as any).sem));
+    navigateTo(`/financeiro/dfc?${params.toString()}`);
+  };
 
   // Prioriza o resultado recém-gerado SÓ se for do período atualmente
   // selecionado (mutation.data persiste entre renders; ao trocar de período
@@ -420,10 +413,10 @@ export default function FinanceiroDRE() {
             <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
               <Button
                 variant="outline" size="sm"
-                onClick={() => setDfcOpen(true)}
+                onClick={abrirDFC}
                 disabled={!dre}
                 className="bg-orange-500/20 border-orange-400/40 text-white hover:bg-orange-500/30 hover:text-white"
-                title="Visualizar Demonstração do Fluxo de Caixa — reconciliação DRE × banco"
+                title="Abrir análise completa da Demonstração do Fluxo de Caixa"
               >
                 <Eye className="w-4 h-4 mr-1.5" />
                 Ver DFC
@@ -1091,10 +1084,8 @@ export default function FinanceiroDRE() {
           </SheetContent>
         </Sheet>
 
-        {/* ──────────────────────────────────────────────────────────
-            DFC — Demonstração do Fluxo de Caixa (visualização)
-        ────────────────────────────────────────────────────────── */}
-        <Sheet open={dfcOpen} onOpenChange={setDfcOpen}>
+        {/* DFC Sheet removido — DFC agora é página dedicada /financeiro/dfc */}
+        {false && <Sheet open={false} onOpenChange={() => {}}>
           <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto p-0">
             {/* Cabeçalho sticky */}
             <SheetHeader className="sticky top-0 z-10 bg-white border-b border-gray-100 px-5 py-4">
