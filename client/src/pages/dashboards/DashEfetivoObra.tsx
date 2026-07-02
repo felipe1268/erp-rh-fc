@@ -821,7 +821,7 @@ function EquipeFullScreenDialog({ open, onClose, obraNome, equipeData, loading }
           <p className="text-sm">Aloque funcionários nesta obra para visualizar a equipe.</p>
         </div>
       ) : (
-        <div className="space-y-6 p-4 equipe-print-area">
+        <div className="space-y-6 p-4 pb-16 equipe-print-area">
           {/* Print Header - só aparece na impressão */}
           <div className="hidden print:block equipe-print-header">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', marginBottom: '8px' }}>

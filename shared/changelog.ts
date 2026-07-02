@@ -1,4 +1,16 @@
 /**
+ * Rev. 3967 — **EFETIVO OBRA: FIX ÚLTIMO GRUPO CORTADO NA TABELA EQUIPE.**
+ *
+ * CAUSA: container `<div className="space-y-6 p-4 equipe-print-area">` dentro do
+ * `overflow-y-auto` do FullScreenDialog não tinha padding inferior suficiente;
+ * o último grupo de funções mostrava só o cabeçalho, com a tabela cortada.
+ *
+ * FIX: `p-4` → `p-4 pb-16` (64 px de folga no rodapé do scroll) em
+ * `client/src/pages/dashboards/DashEfetivoObra.tsx`.
+ *
+ * ZERO DELETE.
+ */
+/**
  * Rev. 3966 — **EFETIVO OBRA: LIGHTBOX DE FOTO AO CLICAR NA TABELA "EQUIPE — {OBRA}".**
  *
  * PEDIDO: ao clicar na foto miniatura do funcionário na tabela Equipe, abrir a
