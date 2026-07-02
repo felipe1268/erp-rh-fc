@@ -1,4 +1,5 @@
 - [Dashboard period selector standard](dashboard-period-selector-standard.md) — seletor de mês/ano = white-card (PanoramaFiscal), NUNCA DashHeader gradiente. Regra de ouro do usuário.
+- [VR/VT desconto de falta não misturado](folha-vr-vt-faltas-not-mixed.md) — VT de falta entra na Folha (coluna VT); VR/VA de falta NUNCA entra na Folha (só no Vale Alimentação).
 - [Banco de Horas saldo list filter](banco-horas-saldo-list-filter.md) — lista "Saldos" excluía negativos (`>0`) enquanto card de alerta já os contava; fix `<> 0` + gate admin_master client+backend em toggles sensíveis.
 - [Rescisão × Banco de Horas integration](rescisao-banco-horas-integration.md) — saldo positivo=provento×1,5, negativo=desconto valor cheio sem multiplicador; 1 helper único reusado nos 8 pontos de cálculo.
 - [Banco de Horas — múltiplos tipos de débito discriminados](banco-horas-debito-tipos.md) — tipo é text livre; novo tipo de débito automatizado exige batch+reversão+insert próprios + revisar filtros `tipo==="debito"` no front.

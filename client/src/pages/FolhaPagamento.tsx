@@ -221,11 +221,17 @@ function MemorialCalculo({ campo, f }: { campo: CampoDesconto; f: any }) {
     </div>);
   }
   if (campo === 'vt') {
+    const vtBase = (Number(m.vtDiario) || 0) * (Number(m.diasUteis) || 0);
+    const vtFaltasMes = Number(m.descontoVtFaltasMes) || 0;
     return (<div className="text-xs space-y-1">
       <div className="font-semibold text-gray-700">Memorial de cálculo — VT</div>
       <div>VT diário: <b>{fmt(m.vtDiario)}</b></div>
       <div>Dias úteis: <b>{m.diasUteis}</b></div>
-      <div>{fmt(m.vtDiario)} × {m.diasUteis} = <b>{fmt(calc.vt)}</b></div>
+      <div>{fmt(m.vtDiario)} × {m.diasUteis} = <b>{fmt(vtBase)}</b></div>
+      {vtFaltasMes > 0 && (
+        <div className="pl-2 font-mono text-[11px] text-red-700">+ VT desconto por falta: <b>{fmt(vtFaltasMes)}</b></div>
+      )}
+      <div className="border-t pt-1 mt-1 font-bold text-blue-900">Total VT: {fmt(calc.vt)}</div>
     </div>);
   }
   if (campo === 'va') {
@@ -280,10 +286,14 @@ function MemorialCalculo({ campo, f }: { campo: CampoDesconto; f: any }) {
           {usaBanco && <span className="text-[10px] ml-1 italic no-underline">(revertido p/ banco de horas)</span>}
         </div>
         {m.descontoVrFaltasMes > 0 && (
-          <div className="pl-2 font-mono text-[11px]">+ VR: {m.faltasQtdMes} × {fmt(vrDiarioMes)} = <b>{fmt(m.descontoVrFaltasMes)}</b></div>
+          <div className="pl-2 font-mono text-[11px] text-muted-foreground italic">
+            (referência) VR: {m.faltasQtdMes} × {fmt(vrDiarioMes)} = {fmt(m.descontoVrFaltasMes)} — não descontado na folha, ver Vale Alimentação
+          </div>
         )}
         {m.descontoVtFaltasMes > 0 && (
-          <div className="pl-2 font-mono text-[11px]">+ VT: {m.faltasQtdMes} × {fmt(vtDiarioMes)} = <b>{fmt(m.descontoVtFaltasMes)}</b></div>
+          <div className="pl-2 font-mono text-[11px] text-muted-foreground italic">
+            VT: {m.faltasQtdMes} × {fmt(vtDiarioMes)} = {fmt(m.descontoVtFaltasMes)} — descontado na coluna VT
+          </div>
         )}
         <div className="pl-2 font-semibold">Atrasos: <b>{m.atrasosMinutos}</b> min</div>
         {Array.isArray(m.atrasosMesDias) && m.atrasosMesDias.length > 0 && (
@@ -318,10 +328,14 @@ function MemorialCalculo({ campo, f }: { campo: CampoDesconto; f: any }) {
             </>
           )}
           {m.descontoVrFaltasEscuro > 0 && (
-            <div className="pl-2 font-mono text-[11px]">+ VR retroativo: {m.escFaltasQtd} × {fmt(escVrUnit)} = <b>{fmt(m.descontoVrFaltasEscuro)}</b></div>
+            <div className="pl-2 font-mono text-[11px] text-muted-foreground italic">
+              (referência) VR retroativo: {m.escFaltasQtd} × {fmt(escVrUnit)} = {fmt(m.descontoVrFaltasEscuro)} — não descontado na folha, ver Vale Alimentação
+            </div>
           )}
           {m.descontoVtFaltasEscuro > 0 && (
-            <div className="pl-2 font-mono text-[11px]">+ VT retroativo: {m.escFaltasQtd} × {fmt(escVtUnit)} = <b>{fmt(m.descontoVtFaltasEscuro)}</b></div>
+            <div className="pl-2 font-mono text-[11px] text-muted-foreground italic">
+              VT retroativo: {m.escFaltasQtd} × {fmt(escVtUnit)} = {fmt(m.descontoVtFaltasEscuro)} — descontado na coluna VT
+            </div>
           )}
           {m.descontoAtrasosEscuro > 0 && (
             <>
@@ -336,11 +350,14 @@ function MemorialCalculo({ campo, f }: { campo: CampoDesconto; f: any }) {
 
       <div className="border-t pt-1 mt-1 bg-blue-50 rounded px-2 py-1">
         <div className="font-mono text-[11px] text-gray-700">
-          {usaBanco ? `${fmt(0)} (banco de horas)` : fmt(m.descontoFaltasMes)} + {fmt(m.descontoVrFaltasMes)} + {fmt(m.descontoVtFaltasMes)} + {usaBanco ? `${fmt(0)} (banco de horas)` : fmt(m.descontoAtrasosMinutos)}
+          {usaBanco ? `${fmt(0)} (banco de horas)` : fmt(m.descontoFaltasMes)} + {usaBanco ? `${fmt(0)} (banco de horas)` : fmt(m.descontoAtrasosMinutos)}
           {Number(m.dsrFaltaValor) > 0 && m.dsrFaltaAplicado && ` + ${fmt(m.dsrFaltaValor)}`}
-          {' + '}{fmt(m.descontoFaltasEscuro)} + {fmt(m.descontoVrFaltasEscuro)} + {fmt(m.descontoVtFaltasEscuro)} + {fmt(m.descontoAtrasosEscuro)}
+          {' + '}{fmt(m.descontoFaltasEscuro)} + {fmt(m.descontoAtrasosEscuro)}
         </div>
         <div className="font-bold text-blue-900">Total Faltas: {fmt(calc.faltas)}</div>
+        <div className="text-[10px] text-muted-foreground mt-0.5">
+          (Sem VR/VA — calculado à parte no Vale Alimentação. VT de falta entra na coluna VT.)
+        </div>
         {usaBanco && (
           <div className="text-[10px] text-indigo-700 mt-0.5">
             (Falta/atraso do mês corrente não entram aqui — {m.minutosDebitoBancoHoras || 0} min foram debitados no Banco de Horas)
@@ -4757,7 +4774,8 @@ export default function FolhaPagamento() {
                       const calcVale = f.descontoAdiantamento || 0;
                       const calcInss = f.descontoInss || 0;
                       const calcIr = f.descontoIrrf || 0;
-                      const calcFaltas = (f.descontoFaltas || 0) + (f.descontoVrFaltas || 0) + (f.descontoVtFaltas || 0);
+                      // Rev. 3987 — VR de falta não entra na folha (só no Vale Alimentação); VT de falta some ao VT.
+                      const calcFaltas = f.descontoFaltas || 0;
                       const calcAtrasos = f.descontoAtrasos || 0;
                       const calcSindicato = f.descontoSindicato || 0;
                       const calcPensao = f.descontoPensao || 0;
@@ -4839,7 +4857,7 @@ export default function FolhaPagamento() {
                         const totVale = sum('vale', (f) => f.descontoAdiantamento || 0);
                         const totInss = sum('inss', (f) => f.descontoInss || 0);
                         const totIr = sum('ir', (f) => f.descontoIrrf || 0);
-                        const totFaltas = sum('faltas', (f) => (f.descontoFaltas || 0) + (f.descontoVrFaltas || 0) + (f.descontoVtFaltas || 0));
+                        const totFaltas = sum('faltas', (f) => f.descontoFaltas || 0);
                         const totAtrasos = sum('atrasos', (f) => f.descontoAtrasos || 0);
                         const totSindicato = sum('sindicato', (f) => f.descontoSindicato || 0);
                         const totPensao = sum('pensao', (f) => f.descontoPensao || 0);

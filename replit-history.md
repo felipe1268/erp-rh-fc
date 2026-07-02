@@ -1,3 +1,5 @@
+- **Rev. 3980** — **DISSÍDIO: LAYOUT DE IMPRESSÃO FEIO/COM COLUNAS CORTADAS — CORRIGIDO.** `handlePrintDissidioRel` reescrito pro padrão de `DashAvisoPrevio.tsx` (HTML auto-contido via `window.open`+`document.write`), corrigindo colunas cortadas por imprimir dentro do Dialog Radix. ZERO DELETE · ZERO ALTER.
+
 - **Rev. 3979** — **DISSÍDIO: BOTÃO IMPRIMIR / PDF NO RELATÓRIO DE DIFERENÇAS RETROATIVAS.** Dialog "Diferenças Salariais Retroativas (Dissídio)" (`FolhaPagamento.tsx`) ganha botão "Imprimir / PDF" no header, seguindo convenção de `DashAvisoPrevio.tsx` (`print-only`+`window.print()`). Sem mudança de backend. ZERO DELETE · ZERO ALTER. *(Superado pela Rev. 3980 — abordagem de impressão trocada.)*
 
 - **Rev. 3978** — **DISSÍDIO: DIFERENÇA RETROATIVA SAI DA FOLHA MENSAL E GANHA ENCARGOS PRÓPRIOS.** A diferença salarial retroativa do dissídio deixou de ser somada em `totalProventos` da folha mensal (`payrollEngine.ts`) — é paga separadamente, com guia própria. O relatório de diferenças agora calcula INSS/IRRF e valor líquido por linha. FGTS 8% informativo. ZERO DELETE · ZERO ALTER.

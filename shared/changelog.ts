@@ -1,4 +1,40 @@
 /**
+ * Rev. 3987 — **FOLHA: COLUNA "FALTAS" NÃO MISTURA MAIS VR/VT — VR SAI DA FOLHA (SÓ NO VALE
+ * ALIMENTAÇÃO), VT DE FALTA VAI PRA COLUNA VT.**
+ *
+ * PEDIDO: usuário mostrou print da Folha de Pagamento com a coluna "FALTAS" exibindo valores altos
+ * (vermelho) que davam a falsa impressão de desconto de falta/DSR sobre o salário. Investigação (query
+ * direta no Neon) confirmou que `descontoFaltas` (salário/DSR) estava ZERADO para os funcionários com
+ * banco de horas — os valores vinham inteiramente de `descontoVrFaltas`/`descontoVtFaltas` (desconto de
+ * VR/VT nos dias de falta), somados dentro do mesmo campo "faltas". Usuário confirmou a regra correta:
+ * (1) a empresa TEM o direito de descontar VR e VT do funcionário que falta, mesmo com banco de horas
+ * ativo — isso não muda; (2) porém só o desconto de VT entra na Folha de Pagamento; (3) o valor de VR/VA
+ * é calculado à parte, no módulo "Vale Alimentação" (que já tem seu próprio fluxo de alertas de falta) —
+ * NUNCA deve aparecer na Folha; (4) misturar VR/VT dentro da coluna "FALTAS" cria a ilusão de desconto
+ * salarial/DSR que não existe e não pode acontecer.
+ *
+ * BACKEND (`server/routers/payrollEngine.ts`): no cálculo principal, `calcFaltas` deixou de somar
+ * `descontoVrFaltas`+`descontoVtFaltas` — agora é só `descontoFaltas` (salário/DSR). `calcVt` passou a
+ * somar `descontoVtFaltas` (VT de falta agora entra na coluna VT, nunca em FALTAS). `descontoVrFaltas`
+ * deixou de contribuir para qualquer coluna/total — resultado é que VR de falta não afeta mais
+ * `totalDescontos` da Folha (fica só como dado informativo no `memorialCalculo`, sem efeito monetário).
+ * O comprovante/contracheque (`descontos` do PDF) removeu a linha "VR (dias de falta)" e corrigiu o
+ * rótulo da linha de VT (estava mal-rotulada como "VA 5% (dias de falta)", na verdade é VT).
+ *
+ * FRONTEND (`client/src/pages/FolhaPagamento.tsx`): recomputo local da tabela (`calcFaltas`/`totFaltas`
+ * no dialog de edição e no rodapé de totais) espelha a mesma fórmula do backend (sem VR/VT em FALTAS).
+ * Memorial de cálculo — aba "Faltas": linhas de VR/VT viram texto informativo em cinza/itálico ("não
+ * descontado na folha, ver Vale Alimentação" p/ VR; "descontado na coluna VT" p/ VT), removidas da soma
+ * do "Total Faltas". Memorial de cálculo — aba "VT": passou a exibir a parcela de desconto por falta
+ * somada ao VT normal ("Total VT").
+ *
+ * Fluxo de Vale Alimentação (alertas de falta/abono próprios) não foi tocado — já cobria o VR/VA de
+ * forma independente, como confirmado pelo usuário.
+ *
+ * ZERO DELETE · ZERO ALTER.
+ */
+
+/**
  * Rev. 3986 — **FOLHA: "VERIFICAÇÃO CRUZADA" PASSA A COMPARAR SÓ COLABORADOR + LÍQUIDO — RESTO FICA NO
  * "COMPARATIVO FOLHA × ERP".**
  *

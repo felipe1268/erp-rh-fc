@@ -4356,11 +4356,15 @@ export const payrollEngineRouter = router({
         const calcVale = descontoAdiantamento;
         const calcInss = inssValor;
         const calcIr = irrfValor;
-        const calcFaltas = descontoFaltas + descontoVrFaltas + descontoVtFaltas; // sem atrasos
+        // Rev. 3987 — VR (dias de falta) é tratado só no módulo Vale Alimentação (alertas de
+        // falta/abono), NUNCA entra na folha (evita duplicidade e a ilusão de "desconto de
+        // falta" na coluna FALTAS). VT (dias de falta) continua entrando na folha, mas some
+        // à coluna VT (não mistura mais com FALTAS).
+        const calcFaltas = descontoFaltas; // sem atrasos, sem VR/VT
         const calcAtrasos = descontoAtrasos;
         const calcSindicato = sindicatoValor;
         const calcPensao = descontoPensao;
-        const calcVt = vtValorMensal;
+        const calcVt = vtValorMensal + descontoVtFaltas;
         const calcConvenio = descontoConvenio;
         const calcEpi = descontoEpi;
         const calcOutros = seguroVidaValor + acertoEscuroValor + outrosManuaisValor + descontoVaTotal;
@@ -5609,8 +5613,9 @@ export const payrollEngineRouter = router({
             ...(parseBRL(p.descontoAdiantamento) > 0 ? [{ descricao: "Adiantamento (Vale)", referencia: adv ? `${adv.percentualAdiantamento}%` : "40%", valor: parseBRL(p.descontoAdiantamento) }] : []),
             ...(parseBRL(p.descontoFaltas) > 0 ? [{ descricao: `Faltas (${p.descontoFaltasQtd} dias)`, referencia: "", valor: parseBRL(p.descontoFaltas) }] : []),
             ...(parseBRL(p.descontoAtrasos) > 0 ? [{ descricao: `Atrasos (${p.descontoAtrasosMinutos}min)`, referencia: "", valor: parseBRL(p.descontoAtrasos) }] : []),
-            ...(parseBRL(p.descontoVrFaltas) > 0 ? [{ descricao: "VR (dias de falta)", referencia: `${p.descontoFaltasQtd} dias`, valor: parseBRL(p.descontoVrFaltas) }] : []),
-            ...(parseBRL(p.descontoVtFaltas) > 0 ? [{ descricao: "VA 5% (dias de falta)", referencia: `${p.descontoFaltasQtd} dias`, valor: parseBRL(p.descontoVtFaltas) }] : []),
+            // Rev. 3987 — VR (dias de falta) não entra mais na folha/comprovante (tratado só
+            // no módulo Vale Alimentação); VT (dias de falta) some ao VT normal, listado abaixo.
+            ...(parseBRL(p.descontoVtFaltas) > 0 ? [{ descricao: "VT (dias de falta)", referencia: `${p.descontoFaltasQtd} dias`, valor: parseBRL(p.descontoVtFaltas) }] : []),
             ...(parseBRL(p.descontoPensao) > 0 ? [{ descricao: "Pensão Alimentícia", referencia: "", valor: parseBRL(p.descontoPensao) }] : []),
             ...(parseBRL(p.acertoEscuroValor) > 0 ? [{ descricao: "Acerto Período Escuro", referencia: `Ref. mês anterior`, valor: parseBRL(p.acertoEscuroValor) }] : []),
           ],
