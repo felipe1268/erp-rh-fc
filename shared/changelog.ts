@@ -1,4 +1,26 @@
 /**
+ * Rev. 3960 — **DRE IA: FIX DEFINITIVO DO JSON TRUNCADO — BUG REAL ERA LINHA 359 (callOpus PASSAVA 4000 EXPLÍCITO) + REPAIR DE JSON.**
+ *
+ * CAUSA-RAIZ REAL (diferente do que se supunha na Rev. 3958):
+ *   O default do parâmetro `maxTokens` em `callOpus` foi corrigido para 8000 na Rev. 3958,
+ *   MAS a chamada concreta na linha 359 (`callOpus(sys, prompt, 4000)`) ainda passava
+ *   `4000` explicitamente, SOBRESCREVENDO o default. Com max_tokens=4000 tokens de saída
+ *   e cada token valendo ~2.5 chars, o teto é ≈10.000 chars — exatamente onde o JSON
+ *   truncava (posições 10277 e 10721 nos screenshots).
+ *
+ * CORREÇÃO:
+ *   1. `server/services/dreAnaliseIA.ts` linha 393: `callOpus(sys, prompt, 4000)` →
+ *      `callOpus(sys, prompt)` (usa default 8000 = ≈20.000 chars de headroom).
+ *   2. `parseJsonLoose` reescrito com `repairTruncatedJson`:
+ *      - 1ª tentativa: JSON completo (lastIndexOf "}").
+ *      - 2ª tentativa: fecha arrays/objetos abertos via stack de abertura,
+ *        remove vírgula pendurada no final. Se o truncamento cortar no meio
+ *        de um item do planoAcao[], o reparo fecha o item com `}` + fecha o
+ *        array `]` + fecha o objeto raiz `}` → parse bem-sucedido com N-1 itens.
+ *
+ * ZERO DELETE.
+ */
+/**
  * Rev. 3959 — **NF-e: BOTÕES PAUSAR/RETOMAR SYNC + PRORROGAR (+2h/+4h/+8h/+24h) NO CARD DO COUNTDOWN.**
  *
  * PEDIDO: botão visível no card "Próxima sync em X" para pausar o sincronismo automático com a

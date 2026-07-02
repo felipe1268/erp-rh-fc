@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3960** — **DRE IA: FIX DEFINITIVO JSON TRUNCADO.** Bug real: `callOpus(sys, prompt, 4000)` passava `4000` EXPLICITAMENTE, sobrescrevendo o default 8000 → JSON cortava em ~10.000 chars. Fix: removido argumento explícito → usa 8000 tokens (≈20k chars). `parseJsonLoose` reescrito: tenta parse completo, depois `repairTruncatedJson` (fecha stack de `{[` abertos, remove vírgula solta) → análise completa mesmo se Opus truncar. ZERO DELETE.
+
 - **Rev. 3959** — **NF-e: PAUSAR/RETOMAR SYNC + PRORROGAR (+2h/+4h/+8h/+24h).** Backend: `toggleSync` (só `sync_enabled`) + `prorrogarSync` (seta `last_sync_at` para exatamente N horas restantes via fórmula `NOW() - gate_min + N horas`). Card countdown ganhou footer unificado sempre visível: ⏸ Pausar · ▶ Retomar · Prorrogar +2h|+4h|+8h|+24h · 🔧 Curar rate-limit (só em bloqueio). ZERO DELETE.
 
-- **Rev. 3958** — **DRE IA: PÁGINA FULL-SCREEN + FIX JSON TRUNCADO (maxTokens 4000→8000) + PARETO RECHARTS.** Causa-raiz do JSON error: maxTokens=4000 tokens ≠ chars → Opus truncava a resposta no meio do array. Fix: maxTokens=8000 em `callOpus`. Nova página `FinanceiroDREAnalise.tsx` em `/financeiro/dre-analise` (full-screen, seletor white-card, barra 0→100%, pareto recharts horizontal + tabela acumulada, indicadores × benchmarks, plano de ação, fontes). ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3958** — **DRE IA: PÁGINA FULL-SCREEN `/financeiro/dre-analise` + maxTokens 4000→8000 (default) + PARETO RECHARTS.** ZERO DELETE.
 
 - **Rev. 3957** — **DRE IA: CLAUDE OPUS 4-5 DIRETO + DIALOG POPUP (FIX 95% TRAVADO).** `callOpus()` direto, maxTokens 4000, badge no título. ZERO DELETE.
 

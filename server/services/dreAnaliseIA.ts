@@ -193,13 +193,44 @@ function brl(v: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v ?? 0);
 }
 
+// Tenta reparar JSON truncado fechando arrays/objetos abertos.
+// Necessário quando max_tokens corta a resposta no meio de um array.
+function repairTruncatedJson(raw: string): string {
+  let t = raw.trimEnd();
+  // Remove vírgula/colchete/chave pendurado no final
+  t = t.replace(/,\s*$/, "");
+  // Rastreia pilha de abertura
+  const stack: string[] = [];
+  let inStr = false;
+  let escape = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (escape) { escape = false; continue; }
+    if (c === "\\" && inStr) { escape = true; continue; }
+    if (c === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (c === "{") stack.push("}");
+    else if (c === "[") stack.push("]");
+    else if (c === "}" || c === "]") stack.pop();
+  }
+  // Fecha o que está aberto, na ordem inversa
+  return t + stack.reverse().join("");
+}
+
 function parseJsonLoose(text: string): any {
   let t = (text || "").trim();
   t = t.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
   const start = t.indexOf("{");
-  const end = t.lastIndexOf("}");
-  if (start >= 0 && end > start) t = t.slice(start, end + 1);
-  return JSON.parse(t);
+  if (start >= 0) t = t.slice(start);
+  // 1ª tentativa: JSON completo
+  const endFull = t.lastIndexOf("}");
+  if (endFull > 0) {
+    try { return JSON.parse(t.slice(0, endFull + 1)); } catch {}
+  }
+  // 2ª tentativa: reparar truncamento
+  try { return JSON.parse(repairTruncatedJson(t)); } catch (e2) {
+    throw new Error(`JSON inválido mesmo após reparo: ${(e2 as any)?.message}`);
+  }
 }
 
 const FONTE_IDS = new Set(FONTES_DRE.map((f) => f.id));
@@ -356,7 +387,7 @@ export async function analisarDRE(
 
   let parsed: any;
   try {
-    const text = await callOpus(sys, prompt, 4000);
+    const text = await callOpus(sys, prompt); // usa default 8000 tokens
     parsed = parseJsonLoose(text);
   } catch (e: any) {
     return {
