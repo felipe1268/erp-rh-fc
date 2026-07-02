@@ -1,3 +1,5 @@
+- **Rev. 3972** — **AUTO-PONTO: FÉRIAS NÃO GERAM FALTA NO FECHAMENTO DA FOLHA.** Pré-carrega `vacation_periods` que intersectam o período; dias de férias recebem `tipoDia='ferias'`, bloqueando `isFalta=1`. Padrão idêntico ao da fase do escuro. ZERO DELETE.
+
 - **Rev. 3971** — **CONVÊNIOS: FIX COLUNA VAZIA NA FOLHA (`competencia_desconto` NULL).** `aprovar` mutation nunca gravava `competenciaDesconto` no update — agora persiste `competenciaSelecionada` do RH. ColFix v3971 backfilla todos os aprovados antigos com `competencia_desconto IS NULL` pela regra dia-15/16. ZERO DELETE.
 
 - **Rev. 3969** — **DISSÍDIO: FIX DIFERENÇAS RETROATIVAS QUANDO VIGÊNCIA == MÊS DE APLICAÇÃO.** `mesesRetroativosEntre("2026-05","2026-05")` retornava `[]`; guard inclui o próprio mês quando vigência == aplicação; `recalcularDiferencas` corrigido igual; botão "Calcular Diferenças Retroativas" adicionado no dialog da Folha. ZERO DELETE.

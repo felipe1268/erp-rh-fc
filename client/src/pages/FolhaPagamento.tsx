@@ -12,7 +12,7 @@ import {
   Eye, Trash2, RefreshCw, ArrowLeft, XCircle, Info, Building2,
   FileSpreadsheet, AlertCircle, ShieldCheck, Clock, TrendingUp, TrendingDown,
   Filter, Briefcase, BarChart3, ChevronDown, ChevronUp, Lightbulb, Wrench, ArrowRight, MapPin, Scale,
-  HardHat, Ban, User, CheckCircle2, Calculator, Zap, Moon, FileCheck, Wallet, Pencil, Save, X, FileDown, PenLine, ClipboardCheck, FileBarChart, ExternalLink, ZoomIn, Loader2
+  HardHat, Ban, User, CheckCircle2, Calculator, Zap, Moon, FileCheck, Wallet, Pencil, Save, X, FileDown, PenLine, ClipboardCheck, FileBarChart, ExternalLink, ZoomIn, Loader2, Printer
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import FullScreenDialog from "@/components/FullScreenDialog";
@@ -656,6 +656,23 @@ export default function FolhaPagamento() {
     },
     onError: (e: any) => toast.error(e.message || 'Erro ao recalcular diferenças'),
   });
+
+  // Rev. 3979 — Imprimir / PDF do relatório de Diferenças Salariais (Dissídio).
+  // Convenção do codebase (ver DashAvisoPrevio.tsx): marca o container com
+  // `print-only` (regra global em index.css oculta todo o resto da árvore),
+  // chama window.print() e remove a classe no afterprint (+ fallback timeout).
+  const handlePrintDissidioRel = () => {
+    const el = document.getElementById('dissidio-print-area');
+    if (!el) return;
+    el.classList.add('print-only');
+    const cleanup = () => {
+      el.classList.remove('print-only');
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    setTimeout(cleanup, 5000);
+    window.print();
+  };
 
   const arredondarMut = trpc.payrollEngine.arredondarLote.useMutation({
     onSuccess: (data: any) => {
@@ -6355,9 +6372,15 @@ export default function FolhaPagamento() {
         <Dialog open={showDissidioRel} onOpenChange={setShowDissidioRel}>
           <DialogContent className="max-w-4xl">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
+              <DialogTitle className="flex items-center gap-2 pr-8">
                 <FileBarChart className="h-5 w-5 text-emerald-600" />
                 Diferenças Salariais Retroativas (Dissídio) — {fmtNum(anoSelecionado)}
+                {dissidioRelQuery.data && dissidioRelQuery.data.rows.length > 0 && (
+                  <Button size="sm" variant="outline" className="ml-auto border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                    onClick={handlePrintDissidioRel}>
+                    <Printer className="h-3.5 w-3.5 mr-1" /> Imprimir / PDF
+                  </Button>
+                )}
               </DialogTitle>
               <DialogDescription>
                 Diferenças geradas ao aplicar um dissídio com data de vigência no passado (ex.: data-base 01/05). Paga À PARTE da folha mensal (guia própria de INSS/IRRF) — NÃO entra nos totais da folha.
@@ -6378,7 +6401,10 @@ export default function FolhaPagamento() {
                 </Button>
               </div>
             ) : (
-              <>
+              <div id="dissidio-print-area">
+                <p className="hidden print:block text-sm font-semibold mb-2">
+                  Diferenças Salariais Retroativas (Dissídio) — {fmtNum(anoSelecionado)}
+                </p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-2">
                   <div className="bg-emerald-50 rounded-md p-2 border border-emerald-100">
                     <p className="text-[10px] text-gray-500 uppercase">Total Bruto</p>
@@ -6455,7 +6481,7 @@ export default function FolhaPagamento() {
                     </tbody>
                   </table>
                 </div>
-              </>
+              </div>
             )}
           </DialogContent>
         </Dialog>

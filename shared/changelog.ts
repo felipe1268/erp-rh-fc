@@ -1,4 +1,21 @@
 /**
+ * Rev. 3979 — **DISSÍDIO: BOTÃO IMPRIMIR / PDF NO RELATÓRIO DE DIFERENÇAS RETROATIVAS.**
+ *
+ * PEDIDO: gerar PDF/imprimir o dialog "Diferenças Salariais Retroativas (Dissídio)"
+ * (`client/src/pages/FolhaPagamento.tsx`) introduzido na Rev. 3978.
+ *
+ * SOLUÇÃO: seguida a convenção já usada em dashboards com conteúdo dentro de Dialog Radix
+ * (ver `DashAvisoPrevio.tsx`) — regra global `print-only` em `index.css` esconde toda a árvore
+ * exceto o container marcado. Novo botão "Imprimir / PDF" no header do dialog aplica
+ * `handlePrintDissidioRel`: adiciona a classe `print-only` no container `#dissidio-print-area`
+ * (cards de totais + tabela de linhas), chama `window.print()`, remove a classe no `afterprint`
+ * (+ fallback de 5s). Cabeçalho impresso (título/ano) só aparece via `print:block` (invisível na
+ * tela). Sem mudança de backend — reaproveita os dados já carregados por `dissidioRelQuery`.
+ *
+ * ZERO DELETE · ZERO ALTER.
+ */
+
+/**
  * Rev. 3978 — **DISSÍDIO: DIFERENÇA RETROATIVA SAI DA FOLHA MENSAL E GANHA ENCARGOS PRÓPRIOS.**
  *
  * PEDIDO: a diferença salarial retroativa do dissídio ("DIFERENÇA SALARIAL") estava sendo
