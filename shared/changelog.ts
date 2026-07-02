@@ -1,4 +1,47 @@
 /**
+ * Rev. 3954 — **ANÁLISE IA DO DRE: PARETO DE CUSTOS + PLANO DE AÇÃO (EMPREITADA DE OBRA).**
+ *
+ * MOTIVAÇÃO:
+ *   Usuário solicitou diagnóstico mais preciso e acionável: não apenas benchmarks genéricos,
+ *   mas um plano de ação específico para empreitada de obra — identificando os maiores
+ *   ofensores de custo, distinguindo direto vs. indireto, com linguagem de gestor de obra
+ *   ("sua equipe está inchada", "escritório central consome X% vs benchmark Y%") e
+ *   probabilidade de eficácia para cada ação.
+ *
+ * BACKEND — dreAnaliseIA.ts (reescrito):
+ *   - Nova interface `ParetoCustoItem` + `PlanoAcaoItem`
+ *   - `AnaliseDREResult` expandida com campos `paretoCustos` e `planoAcao`
+ *   - Chamada paralela `calcularDRECustoPorConta` (top 15 contas de custo por valor)
+ *   - System prompt reescrito: "CFO sênior em EMPREITADA DE OBRAS" — instruções para
+ *     linguagem direta e específica; referência explícita ao Pareto no plano de ação
+ *   - Benchmarks atualizados para empreitada: Overhead/Receita máx 15%, CDO 65-80%,
+ *     Margem Bruta 20-35%, Folha Indireta/CDO até 18%; nova fonte SINDUSCON-SP/FGV
+ *   - Plano de ação: 5-8 itens com prioridade, prazo (imediato/30d/90d/180d), área,
+ *     impacto (alto/medio/baixo), probabilidadeEficacia (0-100) e justificativa
+ *   - maxTokens elevado para 6000 (resposta muito mais rica)
+ *
+ * BACKEND — financialKpiService.ts:
+ *   - Nova função exportada `calcularDRECustoPorConta`: query CTE 3 níveis que agrupa
+ *     todas as despesas/custos operacionais por conta (excluindo financeiras, impostos,
+ *     nao_operacional, investimento), categoriza em custo_obra/despesa_fixa/despesa_variavel
+ *     e retorna com pctReceita, pctCustoTotal, pctAcumulado para Pareto
+ *
+ * FRONTEND — FinanceiroDRE.tsx:
+ *   - Nova seção "Pareto de Custos": tabela horizontal com barra de progresso por conta
+ *     (cor por categoria: vermelho=obra, âmbar=fixo, índigo=variável), colunas
+ *     %Receita/%Custo/Acumulado, linha de aviso âmbar ao cruzar o threshold de 80%
+ *   - Nova seção "Plano de Ação": cards com número de prioridade, prazo badge,
+ *     impacto badge, área, % eficácia colorida, justificativa, fontes
+ *   - IA_FASES atualizado: 5 fases (incluindo "Calculando Pareto de custos" e
+ *     "Elaborando plano de ação")
+ *   - Ícones Target + Zap adicionados
+ *
+ * ZERO DELETE. Arquivos: server/services/dreAnaliseIA.ts (reescrito),
+ * server/services/financialKpiService.ts (calcularDRECustoPorConta),
+ * client/src/pages/financeiro/FinanceiroDRE.tsx (Pareto + Plano de Ação).
+ */
+
+/**
  * Rev. 3953 — **DFC PDF: DEMONSTRAÇÃO DO FLUXO DE CAIXA DIDÁTICA.**
  *
  * MOTIVAÇÃO:

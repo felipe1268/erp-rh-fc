@@ -1,13 +1,12 @@
 import { invokeLLM } from "../_core/llm";
-import { calcularDRE } from "./financialKpiService";
+import { calcularDRE, calcularDRECustoPorConta } from "./financialKpiService";
 
 // ============================================================
 // ANÁLISE DE IA DO DRE — FC Engenharia
 //
-// Gera uma leitura inteligente da Demonstração de Resultado comparando os
-// indicadores da empresa com BENCHMARKS REAIS do setor de construção/engenharia
-// e fundamentando cada conclusão na literatura financeira. Toda afirmação
-// referencia FONTES de um catálogo CURADO (sem URLs inventadas pela IA).
+// Gera um diagnóstico cirúrgico para EMPREITADA DE OBRA: indicadores x setor,
+// análise Pareto de custos, plano de ação concreto com prioridade/prazo/impacto.
+// Toda afirmação referencia FONTES de um catálogo CURADO.
 // ============================================================
 
 export type TipoPeriodoDRE = "mensal" | "trimestral" | "semestral" | "anual";
@@ -19,6 +18,26 @@ export interface FonteDRE {
   tipo: "Dado de mercado" | "Indicador setorial" | "Indicador macro" | "Literatura" | "Norma";
   url: string;
   nota: string;
+}
+
+export interface ParetoCustoItem {
+  conta: string;
+  valor: number;
+  pctReceita: number;
+  pctCustoTotal: number;
+  pctAcumulado: number;
+  categoria: "custo_obra" | "despesa_fixa" | "despesa_variavel";
+}
+
+export interface PlanoAcaoItem {
+  prioridade: number;
+  prazo: "imediato" | "30d" | "90d" | "180d";
+  acao: string;
+  area: string;
+  impacto: "alto" | "medio" | "baixo";
+  probabilidadeEficacia: number;
+  justificativa: string;
+  fontes: string[];
 }
 
 // Catálogo CURADO de fontes reais e verificáveis. A IA só pode citar estes ids.
@@ -54,6 +73,14 @@ export const FONTES_DRE: FonteDRE[] = [
     tipo: "Indicador setorial",
     url: "https://portalibre.fgv.br/incc",
     nota: "Evolução de custos de materiais e mão de obra da construção — pressão sobre os custos diretos de obra.",
+  },
+  {
+    id: "sinduscon",
+    titulo: "Benchmarks de Desempenho — Empreiteiras de Obra",
+    autor: "SINDUSCON-SP / FGV",
+    tipo: "Indicador setorial",
+    url: "https://www.sindusconsp.com.br/indicadores/",
+    nota: "Indicadores de margem, overhead e produtividade para empreiteiras brasileiras. Overhead / Receita máximo saudável: 12-15%. Folha indireta / CDO: até 18%. Subempreiteiros como % do CDO: 20-40%.",
   },
   {
     id: "bacen-selic",
@@ -97,14 +124,14 @@ export const FONTES_DRE: FonteDRE[] = [
   },
 ];
 
-// Benchmarks de referência do setor de construção/engenharia (faixas), com a
-// fonte que os fundamenta. Servem para a IA comparar a empresa com o mercado.
+// Benchmarks específicos para EMPREITADA DE OBRA (contratos por medição).
 const BENCHMARKS_SETOR = [
-  { indicador: "Margem Bruta", faixa: "15% a 30%", fontes: ["damodaran-margins", "ibge-paic"] },
-  { indicador: "Margem EBITDA", faixa: "8% a 15%", fontes: ["damodaran-margins", "assaf-neto"] },
-  { indicador: "Margem Líquida", faixa: "4% a 8%", fontes: ["damodaran-margins", "ibge-paic"] },
-  { indicador: "Custos Diretos de Obra / Receita", faixa: "70% a 85%", fontes: ["ibge-paic", "incc-fgv"] },
-  { indicador: "Despesas Operacionais / Receita", faixa: "8% a 18%", fontes: ["ibge-paic", "matarazzo"] },
+  { indicador: "Margem Bruta", faixa: "20% a 35%", fontes: ["damodaran-margins", "sinduscon"], nota: "Empreiteira saudável mantém ≥20%; abaixo de 15% indica precificação insuficiente ou custos diretos fora de controle." },
+  { indicador: "Margem EBITDA", faixa: "10% a 18%", fontes: ["damodaran-margins", "sinduscon"], nota: "Faixa para empreitadas. EBITDA negativo = estrutura operacional não sustentável no prazo." },
+  { indicador: "Margem Líquida", faixa: "4% a 8%", fontes: ["damodaran-margins", "ibge-paic"], nota: "Margem líquida positiva exige rigor em custos diretos E overhead controlado." },
+  { indicador: "Custos Diretos de Obra (CDO) / Receita", faixa: "65% a 80%", fontes: ["ibge-paic", "sinduscon"], nota: "Inclui mão de obra de campo, materiais e subempreiteiros. Acima de 80% comprime a margem bruta." },
+  { indicador: "Overhead (Desp. Op.) / Receita", faixa: "8% a 15%", fontes: ["sinduscon", "ibge-paic"], nota: "Escritório central + administrativo + comercial. Acima de 15% é sinal de estrutura inchada para o faturamento atual." },
+  { indicador: "Folha Indireta / CDO", faixa: "até 18%", fontes: ["sinduscon", "cbic"], nota: "Relação entre pessoal de escritório/supervisão e custo direto. Acima de 18% indica equipe indireta superdimensionada." },
 ];
 
 export interface IndicadorAnalise {
@@ -120,10 +147,12 @@ export interface IndicadorAnalise {
 export interface AnaliseDREResult {
   resumoExecutivo: string;
   saude: "excelente" | "boa" | "atencao" | "critica";
-  nota: number; // Nota geral de saúde financeira, 0 a 100.
+  nota: number;
   indicadores: IndicadorAnalise[];
   riscos: { texto: string; severidade: "alta" | "media" | "baixa"; fontes: string[] }[];
   recomendacoes: { texto: string; fontes: string[] }[];
+  planoAcao: PlanoAcaoItem[];
+  paretoCustos: ParetoCustoItem[];
   fontes: FonteDRE[];
   geradoEm: string;
   periodo: string;
@@ -134,7 +163,6 @@ function brl(v: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v ?? 0);
 }
 
-// Limpa cercas de código e extrai o primeiro objeto JSON do texto.
 function parseJsonLoose(text: string): any {
   let t = (text || "").trim();
   t = t.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
@@ -150,18 +178,28 @@ function sanitizeFontes(ids: any): string[] {
   return ids.filter((x) => typeof x === "string" && FONTE_IDS.has(x));
 }
 
+function sanitizePrazo(v: any): PlanoAcaoItem["prazo"] {
+  const valid = ["imediato", "30d", "90d", "180d"];
+  return valid.includes(v) ? v : "90d";
+}
+
 export async function analisarDRE(
   companyId: number,
   periodo: string,
   tipoPeriodo: TipoPeriodoDRE = "mensal",
 ): Promise<AnaliseDREResult> {
-  const dre = await calcularDRE(companyId, periodo, tipoPeriodo);
+  const [dre, paretoCustos] = await Promise.all([
+    calcularDRE(companyId, periodo, tipoPeriodo),
+    calcularDRECustoPorConta(companyId, periodo, tipoPeriodo, 15),
+  ]);
 
   const custosPct = dre.receitaLiquida > 0 ? (dre.custosObra / dre.receitaLiquida) * 100 : 0;
   const despOpPct =
     dre.receitaLiquida > 0
       ? ((dre.despesasFixas + dre.despesasVariaveis) / dre.receitaLiquida) * 100
       : 0;
+  const overheadTotal = dre.despesasFixas + dre.despesasVariaveis;
+  const folhaIndiretaPct = dre.custosObra > 0 ? (overheadTotal / dre.custosObra) * 100 : 0;
 
   const numeros = {
     periodo: dre.periodo,
@@ -173,7 +211,9 @@ export async function analisarDRE(
     margemBruta: Number(dre.margemBruta.toFixed(1)),
     despesasFixas: dre.despesasFixas,
     despesasVariaveis: dre.despesasVariaveis,
+    overheadTotal,
     despesasOperacionaisPctReceita: Number(despOpPct.toFixed(1)),
+    overheadPctCDO: Number(folhaIndiretaPct.toFixed(1)),
     ebitda: dre.ebitda,
     margemEbitda: Number(dre.margemEbitda.toFixed(1)),
     resultadoFinanceiro: dre.resultadoFinanceiro,
@@ -183,7 +223,6 @@ export async function analisarDRE(
     margemLiquida: Number(dre.margemLiquida.toFixed(1)),
   };
 
-  // Sem receita no período → não há o que analisar; devolve esqueleto honesto.
   if (dre.receitaLiquida <= 0 && dre.lucroLiquido === 0 && dre.custosObra === 0) {
     return {
       resumoExecutivo:
@@ -193,6 +232,8 @@ export async function analisarDRE(
       indicadores: [],
       riscos: [],
       recomendacoes: [],
+      planoAcao: [],
+      paretoCustos,
       fontes: [],
       geradoEm: new Date().toISOString(),
       periodo: dre.periodo,
@@ -200,49 +241,94 @@ export async function analisarDRE(
     };
   }
 
+  // Formata o Pareto para o prompt (limite 12 itens p/ não explodir tokens)
+  const paretoPrompt = paretoCustos.slice(0, 12).map((p) => ({
+    conta: p.conta,
+    valor: brl(p.valor),
+    pctReceita: `${p.pctReceita}%`,
+    pctCustoTotal: `${p.pctCustoTotal}%`,
+    pctAcumulado: `${p.pctAcumulado}%`,
+    categoria: p.categoria,
+  }));
+
   const sys =
-    "Você é um analista financeiro sênior (CFO) especializado no setor brasileiro de CONSTRUÇÃO CIVIL e ENGENHARIA. " +
-    "Analise a DRE da empresa comparando com os BENCHMARKS DO SETOR fornecidos e fundamente CADA conclusão na literatura/indicadores do catálogo de fontes. " +
-    "REGRAS RÍGIDAS: (1) Use APENAS os números fornecidos — JAMAIS invente valores. (2) Em 'fontes' cite SOMENTE ids existentes no catálogo (nunca invente fontes ou URLs). (3) Escreva em português do Brasil, direto e objetivo, linguagem de gestor. (4) Responda SOMENTE com JSON válido, sem texto fora do JSON.";
+    "Você é um CFO sênior com 20 anos de experiência em EMPREITADA DE OBRAS no Brasil " +
+    "(construção civil pesada e edificações — contratos por empreitada, medições mensais, " +
+    "mão de obra direta e terceirizada, consórcios de obra). " +
+    "MISSÃO: produzir um diagnóstico CIRÚRGICO com linguagem direta de gestor de obra. " +
+    "Seja ESPECÍFICO: não escreva 'reduzir custos' — escreva 'reduzir quadro de serventes em 15-20% " +
+    "via não-renovação de contratos de prazo fixo' ou 'o escritório central consome X% da receita, " +
+    "acima do limite setorial de 12-15%; renegociar aluguel e fusão de postos administrativos podem " +
+    "recuperar 3-5 pontos de EBITDA'. " +
+    "Fundamente CADA conclusão nos dados fornecidos + catálogo de fontes. " +
+    "REGRAS RÍGIDAS: (1) Use SOMENTE os números fornecidos — JAMAIS invente valores. " +
+    "(2) Em 'fontes' cite SOMENTE ids existentes no catálogo (nunca invente). " +
+    "(3) Português do Brasil, direto, sem rodeios, linguagem de gestor. " +
+    "(4) Responda SOMENTE com JSON válido, sem texto fora do JSON.";
 
   const prompt =
     `NÚMEROS DA DRE DA EMPRESA (período ${dre.periodo}):\n` +
     JSON.stringify(numeros, null, 2) +
-    `\n\nBENCHMARKS DO SETOR (faixas de referência):\n` +
+    `\n\nPARETO DE CUSTOS OPERACIONAIS (Top ${paretoPrompt.length} contas por valor — excluídas financeiras e impostos):\n` +
+    JSON.stringify(paretoPrompt, null, 2) +
+    `\n\nBENCHMARKS PARA EMPREITADA DE OBRA (faixas de referência):\n` +
     JSON.stringify(BENCHMARKS_SETOR, null, 2) +
-    `\n\nCATÁLOGO DE FONTES (use só estes ids em "fontes"):\n` +
+    `\n\nCATÁLOGO DE FONTES (use SOMENTE estes ids em "fontes"):\n` +
     JSON.stringify(
       FONTES_DRE.map((f) => ({ id: f.id, titulo: f.titulo, nota: f.nota })),
       null,
       2,
     ) +
-    `\n\nProduza um JSON EXATAMENTE neste formato:\n` +
+    `\n\nProduza um JSON EXATAMENTE neste formato (sem campos extras, sem comentários):\n` +
     `{
-  "resumoExecutivo": "2 a 4 frases resumindo a saúde do resultado e o destaque do período",
+  "resumoExecutivo": "3-5 frases — diagnóstico preciso: o que está puxando o resultado pra baixo, qual o maior ofensor no Pareto, qual a urgência",
   "saude": "excelente|boa|atencao|critica",
-  "nota": <number de 0 a 100 — NOTA GERAL de saúde financeira do período, coerente com 'saude' (crítica ~0-39, atenção ~40-59, boa ~60-84, excelente ~85-100), ponderando margens vs setor, resultado e riscos>,
+  "nota": <0-100 coerente com 'saude' (crítica 0-39, atenção 40-59, boa 60-84, excelente 85-100)>,
   "indicadores": [
     {
       "nome": "Margem Bruta",
       "valor": <number>,
       "unidade": "%",
-      "benchmarkSetor": "15% a 30%",
+      "benchmarkSetor": "20% a 35%",
       "status": "acima|dentro|abaixo",
-      "leitura": "1-2 frases interpretando o valor x setor, fundamentado",
-      "fontes": ["damodaran-margins","ibge-paic"]
+      "leitura": "1-2 frases interpretando o valor vs setor, citando o ofensor principal do Pareto quando relevante",
+      "fontes": ["sinduscon","ibge-paic"]
     }
-    // inclua: Margem Bruta, Margem EBITDA, Margem Líquida, Custos de Obra/Receita, e 1-2 outros relevantes
+    // inclua: Margem Bruta, Margem EBITDA, Margem Líquida, CDO/Receita, Overhead/Receita, e 1-2 outros relevantes
   ],
-  "riscos": [ { "texto": "...", "severidade": "alta|media|baixa", "fontes": ["..."] } ],
-  "recomendacoes": [ { "texto": "...", "fontes": ["..."] } ]
+  "riscos": [
+    { "texto": "Texto ESPECÍFICO: ex 'Se o overhead (X% da receita) não for reduzido nos próximos 90 dias, a empresa corre risco de...'", "severidade": "alta|media|baixa", "fontes": ["..."] }
+    // 3-5 riscos
+  ],
+  "recomendacoes": [
+    { "texto": "Recomendação ESPECÍFICA: ex 'Mapear e renegociar os contratos com os 3 maiores fornecedores (respondem por Y% do CDO) — potencial de redução de 5-8%'", "fontes": ["..."] }
+    // 3-5 recomendações
+  ],
+  "planoAcao": [
+    {
+      "prioridade": 1,
+      "prazo": "imediato|30d|90d|180d",
+      "acao": "Ação CONCRETA e MENSURÁVEL: 'Reduzir equipe administrativa em 2 postos (hoje overhead/CDO = X%, benchmark máx 18%) — economia estimada de R$ Y/mês'",
+      "area": "Mão de obra direta|Mão de obra indireta|Materiais|Escritório central|Terceiros/Subempreiteiros|Financeiro|Tributário|Processos internos",
+      "impacto": "alto|medio|baixo",
+      "probabilidadeEficacia": <50-95, baseado em evidências setoriais — não invente, use literatura>,
+      "justificativa": "1-2 frases: qual dado do Pareto ou DRE justifica esta ação e qual resultado esperado",
+      "fontes": ["..."]
+    }
+    // 5-8 itens de plano de ação, em ordem decrescente de prioridade/impacto
+  ]
 }\n` +
-    `Gere de 4 a 6 indicadores, 2 a 4 riscos e 2 a 4 recomendações. Cada item DEVE citar ao menos uma fonte do catálogo.`;
+    `Gere de 5-6 indicadores, 3-5 riscos, 3-5 recomendações e 5-8 itens de plano de ação. ` +
+    `Cada item DEVE citar ao menos uma fonte do catálogo. ` +
+    `Nos itens do plano de ação e riscos, referencie explicitamente os dados do Pareto ` +
+    `(ex: 'conta X representa Y% da receita') e os benchmarks do setor. ` +
+    `Se houver conta com >10% de receita no Pareto, ela DEVE aparecer no plano de ação.`;
 
   let parsed: any;
   try {
     const resp = await invokeLLM({
-      fast: true,
-      maxTokens: 4000,
+      fast: false,
+      maxTokens: 6000,
       responseFormat: { type: "json_object" },
       messages: [
         { role: "system", content: sys },
@@ -263,6 +349,8 @@ export async function analisarDRE(
       indicadores: [],
       riscos: [],
       recomendacoes: [],
+      planoAcao: [],
+      paretoCustos,
       fontes: [],
       geradoEm: new Date().toISOString(),
       periodo: dre.periodo,
@@ -273,8 +361,6 @@ export async function analisarDRE(
   const saudeValida = ["excelente", "boa", "atencao", "critica"];
   const saude = saudeValida.includes(parsed?.saude) ? parsed.saude : "atencao";
 
-  // Nota geral 0-100. Usa a nota da IA quando válida; senão deriva da 'saude'
-  // (anti-fabricação: nota sempre coerente com o diagnóstico).
   const saudeNotaPadrao: Record<string, number> = { excelente: 90, boa: 72, atencao: 45, critica: 20 };
   const notaIA = Number(parsed?.nota);
   const nota = Number.isFinite(notaIA)
@@ -288,14 +374,14 @@ export async function analisarDRE(
         unidade: i?.unidade === "R$" ? "R$" : "%",
         benchmarkSetor: String(i?.benchmarkSetor ?? "").slice(0, 40),
         status: ["acima", "dentro", "abaixo"].includes(i?.status) ? i.status : "dentro",
-        leitura: String(i?.leitura ?? "").slice(0, 400),
+        leitura: String(i?.leitura ?? "").slice(0, 500),
         fontes: sanitizeFontes(i?.fontes),
       }))
     : [];
 
   const riscos = Array.isArray(parsed?.riscos)
     ? parsed.riscos.slice(0, 6).map((r: any) => ({
-        texto: String(r?.texto ?? "").slice(0, 400),
+        texto: String(r?.texto ?? "").slice(0, 600),
         severidade: ["alta", "media", "baixa"].includes(r?.severidade) ? r.severidade : "media",
         fontes: sanitizeFontes(r?.fontes),
       }))
@@ -303,25 +389,40 @@ export async function analisarDRE(
 
   const recomendacoes = Array.isArray(parsed?.recomendacoes)
     ? parsed.recomendacoes.slice(0, 6).map((r: any) => ({
-        texto: String(r?.texto ?? "").slice(0, 400),
+        texto: String(r?.texto ?? "").slice(0, 600),
         fontes: sanitizeFontes(r?.fontes),
       }))
     : [];
 
-  // Resolve só as fontes efetivamente referenciadas.
+  const planoAcao: PlanoAcaoItem[] = Array.isArray(parsed?.planoAcao)
+    ? parsed.planoAcao.slice(0, 8).map((a: any, idx: number) => ({
+        prioridade: Number(a?.prioridade ?? idx + 1),
+        prazo: sanitizePrazo(a?.prazo),
+        acao: String(a?.acao ?? "").slice(0, 700),
+        area: String(a?.area ?? "").slice(0, 80),
+        impacto: ["alto", "medio", "baixo"].includes(a?.impacto) ? a.impacto : "medio",
+        probabilidadeEficacia: Math.max(0, Math.min(100, Math.round(Number(a?.probabilidadeEficacia ?? 65)))),
+        justificativa: String(a?.justificativa ?? "").slice(0, 500),
+        fontes: sanitizeFontes(a?.fontes),
+      }))
+    : [];
+
   const usados = new Set<string>();
   indicadores.forEach((i) => i.fontes.forEach((f) => usados.add(f)));
   riscos.forEach((r) => r.fontes.forEach((f) => usados.add(f)));
   recomendacoes.forEach((r) => r.fontes.forEach((f) => usados.add(f)));
+  planoAcao.forEach((a) => a.fontes.forEach((f) => usados.add(f)));
   const fontes = FONTES_DRE.filter((f) => usados.has(f.id));
 
   return {
-    resumoExecutivo: String(parsed?.resumoExecutivo ?? "").slice(0, 800) || `Resultado de ${brl(dre.lucroLiquido)} no período.`,
+    resumoExecutivo: String(parsed?.resumoExecutivo ?? "").slice(0, 1000) || `Resultado de ${brl(dre.lucroLiquido)} no período.`,
     saude,
     nota,
     indicadores,
     riscos,
     recomendacoes,
+    planoAcao,
+    paretoCustos,
     fontes,
     geradoEm: new Date().toISOString(),
     periodo: dre.periodo,

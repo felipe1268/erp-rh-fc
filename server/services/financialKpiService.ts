@@ -682,6 +682,87 @@ export async function calcularDRELinhaDetalhe(
   };
 }
 
+// Pareto de custos: top N contas de despesa/custo operacional agrupadas por valor.
+// Usada pela análise de IA para produzir diagnóstico cirúrgico (empreitada de obra).
+// Exclui despesas financeiras, impostos e itens nao_operacional/investimento.
+export async function calcularDRECustoPorConta(
+  companyId: number,
+  periodo: string,
+  tipoPeriodo: "mensal" | "trimestral" | "semestral" | "anual" = "mensal",
+  limite = 15,
+) {
+  const db = await getDb();
+  const [mesIni, mesFim] = dreRange(periodo, tipoPeriodo);
+
+  const res = await q(db!, `
+    WITH ${dreAcctClassCte('$1')},
+    e AS (
+      SELECT fe.tipo, fe.natureza,
+             LOWER(COALESCE(fe.origem_modulo,'')) AS origem,
+             LOWER(COALESCE(fe.conta_nome,'')) AS conta,
+             COALESCE(NULLIF(fe.conta_nome,''),'(Sem categoria)') AS conta_label,
+             COALESCE(fe.valor_realizado, 0)::numeric AS v,
+             ac.classificacao_dre AS class_dre
+      FROM financial_entries fe
+      LEFT JOIN acct_class ac ON ac.id = fe.conta_id
+      WHERE fe.company_id=$1
+        AND fe.status NOT IN ('cancelado','estornado','a_pagar','a_receber','previsto')
+        AND fe.tipo <> 'transferencia'
+        AND fe.data_competencia IS NOT NULL
+        AND TO_CHAR(fe.data_competencia,'YYYY-MM') BETWEEN $2 AND $3
+    ),
+    receita AS (
+      SELECT COALESCE(SUM(v),0) AS r FROM e
+      WHERE tipo='receita'
+        AND origem NOT IN ('aplicacao_financeira','rendimento_financeiro')
+        AND conta NOT LIKE '%juros%' AND conta NOT LIKE '%rendiment%'
+        AND COALESCE(class_dre,'') <> 'nao_operacional'
+    ),
+    despesas AS (
+      SELECT conta_label,
+        COALESCE(SUM(v),0)::numeric AS total,
+        CASE
+          WHEN tipo='despesa' AND (origem IN ('compras','compra_oc','almoxarifado_saida') OR class_dre='custo_obra') THEN 'custo_obra'
+          WHEN tipo='despesa' AND (natureza='fixo' OR class_dre='despesa_fixa')
+               AND COALESCE(class_dre,'') NOT IN ('custo_obra','despesa_financeira','investimento','nao_operacional')
+               AND origem NOT IN ('compras','compra_oc','almoxarifado_saida','despesa_financeira','juros','tarifa_bancaria','iof','guia_tributaria')
+               THEN 'despesa_fixa'
+          ELSE 'despesa_variavel'
+        END AS categoria
+      FROM e
+      WHERE tipo='despesa'
+        AND COALESCE(class_dre,'') NOT IN ('nao_operacional','investimento','despesa_financeira')
+        AND origem NOT IN ('despesa_financeira','juros','tarifa_bancaria','iof','guia_tributaria')
+        AND conta NOT LIKE '%juros%' AND conta NOT LIKE '%tarifa banc%' AND conta NOT LIKE '%iof%'
+      GROUP BY conta_label, categoria
+      HAVING COALESCE(SUM(v),0) > 0
+    )
+    SELECT d.conta_label AS conta, d.total, d.categoria,
+           (SELECT r FROM receita) AS receita_total
+    FROM despesas d
+    ORDER BY d.total DESC
+    LIMIT $4
+  `, [companyId, mesIni, mesFim, limite]);
+
+  const rows: any[] = (res as any).rows ?? [];
+  const totalCusto = rows.reduce((s: number, row: any) => s + parseFloat(row.total ?? '0'), 0);
+  const receitaTotal = rows.length > 0 ? parseFloat(rows[0].receita_total ?? '0') : 0;
+
+  let acumulado = 0;
+  return rows.map((row: any) => {
+    const valor = parseFloat(row.total ?? '0');
+    acumulado += valor;
+    return {
+      conta: String(row.conta ?? ''),
+      valor,
+      pctReceita: receitaTotal > 0 ? Math.round((valor / receitaTotal) * 1000) / 10 : 0,
+      pctCustoTotal: totalCusto > 0 ? Math.round((valor / totalCusto) * 1000) / 10 : 0,
+      pctAcumulado: totalCusto > 0 ? Math.round((acumulado / totalCusto) * 1000) / 10 : 0,
+      categoria: (row.categoria ?? 'despesa_variavel') as "custo_obra" | "despesa_fixa" | "despesa_variavel",
+    };
+  });
+}
+
 // Disponibilidade de dados por mês de um ano (para o seletor de meses do DRE).
 // Para cada mês 1..12 retorna { n, nRealizado }:
 //  - n         = total de lançamentos no mês (status != cancelado, tipo != transferencia)

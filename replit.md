@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3954** — **ANÁLISE IA DO DRE: PARETO DE CUSTOS + PLANO DE AÇÃO (EMPREITADA DE OBRA).** dreAnaliseIA.ts reescrito para diagnóstico cirúrgico: nova fn `calcularDRECustoPorConta` (Pareto top 15 por valor com pct% acumulado); prompt "CFO de empreitada" com benchmarks específicos (CDO 65-80%, Overhead máx 15%, Folha Indireta/CDO máx 18%); resposta com `planoAcao[]` (5-8 ações com prioridade/prazo/impacto/probabilidade) e `paretoCustos[]`; UI: Pareto horizontal + Plano de Ação com cards. ZERO DELETE.
+
 - **Rev. 3953** — **DFC PDF: DEMONSTRAÇÃO DO FLUXO DE CAIXA DIDÁTICA.** PDF client-side (jsPDF) com 4 seções: waterfall DRE, ajustes fora do DRE (nao_operacional + investimento por conta), reconciliação final (bridge table) e interpretação contextual 4 cenários. Novo endpoint `getDFCData`; botão "Exportar DFC (PDF)" no header do DRE. FIX: dbExecute `$N` repetido → params distintos $1..$7. ZERO DELETE.
 
-- **Rev. 3952** — **DRE: CORREÇÃO DE CLASSIFICAÇÃO + CARD CONTEXTUAL DRE × CAIXA.** Auditoria detectou 2 erros: FINANCIAMENTOS (R$69.758) entrava como Despesa Fixa (amortização de principal não é despesa); MÚTUO INTERCOMPANY (R$60.000) entrava como Receita (passivo, não receita). Fix: `classificacao_dre` → 'investimento'/'nao_operacional'; novo predicado exclui 'nao_operacional' de receitaBruta. Novo endpoint `getDREBankComparison` + card dinâmico no DRE explicando divergência DRE × caixa bancário em 3 cenários (azul/âmbar/verde). ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3952** — **DRE: CORREÇÃO DE CLASSIFICAÇÃO + CARD CONTEXTUAL DRE × CAIXA.** Fix: FINANCIAMENTOS → 'investimento'; MÚTUO INTERCOMPANY → 'nao_operacional'; predicado exclui nao_operacional de receitaBruta. Novo getDREBankComparison + card azul/âmbar/verde. ZERO DELETE.
 
 - **Rev. 3949** — **CONCILIAÇÃO: FIX DEDUP SECUNDÁRIO DESCARTA LANÇAMENTOS COM MESMO DOC.** Fase 1+2 receberam `($5::numeric IS NULL OR saldo_apos=$6)`. Saldo distinto = transação distinta. ZERO DELETE.
 

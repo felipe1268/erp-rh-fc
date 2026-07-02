@@ -15,6 +15,7 @@ import {
   Lightbulb, Activity, ArrowUpRight, ArrowDownRight, Minus, ShieldCheck,
   ChevronRight as ChevronRightIcon, Layers, ListTree, Calculator, Percent,
   ArrowLeft, Receipt, CheckCircle2, XCircle, Building2, Scale, FileDown,
+  Target, Zap,
 } from "lucide-react";
 
 type DRELinhaKey =
@@ -232,9 +233,10 @@ export default function FinanceiroDRE() {
   const [iaProgresso, setIaProgresso] = useState(0);
   const [drill, setDrill] = useState<DrillState | null>(null);
   const IA_FASES = [
-    { ate: 30, label: "Lendo os números do DRE" },
-    { ate: 60, label: "Comparando com benchmarks do setor" },
-    { ate: 85, label: "Calculando a nota de saúde financeira" },
+    { ate: 20, label: "Lendo os números do DRE" },
+    { ate: 45, label: "Calculando Pareto de custos" },
+    { ate: 65, label: "Comparando com benchmarks de empreitada" },
+    { ate: 85, label: "Elaborando plano de ação" },
     { ate: 101, label: "Redigindo o diagnóstico" },
   ];
   const iaFase = IA_FASES.find(f => iaProgresso < f.ate) ?? IA_FASES[IA_FASES.length - 1];
@@ -927,6 +929,128 @@ export default function FinanceiroDRE() {
                     </div>
                   )}
                 </div>
+
+                {/* Pareto de Custos */}
+                {analise.paretoCustos?.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                      <BarChart2 className="w-3.5 h-3.5 text-orange-500" /> Pareto de Custos — Top Ofensores
+                      <span className="ml-auto text-[10px] font-normal text-gray-400 normal-case tracking-normal">As barras mostram % do custo total; a coluna "% Rec." mostra o peso sobre a receita</span>
+                    </div>
+                    <div className="rounded-xl border border-gray-100 overflow-hidden">
+                      <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-4 py-2 bg-gray-50/80 border-b border-gray-100">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Conta</span>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 w-14 text-right">% Rec.</span>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 w-24 text-right hidden sm:block">Valor</span>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 w-14 text-right">Acum.</span>
+                      </div>
+                      {analise.paretoCustos.map((item: any, i: number) => {
+                        const catColor = item.categoria === "custo_obra" ? "#ef4444" : item.categoria === "despesa_fixa" ? "#f59e0b" : "#6366f1";
+                        const crossed80 = item.pctAcumulado >= 80 && (i === 0 || analise.paretoCustos[i - 1].pctAcumulado < 80);
+                        return (
+                          <div key={i}>
+                            {crossed80 && (
+                              <div className="px-4 py-1.5 bg-amber-50 border-y border-amber-100 text-[10px] font-semibold text-amber-700 flex items-center gap-1.5">
+                                <Zap className="w-3 h-3" /> 80% do custo total acumulado até aqui — foco nestas contas gera o maior retorno
+                              </div>
+                            )}
+                            <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-4 py-2.5 border-b border-gray-50 last:border-0 hover:bg-gray-50/40 transition-colors">
+                              <div className="flex flex-col gap-1.5 min-w-0">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: catColor }} />
+                                  <span className="text-xs font-medium text-gray-800 truncate">{item.conta}</span>
+                                </div>
+                                <div className="flex items-center gap-2 pr-1">
+                                  <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                                    <div
+                                      className="h-full rounded-full"
+                                      style={{ width: `${Math.min(100, item.pctCustoTotal)}%`, background: catColor, opacity: 0.85 }}
+                                    />
+                                  </div>
+                                  <span className="text-[10px] text-gray-400 w-8 text-right shrink-0">{item.pctCustoTotal.toFixed(1)}%</span>
+                                </div>
+                              </div>
+                              <span className="text-xs tabular-nums font-semibold text-gray-700 w-14 text-right self-center">{item.pctReceita.toFixed(1)}%</span>
+                              <span className="text-xs tabular-nums text-gray-500 w-24 text-right self-center hidden sm:block">{formatBRL(item.valor)}</span>
+                              <span className={`text-xs tabular-nums font-medium w-14 text-right self-center ${item.pctAcumulado >= 80 ? "text-amber-600" : "text-gray-400"}`}>
+                                {item.pctAcumulado.toFixed(0)}%
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="flex flex-wrap gap-4 mt-2 px-1">
+                      <span className="text-[10px] text-gray-400 flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500" /> Custo direto de obra</span>
+                      <span className="text-[10px] text-gray-400 flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-500" /> Despesa fixa / overhead</span>
+                      <span className="text-[10px] text-gray-400 flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-indigo-500" /> Despesa variável</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Plano de Ação */}
+                {analise.planoAcao?.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                      <Target className="w-3.5 h-3.5 text-orange-500" /> Plano de Ação
+                      <span className="ml-auto text-[10px] font-normal text-gray-400 normal-case tracking-normal">{analise.planoAcao.length} ações em ordem de prioridade</span>
+                    </div>
+                    <div className="space-y-2.5">
+                      {analise.planoAcao.map((item: any, i: number) => {
+                        const prazoMap: Record<string, { label: string; cls: string }> = {
+                          imediato: { label: "Imediato", cls: "bg-red-50 text-red-700 border-red-200" },
+                          "30d": { label: "30 dias", cls: "bg-orange-50 text-orange-700 border-orange-200" },
+                          "90d": { label: "90 dias", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+                          "180d": { label: "6 meses", cls: "bg-blue-50 text-blue-700 border-blue-200" },
+                        };
+                        const impactoCls: Record<string, string> = {
+                          alto: "bg-red-50 text-red-700 border-red-200",
+                          medio: "bg-amber-50 text-amber-700 border-amber-200",
+                          baixo: "bg-gray-50 text-gray-600 border-gray-200",
+                        };
+                        const prazo = prazoMap[item.prazo] ?? prazoMap["90d"];
+                        const probColor = item.probabilidadeEficacia >= 70 ? "#059669" : item.probabilidadeEficacia >= 50 ? "#d97706" : "#dc2626";
+                        return (
+                          <div key={i} className="rounded-xl border border-gray-100 p-3.5 hover:border-orange-100 transition-colors">
+                            <div className="flex items-start gap-3">
+                              <div
+                                className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-extrabold shrink-0 mt-0.5 text-white"
+                                style={{ background: NAVY }}
+                              >
+                                {item.prioridade}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                                  <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${prazo.cls}`}>
+                                    {prazo.label}
+                                  </span>
+                                  <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${impactoCls[item.impacto] ?? impactoCls.medio}`}>
+                                    Impacto {item.impacto}
+                                  </span>
+                                  {item.area && (
+                                    <span className="text-[10px] bg-gray-100 text-gray-600 rounded-full px-2 py-0.5 font-medium">{item.area}</span>
+                                  )}
+                                  <span
+                                    className="ml-auto text-[11px] font-bold tabular-nums"
+                                    style={{ color: probColor }}
+                                    title="Probabilidade de eficácia baseada em literatura setorial"
+                                  >
+                                    {item.probabilidadeEficacia}% eficácia
+                                  </span>
+                                </div>
+                                <p className="text-sm font-semibold text-gray-900 leading-snug">{item.acao}</p>
+                                {item.justificativa && (
+                                  <p className="text-xs text-gray-500 leading-relaxed mt-1">{item.justificativa}</p>
+                                )}
+                                <FonteChips ids={item.fontes} map={fontesMap} />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* Todas as fontes citadas */}
                 {analise.fontes?.length > 0 && (
