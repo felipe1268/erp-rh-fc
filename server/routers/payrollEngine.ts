@@ -4334,6 +4334,11 @@ export const payrollEngineRouter = router({
             atrasosMinutos,
             descontoAtrasosMinutos: (atrasosMinutos / 60) * valorHora,
             descontoAtrasosEscuro: escAtrasosValor,
+            // Rev. 3981 — Banco de Horas: quando ativo p/ este funcionário, o valor base de
+            // falta/atraso (mês corrente) NÃO é descontado em dinheiro — vira débito de minutos
+            // no banco de horas. Expondo os flags p/ a UI não exibir "desconto" enganoso.
+            usaBancoHorasAtrasoFalta,
+            minutosDebitoBancoHoras,
             // INSS
             inssPercentual: parseBRL(emp.inssPercentual || '0'),
             // VT

@@ -246,6 +246,7 @@ function MemorialCalculo({ campo, f }: { campo: CampoDesconto; f: any }) {
     const escVtUnit = escFaltasQtd > 0 ? (Number(m.descontoVtFaltasEscuro) || 0) / escFaltasQtd : 0;
     const vrDiarioMes = m.faltasQtdMes > 0 ? (Number(m.descontoVrFaltasMes) || 0) / m.faltasQtdMes : 0;
     const vtDiarioMes = m.faltasQtdMes > 0 ? (Number(m.descontoVtFaltasMes) || 0) / m.faltasQtdMes : 0;
+    const usaBanco = !!m.usaBancoHorasAtrasoFalta;
     return (<div className="text-xs space-y-1 max-h-[70vh] overflow-y-auto">
       <div className="font-semibold text-gray-700">Memorial de cálculo — Faltas / Atrasos</div>
       <div className="bg-gray-50 rounded px-2 py-1 text-[11px]">
@@ -258,13 +259,26 @@ function MemorialCalculo({ campo, f }: { campo: CampoDesconto; f: any }) {
         )}
       </div>
 
+      {usaBanco && (
+        <div className="border-t pt-1 mt-1 bg-indigo-50 border border-indigo-200 rounded px-2 py-1">
+          <div className="font-semibold text-indigo-800">Banco de Horas ativo para este funcionário</div>
+          <div className="text-[11px] text-indigo-700">
+            Falta/atraso NÃO gera desconto em dinheiro — foi lançado como <b>débito de {m.minutosDebitoBancoHoras || 0} min</b> no saldo do Banco de Horas.
+            O valor abaixo é só referência (o que seria descontado sem o banco de horas).
+          </div>
+        </div>
+      )}
+
       <div className="border-t pt-1 mt-1">
         <div className="font-semibold text-gray-700">Faltas no mês corrente</div>
         <div className="pl-2">Qtd: <b>{m.faltasQtdMes}</b> dia(s)</div>
         {Array.isArray(m.faltasMesDias) && m.faltasMesDias.length > 0 && (
           <div className="pl-2 text-[10px] text-muted-foreground">Dias: {m.faltasMesDias.join(', ')}</div>
         )}
-        <div className="pl-2 font-mono text-[11px]">{m.faltasQtdMes} × {fmt(valorDia)} = <b>{fmt(m.descontoFaltasMes)}</b></div>
+        <div className={`pl-2 font-mono text-[11px] ${usaBanco ? 'text-muted-foreground line-through' : ''}`}>
+          {m.faltasQtdMes} × {fmt(valorDia)} = <b>{fmt(m.descontoFaltasMes)}</b>
+          {usaBanco && <span className="text-[10px] ml-1 italic no-underline">(revertido p/ banco de horas)</span>}
+        </div>
         {m.descontoVrFaltasMes > 0 && (
           <div className="pl-2 font-mono text-[11px]">+ VR: {m.faltasQtdMes} × {fmt(vrDiarioMes)} = <b>{fmt(m.descontoVrFaltasMes)}</b></div>
         )}
@@ -275,7 +289,10 @@ function MemorialCalculo({ campo, f }: { campo: CampoDesconto; f: any }) {
         {Array.isArray(m.atrasosMesDias) && m.atrasosMesDias.length > 0 && (
           <div className="pl-2 text-[10px] text-muted-foreground">Dias: {m.atrasosMesDias.join(', ')}</div>
         )}
-        <div className="pl-2 font-mono text-[11px]">({m.atrasosMinutos} ÷ 60) × {fmt(vh)} = <b>{fmt(m.descontoAtrasosMinutos)}</b></div>
+        <div className={`pl-2 font-mono text-[11px] ${usaBanco ? 'text-muted-foreground line-through' : ''}`}>
+          ({m.atrasosMinutos} ÷ 60) × {fmt(vh)} = <b>{fmt(m.descontoAtrasosMinutos)}</b>
+          {usaBanco && <span className="text-[10px] ml-1 italic no-underline">(revertido p/ banco de horas)</span>}
+        </div>
       </div>
 
       {Number(m.dsrFaltaValor) > 0 && (
@@ -319,11 +336,16 @@ function MemorialCalculo({ campo, f }: { campo: CampoDesconto; f: any }) {
 
       <div className="border-t pt-1 mt-1 bg-blue-50 rounded px-2 py-1">
         <div className="font-mono text-[11px] text-gray-700">
-          {fmt(m.descontoFaltasMes)} + {fmt(m.descontoVrFaltasMes)} + {fmt(m.descontoVtFaltasMes)} + {fmt(m.descontoAtrasosMinutos)}
+          {usaBanco ? `${fmt(0)} (banco de horas)` : fmt(m.descontoFaltasMes)} + {fmt(m.descontoVrFaltasMes)} + {fmt(m.descontoVtFaltasMes)} + {usaBanco ? `${fmt(0)} (banco de horas)` : fmt(m.descontoAtrasosMinutos)}
           {Number(m.dsrFaltaValor) > 0 && m.dsrFaltaAplicado && ` + ${fmt(m.dsrFaltaValor)}`}
           {' + '}{fmt(m.descontoFaltasEscuro)} + {fmt(m.descontoVrFaltasEscuro)} + {fmt(m.descontoVtFaltasEscuro)} + {fmt(m.descontoAtrasosEscuro)}
         </div>
         <div className="font-bold text-blue-900">Total Faltas: {fmt(calc.faltas)}</div>
+        {usaBanco && (
+          <div className="text-[10px] text-indigo-700 mt-0.5">
+            (Falta/atraso do mês corrente não entram aqui — {m.minutosDebitoBancoHoras || 0} min foram debitados no Banco de Horas)
+          </div>
+        )}
       </div>
     </div>);
   }
