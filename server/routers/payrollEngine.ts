@@ -3691,6 +3691,19 @@ export const payrollEngineRouter = router({
                 const actualMins = parseTime(horasTrabalhadas) || 0;
                 const heMins = Math.max(0, actualMins - expectedMins);
                 horasExtras = heMins > 0 ? minutesToHHMM(heMins) : '0:00';
+
+                // Rev. 3973 — Turno incompleto (saída antecipada / não voltou do intervalo):
+                // se o colaborador registrou batidas mas trabalhou MENOS que a jornada,
+                // o déficit total substitui (ou complementa) o minutosAtraso de entrada.
+                // Math.max evita dupla contagem: deficit >= atraso de entrada quando o turno
+                // é incompleto (ambos medem o mesmo tempo não trabalhado).
+                if (numBatidas > 0 && tipoDia === 'util' && isFalta === 0 && actualMins < expectedMins) {
+                  const deficit = expectedMins - actualMins;
+                  if (deficit > criteria.pontoToleranciaLegal) {
+                    if (!isAtraso) { isAtraso = 1; autoAtrasos++; }
+                    minutosAtraso = Math.max(minutosAtraso, deficit);
+                  }
+                }
               } else {
                 if (tipoDia === 'util') { isFalta = 1; autoFaltas++; }
               }

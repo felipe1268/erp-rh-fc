@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3973** — **AUTO-PONTO: TURNO INCOMPLETO COMPUTA DÉFICIT TOTAL COMO ATRASO.** Loop do `simulaFolha` computava `minutosAtraso` apenas pelo atraso de entrada, ignorando o déficit quando o colaborador saiu antes de completar a jornada (ex: 5h02 de 9h → 3h58 invisíveis). Fix: após cálculo de HE, `if actualMins < expectedMins → minutosAtraso = max(minutosAtraso, deficit)`. Guard `isFalta===0` evita dupla contagem. ZERO DELETE.
+
 - **Rev. 3972** — **AUTO-PONTO: FÉRIAS NÃO GERAM FALTA NO FECHAMENTO DA FOLHA.** Loop do `simulaFolha` marcava `isFalta=1` em todos os dias úteis sem `time_record`, incluindo dias de gozo de férias. Corrigido: pré-carrega `vacation_periods` que intersectam o período do ponto; dias de férias recebem `tipoDia='ferias'`, bloqueando os guards `if (tipoDia==='util') isFalta=1`. Padrão idêntico ao da fase do escuro. ZERO DELETE.
 
-- **Rev. 3971** — **CONVÊNIOS: FIX COLUNA VAZIA NA FOLHA (`competencia_desconto` NULL).** `aprovar` mutation nunca gravava `competenciaDesconto` no update — agora persiste `competenciaSelecionada` do RH. ColFix v3971 backfilla todos os aprovados antigos com `competencia_desconto IS NULL` pela regra dia-15/16. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3971** — **CONVÊNIOS: FIX COLUNA VAZIA NA FOLHA (`competencia_desconto` NULL).** `aprovar` mutation nunca gravava `competenciaDesconto` no update — agora persiste `competenciaSelecionada` do RH. ColFix v3971 backfilla todos os aprovados antigos com `competencia_desconto IS NULL` pela regra dia-15/16. ZERO DELETE.
 
 - **Rev. 3970** — **REFIS: FIX CARDS INFERIORES PREVISTO/REALIZADO (DELTA → ACUMULADO).** `rPrevSem`/`rRealSem` substituídos por `rPrev`/`rReal` (acumulados); barra de progresso ajustada; legenda → "Snapshot MSP". ZERO DELETE.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3968** — **VALE ALIMENTAÇÃO: SELETOR PERÍODO → PADRÃO WHITE-CARD.** `MonthSelector` → `PeriodSelectorCard` nas 3 abas (lancamento/por_obra/alertas_faltas); `mesAno` → `ano`+`mes`+`mesStr`; todas as queries e mutations atualizadas. ZERO DELETE.
 
 - **Rev. 3967** — **EFETIVO OBRA: FIX ÚLTIMO GRUPO CORTADO NA TABELA EQUIPE.** `p-4` → `p-4 pb-16` no container scroll da FullScreenDialog; último grupo de funções não ficava mais visível. ZERO DELETE.
-
-- **Rev. 3966** — **EFETIVO OBRA: LIGHTBOX DE FOTO AO CLICAR NA TABELA "EQUIPE — {OBRA}".** `EmpAvatar` recebe `onClick`; Dialog shadcn 256×256 abre ao clicar na miniatura; iniciais sem foto não são clicáveis. ZERO DELETE.
 
 ### Histórico completo
 

@@ -1,4 +1,23 @@
 /**
+ * Rev. 3973 — **AUTO-PONTO: TURNO INCOMPLETO COMPUTA DÉFICIT TOTAL COMO ATRASO.**
+ *
+ * CAUSA-RAIZ: o loop do auto-ponto (`SimPag simulaFolha`) computava `minutosAtraso`
+ * APENAS pelo atraso de entrada (ex: 20 min), mas ignorava o déficit de horas quando o
+ * colaborador registrou batidas e saiu antes de completar a jornada (ex: 5h02 de 9h →
+ * 3h58 remanescentes = invisível no card ATRASOS).
+ *
+ * CORREÇÃO (`server/routers/payrollEngine.ts`):
+ *   - Após o cálculo de HE, verifica `actualMins < expectedMins` com `numBatidas > 0`.
+ *   - Se o déficit (`expectedMins - actualMins`) > `pontoToleranciaLegal` →
+ *     `minutosAtraso = Math.max(minutosAtraso, deficit)`.
+ *   - `Math.max` evita dupla contagem: o déficit total é sempre ≥ o atraso de entrada
+ *     isolado (ambos medem o mesmo tempo não trabalhado no caso de turno incompleto).
+ *   - Guard `isFalta === 0`: dias já marcados como falta não contam atraso adicional.
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3972 — **AUTO-PONTO: FÉRIAS NÃO GERAM FALTA NO FECHAMENTO DA FOLHA.**
  *
  * CAUSA-RAIZ: o loop do auto-ponto (`SimPag simulaFolha`) iterava todos os dias úteis
