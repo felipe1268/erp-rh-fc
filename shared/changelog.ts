@@ -1,4 +1,24 @@
 /**
+ * Rev. 3968 — **VALE ALIMENTAÇÃO: SELETOR PERÍODO → PADRÃO WHITE-CARD (PeriodSelectorCard).**
+ *
+ * PEDIDO: substituir o MonthSelector antigo (`< Julho 2026 >`) pelo padrão ERP
+ * white-card (ano nav + 12 pills mensais) nas 3 abas que tinham seletor de período.
+ *
+ * ALTERAÇÕES (`client/src/pages/ValeAlimentacao.tsx`):
+ *   - Import: `MonthSelector` → `PeriodSelectorCard`.
+ *   - Estado: `mesAno: string` → `ano: number` + `mes: number`; derivado `mesStr`.
+ *   - `mesLabel` usa `ano`/`mes` diretamente (sem `.split()`).
+ *   - Todas as 3 queries e 7 mutations que usavam `mesReferencia: mesAno` agora
+ *     usam `mesReferencia: mesStr`.
+ *   - `mesAno.split('-').map(Number)` na aba Alertas substituído por `[ano, mes]`.
+ *   - Aba "lancamento": PeriodSelectorCard em linha própria, botões de ação mantidos
+ *     alinhados à direita abaixo.
+ *   - Aba "por_obra": PeriodSelectorCard no topo da aba, título/descrição abaixo.
+ *   - Aba "alertas_faltas": PeriodSelectorCard antes do filtro de status.
+ *
+ * ZERO DELETE.
+ */
+/**
  * Rev. 3967 — **EFETIVO OBRA: FIX ÚLTIMO GRUPO CORTADO NA TABELA EQUIPE.**
  *
  * CAUSA: container `<div className="space-y-6 p-4 equipe-print-area">` dentro do

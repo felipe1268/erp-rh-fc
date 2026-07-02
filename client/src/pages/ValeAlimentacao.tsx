@@ -1,5 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
-import MonthSelector from "@/components/MonthSelector";
+import PeriodSelectorCard from "@/components/PeriodSelectorCard";
 import RaioXFuncionario from "@/components/RaioXFuncionario";
 import PrintActions from "@/components/PrintActions";
 import PrintHeader from "@/components/PrintHeader";
@@ -139,7 +139,9 @@ export default function ValeAlimentacao() {
   const companyId = selectedCompanyId ? parseInt(selectedCompanyId, 10) || 0 : 0;
   const companyIds = getCompanyIdsForQuery();
   const now = new Date();
-  const [mesAno, setMesAno] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
+  const [ano, setAno] = useState(now.getFullYear());
+  const [mes, setMes] = useState(now.getMonth() + 1);
+  const mesStr = `${ano}-${String(mes).padStart(2, "0")}`;
   const [tab, setTab] = useState<TabKey>("lancamento");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -163,8 +165,8 @@ export default function ValeAlimentacao() {
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Queries
-  const statsQ = trpc.valeAlimentacao.getStats.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: !!companyId || companyIds?.length > 0 });
-  const lancamentosQ = trpc.valeAlimentacao.listLancamentos.useQuery({ companyId, companyIds, mesReferencia: mesAno }, { enabled: !!companyId || companyIds?.length > 0 });
+  const statsQ = trpc.valeAlimentacao.getStats.useQuery({ companyId, companyIds, mesReferencia: mesStr }, { enabled: !!companyId || companyIds?.length > 0 });
+  const lancamentosQ = trpc.valeAlimentacao.listLancamentos.useQuery({ companyId, companyIds, mesReferencia: mesStr }, { enabled: !!companyId || companyIds?.length > 0 });
   const configsQ = trpc.avisoPrevio.avisoPrevio.listMealBenefitConfigs.useQuery({ companyId, companyIds }, { enabled: (!!companyId || companyIds?.length > 0) && tab === "configuracao" });
   const obrasQ = trpc.obras.listActive.useQuery({ companyId, companyIds }, { enabled: (!!companyId || companyIds?.length > 0) && tab === "configuracao" });
   const histQ = trpc.valeAlimentacao.historicoColaborador.useQuery(
@@ -176,7 +178,7 @@ export default function ValeAlimentacao() {
     { enabled: (!!companyId || companyIds?.length > 0) && !!histDialogEmployeeId }
   );
   const employeesQ = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true }, { enabled: (!!companyId || companyIds?.length > 0) && tab === "historico" });
-  const alertasQ = trpc.valeAlimentacao.listarAlertasFaltas.useQuery({ companyId, companyIds, mesReferencia: mesAno, status: alertaFilter }, { enabled: (!!companyId || companyIds?.length > 0) && tab === "alertas_faltas" });
+  const alertasQ = trpc.valeAlimentacao.listarAlertasFaltas.useQuery({ companyId, companyIds, mesReferencia: mesStr, status: alertaFilter }, { enabled: (!!companyId || companyIds?.length > 0) && tab === "alertas_faltas" });
 
   // Mutations
   const gerarMut = trpc.valeAlimentacao.gerarMes.useMutation({
@@ -370,9 +372,8 @@ export default function ValeAlimentacao() {
   }, [lancamentos]);
 
   const mesLabel = (() => {
-    const [y, m] = mesAno.split("-");
     const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-    return `${MESES[parseInt(m) - 1]} ${y}`;
+    return `${MESES[mes - 1]} ${ano}`;
   })();
 
   return (
@@ -417,9 +418,10 @@ export default function ValeAlimentacao() {
         {/* ===== ABA LANÇAMENTO MENSAL ===== */}
         {tab === "lancamento" && (
           <div className="space-y-4">
-            {/* Month selector + Actions */}
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <MonthSelector value={mesAno} onChange={setMesAno} />
+            {/* Period selector padrão white-card */}
+            <PeriodSelectorCard ano={ano} mes={mes} onAno={setAno} onMes={setMes} />
+            {/* Actions */}
+            <div className="flex items-center gap-2 flex-wrap justify-end">
               <div className="flex items-center gap-2 flex-wrap">
                 {lancamentos.length === 0 ? (
                   <Button className="bg-orange-600 hover:bg-orange-700 text-white gap-2" onClick={() => setShowGerarDialog(true)}>
@@ -433,7 +435,7 @@ export default function ValeAlimentacao() {
                         onConfirm: () => {
                           const totalFuncs = lancamentos.length || 50;
                           startProgress(totalFuncs);
-                          regerarMut.mutate({ companyId, companyIds, mesReferencia: mesAno, diasUteis });
+                          regerarMut.mutate({ companyId, companyIds, mesReferencia: mesStr, diasUteis });
                         }
                       });
                     }} disabled={regerarMut.isPending || !!progressState}>
@@ -443,7 +445,7 @@ export default function ValeAlimentacao() {
                       <Button size="sm" className="gap-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white" onClick={() => {
                         setConfirmAction({
                           msg: `Aprovar todos os ${stats.pendentes} lançamentos pendentes?`,
-                          onConfirm: () => aprovarMut.mutate({ companyId, companyIds, mesReferencia: mesAno })
+                          onConfirm: () => aprovarMut.mutate({ companyId, companyIds, mesReferencia: mesStr })
                         });
                       }} disabled={aprovarMut.isPending}>
                         <CheckCircle className="h-3.5 w-3.5" /> Aprovar Todos ({stats.pendentes})
@@ -452,7 +454,7 @@ export default function ValeAlimentacao() {
                     {stats && stats.aprovados > 0 && (
                       <Button size="sm" className="gap-1.5 text-xs bg-green-600 hover:bg-green-700 text-white" onClick={() => {
                         if (confirm(`Marcar ${stats.aprovados} lançamentos como pagos?`)) {
-                          pagarMut.mutate({ companyId, companyIds, mesReferencia: mesAno });
+                          pagarMut.mutate({ companyId, companyIds, mesReferencia: mesStr });
                         }
                       }} disabled={pagarMut.isPending}>
                         <DollarSign className="h-3.5 w-3.5" /> Marcar Pagos ({stats.aprovados})
@@ -461,7 +463,7 @@ export default function ValeAlimentacao() {
                     {stats && stats.pagos > 0 && (
                       <Button size="sm" variant="outline" className="gap-1.5 text-xs text-amber-700 border-amber-300 hover:bg-amber-50" onClick={() => {
                         if (confirm(`Reverter ${stats.pagos} lançamento(s) de 'Pago' para 'Aprovado'?`)) {
-                          reverterPagoMut.mutate({ companyId, companyIds, mesReferencia: mesAno });
+                          reverterPagoMut.mutate({ companyId, companyIds, mesReferencia: mesStr });
                         }
                       }} disabled={reverterPagoMut.isPending}>
                         <RefreshCw className="h-3.5 w-3.5" /> Reverter Pagos ({stats.pagos})
@@ -721,7 +723,7 @@ export default function ValeAlimentacao() {
                                       <Pencil className="h-3.5 w-3.5" />
                                     </Button>
                                     <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-600" title="Aprovar" onClick={() => {
-                                      aprovarMut.mutate({ companyId, companyIds, mesReferencia: mesAno, ids: [l.id] });
+                                      aprovarMut.mutate({ companyId, companyIds, mesReferencia: mesStr, ids: [l.id] });
                                     }}>
                                       <CheckCircle className="h-3.5 w-3.5" />
                                     </Button>
@@ -734,7 +736,7 @@ export default function ValeAlimentacao() {
                                 )}
                                 {l.status === "aprovado" && (
                                   <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600" title="Marcar como pago" onClick={() => {
-                                    pagarMut.mutate({ companyId, companyIds, mesReferencia: mesAno, ids: [l.id] });
+                                    pagarMut.mutate({ companyId, companyIds, mesReferencia: mesStr, ids: [l.id] });
                                   }}>
                                     <DollarSign className="h-3.5 w-3.5" />
                                   </Button>
@@ -742,7 +744,7 @@ export default function ValeAlimentacao() {
                                 {l.status === "pago" && (
                                   <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600" title="Reverter para Aprovado" onClick={() => {
                                     if (confirm("Reverter este lançamento de 'Pago' para 'Aprovado'?")) {
-                                      reverterPagoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, ids: [l.id] });
+                                      reverterPagoMut.mutate({ companyId, companyIds, mesReferencia: mesStr, ids: [l.id] });
                                     }
                                   }}>
                                     <RefreshCw className="h-3.5 w-3.5" />
@@ -883,12 +885,10 @@ export default function ValeAlimentacao() {
         {/* ===== ABA POR OBRA ===== */}
         {tab === "por_obra" && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold">Valores por Obra — {mesLabel}</h2>
-                <p className="text-sm text-muted-foreground">Resumo dos benefícios agrupados por obra/centro de custo.</p>
-              </div>
-              <MonthSelector value={mesAno} onChange={setMesAno} />
+            <PeriodSelectorCard ano={ano} mes={mes} onAno={setAno} onMes={setMes} />
+            <div>
+              <h2 className="text-lg font-semibold">Valores por Obra — {mesLabel}</h2>
+              <p className="text-sm text-muted-foreground">Resumo dos benefícios agrupados por obra/centro de custo.</p>
             </div>
 
             {lancamentosQ.isLoading ? (
@@ -954,7 +954,7 @@ export default function ValeAlimentacao() {
                   Alertas de Faltas — {mesLabel}
                 </h2>
                 {(() => {
-                  const [a, m] = mesAno.split('-').map(Number);
+                  const [a, m] = [ano, mes];
                   const iniM = m - 1 <= 0 ? 12 : m - 1;
                   const iniA = m - 1 <= 0 ? a - 1 : a;
                   const mesesNome = ['', 'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -965,8 +965,8 @@ export default function ValeAlimentacao() {
                   );
                 })()}
               </div>
+              <PeriodSelectorCard ano={ano} mes={mes} onAno={setAno} onMes={setMes} />
               <div className="flex items-center gap-2">
-                <MonthSelector value={mesAno} onChange={setMesAno} />
                 <Select value={alertaFilter} onValueChange={(v) => setAlertaFilter(v as any)}>
                   <SelectTrigger className="w-[150px]">
                     <SelectValue />
@@ -1533,7 +1533,7 @@ export default function ValeAlimentacao() {
             <Button variant="outline" onClick={() => setShowGerarDialog(false)}>Cancelar</Button>
             <Button className="bg-orange-600 hover:bg-orange-700 text-white" disabled={gerarMut.isPending || !!progressState} onClick={() => {
               startProgress(50);
-              gerarMut.mutate({ companyId, companyIds, mesReferencia: mesAno, diasUteis });
+              gerarMut.mutate({ companyId, companyIds, mesReferencia: mesStr, diasUteis });
             }}>
               {gerarMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Gerando...</> : "Gerar Lançamentos"}
             </Button>
