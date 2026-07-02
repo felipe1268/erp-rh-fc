@@ -369,6 +369,28 @@ img, video {
     page-break-inside: auto;
   }
 
+  /* 5b. Rev. 3980 — DialogContent (shadcn/Radix) usa `position: fixed`      */
+  /*     + `max-h-[92dvh]` + `overflow-y-auto` (inclusive via `style`        */
+  /*     inline em variantes fullscreen/resizable). Elemento `fixed` na      */
+  /*     impressão fica PRESO à primeira página: qualquer conteúdo que       */
+  /*     ultrapasse a altura da janela é cortado (só a "página 1" aparece,   */
+  /*     ex.: relatório de Dissídio com muitos funcionários). Quando o       */
+  /*     dialog contém `.print-only`, soltamos ele do posicionamento fixo    */
+  /*     para fluir normalmente pelo documento e permitir múltiplas páginas. */
+  [data-slot="dialog-content"]:has(.print-only) {
+    position: static !important;
+    top: auto !important;
+    left: auto !important;
+    transform: none !important;
+    max-height: none !important;
+    height: auto !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
   /* 6. Ocultar sidebar, header, botões de ação e elementos de UI */
   [data-sidebar],
   .sidebar-wrapper,
