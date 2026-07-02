@@ -1,4 +1,36 @@
 /**
+ * Rev. 3984 — **FOLHA: PJ NUNCA NA FOLHA + ALERTA "PAGAR OU NÃO?" P/ AVISO PRÉVIO ENCERRANDO NO MÊS.**
+ *
+ * PEDIDO: (1) funcionários PJ jamais podem aparecer na Folha de Pagamento principal; (2) funcionários
+ * desligados/em aviso prévio (ex.: KELLEN, MYRIELE) cujo aviso ENCERRA dentro do mês de referência
+ * entravam silenciosamente na folha — precisa virar um alerta de decisão "pagar ou não?" (espelhando
+ * o padrão já usado no Vale/Alimentação), não inclusão automática.
+ *
+ * INVESTIGAÇÃO PJ: `simularPagamento` (payrollEngine.ts) já filtra `tipoContrato='CLT'` estritamente —
+ * confirmado via Neon que nenhum PJ/Sócio tem `payroll_payments` hoje. O vazamento real estava em
+ * `custosPorObra` (folhaPagamento.ts), relatório de distribuição por obra que lê `folhaItens`
+ * (importado de PDF) e cruzava com `employees` SEM checar `tipoContrato` — agora filtra só CLT antes
+ * de montar o resumo por obra.
+ *
+ * IMPLEMENTAÇÃO (aviso prévio): nova tabela `payroll_folha_decisoes` (companyId/employeeId/
+ * mesReferencia/decisao 'pagar'|'nao_pagar'/motivo/decididoPor) — decisão sobrevive à regeneração do
+ * snapshot porque `payroll_payments` é recriada a cada simulação. Em `simularPagamento`: monta
+ * `avisoEncerraNoMesMap` (termination_notices com `dataFim` dentro do mês, não cancelado/indenizado) e
+ * `decisoesAvisoMap` (última decisão por funcionário). No loop principal: `decisao='nao_pagar'` pula o
+ * funcionário inteiro (fora da folha e dos totais); sem decisão ainda → `alertaAvisoPendente=true`,
+ * `status='alerta_aviso_pendente'`, EXCLUÍDO dos totais (grandTotalBruto/Descontos/Liquido) até
+ * decidir. Payload de retorno ganha `alertasAvisoEncerrado` (lista pendente) e
+ * `excluidosPorDecisaoAviso`. Nova mutation `decidirFolhaAviso` (espelha `decidirVale`) grava a
+ * decisão; próxima simulação já respeita.
+ *
+ * FRONTEND (`FolhaPagamento.tsx`): novo Card amarelo "Aviso Prévio Encerrando no Mês — Decisão
+ * Necessária" (mesmo padrão visual do alerta de Vale) com botões Pagar/Não Pagar por linha + ações em
+ * lote "Pagar Todos"/"Excluir Todos", chamando `decidirFolhaAviso` e dando refetch em `getPeriod`.
+ *
+ * ZERO DELETE · ZERO ALTER (tabela e colunas 100% aditivas).
+ */
+
+/**
  * Rev. 3983 — **BANCO DE HORAS: DSR PERDIDO TAMBÉM VIRA DÉBITO DE HORAS (SEPARADO DE ATRASO/FALTA).**
  *
  * PEDIDO: a Rev. 3977 já redirecionava atraso/falta para débito no banco de horas quando a empresa

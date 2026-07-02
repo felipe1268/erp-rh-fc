@@ -4718,7 +4718,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v3977-2026-07-02-banco-horas-excecao";
+    const COLFIX_VERSION = "v3984-2026-07-02-folha-decisao-aviso";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -6207,6 +6207,27 @@ Regras:
         await _db3977.$client.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS banco_horas_excecao smallint NOT NULL DEFAULT 0`);
         console.log("[ColFix Rev.3977] employees: banco_horas_excecao garantida.");
       } catch (e: any) { console.warn("[ColFix Rev.3977] employees banco_horas_excecao falhou (não-fatal):", e?.message ?? e); }
+
+      // Rev. 3984 — Folha: decisão "pagar ou não?" p/ aviso prévio que encerra no mês
+      try {
+        const _db3984 = (await getDb())!;
+        await _db3984.$client.query(`
+          CREATE TABLE IF NOT EXISTS payroll_folha_decisoes (
+            id SERIAL PRIMARY KEY,
+            "companyId" integer NOT NULL,
+            "employeeId" integer NOT NULL,
+            "mesReferencia" varchar(7) NOT NULL,
+            decisao varchar(20) NOT NULL,
+            motivo varchar(50) DEFAULT 'aviso_encerrado_no_mes',
+            "decididoPor" varchar(255),
+            "decididoEm" timestamp DEFAULT now(),
+            "createdAt" timestamp NOT NULL DEFAULT now()
+          )
+        `);
+        await _db3984.$client.query(`CREATE INDEX IF NOT EXISTS pfd_company_mes ON payroll_folha_decisoes ("companyId", "mesReferencia")`);
+        await _db3984.$client.query(`CREATE INDEX IF NOT EXISTS pfd_employee_mes ON payroll_folha_decisoes ("employeeId", "mesReferencia")`);
+        console.log("[ColFix Rev.3984] payroll_folha_decisoes: tabela garantida.");
+      } catch (e: any) { console.warn("[ColFix Rev.3984] payroll_folha_decisoes falhou (não-fatal):", e?.message ?? e); }
 
       // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos
       import("../services/startupCache").then(({ setCache }) =>

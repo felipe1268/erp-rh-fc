@@ -4967,6 +4967,25 @@ export const payrollPayments = pgTable("payroll_payments", {
         index("ppay_status").on(table.status),
 ]);
 
+// Rev. 3984 — Decisão "pagar ou não?" p/ funcionários cujo aviso prévio
+// ENCERRA dentro do mês de referência (espelha o padrão de payroll_advances p/
+// vale). Tabela dedicada (não payroll_payments, que é DELETE+INSERT a cada
+// recálculo) para persistir a decisão do RH entre simulações.
+export const payrollFolhaDecisoes = pgTable("payroll_folha_decisoes", {
+        id: serial().notNull(),
+        companyId: integer().notNull(),
+        employeeId: integer().notNull(),
+        mesReferencia: varchar({ length: 7 }).notNull(),
+        decisao: varchar({ length: 20 }).notNull(), // 'pagar' | 'nao_pagar'
+        motivo: varchar({ length: 50 }).default('aviso_encerrado_no_mes'),
+        decididoPor: varchar({ length: 255 }),
+        decididoEm: timestamp({ mode: 'string' }).defaultNow(),
+        createdAt: timestamp({ mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+        index("pfd_company_mes").on(table.companyId, table.mesReferencia),
+        index("pfd_employee_mes").on(table.employeeId, table.mesReferencia),
+]);
+
 // Rev. 3293 — Ledger de ARREDONDAMENTO p/ múltiplos de R$ 1 com CARRY-FORWARD.
 // Cada evento de pagamento (vale OU folha mensal) paga o real inteiro mais próximo
 // do líquido exato; o residual (±centavos) é o SALDO que carrega p/ o próximo evento

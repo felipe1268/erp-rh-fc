@@ -1696,11 +1696,16 @@ export const folhaPagamentoRouter = router({
       const itens = await db.select().from(folhaItens)
         .where(eq(folhaItens.folhaLancamentoId, input.folhaLancamentoId));
 
-      const empIds = itens.filter(i => i.employeeId).map(i => i.employeeId!);
-      if (empIds.length === 0) return { obrasResumo: [], semObra: null, totalGeral: "0,00" };
+      const empIdsRaw = itens.filter(i => i.employeeId).map(i => i.employeeId!);
+      if (empIdsRaw.length === 0) return { obrasResumo: [], semObra: null, totalGeral: "0,00" };
 
-      // Get employees
-      const emps = await db.select().from(employees).where(inArray(employees.id, empIds));
+      // Get employees — Rev. 3984: PJ/Sócio/estagiário NUNCA entram na folha
+      // principal (só CLT). `folhaItens` vem de import de PDF sem esse filtro,
+      // então aplicamos aqui explicitamente.
+      const empsRaw = await db.select().from(employees).where(inArray(employees.id, empIdsRaw));
+      const emps = empsRaw.filter(e => (e as any).tipoContrato === "CLT");
+      const empIds = emps.map(e => e.id);
+      if (empIds.length === 0) return { obrasResumo: [], semObra: null, totalGeral: "0,00" };
       const empMap = new Map(emps.map(e => [e.id, e]));
 
       // Get time records for the month

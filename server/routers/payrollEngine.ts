@@ -2995,6 +2995,42 @@ export const payrollEngineRouter = router({
       return { message: "Vale revertido com sucesso" };
     }),
 
+  // Rev. 3984 — decisão "pagar ou não?" para funcionários cujo aviso prévio
+  // ENCERRA dentro do mês de referência (espelha decidirVale). Grava em tabela
+  // dedicada (payroll_folha_decisoes) porque payroll_payments é regenerada a
+  // cada simulação; a decisão é reaplicada automaticamente na próxima chamada
+  // de simularPagamento.
+  decidirFolhaAviso: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      companyIds: z.array(z.number()).optional(),
+      mesReferencia: z.string(),
+      decisoes: z.array(z.object({
+        employeeId: z.number(),
+        pagar: z.boolean(),
+      })),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const decididoPorNome = ctx.user.name || "Usuário";
+      let aprovados = 0;
+      let rejeitados = 0;
+      for (const decisao of input.decisoes) {
+        const decisaoStr = decisao.pagar ? 'pagar' : 'nao_pagar';
+        await db.execute(sql`
+          INSERT INTO payroll_folha_decisoes ("companyId", "employeeId", "mesReferencia", decisao, motivo, "decididoPor")
+          VALUES (${input.companyId}, ${decisao.employeeId}, ${input.mesReferencia}, ${decisaoStr}, 'aviso_encerrado_no_mes', ${decididoPorNome})
+        `);
+        if (decisao.pagar) aprovados++; else rejeitados++;
+      }
+      return {
+        aprovados,
+        rejeitados,
+        message: `Decisão registrada: ${aprovados} liberado(s) para pagamento, ${rejeitados} excluído(s) da folha. Rode a simulação novamente para atualizar os totais.`,
+      };
+    }),
+
   editarValorVale: protectedProcedure
     .input(z.object({
       companyId: z.number(),
@@ -3456,6 +3492,39 @@ export const payrollEngineRouter = router({
       const contaEmpresaMap = new Map(contasEmpresa.map((c: any) => [c.id, c]));
 
       console.log(`[SimPag DIAG] mesRef=${input.mesReferencia}, companyId=${input.companyId}, allCompanyIds=[${allCompanyIds.join(',')}], empList=${empList.length}`);
+
+      // Rev. 3984 — Aviso prévio que ENCERRA dentro do mês de referência (dataFim
+      // caindo em [primeiroDia, ultimoDia], não só sobrepondo) exige decisão explícita
+      // "pagar ou não?" do RH antes de entrar normalmente na folha — espelha o padrão
+      // de alerta já usado no Vale. Diferente do filtro de inclusão no empList acima
+      // (que aceita QUALQUER sobreposição), aqui restringimos ao término efetivo no mês.
+      const avisoEncerraNoMesRows = ((await db.execute(sql`
+        SELECT tn."employeeId", tn."dataFim"
+        FROM termination_notices tn
+        WHERE tn."deletedAt" IS NULL
+          AND tn.status NOT IN ('cancelado')
+          AND tn.tipo NOT LIKE '%indenizado%'
+          AND tn."dataFim" >= ${primeiroDiaMesAviso}::date
+          AND tn."dataFim" <= ${ultimoDiaMesAviso}::date
+      `)) as any).rows || [];
+      const avisoEncerraNoMesMap = new Map<number, string>();
+      for (const r of avisoEncerraNoMesRows as any[]) {
+        avisoEncerraNoMesMap.set(Number(r.employeeId), r.dataFim);
+      }
+
+      // Decisões já registradas (persistem entre recálculos, já que payroll_payments
+      // é DELETE+INSERT a cada simulação).
+      const decisoesAvisoRows = ((await db.execute(sql`
+        SELECT DISTINCT ON ("employeeId") "employeeId", decisao
+        FROM payroll_folha_decisoes
+        WHERE "companyId" IN (${allCompanyIdsSql}) AND "mesReferencia" = ${input.mesReferencia}
+        ORDER BY "employeeId", "decididoEm" DESC
+      `)) as any).rows || [];
+      const decisoesAvisoMap = new Map<number, string>();
+      for (const r of decisoesAvisoRows as any[]) {
+        decisoesAvisoMap.set(Number(r.employeeId), r.decisao);
+      }
+      const excluidosPorDecisaoAviso: { employeeId: number; nome: string }[] = [];
 
       // Get advances for this month
       const advRows = ((await db.execute(sql`
@@ -4090,6 +4159,19 @@ export const payrollEngineRouter = router({
       const bancoHorasDebitosDsrBatch: { employeeId: number; companyId: number; minutos: number; qtdDsr: number }[] = [];
 
       for (const emp of empList) {
+        // Rev. 3984 — Aviso prévio encerrando no mês: se já foi decidido "não pagar",
+        // o funcionário fica FORA da folha (não gera payroll_payments); se ainda não
+        // há decisão, ele entra com status 'alerta_aviso_pendente' e fica de fora dos
+        // totais até o RH decidir. Decisão "pagar" segue o fluxo normal.
+        const avisoDataFimEmp = avisoEncerraNoMesMap.get(emp.id);
+        const decisaoAvisoEmp = decisoesAvisoMap.get(emp.id);
+        if (avisoDataFimEmp && decisaoAvisoEmp === 'nao_pagar') {
+          excluidosPorDecisaoAviso.push({ employeeId: emp.id, nome: emp.nomeCompleto });
+          continue;
+        }
+        const alertaAvisoPendente = !!avisoDataFimEmp && decisaoAvisoEmp !== 'pagar';
+        const statusPagamentoRow = alertaAvisoPendente ? 'alerta_aviso_pendente' : 'simulado';
+
         const valorHora = parseBRL(emp.valorHora);
         // CLT horista: 220h = referência de 30 dias. Proporcional ao número real de dias do mês.
         const horasMensaisBaseEmp = emp.horasMensais ? Number(emp.horasMensais) : 220;
@@ -4325,12 +4407,16 @@ export const payrollEngineRouter = router({
           ${formatMoney(finalConvenio)}, ${formatMoney(finalIr)}, ${formatMoney(finalSindicato)}, ${formatMoney(finalEpi)},
           ${formatMoney(totalDescontos)}, ${formatMoney(acertoEscuroValor)}, ${JSON.stringify(acertoEscuroDetalhes)}, ${formatMoney(salarioLiquido)},
           ${formatMoney(arrFolha.ajuste)}, ${formatMoney(salarioLiquidoExato)},
-          'simulado', ${dataPagamentoPrevista}, ${manuaisJsonStr}, ${histJsonStr},
+          ${statusPagamentoRow}, ${dataPagamentoPrevista}, ${manuaisJsonStr}, ${histJsonStr},
           ${formatMoney(adicionaisValor)}, ${adicionaisDetalhes ? JSON.stringify(adicionaisDetalhes) : null})`);
 
-        grandTotalLiquido += salarioLiquido;
-        grandTotalBruto += salarioBruto;
-        grandTotalDescontos += totalDescontos;
+        // Rev. 3984 — enquanto pendente de decisão, o funcionário aparece na lista
+        // (para o alerta) mas NÃO entra nos totais da folha.
+        if (!alertaAvisoPendente) {
+          grandTotalLiquido += salarioLiquido;
+          grandTotalBruto += salarioBruto;
+          grandTotalDescontos += totalDescontos;
+        }
 
         results.push({
           employeeId: emp.id, nome: emp.nomeCompleto, funcao: emp.funcao, codigoInterno: emp.codigoInterno,
@@ -4345,6 +4431,9 @@ export const payrollEngineRouter = router({
           descontoFgts: fgtsValor, acertoEscuroValor, descontoConvenio: finalConvenio,
           descontoOutros: finalOutros,
           totalDescontos, salarioLiquido, salarioLiquidoExato, ajusteArredondamento: arrFolha.ajuste, saldoAnteriorArredondamento: saldoAntFolha, dataPagamentoPrevista, vaValor,
+          // Rev. 3984 — aviso prévio encerrando no mês, ainda sem decisão do RH.
+          alertaAvisoEncerrado: alertaAvisoPendente,
+          avisoDataFim: avisoDataFimEmp || null,
           vtValor: finalVt, vtDiario, vrValor: vrValorMensal, vrDiario, seguroVidaValor, rateioPorObra,
           // Memorial de cálculo (valores originais antes de overrides) — 11 chaves alinhadas com a UI
           calculadoOriginal: {
@@ -4535,6 +4624,12 @@ export const payrollEngineRouter = router({
       const totalValeForaDaFolhaBruto = valeForaDaFolha.reduce((s: number, r: any) => s + r.valorBruto, 0);
       const totalValeForaDaFolhaLiquido = valeForaDaFolha.reduce((s: number, r: any) => s + r.valorLiquido, 0);
 
+      // Rev. 3984 — alerta "pagar ou não?" (aviso prévio encerrando no mês, sem decisão ainda)
+      const alertasAvisoEncerrado = (results as any[])
+        .filter(r => r.alertaAvisoEncerrado)
+        .map(r => ({ employeeId: r.employeeId, nome: r.nome, funcao: r.funcao, avisoDataFim: r.avisoDataFim, valorLiquidoEstimado: r.salarioLiquido }))
+        .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));
+
       const pagamentoResultPayload = {
         totalFuncionarios: empList.length,
         totalCltAtivos: allCltAtivos.length,
@@ -4550,8 +4645,14 @@ export const payrollEngineRouter = router({
         totalValeForaDaFolhaLiquido: Math.round(totalValeForaDaFolhaLiquido * 100) / 100,
         pontoProcessado,
         timecardDailyCount,
+        // Rev. 3984 — funcionários com aviso prévio encerrando no mês aguardando decisão
+        // "pagar ou não?" (ficam FORA dos totais acima até serem decididos).
+        alertasAvisoEncerrado,
+        excluidosPorDecisaoAviso,
         message: divergencias.length > 0
           ? `Simulação concluída: ${empList.length} de ${allCltAtivos.length} CLTs ativos processados. ATENÇÃO: ${divergencias.length} funcionário(s) excluído(s) da folha — verifique as divergências.`
+          : alertasAvisoEncerrado.length > 0
+          ? `Simulação concluída: ${empList.length} funcionários, líquido total R$ ${formatMoney(grandTotalLiquido)}. ATENÇÃO: ${alertasAvisoEncerrado.length} funcionário(s) com aviso prévio encerrando no mês aguardam decisão.`
           : `Simulação concluída: ${empList.length} funcionários, líquido total R$ ${formatMoney(grandTotalLiquido)}`,
       };
       const pagJson = JSON.stringify(pagamentoResultPayload);

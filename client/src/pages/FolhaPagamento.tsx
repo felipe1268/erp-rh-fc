@@ -1152,6 +1152,14 @@ export default function FolhaPagamento() {
     onError: (err) => toast.error(`Erro ao registrar decisão: ${err.message}`),
   });
 
+  const decidirFolhaAvisoMut = trpc.payrollEngine.decidirFolhaAviso.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message);
+      payrollPeriod.refetch();
+    },
+    onError: (err: any) => toast.error(`Erro ao registrar decisão: ${err.message}`),
+  });
+
   const reverterValeMut = trpc.payrollEngine.reverterVale.useMutation({
     onSuccess: (data, variables) => {
       toast.success(data.message);
@@ -4335,6 +4343,79 @@ export default function FolhaPagamento() {
                 </div>
               </div>
             </div>
+          )}
+
+          {pagamentoResult.alertasAvisoEncerrado && pagamentoResult.alertasAvisoEncerrado.length > 0 && (
+            <Card className="border-2 border-amber-400 bg-amber-50/50 print:hidden">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="h-10 w-10 rounded-lg bg-amber-500 flex items-center justify-center shrink-0">
+                    <AlertTriangle className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-base text-amber-800">Aviso Prévio Encerrando no Mês — Decisão Necessária</p>
+                    <p className="text-xs text-amber-700">
+                      Estes funcionários têm aviso prévio que ENCERRA dentro do mês de referência. Decida se devem ser pagos nesta folha. Eles ficam FORA dos totais até a decisão.
+                    </p>
+                  </div>
+                  <div className="ml-auto flex gap-2">
+                    <Button size="sm" variant="outline" className="border-green-500 text-green-700 hover:bg-green-50"
+                      onClick={() => {
+                        const decisoes = pagamentoResult.alertasAvisoEncerrado.map((f: any) => ({ employeeId: f.employeeId, pagar: true }));
+                        decidirFolhaAvisoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, decisoes });
+                      }}
+                      disabled={decidirFolhaAvisoMut.isPending}>
+                      <CheckCircle className="h-3 w-3 mr-1" /> Pagar Todos
+                    </Button>
+                    <Button size="sm" variant="outline" className="border-red-500 text-red-700 hover:bg-red-50"
+                      onClick={() => {
+                        const decisoes = pagamentoResult.alertasAvisoEncerrado.map((f: any) => ({ employeeId: f.employeeId, pagar: false }));
+                        decidirFolhaAvisoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, decisoes });
+                      }}
+                      disabled={decidirFolhaAvisoMut.isPending}>
+                      <XCircle className="h-3 w-3 mr-1" /> Excluir Todos
+                    </Button>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b-2 border-amber-300">
+                        <th className="text-left py-2 px-2">Funcionário</th>
+                        <th className="text-left py-2 px-2">Função</th>
+                        <th className="text-left py-2 px-2">Aviso encerra em</th>
+                        <th className="text-right py-2 px-2">Líquido Estimado</th>
+                        <th className="text-center py-2 px-2">Decisão</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pagamentoResult.alertasAvisoEncerrado.map((f: any, i: number) => (
+                        <tr key={i} className="border-b border-amber-200 hover:bg-amber-100/50">
+                          <td className="py-2 px-2 font-medium">{f.nome}</td>
+                          <td className="py-2 px-2 text-slate-600">{f.funcao || '—'}</td>
+                          <td className="py-2 px-2">{f.avisoDataFim ? new Date(f.avisoDataFim + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</td>
+                          <td className="text-right py-2 px-2 font-bold text-green-700">{formatBRL(f.valorLiquidoEstimado)}</td>
+                          <td className="text-center py-2 px-2">
+                            <div className="flex items-center justify-center gap-1">
+                              <Button size="sm" variant="outline" className="h-7 px-2 text-xs border-green-500 text-green-700 hover:bg-green-50"
+                                disabled={decidirFolhaAvisoMut.isPending}
+                                onClick={() => decidirFolhaAvisoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, decisoes: [{ employeeId: f.employeeId, pagar: true }] })}>
+                                <CheckCircle className="h-3 w-3 mr-0.5" /> Pagar
+                              </Button>
+                              <Button size="sm" variant="outline" className="h-7 px-2 text-xs border-red-500 text-red-700 hover:bg-red-50"
+                                disabled={decidirFolhaAvisoMut.isPending}
+                                onClick={() => decidirFolhaAvisoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, decisoes: [{ employeeId: f.employeeId, pagar: false }] })}>
+                                <XCircle className="h-3 w-3 mr-0.5" /> Não Pagar
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           <div className="flex items-center gap-2 flex-wrap">
