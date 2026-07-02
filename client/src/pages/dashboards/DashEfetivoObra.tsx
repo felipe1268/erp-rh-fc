@@ -26,17 +26,25 @@ import { Button } from "@/components/ui/button";
 
 const MESES_NOMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
-function EmpAvatar({ nome, fotoUrl, size = 28 }: { nome: string; fotoUrl?: string | null; size?: number }) {
+function EmpAvatar({ nome, fotoUrl, size = 28, onClick }: { nome: string; fotoUrl?: string | null; size?: number; onClick?: () => void }) {
   const initials = nome.split(" ").filter(Boolean).slice(0, 2).map(p => p[0].toUpperCase()).join("");
   if (fotoUrl) {
     return (
-      <img
-        src={fotoUrl}
-        alt={nome}
+      <button
+        type="button"
+        onClick={onClick}
+        className={`rounded-full overflow-hidden shrink-0 border border-border/50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${onClick ? "cursor-pointer hover:ring-2 hover:ring-blue-400" : "cursor-default"}`}
         style={{ width: size, height: size }}
-        className="rounded-full object-cover shrink-0 border border-border/50"
-        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-      />
+        title={onClick ? "Clique para ampliar" : undefined}
+      >
+        <img
+          src={fotoUrl}
+          alt={nome}
+          style={{ width: size, height: size }}
+          className="object-cover"
+          onError={(e) => { (e.currentTarget.parentElement as HTMLElement).style.display = "none"; }}
+        />
+      </button>
     );
   }
   return (
@@ -680,6 +688,7 @@ function EquipeFullScreenDialog({ open, onClose, obraNome, equipeData, loading }
 }) {
   const [busca, setBusca] = useState('');
   const [chartFilter, setChartFilter] = useState<{ funcao?: string; status?: string } | null>(null);
+  const [fotoZoom, setFotoZoom] = useState<{ url: string; nome: string } | null>(null);
   const { user } = useAuth();
   const { selectedCompany } = useCompany();
   const removeAccents = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -963,7 +972,11 @@ function EquipeFullScreenDialog({ open, onClose, obraNome, equipeData, loading }
                       <TableRow key={emp.id}>
                         <TableCell className="font-medium text-sm">
                           <div className="flex items-center gap-2.5">
-                            <EmpAvatar nome={emp.nomeCompleto || ""} fotoUrl={emp.fotoUrl} />
+                            <EmpAvatar
+                              nome={emp.nomeCompleto || ""}
+                              fotoUrl={emp.fotoUrl}
+                              onClick={emp.fotoUrl ? () => setFotoZoom({ url: emp.fotoUrl, nome: emp.nomeCompleto || "" }) : undefined}
+                            />
                             <span>{emp.nomeCompleto}</span>
                           </div>
                         </TableCell>
@@ -1013,6 +1026,23 @@ function EquipeFullScreenDialog({ open, onClose, obraNome, equipeData, loading }
           </div>
         </div>
       )}
+
+      {/* Lightbox de foto ampliada */}
+      <Dialog open={!!fotoZoom} onOpenChange={(v) => { if (!v) setFotoZoom(null); }}>
+        <DialogContent className="max-w-sm p-4 flex flex-col items-center gap-3">
+          <DialogHeader className="w-full">
+            <DialogTitle className="text-sm font-semibold text-center break-words">{fotoZoom?.nome}</DialogTitle>
+            <DialogDescription className="sr-only">Foto ampliada do funcionário</DialogDescription>
+          </DialogHeader>
+          {fotoZoom && (
+            <img
+              src={fotoZoom.url}
+              alt={fotoZoom.nome}
+              className="w-64 h-64 rounded-2xl object-cover border border-border shadow-md"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </FullScreenDialog>
   );
 }

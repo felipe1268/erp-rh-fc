@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3966** — **EFETIVO OBRA: LIGHTBOX DE FOTO AO CLICAR NA TABELA "EQUIPE — {OBRA}".** `EmpAvatar` recebe `onClick`; Dialog shadcn 256×256 abre ao clicar na miniatura; iniciais sem foto não são clicáveis. ZERO DELETE.
+
 - **Rev. 3965** — **EFETIVO OBRA: FOTO DO FUNCIONÁRIO NA TABELA "EQUIPE — {OBRA}".** `EmpAvatar` inline (foto circular ou iniciais) adicionado na coluna Nome da tabela agrupada por função em DashEfetivoObra. Backend já retornava `fotoUrl` — só frontend alterado. ZERO DELETE.
 
-- **Rev. 3964** — **FOLHA DE PAGAMENTO: FIX `mes.split is not a function` (REGRESSÃO Rev. 3962).** `mes.split("-")[0]` no título da TabelaComparativaAnual → `ano`. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3964** — **FOLHA DE PAGAMENTO: FIX `mes.split is not a function` (REGRESSÃO Rev. 3962).** `mes.split("-")[0]` no título da TabelaComparativaAnual → `ano`. ZERO DELETE.
 
 - **Rev. 3963** — **CARTÃO DE PONTO: FOTO DO FUNCIONÁRIO NOS RANKINGS DE FALTAS E ATRASOS.** `fotoUrl` adicionado ao select de allEmps; `EmpAvatar` (foto/iniciais) inserido entre badge numérico e nome nos dois Top 10. ZERO DELETE.
 

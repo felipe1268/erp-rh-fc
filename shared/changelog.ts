@@ -1,4 +1,21 @@
 /**
+ * Rev. 3966 — **EFETIVO OBRA: LIGHTBOX DE FOTO AO CLICAR NA TABELA "EQUIPE — {OBRA}".**
+ *
+ * PEDIDO: ao clicar na foto miniatura do funcionário na tabela Equipe, abrir a
+ * imagem ampliada para melhor visualização.
+ *
+ * FRONTEND (`client/src/pages/dashboards/DashEfetivoObra.tsx`):
+ *   - `EmpAvatar` recebe prop opcional `onClick`; quando presente, envolve a imagem
+ *     em `<button>` com `cursor-pointer` e `hover:ring-2 hover:ring-blue-400`.
+ *   - Novo estado `fotoZoom: { url, nome } | null` em `EquipeFullScreenDialog`.
+ *   - `<TableCell>` da coluna Nome passa `onClick={() => setFotoZoom(...)}` ao avatar
+ *     apenas quando `emp.fotoUrl` existe (iniciais não são clicáveis).
+ *   - Dialog shadcn com imagem `256×256 rounded-2xl object-cover` e nome do
+ *     funcionário como título — fecha pelo X nativo ou clique fora.
+ *
+ * ZERO DELETE.
+ */
+/**
  * Rev. 3965 — **EFETIVO OBRA: FOTO DO FUNCIONÁRIO NA TABELA "EQUIPE — {OBRA}".**
  *
  * PEDIDO: exibir a foto do funcionário na tela "Equipe — {obra}" do Dashboard
