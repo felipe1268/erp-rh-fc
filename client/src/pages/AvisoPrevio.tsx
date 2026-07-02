@@ -142,10 +142,13 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
   const { data: empList = [] } = trpc.employees.list.useQuery({ companyId, companyIds, excludeTerminated: true }, { enabled: !!companyId || companyIds?.length > 0 });
   // Rev. 1727: incluir todos os colaboradores não-desligados (Ativo, Ferias, Afastado, Licenca, Recluso)
   // pra permitir simulação de aviso prévio em qualquer cenário. Só corta Desligado/Lista_Negra e soft-deleted.
+  // Rev. 3961: PJ e Sócios são excluídos — rescisão CLT não se aplica a contratos PJ/Sócio.
   const activeEmployees = useMemo(() => (empList as any[]).filter((e: any) => {
     if (e.deletedAt) return false;
     if (e.status === "Desligado" || e.status === "Lista_Negra" || e.status === "ListaNegra") return false;
     if (e.listaNegra === 1 || e.listaNegra === true) return false;
+    const tc = (e.tipoContrato || "").trim();
+    if (tc === "PJ" || tc.toLowerCase() === "socio" || tc.toLowerCase() === "sócio") return false;
     return true;
   }), [empList]);
 

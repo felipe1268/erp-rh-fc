@@ -1,4 +1,26 @@
 /**
+ * Rev. 3961 — **AVISO PRÉVIO / RESCISÃO: FILTRO CLT — PJ E SÓCIOS BLOQUEADOS.**
+ *
+ * PEDIDO: colaboradores PJ não podem entrar no cálculo de rescisão; só CLT.
+ *
+ * CAMADAS DE PROTEÇÃO:
+ *
+ * 1. FRONTEND (`client/src/pages/AvisoPrevio.tsx` — `activeEmployees` memo):
+ *    Adicionado filtro no `useMemo` que monta a lista do seletor de colaborador.
+ *    Antes: cortava só Desligado/Lista_Negra/soft-deleted.
+ *    Agora: também exclui `tipoContrato === "PJ"` e `tipoContrato === "Socio"/"Sócio"`.
+ *    → PJ e Sócios simplesmente não aparecem no dropdown de Novo Aviso Prévio.
+ *
+ * 2. BACKEND (`server/routers/avisoPrevioFerias.ts` — mutation `avisoPrevio.create`):
+ *    Após buscar o employee (linha 1491), antes de delegar para `criarAvisoPrevioInterno`,
+ *    verificação explícita do `tipoContrato`. Se for PJ ou Sócio (case-insensitive),
+ *    lança `TRPCError BAD_REQUEST` com mensagem clara.
+ *    → Defesa em profundidade: mesmo se chamada for feita via API direta, é rejeitada.
+ *
+ * Padrão idêntico ao já usado nas férias (Rev. 1613): mesmos valores e lógica.
+ * ZERO DELETE.
+ */
+/**
  * Rev. 3960 — **DRE IA: FIX DEFINITIVO DO JSON TRUNCADO — BUG REAL ERA LINHA 359 (callOpus PASSAVA 4000 EXPLÍCITO) + REPAIR DE JSON.**
  *
  * CAUSA-RAIZ REAL (diferente do que se supunha na Rev. 3958):

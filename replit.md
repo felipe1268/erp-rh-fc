@@ -50,23 +50,19 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 3960** — **DRE IA: FIX DEFINITIVO JSON TRUNCADO.** Bug real: `callOpus(sys, prompt, 4000)` passava `4000` EXPLICITAMENTE, sobrescrevendo o default 8000 → JSON cortava em ~10.000 chars. Fix: removido argumento explícito → usa 8000 tokens (≈20k chars). `parseJsonLoose` reescrito: tenta parse completo, depois `repairTruncatedJson` (fecha stack de `{[` abertos, remove vírgula solta) → análise completa mesmo se Opus truncar. ZERO DELETE.
-
-- **Rev. 3959** — **NF-e: PAUSAR/RETOMAR SYNC + PRORROGAR (+2h/+4h/+8h/+24h).** Backend: `toggleSync` (só `sync_enabled`) + `prorrogarSync` (seta `last_sync_at` para exatamente N horas restantes via fórmula `NOW() - gate_min + N horas`). Card countdown ganhou footer unificado sempre visível: ⏸ Pausar · ▶ Retomar · Prorrogar +2h|+4h|+8h|+24h · 🔧 Curar rate-limit (só em bloqueio). ZERO DELETE.
+- **Rev. 3961** — **AVISO PRÉVIO / RESCISÃO: FILTRO CLT — PJ E SÓCIOS BLOQUEADOS.** Frontend: `activeEmployees` memo exclui `tipoContrato === "PJ"/"Socio"/"Sócio"` → não aparecem no seletor. Backend: guard em `avisoPrevio.create` após buscar employee → `TRPCError BAD_REQUEST` se PJ/Sócio mesmo por chamada direta. Padrão idêntico ao filtro de férias (Rev. 1613). ZERO DELETE.
 
 ### 5 one-liners
+
+- **Rev. 3960** — **DRE IA: FIX DEFINITIVO JSON TRUNCADO.** `callOpus(sys, prompt, 4000)` explícito → sem arg (usa default 8000); `repairTruncatedJson` fecha stack aberta. ZERO DELETE.
+
+- **Rev. 3959** — **NF-e: PAUSAR/RETOMAR SYNC + PRORROGAR (+2h/+4h/+8h/+24h).** `toggleSync` + `prorrogarSync` backend; footer unificado no card countdown. ZERO DELETE.
 
 - **Rev. 3958** — **DRE IA: PÁGINA FULL-SCREEN `/financeiro/dre-analise` + maxTokens 4000→8000 (default) + PARETO RECHARTS.** ZERO DELETE.
 
 - **Rev. 3957** — **DRE IA: CLAUDE OPUS 4-5 DIRETO + DIALOG POPUP (FIX 95% TRAVADO).** `callOpus()` direto, maxTokens 4000, badge no título. ZERO DELETE.
 
 - **Rev. 3956** — **DFC: PÁGINA DEDICADA `/financeiro/dfc` (ROTA EXCLUSIVA, FULL-SCREEN).** `FinanceiroDFC.tsx`; seletor white-card; 4 KPIs; waterfall/ajustes/bridge/indicadores. ZERO DELETE.
-
-- **Rev. 3955** — **DFC: VISUALIZAÇÃO IN-APP (SHEET) SUBSTITUINDO O PDF.** Sheet 4 seções; fix getDFCData `.rows`. ZERO DELETE.
-
-- **Rev. 3954** — **ANÁLISE IA DO DRE: PARETO DE CUSTOS + PLANO DE AÇÃO.** dreAnaliseIA.ts reescrito; Pareto top 15; prompt "CFO de empreitada"; resposta com `planoAcao[]`+`paretoCustos[]`; UI cards. ZERO DELETE.
-
-- **Rev. 3952** — **DRE: CORREÇÃO DE CLASSIFICAÇÃO + CARD CONTEXTUAL DRE × CAIXA.** Fix: FINANCIAMENTOS → 'investimento'; MÚTUO INTERCOMPANY → 'nao_operacional'. ZERO DELETE.
 
 ### Histórico completo
 

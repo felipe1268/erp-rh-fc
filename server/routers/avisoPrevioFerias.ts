@@ -1486,6 +1486,11 @@ export const avisoPrevioFeriasRouter = router({
         const db = (await getDb())!;
         const [emp] = await db.select().from(employees).where(eq(employees.id, input.employeeId));
         if (!emp) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado" });
+        // Rev. 3961 — PJ e Sócios não têm vínculo CLT; rescisão não se aplica.
+        const _tc = (emp.tipoContrato || "").trim();
+        if (_tc === "PJ" || _tc.toLowerCase() === "socio" || _tc.toLowerCase() === "sócio") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Aviso prévio e rescisão CLT não se aplicam a contratos PJ ou Sócios." });
+        }
         // Rev. 2960 — corpo extraído p/ `criarAvisoPrevioInterno` (reuso no lote).
         return criarAvisoPrevioInterno(db, emp, input, { id: ctx.user.id, name: ctx.user.name });
       }),
