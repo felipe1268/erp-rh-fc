@@ -1,3 +1,5 @@
+- **Rev. 3957** — **DRE IA: CLAUDE OPUS 4-5 DIRETO + DIALOG POPUP (FIX 95% TRAVADO).** `callOpus()` direto, maxTokens 4000, badge no título. ZERO DELETE.
+
 - **Rev. 3956** — **DFC: PÁGINA DEDICADA `/financeiro/dfc` (ROTA EXCLUSIVA, FULL-SCREEN).** `FinanceiroDFC.tsx`; seletor white-card; 4 KPIs; waterfall/ajustes/bridge/indicadores. ZERO DELETE.
 
 - **Rev. 3944** — **CONTAS A RECEBER: MULTI-SELEÇÃO + AJUSTE EM LOTE.** Botão "Selecionar", checkboxes, barra flutuante, `BulkAjustarDialog` 3 abas, endpoint `bulkAtualizarVencimento`. ZERO DELETE.

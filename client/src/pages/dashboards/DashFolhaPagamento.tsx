@@ -775,7 +775,7 @@ export default function DashFolhaPagamento() {
         meses={comparativoAnual?.meses || []}
         indicadores={FOLHA_INDICADORES}
         isLoading={loadingCompAnual}
-        titulo={`Tendência mês-a-mês — ${mes.split("-")[0]}`}
+        titulo={`Tendência mês-a-mês — ${ano}`}
         subtitulo="Janeiro até o mês de referência · clique em qualquer linha para análise aprofundada"
       />
 

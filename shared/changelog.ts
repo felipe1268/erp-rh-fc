@@ -1,4 +1,19 @@
 /**
+ * Rev. 3964 — **FOLHA DE PAGAMENTO: FIX `mes.split is not a function` (REGRESSÃO Rev. 3962).**
+ *
+ * CAUSA: Rev. 3962 converteu o estado `mes` de YYYY-MM string para número 1-12,
+ * mas a linha do título da `TabelaComparativaAnual` ainda chamava `mes.split("-")[0]`
+ * para extrair o ano.
+ *
+ * FIX (`client/src/pages/dashboards/DashFolhaPagamento.tsx`, linha 778):
+ *   `mes.split("-")[0]` → `ano`  (estado de ano já disponível no componente).
+ *
+ * As outras chamadas `r.mes.split("-")` do arquivo são sobre `r.mes` vindo do
+ * backend (campo string YYYY-MM) — não afetadas e sem alteração.
+ *
+ * ZERO DELETE.
+ */
+/**
  * Rev. 3963 — **CARTÃO DE PONTO: FOTO DO FUNCIONÁRIO NOS RANKINGS DE FALTAS E ATRASOS.**
  *
  * PEDIDO: exibir a foto do funcionário nos rankings "Top 10 Faltas" e "Top 10 Atrasos"
