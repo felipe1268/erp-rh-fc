@@ -1,6 +1,7 @@
 - [Dashboard period selector standard](dashboard-period-selector-standard.md) — seletor de mês/ano = white-card (PanoramaFiscal), NUNCA DashHeader gradiente. Regra de ouro do usuário.
 - [Banco de Horas saldo list filter](banco-horas-saldo-list-filter.md) — lista "Saldos" excluía negativos (`>0`) enquanto card de alerta já os contava; fix `<> 0` + gate admin_master client+backend em toggles sensíveis.
 - [Rescisão × Banco de Horas integration](rescisao-banco-horas-integration.md) — saldo positivo=provento×1,5, negativo=desconto valor cheio sem multiplicador; 1 helper único reusado nos 8 pontos de cálculo.
+- [Banco de Horas — múltiplos tipos de débito discriminados](banco-horas-debito-tipos.md) — tipo é text livre; novo tipo de débito automatizado exige batch+reversão+insert próprios + revisar filtros `tipo==="debito"` no front.
 - [Dissídio diferença — fora da folha, encargos próprios](dissidio-diferenca-encargos.md) — diferença retroativa NÃO entra em totalProventos da folha mensal; INSS/IRRF calculados só no relatório dedicado.
 - [Print/PDF a Radix Dialog](dialog-print-only-pattern.md) — toggle `print-only` class + window.print() + afterprint cleanup, NOT window.open/document.write, to print a dialog's content only.
 - [Dialog no-truncate rule](dialog-no-truncate.md) — dialogs NUNCA truncam texto; use break-words/break-all; truncate só em linhas compactas de tabela com title= tooltip.

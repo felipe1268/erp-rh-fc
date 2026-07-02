@@ -1,4 +1,39 @@
 /**
+ * Rev. 3983 — **BANCO DE HORAS: DSR PERDIDO TAMBÉM VIRA DÉBITO DE HORAS (SEPARADO DE ATRASO/FALTA).**
+ *
+ * PEDIDO: a Rev. 3977 já redirecionava atraso/falta para débito no banco de horas quando a empresa
+ * usa banco de horas, mas o DSR perdido (Lei 605/49 Art. 6º) decorrente dessas faltas continuava
+ * sendo descontado em dinheiro na folha. Usuário confirmou que o DSR também deve virar débito de
+ * horas — e que precisa aparecer DISCRIMINADO no extrato, separado do débito de atraso/falta, para o
+ * funcionário conseguir ver quantas horas são de atraso/falta e quantas são de DSR. Conversão
+ * confirmada: cada DSR perdido = 7h33 fixas (220h/30d = 7,3333h = 440 minutos), independente do dia
+ * da semana em que caiu.
+ *
+ * A REGRA DE QUANDO se perde um DSR (1 por semana com ≥1 falta injustificada, não por falta —
+ * `pontoDescontos.ts`, `semanasComFalta`/`dsrPerdidos`) NÃO MUDOU — só o destino do valor.
+ *
+ * IMPLEMENTAÇÃO (`payrollEngine.ts`): novo tipo de lançamento no banco de horas,
+ * `'debito_dsr'` (mirror do `'debito_atraso_falta'` da Rev. 3977, mas em lote/marcador PRÓPRIOS —
+ * `bancoHorasDebitosDsrBatch` + marcador `Débito DSR {mesReferencia}`), com bloco de reversão
+ * idempotente antes do recálculo (mesmo padrão do bloco de atraso/falta) e bloco de INSERT em
+ * `banco_horas_saldo` + `banco_horas_lancamentos` após o loop principal. Minutos = `dsrInfo.qtdFalta *
+ * 440`, só quando `usaBancoHorasAtrasoFalta && aplicarDsrFalta`. `descontoFaltas` passou a zerar (em
+ * vez de receber `dsrFaltaValorAplicado`) quando o funcionário usa banco de horas — sem banco de
+ * horas ou com a exceção `banco_horas_excecao=1`, o DSR continua monetário exatamente como antes.
+ * Campos `dsrRedirecionadoBancoHoras`/`dsrMinutosBancoHoras` adicionados ao memorial de cálculo para
+ * auditoria.
+ *
+ * FRONTEND (`BancoHoras.tsx`): extrato agora distingue 4 badges (CRÉDITO verde / DÉBITO ATRASO-FALTA
+ * laranja / DÉBITO DSR roxo / DÉBITO manual vermelho); rodapé da tabela corrigido para somar TODO
+ * débito (`tipo !== "credito"`, antes só contava `tipo === "debito"` e ignorava os dois tipos
+ * redirecionados); novos cards de resumo (Total Crédito / Débito Atraso-Falta / Débito DSR / Débito
+ * Manual) abaixo da tabela para visualização rápida da composição do saldo.
+ *
+ * Coluna `tipo` de `banco_horas_lancamentos` é `text()` livre (sem CHECK constraint), então o novo
+ * valor não exige migration. ZERO DELETE · ZERO ALTER.
+ */
+
+/**
  * Rev. 3982 — **DISSÍDIO: RELATÓRIO DE DIFERENÇAS RETROATIVAS — ORDEM ALFABÉTICA.**
  *
  * PEDIDO: usuário confirmou que o novo layout de impressão (Rev. 3980) ficou bom, mas apontou que a

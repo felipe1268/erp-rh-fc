@@ -785,12 +785,29 @@ export default function BancoHoras() {
                               } else {
                                 saldoAcumulado -= total;
                               }
+                              const isDsr = l.tipo === "debito_dsr";
+                              const isAtrasoFalta = l.tipo === "debito_atraso_falta";
+                              const badgeClass = l.tipo === "credito"
+                                ? "bg-green-100 text-green-700"
+                                : isDsr
+                                  ? "bg-purple-100 text-purple-700"
+                                  : isAtrasoFalta
+                                    ? "bg-orange-100 text-orange-700"
+                                    : "bg-red-100 text-red-700";
+                              const badgeLabel = l.tipo === "credito"
+                                ? "CRÉDITO"
+                                : isDsr
+                                  ? "DÉBITO DSR"
+                                  : isAtrasoFalta
+                                    ? "DÉBITO ATRASO/FALTA"
+                                    : "DÉBITO";
+                              const totalColorClass = l.tipo === "credito" ? "text-green-700" : isDsr ? "text-purple-700" : "text-orange-700";
                               return (
                                 <tr key={l.id} className="border-b">
                                   <td className="py-2 px-3">{new Date(l.data).toLocaleDateString("pt-BR")}</td>
                                   <td className="py-2 px-3">
-                                    <span className={`font-semibold text-xs px-2 py-0.5 rounded ${l.tipo === "credito" ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}`}>
-                                      {l.tipo === "credito" ? "CRÉDITO" : "DÉBITO"}
+                                    <span className={`font-semibold text-xs px-2 py-0.5 rounded whitespace-nowrap ${badgeClass}`}>
+                                      {badgeLabel}
                                     </span>
                                   </td>
                                   <td className="text-right py-2 px-3 font-medium">
@@ -800,7 +817,7 @@ export default function BancoHoras() {
                                     {l.tipo === "credito" ? (acrescimo > 0 ? `+${minsToHHMM(acrescimo)}` : "0h00") : "—"}
                                   </td>
                                   <td className="text-right py-2 px-3 font-bold">
-                                    <span className={l.tipo === "credito" ? "text-green-700" : "text-orange-700"}>
+                                    <span className={totalColorClass}>
                                       {l.tipo === "credito" ? "+" : "−"}{minsToHHMM(total)}
                                     </span>
                                   </td>
@@ -825,7 +842,7 @@ export default function BancoHoras() {
                             <td className="text-right py-2 px-3 text-blue-700">
                               {(() => {
                                 const totalCredito = lancamentosFiltradosMes.filter((l: any) => l.tipo === "credito").reduce((acc: number, l: any) => acc + Number(l.minutos), 0);
-                                const totalDebito = lancamentosFiltradosMes.filter((l: any) => l.tipo === "debito").reduce((acc: number, l: any) => acc + Number(l.minutos), 0);
+                                const totalDebito = lancamentosFiltradosMes.filter((l: any) => l.tipo !== "credito").reduce((acc: number, l: any) => acc + Number(l.minutos), 0);
                                 const saldo = totalCredito - totalDebito;
                                 return `${saldo >= 0 ? "+" : ""}${minsToHHMM(saldo)}`;
                               })()}
@@ -835,11 +852,39 @@ export default function BancoHoras() {
                             </td>
                             <td className="py-2 px-3 text-xs text-muted-foreground">
                               (+{minsToHHMM(lancamentosFiltradosMes.filter((l: any) => l.tipo === "credito").reduce((acc: number, l: any) => acc + Number(l.minutos), 0))} créditos /
-                              −{minsToHHMM(lancamentosFiltradosMes.filter((l: any) => l.tipo === "debito").reduce((acc: number, l: any) => acc + Number(l.minutos), 0))} débitos)
+                              −{minsToHHMM(lancamentosFiltradosMes.filter((l: any) => l.tipo !== "credito").reduce((acc: number, l: any) => acc + Number(l.minutos), 0))} débitos)
                             </td>
                           </tr>
                         </tfoot>
                       </table>
+
+                      {(() => {
+                        const totalCredito = lancamentosFiltradosMes.filter((l: any) => l.tipo === "credito").reduce((acc: number, l: any) => acc + Number(l.minutos), 0);
+                        const totalDebitoAtrasoFalta = lancamentosFiltradosMes.filter((l: any) => l.tipo === "debito_atraso_falta").reduce((acc: number, l: any) => acc + Number(l.minutos), 0);
+                        const totalDebitoDsr = lancamentosFiltradosMes.filter((l: any) => l.tipo === "debito_dsr").reduce((acc: number, l: any) => acc + Number(l.minutos), 0);
+                        const totalDebitoManual = lancamentosFiltradosMes.filter((l: any) => l.tipo === "debito").reduce((acc: number, l: any) => acc + Number(l.minutos), 0);
+                        if (totalDebitoAtrasoFalta === 0 && totalDebitoDsr === 0 && totalDebitoManual === 0 && totalCredito === 0) return null;
+                        return (
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 print:hidden">
+                            <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+                              <p className="text-[11px] text-green-700 font-medium">Total Crédito</p>
+                              <p className="text-lg font-bold text-green-700">+{minsToHHMM(totalCredito)}</p>
+                            </div>
+                            <div className="rounded-lg border border-orange-200 bg-orange-50 p-3">
+                              <p className="text-[11px] text-orange-700 font-medium">Débito Atraso/Falta</p>
+                              <p className="text-lg font-bold text-orange-700">−{minsToHHMM(totalDebitoAtrasoFalta)}</p>
+                            </div>
+                            <div className="rounded-lg border border-purple-200 bg-purple-50 p-3">
+                              <p className="text-[11px] text-purple-700 font-medium">Débito DSR</p>
+                              <p className="text-lg font-bold text-purple-700">−{minsToHHMM(totalDebitoDsr)}</p>
+                            </div>
+                            <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                              <p className="text-[11px] text-red-700 font-medium">Débito Manual</p>
+                              <p className="text-lg font-bold text-red-700">−{minsToHHMM(totalDebitoManual)}</p>
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       <div className="mt-8 pt-4 border-t text-sm text-muted-foreground print:mt-12">
                         <p className="mb-6">Declaro ter recebido o extrato detalhado do banco de horas referente ao mês acima indicado.</p>

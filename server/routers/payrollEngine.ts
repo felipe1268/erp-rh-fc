@@ -3914,6 +3914,30 @@ export const payrollEngineRouter = router({
         }
       }
 
+      // Rev. 3983 — Banco de Horas: mesma reversão idempotente acima, para os débitos de DSR
+      // perdido redirecionados (tipo='debito_dsr', lançamento separado do de atraso/falta).
+      {
+        const _debitoMarkerDsr983 = `Débito DSR ${input.mesReferencia}`;
+        const _oldDebitosDsr983 = ((await db.execute(sql`
+          SELECT id, "employeeId", "companyId", minutos FROM banco_horas_lancamentos
+          WHERE "companyId" IN (${allCompanyIdsSql}) AND tipo = 'debito_dsr'
+            AND descricao LIKE ${_debitoMarkerDsr983 + '%'}
+        `)) as any).rows || [];
+        for (const d of _oldDebitosDsr983) {
+          await db.execute(sql`
+            UPDATE banco_horas_saldo SET "saldoMinutos" = "saldoMinutos" - ${Number(d.minutos)}, "atualizadoEm" = NOW()
+            WHERE "employeeId" = ${d.employeeId} AND "companyId" = ${d.companyId}
+          `);
+        }
+        if (_oldDebitosDsr983.length > 0) {
+          await db.execute(sql`
+            DELETE FROM banco_horas_lancamentos
+            WHERE "companyId" IN (${allCompanyIdsSql}) AND tipo = 'debito_dsr'
+              AND descricao LIKE ${_debitoMarkerDsr983 + '%'}
+          `);
+        }
+      }
+
       // Reseta ajustes que estavam vinculados aos payments deletados de volta para 'pendente'
       // para que sejam re-aplicados consistentemente nesta nova simulação.
       await db.execute(sql`
@@ -4059,6 +4083,11 @@ export const payrollEngineRouter = router({
       // Rev. 3977 — Banco de Horas: acumula débitos de atraso/falta redirecionados
       // (aplicados em lote após o loop principal, uma vez que o period foi limpo acima).
       const bancoHorasDebitosBatch: { employeeId: number; companyId: number; minutos: number }[] = [];
+      // Rev. 3983 — Banco de Horas: acumula débitos de DSR perdido redirecionados (separado do
+      // débito de atraso/falta acima para aparecer discriminado no extrato). Cada DSR perdido
+      // vale 7h20 (220h/30d = 7,3333h = 440min), valor fixo — não depende do dia da semana.
+      const DSR_MINUTOS_POR_PERDA = 440;
+      const bancoHorasDebitosDsrBatch: { employeeId: number; companyId: number; minutos: number; qtdDsr: number }[] = [];
 
       for (const emp of empList) {
         const valorHora = parseBRL(emp.valorHora);
@@ -4132,8 +4161,12 @@ export const payrollEngineRouter = router({
         // Rev. 3977 — Banco de Horas: quando a empresa usa banco de horas (he_banco_horas=Sim)
         // e o funcionário NÃO tem a exceção bidirecional marcada, o valor que seria descontado
         // de atraso/falta é redirecionado como DÉBITO no saldo do banco de horas (valor cheio,
-        // sem multiplicador), em vez de desconto monetário na folha. DSR-falta continua monetário
-        // (não é "atraso/falta" em si, é consequência legal separada).
+        // sem multiplicador), em vez de desconto monetário na folha.
+        // Rev. 3983 — O DSR perdido (mesma condição de banco de horas) TAMBÉM é redirecionado como
+        // débito de horas, só que discriminado num lançamento PRÓPRIO (tipo='debito_dsr', 7h20 fixas
+        // por DSR perdido = 220h/30d), para o funcionário enxergar separadamente quantas horas são de
+        // atraso/falta e quantas são de DSR. A regra de QUANDO se perde o DSR (Lei 605/49 Art. 6º — 1
+        // DSR por semana com falta injustificada, não por falta) não muda, só o destino do valor.
         const usaBancoHorasAtrasoFalta = criteria.heBancoHoras && Number((emp as any).bancoHorasExcecao || 0) !== 1;
         let minutosDebitoBancoHoras = 0;
         if (usaBancoHorasAtrasoFalta && valorHora > 0 && (descontoFaltasBase > 0 || descontoAtrasosBase > 0)) {
@@ -4147,8 +4180,20 @@ export const payrollEngineRouter = router({
           }
         }
 
-        // Soma o DSR aplicado na coluna FALTAS (mesma natureza CLT)
-        const descontoFaltas  = usaBancoHorasAtrasoFalta ? dsrFaltaValorAplicado : (descontoFaltasBase + dsrFaltaValorAplicado);
+        let minutosDebitoDsrBancoHoras = 0;
+        if (usaBancoHorasAtrasoFalta && aplicarDsrFalta && dsrInfo.qtdFalta > 0) {
+          minutosDebitoDsrBancoHoras = dsrInfo.qtdFalta * DSR_MINUTOS_POR_PERDA;
+          bancoHorasDebitosDsrBatch.push({
+            employeeId: emp.id,
+            companyId: (emp as any).companyId ?? input.companyId,
+            minutos: minutosDebitoDsrBancoHoras,
+            qtdDsr: dsrInfo.qtdFalta,
+          });
+        }
+
+        // Faltas/Atrasos e o DSR decorrente vão para o banco de horas quando ativo; sem banco de
+        // horas, seguem monetários exatamente como antes.
+        const descontoFaltas  = usaBancoHorasAtrasoFalta ? 0 : (descontoFaltasBase + dsrFaltaValorAplicado);
         const descontoAtrasos = usaBancoHorasAtrasoFalta ? 0 : descontoAtrasosBase;
 
         // PENSÃO ALIMENTÍCIA: cálculo dinâmico direto do cadastro do funcionário (Rev. 1205).
@@ -4330,6 +4375,9 @@ export const payrollEngineRouter = router({
             dsrFaltaQtd: dsrInfo.qtdFalta,
             dsrFaltaValor: dsrInfo.valorFalta,
             dsrFaltaAplicado: aplicarDsrFalta,
+            // Rev. 3983 — DSR redirecionado para o banco de horas (quando ativo)
+            dsrRedirecionadoBancoHoras: usaBancoHorasAtrasoFalta && aplicarDsrFalta,
+            dsrMinutosBancoHoras: minutosDebitoDsrBancoHoras,
             // Atrasos
             atrasosMinutos,
             descontoAtrasosMinutos: (atrasosMinutos / 60) * valorHora,
@@ -4420,6 +4468,27 @@ export const payrollEngineRouter = router({
             INSERT INTO banco_horas_lancamentos ("employeeId", "companyId", tipo, minutos, "minutosBase", "minutosAcrescimo", descricao, data, "criadoPor")
             VALUES (${d.employeeId}, ${d.companyId}, 'debito_atraso_falta', ${-d.minutos}, ${-d.minutos}, 0,
               ${_debitoDescricao977}, ${_dataFimMes977}::date, 'Sistema (folha)')
+          `);
+        }
+      }
+
+      // Rev. 3983 — Banco de Horas: grava débitos de DSR perdido redirecionados, num tipo PRÓPRIO
+      // ('debito_dsr') para aparecer discriminado no extrato, separado do atraso/falta acima.
+      if (bancoHorasDebitosDsrBatch.length > 0) {
+        const _dataFimMesDsr983 = `${year}-${String(month).padStart(2, '0')}-${String(diasNoMesSim).padStart(2, '0')}`;
+        for (const d of bancoHorasDebitosDsrBatch) {
+          const _debitoDescricaoDsr983 = `Débito DSR ${input.mesReferencia} (banco de horas) — ${d.qtdDsr} DSR${d.qtdDsr > 1 ? 's' : ''} perdido${d.qtdDsr > 1 ? 's' : ''} x 7h20`;
+          await db.execute(sql`
+            INSERT INTO banco_horas_saldo ("employeeId", "companyId", "saldoMinutos", "atualizadoEm")
+            VALUES (${d.employeeId}, ${d.companyId}, ${-d.minutos}, NOW())
+            ON CONFLICT ("employeeId", "companyId") DO UPDATE SET
+              "saldoMinutos" = banco_horas_saldo."saldoMinutos" + EXCLUDED."saldoMinutos",
+              "atualizadoEm" = NOW()
+          `);
+          await db.execute(sql`
+            INSERT INTO banco_horas_lancamentos ("employeeId", "companyId", tipo, minutos, "minutosBase", "minutosAcrescimo", descricao, data, "criadoPor")
+            VALUES (${d.employeeId}, ${d.companyId}, 'debito_dsr', ${-d.minutos}, ${-d.minutos}, 0,
+              ${_debitoDescricaoDsr983}, ${_dataFimMesDsr983}::date, 'Sistema (folha)')
           `);
         }
       }
