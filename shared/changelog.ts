@@ -1,4 +1,28 @@
 /**
+ * Rev. 3957 — **DRE IA: CLAUDE OPUS 4-5 DIRETO + DIALOG POPUP (FIX 95% TRAVADO).**
+ *
+ * CAUSA-RAIZ DO 95% TRAVADO:
+ *   `invokeLLM` roteava para `claude-sonnet-4-6` com 6.000 tokens de output.
+ *   Sonnet 4-6 leva 60-90s para resposta tão longa — estoura o timeout do proxy
+ *   iOS (~30s) antes de retornar. `analiseMut.isSuccess` nunca dispara, a barra
+ *   fica presa em ~95% para sempre.
+ *
+ * MUDANÇAS:
+ *   - server/services/dreAnaliseIA.ts: substitui `invokeLLM` por `callOpus()`
+ *     (Anthropic SDK direto, model `claude-opus-4-5`, maxTokens 4000).
+ *     Anthropic resolve via integration vars (AI_INTEGRATIONS_ANTHROPIC_*) ou
+ *     ANTHROPIC_API_KEY. Opus 4-5 é mais eficiente por token → resposta mais
+ *     rápida e mais inteligente.
+ *   - client/src/pages/financeiro/FinanceiroDRE.tsx: Sheet lateral de Análise
+ *     substituído por Dialog centralizado (`max-w-4xl`, `max-h-[92vh]`,
+ *     cabeçalho sticky). Badge "Claude Opus 4-5" no título do Dialog.
+ *     Imports: SheetHeader/SheetTitle removidos do bloco de análise (mantidos
+ *     no bloco DFC inativo).
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3956 — **DFC: PÁGINA DEDICADA `/financeiro/dfc` (ROTA EXCLUSIVA).**
  *
  * MOTIVAÇÃO:

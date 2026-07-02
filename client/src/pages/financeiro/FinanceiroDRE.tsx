@@ -727,24 +727,25 @@ export default function FinanceiroDRE() {
           </CardContent>
         </Card>
 
-        {/* Sheet — Análise de IA */}
-        <Sheet open={analiseOpen} onOpenChange={setAnaliseOpen}>
-          <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto p-0">
-            <SheetHeader className="sticky top-0 z-10 bg-white border-b border-gray-100 px-5 py-4">
+        {/* Dialog — Análise de IA (Rev. 3957: Dialog popup em vez de Sheet lateral) */}
+        <Dialog open={analiseOpen} onOpenChange={setAnaliseOpen}>
+          <DialogContent className="max-w-4xl w-full max-h-[92vh] overflow-y-auto p-0 gap-0 flex flex-col">
+            <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-5 py-4 shrink-0">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
                   <span className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center shrink-0">
                     <Sparkles className="w-5 h-5 text-orange-500" />
                   </span>
                   <div>
-                    <SheetTitle className="text-sm font-bold text-gray-900 flex items-center gap-2 flex-wrap">
+                    <DialogTitle className="text-sm font-bold text-gray-900 flex items-center gap-2 flex-wrap">
                       Análise Inteligente · {tituloPeriodo}
+                      <span className="text-[10px] font-normal text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">Claude Opus 4-5</span>
                       {analise?.saude && !analiseMut.isPending && (
                         <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${saudeMap[analise.saude]?.cls ?? ""}`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${saudeMap[analise.saude]?.dot ?? "bg-gray-400"}`} /> {saudeMap[analise.saude]?.label ?? analise.saude}
                         </span>
                       )}
-                    </SheetTitle>
+                    </DialogTitle>
                     {!analiseMut.isPending && analiseSalvaEm && (
                       <p className="text-[11px] text-gray-400 mt-0.5">
                         Salva em {parseAsUTC(analiseSalvaEm).toLocaleString("pt-BR")}
@@ -753,7 +754,7 @@ export default function FinanceiroDRE() {
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 mr-8">
                   {nota !== null && !analiseMut.isPending && (
                     <div
                       className="w-11 h-11 rounded-full flex items-center justify-center font-extrabold text-sm tabular-nums border-4"
@@ -774,7 +775,7 @@ export default function FinanceiroDRE() {
                   </Button>
                 </div>
               </div>
-            </SheetHeader>
+            </div>
 
             <div className="p-5 space-y-5">
               {analiseMut.isPending || iaProgresso > 0 ? (
@@ -1081,8 +1082,8 @@ export default function FinanceiroDRE() {
                 </div>
               )}
             </div>
-          </SheetContent>
-        </Sheet>
+          </DialogContent>
+        </Dialog>
 
         {/* DFC Sheet removido — DFC agora é página dedicada /financeiro/dfc */}
         {false && <Sheet open={false} onOpenChange={() => {}}>

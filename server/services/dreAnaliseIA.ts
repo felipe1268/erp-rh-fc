@@ -1,5 +1,35 @@
-import { invokeLLM } from "../_core/llm";
+import Anthropic from "@anthropic-ai/sdk";
 import { calcularDRE, calcularDRECustoPorConta } from "./financialKpiService";
+
+// Rev. 3957 — Claude Opus 4-5 diretamente (mais poderoso da Anthropic).
+// Não passa pelo invokeLLM genérico para evitar timeout iOS em ~95%:
+// o roteador usava Sonnet 4-6 (lento p/ 6k tokens) e caia no timeout do proxy.
+const OPUS_MODEL = "claude-opus-4-5";
+
+function getAnthropicDirect(): Anthropic {
+  if (process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL && process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY) {
+    return new Anthropic({
+      apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
+      baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
+    });
+  }
+  if (process.env.ANTHROPIC_API_KEY) {
+    return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  }
+  throw new Error("Anthropic não configurado. Ative a integração Anthropic no Replit ou configure ANTHROPIC_API_KEY.");
+}
+
+async function callOpus(system: string, userMsg: string, maxTokens = 4000): Promise<string> {
+  const client = getAnthropicDirect();
+  const resp = await client.messages.create({
+    model: OPUS_MODEL,
+    max_tokens: maxTokens,
+    system,
+    messages: [{ role: "user", content: userMsg }],
+  });
+  const block = resp.content.find((c) => c.type === "text");
+  return block && "text" in block ? block.text : "";
+}
 
 // ============================================================
 // ANÁLISE DE IA DO DRE — FC Engenharia
@@ -326,17 +356,7 @@ export async function analisarDRE(
 
   let parsed: any;
   try {
-    const resp = await invokeLLM({
-      fast: false,
-      maxTokens: 6000,
-      responseFormat: { type: "json_object" },
-      messages: [
-        { role: "system", content: sys },
-        { role: "user", content: prompt },
-      ],
-    });
-    const content = resp?.choices?.[0]?.message?.content;
-    const text = typeof content === "string" ? content : JSON.stringify(content ?? "");
+    const text = await callOpus(sys, prompt, 4000);
     parsed = parseJsonLoose(text);
   } catch (e: any) {
     return {
