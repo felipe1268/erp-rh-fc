@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3974** — **FOLHA: AUTO-RECONCILIAR FALTA ÓRFÃ DO ESCURO CONTRA REGISTRO MANUAL.** `payroll_adjustments` gerado pelo escuro (tipo='falta', status='pendente') persistia mesmo após lançamento manual no Espelho corrigir `timecard_daily.isFalta=0` → `escFaltasValor` entrava em `descontoFaltasBase` gerando desconto indevido (ex: R$101,38 sem nenhuma falta real). Fix: após auto-ponto, UPDATE-CTE cancela adjustments órfãos + limpa `adjMap` em memória. ZERO DELETE.
+
 - **Rev. 3973** — **AUTO-PONTO: TURNO INCOMPLETO COMPUTA DÉFICIT TOTAL COMO ATRASO.** Loop do `simulaFolha` computava `minutosAtraso` apenas pelo atraso de entrada, ignorando o déficit quando o colaborador saiu antes de completar a jornada (ex: 5h02 de 9h → 3h58 invisíveis). Fix: após cálculo de HE, `if actualMins < expectedMins → minutosAtraso = max(minutosAtraso, deficit)`. Guard `isFalta===0` evita dupla contagem. ZERO DELETE.
 
-- **Rev. 3972** — **AUTO-PONTO: FÉRIAS NÃO GERAM FALTA NO FECHAMENTO DA FOLHA.** Loop do `simulaFolha` marcava `isFalta=1` em todos os dias úteis sem `time_record`, incluindo dias de gozo de férias. Corrigido: pré-carrega `vacation_periods` que intersectam o período do ponto; dias de férias recebem `tipoDia='ferias'`, bloqueando os guards `if (tipoDia==='util') isFalta=1`. Padrão idêntico ao da fase do escuro. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3972** — **AUTO-PONTO: FÉRIAS NÃO GERAM FALTA NO FECHAMENTO DA FOLHA.** Pré-carrega `vacation_periods` que intersectam o período; dias de férias recebem `tipoDia='ferias'`, bloqueando `isFalta=1`. Padrão idêntico ao da fase do escuro. ZERO DELETE.
 
 - **Rev. 3971** — **CONVÊNIOS: FIX COLUNA VAZIA NA FOLHA (`competencia_desconto` NULL).** `aprovar` mutation nunca gravava `competenciaDesconto` no update — agora persiste `competenciaSelecionada` do RH. ColFix v3971 backfilla todos os aprovados antigos com `competencia_desconto IS NULL` pela regra dia-15/16. ZERO DELETE.
 

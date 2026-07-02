@@ -3763,6 +3763,44 @@ export const payrollEngineRouter = router({
         }
       }
 
+      // Rev. 3974 — Auto-reconciliar ajustes de falta do escuro contra timecard_daily.
+      // Cenário: escuro aferição rodou ANTES da entrada manual do colaborador.
+      // Gerou payroll_adjustment tipo='falta' (status='pendente').
+      // Depois o usuário lançou manualmente no Espelho → timecard_daily corrigido
+      // (isFalta=0, origemRegistro='manual'). O adjustment ficou órfão.
+      // Aqui cancelamos automaticamente esses adjustments para não entrar em
+      // descontoFaltasBase e gerar desconto indevido na Folha.
+      {
+        const autoReconcileRows = ((await db.execute(sql`
+          WITH cancelados AS (
+            UPDATE payroll_adjustments pa
+            SET status = 'cancelado', "updatedAt" = NOW()
+            FROM timecard_daily td
+            WHERE pa."companyId" IN (${allCompanyIdsSql})
+              AND pa."mesDesconto" = ${input.mesReferencia}
+              AND pa.tipo = 'falta'
+              AND pa.status = 'pendente'
+              AND td."companyId" IN (${allCompanyIdsSql})
+              AND td."mesCompetencia" = ${input.mesReferencia}
+              AND td."employeeId" = pa."employeeId"
+              AND td.data = pa.data
+              AND td."isFalta" = 0
+              AND td."statusDia" = 'registrado'
+            RETURNING pa.id
+          )
+          SELECT id FROM cancelados
+        `)) as any).rows || [];
+        if (autoReconcileRows.length > 0) {
+          const cancelledIds = new Set<number>(autoReconcileRows.map((r: any) => Number(r.id)));
+          console.log(`[SimPag AUTO-RECONCILE] ${cancelledIds.size} ajuste(s) de falta cancelados por registro manual sem falta`);
+          // Limpar do adjMap em memória (adjRows foi carregado antes do auto-ponto)
+          for (const [empId, adjs] of adjMap.entries()) {
+            const filtered = (adjs as any[]).filter((a: any) => !cancelledIds.has(Number(a.id)));
+            if (filtered.length !== (adjs as any[]).length) adjMap.set(empId, filtered);
+          }
+        }
+      }
+
       // Get faltas from timecard_daily for the ponto period (registrado only)
       const faltasRows2 = ((await db.execute(sql`
         SELECT "employeeId", 

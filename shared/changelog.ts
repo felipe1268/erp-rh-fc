@@ -1,4 +1,25 @@
 /**
+ * Rev. 3974 — **FOLHA: AUTO-RECONCILIAR FALTA ÓRFÃ DO ESCURO CONTRA REGISTRO MANUAL.**
+ *
+ * CAUSA-RAIZ: `payroll_adjustments` gerados pela aferição do escuro (tipo='falta',
+ * status='pendente') persistem mesmo após o usuário lançar o dia manualmente no Espelho
+ * de Ponto (corrigindo `timecard_daily.isFalta=0`). O SimPag somava ambos → `escFaltasValor`
+ * entrava em `descontoFaltasBase` → desconto indevido na Folha (ex: R$101,38 para Alex da
+ * Silva Domingos com 0 faltas no Espelho).
+ *
+ * CORREÇÃO (`server/routers/payrollEngine.ts`):
+ *   - Após o loop do auto-ponto (que grava/atualiza `timecard_daily`), executa UPDATE
+ *     via CTE `WITH cancelados AS (UPDATE ... RETURNING pa.id)` que cancela todos os
+ *     `payroll_adjustments.tipo='falta'` status='pendente' para dias onde
+ *     `timecard_daily.isFalta=0 AND statusDia='registrado'` (registro presente e sem falta).
+ *   - Remove também do `adjMap` em memória (carregado antes do auto-ponto), para que a
+ *     mesma execução do SimPag já saia com o valor corrigido sem precisar reprocessar.
+ *   - Log: "[SimPag AUTO-RECONCILE] N ajuste(s) de falta cancelados por registro manual".
+ *
+ * ZERO DELETE.
+ */
+
+/**
  * Rev. 3973 — **AUTO-PONTO: TURNO INCOMPLETO COMPUTA DÉFICIT TOTAL COMO ATRASO.**
  *
  * CAUSA-RAIZ: o loop do auto-ponto (`SimPag simulaFolha`) computava `minutosAtraso`
