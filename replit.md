@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3970** — **REFIS: FIX CARDS INFERIORES PREVISTO/REALIZADO (DELTA → ACUMULADO).** `rPrevSem`/`rRealSem` (deltas com fontes misturadas: MSP vs ponderação local) substituídos por `rPrev`/`rReal` (valores acumulados, mesma fonte das barras superiores); barra interna de progresso ajustada (`*10` → `Math.min(val,100)`); legenda "Ponderado por duração" → "Snapshot MSP". ZERO DELETE.
+
 - **Rev. 3969** — **DISSÍDIO: FIX DIFERENÇAS RETROATIVAS QUANDO VIGÊNCIA == MÊS DE APLICAÇÃO.** `mesesRetroativosEntre("2026-05","2026-05")` retornava `[]`; guard inclui o próprio mês quando vigência == aplicação; `recalcularDiferencas` corrigido igual; botão "Calcular Diferenças Retroativas" adicionado no dialog da Folha. ZERO DELETE.
 
-- **Rev. 3968** — **VALE ALIMENTAÇÃO: SELETOR PERÍODO → PADRÃO WHITE-CARD.** `MonthSelector` → `PeriodSelectorCard` nas 3 abas (lancamento/por_obra/alertas_faltas); `mesAno` → `ano`+`mes`+`mesStr`; todas as queries e mutations atualizadas. ZERO DELETE.
-
 ### 5 one-liners
+
+- **Rev. 3968** — **VALE ALIMENTAÇÃO: SELETOR PERÍODO → PADRÃO WHITE-CARD.** `MonthSelector` → `PeriodSelectorCard` nas 3 abas (lancamento/por_obra/alertas_faltas); `mesAno` → `ano`+`mes`+`mesStr`; todas as queries e mutations atualizadas. ZERO DELETE.
 
 - **Rev. 3967** — **EFETIVO OBRA: FIX ÚLTIMO GRUPO CORTADO NA TABELA EQUIPE.** `p-4` → `p-4 pb-16` no container scroll da FullScreenDialog; último grupo de funções não ficava mais visível. ZERO DELETE.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 3965** — **EFETIVO OBRA: FOTO DO FUNCIONÁRIO NA TABELA "EQUIPE — {OBRA}".** `EmpAvatar` inline (foto circular ou iniciais) adicionado na coluna Nome da tabela agrupada por função em DashEfetivoObra. Backend já retornava `fotoUrl` — só frontend alterado. ZERO DELETE.
 
 - **Rev. 3964** — **FOLHA DE PAGAMENTO: FIX `mes.split is not a function` (REGRESSÃO Rev. 3962).** `mes.split("-")[0]` no título da TabelaComparativaAnual → `ano`. ZERO DELETE.
-
-- **Rev. 3963** — **CARTÃO DE PONTO: FOTO DO FUNCIONÁRIO NOS RANKINGS DE FALTAS E ATRASOS.** `fotoUrl` adicionado ao select de allEmps; `EmpAvatar` (foto/iniciais) inserido entre badge numérico e nome nos dois Top 10. ZERO DELETE.
 
 ### Histórico completo
 

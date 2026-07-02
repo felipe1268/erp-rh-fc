@@ -1,4 +1,29 @@
 /**
+ * Rev. 3970 — **REFIS: FIX CARDS INFERIORES PREVISTO/REALIZADO (DELTA → ACUMULADO).**
+ *
+ * CAUSA-RAIZ: os dois primeiros KPI cards da faixa inferior do REFIS exibiam
+ * `rPrevSem` e `rRealSem` — deltas semanais calculados com FONTES MISTURADAS:
+ *   - `rPrevSem = rPrev(cronograma) − rPrevAntes(curva @ início da semana)` → delta parcial
+ *     de apenas parte da semana (seg→cutoff), não o período completo.
+ *   - `rRealSem = rReal(MSP snapshot=42%) − rRealAntes(ponderação local semana anterior)` →
+ *     subtração de fontes INCOMPATÍVEIS (MSP vs ponderação manual), gerando valor espúrio.
+ *
+ * CORREÇÃO (`client/src/pages/planejamento/PlanejamentoDetalhe.tsx`):
+ *   - Card "Avanço Semanal Previsto" → agora exibe `rPrev` (% previsto acumulado do
+ *     cronograma, idêntico à barra superior), label atualizado para "Previsto / Acumulado".
+ *   - Card "Avanço Semanal Realizado" → agora exibe `rReal` (% realizado acumulado do
+ *     snapshot MSP, idêntico à barra superior), label "Realizado / Acumulado".
+ *   - Barra de progresso interna de cada card ajustada: `width = Math.min(valor, 100)%`
+ *     (antes escalonava * 10 para deltas pequenos, agora escala linearmente 0–100).
+ *   - Legenda do card Realizado: "Snapshot MSP" (era "Ponderado por duração" — label
+ *     errado, pois o valor vinha do MSP e não de ponderação local).
+ *   - SPI e Desvio Físico (cards 3 e 4) permanecem inalterados.
+ *
+ * RESULTADO: cards inferiores agora são coerentes com a barra superior
+ * (Previsto 47,75% / Realizado 42,00%) e com o módulo Avanço Semanal
+ * (Realizado Acum. = 42,00%). ZERO DELETE.
+ */
+/**
  * Rev. 3969 — **DISSÍDIO: FIX DIFERENÇAS RETROATIVAS QUANDO VIGÊNCIA == MÊS DE APLICAÇÃO.**
  *
  * CAUSA-RAIZ: `mesesRetroativosEntre("2026-05", "2026-05")` retorna `[]` porque o

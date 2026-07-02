@@ -15257,30 +15257,30 @@ function Refis({ projetoId, proj, atividades, avancos, avancoAtual, refisLista, 
 
           {/* ── Cards KPI — faixa horizontal inferior ────────────────────────── */}
           <div className="grid grid-cols-2 sm:grid-cols-4 border-t border-slate-200">
-            {/* ADV SEMANAL PREVISTO */}
+            {/* PREVISTO ACUMULADO */}
             <div className="flex flex-col px-5 py-4 border-r border-slate-100" style={{ background: "#fffbeb" }}>
               <p className="text-[9px] font-bold uppercase tracking-[0.14em] mb-3" style={{ color: "#92400e" }}>
-                Avanço Semanal<br/>
-                <span style={{ color: "#b45309" }}>Previsto</span>
+                Previsto<br/>
+                <span style={{ color: "#b45309" }}>Acumulado</span>
               </p>
-              <p className="text-3xl font-black leading-none" style={{ color: "#d97706" }}>{fPct_(rPrevSem)}</p>
+              <p className="text-3xl font-black leading-none" style={{ color: "#d97706" }}>{fPct_(rPrev)}</p>
               <div className="mt-3 w-full h-1.5 rounded-full overflow-hidden" style={{ background: "#fde68a" }}>
-                <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(rPrevSem * 10, 100)}%`, background: "#FFB800" }} />
+                <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(rPrev, 100)}%`, background: "#FFB800" }} />
               </div>
               <p className="text-[9px] mt-2 text-amber-700 font-medium">Baseado no cronograma</p>
             </div>
 
-            {/* ADV SEMANAL REAL */}
+            {/* REALIZADO ACUMULADO */}
             <div className="flex flex-col px-5 py-4 border-r border-slate-100" style={{ background: "#eff6ff" }}>
               <p className="text-[9px] font-bold uppercase tracking-[0.14em] mb-3" style={{ color: "#1e3a8a" }}>
-                Avanço Semanal<br/>
-                <span style={{ color: "#1d4ed8" }}>Realizado</span>
+                Realizado<br/>
+                <span style={{ color: "#1d4ed8" }}>Acumulado</span>
               </p>
-              <p className="text-3xl font-black leading-none" style={{ color: "#2563eb" }}>{fPct_(rRealSem)}</p>
+              <p className="text-3xl font-black leading-none" style={{ color: "#2563eb" }}>{fPct_(rReal)}</p>
               <div className="mt-3 w-full h-1.5 rounded-full overflow-hidden" style={{ background: "#bfdbfe" }}>
-                <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(rRealSem * 10, 100)}%`, background: "#3b82f6" }} />
+                <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(rReal, 100)}%`, background: "#3b82f6" }} />
               </div>
-              <p className="text-[9px] mt-2 text-blue-700 font-medium">{usarPesoPorDuracao ? "Ponderado por duração" : "Ponderado financeiramente"}</p>
+              <p className="text-[9px] mt-2 text-blue-700 font-medium">Snapshot MSP</p>
             </div>
 
             {/* SPI */}
