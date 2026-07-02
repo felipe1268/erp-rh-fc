@@ -18,7 +18,8 @@ import {
   UtensilsCrossed, Search, Upload, FileSpreadsheet, Users, DollarSign,
   Settings, ListChecks, History, CheckCircle, XCircle, Pencil, Trash2,
   RefreshCw, Plus, Building2, Coffee, Sandwich, Moon, CreditCard,
-  ChevronDown, ChevronUp, AlertTriangle, Eye, Loader2, Ban, Calculator, Info, MinusCircle
+  ChevronDown, ChevronUp, AlertTriangle, Eye, Loader2, Ban, Calculator, Info, MinusCircle,
+  CalendarRange
 } from "lucide-react";
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
@@ -1313,6 +1314,8 @@ export default function ValeAlimentacao() {
                     jantaTotalMes: "",
                     vaTotalMes: "",
                     observacoes: "",
+                    vigenciaInicio: "",
+                    vigenciaFim: "",
                   });
                   setShowConfigDialog(true);
                 }}>
@@ -1335,13 +1338,25 @@ export default function ValeAlimentacao() {
                   <Card key={cfg.id} className={`${!cfg.obraId ? "border-orange-300 bg-orange-50/30" : ""}`}>
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">
-                        <CardTitle className="text-sm flex items-center gap-2">
-                          {cfg.obraId ? (
-                            <><Building2 className="h-4 w-4 text-blue-600" /> {cfg.obraNome || `Obra #${cfg.obraId}`}</>
-                          ) : (
-                            <><Settings className="h-4 w-4 text-orange-600" /> Padrão da Empresa</>
-                          )}
-                        </CardTitle>
+                        <div className="flex flex-col gap-1">
+                          <CardTitle className="text-sm flex items-center gap-2">
+                            {cfg.obraId ? (
+                              <><Building2 className="h-4 w-4 text-blue-600" /> {cfg.obraNome || `Obra #${cfg.obraId}`}</>
+                            ) : (
+                              <><Settings className="h-4 w-4 text-orange-600" /> Padrão da Empresa</>
+                            )}
+                          </CardTitle>
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <CalendarRange className="h-3 w-3" />
+                            {cfg.vigencia_inicio ? new Date(cfg.vigencia_inicio + 'T00:00:00').toLocaleDateString('pt-BR') : "início indefinido"}
+                            {" — "}
+                            {cfg.vigencia_fim ? (
+                              <span className="text-red-500">encerrada em {new Date(cfg.vigencia_fim + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                            ) : (
+                              <Badge variant="outline" className="h-4 px-1.5 py-0 text-[10px] border-green-400 text-green-700 bg-green-50">vigente</Badge>
+                            )}
+                          </div>
+                        </div>
                         <div className="flex gap-1">
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => {
                             setEditingConfigId(cfg.id);
@@ -1368,6 +1383,8 @@ export default function ValeAlimentacao() {
                                 jantaTotalMes: hasTotals ? (cfg.janta_total_mes || cfg.jantaTotalMes || "0") : (parseBRL(cfg.jantaDia) * dias).toFixed(2).replace('.', ','),
                                 vaTotalMes: hasTotals ? (cfg.va_total_mes || cfg.vaTotalMes || "0") : (parseBRL(cfg.valeAlimentacaoMes) * dias).toFixed(2).replace('.', ','),
                                 observacoes: cfg.observacoes || "",
+                                vigenciaInicio: cfg.vigencia_inicio ? String(cfg.vigencia_inicio).slice(0, 10) : "",
+                                vigenciaFim: cfg.vigencia_fim ? String(cfg.vigencia_fim).slice(0, 10) : "",
                               });
                             }
                             setShowConfigDialog(true);
@@ -1681,6 +1698,20 @@ export default function ValeAlimentacao() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="grid grid-cols-2 gap-3 rounded-md border border-orange-200 bg-orange-50/50 p-3">
+              <div>
+                <Label className="text-sm flex items-center gap-1"><CalendarRange className="h-3.5 w-3.5" /> Vigência — Início</Label>
+                <Input type="date" value={configForm.vigenciaInicio || ""} onChange={e => setConfigForm((f: any) => ({ ...f, vigenciaInicio: e.target.value }))} className="mt-1 bg-white" />
+                <p className="text-xs text-muted-foreground mt-1">
+                  {editingConfigId ? "Ajuste manual (correção). Deixe vazio para não alterar." : "Vazio = hoje. Uma config aberta existente nesta obra/empresa será encerrada automaticamente na véspera."}
+                </p>
+              </div>
+              <div>
+                <Label className="text-sm flex items-center gap-1"><CalendarRange className="h-3.5 w-3.5" /> Vigência — Fim (opcional)</Label>
+                <Input type="date" value={configForm.vigenciaFim || ""} onChange={e => setConfigForm((f: any) => ({ ...f, vigenciaFim: e.target.value }))} className="mt-1 bg-white" />
+                <p className="text-xs text-muted-foreground mt-1">Vazio = em aberto (config atual)</p>
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-sm">Dias Úteis Referência</Label>
@@ -1830,6 +1861,7 @@ export default function ValeAlimentacao() {
             <DialogTitle className="flex items-center gap-2"><Calculator className="h-5 w-5 text-orange-600" /> Calcular Reajuste dos Benefícios</DialogTitle>
             <DialogDescription>
               Aplica o percentual de reajuste do Dissídio (data-base de maio) sobre café, lanche, VA e janta de todas as configurações ativas.
+              A config atual é encerrada na véspera da data-base e uma NOVA versão vigente é criada com os valores reajustados — o histórico é preservado.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -1903,7 +1935,7 @@ export default function ValeAlimentacao() {
               disabled={!previewReajusteQ.data?.dissidio || !previewReajusteQ.data?.configs?.length || aplicarReajusteMut.isPending}
               onClick={() => {
                 setConfirmAction({
-                  msg: `Aplicar reajuste de +${previewReajusteQ.data?.percentual}% (Dissídio ${reajusteAno}) em ${previewReajusteQ.data?.configs.length} configuração(ões) de benefícios? Esta ação atualiza os valores diretamente.`,
+                  msg: `Aplicar reajuste de +${previewReajusteQ.data?.percentual}% (Dissídio ${reajusteAno}) em ${previewReajusteQ.data?.configs.length} configuração(ões) de benefícios? Cada configuração atual será encerrada e uma nova versão vigente será criada com os valores reajustados (histórico preservado).`,
                   onConfirm: () => aplicarReajusteMut.mutate({ companyId, companyIds, ano: reajusteAno }),
                 });
               }}

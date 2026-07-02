@@ -11,6 +11,7 @@ import {
   planejamentoRevisoes, mealBenefitConfigs,
   clientes, employeeIntegrations, companies,
 } from "../../drizzle/schema";
+import { resolveMealBenefitConfig } from "../services/mealBenefitResolver";
 
 function companyFilter(col: any, input: { companyId: number; companyIds?: number[] }) {
   if (input.companyIds && input.companyIds.length > 0) {
@@ -173,27 +174,19 @@ function calcEncargosBlended(
   };
 }
 
-async function getMealConfig(db: any, input: { companyId: number; companyIds?: number[] }, obraId?: number) {
-  let mealCfg: any = null;
-  if (obraId) {
-    const [obraCfg] = await db.select().from(mealBenefitConfigs)
-      .where(and(companyFilter(mealBenefitConfigs.companyId, input), eq(mealBenefitConfigs.obraId, obraId), eq(mealBenefitConfigs.ativo, 1)))
-      .orderBy(desc(mealBenefitConfigs.createdAt)).limit(1);
-    mealCfg = obraCfg || null;
+// Rev. 3985 — resolve a config VIGENTE na data de referência (default: hoje), não mais "mais recente por createdAt"
+async function getMealConfig(db: any, input: { companyId: number; companyIds?: number[] }, obraId?: number, refDate?: string) {
+  const dataRef = refDate || new Date().toISOString().split("T")[0];
+  const companyId = input.companyId ?? (input.companyIds && input.companyIds[0]);
+  if (companyId) {
+    const cfg = await resolveMealBenefitConfig(db, companyId, obraId || null, dataRef);
+    if (cfg) return cfg;
   }
-  if (!mealCfg) {
-    const [padrao] = await db.select().from(mealBenefitConfigs)
-      .where(and(companyFilter(mealBenefitConfigs.companyId, input), isNull(mealBenefitConfigs.obraId), eq(mealBenefitConfigs.ativo, 1)))
-      .orderBy(desc(mealBenefitConfigs.createdAt)).limit(1);
-    mealCfg = padrao || null;
-  }
-  if (!mealCfg) {
-    const [any] = await db.select().from(mealBenefitConfigs)
-      .where(and(companyFilter(mealBenefitConfigs.companyId, input), eq(mealBenefitConfigs.ativo, 1)))
-      .orderBy(desc(mealBenefitConfigs.createdAt)).limit(1);
-    mealCfg = any || null;
-  }
-  return mealCfg;
+  // Fallback final: qualquer config ativa da empresa (multi-company ou dado legado sem vigência)
+  const [any] = await db.select().from(mealBenefitConfigs)
+    .where(and(companyFilter(mealBenefitConfigs.companyId, input), eq(mealBenefitConfigs.ativo, 1)))
+    .orderBy(desc(mealBenefitConfigs.createdAt)).limit(1);
+  return any || null;
 }
 
 function calcBeneficiosFromConfig(mealCfg: any, convVrDiario: number, convVaMensal: number) {
@@ -1121,7 +1114,7 @@ export const smoRouter = router({
       const convVaVal = parseFloat(convData?.valeAlimentacao || "0");
       const pisoFallback = parseFloat(convData?.pisoSalarial || "2500");
 
-      const mealCfgCreate = await getMealConfig(db, input, input.obraId);
+      const mealCfgCreate = await getMealConfig(db, input, input.obraId, input.dataInicioNecessidade);
       const benefCreate = calcBeneficiosFromConfig(mealCfgCreate, convVrDiario, convVaVal);
 
       const results = [];

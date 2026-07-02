@@ -2675,13 +2675,25 @@ async function getDashCustoDemissaoMassa(
   const vrDiarioDefaultByCompany = new Map<number, number>();
   const cfgCompanyIds = companyIds && companyIds.length > 0 ? companyIds : [companyId];
   try {
-    const cfgRows = ((await db.execute(sql`
+    // Rev. 3985 — vigente na data de referência (dataRef), pegando a mais recente por
+    // vigenciaInicio dentro de cada escopo (companyId+obraId, incl. NULL = "Todas as Obras").
+    const cfgRowsRaw = ((await db.execute(sql`
       SELECT "companyId", "obraId", "cafeManhaDia", "lancheTardeDia",
-             "valeAlimentacaoMes", "diasUteisRef", "cafeAtivo", "lancheAtivo"
+             "valeAlimentacaoMes", "diasUteisRef", "cafeAtivo", "lancheAtivo", vigencia_inicio
       FROM meal_benefit_configs
       WHERE "companyId" IN (${sql.join(cfgCompanyIds.map(id => sql`${id}`), sql`, `)})
         AND ativo = 1
+        AND (vigencia_inicio IS NULL OR vigencia_inicio <= ${dataRef}::date)
+        AND (vigencia_fim IS NULL OR vigencia_fim >= ${dataRef}::date)
+      ORDER BY "companyId", "obraId" IS NULL DESC, "obraId", vigencia_inicio DESC NULLS LAST
     `)) as any).rows || [];
+    const seenScope = new Set<string>();
+    const cfgRows = cfgRowsRaw.filter((cfg: any) => {
+      const key = `${cfg.companyId}:${cfg.obraId ?? 'null'}`;
+      if (seenScope.has(key)) return false;
+      seenScope.add(key);
+      return true;
+    });
     for (const cfg of cfgRows) {
       const cafe = parseBRL(cfg.cafeManhaDia);
       const lanche = parseBRL(cfg.lancheTardeDia);

@@ -29,6 +29,7 @@ import { getIncluirMultaFgts, carregarMultaFgtsPorEmpresa } from "../utils/resci
 import { corrigirPontoFuncionario } from "../utils/pontoCorrecaoAuto";
 import { storagePut } from "../storage";
 import { bancoHorasSaldo } from "../../drizzle/schema";
+import { resolveMealBenefitConfig } from "../services/mealBenefitResolver";
 
 /**
  * Rev. 3977 — Lê o saldo (em minutos) do Banco de Horas do empregado, usado para
@@ -936,21 +937,9 @@ export const avisoPrevioFeriasRouter = router({
         const [empObraAloc] = await db.select({ obraId: obraFuncionarios.obraId }).from(obraFuncionarios).where(and(eq(obraFuncionarios.employeeId, emp.id), eq(obraFuncionarios.isActive, 1)));
         try {
           const obraId = empObraAloc?.obraId || null;
-          let cfgRows: any[] = [];
-          if (obraId) {
-            const rows = ((await db.execute(
-              sql`SELECT * FROM meal_benefit_configs WHERE companyId = ${emp.companyId} AND obraId = ${obraId} AND ativo = 1 LIMIT 1`
-            )) as any).rows || [];
-            cfgRows = rows || [];
-          }
-          if (cfgRows.length === 0) {
-            const rows = ((await db.execute(
-              sql`SELECT * FROM meal_benefit_configs WHERE companyId = ${emp.companyId} AND obraId IS NULL AND ativo = 1 LIMIT 1`
-            )) as any).rows || [];
-            cfgRows = rows || [];
-          }
-          if (cfgRows.length > 0) {
-            const cfg = cfgRows[0];
+          // Rev. 3985 — resolve a config VIGENTE na data de fim do aviso (última data com direito a VR)
+          const cfg = await resolveMealBenefitConfig(db, emp.companyId, obraId, dataFimAviso);
+          if (cfg) {
             const cafe = parseBRL(cfg.cafeManhaDia);
             const lanche = parseBRL(cfg.lancheTardeDia);
             const vaMes = parseBRL(cfg.valeAlimentacaoMes);
@@ -1204,21 +1193,9 @@ export const avisoPrevioFeriasRouter = router({
           // Buscar obra via alocação ativa
           const [empObraAloc] = await db.select({ obraId: obraFuncionarios.obraId }).from(obraFuncionarios).where(and(eq(obraFuncionarios.employeeId, emp.id), eq(obraFuncionarios.isActive, 1)));
           const obraId = empObraAloc?.obraId || null;
-          let cfgRows: any[] = [];
-          if (obraId) {
-            const rows = ((await db.execute(
-              sql`SELECT * FROM meal_benefit_configs WHERE companyId = ${emp.companyId} AND obraId = ${obraId} AND ativo = 1 LIMIT 1`
-            )) as any).rows || [];
-            cfgRows = rows || [];
-          }
-          if (cfgRows.length === 0) {
-            const rows = ((await db.execute(
-              sql`SELECT * FROM meal_benefit_configs WHERE companyId = ${emp.companyId} AND obraId IS NULL AND ativo = 1 LIMIT 1`
-            )) as any).rows || [];
-            cfgRows = rows || [];
-          }
-          if (cfgRows.length > 0) {
-            const cfg = cfgRows[0];
+          // Rev. 3985 — resolve a config VIGENTE na data de desligamento informada
+          const cfg = await resolveMealBenefitConfig(db, emp.companyId, obraId, input.dataDesligamento);
+          if (cfg) {
             const cafe = parseBRL(cfg.cafeManhaDia);
             const lanche = parseBRL(cfg.lancheTardeDia);
             const vaMes = parseBRL(cfg.valeAlimentacaoMes);
@@ -1395,23 +1372,15 @@ export const avisoPrevioFeriasRouter = router({
         };
       }),
 
-    /** Buscar configuração de benefícios de alimentação */
+    /** Buscar configuração de benefícios de alimentação (Rev. 3985 — vigente em `dataRef`, default hoje) */
     getMealBenefitConfig: protectedProcedure
-      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), obraId: z.number().optional() }))
+      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), obraId: z.number().optional(), dataRef: z.string().optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         try {
-          if (input.obraId) {
-            const rows = ((await db.execute(
-              sql`SELECT * FROM meal_benefit_configs WHERE companyId = ${input.companyId} AND obraId = ${input.obraId} AND ativo = 1 LIMIT 1`
-            )) as any).rows || [];
-            if (rows && rows.length > 0) return rows[0];
-          }
-          // Fallback: config padrão da empresa
-          const rows = ((await db.execute(
-            sql`SELECT * FROM meal_benefit_configs WHERE companyId = ${input.companyId} AND obraId IS NULL AND ativo = 1 LIMIT 1`
-          )) as any).rows || [];
-          return rows && rows.length > 0 ? rows[0] : null;
+          const dataRef = input.dataRef || new Date().toISOString().split('T')[0];
+          const cfg = await resolveMealBenefitConfig(db, input.companyId, input.obraId ?? null, dataRef);
+          return cfg || null;
         } catch {
           return null;
         }
@@ -1424,7 +1393,7 @@ export const avisoPrevioFeriasRouter = router({
         const db = (await getDb())!;
         try {
           const rows = ((await db.execute(
-            sql`SELECT mbc.*, o.nome as "obraNome" FROM meal_benefit_configs mbc LEFT JOIN obras o ON mbc."obraId" = o.id WHERE mbc."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) ORDER BY mbc."obraId" IS NULL DESC, o.nome ASC`
+            sql`SELECT mbc.*, o.nome as "obraNome" FROM meal_benefit_configs mbc LEFT JOIN obras o ON mbc."obraId" = o.id WHERE mbc."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) ORDER BY mbc."obraId" IS NULL DESC, o.nome ASC, mbc.vigencia_inicio DESC NULLS LAST`
           )) as any).rows || [];
           return rows || [];
         } catch {
@@ -1432,7 +1401,15 @@ export const avisoPrevioFeriasRouter = router({
         }
       }),
 
-    /** Criar/atualizar configuração de benefícios de alimentação */
+    /**
+     * Criar/atualizar configuração de benefícios de alimentação.
+     * Rev. 3985 — Vigência explícita (início/fim): ao CRIAR uma nova config
+     * (sem `id`) para o mesmo escopo (companyId+obraId, incl. "Todas as Obras"),
+     * qualquer config antiga em aberto (vigenciaFim NULL) desse escopo é
+     * automaticamente ENCERRADA (vigenciaFim = novo início - 1 dia) — preserva
+     * o histórico (nunca some, nunca ambíguo) em vez de simplesmente coexistir.
+     * Edição por `id` NÃO dispara esse fechamento (é só correção da própria linha).
+     */
     saveMealBenefitConfig: protectedProcedure
       .input(z.object({
         id: z.number().optional(),
@@ -1454,6 +1431,8 @@ export const avisoPrevioFeriasRouter = router({
         jantaTotalMes: z.string().optional(),
         vaTotalMes: z.string().optional(),
         observacoes: z.string().optional(),
+        vigenciaInicio: z.string().optional(),
+        vigenciaFim: z.string().optional(),
       }))
       .mutation(async ({ input }) => {
         const db = (await getDb())!;
@@ -1479,14 +1458,31 @@ export const avisoPrevioFeriasRouter = router({
               lanche_total_mes = ${input.lancheTotalMes || '0'},
               janta_total_mes = ${input.jantaTotalMes || '0'},
               va_total_mes = ${input.vaTotalMes || '0'},
-              observacoes = ${input.observacoes || null}
+              observacoes = ${input.observacoes || null},
+              vigencia_inicio = COALESCE(${input.vigenciaInicio ?? null}::date, vigencia_inicio),
+              vigencia_fim = ${input.vigenciaFim ?? null}::date
             WHERE id = ${input.id}`
           );
           return { success: true, id: input.id };
         } else {
+          const novaVigenciaInicio = input.vigenciaInicio || new Date().toISOString().split('T')[0];
+          // Encerra qualquer config em aberto do MESMO escopo (empresa+obra) na véspera
+          // do início da nova — preserva histórico em vez de deixar duas "ativas" juntas.
+          try {
+            const obraCond = input.obraId != null ? sql`"obraId" = ${input.obraId}` : sql`"obraId" IS NULL`;
+            await db.execute(sql`
+              UPDATE meal_benefit_configs
+              SET vigencia_fim = (${novaVigenciaInicio}::date - INTERVAL '1 day')::date
+              WHERE "companyId" = ${input.companyId} AND ${obraCond} AND ativo = 1
+                AND vigencia_fim IS NULL
+                AND (vigencia_inicio IS NULL OR vigencia_inicio < ${novaVigenciaInicio}::date)
+            `);
+          } catch (e) {
+            console.error('[saveMealBenefitConfig] falha ao encerrar vigência anterior:', (e as any)?.message ?? e);
+          }
           const result = ((await db.execute(
-            sql`INSERT INTO meal_benefit_configs ("companyId", "obraId", nome, "cafeManhaDia", "lancheTardeDia", "valeAlimentacaoMes", "jantaDia", "totalVA_iFood", "diasUteisRef", "cafeAtivo", "lancheAtivo", "jantaAtivo", "descontoVaPercentual", cafe_total_mes, lanche_total_mes, janta_total_mes, va_total_mes, observacoes)
-            VALUES (${input.companyId}, ${input.obraId ?? null}, ${input.nome}, ${input.cafeManhaDia}, ${input.lancheTardeDia}, ${input.valeAlimentacaoMes}, ${input.jantaDia}, ${input.totalVA_iFood}, ${input.diasUteisRef}, ${cafeAtivoInt}, ${lancheAtivoInt}, ${jantaAtivoInt}, ${input.descontoVaPercentual || '0'}, ${input.cafeTotalMes || '0'}, ${input.lancheTotalMes || '0'}, ${input.jantaTotalMes || '0'}, ${input.vaTotalMes || '0'}, ${input.observacoes || null}) RETURNING id`
+            sql`INSERT INTO meal_benefit_configs ("companyId", "obraId", nome, "cafeManhaDia", "lancheTardeDia", "valeAlimentacaoMes", "jantaDia", "totalVA_iFood", "diasUteisRef", "cafeAtivo", "lancheAtivo", "jantaAtivo", "descontoVaPercentual", cafe_total_mes, lanche_total_mes, janta_total_mes, va_total_mes, observacoes, vigencia_inicio, vigencia_fim)
+            VALUES (${input.companyId}, ${input.obraId ?? null}, ${input.nome}, ${input.cafeManhaDia}, ${input.lancheTardeDia}, ${input.valeAlimentacaoMes}, ${input.jantaDia}, ${input.totalVA_iFood}, ${input.diasUteisRef}, ${cafeAtivoInt}, ${lancheAtivoInt}, ${jantaAtivoInt}, ${input.descontoVaPercentual || '0'}, ${input.cafeTotalMes || '0'}, ${input.lancheTotalMes || '0'}, ${input.jantaTotalMes || '0'}, ${input.vaTotalMes || '0'}, ${input.observacoes || null}, ${novaVigenciaInicio}::date, ${input.vigenciaFim ?? null}::date) RETURNING id`
           )) as any).rows || [];
           return { success: true, id: result[0]?.id };
         }
@@ -1554,6 +1550,13 @@ export const avisoPrevioFeriasRouter = router({
      * `observacoes` para rastreabilidade e para impedir duplo-reajuste
      * acidental (o preview sinaliza `jaReajustado`, mas a aplicação em si não
      * bloqueia — decisão fica com o usuário, igual ao dissídio salarial).
+     *
+     * Rev. 3985 — Deixou de fazer UPDATE in-place na config existente.
+     * Agora ENCERRA a config vigente (vigenciaFim = véspera da data-base) e
+     * INSERE uma NOVA linha com os valores reajustados e vigenciaInicio =
+     * data-base do dissídio (1º do mês de `dissidio.mesDataBase`, default
+     * maio). Isso preserva o histórico: quem consultar uma rescisão/período
+     * anterior à data-base continua vendo os valores ANTIGOS corretos.
      */
     aplicarReajusteBeneficios: protectedProcedure
       .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), ano: z.number() }))
@@ -1567,8 +1570,12 @@ export const avisoPrevioFeriasRouter = router({
         const percentual = parseFloat(dissidio.percentualReajuste) || 0;
         if (percentual <= 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Percentual de reajuste do dissídio é inválido (0% ou negativo)' });
 
+        const mesDataBase = Number((dissidio as any).mesDataBase) || 5; // maio, convenção do módulo
+        const vigenciaInicioNova = `${input.ano}-${String(mesDataBase).padStart(2, '0')}-01`;
+
         const rows = ((await db.execute(
-          sql`SELECT * FROM meal_benefit_configs WHERE "companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND ativo = 1`
+          sql`SELECT * FROM meal_benefit_configs WHERE "companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) AND ativo = 1
+              AND (vigencia_fim IS NULL OR vigencia_fim >= ${vigenciaInicioNova}::date)`
         )) as any).rows || [];
 
         const dataHoje = new Date().toLocaleDateString('pt-BR');
@@ -1582,16 +1589,16 @@ export const avisoPrevioFeriasRouter = router({
           const novoJanta = (parseBRL(cfg.jantaDia) * (1 + percentual / 100)).toFixed(2).replace('.', ',');
           const totalVA = (parseFloat(novoCafe.replace(',', '.')) * dias) + (parseFloat(novoLanche.replace(',', '.')) * dias) + parseFloat(novoVa.replace(',', '.'));
           const novasObs = `${cfg.observacoes ? cfg.observacoes + ' ' : ''}${nota}`;
+
+          // Encerra a config vigente na véspera da nova data-base (ZERO DELETE — só fecha o período).
           await db.execute(
-            sql`UPDATE meal_benefit_configs SET
-              "cafeManhaDia" = ${novoCafe},
-              "lancheTardeDia" = ${novoLanche},
-              "valeAlimentacaoMes" = ${novoVa},
-              "jantaDia" = ${novoJanta},
-              "totalVA_iFood" = ${totalVA.toFixed(2).replace('.', ',')},
-              observacoes = ${novasObs},
-              "updatedAt" = now()
-            WHERE id = ${cfg.id}`
+            sql`UPDATE meal_benefit_configs SET vigencia_fim = (${vigenciaInicioNova}::date - INTERVAL '1 day')::date, "updatedAt" = now()
+                WHERE id = ${cfg.id}`
+          );
+          // Cria a NOVA versão vigente a partir da data-base, com os valores reajustados.
+          await db.execute(
+            sql`INSERT INTO meal_benefit_configs ("companyId", "obraId", nome, "cafeManhaDia", "lancheTardeDia", "valeAlimentacaoMes", "jantaDia", "totalVA_iFood", "diasUteisRef", "cafeAtivo", "lancheAtivo", "jantaAtivo", "descontoVaPercentual", cafe_total_mes, lanche_total_mes, janta_total_mes, va_total_mes, observacoes, ativo, vigencia_inicio, vigencia_fim)
+            VALUES (${cfg.companyId}, ${cfg.obraId ?? null}, ${cfg.nome}, ${novoCafe}, ${novoLanche}, ${novoVa}, ${novoJanta}, ${totalVA.toFixed(2).replace('.', ',')}, ${dias}, ${cfg.cafeAtivo}, ${cfg.lancheAtivo}, ${cfg.jantaAtivo}, ${cfg.descontoVaPercentual || '0'}, ${cfg.cafeTotalMes || '0'}, ${cfg.lancheTotalMes || '0'}, ${cfg.jantaTotalMes || '0'}, ${cfg.vaTotalMes || '0'}, ${novasObs}, 1, ${vigenciaInicioNova}::date, NULL)`
           );
           atualizados++;
         }

@@ -2321,10 +2321,13 @@ export const mealBenefitConfigs = pgTable("meal_benefit_configs", {
         lancheTotalMes: varchar("lanche_total_mes", { length: 20 }).default('0'),
         jantaTotalMes: varchar("janta_total_mes", { length: 20 }).default('0'),
         vaTotalMes: varchar("va_total_mes", { length: 20 }).default('0'),
+        vigenciaInicio: date("vigencia_inicio"),
+        vigenciaFim: date("vigencia_fim"),
 },
 (table) => [
         index("idx_meal_company").on(table.companyId),
         index("idx_meal_obra").on(table.obraId),
+        index("idx_meal_vigencia").on(table.companyId, table.obraId, table.vigenciaInicio),
 ]);
 
 export const menuConfig = pgTable("menu_config", {

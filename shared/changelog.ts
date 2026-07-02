@@ -1,4 +1,43 @@
 /**
+ * Rev. 3985 — **BENEFÍCIOS DE ALIMENTAÇÃO: VIGÊNCIA EXPLÍCITA (INÍCIO/FIM) — REAJUSTE DE DISSÍDIO NUNCA
+ * MAIS SOBRESCREVE O HISTÓRICO.**
+ *
+ * PEDIDO: até aqui, `aplicarReajusteBeneficios` fazia UPDATE in-place na config de café/lanche/VA/janta —
+ * o reajuste anual do dissídio apagava os valores antigos. Qualquer relatório retroativo (rescisão,
+ * aviso prévio de mês passado) que precisasse dos valores VIGENTES NA ÉPOCA passava a usar,
+ * incorretamente, os valores reajustados de hoje. Usuário confirmou (após ver o problema no fluxo de
+ * rescisão) que o reajuste deve criar uma NOVA versão datada em vez de sobrescrever.
+ *
+ * SCHEMA: `meal_benefit_configs` ganhou `vigencia_inicio`/`vigencia_fim` (date, nullable) + índice
+ * composto `(companyId, obraId, vigencia_inicio)`. ColFix Rev.3985 faz backfill de `vigencia_inicio`
+ * (`createdAt` das linhas existentes) para nenhuma config ficar sem data.
+ *
+ * RESOLVER CENTRAL: novo `server/services/mealBenefitResolver.ts` —
+ * `resolveMealBenefitConfig(db, companyId, obraId, refDate)` com fallback em 3 níveis (obra específica
+ * vigente na data → padrão da empresa vigente na data → qualquer config da empresa como último recurso,
+ * pra nunca zerar VR por buraco de vigência). TODOS os ~9 pontos de LEITURA foram migrados pra usar o
+ * resolver com a data de referência correta do contexto (data de desligamento/fim do aviso em rescisão,
+ * mês de referência em geração de vale, "hoje" em telas ao vivo):
+ * `avisoPrevioFerias.ts` (2 cálculos de custo de rescisão), `getMealBenefitConfig`/`listMealBenefitConfigs`,
+ * `smo.ts` `getMealConfig`, `dashboards.ts` (query em lote), `valeAlimentacao.ts` (`gerarMes`/`regerarMes`),
+ * `payrollProjectionBridge.ts` `getBeneficiosMedios`.
+ *
+ * ESCRITA: `saveMealBenefitConfig` — criar uma config NOVA (sem `id`) pro mesmo escopo
+ * (companyId+obraId, incl. "Todas as Obras") ENCERRA automaticamente qualquer config em aberto desse
+ * escopo (`vigencia_fim` = véspera do novo início); edição por `id` não dispara esse fechamento (é só
+ * correção pontual). `aplicarReajusteBeneficios` deixou de fazer UPDATE in-place: agora ENCERRA a
+ * config vigente na véspera da data-base do dissídio (`dissidios.mesDataBase`, default maio) e INSERE
+ * uma nova linha com os valores reajustados e vigência a partir da data-base — histórico 100%
+ * preservado, cada consulta retroativa vê os valores corretos da época.
+ *
+ * FRONTEND (`ValeAlimentacao.tsx`): dialog de config ganhou campos de vigência início/fim (data);
+ * cards de configuração mostram badge "vigente" (verde) ou "encerrada em DD/MM/AAAA" (vermelho); dialog
+ * de Calcular Reajuste deixa explícito que a config atual será encerrada e uma nova será criada.
+ *
+ * ZERO DELETE · ZERO ALTER.
+ */
+
+/**
  * Rev. 3984 — **FOLHA: PJ NUNCA NA FOLHA + ALERTA "PAGAR OU NÃO?" P/ AVISO PRÉVIO ENCERRANDO NO MÊS.**
  *
  * PEDIDO: (1) funcionários PJ jamais podem aparecer na Folha de Pagamento principal; (2) funcionários

@@ -295,14 +295,21 @@ export const valeAlimentacaoRouter = router({
         return { success: false, message: `Já existem ${existing[0].total} lançamentos para este mês. Use "Regerar" para substituir.` };
       }
 
+      // Rev. 3985 — usa a config VIGENTE no mês de referência (não mais "qualquer ativa"),
+      // pegando a mais recente por vigenciaInicio dentro de cada escopo (obra/padrão).
+      const refDateGerar = `${input.mesReferencia}-01`;
       const cfgRows = ((await db.execute(
-        sql`SELECT * FROM meal_benefit_configs WHERE "companyId" = ${input.companyId} AND ativo = 1 ORDER BY "obraId" IS NULL DESC LIMIT 100`
+        sql`SELECT * FROM meal_benefit_configs WHERE "companyId" = ${input.companyId} AND ativo = 1
+            AND (vigencia_inicio IS NULL OR vigencia_inicio <= ${refDateGerar}::date)
+            AND (vigencia_fim IS NULL OR vigencia_fim >= ${refDateGerar}::date)
+            ORDER BY "obraId" IS NULL DESC, "obraId", vigencia_inicio DESC NULLS LAST
+            LIMIT 500`
       )) as any).rows || [];
       const configs = cfgRows || [];
       const cfgPadrao = configs.find((c: any) => !c.obraId) || null;
       const cfgPorObra: Record<number, any> = {};
       for (const c of configs) {
-        if (c.obraId) cfgPorObra[c.obraId] = c;
+        if (c.obraId && !cfgPorObra[c.obraId]) cfgPorObra[c.obraId] = c;
       }
 
       const empRows = ((await db.execute(
@@ -597,14 +604,20 @@ export const valeAlimentacaoRouter = router({
       );
       const userName = input.geradoPor || ctx.user?.name || "Sistema";
 
+      // Rev. 3985 — usa a config VIGENTE no mês de referência (não mais "qualquer ativa")
+      const refDateRegerar = `${input.mesReferencia}-01`;
       const cfgRows = ((await db.execute(
-        sql`SELECT * FROM meal_benefit_configs WHERE "companyId" = ${input.companyId} AND ativo = 1 ORDER BY "obraId" IS NULL DESC LIMIT 100`
+        sql`SELECT * FROM meal_benefit_configs WHERE "companyId" = ${input.companyId} AND ativo = 1
+            AND (vigencia_inicio IS NULL OR vigencia_inicio <= ${refDateRegerar}::date)
+            AND (vigencia_fim IS NULL OR vigencia_fim >= ${refDateRegerar}::date)
+            ORDER BY "obraId" IS NULL DESC, "obraId", vigencia_inicio DESC NULLS LAST
+            LIMIT 500`
       )) as any).rows || [];
       const configs = cfgRows || [];
       const cfgPadrao = configs.find((c: any) => !c.obraId) || null;
       const cfgPorObra: Record<number, any> = {};
       for (const c of configs) {
-        if (c.obraId) cfgPorObra[c.obraId] = c;
+        if (c.obraId && !cfgPorObra[c.obraId]) cfgPorObra[c.obraId] = c;
       }
 
       const empRows = ((await db.execute(

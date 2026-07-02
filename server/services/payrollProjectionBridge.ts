@@ -208,6 +208,8 @@ async function getBeneficiosMedios(db: any, companyId: number): Promise<{
   vaPorFuncMes: number; // valor mensal do cartão
 }> {
   // Rev. 1632 — usa brMoneySql para evitar falha com formato "9.999,99"
+  // Rev. 3985 — considera só configs VIGENTES hoje (não mais toda config ativa histórica,
+  // que agora pode coexistir com versões antigas encerradas por vigenciaFim).
   const { rows } = await dbExecute(db,
     `SELECT
        COALESCE(AVG(${brMoneySql('"cafeManhaDia"')}), 0) AS cafe,
@@ -216,7 +218,9 @@ async function getBeneficiosMedios(db: any, companyId: number): Promise<{
        COALESCE(AVG(${brMoneySql('"valeAlimentacaoMes"')}), 0) AS va,
        COALESCE(AVG("diasUteisRef"), $2) AS dias
      FROM meal_benefit_configs
-     WHERE "companyId" = $1 AND COALESCE("ativo", 1) = 1`,
+     WHERE "companyId" = $1 AND COALESCE("ativo", 1) = 1
+       AND (vigencia_inicio IS NULL OR vigencia_inicio <= CURRENT_DATE)
+       AND (vigencia_fim IS NULL OR vigencia_fim >= CURRENT_DATE)`,
     [companyId, DIAS_UTEIS_PADRAO]
   );
   const r = rows[0] ?? {};

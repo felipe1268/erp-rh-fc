@@ -4,6 +4,7 @@
 - [Banco de Horas — múltiplos tipos de débito discriminados](banco-horas-debito-tipos.md) — tipo é text livre; novo tipo de débito automatizado exige batch+reversão+insert próprios + revisar filtros `tipo==="debito"` no front.
 - [Dissídio diferença — fora da folha, encargos próprios](dissidio-diferenca-encargos.md) — diferença retroativa NÃO entra em totalProventos da folha mensal; INSS/IRRF calculados só no relatório dedicado.
 - [Print/PDF a Radix Dialog](dialog-print-only-pattern.md) — toggle `print-only` class + window.print() + afterprint cleanup, NOT window.open/document.write, to print a dialog's content only.
+- [Meal benefit config vigência pattern](meal-benefit-vigencia.md) — annual dissídio readjustments close-old+insert-new (never UPDATE in-place); all reads go through a resolver with an explicit reference date.
 - [Dialog no-truncate rule](dialog-no-truncate.md) — dialogs NUNCA truncam texto; use break-words/break-all; truncate só em linhas compactas de tabela com title= tooltip.
 - [Which DB the app uses](db-connection.md) — `executeSql` tool hits the Replit Postgres (`DATABASE_URL`/helium), but the app reads `NEON_DATABASE_URL`. To inspect REAL app data, query Neon.
 - [Importar planilha financeira FC](financeiro-excel-import.md) — abas mensais têm linha TOTAL no rodapé (dobra o import; filtrar por regex DD/MM/AAAA); memoizar de-para fuzzy + execute_values; nohup& não sobrevive entre tool calls.

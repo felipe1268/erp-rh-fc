@@ -4718,7 +4718,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v3984-2026-07-02-folha-decisao-aviso";
+    const COLFIX_VERSION = "v3985-2026-07-02-meal-benefit-vigencia";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -6228,6 +6228,24 @@ Regras:
         await _db3984.$client.query(`CREATE INDEX IF NOT EXISTS pfd_employee_mes ON payroll_folha_decisoes ("employeeId", "mesReferencia")`);
         console.log("[ColFix Rev.3984] payroll_folha_decisoes: tabela garantida.");
       } catch (e: any) { console.warn("[ColFix Rev.3984] payroll_folha_decisoes falhou (não-fatal):", e?.message ?? e); }
+
+      // Rev. 3985 — Benefícios de Alimentação: vigência explícita (data início/fim) p/ reajuste anual sem perder histórico
+      try {
+        const _db3985 = (await getDb())!;
+        await _db3985.$client.query(`
+          ALTER TABLE meal_benefit_configs
+            ADD COLUMN IF NOT EXISTS vigencia_inicio date,
+            ADD COLUMN IF NOT EXISTS vigencia_fim    date
+        `);
+        // Backfill: configs antigas sem vigência assumem que já valiam desde a criação (ou uma data-sentinela bem antiga)
+        await _db3985.$client.query(`
+          UPDATE meal_benefit_configs
+          SET vigencia_inicio = COALESCE("createdAt"::date, '2020-01-01'::date)
+          WHERE vigencia_inicio IS NULL
+        `);
+        await _db3985.$client.query(`CREATE INDEX IF NOT EXISTS idx_meal_vigencia ON meal_benefit_configs ("companyId", "obraId", vigencia_inicio)`);
+        console.log("[ColFix Rev.3985] meal_benefit_configs: vigencia_inicio/vigencia_fim garantidas + backfill.");
+      } catch (e: any) { console.warn("[ColFix Rev.3985] meal_benefit_configs vigencia falhou (não-fatal):", e?.message ?? e); }
 
       // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos
       import("../services/startupCache").then(({ setCache }) =>
