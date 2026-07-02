@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import PeriodSelectorCard from "@/components/PeriodSelectorCard";
 
 function minsToHHMM(mins: number): string {
   const h = Math.floor(Math.abs(mins) / 60);
@@ -41,10 +42,12 @@ export default function BancoHoras() {
   const [debitDesc, setDebitDesc] = useState("");
 
   const [extratoEmpId, setExtratoEmpId] = useState<number | null>(null);
-  const [extratoMes, setExtratoMes] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  });
+  const [extratoAno, setExtratoAno] = useState(() => new Date().getFullYear());
+  const [extratoMesNum, setExtratoMesNum] = useState(() => new Date().getMonth() + 1);
+  const extratoMes = `${extratoAno}-${String(extratoMesNum).padStart(2, "0")}`;
+  const [extratoPeriodoInicio, setExtratoPeriodoInicio] = useState("");
+  const [extratoPeriodoFim, setExtratoPeriodoFim] = useState("");
+  const extratoPeriodoAtivo = !!(extratoPeriodoInicio && extratoPeriodoFim);
 
   const destinoPadrao = trpc.horasExtras.getHeDestinoPadrao.useQuery(
     { companyId },
@@ -193,9 +196,15 @@ export default function BancoHoras() {
   }, [selectedEmpId, saldos]);
 
   const lancamentosFiltradosMes = useMemo(() => {
+    if (extratoPeriodoAtivo) {
+      return lancamentosExtratoList.filter((l: any) => {
+        const d = String(l.data).slice(0, 10);
+        return d >= extratoPeriodoInicio && d <= extratoPeriodoFim;
+      });
+    }
     if (!extratoMes) return lancamentosExtratoList;
     return lancamentosExtratoList.filter((l: any) => String(l.data).slice(0, 7) === extratoMes);
-  }, [lancamentosExtratoList, extratoMes]);
+  }, [lancamentosExtratoList, extratoMes, extratoPeriodoAtivo, extratoPeriodoInicio, extratoPeriodoFim]);
 
   const tabs: { id: TabView; label: string; icon: any; count?: number }[] = [
     { id: "saldos", label: "Saldos", icon: Users, count: saldos.length },
@@ -264,25 +273,34 @@ export default function BancoHoras() {
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <Button
-                  variant={isBancoAtivo ? "outline" : "default"}
-                  className={!isBancoAtivo ? "bg-orange-500 hover:bg-orange-600" : ""}
-                  disabled={setDestinoPadraoMut.isPending || !isBancoAtivo}
-                  onClick={() => setDestinoPadraoMut.mutate({ companyId, destino: "pagamento" })}
-                >
-                  <CreditCard className="h-4 w-4 mr-1.5" />
-                  Hora Extra
-                </Button>
-                <Button
-                  variant={isBancoAtivo ? "default" : "outline"}
-                  className={isBancoAtivo ? "bg-blue-600 hover:bg-blue-700" : ""}
-                  disabled={setDestinoPadraoMut.isPending || isBancoAtivo}
-                  onClick={() => setDestinoPadraoMut.mutate({ companyId, destino: "banco_horas" })}
-                >
-                  <ArrowLeftRight className="h-4 w-4 mr-1.5" />
-                  Banco de Horas
-                </Button>
+              <div className="flex flex-col items-end gap-1.5">
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant={isBancoAtivo ? "outline" : "default"}
+                    className={!isBancoAtivo ? "bg-orange-500 hover:bg-orange-600" : ""}
+                    disabled={setDestinoPadraoMut.isPending || !isBancoAtivo || !isAdminMaster}
+                    title={!isAdminMaster ? "Somente o Administrador Master pode alterar esta configuração" : undefined}
+                    onClick={() => setDestinoPadraoMut.mutate({ companyId, destino: "pagamento" })}
+                  >
+                    <CreditCard className="h-4 w-4 mr-1.5" />
+                    Hora Extra
+                  </Button>
+                  <Button
+                    variant={isBancoAtivo ? "default" : "outline"}
+                    className={isBancoAtivo ? "bg-blue-600 hover:bg-blue-700" : ""}
+                    disabled={setDestinoPadraoMut.isPending || isBancoAtivo || !isAdminMaster}
+                    title={!isAdminMaster ? "Somente o Administrador Master pode alterar esta configuração" : undefined}
+                    onClick={() => setDestinoPadraoMut.mutate({ companyId, destino: "banco_horas" })}
+                  >
+                    <ArrowLeftRight className="h-4 w-4 mr-1.5" />
+                    Banco de Horas
+                  </Button>
+                </div>
+                {!isAdminMaster && (
+                  <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                    <ShieldAlert className="h-3 w-3" /> Somente Admin Master pode alterar
+                  </p>
+                )}
               </div>
             </div>
           </CardContent>
@@ -445,7 +463,7 @@ export default function BancoHoras() {
                                 </div>
                               </td>
                               <td className="py-3 px-4 text-xs text-muted-foreground">{s.funcao || "—"}</td>
-                              <td className="text-right py-3 px-4 font-bold text-blue-700 text-base">{minsToHHMM(Number(s.saldoMinutos))}</td>
+                              <td className={`text-right py-3 px-4 font-bold text-base ${Number(s.saldoMinutos) < 0 ? "text-red-600" : "text-blue-700"}`}>{minsToHHMM(Number(s.saldoMinutos))}</td>
                               <td className="text-right py-3 px-4 text-xs text-muted-foreground">
                                 {s.ultimoLancamento ? new Date(s.ultimoLancamento).toLocaleDateString("pt-BR") : "—"}
                               </td>
@@ -641,7 +659,7 @@ export default function BancoHoras() {
         {activeTab === "extrato" && (
           <div className="space-y-4">
             <Card>
-              <CardContent className="p-5">
+              <CardContent className="p-5 space-y-4">
                 <div className="flex items-center gap-4 flex-wrap">
                   <div className="flex-1 min-w-[250px]">
                     <label className="text-xs text-muted-foreground block mb-1">Funcionário</label>
@@ -658,11 +676,6 @@ export default function BancoHoras() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground block mb-1">Mês de Referência</label>
-                    <input type="month" value={extratoMes} onChange={e => setExtratoMes(e.target.value)}
-                      className="border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
-                  </div>
                   {extratoEmpId && (
                     <div className="self-end">
                       <Button variant="outline" className="gap-1.5" onClick={() => window.print()}>
@@ -670,6 +683,42 @@ export default function BancoHoras() {
                       </Button>
                     </div>
                   )}
+                </div>
+
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">Período de Referência (mês a mês)</label>
+                  <PeriodSelectorCard
+                    ano={extratoAno}
+                    mes={extratoMesNum}
+                    onAno={setExtratoAno}
+                    onMes={(m) => {
+                      setExtratoMesNum(m);
+                      setExtratoPeriodoInicio("");
+                      setExtratoPeriodoFim("");
+                    }}
+                    className={extratoPeriodoAtivo ? "opacity-50 pointer-events-none" : ""}
+                  />
+                </div>
+
+                <div className="border-t border-gray-100 pt-3">
+                  <p className="text-xs font-medium text-gray-600 mb-2">Ou pesquise um período específico (data a data)</p>
+                  <div className="flex items-end gap-3 flex-wrap">
+                    <div>
+                      <label className="text-xs text-muted-foreground block mb-1">De</label>
+                      <input type="date" value={extratoPeriodoInicio} onChange={e => setExtratoPeriodoInicio(e.target.value)}
+                        className="border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground block mb-1">Até</label>
+                      <input type="date" value={extratoPeriodoFim} onChange={e => setExtratoPeriodoFim(e.target.value)}
+                        className="border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                    </div>
+                    {extratoPeriodoAtivo && (
+                      <Button variant="ghost" size="sm" className="h-9 text-xs" onClick={() => { setExtratoPeriodoInicio(""); setExtratoPeriodoFim(""); }}>
+                        Limpar período
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -680,7 +729,9 @@ export default function BancoHoras() {
                   <div className="text-center mb-6 print:mb-4">
                     <h2 className="text-lg font-bold">EXTRATO DE BANCO DE HORAS</h2>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Mês de Referência: {extratoMes ? new Date(extratoMes + "-01").toLocaleDateString("pt-BR", { month: "long", year: "numeric" }) : "—"}
+                      {extratoPeriodoAtivo
+                        ? `Período: ${new Date(extratoPeriodoInicio + "T00:00:00").toLocaleDateString("pt-BR")} a ${new Date(extratoPeriodoFim + "T00:00:00").toLocaleDateString("pt-BR")}`
+                        : `Mês de Referência: ${extratoMes ? new Date(extratoMes + "-01").toLocaleDateString("pt-BR", { month: "long", year: "numeric" }) : "—"}`}
                     </p>
                   </div>
 

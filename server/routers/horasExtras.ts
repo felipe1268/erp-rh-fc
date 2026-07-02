@@ -1112,7 +1112,7 @@ export const horasExtrasRouter = router({
            WHERE bhl."employeeId" = bhs."employeeId" AND bhl."companyId" = bhs."companyId") as "ultimoLancamento"
         FROM banco_horas_saldo bhs
         JOIN employees e ON e.id = bhs."employeeId"
-        WHERE bhs."companyId" = ${input.companyId} AND bhs."saldoMinutos" > 0
+        WHERE bhs."companyId" = ${input.companyId} AND bhs."saldoMinutos" <> 0
         ORDER BY bhs."saldoMinutos" DESC
       `)) as any).rows || [];
       return rows;
@@ -1313,7 +1313,10 @@ export const horasExtrasRouter = router({
       companyId: z.number(),
       destino: z.enum(["pagamento", "banco_horas"]),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== 'admin_master') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas o Administrador Master pode alterar o destino padrão de Hora Extra.' });
+      }
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       await db.execute(sql`
