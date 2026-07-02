@@ -1153,9 +1153,34 @@ export default function FolhaPagamento() {
   });
 
   const decidirFolhaAvisoMut = trpc.payrollEngine.decidirFolhaAviso.useMutation({
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       toast.success(data.message);
       payrollPeriod.refetch();
+      // Rev. 3986 — patch local imediato: sem isso o card mostrava "excluído com
+      // sucesso" mas o funcionário continuava na tabela até rodar nova simulação
+      // (payroll_payments só é regenerada em simularPagamento; refetch do getPeriod
+      // trazia o snapshot antigo). Espelha o padrão já usado em decidirValeMut.
+      setPagamentoResult((prev: any) => {
+        if (!prev) return prev;
+        const decisoesMap = new Map(variables.decisoes.map((d: any) => [d.employeeId, d.pagar]));
+        const naoPagarIds = new Set(variables.decisoes.filter((d: any) => !d.pagar).map((d: any) => d.employeeId));
+        const funcionarios = (prev.funcionarios || [])
+          .filter((f: any) => !naoPagarIds.has(f.employeeId))
+          .map((f: any) => (decisoesMap.get(f.employeeId) === true ? { ...f, alertaAvisoEncerrado: false } : f));
+        const alertasAvisoEncerrado = (prev.alertasAvisoEncerrado || []).filter((f: any) => !decisoesMap.has(f.employeeId));
+        const totalBruto = funcionarios.reduce((s: number, f: any) => s + (f.salarioBruto || 0), 0);
+        const totalDescontos = funcionarios.reduce((s: number, f: any) => s + (f.totalDescontos || 0), 0);
+        const totalLiquido = funcionarios.reduce((s: number, f: any) => s + (f.salarioLiquido || 0), 0);
+        return {
+          ...prev,
+          funcionarios,
+          alertasAvisoEncerrado,
+          totalFuncionarios: funcionarios.length,
+          totalBruto,
+          totalDescontos,
+          totalLiquido,
+        };
+      });
     },
     onError: (err: any) => toast.error(`Erro ao registrar decisão: ${err.message}`),
   });
