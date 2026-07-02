@@ -1342,7 +1342,7 @@ export default function FinanceiroDRE() {
 
             </div>
           </SheetContent>
-        </Sheet>
+        </Sheet>}
 
         {/* Legenda do modelo contábil — fixo, sempre visível */}
         <div className="rounded-2xl border border-gray-100 bg-gray-50/70 px-5 py-4 space-y-3">
