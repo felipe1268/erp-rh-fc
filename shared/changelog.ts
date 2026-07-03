@@ -1,4 +1,42 @@
 /**
+ * Rev. 3994 — **BENEFÍCIOS DE ALIMENTAÇÃO: CORRIGIDA A EDIÇÃO QUE REABRIA CONFIGURAÇÕES JÁ
+ * ENCERRADAS + TELA GANHA VISIBILIDADE/CONTROLE DE VIGÊNCIA.**
+ *
+ * PEDIDO: usuário reportou que a vigência de "Benefícios de Alimentação" (Configurações) ainda
+ * estava quebrada, temendo que com 2 configurações no mesmo escopo (obra ou "todas as obras") o
+ * sistema pudesse calcular VR/VA errado.
+ *
+ * INVESTIGAÇÃO: o motor de resolução (`resolveMealBenefitConfig`, Rev. 3985) e a criação de nova
+ * config (`saveMealBenefitConfig` sem `id`) já fecham corretamente qualquer config aberta do mesmo
+ * escopo. O BUG REAL estava na EDIÇÃO (`id` presente): a query sempre gravava
+ * `vigencia_fim = input.vigenciaFim ?? null`, e como a tela nunca enviava esse campo (não existia
+ * nenhum input de vigência no formulário), TODA EDIÇÃO reabria silenciosamente a config, mesmo uma
+ * já encerrada — recriando a ambiguidade de 2 configs "vigentes" simultâneas no mesmo escopo.
+ * Confirmado em produção: a empresa 60002 tinha "Padrão" (vigência desde 03/04/2026) e "TESTE"
+ * (desde 02/07/2026) ambas com `vigencia_fim = NULL`, "Padrão (todas as obras)".
+ *
+ * SOLUÇÃO:
+ * 1) `server/routers/avisoPrevioFerias.ts::saveMealBenefitConfig` — UPDATE agora só altera
+ *    `vigencia_fim` quando o campo é explicitamente enviado (`COALESCE` preserva o valor atual) ou
+ *    quando a nova flag `limparVigenciaFim: true` é passada para reabrir de propósito.
+ * 2) `listMealBenefitConfigs` passa a retornar `vigenteAgora` (mesma regra usada no resolver) para
+ *    a tela indicar claramente qual config vale hoje.
+ * 3) `client/src/components/BeneficiosAlimentacaoTab.tsx` — antes não existia NENHUM campo de
+ *    vigência na tela (nem na lista, nem no dialog de criar/editar). Agora: coluna "Vigência" na
+ *    tabela (badges "Vigente desde…" / "Encerrada em…" / "Agendada p/…"), inputs de Início/Fim no
+ *    dialog, e aviso amarelo quando já existe outra config vigente no mesmo escopo (obra/padrão)
+ *    ao criar ou editar.
+ *
+ * DADO EXISTENTE: a config "TESTE" (id=4, empresa 60002) segue como está — não foi apagada nem
+ * encerrada automaticamente; agora fica visível na tela com badge "Vigente" para o usuário decidir
+ * (encerrar, editar ou excluir) com a interface corrigida.
+ *
+ * ARQUIVOS: `server/routers/avisoPrevioFerias.ts` (`saveMealBenefitConfig`, `listMealBenefitConfigs`),
+ * `client/src/components/BeneficiosAlimentacaoTab.tsx`, `shared/version.ts`→3994.
+ *
+ * ZERO DELETE · ZERO ALTER (nenhuma migração; só lógica de leitura/escrita e UI).
+ */
+/**
  * Rev. 3993 — **DISSÍDIO: HABILITADA EDIÇÃO MANUAL LINHA A LINHA DA DIFERENÇA SALARIAL
  * RETROATIVA (BRUTO/INSS/IRRF) NO RELATÓRIO "DIFERENÇAS SALARIAIS RETROATIVAS (DISSÍDIO)".**
  *

@@ -1,5 +1,7 @@
 - **Rev. 3987** — **FOLHA: COLUNA "FALTAS" NÃO MISTURA MAIS VR/VT — VR SAI DA FOLHA (SÓ NO VALE ALIMENTAÇÃO), VT DE FALTA VAI PRA COLUNA VT.** Regra confirmada: empresa TEM direito de descontar VR/VT em falta, mas só VT entra na Folha — VR/VA fica só no módulo Vale Alimentação. Backend (`payrollEngine.ts`) e frontend (`FolhaPagamento.tsx`) ajustados espelhando a mesma fórmula. ZERO DELETE · ZERO ALTER.
 
+- **Rev. 3986** — **FOLHA: "VERIFICAÇÃO CRUZADA" PASSA A COMPARAR SÓ COLABORADOR + LÍQUIDO — RESTO FICA NO "COMPARATIVO FOLHA × ERP".** Removidos alertas sobrepostos de Salário/Função/status; mantido só "não vinculado ao cadastro" + novo alerta "Líquido divergente" (tolerância R$1). ZERO DELETE · ZERO ALTER.
+
 - **Rev. 3985** — **BENEFÍCIOS DE ALIMENTAÇÃO: VIGÊNCIA EXPLÍCITA (INÍCIO/FIM) — REAJUSTE DE DISSÍDIO NUNCA MAIS SOBRESCREVE O HISTÓRICO.** `meal_benefit_configs` ganhou vigência com fallback em 3 níveis; reajuste de dissídio agora ENCERRA a config vigente e INSERE nova versão, preservando histórico retroativo. ZERO DELETE · ZERO ALTER.
 
 - **Rev. 3984** — **FOLHA: PJ NUNCA NA FOLHA + ALERTA "PAGAR OU NÃO?" P/ AVISO PRÉVIO ENCERRANDO NO MÊS.** Vazamento de PJ em `custosPorObra` corrigido (filtra só CLT); nova tabela `payroll_folha_decisoes` p/ decisão do RH sobre aviso prévio encerrando no mês. ZERO DELETE · ZERO ALTER.

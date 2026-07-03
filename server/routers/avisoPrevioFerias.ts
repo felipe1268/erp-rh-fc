@@ -1392,8 +1392,17 @@ export const avisoPrevioFeriasRouter = router({
       .query(async ({ input }) => {
         const db = (await getDb())!;
         try {
+          // Rev. 3994 — expõe "vigenteAgora" (calculado no servidor, mesma regra do
+          // resolveMealBenefitConfig) para a tela deixar claro qual config está
+          // realmente valendo hoje quando há mais de uma no mesmo escopo (obra/padrão).
           const rows = ((await db.execute(
-            sql`SELECT mbc.*, o.nome as "obraNome" FROM meal_benefit_configs mbc LEFT JOIN obras o ON mbc."obraId" = o.id WHERE mbc."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)}) ORDER BY mbc."obraId" IS NULL DESC, o.nome ASC, mbc.vigencia_inicio DESC NULLS LAST`
+            sql`SELECT mbc.*, o.nome as "obraNome",
+                  (mbc.ativo = 1
+                    AND (mbc.vigencia_inicio IS NULL OR mbc.vigencia_inicio <= CURRENT_DATE)
+                    AND (mbc.vigencia_fim IS NULL OR mbc.vigencia_fim >= CURRENT_DATE)) AS "vigenteAgora"
+                FROM meal_benefit_configs mbc LEFT JOIN obras o ON mbc."obraId" = o.id
+                WHERE mbc."companyId" IN (${sql.join(resolveCompanyIds(input).map(id => sql`${id}`), sql`,`)})
+                ORDER BY mbc."obraId" IS NULL DESC, o.nome ASC, mbc.vigencia_inicio DESC NULLS LAST`
           )) as any).rows || [];
           return rows || [];
         } catch {
@@ -1433,6 +1442,7 @@ export const avisoPrevioFeriasRouter = router({
         observacoes: z.string().optional(),
         vigenciaInicio: z.string().optional(),
         vigenciaFim: z.string().optional(),
+        limparVigenciaFim: z.boolean().optional(),
       }))
       .mutation(async ({ input }) => {
         const db = (await getDb())!;
@@ -1440,6 +1450,13 @@ export const avisoPrevioFeriasRouter = router({
         const lancheAtivoInt = input.lancheAtivo ? 1 : 0;
         const jantaAtivoInt = input.jantaAtivo ? 1 : 0;
         if (input.id) {
+          // Rev. 3994 — BUGFIX: antes, editar (id presente) SEMPRE gravava
+          // vigencia_fim = NULL quando o front não mandava o campo (que nunca
+          // mandava, pois a tela não tinha esses inputs) — isso REABRIA
+          // silenciosamente qualquer config já encerrada, recriando a
+          // ambiguidade de 2 configs "vigentes" no mesmo escopo. Agora só
+          // altera vigencia_fim quando explicitamente enviado (ou limpo via
+          // `limparVigenciaFim: true`); caso contrário preserva o valor atual.
           await db.execute(
             sql`UPDATE meal_benefit_configs SET 
               nome = ${input.nome},
@@ -1460,7 +1477,7 @@ export const avisoPrevioFeriasRouter = router({
               va_total_mes = ${input.vaTotalMes || '0'},
               observacoes = ${input.observacoes || null},
               vigencia_inicio = COALESCE(${input.vigenciaInicio ?? null}::date, vigencia_inicio),
-              vigencia_fim = ${input.vigenciaFim ?? null}::date
+              vigencia_fim = CASE WHEN ${input.limparVigenciaFim === true} THEN NULL ELSE COALESCE(${input.vigenciaFim ?? null}::date, vigencia_fim) END
             WHERE id = ${input.id}`
           );
           return { success: true, id: input.id };

@@ -38,7 +38,27 @@ export default function BeneficiosAlimentacaoTab({ companyId }: Props) {
     jantaDia: '0,00',
     diasUteisRef: 22,
     observacoes: '',
+    vigenciaInicio: '',
+    vigenciaFim: '',
   });
+
+  function formatDateBR(iso: string | null | undefined): string {
+    if (!iso) return '';
+    const d = String(iso).slice(0, 10);
+    const [y, m, dd] = d.split('-');
+    if (!y || !m || !dd) return '';
+    return `${dd}/${m}/${y}`;
+  }
+
+  function vigenciaStatus(cfg: any): { label: string; className: string } {
+    const hoje = new Date().toISOString().slice(0, 10);
+    const inicio = cfg.vigencia_inicio ? String(cfg.vigencia_inicio).slice(0, 10) : null;
+    const fim = cfg.vigencia_fim ? String(cfg.vigencia_fim).slice(0, 10) : null;
+    if (cfg.ativo !== 1) return { label: 'Inativa', className: 'bg-gray-100 text-gray-500' };
+    if (inicio && inicio > hoje) return { label: `Agendada p/ ${formatDateBR(inicio)}`, className: 'bg-blue-50 text-blue-700' };
+    if (fim && fim < hoje) return { label: `Encerrada em ${formatDateBR(fim)}`, className: 'bg-gray-100 text-gray-500' };
+    return { label: inicio ? `Vigente desde ${formatDateBR(inicio)}` : 'Vigente', className: 'bg-green-50 text-green-700' };
+  }
 
   // Buscar configurações
   const { data: configs, isLoading } = (trpc as any).avisoPrevio.avisoPrevio.listMealBenefitConfigs.useQuery(
@@ -81,6 +101,8 @@ export default function BeneficiosAlimentacaoTab({ companyId }: Props) {
       jantaDia: '0,00',
       diasUteisRef: 22,
       observacoes: '',
+      vigenciaInicio: new Date().toISOString().slice(0, 10),
+      vigenciaFim: '',
     });
   }
 
@@ -95,9 +117,23 @@ export default function BeneficiosAlimentacaoTab({ companyId }: Props) {
       jantaDia: cfg.jantaDia || '0,00',
       diasUteisRef: cfg.diasUteisRef || 22,
       observacoes: cfg.observacoes || '',
+      vigenciaInicio: cfg.vigencia_inicio ? String(cfg.vigencia_inicio).slice(0, 10) : '',
+      vigenciaFim: cfg.vigencia_fim ? String(cfg.vigencia_fim).slice(0, 10) : '',
     });
     setShowDialog(true);
   }
+
+  // Existe outra config VIGENTE hoje no mesmo escopo (obra ou "todas")? Ajuda a
+  // avisar o usuário quando ele está prestes a criar/editar algo que vai
+  // sobrepor ou encerrar outra configuração.
+  const conflitoVigencia = useMemo(() => {
+    const escopoObraId = form.obraId ?? null;
+    return (configs || []).find((c: any) =>
+      c.id !== editingId &&
+      (c.obraId ?? null) === escopoObraId &&
+      vigenciaStatus(c).label.startsWith('Vigente')
+    ) || null;
+  }, [configs, form.obraId, editingId]);
 
   function calcularTotais() {
     const cafe = parseBRL(form.cafeManhaDia);
@@ -133,6 +169,9 @@ export default function BeneficiosAlimentacaoTab({ companyId }: Props) {
       totalVA_iFood: formatBRL(totais.totalVA),
       diasUteisRef: form.diasUteisRef,
       observacoes: form.observacoes,
+      vigenciaInicio: form.vigenciaInicio || undefined,
+      vigenciaFim: form.vigenciaFim || undefined,
+      limparVigenciaFim: !!editingId && !form.vigenciaFim,
     });
   }
 
@@ -180,6 +219,7 @@ export default function BeneficiosAlimentacaoTab({ companyId }: Props) {
                   <tr className="border-b bg-gray-50">
                     <th className="text-left p-2 font-medium">Nome</th>
                     <th className="text-left p-2 font-medium">Obra</th>
+                    <th className="text-left p-2 font-medium">Vigência</th>
                     <th className="text-right p-2 font-medium">Café/dia</th>
                     <th className="text-right p-2 font-medium">Lanche/dia</th>
                     <th className="text-right p-2 font-medium">VA/mês</th>
@@ -196,6 +236,7 @@ export default function BeneficiosAlimentacaoTab({ companyId }: Props) {
                     const va = parseBRL(cfg.valeAlimentacaoMes);
                     const dias = cfg.diasUteisRef || 22;
                     const totalVA = cafe * dias + lanche * dias + va;
+                    const vig = vigenciaStatus(cfg);
                     return (
                       <tr key={cfg.id} className="border-b hover:bg-gray-50">
                         <td className="p-2 font-medium">{cfg.nome}</td>
@@ -208,6 +249,11 @@ export default function BeneficiosAlimentacaoTab({ companyId }: Props) {
                           ) : (
                             <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded">Padrão (todas)</span>
                           )}
+                        </td>
+                        <td className="p-2">
+                          <span className={`inline-block text-xs px-2 py-0.5 rounded whitespace-nowrap ${vig.className}`}>
+                            {vig.label}
+                          </span>
                         </td>
                         <td className="p-2 text-right">R$ {cfg.cafeManhaDia}</td>
                         <td className="p-2 text-right">R$ {cfg.lancheTardeDia}</td>
@@ -301,6 +347,47 @@ export default function BeneficiosAlimentacaoTab({ companyId }: Props) {
               </Select>
             </div>
           </div>
+
+          {/* Vigência */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label className="text-sm font-medium">Vigência — Início</Label>
+              <Input
+                type="date"
+                value={form.vigenciaInicio}
+                onChange={e => setForm({ ...form, vigenciaInicio: e.target.value })}
+                className="mt-1"
+              />
+              <p className="text-xs text-gray-400 mt-0.5">
+                {editingId ? "Data a partir da qual esta configuração passa a valer." : "Ao criar, qualquer configuração aberta deste mesmo escopo (obra/padrão) será encerrada automaticamente no dia anterior a esta data."}
+              </p>
+            </div>
+            <div>
+              <Label className="text-sm font-medium">Vigência — Fim (opcional)</Label>
+              <Input
+                type="date"
+                value={form.vigenciaFim}
+                onChange={e => setForm({ ...form, vigenciaFim: e.target.value })}
+                className="mt-1"
+              />
+              <p className="text-xs text-gray-400 mt-0.5">Deixe em branco para manter em aberto (vale até ser encerrada por uma nova).</p>
+            </div>
+          </div>
+
+          {conflitoVigencia && (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              <Info className="w-4 h-4 mt-0.5 shrink-0" />
+              <div>
+                <p className="font-medium">Atenção: já existe uma configuração vigente para este mesmo escopo</p>
+                <p>
+                  <strong>"{conflitoVigencia.nome}"</strong> está vigente desde {formatDateBR(conflitoVigencia.vigencia_inicio)} para {conflitoVigencia.obraId ? (conflitoVigencia.obraNome || `Obra #${conflitoVigencia.obraId}`) : 'todas as obras (Padrão)'}.
+                  {!editingId
+                    ? ' Ao criar esta nova configuração, ela será encerrada automaticamente na véspera do início informado acima.'
+                    : ' Ajuste as datas de vigência para evitar duas configurações valendo ao mesmo tempo (o cálculo usa a de início mais recente).'}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Valores diários */}
           <Card>
