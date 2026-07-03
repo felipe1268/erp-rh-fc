@@ -3945,7 +3945,7 @@ export const payrollEngineRouter = router({
       if (somarDiferencaDissidio) {
         const diffRows = ((await db.execute(sql`
           SELECT df."employeeId" AS "employeeId", df."valorRetroativo" AS "valorRetroativo",
-                 df."diferencaTipo" AS "diferencaTipo", df."diferencaBreakdownJson" AS "diferencaBreakdownJson"
+                 df."diferenca_tipo" AS "diferencaTipo", df."diferenca_breakdown_json" AS "diferencaBreakdownJson"
           FROM dissidio_funcionarios df
           LEFT JOIN dissidios d ON d.id = df."dissidioId"
           WHERE df."companyId" IN (${allCompanyIdsSql})
