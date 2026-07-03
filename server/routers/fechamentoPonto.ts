@@ -5177,7 +5177,15 @@ export const fechamentoPontoRouter = router({
         sql`${atestados.dataEmissao} <= ${dataFim}`,
       ));
       // Set de dias cobertos por atestado: empId|YYYY-MM-DD → tipo
+      // Rev. 4005 — guard contra data corrompida (ex.: "20026-05-09" por erro de
+      // digitação) que fazia este loop iterar ~18 mil anos dia a dia e travar o
+      // relatório indefinidamente para QUALQUER usuário que consultasse a empresa
+      // afetada. Clampa o range de iteração aos limites do período solicitado
+      // (dataInicio/dataFim) ANTES do loop, em vez de iterar o range bruto do
+      // atestado e descartar dias fora do período depois.
       const atestSet = new Map<string, string>();
+      const dInicioDate = new Date(dataInicio + "T12:00:00Z");
+      const dFimDate = new Date(dataFim + "T12:00:00Z");
       for (const a of ats) {
         if ((a.afastamentoTipo || "dia") !== "dia") continue; // afastamento em horas não cobre dia inteiro
         const start = a.dataEmissao;
@@ -5195,9 +5203,13 @@ export const fechamentoPontoRouter = router({
         }
         const sd = new Date(start + "T12:00:00Z");
         const ed = new Date(endStr + "T12:00:00Z");
-        for (let d = new Date(sd); d <= ed; d.setUTCDate(d.getUTCDate() + 1)) {
+        if (isNaN(sd.getTime()) || isNaN(ed.getTime())) continue; // data inválida — ignora com segurança
+        // Clampa aos limites do período ANTES de iterar, pra nunca varrer mais
+        // que o período solicitado independente do que veio gravado no banco.
+        const loopStart = sd < dInicioDate ? dInicioDate : sd;
+        const loopEnd = ed > dFimDate ? dFimDate : ed;
+        for (let d = new Date(loopStart); d <= loopEnd; d.setUTCDate(d.getUTCDate() + 1)) {
           const ds = d.toISOString().slice(0, 10);
-          if (ds < dataInicio || ds > dataFim) continue;
           atestSet.set(`${a.employeeId}|${ds}`, a.tipo || "Atestado");
         }
       }
@@ -5216,13 +5228,18 @@ export const fechamentoPontoRouter = router({
         inArray(vacationPeriods.employeeId, empIds),
       ));
       const feriasSet = new Set<string>();
+      // Rev. 4005 — mesmo guard do bloco de atestados acima: clampa aos limites
+      // do período ANTES de iterar, pra uma data corrompida em vacation_periods
+      // não travar o relatório varrendo décadas/séculos dia a dia.
       const addRange = (empId: number, ini?: string | null, fim?: string | null) => {
         if (!ini || !fim) return;
         const sd = new Date(ini + "T12:00:00Z");
         const ed = new Date(fim + "T12:00:00Z");
-        for (let d = new Date(sd); d <= ed; d.setUTCDate(d.getUTCDate() + 1)) {
+        if (isNaN(sd.getTime()) || isNaN(ed.getTime())) return; // data inválida — ignora com segurança
+        const loopStart = sd < dInicioDate ? dInicioDate : sd;
+        const loopEnd = ed > dFimDate ? dFimDate : ed;
+        for (let d = new Date(loopStart); d <= loopEnd; d.setUTCDate(d.getUTCDate() + 1)) {
           const ds = d.toISOString().slice(0, 10);
-          if (ds < dataInicio || ds > dataFim) continue;
           feriasSet.add(`${empId}|${ds}`);
         }
       };
