@@ -20,7 +20,7 @@ import { calcularRescisaoComplementar, calcularINSSProgressivo, calcularIRRFProg
 //   saldo de salário e 13º sofrem INSS; salário+férias sofrem IRRF (13º com base
 //   separada, sem redutor simplificado); aviso prévio indenizado é ISENTO de
 //   INSS/IRRF/FGTS (Súmulas 125/136 TST).
-function calcularEncargosDiferenca(r: { diferencaTipo: string | null; valorRetroativo: string | null; diferencaBreakdownJson: any }) {
+export function calcularEncargosDiferenca(r: { diferencaTipo: string | null; valorRetroativo: string | null; diferencaBreakdownJson: any }) {
   const bruto = parseBRL(r.valorRetroativo);
   if (bruto <= 0) return { inss: 0, irrf: 0, fgts: 0, liquido: 0 };
 

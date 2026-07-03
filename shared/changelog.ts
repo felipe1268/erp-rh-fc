@@ -1,4 +1,47 @@
 /**
+ * Rev. 3989 — **FOLHA: TOGGLE "SOMAR DIFERENÇA DO DISSÍDIO" — INCLUI O RETROATIVO DO DISSÍDIO
+ * NO LÍQUIDO DA FOLHA DO MÊS DE PAGAMENTO (PERSISTIDO POR PERÍODO).**
+ *
+ * PEDIDO: o relatório "Diferenças Salariais Retroativas (Dissídio)" (`sindical.ts`) já calcula o
+ * valor retroativo líquido por funcionário e o mês em que a diferença deve ser paga
+ * (`dissidio_funcionarios.diferenca_mes_pagamento`). Usuário pediu um jeito de, OPCIONALMENTE,
+ * somar esse líquido retroativo dentro do líquido da folha normal do mês de pagamento — porque a
+ * contabilidade às vezes gera 2 holerites separados (folha normal + holerite de diferença) e às
+ * vezes prefere consolidar tudo num único holerite. A escolha precisa ficar GRAVADA por período
+ * (não é um cálculo client-side efêmero), porque a decisão pode ser tomada num dia e a folha
+ * reaberta/reconsultada dias depois deve lembrar a opção escolhida.
+ *
+ * BACKEND: `drizzle/schema.ts` — nova coluna `somarDiferencaDissidio` (smallint, default 0) em
+ * `payrollPeriods`, mesmo padrão de `aplicarDsrFalta`; self-heal ALTER guard em
+ * `server/_core/index.ts` (`[SyncSchema+]`) + bump de `COLFIX_VERSION`. `server/routers/sindical.ts`
+ * passou `calcularEncargosDiferenca` de privada para exportada (reuso sem duplicar a lógica de
+ * cálculo do líquido retroativo). `server/routers/payrollEngine.ts` (`simularPagamento`): novo
+ * input opcional `somarDiferencaDissidio` (default lido da coluna persistida, mesmo padrão de
+ * `aplicarDsrFalta`); quando ON, monta `diferencaDissidioMap` a partir de
+ * `dissidio_funcionarios` JOIN `dissidios` (filtrando `diferenca_mes_pagamento = mesReferencia`,
+ * `valorRetroativo > 0`, dissídio não cancelado, restrito às companyIds da consulta) somando o
+ * líquido via `calcularEncargosDiferenca`; o valor por funcionário é somado em
+ * `salarioLiquidoExato` e devolvido em `diferencaDissidioValor`/`diferencaDissidioAplicada` por
+ * item de `results`; a escolha do toggle é persistida no `UPDATE payroll_periods` ao fim da
+ * simulação. `editarDescontoManual` foi ajustado para preservar `diferencaDissidioValor` (lido do
+ * funcionário já calculado) ao recompor o líquido depois de uma edição manual de desconto —
+ * sem isso, editar um desconto na tela zerava silenciosamente a diferença já somada.
+ *
+ * FRONTEND (`client/src/pages/FolhaPagamento.tsx`): novo switch "Somar Diferença do Dissídio" ao
+ * lado do toggle "Descontar DSR Falta" (mesmo padrão visual/comportamental: dispara
+ * `simularPagamentoMut` na troca, desabilitado com folha consolidada ou mutation pendente,
+ * hidratado tanto no `onSuccess` da simulação quanto no efeito que lê `payrollPeriod.data`).
+ * Colunas de líquido (Visão Geral E Por Banco) ganharam um selo informativo
+ * "+ R$ X dissídio" abaixo do valor quando `diferencaDissidioValor > 0`, para transparência de
+ * quanto do líquido veio do retroativo somado.
+ *
+ * ARQUIVOS: `drizzle/schema.ts`, `server/_core/index.ts`, `server/routers/sindical.ts`,
+ * `server/routers/payrollEngine.ts`, `client/src/pages/FolhaPagamento.tsx`,
+ * `shared/version.ts`→3989.
+ *
+ * ZERO DELETE · ZERO ALTER (só ADD COLUMN).
+ */
+/**
  * Rev. 3988 — **FOLHA: "GERAR REMESSA CNAB" GANHA SELEÇÃO MÚLTIPLA — 1 ARQUIVO POR BANCO
  * MARCADO, NUM SÓ CLIQUE.**
  *

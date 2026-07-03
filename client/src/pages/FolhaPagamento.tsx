@@ -917,6 +917,8 @@ export default function FolhaPagamento() {
   });
   const [overridesPrompt, setOverridesPrompt] = useState<{ open: boolean; count: number }>({ open: false, count: 0 });
   const [aplicarDsrFalta, setAplicarDsrFalta] = useState<boolean>(true);
+  // Rev. 3989 — toggle "Somar Diferença do Dissídio" (persistido por período)
+  const [somarDiferencaDissidio, setSomarDiferencaDissidio] = useState<boolean>(false);
   const calcPeriodoPadrao = useCallback((ref: string) => {
     const [y, m] = ref.split('-').map(Number);
     const diaCorte = 15;
@@ -953,6 +955,7 @@ export default function FolhaPagamento() {
       setViewMode("calculo_pagamento");
       setOverridesPrompt({ open: false, count: 0 });
       if (typeof (data as any).aplicarDsrFalta === 'boolean')  setAplicarDsrFalta((data as any).aplicarDsrFalta);
+      if (typeof (data as any).somarDiferencaDissidio === 'boolean') setSomarDiferencaDissidio((data as any).somarDiferencaDissidio);
       if (data.divergencias && data.divergencias.length > 0) {
         toast.warning(`ATENÇÃO: ${data.divergencias.length} funcionário(s) CLT ativo(s) excluído(s) da folha por cadastro incompleto. Verifique o alerta na tela.`, { duration: 8000 });
       }
@@ -1046,6 +1049,9 @@ export default function FolhaPagamento() {
     // Hidrata toggles DSR a partir das colunas persistidas em payroll_periods
     if (pd.aplicarDsrFalta !== undefined && pd.aplicarDsrFalta !== null) {
       setAplicarDsrFalta(Number(pd.aplicarDsrFalta) === 1);
+    }
+    if (pd.somarDiferencaDissidio !== undefined && pd.somarDiferencaDissidio !== null) {
+      setSomarDiferencaDissidio(Number(pd.somarDiferencaDissidio) === 1);
     }
   }, [payrollPeriod.data]);
 
@@ -4521,6 +4527,22 @@ export default function FolhaPagamento() {
                 Descontar DSR Falta
               </label>
             </div>
+            {/* Toggle Somar Diferença do Dissídio — Rev. 3989 */}
+            <div className="flex items-center gap-3 border rounded-md px-3 py-1.5 bg-blue-50 border-blue-200 print:hidden">
+              <label className="flex items-center gap-1.5 text-[11px] text-blue-900 cursor-pointer">
+                <Switch
+                  checked={somarDiferencaDissidio}
+                  onCheckedChange={(v: boolean) => {
+                    setSomarDiferencaDissidio(v);
+                    if (pagamentoConsolidado) return;
+                    setCalcType("pagamento");
+                    simularPagamentoMut.mutate({ companyId, companyIds, mesReferencia: mesAno, somarDiferencaDissidio: v, manterOverrides: true, pontoInicioManual: periodoInicio, pontoFimManual: periodoFim });
+                  }}
+                  disabled={simularPagamentoMut.isPending || pagamentoConsolidado}
+                />
+                Somar Diferença do Dissídio
+              </label>
+            </div>
           </div>
 
           {pagamentoSubView === "geral" && (() => {
@@ -4791,7 +4813,17 @@ export default function FolhaPagamento() {
                                     <td className="py-2 px-2 text-[10px] max-w-[160px] truncate" title={pixInfo}>{pixInfo}</td>
                                     <td className="text-right py-2 px-2 text-green-700">{formatBRL(f.totalProventos)}</td>
                                     <td className="text-right py-2 px-2 text-red-600">{formatBRL(f.totalDescontos)}</td>
-                                    <td className="text-right py-2 px-3 font-bold text-[#1B2A4A]">{formatBRL(f.salarioLiquido)}</td>
+                                    <td className="text-right py-2 px-3 font-bold text-[#1B2A4A]">
+                                      {formatBRL(f.salarioLiquido)}
+                                      {Number(f.diferencaDissidioValor || 0) > 0 && (
+                                        <span
+                                          className="block text-[9px] font-normal whitespace-nowrap text-blue-600"
+                                          title={`Inclui R$ ${formatBRL(Number(f.diferencaDissidioValor))} de diferença retroativa do dissídio (somada por opção do toggle).`}
+                                        >
+                                          + {formatBRL(Number(f.diferencaDissidioValor))} dissídio
+                                        </span>
+                                      )}
+                                    </td>
                                   </tr>
                                 );
                               })}
@@ -4925,6 +4957,14 @@ export default function FolhaPagamento() {
                           <td className="text-right py-2 px-2 font-semibold text-red-700">{formatBRL(f.totalDescontos)}</td>
                           <td className="text-right py-2 px-2 border-l border-blue-100 font-bold text-[#1B2A4A]">
                             {formatBRL(f.salarioLiquido)}
+                            {Number(f.diferencaDissidioValor || 0) > 0 && (
+                              <span
+                                className="block text-[9px] font-normal whitespace-nowrap text-blue-600"
+                                title={`Inclui R$ ${formatBRL(Number(f.diferencaDissidioValor))} de diferença retroativa do dissídio (somada por opção do toggle "Somar Diferença do Dissídio").`}
+                              >
+                                + {formatBRL(Number(f.diferencaDissidioValor))} dissídio
+                              </span>
+                            )}
                             {Math.abs(Number(f.ajusteArredondamento || 0)) >= 0.005 && (
                               <span
                                 className={`block text-[9px] font-normal whitespace-nowrap ${Number(f.ajusteArredondamento) >= 0 ? 'text-emerald-600' : 'text-amber-600'}`}

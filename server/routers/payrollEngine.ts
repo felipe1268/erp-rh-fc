@@ -1,13 +1,14 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, getCompaniesForUser } from "../db";
-import { employees, timeRecords, systemCriteria, obras, heSolicitacoes, vrBenefits, advances, vacationPeriods, companyBankAccounts } from "../../drizzle/schema";
+import { employees, timeRecords, systemCriteria, obras, heSolicitacoes, vrBenefits, advances, vacationPeriods, companyBankAccounts, dissidios, dissidioFuncionarios } from "../../drizzle/schema";
 import { eq, and, sql, between, inArray, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { EMPLOYEE_STATUS_DESLIGADOS } from "../../shared/modules";
 import { TRPCError } from "@trpc/server";
 import { parseBRL } from "../utils/parseBRL";
 import { gerarCnab240 } from "./cnab240";
+import { calcularEncargosDiferenca } from "./sindical";
 
 // ============================================================
 // HELPERS
@@ -3337,6 +3338,10 @@ export const payrollEngineRouter = router({
       manterOverrides: z.boolean().optional(),
       descartarOverrides: z.boolean().optional(),
       aplicarDsrFalta: z.boolean().optional(),
+      // Rev. 3989 — soma o líquido das diferenças salariais retroativas do
+      // dissídio (relatorioDiferencas) no líquido desta folha (contador às vezes
+      // paga em 1 holerite combinado, às vezes em 2 separados — por isso togglável).
+      somarDiferencaDissidio: z.boolean().optional(),
       pontoInicioManual: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       pontoFimManual: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       forcarRecalculoPonto: z.boolean().optional(),
@@ -3922,6 +3927,44 @@ export const payrollEngineRouter = router({
       // Input override > config persistida > default true
       const aplicarDsrFalta  = input.aplicarDsrFalta  != null ? input.aplicarDsrFalta  : cfgFalta;
 
+      // Rev. 3989 — Ler default de somarDiferencaDissidio do payroll_periods
+      const ppCfgDissidioRows = ((await db.execute(sql`
+        SELECT COALESCE("somarDiferencaDissidio", 0) AS "somarDiferencaDissidio"
+        FROM payroll_periods
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+        LIMIT 1
+      `)) as any).rows || [];
+      const cfgSomarDissidio = ppCfgDissidioRows.length > 0 ? Number(ppCfgDissidioRows[0].somarDiferencaDissidio) === 1 : false;
+      // Input override > config persistida > default false
+      const somarDiferencaDissidio = input.somarDiferencaDissidio != null ? input.somarDiferencaDissidio : cfgSomarDissidio;
+
+      // Rev. 3989 — mapa employeeId → líquido da diferença retroativa do dissídio
+      // (mesma fórmula de relatorioDiferencas/sindical.ts), somado no líquido do
+      // mês em que o contador efetivamente PAGA a diferença (diferencaMesPagamento).
+      const diferencaDissidioMap = new Map<number, number>();
+      if (somarDiferencaDissidio) {
+        const diffRows = ((await db.execute(sql`
+          SELECT df."employeeId" AS "employeeId", df."valorRetroativo" AS "valorRetroativo",
+                 df."diferencaTipo" AS "diferencaTipo", df."diferencaBreakdownJson" AS "diferencaBreakdownJson"
+          FROM dissidio_funcionarios df
+          LEFT JOIN dissidios d ON d.id = df."dissidioId"
+          WHERE df."companyId" IN (${allCompanyIdsSql})
+            AND df."diferenca_mes_pagamento" = ${input.mesReferencia}
+            AND df."valorRetroativo" IS NOT NULL
+            AND CAST(NULLIF(df."valorRetroativo", '') AS NUMERIC) > 0
+            AND (d.status IS NULL OR d.status != 'cancelado')
+        `)) as any).rows || [];
+        for (const r of diffRows) {
+          const enc = calcularEncargosDiferenca({
+            diferencaTipo: r.diferencaTipo,
+            valorRetroativo: r.valorRetroativo,
+            diferencaBreakdownJson: r.diferencaBreakdownJson,
+          });
+          const empId = Number(r.employeeId);
+          diferencaDissidioMap.set(empId, (diferencaDissidioMap.get(empId) || 0) + enc.liquido);
+        }
+      }
+
       // HE is now a SEPARATE MODULE (he_periods) — simularPagamento = salário base only
       // HE is tracked and paid via the dedicated HE module in Folha → Hora Extra
 
@@ -4393,7 +4436,11 @@ export const payrollEngineRouter = router({
 
         const totalDescontos = finalVale + finalInss + finalIr + finalFaltas + finalAtrasos
                               + finalSindicato + finalPensao + finalVt + finalConvenio + finalEpi + finalOutros;
-        const salarioLiquidoExato = totalProventos - totalDescontos;
+        // Rev. 3989 — líquido da diferença retroativa do dissídio (já líquida de INSS/IRRF
+        // próprios, calculada em separado); somada diretamente no líquido do mês quando o
+        // toggle está ativo (contador optou por pagar tudo em 1 holerite combinado).
+        const diferencaDissidioValor = somarDiferencaDissidio ? (diferencaDissidioMap.get(emp.id) || 0) : 0;
+        const salarioLiquidoExato = totalProventos - totalDescontos + diferencaDissidioValor;
         // Rev. 3293 — arredonda p/ R$ 1 com carry-forward; salarioLiquido = valor PAGO.
         const saldoAntFolha = saldoAnteriorArred(saldosArredFolha, input.companyId, emp.id, ordemFolha);
         const arrFolha = aplicarArredondamentoReal(salarioLiquidoExato, saldoAntFolha);
@@ -4435,6 +4482,8 @@ export const payrollEngineRouter = router({
           descontoFgts: fgtsValor, acertoEscuroValor, descontoConvenio: finalConvenio,
           descontoOutros: finalOutros,
           totalDescontos, salarioLiquido, salarioLiquidoExato, ajusteArredondamento: arrFolha.ajuste, saldoAnteriorArredondamento: saldoAntFolha, dataPagamentoPrevista, vaValor,
+          // Rev. 3989 — diferença retroativa do dissídio somada no líquido (transparência na UI)
+          diferencaDissidioValor, diferencaDissidioAplicada: somarDiferencaDissidio && diferencaDissidioValor > 0,
           // Rev. 3984 — aviso prévio encerrando no mês, ainda sem decisão do RH.
           alertaAvisoEncerrado: alertaAvisoPendente,
           avisoDataFim: avisoDataFimEmp || null,
@@ -4672,13 +4721,14 @@ export const payrollEngineRouter = router({
           "totalLiquido" = ${formatMoney(grandTotalLiquido)},
           "aplicarDsrFalta"  = ${aplicarDsrFalta  ? 1 : 0},
           "aplicarDsrAtraso" = 0,
+          "somarDiferencaDissidio" = ${somarDiferencaDissidio ? 1 : 0},
           "pagamentoResultJson" = ${pagJson}
           ${input.pontoInicioManual ? sql`, "pontoInicio" = ${input.pontoInicioManual}` : sql``}
           ${input.pontoFimManual ? sql`, "pontoFim" = ${input.pontoFimManual}` : sql``}
         WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
       `);
 
-      return { ...pagamentoResultPayload, aplicarDsrFalta };
+      return { ...pagamentoResultPayload, aplicarDsrFalta, somarDiferencaDissidio };
     }),
 
   // ============================================================
@@ -4765,7 +4815,10 @@ export const payrollEngineRouter = router({
       const totalDescontos = finalVale + finalInss + finalIr + finalFaltas + finalAtrasos
                             + finalSindicato + finalPensao + finalVt + finalConvenio + finalEpi + finalOutros;
       const totalProventos = Number(f.totalProventos || 0);
-      const salarioLiquidoExato = totalProventos - totalDescontos;
+      // Rev. 3989 — preserva a diferença do dissídio já somada (se o toggle estava ativo
+      // na simulação) ao recalcular o líquido após uma edição manual de desconto.
+      const diferencaDissidioValor = Number(f.diferencaDissidioValor || 0);
+      const salarioLiquidoExato = totalProventos - totalDescontos + diferencaDissidioValor;
       // Rev. 3293 — reaplica arredondamento p/ R$ 1 com carry-forward ao editar desconto
       // manual; sem isto o líquido voltava a ter centavos e o ledger/colunas *Exato
       // ficavam defasados (o pago da folha deixava de ser múltiplo inteiro).

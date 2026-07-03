@@ -4791,6 +4791,9 @@ export const payrollPeriods = pgTable("payroll_periods", {
         travadoPor: varchar({ length: 255 }),
         aplicarDsrFalta: smallint().default(1).notNull(),
         aplicarDsrAtraso: smallint().default(1).notNull(),
+        // Rev. 3989 — quando ativo, soma o líquido das diferenças salariais
+        // retroativas do dissídio (relatorioDiferencas) no líquido da folha do mês.
+        somarDiferencaDissidio: smallint().default(0).notNull(),
         afericaoRealizada: smallint().default(0).notNull(),
         afericaoEm: timestamp({ mode: 'string' }),
         afericaoPor: varchar({ length: 255 }),
