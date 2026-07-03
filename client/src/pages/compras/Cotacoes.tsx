@@ -3485,6 +3485,20 @@ export default function Cotacoes() {
           ${fornCols}
         </tr>`;
       }).join("");
+      const totalFornCols = participantes.map((p: any) => {
+        const totalForn = getFornTotal(p);
+        const isMelhor = melhorForn?.fornecedorId === p.fornecedorId;
+        return `
+          <td></td>
+          <td></td>
+          <td style="text-align:right;font-weight:700${isMelhor ? ";color:#166534" : ""}">${totalForn > 0 ? fmtMoeda(totalForn) : "—"}</td>`;
+      }).join("");
+      const totalRowHtml = `<tr style="background:#f1f5f9;border-top:2px solid #0f172a">
+        <td colspan="2" style="font-weight:700;text-transform:uppercase;font-size:10px">Total</td>
+        <td style="text-align:right;font-weight:700">${qtdGrandTotal !== null ? `${qtdGrandTotal.toLocaleString("pt-BR")} ${esc(qtdUnidade)}` : "—"}</td>
+        <td style="text-align:right;font-weight:700">${metaGrandTotal > 0 ? fmtMoeda(metaGrandTotal) : "—"}</td>
+        ${totalFornCols}
+      </tr>`;
       const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(numeroFmt)}</title>
 <style>
   *{box-sizing:border-box} body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1f2937;margin:24px;font-size:11px}
@@ -3521,6 +3535,7 @@ export default function Cotacoes() {
     <tr>${theadSub}</tr>
   </thead>
   <tbody>${rowsHtml || `<tr><td colspan="${colCount}" style="text-align:center;color:#94a3b8;padding:24px">Sem itens</td></tr>`}</tbody>
+  <tfoot>${linhas.length ? totalRowHtml : ""}</tfoot>
 </table>
 <div class="footer"><span>FC Engenharia · ERP RH/DP</span><span>Impresso em ${new Date().toLocaleString("pt-BR")}</span></div>
 <script>setTimeout(function(){window.print()},250);</script>
@@ -3551,7 +3566,10 @@ export default function Cotacoes() {
         l.metaTot || "",
         ...l.porFornecedor.flatMap((f: any) => [f.qtd ?? "", f.precoUnit ?? "", f.total ?? ""]),
       ]);
-      const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+      const totalRow = ["TOTAL", "", qtdGrandTotal !== null ? `${qtdGrandTotal} ${qtdUnidade}` : "", "", metaGrandTotal || "",
+        ...participantes.flatMap((p: any) => ["", "", getFornTotal(p) || ""]),
+      ];
+      const ws = XLSX.utils.aoa_to_sheet([header, ...rows, totalRow]);
       ws["!cols"] = [{ wch: 42 }, { wch: 8 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, ...participantes.flatMap(() => [{ wch: 10 }, { wch: 14 }, { wch: 14 }])];
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Mapa de Cotação");

@@ -1,4 +1,26 @@
 /**
+ * Rev. 4004 — **COMPRAS/COTAÇÕES: PDF E EXCEL DO MAPA DE COTAÇÃO NÃO TRAZIAM A LINHA DE TOTAL POR
+ * FORNECEDOR (SÓ OS ITENS, SEM O SOMATÓRIO QUE APARECE NA TELA).**
+ *
+ * PEDIDO (usuário, com print): depois do fix da Rev. 4003, "deu certo, porém não está somando o
+ * valor total" — o PDF/Excel exportado trazia todas as linhas de item mas faltava a linha de
+ * rodapé com o total por fornecedor (e o total geral de meta/quantidade), que já existe na tabela
+ * em tela (`<tfoot>` do Mapa de Cotação).
+ *
+ * CAUSA-RAIZ: `gerarPdfCotacao`/`exportarExcelCotacao` (Rev. 4003) montavam só as linhas de item
+ * via `montarLinhasExportacao()`, sem replicar a linha de totais que a tabela em tela calcula à
+ * parte (`getFornTotal(p)` por fornecedor + `metaGrandTotal`/`qtdGrandTotal` gerais, usados no
+ * `<tfoot>` original).
+ *
+ * FIX: `client/src/pages/compras/Cotacoes.tsx` — ambas as exportações agora reaproveitam as MESMAS
+ * funções/variáveis já usadas pelo rodapé da tabela em tela (`getFornTotal`, `metaGrandTotal`,
+ * `qtdGrandTotal`, `qtdUnidade`, `melhorForn`) para montar uma linha de total: no PDF, uma `<tr>`
+ * em negrito no `<tfoot>` da tabela HTML (melhor fornecedor destacado em verde); no Excel, uma
+ * linha "TOTAL" extra ao final da matriz (`aoa_to_sheet`). ZERO DELETE de linhas · ZERO ALTER de
+ * schema.
+ */
+
+/**
  * Rev. 4003 — **COMPRAS/COTAÇÕES: "EXPORTAR PDF" GERAVA PÁGINA EM BRANCO — BLOQUEAVA ENVIO DE
  * COTAÇÃO PARA CLIENTE APROVAR ITEM A ITEM; ADICIONADO TAMBÉM "EXPORTAR EXCEL".**
  *
