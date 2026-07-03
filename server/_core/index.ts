@@ -612,7 +612,11 @@ Regras:
   app.use("/uploads", async (req: any, res: any) => {
     try {
       const { dbRetrieve } = await import("../storage");
-      const key = req.path.replace(/^\/+/, '');
+      // Rev. 3998 — req.path preserva o encoding original (%20 etc.) neste
+      // handler assíncrono; sem decodeURIComponent a chave nunca batia com
+      // file_key salvo no banco (espaços/acentos), causando 404 falso sempre
+      // que o arquivo não estava mais em disco (efêmero) e caía no fallback.
+      const key = decodeURIComponent(req.path.replace(/^\/+/, ''));
       const result = await dbRetrieve(key);
       if (result) {
         const uploadsRoot = path.join(process.cwd(), "server/uploads");

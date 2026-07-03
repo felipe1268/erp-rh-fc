@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3998** — **CORRIGIDO 404 "ARQUIVO NÃO ENCONTRADO" EM ANEXOS COM ESPAÇO NO NOME QUANDO O DISCO EFÊMERO JÁ NÃO TINHA MAIS A CÓPIA LOCAL.** Usuário reportou ASO de terceiro (enviado no dia anterior) dando "Arquivo não encontrado" mesmo existindo e válido em `uploaded_files`. Causa: o handler assíncrono de fallback do banco em `/uploads` (`server/_core/index.ts`) montava a chave com `req.path.replace(...)` SEM `decodeURIComponent` — diferente do middleware irmão (cap de Range) alguns metros acima, que já decodifica. `req.path` chega com encoding original (`%20` etc.) nesse handler, então a chave nunca batia com o `file_key` salvo (espaço/acento literal) → 0 linhas → 404 falso. Só aparecia em arquivos ANTIGOS porque uploads recentes ainda tinham cópia no disco efêmero e eram servidos direto pelo `express.static` antes de chegar nesse handler, mascarando o bug; um reinício de container/redeploy expõe o problema para qualquer nome com espaço. Fix: `decodeURIComponent` na chave, igual ao middleware irmão. ZERO DELETE · ZERO ALTER.
+
 - **Rev. 3997** — **FOLHA DE PAGAMENTO: CAMPO "LÍQUIDO" GANHA EDIÇÃO INLINE (LÁPIS → INPUT → SALVAR/CANCELAR), IGUAL À FOLHA DE VALE.** Usuário pediu, "assim como na folha do vale, deixei o campo editável", que a coluna "Líquido" da tela PRINCIPAL de Folha de Pagamento ganhasse o mesmo padrão de edição manual (Master only) já usado na aba Vale. Nova mutation `payrollEngine.editarLiquidoFolha` (espelha `editarLiquidoVale`): força o líquido final do funcionário, zera o ajuste de arredondamento e limpa a linha 'folha' do ledger (senão o carry-forward do próximo evento corrompe); persiste em `payroll_payments` + `pagamentoResultJson` de `payroll_periods`, com guard de pagamento consolidado e badge "Editado" via `observacoes`. Frontend (`FolhaPagamento.tsx`) ganha estado `pgLiqEditId`/`pgLiqEditValor` + patch otimista local. ZERO DELETE · ZERO ALTER.
 
-- **Rev. 3996** — **BANCO DE HORAS: ADICIONADO NAVEGADOR MENSAL (ESTILO FOLHA DE PAGAMENTO) NA ABA "SALDOS".** Usuário pediu para ver o Banco de Horas "por mês". `banco_horas_lancamentos` já espelha todo crédito/débito de `banco_horas_saldo`, então o histórico mensal é reconstruído somando lançamentos (sem snapshot novo). Dois endpoints novos em `horasExtras.ts`: `getSaldoBancoMensal` (saldo acumulado até o fim do mês + "Movimento no Mês" por funcionário) e `getResumoMensalBanco` (contagem por mês, colore os pills). Frontend (`BancoHoras.tsx`) ganha Card de navegação (ano + Jan–Dez, azul="com lançamento"/cinza="sem dados"), coluna "Movimento no Mês" na tabela, KPIs "Total em Banco"/"Funcionários com Saldo" refletindo o mês navegado; seleção em lote e "Debitar" desabilitados fora do mês corrente (débito só se aplica ao saldo vivo). ZERO DELETE · ZERO ALTER.
-
 ### 5 one-liners
+
+- **Rev. 3996** — **BANCO DE HORAS: ADICIONADO NAVEGADOR MENSAL (ESTILO FOLHA DE PAGAMENTO) NA ABA "SALDOS".** Usuário pediu para ver o Banco de Horas "por mês". `banco_horas_lancamentos` já espelha todo crédito/débito de `banco_horas_saldo`, então o histórico mensal é reconstruído somando lançamentos (sem snapshot novo). Dois endpoints novos em `horasExtras.ts`: `getSaldoBancoMensal` (saldo acumulado até o fim do mês + "Movimento no Mês" por funcionário) e `getResumoMensalBanco` (contagem por mês, colore os pills). Frontend (`BancoHoras.tsx`) ganha Card de navegação (ano + Jan–Dez, azul="com lançamento"/cinza="sem dados"), coluna "Movimento no Mês" na tabela, KPIs "Total em Banco"/"Funcionários com Saldo" refletindo o mês navegado; seleção em lote e "Debitar" desabilitados fora do mês corrente (débito só se aplica ao saldo vivo). ZERO DELETE · ZERO ALTER.
 
 - **Rev. 3995** — **VERIFICAÇÃO CRUZADA (FOLHA): CORRIGIDA COLUNA "LÍQUIDO ERP" QUE MOSTRAVA VALOR ~100x MAIOR DO QUE O REAL.** Causa: `verificacaoCruzada` lia `payroll_payments.salarioLiquido` (formato US "1394.00") com `parseBRL()` (assume BR), virando 139400; fix detecta formato pela vírgula antes de escolher o parser. ZERO DELETE · ZERO ALTER.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3992** — **DISSÍDIO: HORAS EXTRAS REMOVIDAS DA BASE DA DIFERENÇA SALARIAL RETROATIVA — TODA HE É COMPENSADA VIA BANCO DE HORAS, NUNCA PAGA EM DINHEIRO.** Fórmula/INSS/IRRF marginal estavam corretos DADO que a base incluía HE, mas HE nunca é paga em dinheiro (vira banco de horas). Removida a soma de HE de `baseVerbas` + correção pontual das 58 linhas já persistidas. ZERO DELETE · ZERO ALTER.
 
-- **Rev. 3991** — **DISSÍDIO: BOTÃO "CALCULAR/RECALCULAR DIFERENÇAS RETROATIVAS" FICAVA PERMANENTEMENTE SEM EFEITO — GUARD BLOQUEAVA O DISSÍDIO INTEIRO EM VEZ DE SÓ QUEM JÁ ESTAVA OK.** Guard passou a ser POR FUNCIONÁRIO — recalcula só quem está com valor zerado e não é `rescisao_complementar`. ZERO DELETE · ZERO ALTER.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3990 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3991 e anteriores.
 
 ## User preferences
 

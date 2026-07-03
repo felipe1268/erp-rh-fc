@@ -1,4 +1,30 @@
 /**
+ * Rev. 3998 — **CORRIGIDO 404 "ARQUIVO NÃO ENCONTRADO" EM ANEXOS COM ESPAÇO NO NOME QUANDO O
+ * DISCO EFÊMERO JÁ NÃO TINHA MAIS A CÓPIA LOCAL.**
+ *
+ * PEDIDO: usuário reportou que um ASO de terceiro, enviado no dia anterior, dava
+ * "Arquivo não encontrado" ao abrir (`/uploads/terceiros/funcionarios/5/...ASO Marcos Antonio
+ * Ferreira.jpeg`), mesmo o arquivo existindo e sendo válido em `uploaded_files` (confirmado via
+ * consulta direta ao Neon e via chamada isolada de `dbRetrieve`).
+ *
+ * CAUSA-RAIZ: o handler assíncrono de fallback do banco em `/uploads` (server/_core/index.ts)
+ * construía a chave de busca com `req.path.replace(/^\/+/, '')` SEM `decodeURIComponent` — ao
+ * contrário do middleware irmão (cap de Range) alguns metros acima, que já fazia o decode
+ * corretamente. Nesse handler, `req.path` chega com o encoding original (`%20` etc.), então a
+ * chave nunca batia com o `file_key` salvo no Postgres (que tem espaço/acento literal), e a
+ * consulta sempre retornava 0 linhas → 404 falso.
+ *
+ * POR QUE SÓ APARECIA EM ARQUIVOS ANTIGOS: o disco do container é efêmero; arquivos recém
+ * enviados ainda tinham cópia local e eram servidos direto pelo `express.static` ANTES de
+ * chegar nesse handler, mascarando o bug. Só arquivos cuja cópia local já tinha sumido (reinício
+ * de container/redeploy) caíam de fato no fallback do banco e expunham o problema — por isso
+ * parecia aleatório/só em uploads "antigos".
+ *
+ * FIX: `const key = decodeURIComponent(req.path.replace(/^\/+/, ''))`, igual ao middleware
+ * irmão. Sem outras mudanças de schema/comportamento. ZERO DELETE · ZERO ALTER.
+ */
+
+/**
  * Rev. 3997 — **FOLHA DE PAGAMENTO: CAMPO "LÍQUIDO" GANHA EDIÇÃO INLINE (LÁPIS → INPUT →
  * SALVAR/CANCELAR), IGUAL À FOLHA DE VALE.**
  *
