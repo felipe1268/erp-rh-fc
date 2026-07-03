@@ -1,4 +1,42 @@
 /**
+ * Rev. 3990 — **DISSÍDIO: CORRIGE INSS/IRRF DA DIFERENÇA SALARIAL RETROATIVA — DE "PROGRESSIVO
+ * DO ZERO SOBRE O VALOR ISOLADO" PARA "ALÍQUOTA MARGINAL" (BUG REPORTADO POR CONFERÊNCIA MANUAL).**
+ *
+ * PEDIDO: usuário conferiu manualmente o relatório "Diferenças Salariais Retroativas (Dissídio)"
+ * e encontrou o líquido de ANA BEATRIZ errado: bruto retroativo R$129,77 estava sendo exibido com
+ * líquido R$120,04 (INSS R$9,73 — faixa de 7,5%), quando o INSS correto, na faixa que o salário
+ * dela realmente ocupa (9%), deveria estar próximo de R$11-12 (não R$9,73). Usuário identificou
+ * outros 3 funcionários (ANDERSON BRAGA, ALEXANDRO GONÇALVES, ANDERSON ALKMIN JUNIOR) com valores
+ * "completamente equivocados", suspeitando de férias — mas a raiz confirmada via o exemplo limpo
+ * da Ana foi o cálculo de INSS/IRRF em si, não a fórmula do valor bruto (bruto confirmado correto).
+ *
+ * CAUSA-RAIZ: `calcularEncargosDiferenca` (`server/routers/sindical.ts`) rodava
+ * `calcularINSSProgressivo(bruto)`/`calcularIRRFProgressivo(bruto,bruto)` tratando o valor ISOLADO
+ * da diferença retroativa (ex.: R$129,77) como se fosse um salário-base começando do zero — isso
+ * reinicia as faixas progressivas e aplica a alíquota mais baixa (7,5%) a quem já está, pela folha
+ * normal, em faixas mais altas (9%/12%/14%). INSS/IRRF são tabelas cumulativas: a alíquota correta
+ * de uma verba adicional paga à parte é a MARGINAL — o quanto de imposto A MAIS seria devido se a
+ * diferença tivesse sido paga junto da verba original.
+ *
+ * FIX: `calcularEncargosDiferenca` agora computa
+ * `encargo(baseAntes + diferença) - encargo(baseAntes)`, onde `baseAntes` é o valor das verbas já
+ * recebidas no(s) mês(es) retroativo(s) NO SALÁRIO ANTIGO (tipo 'folha': usa
+ * `diferencaBreakdownJson.baseVerbas`, campo que já existia gravado desde a Rev. 3278 — a correção
+ * é 100% na leitura/cálculo, SEM precisar reprocessar dados já persistidos, já que INSS/IRRF/líquido
+ * são computados on-the-fly na query do relatório, não colunas gravadas). Validado com a conta
+ * manual do usuário (base R$2.261,96 + diferença isolada de salário R$115,91 → INSS marginal
+ * R$10,43 na faixa de 9%, batendo exatamente com a conferência). Para o tipo 'rescisao_complementar'
+ * (desligados), aplicado o mesmo princípio usando uma nova `baseReferencia` (salário mensal do
+ * desligado) gravada na aplicação do dissídio a partir de agora — linhas antigas sem essa base
+ * caem num fallback que preserva o cálculo histórico (evita zerar retroativamente valores já
+ * conferidos por quem já baixou aquelas guias).
+ *
+ * ARQUIVOS: `server/routers/sindical.ts` (`calcularEncargosDiferenca` + gravação de
+ * `baseReferencia` no breakdown da rescisão complementar), `shared/version.ts`→3990.
+ *
+ * ZERO DELETE · ZERO ALTER (correção de lógica pura, sem mudança de schema).
+ */
+/**
  * Rev. 3989 — **FOLHA: TOGGLE "SOMAR DIFERENÇA DO DISSÍDIO" — INCLUI O RETROATIVO DO DISSÍDIO
  * NO LÍQUIDO DA FOLHA DO MÊS DE PAGAMENTO (PERSISTIDO POR PERÍODO).**
  *

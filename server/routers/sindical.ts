@@ -9,27 +9,67 @@ import { parseBRL } from "../utils/parseBRL";
 import { calcularRescisaoComplementar, calcularINSSProgressivo, calcularIRRFProgressivo } from "../utils/rescisaoCalc";
 
 // Rev. 3978 — ENCARGOS sobre a diferença retroativa do dissídio (paga À PARTE da
-// folha mensal, com guia própria). Espelha o padrão já usado na rescisão: cada
-// verba tem sua PRÓPRIA incidência (INSS/IRRF calculados isoladamente sobre a
-// base, não empilhados sobre o salário do mês — aproximação padrão para verba
-// paga em separado).
-// - tipo 'folha' (ativos): diferença é natureza salarial pura → INSS + IRRF
-//   incidem sobre o valor cheio.
-// - tipo 'rescisao_complementar' (desligados): usa o breakdown já calculado por
-//   `calcularRescisaoComplementar` para aplicar a incidência correta por verba —
-//   saldo de salário e 13º sofrem INSS; salário+férias sofrem IRRF (13º com base
-//   separada, sem redutor simplificado); aviso prévio indenizado é ISENTO de
-//   INSS/IRRF/FGTS (Súmulas 125/136 TST).
+// folha mensal, com guia própria).
+//
+// Rev. 3990 — CORREÇÃO CRÍTICA: INSS/IRRF são tabelas PROGRESSIVAS POR FAIXA — rodar
+// `calcularINSSProgressivo`/`calcularIRRFProgressivo` diretamente sobre o valor ISOLADO
+// da diferença (ex.: R$115,91) reinicia as faixas do zero e aplica a alíquota mais baixa
+// (7,5%) a quem já está, pela folha normal, na faixa de 9%/12%/14% — subestimando o
+// desconto e inflando o líquido. O correto é a ALÍQUOTA MARGINAL: o quanto de INSS/IRRF
+// a MAIS seria devido se a diferença tivesse sido paga junto da verba original, ou seja
+// `encargo(baseAntes + diferença) - encargo(baseAntes)`, onde `baseAntes` é o valor
+// (verbas) já recebido no(s) mês(es) retroativo(s) NO SALÁRIO ANTIGO. Validado contra
+// conferência manual do usuário (ANA BEATRIZ: base R$2.261,96 + diferença R$115,91 →
+// INSS marginal R$10,43 [faixa 9%] vs R$8,69 do cálculo antigo isolado [faixa 7,5%]).
+// - tipo 'folha' (ativos): usa `diferencaBreakdownJson.baseVerbas` (já gravado na
+//   aplicação do dissídio) como base "antes" — cobre salário+HE+férias do período.
+// - tipo 'rescisao_complementar' (desligados): usa `diferencaBreakdownJson.baseReferencia`
+//   (salário mensal de referência do desligado, gravado na aplicação) como base "antes"
+//   para saldo de salário e para o 13º (bases isoladas, mesma regra de incidência
+//   separada por verba já usada por `calcularRescisaoComplementar`); aviso prévio
+//   indenizado permanece ISENTO de INSS/IRRF/FGTS (Súmulas 125/136 TST). Linhas antigas
+//   sem `baseReferencia` gravado (aplicadas antes desta correção) caem no fallback
+//   histórico (cálculo isolado) para não zerar retroativamente valores já conferidos.
 export function calcularEncargosDiferenca(r: { diferencaTipo: string | null; valorRetroativo: string | null; diferencaBreakdownJson: any }) {
   const bruto = parseBRL(r.valorRetroativo);
   if (bruto <= 0) return { inss: 0, irrf: 0, fgts: 0, liquido: 0 };
+  const bk = r.diferencaBreakdownJson || {};
 
   if (r.diferencaTipo === 'rescisao_complementar') {
-    const bk = r.diferencaBreakdownJson || {};
     const saldoSalario = parseBRL(bk.saldoSalario);
     const decimo = parseBRL(bk.decimoTerceiroProporcional);
     const ferias = parseBRL(bk.totalFerias) + parseBRL(bk.feriasVencidas);
-    // aviso prévio indenizado: isento — não entra em nenhuma base.
+    const baseReferencia = parseBRL(bk.baseReferencia);
+
+    if (baseReferencia > 0) {
+      // Método marginal: cada verba usa a MESMA base de referência (salário mensal do
+      // desligado) para achar a faixa — saldo/férias entram na base de INSS+IRRF do mês;
+      // 13º mantém incidência ISOLADA (própria tabela, sem redutor simplificado).
+      const inssSaldo = Math.max(0, calcularINSSProgressivo(baseReferencia + saldoSalario) - calcularINSSProgressivo(baseReferencia));
+      const inssDecimo = Math.max(0, calcularINSSProgressivo(baseReferencia + decimo) - calcularINSSProgressivo(baseReferencia));
+      const inss = inssSaldo + inssDecimo;
+
+      const irBaseAntes = Math.max(0, baseReferencia - calcularINSSProgressivo(baseReferencia));
+      const irBaseDepoisSaldo = Math.max(0, (baseReferencia + saldoSalario + ferias) - calcularINSSProgressivo(baseReferencia + saldoSalario));
+      const irrfSaldoDepois = calcularIRRFProgressivo(irBaseDepoisSaldo, baseReferencia + saldoSalario + ferias);
+      const irrfSaldoAntes = calcularIRRFProgressivo(irBaseAntes, baseReferencia);
+      const irrfSaldo = Math.max(0, irrfSaldoDepois - irrfSaldoAntes);
+      const irrfDecimoDepois = calcularIRRFProgressivo(baseReferencia + decimo, baseReferencia + decimo, true);
+      const irrfDecimoAntes = calcularIRRFProgressivo(baseReferencia, baseReferencia, true);
+      const irrfDecimo = Math.max(0, irrfDecimoDepois - irrfDecimoAntes);
+      const irrf = irrfSaldo + irrfDecimo;
+
+      const fgts = (saldoSalario + decimo) * 0.08;
+      const liquido = Math.max(0, bruto - inss - irrf);
+      return {
+        inss: Number(inss.toFixed(2)),
+        irrf: Number(irrf.toFixed(2)),
+        fgts: Number(fgts.toFixed(2)),
+        liquido: Number(liquido.toFixed(2)),
+      };
+    }
+
+    // Fallback histórico (linhas aplicadas antes da Rev. 3990, sem baseReferencia gravada).
     const inss = calcularINSSProgressivo(saldoSalario) + calcularINSSProgressivo(decimo);
     const baseIrSaldo = saldoSalario + ferias;
     const irrf = calcularIRRFProgressivo(baseIrSaldo, baseIrSaldo)
@@ -44,9 +84,18 @@ export function calcularEncargosDiferenca(r: { diferencaTipo: string | null; val
     };
   }
 
-  // tipo 'folha' (padrão) — verba salarial isolada.
-  const inss = calcularINSSProgressivo(bruto);
-  const irrf = calcularIRRFProgressivo(bruto, bruto);
+  // tipo 'folha' (padrão) — método marginal usando a base já paga no(s) mês(es)
+  // retroativo(s) (salário antigo) como referência de faixa.
+  const baseAntes = parseBRL(bk.baseVerbas);
+  const baseDepois = baseAntes + bruto;
+  const inssAntes = calcularINSSProgressivo(baseAntes);
+  const inssDepois = calcularINSSProgressivo(baseDepois);
+  const inss = Math.max(0, inssDepois - inssAntes);
+  const irBaseAntes = Math.max(0, baseAntes - inssAntes);
+  const irBaseDepois = Math.max(0, baseDepois - inssDepois);
+  const irrfAntes = calcularIRRFProgressivo(irBaseAntes, baseAntes);
+  const irrfDepois = calcularIRRFProgressivo(irBaseDepois, baseDepois);
+  const irrf = Math.max(0, irrfDepois - irrfAntes);
   const fgts = bruto * 0.08;
   const liquido = Math.max(0, bruto - inss - irrf);
   return {
@@ -362,6 +411,9 @@ export const sindicalRouter = router({
         if (!complementar) continue;
 
         const totalComplementar = parseBRL(complementar.total);
+        // Rev. 3990 — grava a base de referência (salário mensal do desligado) para o
+        // cálculo MARGINAL de INSS/IRRF em `calcularEncargosDiferenca` (ver comentário lá).
+        (complementar as any).baseReferencia = Number(salarioRescisao.toFixed(2));
 
         await tx.insert(dissidioFuncionarios).values({
           dissidioId: dissidio.id,

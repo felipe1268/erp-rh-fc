@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3990** — **DISSÍDIO: CORRIGE INSS/IRRF DA DIFERENÇA SALARIAL RETROATIVA — DE "PROGRESSIVO DO ZERO SOBRE O VALOR ISOLADO" PARA "ALÍQUOTA MARGINAL".** Usuário conferiu manualmente o relatório "Diferenças Salariais Retroativas (Dissídio)" e achou o líquido errado (ANA BEATRIZ: bruto R$129,77 mostrando líquido R$120,04 com INSS na faixa de 7,5%, quando o salário dela realmente está na faixa de 9%). Causa-raiz: `calcularEncargosDiferenca` (`sindical.ts`) rodava `calcularINSSProgressivo`/`calcularIRRFProgressivo` diretamente sobre o valor ISOLADO da diferença, reiniciando as faixas do zero e aplicando sempre a alíquota mais baixa, em vez da MARGINAL (a que incide de fato sobre quem já ganha naquela faixa). Fix: agora computa `encargo(baseAntes+diferença) - encargo(baseAntes)`, usando `diferencaBreakdownJson.baseVerbas` (tipo 'folha', já gravado desde a Rev. 3278) ou a nova `baseReferencia` gravada na aplicação (tipo 'rescisao_complementar', com fallback pro cálculo antigo em linhas já aplicadas sem essa base) como referência de faixa. Correção é só de leitura/cálculo — sem migração de dados, já que o relatório calcula on-the-fly. Validado batendo exatamente com a conferência manual do usuário. ZERO DELETE · ZERO ALTER.
+
 - **Rev. 3989** — **FOLHA: TOGGLE "SOMAR DIFERENÇA DO DISSÍDIO" — INCLUI O RETROATIVO DO DISSÍDIO NO LÍQUIDO DA FOLHA DO MÊS DE PAGAMENTO (PERSISTIDO POR PERÍODO).** Usuário pediu um jeito de, opcionalmente, somar o líquido retroativo do relatório "Diferenças Salariais Retroativas (Dissídio)" dentro do líquido da folha normal do mês de pagamento (`diferenca_mes_pagamento`) — porque a contabilidade às vezes gera 2 holerites separados, às vezes prefere consolidar num só, e a escolha precisa ficar GRAVADA por período (não é cálculo client-side efêmero). Backend: nova coluna `somarDiferencaDissidio` (smallint) em `payrollPeriods` (self-heal ALTER guard + bump `COLFIX_VERSION`); `calcularEncargosDiferenca` (`sindical.ts`) exportada p/ reuso; `simularPagamento` (`payrollEngine.ts`) ganha input opcional `somarDiferencaDissidio` (default lido da coluna persistida) que, quando ON, monta `diferencaDissidioMap` via JOIN `dissidio_funcionarios`×`dissidios` (filtrado por `diferenca_mes_pagamento = mesReferencia`, não cancelado) e soma o líquido em `salarioLiquidoExato`, devolvendo `diferencaDissidioValor` por funcionário; escolha persistida no `UPDATE payroll_periods` ao fim da simulação; `editarDescontoManual` preserva o valor ao recompor líquido após edição manual. Frontend (`FolhaPagamento.tsx`): novo switch "Somar Diferença do Dissídio" ao lado do toggle de DSR Falta (mesmo padrão), hidratado no `onSuccess` e no efeito de `payrollPeriod.data`; colunas de líquido (Visão Geral + Por Banco) ganharam selo "+ R$ X dissídio" quando aplicável. ZERO DELETE · ZERO ALTER (só ADD COLUMN).
 
-- **Rev. 3988** — **FOLHA: "GERAR REMESSA CNAB" GANHA SELEÇÃO MÚLTIPLA — 1 ARQUIVO POR BANCO MARCADO.** Usuário pediu que, ao gerar remessa CNAB, o sistema gere 1 remessa PARA CADA BANCO selecionado. Frontend puro (`FolhaPagamento.tsx`, subview "Por Banco"): novo estado `contasRemessaSelecionadas`, checkbox em cada card (resumo + detalhe), barra de ação com "Selecionar todos" + "Gerar Remessas Selecionadas (N)". Nova função `gerarRemessasSelecionadas` chama `gerarRemessaCnab` sequencialmente (1 chamada por conta marcada, delay de 250ms entre downloads), reusando o endpoint existente sem tocar o backend — cada banco continua gerando seu próprio arquivo .rem (nunca combinado). Botão individual por card mantido. ZERO DELETE · ZERO ALTER.
-
 ### 5 one-liners
+
+- **Rev. 3988** — **FOLHA: "GERAR REMESSA CNAB" GANHA SELEÇÃO MÚLTIPLA — 1 ARQUIVO POR BANCO MARCADO.** Usuário pediu que, ao gerar remessa CNAB, o sistema gere 1 remessa PARA CADA BANCO selecionado. Frontend puro (`FolhaPagamento.tsx`, subview "Por Banco"): novo estado `contasRemessaSelecionadas`, checkbox em cada card (resumo + detalhe), barra de ação com "Selecionar todos" + "Gerar Remessas Selecionadas (N)". Nova função `gerarRemessasSelecionadas` chama `gerarRemessaCnab` sequencialmente (1 chamada por conta marcada, delay de 250ms entre downloads), reusando o endpoint existente sem tocar o backend — cada banco continua gerando seu próprio arquivo .rem (nunca combinado). Botão individual por card mantido. ZERO DELETE · ZERO ALTER.
 
 - **Rev. 3987** — **FOLHA: COLUNA "FALTAS" NÃO MISTURA MAIS VR/VT — VR SAI DA FOLHA (SÓ NO VALE ALIMENTAÇÃO), VT DE FALTA VAI PRA COLUNA VT.** Regra confirmada: empresa TEM direito de descontar VR/VT em falta, mas só VT entra na Folha — VR/VA fica só no módulo Vale Alimentação. Backend (`payrollEngine.ts`) e frontend (`FolhaPagamento.tsx`) ajustados espelhando a mesma fórmula. ZERO DELETE · ZERO ALTER.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3984** — **FOLHA: PJ NUNCA NA FOLHA + ALERTA "PAGAR OU NÃO?" P/ AVISO PRÉVIO ENCERRANDO NO MÊS.** Vazamento de PJ em `custosPorObra` corrigido (filtra só CLT); nova tabela `payroll_folha_decisoes` p/ decisão do RH sobre aviso prévio encerrando no mês. ZERO DELETE · ZERO ALTER.
 
-- **Rev. 3983** — **BANCO DE HORAS: DSR PERDIDO TAMBÉM VIRA DÉBITO DE HORAS (SEPARADO DE ATRASO/FALTA).** Novo lançamento `tipo='debito_dsr'` (440min fixo por DSR perdido), discriminado do débito de atraso/falta. ZERO DELETE · ZERO ALTER.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3982 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3983 e anteriores.
 
 ## User preferences
 
