@@ -12,7 +12,7 @@ import {
   Eye, Trash2, RefreshCw, ArrowLeft, XCircle, Info, Building2,
   FileSpreadsheet, AlertCircle, ShieldCheck, Clock, TrendingUp, TrendingDown,
   Filter, Briefcase, BarChart3, ChevronDown, ChevronUp, Lightbulb, Wrench, ArrowRight, MapPin, Scale,
-  HardHat, Ban, User, CheckCircle2, Calculator, Zap, Moon, FileCheck, Wallet, Pencil, Save, X, FileDown, PenLine, ClipboardCheck, FileBarChart, ExternalLink, ZoomIn, Loader2, Printer
+  HardHat, Ban, User, CheckCircle2, Calculator, Zap, Moon, FileCheck, Wallet, Pencil, Save, X, FileDown, PenLine, ClipboardCheck, FileBarChart, ExternalLink, ZoomIn, Loader2, Printer, RotateCcw
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import FullScreenDialog from "@/components/FullScreenDialog";
@@ -702,6 +702,45 @@ export default function FolhaPagamento() {
     },
     onError: (e: any) => toast.error(e.message || 'Erro ao recalcular diferenças'),
   });
+
+  // Rev. 3993 — Edição manual da diferença retroativa (bruto/INSS/IRRF), linha a
+  // linha, para conciliar divergências residuais que o cálculo automático não cobre.
+  const [editDifRow, setEditDifRow] = useState<any>(null);
+  const [editDifBruto, setEditDifBruto] = useState('');
+  const [editDifInss, setEditDifInss] = useState('');
+  const [editDifIrrf, setEditDifIrrf] = useState('');
+  const editarDifMut = trpc.sindical.editarDiferencaManual.useMutation({
+    onSuccess: () => {
+      toast.success('Diferença ajustada manualmente.');
+      setEditDifRow(null);
+      dissidioRelQuery.refetch();
+    },
+    onError: (e: any) => toast.error(e.message || 'Erro ao salvar edição manual'),
+  });
+  const removerEdicaoDifMut = trpc.sindical.removerEdicaoManualDiferenca.useMutation({
+    onSuccess: () => {
+      toast.success('Edição manual removida — voltou ao valor calculado.');
+      dissidioRelQuery.refetch();
+    },
+    onError: (e: any) => toast.error(e.message || 'Erro ao remover edição manual'),
+  });
+  const abrirEdicaoDif = (r: any) => {
+    setEditDifRow(r);
+    setEditDifBruto(String(r.valorRetroativo ?? '0'));
+    setEditDifInss(String(r.inss ?? '0'));
+    setEditDifIrrf(String(r.irrf ?? '0'));
+  };
+  const salvarEdicaoDif = () => {
+    if (!editDifRow) return;
+    const bruto = parseFloat(editDifBruto.replace(',', '.'));
+    const inss = parseFloat(editDifInss.replace(',', '.'));
+    const irrf = parseFloat(editDifIrrf.replace(',', '.'));
+    if (isNaN(bruto) || isNaN(inss) || isNaN(irrf) || bruto < 0 || inss < 0 || irrf < 0) {
+      toast.error('Valores inválidos.');
+      return;
+    }
+    editarDifMut.mutate({ companyId, companyIds, id: editDifRow.id, bruto, inss, irrf });
+  };
 
   // Rev. 3982 — Imprimir / PDF do relatório de Diferenças Salariais (Dissídio).
   // Trocado de `print-only`+window.print() (Rev. 3979) para janela nova com
@@ -6812,11 +6851,12 @@ export default function FolhaPagamento() {
                         <th className="text-right py-1.5 px-2">INSS</th>
                         <th className="text-right py-1.5 px-2">IRRF</th>
                         <th className="text-right py-1.5 px-2">Líquido</th>
+                        <th className="text-center py-1.5 px-2">Editar</th>
                       </tr>
                     </thead>
                     <tbody>
                       {[...dissidioRelQuery.data.rows].sort((a: any, b: any) => (a.employeeName || '').localeCompare(b.employeeName || '', 'pt-BR')).map((r: any) => (
-                        <tr key={r.id} className="border-b border-emerald-100 hover:bg-emerald-50/40">
+                        <tr key={r.id} className={`border-b border-emerald-100 hover:bg-emerald-50/40 ${r.editadoManualmente ? 'bg-amber-50/50' : ''}`}>
                           <td className="py-1.5 px-2 font-medium">{r.employeeName || `#${r.employeeId}`}</td>
                           <td className="py-1.5 px-2 text-muted-foreground">{r.anoReferencia ?? '—'}</td>
                           <td className="py-1.5 px-2 text-center">
@@ -6824,6 +6864,15 @@ export default function FolhaPagamento() {
                               <Badge variant="outline" className="border-amber-300 text-amber-700 text-[10px]">Resc. Compl.</Badge>
                             ) : (
                               <Badge variant="outline" className="border-emerald-300 text-emerald-700 text-[10px]">Folha</Badge>
+                            )}
+                            {r.editadoManualmente && (
+                              <Badge
+                                variant="outline"
+                                className="border-orange-300 text-orange-700 text-[10px] ml-1"
+                                title={`Editado manualmente${r.diferencaOverrideJson?.editadoPorNome ? ` por ${r.diferencaOverrideJson.editadoPorNome}` : ''}${r.diferencaOverrideJson?.editadoEm ? ` em ${new Date(r.diferencaOverrideJson.editadoEm).toLocaleString('pt-BR')}` : ''}`}
+                              >
+                                Manual
+                              </Badge>
                             )}
                           </td>
                           <td className="py-1.5 px-2 text-center text-muted-foreground">{r.diferencaMesPagamento || '—'}</td>
@@ -6833,6 +6882,33 @@ export default function FolhaPagamento() {
                           <td className="py-1.5 px-2 text-right text-red-600">{r.inss > 0 ? `- ${formatBRL(r.inss)}` : '—'}</td>
                           <td className="py-1.5 px-2 text-right text-red-600">{r.irrf > 0 ? `- ${formatBRL(r.irrf)}` : '—'}</td>
                           <td className="py-1.5 px-2 text-right font-semibold text-blue-700">{formatBRL(r.valorLiquido)}</td>
+                          <td className="py-1.5 px-2 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                title="Editar manualmente"
+                                onClick={() => abrirEdicaoDif(r)}
+                              >
+                                <Pencil className="h-3.5 w-3.5 text-gray-500" />
+                              </Button>
+                              {r.editadoManualmente && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  title="Restaurar valor calculado"
+                                  disabled={removerEdicaoDifMut.isPending}
+                                  onClick={() => removerEdicaoDifMut.mutate({ companyId, companyIds, id: r.id })}
+                                >
+                                  <RotateCcw className="h-3.5 w-3.5 text-amber-600" />
+                                </Button>
+                              )}
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -6840,6 +6916,69 @@ export default function FolhaPagamento() {
                 </div>
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* ===== EDIÇÃO MANUAL DA DIFERENÇA RETROATIVA (Rev. 3993) ===== */}
+        <Dialog open={!!editDifRow} onOpenChange={(open) => { if (!open) setEditDifRow(null); }}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Pencil className="h-4 w-4 text-amber-600" />
+                Editar Diferença Manualmente
+              </DialogTitle>
+              <DialogDescription className="break-words">
+                {editDifRow?.employeeName || `Funcionário #${editDifRow?.employeeId}`} — ajuste Bruto/INSS/IRRF; o Líquido é recalculado automaticamente. Esse valor passará a prevalecer sobre o cálculo automático até ser restaurado.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Bruto (diferença retroativa)</label>
+                <Input
+                  value={editDifBruto}
+                  onChange={(e) => setEditDifBruto(e.target.value)}
+                  inputMode="decimal"
+                  placeholder="0,00"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">INSS</label>
+                  <Input
+                    value={editDifInss}
+                    onChange={(e) => setEditDifInss(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="0,00"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">IRRF</label>
+                  <Input
+                    value={editDifIrrf}
+                    onChange={(e) => setEditDifIrrf(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="0,00"
+                  />
+                </div>
+              </div>
+              <div className="rounded-md bg-blue-50 border border-blue-200 px-3 py-2 text-sm flex items-center justify-between">
+                <span className="text-blue-700 font-medium">Líquido</span>
+                <span className="font-semibold text-blue-800">
+                  {(() => {
+                    const b = parseFloat(editDifBruto.replace(',', '.')) || 0;
+                    const i = parseFloat(editDifInss.replace(',', '.')) || 0;
+                    const ir = parseFloat(editDifIrrf.replace(',', '.')) || 0;
+                    return formatBRL(Math.max(0, b - i - ir));
+                  })()}
+                </span>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditDifRow(null)}>Cancelar</Button>
+              <Button onClick={salvarEdicaoDif} disabled={editarDifMut.isPending}>
+                {editarDifMut.isPending ? 'Salvando...' : 'Salvar'}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
 

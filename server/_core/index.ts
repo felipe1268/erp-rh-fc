@@ -961,6 +961,14 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3278: colunas de DISSÍDIO (data_vigencia + diferença salarial retroativa + complementar de dissídio p/ desligados) garantidas.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 3278 dissídio:`, e?.message || e); }
 
+        // Rev. 3993 — override manual da diferença retroativa do dissídio (bruto/INSS/
+        // IRRF/líquido), para conciliar divergências residuais linha-a-linha sem perder
+        // o cálculo automático (limpável a qualquer momento).
+        try {
+          await db.execute(sql`ALTER TABLE dissidio_funcionarios ADD COLUMN IF NOT EXISTS diferenca_override_json JSON`);
+          console.log(`[SyncSchema+] Rev. 3993: coluna diferenca_override_json garantida em dissidio_funcionarios (edição manual da diferença retroativa).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 3993 dissídio override:`, e?.message || e); }
+
         // Rev. 2004 — Tabela de participações em DDS (Diálogo Diário de Segurança)
         try {
           await db.execute(sql`

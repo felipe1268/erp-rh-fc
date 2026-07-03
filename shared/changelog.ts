@@ -1,4 +1,37 @@
 /**
+ * Rev. 3993 — **DISSÍDIO: HABILITADA EDIÇÃO MANUAL LINHA A LINHA DA DIFERENÇA SALARIAL
+ * RETROATIVA (BRUTO/INSS/IRRF) NO RELATÓRIO "DIFERENÇAS SALARIAIS RETROATIVAS (DISSÍDIO)".**
+ *
+ * PEDIDO: mesmo após Rev. 3990 (INSS/IRRF marginal) e Rev. 3992 (remoção de HE da base), usuário
+ * conferiu de novo os valores e ainda achou algumas divergências residuais pontuais — pediu
+ * explicitamente: "quero que habilite para edição manual" nas linhas do relatório.
+ *
+ * SOLUÇÃO: nova coluna `diferenca_override_json` em `dissidio_funcionarios` guarda um override
+ * opcional `{ativo, bruto, inss, irrf, fgts, liquido, editadoPorId, editadoPorNome, editadoEm}`
+ * que, quando `ativo:true`, PREVALECE sobre o cálculo automático (`calcularEncargosDiferenca`) na
+ * leitura (`relatorioDiferencas`) — o valor calculado original NUNCA é apagado (fica intacto em
+ * `valorRetroativo`/`diferencaBreakdownJson`), só sobreposto na exibição/impressão/totais.
+ *
+ * Duas mutations novas (admin_master only, mesmo padrão de `recalcularDiferencas`):
+ * `sindical.editarDiferencaManual` (grava o override a partir de Bruto/INSS/IRRF informados,
+ * computa Líquido e FGTS 8% automaticamente) e `sindical.removerEdicaoManualDiferenca` (desativa
+ * o override, restaurando o valor calculado).
+ *
+ * FRONT (`FolhaPagamento.tsx`, tabela do relatório de Dissídio): nova coluna "Editar" com ícone
+ * de lápis por linha, abrindo um Dialog compacto (Bruto/INSS/IRRF editáveis, Líquido calculado ao
+ * vivo); linhas com override ganham badge laranja "Manual" (tooltip com quem editou e quando) +
+ * destaque de fundo âmbar na linha; botão de restaurar (ícone de reset) aparece só quando há
+ * override ativo.
+ *
+ * ARQUIVOS: `server/_core/index.ts` (self-heal `ADD COLUMN IF NOT EXISTS diferenca_override_json`),
+ * `drizzle/schema.ts` (`dissidioFuncionarios.diferencaOverrideJson`), `server/routers/sindical.ts`
+ * (`relatorioDiferencas` passa a checar o override; `editarDiferencaManual` +
+ * `removerEdicaoManualDiferenca` novos), `client/src/pages/FolhaPagamento.tsx` (UI de edição),
+ * `shared/version.ts`→3993.
+ *
+ * ZERO DELETE · ZERO ALTER (só ADD COLUMN nova, nullable).
+ */
+/**
  * Rev. 3992 — **DISSÍDIO: HORAS EXTRAS REMOVIDAS DA BASE DA DIFERENÇA SALARIAL RETROATIVA —
  * TODA HE É COMPENSADA VIA BANCO DE HORAS, NUNCA PAGA EM DINHEIRO.**
  *

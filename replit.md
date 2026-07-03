@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3993** — **DISSÍDIO: HABILITADA EDIÇÃO MANUAL LINHA A LINHA DA DIFERENÇA SALARIAL RETROATIVA (BRUTO/INSS/IRRF).** Mesmo após Rev. 3990 (INSS/IRRF marginal) e Rev. 3992 (remoção de HE da base), usuário ainda encontrava divergências residuais pontuais e pediu explicitamente edição manual. Nova coluna `diferenca_override_json` em `dissidio_funcionarios` guarda um override opcional `{ativo, bruto, inss, irrf, fgts, liquido, editadoPorNome, editadoEm}` que PREVALECE sobre o cálculo automático em `relatorioDiferencas` quando ativo — o valor calculado original nunca é apagado, só sobreposto na exibição/totais. Duas mutations novas (admin_master only): `sindical.editarDiferencaManual` (grava override, calcula líquido/FGTS) e `sindical.removerEdicaoManualDiferenca` (restaura o calculado). Frontend (`FolhaPagamento.tsx`): coluna "Editar" com lápis por linha abrindo Dialog compacto (Bruto/INSS/IRRF editáveis, líquido ao vivo); badge laranja "Manual" + fundo âmbar na linha quando há override; botão de restaurar quando ativo. ZERO DELETE · ZERO ALTER (só ADD COLUMN nova, nullable).
+
 - **Rev. 3992** — **DISSÍDIO: HORAS EXTRAS REMOVIDAS DA BASE DA DIFERENÇA SALARIAL RETROATIVA — TODA HE É COMPENSADA VIA BANCO DE HORAS, NUNCA PAGA EM DINHEIRO.** Usuário conferiu de novo o líquido de ANA BEATRIZ (após Rev. 3990) e ainda achou o valor errado. A fórmula e o INSS/IRRF marginal estavam corretos DADO que a base incluía HE do mês retroativo — mas a empresa nunca paga HE em dinheiro (tudo vira banco de horas), então essa HE não deveria compor a diferença. Fix: `sindical.ts` (`aplicar` e `recalcularDiferencas`) removeu a soma de `heMap`/`hePeriodEmployees` de `baseVerbas`, que agora é só salário + férias. Correção de dados: rodado update pontual nas 58 linhas já persistidas de `dissidio_funcionarios` (tipo 'folha') com HE > 0, recalculando `valorRetroativo`/`baseVerbas`/breakdown sem a HE. ANA BEATRIZ validada: baseVerbas 2261,97, valorRetroativo 116,49 (era 129,77 com HE). ZERO DELETE · ZERO ALTER (correção de dados via UPDATE, mesmo formato).
 
-- **Rev. 3991** — **DISSÍDIO: BOTÃO "CALCULAR/RECALCULAR DIFERENÇAS RETROATIVAS" FICAVA PERMANENTEMENTE SEM EFEITO — GUARD BLOQUEAVA O DISSÍDIO INTEIRO EM VEZ DE SÓ QUEM JÁ ESTAVA OK.** Usuário reportou que o botão não recalculava os valores. Causa-raiz: `sindical.recalcularDiferencas` tinha um guard que abortava para TODOS os funcionários do dissídio se QUALQUER UM já tivesse `valorRetroativo > 0` — como isso é o caso normal (maioria já vem calculada certa na aplicação), o botão ficava inútil na prática (sempre retornava erro "já foram calculadas", mesmo quando havia funcionário zerado precisando de recálculo). Fix: guard passou a ser POR FUNCIONÁRIO — recalcula só quem está com valor zerado e não é `rescisao_complementar` (tipo com lógica própria, preservado intacto); se ninguém precisa de recálculo, retorna sucesso informativo em vez de erro. ZERO DELETE · ZERO ALTER.
-
 ### 5 one-liners
+
+- **Rev. 3991** — **DISSÍDIO: BOTÃO "CALCULAR/RECALCULAR DIFERENÇAS RETROATIVAS" FICAVA PERMANENTEMENTE SEM EFEITO — GUARD BLOQUEAVA O DISSÍDIO INTEIRO EM VEZ DE SÓ QUEM JÁ ESTAVA OK.** Guard passou a ser POR FUNCIONÁRIO — recalcula só quem está com valor zerado e não é `rescisao_complementar`. ZERO DELETE · ZERO ALTER.
 
 - **Rev. 3990** — **DISSÍDIO: CORRIGE INSS/IRRF DA DIFERENÇA SALARIAL RETROATIVA — DE "PROGRESSIVO DO ZERO SOBRE O VALOR ISOLADO" PARA "ALÍQUOTA MARGINAL".** `calcularEncargosDiferenca` rodava INSS/IRRF progressivo sobre o valor ISOLADO da diferença em vez da alíquota MARGINAL; agora computa `encargo(baseAntes+diferença) - encargo(baseAntes)`. ZERO DELETE · ZERO ALTER.
 
@@ -68,7 +70,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3985 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3987 e anteriores.
 
 ## User preferences
 

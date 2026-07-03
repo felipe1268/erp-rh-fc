@@ -869,6 +869,8 @@ export const dissidioFuncionarios = pgTable("dissidio_funcionarios", {
         diferencaBaseVerbas: varchar("diferenca_base_verbas", { length: 20 }),
         diferencaBreakdownJson: json("diferenca_breakdown_json"),
         diferencaTipo: text("diferenca_tipo"),
+        // Rev. 3993 — override manual da diferença retroativa (bruto/inss/irrf/liquido).
+        diferencaOverrideJson: json("diferenca_override_json"),
         status: text().default('pendente').notNull(),
         motivoExclusao: text(),
         aplicadoEm: timestamp({ mode: 'string' }),

@@ -491,6 +491,7 @@ export const sindicalRouter = router({
       diferencaBaseVerbas: dissidioFuncionarios.diferencaBaseVerbas,
       diferencaBreakdownJson: dissidioFuncionarios.diferencaBreakdownJson,
       diferencaTipo: dissidioFuncionarios.diferencaTipo,
+      diferencaOverrideJson: dissidioFuncionarios.diferencaOverrideJson,
       status: dissidioFuncionarios.status,
     })
       .from(dissidioFuncionarios)
@@ -501,9 +502,24 @@ export const sindicalRouter = router({
 
     // Rev. 3978 — encargos (INSS/IRRF/FGTS) por linha; agora paga em separado da
     // folha, então cada diferença precisa da SUA própria guia de recolhimento.
+    // Rev. 3993 — se houver override manual (`diferencaOverrideJson`), ele PREVALECE
+    // sobre o cálculo automático, linha a linha — usado para conciliar pequenas
+    // divergências residuais sem perder a rastreabilidade do valor calculado.
     const rowsComEncargos = rows.map((r) => {
+      const ov = r.diferencaOverrideJson as any;
+      if (ov && ov.ativo) {
+        return {
+          ...r,
+          inss: Number(ov.inss) || 0,
+          irrf: Number(ov.irrf) || 0,
+          fgts: Number(ov.fgts) || 0,
+          valorLiquido: Number(ov.liquido) || 0,
+          valorRetroativo: ov.bruto != null ? String(ov.bruto) : r.valorRetroativo,
+          editadoManualmente: true,
+        };
+      }
       const enc = calcularEncargosDiferenca(r);
-      return { ...r, inss: enc.inss, irrf: enc.irrf, fgts: enc.fgts, valorLiquido: enc.liquido };
+      return { ...r, inss: enc.inss, irrf: enc.irrf, fgts: enc.fgts, valorLiquido: enc.liquido, editadoManualmente: false };
     });
 
     const totalGeral = rowsComEncargos.reduce((s, r) => s + (parseFloat(r.valorRetroativo || '0') || 0), 0);
@@ -527,6 +543,59 @@ export const sindicalRouter = router({
       totalLiquido: Number(totalLiquido.toFixed(2)),
       qtdFuncionarios: new Set(rowsComEncargos.map(r => r.employeeId)).size,
     };
+  }),
+
+  // Rev. 3993 — EDIÇÃO MANUAL da diferença retroativa (bruto/INSS/IRRF/líquido), linha
+  // a linha, para conciliar divergências residuais que o cálculo automático (marginal,
+  // Rev. 3990/3992) não cobre em casos específicos. Grava em `diferencaOverrideJson`,
+  // que passa a PREVALECER sobre o cálculo automático em `relatorioDiferencas` até ser
+  // limpo — o valor calculado original nunca é apagado (fica em `valorRetroativo`/
+  // `diferencaBreakdownJson`), só sobreposto na exibição/print.
+  editarDiferencaManual: protectedProcedure.input(z.object({
+    companyId: z.number(), companyIds: z.array(z.number()).optional(),
+    id: z.number(),
+    bruto: z.number().min(0),
+    inss: z.number().min(0),
+    irrf: z.number().min(0),
+  })).mutation(async ({ input, ctx }) => {
+    if (ctx.user.role !== 'admin_master') throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas Admin Master pode editar diferenças manualmente' });
+    await assertCompanyAccess(ctx.user, input);
+    const db = (await getDb())!;
+    const [linha] = await db.select().from(dissidioFuncionarios)
+      .where(and(eq(dissidioFuncionarios.id, input.id), companyFilter(dissidioFuncionarios.companyId, input)));
+    if (!linha) throw new TRPCError({ code: 'NOT_FOUND', message: 'Linha de diferença não encontrada' });
+
+    const liquido = Math.max(0, input.bruto - input.inss - input.irrf);
+    const fgts = Number((input.bruto * 0.08).toFixed(2));
+    const override = {
+      ativo: true,
+      bruto: Number(input.bruto.toFixed(2)),
+      inss: Number(input.inss.toFixed(2)),
+      irrf: Number(input.irrf.toFixed(2)),
+      liquido: Number(liquido.toFixed(2)),
+      fgts,
+      editadoPorId: ctx.user.id,
+      editadoPorNome: ctx.user.name || 'Sistema',
+      editadoEm: new Date().toISOString(),
+    };
+    await db.update(dissidioFuncionarios).set({ diferencaOverrideJson: override }).where(eq(dissidioFuncionarios.id, input.id));
+    return { success: true, override };
+  }),
+
+  // Rev. 3993 — remove o override manual, voltando o valor exibido para o cálculo
+  // automático (marginal). Não apaga histórico — só desativa (`ativo:false`).
+  removerEdicaoManualDiferenca: protectedProcedure.input(z.object({
+    companyId: z.number(), companyIds: z.array(z.number()).optional(),
+    id: z.number(),
+  })).mutation(async ({ input, ctx }) => {
+    if (ctx.user.role !== 'admin_master') throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas Admin Master pode remover edição manual' });
+    await assertCompanyAccess(ctx.user, input);
+    const db = (await getDb())!;
+    const [linha] = await db.select().from(dissidioFuncionarios)
+      .where(and(eq(dissidioFuncionarios.id, input.id), companyFilter(dissidioFuncionarios.companyId, input)));
+    if (!linha) throw new TRPCError({ code: 'NOT_FOUND', message: 'Linha de diferença não encontrada' });
+    await db.update(dissidioFuncionarios).set({ diferencaOverrideJson: null }).where(eq(dissidioFuncionarios.id, input.id));
+    return { success: true };
   }),
 
   // Rev. 3950 — RECALCULAR diferenças retroativas para dissídio aplicado antes
