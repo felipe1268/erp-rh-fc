@@ -1,4 +1,39 @@
 /**
+ * Rev. 4003 — **COMPRAS/COTAÇÕES: "EXPORTAR PDF" GERAVA PÁGINA EM BRANCO — BLOQUEAVA ENVIO DE
+ * COTAÇÃO PARA CLIENTE APROVAR ITEM A ITEM; ADICIONADO TAMBÉM "EXPORTAR EXCEL".**
+ *
+ * PEDIDO (usuário, urgente): "Exportar PDF" na tela de detalhe da cotação abria o diálogo de
+ * impressão do navegador só com página em branco, travando o envio de 2 cotações longas do dia
+ * pro cliente Airton (Hotel do Papa) aprovar item a item. Usuário também mencionou ter pedido
+ * antes (a outro agente) uma exportação em Excel item a item pra aprovação do cliente, nunca
+ * entregue — hoje monta essa planilha manualmente.
+ *
+ * CAUSA-RAIZ: o botão chamava `window.print()` direto sobre o DOM vivo da tela. Quando a aba
+ * "Mapa de Cotação" está ativa, `DetalheWrapper` renderiza o conteúdo dentro de
+ * `<div className="fixed inset-0 z-50 ...">` (fullscreen). Elemento com `position: fixed` não
+ * flui pro fluxo normal de paginação de impressão do Chrome — mesma causa-raiz já documentada
+ * para Dialogs Radix fixos (memória `print-dialog-fixed-clip`): o navegador tenta imprimir o
+ * elemento fixo "grudado" na página 1, mas como ele não é filho posicionado dentro do fluxo do
+ * `body` (e as regras globais de impressão em `index.css` tratam `[data-slot="dialog-content"]`
+ * mas não um `<div className="fixed">` solto fora de um Dialog Radix), o resultado é página em
+ * branco.
+ *
+ * FIX: `client/src/pages/compras/Cotacoes.tsx` — extraída `montarLinhasExportacao()` (monta as
+ * linhas item × fornecedor do Mapa de Cotação, reaproveitando `getMelhorPrecoItem`/
+ * `respostaMap`, mesma fonte de dados da tabela em tela) e criadas duas funções que NÃO dependem
+ * do DOM vivo: (1) `gerarPdfCotacao()` — monta HTML autônomo (cabeçalho + tabela item ×
+ * fornecedor, melhor preço destacado em verde) e abre numa aba nova via `window.open()` +
+ * `document.write()` + `window.print()` com `setTimeout`, mesmo padrão já comprovado em
+ * `Solicitacoes.tsx` (`gerarPdfSC`, Rev. 1743) — imune a `fixed`/`overflow` da tela de origem;
+ * (2) `exportarExcelCotacao()` — gera `.xlsx` com a mesma matriz item × fornecedor (Qtd/Preço
+ * Unit./Total por fornecedor + Meta Unit./Total) via `XLSX.utils.aoa_to_sheet` +
+ * `XLSX.writeFile` (pacote `xlsx`/SheetJS já usado no backend, agora importado no client), pronta
+ * pra mandar ao cliente para aprovação item a item sem montar planilha manual. Botão "Exportar
+ * Excel" adicionado ao lado do "Exportar PDF" no cabeçalho da cotação. ZERO DELETE de linhas ·
+ * ZERO ALTER de schema.
+ */
+
+/**
  * Rev. 4002 — **IMPORTAÇÃO DE EXTRATO PDF (SANTANDER IBPJ): PARSER ESTAVA IGNORANDO 100% DOS
  * LANÇAMENTOS EM EXTRATOS DE VÁRIAS PÁGINAS — O UPLOAD "FUNCIONAVA" MAS NÃO TRAZIA NENHUMA
  * TRANSAÇÃO.**

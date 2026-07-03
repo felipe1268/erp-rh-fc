@@ -1,3 +1,5 @@
+- **Rev. 3996** — **BANCO DE HORAS: ADICIONADO NAVEGADOR MENSAL (ESTILO FOLHA DE PAGAMENTO) NA ABA "SALDOS".** Dois endpoints novos (`getSaldoBancoMensal`/`getResumoMensalBanco`) reconstroem histórico mensal a partir dos lançamentos; Card de navegação ano/mês, débito desabilitado fora do mês corrente. ZERO DELETE · ZERO ALTER.
+
 - **Rev. 3995** — **VERIFICAÇÃO CRUZADA (FOLHA): CORRIGIDA COLUNA "LÍQUIDO ERP" QUE MOSTRAVA VALOR ~100x MAIOR DO QUE O REAL.** Causa: `verificacaoCruzada` lia `payroll_payments.salarioLiquido` (formato US "1394.00") com `parseBRL()` (assume BR), virando 139400; fix detecta formato pela vírgula antes de escolher o parser. ZERO DELETE · ZERO ALTER.
 
 - **Rev. 3994** — **BENEFÍCIOS DE ALIMENTAÇÃO: CORRIGIDA A EDIÇÃO QUE REABRIA CONFIGURAÇÕES JÁ ENCERRADAS + TELA GANHA VISIBILIDADE/CONTROLE DE VIGÊNCIA.** UPDATE só altera `vigencia_fim` quando enviado explicitamente; tela ganha coluna "Vigência" (badges) e inputs de Início/Fim. ZERO DELETE · ZERO ALTER.

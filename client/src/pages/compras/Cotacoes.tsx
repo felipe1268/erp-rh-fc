@@ -24,6 +24,7 @@ import { formatNumeroOcDisplay } from "@shared/numeroOc";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, ArrowUp, ArrowDown, ArrowUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, TrendingUp, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil, Check, ClipboardList, FileSearch, ShoppingCart, RotateCcw, Pin, GitBranch, Zap, PenTool, CreditCard, Banknote, Calendar, Truck, Target, BarChart2, Clock, Wallet, Layers, ArrowLeftRight, Warehouse, HardHat, Info, Printer, type LucideIcon } from "lucide-react";
 import { TIPOS_PAGAMENTO, getTipoPagamentoInfo, calcularParcelas, formatCurrency } from "../../../../shared/paymentConditions";
+import * as XLSX from "xlsx";
 import { PurchaseTimeline, TimelineBadge } from "@/components/compras/PurchaseTimeline";
 import { useConfirm } from "@/hooks/useConfirm";
 
@@ -3412,6 +3413,151 @@ export default function Cotacoes() {
       return { saldo: metaTot - custoCompra, hasMeta: true };
     }
 
+    // Rev. 4003 — Monta as linhas item × fornecedor do Mapa de Cotação
+    // (mesma fonte de dados usada na tabela em tela) para reaproveitar
+    // tanto no "Exportar PDF" quanto no "Exportar Excel".
+    function montarLinhasExportacao() {
+      const participantes = mapa?.participantes ?? [];
+      const itens = mapa?.itens ?? [];
+      const fmtQtd = (v: any) => { const n = parseFloat(String(v ?? "0")); return Number.isFinite(n) ? n.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) : "0"; };
+      const linhas = itens.map((it: any) => {
+        const metaUnitRaw = parseFloat(it.metaUnitario ?? "0");
+        const metaUnit = Math.round(metaUnitRaw * 100) / 100;
+        const metaQtdVal = parseFloat(it.metaQtd ?? it.quantidade ?? "0");
+        const metaTot = Math.round(metaUnit * metaQtdVal * 100) / 100;
+        const melhorPreco = getMelhorPrecoItem(it.id);
+        const porFornecedor = participantes.map((p: any) => {
+          const resp = mapa?.respostaMap?.[`${it.id}_${p.fornecedorId}`];
+          const precoUnit = resp ? parseFloat((resp as any).precoUnitario ?? "0") : null;
+          const qtd = resp ? parseFloat((resp as any).quantidade ?? it.quantidade ?? "0") : parseFloat(it.quantidade ?? "0");
+          const total = precoUnit != null ? precoUnit * qtd : null;
+          const nome = p.fornecedor?.nomeFantasia || p.fornecedor?.razaoSocial || `#${p.fornecedorId}`;
+          return {
+            fornecedorId: p.fornecedorId,
+            nome,
+            qtd,
+            precoUnit,
+            total,
+            isMelhorPreco: melhorPreco != null && precoUnit != null && Math.abs(precoUnit - melhorPreco) < 0.005,
+          };
+        });
+        return {
+          descricao: it._isPacoteGroup && (it as any).composicaoEapCodigo ? `[${(it as any).composicaoEapCodigo}] ${it.descricao}` : it.descricao,
+          unidade: it.unidade || "un",
+          quantidade: fmtQtd(it.quantidade),
+          metaUnit,
+          metaTot,
+          porFornecedor,
+        };
+      });
+      return { linhas, participantes };
+    }
+
+    // Rev. 4003 — "Exportar PDF" abria o print do navegador via window.print()
+    // sobre o container `fixed inset-0` do DetalheWrapper fullscreen; nesse
+    // cenário o Chrome imprime página em branco (mesma causa-raiz documentada
+    // em print-dialog-fixed-clip: elemento fixed não flui pro fluxo normal de
+    // impressão). Fix: gera HTML autônomo numa aba nova (mesmo padrão já
+    // usado em Solicitacoes.tsx → gerarPdfSC), imune a overflow/fixed da tela.
+    function gerarPdfCotacao() {
+      if (!detalheFullscreen) return;
+      const esc = (s: any) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+      const fmtMoeda = (v: any) => v != null ? `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—";
+      const { linhas, participantes } = montarLinhasExportacao();
+      const numeroFmt = formatNumeroCotacaoDisplay(detalheFullscreen.numeroCotacao);
+      const st2 = STATUS_LABELS[detalheFullscreen.status] ?? STATUS_LABELS.pendente;
+      const colCount = 4 + participantes.length * 3;
+      const theadFornecedores = participantes.map((p: any) => {
+        const nome = p.fornecedor?.nomeFantasia || p.fornecedor?.razaoSocial || `#${p.fornecedorId}`;
+        return `<th colspan="3" style="text-align:center">${esc(nome)}</th>`;
+      }).join("");
+      const theadSub = participantes.map(() => `<th style="text-align:right">Qtd</th><th style="text-align:right">Preço Unit.</th><th style="text-align:right">Total</th>`).join("");
+      const rowsHtml = linhas.map((l: any) => {
+        const fornCols = l.porFornecedor.map((f: any) => `
+          <td style="text-align:right">${f.qtd ? f.qtd.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) : "—"}</td>
+          <td style="text-align:right${f.isMelhorPreco ? ";color:#166534;font-weight:700" : ""}">${f.precoUnit != null ? fmtMoeda(f.precoUnit) : "—"}</td>
+          <td style="text-align:right${f.isMelhorPreco ? ";color:#166534;font-weight:700" : ""}">${f.total != null ? fmtMoeda(f.total) : "—"}</td>`).join("");
+        return `<tr>
+          <td>${esc(l.descricao)}</td>
+          <td style="text-align:center">${esc(l.unidade)}</td>
+          <td style="text-align:right">${esc(l.quantidade)}</td>
+          <td style="text-align:right">${l.metaUnit > 0 ? fmtMoeda(l.metaUnit) : "—"}</td>
+          ${fornCols}
+        </tr>`;
+      }).join("");
+      const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(numeroFmt)}</title>
+<style>
+  *{box-sizing:border-box} body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1f2937;margin:24px;font-size:11px}
+  h1{font-size:20px;margin:0 0 4px 0;color:#0f172a}
+  .head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #0f172a;padding-bottom:12px;margin-bottom:16px}
+  .meta{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 24px;margin-bottom:16px}
+  .meta div{padding:6px 8px;background:#f8fafc;border-left:3px solid #3b82f6;border-radius:4px}
+  .meta b{display:block;font-size:10px;color:#64748b;text-transform:uppercase;font-weight:600;margin-bottom:2px}
+  table{width:100%;border-collapse:collapse;margin-top:8px}
+  th{background:#1e293b;color:#fff;padding:6px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.3px}
+  td{padding:6px;border-bottom:1px solid #e2e8f0;vertical-align:top}
+  tbody tr:nth-child(even){background:#f8fafc}
+  .footer{margin-top:24px;padding-top:12px;border-top:1px solid #cbd5e1;font-size:10px;color:#64748b;display:flex;justify-content:space-between}
+  .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;text-transform:uppercase}
+  @media print{body{margin:12px}}
+</style></head><body>
+<div class="head">
+  <div>
+    <h1>Mapa de Cotação ${esc(numeroFmt)}</h1>
+    <div style="color:#64748b;font-size:11px">${esc((detalheFullscreen as any).descricao || "")}</div>
+  </div>
+  <div style="text-align:right">
+    <span class="badge" style="background:#dbeafe;color:#1e40af">${esc(st2.label)}</span>
+  </div>
+</div>
+<div class="meta">
+  <div><b>Obra</b>${esc((detalheFullscreen as any).obraNome || "—")}</div>
+  <div><b>Fornecedores</b>${participantes.length}</div>
+  <div><b>Criado em</b>${(detalheFullscreen as any).criadoEm ? new Date((detalheFullscreen as any).criadoEm).toLocaleDateString("pt-BR") : "—"}</div>
+</div>
+<table>
+  <thead>
+    <tr><th rowspan="2">Item</th><th rowspan="2">Un.</th><th rowspan="2" style="text-align:right">Qtd</th><th rowspan="2" style="text-align:right">Meta Unit.</th>${theadFornecedores}</tr>
+    <tr>${theadSub}</tr>
+  </thead>
+  <tbody>${rowsHtml || `<tr><td colspan="${colCount}" style="text-align:center;color:#94a3b8;padding:24px">Sem itens</td></tr>`}</tbody>
+</table>
+<div class="footer"><span>FC Engenharia · ERP RH/DP</span><span>Impresso em ${new Date().toLocaleString("pt-BR")}</span></div>
+<script>setTimeout(function(){window.print()},250);</script>
+</body></html>`;
+      const w = window.open("", "_blank", "width=1100,height=1400");
+      if (!w) { toast.error("Bloqueador de pop-up impediu abrir o PDF. Permita pop-ups e tente novamente."); return; }
+      w.document.open(); w.document.write(html); w.document.close();
+    }
+
+    // Rev. 4003 — Exportação em Excel item × fornecedor do Mapa de Cotação
+    // (pedido recorrente do usuário p/ mandar pro cliente aprovar item a
+    // item; hoje ele monta essa planilha manualmente).
+    function exportarExcelCotacao() {
+      if (!detalheFullscreen) return;
+      const { linhas, participantes } = montarLinhasExportacao();
+      const numeroFmt = formatNumeroCotacaoDisplay(detalheFullscreen.numeroCotacao);
+      const header = ["Item", "Unidade", "Qtd", "Meta Unit.", "Meta Total",
+        ...participantes.flatMap((p: any) => {
+          const nome = p.fornecedor?.nomeFantasia || p.fornecedor?.razaoSocial || `#${p.fornecedorId}`;
+          return [`${nome} - Qtd`, `${nome} - Preço Unit.`, `${nome} - Total`];
+        }),
+      ];
+      const rows = linhas.map((l: any) => [
+        l.descricao,
+        l.unidade,
+        l.quantidade,
+        l.metaUnit || "",
+        l.metaTot || "",
+        ...l.porFornecedor.flatMap((f: any) => [f.qtd ?? "", f.precoUnit ?? "", f.total ?? ""]),
+      ]);
+      const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+      ws["!cols"] = [{ wch: 42 }, { wch: 8 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, ...participantes.flatMap(() => [{ wch: 10 }, { wch: 14 }, { wch: 14 }])];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Mapa de Cotação");
+      XLSX.writeFile(wb, `Cotacao_${numeroFmt.replace(/[^\w-]/g, "_")}.xlsx`);
+    }
+
     const isPacoteTotals = ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote';
     const pacoteCompItens = (() => {
       if (!isPacoteTotals) return null;
@@ -3510,11 +3656,19 @@ export default function Cotacoes() {
                   {st && <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium border ${st.cls}`}>{st.label}</span>}
                   <Button
                     variant="outline"
-                    onClick={() => window.print()}
+                    onClick={gerarPdfCotacao}
                     className="no-print border-gray-300 text-gray-700 hover:bg-gray-50 gap-2"
-                    title="Abre o diálogo de impressão. Em 'Destino', escolha 'Salvar como PDF'."
+                    title="Gera um PDF do Mapa de Cotação (item a item, por fornecedor) numa aba nova."
                   >
                     <Printer className="h-4 w-4" /> Exportar PDF
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={exportarExcelCotacao}
+                    className="no-print border-gray-300 text-gray-700 hover:bg-gray-50 gap-2"
+                    title="Exporta o Mapa de Cotação (item a item, por fornecedor) em Excel — útil para envio ao cliente para aprovação."
+                  >
+                    <FileText className="h-4 w-4" /> Exportar Excel
                   </Button>
                   {detalheFullscreen.status === "pendente" && (detalheFullscreen as any).tipo === "servico" && (
                     <>

@@ -20,3 +20,12 @@ in a `setTimeout`. This is the proven pattern already used in `DashAvisoPrevio.t
 report). It sidesteps all Dialog/overflow/CSS-print fragility entirely and gives full control over
 page orientation (e.g. landscape for wide tables), fonts, and colors (`-webkit-print-color-adjust:exact`).
 Only use the `.print-only` class approach for content that's NOT inside a scrollable/fixed Dialog.
+
+**Also applies beyond Radix Dialogs:** any ad-hoc `position:fixed` fullscreen wrapper (e.g. a plain
+`<div className="fixed inset-0 z-50 ...">` used for an in-app "fullscreen detail" view, not a Radix
+`DialogContent`) hits the exact same failure — `window.print()` over it renders a BLANK page, not just
+clipped, because global print CSS overrides typically only target `[data-slot="dialog-content"]` and
+never touch arbitrary fixed containers. Same fix applies: self-contained HTML + `window.open`+
+`document.write`+`window.print()` (see `Cotacoes.tsx` → `gerarPdfCotacao`, mirrors `Solicitacoes.tsx`
+→ `gerarPdfSC`). When auditing an app for this bug class, grep for `onClick={() => window.print()}` and
+check whether the printed subtree (or an ancestor) is `position:fixed`.
