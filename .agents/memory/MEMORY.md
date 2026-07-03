@@ -78,6 +78,7 @@
 - [Master-only field must gate at backend](master-only-field-backend-gate.md) — dashboardAvaliacoesCliente does `select()` of all columns; a "só Admin Master" field must be stripped from the payload by role server-side, not just hidden in the UI.
 - [NPS fill-time clock](nps-fill-time-clock.md) — tempoRespostaSegundos = useRef(Date.now()) restarted on entering tab "avaliacao" (not mount), sent as round((now-start)/1000) min 1; logged users start on "obras" so mount-time inflates it.
 - [react-pdf worker version match](pdfjs-worker-version-match.md) — "Erro ao carregar PDF" = bundled worker version ≠ react-pdf's internal pdfjs API; pin pdfjs-dist EXACTLY to react-pdf's dep, realign on every react-pdf upgrade.
+- [pdf-parse multi-line table cells](pdf-parse-multiline-table-cells.md) — a bank statement row can extract as separate date/desc/value lines, not one line; single-line regex parsers then silently return zero rows. Validate via reconciliation, not just non-zero output.
 
 - [SyncSchema+ log capture vs dead-zone](syncschema-log-capture.md) — bloco roda TODOS os entries sequencialmente; log capturado antes do fim parece "morto" mas não é; dupla-corrupção SEFAZ chave_acesso+numero_nf = float64, irrecuperável sem XML.
 - [SEFAZ NSU rate-limit loop](sefaz-nsu-rate-limit-loop.md) — cStat=656 retorna ultNSU correto; NÃO salvar causa loop eterno independente de tempo de espera. Importação alternativa via XML disponível.

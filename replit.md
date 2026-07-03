@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4002** — **IMPORTAÇÃO DE EXTRATO PDF (SANTANDER IBPJ): PARSER ESTAVA IGNORANDO 100% DOS LANÇAMENTOS EM EXTRATOS DE VÁRIAS PÁGINAS.** Usuário reportou que a importação do extrato Santander (Internet Banking Empresarial) não subia 100% das transações. Causa: `parseSantanderIbpjPdf` assumia cada lançamento em UMA linha só, mas a extração real do `pdf-parse` para este layout quebra cada lançamento em 2-3 linhas separadas (data sozinha → histórico → valor, às vezes com texto extra colado sem espaço) — o parser não casava nenhuma linha real e devolvia 0 lançamentos silenciosamente. Fix: reescrito como scanner por blocos que abre um bloco na linha "só data" e acumula histórico até achar a linha com "R$"; lista de linhas ignoráveis expandida (cabeçalhos isolados, rodapé). Validado: 0→131 lançamentos no PDF real, saldo diário reconciliado exato em 100% dos 20 dias; sem regressão nos outros 6 extratos IBPJ já anexados. ZERO DELETE de linhas · ZERO ALTER de schema.
+
 - **Rev. 4001** — **COMPRAS / COTAÇÕES: SOLICITAÇÕES DE OBRAS DIFERENTES CAINDO COM O MESMO NÚMERO DE COTAÇÃO.** Usuário reportou (com print) várias cotações de obras/SCs distintas exibindo o mesmo número (ex.: 4x "COT-0406-2026"). Causa: 4 dos 7 pontos que geram `numeroCotacao` em `compras.ts` (auto-cotação em `criarSolicitacao`, `aprovarSolicitacao`, `criarCotacao` principal, loop de `aprovarSolicitacoesLote`) calculavam o próximo número via `COUNT(*)+1` FORA de lock/transação — clássica race condition, mesma classe de bug já corrigida para OC/OS (Rev. 1985) e contrato de terceiro (Rev. 1986). Fix: os 4 pontos agora rodam a leitura do COUNT + INSERT da cotação dentro de `db.transaction` com `pg_advisory_xact_lock(companyId, 1001)` — mesmo lock já usado pelos outros 3 pontos (`dividirCotacao`, `cotarItensRestantes`). CORREÇÃO DE DADOS: 32 grupos duplicados (41 cotações) no Neon foram renumerados (mantendo o ID mais antigo de cada grupo com o número original). ZERO DELETE de linhas · ZERO ALTER de schema.
 
-- **Rev. 4000** — **BANCO DE HORAS: DÉBITOS AUTOMÁTICOS DE ATRASO/FALTA E DSR (GERADOS PELA FOLHA) GRAVAVAM `minutos` NEGATIVO, INVERTENDO O SALDO MENSAL NA ABA "SALDOS".** Achado em revisão de código: `debito_atraso_falta`/`debito_dsr` (Rev. 3977/3983) gravavam `minutos` negativo em `banco_horas_lancamentos`, mas toda leitura agregada (Rev. 3996 `getSaldoBancoMensal`, totais da aba Extrato) assume `minutos` sempre positivo com sinal derivado do `tipo` — dupla-negação inflava o saldo mensal (débito virava crédito na soma) e duplicava o sinal visual no card "Débito Atraso/Falta". O saldo TOTAL do funcionário (`banco_horas_saldo`) nunca esteve errado, só a coluna de detalhe. Fix: INSERTs em `payrollEngine.ts` agora gravam `minutos`/`minutosBase` positivos (igual ao débito manual); reversão idempotente usa `ABS()`; `getSaldoBancoMensal`/`getResumoMensalBanco` também usam `ABS()` como defesa extra; as 93 linhas históricas já gravadas negativas tiveram o sinal corrigido direto no Neon. ZERO DELETE de linhas · ZERO ALTER de schema.
-
 ### 5 one-liners
+
+- **Rev. 4000** — **BANCO DE HORAS: DÉBITOS AUTOMÁTICOS DE ATRASO/FALTA E DSR (GERADOS PELA FOLHA) GRAVAVAM `minutos` NEGATIVO, INVERTENDO O SALDO MENSAL NA ABA "SALDOS".** `debito_atraso_falta`/`debito_dsr` gravavam `minutos` negativo, dupla-negação inflava o saldo mensal; fix grava positivo (igual ao manual) + `ABS()` de defesa nas leituras + correção das 93 linhas históricas no Neon. ZERO DELETE · ZERO ALTER.
 
 - **Rev. 3999** — **CONTAS A PAGAR: BUSCA POR FORNECEDOR/OC AGORA PROCURA NO ANO INTEIRO, NÃO SÓ NO MÊS ABERTO NA TELA.** Busca por texto rodava sobre `mesData` (mês selecionado), não `allContas` (ano inteiro); fornecedor com títulos em outros meses ou sem `data_vencimento` ficava invisível. Fix: com termo ativo, `filtered` usa `allContas` + checa `fornecedorNome`. ZERO DELETE · ZERO ALTER.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3996** — **BANCO DE HORAS: ADICIONADO NAVEGADOR MENSAL (ESTILO FOLHA DE PAGAMENTO) NA ABA "SALDOS".** Dois endpoints novos (`getSaldoBancoMensal`/`getResumoMensalBanco`) reconstroem histórico mensal a partir dos lançamentos; Card de navegação ano/mês, débito desabilitado fora do mês corrente. ZERO DELETE · ZERO ALTER.
 
-- **Rev. 3995** — **VERIFICAÇÃO CRUZADA (FOLHA): CORRIGIDA COLUNA "LÍQUIDO ERP" QUE MOSTRAVA VALOR ~100x MAIOR DO QUE O REAL.** Causa: `verificacaoCruzada` lia `payroll_payments.salarioLiquido` (formato US "1394.00") com `parseBRL()` (assume BR), virando 139400; fix detecta formato pela vírgula antes de escolher o parser. ZERO DELETE · ZERO ALTER.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3994 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3995 e anteriores.
 
 ## User preferences
 

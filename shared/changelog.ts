@@ -1,4 +1,43 @@
 /**
+ * Rev. 4002 — **IMPORTAÇÃO DE EXTRATO PDF (SANTANDER IBPJ): PARSER ESTAVA IGNORANDO 100% DOS
+ * LANÇAMENTOS EM EXTRATOS DE VÁRIAS PÁGINAS — O UPLOAD "FUNCIONAVA" MAS NÃO TRAZIA NENHUMA
+ * TRANSAÇÃO.**
+ *
+ * PEDIDO (usuário): "não está subindo 100% das transações" ao importar o extrato Santander de
+ * junho/2026 (Internet Banking Empresarial, agência 0633 conta 130026093-FC) comparado ao PDF
+ * anexado.
+ *
+ * CAUSA-RAIZ: `parseSantanderIbpjPdf` (server/services/santanderIbpjParser.ts) assumia que cada
+ * lançamento vinha em UMA linha de texto só ("DD/MM/AAAA  Histórico  [- ]R$ V,VV"). Na extração
+ * real do `pdf-parse` para este layout de tabela do IBPJ, cada lançamento é quebrado em 2-3
+ * linhas separadas — uma linha só com a data, depois 1+ linhas de histórico, depois a linha do
+ * valor (às vezes com texto extra colado sem espaço, ex.: "FELIPE COSTA ALVES ME- R$ 37.000,00"
+ * ou "26/06/2026- R$ 5,30" quando o histórico embute uma 2ª data de referência). Com isso o
+ * parser não casava a regex de linha única em NENHUMA linha real do arquivo e devolvia 0
+ * lançamentos silenciosamente (isIbpj=true, lines=[]), caindo pro fallback de IA só quando havia
+ * `lines.length===0`; em extratos grandes (4+ páginas) a IA também falhava/truncava e o resultado
+ * final era "importação vazia".
+ *
+ * FIX: reescrito o parser com um scanner por blocos: (1) mantém suporte ao formato de 1 linha
+ * (data + espaço + resto) e ao formato "colado sem espaço" (ex.: linhas de "Saldo do dia", que
+ * continuam sendo ignoradas); (2) NOVO — ao encontrar uma linha que é SÓ a data (`^\d{2}\/\d{2}\/
+ * \d{4}$`), abre um bloco e acumula as linhas seguintes como histórico até achar uma linha com
+ * "R$" (usa o texto antes do R$ como histórico extra também), abortando o bloco sem emitir se
+ * aparecer OUTRA data pura antes (guarda de segurança, máx. 10 linhas de lookahead); (3) lista de
+ * linhas ignoráveis (`isSkippable`) expandida para cobrir cabeçalhos "Data"/"Histórico"/"Valor"
+ * isolados em linha própria (não combinados, como o código antigo assumia) e boilerplate de
+ * rodapé (Central de Atendimento, telefones, SAC, Ouvidoria, "about:blank", data de impressão).
+ * VALIDAÇÃO: rodado contra o PDF real de junho/2026 (4 páginas) — antes 0 lançamentos, depois 131;
+ * reconciliado o saldo diário ("Saldo do dia") de TODOS os 20 dias do extrato contra a soma dos
+ * lançamentos daquele dia — bateu exato (± R$0,01) em 100% dos dias. Rodado também contra outros
+ * 6 extratos IBPJ já anexados ao projeto (contas FC/JF/LOCNOW) sem regressão. Extratos do tipo
+ * "Extrato Consolidado Inteligente" (formato diferente, `santanderPdfParser.ts`) não foram
+ * tocados — o gate por `EXTRATO CONSOLIDADO INTELIGENTE` já roda ANTES do parser IBPJ na cadeia de
+ * fallback (`server/routers/financial.ts`), então não são afetados por esta mudança. ZERO DELETE
+ * de linhas · ZERO ALTER de schema.
+ */
+
+/**
  * Rev. 4001 — **COMPRAS / COTAÇÕES: SOLICITAÇÕES DE OBRAS DIFERENTES CAINDO COM O MESMO NÚMERO
  * DE COTAÇÃO (EX.: VÁRIAS "COT-0406-2026").**
  *
