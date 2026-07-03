@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4000** — **BANCO DE HORAS: DÉBITOS AUTOMÁTICOS DE ATRASO/FALTA E DSR (GERADOS PELA FOLHA) GRAVAVAM `minutos` NEGATIVO, INVERTENDO O SALDO MENSAL NA ABA "SALDOS".** Achado em revisão de código: `debito_atraso_falta`/`debito_dsr` (Rev. 3977/3983) gravavam `minutos` negativo em `banco_horas_lancamentos`, mas toda leitura agregada (Rev. 3996 `getSaldoBancoMensal`, totais da aba Extrato) assume `minutos` sempre positivo com sinal derivado do `tipo` — dupla-negação inflava o saldo mensal (débito virava crédito na soma) e duplicava o sinal visual no card "Débito Atraso/Falta". O saldo TOTAL do funcionário (`banco_horas_saldo`) nunca esteve errado, só a coluna de detalhe. Fix: INSERTs em `payrollEngine.ts` agora gravam `minutos`/`minutosBase` positivos (igual ao débito manual); reversão idempotente usa `ABS()`; `getSaldoBancoMensal`/`getResumoMensalBanco` também usam `ABS()` como defesa extra; as 93 linhas históricas já gravadas negativas tiveram o sinal corrigido direto no Neon. ZERO DELETE de linhas · ZERO ALTER de schema.
+
 - **Rev. 3999** — **CONTAS A PAGAR: BUSCA POR FORNECEDOR/OC AGORA PROCURA NO ANO INTEIRO, NÃO SÓ NO MÊS ABERTO NA TELA.** Usuário buscou "eletrogu" e só viram 2 títulos, mesmo tendo várias OCs desse fornecedor (confirmado no Neon: dezenas de lançamentos, incluindo um com vencimento em outro mês e outro com `data_vencimento` NULL). Causa: a busca por texto rodava sobre `mesData` (lista já filtrada pelo mês selecionado no navegador de meses), não sobre `allContas` (ano inteiro, já carregado do backend) — um fornecedor com títulos em outros meses ou sem data de vencimento ficava invisível mesmo estando nos dados do cliente. Fix: com termo de busca ativo, `filtered` passa a usar `allContas`; título/mensagem de vazio avisam que a busca abrange o ano todo; busca também passou a checar `fornecedorNome`. Sem busca, comportamento por mês inalterado. ZERO DELETE · ZERO ALTER.
 
-- **Rev. 3998** — **CORRIGIDO 404 "ARQUIVO NÃO ENCONTRADO" EM ANEXOS COM ESPAÇO NO NOME QUANDO O DISCO EFÊMERO JÁ NÃO TINHA MAIS A CÓPIA LOCAL.** Usuário reportou ASO de terceiro (enviado no dia anterior) dando "Arquivo não encontrado" mesmo existindo e válido em `uploaded_files`. Causa: o handler assíncrono de fallback do banco em `/uploads` (`server/_core/index.ts`) montava a chave com `req.path.replace(...)` SEM `decodeURIComponent` — diferente do middleware irmão (cap de Range) alguns metros acima, que já decodifica. `req.path` chega com encoding original (`%20` etc.) nesse handler, então a chave nunca batia com o `file_key` salvo (espaço/acento literal) → 0 linhas → 404 falso. Só aparecia em arquivos ANTIGOS porque uploads recentes ainda tinham cópia no disco efêmero e eram servidos direto pelo `express.static` antes de chegar nesse handler, mascarando o bug; um reinício de container/redeploy expõe o problema para qualquer nome com espaço. Fix: `decodeURIComponent` na chave, igual ao middleware irmão. ZERO DELETE · ZERO ALTER.
-
 ### 5 one-liners
+
+- **Rev. 3998** — **CORRIGIDO 404 "ARQUIVO NÃO ENCONTRADO" EM ANEXOS COM ESPAÇO NO NOME QUANDO O DISCO EFÊMERO JÁ NÃO TINHA MAIS A CÓPIA LOCAL.** `decodeURIComponent` faltando no fallback do banco em `/uploads` (server/_core/index.ts) fazia a chave nunca bater com `file_key`. ZERO DELETE · ZERO ALTER.
 
 - **Rev. 3997** — **FOLHA DE PAGAMENTO: CAMPO "LÍQUIDO" GANHA EDIÇÃO INLINE (LÁPIS → INPUT → SALVAR/CANCELAR), IGUAL À FOLHA DE VALE.** Nova mutation `payrollEngine.editarLiquidoFolha` (espelha `editarLiquidoVale`); força líquido final, zera arredondamento, guard de pagamento consolidado, badge "Editado". ZERO DELETE · ZERO ALTER.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3994** — **BENEFÍCIOS DE ALIMENTAÇÃO: CORRIGIDA A EDIÇÃO QUE REABRIA CONFIGURAÇÕES JÁ ENCERRADAS + TELA GANHA VISIBILIDADE/CONTROLE DE VIGÊNCIA.** UPDATE só altera `vigencia_fim` quando enviado explicitamente; tela ganha coluna "Vigência" (badges) e inputs de Início/Fim. ZERO DELETE · ZERO ALTER.
 
-- **Rev. 3993** — **DISSÍDIO: HABILITADA EDIÇÃO MANUAL LINHA A LINHA DA DIFERENÇA SALARIAL RETROATIVA (BRUTO/INSS/IRRF).** Nova coluna `diferenca_override_json` em `dissidio_funcionarios` guarda override opcional que PREVALECE sobre o cálculo automático; mutations `sindical.editarDiferencaManual`/`removerEdicaoManualDiferenca` (admin_master only). ZERO DELETE · ZERO ALTER.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3992 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3993 e anteriores.
 
 ## User preferences
 

@@ -1,3 +1,5 @@
+- **Rev. 3993** — **DISSÍDIO: HABILITADA EDIÇÃO MANUAL LINHA A LINHA DA DIFERENÇA SALARIAL RETROATIVA (BRUTO/INSS/IRRF).** Nova coluna `diferenca_override_json` em `dissidio_funcionarios` guarda override opcional que PREVALECE sobre o cálculo automático; mutations `sindical.editarDiferencaManual`/`removerEdicaoManualDiferenca` (admin_master only). ZERO DELETE · ZERO ALTER.
+
 - **Rev. 3992** — **DISSÍDIO: HORAS EXTRAS REMOVIDAS DA BASE DA DIFERENÇA SALARIAL RETROATIVA — TODA HE É COMPENSADA VIA BANCO DE HORAS, NUNCA PAGA EM DINHEIRO.** Fórmula/INSS/IRRF marginal estavam corretos DADO que a base incluía HE, mas HE nunca é paga em dinheiro (vira banco de horas). Removida a soma de HE de `baseVerbas` + correção pontual das 58 linhas já persistidas. ZERO DELETE · ZERO ALTER.
 
 - **Rev. 3995** — **VERIFICAÇÃO CRUZADA (FOLHA): CORRIGIDA COLUNA "LÍQUIDO ERP" QUE MOSTRAVA VALOR ~100x MAIOR DO QUE O REAL.** Causa: `verificacaoCruzada` lia `payroll_payments.salarioLiquido` (formato US "1394.00") com `parseBRL()` (assume BR), virando 139400; fix detecta formato pela vírgula antes de escolher o parser. ZERO DELETE · ZERO ALTER.

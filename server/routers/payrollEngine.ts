@@ -4012,8 +4012,11 @@ export const payrollEngineRouter = router({
             AND descricao LIKE ${_debitoMarker977 + '%'}
         `)) as any).rows || [];
         for (const d of _oldDebitos977) {
+          // Rev. 4000 — reversão soma o valor ABSOLUTO de volta ao saldo, independente do sinal
+          // gravado historicamente na linha (linhas antigas ficaram negativas por bug; linhas novas
+          // são positivas, ver Rev. 4000 no INSERT abaixo). ABS() garante idempotência nos dois casos.
           await db.execute(sql`
-            UPDATE banco_horas_saldo SET "saldoMinutos" = "saldoMinutos" - ${Number(d.minutos)}, "atualizadoEm" = NOW()
+            UPDATE banco_horas_saldo SET "saldoMinutos" = "saldoMinutos" + ABS(${Number(d.minutos)}), "atualizadoEm" = NOW()
             WHERE "employeeId" = ${d.employeeId} AND "companyId" = ${d.companyId}
           `);
         }
@@ -4036,8 +4039,9 @@ export const payrollEngineRouter = router({
             AND descricao LIKE ${_debitoMarkerDsr983 + '%'}
         `)) as any).rows || [];
         for (const d of _oldDebitosDsr983) {
+          // Rev. 4000 — mesma reversão via ABS() do bloco de atraso/falta acima.
           await db.execute(sql`
-            UPDATE banco_horas_saldo SET "saldoMinutos" = "saldoMinutos" - ${Number(d.minutos)}, "atualizadoEm" = NOW()
+            UPDATE banco_horas_saldo SET "saldoMinutos" = "saldoMinutos" + ABS(${Number(d.minutos)}), "atualizadoEm" = NOW()
             WHERE "employeeId" = ${d.employeeId} AND "companyId" = ${d.companyId}
           `);
         }
@@ -4606,9 +4610,12 @@ export const payrollEngineRouter = router({
               "saldoMinutos" = banco_horas_saldo."saldoMinutos" + EXCLUDED."saldoMinutos",
               "atualizadoEm" = NOW()
           `);
+          // Rev. 4000 — minutos gravado POSITIVO (magnitude), igual à convenção do débito manual;
+          // o sinal é inferido pelo `tipo` nas leituras (getSaldoBancoMensal etc.), nunca pré-embutido
+          // na coluna. Gravar negativo aqui causava dupla-negação nas somas "ELSE -minutos".
           await db.execute(sql`
             INSERT INTO banco_horas_lancamentos ("employeeId", "companyId", tipo, minutos, "minutosBase", "minutosAcrescimo", descricao, data, "criadoPor")
-            VALUES (${d.employeeId}, ${d.companyId}, 'debito_atraso_falta', ${-d.minutos}, ${-d.minutos}, 0,
+            VALUES (${d.employeeId}, ${d.companyId}, 'debito_atraso_falta', ${d.minutos}, ${d.minutos}, 0,
               ${_debitoDescricao977}, ${_dataFimMes977}::date, 'Sistema (folha)')
           `);
         }
@@ -4627,9 +4634,10 @@ export const payrollEngineRouter = router({
               "saldoMinutos" = banco_horas_saldo."saldoMinutos" + EXCLUDED."saldoMinutos",
               "atualizadoEm" = NOW()
           `);
+          // Rev. 4000 — mesma correção de sinal (positivo) do bloco de atraso/falta acima.
           await db.execute(sql`
             INSERT INTO banco_horas_lancamentos ("employeeId", "companyId", tipo, minutos, "minutosBase", "minutosAcrescimo", descricao, data, "criadoPor")
-            VALUES (${d.employeeId}, ${d.companyId}, 'debito_dsr', ${-d.minutos}, ${-d.minutos}, 0,
+            VALUES (${d.employeeId}, ${d.companyId}, 'debito_dsr', ${d.minutos}, ${d.minutos}, 0,
               ${_debitoDescricaoDsr983}, ${_dataFimMesDsr983}::date, 'Sistema (folha)')
           `);
         }

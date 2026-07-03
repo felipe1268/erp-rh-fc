@@ -1134,14 +1134,14 @@ export const horasExtrasRouter = router({
         ),
         acumulado AS (
           SELECT bhl."employeeId",
-            SUM(CASE WHEN bhl.tipo = 'credito' THEN bhl.minutos ELSE -bhl.minutos END) AS saldo
+            SUM(CASE WHEN bhl.tipo = 'credito' THEN ABS(bhl.minutos) ELSE -ABS(bhl.minutos) END) AS saldo
           FROM banco_horas_lancamentos bhl, fim_mes
           WHERE bhl."companyId" = ${input.companyId} AND bhl.data <= fim_mes.d
           GROUP BY bhl."employeeId"
         ),
         movimento AS (
           SELECT bhl."employeeId",
-            SUM(CASE WHEN bhl.tipo = 'credito' THEN bhl.minutos ELSE -bhl.minutos END) AS movimento,
+            SUM(CASE WHEN bhl.tipo = 'credito' THEN ABS(bhl.minutos) ELSE -ABS(bhl.minutos) END) AS movimento,
             MAX(bhl."criadoEm") AS "ultimoLancamento"
           FROM banco_horas_lancamentos bhl
           WHERE bhl."companyId" = ${input.companyId}

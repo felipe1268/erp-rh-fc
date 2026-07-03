@@ -1,4 +1,32 @@
 /**
+ * Rev. 4000 — **BANCO DE HORAS: DÉBITOS AUTOMÁTICOS DE ATRASO/FALTA E DSR (GERADOS PELA FOLHA)
+ * GRAVAVAM `minutos` NEGATIVO, INVERTENDO O SALDO MENSAL NA ABA "SALDOS".**
+ *
+ * ACHADO: revisão de código apontou que `debito_atraso_falta`/`debito_dsr` (Rev. 3977/3983,
+ * gerados automaticamente pela simulação de folha quando a empresa usa banco de horas) gravavam
+ * `banco_horas_lancamentos.minutos` como NEGATIVO. Toda leitura agregada do módulo (Rev. 3996
+ * `getSaldoBancoMensal`/`getResumoMensalBanco`, e os totalizadores da aba Extrato em
+ * `BancoHoras.tsx`) segue a convenção de que `minutos` é sempre a MAGNITUDE positiva e o sinal é
+ * derivado do `tipo` (`SUM(CASE WHEN tipo='credito' THEN minutos ELSE -minutos END)`, igual ao
+ * débito manual `debitarBanco`, que grava positivo). Com a coluna já negativa, essas somas faziam
+ * dupla-negação: um débito de 100min virava `-(-100) = +100`, ENGORDANDO o saldo mensal em vez de
+ * reduzi-lo; a aba Extrato também exibia o card "Débito Atraso/Falta" com sinal duplicado
+ * (`−(-1h40)`). O saldo TOTAL do funcionário (`banco_horas_saldo.saldoMinutos`) nunca esteve errado
+ * — só a coluna de detalhe (`banco_horas_lancamentos.minutos`) e tudo que soma direto sobre ela.
+ *
+ * FIX: INSERTs de `debito_atraso_falta`/`debito_dsr` em `payrollEngine.ts` agora gravam `minutos`/
+ * `minutosBase` POSITIVOS (magnitude), igual ao débito manual; a reversão idempotente (ao
+ * resimular o mesmo mês) passou a somar `ABS(minutos)` de volta ao saldo (funciona tanto para
+ * linhas antigas negativas quanto novas positivas). `getSaldoBancoMensal`/`getResumoMensalBanco`
+ * também passaram a usar `ABS(minutos)` nas somas, como defesa adicional (correto independente do
+ * sinal historicamente gravado). CORREÇÃO DE DADOS: as 93 linhas históricas de
+ * `debito_atraso_falta` já gravadas com `minutos`/`minutosBase` negativos tiveram o sinal
+ * corrigido via `UPDATE ... SET minutos = ABS(minutos)` direto no Neon (não afeta
+ * `banco_horas_saldo`, que já estava correto — só a coluna de detalhe). ZERO DELETE de linhas ·
+ * ZERO ALTER de schema.
+ */
+
+/**
  * Rev. 3999 — **CONTAS A PAGAR: BUSCA POR FORNECEDOR/OC AGORA PROCURA NO ANO INTEIRO, NÃO SÓ NO
  * MÊS ABERTO NA TELA.**
  *
