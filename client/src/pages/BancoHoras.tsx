@@ -9,7 +9,7 @@ import { usePermissions } from "@/contexts/PermissionsContext";
 import { toast } from "sonner";
 import {
   ArrowLeftRight, AlertTriangle, Clock, CreditCard, RefreshCw,
-  Users, FileText, Settings, Search, Printer, ChevronDown, ChevronRight,
+  Users, FileText, Settings, Search, Printer, ChevronDown, ChevronRight, ChevronLeft,
   CalendarDays, Scale, Info, ShieldAlert,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,16 @@ function minsToHHMM(mins: number): string {
   const m = String(Math.abs(mins) % 60).padStart(2, "0");
   return `${mins < 0 ? "-" : ""}${h}h${m}`;
 }
+
+function minsToHHMMSigned(mins: number): string {
+  const n = Number(mins || 0);
+  if (n === 0) return "—";
+  return `${n > 0 ? "+" : ""}${minsToHHMM(n)}`;
+}
+
+// Rev. 3996 — nav mensal (mesmo padrão visual do calendário de Jan-Dez da Folha de Pagamento)
+const MESES_CURTOS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+const MESES_LONGOS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
 type TabView = "saldos" | "extrato" | "alertas" | "configuracao";
 
@@ -48,6 +58,12 @@ export default function BancoHoras() {
   const [extratoPeriodoInicio, setExtratoPeriodoInicio] = useState("");
   const [extratoPeriodoFim, setExtratoPeriodoFim] = useState("");
   const extratoPeriodoAtivo = !!(extratoPeriodoInicio && extratoPeriodoFim);
+
+  // Rev. 3996 — navegador mensal da aba "Saldos" (estilo Folha de Pagamento).
+  const [anoBanco, setAnoBanco] = useState(() => new Date().getFullYear());
+  const [mesBanco, setMesBanco] = useState(() => new Date().getMonth() + 1);
+  const agora = new Date();
+  const isMesAtual = anoBanco === agora.getFullYear() && mesBanco === (agora.getMonth() + 1);
 
   const destinoPadrao = trpc.horasExtras.getHeDestinoPadrao.useQuery(
     { companyId },
@@ -82,6 +98,15 @@ export default function BancoHoras() {
     { companyId },
     { enabled: canAccess && companyId > 0 }
   );
+  // Rev. 3996 — saldo/movimento do mês navegado na aba "Saldos".
+  const saldoBancoMensal = trpc.horasExtras.getSaldoBancoMensal.useQuery(
+    { companyId, ano: anoBanco, mes: mesBanco },
+    { enabled: canAccess && companyId > 0 }
+  );
+  const resumoMensalBanco = trpc.horasExtras.getResumoMensalBanco.useQuery(
+    { companyId, ano: anoBanco },
+    { enabled: canAccess && companyId > 0 }
+  );
   const alertasExpiracao = trpc.horasExtras.getAlertasExpiracao.useQuery(
     { companyId },
     { enabled: canAccess && companyId > 0 }
@@ -113,6 +138,8 @@ export default function BancoHoras() {
       setDebitHoras(0);
       setDebitMins(0);
       saldoBanco.refetch();
+      saldoBancoMensal.refetch();
+      resumoMensalBanco.refetch();
       lancamentosSaldos.refetch();
       alertasExpiracao.refetch();
     },
@@ -121,6 +148,9 @@ export default function BancoHoras() {
 
   // Rev. 2575 — seleção múltipla + dar baixa em lote
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  // Rev. 3996 — trocar de mês/ano no navegador da aba "Saldos" limpa a seleção em lote.
+  const selecionarMes = (mes: number) => { setMesBanco(mes); setSelectedIds(new Set()); };
+  const mudarAno = (delta: number) => { setAnoBanco(a => a + delta); setSelectedIds(new Set()); };
   const [showBaixaLote, setShowBaixaLote] = useState(false);
   const [baixaLoteDesc, setBaixaLoteDesc] = useState("Pagamento de horas extras na folha");
   const [baixaLoteData, setBaixaLoteData] = useState(new Date().toISOString().slice(0, 10));
@@ -134,6 +164,8 @@ export default function BancoHoras() {
       setShowBaixaLote(false);
       setSelectedIds(new Set());
       saldoBanco.refetch();
+      saldoBancoMensal.refetch();
+      resumoMensalBanco.refetch();
       lancamentosSaldos.refetch();
       alertasExpiracao.refetch();
     },
@@ -185,6 +217,31 @@ export default function BancoHoras() {
     );
   }, [saldos, searchTerm]);
 
+  // Rev. 3996 — saldo/movimento do mês navegado (aba "Saldos"): saldo acumulado ATÉ O
+  // FIM do mês selecionado + o líquido movimentado NAQUELE mês (histórico real, via soma
+  // de banco_horas_lancamentos — ver getSaldoBancoMensal). Mês atual == saldo ao vivo.
+  const saldosMensal = useMemo(() => (saldoBancoMensal.data ?? []) as any[], [saldoBancoMensal.data]);
+  const totalBancoMensalMins = useMemo(
+    () => saldosMensal.reduce((acc: number, s: any) => acc + Number(s.saldoMinutos || 0), 0),
+    [saldosMensal],
+  );
+  const funcComSaldoMensalCount = useMemo(
+    () => saldosMensal.filter((s: any) => Number(s.saldoMinutos || 0) !== 0).length,
+    [saldosMensal],
+  );
+  const filteredSaldosMensal = useMemo(() => {
+    if (!searchTerm.trim()) return saldosMensal;
+    const term = searchTerm.toLowerCase();
+    return saldosMensal.filter((s: any) =>
+      s.nomeCompleto?.toLowerCase().includes(term) || s.funcao?.toLowerCase().includes(term)
+    );
+  }, [saldosMensal, searchTerm]);
+  const mesesComLancamento = useMemo(() => {
+    const s = new Set<number>();
+    for (const r of (resumoMensalBanco.data ?? []) as any[]) s.add(Number(r.mes));
+    return s;
+  }, [resumoMensalBanco.data]);
+
   const debitarEmpNome = useMemo(() => {
     if (!debitEmpId) return "";
     return saldos.find((s: any) => Number(s.employeeId) === debitEmpId)?.nomeCompleto || "";
@@ -207,7 +264,7 @@ export default function BancoHoras() {
   }, [lancamentosExtratoList, extratoMes, extratoPeriodoAtivo, extratoPeriodoInicio, extratoPeriodoFim]);
 
   const tabs: { id: TabView; label: string; icon: any; count?: number }[] = [
-    { id: "saldos", label: "Saldos", icon: Users, count: saldos.length },
+    { id: "saldos", label: "Saldos", icon: Users, count: funcComSaldoMensalCount },
     { id: "extrato", label: "Extrato Mensal", icon: FileText },
     { id: "alertas", label: "Alertas", icon: AlertTriangle, count: alertas.length + alertasNegativos.length + alertasPositivosTri.length },
     { id: "configuracao", label: "Regras & Orientação", icon: Scale },
@@ -306,18 +363,66 @@ export default function BancoHoras() {
           </CardContent>
         </Card>
 
+        {/* Rev. 3996 — navegador mensal (mesmo padrão da Folha de Pagamento) */}
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => mudarAno(-1)}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="font-bold text-lg min-w-[60px] text-center">{anoBanco}</span>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => mudarAno(1)}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-blue-500" /> Com lançamento</div>
+                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-gray-200" /> Sem dados</div>
+              </div>
+            </div>
+            <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+              {MESES_CURTOS.map((nome, i) => {
+                const mes = i + 1;
+                const isSelected = mes === mesBanco;
+                const temDados = mesesComLancamento.has(mes);
+                const statusClasses = temDados
+                  ? "bg-blue-500 text-white hover:bg-blue-600 border-blue-600"
+                  : "bg-gray-200 text-gray-500 hover:bg-gray-300 border-gray-300";
+                const selectionClasses = isSelected ? "ring-2 ring-offset-1 ring-[#1B2A4A] shadow-md scale-105" : "";
+                return (
+                  <button key={mes} onClick={() => selecionarMes(mes)}
+                    className={`relative rounded-lg py-2 px-1 text-center text-sm font-medium transition-all border-2 ${statusClasses} ${selectionClasses}`}>
+                    {nome}
+                  </button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="flex items-center gap-2">
+          <CalendarDays className="h-4 w-4 text-[#1B2A4A]" />
+          <span className="text-sm font-semibold text-[#1B2A4A]">{MESES_LONGOS[mesBanco - 1]} {anoBanco}</span>
+          {!isMesAtual && (
+            <span className="text-xs text-muted-foreground">
+              · saldo histórico até o fim do mês — ações de débito disponíveis apenas no mês atual
+            </span>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
           <Card className="border-blue-200">
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground">Total em Banco</p>
-              <p className="text-2xl font-bold text-blue-700 mt-1">{minsToHHMM(totalBancoMins)}</p>
-              <p className="text-xs text-muted-foreground mt-1">horas acumuladas</p>
+              <p className="text-2xl font-bold text-blue-700 mt-1">{minsToHHMM(totalBancoMensalMins)}</p>
+              <p className="text-xs text-muted-foreground mt-1">acumulado até {MESES_CURTOS[mesBanco - 1]}/{anoBanco}</p>
             </CardContent>
           </Card>
           <Card className="border-blue-200">
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground">Funcionários com Saldo</p>
-              <p className="text-2xl font-bold text-blue-700 mt-1">{saldos.length}</p>
+              <p className="text-2xl font-bold text-blue-700 mt-1">{funcComSaldoMensalCount}</p>
               <p className="text-xs text-muted-foreground mt-1">com banco ativo</p>
             </CardContent>
           </Card>
@@ -410,9 +515,9 @@ export default function BancoHoras() {
               </div>
             )}
 
-            {saldoBanco.isLoading ? (
+            {saldoBancoMensal.isLoading ? (
               <div className="text-center py-8 text-muted-foreground">Carregando saldos...</div>
-            ) : filteredSaldos.length > 0 ? (
+            ) : filteredSaldosMensal.length > 0 ? (
               <Card>
                 <CardContent className="p-0">
                   <div className="overflow-x-auto">
@@ -422,10 +527,11 @@ export default function BancoHoras() {
                           <th className="py-3 px-4 w-10 no-print" onClick={e => e.stopPropagation()}>
                             <Checkbox
                               aria-label="Selecionar todos"
-                              checked={filteredSaldos.length > 0 && filteredSaldos.every((s: any) => selectedIds.has(Number(s.employeeId)))}
+                              disabled={!isMesAtual}
+                              checked={filteredSaldosMensal.length > 0 && filteredSaldosMensal.every((s: any) => selectedIds.has(Number(s.employeeId)))}
                               onCheckedChange={(c) => {
                                 if (c) {
-                                  setSelectedIds(new Set(filteredSaldos.map((s: any) => Number(s.employeeId))));
+                                  setSelectedIds(new Set(filteredSaldosMensal.map((s: any) => Number(s.employeeId))));
                                 } else {
                                   setSelectedIds(new Set());
                                 }
@@ -434,15 +540,17 @@ export default function BancoHoras() {
                           </th>
                           <th className="text-left py-3 px-4 font-semibold">Funcionário</th>
                           <th className="text-left py-3 px-4 font-semibold">Cargo</th>
-                          <th className="text-right py-3 px-4 font-semibold">Saldo</th>
+                          <th className="text-right py-3 px-4 font-semibold">Movimento no Mês</th>
+                          <th className="text-right py-3 px-4 font-semibold">Saldo{!isMesAtual ? ` (até ${MESES_CURTOS[mesBanco - 1]}/${anoBanco})` : ""}</th>
                           <th className="text-right py-3 px-4 font-semibold">Última Movimentação</th>
                           <th className="text-center py-3 px-4 font-semibold no-print">Ações</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredSaldos.map((s: any) => {
+                        {filteredSaldosMensal.map((s: any) => {
                           const isExpiring = alertas.some((a: any) => Number(a.employeeId) === Number(s.employeeId));
                           const isOpen = selectedEmpId === Number(s.employeeId);
+                          const movimento = Number(s.movimentoMesMinutos || 0);
                           return (
                             <tr key={s.employeeId}
                               className={`border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${isExpiring ? "bg-amber-50/30" : ""} ${isOpen ? "bg-blue-50/50" : ""}`}
@@ -451,6 +559,7 @@ export default function BancoHoras() {
                               <td className="py-3 px-4 w-10 no-print" onClick={e => e.stopPropagation()}>
                                 <Checkbox
                                   aria-label={`Selecionar ${s.nomeCompleto}`}
+                                  disabled={!isMesAtual}
                                   checked={selectedIds.has(Number(s.employeeId))}
                                   onCheckedChange={() => toggleSelected(Number(s.employeeId))}
                                 />
@@ -463,6 +572,9 @@ export default function BancoHoras() {
                                 </div>
                               </td>
                               <td className="py-3 px-4 text-xs text-muted-foreground">{s.funcao || "—"}</td>
+                              <td className={`text-right py-3 px-4 text-xs font-medium ${movimento > 0 ? "text-green-600" : movimento < 0 ? "text-orange-600" : "text-muted-foreground"}`}>
+                                {minsToHHMMSigned(movimento)}
+                              </td>
                               <td className={`text-right py-3 px-4 font-bold text-base ${Number(s.saldoMinutos) < 0 ? "text-red-600" : "text-blue-700"}`}>{minsToHHMM(Number(s.saldoMinutos))}</td>
                               <td className="text-right py-3 px-4 text-xs text-muted-foreground">
                                 {s.ultimoLancamento ? new Date(s.ultimoLancamento).toLocaleDateString("pt-BR") : "—"}
@@ -474,6 +586,8 @@ export default function BancoHoras() {
                                     {isOpen ? "Fechar" : "Histórico"}
                                   </Button>
                                   <Button size="sm" className="h-7 text-xs bg-orange-500 hover:bg-orange-600"
+                                    disabled={!isMesAtual}
+                                    title={!isMesAtual ? "Débito só é aplicado ao saldo atual — volte ao mês corrente" : undefined}
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       setDebitEmpId(debitEmpId === Number(s.employeeId) ? null : Number(s.employeeId));
@@ -496,7 +610,7 @@ export default function BancoHoras() {
             ) : (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-8 text-center text-muted-foreground text-sm">
                 <ArrowLeftRight className="h-10 w-10 text-blue-300 mx-auto mb-3" />
-                <p className="font-medium text-blue-700 mb-1">Nenhum funcionário com saldo no banco de horas</p>
+                <p className="font-medium text-blue-700 mb-1">Nenhum funcionário com saldo no banco de horas em {MESES_LONGOS[mesBanco - 1]}/{anoBanco}</p>
                 <p>Saldos aparecem após aprovação de períodos de HE com destinação "Banco de Horas" na tela de Folha de Pagamento.</p>
               </div>
             )}

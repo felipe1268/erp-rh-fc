@@ -1,4 +1,31 @@
 /**
+ * Rev. 3996 — **BANCO DE HORAS: ADICIONADO NAVEGADOR MENSAL (ESTILO FOLHA DE PAGAMENTO) NA ABA
+ * "SALDOS".**
+ *
+ * PEDIDO: usuário pediu para ver o Banco de Horas "por mês", replicando o padrão de navegação
+ * usado na Folha de Pagamento (pills Jan–Dez com setas de ano, azul = "com lançamento" / cinza =
+ * "sem dados").
+ *
+ * IMPLEMENTAÇÃO: `banco_horas_saldo` guarda só o saldo CORRENTE (vivo), mas todo crédito/débito
+ * (motor de folha, fechamento de ponto, horas extras, débito manual) grava um lançamento espelho
+ * em `banco_horas_lancamentos` — então o histórico mês a mês é reconstruído somando lançamentos,
+ * sem precisar de snapshot novo. Dois novos endpoints em `server/routers/horasExtras.ts`:
+ * `getSaldoBancoMensal({companyId,ano,mes})` retorna, por funcionário, o saldo ACUMULADO até o
+ * fim do mês selecionado + o "Movimento no Mês" (líquido creditado/debitado naquele mês) + a data
+ * da última movimentação; `getResumoMensalBanco({companyId,ano})` conta lançamentos por mês só
+ * para colorir os pills do navegador. No frontend (`BancoHoras.tsx`), a aba "Saldos" ganhou o
+ * Card de navegação (ano + Jan–Dez), uma coluna "Movimento no Mês" na tabela, e os KPIs "Total em
+ * Banco"/"Funcionários com Saldo" agora refletem o mês navegado (não mais o saldo ao vivo). Como
+ * o saldo de um mês passado é histórico, a seleção em lote e o botão "Debitar" ficam desabilitados
+ * fora do mês corrente (débito só é aplicável ao saldo vivo).
+ *
+ * ARQUIVOS: `server/routers/horasExtras.ts` (2 queries novas), `client/src/pages/BancoHoras.tsx`
+ * (navegador mensal + coluna de movimento + gating de ações fora do mês atual), `shared/version.ts`
+ * → 3996.
+ *
+ * ZERO DELETE · ZERO ALTER (2 queries novas de leitura; nenhuma migração de schema).
+ */
+/**
  * Rev. 3995 — **VERIFICAÇÃO CRUZADA (FOLHA): CORRIGIDA COLUNA "LÍQUIDO ERP" QUE MOSTRAVA VALOR
  * ~100x MAIOR DO QUE O REAL, GERANDO ALERTA DE DIVERGÊNCIA FALSO PARA QUASE TODOS OS FUNCIONÁRIOS.**
  *

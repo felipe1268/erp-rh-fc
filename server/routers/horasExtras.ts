@@ -1118,6 +1118,66 @@ export const horasExtrasRouter = router({
       return rows;
     }),
 
+  // Rev. 3996 — Saldo do Banco de Horas POR MÊS (navegação estilo Folha de Pagamento).
+  // Saldo = acumulado de todos os lançamentos até o fim do mês selecionado (histórico
+  // real, não só o saldo corrente); Movimento = líquido creditado/debitado NO mês.
+  // Todo write em banco_horas_saldo tem um lançamento espelho em banco_horas_lancamentos
+  // (ver payrollEngine/fechamentoPonto/horasExtras), então somar lançamentos == saldo real.
+  getSaldoBancoMensal: protectedProcedure
+    .input(z.object({ companyId: z.number(), ano: z.number(), mes: z.number().min(1).max(12) }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const rows = ((await db.execute(sql`
+        WITH fim_mes AS (
+          SELECT (date_trunc('month', make_date(${input.ano}::int, ${input.mes}::int, 1)) + interval '1 month' - interval '1 day')::date AS d
+        ),
+        acumulado AS (
+          SELECT bhl."employeeId",
+            SUM(CASE WHEN bhl.tipo = 'credito' THEN bhl.minutos ELSE -bhl.minutos END) AS saldo
+          FROM banco_horas_lancamentos bhl, fim_mes
+          WHERE bhl."companyId" = ${input.companyId} AND bhl.data <= fim_mes.d
+          GROUP BY bhl."employeeId"
+        ),
+        movimento AS (
+          SELECT bhl."employeeId",
+            SUM(CASE WHEN bhl.tipo = 'credito' THEN bhl.minutos ELSE -bhl.minutos END) AS movimento,
+            MAX(bhl."criadoEm") AS "ultimoLancamento"
+          FROM banco_horas_lancamentos bhl
+          WHERE bhl."companyId" = ${input.companyId}
+            AND date_trunc('month', bhl.data) = make_date(${input.ano}::int, ${input.mes}::int, 1)
+          GROUP BY bhl."employeeId"
+        )
+        SELECT e.id AS "employeeId", e."nomeCompleto", e.funcao,
+          COALESCE(a.saldo, 0)::int AS "saldoMinutos",
+          COALESCE(m.movimento, 0)::int AS "movimentoMesMinutos",
+          m."ultimoLancamento"
+        FROM employees e
+        LEFT JOIN acumulado a ON a."employeeId" = e.id
+        LEFT JOIN movimento m ON m."employeeId" = e.id
+        WHERE e."companyId" = ${input.companyId}
+          AND (COALESCE(a.saldo, 0) <> 0 OR m.movimento IS NOT NULL)
+        ORDER BY COALESCE(a.saldo, 0) DESC
+      `)) as any).rows || [];
+      return rows;
+    }),
+
+  // Rev. 3996 — Resumo por mês (12 meses do ano) só p/ colorir a barra de navegação:
+  // "com lançamento" (algum crédito/débito no mês) vs "sem dados".
+  getResumoMensalBanco: protectedProcedure
+    .input(z.object({ companyId: z.number(), ano: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const rows = ((await db.execute(sql`
+        SELECT EXTRACT(MONTH FROM bhl.data)::int AS mes, COUNT(*)::int AS qtd
+        FROM banco_horas_lancamentos bhl
+        WHERE bhl."companyId" = ${input.companyId} AND EXTRACT(YEAR FROM bhl.data) = ${input.ano}
+        GROUP BY 1
+      `)) as any).rows || [];
+      return rows;
+    }),
+
   // Get lancamentos history for a specific employee
   getLancamentos: protectedProcedure
     .input(z.object({ employeeId: z.number(), companyId: z.number() }))
