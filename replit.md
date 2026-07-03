@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3992** — **DISSÍDIO: HORAS EXTRAS REMOVIDAS DA BASE DA DIFERENÇA SALARIAL RETROATIVA — TODA HE É COMPENSADA VIA BANCO DE HORAS, NUNCA PAGA EM DINHEIRO.** Usuário conferiu de novo o líquido de ANA BEATRIZ (após Rev. 3990) e ainda achou o valor errado. A fórmula e o INSS/IRRF marginal estavam corretos DADO que a base incluía HE do mês retroativo — mas a empresa nunca paga HE em dinheiro (tudo vira banco de horas), então essa HE não deveria compor a diferença. Fix: `sindical.ts` (`aplicar` e `recalcularDiferencas`) removeu a soma de `heMap`/`hePeriodEmployees` de `baseVerbas`, que agora é só salário + férias. Correção de dados: rodado update pontual nas 58 linhas já persistidas de `dissidio_funcionarios` (tipo 'folha') com HE > 0, recalculando `valorRetroativo`/`baseVerbas`/breakdown sem a HE. ANA BEATRIZ validada: baseVerbas 2261,97, valorRetroativo 116,49 (era 129,77 com HE). ZERO DELETE · ZERO ALTER (correção de dados via UPDATE, mesmo formato).
+
 - **Rev. 3991** — **DISSÍDIO: BOTÃO "CALCULAR/RECALCULAR DIFERENÇAS RETROATIVAS" FICAVA PERMANENTEMENTE SEM EFEITO — GUARD BLOQUEAVA O DISSÍDIO INTEIRO EM VEZ DE SÓ QUEM JÁ ESTAVA OK.** Usuário reportou que o botão não recalculava os valores. Causa-raiz: `sindical.recalcularDiferencas` tinha um guard que abortava para TODOS os funcionários do dissídio se QUALQUER UM já tivesse `valorRetroativo > 0` — como isso é o caso normal (maioria já vem calculada certa na aplicação), o botão ficava inútil na prática (sempre retornava erro "já foram calculadas", mesmo quando havia funcionário zerado precisando de recálculo). Fix: guard passou a ser POR FUNCIONÁRIO — recalcula só quem está com valor zerado e não é `rescisao_complementar` (tipo com lógica própria, preservado intacto); se ninguém precisa de recálculo, retorna sucesso informativo em vez de erro. ZERO DELETE · ZERO ALTER.
 
-- **Rev. 3990** — **DISSÍDIO: CORRIGE INSS/IRRF DA DIFERENÇA SALARIAL RETROATIVA — DE "PROGRESSIVO DO ZERO SOBRE O VALOR ISOLADO" PARA "ALÍQUOTA MARGINAL".** Usuário conferiu manualmente o relatório "Diferenças Salariais Retroativas (Dissídio)" e achou o líquido errado (ANA BEATRIZ: bruto R$129,77 mostrando líquido R$120,04 com INSS na faixa de 7,5%, quando o salário dela realmente está na faixa de 9%). Causa-raiz: `calcularEncargosDiferenca` (`sindical.ts`) rodava `calcularINSSProgressivo`/`calcularIRRFProgressivo` diretamente sobre o valor ISOLADO da diferença, reiniciando as faixas do zero e aplicando sempre a alíquota mais baixa, em vez da MARGINAL (a que incide de fato sobre quem já ganha naquela faixa). Fix: agora computa `encargo(baseAntes+diferença) - encargo(baseAntes)`, usando `diferencaBreakdownJson.baseVerbas` (tipo 'folha', já gravado desde a Rev. 3278) ou a nova `baseReferencia` gravada na aplicação (tipo 'rescisao_complementar', com fallback pro cálculo antigo em linhas já aplicadas sem essa base) como referência de faixa. Correção é só de leitura/cálculo — sem migração de dados, já que o relatório calcula on-the-fly. Validado batendo exatamente com a conferência manual do usuário. ZERO DELETE · ZERO ALTER.
-
 ### 5 one-liners
+
+- **Rev. 3990** — **DISSÍDIO: CORRIGE INSS/IRRF DA DIFERENÇA SALARIAL RETROATIVA — DE "PROGRESSIVO DO ZERO SOBRE O VALOR ISOLADO" PARA "ALÍQUOTA MARGINAL".** `calcularEncargosDiferenca` rodava INSS/IRRF progressivo sobre o valor ISOLADO da diferença em vez da alíquota MARGINAL; agora computa `encargo(baseAntes+diferença) - encargo(baseAntes)`. ZERO DELETE · ZERO ALTER.
 
 - **Rev. 3989** — **FOLHA: TOGGLE "SOMAR DIFERENÇA DO DISSÍDIO" — INCLUI O RETROATIVO DO DISSÍDIO NO LÍQUIDO DA FOLHA DO MÊS DE PAGAMENTO (PERSISTIDO POR PERÍODO).** Nova coluna `somarDiferencaDissidio` em `payrollPeriods`; `simularPagamento` soma o líquido retroativo do dissídio quando o toggle está ON (persistido por período); frontend ganha switch dedicado + selo "+ R$ X dissídio" nas colunas de líquido. ZERO DELETE · ZERO ALTER (só ADD COLUMN).
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3986** — **FOLHA: "VERIFICAÇÃO CRUZADA" PASSA A COMPARAR SÓ COLABORADOR + LÍQUIDO — RESTO FICA NO "COMPARATIVO FOLHA × ERP".** Removidos alertas sobrepostos de Salário/Função/status; mantido só "não vinculado ao cadastro" + novo alerta "Líquido divergente" (tolerância R$1). ZERO DELETE · ZERO ALTER.
 
-- **Rev. 3985** — **BENEFÍCIOS DE ALIMENTAÇÃO: VIGÊNCIA EXPLÍCITA (INÍCIO/FIM) — REAJUSTE DE DISSÍDIO NUNCA MAIS SOBRESCREVE O HISTÓRICO.** `meal_benefit_configs` ganhou vigência com fallback em 3 níveis; reajuste de dissídio agora ENCERRA a config vigente e INSERE nova versão, preservando histórico retroativo. ZERO DELETE · ZERO ALTER.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3984 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3985 e anteriores.
 
 ## User preferences
 

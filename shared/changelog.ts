@@ -1,4 +1,34 @@
 /**
+ * Rev. 3992 — **DISSÍDIO: HORAS EXTRAS REMOVIDAS DA BASE DA DIFERENÇA SALARIAL RETROATIVA —
+ * TODA HE É COMPENSADA VIA BANCO DE HORAS, NUNCA PAGA EM DINHEIRO.**
+ *
+ * PEDIDO: usuário conferiu de novo o líquido de ANA BEATRIZ no relatório "Diferenças Salariais
+ * Retroativas (Dissídio)" (após a correção da Rev. 3990 de INSS/IRRF marginal) e ainda achou o
+ * valor errado. Investigação confirmou que a FÓRMULA do bruto retroativo (baseVerbas × percentual)
+ * e o INSS/IRRF marginal (Rev. 3990) estavam matematicamente corretos DADO que a base incluía
+ * horas extras do mês retroativo. Usuário esclareceu a regra de negócio: TODA hora extra da
+ * empresa é compensada via banco de horas (nunca paga em dinheiro), então não existe HE monetária
+ * a reajustar retroativamente — a base deveria ser SÓ salário + férias, sem HE.
+ *
+ * CAUSA-RAIZ: `sindical.ts` (`aplicar` e `recalcularDiferencas`) somava `heMap` (valor de HE
+ * aprovada/paga vindo de `hePeriodEmployees`) dentro de `baseVerbas`, contaminando a diferença
+ * retroativa com um componente que a empresa nunca paga em dinheiro.
+ *
+ * FIX: removida a query/soma de HE (`heMap`/`heRaw`, `hePeriods`/`hePeriodEmployees`) das duas
+ * mutations; `baseVerbas` agora é só `baseSalario + baseFerias`; `breakdown.horasExtras` fixado em
+ * `0` (chave mantida no JSON só por compatibilidade de leitura). CORREÇÃO DE DADOS: rodado um
+ * update pontual nas 58 linhas de `dissidio_funcionarios` (diferenca_tipo='folha') que já tinham
+ * HE > 0 na base, recalculando `valorRetroativo`/`diferenca_base_verbas`/`diferencaBreakdownJson`
+ * sem a HE (mesma fórmula do fix, aplicada aos dados já persistidos) — sem tocar em
+ * `rescisao_complementar` (não usa HE). Validado: ANA BEATRIZ agora com baseVerbas=2261,97,
+ * valorRetroativo=116,49 (era 129,77 com HE).
+ *
+ * ARQUIVOS: `server/routers/sindical.ts` (`aplicar`, `recalcularDiferencas`), `shared/
+ * version.ts`→3992, correção pontual via script direto no Neon (sem migração de schema).
+ *
+ * ZERO DELETE · ZERO ALTER (dados corrigidos são UPDATE de linhas já existentes, mesmo formato).
+ */
+/**
  * Rev. 3991 — **DISSÍDIO: BOTÃO "CALCULAR/RECALCULAR DIFERENÇAS RETROATIVAS" FICAVA
  * PERMANENTEMENTE SEM EFEITO — GUARD BLOQUEAVA O DISSÍDIO INTEIRO EM VEZ DE SÓ QUEM JÁ ESTAVA OK.**
  *

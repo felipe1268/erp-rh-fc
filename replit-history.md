@@ -1,3 +1,5 @@
+- **Rev. 3985** — **BENEFÍCIOS DE ALIMENTAÇÃO: VIGÊNCIA EXPLÍCITA (INÍCIO/FIM) — REAJUSTE DE DISSÍDIO NUNCA MAIS SOBRESCREVE O HISTÓRICO.** `meal_benefit_configs` ganhou vigência com fallback em 3 níveis; reajuste de dissídio agora ENCERRA a config vigente e INSERE nova versão, preservando histórico retroativo. ZERO DELETE · ZERO ALTER.
+
 - **Rev. 3984** — **FOLHA: PJ NUNCA NA FOLHA + ALERTA "PAGAR OU NÃO?" P/ AVISO PRÉVIO ENCERRANDO NO MÊS.** Vazamento de PJ em `custosPorObra` corrigido (filtra só CLT); nova tabela `payroll_folha_decisoes` p/ decisão do RH sobre aviso prévio encerrando no mês. ZERO DELETE · ZERO ALTER.
 
 - **Rev. 3983** — **BANCO DE HORAS: DSR PERDIDO TAMBÉM VIRA DÉBITO DE HORAS (SEPARADO DE ATRASO/FALTA).** Novo lançamento `tipo='debito_dsr'` (440min fixo por DSR perdido), discriminado do débito de atraso/falta. ZERO DELETE · ZERO ALTER.

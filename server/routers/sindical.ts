@@ -2,7 +2,7 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb, getUserCompanyLinks } from "../db";
-import { dissidios, dissidioFuncionarios, employees, payrollPayments, hePeriods, hePeriodEmployees, vacationPeriods, terminationNotices } from "../../drizzle/schema";
+import { dissidios, dissidioFuncionarios, employees, payrollPayments, vacationPeriods, terminationNotices } from "../../drizzle/schema";
 import { eq, and, sql, desc, inArray, isNull } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
 import { parseBRL } from "../utils/parseBRL";
@@ -258,25 +258,16 @@ export const sindicalRouter = router({
 
     // Pré-carregar as VERBAS de cada mês retroativo (somente quando há retroação),
     // somando em JS via parseBRL (formatos mistos no banco). A diferença incide
-    // sobre TODAS as verbas: salário bruto + HE aprovada/paga + férias.
+    // sobre salário bruto + férias. Rev. 3992 — HE é DELIBERADAMENTE excluída: toda
+    // hora extra é compensada via banco de horas (nunca paga em dinheiro), então não
+    // há valor monetário de HE a reajustar retroativamente.
     const salarioMap = new Map<number, number>();
-    const heMap = new Map<number, number>();
     const feriasMap = new Map<number, number>();
     if (mesesRetro.length > 0) {
       const salarioRaw = await db.select({ employeeId: payrollPayments.employeeId, v: payrollPayments.salarioBrutoMes })
         .from(payrollPayments)
         .where(and(companyFilter(payrollPayments.companyId, input), inArray(payrollPayments.mesReferencia, mesesRetro)));
       for (const r of salarioRaw) salarioMap.set(r.employeeId, (salarioMap.get(r.employeeId) || 0) + parseBRL(r.v));
-
-      const heRaw = await db.select({ employeeId: hePeriodEmployees.employeeId, v: hePeriodEmployees.valorHETotal })
-        .from(hePeriodEmployees)
-        .innerJoin(hePeriods, eq(hePeriods.id, hePeriodEmployees.hePeriodId))
-        .where(and(
-          companyFilter(hePeriodEmployees.companyId, input),
-          inArray(hePeriods.mesReferencia, mesesRetro),
-          inArray(hePeriods.status, ['aprovado', 'pago']),
-        ));
-      for (const r of heRaw) heMap.set(r.employeeId, (heMap.get(r.employeeId) || 0) + parseBRL(r.v as any));
 
       const feriasRaw = await db.select({ employeeId: vacationPeriods.employeeId, v: vacationPeriods.valorTotal })
         .from(vacationPeriods)
@@ -314,6 +305,9 @@ export const sindicalRouter = router({
       const percentualReal = salarioAtual > 0 ? ((salarioNovo - salarioAtual) / salarioAtual * 100) : 0;
 
       // Diferença RETROATIVA sobre as verbas dos meses já pagos no valor antigo.
+      // Rev. 3992 — horas extras NÃO entram na base: toda HE é compensada via banco
+      // de horas (nunca paga em dinheiro), então não há valor monetário de HE para
+      // reajustar retroativamente. Base = salário + férias apenas.
       let valorRetroativo = 0;
       let baseVerbas = 0;
       let breakdown: any = null;
@@ -322,15 +316,14 @@ export const sindicalRouter = router({
         const usouFallback = baseSalarioFonte == null;
         // Fallback p/ mês sem folha consolidada: salário ANTIGO × nº de meses.
         const baseSalario = usouFallback ? salarioAtual * mesesRetro.length : baseSalarioFonte!;
-        const baseHE = heMap.get(func.id) || 0;
         const baseFerias = feriasMap.get(func.id) || 0;
-        baseVerbas = baseSalario + baseHE + baseFerias;
+        baseVerbas = baseSalario + baseFerias;
         valorRetroativo = baseVerbas * (percentual / 100);
         breakdown = {
           meses: mesesRetro,
           mesPagamento,
           salario: Number(baseSalario.toFixed(2)),
-          horasExtras: Number(baseHE.toFixed(2)),
+          horasExtras: 0,
           ferias: Number(baseFerias.toFixed(2)),
           baseVerbas: Number(baseVerbas.toFixed(2)),
           percentual,
@@ -599,24 +592,16 @@ export const sindicalRouter = router({
     const percentual = parseFloat(dissidio.percentualReajuste);
     const mesPagamento = dataAplicacaoYM;
 
+    // Rev. 3992 — HE é DELIBERADAMENTE excluída da base: toda hora extra é
+    // compensada via banco de horas (nunca paga em dinheiro), então não há valor
+    // monetário de HE a reajustar retroativamente. Base = salário + férias.
     const salarioMap = new Map<number, number>();
-    const heMap = new Map<number, number>();
     const feriasMap = new Map<number, number>();
 
     const salarioRaw = await db.select({ employeeId: payrollPayments.employeeId, v: payrollPayments.salarioBrutoMes })
       .from(payrollPayments)
       .where(and(companyFilter(payrollPayments.companyId, input), inArray(payrollPayments.mesReferencia, mesesRetro)));
     for (const r of salarioRaw) salarioMap.set(r.employeeId, (salarioMap.get(r.employeeId) || 0) + parseBRL(r.v));
-
-    const heRaw = await db.select({ employeeId: hePeriodEmployees.employeeId, v: hePeriodEmployees.valorHETotal })
-      .from(hePeriodEmployees)
-      .innerJoin(hePeriods, eq(hePeriods.id, hePeriodEmployees.hePeriodId))
-      .where(and(
-        companyFilter(hePeriodEmployees.companyId, input),
-        inArray(hePeriods.mesReferencia, mesesRetro),
-        inArray(hePeriods.status, ['aprovado', 'pago']),
-      ));
-    for (const r of heRaw) heMap.set(r.employeeId, (heMap.get(r.employeeId) || 0) + parseBRL(r.v as any));
 
     const feriasRaw = await db.select({ employeeId: vacationPeriods.employeeId, v: vacationPeriods.valorTotal })
       .from(vacationPeriods)
@@ -634,16 +619,15 @@ export const sindicalRouter = router({
       const baseSalarioFonte = salarioMap.get(func.employeeId);
       const usouFallback = baseSalarioFonte == null;
       const baseSalario = usouFallback ? salarioAnterior * mesesRetro.length : baseSalarioFonte!;
-      const baseHE = heMap.get(func.employeeId) || 0;
       const baseFerias = feriasMap.get(func.employeeId) || 0;
-      const baseVerbas = baseSalario + baseHE + baseFerias;
+      const baseVerbas = baseSalario + baseFerias;
       const valorRetroativo = baseVerbas * (percentual / 100);
       if (valorRetroativo <= 0) continue;
       const breakdown = {
         meses: mesesRetro,
         mesPagamento,
         salario: Number(baseSalario.toFixed(2)),
-        horasExtras: Number(baseHE.toFixed(2)),
+        horasExtras: 0,
         ferias: Number(baseFerias.toFixed(2)),
         baseVerbas: Number(baseVerbas.toFixed(2)),
         percentual,
