@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 3997** — **FOLHA DE PAGAMENTO: CAMPO "LÍQUIDO" GANHA EDIÇÃO INLINE (LÁPIS → INPUT → SALVAR/CANCELAR), IGUAL À FOLHA DE VALE.** Usuário pediu, "assim como na folha do vale, deixei o campo editável", que a coluna "Líquido" da tela PRINCIPAL de Folha de Pagamento ganhasse o mesmo padrão de edição manual (Master only) já usado na aba Vale. Nova mutation `payrollEngine.editarLiquidoFolha` (espelha `editarLiquidoVale`): força o líquido final do funcionário, zera o ajuste de arredondamento e limpa a linha 'folha' do ledger (senão o carry-forward do próximo evento corrompe); persiste em `payroll_payments` + `pagamentoResultJson` de `payroll_periods`, com guard de pagamento consolidado e badge "Editado" via `observacoes`. Frontend (`FolhaPagamento.tsx`) ganha estado `pgLiqEditId`/`pgLiqEditValor` + patch otimista local. ZERO DELETE · ZERO ALTER.
+
 - **Rev. 3996** — **BANCO DE HORAS: ADICIONADO NAVEGADOR MENSAL (ESTILO FOLHA DE PAGAMENTO) NA ABA "SALDOS".** Usuário pediu para ver o Banco de Horas "por mês". `banco_horas_lancamentos` já espelha todo crédito/débito de `banco_horas_saldo`, então o histórico mensal é reconstruído somando lançamentos (sem snapshot novo). Dois endpoints novos em `horasExtras.ts`: `getSaldoBancoMensal` (saldo acumulado até o fim do mês + "Movimento no Mês" por funcionário) e `getResumoMensalBanco` (contagem por mês, colore os pills). Frontend (`BancoHoras.tsx`) ganha Card de navegação (ano + Jan–Dez, azul="com lançamento"/cinza="sem dados"), coluna "Movimento no Mês" na tabela, KPIs "Total em Banco"/"Funcionários com Saldo" refletindo o mês navegado; seleção em lote e "Debitar" desabilitados fora do mês corrente (débito só se aplica ao saldo vivo). ZERO DELETE · ZERO ALTER.
 
-- **Rev. 3995** — **VERIFICAÇÃO CRUZADA (FOLHA): CORRIGIDA COLUNA "LÍQUIDO ERP" QUE MOSTRAVA VALOR ~100x MAIOR DO QUE O REAL.** Usuário reportou alerta de "Líquido divergente" em praticamente todos os colaboradores (ex.: Folha R$1.613,00 ≠ ERP R$139.400,00). Causa: `verificacaoCruzada` (`folhaPagamento.ts`) lê `payroll_payments.salarioLiquido`, gravado pelo motor de folha via `formatMoney()` = `val.toFixed(2)` (formato US "1394.00", sem separador de milhar); a função local `parseBRL()` do arquivo assume sempre formato BR ("1.394,00") e remove o ponto como se fosse milhar, transformando "1394.00" em 139400. Fix: no ponto de leitura desse campo específico, detecta o formato pela presença de vírgula antes de escolher o parser (sem vírgula → `parseFloat` direto; com vírgula → `parseBRL()` normal); os demais ~20 usos de `parseBRL()` no arquivo (todos sobre campos de `folhaItens`, sempre em formato BR) não foram alterados. ZERO DELETE · ZERO ALTER.
-
 ### 5 one-liners
+
+- **Rev. 3995** — **VERIFICAÇÃO CRUZADA (FOLHA): CORRIGIDA COLUNA "LÍQUIDO ERP" QUE MOSTRAVA VALOR ~100x MAIOR DO QUE O REAL.** Causa: `verificacaoCruzada` lia `payroll_payments.salarioLiquido` (formato US "1394.00") com `parseBRL()` (assume BR), virando 139400; fix detecta formato pela vírgula antes de escolher o parser. ZERO DELETE · ZERO ALTER.
 
 - **Rev. 3994** — **BENEFÍCIOS DE ALIMENTAÇÃO: CORRIGIDA A EDIÇÃO QUE REABRIA CONFIGURAÇÕES JÁ ENCERRADAS + TELA GANHA VISIBILIDADE/CONTROLE DE VIGÊNCIA.** UPDATE só altera `vigencia_fim` quando enviado explicitamente; tela ganha coluna "Vigência" (badges) e inputs de Início/Fim. ZERO DELETE · ZERO ALTER.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3991** — **DISSÍDIO: BOTÃO "CALCULAR/RECALCULAR DIFERENÇAS RETROATIVAS" FICAVA PERMANENTEMENTE SEM EFEITO — GUARD BLOQUEAVA O DISSÍDIO INTEIRO EM VEZ DE SÓ QUEM JÁ ESTAVA OK.** Guard passou a ser POR FUNCIONÁRIO — recalcula só quem está com valor zerado e não é `rescisao_complementar`. ZERO DELETE · ZERO ALTER.
 
-- **Rev. 3990** — **DISSÍDIO: CORRIGE INSS/IRRF DA DIFERENÇA SALARIAL RETROATIVA — DE "PROGRESSIVO DO ZERO SOBRE O VALOR ISOLADO" PARA "ALÍQUOTA MARGINAL".** `calcularEncargosDiferenca` rodava INSS/IRRF progressivo sobre o valor ISOLADO da diferença em vez da alíquota MARGINAL; agora computa `encargo(baseAntes+diferença) - encargo(baseAntes)`. ZERO DELETE · ZERO ALTER.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3987 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3990 e anteriores.
 
 ## User preferences
 

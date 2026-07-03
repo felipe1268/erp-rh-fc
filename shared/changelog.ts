@@ -1,4 +1,31 @@
 /**
+ * Rev. 3997 — **FOLHA DE PAGAMENTO: CAMPO "LÍQUIDO" GANHA EDIÇÃO INLINE (LÁPIS → INPUT →
+ * SALVAR/CANCELAR), IGUAL À FOLHA DE VALE.**
+ *
+ * PEDIDO: usuário pediu, "assim como na folha do vale, deixei o campo editável", que a coluna
+ * "Líquido" da tela PRINCIPAL de Folha de Pagamento (Simular Pagamento) ganhasse o mesmo padrão
+ * de edição manual (ícone de lápis ao passar o mouse → input com Salvar/Cancelar) já usado na aba
+ * Vale (adiantamento), restrito a usuários Master.
+ *
+ * IMPLEMENTAÇÃO: nova mutation `payrollEngine.editarLiquidoFolha` (espelha `editarLiquidoVale`) —
+ * força o líquido FINAL do funcionário para o valor digitado, zera o ajuste de arredondamento e
+ * limpa a linha 'folha' do ledger de arredondamento (senão o carry-forward do próximo evento fica
+ * corrompido, mesma lógica do override do vale — Rev. 3293). Diferente de `editarDescontoManual`
+ * (edita 1 categoria de desconto e o líquido é RECALCULADO), aqui o líquido é sobrescrito direto.
+ * Persiste em `payroll_payments.salarioLiquido/salarioLiquidoExato/ajusteArredondamento` +
+ * `pagamentoResultJson` de `payroll_periods` (fonte que a tela lê), com guard de pagamento
+ * consolidado (bloqueia edição) e `observacoes` registrando quem editou e o valor anterior — usado
+ * também para acender o badge "Editado" na célula. No frontend (`FolhaPagamento.tsx`), estado
+ * `pgLiqEditId`/`pgLiqEditValor` + mutation `editarLiquidoFolhaMut` com patch otimista local do
+ * `pagamentoResult` (sem esperar refetch).
+ *
+ * ARQUIVOS: `server/routers/payrollEngine.ts` (mutation `editarLiquidoFolha` nova),
+ * `client/src/pages/FolhaPagamento.tsx` (estado + mutation + célula editável na tabela principal),
+ * `shared/version.ts` → 3997.
+ *
+ * ZERO DELETE · ZERO ALTER (mutation nova; nenhuma migração de schema).
+ */
+/**
  * Rev. 3996 — **BANCO DE HORAS: ADICIONADO NAVEGADOR MENSAL (ESTILO FOLHA DE PAGAMENTO) NA ABA
  * "SALDOS".**
  *

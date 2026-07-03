@@ -1034,6 +1034,30 @@ export default function FolhaPagamento() {
     onError: (err) => toast.error(`Erro ao salvar desconto: ${err.message}`),
   });
 
+  // Rev. 3997 — editar o Líquido diretamente na Folha de Pagamento (mesmo padrão
+  // pencil/save/cancel da Folha de Vale via editarLiquidoMut/liqEditId).
+  const editarLiquidoFolhaMut = trpc.payrollEngine.editarLiquidoFolha.useMutation({
+    onSuccess: (data: any) => {
+      toast.success(data.message);
+      setPgLiqEditId(null);
+      setPgLiqEditValor("");
+      setPagamentoResult((prev: any) => {
+        if (!prev) return prev;
+        const novoLiquido = parseFloat(data.novoLiquido) || 0;
+        const funcs = (prev.funcionarios || []).map((f: any) =>
+          Number(f.employeeId) === Number(data.employeeId)
+            ? { ...f, salarioLiquido: novoLiquido, salarioLiquidoExato: novoLiquido, ajusteArredondamento: 0, liquidoEditadoManualmente: true }
+            : f
+        );
+        const totalLiquido = funcs.reduce((s: number, f: any) => s + (Number(f.salarioLiquido) || 0), 0);
+        return { ...prev, funcionarios: funcs, totalLiquido };
+      });
+    },
+    onError: (err) => toast.error(`Erro ao salvar líquido: ${err.message}`),
+  });
+  const [pgLiqEditId, setPgLiqEditId] = useState<number | null>(null);
+  const [pgLiqEditValor, setPgLiqEditValor] = useState("");
+
   // Hidratação dos resultados (vale/pagamento/aferição) a partir do snapshot do
   // período. Effect ÚNICO e determinístico: dispara só quando a IDENTIDADE do
   // período muda ("none" quando não há competência). Antes havia DOIS effects —
@@ -4999,7 +5023,48 @@ export default function FolhaPagamento() {
                           <DescontoCell f={f} campo="outros" valor={valOutros} onSave={onSaveCell} isLoading={editarDescontoMut.isPending} baseClassName="text-red-600 text-right" />
                           <td className="text-right py-2 px-2 font-semibold text-red-700">{formatBRL(f.totalDescontos)}</td>
                           <td className="text-right py-2 px-2 border-l border-blue-100 font-bold text-[#1B2A4A]">
-                            {formatBRL(f.salarioLiquido)}
+                            {pgLiqEditId === f.employeeId ? (
+                              <div className="flex items-center justify-end gap-1">
+                                <span className="text-xs text-slate-400">R$</span>
+                                <input
+                                  type="text"
+                                  value={pgLiqEditValor}
+                                  onChange={e => setPgLiqEditValor(e.target.value)}
+                                  className="w-24 h-7 text-right text-sm border rounded px-1 font-bold text-[#1B2A4A]"
+                                  autoFocus
+                                  onKeyDown={e => {
+                                    if (e.key === "Enter") {
+                                      editarLiquidoFolhaMut.mutate({ companyId, mesReferencia: mesAno, employeeId: f.employeeId, novoLiquido: pgLiqEditValor });
+                                    } else if (e.key === "Escape") {
+                                      setPgLiqEditId(null); setPgLiqEditValor("");
+                                    }
+                                  }}
+                                />
+                                <button className="text-green-600 hover:text-green-800" title="Salvar" disabled={editarLiquidoFolhaMut.isPending}
+                                  onClick={() => editarLiquidoFolhaMut.mutate({ companyId, mesReferencia: mesAno, employeeId: f.employeeId, novoLiquido: pgLiqEditValor })}>
+                                  <Save className="h-3.5 w-3.5" />
+                                </button>
+                                <button className="text-slate-400 hover:text-slate-600" title="Cancelar"
+                                  onClick={() => { setPgLiqEditId(null); setPgLiqEditValor(""); }}>
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-end gap-1">
+                                {formatBRL(f.salarioLiquido)}
+                                {isMaster && (
+                                  <button className="text-slate-300 hover:text-blue-600 transition-colors no-print" title="Editar líquido (Master)"
+                                    onClick={() => { setPgLiqEditId(f.employeeId); setPgLiqEditValor(String(parseFloat(String(f.salarioLiquido || "0").replace(/[^\d.,]/g, "").replace(",", ".")).toFixed(2))); }}>
+                                    <Pencil className="h-3 w-3" />
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                            {(f.liquidoEditadoManualmente === true || (f.observacoes && String(f.observacoes).includes('LÍQUIDO EDITADO'))) && (
+                              <span className="block text-[9px] font-normal text-orange-600 flex items-center justify-end gap-0.5" title="Líquido editado manualmente">
+                                <PenLine className="h-2.5 w-2.5" /> Editado
+                              </span>
+                            )}
                             {Number(f.diferencaDissidioValor || 0) > 0 && (
                               <span
                                 className="block text-[9px] font-normal whitespace-nowrap text-blue-600"

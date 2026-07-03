@@ -4912,6 +4912,106 @@ export const payrollEngineRouter = router({
       };
     }),
 
+  // ============================================================
+  // 6.2. EDITAR LÍQUIDO DIRETO (override manual, mesmo padrão do editarLiquidoVale)
+  // ============================================================
+  // Rev. 3997 — usuário pediu, "assim como na folha do vale", um campo Líquido
+  // editável (lápis → input → salvar/cancelar) na tela principal da Folha de
+  // Pagamento. Diferente de editarDescontoManual (edita 1 categoria e o líquido
+  // é RECALCULADO), aqui o líquido FINAL é forçado direto — o ajuste de
+  // arredondamento zera e o ledger 'folha' é limpo p/ não corromper o carry-forward
+  // do próximo evento (mesma lógica do override do vale, Rev. 3293).
+  editarLiquidoFolha: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      mesReferencia: z.string(),
+      employeeId: z.number(),
+      novoLiquido: z.string(),
+      motivo: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.user?.role !== "admin_master") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas usuários Master podem editar o líquido da folha." });
+      }
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      const liquidoNum = parseFloat(input.novoLiquido.replace(/[^\d.,]/g, "").replace(",", "."));
+      if (isNaN(liquidoNum) || liquidoNum < 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Valor líquido inválido." });
+      }
+
+      // Guard: bloqueia edição se pagamento estiver consolidado
+      const guard = ((await db.execute(sql`
+        SELECT "pagamentoConsolidadoEm", "pagamentoResultJson"
+        FROM payroll_periods
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+        LIMIT 1
+      `)) as any).rows || [];
+      if (guard.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Período de folha não encontrado" });
+      }
+      if (guard[0].pagamentoConsolidadoEm) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Pagamento consolidado — desconsolide para editar" });
+      }
+      const payload = (() => { try { return JSON.parse(guard[0].pagamentoResultJson || '{}'); } catch { return {}; } })();
+      const funcionarios: any[] = payload.funcionarios || [];
+      const idx = funcionarios.findIndex(f => Number(f.employeeId) === Number(input.employeeId));
+      if (idx < 0) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado na folha" });
+      const f = funcionarios[idx];
+
+      const liquidoAnterior = Number(f.salarioLiquido || 0);
+      const liquidoFormatado = liquidoNum.toFixed(2);
+      const editadoPor = ctx.user.name || ctx.user.email || "Master";
+      const agora = new Date().toISOString();
+      const obs = `[LÍQUIDO EDITADO por ${editadoPor}: R$ ${liquidoAnterior.toFixed(2)} → R$ ${liquidoFormatado}${input.motivo ? ` | Motivo: ${input.motivo}` : ""}]`;
+
+      funcionarios[idx] = {
+        ...f,
+        salarioLiquido: liquidoNum,
+        salarioLiquidoExato: liquidoNum,
+        ajusteArredondamento: 0,
+        observacoes: (f.observacoes ? f.observacoes + ' ' : '') + obs,
+        liquidoEditadoManualmente: true,
+        liquidoEditadoPor: editadoPor,
+        liquidoEditadoEm: agora,
+      };
+
+      const grandTotalLiquido = funcionarios.reduce((s, x) => s + Number(x.salarioLiquido || 0), 0);
+      payload.funcionarios = funcionarios;
+      payload.totalLiquido = grandTotalLiquido;
+
+      await db.execute(sql`
+        UPDATE payroll_payments
+        SET "salarioLiquido" = ${liquidoFormatado},
+            "salarioLiquidoExato" = ${liquidoFormatado},
+            "ajusteArredondamento" = ${"0.00"},
+            "observacoes" = COALESCE("observacoes", '') || ${' ' + obs},
+            "updatedAt" = NOW()
+        WHERE "companyId" = ${input.companyId}
+          AND "mesReferencia" = ${input.mesReferencia}
+          AND "employeeId" = ${input.employeeId}
+      `);
+
+      // Remove a linha 'folha' do ledger p/ o override virar o pago final sem residual
+      // (mesma lógica do Rev. 3293 aplicada ao override do vale).
+      await db.execute(sql`DELETE FROM payroll_rounding_ledger WHERE "companyId" = ${input.companyId} AND "employeeId" = ${input.employeeId} AND "mesReferencia" = ${input.mesReferencia} AND "origem" = 'folha'`);
+
+      await db.execute(sql`
+        UPDATE payroll_periods SET
+          "totalLiquido" = ${formatMoney(grandTotalLiquido)},
+          "pagamentoResultJson" = ${JSON.stringify(payload)}
+        WHERE "companyId" = ${input.companyId} AND "mesReferencia" = ${input.mesReferencia}
+      `);
+
+      return {
+        success: true,
+        employeeId: input.employeeId,
+        novoLiquido: liquidoFormatado,
+        liquidoAnterior: liquidoAnterior.toFixed(2),
+        message: `Líquido editado: R$ ${liquidoAnterior.toFixed(2)} → R$ ${liquidoFormatado}`,
+      };
+    }),
 
   // ============================================================
   // 7. LISTAR PAGAMENTOS
