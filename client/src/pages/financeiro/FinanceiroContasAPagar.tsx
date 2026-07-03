@@ -554,8 +554,13 @@ export default function FinanceiroContasAPagar() {
 
   const hojeStr = hoje.toISOString().split("T")[0];
 
+  // Rev. 3999 — Busca por texto (fornecedor/OC/conta/obra) NÃO deve ficar presa
+  // ao mês selecionado: um fornecedor pode ter títulos em vários meses/sem data
+  // de vencimento, e o usuário espera que a busca encontre TODOS eles no ano
+  // corrente (mesma janela que getContasAPagarByYear já carregou), não só os
+  // do mês em que a tela estava aberta. Sem busca, mantém o escopo do mês.
   const filtered = useMemo(() => {
-    let list = mesData;
+    let list = search ? (allContas ?? []) : mesData;
     if (statusFilter === "pendentes") list = list.filter((c: any) => c.status !== "pago");
     if (statusFilter === "pagos") list = list.filter((c: any) => c.status === "pago");
     if (naturezaFilter === "efetivo") list = list.filter((c: any) => !isProjecao(c));
@@ -568,6 +573,7 @@ export default function FinanceiroContasAPagar() {
         (c.contaNome ?? "").toLowerCase().includes(q) ||
         (c.obraNome ?? "").toLowerCase().includes(q) ||
         (c.origemDescricao ?? "").toLowerCase().includes(q) ||
+        (c.fornecedorNome ?? "").toLowerCase().includes(q) ||
         extractOcNumero(c).toLowerCase().includes(q)
       );
     }
@@ -581,7 +587,7 @@ export default function FinanceiroContasAPagar() {
       if (da !== db) return da.localeCompare(db);
       return Number(b.valorPrevisto ?? 0) - Number(a.valorPrevisto ?? 0);
     });
-  }, [mesData, statusFilter, naturezaFilter, origemFilter, search, hojeStr]);
+  }, [mesData, allContas, statusFilter, naturezaFilter, origemFilter, search, hojeStr]);
 
   // Rev. 1619 — agrupamento por horizonte de vencimento (cabeçalhos sticky)
   const grupos = useMemo(() => {
@@ -1099,7 +1105,7 @@ export default function FinanceiroContasAPagar() {
           <CardHeader className="pb-2 px-5 pt-4">
             <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
               <CreditCard className="w-4 h-4 text-orange-500" />
-              {MESES[mesSel-1]} {ano} — {filtered.length} conta(s)
+              {search ? `Busca em ${ano} (todos os meses)` : `${MESES[mesSel-1]} ${ano}`} — {filtered.length} conta(s)
               {naturezaFilter !== "todos" && (
                 <span className={`ml-2 text-[11px] font-medium px-2 py-0.5 rounded-full ${naturezaFilter === "efetivo" ? "bg-emerald-100 text-emerald-700" : "bg-violet-100 text-violet-700"}`}>
                   {naturezaFilter === "efetivo" ? "💰 Efetivo" : "📊 Projeção"}
@@ -1113,7 +1119,7 @@ export default function FinanceiroContasAPagar() {
             ) : filtered.length === 0 ? (
               <div className="p-10 text-center">
                 <Calendar className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500 font-medium">Nenhuma conta em {MESES[mesSel-1]} {ano}</p>
+                <p className="text-gray-500 font-medium">{search ? `Nenhuma conta encontrada em ${ano}` : `Nenhuma conta em ${MESES[mesSel-1]} ${ano}`}</p>
                 {(search || origemFilter !== "all" || statusFilter !== "all" || naturezaFilter !== "efetivo") && (
                   <button onClick={() => { setSearch(""); setOrigemFilter("all"); setStatusFilter("pendentes"); setNaturezaFilter("efetivo"); }}
                     className="mt-2 text-xs text-blue-600 hover:underline">Limpar filtros</button>

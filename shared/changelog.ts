@@ -1,4 +1,27 @@
 /**
+ * Rev. 3999 — **CONTAS A PAGAR: BUSCA POR FORNECEDOR/OC AGORA PROCURA NO ANO INTEIRO, NÃO SÓ NO
+ * MÊS ABERTO NA TELA.**
+ *
+ * PEDIDO: usuário filtrou "Contas a Pagar" pelo fornecedor "eletrogu" (ELETROGUARA MATERIAIS) e
+ * só apareceram 2 títulos, mesmo tendo várias OCs desse fornecedor (confirmado por consulta direta
+ * ao Neon: dezenas de lançamentos em `financial_entries`, incluindo OC-2026-555 com vencimento em
+ * 30/06/2026, OC-2026-533 (R$ 20.899,65) com `data_vencimento` NULL, e vários outros meses/2025).
+ *
+ * CAUSA-RAIZ: a busca por texto rodava sobre `mesData` — a lista JÁ FILTRADA pelo mês selecionado
+ * no navegador de meses da tela (`mesSel`) — em vez de rodar sobre `allContas` (o ano inteiro que
+ * `getContasAPagarByYear` já carrega). Resultado: digitar um fornecedor só encontrava os títulos
+ * dele que caíssem no mês em que a tela estava aberta; títulos do mesmo fornecedor em outros meses
+ * — ou sem `data_vencimento` (que não bate em NENHUM mês) — ficavam invisíveis mesmo estando nos
+ * dados já carregados no cliente.
+ *
+ * FIX: quando há termo de busca, `filtered` passa a usar `allContas` (ano inteiro) em vez de
+ * `mesData` (mês selecionado); título da tabela e mensagem de "nenhum resultado" avisam que a
+ * busca abrange o ano todo. Também passou a checar `fornecedorNome` (campo que nem sempre é
+ * espelhado em `descricao`/`origemDescricao`). Sem busca ativa, comportamento por mês é mantido
+ * inalterado. ZERO DELETE · ZERO ALTER.
+ */
+
+/**
  * Rev. 3998 — **CORRIGIDO 404 "ARQUIVO NÃO ENCONTRADO" EM ANEXOS COM ESPAÇO NO NOME QUANDO O
  * DISCO EFÊMERO JÁ NÃO TINHA MAIS A CÓPIA LOCAL.**
  *
