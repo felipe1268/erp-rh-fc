@@ -1,4 +1,34 @@
 /**
+ * Rev. 4001 — **COMPRAS / COTAÇÕES: SOLICITAÇÕES DE OBRAS DIFERENTES CAINDO COM O MESMO NÚMERO
+ * DE COTAÇÃO (EX.: VÁRIAS "COT-0406-2026").**
+ *
+ * PEDIDO (usuário): "cotações no módulo de compras está com bug. Mais de uma solicitação de
+ * várias obras estão com mesma numeração" — print anexado mostrando 4 cotações distintas
+ * (obras VITRA e HOTEL DO PAPA, SCs diferentes) todas exibindo "COT-0406-2026".
+ *
+ * CAUSA-RAIZ: os 4 pontos de `server/routers/compras.ts` que geram `numeroCotacao`
+ * (auto-cotação em `criarSolicitacao`, `aprovarSolicitacao`, o endpoint principal
+ * `criarCotacao` e o loop de `aprovarSolicitacoesLote`) calculavam o próximo número via
+ * `COUNT(*) + 1` LIDO FORA de qualquer lock/transação de numeração. Duas cotações criadas em
+ * rápida sucessão (aprovação em lote de SCs de obras diferentes, ou dois usuários simultâneos)
+ * liam o mesmo `COUNT(*)` antes do primeiro INSERT commitar e geravam o MESMO `numeroCotacao` —
+ * clássica race condition read-then-write, o mesmo bug de classe já corrigido para numeração de
+ * OC/OS (Rev. 1985) e contrato de terceiro (Rev. 1986) via `pg_advisory_xact_lock`. Só 3 dos 7
+ * pontos de geração já tinham o lock (`dividirCotacao`, `cotarItensRestantes` e a numeração de
+ * OC em si) — os 4 restantes (justamente os de CRIAÇÃO de cotação a partir de SC, o caminho mais
+ * usado) ficaram destravados.
+ *
+ * FIX: os 4 pontos agora rodam a leitura do `COUNT(*)` + INSERT da cotação (+ itens) dentro de
+ * `db.transaction` com `pg_advisory_xact_lock(companyId, 1001)` — MESMO escopo de lock (1001) já
+ * usado pelos pontos que geram número de cotação/OC/OS, serializando toda a numeração de compras
+ * por empresa. CORREÇÃO DE DADOS: 32 grupos de `numero_cotacao` duplicados (41 cotações
+ * afetadas) foram detectados no Neon; a cotação de ID mais antigo de cada grupo manteve o número
+ * original, e as demais foram renumeradas sequencialmente para o próximo número livre da
+ * empresa/ano (ex.: `COT-2026-0036` duplicada → a 2ª virou `COT-2026-0408`). ZERO DELETE de
+ * linhas · ZERO ALTER de schema.
+ */
+
+/**
  * Rev. 4000 — **BANCO DE HORAS: DÉBITOS AUTOMÁTICOS DE ATRASO/FALTA E DSR (GERADOS PELA FOLHA)
  * GRAVAVAM `minutos` NEGATIVO, INVERTENDO O SALDO MENSAL NA ABA "SALDOS".**
  *

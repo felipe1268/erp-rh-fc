@@ -3967,6 +3967,13 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       try {
         if (scItensInseridos.length > 0) {
           await db.transaction(async (tx: any) => {
+            // Rev. 4001 — pg_advisory_xact_lock(companyId, 1001) ANTES do COUNT(*),
+            // igual ao padrão já usado em criarCotacao/dividirCotacao/cotarItensRestantes.
+            // Faltava aqui: duas SCs de obras diferentes criadas quase juntas
+            // liam o mesmo COUNT(*) antes do primeiro INSERT commitar e
+            // recebiam o MESMO numeroCotacao (bug reportado: várias SCs de
+            // obras distintas com o mesmo "COT-XXXX-2026").
+            await tx.execute(sql`SELECT pg_advisory_xact_lock(${input.companyId}::int, 1001::int)`);
             const yr = new Date().getFullYear();
             const cnt = await tx.select({ c: sql<number>`count(*)` }).from(comprasCotacoes).where(eq(comprasCotacoes.companyId, input.companyId));
             const seq = (parseInt(String(cnt[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
@@ -4192,10 +4199,6 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
           if (activeCots.length === 0) {
             const scItens = await db.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, input.id));
 
-            const count = await db.select({ c: sql<number>`count(*)` }).from(comprasCotacoes).where(eq(comprasCotacoes.companyId, sc.companyId));
-            const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
-            const numeroCotacao = `COT-${new Date().getFullYear()}-${seq}`;
-
             const itensMapped = scItens.map(it => ({
               descricao: normalizarTexto(it.descricao),
               unidade: it.unidade ?? "un",
@@ -4207,36 +4210,50 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
             }));
             const totalGeral = 0;
 
-            const [cot] = await db.insert(comprasCotacoes).values({
-              companyId: sc.companyId,
-              numeroCotacao,
-              descricao: sc.titulo || sc.departamento || "Cotação automática",
-              prioridade: sc.prioridade ?? "normal",
-              obraId: sc.obraId ?? null,
-              solicitacaoId: sc.id,
-              total: String(totalGeral.toFixed(2)),
-              status: "pendente",
-              tipo: sc.tipo ?? "material",
-              criadoPorId: input.aprovadorId ?? null,
-              criadoPorNome: input.aprovadorNome ?? null,
-            } as any).returning();
+            // Rev. 4001 — numeração + insert dentro de db.transaction com
+            // pg_advisory_xact_lock(companyId, 1001), igual ao padrão já usado
+            // em criarCotacao/dividirCotacao/cotarItensRestantes. Antes usava
+            // COUNT(*) fora de transação/lock — duas aprovações de SCs de obras
+            // diferentes quase simultâneas podiam gerar o MESMO numeroCotacao.
+            const cot = await db.transaction(async (tx: any) => {
+              await tx.execute(sql`SELECT pg_advisory_xact_lock(${sc.companyId}::int, 1001::int)`);
+              const count = await tx.select({ c: sql<number>`count(*)` }).from(comprasCotacoes).where(eq(comprasCotacoes.companyId, sc.companyId));
+              const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
+              const numeroCotacaoTx = `COT-${new Date().getFullYear()}-${seq}`;
 
-            if (itensMapped.length > 0) {
-              await db.insert(comprasCotacoesItens).values(
-                itensMapped.map(it => ({
-                  cotacaoId: cot.id,
-                  solicitacaoItemId: it.solicitacaoItemId ?? null,
-                  descricao: it.descricao,
-                  unidade: it.unidade,
-                  quantidade: String(it.quantidade),
-                  precoUnitario: "0",
-                  descontoPct: "0",
-                  total: "0",
-                  semVerba: it.semVerba ?? false,
-                  motivoSemVerba: it.motivoSemVerba ?? null,
-                }))
-              );
-            }
+              const [cotRow] = await tx.insert(comprasCotacoes).values({
+                companyId: sc.companyId,
+                numeroCotacao: numeroCotacaoTx,
+                descricao: sc.titulo || sc.departamento || "Cotação automática",
+                prioridade: sc.prioridade ?? "normal",
+                obraId: sc.obraId ?? null,
+                solicitacaoId: sc.id,
+                total: String(totalGeral.toFixed(2)),
+                status: "pendente",
+                tipo: sc.tipo ?? "material",
+                criadoPorId: input.aprovadorId ?? null,
+                criadoPorNome: input.aprovadorNome ?? null,
+              } as any).returning();
+
+              if (itensMapped.length > 0) {
+                await tx.insert(comprasCotacoesItens).values(
+                  itensMapped.map(it => ({
+                    cotacaoId: cotRow.id,
+                    solicitacaoItemId: it.solicitacaoItemId ?? null,
+                    descricao: it.descricao,
+                    unidade: it.unidade,
+                    quantidade: String(it.quantidade),
+                    precoUnitario: "0",
+                    descontoPct: "0",
+                    total: "0",
+                    semVerba: it.semVerba ?? false,
+                    motivoSemVerba: it.motivoSemVerba ?? null,
+                  }))
+                );
+              }
+              return cotRow;
+            });
+            const numeroCotacao = cot.numeroCotacao;
 
             await db.update(comprasSolicitacoes).set({ status: "cotacao", atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, input.id));
             cotacaoCriada = { id: cot.id, numeroCotacao };
@@ -4666,52 +4683,66 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         }
       }
 
-      const count = await db.select({ c: sql<number>`count(*)` }).from(comprasCotacoes).where(eq(comprasCotacoes.companyId, input.companyId));
-      const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
-      const numeroCotacao = `COT-${new Date().getFullYear()}-${seq}`;
       const itensMapped = input.itens.map(it => {
         const desc = it.descontoPct ?? 0;
         const total = n(it.quantidade) * n(it.precoUnitario) * (1 - desc / 100);
         return { ...it, total: total.toFixed(2) };
       });
       const totalGeral = itensMapped.reduce((s, it) => s + n(it.total), 0);
-      const [cot] = await db.insert(comprasCotacoes).values({
-        companyId: input.companyId,
-        numeroCotacao,
-        descricao: normalizarTexto(input.descricao),
-        prioridade: input.prioridade ?? "normal",
-        tipo: tipoFinal,
-        obraId: input.obraId ?? null,
-        solicitacaoId: input.solicitacaoId ?? null,
-        fornecedorId: input.fornecedorId ?? null,
-        dataValidade: input.dataValidade,
-        condicaoPagamento: input.condicaoPagamento,
-        tipoPagamento: input.tipoPagamento ?? null,
-        numeroParcelas: input.numeroParcelas ?? 1,
-        prazoEntregaDias: input.prazoEntregaDias ?? null,
-        observacoes: input.observacoes,
-        total: String(totalGeral.toFixed(2)),
-        status: "pendente",
-        criadoPorId: input.userId ?? null,
-        criadoPorNome: input.userName ?? null,
-      } as any).returning();
-      if (itensMapped.length > 0) {
-        await db.insert(comprasCotacoesItens).values(
-          itensMapped.map(it => ({
-            cotacaoId: cot.id,
-            solicitacaoItemId: it.solicitacaoItemId ?? null,
-            descricao: normalizarTexto(it.descricao),
-            unidade: it.unidade,
-            quantidade: String(it.quantidade),
-            precoUnitario: String(it.precoUnitario),
-            descontoPct: String(it.descontoPct ?? 0),
-            total: it.total,
-          }))
-        );
-      }
-      if (input.solicitacaoId) {
-        await db.update(comprasSolicitacoes).set({ status: "cotacao", atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, input.solicitacaoId));
-      }
+
+      // Rev. 4001 — numeração + insert dentro de db.transaction com
+      // pg_advisory_xact_lock(companyId, 1001). Este é o endpoint PRINCIPAL de
+      // criação manual de cotação (via botão "Enviar para Cotação"); usava
+      // COUNT(*) fora de qualquer lock/transação — 2 cotações criadas quase
+      // juntas (obras diferentes ou não) liam o mesmo COUNT(*) e recebiam o
+      // MESMO numeroCotacao. Bug reportado: "várias solicitações de várias
+      // obras com a mesma numeração COT-XXXX-2026".
+      const cot = await db.transaction(async (tx: any) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${input.companyId}::int, 1001::int)`);
+        const count = await tx.select({ c: sql<number>`count(*)` }).from(comprasCotacoes).where(eq(comprasCotacoes.companyId, input.companyId));
+        const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
+        const numeroCotacao = `COT-${new Date().getFullYear()}-${seq}`;
+
+        const [cotRow] = await tx.insert(comprasCotacoes).values({
+          companyId: input.companyId,
+          numeroCotacao,
+          descricao: normalizarTexto(input.descricao),
+          prioridade: input.prioridade ?? "normal",
+          tipo: tipoFinal,
+          obraId: input.obraId ?? null,
+          solicitacaoId: input.solicitacaoId ?? null,
+          fornecedorId: input.fornecedorId ?? null,
+          dataValidade: input.dataValidade,
+          condicaoPagamento: input.condicaoPagamento,
+          tipoPagamento: input.tipoPagamento ?? null,
+          numeroParcelas: input.numeroParcelas ?? 1,
+          prazoEntregaDias: input.prazoEntregaDias ?? null,
+          observacoes: input.observacoes,
+          total: String(totalGeral.toFixed(2)),
+          status: "pendente",
+          criadoPorId: input.userId ?? null,
+          criadoPorNome: input.userName ?? null,
+        } as any).returning();
+
+        if (itensMapped.length > 0) {
+          await tx.insert(comprasCotacoesItens).values(
+            itensMapped.map(it => ({
+              cotacaoId: cotRow.id,
+              solicitacaoItemId: it.solicitacaoItemId ?? null,
+              descricao: normalizarTexto(it.descricao),
+              unidade: it.unidade,
+              quantidade: String(it.quantidade),
+              precoUnitario: String(it.precoUnitario),
+              descontoPct: String(it.descontoPct ?? 0),
+              total: it.total,
+            }))
+          );
+        }
+        if (input.solicitacaoId) {
+          await tx.update(comprasSolicitacoes).set({ status: "cotacao", atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, input.solicitacaoId));
+        }
+        return cotRow;
+      });
       return cot;
     }),
 
@@ -12699,47 +12730,58 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
             if (activeCots.length === 0) {
               const scItens = await db.select().from(comprasSolicitacoesItens).where(eq(comprasSolicitacoesItens.solicitacaoId, id));
-              const count = await db.select({ c: sql<number>`count(*)` }).from(comprasCotacoes).where(eq(comprasCotacoes.companyId, sc.companyId));
-              const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
-              const numeroCotacao = `COT-${new Date().getFullYear()}-${seq}`;
 
-              const [cot] = await db.insert(comprasCotacoes).values({
-                companyId: sc.companyId,
-                numeroCotacao,
-                descricao: sc.titulo || sc.departamento || "Cotação automática",
-                prioridade: sc.prioridade ?? "normal",
-                obraId: sc.obraId ?? null,
-                solicitacaoId: sc.id,
-                // Rev. 3028 — a cotação automática nasce com o MESMO tipo da SC
-                // (antes caía no default "material" → legenda divergente quando a
-                // SC era servico/pacote/equipamento). Junto com a propagação no
-                // editarSolicitacao, garante SC×COT sempre consistentes.
-                tipo: sc.tipo ?? "material",
-                total: "0",
-                status: "pendente",
-                criadoPorId: input.aprovadorId ?? null,
-                criadoPorNome: input.aprovadorNome ?? null,
-              } as any).returning();
+              // Rev. 4001 — numeração + insert dentro de db.transaction com
+              // pg_advisory_xact_lock(companyId, 1001). Loop de aprovação EM LOTE
+              // é o cenário mais provável de disparar o bug (várias SCs de obras
+              // diferentes aprovadas juntas): usava COUNT(*) sem lock/transação,
+              // cada iteração lia o mesmo COUNT(*) da anterior antes do commit e
+              // gerava numeroCotacao duplicado entre SCs de obras distintas.
+              const cot = await db.transaction(async (tx: any) => {
+                await tx.execute(sql`SELECT pg_advisory_xact_lock(${sc.companyId}::int, 1001::int)`);
+                const count = await tx.select({ c: sql<number>`count(*)` }).from(comprasCotacoes).where(eq(comprasCotacoes.companyId, sc.companyId));
+                const seq = (parseInt(String(count[0]?.c ?? 0)) + 1).toString().padStart(4, "0");
+                const numeroCotacaoTx = `COT-${new Date().getFullYear()}-${seq}`;
 
-              if (scItens.length > 0) {
-                await db.insert(comprasCotacoesItens).values(
-                  scItens.map(it => ({
-                    cotacaoId: cot.id,
-                    solicitacaoItemId: it.id,
-                    descricao: normalizarTexto(it.descricao),
-                    unidade: it.unidade ?? "un",
-                    quantidade: String(n(it.quantidade)),
-                    precoUnitario: "0",
-                    descontoPct: "0",
-                    total: "0",
-                    semVerba: it.semVerba ?? false,
-                    motivoSemVerba: it.motivoSemVerba ?? null,
-                  }))
-                );
-              }
+                const [cotRow] = await tx.insert(comprasCotacoes).values({
+                  companyId: sc.companyId,
+                  numeroCotacao: numeroCotacaoTx,
+                  descricao: sc.titulo || sc.departamento || "Cotação automática",
+                  prioridade: sc.prioridade ?? "normal",
+                  obraId: sc.obraId ?? null,
+                  solicitacaoId: sc.id,
+                  // Rev. 3028 — a cotação automática nasce com o MESMO tipo da SC
+                  // (antes caía no default "material" → legenda divergente quando a
+                  // SC era servico/pacote/equipamento). Junto com a propagação no
+                  // editarSolicitacao, garante SC×COT sempre consistentes.
+                  tipo: sc.tipo ?? "material",
+                  total: "0",
+                  status: "pendente",
+                  criadoPorId: input.aprovadorId ?? null,
+                  criadoPorNome: input.aprovadorNome ?? null,
+                } as any).returning();
 
-              await db.update(comprasSolicitacoes).set({ status: "cotacao", atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, id));
-              cotacaoCriada = { id: cot.id, numeroCotacao };
+                if (scItens.length > 0) {
+                  await tx.insert(comprasCotacoesItens).values(
+                    scItens.map(it => ({
+                      cotacaoId: cotRow.id,
+                      solicitacaoItemId: it.id,
+                      descricao: normalizarTexto(it.descricao),
+                      unidade: it.unidade ?? "un",
+                      quantidade: String(n(it.quantidade)),
+                      precoUnitario: "0",
+                      descontoPct: "0",
+                      total: "0",
+                      semVerba: it.semVerba ?? false,
+                      motivoSemVerba: it.motivoSemVerba ?? null,
+                    }))
+                  );
+                }
+
+                await tx.update(comprasSolicitacoes).set({ status: "cotacao", atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, id));
+                return cotRow;
+              });
+              cotacaoCriada = { id: cot.id, numeroCotacao: cot.numeroCotacao };
             }
           }
 

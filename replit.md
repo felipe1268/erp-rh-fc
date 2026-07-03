@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4001** — **COMPRAS / COTAÇÕES: SOLICITAÇÕES DE OBRAS DIFERENTES CAINDO COM O MESMO NÚMERO DE COTAÇÃO.** Usuário reportou (com print) várias cotações de obras/SCs distintas exibindo o mesmo número (ex.: 4x "COT-0406-2026"). Causa: 4 dos 7 pontos que geram `numeroCotacao` em `compras.ts` (auto-cotação em `criarSolicitacao`, `aprovarSolicitacao`, `criarCotacao` principal, loop de `aprovarSolicitacoesLote`) calculavam o próximo número via `COUNT(*)+1` FORA de lock/transação — clássica race condition, mesma classe de bug já corrigida para OC/OS (Rev. 1985) e contrato de terceiro (Rev. 1986). Fix: os 4 pontos agora rodam a leitura do COUNT + INSERT da cotação dentro de `db.transaction` com `pg_advisory_xact_lock(companyId, 1001)` — mesmo lock já usado pelos outros 3 pontos (`dividirCotacao`, `cotarItensRestantes`). CORREÇÃO DE DADOS: 32 grupos duplicados (41 cotações) no Neon foram renumerados (mantendo o ID mais antigo de cada grupo com o número original). ZERO DELETE de linhas · ZERO ALTER de schema.
+
 - **Rev. 4000** — **BANCO DE HORAS: DÉBITOS AUTOMÁTICOS DE ATRASO/FALTA E DSR (GERADOS PELA FOLHA) GRAVAVAM `minutos` NEGATIVO, INVERTENDO O SALDO MENSAL NA ABA "SALDOS".** Achado em revisão de código: `debito_atraso_falta`/`debito_dsr` (Rev. 3977/3983) gravavam `minutos` negativo em `banco_horas_lancamentos`, mas toda leitura agregada (Rev. 3996 `getSaldoBancoMensal`, totais da aba Extrato) assume `minutos` sempre positivo com sinal derivado do `tipo` — dupla-negação inflava o saldo mensal (débito virava crédito na soma) e duplicava o sinal visual no card "Débito Atraso/Falta". O saldo TOTAL do funcionário (`banco_horas_saldo`) nunca esteve errado, só a coluna de detalhe. Fix: INSERTs em `payrollEngine.ts` agora gravam `minutos`/`minutosBase` positivos (igual ao débito manual); reversão idempotente usa `ABS()`; `getSaldoBancoMensal`/`getResumoMensalBanco` também usam `ABS()` como defesa extra; as 93 linhas históricas já gravadas negativas tiveram o sinal corrigido direto no Neon. ZERO DELETE de linhas · ZERO ALTER de schema.
 
-- **Rev. 3999** — **CONTAS A PAGAR: BUSCA POR FORNECEDOR/OC AGORA PROCURA NO ANO INTEIRO, NÃO SÓ NO MÊS ABERTO NA TELA.** Usuário buscou "eletrogu" e só viram 2 títulos, mesmo tendo várias OCs desse fornecedor (confirmado no Neon: dezenas de lançamentos, incluindo um com vencimento em outro mês e outro com `data_vencimento` NULL). Causa: a busca por texto rodava sobre `mesData` (lista já filtrada pelo mês selecionado no navegador de meses), não sobre `allContas` (ano inteiro, já carregado do backend) — um fornecedor com títulos em outros meses ou sem data de vencimento ficava invisível mesmo estando nos dados do cliente. Fix: com termo de busca ativo, `filtered` passa a usar `allContas`; título/mensagem de vazio avisam que a busca abrange o ano todo; busca também passou a checar `fornecedorNome`. Sem busca, comportamento por mês inalterado. ZERO DELETE · ZERO ALTER.
-
 ### 5 one-liners
+
+- **Rev. 3999** — **CONTAS A PAGAR: BUSCA POR FORNECEDOR/OC AGORA PROCURA NO ANO INTEIRO, NÃO SÓ NO MÊS ABERTO NA TELA.** Busca por texto rodava sobre `mesData` (mês selecionado), não `allContas` (ano inteiro); fornecedor com títulos em outros meses ou sem `data_vencimento` ficava invisível. Fix: com termo ativo, `filtered` usa `allContas` + checa `fornecedorNome`. ZERO DELETE · ZERO ALTER.
 
 - **Rev. 3998** — **CORRIGIDO 404 "ARQUIVO NÃO ENCONTRADO" EM ANEXOS COM ESPAÇO NO NOME QUANDO O DISCO EFÊMERO JÁ NÃO TINHA MAIS A CÓPIA LOCAL.** `decodeURIComponent` faltando no fallback do banco em `/uploads` (server/_core/index.ts) fazia a chave nunca bater com `file_key`. ZERO DELETE · ZERO ALTER.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3995** — **VERIFICAÇÃO CRUZADA (FOLHA): CORRIGIDA COLUNA "LÍQUIDO ERP" QUE MOSTRAVA VALOR ~100x MAIOR DO QUE O REAL.** Causa: `verificacaoCruzada` lia `payroll_payments.salarioLiquido` (formato US "1394.00") com `parseBRL()` (assume BR), virando 139400; fix detecta formato pela vírgula antes de escolher o parser. ZERO DELETE · ZERO ALTER.
 
-- **Rev. 3994** — **BENEFÍCIOS DE ALIMENTAÇÃO: CORRIGIDA A EDIÇÃO QUE REABRIA CONFIGURAÇÕES JÁ ENCERRADAS + TELA GANHA VISIBILIDADE/CONTROLE DE VIGÊNCIA.** UPDATE só altera `vigencia_fim` quando enviado explicitamente; tela ganha coluna "Vigência" (badges) e inputs de Início/Fim. ZERO DELETE · ZERO ALTER.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3993 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3994 e anteriores.
 
 ## User preferences
 
