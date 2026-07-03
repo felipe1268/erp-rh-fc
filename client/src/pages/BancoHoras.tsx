@@ -21,7 +21,7 @@ import PeriodSelectorCard from "@/components/PeriodSelectorCard";
 function minsToHHMM(mins: number): string {
   const h = Math.floor(Math.abs(mins) / 60);
   const m = String(Math.abs(mins) % 60).padStart(2, "0");
-  return `${mins < 0 ? "-" : ""}${h}h${m}`;
+  return `${mins < 0 ? "-" : ""}${h}:${m}`;
 }
 
 function minsToHHMMSigned(mins: number): string {
@@ -928,7 +928,7 @@ export default function BancoHoras() {
                                     {l.tipo === "credito" ? minsToHHMM(base) : "—"}
                                   </td>
                                   <td className="text-right py-2 px-3 text-muted-foreground">
-                                    {l.tipo === "credito" ? (acrescimo > 0 ? `+${minsToHHMM(acrescimo)}` : "0h00") : "—"}
+                                    {l.tipo === "credito" ? (acrescimo > 0 ? `+${minsToHHMM(acrescimo)}` : "0:00") : "—"}
                                   </td>
                                   <td className="text-right py-2 px-3 font-bold">
                                     <span className={totalColorClass}>
