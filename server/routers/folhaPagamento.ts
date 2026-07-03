@@ -1434,7 +1434,14 @@ export const folhaPagamentoRouter = router({
       `)) as any).rows || [] : [];
       const liquidoErpMap = new Map<number, number>();
       for (const p of pagamentosErp as any[]) {
-        liquidoErpMap.set(Number(p.employeeId), parseBRL(p.salarioLiquido));
+        // Rev. 3995 — payroll_payments.salarioLiquido é gravado via formatMoney()
+        // (toFixed(2), formato US "1394.00", SEM separador de milhar), diferente dos
+        // campos de folhaItens usados no resto deste arquivo (formato BR "1.394,00").
+        // parseBRL() genérico assumia sempre BR e removia o ponto decimal, inflando o
+        // valor em ~100x (ex.: "1394.00" virava 139400). Detecta o formato pela vírgula.
+        const raw = String(p.salarioLiquido ?? "").trim();
+        const liquidoErp = raw.includes(",") ? parseBRL(raw) : (parseFloat(raw) || 0);
+        liquidoErpMap.set(Number(p.employeeId), liquidoErp);
       }
 
       // Build verification results

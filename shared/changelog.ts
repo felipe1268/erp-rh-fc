@@ -1,4 +1,32 @@
 /**
+ * Rev. 3995 — **VERIFICAÇÃO CRUZADA (FOLHA): CORRIGIDA COLUNA "LÍQUIDO ERP" QUE MOSTRAVA VALOR
+ * ~100x MAIOR DO QUE O REAL, GERANDO ALERTA DE DIVERGÊNCIA FALSO PARA QUASE TODOS OS FUNCIONÁRIOS.**
+ *
+ * PEDIDO: usuário reportou no relatório "Verificação Cruzada" (Folha × Ponto × Cadastro) que a
+ * coluna "Líquido ERP" mostrava valores absurdos (ex.: R$ 139.400,00, R$ 117.400,00) muito maiores
+ * que o "Líquido Folha" correspondente (R$ 1.613,00, R$ 1.305,00), disparando alerta de "Líquido
+ * divergente" em praticamente 100/109 colaboradores do período.
+ *
+ * INVESTIGAÇÃO: `verificacaoCruzada` (`server/routers/folhaPagamento.ts`) lê o valor "ERP" de
+ * `payroll_payments.salarioLiquido`, que é gravado pelo motor de folha (`payrollEngine.ts`) via
+ * `formatMoney()` = `val.toFixed(2)` — formato US puro, ex. `"1394.00"` (SEM separador de milhar).
+ * A função local `parseBRL()` deste arquivo, porém, é usada em todo o resto do arquivo para ler
+ * campos de `folhaItens` que são gravados em formato BR (`"1.394,00"`) e por isso SEMPRE remove
+ * pontos antes de trocar vírgula por ponto decimal. Aplicada a um valor já em formato US, ela
+ * removia o ponto decimal legítimo: `"1394.00"` → `"139400"` → `parseFloat` → **139400**, inflando
+ * o valor em ~100x e fazendo quase todo mundo bater "divergente" mesmo quando os valores batiam.
+ *
+ * SOLUÇÃO: no ponto de leitura de `payroll_payments.salarioLiquido` (linha ~1439), detecta o
+ * formato pela presença de vírgula antes de decidir o parser — sem vírgula (formato US do
+ * `formatMoney`) usa `parseFloat` direto; com vírgula (formato BR) usa `parseBRL()` normal. Os
+ * demais ~20 usos de `parseBRL()` no arquivo (todos sobre campos de `folhaItens`, sempre BR) não
+ * foram alterados.
+ *
+ * ARQUIVOS: `server/routers/folhaPagamento.ts` (`verificacaoCruzada`), `shared/version.ts`→3995.
+ *
+ * ZERO DELETE · ZERO ALTER (nenhuma migração; só correção de parsing de leitura).
+ */
+/**
  * Rev. 3994 — **BENEFÍCIOS DE ALIMENTAÇÃO: CORRIGIDA A EDIÇÃO QUE REABRIA CONFIGURAÇÕES JÁ
  * ENCERRADAS + TELA GANHA VISIBILIDADE/CONTROLE DE VIGÊNCIA.**
  *
