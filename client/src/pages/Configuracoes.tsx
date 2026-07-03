@@ -1069,8 +1069,12 @@ function SindicalDissidioTab({ companyId, isMaster }: { companyId: number; isMas
   });
 
   const recalcularMutation = trpc.sindical.recalcularDiferencas.useMutation({
-    onSuccess: (data) => {
-      toast.success(`Diferenças recalculadas: ${data.atualizados} funcionários — ${data.mesesRetro.join(', ')} — Total R$ ${data.totalDiferencas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
+    onSuccess: (data: any) => {
+      if (data.atualizados === 0) {
+        toast.success('Nenhuma diferença pendente — todos os funcionários já estão calculados.');
+      } else {
+        toast.success(`Diferenças recalculadas: ${data.atualizados} funcionário(s) — ${(data.mesesRetro || []).join(', ')} — Total R$ ${data.totalDiferencas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
+      }
       listaQuery.refetch();
     },
     onError: (e) => toast.error(e.message),
@@ -1262,7 +1266,7 @@ function SindicalDissidioTab({ companyId, isMaster }: { companyId: number; isMas
                           className="gap-1.5 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
                           onClick={() => recalcularMutation.mutate({ companyId, anoReferencia: d.anoReferencia })}
                           disabled={recalcularMutation.isPending}
-                          title="Recalcula diferenças retroativas para dissídios aplicados antes da Rev. 3278 (valores zero)"
+                          title="Recalcula as diferenças retroativas de quem ainda está com valor zero (não mexe em quem já foi calculado)"
                         >
                           {recalcularMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                           Recalcular Difs.

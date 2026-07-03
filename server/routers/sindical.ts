@@ -571,15 +571,30 @@ export const sindicalRouter = router({
       }
     }
 
-    const funcs = await db.select().from(dissidioFuncionarios)
+    const funcsTodos = await db.select().from(dissidioFuncionarios)
       .where(and(
         eq(dissidioFuncionarios.dissidioId, dissidio.id),
         companyFilter(dissidioFuncionarios.companyId, input),
       ));
-    if (funcs.length === 0) throw new TRPCError({ code: 'NOT_FOUND', message: 'Nenhum registro de funcionário para este dissídio' });
+    if (funcsTodos.length === 0) throw new TRPCError({ code: 'NOT_FOUND', message: 'Nenhum registro de funcionário para este dissídio' });
 
-    const jaTemDiffs = funcs.some(f => parseFloat(f.valorRetroativo || '0') > 0);
-    if (jaTemDiffs) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Diferenças retroativas já foram calculadas para este dissídio' });
+    // Rev. 3991 — o guard antigo bloqueava o recálculo do DISSÍDIO INTEIRO se
+    // QUALQUER funcionário já tivesse valorRetroativo > 0 — como isso é o caso
+    // normal (a maioria já vem calculada certa na aplicação), o botão "Calcular/
+    // Recalcular Diferenças Retroativas" ficava permanentemente sem efeito para
+    // quem realmente precisava (os que zeraram por vigência==mês de aplicação,
+    // Rev. 3969). Fix: pular POR FUNCIONÁRIO (só recalcula quem está com
+    // valorRetroativo<=0 OU sem diferencaTipo), preservando quem já foi
+    // calculado/conferido (inclusive rescisão complementar, que este endpoint
+    // não sabe recompor). Não mexe em `rescisao_complementar` mesmo zerado —
+    // aquele fluxo tem sua própria lógica (linha ~387) e usa `baseReferencia`.
+    const funcs = funcsTodos.filter(f =>
+      f.diferencaTipo !== 'rescisao_complementar' &&
+      !(parseFloat(f.valorRetroativo || '0') > 0)
+    );
+    if (funcs.length === 0) {
+      return { atualizados: 0, totalFuncionarios: funcsTodos.length, mesesRetro: [], mesPagamento: null, totalDiferencas: 0, jaCompleto: true };
+    }
 
     const percentual = parseFloat(dissidio.percentualReajuste);
     const mesPagamento = dataAplicacaoYM;

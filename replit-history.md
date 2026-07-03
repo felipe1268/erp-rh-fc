@@ -1,3 +1,5 @@
+- **Rev. 3984** — **FOLHA: PJ NUNCA NA FOLHA + ALERTA "PAGAR OU NÃO?" P/ AVISO PRÉVIO ENCERRANDO NO MÊS.** Vazamento de PJ em `custosPorObra` corrigido (filtra só CLT); nova tabela `payroll_folha_decisoes` p/ decisão do RH sobre aviso prévio encerrando no mês. ZERO DELETE · ZERO ALTER.
+
 - **Rev. 3983** — **BANCO DE HORAS: DSR PERDIDO TAMBÉM VIRA DÉBITO DE HORAS (SEPARADO DE ATRASO/FALTA).** Novo lançamento `tipo='debito_dsr'` (440min fixo por DSR perdido), discriminado do débito de atraso/falta. ZERO DELETE · ZERO ALTER.
 
 - **Rev. 3982** — **DISSÍDIO: RELATÓRIO DE DIFERENÇAS RETROATIVAS — ORDEM ALFABÉTICA.** Usuário confirmou que o layout de impressão (Rev. 3980) ficou bom, mas a lista não estava em ordem alfabética — vinha ordenada por `valorRetroativo` decrescente (ordem do backend). Fix: `[...rows].sort((a,b)=>a.employeeName.localeCompare(b.employeeName,'pt-BR'))` aplicado tanto na tabela on-screen do Dialog quanto em `handlePrintDissidioRel` (`FolhaPagamento.tsx`), mantendo tela e impressão consistentes. Sem mudança de backend. ZERO DELETE · ZERO ALTER.

@@ -1,4 +1,33 @@
 /**
+ * Rev. 3991 — **DISSÍDIO: BOTÃO "CALCULAR/RECALCULAR DIFERENÇAS RETROATIVAS" FICAVA
+ * PERMANENTEMENTE SEM EFEITO — GUARD BLOQUEAVA O DISSÍDIO INTEIRO EM VEZ DE SÓ QUEM JÁ ESTAVA OK.**
+ *
+ * PEDIDO: usuário reportou que o botão "Calcular Diferenças Retroativas" (Folha) / "Recalcular
+ * Difs." (Configurações › Sindical) não recalculava os valores.
+ *
+ * CAUSA-RAIZ: `sindical.recalcularDiferencas` tinha um guard `jaTemDiffs` que verificava se
+ * QUALQUER funcionário do dissídio já tinha `valorRetroativo > 0` e, se sim, lançava erro e
+ * abortava para TODOS os funcionários daquele dissídio — inclusive os que realmente precisavam
+ * (valor zerado por vigência==mês de aplicação, Rev. 3969). Como é normal a maioria dos
+ * funcionários já vir calculada corretamente na aplicação do dissídio, esse guard "dissídio
+ * inteiro" praticamente sempre disparava, deixando o botão inútil na prática (clicar não fazia
+ * nada de efetivo, apenas retornava erro "já foram calculadas").
+ *
+ * FIX: o guard passou a ser POR FUNCIONÁRIO — filtra e recalcula só quem está com
+ * `valorRetroativo <= 0` e `diferencaTipo !== 'rescisao_complementar'` (esse tipo tem lógica e
+ * campos próprios — `baseReferencia` — que este endpoint não reconstrói; não deve ser tocado
+ * aqui), preservando intactos os que já foram calculados/conferidos. Se não sobrar ninguém para
+ * recalcular, retorna `{ atualizados: 0, jaCompleto: true }` em vez de erro — frontend
+ * (`FolhaPagamento.tsx`, `Configuracoes.tsx`) trata esse caso com toast informativo em vez de
+ * erro vermelho.
+ *
+ * ARQUIVOS: `server/routers/sindical.ts` (`recalcularDiferencas`), `client/src/pages/
+ * FolhaPagamento.tsx` e `client/src/pages/Configuracoes.tsx` (mensagens de sucesso/tooltip),
+ * `shared/version.ts`→3991.
+ *
+ * ZERO DELETE · ZERO ALTER.
+ */
+/**
  * Rev. 3990 — **DISSÍDIO: CORRIGE INSS/IRRF DA DIFERENÇA SALARIAL RETROATIVA — DE "PROGRESSIVO
  * DO ZERO SOBRE O VALOR ISOLADO" PARA "ALÍQUOTA MARGINAL" (BUG REPORTADO POR CONFERÊNCIA MANUAL).**
  *

@@ -693,7 +693,11 @@ export default function FolhaPagamento() {
   // tenham sido geradas na aplicação por vigência == mês de aplicação).
   const recalcularDifsMut = trpc.sindical.recalcularDiferencas.useMutation({
     onSuccess: (data: any) => {
-      toast.success(`Diferenças recalculadas: ${data?.atualizados ?? 0} funcionário(s).`);
+      if ((data?.atualizados ?? 0) === 0) {
+        toast.success('Nenhuma diferença pendente — todos os funcionários já estão calculados.');
+      } else {
+        toast.success(`Diferenças recalculadas: ${data.atualizados} funcionário(s).`);
+      }
       dissidioRelQuery.refetch();
     },
     onError: (e: any) => toast.error(e.message || 'Erro ao recalcular diferenças'),
