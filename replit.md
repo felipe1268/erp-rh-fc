@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4016** — **COMPRAS: LOTE FINAL DOS ~20 AJUSTES DO DOCX (Itens 7, 9, 13, 14, 17, 19, 20, 21a, 22) + CORREÇÃO DE BUG DE AUTORIZAÇÃO NA "TRANSFERÊNCIA EM LOTE" DO ALMOXARIFADO (Item 5, reaberto).** Itens do docx implementados em `Solicitacoes.tsx` (7,19,20), `Ordens.tsx` (13,14,21a) e `Cotacoes.tsx` (17; e 22 = seleção múltipla de fornecedores via checkbox no popover "Adicionar Fornecedor", com botão "Adicionar N selecionado(s)"). Item 5 tinha sido fechado numa revisão anterior como "sem alteração de código", mas usuário reportou que usuário comum não consegue transferir material entre obras (só admin funciona) — causa-raiz: `createTransferenciaOrigemDestino` e `createTransferenciaLote` (`server/routers/warehouse.ts`) usavam o guard genérico `userCanAccessObra` (só `allowed_obra_ids`/grupo) em vez do `userCanAccessObraAlmox` (que TAMBÉM libera por alocação operacional via `obra_funcionarios`, Rev. 2542) — único ponto do módulo de almoxarifado com esse guard mais restrito, todas as outras ~8 mutações já usavam o correto. Fix: trocado para `userCanAccessObraAlmox` nos 3 pontos (transferência individual + destino/origem do loop de transferência em lote). ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4015** — **COMPRAS: ERRO AO SELECIONAR MATERIAL DO ESTOQUE NA COTAÇÃO — MATCH RESTRITO A "CENTRAL + OBRA DE DESTINO" IGNORAVA SALDO EM OUTRA OBRA (Item 3 dos ~20 ajustes do docx).** Reprodução: SC-2026-0163, item só tinha saldo na obra 90005 mas a cotação era da obra 90004 — `adicionarEstoqueAoMapa` e o pré-check de `criarOrdemDeCotacao` filtravam o almoxarifado a `obraId IS NULL OR = destino`, mesmo o modal "Selecionar do Estoque" (Rev. 2470) já listando a empresa inteira; user escolhia o item explicitamente mas o auto-match não achava de novo → gravava quantidade=0/preço=0, e a OC travava com falso "sem correspondência"/"saldo insuficiente". Fix: `adicionarEstoqueAoMapa` remove o filtro de obra quando há `almoxItemIds` (seleção explícita — whitelist já é confiável); `criarOrdemDeCotacao` passa a buscar company-wide quando `obraOrigemId` não foi escolhido explicitamente (antes só central+destino); `obraOrigemId` explícito continua restringindo. Validado via HTTP real (SC/cotação/item descartáveis, cenário reproduzido, match correto obtido, tudo revertido); dado real de SC-2026-0163 também corrigido (quantidade 0→1, preço 0→25.40). ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4014** — **COMPRAS: PERMITIR QUANTIDADE PARCIAL NA "DIVIDIR COTAÇÃO" (Item 2 dos ~20 ajustes do docx).** `dividirCotacao` só movia o item INTEIRO para a nova cotação; agora aceita `itens: {id, quantidade}[]` (quantidade legado `itemIds` continua funcionando = 100%). Itens com quantidade movida < total viram `partialMoveItems`: cria item NOVO na cotação destino com a fração, reduz o item original, e divide PROPORCIONALMENTE cada resposta de fornecedor já lançada (senão o orçamento por fornecedor ficaria incoerente entre as 2 cotações). Front-end: `dividirSel` virou `Map<itemId, quantidade>` (era `Set`), com input numérico + badge "parcial" no modal "Dividir Cotação" de `Cotacoes.tsx`. Validado via HTTP real (usuário admin_master temporário) na cotação 616: split 10/33un + 1 item inteiro, conferido item/respostas/fornecedores proporcionais nas 2 pontas, revertido sem rastro. ZERO DELETE · ZERO ALTER destrutivo (reusa schema existente).
-
 ### 5 one-liners
+
+- **Rev. 4014** — **COMPRAS: PERMITIR QUANTIDADE PARCIAL NA "DIVIDIR COTAÇÃO" (Item 2 dos ~20 ajustes do docx).** `dividirCotacao` só movia o item INTEIRO para a nova cotação; agora aceita `itens: {id, quantidade}[]` (quantidade legado `itemIds` continua funcionando = 100%), com split proporcional de respostas de fornecedor já lançadas. Validado via HTTP real. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4013** — **COMPRAS: REGIME DE CUSTO/RISCO (BDI) NA EQUALIZAÇÃO DE COTAÇÃO PARA OBRAS "FORNECIMENTO DE MDO" (Item 1 dos ~20 ajustes do docx).** Seletor de 3 opções por item (cliente paga / empresa sem risco / empresa com risco) via novo `regime_custo` em `compras_cotacoes`/`compras_ordens`; sem-risco/cliente pula travamento por estouro. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4010** — **ALMOXARIFADO: PADRONIZAÇÃO AUTOMÁTICA DO NOME DE MATERIAL (1ª LETRA MAIÚSCULA + RESTANTE MINÚSCULO).** Função SQL única `padronizar_nome_material(text)` reusada em todos os pontos de escrita (criação manual/import/OC/sync de equipamento). Backfill nos 2.638 itens existentes — 100% padronizados. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4008** — **ALMOXARIFADO: UNIFICAÇÃO DOS 985 ITENS COM NOME IDÊNTICO (165 GRUPOS), MAIS RENUMERAÇÃO SEQUENCIAL.** Usuário, ao ver a lista de materiais: "se tem o mesmo nome, pode unificar pra não ter dúvidas". Os 165 grupos (nome idêntico após normalizar só espaços) tinham 100% `tipo_controle='estoque'` — critério que se revelou insuficiente (ver Rev. 4009: não excluiu itens vinculados a equipamento). Backup completo antes da operação (posteriormente limpo do ambiente); migração em 1 transação: soma de `quantidade_atual` no item mais antigo de cada grupo (canônico), histórico repontado em 7 tabelas antes de apagar os 985 duplicados. Resultado imediato: 2.823 → 1.838 itens — corrigido na Rev. 4009 após descoberta do efeito colateral.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4009 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4008 e anteriores.
 
 ## User preferences
 

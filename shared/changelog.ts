@@ -1,4 +1,47 @@
 /**
+ * Rev. 4016 — **COMPRAS: LOTE FINAL DOS ~20 AJUSTES DO DOCX (Itens 7, 9, 13, 14, 17, 19, 20, 21a,
+ * 22) + CORREÇÃO DE BUG DE AUTORIZAÇÃO NA "TRANSFERÊNCIA EM LOTE" DO ALMOXARIFADO (Item 5,
+ * reaberto).**
+ *
+ * ITENS DO DOCX (Solicitações/Ordens/Cotações — `client/src/pages/compras/*.tsx`):
+ * - Item 7, 19, 20 (`Solicitacoes.tsx`): ajustes de fluxo/validação na tela de Solicitação de
+ *   Compra apontados na auditoria.
+ * - Item 13, 14, 21a (`Ordens.tsx`): ajustes na tela de Ordem de Compra.
+ * - Item 17, 22 (`Cotacoes.tsx`): Item 17 é ajuste de fluxo na tela de Cotação; Item 22 adiciona
+ *   seleção múltipla de fornecedores via checkbox no popover "Adicionar Fornecedor" do Mapa de
+ *   Cotação (`mapaFornMultiIds` + botão "Adicionar N selecionado(s)", loop de
+ *   `adicionarForn.mutateAsync` por fornecedor marcado — evita repetir o fluxo de 1-em-1).
+ *
+ * ITEM 5 REABERTO — BUG REAL DE AUTORIZAÇÃO NA TRANSFERÊNCIA EM LOTE (`server/routers/
+ * warehouse.ts`): o item já tinha sido marcado como "sem alteração de código, só treinamento" em
+ * revisão anterior, mas o usuário reportou que usuários comuns (role "user") não conseguem
+ * transferir material entre obras, só admin/admin_master conseguem.
+ *
+ * Causa-raiz: `createTransferenciaOrigemDestino` (transferência individual) e
+ * `createTransferenciaLote` (em lote) usavam o guard genérico `userCanAccessObra` (que só olha
+ * `allowed_obra_ids`/grupo "acesso a todas as obras" do usuário) tanto no check da obra ORIGEM
+ * quanto da obra DESTINO. TODAS as outras mutações de almoxarifado do arquivo usam, em vez disso,
+ * `userCanAccessObraAlmox` — que ADICIONALMENTE concede acesso quando o usuário está alocado
+ * operacionalmente na obra via `obra_funcionarios` (Rev. 2542). Um usuário comum alocado em uma
+ * obra só por `obra_funcionarios` (sem estar no `allowed_obra_ids` nem em grupo "todas as obras")
+ * passava no guard de toda tela de almoxarifado, MENOS nessas duas mutações de transferência —
+ * único ponto do módulo com esse guard mais restrito, por isso o sintoma parecia "só admin
+ * funciona".
+ *
+ * Correção: trocado `userCanAccessObra` por `userCanAccessObraAlmox(ctx.user.id, ctx.user.role,
+ * ctx.user.email, obraId)` nos 3 pontos afetados — check único de
+ * `createTransferenciaOrigemDestino`, e os 2 checks (destino + origem por item no loop) de
+ * `createTransferenciaLote`. Sem mudança de schema; admin/admin_master continuam irrestritos
+ * (guard retorna acesso total pra esses papéis, como antes).
+ *
+ * Validação: typecheck limpo em `warehouse.ts`; padrão idêntico ao já usado nas demais ~8
+ * mutações de almoxarifado do mesmo arquivo (transferência agora é consistente com o resto do
+ * módulo).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4015 — **COMPRAS: ERRO AO SELECIONAR MATERIAL DO ESTOQUE NA COTAÇÃO — MATCH RESTRITO A
  * "CENTRAL + OBRA DE DESTINO" IGNORAVA SALDO EM OUTRA OBRA (Item 3 dos ~20 ajustes do docx).**
  *

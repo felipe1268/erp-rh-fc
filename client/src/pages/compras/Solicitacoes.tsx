@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { normalizarTexto, stripAccents } from "@shared/textNormalization";
-import { formatNumeroScDisplay } from "@shared/numeroSc";
+import { formatNumeroScDisplay, formatNumeroScShort } from "@shared/numeroSc";
 import { formatNumeroCotacaoDisplay } from "@shared/numeroCotacao";
 import { formatNumeroOcDisplay } from "@shared/numeroOc";
 import {
@@ -1109,7 +1109,7 @@ export default function Solicitacoes() {
   const [filtroDataDe, setFiltroDataDe] = useState("");
   const [filtroDataAte, setFiltroDataAte] = useState("");
   // Rev. 2089 — Ordenação clicável por coluna. Default: criadoEm DESC (mais recentes primeiro).
-  type SortKey = "criadoEm" | "tipo" | "prioridade" | "status" | "numeroSc" | "titulo" | "obra" | "dataNecessidade";
+  type SortKey = "criadoEm" | "tipo" | "prioridade" | "status" | "numeroSc" | "titulo" | "obra" | "solicitante" | "dataNecessidade";
   const [sortKey, setSortKey] = useState<SortKey>("criadoEm");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   function toggleSort(k: SortKey) {
@@ -2336,6 +2336,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
         }
         case "status": return String(r.status ?? "").toLowerCase();
         case "obra": return (nomeObra(r.obraId) ?? "").toLowerCase();
+        case "solicitante": return String(r.criadoPorNome ?? "").toLowerCase();
         default: return 0;
       }
     };
@@ -2639,6 +2640,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
             numeroSc: "Número",
             titulo: "Título",
             obra: "Obra",
+            solicitante: "Solicitante",
             dataNecessidade: "Necessidade",
           } as Record<SortKey, string>)[sortKey]}
           {sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
@@ -2681,6 +2683,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                 { k: "numeroSc", label: "Número" },
                 { k: "titulo", label: "Título / Setor" },
                 { k: "obra", label: "Obra" },
+                { k: "solicitante", label: "Solicitante" },
                 { k: "dataNecessidade", label: "Necessidade" },
               ] as { k: SortKey; label: string }[]).map(col => {
                 const active = sortKey === col.k;
@@ -2705,9 +2708,9 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
           </TableHeader>
           <TableBody>
             {q.isLoading ? (
-              <TableRow><TableCell colSpan={10} className="text-center py-10 text-gray-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={11} className="text-center py-10 text-gray-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></TableCell></TableRow>
             ) : listaFiltradaObra.length === 0 ? (
-              <TableRow><TableCell colSpan={10} className="text-center py-10 text-gray-400">Nenhuma solicitação encontrada</TableCell></TableRow>
+              <TableRow><TableCell colSpan={11} className="text-center py-10 text-gray-400">Nenhuma solicitação encontrada</TableCell></TableRow>
             ) : listaFiltradaObra.map((sc: any) => {
               const itC = sc._itens ?? { total: 0, atendidos: 0 };
               const pct = itC.total > 0 ? Math.round((itC.atendidos / itC.total) * 100) : 0;
@@ -2763,7 +2766,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                           <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-600" />
                         </span>
                       )}
-                      {formatNumeroScDisplay(sc.numeroSc)}
+                      {formatNumeroScShort(sc.numeroSc)}
                       <span className={`ml-1 px-1.5 py-0.5 text-[9px] font-semibold rounded ${(sc as any).tipo === "servico" ? "bg-purple-100 text-purple-700" : (sc as any).tipo === "pacote" ? "bg-indigo-100 text-indigo-700" : (sc as any).tipo === "equipamento" ? "bg-cyan-100 text-cyan-700" : (sc as any).tipo === "pecas_veiculo" || (sc as any).tipo === "manutencao" ? "bg-teal-100 text-teal-700" : "bg-blue-100 text-blue-700"}`}>
                         {(sc as any).tipo === "servico" ? "MDO" : (sc as any).tipo === "pacote" ? "MAT+MDO" : (sc as any).tipo === "equipamento" ? ((sc as any).isLocacao ? "EQUIP·LOC" : "EQUIP") : (sc as any).tipo === "pecas_veiculo" || (sc as any).tipo === "manutencao" ? "VEÍC" : "MAT"}
                       </span>
@@ -2772,12 +2775,12 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                       )}
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <div className="text-gray-900 text-sm font-medium flex items-center gap-1.5">
-                      {sc.titulo || "—"}
-                      {sc.imagemReferenciaUrl && <ImageIcon className="h-3.5 w-3.5 text-blue-400 shrink-0" title="Possui imagem de referência" />}
+                  <TableCell className="max-w-xs">
+                    <div className="text-gray-900 text-sm font-medium flex items-start gap-1.5 break-words whitespace-normal">
+                      <span className="break-words">{sc.titulo || "—"}</span>
+                      {sc.imagemReferenciaUrl && <ImageIcon className="h-3.5 w-3.5 text-blue-400 shrink-0 mt-0.5" title="Possui imagem de referência" />}
                     </div>
-                    {sc.departamento && <div className="text-gray-400 text-xs">{sc.departamento}</div>}
+                    {sc.departamento && <div className="text-gray-400 text-xs break-words whitespace-normal">{sc.departamento}</div>}
                     {sc.prioridade === "urgente" ? (
                       <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase text-red-700 bg-red-100 border border-red-300 rounded px-1.5 py-0.5 mt-0.5">
                         <AlertTriangle className="h-3 w-3" /> URGENTE
@@ -2793,6 +2796,9 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                         {nomeObra(sc.obraId) ?? `#${sc.obraId}`}
                       </div>
                     ) : <span className="text-gray-300 text-xs">—</span>}
+                  </TableCell>
+                  <TableCell className="text-gray-600 text-xs break-words whitespace-normal max-w-[140px]">
+                    {sc.criadoPorNome || <span className="text-gray-300">—</span>}
                   </TableCell>
                   <TableCell className="text-gray-500 text-xs">{sc.dataNecessidade ? new Date(sc.dataNecessidade + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</TableCell>
                   <TableCell>
@@ -5198,6 +5204,12 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                     <p className="text-gray-900 mt-0.5 font-medium">{f.value}</p>
                   </div>
                 ))}
+                {detalhe.observacoes && (
+                  <div className="col-span-3">
+                    <span className="text-gray-400">Observações</span>
+                    <p className="text-gray-900 mt-0.5 font-medium whitespace-pre-wrap break-words">{detalhe.observacoes}</p>
+                  </div>
+                )}
               </div>
 
               {/* Anexos */}
@@ -5648,7 +5660,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                           </div>
                           <div className="flex items-center gap-2">
                             <span className={`px-2 py-0.5 text-[10px] font-semibold rounded border ${stCfg.cls}`}>{stCfg.label}</span>
-                            <Button size="sm" variant="outline" onClick={() => { setShowDetalhe(null); setAbaScDetalhe("detalhes"); navigate(`/compras/cotacoes?destaque=${scCotacaoId}`); }}
+                            <Button size="sm" variant="outline" onClick={() => { window.open(`/compras/cotacoes?destaque=${scCotacaoId}`, "_blank"); }}
                               className="text-xs border-blue-200 text-blue-600 hover:bg-blue-50 gap-1">
                               <FileText className="h-3 w-3" /> Abrir Cotação Completa
                             </Button>
@@ -5780,7 +5792,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                           <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
                             <FileText className="h-4 w-4 text-blue-600" />
                             <span className="text-xs text-blue-700 font-medium">Contrato de Serviço vinculado ao módulo Terceiros</span>
-                            <Button size="sm" variant="outline" onClick={() => { setShowDetalhe(null); setAbaScDetalhe("detalhes"); navigate(`/terceiros/contratos/${(cot as any).contratoTerceiroId}`); }}
+                            <Button size="sm" variant="outline" onClick={() => { window.open(`/terceiros/contratos/${(cot as any).contratoTerceiroId}`, "_blank"); }}
                               className="ml-auto text-xs border-blue-200 text-blue-600 hover:bg-blue-50 gap-1">
                               <FileText className="h-3 w-3" /> Ver Contrato
                             </Button>
@@ -5821,7 +5833,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <span className={`px-2 py-0.5 text-[10px] font-semibold rounded border ${stCfg.cls}`}>{stCfg.label}</span>
-                                  <Button size="sm" variant="outline" onClick={() => { setShowDetalhe(null); setAbaScDetalhe("detalhes"); navigate(`/compras/ordens?destaque=${oc.id}`); }}
+                                  <Button size="sm" variant="outline" onClick={() => { window.open(`/compras/ordens?destaque=${oc.id}`, "_blank"); }}
                                     className="text-xs border-blue-200 text-blue-600 hover:bg-blue-50 gap-1">
                                     <ShoppingCart className="h-3 w-3" /> Abrir OC Completa
                                   </Button>

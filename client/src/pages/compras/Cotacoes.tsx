@@ -906,6 +906,10 @@ export default function Cotacoes() {
   const [filtroStatus, setFiltroStatus] = useState("todos");
   // Rev. 2298 — filtro por tipo (material/servico/pacote/equipamento)
   const [filtroTipo, setFiltroTipo] = useState<"todos" | "material" | "servico" | "pacote" | "equipamento">("todos");
+  // Rev. 4016 — Item 17: filtro dedicado por período de CRIAÇÃO da cotação
+  // (antes só existia filtro comum de período em dashboards, não na lista).
+  const [filtroDataInicio, setFiltroDataInicio] = useState("");
+  const [filtroDataFim, setFiltroDataFim] = useState("");
   // Rev. 2487 — Ordenação clicável por coluna na tabela de Cotações.
   type CotSortKey = "numeroCotacao" | "descricao" | "obra" | "fornecedor" | "total" | "validade" | "status";
   const [sortKey, setSortKey] = useState<CotSortKey>("numeroCotacao");
@@ -968,6 +972,10 @@ export default function Cotacoes() {
   const [mapaFornSelectId, setMapaFornSelectId] = useState("");
   const [mapaFornSearch, setMapaFornSearch] = useState("");
   const [mapaFornOpen, setMapaFornOpen] = useState(false);
+  // Rev. 4016 — Item 22: seleção múltipla de fornecedores via checkbox
+  // (antes só dava pra incluir 1 fornecedor real por vez na cotação).
+  const [mapaFornMultiIds, setMapaFornMultiIds] = useState<Set<number>>(new Set());
+  const [addingFornMulti, setAddingFornMulti] = useState(false);
   // Cadastro rápido de fornecedor sem sair da cotação (popup)
   const [showNovoForn, setShowNovoForn] = useState(false);
   const [novoForn, setNovoForn] = useState({ cnpj: "", razaoSocial: "", nomeFantasia: "", telefone: "", email: "", cidade: "", estado: "" });
@@ -1791,9 +1799,27 @@ export default function Cotacoes() {
   }, {});
   const countTodosTipo = baseStatusFiltered.length;
 
+  // Rev. 4016 — Item 17: filtro por período de criação (criadoEm).
+  function matchData(c: any) {
+    if (!filtroDataInicio && !filtroDataFim) return true;
+    const raw = c?.criadoEm;
+    if (!raw) return false;
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return false;
+    if (filtroDataInicio) {
+      const ini = new Date(`${filtroDataInicio}T00:00:00`);
+      if (d < ini) return false;
+    }
+    if (filtroDataFim) {
+      const fim = new Date(`${filtroDataFim}T23:59:59`);
+      if (d > fim) return false;
+    }
+    return true;
+  }
   const filtBase = listaSearched.filter(c =>
     matchStatus(c) &&
-    (filtroTipo === "todos" || tipoOf(c) === filtroTipo)
+    (filtroTipo === "todos" || tipoOf(c) === filtroTipo) &&
+    matchData(c)
   );
   // Rev. 2487 — Ordenação clicável por coluna.
   const fornecedoresList = fornQ.data ?? [];
@@ -4274,16 +4300,69 @@ export default function Cotacoes() {
                                 const nome = (f.nomeFantasia || f.razaoSocial || "").toLowerCase();
                                 return !mapaFornSearch || nome.includes(mapaFornSearch.toLowerCase());
                               })
-                              .map((f: any) => (
-                                <button key={f.id} onClick={() => { setMapaFornSelectId(String(f.id)); setMapaFornOpen(false); setMapaFornSearch(""); }}
-                                  className={`w-full text-left px-4 py-2 text-sm hover:bg-blue-50 hover:text-blue-700 transition-colors ${mapaFornSelectId === String(f.id) ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-800"}`}>
-                                  {f.nomeFantasia || f.razaoSocial}
-                                </button>
-                              ))}
+                              .map((f: any) => {
+                                const checked = mapaFornMultiIds.has(f.id);
+                                return (
+                                  <div key={f.id}
+                                    className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-blue-50 transition-colors ${mapaFornSelectId === String(f.id) ? "bg-blue-50" : ""}`}>
+                                    {/* Rev. 4016 — Item 22: checkbox p/ seleção múltipla (ação em lote via "Adicionar selecionados"). */}
+                                    <input
+                                      type="checkbox"
+                                      className="h-4 w-4 rounded border-gray-300 accent-blue-600 shrink-0"
+                                      checked={checked}
+                                      onClick={e => e.stopPropagation()}
+                                      onChange={e => {
+                                        setMapaFornMultiIds(prev => {
+                                          const n = new Set(prev);
+                                          e.target.checked ? n.add(f.id) : n.delete(f.id);
+                                          return n;
+                                        });
+                                      }}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => { setMapaFornSelectId(String(f.id)); setMapaFornOpen(false); setMapaFornSearch(""); }}
+                                      className={`flex-1 text-left ${mapaFornSelectId === String(f.id) ? "text-blue-700 font-medium" : "text-gray-800"}`}>
+                                      {f.nomeFantasia || f.razaoSocial}
+                                    </button>
+                                  </div>
+                                );
+                              })}
                             {fornDisponiveis.filter((f: any) => !mapaFornSearch || (f.nomeFantasia || f.razaoSocial || "").toLowerCase().includes(mapaFornSearch.toLowerCase())).length === 0 && (
                               <p className="px-4 py-3 text-sm text-gray-400 text-center">Nenhum fornecedor encontrado</p>
                             )}
                           </div>
+                          {mapaFornMultiIds.size > 0 && (
+                            <div className="p-2 border-t border-gray-100 flex items-center gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={addingFornMulti || !showDetalhe}
+                                onClick={async () => {
+                                  if (!showDetalhe) return;
+                                  setAddingFornMulti(true);
+                                  try {
+                                    const ids = Array.from(mapaFornMultiIds);
+                                    for (const fid of ids) {
+                                      await adicionarForn.mutateAsync({ cotacaoId: showDetalhe, fornecedorId: fid });
+                                    }
+                                    toast.success(`${ids.length} fornecedor(es) adicionado(s) à cotação`);
+                                    setMapaFornMultiIds(new Set());
+                                    setMapaFornOpen(false);
+                                  } catch (err: any) {
+                                    toast.error(`Falha ao adicionar fornecedores: ${err?.message || "erro"}`);
+                                  } finally {
+                                    setAddingFornMulti(false);
+                                  }
+                                }}
+                                className="flex-1 bg-blue-600 hover:bg-blue-500 text-white gap-2"
+                              >
+                                {addingFornMulti ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
+                                Adicionar {mapaFornMultiIds.size} selecionado(s)
+                              </Button>
+                              <Button type="button" size="sm" variant="ghost" className="text-gray-400" onClick={() => setMapaFornMultiIds(new Set())}>Limpar</Button>
+                            </div>
+                          )}
                           <div className="p-2 border-t border-gray-100">
                             <button
                               type="button"
@@ -7500,6 +7579,36 @@ export default function Cotacoes() {
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input placeholder="Buscar por número..." className="pl-9 bg-white border-gray-300 text-gray-900" value={busca} onChange={e => setBusca(e.target.value)} />
+        </div>
+        {/* Rev. 4016 — Item 17: filtro por período de criação da cotação. */}
+        <div className="flex items-center gap-1.5">
+          <Input
+            type="date"
+            className="w-[150px] bg-white border-gray-300 text-gray-900 text-sm"
+            value={filtroDataInicio}
+            onChange={e => setFiltroDataInicio(e.target.value)}
+            title="Criada a partir de"
+          />
+          <span className="text-gray-400 text-xs">até</span>
+          <Input
+            type="date"
+            className="w-[150px] bg-white border-gray-300 text-gray-900 text-sm"
+            value={filtroDataFim}
+            onChange={e => setFiltroDataFim(e.target.value)}
+            title="Criada até"
+          />
+          {(filtroDataInicio || filtroDataFim) && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-gray-400 hover:text-gray-700 h-8 px-2"
+              onClick={() => { setFiltroDataInicio(""); setFiltroDataFim(""); }}
+              title="Limpar filtro de data"
+            >
+              <XCircle className="h-4 w-4" />
+            </Button>
+          )}
         </div>
         {/* Rev. 2296 — Pills coloridos por status com ícone + contador.
             Antes: botões neutros (azul=ativo / branco=inativo) sem dimensão visual.

@@ -8164,6 +8164,13 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         tipoPagamento: fornInfo?.tipoPagamento ?? cot.tipoPagamento ?? null,
         formaPagamento: (fornInfo as any)?.formaPagamento ?? (cot as any).formaPagamento ?? null,
         numeroParcelas: fornInfo?.numeroParcelas ?? cot.numeroParcelas ?? 1,
+        // Rev. 4016 — Item 9: OC gerada a partir de cotação herda o anexo
+        // da proposta do fornecedor vencedor (arquivoUrl/arquivoNome já
+        // preenchidos no mapa de cotação), senão a OC nascia sem anexo
+        // algum mesmo quando havia proposta/orçamento anexado.
+        anexos: (!isEstoqueWinner && (fornInfo as any)?.arquivoUrl)
+          ? [{ url: (fornInfo as any).arquivoUrl, nome: (fornInfo as any).arquivoNome || "Proposta do fornecedor", tipo: "proposta", ts: Date.now() }]
+          : [],
         dataEntregaPrevista: dataEntregaPrevista,
         pendenteCoberturaOrcamentaria: itens.some(it => (it as any).semVerba === true),
         regimeCusto: regimeCustoCot,

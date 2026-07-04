@@ -1438,7 +1438,7 @@ export default function Ordens() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-gray-700 text-sm font-medium">Fornecedor</Label>
+              <Label className="text-gray-700 text-sm font-medium">Fornecedor <span className="text-red-500">*</span></Label>
               <Popover open={fornecedorPopoverOpen} onOpenChange={setFornecedorPopoverOpen}>
                 <PopoverTrigger asChild>
                   <button
@@ -2153,6 +2153,13 @@ export default function Ordens() {
                   <FornecedorContatoCard contato={(detalhe as { fornecedor?: FornecedorContatoData | null }).fornecedor} />
                 )}
 
+                {(detalhe as any).observacoes && (
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                    <span className="text-gray-400 text-xs uppercase tracking-widest font-semibold">Observações</span>
+                    <p className="text-gray-900 text-sm mt-1 whitespace-pre-wrap break-words">{(detalhe as any).observacoes}</p>
+                  </div>
+                )}
+
                 {/* Rastreabilidade / Auditoria */}
                 {(() => {
                   const d: any = detalhe;
@@ -2214,7 +2221,23 @@ export default function Ordens() {
                   const desconto = parseFloat((detalhe as any).desconto ?? "0");
                   const total = parseFloat(detalhe.total ?? "0");
                   const hasExtras = frete > 0 || outrasDespesas > 0 || impostos > 0 || desconto > 0;
-                  if (!hasExtras) return null;
+                  // Rev. 4016 — Item 14: antes esse bloco só renderizava
+                  // quando havia frete/impostos/desconto; numa OC sem
+                  // extras (a maioria) o total consolidado sumia do
+                  // resumo por completo — só aparecia por item na tabela.
+                  // Agora sempre mostra ao menos o Total; a itemização
+                  // (Subtotal/Frete/Impostos/Desconto) só some quando não
+                  // há extras, evitando redundância "Subtotal = Total".
+                  if (!hasExtras) {
+                    return (
+                      <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-900 font-semibold">Total da OC</span>
+                          <span className="text-emerald-700 font-bold text-base">{fmt(total)}</span>
+                        </div>
+                      </div>
+                    );
+                  }
                   return (
                     <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm space-y-1.5">
                       <div className="text-xs text-gray-500 font-semibold uppercase tracking-widest mb-2">Composição do Total</div>

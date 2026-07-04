@@ -1548,7 +1548,12 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
       if (itemOrigem.companyId !== input.companyId) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Item de outra empresa." });
       }
-      if (itemOrigem.obraId && !(await userCanAccessObra(ctx.user.id, ctx.user.role, itemOrigem.obraId))) {
+      // Rev. 4016 — Item 5: usa o guard ESPECÍFICO do almoxarifado (soma
+      // alocação operacional via obra_funcionarios), não o guard geral de
+      // segurança — senão um usuário comum alocado na obra (mas sem
+      // allowed_obra_ids/grupo "todas as obras") tomava FORBIDDEN e só
+      // admin/admin_master conseguiam transferir.
+      if (itemOrigem.obraId && !(await userCanAccessObraAlmox(ctx.user.id, ctx.user.role, ctx.user.email, itemOrigem.obraId))) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso à obra origem." });
       }
       const destinoObraIdAuthz = input.destinoTipo === "obra" ? (input.destinoObraId ?? null) : null;
@@ -1556,7 +1561,7 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
         if (!destinoObraIdAuthz || !Number.isInteger(destinoObraIdAuthz) || destinoObraIdAuthz <= 0) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Destino do tipo 'obra' exige destinoObraId inteiro positivo." });
         }
-        if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, destinoObraIdAuthz))) {
+        if (!(await userCanAccessObraAlmox(ctx.user.id, ctx.user.role, ctx.user.email, destinoObraIdAuthz))) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso à obra destino." });
         }
       }
@@ -1706,7 +1711,9 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
         if (!destinoObraId || !Number.isInteger(destinoObraId) || destinoObraId <= 0) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Destino do tipo 'obra' exige destinoObraId inteiro positivo." });
         }
-        if (!(await userCanAccessObra(ctx.user.id, ctx.user.role, destinoObraId))) {
+        // Rev. 4016 — Item 5: mesmo guard almox-específico (ver comentário
+        // em createTransferenciaOrigemDestino acima).
+        if (!(await userCanAccessObraAlmox(ctx.user.id, ctx.user.role, ctx.user.email, destinoObraId))) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso à obra destino." });
         }
       }
@@ -1734,8 +1741,8 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
             falhas.push({ itemIdOrigem: linha.itemIdOrigem, itemNome: itemOrigem.nome, motivo: "Item de outra empresa." });
             continue;
           }
-          // AUTHZ: user deve ter acesso à obra origem também
-          if (itemOrigem.obraId && !(await userCanAccessObra(ctx.user.id, ctx.user.role, itemOrigem.obraId))) {
+          // AUTHZ: user deve ter acesso à obra origem também (guard almox-específico — Rev. 4016 Item 5)
+          if (itemOrigem.obraId && !(await userCanAccessObraAlmox(ctx.user.id, ctx.user.role, ctx.user.email, itemOrigem.obraId))) {
             falhas.push({ itemIdOrigem: linha.itemIdOrigem, itemNome: itemOrigem.nome, motivo: "Sem acesso à obra origem." });
             continue;
           }
