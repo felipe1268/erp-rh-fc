@@ -1,4 +1,38 @@
 /**
+ * Rev. 4018 — **COMPRAS: BUG DE CASA DECIMAL "MUDANDO SOZINHA" NA QUANTIDADE — CAUSA-RAIZ E FIX
+ * (Item 6) + CONFIRMAÇÃO/FECHAMENTO DOS ITENS 1 (BDI) E 4 (UPLOAD IA NO CADASTRO DE ITEM) DOS
+ * ~20 AJUSTES DO DOCX.**
+ *
+ * ITEM 6 — BUG DE DECIMAL: causa-raiz encontrada por inspeção de código (sem precisar de
+ * reprodução manual — o padrão bate exatamente com floating point JS). Em `Solicitacoes.tsx`,
+ * ao consolidar linhas duplicadas de item na criação/edição de uma SC (mesmo insumo/EAP
+ * repetido em mais de uma linha do formulário), a soma de quantidade era feita em ponto
+ * flutuante puro (`String(parseFloat(a) + parseFloat(b))`), produzindo artefatos clássicos tipo
+ * `0.1 + 0.2 = 0.30000000000000004` — exatamente o sintoma "a casa decimal muda sozinha" ao
+ * salvar. Corrigidos os 2 pontos de soma (consolidação final da SC + soma por insumo para
+ * validação de saldo/EAP), agora arredondando para 3 casas decimais
+ * (`Math.round(x*1000)/1000`), consistente com a precisão `numeric(14,3)` do banco. Telas de
+ * Cotação/OC usam inputs `type="number"` nativos e não somam quantidades em ponto flutuante —
+ * não apresentaram o mesmo padrão de risco, não precisaram de alteração.
+ *
+ * ITEM 1 — BDI (Hotel do Papa): usuário confirmou que o cenário já está OK, sem necessidade de
+ * mudança de código nesta rodada (item fica fechado; qualquer ajuste futuro de motor de BDI
+ * segue precisando de nova rodada de decisão de negócio dado o risco financeiro).
+ *
+ * ITEM 4 — UPLOAD DE IA NO CADASTRO DE ITEM: confirmado que a tela "+ Novo Item"
+ * (`client/src/pages/almoxarifado/index.tsx`) já possui upload de foto com preenchimento
+ * automático via IA (`handleFotoChange` → `trpc.warehouse.sugerirCadastroItem`), cobrindo o
+ * pedido original do docx. PDF/Excel automático fica como melhoria futura opcional (item 11,
+ * sem prioridade confirmada).
+ *
+ * Dos 22 itens do docx original, restam pendentes apenas: item 11 (criar OC via upload de
+ * documento genérico — feature de maior esforço, sem prioridade ativa já que o caso de uso
+ * principal está coberto pelo item 4).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4017 — **COMPRAS: RASTREIO INVERSO COTAÇÃO→OC, DUPLICAR OC E RESUMO DE CARTÃO DE CRÉDITO
  * DISPONÍVEL NA COTAÇÃO/OC (Itens 8, 10 e 12 dos ~20 ajustes do docx).**
  *

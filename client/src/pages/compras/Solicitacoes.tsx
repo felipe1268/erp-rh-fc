@@ -2054,7 +2054,11 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
         : (it.insumoCodigo || it.descricao);
       if (consolidados.has(key)) {
         const prev = consolidados.get(key)!;
-        prev.quantidade = String(parseFloat(prev.quantidade) + parseFloat(it.quantidade));
+        // Rev. 4018 — Item 6: soma em ponto flutuante sem arredondar produzia
+        // artefatos tipo 0.1+0.2=0.30000000000000004 ao consolidar itens
+        // duplicados (ex. mesmo insumo repetido na SC), fazendo a quantidade
+        // "mudar sozinha" ao salvar. Arredonda pra 3 casas (numeric(14,3) do banco).
+        prev.quantidade = String(Math.round((parseFloat(prev.quantidade) + parseFloat(it.quantidade)) * 1000) / 1000);
       } else {
         consolidados.set(key, { ...it });
       }
@@ -2085,7 +2089,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
         const qtdPorInsumo: Record<string, number> = {};
         for (const [, item] of consolidados) {
           if (item.insumoCodigo) {
-            qtdPorInsumo[item.insumoCodigo] = (qtdPorInsumo[item.insumoCodigo] || 0) + parseFloat(item.quantidade);
+            qtdPorInsumo[item.insumoCodigo] = Math.round(((qtdPorInsumo[item.insumoCodigo] || 0) + parseFloat(item.quantidade)) * 1000) / 1000;
           }
         }
         for (const [codigo, qtdSolicitando] of Object.entries(qtdPorInsumo)) {
