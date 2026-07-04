@@ -1401,37 +1401,66 @@ export default function MedicaoDetalhe() {
                     </Button>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-gray-50 text-xs">
-                          <TableHead className="w-20">Item</TableHead>
-                          <TableHead>Descrição</TableHead>
-                          <TableHead className="w-28">Origem</TableHead>
-                          <TableHead className="text-right w-28">Valor Contratual</TableHead>
-                          <TableHead className="text-right w-24">% Ant.</TableHead>
-                          <TableHead className="text-right w-24">% Período</TableHead>
-                          <TableHead className="text-right w-24">% Acum.</TableHead>
-                          <TableHead className="text-right w-28">Valor Período</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {boletimDetalhe.itens.map((item: any, i: number) => (
-                          <TableRow key={item.id} className={item.isFd ? "bg-violet-50 hover:bg-violet-100" : i % 2 === 1 ? "bg-gray-50/60" : ""}>
-                            <TableCell className="font-mono text-xs">{item.eapCodigo || "—"}</TableCell>
-                            <TableCell className="text-sm">{item.descricao}</TableCell>
-                            <TableCell className="text-xs">
-                              <OrigemBadge item={item} contratoId={contratoId} companyId={companyId} />
-                            </TableCell>
-                            <TableCell className="text-right text-sm">{brl(n(item.valorContratual))}</TableCell>
-                            <TableCell className="text-right text-sm">{pct(n(item.percentualAcumuladoAnterior))}</TableCell>
-                            <TableCell className="text-right text-sm font-medium text-blue-700">{pct(n(item.percentualPeriodo))}</TableCell>
-                            <TableCell className="text-right text-sm">{pct(n(item.percentualAcumuladoAtual))}</TableCell>
-                            <TableCell className="text-right text-sm font-semibold">{brl(n(item.valorPeriodo))}</TableCell>
+                  <div className="rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <Table className="table-fixed min-w-[900px]">
+                        <colgroup>
+                          <col style={{ width: "5%" }} />
+                          <col style={{ width: "29%" }} />
+                          <col style={{ width: "10%" }} />
+                          <col style={{ width: "12%" }} />
+                          <col style={{ width: "8%" }} />
+                          <col style={{ width: "13%" }} />
+                          <col style={{ width: "8%" }} />
+                          <col style={{ width: "15%" }} />
+                        </colgroup>
+                        <TableHeader>
+                          <TableRow className="bg-gray-50 text-[11px] uppercase tracking-wide text-gray-500">
+                            <TableHead className="text-center">Item</TableHead>
+                            <TableHead>Descrição</TableHead>
+                            <TableHead>Origem</TableHead>
+                            <TableHead className="text-right">V. Contratual</TableHead>
+                            <TableHead className="text-center">% Ant.</TableHead>
+                            <TableHead className="text-center">% Período</TableHead>
+                            <TableHead className="text-center">% Acum.</TableHead>
+                            <TableHead className="text-right">V. Período</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {boletimDetalhe.itens.map((item: any, i: number) => {
+                            const acum = n(item.percentualAcumuladoAtual);
+                            return (
+                              <TableRow key={item.id} className={item.isFd ? "bg-violet-50/70 hover:bg-violet-100" : i % 2 === 1 ? "bg-gray-50/60" : ""}>
+                                <TableCell className="text-center font-mono text-[11px] text-gray-400">{item.eapCodigo || "—"}</TableCell>
+                                <TableCell className="text-sm truncate" title={item.descricao}>{item.descricao}</TableCell>
+                                <TableCell className="text-xs">
+                                  <OrigemBadge item={item} contratoId={contratoId} companyId={companyId} compact />
+                                </TableCell>
+                                <TableCell className="text-right text-sm tabular-nums">{brl(n(item.valorContratual))}</TableCell>
+                                <TableCell className="text-center text-sm text-gray-500 tabular-nums">{pct(n(item.percentualAcumuladoAnterior))}</TableCell>
+                                <TableCell className="text-center">
+                                  <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700 tabular-nums">
+                                    {pct(n(item.percentualPeriodo))}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <div className="flex flex-col items-center gap-1">
+                                    <span className="text-xs font-medium text-gray-700 tabular-nums">{pct(acum)}</span>
+                                    <div className="h-1 w-12 rounded-full bg-gray-200 overflow-hidden">
+                                      <div
+                                        className={acum >= 100 ? "h-1 rounded-full bg-emerald-500" : "h-1 rounded-full bg-blue-400"}
+                                        style={{ width: `${Math.min(100, Math.max(0, acum))}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-right text-sm font-semibold tabular-nums">{brl(n(item.valorPeriodo))}</TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </div>
                 )}
                 {(boletimDetalhe.itens?.length ?? 0) > 0 && boletimSelecionado?.status === "rascunho" && (
@@ -1460,66 +1489,93 @@ export default function MedicaoDetalhe() {
                     </Button>
                   </div>
                 </div>
-                <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm max-h-[50vh]">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-gray-50 text-xs sticky top-0 z-10">
-                        <TableHead className="w-20">Item</TableHead>
-                        <TableHead>Descrição</TableHead>
-                        <TableHead className="w-24">Origem</TableHead>
-                        <TableHead className="text-right w-28">V. Contratual</TableHead>
-                        <TableHead className="text-center w-24">% Ant.</TableHead>
-                        <TableHead className="text-center w-28">% Período *</TableHead>
-                        <TableHead className="text-center w-24">% Acum.</TableHead>
-                        <TableHead className="text-right w-28">V. Período</TableHead>
-                        <TableHead className="text-center w-16">FD</TableHead>
-                        <TableHead className="w-10" />
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {itensEdicao.map((item, idx) => (
-                        <TableRow key={idx} className={item.isFd ? "bg-violet-50 hover:bg-violet-100" : idx % 2 === 1 ? "bg-gray-50/60" : ""}>
-                          <TableCell className="font-mono text-xs">{item.eapCodigo || "—"}</TableCell>
-                          <TableCell className="text-xs truncate max-w-[200px]" title={item.descricao}>{item.descricao}</TableCell>
-                          <TableCell className="text-xs">
-                            <OrigemBadge item={item} contratoId={contratoId} companyId={companyId} compact />
-                          </TableCell>
-                          <TableCell className="text-right text-xs">{brl(n(item.valorContratual))}</TableCell>
-                          <TableCell className="text-center text-xs">{pct(n(item.percentualAcumuladoAnterior))}</TableCell>
-                          <TableCell>
-                            <Input
-                              className="h-7 text-xs text-center"
-                              value={item.percentualPeriodo}
-                              onChange={e => {
-                                const updated = calcularItem(item, "percentualPeriodo", e.target.value);
-                                setItensEdicao(prev => prev.map((it, i) => i === idx ? updated : it));
-                              }}
-                            />
-                          </TableCell>
-                          <TableCell className="text-center text-xs font-medium">{pct(n(item.percentualAcumuladoAtual))}</TableCell>
-                          <TableCell className="text-right text-xs font-semibold">{brl(n(item.valorPeriodo))}</TableCell>
-                          <TableCell className="text-center">
-                            <input
-                              type="checkbox"
-                              checked={item.isFd}
-                              onChange={e => setItensEdicao(prev => prev.map((it, i) => i === idx ? { ...it, isFd: e.target.checked } : it))}
-                              className="h-3.5 w-3.5 accent-violet-600"
-                            />
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <button
-                              type="button"
-                              title="Remover item"
-                              onClick={() => setItensEdicao(prev => prev.filter((_, i) => i !== idx))}
-                              className="text-gray-300 hover:text-red-500"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </TableCell>
+                <div className="rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                  <div className="overflow-x-auto max-h-[50vh] overflow-y-auto">
+                    <Table className="table-fixed min-w-[960px]">
+                      <colgroup>
+                        <col style={{ width: "4.5%" }} />
+                        <col style={{ width: "27%" }} />
+                        <col style={{ width: "9%" }} />
+                        <col style={{ width: "10.5%" }} />
+                        <col style={{ width: "7%" }} />
+                        <col style={{ width: "11%" }} />
+                        <col style={{ width: "7%" }} />
+                        <col style={{ width: "13%" }} />
+                        <col style={{ width: "6%" }} />
+                        <col style={{ width: "5%" }} />
+                      </colgroup>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50 text-[11px] uppercase tracking-wide text-gray-500 sticky top-0 z-10">
+                          <TableHead className="text-center">Item</TableHead>
+                          <TableHead>Descrição</TableHead>
+                          <TableHead>Origem</TableHead>
+                          <TableHead className="text-right">V. Contratual</TableHead>
+                          <TableHead className="text-center">% Ant.</TableHead>
+                          <TableHead className="text-center text-blue-600">% Período *</TableHead>
+                          <TableHead className="text-center">% Acum.</TableHead>
+                          <TableHead className="text-right">V. Período</TableHead>
+                          <TableHead className="text-center">FD</TableHead>
+                          <TableHead />
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {itensEdicao.map((item, idx) => {
+                          const acum = n(item.percentualAcumuladoAtual);
+                          return (
+                            <TableRow key={idx} className={item.isFd ? "bg-violet-50/70 hover:bg-violet-100" : idx % 2 === 1 ? "bg-gray-50/60" : ""}>
+                              <TableCell className="text-center font-mono text-[11px] text-gray-400">{item.eapCodigo || "—"}</TableCell>
+                              <TableCell className="text-xs truncate" title={item.descricao}>{item.descricao}</TableCell>
+                              <TableCell className="text-xs">
+                                <OrigemBadge item={item} contratoId={contratoId} companyId={companyId} compact />
+                              </TableCell>
+                              <TableCell className="text-right text-xs tabular-nums">{brl(n(item.valorContratual))}</TableCell>
+                              <TableCell className="text-center text-xs text-gray-500 tabular-nums">{pct(n(item.percentualAcumuladoAnterior))}</TableCell>
+                              <TableCell>
+                                <Input
+                                  className="h-7 text-xs text-center bg-blue-50/60 border-blue-200 focus-visible:bg-white"
+                                  value={item.percentualPeriodo}
+                                  onChange={e => {
+                                    const updated = calcularItem(item, "percentualPeriodo", e.target.value);
+                                    setItensEdicao(prev => prev.map((it, i) => i === idx ? updated : it));
+                                  }}
+                                />
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <div className="flex flex-col items-center gap-1">
+                                  <span className="text-xs font-medium text-gray-700 tabular-nums">{pct(acum)}</span>
+                                  <div className="h-1 w-10 rounded-full bg-gray-200 overflow-hidden">
+                                    <div
+                                      className={acum >= 100 ? "h-1 rounded-full bg-emerald-500" : "h-1 rounded-full bg-blue-400"}
+                                      style={{ width: `${Math.min(100, Math.max(0, acum))}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right text-xs font-semibold tabular-nums">{brl(n(item.valorPeriodo))}</TableCell>
+                              <TableCell className="text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={item.isFd}
+                                  onChange={e => setItensEdicao(prev => prev.map((it, i) => i === idx ? { ...it, isFd: e.target.checked } : it))}
+                                  className="h-3.5 w-3.5 accent-violet-600"
+                                />
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <button
+                                  type="button"
+                                  title="Remover item"
+                                  onClick={() => setItensEdicao(prev => prev.filter((_, i) => i !== idx))}
+                                  className="text-gray-300 hover:text-red-500"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
                 <div className="flex justify-between items-center border-t pt-3">
                   <div className="text-sm space-x-4">
