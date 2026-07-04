@@ -18,11 +18,12 @@ import { inferirCategoria, CATEGORIA_KEYWORDS } from "./categoriaUtils";
 import { ModalConfirmacaoAuditoria } from "@/components/almoxarifado/ModalConfirmacaoAuditoria";
 import { ModalVincularEquipamento } from "@/components/almoxarifado/ModalVincularEquipamento";
 import { ShieldCheck, ShieldAlert } from "lucide-react";
+import { SignaturePad } from "@/components/SignaturePad";
 
 
 const EMPTY_ITEM = {
   nome: "", unidade: "un", categoria: "", codigoInterno: "",
-  quantidadeAtual: "", quantidadeMinima: "", observacoes: "", fotoUrl: "",
+  quantidadeAtual: "", quantidadeMinima: "", observacoes: "", especificacao: "", fotoUrl: "",
   valorUnitario: "",
   origem: "proprio" as "proprio" | "alugado",
   fornecedorLocacao: "", dataInicioLocacao: "", dataVencimentoLocacao: "",
@@ -1089,7 +1090,7 @@ export default function AlmoxarifadoPage() {
       nome: real.nome, unidade: real.unidade, categoria: real.categoria ?? "", codigoInterno: real.codigoInterno ?? "",
       quantidadeAtual: n(real.quantidadeAtual) ? String(n(real.quantidadeAtual)) : "",
       quantidadeMinima: n(real.quantidadeMinima) ? String(n(real.quantidadeMinima)) : "",
-      observacoes: real.observacoes ?? "", fotoUrl: real.fotoUrl ?? "",
+      observacoes: real.observacoes ?? "", especificacao: real.especificacao ?? "", fotoUrl: real.fotoUrl ?? "",
       valorUnitario: n(real.valorUnitario) ? String(n(real.valorUnitario)).replace(".", ",") : "",
       origem: (real.origem === "alugado" ? "alugado" : "proprio") as "proprio" | "alugado",
       fornecedorLocacao: real.fornecedorLocacao ?? "",
@@ -1271,6 +1272,7 @@ export default function AlmoxarifadoPage() {
         id: editandoId, nome: formItem.nome, unidade: formItem.unidade,
         categoria: formItem.categoria || undefined, codigoInterno: formItem.codigoInterno || undefined,
         quantidadeMinima: pQtdMin, observacoes: formItem.observacoes || undefined,
+        especificacao: formItem.especificacao || null,
         fotoUrl: formItem.fotoUrl || null, quantidadeAtual: pQtdAtual,
         valorUnitario: pValUnit || null,
         ...locacaoPayload,
@@ -1313,7 +1315,8 @@ export default function AlmoxarifadoPage() {
         companyId, obraId: obraParaCriar, nome: formItem.nome, unidade: formItem.unidade,
         categoria: formItem.categoria || undefined, codigoInterno: formItem.codigoInterno || undefined,
         quantidadeAtual: pQtdAtual, quantidadeMinima: pQtdMin,
-        observacoes: formItem.observacoes || undefined, fotoUrl: formItem.fotoUrl || undefined,
+        observacoes: formItem.observacoes || undefined, especificacao: formItem.especificacao || undefined,
+        fotoUrl: formItem.fotoUrl || undefined,
         valorUnitario: pValUnit || null,
         ...locacaoPayload,
       } as any);
@@ -1498,6 +1501,24 @@ export default function AlmoxarifadoPage() {
     onSuccess: () => { refetchLoans(); refetchLoansAbertos(); refetch(); toast.success("Ferramenta devolvida!"); },
     onError: (e) => toast.error(e.message),
   });
+  // Rev. 4011 — Assinatura opcional na devolução de ferramenta ("se possível", conforme
+  // pedido do usuário — nem toda obra tem tablet disponível, então NÃO é bloqueante).
+  const [modalAssinaturaDevolucao, setModalAssinaturaDevolucao] = useState<{ tipo: "individual" | "grupo"; loan?: any; grupo?: { itens: any[] } } | null>(null);
+  const [assinaturaDevolucaoDataUrl, setAssinaturaDevolucaoDataUrl] = useState<string | null>(null);
+  async function confirmarDevolucaoComAssinatura() {
+    const ctx = modalAssinaturaDevolucao;
+    if (!ctx) return;
+    const assinaturaUrl = assinaturaDevolucaoDataUrl || undefined;
+    if (ctx.tipo === "individual" && ctx.loan) {
+      returnLoan.mutate({ loanId: ctx.loan.id, assinaturaUrl } as any);
+    } else if (ctx.tipo === "grupo" && ctx.grupo) {
+      for (const it of ctx.grupo.itens) {
+        try { await returnLoan.mutateAsync({ loanId: it.id, assinaturaUrl } as any); } catch { /* segue */ }
+      }
+    }
+    setModalAssinaturaDevolucao(null);
+    setAssinaturaDevolucaoDataUrl(null);
+  }
 
   // ── Modal Registros ─────────────────────────────────────────────
   const [modalRegistros, setModalRegistros] = useState(false);
@@ -2091,6 +2112,7 @@ export default function AlmoxarifadoPage() {
                       </div>
                       <div className="p-3 flex flex-col gap-1.5 flex-1">
                         <p className="text-sm font-semibold text-gray-800 leading-tight line-clamp-2">{item.nome}</p>
+                        {(item as any).especificacao && <p className="text-[11px] text-gray-500 italic line-clamp-1">{(item as any).especificacao}</p>}
                         {item.categoria && <p className="text-[11px] text-gray-400">{item.categoria}</p>}
                         {item.codigoInterno && <p className="text-[11px] font-mono text-gray-400">{item.codigoInterno}</p>}
                         <div className="mt-auto pt-1">
@@ -2191,6 +2213,7 @@ export default function AlmoxarifadoPage() {
                           </td>
                           <td className="px-4 py-3">
                             <p className="font-medium text-gray-900">{item.nome}</p>
+                            {(item as any).especificacao && <p className="text-[11px] text-gray-500 italic">{(item as any).especificacao}</p>}
                             <div className="flex items-center gap-1.5 mt-0.5">
                               <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{item.unidade}</span>
                               {item.categoria && <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{item.categoria}</span>}
@@ -2741,6 +2764,7 @@ export default function AlmoxarifadoPage() {
                     <div className="p-3 flex flex-col gap-2 flex-1">
                       <div>
                         <p className="text-sm font-semibold text-gray-800 leading-tight line-clamp-2">{item.nome}</p>
+                        {(item as any).especificacao && <p className="text-[11px] text-gray-500 italic line-clamp-1">{(item as any).especificacao}</p>}
                         {item.categoria && <p className="text-[11px] text-gray-400 mt-0.5">{item.categoria}</p>}
                         {item.codigoInterno && <p className="text-[11px] font-mono text-gray-400">{item.codigoInterno}</p>}
                         {(item as any).criadoPorNome && (
@@ -2866,6 +2890,7 @@ export default function AlmoxarifadoPage() {
                         <td className="px-4 py-3">
                           <div>
                             <p className="font-medium text-gray-800">{item.nome}</p>
+                            {(item as any).especificacao && <p className="text-[11px] text-gray-500 italic">{(item as any).especificacao}</p>}
                             <p className="text-xs text-gray-400">{item.unidade}</p>
                           </div>
                         </td>
@@ -3128,6 +3153,17 @@ export default function AlmoxarifadoPage() {
                         onChange={e => setFormItem(p => ({ ...p, quantidadeAtual: e.target.value }))}
                       />
                     </div>
+                  </div>
+
+                  {/* Rev. 4011 — Especificação técnica, separada do nome (ex: bitola, cor, voltagem). */}
+                  <div>
+                    <label className="text-xs font-medium text-gray-700">Especificação</label>
+                    <input
+                      className="mt-1 w-full h-9 px-3 text-sm rounded-lg border border-gray-200 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-200"
+                      placeholder="Ex: M8 x 40mm, aço inox / 220V / azul"
+                      value={formItem.especificacao}
+                      onChange={e => setFormItem(p => ({ ...p, especificacao: e.target.value }))}
+                    />
                   </div>
 
                   {/* Observações */}
@@ -4510,10 +4546,9 @@ export default function AlmoxarifadoPage() {
                   if (l.status === "emprestado") g.itens.push(l);
                 }
                 const gruposArr = Array.from(grupos.values()).filter((g) => g.itens.length > 0).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-                async function devolverGrupo(g: { itens: any[] }) {
-                  for (const it of g.itens) {
-                    try { await returnLoan.mutateAsync({ loanId: it.id }); } catch { /* segue */ }
-                  }
+                function devolverGrupo(g: { itens: any[] }) {
+                  setAssinaturaDevolucaoDataUrl(null);
+                  setModalAssinaturaDevolucao({ tipo: "grupo", grupo: g });
                 }
                 return (
                   <div className="space-y-3">
@@ -4547,7 +4582,7 @@ export default function AlmoxarifadoPage() {
                                 <p className="text-[11px] text-gray-500">{n(l.quantidade)} un · Emprestado em {l.dataEmprestimo}{l.horaEmprestimo ? ` às ${l.horaEmprestimo}` : ""}</p>
                               </div>
                               <button
-                                onClick={() => returnLoan.mutate({ loanId: l.id })}
+                                onClick={() => { setAssinaturaDevolucaoDataUrl(null); setModalAssinaturaDevolucao({ tipo: "individual", loan: l }); }}
                                 disabled={returnLoan.isPending}
                                 className="shrink-0 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-1.5 font-semibold transition disabled:opacity-60"
                               >
@@ -4760,6 +4795,44 @@ export default function AlmoxarifadoPage() {
                   className="flex-1 h-9 text-sm rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold transition disabled:opacity-60 flex items-center justify-center gap-2">
                   {devolverLocacaoMut.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                   Confirmar Devolução
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rev. 4011 — Modal de assinatura opcional na devolução de ferramenta emprestada. */}
+      {modalAssinaturaDevolucao && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/50" onClick={() => setModalAssinaturaDevolucao(null)} />
+          <div className="relative bg-white rounded-xl border border-gray-200 shadow-xl w-full max-w-sm mx-4">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-blue-500" /> Confirmar Devolução
+              </h2>
+              <button onClick={() => setModalAssinaturaDevolucao(null)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-sm text-gray-600">
+                {modalAssinaturaDevolucao.tipo === "grupo"
+                  ? `${modalAssinaturaDevolucao.grupo?.itens.length ?? 0} ferramenta(s) serão marcadas como devolvidas.`
+                  : `Ferramenta "${modalAssinaturaDevolucao.loan?.itemNome}" será marcada como devolvida.`}
+              </p>
+              <SignaturePad
+                label="Assinatura de quem devolveu (opcional)"
+                value={assinaturaDevolucaoDataUrl}
+                onChange={setAssinaturaDevolucaoDataUrl}
+                height={140}
+              />
+              <div className="flex gap-3 pt-1 border-t border-gray-100">
+                <button onClick={() => setModalAssinaturaDevolucao(null)} className="flex-1 h-9 text-sm border border-gray-200 rounded-lg bg-white text-gray-600 hover:bg-gray-50 font-medium transition">Cancelar</button>
+                <button
+                  onClick={confirmarDevolucaoComAssinatura}
+                  disabled={returnLoan.isPending}
+                  className="flex-1 h-9 text-sm rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold transition disabled:opacity-60 flex items-center justify-center gap-2">
+                  {returnLoan.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Confirmar
                 </button>
               </div>
             </div>

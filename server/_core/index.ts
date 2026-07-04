@@ -4730,7 +4730,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v4010-2026-07-04-padronizar-nome-material";
+    const COLFIX_VERSION = "v4011-2026-07-04-especificacao-assinatura-devolucao";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -4754,6 +4754,14 @@ Regras:
           ALTER TABLE IF EXISTS compras_cotacao_fornecedores
             ADD COLUMN IF NOT EXISTS is_estoque             boolean DEFAULT false,
             ADD COLUMN IF NOT EXISTS almoxarifado_origem_id integer;
+
+          -- Rev. 4011 — Especificação técnica separada do nome do material.
+          ALTER TABLE IF EXISTS almoxarifado_itens
+            ADD COLUMN IF NOT EXISTS especificacao text;
+
+          -- Rev. 4011 — Assinatura digital opcional no ato da devolução de ferramenta.
+          ALTER TABLE IF EXISTS warehouse_loans
+            ADD COLUMN IF NOT EXISTS assinatura_devolucao_url text;
         `);
         await db.execute(sql`
           DO $$ BEGIN

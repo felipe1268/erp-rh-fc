@@ -678,7 +678,12 @@ export const warehouseRouter = router({
 
   // Devolver item
   returnLoanById: protectedProcedure
-    .input(z.object({ loanId: z.number() }))
+    .input(z.object({
+      loanId: z.number(),
+      // Rev. 4011 — Assinatura digital (dataURL PNG) opcional no ato da devolução.
+      // Opcional pois nem todo posto de almoxarifado tem tablet disponível.
+      assinaturaUrl: z.string().nullable().optional(),
+    }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -697,7 +702,12 @@ export const warehouseRouter = router({
 
       await db
         .update(warehouseLoans)
-        .set({ status: "devolvido", dataDevolucao: hoje, horaDevolucao: hora } as any)
+        .set({
+          status: "devolvido",
+          dataDevolucao: hoje,
+          horaDevolucao: hora,
+          ...(input.assinaturaUrl ? { assinaturaDevolucaoUrl: input.assinaturaUrl } : {}),
+        } as any)
         .where(eq(warehouseLoans.id, input.loanId));
 
       // Rev. 2392 — reativa item se estava soft-deleted (zerou via transferência).

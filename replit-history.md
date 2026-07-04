@@ -1,3 +1,5 @@
+- **Rev. 4003** — **COMPRAS/COTAÇÕES: "EXPORTAR PDF" GERAVA PÁGINA EM BRANCO — BLOQUEAVA ENVIO DE COTAÇÃO PARA CLIENTE APROVAR ITEM A ITEM; ADICIONADO TAMBÉM "EXPORTAR EXCEL".** Causa: `window.print()` sobre `<div className="fixed inset-0 ...">` (mesma causa-raiz de `print-dialog-fixed-clip`); fix via HTML autônomo em `window.open`+`document.write`. ZERO DELETE · ZERO ALTER.
+
 - **Rev. 4002** — **IMPORTAÇÃO DE EXTRATO PDF (SANTANDER IBPJ): PARSER ESTAVA IGNORANDO 100% DOS LANÇAMENTOS EM EXTRATOS DE VÁRIAS PÁGINAS.** `parseSantanderIbpjPdf` assumia cada lançamento em UMA linha só, mas a extração real do `pdf-parse` quebra em 2-3 linhas; reescrito como scanner por blocos. Validado: 0→131 lançamentos, saldo diário reconciliado 100%. ZERO DELETE · ZERO ALTER.
 
 - **Rev. 4001** — **COMPRAS / COTAÇÕES: SOLICITAÇÕES DE OBRAS DIFERENTES CAINDO COM O MESMO NÚMERO DE COTAÇÃO.** 4 dos 7 pontos que geram `numeroCotacao` em `compras.ts` calculavam via `COUNT(*)+1` FORA de lock/transação (race condition); fix roda dentro de `db.transaction` com `pg_advisory_xact_lock`; 32 grupos duplicados (41 cotações) renumerados no Neon. ZERO DELETE · ZERO ALTER.

@@ -1,4 +1,37 @@
 /**
+ * Rev. 4011 — **ALMOXARIFADO: OS 3 ITENS PENDENTES DA AUDITORIA "CORREÇÕES E MELHORIAS ERP -
+ * ALMOXARIFADO" (12/15 já haviam sido implementados em revisões anteriores).**
+ *
+ * Usuário confirmou "Sim" para implementar os 3 itens restantes do PDF de auditoria:
+ *
+ * 1. **Campo `especificacao` separado do `nome`** — até então o nome do material acumulava
+ *    detalhes técnicos (bitola, cor, voltagem etc.) misturados ao nome, dificultando busca e
+ *    padronização (ver `padronizar_nome_material` da Rev. 4010, que só normaliza caixa, não
+ *    separa conteúdo). Adicionada coluna `especificacao` (text, nullable) em
+ *    `almoxarifado_itens` — `drizzle/schema.ts`, `[ColFix Rev.4011]` em `server/_core/index.ts`
+ *    (COLFIX_VERSION bumpado, ver `colfix-version-gate.md`). Plugado em `criarItem`/
+ *    `atualizarItem`/`criarItemAlmoxarifadoComCodigo` (`compras.ts`) e no formulário +
+ *    listagens (cards/tabela) de `client/src/pages/almoxarifado/index.tsx`. Campo é opcional —
+ *    NÃO obrigatório, nem migração de dados existentes (não há como separar retroativamente
+ *    nome/especificação já misturados sem intervenção manual).
+ *
+ * 2. **Assinatura digital opcional na devolução de ferramenta emprestada** — aba "🔧
+ *    Ferramentas em Aberto" ganhou modal de confirmação com `SignaturePad` (componente já
+ *    existente, reusado de Locados/AssinarDocumento) antes de confirmar "Devolver"/"Devolver
+ *    Todas". Assinatura é OPCIONAL ("se possível" no pedido original — nem toda obra tem
+ *    tablet disponível), nunca bloqueia a devolução. Nova coluna
+ *    `assinatura_devolucao_url` (text, nullable) em `warehouse_loans`; `returnLoanById`
+ *    (`warehouse.ts`) aceita `assinaturaUrl` opcional.
+ *
+ * 3. **Rename "Devolução de Ferramentas"** — investigado e não havia mais nenhuma tela com
+ *    esse título no código atual (a aba já se chama "🔧 Ferramentas em Aberto" com botões
+ *    "Devolver"/"Devolver Todas"); item já estava resolvido em revisão anterior não
+ *    documentada. Nenhuma ação necessária.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo — apenas colunas novas nullable + UI aditiva.
+ */
+
+/**
  * Rev. 4010 — **ALMOXARIFADO: PADRONIZAÇÃO AUTOMÁTICA DO NOME DE MATERIAL (1ª LETRA MAIÚSCULA +
  * RESTANTE MINÚSCULO), INDEPENDENTE DE COMO O USUÁRIO/IMPORT/EQUIPAMENTO DIGITOU/GRAVOU O NOME.**
  *

@@ -1902,6 +1902,8 @@ export const comprasRouter = router({
       quantidadeAtual:       z.number().optional(),
       quantidadeMinima:      z.number().optional(),
       observacoes:           z.string().nullable().optional(),
+      // Rev. 4011 — Especificação técnica separada do nome.
+      especificacao:         z.string().nullable().optional(),
       fotoUrl:               z.string().nullable().optional(),
       valorUnitario:         z.number().nullable().optional(),
       origem:                z.enum(["proprio", "alugado"]).optional(),
@@ -1953,6 +1955,7 @@ export const comprasRouter = router({
         quantidadeAtual:       String(qtdInicial),
         quantidadeMinima:      String(input.quantidadeMinima ?? 0),
         observacoes:           input.observacoes ?? null,
+        especificacao:         input.especificacao ?? null,
         fotoUrl:               input.fotoUrl ?? null,
         valorUnitario:         input.valorUnitario != null ? String(input.valorUnitario) : null,
         ativo:                 true,
@@ -2078,6 +2081,8 @@ export const comprasRouter = router({
       codigoInterno:         z.string().optional(),
       quantidadeMinima:      z.number().optional(),
       observacoes:           z.string().optional(),
+      // Rev. 4011 — Especificação técnica separada do nome.
+      especificacao:         z.string().nullable().optional(),
       fotoUrl:               z.string().nullable().optional(),
       valorUnitario:         z.number().nullable().optional(),
       origem:                z.enum(["proprio", "alugado"]).optional(),
@@ -2133,6 +2138,7 @@ export const comprasRouter = router({
       if (data.codigoInterno !== undefined)        updates.codigoInterno = data.codigoInterno;
       if (data.quantidadeMinima !== undefined)     updates.quantidadeMinima = String(data.quantidadeMinima);
       if (data.observacoes !== undefined)          updates.observacoes = data.observacoes;
+      if ('especificacao' in data)                 updates.especificacao = data.especificacao;
       if ('fotoUrl' in data)                       updates.fotoUrl = data.fotoUrl;
       if ('valorUnitario' in data)                 updates.valorUnitario = data.valorUnitario != null ? String(data.valorUnitario) : null;
       if (data.origem !== undefined)               updates.origem = data.origem;

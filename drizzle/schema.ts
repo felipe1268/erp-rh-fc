@@ -6537,6 +6537,9 @@ export const almoxarifadoItens = pgTable("almoxarifado_itens", {
   quantidadeAtual:  numeric("quantidade_atual", { precision: 14, scale: 3 }).default("0"),
   quantidadeMinima: numeric("quantidade_minima", { precision: 14, scale: 3 }).default("0"),
   observacoes:      text(),
+  // Rev. 4011 — Especificação técnica do material, separada do nome
+  // (ex.: nome "Parafuso" + especificação "M8 x 40mm, aço inox").
+  especificacao:    text("especificacao"),
   fotoUrl:               text("foto_url"),
   ativo:                 boolean().default(true),
   origem:                varchar({ length: 20 }).default("proprio"),
@@ -7048,6 +7051,8 @@ export const warehouseLoans = pgTable("warehouse_loans", {
   fotoDevolucaoUrl:     text("foto_devolucao_url"),
   equipamentoProprioId: integer("equipamento_proprio_id"),
   equipamentoLocadoId:  integer("equipamento_locado_id"),
+  // Rev. 4011 — Assinatura digital (dataURL PNG) opcional no ato da devolução da ferramenta.
+  assinaturaDevolucaoUrl: text("assinatura_devolucao_url"),
 });
 
 // Saídas de Insumos/Consumíveis para Funcionários
