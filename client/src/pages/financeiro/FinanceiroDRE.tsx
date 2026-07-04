@@ -9,8 +9,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
+import { useAuth } from "@/_core/hooks/useAuth";
 import {
   BarChart2, TrendingUp, TrendingDown, RefreshCw, ChevronLeft, ChevronRight,
   CalendarDays, Sparkles, Info, BookOpen, ExternalLink, AlertTriangle,
@@ -132,10 +135,16 @@ function FonteChips({ ids, map }: { ids: string[]; map: Record<string, Fonte> })
 
 export default function FinanceiroDRE() {
   const { companyId } = useCompany();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const isAdmin = user?.role === "admin" || user?.role === "admin_master";
   const hoje = new Date();
   const [ano, setAno] = useState(hoje.getFullYear());
   const [sel, setSel] = useState<Sel>({ tipo: "mensal", mes: hoje.getMonth() + 1 });
   const [analiseOpen, setAnaliseOpen] = useState(false);
+  const [consolidarDialogOpen, setConsolidarDialogOpen] = useState(false);
+  const [desconsolidarDialogOpen, setDesconsolidarDialogOpen] = useState(false);
+  const [obsConsolidar, setObsConsolidar] = useState("");
 
   const tipoPeriodo: "mensal" | "trimestral" | "semestral" | "anual" = sel.tipo;
   const periodo =
@@ -163,12 +172,46 @@ export default function FinanceiroDRE() {
   );
 
   const mesesStatus: Record<number, MesStatus> = {};
+  const mesesConsolidadoManual: Record<number, { por: string | null; em: string | null }> = {};
   for (let m = 1; m <= 12; m++) {
     const info = disp?.meses?.[m] ?? disp?.meses?.[String(m)];
     const total = Number(info?.n ?? 0);
     const realizado = Number(info?.nRealizado ?? 0);
-    mesesStatus[m] = total === 0 ? "sem_dados" : (realizado >= total ? "consolidado" : "lancamento");
+    // Rev. 4022 — consolidação manual sobrepõe o cálculo automático.
+    if (info?.consolidadoManual) {
+      mesesStatus[m] = "consolidado";
+      mesesConsolidadoManual[m] = { por: info?.consolidadoPor ?? null, em: info?.consolidadoEm ?? null };
+    } else {
+      mesesStatus[m] = total === 0 ? "sem_dados" : (realizado >= total ? "consolidado" : "lancamento");
+    }
   }
+
+  // Consolidação manual do mês selecionado (só se aplica ao modo "mensal")
+  const mesSelecionado = sel.tipo === "mensal" ? sel.mes : null;
+  const periodoMensalConsolidacao = mesSelecionado ? `${ano}-${String(mesSelecionado).padStart(2, "0")}` : null;
+  const consolidacaoManualSelecionada = mesSelecionado ? mesesConsolidadoManual[mesSelecionado] : undefined;
+  const utils = trpc.useUtils();
+  const consolidarMut = (trpc as any).financial.consolidarDRE.useMutation({
+    onSuccess: () => {
+      toast({ title: "Mês consolidado", description: "O mês foi marcado como consolidado no DRE." });
+      setConsolidarDialogOpen(false);
+      setObsConsolidar("");
+      (utils as any).financial.getDREDisponibilidade.invalidate({ companyId, ano: `${ano}` });
+    },
+    onError: (e: any) => {
+      toast({ title: "Erro ao consolidar", description: e?.message ?? "Falha ao consolidar o mês.", variant: "destructive" });
+    },
+  });
+  const desconsolidarMut = (trpc as any).financial.desconsolidarDRE.useMutation({
+    onSuccess: () => {
+      toast({ title: "Mês desconsolidado", description: "O mês voltou ao status automático." });
+      setDesconsolidarDialogOpen(false);
+      (utils as any).financial.getDREDisponibilidade.invalidate({ companyId, ano: `${ano}` });
+    },
+    onError: (e: any) => {
+      toast({ title: "Erro ao desconsolidar", description: e?.message ?? "Falha ao desconsolidar o mês.", variant: "destructive" });
+    },
+  });
 
   const { data: dre, isLoading, refetch } = (trpc as any).financial.getDRE.useQuery(
     { companyId, periodo, tipoPeriodo },
@@ -470,6 +513,42 @@ export default function FinanceiroDRE() {
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />Sem dados</span>
               </div>
             </div>
+            {sel.tipo === "mensal" && (
+              <div className="mb-3 flex items-center justify-between flex-wrap gap-2 rounded-lg border border-gray-100 bg-gray-50/60 px-3 py-2">
+                {consolidacaoManualSelecionada ? (
+                  <div className="flex items-center gap-2 text-xs text-emerald-700">
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>
+                      <strong>{MESES_PT[sel.mes - 1]}/{ano} consolidado manualmente</strong>
+                      {consolidacaoManualSelecionada.por && ` por ${consolidacaoManualSelecionada.por}`}
+                      {consolidacaoManualSelecionada.em && ` em ${new Date(consolidacaoManualSelecionada.em).toLocaleString("pt-BR")}`}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-xs text-gray-400">O status deste mês é calculado automaticamente conforme os lançamentos realizados.</span>
+                )}
+                <div className="flex items-center gap-2">
+                  {!consolidacaoManualSelecionada && (
+                    <Button
+                      variant="outline" size="sm"
+                      className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                      onClick={() => { setObsConsolidar(""); setConsolidarDialogOpen(true); }}
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5 mr-1.5" /> Consolidar Mês
+                    </Button>
+                  )}
+                  {consolidacaoManualSelecionada && isAdmin && (
+                    <Button
+                      variant="outline" size="sm"
+                      className="text-amber-700 border-amber-300 hover:bg-amber-50"
+                      onClick={() => setDesconsolidarDialogOpen(true)}
+                    >
+                      Desconsolidar
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
               {MESES_ABREV.map((m, i) => {
                 const num = i + 1;
@@ -1416,6 +1495,72 @@ export default function FinanceiroDRE() {
               tipoPeriodo={sel.tipo}
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={consolidarDialogOpen} onOpenChange={setConsolidarDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-700">
+              <ShieldCheck className="w-5 h-5" /> Consolidar Mês
+            </DialogTitle>
+            <DialogDescription className="break-words">
+              {mesSelecionado && `Confirma a consolidação manual de ${MESES_PT[mesSelecionado - 1]}/${ano}?`}
+              {" "}O status deste mês no seletor passará a ser exibido como <strong>Consolidado</strong>, independentemente do percentual de lançamentos já realizados.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-gray-600">Observações (opcional)</label>
+            <Textarea
+              value={obsConsolidar}
+              onChange={(e) => setObsConsolidar(e.target.value)}
+              placeholder="Ex.: mês revisado e fechado após conferência do contador."
+              className="break-words"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setConsolidarDialogOpen(false)} disabled={consolidarMut.isPending}>
+              Cancelar
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              disabled={consolidarMut.isPending || !periodoMensalConsolidacao}
+              onClick={() => {
+                if (!periodoMensalConsolidacao) return;
+                consolidarMut.mutate({ companyId, mesReferencia: periodoMensalConsolidacao, observacoes: obsConsolidar || undefined });
+              }}
+            >
+              {consolidarMut.isPending ? "Consolidando..." : "Consolidar Mês"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={desconsolidarDialogOpen} onOpenChange={setDesconsolidarDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-amber-700">Desconsolidar Mês</DialogTitle>
+            <DialogDescription className="break-words">
+              {mesSelecionado && `Confirma a desconsolidação de ${MESES_PT[mesSelecionado - 1]}/${ano}?`}
+              {" "}O mês voltará a exibir o status calculado automaticamente pelos lançamentos.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setDesconsolidarDialogOpen(false)} disabled={desconsolidarMut.isPending}>
+              Cancelar
+            </Button>
+            <Button
+              variant="outline"
+              className="text-amber-700 border-amber-300 hover:bg-amber-50"
+              disabled={desconsolidarMut.isPending || !periodoMensalConsolidacao}
+              onClick={() => {
+                if (!periodoMensalConsolidacao) return;
+                desconsolidarMut.mutate({ companyId, mesReferencia: periodoMensalConsolidacao });
+              }}
+            >
+              {desconsolidarMut.isPending ? "Desconsolidando..." : "Desconsolidar"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </DashboardLayout>

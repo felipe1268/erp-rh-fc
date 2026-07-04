@@ -1,3 +1,5 @@
+- **Rev. 4014** — **COMPRAS: PERMITIR QUANTIDADE PARCIAL NA "DIVIDIR COTAÇÃO" (Item 2 dos ~20 ajustes do docx).** `dividirCotacao` só movia o item INTEIRO para a nova cotação; agora aceita `itens: {id, quantidade}[]`, com split proporcional de respostas de fornecedor já lançadas. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4013** — **COMPRAS: REGIME DE CUSTO/RISCO (BDI) NA EQUALIZAÇÃO DE COTAÇÃO PARA OBRAS "FORNECIMENTO DE MDO" (Item 1 dos ~20 ajustes do docx).** Seletor de 3 opções por item (cliente paga / empresa sem risco / empresa com risco) via novo `regime_custo` em `compras_cotacoes`/`compras_ordens`; sem-risco/cliente pula travamento por estouro. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4016** — **COMPRAS: LOTE FINAL DOS ~20 AJUSTES DO DOCX (Itens 7, 9, 13, 14, 17, 19, 20, 21a, 22) + CORREÇÃO DE BUG DE AUTORIZAÇÃO NA "TRANSFERÊNCIA EM LOTE" DO ALMOXARIFADO (Item 5, reaberto).** Causa-raiz do Item 5: `createTransferenciaOrigemDestino`/`createTransferenciaLote` usavam guard `userCanAccessObra` em vez de `userCanAccessObraAlmox`. ZERO DELETE · ZERO ALTER destrutivo.

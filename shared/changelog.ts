@@ -1,4 +1,34 @@
 /**
+ * Rev. 4022 — **FINANCEIRO/DRE: OPÇÃO DE CONSOLIDAR O MÊS MANUALMENTE (independente do
+ * percentual automático de lançamentos).**
+ *
+ * PEDIDO: usuário queria poder "consolidar o mês" no DRE manualmente — hoje o seletor de
+ * mês/período mostra o status "Consolidado" (verde) só quando o percentual de lançamentos
+ * realizados vs. previstos atinge 100% (cálculo automático em `dreDisponibilidade`). Não havia
+ * forma de forçar esse status para um mês que o usuário considera fechado por outros motivos
+ * (ex.: revisão manual do contador), análogo ao que já existe em Fechamento de Ponto.
+ *
+ * SOLUÇÃO (ADITIVA):
+ * - Nova tabela `financial_dre_consolidacoes` (company_id, mes_referencia "YYYY-MM", status,
+ *   consolidado_por/consolidado_em, desconsolidado_por/desconsolidado_em, observacoes), criada
+ *   via ColFix isolado em `server/_core/index.ts` (COLFIX_VERSION bumpado). Índice único
+ *   `(company_id, mes_referencia)`.
+ * - `dreDisponibilidade()` em `financialKpiService.ts` passa a consultar essa tabela por mês e
+ *   expõe `consolidadoManual`/`consolidadoPor`/`consolidadoEm`, sobrepondo o cálculo automático
+ *   quando presente (try/catch — ausência da tabela não quebra o seletor).
+ * - 3 novas procedures em `financial.ts`: `getDREConsolidacaoStatus` (query), `consolidarDRE`
+ *   (mutation, qualquer usuário autenticado da empresa via `_assertFinanceiroCompanyAccess`,
+ *   upsert por ON CONFLICT), `desconsolidarDRE` (mutation, restrita a admin/admin_master,
+ *   espelhando o gate de `desconsolidarMes` do Ponto).
+ * - Tela "Financeiro > DRE": ao selecionar um mês, aparece um cartão com o botão "Consolidar
+ *   Mês" (com campo de observações opcional) ou, se já consolidado manualmente, um selo
+ *   "consolidado manualmente por/em" + botão "Desconsolidar" (só admin). O selo do seletor de
+ *   mês (bolinha verde) já usa o novo status automaticamente.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4021 — **FINANCEIRO/SEFAZ: DANFE MOSTRANDO "XML COMPLETO NÃO DISPONÍVEL" — CAUSA-RAIZ
  * E BOTÃO MANUAL "DAR CIÊNCIA DA OPERAÇÃO E BUSCAR XML COMPLETO".**
  *

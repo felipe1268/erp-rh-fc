@@ -4730,7 +4730,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v4019-2026-07-04-cartao-escopo-oc-vinculo";
+    const COLFIX_VERSION = "v4022-2026-07-04-dre-consolidacao-manual";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -6350,6 +6350,36 @@ Regras:
         await _db4013.$client.query(`ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS regime_custo VARCHAR(20) DEFAULT 'empresa_com_risco'`);
         console.log("[ColFix Rev.4013] regime_custo garantido em compras_cotacoes/compras_ordens.");
       } catch (e: any) { console.error("[ColFix Rev.4013] FALHA regime_custo:", e?.message ?? e); }
+
+      // Rev. 4022 — Consolidação manual do mês no DRE (Financeiro > DRE), espelhando
+      // o padrão de "Consolidar mês" já existente no módulo de Ponto. Tabela própria
+      // (NÃO altera financial_entries) para não interferir no status automático
+      // baseado em lançamentos realizados; consolidação manual apenas SOBREPÕE a
+      // exibição do status do mês no seletor. Isolado em bloco próprio pelo mesmo
+      // motivo do Rev.4013 acima.
+      try {
+        const _db4022 = (await getDb())!;
+        await _db4022.$client.query(`
+          CREATE TABLE IF NOT EXISTS financial_dre_consolidacoes (
+            id                  SERIAL PRIMARY KEY,
+            company_id          INTEGER NOT NULL,
+            mes_referencia      VARCHAR(7) NOT NULL,
+            status              VARCHAR(20) NOT NULL DEFAULT 'aberto',
+            consolidado_por     VARCHAR(255),
+            consolidado_em      TIMESTAMP,
+            desconsolidado_por  VARCHAR(255),
+            desconsolidado_em   TIMESTAMP,
+            observacoes         TEXT,
+            created_at          TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at          TIMESTAMP NOT NULL DEFAULT NOW()
+          )
+        `);
+        await _db4022.$client.query(`
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_dre_consolidacoes_company_mes
+            ON financial_dre_consolidacoes(company_id, mes_referencia)
+        `);
+        console.log("[ColFix Rev.4022] financial_dre_consolidacoes garantida (consolidação manual do DRE).");
+      } catch (e: any) { console.error("[ColFix Rev.4022] FALHA financial_dre_consolidacoes:", e?.message ?? e); }
 
       // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos
       import("../services/startupCache").then(({ setCache }) =>

@@ -10391,6 +10391,77 @@ export const financialRouter = router({
     }
   }),
 
+  // Rev. 4022 — Consolidação manual do mês no DRE (Financeiro > DRE), análoga à
+  // consolidação de Ponto. NÃO trava/altera financial_entries — apenas grava o
+  // "selo" de mês fechado que sobrepõe o status automático no seletor.
+  getDREConsolidacaoStatus: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    mesReferencia: z.string().regex(/^\d{4}-\d{2}$/, "mesReferencia deve ser YYYY-MM."),
+  })).query(async ({ ctx, input }) => {
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const db = (await getDb())!;
+    const res = await dbExecute(db,
+      `SELECT status, consolidado_por, consolidado_em, desconsolidado_por, desconsolidado_em, observacoes
+       FROM financial_dre_consolidacoes
+       WHERE company_id = $1 AND mes_referencia = $2
+       LIMIT 1`,
+      [input.companyId, input.mesReferencia]
+    );
+    const row = rows(res)[0];
+    if (!row) return { consolidado: false, consolidadoPor: null, consolidadoEm: null, observacoes: null };
+    return {
+      consolidado: row.status === 'consolidado',
+      consolidadoPor: row.consolidado_por ?? null,
+      consolidadoEm: row.consolidado_em ?? null,
+      observacoes: row.observacoes ?? null,
+    };
+  }),
+
+  consolidarDRE: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    mesReferencia: z.string().regex(/^\d{4}-\d{2}$/, "mesReferencia deve ser YYYY-MM."),
+    observacoes: z.string().optional(),
+  })).mutation(async ({ ctx, input }) => {
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const db = (await getDb())!;
+    const nomeUsuario = ctx.user?.name || 'Financeiro';
+    await dbExecute(db,
+      `INSERT INTO financial_dre_consolidacoes
+         (company_id, mes_referencia, status, consolidado_por, consolidado_em, observacoes, updated_at)
+       VALUES ($1, $2, 'consolidado', $3, NOW(), $4, NOW())
+       ON CONFLICT (company_id, mes_referencia) DO UPDATE SET
+         status = 'consolidado',
+         consolidado_por = $5,
+         consolidado_em = NOW(),
+         observacoes = $6,
+         updated_at = NOW()`,
+      [input.companyId, input.mesReferencia, nomeUsuario, input.observacoes || null, nomeUsuario, input.observacoes || null]
+    );
+    return { success: true, consolidadoPor: nomeUsuario };
+  }),
+
+  desconsolidarDRE: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    mesReferencia: z.string().regex(/^\d{4}-\d{2}$/, "mesReferencia deve ser YYYY-MM."),
+  })).mutation(async ({ ctx, input }) => {
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    // Mesma verificação robusta usada em Ponto: admin_master, admin ou owner.
+    const userRole = (ctx.user.role || '').toString().trim().toLowerCase();
+    const isOwner = ctx.user.openId === process.env.OWNER_OPEN_ID;
+    const isAdmin = userRole.includes('admin');
+    if (!isAdmin && !isOwner) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: `Apenas administradores podem desconsolidar um mês do DRE. Seu perfil atual: ${userRole || 'desconhecido'}.` });
+    }
+    const db = (await getDb())!;
+    await dbExecute(db,
+      `UPDATE financial_dre_consolidacoes
+       SET status = 'aberto', desconsolidado_por = $3, desconsolidado_em = NOW(), updated_at = NOW()
+       WHERE company_id = $1 AND mes_referencia = $2`,
+      [input.companyId, input.mesReferencia, ctx.user?.name || 'Admin']
+    );
+    return { success: true };
+  }),
+
   getFluxoCaixa: protectedProcedure.input(z.object({
     companyId: z.number(),
   })).query(async ({ input }) => {

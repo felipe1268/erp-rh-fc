@@ -764,10 +764,12 @@ export async function calcularDRECustoPorConta(
 }
 
 // Disponibilidade de dados por mês de um ano (para o seletor de meses do DRE).
-// Para cada mês 1..12 retorna { n, nRealizado }:
+// Para cada mês 1..12 retorna { n, nRealizado, consolidadoManual, consolidadoPor, consolidadoEm }:
 //  - n         = total de lançamentos no mês (status != cancelado, tipo != transferencia)
 //  - nRealizado= lançamentos já realizados (valor_realizado preenchido / status pago)
-// Cliente deriva: n===0 → "sem_dados"; n>0 e nRealizado===n → "consolidado"; senão "lancamento".
+//  - consolidadoManual = true se o usuário consolidou manualmente o mês (Rev. 4022)
+// Cliente deriva: consolidadoManual → "consolidado" (sobrepõe o automático);
+// senão n===0 → "sem_dados"; n>0 e nRealizado===n → "consolidado"; senão "lancamento".
 export async function dreDisponibilidade(companyId: number, ano: string) {
   const db = await getDb();
   const yyyy = (ano || "").slice(0, 4);
@@ -784,12 +786,34 @@ export async function dreDisponibilidade(companyId: number, ano: string) {
      GROUP BY TO_CHAR(data_competencia,'MM')`,
     [companyId, yyyy]
   );
-  const meses: Record<number, { n: number; nRealizado: number }> = {};
-  for (let m = 1; m <= 12; m++) meses[m] = { n: 0, nRealizado: 0 };
+  const meses: Record<number, { n: number; nRealizado: number; consolidadoManual: boolean; consolidadoPor: string | null; consolidadoEm: string | null }> = {};
+  for (let m = 1; m <= 12; m++) meses[m] = { n: 0, nRealizado: 0, consolidadoManual: false, consolidadoPor: null, consolidadoEm: null };
   for (const row of r(res)) {
     const m = parseInt(row.mes, 10);
-    if (m >= 1 && m <= 12) meses[m] = { n: n(row.n), nRealizado: n(row.n_realizado) };
+    if (m >= 1 && m <= 12) meses[m] = { ...meses[m], n: n(row.n), nRealizado: n(row.n_realizado) };
   }
+
+  // Rev. 4022 — sobrepõe com a consolidação manual (tabela própria, não altera
+  // financial_entries). Só considera linhas com status='consolidado'; uma
+  // desconsolidação (status volta a 'aberto') faz o mês cair de volta ao
+  // cálculo automático acima.
+  try {
+    const consRes = await q(db!,
+      `SELECT mes_referencia, consolidado_por, consolidado_em
+       FROM financial_dre_consolidacoes
+       WHERE company_id=$1 AND status='consolidado' AND mes_referencia LIKE $2`,
+      [companyId, `${yyyy}-%`]
+    );
+    for (const row of r(consRes)) {
+      const m = parseInt(String(row.mes_referencia).slice(5, 7), 10);
+      if (m >= 1 && m <= 12) {
+        meses[m].consolidadoManual = true;
+        meses[m].consolidadoPor = row.consolidado_por ?? null;
+        meses[m].consolidadoEm = row.consolidado_em ?? null;
+      }
+    }
+  } catch { /* tabela ainda não sincronizada nesta instância — não bloqueia o seletor */ }
+
   return { ano: yyyy, meses };
 }
 
