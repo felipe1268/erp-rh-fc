@@ -36,9 +36,15 @@ const MDEV_TP_EVENTO: Record<string, number> = {
 };
 const MDEV_DESC: Record<number, string> = {
   210200: "Confirmacao da Operacao",
+  210210: "Ciencia da Operacao",
   210220: "Desconhecimento da Operacao",
   210240: "Operacao nao Realizada",
 };
+// Rev. 4021 — Ciência da Operação (210210): ato de baixo compromisso (não é
+// aceite/recusa) exigido pela SEFAZ para liberar o download do XML COMPLETO
+// (nfeProc) ao destinatário quando a nota só chegou como resumo (resNFe).
+// Sem essa manifestação, muitas UFs nunca liberam o XML completo via distribuição.
+const CIENCIA_TP_EVENTO = 210210;
 
 // Códigos IBGE de UF para o campo cUFAutor
 const UF_CODES: Record<string, number> = {
@@ -470,6 +476,71 @@ function processDocZip(base64gz: string, nsu: string): ResNFe | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Rev. 4021 — Consulta uma NF-e ESPECÍFICA pela chave de acesso (consChNFe, via
+ * NFeDistribuicaoDFe) e, se a SEFAZ já liberou o XML completo (nfeProc) —
+ * normalmente após Ciência da Operação registrada — salva em fiscal_notes.xml_payload.
+ * Antes da Ciência, a SEFAZ costuma devolver só o mesmo resNFe (resumo) já conhecido.
+ */
+async function buscarXmlPorChave(opts: {
+  db: any;
+  companyId: number;
+  chaveNFe: string;
+  cnpj: string;
+  cUFAutor: number;
+  tpAmb: number;
+  pfxBase64: string;
+  pfxPassword: string;
+}): Promise<{ ok: boolean; temXmlCompleto: boolean; cStat: string; xMotivo: string }> {
+  const { db, companyId, chaveNFe, cnpj, cUFAutor, tpAmb, pfxBase64, pfxPassword } = opts;
+  const url = tpAmb === 2 ? SEFAZ_URL_HOM : SEFAZ_URL_PROD;
+  const soap = buildSoapEnvelopeByChave(cnpj, cUFAutor, chaveNFe, tpAmb);
+
+  let respXml: string;
+  try {
+    respXml = await callSefaz(url, soap, pfxBase64, pfxPassword);
+  } catch (e: any) {
+    return { ok: false, temXmlCompleto: false, cStat: "", xMotivo: "Erro de comunicação: " + (e?.message || e) };
+  }
+
+  const parsed = xmlParser.parse(respXml);
+  const env = parsed["soap:Envelope"] || parsed["soap12:Envelope"] || parsed["s:Envelope"] || parsed["Envelope"] || parsed;
+  const body = env?.["soap:Body"] || env?.["soap12:Body"] || env?.["s:Body"] || env?.["Body"] || env;
+  const resp = body?.["nfeDistDFeInteresseResponse"] || body?.["nfeDistDFeIntResponse"] || body;
+  const ret = resp?.["nfeDistDFeInteresseResult"]?.["retDistDFeInt"]
+    || resp?.["nfeDistDFeInteresseResult"]?.["nfeRetDistDFeInt"]
+    || resp?.["nfeDistDFeIntResult"]?.["nfeRetDistDFeInt"]
+    || resp?.["nfeRetDistDFeInt"]
+    || {};
+
+  const cStat = String(ret?.cStat ?? "");
+  const xMotivo = String(ret?.xMotivo ?? "");
+  console.log(`[SefazBuscaChave] company=${companyId} chave=${chaveNFe.slice(0, 10)}… cStat=${cStat} xMotivo="${xMotivo}"`);
+
+  // 137 = nada localizado (mesmo assim retorna ok=true, sem XML) | 138 = documento localizado
+  if (cStat !== "137" && cStat !== "138") {
+    return { ok: false, temXmlCompleto: false, cStat, xMotivo };
+  }
+
+  const lote = ret?.loteDistDFeInt?.docZip;
+  const docs: any[] = Array.isArray(lote) ? lote : lote ? [lote] : [];
+  for (const doc of docs) {
+    const schema = String(doc?.["@_schema"] || doc?.schema || "");
+    const nsuDoc = padNSU(doc?.["@_NSU"] || doc?.NSU || "0");
+    const b64 = String(doc?.["#text"] || doc || "");
+    if (!schema.startsWith("nfeProc")) continue;
+    const nfe = processDocZip(b64, nsuDoc);
+    if (nfe?.rawXml && nfe.chNFe === chaveNFe) {
+      await db.execute(sql`
+        UPDATE fiscal_notes SET xml_payload = ${nfe.rawXml}, updated_at = NOW()
+        WHERE company_id = ${companyId} AND chave_acesso = ${chaveNFe} AND xml_payload IS NULL
+      `);
+      return { ok: true, temXmlCompleto: true, cStat, xMotivo };
+    }
+  }
+  return { ok: true, temXmlCompleto: false, cStat, xMotivo };
 }
 
 /**
@@ -1625,6 +1696,91 @@ export const sefazRouter = router({
       `);
 
       return { ok: true, cStat, xMotivo, nProt };
+    }),
+
+  // Rev. 4021 — Dar "Ciência da Operação" (210210) para UMA nota específica e,
+  // em seguida, tentar baixar o XML COMPLETO (nfeProc) pela chave. É um ato
+  // de baixo compromisso (não confirma nem recusa a compra) — só sinaliza à
+  // SEFAZ que o destinatário está ciente da nota, o que libera o XML completo
+  // em boa parte das UFs quando só o resumo (resNFe) havia sido distribuído.
+  // Disparado manualmente pelo usuário (botão), NUNCA automático.
+  darCienciaEBuscarXml: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      console.log(`[SefazCiencia] recebido — id=${input.id} company=${input.companyId}`);
+
+      const noteRows = (await db.execute(sql`
+        SELECT id, chave_acesso, xml_payload FROM fiscal_notes
+        WHERE id = ${input.id} AND company_id = ${input.companyId}
+          AND origem IN ('sefaz_nfe', 'xml_upload')
+      `)) as any;
+      const note = (noteRows?.rows ?? noteRows)?.[0];
+      if (!note) throw new TRPCError({ code: "NOT_FOUND", message: "Nota não encontrada." });
+      if (note.xml_payload) return { ok: true, jaTinhaXml: true, temXmlCompleto: true };
+
+      const chaveNFe = String(note.chave_acesso || "").replace(/\D/g, "");
+      if (chaveNFe.length !== 44)
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Chave de acesso inválida (${chaveNFe.length} dígitos — esperado 44). Não é possível buscar o XML.` });
+
+      const cfgRows = (await db.execute(sql`
+        SELECT cnpj, cert_pfx_base64, cert_password, ambiente
+        FROM company_nfe_config WHERE company_id = ${input.companyId} AND ativo = 1
+      `)) as any;
+      const cfg = (cfgRows?.rows ?? cfgRows)?.[0];
+      if (!cfg?.cert_pfx_base64 || !cfg?.cert_password)
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Certificado A1 não configurado. Acesse Configurações → Financeiro → SEFAZ." });
+
+      const cnpj = cleanCnpj(cfg.cnpj || "");
+      const tpAmb = cfg.ambiente === "homologacao" ? 2 : 1;
+      const cUF   = parseInt(chaveNFe.slice(0, 2), 10);
+      const url   = getMdeUrl(tpAmb);
+
+      let certPem: string, keyPem: string;
+      try {
+        ({ cert: certPem, key: keyPem } = pfxToPem(cfg.cert_pfx_base64, cfg.cert_password));
+      } catch (e: any) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro ao ler certificado: " + (e?.message || e) });
+      }
+
+      // 1) Envia Ciência da Operação (210210) para a SEFAZ.
+      const envEventoXml = buildEnvEvento({ cnpj, chaveNFe, tpEvento: CIENCIA_TP_EVENTO, tpAmb, certPem, keyPem });
+      const soap = buildSoapEventoEnvelope(envEventoXml);
+      console.log(`[SefazCiencia] company=${input.companyId} chave=${chaveNFe.slice(0, 10)}… tpAmb=${tpAmb} cUF=${cUF} url=${url}`);
+
+      let respXml: string;
+      try {
+        respXml = await callSefazEvento(url, soap, cfg.cert_pfx_base64, cfg.cert_password);
+      } catch (e: any) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Erro de comunicação com SEFAZ: " + (e?.message || e) });
+      }
+
+      const { cStat, xMotivo, nProt } = parseRetEnvEvento(respXml);
+      console.log(`[SefazCiencia] cStat=${cStat} xMotivo=${xMotivo} nProt=${nProt}`);
+
+      // 135/136 = registrado | 573 = duplicidade de evento (já manifestada antes) —
+      // em ambos os casos a Ciência já está registrada e podemos seguir pro download.
+      const isOk = ["135", "136", "573", "628"].includes(cStat);
+      if (!isOk) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `SEFAZ ${cStat}: ${xMotivo}` });
+      }
+
+      // 2) Consulta a NF-e específica pela chave — com a Ciência registrada, a
+      //    SEFAZ tende a liberar o XML completo (nfeProc) nesta consulta.
+      const download = await buscarXmlPorChave({
+        db, companyId: input.companyId, chaveNFe, cnpj, cUFAutor: cUF, tpAmb,
+        pfxBase64: cfg.cert_pfx_base64, pfxPassword: cfg.cert_password,
+      });
+      console.log(`[SefazCiencia] download temXmlCompleto=${download.temXmlCompleto} cStat=${download.cStat} xMotivo="${download.xMotivo}"`);
+
+      return {
+        ok: true,
+        cienciaCStat: cStat,
+        cienciaXMotivo: xMotivo,
+        temXmlCompleto: download.temXmlCompleto,
+        buscaCStat: download.cStat,
+        buscaXMotivo: download.xMotivo,
+      };
     }),
 
   getDetalhesNFe: protectedProcedure

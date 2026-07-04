@@ -1,4 +1,41 @@
 /**
+ * Rev. 4021 — **FINANCEIRO/SEFAZ: DANFE MOSTRANDO "XML COMPLETO NÃO DISPONÍVEL" — CAUSA-RAIZ
+ * E BOTÃO MANUAL "DAR CIÊNCIA DA OPERAÇÃO E BUSCAR XML COMPLETO".**
+ *
+ * PROBLEMA: nota fiscal recebida via distribuição SEFAZ (WebService NFeDistribuicaoDFe) exibia
+ * "XML completo não disponível — nota recebida como resumo SEFAZ" com todos os campos do
+ * DANFE zerados/em branco (ex.: nota da CONSTRUDECOR S.A.). Investigação encontrou a causa-raiz:
+ * a SEFAZ só entregou o evento resumido `resNFe` — o `nfeProc` (XML completo, com todos os itens,
+ * impostos e dados) não é liberado ao destinatário automaticamente em boa parte das UFs até que o
+ * destinatário registre o evento "Ciência da Operação" (tpEvento 210210) junto à SEFAZ. O sistema
+ * só suportava os eventos de manifestação definitiva (Confirmação/Recusa/Desconhecimento —
+ * 210200/210220/210240); a Ciência (ato neutro, de baixo compromisso, que NÃO confirma nem recusa
+ * a compra) nunca era emitida, então o XML completo nunca era liberado para essas notas.
+ *
+ * SOLUÇÃO (ADITIVA, disparo 100% MANUAL por nota — nunca automático em lote):
+ * - `CIENCIA_TP_EVENTO = 210210` + entrada em `MDEV_DESC` (mapa de descrições de evento MD-e).
+ * - Nova função `buscarXmlPorChave` — reaproveita o SOAP builder `buildSoapEnvelopeByChave`
+ *   (já existente, mas até então nunca chamado) para consultar a NF-e ESPECÍFICA pela chave de
+ *   acesso (consChNFe) e, se a SEFAZ já liberou o `nfeProc`, salvar em `fiscal_notes.xml_payload`
+ *   reaproveitando o parser `processDocZip` já usado no sync geral por NSU.
+ * - Nova mutation `sefaz.darCienciaEBuscarXml({ id, companyId })`: (1) valida que a nota não tem
+ *   XML ainda e que a chave tem 44 dígitos, (2) monta e assina o evento de Ciência via
+ *   `buildEnvEvento`/`callSefazEvento` (reaproveitando toda a infra de certificado A1 existente),
+ *   (3) trata cStat 135/136/573(duplicidade)/628 como sucesso, (4) em seguida chama
+ *   `buscarXmlPorChave` para tentar puxar o XML completo imediatamente.
+ * - Tela "Financeiro > Notas Fiscais > Recebidas": o aviso âmbar "XML completo não disponível"
+ *   ganhou o botão "Dar Ciência da Operação e buscar XML completo", com estado de carregamento e
+ *   toasts explicando o resultado (XML recuperado / Ciência registrada mas XML ainda não liberado
+ *   pela SEFAZ / erro). Distinto do botão de backfill por NSU já existente (que só re-tenta pegar
+ *   XML já enfileirado pela SEFAZ, sem forçar liberação via Ciência).
+ *
+ * Ação é sempre disparada pelo usuário por nota — Ciência é um ato oficial registrado junto ao
+ * governo, não deve ser automatizado em lote sem revisão explícita.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4019 — **COMPRAS: SUGESTÃO AUTOMÁTICA DE CARTÃO DE CRÉDITO NA COTAÇÃO/OC + VÍNCULO
  * AUTOMÁTICO OC↔FATURA DO CARTÃO PARA CONCILIAÇÃO.**
  *

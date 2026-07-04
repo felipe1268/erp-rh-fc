@@ -746,6 +746,24 @@ export default function FinanceiroNotasFiscais() {
     },
     onError: (e: any) => toast({ title: "Erro ao manifestar", description: e.message, variant: "destructive" }),
   });
+  const darCienciaMut = (trpc as any).sefaz.darCienciaEBuscarXml.useMutation({
+    onSuccess: (data: any) => {
+      nfeDetalhesQuery.refetch();
+      nfeRecQuery.refetch();
+      if (data?.jaTinhaXml) {
+        toast({ title: "✅ Esta nota já tinha o XML completo." });
+      } else if (data?.temXmlCompleto) {
+        toast({ title: "✅ XML completo recuperado!", description: "Ciência da Operação registrada na SEFAZ e o DANFE completo já está disponível." });
+      } else {
+        toast({
+          title: "ℹ️ Ciência registrada, XML ainda não liberado",
+          description: `A SEFAZ confirmou a Ciência da Operação, mas ainda não liberou o XML completo desta nota${data?.buscaXMotivo ? ` (${data.buscaXMotivo})` : ""}. Tente novamente em alguns minutos.`,
+          duration: 8000,
+        } as any);
+      }
+    },
+    onError: (e: any) => toast({ title: "Erro ao dar Ciência da Operação", description: e.message, variant: "destructive", duration: 8000 } as any),
+  });
   const vincularEntryMut = trpc.fiscalNotes.vincularLancamento.useMutation({
     onSuccess: () => { toast({ title: "Lançamento vinculado!" }); setDetalheNf(null); listQuery.refetch(); },
     onError: (e) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
@@ -4017,11 +4035,25 @@ export default function FinanceiroNotasFiscais() {
 
                     {/* ── Nota sem XML completo ── */}
                     {!isLoadingDet && !det && (
-                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 flex gap-2 items-start">
-                        <span className="text-amber-500 text-sm mt-0.5">ⓘ</span>
-                        <p className="text-xs text-amber-700 leading-relaxed">
-                          XML completo não disponível para esta nota — foi importada via resumo SEFAZ (resNFe). Novas sincronizações e importações de XML salvarão o conteúdo completo automaticamente.
-                        </p>
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 flex flex-col gap-2 items-start">
+                        <div className="flex gap-2 items-start">
+                          <span className="text-amber-500 text-sm mt-0.5">ⓘ</span>
+                          <p className="text-xs text-amber-700 leading-relaxed">
+                            XML completo não disponível para esta nota — foi importada via resumo SEFAZ (resNFe). Isso costuma acontecer quando a empresa ainda não deu "Ciência da Operação" para esta NF-e junto à SEFAZ, o que é exigido para liberar o XML completo (DANFE com todos os itens, impostos e dados).
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={darCienciaMut.isPending}
+                          onClick={() => nfeRecDetalhe?.id && companyId && darCienciaMut.mutate({ id: nfeRecDetalhe.id, companyId })}
+                          className="ml-6 flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {darCienciaMut.isPending ? (
+                            <><RefreshCw className="w-3 h-3 animate-spin" />Dando Ciência na SEFAZ e buscando XML…</>
+                          ) : (
+                            <><RefreshCw className="w-3 h-3" />Dar Ciência da Operação e buscar XML completo</>
+                          )}
+                        </button>
                       </div>
                     )}
 
