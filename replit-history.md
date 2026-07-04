@@ -1,3 +1,5 @@
+- **Rev. 4004** — COMPRAS/COTAÇÕES: PDF e Excel do Mapa de Cotação não traziam a linha de total por fornecedor; `gerarPdfCotacao`/`exportarExcelCotacao` passaram a reaproveitar `getFornTotal`/`metaGrandTotal`/`qtdGrandTotal` pra gerar a linha de total. ZERO DELETE · ZERO ALTER.
+
 - **Rev. 4003** — **COMPRAS/COTAÇÕES: "EXPORTAR PDF" GERAVA PÁGINA EM BRANCO — BLOQUEAVA ENVIO DE COTAÇÃO PARA CLIENTE APROVAR ITEM A ITEM; ADICIONADO TAMBÉM "EXPORTAR EXCEL".** Causa: `window.print()` sobre `<div className="fixed inset-0 ...">` (mesma causa-raiz de `print-dialog-fixed-clip`); fix via HTML autônomo em `window.open`+`document.write`. ZERO DELETE · ZERO ALTER.
 
 - **Rev. 4002** — **IMPORTAÇÃO DE EXTRATO PDF (SANTANDER IBPJ): PARSER ESTAVA IGNORANDO 100% DOS LANÇAMENTOS EM EXTRATOS DE VÁRIAS PÁGINAS.** `parseSantanderIbpjPdf` assumia cada lançamento em UMA linha só, mas a extração real do `pdf-parse` quebra em 2-3 linhas; reescrito como scanner por blocos. Validado: 0→131 lançamentos, saldo diário reconciliado 100%. ZERO DELETE · ZERO ALTER.

@@ -46,6 +46,11 @@ const EMPTY_MOV = {
 };
 
 function n(v: any) { return parseFloat(v ?? "0") || 0; }
+// Rev. 4012 — exibição de quantidade em pt-BR: remove zeros decimais espúrios
+// (numeric(14,3) do banco chega como "37.0000") e aplica separador de milhar
+// ("1.000" em vez de "1000"). Usar SÓ em pontos de EXIBIÇÃO, nunca em inputs/estado editável.
+const qtdFmt = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+function fmtQtd(v: any) { return qtdFmt.format(n(v)); }
 function norm(s: string) { return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[.\-\/\[\]]/g, "").toLowerCase().trim(); }
 
 /**
@@ -3326,7 +3331,7 @@ export default function AlmoxarifadoPage() {
                 )}
                 <div>
                   <p className="font-medium text-gray-800 text-sm">{movItem.nome}</p>
-                  <p className="text-xs text-gray-500">Saldo atual: <strong>{n(movItem.quantidadeAtual) % 1 === 0 ? n(movItem.quantidadeAtual).toFixed(0) : n(movItem.quantidadeAtual).toFixed(2)}</strong> {movItem.unidade}</p>
+                  <p className="text-xs text-gray-500">Saldo atual: <strong>{fmtQtd(movItem.quantidadeAtual)}</strong> {movItem.unidade}</p>
                 </div>
               </div>
 
@@ -3421,7 +3426,7 @@ export default function AlmoxarifadoPage() {
                         </td>
                         <td className="py-2.5 px-3 text-right font-mono text-sm font-semibold">
                           {m.tipo === "entrada" ? "+" : m.tipo === "saida" ? "-" : ""}
-                          {n(m.quantidade) % 1 === 0 ? n(m.quantidade).toFixed(0) : n(m.quantidade).toFixed(2)}
+                          {fmtQtd(m.quantidade)}
                         </td>
                         <td className="py-2.5 px-3 text-xs text-gray-500">{m.obraNome || "—"}</td>
                         <td className="py-2.5 px-3 text-xs text-gray-500">{m.motivo || "—"}</td>
@@ -3515,7 +3520,7 @@ export default function AlmoxarifadoPage() {
                     <label className="text-sm font-semibold text-gray-700 block mb-1">Selecionar Item *</label>
                     <select className="w-full border-2 rounded-xl p-3 text-base" value={saidaItemId} onChange={e => setSaidaItemId(Number(e.target.value))}>
                       <option value={0}>— escolha o item —</option>
-                      {itens.map(i => <option key={i.id} value={i.id}>{i.nome} — Estoque: {n(i.quantidadeAtual)} {i.unidade}</option>)}
+                      {itens.map(i => <option key={i.id} value={i.id}>{i.nome} — Estoque: {fmtQtd(i.quantidadeAtual)} {i.unidade}</option>)}
                     </select>
                   </div>
                   <div>
@@ -3701,7 +3706,7 @@ export default function AlmoxarifadoPage() {
                                   <Wrench className="w-4 h-4 text-blue-500 shrink-0" />
                                   <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium text-gray-900 truncate">{info?.nome || `#${it.itemId}`}</p>
-                                    <p className="text-[11px] text-gray-500">Qtd: <b>{it.qtd}</b> · Estoque: {info ? n(info.quantidadeAtual) : "—"}</p>
+                                    <p className="text-[11px] text-gray-500">Qtd: <b>{it.qtd}</b> · Estoque: {info ? fmtQtd(info.quantidadeAtual) : "—"}</p>
                                   </div>
                                   <button type="button" onClick={() => setEmpItens(prev => prev.filter((_, i) => i !== idx))} className="text-gray-400 hover:text-red-500 transition" title="Remover">
                                     <X className="w-4 h-4" />
@@ -3717,7 +3722,7 @@ export default function AlmoxarifadoPage() {
                           <div className="flex gap-2">
                             <select className="flex-1 min-w-0 border-2 rounded-xl p-3 text-sm" value={empItemId} onChange={e => setEmpItemId(Number(e.target.value))}>
                               <option value={0}>— escolha a ferramenta —</option>
-                              {ferramentasList.filter((i: any) => !jaEscolhidos.has(i.id)).map((i: any) => <option key={i.id} value={i.id}>{i.nome} — Estoque: {n(i.quantidadeAtual)}</option>)}
+                              {ferramentasList.filter((i: any) => !jaEscolhidos.has(i.id)).map((i: any) => <option key={i.id} value={i.id}>{i.nome} — Estoque: {fmtQtd(i.quantidadeAtual)}</option>)}
                             </select>
                             <input type="number" inputMode="numeric" className="w-20 border-2 rounded-xl p-3 text-base font-bold text-center" value={empQtd} onChange={e => setEmpQtd(e.target.value)} placeholder="Qtd" />
                             <button type="button" onClick={adicionar} disabled={!podeAdicionar} className="bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold px-3 rounded-xl disabled:opacity-40 transition" title="Adicionar à lista">+</button>
@@ -3894,7 +3899,7 @@ export default function AlmoxarifadoPage() {
                     )}
                     {insItemId ? (
                       <div className="w-full border-2 border-amber-300 bg-amber-50 rounded-xl p-3 text-base flex items-center justify-between">
-                        <span className="truncate">{(() => { const it = itens.find((i: any) => i.id === insItemId); return it ? `${it.nome} — Estoque: ${n(it.quantidadeAtual)} ${it.unidade || "un"}` : ""; })()}</span>
+                        <span className="truncate">{(() => { const it = itens.find((i: any) => i.id === insItemId); return it ? `${it.nome} — Estoque: ${fmtQtd(it.quantidadeAtual)} ${it.unidade || "un"}` : ""; })()}</span>
                         <button type="button" onClick={() => { setInsItemId(0); setInsItemSearch(""); }} className="ml-2 text-gray-400 hover:text-red-500 flex-shrink-0"><X className="w-4 h-4" /></button>
                       </div>
                     ) : (
@@ -3916,7 +3921,7 @@ export default function AlmoxarifadoPage() {
                         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
                           {filtered.slice(0, 50).map((i: any) => (
                             <button key={i.id} type="button" className="w-full text-left px-3 py-2 hover:bg-amber-50 text-sm transition truncate" onMouseDown={() => { setInsItemId(i.id); setInsItemSearch(i.nome); setInsItemFocused(false); }}>
-                              {i.nome} — Estoque: {n(i.quantidadeAtual)} {i.unidade || "un"}
+                              {i.nome} — Estoque: {fmtQtd(i.quantidadeAtual)} {i.unidade || "un"}
                             </button>
                           ))}
                         </div>
@@ -4062,7 +4067,7 @@ export default function AlmoxarifadoPage() {
                                   {i.codigoInterno ? <span className="text-purple-600 font-mono mr-1">{i.codigoInterno}</span> : null}
                                   {i.nome}
                                 </span>
-                                <span className="text-xs text-gray-500 ml-2 whitespace-nowrap">Estoque: {n(parseFloat(i.quantidadeAtual || "0"))} {i.unidade || "un"}</span>
+                                <span className="text-xs text-gray-500 ml-2 whitespace-nowrap">Estoque: {fmtQtd(i.quantidadeAtual)} {i.unidade || "un"}</span>
                               </button>
                             ))}
                           {(itensOrigem as any[]).filter((i: any) => {
@@ -4193,7 +4198,7 @@ export default function AlmoxarifadoPage() {
                           <p className="text-xs text-gray-400">
                             {loan.dataEmprestimo
                               ? new Date(loan.dataEmprestimo + "T00:00:00").toLocaleDateString("pt-BR")
-                              : ""}{loan.horaEmprestimo ? ` às ${loan.horaEmprestimo}` : ""} — Qtd: {n(loan.quantidade)}
+                              : ""}{loan.horaEmprestimo ? ` às ${loan.horaEmprestimo}` : ""} — Qtd: {fmtQtd(loan.quantidade)}
                           </p>
                         </div>
                         {atrasado ? (
@@ -4489,7 +4494,7 @@ export default function AlmoxarifadoPage() {
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-gray-900 text-sm truncate">{m.itemNome ?? "—"}</p>
                       <p className="text-xs text-gray-500">
-                        +{n(m.quantidade)} {m.unidade ?? "un"}
+                        +{fmtQtd(m.quantidade)} {m.unidade ?? "un"}
                         {m.motivo ? ` · ${m.motivo}` : ""}
                         {m.usuarioNome ? ` · ${m.usuarioNome}` : ""}
                       </p>
@@ -4511,7 +4516,7 @@ export default function AlmoxarifadoPage() {
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-gray-900 text-sm truncate">{m.itemNome ?? "—"}</p>
                       <p className="text-xs text-gray-500">
-                        -{n(m.quantidade)} {m.unidade ?? "un"}
+                        -{fmtQtd(m.quantidade)} {m.unidade ?? "un"}
                         {m.obraNome ? ` · ${m.obraNome}` : ""}
                         {m.usuarioNome ? ` · ${m.usuarioNome}` : ""}
                       </p>
@@ -4579,7 +4584,7 @@ export default function AlmoxarifadoPage() {
                               <Wrench className="w-4 h-4 text-blue-500 shrink-0" />
                               <div className="flex-1 min-w-0">
                                 <p className="font-semibold text-gray-900 text-sm truncate">{l.itemNome}</p>
-                                <p className="text-[11px] text-gray-500">{n(l.quantidade)} un · Emprestado em {l.dataEmprestimo}{l.horaEmprestimo ? ` às ${l.horaEmprestimo}` : ""}</p>
+                                <p className="text-[11px] text-gray-500">{fmtQtd(l.quantidade)} un · Emprestado em {l.dataEmprestimo}{l.horaEmprestimo ? ` às ${l.horaEmprestimo}` : ""}</p>
                               </div>
                               <button
                                 onClick={() => { setAssinaturaDevolucaoDataUrl(null); setModalAssinaturaDevolucao({ tipo: "individual", loan: l }); }}
@@ -4614,7 +4619,7 @@ export default function AlmoxarifadoPage() {
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-gray-900 text-sm truncate">{r.item_nome}</p>
                       <p className="text-xs text-gray-600">
-                        {n(r.quantidade)} {r.unidade || "un"} · <span className="font-medium">{r.funcionario_nome}</span>
+                        {fmtQtd(r.quantidade)} {r.unidade || "un"} · <span className="font-medium">{r.funcionario_nome}</span>
                         {r.funcionario_codigo ? ` (${r.funcionario_codigo})` : ""}
                       </p>
                       {r.obra_nome && <p className="text-[11px] text-amber-700">🏗️ {r.obra_nome}</p>}
@@ -4644,7 +4649,7 @@ export default function AlmoxarifadoPage() {
                       <div className="flex items-center gap-2 mb-1">
                         <ArrowLeftRight className="w-4 h-4 text-purple-500 shrink-0" />
                         <p className="font-semibold text-gray-900 text-sm truncate">{t.item_nome}</p>
-                        <span className="ml-auto text-sm font-bold text-purple-700 shrink-0">{n(t.quantidade)} {t.unidade || "un"}</span>
+                        <span className="ml-auto text-sm font-bold text-purple-700 shrink-0">{fmtQtd(t.quantidade)} {t.unidade || "un"}</span>
                       </div>
                       <div className="flex items-center gap-1 text-xs text-gray-600">
                         <span className="px-2 py-0.5 bg-purple-100 rounded-full font-medium">{origemLabel}</span>
@@ -4674,7 +4679,7 @@ export default function AlmoxarifadoPage() {
                       <p className="text-xs text-gray-500">{item.categoria ?? "Sem categoria"} · {item.unidade}</p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="text-sm font-bold text-gray-900">{n(item.quantidadeAtual)}</p>
+                      <p className="text-sm font-bold text-gray-900">{fmtQtd(item.quantidadeAtual)}</p>
                       <p className="text-[11px] text-gray-400">{item.unidade}</p>
                     </div>
                   </div>
@@ -5108,7 +5113,7 @@ export default function AlmoxarifadoPage() {
                         </div>
                         <div className="text-right flex-shrink-0">
                           <p className="text-[10px] text-gray-400 uppercase">Quantidade final</p>
-                          <p className="text-lg font-bold text-violet-600">{g.qtdDepois} <span className="text-xs text-gray-400">{g.unidade}</span></p>
+                          <p className="text-lg font-bold text-violet-600">{fmtQtd(g.qtdDepois)} <span className="text-xs text-gray-400">{g.unidade}</span></p>
                         </div>
                       </div>
                       <div className="text-[11px] text-gray-600 bg-gray-50 rounded p-2 space-y-0.5">
@@ -5529,7 +5534,7 @@ export default function AlmoxarifadoPage() {
                             <p className="text-sm text-gray-700 mt-2 bg-gray-50 rounded px-2 py-1.5 italic">"{r.justificativa}"</p>
                             {r.acao === "alterar_quantidade" && r.dadosAntes && r.dadosDepois && (
                               <p className="text-xs text-gray-600 mt-1">
-                                Quantidade: <strong>{r.dadosAntes.quantidadeAtual}</strong> → <strong>{r.dadosDepois.quantidadeAtual}</strong>
+                                Quantidade: <strong>{fmtQtd(r.dadosAntes.quantidadeAtual)}</strong> → <strong>{fmtQtd(r.dadosDepois.quantidadeAtual)}</strong>
                               </p>
                             )}
                             {r.statusValidacao !== "pendente" && (

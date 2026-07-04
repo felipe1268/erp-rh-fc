@@ -1,4 +1,48 @@
 /**
+ * Rev. 4012 — **ALMOXARIFADO: (1) 2 ITENS COM EMPRESA ERRADA CORRIGIDOS, (2) 11 ITENS
+ * DUPLICADOS ("Bacia com Caixa Acoplada Ravena") UNIFICADOS EM 1, (3) FORMATO DE QUANTIDADE
+ * CORRIGIDO PARA PADRÃO BRASILEIRO.**
+ *
+ * Usuário reportou lista de materiais "bagunçada": itens na empresa errada, muitos
+ * duplicados, e quantidade exibida errado ("37.0000" em vez de "37"). Análise cuidadosa
+ * ANTES de qualquer escrita (mesma cautela da Rev. 4009, que corrigiu um merge indevido):
+ *
+ * 1. **Empresa errada** — ids 3719 ("Desmoldante...") e 3720 ("Parafusadeira...") estavam em
+ *    CF Hotelaria (company 60004) mas deveriam ser FC Engenharia (60002). Confirmado ZERO
+ *    referência em qualquer tabela de histórico/movimentação — reatribuídos para 60002 com
+ *    códigos novos `MAT-2637`/`MAT-2638` (próximos da sequência real, evitando colisão com os
+ *    `MAT-0001`/`MAT-0002` já existentes em 60002).
+ *
+ * 2. **Duplicados** — rodada global de agrupamento por nome normalizado + similaridade
+ *    (pg_trgm) sobre os 1685 itens puramente "estoque" (excluídos os 951 vinculados a
+ *    equipamento locado/próprio, ver `warehouse-session-idor.md`/histórico Rev. 4008/4009).
+ *    Resultado: **só 1 grupo é seguro para unificar** — 11 itens "Bacia com Caixa Acoplada
+ *    Ravena Braco - P.909.17 - Deca" (ids 7-19, códigos MAT-0007..MAT-0017) que diferem
+ *    APENAS por um código de localização entre colchetes (ex.: "[15.06.01.01]"), mesmo
+ *    `obra_id` (NULL/estoque central), mesma unidade. Unificados no item mais antigo (id=7,
+ *    MAT-0007), soma de `quantidade_atual` = 393, histórico repontado em
+ *    `almoxarifado_movimentacoes` e `compras_cotacao_respostas` (2 respostas de cotação
+ *    colidentes tiveram total/quantidade somados antes do repointing, por causa da
+ *    constraint única `(cotacao_id, fornecedor_id, item_id)`).
+ *
+ *    **Outros 5-6 pares "parecidos" encontrados pelo algoritmo foram DELIBERADAMENTE NÃO
+ *    unificados** — cada par tem `obra_id` DIFERENTE (itens fisicamente em canteiros
+ *    diferentes) e/ou `unidade` DIFERENTE (ex.: "Brita 1" em m³ vs m²): Aditivo colante
+ *    "bianco", Pulverizador/Burrifador, Brita 1, 2x variações de Prego com cabeça. Unificar
+ *    itens de obras diferentes apagaria a rastreabilidade de estoque por canteiro — mesma
+ *    classe de risco do incidente da Rev. 4008/4009. Ficam para decisão manual do usuário.
+ *
+ * 3. **Formatação de quantidade** — `client/src/pages/almoxarifado/index.tsx` ganhou helper
+ *    `fmtQtd()` (`Intl.NumberFormat('pt-BR', {maximumFractionDigits:3})`) substituindo os ~18
+ *    pontos de EXIBIÇÃO que usavam `n()`/`.toFixed()` cru; agora "37.0000"→"37" e
+ *    "1000"→"1.000". Inputs/estado editável (que usam `n()` para parse) não foram tocados.
+ *
+ * Backup completo de `almoxarifado_itens` (+ linhas afetadas de `almoxarifado_movimentacoes`/
+ * `compras_cotacao_respostas`) em tabelas `*_backup_rev4012` antes de qualquer escrita.
+ * ZERO DELETE fora do grupo Bacia explicitamente auditado · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4011 — **ALMOXARIFADO: OS 3 ITENS PENDENTES DA AUDITORIA "CORREÇÕES E MELHORIAS ERP -
  * ALMOXARIFADO" (12/15 já haviam sido implementados em revisões anteriores).**
  *
