@@ -203,3 +203,9 @@ id = "nEfLyPKTYhnpuz1H-ocUE"
 uri = "file://exports/lista_materiais_almoxarifado.csv"
 type = "table"
 title = "Lista completa de materiais do almoxarifado (2.638 itens)"
+
+[[outputs]]
+id = "uHMSS0kGyR1er_2tbVI00"
+uri = "file://.local/analise_ajustes_compras_03072026.md"
+type = "text"
+title = "Análise dos Ajustes ERP – Compras (03/07/2026)"
