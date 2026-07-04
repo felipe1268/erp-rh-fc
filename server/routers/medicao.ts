@@ -715,12 +715,31 @@ export const medicaoRouter = router({
       const normalizeEap = (eap: string) =>
         eap.split(".").map(s => String(parseInt(s, 10))).join(".");
 
+      // Rev. 4024 — Mesma regra de "revisão ativa" usada em todo o resto do
+      // módulo Planejamento (PlanejamentoDetalhe.tsx `revisaoAtiva`: última
+      // revisão APROVADA; só cai para a mais recente qualquer se não houver
+      // nenhuma aprovada). Antes esta query pegava a última revisão por
+      // NÚMERO sem olhar o status — se existisse uma revisão "rascunho" mais
+      // nova (ex.: próximo ciclo de replanejamento em edição), a Medição
+      // buscava avanços dessa revisão rascunho, que ainda não tem nenhum
+      // `planejamento_avancos` lançado (o avanço real continua sendo
+      // reportado contra a revisão aprovada) — resultado: "Importar do
+      // Orçamento (com avanço físico)" não trazia NENHUM item (avanço 0%
+      // pra tudo), aparentando que a medição "não vem do avanço".
       const revisaoResult = await db.execute(sql`
         SELECT id FROM planejamento_revisoes
-        WHERE projeto_id = ${input.projetoId}
+        WHERE projeto_id = ${input.projetoId} AND status = 'aprovada'
         ORDER BY numero DESC LIMIT 1
       `);
-      const revisaoId = revisaoResult.rows[0]?.id as number | undefined;
+      let revisaoId = revisaoResult.rows[0]?.id as number | undefined;
+      if (!revisaoId) {
+        const fallback = await db.execute(sql`
+          SELECT id FROM planejamento_revisoes
+          WHERE projeto_id = ${input.projetoId}
+          ORDER BY numero DESC LIMIT 1
+        `);
+        revisaoId = fallback.rows[0]?.id as number | undefined;
+      }
       if (!revisaoId) return { avancosCronograma: {}, acumuladoMedido: {} };
 
       const avancosResult = await db.execute(sql`
