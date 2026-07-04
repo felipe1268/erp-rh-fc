@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4030** — **MEDIÇÃO DE CONTRATOS: REDESIGN DA TABELA "ITENS DO BOLETIM" + PADRONIZAÇÃO DO DIÁLOGO "NOVO BOLETIM DE MEDIÇÃO".** Usuário reclamou de espaço vazio enorme entre a coluna "Item" e a descrição na tabela de itens (prints), pediu remodelação 100% moderna; depois mandou print do diálogo "Novo Boletim de Medição" com vão em branco enorme (ainda no layout antigo, sem o redesign da Rev. 4029). `MedicaoDetalhe.tsx`: tabela de itens (view-only e edição) trocada para `table-fixed` + `<colgroup>` com percentuais explícitos somando 100% (elimina o vão Item↔Descrição), "% Período" virou badge azul, "% Acumulado" ganhou mini barra de progresso; diálogo `modalBoletim` reconstruído seguindo EXATAMENTE o padrão do "Editar Boletim" (3 blocos: cabeçalho c/ ícone em avatar + card branco "Período da medição" + rodapé fixo), com o mesmo badge "N dias de medição" e validação de data fim < início. Mesma mutation/campos de antes. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4029** — **MEDIÇÃO DE CONTRATOS: REDESIGN COMPLETO DO DIÁLOGO "EDITAR BOLETIM" (PERÍODO DA MEDIÇÃO).** Usuário apontou que este diálogo (edição de datas do boletim) ainda não tinha recebido o redesign moderno pedido nas revisões anteriores. `MedicaoDetalhe.tsx`, dialog `modalEditBoletim`: reestruturado em 3 blocos visuais (cabeçalho com ícone em avatar azul + subtítulo; corpo com card branco `rounded-2xl` para "Período da medição" + Observações; rodapé fixo com Cancelar/Salvar), inputs de data com ícone `CalendarRange` interno, badge calculado ao vivo "N dias de medição" + referência MM/AAAA, e validação nova (data fim < início desabilita "Salvar" com aviso). Mesma mutation/campos de antes. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4028** — **MEDIÇÃO DE CONTRATOS: OLHINHO NA LISTA DE BOLETINS + REDESIGN MOBILE DO CABEÇALHO DO DIÁLOGO "ITENS DO BOLETIM" + ENCAMINHAR VIA WHATSAPP.** Usuário mandou prints do celular mostrando o cabeçalho do diálogo quebrado no mobile (botões Imprimir/Gerar PDF ilegíveis, em cima do X de fechar) e pediu um ícone de olho na lista de boletins + opção de encaminhar via WhatsApp. Lista de boletins: novo botão `Eye` antes do lápis de editar, chamando `abrirItens(b)`. Cabeçalho do diálogo reestruturado em 2 linhas: título isolado no `DialogTitle`; botões de ação (status/Imprimir/Gerar PDF/WhatsApp) movidos para uma linha própria abaixo, fora do título, sem `ml-auto` (eliminando a colisão com o X), sempre ícone+texto, `flex-wrap` p/ quebrar em várias linhas no mobile. Novo `compartilharBoletimMedicaoWhatsApp` em `boletimMedicaoPdf.ts`: tenta `navigator.share({files:[pdf]})` (Web Share API nível 2, abre a folha nativa com WhatsApp como opção); sem suporte (desktop), baixa o PDF e abre `wa.me` com mensagem pronta pedindo para anexar. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4028** — **MEDIÇÃO DE CONTRATOS: OLHINHO NA LISTA DE BOLETINS + REDESIGN MOBILE DO CABEÇALHO DO DIÁLOGO "ITENS DO BOLETIM" + ENCAMINHAR VIA WHATSAPP.** Ícone de olho na lista de boletins + cabeçalho reestruturado em 2 linhas (título isolado, botões numa linha própria com `flex-wrap`) + `compartilharBoletimMedicaoWhatsApp` (Web Share API nível 2 / fallback wa.me). ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4027** — **MEDIÇÃO DE CONTRATOS: RASTREABILIDADE DO "ORIGEM: CRONOGRAMA" + BOTÕES DE FLUXO/IMPRESSÃO/PDF NO DIÁLOGO "ITENS DO BOLETIM".** Novo `getHistoricoAvancoAtividade` (anti-IDOR) mostra de qual semana do Avanço Semanal veio o % da medição via Popover; diálogo ganhou botões Aprovar/Enviar, Imprimir e Gerar PDF (`boletimMedicaoPdf.ts`, jsPDF). ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4023** — **MEDIÇÃO DE CONTRATOS: DROPDOWN "PROJETO / OBRA" CORTAVA NOMES LONGOS NO DIÁLOGO "NOVO CONTRATO DE MEDIÇÃO".** Fix escopado em `MedicaoContratos.tsx`: `SelectContent` ganhou `max-w-[min(28rem,calc(100vw-2rem))]`, `SelectItem` ganhou `whitespace-normal break-words leading-snug py-2`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4022** — **FINANCEIRO/DRE: OPÇÃO DE CONSOLIDAR O MÊS MANUALMENTE.** Nova tabela `financial_dre_consolidacoes`; procedures `getDREConsolidacaoStatus`/`consolidarDRE`/`desconsolidarDRE` (admin/admin_master); tela DRE ganha botão "Consolidar Mês" e selo de consolidação manual. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4021 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4022 e anteriores.
 
 ## User preferences
 

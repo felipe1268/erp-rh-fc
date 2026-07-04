@@ -1,4 +1,38 @@
 /**
+ * Rev. 4030 — **MEDIÇÃO DE CONTRATOS: REDESIGN DA TABELA "ITENS DO BOLETIM" + PADRONIZAÇÃO DO
+ * DIÁLOGO "NOVO BOLETIM DE MEDIÇÃO".**
+ *
+ * PEDIDO: usuário mandou prints (IMG_3305/IMG_3304) da tabela de itens do boletim reclamando de
+ * espaço vazio enorme entre a coluna "Item" e a descrição, tabela "bagunçada", e pediu remodelação
+ * 100% moderna com toda a informação legível numa tela só. Em seguida mandou outro print
+ * (IMG_3307) do diálogo "Novo Boletim de Medição" mostrando um vão em branco enorme entre o
+ * cabeçalho e o card "Período da medição" — esse diálogo ainda usava o layout antigo (`space-y-4
+ * py-1` solto, sem estrutura de blocos) e não tinha recebido o redesign já aplicado ao "Editar
+ * Boletim" na Rev. 4029. Pediu para seguir "nosso padrão".
+ *
+ * SOLUÇÃO — Frontend (`client/src/pages/medicao/MedicaoDetalhe.tsx`):
+ * - Tabela de itens (view-only `boletimDetalhe.itens` e modo edição `itensEdicao`): trocado layout
+ *   `table-auto` com larguras Tailwind ad-hoc (`w-20`/`w-28`) por `table-fixed` + `<colgroup>` com
+ *   percentuais explícitos somando 100% (Item 5%, Descrição ~28-31%, Origem ~9-10%, V.Contratual
+ *   ~10-12%, %Ant ~7-8%, %Período ~10-13%, %Acum ~7-8%, V.Período ~11-15%, +FD/lixeira no modo
+ *   edição) — elimina o vão vazio entre Item e Descrição, que agora ganha bem mais espaço.
+ * - Coluna "Item" compactada e centralizada (fonte monoespaçada cinza — maioria dos valores é "—").
+ * - "% Período" agora é um badge azul destacado (pill); "% Acumulado" ganhou uma mini barra de
+ *   progresso abaixo do número (verde ao atingir 100%, azul antes disso) para verificação visual
+ *   rápida linha a linha. Descrição com `truncate` + tooltip (`title=`) para não quebrar o layout
+ *   com textos longos.
+ * - Diálogo "Novo Boletim de Medição" (`modalBoletim`) reconstruído seguindo EXATAMENTE o mesmo
+ *   padrão do "Editar Boletim" (Rev. 4029): `DialogContent p-0 overflow-hidden gap-0` com 3 blocos
+ *   (cabeçalho com ícone em avatar azul + subtítulo; corpo com card branco `rounded-2xl` para
+ *   "Período da medição" + Observações; rodapé fixo com Cancelar/Criar e Lançar Itens), inputs de
+ *   data com ícone `CalendarRange` interno, badge ao vivo "N dias de medição" + referência
+ *   MM/AAAA, e a mesma validação de data fim < início desabilitando o botão de ação principal.
+ *   Mesma mutation/campos de antes (`criarBoletimMutation`).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo (reorganização visual + 1 validação aditiva no client).
+ */
+
+/**
  * Rev. 4029 — **MEDIÇÃO DE CONTRATOS: REDESIGN COMPLETO DO DIÁLOGO "EDITAR BOLETIM" (PERÍODO DA
  * MEDIÇÃO).**
  *
