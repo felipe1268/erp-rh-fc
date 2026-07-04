@@ -712,9 +712,6 @@ export const medicaoRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
 
-      const normalizeEap = (eap: string) =>
-        eap.split(".").map(s => String(parseInt(s, 10))).join(".");
-
       // Rev. 4024 — Mesma regra de "revisão ativa" usada em todo o resto do
       // módulo Planejamento (PlanejamentoDetalhe.tsx `revisaoAtiva`: última
       // revisão APROVADA; só cai para a mais recente qualquer se não houver
@@ -740,26 +737,33 @@ export const medicaoRouter = router({
         `);
         revisaoId = fallback.rows[0]?.id as number | undefined;
       }
-      if (!revisaoId) return { avancosCronograma: {}, acumuladoMedido: {} };
+      if (!revisaoId) return { avancosCronograma: {}, acumuladoMedido: {}, revisaoId: null };
 
+      // Rev. 4025 — CHAVE POR `atividade_id`, NÃO MAIS POR `eap_codigo`.
+      // Causa-raiz do "avanço não chega na Medição" em projetos reais (ex.:
+      // VITRA/projeto 44): `eap_codigo` em `planejamento_atividades` está
+      // preenchido só numa fração das atividades-folha (ex.: 11 de ~230 no
+      // caso real) — o resto vem com eap_codigo = '' (string vazia, não
+      // NULL, então passava pelo filtro `IS NOT NULL` e todas colidiam na
+      // MESMA chave ''). Isso fazia o `DISTINCT ON (a.eap_codigo)` colapsar
+      // dezenas de atividades diferentes num único registro por semana, e
+      // fazia a Medição "achar" avanço só para a pequena fatia com EAP
+      // preenchido. `atividade_id` é a chave primária real e sempre existe
+      // — every atividade tem exatamente 1 id, então o casamento é 1:1
+      // garantido, independente de o EAP estar preenchido/coerente ou não.
       const avancosResult = await db.execute(sql`
-        SELECT DISTINCT ON (a.eap_codigo)
-          a.eap_codigo,
+        SELECT DISTINCT ON (av.atividade_id)
+          av.atividade_id,
           av.percentual_acumulado
         FROM planejamento_avancos av
-        JOIN planejamento_atividades a ON a.id = av.atividade_id
         WHERE av.projeto_id = ${input.projetoId}
           AND av.revisao_id = ${revisaoId}
-          AND a.eap_codigo IS NOT NULL
-        ORDER BY a.eap_codigo, av.semana DESC
+        ORDER BY av.atividade_id, av.semana DESC
       `);
 
-      const avancosCronograma: Record<string, number> = {};
+      const avancosCronograma: Record<number, number> = {};
       for (const row of avancosResult.rows as any[]) {
-        const norm = normalizeEap(row.eap_codigo);
-        const val = parseFloat(row.percentual_acumulado || "0");
-        avancosCronograma[row.eap_codigo] = val;
-        if (norm !== row.eap_codigo) avancosCronograma[norm] = val;
+        avancosCronograma[row.atividade_id] = parseFloat(row.percentual_acumulado || "0");
       }
 
       const excludeClause = input.boletimId
@@ -768,26 +772,23 @@ export const medicaoRouter = router({
 
       const medidoResult = await db.execute(sql`
         SELECT
-          i.eap_codigo,
+          i.atividade_id,
           MAX(i.percentual_acumulado_atual) AS pct_acumulado_medido
         FROM medicao_boletim_itens i
         JOIN medicao_boletins b ON b.id = i.boletim_id
         WHERE b.contrato_id = ${input.contratoId}
-          AND i.eap_codigo IS NOT NULL
+          AND i.atividade_id IS NOT NULL
           AND b.status IN ('enviado', 'aprovado', 'finalizado')
           ${excludeClause}
-        GROUP BY i.eap_codigo
+        GROUP BY i.atividade_id
       `);
 
-      const acumuladoMedido: Record<string, number> = {};
+      const acumuladoMedido: Record<number, number> = {};
       for (const row of medidoResult.rows as any[]) {
-        const norm = normalizeEap(row.eap_codigo);
-        const val = parseFloat(row.pct_acumulado_medido || "0");
-        acumuladoMedido[row.eap_codigo] = val;
-        if (norm !== row.eap_codigo) acumuladoMedido[norm] = val;
+        acumuladoMedido[row.atividade_id] = parseFloat(row.pct_acumulado_medido || "0");
       }
 
-      return { avancosCronograma, acumuladoMedido };
+      return { avancosCronograma, acumuladoMedido, revisaoId };
     }),
 
   // ============================================================

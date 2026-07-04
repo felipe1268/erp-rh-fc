@@ -97,17 +97,18 @@ export default function MedicaoDetalhe() {
     { id: boletimSelecionado?.id ?? 0 },
     { enabled: !!boletimSelecionado?.id }
   );
-  const { data: atividades = [] } = trpc.medicao.getAtividadesProjeto.useQuery(
-    { projetoId: contrato?.projetoId ?? 0 },
-    { enabled: !!contrato?.projetoId }
-  );
-  const { data: itensOrcamento = [] } = trpc.medicao.getItensOrcamento.useQuery(
-    { orcamentoId: contrato?.orcamentoId ?? 0 },
-    { enabled: !!contrato?.orcamentoId }
-  );
   const { data: dadosAvancos } = trpc.medicao.getAvancosParaMedicao.useQuery(
     { projetoId: contrato?.projetoId ?? 0, contratoId, boletimId: boletimSelecionado?.id },
     { enabled: !!contrato?.projetoId && contratoId > 0 }
+  );
+  // Rev. 4025 — `atividades` (cronograma) precisa vir da MESMA revisão usada
+  // por `getAvancosParaMedicao` (revisão aprovada), senão os pesos/EAP
+  // consultados podem divergir da revisão de onde o avanço físico foi lido.
+  // (Itens do Orçamento continuam usados só na aba "Planilha de Medição",
+  // via `getPlanilhaMedicao` — não mais na importação do Boletim.)
+  const { data: atividades = [] } = trpc.medicao.getAtividadesProjeto.useQuery(
+    { projetoId: contrato?.projetoId ?? 0, revisaoId: dadosAvancos?.revisaoId ?? undefined },
+    { enabled: !!contrato?.projetoId && dadosAvancos !== undefined }
   );
   const { data: planilhaData, isLoading: loadingPlanilha } = trpc.medicao.getPlanilhaMedicao.useQuery(
     { contratoId, orcamentoId: contrato?.orcamentoId ?? 0, companyId },
@@ -211,36 +212,54 @@ export default function MedicaoDetalhe() {
   const [autoImportar, setAutoImportar] = useState(false);
 
   React.useEffect(() => {
-    if (autoImportar && itensOrcamento.length > 0 && dadosAvancos) {
+    if (autoImportar && atividades.length > 0 && dadosAvancos) {
       popularItensDoOrcamento();
       setAutoImportar(false);
     }
-  }, [autoImportar, itensOrcamento, dadosAvancos]);
+  }, [autoImportar, atividades, dadosAvancos]);
 
   function abrirItens(boletim: any) {
     setBoletimSelecionado(boletim);
     setModalItens(true);
   }
 
-  const normalizeEap = (eap: string) =>
-    eap.split(".").map(s => String(parseInt(s, 10))).join(".");
-
+  // Rev. 4025 — MEDIÇÃO PASSA A VIR DIRETO DO CRONOGRAMA (avanço físico real),
+  // não mais tentando casar item-a-item com o Orçamento por EAP. Causa-raiz do
+  // "Nenhum item lançado" / "medição não vem do avanço": o EAP do Orçamento e
+  // o EAP do Cronograma (MSP) podem ter numerações/granularidades totalmente
+  // diferentes entre si (ex.: orçamento começando em "05.x", cronograma em
+  // "01.x", ou cronograma com atividades mais genéricas repetidas por frente)
+  // — o casamento por código simplesmente não encontrava par nenhum e o
+  // avanço real (visível em "Avanço Semanal"/"Cronograma") nunca chegava na
+  // planilha da medição. Cada atividade-folha do cronograma já carrega seu
+  // próprio `pesoFinanceiro` (% de participação no valor total do contrato —
+  // mesma lógica já usada em "Crono. Financeiro"), então o valor contratual
+  // do item = pesoFinanceiro% × valor do contrato de medição, e o % do
+  // período vem exatamente do último avanço físico acumulado lançado em
+  // "Avanço Semanal" para aquela atividade. Isso garante que toda atividade
+  // com avanço registrado apareça aqui automaticamente, na data certa.
+  // IMPORTANTE: NÃO filtrar por `eapCodigo` truthy aqui — em cronogramas
+  // reais (ex.: VITRA/projeto 44) a maioria das atividades-folha tem
+  // eap_codigo vazio (só a seção "Serviços Preliminares" tinha código
+  // preenchido; o resto, importado do MSP, veio sem EAP). Exigir EAP
+  // preenchido excluiria quase todas as atividades reais do projeto.
   function popularItensDoOrcamento() {
-    if (!itensOrcamento.length) return;
-    const ativMap = new Map((atividades as any[]).map((a: any) => [a.eapCodigo, a]));
-    const ativNormMap = new Map((atividades as any[]).map((a: any) => [normalizeEap(a.eapCodigo || ""), a]));
+    const leafAtividades = (atividades as any[]).filter((a: any) => !a.isGrupo);
+    if (!leafAtividades.length) return;
     const cronograma = dadosAvancos?.avancosCronograma ?? {};
     const jaMedido = dadosAvancos?.acumuladoMedido ?? {};
+    const valorContratoTotal = n(contrato?.valorTotalContrato);
 
     const novos: any[] = [];
-    for (const i of (itensOrcamento as any[])) {
-      if (i.nivel <= 1 || i.tipo?.includes("grupo")) continue;
-      const eap = i.eapCodigo || "";
-      const normEap = normalizeEap(eap);
-      const atv = ativMap.get(eap) || ativNormMap.get(normEap);
-      const valContr = n(i.vendaTotal);
-      const avancoCrono = cronograma[eap] ?? cronograma[normEap] ?? 0;
-      const pctAnt = jaMedido[eap] ?? jaMedido[normEap] ?? 0;
+    for (const a of leafAtividades) {
+      const eap = a.eapCodigo || "";
+      const pesoPct = n(a.pesoFinanceiro);
+      if (pesoPct <= 0) continue;
+      const valContr = (valorContratoTotal * pesoPct) / 100;
+      // Rev. 4025 — chave por atividadeId (id real, sempre presente), não por
+      // eapCodigo (vazio na maioria das atividades-folha em muitos projetos).
+      const avancoCrono = cronograma[a.id] ?? 0;
+      const pctAnt = jaMedido[a.id] ?? 0;
       const pctPeriodo = Math.max(0, Math.min(avancoCrono - pctAnt, 100 - pctAnt));
 
       if (pctPeriodo <= 0 && pctAnt <= 0) continue;
@@ -249,9 +268,9 @@ export default function MedicaoDetalhe() {
       const valPeriodo = (valContr * pctPeriodo) / 100;
 
       novos.push({
-        atividadeId: atv?.id ?? null,
+        atividadeId: a.id ?? null,
         eapCodigo: eap,
-        descricao: i.descricao,
+        descricao: a.nome,
         valorContratual: valContr.toFixed(2),
         percentualAcumuladoAnterior: pctAnt.toFixed(4),
         percentualPeriodo: pctPeriodo.toFixed(4),
@@ -1071,7 +1090,7 @@ export default function MedicaoDetalhe() {
                     <p className="text-sm text-gray-500 mb-3">Nenhum item lançado ainda.</p>
                     <Button variant="outline" size="sm" onClick={() => { popularItensDoOrcamento(); }}>
                       <TrendingUp className="h-3.5 w-3.5 mr-1" />
-                      Importar do Orçamento (com avanço físico)
+                      Importar do Cronograma (avanço físico)
                     </Button>
                   </div>
                 ) : (

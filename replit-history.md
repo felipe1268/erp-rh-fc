@@ -1,3 +1,5 @@
+- **Rev. 4016** — **COMPRAS: LOTE FINAL DOS ~20 AJUSTES DO DOCX (Itens 7, 9, 13, 14, 17, 19, 20, 21a, 22) + CORREÇÃO DE BUG DE AUTORIZAÇÃO NA "TRANSFERÊNCIA EM LOTE" DO ALMOXARIFADO (Item 5, reaberto).** Causa-raiz do Item 5: `createTransferenciaOrigemDestino`/`createTransferenciaLote` usavam guard `userCanAccessObra` em vez de `userCanAccessObraAlmox`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4015** — **COMPRAS: ERRO AO SELECIONAR MATERIAL DO ESTOQUE NA COTAÇÃO — MATCH RESTRITO A "CENTRAL + OBRA DE DESTINO" IGNORAVA SALDO EM OUTRA OBRA (Item 3 dos ~20 ajustes do docx).** `adicionarEstoqueAoMapa`/`criarOrdemDeCotacao` passam a buscar company-wide quando a obra de origem não é explícita. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4014** — **COMPRAS: PERMITIR QUANTIDADE PARCIAL NA "DIVIDIR COTAÇÃO" (Item 2 dos ~20 ajustes do docx).** `dividirCotacao` só movia o item INTEIRO para a nova cotação; agora aceita `itens: {id, quantidade}[]`, com split proporcional de respostas de fornecedor já lançadas. ZERO DELETE · ZERO ALTER destrutivo.

@@ -1,4 +1,5 @@
 - [Dashboard period selector standard](dashboard-period-selector-standard.md) — seletor de mês/ano = white-card (PanoramaFiscal), NUNCA DashHeader gradiente. Regra de ouro do usuário.
+- [Medição × Cronograma: casar por atividadeId, não EAP](medicao-cronograma-atividade-id-match.md) — eap_codigo do cronograma real vem vazio na maioria das atividades; use a PK atividade_id (1:1, sempre presente) pra casar avanço/medição, não código EAP nem descrição.
 - [Select popper overflow on mobile](select-popper-mobile-overflow.md) — Select popper sem max-width corta nome longo (obra/cliente) em telas estreitas; wrap por instância, não no ui/select.tsx global.
 - [SEFAZ Ciência da Operação libera XML completo](sefaz-ciencia-xml-completo.md) — NF-e chegou só como resNFe (resumo)? Falta registrar Ciência (210210) pra SEFAZ liberar o nfeProc completo. Manual, nunca em lote.
 - [Almox transfer guard mismatch](almox-transferencia-guard-mismatch.md) — "só admin funciona" em almoxarifado = suspeitar de UMA mutação usando guard genérico em vez do `*Almox`; grep todos os `userCanAccessObra(` no arquivo.
@@ -133,7 +134,6 @@
 - [Conceder obra implica empresa](grant-obra-implies-company.md) — usuário comum: empresas visíveis = user_companies + DONAS das obras de getEffectiveAllowedObraIds; sem isso, obra concedida sem vínculo de empresa some (só vê como Adm).
 
 - [Per-bank deterministic parser gate](per-bank-deterministic-parser-gate.md) — parser determinístico por banco só pode emitir linhas quando confirma SEU banco (isBancoX); gating por "≥1 linha" sequestra o fallback de IA de outros bancos.
-- [Vale snapshot é fonte de leitura](vale-snapshot-is-read-source.md) — Folha lê snapshot do período, não payroll_advances; todo write de decisão deve re-sincronizar o snapshot ou some no reload.
 - [criarManual explicit-id IDOR](cheques-criar-manual-idor.md) — INSERT de 1 linha que aceita FK id explícito (fornecedorId/contaBancariaId) deve validar ownership da empresa; assertCompanyAccess só autoriza a empresa, não o recurso referenciado.
 - [Conciliação interno×externo](conciliacao-interno-classificacao.md) — 3 camadas (texto+CNPJ cadastrável+override por linha); SQL predicate e JS `_isLancInterno` DEVEM espelhar; só classifica, read-only.
 - [Circular chunk vendor-misc crash](circular-chunk-vendor-misc.md) — catch-all `return "vendor-misc"` em manualChunks cria ciclos (react-dom↔misc↔radix↔charts) → exports undefined → tela branca pré-listener. Fix: `return undefined`.

@@ -1,4 +1,51 @@
 /**
+ * Rev. 4025 — **MEDIÇÃO DE CONTRATOS: "IMPORTAR DO ORÇAMENTO (COM AVANÇO FÍSICO)" NÃO TRAZIA
+ * NENHUM ITEM — PASSA A IMPORTAR DIRETO DO CRONOGRAMA (AVANÇO FÍSICO REAL), NÃO MAIS DO ORÇAMENTO.**
+ *
+ * PEDIDO: usuário reportou que, ao clicar em "Importar do Orçamento (com avanço físico)" nos
+ * Itens de um Boletim de Medição, NENHUM item era importado. Esclareceu em seguida (com prints)
+ * que a intenção real é: toda vez que um avanço semanal é lançado em Planejamento, ele deve fluir
+ * automaticamente para a Medição — o item a ser medido deve aparecer casado com a atividade/data
+ * certa do CRONOGRAMA, não com um item do Orçamento.
+ *
+ * CAUSA-RAIZ (duas, em camadas — projeto real usado para validar: contrato id=3 / projeto 44
+ * "VITRA"):
+ * 1) A importação tentava casar item-a-item por CÓDIGO EAP entre Orçamento e Cronograma. Nos
+ *    projetos reais os dois têm granularidade/numeração de EAP diferentes por natureza (orçamento
+ *    é fino, com 148 itens; cronograma é mais grosso, com 211 atividades-folha e só 35 nomes
+ *    únicos repetidos por frente de obra) — o casamento por código raramente encontra par.
+ * 2) Mesmo trocando a fonte para o Cronograma, o campo `eap_codigo` de `planejamento_atividades`
+ *    está preenchido só numa fração das atividades reais (ex.: no projeto VITRA, 11 de ~230
+ *    atividades-folha — o resto veio do MSP sem EAP, com `eap_codigo=''`). Como `''` não é NULL,
+ *    a query antiga (`WHERE eap_codigo IS NOT NULL`, `DISTINCT ON (eap_codigo)`) deixava passar e
+ *    colapsava DEZENAS de atividades diferentes numa única chave `''`, perdendo quase todo o
+ *    avanço real.
+ *
+ * SOLUÇÃO:
+ * - A importação do Boletim agora itera as ATIVIDADES-FOLHA do Cronograma (não mais os itens do
+ *   Orçamento). Cada atividade já carrega seu próprio `pesoFinanceiro` (% de participação no valor
+ *   total do contrato — mesma lógica já usada em "Crono. Financeiro"); o valor contratual do item
+ *   de medição = `pesoFinanceiro% × valorTotalContrato`.
+ * - `medicao.getAvancosParaMedicao` (`server/routers/medicao.ts`) passou a casar avanço
+ *   físico/medido acumulado por `atividade_id` (chave primária real, sempre presente e 1:1),
+ *   em vez de `eap_codigo` — elimina de vez a colisão de chave vazia. `avancosCronograma` e
+ *   `acumuladoMedido` agora são `Record<number, number>` chaveados por atividadeId.
+ * - `medicao.getAtividadesProjeto` passou a receber `revisaoId` (retornado por
+ *   `getAvancosParaMedicao`, que já usa a última revisão APROVADA do projeto, com fallback pra
+ *   mais recente se não houver aprovada) para garantir que as atividades consultadas sejam da
+ *   MESMA revisão de onde o avanço físico foi lido — evitava buscar avanço contra uma revisão
+ *   rascunho mais nova sem nenhum lançamento ainda.
+ * - `client/src/pages/medicao/MedicaoDetalhe.tsx`: `popularItensDoOrcamento` reescrita para não
+ *   mais exigir `eapCodigo` preenchido (excluiria quase todas as atividades reais); botão
+ *   renomeado para "Importar do Cronograma (avanço físico)".
+ *
+ * Validado por consulta direta ao Neon: com a chave por atividadeId, 211/211 atividades-folha com
+ * avanço lançado casam corretamente (antes: 15/148 via fallback por descrição).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4023 — **MEDIÇÃO DE CONTRATOS: DROPDOWN "PROJETO / OBRA" CORTAVA NOMES LONGOS (EX.:
  * "HOTEL DO PAPA..." APARECIA COMO "OTEL DO PAPA...") NO DIÁLOGO "NOVO CONTRATO DE MEDIÇÃO".**
  *
