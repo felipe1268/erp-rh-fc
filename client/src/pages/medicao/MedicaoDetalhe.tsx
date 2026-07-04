@@ -14,6 +14,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
+  Popover, PopoverContent, PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
@@ -23,8 +26,9 @@ import {
   ArrowLeft, Plus, Loader2, FileText, ChevronRight, ChevronDown, CheckCircle2,
   Clock, Send, AlertCircle, DollarSign, Percent, Settings,
   Edit, Trash2, Eye, TrendingUp, Package, Search, ListTree, Hammer, HardHat, Receipt,
-  Ruler, Image as ImageIcon, CalendarRange, MessageSquare,
+  Ruler, Image as ImageIcon, CalendarRange, MessageSquare, History, Printer, Download,
 } from "lucide-react";
+import { gerarBoletimMedicaoPdf, imprimirBoletimMedicao } from "@/lib/boletimMedicaoPdf";
 
 const n = (v: unknown) => parseFloat(String(v || "0")) || 0;
 function brl(v: number) {
@@ -56,6 +60,92 @@ const PROXIMOS_STATUS: Record<string, { label: string; status: string } | null> 
   aprovado:  { label: "Finalizar Medição", status: "finalizado" },
   finalizado: null,
 };
+
+// Rev. 4027 — badge de "Origem: Cronograma" que, ao clicar, revela DE QUAL
+// semana do Avanço Semanal (Planejamento) veio o % usado na medição.
+function OrigemBadge({
+  item, contratoId, companyId, compact,
+}: { item: any; contratoId: number; companyId: number; compact?: boolean }) {
+  if (item.isFd) {
+    return (
+      <span className={`inline-flex items-center gap-1 text-violet-700 font-medium ${compact ? "" : ""}`}>
+        <Package className="h-3 w-3" />{compact ? "FD" : "FD Compras"}
+      </span>
+    );
+  }
+  if (!item.atividadeId) {
+    return (
+      <span className="inline-flex items-center gap-1 text-blue-600">
+        <TrendingUp className="h-3 w-3" />{compact ? "Cronog." : "Cronograma"}
+      </span>
+    );
+  }
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline underline-offset-2"
+          title="Ver de qual semana do Avanço Semanal veio este %"
+        >
+          <TrendingUp className="h-3 w-3" />{compact ? "Cronog." : "Cronograma"}
+          <History className="h-3 w-3 opacity-60" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 p-0" align="start">
+        <HistoricoAvancoContent item={item} contratoId={contratoId} companyId={companyId} />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function HistoricoAvancoContent({
+  item, contratoId, companyId,
+}: { item: any; contratoId: number; companyId: number }) {
+  const { data, isLoading, error } = trpc.medicao.getHistoricoAvancoAtividade.useQuery(
+    { atividadeId: item.atividadeId, contratoId, companyId },
+    { enabled: !!item.atividadeId }
+  );
+  return (
+    <div className="p-3">
+      <p className="text-xs font-semibold text-gray-700 mb-1 flex items-center gap-1.5">
+        <History className="h-3.5 w-3.5 text-blue-600" />
+        Histórico do Avanço Semanal
+      </p>
+      <p className="text-[11px] text-gray-500 mb-2">
+        {item.eapCodigo ? `${item.eapCodigo} — ` : ""}{item.descricao}
+      </p>
+      {isLoading && <p className="text-xs text-gray-400 py-2">Carregando...</p>}
+      {!!error && <p className="text-xs text-red-500 py-2">Não foi possível carregar o histórico.</p>}
+      {data && data.semanas.length === 0 && (
+        <p className="text-xs text-gray-400 py-2">Nenhum avanço semanal lançado para esta atividade.</p>
+      )}
+      {data && data.semanas.length > 0 && (
+        <div className="max-h-52 overflow-y-auto space-y-1 -mx-1 px-1">
+          {data.semanas.map((s, i) => {
+            const isUltima = i === data.semanas.length - 1;
+            return (
+              <div
+                key={s.semana}
+                className={`flex items-center justify-between text-xs rounded px-2 py-1 ${isUltima ? "bg-blue-50 border border-blue-200" : "bg-gray-50"}`}
+              >
+                <span className="text-gray-600 flex items-center gap-1">
+                  <CalendarRange className="h-3 w-3 text-gray-400" />
+                  {new Date(s.semana + "T12:00:00").toLocaleDateString("pt-BR")}
+                  {isUltima && <span className="text-blue-600 font-medium ml-1">(usada)</span>}
+                </span>
+                <span className="font-medium text-gray-800">
+                  {n(s.percentual_semanal).toFixed(2)}%
+                  <span className="text-gray-400 font-normal"> · acum. {n(s.percentual_acumulado).toFixed(2)}%</span>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function MedicaoDetalhe() {
   const params = useParams<{ id: string }>();
@@ -217,6 +307,39 @@ export default function MedicaoDetalhe() {
 
   const [itensEdicao, setItensEdicao] = useState<any[]>([]);
   const [autoImportar, setAutoImportar] = useState(false);
+  const [gerandoPdf, setGerandoPdf] = useState<"imprimir" | "pdf" | null>(null);
+
+  function montarParamsPdf() {
+    const itensFonte = itensEdicao.length > 0 ? itensEdicao : (boletimDetalhe?.itens ?? []);
+    const totalBrutoAtual = itensEdicao.length > 0 ? totalBruto : n(boletimSelecionado?.valorBruto);
+    const totalFdAtual = itensEdicao.length > 0 ? totalFdEdicao : n(boletimSelecionado?.deducaoFd);
+    return {
+      contratoNome: contrato?.nomeProjeto ?? "—",
+      contratoCliente: contrato?.cliente ?? null,
+      contratoLocal: contrato?.local ?? null,
+      boletimNumero: boletimSelecionado?.numero ?? 0,
+      periodoReferencia: boletimSelecionado?.periodoReferencia ?? "—",
+      dataInicio: boletimSelecionado?.dataInicio ?? null,
+      dataFim: boletimSelecionado?.dataFim ?? null,
+      status: boletimSelecionado?.status ?? "rascunho",
+      valorBruto: totalBrutoAtual,
+      descontoSinal: n(boletimSelecionado?.descontoSinal),
+      descontoRetencao: n(boletimSelecionado?.descontoRetencao),
+      glosa: n(boletimSelecionado?.glosa),
+      deducaoFd: totalFdAtual,
+      valorLiquido: itensEdicao.length > 0 ? (totalBrutoAtual - totalFdAtual) : n(boletimSelecionado?.valorLiquido),
+      itens: itensFonte.map((i: any) => ({
+        eapCodigo: i.eapCodigo ?? null,
+        descricao: i.descricao,
+        isFd: !!i.isFd,
+        valorContratual: i.valorContratual,
+        percentualAcumuladoAnterior: i.percentualAcumuladoAnterior,
+        percentualPeriodo: i.percentualPeriodo,
+        percentualAcumuladoAtual: i.percentualAcumuladoAtual,
+        valorPeriodo: i.valorPeriodo,
+      })),
+    };
+  }
 
   React.useEffect(() => {
     if (autoImportar && atividades.length > 0 && dadosAvancos) {
@@ -1122,11 +1245,61 @@ export default function MedicaoDetalhe() {
       <Dialog open={modalItens} onOpenChange={open => { setModalItens(open); if (!open) setItensEdicao([]); }}>
         <DialogContent resizable={false} className="w-[95vw] max-w-[95vw] h-[95vh] max-h-[95vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-2 flex-wrap pr-8">
               <Receipt className="h-5 w-5 text-blue-600" />
               Itens do Boletim {boletimSelecionado ? String(boletimSelecionado.numero).padStart(2, "0") : ""}
               <span className="text-gray-400 font-normal">— {boletimSelecionado?.periodoReferencia}</span>
               {boletimSelecionado?.status && <StatusBadge status={boletimSelecionado.status} />}
+              {boletimSelecionado && (
+                <div className="flex items-center gap-1.5 ml-auto font-normal">
+                  {(() => {
+                    const proximo = PROXIMOS_STATUS[boletimSelecionado.status];
+                    if (!proximo) return null;
+                    return (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs"
+                        disabled={avancarStatusMutation.isPending}
+                        onClick={() => avancarStatusMutation.mutate({ boletimId: boletimSelecionado.id, status: proximo.status as any })}
+                      >
+                        {proximo.status === "enviado" && <Send className="h-3 w-3 mr-1" />}
+                        {proximo.status === "aprovado" && <CheckCircle2 className="h-3 w-3 mr-1" />}
+                        {proximo.status === "finalizado" && <CheckCircle2 className="h-3 w-3 mr-1" />}
+                        {proximo.label}
+                      </Button>
+                    );
+                  })()}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    disabled={gerandoPdf !== null}
+                    onClick={async () => {
+                      setGerandoPdf("imprimir");
+                      try { await imprimirBoletimMedicao(montarParamsPdf()); }
+                      finally { setGerandoPdf(null); }
+                    }}
+                  >
+                    {gerandoPdf === "imprimir" ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Printer className="h-3 w-3 mr-1" />}
+                    Imprimir
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    disabled={gerandoPdf !== null}
+                    onClick={async () => {
+                      setGerandoPdf("pdf");
+                      try { await gerarBoletimMedicaoPdf(montarParamsPdf()); }
+                      finally { setGerandoPdf(null); }
+                    }}
+                  >
+                    {gerandoPdf === "pdf" ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Download className="h-3 w-3 mr-1" />}
+                    Gerar PDF
+                  </Button>
+                </div>
+              )}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
@@ -1193,11 +1366,7 @@ export default function MedicaoDetalhe() {
                             <TableCell className="font-mono text-xs">{item.eapCodigo || "—"}</TableCell>
                             <TableCell className="text-sm">{item.descricao}</TableCell>
                             <TableCell className="text-xs">
-                              {item.isFd ? (
-                                <span className="inline-flex items-center gap-1 text-violet-700 font-medium"><Package className="h-3 w-3" />FD Compras</span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 text-blue-600"><TrendingUp className="h-3 w-3" />Cronograma</span>
-                              )}
+                              <OrigemBadge item={item} contratoId={contratoId} companyId={companyId} />
                             </TableCell>
                             <TableCell className="text-right text-sm">{brl(n(item.valorContratual))}</TableCell>
                             <TableCell className="text-right text-sm">{pct(n(item.percentualAcumuladoAnterior))}</TableCell>
@@ -1258,11 +1427,7 @@ export default function MedicaoDetalhe() {
                           <TableCell className="font-mono text-xs">{item.eapCodigo || "—"}</TableCell>
                           <TableCell className="text-xs truncate max-w-[200px]" title={item.descricao}>{item.descricao}</TableCell>
                           <TableCell className="text-xs">
-                            {item.isFd ? (
-                              <span className="inline-flex items-center gap-1 text-violet-700 font-medium"><Package className="h-3 w-3" />FD</span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-blue-600"><TrendingUp className="h-3 w-3" />Cronog.</span>
-                            )}
+                            <OrigemBadge item={item} contratoId={contratoId} companyId={companyId} compact />
                           </TableCell>
                           <TableCell className="text-right text-xs">{brl(n(item.valorContratual))}</TableCell>
                           <TableCell className="text-center text-xs">{pct(n(item.percentualAcumuladoAnterior))}</TableCell>

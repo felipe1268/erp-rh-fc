@@ -659,6 +659,53 @@ export const medicaoRouter = router({
       return result.rows as { atividade_id: number; percentual_acumulado: string; semana: string }[];
     }),
 
+  // Rev. 4027 — rastreabilidade do "Origem: Cronograma" no boletim: mostra o
+  // histórico semanal de avanço físico (Planejamento → Avanço Semanal) de UMA
+  // atividade, para o usuário saber exatamente de qual semana veio o % usado
+  // na medição. companyId é validado via o contrato (evita IDOR).
+  getHistoricoAvancoAtividade: protectedProcedure
+    .input(z.object({
+      atividadeId: z.number(),
+      contratoId: z.number(),
+      companyId: z.number(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const [contrato] = await db
+        .select({ id: medicaoContratos.id, projetoId: medicaoContratos.projetoId })
+        .from(medicaoContratos)
+        .where(and(eq(medicaoContratos.id, input.contratoId), eq(medicaoContratos.companyId, input.companyId)))
+        .limit(1);
+      if (!contrato) throw new Error("Contrato não encontrado ou sem permissão");
+
+      const [atividade] = await db
+        .select({
+          id: planejamentoAtividades.id,
+          eapCodigo: planejamentoAtividades.eapCodigo,
+          nome: planejamentoAtividades.nome,
+          projetoId: planejamentoAtividades.projetoId,
+          revisaoId: planejamentoAtividades.revisaoId,
+        })
+        .from(planejamentoAtividades)
+        .where(eq(planejamentoAtividades.id, input.atividadeId))
+        .limit(1);
+      if (!atividade || atividade.projetoId !== contrato.projetoId) {
+        throw new Error("Atividade não pertence a este contrato");
+      }
+
+      const result = await db.execute(sql`
+        SELECT semana, percentual_semanal, percentual_acumulado, observacao
+        FROM planejamento_avancos
+        WHERE atividade_id = ${input.atividadeId}
+          AND revisao_id = ${atividade.revisaoId}
+        ORDER BY semana ASC
+      `);
+      return {
+        atividade: { id: atividade.id, eapCodigo: atividade.eapCodigo, nome: atividade.nome },
+        semanas: result.rows as { semana: string; percentual_semanal: string; percentual_acumulado: string; observacao: string | null }[],
+      };
+    }),
+
   getItensOrcamento: protectedProcedure
     .input(z.object({ orcamentoId: z.number() }))
     .query(async ({ input }) => {

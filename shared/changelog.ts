@@ -1,4 +1,40 @@
 /**
+ * Rev. 4027 — **MEDIÇÃO DE CONTRATOS: RASTREABILIDADE DO "ORIGEM: CRONOGRAMA" (DE QUAL SEMANA DO
+ * AVANÇO SEMANAL VEIO O %) + BOTÕES DE FLUXO/IMPRESSÃO/PDF NO DIÁLOGO "ITENS DO BOLETIM".**
+ *
+ * PEDIDO: o usuário pediu que o diálogo "Itens do Boletim" deixasse claro, ao clicar na origem
+ * "Cronograma" de um item, DE QUAL semana do Avanço Semanal (Planejamento) veio o % usado na
+ * medição; e que o diálogo ganhasse botões de Aprovar/Enviar Medição, Imprimir e Gerar PDF, para o
+ * boletim poder ser entregue ao cliente para validação.
+ *
+ * SOLUÇÃO — Backend (`server/routers/medicao.ts`):
+ * - Nova query `getHistoricoAvancoAtividade({atividadeId, contratoId, companyId})`: valida que o
+ *   contrato pertence à `companyId` e que a atividade pertence ao MESMO projeto do contrato (evita
+ *   IDOR), depois lista todas as semanas de `planejamento_avancos` da atividade (mesma
+ *   `revisaoId` da atividade), ordenadas por semana ASC, com `percentual_semanal`,
+ *   `percentual_acumulado` e `observacao`.
+ *
+ * SOLUÇÃO — Frontend (`client/src/pages/medicao/MedicaoDetalhe.tsx`):
+ * - Novo componente `OrigemBadge`: badge "Cronograma" agora é um botão com Popover; ao clicar,
+ *   `HistoricoAvancoContent` busca `getHistoricoAvancoAtividade` e lista as semanas lançadas,
+ *   destacando a ÚLTIMA (a que efetivamente alimentou o % acumulado atual) com "(usada)". Badge
+ *   "FD Compras" permanece estático (não tem histórico semanal). Reusado nas tabelas de
+ *   visualização e edição.
+ * - Cabeçalho do diálogo "Itens do Boletim" ganhou: (1) botão de avanço de status reaproveitando
+ *   `PROXIMOS_STATUS`/`avancarStatusMutation` já existentes (Marcar como Enviado → Aprovado →
+ *   Finalizar, condicionado ao status atual); (2) botão "Imprimir"; (3) botão "Gerar PDF".
+ * - Novo `client/src/lib/boletimMedicaoPdf.ts` (padrão visual de `dfcPdf.ts`/`epiReceiptPdf.ts`,
+ *   jsPDF manual): monta um documento formal (identificação do contrato/cliente/período, cards de
+ *   totais Bruto/FD/Líquido, tabela de itens com Origem, linhas de assinatura Contratada×Cliente).
+ *   `gerarBoletimMedicaoPdf` chama `.save()`; `imprimirBoletimMedicao` abre o PDF em blob URL numa
+ *   nova aba e dispara `print()` no load — não imprime o Dialog (`position:fixed`) diretamente,
+ *   que corta/zera a página (ver memória `print-dialog-fixed-clip`).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo (nova query read-only; novo arquivo; reaproveita infra de
+ * status já existente).
+ */
+
+/**
  * Rev. 4026 — **MEDIÇÃO DE CONTRATOS: REDESIGN DO DIÁLOGO "ITENS DO BOLETIM" + INTEGRAÇÃO COM
  * COMPRAS PARA DETECTAR OCs DE FD (FATURAMENTO DIRETO) E TRAZER O VALOR AUTOMATICAMENTE.**
  *
