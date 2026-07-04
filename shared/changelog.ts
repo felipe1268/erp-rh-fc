@@ -1,4 +1,80 @@
 /**
+ * Rev. 4015 — **COMPRAS: ERRO AO SELECIONAR MATERIAL DO ESTOQUE NA COTAÇÃO — MATCH RESTRITO A
+ * "CENTRAL + OBRA DE DESTINO" IGNORAVA SALDO EM OUTRA OBRA (Item 3 dos ~20 ajustes do docx).**
+ *
+ * Reprodução: SC-2026-0163 (obra 90004 "Hotel do Papa") pedindo "Papel Sulfite 500 Folhas"; o
+ * único item do almoxarifado com esse nome tinha saldo (10un) na obra 90005 "Escritório
+ * Central" — uma obra DIFERENTE da SC, não o Almoxarifado Central (obraId NULL) de fato.
+ *
+ * Causa-raiz: tanto `adicionarEstoqueAoMapa` (pré-preenchimento do fornecedor virtual "Estoque"
+ * no Mapa de Cotação) quanto o pré-check de `criarOrdemDeCotacao` (na geração da OC) filtravam a
+ * busca no almoxarifado a `obraId IS NULL OR obraId = obraDestino`, mesmo quando o modal
+ * "Selecionar do Estoque" (Rev. 2470 — `listEstoqueDisponivel`) já lista o estoque da empresa
+ * INTEIRA ("mostrar tudo é seguro"). Resultado: o user escolhe explicitamente um item que
+ * aparece na lista (com saldo em outra obra), mas o auto-match não encontra o item de novo →
+ * grava resposta com quantidade=0/preço=0 silenciosamente, e mais tarde a geração da OC dispara
+ * falso "sem correspondência no almoxarifado" ou "saldo insuficiente".
+ *
+ * Correção (2 pontos, mesma lógica):
+ * 1. `adicionarEstoqueAoMapa`: quando o user manda `almoxItemIds` (seleção explícita via modal),
+ *    o filtro de obra é REMOVIDO — a whitelist de IDs explícita já é confiável por si só. O
+ *    filtro central+destino continua válido apenas na varredura CEGA (sem seleção explícita, ou
+ *    seja, quando o sistema tenta auto-match por nome sem o user ter escolhido nada).
+ * 2. `criarOrdemDeCotacao` (pré-check antes de decrementar estoque): quando o user NÃO escolheu
+ *    `obraOrigemId` explicitamente no modal "Transferir do Estoque", a busca passa a ser
+ *    company-wide (em vez de central+destino), alinhando com o que o pré-preenchimento (item 1)
+ *    e a listagem (Rev. 2470) já enxergam. `obraOrigemId` explícito continua restringindo
+ *    estritamente à obra escolhida.
+ *
+ * Validado via HTTP real (usuário admin_master temporário): criada SC/cotação/item descartáveis
+ * reproduzindo o cenário (item cadastrado só na obra 90005, cotação da obra 90004),
+ * `adicionarEstoqueAoMapa` com `almoxItemIds=[495]` retornou match correto (qty=3, preço=25.40,
+ * total=76.20 — antes ficaria 0/0/0); tudo revertido/apagado em seguida (zero rastro).
+ * Adicionalmente, corrigido o dado real de SC-2026-0163/cotação COT-2026-0138 que já estava
+ * gravado com quantidade=0/preço=0 pelo bug (recalculado para quantidade=1/preço=25.40/total=25.40,
+ * espelhando exatamente a nova lógica).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo (nenhuma coluna nova; reusa o schema existente).
+ */
+
+/**
+ * Rev. 4014 — **COMPRAS: PERMITIR QUANTIDADE PARCIAL NA "DIVIDIR COTAÇÃO" (Item 2 dos ~20
+ * ajustes do docx).**
+ *
+ * Contexto: `dividirCotacao` só permitia mover o ITEM INTEIRO (100% da quantidade) para a
+ * nova cotação. Usuário pediu poder dividir a QUANTIDADE de um mesmo item entre duas
+ * cotações (ex.: 33un de "Fita PVC" — 23 seguem na cotação original, 10 vão pra uma nova
+ * cotação com outro fornecedor/prazo), sem duplicar o item cadastral nem perder o histórico
+ * de resposta dos fornecedores já lançada.
+ *
+ * Implementação: `dividirCotacao` passou a aceitar `itens: {id, quantidade}[]` (a quantidade
+ * que sai pra nova cotação) mantendo `itemIds: number[]` legado (equivale a mover 100% do
+ * item, tratado como `Infinity` internamente). Itens classificados em `fullMoveItems`
+ * (quantidade movida ≥ total → re-parent como antes) e `partialMoveItems` (quantidade movida
+ * < total → NÃO re-parenta): para estes, cria um NOVO registro em `compras_cotacoes_itens` na
+ * cotação nova com a fração movida (mesma descrição/preço/rastreio de SC), reduz a
+ * quantidade/total do item ORIGINAL que fica pra trás, e divide PROPORCIONALMENTE cada
+ * resposta de fornecedor já lançada (`compras_cotacao_respostas`) — sem isso o orçamento por
+ * fornecedor ficaria incoerente entre as duas cotações. Validação: pelo menos 1 item (ou
+ * fração de quantidade) deve permanecer na cotação original — não dá pra mover tudo. O bloco
+ * de replicação de fornecedores (recalcula `totalOrcado` por fornecedor a partir das
+ * respostas) já era genérico o bastante pra funcionar sem alteração, pois lê as respostas
+ * DEPOIS do split de item/resposta.
+ *
+ * Front-end (`Cotacoes.tsx`): modal "Dividir Cotação" — `dividirSel` virou
+ * `Map<itemId, quantidade>` (era `Set<itemId>`); ao marcar um item aparece um campo numérico
+ * (default = quantidade total) pra digitar quanto vai pra nova cotação; badge "parcial"
+ * quando a quantidade digitada é menor que o total do item.
+ *
+ * Validado via HTTP real (usuário admin_master temporário + cookie de sessão) na cotação
+ * 616: split de 10/33un de um item (parcial) + 1 item inteiro (full) — conferido que
+ * item/respostas/fornecedores refletem a proporção corretamente nas 2 cotações, revertido ao
+ * estado original em seguida (zero rastro).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo (nenhuma coluna nova; reusa o schema existente).
+ */
+
+/**
  * Rev. 4013 — **COMPRAS: REGIME DE CUSTO/RISCO (BDI) NA EQUALIZAÇÃO DE COTAÇÃO PARA OBRAS
  * "FORNECIMENTO DE MDO" (Item 1 da lista de ~20 ajustes do docx do usuário).**
  *

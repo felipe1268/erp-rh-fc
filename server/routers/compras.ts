@@ -4815,7 +4815,12 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
   dividirCotacao: protectedProcedure
     .input(z.object({
       cotacaoId: z.number(),
-      itemIds: z.array(z.number()).min(1),
+      // Rev. 4014 — cada item pode informar a QUANTIDADE que sai para a nova
+      // cotação (default = quantidade total do item, mantendo compat com o
+      // comportamento antigo de "mover item inteiro"). `itemIds` legado ainda
+      // é aceito (equivale a mover 100% da quantidade de cada item).
+      itens: z.array(z.object({ id: z.number(), quantidade: z.number().positive() })).min(1).optional(),
+      itemIds: z.array(z.number()).min(1).optional(),
       descricao: z.string().optional(),
       userId: z.number().optional(),
       userName: z.string().optional(),
@@ -4836,15 +4841,49 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       }
       const allItens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, cot.id));
       const allIds = new Set(allItens.map(it => it.id));
-      const moveIds = [...new Set(input.itemIds)].filter(id => allIds.has(id));
-      if (moveIds.length === 0) throw new Error("Nenhum item válido selecionado para dividir.");
-      if (moveIds.length >= allItens.length) {
-        throw new Error("Selecione menos itens — pelo menos 1 item deve permanecer na cotação original.");
-      }
 
-      const movedItens = allItens.filter(it => moveIds.includes(it.id));
-      const movedTotal = movedItens.reduce((s, it) => s + n(it.total), 0);
-      const restantesTotal = allItens.filter(it => !moveIds.includes(it.id)).reduce((s, it) => s + n(it.total), 0);
+      // Rev. 4014 — normaliza entrada legada (`itemIds`) pra nova forma (`itens`
+      // com quantidade = 100% do item), pra não quebrar chamadores antigos.
+      const rawItens = input.itens ?? (input.itemIds ?? []).map(id => ({ id, quantidade: Infinity }));
+      const requestMap = new Map<number, number>();
+      for (const it of rawItens) {
+        if (allIds.has(it.id)) requestMap.set(it.id, it.quantidade);
+      }
+      if (requestMap.size === 0) throw new Error("Nenhum item válido selecionado para dividir.");
+
+      type ItemRow = typeof allItens[number];
+      const fullMoveItems: ItemRow[] = [];
+      const partialMoveItems: { item: ItemRow; moveQty: number }[] = [];
+      for (const it of allItens) {
+        const req = requestMap.get(it.id);
+        if (req == null) continue;
+        const totalQty = n(it.quantidade);
+        const moveQty = Math.min(Math.max(req, 0), totalQty);
+        if (moveQty <= 1e-9) continue; // ignora seleção de quantidade zero/negativa
+        if (moveQty >= totalQty - 1e-9) {
+          fullMoveItems.push(it);
+        } else {
+          partialMoveItems.push({ item: it, moveQty });
+        }
+      }
+      if (fullMoveItems.length === 0 && partialMoveItems.length === 0) {
+        throw new Error("Nenhum item válido selecionado para dividir.");
+      }
+      if (fullMoveItems.length >= allItens.length) {
+        throw new Error("Selecione menos itens (ou quantidades menores) — pelo menos 1 item deve permanecer na cotação original.");
+      }
+      const moveIds = fullMoveItems.map(it => it.id);
+
+      const round2 = (v: number) => Math.round(v * 100) / 100;
+      const round3 = (v: number) => Math.round(v * 1000) / 1000;
+      const allTotal = allItens.reduce((s, it) => s + n(it.total), 0);
+      const movedTotalFull = fullMoveItems.reduce((s, it) => s + n(it.total), 0);
+      const movedTotalPartial = partialMoveItems.reduce((s, { item, moveQty }) => {
+        const totalQty = n(item.quantidade) || 1;
+        return s + round2(n(item.total) * (moveQty / totalQty));
+      }, 0);
+      const movedTotal = movedTotalFull + movedTotalPartial;
+      const restantesTotal = round2(allTotal - movedTotal);
 
       // Rev. 2806 — TODO o split roda dentro de UMA transação com advisory lock
       // por empresa (serializa numeração + re-parent + recálculo de totais).
@@ -4879,13 +4918,70 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
           criadoPorNome: input.userName ?? ctx.user?.name ?? ctx.user?.email ?? null,
         } as any).returning();
 
-        // Move os itens selecionados (re-parent: preserva os ids, mantendo válidas
-        // as referências de OC/respostas que apontam pra cotacao_item.id).
-        await tx.update(comprasCotacoesItens).set({ cotacaoId: novaRow.id }).where(inArray(comprasCotacoesItens.id, moveIds));
-        // Move as respostas dos fornecedores referentes a esses itens.
-        await tx.update(comprasCotacaoRespostas)
-          .set({ cotacaoId: novaRow.id, propostaId: null })
-          .where(and(eq(comprasCotacaoRespostas.cotacaoId, cot.id), inArray(comprasCotacaoRespostas.itemId, moveIds)));
+        // Move os itens selecionados INTEIRAMENTE (re-parent: preserva os ids,
+        // mantendo válidas as referências de OC/respostas que apontam pra
+        // cotacao_item.id).
+        if (moveIds.length > 0) {
+          await tx.update(comprasCotacoesItens).set({ cotacaoId: novaRow.id }).where(inArray(comprasCotacoesItens.id, moveIds));
+          // Move as respostas dos fornecedores referentes a esses itens.
+          await tx.update(comprasCotacaoRespostas)
+            .set({ cotacaoId: novaRow.id, propostaId: null })
+            .where(and(eq(comprasCotacaoRespostas.cotacaoId, cot.id), inArray(comprasCotacaoRespostas.itemId, moveIds)));
+        }
+
+        // Rev. 4014 — Itens com QUANTIDADE PARCIAL: cria um novo item na cotação
+        // nova com a fração movida (mesma descrição/preço/rastreio de SC) e
+        // reduz a quantidade/total do item original que fica pra trás. As
+        // respostas de fornecedor (já lançadas) são divididas na mesma
+        // proporção, senão o orçamento por fornecedor ficaria incoerente.
+        for (const { item, moveQty } of partialMoveItems) {
+          const totalQty = n(item.quantidade) || 1;
+          const ratio = moveQty / totalQty;
+          const remQty = round3(totalQty - moveQty);
+          const itemTotal = n(item.total);
+          const movedItemTotal = round2(itemTotal * ratio);
+          const remItemTotal = round2(itemTotal - movedItemTotal);
+
+          const [novoItem] = await tx.insert(comprasCotacoesItens).values({
+            cotacaoId: novaRow.id,
+            solicitacaoItemId: item.solicitacaoItemId ?? null,
+            descricao: item.descricao,
+            unidade: item.unidade,
+            quantidade: String(round3(moveQty)),
+            precoUnitario: item.precoUnitario,
+            descontoPct: item.descontoPct,
+            total: String(movedItemTotal.toFixed(2)),
+            semVerba: item.semVerba,
+            motivoSemVerba: item.motivoSemVerba,
+          } as any).returning();
+
+          await tx.update(comprasCotacoesItens)
+            .set({ quantidade: String(remQty), total: String(remItemTotal.toFixed(2)) })
+            .where(eq(comprasCotacoesItens.id, item.id));
+
+          const respostasItem = await tx.select().from(comprasCotacaoRespostas)
+            .where(and(eq(comprasCotacaoRespostas.cotacaoId, cot.id), eq(comprasCotacaoRespostas.itemId, item.id)));
+          for (const r of respostasItem) {
+            const rQty = n(r.quantidade);
+            const rTotal = n(r.total);
+            const rMovedQty = round3(rQty * ratio);
+            const rMovedTotal = round2(rTotal * ratio);
+            await tx.insert(comprasCotacaoRespostas).values({
+              cotacaoId: novaRow.id,
+              fornecedorId: r.fornecedorId,
+              itemId: novoItem.id,
+              propostaId: null,
+              quantidade: String(rMovedQty),
+              precoUnitario: r.precoUnitario,
+              descontoPct: r.descontoPct,
+              total: String(rMovedTotal.toFixed(2)),
+              observacoes: r.observacoes,
+            } as any);
+            await tx.update(comprasCotacaoRespostas)
+              .set({ quantidade: String(round3(rQty - rMovedQty)), total: String(round2(rTotal - rMovedTotal).toFixed(2)) })
+              .where(eq(comprasCotacaoRespostas.id, r.id));
+          }
+        }
 
         // Replica os fornecedores convidados na nova cotação, recalculando o
         // totalOrcado a partir das respostas QUE FORAM MOVIDAS.
@@ -5937,11 +6033,18 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         : [];
       // Carrega itens do almoxarifado da empresa (filtra por obra quando aplicável)
       const almoxConds = [eq(almoxarifadoItens.companyId, input.companyId), eq(almoxarifadoItens.ativo, true)];
-      if (obraId) almoxConds.push(or(isNull(almoxarifadoItens.obraId), eq(almoxarifadoItens.obraId, obraId))!);
-      // Rev. 2466 — Quando o user escolheu manualmente quais itens usar,
-      // restringe a varredura a esses IDs (vira whitelist explícita).
-      if (input.almoxItemIds && input.almoxItemIds.length > 0) {
-        almoxConds.push(inArray(almoxarifadoItens.id, input.almoxItemIds));
+      // Rev. 4015 — Item 3 do docx: quando o user ESCOLHE explicitamente os itens no modal
+      // "Selecionar do Estoque" (que já lista TODA a empresa desde a Rev. 2470 — "mostrar
+      // tudo é seguro"), a whitelist de `almoxItemIds` é confiável por si só; restringir
+      // TAMBÉM por obra (central+destino) fazia o auto-match ignorar a escolha explícita do
+      // user sempre que o saldo estivesse em OUTRA obra (ex.: SC-2026-0163, item só tinha
+      // saldo na obra 90005 mas a cotação era da obra 90004) — resultava em qty=0/preço=0
+      // silenciosamente, e mais tarde travava a OC com "sem correspondência"/"saldo
+      // insuficiente". Só aplica o filtro de obra na varredura CEGA (sem seleção explícita).
+      const temSelecaoExplicita = !!(input.almoxItemIds && input.almoxItemIds.length > 0);
+      if (obraId && !temSelecaoExplicita) almoxConds.push(or(isNull(almoxarifadoItens.obraId), eq(almoxarifadoItens.obraId, obraId))!);
+      if (temSelecaoExplicita) {
+        almoxConds.push(inArray(almoxarifadoItens.id, input.almoxItemIds!));
       }
       const almox = await db.select().from(almoxarifadoItens).where(and(...almoxConds));
       const norm = (x: string|null|undefined) => (x ?? "").toLowerCase().trim().replace(/\s+/g," ");
@@ -8156,13 +8259,18 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           : [];
         const almoxConds: any[] = [eq(almoxarifadoItens.companyId, input.companyId), eq(almoxarifadoItens.ativo, true)];
         // Rev. 2091 — Se o user escolheu obra de ORIGEM no modal "Transferir do Estoque",
-        // filtramos estritamente por aquela obra (=null trata "Almoxarifado Central"). Caso contrário,
-        // mantém comportamento legado (central OR destino).
+        // filtramos estritamente por aquela obra (=null trata "Almoxarifado Central").
+        // Rev. 4015 — Item 3 do docx: quando o user NÃO escolhe obra de origem, o legado
+        // restringia a central+destino, mas isso diverge do que o próprio pré-preenchimento
+        // (`adicionarEstoqueAoMapa`, já corrigido nesta revisão) e o modal "Selecionar do
+        // Estoque" (Rev. 2470) já enxergam — company-wide. Ex.: SC-2026-0163, saldo só existia
+        // na obra 90005 mas a cotação era da obra 90004: o pré-preenchimento (widened) achava e
+        // capava a quantidade corretamente, mas este segundo re-match (estrito) não achava o
+        // item de novo e disparava falso "sem correspondência"/"saldo insuficiente" na hora de
+        // gerar a OC. Mantém company-wide como padrão; obraOrigemId explícito ainda restringe.
         if (input.obraOrigemId !== undefined) {
           if (input.obraOrigemId === null) almoxConds.push(isNull(almoxarifadoItens.obraId));
           else almoxConds.push(eq(almoxarifadoItens.obraId, input.obraOrigemId));
-        } else if (oc.obraId) {
-          almoxConds.push(or(isNull(almoxarifadoItens.obraId), eq(almoxarifadoItens.obraId, oc.obraId))!);
         }
         const almoxList = await db.select().from(almoxarifadoItens).where(and(...almoxConds));
         const norm = (x: string|null|undefined) => (x ?? "").toLowerCase().trim().replace(/\s+/g," ");

@@ -941,7 +941,8 @@ export default function Cotacoes() {
   const [transfObraOrigemId, setTransfObraOrigemId] = useState<number | null | undefined>(undefined);
   // Rev. 2806 — Cotação parcial: modal "Dividir cotação" (move itens p/ nova cotação).
   const [showDividirModal, setShowDividirModal] = useState(false);
-  const [dividirSel, setDividirSel] = useState<Set<number>>(new Set());
+  // Rev. 4014 — Map<itemId, quantidade a mover>; default ao marcar = quantidade total do item.
+  const [dividirSel, setDividirSel] = useState<Map<number, number>>(new Map());
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1138,7 +1139,7 @@ export default function Cotacoes() {
     onSuccess: (data: any) => {
       toast.success(`Cotação dividida! ${data.movidos} ${data.movidos === 1 ? "item movido" : "itens movidos"} para ${data.nova.numeroCotacao}.`);
       setShowDividirModal(false);
-      setDividirSel(new Set());
+      setDividirSel(new Map());
       detalheQ.refetch(); mapaQ.refetch(); q.refetch(); coberturaScQ.refetch();
     },
     onError: (e) => toast.error(e.message),
@@ -3823,7 +3824,7 @@ export default function Cotacoes() {
                     </Button>
                   )}
                   {!["cancelada", "recusada", "aprovada", "concluida"].includes(detalheFullscreen.status ?? "") && ((detalheFullscreen as any)?.itens?.length ?? 0) >= 2 && (
-                    <Button variant="outline" onClick={() => { setDividirSel(new Set()); setShowDividirModal(true); }}
+                    <Button variant="outline" onClick={() => { setDividirSel(new Map()); setShowDividirModal(true); }}
                       className="border-violet-200 text-violet-700 hover:bg-violet-50 gap-2">
                       <GitBranch className="h-4 w-4" /> Dividir Cotação
                     </Button>
@@ -7347,11 +7348,19 @@ export default function Cotacoes() {
     {showDividirModal && detalheFullscreen && (() => {
       const itensCot = ((detalheFullscreen as any).itens ?? []) as any[];
       const sel = dividirSel;
-      const totalSel = itensCot.filter(it => sel.has(it.id)).reduce((s, it) => s + (parseFloat(it.total) || 0), 0);
-      const restam = itensCot.length - sel.size;
-      const podeDividir = sel.size >= 1 && sel.size < itensCot.length;
-      const restamTotal = itensCot.filter(it => !sel.has(it.id)).reduce((s, it) => s + (parseFloat(it.total) || 0), 0);
-      const todosMarcados = itensCot.length > 0 && sel.size === itensCot.length;
+      // Rev. 4014 — proporção movida por item (qtdMovida/qtdTotal), pra dividir o total
+      // do item na mesma razão (funciona pra full-move E partial-move).
+      const ratioOf = (it: any) => {
+        const totalQty = parseFloat(it.quantidade) || 0;
+        const moveQty = Math.min(sel.get(it.id) ?? 0, totalQty);
+        return totalQty > 0 ? moveQty / totalQty : 0;
+      };
+      const totalSel = itensCot.reduce((s, it) => s + (parseFloat(it.total) || 0) * ratioOf(it), 0);
+      const itensSelCount = itensCot.filter(it => sel.has(it.id) && (sel.get(it.id) ?? 0) > 0).length;
+      const restam = itensCot.length - itensCot.filter(it => sel.has(it.id) && ratioOf(it) >= 0.999999).length;
+      const podeDividir = itensSelCount >= 1 && itensCot.some(it => !sel.has(it.id) || ratioOf(it) < 0.999999);
+      const restamTotal = itensCot.reduce((s, it) => s + (parseFloat(it.total) || 0) * (1 - ratioOf(it)), 0);
+      const todosMarcados = itensCot.length > 0 && itensCot.every(it => ratioOf(it) >= 0.999999);
       return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setShowDividirModal(false)}>
           <div className="bg-white rounded-3xl shadow-2xl ring-1 ring-black/5 w-full max-w-2xl max-h-[88vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
@@ -7371,16 +7380,16 @@ export default function Cotacoes() {
             <div className="flex items-center justify-between gap-2 px-6 py-3 border-b border-gray-100 bg-gray-50/70">
               <div className="flex items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-700">
-                  <Check className="h-3.5 w-3.5" /> {sel.size} selecionado{sel.size === 1 ? "" : "s"}
+                  <Check className="h-3.5 w-3.5" /> {itensSelCount} selecionado{itensSelCount === 1 ? "" : "s"}
                 </span>
                 <span className="text-xs text-gray-400">de {itensCot.length}</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <button type="button" onClick={() => setDividirSel(todosMarcados ? new Set() : new Set(itensCot.map(it => it.id)))}
+                <button type="button" onClick={() => setDividirSel(todosMarcados ? new Map() : new Map(itensCot.map(it => [it.id, parseFloat(it.quantidade) || 0])))}
                   className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-violet-700 hover:bg-violet-100 transition-colors">
                   {todosMarcados ? "Desmarcar todos" : "Selecionar todos"}
                 </button>
-                <button type="button" onClick={() => setDividirSel(new Set())}
+                <button type="button" onClick={() => setDividirSel(new Map())}
                   className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-200/70 transition-colors">Limpar</button>
               </div>
             </div>
@@ -7389,24 +7398,42 @@ export default function Cotacoes() {
             <div className="flex-1 overflow-auto px-4 sm:px-6 py-3 space-y-2 bg-gray-50/40">
               {itensCot.map(it => {
                 const checked = sel.has(it.id);
+                const totalQty = parseFloat(it.quantidade) || 0;
+                const moveQty = sel.get(it.id) ?? totalQty;
+                const isPartial = checked && moveQty < totalQty - 1e-9;
                 return (
-                  <label key={it.id}
-                    className={`group flex items-center gap-3 px-3.5 py-3 rounded-xl border cursor-pointer transition-all ${checked ? "border-violet-400 bg-violet-50 shadow-sm ring-1 ring-violet-200" : "border-gray-200 bg-white hover:border-violet-200 hover:shadow-sm"}`}>
-                    <span className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md border-2 transition-colors ${checked ? "border-violet-600 bg-violet-600" : "border-gray-300 group-hover:border-violet-400 bg-white"}`}>
-                      {checked && <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />}
-                    </span>
-                    <input type="checkbox" checked={checked} onChange={() => setDividirSel(prev => { const next = new Set(prev); if (next.has(it.id)) next.delete(it.id); else next.add(it.id); return next; })} className="sr-only" />
-                    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-400 group-hover:bg-violet-100 group-hover:text-violet-500 transition-colors">
-                      <Package className="h-4 w-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-medium truncate ${checked ? "text-violet-900" : "text-gray-800"}`}>{it.descricao}</p>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="inline-flex items-center rounded-md bg-gray-100 px-1.5 py-0.5 text-[11px] font-medium text-gray-600">{Number(it.quantidade)} {it.unidade || "un"}</span>
-                        {parseFloat(it.total) > 0 && <span className="text-[11px] text-gray-400">{fmt(parseFloat(it.total))}</span>}
+                  <div key={it.id}
+                    className={`group flex items-center gap-3 px-3.5 py-3 rounded-xl border transition-all ${checked ? "border-violet-400 bg-violet-50 shadow-sm ring-1 ring-violet-200" : "border-gray-200 bg-white hover:border-violet-200 hover:shadow-sm"}`}>
+                    <label className="flex items-center gap-3 cursor-pointer flex-1 min-w-0">
+                      <span className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md border-2 transition-colors ${checked ? "border-violet-600 bg-violet-600" : "border-gray-300 group-hover:border-violet-400 bg-white"}`}>
+                        {checked && <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />}
+                      </span>
+                      <input type="checkbox" checked={checked} onChange={() => setDividirSel(prev => { const next = new Map(prev); if (next.has(it.id)) next.delete(it.id); else next.set(it.id, totalQty); return next; })} className="sr-only" />
+                      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-400 group-hover:bg-violet-100 group-hover:text-violet-500 transition-colors">
+                        <Package className="h-4 w-4" />
                       </div>
-                    </div>
-                  </label>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium truncate ${checked ? "text-violet-900" : "text-gray-800"}`}>{it.descricao}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="inline-flex items-center rounded-md bg-gray-100 px-1.5 py-0.5 text-[11px] font-medium text-gray-600">{Number(it.quantidade)} {it.unidade || "un"}</span>
+                          {parseFloat(it.total) > 0 && <span className="text-[11px] text-gray-400">{fmt(parseFloat(it.total))}</span>}
+                          {isPartial && <span className="inline-flex items-center rounded-md bg-fuchsia-100 px-1.5 py-0.5 text-[11px] font-semibold text-fuchsia-700">parcial</span>}
+                        </div>
+                      </div>
+                    </label>
+                    {checked && (
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <span className="text-[11px] text-gray-400">mover</span>
+                        <Input type="number" min={0} max={totalQty} step="any" value={moveQty}
+                          onChange={e => {
+                            const raw = parseFloat(e.target.value);
+                            setDividirSel(prev => { const next = new Map(prev); next.set(it.id, isNaN(raw) ? 0 : Math.max(0, Math.min(raw, totalQty))); return next; });
+                          }}
+                          className="h-8 w-24 text-sm text-right" />
+                        <span className="text-[11px] text-gray-400">{it.unidade || "un"}</span>
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -7416,7 +7443,7 @@ export default function Cotacoes() {
               <div className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-2">
                 <div className="rounded-xl border border-violet-200 bg-violet-50 px-3 py-2">
                   <p className="text-[11px] font-medium uppercase tracking-wide text-violet-500">Nova cotação</p>
-                  <p className="text-sm font-bold text-violet-800">{sel.size} {sel.size === 1 ? "item" : "itens"}</p>
+                  <p className="text-sm font-bold text-violet-800">{itensSelCount} {itensSelCount === 1 ? "item" : "itens"}</p>
                   {totalSel > 0 && <p className="text-[11px] text-violet-500">{fmt(totalSel)}</p>}
                 </div>
                 <div className="flex items-center justify-center text-violet-400"><ArrowLeftRight className="h-4 w-4" /></div>
@@ -7426,12 +7453,16 @@ export default function Cotacoes() {
                   {restamTotal > 0 && <p className="text-[11px] text-gray-400">{fmt(restamTotal)}</p>}
                 </div>
               </div>
-              {sel.size > 0 && sel.size >= itensCot.length && (
-                <p className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2"><AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" /> Deixe pelo menos 1 item na cotação original.</p>
+              {!podeDividir && itensSelCount > 0 && (
+                <p className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2"><AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" /> Deixe pelo menos 1 item (ou uma fração de quantidade) na cotação original.</p>
               )}
               <div className="flex justify-end gap-2 pt-1">
                 <Button variant="outline" onClick={() => setShowDividirModal(false)} className="rounded-xl">Cancelar</Button>
-                <Button disabled={!podeDividir || dividirCotacao.isPending} onClick={() => dividirCotacao.mutate({ cotacaoId: showDetalhe!, itemIds: [...sel], userId: user?.id ? parseInt(String(user.id)) : undefined, userName: user?.nome || user?.name || undefined })}
+                <Button disabled={!podeDividir || dividirCotacao.isPending} onClick={() => dividirCotacao.mutate({
+                  cotacaoId: showDetalhe!,
+                  itens: itensCot.filter(it => sel.has(it.id) && (sel.get(it.id) ?? 0) > 0).map(it => ({ id: it.id, quantidade: sel.get(it.id) ?? 0 })),
+                  userId: user?.id ? parseInt(String(user.id)) : undefined, userName: user?.nome || user?.name || undefined
+                })}
                   className="rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white gap-2 shadow-lg shadow-violet-600/20 disabled:shadow-none disabled:opacity-50">
                   {dividirCotacao.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <GitBranch className="h-4 w-4" />} Mover para nova cotação
                 </Button>
