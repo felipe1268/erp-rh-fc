@@ -78,8 +78,12 @@ function extractData(descricao: string): string | undefined {
   const m = descricao.match(/\b(\d{2})\/(\d{2})\/(\d{4})\b/);
   if (!m) return undefined;
   const [, dd, mm, yyyy] = m;
-  const d = Number(dd), mo = Number(mm);
+  const d = Number(dd), mo = Number(mm), y = Number(yyyy);
   if (d < 1 || d > 31 || mo < 1 || mo > 12) return undefined;
+  // Valida dia-no-mês real (ex.: 29/02 em ano não-bissexto, 31/04 etc.) — uma data
+  // impossível derrubava o INSERT inteiro com "date/time field value out of range".
+  const diasNoMes = new Date(y, mo, 0).getDate();
+  if (d > diasNoMes) return undefined;
   return `${yyyy}-${mm}-${dd} 12:00:00`;
 }
 

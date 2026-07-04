@@ -1,4 +1,40 @@
 /**
+ * Rev. 4026 — **MEDIÇÃO DE CONTRATOS: REDESIGN DO DIÁLOGO "ITENS DO BOLETIM" + INTEGRAÇÃO COM
+ * COMPRAS PARA DETECTAR OCs DE FD (FATURAMENTO DIRETO) E TRAZER O VALOR AUTOMATICAMENTE.**
+ *
+ * PEDIDO: usuário reportou que o diálogo "Itens do Boletim" estava confuso/bagunçado e pediu um
+ * redesign moderno e interativo; pediu também que o sistema detectasse OCs de Faturamento Direto
+ * (FD) já lançadas em Compras para a obra/contrato e permitisse trazer esse valor para o boletim
+ * sem digitação manual.
+ *
+ * SOLUÇÃO — Frontend (`client/src/pages/medicao/MedicaoDetalhe.tsx`):
+ * - Diálogo "Itens do Boletim" reconstruído: cards de resumo (Bruto / FD / Líquido) sempre
+ *   visíveis no topo, banner explicando a procedência dos dados (Cronograma × FD Compras), coluna
+ *   "Origem" por linha (badge Cronograma vs FD Compras) nas visões de leitura e edição, zebra
+ *   striping e botão de excluir linha no modo edição.
+ * - Novo botão "Vincular FD de Compras" abre diálogo listando OCs de FD disponíveis para a obra do
+ *   contrato (via `medicao.listarOcsFdDisponiveis`); "Selecionar" cria o registro de FD
+ *   (`origem: "compra"`, `compraId`) e insere automaticamente uma linha `isFd:true` no boletim com
+ *   o valor efetivo da OC — sem digitação manual.
+ *
+ * SOLUÇÃO — Backend (`server/routers/medicao.ts`):
+ * - Nova query `listarOcsFdDisponiveis({companyId, obraId})`: busca `compras_ordens` com
+ *   `modalidadeFd IN (fd_cliente, fd_terceiro, fd_fc)`, status ≠ cancelada, calcula
+ *   `valorEfetivo` (usa `fdValor` se > 0, senão `total`) e marca `jaVinculada` (já usada em algum
+ *   `medicao_fd_registros.compra_id`) para não duplicar vínculo.
+ * - `criarFdRegistro` ganhou `origem: z.enum(["bdi","manual","compra"])` (era só bdi/manual) +
+ *   `compraId` opcional, aproveitando a coluna `compraId` que já existia (sem uso) em
+ *   `medicao_fd_registros` — link direto FD↔OC de Compras.
+ *
+ * `medicaoBoletimItens.isFd` continua sendo o gatilho de `deducaoFd` em `recalcularDeducoes`
+ * (soma `valorPeriodo` das linhas `isFd=true`); a nova linha criada pelo vínculo entra nesse
+ * mesmo cálculo automaticamente, sem lógica nova de dedução.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo (nenhuma coluna/tabela removida ou alterada de forma
+ * destrutiva; `origem` é extensão de enum existente, `compraId` já existia sem uso).
+ */
+
+/**
  * Rev. 4025 — **MEDIÇÃO DE CONTRATOS: "IMPORTAR DO ORÇAMENTO (COM AVANÇO FÍSICO)" NÃO TRAZIA
  * NENHUM ITEM — PASSA A IMPORTAR DIRETO DO CRONOGRAMA (AVANÇO FÍSICO REAL), NÃO MAIS DO ORÇAMENTO.**
  *

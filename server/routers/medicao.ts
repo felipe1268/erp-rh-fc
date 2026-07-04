@@ -18,6 +18,7 @@ import {
   orcamentoItens,
   orcamentos,
   obras,
+  comprasOrdens,
 } from "../../drizzle/schema";
 import { eq, and, isNull, desc, sql, inArray } from "drizzle-orm";
 import { storagePut } from "../storage";
@@ -526,7 +527,8 @@ export const medicaoRouter = router({
       descricao: z.string(),
       valor: z.string(),
       dataRegistro: z.string(),
-      origem: z.enum(["bdi", "manual"]).default("manual"),
+      origem: z.enum(["bdi", "manual", "compra"]).default("manual"),
+      compraId: z.number().nullable().optional(),
       observacoes: z.string().nullable().optional(),
     }))
     .mutation(async ({ input }) => {
@@ -538,9 +540,59 @@ export const medicaoRouter = router({
         valor: input.valor,
         dataRegistro: input.dataRegistro,
         origem: input.origem,
+        compraId: input.compraId ?? null,
         observacoes: input.observacoes,
       }).returning();
       return row;
+    }),
+
+  // Rev. 4026 — OCs de Faturamento Direto (FD) do Painel de Compras disponíveis para
+  // importar direto na Medição (mesmo critério de `compras.getSaldoFdTodasObras`:
+  // modalidadeFd IN fd_cliente/fd_terceiro/fd_fc, status != cancelada). Só considera
+  // OCs da OBRA vinculada ao projeto do contrato de medição. `jaVinculada` sinaliza
+  // OCs que já viraram um `medicao_fd_registros.compraId` (evita duplicar valor).
+  listarOcsFdDisponiveis: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const ocs = await db.select({
+          id: comprasOrdens.id,
+          numeroOc: comprasOrdens.numeroOc,
+          fornecedorNome: comprasOrdens.fornecedorNome,
+          observacoes: comprasOrdens.observacoes,
+          fdValor: comprasOrdens.fdValor,
+          modalidadeFd: comprasOrdens.modalidadeFd,
+          total: comprasOrdens.total,
+          criadoEm: comprasOrdens.criadoEm,
+        })
+        .from(comprasOrdens)
+        .where(and(
+          eq(comprasOrdens.companyId, input.companyId),
+          eq(comprasOrdens.obraId, input.obraId),
+          sql`${comprasOrdens.modalidadeFd} IN ('fd_cliente', 'fd_terceiro', 'fd_fc')`,
+          sql`${comprasOrdens.status} != 'cancelada'`,
+        ))
+        .orderBy(desc(comprasOrdens.criadoEm));
+
+      const vinculadas = await db.select({ compraId: medicaoFdRegistros.compraId })
+        .from(medicaoFdRegistros)
+        .where(sql`${medicaoFdRegistros.compraId} IS NOT NULL`);
+      const vinculadasSet = new Set(vinculadas.map(v => v.compraId));
+
+      const n = (v: unknown) => parseFloat(String(v ?? "0")) || 0;
+      return ocs.map(oc => {
+        const valorEfetivo = n(oc.fdValor) > 0 ? n(oc.fdValor) : n((oc as any).total);
+        return {
+          id: oc.id,
+          numeroOc: oc.numeroOc,
+          fornecedorNome: oc.fornecedorNome,
+          descricao: oc.observacoes,
+          modalidadeFd: oc.modalidadeFd,
+          valorEfetivo,
+          criadoEm: oc.criadoEm,
+          jaVinculada: vinculadasSet.has(oc.id),
+        };
+      });
     }),
 
   atualizarFdRegistro: protectedProcedure

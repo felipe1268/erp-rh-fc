@@ -78,6 +78,7 @@ export default function MedicaoDetalhe() {
   const [formBoletim, setFormBoletim] = useState({ periodoReferencia: "", dataInicio: "", dataFim: "", observacoes: "" });
   const [formFd, setFormFd] = useState({ descricao: "", valor: "", dataRegistro: "", origem: "manual", observacoes: "" });
   const [formContrato, setFormContrato] = useState<any>({});
+  const [modalVincularFd, setModalVincularFd] = useState(false);
 
   const utils = trpc.useUtils();
 
@@ -96,6 +97,12 @@ export default function MedicaoDetalhe() {
   const { data: boletimDetalhe } = trpc.medicao.getBoletim.useQuery(
     { id: boletimSelecionado?.id ?? 0 },
     { enabled: !!boletimSelecionado?.id }
+  );
+  // Rev. 4026 — OCs de Faturamento Direto (FD) do Painel de Compras, para
+  // importar o valor direto num item do boletim (mesma obra do contrato).
+  const { data: ocsFdDisponiveis = [], isLoading: loadingOcsFd } = trpc.medicao.listarOcsFdDisponiveis.useQuery(
+    { companyId, obraId: contrato?.obraId ?? 0 },
+    { enabled: modalVincularFd && !!contrato?.obraId && companyId > 0 }
   );
   const { data: dadosAvancos } = trpc.medicao.getAvancosParaMedicao.useQuery(
     { projetoId: contrato?.projetoId ?? 0, contratoId, boletimId: boletimSelecionado?.id },
@@ -1078,15 +1085,50 @@ export default function MedicaoDetalhe() {
       <Dialog open={modalItens} onOpenChange={open => { setModalItens(open); if (!open) setItensEdicao([]); }}>
         <DialogContent resizable={false} className="w-[95vw] max-w-[95vw] h-[95vh] max-h-[95vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
-              Itens do Boletim {boletimSelecionado ? String(boletimSelecionado.numero).padStart(2, "0") : ""} — {boletimSelecionado?.periodoReferencia}
+            <DialogTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-blue-600" />
+              Itens do Boletim {boletimSelecionado ? String(boletimSelecionado.numero).padStart(2, "0") : ""}
+              <span className="text-gray-400 font-normal">— {boletimSelecionado?.periodoReferencia}</span>
+              {boletimSelecionado?.status && <StatusBadge status={boletimSelecionado.status} />}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Cards de resumo — sempre visíveis, no topo, para leitura rápida */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                <p className="text-[11px] uppercase tracking-wide text-gray-500 font-medium mb-1">Bruto (não-FD)</p>
+                <p className="text-lg font-bold text-gray-900">
+                  {brl(itensEdicao.length > 0 ? totalBruto : n(boletimSelecionado?.valorBruto))}
+                </p>
+              </div>
+              <div className="rounded-xl border border-violet-200 bg-violet-50 p-3">
+                <p className="text-[11px] uppercase tracking-wide text-violet-500 font-medium mb-1">Dedução FD</p>
+                <p className="text-lg font-bold text-violet-700">
+                  -{brl(itensEdicao.length > 0 ? totalFdEdicao : n(boletimSelecionado?.deducaoFd))}
+                </p>
+              </div>
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                <p className="text-[11px] uppercase tracking-wide text-emerald-600 font-medium mb-1">Líquido</p>
+                <p className="text-lg font-bold text-emerald-700">
+                  {brl(itensEdicao.length > 0 ? (totalBruto - totalFdEdicao) : n(boletimSelecionado?.valorLiquido))}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+              <TrendingUp className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+              <span>
+                O avanço físico (<strong>% Período</strong>) vem direto do Cronograma (Planejamento → Avanço Semanal) — cada
+                linha representa uma atividade-folha. Linhas roxas marcadas <strong>FD</strong> são deduzidas do bruto
+                (faturamento direto, ex.: material comprado pelo cliente/OC de terceiro).
+              </span>
+            </div>
+
             {itensEdicao.length === 0 && boletimDetalhe && (
               <div>
                 {(boletimDetalhe.itens?.length ?? 0) === 0 ? (
-                  <div className="text-center py-6">
+                  <div className="text-center py-10 rounded-xl border border-dashed border-gray-300 bg-gray-50/50">
+                    <FileText className="h-8 w-8 text-gray-300 mx-auto mb-2" />
                     <p className="text-sm text-gray-500 mb-3">Nenhum item lançado ainda.</p>
                     <Button variant="outline" size="sm" onClick={() => { popularItensDoOrcamento(); }}>
                       <TrendingUp className="h-3.5 w-3.5 mr-1" />
@@ -1094,44 +1136,41 @@ export default function MedicaoDetalhe() {
                     </Button>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto rounded-lg border border-gray-200">
+                  <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-gray-50 text-xs">
                           <TableHead className="w-20">Item</TableHead>
                           <TableHead>Descrição</TableHead>
+                          <TableHead className="w-28">Origem</TableHead>
                           <TableHead className="text-right w-28">Valor Contratual</TableHead>
                           <TableHead className="text-right w-24">% Ant.</TableHead>
                           <TableHead className="text-right w-24">% Período</TableHead>
                           <TableHead className="text-right w-24">% Acum.</TableHead>
                           <TableHead className="text-right w-28">Valor Período</TableHead>
-                          <TableHead className="w-16 text-center">FD</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {boletimDetalhe.itens.map((item: any) => (
-                          <TableRow key={item.id} className={item.isFd ? "bg-violet-50" : ""}>
-                            <TableCell className="font-mono text-xs">{item.eapCodigo}</TableCell>
+                        {boletimDetalhe.itens.map((item: any, i: number) => (
+                          <TableRow key={item.id} className={item.isFd ? "bg-violet-50 hover:bg-violet-100" : i % 2 === 1 ? "bg-gray-50/60" : ""}>
+                            <TableCell className="font-mono text-xs">{item.eapCodigo || "—"}</TableCell>
                             <TableCell className="text-sm">{item.descricao}</TableCell>
+                            <TableCell className="text-xs">
+                              {item.isFd ? (
+                                <span className="inline-flex items-center gap-1 text-violet-700 font-medium"><Package className="h-3 w-3" />FD Compras</span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-blue-600"><TrendingUp className="h-3 w-3" />Cronograma</span>
+                              )}
+                            </TableCell>
                             <TableCell className="text-right text-sm">{brl(n(item.valorContratual))}</TableCell>
                             <TableCell className="text-right text-sm">{pct(n(item.percentualAcumuladoAnterior))}</TableCell>
                             <TableCell className="text-right text-sm font-medium text-blue-700">{pct(n(item.percentualPeriodo))}</TableCell>
                             <TableCell className="text-right text-sm">{pct(n(item.percentualAcumuladoAtual))}</TableCell>
                             <TableCell className="text-right text-sm font-semibold">{brl(n(item.valorPeriodo))}</TableCell>
-                            <TableCell className="text-center text-xs">
-                              {item.isFd ? <span className="text-violet-600 font-medium">FD</span> : "—"}
-                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
                     </Table>
-                    <div className="p-3 border-t bg-gray-50 flex justify-between text-sm">
-                      <div className="space-x-4">
-                        <span className="text-gray-500">Bruto: <strong className="text-gray-900">{brl(n(boletimSelecionado?.valorBruto))}</strong></span>
-                        <span className="text-violet-600">FD: <strong>-{brl(n(boletimSelecionado?.deducaoFd))}</strong></span>
-                      </div>
-                      <span className="font-bold text-emerald-700">Líquido: {brl(n(boletimSelecionado?.valorLiquido))}</span>
-                    </div>
                   </div>
                 )}
                 {(boletimDetalhe.itens?.length ?? 0) > 0 && boletimSelecionado?.status === "rascunho" && (
@@ -1139,7 +1178,9 @@ export default function MedicaoDetalhe() {
                     <Button variant="outline" size="sm" onClick={() => {
                       const mapped = boletimDetalhe.itens.map((i: any) => ({ ...i }));
                       setItensEdicao(mapped);
-                    }}>Editar Itens</Button>
+                    }}>
+                      <Edit className="h-3.5 w-3.5 mr-1" />Editar Itens
+                    </Button>
                   </div>
                 )}
               </div>
@@ -1147,31 +1188,45 @@ export default function MedicaoDetalhe() {
 
             {itensEdicao.length > 0 && (
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <p className="text-sm text-gray-600">{itensEdicao.length} itens — edite os percentuais do período</p>
-                  <Button variant="outline" size="sm" onClick={popularItensDoOrcamento}>
-                    <TrendingUp className="h-3.5 w-3.5 mr-1" />Reimportar com Avanço Físico
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setModalVincularFd(true)} className="text-violet-700 border-violet-200 hover:bg-violet-50">
+                      <Package className="h-3.5 w-3.5 mr-1" />Vincular FD de Compras
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={popularItensDoOrcamento}>
+                      <TrendingUp className="h-3.5 w-3.5 mr-1" />Reimportar com Avanço Físico
+                    </Button>
+                  </div>
                 </div>
-                <div className="overflow-x-auto rounded-lg border border-gray-200 max-h-96">
+                <div className="overflow-x-auto rounded-xl border border-gray-200 shadow-sm max-h-[50vh]">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-gray-50 text-xs sticky top-0 z-10">
                         <TableHead className="w-20">Item</TableHead>
                         <TableHead>Descrição</TableHead>
+                        <TableHead className="w-24">Origem</TableHead>
                         <TableHead className="text-right w-28">V. Contratual</TableHead>
                         <TableHead className="text-center w-24">% Ant.</TableHead>
                         <TableHead className="text-center w-28">% Período *</TableHead>
                         <TableHead className="text-center w-24">% Acum.</TableHead>
                         <TableHead className="text-right w-28">V. Período</TableHead>
                         <TableHead className="text-center w-16">FD</TableHead>
+                        <TableHead className="w-10" />
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {itensEdicao.map((item, idx) => (
-                        <TableRow key={idx} className={item.isFd ? "bg-violet-50" : ""}>
-                          <TableCell className="font-mono text-xs">{item.eapCodigo}</TableCell>
+                        <TableRow key={idx} className={item.isFd ? "bg-violet-50 hover:bg-violet-100" : idx % 2 === 1 ? "bg-gray-50/60" : ""}>
+                          <TableCell className="font-mono text-xs">{item.eapCodigo || "—"}</TableCell>
                           <TableCell className="text-xs truncate max-w-[200px]" title={item.descricao}>{item.descricao}</TableCell>
+                          <TableCell className="text-xs">
+                            {item.isFd ? (
+                              <span className="inline-flex items-center gap-1 text-violet-700 font-medium"><Package className="h-3 w-3" />FD</span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-blue-600"><TrendingUp className="h-3 w-3" />Cronog.</span>
+                            )}
+                          </TableCell>
                           <TableCell className="text-right text-xs">{brl(n(item.valorContratual))}</TableCell>
                           <TableCell className="text-center text-xs">{pct(n(item.percentualAcumuladoAnterior))}</TableCell>
                           <TableCell>
@@ -1193,6 +1248,16 @@ export default function MedicaoDetalhe() {
                               onChange={e => setItensEdicao(prev => prev.map((it, i) => i === idx ? { ...it, isFd: e.target.checked } : it))}
                               className="h-3.5 w-3.5 accent-violet-600"
                             />
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <button
+                              type="button"
+                              title="Remover item"
+                              onClick={() => setItensEdicao(prev => prev.filter((_, i) => i !== idx))}
+                              className="text-gray-300 hover:text-red-500"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -1233,6 +1298,79 @@ export default function MedicaoDetalhe() {
                     </Button>
                   </div>
                 </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rev. 4026 — Vincular OC de Faturamento Direto (Compras) direto num item do boletim */}
+      <Dialog open={modalVincularFd} onOpenChange={setModalVincularFd}>
+        <DialogContent resizable={false} className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5 text-violet-600" />
+              Vincular FD de Compras
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-gray-500">
+              Ordens de Compra com Faturamento Direto (fd_cliente/fd_terceiro/fd_fc) lançadas para a obra deste contrato.
+              Selecionar adiciona um item FD no boletim com o valor da OC.
+            </p>
+            {loadingOcsFd ? (
+              <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+            ) : ocsFdDisponiveis.length === 0 ? (
+              <div className="text-center py-8 text-sm text-gray-500">
+                Nenhuma OC de Faturamento Direto encontrada para esta obra.
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {ocsFdDisponiveis.map((oc: any) => (
+                  <div key={oc.id} className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 p-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        OC {oc.numeroOc} {oc.fornecedorNome ? `· ${oc.fornecedorNome}` : ""}
+                      </p>
+                      <p className="text-xs text-gray-500 truncate">{oc.descricao || "Sem descrição"}</p>
+                      {oc.jaVinculada && <span className="text-[10px] text-amber-600 font-medium">Já vinculada a uma medição</span>}
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <span className="text-sm font-semibold text-violet-700">{brl(n(oc.valorEfetivo))}</span>
+                      <Button
+                        size="sm"
+                        disabled={criarFdMutation.isPending}
+                        onClick={() => {
+                          const descricao = `FD - OC ${oc.numeroOc}${oc.fornecedorNome ? " - " + oc.fornecedorNome : ""}`;
+                          criarFdMutation.mutate({
+                            companyId,
+                            contratoId,
+                            descricao,
+                            valor: String(n(oc.valorEfetivo).toFixed(2)),
+                            dataRegistro: new Date().toISOString().split("T")[0],
+                            origem: "compra",
+                            compraId: oc.id,
+                          });
+                          setItensEdicao(prev => [...prev, {
+                            atividadeId: null,
+                            eapCodigo: null,
+                            descricao,
+                            valorContratual: n(oc.valorEfetivo).toFixed(2),
+                            percentualAcumuladoAnterior: "0.0000",
+                            percentualPeriodo: "100.0000",
+                            percentualAcumuladoAtual: "100.0000",
+                            valorPeriodo: n(oc.valorEfetivo).toFixed(2),
+                            tipoAvanco: "fd_compra",
+                            isFd: true,
+                          }]);
+                          setModalVincularFd(false);
+                        }}
+                      >
+                        Selecionar
+                      </Button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
