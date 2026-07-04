@@ -11,6 +11,75 @@ import {
 import { inferirCategoria, CATEGORIA_KEYWORDS } from "./categoriaUtils";
 import { formatNumeroOcDisplay } from "@shared/numeroOc";
 
+// Rev. 4005 — matching NF↔cadastro por SIMILARIDADE (tokens + Dice de bigramas), não mais
+// substring da 1ª palavra (que confundia itens com nome parecido, ex.: "Cimento CP-II" vs
+// "Cimento CP-V", ou dava falso-negativo quando a NF descreve o item em ordem diferente).
+// Mesmo padrão de scoring já usado em financial.ts p/ conciliação de fornecedor/cliente.
+const _STOP_TOKENS_MAT = new Set<string>([
+  "DE", "DA", "DO", "DAS", "DOS", "PARA", "COM", "SEM", "EM", "NO", "NA", "E",
+  "UN", "UND", "UNIDADE", "PC", "PCS", "PECA", "PECAS", "KG", "UNID",
+]);
+const _normNomeMat = (v: any): string =>
+  String(v || "")
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+const _toksMat = (v: any): string[] =>
+  _normNomeMat(v).split(" ").filter((t) => t.length >= 3 && !_STOP_TOKENS_MAT.has(t));
+const _bigramsMat = (s: string): Set<string> => {
+  const g = new Set<string>();
+  for (let i = 0; i < s.length - 1; i++) g.add(s.slice(i, i + 2));
+  return g;
+};
+const _diceMat = (a: string, b: string): number => {
+  if (a === b) return 1;
+  if (a.length < 3 || b.length < 3) return 0;
+  const ga = _bigramsMat(a), gb = _bigramsMat(b);
+  let inter = 0;
+  for (const g of ga) if (gb.has(g)) inter++;
+  return (2 * inter) / (ga.size + gb.size);
+};
+/** Encontra o melhor cadastro correspondente à descrição da NF, pontuando por peso de tokens
+ * (exato, prefixo com ≥4 chars, ou Dice≥0.82). Exige ≥60% do peso do nome do cadastro batendo
+ * e pelo menos 1 token forte (≥4 chars) — evita "match" por uma única palavra genérica curta. */
+function matchItemCadastro<T extends { id: number; nome: string }>(
+  descricaoNf: string,
+  itens: T[]
+): T | undefined {
+  const nfToks = _toksMat(descricaoNf);
+  if (nfToks.length === 0) return undefined;
+  let melhor: { item: T; score: number } | undefined;
+  for (const it of itens) {
+    const candToks = _toksMat(it.nome);
+    if (candToks.length === 0) continue;
+    let matchedWeight = 0, totalWeight = 0, temForte = false;
+    for (const ct of candToks) {
+      totalWeight += ct.length;
+      let ok = nfToks.includes(ct);
+      if (!ok) {
+        for (const nt of nfToks) {
+          if (ct.length >= 4 && nt.length >= 4 && (nt.startsWith(ct) || ct.startsWith(nt) || _diceMat(ct, nt) >= 0.82)) {
+            ok = true;
+            break;
+          }
+        }
+      }
+      if (ok) {
+        matchedWeight += ct.length;
+        if (ct.length >= 4) temForte = true;
+      }
+    }
+    const ratio = totalWeight > 0 ? matchedWeight / totalWeight : 0;
+    if (temForte && ratio >= 0.6 && (!melhor || ratio > melhor.score)) {
+      melhor = { item: it, score: ratio };
+    }
+  }
+  return melhor?.item;
+}
+
 type SmartEntryProps = {
   companyId: number;
   obraId?: number;
@@ -121,10 +190,7 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
         setFornecedorNome(dados.fornecedorNome || "");
 
         const items: EntryItem[] = dados.itens.map((nfItem: NFItem) => {
-          const existing = itens.find(i =>
-            i.nome.toLowerCase().includes(nfItem.descricao.toLowerCase().split(" ")[0]) ||
-            nfItem.descricao.toLowerCase().includes(i.nome.toLowerCase().split(" ")[0])
-          );
+          const existing = matchItemCadastro(nfItem.descricao, itens);
 
           const catAuto = !existing?.categoria ? inferirCategoria(nfItem.descricao, Object.keys(CATEGORIA_KEYWORDS)) : "";
 
@@ -208,10 +274,7 @@ export default function SmartEntry({ companyId, obraId, obraNome, itens, onClose
       return;
     }
     const items: EntryItem[] = pending.map(i => {
-        const existing = itens.find(it =>
-          it.nome.toLowerCase().includes(i.descricao.toLowerCase().split(" ")[0]) ||
-          i.descricao.toLowerCase().includes(it.nome.toLowerCase().split(" ")[0])
-        );
+        const existing = matchItemCadastro(i.descricao, itens);
         return {
           itemNome: i.descricao,
           unidade: i.unidade || "un",

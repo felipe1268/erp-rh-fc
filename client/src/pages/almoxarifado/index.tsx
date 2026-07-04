@@ -1397,6 +1397,7 @@ export default function AlmoxarifadoPage() {
   const [empTipo, setEmpTipo] = useState<"mao_obra" | "terceiro">("mao_obra");
   const [empTerceiroNome, setEmpTerceiroNome] = useState("");
   const [empTerceiroEmpresa, setEmpTerceiroEmpresa] = useState("");
+  const [empObservacoes, setEmpObservacoes] = useState("");
   const { data: empFuncionario } = trpc.warehouse.getFuncionarioByCodigo.useQuery(
     { companyId, codigo: empCodigo },
     { enabled: empCodigo.length >= 5 }
@@ -1412,6 +1413,9 @@ export default function AlmoxarifadoPage() {
 
   // Modal Insumo/Consumível
   const [modalInsumo, setModalInsumo] = useState(false);
+  const [insTipo, setInsTipo] = useState<"mao_obra" | "terceiro">("mao_obra");
+  const [insTerceiroNome, setInsTerceiroNome] = useState("");
+  const [insTerceiroEmpresa, setInsTerceiroEmpresa] = useState("");
   const [insCodigo, setInsCodigo] = useState("");
   const [insSearch, setInsSearch] = useState("");
   const [insSelecionado, setInsSelecionado] = useState<any>(null);
@@ -1433,6 +1437,7 @@ export default function AlmoxarifadoPage() {
     onError: (e: any) => { setInsErr(e.message); setInsOk(null); },
   });
   function resetInsumo() {
+    setInsTipo("mao_obra"); setInsTerceiroNome(""); setInsTerceiroEmpresa("");
     setInsCodigo(""); setInsSearch(""); setInsSelecionado(null); setInsShowSug(false);
     setInsItemId(0); setInsItemSearch(""); setInsItemFocused(false); setInsQtd("1");
     setInsObraId(typeof obraContexto === "number" ? obraContexto : 0);
@@ -1475,12 +1480,20 @@ export default function AlmoxarifadoPage() {
     setTransfItemId(0); setTransfQtd("1"); setTransfMotivo(""); setTransfOk(null); setTransfErr(null); setTransfBusca(""); setTransfDropOpen(false);
   }
 
-  // Modal Fechar Dia (devolução)
+  // Modal Fechar Dia (devolução) — Rev. 4005: antes só trazia empréstimos de HOJE
+  // (listTodayLoans), então pendências de dias anteriores desapareciam da tela de
+  // fechamento. Agora usa listOpenLoans (todos os abertos, sem filtro de data) +
+  // filtro de obra opcional no próprio modal.
   const [modalFecharDia, setModalFecharDia] = useState(false);
-  const { data: emprestimosHoje = [], refetch: refetchLoans } = trpc.warehouse.listTodayLoans.useQuery(
+  const [fecharDiaObraFiltro, setFecharDiaObraFiltro] = useState<number | "todas">("todas");
+  const { data: emprestimosAbertos = [], refetch: refetchLoans } = trpc.warehouse.listOpenLoans.useQuery(
     { companyId },
     { enabled: modalFecharDia && !!companyId }
   );
+  const hojeStr = new Date().toISOString().split("T")[0];
+  const emprestimosHoje = (emprestimosAbertos as any[])
+    .filter((l) => fecharDiaObraFiltro === "todas" || l.obraId === fecharDiaObraFiltro)
+    .sort((a, b) => String(a.dataEmprestimo).localeCompare(String(b.dataEmprestimo)));
   const returnLoan = trpc.warehouse.returnLoanById.useMutation({
     onSuccess: () => { refetchLoans(); refetchLoansAbertos(); refetch(); toast.success("Ferramenta devolvida!"); },
     onError: (e) => toast.error(e.message),
@@ -1513,7 +1526,7 @@ export default function AlmoxarifadoPage() {
 
   function resetEntrada() { setEntradaItemId(0); setEntradaQtd(""); setEntradaMotivo(""); setEntradaOk(null); }
   function resetSaida() { setSaidaItemId(0); setSaidaQtd(""); setSaidaObraId(typeof obraContexto === "number" ? obraContexto : 0); setSaidaOk(null); }
-  function resetEmprestimo() { setEmpCodigo(""); setEmpSearch(""); setEmpSelecionado(null); setEmpShowSug(false); setEmpItemId(0); setEmpQtd("1"); setEmpItens([]); setEmpSubmitting(false); setEmpOk(null); setEmpErr(null); setEmpTipo("mao_obra"); setEmpTerceiroNome(""); setEmpTerceiroEmpresa(""); }
+  function resetEmprestimo() { setEmpCodigo(""); setEmpSearch(""); setEmpSelecionado(null); setEmpShowSug(false); setEmpItemId(0); setEmpQtd("1"); setEmpItens([]); setEmpSubmitting(false); setEmpOk(null); setEmpErr(null); setEmpTipo("mao_obra"); setEmpTerceiroNome(""); setEmpTerceiroEmpresa(""); setEmpObservacoes(""); }
 
   // ── Abrir modal via URL param (?modal=X) e/ou setar obra (?obra=ID) ────────
   useEffect(() => {
@@ -1755,7 +1768,7 @@ export default function AlmoxarifadoPage() {
           <div className="grid grid-cols-4 gap-2 mt-2">
             {[
               { label: "Entradas",      aba: "entradas"      as const, icon: "↓",  color: "text-emerald-700 border-emerald-300 bg-emerald-50 hover:bg-emerald-100" },
-              { label: "Ferramentas",   aba: "emprestados"   as const, icon: "🔧", color: "text-blue-700 border-blue-300 bg-blue-50 hover:bg-blue-100" },
+              { label: "Ferram. Aberto", aba: "emprestados"   as const, icon: "🔧", color: "text-blue-700 border-blue-300 bg-blue-50 hover:bg-blue-100" },
               { label: "Insumos",       aba: "insumos"       as const, icon: "🛒", color: "text-amber-700 border-amber-300 bg-amber-50 hover:bg-amber-100" },
               { label: "Transferênc.", aba: "transferencias" as const, icon: "↔",  color: "text-purple-700 border-purple-300 bg-purple-50 hover:bg-purple-100" },
             ].map(({ label, aba, icon, color }) => (
@@ -3675,6 +3688,16 @@ export default function AlmoxarifadoPage() {
                           </div>
                           <p className="text-[11px] text-gray-500 mt-1">Mostrando apenas Ferramentas e Equipamentos ({ferramentasList.length} de {itens.length}). Use o <b>+</b> para adicionar mais de uma ferramenta para o mesmo funcionário.</p>
                         </div>
+                        <div>
+                          <label className="text-sm font-semibold text-gray-700 block mb-1">Observação (opcional)</label>
+                          <input
+                            type="text"
+                            className="w-full border rounded-xl p-3 text-sm"
+                            placeholder="Ex: motivo do empréstimo, condição do equipamento..."
+                            value={empObservacoes}
+                            onChange={e => setEmpObservacoes(e.target.value)}
+                          />
+                        </div>
                         {empErr && <p className="text-sm text-red-600 bg-red-50 rounded-lg p-2">{empErr}</p>}
                         <button
                           className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 rounded-xl text-lg disabled:opacity-50 transition"
@@ -3693,8 +3716,8 @@ export default function AlmoxarifadoPage() {
                             try {
                               for (const it of lista) {
                                 const params = empTipo === "terceiro"
-                                  ? { companyId, itemId: it.itemId, quantidade: parseFloat(it.qtd), obraId: obraIdParam, terceiroNome: empTerceiroNome.trim(), terceiroEmpresa: empTerceiroEmpresa.trim() || undefined }
-                                  : { companyId, itemId: it.itemId, quantidade: parseFloat(it.qtd), funcionarioCodigo: codFunc, obraId: obraIdParam };
+                                  ? { companyId, itemId: it.itemId, quantidade: parseFloat(it.qtd), obraId: obraIdParam, terceiroNome: empTerceiroNome.trim(), terceiroEmpresa: empTerceiroEmpresa.trim() || undefined, observacoes: empObservacoes.trim() || undefined }
+                                  : { companyId, itemId: it.itemId, quantidade: parseFloat(it.qtd), funcionarioCodigo: codFunc, obraId: obraIdParam, observacoes: empObservacoes.trim() || undefined };
                                 const r = await registerLoan.mutateAsync(params);
                                 lastNome = r.funcionarioNome || lastNome;
                                 okCount++;
@@ -3741,7 +3764,25 @@ export default function AlmoxarifadoPage() {
                   <button onClick={() => setModalInsumo(false)}><X className="w-6 h-6 text-gray-400" /></button>
                 </div>
                 <div className="p-4 space-y-4">
+                  {/* Toggle Mão de Obra / Terceiros — Rev. 4005 */}
+                  <div className="flex rounded-xl overflow-hidden border-2 border-gray-200">
+                    <button
+                      type="button"
+                      onClick={() => { setInsTipo("mao_obra"); setInsTerceiroNome(""); setInsTerceiroEmpresa(""); }}
+                      className={`flex-1 py-2.5 text-sm font-semibold transition ${insTipo === "mao_obra" ? "bg-amber-500 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                    >
+                      👷 Mão de Obra Direta
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setInsTipo("terceiro"); setInsSelecionado(null); setInsSearch(""); setInsCodigo(""); }}
+                      className={`flex-1 py-2.5 text-sm font-semibold transition ${insTipo === "terceiro" ? "bg-orange-500 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                    >
+                      🏢 Terceiros
+                    </button>
+                  </div>
                   {/* Funcionário */}
+                  {insTipo === "mao_obra" ? (
                   <div className="relative">
                     <label className="text-sm font-semibold text-gray-700 block mb-1">Funcionário *</label>
                     <input
@@ -3777,6 +3818,30 @@ export default function AlmoxarifadoPage() {
                     )}
                     {insSearch.length >= 2 && !insSelecionado && insSugestoes.length === 0 && <p className="text-xs text-red-500 mt-1">Nenhum funcionário encontrado</p>}
                   </div>
+                  ) : (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-sm font-semibold text-gray-700 block mb-1">Nome do responsável *</label>
+                      <input
+                        type="text"
+                        className="w-full border-2 rounded-xl p-3 text-base"
+                        placeholder="Nome completo da pessoa..."
+                        value={insTerceiroNome}
+                        onChange={e => setInsTerceiroNome(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold text-gray-700 block mb-1">Empresa (opcional)</label>
+                      <input
+                        type="text"
+                        className="w-full border-2 rounded-xl p-3 text-base"
+                        placeholder="Nome da empresa ou prestadora..."
+                        value={insTerceiroEmpresa}
+                        onChange={e => setInsTerceiroEmpresa(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  )}
                   {/* Item */}
                   <div className="relative">
                     <label className="text-sm font-semibold text-gray-700 block mb-1">Selecionar Item *</label>
@@ -3858,14 +3923,16 @@ export default function AlmoxarifadoPage() {
                   {insErr && <p className="text-sm text-red-600 bg-red-50 rounded-lg p-2">{insErr}</p>}
                   <button
                     className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-4 rounded-xl text-lg disabled:opacity-50 transition"
-                    disabled={!insSelecionado || !insItemId || !insQtd || (typeof obraContexto !== "number" && !insObraId) || registerInsumo.isPending}
+                    disabled={(insTipo === "mao_obra" ? !insSelecionado : !insTerceiroNome.trim()) || !insItemId || !insQtd || (typeof obraContexto !== "number" && !insObraId) || registerInsumo.isPending}
                     onClick={() => {
                       const efectiveObraId = typeof obraContexto === "number" ? obraContexto : insObraId;
                       const obraSel = (obrasAtivas as any[]).find((o: any) => o.id === efectiveObraId);
                       registerInsumo.mutate({
                         companyId, itemId: insItemId,
                         quantidade: parseFloat(insQtd),
-                        funcionarioCodigo: insSelecionado?.codigoInterno || insCodigo,
+                        ...(insTipo === "terceiro"
+                          ? { terceiroNome: insTerceiroNome.trim(), terceiroEmpresa: insTerceiroEmpresa.trim() || undefined }
+                          : { funcionarioCodigo: insSelecionado?.codigoInterno || insCodigo }),
                         obraId: efectiveObraId || undefined,
                         obraNome: obraSel ? (obraSel.codigo ? `${obraSel.codigo} – ${obraSel.nome}` : obraSel.nome) : undefined,
                         motivo: insMotivo || undefined,
@@ -4044,45 +4111,71 @@ export default function AlmoxarifadoPage() {
       {/* ══ MODAL FECHAR DIA ════════════════════════════════════════ */}
       {modalFecharDia && (
         <div className="fixed inset-0 z-50 flex flex-col bg-white" style={{ background: "#ffffff", color: "#111827" }}>
-          <div className="flex items-center justify-between p-4 border-b">
-            <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between p-4 border-b gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               <button onClick={() => setModalFecharDia(false)} className="p-1 rounded hover:bg-gray-100"><ChevronLeft className="w-6 h-6 text-gray-500" /></button>
-              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><ClipboardCheck className="w-5 h-5 text-gray-700" /> Fechar Dia — Devoluções</h2>
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2 truncate"><ClipboardCheck className="w-5 h-5 text-gray-700 flex-shrink-0" /> Fechar Dia — Pendências de Devolução</h2>
             </div>
             <button onClick={() => setModalFecharDia(false)}><X className="w-7 h-7 text-gray-400" /></button>
+          </div>
+          <div className="p-4 border-b bg-gray-50">
+            <label className="text-xs font-semibold text-gray-500 uppercase">Filtrar por obra</label>
+            <select
+              className="mt-1 w-full h-10 border border-gray-200 rounded-lg px-3 text-sm bg-white"
+              value={String(fecharDiaObraFiltro)}
+              onChange={(e) => setFecharDiaObraFiltro(e.target.value === "todas" ? "todas" : Number(e.target.value))}
+            >
+              <option value="todas">Todas as obras</option>
+              {(obrasAtivas as any[]).map((o: any) => (
+                <option key={o.id} value={o.id}>{o.codigo ? `${o.codigo} – ${o.nome}` : o.nome}</option>
+              ))}
+            </select>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {emprestimosHoje.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-48 text-center">
                 <CheckCircle2 className="w-16 h-16 text-emerald-400 mb-3" />
-                <p className="text-lg font-semibold text-gray-700">Nenhum empréstimo hoje!</p>
-                <p className="text-sm text-gray-500 mt-1">Todos os itens foram devolvidos.</p>
+                <p className="text-lg font-semibold text-gray-700">Nenhuma pendência!</p>
+                <p className="text-sm text-gray-500 mt-1">Todos os empréstimos em aberto foram devolvidos.</p>
               </div>
             ) : (
               <>
-                <p className="text-sm text-gray-500">{emprestimosHoje.filter(e => e.status === "emprestado").length} item(s) pendente(s) de devolução</p>
-                {emprestimosHoje.map(loan => (
-                  <div key={loan.id} className="bg-white border-2 rounded-xl p-4 space-y-2" style={{ borderColor: loan.status === "devolvido" ? "#86efac" : "#fca5a5" }}>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-bold text-gray-900 text-base">{loan.itemNome}</p>
-                        <p className="text-sm text-gray-600 flex items-center gap-1 mt-0.5">
-                          <User className="w-3 h-3" /> {loan.funcionarioNome}
-                        </p>
-                        <p className="text-xs text-gray-400">
-                          {loan.dataEmprestimo
-                            ? new Date(loan.dataEmprestimo + "T00:00:00").toLocaleDateString("pt-BR")
-                            : ""}{loan.horaEmprestimo ? ` às ${loan.horaEmprestimo}` : ""} — Qtd: {n(loan.quantidade)}
-                        </p>
+                <p className="text-sm text-gray-500">{emprestimosHoje.length} item(s) pendente(s) de devolução (todos os dias em aberto)</p>
+                {emprestimosHoje.map(loan => {
+                  const atrasado = loan.dataEmprestimo && loan.dataEmprestimo !== hojeStr;
+                  return (
+                    <div key={loan.id} className="bg-white border-2 rounded-xl p-4 space-y-2" style={{ borderColor: atrasado ? "#f97316" : "#fca5a5" }}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-gray-900 text-base">{loan.itemNome}</p>
+                          <p className="text-sm text-gray-600 flex items-center gap-1 mt-0.5">
+                            <User className="w-3 h-3" /> {loan.funcionarioNome}
+                          </p>
+                          {loan.obraNome && (
+                            <p className="text-xs text-gray-500 mt-0.5">📍 {loan.obraNome}</p>
+                          )}
+                          <p className="text-xs text-gray-400">
+                            {loan.dataEmprestimo
+                              ? new Date(loan.dataEmprestimo + "T00:00:00").toLocaleDateString("pt-BR")
+                              : ""}{loan.horaEmprestimo ? ` às ${loan.horaEmprestimo}` : ""} — Qtd: {n(loan.quantidade)}
+                          </p>
+                        </div>
+                        {atrasado ? (
+                          <span className="text-xs font-semibold text-orange-700 bg-orange-50 px-2 py-1 rounded-full flex-shrink-0">⚠️ Dia anterior</span>
+                        ) : (
+                          <span className="text-xs font-semibold text-red-700 bg-red-50 px-2 py-1 rounded-full flex-shrink-0">⏳ Pendente</span>
+                        )}
                       </div>
-                      {loan.status === "devolvido" ? (
-                        <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full flex-shrink-0">✅ Devolvido</span>
-                      ) : (
-                        <span className="text-xs font-semibold text-red-700 bg-red-50 px-2 py-1 rounded-full flex-shrink-0">⏳ Pendente</span>
-                      )}
+                      <button
+                        onClick={() => returnLoan.mutate({ loanId: loan.id })}
+                        disabled={returnLoan.isPending}
+                        className="w-full text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 font-semibold transition disabled:opacity-60"
+                      >
+                        Devolver
+                      </button>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </>
             )}
           </div>
@@ -4287,7 +4380,7 @@ export default function AlmoxarifadoPage() {
           <div className="flex border-b bg-white overflow-x-auto">
             {([
               { key: "entradas",    label: "↓ Entradas",    cls: "text-emerald-700 border-emerald-500" },
-              { key: "emprestados", label: "🔧 Ferramentas", cls: "text-blue-700 border-blue-500" },
+              { key: "emprestados", label: "🔧 Ferramentas em Aberto", cls: "text-blue-700 border-blue-500" },
               { key: "insumos",        label: "🛒 Insumos",        cls: "text-amber-700 border-amber-500" },
               { key: "transferencias", label: "↔ Transferências", cls: "text-purple-700 border-purple-500" },
               { key: "cadastros",      label: "📦 Cadastros",      cls: "text-gray-700 border-gray-500" },
@@ -4403,14 +4496,20 @@ export default function AlmoxarifadoPage() {
                 </div>
               ) :
               (() => {
-                // Agrupa empréstimos abertos por funcionário (chave: codigo || nome)
-                const grupos = new Map<string, { nome: string; codigo: string; itens: any[] }>();
+                // Agrupa empréstimos por funcionário (chave: codigo || nome).
+                // Rev. 4005 — listOpenLoans com `data` traz devolvido+pendente do dia
+                // (sem filtro de status); aqui só interessam os PENDENTES pra decidir
+                // se ainda cabe "Devolver Todas" — senão o botão ficava aparecendo
+                // mesmo com tudo já devolvido.
+                const grupos = new Map<string, { nome: string; codigo: string; itens: any[]; totalDia: number }>();
                 for (const l of loansAbertos as any[]) {
                   const key = String(l.funcionarioCodigo || l.funcionarioNome || "—");
-                  if (!grupos.has(key)) grupos.set(key, { nome: l.funcionarioNome || "—", codigo: l.funcionarioCodigo || "", itens: [] });
-                  grupos.get(key)!.itens.push(l);
+                  if (!grupos.has(key)) grupos.set(key, { nome: l.funcionarioNome || "—", codigo: l.funcionarioCodigo || "", itens: [], totalDia: 0 });
+                  const g = grupos.get(key)!;
+                  g.totalDia++;
+                  if (l.status === "emprestado") g.itens.push(l);
                 }
-                const gruposArr = Array.from(grupos.values()).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+                const gruposArr = Array.from(grupos.values()).filter((g) => g.itens.length > 0).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
                 async function devolverGrupo(g: { itens: any[] }) {
                   for (const it of g.itens) {
                     try { await returnLoan.mutateAsync({ loanId: it.id }); } catch { /* segue */ }

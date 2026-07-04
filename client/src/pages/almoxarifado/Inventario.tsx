@@ -30,11 +30,16 @@ type SessionItem = {
 function ItemCard({
   item,
   onConfirm,
+  podeEditar,
 }: {
   item: SessionItem;
   onConfirm: (id: number, qtd: number, obs?: string) => void;
+  podeEditar: boolean;
 }) {
-  const [modo, setModo] = useState<"idle" | "divergente">("idle");
+  // Rev. 4005 — permite reabrir um item já conferido/divergente para correção
+  // ENQUANTO a sessão ainda está em andamento (o backend já aceitava re-confirmar,
+  // só faltava a UI expor isso — sem isso um toque errado ficava travado até finalizar).
+  const [modo, setModo] = useState<"idle" | "divergente" | "editando">("idle");
   const [qtdFisica, setQtdFisica] = useState("");
   const [obs, setObs] = useState("");
   // Rev. 2439 — overlay de foto ampliada (toque na thumb).
@@ -56,60 +61,63 @@ function ItemCard({
     </div>
   ) : null;
 
-  if (item.status === "conferido") {
-    const fUrl = (item as any).itemFotoUrl as string | null | undefined;
+  const fotoUrlBase: string | null = (item as any).itemFotoUrl ?? null;
+  const unidadeBase: string = (item as any).itemUnidade ?? "un";
+
+  function abrirEdicao() {
+    setQtdFisica(item.quantidadeFisica ?? "");
+    setObs(item.observacoes ?? "");
+    setModo("editando");
+  }
+
+  if ((item.status === "conferido" || item.status === "divergente") && modo !== "editando") {
+    const isConferido = item.status === "conferido";
+    const fUrl = fotoUrlBase;
     return (
-      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center gap-3">
+      <div className={`${isConferido ? "bg-emerald-50 border-emerald-200" : "bg-orange-50 border-orange-200"} border rounded-xl p-4 flex items-center gap-3`}>
         {overlay}
         {fUrl ? (
           <img
             src={fUrl}
             alt={item.itemNome ?? ""}
-            className="w-12 h-12 rounded-lg object-cover flex-shrink-0 border border-emerald-200 cursor-pointer"
+            className={`w-12 h-12 rounded-lg object-cover flex-shrink-0 border cursor-pointer ${isConferido ? "border-emerald-200" : "border-orange-200"}`}
             loading="lazy"
             onClick={() => setFotoExpandida(fUrl)}
           />
-        ) : (
+        ) : isConferido ? (
           <CheckCircle2 className="w-8 h-8 text-emerald-500 flex-shrink-0" />
+        ) : (
+          <AlertTriangle className="w-8 h-8 text-orange-500 flex-shrink-0" />
         )}
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-gray-900 truncate">{item.itemNome}</p>
-          <p className="text-sm text-emerald-600">✅ Conferido — {fmt(item.quantidadeFisica)} un</p>
+          {isConferido ? (
+            <p className="text-sm text-emerald-600">✅ Conferido — {fmt(item.quantidadeFisica)} un</p>
+          ) : (
+            <p className="text-sm text-orange-700">
+              ⚠️ Divergência: sistema {fmt(item.quantidadeSistema)} → físico {fmt(item.quantidadeFisica)}
+              {" "}({n(item.diferenca) >= 0 ? "+" : ""}{fmt(item.diferenca)})
+            </p>
+          )}
         </div>
+        {podeEditar && (
+          <button
+            type="button"
+            onClick={abrirEdicao}
+            className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 transition"
+            title="Corrigir esta contagem"
+          >
+            Corrigir
+          </button>
+        )}
       </div>
     );
   }
 
   // Rev. 2439 — Thumbnail da foto do item (vem do JOIN com almoxarifado_itens).
   // Clicável: abre overlay com foto ampliada (facilita aferição no iPad).
-  const fotoUrl: string | null = (item as any).itemFotoUrl ?? null;
-  const unidade: string = (item as any).itemUnidade ?? "un";
-
-  if (item.status === "divergente") {
-    return (
-      <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 flex items-center gap-3">
-        {overlay}
-        {fotoUrl ? (
-          <img
-            src={fotoUrl}
-            alt={item.itemNome ?? ""}
-            className="w-12 h-12 rounded-lg object-cover flex-shrink-0 border border-orange-200 cursor-pointer"
-            loading="lazy"
-            onClick={() => setFotoExpandida(fotoUrl)}
-          />
-        ) : (
-          <AlertTriangle className="w-8 h-8 text-orange-500 flex-shrink-0" />
-        )}
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-gray-900 truncate">{item.itemNome}</p>
-          <p className="text-sm text-orange-700">
-            ⚠️ Divergência: sistema {fmt(item.quantidadeSistema)} → físico {fmt(item.quantidadeFisica)}
-            {" "}({n(item.diferenca) >= 0 ? "+" : ""}{fmt(item.diferenca)})
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const fotoUrl = fotoUrlBase;
+  const unidade = unidadeBase;
 
   return (
     <div className="bg-white border rounded-xl p-4 space-y-3">
@@ -152,6 +160,9 @@ function ItemCard({
         </div>
       ) : (
         <div className="space-y-2">
+          {modo === "editando" && (
+            <p className="text-xs font-semibold text-blue-600 bg-blue-50 rounded-lg px-2 py-1">✏️ Corrigindo contagem já registrada</p>
+          )}
           <label className="text-sm font-medium text-gray-700">Quantidade física encontrada:</label>
           <input
             type="number"
@@ -179,9 +190,9 @@ function ItemCard({
             <button
               className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl text-sm disabled:opacity-50"
               disabled={!qtdFisica}
-              onClick={() => onConfirm(item.id, parseFloat(qtdFisica), obs || undefined)}
+              onClick={() => { onConfirm(item.id, parseFloat(qtdFisica), obs || undefined); setModo("idle"); }}
             >
-              Confirmar divergência
+              {modo === "editando" ? "Salvar correção" : "Confirmar divergência"}
             </button>
           </div>
         </div>
@@ -500,6 +511,7 @@ export default function AlmoxarifadoInventario() {
                       <ItemCard
                         key={item.id}
                         item={item as any}
+                        podeEditar={session.status === "em_andamento"}
                         onConfirm={(id, qtd, obs) =>
                           confirmItem.mutate({
                             sessionItemId: id,
@@ -521,6 +533,7 @@ export default function AlmoxarifadoInventario() {
                       <ItemCard
                         key={item.id}
                         item={item as any}
+                        podeEditar={session.status === "em_andamento"}
                         onConfirm={(id, qtd, obs) =>
                           confirmItem.mutate({
                             sessionItemId: id,

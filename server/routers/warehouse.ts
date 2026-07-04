@@ -534,6 +534,7 @@ export const warehouseRouter = router({
         funcionarioCodigo: z.string().optional(),
         terceiroNome: z.string().optional(),
         terceiroEmpresa: z.string().optional(),
+        observacoes: z.string().optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -582,9 +583,10 @@ export const warehouseRouter = router({
       const hoje = new Date().toISOString().split("T")[0];
       const hora = new Date().toTimeString().slice(0, 5);
 
-      const observacoes = input.terceiroEmpresa
-        ? `Empresa: ${input.terceiroEmpresa}`
-        : null;
+      const observacoes = [
+        input.terceiroEmpresa ? `Empresa: ${input.terceiroEmpresa}` : null,
+        input.observacoes?.trim() || null,
+      ].filter(Boolean).join(" · ") || null;
 
       await db.insert(warehouseLoans).values({
         companyId: input.companyId,
@@ -1382,7 +1384,9 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
       companyId:         z.number(),
       itemId:            z.number(),
       quantidade:        z.number().positive(),
-      funcionarioCodigo: z.string(),
+      funcionarioCodigo: z.string().optional(),
+      terceiroNome:      z.string().optional(),
+      terceiroEmpresa:   z.string().optional(),
       obraId:            z.number().optional(),
       obraNome:          z.string().optional(),
       motivo:            z.string().optional(),
@@ -1392,13 +1396,27 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      // Busca funcionário pelo código
-      const [funcionario] = await db
-        .select()
-        .from(employees)
-        .where(and(eq(employees.companyId, input.companyId), eq(employees.codigoInterno, input.funcionarioCodigo)))
-        .limit(1);
-      if (!funcionario) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado pelo código" });
+      // Rev. 4005 — Saída de Insumos agora aceita terceiro (igual Empréstimo de Ferramentas)
+      let funcionarioId: number | null = null;
+      let funcionarioNome: string;
+      let funcionarioCodigo: string | null = null;
+
+      if (input.terceiroNome) {
+        funcionarioNome = input.terceiroNome;
+      } else {
+        if (!input.funcionarioCodigo) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Informe o funcionário ou o nome do terceiro" });
+        }
+        const [funcionario] = await db
+          .select()
+          .from(employees)
+          .where(and(eq(employees.companyId, input.companyId), eq(employees.codigoInterno, input.funcionarioCodigo)))
+          .limit(1);
+        if (!funcionario) throw new TRPCError({ code: "NOT_FOUND", message: "Funcionário não encontrado pelo código" });
+        funcionarioId = funcionario.id;
+        funcionarioNome = funcionario.nomeCompleto;
+        funcionarioCodigo = input.funcionarioCodigo;
+      }
 
       // Busca item
       const [item] = await db.select().from(almoxarifadoItens).where(eq(almoxarifadoItens.id, input.itemId));
@@ -1408,6 +1426,10 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
       const atual = parseFloat(String(item.quantidadeAtual) || "0");
       if (atual < input.quantidade) throw new TRPCError({ code: "BAD_REQUEST", message: `Estoque insuficiente. Disponível: ${atual} ${item.unidade || "un"}` });
 
+      const observacoesFinal = input.terceiroEmpresa
+        ? `Empresa: ${input.terceiroEmpresa}${input.observacoes ? ` — ${input.observacoes}` : ""}`
+        : (input.observacoes || null);
+
       // Registra saída de insumo
       await db.insert(almoxarifadoSaidasInsumo).values({
         companyId:         input.companyId,
@@ -1415,13 +1437,13 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
         itemNome:          item.nome,
         unidade:           item.unidade || "un",
         quantidade:        String(input.quantidade),
-        funcionarioId:     funcionario.id,
-        funcionarioNome:   funcionario.nomeCompleto,
-        funcionarioCodigo: input.funcionarioCodigo,
+        funcionarioId,
+        funcionarioNome,
+        funcionarioCodigo,
         obraId:            input.obraId || null,
         obraNome:          input.obraNome || null,
         motivo:            input.motivo || null,
-        observacoes:       input.observacoes || null,
+        observacoes:       observacoesFinal,
         almoxarifeId:      ctx.user.id,
         almoxarifeNome:    ctx.user.name || "",
       } as any);
@@ -1437,13 +1459,13 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
         itemId:       input.itemId,
         tipo:         "saida",
         quantidade:   String(input.quantidade),
-        motivo:       `Insumo para ${funcionario.nomeCompleto}${input.motivo ? ` — ${input.motivo}` : ""}`,
+        motivo:       `Insumo para ${funcionarioNome}${input.terceiroEmpresa ? ` (${input.terceiroEmpresa})` : ""}${input.motivo ? ` — ${input.motivo}` : ""}`,
         obraId:       input.obraId || null,
         obraNome:     input.obraNome || null,
         usuarioNome:  ctx.user.name || "Sistema",
       } as any);
 
-      return { funcionarioNome: funcionario.nomeCompleto, itemNome: item.nome };
+      return { funcionarioNome, itemNome: item.nome };
     }),
 
   listInsumos: protectedProcedure
