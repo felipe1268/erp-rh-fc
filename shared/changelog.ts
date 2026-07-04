@@ -1,4 +1,19 @@
 /**
+ * Rev. 4007 — **ALMOXARIFADO: FORMATO DO CÓDIGO DE MATERIAL AJUSTADO PARA `MAT-NNNN`
+ * (4 DÍGITOS COM HÍFEN), SUBSTITUINDO O `MATNNNNNN` (6 DÍGITOS SEM HÍFEN) DA REV. 4006.**
+ *
+ * Pedido do usuário logo após a Rev. 4006: "MAT-0001 quero neste formato". Re-migrados os
+ * mesmos 2.823 materiais (2 empresas) no Neon para `MAT-0001`...`MAT-2821` (sequencial por
+ * `company_id`, mesma ordem por `id` ASC usada na Rev. 4006). Helper
+ * `criarItemAlmoxarifadoComCodigo` (`server/routers/compras.ts`) ajustado: regex de leitura do
+ * MAX passou de `^MAT(\d+)$` para `^MAT-(\d+)$`, e a geração do próximo código passou de
+ * `MAT${n.padStart(6,"0")}` para `MAT-${n.padStart(4,"0")}`. Nenhum outro ponto do código (5
+ * sites de criação + frontend) referenciava o formato antigo diretamente — todos delegam ao
+ * helper ou exibem/buscam o campo `codigoInterno` como texto livre, então não precisaram de
+ * ajuste. ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4006 — **ALMOXARIFADO: PACOTE DE 6 CORREÇÕES E MELHORIAS (PDF "Correções e Melhorias ERP
  * — Almoxarifado") — CÓDIGO AUTOMÁTICO DE MATERIAL, MATCHING DE DUPLICATA NF/OC, SAÍDA DE INSUMOS
  * PARA TERCEIROS, FECHAR DIA, DEVOLUÇÃO E INVENTÁRIO/EMPRÉSTIMO.**

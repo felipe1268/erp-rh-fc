@@ -305,7 +305,7 @@ export async function gerarProximoNumeroOC(companyId: number, ordemTipo: "compra
  * Rev. 4006 — Código automático de material (Almoxarifado).
  *
  * Todos os 2823 materiais existentes foram renumerados para o padrão
- * MATNNNNNN (6 dígitos, sequencial por empresa, ordem de criação) via
+ * MAT-NNNN (4 dígitos, sequencial por empresa, ordem de criação) via
  * migração pontual direto no Neon. Esta função garante que TODO material
  * novo cadastrado (manual, auto-cadastro via OC/recebimento, importação
  * MasControle) saia com código nesse mesmo padrão, sem duplicidade em
@@ -326,14 +326,14 @@ export async function criarItemAlmoxarifadoComCodigo(
     let codigoInterno = values.codigoInterno;
     if (!codigoInterno) {
       const maxRow: any = await tx.execute(sql`
-        SELECT COALESCE(MAX(CAST(SUBSTRING(codigo_interno FROM '^MAT(\\d+)$') AS INTEGER)), 0) AS m
+        SELECT COALESCE(MAX(CAST(SUBSTRING(codigo_interno FROM '^MAT-(\\d+)$') AS INTEGER)), 0) AS m
         FROM almoxarifado_itens
         WHERE company_id = ${companyId}
-          AND codigo_interno ~ '^MAT\\d+$'
+          AND codigo_interno ~ '^MAT-\\d+$'
       `);
       const rows = maxRow.rows || maxRow;
       const proximo = (Number(rows?.[0]?.m) || 0) + 1;
-      codigoInterno = `MAT${String(proximo).padStart(6, "0")}`;
+      codigoInterno = `MAT-${String(proximo).padStart(4, "0")}`;
     }
     const [item] = await tx.insert(almoxarifadoItens).values({
       ...values,
