@@ -1,4 +1,36 @@
 /**
+ * Rev. 4017 — **COMPRAS: RASTREIO INVERSO COTAÇÃO→OC, DUPLICAR OC E RESUMO DE CARTÃO DE CRÉDITO
+ * DISPONÍVEL NA COTAÇÃO/OC (Itens 8, 10 e 12 dos ~20 ajustes do docx).**
+ *
+ * ITEM 8 — RASTREIO INVERSO (SC/OC dentro da Cotação): `getCotacao` (`server/routers/
+ * compras.ts`) agora retorna `ordensVinculadas` (OCs geradas a partir da cotação, via
+ * `comprasOrdens.cotacaoId`); tela de detalhe da Cotação (`Cotacoes.tsx`) ganhou campo "OC
+ * Gerada" clicável, levando para `/compras/ordens?destaque=<id>` (Ordens.tsx já suportava o
+ * parâmetro `destaque`).
+ *
+ * ITEM 10 — DUPLICAR OC: nova mutation `duplicarOrdem` em `compras.ts`, espelhando o padrão já
+ * validado de `duplicarSolicitacao` — copia itens/fornecedor/forma de pagamento/parcelamento e
+ * gera novo número via `gerarProximoNumeroOC`, resetando datas/histórico/NF/anexos e status para
+ * "pendente". Botão "Duplicar OC" adicionado na tela de detalhe de `Ordens.tsx`.
+ *
+ * ITEM 12 — RESUMO DE CARTÃO DE CRÉDITO DISPONÍVEL: novo procedure `cartao.resumoParaCompra`
+ * (`server/routers/cartao.ts`) retorna, por cartão ativo da empresa, banco/bandeira/final4,
+ * dia de fechamento/vencimento, limite e `limiteDisponivel` estimado (limite menos a soma das
+ * faturas com saldo em aberto, i.e. `total > pagamentos` — aproximação transparente, já que não
+ * existe status explícito de fatura paga/aberta na tabela `financial_cartao_faturas`). Novo
+ * componente `CartaoDisponivelCard` (`client/src/components/compras/CartaoDisponivelCard.tsx`)
+ * exibido em `Cotacoes.tsx` e `Ordens.tsx` assim que "Cartão"/"Cartão de Crédito" é selecionado
+ * como forma de pagamento, com alerta se o cartão for cadastrado como pessoa física (PF).
+ *
+ * Itens do docx deixados de fora deste lote (dependem de decisão de negócio ou reprodução):
+ * Item 1 (BDI/regime de custo do Hotel do Papa — decisão de negócio), Item 6 (bug de casa decimal
+ * — precisa de passo a passo reproduzível), Item 21 (tornar campos obrigatórios — decisão de
+ * negócio sobre qual UX/trava usar).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4016 — **COMPRAS: LOTE FINAL DOS ~20 AJUSTES DO DOCX (Itens 7, 9, 13, 14, 17, 19, 20, 21a,
  * 22) + CORREÇÃO DE BUG DE AUTORIZAÇÃO NA "TRANSFERÊNCIA EM LOTE" DO ALMOXARIFADO (Item 5,
  * reaberto).**

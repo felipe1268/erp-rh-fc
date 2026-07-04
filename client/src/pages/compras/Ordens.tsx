@@ -21,10 +21,11 @@ import { formatNumeroCotacaoDisplay } from "@shared/numeroCotacao";
 import { formatNumeroOcDisplay } from "@shared/numeroOc";
 import { consolidarOcItens } from "@shared/ocItensConsolidados";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, ShoppingBag, ChevronRight, ChevronDown, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign, Wrench, ExternalLink, ChevronsUpDown, ArrowUp, ArrowDown, ArrowUpDown, Check, Paperclip, Upload, X, FileText, Save, Edit3, ClipboardCheck, Calendar, RotateCcw, Ban } from "lucide-react";
+import { Plus, Search, Trash2, ShoppingBag, ChevronRight, ChevronDown, Loader2, CheckCircle, Truck, PackageCheck, Building2, AlertTriangle, Clock, CircleDot, Phone, Mail, User, Smartphone, FileDown, Printer, Receipt, DollarSign, Wrench, ExternalLink, ChevronsUpDown, ArrowUp, ArrowDown, ArrowUpDown, Check, Paperclip, Upload, X, FileText, Save, Edit3, ClipboardCheck, Calendar, RotateCcw, Ban, Copy } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { calcularSemaforo, semaforoCor, semaforoTooltip, type SemaforoResult } from "@/lib/semaforoEntrega";
 import { PurchaseTimeline } from "@/components/compras/PurchaseTimeline";
+import { CartaoDisponivelCard } from "@/components/compras/CartaoDisponivelCard";
 
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   rascunho:         { label: "Rascunho",            cls: "bg-yellow-50 text-yellow-700 border-yellow-200" },
@@ -571,6 +572,12 @@ export default function Ordens() {
   });
   const excluir = trpc.compras.excluirOrdem.useMutation({
     onSuccess: () => { toast.success("OC excluída!"); q.refetch(); setShowDetalhe(null); },
+    onError: (e) => toast.error(e.message),
+  });
+  // Rev. 4017 — Item 10: duplicar OC (útil para lançamentos recorrentes: aluguel de
+  // container, equipamentos, etc.) — cópia nasce como rascunho, sem datas/histórico.
+  const duplicarOrdem = trpc.compras.duplicarOrdem.useMutation({
+    onSuccess: (data: any) => { toast.success(`OC ${formatNumeroOcDisplay(data.numeroOc)} criada (cópia)!`); q.refetch(); setShowDetalhe(data.id); },
     onError: (e) => toast.error(e.message),
   });
   const cancelarMaster = trpc.compras.cancelarOrdemMaster.useMutation({
@@ -1681,6 +1688,11 @@ export default function Ordens() {
                   </SelectContent>
                 </Select>
               </div>
+              {form.formaPagamento === "cartao_credito" && (
+                <div className="col-span-2">
+                  <CartaoDisponivelCard companyId={companyId} />
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label className="text-gray-700 text-sm font-medium">Conta Bancária</Label>
                 <Select value={form.contaBancariaId} onValueChange={v => setForm(p => ({ ...p, contaBancariaId: v }))}>
@@ -2520,7 +2532,13 @@ export default function Ordens() {
                   </div>
                 )}
 
-                <div className="flex pt-2 border-t border-gray-200">
+                <div className="flex pt-2 border-t border-gray-200 gap-2">
+                  <Button size="sm" variant="outline"
+                    disabled={duplicarOrdem.isPending}
+                    onClick={() => duplicarOrdem.mutate({ id: detalhe.id, companyId, userId: user?.id, userName: user?.name })}
+                    className="border-blue-200 text-blue-600 hover:bg-blue-50 text-xs gap-1">
+                    {duplicarOrdem.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Copy className="h-3 w-3" />} Duplicar OC
+                  </Button>
                   <Button size="sm" variant="outline" onClick={() => excluir.mutate({ id: detalhe.id })}
                     className="border-gray-200 text-gray-500 hover:bg-gray-50 text-xs ml-auto gap-1">
                     <Trash2 className="h-3 w-3" /> Excluir OC

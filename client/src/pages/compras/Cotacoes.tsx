@@ -26,6 +26,7 @@ import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, Che
 import { TIPOS_PAGAMENTO, getTipoPagamentoInfo, calcularParcelas, formatCurrency } from "../../../../shared/paymentConditions";
 import * as XLSX from "xlsx";
 import { PurchaseTimeline, TimelineBadge } from "@/components/compras/PurchaseTimeline";
+import { CartaoDisponivelCard } from "@/components/compras/CartaoDisponivelCard";
 import { useConfirm } from "@/hooks/useConfirm";
 
 function parseBRNumber(v: string): number {
@@ -2407,6 +2408,11 @@ export default function Cotacoes() {
                       );
                     })}
                   </div>
+                  {editFormaPag[fId] === "cartao" && (
+                    <div className="mt-4">
+                      <CartaoDisponivelCard companyId={companyId} />
+                    </div>
+                  )}
                 </section>
                 )}
 
@@ -4095,6 +4101,25 @@ export default function Cotacoes() {
                           <Link2 className="h-3.5 w-3.5" />{(detalheFullscreen as any).scInfo?.numeroSc ? formatNumeroScDisplay((detalheFullscreen as any).scInfo.numeroSc) : `SC #${detalheFullscreen.solicitacaoId}`}
                         </button>
                       ) : "—" },
+                      { label: "OC Gerada", value: (() => {
+                        const ordens: any[] = (detalheFullscreen as any).ordensVinculadas ?? [];
+                        if (ordens.length === 0) return "—";
+                        return (
+                          <div className="flex flex-wrap gap-1.5">
+                            {ordens.map((oc) => (
+                              <button
+                                key={oc.id}
+                                type="button"
+                                onClick={() => navigate(`/compras/ordens?destaque=${oc.id}`)}
+                                className="text-blue-600 hover:text-blue-800 hover:underline font-medium inline-flex items-center gap-1"
+                                title="Abrir ordem de compra"
+                              >
+                                <Link2 className="h-3.5 w-3.5" />{formatNumeroOcDisplay(oc.numeroOc)}
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })() },
                     ].map(f => (
                       <div key={f.label} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
                         <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">{f.label}</p>

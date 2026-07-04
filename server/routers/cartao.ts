@@ -466,6 +466,45 @@ export const cartaoRouter = router({
     return { ok: true, excluido: res.rows.length };
   }),
 
+  // Rev. 4017 — Item 12: resumo enxuto de cartões pra tela de Cotação/OC
+  // (mostrar limite disponível + fechamento/vencimento assim que "cartão de
+  // crédito" for selecionado como forma de pagamento). "Comprometido" =
+  // soma das faturas com saldo em aberto (total > pagamentos) — aproximação
+  // transparente, já que não existe status explícito de fatura paga/aberta.
+  resumoParaCompra: protectedProcedure.input(z.object({
+    companyId: z.number(),
+  })).query(async ({ input, ctx }) => {
+    await assertCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const res = await dbExecute(db,
+      `SELECT c.id, c.banco, c.bandeira, c.final4, c.titular, c.tipo_pessoa AS "tipoPessoa",
+              c.dia_fechamento AS "diaFechamento", c.dia_vencimento AS "diaVencimento",
+              c.limite,
+              COALESCE((
+                SELECT SUM(f.total - COALESCE(f.pagamentos, 0))
+                  FROM financial_cartao_faturas f
+                 WHERE f.cartao_id = c.id AND f.company_id = c.company_id
+                   AND f.excluido_em IS NULL
+                   AND f.total > COALESCE(f.pagamentos, 0)
+              ), 0) AS comprometido
+         FROM financial_cartoes c
+        WHERE c.company_id=$1 AND c.excluido_em IS NULL AND c.ativo=1
+        ORDER BY c.banco NULLS LAST, c.final4 NULLS LAST, c.id DESC`,
+      [input.companyId]);
+    return res.rows.map((c: any) => {
+      const limite = c.limite != null ? parseFloat(c.limite) : null;
+      const comprometido = parseFloat(c.comprometido ?? "0");
+      return {
+        ...c,
+        limite,
+        comprometido,
+        limiteDisponivel: limite != null ? Math.max(limite - comprometido, 0) : null,
+        alertaPessoal: String(c.tipoPessoa || "").toUpperCase() === "PF",
+      };
+    });
+  }),
+
   // ── Faturas ──────────────────────────────────────────────────────────
   listarFaturas: protectedProcedure.input(z.object({
     companyId: z.number(),

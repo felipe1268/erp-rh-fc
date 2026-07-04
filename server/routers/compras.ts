@@ -4602,6 +4602,13 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         }
       }
 
+      // Rev. 4017 — Item 8: rastreio inverso — OCs geradas a partir desta cotação
+      const ordensVinculadas = await db.select({
+        id: comprasOrdens.id,
+        numeroOc: comprasOrdens.numeroOc,
+        status: comprasOrdens.status,
+      }).from(comprasOrdens).where(eq(comprasOrdens.cotacaoId, input.id));
+
       let fornecedorContato: { contatoNome: string | null; telefone: string | null; contatoCelular: string | null; contatoEmail: string | null; email: string | null; nomeFantasia: string | null; razaoSocial: string | null } | null = null;
       if (cot.fornecedorId) {
         const [f] = await db.select({
@@ -4637,11 +4644,11 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
               total:         r.total         ?? it.total,
             };
           });
-          return { ...cot, itens: itensEnriquecidos, fornecedorContato, scInfo, obraTipoContrato };
+          return { ...cot, itens: itensEnriquecidos, fornecedorContato, scInfo, obraTipoContrato, ordensVinculadas };
         }
       }
 
-      return { ...cot, itens, fornecedorContato, scInfo, obraTipoContrato };
+      return { ...cot, itens, fornecedorContato, scInfo, obraTipoContrato, ordensVinculadas };
     }),
 
   criarCotacao: protectedProcedure
@@ -13065,6 +13072,72 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       }
 
       return novaSc;
+    }),
+
+  // Rev. 4017 — Item 10: duplicar Ordem de Compra (padrão análogo a duplicarSolicitacao).
+  // Duplica itens + fornecedor + forma de pagamento; NÃO copia datas/histórico/número/status
+  // de aprovação/anexos/vínculo com cotação (nova OC nasce como rascunho independente).
+  duplicarOrdem: protectedProcedure
+    .input(z.object({ id: z.number(), companyId: z.number(), userId: z.number().optional(), userName: z.string().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+
+      const [oc] = await db.select().from(comprasOrdens)
+        .where(and(eq(comprasOrdens.id, input.id), eq(comprasOrdens.companyId, input.companyId)));
+      if (!oc) throw new TRPCError({ code: "NOT_FOUND", message: "Ordem de compra não encontrada." });
+
+      const ocItens = await db.select().from(comprasOrdensItens).where(eq(comprasOrdensItens.ordemId, input.id));
+
+      const numeroOc = await gerarProximoNumeroOC(input.companyId, "compra");
+
+      const [novaOc] = await db.insert(comprasOrdens).values({
+        companyId: oc.companyId,
+        numeroOc,
+        obraId: oc.obraId,
+        fornecedorId: oc.fornecedorId,
+        fornecedorNome: oc.fornecedorNome,
+        dataEntregaPrevista: null,
+        dataEntregaReal: null,
+        dataVencimento: null,
+        formaPagamento: oc.formaPagamento,
+        tipoPagamento: oc.tipoPagamento,
+        contaBancariaId: oc.contaBancariaId,
+        numeroParcelas: oc.numeroParcelas,
+        parcelasJson: null,
+        prazoEntregaDias: oc.prazoEntregaDias,
+        condicaoPagamento: oc.condicaoPagamento,
+        observacoes: oc.observacoes ? `${oc.observacoes} (cópia de ${oc.numeroOc})` : `Cópia de ${oc.numeroOc}`,
+        numeroNf: null,
+        status: "pendente",
+        aprovacaoStatus: "aguardando",
+        criadoPorId: input.userId ?? null,
+        criadoPorNome: input.userName ?? null,
+        subtotal: oc.subtotal,
+        frete: "0.00",
+        outrasDespesas: "0.00",
+        impostos: "0.00",
+        desconto: "0.00",
+        total: oc.subtotal,
+        modalidadeFd: oc.modalidadeFd ?? "normal",
+        fdPagador: oc.fdPagador,
+      } as any).returning();
+
+      if (ocItens.length > 0) {
+        await db.insert(comprasOrdensItens).values(
+          ocItens.map(it => ({
+            ordemId: novaOc.id,
+            descricao: it.descricao,
+            unidade: it.unidade,
+            quantidade: it.quantidade,
+            precoUnitario: it.precoUnitario,
+            total: it.total,
+            insumoCodigo: it.insumoCodigo,
+          }))
+        );
+      }
+
+      return novaOc;
     }),
 
   verificarSaldoOrcamentarioParaOC: protectedProcedure

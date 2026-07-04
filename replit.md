@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4017** — **COMPRAS: RASTREIO INVERSO COTAÇÃO→OC, DUPLICAR OC E RESUMO DE CARTÃO DE CRÉDITO DISPONÍVEL NA COTAÇÃO/OC (Itens 8, 10 e 12 dos ~20 ajustes do docx).** Item 8: `getCotacao` retorna `ordensVinculadas` (OCs geradas via `comprasOrdens.cotacaoId`), campo "OC Gerada" clicável na tela de Cotação. Item 10: nova mutation `duplicarOrdem` (espelha `duplicarSolicitacao`), copia itens/fornecedor/pagamento e reseta datas/histórico/NF/anexos/status; botão "Duplicar OC" em Ordens.tsx. Item 12: novo procedure `cartao.resumoParaCompra` (limite disponível estimado = limite − soma de faturas com `total > pagamentos`, aproximação transparente por falta de status pago/aberto explícito) + componente `CartaoDisponivelCard` exibido em Cotação/OC ao selecionar "Cartão" como forma de pagamento. Itens 1 (BDI Hotel do Papa), 6 (decimal) e 21 (campos obrigatórios) ficaram de fora — dependem de decisão de negócio/reprodução. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4016** — **COMPRAS: LOTE FINAL DOS ~20 AJUSTES DO DOCX (Itens 7, 9, 13, 14, 17, 19, 20, 21a, 22) + CORREÇÃO DE BUG DE AUTORIZAÇÃO NA "TRANSFERÊNCIA EM LOTE" DO ALMOXARIFADO (Item 5, reaberto).** Itens do docx implementados em `Solicitacoes.tsx` (7,19,20), `Ordens.tsx` (13,14,21a) e `Cotacoes.tsx` (17; e 22 = seleção múltipla de fornecedores via checkbox no popover "Adicionar Fornecedor", com botão "Adicionar N selecionado(s)"). Item 5 tinha sido fechado numa revisão anterior como "sem alteração de código", mas usuário reportou que usuário comum não consegue transferir material entre obras (só admin funciona) — causa-raiz: `createTransferenciaOrigemDestino` e `createTransferenciaLote` (`server/routers/warehouse.ts`) usavam o guard genérico `userCanAccessObra` (só `allowed_obra_ids`/grupo) em vez do `userCanAccessObraAlmox` (que TAMBÉM libera por alocação operacional via `obra_funcionarios`, Rev. 2542) — único ponto do módulo de almoxarifado com esse guard mais restrito, todas as outras ~8 mutações já usavam o correto. Fix: trocado para `userCanAccessObraAlmox` nos 3 pontos (transferência individual + destino/origem do loop de transferência em lote). ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4015** — **COMPRAS: ERRO AO SELECIONAR MATERIAL DO ESTOQUE NA COTAÇÃO — MATCH RESTRITO A "CENTRAL + OBRA DE DESTINO" IGNORAVA SALDO EM OUTRA OBRA (Item 3 dos ~20 ajustes do docx).** Reprodução: SC-2026-0163, item só tinha saldo na obra 90005 mas a cotação era da obra 90004 — `adicionarEstoqueAoMapa` e o pré-check de `criarOrdemDeCotacao` filtravam o almoxarifado a `obraId IS NULL OR = destino`, mesmo o modal "Selecionar do Estoque" (Rev. 2470) já listando a empresa inteira; user escolhia o item explicitamente mas o auto-match não achava de novo → gravava quantidade=0/preço=0, e a OC travava com falso "sem correspondência"/"saldo insuficiente". Fix: `adicionarEstoqueAoMapa` remove o filtro de obra quando há `almoxItemIds` (seleção explícita — whitelist já é confiável); `criarOrdemDeCotacao` passa a buscar company-wide quando `obraOrigemId` não foi escolhido explicitamente (antes só central+destino); `obraOrigemId` explícito continua restringindo. Validado via HTTP real (SC/cotação/item descartáveis, cenário reproduzido, match correto obtido, tudo revertido); dado real de SC-2026-0163 também corrigido (quantidade 0→1, preço 0→25.40). ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4015** — **COMPRAS: ERRO AO SELECIONAR MATERIAL DO ESTOQUE NA COTAÇÃO — MATCH RESTRITO A "CENTRAL + OBRA DE DESTINO" IGNORAVA SALDO EM OUTRA OBRA (Item 3 dos ~20 ajustes do docx).** `adicionarEstoqueAoMapa`/`criarOrdemDeCotacao` passam a buscar company-wide quando a obra de origem não é explícita. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4014** — **COMPRAS: PERMITIR QUANTIDADE PARCIAL NA "DIVIDIR COTAÇÃO" (Item 2 dos ~20 ajustes do docx).** `dividirCotacao` só movia o item INTEIRO para a nova cotação; agora aceita `itens: {id, quantidade}[]` (quantidade legado `itemIds` continua funcionando = 100%), com split proporcional de respostas de fornecedor já lançadas. Validado via HTTP real. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4011** — **ALMOXARIFADO: OS 3 ITENS PENDENTES DA AUDITORIA "CORREÇÕES E MELHORIAS ERP - ALMOXARIFADO" (12/15 já implementados em revisões anteriores).** Usuário confirmou "Sim" para os 3 restantes: campo `especificacao` separado do `nome`; assinatura digital OPCIONAL na devolução de ferramenta emprestada; rename "Devolução de Ferramentas" já não se aplicava. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4010** — **ALMOXARIFADO: PADRONIZAÇÃO AUTOMÁTICA DO NOME DE MATERIAL (1ª LETRA MAIÚSCULA + RESTANTE MINÚSCULO).** Função SQL única `padronizar_nome_material(text)` reusada em todos os pontos de escrita (criação manual/import/OC/sync de equipamento). Backfill nos 2.638 itens existentes — 100% padronizados. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4008 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4010 e anteriores.
 
 ## User preferences
 
