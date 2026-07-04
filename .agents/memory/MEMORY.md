@@ -1,4 +1,5 @@
 - [Dashboard period selector standard](dashboard-period-selector-standard.md) — seletor de mês/ano = white-card (PanoramaFiscal), NUNCA DashHeader gradiente. Regra de ouro do usuário.
+- [Almox merge — exceção de equipamento vinculado](almox-merge-equipment-linked-exception.md) — fusão de itens por nome idêntico DEVE excluir `equipamento_vinculado_tipo IS NOT NULL` (1 registro = 1 unidade física); self-heal job pode mascarar dano recriando sem código.
 - [Dissídio — HE excluída da base retroativa](dissidio-he-excluded-from-base.md) — toda HE vira banco de horas, nunca é paga em dinheiro; nunca somar HE na base de diferença salarial retroativa/reajuste.
 - [VR/VT desconto de falta não misturado](folha-vr-vt-faltas-not-mixed.md) — VT de falta entra na Folha (coluna VT); VR/VA de falta NUNCA entra na Folha (só no Vale Alimentação).
 - [Banco de Horas saldo list filter](banco-horas-saldo-list-filter.md) — lista "Saldos" excluía negativos (`>0`) enquanto card de alerta já os contava; fix `<> 0` + gate admin_master client+backend em toggles sensíveis.

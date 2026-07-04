@@ -1,4 +1,43 @@
 /**
+ * Rev. 4009 — **ALMOXARIFADO: CORREÇÃO DE BUG CRÍTICO INTRODUZIDO NA REV. 4008 — A FUSÃO DE
+ * "NOME IDÊNTICO" INCLUIU ITENS QUE NA VERDADE ERAM 1-REGISTRO-POR-UNIDADE-FÍSICA DE
+ * EQUIPAMENTO (LOCADO/PRÓPRIO), NÃO DUPLICATAS DE IMPORTAÇÃO.**
+ *
+ * Descoberto ao investigar por que a contagem pós-Rev.4008 (1.838) divergia do total real após
+ * restart (2.638). Causa-raiz: o critério de agrupamento da Rev. 4008 (nome normalizado + 100%
+ * `tipo_controle='estoque'`) NÃO excluiu itens com `equipamento_vinculado_tipo`/`_id` setado —
+ * registros de formas/andaimes/sapatas/diagonais/painéis (locados ou próprios), cada um
+ * representando UMA unidade física real, vinculado 1:1 a uma linha de `equipamentos_locados`/
+ * `equipamentos_proprios`. A fusão consolidou ~806 desses registros (800 locados + 6 próprios)
+ * num único item por nome, somando quantidades e apagando os originais. No restart seguinte, a
+ * rotina de auto-recuperação já existente `backfillAlmoxFromEquipamentos`
+ * (`server/lib/almoxEquipamentoSync.ts`, roda no startup, idempotente) detectou os 806
+ * equipamentos "órfãos" (sem item de almox vinculado) e os recriou automaticamente — restaurando
+ * 100% do vínculo funcional (0 órfãos, quantidade/obra corretas, pois `equipamentos_locados`/
+ * `_proprios` nunca foram tocados pela fusão), PORÉM sem `codigo_interno` (esse INSERT bruto,
+ * anterior à padronização `MAT-NNNN` da Rev. 4006/4007, nunca gerou código).
+ *
+ * Remediação: (1) atribuídos códigos `MAT-1837`...`MAT-2636` aos 806 itens recriados via UPDATE
+ * em lote (window function `ROW_NUMBER` + `pg_advisory_xact_lock` por empresa — tentativa inicial
+ * com loop linha-a-linha de 800 transações individuais deu timeout, resolvido trocando por 1
+ * UPDATE em lote por empresa); (2) `almoxEquipamentoSync.ts` corrigido nos 3 pontos de INSERT
+ * (`ensureAlmoxItemForEquipamento` + as 2 queries de `backfillAlmoxFromEquipamentos`) para SEMPRE
+ * gerar `codigo_interno` MAT-NNNN via lock advisory, prevenindo recorrência. Resultado final:
+ * 2.638 itens (1.838 sobreviventes da fusão original + 800 recriados pelo self-heal), 0 duplicados
+ * de código, 0 órfãos de equipamento.
+ *
+ * PERDA IRREVERSÍVEL (backups temporários já haviam sido limpos do ambiente antes da descoberta):
+ * o histórico de movimentação/transferência/empréstimo (`almoxarifado_movimentacoes`, `_baias`,
+ * `_transferencias`, `warehouse_loans`, `warehouse_inventory_session_items`) que pertencia
+ * especificamente aos ~806 registros mesclados ficou repontado no item "canônico" da Rev. 4008 em
+ * vez de nos itens recriados — não há como reatribuir sem os backups originais. Quantidade e
+ * vínculo funcional atuais estão corretos; apenas o rastro histórico granular desses itens
+ * específicos foi perdido. LIÇÃO: critério de "duplicata de nome" para fusão DEVE excluir sempre
+ * `equipamento_vinculado_tipo IS NOT NULL` (mesma classe de exceção já conhecida do código de
+ * referência embutido no nome, ex. `[15.01.01.01]`, citada na Rev. 4008/4006).
+ */
+
+/**
  * Rev. 4008 — **ALMOXARIFADO: UNIFICAÇÃO DOS 985 ITENS COM NOME IDÊNTICO (165 GRUPOS)
  * DETECTADOS NA REV. 4006, SEGUIDO DE RENUMERAÇÃO SEQUENCIAL DOS CÓDIGOS `MAT-NNNN`.**
  *

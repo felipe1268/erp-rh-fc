@@ -197,3 +197,9 @@ id = "FKfojNGxssvlULHMjd_Ch"
 uri = "file://attached_assets/out/Relatorio_Importacao_Planilha_Aprovacao.xlsx"
 type = "table"
 title = "Relatório de Importação — Aprovação (Pagamentos 2026)"
+
+[[outputs]]
+id = "nEfLyPKTYhnpuz1H-ocUE"
+uri = "file://exports/lista_materiais_almoxarifado.csv"
+type = "table"
+title = "Lista completa de materiais do almoxarifado (2.638 itens)"
