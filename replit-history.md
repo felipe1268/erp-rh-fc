@@ -1,3 +1,5 @@
+- **Rev. 3998** — **CORRIGIDO 404 "ARQUIVO NÃO ENCONTRADO" EM ANEXOS COM ESPAÇO NO NOME QUANDO O DISCO EFÊMERO JÁ NÃO TINHA MAIS A CÓPIA LOCAL.** `decodeURIComponent` faltando no fallback do banco em `/uploads` (server/_core/index.ts) fazia a chave nunca bater com `file_key`. ZERO DELETE · ZERO ALTER.
+
 - **Rev. 3997** — **FOLHA DE PAGAMENTO: CAMPO "LÍQUIDO" GANHA EDIÇÃO INLINE (LÁPIS → INPUT → SALVAR/CANCELAR), IGUAL À FOLHA DE VALE.** Nova mutation `payrollEngine.editarLiquidoFolha` (espelha `editarLiquidoVale`); força líquido final, zera arredondamento, guard de pagamento consolidado, badge "Editado". ZERO DELETE · ZERO ALTER.
 
 - **Rev. 3996** — **BANCO DE HORAS: ADICIONADO NAVEGADOR MENSAL (ESTILO FOLHA DE PAGAMENTO) NA ABA "SALDOS".** Dois endpoints novos (`getSaldoBancoMensal`/`getResumoMensalBanco`) reconstroem histórico mensal a partir dos lançamentos; Card de navegação ano/mês, débito desabilitado fora do mês corrente. ZERO DELETE · ZERO ALTER.

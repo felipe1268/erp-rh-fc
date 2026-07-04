@@ -2293,7 +2293,8 @@ REGRAS:
               message: `"${item.itemNome}" parece ser ${classif.motivo} — não pode entrar no Almoxarifado. Lance esse item como Despesa/Serviço no módulo Financeiro/Compras, não como estoque.`,
             });
           }
-          const [newItem] = await db.insert(almoxarifadoItens).values({
+          const { criarItemAlmoxarifadoComCodigo } = await import("./compras");
+          const newItem = await criarItemAlmoxarifadoComCodigo(db, input.companyId, {
             companyId: input.companyId,
             obraId: input.obraId || null,
             nome: item.itemNome,
@@ -2304,7 +2305,7 @@ REGRAS:
             origem: "proprio",
             criadoPorId: ctx.user?.id ?? null,
             criadoPorNome: ctx.user?.name || null,
-          } as any).returning();
+          });
           itemId = newItem.id;
           createdItems.push(newItem.id);
         }

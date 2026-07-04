@@ -301,6 +301,48 @@ export async function gerarProximoNumeroOC(companyId: number, ordemTipo: "compra
   });
 }
 
+/**
+ * Rev. 4006 — Código automático de material (Almoxarifado).
+ *
+ * Todos os 2823 materiais existentes foram renumerados para o padrão
+ * MATNNNNNN (6 dígitos, sequencial por empresa, ordem de criação) via
+ * migração pontual direto no Neon. Esta função garante que TODO material
+ * novo cadastrado (manual, auto-cadastro via OC/recebimento, importação
+ * MasControle) saia com código nesse mesmo padrão, sem duplicidade em
+ * concorrência.
+ *
+ * Mesmo padrão de `gerarProximoNumeroOC`: pg_advisory_xact_lock por
+ * companyId (escopo 1010 = "almoxarifado_codigo_material") DENTRO da
+ * transação que faz o INSERT — lock + leitura do MAX + insert atômicos,
+ * evita corrida entre 2 cadastros simultâneos gerando o mesmo código.
+ */
+export async function criarItemAlmoxarifadoComCodigo(
+  db: any,
+  companyId: number,
+  values: Record<string, any>,
+): Promise<any> {
+  return await db.transaction(async (tx: any) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${companyId}::int, 1010::int)`);
+    let codigoInterno = values.codigoInterno;
+    if (!codigoInterno) {
+      const maxRow: any = await tx.execute(sql`
+        SELECT COALESCE(MAX(CAST(SUBSTRING(codigo_interno FROM '^MAT(\\d+)$') AS INTEGER)), 0) AS m
+        FROM almoxarifado_itens
+        WHERE company_id = ${companyId}
+          AND codigo_interno ~ '^MAT\\d+$'
+      `);
+      const rows = maxRow.rows || maxRow;
+      const proximo = (Number(rows?.[0]?.m) || 0) + 1;
+      codigoInterno = `MAT${String(proximo).padStart(6, "0")}`;
+    }
+    const [item] = await tx.insert(almoxarifadoItens).values({
+      ...values,
+      codigoInterno,
+    } as any).returning();
+    return item;
+  });
+}
+
 async function gerarContratoTerceiroDeOS(params: {
   ocId: number;
   companyId: number;
@@ -1898,7 +1940,7 @@ export const comprasRouter = router({
       // mesmo se o usuário/IA tentou criar com saldo inicial.
       const qtdInicial = tipoControle === "aplicacao_direta" ? 0 : (input.quantidadeAtual ?? 0);
 
-      const [item] = await db.insert(almoxarifadoItens).values({
+      const item = await criarItemAlmoxarifadoComCodigo(db, input.companyId, {
         companyId:             input.companyId,
         obraId:                input.obraId ?? null,
         nome:                  input.nome,
@@ -1923,7 +1965,7 @@ export const comprasRouter = router({
         tipoControleJustificativa,
         criadoPorId:           ctx.user?.id ?? null,
         criadoPorNome:         ctx.user?.name || null,
-      } as any).returning();
+      });
       return item;
     }),
 
@@ -9271,7 +9313,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
               console.warn(`[OC entrega] IA classificação falhou (default 'estoque'):`, e?.message || e);
             }
             tipoControleItem = cls?.tipoControle ?? "estoque";
-            const [novo] = await db.insert(almoxarifadoItens).values({
+            const novo = await criarItemAlmoxarifadoComCodigo(db, oc.companyId, {
               companyId: oc.companyId,
               nome: item.descricao,
               unidade: item.unidade ?? "un",
@@ -9281,7 +9323,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
               tipoControle: tipoControleItem,
               tipoControleClassificadoIa: !!cls,
               tipoControleJustificativa: cls?.justificativa ?? null,
-            } as any).returning();
+            });
             almoItemId = novo.id;
           }
 

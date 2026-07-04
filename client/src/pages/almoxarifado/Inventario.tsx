@@ -25,6 +25,7 @@ type SessionItem = {
   status: string;
   observacoes: string | null;
   conferidoEm: string | null;
+  itemCodigoInterno?: string | null;
 };
 
 function ItemCard({
@@ -91,6 +92,9 @@ function ItemCard({
         )}
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-gray-900 truncate">{item.itemNome}</p>
+          {item.itemCodigoInterno && (
+            <p className="text-[11px] font-mono text-gray-400">{item.itemCodigoInterno}</p>
+          )}
           {isConferido ? (
             <p className="text-sm text-emerald-600">✅ Conferido — {fmt(item.quantidadeFisica)} un</p>
           ) : (
@@ -139,6 +143,9 @@ function ItemCard({
         )}
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-gray-900 truncate">{item.itemNome}</p>
+          {item.itemCodigoInterno && (
+            <p className="text-[11px] font-mono text-gray-400">{item.itemCodigoInterno}</p>
+          )}
           <p className="text-sm text-gray-500">Sistema diz: <strong>{fmt(sistemaQtd)}</strong> {unidade}</p>
         </div>
       </div>

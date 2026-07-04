@@ -1,4 +1,46 @@
 /**
+ * Rev. 4006 — **ALMOXARIFADO: PACOTE DE 6 CORREÇÕES E MELHORIAS (PDF "Correções e Melhorias ERP
+ * — Almoxarifado") — CÓDIGO AUTOMÁTICO DE MATERIAL, MATCHING DE DUPLICATA NF/OC, SAÍDA DE INSUMOS
+ * PARA TERCEIROS, FECHAR DIA, DEVOLUÇÃO E INVENTÁRIO/EMPRÉSTIMO.**
+ *
+ * PEDIDO (usuário, via PDF de correções): "quero que você faça tudo" — lista de 6 itens no módulo
+ * Almoxarifado. Este é o registro consolidado (os itens já foram sendo commitados individualmente
+ * ao longo da sessão sob comentários soltos "Rev. 4005"; este bloco documenta e fecha o pacote).
+ *
+ * 1) CÓDIGO AUTOMÁTICO DE MATERIAL (item mais pesado): os 2.823 materiais cadastrados (2 empresas)
+ *    foram renumerados via migração pontual direto no Neon para o padrão `MATNNNNNN` (6 dígitos,
+ *    sequencial por `company_id`, ordem de criação/`id` ASC) — antes só 96 tinham código (formato
+ *    livre do fabricante) e o restante ficava sem nenhum. Detectados 149 grupos de nomes
+ *    "duplicados" (953 linhas) na varredura normalizada (acento/caixa/pontuação); a maioria (~109
+ *    grupos, 897 linhas) são peças com rastreio unitário legítimo (ex.: "DIAGONAIS X 1,50 M" × 291
+ *    linhas qty=1 cada, formas/andaimes serializados) — decisão: NÃO mesclar estoque/quantidade
+ *    (destruiria o rastreio por peça); só foi aplicada normalização segura de texto (29 nomes que
+ *    diferiam só por espaço/maiúscula, zero impacto em estoque/FK). Criado helper único
+ *    `criarItemAlmoxarifadoComCodigo` (`server/routers/compras.ts`) — mesmo padrão de
+ *    `gerarProximoNumeroOC`: `pg_advisory_xact_lock(companyId, 1010)` DENTRO da transação que faz o
+ *    INSERT (lock+leitura do MAX+insert atômicos, sem corrida em cadastro simultâneo) — plugado nos
+ *    5 pontos que criam material novo: cadastro manual e auto-cadastro via entrega de OC
+ *    (`compras.ts`), "item novo" do recebimento inteligente (`warehouse.ts`) e as 2 importações do
+ *    Mas Controle (API + CSV, `masControle.ts` — mantém o código externo se vier, senão gera). Os 2
+ *    pontos de TRANSFERÊNCIA entre obras (`warehouse.ts`) foram deixados como estavam (copiam o
+ *    `codigoInterno` do item de origem de propósito — é o mesmo material, não um cadastro novo).
+ *    Frontend (Materiais, Solicitação de Compra/Cotações, Inventário) já exibia/buscava por
+ *    `codigoInterno` em boa parte; adicionado no card do Inventário Semanal (join já trazia o
+ *    campo, só faltava renderizar).
+ * 2) COMPRAS: matching de duplicata de NF/OC melhorado.
+ * 3) SAÍDA DE INSUMOS: passou a aceitar busca/seleção de terceiro (igual ao fluxo de Empréstimo de
+ *    Ferramentas).
+ * 4) FECHAR DIA: tratamento de pendências antigas + filtro por obra.
+ * 5) DEVOLUÇÃO: corrigido bug do botão "Devolver Todas" + renomeação de rótulo.
+ * 6) INVENTÁRIO/EMPRÉSTIMO: botão "Corrigir" no Inventário Semanal (reabre item já conferido/
+ *    divergente para correção enquanto a sessão está em andamento) + campo de observação no
+ *    Empréstimo de Ferramentas.
+ *
+ * ZERO DELETE de linhas · ZERO ALTER destrutivo de schema (renumeração de código é UPDATE em coluna
+ * já existente).
+ */
+
+/**
  * Rev. 4004 — **COMPRAS/COTAÇÕES: PDF E EXCEL DO MAPA DE COTAÇÃO NÃO TRAZIAM A LINHA DE TOTAL POR
  * FORNECEDOR (SÓ OS ITENS, SEM O SOMATÓRIO QUE APARECE NA TELA).**
  *

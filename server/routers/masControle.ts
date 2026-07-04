@@ -267,7 +267,8 @@ export const masControleRouter = router({
             ));
           if (dup) { duplicados++; continue; }
 
-          await db.insert(almoxarifadoItens).values({
+          const { criarItemAlmoxarifadoComCodigo } = await import("./compras");
+          await criarItemAlmoxarifadoComCodigo(db, input.companyId, {
             companyId:     input.companyId,
             nome,
             unidade:       ins.unidade || ins.unit || "un",
@@ -445,7 +446,8 @@ export const masControleRouter = router({
             ));
           if (dup) { duplicados++; continue; }
 
-          await db.insert(almoxarifadoItens).values({
+          const { criarItemAlmoxarifadoComCodigo } = await import("./compras");
+          await criarItemAlmoxarifadoComCodigo(db, input.companyId, {
             companyId:     input.companyId,
             nome,
             unidade:       col(row, "Unidade", "Un", "unidade", "UN") || "un",

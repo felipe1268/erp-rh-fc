@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4004** — **COMPRAS/COTAÇÕES: PDF E EXCEL DO MAPA DE COTAÇÃO NÃO TRAZIAM A LINHA DE TOTAL POR FORNECEDOR.** Usuário reportou, após a Rev. 4003, que "não está somando o valor total" — o PDF/Excel exportado trazia as linhas de item mas faltava o rodapé de totais (por fornecedor + geral) que já existe na tabela em tela. Causa: `gerarPdfCotacao`/`exportarExcelCotacao` só montavam as linhas de item, sem replicar a lógica de total do `<tfoot>` (`getFornTotal`, `metaGrandTotal`, `qtdGrandTotal`). Fix: ambas exportações agora reaproveitam essas mesmas funções/variáveis pra gerar uma linha de total (PDF: `<tr>` em negrito no `<tfoot>` HTML; Excel: linha "TOTAL" extra na matriz). ZERO DELETE de linhas · ZERO ALTER de schema.
+- **Rev. 4006** — **ALMOXARIFADO: PACOTE DE 6 CORREÇÕES E MELHORIAS (usuário: "quero que você faça tudo").** Item principal: código automático de material — os 2.823 itens cadastrados (2 empresas) renumerados no Neon para o padrão `MATNNNNNN` (6 dígitos, sequencial por empresa); antes só 96 tinham código. Detectados 149 grupos de nomes "duplicados" (953 linhas), mas a maioria (~897 linhas) são peças com rastreio unitário legítimo (formas/andaimes serializados) — decisão: NÃO mesclar estoque (destruiria o rastreio), só normalizado texto de 29 nomes com diferença de espaço/maiúscula. Novo helper `criarItemAlmoxarifadoComCodigo` (mesmo padrão de `gerarProximoNumeroOC`: `pg_advisory_xact_lock` dentro da transação do INSERT) plugado nos 5 pontos que criam material novo (cadastro manual, auto-cadastro via OC, recebimento inteligente, import Mas Controle API/CSV); pontos de transferência entre obras mantidos como estavam (copiam o código do item de origem de propósito). Demais 5 itens do pacote: matching de duplicata NF/OC melhorado; Saída de Insumos aceita busca de terceiro; Fechar Dia trata pendências antigas + filtro por obra; corrigido bug do "Devolver Todas"; Inventário ganhou botão "Corrigir" + Empréstimo ganhou campo de observação. Detalhe completo em `shared/changelog.ts`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4003** — **COMPRAS/COTAÇÕES: "EXPORTAR PDF" GERAVA PÁGINA EM BRANCO — BLOQUEAVA ENVIO DE COTAÇÃO PARA CLIENTE APROVAR ITEM A ITEM; ADICIONADO TAMBÉM "EXPORTAR EXCEL".** Usuário reportou (urgente) que "Exportar PDF" na tela de detalhe da cotação abria só página em branco, travando o envio de cotações longas ao cliente Airton (Hotel do Papa) para aprovação item a item; pediu também (repetição de solicitação anterior nunca atendida) um Excel item a item. Causa: botão chamava `window.print()` sobre o DOM vivo, mas quando a aba "Mapa de Cotação" está ativa o conteúdo fica dentro de um `<div className="fixed inset-0 ...">` (fullscreen) — `position: fixed` não flui na paginação de impressão do Chrome e as regras globais de print em `index.css` só cobrem Dialogs Radix, não esse div solto (mesma causa-raiz da memória `print-dialog-fixed-clip`). Fix: `Cotacoes.tsx` ganhou `montarLinhasExportacao()` (linhas item × fornecedor, reusa `getMelhorPrecoItem`) + `gerarPdfCotacao()` (HTML autônomo aberto via `window.open`+`document.write`+`window.print`, mesmo padrão já comprovado em `Solicitacoes.tsx`/`gerarPdfSC`, imune a `fixed`) + `exportarExcelCotacao()` (novo botão, gera `.xlsx` via SheetJS com a mesma matriz item × fornecedor). ZERO DELETE de linhas · ZERO ALTER de schema.
+- **Rev. 4004** — COMPRAS/COTAÇÕES: PDF e Excel do Mapa de Cotação não traziam a linha de total por fornecedor; `gerarPdfCotacao`/`exportarExcelCotacao` passaram a reaproveitar `getFornTotal`/`metaGrandTotal`/`qtdGrandTotal` pra gerar a linha de total. ZERO DELETE · ZERO ALTER.
 
 ### 5 one-liners
+
+- **Rev. 4003** — **COMPRAS/COTAÇÕES: "EXPORTAR PDF" GERAVA PÁGINA EM BRANCO — BLOQUEAVA ENVIO DE COTAÇÃO PARA CLIENTE APROVAR ITEM A ITEM; ADICIONADO TAMBÉM "EXPORTAR EXCEL".** Causa: `window.print()` sobre `<div className="fixed inset-0 ...">` (mesma causa-raiz de `print-dialog-fixed-clip`); fix via HTML autônomo em `window.open`+`document.write`. ZERO DELETE · ZERO ALTER.
 
 - **Rev. 4002** — **IMPORTAÇÃO DE EXTRATO PDF (SANTANDER IBPJ): PARSER ESTAVA IGNORANDO 100% DOS LANÇAMENTOS EM EXTRATOS DE VÁRIAS PÁGINAS.** `parseSantanderIbpjPdf` assumia cada lançamento em UMA linha só, mas a extração real do `pdf-parse` quebra em 2-3 linhas; reescrito como scanner por blocos. Validado: 0→131 lançamentos, saldo diário reconciliado 100%. ZERO DELETE · ZERO ALTER.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 3999** — **CONTAS A PAGAR: BUSCA POR FORNECEDOR/OC AGORA PROCURA NO ANO INTEIRO, NÃO SÓ NO MÊS ABERTO NA TELA.** Busca por texto rodava sobre `mesData` (mês selecionado), não `allContas` (ano inteiro); fornecedor com títulos em outros meses ou sem `data_vencimento` ficava invisível. Fix: com termo ativo, `filtered` usa `allContas` + checa `fornecedorNome`. ZERO DELETE · ZERO ALTER.
 
-- **Rev. 3998** — **CORRIGIDO 404 "ARQUIVO NÃO ENCONTRADO" EM ANEXOS COM ESPAÇO NO NOME QUANDO O DISCO EFÊMERO JÁ NÃO TINHA MAIS A CÓPIA LOCAL.** `decodeURIComponent` faltando no fallback do banco em `/uploads` (server/_core/index.ts) fazia a chave nunca bater com `file_key`. ZERO DELETE · ZERO ALTER.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3995 e anteriores.
+Ver `replit-history.md` para revisões Rev. 3998 e anteriores.
 
 ## User preferences
 
