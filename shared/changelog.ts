@@ -1,4 +1,33 @@
 /**
+ * Rev. 4010 — **ALMOXARIFADO: PADRONIZAÇÃO AUTOMÁTICA DO NOME DE MATERIAL (1ª LETRA MAIÚSCULA +
+ * RESTANTE MINÚSCULO), INDEPENDENTE DE COMO O USUÁRIO/IMPORT/EQUIPAMENTO DIGITOU/GRAVOU O NOME.**
+ *
+ * Usuário pediu: "Crie uma rotina de padronizar todos os nomes, como a primeira letra maiúscula e
+ * o restante seguindo a ortografia brasileira. Independente se o usuário digitar caixa alta, você
+ * sempre padroniza dessa forma". Implementado como função SQL única `padronizar_nome_material(text)`
+ * (trim + colapsa espaços duplos + só a 1ª letra maiúscula, resto minúsculo — sentence case, não
+ * Title Case), criada via bloco `[ColFix Rev.4010]` em `server/_core/index.ts` (COLFIX_VERSION
+ * bumpado p/ `v4010-...`, senão o bloco é pulado em restarts futuros — ver lição
+ * `colfix-version-gate.md`).
+ *
+ * Reusada em TODOS os pontos de escrita de `almoxarifado_itens.nome` pra garantir consistência
+ * (nunca duplicar a lógica em JS separadamente):
+ *  1. `criarItemAlmoxarifadoComCodigo` (`compras.ts`) — helper central usado por criação manual,
+ *     import Mas Controle (CSV/planilha) e recebimento de OC (todos os pontos de criação de
+ *     material novo passam por aqui);
+ *  2. `atualizarItem` (`compras.ts`) — edição manual do nome também é padronizada;
+ *  3. `ensureAlmoxItemForEquipamento` + as 2 queries de `backfillAlmoxFromEquipamentos`
+ *     (`almoxEquipamentoSync.ts`) — nome herdado da descrição do equipamento (locado/próprio)
+ *     também passa pela função.
+ *
+ * Backfill: mesmo bloco `[ColFix Rev.4010]` rodou `UPDATE almoxarifado_itens SET nome =
+ * padronizar_nome_material(nome) WHERE nome IS DISTINCT FROM padronizar_nome_material(nome)` nos
+ * 2.638 itens existentes — 100% padronizados no restart, 0 exceções, 0 DELETE, só troca de
+ * caixa/espaçamento (conteúdo/ordem das palavras preservado 1:1, portanto risco de perda de dado
+ * é mínimo, ao contrário das Rev. 4008/4009). ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4009 — **ALMOXARIFADO: CORREÇÃO DE BUG CRÍTICO INTRODUZIDO NA REV. 4008 — A FUSÃO DE
  * "NOME IDÊNTICO" INCLUIU ITENS QUE NA VERDADE ERAM 1-REGISTRO-POR-UNIDADE-FÍSICA DE
  * EQUIPAMENTO (LOCADO/PRÓPRIO), NÃO DUPLICATAS DE IMPORTAÇÃO.**

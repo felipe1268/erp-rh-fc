@@ -337,6 +337,9 @@ export async function criarItemAlmoxarifadoComCodigo(
     }
     const [item] = await tx.insert(almoxarifadoItens).values({
       ...values,
+      // Rev. 4010 — padroniza nome (1ª maiúscula + resto minúsculo) independente
+      // de como a origem (usuário/import/OC) digitou/gravou o nome.
+      nome: values.nome != null ? sql`padronizar_nome_material(${values.nome}::text)` : values.nome,
       codigoInterno,
     } as any).returning();
     return item;
@@ -2123,7 +2126,8 @@ export const comprasRouter = router({
         atualizadoPorId: ctx.user?.id ?? null,
         atualizadoPorNome: ctx.user?.name || null,
       };
-      if (data.nome !== undefined)                 updates.nome = data.nome;
+      // Rev. 4010 — padroniza nome (1ª maiúscula + resto minúsculo) também na edição.
+      if (data.nome !== undefined)                 updates.nome = data.nome != null ? sql`padronizar_nome_material(${data.nome}::text)` : data.nome;
       if (data.unidade !== undefined)              updates.unidade = data.unidade;
       if (data.categoria !== undefined)            updates.categoria = data.categoria;
       if (data.codigoInterno !== undefined)        updates.codigoInterno = data.codigoInterno;

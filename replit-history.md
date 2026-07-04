@@ -1,3 +1,5 @@
+- **Rev. 4002** — **IMPORTAÇÃO DE EXTRATO PDF (SANTANDER IBPJ): PARSER ESTAVA IGNORANDO 100% DOS LANÇAMENTOS EM EXTRATOS DE VÁRIAS PÁGINAS.** `parseSantanderIbpjPdf` assumia cada lançamento em UMA linha só, mas a extração real do `pdf-parse` quebra em 2-3 linhas; reescrito como scanner por blocos. Validado: 0→131 lançamentos, saldo diário reconciliado 100%. ZERO DELETE · ZERO ALTER.
+
 - **Rev. 4001** — **COMPRAS / COTAÇÕES: SOLICITAÇÕES DE OBRAS DIFERENTES CAINDO COM O MESMO NÚMERO DE COTAÇÃO.** 4 dos 7 pontos que geram `numeroCotacao` em `compras.ts` calculavam via `COUNT(*)+1` FORA de lock/transação (race condition); fix roda dentro de `db.transaction` com `pg_advisory_xact_lock`; 32 grupos duplicados (41 cotações) renumerados no Neon. ZERO DELETE · ZERO ALTER.
 
 - **Rev. 3998** — **CORRIGIDO 404 "ARQUIVO NÃO ENCONTRADO" EM ANEXOS COM ESPAÇO NO NOME QUANDO O DISCO EFÊMERO JÁ NÃO TINHA MAIS A CÓPIA LOCAL.** `decodeURIComponent` faltando no fallback do banco em `/uploads` (server/_core/index.ts) fazia a chave nunca bater com `file_key`. ZERO DELETE · ZERO ALTER.

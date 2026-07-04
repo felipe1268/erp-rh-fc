@@ -76,7 +76,7 @@ export async function ensureAlmoxItemForEquipamento(
         codigo_interno, criado_por_id, criado_por_nome, criado_em, atualizado_em
       )
       SELECT
-        ${params.companyId}, ${params.obraId}, ${params.nome}, 'un', ${params.categoria ?? null},
+        ${params.companyId}, ${params.obraId}, padronizar_nome_material(${params.nome}::text), 'un', ${params.categoria ?? null},
         1, ${params.fotoUrl ?? null}, ${origem},
         ${params.fornecedorNome ?? null}, ${params.dataInicio ?? null}, ${params.dataFim ?? null},
         ${valorUnit}, ${valorMen},
@@ -156,7 +156,7 @@ export async function backfillAlmoxFromEquipamentos(
             codigo_interno, criado_por_nome, criado_em, atualizado_em
           )
           SELECT
-            c.company_id, c.obra_id, c.descricao, 'un', c.categoria,
+            c.company_id, c.obra_id, padronizar_nome_material(c.descricao), 'un', c.categoria,
             1,
             COALESCE(c.foto_url, (c.fotos_recebimento_json->0->>'url')),
             'locacao',
@@ -217,7 +217,7 @@ export async function backfillAlmoxFromEquipamentos(
             codigo_interno, criado_por_nome, criado_em, atualizado_em
           )
           SELECT
-            c.company_id, c.localizacao_atual_obra_id, c.descricao, 'un', c.categoria,
+            c.company_id, c.localizacao_atual_obra_id, padronizar_nome_material(c.descricao), 'un', c.categoria,
             1,
             (c.fotos_json->0->>'url'),
             'proprio',

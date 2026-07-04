@@ -4730,7 +4730,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v3989-2026-07-02-somar-diferenca-dissidio";
+    const COLFIX_VERSION = "v4010-2026-07-04-padronizar-nome-material";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -6259,6 +6259,35 @@ Regras:
         await _db3985.$client.query(`CREATE INDEX IF NOT EXISTS idx_meal_vigencia ON meal_benefit_configs ("companyId", "obraId", vigencia_inicio)`);
         console.log("[ColFix Rev.3985] meal_benefit_configs: vigencia_inicio/vigencia_fim garantidas + backfill.");
       } catch (e: any) { console.warn("[ColFix Rev.3985] meal_benefit_configs vigencia falhou (não-fatal):", e?.message ?? e); }
+
+      // Rev. 4010 — Padronização de nome de material do almoxarifado: 1ª letra
+      // maiúscula + restante minúsculo (ortografia normal), independente de como
+      // o usuário digitou. Função SQL única reusada por TODOS os pontos de escrita
+      // (criação/edição/import/backfill de equipamento) + backfill dos itens existentes.
+      try {
+        const _db4010 = (await getDb())!;
+        await _db4010.$client.query(`
+          CREATE OR REPLACE FUNCTION padronizar_nome_material(nome_raw text)
+          RETURNS text AS $$
+          DECLARE
+            limpo text;
+          BEGIN
+            IF nome_raw IS NULL THEN RETURN NULL; END IF;
+            limpo := btrim(regexp_replace(nome_raw, '\\s+', ' ', 'g'));
+            IF limpo = '' THEN RETURN limpo; END IF;
+            RETURN upper(left(limpo, 1)) || lower(substring(limpo from 2));
+          END;
+          $$ LANGUAGE plpgsql IMMUTABLE;
+        `);
+        const backfill = await _db4010.$client.query(`
+          UPDATE almoxarifado_itens
+          SET nome = padronizar_nome_material(nome), atualizado_em = NOW()
+          WHERE nome IS NOT NULL
+            AND nome IS DISTINCT FROM padronizar_nome_material(nome)
+          RETURNING id
+        `);
+        console.log(`[ColFix Rev.4010] padronizar_nome_material() criada; ${backfill.rowCount ?? backfill.rows?.length ?? 0} nome(s) de material padronizado(s).`);
+      } catch (e: any) { console.warn("[ColFix Rev.4010] padronização de nomes falhou (não-fatal):", e?.message ?? e); }
 
       // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos
       import("../services/startupCache").then(({ setCache }) =>
