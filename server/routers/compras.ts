@@ -4573,6 +4573,15 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       await _assertCompanyAccess(ctx.user, cot.companyId);
       const itens = await db.select().from(comprasCotacoesItens).where(eq(comprasCotacoesItens.cotacaoId, input.id));
 
+      // Rev. 4013 — tipo de contrato da obra, para exibir a seleção de
+      // regime de custo (cliente/empresa-sem-risco/empresa-com-risco) só
+      // quando fizer sentido (obras "Fornecimento de MDO").
+      let obraTipoContrato: string | null = null;
+      if (cot.obraId) {
+        const [ob] = await db.select({ tipoContrato: obras.tipoContrato }).from(obras).where(eq(obras.id, cot.obraId));
+        obraTipoContrato = ob?.tipoContrato ?? null;
+      }
+
       // Rastreabilidade: SC vinculada
       let scInfo: { numeroSc: string | null; criadoPorNome: string | null; aprovadorNome: string | null; aprovadoEm: string | null } | null = null;
       if (cot.solicitacaoId) {
@@ -4628,11 +4637,11 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
               total:         r.total         ?? it.total,
             };
           });
-          return { ...cot, itens: itensEnriquecidos, fornecedorContato, scInfo };
+          return { ...cot, itens: itensEnriquecidos, fornecedorContato, scInfo, obraTipoContrato };
         }
       }
 
-      return { ...cot, itens, fornecedorContato, scInfo };
+      return { ...cot, itens, fornecedorContato, scInfo, obraTipoContrato };
     }),
 
   criarCotacao: protectedProcedure
@@ -7471,7 +7480,12 @@ Retorne APENAS um JSON válido neste formato:
     }),
 
   selecionarVencedorMapa: protectedProcedure
-    .input(z.object({ cotacaoId: z.number(), fornecedorId: z.number() }))
+    .input(z.object({
+      cotacaoId: z.number(),
+      fornecedorId: z.number(),
+      // Rev. 4013 — regime de custo/risco, aplicável a obras "Fornecimento de MDO".
+      regimeCusto: z.enum(["empresa_com_risco", "empresa_sem_risco", "cliente_paga"]).optional(),
+    }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       const [cotAcc] = await db.select({ companyId: comprasCotacoes.companyId }).from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
@@ -7487,6 +7501,7 @@ Retorne APENAS um JSON válido neste formato:
         tipoPagamento: p.tipoPagamento ?? null,
         formaPagamento: (p as any).formaPagamento ?? null,
         numeroParcelas: p.numeroParcelas ?? null,
+        ...(input.regimeCusto ? { regimeCusto: input.regimeCusto } : {}),
       } as any).where(eq(comprasCotacoes.id, input.cotacaoId));
       return { ok: true };
     }),
@@ -7879,7 +7894,13 @@ Retorne APENAS um JSON válido neste formato:
 
       let extraAprovacaoRequerida = false;
       let extraMotivo = "";
-      if (cot.obraId) {
+      // Rev. 4013 — obras "Fornecimento de MDO" podem marcar, na equalização,
+      // que este item é repasse (empresa paga mas sem risco/BDI) ou que o
+      // cliente paga direto: em ambos os casos o estouro de orçamento vira
+      // só informativo e NUNCA bloqueia a criação da OC.
+      const regimeCustoCot = ((cot as any).regimeCusto as string | null) ?? "empresa_com_risco";
+      const semRiscoOrcamentario = regimeCustoCot === "empresa_sem_risco" || regimeCustoCot === "cliente_paga";
+      if (cot.obraId && !semRiscoOrcamentario) {
         try {
           const solicitacaoItemIds = itens.map(it => it.solicitacaoItemId).filter(Boolean);
           if (solicitacaoItemIds.length > 0) {
@@ -8042,6 +8063,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         numeroParcelas: fornInfo?.numeroParcelas ?? cot.numeroParcelas ?? 1,
         dataEntregaPrevista: dataEntregaPrevista,
         pendenteCoberturaOrcamentaria: itens.some(it => (it as any).semVerba === true),
+        regimeCusto: regimeCustoCot,
         ...((cot as any).modalidadeFd && (cot as any).modalidadeFd !== "normal" ? {
           modalidadeFd: (cot as any).modalidadeFd === "fd_fc" ? "fd_terceiro" : (cot as any).modalidadeFd,
           fdValor: (cot as any).fdValor,

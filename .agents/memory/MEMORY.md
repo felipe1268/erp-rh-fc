@@ -1,4 +1,5 @@
 - [Dashboard period selector standard](dashboard-period-selector-standard.md) — seletor de mês/ano = white-card (PanoramaFiscal), NUNCA DashHeader gradiente. Regra de ouro do usuário.
+- [ColFix DO-block silent rollback](colfix-do-block-silent-rollback.md) — o bloco `[ColFix]` gigante engole falha de QUALQUER ALTER e ainda marca a versão como aplicada; novo ALTER deve ir em bloco isolado próprio + verificar direto no Neon.
 - [Almox merge — exceção de equipamento vinculado](almox-merge-equipment-linked-exception.md) — fusão de itens por nome idêntico DEVE excluir `equipamento_vinculado_tipo IS NOT NULL` (1 registro = 1 unidade física); self-heal job pode mascarar dano recriando sem código.
 - [Dissídio — HE excluída da base retroativa](dissidio-he-excluded-from-base.md) — toda HE vira banco de horas, nunca é paga em dinheiro; nunca somar HE na base de diferença salarial retroativa/reajuste.
 - [VR/VT desconto de falta não misturado](folha-vr-vt-faltas-not-mixed.md) — VT de falta entra na Folha (coluna VT); VR/VA de falta NUNCA entra na Folha (só no Vale Alimentação).

@@ -1,4 +1,43 @@
 /**
+ * Rev. 4013 — **COMPRAS: REGIME DE CUSTO/RISCO (BDI) NA EQUALIZAÇÃO DE COTAÇÃO PARA OBRAS
+ * "FORNECIMENTO DE MDO" (Item 1 da lista de ~20 ajustes do docx do usuário).**
+ *
+ * Contexto: em obras com tipo de contrato "Fornecimento de MDO" (mão de obra), nem todo
+ * material comprado pela FC é custo/risco da FC — parte é repasse ao cliente ou pago pelo
+ * cliente direto. Antes, TODO material entrava no orçamento/BDI da obra e podia travar a
+ * geração da OC por estouro, mesmo quando o dinheiro não era da FC. Usuário aprovou, após
+ * discussão iterativa, resolver isso na tela de equalização de cotação ("selecionar
+ * vencedor") com 3 opções por item:
+ *
+ * - 🔵 **Cliente paga direto** — reaproveita o fluxo de Faturamento Direto (FD) já existente.
+ * - 🟡 **Empresa paga, sem risco** (NOVO) — repasse: a FC paga o fornecedor mas o custo não
+ *   é dela; não entra no BDI/orçamento; nunca trava a OC por estouro.
+ * - 🟢 **Empresa paga, com risco** (default, comportamento atual) — compra normal, conta no
+ *   custo/BDI da obra, pode travar por estouro como sempre.
+ *
+ * Implementação: novo campo `regime_custo` (varchar, default `'empresa_com_risco'`) em
+ * `compras_cotacoes` E `compras_ordens` (a OC herda o valor da cotação no momento da
+ * criação) — campo NOVO e ORTOGONAL ao `modalidade_fd` existente (FD tem semântica própria
+ * de fdValor/fdPagador/fdBdiItemId/Painel FD que não deveria ser reaproveitada aqui).
+ * `selecionarVencedorMapa` aceita o novo campo opcional; `criarOrdemDeCotacao` pula
+ * inteiramente o bloco de travamento/aprovação por estouro de orçamento quando o regime é
+ * `empresa_sem_risco` ou `cliente_paga`. Front-end: seletor de 3 opções + balão informativo
+ * grande (explica cada opção) na tela de equalização de `Cotacoes.tsx`, visível só quando a
+ * obra da cotação é `tipoContrato === "mdo"`.
+ *
+ * **Achado colateral corrigido durante a implementação:** o bloco `[ColFix]` principal em
+ * `server/_core/index.ts` roda ~60 `ALTER TABLE` dentro de UM ÚNICO `DO $$ ... EXCEPTION WHEN
+ * OTHERS THEN NULL; END $$` — se QUALQUER statement do lote falhar (ex.: um `ALTER COLUMN
+ * ... TYPE` incompatível com dado existente), TODO o lote sofre rollback silencioso, mas o
+ * `colfix_version` ainda é marcado como aplicado no fim (fora do bloco problemático). Por
+ * isso o `regime_custo` foi adicionado, ao invés de dentro do bloco gigante, em um bloco
+ * PRÓPRIO isolado com try/catch dedicado (`[ColFix Rev.4013]`) — padrão a seguir para
+ * qualquer ALTER novo daqui pra frente. Ver `.agents/memory/colfix-do-block-silent-rollback.md`.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4012 — **ALMOXARIFADO: (1) 2 ITENS COM EMPRESA ERRADA CORRIGIDOS, (2) 11 ITENS
  * DUPLICADOS ("Bacia com Caixa Acoplada Ravena") UNIFICADOS EM 1, (3) FORMATO DE QUANTIDADE
  * CORRIGIDO PARA PADRÃO BRASILEIRO.**

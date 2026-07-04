@@ -4730,7 +4730,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v4011-2026-07-04-especificacao-assinatura-devolucao";
+    const COLFIX_VERSION = "v4013b-2026-07-04-regime-custo-cotacao-isolado";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -5026,6 +5026,8 @@ Regras:
             ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS fd_bdi_item_id INTEGER;
             ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS criado_por_id INTEGER;
             ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS criado_por_nome TEXT;
+            ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS regime_custo VARCHAR(20) DEFAULT 'empresa_com_risco';
+            ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS regime_custo VARCHAR(20) DEFAULT 'empresa_com_risco';
             ALTER TABLE smo_solicitacoes ADD COLUMN IF NOT EXISTS regime_contratacao VARCHAR(20) DEFAULT 'experiencia';
             ALTER TABLE compras_solicitacoes ADD COLUMN IF NOT EXISTS criado_por_id INTEGER;
             ALTER TABLE compras_solicitacoes ADD COLUMN IF NOT EXISTS criado_por_nome TEXT;
@@ -6296,6 +6298,18 @@ Regras:
         `);
         console.log(`[ColFix Rev.4010] padronizar_nome_material() criada; ${backfill.rowCount ?? backfill.rows?.length ?? 0} nome(s) de material padronizado(s).`);
       } catch (e: any) { console.warn("[ColFix Rev.4010] padronização de nomes falhou (não-fatal):", e?.message ?? e); }
+
+      // Rev. 4013 — regime_custo (BDI/risco) em compras_cotacoes/compras_ordens.
+      // Isolado em bloco PRÓPRIO (fora do DO $$ ... EXCEPTION WHEN OTHERS THEN NULL
+      // gigante acima) porque QUALQUER falha em UMA das ~60 declarações daquele
+      // bloco faz rollback SILENCIOSO de TODAS (inclusive esta), mesmo com
+      // colfix_version marcado como aplicado.
+      try {
+        const _db4013 = (await getDb())!;
+        await _db4013.$client.query(`ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS regime_custo VARCHAR(20) DEFAULT 'empresa_com_risco'`);
+        await _db4013.$client.query(`ALTER TABLE compras_ordens ADD COLUMN IF NOT EXISTS regime_custo VARCHAR(20) DEFAULT 'empresa_com_risco'`);
+        console.log("[ColFix Rev.4013] regime_custo garantido em compras_cotacoes/compras_ordens.");
+      } catch (e: any) { console.error("[ColFix Rev.4013] FALHA regime_custo:", e?.message ?? e); }
 
       // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos
       import("../services/startupCache").then(({ setCache }) =>

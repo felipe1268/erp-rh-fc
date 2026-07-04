@@ -6730,6 +6730,10 @@ export const comprasCotacoes = pgTable("compras_cotacoes", {
   fdValor:          numeric("fd_valor", { precision: 14, scale: 2 }),
   fdPagador:        varchar("fd_pagador", { length: 20 }),
   fdBdiItemId:      integer("fd_bdi_item_id"),
+  // Rev. 4013 — quem assume o custo/risco deste item na equalização,
+  // aplicável a obras "Fornecimento de MDO" (gestão de material).
+  // 'empresa_com_risco' (padrão, comportamento de sempre) | 'empresa_sem_risco' (FC paga, mas é repasse, sem risco/BDI) | 'cliente_paga' (Faturamento Direto)
+  regimeCusto:      varchar("regime_custo", { length: 20 }).default("empresa_com_risco"),
   criadoPorId:      integer("criado_por_id"),
   criadoPorNome:    varchar("criado_por_nome", { length: 255 }),
   aprovadoPorId:    integer("aprovado_por_id"),
@@ -6867,6 +6871,8 @@ export const comprasOrdens = pgTable("compras_ordens", {
   fdAprovadoEm:       timestamp("fd_aprovado_em", { mode: "string" }),
   fdAprovadoPor:      varchar("fd_aprovado_por", { length: 255 }),
   fdBdiItemId:        integer("fd_bdi_item_id"),
+  // Rev. 4013 — herdado da cotação: quem assume o custo/risco desta OC.
+  regimeCusto:        varchar("regime_custo", { length: 20 }).default("empresa_com_risco"),
   vehicleId:          integer("vehicle_id"),
   maintenanceId:      integer("maintenance_id"),
   criadoPorId:        integer("criado_por_id"),

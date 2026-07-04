@@ -1116,6 +1116,7 @@ export default function Cotacoes() {
       prevShowDetalhe.current = showDetalhe;
       setCobertoPorRisco(false); setShowRealocacao(false); setIaExtracao(null); setIaFileBuffer(null); setIaProgress(null); setIaJobId(null); setIaPollingFornId(null); setShowPropostas(null); setIaTipoProposta("complemento");
       setSemVerbaAutorizado(null); setShowSemVerbaDialog(false); setSemVerbaAdminEmail(""); setSemVerbaAdminSenha(""); setSemVerbaJustificativa(""); setSemVerbaAba("realocacao");
+      setRegimeCustoSel("empresa_com_risco"); setShowRegimeInfo(null);
     }
   }, [showDetalhe]);
 
@@ -1301,6 +1302,29 @@ export default function Cotacoes() {
   });
   const [showFdCotDialog, setShowFdCotDialog] = useState(false);
   const [fdCotForm, setFdCotForm] = useState({ modalidade: "fd_cliente" as "fd_cliente" | "fd_fc", valor: "" });
+  // Rev. 4013 — regime de custo/risco na equalização (só p/ obras "Fornecimento de MDO").
+  const [regimeCustoSel, setRegimeCustoSel] = useState<"empresa_com_risco" | "empresa_sem_risco" | "cliente_paga">("empresa_com_risco");
+  const [showRegimeInfo, setShowRegimeInfo] = useState<null | "empresa_com_risco" | "empresa_sem_risco" | "cliente_paga">(null);
+  const REGIME_CUSTO_INFO: Record<"empresa_com_risco" | "empresa_sem_risco" | "cliente_paga", { titulo: string; ativoClasse: string; badgeClasse: string; texto: string }> = {
+    cliente_paga: {
+      titulo: "🔵 Cliente paga direto",
+      ativoClasse: "border-blue-400 bg-blue-50 ring-1 ring-blue-300",
+      badgeClasse: "bg-blue-100 text-blue-700 border-blue-300",
+      texto: "O cliente paga o fornecedor diretamente (Faturamento Direto). Você só cota e separa o material. Não conta no seu orçamento nem no seu risco — nunca trava a Ordem de Compra nem pede aprovação de estouro.",
+    },
+    empresa_sem_risco: {
+      titulo: "🟡 Empresa paga, sem risco (gestão de material)",
+      ativoClasse: "border-amber-400 bg-amber-50 ring-1 ring-amber-300",
+      badgeClasse: "bg-amber-100 text-amber-700 border-amber-300",
+      texto: "A empresa compra e paga o fornecedor, mas repassa o valor ao cliente. Não conta no seu orçamento/BDI — nunca trava a Ordem de Compra nem pede aprovação de estouro. Use quando o material é administrado por você, mas o custo não é seu.",
+    },
+    empresa_com_risco: {
+      titulo: "🟢 Empresa paga, com risco (custo normal)",
+      ativoClasse: "border-emerald-400 bg-emerald-50 ring-1 ring-emerald-300",
+      badgeClasse: "bg-emerald-100 text-emerald-700 border-emerald-300",
+      texto: "Compra normal da empresa: entra no seu custo, orçamento e BDI da obra, como sempre. Se estourar o orçamento previsto, pode travar a Ordem de Compra e pedir aprovação, como já acontece hoje.",
+    },
+  };
   const splitQ = trpc.compras.getCotacaoSplitMatMdo.useQuery(
     { cotacaoId: showDetalhe!, companyId },
     { enabled: showDetalhe !== null && showFdCotDialog }
@@ -4663,6 +4687,28 @@ export default function Cotacoes() {
                     );
                   })()}
 
+                  {/* Rev. 4013 — regime de custo/risco, só p/ obras "Fornecimento de MDO" */}
+                  {(detalheFullscreen as any).obraTipoContrato === "mdo" && !melhorForn?.selecionado && (
+                    <div className="bg-white rounded-xl border border-amber-200 shadow-sm p-4">
+                      <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-2">Este item é custo de quem?</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {(["cliente_paga", "empresa_sem_risco", "empresa_com_risco"] as const).map(opt => {
+                          const info = REGIME_CUSTO_INFO[opt];
+                          const ativo = regimeCustoSel === opt;
+                          return (
+                            <button key={opt} type="button"
+                              onClick={() => { setRegimeCustoSel(opt); setShowRegimeInfo(opt); }}
+                              className={`text-left rounded-lg border p-2.5 transition-colors ${ativo ? info.ativoClasse : "border-gray-200 bg-gray-50 hover:bg-gray-100"}`}
+                            >
+                              <p className="text-xs font-semibold text-gray-800">{info.titulo}</p>
+                              <p className="text-[10px] text-gray-500 mt-0.5 line-clamp-2">{info.texto}</p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Melhor fornecedor banner */}
                   {melhorForn && (
                     <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between gap-4">
@@ -4682,7 +4728,7 @@ export default function Cotacoes() {
                             {cancelarVencedor.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />} Cancelar Seleção
                           </Button>
                         )}
-                        <Button onClick={() => selecionarVencedor.mutate({ cotacaoId: showDetalhe!, fornecedorId: melhorForn.fornecedorId })}
+                        <Button onClick={() => selecionarVencedor.mutate({ cotacaoId: showDetalhe!, fornecedorId: melhorForn.fornecedorId, regimeCusto: regimeCustoSel })}
                           disabled={selecionarVencedor.isPending || melhorForn.selecionado}
                           className="bg-emerald-600 hover:bg-emerald-500 text-white gap-2 text-sm">
                           {melhorForn.selecionado ? <><CheckCircle className="h-4 w-4" /> Vencedor Selecionado</> : <><Trophy className="h-4 w-4" /> Selecionar como Vencedor</>}
@@ -4893,7 +4939,7 @@ export default function Cotacoes() {
                                           </span>
                                         ) : detalheFullscreen?.status !== "aprovada" && (
                                           <button
-                                            onClick={(e) => { e.stopPropagation(); selecionarVencedor.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId }); }}
+                                            onClick={(e) => { e.stopPropagation(); selecionarVencedor.mutate({ cotacaoId: showDetalhe!, fornecedorId: p.fornecedorId, regimeCusto: regimeCustoSel }); }}
                                             disabled={selecionarVencedor.isPending}
                                             className="flex items-center gap-0.5 text-[9px] normal-case font-medium bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full border border-blue-200 hover:bg-blue-100 transition-colors"
                                             title="Selecionar este fornecedor como vencedor"
@@ -6059,6 +6105,28 @@ export default function Cotacoes() {
                 </Button>
               </div>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Rev. 4013 — balão informativo do regime de custo/risco */}
+        <Dialog open={showRegimeInfo !== null} onOpenChange={(v) => { if (!v) setShowRegimeInfo(null); }}>
+          <DialogContent className="border-gray-200 max-w-md" style={{ background: '#ffffff', color: '#111827', zIndex: 9999 }}>
+            {showRegimeInfo && (() => {
+              const info = REGIME_CUSTO_INFO[showRegimeInfo];
+              return (
+                <>
+                  <DialogHeader>
+                    <DialogTitle className="text-gray-900 text-lg">{info.titulo}</DialogTitle>
+                  </DialogHeader>
+                  <div className={`rounded-lg border p-4 ${info.badgeClasse}`}>
+                    <p className="text-sm leading-relaxed">{info.texto}</p>
+                  </div>
+                  <div className="flex justify-end pt-2">
+                    <Button onClick={() => setShowRegimeInfo(null)} className="bg-gray-800 hover:bg-gray-700 text-white">Entendi</Button>
+                  </div>
+                </>
+              );
+            })()}
           </DialogContent>
         </Dialog>
 

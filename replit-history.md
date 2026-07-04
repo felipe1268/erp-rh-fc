@@ -1,3 +1,5 @@
+- **Rev. 4006** — **ALMOXARIFADO: PACOTE DE 6 CORREÇÕES E MELHORIAS (usuário: "quero que você faça tudo").** Código automático de material (`criarItemAlmoxarifadoComCodigo`, `pg_advisory_xact_lock`) plugado nos 5 pontos que criam material novo; matching de duplicata NF/OC melhorado; Saída de Insumos aceita busca de terceiro; Fechar Dia tratado; bug "Devolver Todas" corrigido; Inventário ganhou "Corrigir" + Empréstimo ganhou observação. ZERO DELETE · ZERO ALTER destrutivo (na época).
+
 - **Rev. 4004** — COMPRAS/COTAÇÕES: PDF e Excel do Mapa de Cotação não traziam a linha de total por fornecedor; `gerarPdfCotacao`/`exportarExcelCotacao` passaram a reaproveitar `getFornTotal`/`metaGrandTotal`/`qtdGrandTotal` pra gerar a linha de total. ZERO DELETE · ZERO ALTER.
 
 - **Rev. 4003** — **COMPRAS/COTAÇÕES: "EXPORTAR PDF" GERAVA PÁGINA EM BRANCO — BLOQUEAVA ENVIO DE COTAÇÃO PARA CLIENTE APROVAR ITEM A ITEM; ADICIONADO TAMBÉM "EXPORTAR EXCEL".** Causa: `window.print()` sobre `<div className="fixed inset-0 ...">` (mesma causa-raiz de `print-dialog-fixed-clip`); fix via HTML autônomo em `window.open`+`document.write`. ZERO DELETE · ZERO ALTER.
