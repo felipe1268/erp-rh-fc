@@ -989,6 +989,7 @@ export default function Cotacoes() {
   const [editTipoPag, setEditTipoPag] = useState<Record<number, string>>({});
   const [editFreteTipo, setEditFreteTipo] = useState<Record<number, string>>({});
   const [editFormaPag, setEditFormaPag] = useState<Record<number, string>>({});
+  const [editCartaoId, setEditCartaoId] = useState<Record<number, number | null>>({});
   const [condModalFornId, setCondModalFornId] = useState<number | null>(null);
   const [condModo, setCondModo] = useState<Record<number, "padrao" | "custom" | "fechamento">>({});
   // Rev. 1996 — MDO pura: usuário escolhe explicitamente entre "medicao" (>30d) ou "parcelado" (≤30d).
@@ -1603,6 +1604,7 @@ export default function Cotacoes() {
 
       const tipoPagInicial: Record<number, string> = {};
       const formaPagInicial: Record<number, string> = {};
+      const cartaoIdInicial: Record<number, number | null> = {};
       const freteTipoInicial: Record<number, string> = {};
       const valorFreteInicial: Record<number, string> = {};
       const transportadoraInicial: Record<number, string> = {};
@@ -1612,6 +1614,7 @@ export default function Cotacoes() {
         condInicial[p.fornecedorId] = p.condicaoPagamento ?? "";
         tipoPagInicial[p.fornecedorId] = (p as any).tipoPagamento ?? "";
         formaPagInicial[p.fornecedorId] = (p as any).formaPagamento ?? "";
+        cartaoIdInicial[p.fornecedorId] = (p as any).cartaoId ?? null;
         freteTipoInicial[p.fornecedorId] = (p as any).freteTipo ?? "cif";
         valorFreteInicial[p.fornecedorId] = (p as any).valorFrete ? String(parseFloat((p as any).valorFrete)) : "0";
         transportadoraInicial[p.fornecedorId] = (p as any).transportadora ?? "";
@@ -1624,6 +1627,7 @@ export default function Cotacoes() {
       setEditCondPag(condInicial);
       setEditTipoPag(tipoPagInicial);
       setEditFormaPag(formaPagInicial);
+      setEditCartaoId(cartaoIdInicial);
       setEditFreteTipo(freteTipoInicial);
       setEditValorFrete(valorFreteInicial);
       setEditTransportadora(transportadoraInicial);
@@ -1646,6 +1650,7 @@ export default function Cotacoes() {
     const persistedCond = p.condicaoPagamento ?? "";
     const persistedTipo = p.tipoPagamento ?? "";
     const persistedForma = p.formaPagamento ?? "";
+    const persistedCartaoId = (p as any).cartaoId ?? null;
     const persistedFreteTipo = p.freteTipo ?? "cif";
     const persistedValorFrete = p.valorFrete ? String(parseFloat(p.valorFrete)) : "0";
     const persistedTransp = p.transportadora ?? "";
@@ -1662,6 +1667,7 @@ export default function Cotacoes() {
     setEditCondPag(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedCond });
     setEditTipoPag(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedTipo });
     setEditFormaPag(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: formaEfetiva });
+    setEditCartaoId(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedCartaoId });
     setEditFreteTipo(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedFreteTipo });
     setEditValorFrete(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedValorFrete });
     setEditTransportadora(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedTransp });
@@ -2271,6 +2277,7 @@ export default function Cotacoes() {
         prazoEntregaDias: prazoVal,
         numeroParcelas: numParcelas,
         moduloMedicao: editModuloMedicao[fId] || undefined,
+        cartaoId: editFormaPag[fId] === "cartao" ? (editCartaoId[fId] ?? null) : null,
       }, {
         onSuccess: () => {
           setCondModalFornId(null);
@@ -2410,7 +2417,12 @@ export default function Cotacoes() {
                   </div>
                   {editFormaPag[fId] === "cartao" && (
                     <div className="mt-4">
-                      <CartaoDisponivelCard companyId={companyId} />
+                      <CartaoDisponivelCard
+                        companyId={companyId}
+                        valorCompra={fornTotal || null}
+                        cartaoIdSelecionado={editCartaoId[fId] ?? null}
+                        onSelecionarCartao={(cartaoId) => setEditCartaoId(prev => ({ ...prev, [fId]: cartaoId }))}
+                      />
                     </div>
                   )}
                 </section>

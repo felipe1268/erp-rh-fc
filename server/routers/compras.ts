@@ -6226,6 +6226,10 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       prazoEntregaDias: z.number().optional(),
       observacoes: z.string().optional(),
       moduloMedicao: z.string().optional(),
+      // Rev. 4019 — cartão FC escolhido (sugerido ou sobreposto pelo usuário) quando
+      // formaPagamento="cartao"; guardado já na Cotação p/ herdar na OC gerada e permitir
+      // o match automático item-da-fatura↔OC na conciliação do cartão.
+      cartaoId: z.number().nullable().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       await _assertCompanyAccess(ctx.user, input.companyId);
@@ -6240,6 +6244,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       if (input.prazoEntregaDias !== undefined) updateData.prazoEntregaDias = input.prazoEntregaDias;
       if (input.observacoes !== undefined) updateData.observacoes = input.observacoes;
       if (input.moduloMedicao !== undefined) updateData.moduloMedicao = input.moduloMedicao || null;
+      if (input.cartaoId !== undefined) updateData.cartaoId = input.cartaoId;
       if (Object.keys(updateData).length > 0) {
         if (input.fornecedorId === 0) {
           await db.update(comprasCotacoes)
@@ -8170,6 +8175,9 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         condicaoPagamento: fornInfo?.condicaoPagamento ?? cot.condicaoPagamento ?? null,
         tipoPagamento: fornInfo?.tipoPagamento ?? cot.tipoPagamento ?? null,
         formaPagamento: (fornInfo as any)?.formaPagamento ?? (cot as any).formaPagamento ?? null,
+        // Rev. 4019 — herda o cartão FC escolhido na Cotação, pra permitir o match
+        // automático item-da-fatura↔OC na conciliação do cartão.
+        cartaoId: (fornInfo as any)?.cartaoId ?? (cot as any).cartaoId ?? null,
         numeroParcelas: fornInfo?.numeroParcelas ?? cot.numeroParcelas ?? 1,
         // Rev. 4016 — Item 9: OC gerada a partir de cotação herda o anexo
         // da proposta do fornecedor vencedor (arquivoUrl/arquivoNome já
@@ -8629,6 +8637,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         const condPag = (fornPart as any).condicaoPagamento ?? cot.condicaoPagamento ?? null;
         const formaPag = (fornPart as any).formaPagamento ?? (cot as any).formaPagamento ?? null;
         const tipoPag = (fornPart as any).tipoPagamento ?? cot.tipoPagamento ?? null;
+        const cartaoIdPag = (fornPart as any).cartaoId ?? (cot as any).cartaoId ?? null;
         const numeroParcelas = fornPart.numeroParcelas ?? cot.numeroParcelas ?? 1;
         const freteValor = n((fornPart as any).valorFrete ?? 0);
         const freteTipo = (fornPart as any).freteTipo ?? "cif";
@@ -8685,6 +8694,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           condicaoPagamento: condPag,
           tipoPagamento: tipoPag,
           formaPagamento: formaPag,
+          cartaoId: cartaoIdPag,
           numeroParcelas,
           dataEntregaPrevista,
           pendenteCoberturaOrcamentaria: false,
@@ -8903,6 +8913,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       numeroNf: z.string().optional(),
       formaPagamento: z.string().optional(),
       contaBancariaId: z.number().int().optional(),
+      cartaoId: z.number().int().nullable().optional(),
       condicaoPagamento: z.string().min(1, "Condição de pagamento é obrigatória"),
       numeroParcelas: z.number().int().min(1).max(60).optional(),
       parcelasJson: z.array(z.object({
@@ -8964,6 +8975,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         numeroNf: input.numeroNf ?? null,
         formaPagamento: input.formaPagamento ?? null,
         contaBancariaId: input.contaBancariaId ?? null,
+        cartaoId: input.cartaoId ?? null,
         numeroParcelas: input.numeroParcelas ?? 1,
         parcelasJson: input.parcelasJson ? (input.parcelasJson as any) : null,
         observacoes: input.observacoes,
@@ -9009,6 +9021,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       numeroNf: z.string().optional(),
       formaPagamento: z.string().optional(),
       contaBancariaId: z.number().nullable().optional(),
+      cartaoId: z.number().int().nullable().optional(),
       condicaoPagamento: z.string().optional(),
       numeroParcelas: z.number().optional(),
       parcelasJson: z.array(z.object({ numero: z.number(), vencimento: z.string().optional(), valor: z.number() })).optional(),
@@ -9054,6 +9067,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         numeroNf: input.numeroNf ?? null,
         formaPagamento: input.formaPagamento ?? null,
         contaBancariaId: input.contaBancariaId ?? null,
+        cartaoId: input.cartaoId ?? null,
         condicaoPagamento: input.condicaoPagamento ?? "",
         numeroParcelas: input.numeroParcelas ?? 1,
         parcelasJson: input.parcelasJson ? (input.parcelasJson as any) : null,
@@ -9131,6 +9145,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
       numeroNf: z.string().optional(),
       formaPagamento: z.string().optional(),
       contaBancariaId: z.number().nullable().optional(),
+      cartaoId: z.number().int().nullable().optional(),
       condicaoPagamento: z.string().optional(),
       numeroParcelas: z.number().optional(),
       parcelasJson: z.array(z.object({ numero: z.number(), vencimento: z.string().optional(), valor: z.number() })).optional(),
@@ -9194,6 +9209,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         numeroNf: input.numeroNf ?? oc.numeroNf ?? null,
         formaPagamento: input.formaPagamento ?? (oc as any).formaPagamento ?? null,
         contaBancariaId: input.contaBancariaId ?? (oc as any).contaBancariaId ?? null,
+        cartaoId: input.cartaoId !== undefined ? input.cartaoId : (oc as any).cartaoId ?? null,
         condicaoPagamento: condPagFinal,
         numeroParcelas: input.numeroParcelas ?? oc.numeroParcelas ?? 1,
         parcelasJson: input.parcelasJson ? (input.parcelasJson as any) : (oc as any).parcelasJson,

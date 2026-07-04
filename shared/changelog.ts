@@ -1,4 +1,43 @@
 /**
+ * Rev. 4019 — **COMPRAS: SUGESTÃO AUTOMÁTICA DE CARTÃO DE CRÉDITO NA COTAÇÃO/OC + VÍNCULO
+ * AUTOMÁTICO OC↔FATURA DO CARTÃO PARA CONCILIAÇÃO.**
+ *
+ * PROBLEMA: ao escolher "Cartão" como forma de pagamento numa Cotação/OC de Compras, o usuário
+ * não tinha nenhuma indicação de QUAL cartão da empresa usar (dia de compra vs fechamento/
+ * vencimento da fatura, limite disponível), e a compra paga no cartão não ficava pré-vinculada
+ * ao item de fatura correspondente na tela financeira do cartão — a conciliação bancária tinha
+ * que casar manualmente compra×fatura depois.
+ *
+ * SOLUÇÃO:
+ * - Novo campo `escopo` em `financial_cartoes` ("fc" = cartão de titularidade da empresa | "local"
+ *   = cartão de obra/particular). Só cartões `escopo="fc"` entram na sugestão de Compras — cartão
+ *   local nunca aparece como sugestão (regra de negócio explícita do pedido).
+ * - `cartao.resumoParaCompra` (novo procedure): dado `companyId` + `valorCompra`, retorna os
+ *   cartões elegíveis (`escopo="fc"`) ranqueados pela melhor janela de ciclo (compra hoje cai em
+ *   qual fatura, quantos dias até o vencimento) e pelo limite disponível estimado (limite menos
+ *   soma de faturas com `total > pagamentos`, aproximação transparente já usada em telas
+ *   anteriores). Componente `CartaoDisponivelCard` exibe a recomendação em Cotação/OC quando
+ *   "Cartão" é selecionado; sugestão é só informativa — usuário sempre pode trocar manualmente.
+ * - Campo `cartaoId` adicionado a `compras_cotacoes`, `compras_ordens` e
+ *   `compras_cotacao_fornecedores`; herdado automaticamente da Cotação para a(s) OC(s) geradas
+ *   (`criarOrdemDeCotacao`, incluindo o caminho de OC parcial por pacote) e também aceito em
+ *   `criarOrdemManual`/`salvarRascunhoOrdem`/`confirmarRascunhoOrdem`.
+ * - Vínculo automático OC↔fatura: `compra_oc_id`/`compra_oc_numero` adicionados a
+ *   `financial_cartao_itens`; ao importar fatura do cartão (`importarConfirmar`), cada item é
+ *   comparado contra as OCs em aberto pagas naquele cartão (valor + janela de data) e, havendo
+ *   match, grava o vínculo automaticamente — pré-classifica a conciliação sem exigir toque manual.
+ *   `classificarItem` também aceita definir/limpar esse vínculo manualmente. Tela
+ *   "Financeiro > Cartão de Crédito" ganhou: (1) seletor de Escopo (FC/Local) no cadastro do
+ *   cartão, (2) coluna "OC vinculada" na lista de itens da fatura mostrando o badge "OC nº" quando
+ *   houve match automático.
+ *
+ * "SOS" no pedido original do usuário confirmado como typo de "OS ou OC" — interpretação de
+ * match contra Ordem de Compra está correta.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo (só `ADD COLUMN IF NOT EXISTS` nas 4 tabelas citadas).
+ */
+
+/**
  * Rev. 4018 — **COMPRAS: BUG DE CASA DECIMAL "MUDANDO SOZINHA" NA QUANTIDADE — CAUSA-RAIZ E FIX
  * (Item 6) + CONFIRMAÇÃO/FECHAMENTO DOS ITENS 1 (BDI) E 4 (UPLOAD IA NO CADASTRO DE ITEM) DOS
  * ~20 AJUSTES DO DOCX.**

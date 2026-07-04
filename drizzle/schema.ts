@@ -6719,6 +6719,8 @@ export const comprasCotacoes = pgTable("compras_cotacoes", {
   condicaoPagamento:varchar("condicao_pagamento", { length: 100 }),
   tipoPagamento:    varchar("tipo_pagamento", { length: 50 }),
   formaPagamento:   varchar("forma_pagamento", { length: 30 }),
+  // Rev. 4019 — cartão de crédito escolhido/sugerido quando formaPagamento='cartao'.
+  cartaoId:         integer("cartao_id"),
   numeroParcelas:   integer("numero_parcelas").default(1),
   prazoEntregaDias: integer("prazo_entrega_dias"),
   status:           varchar({ length: 30 }).notNull().default("pendente"),
@@ -6776,6 +6778,7 @@ export const comprasCotacaoFornecedores = pgTable("compras_cotacao_fornecedores"
   moduloMedicao:    varchar("modulo_medicao", { length: 30 }),
   isEstoque:        boolean("is_estoque").default(false),
   almoxarifadoOrigemId: integer("almoxarifado_origem_id"),
+  cartaoId:         integer("cartao_id"),
   criadoEm:         timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
 });
 
@@ -6833,6 +6836,8 @@ export const comprasOrdens = pgTable("compras_ordens", {
   financialEntryId:   integer("financial_entry_id"),
   tipoPagamento:      varchar("tipo_pagamento", { length: 50 }),
   formaPagamento:     varchar("forma_pagamento", { length: 30 }),
+  // Rev. 4019 — cartão de crédito escolhido/sugerido quando formaPagamento='cartao'.
+  cartaoId:           integer("cartao_id"),
   numeroParcelas:     integer("numero_parcelas").default(1),
   parcelasJson:       jsonb("parcelas_json"),
   contaBancariaId:    integer("conta_bancaria_id"),
@@ -7426,6 +7431,10 @@ export const financialCartoes = pgTable("financial_cartoes", {
   final4: varchar("final4", { length: 8 }),
   titular: varchar("titular", { length: 255 }),
   tipoPessoa: varchar("tipo_pessoa", { length: 4 }).default("PJ"),
+  // Rev. 4019 — escopo do cartão: 'fc' (uso corporativo, entra na sugestão
+  // automática de melhor cartão em Cotação/OC) | 'local' (obra/pessoal/terceiro,
+  // NUNCA sugerido automaticamente, só cadastro/controle).
+  escopo: varchar("escopo", { length: 10 }).default("fc"),
   status: varchar("status", { length: 20 }).default("ativo"),
   diaFechamento: integer("dia_fechamento"),
   diaVencimento: integer("dia_vencimento"),
@@ -7487,6 +7496,11 @@ export const financialCartaoItens = pgTable("financial_cartao_itens", {
   categoriaNome: varchar("categoria_nome", { length: 255 }),
   categoriaSugerida: varchar("categoria_sugerida", { length: 255 }),
   statusClassificacao: text("status_classificacao").default("sugerido").notNull(),
+  // Rev. 4019 — vínculo com a Cotação/OC de Compras que gerou a compra no
+  // cartão (quando encontrado automaticamente por valor+data+cartão), pra
+  // acelerar a conciliação: item já chega classificado (obra) e rastreável.
+  compraOcId: integer("compra_oc_id"),
+  compraOcNumero: varchar("compra_oc_numero", { length: 20 }),
   excluidoEm: timestamp("excluido_em", { mode: "string" }),
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),

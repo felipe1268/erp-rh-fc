@@ -133,6 +133,25 @@ function ativoDeStatus(s: StatusCartao | undefined | null): number {
   return s === "cancelado" || s === "inativo" ? 0 : 1;
 }
 
+// Rev. 4019 — escopo do cartão: 'fc' entra na sugestão automática de melhor
+// cartão em Cotação/OC; 'local' (obra/pessoal/terceiro) NUNCA entra.
+const ESCOPO_CARTAO = ["fc", "local"] as const;
+
+// Dado dia de fechamento/vencimento e uma data de referência (hoje), calcula quantos
+// dias de "float" uma compra feita HOJE tem até o vencimento da fatura em que ela cai.
+// Mesma convenção de aproximação (mês=30 dias no gap fechamento→vencimento) usada em
+// calcMelhorDataCompra (FinanceiroCartaoCredito.tsx) — não reinventar a fórmula.
+function diasFloatSeComprarHoje(diaFechamento: number, diaVencimento: number, hoje: Date): number {
+  const diaHoje = hoje.getUTCDate();
+  // Próximo fechamento (hoje incluso): se ainda não fechou este mês, fecha este mês;
+  // senão, fecha no mês seguinte.
+  const fechaEsteMs = diaHoje <= diaFechamento;
+  const fechamento = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth() + (fechaEsteMs ? 0 : 1), Math.min(diaFechamento, 28)));
+  const gap = diaVencimento > diaFechamento ? diaVencimento - diaFechamento : diaVencimento + 30 - diaFechamento;
+  const vencimento = new Date(fechamento.getTime() + gap * 86400000);
+  return Math.round((vencimento.getTime() - hoje.getTime()) / 86400000);
+}
+
 // ─────────────────────────── De-para (p/ sugestão da IA) ───────────────────────────
 async function carregarCartoes(db: any, companyId: number) {
   const res = await dbExecute(db,
@@ -363,7 +382,7 @@ export const cartaoRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const res = await dbExecute(db,
       `SELECT id, company_id AS "companyId", banco, bandeira, final4,
-              titular, tipo_pessoa AS "tipoPessoa",
+              titular, tipo_pessoa AS "tipoPessoa", COALESCE(escopo, 'fc') AS escopo,
               CASE WHEN status IS NOT NULL THEN status WHEN ativo = 0 THEN 'inativo' ELSE 'ativo' END AS status, dia_fechamento AS "diaFechamento",
               dia_vencimento AS "diaVencimento", limite, ativo, observacao,
               created_at AS "createdAt"
@@ -387,6 +406,7 @@ export const cartaoRouter = router({
     final4: z.string().max(8).optional(),
     titular: z.string().max(255).optional(),
     tipoPessoa: z.enum(["PF", "PJ"]).default("PJ"),
+    escopo: z.enum(ESCOPO_CARTAO).default("fc"),
     status: z.enum(STATUS_CARTAO).default("ativo"),
     diaFechamento: z.number().int().min(1).max(31).nullable().optional(),
     diaVencimento: z.number().int().min(1).max(31).nullable().optional(),
@@ -398,13 +418,13 @@ export const cartaoRouter = router({
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const res = await dbExecute(db,
       `INSERT INTO financial_cartoes
-         (company_id, banco, bandeira, final4, titular, tipo_pessoa, status,
+         (company_id, banco, bandeira, final4, titular, tipo_pessoa, escopo, status,
           dia_fechamento, dia_vencimento, limite, ativo, observacao, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW(),NOW()) RETURNING id`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW(),NOW()) RETURNING id`,
       [
         input.companyId, input.banco ?? null, input.bandeira ?? null,
         input.final4 ? soDigitos(input.final4).slice(-4) : null,
-        input.titular ?? null, input.tipoPessoa, input.status,
+        input.titular ?? null, input.tipoPessoa, input.escopo, input.status,
         input.diaFechamento ?? null, input.diaVencimento ?? null,
         input.limite ?? null, ativoDeStatus(input.status), input.observacao ?? null,
       ]);
@@ -419,6 +439,7 @@ export const cartaoRouter = router({
     final4: z.string().max(8).nullable().optional(),
     titular: z.string().max(255).nullable().optional(),
     tipoPessoa: z.enum(["PF", "PJ"]).optional(),
+    escopo: z.enum(ESCOPO_CARTAO).optional(),
     status: z.enum(STATUS_CARTAO).optional(),
     diaFechamento: z.number().int().min(1).max(31).nullable().optional(),
     diaVencimento: z.number().int().min(1).max(31).nullable().optional(),
@@ -437,6 +458,7 @@ export const cartaoRouter = router({
     if (input.final4 !== undefined) add("final4", input.final4 ? soDigitos(input.final4).slice(-4) : null);
     if (input.titular !== undefined) add("titular", input.titular);
     if (input.tipoPessoa !== undefined) add("tipo_pessoa", input.tipoPessoa);
+    if (input.escopo !== undefined) add("escopo", input.escopo);
     if (input.status !== undefined) { add("status", input.status); add("ativo", ativoDeStatus(input.status)); }
     if (input.diaFechamento !== undefined) add("dia_fechamento", input.diaFechamento);
     if (input.diaVencimento !== undefined) add("dia_vencimento", input.diaVencimento);
@@ -471,14 +493,20 @@ export const cartaoRouter = router({
   // crédito" for selecionado como forma de pagamento). "Comprometido" =
   // soma das faturas com saldo em aberto (total > pagamentos) — aproximação
   // transparente, já que não existe status explícito de fatura paga/aberta.
+  // Rev. 4019 — Item novo do docx: sugerir automaticamente o MELHOR cartão FC
+  // (nunca "local") considerando (1) melhor data de compra em relação ao ciclo
+  // de fechamento/vencimento (mais dias de float) e (2) limite disponível ≥
+  // valor da compra, quando informado. Usuário sempre pode sobrepor a sugestão.
   resumoParaCompra: protectedProcedure.input(z.object({
     companyId: z.number(),
+    valorCompra: z.number().nullable().optional(),
   })).query(async ({ input, ctx }) => {
     await assertCompanyAccess(ctx.user, input.companyId);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
     const res = await dbExecute(db,
       `SELECT c.id, c.banco, c.bandeira, c.final4, c.titular, c.tipo_pessoa AS "tipoPessoa",
+              COALESCE(c.escopo, 'fc') AS escopo,
               c.dia_fechamento AS "diaFechamento", c.dia_vencimento AS "diaVencimento",
               c.limite,
               COALESCE((
@@ -490,19 +518,46 @@ export const cartaoRouter = router({
               ), 0) AS comprometido
          FROM financial_cartoes c
         WHERE c.company_id=$1 AND c.excluido_em IS NULL AND c.ativo=1
+          AND COALESCE(c.escopo, 'fc') = 'fc'
+          AND COALESCE(c.status, 'ativo') = 'ativo'
         ORDER BY c.banco NULLS LAST, c.final4 NULLS LAST, c.id DESC`,
       [input.companyId]);
-    return res.rows.map((c: any) => {
+
+    const hoje = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()));
+    const valorCompra = input.valorCompra ?? null;
+
+    const cartoes = res.rows.map((c: any) => {
       const limite = c.limite != null ? parseFloat(c.limite) : null;
       const comprometido = parseFloat(c.comprometido ?? "0");
+      const limiteDisponivel = limite != null ? Math.max(limite - comprometido, 0) : null;
+      const diasFloat = (c.diaFechamento != null && c.diaVencimento != null)
+        ? diasFloatSeComprarHoje(Number(c.diaFechamento), Number(c.diaVencimento), hoje)
+        : null;
+      const cabeNoLimite = valorCompra == null || limiteDisponivel == null ? null : limiteDisponivel >= valorCompra;
       return {
         ...c,
         limite,
         comprometido,
-        limiteDisponivel: limite != null ? Math.max(limite - comprometido, 0) : null,
+        limiteDisponivel,
+        diasFloat,
+        cabeNoLimite,
         alertaPessoal: String(c.tipoPessoa || "").toUpperCase() === "PF",
       };
     });
+
+    // Recomendado: entre os que CABEM no limite (ou todos, se valorCompra não veio,
+    // ou se nenhum cabe — mostra o melhor mesmo assim, com aviso), o de maior
+    // "float" (mais dias até o vencimento comprando hoje).
+    const elegiveis = cartoes.filter((c) => c.cabeNoLimite !== false);
+    const pool = elegiveis.length > 0 ? elegiveis : cartoes;
+    const melhor = pool.reduce((best: any, c: any) => {
+      if (!best) return c;
+      if (c.diasFloat == null) return best;
+      if (best.diasFloat == null || c.diasFloat > best.diasFloat) return c;
+      return best;
+    }, null as any);
+
+    return cartoes.map((c) => ({ ...c, recomendado: melhor != null && c.id === melhor.id }));
   }),
 
   // ── Faturas ──────────────────────────────────────────────────────────
@@ -891,7 +946,8 @@ export const cartaoRouter = router({
               centro_custo_id AS "centroCustoId", centro_custo_nome AS "centroCustoNome",
               categoria_id AS "categoriaId", categoria_nome AS "categoriaNome",
               categoria_sugerida AS "categoriaSugerida",
-              status_classificacao AS "statusClassificacao"
+              status_classificacao AS "statusClassificacao",
+              compra_oc_id AS "compraOcId", compra_oc_numero AS "compraOcNumero"
          FROM financial_cartao_itens
         WHERE company_id=$1 AND fatura_id=$2 AND excluido_em IS NULL
         ORDER BY data NULLS LAST, id`,
@@ -915,10 +971,21 @@ export const cartaoRouter = router({
     categoriaNome: z.string().max(255).nullable().optional(),
     tipo: z.enum(TIPOS_ITEM).optional(),
     statusClassificacao: z.enum(STATUS_CLASSIF).optional(),
+    compraOcId: z.number().nullable().optional(),
+    compraOcNumero: z.string().max(20).nullable().optional(),
   })).mutation(async ({ input, ctx }) => {
     await assertCompanyAccess(ctx.user, input.companyId);
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    // Rev. 4019 — vínculo manual com uma OC de Compras (quando o auxiliar quer
+    // corrigir/forçar o match automático). Confirma que a OC pertence à mesma
+    // empresa antes de gravar (evita IDOR cross-tenant via id arbitrário).
+    if (input.compraOcId !== undefined && input.compraOcId != null) {
+      const ocCheck = await dbExecute(db,
+        `SELECT id, numero_oc AS "numeroOc" FROM compras_ordens WHERE id=$1 AND company_id=$2 LIMIT 1`,
+        [input.compraOcId, input.companyId]);
+      if (ocCheck.rows.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "OC não encontrada nesta empresa" });
+    }
     const sets: string[] = []; const params: unknown[] = [];
     let p = 1;
     const add = (col: string, val: unknown) => { sets.push(`${col}=$${p++}`); params.push(val); };
@@ -930,6 +997,8 @@ export const cartaoRouter = router({
     if (input.categoriaNome !== undefined) add("categoria_nome", input.categoriaNome);
     if (input.tipo !== undefined) add("tipo", input.tipo);
     if (input.statusClassificacao !== undefined) add("status_classificacao", input.statusClassificacao);
+    if (input.compraOcId !== undefined) add("compra_oc_id", input.compraOcId);
+    if (input.compraOcNumero !== undefined) add("compra_oc_numero", input.compraOcNumero);
     if (sets.length === 0) return { ok: true, alterado: 0 };
     sets.push(`updated_at=NOW()`);
     const idP = p++, coP = p;
@@ -1135,13 +1204,41 @@ export const cartaoRouter = router({
             [faturaId, dataStr, descTrunc, valorNum]);
           if (dupItem.rows.length > 0) { itensPulados++; continue; }
 
+          // Rev. 4019 — tenta casar automaticamente com a OC de Compras que gerou
+          // esta compra no cartão (mesma empresa+cartão, valor batendo à vista ou
+          // por parcela, data dentro de uma janela de ±20 dias da compra). Quando
+          // acha, já chega classificado (obra) e "confirmado" — acelera a conferência
+          // do auxiliar financeiro na hora da conciliação do cartão.
+          let ocMatch: any = null;
+          if (cartaoId != null && tipo === "compra" && valorNum != null && dataStr) {
+            const parcelaTotal = it.parcelaTotal && it.parcelaTotal > 1 ? it.parcelaTotal : 1;
+            const ocRes = await dbExecute(tx,
+              `SELECT o.id, o.numero_oc AS "numeroOc", o.obra_id AS "obraId", ob.nome AS "obraNome"
+                 FROM compras_ordens o
+                 LEFT JOIN obras ob ON ob.id = o.obra_id
+                WHERE o.company_id=$1
+                  AND o.forma_pagamento='cartao'
+                  AND o.cartao_id=$2
+                  AND o.status <> 'cancelado'
+                  AND (
+                    ABS(o.total - $3) < 0.05
+                    OR ($4::int > 1 AND ABS(o.total / NULLIF($4::int, 0) - $3) < 0.05)
+                  )
+                  AND o.created_at::date BETWEEN ($5::date - INTERVAL '20 days') AND ($5::date + INTERVAL '20 days')
+                ORDER BY ABS(EXTRACT(EPOCH FROM (o.created_at::date - $5::date)))
+                LIMIT 1`,
+              [input.companyId, cartaoId, valorNum, parcelaTotal, dataStr]);
+            ocMatch = ocRes.rows[0] ?? null;
+          }
+
           await dbExecute(tx,
             `INSERT INTO financial_cartao_itens
                (company_id, fatura_id, cartao_id, data, descricao, cidade, valor, moeda,
                 cotacao, valor_origem, parcela_atual, parcela_total, tipo,
                 centro_custo_id, centro_custo_nome, categoria_sugerida, status_classificacao,
+                obra_id, obra_nome, compra_oc_id, compra_oc_numero,
                 created_at, updated_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW(),NOW())`,
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,NOW(),NOW())`,
             [
               input.companyId, faturaId, cartaoId,
               dataStr,
@@ -1153,7 +1250,12 @@ export const cartaoRouter = router({
               it.parcelaAtual ?? null, it.parcelaTotal ?? null, tipo,
               it.centroCustoSugeridoId ?? null,
               it.centroCustoSugeridoNome != null ? String(it.centroCustoSugeridoNome).slice(0, 255) : null,
-              it.centroCustoSugeridoNome != null ? String(it.centroCustoSugeridoNome).slice(0, 255) : null, "sugerido",
+              it.centroCustoSugeridoNome != null ? String(it.centroCustoSugeridoNome).slice(0, 255) : null,
+              ocMatch ? "confirmado" : "sugerido",
+              ocMatch?.obraId ?? null,
+              ocMatch?.obraNome != null ? String(ocMatch.obraNome).slice(0, 255) : null,
+              ocMatch?.id ?? null,
+              ocMatch?.numeroOc != null ? String(ocMatch.numeroOc).slice(0, 20) : null,
             ]);
           itensInseridos++;
         }

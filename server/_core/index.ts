@@ -4730,7 +4730,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v4013b-2026-07-04-regime-custo-cotacao-isolado";
+    const COLFIX_VERSION = "v4019-2026-07-04-cartao-escopo-oc-vinculo";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -5824,6 +5824,46 @@ Regras:
         `);
         console.log("[ColFix] Financial: retencao_contratual + status granular + receita_baseline/previsto OK");
       } catch (e: any) { console.warn("[ColFix] Financial bloco:", e?.message ?? e); }
+    });
+    // ─── Rev. 4019 — Cartão de Crédito: escopo (FC × local) na sugestão automática
+    // de melhor cartão em Cotação/OC + vínculo item da fatura ↔ OC de Compras
+    // (auto-classificação por valor+data+cartão pra acelerar a conciliação) ───
+    import("../db").then(async ({ getDb }) => {
+      if (await colFixSkipPromise) return;
+      try {
+        const db = await getDb();
+        if (!db) return;
+        const { sql } = await import("drizzle-orm");
+        await db.execute(sql`
+          DO $$ BEGIN
+            ALTER TABLE financial_cartoes      ADD COLUMN IF NOT EXISTS escopo VARCHAR(10) DEFAULT 'fc';
+            ALTER TABLE financial_cartao_itens ADD COLUMN IF NOT EXISTS compra_oc_id     INTEGER;
+            ALTER TABLE financial_cartao_itens ADD COLUMN IF NOT EXISTS compra_oc_numero VARCHAR(20);
+            ALTER TABLE compras_cotacoes ADD COLUMN IF NOT EXISTS cartao_id INTEGER;
+            ALTER TABLE compras_ordens   ADD COLUMN IF NOT EXISTS cartao_id INTEGER;
+            ALTER TABLE compras_cotacao_fornecedores ADD COLUMN IF NOT EXISTS cartao_id INTEGER;
+          EXCEPTION WHEN OTHERS THEN NULL;
+          END $$
+        `);
+        // Backfill conservador: cartões cujo titular já bate com a razão social/nome
+        // fantasia da própria empresa viram 'fc'; os demais (titular de pessoa física
+        // ou de outra empresa/terceiro) viram 'local' — usuário pode corrigir manualmente
+        // em Financeiro > Cartões (ZERO ALTER destrutivo, só um default inicial).
+        await db.execute(sql`
+          UPDATE financial_cartoes c
+             SET escopo = 'local'
+            FROM companies co
+           WHERE c.company_id = co.id
+             AND c.excluido_em IS NULL
+             AND (c.escopo IS NULL OR c.escopo = 'fc')
+             AND c.titular IS NOT NULL
+             AND NOT (
+               unaccent(lower(c.titular)) LIKE '%' || unaccent(lower(split_part(co.razao_social, ' ', 1))) || '%'
+               OR (co.nome_fantasia IS NOT NULL AND unaccent(lower(c.titular)) LIKE '%' || unaccent(lower(split_part(co.nome_fantasia, ' ', 1))) || '%')
+             )
+        `).catch(() => {});
+        console.log("[ColFix] Cartão: escopo FC/local + vínculo OC OK");
+      } catch (e: any) { console.warn("[ColFix] Cartão escopo/vínculo OC:", e?.message ?? e); }
     });
     // ─── Backfill: sincronizar baixas históricas do Financeiro → planejamento_medicoes ───
     import("../db").then(async ({ getDb }) => {

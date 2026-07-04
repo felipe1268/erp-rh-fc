@@ -1,3 +1,5 @@
+- **Rev. 4016** — **COMPRAS: LOTE FINAL DOS ~20 AJUSTES DO DOCX (Itens 7, 9, 13, 14, 17, 19, 20, 21a, 22) + CORREÇÃO DE BUG DE AUTORIZAÇÃO NA "TRANSFERÊNCIA EM LOTE" DO ALMOXARIFADO (Item 5, reaberto).** Causa-raiz do Item 5: `createTransferenciaOrigemDestino`/`createTransferenciaLote` usavam guard `userCanAccessObra` em vez de `userCanAccessObraAlmox`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4011** — **ALMOXARIFADO: OS 3 ITENS PENDENTES DA AUDITORIA "CORREÇÕES E MELHORIAS ERP - ALMOXARIFADO" (12/15 já implementados em revisões anteriores).** Usuário confirmou "Sim" para os 3 restantes: campo `especificacao` separado do `nome`; assinatura digital OPCIONAL na devolução de ferramenta emprestada; rename "Devolução de Ferramentas" já não se aplicava. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4010** — **ALMOXARIFADO: PADRONIZAÇÃO AUTOMÁTICA DO NOME DE MATERIAL (1ª LETRA MAIÚSCULA + RESTANTE MINÚSCULO).** Função SQL única `padronizar_nome_material(text)` reusada em todos os pontos de escrita (criação manual/import/OC/sync de equipamento). Backfill nos 2.638 itens existentes — 100% padronizados. ZERO DELETE · ZERO ALTER destrutivo.

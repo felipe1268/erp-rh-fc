@@ -470,7 +470,7 @@ export default function Ordens() {
     obraId: "", fornecedorId: "", dataEntregaPrevista: "", dataVencimento: "", observacoes: "",
     frete: "", outrasDespesas: "", impostos: "", desconto: "",
     condicaoPagamento: "", prazoEntregaDias: "", numeroNf: "",
-    formaPagamento: "", contaBancariaId: "",
+    formaPagamento: "", contaBancariaId: "", cartaoId: "",
   });
   // Rev. 2486 — Grupos por etapa. `itens` legado computado via flatten()
   // pra preservar compatibilidade com leitores existentes (formHasData,
@@ -667,7 +667,7 @@ export default function Ordens() {
   const [editRastreio, setEditRastreio] = useState("");
 
   function resetForm() {
-    setForm({ obraId: "", fornecedorId: "", dataEntregaPrevista: "", dataVencimento: "", observacoes: "", frete: "", outrasDespesas: "", impostos: "", desconto: "", condicaoPagamento: "", prazoEntregaDias: "", numeroNf: "", formaPagamento: "", contaBancariaId: "" });
+    setForm({ obraId: "", fornecedorId: "", dataEntregaPrevista: "", dataVencimento: "", observacoes: "", frete: "", outrasDespesas: "", impostos: "", desconto: "", condicaoPagamento: "", prazoEntregaDias: "", numeroNf: "", formaPagamento: "", contaBancariaId: "", cartaoId: "" });
     setGrupos([newGrupo()]);
     setNumParc(1);
     setParcelas([]);
@@ -703,6 +703,7 @@ export default function Ordens() {
       numeroNf: form.numeroNf || undefined,
       formaPagamento: form.formaPagamento || undefined,
       contaBancariaId: form.contaBancariaId ? parseInt(form.contaBancariaId) : undefined,
+      cartaoId: form.formaPagamento === "cartao_credito" && form.cartaoId ? parseInt(form.cartaoId) : null,
       condicaoPagamento: form.condicaoPagamento || undefined,
       numeroParcelas: numParc,
       parcelasJson: parcelas.length > 0 ? parcelas.map(p => ({ numero: p.numero, vencimento: p.vencimento || undefined, valor: parseFloat(p.valor) || 0 })) : undefined,
@@ -765,6 +766,7 @@ export default function Ordens() {
       numeroNf: ocDetalhe.numeroNf ?? "",
       formaPagamento: (ocDetalhe as any).formaPagamento ?? "",
       contaBancariaId: (ocDetalhe as any).contaBancariaId ? String((ocDetalhe as any).contaBancariaId) : "",
+      cartaoId: (ocDetalhe as any).cartaoId ? String((ocDetalhe as any).cartaoId) : "",
     });
     if (ocDetalhe.itens && ocDetalhe.itens.length > 0) {
       // Rev. 2486 — reagrupa por eapCodigo ao carregar.
@@ -801,6 +803,7 @@ export default function Ordens() {
         numeroNf: form.numeroNf || undefined,
         formaPagamento: form.formaPagamento || undefined,
         contaBancariaId: form.contaBancariaId ? parseInt(form.contaBancariaId) : undefined,
+        cartaoId: form.formaPagamento === "cartao_credito" && form.cartaoId ? parseInt(form.cartaoId) : null,
         condicaoPagamento: form.condicaoPagamento,
         numeroParcelas: numParc,
         parcelasJson: parcelas.length > 0 ? parcelas.map(p => ({ numero: p.numero, vencimento: p.vencimento || undefined, valor: parseFloat(p.valor) || 0 })) : undefined,
@@ -832,6 +835,7 @@ export default function Ordens() {
       numeroNf: form.numeroNf || undefined,
       formaPagamento: form.formaPagamento || undefined,
       contaBancariaId: form.contaBancariaId ? parseInt(form.contaBancariaId) : undefined,
+      cartaoId: form.formaPagamento === "cartao_credito" && form.cartaoId ? parseInt(form.cartaoId) : null,
       condicaoPagamento: form.condicaoPagamento,
       numeroParcelas: numParc,
       parcelasJson: parcelas.length > 0 ? parcelas.map(p => ({ numero: p.numero, vencimento: p.vencimento || undefined, valor: parseFloat(p.valor) || 0 })) : undefined,
@@ -1690,7 +1694,12 @@ export default function Ordens() {
               </div>
               {form.formaPagamento === "cartao_credito" && (
                 <div className="col-span-2">
-                  <CartaoDisponivelCard companyId={companyId} />
+                  <CartaoDisponivelCard
+                    companyId={companyId}
+                    valorCompra={totalOC || null}
+                    cartaoIdSelecionado={form.cartaoId ? parseInt(form.cartaoId) : null}
+                    onSelecionarCartao={(cartaoId) => setForm(p => ({ ...p, cartaoId: cartaoId ? String(cartaoId) : "" }))}
+                  />
                 </div>
               )}
               <div className="space-y-1.5">

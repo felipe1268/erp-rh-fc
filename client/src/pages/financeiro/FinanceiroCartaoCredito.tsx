@@ -131,8 +131,13 @@ function tipoBadge(t: string) {
 
 const CARTAO_FORM_INICIAL = {
   banco: "", bandeira: "", final4: "", titular: "", tipoPessoa: "PJ", status: "ativo",
-  diaFechamento: "", diaVencimento: "", limite: "", observacao: "",
+  diaFechamento: "", diaVencimento: "", limite: "", observacao: "", escopo: "fc",
 };
+
+const ESCOPO_CARTAO_OPCOES = [
+  { value: "fc", label: "FC (empresa)" },
+  { value: "local", label: "Local (obra/particular)" },
+] as const;
 
 const BANCOS_CHIPS = [
   "Santander", "Itaú", "Bradesco", "Caixa", "Banco do Brasil",
@@ -205,6 +210,7 @@ export default function FinanceiroCartaoCredito() {
       diaVencimento: c.diaVencimento != null ? String(c.diaVencimento) : "",
       limite: c.limite != null ? maskBRL(String(Math.round(Number(c.limite) * 100))) : "",
       observacao: c.observacao ?? "",
+      escopo: c.escopo ?? "fc",
     });
     setCartaoModal(true);
   }
@@ -222,6 +228,7 @@ export default function FinanceiroCartaoCredito() {
       diaVencimento: cartaoForm.diaVencimento ? parseInt(cartaoForm.diaVencimento, 10) : null,
       limite: cartaoForm.limite.trim() === "" ? null : parseMaskBRL(cartaoForm.limite),
       observacao: cartaoForm.observacao.trim() || undefined,
+      escopo: cartaoForm.escopo as "fc" | "local",
     };
     try {
       let novoId: number | null = null;
@@ -1726,6 +1733,20 @@ export default function FinanceiroCartaoCredito() {
                       placeholder="Nome impresso no cartão"
                     />
                   </div>
+                  <div className="col-span-2 space-y-1">
+                    <Label className="text-xs">Escopo do cartão</Label>
+                    <Select value={cartaoForm.escopo} onValueChange={(v) => setCartaoForm((f) => ({ ...f, escopo: v }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {ESCOPO_CARTAO_OPCOES.map((o) => (
+                          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground leading-tight">
+                      Cartões "FC" aparecem como sugestão de pagamento nas Cotações/OCs de Compras. Cartões "Local" ficam de fora dessa sugestão.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2029,7 +2050,7 @@ export default function FinanceiroCartaoCredito() {
                   <tr className="text-left text-muted-foreground uppercase text-[10px] tracking-wide">
                     <th className="p-2.5">Data</th><th className="p-2.5">Descrição</th><th className="p-2.5">Tipo</th>
                     <th className="p-2.5 text-right">Valor</th><th className="p-2.5">Obra</th><th className="p-2.5">Centro de custo</th>
-                    <th className="p-2.5">Categoria</th><th className="p-2.5">Status</th>
+                    <th className="p-2.5">Categoria</th><th className="p-2.5">Status</th><th className="p-2.5">OC vinculada</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2092,6 +2113,15 @@ export default function FinanceiroCartaoCredito() {
                             <SelectItem value="ignorado">Ignorado</SelectItem>
                           </SelectContent>
                         </Select>
+                      </td>
+                      <td className="p-2.5 whitespace-nowrap">
+                        {it.compraOcNumero ? (
+                          <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 font-normal" title="Match automático com Ordem de Compra na conciliação do cartão">
+                            OC {it.compraOcNumero}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </td>
                     </tr>
                     );
