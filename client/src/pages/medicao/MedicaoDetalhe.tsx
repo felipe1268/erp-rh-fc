@@ -28,7 +28,7 @@ import {
   Edit, Trash2, Eye, TrendingUp, Package, Search, ListTree, Hammer, HardHat, Receipt,
   Ruler, Image as ImageIcon, CalendarRange, MessageSquare, History, Printer, Download,
 } from "lucide-react";
-import { gerarBoletimMedicaoPdf, imprimirBoletimMedicao } from "@/lib/boletimMedicaoPdf";
+import { gerarBoletimMedicaoPdf, imprimirBoletimMedicao, compartilharBoletimMedicaoWhatsApp } from "@/lib/boletimMedicaoPdf";
 
 const n = (v: unknown) => parseFloat(String(v || "0")) || 0;
 function brl(v: number) {
@@ -307,7 +307,7 @@ export default function MedicaoDetalhe() {
 
   const [itensEdicao, setItensEdicao] = useState<any[]>([]);
   const [autoImportar, setAutoImportar] = useState(false);
-  const [gerandoPdf, setGerandoPdf] = useState<"imprimir" | "pdf" | null>(null);
+  const [gerandoPdf, setGerandoPdf] = useState<"imprimir" | "pdf" | "whatsapp" | null>(null);
 
   function montarParamsPdf() {
     const itensFonte = itensEdicao.length > 0 ? itensEdicao : (boletimDetalhe?.itens ?? []);
@@ -788,6 +788,9 @@ export default function MedicaoDetalhe() {
                           <TableCell className="text-right text-sm font-bold text-emerald-700">{brl(n(b.valorLiquido))}</TableCell>
                           <TableCell onClick={e => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
+                              <Button variant="ghost" size="sm" onClick={() => abrirItens(b)} title="Ver medição">
+                                <Eye className="h-3.5 w-3.5 text-blue-600" />
+                              </Button>
                               <Button variant="ghost" size="sm" onClick={() => {
                                 setBoletimEditando(b);
                                 setFormEditBoletim({ periodoReferencia: b.periodoReferencia || "", dataInicio: b.dataInicio || "", dataFim: b.dataFim || "", observacoes: b.observacoes || "" });
@@ -1244,63 +1247,77 @@ export default function MedicaoDetalhe() {
 
       <Dialog open={modalItens} onOpenChange={open => { setModalItens(open); if (!open) setItensEdicao([]); }}>
         <DialogContent resizable={false} className="w-[95vw] max-w-[95vw] h-[95vh] max-h-[95vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 flex-wrap pr-8">
-              <Receipt className="h-5 w-5 text-blue-600" />
-              Itens do Boletim {boletimSelecionado ? String(boletimSelecionado.numero).padStart(2, "0") : ""}
+          <DialogHeader className="space-y-3 pr-6">
+            <DialogTitle className="flex items-center gap-2 flex-wrap">
+              <Receipt className="h-5 w-5 text-blue-600 shrink-0" />
+              <span>Itens do Boletim {boletimSelecionado ? String(boletimSelecionado.numero).padStart(2, "0") : ""}</span>
               <span className="text-gray-400 font-normal">— {boletimSelecionado?.periodoReferencia}</span>
               {boletimSelecionado?.status && <StatusBadge status={boletimSelecionado.status} />}
-              {boletimSelecionado && (
-                <div className="flex items-center gap-1.5 ml-auto font-normal">
-                  {(() => {
-                    const proximo = PROXIMOS_STATUS[boletimSelecionado.status];
-                    if (!proximo) return null;
-                    return (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs"
-                        disabled={avancarStatusMutation.isPending}
-                        onClick={() => avancarStatusMutation.mutate({ boletimId: boletimSelecionado.id, status: proximo.status as any })}
-                      >
-                        {proximo.status === "enviado" && <Send className="h-3 w-3 mr-1" />}
-                        {proximo.status === "aprovado" && <CheckCircle2 className="h-3 w-3 mr-1" />}
-                        {proximo.status === "finalizado" && <CheckCircle2 className="h-3 w-3 mr-1" />}
-                        {proximo.label}
-                      </Button>
-                    );
-                  })()}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs"
-                    disabled={gerandoPdf !== null}
-                    onClick={async () => {
-                      setGerandoPdf("imprimir");
-                      try { await imprimirBoletimMedicao(montarParamsPdf()); }
-                      finally { setGerandoPdf(null); }
-                    }}
-                  >
-                    {gerandoPdf === "imprimir" ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Printer className="h-3 w-3 mr-1" />}
-                    Imprimir
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs"
-                    disabled={gerandoPdf !== null}
-                    onClick={async () => {
-                      setGerandoPdf("pdf");
-                      try { await gerarBoletimMedicaoPdf(montarParamsPdf()); }
-                      finally { setGerandoPdf(null); }
-                    }}
-                  >
-                    {gerandoPdf === "pdf" ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Download className="h-3 w-3 mr-1" />}
-                    Gerar PDF
-                  </Button>
-                </div>
-              )}
             </DialogTitle>
+            {boletimSelecionado && (
+              <div className="flex items-center gap-2 flex-wrap">
+                {(() => {
+                  const proximo = PROXIMOS_STATUS[boletimSelecionado.status];
+                  if (!proximo) return null;
+                  return (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs"
+                      disabled={avancarStatusMutation.isPending}
+                      onClick={() => avancarStatusMutation.mutate({ boletimId: boletimSelecionado.id, status: proximo.status as any })}
+                    >
+                      {proximo.status === "enviado" && <Send className="h-3.5 w-3.5 mr-1.5" />}
+                      {proximo.status === "aprovado" && <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />}
+                      {proximo.status === "finalizado" && <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />}
+                      {proximo.label}
+                    </Button>
+                  );
+                })()}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs"
+                  disabled={gerandoPdf !== null}
+                  onClick={async () => {
+                    setGerandoPdf("imprimir");
+                    try { await imprimirBoletimMedicao(montarParamsPdf()); }
+                    finally { setGerandoPdf(null); }
+                  }}
+                >
+                  {gerandoPdf === "imprimir" ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Printer className="h-3.5 w-3.5 mr-1.5" />}
+                  Imprimir
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs"
+                  disabled={gerandoPdf !== null}
+                  onClick={async () => {
+                    setGerandoPdf("pdf");
+                    try { await gerarBoletimMedicaoPdf(montarParamsPdf()); }
+                    finally { setGerandoPdf(null); }
+                  }}
+                >
+                  {gerandoPdf === "pdf" ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-1.5" />}
+                  Gerar PDF
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                  disabled={gerandoPdf !== null}
+                  onClick={async () => {
+                    setGerandoPdf("whatsapp");
+                    try { await compartilharBoletimMedicaoWhatsApp(montarParamsPdf()); }
+                    finally { setGerandoPdf(null); }
+                  }}
+                >
+                  {gerandoPdf === "whatsapp" ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <MessageSquare className="h-3.5 w-3.5 mr-1.5" />}
+                  Encaminhar via WhatsApp
+                </Button>
+              </div>
+            )}
           </DialogHeader>
           <div className="space-y-4">
             {/* Cards de resumo — sempre visíveis, no topo, para leitura rápida */}

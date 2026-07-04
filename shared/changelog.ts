@@ -1,4 +1,35 @@
 /**
+ * Rev. 4028 — **MEDIÇÃO DE CONTRATOS: OLHINHO NA LISTA DE BOLETINS + REDESIGN MOBILE DO CABEÇALHO
+ * DO DIÁLOGO "ITENS DO BOLETIM" + ENCAMINHAR VIA WHATSAPP.**
+ *
+ * PEDIDO: usuário mandou 2 prints do celular mostrando que (1) queria um ícone de olho na lista de
+ * boletins para abrir a medição explicitamente; (2) o cabeçalho do diálogo "Itens do Boletim"
+ * estava com o layout quebrado no mobile — os botões "Imprimir" e "Gerar PDF" ficavam espremidos
+ * em cima do X de fechar, ilegíveis; (3) pediu uma opção de encaminhar o boletim via WhatsApp.
+ *
+ * SOLUÇÃO — Frontend (`client/src/pages/medicao/MedicaoDetalhe.tsx`):
+ * - Lista de boletins: novo botão com ícone `Eye` (olhinho) antes do lápis de editar, chamando o
+ *   mesmo `abrirItens(b)` do clique na linha — ação explícita de "Ver medição".
+ * - Cabeçalho do diálogo "Itens do Boletim" reestruturado: título (ícone+número+período+status)
+ *   ficou em uma linha própria dentro do `DialogTitle`; os botões de ação (avançar status,
+ *   Imprimir, Gerar PDF, Encaminhar via WhatsApp) foram MOVIDOS para uma segunda linha própria
+ *   logo abaixo, fora do `DialogTitle` (dentro do `DialogHeader`, com `flex-wrap`), removendo o
+ *   `ml-auto` que colidia com o X de fechar em telas estreitas. Botões sempre mostram ícone+texto
+ *   (não ficam icon-only), altura `h-8` e `text-xs`, quebrando em várias linhas no mobile.
+ * - Novo botão "Encaminhar via WhatsApp" (ícone `MessageSquare`, cor esmeralda) chama
+ *   `compartilharBoletimMedicaoWhatsApp`.
+ *
+ * SOLUÇÃO — `client/src/lib/boletimMedicaoPdf.ts`:
+ * - Nova função `compartilharBoletimMedicaoWhatsApp`: gera o mesmo PDF do boletim e tenta
+ *   `navigator.share({files:[pdf]})` (Web Share API nível 2, suportada na maioria dos celulares)
+ *   para abrir a folha nativa de compartilhamento com o WhatsApp já como opção. Em navegadores sem
+ *   suporte a compartilhar arquivo (ex.: desktop), cai no fallback: baixa o PDF via `.save()` e
+ *   abre `wa.me` com uma mensagem pronta pedindo para anexar o arquivo já baixado.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo (só reorganização de layout + 1 função nova aditiva).
+ */
+
+/**
  * Rev. 4027 — **MEDIÇÃO DE CONTRATOS: RASTREABILIDADE DO "ORIGEM: CRONOGRAMA" (DE QUAL SEMANA DO
  * AVANÇO SEMANAL VEIO O %) + BOTÕES DE FLUXO/IMPRESSÃO/PDF NO DIÁLOGO "ITENS DO BOLETIM".**
  *

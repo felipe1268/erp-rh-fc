@@ -278,3 +278,39 @@ export async function imprimirBoletimMedicao(params: BoletimPdfParams): Promise<
     });
   }
 }
+
+/**
+ * Envia o boletim via WhatsApp. Em navegadores com suporte a Web Share API
+ * nível 2 (a maioria dos celulares), abre a folha nativa de compartilhamento
+ * já com o PDF anexado e o WhatsApp como uma das opções. Em desktop (sem
+ * suporte a compartilhar arquivo), baixa o PDF e abre o WhatsApp Web com uma
+ * mensagem pronta — o usuário só precisa anexar o arquivo já baixado.
+ */
+export async function compartilharBoletimMedicaoWhatsApp(params: BoletimPdfParams): Promise<"compartilhado" | "baixado"> {
+  const pdf = await buildBoletimPdf(params);
+  const fileName = `Boletim_Medicao_${String(params.boletimNumero).padStart(2, "0")}_${params.periodoReferencia}.pdf`;
+  const texto = `Boletim de Medição nº ${String(params.boletimNumero).padStart(2, "0")} — ${params.contratoNome} — Período: ${params.periodoReferencia}`;
+  const blob = pdf.output("blob") as Blob;
+
+  const nav = navigator as Navigator & {
+    canShare?: (data?: ShareData & { files?: File[] }) => boolean;
+    share?: (data: ShareData & { files?: File[] }) => Promise<void>;
+  };
+
+  if (nav.share && nav.canShare) {
+    try {
+      const file = new File([blob], fileName, { type: "application/pdf" });
+      if (nav.canShare({ files: [file] })) {
+        await nav.share({ files: [file], title: fileName, text: texto });
+        return "compartilhado";
+      }
+    } catch (err) {
+      if ((err as any)?.name === "AbortError") return "compartilhado";
+      /* cai no fallback abaixo */
+    }
+  }
+
+  pdf.save(fileName);
+  window.open(`https://wa.me/?text=${encodeURIComponent(`${texto}\n\n(o PDF foi baixado — anexe o arquivo "${fileName}" nesta conversa)`)}`, "_blank");
+  return "baixado";
+}
