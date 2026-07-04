@@ -1,4 +1,29 @@
 /**
+ * Rev. 4023 — **MEDIÇÃO DE CONTRATOS: DROPDOWN "PROJETO / OBRA" CORTAVA NOMES LONGOS (EX.:
+ * "HOTEL DO PAPA..." APARECIA COMO "OTEL DO PAPA...") NO DIÁLOGO "NOVO CONTRATO DE MEDIÇÃO".**
+ *
+ * PEDIDO: usuário reportou que, na tela "Medição de Contratos", o seletor "Projeto / Obra" do
+ * diálogo "Novo Contrato de Medição" cortava o início/fim de nomes de obra longos — mais visível
+ * em viewport mobile — causando perda de informação visual. Pediu correção definitiva ("não tenha
+ * esse tipo de informação [perdida]").
+ *
+ * CAUSA-RAIZ: o `SelectContent` compartilhado (`client/src/components/ui/select.tsx`, Radix
+ * `position="popper"`) só define `min-width` (ligado à largura do trigger), sem `max-width`
+ * atrelado ao viewport. Com um nome de obra muito longo em uma única linha, o popover cresce além
+ * da tela em mobile; o colision-handling do Radix então desloca/corta o popover, "comendo" o
+ * início do texto do item mais longo.
+ *
+ * SOLUÇÃO (ESCOPADA — só no seletor "Projeto / Obra" do diálogo, sem tocar o `select.tsx`
+ * compartilhado, para não afetar outros Selects do sistema que dependem de truncamento em 1
+ * linha):
+ * - `client/src/pages/medicao/MedicaoContratos.tsx`: `SelectContent` ganhou
+ *   `max-w-[min(28rem,calc(100vw-2rem))]`; cada `SelectItem` ganhou
+ *   `whitespace-normal break-words leading-snug py-2` (quebra em várias linhas em vez de cortar).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4022 — **FINANCEIRO/DRE: OPÇÃO DE CONSOLIDAR O MÊS MANUALMENTE (independente do
  * percentual automático de lançamentos).**
  *

@@ -1,16 +1,35 @@
 ---
-name: Vale snapshot — sanitização de desligados por mês
-description: Por que a sanitização de leitura do snapshot de vale precisa de cutoff por saída efetiva × mês, não só PJ/Sócio/excluído.
+name: Vale snapshot — congelado, sanitização por mês/contrato, e fonte de leitura da Folha
+description: Consolidated notes — payroll_advances/valeResultJson is a frozen snapshot; read-path sanitization, contract-change staleness, and re-sync-on-write rules.
 ---
 
-# Vale (`payroll_advances`) — snapshot congelado precisa de sanitização por mês
+# Vale (`payroll_advances` / `payroll_periods.valeResultJson`) — snapshot congelado
 
-O snapshot `valeResultJson` é gerado UMA vez (quando os funcionários ainda estavam Ativos) e fica congelado. A GERAÇÃO (`gerarVale`) exclui corretamente quem saiu antes do mês, mas a LEITURA lê o JSON velho — então qualquer mudança de status DEPOIS da geração (desligamento) precisa ser refletida por uma sanitização de leitura.
+`valeResultJson` é gerado UMA vez em "Gerar Vale" e fica IMUTÁVEL até a próxima geração.
+A tela de Folha/Vale sempre lê esse snapshot, NUNCA direto de `payroll_advances` ao vivo.
+Qualquer mudança de estado DEPOIS da geração (desligamento, CLT→PJ/Sócio, decisão de
+pagar/rejeitar) precisa ser refletida por sanitização de leitura OU re-sincronização do
+snapshot — a geração e a leitura têm fontes de verdade diferentes.
 
-A sanitização original (`getIdsInelegiveisVale`) só removia PJ/Sócio/excluído (`deletedAt`). Faltava o caso DESLIGADO: um funcionário desligado cuja saída efetiva é anterior ao mês continuava "recebendo" vale no snapshot.
+**Regras de elegibilidade / cutoff:**
+- Inelegível ao vale: PJ | Sócio | `deletedAt` (nunca recebe, mesmo forçado).
+- Desligado: inelegível quando `(dataDesligamentoEfetiva ?? dataDemissao) < ${mes}-01`
+  (comparação lexicográfica `YYYY-MM-DD`, mês validado por regex `^\d{4}-\d{2}$`). Em aviso
+  prévio com saída cobrindo o mês (saída ≥ 1º dia) PERMANECE elegível (vale proporcional).
 
-**Regra do cutoff:** inelegível ao vale quem está em `EMPLOYEE_STATUS_DESLIGADOS` E `(dataDesligamentoEfetiva ?? dataDemissao) < ${mes}-01`. Desligado em aviso prévio cuja saída cobre o mês (saída ≥ 1º dia) PERMANECE elegível (recebe vale proporcional).
+**Why:** um fix inicial só cobriu um endpoint de decisão (`decidirVale`); code review achou
+que `reverterVale` era bypass (revertia rejeitado→calculado e recriava o evento financeiro
+sem reaplicar a guarda). Lição: garantia de negócio sobre dinheiro saindo tem que cobrir
+TODOS os sinks, não só o endpoint "óbvio".
 
-**Why:** geração e leitura têm fontes de verdade diferentes (cálculo ao vivo vs JSON congelado); qualquer filtro de elegibilidade aplicado na geração precisa de espelho na sanitização de leitura, senão dados antigos vazam.
-
-**How to apply:** ao mexer em elegibilidade de vale, alinhe `getIdsInelegiveisVale`/`sanitizarValeSnapshotNaoClt` (leitura) com `gerarVale` (geração) E com os guardas de `decidirVale`/`reverterVale` (aprovação/reversão). A sanitização é READ-ONLY — NÃO regrava o snapshot; a linha em `payroll_advances` persiste mas some da exibição/contagem/aprovação. Comparação de datas é lexicográfica `YYYY-MM-DD` (use `.slice(0,10)` + mês validado por regex `^\d{4}-\d{2}$`).
+**How to apply:**
+- Leitura (`getPeriod`): sanitiza o snapshot na hora, READ-ONLY (recalcula
+  totalFuncionarios/totalAlertas/totalVale/valorLiquido) via `getIdsInelegiveisVale` — NÃO
+  regrava `payroll_advances`; a linha persiste mas some da exibição/contagem/aprovação.
+  Linha órfã se auto-higieniza no próximo "Gerar Vale" (DELETE do mês + reinsert).
+- Escrita: TODO write-path que muda estado de um vale (pagar/rejeitar, valores,
+  arredondamento) precisa re-derivar/re-sincronizar o snapshot a partir de
+  `payroll_advances` (helper no `payrollEngine`) — senão a mudança "funciona" na sessão
+  (update otimista) mas some no reload. Teste sempre o reload, não só a sessão.
+- Cobrir os DOIS sinks de decisão (`decidirVale` pagar:true e `reverterVale`): inelegível
+  → `rejeitado`+`bloqueado=1`, sem evento financeiro.

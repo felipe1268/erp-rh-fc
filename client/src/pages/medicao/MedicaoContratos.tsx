@@ -390,11 +390,15 @@ export default function MedicaoContratos() {
                   <Label className="text-sm font-medium text-gray-700 mb-2 block">Projeto / Obra <span className="text-red-500">*</span></Label>
                   <Select value={form.projetoId} onValueChange={handleProjetoSelect}>
                     <SelectTrigger className="h-10 text-sm">
-                      <SelectValue placeholder="Selecione o projeto..." />
+                      <SelectValue placeholder="Selecione o projeto..." className="truncate" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-w-[min(28rem,calc(100vw-2rem))]">
                       {projetosDisponiveis.map((p: any) => (
-                        <SelectItem key={p.id} value={String(p.id)}>
+                        <SelectItem
+                          key={p.id}
+                          value={String(p.id)}
+                          className="whitespace-normal break-words leading-snug py-2"
+                        >
                           {p.nome} {p.cliente ? `— ${p.cliente}` : ""}
                         </SelectItem>
                       ))}

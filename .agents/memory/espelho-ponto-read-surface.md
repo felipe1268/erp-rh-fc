@@ -11,7 +11,11 @@ aviso prévio — e, a partir da Rev. 3222, também a tabela `atestados` (projet
 **Armadilha:** o abono de atestado (`abonarPontoPorAtestado` na Central de Documentos)
 escreve SÓ em `timecard_daily` (statusDia='atestado') e `ponto_descontos` — NENHUM dos
 quais é lido pelo espelho. Logo "abonei o atestado mas o dia continua Falta no espelho"
-NÃO é bug do abono: é mismatch de superfície read/write.
+NÃO é bug do abono: é mismatch de superfície read/write. O "Relatório de Faltas"
+(`FechamentoPonto.tsx`) SIM cruza a tabela `atestados` e mostra "Falta Justificada" — daí
+o mesmo dia divergir entre as duas telas (sintoma que o usuário reporta). Gotcha extra:
+`timecard_daily` só é populado quando o fechamento/folha roda pro período; num mês ainda
+não processado fica VAZIO, e o UPDATE do abono afeta 0 linhas silenciosamente.
 
 **Como aplicar:** qualquer coisa que precise aparecer no Espelho de Ponto tem que estar
 em `time_records.tipoDia` OU ser projetada no retorno de `getEspelhoPontoRange` (padrão
