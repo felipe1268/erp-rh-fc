@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4029** — **MEDIÇÃO DE CONTRATOS: REDESIGN COMPLETO DO DIÁLOGO "EDITAR BOLETIM" (PERÍODO DA MEDIÇÃO).** Usuário apontou que este diálogo (edição de datas do boletim) ainda não tinha recebido o redesign moderno pedido nas revisões anteriores. `MedicaoDetalhe.tsx`, dialog `modalEditBoletim`: reestruturado em 3 blocos visuais (cabeçalho com ícone em avatar azul + subtítulo; corpo com card branco `rounded-2xl` para "Período da medição" + Observações; rodapé fixo com Cancelar/Salvar), inputs de data com ícone `CalendarRange` interno, badge calculado ao vivo "N dias de medição" + referência MM/AAAA, e validação nova (data fim < início desabilita "Salvar" com aviso). Mesma mutation/campos de antes. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4028** — **MEDIÇÃO DE CONTRATOS: OLHINHO NA LISTA DE BOLETINS + REDESIGN MOBILE DO CABEÇALHO DO DIÁLOGO "ITENS DO BOLETIM" + ENCAMINHAR VIA WHATSAPP.** Usuário mandou prints do celular mostrando o cabeçalho do diálogo quebrado no mobile (botões Imprimir/Gerar PDF ilegíveis, em cima do X de fechar) e pediu um ícone de olho na lista de boletins + opção de encaminhar via WhatsApp. Lista de boletins: novo botão `Eye` antes do lápis de editar, chamando `abrirItens(b)`. Cabeçalho do diálogo reestruturado em 2 linhas: título isolado no `DialogTitle`; botões de ação (status/Imprimir/Gerar PDF/WhatsApp) movidos para uma linha própria abaixo, fora do título, sem `ml-auto` (eliminando a colisão com o X), sempre ícone+texto, `flex-wrap` p/ quebrar em várias linhas no mobile. Novo `compartilharBoletimMedicaoWhatsApp` em `boletimMedicaoPdf.ts`: tenta `navigator.share({files:[pdf]})` (Web Share API nível 2, abre a folha nativa com WhatsApp como opção); sem suporte (desktop), baixa o PDF e abre `wa.me` com mensagem pronta pedindo para anexar. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4027** — **MEDIÇÃO DE CONTRATOS: RASTREABILIDADE DO "ORIGEM: CRONOGRAMA" + BOTÕES DE FLUXO/IMPRESSÃO/PDF NO DIÁLOGO "ITENS DO BOLETIM".** Usuário pediu que, ao clicar na origem "Cronograma" de um item, ficasse claro DE QUAL semana do Avanço Semanal (Planejamento) veio o % usado na medição; e que o diálogo ganhasse botões de Aprovar/Enviar Medição, Imprimir e Gerar PDF para o boletim poder ser entregue ao cliente validar. Backend: nova query `medicao.getHistoricoAvancoAtividade({atividadeId, contratoId, companyId})` valida contrato↔company e atividade↔projeto do contrato (anti-IDOR), lista o histórico semanal de `planejamento_avancos` da atividade (mesma revisão) ordenado por semana. Frontend: badge "Cronograma" virou botão com Popover (`OrigemBadge`/`HistoricoAvancoContent`) mostrando as semanas lançadas e destacando a última (a "usada"); cabeçalho do diálogo ganhou botão de avanço de status (reaproveita `PROXIMOS_STATUS`/`avancarStatusMutation` já existentes), "Imprimir" e "Gerar PDF". Novo `client/src/lib/boletimMedicaoPdf.ts` (jsPDF manual, mesmo padrão visual de `dfcPdf.ts`) monta documento formal com identificação do contrato, cards de totais, tabela de itens e linhas de assinatura Contratada×Cliente; "Imprimir" abre o PDF numa nova aba e dispara `print()` (não imprime o Dialog `position:fixed` diretamente). ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4027** — **MEDIÇÃO DE CONTRATOS: RASTREABILIDADE DO "ORIGEM: CRONOGRAMA" + BOTÕES DE FLUXO/IMPRESSÃO/PDF NO DIÁLOGO "ITENS DO BOLETIM".** Novo `getHistoricoAvancoAtividade` (anti-IDOR) mostra de qual semana do Avanço Semanal veio o % da medição via Popover; diálogo ganhou botões Aprovar/Enviar, Imprimir e Gerar PDF (`boletimMedicaoPdf.ts`, jsPDF). ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4026** — **MEDIÇÃO DE CONTRATOS: REDESIGN DO DIÁLOGO "ITENS DO BOLETIM" + INTEGRAÇÃO COM COMPRAS PARA DETECTAR OCs DE FD E TRAZER O VALOR AUTOMATICAMENTE.** Diálogo reconstruído com cards de resumo, coluna "Origem" por linha e botão "Vincular FD de Compras" que cria o registro de FD e insere a linha automaticamente. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4022** — **FINANCEIRO/DRE: OPÇÃO DE CONSOLIDAR O MÊS MANUALMENTE.** Nova tabela `financial_dre_consolidacoes`; procedures `getDREConsolidacaoStatus`/`consolidarDRE`/`desconsolidarDRE` (admin/admin_master); tela DRE ganha botão "Consolidar Mês" e selo de consolidação manual. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4021** — **FINANCEIRO/SEFAZ: DANFE MOSTRANDO "XML COMPLETO NÃO DISPONÍVEL" — CAUSA-RAIZ E BOTÃO MANUAL "DAR CIÊNCIA DA OPERAÇÃO E BUSCAR XML COMPLETO".** Causa-raiz: nota chegou via SEFAZ só como resumo (`resNFe`) — o XML completo (`nfeProc`) não é liberado ao destinatário em boa parte das UFs até que ele registre o evento "Ciência da Operação" (tpEvento 210210, ato neutro). Nova função `buscarXmlPorChave` + mutation `sefaz.darCienciaEBuscarXml`, disparado manualmente por nota. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4019 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4021 e anteriores.
 
 ## User preferences
 

@@ -1,4 +1,30 @@
 /**
+ * Rev. 4029 — **MEDIÇÃO DE CONTRATOS: REDESIGN COMPLETO DO DIÁLOGO "EDITAR BOLETIM" (PERÍODO DA
+ * MEDIÇÃO).**
+ *
+ * PEDIDO: usuário apontou que o diálogo de edição de datas do boletim ("Editar Boletim") ainda não
+ * tinha recebido o redesign moderno pedido — queria layout 100% novo, cores/padrões do sistema,
+ * sem texto sobreposto, tela intuitiva.
+ *
+ * SOLUÇÃO — Frontend (`client/src/pages/medicao/MedicaoDetalhe.tsx`), dialog `modalEditBoletim`:
+ * - Estrutura em 3 blocos visuais dentro do `DialogContent` (`p-0` + seções com borda):
+ *   cabeçalho com ícone em avatar azul arredondado + título + subtítulo explicativo; corpo com
+ *   card branco (`rounded-2xl border shadow-sm`) para "Período da medição" e campo de
+ *   Observações; rodapé fixo com fundo `bg-gray-50/60` e os botões Cancelar/Salvar.
+ * - Inputs de data ganharam ícone `CalendarRange` interno (posicionado à esquerda, `pointer-events-none`)
+ *   e fundo `bg-gray-50` que vira branco no foco.
+ * - Nova faixa de feedback calculada ao vivo: badge "N dias de medição" (calcula a duração do
+ *   período) + a referência AAAA-MM formatada como MM/AAAA; se data fim < data início, mostra aviso
+ *   de erro em vermelho e o botão "Salvar" é desabilitado (validação que antes não existia — só
+ *   checava campos vazios).
+ * - Nenhuma mudança de contrato de dados: mesma mutation `editarBoletimMutation`, mesmos campos
+ *   enviados.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo (só reorganização visual + 1 validação nova aditiva no
+ * client).
+ */
+
+/**
  * Rev. 4028 — **MEDIÇÃO DE CONTRATOS: OLHINHO NA LISTA DE BOLETINS + REDESIGN MOBILE DO CABEÇALHO
  * DO DIÁLOGO "ITENS DO BOLETIM" + ENCAMINHAR VIA WHATSAPP.**
  *

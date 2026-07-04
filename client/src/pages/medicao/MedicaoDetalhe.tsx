@@ -1101,73 +1101,111 @@ export default function MedicaoDetalhe() {
       </Dialog>
 
       <Dialog open={modalEditBoletim} onOpenChange={open => { setModalEditBoletim(open); if (!open) setBoletimEditando(null); }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Edit className="h-5 w-5 text-blue-600" />
-              Editar Boletim {boletimEditando ? String(boletimEditando.numero).padStart(2, "0") : ""}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-1">
-            <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-3 space-y-3">
+        <DialogContent className="max-w-md p-0 overflow-hidden gap-0">
+          <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                  <Edit className="h-5 w-5" />
+                </span>
+                <span className="flex flex-col items-start">
+                  <span className="text-base font-semibold text-gray-900">
+                    Editar Boletim {boletimEditando ? String(boletimEditando.numero).padStart(2, "0") : ""}
+                  </span>
+                  <span className="text-xs font-normal text-gray-400">Ajuste o período e as observações desta medição</span>
+                </span>
+              </DialogTitle>
+            </DialogHeader>
+          </div>
+
+          <div className="space-y-5 px-6 py-5">
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-3 shadow-sm">
               <p className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-gray-500 font-semibold">
-                <CalendarRange className="h-3.5 w-3.5" />
+                <CalendarRange className="h-3.5 w-3.5 text-blue-500" />
                 Período da medição
               </p>
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs text-gray-600">Data Início *</Label>
-                  <Input
-                    type="date"
-                    className="bg-white"
-                    value={formEditBoletim.dataInicio}
-                    onChange={e => setFormEditBoletim(f => ({ ...f, dataInicio: e.target.value }))}
-                  />
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-gray-600">Data Início <span className="text-red-500">*</span></Label>
+                  <div className="relative">
+                    <CalendarRange className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+                    <Input
+                      type="date"
+                      className="bg-gray-50 pl-8 focus:bg-white"
+                      value={formEditBoletim.dataInicio}
+                      onChange={e => setFormEditBoletim(f => ({ ...f, dataInicio: e.target.value }))}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Label className="text-xs text-gray-600">Data Fim *</Label>
-                  <Input
-                    type="date"
-                    className="bg-white"
-                    value={formEditBoletim.dataFim}
-                    onChange={e => setFormEditBoletim(f => ({ ...f, dataFim: e.target.value }))}
-                  />
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-gray-600">Data Fim <span className="text-red-500">*</span></Label>
+                  <div className="relative">
+                    <CalendarRange className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+                    <Input
+                      type="date"
+                      className="bg-gray-50 pl-8 focus:bg-white"
+                      value={formEditBoletim.dataFim}
+                      onChange={e => setFormEditBoletim(f => ({ ...f, dataFim: e.target.value }))}
+                    />
+                  </div>
                 </div>
               </div>
+              {formEditBoletim.dataInicio && formEditBoletim.dataFim && (() => {
+                const di = new Date(formEditBoletim.dataInicio + "T12:00:00");
+                const df = new Date(formEditBoletim.dataFim + "T12:00:00");
+                const dias = Math.round((df.getTime() - di.getTime()) / 86400000) + 1;
+                return dias > 0 ? (
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 text-blue-700 px-2.5 py-1 font-medium">
+                      <Clock className="h-3 w-3" />
+                      {dias} {dias === 1 ? "dia" : "dias"} de medição
+                    </span>
+                    <span className="text-gray-400">
+                      Referência: {formEditBoletim.dataInicio.substring(0, 7).split("-").reverse().join("/")}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-xs text-red-500 font-medium">A data fim deve ser posterior ou igual à data início.</p>
+                );
+              })()}
             </div>
-            <div>
-              <Label className="text-xs text-gray-600 flex items-center gap-1.5 mb-1">
-                <MessageSquare className="h-3.5 w-3.5" />
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-gray-600 flex items-center gap-1.5">
+                <MessageSquare className="h-3.5 w-3.5 text-blue-500" />
                 Observações
               </Label>
               <Textarea
                 placeholder="Observações desta medição..."
+                className="bg-gray-50 focus:bg-white resize-none"
                 value={formEditBoletim.observacoes}
                 onChange={e => setFormEditBoletim(f => ({ ...f, observacoes: e.target.value }))}
-                rows={2}
+                rows={3}
               />
             </div>
-            <div className="flex justify-end gap-2 pt-1">
-              <Button variant="outline" onClick={() => setModalEditBoletim(false)}>Cancelar</Button>
-              <Button
-                disabled={!formEditBoletim.dataInicio || !formEditBoletim.dataFim || editarBoletimMutation.isPending}
-                onClick={() => {
-                  if (!boletimEditando) return;
-                  const periodo = formEditBoletim.dataInicio ? formEditBoletim.dataInicio.substring(0, 7) : boletimEditando.periodoReferencia;
-                  editarBoletimMutation.mutate({
-                    id: boletimEditando.id,
-                    companyId,
-                    periodoReferencia: periodo,
-                    dataInicio: formEditBoletim.dataInicio || null,
-                    dataFim: formEditBoletim.dataFim || null,
-                    observacoes: formEditBoletim.observacoes || null,
-                  });
-                }}
-              >
-                {editarBoletimMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                Salvar
-              </Button>
-            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 px-6 py-4 border-t border-gray-100 bg-gray-50/60">
+            <Button variant="outline" className="bg-white" onClick={() => setModalEditBoletim(false)}>Cancelar</Button>
+            <Button
+              className="bg-blue-600 hover:bg-blue-700"
+              disabled={!formEditBoletim.dataInicio || !formEditBoletim.dataFim || formEditBoletim.dataFim < formEditBoletim.dataInicio || editarBoletimMutation.isPending}
+              onClick={() => {
+                if (!boletimEditando) return;
+                const periodo = formEditBoletim.dataInicio ? formEditBoletim.dataInicio.substring(0, 7) : boletimEditando.periodoReferencia;
+                editarBoletimMutation.mutate({
+                  id: boletimEditando.id,
+                  companyId,
+                  periodoReferencia: periodo,
+                  dataInicio: formEditBoletim.dataInicio || null,
+                  dataFim: formEditBoletim.dataFim || null,
+                  observacoes: formEditBoletim.observacoes || null,
+                });
+              }}
+            >
+              {editarBoletimMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Salvar
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
