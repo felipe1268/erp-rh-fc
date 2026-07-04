@@ -1,4 +1,29 @@
 /**
+ * Rev. 4008 — **ALMOXARIFADO: UNIFICAÇÃO DOS 985 ITENS COM NOME IDÊNTICO (165 GRUPOS)
+ * DETECTADOS NA REV. 4006, SEGUIDO DE RENUMERAÇÃO SEQUENCIAL DOS CÓDIGOS `MAT-NNNN`.**
+ *
+ * Pedido do usuário ao ver a lista de materiais: "se tem o mesmo nome, pode unificar pra não
+ * ter dúvidas". Reavaliação: os 165 grupos (nome idêntico após normalizar só espaços — critério
+ * mais estrito que a varredura da Rev. 4006, que também normalizava acento/pontuação e incluía
+ * casos com código de referência embutido no nome, ex. "[15.01.01.01]", que SÃO itens distintos)
+ * têm 100% `tipo_controle='estoque'` (não há um segundo tipo de controle "unidade serializada"
+ * no schema) — indício de que são registros duplicados de importação, não rastreio unitário
+ * legítimo. Backup completo de `almoxarifado_itens` + 7 tabelas relacionadas salvo antes da
+ * operação. Migração dentro de 1 transação: (1) mapa dup→canônico (canônico = menor `id`/mais
+ * antigo do grupo); (2) soma de `quantidade_atual` de todo o grupo no canônico; (3) repontar
+ * `item_id`/`item_id_origem`/`item_id_destino` em `almoxarifado_baias`, `_movimentacoes`,
+ * `_recebimento_itens`, `_saidas_insumo`, `_transferencias`, `warehouse_inventory_session_items`
+ * (6.566 linhas — a maior parte) e `warehouse_loans` para o item canônico antes de apagar os
+ * duplicados (985 DELETEs), preservando 100% do histórico de movimentação/empréstimo. Resultado:
+ * 2.823 → 1.838 itens (1.836 na empresa principal + 2 na secundária), zero grupos duplicados
+ * restantes. Códigos `MAT-NNNN` renumerados sequencialmente sem buracos (`MAT-0001`...`MAT-1836`)
+ * — repete a rotina de renumeração da Rev. 4006/4007. Primeira tentativa da migração deu timeout
+ * (90s) por rodar 165 UPDATEs sequenciais numa tabela de 12k linhas sem filtro; reescrita com
+ * tabela de mapeamento temporária + 1 UPDATE por tabela via JOIN resolveu (rollback automático da
+ * 1ª tentativa não deixou resíduo).
+ */
+
+/**
  * Rev. 4007 — **ALMOXARIFADO: FORMATO DO CÓDIGO DE MATERIAL AJUSTADO PARA `MAT-NNNN`
  * (4 DÍGITOS COM HÍFEN), SUBSTITUINDO O `MATNNNNNN` (6 DÍGITOS SEM HÍFEN) DA REV. 4006.**
  *

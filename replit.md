@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4007** — **ALMOXARIFADO: FORMATO DO CÓDIGO DE MATERIAL AJUSTADO PARA `MAT-NNNN`.** Usuário pediu logo após a Rev. 4006: "MAT-0001 quero neste formato". Re-migrados os mesmos 2.823 materiais no Neon de `MATNNNNNN` (6 dígitos sem hífen) para `MAT-0001`...`MAT-2821` (4 dígitos com hífen, sequencial por empresa, mesma ordem por `id` ASC). Helper `criarItemAlmoxarifadoComCodigo` ajustado (regex `^MAT-(\d+)$` + `padStart(4,"0")`); nenhum outro ponto do código dependia do formato antigo. ZERO DELETE · ZERO ALTER.
+- **Rev. 4008** — **ALMOXARIFADO: UNIFICAÇÃO DOS 985 ITENS COM NOME IDÊNTICO (165 GRUPOS), MAIS RENUMERAÇÃO SEQUENCIAL.** Usuário, ao ver a lista de materiais: "se tem o mesmo nome, pode unificar pra não ter dúvidas". Os 165 grupos (nome idêntico após normalizar só espaços) tinham 100% `tipo_controle='estoque'` — indício de duplicação de importação, não rastreio unitário legítimo (diferente dos casos com código de referência embutido no nome, ex. `[15.01.01.01]`, que continuam distintos). Backup completo antes da operação; migração em 1 transação: soma de `quantidade_atual` no item mais antigo de cada grupo (canônico), histórico repontado em 7 tabelas (`almoxarifado_movimentacoes`, `_baias`, `_recebimento_itens`, `_saidas_insumo`, `_transferencias`, `warehouse_inventory_session_items` — 6.566 linhas, `warehouse_loans`) antes de apagar os 985 duplicados. Resultado: 2.823 → 1.838 itens, zero grupos duplicados restantes, códigos renumerados sem buracos (`MAT-0001`...`MAT-1836`). Primeira tentativa (165 UPDATEs sequenciais numa tabela de 12k linhas) deu timeout; reescrita com tabela de mapeamento + 1 UPDATE por tabela resolveu. ZERO perda de histórico (tudo repontado, não apagado).
 
-- **Rev. 4006** — **ALMOXARIFADO: PACOTE DE 6 CORREÇÕES E MELHORIAS (usuário: "quero que você faça tudo").** Item principal: código automático de material — os 2.823 itens cadastrados (2 empresas) renumerados no Neon (formato substituído na Rev. 4007); antes só 96 tinham código. Detectados 149 grupos de nomes "duplicados" (953 linhas), mas a maioria (~897 linhas) são peças com rastreio unitário legítimo (formas/andaimes serializados) — decisão: NÃO mesclar estoque (destruiria o rastreio), só normalizado texto de 29 nomes com diferença de espaço/maiúscula. Novo helper `criarItemAlmoxarifadoComCodigo` (mesmo padrão de `gerarProximoNumeroOC`: `pg_advisory_xact_lock` dentro da transação do INSERT) plugado nos 5 pontos que criam material novo (cadastro manual, auto-cadastro via OC, recebimento inteligente, import Mas Controle API/CSV); pontos de transferência entre obras mantidos como estavam (copiam o código do item de origem de propósito). Demais 5 itens do pacote: matching de duplicata NF/OC melhorado; Saída de Insumos aceita busca de terceiro; Fechar Dia trata pendências antigas + filtro por obra; corrigido bug do "Devolver Todas"; Inventário ganhou botão "Corrigir" + Empréstimo ganhou campo de observação. Detalhe completo em `shared/changelog.ts`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4007** — **ALMOXARIFADO: FORMATO DO CÓDIGO DE MATERIAL AJUSTADO PARA `MAT-NNNN`.** Usuário pediu logo após a Rev. 4006: "MAT-0001 quero neste formato". Re-migrados os mesmos 2.823 materiais no Neon de `MATNNNNNN` (6 dígitos sem hífen) para `MAT-0001`... (4 dígitos com hífen, sequencial por empresa). Helper `criarItemAlmoxarifadoComCodigo` ajustado (regex `^MAT-(\d+)$` + `padStart(4,"0")`). ZERO DELETE · ZERO ALTER.
 
 ### 5 one-liners
+
+- **Rev. 4006** — **ALMOXARIFADO: PACOTE DE 6 CORREÇÕES E MELHORIAS (usuário: "quero que você faça tudo").** Código automático de material (`criarItemAlmoxarifadoComCodigo`, mesmo padrão de `gerarProximoNumeroOC` com `pg_advisory_xact_lock`) plugado nos 5 pontos que criam material novo; matching de duplicata NF/OC melhorado; Saída de Insumos aceita busca de terceiro; Fechar Dia trata pendências antigas + filtro por obra; corrigido bug do "Devolver Todas"; Inventário ganhou botão "Corrigir" + Empréstimo ganhou campo de observação. Detecção de duplicatas de nome revista/executada nas Rev. 4008. ZERO DELETE · ZERO ALTER destrutivo (na época).
 
 - **Rev. 4004** — COMPRAS/COTAÇÕES: PDF e Excel do Mapa de Cotação não traziam a linha de total por fornecedor; `gerarPdfCotacao`/`exportarExcelCotacao` passaram a reaproveitar `getFornTotal`/`metaGrandTotal`/`qtdGrandTotal` pra gerar a linha de total. ZERO DELETE · ZERO ALTER.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4001** — **COMPRAS / COTAÇÕES: SOLICITAÇÕES DE OBRAS DIFERENTES CAINDO COM O MESMO NÚMERO DE COTAÇÃO.** 4 dos 7 pontos que geram `numeroCotacao` em `compras.ts` calculavam via `COUNT(*)+1` FORA de lock/transação (race condition); fix roda dentro de `db.transaction` com `pg_advisory_xact_lock`; 32 grupos duplicados (41 cotações) renumerados no Neon. ZERO DELETE · ZERO ALTER.
 
-- **Rev. 4000** — **BANCO DE HORAS: DÉBITOS AUTOMÁTICOS DE ATRASO/FALTA E DSR (GERADOS PELA FOLHA) GRAVAVAM `minutos` NEGATIVO, INVERTENDO O SALDO MENSAL NA ABA "SALDOS".** `debito_atraso_falta`/`debito_dsr` gravavam `minutos` negativo, dupla-negação inflava o saldo mensal; fix grava positivo (igual ao manual) + `ABS()` de defesa nas leituras + correção das 93 linhas históricas no Neon. ZERO DELETE · ZERO ALTER.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 3998 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4000 e anteriores.
 
 ## User preferences
 
