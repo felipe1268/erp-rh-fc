@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { toast } from "sonner";
 import { useLocation, useParams } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
@@ -290,18 +291,27 @@ export default function MedicaoDetalhe() {
     },
   });
 
-  const salvarItensMutation = trpc.medicao.salvarItensBoletim.useMutation({
+  const recalcularMutation = trpc.medicao.recalcularDeducoes.useMutation({
     onSuccess: () => {
       utils.medicao.listarBoletins.invalidate({ contratoId });
       utils.medicao.getBoletim.invalidate({ id: boletimSelecionado?.id });
       setModalItens(false);
     },
+    onError: (error) => {
+      toast.error(`Erro ao calcular deduções: ${error.message || "tente novamente"}`);
+    },
   });
 
-  const recalcularMutation = trpc.medicao.recalcularDeducoes.useMutation({
+  const salvarItensMutation = trpc.medicao.salvarItensBoletim.useMutation({
     onSuccess: () => {
       utils.medicao.listarBoletins.invalidate({ contratoId });
       utils.medicao.getBoletim.invalidate({ id: boletimSelecionado?.id });
+      if (boletimSelecionado) {
+        recalcularMutation.mutate({ boletimId: boletimSelecionado.id });
+      }
+    },
+    onError: (error) => {
+      toast.error(`Erro ao salvar itens do boletim: ${error.message || "tente novamente"}`);
     },
   });
 
@@ -1624,11 +1634,10 @@ export default function MedicaoDetalhe() {
                             isFd: i.isFd ?? false,
                           })),
                         });
-                        recalcularMutation.mutate({ boletimId: boletimSelecionado.id });
                       }}
-                      disabled={salvarItensMutation.isPending}
+                      disabled={salvarItensMutation.isPending || recalcularMutation.isPending}
                     >
-                      {salvarItensMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                      {(salvarItensMutation.isPending || recalcularMutation.isPending) ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                       Salvar e Calcular Deduções
                     </Button>
                   </div>

@@ -1,4 +1,35 @@
 /**
+ * Rev. 4033 — **MEDIÇÃO DE CONTRATOS: BOTÃO "SALVAR E CALCULAR DEDUÇÕES" PARECIA NÃO FAZER NADA
+ * (SEM FEEDBACK DE ERRO) — RACE CONDITION + FALTA DE onError.**
+ *
+ * PEDIDO: usuário reportou (IMG_3314) que, no diálogo "Itens do Boletim" (boletim "01 — 2026-04"),
+ * clicar em "Salvar e Calcular Deduções" "não faz nada"/"dá erro" — sem nenhuma mensagem visível.
+ *
+ * CAUSA RAIZ (dupla):
+ * 1. Race condition: o onClick disparava `salvarItensMutation.mutate(...)` e, na sequência
+ *    IMEDIATA (não encadeado via onSuccess), `recalcularMutation.mutate({ boletimId })` em
+ *    paralelo. `recalcularDeducoes` lê `boletim.valorBruto` direto do banco — se essa leitura
+ *    corresse antes do UPDATE de `salvarItensBoletim` commitar, o cálculo de deduções usava o
+ *    valor bruto ANTIGO (stale), gerando resultado incorreto ou, em cenários de contenção,
+ *    exceção.
+ * 2. Nenhuma das duas mutations tinha `onError`: o `queryClient` global (`client/src/main.tsx`)
+ *    só faz `console.error(...)` em erro de mutation, sem toast/feedback visível — então
+ *    qualquer falha real no backend aparecia pro usuário como "não faz nada".
+ *
+ * SOLUÇÃO — Frontend (`client/src/pages/medicao/MedicaoDetalhe.tsx`):
+ * - `recalcularMutation.mutate({ boletimId })` movido para dentro do `onSuccess` de
+ *   `salvarItensMutation` (encadeamento sequencial garantido: recálculo só roda após o backend
+ *   confirmar que os itens/valorBruto foram persistidos).
+ * - Adicionado `onError` com `toast.error(...)` (sonner, já usado em outras telas do módulo) nas
+ *   duas mutations, mostrando a mensagem de erro do backend ao usuário.
+ * - Botão "Salvar e Calcular Deduções" agora reflete `isPending` de AMBAS as mutations (loading
+ *   contínuo durante as duas etapas, não só a primeira).
+ * - Mesmos campos/payload enviados a `salvarItensBoletim`/`recalcularDeducoes` de antes.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo (fix de sequenciamento + feedback de erro no client).
+ */
+
+/**
  * Rev. 4032 — **MEDIÇÃO DE CONTRATOS: ESPAÇAMENTO E ALINHAMENTO VERTICAL DOS CAMPOS "DATA
  * INÍCIO"/"DATA FIM" NO DIÁLOGO "NOVO BOLETIM DE MEDIÇÃO" (E "EDITAR BOLETIM").**
  *
