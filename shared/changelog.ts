@@ -1,4 +1,27 @@
 /**
+ * Rev. 4061 — **ADMINPRECOS: SALVAR PREÇO FALHAVA COM ERRO DA STRIPE "This price cannot be archived because it is the default price of its product".**
+ *
+ * PEDIDO: usuário anexou print do toast de erro ao clicar em "Salvar todos os preços" em `/admin/saas/precos`,
+ * especificamente na sincronização do módulo "RH & DP" — o preço não era salvo na Stripe (ficava só o local).
+ *
+ * CAUSA-RAIZ: `adminUpdatePrices` em `server/routers/billing.ts` fazia, nessa ordem: (1) `stripe.prices.create`
+ * pro Price novo apontando pro mesmo Product; (2) `stripe.prices.update(currentPriceId, {active:false})` pra
+ * arquivar o Price antigo; (3) `stripe.products.update(productId, {default_price: newPrice.id})` pra trocar o
+ * default do Product. O passo (2) falha porque a API da Stripe recusa arquivar (`active:false`) um Price
+ * enquanto ele AINDA é o `default_price` do seu Product — a troca do default (passo 3) tinha que acontecer
+ * ANTES da tentativa de arquivar, não depois.
+ *
+ * FIX: inverter a ordem dos passos 2 e 3 — agora troca o `default_price` do Product pro Price novo PRIMEIRO,
+ * e só DEPOIS arquiva o Price antigo (que nesse ponto já não é mais o default, então a Stripe permite).
+ *
+ * LIMPEZA: a tentativa anterior (falha no meio do fluxo) tinha deixado 1 Price órfão ATIVO duplicado pro
+ * módulo "rh-dp" na Stripe (criado no passo 1, nunca chegou a virar default nem foi arquivado). Localizado via
+ * `stripe.prices.list` filtrando por `metadata.moduleId==="rh-dp"` e arquivado manualmente (`active:false`) —
+ * sem impacto em assinatura existente (Price arquivado continua válido pra quem já o usa, só não aceita novas
+ * assinaturas). ZERO DELETE · ZERO ALTER destrutivo (fix de lógica + limpeza de dado externo na Stripe).
+ */
+
+/**
  * Rev. 4060 — **`/planos`: MÓDULO FORA DE VENDA AGORA SOME COMPLETAMENTE DA VITRINE, NÃO SÓ DO PREÇO.**
  *
  * PEDIDO: usuário testou a Rev. 4059 em produção e apontou que desligar um módulo pra venda só escondia o

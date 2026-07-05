@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4061** — **ADMINPRECOS: SALVAR PREÇO FALHAVA COM "This price cannot be archived because it is the default price of its product" (STRIPE).** Usuário anexou print do toast de erro ao salvar preço do módulo "RH & DP". `adminUpdatePrices` (`billing.ts`) criava o Price novo, tentava arquivar o Price antigo (`active:false`) e SÓ DEPOIS trocava o `default_price` do Product — mas a Stripe recusa arquivar um Price enquanto ele ainda é o default do produto. Fix: inverter a ordem (trocar `default_price` pro Price novo PRIMEIRO, arquivar o antigo DEPOIS). Limpo também 1 Price órfão ativo duplicado que a tentativa anterior deixou pra trás no Stripe (arquivado manualmente, sem impacto em assinatura existente). ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4060** — **`/planos`: MÓDULO FORA DE VENDA AGORA SOME COMPLETAMENTE DA VITRINE, NÃO SÓ DO PREÇO.** Usuário reportou que desligar um módulo pra venda (Rev. 4059) só escondia o preço (mostrava "—"), com o card completo (nome/descrição/link) ainda visível — sensação de propaganda enganosa. `SiteVendas.tsx`: grid de módulos passou a filtrar `MODULES` contra `catalog.modules` (já é `sellableModules` do backend), então módulo fora de venda não renderiza card nenhum. `ModuloDetalhe.tsx`: guard `isSellable` bloqueia acesso direto por URL à página de detalhe de um módulo desativado (cai em "Módulo não encontrado"). `ContratarPlano.tsx` já estava correto desde a Rev. 4059. ZERO DELETE · ZERO ALTER destrutivo (só frontend).
 
-- **Rev. 4059** — **PAINEL SAAS / AJUSTE DE PREÇOS: NOVO CONTROLE PARA LIGAR/DESLIGAR MÓDULO DA VITRINE COMERCIAL.** Usuário pediu a capacidade de ativar/desativar um módulo pra venda, com layout novo mais intuitivo. Nova coluna `billing_module_prices.is_active` (default 1, ColFix não-destrutivo); novo `server/billingCatalog.ts` centraliza `getEffectiveCatalog()` (`modules` completo + `sellableModules` só ativos) usado por `billing.ts` e `saasAdmin.ts`. Loja pública/checkout só mostra `sellableModules`; assinante que já tem um módulo desativado mantém acesso (grandfather), só fica bloqueado de ADICIONAR módulo fora de venda (`createCheckoutSession`/`updateSubscription`). `AdminPrecos.tsx` redesenhado: saiu a tabela densa, entrou grid de cards por módulo com Switch de ativo/inativo + edição de preço junto. `SaasAdminPanel.tsx` e `MinhaAssinatura.tsx` ganharam badges "fora de venda"/"indisponível". ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4059** — **PAINEL SAAS / AJUSTE DE PREÇOS: NOVO CONTROLE PARA LIGAR/DESLIGAR MÓDULO DA VITRINE COMERCIAL.** Nova coluna `billing_module_prices.is_active`; `server/billingCatalog.ts` centraliza `getEffectiveCatalog()` (`modules` completo + `sellableModules` só ativos). `AdminPrecos.tsx` redesenhado em grid de cards com Switch + edição de preço. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4058** — **`/planos/modulos/:id`: SEÇÃO DE SCREENSHOTS VIRA CARROSSEL "MULTITELA" HORIZONTAL COM VÁRIAS TELAS REAIS POR MÓDULO.** Capturada 2ª screenshot real pra cada um dos 13 módulos que só tinham 1 print; `ModuloDetalhe.tsx` ganhou seção com scroll horizontal + setas de navegação. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4055** — **`/planos/modulos/:id`: SCREENSHOTS DE RH & DP REFEITAS COM DADOS 100% FICTÍCIOS (ZERO PII REAL).** Usuário anexou 5 prints do Raio-X do Funcionário mostrando PII real e exigiu zero dado real em screenshot de marketing; recapturado `painel.png`/`dashboard-funcionarios.png` com empresa/colaboradores 100% fictícios, tudo removido do banco ao final. ZERO DELETE de dado real · ZERO ALTER destrutivo.
 
-- **Rev. 4054** — **`/planos/modulos/:id`: SCREENSHOTS REAIS DO SISTEMA AUTENTICADO SUBSTITUEM O MOCKUP ABSTRATO.** Capturados screenshots reais de TODOS os 14 módulos via bypass de dev temporário (revertido); novo `moduleScreenshots.ts` (`MODULE_SCREENSHOTS`) consumido por `ModuloDetalhe.tsx`. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4053 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4054 e anteriores.
 
 ## User preferences
 

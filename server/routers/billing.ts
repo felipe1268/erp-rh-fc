@@ -186,8 +186,13 @@ export const billingRouter = router({
               recurring: { interval: "month" },
               metadata: { moduleId: update.id },
             });
-            await stripe.prices.update(currentPriceId, { active: false });
+            // Rev. 4061 — a Stripe recusa arquivar (`active:false`) um Price
+            // enquanto ele ainda é o `default_price` do Product ("This price
+            // cannot be archived because it is the default price of its
+            // product"). Precisa trocar o default_price pro Price NOVO
+            // primeiro, e só DEPOIS arquivar o antigo.
             await stripe.products.update(productId, { default_price: newPrice.id });
+            await stripe.prices.update(currentPriceId, { active: false });
           } catch (e: any) {
             throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Falha ao sincronizar preço "${update.id}" no Stripe: ${e?.message || e}` });
           }
