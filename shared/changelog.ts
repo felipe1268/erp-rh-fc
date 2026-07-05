@@ -1,4 +1,27 @@
 /**
+ * Rev. 4058 — **`/planos/modulos/:id`: SEÇÃO DE SCREENSHOTS VIRA CARROSSEL "MULTITELA" HORIZONTAL COM VÁRIAS TELAS REAIS POR MÓDULO.**
+ *
+ * PEDIDO: usuário achou a seção de screenshots rasa demais — hero grande + grid pequeno com só 1-2 telas por
+ * módulo — e pediu explicitamente múltiplas imagens em carrossel horizontal deslizável ("multitela"), lado a
+ * lado, em vez do layout hero+grid da Rev. 4054.
+ *
+ * ESCOPO: capturada uma 2ª screenshot real e autenticada (dados reais da FC Engenharia, sem PII) pra cada um
+ * dos 13 módulos que só tinham 1 print (`sst`, `juridico`, `avaliacao`, `terceiros`, `parceiros`, `planejamento`,
+ * `orcamento`, `compras`, `financeiro`, `medicao`, `almoxarifado`, `gestao-documentos`, `frotas`), salvas em
+ * `client/src/assets/screenshots/*-2.jpg`. `moduleScreenshots.ts` já usava `Record<string, string[]>` — só
+ * precisou de novos imports/entradas, nenhuma mudança de tipo. `ModuloDetalhe.tsx`: removido o hero
+ * grande+grid pequeno; nova seção única "Telas reais de {módulo}" com scroll horizontal (`overflow-x-auto` +
+ * `snap-x snap-mandatory`), setas de navegação (desktop) que avançam por slide via `scrollBy`, e cada slide
+ * mantém o frame de "browser" (bolinhas coloridas) + selo "Tela real do sistema". Hero da seção acima virou
+ * só o `ModulePreviewMock` conceitual (ilustrativo), já que agora a prova real vive 100% no carrossel.
+ *
+ * INFRA TEMPORÁRIA: reaberto e FECHADO no mesmo commit o bypass de auth dev (`SCREENSHOT_DEV_BYPASS`) usado nas
+ * Revs. 4054/4055 pra logar como admin_master sem senha e tirar prints autenticados — revertido 100% em
+ * `server/_core/sdk.ts`/`server/db.ts`, variável de ambiente removida, nenhum vestígio em produção. ZERO
+ * DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4057 — **PAINEL SAAS: DASHBOARD GANHA MÉTRICAS DETALHADAS (ARPU, ASSENTOS, CRESCIMENTO/CHURN DO MÊS, POPULARIDADE POR MÓDULO).**
  *
  * PEDIDO: usuário achou o Painel SaaS (Rev. 4056) raso demais — "coloca mais detalhes sobre o dash, isso

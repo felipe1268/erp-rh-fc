@@ -2,8 +2,9 @@ import { useLocation, useParams } from "wouter";
 import { motion } from "framer-motion";
 import {
   ArrowLeft, ArrowRight, ArrowUpRight, CheckCircle2, Sparkles, Plug, Building2, Menu, X,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { MODULES, formatPrice } from "./modulesData";
@@ -28,8 +29,15 @@ export default function ModuloDetalhe() {
   const mod = MODULES.find(m => m.id === id);
   const details = id ? MODULE_DETAILS[id] : undefined;
   const screenshots = id ? MODULE_SCREENSHOTS[id] ?? [] : [];
-  const heroScreenshot = screenshots[0];
-  const gallery = screenshots.slice(1);
+  const carouselRef = useRef<HTMLDivElement>(null);
+
+  const scrollCarousel = (dir: 1 | -1) => {
+    const el = carouselRef.current;
+    if (!el) return;
+    const slide = el.querySelector<HTMLElement>("[data-slide]");
+    const step = slide ? slide.offsetWidth + 20 : el.clientWidth * 0.85;
+    el.scrollBy({ left: dir * step, behavior: "smooth" });
+  };
 
   const price = (() => {
     const found = catalog?.modules.find(m => m.id === id);
@@ -101,53 +109,60 @@ export default function ModuloDetalhe() {
                 </Button>
               </div>
             </div>
-            {heroScreenshot ? (
-              <div className="relative">
-                <div className="rounded-2xl overflow-hidden shadow-2xl border border-slate-200 bg-slate-900">
-                  <div className="flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-800">
-                    <span className="w-2.5 h-2.5 rounded-full bg-red-400" />
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-                  </div>
-                  <img
-                    src={heroScreenshot}
-                    alt={`Tela real do módulo ${mod.title} no sistema`}
-                    className="w-full h-auto block"
-                  />
-                </div>
-                <span className="absolute -top-3 left-4 flex items-center gap-1.5 text-[11px] font-semibold text-white bg-emerald-600 rounded-full px-3 py-1 shadow-lg">
-                  <Monitor className="w-3 h-3" /> Tela real do sistema
-                </span>
-              </div>
-            ) : (
-              <ModulePreviewMock m={mod} />
-            )}
+            {mod && <ModulePreviewMock m={mod} />}
           </motion.div>
         </div>
       </section>
 
-      {gallery.length > 0 && (
+      {screenshots.length > 0 && (
         <section className="py-14 px-4 sm:px-6 bg-slate-50 border-y border-blue-100">
           <div className="max-w-6xl mx-auto">
-            <div className="flex items-center gap-2 mb-6">
-              <Monitor className="w-4.5 h-4.5 text-blue-800" />
-              <h2 className="text-lg font-bold text-slate-900">Mais telas reais de {mod.title}</h2>
+            <div className="flex items-center justify-between gap-2 mb-6">
+              <div className="flex items-center gap-2">
+                <Monitor className="w-4.5 h-4.5 text-blue-800" />
+                <h2 className="text-lg font-bold text-slate-900">Telas reais de {mod.title}</h2>
+                <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-semibold text-white bg-emerald-600 rounded-full px-3 py-1 ml-2">
+                  Tela real do sistema
+                </span>
+              </div>
+              {screenshots.length > 1 && (
+                <div className="hidden sm:flex items-center gap-2">
+                  <button
+                    onClick={() => scrollCarousel(-1)}
+                    aria-label="Tela anterior"
+                    className="w-9 h-9 rounded-full border border-blue-200 bg-white flex items-center justify-center text-blue-800 hover:bg-blue-50 transition-colors"
+                  >
+                    <ChevronLeft className="w-4.5 h-4.5" />
+                  </button>
+                  <button
+                    onClick={() => scrollCarousel(1)}
+                    aria-label="Próxima tela"
+                    className="w-9 h-9 rounded-full border border-blue-200 bg-white flex items-center justify-center text-blue-800 hover:bg-blue-50 transition-colors"
+                  >
+                    <ChevronRight className="w-4.5 h-4.5" />
+                  </button>
+                </div>
+              )}
             </div>
-            <div className="grid sm:grid-cols-2 gap-5">
-              {gallery.map((src, i) => (
+            <div
+              ref={carouselRef}
+              className="flex gap-5 overflow-x-auto snap-x snap-mandatory pb-3 -mx-4 px-4 sm:mx-0 sm:px-0 [scrollbar-width:thin]"
+            >
+              {screenshots.map((src, i) => (
                 <a
                   key={i}
                   href={src}
                   target="_blank"
                   rel="noreferrer"
-                  className="block rounded-xl overflow-hidden border border-slate-200 shadow-md hover:shadow-xl transition-shadow bg-slate-900"
+                  data-slide
+                  className="shrink-0 snap-start w-[85%] sm:w-[68%] lg:w-[58%] block rounded-xl overflow-hidden border border-slate-200 shadow-md hover:shadow-xl transition-shadow bg-slate-900"
                 >
                   <div className="flex items-center gap-1.5 px-3 py-2 bg-slate-800">
                     <span className="w-2 h-2 rounded-full bg-red-400" />
                     <span className="w-2 h-2 rounded-full bg-amber-400" />
                     <span className="w-2 h-2 rounded-full bg-emerald-400" />
                   </div>
-                  <img src={src} alt={`Tela real ${i + 2} do módulo ${mod.title}`} className="w-full h-auto block" />
+                  <img src={src} alt={`Tela real ${i + 1} do módulo ${mod.title}`} className="w-full h-auto block" />
                 </a>
               ))}
             </div>
