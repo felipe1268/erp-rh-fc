@@ -1,4 +1,25 @@
 /**
+ * Rev. 4051 — **`/planos`: PALETA DE CORES TROCADA DE LARANJA/ÂMBAR PARA AZUL EM TODA A LANDING.**
+ *
+ * PEDIDO: usuário viu os screenshots da Rev. 4050 no canvas e disse que não curte laranja, prefere azul
+ * ("gosto mais do azul... pode criar algo em torno disso").
+ *
+ * ESCOPO: `client/src/pages/portal/SiteVendas.tsx` — toda a identidade visual PRÓPRIA do site (nav, badge do
+ * hero, título gradiente, botões CTA, glow de fundo do hero, cards de stats, seção "Quem somos"/valores,
+ * seção "Por que a FC", cases ilustrativos, benefícios, vídeo institucional, seção final de planos e rodapé)
+ * migrou de `orange-*/amber-*` para `blue-*/sky-*`, incluindo os valores `rgba(...)` e hex hardcoded usados
+ * nos radial-gradients e box-shadows do hero (antes tons de laranja/pêssego, agora azul/céu/índigo, fundo
+ * frio `#F5F9FF` no lugar do creme quente `#FFFBF5`).
+ *
+ * MANTIDO DE PROPÓSITO: as cores INDIVIDUAIS de cada card de módulo no array `MODULES` (ex.: Jurídico,
+ * Avaliação, Terceiros e Financeiro usam tons de âmbar/laranja como parte da paleta variada por categoria)
+ * não foram tocadas — são identidade de módulo, não a cor de marca do site; e o mascote "Julinho" continua
+ * com capacete/colete laranja (uniforme de obra, não é a paleta de UI).
+ *
+ * Arquivo: `client/src/pages/portal/SiteVendas.tsx`. ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4050 — **`/planos`: SELO "ILUSTRATIVO" REMOVIDO DOS CARDS, NOVA SEÇÃO "QUEM SOMOS" (missão/visão/valores/história)
  * E MÓDULOS AGORA CLICÁVEIS COM PRÉVIA VISUAL + DESTAQUES DE IA/INTEGRAÇÃO.**
  *

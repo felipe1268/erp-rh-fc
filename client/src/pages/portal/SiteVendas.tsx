@@ -150,8 +150,8 @@ const TESTIMONIAL_DISCLAIMER =
 
 function TestimonialCardView({ t }: { t: TestimonialCard }) {
   return (
-    <div className="relative shrink-0 w-[320px] sm:w-[360px] rounded-2xl border border-orange-100 bg-white shadow-sm p-6 mx-3 flex flex-col">
-      <Quote className="w-6 h-6 text-orange-300 mb-3" />
+    <div className="relative shrink-0 w-[320px] sm:w-[360px] rounded-2xl border border-blue-100 bg-white shadow-sm p-6 mx-3 flex flex-col">
+      <Quote className="w-6 h-6 text-blue-300 mb-3" />
       <p className="text-sm text-slate-600 leading-relaxed italic flex-1">"{t.quote}"</p>
       <div className="mt-5 pt-4 border-t border-slate-100">
         <p className="text-sm font-semibold text-slate-900">{t.name}</p>
@@ -254,10 +254,10 @@ function ModuleDetailDialog({ m, price, onClose, onSubscribe }: { m: ModuleCard;
             <Play className="w-3.5 h-3.5" /> Vídeo explicativo desta tela em produção — em breve por aqui.
           </div>
           <div className="mt-6 flex items-center justify-between gap-4 flex-wrap">
-            <span className="text-lg font-bold text-orange-600">
+            <span className="text-lg font-bold text-blue-600">
               {price ? `${price}/mês` : "Sob consulta"}
             </span>
-            <Button className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-lg shadow-orange-200" onClick={onSubscribe}>
+            <Button className="bg-gradient-to-r from-blue-500 to-sky-500 hover:from-blue-600 hover:to-sky-600 text-white shadow-lg shadow-blue-200" onClick={onSubscribe}>
               Testar este módulo grátis <ArrowRight className="w-4 h-4 ml-1.5" />
             </Button>
           </div>
@@ -295,28 +295,28 @@ export default function SiteVendas() {
   return (
     <div className="min-h-screen bg-white text-slate-800 overflow-x-hidden">
       {/* ── Nav ── */}
-      <header className="sticky top-0 z-50 backdrop-blur-2xl bg-white/70 border-b border-white/60 shadow-[0_1px_20px_rgba(251,146,60,0.08)]">
+      <header className="sticky top-0 z-50 backdrop-blur-2xl bg-white/70 border-b border-white/60 shadow-[0_1px_20px_rgba(59,130,246,0.08)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="relative w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-amber-400 flex items-center justify-center shadow-md shadow-orange-200">
-              <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-orange-400 to-amber-300 blur-md opacity-50 -z-10" />
+            <div className="relative w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-sky-400 flex items-center justify-center shadow-md shadow-blue-200">
+              <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-blue-400 to-sky-300 blur-md opacity-50 -z-10" />
               <Building2 className="w-5 h-5 text-white" />
             </div>
             <span className="font-bold text-lg tracking-tight text-slate-800">ERP Gestão Integrada</span>
           </div>
           <nav className="hidden md:flex items-center gap-8">
             {navLinks.map((l) => (
-              <a key={l.href} href={l.href} className="relative text-sm text-slate-600 hover:text-orange-600 transition-colors font-medium group">
+              <a key={l.href} href={l.href} className="relative text-sm text-slate-600 hover:text-blue-600 transition-colors font-medium group">
                 {l.label}
-                <span className="absolute -bottom-1 left-0 w-0 h-px bg-gradient-to-r from-orange-500 to-amber-400 group-hover:w-full transition-all duration-300" />
+                <span className="absolute -bottom-1 left-0 w-0 h-px bg-gradient-to-r from-blue-500 to-sky-400 group-hover:w-full transition-all duration-300" />
               </a>
             ))}
           </nav>
           <div className="hidden md:flex items-center gap-3">
-            <Button variant="ghost" className="text-slate-600 hover:text-orange-600 hover:bg-orange-50" onClick={() => navigate("/login")}>
+            <Button variant="ghost" className="text-slate-600 hover:text-blue-600 hover:bg-blue-50" onClick={() => navigate("/login")}>
               Entrar
             </Button>
-            <Button className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-lg shadow-orange-200" onClick={goToPlans}>
+            <Button className="bg-gradient-to-r from-blue-500 to-sky-500 hover:from-blue-600 hover:to-sky-600 text-white shadow-lg shadow-blue-200" onClick={goToPlans}>
               Começar grátis <ArrowRight className="w-4 h-4 ml-1.5" />
             </Button>
           </div>
@@ -325,15 +325,15 @@ export default function SiteVendas() {
           </button>
         </div>
         {menuOpen && (
-          <div className="md:hidden border-t border-orange-100 bg-white px-4 py-4 space-y-3">
+          <div className="md:hidden border-t border-blue-100 bg-white px-4 py-4 space-y-3">
             {navLinks.map((l) => (
-              <a key={l.href} href={l.href} className="block text-sm text-slate-600 hover:text-orange-600" onClick={() => setMenuOpen(false)}>
+              <a key={l.href} href={l.href} className="block text-sm text-slate-600 hover:text-blue-600" onClick={() => setMenuOpen(false)}>
                 {l.label}
               </a>
             ))}
             <div className="flex flex-col gap-2 pt-2">
-              <Button variant="outline" className="border-orange-200 text-slate-700 hover:bg-orange-50" onClick={() => navigate("/login")}>Entrar</Button>
-              <Button className="bg-gradient-to-r from-orange-500 to-amber-500" onClick={goToPlans}>Começar grátis</Button>
+              <Button variant="outline" className="border-blue-200 text-slate-700 hover:bg-blue-50" onClick={() => navigate("/login")}>Entrar</Button>
+              <Button className="bg-gradient-to-r from-blue-500 to-sky-500" onClick={goToPlans}>Começar grátis</Button>
             </div>
           </div>
         )}
@@ -345,12 +345,12 @@ export default function SiteVendas() {
           className="absolute inset-0 -z-10 animate-mesh-drift"
           style={{
             background:
-              "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(253,186,116,0.35) 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 95% 10%, rgba(96,165,250,0.18) 0%, transparent 60%), radial-gradient(ellipse 50% 35% at 10% 25%, rgba(244,114,182,0.12) 0%, transparent 60%), linear-gradient(180deg, #FFFBF5 0%, #FFFFFF 40%)",
+              "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(147,197,253,0.35) 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 95% 10%, rgba(56,189,248,0.18) 0%, transparent 60%), radial-gradient(ellipse 50% 35% at 10% 25%, rgba(129,140,248,0.12) 0%, transparent 60%), linear-gradient(180deg, #F5F9FF 0%, #FFFFFF 40%)",
           }}
         />
-        <div className="absolute inset-0 -z-10 opacity-[0.35] [background-image:radial-gradient(circle,rgba(251,146,60,0.35)_1px,transparent_1px)] [background-size:28px_28px]" />
-        <div className="absolute top-24 left-[8%] w-2 h-2 rounded-full bg-orange-400/60 animate-float-slow hidden sm:block" />
-        <div className="absolute top-40 right-[12%] w-3 h-3 rounded-full bg-amber-400/50 animate-float-slower hidden sm:block" />
+        <div className="absolute inset-0 -z-10 opacity-[0.35] [background-image:radial-gradient(circle,rgba(59,130,246,0.35)_1px,transparent_1px)] [background-size:28px_28px]" />
+        <div className="absolute top-24 left-[8%] w-2 h-2 rounded-full bg-blue-400/60 animate-float-slow hidden sm:block" />
+        <div className="absolute top-40 right-[12%] w-3 h-3 rounded-full bg-sky-400/50 animate-float-slower hidden sm:block" />
         <div className="absolute bottom-16 left-[20%] w-1.5 h-1.5 rounded-full bg-sky-400/60 animate-float-slow hidden sm:block" />
         <div className="max-w-6xl mx-auto grid lg:grid-cols-[1.1fr_0.9fr] gap-10 items-center">
           <div className="text-center lg:text-left">
@@ -358,7 +358,7 @@ export default function SiteVendas() {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
-              className="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-4 py-1.5 text-sm text-orange-700 mb-6 font-medium"
+              className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 py-1.5 text-sm text-blue-700 mb-6 font-medium"
             >
               <Sparkles className="w-4 h-4" /> Pra quem tá abrindo (ou organizando) a primeira construtora
             </motion.div>
@@ -369,7 +369,7 @@ export default function SiteVendas() {
               className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.08] text-slate-900"
             >
               Comece sua construtora <br className="hidden lg:block" />
-              <span className="bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-blue-500 via-sky-500 to-blue-600 bg-clip-text text-transparent">
                 sem planilha e sem medo
               </span>
             </motion.h1>
@@ -389,16 +389,16 @@ export default function SiteVendas() {
               transition={{ duration: 0.6, delay: 0.15 }}
               className="mt-9 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4"
             >
-              <Button size="lg" className="h-13 px-8 text-base bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 shadow-xl shadow-orange-200" onClick={goToPlans}>
+              <Button size="lg" className="h-13 px-8 text-base bg-gradient-to-r from-blue-500 to-sky-500 hover:from-blue-600 hover:to-sky-600 shadow-xl shadow-blue-200" onClick={goToPlans}>
                 Começar teste grátis de 3 dias <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
-              <a href="#modulos" className="text-sm text-slate-600 hover:text-orange-600 underline underline-offset-4 font-medium">
+              <a href="#modulos" className="text-sm text-slate-600 hover:text-blue-600 underline underline-offset-4 font-medium">
                 Ver todos os módulos
               </a>
             </motion.div>
             <p className="mt-4 text-xs text-slate-400">
               Cartão exigido para iniciar. Cancele quando quiser antes do fim do teste, sem cobrança.
-              {cheapestPrice !== null && <> Módulos a partir de <strong className="text-orange-600">{formatPrice(cheapestPrice)}/mês</strong>.</>}
+              {cheapestPrice !== null && <> Módulos a partir de <strong className="text-blue-600">{formatPrice(cheapestPrice)}/mês</strong>.</>}
             </p>
           </div>
 
@@ -408,14 +408,14 @@ export default function SiteVendas() {
             transition={{ duration: 0.6, delay: 0.1 }}
             className="relative flex items-center justify-center"
           >
-            <div className="absolute w-64 h-64 sm:w-80 sm:h-80 rounded-full bg-gradient-to-br from-orange-200 to-amber-100 blur-2xl opacity-70" />
+            <div className="absolute w-64 h-64 sm:w-80 sm:h-80 rounded-full bg-gradient-to-br from-blue-200 to-sky-100 blur-2xl opacity-70" />
             <img
               src={julinhoImg}
               alt="Julinho, o mascote da FC Engenharia, acenando de capacete"
               className="relative w-56 sm:w-72 lg:w-80 drop-shadow-xl"
             />
-            <div className="absolute -bottom-2 sm:bottom-2 right-0 sm:right-4 bg-white rounded-2xl shadow-lg border border-orange-100 px-4 py-2.5 flex items-center gap-2 max-w-[220px]">
-              <Smile className="w-5 h-5 text-orange-500 shrink-0" />
+            <div className="absolute -bottom-2 sm:bottom-2 right-0 sm:right-4 bg-white rounded-2xl shadow-lg border border-blue-100 px-4 py-2.5 flex items-center gap-2 max-w-[220px]">
+              <Smile className="w-5 h-5 text-blue-500 shrink-0" />
               <p className="text-xs text-slate-600 leading-snug">
                 <strong className="text-slate-800">Oi, eu sou o Julinho!</strong> Vou te ajudar a organizar tudo por aqui.
               </p>
@@ -437,9 +437,9 @@ export default function SiteVendas() {
             { value: "100%", label: "self-service" },
             { value: "0", label: "instalação necessária" },
           ].map((s) => (
-            <div key={s.label} className="group relative rounded-2xl border border-white/60 bg-white/60 backdrop-blur-xl shadow-[0_4px_24px_rgba(251,146,60,0.08)] px-4 py-6 text-center overflow-hidden hover:border-orange-200 hover:-translate-y-0.5 transition-all duration-300">
-              <div className="absolute inset-0 bg-gradient-to-br from-orange-100/0 via-orange-100/0 to-amber-100/0 group-hover:from-orange-100/40 group-hover:to-amber-100/20 transition-all duration-300" />
-              <p className="relative text-2xl sm:text-3xl font-bold bg-gradient-to-r from-orange-500 to-amber-500 bg-clip-text text-transparent">{s.value}</p>
+            <div key={s.label} className="group relative rounded-2xl border border-white/60 bg-white/60 backdrop-blur-xl shadow-[0_4px_24px_rgba(59,130,246,0.08)] px-4 py-6 text-center overflow-hidden hover:border-blue-200 hover:-translate-y-0.5 transition-all duration-300">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-100/0 via-blue-100/0 to-sky-100/0 group-hover:from-blue-100/40 group-hover:to-sky-100/20 transition-all duration-300" />
+              <p className="relative text-2xl sm:text-3xl font-bold bg-gradient-to-r from-blue-500 to-sky-500 bg-clip-text text-transparent">{s.value}</p>
               <p className="relative text-xs text-slate-500 mt-1">{s.label}</p>
             </div>
           ))}
@@ -447,10 +447,10 @@ export default function SiteVendas() {
       </section>
 
       {/* ── Módulos ── */}
-      <section id="modulos" className="py-24 px-4 sm:px-6 bg-gradient-to-b from-orange-50/60 to-white">
+      <section id="modulos" className="py-24 px-4 sm:px-6 bg-gradient-to-b from-blue-50/60 to-white">
         <div className="max-w-7xl mx-auto">
           <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="text-center max-w-2xl mx-auto mb-14">
-            <span className="text-xs font-semibold text-orange-600 tracking-widest uppercase">Módulos</span>
+            <span className="text-xs font-semibold text-blue-600 tracking-widest uppercase">Módulos</span>
             <h2 className="text-3xl sm:text-4xl font-bold mt-3 text-slate-900">Tudo que a sua obra precisa, em um só lugar</h2>
             <p className="text-slate-500 mt-4">Contrate só o que faz sentido pra sua operação hoje. Adicione mais módulos quando quiser, sem trocar de sistema.</p>
           </motion.div>
@@ -465,7 +465,7 @@ export default function SiteVendas() {
                 viewport={{ once: true, margin: "-40px" }}
                 transition={{ duration: 0.4, delay: (i % 3) * 0.06 }}
                 whileHover={{ y: -4 }}
-                className="group text-left rounded-2xl border border-orange-100 bg-white/80 backdrop-blur-sm p-6 hover:shadow-xl hover:shadow-orange-100/60 hover:border-orange-300 transition-all relative overflow-hidden"
+                className="group text-left rounded-2xl border border-blue-100 bg-white/80 backdrop-blur-sm p-6 hover:shadow-xl hover:shadow-blue-100/60 hover:border-blue-300 transition-all relative overflow-hidden"
               >
                 <div className={`absolute -right-8 -top-8 w-24 h-24 rounded-full bg-gradient-to-br ${m.color} opacity-0 group-hover:opacity-10 blur-xl transition-opacity`} />
                 <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${m.color} flex items-center justify-center mb-4 shadow-md group-hover:scale-105 transition-transform`}>
@@ -475,10 +475,10 @@ export default function SiteVendas() {
                 <p className="text-xs text-slate-400 mb-2">{m.subtitle}</p>
                 <p className="text-sm text-slate-500 leading-relaxed">{m.description}</p>
                 <div className="mt-4 flex items-center justify-between">
-                  <span className="text-sm font-semibold text-orange-600">
+                  <span className="text-sm font-semibold text-blue-600">
                     {priceFor(m.id) ? `${priceFor(m.id)}/mês` : "—"}
                   </span>
-                  <span className="flex items-center gap-1 text-xs font-medium text-slate-300 group-hover:text-orange-500 transition-colors">
+                  <span className="flex items-center gap-1 text-xs font-medium text-slate-300 group-hover:text-blue-500 transition-colors">
                     Ver tela <ArrowUpRight className="w-4 h-4" />
                   </span>
                 </div>
@@ -498,33 +498,33 @@ export default function SiteVendas() {
       )}
 
       {/* ── Quem somos (missão, visão, valores, história) ── */}
-      <section id="quem-somos" className="py-24 px-4 sm:px-6 bg-gradient-to-b from-white to-orange-50/40">
+      <section id="quem-somos" className="py-24 px-4 sm:px-6 bg-gradient-to-b from-white to-blue-50/40">
         <div className="max-w-6xl mx-auto">
           <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="text-center max-w-2xl mx-auto mb-16">
-            <span className="text-xs font-semibold text-orange-600 tracking-widest uppercase">Quem somos</span>
+            <span className="text-xs font-semibold text-blue-600 tracking-widest uppercase">Quem somos</span>
             <h2 className="text-3xl sm:text-4xl font-bold mt-3 text-slate-900">Uma plataforma construída com propósito, não do zero por acaso</h2>
           </motion.div>
 
           <div className="grid lg:grid-cols-2 gap-10 items-start mb-16">
             <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="space-y-5">
               <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-orange-500" /> Nossa história
+                <BookOpen className="w-5 h-5 text-blue-500" /> Nossa história
               </h3>
               {COMPANY_STORY.historia.map((p, i) => (
                 <p key={i} className="text-sm text-slate-600 leading-relaxed">{p}</p>
               ))}
             </motion.div>
             <div className="grid gap-5">
-              <motion.div initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="rounded-2xl border border-orange-100 bg-white p-6 shadow-sm">
+              <motion.div initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="rounded-2xl border border-blue-100 bg-white p-6 shadow-sm">
                 <div className="flex items-center gap-2 mb-2">
-                  <Compass className="w-5 h-5 text-orange-500" />
+                  <Compass className="w-5 h-5 text-blue-500" />
                   <h4 className="font-semibold text-slate-900">Missão</h4>
                 </div>
                 <p className="text-sm text-slate-600 leading-relaxed">{COMPANY_STORY.missao}</p>
               </motion.div>
-              <motion.div initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.08 }} className="rounded-2xl border border-orange-100 bg-white p-6 shadow-sm">
+              <motion.div initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.08 }} className="rounded-2xl border border-blue-100 bg-white p-6 shadow-sm">
                 <div className="flex items-center gap-2 mb-2">
-                  <Target className="w-5 h-5 text-orange-500" />
+                  <Target className="w-5 h-5 text-blue-500" />
                   <h4 className="font-semibold text-slate-900">Visão</h4>
                 </div>
                 <p className="text-sm text-slate-600 leading-relaxed">{COMPANY_STORY.visao}</p>
@@ -533,13 +533,13 @@ export default function SiteVendas() {
           </div>
 
           <motion.h3 initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="text-lg font-semibold text-slate-900 flex items-center gap-2 justify-center mb-6">
-            <Award className="w-5 h-5 text-orange-500" /> Nossos valores
+            <Award className="w-5 h-5 text-blue-500" /> Nossos valores
           </motion.h3>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {COMPANY_STORY.valores.map((v, i) => (
               <motion.div key={v.title} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.4, delay: i * 0.08 }} className="text-center">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-100 to-amber-100 border border-orange-200 flex items-center justify-center mx-auto mb-4">
-                  <v.icon className="w-6 h-6 text-orange-600" />
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-100 to-sky-100 border border-blue-200 flex items-center justify-center mx-auto mb-4">
+                  <v.icon className="w-6 h-6 text-blue-600" />
                 </div>
                 <h4 className="font-semibold text-slate-900">{v.title}</h4>
                 <p className="text-sm text-slate-500 mt-2 leading-relaxed">{v.text}</p>
@@ -553,9 +553,9 @@ export default function SiteVendas() {
       <section id="sobre" className="py-24 px-4 sm:px-6">
         <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-14 items-center">
           <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}>
-            <span className="text-xs font-semibold text-orange-600 tracking-widest uppercase">Por que confiar na FC</span>
+            <span className="text-xs font-semibold text-blue-600 tracking-widest uppercase">Por que confiar na FC</span>
             <h2 className="text-3xl sm:text-4xl font-bold mt-3 leading-tight text-slate-900">
-              Não é um software genérico adaptado pra construção. <span className="text-orange-600">É construção, primeiro.</span>
+              Não é um software genérico adaptado pra construção. <span className="text-blue-600">É construção, primeiro.</span>
             </h2>
             <p className="text-slate-500 mt-5 leading-relaxed">
               Este ERP nasceu dentro da FC Engenharia, uma construtora em operação real, pra resolver os próprios
@@ -581,10 +581,10 @@ export default function SiteVendas() {
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5 }}
-            className="rounded-3xl border border-orange-100 bg-gradient-to-br from-orange-50 to-amber-50/40 p-8 shadow-sm"
+            className="rounded-3xl border border-blue-100 bg-gradient-to-br from-blue-50 to-sky-50/40 p-8 shadow-sm"
           >
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-amber-400 flex items-center justify-center shadow-md">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-sky-400 flex items-center justify-center shadow-md">
                 <HardHat className="w-6 h-6 text-white" />
               </div>
               <div>
@@ -603,14 +603,14 @@ export default function SiteVendas() {
       </section>
 
       {/* ── Cases ilustrativos (exemplos, não clientes reais) ── */}
-      <section className="py-20 bg-gradient-to-b from-orange-50/40 to-white overflow-hidden">
+      <section className="py-20 bg-gradient-to-b from-blue-50/40 to-white overflow-hidden">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 text-center mb-10">
-          <span className="text-xs font-semibold text-orange-600 tracking-widest uppercase">Exemplos de uso</span>
+          <span className="text-xs font-semibold text-blue-600 tracking-widest uppercase">Exemplos de uso</span>
           <h2 className="text-3xl sm:text-4xl font-bold mt-3 text-slate-900">
-            Como construtoras iniciantes <span className="text-orange-600">poderiam usar</span> o sistema
+            Como construtoras iniciantes <span className="text-blue-600">poderiam usar</span> o sistema
           </h2>
           <p className="flex items-center justify-center gap-2 text-sm text-slate-500 mt-4 max-w-2xl mx-auto">
-            <Info className="w-4 h-4 text-amber-500 shrink-0" />
+            <Info className="w-4 h-4 text-sky-500 shrink-0" />
             {TESTIMONIAL_DISCLAIMER}
           </p>
         </div>
@@ -631,18 +631,18 @@ export default function SiteVendas() {
       </section>
 
       {/* ── Benefícios ── */}
-      <section className="py-24 px-4 sm:px-6 bg-gradient-to-b from-white to-orange-50/50">
+      <section className="py-24 px-4 sm:px-6 bg-gradient-to-b from-white to-blue-50/50">
         <div className="max-w-6xl mx-auto">
           <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="text-center max-w-xl mx-auto mb-14">
-            <span className="text-xs font-semibold text-orange-600 tracking-widest uppercase">Por que escolher</span>
+            <span className="text-xs font-semibold text-blue-600 tracking-widest uppercase">Por que escolher</span>
             <h2 className="text-3xl sm:text-4xl font-bold mt-3 text-slate-900">Feito pra crescer junto com sua operação</h2>
           </motion.div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {BENEFITS.map((b, i) => (
-              <motion.div key={b.title} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.4, delay: i * 0.08 }} whileHover={{ y: -4 }} className="group relative text-center rounded-2xl border border-transparent hover:border-orange-100 hover:bg-white/70 hover:backdrop-blur-xl hover:shadow-[0_8px_30px_rgba(251,146,60,0.12)] p-5 transition-all duration-300">
-                <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-100 to-amber-100 border border-orange-200 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-orange-300 to-amber-300 blur-lg opacity-0 group-hover:opacity-40 transition-opacity duration-300 -z-10" />
-                  <b.icon className="w-6 h-6 text-orange-600" />
+              <motion.div key={b.title} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.4, delay: i * 0.08 }} whileHover={{ y: -4 }} className="group relative text-center rounded-2xl border border-transparent hover:border-blue-100 hover:bg-white/70 hover:backdrop-blur-xl hover:shadow-[0_8px_30px_rgba(59,130,246,0.12)] p-5 transition-all duration-300">
+                <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-100 to-sky-100 border border-blue-200 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
+                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-blue-300 to-sky-300 blur-lg opacity-0 group-hover:opacity-40 transition-opacity duration-300 -z-10" />
+                  <b.icon className="w-6 h-6 text-blue-600" />
                 </div>
                 <h3 className="font-semibold text-slate-900">{b.title}</h3>
                 <p className="text-sm text-slate-500 mt-2 leading-relaxed">{b.text}</p>
@@ -655,17 +655,17 @@ export default function SiteVendas() {
       {/* ── Vídeo institucional ── */}
       <section id="video" className="py-24 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto text-center">
-          <span className="text-xs font-semibold text-orange-600 tracking-widest uppercase">Conheça na prática</span>
+          <span className="text-xs font-semibold text-blue-600 tracking-widest uppercase">Conheça na prática</span>
           <h2 className="text-3xl sm:text-4xl font-bold mt-3 mb-10 text-slate-900">Veja o ERP em ação</h2>
           {INSTITUTIONAL_VIDEO_URL ? (
-            <div className="rounded-2xl overflow-hidden border border-orange-100 aspect-video shadow-lg">
+            <div className="rounded-2xl overflow-hidden border border-blue-100 aspect-video shadow-lg">
               <video src={INSTITUTIONAL_VIDEO_URL} controls className="w-full h-full" />
             </div>
           ) : (
-            <div className="relative rounded-2xl overflow-hidden border border-orange-100 bg-gradient-to-br from-orange-50 to-amber-50 aspect-video flex items-center justify-center shadow-sm">
+            <div className="relative rounded-2xl overflow-hidden border border-blue-100 bg-gradient-to-br from-blue-50 to-sky-50 aspect-video flex items-center justify-center shadow-sm">
               <div className="text-center">
-                <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center mx-auto mb-4 border border-orange-200 shadow-sm">
-                  <Play className="w-7 h-7 text-orange-500 ml-1" fill="currentColor" />
+                <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center mx-auto mb-4 border border-blue-200 shadow-sm">
+                  <Play className="w-7 h-7 text-blue-500 ml-1" fill="currentColor" />
                 </div>
                 <p className="text-slate-500 text-sm">Vídeo institucional em produção — em breve por aqui</p>
               </div>
@@ -686,7 +686,7 @@ export default function SiteVendas() {
               aria-disabled={!SOCIAL_LINKS.instagram}
               className={`flex items-center gap-2 rounded-full border px-5 py-2.5 text-sm transition-colors ${
                 SOCIAL_LINKS.instagram
-                  ? "border-orange-200 hover:border-orange-400 hover:bg-orange-50 text-slate-700"
+                  ? "border-blue-200 hover:border-blue-400 hover:bg-blue-50 text-slate-700"
                   : "border-slate-200 text-slate-400 cursor-not-allowed"
               }`}
               onClick={(e) => { if (!SOCIAL_LINKS.instagram) e.preventDefault(); }}
@@ -699,7 +699,7 @@ export default function SiteVendas() {
               rel="noreferrer"
               className={`flex items-center gap-2 rounded-full border px-5 py-2.5 text-sm transition-colors ${
                 SOCIAL_LINKS.youtube
-                  ? "border-orange-200 hover:border-orange-400 hover:bg-orange-50 text-slate-700"
+                  ? "border-blue-200 hover:border-blue-400 hover:bg-blue-50 text-slate-700"
                   : "border-slate-200 text-slate-400 cursor-not-allowed"
               }`}
               onClick={(e) => { if (!SOCIAL_LINKS.youtube) e.preventDefault(); }}
@@ -711,25 +711,25 @@ export default function SiteVendas() {
       </section>
 
       {/* ── CTA final / Planos ── */}
-      <section id="planos" className="py-24 px-4 sm:px-6 bg-gradient-to-br from-orange-500 via-amber-500 to-orange-500 relative overflow-hidden">
+      <section id="planos" className="py-24 px-4 sm:px-6 bg-gradient-to-br from-blue-500 via-sky-500 to-blue-500 relative overflow-hidden">
         <div className="absolute inset-0 opacity-40 [background-image:radial-gradient(circle,rgba(255,255,255,0.35)_1px,transparent_1px)] [background-size:26px_26px]" />
         <div className="absolute -top-20 -left-20 w-72 h-72 rounded-full bg-white/10 blur-3xl" />
         <div className="absolute -bottom-24 right-1/3 w-80 h-80 rounded-full bg-white/10 blur-3xl" />
         <img src={julinhoImg} alt="" className="hidden sm:block absolute -right-4 bottom-0 w-48 lg:w-64 opacity-90 pointer-events-none select-none" />
         <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="max-w-3xl mx-auto text-center relative">
           <h2 className="text-3xl sm:text-4xl font-bold text-white">Pronto pra organizar a gestão da sua construtora?</h2>
-          <p className="mt-4 text-orange-50 text-lg">3 dias grátis. Cancele quando quiser. Sem letras miúdas.</p>
-          <Button size="lg" className="mt-8 h-13 px-8 text-base bg-white text-orange-600 hover:bg-orange-50 shadow-xl hover:shadow-2xl hover:scale-[1.03] transition-all" onClick={goToPlans}>
+          <p className="mt-4 text-blue-50 text-lg">3 dias grátis. Cancele quando quiser. Sem letras miúdas.</p>
+          <Button size="lg" className="mt-8 h-13 px-8 text-base bg-white text-blue-600 hover:bg-blue-50 shadow-xl hover:shadow-2xl hover:scale-[1.03] transition-all" onClick={goToPlans}>
             Ver planos e começar agora <ArrowRight className="w-5 h-5 ml-2" />
           </Button>
         </motion.div>
       </section>
 
       {/* ── Footer ── */}
-      <footer className="py-10 px-4 sm:px-6 border-t border-orange-100">
+      <footer className="py-10 px-4 sm:px-6 border-t border-blue-100">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-orange-500 to-amber-400 flex items-center justify-center">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-sky-400 flex items-center justify-center">
               <Building2 className="w-4 h-4 text-white" />
             </div>
             <span className="text-sm text-slate-500">ERP Gestão Integrada — Plataforma corporativa</span>

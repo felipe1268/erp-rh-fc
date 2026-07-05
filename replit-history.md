@@ -1,3 +1,5 @@
+- **Rev. 4044** — **PROJETO SAAS "FASE 3" — LIFECYCLE DE ASSINATURA: SELF-SERVICE REAL PRA `ADM_CLIENTE`.** `server/routers/billing.ts` ganhou `getMySubscription`/`createPortalSession`/`updateSubscription`/`cancelMySubscription`/`reactivateMySubscription`; nova página `MinhaAssinatura.tsx` com guard `AdmClienteGuard` em `/minha-assinatura`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4041** — **PROJETO SAAS: NOVO PERFIL "ADM CLIENTE" + 2 VULNS CRÍTICAS DE `listUsers`/`createLocalUser` CORRIGIDAS.** Novo papel `adm_cliente` (gerencia só usuários `role:"user"` da própria empresa); achado GRAVE corrigido: `listUsers`/`createLocalUser` sem check de role permitiam escalação total e vazamento cross-tenant. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4040** — **PROJETO SAAS "FASE 0" — AUDITORIA DE ISOLAMENTO ENTRE EMPRESAS (LGPD) E CORREÇÃO DE 6 GAPS DE IDOR CONFIRMADOS.** 6 gaps de IDOR cross-tenant corrigidos (SST, DANFE, dissídio, horas extras, folha) antes de iniciar o projeto SaaS. ZERO DELETE · ZERO ALTER destrutivo.
