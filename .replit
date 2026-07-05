@@ -22,6 +22,9 @@ SMTP_HOST = "mail.fcengenhariacivil.com.br"
 SMTP_PORT = "465"
 SMTP_EMAIL = "rh@fcengenhariacivil.com.br"
 
+[userenv.development]
+SCREENSHOT_DEV_BYPASS = "true"
+
 [workflows]
 runButton = "Project"
 

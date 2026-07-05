@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useMemo, ReactNode } from "react";
 import { trpc } from "@/lib/trpc";
 
-const STORAGE_KEY = "erp-rh-fc-default-company";
+const STORAGE_KEY = "erp-rh-fc-default-company-screenshot-tmp";
 
 interface CompanyContextType {
   selectedCompanyId: string;
