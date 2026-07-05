@@ -332,6 +332,7 @@ export default function MedicaoDetalhe() {
       dataInicio: boletimSelecionado?.dataInicio ?? null,
       dataFim: boletimSelecionado?.dataFim ?? null,
       status: boletimSelecionado?.status ?? "rascunho",
+      observacoes: boletimSelecionado?.observacoes ?? null,
       valorBruto: totalBrutoAtual,
       descontoSinal: n(boletimSelecionado?.descontoSinal),
       descontoRetencao: n(boletimSelecionado?.descontoRetencao),

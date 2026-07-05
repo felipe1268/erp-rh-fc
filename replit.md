@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4035** — **BOLETIM DE MEDIÇÃO (PDF): DOCUMENTO SEM ORGANIZAÇÃO, SEM RELATO E SEM PADRÃO — REDESENHO COMPLETO.** Usuário mandou o PDF gerado reclamando "está péssimo, não tem organização, não tem relato, não é uma edição padrão" — tabela plana de ~30 itens sem agrupamento, descrições cortadas no meio da palavra, dezenas de linhas com "—" na coluna Item. `boletimMedicaoPdf.ts`: nova seção "Relatório do Período" (exibe o campo `observacoes` do boletim, já capturado mas nunca mostrado no PDF); itens agora agrupados em 2 seções (Cronograma × FD Compras) cada uma com subtotal + total geral no fim; coluna "Item"→"Nº" com numeração sequencial no lugar de "—" quando não há EAP; descrição quebra em até 3 linhas reais (sem cortar palavras). `MedicaoDetalhe.tsx`: `montarParamsPdf` passa `observacoes` pro gerador. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4034** — **MEDIÇÃO DE CONTRATOS: "VINCULAR FD DE COMPRAS" GERAVA ITEM COM tipoAvanco INVÁLIDO ("fd_compra") — CAUSA-RAIZ DO ERRO REVELADO PELA REV. 4033.** Com o `onError` da Rev. 4033 mostrando erros reais, usuário mandou print (IMG_3315) do erro exato: `Invalid option: expected one of "fisico"|"financeiro_material"`. Causa: botão "Vincular FD de Compras" gravava `tipoAvanco: "fd_compra"`, valor fora do enum aceito pelo backend — qualquer boletim com FD vinculado nunca salvava com sucesso. `MedicaoDetalhe.tsx`: `tipoAvanco` do item de FD trocado para `"financeiro_material"` (auditado: nenhum outro ponto do arquivo gera valor fora do enum; confirmado no banco que nenhum `"fd_compra"` órfão chegou a persistir). ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4033** — **MEDIÇÃO DE CONTRATOS: BOTÃO "SALVAR E CALCULAR DEDUÇÕES" PARECIA NÃO FAZER NADA (SEM FEEDBACK DE ERRO).** Usuário reportou (IMG_3314) que clicar no botão do diálogo "Itens do Boletim" não fazia nada/dava erro sem mensagem. Causa dupla: (1) `recalcularMutation` disparava em paralelo com `salvarItensMutation` (race condition — podia ler `valorBruto` desatualizado do banco); (2) nenhuma das duas mutations tinha `onError`, então falhas reais do backend eram engolidas silenciosamente. `MedicaoDetalhe.tsx`: recálculo movido pro `onSuccess` de salvar itens (encadeamento sequencial garantido); `onError` com `toast.error` (sonner) adicionado às duas mutations; botão reflete `isPending` de ambas. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4033** — **MEDIÇÃO DE CONTRATOS: BOTÃO "SALVAR E CALCULAR DEDUÇÕES" PARECIA NÃO FAZER NADA (SEM FEEDBACK DE ERRO).** Race condition entre `recalcularMutation` e `salvarItensMutation` + falta de `onError` engolindo falhas reais; recálculo movido pro `onSuccess` de salvar itens + `toast.error` nas duas mutations. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4032** — **MEDIÇÃO DE CONTRATOS: ESPAÇAMENTO E ALINHAMENTO VERTICAL DOS CAMPOS "DATA INÍCIO"/"DATA FIM".** Seguindo a Rev. 4031, usuário mandou mais prints reclamando que as datas "ainda estão sobrepondo" e o layout não tinha sido corrigido — colunas coladas sem espaço visível + texto colado à borda superior do campo (mal centralizado). `MedicaoDetalhe.tsx`: grid `gap-3`→`gap-6` + `min-w-0`/`w-full` nas colunas (largura igual, sem overflow); nos 4 `<input type="date">` (modalBoletim e modalEditBoletim) adicionado `flex items-center h-10 leading-normal` para forçar centralização vertical do texto (inputs nativos de data podem não centralizar bem com padding padrão, especialmente em Safari). Mesma mutation/campos de antes. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4030** — **MEDIÇÃO DE CONTRATOS: REDESIGN DA TABELA "ITENS DO BOLETIM" + PADRONIZAÇÃO DO DIÁLOGO "NOVO BOLETIM DE MEDIÇÃO".** Tabela `table-fixed` + `<colgroup>` proporcional (elimina vão Item↔Descrição), badge azul "% Período", barra de progresso "% Acumulado"; diálogo `modalBoletim` reconstruído no padrão do "Editar Boletim" (3 blocos). ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4029** — **MEDIÇÃO DE CONTRATOS: REDESIGN COMPLETO DO DIÁLOGO "EDITAR BOLETIM" (PERÍODO DA MEDIÇÃO).** Reestruturado em 3 blocos visuais (cabeçalho + card branco + rodapé fixo), inputs de data c/ ícone interno, badge "N dias de medição", validação data fim < início. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4028** — **MEDIÇÃO DE CONTRATOS: OLHINHO NA LISTA DE BOLETINS + REDESIGN MOBILE DO CABEÇALHO DO DIÁLOGO "ITENS DO BOLETIM" + ENCAMINHAR VIA WHATSAPP.** Ícone de olho na lista de boletins + cabeçalho reestruturado em 2 linhas (título isolado, botões numa linha própria com `flex-wrap`) + `compartilharBoletimMedicaoWhatsApp` (Web Share API nível 2 / fallback wa.me). ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

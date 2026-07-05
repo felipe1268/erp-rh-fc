@@ -1,3 +1,5 @@
+- **Rev. 4028** — **MEDIÇÃO DE CONTRATOS: OLHINHO NA LISTA DE BOLETINS + REDESIGN MOBILE DO CABEÇALHO DO DIÁLOGO "ITENS DO BOLETIM" + ENCAMINHAR VIA WHATSAPP.** Ícone de olho na lista de boletins + cabeçalho reestruturado em 2 linhas (título isolado, botões numa linha própria com `flex-wrap`) + `compartilharBoletimMedicaoWhatsApp` (Web Share API nível 2 / fallback wa.me). ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4027** — **MEDIÇÃO DE CONTRATOS: RASTREABILIDADE DO "ORIGEM: CRONOGRAMA" + BOTÕES DE FLUXO/IMPRESSÃO/PDF NO DIÁLOGO "ITENS DO BOLETIM".** Novo `getHistoricoAvancoAtividade` (anti-IDOR) mostra de qual semana do Avanço Semanal veio o % da medição via Popover; diálogo ganhou botões Aprovar/Enviar, Imprimir e Gerar PDF (`boletimMedicaoPdf.ts`, jsPDF). ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4026** — **MEDIÇÃO DE CONTRATOS: REDESIGN DO DIÁLOGO "ITENS DO BOLETIM" + INTEGRAÇÃO COM COMPRAS PARA DETECTAR OCs DE FD E TRAZER O VALOR AUTOMATICAMENTE.** Diálogo reconstruído com cards de resumo, coluna "Origem" por linha e botão "Vincular FD de Compras" que cria o registro de FD e insere a linha automaticamente. ZERO DELETE · ZERO ALTER destrutivo.

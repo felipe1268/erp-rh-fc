@@ -1,4 +1,39 @@
 /**
+ * Rev. 4035 — **BOLETIM DE MEDIÇÃO (PDF): DOCUMENTO SEM ORGANIZAÇÃO, SEM RELATO E SEM PADRÃO —
+ * REDESENHO COMPLETO DA TABELA DE ITENS + RELATÓRIO NARRATIVO DO PERÍODO.**
+ *
+ * PEDIDO: usuário mandou o PDF gerado (`Boletim_Medicao_02_2026-05...pdf`) reclamando: "está péssimo
+ * o arquivo, não tem organização, não tem relato, não é uma edição padrão". No PDF anexado: tabela
+ * plana de ~30 itens sem nenhum agrupamento, descrições cortadas no meio da palavra sem reticências
+ * ("Tapume autoportante com estrutura em", "Canteiro de obras provisório completo, incluso"), e
+ * dezenas de linhas com "—" na coluna "Item" (atividades sem código EAP, comum em cronogramas
+ * importados do MSP — ver memória `msp-analysis-columns`), dando impressão de dado quebrado/repetido.
+ *
+ * CAUSA RAIZ: `boletimMedicaoPdf.ts` desenhava uma tabela única, sem seções, sem subtotal e sem
+ * total geral; a descrição usava `splitTextToSize(...)[0]` (pega só a 1ª linha do wrap, cortando a
+ * frase); o campo `observacoes` do boletim (já capturado nos diálogos "Novo"/"Editar Boletim", nunca
+ * exibido no documento) era descartado — por isso "não tem relato".
+ *
+ * SOLUÇÃO:
+ * - `client/src/pages/medicao/MedicaoDetalhe.tsx` (`montarParamsPdf`): passa `observacoes` do
+ *   boletim selecionado para o gerador de PDF.
+ * - `client/src/lib/boletimMedicaoPdf.ts` (redesenho):
+ *   1. Nova seção "RELATÓRIO DO PERÍODO" (card cinza com o texto de `observacoes`, quando
+ *      preenchido) logo após os descontos aplicados.
+ *   2. Itens agrupados em 2 seções tituladas com faixa colorida — "ITENS DE CRONOGRAMA — AVANÇO
+ *      FÍSICO" (azul) e "ITENS DE FD — COMPRAS VINCULADAS" (violeta) — cada uma com subtotal em
+ *      destaque no fim, e uma linha "TOTAL GERAL MEDIDO NO PERÍODO" fechando a tabela.
+ *   3. Coluna "Item" virou "Nº": quando não há `eapCodigo` (maioria das atividades reais, ver
+ *      memória `msp-analysis-columns`), usa numeração sequencial do grupo (01, 02...) em vez de "—".
+ *   4. Descrição agora quebra em até 3 linhas reais (`drawRow` calcula altura de linha dinâmica via
+ *      `splitTextToSize` completo, não só a 1ª linha) — nenhuma palavra é mais cortada ao meio.
+ *   5. Coluna "Origem" removida da tabela (redundante — a seção já identifica a origem do item);
+ *      largura redistribuída para "Descrição" e "V. Período".
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4034 — **MEDIÇÃO DE CONTRATOS: "VINCULAR FD DE COMPRAS" GERAVA ITEM COM tipoAvanco INVÁLIDO
  * ("fd_compra") — CAUSA-RAIZ DO ERRO REVELADO PELA REV. 4033.**
  *

@@ -1,6 +1,10 @@
 /**
- * Rev. 4027 — Gerador do PDF/Impressão do Boletim de Medição, para envio ao
- * cliente validar a medição do período (Aprovação de Boletim).
+ * Rev. 4035 — Gerador do PDF/Impressão do Boletim de Medição, para envio ao
+ * cliente validar a medição do período (Aprovação de Boletim). Redesenhado
+ * para um documento padrão: relatório narrativo do período (observações),
+ * itens agrupados por origem (Cronograma × FD Compras) com subtotal por
+ * grupo e total geral, numeração sequencial no lugar de "—" quando não há
+ * código EAP, e descrição em múltiplas linhas (sem cortar palavras).
  */
 import jsPDF from "jspdf";
 
@@ -33,6 +37,7 @@ export interface BoletimPdfParams {
   dataInicio?: string | null;
   dataFim?: string | null;
   status: string;
+  observacoes?: string | null;
   valorBruto: number;
   descontoSinal: number;
   descontoRetencao: number;
@@ -161,25 +166,50 @@ async function buildBoletimPdf(params: BoletimPdfParams): Promise<jsPDF> {
     y += 6;
   }
 
-  // ── Tabela de itens ──
+  // ── Relatório do período (observações / relato textual) ──
+  const relato = (params.observacoes ?? "").trim();
+  if (relato) {
+    novaPage(20);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(9.5);
+    pdf.setTextColor(...AZUL);
+    pdf.text("RELATÓRIO DO PERÍODO", M, y);
+    y += 5;
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8);
+    const relatoLines: string[] = pdf.splitTextToSize(relato, CW - 8);
+    const relatoH = relatoLines.length * 4 + 6;
+    if (novaPage(relatoH)) { /* cabeçalho da seção não se repete em nova página */ }
+    pdf.setDrawColor(220, 220, 220);
+    pdf.setFillColor(...CINZA_BG);
+    pdf.roundedRect(M, y, CW, relatoH, 2, 2, "FD");
+    pdf.setTextColor(...CINZA);
+    relatoLines.forEach((line: string, li: number) => {
+      pdf.text(line, M + 4, y + 5 + li * 4);
+    });
+    y += relatoH + 6;
+  }
+
+  // ── Tabela de itens (agrupada por origem: Cronograma × FD Compras) ──
   novaPage(12);
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(9.5);
   pdf.setTextColor(...AZUL);
   pdf.text("ITENS MEDIDOS NO PERÍODO", M, y);
-  y += 5;
+  y += 6;
 
   const cols = [
-    { key: "item", label: "Item", w: CW * 0.08, align: "left" as const },
-    { key: "desc", label: "Descrição", w: CW * 0.30, align: "left" as const },
-    { key: "origem", label: "Origem", w: CW * 0.12, align: "left" as const },
-    { key: "vc", label: "V. Contratual", w: CW * 0.13, align: "right" as const },
-    { key: "pa", label: "% Ant.", w: CW * 0.09, align: "right" as const },
-    { key: "pp", label: "% Período", w: CW * 0.09, align: "right" as const },
-    { key: "pac", label: "% Acum.", w: CW * 0.09, align: "right" as const },
-    { key: "vp", label: "V. Período", w: CW * 0.10, align: "right" as const },
+    { key: "item", label: "Nº", w: CW * 0.07, align: "left" as const },
+    { key: "desc", label: "Descrição", w: CW * 0.33, align: "left" as const },
+    { key: "vc", label: "V. Contratual", w: CW * 0.14, align: "right" as const },
+    { key: "pa", label: "% Ant.", w: CW * 0.10, align: "right" as const },
+    { key: "pp", label: "% Período", w: CW * 0.10, align: "right" as const },
+    { key: "pac", label: "% Acum.", w: CW * 0.10, align: "right" as const },
+    { key: "vp", label: "V. Período", w: CW * 0.16, align: "right" as const },
   ];
   const ROW_H = 6;
+  const LINE_H = 3.3;
 
   const drawHeader = () => {
     pdf.setFillColor(240, 242, 248);
@@ -194,22 +224,34 @@ async function buildBoletimPdf(params: BoletimPdfParams): Promise<jsPDF> {
     });
     y += ROW_H;
   };
-  drawHeader();
 
-  itens.forEach((item, i) => {
-    if (novaPage(ROW_H + 2)) drawHeader();
-    if (item.isFd) { pdf.setFillColor(...[237, 233, 254] as [number, number, number]); pdf.rect(M, y, CW, ROW_H, "F"); }
-    else if (i % 2 === 1) { pdf.setFillColor(...CINZA_BG); pdf.rect(M, y, CW, ROW_H, "F"); }
+  const drawSectionTitle = (titulo: string, cor: [number, number, number]) => {
+    if (novaPage(ROW_H + 4)) { /* segue direto pra próxima página */ }
+    pdf.setFillColor(...cor);
+    pdf.rect(M, y, CW, 5.5, "F");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text(titulo, M + 2, y + 3.8);
+    y += 5.5;
+    drawHeader();
+  };
+
+  const drawRow = (item: BoletimPdfItem, numero: string, zebra: boolean, destaqueBg?: [number, number, number]) => {
+    const descLines: string[] = pdf.splitTextToSize(item.descricao, cols[1].w - 4).slice(0, 3);
+    const rowH = Math.max(ROW_H, descLines.length * LINE_H + 2.8);
+    if (novaPage(rowH + 2)) drawHeader();
+
+    if (destaqueBg) { pdf.setFillColor(...destaqueBg); pdf.rect(M, y, CW, rowH, "F"); }
+    else if (zebra) { pdf.setFillColor(...CINZA_BG); pdf.rect(M, y, CW, rowH, "F"); }
 
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(7);
     pdf.setTextColor(...CINZA);
     let cx = M;
-    const descTrunc = pdf.splitTextToSize(item.descricao, cols[1].w - 4)[0] ?? item.descricao;
-    const vals = [
-      item.eapCodigo || "—",
-      descTrunc,
-      item.isFd ? "FD Compras" : "Cronograma",
+    const vals: (string | string[])[] = [
+      numero,
+      descLines,
       brl(n(item.valorContratual)),
       pct(n(item.percentualAcumuladoAnterior)),
       pct(n(item.percentualPeriodo)),
@@ -217,13 +259,66 @@ async function buildBoletimPdf(params: BoletimPdfParams): Promise<jsPDF> {
       brl(n(item.valorPeriodo)),
     ];
     cols.forEach((c, ci) => {
-      if (c.key === "origem" && item.isFd) pdf.setTextColor(...VIOLETA);
-      else pdf.setTextColor(...CINZA);
-      pdf.text(vals[ci], c.align === "right" ? cx + c.w - 2 : cx + 2, y + 4, { align: c.align === "right" ? "right" : "left" });
+      pdf.setTextColor(...CINZA);
+      const v = vals[ci];
+      if (Array.isArray(v)) {
+        v.forEach((line, li) => {
+          pdf.text(line, c.align === "right" ? cx + c.w - 2 : cx + 2, y + 4 + li * LINE_H, { align: c.align === "right" ? "right" : "left" });
+        });
+      } else {
+        pdf.text(v, c.align === "right" ? cx + c.w - 2 : cx + 2, y + 4, { align: c.align === "right" ? "right" : "left" });
+      }
       cx += c.w;
     });
+    y += rowH;
+  };
+
+  const drawSubtotal = (label: string, valor: number, cor: [number, number, number]) => {
+    if (novaPage(ROW_H + 2)) drawHeader();
+    pdf.setFillColor(...cor);
+    pdf.rect(M, y, CW, ROW_H, "F");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(...CINZA);
+    pdf.text(label, M + 2, y + 4);
+    pdf.text(brl(valor), M + CW - 2, y + 4, { align: "right" });
     y += ROW_H;
-  });
+  };
+
+  const cronogramaItens = itens.filter(i => !i.isFd);
+  const fdItens = itens.filter(i => i.isFd);
+
+  if (cronogramaItens.length) {
+    drawSectionTitle(`ITENS DE CRONOGRAMA — AVANÇO FÍSICO (${cronogramaItens.length})`, AZUL);
+    let totalCrono = 0;
+    cronogramaItens.forEach((item, i) => {
+      totalCrono += n(item.valorPeriodo);
+      drawRow(item, item.eapCodigo || String(i + 1).padStart(2, "0"), i % 2 === 1);
+    });
+    drawSubtotal("SUBTOTAL — CRONOGRAMA", totalCrono, [219, 234, 254]);
+    y += 3;
+  }
+
+  if (fdItens.length) {
+    drawSectionTitle(`ITENS DE FD — COMPRAS VINCULADAS (${fdItens.length})`, VIOLETA);
+    let totalFd = 0;
+    fdItens.forEach((item, i) => {
+      totalFd += n(item.valorPeriodo);
+      drawRow(item, String(i + 1).padStart(2, "0"), i % 2 === 1, [237, 233, 254]);
+    });
+    drawSubtotal("SUBTOTAL — FD COMPRAS", totalFd, [237, 233, 254]);
+    y += 3;
+  }
+
+  if (novaPage(ROW_H + 2)) { /* total geral inicia direto na próxima página */ }
+  pdf.setFillColor(...AZUL);
+  pdf.rect(M, y, CW, ROW_H + 1, "F");
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(8.5);
+  pdf.setTextColor(255, 255, 255);
+  pdf.text("TOTAL GERAL MEDIDO NO PERÍODO", M + 2, y + 4.5);
+  pdf.text(brl(itens.reduce((s, i) => s + n(i.valorPeriodo), 0)), M + CW - 2, y + 4.5, { align: "right" });
+  y += ROW_H + 1;
 
   y += 10;
   novaPage(40);
