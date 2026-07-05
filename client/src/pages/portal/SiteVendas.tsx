@@ -18,7 +18,7 @@ const JULINHO_LINES = [
   "Vou te ajudar a organizar tudo por aqui.",
   "Clique nos módulos abaixo pra ver uma prévia!",
   "Sem planilha, sem dor de cabeça. Bip-bop!",
-  "Testando 14 módulos... 100% prontos pra você.",
+  "Testando todos os módulos... 100% prontos pra você.",
 ];
 
 /**
@@ -348,7 +348,7 @@ export default function SiteVendas() {
           className="max-w-4xl mx-auto mt-16 grid grid-cols-2 sm:grid-cols-4 gap-4"
         >
           {[
-            { value: "14", label: "módulos disponíveis" },
+            { value: String(sellableModuleCards.length), label: "módulos disponíveis" },
             { value: "3 dias", label: "de teste grátis" },
             { value: "100%", label: "self-service" },
             { value: "0", label: "instalação necessária" },

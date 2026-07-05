@@ -50,13 +50,15 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4062** — **LOGOTIPO DE CADA MÓDULO NAS TELAS DE VENDA E GESTÃO DE ASSINATURA.** Usuário anexou print de `/admin/saas/precos` apontando que cada card de módulo só tinha texto, sem ícone. `modulesData.ts` já tinha `icon`+`color` por módulo (usado em `/planos`); reaproveitado nas 4 telas restantes que listam módulos em texto puro: `AdminPrecos.tsx` (card com ícone 36px), `MinhaAssinatura.tsx`/`ContratarPlano.tsx` (ícone 28px junto do checkbox), `SaasAdminPanel.tsx` (ícone 20px na barra de popularidade). Módulo "seat" e módulo desativado caem num ícone cinza neutro. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4063** — **`/planos`: "14 MÓDULOS DISPONÍVEIS" ERA NÚMERO FIXO — AGORA REFLETE OS MÓDULOS REALMENTE À VENDA.** Usuário apontou que o card "14 módulos disponíveis" da stats bar do hero não acompanhava a liberação/desligamento feita em `/admin/saas/precos`. `SiteVendas.tsx` tinha `"14"` hardcoded, desconectado do catálogo — a grade de cards (`sellableModuleCards`) já filtrava certo, só o número da stats bar era estático. Fix: trocado por `String(sellableModuleCards.length)`, mesma lista ao vivo de `billing.getCatalog`; desligar módulo agora reduz o número automaticamente. Também removida menção fixa a "14 módulos" na fala decorativa do robô Julinho. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4061** — **ADMINPRECOS: SALVAR PREÇO FALHAVA COM "This price cannot be archived because it is the default price of its product" (STRIPE).** Usuário anexou print do toast de erro ao salvar preço do módulo "RH & DP". `adminUpdatePrices` (`billing.ts`) criava o Price novo, tentava arquivar o Price antigo (`active:false`) e SÓ DEPOIS trocava o `default_price` do Product — mas a Stripe recusa arquivar um Price enquanto ele ainda é o default do produto. Fix: inverter a ordem (trocar `default_price` pro Price novo PRIMEIRO, arquivar o antigo DEPOIS). Limpo também 1 Price órfão ativo duplicado que a tentativa anterior deixou pra trás no Stripe (arquivado manualmente, sem impacto em assinatura existente). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4062** — **LOGOTIPO DE CADA MÓDULO NAS TELAS DE VENDA E GESTÃO DE ASSINATURA.** Usuário anexou print de `/admin/saas/precos` apontando que cada card de módulo só tinha texto, sem ícone. `modulesData.ts` já tinha `icon`+`color` por módulo (usado em `/planos`); reaproveitado nas 4 telas restantes que listam módulos em texto puro: `AdminPrecos.tsx` (card com ícone 36px), `MinhaAssinatura.tsx`/`ContratarPlano.tsx` (ícone 28px junto do checkbox), `SaasAdminPanel.tsx` (ícone 20px na barra de popularidade). Módulo "seat" e módulo desativado caem num ícone cinza neutro. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
-- **Rev. 4060** — **`/planos`: MÓDULO FORA DE VENDA AGORA SOME COMPLETAMENTE DA VITRINE, NÃO SÓ DO PREÇO.** Usuário reportou que desligar um módulo pra venda (Rev. 4059) só escondia o preço (mostrava "—"), com o card completo (nome/descrição/link) ainda visível — sensação de propaganda enganosa. `SiteVendas.tsx`: grid de módulos passou a filtrar `MODULES` contra `catalog.modules` (já é `sellableModules` do backend), então módulo fora de venda não renderiza card nenhum. `ModuloDetalhe.tsx`: guard `isSellable` bloqueia acesso direto por URL à página de detalhe de um módulo desativado (cai em "Módulo não encontrado"). ZERO DELETE · ZERO ALTER destrutivo (só frontend).
+- **Rev. 4061** — **ADMINPRECOS: SALVAR PREÇO FALHAVA COM "This price cannot be archived because it is the default price of its product" (STRIPE).** `adminUpdatePrices` (`billing.ts`) tentava arquivar o Price antigo ANTES de trocar o `default_price` do Product — Stripe recusa. Fix: inverter a ordem. Limpo também 1 Price órfão ativo duplicado deixado pela tentativa anterior. ZERO DELETE · ZERO ALTER destrutivo.
+
+- **Rev. 4060** — **`/planos`: MÓDULO FORA DE VENDA AGORA SOME COMPLETAMENTE DA VITRINE, NÃO SÓ DO PREÇO.** `SiteVendas.tsx`: grid de módulos filtra `MODULES` contra `catalog.modules`; `ModuloDetalhe.tsx`: guard `isSellable` bloqueia acesso direto por URL a módulo desativado. ZERO DELETE · ZERO ALTER destrutivo (só frontend).
 
 - **Rev. 4059** — **PAINEL SAAS / AJUSTE DE PREÇOS: NOVO CONTROLE PARA LIGAR/DESLIGAR MÓDULO DA VITRINE COMERCIAL.** Nova coluna `billing_module_prices.is_active`; `server/billingCatalog.ts` centraliza `getEffectiveCatalog()` (`modules` completo + `sellableModules` só ativos). `AdminPrecos.tsx` redesenhado em grid de cards com Switch + edição de preço. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4057** — **PAINEL SAAS: DASHBOARD GANHA MÉTRICAS DETALHADAS (ARPU, ASSENTOS, CRESCIMENTO/CHURN DO MÊS, POPULARIDADE POR MÓDULO).** `saasAdmin.ts` → `getSummary` ganhou `seatsTotal`, `arpuCents`, `newThisMonth`/`canceledThisMonth`, `moduleBreakdown`; `SaasAdminPanel.tsx` ganhou 2ª fileira de cards + seção "Popularidade dos módulos". ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4056** — **NOVO ITEM "GESTÃO DE VENDAS (SAAS)" NO MENU DE ADMINISTRAÇÃO + CROSS-LINK ENTRE OS 2 PAINÉIS EXISTENTES.** `SaasAdminPanel.tsx` (`/admin/saas`) e `AdminPrecos.tsx` (`/admin/saas/precos`) ganharam link no menu de conta (admin_master) + botões cruzados entre si. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4055 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4056 e anteriores.
 
 ## User preferences
 

@@ -1,4 +1,24 @@
 /**
+ * Rev. 4063 — **`/planos`: "14 MÓDULOS DISPONÍVEIS" ERA UM NÚMERO FIXO — AGORA REFLETE OS MÓDULOS REALMENTE À VENDA.**
+ *
+ * PEDIDO: usuário anexou print da landing `/planos` mostrando o card "14 módulos disponíveis" na stats bar do
+ * hero e apontou que esse número tem que acompanhar a liberação/desligamento de módulo feita em
+ * `/admin/saas/precos` (Rev. 4059/4060) — hoje não são 14 módulos à venda, e desligar um módulo ali não reduzia
+ * essa contagem.
+ *
+ * CAUSA-RAIZ: `SiteVendas.tsx` tinha `{ value: "14", label: "módulos disponíveis" }` HARDCODED no array de
+ * stats do hero, nunca ligado ao catálogo — só a GRADE de cards de módulo (`sellableModuleCards`, Rev. 4060)
+ * já filtrava por módulo à venda; o número da stats bar era estático e ficava defasado a cada toggle.
+ *
+ * FIX: trocado `"14"` por `String(sellableModuleCards.length)`, que já é a mesma lista derivada ao vivo de
+ * `billing.getCatalog` (`catalog.modules`, só módulos com `isActive:true`) usada na grade — agora desligar um
+ * módulo em `/admin/saas/precos` reduz o número automaticamente, sem nova fonte de dado. Também trocada a fala
+ * decorativa do robô "Julinho" que citava "Testando 14 módulos..." por uma versão sem número fixo ("Testando
+ * todos os módulos..."), pra não ficar outra referência defasada na mesma tela. ZERO DELETE · ZERO ALTER
+ * destrutivo (mudança 100% de frontend).
+ */
+
+/**
  * Rev. 4062 — **LOGOTIPO DE CADA MÓDULO NAS TELAS DE VENDA E GESTÃO DE ASSINATURA.**
  *
  * PEDIDO: usuário anexou print de `/admin/saas/precos` (grid de cards de módulo) apontando que cada card só
