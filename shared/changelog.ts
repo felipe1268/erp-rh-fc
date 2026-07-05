@@ -1,4 +1,27 @@
 /**
+ * Rev. 4054 — **`/planos/modulos/:id`: SCREENSHOTS REAIS DO SISTEMA AUTENTICADO SUBSTITUEM O MOCKUP ABSTRATO.**
+ *
+ * PEDIDO: usuário pediu explicitamente "QUERO PRINTS REAIS DOS MÓDULOS.. PARA VALORIZAR A FERRAMENTA" — o
+ * `ModulePreviewMock` (Rev. 4050/4053) era só uma ilustração abstrata (painéis/gráficos genéricos), insuficiente
+ * pra convencer um visitante da landing. Usuário também anexou 7 screenshots próprios de telas reais do módulo
+ * RH & DP (Painel RH, Dashboard de Funcionários, Top 10 Funções/Setores, evolução da Folha) como referência de
+ * qualidade — full desktop, dados reais da empresa-cliente-zero FC Engenharia (317 pessoas), sem mascarar nomes.
+ *
+ * ESCOPO: capturados screenshots reais autenticados de TODOS os 14 módulos via bypass de dev temporário (revertido
+ * 100% ao final — ver `server/_core/sdk.ts`/`server/db.ts`/`CompanyContext.tsx`, sem vestígio em produção), salvos
+ * em `client/src/assets/screenshots/*.jpg`. Pra RH & DP especificamente, usados os 4 melhores prints que o próprio
+ * usuário forneceu (`client/src/assets/screenshots/rh-dp/*.png`) por serem de qualidade superior (full-desktop,
+ * sem crop de sidebar). Novo arquivo `client/src/pages/portal/moduleScreenshots.ts` (`MODULE_SCREENSHOTS`, mapa
+ * módulo→array de imagens). `ModuloDetalhe.tsx`: hero agora mostra a 1ª screenshot dentro de um frame de navegador
+ * (selo verde "Tela real do sistema"), com fallback pro `ModulePreviewMock` caso um módulo não tenha print; nova
+ * seção "Mais telas reais de {módulo}" exibe as screenshots extras em grid (só aparece p/ RH & DP, que tem 4).
+ *
+ * DECISÃO DE PRIVACIDADE: usuário não respondeu à pergunta pendente sobre mascarar CPF/nome, mas anexou seus
+ * próprios prints com nomes reais de funcionários sem qualquer blur — interpretado como confirmação implícita de
+ * publicar como está (nenhum CPF completo aparece nas telas capturadas). ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4053 — **`/planos`: CLIQUE NO MÓDULO ABRE PÁGINA DEDICADA COM TODAS AS FUNCIONALIDADES (SUBSTITUI O DIALOG PEQUENO).**
  *
  * PEDIDO: usuário achou o dialog pequeno de detalhe do módulo (`ModuleDetailDialog`, Rev. 4050) raso demais pra

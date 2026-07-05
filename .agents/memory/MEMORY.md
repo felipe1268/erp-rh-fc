@@ -154,3 +154,4 @@
 - [Stripe restricted key breaks stripe-replit-sync](stripe-restricted-key-permissions.md) — rk_test_/rk_live_ keys lack account-read scope the lib needs everywhere; must use a standard sk_ secret key.
 - [stripe-replit-sync advisory lock hang](stripe-replit-sync-advisory-lock-hang.md) — a killed runMigrations() call can leave an idle Neon session holding its advisory lock forever; pg_terminate_backend to unstick.
 - [Tenant isolation audit — recurring IDOR pattern](tenant-isolation-audit-idor-pattern.md) — lookup-by-id procedures often skip a companyId access check; standard fix + `admin` role is intentionally global (SaaS painel mestre needs a separate client-admin role).
+- [Marketing screenshot capture](marketing-screenshot-capture.md) — temp dev auth bypass for real screenshots must be grepped/reverted fully across ALL files it touched; user's own unmasked screenshots = implicit consent to publish as-is.

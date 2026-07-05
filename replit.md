@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4054** — **`/planos/modulos/:id`: SCREENSHOTS REAIS DO SISTEMA AUTENTICADO SUBSTITUEM O MOCKUP ABSTRATO.** Usuário pediu explicitamente "QUERO PRINTS REAIS DOS MÓDULOS.. PARA VALORIZAR A FERRAMENTA" — o `ModulePreviewMock` abstrato não convencia. Capturados screenshots reais de TODOS os 14 módulos via bypass de dev temporário (revertido 100% ao final, sem vestígio em produção), salvos em `client/src/assets/screenshots/*.jpg`. Pra RH & DP, usados os 4 melhores prints que o próprio usuário anexou (full-desktop, dados reais da FC Engenharia, sem mascarar nomes) em `client/src/assets/screenshots/rh-dp/*.png`. Novo `client/src/pages/portal/moduleScreenshots.ts` (`MODULE_SCREENSHOTS`); `ModuloDetalhe.tsx` mostra a 1ª screenshot no hero (frame de navegador, selo "Tela real do sistema", fallback pro mock se faltar print) + seção "Mais telas reais" em grid pras extras (hoje só RH & DP tem). ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4053** — **`/planos`: CLIQUE NO MÓDULO ABRE PÁGINA DEDICADA COM TODAS AS FUNCIONALIDADES (SUBSTITUI O DIALOG PEQUENO).** Usuário achou o dialog pequeno de detalhe (Rev. 4050) raso demais pra vender o produto; pediu página cheia por módulo com TODAS as funcionalidades em profundidade (ex.: RH mostrando Raio-X do Funcionário, cadastro, controle de documentos etc.). Nova página `client/src/pages/portal/ModuloDetalhe.tsx` em `/planos/modulos/:id`: hero com preço real (`billing.getCatalog`), tagline, prévia conceitual, descrição longa, seções detalhadas por módulo (todas as 14), destaques de IA, integrações e "outros módulos". Conteúdo em `moduleDetails.ts` (novo, `MODULE_DETAILS`), 100% baseado nas features reais de `shared/modules.ts`. Refatoração de suporte sem alterar dados: array `MODULES`/`formatPrice` e `ModulePreviewMock` extraídos de `SiteVendas.tsx` pra `modulesData.ts`/`ModulePreviewMock.tsx` (reuso entre as duas telas); clique no card do módulo agora navega pra `/planos/modulos/${id}` em vez de abrir `ModuleDetailDialog` (removido, morto). ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4052** — **`/planos`: AZUL MAIS ESCURO EM TODA A LANDING + MASCOTE "JULINHO" VIROU UM ROBÔ ANIMADO E INTERATIVO (AJUSTADO P/ MAIS VELHO/ALTO/RESPONSÁVEL).** Usuário achou o azul da Rev. 4051 claro demais e pediu robô no lugar do mascote humano; depois pediu, via canvas, que o robô fosse "mais velho, mais alto, transmitindo responsabilidade" — imagem regenerada com build mais alto/robusto, postura calma (mão na cintura) e expressão séria. Paleta aprofundada (blue-600→900, blue-500→800, blue-400→700, blue-300→600, sky-*→indigo-*), mantendo tints claros (blue-50/100/200) como fundo suave; array `MODULES` intocado. Imagem final em `client/src/assets/julinho_robot.png`; no hero ele flutua continuamente, tem glow pulsante, e é clicável (troca a fala do balão entre 4 mensagens via `AnimatePresence`); versão decorativa no CTA final também flutua. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4052** — **`/planos`: AZUL MAIS ESCURO EM TODA A LANDING + MASCOTE "JULINHO" VIROU UM ROBÔ ANIMADO E INTERATIVO (AJUSTADO P/ MAIS VELHO/ALTO/RESPONSÁVEL).** Usuário achou o azul da Rev. 4051 claro demais e pediu robô no lugar do mascote humano; depois pediu, via canvas, que o robô fosse "mais velho, mais alto, transmitindo responsabilidade". Paleta aprofundada (blue-600→900 etc.); imagem final em `client/src/assets/julinho_robot.png`, flutuante/clicável no hero e CTA final. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4051** — **`/planos`: PALETA DE CORES TROCADA DE LARANJA/ÂMBAR PARA AZUL EM TODA A LANDING.** Usuário viu os screenshots da Rev. 4050 no canvas e pediu pra trocar laranja por azul ("gosto mais do azul"). Toda a identidade visual PRÓPRIA do site migrou de `orange-*/amber-*` pra `blue-*/sky-*`. Mantido de propósito: cores por categoria no array `MODULES`. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4047** — **`/planos` REDESENHADA (TEMA CLARO/VÍVIDO) + MASCOTE "JULINHO" + PREÇOS AJUSTÁVEIS PELO ADMIN.** Nova tabela `billing_module_prices` (self-heal) + `applyPriceOverrides()`; `server/routers/billing.ts` ganhou `adminGetPrices`/`adminUpdatePrices`; nova página `AdminPrecos.tsx` em `/admin/saas/precos`; `SiteVendas.tsx` reescrita com fundo claro/vívido e mascote "Julinho". ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4046** — **SITE DE VENDAS COMPLETO EM `/planos` (LANDING PAGE, NÃO SÓ O FORMULÁRIO).** Nova página `client/src/pages/portal/SiteVendas.tsx` (dark/gradiente laranja-âmbar sobre navy): hero com CTA duplo, stats bar, grid dos 14 módulos, seção "Por que a FC" com o case ÚNICO real, benefícios, vídeo institucional placeholder, CTA final e footer. `/planos` agora renderiza `SiteVendas`; `/contratar` continua sendo `ContratarPlano`. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4045 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4046 e anteriores.
 
 ## User preferences
 

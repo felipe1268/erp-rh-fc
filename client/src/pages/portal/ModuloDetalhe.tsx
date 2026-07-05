@@ -9,6 +9,8 @@ import { trpc } from "@/lib/trpc";
 import { MODULES, formatPrice } from "./modulesData";
 import { MODULE_DETAILS } from "./moduleDetails";
 import { ModulePreviewMock } from "./ModulePreviewMock";
+import { MODULE_SCREENSHOTS } from "./moduleScreenshots";
+import { Monitor } from "lucide-react";
 
 /**
  * Rev. 4053 — Página dedicada de detalhe do módulo (`/planos/modulos/:id`),
@@ -25,6 +27,9 @@ export default function ModuloDetalhe() {
 
   const mod = MODULES.find(m => m.id === id);
   const details = id ? MODULE_DETAILS[id] : undefined;
+  const screenshots = id ? MODULE_SCREENSHOTS[id] ?? [] : [];
+  const heroScreenshot = screenshots[0];
+  const gallery = screenshots.slice(1);
 
   const price = (() => {
     const found = catalog?.modules.find(m => m.id === id);
@@ -96,10 +101,59 @@ export default function ModuloDetalhe() {
                 </Button>
               </div>
             </div>
-            <ModulePreviewMock m={mod} />
+            {heroScreenshot ? (
+              <div className="relative">
+                <div className="rounded-2xl overflow-hidden shadow-2xl border border-slate-200 bg-slate-900">
+                  <div className="flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-800">
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-400" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+                  </div>
+                  <img
+                    src={heroScreenshot}
+                    alt={`Tela real do módulo ${mod.title} no sistema`}
+                    className="w-full h-auto block"
+                  />
+                </div>
+                <span className="absolute -top-3 left-4 flex items-center gap-1.5 text-[11px] font-semibold text-white bg-emerald-600 rounded-full px-3 py-1 shadow-lg">
+                  <Monitor className="w-3 h-3" /> Tela real do sistema
+                </span>
+              </div>
+            ) : (
+              <ModulePreviewMock m={mod} />
+            )}
           </motion.div>
         </div>
       </section>
+
+      {gallery.length > 0 && (
+        <section className="py-14 px-4 sm:px-6 bg-slate-50 border-y border-blue-100">
+          <div className="max-w-6xl mx-auto">
+            <div className="flex items-center gap-2 mb-6">
+              <Monitor className="w-4.5 h-4.5 text-blue-800" />
+              <h2 className="text-lg font-bold text-slate-900">Mais telas reais de {mod.title}</h2>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-5">
+              {gallery.map((src, i) => (
+                <a
+                  key={i}
+                  href={src}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block rounded-xl overflow-hidden border border-slate-200 shadow-md hover:shadow-xl transition-shadow bg-slate-900"
+                >
+                  <div className="flex items-center gap-1.5 px-3 py-2 bg-slate-800">
+                    <span className="w-2 h-2 rounded-full bg-red-400" />
+                    <span className="w-2 h-2 rounded-full bg-amber-400" />
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                  </div>
+                  <img src={src} alt={`Tela real ${i + 2} do módulo ${mod.title}`} className="w-full h-auto block" />
+                </a>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="py-16 px-4 sm:px-6">
         <div className="max-w-6xl mx-auto">
