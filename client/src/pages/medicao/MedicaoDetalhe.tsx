@@ -1049,30 +1049,24 @@ export default function MedicaoDetalhe() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-gray-600">Data Início <span className="text-red-500">*</span></Label>
-                  <div className="relative">
-                    <CalendarRange className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
-                    <Input
-                      type="date"
-                      className="bg-gray-50 pl-8 focus:bg-white"
-                      value={formBoletim.dataInicio}
-                      onChange={e => setFormBoletim(f => ({ ...f, dataInicio: e.target.value }))}
-                    />
-                  </div>
+                  <Input
+                    type="date"
+                    className="bg-gray-50 focus:bg-white"
+                    value={formBoletim.dataInicio}
+                    onChange={e => setFormBoletim(f => ({ ...f, dataInicio: e.target.value }))}
+                  />
                   {formBoletim.dataInicio && ultimoBoletimDataFim && (
                     <p className="text-[10px] text-emerald-600 font-medium">Dia seguinte à medição anterior</p>
                   )}
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-gray-600">Data Fim <span className="text-red-500">*</span></Label>
-                  <div className="relative">
-                    <CalendarRange className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
-                    <Input
-                      type="date"
-                      className="bg-gray-50 pl-8 focus:bg-white"
-                      value={formBoletim.dataFim}
-                      onChange={e => setFormBoletim(f => ({ ...f, dataFim: e.target.value }))}
-                    />
-                  </div>
+                  <Input
+                    type="date"
+                    className="bg-gray-50 focus:bg-white"
+                    value={formBoletim.dataFim}
+                    onChange={e => setFormBoletim(f => ({ ...f, dataFim: e.target.value }))}
+                  />
                 </div>
               </div>
               {formBoletim.dataInicio && formBoletim.dataFim && (() => {
@@ -1161,27 +1155,21 @@ export default function MedicaoDetalhe() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-gray-600">Data Início <span className="text-red-500">*</span></Label>
-                  <div className="relative">
-                    <CalendarRange className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
-                    <Input
-                      type="date"
-                      className="bg-gray-50 pl-8 focus:bg-white"
-                      value={formEditBoletim.dataInicio}
-                      onChange={e => setFormEditBoletim(f => ({ ...f, dataInicio: e.target.value }))}
-                    />
-                  </div>
+                  <Input
+                    type="date"
+                    className="bg-gray-50 focus:bg-white"
+                    value={formEditBoletim.dataInicio}
+                    onChange={e => setFormEditBoletim(f => ({ ...f, dataInicio: e.target.value }))}
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-gray-600">Data Fim <span className="text-red-500">*</span></Label>
-                  <div className="relative">
-                    <CalendarRange className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
-                    <Input
-                      type="date"
-                      className="bg-gray-50 pl-8 focus:bg-white"
-                      value={formEditBoletim.dataFim}
-                      onChange={e => setFormEditBoletim(f => ({ ...f, dataFim: e.target.value }))}
-                    />
-                  </div>
+                  <Input
+                    type="date"
+                    className="bg-gray-50 focus:bg-white"
+                    value={formEditBoletim.dataFim}
+                    onChange={e => setFormEditBoletim(f => ({ ...f, dataFim: e.target.value }))}
+                  />
                 </div>
               </div>
               {formEditBoletim.dataInicio && formEditBoletim.dataFim && (() => {

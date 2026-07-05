@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4031** — **MEDIÇÃO DE CONTRATOS: ÍCONE DECORATIVO NOS CAMPOS DE DATA SOBREPUNHA O ÍCONE NATIVO DO NAVEGADOR — REMOVIDO.** Usuário mandou print (IMG_3308) do diálogo "Novo Boletim de Medição" (redesenhado na Rev. 4030) com as datas "se sobrepondo"/"ficou péssimo". Causa: o ícone `CalendarRange` decorativo em `absolute` + `pl-8` (copiado do padrão do "Editar Boletim") colide com o affordance nativo do `<input type="date">`, já que o shadow-DOM interno do campo nem sempre respeita o padding customizado em todos navegadores/dispositivos. `MedicaoDetalhe.tsx`: removido o wrapper/ícone/padding dos 4 campos de data (`modalBoletim` E `modalEditBoletim`), voltando a inputs simples sem ícone sobreposto. Mesma mutation/validação/campos de antes. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4030** — **MEDIÇÃO DE CONTRATOS: REDESIGN DA TABELA "ITENS DO BOLETIM" + PADRONIZAÇÃO DO DIÁLOGO "NOVO BOLETIM DE MEDIÇÃO".** Usuário reclamou de espaço vazio enorme entre a coluna "Item" e a descrição na tabela de itens (prints), pediu remodelação 100% moderna; depois mandou print do diálogo "Novo Boletim de Medição" com vão em branco enorme (ainda no layout antigo, sem o redesign da Rev. 4029). `MedicaoDetalhe.tsx`: tabela de itens (view-only e edição) trocada para `table-fixed` + `<colgroup>` com percentuais explícitos somando 100% (elimina o vão Item↔Descrição), "% Período" virou badge azul, "% Acumulado" ganhou mini barra de progresso; diálogo `modalBoletim` reconstruído seguindo EXATAMENTE o padrão do "Editar Boletim" (3 blocos: cabeçalho c/ ícone em avatar + card branco "Período da medição" + rodapé fixo), com o mesmo badge "N dias de medição" e validação de data fim < início. Mesma mutation/campos de antes. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4029** — **MEDIÇÃO DE CONTRATOS: REDESIGN COMPLETO DO DIÁLOGO "EDITAR BOLETIM" (PERÍODO DA MEDIÇÃO).** Usuário apontou que este diálogo (edição de datas do boletim) ainda não tinha recebido o redesign moderno pedido nas revisões anteriores. `MedicaoDetalhe.tsx`, dialog `modalEditBoletim`: reestruturado em 3 blocos visuais (cabeçalho com ícone em avatar azul + subtítulo; corpo com card branco `rounded-2xl` para "Período da medição" + Observações; rodapé fixo com Cancelar/Salvar), inputs de data com ícone `CalendarRange` interno, badge calculado ao vivo "N dias de medição" + referência MM/AAAA, e validação nova (data fim < início desabilita "Salvar" com aviso). Mesma mutation/campos de antes. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4029** — **MEDIÇÃO DE CONTRATOS: REDESIGN COMPLETO DO DIÁLOGO "EDITAR BOLETIM" (PERÍODO DA MEDIÇÃO).** Reestruturado em 3 blocos visuais (cabeçalho + card branco + rodapé fixo), inputs de data c/ ícone interno, badge "N dias de medição", validação data fim < início. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4028** — **MEDIÇÃO DE CONTRATOS: OLHINHO NA LISTA DE BOLETINS + REDESIGN MOBILE DO CABEÇALHO DO DIÁLOGO "ITENS DO BOLETIM" + ENCAMINHAR VIA WHATSAPP.** Ícone de olho na lista de boletins + cabeçalho reestruturado em 2 linhas (título isolado, botões numa linha própria com `flex-wrap`) + `compartilharBoletimMedicaoWhatsApp` (Web Share API nível 2 / fallback wa.me). ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4025** — **MEDIÇÃO DE CONTRATOS: "IMPORTAR DO ORÇAMENTO (COM AVANÇO FÍSICO)" NÃO TRAZIA NENHUM ITEM — PASSA A IMPORTAR DIRETO DO CRONOGRAMA.** Casamento por `eap_codigo` colapsava dezenas de atividades numa chave vazia; importação passa a iterar atividades-folha do Cronograma direto, casando avanço por `atividade_id` (211/211 validado, antes 15/148). Botão renomeado para "Importar do Cronograma (avanço físico)". ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4023** — **MEDIÇÃO DE CONTRATOS: DROPDOWN "PROJETO / OBRA" CORTAVA NOMES LONGOS NO DIÁLOGO "NOVO CONTRATO DE MEDIÇÃO".** Fix escopado em `MedicaoContratos.tsx`: `SelectContent` ganhou `max-w-[min(28rem,calc(100vw-2rem))]`, `SelectItem` ganhou `whitespace-normal break-words leading-snug py-2`. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4022 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4023 e anteriores.
 
 ## User preferences
 

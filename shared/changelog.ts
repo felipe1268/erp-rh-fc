@@ -1,4 +1,27 @@
 /**
+ * Rev. 4031 — **MEDIÇÃO DE CONTRATOS: ÍCONE DECORATIVO NOS CAMPOS DE DATA SOBREPUNHA O ÍCONE
+ * NATIVO DO NAVEGADOR — REMOVIDO.**
+ *
+ * PEDIDO: usuário mandou print (IMG_3308) do diálogo "Novo Boletim de Medição" (recém-redesenhado
+ * na Rev. 4030) mostrando as datas "se sobrepondo" / "ficou péssimo". Causa raiz: o ícone
+ * `CalendarRange` decorativo, posicionado em `absolute` sobre o `<input type="date">` com
+ * `pl-8` reservando espaço, foi copiado do padrão do "Editar Boletim" (Rev. 4029) — mas inputs
+ * nativos de data já desenham seu próprio ícone/affordance de calendário, e em vários
+ * navegadores/dispositivos (especialmente mobile) o padding customizado não é respeitado pelo
+ * shadow-DOM interno do campo, fazendo o ícone decorativo colidir visualmente com o texto/ícone
+ * nativo do navegador.
+ *
+ * SOLUÇÃO — Frontend (`client/src/pages/medicao/MedicaoDetalhe.tsx`):
+ * - Removido o wrapper `<div className="relative">` + `<CalendarRange className="absolute
+ *   left-2.5 ...">` + `pl-8` dos 4 campos de data (`Data Início`/`Data Fim` em `modalBoletim` E
+ *   em `modalEditBoletim` — ambos tinham o mesmo padrão copiado). Inputs voltam a ser simples
+ *   (`bg-gray-50 focus:bg-white`, sem ícone sobreposto), deixando o navegador exibir seu próprio
+ *   affordance de calendário sem duplicidade/colisão. Nenhuma mudança de mutation/validação/campos.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo (remoção de elemento puramente decorativo).
+ */
+
+/**
  * Rev. 4030 — **MEDIÇÃO DE CONTRATOS: REDESIGN DA TABELA "ITENS DO BOLETIM" + PADRONIZAÇÃO DO
  * DIÁLOGO "NOVO BOLETIM DE MEDIÇÃO".**
  *
