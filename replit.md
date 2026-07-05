@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4046** — **SITE DE VENDAS COMPLETO EM `/planos` (LANDING PAGE, NÃO SÓ O FORMULÁRIO).** Nova página `client/src/pages/portal/SiteVendas.tsx` (dark/gradiente laranja-âmbar sobre navy): hero com CTA duplo, stats bar, grid dos 14 módulos (ícone/cor/descrição/preço espelhando `shared/billingModules.ts`), seção "Por que a FC" com o case ÚNICO real (FC Engenharia como cliente-zero do próprio produto — sem cliente fictício), benefícios, vídeo institucional placeholder (`INSTITUTIONAL_VIDEO_URL`), Instagram/YouTube desabilitados "(em breve)" via `SOCIAL_LINKS`, CTA final e footer. `/planos` agora renderiza `SiteVendas`; `/contratar` continua sendo o formulário `ContratarPlano` (conversão), alvo dos CTAs da landing. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4045** — **PROJETO SAAS "FASE 4" (FINAL) — MODULE GATING (ENFORCEMENT): EMPRESA-CLIENTE SÓ ACESSA O QUE CONTRATOU.** Gate GLOBAL via middleware tRPC (`server/_core/moduleGating.ts` + `requireModuleGate` em `protectedProcedure`), não router-por-router: `ROUTER_MODULE_MAP` liga namespace tRPC → módulo faturável (`shared/billingModules.ts`). Regra crítica: empresa SEM `company_subscriptions` (todo o parque interno FC pré-SaaS) = "legada", acesso irrestrito; só empresa-cliente com subscription é gateada pelos módulos contratados em `company_subscription_modules` (status trialing/active/past_due). `admin`/`admin_master` sempre bypassam (design da Rev. 4040). Cache 30s invalidado nas mutations de billing + no webhook de sync. Frontend: `billing.getContractedModules` integrado em `ModuleConfigContext.isModuleEnabled`. Fecha o plano de 4 fases da transformação SaaS. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4044** — **PROJETO SAAS "FASE 3" — LIFECYCLE DE ASSINATURA: SELF-SERVICE REAL PRA `ADM_CLIENTE`.** `server/routers/billing.ts` ganhou `getMySubscription`/`createPortalSession` (Stripe Billing Portal)/`updateSubscription` (add/remove módulo + assentos com proration)/`cancelMySubscription`/`reactivateMySubscription`, todos via `getOwnSubscriptionOrThrow` (só `adm_cliente`, só a própria empresa). Nova página `MinhaAssinatura.tsx` com guard dedicado `AdmClienteGuard` em `/minha-assinatura`; item de sidebar visível só pra `adm_cliente`. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4044** — **PROJETO SAAS "FASE 3" — LIFECYCLE DE ASSINATURA: SELF-SERVICE REAL PRA `ADM_CLIENTE`.** `server/routers/billing.ts` ganhou `getMySubscription`/`createPortalSession` (Stripe Billing Portal)/`updateSubscription` (add/remove módulo + assentos com proration)/`cancelMySubscription`/`reactivateMySubscription`, todos via `getOwnSubscriptionOrThrow` (só `adm_cliente`, só a própria empresa). Nova página `MinhaAssinatura.tsx` com guard dedicado `AdmClienteGuard` em `/minha-assinatura`; item de sidebar visível só pra `adm_cliente`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4041** — **PROJETO SAAS: NOVO PERFIL "ADM CLIENTE" + 2 VULNS CRÍTICAS DE `listUsers`/`createLocalUser` CORRIGIDAS.** Novo papel `adm_cliente` (gerencia só usuários `role:"user"` da própria empresa); achado GRAVE corrigido: `listUsers`/`createLocalUser` sem check de role permitiam escalação total e vazamento cross-tenant. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4039** — **DASHBOARD ALMOXARIFADO & EQUIPAMENTOS: ARQUIVO ÚNICO DE 1851 LINHAS COM 6 ABAS VIROU 6 PÁGINAS PRÓPRIAS.** Pedido: dividir `DashAlmoxarifadoEquipamentos.tsx` (controlava 6 seções via `?tab=`) em 6 páginas independentes com item próprio na sidebar, mais análise por funcionário, "top itens por valor", alerta de "itens sem categoria" e click-to-drill-down em todo gráfico. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4038** — **DASHBOARDS DE APR E PT (REV. 4037): GRÁFICOS RASOS DEMAIS — "COLOCA MAIS GRÁFICOS DETALHADOS".** 3 novas agregações em `aprAnalises.dashboard` (matrizRisco, topPerigos, timelinePorStatus) + 2 em `ptPermissoes.dashboard` (porEmpresaExecutante, timelinePorStatus); frontend ganhou heatmap + bar charts nos 2 dashboards. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4037** — **"CADÊ O DASH DA APR E DA PT?" — FALTAVAM DASHBOARDS DEDICADOS NO GRUPO "DASHBOARDS" DA SIDEBAR.** Novo procedimento `dashboard` em `aprAnalises.ts`/`ptPermissoes.ts`; novas páginas `DashboardAprAnalise.tsx`/`DashboardPermissaoTrabalho.tsx`; rotas `/sst/dashboard-apr` e `/sst/dashboard-pt` + 2 itens novos no grupo "Dashboards" da sidebar. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

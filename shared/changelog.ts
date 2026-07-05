@@ -1,4 +1,28 @@
 /**
+ * Rev. 4046 — **SITE DE VENDAS COMPLETO EM `/planos` (LANDING PAGE, NÃO SÓ O FORMULÁRIO).**
+ *
+ * PEDIDO: "um site completo para vendas" — o usuário achou o `/planos` atual (que só renderizava o
+ * formulário `ContratarPlano`) muito raso pra converter visitante em cliente. Pediu vitrine detalhada
+ * de módulos, "case studies", vídeo e seções de Instagram/YouTube. Confirmado nas perguntas de
+ * esclarecimento: estilo visual moderno/tech (gradientes, bold, cara de SaaS); SEM links reais de
+ * Instagram/YouTube ainda (deixar como placeholder "em breve" pra preencher depois); SEM cases de
+ * clientes reais ainda — só a própria história/uso da FC Engenharia pode ser destacado como case
+ * (nunca inventar cliente fictício).
+ *
+ * IMPLEMENTAÇÃO: nova página `client/src/pages/portal/SiteVendas.tsx`, dark/gradiente
+ * laranja-âmbar sobre navy (`#0A0F1E`), com: nav sticky + hero com CTA duplo, stats bar, grid de 14
+ * módulos (ícone/cor/descrição/preço, espelhando `shared/billingModules.ts`), seção "Por que a FC"
+ * com o case ÚNICO real (FC Engenharia como cliente-zero do próprio produto, sem dado fabricado),
+ * grid de benefícios, seção de vídeo institucional (placeholder "em produção" — `INSTITUTIONAL_VIDEO_URL`
+ * no topo do arquivo pra trocar depois por embed real), seção de redes sociais com Instagram/YouTube
+ * desabilitados e rotulados "(em breve)" via `SOCIAL_LINKS` (trocar `null` por URL quando existir), CTA
+ * final em faixa laranja e footer. Rota `/planos` (App.tsx) agora aponta pra `SiteVendas`; `/contratar`
+ * continua apontando pro formulário `ContratarPlano` original (conversão), com os CTAs da landing
+ * navegando pra lá. `main.tsx` já whitelistava ambos os prefixos, nenhuma mudança necessária ali.
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4045 — **PROJETO SAAS "FASE 4" — MODULE GATING (ENFORCEMENT): EMPRESA-CLIENTE SÓ ACESSA O QUE CONTRATOU.**
  *
  * PEDIDO: última fase do plano de 4 fases aprovado pelo usuário ("pode seguir da fase um à fase

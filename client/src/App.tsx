@@ -455,6 +455,7 @@ const ClimaPublicoPage = lazyWithRetry(() => import("./pages/PesquisaPublica").t
 // Portal Externo
 const PortalLogin = lazyWithRetry(() => import("./pages/portal/PortalLogin"));
 const ContratarPlano = lazyWithRetry(() => import("./pages/portal/ContratarPlano"));
+const SiteVendas = lazyWithRetry(() => import("./pages/portal/SiteVendas"));
 const ContratarSucesso = lazyWithRetry(() => import("./pages/portal/ContratarSucesso"));
 const PortalLoginCliente = lazyWithRetry(() => import("./pages/portal/PortalLoginCliente"));
 const PortalEsqueciSenha = lazyWithRetry(() => import("./pages/portal/PortalEsqueciSenha"));
@@ -766,7 +767,7 @@ function Router() {
         <Route path="/a/:codigo" component={AvaliacaoPublicaCurta} />
         {/* Portal Externo (Terceiros/Parceiros) */}
         <Route path="/portal/login" component={PortalLogin} />
-        <Route path="/planos" component={ContratarPlano} />
+        <Route path="/planos" component={SiteVendas} />
         <Route path="/contratar" component={ContratarPlano} />
         <Route path="/contratar/sucesso" component={ContratarSucesso} />
         <Route path="/portal/cliente/login" component={PortalLoginCliente} />
