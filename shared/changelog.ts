@@ -1,4 +1,33 @@
 /**
+ * Rev. 4065 — **NOTIFICAÇÕES DE CONTABILIDADE: BOTÕES E PERMISSÕES PADRONIZADOS COMO NO MÓDULO DE RH.**
+ *
+ * PEDIDO: usuário pediu pra "padronizar os botões e as permissões como a gente fez no módulo de RH, pra ficar
+ * mais fácil controlar o que envia e o que não envia" — a aba Contabilidade usava um `Switch` inline simples
+ * (Rev. 4064) enquanto a aba RH (`NotificacoesEmailTab`) já tinha um padrão mais rico (cards de resumo, badges
+ * coloridas por categoria, botões ícone ToggleRight/ToggleLeft + Settings + Trash2, formulário dedicado de
+ * criar/editar).
+ *
+ * FIX: `NotificacoesContabilidadeTab` (`Configuracoes.tsx`) redesenhada seguindo o padrão do RH. Modelo de
+ * permissão do destinatário evoluiu de 1 flag única (`recebeExtrato`) pra 3 campos: `ativo` (liga/desliga o
+ * destinatário inteiro sem excluir) + `recebeFiscal`/`recebeContabil` (habilita o envio pra cada um dos 2 prazos
+ * automáticos existentes, Fiscal e Contábil). Lista de destinatários agora mostra avatar, badges "Fiscal"/
+ * "Contábil" coloridas, e botões ícone padronizados: ToggleRight/ToggleLeft (ativar/desativar), Settings (abre
+ * card de edição com Switch por permissão), Trash2 (remover). Botão "Novo Destinatário" abre o mesmo card de
+ * formulário. 4 cards de resumo: Total / Ativos / Recebem Fiscal / Recebem Contábil.
+ *
+ * COMPATIBILIDADE: `normalizeDestinatarioContabilidade()` (client) e `normalizeEmail()` (`contabilidade.ts`
+ * `getConfig`) migram destinatários salvos no formato antigo (`recebeExtrato`) pra `ativo:true` +
+ * `recebeFiscal`/`recebeContabil` herdando o valor do `recebeExtrato` legado — nenhum destinatário existente
+ * perde configuração. Filtros de envio atualizados em TODOS os pontos: "Enviar Teste" e dialog manual
+ * (`FinanceiroContabilidade.tsx`, helper `destinatarioHabilitado`) usam `ativo && (fiscal||contabil)` (genérico,
+ * não distingue prazo); job automático `verificarEnvioAutomaticoContabilidade` (`statusSyncJob.ts`) agora filtra
+ * por `ativo` + a permissão ESPECÍFICA do prazo que disparou o dia (`recebeFiscal` no dia do prazo Fiscal,
+ * `recebeContabil` no dia do prazo Contábil), com fallback pro `recebeExtrato` legado via `recebeCategoria()`.
+ * `saveConfig` (schema zod) trocou `recebeExtrato` por `ativo`/`recebeFiscal`/`recebeContabil` (default `true`
+ * nos 3). ZERO DELETE · ZERO ALTER destrutivo (só JSON, sem migration de coluna).
+ */
+
+/**
  * Rev. 4064 — **NOTIFICAÇÕES DE CONTABILIDADE: TOGGLE POR DESTINATÁRIO PARA LIGAR/DESLIGAR O ENCAMINHAMENTO DO ARQUIVO POR E-MAIL.**
  *
  * PEDIDO: usuário anexou prints da tela `Configurações → Notificações por E-mail → Contabilidade`, mostrando o

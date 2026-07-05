@@ -506,10 +506,22 @@ export const contabilidadeRouter = router({
         [input.companyId]
       );
       const defaultEmails = [
-        { nome: "Fabiane / Amanda", email: "contabil@pronustributario.com.br",  dept: "Contabilidade", recebeExtrato: true },
-        { nome: "Tania / Ramatis",  email: "fiscal@pronustributario.com.br",    dept: "Fiscal", recebeExtrato: true },
-        { nome: "Silvia / Adriana", email: "trabalhista@pronustributario.com.br", dept: "Pessoal", recebeExtrato: true },
+        { nome: "Fabiane / Amanda", email: "contabil@pronustributario.com.br",  dept: "Contabilidade", ativo: true, recebeFiscal: true, recebeContabil: true },
+        { nome: "Tania / Ramatis",  email: "fiscal@pronustributario.com.br",    dept: "Fiscal", ativo: true, recebeFiscal: true, recebeContabil: true },
+        { nome: "Silvia / Adriana", email: "trabalhista@pronustributario.com.br", dept: "Pessoal", ativo: true, recebeFiscal: true, recebeContabil: true },
       ];
+      // Migra registros legados (só recebeExtrato) para o novo modelo ativo/recebeFiscal/recebeContabil
+      const normalizeEmail = (e: any) => {
+        const legado = typeof e?.recebeExtrato === "boolean" ? e.recebeExtrato : true;
+        return {
+          nome: e?.nome ?? "",
+          email: e?.email ?? "",
+          dept: e?.dept ?? "",
+          ativo: e?.ativo !== false,
+          recebeFiscal: typeof e?.recebeFiscal === "boolean" ? e.recebeFiscal : legado,
+          recebeContabil: typeof e?.recebeContabil === "boolean" ? e.recebeContabil : legado,
+        };
+      };
       if (!q.rows.length) {
         return { diaFiscal: 5, diaContabil: 8, emails: defaultEmails, ativo: true, autoEnvio: false };
       }
@@ -519,7 +531,7 @@ export const contabilidadeRouter = router({
       return {
         diaFiscal:   Number(row.dia_fiscal),
         diaContabil: Number(row.dia_contabil),
-        emails,
+        emails: emails.map(normalizeEmail),
         ativo:     Boolean(row.ativo),
         autoEnvio: Boolean(row.auto_envio),
       };
@@ -535,7 +547,9 @@ export const contabilidadeRouter = router({
         nome:  z.string().min(1),
         email: z.string().email(),
         dept:  z.string().default(""),
-        recebeExtrato: z.boolean().default(true),
+        ativo: z.boolean().default(true),
+        recebeFiscal: z.boolean().default(true),
+        recebeContabil: z.boolean().default(true),
       })).max(20),
       ativo:      z.boolean().default(true),
       autoEnvio:  z.boolean().default(false),

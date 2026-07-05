@@ -1,3 +1,5 @@
+- **Rev. 4058** — **`/planos/modulos/:id`: SEÇÃO DE SCREENSHOTS VIRA CARROSSEL "MULTITELA" HORIZONTAL COM VÁRIAS TELAS REAIS POR MÓDULO.** Capturada 2ª screenshot real pra cada um dos 13 módulos que só tinham 1 print; `ModuloDetalhe.tsx` ganhou seção com scroll horizontal + setas de navegação. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4057** — **PAINEL SAAS: DASHBOARD GANHA MÉTRICAS DETALHADAS (ARPU, ASSENTOS, CRESCIMENTO/CHURN DO MÊS, POPULARIDADE POR MÓDULO).** `saasAdmin.ts` → `getSummary` ganhou `seatsTotal`, `arpuCents`, `newThisMonth`/`canceledThisMonth`, `moduleBreakdown`; `SaasAdminPanel.tsx` ganhou 2ª fileira de cards + seção "Popularidade dos módulos". ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4055** — **`/planos/modulos/:id`: SCREENSHOTS DE RH & DP REFEITAS COM DADOS 100% FICTÍCIOS (ZERO PII REAL).** Usuário anexou 5 prints do Raio-X do Funcionário mostrando PII real e exigiu zero dado real em screenshot de marketing; recapturado `painel.png`/`dashboard-funcionarios.png` com empresa/colaboradores 100% fictícios, tudo removido do banco ao final. ZERO DELETE de dado real · ZERO ALTER destrutivo.

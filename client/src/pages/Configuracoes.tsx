@@ -1852,16 +1852,39 @@ function NotificacoesUnificadaTab({ companyId }: { companyId: number }) {
 
 // COMPONENTE: Notificações Contabilidade (Tab em Configurações)
 // ============================================================
+type ContabilidadeDestinatario = {
+  nome: string; email: string; dept: string;
+  ativo?: boolean; recebeFiscal?: boolean; recebeContabil?: boolean;
+  recebeExtrato?: boolean; // legado — migrado na leitura
+};
+
+function normalizeDestinatarioContabilidade(e: any): ContabilidadeDestinatario {
+  const legado = typeof e?.recebeExtrato === "boolean" ? e.recebeExtrato : true;
+  return {
+    nome: e?.nome ?? "",
+    email: e?.email ?? "",
+    dept: e?.dept ?? "",
+    ativo: e?.ativo !== false,
+    recebeFiscal: typeof e?.recebeFiscal === "boolean" ? e.recebeFiscal : legado,
+    recebeContabil: typeof e?.recebeContabil === "boolean" ? e.recebeContabil : legado,
+  };
+}
+
 function NotificacoesContabilidadeTab({ companyId }: { companyId: number }) {
   const [diaFiscal, setDiaFiscal] = useState(5);
   const [diaContabil, setDiaContabil] = useState(8);
   const [autoEnvio, setAutoEnvio] = useState(false);
   const [ativo, setAtivo] = useState(true);
-  const [emails, setEmails] = useState<{nome:string;email:string;dept:string;recebeExtrato?:boolean}[]>([]);
+  const [emails, setEmails] = useState<ContabilidadeDestinatario[]>([]);
+  const [carregado, setCarregado] = useState(false);
+
+  const [showForm, setShowForm] = useState(false);
+  const [editIndex, setEditIndex] = useState<number | null>(null);
   const [novoNome, setNovoNome] = useState("");
   const [novoEmail, setNovoEmail] = useState("");
   const [novoDept, setNovoDept] = useState("");
-  const [carregado, setCarregado] = useState(false);
+  const [novoRecebeFiscal, setNovoRecebeFiscal] = useState(true);
+  const [novoRecebeContabil, setNovoRecebeContabil] = useState(true);
 
   const configQ = trpc.contabilidade.getConfig.useQuery(
     { companyId }, { enabled: companyId > 0, staleTime: 30_000 }
@@ -1884,7 +1907,7 @@ function NotificacoesContabilidadeTab({ companyId }: { companyId: number }) {
       setDiaContabil(configQ.data.diaContabil);
       setAutoEnvio(configQ.data.autoEnvio ?? false);
       setAtivo(configQ.data.ativo);
-      setEmails(configQ.data.emails ?? []);
+      setEmails((configQ.data.emails ?? []).map(normalizeDestinatarioContabilidade));
       setCarregado(true);
     }
   }, [configQ.data, carregado]);
@@ -1897,29 +1920,59 @@ function NotificacoesContabilidadeTab({ companyId }: { companyId: number }) {
     saveMut.mutate({ companyId, diaFiscal, diaContabil, emails, ativo, autoEnvio });
   }
 
-  function adicionarEmail() {
-    if (!novoNome.trim() || !novoEmail.trim()) { toast.error("Nome e e-mail são obrigatórios"); return; }
-    setEmails(prev => [...prev, { nome: novoNome.trim(), email: novoEmail.trim(), dept: novoDept.trim(), recebeExtrato: true }]);
+  function resetForm() {
+    setShowForm(false); setEditIndex(null);
     setNovoNome(""); setNovoEmail(""); setNovoDept("");
+    setNovoRecebeFiscal(true); setNovoRecebeContabil(true);
   }
+
+  function handleEditDestinatario(i: number) {
+    const e = emails[i];
+    setEditIndex(i); setNovoNome(e.nome); setNovoEmail(e.email); setNovoDept(e.dept || "");
+    setNovoRecebeFiscal(e.recebeFiscal !== false); setNovoRecebeContabil(e.recebeContabil !== false);
+    setShowForm(true);
+  }
+
+  function handleSaveDestinatario() {
+    if (!novoNome.trim() || !novoEmail.trim()) { toast.error("Nome e e-mail são obrigatórios"); return; }
+    const payload = {
+      nome: novoNome.trim(), email: novoEmail.trim(), dept: novoDept.trim(),
+      recebeFiscal: novoRecebeFiscal, recebeContabil: novoRecebeContabil,
+    };
+    if (editIndex !== null) {
+      setEmails(prev => prev.map((em, j) => j === editIndex ? { ...em, ...payload } : em));
+    } else {
+      setEmails(prev => [...prev, { ...payload, ativo: true }]);
+    }
+    resetForm();
+  }
+
+  function handleToggleAtivoDestinatario(i: number) {
+    setEmails(prev => prev.map((em, j) => j === i ? { ...em, ativo: em.ativo === false } : em));
+  }
+
+  const emailsHabilitados = emails.filter(e => e.email && e.ativo !== false && (e.recebeFiscal !== false || e.recebeContabil !== false));
 
   return (
     <div className="space-y-6">
-      {/* Botão de teste */}
-      <div className="flex justify-end">
-        <Button variant="outline" size="sm" disabled={!emails.length || enviarTesteMut.isPending}
+      {/* Botões de ação */}
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="outline" size="sm" disabled={!emailsHabilitados.length || enviarTesteMut.isPending}
           onClick={() => {
             const now = new Date();
             const mes = now.getMonth() === 0 ? 12 : now.getMonth() + 1;
             const ano = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
             enviarTesteMut.mutate({
               companyId, mes, ano,
-              emailsDestino: emails.filter(e => e.email && e.recebeExtrato !== false).map(e => e.email),
+              emailsDestino: emailsHabilitados.map(e => e.email),
               mensagem: "E-mail de teste enviado pelas Configurações do Sistema.",
             });
           }}>
           <Send className="w-4 h-4 mr-1" />
           {enviarTesteMut.isPending ? "Enviando…" : "Enviar Teste"}
+        </Button>
+        <Button onClick={() => { resetForm(); setShowForm(true); }} className="bg-indigo-600 hover:bg-indigo-700">
+          <Plus className="w-4 h-4 mr-1" /> Novo Destinatário
         </Button>
       </div>
 
@@ -1971,85 +2024,129 @@ function NotificacoesContabilidadeTab({ companyId }: { companyId: number }) {
           </Card>
 
           {/* Destinatários */}
-          <Card>
-            <CardContent className="p-5 space-y-4">
-              <h3 className="font-semibold text-gray-800">Destinatários</h3>
-
-              {/* Resumo */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold text-blue-700">{emails.length}</p>
-                  <p className="text-xs text-gray-500">Total</p>
-                </div>
-                <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold text-indigo-700">{emails.filter(e => e.recebeExtrato !== false).length}</p>
-                  <p className="text-xs text-gray-500">Recebem Extrato</p>
-                </div>
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold text-green-700">{autoEnvio ? "SIM" : "NÃO"}</p>
-                  <p className="text-xs text-gray-500">Envio Auto</p>
-                </div>
+          <div className="space-y-4">
+            {/* Resumo */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+                <p className="text-2xl font-bold text-blue-700">{emails.length}</p>
+                <p className="text-xs text-gray-500">Total</p>
               </div>
-
-              {/* Lista */}
-              <div className="space-y-2">
-                {emails.length === 0 && (
-                  <p className="text-sm text-gray-400 italic py-2 text-center">Nenhum destinatário configurado ainda.</p>
-                )}
-                {emails.map((e, i) => (
-                  <div key={i} className="flex items-center gap-3 bg-gray-50 border rounded-lg px-4 py-2.5">
-                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm shrink-0">
-                      {e.nome.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{e.nome}</p>
-                      <p className="text-xs text-indigo-600 truncate">{e.email}</p>
-                    </div>
-                    {e.dept && <span className="text-[10px] text-gray-400 bg-white border rounded px-2 py-0.5 shrink-0">{e.dept}</span>}
-                    <label className="flex items-center gap-1.5 shrink-0 cursor-pointer" title="Encaminhar arquivos por e-mail para este destinatário">
-                      <Switch
-                        checked={e.recebeExtrato !== false}
-                        onCheckedChange={(checked) => setEmails(prev => prev.map((em, j) => j === i ? { ...em, recebeExtrato: checked } : em))}
-                      />
-                      <span className="text-[10px] text-gray-400 hidden sm:inline">
-                        {e.recebeExtrato !== false ? "Recebe" : "Não recebe"}
-                      </span>
-                    </label>
-                    <button className="text-gray-400 hover:text-red-500 shrink-0 ml-1"
-                      onClick={() => setEmails(prev => prev.filter((_, j) => j !== i))}>
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+                <p className="text-2xl font-bold text-green-700">{emails.filter(e => e.ativo !== false).length}</p>
+                <p className="text-xs text-gray-500">Ativos</p>
               </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-center">
+                <p className="text-2xl font-bold text-amber-700">{emails.filter(e => e.ativo !== false && e.recebeFiscal !== false).length}</p>
+                <p className="text-xs text-gray-500">Recebem Fiscal</p>
+              </div>
+              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-center">
+                <p className="text-2xl font-bold text-indigo-700">{emails.filter(e => e.ativo !== false && e.recebeContabil !== false).length}</p>
+                <p className="text-xs text-gray-500">Recebem Contábil</p>
+              </div>
+            </div>
 
-              {/* Adicionar */}
-              <div className="border border-dashed rounded-lg p-4 space-y-3">
-                <p className="text-sm font-medium text-gray-600">Adicionar destinatário</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-sm font-medium text-gray-700">Nome *</Label>
-                    <Input value={novoNome} onChange={e => setNovoNome(e.target.value)} placeholder="Ex: Fabiane / Amanda" className="mt-1" />
+            {/* Formulário (novo/editar) */}
+            {showForm && (
+              <Card className="border-indigo-200">
+                <CardContent className="p-5 space-y-4">
+                  <h3 className="font-semibold text-gray-800">{editIndex !== null ? "Editar Destinatário" : "Novo Destinatário"}</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">Nome *</Label>
+                      <Input value={novoNome} onChange={e => setNovoNome(e.target.value)} placeholder="Ex: Fabiane / Amanda" className="mt-1" />
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">Departamento</Label>
+                      <Input value={novoDept} onChange={e => setNovoDept(e.target.value)} placeholder="Ex: Contabilidade" className="mt-1" />
+                    </div>
                   </div>
                   <div>
-                    <Label className="text-sm font-medium text-gray-700">Departamento</Label>
-                    <Input value={novoDept} onChange={e => setNovoDept(e.target.value)} placeholder="Ex: Contabilidade" className="mt-1" />
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <div className="flex-1">
                     <Label className="text-sm font-medium text-gray-700">E-mail *</Label>
                     <Input type="email" value={novoEmail} onChange={e => setNovoEmail(e.target.value)} placeholder="contador@escritorio.com.br" className="mt-1" />
                   </div>
-                  <div className="flex items-end">
-                    <Button onClick={adicionarEmail} disabled={!novoNome || !novoEmail} className="bg-indigo-600 hover:bg-indigo-700 mb-0">
-                      <Plus className="w-4 h-4 mr-1" /> Adicionar
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700 mb-2 block">O que este destinatário recebe?</Label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-amber-50 transition-colors">
+                        <Switch checked={novoRecebeFiscal} onCheckedChange={setNovoRecebeFiscal} />
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">Extrato — Prazo Fiscal</p>
+                          <p className="text-xs text-gray-400">Envio automático no dia {diaFiscal}</p>
+                        </div>
+                      </label>
+                      <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-indigo-50 transition-colors">
+                        <Switch checked={novoRecebeContabil} onCheckedChange={setNovoRecebeContabil} />
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">Extrato — Prazo Contábil</p>
+                          <p className="text-xs text-gray-400">Envio automático no dia {diaContabil}</p>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button variant="outline" onClick={resetForm}>Cancelar</Button>
+                    <Button onClick={handleSaveDestinatario} className="bg-indigo-600 hover:bg-indigo-700">
+                      {editIndex !== null ? "Atualizar" : "Adicionar"}
                     </Button>
                   </div>
-                </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Lista */}
+            {emails.length === 0 ? (
+              <Card className="border-dashed border-2 border-gray-300">
+                <CardContent className="p-8 text-center">
+                  <Mail className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500 mb-2">Nenhum destinatário cadastrado</p>
+                  <p className="text-xs text-gray-400 mb-4">Adicione e-mails para receber o Extrato Bancário automaticamente nos prazos Fiscal e Contábil.</p>
+                  <Button onClick={() => { resetForm(); setShowForm(true); }} variant="outline">
+                    <Plus className="w-4 h-4 mr-1" /> Adicionar Primeiro Destinatário
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {emails.map((e, i) => (
+                  <div key={i} className={cn(
+                    "flex items-center justify-between p-4 border rounded-lg transition-colors",
+                    e.ativo !== false ? "bg-white hover:bg-gray-50" : "bg-gray-50 opacity-60"
+                  )}>
+                    <div className="flex items-center gap-4 flex-1 min-w-0">
+                      <div className={cn(
+                        "h-10 w-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0",
+                        e.ativo !== false ? "bg-indigo-600" : "bg-gray-400"
+                      )}>
+                        {e.nome.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-800 truncate">{e.nome}</p>
+                        <p className="text-sm text-gray-500 truncate">{e.email}</p>
+                      </div>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {e.dept && <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-medium">{e.dept}</span>}
+                        {!!e.recebeFiscal && e.recebeFiscal !== false && <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-medium">Fiscal</span>}
+                        {!!e.recebeContabil && e.recebeContabil !== false && <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[10px] font-medium">Contábil</span>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 ml-4 shrink-0">
+                      <Button variant="ghost" size="sm" className="text-xs" onClick={() => handleToggleAtivoDestinatario(i)} title={e.ativo !== false ? "Desativar" : "Ativar"}>
+                        {e.ativo !== false ? <ToggleRight className="w-5 h-5 text-green-600" /> : <ToggleLeft className="w-5 h-5 text-gray-400" />}
+                      </Button>
+                      <Button variant="ghost" size="sm" className="text-xs" onClick={() => handleEditDestinatario(i)}>
+                        <Settings className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" className="text-xs text-red-500 hover:text-red-700" onClick={() => {
+                        if (confirm(`Remover ${e.nome} da lista de notificações?`)) setEmails(prev => prev.filter((_, j) => j !== i));
+                      }}>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            </CardContent>
-          </Card>
+            )}
+          </div>
 
           {/* Opções */}
           <Card>

@@ -480,10 +480,18 @@ export async function verificarEnvioAutomaticoContabilidade(): Promise<void> {
       );
       const empresa = empQ.rows[0]?.nomeFantasia || empQ.rows[0]?.razaoSocial || `Empresa ${companyId}`;
 
-      // Buscar destinatários (só quem está com "recebe por e-mail" ligado)
-      let emails: {nome:string; email:string; recebeExtrato?: boolean}[] = [];
+      // Buscar destinatários (só quem está ativo e habilitado para o prazo do dia)
+      let emails: {nome:string; email:string; ativo?: boolean; recebeExtrato?: boolean; recebeFiscal?: boolean; recebeContabil?: boolean}[] = [];
       try { emails = JSON.parse(cfg.emails_json ?? "[]"); } catch { emails = []; }
-      const emailsValidos = emails.filter((e: any) => e?.email?.includes("@") && e?.recebeExtrato !== false);
+      const recebeCategoria = (e: any, campo: "recebeFiscal" | "recebeContabil") => {
+        if (typeof e?.[campo] === "boolean") return e[campo];
+        if (typeof e?.recebeExtrato === "boolean") return e.recebeExtrato;
+        return true;
+      };
+      const emailsValidos = emails.filter((e: any) =>
+        e?.email?.includes("@") && e?.ativo !== false &&
+        ((eDiaFiscal && recebeCategoria(e, "recebeFiscal")) || (eDiaContabil && recebeCategoria(e, "recebeContabil")))
+      );
       if (!emailsValidos.length) {
         console.log(`[ContabilAutoSend] Empresa ${companyId}: sem destinatários habilitados a receber o extrato. Pulando.`);
         continue;
