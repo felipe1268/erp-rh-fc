@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4064** — **NOTIFICAÇÕES DE CONTABILIDADE: TOGGLE POR DESTINATÁRIO PARA LIGAR/DESLIGAR O ENCAMINHAMENTO DO ARQUIVO POR E-MAIL.** Usuário pediu um "botão de liga e desliga" pra controlar quem recebe o Extrato Bancário por e-mail — o card "Recebem Extrato" já existia, mas era calculado por heurística frágil sobre o texto do `dept` (`includes("fiscal")`), sem controle real por pessoa. Novo campo `recebeExtrato:boolean` (default true) em cada destinatário de `contabilidade_alertas_config.emails_json`; `Switch` por linha em `Configuracoes.tsx`; filtro aplicado no "Enviar Teste", no dialog manual de `FinanceiroContabilidade.tsx` e no job automático `verificarEnvioAutomaticoContabilidade`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4063** — **`/planos`: "14 MÓDULOS DISPONÍVEIS" ERA NÚMERO FIXO — AGORA REFLETE OS MÓDULOS REALMENTE À VENDA.** Usuário apontou que o card "14 módulos disponíveis" da stats bar do hero não acompanhava a liberação/desligamento feita em `/admin/saas/precos`. `SiteVendas.tsx` tinha `"14"` hardcoded, desconectado do catálogo — a grade de cards (`sellableModuleCards`) já filtrava certo, só o número da stats bar era estático. Fix: trocado por `String(sellableModuleCards.length)`, mesma lista ao vivo de `billing.getCatalog`; desligar módulo agora reduz o número automaticamente. Também removida menção fixa a "14 módulos" na fala decorativa do robô Julinho. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4062** — **LOGOTIPO DE CADA MÓDULO NAS TELAS DE VENDA E GESTÃO DE ASSINATURA.** Usuário anexou print de `/admin/saas/precos` apontando que cada card de módulo só tinha texto, sem ícone. `modulesData.ts` já tinha `icon`+`color` por módulo (usado em `/planos`); reaproveitado nas 4 telas restantes que listam módulos em texto puro: `AdminPrecos.tsx` (card com ícone 36px), `MinhaAssinatura.tsx`/`ContratarPlano.tsx` (ícone 28px junto do checkbox), `SaasAdminPanel.tsx` (ícone 20px na barra de popularidade). Módulo "seat" e módulo desativado caem num ícone cinza neutro. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4062** — **LOGOTIPO DE CADA MÓDULO NAS TELAS DE VENDA E GESTÃO DE ASSINATURA.** Ícone (`modulesData.ts`) reaproveitado em `AdminPrecos.tsx`, `MinhaAssinatura.tsx`/`ContratarPlano.tsx`, `SaasAdminPanel.tsx`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4061** — **ADMINPRECOS: SALVAR PREÇO FALHAVA COM "This price cannot be archived because it is the default price of its product" (STRIPE).** `adminUpdatePrices` (`billing.ts`) tentava arquivar o Price antigo ANTES de trocar o `default_price` do Product — Stripe recusa. Fix: inverter a ordem. Limpo também 1 Price órfão ativo duplicado deixado pela tentativa anterior. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4058** — **`/planos/modulos/:id`: SEÇÃO DE SCREENSHOTS VIRA CARROSSEL "MULTITELA" HORIZONTAL COM VÁRIAS TELAS REAIS POR MÓDULO.** Capturada 2ª screenshot real pra cada um dos 13 módulos que só tinham 1 print; `ModuloDetalhe.tsx` ganhou seção com scroll horizontal + setas de navegação. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4057** — **PAINEL SAAS: DASHBOARD GANHA MÉTRICAS DETALHADAS (ARPU, ASSENTOS, CRESCIMENTO/CHURN DO MÊS, POPULARIDADE POR MÓDULO).** `saasAdmin.ts` → `getSummary` ganhou `seatsTotal`, `arpuCents`, `newThisMonth`/`canceledThisMonth`, `moduleBreakdown`; `SaasAdminPanel.tsx` ganhou 2ª fileira de cards + seção "Popularidade dos módulos". ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4056 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4057 e anteriores.
 
 ## User preferences
 

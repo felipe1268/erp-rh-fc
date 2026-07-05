@@ -516,7 +516,7 @@ function PainelMes({
               <>
                 <p className="text-sm text-slate-600">Será enviado o <strong>Extrato Bancário em XLSX</strong> para os destinatários configurados:</p>
                 <div className="space-y-1.5">
-                  {(configQ.data?.emails ?? []).map((e: any, i: number) => (
+                  {(configQ.data?.emails ?? []).filter((e: any) => e.recebeExtrato !== false).map((e: any, i: number) => (
                     <div key={i} className="flex items-center gap-2 text-sm bg-blue-50 border border-blue-100 rounded px-3 py-1.5">
                       <Mail className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                       <span className="font-medium text-slate-700">{e.nome}</span>
@@ -525,8 +525,8 @@ function PainelMes({
                       {e.dept && <span className="ml-auto text-[10px] text-slate-400 bg-white rounded px-1.5 py-0.5 border">{e.dept}</span>}
                     </div>
                   ))}
-                  {(!configQ.data?.emails?.length) && (
-                    <p className="text-sm text-amber-700 bg-amber-50 rounded px-3 py-2">Nenhum e-mail configurado. Configure em "Configurações" na tela principal.</p>
+                  {(!(configQ.data?.emails ?? []).filter((e: any) => e.recebeExtrato !== false).length) && (
+                    <p className="text-sm text-amber-700 bg-amber-50 rounded px-3 py-2">Nenhum e-mail configurado para receber o extrato. Configure em "Configurações" na tela principal.</p>
                   )}
                 </div>
                 <div>
@@ -540,9 +540,9 @@ function PainelMes({
             <Button variant="outline" onClick={() => setDlgEmail(false)}>Cancelar</Button>
             <Button
               className="bg-blue-600 hover:bg-blue-700"
-              disabled={enviarEmailMut.isPending || !configQ.data?.emails?.length}
+              disabled={enviarEmailMut.isPending || !(configQ.data?.emails ?? []).some((e: any) => e.recebeExtrato !== false)}
               onClick={() => {
-                const emails = (configQ.data?.emails ?? []).map((e: any) => e.email).filter(Boolean);
+                const emails = (configQ.data?.emails ?? []).filter((e: any) => e.recebeExtrato !== false).map((e: any) => e.email).filter(Boolean);
                 if (!emails.length) return;
                 enviarEmailMut.mutate({ companyId, mes, ano, emailsDestino: emails, mensagem: emailMsg || undefined });
               }}

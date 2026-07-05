@@ -480,12 +480,12 @@ export async function verificarEnvioAutomaticoContabilidade(): Promise<void> {
       );
       const empresa = empQ.rows[0]?.nomeFantasia || empQ.rows[0]?.razaoSocial || `Empresa ${companyId}`;
 
-      // Buscar destinatários
-      let emails: {nome:string; email:string}[] = [];
+      // Buscar destinatários (só quem está com "recebe por e-mail" ligado)
+      let emails: {nome:string; email:string; recebeExtrato?: boolean}[] = [];
       try { emails = JSON.parse(cfg.emails_json ?? "[]"); } catch { emails = []; }
-      const emailsValidos = emails.filter((e: any) => e?.email?.includes("@"));
+      const emailsValidos = emails.filter((e: any) => e?.email?.includes("@") && e?.recebeExtrato !== false);
       if (!emailsValidos.length) {
-        console.log(`[ContabilAutoSend] Empresa ${companyId}: sem destinatários configurados. Pulando.`);
+        console.log(`[ContabilAutoSend] Empresa ${companyId}: sem destinatários habilitados a receber o extrato. Pulando.`);
         continue;
       }
 

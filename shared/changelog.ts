@@ -1,4 +1,26 @@
 /**
+ * Rev. 4064 — **NOTIFICAÇÕES DE CONTABILIDADE: TOGGLE POR DESTINATÁRIO PARA LIGAR/DESLIGAR O ENCAMINHAMENTO DO ARQUIVO POR E-MAIL.**
+ *
+ * PEDIDO: usuário anexou prints da tela `Configurações → Notificações por E-mail → Contabilidade`, mostrando o
+ * card "Recebem Extrato" acima da lista de destinatários, e pediu um "botão de liga e desliga" pra controlar
+ * quem recebe (ou não) o arquivo (Extrato Bancário) por e-mail — "fica mais fácil".
+ *
+ * CAUSA-RAIZ: o card "Recebem Extrato" já sugeria a existência desse controle, mas na prática era calculado por
+ * uma HEURÍSTICA frágil sobre o texto do campo `dept` (`dept.includes("fiscal")`) — não existia nenhum campo
+ * real por destinatário; não dava pra desligar alguém sem editar o departamento manualmente.
+ *
+ * FIX: novo campo `recebeExtrato: boolean` (default `true`) em cada item do array `emails` de
+ * `contabilidade_alertas_config.emails_json` (JSON, sem migration de schema). `NotificacoesContabilidadeTab`
+ * (`Configuracoes.tsx`) ganhou um `Switch` por linha de destinatário ("Recebe"/"Não recebe"); novo destinatário
+ * entra com `recebeExtrato:true` por padrão; card "Recebem Extrato" agora conta `recebeExtrato !== false` (fonte
+ * real, não mais heurística de texto). O filtro é respeitado em TODOS os pontos de envio: botão "Enviar Teste"
+ * (Configurações), dialog "Enviar por E-mail" manual (`FinanceiroContabilidade.tsx`, lista de destinatários do
+ * dialog + botão de enviar), e o job automático `verificarEnvioAutomaticoContabilidade`
+ * (`statusSyncJob.ts`) que dispara no dia do prazo. ZERO DELETE · ZERO ALTER destrutivo (novo campo JSON
+ * opcional, `undefined` tratado como `true` pra não quebrar destinatários já cadastrados).
+ */
+
+/**
  * Rev. 4063 — **`/planos`: "14 MÓDULOS DISPONÍVEIS" ERA UM NÚMERO FIXO — AGORA REFLETE OS MÓDULOS REALMENTE À VENDA.**
  *
  * PEDIDO: usuário anexou print da landing `/planos` mostrando o card "14 módulos disponíveis" na stats bar do

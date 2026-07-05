@@ -1857,7 +1857,7 @@ function NotificacoesContabilidadeTab({ companyId }: { companyId: number }) {
   const [diaContabil, setDiaContabil] = useState(8);
   const [autoEnvio, setAutoEnvio] = useState(false);
   const [ativo, setAtivo] = useState(true);
-  const [emails, setEmails] = useState<{nome:string;email:string;dept:string}[]>([]);
+  const [emails, setEmails] = useState<{nome:string;email:string;dept:string;recebeExtrato?:boolean}[]>([]);
   const [novoNome, setNovoNome] = useState("");
   const [novoEmail, setNovoEmail] = useState("");
   const [novoDept, setNovoDept] = useState("");
@@ -1899,7 +1899,7 @@ function NotificacoesContabilidadeTab({ companyId }: { companyId: number }) {
 
   function adicionarEmail() {
     if (!novoNome.trim() || !novoEmail.trim()) { toast.error("Nome e e-mail são obrigatórios"); return; }
-    setEmails(prev => [...prev, { nome: novoNome.trim(), email: novoEmail.trim(), dept: novoDept.trim() }]);
+    setEmails(prev => [...prev, { nome: novoNome.trim(), email: novoEmail.trim(), dept: novoDept.trim(), recebeExtrato: true }]);
     setNovoNome(""); setNovoEmail(""); setNovoDept("");
   }
 
@@ -1914,7 +1914,7 @@ function NotificacoesContabilidadeTab({ companyId }: { companyId: number }) {
             const ano = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
             enviarTesteMut.mutate({
               companyId, mes, ano,
-              emailsDestino: emails.filter(e => e.email).map(e => e.email),
+              emailsDestino: emails.filter(e => e.email && e.recebeExtrato !== false).map(e => e.email),
               mensagem: "E-mail de teste enviado pelas Configurações do Sistema.",
             });
           }}>
@@ -1982,7 +1982,7 @@ function NotificacoesContabilidadeTab({ companyId }: { companyId: number }) {
                   <p className="text-xs text-gray-500">Total</p>
                 </div>
                 <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold text-indigo-700">{emails.filter(e => e.dept?.toLowerCase().includes("fiscal") || e.dept?.toLowerCase().includes("fiscal")).length || emails.length}</p>
+                  <p className="text-2xl font-bold text-indigo-700">{emails.filter(e => e.recebeExtrato !== false).length}</p>
                   <p className="text-xs text-gray-500">Recebem Extrato</p>
                 </div>
                 <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
@@ -2006,6 +2006,15 @@ function NotificacoesContabilidadeTab({ companyId }: { companyId: number }) {
                       <p className="text-xs text-indigo-600 truncate">{e.email}</p>
                     </div>
                     {e.dept && <span className="text-[10px] text-gray-400 bg-white border rounded px-2 py-0.5 shrink-0">{e.dept}</span>}
+                    <label className="flex items-center gap-1.5 shrink-0 cursor-pointer" title="Encaminhar arquivos por e-mail para este destinatário">
+                      <Switch
+                        checked={e.recebeExtrato !== false}
+                        onCheckedChange={(checked) => setEmails(prev => prev.map((em, j) => j === i ? { ...em, recebeExtrato: checked } : em))}
+                      />
+                      <span className="text-[10px] text-gray-400 hidden sm:inline">
+                        {e.recebeExtrato !== false ? "Recebe" : "Não recebe"}
+                      </span>
+                    </label>
                     <button className="text-gray-400 hover:text-red-500 shrink-0 ml-1"
                       onClick={() => setEmails(prev => prev.filter((_, j) => j !== i))}>
                       <Trash2 className="w-4 h-4" />

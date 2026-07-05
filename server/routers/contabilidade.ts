@@ -506,9 +506,9 @@ export const contabilidadeRouter = router({
         [input.companyId]
       );
       const defaultEmails = [
-        { nome: "Fabiane / Amanda", email: "contabil@pronustributario.com.br",  dept: "Contabilidade" },
-        { nome: "Tania / Ramatis",  email: "fiscal@pronustributario.com.br",    dept: "Fiscal" },
-        { nome: "Silvia / Adriana", email: "trabalhista@pronustributario.com.br", dept: "Pessoal" },
+        { nome: "Fabiane / Amanda", email: "contabil@pronustributario.com.br",  dept: "Contabilidade", recebeExtrato: true },
+        { nome: "Tania / Ramatis",  email: "fiscal@pronustributario.com.br",    dept: "Fiscal", recebeExtrato: true },
+        { nome: "Silvia / Adriana", email: "trabalhista@pronustributario.com.br", dept: "Pessoal", recebeExtrato: true },
       ];
       if (!q.rows.length) {
         return { diaFiscal: 5, diaContabil: 8, emails: defaultEmails, ativo: true, autoEnvio: false };
@@ -535,6 +535,7 @@ export const contabilidadeRouter = router({
         nome:  z.string().min(1),
         email: z.string().email(),
         dept:  z.string().default(""),
+        recebeExtrato: z.boolean().default(true),
       })).max(20),
       ativo:      z.boolean().default(true),
       autoEnvio:  z.boolean().default(false),
