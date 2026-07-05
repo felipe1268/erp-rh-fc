@@ -268,13 +268,6 @@ class SDKServer {
   }
 
   async authenticateRequest(req: Request): Promise<User> {
-    // TEMP — Rev. 4053 screenshot capture only. Auto-loga como admin_master em dev
-    // pra permitir tirar prints reais das telas autenticadas pro /planos. Gated
-    // por NODE_ENV+flag explícita; REMOVER assim que os prints forem capturados.
-    if (process.env.NODE_ENV === "development" && process.env.SCREENSHOT_DEV_BYPASS === "true") {
-      const adminUser = await db.getAdminMasterForScreenshotBypass();
-      if (adminUser) return adminUser as unknown as User;
-    }
     // Regular authentication flow
     const cookies = this.parseCookies(req.headers.cookie);
     const sessionCookie = cookies.get(COOKIE_NAME);

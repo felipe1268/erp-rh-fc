@@ -217,21 +217,6 @@ export async function getAllUsers() {
   return db.select().from(users).where(isNull(users.deletedAt)).orderBy(desc(users.createdAt));
 }
 
-// TEMP — Rev. 4053 screenshot capture only. Ver server/_core/sdk.ts (gated por
-// NODE_ENV=development + SCREENSHOT_DEV_BYPASS=true). REMOVER junto com o bypass.
-export async function getAdminMasterForScreenshotBypass() {
-  const db = await getDb();
-  if (!db) return undefined;
-  // id=1 é o admin_master cuja 1ª empresa vinculada é a FC Engenharia (60002),
-  // que tem o dado real mais rico pros prints (324 colaboradores, EPIs, etc).
-  const byId = await db.select().from(users).where(eq(users.id, 1)).limit(1);
-  if (byId.length > 0) return byId[0];
-  const result = await db.select().from(users)
-    .where(and(eq(users.role, "admin_master"), isNull(users.deletedAt)))
-    .limit(1);
-  return result.length > 0 ? result[0] : undefined;
-}
-
 // ============================================================
 // COMPANIES (MULTI-TENANT)
 // ============================================================
@@ -254,13 +239,6 @@ export async function getCompanies() {
     const db = await getDb();
     if (!db) return [];
     try {
-      // TEMP — Rev. 4053 screenshot capture only. Força a FC Engenharia (60002,
-      // dado real mais rico) a vir primeiro na lista, já que o front seleciona
-      // sempre companies[0] como empresa padrão. REMOVER junto com o bypass.
-      if (process.env.NODE_ENV === "development" && process.env.SCREENSHOT_DEV_BYPASS === "true") {
-        return await db.select().from(companies).where(isNull(companies.deletedAt))
-          .orderBy(sql`CASE WHEN ${companies.id} = 60002 THEN 0 ELSE 1 END`, companies.razaoSocial);
-      }
       return await db.select().from(companies).where(isNull(companies.deletedAt)).orderBy(companies.razaoSocial);
     } catch (e: any) {
       const causeMsg = (e as any)?.cause?.message || '';
