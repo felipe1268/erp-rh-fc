@@ -216,6 +216,8 @@ const menuSectionsSST: MenuSection[] = [
       { icon: HardHat, label: "EPIs", path: "/dashboards/epis" },
       { icon: HeartPulse, label: "Atestados & Acidentes", path: "/sst/dashboard-atestados-acidentes" },
       { icon: ClipboardCheck, label: "DDS — Diálogo Diário", path: "/sst/dds-dashboard" },
+      { icon: ShieldAlert, label: "APR — Análise de Risco", path: "/sst/dashboard-apr" },
+      { icon: FileText, label: "Permissão de Trabalho (PT)", path: "/sst/dashboard-pt" },
     ],
   },
 ];

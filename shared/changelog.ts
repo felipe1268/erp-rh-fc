@@ -1,4 +1,28 @@
 /**
+ * Rev. 4037 — **"CADÊ O DASH DA APR E DA PT?" — FALTAVAM DASHBOARDS DEDICADOS NO GRUPO "DASHBOARDS" DA SIDEBAR.**
+ *
+ * PEDIDO: usuário mandou print (IMG_3318) do grupo "DASHBOARDS" da sidebar SST mostrando só 3 itens
+ * (EPIs / Atestados & Acidentes / DDS — Diálogo Diário) e perguntou "Cadê o dash da APR e da PT?".
+ * A Rev. 4036 (baseada num áudio mal-entendido) só padronizou o ESTILO dos KPI cards já existentes
+ * DENTRO das telas de APR/PT — não resolvia o pedido real: faltavam páginas de DASHBOARD dedicadas
+ * para APR e PT, no mesmo padrão das outras 3 (EPIs/Atestados/DDS), acessíveis pelo grupo Dashboards.
+ *
+ * CAUSA RAIZ: `aprAnalisesRouter`/`ptPermissoesRouter` só tinham `list` (paginado) e `stats` (contagem
+ * por status) — nenhuma agregação por obra, por tipo de trabalho/atividade, por nível de risco (matriz
+ * P×G) ou linha do tempo mensal, que é o mínimo esperado de um dashboard (ver padrão de `DDSDashboard.tsx`).
+ *
+ * SOLUÇÃO: novo procedimento `dashboard` em `aprAnalises.ts` (stats + porObra + porTipoAtividade +
+ * timeline mensal + porNivelRisco agregando `apr_riscos.nivel_risco` nas 4 faixas Baixo/Médio/Alto/
+ * Crítico + 10 recentes) e em `ptPermissoes.ts` (stats + porObra + porTipoTrabalho — desagregando
+ * `tiposTrabalhoJson` em JS e rotulando pela NR — + timeline + 10 recentes). Novas páginas
+ * `DashboardAprAnalise.tsx` e `DashboardPermissaoTrabalho.tsx` (padrão visual `DDSDashboard.tsx`:
+ * KPI cards flat/dot da Rev. 4036, Recharts Line/Pie/Bar, tabela de recentes). Rotas
+ * `/sst/dashboard-apr` e `/sst/dashboard-pt` registradas em `App.tsx`; 2 novos itens no grupo
+ * "Dashboards" de `DashboardLayout.tsx`; mapeamento de permissão (`dashboards`) em `modulePages.ts`.
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4036 — **APR — ANÁLISE PRELIMINAR DE RISCO: CARDS DE INDICADORES FORA DO PADRÃO VISUAL DA PT.**
  *
  * PEDIDO: usuário mandou print (IMG_3317) da tela "Permissão de Trabalho (PT)" — que usa cards

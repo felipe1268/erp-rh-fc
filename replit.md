@@ -50,25 +50,25 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4037** — **"CADÊ O DASH DA APR E DA PT?" — FALTAVAM DASHBOARDS DEDICADOS NO GRUPO "DASHBOARDS" DA SIDEBAR.** Usuário mandou print (IMG_3318) do grupo "Dashboards" da sidebar SST mostrando só EPIs/Atestados & Acidentes/DDS e perguntou "Cadê o dash da APR e da PT?" — a Rev. 4036 só tinha padronizado o ESTILO dos KPI cards dentro das telas de APR/PT, não criado dashboards dedicados. Novo procedimento `dashboard` em `aprAnalises.ts` (stats + porObra + porTipoAtividade + timeline mensal + porNivelRisco Baixo/Médio/Alto/Crítico + recentes) e em `ptPermissoes.ts` (stats + porObra + porTipoTrabalho + timeline + recentes); novas páginas `DashboardAprAnalise.tsx`/`DashboardPermissaoTrabalho.tsx` no padrão visual de `DDSDashboard.tsx`; rotas `/sst/dashboard-apr` e `/sst/dashboard-pt` + 2 itens novos no grupo "Dashboards" da sidebar + mapeamento de permissão em `modulePages.ts`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4036** — **APR — ANÁLISE PRELIMINAR DE RISCO: CARDS DE INDICADORES FORA DO PADRÃO VISUAL DA PT.** Usuário mandou print da tela "Permissão de Trabalho (PT)" pedindo pra "criar o dash da APR igual é o da PT também" — ambas já tinham cards de indicadores, mas com estilos divergentes (APR usava cards em gradiente cheio + ícone branco; PT usa cards planos com "dot" colorido). `AprAnalise.tsx`: array `CARDS` trocado de `{color: gradient, icon}` para `{color: text-*, bg: bg-*-50 border-*-200, dot: bg-*-500}` (mesma paleta semântica: Em Análise=âmbar, Aprovadas=verde, Concluídas=azul, Total=slate); bloco de render dos KPI Cards reescrito no mesmo markup da PT (dot + label + número grande, sem ícone/gradiente), mantendo o filtro por clique já existente. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4035** — **BOLETIM DE MEDIÇÃO (PDF): DOCUMENTO SEM ORGANIZAÇÃO, SEM RELATO E SEM PADRÃO — REDESENHO COMPLETO.** Usuário mandou o PDF gerado reclamando "está péssimo, não tem organização, não tem relato, não é uma edição padrão" — tabela plana de ~30 itens sem agrupamento, descrições cortadas no meio da palavra, dezenas de linhas com "—" na coluna Item. `boletimMedicaoPdf.ts`: nova seção "Relatório do Período" (exibe o campo `observacoes` do boletim, já capturado mas nunca mostrado no PDF); itens agora agrupados em 2 seções (Cronograma × FD Compras) cada uma com subtotal + total geral no fim; coluna "Item"→"Nº" com numeração sequencial no lugar de "—" quando não há EAP; descrição quebra em até 3 linhas reais (sem cortar palavras). `MedicaoDetalhe.tsx`: `montarParamsPdf` passa `observacoes` pro gerador. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4035** — **BOLETIM DE MEDIÇÃO (PDF): DOCUMENTO SEM ORGANIZAÇÃO, SEM RELATO E SEM PADRÃO — REDESENHO COMPLETO.** Nova seção "Relatório do Período" (campo `observacoes`), itens agrupados em 2 seções (Cronograma × FD Compras) com subtotal + total geral, coluna "Item"→"Nº" sequencial, descrição sem cortar palavras. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4034** — **MEDIÇÃO DE CONTRATOS: "VINCULAR FD DE COMPRAS" GERAVA ITEM COM tipoAvanco INVÁLIDO ("fd_compra") — CAUSA-RAIZ DO ERRO REVELADO PELA REV. 4033.** `MedicaoDetalhe.tsx`: `tipoAvanco` do item de FD trocado para `"financeiro_material"` (valor fora do enum fazia qualquer boletim com FD vinculado nunca salvar). ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4033** — **MEDIÇÃO DE CONTRATOS: BOTÃO "SALVAR E CALCULAR DEDUÇÕES" PARECIA NÃO FAZER NADA (SEM FEEDBACK DE ERRO).** Race condition entre `recalcularMutation` e `salvarItensMutation` + falta de `onError` engolindo falhas reais; recálculo movido pro `onSuccess` de salvar itens + `toast.error` nas duas mutations. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4032** — **MEDIÇÃO DE CONTRATOS: ESPAÇAMENTO E ALINHAMENTO VERTICAL DOS CAMPOS "DATA INÍCIO"/"DATA FIM".** Seguindo a Rev. 4031, usuário mandou mais prints reclamando que as datas "ainda estão sobrepondo" e o layout não tinha sido corrigido — colunas coladas sem espaço visível + texto colado à borda superior do campo (mal centralizado). `MedicaoDetalhe.tsx`: grid `gap-3`→`gap-6` + `min-w-0`/`w-full` nas colunas (largura igual, sem overflow); nos 4 `<input type="date">` (modalBoletim e modalEditBoletim) adicionado `flex items-center h-10 leading-normal` para forçar centralização vertical do texto (inputs nativos de data podem não centralizar bem com padding padrão, especialmente em Safari). Mesma mutation/campos de antes. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4032** — **MEDIÇÃO DE CONTRATOS: ESPAÇAMENTO E ALINHAMENTO VERTICAL DOS CAMPOS "DATA INÍCIO"/"DATA FIM".** Grid `gap-3`→`gap-6` + `min-w-0`/`w-full` nas colunas; inputs de data com `flex items-center h-10 leading-normal` pra centralizar o texto. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4031** — **MEDIÇÃO DE CONTRATOS: ÍCONE DECORATIVO NOS CAMPOS DE DATA SOBREPUNHA O ÍCONE NATIVO DO NAVEGADOR — REMOVIDO.** Usuário mandou print (IMG_3308) do diálogo "Novo Boletim de Medição" (redesenhado na Rev. 4030) com as datas "se sobrepondo"/"ficou péssimo". Causa: o ícone `CalendarRange` decorativo em `absolute` + `pl-8` (copiado do padrão do "Editar Boletim") colide com o affordance nativo do `<input type="date">`, já que o shadow-DOM interno do campo nem sempre respeita o padding customizado em todos navegadores/dispositivos. `MedicaoDetalhe.tsx`: removido o wrapper/ícone/padding dos 4 campos de data (`modalBoletim` E `modalEditBoletim`), voltando a inputs simples sem ícone sobreposto. Mesma mutation/validação/campos de antes. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4030** — **MEDIÇÃO DE CONTRATOS: REDESIGN DA TABELA "ITENS DO BOLETIM" + PADRONIZAÇÃO DO DIÁLOGO "NOVO BOLETIM DE MEDIÇÃO".** Tabela `table-fixed` + `<colgroup>` proporcional (elimina vão Item↔Descrição), badge azul "% Período", barra de progresso "% Acumulado"; diálogo `modalBoletim` reconstruído no padrão do "Editar Boletim" (3 blocos). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4031** — **MEDIÇÃO DE CONTRATOS: ÍCONE DECORATIVO NOS CAMPOS DE DATA SOBREPUNHA O ÍCONE NATIVO DO NAVEGADOR — REMOVIDO.** Removido o wrapper/ícone/padding dos 4 campos de data (modalBoletim e modalEditBoletim), voltando a inputs simples sem ícone sobreposto. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4029 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4030 e anteriores.
 
 ## User preferences
 

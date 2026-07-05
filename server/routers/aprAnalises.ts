@@ -645,4 +645,87 @@ ${apr.observacoes ? `<h2>${checklist.length ? (epis.length ? "5" : "4") : (epis.
 </html>`;
       return { html };
     }),
+
+  // ── Dashboard (Rev. 4037) ────────────────────────────────────────────────
+  dashboard: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      assertCompany(ctx, input.companyId);
+      const db = (await getDb())!;
+      const baseCond = and(eq(aprAnalises.companyId, input.companyId), isNull(aprAnalises.deletedAt));
+
+      const statusRows = await db
+        .select({ status: aprAnalises.status, cnt: sql<number>`count(*)` })
+        .from(aprAnalises).where(baseCond).groupBy(aprAnalises.status);
+      const byStatus: Record<string, number> = {};
+      for (const r of statusRows) byStatus[r.status] = Number(r.cnt);
+      const stats = {
+        total:      Object.values(byStatus).reduce((a, b) => a + b, 0),
+        rascunho:   byStatus["rascunho"] ?? 0,
+        em_analise: byStatus["em_analise"] ?? 0,
+        aprovada:   byStatus["aprovada"] ?? 0,
+        concluida:  byStatus["concluida"] ?? 0,
+        cancelada:  byStatus["cancelada"] ?? 0,
+      };
+
+      const porObraRows = await db
+        .select({ obraId: aprAnalises.obraId, cnt: sql<number>`count(*)` })
+        .from(aprAnalises).where(baseCond).groupBy(aprAnalises.obraId);
+      const obraIds = [...new Set(porObraRows.map(r => r.obraId).filter(Boolean))] as number[];
+      const obrasMap = new Map<number, string>();
+      if (obraIds.length) {
+        (await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(inArray(obras.id, obraIds)))
+          .forEach((o: any) => obrasMap.set(o.id, o.nome));
+      }
+      const porObra = porObraRows.map(r => ({
+        obraNome: r.obraId ? (obrasMap.get(r.obraId) ?? "—") : "Sem obra",
+        total: Number(r.cnt),
+      })).sort((a, b) => b.total - a.total);
+
+      const porTipoRows = await db
+        .select({ tipo: aprAnalises.tipoAtividade, cnt: sql<number>`count(*)` })
+        .from(aprAnalises).where(baseCond).groupBy(aprAnalises.tipoAtividade);
+      const porTipoAtividade = porTipoRows.map(r => ({
+        tipo: r.tipo ?? "Não informado",
+        total: Number(r.cnt),
+      })).sort((a, b) => b.total - a.total);
+
+      const timelineRows = await db
+        .select({ mes: sql<string>`to_char(${aprAnalises.createdAt}, 'YYYY-MM')`, cnt: sql<number>`count(*)` })
+        .from(aprAnalises).where(baseCond)
+        .groupBy(sql`to_char(${aprAnalises.createdAt}, 'YYYY-MM')`)
+        .orderBy(sql`to_char(${aprAnalises.createdAt}, 'YYYY-MM')`);
+      const timeline = timelineRows.slice(-6).map(r => ({ mes: r.mes, total: Number(r.cnt) }));
+
+      const nivelRows = await db
+        .select({ nivel: aprRiscos.nivelRisco, cnt: sql<number>`count(*)` })
+        .from(aprRiscos)
+        .where(eq(aprRiscos.companyId, input.companyId))
+        .groupBy(aprRiscos.nivelRisco);
+      let baixo = 0, medio = 0, alto = 0, critico = 0;
+      for (const r of nivelRows) {
+        const n = Number(r.nivel) || 0;
+        const c = Number(r.cnt);
+        if (n <= 4) baixo += c;
+        else if (n <= 9) medio += c;
+        else if (n <= 16) alto += c;
+        else critico += c;
+      }
+      const porNivelRisco = [
+        { nivel: "Baixo", total: baixo },
+        { nivel: "Médio", total: medio },
+        { nivel: "Alto", total: alto },
+        { nivel: "Crítico", total: critico },
+      ];
+
+      const recentesRows = await db.select({
+        id: aprAnalises.id, numero: aprAnalises.numero, status: aprAnalises.status,
+        dataEmissao: aprAnalises.dataEmissao, atividade: aprAnalises.atividade, obraId: aprAnalises.obraId,
+      }).from(aprAnalises).where(baseCond).orderBy(desc(aprAnalises.createdAt)).limit(10);
+      const recentes = recentesRows.map(r => ({
+        ...r, obraNome: r.obraId ? (obrasMap.get(r.obraId) ?? "—") : "Sem obra",
+      }));
+
+      return { stats, porObra, porTipoAtividade, timeline, porNivelRisco, recentes };
+    }),
 });

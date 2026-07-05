@@ -512,6 +512,8 @@ export const ROUTE_TO_PAGEID: Record<string, Record<string, string>> = {
     "/sst/integracao":             "integracao_sst",
     "/dashboards/epis":            "dashboards",
     "/sst/dashboard-atestados-acidentes": "dashboards",
+    "/sst/dashboard-apr":          "dashboards",
+    "/sst/dashboard-pt":           "dashboards",
   },
   "juridico": {
     "/painel/juridico":              "painel_juridico",

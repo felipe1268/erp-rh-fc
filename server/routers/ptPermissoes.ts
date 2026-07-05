@@ -827,4 +827,83 @@ ${input.signers.map(s => `<!--FCSIGN:SIG:${s.role}-->`).join("\n")}`;
 
       return { sessionId: session.id };
     }),
+
+  // ── Dashboard (Rev. 4037) ────────────────────────────────────────────────
+  dashboard: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      assertCompany(ctx, input.companyId);
+      const db = (await getDb())!;
+      const baseCond = and(eq(ptPermissoes.companyId, input.companyId), isNull(ptPermissoes.deletedAt));
+
+      const statusRows = await db
+        .select({ status: ptPermissoes.status, cnt: sql<number>`count(*)` })
+        .from(ptPermissoes).where(baseCond).groupBy(ptPermissoes.status);
+      const byStatus: Record<string, number> = {};
+      for (const r of statusRows) byStatus[r.status] = Number(r.cnt);
+      const stats = {
+        total:        Object.values(byStatus).reduce((a, b) => a + b, 0),
+        rascunho:     byStatus["rascunho"] ?? 0,
+        em_andamento: byStatus["em_andamento"] ?? 0,
+        liberada:     byStatus["liberada"] ?? 0,
+        concluida:    byStatus["concluida"] ?? 0,
+        cancelada:    byStatus["cancelada"] ?? 0,
+      };
+
+      const porObraRows = await db
+        .select({ obraId: ptPermissoes.obraId, cnt: sql<number>`count(*)` })
+        .from(ptPermissoes).where(baseCond).groupBy(ptPermissoes.obraId);
+      const obraIds = [...new Set(porObraRows.map(r => r.obraId).filter(Boolean))] as number[];
+      const obrasMap = new Map<number, string>();
+      if (obraIds.length) {
+        (await db.select({ id: obras.id, nome: obras.nome }).from(obras).where(inArray(obras.id, obraIds)))
+          .forEach((o: any) => obrasMap.set(o.id, o.nome));
+      }
+      const porObra = porObraRows.map(r => ({
+        obraNome: r.obraId ? (obrasMap.get(r.obraId) ?? "—") : "Sem obra",
+        total: Number(r.cnt),
+      })).sort((a, b) => b.total - a.total);
+
+      const timelineRows = await db
+        .select({ mes: sql<string>`to_char(${ptPermissoes.createdAt}, 'YYYY-MM')`, cnt: sql<number>`count(*)` })
+        .from(ptPermissoes).where(baseCond)
+        .groupBy(sql`to_char(${ptPermissoes.createdAt}, 'YYYY-MM')`)
+        .orderBy(sql`to_char(${ptPermissoes.createdAt}, 'YYYY-MM')`);
+      const timeline = timelineRows.slice(-6).map(r => ({ mes: r.mes, total: Number(r.cnt) }));
+
+      // tiposTrabalhoJson é array de keys (ex.: ["altura","eletrica"]) — desagregar em JS
+      const tipoRows = await db.select({ tiposTrabalhoJson: ptPermissoes.tiposTrabalhoJson })
+        .from(ptPermissoes).where(baseCond);
+      const tipoCounts = new Map<string, number>();
+      for (const r of tipoRows) {
+        if (!r.tiposTrabalhoJson) continue;
+        try {
+          const arr = JSON.parse(r.tiposTrabalhoJson);
+          if (Array.isArray(arr)) {
+            for (const t of arr) tipoCounts.set(t, (tipoCounts.get(t) ?? 0) + 1);
+          }
+        } catch { /* ignore malformed json */ }
+      }
+      const TIPO_LABELS: Record<string, string> = {
+        altura: "Trabalho em Altura", espaco_confinado: "Espaço Confinado",
+        escavacao: "Escavação / Fundação", andaime: "Montagem de Andaime",
+        eletrica: "Instalação Elétrica", demolicao: "Demolição",
+        icamento: "Içamento de Cargas", soldagem: "Soldagem / Corte a Quente",
+        cobertura: "Cobertura / Telhado", geral: "Atividade Geral",
+      };
+      const porTipoTrabalho = [...tipoCounts.entries()]
+        .map(([tipo, total]) => ({ tipo: TIPO_LABELS[tipo] ?? tipo, total }))
+        .sort((a, b) => b.total - a.total);
+
+      const recentesRows = await db.select({
+        id: ptPermissoes.id, numero: ptPermissoes.numero, status: ptPermissoes.status,
+        dataEmissao: ptPermissoes.dataEmissao, obraId: ptPermissoes.obraId,
+        empresaExecutanteNome: ptPermissoes.empresaExecutanteNome,
+      }).from(ptPermissoes).where(baseCond).orderBy(desc(ptPermissoes.createdAt)).limit(10);
+      const recentes = recentesRows.map(r => ({
+        ...r, obraNome: r.obraId ? (obrasMap.get(r.obraId) ?? "—") : "Sem obra",
+      }));
+
+      return { stats, porObra, porTipoTrabalho, timeline, recentes };
+    }),
 });
