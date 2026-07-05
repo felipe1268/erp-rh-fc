@@ -46,7 +46,13 @@ export default function ModuloDetalhe() {
 
   const goToPlans = () => navigate("/contratar");
 
-  if (!mod || !details) {
+  // Rev. 4060 — módulo fora de venda não pode ter a página de detalhe
+  // acessível nem por link direto/compartilhado; some por completo, igual
+  // à vitrine, senão dá sensação de propaganda enganosa. `catalog.modules`
+  // já vem filtrado por sellableModules no backend (getCatalog).
+  const isSellable = !catalog || catalog.modules.some(m => m.id === id);
+
+  if (!mod || !details || !isSellable) {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center gap-4 px-6 text-center">
         <p className="text-slate-500">Módulo não encontrado.</p>

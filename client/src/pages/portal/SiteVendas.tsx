@@ -160,6 +160,15 @@ export default function SiteVendas() {
     return found ? formatPrice(found.monthlyPriceCents) : null;
   };
 
+  // Rev. 4060 — só exibe na vitrine os módulos que estão À VENDA
+  // (catalog.modules já vem filtrado por sellableModules no backend). Antes
+  // de o catálogo carregar, mostra TODOS pra não sumir a seção; assim que
+  // `catalog` chega, esconde totalmente o que está fora de venda — não pode
+  // aparecer nem sem preço, senão passa a sensação de propaganda enganosa.
+  const sellableModuleCards = catalog
+    ? MODULES.filter(m => catalog.modules.some(cm => cm.id === m.id))
+    : MODULES;
+
   const cheapestPrice = catalog
     ? Math.min(...catalog.modules.map(m => m.monthlyPriceCents))
     : null;
@@ -362,7 +371,7 @@ export default function SiteVendas() {
             <p className="text-slate-500 mt-4">Contrate só o que faz sentido pra sua operação hoje. Adicione mais módulos quando quiser, sem trocar de sistema.</p>
           </motion.div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {MODULES.map((m, i) => (
+            {sellableModuleCards.map((m, i) => (
               <motion.button
                 key={m.id}
                 type="button"

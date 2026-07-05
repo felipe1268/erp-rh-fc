@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4060** — **`/planos`: MÓDULO FORA DE VENDA AGORA SOME COMPLETAMENTE DA VITRINE, NÃO SÓ DO PREÇO.** Usuário reportou que desligar um módulo pra venda (Rev. 4059) só escondia o preço (mostrava "—"), com o card completo (nome/descrição/link) ainda visível — sensação de propaganda enganosa. `SiteVendas.tsx`: grid de módulos passou a filtrar `MODULES` contra `catalog.modules` (já é `sellableModules` do backend), então módulo fora de venda não renderiza card nenhum. `ModuloDetalhe.tsx`: guard `isSellable` bloqueia acesso direto por URL à página de detalhe de um módulo desativado (cai em "Módulo não encontrado"). `ContratarPlano.tsx` já estava correto desde a Rev. 4059. ZERO DELETE · ZERO ALTER destrutivo (só frontend).
+
 - **Rev. 4059** — **PAINEL SAAS / AJUSTE DE PREÇOS: NOVO CONTROLE PARA LIGAR/DESLIGAR MÓDULO DA VITRINE COMERCIAL.** Usuário pediu a capacidade de ativar/desativar um módulo pra venda, com layout novo mais intuitivo. Nova coluna `billing_module_prices.is_active` (default 1, ColFix não-destrutivo); novo `server/billingCatalog.ts` centraliza `getEffectiveCatalog()` (`modules` completo + `sellableModules` só ativos) usado por `billing.ts` e `saasAdmin.ts`. Loja pública/checkout só mostra `sellableModules`; assinante que já tem um módulo desativado mantém acesso (grandfather), só fica bloqueado de ADICIONAR módulo fora de venda (`createCheckoutSession`/`updateSubscription`). `AdminPrecos.tsx` redesenhado: saiu a tabela densa, entrou grid de cards por módulo com Switch de ativo/inativo + edição de preço junto. `SaasAdminPanel.tsx` e `MinhaAssinatura.tsx` ganharam badges "fora de venda"/"indisponível". ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4058** — **`/planos/modulos/:id`: SEÇÃO DE SCREENSHOTS VIRA CARROSSEL "MULTITELA" HORIZONTAL COM VÁRIAS TELAS REAIS POR MÓDULO.** Usuário achou a seção de screenshots rasa demais (hero grande + grid pequeno) e pediu carrossel horizontal deslizável, lado a lado. Capturada 2ª screenshot real (dados reais FC Engenharia, sem PII) pra cada um dos 13 módulos que só tinham 1 print, salvas em `client/src/assets/screenshots/*-2.jpg`; `moduleScreenshots.ts` (já era `Record<string,string[]>`) ganhou os novos imports/entradas. `ModuloDetalhe.tsx`: hero+grid substituídos por 1 seção "Telas reais de {módulo}" com scroll horizontal (`snap-x snap-mandatory`) + setas de navegação; hero acima virou só o `ModulePreviewMock` conceitual. Bypass de auth dev (`SCREENSHOT_DEV_BYPASS`) reaberto e FECHADO no mesmo commit, sem vestígio. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4058** — **`/planos/modulos/:id`: SEÇÃO DE SCREENSHOTS VIRA CARROSSEL "MULTITELA" HORIZONTAL COM VÁRIAS TELAS REAIS POR MÓDULO.** Capturada 2ª screenshot real pra cada um dos 13 módulos que só tinham 1 print; `ModuloDetalhe.tsx` ganhou seção com scroll horizontal + setas de navegação. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4057** — **PAINEL SAAS: DASHBOARD GANHA MÉTRICAS DETALHADAS (ARPU, ASSENTOS, CRESCIMENTO/CHURN DO MÊS, POPULARIDADE POR MÓDULO).** `saasAdmin.ts` → `getSummary` ganhou `seatsTotal`, `arpuCents`, `newThisMonth`/`canceledThisMonth`, `moduleBreakdown`; `SaasAdminPanel.tsx` ganhou 2ª fileira de cards + seção "Popularidade dos módulos". ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4054** — **`/planos/modulos/:id`: SCREENSHOTS REAIS DO SISTEMA AUTENTICADO SUBSTITUEM O MOCKUP ABSTRATO.** Capturados screenshots reais de TODOS os 14 módulos via bypass de dev temporário (revertido); novo `moduleScreenshots.ts` (`MODULE_SCREENSHOTS`) consumido por `ModuloDetalhe.tsx`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4053** — **`/planos`: CLIQUE NO MÓDULO ABRE PÁGINA DEDICADA COM TODAS AS FUNCIONALIDADES (SUBSTITUI O DIALOG PEQUENO).** Nova página `ModuloDetalhe.tsx` em `/planos/modulos/:id`, baseada 100% em `shared/modules.ts`. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4052 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4053 e anteriores.
 
 ## User preferences
 

@@ -1,3 +1,5 @@
+- **Rev. 4053** — **`/planos`: CLIQUE NO MÓDULO ABRE PÁGINA DEDICADA COM TODAS AS FUNCIONALIDADES (SUBSTITUI O DIALOG PEQUENO).** Nova página `ModuloDetalhe.tsx` em `/planos/modulos/:id`, baseada 100% em `shared/modules.ts`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4052** — **`/planos`: AZUL MAIS ESCURO EM TODA A LANDING + MASCOTE "JULINHO" VIROU UM ROBÔ ANIMADO E INTERATIVO.** Paleta aprofundada (blue-600→900); imagem final em `client/src/assets/julinho_robot.png`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4051** — **`/planos`: PALETA DE CORES TROCADA DE LARANJA/ÂMBAR PARA AZUL EM TODA A LANDING.** Usuário viu os screenshots da Rev. 4050 no canvas e pediu pra trocar laranja por azul ("gosto mais do azul"). Toda a identidade visual PRÓPRIA do site migrou de `orange-*/amber-*` pra `blue-*/sky-*`. Mantido de propósito: cores por categoria no array `MODULES`. ZERO DELETE · ZERO ALTER destrutivo.

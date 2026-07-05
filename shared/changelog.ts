@@ -1,4 +1,23 @@
 /**
+ * Rev. 4060 — **`/planos`: MÓDULO FORA DE VENDA AGORA SOME COMPLETAMENTE DA VITRINE, NÃO SÓ DO PREÇO.**
+ *
+ * PEDIDO: usuário testou a Rev. 4059 em produção e apontou que desligar um módulo pra venda só escondia o
+ * preço (mostrava "—"), mas o card completo (nome, descrição, "Ver detalhes") continuava visível em `/planos`
+ * — e a página de detalhe dedicada (`/planos/modulos/:id`) continuava acessível por link direto. Isso passava
+ * sensação de propaganda enganosa (produto anunciado que na prática não pode ser comprado).
+ *
+ * FIX: `SiteVendas.tsx` — a grade de módulos da seção "#modulos" passou a filtrar o array local `MODULES`
+ * contra `catalog.modules` (que já vem de `sellableModules` no backend, ver Rev. 4059); módulo fora de venda
+ * não renderiza NENHUM card (nome/descrição/link somem juntos), não só o preço. Enquanto o catálogo ainda
+ * não carregou, mostra todos temporariamente (evita flash vazio) — assim que chega, filtra de verdade.
+ * `ModuloDetalhe.tsx` — adicionado guard `isSellable` que reusa a mesma checagem contra `catalog.modules`;
+ * acessar a URL de detalhe de um módulo fora de venda diretamente (link salvo, compartilhado, indexado) agora
+ * cai na tela "Módulo não encontrado" em vez de mostrar a página completa. `ContratarPlano.tsx` (checkout) já
+ * renderizava só `catalog.modules` desde a Rev. 4059 — não precisou de mudança. ZERO DELETE · ZERO ALTER
+ * destrutivo (mudança 100% de frontend, sem tocar schema/backend).
+ */
+
+/**
  * Rev. 4059 — **PAINEL SAAS / AJUSTE DE PREÇOS: NOVO CONTROLE PARA LIGAR/DESLIGAR MÓDULO DA VITRINE COMERCIAL.**
  *
  * PEDIDO: usuário anexou prints de "Ajuste de Preços do Catálogo" (AdminPrecos.tsx) e do Painel SaaS e pediu
