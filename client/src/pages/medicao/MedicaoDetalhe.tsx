@@ -1704,7 +1704,7 @@ export default function MedicaoDetalhe() {
                             percentualPeriodo: "100.0000",
                             percentualAcumuladoAtual: "100.0000",
                             valorPeriodo: n(oc.valorEfetivo).toFixed(2),
-                            tipoAvanco: "fd_compra",
+                            tipoAvanco: "financeiro_material",
                             isFd: true,
                           }]);
                           setModalVincularFd(false);

@@ -1,4 +1,28 @@
 /**
+ * Rev. 4034 — **MEDIÇÃO DE CONTRATOS: "VINCULAR FD DE COMPRAS" GERAVA ITEM COM tipoAvanco INVÁLIDO
+ * ("fd_compra") — CAUSA-RAIZ DO ERRO REVELADO PELA REV. 4033.**
+ *
+ * PEDIDO: com o `onError` da Rev. 4033 agora mostrando erros reais, usuário mandou print
+ * (IMG_3315) do erro exato ao clicar "Salvar e Calcular Deduções": `Invalid option: expected one
+ * of "fisico"|"financeiro_material"` no campo `itens[32].tipoAvanco`.
+ *
+ * CAUSA RAIZ: o botão "Vincular FD de Compras" (`MedicaoDetalhe.tsx`), ao adicionar o item de FD
+ * recém-criado em `itensEdicao`, gravava `tipoAvanco: "fd_compra"` — valor que NUNCA existiu no
+ * enum aceito pelo backend (`z.enum(["fisico", "financeiro_material"])` em
+ * `salvarItensBoletim`). Qualquer boletim com um item de FD vinculado (`isFd: true`) falhava
+ * silenciosamente ao salvar (antes da Rev. 4033) ou com erro visível (depois dela) — o item de FD
+ * nunca havia sido persistido no banco com sucesso (confirmado: `medicao_boletim_itens.tipo_avanco`
+ * só tem o valor `"fisico"` em produção, nenhum `"fd_compra"` órfão).
+ *
+ * SOLUÇÃO — Frontend (`client/src/pages/medicao/MedicaoDetalhe.tsx`):
+ * - `tipoAvanco: "fd_compra"` → `tipoAvanco: "financeiro_material"` no handler de "Vincular FD de
+ *   Compras" (semanticamente correto: FD é avanço por valor financeiro, não físico).
+ * - Nenhum outro ponto do arquivo gera valor de `tipoAvanco` fora do enum (auditado via grep).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4033 — **MEDIÇÃO DE CONTRATOS: BOTÃO "SALVAR E CALCULAR DEDUÇÕES" PARECIA NÃO FAZER NADA
  * (SEM FEEDBACK DE ERRO) — RACE CONDITION + FALTA DE onError.**
  *

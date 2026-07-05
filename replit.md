@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4034** — **MEDIÇÃO DE CONTRATOS: "VINCULAR FD DE COMPRAS" GERAVA ITEM COM tipoAvanco INVÁLIDO ("fd_compra") — CAUSA-RAIZ DO ERRO REVELADO PELA REV. 4033.** Com o `onError` da Rev. 4033 mostrando erros reais, usuário mandou print (IMG_3315) do erro exato: `Invalid option: expected one of "fisico"|"financeiro_material"`. Causa: botão "Vincular FD de Compras" gravava `tipoAvanco: "fd_compra"`, valor fora do enum aceito pelo backend — qualquer boletim com FD vinculado nunca salvava com sucesso. `MedicaoDetalhe.tsx`: `tipoAvanco` do item de FD trocado para `"financeiro_material"` (auditado: nenhum outro ponto do arquivo gera valor fora do enum; confirmado no banco que nenhum `"fd_compra"` órfão chegou a persistir). ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4033** — **MEDIÇÃO DE CONTRATOS: BOTÃO "SALVAR E CALCULAR DEDUÇÕES" PARECIA NÃO FAZER NADA (SEM FEEDBACK DE ERRO).** Usuário reportou (IMG_3314) que clicar no botão do diálogo "Itens do Boletim" não fazia nada/dava erro sem mensagem. Causa dupla: (1) `recalcularMutation` disparava em paralelo com `salvarItensMutation` (race condition — podia ler `valorBruto` desatualizado do banco); (2) nenhuma das duas mutations tinha `onError`, então falhas reais do backend eram engolidas silenciosamente. `MedicaoDetalhe.tsx`: recálculo movido pro `onSuccess` de salvar itens (encadeamento sequencial garantido); `onError` com `toast.error` (sonner) adicionado às duas mutations; botão reflete `isPending` de ambas. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4032** — **MEDIÇÃO DE CONTRATOS: ESPAÇAMENTO E ALINHAMENTO VERTICAL DOS CAMPOS "DATA INÍCIO"/"DATA FIM".** Seguindo a Rev. 4031, usuário mandou mais prints reclamando que as datas "ainda estão sobrepondo" e o layout não tinha sido corrigido — colunas coladas sem espaço visível + texto colado à borda superior do campo (mal centralizado). `MedicaoDetalhe.tsx`: grid `gap-3`→`gap-6` + `min-w-0`/`w-full` nas colunas (largura igual, sem overflow); nos 4 `<input type="date">` (modalBoletim e modalEditBoletim) adicionado `flex items-center h-10 leading-normal` para forçar centralização vertical do texto (inputs nativos de data podem não centralizar bem com padding padrão, especialmente em Safari). Mesma mutation/campos de antes. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4032** — **MEDIÇÃO DE CONTRATOS: ESPAÇAMENTO E ALINHAMENTO VERTICAL DOS CAMPOS "DATA INÍCIO"/"DATA FIM".** Seguindo a Rev. 4031, usuário mandou mais prints reclamando que as datas "ainda estão sobrepondo" e o layout não tinha sido corrigido — colunas coladas sem espaço visível + texto colado à borda superior do campo (mal centralizado). `MedicaoDetalhe.tsx`: grid `gap-3`→`gap-6` + `min-w-0`/`w-full` nas colunas (largura igual, sem overflow); nos 4 `<input type="date">` (modalBoletim e modalEditBoletim) adicionado `flex items-center h-10 leading-normal` para forçar centralização vertical do texto (inputs nativos de data podem não centralizar bem com padding padrão, especialmente em Safari). Mesma mutation/campos de antes. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4031** — **MEDIÇÃO DE CONTRATOS: ÍCONE DECORATIVO NOS CAMPOS DE DATA SOBREPUNHA O ÍCONE NATIVO DO NAVEGADOR — REMOVIDO.** Usuário mandou print (IMG_3308) do diálogo "Novo Boletim de Medição" (redesenhado na Rev. 4030) com as datas "se sobrepondo"/"ficou péssimo". Causa: o ícone `CalendarRange` decorativo em `absolute` + `pl-8` (copiado do padrão do "Editar Boletim") colide com o affordance nativo do `<input type="date">`, já que o shadow-DOM interno do campo nem sempre respeita o padding customizado em todos navegadores/dispositivos. `MedicaoDetalhe.tsx`: removido o wrapper/ícone/padding dos 4 campos de data (`modalBoletim` E `modalEditBoletim`), voltando a inputs simples sem ícone sobreposto. Mesma mutation/validação/campos de antes. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4028** — **MEDIÇÃO DE CONTRATOS: OLHINHO NA LISTA DE BOLETINS + REDESIGN MOBILE DO CABEÇALHO DO DIÁLOGO "ITENS DO BOLETIM" + ENCAMINHAR VIA WHATSAPP.** Ícone de olho na lista de boletins + cabeçalho reestruturado em 2 linhas (título isolado, botões numa linha própria com `flex-wrap`) + `compartilharBoletimMedicaoWhatsApp` (Web Share API nível 2 / fallback wa.me). ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4027** — **MEDIÇÃO DE CONTRATOS: RASTREABILIDADE DO "ORIGEM: CRONOGRAMA" + BOTÕES DE FLUXO/IMPRESSÃO/PDF NO DIÁLOGO "ITENS DO BOLETIM".** Novo `getHistoricoAvancoAtividade` (anti-IDOR) mostra de qual semana do Avanço Semanal veio o % da medição via Popover; diálogo ganhou botões Aprovar/Enviar, Imprimir e Gerar PDF (`boletimMedicaoPdf.ts`, jsPDF). ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4026 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4027 e anteriores.
 
 ## User preferences
 
