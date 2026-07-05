@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
-import { getDb } from "../db";
+import { getDb, getCompaniesForUser } from "../db";
 import { employees, systemCriteria } from "../../drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { resolveCompanyIds, companyFilter } from "../companyHelper";
@@ -268,9 +268,19 @@ export const horasExtrasRouter = router({
   // Get detail (employees) for a specific HE period
   getDetalhe: protectedProcedure
     .input(z.object({ hePeriodId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      // Tenant guard — período traz horas/valores de funcionários; confirmar
+      // que o usuário tem acesso à empresa dona do período (IDOR).
+      const periodCheckRows = ((await db.execute(sql`SELECT "companyId" FROM he_periods WHERE id = ${input.hePeriodId} LIMIT 1`)) as any).rows || [];
+      if (!periodCheckRows.length) throw new TRPCError({ code: "NOT_FOUND", message: "Período não encontrado" });
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!(allowed as any[]).some(c => c.id === Number(periodCheckRows[0].companyId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este período." });
+      }
+
       const [periodRows, empRows] = await Promise.all([
         db.execute(sql`SELECT * FROM he_periods WHERE id = ${input.hePeriodId} LIMIT 1`),
         db.execute(sql`
@@ -382,13 +392,20 @@ export const horasExtrasRouter = router({
 
   memorialCalculo: protectedProcedure
     .input(z.object({ hePeriodId: z.number(), employeeId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
       const periodRows = ((await db.execute(sql`SELECT * FROM he_periods WHERE id = ${input.hePeriodId} LIMIT 1`)) as any).rows || [];
       if (!periodRows.length) throw new TRPCError({ code: "NOT_FOUND", message: "Período não encontrado" });
       const period = periodRows[0];
+
+      // Tenant guard — memorial de cálculo traz salário/valor-hora do
+      // funcionário; confirmar acesso à empresa dona do período (IDOR).
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!(allowed as any[]).some(c => c.id === Number(period.companyId))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este período." });
+      }
 
       const criteria = await getHECriteria(db, Number(period.companyId));
 

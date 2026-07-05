@@ -606,6 +606,17 @@ export const folhaPagamentoRouter = router({
     }))
     .query(async ({ input, ctx }) => {
       const db = (await getDb())!;
+
+      // Tenant guard — itens trazem salário/dados bancários; confirmar que o
+      // lançamento pertence a uma empresa que o usuário pode acessar (IDOR).
+      const [lancamento] = await db.select({ companyId: folhaLancamentos.companyId }).from(folhaLancamentos)
+        .where(eq(folhaLancamentos.id, input.folhaLancamentoId));
+      if (!lancamento) throw new TRPCError({ code: "NOT_FOUND", message: "Lançamento não encontrado" });
+      const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!(allowed as any[]).some(c => c.id === lancamento.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a este lançamento." });
+      }
+
       const itens = await db.select().from(folhaItens)
         .where(eq(folhaItens.folhaLancamentoId, input.folhaLancamentoId));
 

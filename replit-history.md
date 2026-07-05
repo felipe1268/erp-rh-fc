@@ -1,3 +1,5 @@
+- **Rev. 4033** — **MEDIÇÃO DE CONTRATOS: BOTÃO "SALVAR E CALCULAR DEDUÇÕES" PARECIA NÃO FAZER NADA (SEM FEEDBACK DE ERRO).** Race condition entre `recalcularMutation` e `salvarItensMutation` + falta de `onError` engolindo falhas reais; recálculo movido pro `onSuccess` de salvar itens + `toast.error` nas duas mutations. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4032** — **MEDIÇÃO DE CONTRATOS: ESPAÇAMENTO E ALINHAMENTO VERTICAL DOS CAMPOS "DATA INÍCIO"/"DATA FIM".** Grid `gap-3`→`gap-6` + `min-w-0`/`w-full` nas colunas; inputs de data com `flex items-center h-10 leading-normal` pra centralizar o texto. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4031** — **MEDIÇÃO DE CONTRATOS: ÍCONE DECORATIVO NOS CAMPOS DE DATA SOBREPUNHA O ÍCONE NATIVO DO NAVEGADOR — REMOVIDO.** Removido o wrapper/ícone/padding dos 4 campos de data (modalBoletim e modalEditBoletim), voltando a inputs simples sem ícone sobreposto. ZERO DELETE · ZERO ALTER destrutivo.

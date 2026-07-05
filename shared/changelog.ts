@@ -1,4 +1,53 @@
 /**
+ * Rev. 4040 — **PROJETO SAAS: "FASE 0" — AUDITORIA DE ISOLAMENTO ENTRE EMPRESAS (LGPD) E CORREÇÃO DE 6 GAPS DE IDOR CONFIRMADOS.**
+ *
+ * PEDIDO: antes de iniciar a transformação do ERP em SaaS multi-cliente (venda de licenças por
+ * módulo/usuário, painel mestre, self-service), usuário pediu uma "Fase 0" de hardening de segurança
+ * pra garantir isolamento 100% entre dados de empresas clientes diferentes — pré-requisito de LGPD
+ * pra vender o produto pra terceiros (hoje é uso interno único-tenant "de fato", então gaps de
+ * cross-tenant nunca foram explorados, mas existiam).
+ *
+ * AUDITORIA: rodados `runDependencyAudit` (1 crítico + 20 altos, majoritariamente devDependencies —
+ * pnpm/vite/vitest/xlsx/nodemailer, não ligados a isolamento) e `runHoundDogScan` (achados leves de
+ * PII em `console.log`, não vazamento cross-tenant). SAST indisponível (erro de infra do scanner,
+ * não do código). 4 auditorias paralelas (financeiro, folha/RH, rotas públicas, criação de
+ * usuário/empresa) cobrindo os módulos de maior risco.
+ *
+ * ACHADOS CONFIRMADOS E CORRIGIDOS (6 gaps de IDOR — usuário de uma empresa podia ler/baixar dado de
+ * OUTRA empresa só adivinhando/manipulando um ID):
+ * 1. `downloadSST.ts` (rota Express `/api/download/sst/:employeeId`) — QUALQUER usuário autenticado
+ *    baixava o ZIP de ASOs/treinamentos (dado de saúde) de QUALQUER funcionário de QUALQUER empresa,
+ *    bastando trocar o ID na URL. Fix: busca a `companyId` do funcionário e valida vínculo via
+ *    `userCompanies` (mesmo padrão já usado em `downloadOC.ts`), com bypass só para admin/admin_master.
+ * 2. `danfeRoute.ts` (rota Express `/api/fiscal-notes/:id/danfe`) — autenticava o usuário mas o
+ *    `companyId` vinha de query param SEM checar se o usuário pertencia a ela; o WHERE já filtrava
+ *    por `company_id`, mas um usuário podia passar o `companyId` de OUTRA empresa (não a sua) e ver o
+ *    DANFE dela. Fix: valida vínculo via `userCompanies` antes da query.
+ * 3. `dissidio.buscarPorId` — trazia % de reajuste, piso salarial e lista de funcionários afetados
+ *    (dado sensível) de QUALQUER dissídio pelo ID, sem checar a empresa dona. Fix: `getCompaniesForUser`
+ *    + comparação com `dissidio.companyId` (mesmo padrão já usado em `dissidio.simular`).
+ * 4. `horasExtras.getDetalhe` e `memorialCalculo` — traziam horas/valor-hora de funcionários de
+ *    QUALQUER período de HE pelo ID, sem checar a empresa dona do período. Fix: mesmo padrão de guard.
+ * 5. `folhaPagamento.listarItens` — trazia salário e dados bancários dos itens de QUALQUER lançamento
+ *    de folha pelo ID, sem checar a empresa dona. Fix: mesmo padrão de guard.
+ *
+ * NÃO SÃO BUGS (confirmado por design, documentado pra não reabrir no futuro): `getCompaniesForUser`
+ * trata `admin` (não só `admin_master`) como acesso global — decisão intencional da Rev. 1696, ambos
+ * os papéis são internos da FC Engenharia. Ao desenhar o painel mestre SaaS (próxima fase), os papéis
+ * de administrador de empresa-CLIENTE devem usar um nome de role DIFERENTE de `admin`/`admin_master`
+ * (reservados pro time interno), senão herdam acesso global sem querer.
+ *
+ * ITENS DE MENOR PRIORIDADE IDENTIFICADOS (não corrigidos nesta rodada — documentados pra follow-up):
+ * link público de `coletaRh.ts` expõe nome/foto/função de todos os funcionários da obra (trade-off de
+ * usabilidade já documentado no código-fonte); `portalDocumentos.ts` usa casamento de obra por NOME
+ * (não por ID), o que teoricamente falha se duas empresas tiverem obras com nome idêntico — merece
+ * revisão futura mas não foi confirmado como explorável hoje.
+ *
+ * ZERO DELETE de dados · ZERO ALTER destrutivo — todas as correções são guards adicionais (nenhuma
+ * validação existente foi removida ou afrouxada).
+ */
+
+/**
  * Rev. 4039 — **DASHBOARD ALMOXARIFADO & EQUIPAMENTOS: ARQUIVO ÚNICO DE 1851 LINHAS COM 6 ABAS VIROU 6 PÁGINAS PRÓPRIAS.**
  *
  * PEDIDO: dividir `DashAlmoxarifadoEquipamentos.tsx` (1 arquivo gigante controlando 6 seções via

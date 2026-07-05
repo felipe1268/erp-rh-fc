@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import archiver from "archiver";
 import { getDb } from "../db";
-import { asos, trainings } from "../../drizzle/schema";
+import { asos, trainings, employees, userCompanies } from "../../drizzle/schema";
 import { eq, isNull, and } from "drizzle-orm";
 import { sdk } from "../_core/sdk";
 
@@ -22,9 +22,10 @@ function getExtFromUrl(url: string): string {
 export function registerDownloadSSTRoute(app: Express) {
   app.get("/api/download/sst/:employeeId", async (req: Request, res: Response) => {
     try {
-      let user;
+      let user: { id: number; role: string };
       try {
-        user = await sdk.authenticateRequest(req);
+        const authUser = await sdk.authenticateRequest(req);
+        user = { id: (authUser as Record<string, number>).id, role: (authUser as Record<string, string>).role };
       } catch {
         res.status(401).json({ error: "Não autenticado" });
         return;
@@ -37,6 +38,23 @@ export function registerDownloadSSTRoute(app: Express) {
       }
 
       const db = await getDb();
+
+      const [empRow] = await db.select({ id: employees.id, companyId: employees.companyId }).from(employees).where(eq(employees.id, employeeId));
+      if (!empRow) {
+        res.status(404).json({ error: "Funcionário não encontrado" });
+        return;
+      }
+
+      if (user.role !== "admin_master" && user.role !== "admin") {
+        const userComps = await db
+          .select()
+          .from(userCompanies)
+          .where(and(eq(userCompanies.userId, user.id), eq(userCompanies.companyId, empRow.companyId)));
+        if (userComps.length === 0) {
+          res.status(403).json({ error: "Sem permissão para acessar arquivos deste funcionário" });
+          return;
+        }
+      }
 
       const empAsos = await db.select({
         id: asos.id,

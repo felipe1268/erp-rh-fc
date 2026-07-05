@@ -2,6 +2,8 @@ import { Express, Request, Response } from "express";
 import { getDb } from "../db";
 import { sdk } from "../_core/sdk";
 import { XMLParser } from "fast-xml-parser";
+import { userCompanies } from "../../drizzle/schema";
+import { eq, and } from "drizzle-orm";
 
 const xmlParser = new XMLParser({
   ignoreAttributes: false,
@@ -393,6 +395,17 @@ export function registerDanfeRoute(app: Express) {
 
       const db = await getDb();
       if (!db) { res.status(500).send("<h3>DB indisponível</h3>"); return; }
+
+      if (user.role !== "admin_master" && user.role !== "admin") {
+        const userComps = await db
+          .select()
+          .from(userCompanies)
+          .where(and(eq(userCompanies.userId, user.id), eq(userCompanies.companyId, companyId)));
+        if (userComps.length === 0) {
+          res.status(403).send("<h3>Sem permissão para acessar esta nota</h3>");
+          return;
+        }
+      }
 
       const result = await db.$client.query(
         `SELECT id, numero_nf, chave_acesso, data_emissao, emitente_cnpj, emitente_nome,

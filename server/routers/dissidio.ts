@@ -56,11 +56,19 @@ export const dissidioRouter = router({
   // Buscar dissídio por ID
   buscarPorId: protectedProcedure.input(z.object({
     id: z.number(),
-  })).query(async ({ input }) => {
+  })).query(async ({ input, ctx }) => {
     const db = (await getDb())!;
     const [dissidio] = await db.select().from(dissidios).where(eq(dissidios.id, input.id));
     if (!dissidio) throw new TRPCError({ code: 'NOT_FOUND', message: 'Dissídio não encontrado' });
-    
+
+    // Tenant guard — dissídio traz % de reajuste, piso salarial e dados de
+    // funcionários (dado sensível); confirmar que o usuário tem acesso à
+    // empresa dona do registro (IDOR: passar id de dissídio de outra empresa).
+    const allowed = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+    if (!(allowed as any[]).some(c => c.id === dissidio.companyId)) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Sem acesso a este dissídio.' });
+    }
+
     // Buscar funcionários afetados
     const funcs = await db.select().from(dissidioFuncionarios)
       .where(eq(dissidioFuncionarios.dissidioId, input.id));
