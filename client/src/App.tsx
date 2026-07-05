@@ -276,7 +276,14 @@ const DashCompetencias = lazyWithRetry(() => import("./pages/dashboards/DashComp
 const DashApontamentos = lazyWithRetry(() => import("./pages/dashboards/DashApontamentos"));
 const DashHabilidades = lazyWithRetry(() => import("./pages/dashboards/DashHabilidades"));
 const DashParceiros = lazyWithRetry(() => import("./pages/dashboards/DashParceiros"));
-const DashAlmoxarifadoEquipamentos = lazyWithRetry(() => import("./pages/dashboards/DashAlmoxarifadoEquipamentos"));
+// Rev. 4039 — Dashboard Almoxarifado & Equipamentos dividido em 6 páginas
+// próprias (antes 1 arquivo único de 1851 linhas com abas por querystring).
+const DashAlmoxVisaoGeral = lazyWithRetry(() => import("./pages/dashboards/almoxarifado/VisaoGeral"));
+const DashAlmoxEstoque = lazyWithRetry(() => import("./pages/dashboards/almoxarifado/Estoque"));
+const DashAlmoxMovimentacoes = lazyWithRetry(() => import("./pages/dashboards/almoxarifado/Movimentacoes"));
+const DashAlmoxFerramentasTerceiros = lazyWithRetry(() => import("./pages/dashboards/almoxarifado/FerramentasTerceiros"));
+const DashAlmoxEquipProprios = lazyWithRetry(() => import("./pages/dashboards/almoxarifado/EquipProprios"));
+const DashAlmoxEquipLocados = lazyWithRetry(() => import("./pages/dashboards/almoxarifado/EquipLocados"));
 const RelatorioHabilidadesObra = lazyWithRetry(() => import("./pages/RelatorioHabilidadesObra"));
 const ImportacaoHabilidades = lazyWithRetry(() => import("./pages/ImportacaoHabilidades"));
 
@@ -577,7 +584,14 @@ function Router() {
         <Route path={"/dashboards/apontamentos"} component={() => <RouteGuard component={DashApontamentos} route="/dashboards/apontamentos" />} />
         <Route path={"/dashboards/habilidades"} component={() => <RouteGuard component={DashHabilidades} route="/dashboards/habilidades" />} />
         <Route path={"/dashboards/parceiros"} component={() => <RouteGuard component={DashParceiros} route="/dashboards/parceiros" />} />
-        <Route path={"/dashboards/almoxarifado-equipamentos"} component={() => <RouteGuard component={DashAlmoxarifadoEquipamentos} route="/almoxarifado" />} />
+        {/* Rev. 4039 — 6 páginas próprias (antes 1 arquivo único com abas). */}
+        <Route path={"/dashboards/almoxarifado-equipamentos"} component={() => <RouteGuard component={DashAlmoxVisaoGeral} route="/almoxarifado" />} />
+        <Route path={"/dashboards/almoxarifado/visao-geral"} component={() => <RouteGuard component={DashAlmoxVisaoGeral} route="/almoxarifado" />} />
+        <Route path={"/dashboards/almoxarifado/estoque"} component={() => <RouteGuard component={DashAlmoxEstoque} route="/almoxarifado" />} />
+        <Route path={"/dashboards/almoxarifado/movimentacoes"} component={() => <RouteGuard component={DashAlmoxMovimentacoes} route="/almoxarifado" />} />
+        <Route path={"/dashboards/almoxarifado/ferramentas-terceiros"} component={() => <RouteGuard component={DashAlmoxFerramentasTerceiros} route="/almoxarifado" />} />
+        <Route path={"/dashboards/almoxarifado/equip-proprios"} component={() => <RouteGuard component={DashAlmoxEquipProprios} route="/almoxarifado" />} />
+        <Route path={"/dashboards/almoxarifado/equip-locados"} component={() => <RouteGuard component={DashAlmoxEquipLocados} route="/almoxarifado" />} />
         {/* Terceiros */}
         <Route path="/terceiros" component={() => <RouteGuard component={PainelTerceiros} route="/terceiros/painel" />} />
         <Route path="/terceiros/empresas" component={() => <RouteGuard component={EmpresasTerceiras} route="/terceiros/empresas" />} />

@@ -1,4 +1,29 @@
 /**
+ * Rev. 4039 — **DASHBOARD ALMOXARIFADO & EQUIPAMENTOS: ARQUIVO ÚNICO DE 1851 LINHAS COM 6 ABAS VIROU 6 PÁGINAS PRÓPRIAS.**
+ *
+ * PEDIDO: dividir `DashAlmoxarifadoEquipamentos.tsx` (1 arquivo gigante controlando 6 seções via
+ * querystring `?tab=`) em 6 páginas independentes, cada uma com seu próprio item de sidebar, e ainda
+ * acrescentar: análise por funcionário, "top itens por valor", alerta de "itens sem categoria" e
+ * click-to-drill-down em todo gráfico.
+ *
+ * SOLUÇÃO — backend: novo procedimento `almoxarifadoEquipamentos.dashboardPorFuncionario` (agregação
+ * de movimentações/consumo por funcionário responsável). Frontend: extraído todo o conteúdo original
+ * pra `client/src/pages/dashboards/almoxarifado/` — `shared.tsx` (helpers/UI compartilhados),
+ * `useAlmoxarifadoData.ts` (hook central de queries) e 6 páginas próprias (`VisaoGeral.tsx`,
+ * `Estoque.tsx`, `Movimentacoes.tsx`, `FerramentasTerceiros.tsx`, `EquipProprios.tsx`,
+ * `EquipLocados.tsx` — esta última preserva o painel de IA "Comprar vs Alugar" e o drill mensal
+ * verbatim do arquivo original). `VisaoGeral.tsx` ganhou a nova análise por funcionário, "top itens
+ * por valor" e alerta de "itens sem categoria"; todo gráfico das 6 páginas ganhou click-to-drill-down
+ * (abre tabela contextual filtrada pelo ponto clicado). Roteamento: 6 rotas novas em `/dashboards/
+ * almoxarifado/{visao-geral,estoque,movimentacoes,ferramentas-terceiros,equip-proprios,equip-locados}`
+ * registradas em `App.tsx` (rota legada `/dashboards/almoxarifado-equipamentos` mantida como alias
+ * pra Visão Geral, sem quebrar links salvos); grupo "Análise" da sidebar em `DashboardLayout.tsx`
+ * trocado de 6 sub-itens `?tab=` pra 6 rotas reais. Arquivo original `DashAlmoxarifadoEquipamentos.tsx`
+ * REMOVIDO após confirmar todas as 6 páginas funcionando (conteúdo integralmente preservado nas novas
+ * páginas — não houve perda de funcionalidade). ZERO DELETE de dados · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4038 — **DASHBOARDS DE APR E PT (REV. 4037): GRÁFICOS RASOS DEMAIS — "COLOCA MAIS GRÁFICOS DETALHADOS".**
  *
  * PEDIDO: logo após a entrega da Rev. 4037 (dashboards dedicados de APR/PT), usuário pediu pra

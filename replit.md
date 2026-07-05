@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4039** — **DASHBOARD ALMOXARIFADO & EQUIPAMENTOS: ARQUIVO ÚNICO DE 1851 LINHAS COM 6 ABAS VIROU 6 PÁGINAS PRÓPRIAS.** Pedido: dividir `DashAlmoxarifadoEquipamentos.tsx` (controlava 6 seções via `?tab=`) em 6 páginas independentes com item próprio na sidebar, mais análise por funcionário, "top itens por valor", alerta de "itens sem categoria" e click-to-drill-down em todo gráfico. Backend: novo `almoxarifadoEquipamentos.dashboardPorFuncionario`. Frontend: extraído pra `client/src/pages/dashboards/almoxarifado/` (`shared.tsx` + `useAlmoxarifadoData.ts` + 6 páginas — `VisaoGeral`/`Estoque`/`Movimentacoes`/`FerramentasTerceiros`/`EquipProprios`/`EquipLocados`, esta preserva o painel de IA "Comprar vs Alugar" verbatim). 6 rotas novas em `/dashboards/almoxarifado/*` (`App.tsx`, rota legada mantida como alias); sidebar (`DashboardLayout.tsx`) trocada de 6 sub-itens `?tab=` pra 6 rotas reais. Arquivo original removido após validar as 6 páginas. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4038** — **DASHBOARDS DE APR E PT (REV. 4037): GRÁFICOS RASOS DEMAIS — "COLOCA MAIS GRÁFICOS DETALHADOS".** Logo após a Rev. 4037 (dashboards dedicados de APR/PT), usuário pediu pra enriquecer os gráficos — os 2 dashboards tinham só 4 gráficos cada, rasos pra dados já existentes no banco. `aprAnalises.dashboard`: 3 novas agregações — `matrizRisco` (grid 5×5 probabilidade × gravidade, heatmap), `topPerigos` (top 8 perigos mais recorrentes) e `timelinePorStatus` (evolução mensal empilhada por status). `ptPermissoes.dashboard`: `porEmpresaExecutante` (top 10) e `timelinePorStatus`. Frontend: `DashboardAprAnalise.tsx` ganhou heatmap de matriz de risco + bar chart de perigos + bar chart empilhado; `DashboardPermissaoTrabalho.tsx` ganhou bar chart de empresa executante + bar chart empilhado. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4037** — **"CADÊ O DASH DA APR E DA PT?" — FALTAVAM DASHBOARDS DEDICADOS NO GRUPO "DASHBOARDS" DA SIDEBAR.** Usuário mandou print (IMG_3318) do grupo "Dashboards" da sidebar SST mostrando só EPIs/Atestados & Acidentes/DDS e perguntou "Cadê o dash da APR e da PT?" — a Rev. 4036 só tinha padronizado o ESTILO dos KPI cards dentro das telas de APR/PT, não criado dashboards dedicados. Novo procedimento `dashboard` em `aprAnalises.ts` (stats + porObra + porTipoAtividade + timeline mensal + porNivelRisco Baixo/Médio/Alto/Crítico + recentes) e em `ptPermissoes.ts` (stats + porObra + porTipoTrabalho + timeline + recentes); novas páginas `DashboardAprAnalise.tsx`/`DashboardPermissaoTrabalho.tsx` no padrão visual de `DDSDashboard.tsx`; rotas `/sst/dashboard-apr` e `/sst/dashboard-pt` + 2 itens novos no grupo "Dashboards" da sidebar + mapeamento de permissão em `modulePages.ts`. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4037** — **"CADÊ O DASH DA APR E DA PT?" — FALTAVAM DASHBOARDS DEDICADOS NO GRUPO "DASHBOARDS" DA SIDEBAR.** Novo procedimento `dashboard` em `aprAnalises.ts`/`ptPermissoes.ts`; novas páginas `DashboardAprAnalise.tsx`/`DashboardPermissaoTrabalho.tsx`; rotas `/sst/dashboard-apr` e `/sst/dashboard-pt` + 2 itens novos no grupo "Dashboards" da sidebar. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4036** — **APR — ANÁLISE PRELIMINAR DE RISCO: CARDS DE INDICADORES FORA DO PADRÃO VISUAL DA PT.** `AprAnalise.tsx`: array `CARDS` padronizado no mesmo markup da PT (dot + label + número grande, sem ícone/gradiente), mantendo o filtro por clique já existente. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4033** — **MEDIÇÃO DE CONTRATOS: BOTÃO "SALVAR E CALCULAR DEDUÇÕES" PARECIA NÃO FAZER NADA (SEM FEEDBACK DE ERRO).** Race condition entre `recalcularMutation` e `salvarItensMutation` + falta de `onError` engolindo falhas reais; recálculo movido pro `onSuccess` de salvar itens + `toast.error` nas duas mutations. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4032** — **MEDIÇÃO DE CONTRATOS: ESPAÇAMENTO E ALINHAMENTO VERTICAL DOS CAMPOS "DATA INÍCIO"/"DATA FIM".** Grid `gap-3`→`gap-6` + `min-w-0`/`w-full` nas colunas; inputs de data com `flex items-center h-10 leading-normal` pra centralizar o texto. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4031 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4032 e anteriores.
 
 ## User preferences
 

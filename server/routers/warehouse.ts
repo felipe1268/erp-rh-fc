@@ -1516,6 +1516,62 @@ Retorne os até 5 melhores matches em ordem decrescente de similaridade. Se nenh
       return (rows as any)?.rows ?? rows ?? [];
     }),
 
+  // Rev. 4039 — Repaginação do Dashboard Almoxarifado & Equipamentos:
+  // agregação por FUNCIONÁRIO pedida pelo usuário — (a) quem mais retira
+  // material (almoxarifado_saidas_insumo) e (b) quem está com
+  // ferramentas/equipamentos emprestados AGORA (warehouse_loans status
+  // 'emprestado'). Cálculo feito no banco (GROUP BY sobre a base inteira,
+  // não limitada a 200/2000 registros como as listagens client-side).
+  dashboardPorFuncionario: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const allowedCompanies = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (!allowedCompanies.map((c: any) => c.id).includes(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a essa empresa." });
+      }
+      const cid = input.companyId;
+
+      const retiradasRows = await db.execute(sql`
+        SELECT
+          s.funcionario_id                                   AS funcionario_id,
+          COALESCE(s.funcionario_nome, '— sem funcionário —') AS funcionario_nome,
+          s.funcionario_codigo                                AS funcionario_codigo,
+          COUNT(*)::int                                       AS retiradas,
+          COALESCE(SUM(s.quantidade), 0)::float                AS qtd_total,
+          COALESCE(SUM(s.quantidade * COALESCE(i.valor_unitario, 0)), 0)::float AS valor_total,
+          MAX(s.created_at)                                    AS ultima_retirada
+        FROM almoxarifado_saidas_insumo s
+        LEFT JOIN almoxarifado_itens i ON i.id = s.item_id
+        WHERE s.company_id = ${cid} AND s.funcionario_id IS NOT NULL
+        GROUP BY s.funcionario_id, s.funcionario_nome, s.funcionario_codigo
+        ORDER BY valor_total DESC
+        LIMIT 25
+      `);
+
+      const emprestadosRows = await db.execute(sql`
+        SELECT
+          l.funcionario_id                                    AS funcionario_id,
+          COALESCE(l.funcionario_nome, '— sem funcionário —')  AS funcionario_nome,
+          l.funcionario_codigo                                 AS funcionario_codigo,
+          COUNT(*)::int                                        AS itens_em_maos,
+          MIN(l.data_emprestimo)                                AS emprestimo_mais_antigo
+        FROM warehouse_loans l
+        WHERE l.company_id = ${cid} AND l.status = 'emprestado' AND l.funcionario_id IS NOT NULL
+        GROUP BY l.funcionario_id, l.funcionario_nome, l.funcionario_codigo
+        ORDER BY itens_em_maos DESC
+        LIMIT 25
+      `);
+
+      const toRows = (r: any) => (r as any)?.rows ?? r ?? [];
+      return {
+        topRetiradas: toRows(retiradasRows),
+        comEmprestimoAberto: toRows(emprestadosRows),
+      };
+    }),
+
   // ── CRIAR TRANSFERÊNCIA ENTRE ALMOXARIFADOS ─────────────────
   createTransferencia: protectedProcedure
     .input(z.object({

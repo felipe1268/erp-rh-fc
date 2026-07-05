@@ -1,3 +1,5 @@
+- **Rev. 4032** — **MEDIÇÃO DE CONTRATOS: ESPAÇAMENTO E ALINHAMENTO VERTICAL DOS CAMPOS "DATA INÍCIO"/"DATA FIM".** Grid `gap-3`→`gap-6` + `min-w-0`/`w-full` nas colunas; inputs de data com `flex items-center h-10 leading-normal` pra centralizar o texto. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4031** — **MEDIÇÃO DE CONTRATOS: ÍCONE DECORATIVO NOS CAMPOS DE DATA SOBREPUNHA O ÍCONE NATIVO DO NAVEGADOR — REMOVIDO.** Removido o wrapper/ícone/padding dos 4 campos de data (modalBoletim e modalEditBoletim), voltando a inputs simples sem ícone sobreposto. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4030** — **MEDIÇÃO DE CONTRATOS: REDESIGN DA TABELA "ITENS DO BOLETIM" + PADRONIZAÇÃO DO DIÁLOGO "NOVO BOLETIM DE MEDIÇÃO".** Tabela `table-fixed` + `<colgroup>` proporcional (elimina vão Item↔Descrição), badge azul "% Período", barra de progresso "% Acumulado"; diálogo `modalBoletim` reconstruído no padrão do "Editar Boletim" (3 blocos). ZERO DELETE · ZERO ALTER destrutivo.

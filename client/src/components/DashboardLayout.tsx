@@ -461,14 +461,17 @@ const menuSectionsAlmoxarifado: MenuSection[] = [
   // Rev. 2327 — cada aba exposta como item próprio da sidebar (?tab=...);
   // todos abrem a mesma página que reage à querystring.
   {
+    // Rev. 4039 — antes 1 item "Dashboard Almox & Equip." com 5 sub-itens de
+    // querystring (?tab=...) apontando pro MESMO arquivo de 1851 linhas; agora
+    // 6 páginas próprias, cada uma com sua própria rota dedicada.
     title: "Análise",
     items: [
-      { icon: BarChart3,      label: "Dashboard Almox & Equip.", path: "/dashboards/almoxarifado-equipamentos?tab=visao" },
-      { icon: Package,        label: "↳ Estoque",                 path: "/dashboards/almoxarifado-equipamentos?tab=estoque" },
-      { icon: ArrowLeftRight, label: "↳ Movimentações",           path: "/dashboards/almoxarifado-equipamentos?tab=movs" },
-      { icon: Wrench,         label: "↳ Ferramentas Terceiros",   path: "/dashboards/almoxarifado-equipamentos?tab=ferramentas" },
-      { icon: HardHat,        label: "↳ Equip. Próprios",         path: "/dashboards/almoxarifado-equipamentos?tab=proprios" },
-      { icon: Truck,          label: "↳ Equip. Locados",          path: "/dashboards/almoxarifado-equipamentos?tab=locados" },
+      { icon: Warehouse,      label: "Dashboard · Visão Geral",       path: "/dashboards/almoxarifado/visao-geral" },
+      { icon: Package,        label: "Dashboard · Estoque",           path: "/dashboards/almoxarifado/estoque" },
+      { icon: ArrowLeftRight, label: "Dashboard · Movimentações",     path: "/dashboards/almoxarifado/movimentacoes" },
+      { icon: Wrench,         label: "Dashboard · Ferramentas Terc.", path: "/dashboards/almoxarifado/ferramentas-terceiros" },
+      { icon: HardHat,        label: "Dashboard · Equip. Próprios",   path: "/dashboards/almoxarifado/equip-proprios" },
+      { icon: Truck,          label: "Dashboard · Equip. Locados",    path: "/dashboards/almoxarifado/equip-locados" },
     ],
   },
 ];

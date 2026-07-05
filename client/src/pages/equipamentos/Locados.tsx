@@ -1682,8 +1682,8 @@ export default function EquipamentosLocados() {
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               {/* Rev. 2365 — Botão "Comprar vs Alugar (IA)" REMOVIDO daqui.
-                  A análise agora vive em /dashboards/almoxarifado-equipamentos
-                  (aba "Equip. Locados") junto com os demais KPIs estratégicos. */}
+                  A análise agora vive em /dashboards/almoxarifado/equip-locados
+                  (Rev. 4039: página própria) junto com os demais KPIs estratégicos. */}
               {/* Rev. 2337 — Categorizar com IA (só aparece se houver itens sem categoria). */}
               {totalSemCategoria > 0 && (
                 <button onClick={() => setModalCategIA({ sobrescrever: false })}
