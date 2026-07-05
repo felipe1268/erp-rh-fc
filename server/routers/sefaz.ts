@@ -1085,7 +1085,7 @@ export async function executarSyncNFe(companyId: number, opts?: { skipTimeGate?:
             html: `<p>Olá${admin.name ? `, ${admin.name}` : ""},</p>
                    <p>O sincronizador SEFAZ atingiu o limite de requisições (<strong>cStat=656</strong>) para o CNPJ <strong>${cnpjFmt}</strong>.</p>
                    <p>O sistema retomará automaticamente em aproximadamente 1 hora. Nenhuma ação é necessária.</p>
-                   <p style="color:#9ca3af;font-size:12px">ERP FC Engenharia · NF-e Recebidas · ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}</p>`,
+                   <p style="color:#9ca3af;font-size:12px">ERP Gestão Integrada · NF-e Recebidas · ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}</p>`,
           }).catch(() => { /* não bloquear o sync por falha no envio */ });
         }
       } catch { /* não bloquear o sync por falha na consulta */ }

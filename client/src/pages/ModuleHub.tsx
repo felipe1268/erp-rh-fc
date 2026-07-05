@@ -690,7 +690,7 @@ export default function ModuleHub() {
               <div className="hub-robot-float">
                 <img
                   src={ROBOT_IMG}
-                  alt="Assistente IA FC Engenharia"
+                  alt="Assistente IA ERP Gestão Integrada"
                   className="w-full h-auto object-contain drop-shadow-2xl"
                   style={{
                     filter: "drop-shadow(0 20px 40px rgba(27,42,74,0.15))",

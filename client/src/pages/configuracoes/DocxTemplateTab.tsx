@@ -283,7 +283,7 @@ export default function DocxTemplateTab({ userName }: Props) {
               <div className="flex gap-2 text-gray-600"><span>☑</span><span>Extratos_Bancarios/ → Extratos</span></div>
             </div>
             <div className="px-4 py-1.5 text-[10px] text-gray-400 border-t border-gray-100 bg-gray-50 flex justify-between">
-              <span>Gerado automaticamente pelo ERP FC Engenharia</span>
+              <span>Gerado automaticamente pelo ERP Gestão Integrada</span>
               <span>Pág. 1 / 1</span>
             </div>
           </div>

@@ -52,7 +52,7 @@ td{font-size:13px}.footer{margin-top:32px;font-size:12px;color:#6b7280;border-to
 <table><thead><tr>
   <th>Documento</th><th style="text-align:center;width:100px">Qtd.</th><th style="text-align:center;width:120px">Status</th>
 </tr></thead><tbody>${rows}</tbody></table>
-<p style="margin-top:16px;font-size:13px">Os documentos acima foram gerados pelo ERP FC Engenharia e enviados eletronicamente ao escritorio de contabilidade Pronus Tributario para apuracao fiscal do periodo ${mesAno}.</p>
+<p style="margin-top:16px;font-size:13px">Os documentos acima foram gerados pelo ERP Gestão Integrada e enviados eletronicamente ao escritorio de contabilidade Pronus Tributario para apuracao fiscal do periodo ${mesAno}.</p>
 <div class="footer">Este protocolo foi assinado digitalmente como confirmacao de entrega e recebimento dos documentos listados acima.</div>
 </body></html>`;
 }
@@ -608,10 +608,10 @@ td{padding:8px 10px;border-top:1px solid #f3f4f6}
     </ul>
     <p style="font-size:12px;color:#6b7280;margin-top:24px">
       Para dúvidas ou informações adicionais, entre em contato conosco.<br>
-      <em>— Sistema ERP FC Engenharia</em>
+      <em>— Sistema ERP Gestão Integrada</em>
     </p>
   </div>
-  <div class="footer">Este e-mail foi gerado automaticamente pelo ERP FC Engenharia.</div>
+  <div class="footer">Este e-mail foi gerado automaticamente pelo ERP Gestão Integrada.</div>
 </div>
 </body></html>`;
 

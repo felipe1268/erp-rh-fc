@@ -2694,7 +2694,7 @@ function VisaoGeral({ proj, atividades, avancos, avancoAtual, avancoPrevistoDia,
 
             {/* Rodapé de impressão */}
             <div className="hidden print:block mt-8 pt-4 border-t border-slate-200 text-[10px] text-slate-400 text-center">
-              {selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || ""} · Relatório gerado pelo sistema ERP FC Engenharia
+              {selectedCompany?.nomeFantasia || selectedCompany?.razaoSocial || ""} · Relatório gerado pelo ERP Gestão Integrada
             </div>
           </div>
         </div>

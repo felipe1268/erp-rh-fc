@@ -142,7 +142,7 @@ Estou ciente de que o uso do EPI é obrigatório conforme a NR-6 e que o descump
 
       y += 30;
       doc.fontSize(7).fillColor('#999999')
-        .text(`Documento gerado automaticamente pelo sistema FC Engenharia — ID #${data.deliveryId} — ${new Date().toLocaleString('pt-BR')}`, 50, y, { width: pageWidth - 20, align: 'center' });
+        .text(`Documento gerado automaticamente pelo ERP Gestão Integrada — ID #${data.deliveryId} — ${new Date().toLocaleString('pt-BR')}`, 50, y, { width: pageWidth - 20, align: 'center' });
 
       doc.end();
     } catch (err) {

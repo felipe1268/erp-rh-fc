@@ -82,7 +82,7 @@ export default function ContratarPlano() {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-orange-500 mb-4">
             <Building2 className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-white">Contrate o ERP FC Engenharia</h1>
+          <h1 className="text-2xl font-bold text-white">Contrate o ERP Gestão Integrada</h1>
           <p className="text-blue-200 mt-1">3 dias grátis, sem compromisso. Cancele quando quiser.</p>
         </div>
 

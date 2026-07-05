@@ -955,7 +955,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
       html += `</tbody></table>`;
     }
     html += `</div>`;
-    html += `<div class="footer"><span>ERP FC Engenharia — Gestão SST</span><span>LGPD: Dados protegidos pela Lei 13.709/2018</span><span>${dataEmissao}</span></div></body></html>`;
+    html += `<div class="footer"><span>ERP Gestão Integrada — Gestão SST</span><span>LGPD: Dados protegidos pela Lei 13.709/2018</span><span>${dataEmissao}</span></div></body></html>`;
     printWindow.document.write(html);
     printWindow.document.close();
     setTimeout(() => printWindow.print(), 600);
@@ -1033,7 +1033,7 @@ const diasMap: Record<string, string> = { seg: 'Segunda', ter: 'Terça', qua: 'Q
       });
     }
 
-    html += `<div class="footer"><span>ERP FC Engenharia — Avaliação do Cliente</span><span>LGPD: Dados protegidos pela Lei 13.709/2018</span><span>${esc(dataEmissao)}</span></div></body></html>`;
+    html += `<div class="footer"><span>ERP Gestão Integrada — Avaliação do Cliente</span><span>LGPD: Dados protegidos pela Lei 13.709/2018</span><span>${esc(dataEmissao)}</span></div></body></html>`;
     printWindow.document.write(html);
     printWindow.document.close();
     setTimeout(() => printWindow.print(), 600);

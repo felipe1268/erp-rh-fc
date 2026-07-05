@@ -517,9 +517,9 @@ export async function verificarEnvioAutomaticoContabilidade(): Promise<void> {
   <div class="body">
     <p>Prezados,</p>
     <p>Segue em anexo o <strong>Extrato Bancário (${mesLabel}/${anoAnt})</strong> enviado automaticamente no prazo <strong>${tipoPrazo} (dia ${eDiaFiscal ? diaFiscal : diaContabil})</strong>.</p>
-    <p style="font-size:12px;color:#6b7280;margin-top:24px"><em>— ERP FC Engenharia (envio automático)</em></p>
+    <p style="font-size:12px;color:#6b7280;margin-top:24px"><em>— ERP Gestão Integrada (envio automático)</em></p>
   </div>
-  <div class="footer">Este e-mail foi gerado automaticamente pelo ERP FC Engenharia. Para cancelar o envio automático, acesse Configurações → Notificações Contabilidade.</div>
+  <div class="footer">Este e-mail foi gerado automaticamente pelo ERP Gestão Integrada. Para cancelar o envio automático, acesse Configurações → Notificações Contabilidade.</div>
 </div></body></html>`;
 
       // Enviar para todos os destinatários

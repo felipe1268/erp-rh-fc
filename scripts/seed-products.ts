@@ -54,7 +54,7 @@ async function findOrCreatePrice(params: {
 }
 
 async function main() {
-  console.log('Semeando produtos/preços de billing no Stripe (SaaS ERP FC Engenharia)...\n');
+  console.log('Semeando produtos/preços de billing no Stripe (SaaS ERP Gestão Integrada)...\n');
   const created: Record<string, string> = {};
 
   for (const mod of BILLING_MODULES) {

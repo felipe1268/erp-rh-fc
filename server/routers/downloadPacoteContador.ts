@@ -700,7 +700,7 @@ function buildNfseHtml(n: any, tipo: "emitida" | "tomada", empresa: string): Buf
   <div class="ret">${retencoes}</div>
 </div>
 <p style="font-size:11px;color:#aaa;text-align:center;margin-top:32px">
-  Documento gerado pelo ERP FC Engenharia em ${new Date().toLocaleString("pt-BR")} · Para impressão em PDF, use Ctrl+P → Salvar como PDF
+  Documento gerado pelo ERP Gestão Integrada em ${new Date().toLocaleString("pt-BR")} · Para impressão em PDF, use Ctrl+P → Salvar como PDF
 </p>
 </body></html>`;
   return Buffer.from(html, "utf8");
@@ -972,7 +972,7 @@ async function buildChecklistDocx(label: string, empresa: string, d: ReturnType<
 
   // ── Documento ─────────────────────────────────────────────────────────────
   const doc = new Document({
-    creator: "ERP FC Engenharia",
+    creator: "ERP Gestão Integrada",
     title:   `Checklist Contabilidade — ${label}`,
     sections: [{
       properties: {
@@ -1001,7 +1001,7 @@ async function buildChecklistDocx(label: string, empresa: string, d: ReturnType<
             border: { top: { style: BorderStyle.SINGLE, size: 4, color: "D0D5DD", space: 4 } },
             spacing: { before: 80, after: 0 },
             children: [
-              new TextRun({ text: `Gerado pelo ERP FC Engenharia  ·  ${geradoEm}  ·  Pág. `, size: 16, font: FONTE, color: "94A3B8" }),
+              new TextRun({ text: `Gerado pelo ERP Gestão Integrada  ·  ${geradoEm}  ·  Pág. `, size: 16, font: FONTE, color: "94A3B8" }),
               new TextRun({ children: [PageNumber.CURRENT], size: 16, font: FONTE, color: "94A3B8" }),
               new TextRun({ text: " / ", size: 16, font: FONTE, color: "94A3B8" }),
               new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 16, font: FONTE, color: "94A3B8" }),

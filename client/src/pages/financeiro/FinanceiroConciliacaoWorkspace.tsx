@@ -407,7 +407,7 @@ export default function FinanceiroConciliacaoWorkspace() {
   <tbody>${rowsLanc}</tbody>
   <tfoot><tr><td colspan="3">Total</td><td class="r">${esc(formatBRL(tLanc))}</td></tr></tfoot></table>
 
-  <div class="foot">Documento gerado automaticamente pelo ERP FC Engenharia — Conciliação Bancária.</div>
+  <div class="foot">Documento gerado automaticamente pelo ERP Gestão Integrada — Conciliação Bancária.</div>
 </body></html>`;
     const w = window.open("", "_blank");
     if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 600); }

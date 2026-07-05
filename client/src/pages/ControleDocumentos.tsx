@@ -1167,7 +1167,7 @@ function MapeamentoPanel({ companyId, companyIds, onClickEmployee, empresaNome }
         <thead><tr><th style="width:28px">#</th><th>Colaborador</th><th>CPF</th><th>Função</th><th>Obra</th><th style="width:120px">Situação</th><th style="width:80px">Último ASO</th></tr></thead>
         <tbody>${linhas || `<tr><td colspan="7" style="text-align:center;padding:18px">Nenhum colaborador pendente para este exame.</td></tr>`}</tbody>
       </table>
-      <div class="footer"><span>ERP FC Engenharia — Controle de Documentos / Mapeamento de Exames</span><span class="lgpd">LGPD (Lei 13.709/2018) — Uso restrito e confidencial.</span></div>
+      <div class="footer"><span>ERP Gestão Integrada — Controle de Documentos / Mapeamento de Exames</span><span class="lgpd">LGPD (Lei 13.709/2018) — Uso restrito e confidencial.</span></div>
       </body></html>`;
     const w = window.open("", "_blank");
     if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 500); }

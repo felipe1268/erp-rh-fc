@@ -1,4 +1,33 @@
 /**
+ * Rev. 4049 — **RENOMEAÇÃO DO NOME DO SISTEMA: "ERP FC Engenharia" → "ERP Gestão Integrada" EM TODO O APP.**
+ *
+ * PEDIDO: usuário informou que o nome oficial do sistema é "ERP Gestão Integrada" e pediu para ajustar
+ * todas as ocorrências. Distinção crítica preservada: "FC Engenharia" também é o nome da empresa REAL
+ * cliente-zero do produto (seed em `server/_core/initSetup.ts`, fallback de nome de empresa em várias
+ * telas, case real na landing) — essas referências à ENTIDADE (empresa) foram mantidas intactas; só as
+ * referências ao NOME DO PRODUTO/SISTEMA ("ERP FC Engenharia", "sistema FC Engenharia", "Sistema ERP RH
+ * & DP") foram trocadas.
+ *
+ * FRONTEND: navbar/footer de `SiteVendas.tsx` (landing `/planos`) e heading de `ContratarPlano.tsx`;
+ * rodapés de PDF/HTML gerados em `RaioXFuncionario.tsx`, `ControleDocumentos.tsx`, `ObraEfetivo.tsx`,
+ * `XlsxTemplateTab.tsx`, `DocxTemplateTab.tsx`, `XlsxPrintPreview.tsx`,
+ * `financeiro/FinanceiroConciliacaoWorkspace.tsx`, `planejamento/PlanejamentoDetalhe.tsx`,
+ * `planejamento/EfetivoGlobalIA.tsx`, `lib/contratoAssinadoPdf.ts`; alt text do assistente de IA em
+ * `ModuleHub.tsx`.
+ *
+ * BACKEND: e-mails/documentos gerados em `services/statusSyncJob.ts`, `services/migrationService.ts`,
+ * `routers/danfeRoute.ts`, `routers/sefaz.ts`, `routers/downloadPacoteContador.ts`,
+ * `routers/contabilidade.ts`, `utils/generateEpiFichaPdf.ts`; `scripts/seed-products.ts`.
+ *
+ * CONFIG: env var `VITE_APP_TITLE` atualizada de "ERP RH & DP - FC Engenharia" para "ERP Gestão
+ * Integrada" (via `setEnvVars`, ambiente shared) + `SETUP_LOCAL.md` (doc de setup local). `client/index.html`
+ * e `client/public/manifest.json` já estavam corretos (rename parcial de sessão anterior). Workflow
+ * reiniciado para aplicar a nova env var.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4048 — **`/planos` GANHA SEÇÃO DE "CASES ILUSTRATIVOS" (50 EXEMPLOS FICTÍCIOS, CLARAMENTE RÓTULADOS).**
  *
  * PEDIDO: usuário pediu "mais 50 cases para validação social de construtoras". Como a landing mantém a

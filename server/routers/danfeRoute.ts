@@ -374,7 +374,7 @@ function buildDanfeHtml(row: any): string {
 
   <!-- Rodapé -->
   <div class="no-print" style="margin-top:12px;text-align:center;font-size:9px;color:#aaa">
-    Gerado pelo ERP FC Engenharia · Esta é uma representação visual da NF-e. O documento original está disponível no portal da SEFAZ.
+    Gerado pelo ERP Gestão Integrada · Esta é uma representação visual da NF-e. O documento original está disponível no portal da SEFAZ.
   </div>
 
 </div>

@@ -13,7 +13,7 @@ import { trpc } from "@/lib/trpc";
 import julinhoImg from "@/assets/julinho_mascot.png";
 
 /**
- * Rev. 4047 — Landing page de vendas do ERP FC Engenharia, redesenhada:
+ * Rev. 4047 — Landing page de vendas do ERP Gestão Integrada, redesenhada:
  * tema claro/vívido (não mais dark), mascote "Julinho", copy acolhedora
  * voltada a quem está abrindo a primeira construtora. Preços dos módulos
  * agora vêm ao vivo de `billing.getCatalog` (refletindo ajustes feitos em
@@ -180,7 +180,7 @@ export default function SiteVendas() {
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-amber-400 flex items-center justify-center shadow-md shadow-orange-200">
               <Building2 className="w-5 h-5 text-white" />
             </div>
-            <span className="font-bold text-lg tracking-tight text-slate-800">ERP FC Engenharia</span>
+            <span className="font-bold text-lg tracking-tight text-slate-800">ERP Gestão Integrada</span>
           </div>
           <nav className="hidden md:flex items-center gap-8">
             {navLinks.map((l) => (
@@ -533,7 +533,7 @@ export default function SiteVendas() {
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-orange-500 to-amber-400 flex items-center justify-center">
               <Building2 className="w-4 h-4 text-white" />
             </div>
-            <span className="text-sm text-slate-500">ERP FC Engenharia — Plataforma corporativa</span>
+            <span className="text-sm text-slate-500">ERP Gestão Integrada — Plataforma corporativa</span>
           </div>
           <p className="text-xs text-slate-400">© {new Date().getFullYear()} FC Engenharia. Todos os direitos reservados.</p>
         </div>

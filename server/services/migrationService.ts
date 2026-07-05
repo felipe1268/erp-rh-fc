@@ -216,7 +216,7 @@ export async function exportDatabase(
   const meta = {
     version: "2.0.0",
     exportedAt: new Date().toISOString(),
-    platform: "ERP FC Engenharia (PostgreSQL/Neon)",
+    platform: "ERP Gestão Integrada (PostgreSQL/Neon)",
     totalTables: allTables.length,
     totalRecords,
     totalFiles: fileUrls.length,
@@ -229,7 +229,7 @@ export async function exportDatabase(
 // ============================================================
 // README DE MIGRAÇÃO
 // ============================================================
-const MIGRATION_README = `# Guia de Migração — ERP FC Engenharia
+const MIGRATION_README = `# Guia de Migração — ERP Gestão Integrada
 
 Este pacote contém **100% dos dados, arquivos e código** do ERP para você rodar
 em qualquer plataforma (Railway, Render, Fly.io, VPS própria, etc.) com total

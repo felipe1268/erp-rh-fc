@@ -11,7 +11,7 @@ channel = "stable-25_05"
 [userenv.shared]
 PORT = "5000"
 JWT_SECRET = "replit-dev-jwt-secret-change-in-production"
-VITE_APP_TITLE = "ERP RH & DP - FC Engenharia"
+VITE_APP_TITLE = "ERP Gestão Integrada"
 VITE_APP_LOGO = "/fc-logo.png"
 NODE_ENV = "development"
 OAUTH_SERVER_URL = "https://forge.manus.ai"

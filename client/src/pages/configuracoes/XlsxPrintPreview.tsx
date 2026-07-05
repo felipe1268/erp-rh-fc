@@ -687,7 +687,7 @@ export default function XlsxPrintPreview({
                             fontStyle: "italic",
                           }}
                         >
-                          ERP FC Engenharia · Gerado em {todayBR()} · {mesAnoBR()} · Dados fictícios para visualização
+                          ERP Gestão Integrada · Gerado em {todayBR()} · {mesAnoBR()} · Dados fictícios para visualização
                         </td>
                       </tr>
                     </tbody>

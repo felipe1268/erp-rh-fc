@@ -1730,7 +1730,7 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
                 <table><thead><tr><th>#</th><th>Funcionário</th><th>Função na Obra</th><th>Status</th><th>Info Status</th><th>Desde</th></tr></thead><tbody>
                 ${rows.map((r: any, i: number) => `<tr style="background:${rowBg[r.status] || (i % 2 === 0 ? '#fff' : '#f8f9fa')}"><td>${i + 1}</td><td>${r.nome}</td><td>${r.funcao}</td><td><span class="status" style="background:${statusBg[r.status] || '#f8f9fa'};color:${statusFg[r.status] || '#333'}">${statusLabels[r.status] || r.status}</span></td><td>${r.infoStatus ? `<span class="info-status" style="background:${statusBg[r.status] || '#f8f9fa'};color:${statusFg[r.status] || '#333'}">${r.infoStatus}</span>` : '—'}</td><td>${r.desde}</td></tr>`).join("")}
                 </tbody></table>
-                <div class="footer">FC Engenharia — Sistema ERP RH & DP — Documento gerado automaticamente</div>
+                <div class="footer">ERP Gestão Integrada — Documento gerado automaticamente</div>
               </body></html>`;
               const w = window.open("", "_blank");
               if (w) { w.document.write(printHtml); w.document.close(); w.focus(); setTimeout(() => w.print(), 300); }
@@ -1780,7 +1780,7 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
                 <table><thead><tr><th>#</th><th>Funcionário</th><th>Função na Obra</th><th>Status</th><th>Info Status</th><th>Desde</th></tr></thead><tbody>
                 ${rows.map((r: any, i: number) => `<tr style="background:${rowBg[r.status] || (i % 2 === 0 ? '#fff' : '#f8f9fa')}"><td>${i + 1}</td><td>${r.nome}</td><td>${r.funcao}</td><td><span class="status" style="background:${statusBg[r.status] || '#f8f9fa'};color:${statusFg[r.status] || '#333'}">${statusLabels[r.status] || r.status}</span></td><td>${r.infoStatus ? `<span class="info-status" style="background:${statusBg[r.status] || '#f8f9fa'};color:${statusFg[r.status] || '#333'}">${r.infoStatus}</span>` : '—'}</td><td>${r.desde}</td></tr>`).join("")}
                 </tbody></table>
-                <div class="footer">FC Engenharia — Sistema ERP RH & DP — Documento gerado automaticamente</div>
+                <div class="footer">ERP Gestão Integrada — Documento gerado automaticamente</div>
               </body></html>`;
               setTimeout(() => {
                 const w = window.open("", "_blank");

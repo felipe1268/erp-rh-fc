@@ -52,7 +52,7 @@ VITE_FRONTEND_FORGE_API_KEY=chave_frontend
 VITE_FRONTEND_FORGE_API_URL=url_frontend
 
 # Título e Logo
-VITE_APP_TITLE=ERP RH & DP - FC Engenharia
+VITE_APP_TITLE=ERP Gestão Integrada
 VITE_APP_LOGO=/fc-logo.png
 ```
 

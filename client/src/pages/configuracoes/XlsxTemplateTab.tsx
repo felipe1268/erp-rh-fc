@@ -549,7 +549,7 @@ export default function XlsxTemplateTab({ userName }: Props) {
                     colSpan={PREVIEW_COLS.length}
                     className="px-3 py-1.5 text-[10px] text-gray-400 border border-gray-200 bg-gray-50 text-right"
                   >
-                    Gerado em {todayBR()} · ERP FC Engenharia
+                    Gerado em {todayBR()} · ERP Gestão Integrada
                   </td>
                 </tr>
               </tbody>
@@ -677,7 +677,7 @@ export default function XlsxTemplateTab({ userName }: Props) {
                             colSpan={r.cols.length}
                             className="px-3 py-1 text-[9px] text-gray-400 border border-gray-200 bg-gray-50 text-right"
                           >
-                            Dados fictícios para visualização · ERP FC Engenharia · {todayBR()}
+                            Dados fictícios para visualização · ERP Gestão Integrada · {todayBR()}
                           </td>
                         </tr>
                       </tfoot>

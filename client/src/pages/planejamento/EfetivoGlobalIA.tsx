@@ -345,7 +345,7 @@ export default function EfetivoGlobalIA({ companyId }: Props) {
       html += `<div class="section"><div class="section-title">Obras fora da análise (${esc(obrasIgnoradas.length)})</div><ul class="bul">${obrasIgnoradas.map((o: any) => `<li>${esc(norm(o.obra))} — <span class="muted">${esc(norm(o.motivo))}</span></li>`).join("")}</ul></div>`;
     }
 
-    html += `<div class="footer"><span>ERP FC Engenharia — Planejamento de Mão de Obra (gerado por IA · revisão humana recomendada)</span><span>${esc(dataEmissao)}</span></div>`;
+    html += `<div class="footer"><span>ERP Gestão Integrada — Planejamento de Mão de Obra (gerado por IA · revisão humana recomendada)</span><span>${esc(dataEmissao)}</span></div>`;
     html += `</body></html>`;
     w.document.write(html);
     w.document.close();
