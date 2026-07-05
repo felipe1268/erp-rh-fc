@@ -175,6 +175,21 @@ function crudRouter(opts: {
   });
 }
 
+// Rev. 4041 — "Adm Cliente" (role adm_cliente): admin restrito às SUAS empresas
+// vinculadas (companyIds via user_companies), sem acesso global (diferente de
+// admin/admin_master). Só gerencia usuários "user" dentro do próprio escopo;
+// não promove ninguém a admin/admin_master/adm_cliente e não gerencia módulos.
+async function assertAdmClienteTargetScope(callerId: number, targetUserId: number): Promise<number[]> {
+  const callerCompanies = (await getCompaniesForUser(callerId, "adm_cliente")).map((c: any) => Number(c.id));
+  const targetLinks = await getUserCompanyLinks(targetUserId);
+  const targetCompanyIds = targetLinks.map((l: any) => Number(l.companyId));
+  const overlap = targetCompanyIds.some((id: number) => callerCompanies.includes(id));
+  if (!overlap) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Usuário fora do escopo das suas empresas" });
+  }
+  return callerCompanies;
+}
+
 export const appRouter = router({
   system: systemRouter,
   docs: controleDocumentosRouter,
@@ -2519,7 +2534,14 @@ export const appRouter = router({
   // LOGIN COM SENHA & GERENCIAMENTO DE USUÁRIOS
   // ============================================================
   userManagement: router({
-    listUsers: protectedProcedure.query(async () => {
+    listUsers: protectedProcedure.query(async ({ ctx }) => {
+      // Rev. 4041 — gate: só admin/admin_master/adm_cliente podem listar usuários
+      // (endpoint não tinha NENHUM check — qualquer usuário logado via API direta
+      // conseguia listar nome/email/role/empresas de TODOS os usuários do sistema).
+      const role = ctx.user.role;
+      if (role !== "admin" && role !== "admin_master" && role !== "adm_cliente") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para listar usuários" });
+      }
       const allUsers = await getAllUsers();
       const usersWithCompanies = await Promise.all(allUsers.map(async (u: any) => {
         const links = await getUserCompanyLinks(u.id);
@@ -2527,6 +2549,11 @@ export const appRouter = router({
         try { if (u.allowedObraIds) parsedObras = JSON.parse(u.allowedObraIds); } catch {}
         return { ...u, password: undefined, companyIds: links.map((l: any) => l.companyId), allowedObraIds: parsedObras };
       }));
+      // Adm Cliente enxerga só usuários vinculados às SUAS empresas (isolamento cross-tenant).
+      if (role === "adm_cliente") {
+        const callerCompanyIds = new Set((await getCompaniesForUser(ctx.user.id, role)).map((c: any) => Number(c.id)));
+        return usersWithCompanies.filter((u: any) => (u.companyIds || []).some((cid: number) => callerCompanyIds.has(Number(cid))));
+      }
       return usersWithCompanies;
     }),
     // Listar vínculos de empresa de um usuário
@@ -2539,8 +2566,15 @@ export const appRouter = router({
       userId: z.number(),
       companyIds: z.array(z.number()),
     })).mutation(async ({ input, ctx }) => {
-      if (ctx.user.role !== 'admin' && ctx.user.role !== 'admin_master') {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'admin_master' && ctx.user.role !== 'adm_cliente') {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas admin pode gerenciar acesso a empresas' });
+      }
+      if (ctx.user.role === 'adm_cliente') {
+        const callerCompanies = await assertAdmClienteTargetScope(ctx.user.id, input.userId);
+        // Adm Cliente não pode conceder acesso a empresas fora do seu próprio escopo.
+        if (input.companyIds.some(id => !callerCompanies.includes(Number(id)))) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Você só pode conceder acesso às suas próprias empresas' });
+        }
       }
       await setUserCompanies(input.userId, input.companyIds);
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'UPDATE', module: 'usuarios', entityType: 'user_companies', entityId: input.userId, details: `Empresas do usuário atualizadas: [${input.companyIds.join(', ')}]` });
@@ -2550,8 +2584,11 @@ export const appRouter = router({
       userId: z.number(),
       obraIds: z.array(z.number()),
     })).mutation(async ({ input, ctx }) => {
-      if (ctx.user.role !== 'admin' && ctx.user.role !== 'admin_master') {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'admin_master' && ctx.user.role !== 'adm_cliente') {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas admin pode gerenciar acesso a obras' });
+      }
+      if (ctx.user.role === 'adm_cliente') {
+        await assertAdmClienteTargetScope(ctx.user.id, input.userId);
       }
       const db = await getDb();
       await db.execute(sql`UPDATE users SET allowed_obra_ids = ${JSON.stringify(input.obraIds)} WHERE id = ${input.userId}`);
@@ -2606,7 +2643,7 @@ export const appRouter = router({
     getMyPermissions: protectedProcedure.query(async ({ ctx }) => {
       // Admin Master tem acesso total (allowedObraIds = null => sem restrição)
       if (ctx.user.role === 'admin_master') {
-        return { isAdminMaster: true, isAdmin: false, permissions: [], groupPermissions: null, moduleAccess: {} as Record<string, string>, allowedObraIds: null as number[] | null };
+        return { isAdminMaster: true, isAdmin: false, isAdmCliente: false, permissions: [], groupPermissions: null, moduleAccess: {} as Record<string, string>, allowedObraIds: null as number[] | null };
       }
       const perms = await getUserPermissions(ctx.user.id);
       // Obras liberadas (helper centralizado): null => sem restrição (role=admin); array => obras permitidas (vazio = nenhuma).
@@ -2650,6 +2687,7 @@ export const appRouter = router({
       return {
         isAdminMaster: false,
         isAdmin: ctx.user.role === 'admin',
+        isAdmCliente: ctx.user.role === 'adm_cliente',
         moduleAccess,
         allowedObraIds,
         permissions: perms.map((p: any) => ({ moduleId: p.moduleId, featureKey: p.featureKey, canAccess: !!p.canAccess })),
@@ -2673,10 +2711,38 @@ export const appRouter = router({
       username: z.string().min(3),
       name: z.string().min(1),
       email: z.string().email().optional(),
-      role: z.enum(["user", "admin", "admin_master"]).default("user"),
+      role: z.enum(["user", "admin", "admin_master", "adm_cliente"]).default("user"),
       password: z.string().optional(),
       companyIds: z.array(z.number()).optional(),
-    })).mutation(async ({ input }) => {
+    })).mutation(async ({ input, ctx }) => {
+      // Rev. 4041 — CRÍTICO: endpoint não tinha NENHUM check de role — qualquer
+      // usuário autenticado (mesmo role "user") conseguia criar uma conta
+      // admin_master via chamada direta da API (escalonamento de privilégio).
+      const callerRole = ctx.user.role;
+      if (callerRole !== "admin" && callerRole !== "admin_master" && callerRole !== "adm_cliente") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para criar usuários" });
+      }
+      if (input.role === "admin_master" && callerRole !== "admin_master") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode criar outro Admin Master" });
+      }
+      if (input.role === "adm_cliente" && callerRole !== "admin_master" && callerRole !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode criar um Adm Cliente" });
+      }
+      let companyIds = input.companyIds;
+      if (callerRole === "adm_cliente") {
+        // Adm Cliente só cria usuários comuns, restritos às SUAS próprias empresas.
+        if (input.role !== "user") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Adm Cliente só pode criar usuários com perfil Usuário" });
+        }
+        const callerCompanies = (await getCompaniesForUser(ctx.user.id, callerRole)).map((c: any) => Number(c.id));
+        if (companyIds && companyIds.length > 0) {
+          if (companyIds.some(id => !callerCompanies.includes(Number(id)))) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode vincular usuários às suas próprias empresas" });
+          }
+        } else {
+          companyIds = callerCompanies;
+        }
+      }
       const bcrypt = await import("bcryptjs");
       const { getDb } = await import("./db");
       const db = await getDb();
@@ -2695,9 +2761,10 @@ export const appRouter = router({
       }).returning();
       const newUserId = Number(result[0].id);
       // Se companyIds foram passados, vincular o usuário às empresas
-      if (input.companyIds && input.companyIds.length > 0) {
-        await setUserCompanies(newUserId, input.companyIds);
+      if (companyIds && companyIds.length > 0) {
+        await setUserCompanies(newUserId, companyIds);
       }
+      await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? 'Sistema', action: 'CREATE', module: 'usuarios', entityType: 'user', entityId: newUserId, details: `Usuário criado: ${input.username} (perfil: ${input.role})` });
       return { id: newUserId, username: input.username, defaultPassword: defaultPwd };
     }),
     loginLocal: publicProcedure.input(z.object({
@@ -2790,7 +2857,17 @@ export const appRouter = router({
     resetPassword: protectedProcedure.input(z.object({
       userId: z.number(),
     })).mutation(async ({ input, ctx }) => {
-      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode resetar senhas" });
+      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master" && ctx.user.role !== "adm_cliente") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode resetar senhas" });
+      if (ctx.user.role === "adm_cliente") {
+        const { getDb: getDbScope } = await import("./db");
+        const dbScope = await getDbScope();
+        if (!dbScope) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+        const { users: usersScope } = await import("../drizzle/schema");
+        const { eq: eqScope } = await import("drizzle-orm");
+        const [alvo] = await dbScope.select().from(usersScope).where(eqScope(usersScope.id, input.userId));
+        if (!alvo || alvo.role !== "user") throw new TRPCError({ code: "FORBIDDEN", message: "Adm Cliente só pode resetar senha de usuários comuns" });
+        await assertAdmClienteTargetScope(ctx.user.id, input.userId);
+      }
       const bcrypt = await import("bcryptjs");
       const { getDb } = await import("./db");
       const db = await getDb();
@@ -2804,7 +2881,7 @@ export const appRouter = router({
     }),
     updateRole: protectedProcedure.input(z.object({
       userId: z.number(),
-      role: z.enum(["user", "admin", "admin_master"]),
+      role: z.enum(["user", "admin", "admin_master", "adm_cliente"]),
     })).mutation(async ({ input, ctx }) => {
       if (ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode alterar perfis" });
       if (input.userId === ctx.user.id) throw new TRPCError({ code: "BAD_REQUEST", message: "Você não pode alterar seu próprio perfil" });
@@ -2823,31 +2900,39 @@ export const appRouter = router({
       email: z.string().email().optional(),
       username: z.string().min(3).optional(),
       newPassword: z.string().min(6).optional(),
-      role: z.enum(["admin", "user", "admin_master"]).optional(),
+      role: z.enum(["admin", "user", "admin_master", "adm_cliente"]).optional(),
     })).mutation(async ({ input, ctx }) => {
-      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode editar usuários" });
+      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master" && ctx.user.role !== "adm_cliente") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode editar usuários" });
       const { getDb } = await import("./db");
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
       const { users } = await import("../drizzle/schema");
       const { eq } = await import("drizzle-orm");
+      if (ctx.user.role === "adm_cliente") {
+        const [alvo] = await db.select().from(users).where(eq(users.id, input.userId));
+        if (!alvo || alvo.role !== "user") throw new TRPCError({ code: "FORBIDDEN", message: "Adm Cliente só pode editar usuários comuns" });
+        await assertAdmClienteTargetScope(ctx.user.id, input.userId);
+        if (input.role && input.role !== "user") throw new TRPCError({ code: "FORBIDDEN", message: "Adm Cliente não pode alterar perfis" });
+      }
       const updateData: any = {};
       if (input.name) updateData.name = input.name;
       if (input.email) updateData.email = input.email;
       if (input.username) updateData.username = input.username;
       if (input.role) {
-        // Admin Master pode definir qualquer perfil; Admin pode definir user ou admin (não admin_master)
+        // Admin Master pode definir qualquer perfil; Admin pode definir user, admin ou adm_cliente (não admin_master)
         if (ctx.user.role === "admin_master") {
           updateData.role = input.role;
         } else if (ctx.user.role === "admin") {
           if (input.role === "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode promover para Admin Master" });
           updateData.role = input.role;
+        } else if (ctx.user.role === "adm_cliente") {
+          updateData.role = input.role; // já validado acima que só pode ser "user"
         } else {
           throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para alterar perfil" });
         }
       }
       if (input.newPassword) {
-        if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode alterar senhas" });
+        if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master" && ctx.user.role !== "adm_cliente") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode alterar senhas" });
         const bcrypt = await import("bcryptjs");
         updateData.password = await bcrypt.hash(input.newPassword, 10);
       }
@@ -2864,7 +2949,7 @@ export const appRouter = router({
       userId: z.number(),
       status: z.enum(["ativo", "desligado"]),
     })).mutation(async ({ input, ctx }) => {
-      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode alterar o acesso de usuários" });
+      if (ctx.user.role !== "admin" && ctx.user.role !== "admin_master" && ctx.user.role !== "adm_cliente") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin pode alterar o acesso de usuários" });
       if (input.userId === ctx.user.id) throw new TRPCError({ code: "BAD_REQUEST", message: "Você não pode desativar o próprio acesso" });
       const { getDb } = await import("./db");
       const db = await getDb();
@@ -2875,6 +2960,10 @@ export const appRouter = router({
       if (!alvo) throw new TRPCError({ code: "NOT_FOUND", message: "Usuário não encontrado" });
       // Admin (não-master) não pode desativar um Admin Master.
       if (ctx.user.role === "admin" && alvo.role === "admin_master") throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode alterar o acesso de outro Admin Master" });
+      if (ctx.user.role === "adm_cliente") {
+        if (alvo.role !== "user") throw new TRPCError({ code: "FORBIDDEN", message: "Adm Cliente só pode alterar o acesso de usuários comuns" });
+        await assertAdmClienteTargetScope(ctx.user.id, input.userId);
+      }
       await db.update(users).set({ status: input.status } as any).where(eq(users.id, input.userId));
       await createAuditLog({ userId: ctx.user.id, userName: ctx.user.name ?? "Sistema", action: "UPDATE", module: "usuarios", entityType: "user", entityId: input.userId, details: `Acesso do usuário ${alvo.name || alvo.username || input.userId} alterado para: ${input.status}` });
       return { success: true };

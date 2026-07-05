@@ -63,10 +63,11 @@ function serializeGroupState(
   return JSON.stringify({ nome: nome || "", descricao: descricao || "", cor: cor || "#6b7280", moduleAccess: clean });
 }
 
-const ROLE_LABELS: Record<string, string> = { admin_master: "Admin Master", admin: "Admin", user: "Usuário" };
+const ROLE_LABELS: Record<string, string> = { admin_master: "Admin Master", admin: "Admin", adm_cliente: "Adm Cliente", user: "Usuário" };
 const ROLE_BADGE: Record<string, string> = {
   admin_master: "bg-purple-100 text-purple-700 border-purple-200",
   admin:        "bg-blue-100 text-blue-700 border-blue-200",
+  adm_cliente:  "bg-teal-100 text-teal-700 border-teal-200",
   user:         "bg-gray-100 text-gray-600 border-gray-200",
 };
 const ACTION_LABELS: Record<PageAction, string> = { view: "Ver", create: "Criar", edit: "Editar", delete: "Excluir" };
@@ -305,6 +306,10 @@ export default function Usuarios() {
   const { user } = useAuth();
   const isMaster = user?.role === "admin_master";
   const isAdmin  = user?.role === "admin" || isMaster;
+  // Rev. 4041 — "Adm Cliente": admin restrito às SUAS empresas vinculadas,
+  // não gerencia perfis/módulos, só usuários "user" no próprio escopo.
+  const isAdmCliente = user?.role === "adm_cliente";
+  const canManageUsers = isAdmin || isAdmCliente;
 
   const [activeTab, setActiveTab] = useState<"usuarios" | "grupos">("usuarios");
 
@@ -373,7 +378,7 @@ export default function Usuarios() {
   const createUserMut = trpc.userManagement.createLocalUser.useMutation({
     onSuccess: async (d) => {
       toast.success(`Usuário "${d.username}" criado! Senha: ${d.defaultPassword}`);
-      if (newUser.groupIds.length > 0) {
+      if (!isAdmCliente && newUser.groupIds.length > 0) {
         await setGroupsMut.mutateAsync({ userId: d.id, groupIds: newUser.groupIds });
       }
       if (newUser.companyIds.length > 0) {
@@ -421,9 +426,12 @@ export default function Usuarios() {
 
   const handleSaveUser = async () => {
     if (!selectedUser) return;
-    await updateUserMut.mutateAsync({ userId: selectedUser.id, name: editName, email: editEmail||undefined, username: editUser, role: editRole as any, password: editPwd||undefined });
+    await updateUserMut.mutateAsync({ userId: selectedUser.id, name: editName, email: editEmail||undefined, username: editUser, role: (isAdmCliente ? "user" : editRole) as any, password: editPwd||undefined });
     await setCosMut.mutateAsync({ userId: selectedUser.id, companyIds: editCos });
-    await setGroupsMut.mutateAsync({ userId: selectedUser.id, groupIds: editGroupIds });
+    // Rev. 4041 — Adm Cliente não gerencia grupos de permissão (escopo de acesso amplo demais).
+    if (!isAdmCliente) {
+      await setGroupsMut.mutateAsync({ userId: selectedUser.id, groupIds: editGroupIds });
+    }
     await setObrasMut.mutateAsync({ userId: selectedUser.id, obraIds: editObras });
     utils.userGroups.list.invalidate();
   };
@@ -633,7 +641,7 @@ export default function Usuarios() {
                 <div className="p-3 border-b space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold flex items-center gap-1.5"><Users className="h-4 w-4 text-blue-600" /> Usuários</span>
-                    {isAdmin && (
+                    {canManageUsers && (
                       <Button size="sm" className="h-7 gap-1 bg-green-600 hover:bg-green-700 text-xs"
                         onClick={() => { setSelectedUser(null); setUPanel("new"); }}>
                         <UserPlus className="h-3 w-3" /> Novo
@@ -705,15 +713,18 @@ export default function Usuarios() {
                         <div><label className="text-xs text-muted-foreground">E-mail</label>
                           <Input value={newUser.email} onChange={e=>setNewUser(p=>({...p,email:e.target.value}))} placeholder="email@empresa.com" type="email" className="h-9 mt-1" /></div>
                         <div className="grid grid-cols-2 gap-3">
+                          {isAdmCliente ? null : (
                           <div><label className="text-xs text-muted-foreground">Perfil</label>
                             <Select value={newUser.role} onValueChange={v=>setNewUser(p=>({...p,role:v}))}>
                               <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="user">Usuário</SelectItem>
                                 <SelectItem value="admin">Admin</SelectItem>
+                                <SelectItem value="adm_cliente">Adm Cliente</SelectItem>
                                 {isMaster && <SelectItem value="admin_master">Admin Master</SelectItem>}
                               </SelectContent>
                             </Select></div>
+                          )}
                           <div><label className="text-xs text-muted-foreground">Senha (opcional)</label>
                             <Input value={newUser.password} onChange={e=>setNewUser(p=>({...p,password:e.target.value}))} placeholder="Padrão: asdf1020" type="password" className="h-9 mt-1" /></div>
                         </div>
@@ -792,7 +803,7 @@ export default function Usuarios() {
                             </div>
                           </div>
                           <div className="flex flex-col items-stretch gap-2 shrink-0 w-full sm:w-auto">
-                            {isAdmin && selectedUser.id !== user?.id && (
+                            {canManageUsers && selectedUser.id !== user?.id && (
                               <div className={`flex items-center justify-between gap-3 h-9 px-3 rounded-lg border ${selectedUser.status==="desligado" ? "bg-red-50 border-red-200" : "bg-green-50 border-green-200"}`}>
                                 <span className="flex items-center gap-1.5">
                                   <Lock className={`h-3.5 w-3.5 ${selectedUser.status==="desligado" ? "text-red-600" : "text-green-600"}`} />
@@ -809,7 +820,7 @@ export default function Usuarios() {
                               </div>
                             )}
                             <div className="flex gap-2">
-                              {isAdmin && selectedUser.id !== user?.id && (
+                              {canManageUsers && selectedUser.id !== user?.id && (
                                 <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs flex-1"
                                   onClick={()=>{ if(confirm(`Resetar senha de ${selectedUser.name}?`)) resetPwdMut.mutate({userId:selectedUser.id}); }}>
                                   <RefreshCw className="h-3 w-3" /> Resetar senha
@@ -840,6 +851,7 @@ export default function Usuarios() {
                                 <SelectContent>
                                   <SelectItem value="user">Usuário</SelectItem>
                                   <SelectItem value="admin">Admin</SelectItem>
+                                  <SelectItem value="adm_cliente">Adm Cliente</SelectItem>
                                   {isMaster && <SelectItem value="admin_master">Admin Master</SelectItem>}
                                 </SelectContent>
                               </Select></div>

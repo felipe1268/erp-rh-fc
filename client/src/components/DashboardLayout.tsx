@@ -1406,11 +1406,17 @@ function DashboardLayoutContent({
       sections = customSections;
     }
 
-    // Filter admin-only paths: only master user can see/access these
+    // Filter admin-only paths: only master user can see/access these.
+    // Exceção: "/usuarios" também é visível para admin e adm_cliente (Rev. 4041),
+    // o backend (userManagement router) escopa o que cada perfil pode fazer lá dentro.
+    const isAdmOrAdmCliente = user?.role === 'admin' || user?.role === 'adm_cliente';
     if (!isMasterUser) {
       sections = sections.map(s => ({
         ...s,
-        items: s.items.filter(item => !adminOnlyPaths.includes(item.path)),
+        items: s.items.filter(item => {
+          if (item.path === '/usuarios' && isAdmOrAdmCliente) return true;
+          return !adminOnlyPaths.includes(item.path);
+        }),
       }));
     }
     // Filter admin master only items

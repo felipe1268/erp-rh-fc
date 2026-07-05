@@ -1,4 +1,5 @@
 - [Dashboard period selector standard](dashboard-period-selector-standard.md) — seletor de mês/ano = white-card (PanoramaFiscal), NUNCA DashHeader gradiente. Regra de ouro do usuário.
+- [Unguarded tRPC endpoints](unguarded-trpc-endpoints.md) — frontend route gating ≠ backend authorization; verify role/tenant checks live IN the procedure, not just behind the UI route guard.
 - [Medição FD ↔ Compras link](medicao-fd-compras-link.md) — medicao_fd_registros.compraId (coluna já existia sem uso) é o ponto de integração p/ puxar valor de OC de Faturamento Direto (fd_cliente/fd_terceiro/fd_fc) direto pro boletim.
 - [Medição × Cronograma: casar por atividadeId, não EAP](medicao-cronograma-atividade-id-match.md) — eap_codigo do cronograma real vem vazio na maioria das atividades; use a PK atividade_id (1:1, sempre presente) pra casar avanço/medição, não código EAP nem descrição.
 - [Select popper overflow on mobile](select-popper-mobile-overflow.md) — Select popper sem max-width corta nome longo (obra/cliente) em telas estreitas; wrap por instância, não no ui/select.tsx global.

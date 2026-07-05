@@ -48,6 +48,50 @@
  */
 
 /**
+ * Rev. 4041 — **PROJETO SAAS: NOVO PERFIL "ADM CLIENTE" (ADMIN RESTRITO À(S) PRÓPRIA(S) EMPRESA(S)) + 2 VULNS CRÍTICAS DE `listUsers`/`createLocalUser` CORRIGIDAS.**
+ *
+ * PEDIDO: seguindo a Rev. 4040 (auditoria de isolamento cross-tenant), próximo passo da transformação
+ * em SaaS: um cliente que assina o produto precisa administrar SEUS PRÓPRIOS usuários (criar, editar,
+ * resetar senha, ativar/desativar) sem herdar acesso global — hoje só existiam `admin`/`admin_master`,
+ * ambos globais por design (Rev. 1696), o que abriria a porta pra um cliente enxergar dado de outro.
+ *
+ * DESCOBERTA GRAVE DURANTE A IMPLEMENTAÇÃO: ao mexer no `userManagement` router pra escopar o novo
+ * papel, ficou evidente que `listUsers` e `createLocalUser` NÃO TINHAM NENHUM CHECK DE ROLE — qualquer
+ * usuário autenticado (inclusive `role: "user"` comum) podia chamar `createLocalUser` e criar uma conta
+ * `admin_master` pra si mesmo (escalação de privilégio total), e `listUsers` vazava a lista de TODOS os
+ * usuários de TODAS as empresas pra qualquer chamador. Isso é pior que qualquer gap de IDOR da Rev.
+ * 4040 — não precisa nem adivinhar um ID, o endpoint simplesmente não checava nada. Corrigido nesta
+ * revisão como prioridade máxima, junto com o trabalho do Adm Cliente.
+ *
+ * SOLUÇÃO — backend (`server/routers.ts`): novo helper `assertAdmClienteTargetScope(callerId,
+ * targetUserId)` que resolve as empresas do chamador Adm Cliente e garante que o usuário-alvo pertence
+ * a alguma delas. `listUsers` fixado (retorna só usuários das empresas do chamador quando `adm_cliente`,
+ * comportamento antigo preservado pra admin/admin_master). `createLocalUser` fixado (vuln crítica): agora
+ * exige `role` do chamador — só `admin_master` pode criar `admin_master`; `adm_cliente` só pode criar
+ * `role: "user"` e só dentro das próprias empresas; qualquer outro papel chamador é bloqueado. Mesmo
+ * guard extendido a `setUserCompanies`, `setUserObras`, `resetPassword`, `updateUser`, `setUserStatus`.
+ * `setUserGroups` (router `userGroups`, permissões de grupo são amplas demais pro escopo do Adm Cliente)
+ * ficou deliberadamente fora do alcance do novo papel — o frontend pula essa chamada quando o ator é
+ * Adm Cliente. `getMyPermissions` ganhou a flag `isAdmCliente`. Os 3 `z.enum([...])` de role
+ * (createLocalUser/updateRole/updateUser) passaram a aceitar `"adm_cliente"`.
+ *
+ * SOLUÇÃO — frontend: `PermissionsContext` expõe `isAdmCliente`; `Usuarios.tsx` ganhou label/badge
+ * "Adm Cliente", trava o formulário de criação em `role: "user"` quando o ator é Adm Cliente (sem
+ * seletor de perfil), e libera reset de senha/status/criação de usuário pra `canManageUsers` (admin OU
+ * adm_cliente) em vez de só `isAdmin`; exclusão de usuário continua master-only. `App.tsx` ganhou um
+ * guard NOVO e dedicado `UsuariosGuard` (admin_master + admin + adm_cliente) só pra rota `/usuarios` —
+ * o `MasterOnlyGuard` compartilhado por Oráculo/Grupos/Auditoria/Telemetria/Configurações/Lixeira NÃO
+ * foi tocado. `DashboardLayout.tsx`: item de sidebar "Usuários e Permissões" agora visível também pra
+ * `admin`/`adm_cliente` (os demais itens `adminOnlyPaths` continuam master-only).
+ *
+ * IMPORTANTE — módulos (ligar/desligar por empresa) e o cadastro de Grupos de Acesso continuam
+ * exclusivos de FC (admin/admin_master); Adm Cliente só gerencia usuários `role: "user"` dentro das
+ * próprias empresas + configurações internas do próprio escopo.
+ *
+ * ZERO DELETE de dados · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4039 — **DASHBOARD ALMOXARIFADO & EQUIPAMENTOS: ARQUIVO ÚNICO DE 1851 LINHAS COM 6 ABAS VIROU 6 PÁGINAS PRÓPRIAS.**
  *
  * PEDIDO: dividir `DashAlmoxarifadoEquipamentos.tsx` (1 arquivo gigante controlando 6 seções via

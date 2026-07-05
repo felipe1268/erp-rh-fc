@@ -38,6 +38,24 @@ function MasterOnlyGuard({ component: Component }: { component: ComponentType })
   return <Component />;
 }
 
+// Rev. 4041 — "/usuarios" agora também é acessível por admin e pelo novo perfil
+// "Adm Cliente" (admin restrito às suas empresas vinculadas); apenas o backend
+// (userManagement router) restringe o escopo do que cada perfil pode fazer lá dentro.
+function UsuariosGuard({ component: Component }: { component: ComponentType }) {
+  const { user, loading } = useAuth();
+  const [, setLocation] = useLocation();
+  const allowedRoles = ["admin_master", "admin", "adm_cliente"];
+  useEffect(() => {
+    if (loading) return;
+    if (!user) { setLocation("/login"); return; }
+    if (!allowedRoles.includes(user.role)) { setLocation("/"); }
+  }, [user, loading, setLocation]);
+
+  if (loading) return <PageLoader />;
+  if (!user || !allowedRoles.includes(user.role)) return <PageLoader />;
+  return <Component />;
+}
+
 function RouteGuard({ component: Component, route }: { component: ComponentType; route: string | string[] }) {
   const { isAdminMaster, hasGroup, groupCanAccessRoute, isLoading } = usePermissions();
 
@@ -471,7 +489,7 @@ function Router() {
         <Route path={"/processos-civis"} component={() => <RouteGuard component={ProcessosCivis} route="/processos-civis" />} />
         <Route path={"/epis"} component={() => <RouteGuard component={Epis} route="/epis" />} />
         <Route path={"/oraculo"} component={() => <MasterOnlyGuard component={Oraculo} />} />
-        <Route path={"/usuarios"} component={() => <MasterOnlyGuard component={Usuarios} />} />
+        <Route path={"/usuarios"} component={() => <UsuariosGuard component={Usuarios} />} />
         <Route path={"/grupos-usuarios"} component={() => <MasterOnlyGuard component={GruposUsuarios} />} />
         <Route path={"/auditoria"} component={() => <MasterOnlyGuard component={Auditoria} />} />
         <Route path={"/admin/telemetria"} component={() => <MasterOnlyGuard component={Telemetria} />} />
