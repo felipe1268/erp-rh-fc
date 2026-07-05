@@ -1,3 +1,7 @@
+- **Rev. 4026** — **MEDIÇÃO DE CONTRATOS: REDESIGN DO DIÁLOGO "ITENS DO BOLETIM" + INTEGRAÇÃO COM COMPRAS PARA DETECTAR OCs DE FD E TRAZER O VALOR AUTOMATICAMENTE.** Diálogo reconstruído com cards de resumo, coluna "Origem" por linha e botão "Vincular FD de Compras" que cria o registro de FD e insere a linha automaticamente. ZERO DELETE · ZERO ALTER destrutivo.
+
+- **Rev. 4025** — **MEDIÇÃO DE CONTRATOS: "IMPORTAR DO ORÇAMENTO (COM AVANÇO FÍSICO)" NÃO TRAZIA NENHUM ITEM — PASSA A IMPORTAR DIRETO DO CRONOGRAMA.** Casamento por `eap_codigo` colapsava dezenas de atividades numa chave vazia; importação passa a iterar atividades-folha do Cronograma direto, casando avanço por `atividade_id` (211/211 validado, antes 15/148). Botão renomeado para "Importar do Cronograma (avanço físico)". ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4023** — **MEDIÇÃO DE CONTRATOS: DROPDOWN "PROJETO / OBRA" CORTAVA NOMES LONGOS NO DIÁLOGO "NOVO CONTRATO DE MEDIÇÃO".** Fix escopado em `MedicaoContratos.tsx`: `SelectContent` ganhou `max-w-[min(28rem,calc(100vw-2rem))]`, `SelectItem` ganhou `whitespace-normal break-words leading-snug py-2`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4022** — **FINANCEIRO/DRE: OPÇÃO DE CONSOLIDAR O MÊS MANUALMENTE.** Nova tabela `financial_dre_consolidacoes`; procedures `getDREConsolidacaoStatus`/`consolidarDRE`/`desconsolidarDRE` (admin/admin_master); tela DRE ganha botão "Consolidar Mês" e selo de consolidação manual. ZERO DELETE · ZERO ALTER destrutivo.

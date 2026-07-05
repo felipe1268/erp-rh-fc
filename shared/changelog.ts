@@ -1,4 +1,29 @@
 /**
+ * Rev. 4032 — **MEDIÇÃO DE CONTRATOS: ESPAÇAMENTO E ALINHAMENTO VERTICAL DOS CAMPOS "DATA
+ * INÍCIO"/"DATA FIM" NO DIÁLOGO "NOVO BOLETIM DE MEDIÇÃO" (E "EDITAR BOLETIM").**
+ *
+ * PEDIDO: seguindo a Rev. 4031 (remoção do ícone decorativo sobreposto), usuário mandou mais 2
+ * prints (IMG_3310/IMG_3309, depois IMG_3311) reclamando que "ainda está sobreposto"/"não acertou
+ * o layout" — as duas colunas (Data Início/Data Fim) pareciam coladas sem espaço visível entre
+ * elas, e o texto dentro do campo aparecia colado à borda superior (mal centralizado
+ * verticalmente), sugerindo um mismatch de altura entre o texto e o box do input.
+ *
+ * SOLUÇÃO — Frontend (`client/src/pages/medicao/MedicaoDetalhe.tsx`):
+ * - Grid dos 2 campos de data: `gap-3` → `gap-6` (mais espaço horizontal entre as colunas),
+ *   `space-y-1.5` das colunas ganhou `min-w-0` e os `Input` ganharam `w-full` (garante 2 colunas
+ *   de largura igual e consistente, sem overflow).
+ * - Alinhamento vertical do texto dentro do `<input type="date">`: adicionado `flex items-center
+ *   h-10 leading-normal` ao className dos 4 inputs de data (2 em `modalBoletim`, 2 em
+ *   `modalEditBoletim`) — inputs nativos de data podem não centralizar verticalmente seus
+ *   segmentos internos (dia/mês/ano) apenas com padding padrão do componente `Input`,
+ *   especialmente em Safari; forçar `display:flex` + `align-items:center` no próprio input
+ *   corrige a centralização do texto dentro do box.
+ * - Mesma mutation/validação/campos de antes nos dois diálogos.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo (ajuste puramente visual/CSS).
+ */
+
+/**
  * Rev. 4031 — **MEDIÇÃO DE CONTRATOS: ÍCONE DECORATIVO NOS CAMPOS DE DATA SOBREPUNHA O ÍCONE
  * NATIVO DO NAVEGADOR — REMOVIDO.**
  *

@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4032** — **MEDIÇÃO DE CONTRATOS: ESPAÇAMENTO E ALINHAMENTO VERTICAL DOS CAMPOS "DATA INÍCIO"/"DATA FIM".** Seguindo a Rev. 4031, usuário mandou mais prints reclamando que as datas "ainda estão sobrepondo" e o layout não tinha sido corrigido — colunas coladas sem espaço visível + texto colado à borda superior do campo (mal centralizado). `MedicaoDetalhe.tsx`: grid `gap-3`→`gap-6` + `min-w-0`/`w-full` nas colunas (largura igual, sem overflow); nos 4 `<input type="date">` (modalBoletim e modalEditBoletim) adicionado `flex items-center h-10 leading-normal` para forçar centralização vertical do texto (inputs nativos de data podem não centralizar bem com padding padrão, especialmente em Safari). Mesma mutation/campos de antes. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4031** — **MEDIÇÃO DE CONTRATOS: ÍCONE DECORATIVO NOS CAMPOS DE DATA SOBREPUNHA O ÍCONE NATIVO DO NAVEGADOR — REMOVIDO.** Usuário mandou print (IMG_3308) do diálogo "Novo Boletim de Medição" (redesenhado na Rev. 4030) com as datas "se sobrepondo"/"ficou péssimo". Causa: o ícone `CalendarRange` decorativo em `absolute` + `pl-8` (copiado do padrão do "Editar Boletim") colide com o affordance nativo do `<input type="date">`, já que o shadow-DOM interno do campo nem sempre respeita o padding customizado em todos navegadores/dispositivos. `MedicaoDetalhe.tsx`: removido o wrapper/ícone/padding dos 4 campos de data (`modalBoletim` E `modalEditBoletim`), voltando a inputs simples sem ícone sobreposto. Mesma mutation/validação/campos de antes. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4030** — **MEDIÇÃO DE CONTRATOS: REDESIGN DA TABELA "ITENS DO BOLETIM" + PADRONIZAÇÃO DO DIÁLOGO "NOVO BOLETIM DE MEDIÇÃO".** Usuário reclamou de espaço vazio enorme entre a coluna "Item" e a descrição na tabela de itens (prints), pediu remodelação 100% moderna; depois mandou print do diálogo "Novo Boletim de Medição" com vão em branco enorme (ainda no layout antigo, sem o redesign da Rev. 4029). `MedicaoDetalhe.tsx`: tabela de itens (view-only e edição) trocada para `table-fixed` + `<colgroup>` com percentuais explícitos somando 100% (elimina o vão Item↔Descrição), "% Período" virou badge azul, "% Acumulado" ganhou mini barra de progresso; diálogo `modalBoletim` reconstruído seguindo EXATAMENTE o padrão do "Editar Boletim" (3 blocos: cabeçalho c/ ícone em avatar + card branco "Período da medição" + rodapé fixo), com o mesmo badge "N dias de medição" e validação de data fim < início. Mesma mutation/campos de antes. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4030** — **MEDIÇÃO DE CONTRATOS: REDESIGN DA TABELA "ITENS DO BOLETIM" + PADRONIZAÇÃO DO DIÁLOGO "NOVO BOLETIM DE MEDIÇÃO".** Tabela `table-fixed` + `<colgroup>` proporcional (elimina vão Item↔Descrição), badge azul "% Período", barra de progresso "% Acumulado"; diálogo `modalBoletim` reconstruído no padrão do "Editar Boletim" (3 blocos). ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4029** — **MEDIÇÃO DE CONTRATOS: REDESIGN COMPLETO DO DIÁLOGO "EDITAR BOLETIM" (PERÍODO DA MEDIÇÃO).** Reestruturado em 3 blocos visuais (cabeçalho + card branco + rodapé fixo), inputs de data c/ ícone interno, badge "N dias de medição", validação data fim < início. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -62,13 +64,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4027** — **MEDIÇÃO DE CONTRATOS: RASTREABILIDADE DO "ORIGEM: CRONOGRAMA" + BOTÕES DE FLUXO/IMPRESSÃO/PDF NO DIÁLOGO "ITENS DO BOLETIM".** Novo `getHistoricoAvancoAtividade` (anti-IDOR) mostra de qual semana do Avanço Semanal veio o % da medição via Popover; diálogo ganhou botões Aprovar/Enviar, Imprimir e Gerar PDF (`boletimMedicaoPdf.ts`, jsPDF). ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4026** — **MEDIÇÃO DE CONTRATOS: REDESIGN DO DIÁLOGO "ITENS DO BOLETIM" + INTEGRAÇÃO COM COMPRAS PARA DETECTAR OCs DE FD E TRAZER O VALOR AUTOMATICAMENTE.** Diálogo reconstruído com cards de resumo, coluna "Origem" por linha e botão "Vincular FD de Compras" que cria o registro de FD e insere a linha automaticamente. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4025** — **MEDIÇÃO DE CONTRATOS: "IMPORTAR DO ORÇAMENTO (COM AVANÇO FÍSICO)" NÃO TRAZIA NENHUM ITEM — PASSA A IMPORTAR DIRETO DO CRONOGRAMA.** Casamento por `eap_codigo` colapsava dezenas de atividades numa chave vazia; importação passa a iterar atividades-folha do Cronograma direto, casando avanço por `atividade_id` (211/211 validado, antes 15/148). Botão renomeado para "Importar do Cronograma (avanço físico)". ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4023 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4026 e anteriores.
 
 ## User preferences
 
