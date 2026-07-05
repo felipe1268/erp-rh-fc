@@ -4745,7 +4745,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v4047-2026-07-05-billing-module-prices";
+    const COLFIX_VERSION = "v4059-2026-07-05-billing-module-active-toggle";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -6460,6 +6460,18 @@ Regras:
         `);
         console.log("[ColFix Rev.4047] billing_module_prices garantida (preços de catálogo editáveis).");
       } catch (e: any) { console.error("[ColFix Rev.4047] FALHA billing_module_prices:", e?.message ?? e); }
+
+      // Rev. 4059 — admin_master liga/desliga módulo do catálogo comercial
+      // (fora de venda pra novos clientes, sem afetar quem já contratou).
+      try {
+        const _db4059 = await getDb();
+        if (!_db4059) throw new Error("db indisponível");
+        await _db4059.$client.query(`
+          ALTER TABLE billing_module_prices
+            ADD COLUMN IF NOT EXISTS is_active INTEGER NOT NULL DEFAULT 1
+        `);
+        console.log("[ColFix Rev.4059] billing_module_prices.is_active garantida (toggle comercializável).");
+      } catch (e: any) { console.error("[ColFix Rev.4059] FALHA billing_module_prices.is_active:", e?.message ?? e); }
 
       // Rev. 4042 — Stripe: inicializar (schema stripe.* + webhook gerenciado)
       // Envolvido em try/catch isolado: falha na configuração do Stripe NÃO

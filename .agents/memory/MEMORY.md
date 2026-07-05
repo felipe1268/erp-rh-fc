@@ -1,3 +1,4 @@
+- [Billing module active/inactive toggle](billing-module-active-toggle.md) — isActive (comercializável) ≠ preço; grandfather: desativar módulo nunca revoga de quem já tem, só bloqueia ADICIONAR novo.
 - [Dashboard period selector standard](dashboard-period-selector-standard.md) — seletor de mês/ano = white-card (PanoramaFiscal), NUNCA DashHeader gradiente. Regra de ouro do usuário.
 - [Marketing screenshot fictional data](marketing-screenshot-fictional-data.md) — public marketing screenshots of authenticated screens must use 100% fictional seed data, never real tenant PII; revert any temp auth bypass fully.
 - [Unguarded tRPC endpoints](unguarded-trpc-endpoints.md) — frontend route gating ≠ backend authorization; verify role/tenant checks live IN the procedure, not just behind the UI route guard.

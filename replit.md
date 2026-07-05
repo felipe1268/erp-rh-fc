@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4059** — **PAINEL SAAS / AJUSTE DE PREÇOS: NOVO CONTROLE PARA LIGAR/DESLIGAR MÓDULO DA VITRINE COMERCIAL.** Usuário pediu a capacidade de ativar/desativar um módulo pra venda, com layout novo mais intuitivo. Nova coluna `billing_module_prices.is_active` (default 1, ColFix não-destrutivo); novo `server/billingCatalog.ts` centraliza `getEffectiveCatalog()` (`modules` completo + `sellableModules` só ativos) usado por `billing.ts` e `saasAdmin.ts`. Loja pública/checkout só mostra `sellableModules`; assinante que já tem um módulo desativado mantém acesso (grandfather), só fica bloqueado de ADICIONAR módulo fora de venda (`createCheckoutSession`/`updateSubscription`). `AdminPrecos.tsx` redesenhado: saiu a tabela densa, entrou grid de cards por módulo com Switch de ativo/inativo + edição de preço junto. `SaasAdminPanel.tsx` e `MinhaAssinatura.tsx` ganharam badges "fora de venda"/"indisponível". ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4058** — **`/planos/modulos/:id`: SEÇÃO DE SCREENSHOTS VIRA CARROSSEL "MULTITELA" HORIZONTAL COM VÁRIAS TELAS REAIS POR MÓDULO.** Usuário achou a seção de screenshots rasa demais (hero grande + grid pequeno) e pediu carrossel horizontal deslizável, lado a lado. Capturada 2ª screenshot real (dados reais FC Engenharia, sem PII) pra cada um dos 13 módulos que só tinham 1 print, salvas em `client/src/assets/screenshots/*-2.jpg`; `moduleScreenshots.ts` (já era `Record<string,string[]>`) ganhou os novos imports/entradas. `ModuloDetalhe.tsx`: hero+grid substituídos por 1 seção "Telas reais de {módulo}" com scroll horizontal (`snap-x snap-mandatory`) + setas de navegação; hero acima virou só o `ModulePreviewMock` conceitual. Bypass de auth dev (`SCREENSHOT_DEV_BYPASS`) reaberto e FECHADO no mesmo commit, sem vestígio. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4057** — **PAINEL SAAS: DASHBOARD GANHA MÉTRICAS DETALHADAS (ARPU, ASSENTOS, CRESCIMENTO/CHURN DO MÊS, POPULARIDADE POR MÓDULO).** Usuário achou o Painel SaaS (Rev. 4056) raso demais — "coloca mais detalhes sobre o dash, isso valoriza bastante a gestão do sistema". `saasAdmin.ts` → `getSummary` ganhou `seatsTotal`, `arpuCents`, `newThisMonth`/`canceledThisMonth` (mês corrente) e `moduleBreakdown` (empresas ativas + receita por módulo, ordenado por popularidade); MRR/ARPU/breakdown agora respeitam os overrides de preço de `billing_module_prices` em tempo real. `SaasAdminPanel.tsx` ganhou 2ª fileira de cards + seção "Popularidade dos módulos" com barra proporcional. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4057** — **PAINEL SAAS: DASHBOARD GANHA MÉTRICAS DETALHADAS (ARPU, ASSENTOS, CRESCIMENTO/CHURN DO MÊS, POPULARIDADE POR MÓDULO).** `saasAdmin.ts` → `getSummary` ganhou `seatsTotal`, `arpuCents`, `newThisMonth`/`canceledThisMonth`, `moduleBreakdown`; `SaasAdminPanel.tsx` ganhou 2ª fileira de cards + seção "Popularidade dos módulos". ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4056** — **NOVO ITEM "GESTÃO DE VENDAS (SAAS)" NO MENU DE ADMINISTRAÇÃO + CROSS-LINK ENTRE OS 2 PAINÉIS EXISTENTES.** `SaasAdminPanel.tsx` (`/admin/saas`) e `AdminPrecos.tsx` (`/admin/saas/precos`) ganharam link no menu de conta (admin_master) + botões cruzados entre si. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4053** — **`/planos`: CLIQUE NO MÓDULO ABRE PÁGINA DEDICADA COM TODAS AS FUNCIONALIDADES (SUBSTITUI O DIALOG PEQUENO).** Nova página `ModuloDetalhe.tsx` em `/planos/modulos/:id`, baseada 100% em `shared/modules.ts`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4052** — **`/planos`: AZUL MAIS ESCURO EM TODA A LANDING + MASCOTE "JULINHO" VIROU UM ROBÔ ANIMADO E INTERATIVO.** Paleta aprofundada (blue-600→900); imagem final em `client/src/assets/julinho_robot.png`. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4051 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4052 e anteriores.
 
 ## User preferences
 

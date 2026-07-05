@@ -1,4 +1,43 @@
 /**
+ * Rev. 4059 — **PAINEL SAAS / AJUSTE DE PREÇOS: NOVO CONTROLE PARA LIGAR/DESLIGAR MÓDULO DA VITRINE COMERCIAL.**
+ *
+ * PEDIDO: usuário anexou prints de "Ajuste de Preços do Catálogo" (AdminPrecos.tsx) e do Painel SaaS e pediu
+ * a capacidade de ativar/desativar um módulo para comercialização, com um layout novo, mais fácil e intuitivo
+ * para fazer esse ajuste (a tela antiga só tinha edição de preço, numa tabela densa).
+ *
+ * SCHEMA: nova coluna `billing_module_prices.is_active` (INTEGER NOT NULL DEFAULT 1), guardada por ColFix
+ * (`COLFIX_VERSION` bumpado p/ `v4059-2026-07-05-billing-module-active-toggle`) — `ADD COLUMN IF NOT EXISTS`,
+ * não-destrutivo, todo módulo existente nasce ativo.
+ *
+ * BACKEND: novo `server/billingCatalog.ts` centraliza `getModuleOverrides()`/`getEffectiveCatalog()` (preço +
+ * isActive por módulo), substituindo a lógica duplicada que antes vivia solta em `billing.ts` e `saasAdmin.ts`.
+ * `getEffectiveCatalog()` retorna `modules` (todos, inclusive fora de venda) e `sellableModules` (só os
+ * ativos) — a vitrine pública (`getCatalog`, usada por "/planos" e no checkout) passou a usar SÓ
+ * `sellableModules`, então módulo desativado some da loja e do fluxo de contratação. `adminGetPrices` agora
+ * retorna `isActive` por módulo; nova mutation `adminSetModuleActive({id, isActive})` faz upsert em
+ * `billing_module_prices` mexendo SÓ em `is_active` (preço fica intocado). Regra de negócio decidida:
+ * assinante que JÁ tem um módulo continua com ele mesmo se for desativado depois (grandfather) — só fica
+ * bloqueado de ADICIONAR um módulo novo enquanto ele estiver fora de venda; isso é validado tanto em
+ * `createCheckoutSession` (contratação nova) quanto em `updateSubscription` (upgrade de assinatura existente,
+ * comparando contra os módulos já contratados antes de rejeitar). `getMySubscription` passou a expor
+ * `isActive` por módulo pra "Minha Assinatura" saber o que travar. `saasAdmin.ts` (`listCompanies`,
+ * `getSummary`) migrou pra usar `getEffectiveCatalog()` em vez da função duplicada antiga; `moduleBreakdown`
+ * ganhou `isActive`.
+ *
+ * FRONTEND: `AdminPrecos.tsx` totalmente redesenhado — saiu a tabela densa de 4 colunas, entrou um grid de
+ * cards por módulo (2 colunas) com: nome + descrição, badge "À venda"/"Fora de venda", Switch (shadcn) pra
+ * ligar/desligar, preço padrão de fábrica vs. cobrado hoje, e o campo de edição de preço com botão de reset —
+ * tudo em um único lugar por módulo, mais fácil de escanear que a tabela antiga. Card fica visualmente
+ * "apagado" (fundo cinza, texto claro) quando desativado. Contador no topo mostra quantos módulos estão à
+ * venda vs. fora. `seat` (assento por usuário) não tem toggle — nunca pode ser desativado.
+ * `SaasAdminPanel.tsx`: seção "Popularidade dos módulos" ganhou badge "fora de venda" + barra cinza (em vez
+ * de laranja) pro módulo desativado. `MinhaAssinatura.tsx`: checkbox de módulo fora de venda que o cliente
+ * AINDA NÃO tem fica travado (opacidade reduzida + badge "indisponível"); se ele já tinha antes de ser
+ * desativado, o checkbox continua liberado (badge "descontinuado" em vez de travar). ZERO DELETE · ZERO
+ * ALTER destrutivo.
+ */
+
+/**
  * Rev. 4058 — **`/planos/modulos/:id`: SEÇÃO DE SCREENSHOTS VIRA CARROSSEL "MULTITELA" HORIZONTAL COM VÁRIAS TELAS REAIS POR MÓDULO.**
  *
  * PEDIDO: usuário achou a seção de screenshots rasa demais — hero grande + grid pequeno com só 1-2 telas por

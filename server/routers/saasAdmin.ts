@@ -6,9 +6,10 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { eq, desc } from "drizzle-orm";
 import { getDb } from "../db";
-import { companies, companySubscriptions, companySubscriptionModules, billingModulePrices } from "../../drizzle/schema";
+import { companies, companySubscriptions, companySubscriptionModules } from "../../drizzle/schema";
 import { getUncachableStripeClient } from "../stripeClient";
-import { BILLING_MODULES, SEAT_MONTHLY_PRICE_CENTS, applyPriceOverrides } from "../../shared/billingModules";
+import { SEAT_MONTHLY_PRICE_CENTS } from "../../shared/billingModules";
+import { getEffectiveCatalog, type EffectiveModule } from "../billingCatalog";
 
 function requireAdminMaster(role: string | undefined) {
   if (role !== "admin_master") {
@@ -16,19 +17,7 @@ function requireAdminMaster(role: string | undefined) {
   }
 }
 
-// Rev. 4056 — mesma lógica de override de preço do billing.ts (getPriceOverrides),
-// duplicada aqui pra evitar import cross-router; qualquer ajuste de preço em
-// "Painel SaaS → Preços" já reflete IMEDIATAMENTE no MRR/ARPU/breakdown do dashboard.
-async function getPriceOverrides(): Promise<Record<string, number>> {
-  const db = await getDb();
-  if (!db) return {};
-  const rows = await db.select().from(billingModulePrices);
-  const map: Record<string, number> = {};
-  for (const r of rows) map[r.moduleId] = r.monthlyPriceCents;
-  return map;
-}
-
-function computeMrrCents(seats: number, moduleIds: string[], effectiveModules: typeof BILLING_MODULES): number {
+function computeMrrCents(seats: number, moduleIds: string[], effectiveModules: EffectiveModule[]): number {
   const modulesTotal = moduleIds.reduce((acc, id) => {
     const mod = effectiveModules.find(m => m.id === id);
     return acc + (mod?.monthlyPriceCents || 0);
@@ -65,8 +54,7 @@ export const saasAdminRouter = router({
       modulesBySub.set(Number(link.subscriptionId), list);
     }
 
-    const overrides = await getPriceOverrides();
-    const effectiveModules = applyPriceOverrides(BILLING_MODULES, overrides);
+    const { modules: effectiveModules } = await getEffectiveCatalog();
 
     return subs.map(sub => {
       const company = companyMap.get(Number(sub.companyId));
@@ -145,8 +133,7 @@ export const saasAdminRouter = router({
       modulesBySub.set(Number(link.subscriptionId), list);
     }
 
-    const overrides = await getPriceOverrides();
-    const effectiveModules = applyPriceOverrides(BILLING_MODULES, overrides);
+    const { modules: effectiveModules } = await getEffectiveCatalog();
 
     const active = subs.filter(s => s.status === "active" || s.status === "trialing");
     const trialing = subs.filter(s => s.status === "trialing");
@@ -174,7 +161,7 @@ export const saasAdminRouter = router({
           revenueCents += mod.monthlyPriceCents;
         }
       }
-      return { id: mod.id, label: mod.label, companyCount, revenueCents };
+      return { id: mod.id, label: mod.label, companyCount, revenueCents, isActive: mod.isActive };
     }).sort((a, b) => b.companyCount - a.companyCount);
 
     return {

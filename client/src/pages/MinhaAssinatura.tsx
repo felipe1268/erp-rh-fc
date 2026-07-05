@@ -102,21 +102,41 @@ export default function MinhaAssinatura() {
       <div className="rounded-xl border bg-white p-5 space-y-4">
         <h2 className="font-semibold text-gray-800">Módulos contratados</h2>
         <div className="grid sm:grid-cols-2 gap-2">
-          {data.modules.map(m => (
-            <label key={m.id} className="flex items-start gap-2 rounded-lg border p-3 cursor-pointer hover:bg-gray-50">
-              <Checkbox
-                checked={selectedModules.includes(m.id)}
-                onCheckedChange={(checked) => {
-                  setSelectedModules(prev => checked ? [...prev, m.id] : prev.filter(id => id !== m.id));
-                }}
-              />
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-gray-800 break-words">{m.label}</p>
-                <p className="text-xs text-gray-500 break-words">{m.description}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{formatCentsBRL(m.monthlyPriceCents)}/mês</p>
-              </div>
-            </label>
-          ))}
+          {data.modules.map(m => {
+            const isSelected = selectedModules.includes(m.id);
+            // Rev. 4059 — módulo fora de venda: quem já tem mantém (grandfather);
+            // quem não tem não pode marcar (checkbox travado + aviso).
+            const blockedToAdd = m.isActive === false && !isSelected;
+            return (
+              <label
+                key={m.id}
+                className={`flex items-start gap-2 rounded-lg border p-3 ${
+                  blockedToAdd ? "opacity-60 cursor-not-allowed bg-gray-50" : "cursor-pointer hover:bg-gray-50"
+                }`}
+              >
+                <Checkbox
+                  checked={isSelected}
+                  disabled={blockedToAdd}
+                  onCheckedChange={(checked) => {
+                    if (blockedToAdd) return;
+                    setSelectedModules(prev => checked ? [...prev, m.id] : prev.filter(id => id !== m.id));
+                  }}
+                />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-800 break-words flex items-center gap-1.5">
+                    {m.label}
+                    {m.isActive === false && (
+                      <span className="inline-flex items-center rounded-full bg-gray-200 text-gray-500 text-[10px] px-1.5 py-0.5 shrink-0">
+                        {isSelected ? "descontinuado" : "indisponível"}
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-xs text-gray-500 break-words">{m.description}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{formatCentsBRL(m.monthlyPriceCents)}/mês</p>
+                </div>
+              </label>
+            );
+          })}
         </div>
       </div>
 

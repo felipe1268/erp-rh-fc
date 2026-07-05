@@ -615,6 +615,10 @@ export const billingModulePrices = pgTable("billing_module_prices", {
         id: serial().notNull(),
         moduleId: varchar("module_id", { length: 60 }).notNull(),
         monthlyPriceCents: integer("monthly_price_cents").notNull(),
+        // Rev. 4059 — liga/desliga o módulo para NOVAS contratações/upgrades (venda).
+        // Assinaturas já ativas com o módulo continuam com acesso normal mesmo se
+        // desativado depois; 1=à venda (default), 0=fora de venda.
+        isActive: integer("is_active").default(1).notNull(),
         updatedByName: varchar("updated_by_name", { length: 255 }),
         updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
 });

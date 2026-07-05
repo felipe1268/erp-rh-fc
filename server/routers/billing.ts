@@ -8,35 +8,16 @@ import { router, publicProcedure, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { eq, sql } from "drizzle-orm";
 import { getDb, getCompaniesForUser } from "../db";
-import { companies, companySubscriptions, companySubscriptionModules, billingModulePrices } from "../../drizzle/schema";
+import { companies, companySubscriptions, companySubscriptionModules } from "../../drizzle/schema";
 import { getUncachableStripeClient, getModulePriceMap, invalidateModulePriceCache } from "../stripeClient";
-import { BILLING_MODULES, SEAT_MONTHLY_PRICE_CENTS, TRIAL_PERIOD_DAYS, applyPriceOverrides } from "../../shared/billingModules";
+import { BILLING_MODULES, SEAT_MONTHLY_PRICE_CENTS, TRIAL_PERIOD_DAYS } from "../../shared/billingModules";
 import { invalidateModuleGateCache } from "../_core/moduleGating";
+import { getModuleOverrides, getEffectiveCatalog } from "../billingCatalog";
 
 function requireAdminMaster(role: string | undefined) {
   if (role !== "admin_master") {
     throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin_master pode ajustar preços do catálogo." });
   }
-}
-
-// Rev. 4047 — lê `billing_module_prices` (override editável) e mescla com os
-// defaults estáticos de shared/billingModules.ts. Sem linha na tabela = usa o
-// default; "seat" é tratado separadamente pois não faz parte de BILLING_MODULES.
-async function getPriceOverrides(): Promise<Record<string, number>> {
-  const db = await getDb();
-  if (!db) return {};
-  const rows = await db.select().from(billingModulePrices);
-  const map: Record<string, number> = {};
-  for (const r of rows) map[r.moduleId] = r.monthlyPriceCents;
-  return map;
-}
-
-async function getEffectiveCatalog() {
-  const overrides = await getPriceOverrides();
-  return {
-    modules: applyPriceOverrides(BILLING_MODULES, overrides),
-    seatMonthlyPriceCents: overrides["seat"] ?? SEAT_MONTHLY_PRICE_CENTS,
-  };
 }
 
 // Rev. 4044 — self-service de lifecycle (T004): só `adm_cliente` gerencia a
@@ -74,10 +55,12 @@ function resolveOrigin(req: any): string {
 }
 
 export const billingRouter = router({
+  // Rev. 4059 — loja pública ("/planos", checkout) NUNCA lista módulo fora de
+  // venda: usa `sellableModules` (isActive), não o catálogo completo.
   getCatalog: publicProcedure.query(async () => {
-    const { modules, seatMonthlyPriceCents } = await getEffectiveCatalog();
+    const { sellableModules, seatMonthlyPriceCents } = await getEffectiveCatalog();
     return {
-      modules: modules.map(m => ({
+      modules: sellableModules.map(m => ({
         id: m.id,
         label: m.label,
         description: m.description,
@@ -93,23 +76,64 @@ export const billingRouter = router({
   // Price (imóveis são imutáveis na Stripe) e arquiva o antigo; assinaturas já
   // ativas continuam com o preço travado no momento da contratação — só o
   // catálogo (novas vendas / upgrades) muda.
+  // Rev. 4059 — passa a incluir `isActive` (comercializável ou não) por módulo.
   adminGetPrices: protectedProcedure.query(async ({ ctx }) => {
     requireAdminMaster(ctx.user.role);
-    const overrides = await getPriceOverrides();
+    const overrides = await getModuleOverrides();
     const modules = BILLING_MODULES.map(m => ({
       id: m.id,
       label: m.label,
+      description: m.description,
       defaultPriceCents: m.monthlyPriceCents,
-      currentPriceCents: overrides[m.id] ?? m.monthlyPriceCents,
+      currentPriceCents: overrides[m.id]?.monthlyPriceCents ?? m.monthlyPriceCents,
+      isActive: overrides[m.id]?.isActive ?? true,
     }));
     modules.push({
       id: "seat",
       label: "Assento por usuário",
+      description: "Cobrança por usuário ativo na empresa-cliente.",
       defaultPriceCents: SEAT_MONTHLY_PRICE_CENTS,
-      currentPriceCents: overrides["seat"] ?? SEAT_MONTHLY_PRICE_CENTS,
+      currentPriceCents: overrides["seat"]?.monthlyPriceCents ?? SEAT_MONTHLY_PRICE_CENTS,
+      // "seat" não é um módulo comercial opcional — sempre vendável, sem toggle na UI.
+      isActive: true,
     });
     return { modules };
   }),
+
+  // Rev. 4059 — liga/desliga um módulo para NOVAS contratações/upgrades, sem
+  // mexer no preço. Assinantes que já têm o módulo continuam com ele normalmente
+  // (só bloqueia quem ainda não tem de adicioná-lo enquanto estiver desativado).
+  adminSetModuleActive: protectedProcedure
+    .input(z.object({ id: z.string(), isActive: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdminMaster(ctx.user.role);
+      if (input.id === "seat") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "O assento por usuário não pode ser desativado." });
+      }
+      const mod = BILLING_MODULES.find(m => m.id === input.id);
+      if (!mod) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Módulo inválido: ${input.id}` });
+      }
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indisponível." });
+
+      const overrides = await getModuleOverrides();
+      const currentPriceCents = overrides[input.id]?.monthlyPriceCents ?? mod.monthlyPriceCents;
+
+      await db.execute(
+        sql`
+          INSERT INTO billing_module_prices (module_id, monthly_price_cents, is_active, updated_by_name)
+          VALUES (${input.id}, ${currentPriceCents}, ${input.isActive ? 1 : 0}, ${ctx.user.name || "admin_master"})
+          ON CONFLICT (module_id) DO UPDATE SET
+            is_active = EXCLUDED.is_active,
+            updated_by_name = EXCLUDED.updated_by_name,
+            updated_at = NOW()
+        `
+      );
+
+      return { success: true };
+    }),
 
   adminUpdatePrices: protectedProcedure
     .input(z.object({
@@ -190,9 +214,13 @@ export const billingRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "CNPJ inválido." });
       }
 
-      const invalidModules = input.moduleIds.filter(id => !BILLING_MODULES.some(m => m.id === id));
+      // Rev. 4059 — contratação NOVA só pode incluir módulos ativamente à venda
+      // (getCatalog já esconde da UI, mas o backend valida de novo aqui).
+      const { sellableModules } = await getEffectiveCatalog();
+      const sellableIds = new Set(sellableModules.map(m => m.id));
+      const invalidModules = input.moduleIds.filter(id => !sellableIds.has(id));
       if (invalidModules.length > 0) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: `Módulo(s) inválido(s): ${invalidModules.join(", ")}` });
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Módulo(s) indisponível(is) para contratação: ${invalidModules.join(", ")}` });
       }
 
       const db = await getDb();
@@ -285,7 +313,10 @@ export const billingRouter = router({
       currentPeriodEnd: sub.currentPeriodEnd,
       canceledAt: sub.canceledAt,
       paymentFailedAt: sub.paymentFailedAt,
-      modules: modules.map(m => ({ id: m.id, label: m.label, description: m.description, monthlyPriceCents: m.monthlyPriceCents })),
+      // Rev. 4059 — inclui `isActive`: módulo desativado que o assinante já tem
+      // continua listado (pode manter/remover), mas a UI não deixa ADICIONAR
+      // outro que esteja fora de venda.
+      modules: modules.map(m => ({ id: m.id, label: m.label, description: m.description, monthlyPriceCents: m.monthlyPriceCents, isActive: m.isActive })),
       seatMonthlyPriceCents,
     };
   }),
@@ -344,6 +375,18 @@ export const billingRouter = router({
       const { db, sub } = await getOwnSubscriptionOrThrow(ctx.user.id, ctx.user.role);
       if (sub.status === "canceled") {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Assinatura cancelada — não é possível alterar módulos/assentos." });
+      }
+
+      // Rev. 4059 — módulo desativado para venda não pode ser ADICIONADO por
+      // quem ainda não tem; quem já tinha continua podendo mantê-lo (grandfather).
+      const currentLinks = await db.select().from(companySubscriptionModules).where(eq(companySubscriptionModules.subscriptionId, sub.id));
+      const currentModuleIds = new Set(currentLinks.map(l => l.moduleId));
+      const { sellableModules } = await getEffectiveCatalog();
+      const sellableIds = new Set(sellableModules.map(m => m.id));
+      const blockedNew = input.moduleIds.filter(id => !currentModuleIds.has(id) && !sellableIds.has(id));
+      if (blockedNew.length > 0) {
+        const labels = blockedNew.map(id => BILLING_MODULES.find(m => m.id === id)?.label || id).join(", ");
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Módulo(s) indisponível(is) para contratação: ${labels}` });
       }
 
       const priceMap = await getModulePriceMap();

@@ -1,3 +1,5 @@
+- **Rev. 4052** — **`/planos`: AZUL MAIS ESCURO EM TODA A LANDING + MASCOTE "JULINHO" VIROU UM ROBÔ ANIMADO E INTERATIVO.** Paleta aprofundada (blue-600→900); imagem final em `client/src/assets/julinho_robot.png`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4051** — **`/planos`: PALETA DE CORES TROCADA DE LARANJA/ÂMBAR PARA AZUL EM TODA A LANDING.** Usuário viu os screenshots da Rev. 4050 no canvas e pediu pra trocar laranja por azul ("gosto mais do azul"). Toda a identidade visual PRÓPRIA do site migrou de `orange-*/amber-*` pra `blue-*/sky-*`. Mantido de propósito: cores por categoria no array `MODULES`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4050** — **`/planos`: SELO "ILUSTRATIVO" REMOVIDO DOS CARDS, NOVA SEÇÃO "QUEM SOMOS" E MÓDULOS CLICÁVEIS COM PRÉVIA VISUAL + DESTAQUES DE IA/INTEGRAÇÃO.** Selo por card removido mas aviso do cabeçalho (`TESTIMONIAL_DISCLAIMER`) mantido; `ModuleDetailDialog`/`ModulePreviewMock` abrem prévia CONCEITUAL de cada módulo + `highlights` de IA/integração; `COMPANY_STORY` é do PRODUTO, sem dados inventados. ZERO DELETE · ZERO ALTER destrutivo.

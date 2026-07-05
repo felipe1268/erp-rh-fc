@@ -135,9 +135,16 @@ export default function SaasAdminPanel() {
               const pct = Math.round((mod.companyCount / maxCount) * 100);
               return (
                 <div key={mod.id} className="flex items-center gap-3">
-                  <span className="text-xs text-gray-600 w-40 shrink-0 truncate" title={mod.label}>{mod.label}</span>
+                  <span className="text-xs text-gray-600 w-40 shrink-0 truncate flex items-center gap-1.5" title={mod.label}>
+                    {mod.label}
+                    {mod.isActive === false && (
+                      <span className="inline-flex items-center rounded-full bg-gray-100 text-gray-500 text-[10px] px-1.5 py-0.5 shrink-0">
+                        fora de venda
+                      </span>
+                    )}
+                  </span>
                   <div className="flex-1 h-2.5 rounded-full bg-gray-100 overflow-hidden">
-                    <div className="h-full rounded-full bg-orange-400" style={{ width: `${pct}%` }} />
+                    <div className={`h-full rounded-full ${mod.isActive === false ? "bg-gray-300" : "bg-orange-400"}`} style={{ width: `${pct}%` }} />
                   </div>
                   <span className="text-xs text-gray-500 w-8 text-right shrink-0">{mod.companyCount}</span>
                   <span className="text-xs font-medium text-gray-700 w-24 text-right shrink-0">{formatCentsBRL(mod.revenueCents)}/mês</span>
