@@ -1,4 +1,29 @@
 /**
+ * Rev. 4052 — **`/planos`: AZUL MAIS ESCURO EM TODA A LANDING + MASCOTE "JULINHO" VIROU UM ROBÔ ANIMADO E INTERATIVO.**
+ *
+ * PEDIDO: usuário achou o azul da Rev. 4051 claro demais ("quero um azul mais escuro") e pediu pra trocar o
+ * mascote humano por um robô ("o julinho deve ser um robo.. animado e interativo"), referenciando uma imagem
+ * de um robô branco/prateado com colete de segurança amarelo, capacete branco e tablet holográfico.
+ *
+ * ESCOPO (paleta): `client/src/pages/portal/SiteVendas.tsx` — todos os tons de marca (fora do array `MODULES`,
+ * que guarda cores por categoria de módulo e não é a cor de marca do site) foram aprofundados: blue-600→900,
+ * blue-500→800, blue-400→700, blue-300→600, sky-600→indigo-900, sky-500→indigo-800, sky-400→indigo-700,
+ * sky-300→indigo-600. Tons claros (blue-50/100/200, sky-50/100) foram mantidos como tint de fundo suave —
+ * só ficaram mais escuros os elementos de destaque (nav, título, botões, seções, footer).
+ *
+ * ESCOPO (mascote): nova imagem gerada em `client/src/assets/julinho_robot.png` (robô humanoide branco/prateado,
+ * capacete branco, colete de segurança amarelo com forro azul-marinho, visor com "olhos" azuis brilhantes,
+ * segurando um tablet holográfico azul — combina com a paleta mais escura). No hero, o robô agora tem: flutuação
+ * contínua (`animate={{y:[0,-10,0]}}` em loop), glow pulsante atrás dele, e é CLICÁVEL — cada clique troca a fala
+ * do balão de diálogo entre 4 mensagens (`JULINHO_LINES`), com transição via `AnimatePresence`. A versão
+ * decorativa do robô na seção final de CTA também ganhou flutuação sutil. Nome "Julinho" mantido (só o design
+ * mudou de humano pra robô).
+ *
+ * Arquivo: `client/src/pages/portal/SiteVendas.tsx`, `client/src/assets/julinho_robot.png`. ZERO DELETE · ZERO
+ * ALTER destrutivo (asset humano antigo `julinho_mascot.png` só ficou sem uso, não foi apagado).
+ */
+
+/**
  * Rev. 4051 — **`/planos`: PALETA DE CORES TROCADA DE LARANJA/ÂMBAR PARA AZUL EM TODA A LANDING.**
  *
  * PEDIDO: usuário viu os screenshots da Rev. 4050 no canvas e disse que não curte laranja, prefere azul
