@@ -1051,7 +1051,7 @@ export default function MedicaoDetalhe() {
                   <Label className="text-xs font-medium text-gray-600">Data Início <span className="text-red-500">*</span></Label>
                   <Input
                     type="date"
-                    className="bg-gray-50 focus:bg-white w-full"
+                    className="bg-gray-50 focus:bg-white w-full flex items-center h-10 leading-normal"
                     value={formBoletim.dataInicio}
                     onChange={e => setFormBoletim(f => ({ ...f, dataInicio: e.target.value }))}
                   />
@@ -1063,7 +1063,7 @@ export default function MedicaoDetalhe() {
                   <Label className="text-xs font-medium text-gray-600">Data Fim <span className="text-red-500">*</span></Label>
                   <Input
                     type="date"
-                    className="bg-gray-50 focus:bg-white w-full"
+                    className="bg-gray-50 focus:bg-white w-full flex items-center h-10 leading-normal"
                     value={formBoletim.dataFim}
                     onChange={e => setFormBoletim(f => ({ ...f, dataFim: e.target.value }))}
                   />
@@ -1157,7 +1157,7 @@ export default function MedicaoDetalhe() {
                   <Label className="text-xs font-medium text-gray-600">Data Início <span className="text-red-500">*</span></Label>
                   <Input
                     type="date"
-                    className="bg-gray-50 focus:bg-white w-full"
+                    className="bg-gray-50 focus:bg-white w-full flex items-center h-10 leading-normal"
                     value={formEditBoletim.dataInicio}
                     onChange={e => setFormEditBoletim(f => ({ ...f, dataInicio: e.target.value }))}
                   />
@@ -1166,7 +1166,7 @@ export default function MedicaoDetalhe() {
                   <Label className="text-xs font-medium text-gray-600">Data Fim <span className="text-red-500">*</span></Label>
                   <Input
                     type="date"
-                    className="bg-gray-50 focus:bg-white w-full"
+                    className="bg-gray-50 focus:bg-white w-full flex items-center h-10 leading-normal"
                     value={formEditBoletim.dataFim}
                     onChange={e => setFormEditBoletim(f => ({ ...f, dataFim: e.target.value }))}
                   />
