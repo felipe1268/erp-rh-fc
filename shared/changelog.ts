@@ -13,8 +13,11 @@
  *
  * ESCOPO (mascote): nova imagem gerada em `client/src/assets/julinho_robot.png` (robô humanoide branco/prateado,
  * capacete branco, colete de segurança amarelo com forro azul-marinho, visor com "olhos" azuis brilhantes,
- * segurando um tablet holográfico azul — combina com a paleta mais escura). No hero, o robô agora tem: flutuação
- * contínua (`animate={{y:[0,-10,0]}}` em loop), glow pulsante atrás dele, e é CLICÁVEL — cada clique troca a fala
+ * segurando um tablet holográfico azul — combina com a paleta mais escura). Após feedback do usuário no canvas
+ * ("quero ele mais velho, mais alto.. transmitindo responsabilidade"), a imagem foi regenerada: build mais alto/
+ * robusto, postura calma e confiante (mão na cintura em vez de aceno), expressão séria no visor — transmite
+ * autoridade/responsabilidade em vez de fofura. No hero, o robô agora tem: flutuação contínua
+ * (`animate={{y:[0,-10,0]}}` em loop), glow pulsante atrás dele, e é CLICÁVEL — cada clique troca a fala
  * do balão de diálogo entre 4 mensagens (`JULINHO_LINES`), com transição via `AnimatePresence`. A versão
  * decorativa do robô na seção final de CTA também ganhou flutuação sutil. Nome "Julinho" mantido (só o design
  * mudou de humano pra robô).
