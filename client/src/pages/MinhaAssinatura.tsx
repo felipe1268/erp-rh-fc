@@ -7,7 +7,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
-import { CreditCard, Users, Loader2, PlusCircle, MinusCircle, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { CreditCard, Users, Loader2, PlusCircle, MinusCircle, AlertTriangle, CheckCircle2, Wallet } from "lucide-react";
+import { MODULES } from "@/pages/portal/modulesData";
+
+const MODULE_ICON_MAP = new Map(MODULES.map(m => [m.id, m]));
 
 function formatCentsBRL(cents: number): string {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -107,6 +110,8 @@ export default function MinhaAssinatura() {
             // Rev. 4059 — módulo fora de venda: quem já tem mantém (grandfather);
             // quem não tem não pode marcar (checkbox travado + aviso).
             const blockedToAdd = m.isActive === false && !isSelected;
+            const moduleInfo = MODULE_ICON_MAP.get(m.id);
+            const ModuleIcon = moduleInfo?.icon || Wallet;
             return (
               <label
                 key={m.id}
@@ -122,6 +127,13 @@ export default function MinhaAssinatura() {
                     setSelectedModules(prev => checked ? [...prev, m.id] : prev.filter(id => id !== m.id));
                   }}
                 />
+                <div
+                  className={`shrink-0 w-7 h-7 rounded-md flex items-center justify-center bg-gradient-to-br ${
+                    blockedToAdd ? "from-gray-300 to-gray-400" : moduleInfo?.color || "from-orange-500 to-amber-600"
+                  }`}
+                >
+                  <ModuleIcon className="w-3.5 h-3.5 text-white" />
+                </div>
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-800 break-words flex items-center gap-1.5">
                     {m.label}

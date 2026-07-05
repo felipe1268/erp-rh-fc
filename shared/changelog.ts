@@ -1,4 +1,21 @@
 /**
+ * Rev. 4062 — **LOGOTIPO DE CADA MÓDULO NAS TELAS DE VENDA E GESTÃO DE ASSINATURA.**
+ *
+ * PEDIDO: usuário anexou print de `/admin/saas/precos` (grid de cards de módulo) apontando que cada card só
+ * tinha nome/descrição/preço em texto, sem nenhum ícone identificando o módulo — pediu "em cada layout coloca
+ * o logotipo de cada módulo".
+ *
+ * FIX: `client/src/pages/portal/modulesData.ts` já tinha um `icon` (lucide-react) + `color` (gradiente
+ * Tailwind) por módulo, usado em `/planos` e `/planos/modulos/:id` — reaproveitado (sem duplicar dado) nas
+ * 4 telas que listam módulos por texto puro: `AdminPrecos.tsx` (card com ícone em bloco de 36px + gradiente),
+ * `MinhaAssinatura.tsx` e `ContratarPlano.tsx` (ícone de 28px ao lado do checkbox de cada módulo),
+ * `SaasAdminPanel.tsx` (ícone de 20px na barra "Popularidade dos módulos"). Módulo "seat" (assento de usuário,
+ * não tem entrada em `modulesData.ts`) e módulo desativado ("fora de venda") caem num ícone/gradiente cinza
+ * neutro (`Wallet` + `from-gray-300 to-gray-400`) em vez de quebrar. ZERO DELETE · ZERO ALTER destrutivo
+ * (mudança 100% de frontend, reuso de dado existente).
+ */
+
+/**
  * Rev. 4061 — **ADMINPRECOS: SALVAR PREÇO FALHAVA COM ERRO DA STRIPE "This price cannot be archived because it is the default price of its product".**
  *
  * PEDIDO: usuário anexou print do toast de erro ao clicar em "Salvar todos os preços" em `/admin/saas/precos`,

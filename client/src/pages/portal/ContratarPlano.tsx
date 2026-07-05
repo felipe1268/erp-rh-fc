@@ -6,7 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { useLocation, useSearch } from "wouter";
-import { Building2, Mail, User, Users, CreditCard, Loader2, CheckCircle2 } from "lucide-react";
+import { Building2, Mail, User, Users, CreditCard, Loader2, CheckCircle2, Wallet } from "lucide-react";
+import { MODULES } from "@/pages/portal/modulesData";
+
+const MODULE_ICON_MAP = new Map(MODULES.map(m => [m.id, m]));
 
 function formatCnpj(v: string): string {
   const n = v.replace(/\D/g, "").slice(0, 14);
@@ -142,21 +145,32 @@ export default function ContratarPlano() {
               <Label className="text-gray-700 font-medium mb-2 block">Módulos contratados</Label>
               {loadingCatalog && <Loader2 className="w-5 h-5 animate-spin text-gray-400" />}
               <div className="grid sm:grid-cols-2 gap-2">
-                {catalog?.modules.map((m) => (
-                  <label
-                    key={m.id}
-                    className={`flex items-start gap-2 rounded-lg border p-3 cursor-pointer transition-colors ${
-                      selectedModules.includes(m.id) ? "border-orange-500 bg-orange-50" : "border-gray-200 hover:border-gray-300"
-                    }`}
-                  >
-                    <Checkbox checked={selectedModules.includes(m.id)} onCheckedChange={() => toggleModule(m.id)} className="mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium text-gray-800">{m.label}</p>
-                      <p className="text-xs text-gray-500">{m.description}</p>
-                      <p className="text-xs font-semibold text-orange-600 mt-0.5">{formatCentsBRL(m.monthlyPriceCents)}/mês</p>
-                    </div>
-                  </label>
-                ))}
+                {catalog?.modules.map((m) => {
+                  const moduleInfo = MODULE_ICON_MAP.get(m.id);
+                  const ModuleIcon = moduleInfo?.icon || Wallet;
+                  return (
+                    <label
+                      key={m.id}
+                      className={`flex items-start gap-2 rounded-lg border p-3 cursor-pointer transition-colors ${
+                        selectedModules.includes(m.id) ? "border-orange-500 bg-orange-50" : "border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      <Checkbox checked={selectedModules.includes(m.id)} onCheckedChange={() => toggleModule(m.id)} className="mt-0.5" />
+                      <div
+                        className={`shrink-0 w-7 h-7 rounded-md flex items-center justify-center bg-gradient-to-br ${
+                          moduleInfo?.color || "from-orange-500 to-amber-600"
+                        }`}
+                      >
+                        <ModuleIcon className="w-3.5 h-3.5 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-800">{m.label}</p>
+                        <p className="text-xs text-gray-500">{m.description}</p>
+                        <p className="text-xs font-semibold text-orange-600 mt-0.5">{formatCentsBRL(m.monthlyPriceCents)}/mês</p>
+                      </div>
+                    </label>
+                  );
+                })}
               </div>
             </div>
 

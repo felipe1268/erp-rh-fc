@@ -8,8 +8,11 @@ import {
 import { toast } from "sonner";
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Building2, DollarSign, Users, AlertTriangle, Ban, CheckCircle2, XCircle, Loader2, Settings, TrendingUp, PlusCircle, BarChart3 } from "lucide-react";
+import { Building2, DollarSign, Users, AlertTriangle, Ban, CheckCircle2, XCircle, Loader2, Settings, TrendingUp, PlusCircle, BarChart3, Wallet } from "lucide-react";
+import { MODULES } from "@/pages/portal/modulesData";
 import { BILLING_MODULES } from "../../../shared/billingModules";
+
+const MODULE_ICON_MAP = new Map(MODULES.map(m => [m.id, m]));
 
 function formatCentsBRL(cents: number): string {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -133,9 +136,18 @@ export default function SaasAdminPanel() {
             {summary.moduleBreakdown.map(mod => {
               const maxCount = Math.max(1, ...summary.moduleBreakdown.map(m => m.companyCount));
               const pct = Math.round((mod.companyCount / maxCount) * 100);
+              const moduleInfo = MODULE_ICON_MAP.get(mod.id);
+              const ModuleIcon = moduleInfo?.icon || Wallet;
               return (
                 <div key={mod.id} className="flex items-center gap-3">
                   <span className="text-xs text-gray-600 w-40 shrink-0 truncate flex items-center gap-1.5" title={mod.label}>
+                    <span
+                      className={`shrink-0 w-5 h-5 rounded flex items-center justify-center bg-gradient-to-br ${
+                        mod.isActive === false ? "from-gray-300 to-gray-400" : moduleInfo?.color || "from-orange-500 to-amber-600"
+                      }`}
+                    >
+                      <ModuleIcon className="w-2.5 h-2.5 text-white" />
+                    </span>
                     {mod.label}
                     {mod.isActive === false && (
                       <span className="inline-flex items-center rounded-full bg-gray-100 text-gray-500 text-[10px] px-1.5 py-0.5 shrink-0">

@@ -6,7 +6,10 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
-import { DollarSign, Loader2, Save, RotateCcw, TrendingUp, Building2, EyeOff, Eye } from "lucide-react";
+import { DollarSign, Loader2, Save, RotateCcw, TrendingUp, Building2, EyeOff, Eye, Wallet } from "lucide-react";
+import { MODULES } from "@/pages/portal/modulesData";
+
+const MODULE_ICON_MAP = new Map(MODULES.map(m => [m.id, m]));
 
 function formatCentsBRL(cents: number): string {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -115,6 +118,8 @@ export default function AdminPrecos() {
           const changed = !isNaN(currentDraftCents) && currentDraftCents !== m.currentPriceCents;
           const isSeat = m.id === "seat";
           const disabled = !m.isActive;
+          const moduleInfo = MODULE_ICON_MAP.get(m.id);
+          const ModuleIcon = moduleInfo?.icon || Wallet;
           return (
             <div
               key={m.id}
@@ -123,15 +128,24 @@ export default function AdminPrecos() {
               }`}
             >
               <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className={`text-sm font-semibold truncate ${disabled ? "text-gray-400" : "text-gray-800"}`}>
-                    {m.label}
-                  </p>
-                  {m.description && (
-                    <p className={`text-xs mt-0.5 line-clamp-2 ${disabled ? "text-gray-400" : "text-gray-500"}`}>
-                      {m.description}
+                <div className="flex items-start gap-3 min-w-0">
+                  <div
+                    className={`shrink-0 w-9 h-9 rounded-lg flex items-center justify-center bg-gradient-to-br ${
+                      disabled ? "from-gray-300 to-gray-400" : moduleInfo?.color || "from-orange-500 to-amber-600"
+                    }`}
+                  >
+                    <ModuleIcon className="w-[18px] h-[18px] text-white" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className={`text-sm font-semibold truncate ${disabled ? "text-gray-400" : "text-gray-800"}`}>
+                      {m.label}
                     </p>
-                  )}
+                    {m.description && (
+                      <p className={`text-xs mt-0.5 line-clamp-2 ${disabled ? "text-gray-400" : "text-gray-500"}`}>
+                        {m.description}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 {!isSeat && (
                   <div className="flex items-center gap-2 shrink-0">
