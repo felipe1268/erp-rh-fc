@@ -3,13 +3,15 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { DollarSign, Loader2, Save, RotateCcw, TrendingUp } from "lucide-react";
+import { useLocation } from "wouter";
+import { DollarSign, Loader2, Save, RotateCcw, TrendingUp, Building2 } from "lucide-react";
 
 function formatCentsBRL(cents: number): string {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
 export default function AdminPrecos() {
+  const [, navigate] = useLocation();
   const utils = trpc.useUtils();
   const { data, isLoading } = trpc.billing.adminGetPrices.useQuery();
   const [draft, setDraft] = useState<Record<string, string>>({});
@@ -60,16 +62,21 @@ export default function AdminPrecos() {
 
   return (
     <div className="p-6 space-y-6 max-w-4xl">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-          <DollarSign className="w-6 h-6 text-orange-500" /> Ajuste de Preços do Catálogo
-        </h1>
-        <p className="text-sm text-gray-500 mt-1 max-w-2xl">
-          Estratégia sugerida: comece com valores baixos para o cliente novo experimentar sem medo,
-          e aumente gradualmente depois que ele já estiver acostumado com o sistema. Alterar aqui
-          afeta apenas <strong>novas contratações e upgrades</strong> — quem já assina mantém o valor
-          combinado no momento da adesão.
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <DollarSign className="w-6 h-6 text-orange-500" /> Ajuste de Preços do Catálogo
+          </h1>
+          <p className="text-sm text-gray-500 mt-1 max-w-2xl">
+            Estratégia sugerida: comece com valores baixos para o cliente novo experimentar sem medo,
+            e aumente gradualmente depois que ele já estiver acostumado com o sistema. Alterar aqui
+            afeta apenas <strong>novas contratações e upgrades</strong> — quem já assina mantém o valor
+            combinado no momento da adesão.
+          </p>
+        </div>
+        <Button variant="outline" onClick={() => navigate("/admin/saas")} className="shrink-0">
+          <Building2 className="w-4 h-4 mr-2" /> Empresas-cliente
+        </Button>
       </div>
 
       <div className="rounded-xl border bg-white overflow-hidden">

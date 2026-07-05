@@ -1,4 +1,25 @@
 /**
+ * Rev. 4056 — **NOVO ITEM "GESTÃO DE VENDAS (SAAS)" NO MENU DE ADMINISTRAÇÃO + CROSS-LINK ENTRE OS 2 PAINÉIS EXISTENTES.**
+ *
+ * PEDIDO: usuário pediu um botão no menu suspenso da conta (seção "Administração", junto de Usuários e Permissões,
+ * Auditoria, Configurações, Revisões, Lixeira, Telemetria) que dê acesso a "toda a parte gerencial do módulo de
+ * vendas" — valores/preços dos módulos, circuito/fluxo, custo, e quais empresas/clientes têm quais módulos.
+ *
+ * ESCOPO: a infraestrutura já existia mas estava fragmentada e sem link nenhum no menu — `SaasAdminPanel.tsx`
+ * (`/admin/saas`, admin_master) lista empresas-cliente/assinaturas/MRR/trial/suspender-reativar-cancelar, e
+ * `AdminPrecos.tsx` (`/admin/saas/precos`) edita os preços do catálogo sincronizados com Stripe, mas nenhum dos
+ * dois se referenciava e nenhum estava no menu de conta. Adicionado 1 novo `DropdownMenuItem` em `ModuleHub.tsx`
+ * (seção Administração, admin_master-only) "Gestão de Vendas (SaaS)" → navega pra `/admin/saas`, que já concentra
+ * a visão comercial (quem tem o quê, status, MRR). De lá, novo botão no cabeçalho leva pra `/admin/saas/precos`
+ * (preços) e vice-versa — os 2 painéis existentes agora formam um fluxo único de gestão comercial sem duplicar
+ * nenhuma lógica de backend (`server/routers/saasAdmin.ts` e `server/routers/billing.ts` intocados).
+ *
+ * NÃO ESCOPO: não existe conceito de "circuito"/pipeline de vendas separado no sistema hoje — o ciclo de vida já
+ * coberto (trial→ativo→atrasado→cancelado, suspender/reativar) é o que já está no `SaasAdminPanel`. ZERO DELETE ·
+ * ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4055 — **`/planos/modulos/:id`: SCREENSHOTS DE RH & DP REFEITAS COM DADOS 100% FICTÍCIOS (ZERO PII REAL).**
  *
  * PEDIDO: usuário anexou 5 prints do Raio-X do Funcionário mostrando PII real de colaboradores (nome completo, CPF,

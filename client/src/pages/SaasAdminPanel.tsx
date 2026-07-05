@@ -7,7 +7,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { useState } from "react";
-import { Building2, DollarSign, Users, AlertTriangle, Ban, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { useLocation } from "wouter";
+import { Building2, DollarSign, Users, AlertTriangle, Ban, CheckCircle2, XCircle, Loader2, Settings } from "lucide-react";
 import { BILLING_MODULES } from "../../../shared/billingModules";
 
 function formatCentsBRL(cents: number): string {
@@ -30,6 +31,7 @@ const STATUS_LABEL: Record<string, { label: string; className: string }> = {
 };
 
 export default function SaasAdminPanel() {
+  const [, navigate] = useLocation();
   const utils = trpc.useUtils();
   const { data: summary } = trpc.saasAdmin.getSummary.useQuery();
   const { data: companiesList, isLoading } = trpc.saasAdmin.listCompanies.useQuery();
@@ -64,11 +66,16 @@ export default function SaasAdminPanel() {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-          <Building2 className="w-6 h-6 text-orange-500" /> Painel SaaS — Empresas-cliente
-        </h1>
-        <p className="text-sm text-gray-500 mt-1">Assinaturas, MRR e ciclo de vida das empresas contratantes.</p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <Building2 className="w-6 h-6 text-orange-500" /> Painel SaaS — Empresas-cliente
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">Assinaturas, MRR e ciclo de vida das empresas contratantes.</p>
+        </div>
+        <Button variant="outline" onClick={() => navigate("/admin/saas/precos")} className="shrink-0">
+          <Settings className="w-4 h-4 mr-2" /> Preços dos módulos
+        </Button>
       </div>
 
       {summary && (
