@@ -579,6 +579,35 @@ export const cipaActionItems = pgTable("cipa_action_items", {
         index("cai_company").on(table.companyId),
 ]);
 
+// ============================================================
+// SAAS BILLING (Stripe) — Rev. 4042
+// companySubscriptions: 1 linha por empresa-cliente com assinatura Stripe.
+// companySubscriptionModules: módulos contratados na assinatura (histórico
+// imutável do priceId usado no momento da contratação/alteração).
+// ============================================================
+export const companySubscriptions = pgTable("company_subscriptions", {
+        id: serial().notNull(),
+        companyId: integer("company_id").notNull(),
+        stripeCustomerId: varchar("stripe_customer_id", { length: 255 }).notNull(),
+        stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }).notNull(),
+        status: varchar({ length: 30 }).default('trialing').notNull(), // trialing|active|past_due|canceled|unpaid
+        seats: integer().default(1).notNull(),
+        trialEnd: timestamp("trial_end", { mode: 'string' }),
+        currentPeriodEnd: timestamp("current_period_end", { mode: 'string' }),
+        canceledAt: timestamp("canceled_at", { mode: 'string' }),
+        paymentFailedAt: timestamp("payment_failed_at", { mode: 'string' }),
+        createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+        updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
+});
+
+export const companySubscriptionModules = pgTable("company_subscription_modules", {
+        id: serial().notNull(),
+        subscriptionId: integer("subscription_id").notNull(),
+        moduleId: varchar("module_id", { length: 60 }).notNull(),
+        stripePriceId: varchar("stripe_price_id", { length: 255 }),
+        createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+});
+
 export const companies = pgTable("companies", {
         id: serial().notNull(),
         cnpj: varchar({ length: 18 }).notNull(),

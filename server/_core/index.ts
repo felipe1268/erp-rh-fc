@@ -55,6 +55,21 @@ async function startServer() {
   }));
   // Security headers (XSS, clickjacking, MIME sniffing, HSTS)
   app.use(securityHeaders());
+  // Rev. 4042 — Webhook do Stripe: DEVE ser registrado ANTES do express.json(),
+  // pois a verificação de assinatura do Stripe exige o corpo RAW (Buffer), não
+  // o JSON já parseado.
+  app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (req: any, res: any) => {
+    try {
+      const signature = req.headers["stripe-signature"];
+      if (!signature) return res.status(400).send("Missing stripe-signature header");
+      const { WebhookHandlers } = await import("../webhookHandlers");
+      await WebhookHandlers.processWebhook(req.body, signature);
+      res.json({ received: true });
+    } catch (e: any) {
+      console.error("[StripeWebhook] Erro ao processar webhook:", e?.message || e);
+      res.status(400).send(`Webhook Error: ${e?.message || "unknown"}`);
+    }
+  });
   // Configure body parser with larger size limit for file uploads
   // Rev. 1765 — limites de upload removidos a pedido do usuário ('quero ilimitado').
   // Mantemos um teto técnico alto pra evitar OOM no container (2GB), mas na prática
@@ -4730,7 +4745,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v4022-2026-07-04-dre-consolidacao-manual";
+    const COLFIX_VERSION = "v4042b-2026-07-05-saas-billing-stripe-fix";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -6380,6 +6395,68 @@ Regras:
         `);
         console.log("[ColFix Rev.4022] financial_dre_consolidacoes garantida (consolidação manual do DRE).");
       } catch (e: any) { console.error("[ColFix Rev.4022] FALHA financial_dre_consolidacoes:", e?.message ?? e); }
+
+      // Rev. 4042 — SaaS Billing: tabelas de assinatura Stripe por empresa-cliente
+      try {
+        const _db4042 = await getDb();
+        if (!_db4042) throw new Error("db indisponível");
+        await _db4042.$client.query(`
+          CREATE TABLE IF NOT EXISTS company_subscriptions (
+            id                     SERIAL PRIMARY KEY,
+            company_id             INTEGER NOT NULL,
+            stripe_customer_id     VARCHAR(255) NOT NULL,
+            stripe_subscription_id VARCHAR(255) NOT NULL,
+            status                 VARCHAR(30) NOT NULL DEFAULT 'trialing',
+            seats                  INTEGER NOT NULL DEFAULT 1,
+            trial_end              TIMESTAMP,
+            current_period_end     TIMESTAMP,
+            canceled_at            TIMESTAMP,
+            payment_failed_at      TIMESTAMP,
+            created_at             TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at             TIMESTAMP NOT NULL DEFAULT NOW()
+          )
+        `);
+        await _db4042.$client.query(`
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_company_subscriptions_stripe_sub
+            ON company_subscriptions(stripe_subscription_id)
+        `);
+        await _db4042.$client.query(`
+          CREATE INDEX IF NOT EXISTS idx_company_subscriptions_company
+            ON company_subscriptions(company_id)
+        `);
+        await _db4042.$client.query(`
+          CREATE TABLE IF NOT EXISTS company_subscription_modules (
+            id              SERIAL PRIMARY KEY,
+            subscription_id INTEGER NOT NULL,
+            module_id       VARCHAR(60) NOT NULL,
+            stripe_price_id VARCHAR(255),
+            created_at      TIMESTAMP NOT NULL DEFAULT NOW()
+          )
+        `);
+        await _db4042.$client.query(`
+          CREATE INDEX IF NOT EXISTS idx_company_subscription_modules_sub
+            ON company_subscription_modules(subscription_id)
+        `);
+        console.log("[ColFix Rev.4042] company_subscriptions + company_subscription_modules garantidas (SaaS billing Stripe).");
+      } catch (e: any) { console.error("[ColFix Rev.4042] FALHA saas billing tables:", e?.message ?? e); }
+
+      // Rev. 4042 — Stripe: inicializar (schema stripe.* + webhook gerenciado)
+      // Envolvido em try/catch isolado: falha na configuração do Stripe NÃO
+      // pode derrubar o boot do resto da aplicação.
+      try {
+        const { isStripeConfigured, getStripeSync, runStripeSyncMigrations } = await import("../stripeClient");
+        if (isStripeConfigured()) {
+          await runStripeSyncMigrations();
+          const sync = await getStripeSync();
+          const domain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(",")[0];
+          if (domain) {
+            await sync.findOrCreateManagedWebhook(`https://${domain}/api/stripe/webhook`);
+          }
+          console.log("[Stripe] Inicializado (schema stripe.* sincronizado, webhook gerenciado).");
+        } else {
+          console.log("[Stripe] Não configurado (STRIPE_SECRET_KEY ausente) — módulo de billing desativado.");
+        }
+      } catch (e: any) { console.error("[Stripe] Falha ao inicializar:", e?.message ?? e); }
 
       // Marcar ColFix como aplicado nesta versão — próximos restarts pulam todos os blocos
       import("../services/startupCache").then(({ setCache }) =>
