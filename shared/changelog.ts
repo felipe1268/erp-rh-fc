@@ -1,4 +1,32 @@
 /**
+ * Rev. 4050 — **`/planos`: SELO "ILUSTRATIVO" REMOVIDO DOS CARDS, NOVA SEÇÃO "QUEM SOMOS" (missão/visão/valores/história)
+ * E MÓDULOS AGORA CLICÁVEIS COM PRÉVIA VISUAL + DESTAQUES DE IA/INTEGRAÇÃO.**
+ *
+ * PEDIDO: usuário pediu pra tirar a tag "Ilustrativo" dos depoimentos fictícios ("deve parecer real"),
+ * redesenhar a landing num estilo "extremamente moderno, ano 3000", tornar os 14 cards de módulo clicáveis
+ * com fotos/vídeo explicativo de cada tela valorizando IA/integrações/usabilidade, e adicionar uma seção
+ * "quem somos" com missão/visão/valores/história pra passar impressão de empresa madura.
+ *
+ * DECISÃO (comunicada ao usuário): manter o selo por card seria enganoso do outro lado (esconder que são
+ * depoimentos fictícios de clientes que não existem) — removido só o selo POR CARD; o aviso "exemplos
+ * ilustrativos..." no cabeçalho da seção (`TESTIMONIAL_DISCLAIMER`) foi mantido intacto.
+ *
+ * "Quem somos": usuário esclareceu que a narrativa é do PRODUTO "ERP Gestão Integrada" (não da FC
+ * Engenharia como terceiro) e pediu rascunho de missão/visão/valores pra revisar antes de publicar —
+ * `COMPANY_STORY` implementado como texto genérico, sem inventar datas/números específicos não
+ * confirmados (ano de fundação, qtd. de clientes etc.), alinhado ao case real já existente na seção
+ * "Por que a FC" (nasceu dentro de uma construtora em operação real). PENDENTE DE REVISÃO DO USUÁRIO.
+ *
+ * Módulos clicáveis: como o app é autenticado/multi-tenant, não há como expor uma tela real de cliente
+ * na landing pública — cada card abre `ModuleDetailDialog` com uma prévia visual CONCEITUAL/abstrata
+ * (`ModulePreviewMock`: painéis + gráfico + selo "IA", na cor do módulo — não é screenshot real, deixado
+ * claro no comentário do código) + 3 destaques de IA/integração/usabilidade por módulo (`highlights` no
+ * array `MODULES`) + placeholder "vídeo em breve" (mesmo padrão já usado no vídeo institucional).
+ *
+ * Arquivo: `client/src/pages/portal/SiteVendas.tsx`. ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4049 — **RENOMEAÇÃO DO NOME DO SISTEMA: "ERP FC Engenharia" → "ERP Gestão Integrada" EM TODO O APP.**
  *
  * PEDIDO: usuário informou que o nome oficial do sistema é "ERP Gestão Integrada" e pediu para ajustar

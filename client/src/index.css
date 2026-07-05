@@ -929,3 +929,24 @@ html, body, * {
 .marquee-row:hover .marquee-track-right {
   animation-play-state: paused;
 }
+
+/* Rev. 4050 — micro-animações "futuristas" da landing /planos (hero mesh + partículas flutuantes) */
+@keyframes mesh-drift {
+  0%   { background-position: 0% 0%, 0% 0%, 0% 0%, 0% 0%; }
+  50%  { background-position: 3% 4%, -3% -2%, 2% -3%, 0% 0%; }
+  100% { background-position: 0% 0%, 0% 0%, 0% 0%, 0% 0%; }
+}
+.animate-mesh-drift {
+  animation: mesh-drift 18s ease-in-out infinite;
+  background-size: 140% 140%, 140% 140%, 140% 140%, 100% 100%;
+}
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-14px); }
+}
+@keyframes float-slower {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(18px); }
+}
+.animate-float-slow { animation: float-slow 6s ease-in-out infinite; }
+.animate-float-slower { animation: float-slower 8s ease-in-out infinite; }

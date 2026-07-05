@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4050** — **`/planos`: SELO "ILUSTRATIVO" REMOVIDO DOS CARDS, NOVA SEÇÃO "QUEM SOMOS" (missão/visão/valores/história, RASCUNHO pendente de revisão do usuário) E MÓDULOS CLICÁVEIS COM PRÉVIA VISUAL + DESTAQUES DE IA/INTEGRAÇÃO.** Pedido: tirar a tag "Ilustrativo" ("deve parecer real"), redesign moderno, módulos clicáveis com fotos/vídeo explicativo, seção institucional pra parecer empresa madura. Selo por card removido mas aviso do cabeçalho (`TESTIMONIAL_DISCLAIMER`) mantido — evita depoimento fictício sem qualquer disclosure. `ModuleDetailDialog`/`ModulePreviewMock` abrem prévia CONCEITUAL/abstrata de cada módulo (app é autenticado/multi-tenant, não dá pra expor tela real de cliente na landing pública) + `highlights` de IA/integração por módulo + placeholder "vídeo em breve". `COMPANY_STORY` (missão/visão/valores/história) é do PRODUTO, sem datas/números inventados. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4049** — **RENOMEAÇÃO DO NOME DO SISTEMA: "ERP FC Engenharia" → "ERP Gestão Integrada" EM TODO O APP.** Usuário informou o nome oficial do sistema. Distinção preservada: "FC Engenharia" também é a empresa REAL cliente-zero (seed em `initSetup.ts`, fallback de nome de empresa, case real na landing) — essas referências à ENTIDADE ficaram intactas; só o NOME DO PRODUTO/SISTEMA foi trocado (navbar/footer de `SiteVendas.tsx`, heading `ContratarPlano.tsx`, rodapés de PDF/HTML em ~15 arquivos client+server, `VITE_APP_TITLE` env var, `SETUP_LOCAL.md`). ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4048** — **`/planos` GANHA SEÇÃO DE "CASES ILUSTRATIVOS" (50 EXEMPLOS FICTÍCIOS, CLARAMENTE RÓTULADOS).** Usuário pediu "mais 50 cases para validação social"; como a regra é nunca inventar cliente fictício apresentado como real, foi confirmado por pergunta que são depoimentos fictícios com aviso explícito. `SiteVendas.tsx` ganhou `TESTIMONIALS` (50 objetos fictícios) + `TestimonialCardView` (badge "Ilustrativo"), nova seção "Exemplos de uso" com disclaimer permanente acima de um carrossel de 2 faixas com scroll infinito (`marquee-left`/`marquee-right` em `client/src/index.css`, pausa no hover). Case único REAL da FC Engenharia intacto em "Por que a FC". ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4048** — **`/planos` GANHA SEÇÃO DE "CASES ILUSTRATIVOS" (50 EXEMPLOS FICTÍCIOS, CLARAMENTE RÓTULADOS).** Usuário pediu "mais 50 cases para validação social"; como a regra é nunca inventar cliente fictício apresentado como real, foi confirmado por pergunta que são depoimentos fictícios com aviso explícito. `SiteVendas.tsx` ganhou `TESTIMONIALS` (50 objetos fictícios) + `TestimonialCardView` (badge "Ilustrativo"), nova seção "Exemplos de uso" com disclaimer permanente acima de um carrossel de 2 faixas com scroll infinito (`marquee-left`/`marquee-right` em `client/src/index.css`, pausa no hover). Case único REAL da FC Engenharia intacto em "Por que a FC". ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4047** — **`/planos` REDESENHADA (TEMA CLARO/VÍVIDO) + MASCOTE "JULINHO" + PREÇOS AJUSTÁVEIS PELO ADMIN.** Nova tabela `billing_module_prices` (self-heal) + `applyPriceOverrides()`; `server/routers/billing.ts` ganhou `adminGetPrices`/`adminUpdatePrices`; nova página `AdminPrecos.tsx` em `/admin/saas/precos`; `SiteVendas.tsx` reescrita com fundo claro/vívido e mascote "Julinho". ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4044** — **PROJETO SAAS "FASE 3" — LIFECYCLE DE ASSINATURA: SELF-SERVICE REAL PRA `ADM_CLIENTE`.** `server/routers/billing.ts` ganhou `getMySubscription`/`createPortalSession`/`updateSubscription`/`cancelMySubscription`/`reactivateMySubscription`; nova página `MinhaAssinatura.tsx` com guard `AdmClienteGuard` em `/minha-assinatura`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4041** — **PROJETO SAAS: NOVO PERFIL "ADM CLIENTE" + 2 VULNS CRÍTICAS DE `listUsers`/`createLocalUser` CORRIGIDAS.** Novo papel `adm_cliente` (gerencia só usuários `role:"user"` da própria empresa); achado GRAVE corrigido: `listUsers`/`createLocalUser` sem check de role permitiam escalação total e vazamento cross-tenant. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4040 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4041 e anteriores.
 
 ## User preferences
 

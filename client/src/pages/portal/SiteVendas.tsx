@@ -1,14 +1,17 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Users, Shield, Gavel, CalendarRange, DollarSign, ShoppingCart, Calculator,
   ArrowRight, Building2, ClipboardCheck, Handshake, Ruler, BookOpen,
   HardHat, Warehouse, FolderOpen, Truck, ShieldCheck, Receipt,
   CheckCircle2, Sparkles, Play, Instagram, Youtube, Menu, X,
   TrendingUp, Lock, Zap, Layers, ArrowUpRight, Heart, Smile, Quote, Info,
+  Target, Compass, Award, Rocket, BrainCircuit, Plug, MousePointerClick,
+  BarChart3, PieChart, ListChecks,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
 import julinhoImg from "@/assets/julinho_mascot.png";
 
@@ -36,24 +39,49 @@ type ModuleCard = {
   description: string;
   icon: any;
   color: string;
+  highlights: string[];
 };
 
 const MODULES: ModuleCard[] = [
-  { id: "rh-dp", title: "RH & DP", subtitle: "Recursos Humanos", description: "Colaboradores, folha de pagamento, ponto eletrônico, férias, benefícios e documentação trabalhista.", icon: Users, color: "from-blue-500 to-indigo-500" },
-  { id: "sst", title: "SST", subtitle: "Segurança do Trabalho", description: "EPIs, ASOs, CIPA, treinamentos de segurança e conformidade com normas regulamentadoras.", icon: Shield, color: "from-emerald-500 to-teal-600" },
-  { id: "juridico", title: "Jurídico", subtitle: "Gestão Jurídica Completa", description: "Trabalhista, tributário e civil — processos, audiências, provisões e análise de risco com IA.", icon: Gavel, color: "from-slate-600 to-amber-500" },
-  { id: "avaliacao", title: "Avaliação", subtitle: "Desempenho", description: "Questionários personalizáveis, ciclos de avaliação, ranking e análise de competências.", icon: ClipboardCheck, color: "from-amber-500 to-orange-600" },
-  { id: "terceiros", title: "Terceiros", subtitle: "Empresas Terceirizadas", description: "Cadastro, documentação, obrigações mensais, aptidão e conformidade de terceirizadas.", icon: HardHat, color: "from-orange-500 to-red-500" },
-  { id: "parceiros", title: "Parceiros", subtitle: "Portal de Convênios", description: "Farmácia, posto, restaurante e outros convênios com lançamentos e aprovações.", icon: Handshake, color: "from-purple-500 to-violet-600" },
-  { id: "planejamento", title: "Planejamento", subtitle: "Gestão de Projetos", description: "Curva S, avanço físico semanal, revisões de cronograma e % previsto x realizado.", icon: CalendarRange, color: "from-green-500 to-emerald-600" },
-  { id: "orcamento", title: "Orçamento", subtitle: "Orçamento de Obras", description: "Importação de planilhas com BDI, curva ABC de insumos e 3 versões de orçamento.", icon: Calculator, color: "from-cyan-500 to-sky-600" },
-  { id: "compras", title: "Compras", subtitle: "Suprimentos", description: "Solicitações com aprovação, cotações comparativas e ordens de compra.", icon: ShoppingCart, color: "from-rose-500 to-pink-600" },
-  { id: "financeiro", title: "Financeiro", subtitle: "Gestão Financeira", description: "Contas a pagar/receber, conciliação bancária, DRE e fluxo de caixa.", icon: DollarSign, color: "from-amber-500 to-yellow-600" },
-  { id: "medicao", title: "Medição", subtitle: "Boletins de Medição", description: "Medição de contratos com % automático de avanço físico e faturamento.", icon: Ruler, color: "from-teal-500 to-cyan-600" },
-  { id: "almoxarifado", title: "Almoxarifado", subtitle: "Materiais e Equipamentos", description: "Controle de estoque, ferramentas, empréstimos e inventário centralizado.", icon: Warehouse, color: "from-emerald-500 to-green-600" },
-  { id: "gestao-documentos", title: "Doc. Técnicos", subtitle: "Gestão de Documentos", description: "Central de documentos técnicos com revisões, aprovações e ARTs/RRTs.", icon: FolderOpen, color: "from-indigo-500 to-blue-600" },
-  { id: "frotas", title: "Frotas", subtitle: "Controle de Veículos", description: "Manutenções, combustível, multas, IPVA, seguros e rastreamento.", icon: Truck, color: "from-sky-500 to-cyan-600" },
+  { id: "rh-dp", title: "RH & DP", subtitle: "Recursos Humanos", description: "Colaboradores, folha de pagamento, ponto eletrônico, férias, benefícios e documentação trabalhista.", icon: Users, color: "from-blue-500 to-indigo-500", highlights: ["IA sugere férias e alerta vencimentos automaticamente", "Integração direta com ponto eletrônico e folha", "Telas simples até pra quem nunca usou ERP"] },
+  { id: "sst", title: "SST", subtitle: "Segurança do Trabalho", description: "EPIs, ASOs, CIPA, treinamentos de segurança e conformidade com normas regulamentadoras.", icon: Shield, color: "from-emerald-500 to-teal-600", highlights: ["IA analisa risco de vencimento de ASO e treinamentos", "Integração com Almoxarifado (EPIs) e RH", "Central única de documentos de segurança"] },
+  { id: "juridico", title: "Jurídico", subtitle: "Gestão Jurídica Completa", description: "Trabalhista, tributário e civil — processos, audiências, provisões e análise de risco com IA.", icon: Gavel, color: "from-slate-600 to-amber-500", highlights: ["IA classifica o risco de cada processo automaticamente", "Integração com RH para rescisões e SST", "Linha do tempo visual de cada processo"] },
+  { id: "avaliacao", title: "Avaliação", subtitle: "Desempenho", description: "Questionários personalizáveis, ciclos de avaliação, ranking e análise de competências.", icon: ClipboardCheck, color: "from-amber-500 to-orange-600", highlights: ["Ciclos e formulários 100% personalizáveis", "Ranking automático de competências", "Interface simples pra qualquer gestor aplicar"] },
+  { id: "terceiros", title: "Terceiros", subtitle: "Empresas Terceirizadas", description: "Cadastro, documentação, obrigações mensais, aptidão e conformidade de terceirizadas.", icon: HardHat, color: "from-orange-500 to-red-500", highlights: ["IA cruza obrigações e prazos de terceirizadas", "Integração com Almoxarifado e Gestão de Documentos", "Alertas automáticos de vencimento"] },
+  { id: "parceiros", title: "Parceiros", subtitle: "Portal de Convênios", description: "Farmácia, posto, restaurante e outros convênios com lançamentos e aprovações.", icon: Handshake, color: "from-purple-500 to-violet-600", highlights: ["Aprovações de convênio em poucos cliques", "Integração direta com a Folha", "Portal simples pro colaborador usar no celular"] },
+  { id: "planejamento", title: "Planejamento", subtitle: "Gestão de Projetos", description: "Curva S, avanço físico semanal, revisões de cronograma e % previsto x realizado.", icon: CalendarRange, color: "from-green-500 to-emerald-600", highlights: ["IA cruza avanço físico x financeiro na Curva S", "Integração com Medição e Orçamento", "Visual claro de % previsto x realizado"] },
+  { id: "orcamento", title: "Orçamento", subtitle: "Orçamento de Obras", description: "Importação de planilhas com BDI, curva ABC de insumos e 3 versões de orçamento.", icon: Calculator, color: "from-cyan-500 to-sky-600", highlights: ["IA identifica insumos fora da curva ABC", "Integração direta com Compras", "Importação de planilha sem retrabalho"] },
+  { id: "compras", title: "Compras", subtitle: "Suprimentos", description: "Solicitações com aprovação, cotações comparativas e ordens de compra.", icon: ShoppingCart, color: "from-rose-500 to-pink-600", highlights: ["IA compara cotações e aponta a melhor opção", "Integração com Orçamento e Financeiro", "Aprovação em poucos toques, do celular"] },
+  { id: "financeiro", title: "Financeiro", subtitle: "Gestão Financeira", description: "Contas a pagar/receber, conciliação bancária, DRE e fluxo de caixa.", icon: DollarSign, color: "from-amber-500 to-yellow-600", highlights: ["IA concilia extrato bancário automaticamente", "Integração com Compras, Folha e Medição", "DRE e fluxo de caixa sempre atualizados"] },
+  { id: "medicao", title: "Medição", subtitle: "Boletins de Medição", description: "Medição de contratos com % automático de avanço físico e faturamento.", icon: Ruler, color: "from-teal-500 to-cyan-600", highlights: ["IA calcula o % de avanço automaticamente", "Integração direta com Planejamento", "Boletim de medição pronto em minutos"] },
+  { id: "almoxarifado", title: "Almoxarifado", subtitle: "Materiais e Equipamentos", description: "Controle de estoque, ferramentas, empréstimos e inventário centralizado.", icon: Warehouse, color: "from-emerald-500 to-green-600", highlights: ["IA estima consumo e alerta reposição", "Integração com Compras e Terceiros", "Inventário visual, fácil de conferir"] },
+  { id: "gestao-documentos", title: "Doc. Técnicos", subtitle: "Gestão de Documentos", description: "Central de documentos técnicos com revisões, aprovações e ARTs/RRTs.", icon: FolderOpen, color: "from-indigo-500 to-blue-600", highlights: ["IA organiza revisões e aprovações pendentes", "Integração com SST e Jurídico", "Central única pra ART, RRT e ISO"] },
+  { id: "frotas", title: "Frotas", subtitle: "Controle de Veículos", description: "Manutenções, combustível, multas, IPVA, seguros e rastreamento.", icon: Truck, color: "from-sky-500 to-cyan-600", highlights: ["IA aponta manutenção preventiva antes do problema", "Integração com rastreamento via Infleet", "Multas, seguro e IPVA num só lugar"] },
 ];
+
+/**
+ * Rev. 4050 — RASCUNHO da narrativa institucional do produto "ERP Gestão
+ * Integrada" (não da FC Engenharia como empresa terceira — o produto é feito
+ * PELA FC). Texto pendente de revisão do usuário antes de considerar final;
+ * não inventa datas/números específicos não confirmados (ex.: ano de fundação,
+ * qtd. de clientes) — fica genérico e alinhado ao case real já existente
+ * ("nasceu dentro de uma construtora em operação").
+ */
+const COMPANY_STORY = {
+  historia: [
+    "O ERP Gestão Integrada nasceu de um problema muito concreto: uma construtora em operação real, cansada de planilhas soltas, retrabalho entre RH, obra e financeiro, e informação que nunca batia entre os times.",
+    "Em vez de contratar um software genérico adaptado \"na marra\" pra construção civil, a decisão foi construir o próprio sistema — módulo por módulo, testado no dia a dia de canteiro antes de qualquer linha de código virar produto.",
+    "O resultado é uma plataforma que evoluiu (e continua evoluindo) junto com quem constrói de verdade: cada novo recurso resolve uma dor real de RH, engenharia, jurídico ou financeiro — não uma suposição de mercado.",
+  ],
+  missao: "Simplificar a gestão de construtoras de qualquer porte, unindo RH, obra, jurídico, compras e financeiro em uma única plataforma acessível, inteligente e fácil de usar desde o primeiro dia.",
+  visao: "Ser a plataforma de gestão mais confiável do setor da construção civil — reconhecida por unir inteligência artificial aplicada, integrações reais entre áreas e uma experiência simples o bastante pra qualquer equipe usar sem treinamento longo.",
+  valores: [
+    { icon: Heart, title: "Feito por quem constrói", text: "Cada módulo nasce de um problema real de canteiro, não de uma suposição de escritório." },
+    { icon: BrainCircuit, title: "Inteligência aplicada", text: "IA a serviço da decisão: alertas, cruzamento de dados e análises que economizam tempo de verdade." },
+    { icon: Lock, title: "Segurança e transparência", text: "Dados isolados por empresa, auditados continuamente, sem letras miúdas no contrato." },
+    { icon: Rocket, title: "Evolução constante", text: "O sistema cresce mês a mês junto com quem usa — sempre com o pé no chão da obra." },
+  ],
+};
 
 type TestimonialCard = { name: string; role: string; company: string; city: string; quote: string };
 
@@ -123,9 +151,6 @@ const TESTIMONIAL_DISCLAIMER =
 function TestimonialCardView({ t }: { t: TestimonialCard }) {
   return (
     <div className="relative shrink-0 w-[320px] sm:w-[360px] rounded-2xl border border-orange-100 bg-white shadow-sm p-6 mx-3 flex flex-col">
-      <span className="absolute top-4 right-4 text-[10px] font-semibold uppercase tracking-wide text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
-        Ilustrativo
-      </span>
       <Quote className="w-6 h-6 text-orange-300 mb-3" />
       <p className="text-sm text-slate-600 leading-relaxed italic flex-1">"{t.quote}"</p>
       <div className="mt-5 pt-4 border-t border-slate-100">
@@ -148,9 +173,104 @@ function formatPrice(cents: number): string {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
+/**
+ * Rev. 4050 — Prévia visual "conceitual" da tela de cada módulo, aberta ao
+ * clicar no card. NÃO é um screenshot real do app (o app é autenticado e
+ * multi-tenant, não daria pra expor uma tela real de cliente aqui) — é uma
+ * ilustração abstrata (painéis + gráfico + selo de IA) na cor do módulo,
+ * deixando claro visualmente o tipo de informação que a tela mostra.
+ */
+function ModulePreviewMock({ m }: { m: ModuleCard }) {
+  return (
+    <div className={`relative rounded-2xl overflow-hidden bg-gradient-to-br ${m.color} p-5 sm:p-6 aspect-[16/10]`}>
+      <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "16px 16px" }} />
+      <div className="relative h-full rounded-xl bg-white/95 backdrop-blur-sm shadow-xl p-4 flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className={`w-6 h-6 rounded-md bg-gradient-to-br ${m.color} flex items-center justify-center`}>
+              <m.icon className="w-3.5 h-3.5 text-white" />
+            </div>
+            <div className="h-2 w-20 rounded-full bg-slate-200" />
+          </div>
+          <div className="flex items-center gap-1 text-[9px] font-semibold text-violet-600 bg-violet-50 border border-violet-200 rounded-full px-2 py-0.5">
+            <BrainCircuit className="w-2.5 h-2.5" /> IA
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2 flex-1">
+          <div className="rounded-lg bg-slate-50 border border-slate-100 p-2 flex flex-col justify-between">
+            <BarChart3 className="w-4 h-4 text-slate-300" />
+            <div className="flex items-end gap-1 h-10">
+              {[40, 70, 55, 90, 65].map((h, i) => (
+                <div key={i} className={`w-full rounded-sm bg-gradient-to-t ${m.color} opacity-70`} style={{ height: `${h}%` }} />
+              ))}
+            </div>
+          </div>
+          <div className="rounded-lg bg-slate-50 border border-slate-100 p-2 flex flex-col items-center justify-center gap-1">
+            <PieChart className="w-4 h-4 text-slate-300" />
+            <div className="h-1.5 w-10 rounded-full bg-slate-200" />
+            <div className="h-1.5 w-7 rounded-full bg-slate-200" />
+          </div>
+          <div className="rounded-lg bg-slate-50 border border-slate-100 p-2 flex flex-col gap-1.5">
+            <ListChecks className="w-4 h-4 text-slate-300 mb-0.5" />
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-1.5 rounded-full bg-slate-200" style={{ width: `${90 - i * 15}%` }} />
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+          <MousePointerClick className="w-3.5 h-3.5 text-slate-300" />
+          <div className="h-1.5 w-24 rounded-full bg-slate-100" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModuleDetailDialog({ m, price, onClose, onSubscribe }: { m: ModuleCard; price: string | null; onClose: () => void; onSubscribe: () => void }) {
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="sm:max-w-2xl p-0 overflow-hidden gap-0">
+        <div className="p-6 sm:p-8">
+          <div className="flex items-center gap-3 mb-5">
+            <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${m.color} flex items-center justify-center shadow-md shrink-0`}>
+              <m.icon className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-slate-900">{m.title}</h3>
+              <p className="text-xs text-slate-400">{m.subtitle}</p>
+            </div>
+          </div>
+          <ModulePreviewMock m={m} />
+          <p className="text-sm text-slate-500 mt-5 leading-relaxed">{m.description}</p>
+          <div className="mt-5 space-y-2.5">
+            {m.highlights.map((h) => (
+              <div key={h} className="flex items-start gap-2.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                <p className="text-sm text-slate-600">{h}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-6 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 flex items-center gap-2 text-xs text-slate-400">
+            <Play className="w-3.5 h-3.5" /> Vídeo explicativo desta tela em produção — em breve por aqui.
+          </div>
+          <div className="mt-6 flex items-center justify-between gap-4 flex-wrap">
+            <span className="text-lg font-bold text-orange-600">
+              {price ? `${price}/mês` : "Sob consulta"}
+            </span>
+            <Button className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-lg shadow-orange-200" onClick={onSubscribe}>
+              Testar este módulo grátis <ArrowRight className="w-4 h-4 ml-1.5" />
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function SiteVendas() {
   const [, navigate] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [selectedModule, setSelectedModule] = useState<ModuleCard | null>(null);
   const { data: catalog } = trpc.billing.getCatalog.useQuery();
 
   const priceFor = (moduleId: string): string | null => {
@@ -166,6 +286,7 @@ export default function SiteVendas() {
 
   const navLinks = [
     { label: "Módulos", href: "#modulos" },
+    { label: "Quem somos", href: "#quem-somos" },
     { label: "Por que a FC", href: "#sobre" },
     { label: "Vídeo", href: "#video" },
     { label: "Planos", href: "#planos" },
@@ -174,18 +295,20 @@ export default function SiteVendas() {
   return (
     <div className="min-h-screen bg-white text-slate-800 overflow-x-hidden">
       {/* ── Nav ── */}
-      <header className="sticky top-0 z-50 backdrop-blur-xl bg-white/85 border-b border-orange-100">
+      <header className="sticky top-0 z-50 backdrop-blur-2xl bg-white/70 border-b border-white/60 shadow-[0_1px_20px_rgba(251,146,60,0.08)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-amber-400 flex items-center justify-center shadow-md shadow-orange-200">
+            <div className="relative w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-amber-400 flex items-center justify-center shadow-md shadow-orange-200">
+              <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-orange-400 to-amber-300 blur-md opacity-50 -z-10" />
               <Building2 className="w-5 h-5 text-white" />
             </div>
             <span className="font-bold text-lg tracking-tight text-slate-800">ERP Gestão Integrada</span>
           </div>
           <nav className="hidden md:flex items-center gap-8">
             {navLinks.map((l) => (
-              <a key={l.href} href={l.href} className="text-sm text-slate-600 hover:text-orange-600 transition-colors font-medium">
+              <a key={l.href} href={l.href} className="relative text-sm text-slate-600 hover:text-orange-600 transition-colors font-medium group">
                 {l.label}
+                <span className="absolute -bottom-1 left-0 w-0 h-px bg-gradient-to-r from-orange-500 to-amber-400 group-hover:w-full transition-all duration-300" />
               </a>
             ))}
           </nav>
@@ -219,12 +342,16 @@ export default function SiteVendas() {
       {/* ── Hero ── */}
       <section className="relative pt-16 pb-20 px-4 sm:px-6 overflow-hidden">
         <div
-          className="absolute inset-0 -z-10"
+          className="absolute inset-0 -z-10 animate-mesh-drift"
           style={{
             background:
-              "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(253,186,116,0.35) 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 95% 10%, rgba(96,165,250,0.18) 0%, transparent 60%), linear-gradient(180deg, #FFFBF5 0%, #FFFFFF 40%)",
+              "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(253,186,116,0.35) 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 95% 10%, rgba(96,165,250,0.18) 0%, transparent 60%), radial-gradient(ellipse 50% 35% at 10% 25%, rgba(244,114,182,0.12) 0%, transparent 60%), linear-gradient(180deg, #FFFBF5 0%, #FFFFFF 40%)",
           }}
         />
+        <div className="absolute inset-0 -z-10 opacity-[0.35] [background-image:radial-gradient(circle,rgba(251,146,60,0.35)_1px,transparent_1px)] [background-size:28px_28px]" />
+        <div className="absolute top-24 left-[8%] w-2 h-2 rounded-full bg-orange-400/60 animate-float-slow hidden sm:block" />
+        <div className="absolute top-40 right-[12%] w-3 h-3 rounded-full bg-amber-400/50 animate-float-slower hidden sm:block" />
+        <div className="absolute bottom-16 left-[20%] w-1.5 h-1.5 rounded-full bg-sky-400/60 animate-float-slow hidden sm:block" />
         <div className="max-w-6xl mx-auto grid lg:grid-cols-[1.1fr_0.9fr] gap-10 items-center">
           <div className="text-center lg:text-left">
             <motion.div
@@ -310,9 +437,10 @@ export default function SiteVendas() {
             { value: "100%", label: "self-service" },
             { value: "0", label: "instalação necessária" },
           ].map((s) => (
-            <div key={s.label} className="rounded-2xl border border-orange-100 bg-white shadow-sm px-4 py-6 text-center">
-              <p className="text-2xl sm:text-3xl font-bold text-orange-500">{s.value}</p>
-              <p className="text-xs text-slate-500 mt-1">{s.label}</p>
+            <div key={s.label} className="group relative rounded-2xl border border-white/60 bg-white/60 backdrop-blur-xl shadow-[0_4px_24px_rgba(251,146,60,0.08)] px-4 py-6 text-center overflow-hidden hover:border-orange-200 hover:-translate-y-0.5 transition-all duration-300">
+              <div className="absolute inset-0 bg-gradient-to-br from-orange-100/0 via-orange-100/0 to-amber-100/0 group-hover:from-orange-100/40 group-hover:to-amber-100/20 transition-all duration-300" />
+              <p className="relative text-2xl sm:text-3xl font-bold bg-gradient-to-r from-orange-500 to-amber-500 bg-clip-text text-transparent">{s.value}</p>
+              <p className="relative text-xs text-slate-500 mt-1">{s.label}</p>
             </div>
           ))}
         </motion.div>
@@ -328,15 +456,19 @@ export default function SiteVendas() {
           </motion.div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {MODULES.map((m, i) => (
-              <motion.div
+              <motion.button
                 key={m.id}
+                type="button"
+                onClick={() => setSelectedModule(m)}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-40px" }}
                 transition={{ duration: 0.4, delay: (i % 3) * 0.06 }}
-                className="group rounded-2xl border border-orange-100 bg-white p-6 hover:shadow-lg hover:border-orange-200 hover:-translate-y-0.5 transition-all"
+                whileHover={{ y: -4 }}
+                className="group text-left rounded-2xl border border-orange-100 bg-white/80 backdrop-blur-sm p-6 hover:shadow-xl hover:shadow-orange-100/60 hover:border-orange-300 transition-all relative overflow-hidden"
               >
-                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${m.color} flex items-center justify-center mb-4 shadow-md`}>
+                <div className={`absolute -right-8 -top-8 w-24 h-24 rounded-full bg-gradient-to-br ${m.color} opacity-0 group-hover:opacity-10 blur-xl transition-opacity`} />
+                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${m.color} flex items-center justify-center mb-4 shadow-md group-hover:scale-105 transition-transform`}>
                   <m.icon className="w-5.5 h-5.5 text-white" />
                 </div>
                 <h3 className="font-semibold text-lg text-slate-900">{m.title}</h3>
@@ -346,8 +478,71 @@ export default function SiteVendas() {
                   <span className="text-sm font-semibold text-orange-600">
                     {priceFor(m.id) ? `${priceFor(m.id)}/mês` : "—"}
                   </span>
-                  <ArrowUpRight className="w-4 h-4 text-slate-300 group-hover:text-orange-500 transition-colors" />
+                  <span className="flex items-center gap-1 text-xs font-medium text-slate-300 group-hover:text-orange-500 transition-colors">
+                    Ver tela <ArrowUpRight className="w-4 h-4" />
+                  </span>
                 </div>
+              </motion.button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {selectedModule && (
+        <ModuleDetailDialog
+          m={selectedModule}
+          price={priceFor(selectedModule.id)}
+          onClose={() => setSelectedModule(null)}
+          onSubscribe={() => { setSelectedModule(null); goToPlans(); }}
+        />
+      )}
+
+      {/* ── Quem somos (missão, visão, valores, história) ── */}
+      <section id="quem-somos" className="py-24 px-4 sm:px-6 bg-gradient-to-b from-white to-orange-50/40">
+        <div className="max-w-6xl mx-auto">
+          <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="text-center max-w-2xl mx-auto mb-16">
+            <span className="text-xs font-semibold text-orange-600 tracking-widest uppercase">Quem somos</span>
+            <h2 className="text-3xl sm:text-4xl font-bold mt-3 text-slate-900">Uma plataforma construída com propósito, não do zero por acaso</h2>
+          </motion.div>
+
+          <div className="grid lg:grid-cols-2 gap-10 items-start mb-16">
+            <motion.div initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="space-y-5">
+              <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-orange-500" /> Nossa história
+              </h3>
+              {COMPANY_STORY.historia.map((p, i) => (
+                <p key={i} className="text-sm text-slate-600 leading-relaxed">{p}</p>
+              ))}
+            </motion.div>
+            <div className="grid gap-5">
+              <motion.div initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="rounded-2xl border border-orange-100 bg-white p-6 shadow-sm">
+                <div className="flex items-center gap-2 mb-2">
+                  <Compass className="w-5 h-5 text-orange-500" />
+                  <h4 className="font-semibold text-slate-900">Missão</h4>
+                </div>
+                <p className="text-sm text-slate-600 leading-relaxed">{COMPANY_STORY.missao}</p>
+              </motion.div>
+              <motion.div initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.08 }} className="rounded-2xl border border-orange-100 bg-white p-6 shadow-sm">
+                <div className="flex items-center gap-2 mb-2">
+                  <Target className="w-5 h-5 text-orange-500" />
+                  <h4 className="font-semibold text-slate-900">Visão</h4>
+                </div>
+                <p className="text-sm text-slate-600 leading-relaxed">{COMPANY_STORY.visao}</p>
+              </motion.div>
+            </div>
+          </div>
+
+          <motion.h3 initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="text-lg font-semibold text-slate-900 flex items-center gap-2 justify-center mb-6">
+            <Award className="w-5 h-5 text-orange-500" /> Nossos valores
+          </motion.h3>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {COMPANY_STORY.valores.map((v, i) => (
+              <motion.div key={v.title} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.4, delay: i * 0.08 }} className="text-center">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-100 to-amber-100 border border-orange-200 flex items-center justify-center mx-auto mb-4">
+                  <v.icon className="w-6 h-6 text-orange-600" />
+                </div>
+                <h4 className="font-semibold text-slate-900">{v.title}</h4>
+                <p className="text-sm text-slate-500 mt-2 leading-relaxed">{v.text}</p>
               </motion.div>
             ))}
           </div>
@@ -444,8 +639,9 @@ export default function SiteVendas() {
           </motion.div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {BENEFITS.map((b, i) => (
-              <motion.div key={b.title} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.4, delay: i * 0.08 }} className="text-center">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-100 to-amber-100 border border-orange-200 flex items-center justify-center mx-auto mb-4">
+              <motion.div key={b.title} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.4, delay: i * 0.08 }} whileHover={{ y: -4 }} className="group relative text-center rounded-2xl border border-transparent hover:border-orange-100 hover:bg-white/70 hover:backdrop-blur-xl hover:shadow-[0_8px_30px_rgba(251,146,60,0.12)] p-5 transition-all duration-300">
+                <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-100 to-amber-100 border border-orange-200 flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
+                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-orange-300 to-amber-300 blur-lg opacity-0 group-hover:opacity-40 transition-opacity duration-300 -z-10" />
                   <b.icon className="w-6 h-6 text-orange-600" />
                 </div>
                 <h3 className="font-semibold text-slate-900">{b.title}</h3>
@@ -516,14 +712,17 @@ export default function SiteVendas() {
 
       {/* ── CTA final / Planos ── */}
       <section id="planos" className="py-24 px-4 sm:px-6 bg-gradient-to-br from-orange-500 via-amber-500 to-orange-500 relative overflow-hidden">
+        <div className="absolute inset-0 opacity-40 [background-image:radial-gradient(circle,rgba(255,255,255,0.35)_1px,transparent_1px)] [background-size:26px_26px]" />
+        <div className="absolute -top-20 -left-20 w-72 h-72 rounded-full bg-white/10 blur-3xl" />
+        <div className="absolute -bottom-24 right-1/3 w-80 h-80 rounded-full bg-white/10 blur-3xl" />
         <img src={julinhoImg} alt="" className="hidden sm:block absolute -right-4 bottom-0 w-48 lg:w-64 opacity-90 pointer-events-none select-none" />
-        <div className="max-w-3xl mx-auto text-center relative">
+        <motion.div initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="max-w-3xl mx-auto text-center relative">
           <h2 className="text-3xl sm:text-4xl font-bold text-white">Pronto pra organizar a gestão da sua construtora?</h2>
           <p className="mt-4 text-orange-50 text-lg">3 dias grátis. Cancele quando quiser. Sem letras miúdas.</p>
-          <Button size="lg" className="mt-8 h-13 px-8 text-base bg-white text-orange-600 hover:bg-orange-50 shadow-xl" onClick={goToPlans}>
+          <Button size="lg" className="mt-8 h-13 px-8 text-base bg-white text-orange-600 hover:bg-orange-50 shadow-xl hover:shadow-2xl hover:scale-[1.03] transition-all" onClick={goToPlans}>
             Ver planos e começar agora <ArrowRight className="w-5 h-5 ml-2" />
           </Button>
-        </div>
+        </motion.div>
       </section>
 
       {/* ── Footer ── */}
