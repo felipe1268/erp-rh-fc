@@ -1,4 +1,27 @@
 /**
+ * Rev. 4036 — **APR — ANÁLISE PRELIMINAR DE RISCO: CARDS DE INDICADORES FORA DO PADRÃO VISUAL DA PT.**
+ *
+ * PEDIDO: usuário mandou print (IMG_3317) da tela "Permissão de Trabalho (PT)" — que usa cards
+ * planos (fundo colorido claro + borda + "dot" indicador + número grande) — pedindo pra "criar o
+ * dash da APR igual é o da PT também", ou seja, padronizar visualmente os cards de indicadores da
+ * tela de APR (Análise Preliminar de Risco) no mesmo estilo da PT (ambas já tinham cards, mas com
+ * estilos divergentes: APR usava cards em gradiente cheio + ícone branco, PT usa cards planos com
+ * "dot" colorido).
+ *
+ * CAUSA RAIZ: `AprAnalise.tsx` implementava seus KPI Cards com `bg-gradient-to-br` + ícone Lucide
+ * sobreposto em branco (`ShieldAlert`/`Clock`/`CheckCircle2`/`Check`), enquanto `PermissaoTrabalho.tsx`
+ * usa cards brancos/claros com borda colorida + "dot" + número — os dois módulos irmãos (PT e APR)
+ * do mesmo grupo "Programas Legais" tinham dashboards de indicadores com linguagem visual diferente.
+ *
+ * CORREÇÃO: `AprAnalise.tsx` — array `CARDS` trocado de `{color: gradient, icon}` para
+ * `{color: text-*, bg: bg-*-50 border-*-200, dot: bg-*-500}` (mesma paleta semântica: Em Análise=âmbar,
+ * Aprovadas=verde, Concluídas=azul, Total=slate); bloco de render dos KPI Cards reescrito para o
+ * mesmo markup da PT (dot + label pequeno + número grande `text-3xl font-bold`, sem ícone, sem
+ * gradiente), mantendo o filtro por clique (`filtroStatus`) já existente. Nenhuma mudança de dado/
+ * query — só padronização visual. ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4035 — **BOLETIM DE MEDIÇÃO (PDF): DOCUMENTO SEM ORGANIZAÇÃO, SEM RELATO E SEM PADRÃO —
  * REDESENHO COMPLETO DA TABELA DE ITENS + RELATÓRIO NARRATIVO DO PERÍODO.**
  *

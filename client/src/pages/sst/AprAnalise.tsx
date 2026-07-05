@@ -1787,10 +1787,10 @@ export default function AprAnalise() {
   const listaAprs = listQ.data ?? [];
 
   const CARDS = [
-    { key: null,         label: "Total",      value: stats.total,      color: "from-orange-500 to-orange-600", icon: ShieldAlert },
-    { key: "em_analise", label: "Em Análise", value: stats.em_analise, color: "from-amber-500 to-amber-600",   icon: Clock },
-    { key: "aprovada",   label: "Aprovadas",  value: stats.aprovada,   color: "from-green-500 to-green-600",   icon: CheckCircle2 },
-    { key: "concluida",  label: "Concluídas", value: stats.concluida,  color: "from-blue-500 to-blue-600",     icon: Check },
+    { key: "em_analise", label: "Em Análise", value: stats.em_analise, color: "text-amber-700",  bg: "bg-amber-50 border-amber-200",  dot: "bg-amber-500" },
+    { key: "aprovada",   label: "Aprovadas",  value: stats.aprovada,   color: "text-green-700",  bg: "bg-green-50 border-green-200",  dot: "bg-green-500" },
+    { key: "concluida",  label: "Concluídas", value: stats.concluida,  color: "text-blue-700",   bg: "bg-blue-50 border-blue-200",   dot: "bg-blue-500" },
+    { key: null,         label: "Total",      value: stats.total,      color: "text-slate-700",  bg: "bg-white border-slate-200",    dot: "bg-slate-400" },
   ];
 
   return (
@@ -1818,19 +1818,16 @@ export default function AprAnalise() {
         {/* KPI Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {CARDS.map(card => {
-            const Icon = card.icon;
             const active = filtroStatus === card.key;
             return (
               <button key={String(card.key)} type="button" onClick={() => setFiltroStatus(active ? null : card.key)}
-                className={`relative overflow-hidden rounded-2xl p-4 text-left transition-all shadow-sm hover:shadow-md
-                  ${active ? "ring-2 ring-orange-500 ring-offset-1 scale-[1.02]" : "hover:scale-[1.01]"}`}>
-                <div className={`absolute inset-0 bg-gradient-to-br ${card.color} opacity-90`} />
-                <div className="relative text-white">
-                  <Icon className="h-5 w-5 mb-1 opacity-80" />
-                  <div className="text-3xl font-black">{card.value}</div>
-                  <div className="text-xs font-medium opacity-80">{card.label}</div>
+                className={`flex flex-col gap-1 p-4 rounded-xl border-2 text-left transition-all hover:shadow-md
+                  ${active ? card.bg + " ring-2 ring-offset-1 " + card.dot.replace("bg-", "ring-") : "bg-white border-slate-100 hover:border-slate-200"}`}>
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${card.dot}`} />
+                  <span className="text-xs text-slate-500 font-medium">{card.label}</span>
                 </div>
-                {active && <div className="absolute top-2 right-2 bg-white/30 rounded-full p-0.5"><Check className="h-3 w-3 text-white" /></div>}
+                <span className={`text-3xl font-bold ${card.color}`}>{card.value}</span>
               </button>
             );
           })}

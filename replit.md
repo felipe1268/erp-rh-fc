@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4036** — **APR — ANÁLISE PRELIMINAR DE RISCO: CARDS DE INDICADORES FORA DO PADRÃO VISUAL DA PT.** Usuário mandou print da tela "Permissão de Trabalho (PT)" pedindo pra "criar o dash da APR igual é o da PT também" — ambas já tinham cards de indicadores, mas com estilos divergentes (APR usava cards em gradiente cheio + ícone branco; PT usa cards planos com "dot" colorido). `AprAnalise.tsx`: array `CARDS` trocado de `{color: gradient, icon}` para `{color: text-*, bg: bg-*-50 border-*-200, dot: bg-*-500}` (mesma paleta semântica: Em Análise=âmbar, Aprovadas=verde, Concluídas=azul, Total=slate); bloco de render dos KPI Cards reescrito no mesmo markup da PT (dot + label + número grande, sem ícone/gradiente), mantendo o filtro por clique já existente. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4035** — **BOLETIM DE MEDIÇÃO (PDF): DOCUMENTO SEM ORGANIZAÇÃO, SEM RELATO E SEM PADRÃO — REDESENHO COMPLETO.** Usuário mandou o PDF gerado reclamando "está péssimo, não tem organização, não tem relato, não é uma edição padrão" — tabela plana de ~30 itens sem agrupamento, descrições cortadas no meio da palavra, dezenas de linhas com "—" na coluna Item. `boletimMedicaoPdf.ts`: nova seção "Relatório do Período" (exibe o campo `observacoes` do boletim, já capturado mas nunca mostrado no PDF); itens agora agrupados em 2 seções (Cronograma × FD Compras) cada uma com subtotal + total geral no fim; coluna "Item"→"Nº" com numeração sequencial no lugar de "—" quando não há EAP; descrição quebra em até 3 linhas reais (sem cortar palavras). `MedicaoDetalhe.tsx`: `montarParamsPdf` passa `observacoes` pro gerador. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4034** — **MEDIÇÃO DE CONTRATOS: "VINCULAR FD DE COMPRAS" GERAVA ITEM COM tipoAvanco INVÁLIDO ("fd_compra") — CAUSA-RAIZ DO ERRO REVELADO PELA REV. 4033.** Com o `onError` da Rev. 4033 mostrando erros reais, usuário mandou print (IMG_3315) do erro exato: `Invalid option: expected one of "fisico"|"financeiro_material"`. Causa: botão "Vincular FD de Compras" gravava `tipoAvanco: "fd_compra"`, valor fora do enum aceito pelo backend — qualquer boletim com FD vinculado nunca salvava com sucesso. `MedicaoDetalhe.tsx`: `tipoAvanco` do item de FD trocado para `"financeiro_material"` (auditado: nenhum outro ponto do arquivo gera valor fora do enum; confirmado no banco que nenhum `"fd_compra"` órfão chegou a persistir). ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4034** — **MEDIÇÃO DE CONTRATOS: "VINCULAR FD DE COMPRAS" GERAVA ITEM COM tipoAvanco INVÁLIDO ("fd_compra") — CAUSA-RAIZ DO ERRO REVELADO PELA REV. 4033.** `MedicaoDetalhe.tsx`: `tipoAvanco` do item de FD trocado para `"financeiro_material"` (valor fora do enum fazia qualquer boletim com FD vinculado nunca salvar). ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4033** — **MEDIÇÃO DE CONTRATOS: BOTÃO "SALVAR E CALCULAR DEDUÇÕES" PARECIA NÃO FAZER NADA (SEM FEEDBACK DE ERRO).** Race condition entre `recalcularMutation` e `salvarItensMutation` + falta de `onError` engolindo falhas reais; recálculo movido pro `onSuccess` de salvar itens + `toast.error` nas duas mutations. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4030** — **MEDIÇÃO DE CONTRATOS: REDESIGN DA TABELA "ITENS DO BOLETIM" + PADRONIZAÇÃO DO DIÁLOGO "NOVO BOLETIM DE MEDIÇÃO".** Tabela `table-fixed` + `<colgroup>` proporcional (elimina vão Item↔Descrição), badge azul "% Período", barra de progresso "% Acumulado"; diálogo `modalBoletim` reconstruído no padrão do "Editar Boletim" (3 blocos). ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4029** — **MEDIÇÃO DE CONTRATOS: REDESIGN COMPLETO DO DIÁLOGO "EDITAR BOLETIM" (PERÍODO DA MEDIÇÃO).** Reestruturado em 3 blocos visuais (cabeçalho + card branco + rodapé fixo), inputs de data c/ ícone interno, badge "N dias de medição", validação data fim < início. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4027 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4029 e anteriores.
 
 ## User preferences
 
