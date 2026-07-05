@@ -457,6 +457,7 @@ const ClimaPublicoPage = lazyWithRetry(() => import("./pages/PesquisaPublica").t
 const PortalLogin = lazyWithRetry(() => import("./pages/portal/PortalLogin"));
 const ContratarPlano = lazyWithRetry(() => import("./pages/portal/ContratarPlano"));
 const SiteVendas = lazyWithRetry(() => import("./pages/portal/SiteVendas"));
+const ModuloDetalhe = lazyWithRetry(() => import("./pages/portal/ModuloDetalhe"));
 const ContratarSucesso = lazyWithRetry(() => import("./pages/portal/ContratarSucesso"));
 const PortalLoginCliente = lazyWithRetry(() => import("./pages/portal/PortalLoginCliente"));
 const PortalEsqueciSenha = lazyWithRetry(() => import("./pages/portal/PortalEsqueciSenha"));
@@ -770,6 +771,7 @@ function Router() {
         {/* Portal Externo (Terceiros/Parceiros) */}
         <Route path="/portal/login" component={PortalLogin} />
         <Route path="/planos" component={SiteVendas} />
+        <Route path="/planos/modulos/:id" component={ModuloDetalhe} />
         <Route path="/contratar" component={ContratarPlano} />
         <Route path="/contratar/sucesso" component={ContratarSucesso} />
         <Route path="/portal/cliente/login" component={PortalLoginCliente} />

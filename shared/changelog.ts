@@ -1,4 +1,30 @@
 /**
+ * Rev. 4053 — **`/planos`: CLIQUE NO MÓDULO ABRE PÁGINA DEDICADA COM TODAS AS FUNCIONALIDADES (SUBSTITUI O DIALOG PEQUENO).**
+ *
+ * PEDIDO: usuário achou o dialog pequeno de detalhe do módulo (`ModuleDetailDialog`, Rev. 4050) raso demais pra
+ * vender o produto de verdade — pediu uma PÁGINA CHEIA por módulo mostrando TODAS as funcionalidades em
+ * profundidade (ex.: RH deve mostrar Raio-X do Funcionário, cadastro, controle de documentos etc., não só um
+ * resumo genérico).
+ *
+ * ESCOPO: nova página `client/src/pages/portal/ModuloDetalhe.tsx` em `/planos/modulos/:id` — hero com preço real
+ * (via `billing.getCatalog`), tagline, prévia visual conceitual (reaproveita `ModulePreviewMock`), descrição longa,
+ * seções detalhadas de funcionalidades (2-5 por módulo, todas as 14), destaques de IA e integrações com outros
+ * módulos, cards de "outros módulos" e CTA final — conteúdo 100% baseado nas features REAIS de
+ * `shared/modules.ts` (MODULE_DEFINITIONS), sem inventar nada. Conteúdo detalhado extraído pra
+ * `client/src/pages/portal/moduleDetails.ts` (novo, `MODULE_DETAILS`).
+ *
+ * REFATORAÇÃO DE SUPORTE (sem alterar dados): pra evitar duplicar o array `MODULES` e o componente
+ * `ModulePreviewMock` entre `SiteVendas.tsx` e a nova página, ambos foram extraídos pra arquivos próprios —
+ * `client/src/pages/portal/modulesData.ts` (array `MODULES` + `formatPrice`, valores idênticos aos anteriores)
+ * e `client/src/pages/portal/ModulePreviewMock.tsx`. `SiteVendas.tsx` passou a importar os dois; o clique no
+ * card do módulo (seção "Módulos") agora navega pra `/planos/modulos/${m.id}` em vez de abrir o
+ * `ModuleDetailDialog`, que foi removido junto com o state `selectedModule` (morto, sem mais uso).
+ *
+ * Rota registrada em `client/src/App.tsx` (`lazyWithRetry`), já coberta pela whitelist pública existente do
+ * prefixo `/planos` em `client/src/main.tsx` (sem mudança de auth). ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4052 — **`/planos`: AZUL MAIS ESCURO EM TODA A LANDING + MASCOTE "JULINHO" VIROU UM ROBÔ ANIMADO E INTERATIVO.**
  *
  * PEDIDO: usuário achou o azul da Rev. 4051 claro demais ("quero um azul mais escuro") e pediu pra trocar o

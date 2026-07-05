@@ -2,18 +2,16 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Users, Shield, Gavel, CalendarRange, DollarSign, ShoppingCart, Calculator,
-  ArrowRight, Building2, ClipboardCheck, Handshake, Ruler, BookOpen,
-  HardHat, Warehouse, FolderOpen, Truck, ShieldCheck, Receipt,
+  Building2, ArrowRight, BookOpen, ShieldCheck, Receipt, HardHat,
   CheckCircle2, Sparkles, Play, Instagram, Youtube, Menu, X,
   TrendingUp, Lock, Zap, Layers, ArrowUpRight, Heart, Smile, Quote, Info,
-  Target, Compass, Award, Rocket, BrainCircuit, Plug, MousePointerClick,
-  BarChart3, PieChart, ListChecks,
+  Target, Compass, Award, Rocket, BrainCircuit, Plug,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
 import julinhoImg from "@/assets/julinho_robot.png";
+import { MODULES, formatPrice } from "./modulesData";
+import { ModulePreviewMock } from "./ModulePreviewMock";
 
 /** Falas do Julinho-robô no hero — clicar nele troca a mensagem (easter egg interativo). */
 const JULINHO_LINES = [
@@ -39,33 +37,6 @@ const SOCIAL_LINKS: { instagram: string | null; youtube: string | null } = {
 
 /** Vídeo institucional — ainda não gravado. Troque por um embed real quando disponível. */
 const INSTITUTIONAL_VIDEO_URL: string | null = null;
-
-type ModuleCard = {
-  id: string;
-  title: string;
-  subtitle: string;
-  description: string;
-  icon: any;
-  color: string;
-  highlights: string[];
-};
-
-const MODULES: ModuleCard[] = [
-  { id: "rh-dp", title: "RH & DP", subtitle: "Recursos Humanos", description: "Colaboradores, folha de pagamento, ponto eletrônico, férias, benefícios e documentação trabalhista.", icon: Users, color: "from-blue-500 to-indigo-500", highlights: ["IA sugere férias e alerta vencimentos automaticamente", "Integração direta com ponto eletrônico e folha", "Telas simples até pra quem nunca usou ERP"] },
-  { id: "sst", title: "SST", subtitle: "Segurança do Trabalho", description: "EPIs, ASOs, CIPA, treinamentos de segurança e conformidade com normas regulamentadoras.", icon: Shield, color: "from-emerald-500 to-teal-600", highlights: ["IA analisa risco de vencimento de ASO e treinamentos", "Integração com Almoxarifado (EPIs) e RH", "Central única de documentos de segurança"] },
-  { id: "juridico", title: "Jurídico", subtitle: "Gestão Jurídica Completa", description: "Trabalhista, tributário e civil — processos, audiências, provisões e análise de risco com IA.", icon: Gavel, color: "from-slate-600 to-amber-500", highlights: ["IA classifica o risco de cada processo automaticamente", "Integração com RH para rescisões e SST", "Linha do tempo visual de cada processo"] },
-  { id: "avaliacao", title: "Avaliação", subtitle: "Desempenho", description: "Questionários personalizáveis, ciclos de avaliação, ranking e análise de competências.", icon: ClipboardCheck, color: "from-amber-500 to-orange-600", highlights: ["Ciclos e formulários 100% personalizáveis", "Ranking automático de competências", "Interface simples pra qualquer gestor aplicar"] },
-  { id: "terceiros", title: "Terceiros", subtitle: "Empresas Terceirizadas", description: "Cadastro, documentação, obrigações mensais, aptidão e conformidade de terceirizadas.", icon: HardHat, color: "from-orange-500 to-red-500", highlights: ["IA cruza obrigações e prazos de terceirizadas", "Integração com Almoxarifado e Gestão de Documentos", "Alertas automáticos de vencimento"] },
-  { id: "parceiros", title: "Parceiros", subtitle: "Portal de Convênios", description: "Farmácia, posto, restaurante e outros convênios com lançamentos e aprovações.", icon: Handshake, color: "from-purple-500 to-violet-600", highlights: ["Aprovações de convênio em poucos cliques", "Integração direta com a Folha", "Portal simples pro colaborador usar no celular"] },
-  { id: "planejamento", title: "Planejamento", subtitle: "Gestão de Projetos", description: "Curva S, avanço físico semanal, revisões de cronograma e % previsto x realizado.", icon: CalendarRange, color: "from-green-500 to-emerald-600", highlights: ["IA cruza avanço físico x financeiro na Curva S", "Integração com Medição e Orçamento", "Visual claro de % previsto x realizado"] },
-  { id: "orcamento", title: "Orçamento", subtitle: "Orçamento de Obras", description: "Importação de planilhas com BDI, curva ABC de insumos e 3 versões de orçamento.", icon: Calculator, color: "from-cyan-500 to-sky-600", highlights: ["IA identifica insumos fora da curva ABC", "Integração direta com Compras", "Importação de planilha sem retrabalho"] },
-  { id: "compras", title: "Compras", subtitle: "Suprimentos", description: "Solicitações com aprovação, cotações comparativas e ordens de compra.", icon: ShoppingCart, color: "from-rose-500 to-pink-600", highlights: ["IA compara cotações e aponta a melhor opção", "Integração com Orçamento e Financeiro", "Aprovação em poucos toques, do celular"] },
-  { id: "financeiro", title: "Financeiro", subtitle: "Gestão Financeira", description: "Contas a pagar/receber, conciliação bancária, DRE e fluxo de caixa.", icon: DollarSign, color: "from-amber-500 to-yellow-600", highlights: ["IA concilia extrato bancário automaticamente", "Integração com Compras, Folha e Medição", "DRE e fluxo de caixa sempre atualizados"] },
-  { id: "medicao", title: "Medição", subtitle: "Boletins de Medição", description: "Medição de contratos com % automático de avanço físico e faturamento.", icon: Ruler, color: "from-teal-500 to-cyan-600", highlights: ["IA calcula o % de avanço automaticamente", "Integração direta com Planejamento", "Boletim de medição pronto em minutos"] },
-  { id: "almoxarifado", title: "Almoxarifado", subtitle: "Materiais e Equipamentos", description: "Controle de estoque, ferramentas, empréstimos e inventário centralizado.", icon: Warehouse, color: "from-emerald-500 to-green-600", highlights: ["IA estima consumo e alerta reposição", "Integração com Compras e Terceiros", "Inventário visual, fácil de conferir"] },
-  { id: "gestao-documentos", title: "Doc. Técnicos", subtitle: "Gestão de Documentos", description: "Central de documentos técnicos com revisões, aprovações e ARTs/RRTs.", icon: FolderOpen, color: "from-indigo-500 to-blue-600", highlights: ["IA organiza revisões e aprovações pendentes", "Integração com SST e Jurídico", "Central única pra ART, RRT e ISO"] },
-  { id: "frotas", title: "Frotas", subtitle: "Controle de Veículos", description: "Manutenções, combustível, multas, IPVA, seguros e rastreamento.", icon: Truck, color: "from-sky-500 to-cyan-600", highlights: ["IA aponta manutenção preventiva antes do problema", "Integração com rastreamento via Infleet", "Multas, seguro e IPVA num só lugar"] },
-];
 
 /**
  * Rev. 4050 — RASCUNHO da narrativa institucional do produto "ERP Gestão
@@ -177,108 +148,9 @@ const BENEFITS = [
   { icon: Heart, title: "Feito por quem constrói de verdade", text: "Nasceu dentro de uma construtora em operação — não é uma planilha genérica maquiada de sistema." },
 ];
 
-function formatPrice(cents: number): string {
-  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0, maximumFractionDigits: 0 });
-}
-
-/**
- * Rev. 4050 — Prévia visual "conceitual" da tela de cada módulo, aberta ao
- * clicar no card. NÃO é um screenshot real do app (o app é autenticado e
- * multi-tenant, não daria pra expor uma tela real de cliente aqui) — é uma
- * ilustração abstrata (painéis + gráfico + selo de IA) na cor do módulo,
- * deixando claro visualmente o tipo de informação que a tela mostra.
- */
-function ModulePreviewMock({ m }: { m: ModuleCard }) {
-  return (
-    <div className={`relative rounded-2xl overflow-hidden bg-gradient-to-br ${m.color} p-5 sm:p-6 aspect-[16/10]`}>
-      <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "16px 16px" }} />
-      <div className="relative h-full rounded-xl bg-white/95 backdrop-blur-sm shadow-xl p-4 flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className={`w-6 h-6 rounded-md bg-gradient-to-br ${m.color} flex items-center justify-center`}>
-              <m.icon className="w-3.5 h-3.5 text-white" />
-            </div>
-            <div className="h-2 w-20 rounded-full bg-slate-200" />
-          </div>
-          <div className="flex items-center gap-1 text-[9px] font-semibold text-violet-600 bg-violet-50 border border-violet-200 rounded-full px-2 py-0.5">
-            <BrainCircuit className="w-2.5 h-2.5" /> IA
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-2 flex-1">
-          <div className="rounded-lg bg-slate-50 border border-slate-100 p-2 flex flex-col justify-between">
-            <BarChart3 className="w-4 h-4 text-slate-300" />
-            <div className="flex items-end gap-1 h-10">
-              {[40, 70, 55, 90, 65].map((h, i) => (
-                <div key={i} className={`w-full rounded-sm bg-gradient-to-t ${m.color} opacity-70`} style={{ height: `${h}%` }} />
-              ))}
-            </div>
-          </div>
-          <div className="rounded-lg bg-slate-50 border border-slate-100 p-2 flex flex-col items-center justify-center gap-1">
-            <PieChart className="w-4 h-4 text-slate-300" />
-            <div className="h-1.5 w-10 rounded-full bg-slate-200" />
-            <div className="h-1.5 w-7 rounded-full bg-slate-200" />
-          </div>
-          <div className="rounded-lg bg-slate-50 border border-slate-100 p-2 flex flex-col gap-1.5">
-            <ListChecks className="w-4 h-4 text-slate-300 mb-0.5" />
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-1.5 rounded-full bg-slate-200" style={{ width: `${90 - i * 15}%` }} />
-            ))}
-          </div>
-        </div>
-        <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
-          <MousePointerClick className="w-3.5 h-3.5 text-slate-300" />
-          <div className="h-1.5 w-24 rounded-full bg-slate-100" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ModuleDetailDialog({ m, price, onClose, onSubscribe }: { m: ModuleCard; price: string | null; onClose: () => void; onSubscribe: () => void }) {
-  return (
-    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="sm:max-w-2xl p-0 overflow-hidden gap-0">
-        <div className="p-6 sm:p-8">
-          <div className="flex items-center gap-3 mb-5">
-            <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${m.color} flex items-center justify-center shadow-md shrink-0`}>
-              <m.icon className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-slate-900">{m.title}</h3>
-              <p className="text-xs text-slate-400">{m.subtitle}</p>
-            </div>
-          </div>
-          <ModulePreviewMock m={m} />
-          <p className="text-sm text-slate-500 mt-5 leading-relaxed">{m.description}</p>
-          <div className="mt-5 space-y-2.5">
-            {m.highlights.map((h) => (
-              <div key={h} className="flex items-start gap-2.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <p className="text-sm text-slate-600">{h}</p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-6 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 flex items-center gap-2 text-xs text-slate-400">
-            <Play className="w-3.5 h-3.5" /> Vídeo explicativo desta tela em produção — em breve por aqui.
-          </div>
-          <div className="mt-6 flex items-center justify-between gap-4 flex-wrap">
-            <span className="text-lg font-bold text-blue-900">
-              {price ? `${price}/mês` : "Sob consulta"}
-            </span>
-            <Button className="bg-gradient-to-r from-blue-800 to-indigo-800 hover:from-blue-900 hover:to-indigo-900 text-white shadow-lg shadow-blue-200" onClick={onSubscribe}>
-              Testar este módulo grátis <ArrowRight className="w-4 h-4 ml-1.5" />
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 export default function SiteVendas() {
   const [, navigate] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [selectedModule, setSelectedModule] = useState<ModuleCard | null>(null);
   const [julinhoLineIdx, setJulinhoLineIdx] = useState(0);
   const cycleJulinhoLine = () => setJulinhoLineIdx((i) => (i + 1) % JULINHO_LINES.length);
   const { data: catalog } = trpc.billing.getCatalog.useQuery();
@@ -494,7 +366,7 @@ export default function SiteVendas() {
               <motion.button
                 key={m.id}
                 type="button"
-                onClick={() => setSelectedModule(m)}
+                onClick={() => navigate(`/planos/modulos/${m.id}`)}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-40px" }}
@@ -514,7 +386,7 @@ export default function SiteVendas() {
                     {priceFor(m.id) ? `${priceFor(m.id)}/mês` : "—"}
                   </span>
                   <span className="flex items-center gap-1 text-xs font-medium text-slate-300 group-hover:text-blue-800 transition-colors">
-                    Ver tela <ArrowUpRight className="w-4 h-4" />
+                    Ver detalhes <ArrowUpRight className="w-4 h-4" />
                   </span>
                 </div>
               </motion.button>
@@ -522,15 +394,6 @@ export default function SiteVendas() {
           </div>
         </div>
       </section>
-
-      {selectedModule && (
-        <ModuleDetailDialog
-          m={selectedModule}
-          price={priceFor(selectedModule.id)}
-          onClose={() => setSelectedModule(null)}
-          onSubscribe={() => { setSelectedModule(null); goToPlans(); }}
-        />
-      )}
 
       {/* ── Quem somos (missão, visão, valores, história) ── */}
       <section id="quem-somos" className="py-24 px-4 sm:px-6 bg-gradient-to-b from-white to-blue-50/40">
