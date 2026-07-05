@@ -4745,7 +4745,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v4042c-2026-07-05-saas-billing-stripe-standard-key";
+    const COLFIX_VERSION = "v4047-2026-07-05-billing-module-prices";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -6439,6 +6439,27 @@ Regras:
         `);
         console.log("[ColFix Rev.4042] company_subscriptions + company_subscription_modules garantidas (SaaS billing Stripe).");
       } catch (e: any) { console.error("[ColFix Rev.4042] FALHA saas billing tables:", e?.message ?? e); }
+
+      // Rev. 4047 — override editável de preço de catálogo (admin_master ajusta
+      // valores depois de baixar para atrair cliente novo, sem tocar em código).
+      try {
+        const _db4047 = await getDb();
+        if (!_db4047) throw new Error("db indisponível");
+        await _db4047.$client.query(`
+          CREATE TABLE IF NOT EXISTS billing_module_prices (
+            id                  SERIAL PRIMARY KEY,
+            module_id           VARCHAR(60) NOT NULL,
+            monthly_price_cents INTEGER NOT NULL,
+            updated_by_name     VARCHAR(255),
+            updated_at          TIMESTAMP NOT NULL DEFAULT NOW()
+          )
+        `);
+        await _db4047.$client.query(`
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_billing_module_prices_module
+            ON billing_module_prices(module_id)
+        `);
+        console.log("[ColFix Rev.4047] billing_module_prices garantida (preços de catálogo editáveis).");
+      } catch (e: any) { console.error("[ColFix Rev.4047] FALHA billing_module_prices:", e?.message ?? e); }
 
       // Rev. 4042 — Stripe: inicializar (schema stripe.* + webhook gerenciado)
       // Envolvido em try/catch isolado: falha na configuração do Stripe NÃO

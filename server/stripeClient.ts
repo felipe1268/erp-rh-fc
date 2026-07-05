@@ -124,6 +124,15 @@ export async function getModulePriceMap(): Promise<Record<string, string>> {
 }
 
 /**
+ * Invalida o cache de 5min de getModulePriceMap() — chamado logo após criar um
+ * novo Stripe Price para um módulo (Rev. 4047, ajuste de preços via admin_master)
+ * para que o próximo checkout/updateSubscription já use o preço novo.
+ */
+export function invalidateModulePriceCache(): void {
+  modulePriceCache = null;
+}
+
+/**
  * Runs the stripe-replit-sync database migrations (creates the `stripe.*`
  * schema mirroring products/prices/subscriptions/etc). `runMigrations` is a
  * standalone export of the package, NOT a method on the StripeSync instance.

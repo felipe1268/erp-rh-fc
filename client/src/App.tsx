@@ -279,6 +279,7 @@ const BibliotecaConhecimento = lazyWithRetry(() => import("./pages/BibliotecaCon
 const AvaliacaoDesempenho = lazyWithRetry(() => import("./pages/AvaliacaoDesempenho"));
 const Telemetria = lazyWithRetry(() => import("./pages/Telemetria"));
 const SaasAdminPanel = lazyWithRetry(() => import("./pages/SaasAdminPanel"));
+const AdminPrecos = lazyWithRetry(() => import("./pages/AdminPrecos"));
 const MinhaAssinatura = lazyWithRetry(() => import("./pages/MinhaAssinatura"));
 const ImportData = lazyWithRetry(() => import("./pages/ImportData"));
 
@@ -516,6 +517,7 @@ function Router() {
         <Route path={"/auditoria"} component={() => <MasterOnlyGuard component={Auditoria} />} />
         <Route path={"/admin/telemetria"} component={() => <MasterOnlyGuard component={Telemetria} />} />
         <Route path={"/admin/saas"} component={() => <MasterOnlyGuard component={SaasAdminPanel} />} />
+        <Route path={"/admin/saas/precos"} component={() => <MasterOnlyGuard component={AdminPrecos} />} />
         <Route path={"/minha-assinatura"} component={() => <AdmClienteGuard component={MinhaAssinatura} />} />
         <Route path={"/fechamento-ponto"} component={() => <RouteGuard component={FechamentoPonto} route="/fechamento-ponto" />} />
         <Route path={"/espelho-ponto"} component={() => <RouteGuard component={EspelhoPonto} route="/espelho-ponto" />} />

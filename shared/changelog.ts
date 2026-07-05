@@ -1,4 +1,36 @@
 /**
+ * Rev. 4047 — **`/planos` REDESENHADA (TEMA CLARO/VÍVIDO) + MASCOTE "JULINHO" + PREÇOS AJUSTÁVEIS PELO ADMIN.**
+ *
+ * PEDIDO: usuário rejeitou a landing dark/navy da Rev. 4046 ("muito sombria/séria"). Pedido explícito:
+ * (1) tela de admin pra editar preço de cada módulo, pra poder começar barato e subir depois; (2) preços
+ * gerais mais baratos; (3) redesenhar o site pra clean/vívido/moderno (NÃO dark); (4) criar um mascote
+ * chamado "Julinho"; (5) copy voltada a quem está ABRINDO uma construtora agora, deixando a pessoa
+ * confortável/acolhida (não intimidada).
+ *
+ * BACKEND — preços editáveis: nova tabela `billing_module_prices` (self-heal em `server/_core/index.ts`,
+ * `COLFIX_VERSION` bumpado) guarda overrides por `moduleId`; `shared/billingModules.ts` ganhou
+ * `applyPriceOverrides()` e teve TODOS os preços-padrão reduzidos em ~50% (novo piso de entrada). Em
+ * `server/routers/billing.ts`: `getEffectiveCatalog()` mescla defaults + overrides; `getCatalog` (público,
+ * usado por `/planos` e `/contratar`) e `getMySubscription` passaram a ler o catálogo efetivo; novos
+ * endpoints `adminGetPrices`/`adminUpdatePrices` (admin_master-only) criam um NOVO Stripe Price a cada
+ * ajuste (Price é imutável na Stripe), arquivam o antigo, atualizam `default_price` do Product e invalidam
+ * o cache local (`invalidateModulePriceCache` em `server/stripeClient.ts`). Assinaturas já ativas mantêm o
+ * valor travado na contratação — só novas vendas/upgrades usam o preço novo.
+ *
+ * FRONTEND — admin: nova página `client/src/pages/AdminPrecos.tsx` (tabela: padrão de fábrica vs valor
+ * atual vs novo valor, com botão de reset por linha e salvar-tudo); rota `/admin/saas/precos`
+ * (MasterOnlyGuard) + item "Preços do Catálogo" na sidebar em `DashboardLayout.tsx`.
+ *
+ * FRONTEND — landing: `client/src/pages/portal/SiteVendas.tsx` totalmente reescrita: fundo branco/laranja-
+ * claro (gradientes suaves) em vez de `#0A0F1E`; mascote "Julinho" (imagem gerada, capacete laranja,
+ * acenando) na hero e na faixa de CTA final; copy reescrita pra falar direto com quem tá abrindo a primeira
+ * construtora ("sem planilha e sem medo"); preços dos módulos deixaram de ser string hardcoded e agora vêm
+ * ao vivo de `trpc.billing.getCatalog` (sempre refletem os ajustes feitos em `/admin/saas/precos`). Mantido:
+ * case único real da FC Engenharia (sem cliente fictício), placeholders de vídeo/redes sociais "(em breve)".
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4046 — **SITE DE VENDAS COMPLETO EM `/planos` (LANDING PAGE, NÃO SÓ O FORMULÁRIO).**
  *
  * PEDIDO: "um site completo para vendas" — o usuário achou o `/planos` atual (que só renderizava o

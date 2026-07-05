@@ -6,12 +6,38 @@
 import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getDb, getCompaniesForUser } from "../db";
-import { companies, companySubscriptions, companySubscriptionModules } from "../../drizzle/schema";
-import { getUncachableStripeClient, getModulePriceMap } from "../stripeClient";
-import { BILLING_MODULES, SEAT_MONTHLY_PRICE_CENTS, TRIAL_PERIOD_DAYS } from "../../shared/billingModules";
+import { companies, companySubscriptions, companySubscriptionModules, billingModulePrices } from "../../drizzle/schema";
+import { getUncachableStripeClient, getModulePriceMap, invalidateModulePriceCache } from "../stripeClient";
+import { BILLING_MODULES, SEAT_MONTHLY_PRICE_CENTS, TRIAL_PERIOD_DAYS, applyPriceOverrides } from "../../shared/billingModules";
 import { invalidateModuleGateCache } from "../_core/moduleGating";
+
+function requireAdminMaster(role: string | undefined) {
+  if (role !== "admin_master") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Apenas admin_master pode ajustar preços do catálogo." });
+  }
+}
+
+// Rev. 4047 — lê `billing_module_prices` (override editável) e mescla com os
+// defaults estáticos de shared/billingModules.ts. Sem linha na tabela = usa o
+// default; "seat" é tratado separadamente pois não faz parte de BILLING_MODULES.
+async function getPriceOverrides(): Promise<Record<string, number>> {
+  const db = await getDb();
+  if (!db) return {};
+  const rows = await db.select().from(billingModulePrices);
+  const map: Record<string, number> = {};
+  for (const r of rows) map[r.moduleId] = r.monthlyPriceCents;
+  return map;
+}
+
+async function getEffectiveCatalog() {
+  const overrides = await getPriceOverrides();
+  return {
+    modules: applyPriceOverrides(BILLING_MODULES, overrides),
+    seatMonthlyPriceCents: overrides["seat"] ?? SEAT_MONTHLY_PRICE_CENTS,
+  };
+}
 
 // Rev. 4044 — self-service de lifecycle (T004): só `adm_cliente` gerencia a
 // PRÓPRIA assinatura (nunca outra empresa). `admin`/`admin_master` são staff
@@ -48,18 +74,105 @@ function resolveOrigin(req: any): string {
 }
 
 export const billingRouter = router({
-  getCatalog: publicProcedure.query(() => {
+  getCatalog: publicProcedure.query(async () => {
+    const { modules, seatMonthlyPriceCents } = await getEffectiveCatalog();
     return {
-      modules: BILLING_MODULES.map(m => ({
+      modules: modules.map(m => ({
         id: m.id,
         label: m.label,
         description: m.description,
         monthlyPriceCents: m.monthlyPriceCents,
       })),
-      seatMonthlyPriceCents: SEAT_MONTHLY_PRICE_CENTS,
+      seatMonthlyPriceCents,
       trialPeriodDays: TRIAL_PERIOD_DAYS,
     };
   }),
+
+  // Rev. 4047 — admin_master ajusta os valores de catálogo (baixar pra atrair
+  // cliente novo, subir depois que ele já usa o sistema). Cria um NOVO Stripe
+  // Price (imóveis são imutáveis na Stripe) e arquiva o antigo; assinaturas já
+  // ativas continuam com o preço travado no momento da contratação — só o
+  // catálogo (novas vendas / upgrades) muda.
+  adminGetPrices: protectedProcedure.query(async ({ ctx }) => {
+    requireAdminMaster(ctx.user.role);
+    const overrides = await getPriceOverrides();
+    const modules = BILLING_MODULES.map(m => ({
+      id: m.id,
+      label: m.label,
+      defaultPriceCents: m.monthlyPriceCents,
+      currentPriceCents: overrides[m.id] ?? m.monthlyPriceCents,
+    }));
+    modules.push({
+      id: "seat",
+      label: "Assento por usuário",
+      defaultPriceCents: SEAT_MONTHLY_PRICE_CENTS,
+      currentPriceCents: overrides["seat"] ?? SEAT_MONTHLY_PRICE_CENTS,
+    });
+    return { modules };
+  }),
+
+  adminUpdatePrices: protectedProcedure
+    .input(z.object({
+      updates: z.array(z.object({
+        id: z.string(),
+        monthlyPriceCents: z.number().int().min(0).max(10_000_00),
+      })).min(1),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      requireAdminMaster(ctx.user.role);
+      const validIds = new Set([...BILLING_MODULES.map(m => m.id), "seat"]);
+      const invalid = input.updates.filter(u => !validIds.has(u.id));
+      if (invalid.length > 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Módulo(s) inválido(s): ${invalid.map(u => u.id).join(", ")}` });
+      }
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco de dados indisponível." });
+
+      const stripe = await getUncachableStripeClient();
+      const priceMap = await getModulePriceMap();
+
+      for (const update of input.updates) {
+        // Persiste o valor exibido/cobrado no catálogo local (fonte para getCatalog).
+        await db.execute(
+          sql`
+            INSERT INTO billing_module_prices (module_id, monthly_price_cents, updated_by_name)
+            VALUES (${update.id}, ${update.monthlyPriceCents}, ${ctx.user.name || "admin_master"})
+            ON CONFLICT (module_id) DO UPDATE SET
+              monthly_price_cents = EXCLUDED.monthly_price_cents,
+              updated_by_name = EXCLUDED.updated_by_name,
+              updated_at = NOW()
+          `
+        );
+
+        // Sincroniza com o Stripe: cria um Price novo (imutável) apontando pro
+        // mesmo Product do preço ativo atual e arquiva o antigo. Sem preço
+        // ativo prévio (catálogo Stripe ainda não semeado) apenas grava o
+        // override local — o seed inicial via scripts/seed-products.ts segue
+        // valendo até o próximo `pnpm seed:products`.
+        const currentPriceId = priceMap[update.id];
+        if (currentPriceId) {
+          try {
+            const currentPrice = await stripe.prices.retrieve(currentPriceId);
+            const productId = typeof currentPrice.product === "string" ? currentPrice.product : currentPrice.product.id;
+            const newPrice = await stripe.prices.create({
+              product: productId,
+              currency: "brl",
+              unit_amount: update.monthlyPriceCents,
+              recurring: { interval: "month" },
+              metadata: { moduleId: update.id },
+            });
+            await stripe.prices.update(currentPriceId, { active: false });
+            await stripe.products.update(productId, { default_price: newPrice.id });
+          } catch (e: any) {
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Falha ao sincronizar preço "${update.id}" no Stripe: ${e?.message || e}` });
+          }
+        }
+      }
+
+      invalidateModulePriceCache();
+      return { success: true };
+    }),
 
   createCheckoutSession: publicProcedure
     .input(z.object({
@@ -163,6 +276,7 @@ export const billingRouter = router({
     const { sub } = await getOwnSubscriptionOrThrow(ctx.user.id, ctx.user.role);
     const db = await getDb();
     const links = db ? await db.select().from(companySubscriptionModules).where(eq(companySubscriptionModules.subscriptionId, sub.id)) : [];
+    const { modules, seatMonthlyPriceCents } = await getEffectiveCatalog();
     return {
       status: sub.status,
       seats: sub.seats,
@@ -171,8 +285,8 @@ export const billingRouter = router({
       currentPeriodEnd: sub.currentPeriodEnd,
       canceledAt: sub.canceledAt,
       paymentFailedAt: sub.paymentFailedAt,
-      modules: BILLING_MODULES.map(m => ({ id: m.id, label: m.label, description: m.description, monthlyPriceCents: m.monthlyPriceCents })),
-      seatMonthlyPriceCents: SEAT_MONTHLY_PRICE_CENTS,
+      modules: modules.map(m => ({ id: m.id, label: m.label, description: m.description, monthlyPriceCents: m.monthlyPriceCents })),
+      seatMonthlyPriceCents,
     };
   }),
 

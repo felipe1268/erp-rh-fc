@@ -84,6 +84,12 @@ uri = "file://server/uploads/frotas/fotos/JCB3CX_2024.png"
 type = "image"
 title = "JCB 3CX 2024"
 
+[[generated]]
+id = "rBQ0A7NFnm4TvjLqdWIH_"
+uri = "file://attached_assets/generated_images/julinho_mascot.png"
+type = "image"
+title = "generated_image"
+
 [[outputs]]
 id = "ymo9vkKPGT97dlvOhT6J2"
 uri = "file://attached_assets/stock_images/vw_gol_16v.jpg"

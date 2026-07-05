@@ -608,6 +608,17 @@ export const companySubscriptionModules = pgTable("company_subscription_modules"
         createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
 });
 
+// Rev. 4047 — override editável (admin_master) do preço de catálogo por módulo/assento.
+// Fonte de VERDADE do valor exibido em getCatalog(); ausência de linha = usa o default
+// estático de shared/billingModules.ts. moduleId="seat" cobre o preço por usuário.
+export const billingModulePrices = pgTable("billing_module_prices", {
+        id: serial().notNull(),
+        moduleId: varchar("module_id", { length: 60 }).notNull(),
+        monthlyPriceCents: integer("monthly_price_cents").notNull(),
+        updatedByName: varchar("updated_by_name", { length: 255 }),
+        updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
+});
+
 export const companies = pgTable("companies", {
         id: serial().notNull(),
         cnpj: varchar({ length: 18 }).notNull(),

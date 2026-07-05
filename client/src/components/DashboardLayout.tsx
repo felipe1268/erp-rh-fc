@@ -691,6 +691,7 @@ const menuSectionsAdmin: MenuSection[] = [
     items: [
       { icon: BarChart3, label: "Telemetria & Analytics", path: "/admin/telemetria" },
       { icon: Building2, label: "Painel SaaS", path: "/admin/saas", adminMasterOnly: true },
+      { icon: DollarSign, label: "Preços do Catálogo", path: "/admin/saas/precos", adminMasterOnly: true },
     ],
   },
 ];
