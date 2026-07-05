@@ -1,4 +1,23 @@
 /**
+ * Rev. 4048 — **`/planos` GANHA SEÇÃO DE "CASES ILUSTRATIVOS" (50 EXEMPLOS FICTÍCIOS, CLARAMENTE RÓTULADOS).**
+ *
+ * PEDIDO: usuário pediu "mais 50 cases para validação social de construtoras". Como a landing mantém a
+ * regra de nunca inventar cliente fictício apresentado como real (case único real = FC Engenharia, Rev.
+ * 4046/4047), foi feita uma pergunta de esclarecimento ao usuário: confirmado que são depoimentos
+ * FICTÍCIOS de construtoras-exemplo, com aviso explícito de que são ilustrativos (não clientes reais).
+ *
+ * FRONTEND: `client/src/pages/portal/SiteVendas.tsx` ganhou `TESTIMONIALS` (array de 50 objetos
+ * `{name, role, company, city, quote}`, todos fictícios, focados em dores de quem está abrindo/organizando
+ * a primeira construtora) + `TestimonialCardView` (card com badge "Ilustrativo" no canto). Nova seção
+ * "Exemplos de uso" entre "Por que a FC" e "Benefícios", com aviso permanente
+ * (`TESTIMONIAL_DISCLAIMER`: "Exemplos ilustrativos... ainda não são depoimentos de clientes reais")
+ * acima do carrossel. Carrossel em 2 faixas horizontais com scroll infinito (`marquee-left`/`marquee-right`,
+ * novos keyframes em `client/src/index.css`, pausa no hover). O case único REAL da FC Engenharia
+ * permanece intocado na seção "Por que a FC" — as duas seções coexistem com propósitos distintos e
+ * rotulagem clara. ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4047 — **`/planos` REDESENHADA (TEMA CLARO/VÍVIDO) + MASCOTE "JULINHO" + PREÇOS AJUSTÁVEIS PELO ADMIN.**
  *
  * PEDIDO: usuário rejeitou a landing dark/navy da Rev. 4046 ("muito sombria/séria"). Pedido explícito:

@@ -1,3 +1,5 @@
+- **Rev. 4039** — **DASHBOARD ALMOXARIFADO & EQUIPAMENTOS: ARQUIVO ÚNICO DE 1851 LINHAS COM 6 ABAS VIROU 6 PÁGINAS PRÓPRIAS.** Pedido: dividir `DashAlmoxarifadoEquipamentos.tsx` (controlava 6 seções via `?tab=`) em 6 páginas independentes com item próprio na sidebar, mais análise por funcionário, "top itens por valor", alerta de "itens sem categoria" e click-to-drill-down em todo gráfico. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4037** — **"CADÊ O DASH DA APR E DA PT?" — FALTAVAM DASHBOARDS DEDICADOS NO GRUPO "DASHBOARDS" DA SIDEBAR.** Novo procedimento `dashboard` em `aprAnalises.ts`/`ptPermissoes.ts`; novas páginas `DashboardAprAnalise.tsx`/`DashboardPermissaoTrabalho.tsx`; rotas `/sst/dashboard-apr` e `/sst/dashboard-pt` + 2 itens novos no grupo "Dashboards" da sidebar. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4036** — **APR — ANÁLISE PRELIMINAR DE RISCO: CARDS DE INDICADORES FORA DO PADRÃO VISUAL DA PT.** `AprAnalise.tsx`: array `CARDS` padronizado no mesmo markup da PT (dot + label + número grande, sem ícone/gradiente), mantendo o filtro por clique já existente. ZERO DELETE · ZERO ALTER destrutivo.

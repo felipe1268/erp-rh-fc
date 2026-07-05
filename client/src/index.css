@@ -909,3 +909,23 @@ html, body, * {
   50%  { opacity: 0.5; }
   100% { opacity: 0; }
 }
+
+/* Rev. 4048 — marquee horizontal p/ carrossel de cases ilustrativos em /planos */
+@keyframes marquee-left {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+@keyframes marquee-right {
+  from { transform: translateX(-50%); }
+  to   { transform: translateX(0); }
+}
+.marquee-track-left {
+  animation: marquee-left 60s linear infinite;
+}
+.marquee-track-right {
+  animation: marquee-right 60s linear infinite;
+}
+.marquee-row:hover .marquee-track-left,
+.marquee-row:hover .marquee-track-right {
+  animation-play-state: paused;
+}

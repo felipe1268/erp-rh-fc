@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4048** — **`/planos` GANHA SEÇÃO DE "CASES ILUSTRATIVOS" (50 EXEMPLOS FICTÍCIOS, CLARAMENTE RÓTULADOS).** Usuário pediu "mais 50 cases para validação social"; como a regra é nunca inventar cliente fictício apresentado como real, foi confirmado por pergunta que são depoimentos fictícios com aviso explícito. `SiteVendas.tsx` ganhou `TESTIMONIALS` (50 objetos fictícios) + `TestimonialCardView` (badge "Ilustrativo"), nova seção "Exemplos de uso" com disclaimer permanente acima de um carrossel de 2 faixas com scroll infinito (`marquee-left`/`marquee-right` em `client/src/index.css`, pausa no hover). Case único REAL da FC Engenharia intacto em "Por que a FC". ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4047** — **`/planos` REDESENHADA (TEMA CLARO/VÍVIDO) + MASCOTE "JULINHO" + PREÇOS AJUSTÁVEIS PELO ADMIN.** Usuário rejeitou a landing dark da Rev. 4046. Nova tabela `billing_module_prices` (self-heal, `COLFIX_VERSION` bumpado) + `applyPriceOverrides()` em `shared/billingModules.ts` (defaults reduzidos ~50%); `server/routers/billing.ts` ganhou `adminGetPrices`/`adminUpdatePrices` (admin_master, cria novo Stripe Price a cada ajuste + arquiva o antigo) e `getCatalog`/`getMySubscription` passaram a usar `getEffectiveCatalog()`. Nova página `client/src/pages/AdminPrecos.tsx` em `/admin/saas/precos` (MasterOnlyGuard) pra editar preço por módulo. `SiteVendas.tsx` reescrita: fundo claro/vívido (branco + laranja-âmbar) em vez de navy, mascote "Julinho" (imagem gerada) na hero e no CTA final, copy acolhedora pra quem tá abrindo a primeira construtora, preços lidos ao vivo de `trpc.billing.getCatalog`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4046** — **SITE DE VENDAS COMPLETO EM `/planos` (LANDING PAGE, NÃO SÓ O FORMULÁRIO).** Nova página `client/src/pages/portal/SiteVendas.tsx` (dark/gradiente laranja-âmbar sobre navy): hero com CTA duplo, stats bar, grid dos 14 módulos (ícone/cor/descrição/preço espelhando `shared/billingModules.ts`), seção "Por que a FC" com o case ÚNICO real (FC Engenharia como cliente-zero do próprio produto — sem cliente fictício), benefícios, vídeo institucional placeholder (`INSTITUTIONAL_VIDEO_URL`), Instagram/YouTube desabilitados "(em breve)" via `SOCIAL_LINKS`, CTA final e footer. `/planos` agora renderiza `SiteVendas`; `/contratar` continua sendo o formulário `ContratarPlano` (conversão), alvo dos CTAs da landing. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4046** — **SITE DE VENDAS COMPLETO EM `/planos` (LANDING PAGE, NÃO SÓ O FORMULÁRIO).** Nova página `client/src/pages/portal/SiteVendas.tsx` (dark/gradiente laranja-âmbar sobre navy): hero com CTA duplo, stats bar, grid dos 14 módulos (ícone/cor/descrição/preço espelhando `shared/billingModules.ts`), seção "Por que a FC" com o case ÚNICO real (FC Engenharia como cliente-zero do próprio produto — sem cliente fictício), benefícios, vídeo institucional placeholder (`INSTITUTIONAL_VIDEO_URL`), Instagram/YouTube desabilitados "(em breve)" via `SOCIAL_LINKS`, CTA final e footer. `/planos` agora renderiza `SiteVendas`; `/contratar` continua sendo o formulário `ContratarPlano` (conversão), alvo dos CTAs da landing. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4045** — **PROJETO SAAS "FASE 4" (FINAL) — MODULE GATING (ENFORCEMENT): EMPRESA-CLIENTE SÓ ACESSA O QUE CONTRATOU.** Gate GLOBAL via middleware tRPC (`server/_core/moduleGating.ts` + `requireModuleGate` em `protectedProcedure`), não router-por-router: `ROUTER_MODULE_MAP` liga namespace tRPC → módulo faturável (`shared/billingModules.ts`). Regra crítica: empresa SEM `company_subscriptions` (todo o parque interno FC pré-SaaS) = "legada", acesso irrestrito; só empresa-cliente com subscription é gateada pelos módulos contratados em `company_subscription_modules` (status trialing/active/past_due). `admin`/`admin_master` sempre bypassam (design da Rev. 4040). Cache 30s invalidado nas mutations de billing + no webhook de sync. Frontend: `billing.getContractedModules` integrado em `ModuleConfigContext.isModuleEnabled`. Fecha o plano de 4 fases da transformação SaaS. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4040** — **PROJETO SAAS "FASE 0" — AUDITORIA DE ISOLAMENTO ENTRE EMPRESAS (LGPD) E CORREÇÃO DE 6 GAPS DE IDOR CONFIRMADOS.** 6 gaps de IDOR cross-tenant corrigidos (SST, DANFE, dissídio, horas extras, folha) antes de iniciar o projeto SaaS. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4039** — **DASHBOARD ALMOXARIFADO & EQUIPAMENTOS: ARQUIVO ÚNICO DE 1851 LINHAS COM 6 ABAS VIROU 6 PÁGINAS PRÓPRIAS.** Pedido: dividir `DashAlmoxarifadoEquipamentos.tsx` (controlava 6 seções via `?tab=`) em 6 páginas independentes com item próprio na sidebar, mais análise por funcionário, "top itens por valor", alerta de "itens sem categoria" e click-to-drill-down em todo gráfico. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4036 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4039 e anteriores.
 
 ## User preferences
 

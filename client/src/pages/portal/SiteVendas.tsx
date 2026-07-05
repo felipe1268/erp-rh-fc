@@ -6,7 +6,7 @@ import {
   ArrowRight, Building2, ClipboardCheck, Handshake, Ruler, BookOpen,
   HardHat, Warehouse, FolderOpen, Truck, ShieldCheck, Receipt,
   CheckCircle2, Sparkles, Play, Instagram, Youtube, Menu, X,
-  TrendingUp, Lock, Zap, Layers, ArrowUpRight, Heart, Smile,
+  TrendingUp, Lock, Zap, Layers, ArrowUpRight, Heart, Smile, Quote, Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
@@ -54,6 +54,88 @@ const MODULES: ModuleCard[] = [
   { id: "gestao-documentos", title: "Doc. Técnicos", subtitle: "Gestão de Documentos", description: "Central de documentos técnicos com revisões, aprovações e ARTs/RRTs.", icon: FolderOpen, color: "from-indigo-500 to-blue-600" },
   { id: "frotas", title: "Frotas", subtitle: "Controle de Veículos", description: "Manutenções, combustível, multas, IPVA, seguros e rastreamento.", icon: Truck, color: "from-sky-500 to-cyan-600" },
 ];
+
+type TestimonialCard = { name: string; role: string; company: string; city: string; quote: string };
+
+/**
+ * Rev. 4048 — 50 depoimentos ILUSTRATIVOS de construtoras fictícias, usados só
+ * pra exemplificar o tipo de dor/benefício que o sistema resolve pra quem tá
+ * começando. NÃO são clientes reais — por isso o aviso "exemplos ilustrativos"
+ * fica sempre visível no cabeçalho da seção e em cada card (ver TESTIMONIAL_DISCLAIMER).
+ * O ÚNICO case real da plataforma continua sendo a FC Engenharia, na seção "Por que a FC".
+ */
+const TESTIMONIALS: TestimonialCard[] = [
+  { name: "Marcos Ferreira", role: "Sócio-fundador", company: "MF Construções", city: "Sorocaba/SP", quote: "Abri a empresa há 8 meses e tava perdido com planilha de ponto e vale-transporte. Em uma tarde já tinha a folha do primeiro time rodando." },
+  { name: "Juliana Prado", role: "Administradora", company: "Prado Engenharia", city: "Uberlândia/MG", quote: "O que mais me deixou tranquila foi só pagar pelos módulos que eu já uso. Comecei só com RH e Financeiro." },
+  { name: "Ricardo Almeida", role: "Diretor técnico", company: "Almeida & Torres", city: "Curitiba/PR", quote: "Nunca tinha usado um ERP antes. O suporte pra configurar os primeiros funcionários foi bem tranquilo." },
+  { name: "Camila Rezende", role: "Sócia", company: "CR Construtora", city: "Belo Horizonte/MG", quote: "Consigo ver o fluxo de caixa da minha primeira obra sem depender de planilha compartilhada com o contador." },
+  { name: "Thiago Nogueira", role: "Fundador", company: "Nogueira Obras", city: "Ribeirão Preto/SP", quote: "O módulo de compras já evitou duas cotações erradas logo no início. Se pagou sozinho." },
+  { name: "Patrícia Lima", role: "Gestora administrativa", company: "PL Empreendimentos", city: "Joinville/SC", quote: "Tava com medo de contratar um sistema caro demais pra uma empresa pequena. O preço por módulo fez toda diferença." },
+  { name: "Eduardo Castro", role: "Sócio-diretor", company: "Castro Engenharia", city: "Campinas/SP", quote: "Ativei SST assim que contratei o primeiro encarregado. Ficou tudo documentado desde o dia 1." },
+  { name: "Fernanda Duarte", role: "Administradora", company: "Duarte Construções", city: "Florianópolis/SC", quote: "O que eu mais queria era não bagunçar os dados desde o começo. O sistema já nasceu organizado com a gente." },
+  { name: "Bruno Siqueira", role: "Fundador", company: "Siqueira Obras", city: "Londrina/PR", quote: "Comecei sozinho, hoje já tenho 12 pessoas na folha. O sistema cresceu junto sem eu precisar trocar de ferramenta." },
+  { name: "Larissa Moura", role: "Sócia-administradora", company: "Moura Engenharia", city: "Vitória/ES", quote: "O suporte respondeu rápido quando travei configurando o primeiro contrato de terceirizada." },
+  { name: "Diego Barbosa", role: "Diretor", company: "Barbosa Construtora", city: "Goiânia/GO", quote: "Já usei planilha, já usei sistema caro que não usava nem metade. Aqui uso praticamente tudo que pago." },
+  { name: "Renata Vasconcelos", role: "Sócia-fundadora", company: "RV Empreendimentos", city: "Natal/RN", quote: "Consegui montar o primeiro orçamento de obra com curva ABC sem precisar contratar ninguém pra isso." },
+  { name: "Felipe Andrade", role: "Fundador", company: "Andrade Engenharia", city: "Maringá/PR", quote: "A parte de jurídico me ajudou a entender um processo trabalhista que eu nem sabia como conduzir." },
+  { name: "Aline Cordeiro", role: "Administradora financeira", company: "Cordeiro Obras", city: "Caxias do Sul/RS", quote: "A conciliação bancária sozinha já valeu a assinatura. Não perco mais tempo comparando extrato na mão." },
+  { name: "Gustavo Teixeira", role: "Sócio", company: "GT Construções", city: "São José dos Campos/SP", quote: "Comecei com medo de sistema complicado. Em uma semana minha equipe já usava o ponto eletrônico direito." },
+  { name: "Vanessa Correia", role: "Fundadora", company: "Correia Engenharia", city: "Vila Velha/ES", quote: "O módulo de almoxarifado resolveu um problema bobo que me custava caro: ferramenta sumindo de canteiro." },
+  { name: "Rodrigo Peixoto", role: "Diretor de obras", company: "Peixoto Construtora", city: "Feira de Santana/BA", quote: "Consigo acompanhar o avanço físico da obra pelo celular, direto do canteiro." },
+  { name: "Isabela Ramos", role: "Sócia-administradora", company: "IR Empreendimentos", city: "Juiz de Fora/MG", quote: "A parte de SST me deu confiança na primeira fiscalização. Todo documento já estava organizado." },
+  { name: "Leonardo Farias", role: "Fundador", company: "Farias Engenharia", city: "Anápolis/GO", quote: "Testei três sistemas antes. Esse foi o único que realmente entendia o dia a dia de obra pequena." },
+  { name: "Bianca Monteiro", role: "Administradora", company: "Monteiro Construções", city: "Blumenau/SC", quote: "Meu contador elogiou a organização do financeiro assim que comecei a usar o sistema." },
+  { name: "Vinícius Cavalcante", role: "Sócio-fundador", company: "Cavalcante Obras", city: "Petrolina/PE", quote: "A gente contratou só RH e Financeiro no começo. Hoje já uso Compras e Almoxarifado também." },
+  { name: "Débora Aragão", role: "Fundadora", company: "Aragão Engenharia", city: "Aracaju/SE", quote: "O que eu procurava era simplicidade sem perder controle. Foi exatamente isso que encontrei." },
+  { name: "Matheus Rocha", role: "Diretor técnico", company: "Rocha Construtora", city: "Presidente Prudente/SP", quote: "Migrei de uma planilha gigante de RH em menos de uma semana, sem perder histórico de ninguém." },
+  { name: "Priscila Guedes", role: "Sócia-administradora", company: "Guedes Empreendimentos", city: "Marília/SP", quote: "O preço acessível foi decisivo pra eu não adiar mais a organização da empresa." },
+  { name: "Alexandre Brito", role: "Fundador", company: "Brito Engenharia", city: "Montes Claros/MG", quote: "Comecei a usar o módulo de medição no segundo contrato e já evitei um erro de faturamento." },
+  { name: "Cristiane Aquino", role: "Administradora", company: "Aquino Construções", city: "Chapecó/SC", quote: "Consigo emitir os documentos trabalhistas certos sem precisar pesquisar modelo toda vez." },
+  { name: "Henrique Salgado", role: "Sócio-diretor", company: "Salgado Obras", city: "Itajaí/SC", quote: "O sistema me ajudou a entender que eu estava pagando hora extra errado. Corrigi rápido." },
+  { name: "Tatiane Vieira", role: "Fundadora", company: "Vieira Engenharia", city: "Bauru/SP", quote: "Adicionei o módulo de Frotas quando comprei a primeira caminhonete da obra. Ficou tudo num lugar só." },
+  { name: "Otávio Machado", role: "Sócio", company: "Machado Construtora", city: "Passo Fundo/RS", quote: "Não precisei contratar um TI pra colocar o sistema pra funcionar. Foi bem direto." },
+  { name: "Marina Bezerra", role: "Administradora financeira", company: "Bezerra Empreendimentos", city: "Mossoró/RN", quote: "O DRE automático me mostrou onde eu estava perdendo margem numa das obras." },
+  { name: "Rafael Coutinho", role: "Fundador", company: "Coutinho Engenharia", city: "Volta Redonda/RJ", quote: "Consegui documentar as ASOs de toda a equipe assim que contratei o pessoal de campo." },
+  { name: "Sabrina Leal", role: "Sócia-fundadora", company: "Leal Construções", city: "Criciúma/SC", quote: "Achei que ia precisar de um sistema caro pra ter esse nível de controle. Não foi o caso." },
+  { name: "Daniel Pontes", role: "Diretor de obras", company: "Pontes Obras", city: "Cascavel/PR", quote: "Comecei sozinho com uma obra e hoje já tenho três em andamento, tudo acompanhado no mesmo lugar." },
+  { name: "Fabiana Xavier", role: "Administradora", company: "Xavier Engenharia", city: "Governador Valadares/MG", quote: "O suporte me ajudou a cadastrar meus primeiros fornecedores certinho." },
+  { name: "Caio Menezes", role: "Sócio", company: "Menezes Construtora", city: "Santa Maria/RS", quote: "A parte de compras com cotação comparativa já me economizou em pelo menos duas negociações." },
+  { name: "Roberta Sales", role: "Fundadora", company: "Sales Empreendimentos", city: "Uberaba/MG", quote: "Gostei de poder ativar um módulo por vez, sem pressão de contratar tudo de uma vez." },
+  { name: "Wesley Tavares", role: "Sócio-diretor", company: "Tavares Engenharia", city: "Dourados/MS", quote: "O painel de RH me ajudou a organizar as férias da equipe pela primeira vez desde que abri a empresa." },
+  { name: "Gabriela Freitas", role: "Administradora", company: "Freitas Construções", city: "Ponta Grossa/PR", quote: "Consigo ver tudo de terceirizadas num só lugar, isso me tirou um peso enorme." },
+  { name: "Igor Pacheco", role: "Fundador", company: "Pacheco Obras", city: "Rio Branco/AC", quote: "O sistema me ajudou a evitar multa de vencimento de documento de terceirizada." },
+  { name: "Silvana Cunha", role: "Sócia-administradora", company: "Cunha Engenharia", city: "Teresina/PI", quote: "Como só tenho poucos funcionários ainda, o preço por módulo fez muito mais sentido pro meu bolso." },
+  { name: "Alan Figueiredo", role: "Diretor", company: "Figueiredo Construtora", city: "Imperatriz/MA", quote: "A parte de avaliação de desempenho me ajudou a decidir quem promover na minha primeira equipe fixa." },
+  { name: "Michele Dornelles", role: "Fundadora", company: "Dornelles Empreendimentos", city: "Pelotas/RS", quote: "O suporte foi rápido quando tive dúvida sobre o cálculo de rescisão do primeiro desligamento." },
+  { name: "Anderson Lacerda", role: "Sócio", company: "Lacerda Engenharia", city: "Divinópolis/MG", quote: "Consigo acompanhar o orçamento da obra sem depender só do meu engenheiro pra me passar número." },
+  { name: "Kelly Nascimento", role: "Administradora", company: "Nascimento Construções", city: "Itabuna/BA", quote: "Achei que ERP era coisa de empresa grande. Hoje uso desde o segundo mês da minha construtora." },
+  { name: "Douglas Assis", role: "Fundador", company: "Assis Obras", city: "Barretos/SP", quote: "O módulo de documentos técnicos me ajudou a organizar ART e RRT sem perder prazo de nenhum." },
+  { name: "Nathália Pires", role: "Sócia-fundadora", company: "Pires Engenharia", city: "Franca/SP", quote: "O que eu mais valorizei foi não precisar assinar um contrato longo pra começar a testar." },
+  { name: "Jonas Werneck", role: "Diretor técnico", company: "Werneck Construtora", city: "Macaé/RJ", quote: "Uso o módulo de planejamento pra acompanhar a curva S da minha primeira obra maior." },
+  { name: "Simone Andrade", role: "Administradora financeira", company: "SA Empreendimentos", city: "Arapiraca/AL", quote: "O fluxo de caixa organizado me deu confiança pra negociar melhor com fornecedor." },
+  { name: "Leandro Batista", role: "Fundador", company: "Batista Engenharia", city: "Cuiabá/MT", quote: "Comecei com uma obra pequena e hoje o sistema já acompanha três equipes ao mesmo tempo." },
+  { name: "Adriana Melo", role: "Sócia-administradora", company: "Melo Construções", city: "Boa Vista/RR", quote: "O suporte entendeu minha realidade de construtora iniciante e não me empurrou módulo que eu não precisava." },
+];
+
+const TESTIMONIAL_DISCLAIMER =
+  "Exemplos ilustrativos de como o sistema ajuda construtoras que estão começando — ainda não são depoimentos de clientes reais.";
+
+function TestimonialCardView({ t }: { t: TestimonialCard }) {
+  return (
+    <div className="relative shrink-0 w-[320px] sm:w-[360px] rounded-2xl border border-orange-100 bg-white shadow-sm p-6 mx-3 flex flex-col">
+      <span className="absolute top-4 right-4 text-[10px] font-semibold uppercase tracking-wide text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+        Ilustrativo
+      </span>
+      <Quote className="w-6 h-6 text-orange-300 mb-3" />
+      <p className="text-sm text-slate-600 leading-relaxed italic flex-1">"{t.quote}"</p>
+      <div className="mt-5 pt-4 border-t border-slate-100">
+        <p className="text-sm font-semibold text-slate-900">{t.name}</p>
+        <p className="text-xs text-slate-500">{t.role} · {t.company}</p>
+        <p className="text-xs text-slate-400">{t.city}</p>
+      </div>
+    </div>
+  );
+}
 
 const BENEFITS = [
   { icon: Zap, title: "Comece no seu ritmo", text: "Ative só os módulos que fazem sentido hoje. Nada de contrato engessado — cresça o sistema junto com a sua obra." },
@@ -322,6 +404,34 @@ export default function SiteVendas() {
             </p>
             <p className="text-xs text-slate-400 mt-4">— Equipe FC Engenharia</p>
           </motion.div>
+        </div>
+      </section>
+
+      {/* ── Cases ilustrativos (exemplos, não clientes reais) ── */}
+      <section className="py-20 bg-gradient-to-b from-orange-50/40 to-white overflow-hidden">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 text-center mb-10">
+          <span className="text-xs font-semibold text-orange-600 tracking-widest uppercase">Exemplos de uso</span>
+          <h2 className="text-3xl sm:text-4xl font-bold mt-3 text-slate-900">
+            Como construtoras iniciantes <span className="text-orange-600">poderiam usar</span> o sistema
+          </h2>
+          <p className="flex items-center justify-center gap-2 text-sm text-slate-500 mt-4 max-w-2xl mx-auto">
+            <Info className="w-4 h-4 text-amber-500 shrink-0" />
+            {TESTIMONIAL_DISCLAIMER}
+          </p>
+        </div>
+        <div className="marquee-row relative">
+          <div className="flex w-max marquee-track-left">
+            {[...TESTIMONIALS.slice(0, 25), ...TESTIMONIALS.slice(0, 25)].map((t, i) => (
+              <TestimonialCardView key={`row1-${i}`} t={t} />
+            ))}
+          </div>
+        </div>
+        <div className="marquee-row relative mt-2">
+          <div className="flex w-max marquee-track-right">
+            {[...TESTIMONIALS.slice(25, 50), ...TESTIMONIALS.slice(25, 50)].map((t, i) => (
+              <TestimonialCardView key={`row2-${i}`} t={t} />
+            ))}
+          </div>
         </div>
       </section>
 
