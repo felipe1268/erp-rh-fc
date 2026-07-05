@@ -141,4 +141,9 @@ export async function syncSubscriptionStatus(objectLike: any, eventType: string)
 
   await db.update(companySubscriptions).set(patch as any).where(eq(companySubscriptions.stripeSubscriptionId, subscriptionId));
   console.log(`[billingProvisioning] Assinatura ${subscriptionId} sincronizada (evento ${eventType}) → status=${patch.status ?? rows[0].status}.`);
+
+  // Rev. 4045 — mudança de status (ex.: past_due/canceled via dunning) deve
+  // refletir na hora no gate de módulos, sem esperar o TTL do cache expirar.
+  const { invalidateModuleGateCache } = await import("./_core/moduleGating");
+  invalidateModuleGateCache();
 }

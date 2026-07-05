@@ -56,6 +56,23 @@ function UsuariosGuard({ component: Component }: { component: ComponentType }) {
   return <Component />;
 }
 
+// Rev. 4044 — "/minha-assinatura" (self-service lifecycle) é exclusivo do
+// `adm_cliente` (dono da assinatura da empresa-cliente); admin/admin_master
+// internos não têm assinatura própria.
+function AdmClienteGuard({ component: Component }: { component: ComponentType }) {
+  const { user, loading } = useAuth();
+  const [, setLocation] = useLocation();
+  useEffect(() => {
+    if (loading) return;
+    if (!user) { setLocation("/login"); return; }
+    if (user.role !== 'adm_cliente') { setLocation("/"); }
+  }, [user, loading, setLocation]);
+
+  if (loading) return <PageLoader />;
+  if (!user || user.role !== 'adm_cliente') return <PageLoader />;
+  return <Component />;
+}
+
 function RouteGuard({ component: Component, route }: { component: ComponentType; route: string | string[] }) {
   const { isAdminMaster, hasGroup, groupCanAccessRoute, isLoading } = usePermissions();
 
@@ -261,6 +278,8 @@ const ProcessosCivis = lazyWithRetry(() => import("./pages/ProcessosCivis"));
 const BibliotecaConhecimento = lazyWithRetry(() => import("./pages/BibliotecaConhecimento"));
 const AvaliacaoDesempenho = lazyWithRetry(() => import("./pages/AvaliacaoDesempenho"));
 const Telemetria = lazyWithRetry(() => import("./pages/Telemetria"));
+const SaasAdminPanel = lazyWithRetry(() => import("./pages/SaasAdminPanel"));
+const MinhaAssinatura = lazyWithRetry(() => import("./pages/MinhaAssinatura"));
 const ImportData = lazyWithRetry(() => import("./pages/ImportData"));
 
 // Relatórios
@@ -435,6 +454,8 @@ const ClimaPublicoPage = lazyWithRetry(() => import("./pages/PesquisaPublica").t
 
 // Portal Externo
 const PortalLogin = lazyWithRetry(() => import("./pages/portal/PortalLogin"));
+const ContratarPlano = lazyWithRetry(() => import("./pages/portal/ContratarPlano"));
+const ContratarSucesso = lazyWithRetry(() => import("./pages/portal/ContratarSucesso"));
 const PortalLoginCliente = lazyWithRetry(() => import("./pages/portal/PortalLoginCliente"));
 const PortalEsqueciSenha = lazyWithRetry(() => import("./pages/portal/PortalEsqueciSenha"));
 const PortalRedefinirSenha = lazyWithRetry(() => import("./pages/portal/PortalRedefinirSenha"));
@@ -493,6 +514,8 @@ function Router() {
         <Route path={"/grupos-usuarios"} component={() => <MasterOnlyGuard component={GruposUsuarios} />} />
         <Route path={"/auditoria"} component={() => <MasterOnlyGuard component={Auditoria} />} />
         <Route path={"/admin/telemetria"} component={() => <MasterOnlyGuard component={Telemetria} />} />
+        <Route path={"/admin/saas"} component={() => <MasterOnlyGuard component={SaasAdminPanel} />} />
+        <Route path={"/minha-assinatura"} component={() => <AdmClienteGuard component={MinhaAssinatura} />} />
         <Route path={"/fechamento-ponto"} component={() => <RouteGuard component={FechamentoPonto} route="/fechamento-ponto" />} />
         <Route path={"/espelho-ponto"} component={() => <RouteGuard component={EspelhoPonto} route="/espelho-ponto" />} />
         <Route path={"/folha-pagamento"} component={() => <RouteGuard component={FolhaPagamento} route="/folha-pagamento" />} />
@@ -743,6 +766,9 @@ function Router() {
         <Route path="/a/:codigo" component={AvaliacaoPublicaCurta} />
         {/* Portal Externo (Terceiros/Parceiros) */}
         <Route path="/portal/login" component={PortalLogin} />
+        <Route path="/planos" component={ContratarPlano} />
+        <Route path="/contratar" component={ContratarPlano} />
+        <Route path="/contratar/sucesso" component={ContratarSucesso} />
         <Route path="/portal/cliente/login" component={PortalLoginCliente} />
         <Route path="/portal/cliente" component={PortalLoginCliente} />
         <Route path="/portal/esqueci-senha" component={PortalEsqueciSenha} />

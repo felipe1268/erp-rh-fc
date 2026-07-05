@@ -92,6 +92,38 @@ export function isStripeConfigured(): boolean {
 }
 
 /**
+ * Mapa moduleId -> Stripe Price ID ativo, resolvido por `metadata.moduleId`
+ * (seed feito por scripts/seed-products.ts). O preço do assento usa
+ * moduleId="seat" (SEAT_ENV_PRICE_KEY em shared/billingModules.ts).
+ * Cacheado em memória por 5 min — evita 1 chamada Stripe por moduleId a
+ * cada checkout; `active:true` garante que só preços correntes sejam usados.
+ */
+let modulePriceCache: { map: Record<string, string>; expiresAt: number } | null = null;
+
+export async function getModulePriceMap(): Promise<Record<string, string>> {
+  if (modulePriceCache && modulePriceCache.expiresAt > Date.now()) {
+    return modulePriceCache.map;
+  }
+
+  const stripe = await getUncachableStripeClient();
+  const map: Record<string, string> = {};
+  let startingAfter: string | undefined;
+  do {
+    const page = await stripe.prices.list({ active: true, limit: 100, starting_after: startingAfter });
+    for (const price of page.data) {
+      const moduleId = price.metadata?.moduleId;
+      if (moduleId && !map[moduleId]) {
+        map[moduleId] = price.id;
+      }
+    }
+    startingAfter = page.has_more ? page.data[page.data.length - 1]?.id : undefined;
+  } while (startingAfter);
+
+  modulePriceCache = { map, expiresAt: Date.now() + 5 * 60 * 1000 };
+  return map;
+}
+
+/**
  * Runs the stripe-replit-sync database migrations (creates the `stripe.*`
  * schema mirroring products/prices/subscriptions/etc). `runMigrations` is a
  * standalone export of the package, NOT a method on the StripeSync instance.

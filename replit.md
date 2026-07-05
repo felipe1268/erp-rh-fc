@@ -50,11 +50,15 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4041** — **PROJETO SAAS: NOVO PERFIL "ADM CLIENTE" (ADMIN RESTRITO À(S) PRÓPRIA(S) EMPRESA(S)) + 2 VULNS CRÍTICAS DE `listUsers`/`createLocalUser` CORRIGIDAS.** Seguindo a Rev. 4040, novo papel `adm_cliente`: gerencia SÓ usuários `role: "user"` dentro das próprias empresas (criar/editar/resetar senha/ativar-desativar), sem acesso a módulos/grupos/config (isso continua exclusivo de admin/admin_master). Durante a implementação, achado GRAVE: `listUsers` e `createLocalUser` (`server/routers.ts`) não tinham NENHUM check de role — qualquer usuário comum podia criar uma conta `admin_master` pra si mesmo (escalação total) e `listUsers` vazava todos os usuários de todas as empresas. Corrigido com novo helper `assertAdmClienteTargetScope` + guard de role explícito em `createLocalUser`/`setUserCompanies`/`setUserObras`/`resetPassword`/`updateUser`/`setUserStatus`; `setUserGroups` ficou fora do alcance do Adm Cliente. Frontend: `PermissionsContext.isAdmCliente`, `Usuarios.tsx` trava criação em `role:"user"` pro Adm Cliente, `App.tsx` ganhou guard dedicado `UsuariosGuard` (admin_master+admin+adm_cliente) só pra `/usuarios` (MasterOnlyGuard compartilhado intocado), sidebar libera o item pros 3 papéis. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4045** — **PROJETO SAAS "FASE 4" (FINAL) — MODULE GATING (ENFORCEMENT): EMPRESA-CLIENTE SÓ ACESSA O QUE CONTRATOU.** Gate GLOBAL via middleware tRPC (`server/_core/moduleGating.ts` + `requireModuleGate` em `protectedProcedure`), não router-por-router: `ROUTER_MODULE_MAP` liga namespace tRPC → módulo faturável (`shared/billingModules.ts`). Regra crítica: empresa SEM `company_subscriptions` (todo o parque interno FC pré-SaaS) = "legada", acesso irrestrito; só empresa-cliente com subscription é gateada pelos módulos contratados em `company_subscription_modules` (status trialing/active/past_due). `admin`/`admin_master` sempre bypassam (design da Rev. 4040). Cache 30s invalidado nas mutations de billing + no webhook de sync. Frontend: `billing.getContractedModules` integrado em `ModuleConfigContext.isModuleEnabled`. Fecha o plano de 4 fases da transformação SaaS. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4040** — **PROJETO SAAS: "FASE 0" — AUDITORIA DE ISOLAMENTO ENTRE EMPRESAS (LGPD) E CORREÇÃO DE 6 GAPS DE IDOR CONFIRMADOS.** Antes de iniciar a transformação em SaaS multi-cliente, auditoria de isolamento cross-tenant (financeiro, folha/RH, rotas públicas, criação de usuário/empresa) + scans automatizados. Corrigidos 6 gaps de IDOR confirmados onde um usuário podia ler/baixar dado de OUTRA empresa manipulando um ID: `downloadSST.ts` (ZIP de ASO/saúde de qualquer funcionário), `danfeRoute.ts` (DANFE via companyId de query param não validado), `dissidio.buscarPorId`, `horasExtras.getDetalhe`/`memorialCalculo`, `folhaPagamento.listarItens` (salário/dados bancários). Todos usam o mesmo padrão: `getCompaniesForUser`/`userCompanies` guard antes de retornar o dado. Confirmado por design (não é bug): `admin` tem acesso global igual `admin_master` — painel mestre SaaS deve usar role distinto pra admin de empresa-cliente. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4044** — **PROJETO SAAS "FASE 3" — LIFECYCLE DE ASSINATURA: SELF-SERVICE REAL PRA `ADM_CLIENTE`.** `server/routers/billing.ts` ganhou `getMySubscription`/`createPortalSession` (Stripe Billing Portal)/`updateSubscription` (add/remove módulo + assentos com proration)/`cancelMySubscription`/`reactivateMySubscription`, todos via `getOwnSubscriptionOrThrow` (só `adm_cliente`, só a própria empresa). Nova página `MinhaAssinatura.tsx` com guard dedicado `AdmClienteGuard` em `/minha-assinatura`; item de sidebar visível só pra `adm_cliente`. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
+
+- **Rev. 4041** — **PROJETO SAAS: NOVO PERFIL "ADM CLIENTE" + 2 VULNS CRÍTICAS DE `listUsers`/`createLocalUser` CORRIGIDAS.** Novo papel `adm_cliente` (gerencia só usuários `role:"user"` da própria empresa); achado GRAVE corrigido: `listUsers`/`createLocalUser` sem check de role permitiam escalação total e vazamento cross-tenant. ZERO DELETE · ZERO ALTER destrutivo.
+
+- **Rev. 4040** — **PROJETO SAAS "FASE 0" — AUDITORIA DE ISOLAMENTO ENTRE EMPRESAS (LGPD) E CORREÇÃO DE 6 GAPS DE IDOR CONFIRMADOS.** 6 gaps de IDOR cross-tenant corrigidos (SST, DANFE, dissídio, horas extras, folha) antes de iniciar o projeto SaaS. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4039** — **DASHBOARD ALMOXARIFADO & EQUIPAMENTOS: ARQUIVO ÚNICO DE 1851 LINHAS COM 6 ABAS VIROU 6 PÁGINAS PRÓPRIAS.** Pedido: dividir `DashAlmoxarifadoEquipamentos.tsx` (controlava 6 seções via `?tab=`) em 6 páginas independentes com item próprio na sidebar, mais análise por funcionário, "top itens por valor", alerta de "itens sem categoria" e click-to-drill-down em todo gráfico. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -62,13 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4037** — **"CADÊ O DASH DA APR E DA PT?" — FALTAVAM DASHBOARDS DEDICADOS NO GRUPO "DASHBOARDS" DA SIDEBAR.** Novo procedimento `dashboard` em `aprAnalises.ts`/`ptPermissoes.ts`; novas páginas `DashboardAprAnalise.tsx`/`DashboardPermissaoTrabalho.tsx`; rotas `/sst/dashboard-apr` e `/sst/dashboard-pt` + 2 itens novos no grupo "Dashboards" da sidebar. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4036** — **APR — ANÁLISE PRELIMINAR DE RISCO: CARDS DE INDICADORES FORA DO PADRÃO VISUAL DA PT.** `AprAnalise.tsx`: array `CARDS` padronizado no mesmo markup da PT (dot + label + número grande, sem ícone/gradiente), mantendo o filtro por clique já existente. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4035** — **BOLETIM DE MEDIÇÃO (PDF): DOCUMENTO SEM ORGANIZAÇÃO, SEM RELATO E SEM PADRÃO — REDESENHO COMPLETO.** Nova seção "Relatório do Período" (campo `observacoes`), itens agrupados em 2 seções (Cronograma × FD Compras) com subtotal + total geral, coluna "Item"→"Nº" sequencial, descrição sem cortar palavras. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4033 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4036 e anteriores.
 
 ## User preferences
 

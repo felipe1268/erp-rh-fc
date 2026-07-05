@@ -265,6 +265,14 @@ export const adminSections: MenuSection[] = [
       { icon: BookOpen, label: "Biblioteca de Conhecimento", path: "/ajuda" },
     ],
   },
+  {
+    // Rev. 4044 — só aparece pra adm_cliente (filtro de role abaixo, igual ao
+    // tratamento especial já existente pra "/usuarios").
+    title: "Assinatura",
+    items: [
+      { icon: CreditCard, label: "Minha Assinatura", path: "/minha-assinatura" },
+    ],
+  },
 ];
 
 const menuSectionsAvaliacao: MenuSection[] = [
@@ -682,6 +690,7 @@ const menuSectionsAdmin: MenuSection[] = [
     title: "Administração",
     items: [
       { icon: BarChart3, label: "Telemetria & Analytics", path: "/admin/telemetria" },
+      { icon: Building2, label: "Painel SaaS", path: "/admin/saas", adminMasterOnly: true },
     ],
   },
 ];
@@ -1417,6 +1426,14 @@ function DashboardLayoutContent({
           if (item.path === '/usuarios' && isAdmOrAdmCliente) return true;
           return !adminOnlyPaths.includes(item.path);
         }),
+      }));
+    }
+    // Rev. 4044 — "Minha Assinatura" é exclusivo do adm_cliente (dono da
+    // assinatura da própria empresa-cliente); some para todos os outros papéis.
+    if (user?.role !== 'adm_cliente') {
+      sections = sections.map(s => ({
+        ...s,
+        items: s.items.filter(item => item.path !== '/minha-assinatura'),
       }));
     }
     // Filter admin master only items

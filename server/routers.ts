@@ -112,6 +112,8 @@ import { fieldNotesRouter } from "./routers/fieldNotes";
 import { epiAvancadoRouter } from "./routers/epiAvancado";
 import { backupRouter } from "./routers/backup";
 import { migrationRouter } from "./routers/migration";
+import { billingRouter } from "./routers/billing";
+import { saasAdminRouter } from "./routers/saasAdmin";
 import { contractsRouter } from "./routers/contracts";
 import { skillsRouter } from "./routers/skills";
 import { orcamentoRouter } from "./routers/orcamento";
@@ -191,6 +193,8 @@ async function assertAdmClienteTargetScope(callerId: number, targetUserId: numbe
 }
 
 export const appRouter = router({
+  billing: billingRouter,
+  saasAdmin: saasAdminRouter,
   system: systemRouter,
   docs: controleDocumentosRouter,
   home: homeDataRouter,
@@ -2828,6 +2832,21 @@ export const appRouter = router({
       if ((user as any).status === 'desligado') {
         console.warn(`[Login] Acesso bloqueado (status=desligado): userId=${user.id} '${loginInput}'`);
         throw new TRPCError({ code: "UNAUTHORIZED", message: "Acesso desativado. Procure o administrador do sistema." });
+      }
+      // Rev. 4043 — SaaS: empresa-cliente suspensa (companies.isActive=0) bloqueia
+      // login de `adm_cliente`/`user` dela — NÃO se aplica a admin/admin_master
+      // (equipe interna FC, acesso global independente de assinatura).
+      if (user.role === 'adm_cliente' || user.role === 'user') {
+        try {
+          const userCompaniesList = await getCompaniesForUser(user.id, user.role);
+          if (userCompaniesList.length > 0 && userCompaniesList.every((c: any) => c.isActive === 0)) {
+            console.warn(`[Login] Acesso bloqueado (empresa suspensa): userId=${user.id} '${loginInput}'`);
+            throw new TRPCError({ code: "UNAUTHORIZED", message: "Assinatura suspensa. Entre em contato com o suporte para regularizar o pagamento." });
+          }
+        } catch (e) {
+          if (e instanceof TRPCError) throw e;
+          console.error(`[Login] Falha ao checar suspensão de empresa (userId=${user.id}):`, e);
+        }
       }
       // Usar o SDK para gerar o token no formato correto (openId, appId, name)
       const { sdk } = await import("./_core/sdk");

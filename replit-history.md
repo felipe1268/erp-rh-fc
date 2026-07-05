@@ -1,3 +1,7 @@
+- **Rev. 4036** — **APR — ANÁLISE PRELIMINAR DE RISCO: CARDS DE INDICADORES FORA DO PADRÃO VISUAL DA PT.** `AprAnalise.tsx`: array `CARDS` padronizado no mesmo markup da PT (dot + label + número grande, sem ícone/gradiente), mantendo o filtro por clique já existente. ZERO DELETE · ZERO ALTER destrutivo.
+
+- **Rev. 4035** — **BOLETIM DE MEDIÇÃO (PDF): DOCUMENTO SEM ORGANIZAÇÃO, SEM RELATO E SEM PADRÃO — REDESENHO COMPLETO.** Nova seção "Relatório do Período" (campo `observacoes`), itens agrupados em 2 seções (Cronograma × FD Compras) com subtotal + total geral, coluna "Item"→"Nº" sequencial, descrição sem cortar palavras. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4034** — **MEDIÇÃO DE CONTRATOS: "VINCULAR FD DE COMPRAS" GERAVA ITEM COM tipoAvanco INVÁLIDO ("fd_compra") — CAUSA-RAIZ DO ERRO REVELADO PELA REV. 4033.** `MedicaoDetalhe.tsx`: `tipoAvanco` do item de FD trocado para `"financeiro_material"` (valor fora do enum fazia qualquer boletim com FD vinculado nunca salvar). ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4033** — **MEDIÇÃO DE CONTRATOS: BOTÃO "SALVAR E CALCULAR DEDUÇÕES" PARECIA NÃO FAZER NADA (SEM FEEDBACK DE ERRO).** Race condition entre `recalcularMutation` e `salvarItensMutation` + falta de `onError` engolindo falhas reais; recálculo movido pro `onSuccess` de salvar itens + `toast.error` nas duas mutations. ZERO DELETE · ZERO ALTER destrutivo.

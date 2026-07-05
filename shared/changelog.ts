@@ -1,4 +1,91 @@
 /**
+ * Rev. 4045 — **PROJETO SAAS "FASE 4" — MODULE GATING (ENFORCEMENT): EMPRESA-CLIENTE SÓ ACESSA O QUE CONTRATOU.**
+ *
+ * PEDIDO: última fase do plano de 4 fases aprovado pelo usuário ("pode seguir da fase um à fase
+ * quatro, sem parar"). Faltava o enforcement real: até aqui, checkout/painel master/lifecycle já
+ * criavam e mantinham `company_subscriptions`/`company_subscription_modules` corretamente no Stripe
+ * e no banco, mas NADA no backend impedia uma empresa-cliente de acessar um módulo que não contratou
+ * — as rotas tRPC continuavam abertas pra qualquer usuário autenticado.
+ *
+ * DECISÃO DE DESENHO: gate GLOBAL em vez de tocar router-por-router (dezenas de arquivos, risco alto
+ * de esquecer um). Novo `server/_core/moduleGating.ts`: `ROUTER_MODULE_MAP` mapeia o namespace de
+ * topo do tRPC (ex.: `financial`, `compras`, `warehouse`, `sst`, `medicao`, `payrollEngine`,
+ * `frotas`, `planejamento`, `orcamento`, `terceiros`, `parceiros`, `avaliacao`, `gestaoDocumentos`
+ * etc.) pro `billingModuleId` correspondente (`shared/billingModules.ts`); namespaces de plataforma
+ * (auth, companies, billing, saasAdmin, notifications, userManagement etc.) ficam FORA do mapa e
+ * nunca são afetados. `isModuleAccessibleForUser(userId, moduleId)` decide o acesso e roda em cache
+ * de memória (30s TTL, chave `userId:moduleId`) pra não bater no banco a cada chamada tRPC.
+ *
+ * REGRA DE COMPATIBILIDADE (a mais crítica): empresa SEM linha em `company_subscriptions` = "legada"
+ * — toda empresa interna FC pré-existente ao projeto SaaS nunca teve assinatura e continua com acesso
+ * TOTAL irrestrito (nunca foram cobradas por módulo, não faz sentido gateá-las agora). Só empresas
+ * que passaram pelo checkout self-service (têm subscription) são de fato gateadas pelos módulos em
+ * `company_subscription_modules`, desde que o status permita (`trialing`/`active`/`past_due` — este
+ * último é o grace period do dunning, ver Rev. 4040-4044). O gate roda POR USUÁRIO, não por empresa
+ * isolada: se QUALQUER empresa que o usuário acessa permite o módulo (legada ou contratante), o
+ * acesso passa — evita quebrar usuários vinculados a múltiplas empresas. `admin`/`admin_master`
+ * (staff interno FC) têm bypass explícito e incondicional, confirmando a decisão de design já
+ * registrada na Rev. 4040 (acesso global por natureza do papel, nunca sujeito ao SaaS gate).
+ *
+ * IMPLEMENTAÇÃO: middleware `requireModuleGate` encadeado em `protectedProcedure`
+ * (`server/_core/trpc.ts`), sempre DEPOIS de `requireUser` (requisição não-autenticada continua
+ * recebendo 401 puro, nunca vaza informação de módulo). Invalidação de cache explícita nas mutations
+ * de autoatendimento (`updateSubscription`/`cancelMySubscription`/`reactivateMySubscription` em
+ * `server/routers/billing.ts`) e no sync de status via webhook (`syncSubscriptionStatus` em
+ * `server/billingProvisioning.ts`) — sem isso, uma empresa que acabou de contratar/cancelar um
+ * módulo ficaria até 30s vendo o estado antigo.
+ *
+ * FRONTEND: novo endpoint `billing.getContractedModules({companyId})` (retorna `{legacy,
+ * moduleIds}`, com o mesmo bypass admin/admin_master); `ModuleConfigContext.tsx` agora combina o
+ * toggle manual pré-existente "Módulos do Sistema" com esse gate de billing em `isModuleEnabled`,
+ * usando um alias map pra sub-variantes que a sidebar/ModuleHub já tratavam separado (ex.:
+ * juridico-trabalhista/tributario/civil→juridico, medicao-terceiros→medicao).
+ *
+ * LIMITAÇÃO CONHECIDA (aceita, não é bug de segurança): `hubToConfigKey` em `DashboardLayout.tsx`
+ * (pré-existente ao billing) mapeia tanto "compras" quanto "almoxarifado" pra mesma chave "compras"
+ * no toggle manual antigo; se uma empresa contratar só 1 dos 2 módulos de billing, o card do
+ * ModuleHub pode exibir estado com pequena imprecisão visual entre os dois. Não afeta o gate real:
+ * `ROUTER_MODULE_MAP` no backend distingue `compras`/`purchase` de `warehouse`/`equipamentos`/`epis`
+ * corretamente — só a UX do hub herda essa nuance do sistema de toggle manual anterior ao SaaS.
+ *
+ * VERIFICAÇÃO: `tsc --noEmit -p .` limpo em todo o projeto (exceto ruído pré-existente conhecido de
+ * `changelog.ts`, ver Rev. anterior sobre `*\/ ` em comentários). App reiniciado sem erros novos,
+ * `[SyncSchema+]` completou normalmente. Smoke test: chamada sem sessão em rota gateada (`financial`)
+ * retorna 401 (auth roda ANTES do module gate, ordem confirmada); `billing.getContractedModules` sem
+ * sessão também retorna 401. ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
+ * Rev. 4044 — **PROJETO SAAS "FASE 3" — LIFECYCLE DE ASSINATURA: SELF-SERVICE REAL PRA `ADM_CLIENTE`.**
+ *
+ * PEDIDO: seguindo o plano de 4 fases, faltava dar ao `adm_cliente` (dono da conta da empresa-cliente)
+ * controle self-service sobre a PRÓPRIA assinatura, sem depender de suporte manual: ver status, trocar
+ * cartão/ver faturas, ajustar módulos/assentos contratados, cancelar e reativar.
+ *
+ * IMPLEMENTAÇÃO: `server/routers/billing.ts` ganhou `getMySubscription` / `createPortalSession`
+ * (abre o Stripe Billing Portal gerenciado, sem reimplementar troca de cartão/histórico de fatura) /
+ * `updateSubscription` (adicionar/remover módulo + ajustar quantidade de assentos direto via
+ * `stripe.subscriptions.update` com `proration_behavior: "create_prorations"`, sincronizando
+ * `company_subscription_modules` local no mesmo request, sem esperar o webhook) / `cancelMySubscription`
+ * / `reactivateMySubscription` (toggle de `cancel_at_period_end`, permite desistir do cancelamento
+ * antes do fim do período). Todos os 5 endpoints passam por `getOwnSubscriptionOrThrow`: só role
+ * `adm_cliente`, e só a assinatura da PRÓPRIA empresa (nunca aceita companyId arbitrário de outro
+ * tenant — mesma preocupação de IDOR das Rev. 4040/4041).
+ *
+ * FRONTEND: nova página `client/src/pages/MinhaAssinatura.tsx` (checkboxes de módulo contratável +
+ * stepper de assentos + total estimado recalculado ao vivo + botão pro portal do Stripe + cancelar/
+ * reativar com `AlertDialog` de confirmação, seguindo o padrão de diálogo destrutivo do projeto).
+ * Rota `/minha-assinatura` protegida por um novo guard dedicado `AdmClienteGuard` em `App.tsx`
+ * (distinto do `MasterOnlyGuard` compartilhado, que seria amplo demais); item de sidebar adicionado
+ * em `adminSections` (`DashboardLayout.tsx`, aparece em todo módulo por estar nessa seção) mas
+ * filtrado por `user?.role === "adm_cliente"` — outros papéis nunca veem o item.
+ *
+ * VERIFICAÇÃO: `tsc --noEmit -p .` limpo, app reiniciado sem erros, todos os 5 endpoints retornam
+ * 401 sem sessão autenticada (guard de auth confirmado antes do guard de role). ZERO DELETE · ZERO
+ * ALTER destrutivo.
+ */
+
+/**
  * Rev. 4040 — **PROJETO SAAS: "FASE 0" — AUDITORIA DE ISOLAMENTO ENTRE EMPRESAS (LGPD) E CORREÇÃO DE 6 GAPS DE IDOR CONFIRMADOS.**
  *
  * PEDIDO: antes de iniciar a transformação do ERP em SaaS multi-cliente (venda de licenças por
