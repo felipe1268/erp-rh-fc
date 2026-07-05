@@ -8,7 +8,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useLocation } from "wouter";
 import {
   ShieldAlert, ArrowLeft, BarChart3, Building2, Activity,
-  Clock, CheckCircle2, ListChecks, XCircle, TrendingUp,
+  Clock, CheckCircle2, ListChecks, XCircle, TrendingUp, Grid3x3, AlertTriangle,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -41,6 +41,18 @@ function fmtDataBR(iso: string | null) {
   const [y, m, d] = iso.split("-");
   if (!y || !m || !d) return iso;
   return `${d}/${m}/${y}`;
+}
+function nivelDaCelula(p: number, g: number): { nivel: string; cor: string } {
+  const n = p * g;
+  if (n <= 4) return { nivel: "Baixo", cor: "#22c55e" };
+  if (n <= 9) return { nivel: "Médio", cor: "#eab308" };
+  if (n <= 16) return { nivel: "Alto", cor: "#f97316" };
+  return { nivel: "Crítico", cor: "#dc2626" };
+}
+function heatCellBg(total: number, max: number, cor: string) {
+  if (total === 0) return "#f8fafc";
+  const intensidade = Math.max(0.18, Math.min(1, total / Math.max(1, max)));
+  return cor + Math.round(intensidade * 255).toString(16).padStart(2, "0");
 }
 
 function KPI({
@@ -243,6 +255,125 @@ export default function DashboardAprAnalise() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Charts row 3 — Matriz P×G + Top Perigos */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Grid3x3 className="h-4 w-4 text-red-600" /> Matriz de Risco (Probabilidade × Gravidade)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {data.matrizRisco.every((c: any) => c.total === 0) ? (
+                    <div className="h-64 flex items-center justify-center text-xs text-gray-400">Nenhum risco cadastrado</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      {(() => {
+                        const max = Math.max(1, ...data.matrizRisco.map((c: any) => c.total));
+                        return (
+                          <table className="border-collapse mx-auto">
+                            <thead>
+                              <tr>
+                                <th className="text-[10px] text-gray-400 font-normal p-1"></th>
+                                {[1, 2, 3, 4, 5].map((g) => (
+                                  <th key={g} className="text-[10px] text-gray-500 font-medium p-1 text-center w-14">G{g}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {[5, 4, 3, 2, 1].map((p) => (
+                                <tr key={p}>
+                                  <td className="text-[10px] text-gray-500 font-medium p-1 text-right pr-2">P{p}</td>
+                                  {[1, 2, 3, 4, 5].map((g) => {
+                                    const cell = data.matrizRisco.find((c: any) => c.probabilidade === p && c.gravidade === g);
+                                    const total = cell?.total ?? 0;
+                                    const { nivel, cor } = nivelDaCelula(p, g);
+                                    return (
+                                      <td key={g} className="p-1">
+                                        <div
+                                          title={`P${p} × G${g} = ${nivel} — ${total} risco(s)`}
+                                          className="w-14 h-10 rounded flex items-center justify-center text-xs font-bold border"
+                                          style={{ backgroundColor: heatCellBg(total, max, cor), borderColor: cor, color: total > 0 ? "#1f2937" : "#cbd5e1" }}
+                                        >
+                                          {total || ""}
+                                        </div>
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        );
+                      })()}
+                      <div className="flex items-center justify-center gap-4 mt-3 text-[10px] text-gray-500">
+                        {Object.entries(NIVEL_COLORS).map(([nivel, cor]) => (
+                          <span key={nivel} className="flex items-center gap-1">
+                            <span className="h-2.5 w-2.5 rounded-sm inline-block" style={{ backgroundColor: cor }} /> {nivel}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-orange-600" /> Perigos mais recorrentes
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {data.topPerigos.length === 0 ? (
+                    <div className="h-64 flex items-center justify-center text-xs text-gray-400">Nenhum perigo cadastrado</div>
+                  ) : (
+                    <div className="w-full" style={{ height: Math.max(220, data.topPerigos.length * 30) }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={data.topPerigos} layout="vertical" margin={{ left: 8, right: 16 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
+                          <YAxis type="category" dataKey="perigo" tick={{ fontSize: 10 }} width={170}
+                            tickFormatter={(t) => (t.length > 22 ? t.slice(0, 21) + "…" : t)} />
+                          <Tooltip />
+                          <Bar dataKey="total" fill="#f97316" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Chart row 4 — Evolução por status (empilhado) */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-cyan-600" /> Evolução mensal por status
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {data.timelinePorStatus.length === 0 ? (
+                  <div className="h-64 flex items-center justify-center text-xs text-gray-400">Sem registros</div>
+                ) : (
+                  <div className="w-full h-[280px] min-h-[220px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={data.timelinePorStatus.map((r: any) => ({ ...r, mesLabel: mesLabel(r.mes) }))}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis dataKey="mesLabel" tick={{ fontSize: 10 }} />
+                        <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                        <Tooltip />
+                        <Legend wrapperStyle={{ fontSize: 10 }} formatter={(v: string) => STATUS_LABELS[v] || v} />
+                        {Object.keys(STATUS_LABELS).map((st) => (
+                          <Bar key={st} dataKey={st} stackId="s" fill={STATUS_COLORS[st]} name={STATUS_LABELS[st]} />
+                        ))}
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             {/* Recentes */}
             <Card>

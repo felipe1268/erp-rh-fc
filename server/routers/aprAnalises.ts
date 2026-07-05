@@ -726,6 +726,52 @@ ${apr.observacoes ? `<h2>${checklist.length ? (epis.length ? "5" : "4") : (epis.
         ...r, obraNome: r.obraId ? (obrasMap.get(r.obraId) ?? "—") : "Sem obra",
       }));
 
-      return { stats, porObra, porTipoAtividade, timeline, porNivelRisco, recentes };
+      // Matriz de risco P×G — heatmap 5x5 (probabilidade × gravidade)
+      const matrizRows = await db
+        .select({ probabilidade: aprRiscos.probabilidade, gravidade: aprRiscos.gravidade, cnt: sql<number>`count(*)` })
+        .from(aprRiscos)
+        .where(eq(aprRiscos.companyId, input.companyId))
+        .groupBy(aprRiscos.probabilidade, aprRiscos.gravidade);
+      const matrizRisco: { probabilidade: number; gravidade: number; total: number }[] = [];
+      for (let p = 1; p <= 5; p++) {
+        for (let g = 1; g <= 5; g++) {
+          const found = matrizRows.find(r => Number(r.probabilidade) === p && Number(r.gravidade) === g);
+          matrizRisco.push({ probabilidade: p, gravidade: g, total: found ? Number(found.cnt) : 0 });
+        }
+      }
+
+      // Top perigos mais recorrentes
+      const perigoRows = await db
+        .select({ perigo: aprRiscos.perigo, cnt: sql<number>`count(*)` })
+        .from(aprRiscos)
+        .where(and(eq(aprRiscos.companyId, input.companyId), sql`${aprRiscos.perigo} is not null and ${aprRiscos.perigo} <> ''`))
+        .groupBy(aprRiscos.perigo)
+        .orderBy(desc(sql`count(*)`))
+        .limit(8);
+      const topPerigos = perigoRows.map(r => ({ perigo: r.perigo as string, total: Number(r.cnt) }));
+
+      // Evolução mensal por status (últimos 6 meses) — stacked
+      const statusTimelineRows = await db
+        .select({
+          mes: sql<string>`to_char(${aprAnalises.createdAt}, 'YYYY-MM')`,
+          status: aprAnalises.status,
+          cnt: sql<number>`count(*)`,
+        })
+        .from(aprAnalises).where(baseCond)
+        .groupBy(sql`to_char(${aprAnalises.createdAt}, 'YYYY-MM')`, aprAnalises.status)
+        .orderBy(sql`to_char(${aprAnalises.createdAt}, 'YYYY-MM')`);
+      const meses = [...new Set(statusTimelineRows.map(r => r.mes))].slice(-6);
+      const timelinePorStatus = meses.map(mes => {
+        const row: Record<string, any> = { mes };
+        for (const st of ["rascunho", "em_analise", "aprovada", "concluida", "cancelada"]) {
+          row[st] = Number(statusTimelineRows.find(r => r.mes === mes && r.status === st)?.cnt ?? 0);
+        }
+        return row;
+      });
+
+      return {
+        stats, porObra, porTipoAtividade, timeline, porNivelRisco, recentes,
+        matrizRisco, topPerigos, timelinePorStatus,
+      };
     }),
 });

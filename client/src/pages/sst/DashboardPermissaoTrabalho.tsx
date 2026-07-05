@@ -8,7 +8,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useLocation } from "wouter";
 import {
   ClipboardCheck, ArrowLeft, BarChart3, Building2, Wrench,
-  Clock, CheckCircle2, ListChecks, XCircle, TrendingUp,
+  Clock, CheckCircle2, ListChecks, XCircle, TrendingUp, Briefcase,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -230,6 +230,63 @@ export default function DashboardPermissaoTrabalho() {
                           <YAxis type="category" dataKey="obraNome" tick={{ fontSize: 10 }} width={150} />
                           <Tooltip />
                           <Bar dataKey="total" fill="#0891b2" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Charts row 3 — Empresa executante + Evolução por status */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Briefcase className="h-4 w-4 text-slate-600" /> PTs por empresa executante
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {data.porEmpresaExecutante.length === 0 ? (
+                    <div className="h-64 flex items-center justify-center text-xs text-gray-400">Sem registros</div>
+                  ) : (
+                    <div className="w-full" style={{ height: Math.max(220, data.porEmpresaExecutante.length * 30) }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={data.porEmpresaExecutante} layout="vertical" margin={{ left: 8, right: 16 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
+                          <YAxis type="category" dataKey="empresa" tick={{ fontSize: 10 }} width={170}
+                            tickFormatter={(t) => (t.length > 22 ? t.slice(0, 21) + "…" : t)} />
+                          <Tooltip />
+                          <Bar dataKey="total" fill="#0891b2" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4 text-cyan-600" /> Evolução mensal por status
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {data.timelinePorStatus.length === 0 ? (
+                    <div className="h-64 flex items-center justify-center text-xs text-gray-400">Sem registros</div>
+                  ) : (
+                    <div className="w-full h-[280px] min-h-[220px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={data.timelinePorStatus.map((r: any) => ({ ...r, mesLabel: mesLabel(r.mes) }))}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="mesLabel" tick={{ fontSize: 10 }} />
+                          <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                          <Tooltip />
+                          <Legend wrapperStyle={{ fontSize: 10 }} formatter={(v: string) => STATUS_LABELS[v] || v} />
+                          {Object.keys(STATUS_LABELS).map((st) => (
+                            <Bar key={st} dataKey={st} stackId="s" fill={STATUS_COLORS[st]} name={STATUS_LABELS[st]} />
+                          ))}
                         </BarChart>
                       </ResponsiveContainer>
                     </div>

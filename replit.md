@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4038** — **DASHBOARDS DE APR E PT (REV. 4037): GRÁFICOS RASOS DEMAIS — "COLOCA MAIS GRÁFICOS DETALHADOS".** Logo após a Rev. 4037 (dashboards dedicados de APR/PT), usuário pediu pra enriquecer os gráficos — os 2 dashboards tinham só 4 gráficos cada, rasos pra dados já existentes no banco. `aprAnalises.dashboard`: 3 novas agregações — `matrizRisco` (grid 5×5 probabilidade × gravidade, heatmap), `topPerigos` (top 8 perigos mais recorrentes) e `timelinePorStatus` (evolução mensal empilhada por status). `ptPermissoes.dashboard`: `porEmpresaExecutante` (top 10) e `timelinePorStatus`. Frontend: `DashboardAprAnalise.tsx` ganhou heatmap de matriz de risco + bar chart de perigos + bar chart empilhado; `DashboardPermissaoTrabalho.tsx` ganhou bar chart de empresa executante + bar chart empilhado. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4037** — **"CADÊ O DASH DA APR E DA PT?" — FALTAVAM DASHBOARDS DEDICADOS NO GRUPO "DASHBOARDS" DA SIDEBAR.** Usuário mandou print (IMG_3318) do grupo "Dashboards" da sidebar SST mostrando só EPIs/Atestados & Acidentes/DDS e perguntou "Cadê o dash da APR e da PT?" — a Rev. 4036 só tinha padronizado o ESTILO dos KPI cards dentro das telas de APR/PT, não criado dashboards dedicados. Novo procedimento `dashboard` em `aprAnalises.ts` (stats + porObra + porTipoAtividade + timeline mensal + porNivelRisco Baixo/Médio/Alto/Crítico + recentes) e em `ptPermissoes.ts` (stats + porObra + porTipoTrabalho + timeline + recentes); novas páginas `DashboardAprAnalise.tsx`/`DashboardPermissaoTrabalho.tsx` no padrão visual de `DDSDashboard.tsx`; rotas `/sst/dashboard-apr` e `/sst/dashboard-pt` + 2 itens novos no grupo "Dashboards" da sidebar + mapeamento de permissão em `modulePages.ts`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4036** — **APR — ANÁLISE PRELIMINAR DE RISCO: CARDS DE INDICADORES FORA DO PADRÃO VISUAL DA PT.** Usuário mandou print da tela "Permissão de Trabalho (PT)" pedindo pra "criar o dash da APR igual é o da PT também" — ambas já tinham cards de indicadores, mas com estilos divergentes (APR usava cards em gradiente cheio + ícone branco; PT usa cards planos com "dot" colorido). `AprAnalise.tsx`: array `CARDS` trocado de `{color: gradient, icon}` para `{color: text-*, bg: bg-*-50 border-*-200, dot: bg-*-500}` (mesma paleta semântica: Em Análise=âmbar, Aprovadas=verde, Concluídas=azul, Total=slate); bloco de render dos KPI Cards reescrito no mesmo markup da PT (dot + label + número grande, sem ícone/gradiente), mantendo o filtro por clique já existente. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4036** — **APR — ANÁLISE PRELIMINAR DE RISCO: CARDS DE INDICADORES FORA DO PADRÃO VISUAL DA PT.** `AprAnalise.tsx`: array `CARDS` padronizado no mesmo markup da PT (dot + label + número grande, sem ícone/gradiente), mantendo o filtro por clique já existente. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4035** — **BOLETIM DE MEDIÇÃO (PDF): DOCUMENTO SEM ORGANIZAÇÃO, SEM RELATO E SEM PADRÃO — REDESENHO COMPLETO.** Nova seção "Relatório do Período" (campo `observacoes`), itens agrupados em 2 seções (Cronograma × FD Compras) com subtotal + total geral, coluna "Item"→"Nº" sequencial, descrição sem cortar palavras. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4032** — **MEDIÇÃO DE CONTRATOS: ESPAÇAMENTO E ALINHAMENTO VERTICAL DOS CAMPOS "DATA INÍCIO"/"DATA FIM".** Grid `gap-3`→`gap-6` + `min-w-0`/`w-full` nas colunas; inputs de data com `flex items-center h-10 leading-normal` pra centralizar o texto. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4031** — **MEDIÇÃO DE CONTRATOS: ÍCONE DECORATIVO NOS CAMPOS DE DATA SOBREPUNHA O ÍCONE NATIVO DO NAVEGADOR — REMOVIDO.** Removido o wrapper/ícone/padding dos 4 campos de data (modalBoletim e modalEditBoletim), voltando a inputs simples sem ícone sobreposto. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4030 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4031 e anteriores.
 
 ## User preferences
 

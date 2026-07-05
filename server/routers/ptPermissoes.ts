@@ -904,6 +904,38 @@ ${input.signers.map(s => `<!--FCSIGN:SIG:${s.role}-->`).join("\n")}`;
         ...r, obraNome: r.obraId ? (obrasMap.get(r.obraId) ?? "—") : "Sem obra",
       }));
 
-      return { stats, porObra, porTipoTrabalho, timeline, recentes };
+      // PTs por empresa executante (top 10)
+      const empresaRows = await db
+        .select({ empresa: ptPermissoes.empresaExecutanteNome, cnt: sql<number>`count(*)` })
+        .from(ptPermissoes)
+        .where(and(baseCond, sql`${ptPermissoes.empresaExecutanteNome} is not null and ${ptPermissoes.empresaExecutanteNome} <> ''`))
+        .groupBy(ptPermissoes.empresaExecutanteNome)
+        .orderBy(desc(sql`count(*)`))
+        .limit(10);
+      const porEmpresaExecutante = empresaRows.map(r => ({ empresa: r.empresa as string, total: Number(r.cnt) }));
+
+      // Evolução mensal por status (últimos 6 meses) — stacked
+      const statusTimelineRows = await db
+        .select({
+          mes: sql<string>`to_char(${ptPermissoes.createdAt}, 'YYYY-MM')`,
+          status: ptPermissoes.status,
+          cnt: sql<number>`count(*)`,
+        })
+        .from(ptPermissoes).where(baseCond)
+        .groupBy(sql`to_char(${ptPermissoes.createdAt}, 'YYYY-MM')`, ptPermissoes.status)
+        .orderBy(sql`to_char(${ptPermissoes.createdAt}, 'YYYY-MM')`);
+      const meses = [...new Set(statusTimelineRows.map(r => r.mes))].slice(-6);
+      const timelinePorStatus = meses.map(mes => {
+        const row: Record<string, any> = { mes };
+        for (const st of ["rascunho", "em_andamento", "liberada", "concluida", "cancelada"]) {
+          row[st] = Number(statusTimelineRows.find(r => r.mes === mes && r.status === st)?.cnt ?? 0);
+        }
+        return row;
+      });
+
+      return {
+        stats, porObra, porTipoTrabalho, timeline, recentes,
+        porEmpresaExecutante, timelinePorStatus,
+      };
     }),
 });

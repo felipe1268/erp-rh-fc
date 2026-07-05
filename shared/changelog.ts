@@ -1,4 +1,23 @@
 /**
+ * Rev. 4038 — **DASHBOARDS DE APR E PT (REV. 4037): GRÁFICOS RASOS DEMAIS — "COLOCA MAIS GRÁFICOS DETALHADOS".**
+ *
+ * PEDIDO: logo após a entrega da Rev. 4037 (dashboards dedicados de APR/PT), usuário pediu pra
+ * enriquecer os gráficos ("coloca mais gráficos detalhados") — os 2 dashboards tinham só 4 gráficos
+ * cada (timeline simples, pizza de status, 1 gráfico de distribuição, obras), rasos pra dados que já
+ * existem no banco e não estavam sendo explorados (matriz de risco P×G, perigos recorrentes, empresa
+ * executante, evolução por status).
+ *
+ * SOLUÇÃO — `aprAnalises.dashboard`: 3 novas agregações — `matrizRisco` (grid 5×5 de
+ * apr_riscos.probabilidade × gravidade, heatmap), `topPerigos` (top 8 `apr_riscos.perigo` mais
+ * recorrentes) e `timelinePorStatus` (contagem mensal empilhada por status, últimos 6 meses).
+ * `ptPermissoes.dashboard`: `porEmpresaExecutante` (top 10 por `empresa_executante_nome`) e
+ * `timelinePorStatus` (mesma lógica). Frontend: `DashboardAprAnalise.tsx` ganhou heatmap de matriz de
+ * risco (tabela HTML com células coloridas por intensidade/nível), bar chart de perigos e bar chart
+ * empilhado de evolução por status; `DashboardPermissaoTrabalho.tsx` ganhou bar chart de empresa
+ * executante e o mesmo empilhado de evolução por status. ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4037 — **"CADÊ O DASH DA APR E DA PT?" — FALTAVAM DASHBOARDS DEDICADOS NO GRUPO "DASHBOARDS" DA SIDEBAR.**
  *
  * PEDIDO: usuário mandou print (IMG_3318) do grupo "DASHBOARDS" da sidebar SST mostrando só 3 itens
