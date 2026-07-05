@@ -1,4 +1,24 @@
 /**
+ * Rev. 4057 — **PAINEL SAAS: DASHBOARD GANHA MÉTRICAS DETALHADAS (ARPU, ASSENTOS, CRESCIMENTO/CHURN DO MÊS, POPULARIDADE POR MÓDULO).**
+ *
+ * PEDIDO: usuário achou o Painel SaaS (Rev. 4056) raso demais — "coloca mais detalhes sobre o dash, isso
+ * valoriza bastante a gestão do sistema".
+ *
+ * ESCOPO: `server/routers/saasAdmin.ts` → `getSummary` ganhou: `seatsTotal` (assentos ativos somados),
+ * `arpuCents` (MRR/empresa ativa), `newThisMonth`/`canceledThisMonth` (novas assinaturas e cancelamentos
+ * do mês corrente, via `isSameMonth`), e `moduleBreakdown` (por módulo: quantas empresas ativas contrataram
+ * + receita mensal gerada, ordenado por popularidade). `computeMrrCents`/`listCompanies` passaram a usar os
+ * overrides de `billing_module_prices` (mesma função `getPriceOverrides` de `billing.ts`, duplicada aqui pra
+ * não criar import cross-router) — ajustar um preço em "Painel SaaS → Preços" agora reflete IMEDIATAMENTE
+ * no MRR/ARPU/breakdown do dashboard, não só nas novas contratações.
+ *
+ * FRONTEND: `SaasAdminPanel.tsx` ganhou 2ª fileira de cards (Assentos, ARPU, Novas/Canceladas do mês) +
+ * seção "Popularidade dos módulos" com barra proporcional por módulo (contagem de empresas + receita/mês),
+ * ordenada do mais vendido pro menos vendido — ajuda a decidir o que promover/reprecificar. ZERO DELETE ·
+ * ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4056 — **NOVO ITEM "GESTÃO DE VENDAS (SAAS)" NO MENU DE ADMINISTRAÇÃO + CROSS-LINK ENTRE OS 2 PAINÉIS EXISTENTES.**
  *
  * PEDIDO: usuário pediu um botão no menu suspenso da conta (seção "Administração", junto de Usuários e Permissões,

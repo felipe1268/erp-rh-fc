@@ -6,9 +6,9 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { eq, desc } from "drizzle-orm";
 import { getDb } from "../db";
-import { companies, companySubscriptions, companySubscriptionModules } from "../../drizzle/schema";
+import { companies, companySubscriptions, companySubscriptionModules, billingModulePrices } from "../../drizzle/schema";
 import { getUncachableStripeClient } from "../stripeClient";
-import { BILLING_MODULES, SEAT_MONTHLY_PRICE_CENTS } from "../../shared/billingModules";
+import { BILLING_MODULES, SEAT_MONTHLY_PRICE_CENTS, applyPriceOverrides } from "../../shared/billingModules";
 
 function requireAdminMaster(role: string | undefined) {
   if (role !== "admin_master") {
@@ -16,12 +16,30 @@ function requireAdminMaster(role: string | undefined) {
   }
 }
 
-function computeMrrCents(seats: number, moduleIds: string[]): number {
+// Rev. 4056 — mesma lógica de override de preço do billing.ts (getPriceOverrides),
+// duplicada aqui pra evitar import cross-router; qualquer ajuste de preço em
+// "Painel SaaS → Preços" já reflete IMEDIATAMENTE no MRR/ARPU/breakdown do dashboard.
+async function getPriceOverrides(): Promise<Record<string, number>> {
+  const db = await getDb();
+  if (!db) return {};
+  const rows = await db.select().from(billingModulePrices);
+  const map: Record<string, number> = {};
+  for (const r of rows) map[r.moduleId] = r.monthlyPriceCents;
+  return map;
+}
+
+function computeMrrCents(seats: number, moduleIds: string[], effectiveModules: typeof BILLING_MODULES): number {
   const modulesTotal = moduleIds.reduce((acc, id) => {
-    const mod = BILLING_MODULES.find(m => m.id === id);
+    const mod = effectiveModules.find(m => m.id === id);
     return acc + (mod?.monthlyPriceCents || 0);
   }, 0);
   return modulesTotal + seats * SEAT_MONTHLY_PRICE_CENTS;
+}
+
+function isSameMonth(dateStr: string | null | undefined, ref: Date): boolean {
+  if (!dateStr) return false;
+  const d = new Date(dateStr);
+  return d.getUTCFullYear() === ref.getUTCFullYear() && d.getUTCMonth() === ref.getUTCMonth();
 }
 
 export const saasAdminRouter = router({
@@ -47,6 +65,9 @@ export const saasAdminRouter = router({
       modulesBySub.set(Number(link.subscriptionId), list);
     }
 
+    const overrides = await getPriceOverrides();
+    const effectiveModules = applyPriceOverrides(BILLING_MODULES, overrides);
+
     return subs.map(sub => {
       const company = companyMap.get(Number(sub.companyId));
       const moduleIds = modulesBySub.get(Number(sub.id)) || [];
@@ -59,7 +80,7 @@ export const saasAdminRouter = router({
         status: sub.status,
         seats: sub.seats,
         moduleIds,
-        mrrCents: computeMrrCents(Number(sub.seats || 0), moduleIds),
+        mrrCents: computeMrrCents(Number(sub.seats || 0), moduleIds, effectiveModules),
         trialEnd: sub.trialEnd,
         currentPeriodEnd: sub.currentPeriodEnd,
         canceledAt: sub.canceledAt,
@@ -124,11 +145,37 @@ export const saasAdminRouter = router({
       modulesBySub.set(Number(link.subscriptionId), list);
     }
 
+    const overrides = await getPriceOverrides();
+    const effectiveModules = applyPriceOverrides(BILLING_MODULES, overrides);
+
     const active = subs.filter(s => s.status === "active" || s.status === "trialing");
     const trialing = subs.filter(s => s.status === "trialing");
     const pastDue = subs.filter(s => s.status === "past_due");
     const canceled = subs.filter(s => s.status === "canceled");
-    const mrrCents = active.reduce((acc, s) => acc + computeMrrCents(Number(s.seats || 0), modulesBySub.get(Number(s.id)) || []), 0);
+    const mrrCents = active.reduce((acc, s) => acc + computeMrrCents(Number(s.seats || 0), modulesBySub.get(Number(s.id)) || [], effectiveModules), 0);
+    const seatsTotal = active.reduce((acc, s) => acc + Number(s.seats || 0), 0);
+    const arpuCents = active.length > 0 ? Math.round(mrrCents / active.length) : 0;
+
+    // Rev. 4056 — crescimento/churn do mês corrente, pra dar noção de tração
+    // (não é histórico completo — só o mês atual, cálculo em memória e leve).
+    const now = new Date();
+    const newThisMonth = subs.filter(s => isSameMonth(s.createdAt, now)).length;
+    const canceledThisMonth = subs.filter(s => s.status === "canceled" && isSameMonth(s.canceledAt, now)).length;
+
+    // Rev. 4056 — popularidade de cada módulo entre as empresas ATIVAS (não
+    // canceladas), pra saber o que vale mais a pena promover/precificar melhor.
+    const moduleBreakdown = effectiveModules.map(mod => {
+      let companyCount = 0;
+      let revenueCents = 0;
+      for (const s of active) {
+        const mods = modulesBySub.get(Number(s.id)) || [];
+        if (mods.includes(mod.id)) {
+          companyCount++;
+          revenueCents += mod.monthlyPriceCents;
+        }
+      }
+      return { id: mod.id, label: mod.label, companyCount, revenueCents };
+    }).sort((a, b) => b.companyCount - a.companyCount);
 
     return {
       totalCompanies: subs.length,
@@ -137,6 +184,11 @@ export const saasAdminRouter = router({
       pastDueCount: pastDue.length,
       canceledCount: canceled.length,
       mrrCents,
+      seatsTotal,
+      arpuCents,
+      newThisMonth,
+      canceledThisMonth,
+      moduleBreakdown,
     };
   }),
 });

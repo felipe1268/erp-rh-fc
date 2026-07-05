@@ -8,7 +8,7 @@ import {
 import { toast } from "sonner";
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Building2, DollarSign, Users, AlertTriangle, Ban, CheckCircle2, XCircle, Loader2, Settings } from "lucide-react";
+import { Building2, DollarSign, Users, AlertTriangle, Ban, CheckCircle2, XCircle, Loader2, Settings, TrendingUp, PlusCircle, BarChart3 } from "lucide-react";
 import { BILLING_MODULES } from "../../../shared/billingModules";
 
 function formatCentsBRL(cents: number): string {
@@ -99,6 +99,51 @@ export default function SaasAdminPanel() {
           <div className="rounded-xl border bg-white p-4">
             <p className="text-xs text-gray-500 flex items-center gap-1"><DollarSign className="w-3.5 h-3.5 text-orange-500" /> MRR</p>
             <p className="text-xl font-bold text-orange-600">{formatCentsBRL(summary.mrrCents)}</p>
+          </div>
+        </div>
+      )}
+
+      {summary && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="rounded-xl border bg-white p-4">
+            <p className="text-xs text-gray-500 flex items-center gap-1"><Users className="w-3.5 h-3.5 text-gray-400" /> Assentos ativos</p>
+            <p className="text-xl font-bold text-gray-800">{summary.seatsTotal}</p>
+          </div>
+          <div className="rounded-xl border bg-white p-4">
+            <p className="text-xs text-gray-500 flex items-center gap-1"><TrendingUp className="w-3.5 h-3.5 text-orange-500" /> Ticket médio (ARPU)</p>
+            <p className="text-xl font-bold text-gray-800">{formatCentsBRL(summary.arpuCents)}</p>
+          </div>
+          <div className="rounded-xl border bg-white p-4">
+            <p className="text-xs text-gray-500 flex items-center gap-1"><PlusCircle className="w-3.5 h-3.5 text-emerald-500" /> Novas este mês</p>
+            <p className="text-xl font-bold text-emerald-600">{summary.newThisMonth}</p>
+          </div>
+          <div className="rounded-xl border bg-white p-4">
+            <p className="text-xs text-gray-500 flex items-center gap-1"><XCircle className="w-3.5 h-3.5 text-red-500" /> Canceladas este mês</p>
+            <p className="text-xl font-bold text-red-600">{summary.canceledThisMonth}</p>
+          </div>
+        </div>
+      )}
+
+      {summary && summary.moduleBreakdown.length > 0 && (
+        <div className="rounded-xl border bg-white p-5">
+          <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-4">
+            <BarChart3 className="w-4 h-4 text-orange-500" /> Popularidade dos módulos (empresas ativas)
+          </h2>
+          <div className="space-y-2.5">
+            {summary.moduleBreakdown.map(mod => {
+              const maxCount = Math.max(1, ...summary.moduleBreakdown.map(m => m.companyCount));
+              const pct = Math.round((mod.companyCount / maxCount) * 100);
+              return (
+                <div key={mod.id} className="flex items-center gap-3">
+                  <span className="text-xs text-gray-600 w-40 shrink-0 truncate" title={mod.label}>{mod.label}</span>
+                  <div className="flex-1 h-2.5 rounded-full bg-gray-100 overflow-hidden">
+                    <div className="h-full rounded-full bg-orange-400" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="text-xs text-gray-500 w-8 text-right shrink-0">{mod.companyCount}</span>
+                  <span className="text-xs font-medium text-gray-700 w-24 text-right shrink-0">{formatCentsBRL(mod.revenueCents)}/mês</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
