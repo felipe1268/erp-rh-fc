@@ -1,4 +1,25 @@
 /**
+ * Rev. 4055 — **`/planos/modulos/:id`: SCREENSHOTS DE RH & DP REFEITAS COM DADOS 100% FICTÍCIOS (ZERO PII REAL).**
+ *
+ * PEDIDO: usuário anexou 5 prints do Raio-X do Funcionário mostrando PII real de colaboradores (nome completo, CPF,
+ * salário, data de nascimento, endereço) e exigiu explicitamente que NENHUM nome/dado real aparecesse em nenhuma
+ * screenshot de marketing — as screenshots de RH & DP da Rev. 4054 usavam dados reais da FC Engenharia.
+ *
+ * ESCOPO: criada empresa fictícia "Horizonte Engenharia e Construções Ltda" com obra e 16 colaboradores 100%
+ * inventados (nomes, CPFs sequenciais fake, cargos, salários, datas) em `NEON_DATABASE_URL`, incl. 3 registros com
+ * contrato de experiência pra reproduzir o painel "Contratos de Experiência". Re-habilitado temporariamente um
+ * bypass de autenticação em dev (gated por `NODE_ENV=development && SCREENSHOT_DEV_BYPASS=true`, em
+ * `server/_core/sdk.ts`/`server/db.ts`, mais `CompanyContext.tsx` com chave de storage isolada) só pra logar como
+ * o admin fictício e navegar autenticado; recapturados `painel.png` e `dashboard-funcionarios.png` de
+ * `client/src/assets/screenshots/rh-dp/` com todos os nomes agora fictícios. `top-funcoes-setores.png` e
+ * `folha-comparativo.png` já não tinham nomes de pessoa e foram mantidos.
+ *
+ * LIMPEZA (100% revertida, sem vestígio): bypass de auth removido de `sdk.ts`/`db.ts`, chave de storage do
+ * `CompanyContext.tsx` restaurada, flag `SCREENSHOT_DEV_BYPASS` removida do workflow, e TODA a empresa/obra/
+ * usuário/16 colaboradores fictícios deletados do Neon ao final. ZERO DELETE de dado real · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4054 — **`/planos/modulos/:id`: SCREENSHOTS REAIS DO SISTEMA AUTENTICADO SUBSTITUEM O MOCKUP ABSTRATO.**
  *
  * PEDIDO: usuário pediu explicitamente "QUERO PRINTS REAIS DOS MÓDULOS.. PARA VALORIZAR A FERRAMENTA" — o

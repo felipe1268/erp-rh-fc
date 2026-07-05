@@ -1,9 +1,15 @@
 /**
- * Rev. 4054 — Screenshots REAIS do sistema autenticado (dados reais da FC
- * Engenharia, empresa 60002) pra cada módulo, usados em `/planos/modulos/:id`
- * junto com o `ModulePreviewMock` (que continua existindo como fallback
- * conceitual quando um módulo não tem print ainda). Objetivo: valorizar a
- * ferramenta mostrando telas de verdade, não só mockup abstrato.
+ * Rev. 4054 — Screenshots REAIS do sistema autenticado pra cada módulo,
+ * usados em `/planos/modulos/:id` junto com o `ModulePreviewMock` (que
+ * continua existindo como fallback conceitual quando um módulo não tem
+ * print ainda). Objetivo: valorizar a ferramenta mostrando telas de
+ * verdade, não só mockup abstrato.
+ *
+ * Rev. 4055 — As screenshots de RH & DP (`painel.png` e
+ * `dashboard-funcionarios.png`) usam dados 100% FICTÍCIOS (empresa/obra/
+ * colaboradores inventados), nunca dados reais de cliente. As demais
+ * (`top-funcoes-setores.png`, `folha-comparativo.png`) já não continham
+ * nomes de pessoa e foram mantidas.
  */
 
 import rhDpPainel from "@/assets/screenshots/rh-dp/painel.png";

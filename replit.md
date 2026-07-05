@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4055** — **`/planos/modulos/:id`: SCREENSHOTS DE RH & DP REFEITAS COM DADOS 100% FICTÍCIOS (ZERO PII REAL).** Usuário anexou 5 prints do Raio-X do Funcionário mostrando PII real (nome, CPF, salário, nascimento, endereço) e exigiu que nenhum dado real aparecesse em screenshot de marketing — as prints de RH & DP da Rev. 4054 usavam dados reais da FC Engenharia. Criada empresa/obra/16 colaboradores 100% fictícios em `NEON_DATABASE_URL` (incl. 3 com contrato de experiência), reabilitado bypass de auth temporário em dev pra logar como admin fictício, recapturados `painel.png` e `dashboard-funcionarios.png` de `client/src/assets/screenshots/rh-dp/` já sem nenhum nome real; `top-funcoes-setores.png`/`folha-comparativo.png` mantidos (já não tinham PII). Bypass e todos os dados fictícios REMOVIDOS do banco ao final, sem vestígio. ZERO DELETE de dado real · ZERO ALTER destrutivo.
+
 - **Rev. 4054** — **`/planos/modulos/:id`: SCREENSHOTS REAIS DO SISTEMA AUTENTICADO SUBSTITUEM O MOCKUP ABSTRATO.** Usuário pediu explicitamente "QUERO PRINTS REAIS DOS MÓDULOS.. PARA VALORIZAR A FERRAMENTA" — o `ModulePreviewMock` abstrato não convencia. Capturados screenshots reais de TODOS os 14 módulos via bypass de dev temporário (revertido 100% ao final, sem vestígio em produção), salvos em `client/src/assets/screenshots/*.jpg`. Pra RH & DP, usados os 4 melhores prints que o próprio usuário anexou (full-desktop, dados reais da FC Engenharia, sem mascarar nomes) em `client/src/assets/screenshots/rh-dp/*.png`. Novo `client/src/pages/portal/moduleScreenshots.ts` (`MODULE_SCREENSHOTS`); `ModuloDetalhe.tsx` mostra a 1ª screenshot no hero (frame de navegador, selo "Tela real do sistema", fallback pro mock se faltar print) + seção "Mais telas reais" em grid pras extras (hoje só RH & DP tem). ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4053** — **`/planos`: CLIQUE NO MÓDULO ABRE PÁGINA DEDICADA COM TODAS AS FUNCIONALIDADES (SUBSTITUI O DIALOG PEQUENO).** Usuário achou o dialog pequeno de detalhe (Rev. 4050) raso demais pra vender o produto; pediu página cheia por módulo com TODAS as funcionalidades em profundidade (ex.: RH mostrando Raio-X do Funcionário, cadastro, controle de documentos etc.). Nova página `client/src/pages/portal/ModuloDetalhe.tsx` em `/planos/modulos/:id`: hero com preço real (`billing.getCatalog`), tagline, prévia conceitual, descrição longa, seções detalhadas por módulo (todas as 14), destaques de IA, integrações e "outros módulos". Conteúdo em `moduleDetails.ts` (novo, `MODULE_DETAILS`), 100% baseado nas features reais de `shared/modules.ts`. Refatoração de suporte sem alterar dados: array `MODULES`/`formatPrice` e `ModulePreviewMock` extraídos de `SiteVendas.tsx` pra `modulesData.ts`/`ModulePreviewMock.tsx` (reuso entre as duas telas); clique no card do módulo agora navega pra `/planos/modulos/${id}` em vez de abrir `ModuleDetailDialog` (removido, morto). ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4053** — **`/planos`: CLIQUE NO MÓDULO ABRE PÁGINA DEDICADA COM TODAS AS FUNCIONALIDADES (SUBSTITUI O DIALOG PEQUENO).** Nova página `ModuloDetalhe.tsx` em `/planos/modulos/:id` com todas as funcionalidades por módulo, baseada 100% em `shared/modules.ts`; array `MODULES`/`ModulePreviewMock` extraídos pra arquivos próprios reusados entre `SiteVendas.tsx` e a nova página. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4052** — **`/planos`: AZUL MAIS ESCURO EM TODA A LANDING + MASCOTE "JULINHO" VIROU UM ROBÔ ANIMADO E INTERATIVO (AJUSTADO P/ MAIS VELHO/ALTO/RESPONSÁVEL).** Usuário achou o azul da Rev. 4051 claro demais e pediu robô no lugar do mascote humano; depois pediu, via canvas, que o robô fosse "mais velho, mais alto, transmitindo responsabilidade". Paleta aprofundada (blue-600→900 etc.); imagem final em `client/src/assets/julinho_robot.png`, flutuante/clicável no hero e CTA final. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4049** — **RENOMEAÇÃO DO NOME DO SISTEMA: "ERP FC Engenharia" → "ERP Gestão Integrada" EM TODO O APP.** Usuário informou o nome oficial do sistema. Distinção preservada: "FC Engenharia" também é a empresa REAL cliente-zero — essas referências à ENTIDADE ficaram intactas; só o NOME DO PRODUTO/SISTEMA foi trocado. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4047** — **`/planos` REDESENHADA (TEMA CLARO/VÍVIDO) + MASCOTE "JULINHO" + PREÇOS AJUSTÁVEIS PELO ADMIN.** Nova tabela `billing_module_prices` (self-heal) + `applyPriceOverrides()`; `server/routers/billing.ts` ganhou `adminGetPrices`/`adminUpdatePrices`; nova página `AdminPrecos.tsx` em `/admin/saas/precos`; `SiteVendas.tsx` reescrita com fundo claro/vívido e mascote "Julinho". ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4046 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4047 e anteriores.
 
 ## User preferences
 
