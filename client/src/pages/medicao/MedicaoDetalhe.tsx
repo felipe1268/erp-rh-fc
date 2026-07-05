@@ -1046,12 +1046,12 @@ export default function MedicaoDetalhe() {
                 <CalendarRange className="h-3.5 w-3.5 text-blue-500" />
                 Período da medição
               </p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-1.5 min-w-0">
                   <Label className="text-xs font-medium text-gray-600">Data Início <span className="text-red-500">*</span></Label>
                   <Input
                     type="date"
-                    className="bg-gray-50 focus:bg-white"
+                    className="bg-gray-50 focus:bg-white w-full"
                     value={formBoletim.dataInicio}
                     onChange={e => setFormBoletim(f => ({ ...f, dataInicio: e.target.value }))}
                   />
@@ -1059,11 +1059,11 @@ export default function MedicaoDetalhe() {
                     <p className="text-[10px] text-emerald-600 font-medium">Dia seguinte à medição anterior</p>
                   )}
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 min-w-0">
                   <Label className="text-xs font-medium text-gray-600">Data Fim <span className="text-red-500">*</span></Label>
                   <Input
                     type="date"
-                    className="bg-gray-50 focus:bg-white"
+                    className="bg-gray-50 focus:bg-white w-full"
                     value={formBoletim.dataFim}
                     onChange={e => setFormBoletim(f => ({ ...f, dataFim: e.target.value }))}
                   />
@@ -1152,21 +1152,21 @@ export default function MedicaoDetalhe() {
                 <CalendarRange className="h-3.5 w-3.5 text-blue-500" />
                 Período da medição
               </p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-1.5 min-w-0">
                   <Label className="text-xs font-medium text-gray-600">Data Início <span className="text-red-500">*</span></Label>
                   <Input
                     type="date"
-                    className="bg-gray-50 focus:bg-white"
+                    className="bg-gray-50 focus:bg-white w-full"
                     value={formEditBoletim.dataInicio}
                     onChange={e => setFormEditBoletim(f => ({ ...f, dataInicio: e.target.value }))}
                   />
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 min-w-0">
                   <Label className="text-xs font-medium text-gray-600">Data Fim <span className="text-red-500">*</span></Label>
                   <Input
                     type="date"
-                    className="bg-gray-50 focus:bg-white"
+                    className="bg-gray-50 focus:bg-white w-full"
                     value={formEditBoletim.dataFim}
                     onChange={e => setFormEditBoletim(f => ({ ...f, dataFim: e.target.value }))}
                   />
