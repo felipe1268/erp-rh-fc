@@ -1,4 +1,31 @@
 /**
+ * Rev. 4066 — **CONCILIAÇÃO BANCÁRIA: CAMPO CATEGORIA NÃO MOSTRAVA CONTAS DO PLANO DE CONTAS.**
+ *
+ * PEDIDO: usuário cadastrou "Licenças e Assinaturas de Software" (código `4.6`) no Plano de Contas e
+ * anexou 2 prints — um da tela Plano de Contas mostrando a conta cadastrada, outro do dialog "Lançar
+ * no Contas a Pagar" (aberto a partir de uma linha do extrato na Conciliação Bancária) mostrando que
+ * pesquisar "LICEN" no campo Categoria não retornava nenhum resultado.
+ *
+ * CAUSA-RAIZ: `FinanceiroConciliacao.tsx` buscava `financial.getAccounts` com `escopo: "categoria"`.
+ * No backend (`server/routers/financial.ts`, Rev. 2157), esse escopo filtra `codigo LIKE 'AUTO-%'` —
+ * ou seja, só retorna Categorias operacionais criadas via tela "Categorias" (código auto-gerado
+ * `AUTO-NNNN`), excluindo TODAS as contas do Plano de Contas (código contábil hierárquico, ex.:
+ * `4.6`). As outras telas de lançamento que também têm campo de categoria — `FinanceiroContasAPagar.tsx`
+ * e `FinanceiroLancamentos.tsx` — já chamam `getAccounts` SEM escopo (retorna Plano de Contas +
+ * Categorias juntos); só a Conciliação Bancária ficou presa ao filtro restrito, criado originalmente
+ * (Rev. 3198) sem essa distinção estar em mente.
+ *
+ * FIX: removido `escopo: "categoria"` da query `lancAccounts` em `FinanceiroConciliacao.tsx` (usada
+ * por `catOpts`, a lista de opções do combobox "Pesquisar categoria…" no dialog "Lançar no Contas a
+ * Pagar" e também no editor inline de categoria de itens já conciliados). Agora traz todas as contas
+ * ativas da empresa, do Plano de Contas e de Categorias, igual às outras telas de lançamento. Mantido
+ * intacto o `escopo: "categoria"` usado na mutation de criar categoria rápida ("+ Nova categoria" dentro
+ * do próprio dialog) — esse fluxo continua gerando corretamente um código `AUTO-NNNN` novo, sem qualquer
+ * mudança de comportamento. ZERO DELETE · ZERO ALTER destrutivo (mudança é só no filtro client-side de
+ * uma query de leitura).
+ */
+
+/**
  * Rev. 4065 — **NOTIFICAÇÕES DE CONTABILIDADE: BOTÕES E PERMISSÕES PADRONIZADOS COMO NO MÓDULO DE RH.**
  *
  * PEDIDO: usuário pediu pra "padronizar os botões e as permissões como a gente fez no módulo de RH, pra ficar

@@ -1,3 +1,5 @@
+- **Rev. 4059** — **PAINEL SAAS / AJUSTE DE PREÇOS: NOVO CONTROLE PARA LIGAR/DESLIGAR MÓDULO DA VITRINE COMERCIAL.** Nova coluna `billing_module_prices.is_active`; `server/billingCatalog.ts` centraliza `getEffectiveCatalog()` (`modules` completo + `sellableModules` só ativos). `AdminPrecos.tsx` redesenhado em grid de cards com Switch + edição de preço. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4058** — **`/planos/modulos/:id`: SEÇÃO DE SCREENSHOTS VIRA CARROSSEL "MULTITELA" HORIZONTAL COM VÁRIAS TELAS REAIS POR MÓDULO.** Capturada 2ª screenshot real pra cada um dos 13 módulos que só tinham 1 print; `ModuloDetalhe.tsx` ganhou seção com scroll horizontal + setas de navegação. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4057** — **PAINEL SAAS: DASHBOARD GANHA MÉTRICAS DETALHADAS (ARPU, ASSENTOS, CRESCIMENTO/CHURN DO MÊS, POPULARIDADE POR MÓDULO).** `saasAdmin.ts` → `getSummary` ganhou `seatsTotal`, `arpuCents`, `newThisMonth`/`canceledThisMonth`, `moduleBreakdown`; `SaasAdminPanel.tsx` ganhou 2ª fileira de cards + seção "Popularidade dos módulos". ZERO DELETE · ZERO ALTER destrutivo.

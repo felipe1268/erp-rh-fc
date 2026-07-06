@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4066** — **CONCILIAÇÃO BANCÁRIA: CAMPO CATEGORIA NÃO MOSTRAVA CONTAS DO PLANO DE CONTAS.** Usuário cadastrou "Licenças e Assinaturas de Software" (código 4.6) no Plano de Contas, mas ao pesquisar na tela de Conciliação Bancária (dialog "Lançar no Contas a Pagar") ela não aparecia. Causa: `FinanceiroConciliacao.tsx` buscava `financial.getAccounts` com `escopo: "categoria"`, que no backend filtra só contas `AUTO-*` (Categorias operacionais), excluindo o Plano de Contas — diferente de Contas a Pagar/Lançamentos, que já buscam sem escopo (Plano + Categorias). Fix: removido o filtro de escopo da query de listagem; mantido só na criação inline de categoria rápida ("+ Nova categoria"). ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4065** — **NOTIFICAÇÕES DE CONTABILIDADE: BOTÕES E PERMISSÕES PADRONIZADOS COMO NO MÓDULO DE RH.** Usuário pediu pra padronizar a aba Contabilidade (`Switch` inline simples da Rev. 4064) no padrão mais rico já usado na aba RH (`NotificacoesEmailTab`): cards de resumo, badges coloridas por categoria, botões ícone ToggleRight/ToggleLeft + Settings + Trash2, formulário dedicado de criar/editar. Modelo de permissão evoluiu de 1 flag (`recebeExtrato`) pra 3: `ativo` (liga/desliga o destinatário sem excluir) + `recebeFiscal`/`recebeContabil` (por prazo automático). `normalizeDestinatarioContabilidade()` (client) e `normalizeEmail()` (`contabilidade.ts`) migram dados legados sem perda; job automático (`statusSyncJob.ts`) passa a checar a permissão específica do prazo que disparou o dia. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4064** — **NOTIFICAÇÕES DE CONTABILIDADE: TOGGLE POR DESTINATÁRIO PARA LIGAR/DESLIGAR O ENCAMINHAMENTO DO ARQUIVO POR E-MAIL.** Usuário pediu um "botão de liga e desliga" pra controlar quem recebe o Extrato Bancário por e-mail — o card "Recebem Extrato" já existia, mas era calculado por heurística frágil sobre o texto do `dept` (`includes("fiscal")`), sem controle real por pessoa. Novo campo `recebeExtrato:boolean` (default true) em cada destinatário de `contabilidade_alertas_config.emails_json`; `Switch` por linha em `Configuracoes.tsx`; filtro aplicado no "Enviar Teste", no dialog manual de `FinanceiroContabilidade.tsx` e no job automático `verificarEnvioAutomaticoContabilidade`. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4064** — **NOTIFICAÇÕES DE CONTABILIDADE: TOGGLE POR DESTINATÁRIO PARA LIGAR/DESLIGAR O ENCAMINHAMENTO DO ARQUIVO POR E-MAIL.** Novo campo `recebeExtrato:boolean` (default true) em cada destinatário de `contabilidade_alertas_config.emails_json`; filtro aplicado no "Enviar Teste", dialog manual e job automático. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4063** — **`/planos`: "14 MÓDULOS DISPONÍVEIS" ERA NÚMERO FIXO — AGORA REFLETE OS MÓDULOS REALMENTE À VENDA.** `SiteVendas.tsx` trocou `"14"` hardcoded por `String(sellableModuleCards.length)`, mesma lista ao vivo de `billing.getCatalog`. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4061** — **ADMINPRECOS: SALVAR PREÇO FALHAVA COM "This price cannot be archived because it is the default price of its product" (STRIPE).** `adminUpdatePrices` (`billing.ts`) tentava arquivar o Price antigo ANTES de trocar o `default_price` do Product — Stripe recusa. Fix: inverter a ordem. Limpo também 1 Price órfão ativo duplicado deixado pela tentativa anterior. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4060** — **`/planos`: MÓDULO FORA DE VENDA AGORA SOME COMPLETAMENTE DA VITRINE, NÃO SÓ DO PREÇO.** `SiteVendas.tsx`: grid de módulos filtra `MODULES` contra `catalog.modules`; `ModuloDetalhe.tsx`: guard `isSellable` bloqueia acesso direto por URL a módulo desativado. ZERO DELETE · ZERO ALTER destrutivo (só frontend).
-
-- **Rev. 4059** — **PAINEL SAAS / AJUSTE DE PREÇOS: NOVO CONTROLE PARA LIGAR/DESLIGAR MÓDULO DA VITRINE COMERCIAL.** Nova coluna `billing_module_prices.is_active`; `server/billingCatalog.ts` centraliza `getEffectiveCatalog()` (`modules` completo + `sellableModules` só ativos). `AdminPrecos.tsx` redesenhado em grid de cards com Switch + edição de preço. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

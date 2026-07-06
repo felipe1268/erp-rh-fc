@@ -427,7 +427,12 @@ export default function FinanceiroConciliacao() {
   // lançamento (data, conta e valor já vêm pré-preenchidos do extrato). Após criar,
   // auto-concilia com a linha do extrato (mesma mutation da conciliação manual).
   const { data: lancObras, refetch: refetchLancObras } = (trpc as any).obras.listActive.useQuery({ companyId }, { enabled: !!companyId });
-  const { data: lancAccounts, refetch: refetchLancAccounts } = (trpc as any).financial.getAccounts.useQuery({ companyId, ativo: true, escopo: "categoria" }, { enabled: !!companyId });
+  // Rev. 4066 — removido `escopo: "categoria"`: a busca de Categoria na conciliação
+  // só trazia contas AUTO-* (Categorias operacionais), escondendo contas cadastradas
+  // no Plano de Contas (ex.: "Licenças e Assinaturas de Software", código 4.6). Outras
+  // telas de lançamento (Contas a Pagar, Lançamentos) já buscam sem escopo (todas as
+  // contas ativas); conciliação agora segue o mesmo padrão.
+  const { data: lancAccounts, refetch: refetchLancAccounts } = (trpc as any).financial.getAccounts.useQuery({ companyId, ativo: true }, { enabled: !!companyId });
   const { data: lancCostCenters, refetch: refetchLancCostCenters } = (trpc as any).financial.getCostCenters.useQuery({ companyId }, { enabled: !!companyId });
   // Rev. 3457 — includeAllGroup: true → retorna fornecedores de TODAS as empresas
   // do grupo (não só a empresa corrente), corrigindo o bug onde a lista ficava vazia
