@@ -1,4 +1,33 @@
 /**
+ * Rev. 4072 — **CONTAS A PAGAR CONSOLIDADO: NUNCA AGRUPAR/MISTURAR TÍTULOS DE FATURAMENTO DIRETO
+ * (FD) NO CICLO DE FECHAMENTO PRÓPRIO DA FC.**
+ *
+ * PEDIDO: usuário exigiu, de forma explícita e crítica, que a consolidação por ciclo de
+ * fechamento do fornecedor (Rev. 4070/4071) NUNCA inclua valores de Faturamento Direto (FD) —
+ * ou seja, compras cuja `modalidade_fd` é `fd_cliente`, `fd_terceiro` ou `fd_fc`, em que quem paga
+ * o fornecedor é o CLIENTE (ou o terceiro) diretamente, não o caixa da FC. Misturar esses títulos
+ * no mesmo grupo/cheque consolidado da FC juntaria dinheiro que não é (e não deve ser) desembolso
+ * da empresa com o fluxo de caixa real dela.
+ *
+ * CAUSA-RAIZ: `_agruparContasPagarPorCicloForn`/`_agruparConciliacao` agrupavam por
+ * fornecedor+janela de fechamento olhando só `fornecedor_nome`/`dataCompetencia`, sem nunca
+ * checar a modalidade da OC de origem — e a query principal de `getContasAPagarByYear` nem
+ * carregava essa informação (não fazia join com `compras_ordens`). Verificado em produção: 44
+ * títulos com `modalidade_fd` FD hoje passam por Contas a Pagar (1 da Ferragens Santa Rita) e
+ * seriam elegíveis a entrar num grupo de fechamento se não fossem excluídos.
+ *
+ * FIX (server/routers/financial.ts): novo helper `_isFdModalidade(v)` (true p/
+ * fd_cliente/fd_terceiro/fd_fc); `_agruparContasPagarPorCicloForn` e o branch `fechamento_forn`
+ * de `_agruparConciliacao` agora pulam o agrupamento por ciclo sempre que `r.modalidadeFd` for FD
+ * (o título continua aparecendo, só que como linha individual, nunca dentro do grupo consolidado);
+ * a query principal de `getContasAPagarByYear` ganhou `LEFT JOIN compras_ordens co` (mesma
+ * condição de origem já usada em Conciliação) e passou a selecionar `co.modalidade_fd AS
+ * "modalidadeFd"` — exigiu re-qualificar todas as colunas da query com o alias `e.` (incluindo
+ * `yearCond`, que antes era montada com nomes de coluna sem prefixo). ZERO DELETE · ZERO ALTER
+ * destrutivo (100% na leitura: 1 join a mais + 1 condição de guarda nos agrupadores).
+ */
+
+/**
  * Rev. 4071 — **CONTAS A PAGAR CONSOLIDADO: JANELA DE FECHAMENTO ERA CALCULADA PELO VENCIMENTO
  * INDIVIDUAL DA OC, NÃO PELA DATA DA COMPRA — FRAGMENTAVA O AGRUPAMENTO.**
  *

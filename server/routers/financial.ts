@@ -407,6 +407,14 @@ function _calcParcelas(total: number, numParcelas: number, prazoDias: number, da
 // cancelado passam intactos — já liquidados, não há o que consolidar pra pagamento).
 // Grupos com 1 único item voltam a ser individuais (não vale a pena consolidar 1 título).
 // READ-ONLY (só formata o retorno da query; nada é gravado aqui).
+// Rev. 4072 — Faturamento Direto (modalidade_fd IN fd_cliente/fd_terceiro/fd_fc) é
+// dinheiro que o CLIENTE paga diretamente ao fornecedor — a FC nunca desembolsa esse
+// valor, então NUNCA pode entrar no agrupamento/consolidação por ciclo de fechamento
+// do fornecedor (misturaria valor de terceiro com o fluxo de caixa da empresa).
+function _isFdModalidade(v: any): boolean {
+  return v === "fd_cliente" || v === "fd_terceiro" || v === "fd_fc";
+}
+
 function _agruparContasPagarPorCicloForn(arr: any[], supplierCycleMap: Map<string, any>): any[] {
   if (!supplierCycleMap.size) return arr;
   // Rev. 4070 — os lançamentos vindos de OC costumam gravar fornecedor_nome como
@@ -429,6 +437,9 @@ function _agruparContasPagarPorCicloForn(arr: any[], supplierCycleMap: Map<strin
   const groups = new Map<string, any>();
   for (const r of arr) {
     if (r.status === "pago" || r.status === "cancelado") { out.push(r); continue; }
+    // Rev. 4072 — FD (Faturamento Direto) nunca entra no consolidado do fornecedor:
+    // é o cliente quem paga o fornecedor diretamente, não a FC.
+    if (_isFdModalidade(r.modalidadeFd)) { out.push(r); continue; }
     const fornNormRaw = _normNomeConc(String(r.fornecedorNome || ""));
     const match = _matchCycleConfig(fornNormRaw);
     const cycleConfig = match?.config;
@@ -501,7 +512,8 @@ function _agruparConciliacao(arr: any[], supplierCycleMap: Map<string, any> = ne
     const tipoG = GRUP[String(r.origemModulo ?? "")];
     if (!tipoG) {
       // Rev. 3437 — checar se o fornecedor tem ciclo de fechamento configurado
-      if (supplierCycleMap.size) {
+      // Rev. 4072 — FD (Faturamento Direto) nunca entra no consolidado do fornecedor.
+      if (supplierCycleMap.size && !_isFdModalidade(r.modalidadeFd)) {
         const fornNorm = _normNomeConc(String(r.fornecedorNome || ""));
         const cycleConfig = fornNorm ? supplierCycleMap.get(fornNorm) : undefined;
         if (cycleConfig && cycleConfig.cicloPagamento && cycleConfig.cicloPagamento !== "avista") {
@@ -1970,6 +1982,7 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
               e.origem_modulo AS "origemModulo",
               e.origem_id AS "origemId",
               co.numero_oc AS "ocNumero",
+              co.modalidade_fd AS "modalidadeFd",
               COALESCE(NULLIF(TRIM(ff.posto),''), NULLIF(TRIM(fm.fornecedor),'')) AS "frotaFornecedor",
               COALESCE(NULLIF(TRIM(pc.nome_fantasia),''), NULLIF(TRIM(pc.razao_social),'')) AS "parceiroFornecedor",
               COALESCE(NULLIF(TRIM(pjemp."nomeCompleto"),''), NULLIF(TRIM(pjc."razaoSocialPrestador"),'')) AS "pjFornecedor",
@@ -2012,6 +2025,7 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
               e.origem_modulo AS "origemModulo",
               e.origem_id AS "origemId",
               co.numero_oc AS "ocNumero",
+              co.modalidade_fd AS "modalidadeFd",
               COALESCE(NULLIF(TRIM(ff.posto),''), NULLIF(TRIM(fm.fornecedor),'')) AS "frotaFornecedor",
               COALESCE(NULLIF(TRIM(pc.nome_fantasia),''), NULLIF(TRIM(pc.razao_social),'')) AS "parceiroFornecedor",
               COALESCE(NULLIF(TRIM(pjemp."nomeCompleto"),''), NULLIF(TRIM(pjc."razaoSocialPrestador"),'')) AS "pjFornecedor",
@@ -10337,37 +10351,39 @@ export const financialRouter = router({
       // SEM data_pagamento — nesse caso cai no fallback venc→competência→created_at
       // (em vez de SUMIR do ano). EM ABERTO segue por vencimento (fallback created_at).
       yearCond =
-        `((status = 'pago' AND EXTRACT(year FROM COALESCE(data_pagamento::date, data_vencimento::date, data_competencia::date, created_at::date)) = $1) ` +
-        `OR (status <> 'pago' AND EXTRACT(year FROM COALESCE(data_vencimento::date, data_competencia::date, created_at::date)) = $2))`;
+        `((e.status = 'pago' AND EXTRACT(year FROM COALESCE(e.data_pagamento::date, e.data_vencimento::date, e.data_competencia::date, e.created_at::date)) = $1) ` +
+        `OR (e.status <> 'pago' AND EXTRACT(year FROM COALESCE(e.data_vencimento::date, e.data_competencia::date, e.created_at::date)) = $2))`;
       yearVals.push(input.ano, input.ano);
     } else {
-      yearCond = `EXTRACT(year FROM COALESCE(data_vencimento::date, created_at::date)) = $1`;
+      yearCond = `EXTRACT(year FROM COALESCE(e.data_vencimento::date, e.created_at::date)) = $1`;
       yearVals.push(input.ano);
     }
 
     const res = await dbExecute(db,
-      `SELECT id, obra_id AS "obraId", obra_nome AS "obraNome", descricao,
-              conta_id AS "contaId", conta_nome AS "contaNome",
-              centro_custo_id AS "centroCustoId", centro_custo_nome AS "centroCustoNome",
-              valor_previsto AS "valorPrevisto",
-              valor_realizado AS "valorRealizado", status,
-              data_vencimento AS "dataVencimento", data_pagamento AS "dataPagamento",
-              data_competencia AS "dataCompetencia",
-              forma_pagamento AS "formaPagamento",
-              origem_modulo AS "origemModulo", origem_id AS "origemId",
-              origem_descricao AS "origemDescricao",
-              fornecedor_nome AS "fornecedorNome",
-              anexo_url AS "anexoUrl", anexo_nome AS "anexoNome",
-              conta_bancaria_id AS "contaBancariaId",
-              tipo,
-              CASE WHEN data_vencimento < CURRENT_DATE AND status != 'pago' THEN CURRENT_DATE - data_vencimento ELSE 0 END AS "diasAtraso"
-       FROM financial_entries
-       WHERE company_id IN (${inlineIds(ids)})
-         AND tipo = 'despesa'
-         AND status != 'cancelado'
-         ${FINANCEIRO_SOMENTE_REAL ? `AND ${sqlNotProjecao()}` : ""}
+      `SELECT e.id, e.obra_id AS "obraId", e.obra_nome AS "obraNome", e.descricao,
+              e.conta_id AS "contaId", e.conta_nome AS "contaNome",
+              e.centro_custo_id AS "centroCustoId", e.centro_custo_nome AS "centroCustoNome",
+              e.valor_previsto AS "valorPrevisto",
+              e.valor_realizado AS "valorRealizado", e.status,
+              e.data_vencimento AS "dataVencimento", e.data_pagamento AS "dataPagamento",
+              e.data_competencia AS "dataCompetencia",
+              e.forma_pagamento AS "formaPagamento",
+              e.origem_modulo AS "origemModulo", e.origem_id AS "origemId",
+              e.origem_descricao AS "origemDescricao",
+              e.fornecedor_nome AS "fornecedorNome",
+              e.anexo_url AS "anexoUrl", e.anexo_nome AS "anexoNome",
+              e.conta_bancaria_id AS "contaBancariaId",
+              e.tipo,
+              co.modalidade_fd AS "modalidadeFd",
+              CASE WHEN e.data_vencimento < CURRENT_DATE AND e.status != 'pago' THEN CURRENT_DATE - e.data_vencimento ELSE 0 END AS "diasAtraso"
+       FROM financial_entries e
+       LEFT JOIN compras_ordens co ON e.origem_modulo IN ('compras','compra_oc') AND co.id = e.origem_id AND co.company_id = e.company_id
+       WHERE e.company_id IN (${inlineIds(ids)})
+         AND e.tipo = 'despesa'
+         AND e.status != 'cancelado'
+         ${FINANCEIRO_SOMENTE_REAL ? `AND ${sqlNotProjecao("e.origem_modulo")}` : ""}
          AND ${yearCond}
-       ORDER BY data_vencimento ASC NULLS LAST`,
+       ORDER BY e.data_vencimento ASC NULLS LAST`,
       yearVals
     );
 
