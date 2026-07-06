@@ -1254,6 +1254,18 @@ Regras:
           console.log(`[SyncSchema+] Tabela financial_cheques garantida (Controle de Cheques).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA financial_cheques:`, e?.message || e); }
 
+        // Rev. 4068 — Controle de Cheques: persiste o MOTIVO de devolução (antes só
+        // computado on-the-fly) e a CONTA BANCÁRIA em que o cheque foi tentado compensar
+        // (linha do extrato na Conciliação Bancária). Colunas aditivas (R-001/R-007/R-010 OK).
+        try {
+          await db.execute(sql`ALTER TABLE financial_cheques ADD COLUMN IF NOT EXISTS motivo_devolucao_codigo INTEGER`);
+          await db.execute(sql`ALTER TABLE financial_cheques ADD COLUMN IF NOT EXISTS motivo_devolucao_texto TEXT`);
+          await db.execute(sql`ALTER TABLE financial_cheques ADD COLUMN IF NOT EXISTS conta_bancaria_tentativa_id INTEGER`);
+          await db.execute(sql`ALTER TABLE financial_cheques ADD COLUMN IF NOT EXISTS conta_bancaria_tentativa_nome VARCHAR(255)`);
+          await db.execute(sql`ALTER TABLE financial_cheques ADD COLUMN IF NOT EXISTS devolvido_em TIMESTAMP`);
+          console.log(`[SyncSchema+] Rev. 4068: financial_cheques.motivo_devolucao_* / conta_bancaria_tentativa_* garantidos.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA financial_cheques Rev. 4068:`, e?.message || e); }
+
         // Rev. 3343 — Controle de TALÕES de cheque (rastreabilidade de folhas). Flag
         // "tem talão" na conta + tabela de talões (nº inicial + qtd de folhas; folha
         // usada/perdida/cancelada). ADD COLUMN/CREATE TABLE IF NOT EXISTS (R-001/R-007/R-010 OK).

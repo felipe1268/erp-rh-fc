@@ -1769,6 +1769,24 @@ export default function FinanceiroCheques() {
               <div className="text-xs text-muted-foreground">
                 Valor {editItem.valor != null ? formatBRL(Number(editItem.valor)) : "—"} · Venc. {fmtData(editItem.dataVencimento)} · Comp. {fmtData(editItem.dataCompensacao)}
               </div>
+              {(editItem.contaBancariaTentativaNome || editItem.motivoDevolucaoTexto || editItem.extratoMotivoTexto) && (
+                <div className="rounded-md border border-slate-200 bg-slate-50 p-2.5 space-y-1">
+                  <div className="text-[11px] font-semibold text-slate-600">Informações de Conciliação</div>
+                  {editItem.contaBancariaTentativaNome && (
+                    <div className="text-xs text-slate-700 break-words">
+                      Conta bancária tentativa: <span className="font-medium">{editItem.contaBancariaTentativaNome}</span>
+                    </div>
+                  )}
+                  {(editItem.motivoDevolucaoTexto || editItem.extratoMotivoTexto) && (
+                    <div className="text-xs text-amber-700 break-words">
+                      Motivo da devolução{(editItem.motivoDevolucaoCodigo ?? editItem.extratoMotivoCodigo) ? ` (${editItem.motivoDevolucaoCodigo ?? editItem.extratoMotivoCodigo})` : ""}: <span className="font-medium">{editItem.motivoDevolucaoTexto || editItem.extratoMotivoTexto}</span>
+                    </div>
+                  )}
+                  {editItem.devolvidoEm && (
+                    <div className="text-[11px] text-slate-500">Devolvido em {fmtData(editItem.devolvidoEm)}</div>
+                  )}
+                </div>
+              )}
             </div>
           )}
           <DialogFooter>

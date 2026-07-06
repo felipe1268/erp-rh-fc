@@ -7423,6 +7423,13 @@ export const financialCheques = pgTable("financial_cheques", {
   lancamentoId: integer("lancamento_id"),
   conciliado: smallint().default(0),
   dataConciliacao: date("data_conciliacao", { mode: "string" }),
+  // Rev. 4068 — persistência do motivo de devolução + conta bancária TENTADA na
+  // compensação, detectados na Conciliação Bancária (antes eram só computados on-the-fly).
+  motivoDevolucaoCodigo: integer("motivo_devolucao_codigo"),
+  motivoDevolucaoTexto: text("motivo_devolucao_texto"),
+  contaBancariaTentativaId: integer("conta_bancaria_tentativa_id"),
+  contaBancariaTentativaNome: varchar("conta_bancaria_tentativa_nome", { length: 255 }),
+  devolvidoEm: timestamp("devolvido_em", { mode: "string" }),
   excluidoEm: timestamp("excluido_em", { mode: "string" }),
   createdAt: timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow().notNull(),

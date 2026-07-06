@@ -1,3 +1,5 @@
+- **Rev. 4061** — **ADMINPRECOS: SALVAR PREÇO FALHAVA COM "This price cannot be archived because it is the default price of its product" (STRIPE).** `adminUpdatePrices` (`billing.ts`) tentava arquivar o Price antigo ANTES de trocar o `default_price` do Product — Stripe recusa. Fix: inverter a ordem. Limpo também 1 Price órfão ativo duplicado deixado pela tentativa anterior. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4064** — **NOTIFICAÇÕES DE CONTABILIDADE: TOGGLE POR DESTINATÁRIO PARA LIGAR/DESLIGAR O ENCAMINHAMENTO DO ARQUIVO POR E-MAIL.** Novo campo `recebeExtrato:boolean` (default true) em cada destinatário de `contabilidade_alertas_config.emails_json`; filtro aplicado no "Enviar Teste", dialog manual e job automático. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4059** — **PAINEL SAAS / AJUSTE DE PREÇOS: NOVO CONTROLE PARA LIGAR/DESLIGAR MÓDULO DA VITRINE COMERCIAL.** Nova coluna `billing_module_prices.is_active`; `server/billingCatalog.ts` centraliza `getEffectiveCatalog()` (`modules` completo + `sellableModules` só ativos). `AdminPrecos.tsx` redesenhado em grid de cards com Switch + edição de preço. ZERO DELETE · ZERO ALTER destrutivo.

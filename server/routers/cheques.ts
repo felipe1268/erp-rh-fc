@@ -1047,6 +1047,11 @@ export const chequesRouter = router({
               status, observacao, mes_ref AS "mes", ano_ref AS "ano",
               origem_arquivo AS "origemArquivo", lote_id AS "loteId",
               conciliado, data_conciliacao AS "dataConciliacao",
+              motivo_devolucao_codigo AS "motivoDevolucaoCodigo",
+              motivo_devolucao_texto AS "motivoDevolucaoTexto",
+              conta_bancaria_tentativa_id AS "contaBancariaTentativaId",
+              conta_bancaria_tentativa_nome AS "contaBancariaTentativaNome",
+              devolvido_em AS "devolvidoEm",
               created_at AS "createdAt"
          FROM financial_cheques
         WHERE ${where.join(" AND ")}
@@ -1056,7 +1061,20 @@ export const chequesRouter = router({
     // Rev. 3234 — dupla checagem: anota cada cheque com o cruzamento contra o extrato
     // bancário (confirmado × divergente). SÓ LEITURA — alimenta o alerta na tela.
     const matchCheque = await montarMatcherExtrato(db, input.companyId);
-    return (res.rows as any[]).map((c) => ({ ...c, ...classificarExtrato(c.status, matchCheque(c)) }));
+    // Rev. 4068 — motivo/conta tentativa PERSISTIDOS (ação explícita do usuário na
+    // Conciliação) têm precedência sobre o computado on-the-fly (só um indício até ser
+    // confirmado); status='devolvido' já persistido também dispensa o cálculo ao vivo.
+    return (res.rows as any[]).map((c) => {
+      const classif = classificarExtrato(c.status, matchCheque(c));
+      const persistedDevolvido = c.status === "devolvido" && (c.motivoDevolucaoCodigo != null || c.devolvidoEm != null);
+      return {
+        ...c,
+        ...classif,
+        extratoDevolvido: persistedDevolvido ? true : classif.extratoDevolvido,
+        extratoMotivoCodigo: persistedDevolvido ? c.motivoDevolucaoCodigo : classif.extratoMotivoCodigo,
+        extratoMotivoTexto: persistedDevolvido ? c.motivoDevolucaoTexto : classif.extratoMotivoTexto,
+      };
+    });
   }),
 
   // Cards de resumo por status (ano e mês opcionais).

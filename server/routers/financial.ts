@@ -24,7 +24,7 @@ import { runAllAutoImports } from "../services/financialAutoImport";
 // flag global. Quando FINANCEIRO_SOMENTE_REAL, os endpoints de leitura escondem
 // TODAS as projeções (cronograma/PCP/folha projetada/etc.), não só o cronograma.
 import { sqlNotProjecao, FINANCEIRO_SOMENTE_REAL } from "../../shared/financeiroProjecao";
-import { detectarParesEstorno, pareceCompensacaoCheque, pareceDevolucaoCheque, parseDocNumero, parseChequeNumero, type LinhaEstornoMin } from "../../shared/chequeMotivos";
+import { detectarParesEstorno, pareceCompensacaoCheque, pareceDevolucaoCheque, parseDocNumero, parseChequeNumero, parseMotivoDevolucao, type LinhaEstornoMin } from "../../shared/chequeMotivos";
 import {
   runAllDespesasImport,
   runAllReceitasImport,
@@ -7019,9 +7019,10 @@ export const financialRouter = router({
     // devolvido (compensação=débito + devolução=crédito, mesmo valor absoluto), espelhando os
     // predicados de `detectarParesEstorno`. Sem isso, a API aceitaria lineIds arbitrários da
     // empresa e tiraria linhas quaisquer do cálculo do %, distorcendo o indicador.
+    let debitoLinha: any = null;
     {
       const sel = await dbExecute(db,
-        `SELECT id, valor, descricao, conciliado FROM bank_statement_lines
+        `SELECT id, valor, descricao, conciliado, conta_bancaria_id AS "contaBancariaId" FROM bank_statement_lines
           WHERE company_id=$1 AND excluido_em IS NULL AND id IN (${inlineIds(ids)})`,
         [input.companyId]);
       const linhas = rows(sel);
@@ -7034,6 +7035,7 @@ export const financialRouter = router({
         && pareceCompensacaoCheque(debito.descricao) && pareceDevolucaoCheque(credito.descricao)
         && Number(debito.conciliado) !== 1 && Number(credito.conciliado) !== 1;
       if (!elegivel) throw new TRPCError({ code: "BAD_REQUEST", message: "Estas linhas não formam um par de cheque devolvido elegível (ou já estão conciliadas)." });
+      debitoLinha = debito;
     }
     const porNome = (ctx.user as any)?.nome ?? (ctx.user as any)?.name ?? null;
     // dbExecute liga params por ORDEM DE APARIÇÃO: $1=por_id, $2=por_nome, $3=company_id.
@@ -7046,6 +7048,47 @@ export const financialRouter = router({
         RETURNING id`,
       [ctx.user?.id ?? null, porNome, input.companyId]);
     const afetados = rows(upd).length;
+    // Rev. 4068 — Ao CONFIRMAR (ação explícita) que este par é um cheque devolvido e não
+    // pago, persiste status='devolvido' + motivo (alínea Bacen) + conta bancária tentativa
+    // no Controle de Cheques, casando por Nº do cheque/doc + valor (mesma identidade de
+    // `detectarParesEstorno`). Ambíguo → não faz nada (não escreve no escuro).
+    try {
+      if (afetados > 0 && debitoLinha) {
+        const motivo = parseMotivoDevolucao(debitoLinha.descricao) ?? null;
+        const doc = parseDocNumero(debitoLinha.descricao);
+        const chq = parseChequeNumero(debitoLinha.descricao);
+        const cents = Math.round(Math.abs(Number(debitoLinha.valor) || 0) * 100);
+        if ((doc || chq) && cents > 0) {
+          const norm = (s: any) => String(s ?? "").replace(/[^0-9]/g, "").replace(/^0+/, "");
+          const alvo = norm(chq) || norm(doc);
+          const candRes = await dbExecute(db,
+            `SELECT id, numero_cheque AS "numeroCheque" FROM financial_cheques
+              WHERE company_id=$1 AND excluido_em IS NULL AND status <> 'devolvido'
+                AND ROUND(ABS(valor)*100)=$2`,
+            [input.companyId, cents]);
+          const cands = (rows(candRes) as any[]).filter((c) => norm(c.numeroCheque) === alvo);
+          if (cands.length === 1) {
+            let contaNome: string | null = null;
+            const contaId = debitoLinha.contaBancariaId ?? null;
+            if (contaId != null) {
+              const cbRes = await dbExecute(db,
+                `SELECT banco, agencia, conta, apelido FROM company_bank_accounts WHERE id=$1`,
+                [contaId]);
+              const cb: any = rows(cbRes)[0];
+              if (cb) contaNome = cb.apelido || `${cb.banco} · Ag ${cb.agencia} · CC ${cb.conta}`;
+            }
+            await dbExecute(db,
+              `UPDATE financial_cheques
+                  SET status='devolvido', devolvido_em=NOW(),
+                      motivo_devolucao_codigo=$1, motivo_devolucao_texto=$2,
+                      conta_bancaria_tentativa_id=$3, conta_bancaria_tentativa_nome=$4,
+                      updated_at=NOW()
+                WHERE id=$5 AND company_id=$6 AND excluido_em IS NULL`,
+              [motivo?.codigo ?? null, motivo?.motivo ?? null, contaId, contaNome, cands[0].id, input.companyId]);
+          }
+        }
+      }
+    } catch (e: any) { console.error("[desconsiderarChequeDevolvido] persistir motivo/devolvido falhou (não bloqueia):", e?.message || e); }
     await createAuditLog({
       userId: ctx.user?.id,
       action: "bank_statement_line_desconsiderar",
@@ -7194,6 +7237,57 @@ export const financialRouter = router({
       [ctx.user?.id ?? null, ctx.user?.name ?? null, input.entryId, input.companyId]
     );
     autoVincularNfsPorLinhas(input.companyId, [input.statementLineId]).catch(() => {});
+    // Rev. 4068 — AUTO-BAIXA do cheque no Controle de Cheques quando o lançamento
+    // conciliado é o pagamento de um cheque (forma_pagamento='cheque'). Antes, conciliar
+    // aqui (fluxo principal de conciliação manual) nunca tocava financial_cheques — só
+    // `conciliarChequeComLinha` (fluxo raro, sem lançamento prévio) baixava. Casa por
+    // Nº do cheque (normalizado, sem zeros à esquerda) + VALOR (2 casas); ambíguo → não
+    // faz nada (mesma filosofia de "conciliação só sugestiva" — nunca baixa no escuro).
+    try {
+      const entryChqRes = await dbExecute(db,
+        `SELECT forma_pagamento AS "formaPagamento", cheque_numero AS "chequeNumero",
+                COALESCE(valor_realizado, valor_previsto) AS valor
+           FROM financial_entries WHERE id=$1 AND company_id=$2`,
+        [input.entryId, input.companyId]);
+      const entryChq: any = rows(entryChqRes)[0];
+      const chequeNumNorm = String(entryChq?.chequeNumero ?? "").replace(/[^0-9]/g, "").replace(/^0+/, "");
+      const centsEntry = Math.round(Math.abs(Number(entryChq?.valor ?? 0)) * 100);
+      if (chequeNumNorm && centsEntry > 0) {
+        const candRes = await dbExecute(db,
+          `SELECT id, numero_cheque AS "numeroCheque", lancamento_id AS "lancamentoId"
+             FROM financial_cheques
+            WHERE company_id=$1 AND excluido_em IS NULL AND COALESCE(conciliado,0)=0
+              AND ROUND(ABS(valor)*100)=$2
+              AND (lancamento_id IS NULL OR lancamento_id=$3)`,
+          [input.companyId, centsEntry, input.entryId]);
+        const norm = (s: any) => String(s ?? "").replace(/[^0-9]/g, "").replace(/^0+/, "");
+        const cands = (rows(candRes) as any[]).filter((c) => norm(c.numeroCheque) === chequeNumNorm);
+        const linkedFirst = cands.find((c) => Number(c.lancamentoId) === input.entryId);
+        const chequeMatch = linkedFirst ?? (cands.length === 1 ? cands[0] : null);
+        if (chequeMatch) {
+          let contaNome: string | null = null;
+          if (lineConta != null) {
+            const cbRes = await dbExecute(db,
+              `SELECT banco, agencia, conta, apelido FROM company_bank_accounts WHERE id=$1`,
+              [lineConta]);
+            const cb: any = rows(cbRes)[0];
+            if (cb) contaNome = cb.apelido || `${cb.banco} · Ag ${cb.agencia} · CC ${cb.conta}`;
+          }
+          await dbExecute(db,
+            `UPDATE financial_cheques
+                SET conciliado=1,
+                    status = CASE WHEN status IN ('devolvido','sustado','cancelado') THEN status ELSE 'compensado' END,
+                    data_conciliacao=CURRENT_DATE,
+                    lancamento_id=$1,
+                    conta_bancaria_tentativa_id=$2,
+                    conta_bancaria_tentativa_nome=$3,
+                    updated_at=NOW()
+              WHERE id=$4 AND company_id=$5 AND excluido_em IS NULL AND COALESCE(conciliado,0)=0
+              RETURNING id`,
+            [input.entryId, lineConta, contaNome, chequeMatch.id, input.companyId]);
+        }
+      }
+    } catch (e: any) { console.error("[conciliarLancamento] auto-baixa cheque falhou (não bloqueia conciliação):", e?.message || e); }
     return { ok: true };
   }),
 
@@ -7263,12 +7357,26 @@ export const financialRouter = router({
       // requisição já baixou este cheque, `lancamento_id IS NULL` falha → 0 linhas → rollback de
       // tudo (despesa + linha). Sem checar rows-affected aqui, duas linhas distintas poderiam
       // conciliar o MESMO cheque (cada uma criando sua despesa) e só a 1ª baixaria o cheque.
+      // Rev. 4068 — junto com a baixa, registra STATUS='compensado' (salvo devolvido/sustado/
+      // cancelado) + a conta bancária TENTATIVA (a que recebeu a linha do extrato), espelhando
+      // `conciliarLancamento`. Resolve o nome fora da transação não é necessário aqui pois é
+      // read-only sobre uma tabela auxiliar.
+      let contaTentativaNome: string | null = null;
+      if (lineConta != null) {
+        const cbRes = await dbExecute(tx,
+          `SELECT banco, agencia, conta, apelido FROM company_bank_accounts WHERE id=$1`,
+          [lineConta]);
+        const cb: any = rows(cbRes)[0];
+        if (cb) contaTentativaNome = cb.apelido || `${cb.banco} · Ag ${cb.agencia} · CC ${cb.conta}`;
+      }
       const updChq = await dbExecute(tx,
         `UPDATE financial_cheques
-            SET conciliado=1, data_conciliacao=CURRENT_DATE, lancamento_id=$1, updated_at=NOW()
-          WHERE id=$2 AND company_id=$3 AND excluido_em IS NULL AND lancamento_id IS NULL
+            SET conciliado=1, data_conciliacao=CURRENT_DATE, lancamento_id=$1,
+                status = CASE WHEN status IN ('devolvido','sustado','cancelado') THEN status ELSE 'compensado' END,
+                conta_bancaria_tentativa_id=$2, conta_bancaria_tentativa_nome=$3, updated_at=NOW()
+          WHERE id=$4 AND company_id=$5 AND excluido_em IS NULL AND lancamento_id IS NULL
           RETURNING id`,
-        [entryId, input.chequeId, input.companyId]);
+        [entryId, lineConta, contaTentativaNome, input.chequeId, input.companyId]);
       if (rows(updChq).length === 0) throw new TRPCError({ code: "CONFLICT", message: "Este cheque já foi conciliado / vinculado a um lançamento." });
       // Reserva ATÔMICA da linha (vencedor único; se outro já conciliou → rollback de tudo).
       const updLn = await dbExecute(tx,

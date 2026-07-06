@@ -1,4 +1,40 @@
 /**
+ * Rev. 4068 — **CONCILIAÇÃO BANCÁRIA NÃO BAIXAVA O CHEQUE NO CONTROLE DE CHEQUES + MOTIVO/CONTA
+ * TENTATIVA DE CHEQUE DEVOLVIDO AGORA FICAM REGISTRADOS.**
+ *
+ * PEDIDO: usuário reportou que ao conciliar (na Conciliação Bancária) uma linha do extrato que
+ * era o pagamento de um cheque, o Controle de Cheques continuava mostrando o cheque como
+ * "pendente" — a baixa não acontecia sozinha. Pediu também que, quando um cheque devolvido não
+ * fosse pago, o motivo da devolução ficasse registrado/visível no Controle de Cheques, e que ao
+ * clicar num cheque desse pra ver contra qual conta bancária a compensação foi tentada.
+ *
+ * CAUSA-RAIZ: `conciliarLancamento` (fluxo PRINCIPAL de conciliação manual, `financial.ts`) nunca
+ * tocava a tabela `financial_cheques` — só o fluxo raro `conciliarChequeComLinha` (conciliar
+ * direto contra um cheque sem lançamento prévio) baixava. Além disso, `financial_cheques` não
+ * tinha colunas para persistir motivo de devolução nem a conta bancária tentada; só existia o
+ * cálculo AO VIVO (`extratoMotivoTexto`) contra o extrato, que se perde se o extrato for reimportado
+ * ou a linha reclassificada.
+ *
+ * FIX: novas colunas em `financial_cheques` (`motivo_devolucao_codigo`, `motivo_devolucao_texto`,
+ * `conta_bancaria_tentativa_id`, `conta_bancaria_tentativa_nome`, `devolvido_em`) via self-heal em
+ * `server/_core/index.ts`. `conciliarLancamento` ganhou uma AUTO-BAIXA (fim da mutation, dentro de
+ * try/catch que nunca bloqueia a conciliação principal): casa o cheque candidato por Nº normalizado
+ * (sem zeros à esquerda) + valor em centavos; se já houver `lancamento_id` vinculado a este entry
+ * usa ele, senão exige match ÚNICO (ambíguo → não faz nada, mesma filosofia "conciliação só
+ * sugestiva"); baixa `conciliado=1`, `status='compensado'` (a menos que já devolvido/sustado/
+ * cancelado) e grava a conta bancária tentativa (resolvida via `company_bank_accounts` a partir da
+ * conta da linha do extrato). `conciliarChequeComLinha` foi alinhado à mesma lógica de status/conta
+ * tentativa para consistência. `desconsiderarChequeDevolvido` (ação explícita do usuário confirmando
+ * que o par de estorno é um cheque devolvido não pago) agora persiste `status='devolvido'` +
+ * `motivo_devolucao_*` (via `parseMotivoDevolucao` sobre a descrição do débito) + conta tentativa
+ * no cheque casado. `cheques.listar` passou a expor as novas colunas e dar PRECEDÊNCIA ao valor
+ * PERSISTIDO sobre o cálculo ao vivo quando o status já é 'devolvido' com motivo/data gravados.
+ * `FinanceiroCheques.tsx` ganhou uma seção "Informações de Conciliação" no dialog de edição do
+ * cheque mostrando a conta bancária tentativa e o motivo de devolução (persistido ou calculado).
+ * ZERO DELETE · ZERO ALTER destrutivo (só ADD COLUMN aditivo).
+ */
+
+/**
  * Rev. 4067 — **RH: FUNCIONÁRIOS DUPLICADOS ENTRE EMPRESAS DO MESMO GRUPO (Efetivo por Obra).**
  *
  * PEDIDO: usuário reportou "Douglas Felippe Ribeiro" aparecendo 2x na tela de Efetivo por Obra, e
