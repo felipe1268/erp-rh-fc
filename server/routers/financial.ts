@@ -2,6 +2,7 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { getDb, createAuditLog, getUserCompanyLinks, getCompaniesForUser } from "../db";
 import { resolveCompanyIds } from "../companyHelper";
 import { TRPCError } from "@trpc/server";
+import { randomUUID } from "crypto";
 
 const CC_MINUSCULAS = new Set(["e","de","da","do","das","dos","em","a","o","as","os","por","para","com","ao","na","no","nas","nos"]);
 function normalizarNomeCC(nome: string): string {
@@ -396,6 +397,84 @@ function _calcParcelas(total: number, numParcelas: number, prazoDias: number, da
     parcelas.push({ num: i + 1, total: numParcelas, valor, vencimento: venc });
   }
   return parcelas;
+}
+
+// Rev. 4070 — Contas a Pagar: consolida por FORNECEDOR + CICLO DE FECHAMENTO (config no
+// cadastro do fornecedor, empresas_terceiras.ciclo_*). Compras de várias obras/OCs do mesmo
+// fornecedor dentro da mesma janela de fechamento viram UMA linha sintética "grp:fech|..."
+// (mesmo padrão de _agruparConciliacao), expandível pra ver os lançamentos originais. Só
+// agrupa fornecedores COM ciclo configurado (≠ 'avista') e só títulos NÃO PAGOS (pago/
+// cancelado passam intactos — já liquidados, não há o que consolidar pra pagamento).
+// Grupos com 1 único item voltam a ser individuais (não vale a pena consolidar 1 título).
+// READ-ONLY (só formata o retorno da query; nada é gravado aqui).
+function _agruparContasPagarPorCicloForn(arr: any[], supplierCycleMap: Map<string, any>): any[] {
+  if (!supplierCycleMap.size) return arr;
+  // Rev. 4070 — os lançamentos vindos de OC costumam gravar fornecedor_nome como
+  // "OC OC-2026-585 — FERRAGENS SANTA RITA" (descrição completa, não só o nome do
+  // fornecedor cadastrado); um match EXATO contra empresas_terceiras nunca bate.
+  // Fix: além do match exato, tenta achar o nome do fornecedor cadastrado como
+  // SUBSTRING do texto (maior nome primeiro, pra evitar colisão entre fornecedores
+  // com nomes parecidos).
+  const candidatesByLen = Array.from(supplierCycleMap.entries()).sort((a, b) => b[0].length - a[0].length);
+  function _matchCycleConfig(fornNormRaw: string): { key: string; config: any } | null {
+    if (!fornNormRaw) return null;
+    const exact = supplierCycleMap.get(fornNormRaw);
+    if (exact) return { key: fornNormRaw, config: exact };
+    for (const [key, config] of candidatesByLen) {
+      if (key.length >= 4 && fornNormRaw.includes(key)) return { key, config };
+    }
+    return null;
+  }
+  const out: any[] = [];
+  const groups = new Map<string, any>();
+  for (const r of arr) {
+    if (r.status === "pago" || r.status === "cancelado") { out.push(r); continue; }
+    const fornNormRaw = _normNomeConc(String(r.fornecedorNome || ""));
+    const match = _matchCycleConfig(fornNormRaw);
+    const cycleConfig = match?.config;
+    if (!cycleConfig || !cycleConfig.cicloPagamento || cycleConfig.cicloPagamento === "avista") {
+      out.push(r); continue;
+    }
+    const fornNorm = match!.key;
+    const fornecedorLabel = cycleConfig.nome || r.fornecedorNome || "Fornecedor";
+    const dataStr = String(r.dataVencimento ?? r.dataCompetencia ?? "").slice(0, 10);
+    const win = dataStr ? _cicloWindow(dataStr, cycleConfig.cicloPagamento, cycleConfig.cicloDataReferencia) : "0000-00";
+    const chave = `fech|${fornNorm}|${win}`;
+    let g = groups.get(chave);
+    if (!g) {
+      g = {
+        id: `grp:${chave}`,
+        agrupado: true,
+        grupoTipo: "fechamento_forn",
+        obraId: null, obraNome: null,
+        descricao: `${fornecedorLabel} · ${_cicloWindowLabel(win, cycleConfig.cicloPagamento)}`,
+        fornecedorNome: fornecedorLabel,
+        contaId: null, contaNome: null, centroCustoId: null, centroCustoNome: null,
+        valorPrevisto: 0, valorRealizado: 0, status: "a_pagar",
+        dataVencimento: _cicloFechamentoDate(win, cycleConfig.cicloPagamento),
+        dataPagamento: null, dataCompetencia: null,
+        formaPagamento: cycleConfig.cicloFormaPagamento || null,
+        origemModulo: "consolidado_fornecedor", origemId: null, origemDescricao: null,
+        anexoUrl: null, anexoNome: null, contaBancariaId: null,
+        tipo: "despesa",
+        diasAtraso: 0,
+        itensIds: [] as number[],
+        itens: [] as any[],
+        _cicloConfig: cycleConfig,
+        _cicloWindow: win,
+      };
+      groups.set(chave, g);
+    }
+    g.valorPrevisto += Number(r.valorPrevisto) || 0;
+    g.itensIds.push(r.id);
+    g.itens.push(r);
+    if (Number(r.diasAtraso || 0) > g.diasAtraso) g.diasAtraso = Number(r.diasAtraso || 0);
+  }
+  for (const g of groups.values()) {
+    if (g.itensIds.length < 2) { out.push(...g.itens); continue; }
+    out.push(g);
+  }
+  return out;
 }
 
 function _agruparConciliacao(arr: any[], supplierCycleMap: Map<string, any> = new Map()): any[] {
@@ -9884,6 +9963,117 @@ export const financialRouter = router({
     return { ok: true, quitado: roll.quitado, acumulado: roll.acumulado, saldo: roll.saldo, status: roll.status };
   }),
 
+  // Rev. 4070 — Paga um GRUPO consolidado de Contas a Pagar (fechamento por fornecedor,
+  // ver _agruparContasPagarPorCicloForn): dá baixa TOTAL em todos os títulos do grupo de uma
+  // vez e, quando a forma é "cheque", registra automaticamente cada cheque digitado pelo
+  // usuário no Controle de Cheques (financial_cheques) já vinculado ao fornecedor, pronto
+  // para casar na Conciliação Bancária depois. Tudo em UMA transação por lançamento (mesmo
+  // padrão de lock de registrarBaixa) + inserts dos cheques.
+  pagarConsolidadoFornecedor: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    itensIds: z.array(z.number()).min(1).max(500),
+    dataPagamento: z.string().optional(),
+    contaBancariaId: z.number().nullable().optional(),
+    formaPagamento: z.string(),
+    fornecedorNome: z.string().optional(),
+    observacoes: z.string().optional(),
+    cheques: z.array(z.object({
+      numero: z.string(),
+      valor: z.number().positive("Valor do cheque inválido."),
+      dataVencimento: z.string(),
+    })).optional(),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    if (input.contaBancariaId != null) {
+      await _assertContaBancariaPertenceEmpresa(db, input.contaBancariaId, input.companyId);
+    }
+    const dataBaixa = (input.dataPagamento || new Date().toISOString().slice(0, 10)).slice(0, 10);
+    const isCheque = input.formaPagamento === "cheque";
+    if (isCheque) {
+      if (!input.cheques || input.cheques.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Informe os cheques do pagamento." });
+      }
+      for (const c of input.cheques) {
+        if (!c.numero || !c.numero.trim()) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Informe o número de todos os cheques." });
+        }
+      }
+    }
+    const entries: any[] = rows(await dbExecute(db,
+      `SELECT id, tipo, valor_previsto AS "valorPrevisto", status
+         FROM financial_entries WHERE company_id=$1 AND id = ANY($2::int[])`,
+      [input.companyId, input.itensIds]));
+    if (entries.length !== input.itensIds.length) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Um ou mais lançamentos não pertencem a esta empresa." });
+    }
+    const pendentes = entries.filter((e) => e.status !== "pago" && e.status !== "cancelado");
+    if (pendentes.length === 0) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Todos os lançamentos deste grupo já foram pagos." });
+    }
+    const totalGrupo = Math.round(pendentes.reduce((s, e) => s + (Number(e.valorPrevisto) || 0), 0) * 100) / 100;
+    if (isCheque) {
+      const totalCheques = Math.round((input.cheques!.reduce((s, c) => s + (Number(c.valor) || 0), 0)) * 100) / 100;
+      if (Math.abs(totalCheques - totalGrupo) > 0.05) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `A soma dos cheques (R$${totalCheques.toFixed(2)}) não bate com o total do grupo (R$${totalGrupo.toFixed(2)}).` });
+      }
+    }
+    const chequesCriados: number[] = [];
+    await (db as any).transaction(async (tx: any) => {
+      for (const e of pendentes) {
+        await _lockEntryBaixas(tx, input.companyId, e.id);
+        const valor = Number(e.valorPrevisto) || 0;
+        await dbExecute(tx,
+          `INSERT INTO financial_entry_baixas
+             (entry_id, company_id, tipo, valor, data, conta_bancaria_id, forma_pagamento,
+              observacoes, quitou_total, criado_por_id, criado_por_nome)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+          [e.id, input.companyId, e.tipo, valor, dataBaixa,
+           input.contaBancariaId ?? null, input.formaPagamento,
+           input.observacoes ?? `Pagamento consolidado — ${input.fornecedorNome || "fornecedor"} (${pendentes.length} título(s))`,
+           1, ctx.user?.id ?? null, ctx.user?.name ?? null]
+        );
+        await _aplicarRollupBaixas(tx, e.id, input.companyId);
+      }
+      if (isCheque) {
+        const loteId = randomUUID();
+        let fornecedorId: number | null = null;
+        if (input.fornecedorNome) {
+          const fr: any[] = rows(await dbExecute(tx,
+            `SELECT id FROM fornecedores WHERE company_id=$1
+               AND (UPPER(TRIM(razao_social))=UPPER(TRIM($2)) OR UPPER(TRIM(nome_fantasia))=UPPER(TRIM($2)))
+             LIMIT 1`,
+            [input.companyId, input.fornecedorNome]));
+          fornecedorId = fr[0]?.id ?? null;
+        }
+        for (const c of input.cheques!) {
+          const dt = new Date(c.dataVencimento + "T12:00:00Z");
+          const mesRef = dt.getUTCMonth() + 1;
+          const anoRef = dt.getUTCFullYear();
+          const res: any = await dbExecute(tx,
+            `INSERT INTO financial_cheques
+               (company_id, conta_bancaria_id, numero_cheque, fornecedor_nome, fornecedor_id, valor,
+                data_vencimento, status, observacao, mes_ref, ano_ref, origem_arquivo, lote_id)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,'pendente',$8,$9,$10,'contas_a_pagar',$11)
+             RETURNING id`,
+            [input.companyId, input.contaBancariaId ?? null, c.numero.trim(), input.fornecedorNome ?? null,
+             fornecedorId, c.valor, c.dataVencimento,
+             `Pagamento consolidado de ${pendentes.length} título(s) em Contas a Pagar`, mesRef, anoRef, loteId]
+          );
+          const id = rows(res)[0]?.id;
+          if (id) chequesCriados.push(id);
+        }
+      }
+    });
+    await createAuditLog({
+      action: "financial_payable_consolidated_paid",
+      userId: ctx.user?.id, companyId: input.companyId,
+      details: `Pagamento consolidado: ${pendentes.length} título(s) de ${input.fornecedorNome || "fornecedor"} — R$${totalGrupo.toFixed(2)} via ${input.formaPagamento}${isCheque ? ` (${input.cheques!.length} cheque(s) registrados no Controle de Cheques)` : ""}.`,
+    });
+    return { ok: true, pagos: pendentes.length, total: totalGrupo, chequesCriados: chequesCriados.length };
+  }),
+
   // Estorna UMA baixa (soft): marca estornada_em e recalcula o rollup (reabre o título
   // para 'a_pagar'/'a_receber' ou 'recebido_parcial' conforme as baixas restantes).
   estornarBaixaItem: protectedProcedure.input(z.object({
@@ -10173,7 +10363,28 @@ export const financialRouter = router({
        ORDER BY data_vencimento ASC NULLS LAST`,
       yearVals
     );
-    return rows(res);
+
+    // Rev. 4070 — carrega ciclos de fechamento configurados no cadastro do fornecedor
+    // (empresas_terceiras.ciclo_*) e consolida os títulos em aberto por fornecedor+janela
+    // de fechamento (ex.: Ferragens Santa Rita: cheque em até 5x/30d). Só afeta fornecedores
+    // com ciclo configurado; os demais seguem individuais como sempre.
+    const cycleRows = await dbExecute(db,
+      `SELECT COALESCE(NULLIF(TRIM(nome_fantasia),''), TRIM(razao_social)) AS nome,
+              ciclo_pagamento AS "cicloPagamento",
+              ciclo_dia_fechamento AS "cicloDiaFechamento",
+              ciclo_num_parcelas AS "cicloNumParcelas",
+              ciclo_prazo_parcela AS "cicloPrazoParcela",
+              ciclo_forma_pagamento AS "cicloFormaPagamento",
+              ciclo_data_referencia AS "cicloDataReferencia"
+         FROM empresas_terceiras
+        WHERE "companyId" IN (${inlineIds(ids)}) AND deleted_at IS NULL
+          AND ciclo_pagamento IS NOT NULL AND ciclo_pagamento <> 'avista'`,
+      []);
+    const supplierCycleMap = new Map<string, any>();
+    for (const r of rows(cycleRows)) {
+      if (r.nome) supplierCycleMap.set(_normNomeConc(String(r.nome)), r);
+    }
+    return _agruparContasPagarPorCicloForn(rows(res), supplierCycleMap);
   }),
 
   // ─────────── Rev. 1630 — Calendário Folha & Benefícios — 12 meses ───────────

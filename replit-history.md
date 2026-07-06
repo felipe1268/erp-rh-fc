@@ -1,3 +1,5 @@
+- **Rev. 4063** — **`/planos`: "14 MÓDULOS DISPONÍVEIS" ERA NÚMERO FIXO — AGORA REFLETE OS MÓDULOS REALMENTE À VENDA.** `SiteVendas.tsx` trocou `"14"` hardcoded por `String(sellableModuleCards.length)`, mesma lista ao vivo de `billing.getCatalog`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4062** — **LOGOTIPO DE CADA MÓDULO NAS TELAS DE VENDA E GESTÃO DE ASSINATURA.** Ícone (`modulesData.ts`) reaproveitado em `AdminPrecos.tsx`, `MinhaAssinatura.tsx`/`ContratarPlano.tsx`, `SaasAdminPanel.tsx`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4061** — **ADMINPRECOS: SALVAR PREÇO FALHAVA COM "This price cannot be archived because it is the default price of its product" (STRIPE).** `adminUpdatePrices` (`billing.ts`) tentava arquivar o Price antigo ANTES de trocar o `default_price` do Product — Stripe recusa. Fix: inverter a ordem. Limpo também 1 Price órfão ativo duplicado deixado pela tentativa anterior. ZERO DELETE · ZERO ALTER destrutivo.

@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4070** — **CONTAS A PAGAR: CONSOLIDAÇÃO DE TÍTULOS POR CICLO DE FECHAMENTO DO FORNECEDOR (CADASTRO) + PAGAMENTO ÚNICO QUE AUTO-DIVIDE EM N CHEQUES E LANÇA NO CONTROLE DE CHEQUES.** Fornecedores com ciclo configurado no cadastro (ex.: Ferragens Santa Rita — cheque em até 5x/30d, fechamento quinzenal) geravam dezenas de títulos separados (1 por OC/obra). Fix: novo `_agruparContasPagarPorCicloForn` (`server/routers/financial.ts`) consolida títulos não pagos do mesmo fornecedor dentro da mesma janela de fechamento numa linha expansível; `getContasAPagarByYear` carrega o mapa de ciclo (`empresas_terceiras.ciclo_*`) e aplica o agrupamento — match exato ou por substring do nome cadastrado (o `fornecedor_nome` de OC vem como descrição completa, não só o nome do fornecedor). Nova mutation `pagarConsolidadoFornecedor` dá baixa em todos os títulos do grupo e, se a forma for cheque, já lança N cheques em `financial_cheques` pra Conciliação Bancária. Novo `PagarConsolidadoDialog.tsx` pré-preenche as parcelas a partir do cadastro; `FinanceiroContasAPagar.tsx` ganhou linha "fechamento" (roxa) com botão "Pagar consolidado". ZERO DELETE · ZERO ALTER destrutivo (100% aditivo).
+
 - **Rev. 4069** — **CONTAS A PAGAR: FILTRO DE MÊS ERA IGNORADO DURANTE A BUSCA + FALTAVA OPÇÃO "ANO TODO".** Usuário selecionou Julho e pesquisou um fornecedor — a lista trouxe títulos de todos os meses. Causa: Rev. 3999 fazia a busca por texto ignorar deliberadamente o mês selecionado (`list = search ? allContas : mesData`). Fix: novo toggle "Ano todo (AAAA)" explícito ao lado dos meses (desliga ao clicar num mês); novo `escopoData` (mês OU ano todo) do qual TUDO deriva (busca, KPIs, contagens, origens, seleção em lote) — o mês agora sempre restringe a lista, inclusive com busca ativa. ZERO DELETE · ZERO ALTER destrutivo (100% client-side).
 
-- **Rev. 4068** — **CONCILIAÇÃO BANCÁRIA NÃO BAIXAVA O CHEQUE NO CONTROLE DE CHEQUES + MOTIVO/CONTA TENTATIVA DE DEVOLUÇÃO AGORA FICAM REGISTRADOS.** Usuário reportou que conciliar (Conciliação Bancária) o pagamento de um cheque não baixava o cheque correspondente no Controle de Cheques; pediu também que motivo de devolução e conta bancária tentada ficassem visíveis lá. Causa: `conciliarLancamento` nunca tocava `financial_cheques` (só o fluxo raro `conciliarChequeComLinha` baixava); faltavam colunas para persistir motivo/conta. Fix: novas colunas em `financial_cheques` (`motivo_devolucao_codigo/texto`, `conta_bancaria_tentativa_id/nome`, `devolvido_em`); `conciliarLancamento` e `conciliarChequeComLinha` agora baixam o cheque (match por Nº normalizado + valor, ambíguo → não faz nada) e gravam a conta tentativa; `desconsiderarChequeDevolvido` persiste status='devolvido'+motivo ao confirmar o par de estorno; `cheques.listar` expõe as novas colunas com precedência sobre o cálculo ao vivo; dialog de edição em `FinanceiroCheques.tsx` mostra as novas informações. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4068** — **CONCILIAÇÃO BANCÁRIA NÃO BAIXAVA O CHEQUE NO CONTROLE DE CHEQUES + MOTIVO/CONTA TENTATIVA DE DEVOLUÇÃO AGORA FICAM REGISTRADOS.** `conciliarLancamento` nunca tocava `financial_cheques`; novas colunas de motivo/conta tentativa + baixa automática do cheque ao conciliar (match por Nº normalizado + valor). ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4067** — **RH: FUNCIONÁRIOS DUPLICADOS ENTRE EMPRESAS DO MESMO GRUPO (Efetivo por Obra).** 12 funcionários reais da FC Engenharia recadastrados do zero em empresa do mesmo grupo em vez de reaproveitar cadastro compartilhado; soft-deletados + nova `checkDuplicateCpfCrossCompanyGroup` bloqueia recorrência. ZERO DELETE definitivo · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4064** — **NOTIFICAÇÕES DE CONTABILIDADE: TOGGLE POR DESTINATÁRIO PARA LIGAR/DESLIGAR O ENCAMINHAMENTO DO ARQUIVO POR E-MAIL.** Novo campo `recebeExtrato:boolean` (default true) em cada destinatário de `contabilidade_alertas_config.emails_json`; filtro aplicado no "Enviar Teste", dialog manual e job automático. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4063** — **`/planos`: "14 MÓDULOS DISPONÍVEIS" ERA NÚMERO FIXO — AGORA REFLETE OS MÓDULOS REALMENTE À VENDA.** `SiteVendas.tsx` trocou `"14"` hardcoded por `String(sellableModuleCards.length)`, mesma lista ao vivo de `billing.getCatalog`. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4062 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4063 e anteriores.
 
 ## User preferences
 

@@ -30,6 +30,8 @@ import {
 // Rev. 3147 — fonte única das projeções + TRAVA "só real" (esconde o seletor
 // Efetivo/Projeção; o backend já não devolve projeções com a trava ligada).
 import { isProjecaoOrigem, FINANCEIRO_SOMENTE_REAL } from "@shared/financeiroProjecao";
+// Rev. 4070 — diálogo de pagamento consolidado por fornecedor/ciclo (cheque auto-dividido em N parcelas)
+import PagarConsolidadoDialog from "./PagarConsolidadoDialog";
 
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
@@ -247,6 +249,10 @@ export default function FinanceiroContasAPagar() {
       return next;
     });
   };
+
+  // Rev. 4070 — grupo de fechamento por fornecedor (agrupado:true, grupoTipo:"fechamento_forn")
+  // selecionado para o diálogo de "Pagar consolidado" (cheque auto-dividido em N parcelas).
+  const [payGroupTarget, setPayGroupTarget] = useState<any | null>(null);
 
   const detailQuery = (trpc as any).financial.getEntryDetalhe.useQuery(
     { id: detailEntryId ?? 0, companyId },
@@ -1173,12 +1179,20 @@ export default function FinanceiroContasAPagar() {
                       // Rev. 1625 — Dentro de cada bucket, monta linhas mistas: consolidadas + individuais
                       type Row =
                         | { kind: "single"; item: any }
-                        | { kind: "group"; key: string; sub: string; label: string; origem: string; items: any[]; total: number; mesAno: string };
+                        | { kind: "group"; key: string; sub: string; label: string; origem: string; items: any[]; total: number; mesAno: string }
+                        | { kind: "fechamento"; item: any };
                       const rows: Row[] = [];
+                      // Rev. 4070 — linhas já pré-agrupadas pelo servidor por FORNECEDOR + CICLO DE
+                      // FECHAMENTO (config no cadastro) saem do fluxo de consolidação visual acima
+                      // (independem do toggle "Consolidado") e ganham render próprio com botão
+                      // "Pagar consolidado".
+                      const fechamentoItems = g.items.filter((c: any) => c?.agrupado && c?.grupoTipo === "fechamento_forn");
+                      const itensNormais = g.items.filter((c: any) => !(c?.agrupado && c?.grupoTipo === "fechamento_forn"));
+                      for (const c of fechamentoItems) rows.push({ kind: "fechamento", item: c });
                       if (consolidateMode) {
                         const groupMap = new Map<string, { sub: string; label: string; origem: string; items: any[]; mesAno: string }>();
                         const singles: any[] = [];
-                        for (const c of g.items) {
+                        for (const c of itensNormais) {
                           const sub = consolidateSubtype(c);
                           const venc = (c.dataVencimento ?? "").slice(0, 7);
                           if (sub && venc) {
@@ -1216,9 +1230,9 @@ export default function FinanceiroContasAPagar() {
                         });
                         rows.push(...allRows);
                       } else {
-                        for (const c of g.items) rows.push({ kind: "single", item: c });
+                        for (const c of itensNormais) rows.push({ kind: "single", item: c });
                       }
-                      const totalRowsCount = rows.reduce((n, r) => n + (r.kind === "group" ? r.items.length : 1), 0);
+                      const totalRowsCount = rows.reduce((n, r) => n + (r.kind === "group" ? r.items.length : r.kind === "fechamento" ? (r.item.itensIds?.length ?? 1) : 1), 0);
                       return (
                       <Fragment key={g.label}>
                         {/* Cabeçalho de grupo */}
@@ -1242,6 +1256,140 @@ export default function FinanceiroContasAPagar() {
                           </td>
                         </tr>
                         {rows.map((r) => {
+                          // ─── LINHA CONSOLIDADA POR FORNECEDOR/CICLO DE FECHAMENTO (Rev. 4070) ───
+                          if (r.kind === "fechamento") {
+                            const grp = r.item;
+                            const isExpanded = expandedGroups.has(grp.id);
+                            const itens: any[] = grp.itens ?? [];
+                            const pagosCount = itens.filter((x: any) => x.status === "pago").length;
+                            const vencCount = itens.filter((x: any) => x.dataVencimento && x.dataVencimento.slice(0,10) < hojeStr && x.status !== "pago").length;
+                            return (
+                              <Fragment key={grp.id}>
+                                <tr
+                                  onClick={() => toggleGroupExpand(grp.id)}
+                                  className="border-b border-slate-100 cursor-pointer hover:bg-purple-50/40 bg-purple-50/20"
+                                >
+                                  <td className="px-2 py-2.5" />
+                                  <td className="px-3 py-2.5 whitespace-nowrap">
+                                    <div className="flex flex-col leading-tight">
+                                      <span className="text-sm font-semibold tabular-nums text-slate-800">{fmtDateBR(grp.dataVencimento)}</span>
+                                      <span className="text-[10px] text-slate-500">fechamento fornecedor</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-3 py-2.5 whitespace-nowrap">
+                                    <span className="text-xs font-mono font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
+                                      {isExpanded ? <ChevronLeft className="w-3 h-3 rotate-90" /> : <ChevronRight className="w-3 h-3" />}
+                                      {itens.length}×
+                                    </span>
+                                  </td>
+                                  <td className="px-2 py-2.5">
+                                    <div className="flex items-center gap-1.5">
+                                      <p className="text-sm font-bold text-slate-900">{grp.fornecedorNome}</p>
+                                    </div>
+                                    <p className="text-[11px] text-slate-500 mt-0.5">
+                                      {grp.descricao}
+                                      {pagosCount > 0 && <span className="text-green-600"> · {pagosCount} pago(s)</span>}
+                                      {vencCount > 0 && <span className="text-red-600"> · {vencCount} vencido(s)</span>}
+                                    </p>
+                                  </td>
+                                  <td className="px-2 py-2.5">
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border self-start bg-purple-50 text-purple-700 border-purple-200">
+                                      <Users className="w-2.5 h-2.5" />
+                                      Consolidado fornecedor
+                                    </span>
+                                  </td>
+                                  <td className="px-2 py-2.5 text-right whitespace-nowrap">
+                                    <span className="text-sm font-bold tabular-nums text-slate-900">{formatBRL(Number(grp.valorPrevisto ?? 0))}</span>
+                                  </td>
+                                  <td className="px-2 py-2.5 text-center">
+                                    {pagosCount === itens.length ? (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-green-100 text-green-700 border border-green-200">
+                                        <CheckCircle className="w-3 h-3" />Pago
+                                      </span>
+                                    ) : vencCount > 0 ? (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-700 border border-red-200">
+                                        <AlertTriangle className="w-3 h-3" />Vencido
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-orange-100 text-orange-700 border border-orange-200">
+                                        <Clock className="w-3 h-3" />A Pagar
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="px-2 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
+                                    <div className="inline-flex items-center gap-1">
+                                      <Button size="sm" variant="outline" className="h-7 w-7 p-0" title={isExpanded ? "Recolher" : "Expandir"}
+                                        onClick={() => toggleGroupExpand(grp.id)}>
+                                        <ChevronRight className={`w-4 h-4 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+                                      </Button>
+                                      <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white h-7 px-2.5 text-xs"
+                                        onClick={() => setPayGroupTarget(grp)}>
+                                        <CheckCircle className="w-3 h-3 mr-1" />Pagar consolidado
+                                      </Button>
+                                    </div>
+                                  </td>
+                                </tr>
+                                {isExpanded && itens.map((c: any) => {
+                                  const vencida = c.dataVencimento && c.dataVencimento.slice(0,10) < hojeStr && c.status !== "pago";
+                                  const desc = describeEntry(c);
+                                  return (
+                                    <tr key={c.id}
+                                      onClick={(e) => {
+                                        const isInteractive = (e.target as HTMLElement).closest("button, [role=checkbox], input, a");
+                                        if (isInteractive) return;
+                                        setDetailEntryId(c.id);
+                                      }}
+                                      className="hover:bg-blue-50/30 cursor-pointer border-b border-slate-100">
+                                      <td className="px-2 py-2" />
+                                      <td className="px-2 py-2 whitespace-nowrap pl-6">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-purple-300 text-xs">└─</span>
+                                          <span className={`text-xs tabular-nums ${vencida ? "text-red-700" : c.status === "pago" ? "text-green-700" : "text-slate-600"}`}>
+                                            {fmtDateBR(c.dataVencimento)}
+                                          </span>
+                                        </div>
+                                      </td>
+                                      <td className="px-2 py-2 whitespace-nowrap">
+                                        <span className="text-[11px] font-mono text-slate-500">#{c.id}</span>
+                                      </td>
+                                      <td className="px-2 py-2 max-w-[190px]">
+                                        <p className="text-xs text-slate-700 truncate" title={desc}>{desc}</p>
+                                      </td>
+                                      <td className="px-2 py-2">
+                                        <span className="text-[11px] text-slate-500">{categoriaFor(c)}</span>
+                                      </td>
+                                      <td className="px-2 py-2 text-right whitespace-nowrap">
+                                        <span className={`text-xs font-semibold tabular-nums ${vencida ? "text-red-700" : c.status === "pago" ? "text-green-700" : "text-slate-700"}`}>
+                                          {formatBRL(Number(c.valorPrevisto ?? 0))}
+                                        </span>
+                                      </td>
+                                      <td className="px-2 py-2 text-center">
+                                        {c.status === "pago" ? (
+                                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-700 border border-green-200">
+                                            <CheckCircle className="w-2.5 h-2.5" />Pago
+                                          </span>
+                                        ) : vencida ? (
+                                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-red-100 text-red-700 border border-red-200">
+                                            Vencido
+                                          </span>
+                                        ) : (
+                                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-orange-100 text-orange-700 border border-orange-200">
+                                            A Pagar
+                                          </span>
+                                        )}
+                                      </td>
+                                      <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                                        <Button size="sm" variant="outline" className="h-6 w-6 p-0"
+                                          onClick={() => setDetailEntryId(c.id)}>
+                                          <Eye className="w-3 h-3" />
+                                        </Button>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </Fragment>
+                            );
+                          }
                           // ─── LINHA CONSOLIDADA ───
                           if (r.kind === "group") {
                             const gp = r;
@@ -2107,6 +2255,19 @@ export default function FinanceiroContasAPagar() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Rev. 4070 — Pagamento consolidado por fornecedor/ciclo (cheque auto-dividido em N parcelas) */}
+        <PagarConsolidadoDialog
+          open={!!payGroupTarget}
+          group={payGroupTarget}
+          companyId={companyId}
+          bankAccounts={bankAccounts ?? []}
+          onClose={() => setPayGroupTarget(null)}
+          onSuccess={() => {
+            setPayGroupTarget(null);
+            refetch();
+          }}
+        />
 
         {/* Rev. 1620 — Modal pagamento em lote (Onda 2) */}
         <Dialog open={showBulkPay} onOpenChange={setShowBulkPay}>

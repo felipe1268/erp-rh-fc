@@ -1,4 +1,52 @@
 /**
+ * Rev. 4070 — **CONTAS A PAGAR: CONSOLIDAÇÃO DE TÍTULOS POR CICLO DE FECHAMENTO DO FORNECEDOR
+ * (CADASTRO) + PAGAMENTO ÚNICO QUE AUTO-DIVIDE EM N CHEQUES E LANÇA NO CONTROLE DE CHEQUES.**
+ *
+ * PEDIDO: fornecedores com ciclo de pagamento configurado no cadastro (ex.: Ferragens Santa Rita —
+ * cheque em até 5x/30 dias, fechamento quinzenal) geram DEZENAS de títulos separados em Contas a
+ * Pagar (1 por OC/obra), obrigando o financeiro a conferir e pagar cada um manualmente. Pedido:
+ * consolidar automaticamente compras do MESMO fornecedor dentro da MESMA janela de fechamento em
+ * UMA linha (expansível pra ver as OCs de origem); ao pagar essa linha consolidada, sugerir a forma
+ * de pagamento padrão do cadastro, dividir o total em N parcelas de cheque conforme o cadastro,
+ * deixar o usuário digitar o número de cada cheque, e já lançar esses cheques no Controle de
+ * Cheques para conciliação bancária posterior. Agrupamento só se aplica a fornecedores COM ciclo
+ * configurado (`empresas_terceiras.ciclo_pagamento`); os demais continuam individuais como sempre.
+ *
+ * CAUSA-RAIZ: não havia nenhuma noção de "ciclo de fechamento" na leitura de Contas a Pagar —
+ * `getContasAPagarByYear` sempre devolvia 1 linha por `financial_entries`, refletindo 1:1 a origem
+ * (1 OC = 1 título), mesmo quando o cadastro do fornecedor (Rev. anterior de Cadastro de
+ * Fornecedores) já guardava ciclo/parcelas/forma de pagamento padrão — essa config nunca era lida
+ * em Contas a Pagar. Além disso, o `fornecedor_nome` gravado nos lançamentos vindos de OC vem como
+ * a DESCRIÇÃO completa ("OC OC-2026-585 — FERRAGENS SANTA RITA"), não só o nome do fornecedor
+ * cadastrado — um match exato contra `empresas_terceiras` nunca bateria.
+ *
+ * FIX: novo helper `_agruparContasPagarPorCicloForn` (server/routers/financial.ts) — dado o array de
+ * títulos do ano e um mapa de config de ciclo por fornecedor (`empresas_terceiras` com
+ * `ciclo_pagamento IS NOT NULL AND <> 'avista'`), agrupa títulos NÃO PAGOS do mesmo fornecedor
+ * dentro da mesma janela de fechamento (`_cicloWindow`, helper já existente da Conciliação) em uma
+ * linha sintética `{agrupado:true, grupoTipo:"fechamento_forn", itensIds, itens, _cicloConfig,
+ * _cicloWindow}`; grupos com 1 único item voltam a ser individuais. Para casar o `fornecedor_nome`
+ * "sujo" das OCs contra o cadastro, o match tenta EXATO primeiro e cai para SUBSTRING (nome
+ * cadastrado, do maior pro menor, mín. 4 chars, contido no texto do lançamento) — resolve o caso
+ * real da Ferragens Santa Rita sem exigir faxina retroativa nos dados. `getContasAPagarByYear` passou
+ * a carregar esse mapa e aplicar o agrupamento antes de retornar. Nova mutation
+ * `pagarConsolidadoFornecedor`: recebe os `itensIds` do grupo + forma de pagamento + (se cheque) a
+ * lista de parcelas com número/valor/vencimento digitados pelo usuário; dentro de `db.transaction`,
+ * dá baixa em cada título pendente (reusa `_aplicarRollupBaixas`) e, se a forma for cheque, insere N
+ * linhas em `financial_cheques` (resolve `fornecedorId` por nome, `origem_arquivo='contas_a_pagar'`,
+ * `lote_id` compartilhado) já prontas para a Conciliação Bancária localizar depois; valida que a soma
+ * dos cheques bate com o total do grupo (tolerância R$0,05). Novo componente
+ * `PagarConsolidadoDialog.tsx` — pré-preenche as parcelas espelhando o `_calcParcelas` do backend a
+ * partir da config do cadastro (forma padrão + nº parcelas + prazo entre elas), exige o número de
+ * cada cheque antes de habilitar o botão. `FinanceiroContasAPagar.tsx` ganhou um tipo de linha
+ * "fechamento" (roxo, sempre visível independente do toggle "Consolidado" — que é outro agrupamento,
+ * por tipo de despesa/mês, não por fornecedor), expansível para ver as OCs de origem, com botão
+ * "Pagar consolidado".
+ * ZERO DELETE · ZERO ALTER destrutivo (100% aditivo — nenhuma coluna/tabela removida; leitura
+ * agrupa em memória, escrita reusa os caminhos de baixa/cheque já existentes).
+ */
+
+/**
  * Rev. 4069 — **CONTAS A PAGAR: FILTRO DE MÊS ERA IGNORADO DURANTE A BUSCA + FALTAVA OPÇÃO "ANO TODO".**
  *
  * PEDIDO: usuário selecionou o mês de Julho em Contas a Pagar e buscou por um fornecedor — a lista
