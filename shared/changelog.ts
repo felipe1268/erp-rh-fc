@@ -1,4 +1,38 @@
 /**
+ * Rev. 4074 — **CONTAS A PAGAR: FERRAGENS SANTA RITA (E OUTROS FORNECEDORES COM CICLO) NÃO
+ * CONSOLIDAVAM 100% DAS OCS — LANÇAMENTO FINANCEIRO DA OC NUNCA GRAVAVA `fornecedor_nome`.**
+ *
+ * PEDIDO: usuário reportou que, na tela de Contas a Pagar do fornecedor Ferragens Santa Rita
+ * (ciclo `quinzenal_semana` cadastrado), várias OCs individuais continuavam soltas ao lado do
+ * grupo consolidado "25x", impedindo dar baixa corretamente; pediu explicação e uma varredura
+ * retroativa (para trás e para frente no tempo) que corrigisse os lançamentos já lançados.
+ *
+ * CAUSA-RAIZ: `_agruparContasPagarPorCicloForn` (Rev. 4070, `server/routers/financial.ts`) só
+ * consegue casar um título ao ciclo do fornecedor lendo `r.fornecedorNome` — mas o INSERT do
+ * lançamento financeiro gerado a partir da OC (`server/routers/compras.ts`, integração
+ * "aprovada"/"entregue"/"entregue_parcial") NUNCA gravava a coluna `fornecedor_nome` na tabela
+ * `financial_entries` (só usava o nome dentro do texto de `descricao`). Resultado: 142 de 263
+ * lançamentos com `origem_modulo IN ('compras','compra_oc')` em aberto tinham `fornecedor_nome`
+ * NULO em todo o sistema (não só Ferragens Santa Rita) — o matcher recebia string vazia e o
+ * título caía sempre como linha individual, mesmo tendo ciclo configurado e sendo "normal"
+ * (não-FD).
+ *
+ * FIX: (1) `salvarStatusOrdem`/integração financeira em `compras.ts` agora grava
+ * `fornecedorNome: ocFin.fornecedorNome` no INSERT do lançamento; (2)
+ * `getContasAPagarByYear` (`financial.ts`) ganhou fallback defensivo
+ * `COALESCE(NULLIF(TRIM(e.fornecedor_nome),''), co.fornecedor_nome)` via o LEFT JOIN já existente
+ * com `compras_ordens`, blindando contra qualquer lançamento futuro que volte a nascer sem o
+ * campo; (3) VARREDURA RETROATIVA executada diretamente no banco: `UPDATE financial_entries SET
+ * fornecedor_nome = co.fornecedor_nome FROM compras_ordens co WHERE ... fornecedor_nome IS NULL
+ * OR TRIM='' ` — corrigiu 137 dos 144 lançamentos órfãos (os 7 restantes referenciam OCs já
+ * excluídas do banco, sem fonte pra recuperar o nome; 2 deles já `cancelado`, fora do fluxo).
+ * Simulação pós-fix confirma: Ferragens Santa Rita passa de ~26 títulos soltos pra 44
+ * consolidados na janela de fechamento 01/07 + 9 na janela de 15/07 (FD continua corretamente
+ * de fora, regra da Rev. 4072). ZERO DELETE · 1 UPDATE em massa restrito a `fornecedor_nome IS
+ * NULL/vazio` (sem tocar valor/status/vencimento) · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4073 — **CONDIÇÕES DE PAGAMENTO (COTAÇÕES) PASSAM A RESPEITAR O CICLO DE FECHAMENTO
  * CADASTRADO DO FORNECEDOR, COM EXCEÇÃO POR PRODUTO E EXCEÇÃO MANUAL PONTUAL.**
  *

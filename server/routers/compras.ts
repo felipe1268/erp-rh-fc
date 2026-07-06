@@ -9375,6 +9375,12 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
               status: novoStatus,
               origemModulo: "compras",
               origemId: ocFin.id,
+              // Rev. 4074 — fornecedorNome NUNCA era gravado no lançamento (só entrava
+              // dentro do texto de `descricao`), o que quebrava o match do agrupamento
+              // por ciclo de fechamento (_agruparContasPagarPorCicloForn lê r.fornecedorNome
+              // cru). Sem isso, títulos de fornecedor com ciclo configurado ficavam soltos
+              // em vez de consolidar (ex.: Ferragens Santa Rita).
+              fornecedorNome: ocFin.fornecedorNome ?? null,
               descricao: `OC ${ocFin.numeroOc}${ocFin.fornecedorNome ? " — " + ocFin.fornecedorNome : ""}`,
             } as any).returning({ id: (financialEntries as any).id });
             if (entry?.id) {

@@ -10370,7 +10370,7 @@ export const financialRouter = router({
               e.forma_pagamento AS "formaPagamento",
               e.origem_modulo AS "origemModulo", e.origem_id AS "origemId",
               e.origem_descricao AS "origemDescricao",
-              e.fornecedor_nome AS "fornecedorNome",
+              COALESCE(NULLIF(TRIM(e.fornecedor_nome), ''), co.fornecedor_nome) AS "fornecedorNome",
               e.anexo_url AS "anexoUrl", e.anexo_nome AS "anexoNome",
               e.conta_bancaria_id AS "contaBancariaId",
               e.tipo,

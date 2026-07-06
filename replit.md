@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4074** — **CONTAS A PAGAR: FERRAGENS SANTA RITA (E OUTROS FORNECEDORES COM CICLO) NÃO CONSOLIDAVAM 100% DAS OCS — LANÇAMENTO FINANCEIRO DA OC NUNCA GRAVAVA `fornecedor_nome`.** Usuário reportou que várias OCs da Ferragens Santa Rita ficavam soltas ao lado do grupo consolidado "25x", impedindo dar baixa corretamente, e pediu explicação + varredura retroativa. Causa-raiz: `_agruparContasPagarPorCicloForn` (Rev. 4070) casa o título ao ciclo lendo `r.fornecedorNome`, mas a integração financeira da OC (`server/routers/compras.ts`) NUNCA gravava essa coluna em `financial_entries` (só usava o nome dentro do texto de `descricao`) — 142 de 263 lançamentos de OC em aberto no sistema inteiro tinham `fornecedor_nome` NULO, caindo sempre como linha individual mesmo com ciclo configurado. Fix: (1) INSERT do lançamento agora grava `fornecedorNome`; (2) `getContasAPagarByYear` ganhou fallback `COALESCE(fornecedor_nome, co.fornecedor_nome)` via join existente; (3) varredura retroativa direto no banco corrigiu 137/144 lançamentos órfãos (os 7 restantes referenciam OCs já excluídas, sem fonte pra recuperar o nome). Ferragens Santa Rita passa de ~26 títulos soltos pra 44 consolidados na janela de 01/07 + 9 na de 15/07. ZERO DELETE · 1 UPDATE em massa restrito a `fornecedor_nome IS NULL/vazio` · ZERO ALTER destrutivo.
+
 - **Rev. 4073** — **CONDIÇÕES DE PAGAMENTO (COTAÇÕES) PASSAM A RESPEITAR O CICLO DE FECHAMENTO CADASTRADO DO FORNECEDOR, COM EXCEÇÃO POR PRODUTO E EXCEÇÃO MANUAL PONTUAL.** Usuário exigiu que compradores parem de escolher livremente forma/parcelamento de pagamento por cotação quando o fornecedor já tem ciclo de fechamento cadastrado (`empresas_terceiras.cicloPagamento`) — regra confirmada: "O que não tiver a condição de fechamento cadastrado, fica livre. O que tiver, deve ser respeitado." Exceções por produto (`regrasProdutoJson`) continuam com prioridade sobre o ciclo geral; nova coluna `excecao_manual` em `comprasCotacaoFornecedores` permite ao comprador declarar uma exceção pontual (ex.: compra emergencial) que libera a condição só para aquela cotação. No modal "Condições de Pagamento" (`Cotacoes.tsx`), quando há condição efetiva (regra de produto > ciclo do fornecedor) e a exceção manual não está marcada, a tela fica travada (forma/parcelamento forçados, aba "Fechamento" custom escondida) com banner + checkbox "Esta compra é uma exceção" para liberar. Fornecedor sem ciclo continua 100% livre. ZERO DELETE · ZERO ALTER destrutivo (1 coluna aditiva).
 
-- **Rev. 4072** — **CONTAS A PAGAR CONSOLIDADO: NUNCA AGRUPAR/MISTURAR TÍTULOS DE FATURAMENTO DIRETO (FD) NO CICLO DE FECHAMENTO PRÓPRIO DA FC.** Usuário exigiu, de forma explícita e crítica, que a consolidação por ciclo de fechamento do fornecedor (Rev. 4070/4071) nunca inclua compras de Faturamento Direto (`modalidade_fd` = `fd_cliente`/`fd_terceiro`/`fd_fc`), em que quem paga o fornecedor é o CLIENTE (ou terceiro) diretamente — misturar esses títulos no grupo/cheque consolidado da FC juntaria dinheiro que não é desembolso da empresa com o fluxo de caixa real dela. Causa: os agrupadores (`_agruparContasPagarPorCicloForn`, `_agruparConciliacao`) nunca checavam a modalidade da OC de origem, e `getContasAPagarByYear` nem carregava essa informação. Fix (`server/routers/financial.ts`): novo helper `_isFdModalidade()` bloqueia o agrupamento por ciclo sempre que o título for FD (continua aparecendo individual, nunca dentro do grupo); a query principal ganhou `LEFT JOIN compras_ordens co` + `modalidadeFd`, exigindo re-qualificar as colunas com o alias `e.`. Verificado em produção: 44 títulos FD hoje passam por Contas a Pagar. ZERO DELETE · ZERO ALTER destrutivo (100% leitura).
-
 ### 5 one-liners
+
+- **Rev. 4072** — **CONTAS A PAGAR CONSOLIDADO: NUNCA AGRUPAR/MISTURAR TÍTULOS DE FATURAMENTO DIRETO (FD) NO CICLO DE FECHAMENTO PRÓPRIO DA FC.** Novo `_isFdModalidade()` bloqueia agrupamento por ciclo sempre que o título for FD; query ganhou `LEFT JOIN compras_ordens` + `modalidadeFd`. ZERO DELETE · ZERO ALTER destrutivo (100% leitura).
 
 - **Rev. 4071** — **CONTAS A PAGAR CONSOLIDADO: JANELA DE FECHAMENTO ERA CALCULADA PELO VENCIMENTO INDIVIDUAL DA OC, NÃO PELA DATA DA COMPRA — FRAGMENTAVA O AGRUPAMENTO.** Causa dupla: janela calculada via `dataVencimento` (varia OC a OC) em vez de `dataCompetencia`; Madeireira Andorra sem ciclo cadastrado no banco. Fix usa `dataCompetencia ?? dataVencimento`. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4068** — **CONCILIAÇÃO BANCÁRIA NÃO BAIXAVA O CHEQUE NO CONTROLE DE CHEQUES + MOTIVO/CONTA TENTATIVA DE DEVOLUÇÃO AGORA FICAM REGISTRADOS.** `conciliarLancamento` nunca tocava `financial_cheques`; novas colunas de motivo/conta tentativa + baixa automática do cheque ao conciliar (match por Nº normalizado + valor). ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4067** — **RH: FUNCIONÁRIOS DUPLICADOS ENTRE EMPRESAS DO MESMO GRUPO (Efetivo por Obra).** 12 funcionários reais da FC Engenharia recadastrados do zero em empresa do mesmo grupo em vez de reaproveitar cadastro compartilhado; soft-deletados + nova `checkDuplicateCpfCrossCompanyGroup` bloqueia recorrência. ZERO DELETE definitivo · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4066 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4067 e anteriores.
 
 ## User preferences
 
