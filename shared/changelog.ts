@@ -1,4 +1,36 @@
 /**
+ * Rev. 4078 — **FATURAMENTO DIRETO (FD): NOMENCLATURA UNIFICADA E MAIS CLARA — "FORA
+ * DO CONTRATO" x "ABATE CONTRATO" — EM CONTAS A PAGAR + PDF DA OC, COM LEGENDA
+ * EXPLICATIVA.**
+ *
+ * PEDIDO: usuário reportou que os selos "FD Cliente" / "FD" / "FD Terceiro" (Rev. 4076,
+ * 4077) confundiam mais do que ajudavam. Existem só 2 conceitos de negócio, não 3: FD
+ * onde o cliente paga direto ao fornecedor e o valor NÃO desconta do contrato da FC
+ * (`modalidade_fd = fd_cliente`), e FD onde o cliente também paga direto, mas o valor
+ * DESCONTA do contrato da FC (`modalidade_fd = fd_fc` OU `fd_terceiro` — o segundo é só
+ * o nome que `fd_fc` ganha quando a OC nasce de uma cotação, ver `compras.ts`; não é um
+ * 3º conceito). Os 2 selos separados "FD" e "FD Terceiro" pra essa MESMA situação eram a
+ * raiz da confusão.
+ *
+ * FIX: `FinanceiroContasAPagar.tsx` — `fdBadgeInfo()` agora retorna só 2 rótulos: "FD
+ * Fora do Contrato" (azul, `fd_cliente`) e "FD Abate Contrato" (âmbar, `fd_fc`/
+ * `fd_terceiro`), cada um com tooltip explicando a regra em linguagem direta; filtro
+ * (Rev. 4077) evolui de 3 pra 4 opções (Todos / FD Fora do Contrato / FD Abate Contrato
+ * / Sem FD); novo `FdLegendaPopover` (ícone "O que é FD?" ao lado do filtro, funciona por
+ * clique — inclusive mobile) explica os 2 tipos em texto corrido, sem precisar caçar
+ * tooltip linha a linha. `purchaseOrderPdf.ts` — `tipoFatLabel` do PDF da OC alinhado à
+ * mesma nomenclatura ("FD Fora do Contrato" / "FD Abate Contrato"), e ganhou de brinde a
+ * correção de um bug real: OCs `fd_terceiro` caíam silenciosamente no default "Empresa
+ * FC" no PDF por não estarem cobertas na condição antiga. `fdApprovalPdf.ts` já é
+ * exclusivo do fluxo `fd_cliente` (não exibe modalidade ambígua), então não precisou de
+ * mudança.
+ *
+ * ESCOPO: ZERO mudança nos valores gravados em `modalidade_fd` (continuam
+ * `fd_cliente`/`fd_fc`/`fd_terceiro` como sempre foram) — tudo aqui é camada de
+ * EXIBIÇÃO. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+ */
+
+/**
  * Rev. 4077 — **CONTAS A PAGAR: NOVO FILTRO "SÓ FD / SEM FD" PRA ISOLAR TÍTULOS DE
  * FATURAMENTO DIRETO NA LISTA.**
  *

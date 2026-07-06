@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4078** — **FATURAMENTO DIRETO (FD): NOMENCLATURA UNIFICADA E MAIS CLARA — "FORA DO CONTRATO" x "ABATE CONTRATO" — EM CONTAS A PAGAR + PDF DA OC, COM LEGENDA EXPLICATIVA.** Usuário reportou que os 3 selos ("FD Cliente"/"FD"/"FD Terceiro") confundiam mais do que ajudavam — só existem 2 conceitos reais: desconta ou não desconta do contrato da FC (`fd_fc` e `fd_terceiro` são o MESMO conceito, não 2). Fix: `fdBadgeInfo()` unificado em 2 rótulos ("FD Fora do Contrato" azul / "FD Abate Contrato" âmbar) com tooltip; filtro evolui pra 4 opções; novo `FdLegendaPopover` (ícone "O que é FD?", clicável) explica os 2 tipos; `purchaseOrderPdf.ts` alinhado à mesma nomenclatura + corrigido bug que fazia OCs `fd_terceiro` caírem no default "Empresa FC". ZERO mudança nos valores gravados — 100% camada de exibição. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+
 - **Rev. 4077** — **CONTAS A PAGAR: NOVO FILTRO "SÓ FD / SEM FD" PRA ISOLAR TÍTULOS DE FATURAMENTO DIRETO NA LISTA.** Na sequência da Rev. 4076 (selo visual "FD"), usuário pediu um filtro pra ver só os títulos FD de uma vez, sem caçar o selo manualmente. Fix: `FinanceiroContasAPagar.tsx` ganhou o estado `fdFilter` ("all"/"fd"/"normal") + toggle de 3 botões ao lado do filtro de Origem, reaproveitando `fdBadgeInfo()` (Rev. 4076) como critério único de verdade. ZERO DELETE · ZERO UPDATE · ZERO ALTER (100% frontend).
 
-- **Rev. 4076** — **CONTAS A PAGAR: SELO VISUAL "FD" NAS LINHAS DE FATURAMENTO DIRETO — DEIXA CLARO POR QUE ESSAS OCS NÃO ENTRAM NO AGRUPAMENTO CONSOLIDADO POR CICLO DO FORNECEDOR.** Usuário reportou que ainda via OCs da Ferragens Santa Rita "soltas" ao lado do grupo consolidado. Investigação (Neon direto) confirmou que TODAS têm `modalidade_fd = fd_cliente` — comportamento correto por desenho (Rev. 4072: FD é dinheiro que o cliente paga direto ao fornecedor, a FC nunca desembolsa). O problema era só de exibição: essas linhas apareciam idênticas às normais, sem indicador. Fix: `FinanceiroContasAPagar.tsx` ganhou `fdBadgeInfo()`/`<FdBadge>` — selo colorido ("FD Cliente" azul / "FD"/"FD Terceiro" âmbar, com tooltip explicando a regra) nos 3 pontos de exibição da linha, usando o campo `modalidadeFd` que o backend já retornava. ZERO DELETE · ZERO UPDATE · ZERO ALTER (100% frontend).
-
 ### 5 one-liners
+
+- **Rev. 4076** — **CONTAS A PAGAR: SELO VISUAL "FD" NAS LINHAS DE FATURAMENTO DIRETO — DEIXA CLARO POR QUE ESSAS OCS NÃO ENTRAM NO AGRUPAMENTO CONSOLIDADO POR CICLO DO FORNECEDOR.** Usuário reportou que ainda via OCs da Ferragens Santa Rita "soltas" ao lado do grupo consolidado. Investigação (Neon direto) confirmou que TODAS têm `modalidade_fd = fd_cliente` — comportamento correto por desenho. Fix: `FinanceiroContasAPagar.tsx` ganhou `fdBadgeInfo()`/`<FdBadge>` — selo colorido com tooltip nos 3 pontos de exibição da linha. ZERO DELETE · ZERO UPDATE · ZERO ALTER (100% frontend).
 
 - **Rev. 4075** — **CONTAS A PAGAR: FECHAMENTO POR CICLO PASSA A ANCORAR NA DATA DE LANÇAMENTO NO SISTEMA (COMPETÊNCIA), NÃO MAIS NO `dataVencimento` DIGITADO À MÃO NA OC — COM SUPORTE A LANÇAMENTO RETROATIVO.** Janela de fechamento já usava `dataCompetencia`; o problema era `data_vencimento` digitado errado pelo comprador. Fix: `atualizarStatusOrdem` passa a usar `dataCompetencia` como vencimento p/ fornecedor com ciclo + novo input `dataLancamento` p/ lançamento retroativo. ZERO DELETE · 1 UPDATE restrito a 7 casos · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4072** — **CONTAS A PAGAR CONSOLIDADO: NUNCA AGRUPAR/MISTURAR TÍTULOS DE FATURAMENTO DIRETO (FD) NO CICLO DE FECHAMENTO PRÓPRIO DA FC.** Novo `_isFdModalidade()` bloqueia agrupamento por ciclo sempre que o título for FD; query ganhou `LEFT JOIN compras_ordens` + `modalidadeFd`. ZERO DELETE · ZERO ALTER destrutivo (100% leitura).
 
-- **Rev. 4071** — **CONTAS A PAGAR CONSOLIDADO: JANELA DE FECHAMENTO ERA CALCULADA PELO VENCIMENTO INDIVIDUAL DA OC, NÃO PELA DATA DA COMPRA — FRAGMENTAVA O AGRUPAMENTO.** Causa dupla: janela calculada via `dataVencimento` (varia OC a OC) em vez de `dataCompetencia`; Madeireira Andorra sem ciclo cadastrado no banco. Fix usa `dataCompetencia ?? dataVencimento`. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4070 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4071 e anteriores.
 
 ## User preferences
 

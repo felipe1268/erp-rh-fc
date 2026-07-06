@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatNumeroOcDisplay } from "@shared/numeroOc";
 // Rev. 1626 — single source of truth para origens financeiras
 import {
@@ -137,21 +138,67 @@ function categoriaFor(c: any): string {
   return ORIGEM_LABELS[c.origemModulo] ?? "Sem categoria";
 }
 
-// Rev. 4076 — Selo "FD" pra deixar visível por que o título NÃO entra no
-// agrupamento por ciclo de fechamento do fornecedor (Rev. 4072): é Faturamento
-// Direto, dinheiro que o CLIENTE paga direto ao fornecedor — a FC não desembolsa.
+// Rev. 4078 — Antes existiam 3 selos (FD Cliente / FD / FD Terceiro) pros 3 valores
+// crus de modalidade_fd, mas na prática só existem 2 conceitos de negócio: o valor
+// PODE ou NÃO ser descontado do contrato da FC. `fd_fc` e `fd_terceiro` são o MESMO
+// conceito (o segundo só é o nome que `fd_fc` ganha quando a OC nasce de uma
+// cotação — ver compras.ts) e por isso viram um selo único. ZERO mudança nos valores
+// gravados no banco — só a camada de exibição foi unificada/renomeada.
 function fdBadgeInfo(c: any): { label: string; cls: string; title: string } | null {
   const m = c?.modalidadeFd;
   if (m === "fd_cliente") {
-    return { label: "FD Cliente", cls: "bg-blue-100 text-blue-700 border-blue-200", title: "Faturamento Direto: o cliente paga direto ao fornecedor — não entra no ciclo de fechamento consolidado da FC" };
+    return {
+      label: "FD Fora do Contrato",
+      cls: "bg-blue-100 text-blue-700 border-blue-200",
+      title: "Faturamento Direto — Fora do Contrato: o cliente paga direto ao fornecedor e esse valor NÃO é descontado do seu contrato (é adicional, fora do escopo contratado).",
+    };
   }
-  if (m === "fd_fc") {
-    return { label: "FD", cls: "bg-amber-100 text-amber-700 border-amber-200", title: "Faturamento Direto (cobrança via terceiro) — não entra no ciclo de fechamento consolidado da FC" };
-  }
-  if (m === "fd_terceiro") {
-    return { label: "FD Terceiro", cls: "bg-amber-100 text-amber-700 border-amber-200", title: "Faturamento Direto: pago por terceiro — não entra no ciclo de fechamento consolidado da FC" };
+  if (m === "fd_fc" || m === "fd_terceiro") {
+    return {
+      label: "FD Abate Contrato",
+      cls: "bg-amber-100 text-amber-700 border-amber-200",
+      title: "Faturamento Direto — Abate Contrato: o cliente continua pagando direto ao fornecedor, mas esse valor É descontado do seu contrato (dentro do escopo já contratado).",
+    };
   }
   return null;
+}
+
+// Rev. 4078 — Legenda explicativa dos 2 tipos de FD, exibida em popover ao lado do
+// filtro (clique OU hover, funciona em mobile também). Fonte única de verdade
+// textual reaproveitada pelo popover e pelos tooltips dos selos (fdBadgeInfo).
+const FD_LEGENDA = [
+  { label: "FD Fora do Contrato", cls: "bg-blue-100 text-blue-700 border-blue-200", desc: "Cliente paga direto ao fornecedor. NÃO desconta do seu contrato — é valor adicional, fora do escopo contratado." },
+  { label: "FD Abate Contrato", cls: "bg-amber-100 text-amber-700 border-amber-200", desc: "Cliente paga direto ao fornecedor. DESCONTA do seu contrato — o valor já está dentro do escopo contratado." },
+] as const;
+
+function FdLegendaPopover() {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 text-xs text-amber-700 hover:text-amber-900 hover:underline underline-offset-2"
+          title="O que é FD Fora do Contrato x FD Abate Contrato?"
+        >
+          <Info className="w-3.5 h-3.5" />
+          O que é FD?
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 p-3" align="start">
+        <p className="text-xs font-semibold text-slate-700 mb-2">Faturamento Direto (FD) — 2 tipos</p>
+        <div className="space-y-2.5">
+          {FD_LEGENDA.map((item) => (
+            <div key={item.label} className="flex gap-2">
+              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold border shrink-0 h-fit ${item.cls}`}>
+                {item.label}
+              </span>
+              <p className="text-[11px] text-slate-600 leading-snug">{item.desc}</p>
+            </div>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 function FdBadge({ c }: { c: any }) {
@@ -218,7 +265,7 @@ export default function FinanceiroContasAPagar() {
   const [origemFilter, setOrigemFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("pendentes");
   // Rev. 4077 — Filtro "FD" (Faturamento Direto): cliente/terceiro/fc x normal.
-  const [fdFilter, setFdFilter] = useState<"all" | "fd" | "normal">("all");
+  const [fdFilter, setFdFilter] = useState<"all" | "fd_fora" | "fd_abate" | "normal">("all");
   // Rev. 1629 — Separação Efetivo × Projeção (APQC PCF 8.7 / PMBOK / Brealey-Myers cap. 30):
   // dívida incorrida (Compras, Folha, PJ, Benefícios, Frota, Parceiros, Almox, Medição, Seguro)
   // não pode dividir tela com forecast de cronograma. Default = Efetivo.
@@ -612,7 +659,8 @@ export default function FinanceiroContasAPagar() {
     if (naturezaFilter === "efetivo") list = list.filter((c: any) => !isProjecao(c));
     else if (naturezaFilter === "projecao") list = list.filter((c: any) => isProjecao(c));
     if (origemFilter !== "all") list = list.filter((c: any) => c.origemModulo === origemFilter);
-    if (fdFilter === "fd") list = list.filter((c: any) => !!fdBadgeInfo(c));
+    if (fdFilter === "fd_fora") list = list.filter((c: any) => c?.modalidadeFd === "fd_cliente");
+    else if (fdFilter === "fd_abate") list = list.filter((c: any) => c?.modalidadeFd === "fd_fc" || c?.modalidadeFd === "fd_terceiro");
     else if (fdFilter === "normal") list = list.filter((c: any) => !fdBadgeInfo(c));
     if (search) {
       const q = search.toLowerCase();
@@ -1098,20 +1146,25 @@ export default function FinanceiroContasAPagar() {
                 </SelectContent>
               </Select>
             )}
-            {/* Rev. 4077 — Filtro por Faturamento Direto (FD), pra isolar títulos que
-                o cliente/terceiro paga direto e não entram no consolidado por ciclo. */}
-            <div className="flex rounded-lg border border-amber-200 overflow-hidden" title="Filtra por Faturamento Direto (dinheiro que o cliente/terceiro paga direto ao fornecedor — não entra no consolidado por ciclo)">
-              {([
-                ["all", "Todos"],
-                ["fd", "Só FD"],
-                ["normal", "Sem FD"],
-              ] as const).map(([v, l]) => (
-                <button key={v}
-                  onClick={() => setFdFilter(v)}
-                  className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${fdFilter === v ? "bg-amber-500 text-white" : "bg-white text-amber-700 hover:bg-amber-50"}`}>
-                  {l}
-                </button>
-              ))}
+            {/* Rev. 4077/4078 — Filtro por Faturamento Direto (FD), pra isolar títulos que
+                o cliente paga direto ao fornecedor. 2 categorias reais: "Fora do Contrato"
+                (não desconta) e "Abate Contrato" (desconta) — ver fdBadgeInfo(). */}
+            <div className="flex items-center gap-1.5">
+              <div className="flex rounded-lg border border-amber-200 overflow-hidden" title="Filtra por Faturamento Direto (dinheiro que o cliente paga direto ao fornecedor)">
+                {([
+                  ["all", "Todos"],
+                  ["fd_fora", "FD Fora do Contrato"],
+                  ["fd_abate", "FD Abate Contrato"],
+                  ["normal", "Sem FD"],
+                ] as const).map(([v, l]) => (
+                  <button key={v}
+                    onClick={() => setFdFilter(v)}
+                    className={`px-2.5 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${fdFilter === v ? "bg-amber-500 text-white" : "bg-white text-amber-700 hover:bg-amber-50"}`}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+              <FdLegendaPopover />
             </div>
             <div className="relative flex-1 min-w-[180px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />

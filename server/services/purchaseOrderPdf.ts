@@ -326,10 +326,14 @@ export function generateOCPdf(data: OCData): PDFKit.PDFDocument {
     ["Forma de Pagamento", oc.formaPagamento ?? "—"],
   ], y, col3);
 
+  // Rev. 4078 — Nomenclatura alinhada com Contas a Pagar: "Fora do Contrato" (não
+  // desconta) x "Abate Contrato" (desconta); fd_fc e fd_terceiro são o MESMO
+  // conceito de negócio (2º só é o nome que fd_fc ganha vindo de cotação — antes
+  // caía silenciosamente no default "Empresa FC", corrigido aqui).
   const tipoFatLabel = (oc as any).modalidadeFd === "fd_cliente"
-    ? "Pagamento Cliente"
-    : (oc as any).modalidadeFd === "fd_fc"
-    ? "Faturamento Direto"
+    ? "FD Fora do Contrato"
+    : (oc as any).modalidadeFd === "fd_fc" || (oc as any).modalidadeFd === "fd_terceiro"
+    ? "FD Abate Contrato"
     : "Empresa FC";
 
   const prazoVal = fmtDate(oc.dataEntregaPrevista) !== "—" ? fmtDate(oc.dataEntregaPrevista) : "—";
