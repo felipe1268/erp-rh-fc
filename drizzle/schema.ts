@@ -6823,6 +6823,10 @@ export const comprasCotacaoFornecedores = pgTable("compras_cotacao_fornecedores"
   isEstoque:        boolean("is_estoque").default(false),
   almoxarifadoOrigemId: integer("almoxarifado_origem_id"),
   cartaoId:         integer("cartao_id"),
+  // Rev. 4073 — marca que a condição de pagamento desta cotação-fornecedor foi
+  // definida manualmente pelo comprador, fugindo do ciclo de fechamento cadastrado
+  // (ou da regra especial por produto) do fornecedor. Fica visível/rastreável.
+  excecaoManual:    boolean("excecao_manual").default(false),
   criadoEm:         timestamp("created_at", { mode: "string" }).defaultNow().notNull(),
 });
 

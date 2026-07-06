@@ -4757,7 +4757,7 @@ Regras:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v4059-2026-07-05-billing-module-active-toggle";
+    const COLFIX_VERSION = "v4073-2026-07-06-excecao-manual-cotacao";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -4789,6 +4789,11 @@ Regras:
           -- Rev. 4011 — Assinatura digital opcional no ato da devolução de ferramenta.
           ALTER TABLE IF EXISTS warehouse_loans
             ADD COLUMN IF NOT EXISTS assinatura_devolucao_url text;
+
+          -- Rev. 4073 — marca condição de pagamento definida manualmente (exceção) fugindo
+          -- do ciclo de fechamento cadastrado / regra especial por produto do fornecedor.
+          ALTER TABLE IF EXISTS compras_cotacao_fornecedores
+            ADD COLUMN IF NOT EXISTS excecao_manual boolean DEFAULT false;
         `);
         await db.execute(sql`
           DO $$ BEGIN

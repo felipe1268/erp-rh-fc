@@ -22,7 +22,7 @@ import { formatNumeroScDisplay } from "@shared/numeroSc";
 import { formatNumeroCotacaoDisplay } from "@shared/numeroCotacao";
 import { formatNumeroOcDisplay } from "@shared/numeroOc";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, ArrowUp, ArrowDown, ArrowUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, TrendingUp, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil, Check, ClipboardList, FileSearch, ShoppingCart, RotateCcw, Pin, GitBranch, Zap, PenTool, CreditCard, Banknote, Calendar, Truck, Target, BarChart2, Clock, Wallet, Layers, ArrowLeftRight, Warehouse, HardHat, Info, Printer, type LucideIcon } from "lucide-react";
+import { Plus, Search, Trash2, FileText, ChevronRight, ChevronDown, Loader2, CheckCircle, X, XCircle, Building2, Trophy, UserPlus, Save, BarChart3, ChevronsUpDown, ArrowUp, ArrowDown, ArrowUpDown, Paperclip, ExternalLink, AlertTriangle, TrendingDown, TrendingUp, Package, Undo2, History, Link2, RefreshCw, Phone, Mail, User, Smartphone, Sparkles, Star, ShieldCheck, ShieldAlert, Settings, DollarSign, Pencil, Check, ClipboardList, FileSearch, ShoppingCart, RotateCcw, Pin, GitBranch, Zap, PenTool, CreditCard, Banknote, Calendar, Truck, Target, BarChart2, Clock, Wallet, Layers, ArrowLeftRight, Warehouse, HardHat, Info, Printer, Lock, type LucideIcon } from "lucide-react";
 import { TIPOS_PAGAMENTO, getTipoPagamentoInfo, calcularParcelas, formatCurrency } from "../../../../shared/paymentConditions";
 import * as XLSX from "xlsx";
 import { PurchaseTimeline, TimelineBadge } from "@/components/compras/PurchaseTimeline";
@@ -992,6 +992,9 @@ export default function Cotacoes() {
   const [editCartaoId, setEditCartaoId] = useState<Record<number, number | null>>({});
   const [condModalFornId, setCondModalFornId] = useState<number | null>(null);
   const [condModo, setCondModo] = useState<Record<number, "padrao" | "custom" | "fechamento">>({});
+  // Rev. 4073 — quando o fornecedor tem ciclo cadastrado (ou regra especial por produto), a
+  // condição de pagamento é travada; esse toggle libera edição livre como uma exceção rastreável.
+  const [editExcecaoManual, setEditExcecaoManual] = useState<Record<number, boolean>>({});
   // Rev. 1996 — MDO pura: usuário escolhe explicitamente entre "medicao" (>30d) ou "parcelado" (≤30d).
   const [mdoTab, setMdoTab] = useState<Record<number, "" | "medicao" | "parcelado">>({});
   const [condCustomParcelas, setCondCustomParcelas] = useState<Record<number, { valor: string; data: string }[]>>({});
@@ -1609,6 +1612,7 @@ export default function Cotacoes() {
       const valorFreteInicial: Record<number, string> = {};
       const transportadoraInicial: Record<number, string> = {};
       const moduloMedicaoInicial: Record<number, string> = {};
+      const excecaoManualInicial: Record<number, boolean> = {};
       for (const p of mapaQ.data.participantes) {
         prazoInicial[p.fornecedorId] = p.prazoEntregaDias ? String(p.prazoEntregaDias) : "";
         condInicial[p.fornecedorId] = p.condicaoPagamento ?? "";
@@ -1619,6 +1623,7 @@ export default function Cotacoes() {
         valorFreteInicial[p.fornecedorId] = (p as any).valorFrete ? String(parseFloat((p as any).valorFrete)) : "0";
         transportadoraInicial[p.fornecedorId] = (p as any).transportadora ?? "";
         moduloMedicaoInicial[p.fornecedorId] = (p as any).moduloMedicao ?? "";
+        excecaoManualInicial[p.fornecedorId] = !!(p as any).excecaoManual;
         if ((p as any).arquivoUrl) anexoInicial[p.fornecedorId] = (p as any).arquivoUrl;
       }
       setEditPrecos(inicialPrecos);
@@ -1632,6 +1637,7 @@ export default function Cotacoes() {
       setEditValorFrete(valorFreteInicial);
       setEditTransportadora(transportadoraInicial);
       setEditModuloMedicao(moduloMedicaoInicial);
+      setEditExcecaoManual(excecaoManualInicial);
       setAnexoUrl(anexoInicial);
     }
   }, [mapaQ.data, abaAtiva]);
@@ -1656,6 +1662,7 @@ export default function Cotacoes() {
     const persistedTransp = p.transportadora ?? "";
     const persistedModulo = p.moduloMedicao ?? "";
     const persistedNumParc = p.numeroParcelas ? Number(p.numeroParcelas) : 0;
+    const persistedExcecao = !!(p as any).excecaoManual;
     // Rev. 3442 — fallback: se o fornecedor tem cicloFormaPagamento e ainda não há valor salvo,
     // pré-preenche como sugestão (o comprador pode alterar livremente).
     const fornCicloFP = (fornecedores.find((x: any) => x.id === fId) as any)?.cicloFormaPagamento ?? "";
@@ -1672,6 +1679,7 @@ export default function Cotacoes() {
     setEditValorFrete(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedValorFrete });
     setEditTransportadora(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedTransp });
     setEditModuloMedicao(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedModulo });
+    setEditExcecaoManual(prev => prev[fId] !== undefined ? prev : { ...prev, [fId]: persistedExcecao });
 
     // Inferência de modo "custom": só dispara quando há indício real de parcelamento custom —
     // numeroParcelas > 1 SEM tipoPagamento persistido (porque tipoPagamento define um plano
@@ -2164,6 +2172,46 @@ export default function Cotacoes() {
       return totalItens + frete;
     })() : parseFloat(fornP?.totalOrcado ?? "0");
 
+    // Rev. 4073 — Condição de pagamento efetiva do fornecedor: prioridade
+    // (1) regra especial por produto cadastrada > (2) ciclo geral de fechamento
+    // cadastrado no fornecedor > (3) livre (comprador escolhe manualmente).
+    const forn: any = fornP?.fornecedor;
+    const condicaoEfetiva = (() => {
+      const itensCot: any[] = mapaQ.data?.itens ?? [];
+      const rawRegras = forn?.regrasProdutoJson;
+      if (rawRegras && itensCot.length > 0) {
+        try {
+          const regras: any[] = JSON.parse(rawRegras);
+          const norm = (s: string) => (s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+          const regra = Array.isArray(regras)
+            ? regras.find(r => itensCot.some(it => norm(it.descricao).includes(norm(r.produto))))
+            : null;
+          if (regra) {
+            return {
+              origem: "produto" as const,
+              label: `Regra especial: ${regra.produto}`,
+              formaPagamento: regra.formaPagamento as string,
+              numParcelas: Number(regra.numParcelas) || 1,
+              prazoParcela: Number(regra.prazoEntreParcelas) || 30,
+            };
+          }
+        } catch { /* regra inválida, ignora */ }
+      }
+      if (forn?.cicloPagamento) {
+        return {
+          origem: "ciclo" as const,
+          label: "Ciclo de fechamento cadastrado do fornecedor",
+          formaPagamento: forn.cicloFormaPagamento as string || "",
+          numParcelas: Number(forn.cicloNumParcelas) || 1,
+          prazoParcela: Number(forn.cicloPrazoParcela) || 30,
+        };
+      }
+      return null;
+    })();
+    const excecaoAtiva = !!editExcecaoManual[fId];
+    const isTravado = !!condicaoEfetiva && !excecaoAtiva;
+    const hideFechamentoTab = !!forn?.cicloPagamento;
+
     const FORMAS: { v: string; l: string; Icon: LucideIcon; sel: string }[] = [
       { v: "boleto", l: "Boleto", Icon: FileText, sel: "bg-blue-50 text-blue-700 border-blue-400 ring-blue-200" },
       { v: "pix", l: "PIX", Icon: Zap, sel: "bg-green-50 text-green-700 border-green-400 ring-green-200" },
@@ -2267,17 +2315,26 @@ export default function Cotacoes() {
       if (modoModal === "mdo" && mdoModoEfetivo === "medicao") {
         tipoPagamentoFinal = "medicao";
       }
+      // Rev. 4073 — condição travada (regra de produto ou ciclo do fornecedor): a gravação
+      // usa SEMPRE a condição efetiva, ignorando o que o usuário tenha mexido na UI (defesa
+      // extra além do próprio bloqueio visual dos campos).
+      const formaPagamentoFinal = isTravado ? (condicaoEfetiva!.formaPagamento || "") : (editFormaPag[fId] || "");
+      const numeroParcelasFinal = isTravado ? condicaoEfetiva!.numParcelas : numParcelas;
+      const condicaoPagamentoFinal = isTravado
+        ? `${condicaoEfetiva!.numParcelas}x / ${condicaoEfetiva!.prazoParcela}d (${condicaoEfetiva!.origem === "produto" ? "regra do produto" : "ciclo do fornecedor"})`
+        : (editCondPag[fId] || "");
       salvarCondicoesComerciais.mutate({
         cotacaoId: showDetalhe,
         fornecedorId: fId,
         companyId,
-        formaPagamento: editFormaPag[fId] || "",
-        tipoPagamento: tipoPagamentoFinal,
-        condicaoPagamento: editCondPag[fId] || "",
+        formaPagamento: formaPagamentoFinal,
+        tipoPagamento: isTravado ? "" : tipoPagamentoFinal,
+        condicaoPagamento: condicaoPagamentoFinal,
         prazoEntregaDias: prazoVal,
-        numeroParcelas: numParcelas,
+        numeroParcelas: numeroParcelasFinal,
         moduloMedicao: editModuloMedicao[fId] || undefined,
-        cartaoId: editFormaPag[fId] === "cartao" ? (editCartaoId[fId] ?? null) : null,
+        cartaoId: formaPagamentoFinal === "cartao" ? (editCartaoId[fId] ?? null) : null,
+        excecaoManual: excecaoAtiva,
       }, {
         onSuccess: () => {
           setCondModalFornId(null);
@@ -2328,6 +2385,28 @@ export default function Cotacoes() {
 
           {/* Body */}
           <div className="flex-1 overflow-y-auto bg-gray-50/40">
+            {/* Rev. 4073 — Banner de condição travada (regra de produto ou ciclo do fornecedor) */}
+            {condicaoEfetiva && (
+              <div className="px-5 lg:px-8 pt-5 lg:pt-6">
+                <div className={`rounded-xl border-2 p-4 flex items-start gap-3 ${excecaoAtiva ? "border-amber-300 bg-amber-50" : condicaoEfetiva.origem === "produto" ? "border-violet-400 bg-violet-50" : "border-blue-300 bg-blue-50"}`}>
+                  <Lock className={`h-5 w-5 flex-shrink-0 mt-0.5 ${excecaoAtiva ? "text-amber-600" : condicaoEfetiva.origem === "produto" ? "text-violet-600" : "text-blue-600"}`} />
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-bold ${excecaoAtiva ? "text-amber-900" : condicaoEfetiva.origem === "produto" ? "text-violet-900" : "text-blue-900"}`}>
+                      {excecaoAtiva ? "Exceção manual ativada — condição livre" : condicaoEfetiva.label}
+                    </p>
+                    <p className={`text-xs mt-0.5 ${excecaoAtiva ? "text-amber-700" : condicaoEfetiva.origem === "produto" ? "text-violet-700" : "text-blue-700"}`}>
+                      {excecaoAtiva
+                        ? "Você optou por definir a condição manualmente para esta compra, fora da regra cadastrada. Isso fica registrado."
+                        : `Condição de pagamento travada em ${condicaoEfetiva.numParcelas}x, ${condicaoEfetiva.prazoParcela} dias entre parcelas${condicaoEfetiva.formaPagamento ? `, via ${condicaoEfetiva.formaPagamento}` : ""}. Cadastro do fornecedor define esta regra.`}
+                    </p>
+                    <label className="flex items-center gap-2 mt-2.5 cursor-pointer w-fit">
+                      <Checkbox checked={excecaoAtiva} onCheckedChange={(v) => setEditExcecaoManual(prev => ({ ...prev, [fId]: !!v }))} />
+                      <span className="text-xs font-semibold text-gray-700">Esta compra é uma exceção (definir condição manualmente)</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            )}
             {/* Rev. 1996 — Header de contexto pra PACOTE explicando estrutura mista */}
             {modoModal === "pacote" && (
               <div className="px-5 lg:px-8 pt-5 lg:pt-6">
@@ -2401,12 +2480,12 @@ export default function Cotacoes() {
                 {/* Forma de Pagamento — esconder quando MDO sem modo escolhido */}
                 {!mdoSemModo && (
                 <section className="rounded-xl border border-gray-200 bg-white p-5 lg:p-6 shadow-sm">
-                  <SectionHeader Icon={Wallet} color="bg-violet-100 text-violet-700" title="Forma de Pagamento" hint={editFormaPag[fId] ? "Selecionado" : "Opcional"} />
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                  <SectionHeader Icon={Wallet} color="bg-violet-100 text-violet-700" title="Forma de Pagamento" hint={isTravado ? "Travado" : editFormaPag[fId] ? "Selecionado" : "Opcional"} />
+                  <div className={`grid grid-cols-2 sm:grid-cols-3 gap-2.5 ${isTravado ? "opacity-60 pointer-events-none" : ""}`}>
                     {FORMAS_RENDER.map(fp => {
-                      const sel = editFormaPag[fId] === fp.v;
+                      const sel = isTravado ? condicaoEfetiva!.formaPagamento === fp.v : editFormaPag[fId] === fp.v;
                       return (
-                        <button key={fp.v} type="button"
+                        <button key={fp.v} type="button" disabled={isTravado}
                           onClick={() => setEditFormaPag(prev => ({ ...prev, [fId]: prev[fId] === fp.v ? "" : fp.v }))}
                           className={`flex items-center gap-2.5 px-3 h-14 rounded-xl text-sm font-medium border-2 transition-all ${sel ? `${fp.sel} ring-2 shadow-sm` : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:border-gray-300"}`}>
                           <fp.Icon className="w-5 h-5 flex-shrink-0" />
@@ -2415,7 +2494,7 @@ export default function Cotacoes() {
                       );
                     })}
                   </div>
-                  {editFormaPag[fId] === "cartao" && (
+                  {!isTravado && editFormaPag[fId] === "cartao" && (
                     <div className="mt-4">
                       <CartaoDisponivelCard
                         companyId={companyId}
@@ -2438,8 +2517,11 @@ export default function Cotacoes() {
                       </div>
                       <h4 className="text-[11px] font-bold text-gray-700 uppercase tracking-[0.12em]">Parcelamento</h4>
                     </div>
+                    {!isTravado && (
                     <div role="tablist" className="flex bg-gray-100 rounded-lg p-1">
-                      {([["padrao", "Padrão"], ["fechamento", "Fechamento"], ["custom", "Personalizado"]] as const).map(([mode, label]) => (
+                      {([["padrao", "Padrão"], ["fechamento", "Fechamento"], ["custom", "Personalizado"]] as const)
+                        .filter(([mode]) => mode !== "fechamento" || !hideFechamentoTab)
+                        .map(([mode, label]) => (
                         <button key={mode} role="tab" type="button"
                           aria-selected={(condModo[fId] ?? "padrao") === mode}
                           onClick={() => {
@@ -2454,9 +2536,37 @@ export default function Cotacoes() {
                         </button>
                       ))}
                     </div>
+                    )}
                   </div>
 
-                  {(condModo[fId] ?? "padrao") === "padrao" ? (
+                  {isTravado ? (() => {
+                    const numParc = condicaoEfetiva!.numParcelas;
+                    const prazo = condicaoEfetiva!.prazoParcela;
+                    const valorParcela = fornTotal / numParc;
+                    const hoje = new Date();
+                    const parcelas = Array.from({ length: numParc }, (_, i) => {
+                      const dt = new Date(hoje);
+                      dt.setDate(dt.getDate() + prazo + (i * prazo));
+                      return { num: i + 1, valor: valorParcela, data: dt };
+                    });
+                    return (
+                      <div className="bg-gradient-to-br from-gray-50 to-white border border-gray-200 rounded-xl overflow-hidden">
+                        <div className="px-4 py-2.5 bg-gray-100/70 border-b border-gray-200 flex justify-between items-center">
+                          <span className="text-xs font-bold text-gray-700 tabular-nums">Total: {formatCurrency(fornTotal)}</span>
+                          <span className="text-[11px] text-gray-600 tabular-nums">{numParc}x de {formatCurrency(valorParcela)}</span>
+                        </div>
+                        <div className="divide-y divide-gray-100 max-h-[260px] overflow-y-auto">
+                          {parcelas.map(p => (
+                            <div key={p.num} className="flex items-center justify-between px-4 py-2">
+                              <span className="text-xs text-gray-600 font-semibold w-20">{p.num}ª parcela</span>
+                              <span className="text-sm font-bold text-gray-900 tabular-nums">{formatCurrency(p.valor)}</span>
+                              <span className="text-xs text-gray-500 tabular-nums">{p.data.toLocaleDateString("pt-BR")}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })() : (condModo[fId] ?? "padrao") === "padrao" ? (
                     <>
                       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
                         {TIPOS_PAGAMENTO.map(t => (

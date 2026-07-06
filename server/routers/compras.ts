@@ -6230,6 +6230,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       // formaPagamento="cartao"; guardado já na Cotação p/ herdar na OC gerada e permitir
       // o match automático item-da-fatura↔OC na conciliação do cartão.
       cartaoId: z.number().nullable().optional(),
+      // Rev. 4073 — marca que o comprador optou por fugir do ciclo/regra cadastrada do fornecedor.
+      excecaoManual: z.boolean().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       await _assertCompanyAccess(ctx.user, input.companyId);
@@ -6245,6 +6247,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       if (input.observacoes !== undefined) updateData.observacoes = input.observacoes;
       if (input.moduloMedicao !== undefined) updateData.moduloMedicao = input.moduloMedicao || null;
       if (input.cartaoId !== undefined) updateData.cartaoId = input.cartaoId;
+      if (input.excecaoManual !== undefined) updateData.excecaoManual = input.excecaoManual;
       if (Object.keys(updateData).length > 0) {
         if (input.fornecedorId === 0) {
           await db.update(comprasCotacoes)

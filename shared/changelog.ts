@@ -1,4 +1,30 @@
 /**
+ * Rev. 4073 — **CONDIÇÕES DE PAGAMENTO (COTAÇÕES) PASSAM A RESPEITAR O CICLO DE FECHAMENTO
+ * CADASTRADO DO FORNECEDOR, COM EXCEÇÃO POR PRODUTO E EXCEÇÃO MANUAL PONTUAL.**
+ *
+ * PEDIDO: usuário exigiu que compradores parem de escolher livremente a forma/parcelamento de
+ * pagamento por cotação quando o fornecedor já tem um ciclo de fechamento cadastrado
+ * (`empresas_terceiras.cicloPagamento` + `cicloFormaPagamento`/`cicloNumParcelas`/
+ * `cicloPrazoParcela`) — regra confirmada pelo usuário: "O que não tiver a condição de fechamento
+ * cadastrado, fica livre. O que tiver, deve ser respeitado." Exceções por produto
+ * (`regrasProdutoJson`, ex.: concreto usinado sempre à vista) continuam tendo prioridade sobre o
+ * ciclo geral, e o comprador pode declarar uma EXCEÇÃO MANUAL pontual (ex.: compra emergencial)
+ * que libera a condição só para aquela cotação específica, com rastreabilidade.
+ *
+ * FIX: nova coluna `excecao_manual` (boolean) em `comprasCotacaoFornecedores`
+ * (`drizzle/schema.ts` + self-heal em `server/_core/index.ts`, COLFIX_VERSION bump). A mutation
+ * `salvarCondicoesComerciais` (`server/routers/compras.ts`) passou a aceitar e persistir
+ * `excecaoManual`. No front (`client/src/pages/compras/Cotacoes.tsx`), o modal de "Condições de
+ * Pagamento" calcula uma `condicaoEfetiva` (regra de produto > ciclo do fornecedor > livre); quando
+ * há condição efetiva e a exceção manual não está marcada, a tela fica travada
+ * (`isTravado`): forma de pagamento e parcelamento são forçados ao valor do ciclo/produto, a aba
+ * "Fechamento" custom some, e aparece um banner explicando a trava com um checkbox "Esta compra é
+ * uma exceção" que, ao marcar, libera os campos para edição livre e grava `excecaoManual: true`.
+ * Fornecedor sem ciclo cadastrado continua 100% livre, como antes. ZERO DELETE · ZERO ALTER
+ * destrutivo (1 coluna aditiva).
+ */
+
+/**
  * Rev. 4072 — **CONTAS A PAGAR CONSOLIDADO: NUNCA AGRUPAR/MISTURAR TÍTULOS DE FATURAMENTO DIRETO
  * (FD) NO CICLO DE FECHAMENTO PRÓPRIO DA FC.**
  *
