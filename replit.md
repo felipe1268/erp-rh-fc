@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4069** — **CONTAS A PAGAR: FILTRO DE MÊS ERA IGNORADO DURANTE A BUSCA + FALTAVA OPÇÃO "ANO TODO".** Usuário selecionou Julho e pesquisou um fornecedor — a lista trouxe títulos de todos os meses. Causa: Rev. 3999 fazia a busca por texto ignorar deliberadamente o mês selecionado (`list = search ? allContas : mesData`). Fix: novo toggle "Ano todo (AAAA)" explícito ao lado dos meses (desliga ao clicar num mês); novo `escopoData` (mês OU ano todo) do qual TUDO deriva (busca, KPIs, contagens, origens, seleção em lote) — o mês agora sempre restringe a lista, inclusive com busca ativa. ZERO DELETE · ZERO ALTER destrutivo (100% client-side).
+
 - **Rev. 4068** — **CONCILIAÇÃO BANCÁRIA NÃO BAIXAVA O CHEQUE NO CONTROLE DE CHEQUES + MOTIVO/CONTA TENTATIVA DE DEVOLUÇÃO AGORA FICAM REGISTRADOS.** Usuário reportou que conciliar (Conciliação Bancária) o pagamento de um cheque não baixava o cheque correspondente no Controle de Cheques; pediu também que motivo de devolução e conta bancária tentada ficassem visíveis lá. Causa: `conciliarLancamento` nunca tocava `financial_cheques` (só o fluxo raro `conciliarChequeComLinha` baixava); faltavam colunas para persistir motivo/conta. Fix: novas colunas em `financial_cheques` (`motivo_devolucao_codigo/texto`, `conta_bancaria_tentativa_id/nome`, `devolvido_em`); `conciliarLancamento` e `conciliarChequeComLinha` agora baixam o cheque (match por Nº normalizado + valor, ambíguo → não faz nada) e gravam a conta tentativa; `desconsiderarChequeDevolvido` persiste status='devolvido'+motivo ao confirmar o par de estorno; `cheques.listar` expõe as novas colunas com precedência sobre o cálculo ao vivo; dialog de edição em `FinanceiroCheques.tsx` mostra as novas informações. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4067** — **RH: FUNCIONÁRIOS DUPLICADOS ENTRE EMPRESAS DO MESMO GRUPO (Efetivo por Obra).** Usuário reportou "Douglas Felippe Ribeiro" 2x e "Francisco Antonio de Lima Teixeira" como Ativo+Férias simultâneos na tela Efetivo por Obra; depois achou mais um caso (Henrique Lopes). Auditoria encontrou 12 funcionários reais da FC Engenharia (60002) recadastrados do zero na empresa 60005 (mesmo grupo, `compartilhaRecursos=1`) em vez de reaproveitar o cadastro compartilhado — cada cópia divergiu de status com o tempo. Fix (dados, confirmado com o usuário): as 12 cópias da 60005 foram soft-deletadas (lixeira) + suas alocações em obra desativadas; zero duplicação restante em qualquer obra. Fix (prevenção): nova `checkDuplicateCpfCrossCompanyGroup` bloqueia cadastro de CPF já existente em outra empresa do mesmo grupo, orientando a alocar o funcionário existente em vez de duplicar. ZERO DELETE definitivo · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4067** — **RH: FUNCIONÁRIOS DUPLICADOS ENTRE EMPRESAS DO MESMO GRUPO (Efetivo por Obra).** 12 funcionários reais da FC Engenharia recadastrados do zero em empresa do mesmo grupo em vez de reaproveitar cadastro compartilhado; soft-deletados + nova `checkDuplicateCpfCrossCompanyGroup` bloqueia recorrência. ZERO DELETE definitivo · ZERO ALTER destrutivo.
 
 - **Rev. 4066** — **CONCILIAÇÃO BANCÁRIA: CAMPO CATEGORIA NÃO MOSTRAVA CONTAS DO PLANO DE CONTAS.** Usuário cadastrou "Licenças e Assinaturas de Software" (código 4.6) no Plano de Contas, mas ao pesquisar na tela de Conciliação Bancária (dialog "Lançar no Contas a Pagar") ela não aparecia. Causa: `FinanceiroConciliacao.tsx` buscava `financial.getAccounts` com `escopo: "categoria"`, que no backend filtra só contas `AUTO-*` (Categorias operacionais), excluindo o Plano de Contas — diferente de Contas a Pagar/Lançamentos, que já buscam sem escopo (Plano + Categorias). Fix: removido o filtro de escopo da query de listagem; mantido só na criação inline de categoria rápida ("+ Nova categoria"). ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4063** — **`/planos`: "14 MÓDULOS DISPONÍVEIS" ERA NÚMERO FIXO — AGORA REFLETE OS MÓDULOS REALMENTE À VENDA.** `SiteVendas.tsx` trocou `"14"` hardcoded por `String(sellableModuleCards.length)`, mesma lista ao vivo de `billing.getCatalog`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4062** — **LOGOTIPO DE CADA MÓDULO NAS TELAS DE VENDA E GESTÃO DE ASSINATURA.** Ícone (`modulesData.ts`) reaproveitado em `AdminPrecos.tsx`, `MinhaAssinatura.tsx`/`ContratarPlano.tsx`, `SaasAdminPanel.tsx`. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4061 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4062 e anteriores.
 
 ## User preferences
 

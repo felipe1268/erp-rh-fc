@@ -1,4 +1,25 @@
 /**
+ * Rev. 4069 — **CONTAS A PAGAR: FILTRO DE MÊS ERA IGNORADO DURANTE A BUSCA + FALTAVA OPÇÃO "ANO TODO".**
+ *
+ * PEDIDO: usuário selecionou o mês de Julho em Contas a Pagar e buscou por um fornecedor — a lista
+ * trouxe títulos de TODOS os meses, não só julho. Pediu também uma opção explícita de "ano todo"
+ * para quando quiser ver o ano inteiro de propósito.
+ *
+ * CAUSA-RAIZ: a Rev. 3999 fez a busca por texto ignorar deliberadamente o mês selecionado (`list =
+ * search ? allContas : mesData`) para não "esconder" resultados de um fornecedor com títulos em
+ * vários meses — mas isso quebrou a expectativa básica de que o mês selecionado FILTRA a lista,
+ * mesmo com busca ativa. Não havia nenhum jeito explícito de pedir o ano inteiro.
+ *
+ * FIX: novo estado `verAnoTodo` (toggle "Ano todo (AAAA)" ao lado dos meses, desliga ao clicar em
+ * qualquer mês). Novo `escopoData` = mês selecionado OU allContas quando "Ano todo" está ligado;
+ * toda a pipeline (busca, KPIs de mês, contagem de status, origens disponíveis, seleção em lote)
+ * passou a derivar de `escopoData` em vez de misturar `mesData`/`allContas` ad-hoc. Agora o mês
+ * SEMPRE restringe a lista (inclusive com busca ativa); "Ano todo" é a única forma de ver o ano
+ * inteiro, e fica visualmente indicado no cabeçalho da tabela e no nome do CSV exportado.
+ * ZERO DELETE · ZERO ALTER destrutivo (mudança 100% client-side).
+ */
+
+/**
  * Rev. 4068 — **CONCILIAÇÃO BANCÁRIA NÃO BAIXAVA O CHEQUE NO CONTROLE DE CHEQUES + MOTIVO/CONTA
  * TENTATIVA DE CHEQUE DEVOLVIDO AGORA FICAM REGISTRADOS.**
  *

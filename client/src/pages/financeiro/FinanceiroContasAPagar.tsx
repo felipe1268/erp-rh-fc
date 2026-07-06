@@ -177,6 +177,11 @@ export default function FinanceiroContasAPagar() {
   const hoje = new Date();
   const [ano, setAno] = useState(hoje.getFullYear());
   const [mesSel, setMesSel] = useState(hoje.getMonth() + 1);
+  // Rev. 4069 — "Ano todo": alternativa explícita ao mês único. Antes, a busca
+  // por texto ignorava silenciosamente o mês selecionado e trazia o ano
+  // inteiro sem avisar; agora o mês SEMPRE restringe a lista (inclusive com
+  // busca ativa) a menos que o usuário ligue este toggle.
+  const [verAnoTodo, setVerAnoTodo] = useState(false);
   const [search, setSearch] = useState("");
   const [origemFilter, setOrigemFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("pendentes");
@@ -497,7 +502,7 @@ export default function FinanceiroContasAPagar() {
   };
 
   // Rev. 1620 — limpar seleção ao mudar mês/ano para evitar pagar item de outro escopo
-  useEffect(() => { setSelectedIds(new Set()); }, [mesSel, ano]);
+  useEffect(() => { setSelectedIds(new Set()); }, [mesSel, ano, verAnoTodo]);
 
   const bulkPayMut = (trpc as any).financial.bulkUpdateStatus.useMutation({
     onSuccess: (r: any) => {
@@ -552,15 +557,18 @@ export default function FinanceiroContasAPagar() {
     return allContas.filter((c: any) => getMesFromDate(c.dataVencimento) === mesSel);
   }, [allContas, mesSel]);
 
+  // Rev. 4069 — escopo efetivo da tela: mês selecionado, OU ano inteiro quando
+  // "Ano todo" está ligado. Toda busca/KPI/filtro deriva DAQUI, nunca mais de
+  // allContas direto, pra garantir que o mês realmente restrinja a lista.
+  const escopoData = useMemo(() => (verAnoTodo ? (allContas ?? []) : mesData), [verAnoTodo, allContas, mesData]);
+
   const hojeStr = hoje.toISOString().split("T")[0];
 
-  // Rev. 3999 — Busca por texto (fornecedor/OC/conta/obra) NÃO deve ficar presa
-  // ao mês selecionado: um fornecedor pode ter títulos em vários meses/sem data
-  // de vencimento, e o usuário espera que a busca encontre TODOS eles no ano
-  // corrente (mesma janela que getContasAPagarByYear já carregou), não só os
-  // do mês em que a tela estava aberta. Sem busca, mantém o escopo do mês.
+  // Rev. 4069 — Busca por texto (fornecedor/OC/conta/obra) SEMPRE respeita o
+  // mês selecionado (ou o ano inteiro, se "Ano todo" estiver ligado); antes a
+  // busca ignorava o mês e trazia o ano inteiro sem o usuário pedir isso.
   const filtered = useMemo(() => {
-    let list = search ? (allContas ?? []) : mesData;
+    let list = escopoData;
     if (statusFilter === "pendentes") list = list.filter((c: any) => c.status !== "pago");
     if (statusFilter === "pagos") list = list.filter((c: any) => c.status === "pago");
     if (naturezaFilter === "efetivo") list = list.filter((c: any) => !isProjecao(c));
@@ -587,7 +595,7 @@ export default function FinanceiroContasAPagar() {
       if (da !== db) return da.localeCompare(db);
       return Number(b.valorPrevisto ?? 0) - Number(a.valorPrevisto ?? 0);
     });
-  }, [mesData, allContas, statusFilter, naturezaFilter, origemFilter, search, hojeStr]);
+  }, [escopoData, statusFilter, naturezaFilter, origemFilter, search, hojeStr]);
 
   // Rev. 1619 — agrupamento por horizonte de vencimento (cabeçalhos sticky)
   const grupos = useMemo(() => {
@@ -605,10 +613,10 @@ export default function FinanceiroContasAPagar() {
   // Rev. 1629 — KPIs respeitam o escopo (Efetivo/Projeção/Todos) selecionado para evitar
   // que a tela mostre números de "dívida total" enquanto a lista oculta projeções.
   const escopoMes = useMemo(() => {
-    if (naturezaFilter === "efetivo") return mesData.filter((c: any) => !isProjecao(c));
-    if (naturezaFilter === "projecao") return mesData.filter(isProjecao);
-    return mesData;
-  }, [mesData, naturezaFilter]);
+    if (naturezaFilter === "efetivo") return escopoData.filter((c: any) => !isProjecao(c));
+    if (naturezaFilter === "projecao") return escopoData.filter(isProjecao);
+    return escopoData;
+  }, [escopoData, naturezaFilter]);
   const pendentes = escopoMes.filter((c: any) => c.status !== "pago");
   const pagos = escopoMes.filter((c: any) => c.status === "pago");
   const vencidos = pendentes.filter((c: any) => c.dataVencimento && c.dataVencimento < hojeStr);
@@ -617,7 +625,7 @@ export default function FinanceiroContasAPagar() {
   const totalPago = pagos.reduce((s: number, c: any) => s + Number(c.valorRealizado ?? c.valorPrevisto ?? 0), 0);
   const totalPendente = pendentes.reduce((s: number, c: any) => s + Number(c.valorPrevisto ?? 0), 0);
   const totalVencido = vencidos.reduce((s: number, c: any) => s + Number(c.valorPrevisto ?? 0), 0);
-  const projecoesOcultas = naturezaFilter === "efetivo" ? mesData.filter(isProjecao).length : 0;
+  const projecoesOcultas = naturezaFilter === "efetivo" ? escopoData.filter(isProjecao).length : 0;
 
   // Rev. 2943 — "Em Aberto (Acumulado)": soma de TODOS os títulos não-pagos do ano
   // (todos os meses), não só do mês selecionado. Respeita o escopo Efetivo/Projeção/Todos
@@ -638,10 +646,10 @@ export default function FinanceiroContasAPagar() {
   }, [allContas, naturezaFilter, hojeStr]);
 
   const origensDisponiveis = useMemo(() => {
-    if (!mesData.length) return [];
-    const s = new Set(mesData.map((c: any) => c.origemModulo).filter(Boolean));
+    if (!escopoData.length) return [];
+    const s = new Set(escopoData.map((c: any) => c.origemModulo).filter(Boolean));
     return Array.from(s) as string[];
-  }, [mesData]);
+  }, [escopoData]);
 
   // ─────────────────────────────────────────────────────────────────
   // Rev. 1620 — Onda 2/3: anti-duplicidade, aging, projeção, KPIs Hackett
@@ -784,7 +792,7 @@ export default function FinanceiroContasAPagar() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `contas-a-pagar_${MESES[mesSel - 1]}_${ano}.csv`;
+    a.download = `contas-a-pagar_${verAnoTodo ? "ano-todo" : MESES[mesSel - 1]}_${ano}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     toast({ title: `CSV exportado: ${rows.length} linhas` });
@@ -825,11 +833,11 @@ export default function FinanceiroContasAPagar() {
               {MESES.map((m, i) => {
                 const num = i + 1;
                 const status = mesesStatus[num];
-                const isSelected = mesSel === num;
+                const isSelected = !verAnoTodo && mesSel === num;
                 return (
                   <button
                     key={m}
-                    onClick={() => setMesSel(num)}
+                    onClick={() => { setMesSel(num); setVerAnoTodo(false); }}
                     className={`relative flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all
                       ${isSelected
                         ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
@@ -845,6 +853,18 @@ export default function FinanceiroContasAPagar() {
                   </button>
                 );
               })}
+              {/* Rev. 4069 — "Ano todo": mostra todos os meses de {ano} explicitamente,
+                  em vez do filtro de mês vazar silenciosamente durante a busca. */}
+              <button
+                onClick={() => setVerAnoTodo(true)}
+                className={`relative flex flex-col items-center justify-center gap-1 py-2 rounded-lg border text-xs font-semibold transition-all col-span-6 sm:col-span-12 mt-1
+                  ${verAnoTodo
+                    ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
+                    : "border-dashed border-gray-300 bg-white text-gray-500 hover:border-gray-400 hover:bg-gray-50"
+                  }`}
+              >
+                Ano todo ({ano})
+              </button>
             </div>
           </CardContent>
         </Card>
@@ -853,7 +873,7 @@ export default function FinanceiroContasAPagar() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <Card className="border-0 shadow-sm border-l-4 border-l-gray-400">
             <CardContent className="p-4">
-              <p className="text-xs text-gray-500 mb-1 flex items-center gap-1"><Banknote className="w-3 h-3" />Total {MESES[mesSel-1]}</p>
+              <p className="text-xs text-gray-500 mb-1 flex items-center gap-1"><Banknote className="w-3 h-3" />Total {verAnoTodo ? ano : MESES[mesSel-1]}</p>
               <p className="text-lg font-bold text-gray-800">{formatBRL(totalMes)}</p>
               {/* Rev. 3146 — contagem espelha o MESMO escopo (Efetivo/Projeção/Todos) do valor.
                   Antes usava mesData.length (todas) enquanto o valor somava só escopoMes → contagem
@@ -1105,7 +1125,7 @@ export default function FinanceiroContasAPagar() {
           <CardHeader className="pb-2 px-5 pt-4">
             <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
               <CreditCard className="w-4 h-4 text-orange-500" />
-              {search ? `Busca em ${ano} (todos os meses)` : `${MESES[mesSel-1]} ${ano}`} — {filtered.length} conta(s)
+              {verAnoTodo ? `Ano todo — ${ano}` : `${MESES[mesSel-1]} ${ano}`} — {filtered.length} conta(s)
               {naturezaFilter !== "todos" && (
                 <span className={`ml-2 text-[11px] font-medium px-2 py-0.5 rounded-full ${naturezaFilter === "efetivo" ? "bg-emerald-100 text-emerald-700" : "bg-violet-100 text-violet-700"}`}>
                   {naturezaFilter === "efetivo" ? "💰 Efetivo" : "📊 Projeção"}
@@ -1119,7 +1139,7 @@ export default function FinanceiroContasAPagar() {
             ) : filtered.length === 0 ? (
               <div className="p-10 text-center">
                 <Calendar className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500 font-medium">{search ? `Nenhuma conta encontrada em ${ano}` : `Nenhuma conta em ${MESES[mesSel-1]} ${ano}`}</p>
+                <p className="text-gray-500 font-medium">{verAnoTodo ? `Nenhuma conta encontrada em ${ano}` : `Nenhuma conta em ${MESES[mesSel-1]} ${ano}`}</p>
                 {(search || origemFilter !== "all" || statusFilter !== "all" || naturezaFilter !== "efetivo") && (
                   <button onClick={() => { setSearch(""); setOrigemFilter("all"); setStatusFilter("pendentes"); setNaturezaFilter("efetivo"); }}
                     className="mt-2 text-xs text-blue-600 hover:underline">Limpar filtros</button>
@@ -2123,9 +2143,9 @@ export default function FinanceiroContasAPagar() {
               <Button variant="outline" onClick={() => setShowBulkPay(false)}>Cancelar</Button>
               <Button className="bg-blue-600 hover:bg-blue-700 text-white" disabled={bulkPayMut.isPending || selectedIds.size === 0}
                 onClick={() => {
-                  // Garantir que só enviamos IDs ainda visíveis/válidos no mês corrente
+                  // Garantir que só enviamos IDs ainda visíveis/válidos no escopo corrente (mês ou ano todo)
                   const validIds = Array.from(selectedIds).filter(id =>
-                    (mesData as any[]).some((c: any) => c.id === id && c.status !== "pago")
+                    (escopoData as any[]).some((c: any) => c.id === id && c.status !== "pago")
                   );
                   if (validIds.length === 0) {
                     toast({ title: "Nenhum título válido na seleção", variant: "destructive" });
