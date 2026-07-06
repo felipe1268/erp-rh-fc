@@ -1,4 +1,39 @@
 /**
+ * Rev. 4067 — **RH: FUNCIONÁRIOS DUPLICADOS ENTRE EMPRESAS DO MESMO GRUPO (Efetivo por Obra).**
+ *
+ * PEDIDO: usuário reportou "Douglas Felippe Ribeiro" aparecendo 2x na tela de Efetivo por Obra, e
+ * "Francisco Antonio de Lima Teixeira" aparecendo simultaneamente como Ativo e em Férias. Depois, ao
+ * revisar o print da obra "Hotel Qiu 2 – Fase 4", identificou mais um caso: "Henrique Lopes" também
+ * duplicado. Pediu auditoria completa para garantir que isso não volte a acontecer.
+ *
+ * CAUSA-RAIZ: as empresas 60002 (FC Engenharia) e 60005 (Julio Ferraz Projetos e Obras) pertencem ao
+ * mesmo grupo empresarial ("Construtora") com `compartilhaRecursos=1` — o que já permite que uma obra
+ * de um lado aloque funcionários allocados via `obra_funcionarios.companyId` do outro lado, sem precisar
+ * de cadastro duplicado. Em algum momento (provavelmente na criação da empresa 60005), 12 funcionários
+ * reais da FC Engenharia foram CADASTRADOS DE NOVO como linhas próprias em `employees` na empresa 60005
+ * (mesmo CPF/matrícula, IDs sequenciais 1200002–1200013), em vez de reaproveitar o cadastro já existente
+ * via compartilhamento. Cada cópia foi alocada independentemente na mesma obra, e como são registros de
+ * banco totalmente separados, o status de cada uma pôde divergir com o tempo (ex.: Francisco: "Ferias" na
+ * 60002 vs "Ativo" na 60005; Darcy: "Desligado" vs "Ativo"; José Benedito: "Ativo" vs "Afastado").
+ * `checkDuplicateCpf` (validação de CPF duplicado no cadastro) só verificava a MESMA empresa — não pegava
+ * esse cenário cross-empresa dentro do mesmo grupo.
+ *
+ * FIX (dados): confirmado com o usuário (manter só o cadastro da empresa FC/60002), os 12 registros
+ * duplicados da empresa 60005 foram SOFT-DELETADOS (`employees.deletedAt`, mesmo mecanismo da lixeira de
+ * colaboradores — reversível, não é hard delete) e suas alocações em `obra_funcionarios` desativadas
+ * (`isActive=0`). Verificado no Neon: zero duplicações de nome remanescentes em qualquer obra do sistema.
+ * Nenhum outro dado histórico (ponto, folha, EPI etc.) dessas 12 linhas foi tocado — ficam preservados
+ * para fins de auditoria, apenas o funcionário não aparece mais em listas ativas.
+ *
+ * FIX (prevenção): nova função `checkDuplicateCpfCrossCompanyGroup` (`server/db.ts`) verifica, no
+ * cadastro de um novo colaborador, se o CPF já existe em OUTRA empresa do MESMO grupo empresarial
+ * (`compartilhaRecursos=1` + mesmo `grupoEmpresarial`). Se existir, bloqueia a criação com uma mensagem
+ * explicando que as empresas do grupo já compartilham recursos e orientando a alocar o funcionário
+ * existente na obra em vez de duplicar o cadastro (`server/routers.ts`, endpoint `employees.create`).
+ * ZERO DELETE definitivo · ZERO ALTER destrutivo (soft-delete reversível via lixeira existente).
+ */
+
+/**
  * Rev. 4066 — **CONCILIAÇÃO BANCÁRIA: CAMPO CATEGORIA NÃO MOSTRAVA CONTAS DO PLANO DE CONTAS.**
  *
  * PEDIDO: usuário cadastrou "Licenças e Assinaturas de Software" (código `4.6`) no Plano de Contas e

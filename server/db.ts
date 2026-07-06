@@ -1923,6 +1923,47 @@ export async function checkDuplicateCpf(cpf: string, companyId: number, excludeE
   return [];
 }
 
+// Rev. 4067 — Detecta CPF já cadastrado em OUTRA empresa do mesmo grupo
+// (compartilhaRecursos=1 + mesmo grupoEmpresarial). Como recursos já são
+// compartilhados entre essas empresas (obra_funcionarios aceita companyId
+// próprio por alocação), NÃO é necessário duplicar o cadastro do funcionário
+// — isso causa 2 registros divergentes da mesma pessoa (ex.: um em férias,
+// outro ativo). Usado só como AVISO no cadastro; não bloqueia casos legítimos.
+export async function checkDuplicateCpfCrossCompanyGroup(cpf: string, companyId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const cleanCpf = cpf.replace(/\D/g, "");
+  if (cleanCpf.length < 11) return [];
+  const [targetCompany] = await db.select({ grupoEmpresarial: companies.grupoEmpresarial, compartilhaRecursos: companies.compartilhaRecursos })
+    .from(companies).where(eq(companies.id, companyId));
+  if (!targetCompany || targetCompany.compartilhaRecursos !== 1 || !targetCompany.grupoEmpresarial) return [];
+  const siblings = await db.select({ id: companies.id })
+    .from(companies)
+    .where(and(
+      isNull(companies.deletedAt),
+      eq(companies.compartilhaRecursos, 1),
+      eq(companies.grupoEmpresarial, targetCompany.grupoEmpresarial),
+      sql`${companies.id} != ${companyId}`,
+    ));
+  if (siblings.length === 0) return [];
+  const siblingIds = siblings.map(s => s.id);
+  const results = await db.select({
+    id: employees.id,
+    nomeCompleto: employees.nomeCompleto,
+    status: employees.status,
+    companyId: employees.companyId,
+  }).from(employees).where(and(
+    sql`regexp_replace(${employees.cpf}, '[^0-9]', '', 'g') = ${cleanCpf}`,
+    isNull(employees.deletedAt),
+    inArray(employees.companyId, siblingIds),
+  ));
+  if (results.length === 0) return [];
+  const companyRows = await db.select({ id: companies.id, nomeFantasia: companies.nomeFantasia, razaoSocial: companies.razaoSocial })
+    .from(companies).where(inArray(companies.id, siblingIds));
+  const nomeById = new Map(companyRows.map(c => [c.id, c.nomeFantasia || c.razaoSocial || `Empresa ${c.id}`]));
+  return results.map(r => ({ ...r, empresa: nomeById.get(r.companyId) || `Empresa ${r.companyId}` }));
+}
+
 // Lista negra filtrada por empresa — isolamento total entre empresas.
 export async function checkBlacklist(cpf: string, companyId?: number) {
   const db = await getDb();

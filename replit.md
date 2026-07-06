@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4067** — **RH: FUNCIONÁRIOS DUPLICADOS ENTRE EMPRESAS DO MESMO GRUPO (Efetivo por Obra).** Usuário reportou "Douglas Felippe Ribeiro" 2x e "Francisco Antonio de Lima Teixeira" como Ativo+Férias simultâneos na tela Efetivo por Obra; depois achou mais um caso (Henrique Lopes). Auditoria encontrou 12 funcionários reais da FC Engenharia (60002) recadastrados do zero na empresa 60005 (mesmo grupo, `compartilhaRecursos=1`) em vez de reaproveitar o cadastro compartilhado — cada cópia divergiu de status com o tempo. Fix (dados, confirmado com o usuário): as 12 cópias da 60005 foram soft-deletadas (lixeira) + suas alocações em obra desativadas; zero duplicação restante em qualquer obra. Fix (prevenção): nova `checkDuplicateCpfCrossCompanyGroup` bloqueia cadastro de CPF já existente em outra empresa do mesmo grupo, orientando a alocar o funcionário existente em vez de duplicar. ZERO DELETE definitivo · ZERO ALTER destrutivo.
+
 - **Rev. 4066** — **CONCILIAÇÃO BANCÁRIA: CAMPO CATEGORIA NÃO MOSTRAVA CONTAS DO PLANO DE CONTAS.** Usuário cadastrou "Licenças e Assinaturas de Software" (código 4.6) no Plano de Contas, mas ao pesquisar na tela de Conciliação Bancária (dialog "Lançar no Contas a Pagar") ela não aparecia. Causa: `FinanceiroConciliacao.tsx` buscava `financial.getAccounts` com `escopo: "categoria"`, que no backend filtra só contas `AUTO-*` (Categorias operacionais), excluindo o Plano de Contas — diferente de Contas a Pagar/Lançamentos, que já buscam sem escopo (Plano + Categorias). Fix: removido o filtro de escopo da query de listagem; mantido só na criação inline de categoria rápida ("+ Nova categoria"). ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4065** — **NOTIFICAÇÕES DE CONTABILIDADE: BOTÕES E PERMISSÕES PADRONIZADOS COMO NO MÓDULO DE RH.** Usuário pediu pra padronizar a aba Contabilidade (`Switch` inline simples da Rev. 4064) no padrão mais rico já usado na aba RH (`NotificacoesEmailTab`): cards de resumo, badges coloridas por categoria, botões ícone ToggleRight/ToggleLeft + Settings + Trash2, formulário dedicado de criar/editar. Modelo de permissão evoluiu de 1 flag (`recebeExtrato`) pra 3: `ativo` (liga/desliga o destinatário sem excluir) + `recebeFiscal`/`recebeContabil` (por prazo automático). `normalizeDestinatarioContabilidade()` (client) e `normalizeEmail()` (`contabilidade.ts`) migram dados legados sem perda; job automático (`statusSyncJob.ts`) passa a checar a permissão específica do prazo que disparou o dia. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4065** — **NOTIFICAÇÕES DE CONTABILIDADE: BOTÕES E PERMISSÕES PADRONIZADOS COMO NO MÓDULO DE RH.** Cards de resumo, badges por categoria, botões ToggleRight/ToggleLeft + Settings + Trash2; permissão evoluiu de 1 flag pra 3 (`ativo`/`recebeFiscal`/`recebeContabil`); migração de dados legados sem perda. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4064** — **NOTIFICAÇÕES DE CONTABILIDADE: TOGGLE POR DESTINATÁRIO PARA LIGAR/DESLIGAR O ENCAMINHAMENTO DO ARQUIVO POR E-MAIL.** Novo campo `recebeExtrato:boolean` (default true) em cada destinatário de `contabilidade_alertas_config.emails_json`; filtro aplicado no "Enviar Teste", dialog manual e job automático. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4061** — **ADMINPRECOS: SALVAR PREÇO FALHAVA COM "This price cannot be archived because it is the default price of its product" (STRIPE).** `adminUpdatePrices` (`billing.ts`) tentava arquivar o Price antigo ANTES de trocar o `default_price` do Product — Stripe recusa. Fix: inverter a ordem. Limpo também 1 Price órfão ativo duplicado deixado pela tentativa anterior. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4060** — **`/planos`: MÓDULO FORA DE VENDA AGORA SOME COMPLETAMENTE DA VITRINE, NÃO SÓ DO PREÇO.** `SiteVendas.tsx`: grid de módulos filtra `MODULES` contra `catalog.modules`; `ModuloDetalhe.tsx`: guard `isSellable` bloqueia acesso direto por URL a módulo desativado. ZERO DELETE · ZERO ALTER destrutivo (só frontend).
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4058 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4060 e anteriores.
 
 ## User preferences
 

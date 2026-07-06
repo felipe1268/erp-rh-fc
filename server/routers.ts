@@ -21,7 +21,7 @@ import {
   // Documentos e Uploads
   createPayrollUpload, getPayrollUploads, updatePayrollUploadStatus, deletePayrollUpload,
   createDixiDevice, getDixiDevices, updateDixiDevice, deleteDixiDevice, restoreDixiDevice,
-  checkDuplicateCpf, checkBlacklist, getBlacklistedEmployees,
+  checkDuplicateCpf, checkDuplicateCpfCrossCompanyGroup, checkBlacklist, getBlacklistedEmployees,
   // Obras
   createObra, getObras, getObraById, updateObra, deleteObra, restoreObra, getObrasByCompanyActive,
   getObraFuncionarios, allocateEmployeeToObra, removeEmployeeFromObra, getObraHorasRateio, checkEmployeeAllocations,
@@ -560,6 +560,18 @@ export const appRouter = router({
             throw new TRPCError({ code: "CONFLICT", message: `⚠️ CPF já cadastrado nesta empresa (Funcionário Desligado)\n\nO CPF ${input.cpf} pertence a: ${dupInfo.nomeCompleto}\nStatus: ${dupInfo.status}\nData Desligamento: ${dupInfo.dataDesligamento || 'N/A'}\n\n🔄 Este funcionário pode ser RECONTRATADO.\nUse a opção de recontratação no cadastro para prosseguir.` });
           } else {
             throw new TRPCError({ code: "CONFLICT", message: `⚠️ CPF já cadastrado nesta empresa!\n\nO CPF ${input.cpf} pertence a: ${dupInfo.nomeCompleto}\nStatus: ${dupInfo.status || 'N/A'}\n\nSe este funcionário trabalha em outra empresa do grupo, selecione a empresa correta antes de cadastrá-lo.` });
+          }
+        }
+        // Rev. 4067 — CPF já existe em OUTRA empresa do MESMO grupo (compartilhaRecursos).
+        // Como as empresas do grupo já compartilham recursos (obra_funcionarios aceita
+        // alocação por empresa), duplicar o cadastro cria 2 registros divergentes da
+        // mesma pessoa (ex.: um em férias, outro ativo). Bloqueia por padrão; libera
+        // só se o usuário confirmar explicitamente via input._confirmarCpfOutraEmpresaGrupo.
+        if (!input._confirmarCpfOutraEmpresaGrupo) {
+          const dupGrupo = await checkDuplicateCpfCrossCompanyGroup(input.cpf, targetCompanyId);
+          if (dupGrupo.length > 0) {
+            const info = dupGrupo[0] as any;
+            throw new TRPCError({ code: "CONFLICT", message: `⚠️ Este CPF já está cadastrado em ${info.empresa} (mesmo grupo empresarial)!\n\n${info.nomeCompleto} — Status: ${info.status || 'N/A'}\n\nAs empresas do grupo já compartilham recursos: aloque este funcionário na obra usando o cadastro existente, em vez de criar um novo. Se tiver certeza que são pessoas diferentes com o mesmo CPF (raro), confirme para prosseguir mesmo assim.` });
           }
         }
       }
