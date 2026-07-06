@@ -1,3 +1,5 @@
+- **Rev. 4065** — **NOTIFICAÇÕES DE CONTABILIDADE: BOTÕES E PERMISSÕES PADRONIZADOS COMO NO MÓDULO DE RH.** Cards de resumo, badges por categoria, botões ToggleRight/ToggleLeft + Settings + Trash2; permissão evoluiu de 1 flag pra 3 (`ativo`/`recebeFiscal`/`recebeContabil`); migração de dados legados sem perda. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4063** — **`/planos`: "14 MÓDULOS DISPONÍVEIS" ERA NÚMERO FIXO — AGORA REFLETE OS MÓDULOS REALMENTE À VENDA.** `SiteVendas.tsx` trocou `"14"` hardcoded por `String(sellableModuleCards.length)`, mesma lista ao vivo de `billing.getCatalog`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4062** — **LOGOTIPO DE CADA MÓDULO NAS TELAS DE VENDA E GESTÃO DE ASSINATURA.** Ícone (`modulesData.ts`) reaproveitado em `AdminPrecos.tsx`, `MinhaAssinatura.tsx`/`ContratarPlano.tsx`, `SaasAdminPanel.tsx`. ZERO DELETE · ZERO ALTER destrutivo.

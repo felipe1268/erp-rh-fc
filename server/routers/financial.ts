@@ -437,7 +437,14 @@ function _agruparContasPagarPorCicloForn(arr: any[], supplierCycleMap: Map<strin
     }
     const fornNorm = match!.key;
     const fornecedorLabel = cycleConfig.nome || r.fornecedorNome || "Fornecedor";
-    const dataStr = String(r.dataVencimento ?? r.dataCompetencia ?? "").slice(0, 10);
+    // Rev. 4071 — a janela de fechamento deve ser calculada pela data da COMPRA
+    // (data_competencia, gravada no lançamento do OC), NÃO pelo vencimento
+    // individual do título. O vencimento de cada OC é calculado com prazo próprio
+    // (ex.: 15/30/45 dias) e varia item a item — usá-lo como base do fechamento
+    // espalhava compras do MESMO ciclo em janelas diferentes (ou coincidiam por
+    // acaso), fragmentando o agrupamento. A data de competência é sempre a data em
+    // que a OC foi lançada no financeiro, então reflete o "quando comprou" real.
+    const dataStr = String(r.dataCompetencia ?? r.dataVencimento ?? "").slice(0, 10);
     const win = dataStr ? _cicloWindow(dataStr, cycleConfig.cicloPagamento, cycleConfig.cicloDataReferencia) : "0000-00";
     const chave = `fech|${fornNorm}|${win}`;
     let g = groups.get(chave);

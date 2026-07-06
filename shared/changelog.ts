@@ -1,4 +1,39 @@
 /**
+ * Rev. 4071 — **CONTAS A PAGAR CONSOLIDADO: JANELA DE FECHAMENTO ERA CALCULADA PELO VENCIMENTO
+ * INDIVIDUAL DA OC, NÃO PELA DATA DA COMPRA — FRAGMENTAVA O AGRUPAMENTO.**
+ *
+ * PEDIDO/BUG: usuário reportou (com prints) que o agrupamento por ciclo de fechamento (Rev. 4070)
+ * estava inconsistente — Ferragens Santa Rita aparecia com só 2 das dezenas de OCs pendentes
+ * agrupadas ("Quinz. até 01/Jul" e "Quinz. até 15/Jul"), o resto ficava solto; Madeireira Andorra
+ * nunca agrupava, mesmo repetindo 3x na mesma data.
+ *
+ * CAUSA-RAIZ (2 causas distintas):
+ * 1) `_agruparContasPagarPorCicloForn` calculava a janela de fechamento (`_cicloWindow`) usando
+ *    `dataVencimento` do título. Mas o vencimento de cada OC é calculado com prazo PRÓPRIO da
+ *    compra (ex.: 15/30/45 dias, `ocFin.dataVencimento`/`dataEntregaPrevista`), então varia OC a
+ *    OC mesmo quando todas foram compradas na mesma quinzena — jogando compras do MESMO ciclo em
+ *    janelas diferentes (ou só coincidindo por acaso, daí os 2 grupos parciais). A data de
+ *    COMPRA real é `dataCompetencia` (gravada com `new Date()` no momento em que a OC é lançada no
+ *    financeiro em `compras.ts`) — essa sim é estável e reflete "quando comprou", não "quando
+ *    vence". Verificado em produção: as únicas OCs da Ferragens Santa Rita têm `data_vencimento`
+ *    espalhado (02/06, 04/06, 11/06, 17/06, 23/06, 30/06, 15/07, 17/07...) mas `data_competencia`
+ *    concentrada nas datas de lançamento (18–26/06), confirmando a causa.
+ * 2) Madeireira Andorra NÃO tem ciclo configurado em nenhum lugar do banco — consultado
+ *    `empresas_terceiras` (produção): só existe UMA linha com `ciclo_pagamento` preenchido no
+ *    sistema inteiro (Ferragens Santa Rita, id 26). O fornecedor 685 (Madeireira Andorra, cadastro
+ *    em Compras) não tem linha correspondente em `empresas_terceiras` — ou seja, o ciclo nunca foi
+ *    salvo pra ela (não é bug de leitura; falta configurar/salvar no cadastro).
+ *
+ * FIX: `_agruparContasPagarPorCicloForn` (server/routers/financial.ts) passou a calcular a janela
+ * a partir de `dataCompetencia ?? dataVencimento` (antes era o inverso). Isso NÃO muda o
+ * vencimento do grupo consolidado em si — continua vindo de `_cicloFechamentoDate` a partir da
+ * janela — só corrige QUAIS títulos caem em qual janela. ZERO DELETE · ZERO ALTER destrutivo
+ * (mudança de 3 linhas na leitura, nada gravado). Para a Madeireira Andorra (e qualquer outro
+ * fornecedor) aparecer consolidada, falta configurar o ciclo de fechamento no cadastro dela em
+ * Compras → Fornecedores → editar → seção "Ciclo de Fechamento".
+ */
+
+/**
  * Rev. 4070 — **CONTAS A PAGAR: CONSOLIDAÇÃO DE TÍTULOS POR CICLO DE FECHAMENTO DO FORNECEDOR
  * (CADASTRO) + PAGAMENTO ÚNICO QUE AUTO-DIVIDE EM N CHEQUES E LANÇA NO CONTROLE DE CHEQUES.**
  *
