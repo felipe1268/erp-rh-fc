@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter, AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -63,15 +64,76 @@ function diasAteData(v: any): number | null {
   } catch { return null; }
 }
 
+// Rev. 4081 — rótulos das formas de pagamento de um vínculo tipo 'ajuste' (sem linha de
+// extrato); mesmo mapa usado em FinanceiroConciliacao.tsx.
+const FORMA_PAGAMENTO_LABEL: Record<string, string> = {
+  dinheiro: "Dinheiro",
+  deposito: "Depósito",
+  cheque_proprio: "Cheque próprio",
+  outro: "Outro",
+};
+
 function statusBadge(s: string) {
   switch (s) {
     case "compensado": return <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Compensado</Badge>;
+    // Rev. 4081 — cheque devolvido quitado por substituição (PIX/TED/dinheiro/etc.) vira
+    // "compensado_pix" (Rev. 4079); antes caía no default "Indefinido".
+    case "compensado_pix": return <Badge className="bg-teal-100 text-teal-700 hover:bg-teal-100">Quitado (substituição)</Badge>;
     case "pendente": return <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">Pendente</Badge>;
     case "sustado": return <Badge className="bg-red-100 text-red-700 hover:bg-red-100">Sustado</Badge>;
     case "cancelado": return <Badge className="bg-gray-200 text-gray-700 hover:bg-gray-200">Cancelado</Badge>;
     case "devolvido": return <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100">Devolvido</Badge>;
     default: return <Badge variant="outline">Indefinido</Badge>;
   }
+}
+
+// Rev. 4081 — detalhamento de COMO um cheque "compensado_pix" foi quitado por substituição
+// (1 ou mais pagamentos, PIX/TED/dinheiro/depósito/cheque próprio/outro somando o total).
+// Busca sob demanda (popover) via getVinculosPorChequeNumero — não pesa a listagem principal.
+function ChequeVinculosBreakdown({ companyId, numeroCheque }: { companyId: number; numeroCheque: string }) {
+  const [open, setOpen] = useState(false);
+  const { data, isFetching } = (trpc as any).financial.getVinculosPorChequeNumero.useQuery(
+    { companyId, numeroCheque },
+    { enabled: open && !!companyId && !!numeroCheque }
+  );
+  const vinculos: any[] = data?.vinculos ?? [];
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button type="button" className="inline-flex w-fit items-center gap-1 rounded-full bg-teal-100 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 hover:bg-teal-200" title="Ver como este cheque foi pago">
+          <Link2 className="h-3 w-3" /> Ver pagamento
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-80 text-xs">
+        <p className="mb-2 font-semibold text-teal-700">Quitado por substituição</p>
+        {isFetching ? (
+          <p className="text-muted-foreground">Carregando…</p>
+        ) : vinculos.length === 0 ? (
+          <p className="text-muted-foreground">Nenhum vínculo encontrado.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {vinculos.map((v) => (
+              <div key={v.id} className="flex items-center justify-between gap-2 border-b border-dashed pb-1 last:border-0">
+                <div className="min-w-0">
+                  <p className="font-medium text-foreground">
+                    {v.tipo === "ajuste" ? (FORMA_PAGAMENTO_LABEL[v.formaPagamento] ?? "Ajuste") : "PIX/TED"}
+                  </p>
+                  <p className="truncate text-[10px] text-muted-foreground">
+                    {[fmtData(v.data), v.pixContaApelido || v.pixDescricao].filter(Boolean).join(" · ") || "—"}
+                  </p>
+                </div>
+                <span className="shrink-0 font-semibold tabular-nums">{formatBRL(Math.abs(Number(v.valor)))}</span>
+              </div>
+            ))}
+            <div className="flex items-center justify-between pt-1 font-semibold">
+              <span>Total</span>
+              <span className="tabular-nums">{formatBRL(vinculos.reduce((s, v) => s + Math.abs(Number(v.valor)), 0))}</span>
+            </div>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 // Rev. 3246 — célula "Dias p/ compensar": substitui a antiga coluna "Compensação".
@@ -1140,6 +1202,10 @@ export default function FinanceiroCheques() {
                         <td className="py-2 pr-3">
                           <div className="flex flex-col gap-1">
                             {statusBadge(c.status)}
+                            {/* Rev. 4081 — detalhamento de como o cheque foi pago (multi-forma/multi-conta). */}
+                            {c.status === "compensado_pix" && c.numeroCheque && companyId ? (
+                              <ChequeVinculosBreakdown companyId={Number(companyId)} numeroCheque={String(c.numeroCheque)} />
+                            ) : null}
                             {/* Rev. 3242 — TAG de conferência com o extrato como pílula (análise diária). */}
                             {c.conciliado ? (
                               <span className="inline-flex w-fit items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700" title={`Conciliado no extrato${c.dataConciliacao ? " em " + fmtData(c.dataConciliacao) : ""}`}>

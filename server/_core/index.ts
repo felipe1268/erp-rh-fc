@@ -917,6 +917,10 @@ Regras:
           await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_bcv_pix ON bank_cheque_vinculos(pix_line_id)`);
           console.log(`[SyncSchema+] Rev. 3747: tabela bank_cheque_vinculos garantida (vínculo cheque devolvido ↔ PIX/TED substituto).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA bank_cheque_vinculos:`, e?.message || e); }
+        try {
+          await db.execute(sql`ALTER TABLE bank_cheque_vinculos ADD COLUMN IF NOT EXISTS forma_pagamento TEXT`);
+          console.log(`[SyncSchema+] Rev. 4081: coluna forma_pagamento garantida em bank_cheque_vinculos (dinheiro/depósito/cheque próprio/outro nos vínculos tipo "ajuste").`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA bank_cheque_vinculos.forma_pagamento:`, e?.message || e); }
 
         // Rev. 3352 — feriados.observado: a empresa ADOTA (segue) o feriado?
         // Cria a coluna SÓ se não existir (idempotente) e, NESSE ÚNICO momento, faz o

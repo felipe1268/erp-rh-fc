@@ -269,6 +269,15 @@ async function _coberturaChequeDevolvido(db: any, companyId: number, debitoLineI
   return { cents, doc, chq, meus, acumCents };
 }
 
+// Rev. 4081 — rótulos das formas de pagamento de um vínculo tipo 'ajuste' (sem linha de
+// extrato): usado tanto na descrição-padrão gravada quanto no audit log.
+const FORMA_PAGAMENTO_LABEL: Record<string, string> = {
+  dinheiro: "Pago em dinheiro",
+  deposito: "Pago via depósito",
+  cheque_proprio: "Quitado com outro cheque (compensação)",
+  outro: "Quitação de saldo (ajuste manual)",
+};
+
 // Casa duas referências de cheque devolvido: mesma linha de débito (exata) OU mesma
 // identidade lógica (valor abs igual + mesmo doc OU mesmo nº de cheque). Usado tanto na
 // cobertura por linha (helper acima) quanto no lote (getChequeDevolvidoVinculacao).
@@ -13332,6 +13341,9 @@ export const financialRouter = router({
     creditoLineId: z.number().optional(),
     chequeNumero: z.string().optional(),
     tipo: z.enum(["pix", "ajuste"]).default("pix"),
+    // Rev. 4081 — obrigatório quando tipo='ajuste': COMO essa parcela foi paga sem linha
+    // de extrato (dinheiro em mãos, depósito, compensação com outro cheque etc.).
+    formaPagamento: z.enum(["dinheiro", "deposito", "cheque_proprio", "outro"]).optional(),
     pixLineId: z.number().optional(),
     valor: z.number().positive(),
     data: z.string().optional(),
@@ -13392,6 +13404,13 @@ export const financialRouter = router({
       }
     }
 
+    // Rev. 4081 — vínculo 'ajuste' (sem linha de extrato) exige dizer COMO foi pago
+    // (dinheiro, depósito, cheque próprio ou outro), pra não virar um "ajuste" genérico
+    // sem rastreabilidade.
+    if (input.tipo === "ajuste" && !input.formaPagamento) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Selecione a forma de pagamento (dinheiro, depósito, cheque próprio ou outro)." });
+    }
+
     // 2.5) valida a linha de CRÉDITO (devolução) do par, se informada — empresa + entrada (valor>0).
     //      Sem isso, um creditoLineId arbitrário (mesmo da empresa) seria auto-desconsiderado ao quitar.
     if (input.creditoLineId != null) {
@@ -13417,18 +13436,20 @@ export const financialRouter = router({
 
     const porNome = (ctx.user as any)?.nome ?? (ctx.user as any)?.name ?? null;
     const dataVinc = input.data ?? (pixLine?.data ?? null);
-    const descVinc = input.descricao ?? (pixLine?.descricao ?? null);
+    // Rev. 4081 — para 'ajuste', a descrição-padrão passa a citar a forma de pagamento
+    // (ex.: "Pago em dinheiro") em vez do genérico "Quitação de saldo (ajuste manual)".
+    const descVinc = input.descricao ?? (pixLine?.descricao ?? (input.tipo === "ajuste" ? FORMA_PAGAMENTO_LABEL[input.formaPagamento ?? "outro"] : null));
 
-    // 4) insere o vínculo ($1..$12 distintos, na ordem de aparição = ordem do array)
+    // 4) insere o vínculo ($1..$13 distintos, na ordem de aparição = ordem do array)
     const ins = await dbExecute(db,
       `INSERT INTO bank_cheque_vinculos
-         (company_id, debito_line_id, credito_line_id, cheque_numero, tipo,
+         (company_id, debito_line_id, credito_line_id, cheque_numero, tipo, forma_pagamento,
           pix_line_id, pix_conta_bancaria_id, valor, data, descricao,
           criado_por_id, criado_por_nome)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
        RETURNING id`,
       [input.companyId, input.debitoLineId, input.creditoLineId ?? null,
-       input.chequeNumero ?? null, input.tipo,
+       input.chequeNumero ?? null, input.tipo, input.tipo === "ajuste" ? (input.formaPagamento ?? null) : null,
        input.pixLineId ?? null, pixLine?.contaId ?? null, input.valor,
        dataVinc, descVinc, ctx.user?.id ?? null, porNome]);
     const vinculoId = rows(ins)[0]?.id;
@@ -13491,7 +13512,7 @@ export const financialRouter = router({
       action: "cheque_vinculo_registrado",
       userId: ctx.user?.id,
       companyId: input.companyId,
-      details: `Vínculo ${input.tipo} R$ ${input.valor.toFixed(2)} ao cheque devolvido (linha #${input.debitoLineId})${input.pixLineId ? ` ↔ extrato #${input.pixLineId}` : " (ajuste de saldo)"}${quitado ? " — cheque QUITADO por substituição" : ""}`,
+      details: `Vínculo ${input.tipo} R$ ${input.valor.toFixed(2)} ao cheque devolvido (linha #${input.debitoLineId})${input.pixLineId ? ` ↔ extrato #${input.pixLineId}` : ` (${FORMA_PAGAMENTO_LABEL[input.formaPagamento ?? "outro"]})`}${quitado ? " — cheque QUITADO por substituição" : ""}`,
     });
     return {
       ok: true,
@@ -13617,7 +13638,7 @@ export const financialRouter = router({
     // empresa + a descrição/valor da linha de débito de cada um, p/ casar por IDENTIDADE do
     // cheque (doc/nº + valor) e não só pelo id volátil da linha (que gira em re-imports).
     const vSel = await dbExecute(db,
-      `SELECT v.id, v.debito_line_id AS "debitoLineId", v.tipo, v.pix_line_id AS "pixLineId",
+      `SELECT v.id, v.debito_line_id AS "debitoLineId", v.tipo, v.forma_pagamento AS "formaPagamento", v.pix_line_id AS "pixLineId",
               v.valor, to_char(v.data,'YYYY-MM-DD') AS data, v.descricao,
               v.cheque_numero AS "chequeNumero", v.criado_por_nome AS "criadoPorNome",
               v.created_at AS "createdAt",
@@ -13695,6 +13716,32 @@ export const financialRouter = router({
       };
     }
     return { mapa };
+  }),
+
+  // Rev. 4081 — Detalhamento de COMO um cheque (já compensado_pix) foi quitado por
+  // substituição: lista todos os vínculos ativos por número do cheque, pra exibir na
+  // tela de Controle de Cheques sem precisar abrir a Conciliação Bancária.
+  getVinculosPorChequeNumero: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    numeroCheque: z.string().min(1),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const r = await dbExecute(db,
+      `SELECT v.id, v.tipo, v.forma_pagamento AS "formaPagamento", v.valor,
+              to_char(v.data,'YYYY-MM-DD') AS data, v.descricao,
+              v.criado_por_nome AS "criadoPorNome", v.created_at AS "createdAt",
+              p.descricao AS "pixDescricao",
+              cba.apelido AS "pixContaApelido", cba.banco AS "pixContaBanco"
+         FROM bank_cheque_vinculos v
+         LEFT JOIN bank_statement_lines p ON p.id = v.pix_line_id
+         LEFT JOIN company_bank_accounts cba ON cba.id = v.pix_conta_bancaria_id
+        WHERE v.company_id=$1 AND v.estornado_em IS NULL
+          AND regexp_replace(v.cheque_numero,'[^0-9]','','g') = regexp_replace($2,'[^0-9]','','g')
+        ORDER BY v.created_at ASC, v.id ASC`,
+      [input.companyId, input.numeroCheque]);
+    return { vinculos: rows(r) as any[] };
   }),
 
   // Rev. 3747 — Busca PIX/TED/transf (débitos) em TODAS as contas da empresa p/ o vínculo

@@ -59,6 +59,16 @@ function parseBRLInput(masked: string) {
   return Number(d || "0") / 100;
 }
 
+// Rev. 4081 — rótulos das formas de pagamento de um vínculo tipo 'ajuste' (sem linha de
+// extrato), usados nos badges de "Gerenciar vínculos" (Conciliação) e no detalhamento
+// exibido em Controle de Cheques.
+const FORMA_PAGAMENTO_LABEL: Record<string, string> = {
+  dinheiro: "Dinheiro",
+  deposito: "Depósito",
+  cheque_proprio: "Cheque próprio",
+  outro: "Outro",
+};
+
 function fmtData(v: any) {
   if (!v) return "—";
   try {
@@ -557,6 +567,9 @@ export default function FinanceiroConciliacao() {
   // Rev. 3747 — Vínculo de cheque devolvido ↔ PIX/TED: parcial (1→N), TODAS as contas.
   // valor da parcela (editável; default = saldo); mutations registrar/estornar; busca global.
   const [vincularPixValor, setVincularPixValor] = useState<string>("");
+  // Rev. 4081 — forma de pagamento do vínculo tipo 'ajuste' (sem linha de extrato):
+  // dinheiro/depósito/cheque próprio/outro, com rastreabilidade (não mais um "ajuste" genérico).
+  const [vincularFormaPagamento, setVincularFormaPagamento] = useState<string>("");
   const registrarVinculoMut = (trpc as any).financial.registrarVinculoChequeDevolvido.useMutation();
   const estornarVinculoMut = (trpc as any).financial.estornarVinculoChequeDevolvido.useMutation();
   const { data: pixGlobalData, isFetching: pixGlobalFetching } =
@@ -5463,7 +5476,7 @@ export default function FinanceiroConciliacao() {
                                   <button
                                     type="button"
                                     className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-semibold bg-gray-200 text-gray-600 hover:bg-gray-300 transition-colors"
-                                    onClick={() => { setVincularPixSel(null); setVincularPixValor(""); setVincularPixBusca(""); setVincularPixDlg({ cheque: d, pixPreSel: null }); }}
+                                    onClick={() => { setVincularPixSel(null); setVincularPixValor(""); setVincularPixBusca(""); setVincularFormaPagamento(""); setVincularPixDlg({ cheque: d, pixPreSel: null }); }}
                                   >
                                     <Zap className="w-3 h-3" /> Gerenciar vínculos
                                   </button>
@@ -5477,7 +5490,7 @@ export default function FinanceiroConciliacao() {
                                   <button
                                     type="button"
                                     className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-semibold bg-gray-200 text-gray-600 hover:bg-gray-300 transition-colors"
-                                    onClick={() => { setVincularPixSel(null); setVincularPixValor(""); setVincularPixBusca(""); setVincularPixDlg({ cheque: d, pixPreSel: null }); }}
+                                    onClick={() => { setVincularPixSel(null); setVincularPixValor(""); setVincularPixBusca(""); setVincularFormaPagamento(""); setVincularPixDlg({ cheque: d, pixPreSel: null }); }}
                                   >
                                     <Zap className="w-3 h-3" /> Gerenciar vínculos
                                   </button>
@@ -5495,7 +5508,7 @@ export default function FinanceiroConciliacao() {
                                   <button
                                     type="button"
                                     className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
-                                    onClick={() => { setVincularPixSel(null); setVincularPixValor(""); setVincularPixBusca(""); setVincularPixDlg({ cheque: d, pixPreSel: null }); }}
+                                    onClick={() => { setVincularPixSel(null); setVincularPixValor(""); setVincularPixBusca(""); setVincularFormaPagamento(""); setVincularPixDlg({ cheque: d, pixPreSel: null }); }}
                                   >
                                     <Zap className="w-3 h-3" /> Vincular PIX/TED
                                   </button>
@@ -5511,12 +5524,12 @@ export default function FinanceiroConciliacao() {
                                       <span className="inline-flex items-center gap-1 px-1.5 py-px rounded-full font-semibold bg-amber-100 text-amber-700"><ArrowLeftRight className="w-3 h-3" /> Parcial</span>
                                     )}
                                     <span className="text-gray-600">Vinculado <strong className="text-gray-800">{formatBRL(vinAcumCents / 100)}</strong> de {formatBRL(vinTotalCents / 100)}{!vinQuitado && vinSaldoCents > 0 ? <> · saldo <strong className="text-rose-600">{formatBRL(vinSaldoCents / 100)}</strong></> : null}</span>
-                                    <button type="button" className="ml-auto text-[11px] text-indigo-700 hover:text-indigo-900 underline" onClick={() => { setVincularPixSel(null); setVincularPixValor(""); setVincularPixBusca(""); setVincularPixDlg({ cheque: d, pixPreSel: null }); }}>Gerenciar vínculos</button>
+                                    <button type="button" className="ml-auto text-[11px] text-indigo-700 hover:text-indigo-900 underline" onClick={() => { setVincularPixSel(null); setVincularPixValor(""); setVincularPixBusca(""); setVincularFormaPagamento(""); setVincularPixDlg({ cheque: d, pixPreSel: null }); }}>Gerenciar vínculos</button>
                                   </div>
                                   <div className="mt-1 space-y-0.5">
                                     {(vinfo.vinculos ?? []).map((v: any) => (
                                       <div key={v.id} className="flex items-center gap-2 text-[11px] text-gray-600">
-                                        <span className="text-gray-400">{v.tipo === "ajuste" ? "Ajuste" : "PIX/TED"}</span>
+                                        <span className="text-gray-400">{v.tipo === "ajuste" ? (FORMA_PAGAMENTO_LABEL[v.formaPagamento] ?? "Ajuste") : "PIX/TED"}</span>
                                         <span className="font-medium text-gray-700">{formatBRL(Math.abs(Number(v.valor)))}</span>
                                         {v.data ? <span className="text-gray-400">{fmtData(v.data)}</span> : null}
                                         {v.pixContaApelido ? <span className="text-gray-400 truncate max-w-[140px]" title={v.pixContaApelido}>{v.pixContaApelido}</span> : null}
@@ -7164,7 +7177,7 @@ export default function FinanceiroConciliacao() {
           const pctCob = valCents > 0 ? Math.min(100, Math.round((acumCents / valCents) * 100)) : 0;
           const candidatas: any[] = (pixGlobalData?.linhas ?? []).filter((l: any) => Number(l.id) !== debId && (credId == null || Number(l.id) !== credId));
           const parcelaCents = Math.round((parseFloat(String(vincularPixValor).replace(",", ".")) || 0) * 100);
-          const closeDialog = () => { setVincularPixDlg(null); setVincularPixSel(null); setVincularPixBusca(""); setVincularPixValor(""); setVincularPixSoProximos(false); setVincularPixOutrosMeses(false); };
+          const closeDialog = () => { setVincularPixDlg(null); setVincularPixSel(null); setVincularPixBusca(""); setVincularPixValor(""); setVincularFormaPagamento(""); setVincularPixSoProximos(false); setVincularPixOutrosMeses(false); };
           const selecionar = (l: any) => {
             setVincularPixSel(l);
             const lineCents = Math.round(Math.abs(Number(l.valor ?? 0)) * 100);
@@ -7175,6 +7188,7 @@ export default function FinanceiroConciliacao() {
             if (!companyId) return;
             if (!(parcelaCents > 0)) { toast({ title: "Informe um valor válido para o vínculo.", variant: "destructive" }); return; }
             if (tipo === "pix" && !vincularPixSel) { toast({ title: "Selecione o PIX/TED no extrato.", variant: "destructive" }); return; }
+            if (tipo === "ajuste" && !vincularFormaPagamento) { toast({ title: "Selecione a forma de pagamento.", variant: "destructive" }); return; }
             try {
               const res = await registrarVinculoMut.mutateAsync({
                 companyId: Number(companyId),
@@ -7183,9 +7197,9 @@ export default function FinanceiroConciliacao() {
                 chequeNumero: chq.chequeNumero ? String(chq.chequeNumero) : undefined,
                 tipo,
                 pixLineId: tipo === "pix" ? Number(vincularPixSel.id) : undefined,
+                formaPagamento: tipo === "ajuste" ? (vincularFormaPagamento as any) : undefined,
                 valor: parcelaCents / 100,
                 data: tipo === "pix" && vincularPixSel?.data ? String(vincularPixSel.data).slice(0, 10) : undefined,
-                descricao: tipo === "pix" ? (vincularPixSel?.descricao ?? undefined) : "Quitação de saldo (ajuste manual)",
               });
               const paresResolvidos = Number(res.paresResolvidos ?? (res.quitado ? 1 : 0));
               toast({
@@ -7197,7 +7211,7 @@ export default function FinanceiroConciliacao() {
                   : `Vinculado ${formatBRL(parcelaCents / 100)} · saldo restante ${formatBRL(Number(res.saldo))}.`,
               });
               refreshAposVinculo();
-              setVincularPixSel(null); setVincularPixValor("");
+              setVincularPixSel(null); setVincularPixValor(""); setVincularFormaPagamento("");
               if (res.quitado) closeDialog();
             } catch (err: any) {
               const msg = String(err?.message ?? err);
@@ -7280,7 +7294,7 @@ export default function FinanceiroConciliacao() {
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                         {vinculos.map((v: any) => (
                           <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 10, background: "#fff", border: "1px solid #e0e7ff", borderRadius: 10, padding: "8px 12px" }}>
-                            <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 999, background: v.tipo === "ajuste" ? "#fef3c7" : "#e0e7ff", color: v.tipo === "ajuste" ? "#92400e" : "#3730a3" }}>{v.tipo === "ajuste" ? "AJUSTE" : "PIX/TED"}</span>
+                            <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 999, background: v.tipo === "ajuste" ? "#fef3c7" : "#e0e7ff", color: v.tipo === "ajuste" ? "#92400e" : "#3730a3" }}>{v.tipo === "ajuste" ? (FORMA_PAGAMENTO_LABEL[v.formaPagamento]?.toUpperCase() ?? "AJUSTE") : "PIX/TED"}</span>
                             <div style={{ minWidth: 0, flex: 1 }}>
                               <p style={{ margin: 0, fontSize: 13, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.pixDescricao ?? v.descricao ?? "Ajuste de saldo"}</p>
                               <p style={{ margin: "1px 0 0", fontSize: 11, color: "#6b7280" }}>{[v.data ? fmtData(v.data) : null, v.pixContaApelido].filter(Boolean).join(" · ") || "—"}</p>
@@ -7391,15 +7405,29 @@ export default function FinanceiroConciliacao() {
                         />
                       </div>
                       <button type="button" onClick={() => setVincularPixValor((saldoCents / 100).toFixed(2))} style={{ height: 38, padding: "0 12px", borderRadius: 10, border: "1px solid #c7d2fe", background: "#eef2ff", color: "#4338ca", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Usar saldo ({formatBRL(saldoCents / 100)})</button>
+                      <div style={{ flex: "0 0 170px" }}>
+                        <label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 4 }}>Forma de pagamento</label>
+                        <select
+                          value={vincularFormaPagamento}
+                          onChange={e => setVincularFormaPagamento(e.target.value)}
+                          style={{ width: "100%", boxSizing: "border-box", border: "1px solid #d1d5db", borderRadius: 10, padding: "9px 8px", fontSize: 13, outline: "none", background: "#fff" }}
+                        >
+                          <option value="">Selecione…</option>
+                          <option value="dinheiro">Dinheiro</option>
+                          <option value="deposito">Depósito</option>
+                          <option value="cheque_proprio">Cheque próprio</option>
+                          <option value="outro">Outro</option>
+                        </select>
+                      </div>
                       <div style={{ flex: 1, minWidth: 8 }} />
                       <Button
                         variant="outline"
                         style={{ height: 38 }}
-                        disabled={busy || !(parcelaCents > 0)}
-                        title="Lança um AJUSTE manual (arredondamento/divergência). Não cria nem altera linha no extrato."
+                        disabled={busy || !(parcelaCents > 0) || !vincularFormaPagamento}
+                        title="Lança um pagamento SEM linha de extrato (dinheiro/depósito/cheque próprio/outro). Não cria nem altera linha no extrato."
                         onClick={() => registrar("ajuste")}
                       >
-                        Quitar saldo (ajuste)
+                        Quitar saldo
                       </Button>
                       <Button
                         style={{ height: 38, background: "#4f46e5", color: "#fff", fontWeight: 600 }}

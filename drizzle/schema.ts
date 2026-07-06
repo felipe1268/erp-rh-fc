@@ -7458,6 +7458,10 @@ export const bankChequeVinculos = pgTable("bank_cheque_vinculos", {
   creditoLineId: integer("credito_line_id"),
   chequeNumero: varchar("cheque_numero", { length: 30 }),
   tipo: text("tipo").default("pix").notNull(), // pix | ajuste
+  // Rev. 4081 — só preenchido quando tipo='ajuste': dinheiro | deposito | cheque_proprio | outro.
+  // Distingue um pagamento REAL sem linha de extrato (ex.: parte em dinheiro) de um mero
+  // arredondamento, dando rastreabilidade de COMO aquela parcela foi paga.
+  formaPagamento: text("forma_pagamento"),
   pixLineId: integer("pix_line_id"),
   pixContaBancariaId: integer("pix_conta_bancaria_id"),
   valor: numeric("valor", { precision: 15, scale: 2 }).notNull(),

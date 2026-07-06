@@ -1,4 +1,38 @@
 /**
+ * Rev. 4081 — **CONCILIAÇÃO: CHEQUE DEVOLVIDO QUITADO POR MÚLTIPLOS PAGAMENTOS/FORMAS
+ * (NÃO SÓ 1 PIX) — CONTROLE DE CHEQUES PASSA A MOSTRAR COMO FOI PAGO.**
+ *
+ * PEDIDO: usuário quer suportar um cheque devolvido quitado por VÁRIOS pagamentos
+ * somando o valor total (ex.: 2k+2k+1k de PIX em contas diferentes, OU 4k em dinheiro +
+ * 1k de PIX) — e que o status no Controle de Cheques reflita isso corretamente,
+ * independente de quantas parcelas/formas foram usadas.
+ *
+ * INVESTIGAÇÃO: o vínculo múltiplo (1→N linhas de PIX/TED, em contas diferentes,
+ * somando o saldo) já funcionava — é o sistema `bank_cheque_vinculos` (Rev. 3747+) com
+ * propagação por identidade (Rev. 4079). As lacunas reais eram: (1) pagamento em
+ * DINHEIRO ou outras formas sem linha de extrato só existiam como um "ajuste manual"
+ * genérico, sem dizer COMO foi pago; (2) `statusBadge()` em FinanceiroCheques.tsx (Controle
+ * de Cheques) não tinha case pra `compensado_pix` — caía no default "Indefinido"; (3) o
+ * detalhamento de como o cheque foi quitado só existia na tela de Conciliação, não no
+ * Controle de Cheques.
+ *
+ * FIX: `bank_cheque_vinculos` ganhou a coluna `forma_pagamento` (dinheiro/depósito/
+ * cheque próprio/outro) pro vínculo tipo 'ajuste' — obrigatória nesse caso
+ * (`registrarVinculoChequeDevolvido` valida e grava; audit log e descrição-padrão citam
+ * a forma escolhida). `FinanceiroConciliacao.tsx` trocou o botão genérico "Quitar saldo
+ * (ajuste)" por um seletor de forma de pagamento + botão "Quitar saldo" (só habilita com
+ * forma selecionada); badges de "Gerenciar vínculos" mostram a forma em vez de "AJUSTE"
+ * genérico. Novo endpoint `getVinculosPorChequeNumero` + `statusBadge()` ganhou o case
+ * `compensado_pix` + popover "Ver pagamento" em `FinanceiroCheques.tsx` (Controle de
+ * Cheques) — lista TODOS os pagamentos (PIX/TED de qualquer conta + dinheiro/depósito/
+ * cheque próprio/outro) que quitaram o cheque, com total, sem precisar abrir a
+ * Conciliação Bancária.
+ *
+ * ESCOPO: ZERO DELETE · ZERO UPDATE em dado existente · 1 ALTER aditivo (coluna nullable
+ * `forma_pagamento`), via self-heal `IF NOT EXISTS`.
+ */
+
+/**
  * Rev. 4080 — **CONTAS A PAGAR: BOTÃO "ANO TODO" PADRONIZADO COM CONTAS A RECEBER.**
  *
  * PEDIDO: usuário notou que o botão "Ano todo" do Contas a Pagar não estava na mesma
