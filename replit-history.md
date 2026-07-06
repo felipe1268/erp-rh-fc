@@ -1,3 +1,5 @@
+- **Rev. 4069** — **CONTAS A PAGAR: FILTRO DE MÊS ERA IGNORADO DURANTE A BUSCA + FALTAVA OPÇÃO "ANO TODO".** Usuário selecionou Julho e pesquisou um fornecedor — a lista trouxe títulos de todos os meses. Fix: novo toggle "Ano todo (AAAA)" + `escopoData` do qual TUDO deriva. ZERO DELETE · ZERO ALTER destrutivo (100% client-side).
+
 - **Rev. 4068** — **CONCILIAÇÃO BANCÁRIA NÃO BAIXAVA O CHEQUE NO CONTROLE DE CHEQUES + MOTIVO/CONTA TENTATIVA DE DEVOLUÇÃO AGORA FICAM REGISTRADOS.** `conciliarLancamento` nunca tocava `financial_cheques`; novas colunas de motivo/conta tentativa + baixa automática do cheque ao conciliar (match por Nº normalizado + valor). ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4067** — **RH: FUNCIONÁRIOS DUPLICADOS ENTRE EMPRESAS DO MESMO GRUPO (Efetivo por Obra).** 12 funcionários reais da FC Engenharia recadastrados do zero em empresa do mesmo grupo em vez de reaproveitar cadastro compartilhado; soft-deletados + nova `checkDuplicateCpfCrossCompanyGroup` bloqueia recorrência. ZERO DELETE definitivo · ZERO ALTER destrutivo.

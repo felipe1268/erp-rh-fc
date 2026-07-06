@@ -1,4 +1,26 @@
 /**
+ * Rev. 4076 — **CONTAS A PAGAR: SELO VISUAL "FD" NAS LINHAS DE FATURAMENTO DIRETO — DEIXA
+ * CLARO POR QUE ESSAS OCS NÃO ENTRAM NO AGRUPAMENTO CONSOLIDADO POR CICLO DO FORNECEDOR.**
+ *
+ * PEDIDO: usuário reportou que ainda via OCs da Ferragens Santa Rita "soltas" ao lado do
+ * grupo consolidado (ex.: OC-2026-312, 680, 235, 311, 317, 696, 722, 675). Investigação
+ * (consulta direta ao Neon) confirmou que TODAS essas OCs têm `modalidade_fd = fd_cliente` —
+ * ou seja, o comportamento está correto por desenho (Rev. 4072: Faturamento Direto é dinheiro
+ * que o CLIENTE paga direto ao fornecedor, a FC nunca desembolsa, então nunca pode entrar no
+ * ciclo de fechamento consolidado). O problema real era de EXIBIÇÃO: essas linhas apareciam
+ * idênticas às normais (mesma categoria "Compras"), sem nenhum indicador visual do motivo.
+ *
+ * FIX: `FinanceiroContasAPagar.tsx` ganhou `fdBadgeInfo()`/`<FdBadge>` — selo colorido
+ * ("FD Cliente" azul / "FD"/"FD Terceiro" âmbar, com tooltip explicando a regra) renderizado
+ * ao lado da categoria nos 3 pontos de exibição da linha (dentro do grupo "fechamento_forn",
+ * dentro de outros agrupamentos, e na linha individual da tabela principal). Usa o campo
+ * `modalidadeFd` que o backend já retornava (`getContasAPagarByYear`), sem nenhuma mudança de
+ * schema ou de lógica de agrupamento (`_isFdModalidade`/`_agruparContasPagarPorCicloForn`
+ * intocados — comportamento correto, só precisava ficar visível). ZERO DELETE · ZERO UPDATE ·
+ * ZERO ALTER (100% frontend, campo já existente).
+ */
+
+/**
  * Rev. 4075 — **CONTAS A PAGAR: FECHAMENTO POR CICLO PASSA A ANCORAR NA DATA DE LANÇAMENTO NO
  * SISTEMA (COMPETÊNCIA), NÃO MAIS NO `dataVencimento` DIGITADO À MÃO NA OC — COM SUPORTE A
  * LANÇAMENTO RETROATIVO.**

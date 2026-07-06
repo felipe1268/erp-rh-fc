@@ -137,6 +137,36 @@ function categoriaFor(c: any): string {
   return ORIGEM_LABELS[c.origemModulo] ?? "Sem categoria";
 }
 
+// Rev. 4076 — Selo "FD" pra deixar visível por que o título NÃO entra no
+// agrupamento por ciclo de fechamento do fornecedor (Rev. 4072): é Faturamento
+// Direto, dinheiro que o CLIENTE paga direto ao fornecedor — a FC não desembolsa.
+function fdBadgeInfo(c: any): { label: string; cls: string; title: string } | null {
+  const m = c?.modalidadeFd;
+  if (m === "fd_cliente") {
+    return { label: "FD Cliente", cls: "bg-blue-100 text-blue-700 border-blue-200", title: "Faturamento Direto: o cliente paga direto ao fornecedor — não entra no ciclo de fechamento consolidado da FC" };
+  }
+  if (m === "fd_fc") {
+    return { label: "FD", cls: "bg-amber-100 text-amber-700 border-amber-200", title: "Faturamento Direto (cobrança via terceiro) — não entra no ciclo de fechamento consolidado da FC" };
+  }
+  if (m === "fd_terceiro") {
+    return { label: "FD Terceiro", cls: "bg-amber-100 text-amber-700 border-amber-200", title: "Faturamento Direto: pago por terceiro — não entra no ciclo de fechamento consolidado da FC" };
+  }
+  return null;
+}
+
+function FdBadge({ c }: { c: any }) {
+  const info = fdBadgeInfo(c);
+  if (!info) return null;
+  return (
+    <span
+      className={`inline-flex items-center px-1 py-0 rounded text-[9px] font-bold border shrink-0 ${info.cls}`}
+      title={info.title}
+    >
+      {info.label}
+    </span>
+  );
+}
+
 // Rev. 1625/1626 — consolidateSubtype agora vive em @/lib/financialOrigins
 const CONSOLIDATE_MIN = 3; // só agrupa quando há ≥ N entries do mesmo subtipo
 const CONSOLIDATE_MODE_KEY = "fc_ap_consolidateMode_v1";
@@ -1356,7 +1386,10 @@ export default function FinanceiroContasAPagar() {
                                         <p className="text-xs text-slate-700 truncate" title={desc}>{desc}</p>
                                       </td>
                                       <td className="px-2 py-2">
-                                        <span className="text-[11px] text-slate-500">{categoriaFor(c)}</span>
+                                        <div className="flex items-center gap-1">
+                                          <span className="text-[11px] text-slate-500">{categoriaFor(c)}</span>
+                                          <FdBadge c={c} />
+                                        </div>
                                       </td>
                                       <td className="px-2 py-2 text-right whitespace-nowrap">
                                         <span className={`text-xs font-semibold tabular-nums ${vencida ? "text-red-700" : c.status === "pago" ? "text-green-700" : "text-slate-700"}`}>
@@ -1529,7 +1562,10 @@ export default function FinanceiroContasAPagar() {
                                         <p className="text-xs text-slate-700 truncate" title={desc}>{desc}</p>
                                       </td>
                                       <td className="px-2 py-2">
-                                        <span className="text-[11px] text-slate-500">{categoriaFor(c)}</span>
+                                        <div className="flex items-center gap-1">
+                                          <span className="text-[11px] text-slate-500">{categoriaFor(c)}</span>
+                                          <FdBadge c={c} />
+                                        </div>
                                       </td>
                                       <td className="px-2 py-2 text-right whitespace-nowrap">
                                         <span className={`text-xs font-semibold tabular-nums ${vencida ? "text-red-700" : c.status === "pago" ? "text-green-700" : "text-slate-700"}`}>
@@ -1635,10 +1671,13 @@ export default function FinanceiroContasAPagar() {
                                   (texto da categoria já carrega o nome). Ícone inline + texto
                                   poupam ~120px de largura → tabela cabe sem scroll. */}
                               <td className="px-2 py-2.5">
-                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium border max-w-[110px] ${colorCls}`} title={cat}>
-                                  <Icon className="w-3 h-3 shrink-0" />
-                                  <span className="truncate">{cat}</span>
-                                </span>
+                                <div className="flex items-center gap-1">
+                                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium border max-w-[110px] ${colorCls}`} title={cat}>
+                                    <Icon className="w-3 h-3 shrink-0" />
+                                    <span className="truncate">{cat}</span>
+                                  </span>
+                                  <FdBadge c={c} />
+                                </div>
                               </td>
                               {/* Valor */}
                               <td className="px-2 py-2.5 text-right whitespace-nowrap">
