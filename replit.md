@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4075** — **CONTAS A PAGAR: FECHAMENTO POR CICLO PASSA A ANCORAR NA DATA DE LANÇAMENTO NO SISTEMA (COMPETÊNCIA), NÃO MAIS NO `dataVencimento` DIGITADO À MÃO NA OC — COM SUPORTE A LANÇAMENTO RETROATIVO.** Usuário reportou que os vencimentos individuais dentro do grupo consolidado "43x" (janela 01/07) não batiam com a lógica do ciclo cadastrado (`quinzenal_semana`, ref. 17/jun, quartas-feiras), perguntando por que não fecha automaticamente pelo critério exato. A janela de fechamento já usava corretamente `dataCompetencia`; o problema era o `data_vencimento` gravado por OC, historicamente digitado errado pelo comprador (ex.: prazo calculado de data-base errada) — confundia ao abrir o grupo, mas a consolidação em si já estava certa. Fix: (1) `atualizarStatusOrdem` (`compras.ts`) — fornecedor com ciclo cadastrado (≠ avista) passa a usar `dataCompetencia` como vencimento do lançamento (quem decide a data real é `_agruparContasPagarPorCicloForn`), ignorando o campo digitado na OC; (2) novo input opcional `dataLancamento` + dialog "Data de Lançamento no Financeiro" em `Ordens.tsx` (Aprovar/Entregar/Entrega Parcial) permite lançar retroativamente uma OC/nota esquecida na janela histórica correta; (3) varredura retroativa corrigiu 7 lançamentos com vencimento inconsistente (fornecedor com ciclo, vencimento < competência). ZERO DELETE · 1 UPDATE restrito a 7 casos · ZERO ALTER destrutivo.
+
 - **Rev. 4074** — **CONTAS A PAGAR: FERRAGENS SANTA RITA (E OUTROS FORNECEDORES COM CICLO) NÃO CONSOLIDAVAM 100% DAS OCS — LANÇAMENTO FINANCEIRO DA OC NUNCA GRAVAVA `fornecedor_nome`.** Usuário reportou que várias OCs da Ferragens Santa Rita ficavam soltas ao lado do grupo consolidado "25x", impedindo dar baixa corretamente, e pediu explicação + varredura retroativa. Causa-raiz: `_agruparContasPagarPorCicloForn` (Rev. 4070) casa o título ao ciclo lendo `r.fornecedorNome`, mas a integração financeira da OC (`server/routers/compras.ts`) NUNCA gravava essa coluna em `financial_entries` (só usava o nome dentro do texto de `descricao`) — 142 de 263 lançamentos de OC em aberto no sistema inteiro tinham `fornecedor_nome` NULO, caindo sempre como linha individual mesmo com ciclo configurado. Fix: (1) INSERT do lançamento agora grava `fornecedorNome`; (2) `getContasAPagarByYear` ganhou fallback `COALESCE(fornecedor_nome, co.fornecedor_nome)` via join existente; (3) varredura retroativa direto no banco corrigiu 137/144 lançamentos órfãos (os 7 restantes referenciam OCs já excluídas, sem fonte pra recuperar o nome). Ferragens Santa Rita passa de ~26 títulos soltos pra 44 consolidados na janela de 01/07 + 9 na de 15/07. ZERO DELETE · 1 UPDATE em massa restrito a `fornecedor_nome IS NULL/vazio` · ZERO ALTER destrutivo.
 
-- **Rev. 4073** — **CONDIÇÕES DE PAGAMENTO (COTAÇÕES) PASSAM A RESPEITAR O CICLO DE FECHAMENTO CADASTRADO DO FORNECEDOR, COM EXCEÇÃO POR PRODUTO E EXCEÇÃO MANUAL PONTUAL.** Usuário exigiu que compradores parem de escolher livremente forma/parcelamento de pagamento por cotação quando o fornecedor já tem ciclo de fechamento cadastrado (`empresas_terceiras.cicloPagamento`) — regra confirmada: "O que não tiver a condição de fechamento cadastrado, fica livre. O que tiver, deve ser respeitado." Exceções por produto (`regrasProdutoJson`) continuam com prioridade sobre o ciclo geral; nova coluna `excecao_manual` em `comprasCotacaoFornecedores` permite ao comprador declarar uma exceção pontual (ex.: compra emergencial) que libera a condição só para aquela cotação. No modal "Condições de Pagamento" (`Cotacoes.tsx`), quando há condição efetiva (regra de produto > ciclo do fornecedor) e a exceção manual não está marcada, a tela fica travada (forma/parcelamento forçados, aba "Fechamento" custom escondida) com banner + checkbox "Esta compra é uma exceção" para liberar. Fornecedor sem ciclo continua 100% livre. ZERO DELETE · ZERO ALTER destrutivo (1 coluna aditiva).
-
 ### 5 one-liners
+
+- **Rev. 4073** — **CONDIÇÕES DE PAGAMENTO (COTAÇÕES) PASSAM A RESPEITAR O CICLO DE FECHAMENTO CADASTRADO DO FORNECEDOR, COM EXCEÇÃO POR PRODUTO E EXCEÇÃO MANUAL PONTUAL.** Fornecedor com ciclo cadastrado trava forma/parcelamento na cotação (exceção por produto tem prioridade; nova coluna `excecao_manual` libera pontualmente); sem ciclo continua livre. ZERO DELETE · ZERO ALTER destrutivo (1 coluna aditiva).
 
 - **Rev. 4072** — **CONTAS A PAGAR CONSOLIDADO: NUNCA AGRUPAR/MISTURAR TÍTULOS DE FATURAMENTO DIRETO (FD) NO CICLO DE FECHAMENTO PRÓPRIO DA FC.** Novo `_isFdModalidade()` bloqueia agrupamento por ciclo sempre que o título for FD; query ganhou `LEFT JOIN compras_ordens` + `modalidadeFd`. ZERO DELETE · ZERO ALTER destrutivo (100% leitura).
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4069** — **CONTAS A PAGAR: FILTRO DE MÊS ERA IGNORADO DURANTE A BUSCA + FALTAVA OPÇÃO "ANO TODO".** Usuário selecionou Julho e pesquisou um fornecedor — a lista trouxe títulos de todos os meses. Fix: novo toggle "Ano todo (AAAA)" + `escopoData` do qual TUDO deriva. ZERO DELETE · ZERO ALTER destrutivo (100% client-side).
 
-- **Rev. 4068** — **CONCILIAÇÃO BANCÁRIA NÃO BAIXAVA O CHEQUE NO CONTROLE DE CHEQUES + MOTIVO/CONTA TENTATIVA DE DEVOLUÇÃO AGORA FICAM REGISTRADOS.** `conciliarLancamento` nunca tocava `financial_cheques`; novas colunas de motivo/conta tentativa + baixa automática do cheque ao conciliar (match por Nº normalizado + valor). ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4067 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4068 e anteriores.
 
 ## User preferences
 

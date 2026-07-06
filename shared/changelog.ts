@@ -1,4 +1,38 @@
 /**
+ * Rev. 4075 — **CONTAS A PAGAR: FECHAMENTO POR CICLO PASSA A ANCORAR NA DATA DE LANÇAMENTO NO
+ * SISTEMA (COMPETÊNCIA), NÃO MAIS NO `dataVencimento` DIGITADO À MÃO NA OC — COM SUPORTE A
+ * LANÇAMENTO RETROATIVO.**
+ *
+ * PEDIDO: usuário reportou (grupo "43x", janela 01/07/2026, Ferragens Santa Rita) que os
+ * vencimentos individuais dentro do grupo consolidado não batiam com a lógica do ciclo
+ * configurado (`quinzenal_semana`, ref. 17/jun/2026, quartas-feiras, 5 parcelas/30 dias) e
+ * perguntou por que o sistema não fecha automaticamente pelo critério exato cadastrado.
+ *
+ * CAUSA-RAIZ: a janela de fechamento (`_cicloWindow`, Rev. 4070+) já usa corretamente
+ * `dataCompetencia` (data em que a OC foi lançada no sistema) — mas o CAMPO
+ * `data_vencimento` gravado por OC vinha do preenchimento manual do comprador
+ * (`dataVencimento`/`dataEntregaPrevista` da OC), historicamente com erros de digitação
+ * (ex.: prazo "30/60/90 dias" calculado a partir de uma data-base errada). Isso gerava
+ * vencimentos individuais sem relação com o ciclo real, confundindo o usuário ao abrir o
+ * grupo consolidado (a confusão era de EXIBIÇÃO/dado sujo, a consolidação por ciclo em si já
+ * estava correta). Varredura confirmou 7 lançamentos de fornecedores com ciclo configurado
+ * com `data_vencimento < data_competencia` (alguns em datas absurdas, ex. ano 0026/2016).
+ *
+ * FIX: (1) `atualizarStatusOrdem` (`compras.ts`) — para fornecedor com ciclo de fechamento
+ * cadastrado (≠ avista, via `empresas_terceiras.fornecedorId`), o `dataVencimento` do
+ * lançamento financeiro deixa de usar o campo digitado na OC e passa a espelhar a
+ * `dataCompetencia` (quem decide a data real de pagamento é `_agruparContasPagarPorCicloForn`,
+ * não esse campo); (2) novo input opcional `dataLancamento` permite ao comprador registrar
+ * retroativamente uma OC/nota esquecida, caindo na janela de ciclo histórica correta em vez de
+ * "hoje" — novo dialog "Data de Lançamento no Financeiro" em `Ordens.tsx` ao Aprovar/Entregar/
+ * Entrega Parcial (default hoje, editável); (3) VARREDURA RETROATIVA: 7 lançamentos com
+ * `data_vencimento` inconsistente (fornecedor com ciclo, vencimento < competência) corrigidos
+ * para `data_vencimento = data_competencia` diretamente no banco. ZERO DELETE · 1 UPDATE em
+ * massa restrito aos 7 casos identificados · ZERO ALTER destrutivo (1 coluna de input
+ * opcional, sem schema novo).
+ */
+
+/**
  * Rev. 4074 — **CONTAS A PAGAR: FERRAGENS SANTA RITA (E OUTROS FORNECEDORES COM CICLO) NÃO
  * CONSOLIDAVAM 100% DAS OCS — LANÇAMENTO FINANCEIRO DA OC NUNCA GRAVAVA `fornecedor_nome`.**
  *

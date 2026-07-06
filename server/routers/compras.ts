@@ -9286,7 +9286,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
     }),
 
   atualizarStatusOrdem: protectedProcedure
-    .input(z.object({ id: z.number(), status: z.string(), dataEntregaReal: z.string().optional() }))
+    .input(z.object({ id: z.number(), status: z.string(), dataEntregaReal: z.string().optional(), dataLancamento: z.string().optional() }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
 
@@ -9361,6 +9361,28 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
 
           const novoStatus = (input.status === "aprovada") ? "previsto" : "a_pagar";
 
+          // Rev. 4075 — FECHAMENTO POR CICLO DEVE ANCORAR NA DATA DE LANÇAMENTO NO
+          // SISTEMA (data de competência), NÃO no `dataVencimento` digitado manualmente
+          // na OC (campo historicamente com erros de digitação/preenchimento — ex.:
+          // "30/60/90 dias" calculado a partir de uma data-base errada, gerando
+          // vencimentos absurdos/anteriores à competência). `dataLancamento` permite ao
+          // comprador registrar retroativamente uma OC/nota esquecida, caindo na janela
+          // de ciclo correta em vez de "hoje". Quando o fornecedor tem ciclo de
+          // fechamento configurado (≠ avista), o vencimento manual é ignorado e a data
+          // de competência é usada como vencimento provisório — quem determina a data
+          // real de pagamento é `_agruparContasPagarPorCicloForn` (financial.ts).
+          const dataCompetenciaFin = input.dataLancamento || new Date().toISOString().split("T")[0];
+          let vencimentoFin: string | null = (ocFin as any).dataVencimento ?? (ocFin as any).dataEntregaPrevista ?? null;
+          if (ocFin.fornecedorId) {
+            const [cycleCfg] = await db.select({ cicloPagamento: (empresasTerceiras as any).cicloPagamento })
+              .from(empresasTerceiras as any)
+              .where(and(eq((empresasTerceiras as any).fornecedorId, ocFin.fornecedorId), eq((empresasTerceiras as any).companyId, ocFin.companyId)))
+              .limit(1);
+            if (cycleCfg?.cicloPagamento && cycleCfg.cicloPagamento !== "avista") {
+              vencimentoFin = dataCompetenciaFin;
+            }
+          }
+
           if (!ocFin.financialEntryId) {
             const [entry] = await db.insert(financialEntries as any).values({
               companyId: ocFin.companyId,
@@ -9370,8 +9392,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
               tipo: "despesa",
               natureza: "variavel",
               valorPrevisto: String(ocFin.total ?? "0"),
-              dataCompetencia: new Date().toISOString().split("T")[0],
-              dataVencimento: (ocFin as any).dataVencimento ?? (ocFin as any).dataEntregaPrevista ?? null,
+              dataCompetencia: dataCompetenciaFin,
+              dataVencimento: vencimentoFin,
               status: novoStatus,
               origemModulo: "compras",
               origemId: ocFin.id,

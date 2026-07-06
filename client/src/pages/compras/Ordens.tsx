@@ -446,6 +446,10 @@ export default function Ordens() {
   const [cancelMasterMotivo, setCancelMasterMotivo] = useState("");
   const [cancelMasterSenha, setCancelMasterSenha] = useState("");
   const [estornoMotivo, setEstornoMotivo] = useState("");
+  // Rev. 4075 — dialog de data de lançamento (retroativa) ao mudar status que dispara
+  // integração financeira (aprovada/entregue/entregue_parcial). Default = hoje.
+  const [showLancamentoDialog, setShowLancamentoDialog] = useState<{ id: number; status: string } | null>(null);
+  const [dataLancamentoInput, setDataLancamentoInput] = useState("");
 
   const [autoSwitchedForCompany, setAutoSwitchedForCompany] = useState<number | null>(null);
   const urlTabHandled = useRef(false);
@@ -2422,7 +2426,14 @@ export default function Ordens() {
                         { s: "entregue_parcial", label: "Entrega Parcial",   icon: Truck,        cls: "bg-orange-500 hover:bg-orange-400 text-white" },
                         { s: "entregue",         label: "Marcar Entregue",   icon: PackageCheck, cls: "bg-emerald-600 hover:bg-emerald-500 text-white" },
                       ].filter(a => a.s !== detalhe.status).filter(a => !(detalhe.status === "aguardando_aprovacao_extra" && a.s === "aprovada")).map(a => (
-                        <Button key={a.s} size="sm" onClick={() => atualizarStatus.mutate({ id: detalhe.id, status: a.s })}
+                        <Button key={a.s} size="sm" onClick={() => {
+                          if (["aprovada", "entregue", "entregue_parcial"].includes(a.s)) {
+                            setDataLancamentoInput(new Date().toISOString().split("T")[0]);
+                            setShowLancamentoDialog({ id: detalhe.id, status: a.s });
+                          } else {
+                            atualizarStatus.mutate({ id: detalhe.id, status: a.s });
+                          }
+                        }}
                           disabled={atualizarStatus.isPending}
                           className={`text-xs gap-1 ${a.cls}`}>
                           <a.icon className="h-3 w-3" /> {a.label}
@@ -2556,6 +2567,44 @@ export default function Ordens() {
               </div>
             );
           })() : null}
+        </DialogContent>
+      </Dialog>
+      {/* Dialog — Data de Lançamento (Rev. 4075) */}
+      <Dialog open={!!showLancamentoDialog} onOpenChange={v => { if (!v) setShowLancamentoDialog(null); }}>
+        <DialogContent className="max-w-md" style={{ background: '#ffffff', color: '#111827' }}>
+          <DialogHeader>
+            <DialogTitle className="text-blue-700 flex items-center gap-2">
+              <Calendar className="h-5 w-5" /> Data de Lançamento no Financeiro
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <p className="text-sm text-gray-600">
+              Esta é a data usada para fechar o ciclo de pagamento do fornecedor (quando ele tiver ciclo cadastrado).
+              Deixe em <strong>hoje</strong> para lançamentos correntes, ou informe uma data retroativa caso esteja
+              cadastrando agora uma OC/nota de um período anterior que ficou esquecida.
+            </p>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium text-gray-700">Data de lançamento</Label>
+              <Input type="date" className="bg-white border-gray-300 text-gray-900"
+                value={dataLancamentoInput}
+                onChange={e => setDataLancamentoInput(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter className="pt-2">
+            <Button variant="outline" onClick={() => setShowLancamentoDialog(null)} disabled={atualizarStatus.isPending}>Cancelar</Button>
+            <Button
+              className="bg-blue-600 hover:bg-blue-500 text-white gap-1.5"
+              disabled={!dataLancamentoInput || atualizarStatus.isPending}
+              onClick={() => {
+                if (!showLancamentoDialog) return;
+                atualizarStatus.mutate({ id: showLancamentoDialog.id, status: showLancamentoDialog.status, dataLancamento: dataLancamentoInput });
+                setShowLancamentoDialog(null);
+              }}
+            >
+              {atualizarStatus.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
+              Confirmar
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
       {/* Dialog — Estornar Recebimento */}
