@@ -119,6 +119,11 @@ const FORMAS_PAG_OPTS = [
   { id: "debito_automatico", label: "Débito automático" }, { id: "cartao", label: "Cartão" },
   { id: "dinheiro", label: "Dinheiro" }, { id: "deposito", label: "Depósito" },
 ];
+// Rev. 4082 — rótulos legíveis do ciclo de pagamento (empresas_terceiras.ciclo_pagamento).
+const CICLO_PAG_LABELS: Record<string, string> = {
+  semanal: "semanal", quinzenal: "quinzenal", quinzenal_semana: "quinzenal",
+  mensal: "mensal", personalizado: "personalizado",
+};
 function LancCombo({ value, onChangeText, onSelect, options, placeholder = "Buscar…", noneLabel, onClear }: {
   value: string; onChangeText?: (s: string) => void;
   onSelect: (opt: { id: string | number; label: string; isPJ?: boolean } | null) => void;
@@ -449,6 +454,12 @@ export default function FinanceiroConciliacao() {
   // quando os fornecedores estavam cadastrados em outra empresa do grupo FC.
   // ativo: undefined → inclui fornecedores com ativo=NULL (cadastros antigos) além dos ativo=true.
   const { data: lancFornecedores } = (trpc as any).compras.listarFornecedores.useQuery({ companyId, includeAllGroup: true }, { enabled: !!companyId });
+  // Rev. 4082 — ciclos de fechamento cadastrados no fornecedor (empresas_terceiras.ciclo_*),
+  // usado só para SUGERIR a forma de pagamento no "Lançar no ERP" quando o usuário lança
+  // retroativamente (extrato sem OS/OC) um fornecedor que tem ciclo configurado. Sugestão
+  // pura — nunca altera o agrupamento "Consolidado fornecedor" do Contas a Pagar, que já
+  // ignora títulos pagos/conciliados (este lançamento nasce conciliado).
+  const { data: lancFornCiclos } = (trpc as any).financial.getFornecedorCiclosConfig.useQuery({ companyId, includeAllGroup: true }, { enabled: !!companyId });
   const { data: lancPjContratos } = (trpc as any).pj.contratos.list.useQuery({ companyId }, { enabled: !!companyId });
   // Rev. 3455 — movido p/ antes de obrasParaLanc (era linha 366) p/ resolver clienteId na filtragem
   const { data: lancClientes, refetch: refetchLancClientes } = (trpc as any).clientes.list.useQuery({ companyId }, { enabled: !!companyId });
@@ -536,6 +547,33 @@ export default function FinanceiroConciliacao() {
     }
     return out.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
   }, [lancFornecedores, lancPjContratos]);
+  // Rev. 4082 — normaliza nome (mesmo critério do backend _normNomeConc: minúsculo,
+  // sem acento, sem pontuação) p/ casar fornecedor selecionado × ciclo cadastrado.
+  const _normNomeLanc = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const lancCicloPorNome = useMemo(() => {
+    const map = new Map<string, any>();
+    for (const c of (Array.isArray(lancFornCiclos) ? lancFornCiclos : [])) {
+      const nome = String(c?.nome ?? "").trim();
+      if (nome) map.set(_normNomeLanc(nome), c);
+    }
+    return map;
+  }, [lancFornCiclos]);
+  // Rev. 4082 — sugestão de forma de pagamento p/ fornecedor com ciclo configurado
+  // (exceção retroativa: mês sem OS/OC). Match por substring (maior nome primeiro),
+  // mesmo critério do agrupador de Contas a Pagar (_matchCycleConfig).
+  const lancFornCicloSugestao = useMemo(() => {
+    const fornConfirmado = (lancForm.fornecedorNome || "").trim();
+    if (!fornConfirmado || !lancCicloPorNome.size) return null;
+    const fornNorm = _normNomeLanc(fornConfirmado);
+    const exact = lancCicloPorNome.get(fornNorm);
+    if (exact) return exact;
+    const candidatesByLen = Array.from(lancCicloPorNome.entries()).sort((a, b) => b[0].length - a[0].length);
+    for (const [key, cfg] of candidatesByLen) {
+      if (fornNorm.includes(key) || key.includes(fornNorm)) return cfg;
+    }
+    return null;
+  }, [lancForm.fornecedorNome, lancCicloPorNome]);
   const [lancStatement, setLancStatement] = useState<any | null>(null);
   const [lancBusy, setLancBusy] = useState(false);
   const { user } = useAuth();
@@ -6854,6 +6892,19 @@ export default function FinanceiroConciliacao() {
                       noneLabel="— (nenhuma) —"
                       onClear={() => setLancForm(f => ({ ...f, formaPagamento: "" }))}
                     />
+                    {/* Rev. 4082 — sugestão de condição de pagamento pro fornecedor com ciclo
+                        configurado (exceção: lançamento retroativo sem OS/OC no período). */}
+                    {(lancStatement?.id == null ? lancForm.tipo === "despesa" : Number(lancStatement.valor) < 0) && lancFornCicloSugestao && (
+                      <p className="text-[11px] text-blue-600 mt-1 flex items-start gap-1">
+                        <span className="shrink-0">💡</span>
+                        <span>
+                          Este fornecedor tem ciclo de fechamento cadastrado ({CICLO_PAG_LABELS[lancFornCicloSugestao.cicloPagamento] ?? lancFornCicloSugestao.cicloPagamento}
+                          {lancFornCicloSugestao.cicloFormaPagamento ? <> · pagamento normalmente via <strong>{FORMAS_PAG_OPTS.find(o => o.id === lancFornCicloSugestao.cicloFormaPagamento)?.label ?? lancFornCicloSugestao.cicloFormaPagamento}</strong></> : null}
+                          {Number(lancFornCicloSugestao.cicloNumParcelas) > 1 ? <> em <strong>{lancFornCicloSugestao.cicloNumParcelas}x</strong></> : null}
+                          ). Forma de pagamento sugerida automaticamente — ajuste se este lançamento for diferente.
+                        </span>
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 pt-1">Classificação</div>
@@ -6897,7 +6948,22 @@ export default function FinanceiroConciliacao() {
                       onSelect={(opt) => {
                         if (!opt) { setLancFornDisplay(""); setLancForm(f => ({ ...f, fornecedorNome: "" })); return; }
                         setLancFornDisplay(opt.label);
-                        setLancForm(f => ({ ...f, fornecedorNome: opt.label }));
+                        // Rev. 4082 — ao confirmar o fornecedor, se ele tiver ciclo de
+                        // fechamento configurado no cadastro, sugere a forma de pagamento
+                        // dali (só se o campo ainda estiver vazio — nunca sobrescreve
+                        // escolha explícita do usuário).
+                        const fornNorm = _normNomeLanc(opt.label);
+                        let cfg = lancCicloPorNome.get(fornNorm);
+                        if (!cfg) {
+                          const candidatesByLen = Array.from(lancCicloPorNome.entries()).sort((a, b) => b[0].length - a[0].length);
+                          for (const [key, c] of candidatesByLen) {
+                            if (fornNorm.includes(key) || key.includes(fornNorm)) { cfg = c; break; }
+                          }
+                        }
+                        setLancForm(f => ({
+                          ...f, fornecedorNome: opt.label,
+                          formaPagamento: (!f.formaPagamento && cfg?.cicloFormaPagamento) ? String(cfg.cicloFormaPagamento) : f.formaPagamento,
+                        }));
                       }}
                       options={lancFornOpts}
                       placeholder="Buscar fornecedor do cadastro…"

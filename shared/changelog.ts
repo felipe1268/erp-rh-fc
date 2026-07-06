@@ -1,4 +1,37 @@
 /**
+ * Rev. 4082 — **CONCILIAÇÃO BANCÁRIA: "LANÇAR NO ERP" AGORA SUGERE A CONDIÇÃO DE
+ * PAGAMENTO PRO FORNECEDOR COM CICLO DE FECHAMENTO CADASTRADO.**
+ *
+ * PEDIDO: usuário perguntou como funciona o "Pagar consolidado" do Contas a Pagar
+ * e pediu pra deixar o "Lançar no ERP" da Conciliação mais inteligente — CASO DE
+ * EXCEÇÃO: quando um lançamento de extrato de um mês RETROATIVO (sem OS/OC já
+ * lançada no período) precisa ser criado manualmente pra um fornecedor que já tem
+ * ciclo de pagamento configurado no cadastro (empresas_terceiras.ciclo_*). No fluxo
+ * normal (mês com OS/OC) a forma de pagamento já vem certa automaticamente — isso
+ * não muda.
+ *
+ * INVESTIGAÇÃO: "Pagar consolidado" agrupa títulos NÃO PAGOS do mesmo fornecedor
+ * dentro da mesma janela de fechamento (`_agruparContasPagarPorCicloForn`); títulos
+ * criados via "Lançar no ERP" na Conciliação já nascem PAGOS/conciliados (a baixa
+ * é o próprio extrato bancário), então NUNCA entrariam nesse agrupamento — não há
+ * "o que consolidar" pra um pagamento que já aconteceu. Ou seja, o pedido é 100%
+ * de UX (sugerir a forma de pagamento certa na hora de classificar o extrato),
+ * sem qualquer relação com o mecanismo de consolidação.
+ *
+ * FIX: novo endpoint `financial.getFornecedorCiclosConfig` (mesmo padrão de
+ * `includeAllGroup` do `compras.listarFornecedores`) expõe os ciclos cadastrados
+ * pro frontend. No diálogo "Lançar no ERP" (`FinanceiroConciliacao.tsx`), ao
+ * confirmar um fornecedor que bate (match por substring, maior nome primeiro —
+ * mesmo critério do `_matchCycleConfig` do backend) com um ciclo configurado,
+ * a forma de pagamento é pré-preenchida com `cicloFormaPagamento` (só se o campo
+ * ainda estiver vazio — nunca sobrescreve escolha explícita do usuário) e aparece
+ * um aviso explicando o ciclo/parcelamento sugerido, editável a qualquer momento.
+ *
+ * ESCOPO: ZERO DELETE · ZERO UPDATE · ZERO ALTER (100% leitura do cadastro
+ * existente + sugestão pré-preenchida no formulário do frontend).
+ */
+
+/**
  * Rev. 4081 — **CONCILIAÇÃO: CHEQUE DEVOLVIDO QUITADO POR MÚLTIPLOS PAGAMENTOS/FORMAS
  * (NÃO SÓ 1 PIX) — CONTROLE DE CHEQUES PASSA A MOSTRAR COMO FOI PAGO.**
  *

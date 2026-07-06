@@ -10419,6 +10419,43 @@ export const financialRouter = router({
     return _agruparContasPagarPorCicloForn(rows(res), supplierCycleMap);
   }),
 
+  // Rev. 4082 — Lista os ciclos de fechamento configurados no cadastro dos fornecedores
+  // (empresas_terceiras.ciclo_*), pra uso no "Lançar no ERP" da Conciliação Bancária:
+  // ao lançar retroativamente um extrato de mês sem OS/OC pra um fornecedor com ciclo
+  // configurado, sugere a forma de pagamento/parcelamento do cadastro (só SUGESTÃO —
+  // usuário sempre pode ajustar; não altera nada, é só leitura do cadastro).
+  getFornecedorCiclosConfig: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    companyIds: z.array(z.number()).optional(),
+    includeAllGroup: z.boolean().optional(),
+  })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    let ids = resolveCompanyIds(input);
+    // Rev. 4082 — mesmo padrão do compras.listarFornecedores: expande p/ todas as
+    // empresas do grupo acessíveis ao usuário (cadastro do fornecedor pode estar
+    // em outra empresa do grupo FC).
+    if (input.includeAllGroup) {
+      const userCos = await getCompaniesForUser(ctx.user.id, ctx.user.role);
+      if (userCos.length > 0) {
+        ids = userCos.map((c: any) => Number(c.id)).filter((n: number) => Number.isFinite(n));
+      }
+    }
+    const cycleRows = await dbExecute(db,
+      `SELECT COALESCE(NULLIF(TRIM(nome_fantasia),''), TRIM(razao_social)) AS nome,
+              ciclo_pagamento AS "cicloPagamento",
+              ciclo_dia_fechamento AS "cicloDiaFechamento",
+              ciclo_num_parcelas AS "cicloNumParcelas",
+              ciclo_prazo_parcela AS "cicloPrazoParcela",
+              ciclo_forma_pagamento AS "cicloFormaPagamento",
+              ciclo_data_referencia AS "cicloDataReferencia"
+         FROM empresas_terceiras
+        WHERE "companyId" IN (${inlineIds(ids)}) AND deleted_at IS NULL
+          AND ciclo_pagamento IS NOT NULL AND ciclo_pagamento <> 'avista'`,
+      []);
+    return rows(cycleRows).filter((r: any) => r.nome);
+  }),
+
   // ─────────── Rev. 1630 — Calendário Folha & Benefícios — 12 meses ───────────
   // Agrupa folha (real + projetada), encargos, VR/VA, 13º e PJ por mês de vencimento,
   // a partir do 1º dia do mês corrente até +12 meses. Usado pelo card "Calendário
