@@ -1,4 +1,40 @@
 /**
+ * Rev. 4079 — **CONCILIAÇÃO BANCÁRIA: CHEQUE DEVOLVIDO MAIS DE UMA VEZ (MESMA
+ * IDENTIDADE, MOTIVOS DIFERENTES) PASSA A QUITAR TODAS AS OCORRÊNCIAS DE UMA SÓ VEZ.**
+ *
+ * PEDIDO: usuário reportou que um cheque caiu 2x na mesma conta (compensação +
+ * devolução repetida, por 2 motivos diferentes) — mas ao vincular o pagamento
+ * substituto (PIX/TED) via "Gerenciar vínculos", só UMA das duas ocorrências saía do
+ * cálculo do %; a outra ficava pendente pra sempre, mesmo já coberta pelo mesmo
+ * pagamento. Pedido explícito: "quero registrar as duas devoluções com motivos
+ * diferentes, mas quando eu vincular o substituto, quero que resolva tudo numa
+ * tacada só".
+ *
+ * CAUSA-RAIZ: a cobertura (`_coberturaChequeDevolvido`/`_mesmoChequeDevolvido`, Rev.
+ * 3750/3792) já soma por IDENTIDADE do cheque (mesmo doc/nº + valor, não por line id),
+ * então o cálculo de "quitado" já estava correto. O bug era só no efeito colateral: ao
+ * quitar, `registrarVinculoChequeDevolvido` desconsiderava (tirava do %) SÓ o par
+ * (debitoLineId/creditoLineId) exato passado NAQUELA chamada — nunca olhava se havia
+ * outro par no extrato com a MESMA identidade também coberto.
+ *
+ * FIX (`server/routers/financial.ts`): ao quitar, a mutation agora busca todos os
+ * pares compensação+devolução ainda não conciliados da mesma conta bancária
+ * (`detectarParesEstorno`, de `shared/chequeMotivos.ts`) e usa `_mesmoChequeDevolvido`
+ * pra achar quais batem com a identidade do cheque sendo vinculado — todos entram no
+ * mesmo UPDATE de `desconsiderado_em`. Simetricamente, `estornarVinculoChequeDevolvido`
+ * ganhou a mesma lógica: se o estorno derrubar a cobertura da identidade, RECONSIDERA
+ * de volta ao % todas as ocorrências-irmãs que tinham sido desconsideradas junto (não
+ * só o par exato do vínculo estornado) — evita ficar uma "resolvida sozinha" órfã.
+ * Toast do frontend (`FinanceiroConciliacao.tsx`) avisa quando mais de 1 ocorrência foi
+ * resolvida de uma vez ("Esse cheque tinha caído Nx na conta…").
+ *
+ * ESCOPO: lookup de pares-irmãos protegido por try/catch (falha na busca não impede a
+ * quitação do par original). ZERO DELETE · ZERO ALTER · UPDATE só em
+ * `desconsiderado_em`/`desconsiderado_por_*` de linhas já pendentes, nunca em linhas
+ * conciliadas ou excluídas.
+ */
+
+/**
  * Rev. 4078 — **FATURAMENTO DIRETO (FD): NOMENCLATURA UNIFICADA E MAIS CLARA — "FORA
  * DO CONTRATO" x "ABATE CONTRATO" — EM CONTAS A PAGAR + PDF DA OC, COM LEGENDA
  * EXPLICATIVA.**

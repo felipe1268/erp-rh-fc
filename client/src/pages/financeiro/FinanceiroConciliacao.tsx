@@ -7187,10 +7187,13 @@ export default function FinanceiroConciliacao() {
                 data: tipo === "pix" && vincularPixSel?.data ? String(vincularPixSel.data).slice(0, 10) : undefined,
                 descricao: tipo === "pix" ? (vincularPixSel?.descricao ?? undefined) : "Quitação de saldo (ajuste manual)",
               });
+              const paresResolvidos = Number(res.paresResolvidos ?? (res.quitado ? 1 : 0));
               toast({
                 title: res.quitado ? "Cheque quitado por substituição" : "Vínculo registrado",
                 description: res.quitado
-                  ? "O par (compensação + devolução) saiu do cálculo do % automaticamente."
+                  ? (paresResolvidos > 1
+                    ? `Esse cheque tinha caído ${paresResolvidos}x na conta — todas as ocorrências saíram do cálculo do % automaticamente.`
+                    : "O par (compensação + devolução) saiu do cálculo do % automaticamente.")
                   : `Vinculado ${formatBRL(parcelaCents / 100)} · saldo restante ${formatBRL(Number(res.saldo))}.`,
               });
               refreshAposVinculo();

@@ -13435,10 +13435,40 @@ export const financialRouter = router({
 
     // 5) se a cobertura fecha o cheque, AUTO-desconsidera o par (marca automática) e,
     //    havendo número, marca o Controle de Cheques como compensado_pix.
+    // Rev. 4079 — CHEQUE DEVOLVIDO MAIS DE UMA VEZ (mesmo doc/nº + valor, ex.: caiu 2x na
+    // conta por motivos diferentes): a cobertura já é somada por IDENTIDADE do cheque
+    // (`_coberturaChequeDevolvido`/`_mesmoChequeDevolvido`), mas o desconsiderar automático
+    // SÓ marcava o par exato (debitoLineId/creditoLineId) passado NESTA chamada — as demais
+    // ocorrências ficavam pendentes pra sempre, mesmo já cobertas pelo mesmo PIX/TED.
+    // Fix: ao quitar, procura TODOS os pares compensação+devolução da conta que casam com a
+    // MESMA identidade (doc/nº + valor) e desconsidera todos de uma vez — "uma tacada só".
     const acumDepoisCents = acumAntesCents + novoCents;
     const quitado = acumDepoisCents >= chequeCents - 1;
     if (quitado) {
-      const parIds = [input.debitoLineId, ...(input.creditoLineId ? [input.creditoLineId] : [])];
+      const parIdsSet = new Set<number>([input.debitoLineId, ...(input.creditoLineId ? [input.creditoLineId] : [])]);
+      try {
+        const idSel = await dbExecute(db,
+          `SELECT id, data, descricao, valor
+             FROM bank_statement_lines
+            WHERE company_id=$1 AND conta_bancaria_id=$2 AND COALESCE(conciliado,0)=0 AND excluido_em IS NULL`,
+          [input.companyId, deb.contaId]);
+        const candLinhas: LinhaEstornoMin[] = (rows(idSel) as any[]).map((l: any) => ({
+          id: l.id,
+          valorCents: Math.round(Math.abs(Number(l.valor)) * 100),
+          isCredito: Number(l.valor) >= 0,
+          descricao: l.descricao,
+          data: String(l.data ?? "").slice(0, 10),
+        }));
+        const paresTodos = detectarParesEstorno(candLinhas);
+        for (const par of paresTodos) {
+          const mesmo = _mesmoChequeDevolvido(
+            { debitoLineId: Number(par.debitoId), cents: par.valorCents, doc: par.doc ?? null, chq: par.chequeNumero ?? null },
+            { debitoLineId: input.debitoLineId, cents: chequeCents, doc: covAntes.doc, chq: covAntes.chq },
+          );
+          if (mesmo) { parIdsSet.add(Number(par.debitoId)); parIdsSet.add(Number(par.creditoId)); }
+        }
+      } catch { /* falha na busca de ocorrências-irmãs não deve impedir a quitação do par atual */ }
+      const parIds = Array.from(parIdsSet);
       await dbExecute(db,
         `UPDATE bank_statement_lines
             SET desconsiderado_em=NOW(), desconsiderado_por_id=NULL, desconsiderado_por_nome=$1
@@ -13469,6 +13499,10 @@ export const financialRouter = router({
       acumulado: acumDepoisCents / 100,
       saldo: Math.max(0, (chequeCents - acumDepoisCents)) / 100,
       quitado,
+      // Rev. 4079 — quantos PARES (compensação+devolução) foram desconsiderados nesta
+      // quitação; >1 indica que o mesmo cheque tinha caído mais de uma vez na conta e
+      // todas as ocorrências foram resolvidas juntas.
+      paresResolvidos: quitado ? Math.max(1, Math.round(parIds.length / 2)) : 0,
     };
   }),
 
@@ -13507,7 +13541,40 @@ export const financialRouter = router({
     const acumCents = covPos.acumCents;
     const quitado = chequeCents > 0 && acumCents >= chequeCents - 1;
     if (!quitado) {
-      const parIds = [debitoLineId, ...(v.creditoLineId ? [Number(v.creditoLineId)] : [])];
+      // Rev. 4079 — simétrico ao fix da quitação: se o vínculo estornado derrubar a
+      // cobertura da identidade do cheque, RECONSIDERA TODAS as ocorrências-irmãs (mesmo
+      // doc/nº + valor) que tinham sido desconsideradas automaticamente junto, não só o
+      // par exato desse vínculo — senão uma fica marcada como resolvida "sozinha".
+      const parIdsSet = new Set<number>([debitoLineId, ...(v.creditoLineId ? [Number(v.creditoLineId)] : [])]);
+      try {
+        const contaSel = await dbExecute(db,
+          `SELECT conta_bancaria_id AS "contaId" FROM bank_statement_lines WHERE id=$1 AND company_id=$2`,
+          [debitoLineId, input.companyId]);
+        const contaId = rows(contaSel)[0]?.contaId;
+        if (contaId) {
+          const idSel = await dbExecute(db,
+            `SELECT id, data, descricao, valor
+               FROM bank_statement_lines
+              WHERE company_id=$1 AND conta_bancaria_id=$2 AND COALESCE(conciliado,0)=0 AND excluido_em IS NULL`,
+            [input.companyId, contaId]);
+          const candLinhas: LinhaEstornoMin[] = (rows(idSel) as any[]).map((l: any) => ({
+            id: l.id,
+            valorCents: Math.round(Math.abs(Number(l.valor)) * 100),
+            isCredito: Number(l.valor) >= 0,
+            descricao: l.descricao,
+            data: String(l.data ?? "").slice(0, 10),
+          }));
+          const paresTodos = detectarParesEstorno(candLinhas);
+          for (const par of paresTodos) {
+            const mesmo = _mesmoChequeDevolvido(
+              { debitoLineId: Number(par.debitoId), cents: par.valorCents, doc: par.doc ?? null, chq: par.chequeNumero ?? null },
+              { debitoLineId, cents: chequeCents, doc: covPos.doc, chq: covPos.chq },
+            );
+            if (mesmo) { parIdsSet.add(Number(par.debitoId)); parIdsSet.add(Number(par.creditoId)); }
+          }
+        }
+      } catch { /* falha na busca de ocorrências-irmãs não deve impedir o estorno do vínculo */ }
+      const parIds = Array.from(parIdsSet);
       await dbExecute(db,
         `UPDATE bank_statement_lines
             SET desconsiderado_em=NULL, desconsiderado_por_id=NULL, desconsiderado_por_nome=NULL
