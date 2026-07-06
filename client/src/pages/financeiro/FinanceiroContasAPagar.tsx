@@ -910,8 +910,20 @@ export default function FinanceiroContasAPagar() {
                 <button onClick={() => setAno(a => a + 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
                   <ChevronRight className="w-4 h-4" />
                 </button>
+                {/* Rev. 4080 — "Ano todo" padronizado com Contas a Receber: pill ao lado do
+                    ano (não mais uma barra full-width abaixo dos meses). */}
+                <button
+                  onClick={() => setVerAnoTodo((v) => !v)}
+                  className={`ml-1 px-3 py-1 rounded-lg border text-xs font-semibold transition-all
+                    ${verAnoTodo
+                      ? "border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm"
+                      : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                    }`}
+                >
+                  Ano todo
+                </button>
               </div>
-              <div className="flex items-center gap-4 text-xs text-gray-500">
+              <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />Com lançamento</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Consolidado</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />Sem dados</span>
@@ -941,18 +953,6 @@ export default function FinanceiroContasAPagar() {
                   </button>
                 );
               })}
-              {/* Rev. 4069 — "Ano todo": mostra todos os meses de {ano} explicitamente,
-                  em vez do filtro de mês vazar silenciosamente durante a busca. */}
-              <button
-                onClick={() => setVerAnoTodo(true)}
-                className={`relative flex flex-col items-center justify-center gap-1 py-2 rounded-lg border text-xs font-semibold transition-all col-span-6 sm:col-span-12 mt-1
-                  ${verAnoTodo
-                    ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
-                    : "border-dashed border-gray-300 bg-white text-gray-500 hover:border-gray-400 hover:bg-gray-50"
-                  }`}
-              >
-                Ano todo ({ano})
-              </button>
             </div>
           </CardContent>
         </Card>

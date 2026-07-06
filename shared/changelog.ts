@@ -1,4 +1,24 @@
 /**
+ * Rev. 4080 — **CONTAS A PAGAR: BOTÃO "ANO TODO" PADRONIZADO COM CONTAS A RECEBER.**
+ *
+ * PEDIDO: usuário notou que o botão "Ano todo" do Contas a Pagar não estava na mesma
+ * posição/estilo do Contas a Receber e pediu pra padronizar.
+ *
+ * ANTES: em Contas a Pagar, "Ano todo (2026)" era uma barra tracejada full-width,
+ * ocupando a linha inteira ABAIXO da grade dos 12 meses. Em Contas a Receber (Rev.
+ * 3180) é um pill compacto ao lado do seletor de ano (◀ 2026 ▶ [Ano todo]).
+ *
+ * FIX: `FinanceiroContasAPagar.tsx` — o botão "Ano todo" saiu da grade de meses e virou
+ * o mesmo pill (`ml-1 px-3 py-1 rounded-lg border`, verde-esmeralda quando ativo) ao
+ * lado do ano, no mesmo lugar/estilo do Contas a Receber; clique agora alterna
+ * (liga/desliga), igual ao padrão de Receber, em vez de só ligar. A grade de meses
+ * voltou a ter só os 12 botões (sem a linha extra ocupando `col-span-12`). Nenhuma
+ * mudança de comportamento/estado (`verAnoTodo`/`escopoData`) — 100% visual/posição.
+ *
+ * ESCOPO: ZERO DELETE · ZERO UPDATE · ZERO ALTER (100% frontend, JSX/classe).
+ */
+
+/**
  * Rev. 4079 — **CONCILIAÇÃO BANCÁRIA: CHEQUE DEVOLVIDO MAIS DE UMA VEZ (MESMA
  * IDENTIDADE, MOTIVOS DIFERENTES) PASSA A QUITAR TODAS AS OCORRÊNCIAS DE UMA SÓ VEZ.**
  *

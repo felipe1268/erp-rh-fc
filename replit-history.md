@@ -1,3 +1,5 @@
+- **Rev. 4073** — **CONDIÇÕES DE PAGAMENTO (COTAÇÕES) PASSAM A RESPEITAR O CICLO DE FECHAMENTO CADASTRADO DO FORNECEDOR, COM EXCEÇÃO POR PRODUTO E EXCEÇÃO MANUAL PONTUAL.** Fornecedor com ciclo cadastrado trava forma/parcelamento na cotação (exceção por produto tem prioridade; nova coluna `excecao_manual` libera pontualmente); sem ciclo continua livre. ZERO DELETE · ZERO ALTER destrutivo (1 coluna aditiva).
+
 - **Rev. 4072** — **CONTAS A PAGAR CONSOLIDADO: NUNCA AGRUPAR/MISTURAR TÍTULOS DE FATURAMENTO DIRETO (FD) NO CICLO DE FECHAMENTO PRÓPRIO DA FC.** Novo `_isFdModalidade()` bloqueia agrupamento por ciclo sempre que o título for FD; query ganhou `LEFT JOIN compras_ordens` + `modalidadeFd`. ZERO DELETE · ZERO ALTER destrutivo (100% leitura).
 
 - **Rev. 4071** — **CONTAS A PAGAR CONSOLIDADO: JANELA DE FECHAMENTO ERA CALCULADA PELO VENCIMENTO INDIVIDUAL DA OC, NÃO PELA DATA DA COMPRA — FRAGMENTAVA O AGRUPAMENTO.** Causa dupla: janela calculada via `dataVencimento` (varia OC a OC) em vez de `dataCompetencia`; Madeireira Andorra sem ciclo cadastrado no banco. Fix usa `dataCompetencia ?? dataVencimento`. ZERO DELETE · ZERO ALTER destrutivo.
