@@ -217,6 +217,8 @@ export default function FinanceiroContasAPagar() {
   const [search, setSearch] = useState("");
   const [origemFilter, setOrigemFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("pendentes");
+  // Rev. 4077 — Filtro "FD" (Faturamento Direto): cliente/terceiro/fc x normal.
+  const [fdFilter, setFdFilter] = useState<"all" | "fd" | "normal">("all");
   // Rev. 1629 — Separação Efetivo × Projeção (APQC PCF 8.7 / PMBOK / Brealey-Myers cap. 30):
   // dívida incorrida (Compras, Folha, PJ, Benefícios, Frota, Parceiros, Almox, Medição, Seguro)
   // não pode dividir tela com forecast de cronograma. Default = Efetivo.
@@ -610,6 +612,8 @@ export default function FinanceiroContasAPagar() {
     if (naturezaFilter === "efetivo") list = list.filter((c: any) => !isProjecao(c));
     else if (naturezaFilter === "projecao") list = list.filter((c: any) => isProjecao(c));
     if (origemFilter !== "all") list = list.filter((c: any) => c.origemModulo === origemFilter);
+    if (fdFilter === "fd") list = list.filter((c: any) => !!fdBadgeInfo(c));
+    else if (fdFilter === "normal") list = list.filter((c: any) => !fdBadgeInfo(c));
     if (search) {
       const q = search.toLowerCase();
       list = list.filter((c: any) =>
@@ -631,7 +635,7 @@ export default function FinanceiroContasAPagar() {
       if (da !== db) return da.localeCompare(db);
       return Number(b.valorPrevisto ?? 0) - Number(a.valorPrevisto ?? 0);
     });
-  }, [escopoData, statusFilter, naturezaFilter, origemFilter, search, hojeStr]);
+  }, [escopoData, statusFilter, naturezaFilter, origemFilter, fdFilter, search, hojeStr]);
 
   // Rev. 1619 — agrupamento por horizonte de vencimento (cabeçalhos sticky)
   const grupos = useMemo(() => {
@@ -1094,6 +1098,21 @@ export default function FinanceiroContasAPagar() {
                 </SelectContent>
               </Select>
             )}
+            {/* Rev. 4077 — Filtro por Faturamento Direto (FD), pra isolar títulos que
+                o cliente/terceiro paga direto e não entram no consolidado por ciclo. */}
+            <div className="flex rounded-lg border border-amber-200 overflow-hidden" title="Filtra por Faturamento Direto (dinheiro que o cliente/terceiro paga direto ao fornecedor — não entra no consolidado por ciclo)">
+              {([
+                ["all", "Todos"],
+                ["fd", "Só FD"],
+                ["normal", "Sem FD"],
+              ] as const).map(([v, l]) => (
+                <button key={v}
+                  onClick={() => setFdFilter(v)}
+                  className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${fdFilter === v ? "bg-amber-500 text-white" : "bg-white text-amber-700 hover:bg-amber-50"}`}>
+                  {l}
+                </button>
+              ))}
+            </div>
             <div className="relative flex-1 min-w-[180px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input className="pl-9 h-8 text-sm" placeholder="Buscar conta, OC/OS, fornecedor..." value={search} onChange={e => setSearch(e.target.value)} />

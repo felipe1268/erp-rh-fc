@@ -1,3 +1,5 @@
+- **Rev. 4070** — **CONTAS A PAGAR: CONSOLIDAÇÃO DE TÍTULOS POR CICLO DE FECHAMENTO DO FORNECEDOR (CADASTRO) + PAGAMENTO ÚNICO QUE AUTO-DIVIDE EM N CHEQUES E LANÇA NO CONTROLE DE CHEQUES.** Fornecedores com ciclo configurado no cadastro geravam dezenas de títulos separados (1 por OC/obra); novo `_agruparContasPagarPorCicloForn` consolida numa linha expansível + `pagarConsolidadoFornecedor` dá baixa em lote e lança N cheques. ZERO DELETE · ZERO ALTER destrutivo (100% aditivo).
+
 - **Rev. 4069** — **CONTAS A PAGAR: FILTRO DE MÊS ERA IGNORADO DURANTE A BUSCA + FALTAVA OPÇÃO "ANO TODO".** Usuário selecionou Julho e pesquisou um fornecedor — a lista trouxe títulos de todos os meses. Fix: novo toggle "Ano todo (AAAA)" + `escopoData` do qual TUDO deriva. ZERO DELETE · ZERO ALTER destrutivo (100% client-side).
 
 - **Rev. 4068** — **CONCILIAÇÃO BANCÁRIA NÃO BAIXAVA O CHEQUE NO CONTROLE DE CHEQUES + MOTIVO/CONTA TENTATIVA DE DEVOLUÇÃO AGORA FICAM REGISTRADOS.** `conciliarLancamento` nunca tocava `financial_cheques`; novas colunas de motivo/conta tentativa + baixa automática do cheque ao conciliar (match por Nº normalizado + valor). ZERO DELETE · ZERO ALTER destrutivo.

@@ -1,4 +1,20 @@
 /**
+ * Rev. 4077 — **CONTAS A PAGAR: NOVO FILTRO "SÓ FD / SEM FD" PRA ISOLAR TÍTULOS DE
+ * FATURAMENTO DIRETO NA LISTA.**
+ *
+ * PEDIDO: usuário pediu, na sequência da Rev. 4076 (selo visual "FD"), um filtro pra ver
+ * só os títulos marcados como Faturamento Direto de uma vez, sem precisar caçar o selo
+ * manualmente linha por linha na lista.
+ *
+ * FIX: `FinanceiroContasAPagar.tsx` ganhou o estado `fdFilter` ("all" | "fd" | "normal")
+ * + um toggle de 3 botões ("Todos" / "Só FD" / "Sem FD") ao lado do filtro de Origem,
+ * reaproveitando `fdBadgeInfo()` (Rev. 4076) como critério — mesma fonte de verdade do
+ * selo, sem duplicar a regra do que é FD. O filtro entra no `useMemo` de `filtered` junto
+ * com os demais filtros (status/natureza/origem/busca). ZERO DELETE · ZERO UPDATE · ZERO
+ * ALTER (100% frontend).
+ */
+
+/**
  * Rev. 4076 — **CONTAS A PAGAR: SELO VISUAL "FD" NAS LINHAS DE FATURAMENTO DIRETO — DEIXA
  * CLARO POR QUE ESSAS OCS NÃO ENTRAM NO AGRUPAMENTO CONSOLIDADO POR CICLO DO FORNECEDOR.**
  *
