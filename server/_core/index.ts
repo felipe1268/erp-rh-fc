@@ -1226,6 +1226,37 @@ REGRAS DE EXTRAÇÃO:
           console.log(`[SyncSchema+] Rev. 4083: templates Santander (Consolidado + IBPJ) garantidos em todas as empresas.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 4083 seed templates Santander:`, e?.message || e); }
 
+        // Rev. 4084 — NFS-e vinculadas a títulos a receber (Contas a Receber).
+        // financial_nfse_vinculos: número, chave, XML e valores serviço/material
+        // de cada NFS-e atrelada a um financial_entries de receita.
+        // Aditiva/idempotente — CREATE IF NOT EXISTS + INDEX IF NOT EXISTS.
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS financial_nfse_vinculos (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              entry_id INTEGER NOT NULL,
+              nfse_numero VARCHAR(20),
+              nfse_serie VARCHAR(10),
+              nfse_chave VARCHAR(50),
+              municipio_nome VARCHAR(255),
+              municipio_ibge INTEGER,
+              valor_servico NUMERIC(15,2),
+              valor_material NUMERIC(15,2),
+              xml_conteudo TEXT,
+              xml_nome VARCHAR(255),
+              status TEXT DEFAULT 'vinculada',
+              emitida_em DATE,
+              criado_por_id INTEGER,
+              criado_por_nome VARCHAR(255),
+              criado_em TIMESTAMP DEFAULT NOW()
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_fnv_entry ON financial_nfse_vinculos(entry_id)`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_fnv_company ON financial_nfse_vinculos(company_id)`);
+          console.log(`[SyncSchema+] Rev. 4084: tabela financial_nfse_vinculos garantida.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 4084 financial_nfse_vinculos:`, e?.message || e); }
+
         // Rev. 3876 — Cheque especial por conta bancária: flag de controle (0/1) + limite disponível.
         // Quando ativo=1 e o saldo acumulado do extrato for negativo, a Conciliação exibe alerta visual.
         try {

@@ -9661,7 +9661,10 @@ export const financialRouter = router({
                 PARTITION BY company_id,
                              ROUND(valor_previsto::numeric, 2),
                              data_vencimento::date
-              )::int AS "dupCount"
+              )::int AS "dupCount",
+              -- Rev. 4084: NFS-e vinculada ao título (badge na lista)
+              (SELECT nfse_numero FROM financial_nfse_vinculos WHERE entry_id = financial_entries.id AND status != 'cancelada' LIMIT 1) AS "nfseNumero",
+              (SELECT nfse_chave   FROM financial_nfse_vinculos WHERE entry_id = financial_entries.id AND status != 'cancelada' LIMIT 1) AS "nfseChave"
        FROM financial_entries
        WHERE company_id IN (${inlineIds(ids)})
          AND tipo = 'receita'
@@ -9693,6 +9696,17 @@ export const financialRouter = router({
     observacoes: z.string().optional(),
     anexoUrl: z.string().optional(),
     anexoNome: z.string().optional(),
+    // Rev. 4084 — conta bancária de recebimento + NFS-e vinculada ao criar o título
+    contaBancariaId: z.number().nullable().optional(),
+    nfseNumero: z.string().max(20).optional(),
+    nfseSerie: z.string().max(10).optional(),
+    nfseChave: z.string().max(50).optional(),
+    municipioNome: z.string().max(255).optional(),
+    municipioIbge: z.number().int().optional(),
+    nfseValorServico: z.number().optional(),
+    nfseValorMaterial: z.number().optional(),
+    nfseXmlConteudo: z.string().optional(),
+    nfseXmlNome: z.string().max(255).optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -9735,13 +9749,13 @@ export const financialRouter = router({
              cliente_id, cliente_nome, descricao, observacoes,
              parcela_numero, parcela_total, parcela_grupo_id,
              anexo_url, anexo_nome, origem_modulo,
-             criado_por_id, criado_por_nome, created_at, updated_at)
+             criado_por_id, criado_por_nome, conta_bancaria_id, created_at, updated_at)
            VALUES ($1, $2, $3, $4, $5, 'receita', $6,
              $7, $8::date, $9::date, 'a_receber',
              $10, $11, $12, $13,
              $14, $15, $16,
              $17, $18, 'manual_receber',
-             $19, $20, NOW(), NOW())
+             $19, $20, $21, NOW(), NOW())
            RETURNING id`,
           [
             input.companyId, input.obraId ?? null, input.obraNome?.trim() || null,
@@ -9752,16 +9766,39 @@ export const financialRouter = router({
             n > 1 ? k + 1 : null, n > 1 ? n : null, grupoId,
             k === 0 ? (input.anexoUrl || null) : null, k === 0 ? (input.anexoNome || null) : null,
             ctx.user?.id ?? null, ctx.user?.name ?? null,
+            input.contaBancariaId ?? null,
           ]
         );
         const id = rows(r)[0]?.id;
         if (id) insertedIds.push(Number(id));
       }
     });
+    // Rev. 4084 — NFS-e linking: se dados informados, vincula ao 1º título (parcela 1/N)
+    const firstId = insertedIds[0];
+    if (firstId && (input.nfseNumero || input.nfseChave || input.nfseXmlConteudo)) {
+      try {
+        await dbExecute(db,
+          `INSERT INTO financial_nfse_vinculos
+             (company_id, entry_id, nfse_numero, nfse_serie, nfse_chave,
+              municipio_nome, municipio_ibge, valor_servico, valor_material,
+              xml_conteudo, xml_nome, status, criado_por_id, criado_por_nome)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'vinculada', $12, $13)`,
+          [
+            input.companyId, firstId,
+            input.nfseNumero?.trim() || null, input.nfseSerie?.trim() || null,
+            input.nfseChave?.trim() || null,
+            input.municipioNome?.trim() || null, input.municipioIbge ?? null,
+            input.nfseValorServico ?? null, input.nfseValorMaterial ?? null,
+            input.nfseXmlConteudo || null, input.nfseXmlNome?.trim() || null,
+            ctx.user?.id ?? null, ctx.user?.name ?? null,
+          ]
+        );
+      } catch (e: any) { console.error("[criarTituloReceber] FALHA ao inserir NFS-e vínculo:", e?.message); }
+    }
     await createAuditLog({
       action: "financial_receivable_created",
       userId: ctx.user?.id, companyId: input.companyId,
-      details: `Título a receber R$${input.valorPrevisto} em ${n}x — "${input.descricao}"${input.clienteNome ? " — " + input.clienteNome : ""}`,
+      details: `Título a receber R$${input.valorPrevisto} em ${n}x — "${input.descricao}"${input.clienteNome ? " — " + input.clienteNome : ""}${input.nfseNumero ? ` — NFS-e ${input.nfseNumero}` : ""}`,
     });
     return { ok: true, ids: insertedIds };
   }),

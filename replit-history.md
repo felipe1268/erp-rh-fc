@@ -2809,3 +2809,5 @@
 - **Rev. 3904** — **SST — PT WIZARD: OBRA PRIMEIRO + TST/ENCARREGADO NO CADASTRO DE OBRAS.** Schema obras: +`tst_id`/`encarregado_id` (ColFix v3904). Novo procedure `ptPermissoes.getObraSST`. Step 0 redesenhado: Obra PRIMEIRO → 3 cards SST auto-fill. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 3905** — **SST — PT WIZARD: GATES DE CHECKLIST + ENVOLVIDOS COM TERCEIROS.** Step 2: banners bloqueio + gate "Próximo". Step 3: terceiros da obra + badge âmbar "Terceiro"; limite 20→30. ZERO DELETE. Detalhe: `shared/changelog.ts`.
+
+- **Rev. 4077** — **CONTAS A PAGAR: NOVO FILTRO "SÓ FD / SEM FD" PRA ISOLAR TÍTULOS DE FATURAMENTO DIRETO NA LISTA.** `FinanceiroContasAPagar.tsx` ganhou estado `fdFilter` + toggle de 3 botões reaproveitando `fdBadgeInfo()`. ZERO DELETE · ZERO UPDATE · ZERO ALTER (100% frontend).

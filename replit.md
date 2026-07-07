@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4084** — **CONTAS A RECEBER: "NOVO TÍTULO" ENRIQUECIDO COM CONTA BANCÁRIA DE RECEBIMENTO + VÍNCULO DE NFS-e + BADGE NA LISTA.** FC Engenharia emite NFS-e em vários municípios (serviço+repasse material). Fix: nova tabela `financial_nfse_vinculos` (SyncSchema+ Rev. 4084); `criarTituloReceber` recebe `contaBancariaId` + campos NFS-e; após commit insere em `financial_nfse_vinculos` (try/catch — erro não aborta título); `getContasAReceberByYear` traz `nfseNumero`/`nfseChave` via subquery; `NovoTituloDialog` ganhou seletor de conta bancária + card azul NFS-e com upload XML (DOMParser multi-padrão: ABRASF/SIL/GIAP/NFS-e Nacional) que pré-preenche Número, Série, Chave, ValorServico, ValorMaterial + badge na lista. ZERO DELETE · ZERO ALTER em dados existentes · 1 CREATE TABLE.
+
 - **Rev. 4083** — **CONCILIAÇÃO: PARSERS SANTANDER CORRIGIDOS — EXTRATO CONSOLIDADO INTELIGENTE (FEV/2026) E INTERNET BANKING EMPRESARIAL IBPJ (JUN/2026) FUNCIONAM INDEPENDENTEMENTE + TEMPLATES AUTO-SEEDED EM CONFIGURAÇÕES.** Dois bugs: (1) `santanderPdfParser.ts` detectava `|santander/i` (muito amplo — capturava o IBPJ que menciona "Santander" na seção de contato), trocado para `/EXTRATO CONSOLIDADO INTELIGENTE/i && !/IBPJ/i`; (2) `santanderIbpjParser.ts` no bloco multi-linha — "Saldo do dia..." era `isSkippable=true` (pulava o `continue`), mas o valor da linha seguinte era emitido como transação → adicionado `if (isSaldoText(l2)) break;` para abortar o bloco inteiro. Além disso, `SKIP_LINE_RES` ganhou LOCNOW, Julio Ferraz e números de página. SyncSchema+ Rev. 4083 faz INSERT idempotente dos dois templates Santander para TODAS as empresas no startup; seed script atualizado com palavras-chave corretas ("EXTRATO CONSOLIDADO INTELIGENTE", "Extrato_PJ_A4_Inteligente") e instruções de IA descrevendo o layout real. ZERO DELETE · ZERO UPDATE em dado · ZERO ALTER.
 
-- **Rev. 4082** — **CONCILIAÇÃO BANCÁRIA: "LANÇAR NO ERP" AGORA SUGERE A CONDIÇÃO DE PAGAMENTO PRO FORNECEDOR COM CICLO DE FECHAMENTO CADASTRADO.** Caso de EXCEÇÃO: lançamento retroativo de extrato (mês sem OS/OC) pra fornecedor que já tem ciclo configurado no cadastro (`empresas_terceiras.ciclo_*`) — no fluxo normal (com OS/OC) a forma de pagamento já vem certa automaticamente, isso não muda. Investigação: "Pagar consolidado" só agrupa títulos NÃO PAGOS; um lançamento criado via "Lançar no ERP" já nasce PAGO/conciliado (a baixa é o próprio extrato), então nunca entraria na consolidação — o pedido é 100% de UX. Fix: novo endpoint `financial.getFornecedorCiclosConfig` (mesmo padrão `includeAllGroup` do `compras.listarFornecedores`); no diálogo "Lançar no ERP" (`FinanceiroConciliacao.tsx`), ao confirmar um fornecedor com ciclo configurado (match por substring, maior nome primeiro), a forma de pagamento é pré-preenchida com `cicloFormaPagamento` (só se vazia — nunca sobrescreve escolha do usuário) + aviso explicando o ciclo/parcelamento sugerido. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
 ### 5 one-liners
+
+- **Rev. 4082** — **CONCILIAÇÃO BANCÁRIA: "LANÇAR NO ERP" SUGERE CONDIÇÃO DE PAGAMENTO PRO FORNECEDOR COM CICLO DE FECHAMENTO CADASTRADO.** Novo endpoint `financial.getFornecedorCiclosConfig`; diálogo pré-preenche `cicloFormaPagamento` (só se vazia) + aviso do ciclo. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4081** — **CONCILIAÇÃO: CHEQUE DEVOLVIDO QUITADO POR MÚLTIPLOS PAGAMENTOS/FORMAS — CONTROLE DE CHEQUES PASSA A MOSTRAR COMO FOI PAGO.** Fix: nova coluna `forma_pagamento` no tipo 'ajuste'; seletor no diálogo Conciliação + popover "Ver pagamento" em Controle de Cheques. ZERO DELETE · ZERO UPDATE · 1 ALTER aditivo.
 
@@ -62,13 +64,11 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4079** — **CONCILIAÇÃO BANCÁRIA: CHEQUE DEVOLVIDO MAIS DE UMA VEZ (MESMA IDENTIDADE, MOTIVOS DIFERENTES) PASSA A QUITAR TODAS AS OCORRÊNCIAS DE UMA SÓ VEZ.** Causa: cobertura já somava por identidade, mas o desconsiderar automático só marcava o par exato passado naquela chamada. Fix: busca TODOS os pares da conta com a mesma identidade e desconsidera juntos (`registrarVinculoChequeDevolvido`/`estornarVinculoChequeDevolvido`). ZERO DELETE · ZERO ALTER · UPDATE só em `desconsiderado_em`.
 
-- **Rev. 4078** — **FATURAMENTO DIRETO (FD): NOMENCLATURA UNIFICADA E MAIS CLARA — "FORA DO CONTRATO" x "ABATE CONTRATO" — EM CONTAS A PAGAR + PDF DA OC, COM LEGENDA EXPLICATIVA.** Usuário reportou que os 3 selos ("FD Cliente"/"FD"/"FD Terceiro") confundiam mais do que ajudavam — só existem 2 conceitos reais: desconta ou não desconta do contrato da FC (`fd_fc` e `fd_terceiro` são o MESMO conceito, não 2). Fix: `fdBadgeInfo()` unificado em 2 rótulos com tooltip + `FdLegendaPopover`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
-- **Rev. 4077** — **CONTAS A PAGAR: NOVO FILTRO "SÓ FD / SEM FD" PRA ISOLAR TÍTULOS DE FATURAMENTO DIRETO NA LISTA.** `FinanceiroContasAPagar.tsx` ganhou estado `fdFilter` + toggle de 3 botões reaproveitando `fdBadgeInfo()`. ZERO DELETE · ZERO UPDATE · ZERO ALTER (100% frontend).
+- **Rev. 4078** — **FATURAMENTO DIRETO (FD): NOMENCLATURA UNIFICADA E MAIS CLARA — "FORA DO CONTRATO" x "ABATE CONTRATO" — EM CONTAS A PAGAR + PDF DA OC, COM LEGENDA EXPLICATIVA.** Usuário reportou que os 3 selos ("FD Cliente"/"FD"/"FD Terceiro") confundiam mais do que ajudavam — só existem 2 conceitos reais: desconta ou não desconta do contrato da FC. Fix: `fdBadgeInfo()` unificado em 2 rótulos com tooltip + `FdLegendaPopover`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4076 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4077 e anteriores.
 
 ## User preferences
 

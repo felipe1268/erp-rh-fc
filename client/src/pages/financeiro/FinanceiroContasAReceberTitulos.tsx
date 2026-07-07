@@ -17,7 +17,7 @@ import {
   ChevronLeft, ChevronRight, Search, Building2, CheckCircle, Clock,
   AlertTriangle, TrendingUp, Plus, Paperclip, Trash2, RotateCcw, Loader2,
   HandCoins, Users, Wallet, CalendarDays, ChevronsUpDown, Check, Tag,
-  X, CheckSquare, SlidersHorizontal,
+  X, CheckSquare, SlidersHorizontal, Landmark, Upload, FileText,
 } from "lucide-react";
 
 // Rev. 3007 — categorias de Contas a Receber (literatura de gestão de contratos
@@ -614,6 +614,7 @@ export default function FinanceiroContasAReceberTitulos() {
                                 {t.descricao || t.origemDescricao || "Título"}
                                 {t.parcelaTotal > 1 && <Badge variant="outline" className="text-[10px]">{t.parcelaNumero}/{t.parcelaTotal}</Badge>}
                                 {t.origemModulo === "revenue" && <Badge variant="outline" className="text-[10px] text-indigo-600 border-indigo-200 bg-indigo-50">Medição</Badge>}
+                                {t.nfseNumero && <Badge variant="outline" className="text-[10px] text-blue-700 border-blue-200 bg-blue-50 gap-0.5"><FileText className="h-2.5 w-2.5" />NFS-e {t.nfseNumero}</Badge>}
                                 {Number(t.dupCount) > 1 && (
                                   <Badge variant="outline" className="text-[10px] text-amber-700 border-amber-300 bg-amber-50" title={`${t.dupCount} títulos com mesmo valor e vencimento — verifique se há duplicata e estorne o desnecessário.`}>
                                     ⚠ Possível duplicata
@@ -665,7 +666,7 @@ export default function FinanceiroContasAReceberTitulos() {
       </div>
 
       {showBaixa && <BaixaDialog titulo={showBaixa} companyId={companyId} contasBancarias={contasBancarias} onClose={() => setShowBaixa(null)} onSubmit={(p: any) => baixaMut.mutate(p)} pending={baixaMut.isPending} onRefetch={refetch} />}
-      {showNovo && <NovoTituloDialog companyId={companyId} clientesOpts={clientesOpts} onClose={() => setShowNovo(false)} onSubmit={(p: any) => criarMut.mutate(p)} pending={criarMut.isPending} />}
+      {showNovo && <NovoTituloDialog companyId={companyId} clientesOpts={clientesOpts} contasBancarias={contasBancarias} onClose={() => setShowNovo(false)} onSubmit={(p: any) => criarMut.mutate(p)} pending={criarMut.isPending} />}
       {showAnexo && <AnexoDialog titulo={showAnexo} companyId={companyId} onClose={() => setShowAnexo(null)} onSubmit={(p: any) => anexarMut.mutate(p)} pending={anexarMut.isPending} />}
       {showBulkAjustar && (
         <BulkAjustarDialog
@@ -956,7 +957,7 @@ function Combobox({
   );
 }
 
-function NovoTituloDialog({ companyId, clientesOpts, onClose, onSubmit, pending }: any) {
+function NovoTituloDialog({ companyId, clientesOpts, contasBancarias, onClose, onSubmit, pending }: any) {
   const { toast } = useToast();
   const [clienteId, setClienteId] = useState<string>("");
   const [descricao, setDescricao] = useState("");
@@ -969,6 +970,17 @@ function NovoTituloDialog({ companyId, clientesOpts, onClose, onSubmit, pending 
   const [vencTouched, setVencTouched] = useState(false);
   const [parcelas, setParcelas] = useState("1");
   const [obs, setObs] = useState("");
+  // Rev. 4084 — conta bancária de recebimento + NFS-e
+  const [contaBancariaId, setContaBancariaId] = useState<string>("");
+  const [nfseNumero, setNfseNumero] = useState("");
+  const [nfseSerie, setNfseSerie] = useState("");
+  const [nfseChave, setNfseChave] = useState("");
+  const [nfseValorServico, setNfseValorServico] = useState("");
+  const [nfseValorMaterial, setNfseValorMaterial] = useState("");
+  const [nfseXmlNome, setNfseXmlNome] = useState("");
+  const [nfseXmlConteudo, setNfseXmlConteudo] = useState("");
+  const [nfseUploading, setNfseUploading] = useState(false);
+  const contas: any[] = Array.isArray(contasBancarias) ? contasBancarias : [];
 
   // Rev. 3004 — automático: o 1º vencimento acompanha a competência enquanto o
   // usuário não editar manualmente o campo de vencimento.
@@ -1006,6 +1018,54 @@ function NovoTituloDialog({ companyId, clientesOpts, onClose, onSubmit, pending 
   // ao trocar de cliente, limpa a obra (as obras pertencem ao cliente anterior)
   useEffect(() => { setObraNome(""); }, [clienteId]);
 
+  // Rev. 4084 — extrai campos do XML da NFS-e (NFS-e Nacional, ABRASF, SIL, GIAP)
+  function parseNfseXml(xmlText: string) {
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(xmlText, "text/xml");
+      const get = (...tags: string[]) => {
+        for (const tag of tags) {
+          const el = doc.querySelector(tag);
+          if (el?.textContent?.trim()) return el.textContent.trim();
+        }
+        return "";
+      };
+      return {
+        numero: get("Numero", "NumeroNfse", "NNfse", "numeroNfse"),
+        serie: get("Serie", "SerieNfse"),
+        chave: get("CodigoVerificacao", "ChaveNFSe", "chaveNFSe", "CodigoAutenticacao"),
+        valorServico: get("ValorServicos", "ValorServico", "vServico"),
+        valorMaterial: get("ValorMaterialFornecido", "ValorMaterial", "vMaterial"),
+      };
+    } catch { return { numero: "", serie: "", chave: "", valorServico: "", valorMaterial: "" }; }
+  }
+
+  async function handleXmlFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setNfseUploading(true);
+    try {
+      const text = await file.text();
+      setNfseXmlConteudo(text);
+      setNfseXmlNome(file.name);
+      const p = parseNfseXml(text);
+      if (p.numero) setNfseNumero(p.numero);
+      if (p.serie) setNfseSerie(p.serie);
+      if (p.chave) setNfseChave(p.chave);
+      if (p.valorServico) {
+        const cents = Math.round(parseFloat(p.valorServico.replace(",", ".")) * 100);
+        if (cents > 0) setNfseValorServico(maskBRL(String(cents)));
+      }
+      if (p.valorMaterial) {
+        const cents = Math.round(parseFloat(p.valorMaterial.replace(",", ".")) * 100);
+        if (cents > 0) setNfseValorMaterial(maskBRL(String(cents)));
+      }
+      toast({ title: "XML carregado", description: `NFS-e nº ${p.numero || "—"} detectada — campos preenchidos.` });
+    } catch (err: any) {
+      toast({ title: "Erro ao ler XML", description: String(err?.message || err), variant: "destructive" });
+    } finally { setNfseUploading(false); e.target.value = ""; }
+  }
+
   const valorNum = parseMaskBRL(valor);
   const np = Math.max(1, parseInt(parcelas, 10) || 1);
 
@@ -1040,6 +1100,15 @@ function NovoTituloDialog({ companyId, clientesOpts, onClose, onSubmit, pending 
       obraNome: obraNome.trim() || undefined,
       contaNome: contaNome.trim() || undefined,
       observacoes: obs.trim() || undefined,
+      // Rev. 4084 — novos campos
+      contaBancariaId: contaBancariaId ? Number(contaBancariaId) : undefined,
+      nfseNumero: nfseNumero.trim() || undefined,
+      nfseSerie: nfseSerie.trim() || undefined,
+      nfseChave: nfseChave.trim() || undefined,
+      nfseValorServico: nfseValorServico ? parseMaskBRL(nfseValorServico) : undefined,
+      nfseValorMaterial: nfseValorMaterial ? parseMaskBRL(nfseValorMaterial) : undefined,
+      nfseXmlConteudo: nfseXmlConteudo || undefined,
+      nfseXmlNome: nfseXmlNome || undefined,
     });
   }
 
@@ -1168,6 +1237,65 @@ function NovoTituloDialog({ companyId, clientesOpts, onClose, onSubmit, pending 
               </div>
             </div>
           )}
+
+          {/* Rev. 4084 — Conta bancária de recebimento */}
+          {contas.length > 0 && (
+            <div>
+              <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5"><Landmark className="h-3.5 w-3.5 text-emerald-600" /> Conta bancária de recebimento <span className="text-slate-400 font-normal">(opcional)</span></Label>
+              <select
+                className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                value={contaBancariaId}
+                onChange={(e) => setContaBancariaId(e.target.value)}
+              >
+                <option value="">Não definir</option>
+                {contas.map((c: any) => (
+                  <option key={c.id} value={String(c.id)}>{c.apelido || c.nome} {c.banco ? `— ${c.banco}` : ""} {c.agencia ? `Ag. ${c.agencia}` : ""}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Rev. 4084 — NFS-e vinculada */}
+          <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-blue-800 flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" /> NFS-e vinculada <span className="font-normal text-blue-600">(opcional)</span></span>
+              <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-blue-700 hover:text-blue-900 transition">
+                {nfseUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                {nfseXmlNome ? nfseXmlNome : "Carregar XML"}
+                <input type="file" accept=".xml,text/xml,application/xml" className="sr-only" onChange={handleXmlFile} disabled={nfseUploading} />
+              </label>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-2">
+                <Label className="text-[10px] text-slate-500">Número da NFS-e</Label>
+                <Input className="mt-0.5 h-8 text-sm" value={nfseNumero} onChange={(e) => setNfseNumero(e.target.value)} placeholder="Ex.: 000123" />
+              </div>
+              <div>
+                <Label className="text-[10px] text-slate-500">Série</Label>
+                <Input className="mt-0.5 h-8 text-sm" value={nfseSerie} onChange={(e) => setNfseSerie(e.target.value)} placeholder="Ex.: A" />
+              </div>
+            </div>
+            <div>
+              <Label className="text-[10px] text-slate-500">Chave / Código de verificação</Label>
+              <Input className="mt-0.5 h-8 text-sm font-mono" value={nfseChave} onChange={(e) => setNfseChave(e.target.value)} placeholder="Código de autenticação" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-[10px] text-slate-500">Valor de serviço (R$)</Label>
+                <div className="relative mt-0.5">
+                  <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">R$</span>
+                  <Input className="h-8 pl-7 text-sm tabular-nums" value={nfseValorServico} onChange={(e) => setNfseValorServico(maskBRL(e.target.value))} inputMode="numeric" placeholder="0,00" />
+                </div>
+              </div>
+              <div>
+                <Label className="text-[10px] text-slate-500">Valor de material (R$)</Label>
+                <div className="relative mt-0.5">
+                  <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">R$</span>
+                  <Input className="h-8 pl-7 text-sm tabular-nums" value={nfseValorMaterial} onChange={(e) => setNfseValorMaterial(maskBRL(e.target.value))} inputMode="numeric" placeholder="0,00" />
+                </div>
+              </div>
+            </div>
+          </div>
 
           <div>
             <Label className="text-xs font-medium text-slate-600">Observações</Label>

@@ -1,4 +1,51 @@
 /**
+ * Rev. 4084 — **CONTAS A RECEBER: "NOVO TÍTULO" ENRIQUECIDO COM CONTA BANCÁRIA
+ * DE RECEBIMENTO + VÍNCULO DE NFS-e (NÚMERO, SÉRIE, CHAVE, VALORES, XML) +
+ * BADGE NFS-e NA LISTA.**
+ *
+ * CONTEXTO: FC Engenharia emite NFS-e em vários municípios (serviço com repasse
+ * de material). Ao lançar um título manual a receber, o operador anotava
+ * em Observações o número da NFS-e e a conta de destino — dados perdidos e sem
+ * rastreabilidade.
+ *
+ * FASE 1 — lançamento enriquecido (sem emissão direta ainda):
+ *
+ * BANCO:
+ * — Nova tabela `financial_nfse_vinculos` (SyncSchema+ Rev. 4084):
+ *   id, company_id, entry_id (FK financial_entries), nfse_numero, nfse_serie,
+ *   nfse_chave, municipio_nome, municipio_ibge, valor_servico, valor_material,
+ *   xml_conteudo, xml_nome, status (vinculada/cancelada), emitida_em,
+ *   criado_por_id, criado_por_nome, criado_em.
+ *   Índices: idx_fnv_entry, idx_fnv_company.
+ * — `financial_entries` já possuía `conta_bancaria_id` (nullable); INSERT de
+ *   `criarTituloReceber` não incluía a coluna — adicionada como $21.
+ *
+ * BACKEND (financial.ts):
+ * — `criarTituloReceber` input: +contaBancariaId, +nfseNumero, +nfseSerie,
+ *   +nfseChave, +municipioNome, +municipioIbge, +nfseValorServico,
+ *   +nfseValorMaterial, +nfseXmlConteudo, +nfseXmlNome.
+ * — INSERT em financial_entries inclui conta_bancaria_id ($21, array em ordem correta).
+ * — Após commit: se nfseNumero|nfseChave|nfseXmlConteudo presentes, INSERT em
+ *   financial_nfse_vinculos vinculado ao firstId (parcela 1). try/catch: erro no
+ *   NFS-e não aborta o título criado.
+ * — `getContasAReceberByYear` SELECT: +subquery nfseNumero + nfseChave
+ *   (WHERE status != 'cancelada') sem JOIN pesado.
+ *
+ * FRONTEND (FinanceiroContasAReceberTitulos.tsx):
+ * — `NovoTituloDialog` recebe nova prop `contasBancarias` (já buscada no pai).
+ * — Novos estados: contaBancariaId, nfseNumero, nfseSerie, nfseChave,
+ *   nfseValorServico, nfseValorMaterial, nfseXmlNome, nfseXmlConteudo, nfseUploading.
+ * — `parseNfseXml`: DOMParser, tags multi-padrão (NFS-e Nacional, ABRASF, SIL, GIAP).
+ * — `handleXmlFile`: lê File.text(), pré-preenche campos, toast com nº detectado.
+ * — UI: seletor de conta bancária (só renderiza se contas>0); card azul NFS-e com
+ *   upload XML + campos Número/Série/Chave/ValorServico/ValorMaterial (editáveis).
+ * — Lista: badge azul "NFS-e {nfseNumero}" com ícone FileText quando t.nfseNumero.
+ * — Icons adicionados: Landmark, Upload, FileText.
+ *
+ * ZERO DELETE · ZERO ALTER em dados existentes · 1 CREATE TABLE.
+ */
+
+/**
  * Rev. 4083 — **CONCILIAÇÃO BANCÁRIA: PARSERS SANTANDER CORRIGIDOS — EXTRATO
  * CONSOLIDADO INTELIGENTE (FEV/2026) E INTERNET BANKING EMPRESARIAL IBPJ
  * (JUN/2026) FUNCIONAM INDEPENDENTEMENTE + TEMPLATES AUTO-SEEDED EM CONFIGURAÇÕES.**
