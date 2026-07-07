@@ -956,10 +956,13 @@ export default function EquipamentosProprios() {
                         <span className="truncate">{p.criadoPorNome || "—"}</span>
                       </span>
                       {(p.valorAquisicao || p.dataAquisicao) && (
-                        <span className="text-[10px] text-slate-500 shrink-0">
-                          {p.valorAquisicao ? fmtMoney(p.valorAquisicao) : ""}
-                          {p.valorAquisicao && p.dataAquisicao ? " · " : ""}
-                          {fmtDate(p.dataAquisicao) || ""}
+                        <span className="flex flex-col items-end shrink-0">
+                          {p.valorAquisicao && (
+                            <span className="text-xs font-semibold text-slate-700">{fmtMoney(p.valorAquisicao)}</span>
+                          )}
+                          {p.dataAquisicao && (
+                            <span className="text-[10px] text-slate-400">{fmtDate(p.dataAquisicao)}</span>
+                          )}
                         </span>
                       )}
                     </div>
