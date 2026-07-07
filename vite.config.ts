@@ -45,9 +45,19 @@ export default defineConfig({
     cssCodeSplit: true,
     // Rev. 3545 — chunks mais granulares para reduzir pico de memória do Rollup
     // durante o build de produção (OOM com 4679 módulos + 8GB de heap pedido).
+    // Rev. 4087 — bump para 4096 MB + chunks adicionais para shared/ pesados
+    // (cid10 ~1 MB, modulePages ~56 KB) + maxParallelFileOps para baixar pico.
     rollupOptions: {
+      maxParallelFileOps: 5,
       output: {
+        compact: true,
         manualChunks(id) {
+          // ── shared/ pesados: isolados para não inflar o bundle principal ──
+          if (id.includes("shared/cid10"))             return "shared-cid10";
+          if (id.includes("shared/modulePages"))       return "shared-module-pages";
+          if (id.includes("shared/documentTemplates")) return "shared-doc-templates";
+          if (id.includes("shared/trainingRules"))     return "shared-training";
+          if (id.includes("shared/portalAvaliacaoI18n")) return "shared-portal-i18n";
           if (!id.includes("node_modules")) return undefined;
           // ── heavy standalone libs ──────────────────────────────────────────
           if (id.includes("/three/"))                  return "vendor-three";
