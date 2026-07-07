@@ -115,7 +115,13 @@ export async function parseSantanderExtratoPdf(base64: string): Promise<Santande
   const data = await pdfParse(buf);
   const text: string = data?.text || "";
 
-  const isSantander = /EXTRATO CONSOLIDADO INTELIGENTE|santander/i.test(text);
+  // Rev. 4083 — Restringir a detecção ao marcador ÚNICO do Extrato Consolidado
+  // Inteligente ("EXTRATO CONSOLIDADO INTELIGENTE"). O critério anterior incluía
+  // "|santander" que batia em QUALQUER PDF com "Santander" no texto — inclusive o
+  // formato IBPJ (Internet Banking Empresarial), causando confusão entre parsers.
+  const isSantander =
+    /EXTRATO CONSOLIDADO INTELIGENTE/i.test(text) &&
+    !/Internet Banking Empresarial|IBPJ/i.test(text);
   if (!isSantander) return { lines: [], isSantander: false };
 
   const rawLines = text.split(/\r?\n/);

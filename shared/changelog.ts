@@ -1,4 +1,65 @@
 /**
+ * Rev. 4083 — **CONCILIAÇÃO BANCÁRIA: PARSERS SANTANDER CORRIGIDOS — EXTRATO
+ * CONSOLIDADO INTELIGENTE (FEV/2026) E INTERNET BANKING EMPRESARIAL IBPJ
+ * (JUN/2026) FUNCIONAM INDEPENDENTEMENTE + TEMPLATES AUTO-SEEDED EM CONFIGURAÇÕES.**
+ *
+ * PROBLEMA REPORTADO: extratos de fev/mar tinham divergências; extratos do
+ * formato novo (IBPJ, a partir de jun/2026) "não liam nada". Além disso, o
+ * usuário pediu que ambos os formatos apareçam automaticamente em
+ * Configurações → Modelos de Extrato sem precisar rodar script manual.
+ *
+ * INVESTIGAÇÃO:
+ *
+ * 1. `santanderPdfParser.ts` — O gate `isSantander` usava
+ *    `/EXTRATO CONSOLIDADO INTELIGENTE|santander/i`, ou seja, qualquer PDF que
+ *    contivesse a palavra "santander" (inclusive a seção de contato do IBPJ como
+ *    "Central de Atendimento Santander Empresarial") era marcado como
+ *    `isSantander=true`. Isso não produzia linhas erradas nesse caminho (os
+ *    marcadores de seção "Data Descrição" / "Movimentação" não existem no IBPJ),
+ *    mas impedia a detecção precisa e abria margem para falsos positivos em PDFs
+ *    que tivessem texto "Santander" incidentalmente.
+ *
+ * 2. `santanderIbpjParser.ts` — Bug no bloco de formato multi-linha (pdf-parse
+ *    às vezes extrai data, histórico e valor em linhas separadas). Quando a linha
+ *    de histórico era "Saldo do dia Cc + ContaMax principal" (que é skippable via
+ *    `isSkippable(l2)=true`), o loop fazia `continue` sem abortar o bloco. A
+ *    linha SEGUINTE com o valor "- R$ 6.414,44" passava então pelo `extractValor`
+ *    e era EMITIDA COMO TRANSAÇÃO, inflando artificialmente as entradas do extrato.
+ *
+ * 3. Templates Santander só existiam se o script `seedExtratoTemplates.ts` fosse
+ *    rodado manualmente. Empresas novas ou recém-provisionadas não tinham nada.
+ *
+ * FIX:
+ * A) `santanderPdfParser.ts` — novo gate:
+ *    `isSantander = /EXTRATO CONSOLIDADO INTELIGENTE/i.test(text) && !/IBPJ|Internet Banking Empresarial/i.test(text)`
+ *    → SÓ ativa para o PDF genuíno do Consolidado Inteligente.
+ *
+ * B) `santanderIbpjParser.ts` — no bloco pureMatch (multi-linha):
+ *    `if (isSaldoText(l2)) break;` antes do `continue` quando `isSkippable`.
+ *    → Aborta o bloco sem emitir transação quando o histórico é "Saldo do dia...".
+ *    Também adicionadas à SKIP_LINE_RES: LOCNOW, Julio Ferraz, `/^\d+\/\d+$/`
+ *    (números de página como "1/4").
+ *
+ * C) `server/_core/index.ts` (SyncSchema+ Rev. 4083) — INSERT … SELECT WHERE NOT
+ *    EXISTS para as duas templates Santander em todas as empresas ativas. Idempotente,
+ *    roda no startup automaticamente.
+ *
+ * D) `scripts/seedExtratoTemplates.ts` — palavras-chave do Consolidado atualizadas
+ *    para incluir "EXTRATO CONSOLIDADO INTELIGENTE" e "Extrato_PJ_A4_Inteligente"
+ *    (únicos ao formato); instruções de IA reescritas descrevendo o layout real
+ *    (colunas Créditos/Débitos, sufixo "-" = débito, DD/MM sem ano).
+ *
+ * ESCOPO: ZERO DELETE · ZERO UPDATE em dado existente · ZERO ALTER.
+ * Apenas INSERT idempotente (WHERE NOT EXISTS) + correções de parser (sem DB).
+ *
+ * @files
+ *   server/services/santanderPdfParser.ts
+ *   server/services/santanderIbpjParser.ts
+ *   server/_core/index.ts
+ *   scripts/seedExtratoTemplates.ts
+ */
+
+/**
  * Rev. 4082 — **CONCILIAÇÃO BANCÁRIA: "LANÇAR NO ERP" AGORA SUGERE A CONDIÇÃO DE
  * PAGAMENTO PRO FORNECEDOR COM CICLO DE FECHAMENTO CADASTRADO.**
  *

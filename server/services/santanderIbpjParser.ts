@@ -43,6 +43,7 @@ const RE_DATE_SPACE = /^(\d{2})\/(\d{2})\/(\d{4})\s+(.+)$/;
 const RE_DATE_GLUED = /^(\d{2})\/(\d{2})\/(\d{4})(\S.*)$/;
 
 // Linhas a ignorar: saldos diários, cabeçalhos, rodapés, boilerplate de contato.
+// Rev. 4083 — expandido com mais razões sociais comuns e variações de rodapé.
 const SKIP_LINE_RES = [
   /^saldo do dia/i,
   /^saldo anterior/i,
@@ -52,7 +53,10 @@ const SKIP_LINE_RES = [
   /^valor$/i,
   /^agência:/i,
   /^conta:/i,
+  // razões sociais das empresas (cabeçalho do IBPJ)
   /^fc engenharia/i,
+  /^locnow /i,
+  /^julio ferraz/i,
   /^internet banking/i,
   /^ibpj/i,
   /^about:blank/i,
@@ -68,6 +72,7 @@ const SKIP_LINE_RES = [
   /^\d{4}\s*\d{4}\s*\(/i, // telefone tipo "4004 2125 (Capitais...)"
   /^55\s*\(11\)/i,
   /^\d{2}\/\d{2}\/\d{2},\s+\d{2}:\d{2}/i, // rodapé de data de impressão
+  /^\d+\/\d+$/, // número de página isolado (ex.: "1/4", "2/3")
 ];
 
 const MAX_BLOCK_LOOKAHEAD = 10;
@@ -188,6 +193,10 @@ export async function parseSantanderIbpjPdf(base64: string): Promise<IbpjParseRe
         // (não deveria acontecer em extratos normais) — aborta sem emitir.
         if (PURE_DATE.test(l2)) break;
         if (isSkippable(l2)) {
+          // Rev. 4083 — Bug: "Saldo do dia..." era pulado (continue), mas a linha
+          // seguinte com o valor (ex.: "- R$ 6.414,44") era emitida como transação.
+          // Quando o bloco É de saldo, abortar sem emitir nada.
+          if (isSaldoText(l2)) break;
           j++;
           continue;
         }

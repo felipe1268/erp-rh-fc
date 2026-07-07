@@ -1,3 +1,5 @@
+- **Rev. 4076** — **CONTAS A PAGAR: SELO VISUAL "FD" NAS LINHAS DE FATURAMENTO DIRETO.** `FinanceiroContasAPagar.tsx` ganhou `fdBadgeInfo()`/`<FdBadge>` — selo colorido com tooltip nos 3 pontos de exibição da linha. ZERO DELETE · ZERO UPDATE · ZERO ALTER (100% frontend).
+
 - **Rev. 4075** — **CONTAS A PAGAR: FECHAMENTO POR CICLO PASSA A ANCORAR NA DATA DE LANÇAMENTO NO SISTEMA (COMPETÊNCIA), NÃO MAIS NO `dataVencimento` DIGITADO À MÃO — COM SUPORTE A LANÇAMENTO RETROATIVO.** ZERO DELETE · 1 UPDATE restrito a 7 casos · ZERO ALTER destrutivo.
 
 - **Rev. 4074** — **CONTAS A PAGAR: FERRAGENS SANTA RITA (E OUTROS FORNECEDORES COM CICLO) NÃO CONSOLIDAVAM 100% DAS OCS — LANÇAMENTO FINANCEIRO DA OC NUNCA GRAVAVA `fornecedor_nome`.** Causa-raiz: `_agruparContasPagarPorCicloForn` (Rev. 4070) casa pelo nome mas a integração financeira da OC nunca gravava `fornecedor_nome` — 142/263 lançamentos NULOS. Fix: INSERT passa a gravar + fallback COALESCE + varredura retroativa corrigiu 137/144 órfãos. ZERO DELETE · 1 UPDATE em massa restrito · ZERO ALTER destrutivo.

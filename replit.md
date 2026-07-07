@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4083** — **CONCILIAÇÃO: PARSERS SANTANDER CORRIGIDOS — EXTRATO CONSOLIDADO INTELIGENTE (FEV/2026) E INTERNET BANKING EMPRESARIAL IBPJ (JUN/2026) FUNCIONAM INDEPENDENTEMENTE + TEMPLATES AUTO-SEEDED EM CONFIGURAÇÕES.** Dois bugs: (1) `santanderPdfParser.ts` detectava `|santander/i` (muito amplo — capturava o IBPJ que menciona "Santander" na seção de contato), trocado para `/EXTRATO CONSOLIDADO INTELIGENTE/i && !/IBPJ/i`; (2) `santanderIbpjParser.ts` no bloco multi-linha — "Saldo do dia..." era `isSkippable=true` (pulava o `continue`), mas o valor da linha seguinte era emitido como transação → adicionado `if (isSaldoText(l2)) break;` para abortar o bloco inteiro. Além disso, `SKIP_LINE_RES` ganhou LOCNOW, Julio Ferraz e números de página. SyncSchema+ Rev. 4083 faz INSERT idempotente dos dois templates Santander para TODAS as empresas no startup; seed script atualizado com palavras-chave corretas ("EXTRATO CONSOLIDADO INTELIGENTE", "Extrato_PJ_A4_Inteligente") e instruções de IA descrevendo o layout real. ZERO DELETE · ZERO UPDATE em dado · ZERO ALTER.
+
 - **Rev. 4082** — **CONCILIAÇÃO BANCÁRIA: "LANÇAR NO ERP" AGORA SUGERE A CONDIÇÃO DE PAGAMENTO PRO FORNECEDOR COM CICLO DE FECHAMENTO CADASTRADO.** Caso de EXCEÇÃO: lançamento retroativo de extrato (mês sem OS/OC) pra fornecedor que já tem ciclo configurado no cadastro (`empresas_terceiras.ciclo_*`) — no fluxo normal (com OS/OC) a forma de pagamento já vem certa automaticamente, isso não muda. Investigação: "Pagar consolidado" só agrupa títulos NÃO PAGOS; um lançamento criado via "Lançar no ERP" já nasce PAGO/conciliado (a baixa é o próprio extrato), então nunca entraria na consolidação — o pedido é 100% de UX. Fix: novo endpoint `financial.getFornecedorCiclosConfig` (mesmo padrão `includeAllGroup` do `compras.listarFornecedores`); no diálogo "Lançar no ERP" (`FinanceiroConciliacao.tsx`), ao confirmar um fornecedor com ciclo configurado (match por substring, maior nome primeiro), a forma de pagamento é pré-preenchida com `cicloFormaPagamento` (só se vazia — nunca sobrescreve escolha do usuário) + aviso explicando o ciclo/parcelamento sugerido. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
-- **Rev. 4081** — **CONCILIAÇÃO: CHEQUE DEVOLVIDO QUITADO POR MÚLTIPLOS PAGAMENTOS/FORMAS — CONTROLE DE CHEQUES PASSA A MOSTRAR COMO FOI PAGO.** Usuário quer suportar um cheque devolvido quitado por VÁRIOS pagamentos somando o total (ex.: 2k+2k+1k PIX em contas diferentes, OU 4k dinheiro + 1k PIX), com o status do Controle de Cheques refletindo isso. Investigação: o vínculo múltiplo 1→N já funcionava (`bank_cheque_vinculos`, Rev. 3747/4079); faltava (1) dinheiro/outras formas sem linha de extrato ficarem só como "ajuste" genérico e (2) `statusBadge()` do Controle de Cheques não ter case pra `compensado_pix` (caía em "Indefinido"). Fix: nova coluna `forma_pagamento` (dinheiro/depósito/cheque próprio/outro) obrigatória no tipo 'ajuste'; `FinanceiroConciliacao.tsx` ganhou seletor de forma de pagamento no lugar do botão genérico + badges mostram a forma escolhida; novo endpoint `getVinculosPorChequeNumero` + popover "Ver pagamento" em `FinanceiroCheques.tsx` mostra o detalhamento completo (todas as formas/pagamentos) sem abrir a Conciliação. ZERO DELETE · ZERO UPDATE em dado existente · 1 ALTER aditivo (coluna nullable, self-heal `IF NOT EXISTS`).
-
 ### 5 one-liners
+
+- **Rev. 4081** — **CONCILIAÇÃO: CHEQUE DEVOLVIDO QUITADO POR MÚLTIPLOS PAGAMENTOS/FORMAS — CONTROLE DE CHEQUES PASSA A MOSTRAR COMO FOI PAGO.** Fix: nova coluna `forma_pagamento` no tipo 'ajuste'; seletor no diálogo Conciliação + popover "Ver pagamento" em Controle de Cheques. ZERO DELETE · ZERO UPDATE · 1 ALTER aditivo.
 
 - **Rev. 4080** — **CONTAS A PAGAR: BOTÃO "ANO TODO" PADRONIZADO COM CONTAS A RECEBER.** Antes: barra tracejada full-width abaixo da grade de meses. Fix: `FinanceiroContasAPagar.tsx` — botão virou o mesmo pill compacto ao lado do seletor de ano (◀ 2026 ▶ [Ano todo]), igual ao Contas a Receber. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4077** — **CONTAS A PAGAR: NOVO FILTRO "SÓ FD / SEM FD" PRA ISOLAR TÍTULOS DE FATURAMENTO DIRETO NA LISTA.** `FinanceiroContasAPagar.tsx` ganhou estado `fdFilter` + toggle de 3 botões reaproveitando `fdBadgeInfo()`. ZERO DELETE · ZERO UPDATE · ZERO ALTER (100% frontend).
 
-- **Rev. 4076** — **CONTAS A PAGAR: SELO VISUAL "FD" NAS LINHAS DE FATURAMENTO DIRETO.** `FinanceiroContasAPagar.tsx` ganhou `fdBadgeInfo()`/`<FdBadge>` — selo colorido com tooltip nos 3 pontos de exibição da linha. ZERO DELETE · ZERO UPDATE · ZERO ALTER (100% frontend).
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4071 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4076 e anteriores.
 
 ## User preferences
 

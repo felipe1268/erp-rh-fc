@@ -124,29 +124,41 @@ REGRAS GERAIS:
 ];
 
 // ── Santander Consolidado (arquivo grande "Consolidado Inteligente") ──────────
+// Rev. 4083 — palavrasChave corrigidas; instruções descrevem o layout real do PDF.
 const TEMPLATE_SANTANDER_CONSOLIDADO = {
   bancoNome:     "Santander — Extrato Consolidado Inteligente",
   palavrasChave: JSON.stringify([
-    "Consolidado Inteligente",
+    "EXTRATO CONSOLIDADO INTELIGENTE",
+    "Extrato_PJ_A4_Inteligente",
     "Extrato Consolidado",
-    "Santander Consolidado",
+    "Santander",
   ]),
   skipPrefixes:  JSON.stringify([
-    "Saldo do dia",
+    "SALDO EM",
+    "Saldo em",
     "Saldo anterior",
     "Total de entradas",
     "Total de saídas",
     "Saldo final",
     "Período:",
+    "Data          Descrição",
+    "Créditos      Débitos",
   ]),
-  instrucoesIa:  `Extrato Santander Consolidado Inteligente — arquivo grande com múltiplas contas/períodos.
-Estrutura: seções por período ou conta, cada uma com lista de transações.
-- Débito: valor precedido de "- R$" ou coluna de saída.
-- Crédito: valor na coluna de entrada ou "R$" sem sinal negativo.
-- Data formato DD/MM/AAAA.
-- Ignore linhas de totalizadores ("Total de entradas", "Total de saídas", "Saldo final").
-- Ignore linhas de cabeçalho de seção.
-- Inclua descrição completa e contraparte na descrição da transação.`,
+  instrucoesIa:  `Extrato Santander "Extrato Consolidado Inteligente" — PDF gerado pelo sistema do banco (texto selecionável, múltiplas páginas).
+
+Layout em COLUNAS:
+  Data (DD/MM) | Descrição + Nº Doc | Créditos (R$) | Débitos (R$) | Saldo (R$)
+
+REGRAS DE EXTRAÇÃO:
+- Cada transação pode ocupar MÚLTIPLAS LINHAS: a 1ª tem a data DD/MM + início da descrição; continuações NÃO têm data.
+- Débito: valor na coluna "Débitos" — aparece com sufixo "-" (ex.: 1.234,56-  → -1234.56).
+- Crédito: valor na coluna "Créditos" — aparece sem sufixo (ex.: 1.200,00 → +1200.00).
+- Uma linha pode ter APENAS crédito OU apenas débito (colunas independentes).
+- A última coluna de cada linha é o Saldo — ignore-a.
+- Linhas "SALDO EM DD/MM" não são transações — ignore-as.
+- Nº de documento de 6 dígitos isolado na linha não é valor — ignore-o.
+- Data no formato DD/MM; use o ano do cabeçalho do extrato.
+- Valores BR: ponto como milhar, vírgula como decimal ("1.234,56" → 1234.56).`,
 };
 
 async function main() {

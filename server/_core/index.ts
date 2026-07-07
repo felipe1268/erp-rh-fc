@@ -1129,6 +1129,103 @@ Regras:
           console.log(`[SyncSchema+] Rev. 3885: atualizado_por_id + atualizado_por_nome garantidos em bank_statement_templates.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 3885 bank_statement_templates.atualizado_por:`, e?.message || e); }
 
+        // Rev. 4083 — Auto-seed dos dois templates Santander para todas as empresas ativas.
+        // Garante que "Configurações → Modelos de Extrato" mostre ambos os formatos por padrão,
+        // sem precisar rodar o script manual scripts/seedExtratoTemplates.ts.
+        // Usa INSERT … SELECT WHERE NOT EXISTS para ser idempotente.
+        try {
+          const seedTemplates = [
+            {
+              bancoNome: "Santander — Extrato Consolidado Inteligente",
+              palavrasChave: JSON.stringify([
+                "EXTRATO CONSOLIDADO INTELIGENTE",
+                "Extrato_PJ_A4_Inteligente",
+                "Extrato Consolidado",
+                "Santander",
+              ]),
+              skipPrefixes: JSON.stringify([
+                "SALDO EM",
+                "Saldo em",
+                "Saldo anterior",
+                "Total de entradas",
+                "Total de saídas",
+                "Saldo final",
+                "Período:",
+                "Data          Descrição",
+                "Créditos      Débitos",
+              ]),
+              instrucoesIa: `Extrato Santander "Extrato Consolidado Inteligente" — PDF gerado pelo sistema do banco (texto selecionável, múltiplas páginas).
+
+Layout em COLUNAS:
+  Data (DD/MM) | Descrição + Nº Doc | Créditos (R$) | Débitos (R$) | Saldo (R$)
+
+REGRAS DE EXTRAÇÃO:
+- Cada transação pode ocupar MÚLTIPLAS LINHAS: a 1ª tem a data DD/MM + início da descrição; continuações NÃO têm data.
+- Débito: valor na coluna "Débitos" — aparece com sufixo "-" (ex.: 1.234,56-  → -1234.56).
+- Crédito: valor na coluna "Créditos" — aparece sem sufixo (ex.: 1.200,00 → +1200.00).
+- Uma linha pode ter APENAS crédito OU apenas débito (colunas independentes).
+- A última coluna de cada linha é o Saldo — ignore-a.
+- Linhas "SALDO EM DD/MM" não são transações — ignore-as.
+- Nº de documento de 6 dígitos isolado na linha não é valor — ignore-o.
+- Data no formato DD/MM; use o ano do cabeçalho do extrato.
+- Valores BR: ponto como milhar, vírgula como decimal ("1.234,56" → 1234.56).`,
+            },
+            {
+              bancoNome: "Santander — Internet Banking Empresarial PJ (IBPJ)",
+              palavrasChave: JSON.stringify([
+                "Internet Banking Empresarial",
+                "IBPJ",
+                "Banco Santander",
+                "santander.com.br",
+              ]),
+              skipPrefixes: JSON.stringify([
+                "Saldo do dia",
+                "Saldo anterior",
+                "Saldo em",
+                "SALDO",
+                "Data  Histórico",
+                "Data Histórico",
+                "Período:",
+              ]),
+              instrucoesIa: `Extrato Santander Internet Banking Empresarial PJ (IBPJ) — gerado via impressão do browser (HTML→PDF).
+
+Layout por linha: DATA (DD/MM/AAAA) + HISTÓRICO + VALOR na mesma linha.
+
+REGRAS DE EXTRAÇÃO:
+- Débito: valor precedido de "- R$" (ex.: - R$ 1.234,56 → -1234.56).
+- Crédito: valor precedido apenas de "R$" sem sinal negativo (ex.: R$ 500,00 → +500.00).
+- Data no formato DD/MM/AAAA.
+- Ignore linhas que começam com "Saldo do dia", "Saldo anterior", "Saldo em" ou similares.
+- Descrição pode incluir contraparte, CPF/CNPJ e complemento na mesma linha.
+- Valores BR: ponto como milhar, vírgula como decimal ("1.234,56" → 1234.56).`,
+            },
+          ];
+
+          for (const tpl of seedTemplates) {
+            await db.execute(sql`
+              INSERT INTO bank_statement_templates
+                (company_id, banco_nome, palavras_chave, skip_prefixes, instrucoes_ia,
+                 ativo, revisao, notas_revisao, criado_por_nome)
+              SELECT
+                c.id,
+                ${tpl.bancoNome},
+                ${tpl.palavrasChave},
+                ${tpl.skipPrefixes},
+                ${tpl.instrucoesIa},
+                1, 1,
+                'Pré-configurado automaticamente — Rev. 4083',
+                'Seed automático Rev. 4083'
+              FROM companies c
+              WHERE NOT EXISTS (
+                SELECT 1 FROM bank_statement_templates t
+                WHERE t.company_id = c.id
+                  AND t.banco_nome = ${tpl.bancoNome}
+              )
+            `);
+          }
+          console.log(`[SyncSchema+] Rev. 4083: templates Santander (Consolidado + IBPJ) garantidos em todas as empresas.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev. 4083 seed templates Santander:`, e?.message || e); }
+
         // Rev. 3876 — Cheque especial por conta bancária: flag de controle (0/1) + limite disponível.
         // Quando ativo=1 e o saldo acumulado do extrato for negativo, a Conciliação exibe alerta visual.
         try {
