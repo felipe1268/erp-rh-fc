@@ -529,6 +529,12 @@ export default function EquipamentosProprios() {
     return (data as any[]).filter(p => String(p.localizacaoAtualObraId) === filtroObra);
   }, [data, filtroObra]);
 
+  // Valor total dos equipamentos visíveis (respeita filtro de obra).
+  const valorFiltrado = useMemo(() => {
+    const lista = filtroObra ? dataFiltrada : (totalList as any[]);
+    return lista.reduce((s, p) => s + (Number(p.valorAquisicao) || 0), 0);
+  }, [filtroObra, dataFiltrada, totalList]);
+
   return (
     <DashboardLayout>
       {/* Rev. 2510 — Header com identidade FC (faixa azul #1B2A4A, regra de ouro) */}
@@ -769,7 +775,7 @@ export default function EquipamentosProprios() {
           <KpiCard icon={<HardHat className="h-4 w-4" />}       label="Em obra"      value={stats.em_obra}    color="blue"    />
           <KpiCard icon={<CheckCircle2 className="h-4 w-4" />}  label="Disponíveis"  value={stats.disponivel} color="emerald" />
           <KpiCard icon={<Wrench className="h-4 w-4" />}        label="Manutenção"   value={stats.manutencao} color="amber"   />
-          <KpiCard icon={<DollarSign className="h-4 w-4" />}    label="Valor total"  moneyText={fmtMoney(valorTotalInventario)} color="indigo" />
+          <KpiCard icon={<DollarSign className="h-4 w-4" />}    label={filtroObra ? "Valor (obra)" : "Valor total"}  moneyText={fmtMoney(valorFiltrado)} color="indigo" />
         </div>
 
         {/* Filtros sticky no topo da lista */}
