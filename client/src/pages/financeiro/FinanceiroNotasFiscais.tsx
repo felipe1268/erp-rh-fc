@@ -1175,6 +1175,7 @@ export default function FinanceiroNotasFiscais() {
     const recebida   = nfs.filter(n => n.status === "recebida");
     const validada   = nfs.filter(n => n.status === "validada");
     const conciliada = nfs.filter(n => n.status === "conciliada");
+    const cancelada  = nfs.filter(n => n.status === "cancelada" || n.status === "substituida");
     const somarLiq = (arr: NF[]) => arr.reduce((s, n) => s + parseFloat(String(n.valorLiquido || 0)), 0);
     return {
       total: ativas.length,
@@ -1182,10 +1183,12 @@ export default function FinanceiroNotasFiscais() {
       recebida: recebida.length,
       validada: validada.length,
       conciliada: conciliada.length,
+      cancelada: cancelada.length,
       valorPendente:   somarLiq(pendente),
       valorRecebida:   somarLiq(recebida),
       valorValidada:   somarLiq(validada),
       valorConciliada: somarLiq(conciliada),
+      valorCancelada:  somarLiq(cancelada),
       valorTotal:      somarLiq(ativas),
     };
   }, [nfs]);
@@ -2092,13 +2095,14 @@ export default function FinanceiroNotasFiscais() {
 
 
         {/* KPI cards */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           {[
             { label: "Pendentes",   count: totais.pendente,   valor: totais.valorPendente,   color: "amber" },
             { label: "Recebidas",   count: totais.recebida,   valor: totais.valorRecebida,   color: "blue" },
             { label: "Validadas",   count: totais.validada,   valor: totais.valorValidada,   color: "violet" },
             { label: "Conciliadas", count: totais.conciliada, valor: totais.valorConciliada, color: "emerald" },
             { label: "Total NFs",   count: totais.total,      valor: totais.valorTotal,      color: "slate" },
+            { label: "Canceladas",  count: totais.cancelada,  valor: totais.valorCancelada,  color: "red" },
           ].map(k => (
             <Card key={k.label} className="border-0 shadow-sm">
               <CardContent className="p-3">
