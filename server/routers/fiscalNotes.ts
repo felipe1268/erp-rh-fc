@@ -300,11 +300,51 @@ export const fiscalNotesRouter = router({
     }),
 
   vincularExtrato: protectedProcedure
-    .input(z.object({ id: z.number(), companyId: z.number(), stmtLineId: z.number().nullable() }))
+    .input(z.object({
+      id: z.number(),
+      companyId: z.number(),
+      stmtLineId: z.number().nullable(),
+      forceVincular: z.boolean().optional(),   // override de divergência de valor
+    }))
     .mutation(async ({ input, ctx }) => {
       await _assertNfAccess(ctx.user, input.companyId);
       const db = await getDb();
       const now = new Date().toISOString();
+
+      // ── Validação de valor: NF líquida deve bater com o extrato (±1 %) ───────
+      if (input.stmtLineId != null && !input.forceVincular) {
+        const nfQ = await db.$client.query(
+          `SELECT valor_liquido::float AS vl FROM fiscal_notes
+           WHERE id = $1 AND company_id = $2`,
+          [input.id, input.companyId],
+        );
+        const stmtQ = await db.$client.query(
+          `SELECT ABS(valor)::float AS val FROM bank_statement_lines
+           WHERE id = $1 AND company_id = $2 AND excluido_em IS NULL`,
+          [input.stmtLineId, input.companyId],
+        );
+        if (nfQ.rows.length > 0 && stmtQ.rows.length > 0) {
+          const nfLiq  = parseFloat(nfQ.rows[0].vl  ?? "0");
+          const stmtVal = parseFloat(stmtQ.rows[0].val ?? "0");
+          if (nfLiq > 0 && stmtVal > 0) {
+            const diff    = Math.abs(nfLiq - stmtVal);
+            const diffPct = diff / Math.max(nfLiq, stmtVal);
+            if (diffPct > 0.01) {              // > 1 % divergência
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: JSON.stringify({
+                  type: "VALUE_MISMATCH",
+                  nfLiquido: nfLiq,
+                  stmtValor: stmtVal,
+                  diff,
+                  diffPct,
+                }),
+              });
+            }
+          }
+        }
+      }
+
       // Vincular extrato → "conciliada"; desvincular → volta para "emitida"
       const novoStatus = input.stmtLineId != null ? "conciliada" : "emitida";
       await db.update(fiscalNotes)

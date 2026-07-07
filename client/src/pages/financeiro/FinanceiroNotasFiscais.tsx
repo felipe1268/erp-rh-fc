@@ -197,6 +197,10 @@ export default function FinanceiroNotasFiscais() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<NF | null>(null);
   const [detalheNf, setDetalheNf] = useState<NF | null>(null);
+  const [mismatchConfirm, setMismatchConfirm] = useState<{
+    id: number; companyId: number; stmtLineId: number;
+    nfLiquido: number; stmtValor: number; diffPct: number;
+  } | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
@@ -405,12 +409,26 @@ export default function FinanceiroNotasFiscais() {
       setVinclandoId(null);
       listQuery.refetch();
       nfeRecQuery.refetch();
-      // Após vincular, mostrar apenas pendentes
       if (pageTab === "emitidas") setFilterSemVinculo(true);
       if (pageTab === "recebidas") setRecSemVinculo(true);
       toast({ title: "✅ NF-e vinculada ao extrato!" });
     },
-    onError: (e: any) => { setVinclandoId(null); toast({ title: "Erro ao vincular", description: e?.message, variant: "destructive" }); },
+    onError: (e: any) => {
+      setVinclandoId(null);
+      try {
+        const parsed = JSON.parse(e?.message ?? "");
+        if (parsed?.type === "VALUE_MISMATCH") {
+          const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+          toast({
+            title: "⚠️ Divergência de valor — vínculo bloqueado",
+            description: `NF líquida: ${fmt(parsed.nfLiquido)} · Extrato: ${fmt(parsed.stmtValor)} (${(parsed.diffPct * 100).toFixed(2)}% de diferença). Abra o detalhe da NF para forçar o vínculo.`,
+            variant: "destructive",
+          });
+          return;
+        }
+      } catch {}
+      toast({ title: "Erro ao vincular", description: e?.message, variant: "destructive" });
+    },
   });
 
   function sugestoesVisiveis() {
@@ -770,7 +788,23 @@ export default function FinanceiroNotasFiscais() {
   });
   const vincularStmtMut = trpc.fiscalNotes.vincularExtrato.useMutation({
     onSuccess: () => { toast({ title: "Extrato vinculado!" }); setDetalheNf(null); listQuery.refetch(); },
-    onError: (e) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+    onError: (e) => {
+      try {
+        const parsed = JSON.parse(e.message);
+        if (parsed?.type === "VALUE_MISMATCH" && detalheNf) {
+          setMismatchConfirm({
+            id: detalheNf.id,
+            companyId: detalheNf.companyId ?? (companyId as number),
+            stmtLineId: parseInt(vincularStmtId),
+            nfLiquido: parsed.nfLiquido,
+            stmtValor: parsed.stmtValor,
+            diffPct:   parsed.diffPct,
+          });
+          return;
+        }
+      } catch {}
+      toast({ title: "Erro", description: e.message, variant: "destructive" });
+    },
   });
   const parsePdfMut = trpc.fiscalNotes.parsePdf.useMutation({
     onError: (e) => {
@@ -1895,18 +1929,26 @@ export default function FinanceiroNotasFiscais() {
                                   {st.label}
                                   {nf.entryId && <CheckCircle className="w-3 h-3 text-emerald-500 ml-0.5" />}
                                 </span>
-                                {nf.stmtLine ? (
-                                  <div className="rounded-lg border border-violet-200 bg-violet-50 px-2 py-1 text-xs space-y-0.5">
-                                    <div className="flex items-center gap-1 text-violet-700 font-semibold">
-                                      <Link className="h-3 w-3 shrink-0" />
-                                      <span className="truncate max-w-[160px]" title={nf.stmtLine.descricao}>{nf.stmtLine.descricao || `Extrato #${nf.stmtLineId}`}</span>
+                                {nf.stmtLine ? (() => {
+                                  const stmtAbs = Math.abs(parseFloat(nf.stmtLine.valor ?? "0"));
+                                  const hasMismatch = stmtAbs > 0 && nf.valorLiquido > 0 &&
+                                    Math.abs(nf.valorLiquido - stmtAbs) / Math.max(nf.valorLiquido, stmtAbs) > 0.01;
+                                  return (
+                                    <div className={`rounded-lg border px-2 py-1 text-xs space-y-0.5 ${hasMismatch ? "border-red-300 bg-red-50" : "border-violet-200 bg-violet-50"}`}>
+                                      <div className={`flex items-center gap-1 font-semibold ${hasMismatch ? "text-red-700" : "text-violet-700"}`}>
+                                        {hasMismatch ? <AlertTriangle className="h-3 w-3 shrink-0" /> : <Link className="h-3 w-3 shrink-0" />}
+                                        <span className="truncate max-w-[160px]" title={nf.stmtLine.descricao}>{nf.stmtLine.descricao || `Extrato #${nf.stmtLineId}`}</span>
+                                      </div>
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className={`font-semibold tabular-nums ${hasMismatch ? "text-red-600" : "text-violet-600"}`}>{formatBRL(stmtAbs)}</span>
+                                        <span className="text-violet-400">{fmtDateBR(nf.stmtLine.data)}</span>
+                                      </div>
+                                      {hasMismatch && (
+                                        <div className="text-[10px] text-red-600 font-medium">≠ NF líquida: {formatBRL(nf.valorLiquido)}</div>
+                                      )}
                                     </div>
-                                    <div className="flex items-center justify-between gap-2 text-violet-600">
-                                      <span className="font-semibold tabular-nums">{formatBRL(Math.abs(parseFloat(nf.stmtLine.valor ?? "0")))}</span>
-                                      <span className="text-violet-400">{fmtDateBR(nf.stmtLine.data)}</span>
-                                    </div>
-                                  </div>
-                                ) : nf.stmtLineId ? (
+                                  );
+                                })() : nf.stmtLineId ? (
                                   <span className="inline-flex items-center gap-1 text-xs text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded border border-violet-200"><Link className="h-3 w-3" />Extrato #{nf.stmtLineId}</span>
                                 ) : null}
                               </div>
@@ -2329,18 +2371,26 @@ export default function FinanceiroNotasFiscais() {
                             ? <span className="inline-flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded"><Link className="h-3 w-3" />Lançamento #{nf.entryId}</span>
                             : <span className="text-xs text-slate-300">— lançamento</span>
                           }
-                          {nf.stmtLine ? (
-                            <div className="rounded-lg border border-violet-200 bg-violet-50 px-2 py-1.5 text-xs space-y-0.5">
-                              <div className="flex items-center gap-1 text-violet-700 font-semibold">
-                                <Link className="h-3 w-3 shrink-0" />
-                                <span className="truncate" title={nf.stmtLine.descricao}>{nf.stmtLine.descricao || `Extrato #${nf.stmtLineId}`}</span>
+                          {nf.stmtLine ? (() => {
+                            const stmtAbs = Math.abs(parseFloat(nf.stmtLine.valor ?? "0"));
+                            const hasMismatch = stmtAbs > 0 && nf.valorLiquido > 0 &&
+                              Math.abs(nf.valorLiquido - stmtAbs) / Math.max(nf.valorLiquido, stmtAbs) > 0.01;
+                            return (
+                              <div className={`rounded-lg border px-2 py-1.5 text-xs space-y-0.5 ${hasMismatch ? "border-red-300 bg-red-50" : "border-violet-200 bg-violet-50"}`}>
+                                <div className={`flex items-center gap-1 font-semibold ${hasMismatch ? "text-red-700" : "text-violet-700"}`}>
+                                  {hasMismatch ? <AlertTriangle className="h-3 w-3 shrink-0" /> : <Link className="h-3 w-3 shrink-0" />}
+                                  <span className="truncate" title={nf.stmtLine.descricao}>{nf.stmtLine.descricao || `Extrato #${nf.stmtLineId}`}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className={`font-semibold tabular-nums ${hasMismatch ? "text-red-600" : "text-violet-600"}`}>{formatBRL(stmtAbs)}</span>
+                                  <span className="text-violet-400">{fmtDateBR(nf.stmtLine.data)}</span>
+                                </div>
+                                {hasMismatch && (
+                                  <div className="text-[10px] text-red-600 font-medium">≠ NF líquida: {formatBRL(nf.valorLiquido)}</div>
+                                )}
                               </div>
-                              <div className="flex items-center justify-between gap-2 text-violet-600">
-                                <span className="font-semibold tabular-nums">{formatBRL(Math.abs(parseFloat(nf.stmtLine.valor ?? "0")))}</span>
-                                <span className="text-violet-400">{fmtDateBR(nf.stmtLine.data)}</span>
-                              </div>
-                            </div>
-                          ) : nf.stmtLineId ? (
+                            );
+                          })() : nf.stmtLineId ? (
                             <span className="inline-flex items-center gap-1 text-xs text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded border border-violet-200"><Link className="h-3 w-3" />Extrato #{nf.stmtLineId}</span>
                           ) : null}
                         </div>
@@ -3547,6 +3597,63 @@ export default function FinanceiroNotasFiscais() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* ── Diálogo de confirmação de divergência de valor ── */}
+        {mismatchConfirm && (
+          <Dialog open={!!mismatchConfirm} onOpenChange={v => !v && setMismatchConfirm(null)}>
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-red-700">
+                  <AlertTriangle className="h-5 w-5" /> Divergência de valor
+                </DialogTitle>
+                <DialogDescription>
+                  O valor do extrato bancário não bate com o valor líquido da NF-e.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3 space-y-2 text-sm">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Valor líquido da NF-e</span>
+                    <span className="font-bold text-slate-800">{formatBRL(mismatchConfirm.nfLiquido)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Valor do extrato bancário</span>
+                    <span className="font-bold text-red-700">{formatBRL(mismatchConfirm.stmtValor)}</span>
+                  </div>
+                  <div className="flex justify-between items-center border-t border-red-200 pt-2">
+                    <span className="text-slate-500">Diferença</span>
+                    <span className="font-bold text-red-700">
+                      {formatBRL(Math.abs(mismatchConfirm.nfLiquido - mismatchConfirm.stmtValor))}
+                      {" "}({(mismatchConfirm.diffPct * 100).toFixed(2)}%)
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Vincule <strong>somente</strong> se houver retenções fiscais adicionais (ISS, IRRF, PIS/COFINS/CSLL)
+                  aplicadas pelo tomador que não foram declaradas na nota fiscal.
+                </p>
+              </div>
+              <DialogFooter className="gap-2">
+                <Button variant="outline" onClick={() => setMismatchConfirm(null)}>Cancelar</Button>
+                <Button
+                  variant="destructive"
+                  disabled={vincularStmtMut.isPending}
+                  onClick={() => {
+                    vincularStmtMut.mutate({
+                      id: mismatchConfirm.id,
+                      companyId: mismatchConfirm.companyId,
+                      stmtLineId: mismatchConfirm.stmtLineId,
+                      forceVincular: true,
+                    });
+                    setMismatchConfirm(null);
+                  }}
+                >
+                  Vincular mesmo assim
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
 
         <AlertDialog open={!!deleteTarget} onOpenChange={v => !v && setDeleteTarget(null)}>
           <AlertDialogContent>

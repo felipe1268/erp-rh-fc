@@ -191,6 +191,13 @@ export async function autoVincularNfsPorLinhas(
     const autoLink = best.score >= 60 || (scored.length === 1 && best.score >= 40);
     if (!autoLink) continue;
 
+    // Segurança extra: exige alinhamento de valor ≤ 8 % antes de vincular
+    const bestLiq = parseFloat(best.valor_liquido ?? "0");
+    const bestBrt = parseFloat(best.valor_bruto   ?? "0");
+    const diffLiq = bestLiq > 0 ? Math.abs(bestLiq - bslVal) / Math.max(bestLiq, bslVal) : 1;
+    const diffBrt = bestBrt > 0 ? Math.abs(bestBrt - bslVal) / Math.max(bestBrt, bslVal) : 1;
+    if (Math.min(diffLiq, diffBrt) > 0.08) continue;  // > 8 % = falso positivo
+
     const res = await db.$client.query(`
       UPDATE fiscal_notes
          SET stmt_line_id = $1, status = 'conciliada', updated_at = $2
