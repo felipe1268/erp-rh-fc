@@ -1,4 +1,39 @@
 /**
+ * Rev. 4086 — **CONCILIAÇÃO: IMPORTAÇÃO EM LOTE INTELIGENTE — CONTA AUTO-DETECTADA DO
+ * CABEÇALHO OFX (<BANKACCTFROM>) + DIÁLOGO DE REVISÃO POR ARQUIVO.**
+ *
+ * CONTEXTO: O usuário precisava selecionar manualmente a conta bancária antes de cada
+ * importação OFX, e só conseguia subir um arquivo por vez para uma única conta.
+ * O arquivo OFX já carrega `<BANKID>` (código do banco) e `<ACCTID>` (número da conta)
+ * no bloco `<BANKACCTFROM>` — informação ignorada pelo sistema até agora.
+ *
+ * SOLUÇÃO (100% client-side — sem chamadas extras ao servidor):
+ *
+ * DETECÇÃO AUTOMÁTICA:
+ * — `extractOfxAccountInfo(text)`: extrai `BANKID`+`ACCTID` via regex do cabeçalho OFX.
+ * — `matchOfxToConta(bankId, acctId, accounts)`: normaliza (remove não-dígitos + zeros
+ *   à esquerda) e cruza com `bankAccounts` já carregado no estado. Ex.: "0000130051325"
+ *   → "130051325" para casar com o cadastro.
+ * — Presente em `FinanceiroConciliacao.tsx` e `FinanceiroConciliacaoWorkspace.tsx`.
+ *
+ * IMPORTAÇÃO EM LOTE (FinanceiroConciliacao.tsx):
+ * — Ao selecionar qualquer arquivo OFX (1 ou N), `handleFileSelect` detecta a conta de
+ *   CADA arquivo e abre o novo `BatchImportDialog` (dark header + tabela arquivo×conta).
+ * — Cada linha mostra: badge OFX, nome do arquivo, conta detectada (seletor editável),
+ *   ícone ✅ (auto-detectada) ou ⚠ (sem correspondência → usuário atribui manualmente).
+ * — `handleBatchImport` processa FASE 1 (analyze) + FASE 1.5 (dedup) + FASE 2 (insert)
+ *   para cada arquivo → sua conta. `proceedWithInsert` usa `fg.contaId ?? contaId` para
+ *   suportar contas diferentes por arquivo.
+ * — `PendImportFile` ganhou campo `contaId?: number` para carregar a conta por arquivo
+ *   até o ReviewDuplicatesDialog.
+ *
+ * BANNER NO WORKSPACE (FinanceiroConciliacaoWorkspace.tsx):
+ * — Ao subir um único OFX, se a conta detectada divergir da selecionada, aparece banner
+ *   azul com o nome da conta detectada e botão "Usar esta conta" que troca o seletor.
+ *
+ * ZERO DELETE · ZERO UPDATE em dados · ZERO ALTER
+ */
+/**
  * Rev. 4085 — **CONCILIAÇÃO: DEDUP DE IMPORTAÇÃO PASSA A SER CONTROLADO PELO USUÁRIO
  * (DIÁLOGO DE REVISÃO) + PARSER OFX ROBUSTO PARA FORMATO BR (VÍRGULA DECIMAL).**
  *

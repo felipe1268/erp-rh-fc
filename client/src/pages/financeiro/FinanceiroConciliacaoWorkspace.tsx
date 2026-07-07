@@ -121,6 +121,8 @@ export default function FinanceiroConciliacaoWorkspace() {
   const [importFileName, setImportFileName] = useState("");
   const [csvSeparador, setCsvSeparador] = useState(";");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Rev. 4086 — conta detectada do cabeçalho OFX (para banner de aviso no diálogo)
+  const [ofxDetectedConta, setOfxDetectedConta] = useState<{ contaId: number; banco: string; apelido: string | null; conta: string } | null>(null);
   const [importRunning, setImportRunning] = useState(false);
   const [importPct, setImportPct] = useState(0);
   const [importLabel, setImportLabel] = useState("");
@@ -256,6 +258,22 @@ export default function FinanceiroConciliacaoWorkspace() {
     conciliarSugMut.mutate({ companyId, pares });
   };
 
+  // Rev. 4086 — helpers de detecção de conta OFX (idênticos ao FinanceiroConciliacao)
+  function extractOfxAccountInfo(text: string): { bankId: string; acctId: string } | null {
+    const getTag = (tag: string) => { const m = text.match(new RegExp(`<${tag}>([^<\r\n]+)`, "i")); return m ? m[1].trim() : ""; };
+    const acctId = getTag("ACCTID");
+    if (!acctId) return null;
+    return { bankId: getTag("BANKID"), acctId };
+  }
+  function matchOfxToConta(bankId: string, acctId: string, accounts: any[]): any | null {
+    const norm = (s: string) => (s || "").replace(/\D/g, "").replace(/^0+/, "") || s;
+    const aN = norm(acctId), bN = norm(bankId);
+    return accounts.find(a => {
+      const da = norm(String(a.conta || "")), db = norm(String(a.codigoBanco || ""));
+      return da === aN && (!bankId || !db || db === bN);
+    }) ?? null;
+  }
+
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -267,6 +285,7 @@ export default function FinanceiroConciliacaoWorkspace() {
       return;
     }
     setImportFileName(file.name);
+    setOfxDetectedConta(null);
     const reader = new FileReader();
     if (ext === "pdf") {
       setImportFormato("pdf");
@@ -274,7 +293,18 @@ export default function FinanceiroConciliacaoWorkspace() {
       reader.readAsDataURL(file);
     } else {
       if (ext === "ofx" || ext === "qfx") setImportFormato("ofx"); else setImportFormato("csv");
-      reader.onload = (ev) => { setImportContent(ev.target?.result as string ?? ""); };
+      reader.onload = (ev) => {
+        const text = ev.target?.result as string ?? "";
+        setImportContent(text);
+        // Rev. 4086 — detectar conta do cabeçalho OFX e sugerir troca se divergir
+        if (ext === "ofx" || ext === "qfx") {
+          const info = extractOfxAccountInfo(text);
+          if (info) {
+            const matched = matchOfxToConta(info.bankId, info.acctId, (bankAccounts ?? []) as any[]);
+            if (matched) setOfxDetectedConta({ contaId: Number(matched.id), banco: String(matched.banco), apelido: matched.apelido ?? null, conta: String(matched.conta) });
+          }
+        }
+      };
       reader.readAsText(file, "ISO-8859-1");
     }
   }
@@ -938,6 +968,28 @@ export default function FinanceiroConciliacaoWorkspace() {
                   <SelectContent><SelectItem value=";">Ponto e vírgula (;)</SelectItem><SelectItem value=",">Vírgula (,)</SelectItem><SelectItem value="\t">Tab</SelectItem></SelectContent>
                 </Select>
                 <p className="text-[11px] text-gray-400">O CSV deve ter colunas: Data, Descrição, Valor (e opcionalmente Saldo)</p>
+              </div>
+            )}
+            {/* Rev. 4086 — Banner: conta detectada do OFX diferente da selecionada */}
+            {ofxDetectedConta && ofxDetectedConta.contaId !== parseInt(importConta) && !importRunning && (
+              <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 shrink-0 rounded-lg bg-blue-100 flex items-center justify-center mt-0.5">
+                    <Landmark className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-blue-800">Conta detectada no arquivo OFX</p>
+                    <p className="text-xs text-blue-600 mt-0.5">
+                      {ofxDetectedConta.apelido || ofxDetectedConta.banco} · ···{String(ofxDetectedConta.conta).slice(-4)}
+                    </p>
+                  </div>
+                  <button
+                    className="shrink-0 text-xs font-semibold text-blue-700 bg-blue-100 hover:bg-blue-200 px-3 py-1.5 rounded-lg transition-colors"
+                    onClick={() => { setImportConta(String(ofxDetectedConta.contaId)); setOfxDetectedConta(null); }}
+                  >
+                    Usar esta conta
+                  </button>
+                </div>
               </div>
             )}
             {importRunning && (

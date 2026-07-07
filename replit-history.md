@@ -1,3 +1,9 @@
+- **Rev. 4079** — **CONCILIAÇÃO BANCÁRIA: CHEQUE DEVOLVIDO MAIS DE UMA VEZ (MESMA IDENTIDADE, MOTIVOS DIFERENTES) PASSA A QUITAR TODAS AS OCORRÊNCIAS DE UMA SÓ VEZ.** Fix: busca TODOS os pares da conta com a mesma identidade e desconsidera juntos. ZERO DELETE · ZERO ALTER · UPDATE só em `desconsiderado_em`.
+
+- **Rev. 4078** — **FATURAMENTO DIRETO (FD): NOMENCLATURA UNIFICADA E MAIS CLARA — "FORA DO CONTRATO" x "ABATE CONTRATO" — EM CONTAS A PAGAR + PDF DA OC, COM LEGENDA EXPLICATIVA.** `fdBadgeInfo()` unificado em 2 rótulos com tooltip + `FdLegendaPopover`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+
+- **Rev. 4077** — **CONCILIAÇÃO: "DESCONSIDERAR" LINHA DO EXTRATO REMOVE DO % DE COBERTURA SEM APAGAR.** ZERO DELETE · UPDATE em `desconsiderado_em` · ZERO ALTER destrutivo.
+
 - **Rev. 4076** — **CONTAS A PAGAR: SELO VISUAL "FD" NAS LINHAS DE FATURAMENTO DIRETO.** `FinanceiroContasAPagar.tsx` ganhou `fdBadgeInfo()`/`<FdBadge>` — selo colorido com tooltip nos 3 pontos de exibição da linha. ZERO DELETE · ZERO UPDATE · ZERO ALTER (100% frontend).
 
 - **Rev. 4075** — **CONTAS A PAGAR: FECHAMENTO POR CICLO PASSA A ANCORAR NA DATA DE LANÇAMENTO NO SISTEMA (COMPETÊNCIA), NÃO MAIS NO `dataVencimento` DIGITADO À MÃO — COM SUPORTE A LANÇAMENTO RETROATIVO.** ZERO DELETE · 1 UPDATE restrito a 7 casos · ZERO ALTER destrutivo.

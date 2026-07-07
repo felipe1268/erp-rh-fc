@@ -308,6 +308,10 @@ export default function FinanceiroConciliacao() {
   const [importFiles, setImportFiles] = useState<{ nome: string; conteudo: string; formato: "ofx" | "csv" | "pdf" }[]>([]);
   const [csvSeparador, setCsvSeparador] = useState(";");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Rev. 4086 — Batch smart import: plano por arquivo com conta detectada do cabeçalho OFX
+  type BatchPlanItem = { file: { nome: string; conteudo: string; formato: "ofx"|"csv"|"pdf" }; detectedBankId: string; detectedAcctId: string; contaId: string };
+  const [batchPlan, setBatchPlan] = useState<BatchPlanItem[]>([]);
+  const [showBatch, setShowBatch] = useState(false);
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
   // Rev. 3411 — IDs de linhas já conciliadas nesta sessão (filtradas localmente sem re-análise)
   const [conciliadosIds, setConciliadosIds] = useState<Set<number>>(new Set());
@@ -1107,7 +1111,8 @@ export default function FinanceiroConciliacao() {
   const [importPct, setImportPct] = useState(0);
   const [importLabel, setImportLabel] = useState("");
   // Rev. 4085 — diálogo de revisão de duplicados
-  type PendImportFile = { nome: string; linhas: any[]; importadoEm: string; formato: "ofx"|"csv"|"pdf"; dupIndices: number[] };
+  // contaId opcional: preenchido no batch-import para que cada arquivo vá para a conta certa
+  type PendImportFile = { nome: string; linhas: any[]; importadoEm: string; formato: "ofx"|"csv"|"pdf"; dupIndices: number[]; contaId?: number };
   const [showReviewDup, setShowReviewDup] = useState(false);
   const [pendingImportFiles, setPendingImportFiles] = useState<PendImportFile[]>([]);
   const [pendingImportContaId, setPendingImportContaId] = useState(0);
@@ -2352,6 +2357,28 @@ export default function FinanceiroConciliacao() {
     conciliarSugMut.mutate({ companyId, pares });
   };
 
+  // Rev. 4086 — Extrai número de conta e banco do cabeçalho OFX (<BANKACCTFROM>).
+  // Executado no cliente, sem chamada ao servidor.
+  function extractOfxAccountInfo(text: string): { bankId: string; acctId: string } | null {
+    const getTag = (tag: string) => { const m = text.match(new RegExp(`<${tag}>([^<\r\n]+)`, "i")); return m ? m[1].trim() : ""; };
+    const acctId = getTag("ACCTID");
+    if (!acctId) return null;
+    return { bankId: getTag("BANKID"), acctId };
+  }
+
+  // Rev. 4086 — Normaliza e cruza conta OFX com a lista de contas cadastradas.
+  // Normalização: remove não-dígitos + zeros à esquerda para casar "0000130051325" → "130051325".
+  function matchOfxToConta(bankId: string, acctId: string, accounts: any[]): any | null {
+    const norm = (s: string) => (s || "").replace(/\D/g, "").replace(/^0+/, "") || s;
+    const aN = norm(acctId);
+    const bN = norm(bankId);
+    return accounts.find(a => {
+      const da = norm(String(a.conta || ""));
+      const db = norm(String(a.codigoBanco || ""));
+      return da === aN && (!bankId || !db || db === bN);
+    }) ?? null;
+  }
+
   // Lê UM arquivo → {nome, conteudo, formato}. PDF vai como base64 (sem o prefixo
   // data:), OFX/CSV como texto ISO-8859-1.
   function lerArquivoExtrato(file: File): Promise<{ nome: string; conteudo: string; formato: "ofx" | "csv" | "pdf" }> {
@@ -2370,8 +2397,9 @@ export default function FinanceiroConciliacao() {
     });
   }
 
-  // Rev. 3354 — aceita VÁRIOS arquivos de uma vez. Imagens são ignoradas (com aviso);
-  // cada extrato válido entra na fila e é lido + gravado em sequência no handleImport.
+  // Rev. 4086 — aceita VÁRIOS arquivos de uma vez. OFX detecta automaticamente a conta do
+  // cabeçalho <BANKACCTFROM> e abre diálogo de revisão de lote (um arquivo por linha com
+  // conta detectada e opção de troca). Imagens ignoradas com aviso.
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const all = Array.from(e.target.files ?? []);
     e.target.value = "";
@@ -2387,8 +2415,6 @@ export default function FinanceiroConciliacao() {
       });
     }
     if (validos.length === 0) return;
-    // Tolerante a falha por arquivo: lê todos, mantém os que deram certo e avisa os que
-    // falharam (um arquivo corrompido não derruba a fila inteira).
     const resultados = await Promise.allSettled(validos.map(lerArquivoExtrato));
     const lidos = resultados.filter((r): r is PromiseFulfilledResult<{ nome: string; conteudo: string; formato: "ofx" | "csv" | "pdf" }> => r.status === "fulfilled").map(r => r.value);
     const falhas = resultados.length - lidos.length;
@@ -2396,12 +2422,33 @@ export default function FinanceiroConciliacao() {
       toast({ title: `${falhas} arquivo(s) não puderam ser lidos`, description: "Os demais foram carregados normalmente.", variant: "destructive" });
     }
     if (lidos.length === 0) return;
-    // Mantém os estados single-file em sincronia (UI do dropzone, separador CSV e o
-    // botão "Importar" que checa importContent) com o 1º arquivo da fila.
+    // Mantém single-file states em sincronia para o fluxo legado
     setImportFiles(lidos);
     setImportFileName(lidos.length === 1 ? lidos[0].nome : `${lidos.length} arquivos selecionados`);
     setImportFormato(lidos[0].formato);
     setImportContent(lidos[0].conteudo);
+    // Rev. 4086 — Para qualquer arquivo OFX (1 ou N), abre o diálogo de revisão de lote
+    // com a conta detectada automaticamente do cabeçalho. Outros formatos seguem o fluxo
+    // normal (sem detecção de conta).
+    const hasOfx = lidos.some(f => f.formato === "ofx");
+    if (hasOfx || lidos.length > 1) {
+      const accts = (bankAccounts ?? []) as any[];
+      const plan: BatchPlanItem[] = lidos.map(f => {
+        if (f.formato !== "ofx") {
+          return { file: f, detectedBankId: "", detectedAcctId: "", contaId: importConta };
+        }
+        const info = extractOfxAccountInfo(f.conteudo);
+        const matched = info ? matchOfxToConta(info.bankId, info.acctId, accts) : null;
+        return {
+          file: f,
+          detectedBankId: info?.bankId ?? "",
+          detectedAcctId: info?.acctId ?? "",
+          contaId: matched ? String(matched.id) : importConta,
+        };
+      });
+      setBatchPlan(plan);
+      setShowBatch(true);
+    }
   }
 
   // Rev. 4085 — handleImport agora tem FASE 1.5 (verificar duplicados) antes de gravar.
@@ -2503,8 +2550,84 @@ export default function FinanceiroConciliacao() {
     }
   }
 
+  // Rev. 4086 — Importação em lote: cada arquivo vai para a conta detectada do seu cabeçalho OFX.
+  // Percorre o batchPlan, analisa (parse), verifica duplicados e insere — tudo per-arquivo.
+  async function handleBatchImport() {
+    const plan = batchPlan;
+    if (plan.length === 0) return;
+    const sem = plan.filter(p => !p.contaId);
+    if (sem.length > 0) {
+      toast({ title: `Atribua uma conta para ${sem.length === 1 ? "o arquivo sem conta" : `${sem.length} arquivos sem conta`} antes de importar`, variant: "destructive" });
+      return;
+    }
+    setShowBatch(false);
+    setImportRunning(true); setImportPct(2);
+    setImportLabel(`Processando ${plan.length} arquivo${plan.length !== 1 ? "s" : ""}...`);
+    const propostasRend: RendProposta[] = [];
+    const fileGroups: PendImportFile[] = [];
+    try {
+      // ── FASE 1: analisar todos (cada um com sua conta) ───────────────────────
+      for (let fi = 0; fi < plan.length; fi++) {
+        const item = plan[fi];
+        const contaId = parseInt(item.contaId);
+        setImportLabel(`Lendo ${fi + 1}/${plan.length}: ${item.file.nome}...`);
+        setImportPct(Math.round(2 + (fi / plan.length) * 38));
+        const analysis: any = await analyzeMut.mutateAsync({
+          companyId, contaBancariaId: contaId,
+          formato: item.file.formato, conteudo: item.file.conteudo,
+          csvSeparador: item.file.formato === "csv" ? csvSeparador : undefined,
+        });
+        if (analysis?.templateDetectado === false && item.file.formato === "pdf") {
+          setImportRunning(false); setTimeout(() => { setImportPct(0); setImportLabel(""); }, 500);
+          setTemplateGateError(true); return;
+        }
+        const linhas: any[] = analysis?.lines ?? [];
+        if (linhas.length === 0) {
+          toast({ title: `Sem transações em ${item.file.nome}`, variant: "destructive" });
+          continue;
+        }
+        const rend = analysis?.rendimentoAplicacao;
+        if (rend && (Number(rend.bruto) > 0 || Number(rend.iof) > 0 || Number(rend.ir) > 0)) {
+          let cMes = Number(rend.competenciaMes) || 0, cAno = Number(rend.competenciaAno) || 0;
+          if (!cMes || !cAno) {
+            const counts = new Map<string, number>();
+            for (const l of linhas) { const k = String(l?.data ?? "").slice(0, 7); if (k.length === 7) counts.set(k, (counts.get(k) ?? 0) + 1); }
+            let dom = ""; let domN = 0;
+            for (const [k, n] of counts) { if (n > domN) { dom = k; domN = n; } }
+            if (dom) { const [ay, am] = dom.split("-"); cAno = parseInt(ay, 10); cMes = parseInt(am, 10); }
+          }
+          if (cMes && cAno) propostasRend.push({ contaBancariaId: contaId, competenciaMes: cMes, competenciaAno: cAno, bruto: Number(rend.bruto)||0, iof: Number(rend.iof)||0, ir: Number(rend.ir)||0, fileName: item.file.nome });
+        }
+        fileGroups.push({ nome: item.file.nome, linhas, importadoEm: analysis?.importadoEm, formato: item.file.formato as any, dupIndices: [], contaId });
+      }
+      if (fileGroups.length === 0) { setImportRunning(false); setTimeout(() => { setImportPct(0); setImportLabel(""); }, 500); return; }
+      // ── FASE 1.5: verificar duplicados por conta ─────────────────────────────
+      setImportLabel("Verificando duplicados..."); setImportPct(42);
+      let totalDups = 0;
+      for (const fg of fileGroups) {
+        const r: any = await checkDupMut.mutateAsync({ companyId, contaBancariaId: fg.contaId!, linhas: fg.linhas });
+        fg.dupIndices = r?.duplicateIndices ?? [];
+        totalDups += fg.dupIndices.length;
+      }
+      setImportRunning(false); setTimeout(() => { setImportPct(0); setImportLabel(""); }, 500);
+      if (totalDups > 0) {
+        setPendingImportFiles(fileGroups);
+        setPendingImportContaId(fileGroups[0].contaId!);
+        setPendingImportPropostas(propostasRend);
+        setReviewDupSel(new Set());
+        setShowReviewDup(true);
+        return;
+      }
+      await proceedWithInsert(fileGroups, new Set(), fileGroups[0].contaId!, propostasRend);
+    } catch (e: any) {
+      setImportRunning(false); setTimeout(() => { setImportPct(0); setImportLabel(""); }, 500);
+      toast({ title: "Erro na importação", description: e?.message || "Falha ao importar.", variant: "destructive" });
+    }
+  }
+
   // Rev. 4085 — Fase 2 da importação: grava as linhas (sem ou com força para duplicados).
   // Chamada tanto no caminho direto (sem dups) quanto após confirmação no diálogo de revisão.
+  // Rev. 4086 — contaId fallback: usa fg.contaId (per-arquivo) se disponível (batch import).
   async function proceedWithInsert(
     fileGroups: PendImportFile[],
     selectedDupKeys: Set<string>,
@@ -2533,7 +2656,9 @@ export default function FinanceiroConciliacao() {
         for (let i = 0; i < normalLinhas.length; i += CHUNK) {
           const slice = normalLinhas.slice(i, i + CHUNK);
           const isLast = forceLinhas.length === 0 && i + CHUNK >= normalLinhas.length && fi === fileGroups.length - 1;
-          const r: any = await insertBatchMut.mutateAsync({ companyId, contaBancariaId: contaId, formato: fg.formato, importadoEm: fg.importadoEm, linhas: slice, finalize: isLast, totalInseridos: grandInserted, totalDuplicados: grandSkipped });
+          // Rev. 4086: usa fg.contaId (batch per-arquivo) se disponível, senão contaId global
+          const cId = fg.contaId ?? contaId;
+          const r: any = await insertBatchMut.mutateAsync({ companyId, contaBancariaId: cId, formato: fg.formato, importadoEm: fg.importadoEm, linhas: slice, finalize: isLast, totalInseridos: grandInserted, totalDuplicados: grandSkipped });
           grandInserted += r?.inserted ?? 0; processed += slice.length;
           setImportPct(Math.min(99, Math.round(baseProgress + (processed / Math.max(totalToInsert, 1)) * span * 0.9)));
           setImportLabel(`${prefix}Gravando ${formatInt(Math.min(processed, totalToInsert))} de ${formatInt(totalToInsert)}...`);
@@ -2541,7 +2666,8 @@ export default function FinanceiroConciliacao() {
         for (let i = 0; i < forceLinhas.length; i += CHUNK) {
           const slice = forceLinhas.slice(i, i + CHUNK);
           const isLast = i + CHUNK >= forceLinhas.length && fi === fileGroups.length - 1;
-          const r: any = await insertBatchMut.mutateAsync({ companyId, contaBancariaId: contaId, formato: fg.formato, importadoEm: fg.importadoEm, linhas: slice, forceInsert: true, finalize: isLast, totalInseridos: grandInserted, totalDuplicados: grandSkipped });
+          const cId = fg.contaId ?? contaId;
+          const r: any = await insertBatchMut.mutateAsync({ companyId, contaBancariaId: cId, formato: fg.formato, importadoEm: fg.importadoEm, linhas: slice, forceInsert: true, finalize: isLast, totalInseridos: grandInserted, totalDuplicados: grandSkipped });
           grandInserted += r?.inserted ?? 0; processed += slice.length;
           setImportPct(Math.min(99, Math.round(baseProgress + (processed / Math.max(totalToInsert, 1)) * span)));
           setImportLabel(`${prefix}Gravando ${formatInt(Math.min(processed, totalToInsert))} de ${formatInt(totalToInsert)}...`);
@@ -8625,6 +8751,122 @@ export default function FinanceiroConciliacao() {
         })()}
       </SheetContent>
     </Sheet>
+
+    {/* Rev. 4086 — Diálogo de Importação em Lote Inteligente.
+        Exibido automaticamente ao selecionar arquivos OFX (1 ou N).
+        Detecta a conta de cada arquivo pelo cabeçalho <BANKACCTFROM> e exibe
+        uma linha por arquivo com conta identificada e seletor manual de override.
+        O usuário confirma e cada arquivo vai para a conta correta. */}
+    <Dialog open={showBatch} onOpenChange={(o) => { if (!o && !importRunning) setShowBatch(false); }}>
+      <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="bg-[#1B2A4A] px-6 py-4 shrink-0">
+          <div className="flex items-start gap-4">
+            <div className="w-10 h-10 rounded-full bg-blue-400/15 border border-blue-400/25 flex items-center justify-center shrink-0 mt-0.5">
+              <FileText className="w-5 h-5 text-blue-300" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <DialogTitle className="text-white text-base font-semibold leading-snug m-0 p-0">
+                Importação em Lote — {batchPlan.length} arquivo{batchPlan.length !== 1 ? "s" : ""}
+              </DialogTitle>
+              <p className="text-blue-200/80 text-xs mt-1 leading-relaxed">
+                Conta detectada automaticamente pelo cabeçalho do arquivo OFX. Corrija se necessário.
+              </p>
+            </div>
+            {(() => {
+              const auto = batchPlan.filter(p => p.detectedAcctId && p.contaId).length;
+              const sem = batchPlan.filter(p => !p.contaId).length;
+              return (
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  {auto > 0 && <span className="bg-emerald-500/20 text-emerald-300 text-xs font-semibold px-2 py-0.5 rounded-full border border-emerald-400/25">{auto} detectada{auto !== 1 ? "s" : ""}</span>}
+                  {sem > 0 && <span className="bg-amber-400/20 text-amber-300 text-xs font-semibold px-2 py-0.5 rounded-full border border-amber-400/25">{sem} sem conta</span>}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+
+        {/* Lista de arquivos */}
+        <div className="flex-1 overflow-y-auto min-h-0 divide-y divide-gray-100">
+          {batchPlan.map((item, idx) => {
+            const conta = (bankAccounts ?? []).find((b: any) => String(b.id) === item.contaId) as any;
+            const cor = conta ? bancoCor(conta.banco) : { bg: "bg-gray-100", text: "text-gray-400" };
+            const isAuto = !!item.detectedAcctId;
+            const semConta = !item.contaId;
+            return (
+              <div key={idx} className={`px-5 py-3.5 flex items-start gap-4 ${semConta ? "bg-amber-50/40" : idx % 2 === 0 ? "bg-white" : "bg-gray-50/40"}`}>
+                {/* Ícone + nome */}
+                <div className="shrink-0 mt-0.5">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${semConta ? "bg-amber-100 text-amber-600" : "bg-blue-100 text-blue-600"}`}>
+                    {item.file.formato.toUpperCase().slice(0, 3)}
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800 truncate" title={item.file.nome}>{item.file.nome}</p>
+                  {isAuto && (
+                    <p className="text-[11px] text-gray-400 mt-0.5">
+                      Banco {item.detectedBankId || "—"} · Conta ···{item.detectedAcctId.slice(-4)}
+                    </p>
+                  )}
+                </div>
+                {/* Seletor de conta */}
+                <div className="shrink-0 w-52">
+                  <Select
+                    value={item.contaId}
+                    onValueChange={val => setBatchPlan(prev => prev.map((p, i) => i === idx ? { ...p, contaId: val } : p))}
+                  >
+                    <SelectTrigger className={`h-9 text-xs ${semConta ? "border-amber-400 bg-amber-50" : ""}`}>
+                      <SelectValue placeholder="Selecione a conta..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(bankAccounts ?? []).filter((b: any) => !b.caixaInterno).map((b: any) => (
+                        <SelectItem key={b.id} value={String(b.id)}>
+                          <span className="flex items-center gap-1.5">
+                            <span className={`inline-flex w-5 h-5 shrink-0 items-center justify-center rounded text-[9px] font-bold ${bancoCor(b.banco).bg} ${bancoCor(b.banco).text}`}>
+                              {String(b.banco).slice(0, 2).toUpperCase()}
+                            </span>
+                            <span className="truncate">{b.apelido || b.banco} ···{String(b.conta).slice(-4)}</span>
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* Badge de status */}
+                <div className="shrink-0 w-7 mt-1 flex justify-center">
+                  {semConta
+                    ? <AlertCircle className="w-4 h-4 text-amber-500" />
+                    : isAuto
+                      ? <Check className="w-4 h-4 text-emerald-500" />
+                      : <Check className="w-4 h-4 text-blue-400" />
+                  }
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer */}
+        <div className="shrink-0 px-6 py-4 border-t bg-white flex items-center justify-between gap-3">
+          <p className="text-xs text-gray-500">
+            {batchPlan.filter(p => !p.contaId).length > 0
+              ? <span className="text-amber-600 font-medium">⚠ {batchPlan.filter(p => !p.contaId).length} arquivo{batchPlan.filter(p => !p.contaId).length !== 1 ? "s" : ""} sem conta atribuída</span>
+              : <span className="text-emerald-700 font-medium">✓ Todos os arquivos têm conta atribuída</span>
+            }
+          </p>
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={() => setShowBatch(false)}>Cancelar</Button>
+            <Button
+              className="bg-[#1B2A4A] hover:bg-[#243660] text-white min-w-[160px]"
+              disabled={batchPlan.some(p => !p.contaId)}
+              onClick={handleBatchImport}
+            >
+              Importar {batchPlan.length} arquivo{batchPlan.length !== 1 ? "s" : ""}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
 
     {/* Rev. 4085 — Diálogo de revisão de duplicados (redesenhado Rev. 4085b).
         Layout: header escuro com resumo, toolbar de seleção rápida, lista generosa,

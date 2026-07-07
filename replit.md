@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4086** — **CONCILIAÇÃO: IMPORTAÇÃO EM LOTE INTELIGENTE — CONTA AUTO-DETECTADA DO CABEÇALHO OFX + DIÁLOGO DE REVISÃO POR ARQUIVO.** O arquivo OFX já carrega `<BANKID>`+`<ACCTID>` no `<BANKACCTFROM>` — agora o sistema lê esses dados client-side e cruza com as contas cadastradas (normalização de zeros à esquerda). Ao subir 1 ou N arquivos OFX, abre `BatchImportDialog` (dark header, tabela arquivo×conta) onde cada linha mostra a conta detectada com badge ✅/⚠ e seletor de override. `handleBatchImport` processa cada arquivo para sua conta detectada (análise → dedup → insert). `PendImportFile` ganhou `contaId?: number`; `proceedWithInsert` usa `fg.contaId ?? contaId` por arquivo. No Workspace: banner azul quando conta do OFX diverge da selecionada, com botão "Usar esta conta". ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+
 - **Rev. 4085** — **CONCILIAÇÃO: DEDUP DE IMPORTAÇÃO PASSA A SER CONTROLADO PELO USUÁRIO (DIÁLOGO DE REVISÃO) + PARSER OFX ROBUSTO PARA FORMATO BR.** Antes: duplicatas eram descartadas silenciosamente sem visibilidade. Fix: novo endpoint `checkStatementDuplicates` (dry-run, sem INSERT) + `handleImport` ganhou FASE 1.5 que pausa antes de gravar e abre `ReviewDuplicatesDialog` listando cada linha duplicada com Checkbox (desmarcado por padrão). Usuário decide quais reimportar; confirmadas são enviadas com `forceInsert: true` que pula o dedup no `insertBankStatementBatch`. OFX parser agora normaliza "1.234,56" (ponto=milhar, vírgula=decimal) corretamente. Funciona em `FinanceiroConciliacao.tsx` e `FinanceiroConciliacaoWorkspace.tsx`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
-- **Rev. 4084** — **CONTAS A RECEBER: "NOVO TÍTULO" ENRIQUECIDO COM CONTA BANCÁRIA DE RECEBIMENTO + VÍNCULO DE NFS-e + BADGE NA LISTA.** FC Engenharia emite NFS-e em vários municípios (serviço+repasse material). Fix: nova tabela `financial_nfse_vinculos` (SyncSchema+ Rev. 4084); `criarTituloReceber` recebe `contaBancariaId` + campos NFS-e; após commit insere em `financial_nfse_vinculos` (try/catch — erro não aborta título); `getContasAReceberByYear` traz `nfseNumero`/`nfseChave` via subquery; `NovoTituloDialog` ganhou seletor de conta bancária + card azul NFS-e com upload XML (DOMParser multi-padrão: ABRASF/SIL/GIAP/NFS-e Nacional) que pré-preenche Número, Série, Chave, ValorServico, ValorMaterial + badge na lista. ZERO DELETE · ZERO ALTER em dados existentes · 1 CREATE TABLE.
-
 ### 5 one-liners
+
+- **Rev. 4084** — **CONTAS A RECEBER: "NOVO TÍTULO" ENRIQUECIDO COM CONTA BANCÁRIA DE RECEBIMENTO + VÍNCULO DE NFS-e + BADGE NA LISTA.** Nova tabela `financial_nfse_vinculos`; `criarTituloReceber` recebe `contaBancariaId`+campos NFS-e; upload XML DOMParser multi-padrão; badge na lista. ZERO DELETE · ZERO ALTER em dados existentes · 1 CREATE TABLE.
 
 - **Rev. 4083** — **CONCILIAÇÃO: PARSERS SANTANDER CORRIGIDOS — EXTRATO CONSOLIDADO INTELIGENTE (FEV/2026) E INTERNET BANKING EMPRESARIAL IBPJ (JUN/2026) FUNCIONAM INDEPENDENTEMENTE + TEMPLATES AUTO-SEEDED EM CONFIGURAÇÕES.** Dois bugs corrigidos; seed script atualizado. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
@@ -64,13 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4080** — **CONTAS A PAGAR: BOTÃO "ANO TODO" PADRONIZADO COM CONTAS A RECEBER.** Antes: barra tracejada full-width abaixo da grade de meses. Fix: `FinanceiroContasAPagar.tsx` — botão virou o mesmo pill compacto ao lado do seletor de ano (◀ 2026 ▶ [Ano todo]), igual ao Contas a Receber. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
-- **Rev. 4079** — **CONCILIAÇÃO BANCÁRIA: CHEQUE DEVOLVIDO MAIS DE UMA VEZ (MESMA IDENTIDADE, MOTIVOS DIFERENTES) PASSA A QUITAR TODAS AS OCORRÊNCIAS DE UMA SÓ VEZ.** Causa: cobertura já somava por identidade, mas o desconsiderar automático só marcava o par exato passado naquela chamada. Fix: busca TODOS os pares da conta com a mesma identidade e desconsidera juntos (`registrarVinculoChequeDevolvido`/`estornarVinculoChequeDevolvido`). ZERO DELETE · ZERO ALTER · UPDATE só em `desconsiderado_em`.
-
-- **Rev. 4078** — **FATURAMENTO DIRETO (FD): NOMENCLATURA UNIFICADA E MAIS CLARA — "FORA DO CONTRATO" x "ABATE CONTRATO" — EM CONTAS A PAGAR + PDF DA OC, COM LEGENDA EXPLICATIVA.** Usuário reportou que os 3 selos ("FD Cliente"/"FD"/"FD Terceiro") confundiam mais do que ajudavam — só existem 2 conceitos reais: desconta ou não desconta do contrato da FC. Fix: `fdBadgeInfo()` unificado em 2 rótulos com tooltip + `FdLegendaPopover`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4077 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4079 e anteriores.
 
 ## User preferences
 
