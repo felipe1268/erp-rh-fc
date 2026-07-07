@@ -8626,95 +8626,145 @@ export default function FinanceiroConciliacao() {
       </SheetContent>
     </Sheet>
 
-    {/* Rev. 4085 — Diálogo de revisão de duplicados: exibido quando a Fase 1.5 detecta
-        transações que já existem no extrato. O usuário decide quais reimportar.
-        Princípio: nada é importado automaticamente — conciliação sempre sugestiva. */}
+    {/* Rev. 4085 — Diálogo de revisão de duplicados (redesenhado Rev. 4085b).
+        Layout: header escuro com resumo, toolbar de seleção rápida, lista generosa,
+        footer fixo com progresso integrado. Nada importado sem confirmação explícita. */}
     <Dialog open={showReviewDup} onOpenChange={(o) => { if (!o && !reviewDupRunning) setShowReviewDup(false); }}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
-            Transações já importadas detectadas
-          </DialogTitle>
-          <DialogDescription>
-            As linhas abaixo já existem no extrato desta conta. Por padrão <strong>não serão reimportadas</strong>. Marque as que deseja importar mesmo assim.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden flex flex-col max-h-[90vh]">
+        {/* ── Header ─────────────────────────────────────────────────────────── */}
+        <div className="bg-[#1B2A4A] px-6 py-4 shrink-0">
+          <div className="flex items-start gap-4">
+            <div className="w-10 h-10 rounded-full bg-amber-400/15 border border-amber-400/30 flex items-center justify-center shrink-0 mt-0.5">
+              <AlertCircle className="w-5 h-5 text-amber-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <DialogTitle className="text-white text-base font-semibold leading-snug m-0 p-0">
+                Transações já importadas detectadas
+              </DialogTitle>
+              <p className="text-blue-200/80 text-xs mt-1 leading-relaxed">
+                As linhas abaixo já existem nesta conta. Por padrão <strong className="text-blue-100">não serão reimportadas</strong> — marque as que quiser incluir mesmo assim.
+              </p>
+            </div>
+            {(() => {
+              const totalDups = pendingImportFiles.reduce((acc, fg) => acc + fg.dupIndices.length, 0);
+              return (
+                <span className="shrink-0 bg-amber-400/20 text-amber-300 text-xs font-bold px-2.5 py-1 rounded-full border border-amber-400/25 tabular-nums">
+                  {formatInt(totalDups)} duplicata{totalDups !== 1 ? "s" : ""}
+                </span>
+              );
+            })()}
+          </div>
+        </div>
 
         {reviewDupRunning ? (
-          <div className="py-4 space-y-2">
-            <div className="flex items-center justify-between text-sm text-blue-800">
-              <span className="truncate">{importLabel || "Importando..."}</span>
-              <span className="font-bold tabular-nums ml-2">{importPct}%</span>
-            </div>
-            <div className="h-2.5 w-full overflow-hidden rounded-full bg-blue-100">
-              <div className="h-full rounded-full bg-blue-600 transition-all duration-300" style={{ width: `${importPct}%` }} />
+          /* ── Progresso (inserindo) ─────────────────────────────────────── */
+          <div className="flex-1 flex flex-col items-center justify-center px-8 py-12 gap-4">
+            <div className="w-full max-w-sm space-y-3">
+              <div className="flex items-center justify-between text-sm font-medium text-[#1B2A4A]">
+                <span className="truncate pr-2">{importLabel || "Importando..."}</span>
+                <span className="tabular-nums shrink-0 text-base font-bold">{importPct}%</span>
+              </div>
+              <div className="relative h-3 w-full overflow-hidden rounded-full bg-gray-100">
+                <div className="h-full rounded-full bg-[#1B2A4A] transition-all duration-300" style={{ width: `${importPct}%` }} />
+              </div>
+              <p className="text-xs text-gray-400 text-center">Aguarde, gravando no banco de dados…</p>
             </div>
           </div>
         ) : (
           <>
-            <div className="max-h-64 overflow-y-auto border rounded-lg divide-y text-sm">
+            {/* ── Toolbar de seleção rápida ─────────────────────────────── */}
+            {(() => {
+              const allKeys = pendingImportFiles.flatMap((fg, fi) => fg.dupIndices.map(idx => `${fi}:${idx}`));
+              const nNovas = pendingImportFiles.reduce((acc, fg) => acc + fg.linhas.length - fg.dupIndices.length, 0);
+              const totalConfirm = nNovas + reviewDupSel.size;
+              return (
+                <div className="shrink-0 px-5 py-2.5 bg-gray-50/80 border-b border-gray-200 flex items-center justify-between gap-4">
+                  <p className="text-xs text-gray-600">
+                    <span className="font-semibold text-emerald-700">{formatInt(nNovas)}</span> nova{nNovas !== 1 ? "s" : ""}{" "}
+                    {reviewDupSel.size > 0 && <><span className="text-gray-400 mx-1">+</span><span className="font-semibold text-amber-700">{reviewDupSel.size}</span> duplicada{reviewDupSel.size !== 1 ? "s" : ""} selecionada{reviewDupSel.size !== 1 ? "s" : ""}</>}{" "}
+                    → <span className="font-bold text-[#1B2A4A]">{formatInt(totalConfirm)} transaç{totalConfirm !== 1 ? "ões" : "ão"}</span> serão importadas
+                  </p>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <button className="text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium" onClick={() => setReviewDupSel(new Set(allKeys))}>
+                      Selecionar todas
+                    </button>
+                    <span className="text-gray-300 text-xs">|</span>
+                    <button className="text-xs text-gray-500 hover:text-gray-700 hover:underline" onClick={() => setReviewDupSel(new Set())}>
+                      Nenhuma
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── Lista de duplicatas ───────────────────────────────────── */}
+            <div className="flex-1 overflow-y-auto min-h-0">
               {pendingImportFiles.map((fg, fi) =>
-                fg.dupIndices.map(idx => {
+                fg.dupIndices.map((idx, rowIdx) => {
                   const l = fg.linhas[idx];
                   const key = `${fi}:${idx}`;
                   const checked = reviewDupSel.has(key);
+                  const valor = Number(l?.valor || 0);
+                  const isCredito = valor >= 0;
                   return (
-                    <label key={key} className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-gray-50 select-none">
-                      <Checkbox checked={checked} onCheckedChange={v => {
-                        setReviewDupSel(prev => {
-                          const next = new Set(prev);
-                          if (v) next.add(key); else next.delete(key);
-                          return next;
-                        });
-                      }} />
-                      <span className="text-gray-400 shrink-0 w-[72px] text-xs">{fmtData(l?.data)}</span>
-                      <span className="flex-1 truncate text-gray-700" title={l?.descricao}>{l?.descricao || "—"}</span>
-                      <span className={`shrink-0 font-medium tabular-nums text-xs ${Number(l?.valor) >= 0 ? "text-green-700" : "text-red-600"}`}>
-                        {formatBRL(Math.abs(Number(l?.valor || 0)))}
-                      </span>
+                    <label
+                      key={key}
+                      className={`flex items-center gap-4 px-5 py-3 cursor-pointer select-none border-b border-gray-100 transition-colors ${checked ? "bg-amber-50/60" : rowIdx % 2 === 0 ? "bg-white hover:bg-gray-50/70" : "bg-gray-50/40 hover:bg-gray-100/60"}`}
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={v => {
+                          setReviewDupSel(prev => {
+                            const next = new Set(prev);
+                            if (v) next.add(key); else next.delete(key);
+                            return next;
+                          });
+                        }}
+                        className={checked ? "border-amber-500 data-[state=checked]:bg-amber-500" : ""}
+                      />
+                      {/* Data */}
+                      <span className="shrink-0 text-xs font-medium text-gray-400 w-[78px] tabular-nums">{fmtData(l?.data)}</span>
+                      {/* Descrição */}
+                      <span className="flex-1 text-sm text-gray-800 truncate min-w-0" title={l?.descricao}>{l?.descricao || "—"}</span>
+                      {/* Valor */}
+                      <div className="shrink-0 text-right min-w-[90px]">
+                        <span className={`text-sm font-semibold tabular-nums ${isCredito ? "text-emerald-700" : "text-red-600"}`}>
+                          {isCredito ? "+" : "−"} {formatBRL(Math.abs(valor))}
+                        </span>
+                      </div>
                     </label>
                   );
                 })
               )}
             </div>
-            {(() => {
-              const nNovas = pendingImportFiles.reduce((acc, fg) => acc + fg.linhas.length - fg.dupIndices.length, 0);
-              return (
-                <p className="text-xs text-gray-400">
-                  {formatInt(nNovas)} nova{nNovas !== 1 ? "s" : ""} + {reviewDupSel.size} duplicada{reviewDupSel.size !== 1 ? "s" : ""} selecionada{reviewDupSel.size !== 1 ? "s" : ""} serão importadas.
-                </p>
-              );
-            })()}
           </>
         )}
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setShowReviewDup(false)} disabled={reviewDupRunning}>
-            Cancelar
-          </Button>
-          <Button
-            className="bg-[#1B2A4A] hover:bg-[#243660] text-white"
-            disabled={reviewDupRunning}
-            onClick={async () => {
-              setReviewDupRunning(true);
-              try {
-                await proceedWithInsert(pendingImportFiles, reviewDupSel, pendingImportContaId, pendingImportPropostas);
-              } finally {
-                setReviewDupRunning(false);
-              }
-            }}
-          >
-            {reviewDupRunning
-              ? `Importando... ${importPct}%`
-              : (() => {
-                  const nNovas = pendingImportFiles.reduce((acc, fg) => acc + fg.linhas.length - fg.dupIndices.length, 0);
-                  const total = nNovas + reviewDupSel.size;
-                  return `Confirmar (${formatInt(total)} transaç${total !== 1 ? "ões" : "ão"})`;
-                })()
-            }
-          </Button>
-        </DialogFooter>
+        {/* ── Footer ──────────────────────────────────────────────────────── */}
+        {!reviewDupRunning && (
+          <div className="shrink-0 px-6 py-4 border-t bg-white flex items-center justify-end gap-3">
+            <Button variant="outline" onClick={() => setShowReviewDup(false)}>
+              Cancelar
+            </Button>
+            <Button
+              className="bg-[#1B2A4A] hover:bg-[#243660] text-white min-w-[180px]"
+              onClick={async () => {
+                setReviewDupRunning(true);
+                try {
+                  await proceedWithInsert(pendingImportFiles, reviewDupSel, pendingImportContaId, pendingImportPropostas);
+                } finally {
+                  setReviewDupRunning(false);
+                }
+              }}
+            >
+              {(() => {
+                const nNovas = pendingImportFiles.reduce((acc, fg) => acc + fg.linhas.length - fg.dupIndices.length, 0);
+                const total = nNovas + reviewDupSel.size;
+                return `Confirmar (${formatInt(total)} transaç${total !== 1 ? "ões" : "ão"})`;
+              })()}
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
 
