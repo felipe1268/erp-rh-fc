@@ -47,6 +47,42 @@ function num(v: any): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function bancoCor(banco?: string): { bg: string; text: string; border: string } {
+  const b = (banco ?? "").toLowerCase();
+  if (b.includes("caixa"))     return { bg: "bg-blue-100",   text: "text-blue-700",   border: "border-blue-300" };
+  if (b.includes("santander")) return { bg: "bg-red-100",    text: "text-red-700",    border: "border-red-300" };
+  if (b.includes("ita"))       return { bg: "bg-orange-100", text: "text-orange-700", border: "border-orange-300" };
+  if (b.includes("bradesco"))  return { bg: "bg-pink-100",   text: "text-pink-700",   border: "border-pink-300" };
+  if (b.includes("brasil"))    return { bg: "bg-yellow-100", text: "text-yellow-700", border: "border-yellow-300" };
+  if (b.includes("sicoob") || b.includes("sicredi")) return { bg: "bg-green-100", text: "text-green-700", border: "border-green-300" };
+  if (b.includes("inter"))     return { bg: "bg-orange-50",  text: "text-orange-600", border: "border-orange-200" };
+  if (b.includes("nubank") || b.includes("nu ")) return { bg: "bg-purple-100", text: "text-purple-700", border: "border-purple-300" };
+  return { bg: "bg-slate-100", text: "text-slate-600", border: "border-slate-300" };
+}
+
+function bancoBadge(banco?: string, apelido?: string): string {
+  if (apelido) {
+    const words = apelido.trim().split(/\s+/);
+    if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+    return apelido.slice(0, 2).toUpperCase();
+  }
+  if (!banco) return "??";
+  const b = banco.toLowerCase();
+  if (b.includes("caixa economica") || b.includes("caixa econômica")) return "CEF";
+  if (b.includes("caixa")) return "CX";
+  if (b.includes("santander")) return "SAN";
+  if (b.includes("itaú") || b.includes("itau")) return "ITÁ";
+  if (b.includes("bradesco")) return "BRD";
+  if (b.includes("brasil")) return "BB";
+  if (b.includes("sicoob")) return "SCB";
+  if (b.includes("sicredi")) return "SCR";
+  if (b.includes("inter")) return "INT";
+  if (b.includes("nubank") || b.includes("nu ")) return "NU";
+  const words = banco.trim().split(/\s+/);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  return banco.slice(0, 3).toUpperCase();
+}
+
 // Rev. 3007 — normaliza nome p/ casar `obras.cliente` (texto) com a razão social /
 // nome fantasia do cliente: minúsculas, SEM acentos e espaços colapsados (dados
 // cadastrais costumam divergir em acentuação/espaçamento).
@@ -1238,20 +1274,72 @@ function NovoTituloDialog({ companyId, clientesOpts, contasBancarias, onClose, o
             </div>
           )}
 
-          {/* Rev. 4084 — Conta bancária de recebimento */}
+          {/* Rev. 4084 — Conta bancária de recebimento (cards visuais) */}
           {contas.length > 0 && (
             <div>
-              <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5"><Landmark className="h-3.5 w-3.5 text-emerald-600" /> Conta bancária de recebimento <span className="text-slate-400 font-normal">(opcional)</span></Label>
-              <select
-                className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                value={contaBancariaId}
-                onChange={(e) => setContaBancariaId(e.target.value)}
-              >
-                <option value="">Não definir</option>
-                {contas.map((c: any) => (
-                  <option key={c.id} value={String(c.id)}>{c.apelido || c.nome} {c.banco ? `— ${c.banco}` : ""} {c.agencia ? `Ag. ${c.agencia}` : ""}</option>
-                ))}
-              </select>
+              <Label className="text-xs font-medium text-slate-600 flex items-center gap-1.5">
+                <Landmark className="h-3.5 w-3.5 text-emerald-600" />
+                Conta bancária de recebimento
+                <span className="text-slate-400 font-normal">(opcional)</span>
+              </Label>
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                {/* "Não definir" card */}
+                <button
+                  type="button"
+                  onClick={() => setContaBancariaId("")}
+                  className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-left transition-all ${
+                    contaBancariaId === ""
+                      ? "border-slate-400 bg-slate-100 ring-1 ring-slate-400"
+                      : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-500">—</span>
+                  <span className="text-xs text-slate-500 font-medium">Não definir</span>
+                </button>
+
+                {contas.map((c: any) => {
+                  const cor = bancoCor(c.banco);
+                  const badge = bancoBadge(c.banco, c.apelido || c.nome);
+                  const selected = contaBancariaId === String(c.id);
+                  const label = c.apelido || c.nome || c.banco || "Conta";
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setContaBancariaId(String(c.id))}
+                      className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-all ${
+                        selected
+                          ? `${cor.border} ${cor.bg} ring-1 ${cor.border}`
+                          : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                      }`}
+                    >
+                      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${cor.bg} ${cor.text}`}>
+                        {badge}
+                      </span>
+                      <span className="min-w-0">
+                        <span className={`block text-xs font-semibold leading-tight truncate max-w-[120px] ${selected ? cor.text : "text-slate-700"}`}>
+                          {label}
+                        </span>
+                        {(c.banco || c.agencia) && (
+                          <span className="block text-[10px] text-slate-400 leading-tight truncate max-w-[120px]">
+                            {[c.banco, c.agencia ? `Ag. ${c.agencia}` : ""].filter(Boolean).join(" · ")}
+                          </span>
+                        )}
+                        {c.conta && (
+                          <span className="block text-[10px] text-slate-400 leading-tight">
+                            CC {c.conta}
+                          </span>
+                        )}
+                      </span>
+                      {selected && (
+                        <span className={`ml-auto shrink-0 h-4 w-4 rounded-full flex items-center justify-center ${cor.bg}`}>
+                          <Check className={`h-2.5 w-2.5 ${cor.text}`} />
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
