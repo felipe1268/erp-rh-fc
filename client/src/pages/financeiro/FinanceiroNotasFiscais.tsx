@@ -2097,18 +2097,18 @@ export default function FinanceiroNotasFiscais() {
         {/* KPI cards */}
         <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           {[
-            { label: "Pendentes",   count: totais.pendente,   valor: totais.valorPendente,   color: "amber" },
-            { label: "Recebidas",   count: totais.recebida,   valor: totais.valorRecebida,   color: "blue" },
-            { label: "Validadas",   count: totais.validada,   valor: totais.valorValidada,   color: "violet" },
-            { label: "Conciliadas", count: totais.conciliada, valor: totais.valorConciliada, color: "emerald" },
-            { label: "Total NFs",   count: totais.total,      valor: totais.valorTotal,      color: "slate" },
-            { label: "Canceladas",  count: totais.cancelada,  valor: totais.valorCancelada,  color: "red" },
+            { label: "Pendentes",   count: totais.pendente,   valor: totais.valorPendente,   color: "amber",   highlight: false },
+            { label: "Recebidas",   count: totais.recebida,   valor: totais.valorRecebida,   color: "blue",    highlight: false },
+            { label: "Validadas",   count: totais.validada,   valor: totais.valorValidada,   color: "violet",  highlight: false },
+            { label: "Conciliadas", count: totais.conciliada, valor: totais.valorConciliada, color: "emerald", highlight: false },
+            { label: "Canceladas",  count: totais.cancelada,  valor: totais.valorCancelada,  color: "red",     highlight: false },
+            { label: "Total NFs",   count: totais.total,      valor: totais.valorTotal,      color: "slate",   highlight: true  },
           ].map(k => (
-            <Card key={k.label} className="border-0 shadow-sm">
+            <Card key={k.label} className={`border-0 shadow-sm${k.highlight ? " ring-1 ring-slate-300" : ""}`}>
               <CardContent className="p-3">
                 <div className={`text-xs font-medium text-${k.color}-600 mb-1`}>{k.label}</div>
                 <div className="text-xl font-bold text-slate-900">{k.count}</div>
-                <div className="text-xs text-slate-500 mt-0.5">{formatBRL(k.valor)}</div>
+                <div className={`text-xs mt-0.5 ${k.highlight ? "font-bold text-slate-700" : "text-slate-500"}`}>{formatBRL(k.valor)}</div>
               </CardContent>
             </Card>
           ))}
