@@ -455,6 +455,11 @@ export const fiscalNotesRouter = router({
       const mesProx = mes === 0 ? 1 : (mes === 12 ? 1 : mes + 1);
       const anoProx = mes === 0 ? ano + 1 : (mes === 12 ? ano + 1 : ano);
       const df = mes === 0 ? `${ano + 1}-01-01` : `${anoProx}-${String(mesProx).padStart(2, "0")}-01`;
+      // Janela retroativa: NFS-e emitidas nos 60 dias anteriores ao período
+      // (regime de competência: nota de DEZ pode ser paga/recebida em JAN)
+      const diAnt = new Date(di);
+      diAnt.setDate(diAnt.getDate() - 60);
+      const diAntStr = diAnt.toISOString().slice(0, 10);
 
       // 1. NFS-e emitidas do período
       const nfseQ = await db.$client.query(`
@@ -505,6 +510,19 @@ export const fiscalNotesRouter = router({
         ORDER BY conta_nome ASC, bsl.data ASC
         LIMIT 600
       `, [companyId, di, df]);
+
+      // 3b. NFS-e emitidas nos 60 dias ANTERIORES ao período (regime de competência:
+      //     nota emitida em mês anterior pode ser recebida/paga no mês corrente)
+      const nfseAntQ = await db.$client.query(`
+        SELECT id, numero_nf, tomador_razao_social, tomador_cnpj,
+               valor_bruto, valor_liquido, data_emissao, status, origem
+        FROM fiscal_notes
+        WHERE company_id = $1
+          AND data_emissao >= $2 AND data_emissao < $3
+          AND origem LIKE 'nfse_%'
+          AND status != 'cancelada'
+        ORDER BY data_emissao DESC
+      `, [companyId, diAntStr, di]);
 
       // 4. Ordens de Compra do período (com CNPJ do fornecedor e número da NF se preenchido)
       // NOTA: as OCs do sistema ficam em `compras_ordens`, NÃO em `purchase_orders`
