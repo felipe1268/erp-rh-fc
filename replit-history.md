@@ -1,3 +1,5 @@
+- **Rev. 4080** — **CONTAS A PAGAR: BOTÃO "ANO TODO" PADRONIZADO COM CONTAS A RECEBER.** Antes: barra tracejada full-width abaixo da grade de meses. Fix: `FinanceiroContasAPagar.tsx` — botão virou o mesmo pill compacto ao lado do seletor de ano (◀ 2026 ▶ [Ano todo]), igual ao Contas a Receber. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+
 - **Rev. 4079** — **CONCILIAÇÃO BANCÁRIA: CHEQUE DEVOLVIDO MAIS DE UMA VEZ (MESMA IDENTIDADE, MOTIVOS DIFERENTES) PASSA A QUITAR TODAS AS OCORRÊNCIAS DE UMA SÓ VEZ.** Fix: busca TODOS os pares da conta com a mesma identidade e desconsidera juntos. ZERO DELETE · ZERO ALTER · UPDATE só em `desconsiderado_em`.
 
 - **Rev. 4078** — **FATURAMENTO DIRETO (FD): NOMENCLATURA UNIFICADA E MAIS CLARA — "FORA DO CONTRATO" x "ABATE CONTRATO" — EM CONTAS A PAGAR + PDF DA OC, COM LEGENDA EXPLICATIVA.** `fdBadgeInfo()` unificado em 2 rótulos com tooltip + `FdLegendaPopover`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.

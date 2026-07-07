@@ -85,17 +85,19 @@ function GaugeMeter({ pct, label, sublabel, size = 96 }: {
 // ── Card de alerta de ação ────────────────────────────────────────────────────
 function AlertCard({ icon, title, count, total, variant, onClick }: {
   icon: React.ReactNode; title: string; count: number; total: number;
-  variant: "danger" | "warn" | "ok"; onClick?: () => void;
+  variant: "danger" | "warn" | "ok" | "info"; onClick?: () => void;
 }) {
   const styles = {
     danger: "border-red-200 bg-red-50 hover:bg-red-100/80",
     warn:   "border-amber-200 bg-amber-50 hover:bg-amber-100/80",
     ok:     "border-emerald-200 bg-emerald-50 hover:bg-emerald-100/80",
+    info:   "border-blue-200 bg-blue-50 hover:bg-blue-100/80",
   };
   const countStyle = {
     danger: "bg-red-500 text-white",
     warn:   "bg-amber-500 text-white",
     ok:     "bg-emerald-500 text-white",
+    info:   "bg-blue-500 text-white",
   };
   return (
     <button
@@ -267,9 +269,11 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
       ocRows.push([o.numero, o.supplier_razao ?? o.supplier_nome, fmtCnpj(o.supplier_cnpj), parseFloat(o.valor_total ?? "0"), o.obra_nome ?? "", o.status, o.nfeNumero ?? "—", fmtDate(o.created_at)]);
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ocRows), "OC vs NF-e");
 
-    const movRows = [["Data","Descrição","Valor","Tipo","Conciliado","NF#"]];
+    const movRows = [["Data","Descrição","Valor","Tipo","Conciliado","NF#","Obs"]];
     for (const b of [...(data.saidasSemNota ?? []), ...(data.entradasSemNota ?? [])])
-      movRows.push([fmtDate(b.data), b.descricao, parseFloat(b.valor ?? "0"), b.tipo === "credito" ? "Entrada" : "Saída", b.conciliado ? "Sim" : "Não", b.fn_numero ?? "—"]);
+      movRows.push([fmtDate(b.data), b.descricao, parseFloat(b.valor ?? "0"), b.tipo === "credito" ? "Entrada" : "Saída", b.conciliado ? "Sim" : "Não", b.fn_numero ?? "—", ""]);
+    for (const b of (data.entradasComNfAnterior ?? []))
+      movRows.push([fmtDate(b.data), b.descricao, parseFloat(b.valor ?? "0"), "Entrada", b.conciliado ? "Sim" : "Não", `NFS-e #${b.sugestao_nf_numero} (mês anterior)`, `Emitida em ${fmtDate(b.sugestao_nf_emissao)} — ${b.sugestao_nf_tomador ?? ""}`]);
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(movRows), "Movimentos s/ Nota");
 
     XLSX.writeFile(wb, `panorama-fiscal-${pl.replace("/", "-")}.xlsx`);
@@ -323,6 +327,7 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
   const ocsSemTotal = (data?.ocsSemNota ?? []).reduce((s: number, o: any) => s + parseFloat(o.valor_total ?? "0"), 0);
   const entSemQtd   = data?.entradasSemNota?.length ?? 0;
   const saiSemQtd   = data?.saidasSemNota?.length ?? 0;
+  const entAntQtd   = data?.entradasComNfAnterior?.length ?? 0;
 
   const totalAlerts = ocsSemQtd + entSemQtd + saiSemQtd;
   const saúde = (() => {
@@ -525,6 +530,16 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
                       onClick={() => jumpTo(secOcsRef, "ocsSemNota")}
                     />
                   )}
+                  {entAntQtd > 0 && (
+                    <AlertCard
+                      icon={<ArrowDownLeft className="h-5 w-5 text-blue-600" />}
+                      title="Entradas com NFS-e de mês anterior"
+                      count={entAntQtd}
+                      total={(data.entradasComNfAnterior ?? []).reduce((s: number, b: any) => s + Math.abs(parseFloat(b.valor ?? "0")), 0)}
+                      variant="info"
+                      onClick={() => jumpTo(secExtRef, "extrato")}
+                    />
+                  )}
                   {entSemQtd > 0 && (
                     <AlertCard
                       icon={<ArrowDownLeft className="h-5 w-5 text-amber-600" />}
@@ -591,6 +606,7 @@ export default function PanoramaFiscal({ companyId, companyNome, companyLogoUrl 
               <UnifiedBankTable
                 entradasCom={data.entradasComNota ?? []}
                 entradasSem={data.entradasSemNota ?? []}
+                entradasAnt={data.entradasComNfAnterior ?? []}
                 saidasCom={data.saidasComNota ?? []}
                 saidasSem={data.saidasSemNota ?? []}
               />
@@ -680,8 +696,8 @@ const BANK_COLORS = [
 type FiltroTipo  = "todas" | "entradas" | "saidas";
 type FiltroNota  = "todas" | "com" | "sem";
 
-function UnifiedBankTable({ entradasCom, entradasSem, saidasCom, saidasSem }: {
-  entradasCom: any[]; entradasSem: any[];
+function UnifiedBankTable({ entradasCom, entradasSem, entradasAnt, saidasCom, saidasSem }: {
+  entradasCom: any[]; entradasSem: any[]; entradasAnt: any[];
   saidasCom:   any[]; saidasSem:   any[];
 }) {
   const [filtroTipo,  setFiltroTipo]  = React.useState<FiltroTipo>("todas");
@@ -689,11 +705,13 @@ function UnifiedBankTable({ entradasCom, entradasSem, saidasCom, saidasSem }: {
   const [filtroConta, setFiltroConta] = React.useState("__all__");
 
   // ── Mescla tudo em uma lista plana com metadados de tipo/nota ────────────
+  // _temNota: true = NF do período | "anterior" = NF de mês anterior | false = sem NF
   const allRows = useMemo(() => {
-    const tag = (arr: any[], tipo: "entrada"|"saida", temNota: boolean) =>
+    const tag = (arr: any[], tipo: "entrada"|"saida", temNota: boolean | "anterior") =>
       arr.map(r => ({ ...r, _tipo: tipo, _temNota: temNota }));
     return [
       ...tag(entradasCom, "entrada", true),
+      ...tag(entradasAnt, "entrada", "anterior"),
       ...tag(entradasSem, "entrada", false),
       ...tag(saidasCom,   "saida",   true),
       ...tag(saidasSem,   "saida",   false),
@@ -702,13 +720,14 @@ function UnifiedBankTable({ entradasCom, entradasSem, saidasCom, saidasSem }: {
       const db = String(b.data || "").slice(0,10);
       return da < db ? -1 : da > db ? 1 : 0;
     });
-  }, [entradasCom, entradasSem, saidasCom, saidasSem]);
+  }, [entradasCom, entradasAnt, entradasSem, saidasCom, saidasSem]);
 
   // ── Filtros aplicados ────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     return allRows.filter(r => {
       if (filtroTipo === "entradas" && r._tipo !== "entrada") return false;
       if (filtroTipo === "saidas"   && r._tipo !== "saida")   return false;
+      // "com NF" inclui notas do período e do mês anterior
       if (filtroNota === "com" && !r._temNota) return false;
       if (filtroNota === "sem" &&  r._temNota) return false;
       if (filtroConta !== "__all__" && (r.conta_nome || "—") !== filtroConta) return false;
@@ -899,14 +918,17 @@ function UnifiedBankTable({ entradasCom, entradasSem, saidasCom, saidasSem }: {
                   </tr>
                   {/* Linhas */}
                   {bankRows.map((b: any, i: number) => {
-                    const isEntrada = b._tipo === "entrada";
-                    const hasNota   = b._temNota;
+                    const isEntrada  = b._tipo === "entrada";
+                    const hasNota    = b._temNota;
+                    const isAnterior = b._temNota === "anterior";
                     return (
                       <tr key={b.id ?? i}
                         className={`border-b border-slate-50 transition-colors ${
-                          hasNota
-                            ? isEntrada ? "bg-emerald-50/20 hover:bg-emerald-50/40" : "bg-blue-50/20 hover:bg-blue-50/40"
-                            : i % 2 === 0 ? "bg-white hover:bg-slate-50/60" : "bg-slate-50/30 hover:bg-slate-50/60"
+                          isAnterior
+                            ? "bg-blue-50/30 hover:bg-blue-50/50"
+                            : hasNota
+                              ? isEntrada ? "bg-emerald-50/20 hover:bg-emerald-50/40" : "bg-blue-50/20 hover:bg-blue-50/40"
+                              : i % 2 === 0 ? "bg-white hover:bg-slate-50/60" : "bg-slate-50/30 hover:bg-slate-50/60"
                         }`}>
                         {/* Data */}
                         <td className="px-3 py-2.5 whitespace-nowrap text-slate-500 font-medium tabular-nums">
@@ -958,7 +980,14 @@ function UnifiedBankTable({ entradasCom, entradasSem, saidasCom, saidasSem }: {
                             ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-[11px] font-bold">
                                 NF# {b.fn_numero}
                               </span>
-                            : <span className="text-slate-300 text-[11px]">—</span>
+                            : isAnterior
+                              ? <span className="inline-flex flex-col gap-0.5">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[11px] font-bold" title={`NFS-e emitida em ${fmtDate(b.sugestao_nf_emissao)} — ${b.sugestao_nf_tomador ?? ""}`}>
+                                    ← NFS-e #{b.sugestao_nf_numero}
+                                  </span>
+                                  <span className="text-[10px] text-blue-500 pl-0.5">{fmtDate(b.sugestao_nf_emissao)}</span>
+                                </span>
+                              : <span className="text-slate-300 text-[11px]">—</span>
                           }
                         </td>
                       </tr>

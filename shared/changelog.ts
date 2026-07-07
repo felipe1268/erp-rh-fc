@@ -1,4 +1,41 @@
 /**
+ * Rev. 4087 — **PANORAMA FISCAL: MATCHING RETROATIVO DE ENTRADAS BANCÁRIAS × NFS-e DE
+ * MESES ANTERIORES (REGIME DE COMPETÊNCIA).**
+ *
+ * CONTEXTO: Pelo regime de competência (CPC 47/IFRS 15), a receita é reconhecida no mês
+ * da emissão da nota. Porém o pagamento pode ocorrer no mês seguinte. Ex.: NFS-e emitida
+ * em DEZ/2025 cujo pagamento de R$19.923,59 entrou no extrato de JAN/2026. O Panorama
+ * Fiscal de JAN mostrava esse crédito como "Sem Nota", o que é tecnicamente correto do
+ * ponto de vista de caixa, mas enganoso do ponto de vista fiscal.
+ *
+ * SOLUÇÃO IMPLEMENTADA:
+ * — Backend (`getPanoramaFiscal`): nova query `nfseAntQ` busca NFS-e emitidas nos 60 dias
+ *   ANTERIORES ao período selecionado. Para cada entrada bancária sem NF vinculada, tenta
+ *   matching heurístico por valor ≈ valor_liquido da NFS-e anterior (tolerância ±3%,
+ *   first-come-first-served para evitar duplo vínculo). Entradas que casam saem de
+ *   `entradasSemNota` e entram em `entradasComNfAnterior` com campos `sugestao_nf_*`.
+ *   O `coberturaNfseReceita` passa a contar essas entradas como cobertas
+ *   (totCobertos = entradasComNota + entradasComNfAnterior).
+ *
+ * — Frontend (`PanoramaFiscal.tsx`):
+ *   • `AlertCard` ganhou variante "info" (azul) para o novo card "Entradas com NFS-e de
+ *     mês anterior".
+ *   • `UnifiedBankTable` aceita novo prop `entradasAnt`; linhas são marcadas com
+ *     `_temNota: "anterior"` (fundo azul-claro) e coluna NF# mostra badge
+ *     "← NFS-e #508 / 19/12/2025" em azul.
+ *   • Export Excel inclui as entradas anteriores com coluna "Obs" explicativa.
+ *
+ * IMPACTO CONTÁBIL: entradas de "baixa de contas a receber" de meses anteriores deixam
+ * de inflar o indicador "Entradas sem NFS-e" e ficam corretamente identificadas.
+ * O Panorama não move nem altera dados — é read-only; o vínculo definitivo continua
+ * sendo feito manualmente na Conciliação Bancária.
+ *
+ * ZERO DELETE · ZERO UPDATE · ZERO ALTER — apenas novas queries de leitura.
+ *
+ * Arquivos: server/routers/fiscalNotes.ts, client/src/pages/financeiro/PanoramaFiscal.tsx
+ */
+
+/**
  * Rev. 4086 — **CONCILIAÇÃO: IMPORTAÇÃO EM LOTE INTELIGENTE — CONTA AUTO-DETECTADA DO
  * CABEÇALHO OFX (<BANKACCTFROM>) + DIÁLOGO DE REVISÃO POR ARQUIVO.**
  *

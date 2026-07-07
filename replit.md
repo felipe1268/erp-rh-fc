@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4087** — **PANORAMA FISCAL: MATCHING RETROATIVO DE ENTRADAS BANCÁRIAS × NFS-e DE MESES ANTERIORES (REGIME DE COMPETÊNCIA).** Novo endpoint `nfseAntQ` busca NFS-e dos 60 dias anteriores ao período; matching heurístico por valor ≈ valor_liquido (±3%) move entradas sem NF para `entradasComNfAnterior`. `coberturaNfseReceita` conta essas entradas como cobertas. Frontend: novo `AlertCard` azul "Entradas com NFS-e de mês anterior" + badge "← NFS-e #N / data" na coluna NF# do extrato. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+
 - **Rev. 4086** — **CONCILIAÇÃO: IMPORTAÇÃO EM LOTE INTELIGENTE — CONTA AUTO-DETECTADA DO CABEÇALHO OFX + DIÁLOGO DE REVISÃO POR ARQUIVO.** O arquivo OFX já carrega `<BANKID>`+`<ACCTID>` no `<BANKACCTFROM>` — agora o sistema lê esses dados client-side e cruza com as contas cadastradas (normalização de zeros à esquerda). Ao subir 1 ou N arquivos OFX, abre `BatchImportDialog` (dark header, tabela arquivo×conta) onde cada linha mostra a conta detectada com badge ✅/⚠ e seletor de override. `handleBatchImport` processa cada arquivo para sua conta detectada (análise → dedup → insert). `PendImportFile` ganhou `contaId?: number`; `proceedWithInsert` usa `fg.contaId ?? contaId` por arquivo. No Workspace: banner azul quando conta do OFX diverge da selecionada, com botão "Usar esta conta". ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
-- **Rev. 4085** — **CONCILIAÇÃO: DEDUP DE IMPORTAÇÃO PASSA A SER CONTROLADO PELO USUÁRIO (DIÁLOGO DE REVISÃO) + PARSER OFX ROBUSTO PARA FORMATO BR.** Antes: duplicatas eram descartadas silenciosamente sem visibilidade. Fix: novo endpoint `checkStatementDuplicates` (dry-run, sem INSERT) + `handleImport` ganhou FASE 1.5 que pausa antes de gravar e abre `ReviewDuplicatesDialog` listando cada linha duplicada com Checkbox (desmarcado por padrão). Usuário decide quais reimportar; confirmadas são enviadas com `forceInsert: true` que pula o dedup no `insertBankStatementBatch`. OFX parser agora normaliza "1.234,56" (ponto=milhar, vírgula=decimal) corretamente. Funciona em `FinanceiroConciliacao.tsx` e `FinanceiroConciliacaoWorkspace.tsx`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
 ### 5 one-liners
+
+- **Rev. 4085** — **CONCILIAÇÃO: DEDUP DE IMPORTAÇÃO PASSA A SER CONTROLADO PELO USUÁRIO (DIÁLOGO DE REVISÃO) + PARSER OFX ROBUSTO PARA FORMATO BR.** Antes: duplicatas eram descartadas silenciosamente sem visibilidade. Fix: novo endpoint `checkStatementDuplicates` (dry-run, sem INSERT) + `handleImport` ganhou FASE 1.5 que pausa antes de gravar e abre `ReviewDuplicatesDialog`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4084** — **CONTAS A RECEBER: "NOVO TÍTULO" ENRIQUECIDO COM CONTA BANCÁRIA DE RECEBIMENTO + VÍNCULO DE NFS-e + BADGE NA LISTA.** Nova tabela `financial_nfse_vinculos`; `criarTituloReceber` recebe `contaBancariaId`+campos NFS-e; upload XML DOMParser multi-padrão; badge na lista. ZERO DELETE · ZERO ALTER em dados existentes · 1 CREATE TABLE.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4082** — **CONCILIAÇÃO BANCÁRIA: "LANÇAR NO ERP" SUGERE CONDIÇÃO DE PAGAMENTO PRO FORNECEDOR COM CICLO DE FECHAMENTO CADASTRADO.** Novo endpoint `financial.getFornecedorCiclosConfig`; diálogo pré-preenche `cicloFormaPagamento` (só se vazia) + aviso do ciclo. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4081** — **CONCILIAÇÃO: CHEQUE DEVOLVIDO QUITADO POR MÚLTIPLOS PAGAMENTOS/FORMAS — CONTROLE DE CHEQUES PASSA A MOSTRAR COMO FOI PAGO.** Fix: nova coluna `forma_pagamento` no tipo 'ajuste'; seletor no diálogo Conciliação + popover "Ver pagamento" em Controle de Cheques. ZERO DELETE · ZERO UPDATE · 1 ALTER aditivo.
-
-- **Rev. 4080** — **CONTAS A PAGAR: BOTÃO "ANO TODO" PADRONIZADO COM CONTAS A RECEBER.** Antes: barra tracejada full-width abaixo da grade de meses. Fix: `FinanceiroContasAPagar.tsx` — botão virou o mesmo pill compacto ao lado do seletor de ano (◀ 2026 ▶ [Ano todo]), igual ao Contas a Receber. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 ### Histórico completo
 

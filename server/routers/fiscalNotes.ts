@@ -549,10 +549,11 @@ export const fiscalNotesRouter = router({
         LIMIT 300
       `, [companyId, di, df]);
 
-      const nfseList: any[] = nfseQ.rows;
-      const nfeList: any[]  = nfeQ.rows;
-      const bankList: any[] = bankQ.rows;
-      const ocList: any[]   = ocQ.rows;
+      const nfseList: any[]    = nfseQ.rows;
+      const nfseAntList: any[] = nfseAntQ.rows;
+      const nfeList: any[]     = nfeQ.rows;
+      const bankList: any[]    = bankQ.rows;
+      const ocList: any[]      = ocQ.rows;
 
       // Cross: OC × NF-e — match em camadas, sem fallback genérico
       // Camada 1: match direto pelo número da NF gravado na OC (definitivo)
@@ -640,10 +641,46 @@ export const fiscalNotesRouter = router({
       const bankDebitos       = bankList.filter((b: any) => b.tipo === "debito");
       const bankDebitosReais  = bankDebitos.filter((b: any) => !_isInterno(b));
       const bankInternos      = bankDebitos.filter((b: any) =>  _isInterno(b));
-      const entradasComNota = bankCreditos.filter((b: any) => b.fn_id != null);
-      const entradasSemNota = bankCreditos.filter((b: any) => b.fn_id == null);
-      const saidasComNota   = bankDebitosReais.filter((b: any) => b.fn_id != null);
-      const saidasSemNota   = bankDebitosReais.filter((b: any) => b.fn_id == null);
+      const entradasComNota    = bankCreditos.filter((b: any) => b.fn_id != null);
+      const entradasSemNotaRaw = bankCreditos.filter((b: any) => b.fn_id == null);
+      const saidasComNota      = bankDebitosReais.filter((b: any) => b.fn_id != null);
+      const saidasSemNota      = bankDebitosReais.filter((b: any) => b.fn_id == null);
+
+      // ── Matching retroativo: entradas sem NF × NFS-e de meses anteriores ──
+      // Regime de competência: nota emitida em DEZ pode ser paga em JAN.
+      // Matching por valor ≈ valor_liquido (±3%) — janela dos 60 dias antes do período.
+      // Cada NFS-e anterior só casa com UMA entrada (first-come-first-served por valor).
+      const _matchedAntIds = new Set<number>();
+      const entradasSemNota: any[]         = [];
+      const entradasComNfAnterior: any[]   = [];
+      for (const b of entradasSemNotaRaw) {
+        const bankVal = Math.abs(parseFloat(b.valor ?? "0"));
+        let matchAnt: any = null;
+        if (bankVal > 0) {
+          for (const nfse of nfseAntList) {
+            if (_matchedAntIds.has(nfse.id)) continue;
+            const liq = parseFloat(nfse.valor_liquido ?? "0");
+            const bru = parseFloat(nfse.valor_bruto  ?? "0");
+            const refVal = liq > 0 ? liq : bru;
+            if (refVal <= 0) continue;
+            const pct = Math.abs(bankVal - refVal) / Math.max(bankVal, refVal);
+            if (pct <= 0.03) { matchAnt = nfse; break; }
+          }
+        }
+        if (matchAnt) {
+          _matchedAntIds.add(matchAnt.id);
+          entradasComNfAnterior.push({
+            ...b,
+            sugestao_nf_id:      matchAnt.id,
+            sugestao_nf_numero:  matchAnt.numero_nf,
+            sugestao_nf_tomador: matchAnt.tomador_razao_social,
+            sugestao_nf_valor:   matchAnt.valor_liquido ?? matchAnt.valor_bruto,
+            sugestao_nf_emissao: matchAnt.data_emissao,
+          });
+        } else {
+          entradasSemNota.push(b);
+        }
+      }
 
       const sumV = (arr: any[], f = "valor") => arr.reduce((s: number, r: any) => s + Math.abs(parseFloat(r[f] ?? "0")), 0);
 
@@ -657,6 +694,10 @@ export const fiscalNotesRouter = router({
       const totOcsNota     = sumV(ocsComNota, "valor_total");
       const totSaiNota     = sumV(saidasComNota);
 
+      // Cobertura de receita: entradas com NF do período OU de mês anterior
+      // (regime de competência: nota de DEZ paga em JAN ainda é coberta)
+      const totCobertos = sumV(entradasComNota) + sumV(entradasComNfAnterior);
+
       return {
         periodo: { mes, ano },
         resumo: {
@@ -666,7 +707,8 @@ export const fiscalNotesRouter = router({
           saidasBancarias:     { qtd: bankDebitosReais.length, total: totDebitosReais },
           saidasInternas:      { qtd: bankInternos.length,    total: totInternos     },
           totalOcs:            { qtd: ocList.length,   total: totOcs  },
-          coberturaNfseReceita: totCreditos > 0 ? Math.min(100, Math.round(totNfse / totCreditos * 100)) : null,
+          // Cobertura = (entradas com NF do período + entradas com NF de mês anterior) / total entradas
+          coberturaNfseReceita: totCreditos > 0 ? Math.min(100, Math.round(totCobertos / totCreditos * 100)) : null,
           coberturaOcNfe:       totOcs > 0 ? Math.round(totOcsNota / totOcs * 100) : null,
           // Ratio de volume: NF-e recebidas / débitos reais (excl. cheque devolvido/tarifas)
           coberturaSaidaNfe:    totDebitosReais > 0 ? Math.min(100, Math.round(totNfe / totDebitosReais * 100)) : null,
@@ -677,6 +719,7 @@ export const fiscalNotesRouter = router({
         ocsSemNota,
         nfeSemOc,
         entradasComNota,
+        entradasComNfAnterior,
         entradasSemNota,
         saidasComNota,
         saidasSemNota,
