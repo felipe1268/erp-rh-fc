@@ -1,4 +1,19 @@
 /**
+ * Rev. 4089 — **NOTAS FISCAIS: CARDS DE TOTAIS EXCLUEM CANCELADAS/SUBSTITUÍDAS.**
+ *
+ * BUG: `totais.total` e `totais.valorTotal` usavam `nfs.length` e `somarLiq(nfs)` —
+ * ambos incluíam NFs canceladas e substituídas no contador e no somatório dos cards
+ * "Total NFs" e "Valor Total" da aba Emitidas. A barra de progresso "vinculadas / pendentes"
+ * também ficava distorcida pois o denominador incluía notas inexistentes fiscalmente.
+ *
+ * FIX: `ativas = nfs.filter(n => !["cancelada","substituida"].has(n.status))`;
+ * `total = ativas.length` e `valorTotal = somarLiq(ativas)`. Os 4 sub-totais por status
+ * (pendente/recebida/validada/conciliada) já eram corretos por filtragem explícita de status.
+ *
+ * ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+ */
+
+/**
  * Rev. 4088 — **NF-e: AUTO-VÍNCULO CROSS-MÊS — NFS-e DE MÊS ANTERIOR CONCILIADA
  * AUTOMATICAMENTE AO CONSOLIDAR O MÊS SEGUINTE (REGIME DE COMPETÊNCIA).**
  *

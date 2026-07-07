@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4089** — **NOTAS FISCAIS: CARDS DE TOTAIS EXCLUEM CANCELADAS/SUBSTITUÍDAS.** Bug: `totais.total` e `totais.valorTotal` usavam `nfs.length`/`somarLiq(nfs)` — incluíam NFs canceladas e substituídas no card "Total NFs" e na barra de progresso. Fix: novo filtro `ativas = nfs.filter(!cancelada && !substituida)` como base dos dois campos. Os sub-totais por status já estavam corretos. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+
 - **Rev. 4088** — **NF-e: AUTO-VÍNCULO CROSS-MÊS — NFS-e DE MÊS ANTERIOR CONCILIADA AUTOMATICAMENTE AO CONSOLIDAR O MÊS SEGUINTE (REGIME DE COMPETÊNCIA).** 3 bugs corrigidos: (1) `autoVincularNfsPorLinhas`: janela de data invertida buscava NFs emitidas *depois* do crédito — agora busca 90 dias *antes*; (2) `sincronizarNfsPeriodo` e `obterSugestoesPeriodo`: NF query restrita ao mesmo mês — expandida 90 dias atrás; (3) `consolidarMes`/`consolidarTodasContas` não disparavam auto-vínculo — agora passam IDs das linhas ao serviço. Resultado: ao consolidar janeiro, NFS-e de dezembro vira "Conciliada" com card mostrando data/valor do crédito de janeiro. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
-- **Rev. 4087** — **PANORAMA FISCAL: MATCHING RETROATIVO DE ENTRADAS BANCÁRIAS × NFS-e DE MESES ANTERIORES (REGIME DE COMPETÊNCIA).** Novo endpoint `nfseAntQ` busca NFS-e dos 60 dias anteriores ao período; matching heurístico por valor ≈ valor_liquido (±3%) move entradas sem NF para `entradasComNfAnterior`. `coberturaNfseReceita` conta essas entradas como cobertas. Frontend: novo `AlertCard` azul "Entradas com NFS-e de mês anterior" + badge "← NFS-e #N / data" na coluna NF# do extrato. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
 ### 5 one-liners
+
+- **Rev. 4087** — **PANORAMA FISCAL: MATCHING RETROATIVO DE ENTRADAS BANCÁRIAS × NFS-e DE MESES ANTERIORES (REGIME DE COMPETÊNCIA).** Novo endpoint `nfseAntQ`; matching heurístico valor ≈ valor_liquido (±3%); AlertCard azul + badge "← NFS-e #N / data". ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4086** — **CONCILIAÇÃO: IMPORTAÇÃO EM LOTE INTELIGENTE — CONTA AUTO-DETECTADA DO CABEÇALHO OFX + DIÁLOGO DE REVISÃO POR ARQUIVO.** BatchImportDialog com auto-detect de conta do OFX + seletor de override. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 

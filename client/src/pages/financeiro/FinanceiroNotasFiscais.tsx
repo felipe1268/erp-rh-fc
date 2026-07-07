@@ -1169,13 +1169,15 @@ export default function FinanceiroNotasFiscais() {
   const isSaving = criarMut.isPending || atualizarMut.isPending;
 
   const totais = useMemo(() => {
-    const pendente  = nfs.filter(n => n.status === "pendente");
-    const recebida  = nfs.filter(n => n.status === "recebida");
-    const validada  = nfs.filter(n => n.status === "validada");
+    const INATIVAS = new Set(["cancelada", "substituida"]);
+    const ativas     = nfs.filter(n => !INATIVAS.has(n.status));
+    const pendente   = nfs.filter(n => n.status === "pendente");
+    const recebida   = nfs.filter(n => n.status === "recebida");
+    const validada   = nfs.filter(n => n.status === "validada");
     const conciliada = nfs.filter(n => n.status === "conciliada");
     const somarLiq = (arr: NF[]) => arr.reduce((s, n) => s + parseFloat(String(n.valorLiquido || 0)), 0);
     return {
-      total: nfs.length,
+      total: ativas.length,
       pendente: pendente.length,
       recebida: recebida.length,
       validada: validada.length,
@@ -1184,7 +1186,7 @@ export default function FinanceiroNotasFiscais() {
       valorRecebida:   somarLiq(recebida),
       valorValidada:   somarLiq(validada),
       valorConciliada: somarLiq(conciliada),
-      valorTotal:      somarLiq(nfs),
+      valorTotal:      somarLiq(ativas),
     };
   }, [nfs]);
 
