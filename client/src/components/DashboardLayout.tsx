@@ -460,7 +460,7 @@ const menuSectionsAlmoxarifado: MenuSection[] = [
     title: "Controle de Equipamentos",
     items: [
       { icon: Package,   label: "Visão Geral",       path: "/equipamentos" },
-      { icon: HardHat,   label: "Próprios",          path: "/equipamentos/proprios" },
+      { icon: HardHat,   label: "Equipamentos Próprios", path: "/equipamentos/proprios" },
       { icon: Truck,     label: "Equipamentos Locados", path: "/equipamentos/locados" },
     ],
   },

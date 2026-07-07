@@ -377,7 +377,7 @@ export const MODULE_DEFINITIONS: ModuleDefinition[] = [
       { key: "almoxarifado-categorias",    label: "Categorias",         route: "/almoxarifado/categorias",    icon: "Layers" },
       // Equipamentos (Rev. 2258) — plugado no Almoxarifado
       { key: "equipamentos-hub",          label: "Equip. — Visão Geral",      route: "/equipamentos",                  icon: "Package" },
-      { key: "equipamentos-proprios",     label: "Equip. — Próprios",         route: "/equipamentos/proprios",         icon: "HardHat" },
+      { key: "equipamentos-proprios",     label: "Equipamentos Próprios",      route: "/equipamentos/proprios",         icon: "HardHat" },
       { key: "equipamentos-locados",      label: "Equip. — Locados",          route: "/equipamentos/locados",          icon: "Truck" },
     ],
   },
