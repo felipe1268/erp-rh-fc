@@ -950,7 +950,11 @@ async function parseExtratoLines(input: {
       const m = dtposted.slice(4, 6);
       const d = dtposted.slice(6, 8);
       const dataStr = `${y}-${m}-${d}`;
-      const valor = parseFloat(trnamt.replace(",", "."));
+      // OFX BR: "1.234,56" (ponto=milhar, vírgula=decimal) → normaliza p/ float
+      let rawAmt = trnamt.trim();
+      if (rawAmt.includes(",") && rawAmt.includes(".")) rawAmt = rawAmt.replace(/\./g, "").replace(",", ".");
+      else if (rawAmt.includes(",")) rawAmt = rawAmt.replace(",", ".");
+      const valor = parseFloat(rawAmt);
       lines.push({
         data: dataStr,
         descricao: memo || name || "Sem descrição",
@@ -9521,6 +9525,53 @@ export const financialRouter = router({
   // FASE 2: gravar um LOTE de linhas (com dedup idempotente). O cliente chama em
   // sequência, fatiando as linhas, e calcula o % real = processadas/total. No último
   // lote (`finalize`), grava a auditoria com os totais acumulados informados.
+  // ─── Rev. 4085 — Verificação de duplicados ANTES de gravar (dry-run) ───────────────────
+  // Espelha exatamente a lógica de dedup do insertBankStatementBatch mas sem INSERT.
+  // O frontend usa isso para pausar e apresentar ao usuário quais linhas já existem,
+  // deixando-o decidir se quer reimportar (forceInsert) ou ignorar.
+  checkStatementDuplicates: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    contaBancariaId: z.number(),
+    linhas: z.array(z.object({
+      data: z.string(),
+      descricao: z.string(),
+      valor: z.number(),
+      saldo: z.number().nullable(),
+    })),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const ownerCheck = await dbExecute(db,
+      `SELECT id FROM company_bank_accounts WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+      [input.contaBancariaId, input.companyId]
+    );
+    if (rows(ownerCheck).length === 0) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Conta bancária não pertence a esta empresa" });
+    }
+    const duplicateIndices: number[] = [];
+    for (let idx = 0; idx < input.linhas.length; idx++) {
+      const line = input.linhas[idx];
+      const salParam = line.saldo ?? null;
+      const existing = await dbExecute(db,
+        `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 AND ($6::numeric IS NULL OR saldo_apos=$7) AND excluido_em IS NULL LIMIT 1`,
+        [input.companyId, input.contaBancariaId, line.data, line.descricao, line.valor, salParam, salParam]
+      );
+      if (rows(existing).length > 0) { duplicateIndices.push(idx); continue; }
+      const eCode = line.descricao?.match(/E[0-9A-Fa-f]{20,}/)?.[0];
+      const docCode = line.descricao?.match(/Doc\s+(\d{5,})/i)?.[1];
+      const txKey = eCode ?? (docCode ? `Doc ${docCode}` : null);
+      if (txKey) {
+        const fuzzy = await dbExecute(db,
+          `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND data=$2 AND valor=$3 AND descricao ILIKE $4 AND ($5::numeric IS NULL OR saldo_apos=$6) AND excluido_em IS NULL LIMIT 1`,
+          [input.companyId, line.data, line.valor, `%${txKey}%`, salParam, salParam]
+        );
+        if (rows(fuzzy).length > 0) { duplicateIndices.push(idx); }
+      }
+    }
+    return { duplicateIndices };
+  }),
+
   insertBankStatementBatch: protectedProcedure.input(z.object({
     companyId: z.number(),
     contaBancariaId: z.number(),
@@ -9535,6 +9586,8 @@ export const financialRouter = router({
     finalize: z.boolean().optional(),
     totalInseridos: z.number().optional(),
     totalDuplicados: z.number().optional(),
+    // Rev. 4085 — força inserção sem dedup (linhas aprovadas pelo usuário no diálogo de revisão)
+    forceInsert: z.boolean().optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -9552,30 +9605,33 @@ export const financialRouter = router({
     let inserted = 0;
     let skipped = 0;
     for (const line of input.linhas) {
-      // Rev. 3533 — mesmo fix da Fase 1: saldo_apos integra a chave de dedup.
-      // Rev. 3544 bugfix: $6 aparecia 2x → segundo $6 virou $7 + salParam passado 2x.
-      // Rev. 3802 — dedup secundário por ID de transação (espelha Fase 1).
-      // Rev. 3804 — dedup secundário cross-conta (espelha Fase 1).
-      const salParam = line.saldo ?? null;
-      const existing = await dbExecute(db,
-        `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 AND ($6::numeric IS NULL OR saldo_apos=$7) AND excluido_em IS NULL LIMIT 1`,
-        [input.companyId, input.contaBancariaId, line.data, line.descricao, line.valor, salParam, salParam]
-      );
-      if (rows(existing).length > 0) { skipped++; continue; }
-      // Dedup secundário: extrai ID canônico da descrição (E003... ou Doc NNNNNN)
-      // Rev. 3804 — cross-conta: remove conta_bancaria_id do filtro para bloquear
-      // o mesmo Doc/E-code sendo importado em uma conta diferente da empresa.
-      // Rev. 3949 — FIX: espelha fix da Fase 1 — saldo_apos na guarda do fuzzy match
-      // para não descartar N lançamentos legítimos com mesmo Doc/E-code no mesmo dia.
-      const eCode = line.descricao?.match(/E[0-9A-Fa-f]{20,}/)?.[0];
-      const docCode = line.descricao?.match(/Doc\s+(\d{5,})/i)?.[1];
-      const txKey = eCode ?? (docCode ? `Doc ${docCode}` : null);
-      if (txKey) {
-        const fuzzy = await dbExecute(db,
-          `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND data=$2 AND valor=$3 AND descricao ILIKE $4 AND ($5::numeric IS NULL OR saldo_apos=$6) AND excluido_em IS NULL LIMIT 1`,
-          [input.companyId, line.data, line.valor, `%${txKey}%`, salParam, salParam]
+      // Rev. 4085 — forceInsert=true pula dedup (linhas aprovadas pelo usuário no diálogo)
+      if (!input.forceInsert) {
+        // Rev. 3533 — mesmo fix da Fase 1: saldo_apos integra a chave de dedup.
+        // Rev. 3544 bugfix: $6 aparecia 2x → segundo $6 virou $7 + salParam passado 2x.
+        // Rev. 3802 — dedup secundário por ID de transação (espelha Fase 1).
+        // Rev. 3804 — dedup secundário cross-conta (espelha Fase 1).
+        const salParam = line.saldo ?? null;
+        const existing = await dbExecute(db,
+          `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 AND ($6::numeric IS NULL OR saldo_apos=$7) AND excluido_em IS NULL LIMIT 1`,
+          [input.companyId, input.contaBancariaId, line.data, line.descricao, line.valor, salParam, salParam]
         );
-        if (rows(fuzzy).length > 0) { skipped++; continue; }
+        if (rows(existing).length > 0) { skipped++; continue; }
+        // Dedup secundário: extrai ID canônico da descrição (E003... ou Doc NNNNNN)
+        // Rev. 3804 — cross-conta: remove conta_bancaria_id do filtro para bloquear
+        // o mesmo Doc/E-code sendo importado em uma conta diferente da empresa.
+        // Rev. 3949 — FIX: espelha fix da Fase 1 — saldo_apos na guarda do fuzzy match
+        // para não descartar N lançamentos legítimos com mesmo Doc/E-code no mesmo dia.
+        const eCode = line.descricao?.match(/E[0-9A-Fa-f]{20,}/)?.[0];
+        const docCode = line.descricao?.match(/Doc\s+(\d{5,})/i)?.[1];
+        const txKey = eCode ?? (docCode ? `Doc ${docCode}` : null);
+        if (txKey) {
+          const fuzzy = await dbExecute(db,
+            `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND data=$2 AND valor=$3 AND descricao ILIKE $4 AND ($5::numeric IS NULL OR saldo_apos=$6) AND excluido_em IS NULL LIMIT 1`,
+            [input.companyId, line.data, line.valor, `%${txKey}%`, salParam, salParam]
+          );
+          if (rows(fuzzy).length > 0) { skipped++; continue; }
+        }
       }
       await dbExecute(db,
         `INSERT INTO bank_statement_lines (company_id, conta_bancaria_id, data, descricao, valor, tipo, saldo_apos, conciliado, importado_em)

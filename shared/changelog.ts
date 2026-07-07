@@ -1,4 +1,42 @@
 /**
+ * Rev. 4085 — **CONCILIAÇÃO: DEDUP DE IMPORTAÇÃO PASSA A SER CONTROLADO PELO USUÁRIO
+ * (DIÁLOGO DE REVISÃO) + PARSER OFX ROBUSTO PARA FORMATO BR (VÍRGULA DECIMAL).**
+ *
+ * CONTEXTO: O sistema descartava silenciosamente linhas duplicadas ao importar um extrato
+ * pela segunda vez (ex.: re-importar o mesmo OFX após adicionar mais transações). O usuário
+ * não tinha visibilidade sobre o que foi pulado nem a opção de reimportar uma linha legítima.
+ * Além disso, arquivos OFX com `<TRNAMT>` no formato BR ("1.234,56") eram parseados
+ * incorretamente em alguns layouts — ponto de milhar virava parte do decimal.
+ *
+ * SOLUÇÃO:
+ *
+ * BACKEND:
+ * — Novo endpoint `financial.checkStatementDuplicates` (dry-run): espelha exatamente
+ *   a lógica de dedup primário (data+desc+valor+saldo) e secundário (E-code/Doc fuzzy)
+ *   do `insertBankStatementBatch`, mas SEM INSERT — apenas retorna `{ duplicateIndices }`.
+ * — `insertBankStatementBatch` recebe campo opcional `forceInsert: boolean`; quando `true`,
+ *   pula todo o bloco de dedup e insere incondicionalmente (linhas aprovadas pelo usuário).
+ * — OFX parser: lógica de parse do `<TRNAMT>` agora detecta formato BR "1.234,56"
+ *   (ponto=milhar, vírgula=decimal) vs formato padrão "1234.56" e normaliza corretamente.
+ *
+ * FRONTEND (FinanceiroConciliacao.tsx + FinanceiroConciliacaoWorkspace.tsx):
+ * — `handleImport` ganhou FASE 1.5 após o parse e antes do INSERT: chama
+ *   `checkStatementDuplicates` para cada arquivo; se `totalDups > 0`, fecha o diálogo
+ *   de importação e abre o `ReviewDuplicatesDialog`.
+ * — `ReviewDuplicatesDialog`: lista cada linha duplicada (data, descrição, valor) com
+ *   Checkbox. Por padrão DESMARCADO (não reimporta). Usuário pode marcar as que quiser
+ *   reimportar e clicar "Confirmar"; progresso é exibido no próprio diálogo.
+ * — Nova função `proceedWithInsert`: separa as linhas em "normais" (sem dedup) e
+ *   "forçadas" (aprovadas pelo usuário); envia em lotes distintos — normais sem flag,
+ *   forçadas com `forceInsert: true`.
+ * — Caminho sem duplicados (caso comum): invoca `proceedWithInsert` diretamente sem
+ *   abrir nenhum diálogo extra — comportamento idêntico ao anterior.
+ * — Princípio respeitado: NADA é conciliado/importado sem confirmação explícita do usuário.
+ *
+ * ZERO DELETE · ZERO UPDATE em dados existentes · ZERO ALTER.
+ */
+
+/**
  * Rev. 4084 — **CONTAS A RECEBER: "NOVO TÍTULO" ENRIQUECIDO COM CONTA BANCÁRIA
  * DE RECEBIMENTO + VÍNCULO DE NFS-e (NÚMERO, SÉRIE, CHAVE, VALORES, XML) +
  * BADGE NFS-e NA LISTA.**

@@ -1101,10 +1101,19 @@ export default function FinanceiroConciliacao() {
   // devolve linhas) e grava em LOTES; o % = linhas processadas / total.
   const analyzeMut = (trpc as any).financial.analyzeBankStatement.useMutation();
   const insertBatchMut = (trpc as any).financial.insertBankStatementBatch.useMutation();
+  const checkDupMut = (trpc as any).financial.checkStatementDuplicates.useMutation();
   const lancarRendimentoMut = (trpc as any).financial.lancarRendimentoAplicacao.useMutation();
   const [importRunning, setImportRunning] = useState(false);
   const [importPct, setImportPct] = useState(0);
   const [importLabel, setImportLabel] = useState("");
+  // Rev. 4085 — diálogo de revisão de duplicados
+  type PendImportFile = { nome: string; linhas: any[]; importadoEm: string; formato: "ofx"|"csv"|"pdf"; dupIndices: number[] };
+  const [showReviewDup, setShowReviewDup] = useState(false);
+  const [pendingImportFiles, setPendingImportFiles] = useState<PendImportFile[]>([]);
+  const [pendingImportContaId, setPendingImportContaId] = useState(0);
+  const [pendingImportPropostas, setPendingImportPropostas] = useState<RendProposta[]>([]);
+  const [reviewDupSel, setReviewDupSel] = useState<Set<string>>(new Set());
+  const [reviewDupRunning, setReviewDupRunning] = useState(false);
 
   // Rev. 3169 — Consolidar / desconsolidar o mês de uma vez (fecha/reabre todas as
   // linhas do extrato da conta+período). Repinta o extrato do mês e as bolinhas do ano.
@@ -2395,12 +2404,12 @@ export default function FinanceiroConciliacao() {
     setImportContent(lidos[0].conteudo);
   }
 
+  // Rev. 4085 — handleImport agora tem FASE 1.5 (verificar duplicados) antes de gravar.
+  // Se houver duplicados, abre o diálogo de revisão para o usuário decidir.
   async function handleImport(skipMonthCheck = false) {
     if (importFiles.length === 0 && !importContent) { toast({ title: "Selecione um arquivo", variant: "destructive" }); return; }
     if (!importConta) { toast({ title: "Selecione a conta bancária", variant: "destructive" }); return; }
     const contaId = parseInt(importConta);
-    // Rev. 3354 — fila de arquivos (1 ou vários). Cada extrato é analisado e gravado em
-    // sequência; o mês/ano de cada lançamento sai da própria DATA da linha.
     const files = importFiles.length > 0
       ? importFiles
       : [{ nome: importFileName, conteudo: importContent, formato: importFormato }];
@@ -2408,51 +2417,35 @@ export default function FinanceiroConciliacao() {
     setImportRunning(true);
     setImportPct(2);
     setImportLabel(multi ? `Lendo ${files.length} extratos...` : "Lendo e analisando o extrato...");
-    let grandInserted = 0, grandSkipped = 0, arquivosComDados = 0;
     const propostasRend: RendProposta[] = [];
     try {
+      // ── FASE 1: analisar todos os arquivos ──────────────────────────────────
+      const fileGroups: PendImportFile[] = [];
       for (let fi = 0; fi < files.length; fi++) {
         const f = files[fi];
         const prefix = multi ? `Arquivo ${fi + 1}/${files.length} — ` : "";
-        const baseProgress = (fi / files.length) * 100;
-        const span = 100 / files.length;
-
-        // FASE 1 — analisar (parse no servidor; nada é gravado ainda)
         setImportLabel(`${prefix}Lendo e analisando...`);
         const analysis: any = await analyzeMut.mutateAsync({
-          companyId,
-          contaBancariaId: contaId,
-          formato: f.formato,
-          conteudo: f.conteudo,
+          companyId, contaBancariaId: contaId, formato: f.formato, conteudo: f.conteudo,
           csvSeparador: f.formato === "csv" ? csvSeparador : undefined,
         });
-        // Rev. 3886 — gate de template: PDF sem template cadastrado → exibe Dialog orientador.
+        // Rev. 3886 — gate de template: PDF sem template → Dialog orientador.
         if (analysis?.templateDetectado === false && f.formato === "pdf") {
-          setImportRunning(false);
-          setShowImport(false);
-          setTemplateGateError(true);
-          return;
+          setImportRunning(false); setTimeout(() => { setImportPct(0); setImportLabel(""); }, 500);
+          setShowImport(false); setTemplateGateError(true); return;
         }
-
         const linhas: any[] = analysis?.lines ?? [];
         const total = linhas.length;
         const importadoEm: string = analysis?.importadoEm;
         if (total === 0) {
-          // Multi-arquivo: avisa e segue pros demais; single: aborta como antes.
           toast({ title: multi ? `Sem transações em ${f.nome}` : "Nenhuma transação encontrada no arquivo", variant: "destructive" });
           if (multi) continue;
-          return;
+          setImportRunning(false); setTimeout(() => { setImportPct(0); setImportLabel(""); }, 500); return;
         }
-        arquivosComDados++;
-        setImportLabel(`${prefix}${formatInt(total)} transações. Gravando...`);
-
-        // Rev. 3363 — rendimento de aplicação/resgate automático (CDB ContaMax) detectado?
-        // Guarda a PROPOSTA p/ confirmação após a gravação (nunca lança sozinho).
+        // Rev. 3363 — rendimento de aplicação/resgate automático (CDB ContaMax)
         const rend = analysis?.rendimentoAplicacao;
         if (rend && (Number(rend.bruto) > 0 || Number(rend.iof) > 0 || Number(rend.ir) > 0)) {
-          // Competência: usa o cabeçalho do extrato; se ausente (0), deriva do mês dominante das linhas.
-          let cMes = Number(rend.competenciaMes) || 0;
-          let cAno = Number(rend.competenciaAno) || 0;
+          let cMes = Number(rend.competenciaMes) || 0, cAno = Number(rend.competenciaAno) || 0;
           if (!cMes || !cAno) {
             const counts = new Map<string, number>();
             for (const l of linhas) { const k = String(l?.data ?? "").slice(0, 7); if (k.length === 7) counts.set(k, (counts.get(k) ?? 0) + 1); }
@@ -2460,17 +2453,9 @@ export default function FinanceiroConciliacao() {
             for (const [k, n] of counts) { if (n > domN) { dom = k; domN = n; } }
             if (dom) { const [ay, am] = dom.split("-"); cAno = parseInt(ay, 10); cMes = parseInt(am, 10); }
           }
-          if (cMes && cAno) {
-            propostasRend.push({
-              contaBancariaId: contaId, competenciaMes: cMes, competenciaAno: cAno,
-              bruto: Number(rend.bruto) || 0, iof: Number(rend.iof) || 0, ir: Number(rend.ir) || 0,
-              fileName: f.nome,
-            });
-          }
+          if (cMes && cAno) propostasRend.push({ contaBancariaId: contaId, competenciaMes: cMes, competenciaAno: cAno, bruto: Number(rend.bruto)||0, iof: Number(rend.iof)||0, ir: Number(rend.ir)||0, fileName: f.nome });
         }
-
-        // Rev. 3179 — ALERTA/BLOQUEIO de mês divergente: SÓ no modo single-file. Importar
-        // VÁRIOS extratos é, por natureza, multi-mês — cada linha cai no seu próprio mês.
+        // Rev. 3179 — alerta de mês divergente (SÓ single-file)
         if (!multi && !skipMonthCheck && modoData === "mes" && mesSel != null) {
           const selKey = `${ano}-${String(mesSel).padStart(2, "0")}`;
           const counts = new Map<string, number>();
@@ -2481,67 +2466,104 @@ export default function FinanceiroConciliacao() {
             const fora = linhas.filter(l => String(l?.data ?? "").slice(0, 7) !== selKey).length;
             const [ay, am] = dom.split("-");
             setMismatch({ detectado: dom, selecionado: selKey, fora, total, anoNum: parseInt(ay, 10), mesNum: parseInt(am, 10) });
-            return; // não grava — usuário decide no alerta (trocar p/ o mês certo ou cancelar)
+            setImportRunning(false); setTimeout(() => { setImportPct(0); setImportLabel(""); }, 500); return;
           }
         }
+        fileGroups.push({ nome: f.nome, linhas, importadoEm, formato: f.formato as any, dupIndices: [] });
+      }
+      if (fileGroups.length === 0) { setImportRunning(false); setTimeout(() => { setImportPct(0); setImportLabel(""); }, 500); return; }
 
-        // FASE 2 — gravar em lotes (progresso real = processadas/total deste arquivo)
-        const CHUNK = 40;
+      // ── FASE 1.5: verificar duplicados antes de gravar ──────────────────────
+      setImportLabel("Verificando duplicados..."); setImportPct(15);
+      let totalDups = 0;
+      for (const fg of fileGroups) {
+        const r: any = await checkDupMut.mutateAsync({ companyId, contaBancariaId: contaId, linhas: fg.linhas });
+        fg.dupIndices = r?.duplicateIndices ?? [];
+        totalDups += fg.dupIndices.length;
+      }
+
+      setImportRunning(false); setTimeout(() => { setImportPct(0); setImportLabel(""); }, 500);
+
+      if (totalDups > 0) {
+        // Pausa — exibe diálogo de revisão (nunca importa duplicados automaticamente)
+        setShowImport(false);
+        setPendingImportFiles(fileGroups);
+        setPendingImportContaId(contaId);
+        setPendingImportPropostas(propostasRend);
+        setReviewDupSel(new Set());
+        setShowReviewDup(true);
+        return;
+      }
+
+      // Sem duplicados — grava direto
+      await proceedWithInsert(fileGroups, new Set(), contaId, propostasRend);
+    } catch (e: any) {
+      setImportRunning(false); setTimeout(() => { setImportPct(0); setImportLabel(""); }, 500);
+      toast({ title: "Erro na importação", description: e?.message || "Falha ao importar o extrato.", variant: "destructive" });
+    }
+  }
+
+  // Rev. 4085 — Fase 2 da importação: grava as linhas (sem ou com força para duplicados).
+  // Chamada tanto no caminho direto (sem dups) quanto após confirmação no diálogo de revisão.
+  async function proceedWithInsert(
+    fileGroups: PendImportFile[],
+    selectedDupKeys: Set<string>,
+    contaId: number,
+    propostasRend: RendProposta[],
+  ) {
+    const multi = fileGroups.length > 1;
+    setImportRunning(true); setImportPct(5); setImportLabel("Gravando...");
+    let grandInserted = 0, grandSkipped = 0, arquivosComDados = 0;
+    const CHUNK = 40;
+    try {
+      for (let fi = 0; fi < fileGroups.length; fi++) {
+        const fg = fileGroups[fi];
+        const prefix = multi ? `Arquivo ${fi + 1}/${fileGroups.length} — ` : "";
+        const baseProgress = (fi / fileGroups.length) * 100;
+        const span = 100 / fileGroups.length;
+        const dupSet = new Set(fg.dupIndices);
+        const normalLinhas = fg.linhas.filter((_, idx) => !dupSet.has(idx));
+        const forceLinhas = fg.dupIndices.filter(idx => selectedDupKeys.has(`${fi}:${idx}`)).map(idx => fg.linhas[idx]);
+        const skippedCount = fg.dupIndices.length - forceLinhas.length;
+        const totalToInsert = normalLinhas.length + forceLinhas.length;
+        grandSkipped += skippedCount;
+        if (totalToInsert === 0) continue;
+        arquivosComDados++;
         let processed = 0;
-        for (let i = 0; i < total; i += CHUNK) {
-          const slice = linhas.slice(i, i + CHUNK);
-          const isLast = i + CHUNK >= total;
-          const r: any = await insertBatchMut.mutateAsync({
-            companyId,
-            contaBancariaId: contaId,
-            formato: f.formato,
-            importadoEm,
-            linhas: slice,
-            finalize: isLast,
-            totalInseridos: grandInserted,
-            totalDuplicados: grandSkipped,
-          });
-          grandInserted += r?.inserted ?? 0;
-          grandSkipped += r?.skipped ?? 0;
-          processed += slice.length;
-          setImportPct(Math.min(99, Math.round(baseProgress + (processed / total) * span)));
-          setImportLabel(`${prefix}Gravando ${formatInt(Math.min(processed, total))} de ${formatInt(total)} transações...`);
+        for (let i = 0; i < normalLinhas.length; i += CHUNK) {
+          const slice = normalLinhas.slice(i, i + CHUNK);
+          const isLast = forceLinhas.length === 0 && i + CHUNK >= normalLinhas.length && fi === fileGroups.length - 1;
+          const r: any = await insertBatchMut.mutateAsync({ companyId, contaBancariaId: contaId, formato: fg.formato, importadoEm: fg.importadoEm, linhas: slice, finalize: isLast, totalInseridos: grandInserted, totalDuplicados: grandSkipped });
+          grandInserted += r?.inserted ?? 0; processed += slice.length;
+          setImportPct(Math.min(99, Math.round(baseProgress + (processed / Math.max(totalToInsert, 1)) * span * 0.9)));
+          setImportLabel(`${prefix}Gravando ${formatInt(Math.min(processed, totalToInsert))} de ${formatInt(totalToInsert)}...`);
+        }
+        for (let i = 0; i < forceLinhas.length; i += CHUNK) {
+          const slice = forceLinhas.slice(i, i + CHUNK);
+          const isLast = i + CHUNK >= forceLinhas.length && fi === fileGroups.length - 1;
+          const r: any = await insertBatchMut.mutateAsync({ companyId, contaBancariaId: contaId, formato: fg.formato, importadoEm: fg.importadoEm, linhas: slice, forceInsert: true, finalize: isLast, totalInseridos: grandInserted, totalDuplicados: grandSkipped });
+          grandInserted += r?.inserted ?? 0; processed += slice.length;
+          setImportPct(Math.min(99, Math.round(baseProgress + (processed / Math.max(totalToInsert, 1)) * span)));
+          setImportLabel(`${prefix}Gravando ${formatInt(Math.min(processed, totalToInsert))} de ${formatInt(totalToInsert)}...`);
         }
       }
-
-      if (arquivosComDados === 0) return; // nada gravado; os toasts já avisaram
-
-      setImportPct(100);
-      setImportLabel("Concluído!");
+      if (arquivosComDados === 0 && grandSkipped === 0) { return; }
+      setImportPct(100); setImportLabel("Concluído!");
+      const nI = grandInserted, nS = grandSkipped;
       toast({
-        title: `Importação concluída! ${formatInt(grandInserted)} inseridos, ${formatInt(grandSkipped)} duplicados ignorados`,
-        description: multi ? `${arquivosComDados} extratos processados. Atualizando a conciliação…` : "Atualizando a conciliação…",
+        title: `Importação concluída! ${formatInt(nI)} inserido${nI !== 1 ? "s" : ""}${nS > 0 ? `, ${formatInt(nS)} duplicado${nS !== 1 ? "s" : ""} ignorado${nS !== 1 ? "s" : ""}` : ""}`,
+        description: multi ? `${arquivosComDados} extrato${arquivosComDados !== 1 ? "s" : ""} processado${arquivosComDados !== 1 ? "s" : ""}. Atualizando a conciliação…` : "Atualizando a conciliação…",
       });
-      setShowImport(false);
-      setImportContent("");
-      setImportFileName("");
-      setImportFiles([]);
-      // Rev. 3187 — após importar, a conta importada vira a conta ATIVA na própria tela e o
-      // relatório/sugestões recarregam ali mesmo (Painel separado aposentado).
+      setShowImport(false); setShowReviewDup(false);
+      setImportContent(""); setImportFileName(""); setImportFiles([]);
       if (contaId) setContaBancariaId(String(contaId));
       setMostrarSugestoes(true);
-      refetchSt();
-      refetchStAno();
-      refetchAccStatus();
-      setReportStale(false);
-      refetchReport();
-      refetchSug();
-      // Rev. 3363 — havendo rendimento(s) de aplicação automática detectado(s), abre o
-      // card de confirmação (nunca lança sozinho).
-      if (propostasRend.length > 0) {
-        setRendimentoPropostas(propostasRend);
-        setShowRendimento(true);
-      }
+      refetchSt(); refetchStAno(); refetchAccStatus(); setReportStale(false); refetchReport(); refetchSug();
+      if (propostasRend.length > 0) { setRendimentoPropostas(propostasRend); setShowRendimento(true); }
     } catch (e: any) {
       toast({ title: "Erro na importação", description: e?.message || "Falha ao importar o extrato.", variant: "destructive" });
     } finally {
-      setImportRunning(false);
-      setTimeout(() => { setImportPct(0); setImportLabel(""); }, 500);
+      setImportRunning(false); setTimeout(() => { setImportPct(0); setImportLabel(""); }, 500);
     }
   }
 
@@ -8603,6 +8625,98 @@ export default function FinanceiroConciliacao() {
         })()}
       </SheetContent>
     </Sheet>
+
+    {/* Rev. 4085 — Diálogo de revisão de duplicados: exibido quando a Fase 1.5 detecta
+        transações que já existem no extrato. O usuário decide quais reimportar.
+        Princípio: nada é importado automaticamente — conciliação sempre sugestiva. */}
+    <Dialog open={showReviewDup} onOpenChange={(o) => { if (!o && !reviewDupRunning) setShowReviewDup(false); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
+            Transações já importadas detectadas
+          </DialogTitle>
+          <DialogDescription>
+            As linhas abaixo já existem no extrato desta conta. Por padrão <strong>não serão reimportadas</strong>. Marque as que deseja importar mesmo assim.
+          </DialogDescription>
+        </DialogHeader>
+
+        {reviewDupRunning ? (
+          <div className="py-4 space-y-2">
+            <div className="flex items-center justify-between text-sm text-blue-800">
+              <span className="truncate">{importLabel || "Importando..."}</span>
+              <span className="font-bold tabular-nums ml-2">{importPct}%</span>
+            </div>
+            <div className="h-2.5 w-full overflow-hidden rounded-full bg-blue-100">
+              <div className="h-full rounded-full bg-blue-600 transition-all duration-300" style={{ width: `${importPct}%` }} />
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="max-h-64 overflow-y-auto border rounded-lg divide-y text-sm">
+              {pendingImportFiles.map((fg, fi) =>
+                fg.dupIndices.map(idx => {
+                  const l = fg.linhas[idx];
+                  const key = `${fi}:${idx}`;
+                  const checked = reviewDupSel.has(key);
+                  return (
+                    <label key={key} className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-gray-50 select-none">
+                      <Checkbox checked={checked} onCheckedChange={v => {
+                        setReviewDupSel(prev => {
+                          const next = new Set(prev);
+                          if (v) next.add(key); else next.delete(key);
+                          return next;
+                        });
+                      }} />
+                      <span className="text-gray-400 shrink-0 w-[72px] text-xs">{fmtData(l?.data)}</span>
+                      <span className="flex-1 truncate text-gray-700" title={l?.descricao}>{l?.descricao || "—"}</span>
+                      <span className={`shrink-0 font-medium tabular-nums text-xs ${Number(l?.valor) >= 0 ? "text-green-700" : "text-red-600"}`}>
+                        {formatBRL(Math.abs(Number(l?.valor || 0)))}
+                      </span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+            {(() => {
+              const nNovas = pendingImportFiles.reduce((acc, fg) => acc + fg.linhas.length - fg.dupIndices.length, 0);
+              return (
+                <p className="text-xs text-gray-400">
+                  {formatInt(nNovas)} nova{nNovas !== 1 ? "s" : ""} + {reviewDupSel.size} duplicada{reviewDupSel.size !== 1 ? "s" : ""} selecionada{reviewDupSel.size !== 1 ? "s" : ""} serão importadas.
+                </p>
+              );
+            })()}
+          </>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setShowReviewDup(false)} disabled={reviewDupRunning}>
+            Cancelar
+          </Button>
+          <Button
+            className="bg-[#1B2A4A] hover:bg-[#243660] text-white"
+            disabled={reviewDupRunning}
+            onClick={async () => {
+              setReviewDupRunning(true);
+              try {
+                await proceedWithInsert(pendingImportFiles, reviewDupSel, pendingImportContaId, pendingImportPropostas);
+              } finally {
+                setReviewDupRunning(false);
+              }
+            }}
+          >
+            {reviewDupRunning
+              ? `Importando... ${importPct}%`
+              : (() => {
+                  const nNovas = pendingImportFiles.reduce((acc, fg) => acc + fg.linhas.length - fg.dupIndices.length, 0);
+                  const total = nNovas + reviewDupSel.size;
+                  return `Confirmar (${formatInt(total)} transaç${total !== 1 ? "ões" : "ão"})`;
+                })()
+            }
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     </DashboardLayout>
   );

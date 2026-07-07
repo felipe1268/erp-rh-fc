@@ -124,6 +124,12 @@ export default function FinanceiroConciliacaoWorkspace() {
   const [importRunning, setImportRunning] = useState(false);
   const [importPct, setImportPct] = useState(0);
   const [importLabel, setImportLabel] = useState("");
+  // Rev. 4085 — diálogo de revisão de duplicados
+  const [showReviewDup, setShowReviewDup] = useState(false);
+  const [pendingImportData, setPendingImportData] = useState<{ linhas: any[]; importadoEm: string; contaId: number } | null>(null);
+  const [pendingDupIndices, setPendingDupIndices] = useState<number[]>([]);
+  const [reviewDupSel, setReviewDupSel] = useState<Set<string>>(new Set());
+  const [reviewDupRunning, setReviewDupRunning] = useState(false);
   // Rev. 3179 — "Limpar extrato" (confirmação) + alerta de extrato de outro mês.
   const [confirmLimpar, setConfirmLimpar] = useState(false);
   const [limparConciliadosCount, setLimparConciliadosCount] = useState(0);
@@ -239,6 +245,7 @@ export default function FinanceiroConciliacaoWorkspace() {
   });
   const analyzeMut = (trpc as any).financial.analyzeBankStatement.useMutation();
   const insertBatchMut = (trpc as any).financial.insertBankStatementBatch.useMutation();
+  const checkDupMut = (trpc as any).financial.checkStatementDuplicates.useMutation();
 
   const toggleSug = (id: number) => setSelSug(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const selecionarAlta = () => setSelSug(new Set(sugestoes.filter(s => s.confianca === "alta").map(s => s.statementLineId)));
@@ -272,6 +279,7 @@ export default function FinanceiroConciliacaoWorkspace() {
     }
   }
 
+  // Rev. 4085 — handleImport com FASE 1.5 (verificar duplicados antes de gravar).
   async function handleImport(skipMonthCheck = false) {
     if (!importContent) { toast({ title: "Selecione um arquivo", variant: "destructive" }); return; }
     if (!importConta) { toast({ title: "Selecione a conta bancária", variant: "destructive" }); return; }
@@ -282,11 +290,8 @@ export default function FinanceiroConciliacaoWorkspace() {
       const linhas: any[] = analysis?.lines ?? [];
       const total = linhas.length;
       const importadoEm: string = analysis?.importadoEm;
-      if (total === 0) { toast({ title: "Nenhuma transação encontrada no arquivo", variant: "destructive" }); return; }
-      setImportPct(10); setImportLabel(`Extrato lido: ${total} transações. Gravando...`);
-      // Rev. 3179 — ALERTA/BLOQUEIO: extrato de outro mês ≠ mês selecionado. Detecta o mês
-      // DOMINANTE (YYYY-MM mais frequente); havendo mês selecionado (não "Ano todo") e
-      // divergindo, ABORTA a gravação e abre o alerta de decisão.
+      if (total === 0) { toast({ title: "Nenhuma transação encontrada no arquivo", variant: "destructive" }); setImportRunning(false); return; }
+      // Mês divergente
       if (!skipMonthCheck && mesSel != null) {
         const selKey = `${ano}-${String(mesSel).padStart(2, "0")}`;
         const counts = new Map<string, number>();
@@ -297,20 +302,63 @@ export default function FinanceiroConciliacaoWorkspace() {
           const fora = linhas.filter(l => String(l?.data ?? "").slice(0, 7) !== selKey).length;
           const [ay, am] = dom.split("-");
           setMismatch({ selecionado: selKey, fora, total, anoNum: parseInt(ay, 10), mesNum: parseInt(am, 10) });
-          return; // não grava — usuário decide no alerta
+          setImportRunning(false); return;
         }
       }
-      const CHUNK = 40; let inserted = 0, skipped = 0, processed = 0;
-      for (let i = 0; i < total; i += CHUNK) {
-        const slice = linhas.slice(i, i + CHUNK); const isLast = i + CHUNK >= total;
-        const r: any = await insertBatchMut.mutateAsync({ companyId, contaBancariaId: contaId, formato: importFormato, importadoEm, linhas: slice, finalize: isLast, totalInseridos: inserted, totalDuplicados: skipped });
-        inserted += r?.inserted ?? 0; skipped += r?.skipped ?? 0; processed += slice.length;
-        setImportPct(10 + Math.round((processed / total) * 90)); setImportLabel(`Gravando ${Math.min(processed, total)} de ${total} transações...`);
+      // FASE 1.5 — verificar duplicados
+      setImportPct(10); setImportLabel("Verificando duplicados...");
+      const dupResult: any = await checkDupMut.mutateAsync({ companyId, contaBancariaId: contaId, linhas });
+      const dupIndices: number[] = dupResult?.duplicateIndices ?? [];
+      setImportRunning(false); setTimeout(() => { setImportPct(0); setImportLabel(""); }, 500);
+      if (dupIndices.length > 0) {
+        setShowImport(false);
+        setPendingImportData({ linhas, importadoEm, contaId });
+        setPendingDupIndices(dupIndices);
+        setReviewDupSel(new Set());
+        setShowReviewDup(true);
+        return;
+      }
+      await proceedWithInsert({ linhas, importadoEm, contaId }, dupIndices, new Set());
+    } catch (e: any) {
+      setImportRunning(false); setTimeout(() => { setImportPct(0); setImportLabel(""); }, 500);
+      toast({ title: "Erro na importação", description: e?.message || "Falha ao importar o extrato.", variant: "destructive" });
+    }
+  }
+
+  async function proceedWithInsert(
+    data: { linhas: any[]; importadoEm: string; contaId: number },
+    dupIndices: number[],
+    selectedDupKeys: Set<string>,
+  ) {
+    setImportRunning(true); setImportPct(10);
+    const dupSet = new Set(dupIndices);
+    const normalLinhas = data.linhas.filter((_, idx) => !dupSet.has(idx));
+    const forceLinhas = dupIndices.filter(idx => selectedDupKeys.has(String(idx))).map(idx => data.linhas[idx]);
+    const skippedCount = dupIndices.length - forceLinhas.length;
+    const totalToInsert = normalLinhas.length + forceLinhas.length;
+    let inserted = 0, processed = 0;
+    const CHUNK = 40;
+    try {
+      for (let i = 0; i < normalLinhas.length; i += CHUNK) {
+        const slice = normalLinhas.slice(i, i + CHUNK);
+        const isLast = forceLinhas.length === 0 && i + CHUNK >= normalLinhas.length;
+        const r: any = await insertBatchMut.mutateAsync({ companyId, contaBancariaId: data.contaId, formato: importFormato, importadoEm: data.importadoEm, linhas: slice, finalize: isLast, totalInseridos: inserted, totalDuplicados: skippedCount });
+        inserted += r?.inserted ?? 0; processed += slice.length;
+        setImportPct(10 + Math.round((processed / Math.max(totalToInsert, 1)) * 80));
+        setImportLabel(`Gravando ${Math.min(processed, totalToInsert)} de ${totalToInsert} transações...`);
+      }
+      for (let i = 0; i < forceLinhas.length; i += CHUNK) {
+        const slice = forceLinhas.slice(i, i + CHUNK);
+        const isLast = i + CHUNK >= forceLinhas.length;
+        const r: any = await insertBatchMut.mutateAsync({ companyId, contaBancariaId: data.contaId, formato: importFormato, importadoEm: data.importadoEm, linhas: slice, forceInsert: true, finalize: isLast, totalInseridos: inserted, totalDuplicados: skippedCount });
+        inserted += r?.inserted ?? 0; processed += slice.length;
+        setImportPct(10 + Math.round((processed / Math.max(totalToInsert, 1)) * 80));
       }
       setImportPct(100); setImportLabel("Concluído!");
-      toast({ title: `Importação concluída! ${inserted} inseridos, ${skipped} duplicados ignorados` });
-      setShowImport(false); setImportContent(""); setImportFileName("");
-      if (!contaBancariaId) setContaBancariaId(String(contaId));
+      const nS = skippedCount;
+      toast({ title: `Importação concluída! ${inserted} inserido${inserted !== 1 ? "s" : ""}${nS > 0 ? `, ${nS} duplicado${nS !== 1 ? "s" : ""} ignorado${nS !== 1 ? "s" : ""}` : ""}` });
+      setShowImport(false); setShowReviewDup(false); setImportContent(""); setImportFileName("");
+      if (!contaBancariaId) setContaBancariaId(String(data.contaId));
       refetchAll();
     } catch (e: any) {
       toast({ title: "Erro na importação", description: e?.message || "Falha ao importar o extrato.", variant: "destructive" });
@@ -1058,6 +1106,70 @@ function ReportBody({ report }: { report: any }) {
           </div>
         ))}
       </ReportSection>
+
+      {/* Rev. 4085 — Diálogo de revisão de duplicados */}
+      <Dialog open={showReviewDup} onOpenChange={(o) => { if (!o && !reviewDupRunning) setShowReviewDup(false); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
+              Transações já importadas detectadas
+            </DialogTitle>
+          </DialogHeader>
+          {reviewDupRunning ? (
+            <div className="py-4 space-y-2">
+              <div className="flex items-center justify-between text-sm text-blue-800">
+                <span className="truncate">{importLabel || "Importando..."}</span>
+                <span className="font-bold tabular-nums ml-2">{importPct}%</span>
+              </div>
+              <div className="h-2.5 w-full overflow-hidden rounded-full bg-blue-100">
+                <div className="h-full rounded-full bg-blue-600 transition-all duration-300" style={{ width: `${importPct}%` }} />
+              </div>
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-gray-500">As linhas abaixo já existem nesta conta. Por padrão <strong>não serão reimportadas</strong>. Marque as que deseja importar mesmo assim.</p>
+              <div className="max-h-64 overflow-y-auto border rounded-lg divide-y text-sm">
+                {(pendingImportData?.linhas ?? []).filter((_, idx) => pendingDupIndices.includes(idx)).map((l, i) => {
+                  const idx = pendingDupIndices[i];
+                  const key = String(idx);
+                  const checked = reviewDupSel.has(key);
+                  return (
+                    <label key={key} className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-gray-50 select-none">
+                      <Checkbox checked={checked} onCheckedChange={v => {
+                        setReviewDupSel(prev => { const next = new Set(prev); if (v) next.add(key); else next.delete(key); return next; });
+                      }} />
+                      <span className="text-gray-400 shrink-0 w-[72px] text-xs">{fmtData(l?.data)}</span>
+                      <span className="flex-1 truncate text-gray-700" title={l?.descricao}>{l?.descricao || "—"}</span>
+                      <span className={`shrink-0 font-medium tabular-nums text-xs ${Number(l?.valor) >= 0 ? "text-green-700" : "text-red-600"}`}>
+                        {formatBRL(Math.abs(Number(l?.valor || 0)))}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-gray-400">
+                {(pendingImportData?.linhas.length ?? 0) - pendingDupIndices.length} nova{(pendingImportData?.linhas.length ?? 0) - pendingDupIndices.length !== 1 ? "s" : ""} + {reviewDupSel.size} duplicada{reviewDupSel.size !== 1 ? "s" : ""} selecionada{reviewDupSel.size !== 1 ? "s" : ""} serão importadas.
+              </p>
+            </>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowReviewDup(false)} disabled={reviewDupRunning}>Cancelar</Button>
+            <Button
+              className="bg-[#1B2A4A] hover:bg-[#243660] text-white"
+              disabled={reviewDupRunning}
+              onClick={async () => {
+                if (!pendingImportData) return;
+                setReviewDupRunning(true);
+                try { await proceedWithInsert(pendingImportData, pendingDupIndices, reviewDupSel); }
+                finally { setReviewDupRunning(false); }
+              }}
+            >
+              {reviewDupRunning ? `Importando... ${importPct}%` : `Confirmar (${((pendingImportData?.linhas.length ?? 0) - pendingDupIndices.length) + reviewDupSel.size} transações)`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
