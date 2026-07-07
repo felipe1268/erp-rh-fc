@@ -94,6 +94,7 @@ export default function EquipamentosProprios() {
   const companyId = Number(selectedCompany?.id) || 0;
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<string>("");
+  const [filtroObra, setFiltroObra] = useState<string>("");
 
   const utils = trpc.useUtils();
   const { data = [], isLoading } = trpc.equipamentos.propriosListar.useQuery(
@@ -509,6 +510,25 @@ export default function EquipamentosProprios() {
     return soma;
   }, [totalList]);
 
+  // Obras únicas presentes nos equipamentos carregados (para o select de filtro).
+  const obrasUnicas = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const p of data as any[]) {
+      if (p.obraNome && p.localizacaoAtualObraId != null) {
+        map.set(String(p.localizacaoAtualObraId), p.obraNome);
+      }
+    }
+    return Array.from(map.entries())
+      .map(([id, nome]) => ({ id, nome }))
+      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  }, [data]);
+
+  // Lista exibida após aplicar o filtro de obra (client-side).
+  const dataFiltrada = useMemo(() => {
+    if (!filtroObra) return data as any[];
+    return (data as any[]).filter(p => String(p.localizacaoAtualObraId) === filtroObra);
+  }, [data, filtroObra]);
+
   return (
     <DashboardLayout>
       {/* Rev. 2510 — Header com identidade FC (faixa azul #1B2A4A, regra de ouro) */}
@@ -753,40 +773,67 @@ export default function EquipamentosProprios() {
         </div>
 
         {/* Filtros sticky no topo da lista */}
-        <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-3 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-            <input
-              value={busca}
-              onChange={e => setBusca(e.target.value)}
-              placeholder="Buscar por descrição, patrimônio ou nº de série…"
-              className="w-full pl-9 pr-3 py-2.5 border border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-200 outline-none rounded-lg text-sm transition"
-            />
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-3 flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+              <input
+                value={busca}
+                onChange={e => setBusca(e.target.value)}
+                placeholder="Buscar por descrição, patrimônio ou nº de série…"
+                className="w-full pl-9 pr-3 py-2.5 border border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-200 outline-none rounded-lg text-sm transition"
+              />
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              {[
+                { v: "",           l: "Todos",        c: "border-slate-300 text-slate-700" },
+                { v: "disponivel", l: "Disponíveis",  c: "border-emerald-300 text-emerald-700" },
+                { v: "em_obra",    l: "Em obra",      c: "border-blue-300 text-blue-700" },
+                { v: "manutencao", l: "Manutenção",   c: "border-amber-300 text-amber-700" },
+                { v: "baixado",    l: "Baixados",     c: "border-slate-400 text-slate-600" },
+              ].map(opt => {
+                const active = filtroStatus === opt.v;
+                return (
+                  <button
+                    key={opt.v || "all"}
+                    onClick={() => setFiltroStatus(opt.v)}
+                    className={`px-3 py-2 rounded-lg text-xs font-semibold border-2 transition whitespace-nowrap ${
+                      active
+                        ? "bg-[#1B2A4A] text-white border-[#1B2A4A] shadow"
+                        : `bg-white hover:bg-slate-50 ${opt.c}`
+                    }`}
+                  >
+                    {opt.l}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <div className="flex gap-2">
-            {[
-              { v: "",           l: "Todos",        c: "border-slate-300 text-slate-700" },
-              { v: "disponivel", l: "Disponíveis",  c: "border-emerald-300 text-emerald-700" },
-              { v: "em_obra",    l: "Em obra",      c: "border-blue-300 text-blue-700" },
-              { v: "manutencao", l: "Manutenção",   c: "border-amber-300 text-amber-700" },
-              { v: "baixado",    l: "Baixados",     c: "border-slate-400 text-slate-600" },
-            ].map(opt => {
-              const active = filtroStatus === opt.v;
-              return (
+          {/* Filtro por obra */}
+          {obrasUnicas.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-slate-400 shrink-0" />
+              <select
+                value={filtroObra}
+                onChange={e => setFiltroObra(e.target.value)}
+                className="flex-1 sm:max-w-xs border border-slate-200 rounded-lg px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-200 outline-none bg-white"
+              >
+                <option value="">Todas as obras</option>
+                {obrasUnicas.map(o => (
+                  <option key={o.id} value={o.id}>{o.nome}</option>
+                ))}
+              </select>
+              {filtroObra && (
                 <button
-                  key={opt.v || "all"}
-                  onClick={() => setFiltroStatus(opt.v)}
-                  className={`px-3 py-2 rounded-lg text-xs font-semibold border-2 transition whitespace-nowrap ${
-                    active
-                      ? "bg-[#1B2A4A] text-white border-[#1B2A4A] shadow"
-                      : `bg-white hover:bg-slate-50 ${opt.c}`
-                  }`}
+                  onClick={() => setFiltroObra("")}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+                  title="Limpar filtro de obra"
                 >
-                  {opt.l}
+                  <X className="h-4 w-4" />
                 </button>
-              );
-            })}
-          </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Grid de cards visuais (foto grande à esquerda, dados à direita) */}
@@ -794,14 +841,14 @@ export default function EquipamentosProprios() {
           <div className="p-12 bg-white border border-slate-200 rounded-xl shadow-sm flex justify-center">
             <Spinner />
           </div>
-        ) : data.length === 0 ? (
+        ) : dataFiltrada.length === 0 ? (
           <div className="p-12 bg-white border border-slate-200 rounded-xl shadow-sm text-center">
             <HardHat className="h-16 w-16 text-slate-300 mx-auto mb-3" />
             <p className="text-sm font-medium text-slate-600 mb-1">Nenhum equipamento cadastrado</p>
             <p className="text-xs text-slate-500 mb-4">
-              {busca || filtroStatus ? "Tente limpar os filtros." : "Toque em \"Cadastrar\" pra começar."}
+              {busca || filtroStatus || filtroObra ? "Tente limpar os filtros." : "Toque em \"Cadastrar\" pra começar."}
             </p>
-            {!busca && !filtroStatus && (
+            {!busca && !filtroStatus && !filtroObra && (
               <button
                 onClick={abrirNovo}
                 className="inline-flex items-center gap-2 bg-[#1B2A4A] hover:bg-[#2E4373] text-white px-4 py-2 rounded-lg text-sm font-semibold"
@@ -812,7 +859,7 @@ export default function EquipamentosProprios() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {(data as any[]).map(p => {
+            {dataFiltrada.map(p => {
               const pFotos = (p.fotosJson as FotoItem[]) || [];
               const foto = pFotos[0];
               return (
