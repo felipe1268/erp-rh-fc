@@ -8239,7 +8239,11 @@ export const financialRouter = router({
           AND COALESCE(conciliado,0)=0 AND excluido_em IS NULL
         RETURNING id`,
       [input.companyId, input.contaBancariaId, input.dataInicio, input.dataFim]);
-    return { ok: true, afetados: rows(res).length };
+    const lineIds = rows(res).map((r: any) => Number(r.id)).filter(Boolean);
+    if (lineIds.length > 0) {
+      autoVincularNfsPorLinhas(input.companyId, lineIds).catch(() => {});
+    }
+    return { ok: true, afetados: lineIds.length };
   }),
 
   // Rev. 3951 — CONSOLIDAR TODAS AS CONTAS DO MÊS: marca TODAS as linhas pendentes do
@@ -8261,7 +8265,11 @@ export const financialRouter = router({
           AND COALESCE(conciliado,0)=0 AND excluido_em IS NULL
         RETURNING id`,
       [input.companyId, input.dataInicio, input.dataFim]);
-    return { ok: true, afetados: rows(res).length };
+    const lineIds = rows(res).map((r: any) => Number(r.id)).filter(Boolean);
+    if (lineIds.length > 0) {
+      autoVincularNfsPorLinhas(input.companyId, lineIds).catch(() => {});
+    }
+    return { ok: true, afetados: lineIds.length };
   }),
 
   // Rev. 3169 — DESCONSOLIDAR O MÊS: reabre o mês marcando TODAS as linhas conciliadas

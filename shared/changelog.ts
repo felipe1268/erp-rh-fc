@@ -1,4 +1,36 @@
 /**
+ * Rev. 4088 — **NF-e: AUTO-VÍNCULO CROSS-MÊS — NFS-e DE MÊS ANTERIOR CONCILIADA
+ * AUTOMATICAMENTE AO CONSOLIDAR O MÊS SEGUINTE (REGIME DE COMPETÊNCIA).**
+ *
+ * CONTEXTO: NFS-e emitida em DEZ/2025 com pagamento recebido em JAN/2026. Ao consolidar
+ * janeiro (ou ao conciliar linhas individuais), o sistema deveria encontrar a NF de
+ * dezembro e marcá-la como "Conciliada" automaticamente — mas não fazia isso por 3 bugs.
+ *
+ * BUG 1 — `autoVincularNfsPorLinhas` (janela de data invertida): a query de NF-e
+ *   candidatas usava `data_emissao BETWEEN ($3::date - interval '5 days') AND ($3::date +
+ *   interval '90 days')`. Para um crédito de 09/jan, buscava NFs emitidas entre 04/jan e
+ *   09/abr — nunca encontrando uma NF de 19/dez. CORRIGIDO para `- interval '90 days'` /
+ *   `+ interval '5 days'`: agora busca NFs emitidas até 90 dias ANTES do crédito.
+ *
+ * BUG 2 — `sincronizarNfsPeriodo` e `obterSugestoesPeriodo` (período restrito): queries
+ *   de NF-e usavam `data_emissao BETWEEN $2 AND $3` (datas do período). Para sync de
+ *   janeiro, só achavam NFs de janeiro. CORRIGIDO para `($2::date - interval '90 days')`
+ *   nas 4 queries afetadas (emitidas + recebidas em cada função).
+ *
+ * BUG 3 — `consolidarMes` / `consolidarTodasContas` não disparavam auto-vínculo: ao
+ *   clicar "Consolidar Mês", o UPDATE marcava conciliado=1 mas não chamava
+ *   `autoVincularNfsPorLinhas`. CORRIGIDO: IDs das linhas afetadas são passados ao
+ *   serviço de auto-vínculo (fire-and-forget, não bloqueia o retorno).
+ *
+ * RESULTADO: ao consolidar janeiro, o sistema encontra NFS-e de outubro/novembro/dezembro
+ * e as marca "Conciliada" com o extrato de janeiro. Na lista de dezembro o badge fica
+ * verde "Conciliada" com o card mostrando data/valor do crédito de janeiro.
+ *
+ * Arquivos: server/services/autoVincularNfService.ts, server/routers/financial.ts.
+ * ZERO DELETE · ZERO UPDATE · ZERO ALTER em dados existentes.
+ */
+
+/**
  * Rev. 4087 — **PANORAMA FISCAL: MATCHING RETROATIVO DE ENTRADAS BANCÁRIAS × NFS-e DE
  * MESES ANTERIORES (REGIME DE COMPETÊNCIA).**
  *

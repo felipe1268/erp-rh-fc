@@ -165,8 +165,8 @@ export async function autoVincularNfsPorLinhas(
         AND status != 'cancelada'
         AND (ABS(valor_liquido::float) BETWEEN $2 * 0.82 AND $2 * 1.03
           OR ABS(valor_bruto::float)   BETWEEN $2 * 0.82 AND $2 * 1.03)
-        AND data_emissao BETWEEN ($3::date - interval '5 days')
-                              AND ($3::date + interval '90 days')
+        AND data_emissao BETWEEN ($3::date - interval '90 days')
+                              AND ($3::date + interval '5 days')
       LIMIT 15
     `, [companyId, bslVal, bsl.data]);
 
@@ -334,7 +334,7 @@ export async function obterSugestoesPeriodo(
       FROM fiscal_notes
       WHERE company_id = $1 AND stmt_line_id IS NULL
         AND origem LIKE 'nfse_%' AND status != 'cancelada'
-        AND data_emissao BETWEEN $2 AND $3
+        AND data_emissao BETWEEN ($2::date - interval '90 days') AND $3
     `, [companyId, dataInicio, dataFim]);
     emitRows = emitQ.rows;
   }
@@ -351,7 +351,7 @@ export async function obterSugestoesPeriodo(
       FROM fiscal_notes
       WHERE company_id = $1 AND stmt_line_id IS NULL
         AND (origem = 'sefaz_nfe' OR origem = 'xml_upload') AND status != 'cancelada'
-        AND data_emissao BETWEEN $2 AND $3
+        AND data_emissao BETWEEN ($2::date - interval '90 days') AND $3
     `, [companyId, dataInicio, dataFim]);
     recRows = recQ.rows;
   }
@@ -552,7 +552,7 @@ export async function sincronizarNfsPeriodo(
         AND stmt_line_id IS NULL
         AND origem LIKE 'nfse_%'
         AND status != 'cancelada'
-        AND data_emissao BETWEEN $2 AND $3
+        AND data_emissao BETWEEN ($2::date - interval '90 days') AND $3
       ORDER BY data_emissao ASC
     `, [companyId, dataInicio, dataFim]);
     emitidas = emitQ.rows;
@@ -569,7 +569,7 @@ export async function sincronizarNfsPeriodo(
         AND stmt_line_id IS NULL
         AND (origem = 'sefaz_nfe' OR origem = 'xml_upload')
         AND status != 'cancelada'
-        AND data_emissao BETWEEN $2 AND $3
+        AND data_emissao BETWEEN ($2::date - interval '90 days') AND $3
       ORDER BY data_emissao ASC
     `, [companyId, dataInicio, dataFim]);
     recebidas = recQ.rows;
