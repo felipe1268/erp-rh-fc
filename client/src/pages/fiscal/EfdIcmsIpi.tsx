@@ -1,66 +1,55 @@
 /**
  * client/src/pages/fiscal/EfdIcmsIpi.tsx
- * Gerador de EFD-ICMS/IPI — configuração + download do arquivo .txt
+ * Gerador de EFD-ICMS/IPI — seletor de período padrão do sistema (white-card)
  * Guia Prático v3.2.2 (Ato COTEPE/ICMS 44/2018), COD_VER 017.
  */
 import { useState, useEffect } from "react";
+import { ChevronLeft, ChevronRight, Download, Save, FileText, Settings, UserCheck } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
-import { ChevronDown, ChevronRight, Download, Save, FileText, Settings, UserCheck } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 
-const MESES = [
-  "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
-  "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro",
-];
-
-const ANO_ATUAL = new Date().getFullYear();
-const MES_ATUAL = new Date().getMonth() + 1;
+const MESES_SHORT = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+const MESES_FULL  = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+const HOJE = new Date();
 
 interface ConfigState {
   ie: string; im: string; codMun: string; cep: string; logradouro: string;
   numeroEnd: string; complemento: string; bairro: string; telefone: string;
-  fax: string; email: string; suframa: string; perfil: "A" | "B" | "C";
+  fax: string; email: string; suframa: string; perfil: "A"|"B"|"C";
   contNome: string; contCpf: string; contCrc: string; contCodMun: string;
   contCnpj: string; contCep: string; contLogradouro: string; contNumero: string;
   contComplemento: string; contBairro: string; contFone: string; contFax: string;
   contEmail: string;
 }
 
-const defaultConfig = (): ConfigState => ({
-  ie: "", im: "", codMun: "", cep: "", logradouro: "", numeroEnd: "",
-  complemento: "", bairro: "", telefone: "", fax: "", email: "", suframa: "",
-  perfil: "A",
-  contNome: "", contCpf: "", contCrc: "", contCodMun: "", contCnpj: "",
-  contCep: "", contLogradouro: "", contNumero: "", contComplemento: "",
-  contBairro: "", contFone: "", contFax: "", contEmail: "",
+const defaultCfg = (): ConfigState => ({
+  ie:"", im:"", codMun:"", cep:"", logradouro:"", numeroEnd:"",
+  complemento:"", bairro:"", telefone:"", fax:"", email:"", suframa:"",
+  perfil:"A",
+  contNome:"", contCpf:"", contCrc:"", contCodMun:"", contCnpj:"",
+  contCep:"", contLogradouro:"", contNumero:"", contComplemento:"",
+  contBairro:"", contFone:"", contFax:"", contEmail:"",
 });
 
-function cleanDigits(s: string): string {
-  return s.replace(/\D/g, "");
-}
+function dig(s: string) { return s.replace(/\D/g,""); }
 
 function Field({ label, value, onChange, maxLength, hint, className }: {
-  label: string; value: string; onChange: (v: string) => void;
+  label: string; value: string; onChange:(v:string)=>void;
   maxLength?: number; hint?: string; className?: string;
 }) {
   return (
     <div className={className}>
       <Label className="text-xs font-medium text-muted-foreground">{label}</Label>
-      <Input
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        maxLength={maxLength}
-        placeholder={hint}
-        className="mt-1 h-8 text-sm"
-      />
+      <Input value={value} onChange={e=>onChange(e.target.value)}
+        maxLength={maxLength} placeholder={hint} className="mt-1 h-8 text-sm" />
     </div>
   );
 }
@@ -69,89 +58,85 @@ export default function EfdIcmsIpi() {
   const { companyIdNum, selectedCompanyId, companies } = useCompany();
   const { toast } = useToast();
 
-  const [mes, setMes] = useState(MES_ATUAL);
-  const [ano, setAno] = useState(ANO_ATUAL);
-  const [finalidade, setFinalidade] = useState<"0" | "1">("0");
-  const [cfg, setCfg] = useState<ConfigState>(defaultConfig());
+  const [ano, setAno]             = useState(HOJE.getFullYear());
+  const [mes, setMes]             = useState(HOJE.getMonth() + 1);
+  const [finalidade, setFinalidade] = useState<"0"|"1">("0");
+  const [cfg, setCfg]             = useState<ConfigState>(defaultCfg());
   const [empresaOpen, setEmpresaOpen] = useState(false);
-  const [contOpen, setContOpen] = useState(false);
+  const [contOpen, setContOpen]   = useState(false);
   const [downloading, setDownloading] = useState(false);
 
-  // Carregar config salva
   const configQ = trpc.efdIcmsIpi.getConfig.useQuery(
     { companyId: companyIdNum },
     { enabled: companyIdNum > 0 }
   );
 
   useEffect(() => {
-    if (configQ.data) {
-      const d = configQ.data;
-      setCfg({
-        ie: d.ie, im: d.im, codMun: d.codMun, cep: d.cep,
-        logradouro: d.logradouro, numeroEnd: d.numeroEnd,
-        complemento: d.complemento, bairro: d.bairro,
-        telefone: d.telefone, fax: d.fax, email: d.email,
-        suframa: d.suframa, perfil: d.perfil,
-        contNome: d.contNome, contCpf: d.contCpf, contCrc: d.contCrc,
-        contCodMun: d.contCodMun, contCnpj: d.contCnpj, contCep: d.contCep,
-        contLogradouro: d.contLogradouro, contNumero: d.contNumero,
-        contComplemento: d.contComplemento, contBairro: d.contBairro,
-        contFone: d.contFone, contFax: d.contFax, contEmail: d.contEmail,
-      });
-    }
+    if (!configQ.data) return;
+    const d = configQ.data;
+    setCfg({
+      ie:d.ie, im:d.im, codMun:d.codMun, cep:d.cep,
+      logradouro:d.logradouro, numeroEnd:d.numeroEnd,
+      complemento:d.complemento, bairro:d.bairro,
+      telefone:d.telefone, fax:d.fax, email:d.email,
+      suframa:d.suframa, perfil:d.perfil,
+      contNome:d.contNome, contCpf:d.contCpf, contCrc:d.contCrc,
+      contCodMun:d.contCodMun, contCnpj:d.contCnpj, contCep:d.contCep,
+      contLogradouro:d.contLogradouro, contNumero:d.contNumero,
+      contComplemento:d.contComplemento, contBairro:d.contBairro,
+      contFone:d.contFone, contFax:d.contFax, contEmail:d.contEmail,
+    });
   }, [configQ.data]);
 
   const saveMut = trpc.efdIcmsIpi.saveConfig.useMutation({
     onSuccess: () => {
-      toast({ title: "Configuração salva", description: "Parâmetros da EFD-ICMS/IPI atualizados." });
+      toast({ title:"Configuração salva", description:"Parâmetros da EFD-ICMS/IPI atualizados." });
       configQ.refetch();
     },
-    onError: (e) => toast({ variant: "destructive", title: "Erro ao salvar", description: e.message }),
+    onError: e => toast({ variant:"destructive", title:"Erro ao salvar", description:e.message }),
   });
 
   function set(field: keyof ConfigState) {
-    return (v: string) => setCfg(prev => ({ ...prev, [field]: v }));
+    return (v: string) => setCfg(p => ({ ...p, [field]: v }));
   }
 
   async function handleDownload() {
-    if (!companyIdNum) {
-      toast({ variant: "destructive", title: "Selecione uma empresa" });
-      return;
-    }
+    if (!companyIdNum) { toast({ variant:"destructive", title:"Selecione uma empresa" }); return; }
     setDownloading(true);
     try {
       const url = `/api/download/efd-icms-ipi?companyId=${companyIdNum}&mes=${mes}&ano=${ano}&finalidade=${finalidade}`;
-      const res = await fetch(url, { credentials: "include" });
+      const res = await fetch(url, { credentials:"include" });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Erro desconhecido" }));
+        const err = await res.json().catch(() => ({ error:"Erro desconhecido" }));
         throw new Error(err.error || "Falha ao gerar arquivo");
       }
       const blob = await res.blob();
-      const mesStr = String(mes).padStart(2, "0");
+      const mesStr = String(mes).padStart(2,"0");
       const fin = finalidade === "1" ? "SUB" : "ORI";
       const filename = `EFD_ICMS_IPI_${companyIdNum}_${mesStr}_${ano}_${fin}.txt`;
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = filename;
-      link.click();
-      URL.revokeObjectURL(link.href);
-      toast({ title: "Arquivo gerado", description: `${filename} baixado com sucesso.` });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast({ title:"Arquivo gerado", description:`${filename} baixado com sucesso.` });
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Erro ao gerar EFD", description: e.message });
+      toast({ variant:"destructive", title:"Erro ao gerar EFD", description:e.message });
     } finally {
       setDownloading(false);
     }
   }
 
   const empresa = companies?.find(c => String(c.id) === selectedCompanyId);
-  const nomeEmpresa = empresa?.nomeFantasia || empresa?.razaoSocial || "Empresa selecionada";
+  const nomeEmpresa = empresa?.nomeFantasia || empresa?.razaoSocial || "";
 
   return (
     <DashboardLayout>
       <div className="max-w-4xl mx-auto p-4 space-y-4">
+
         {/* Cabeçalho */}
         <div className="flex items-center gap-3">
-          <FileText className="h-6 w-6 text-primary" />
+          <FileText className="h-6 w-6 text-primary shrink-0" />
           <div>
             <h1 className="text-xl font-bold">EFD-ICMS/IPI</h1>
             <p className="text-sm text-muted-foreground">
@@ -160,52 +145,41 @@ export default function EfdIcmsIpi() {
           </div>
         </div>
 
-        {/* Período e finalidade */}
-        <div className="bg-white rounded-xl border shadow-sm p-4">
-          <p className="text-sm font-semibold text-muted-foreground mb-3">Período e Finalidade</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div>
-              <Label className="text-xs font-medium text-muted-foreground">Mês</Label>
-              <Select value={String(mes)} onValueChange={v => setMes(Number(v))}>
-                <SelectTrigger className="mt-1 h-9 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MESES.map((m, i) => (
-                    <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        {/* ── Seletor de período — padrão do sistema ─────────────────── */}
+        <div className="rounded-2xl border border-slate-200 shadow-sm bg-white overflow-hidden">
+
+          {/* Linha 1: navegação de ano + legenda + ações */}
+          <div className="px-4 py-3 flex flex-wrap items-center gap-3 border-b border-slate-100">
+
+            {/* Ano */}
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={() => setAno(a => a - 1)}
+                className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-base font-bold text-gray-800 min-w-[3.5rem] text-center">{ano}</span>
+              <button type="button" onClick={() => setAno(a => a + 1)}
+                className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800">
+                <ChevronRight className="w-4 h-4" />
+              </button>
             </div>
-            <div>
-              <Label className="text-xs font-medium text-muted-foreground">Ano</Label>
-              <Select value={String(ano)} onValueChange={v => setAno(Number(v))}>
-                <SelectTrigger className="mt-1 h-9 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 8 }, (_, i) => ANO_ATUAL - 2 + i).map(a => (
-                    <SelectItem key={a} value={String(a)}>{a}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+
+            {/* Legenda */}
+            <div className="hidden sm:flex items-center gap-3 text-xs text-gray-500">
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />Mês selecionado
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />Outros meses
+              </span>
             </div>
-            <div>
-              <Label className="text-xs font-medium text-muted-foreground">Finalidade</Label>
-              <Select value={finalidade} onValueChange={v => setFinalidade(v as "0" | "1")}>
-                <SelectTrigger className="mt-1 h-9 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="0">Original (0)</SelectItem>
-                  <SelectItem value="1">Substituto (1)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs font-medium text-muted-foreground">Perfil</Label>
-              <Select value={cfg.perfil} onValueChange={v => setCfg(p => ({ ...p, perfil: v as "A" | "B" | "C" }))}>
-                <SelectTrigger className="mt-1 h-9 text-sm">
+
+            <div className="flex-1" />
+
+            {/* Perfil + Finalidade compactos */}
+            <div className="flex items-center gap-2">
+              <Select value={cfg.perfil} onValueChange={v => setCfg(p => ({ ...p, perfil: v as "A"|"B"|"C" }))}>
+                <SelectTrigger className="h-8 text-xs w-24">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -214,137 +188,173 @@ export default function EfdIcmsIpi() {
                   <SelectItem value="C">Perfil C</SelectItem>
                 </SelectContent>
               </Select>
+
+              <Select value={finalidade} onValueChange={v => setFinalidade(v as "0"|"1")}>
+                <SelectTrigger className="h-8 text-xs w-28">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">Original</SelectItem>
+                  <SelectItem value="1">Substituto</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Button
+                size="sm"
+                onClick={handleDownload}
+                disabled={downloading || !companyIdNum}
+                className="h-8 text-xs gap-1.5 px-3"
+              >
+                <Download className="h-3.5 w-3.5" />
+                {downloading ? "Gerando…" : `Gerar · ${MESES_SHORT[mes-1]} ${ano}`}
+              </Button>
             </div>
           </div>
 
-          {/* Empresa selecionada */}
+          {/* Linha 2: 12 pills de mês */}
+          <div className="px-4 py-3 grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+            {MESES_SHORT.map((m, i) => {
+              const numMes = i + 1;
+              const isSelected = mes === numMes;
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setMes(numMes)}
+                  className={`relative flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all
+                    ${isSelected
+                      ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
+                      : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50"
+                    }`}
+                >
+                  <span>{m}</span>
+                  <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? "bg-blue-500" : "bg-gray-300"}`} />
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Linha 3: empresa + período selecionado */}
           {empresa && (
-            <div className="mt-3 p-2 bg-muted/40 rounded text-xs text-muted-foreground">
-              <span className="font-medium">{nomeEmpresa}</span>
-              {empresa.cnpj ? ` · CNPJ ${empresa.cnpj}` : ""}
+            <div className="px-4 py-2 border-t border-slate-100 flex items-center gap-2 text-xs text-muted-foreground bg-slate-50/60">
+              <span className="font-medium text-gray-700">{nomeEmpresa}</span>
+              {empresa.cnpj && <span>· CNPJ {empresa.cnpj}</span>}
+              <span className="ml-auto text-gray-500">
+                {MESES_FULL[mes-1]} {ano} · {finalidade === "1" ? "Substituto" : "Original"} · Perfil {cfg.perfil}
+              </span>
             </div>
           )}
         </div>
 
-        {/* Config — Empresa */}
+        {/* ── Parâmetros da Empresa ───────────────────────────────────── */}
         <Collapsible open={empresaOpen} onOpenChange={setEmpresaOpen}>
           <div className="bg-white rounded-xl border shadow-sm">
-            <CollapsibleTrigger className="w-full">
-              <div className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/30 rounded-xl transition-colors">
+            <CollapsibleTrigger asChild>
+              <button className="w-full flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/30 rounded-xl transition-colors">
                 <div className="flex items-center gap-2 text-sm font-semibold">
                   <Settings className="h-4 w-4 text-primary" />
                   Parâmetros da Empresa
-                  <span className="text-xs font-normal text-muted-foreground ml-1">
-                    (Registro 0000, 0005)
-                  </span>
+                  <span className="text-xs font-normal text-muted-foreground">· Registro 0000 / 0005</span>
                 </div>
-                {empresaOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-              </div>
+                {empresaOpen
+                  ? <ChevronLeft className="h-4 w-4 text-muted-foreground rotate-90" />
+                  : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+              </button>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <div className="px-4 pb-4 space-y-3 border-t">
+              <div className="px-4 pb-4 border-t space-y-3">
                 <p className="text-xs text-muted-foreground pt-3">
-                  Preencha os campos fiscais da empresa conforme cadastro na SEFAZ-SP.
+                  Preencha os campos fiscais conforme cadastro na SEFAZ-SP.
                   Razão social e CNPJ são obtidos automaticamente do cadastro da empresa.
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <Field label="Inscrição Estadual (IE)" value={cfg.ie} onChange={set("ie")} maxLength={14} hint="Apenas dígitos" />
-                  <Field label="Inscrição Municipal (IM)" value={cfg.im} onChange={set("im")} maxLength={20} hint="Ex.: 13239401" />
-                  <Field label="Código IBGE do Município" value={cfg.codMun} onChange={v => setCfg(p => ({ ...p, codMun: cleanDigits(v).slice(0, 7) }))} maxLength={7} hint="Ex.: 3518701" />
-                  <Field label="CEP (apenas dígitos)" value={cfg.cep} onChange={v => setCfg(p => ({ ...p, cep: cleanDigits(v).slice(0, 8) }))} maxLength={8} hint="12505300" />
-                  <Field label="Logradouro" value={cfg.logradouro} onChange={set("logradouro")} maxLength={60} hint="Av Juscelino Kubitschek" className="sm:col-span-2" />
-                  <Field label="Número" value={cfg.numeroEnd} onChange={set("numeroEnd")} maxLength={10} hint="1301" />
-                  <Field label="Complemento" value={cfg.complemento} onChange={set("complemento")} maxLength={60} hint="Sala 1104" />
-                  <Field label="Bairro" value={cfg.bairro} onChange={set("bairro")} maxLength={60} hint="Campo do Galvão" />
-                  <Field label="Telefone (apenas dígitos)" value={cfg.telefone} onChange={v => setCfg(p => ({ ...p, telefone: cleanDigits(v).slice(0, 11) }))} maxLength={11} hint="12312334441" />
-                  <Field label="Fax" value={cfg.fax} onChange={v => setCfg(p => ({ ...p, fax: cleanDigits(v).slice(0, 11) }))} maxLength={11} hint="Opcional" />
-                  <Field label="E-mail" value={cfg.email} onChange={set("email")} maxLength={255} hint="fiscal@empresa.com.br" />
-                  <Field label="SUFRAMA" value={cfg.suframa} onChange={set("suframa")} maxLength={9} hint="Zona Franca (opcional)" />
+                  <Field label="Inscrição Estadual (IE)"    value={cfg.ie}        onChange={set("ie")}       maxLength={14} hint="Apenas dígitos" />
+                  <Field label="Inscrição Municipal (IM)"   value={cfg.im}        onChange={set("im")}       maxLength={20} hint="Ex.: 13239401" />
+                  <Field label="Código IBGE do Município"   value={cfg.codMun}    onChange={v=>setCfg(p=>({...p,codMun:dig(v).slice(0,7)}))}   maxLength={7} hint="3518701" />
+                  <Field label="CEP (apenas dígitos)"       value={cfg.cep}       onChange={v=>setCfg(p=>({...p,cep:dig(v).slice(0,8)}))}      maxLength={8} hint="12505300" />
+                  <Field label="Logradouro" className="sm:col-span-2" value={cfg.logradouro} onChange={set("logradouro")} maxLength={60} hint="Av. Exemplo" />
+                  <Field label="Número"                     value={cfg.numeroEnd} onChange={set("numeroEnd")} maxLength={10} hint="1301" />
+                  <Field label="Complemento"                value={cfg.complemento} onChange={set("complemento")} maxLength={60} hint="Sala 1104" />
+                  <Field label="Bairro"                     value={cfg.bairro}    onChange={set("bairro")}   maxLength={60} hint="Centro" />
+                  <Field label="Telefone (apenas dígitos)"  value={cfg.telefone}  onChange={v=>setCfg(p=>({...p,telefone:dig(v).slice(0,11)}))} maxLength={11} hint="12312334441" />
+                  <Field label="Fax"                        value={cfg.fax}       onChange={v=>setCfg(p=>({...p,fax:dig(v).slice(0,11)}))}     maxLength={11} hint="Opcional" />
+                  <Field label="E-mail"                     value={cfg.email}     onChange={set("email")}    maxLength={255} hint="fiscal@empresa.com.br" />
+                  <Field label="SUFRAMA"                    value={cfg.suframa}   onChange={set("suframa")}  maxLength={9}  hint="Zona Franca (opcional)" />
                 </div>
-                <p className="text-xs text-muted-foreground pt-1 italic">
-                  UF: SP · IND_ATIV: 1 (Outros — construtora) · Perfil configurado acima.
+                <p className="text-xs text-muted-foreground italic">
+                  UF: SP · IND_ATIV: 1 (Outros — construtora) · Perfil configurado no seletor acima.
                 </p>
               </div>
             </CollapsibleContent>
           </div>
         </Collapsible>
 
-        {/* Config — Contabilista */}
+        {/* ── Dados do Contabilista ───────────────────────────────────── */}
         <Collapsible open={contOpen} onOpenChange={setContOpen}>
           <div className="bg-white rounded-xl border shadow-sm">
-            <CollapsibleTrigger className="w-full">
-              <div className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/30 rounded-xl transition-colors">
+            <CollapsibleTrigger asChild>
+              <button className="w-full flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/30 rounded-xl transition-colors">
                 <div className="flex items-center gap-2 text-sm font-semibold">
                   <UserCheck className="h-4 w-4 text-primary" />
                   Dados do Contabilista
-                  <span className="text-xs font-normal text-muted-foreground ml-1">
-                    (Registro 0100)
-                  </span>
+                  <span className="text-xs font-normal text-muted-foreground">· Registro 0100</span>
                 </div>
-                {contOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-              </div>
+                {contOpen
+                  ? <ChevronLeft className="h-4 w-4 text-muted-foreground rotate-90" />
+                  : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+              </button>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <div className="px-4 pb-4 space-y-3 border-t">
+              <div className="px-4 pb-4 border-t space-y-3">
                 <p className="text-xs text-muted-foreground pt-3">
                   Se deixado em branco, o Registro 0100 não é gerado no arquivo EFD.
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <Field label="Nome do Contabilista" value={cfg.contNome} onChange={set("contNome")} maxLength={100} hint="Nome completo" className="sm:col-span-2" />
-                  <Field label="CPF (apenas dígitos)" value={cfg.contCpf} onChange={v => setCfg(p => ({ ...p, contCpf: cleanDigits(v).slice(0, 11) }))} maxLength={11} hint="12345678900" />
-                  <Field label="CRC" value={cfg.contCrc} onChange={set("contCrc")} maxLength={15} hint="CRC/SP-000000-1" />
-                  <Field label="CNPJ do Escritório (apenas dígitos)" value={cfg.contCnpj} onChange={v => setCfg(p => ({ ...p, contCnpj: cleanDigits(v).slice(0, 14) }))} maxLength={14} hint="Opcional" />
-                  <Field label="Código IBGE Município" value={cfg.contCodMun} onChange={v => setCfg(p => ({ ...p, contCodMun: cleanDigits(v).slice(0, 7) }))} maxLength={7} hint="Ex.: 3518701" />
-                  <Field label="CEP (apenas dígitos)" value={cfg.contCep} onChange={v => setCfg(p => ({ ...p, contCep: cleanDigits(v).slice(0, 8) }))} maxLength={8} hint="12345678" />
-                  <Field label="Logradouro" value={cfg.contLogradouro} onChange={set("contLogradouro")} maxLength={60} hint="Rua Exemplo" />
-                  <Field label="Número" value={cfg.contNumero} onChange={set("contNumero")} maxLength={10} hint="100" />
-                  <Field label="Complemento" value={cfg.contComplemento} onChange={set("contComplemento")} maxLength={60} hint="Sala 1" />
-                  <Field label="Bairro" value={cfg.contBairro} onChange={set("contBairro")} maxLength={60} hint="Centro" />
-                  <Field label="Telefone (apenas dígitos)" value={cfg.contFone} onChange={v => setCfg(p => ({ ...p, contFone: cleanDigits(v).slice(0, 11) }))} maxLength={11} hint="12987654321" />
-                  <Field label="Fax" value={cfg.contFax} onChange={v => setCfg(p => ({ ...p, contFax: cleanDigits(v).slice(0, 11) }))} maxLength={11} hint="Opcional" />
-                  <Field label="E-mail" value={cfg.contEmail} onChange={set("contEmail")} maxLength={255} hint="contador@escritorio.com.br" />
+                  <Field label="Nome do Contabilista" className="sm:col-span-2" value={cfg.contNome} onChange={set("contNome")} maxLength={100} hint="Nome completo" />
+                  <Field label="CPF (apenas dígitos)"        value={cfg.contCpf}  onChange={v=>setCfg(p=>({...p,contCpf:dig(v).slice(0,11)}))} maxLength={11} hint="12345678900" />
+                  <Field label="CRC"                         value={cfg.contCrc}  onChange={set("contCrc")} maxLength={15} hint="CRC/SP-000000-1" />
+                  <Field label="CNPJ do Escritório"          value={cfg.contCnpj} onChange={v=>setCfg(p=>({...p,contCnpj:dig(v).slice(0,14)}))} maxLength={14} hint="Opcional" />
+                  <Field label="Código IBGE Município"       value={cfg.contCodMun} onChange={v=>setCfg(p=>({...p,contCodMun:dig(v).slice(0,7)}))} maxLength={7} hint="3518701" />
+                  <Field label="CEP (apenas dígitos)"        value={cfg.contCep}  onChange={v=>setCfg(p=>({...p,contCep:dig(v).slice(0,8)}))} maxLength={8} hint="12345678" />
+                  <Field label="Logradouro" className="sm:col-span-2" value={cfg.contLogradouro} onChange={set("contLogradouro")} maxLength={60} hint="Rua Exemplo" />
+                  <Field label="Número"                      value={cfg.contNumero} onChange={set("contNumero")} maxLength={10} hint="100" />
+                  <Field label="Complemento"                 value={cfg.contComplemento} onChange={set("contComplemento")} maxLength={60} hint="Sala 1" />
+                  <Field label="Bairro"                      value={cfg.contBairro} onChange={set("contBairro")} maxLength={60} hint="Centro" />
+                  <Field label="Telefone (apenas dígitos)"   value={cfg.contFone} onChange={v=>setCfg(p=>({...p,contFone:dig(v).slice(0,11)}))} maxLength={11} hint="12987654321" />
+                  <Field label="Fax"                         value={cfg.contFax}  onChange={v=>setCfg(p=>({...p,contFax:dig(v).slice(0,11)}))} maxLength={11} hint="Opcional" />
+                  <Field label="E-mail"                      value={cfg.contEmail} onChange={set("contEmail")} maxLength={255} hint="contador@escritorio.com.br" />
                 </div>
               </div>
             </CollapsibleContent>
           </div>
         </Collapsible>
 
-        {/* Ações */}
-        <div className="flex flex-col sm:flex-row gap-3">
+        {/* ── Botão salvar + informativo ──────────────────────────────── */}
+        <div className="flex items-center gap-3">
           <Button
             variant="outline"
             onClick={() => saveMut.mutate({ companyId: companyIdNum, ...cfg })}
             disabled={saveMut.isPending || !companyIdNum}
-            className="flex items-center gap-2"
+            className="gap-2"
           >
             <Save className="h-4 w-4" />
-            {saveMut.isPending ? "Salvando..." : "Salvar Configuração"}
-          </Button>
-
-          <Button
-            onClick={handleDownload}
-            disabled={downloading || !companyIdNum}
-            className="flex items-center gap-2"
-          >
-            <Download className="h-4 w-4" />
-            {downloading ? "Gerando arquivo..." : `Gerar EFD · ${MESES[mes - 1]} ${ano}`}
+            {saveMut.isPending ? "Salvando…" : "Salvar Configuração"}
           </Button>
         </div>
 
-        {/* Informativo */}
         <Card className="border-blue-200 bg-blue-50/50">
           <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm text-blue-800">Sobre este arquivo</CardTitle>
+            <CardTitle className="text-sm text-blue-800">Sobre o arquivo gerado</CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-blue-700 space-y-1 pb-4 px-4">
-            <p>• O arquivo gerado segue o layout EFD-ICMS/IPI COD_VER 017 (Ato COTEPE/ICMS 44/2018 atualizado).</p>
-            <p>• <strong>Perfil A</strong>: inclui itens de NF-e (C170) quando o XML completo estiver disponível.</p>
-            <p>• Blocos B, D, G, H e K gerados sem movimento (IND_MOV=1) — construtora ISS.</p>
-            <p>• Bloco C inclui NF-e modelo 55 de entradas e saídas do período.</p>
-            <p>• Bloco E calcula apuração ICMS a partir das C190 do período.</p>
+            <p>• Formato EFD-ICMS/IPI COD_VER 017 (Ato COTEPE/ICMS 44/2018 atualizado).</p>
+            <p>• <strong>Perfil A</strong>: inclui itens de NF-e (C170) quando XML completo disponível.</p>
+            <p>• Blocos B, D, G, H gerados sem movimento (IND_MOV=1) — construtora ISS, não ICMS.</p>
+            <p>• Bloco E calcula apuração ICMS a partir dos C190 do período.</p>
             <p>• <strong>Validar no PVA (SPED) antes de transmitir.</strong></p>
           </CardContent>
         </Card>
+
       </div>
     </DashboardLayout>
   );
