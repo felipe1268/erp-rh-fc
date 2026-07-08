@@ -1,4 +1,42 @@
 /**
+ * Rev. 4097 — **CHEQUES RECEBIDOS: REDESIGN COMPLETO DA PÁGINA (LAYOUT PADRÃO EMITIDOS + IMPORT MULTI-XLSX + BARRA DE PROGRESSO).**
+ *
+ * CONTEXTO: A página FinanceiroChequesRecebidos.tsx existia como sub-componente embutido em FinanceiroCheques (aba),
+ * com layout básico e import de um único arquivo por vez. O usuário solicitou: página autônoma com o mesmo padrão
+ * visual dos cheques emitidos, import de múltiplas planilhas simultâneas e barra de progresso 0→100%.
+ *
+ * IMPLEMENTAÇÃO:
+ *
+ * FRONTEND — `client/src/pages/financeiro/FinanceiroChequesRecebidos.tsx` (REESCRITO COMPLETO, ~450 linhas):
+ *   - Agora página standalone com `DashboardLayout` wrapper próprio.
+ *   - 4 cards de totais CLICÁVEIS (filtram a lista por status): Disponíveis/Alocados/Compensados/Devolvidos.
+ *     Cada card tem dot indicator colorido, número grande, valor em BRL, hover shadow + ring de seleção ativo.
+ *   - Bloco de filtros em Card dedicado: busca textual + select de status (linha 1) +
+ *     navegação de ANO (ChevronLeft/Right) + pills de mês (Todos/Jan-Dez) idêntico ao padrão emitidos (linha 2).
+ *   - Tabela redesenhada: coluna Emitente com banco/agência como sublinha, coluna Bom para com badge colorido
+ *     (azul=futuro distante, âmbar=urgente, vermelho=vencido, verde=compensado), rodapé com contagem + total.
+ *   - Import multi-arquivo: Dialog com cabeçalho gradient navy FC, zona de drop/clique, lista de arquivos com
+ *     estado visual (aguardando/analisando/preview/importando/done/erro), badge por arquivo com contagem de
+ *     novos/ignorados, resumo final consolidado após conclusão.
+ *   - Progresso "Regra de Ouro": por arquivo → fase análise simulada baseFrom→midPoint (startSimulatedProgress),
+ *     fase gravação simulada midPoint→baseTo; botão "Importar N arquivo(s)" tem barra `bg-white/15` crescente
+ *     + texto "Importando… XX%"; barra externa h-2.5 no rodapé do dialog.
+ *   - Dialog de cadastro manual: layout 2-col (nº+valor), campos banco/agência/conta, datas emissão/bom para,
+ *     textarea observação, botão verde "Cadastrar cheque" / "Salvar alterações".
+ *   - Drilldown de alocação: Dialog com fornecedor, valor, data e observação.
+ *
+ * FRONTEND — `client/src/pages/financeiro/FinanceiroCheques.tsx` (LIMPEZA):
+ *   - Removido import de FinanceiroChequesRecebidos (linha 3 original).
+ *   - Removido state `[aba, setAba]` (emitidos/recebidos).
+ *   - Removida seção de tabs "Cheques Emitidos / Cheques Recebidos" (bloco lines 845-862).
+ *   - Removido bloco condicional `{aba === "emitidos" && (<>…</>)}` e `{aba === "recebidos" && …}`.
+ *   - Página agora renderiza diretamente o conteúdo de cheques emitidos (sem seletor de aba).
+ *   - "Controle de Cheques Recebidos" já tem rota própria no menu lateral desde Rev. 4096.
+ *
+ * ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+ */
+
+/**
  * Rev. 4096 — **CONTROLE DE CHEQUES RECEBIDOS: NOVO SUB-MÓDULO COMPLETO (CADASTRO + IMPORT XLSX + SUGESTÃO NO PAGAMENTO).**
  *
  * CONTEXTO: Clientes pagam com múltiplos cheques de terceiros (ex.: 10×R$10k = R$100k). O sistema

@@ -1,9 +1,10 @@
-import { useMemo, useState, useRef } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useMemo, useState, useRef, useEffect } from "react";
+import DashboardLayout from "@/components/DashboardLayout";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter, AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -11,16 +12,20 @@ import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, Plus, Pencil, Trash2, Loader2, CheckCircle, RotateCcw, Banknote, ChevronLeft, ChevronRight, Search, FileSpreadsheet, X } from "lucide-react";
+import {
+  Plus, Pencil, Trash2, Loader2, CheckCircle, RotateCcw, Banknote,
+  ChevronLeft, ChevronRight, Search, FileSpreadsheet, X, Upload,
+  AlertCircle, FileText,
+} from "lucide-react";
 
+// ── Formatters ───────────────────────────────────────────────────────────────
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 }
 function maskBRL(raw: string): string {
   const digits = String(raw).replace(/\D/g, "");
   if (!digits) return "";
-  const n = parseInt(digits, 10) / 100;
-  return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return (parseInt(digits, 10) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function parseMaskBRL(masked: string): number {
   const digits = String(masked).replace(/\D/g, "");
@@ -29,7 +34,7 @@ function parseMaskBRL(masked: string): number {
 function fmtData(v: any) {
   if (!v) return "—";
   try {
-    const d = new Date((String(v).length > 10 ? v : v + "T00:00:00"));
+    const d = new Date(String(v).length > 10 ? v : v + "T00:00:00");
     return isNaN(d.getTime()) ? "—" : d.toLocaleDateString("pt-BR");
   } catch { return "—"; }
 }
@@ -44,41 +49,6 @@ function diasAte(v: any): number | null {
     return Math.round((a - b) / 86400000);
   } catch { return null; }
 }
-
-const STATUS_OPTS = [
-  { value: "disponivel",  label: "Disponível",  cls: "bg-green-100 text-green-700" },
-  { value: "alocado",     label: "Alocado",     cls: "bg-blue-100 text-blue-700" },
-  { value: "compensado",  label: "Compensado",  cls: "bg-teal-100 text-teal-700" },
-  { value: "devolvido",   label: "Devolvido",   cls: "bg-orange-100 text-orange-700" },
-];
-
-function statusBadge(s: string) {
-  const opt = STATUS_OPTS.find(o => o.value === s);
-  return opt
-    ? <Badge className={`${opt.cls} hover:${opt.cls}`}>{opt.label}</Badge>
-    : <Badge variant="outline">{s}</Badge>;
-}
-
-function vencCell(c: any) {
-  if (!c.data_bom_para) return <span className="text-xs text-muted-foreground">—</span>;
-  if (c.status === "compensado") return <span className="text-xs text-green-700 font-medium">Compensado</span>;
-  const dias = diasAte(c.data_bom_para);
-  if (dias == null) return <span className="text-xs text-muted-foreground">{fmtData(c.data_bom_para)}</span>;
-  if (dias > 0) return (
-    <span className="text-xs rounded-full bg-blue-50 px-2 py-0.5 text-blue-700 font-medium" title={`Bom para ${fmtData(c.data_bom_para)}`}>
-      {fmtData(c.data_bom_para)} · faltam {dias}d
-    </span>
-  );
-  if (dias === 0) return (
-    <span className="text-xs rounded-full bg-amber-100 px-2 py-0.5 text-amber-700 font-medium">Hoje</span>
-  );
-  return (
-    <span className="text-xs rounded-full bg-red-100 px-2 py-0.5 text-red-700 font-medium" title={`Bom para ${fmtData(c.data_bom_para)}`}>
-      {fmtData(c.data_bom_para)} · vencido
-    </span>
-  );
-}
-
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -92,36 +62,78 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+// ── Constants ────────────────────────────────────────────────────────────────
 const ANO_ATUAL = new Date().getFullYear();
-const MESES = ["", "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+const MESES_ABREV = ["", "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
+const STATUS_OPTS = [
+  { value: "disponivel",  label: "Disponível",  color: "bg-green-100 text-green-700"  },
+  { value: "alocado",     label: "Alocado",     color: "bg-blue-100 text-blue-700"    },
+  { value: "compensado",  label: "Compensado",  color: "bg-teal-100 text-teal-700"    },
+  { value: "devolvido",   label: "Devolvido",   color: "bg-orange-100 text-orange-700"},
+];
+
+function statusBadge(s: string) {
+  const opt = STATUS_OPTS.find(o => o.value === s);
+  return opt
+    ? <Badge className={`${opt.color} hover:${opt.color} border-0`}>{opt.label}</Badge>
+    : <Badge variant="outline">{s}</Badge>;
+}
+
+function VencCell({ c }: { c: any }) {
+  if (!c.data_bom_para) return <span className="text-xs text-muted-foreground">—</span>;
+  if (c.status === "compensado") return <span className="text-xs text-teal-700 font-medium">Compensado ✓</span>;
+  const dias = diasAte(c.data_bom_para);
+  const fmt = fmtData(c.data_bom_para);
+  if (dias == null) return <span className="text-xs text-muted-foreground">{fmt}</span>;
+  if (dias > 3) return <span className="text-xs rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-blue-700 font-medium">{fmt} · {dias}d</span>;
+  if (dias > 0) return <span className="text-xs rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-amber-700 font-medium">{fmt} · {dias}d</span>;
+  if (dias === 0) return <span className="text-xs rounded-full bg-amber-100 border border-amber-300 px-2 py-0.5 text-amber-800 font-semibold">Hoje</span>;
+  return <span className="text-xs rounded-full bg-red-100 border border-red-200 px-2 py-0.5 text-red-700 font-medium">{fmt} · vencido</span>;
+}
+
+// ── Form padrão ───────────────────────────────────────────────────────────────
 const EMPTY_FORM = {
   numeroCheque: "", emitenteNome: "", banco: "", agencia: "", conta: "",
   valorMask: "", dataEmissao: "", dataBomPara: "", observacao: "",
 };
 
+// ── Tipo de fila de importação ────────────────────────────────────────────────
+type ImportItem = {
+  file: File;
+  base64: string;
+  step: "aguardando" | "analisando" | "preview" | "importando" | "done" | "erro";
+  preview: any | null;
+  resultado: any | null;
+  erro: string | null;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
 export default function FinanceiroChequesRecebidos() {
   const { companyId } = useCompany();
   const { toast } = useToast();
   const utils = (trpc as any).useUtils?.() ?? (trpc as any).useContext?.();
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // ── Filtros ──
   const [ano, setAno] = useState(ANO_ATUAL);
   const [mesSel, setMesSel] = useState<number | null>(new Date().getMonth() + 1);
   const [fStatus, setFStatus] = useState("todos");
   const [busca, setBusca] = useState("");
 
+  // ── Dialogs ──
   const [formOpen, setFormOpen] = useState(false);
   const [formEdit, setFormEdit] = useState<any | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
-
   const [excluirId, setExcluirId] = useState<number | null>(null);
   const [alocDrilldown, setAlocDrilldown] = useState<any | null>(null);
 
-  const [importStep, setImportStep] = useState<"idle" | "preview" | "done">("idle");
-  const [importPreview, setImportPreview] = useState<any>(null);
-  const [importBase64, setImportBase64] = useState<string>("");
-  const [importFileName, setImportFileName] = useState<string>("");
+  // ── Import multi-arquivo ──
+  const [importOpen, setImportOpen] = useState(false);
+  const [importQueue, setImportQueue] = useState<ImportItem[]>([]);
+  const [importProgress, setImportProgress] = useState(0);
+  const [importRunning, setImportRunning] = useState(false);
+  const importTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Queries ──
   const listQuery = (trpc as any).chequesRecebidos.listar.useQuery(
@@ -138,6 +150,16 @@ export default function FinanceiroChequesRecebidos() {
     utils?.chequesRecebidos?.listar?.invalidate?.();
     utils?.chequesRecebidos?.totais?.invalidate?.();
   }
+
+  // ── Totais cards ──
+  const totalDisp  = Number(totais?.disponivel?.total  ?? 0);
+  const qtdDisp    = Number(totais?.disponivel?.qtd    ?? 0);
+  const totalAloc  = Number(totais?.alocado?.total     ?? 0);
+  const qtdAloc    = Number(totais?.alocado?.qtd       ?? 0);
+  const totalComp  = Number(totais?.compensado?.total  ?? 0);
+  const qtdComp    = Number(totais?.compensado?.qtd    ?? 0);
+  const totalDev   = Number(totais?.devolvido?.total   ?? 0);
+  const qtdDev     = Number(totais?.devolvido?.qtd     ?? 0);
 
   // ── Mutations ──
   const criarMut = (trpc as any).chequesRecebidos.criar.useMutation({
@@ -156,25 +178,11 @@ export default function FinanceiroChequesRecebidos() {
     onSuccess: () => { toast({ title: "Status atualizado." }); invalidate(); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
-  const previewMut = (trpc as any).chequesRecebidos.importarPreview.useMutation({
-    onSuccess: (d: any) => { setImportPreview(d); setImportStep("preview"); },
-    onError: (e: any) => toast({ title: "Erro na leitura do arquivo", description: e.message, variant: "destructive" }),
-  });
-  const confirmarMut = (trpc as any).chequesRecebidos.importarConfirmar.useMutation({
-    onSuccess: (d: any) => {
-      toast({ title: `Importação concluída: ${d.inseridos} inseridos, ${d.ignorados} ignorados (dedup)` });
-      setImportStep("done");
-      invalidate();
-    },
-    onError: (e: any) => toast({ title: "Erro na importação", description: e.message, variant: "destructive" }),
-  });
+  const previewMut = (trpc as any).chequesRecebidos.importarPreview.useMutation();
+  const confirmarMut = (trpc as any).chequesRecebidos.importarConfirmar.useMutation();
 
   // ── Form helpers ──
-  function abrirNovo() {
-    setFormEdit(null);
-    setForm(EMPTY_FORM);
-    setFormOpen(true);
-  }
+  function abrirNovo() { setFormEdit(null); setForm(EMPTY_FORM); setFormOpen(true); }
   function abrirEditar(c: any) {
     setFormEdit(c);
     setForm({
@@ -192,12 +200,8 @@ export default function FinanceiroChequesRecebidos() {
   }
   function handleSalvar() {
     const valor = parseMaskBRL(form.valorMask);
-    if (!form.numeroCheque.trim()) {
-      toast({ title: "Informe o número do cheque", variant: "destructive" }); return;
-    }
-    if (!valor) {
-      toast({ title: "Informe o valor", variant: "destructive" }); return;
-    }
+    if (!form.numeroCheque.trim()) { toast({ title: "Informe o número do cheque", variant: "destructive" }); return; }
+    if (!valor) { toast({ title: "Informe o valor", variant: "destructive" }); return; }
     const payload: any = {
       companyId,
       numeroCheque: form.numeroCheque.trim(),
@@ -210,419 +214,640 @@ export default function FinanceiroChequesRecebidos() {
       dataBomPara:  form.dataBomPara || undefined,
       observacao:   form.observacao.trim() || undefined,
     };
-    if (formEdit) {
-      atualizarMut.mutate({ ...payload, id: formEdit.id });
-    } else {
-      criarMut.mutate(payload);
-    }
+    formEdit ? atualizarMut.mutate({ ...payload, id: formEdit.id }) : criarMut.mutate(payload);
   }
 
-  // ── Import ──
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setImportFileName(file.name);
-    const b64 = await fileToBase64(file);
-    setImportBase64(b64);
-    previewMut.mutate({ companyId, base64: b64 });
+  // ── Import multi-arquivo ──────────────────────────────────────────────────
+
+  function abrirImport() {
+    setImportQueue([]);
+    setImportProgress(0);
+    setImportRunning(false);
+    setImportOpen(true);
+  }
+
+  function fecharImport() {
+    if (importRunning) return;
+    setImportOpen(false);
+    setImportQueue([]);
+    setImportProgress(0);
+  }
+
+  async function onFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
     e.target.value = "";
-  }
-  function cancelarImport() {
-    setImportStep("idle");
-    setImportPreview(null);
-    setImportBase64("");
-    setImportFileName("");
+
+    const items: ImportItem[] = await Promise.all(files.map(async (file) => {
+      const base64 = await fileToBase64(file);
+      return { file, base64, step: "aguardando" as const, preview: null, resultado: null, erro: null };
+    }));
+
+    setImportQueue(prev => [...prev, ...items]);
   }
 
-  // ── Sumário de totais ──
-  const totalDisp  = Number(totais?.disponivel?.total  ?? 0);
-  const qtdDisp    = Number(totais?.disponivel?.qtd    ?? 0);
-  const totalAloc  = Number(totais?.alocado?.total     ?? 0);
-  const qtdAloc    = Number(totais?.alocado?.qtd       ?? 0);
-  const totalComp  = Number(totais?.compensado?.total  ?? 0);
-  const qtdComp    = Number(totais?.compensado?.qtd    ?? 0);
-  const totalDev   = Number(totais?.devolvido?.total   ?? 0);
-  const qtdDev     = Number(totais?.devolvido?.qtd     ?? 0);
+  function removeFile(idx: number) {
+    setImportQueue(prev => prev.filter((_, i) => i !== idx));
+  }
 
+  // Regra de Ouro: progresso simulado 0→33% (fase análise) + real 33→100% (fase gravação)
+  function startSimulatedProgress(from: number, to: number, durationMs = 2500) {
+    if (importTimerRef.current) clearInterval(importTimerRef.current);
+    const steps = 40;
+    const interval = durationMs / steps;
+    const delta = (to - from) / steps;
+    let current = from;
+    importTimerRef.current = setInterval(() => {
+      current = Math.min(current + delta, to - 0.5);
+      setImportProgress(Math.round(current));
+    }, interval);
+  }
+
+  function stopSimulatedProgress() {
+    if (importTimerRef.current) { clearInterval(importTimerRef.current); importTimerRef.current = null; }
+  }
+
+  async function executarImport() {
+    if (!importQueue.length || importRunning) return;
+    setImportRunning(true);
+    setImportProgress(0);
+
+    const total = importQueue.length;
+
+    for (let i = 0; i < total; i++) {
+      const item = importQueue[i];
+      if (item.step === "done" || item.step === "erro") continue;
+
+      const baseFrom = Math.round((i / total) * 100);
+      const baseTo   = Math.round(((i + 1) / total) * 100);
+      const midPoint = baseFrom + Math.round((baseTo - baseFrom) * 0.4);
+
+      // Fase análise (simulado baseFrom→midPoint)
+      setImportQueue(prev => prev.map((it, idx) => idx === i ? { ...it, step: "analisando" } : it));
+      startSimulatedProgress(baseFrom, midPoint, 2000);
+
+      let preview: any = null;
+      try {
+        preview = await previewMut.mutateAsync({ companyId, base64: item.base64 });
+        stopSimulatedProgress();
+        setImportProgress(midPoint);
+        setImportQueue(prev => prev.map((it, idx) => idx === i ? { ...it, step: "preview", preview } : it));
+      } catch (err: any) {
+        stopSimulatedProgress();
+        setImportQueue(prev => prev.map((it, idx) => idx === i ? { ...it, step: "erro", erro: err.message } : it));
+        setImportProgress(baseTo);
+        continue;
+      }
+
+      // Fase gravação (simulado midPoint→baseTo)
+      setImportQueue(prev => prev.map((it, idx) => idx === i ? { ...it, step: "importando" } : it));
+      startSimulatedProgress(midPoint, baseTo, 1500);
+
+      try {
+        const resultado = await confirmarMut.mutateAsync({ companyId, base64: item.base64 });
+        stopSimulatedProgress();
+        setImportProgress(baseTo);
+        setImportQueue(prev => prev.map((it, idx) => idx === i ? { ...it, step: "done", resultado } : it));
+      } catch (err: any) {
+        stopSimulatedProgress();
+        setImportQueue(prev => prev.map((it, idx) => idx === i ? { ...it, step: "erro", erro: err.message } : it));
+        setImportProgress(baseTo);
+      }
+    }
+
+    setImportProgress(100);
+    setTimeout(() => { setImportProgress(0); }, 1200);
+    setImportRunning(false);
+    invalidate();
+  }
+
+  useEffect(() => () => { if (importTimerRef.current) clearInterval(importTimerRef.current); }, []);
+
+  // totais resumo do dialog
+  const queueTotals = useMemo(() => {
+    let novos = 0, ignorados = 0, erros = 0;
+    for (const it of importQueue) {
+      if (it.resultado) { novos += it.resultado.inseridos ?? 0; ignorados += it.resultado.ignorados ?? 0; }
+      if (it.step === "erro") erros++;
+    }
+    return { novos, ignorados, erros };
+  }, [importQueue]);
+
+  const allDone = importQueue.length > 0 && importQueue.every(it => it.step === "done" || it.step === "erro");
+  const hasPending = importQueue.some(it => it.step === "aguardando");
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-4">
-      {/* Cards de resumo */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card className="border-green-200 bg-green-50/50">
-          <CardContent className="pt-4 pb-3">
-            <p className="text-xs text-green-700 font-medium">Disponíveis</p>
-            <p className="text-xl font-bold text-green-800">{qtdDisp}</p>
-            <p className="text-xs text-green-600">{formatBRL(totalDisp)}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-blue-200 bg-blue-50/50">
-          <CardContent className="pt-4 pb-3">
-            <p className="text-xs text-blue-700 font-medium">Alocados</p>
-            <p className="text-xl font-bold text-blue-800">{qtdAloc}</p>
-            <p className="text-xs text-blue-600">{formatBRL(totalAloc)}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-teal-200 bg-teal-50/50">
-          <CardContent className="pt-4 pb-3">
-            <p className="text-xs text-teal-700 font-medium">Compensados</p>
-            <p className="text-xl font-bold text-teal-800">{qtdComp}</p>
-            <p className="text-xs text-teal-600">{formatBRL(totalComp)}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-orange-200 bg-orange-50/50">
-          <CardContent className="pt-4 pb-3">
-            <p className="text-xs text-orange-700 font-medium">Devolvidos</p>
-            <p className="text-xl font-bold text-orange-800">{qtdDev}</p>
-            <p className="text-xs text-orange-600">{formatBRL(totalDev)}</p>
-          </CardContent>
-        </Card>
-      </div>
+    <DashboardLayout>
+      <div className="space-y-5">
 
-      {/* Barra de ferramentas */}
-      <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" onClick={abrirNovo} className="gap-1.5 bg-green-600 hover:bg-green-700 text-white">
-          <Plus className="h-4 w-4" /> Lançar cheque
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => fileRef.current?.click()} className="gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-50">
-          <FileSpreadsheet className="h-4 w-4" /> Importar .xlsx
-        </Button>
-        <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleFile} />
-
-        {/* Navegação de ano */}
-        <div className="flex items-center gap-1 ml-auto">
-          <Button size="icon" variant="ghost" onClick={() => setAno(a => a - 1)}><ChevronLeft className="h-4 w-4" /></Button>
-          <span className="text-sm font-semibold w-12 text-center">{ano}</span>
-          <Button size="icon" variant="ghost" onClick={() => setAno(a => a + 1)} disabled={ano >= ANO_ATUAL + 1}><ChevronRight className="h-4 w-4" /></Button>
+        {/* ── Cabeçalho ── */}
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <Banknote className="h-6 w-6 text-green-600" /> Controle de Cheques Recebidos
+            </h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Cheques de terceiros recebidos pela empresa — disponíveis para alocação em pagamentos.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={abrirNovo}
+              className="gap-1.5 border-green-300 text-green-700 hover:bg-green-50">
+              <Plus className="h-4 w-4" /> Lançar cheque
+            </Button>
+            <Button size="sm" onClick={abrirImport}
+              className="gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white">
+              <Upload className="h-4 w-4" /> Importar .xlsx
+            </Button>
+          </div>
         </div>
-        {/* Meses */}
-        <div className="flex gap-0.5 flex-wrap">
-          <button
-            className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${mesSel == null ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-            onClick={() => setMesSel(null)}
-          >Todos</button>
-          {MESES.slice(1).map((m, i) => (
-            <button key={i + 1}
-              className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${mesSel === i + 1 ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-              onClick={() => setMesSel(i + 1)}>{m}</button>
-          ))}
-        </div>
-      </div>
 
-      {/* Filtros */}
-      <div className="flex flex-wrap gap-2 items-center">
-        <div className="relative flex-1 min-w-[180px] max-w-xs">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-          <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar nº, emitente, banco…" className="pl-8 h-8 text-sm" />
-        </div>
-        <Select value={fStatus} onValueChange={setFStatus}>
-          <SelectTrigger className="w-36 h-8 text-sm"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos os status</SelectItem>
-            {STATUS_OPTS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
+        {/* ── Cards de totais ── */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <button type="button" onClick={() => setFStatus(fStatus === "disponivel" ? "todos" : "disponivel")}
+            className={`text-left rounded-xl border bg-card p-4 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-green-300 ${fStatus === "disponivel" ? "ring-2 ring-green-500 border-green-300" : ""}`}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-medium text-green-700">Disponíveis</span>
+              <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
+            </div>
+            <div className="text-2xl font-bold text-green-800">{qtdDisp}</div>
+            <div className="text-sm text-green-600 font-medium">{formatBRL(totalDisp)}</div>
+          </button>
 
-      {/* Painel de importação */}
-      {importStep !== "idle" && (
-        <Card className="border-blue-200 bg-blue-50/40">
-          <CardHeader className="pb-2 pt-3 px-4 flex flex-row items-center justify-between">
-            <CardTitle className="text-sm text-blue-800">Importação — {importFileName}</CardTitle>
-            <Button size="icon" variant="ghost" onClick={cancelarImport} className="h-6 w-6"><X className="h-3.5 w-3.5" /></Button>
-          </CardHeader>
-          <CardContent className="px-4 pb-3 space-y-2">
-            {importStep === "preview" && importPreview && (
-              <>
-                <div className="flex flex-wrap items-center gap-3 text-sm">
-                  <span className="text-blue-700"><strong>{importPreview.total}</strong> cheques identificados</span>
-                  {importPreview.novos != null && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
-                      {importPreview.novos} novos
-                    </span>
-                  )}
-                  {importPreview.duplicados != null && importPreview.duplicados > 0 && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-                      {importPreview.duplicados} já existentes (serão ignorados)
-                    </span>
-                  )}
-                  {importPreview.total === 0 && <span className="text-red-600"> — Nenhuma linha válida. Verifique os cabeçalhos.</span>}
+          <button type="button" onClick={() => setFStatus(fStatus === "alocado" ? "todos" : "alocado")}
+            className={`text-left rounded-xl border bg-card p-4 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-blue-300 ${fStatus === "alocado" ? "ring-2 ring-blue-500 border-blue-300" : ""}`}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-medium text-blue-700">Alocados</span>
+              <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
+            </div>
+            <div className="text-2xl font-bold text-blue-800">{qtdAloc}</div>
+            <div className="text-sm text-blue-600 font-medium">{formatBRL(totalAloc)}</div>
+          </button>
+
+          <button type="button" onClick={() => setFStatus(fStatus === "compensado" ? "todos" : "compensado")}
+            className={`text-left rounded-xl border bg-card p-4 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-teal-300 ${fStatus === "compensado" ? "ring-2 ring-teal-500 border-teal-300" : ""}`}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-medium text-teal-700">Compensados</span>
+              <span className="h-2.5 w-2.5 rounded-full bg-teal-500" />
+            </div>
+            <div className="text-2xl font-bold text-teal-800">{qtdComp}</div>
+            <div className="text-sm text-teal-600 font-medium">{formatBRL(totalComp)}</div>
+          </button>
+
+          <button type="button" onClick={() => setFStatus(fStatus === "devolvido" ? "todos" : "devolvido")}
+            className={`text-left rounded-xl border bg-card p-4 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-orange-300 ${fStatus === "devolvido" ? "ring-2 ring-orange-500 border-orange-300" : ""}`}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-medium text-orange-700">Devolvidos</span>
+              <span className="h-2.5 w-2.5 rounded-full bg-orange-400" />
+            </div>
+            <div className="text-2xl font-bold text-orange-800">{qtdDev}</div>
+            <div className="text-sm text-orange-600 font-medium">{formatBRL(totalDev)}</div>
+          </button>
+        </div>
+
+        {/* ── Filtros (ano + meses + busca + status) ── */}
+        <Card>
+          <CardContent className="pt-4 pb-3 space-y-3">
+            {/* Linha 1 — busca + status */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative flex-1 min-w-[200px] max-w-sm">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                <Input value={busca} onChange={e => setBusca(e.target.value)}
+                  placeholder="Buscar nº, emitente, banco…" className="pl-8 h-9 text-sm" />
+              </div>
+              <Select value={fStatus} onValueChange={setFStatus}>
+                <SelectTrigger className="w-40 h-9 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os status</SelectItem>
+                  {STATUS_OPTS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Linha 2 — navegação de ano + meses */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1">
+                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setAno(a => a - 1)}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm font-bold w-12 text-center tabular-nums">{ano}</span>
+                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setAno(a => a + 1)} disabled={ano >= ANO_ATUAL + 1}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-0.5">
+                <button
+                  onClick={() => setMesSel(null)}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${mesSel == null ? "bg-indigo-600 text-white shadow-sm" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                >Todos</button>
+                {MESES_ABREV.slice(1).map((m, i) => (
+                  <button key={i + 1}
+                    onClick={() => setMesSel(i + 1)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${mesSel === i + 1 ? "bg-indigo-600 text-white shadow-sm" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+                  >{m}</button>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ── Tabela ── */}
+        <Card>
+          <CardContent className="p-0">
+            {listQuery.isLoading ? (
+              <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin" /> Carregando…
+              </div>
+            ) : cheques.length === 0 ? (
+              <div className="py-16 text-center text-muted-foreground">
+                <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">Nenhum cheque recebido encontrado.</p>
+                <p className="text-xs mt-1 opacity-70">Use "Lançar cheque" ou "Importar .xlsx" para adicionar.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/40 text-xs text-muted-foreground">
+                      <th className="text-left px-4 py-3 font-medium">Nº Cheque</th>
+                      <th className="text-left px-4 py-3 font-medium">Emitente</th>
+                      <th className="text-right px-4 py-3 font-medium">Valor</th>
+                      <th className="text-left px-4 py-3 font-medium">Emissão</th>
+                      <th className="text-left px-4 py-3 font-medium">Bom para</th>
+                      <th className="text-left px-4 py-3 font-medium">Status</th>
+                      <th className="text-left px-4 py-3 font-medium">Alocado em</th>
+                      <th className="px-4 py-3 w-28"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cheques.map((c: any) => (
+                      <tr key={c.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                        <td className="px-4 py-2.5 font-mono font-semibold text-indigo-800 text-sm">{c.numero_cheque}</td>
+                        <td className="px-4 py-2.5 max-w-[180px]">
+                          <span className="truncate block font-medium" title={c.emitente_nome}>{c.emitente_nome || "—"}</span>
+                          {c.banco && <span className="text-[11px] text-muted-foreground block">{c.banco}{c.agencia ? ` · Ag ${c.agencia}` : ""}</span>}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-semibold tabular-nums">{formatBRL(Number(c.valor))}</td>
+                        <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{fmtData(c.data_emissao)}</td>
+                        <td className="px-4 py-2.5"><VencCell c={c} /></td>
+                        <td className="px-4 py-2.5">{statusBadge(c.status)}</td>
+                        <td className="px-4 py-2.5">
+                          {c.status === "alocado" && c.fornecedor_alocado_nome ? (
+                            <button
+                              className="text-xs font-medium text-blue-700 underline decoration-dotted hover:text-blue-900 max-w-[140px] truncate block"
+                              title={`Fornecedor: ${c.fornecedor_alocado_nome}`}
+                              onClick={() => setAlocDrilldown(c)}
+                            >{c.fornecedor_alocado_nome}</button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-center gap-1 justify-end">
+                            {(c.status === "disponivel" || c.status === "alocado") && (
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-teal-600 hover:bg-teal-50"
+                                title="Marcar como Compensado"
+                                onClick={() => atualizarStatusMut.mutate({ id: c.id, companyId, status: "compensado" })}>
+                                <CheckCircle className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {(c.status === "disponivel" || c.status === "alocado") && (
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-orange-500 hover:bg-orange-50"
+                                title="Marcar como Devolvido"
+                                onClick={() => atualizarStatusMut.mutate({ id: c.id, companyId, status: "devolvido" })}>
+                                <RotateCcw className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {(c.status === "compensado" || c.status === "devolvido") && (
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:bg-muted"
+                                title="Voltar para Disponível"
+                                onClick={() => atualizarStatusMut.mutate({ id: c.id, companyId, status: "disponivel" })}>
+                                <RotateCcw className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:bg-muted"
+                              title="Editar" onClick={() => abrirEditar(c)}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 text-red-400 hover:bg-red-50 hover:text-red-600"
+                              title="Excluir" onClick={() => setExcluirId(c.id)}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="px-4 py-2.5 border-t bg-muted/20 text-xs text-muted-foreground">
+                  {cheques.length} cheque(s) · Total: <span className="font-semibold text-foreground">
+                    {formatBRL(cheques.reduce((s: number, c: any) => s + Number(c.valor ?? 0), 0))}
+                  </span>
                 </div>
-                {importPreview.amostra?.length > 0 && (
-                  <div className="overflow-x-auto">
-                    <table className="text-xs w-full border-collapse">
-                      <thead><tr className="text-blue-700">
-                        <th className="text-left px-2 py-1">Nº Cheque</th>
-                        <th className="text-left px-2 py-1">Emitente</th>
-                        <th className="text-left px-2 py-1">Valor</th>
-                        <th className="text-left px-2 py-1">Bom para</th>
-                      </tr></thead>
-                      <tbody>
-                        {importPreview.amostra.map((r: any, i: number) => (
-                          <tr key={i} className="border-t border-blue-100">
-                            <td className="px-2 py-1 font-mono">{r.numeroCheque}</td>
-                            <td className="px-2 py-1">{r.emitenteNome ?? "—"}</td>
-                            <td className="px-2 py-1">{formatBRL(r.valor ?? 0)}</td>
-                            <td className="px-2 py-1">{r.dataBomPara ? fmtData(r.dataBomPara) : "—"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {importPreview.total > 5 && <p className="text-[10px] text-blue-600 mt-1">… e mais {importPreview.total - 5} registros</p>}
-                  </div>
-                )}
-                <div className="flex gap-2">
-                  <Button size="sm" onClick={() => confirmarMut.mutate({ companyId, base64: importBase64 })}
-                    disabled={confirmarMut.isPending || importPreview.total === 0}
-                    className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5">
-                    {confirmarMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
-                    Confirmar importação
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={cancelarImport}>Cancelar</Button>
-                </div>
-              </>
-            )}
-            {importStep === "done" && (
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-600" />
-                <span className="text-sm text-green-700">Importação concluída!</span>
-                <Button size="sm" variant="outline" onClick={cancelarImport}>Fechar</Button>
               </div>
             )}
           </CardContent>
         </Card>
-      )}
 
-      {/* Tabela */}
-      <Card>
-        <CardContent className="p-0">
-          {listQuery.isLoading ? (
-            <div className="flex items-center justify-center py-10">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : cheques.length === 0 ? (
-            <div className="py-10 text-center text-muted-foreground text-sm">
-              Nenhum cheque recebido encontrado. Use "Lançar cheque" ou "Importar .xlsx".
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-gray-50/60 text-xs text-muted-foreground">
-                    <th className="text-left px-3 py-2.5 font-medium">Nº Cheque</th>
-                    <th className="text-left px-3 py-2.5 font-medium">Emitente</th>
-                    <th className="text-left px-3 py-2.5 font-medium">Banco</th>
-                    <th className="text-right px-3 py-2.5 font-medium">Valor</th>
-                    <th className="text-left px-3 py-2.5 font-medium">Emissão</th>
-                    <th className="text-left px-3 py-2.5 font-medium">Bom para</th>
-                    <th className="text-left px-3 py-2.5 font-medium">Status</th>
-                    <th className="text-left px-3 py-2.5 font-medium">Alocado em</th>
-                    <th className="px-3 py-2.5"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cheques.map((c: any) => (
-                    <tr key={c.id} className="border-b last:border-0 hover:bg-gray-50/50 transition-colors">
-                      <td className="px-3 py-2 font-mono font-semibold text-blue-800">{c.numero_cheque}</td>
-                      <td className="px-3 py-2 max-w-[160px] truncate" title={c.emitente_nome}>{c.emitente_nome || "—"}</td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">
-                        {[c.banco, c.agencia ? `Ag ${c.agencia}` : null].filter(Boolean).join(" · ") || "—"}
-                      </td>
-                      <td className="px-3 py-2 text-right font-semibold tabular-nums">{formatBRL(Number(c.valor))}</td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">{fmtData(c.data_emissao)}</td>
-                      <td className="px-3 py-2">{vencCell(c)}</td>
-                      <td className="px-3 py-2">{statusBadge(c.status)}</td>
-                      <td className="px-3 py-2">
-                        {c.status === "alocado" && c.fornecedor_alocado_nome ? (
-                          <div className="group relative inline-block">
-                            <button
-                              className="text-xs font-medium text-blue-700 underline decoration-dotted hover:text-blue-900 max-w-[130px] truncate block"
-                              title={`Clique para detalhes da alocação — Fornecedor: ${c.fornecedor_alocado_nome}`}
-                              onClick={(e) => { e.stopPropagation(); setAlocDrilldown(c); }}
-                            >
-                              {c.fornecedor_alocado_nome}
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-1 justify-end">
-                          {/* Marcar como compensado */}
-                          {(c.status === "disponivel" || c.status === "alocado") && (
-                            <Button size="icon" variant="ghost" className="h-6 w-6 text-teal-600 hover:text-teal-800"
-                              title="Marcar como Compensado"
-                              onClick={() => atualizarStatusMut.mutate({ id: c.id, companyId, status: "compensado" })}>
-                              <CheckCircle className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                          {/* Marcar como devolvido */}
-                          {(c.status === "disponivel" || c.status === "alocado") && (
-                            <Button size="icon" variant="ghost" className="h-6 w-6 text-orange-600 hover:text-orange-800"
-                              title="Marcar como Devolvido"
-                              onClick={() => atualizarStatusMut.mutate({ id: c.id, companyId, status: "devolvido" })}>
-                              <RotateCcw className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                          {/* Voltar para disponível */}
-                          {(c.status === "compensado" || c.status === "devolvido" || c.status === "alocado") && (
-                            <Button size="icon" variant="ghost" className="h-6 w-6 text-gray-500 hover:text-gray-700"
-                              title="Voltar para Disponível"
-                              onClick={() => atualizarStatusMut.mutate({ id: c.id, companyId, status: "disponivel", fornecedorAlocadoId: null, fornecedorAlocadoNome: null, entryId: null })}>
-                              <Banknote className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => abrirEditar(c)}>
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-6 w-6 text-red-500 hover:text-red-700"
-                            onClick={() => setExcluirId(c.id)}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      </div>
+
+      {/* ════════════════════════════════════════════════════════
+          Dialog: Importar múltiplas planilhas .xlsx
+      ════════════════════════════════════════════════════════ */}
+      <Dialog open={importOpen} onOpenChange={(o) => { if (!o) fecharImport(); }}>
+        <DialogContent className="max-w-2xl w-[calc(100vw-1rem)] sm:w-auto max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+          {/* Cabeçalho */}
+          <DialogHeader className="shrink-0 bg-gradient-to-r from-[#1B2A4A] to-[#2c3f63] px-6 py-4 text-white">
+            <DialogTitle className="flex items-center gap-2.5 text-white">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/15">
+                <FileSpreadsheet className="h-5 w-5" />
+              </span>
+              Importar planilhas de cheques
+            </DialogTitle>
+            <DialogDescription className="text-white/70 text-xs mt-1">
+              Selecione uma ou mais planilhas .xlsx. Cada arquivo será analisado e importado em sequência.
+              Cheques já existentes (mesmo nº + valor + mês) serão ignorados automaticamente.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Corpo */}
+          <div className="flex-1 overflow-y-auto min-h-0 px-6 py-5 space-y-4">
+
+            {/* Zona de drop / seleção */}
+            {!importRunning && (
+              <div
+                onClick={() => !importRunning && fileRef.current?.click()}
+                className="border-2 border-dashed border-indigo-200 bg-indigo-50/50 rounded-xl p-6 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition-colors"
+              >
+                <Upload className="h-8 w-8 mx-auto text-indigo-400 mb-2" />
+                <p className="text-sm font-medium text-indigo-700">Clique para selecionar arquivos</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Vários arquivos .xlsx ao mesmo tempo</p>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  multiple
+                  className="hidden"
+                  onChange={onFilesSelected}
+                />
+              </div>
+            )}
+
+            {/* Lista de arquivos */}
+            {importQueue.length > 0 && (
+              <div className="space-y-2">
+                {importQueue.map((item, idx) => (
+                  <div key={idx} className={`rounded-xl border p-3 transition-colors ${
+                    item.step === "done"       ? "border-green-200 bg-green-50/50" :
+                    item.step === "erro"       ? "border-red-200 bg-red-50/50" :
+                    item.step === "analisando" || item.step === "importando" ? "border-indigo-200 bg-indigo-50/50" :
+                    "border-gray-200 bg-card"
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      {/* Ícone de status */}
+                      {item.step === "done" && <CheckCircle className="h-4 w-4 shrink-0 text-green-600" />}
+                      {item.step === "erro" && <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />}
+                      {(item.step === "analisando" || item.step === "importando") && <Loader2 className="h-4 w-4 shrink-0 text-indigo-600 animate-spin" />}
+                      {(item.step === "aguardando" || item.step === "preview") && <FileSpreadsheet className="h-4 w-4 shrink-0 text-muted-foreground" />}
+
+                      <span className="text-sm font-medium flex-1 truncate" title={item.file.name}>{item.file.name}</span>
+
+                      {/* Badge de situação */}
+                      {item.step === "aguardando"  && <Badge variant="outline" className="text-[10px]">Aguardando</Badge>}
+                      {item.step === "analisando"  && <Badge className="bg-indigo-100 text-indigo-700 text-[10px]">Analisando…</Badge>}
+                      {item.step === "preview"     && item.preview && (
+                        <Badge className="bg-amber-100 text-amber-700 text-[10px]">
+                          {item.preview.novos ?? item.preview.total} novos
+                        </Badge>
+                      )}
+                      {item.step === "importando"  && <Badge className="bg-blue-100 text-blue-700 text-[10px]">Importando…</Badge>}
+                      {item.step === "done" && item.resultado && (
+                        <Badge className="bg-green-100 text-green-700 text-[10px]">
+                          {item.resultado.inseridos} inseridos · {item.resultado.ignorados} ignorados
+                        </Badge>
+                      )}
+                      {item.step === "erro" && <Badge className="bg-red-100 text-red-700 text-[10px]">Erro</Badge>}
+
+                      {/* Remover (só se não rodando) */}
+                      {!importRunning && item.step !== "done" && (
+                        <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => removeFile(idx)}>
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Mensagem de erro */}
+                    {item.step === "erro" && item.erro && (
+                      <p className="text-xs text-red-600 mt-1.5 ml-6 break-words">{item.erro}</p>
+                    )}
+
+                    {/* Preview resumo */}
+                    {item.step === "preview" && item.preview && (
+                      <div className="mt-2 ml-6 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                        <span><strong className="text-foreground">{item.preview.total}</strong> identificados</span>
+                        {item.preview.novos != null && <span className="text-green-700 font-medium">{item.preview.novos} novos</span>}
+                        {item.preview.duplicados > 0 && <span className="text-amber-700">{item.preview.duplicados} duplicados</span>}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Resumo final (quando tudo terminou) */}
+            {allDone && (
+              <div className="rounded-xl border border-green-200 bg-green-50 p-4 flex flex-wrap items-center gap-4">
+                <CheckCircle className="h-5 w-5 text-green-600 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-green-800">Importação concluída!</p>
+                  <p className="text-xs text-green-700 mt-0.5">
+                    {queueTotals.novos} inseridos · {queueTotals.ignorados} ignorados (dedup)
+                    {queueTotals.erros > 0 && ` · ${queueTotals.erros} arquivo(s) com erro`}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Barra de progresso (Regra de Ouro) */}
+          {(importRunning || importProgress > 0) && (
+            <div className="px-6 pb-2 pt-1 shrink-0 border-t">
+              <div className="relative h-2.5 rounded-full bg-gray-100 overflow-hidden">
+                <div
+                  className="absolute inset-y-0 left-0 rounded-full bg-indigo-500 transition-all duration-300"
+                  style={{ width: `${importProgress}%` }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground mt-1 text-right tabular-nums">{importProgress}%</p>
             </div>
           )}
-        </CardContent>
-      </Card>
 
-      {/* Dialog de cadastro/edição */}
-      <Dialog open={formOpen} onOpenChange={v => { if (!v) setFormOpen(false); }}>
+          {/* Rodapé */}
+          <DialogFooter className="px-6 py-4 border-t shrink-0 gap-2">
+            <Button variant="outline" onClick={fecharImport} disabled={importRunning}>
+              {allDone ? "Fechar" : "Cancelar"}
+            </Button>
+            {!allDone && (
+              <Button
+                onClick={executarImport}
+                disabled={importQueue.length === 0 || importRunning || !hasPending}
+                className="relative overflow-hidden bg-indigo-600 hover:bg-indigo-700 text-white min-w-[160px]"
+              >
+                {/* Barra de fundo (Regra de Ouro) */}
+                {importRunning && (
+                  <span
+                    className="absolute inset-y-0 left-0 bg-white/15 transition-all duration-300 pointer-events-none"
+                    style={{ width: `${importProgress}%` }}
+                  />
+                )}
+                <span className="relative flex items-center gap-2">
+                  {importRunning
+                    ? <><Loader2 className="h-4 w-4 animate-spin" /> Importando… {importProgress}%</>
+                    : <><Upload className="h-4 w-4" /> Importar {importQueue.filter(i => i.step === "aguardando").length} arquivo(s)</>
+                  }
+                </span>
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ════════════════════════════════════════════════════════
+          Dialog: Cadastro manual de cheque
+      ════════════════════════════════════════════════════════ */}
+      <Dialog open={formOpen} onOpenChange={(o) => { if (!o) { setFormOpen(false); setFormEdit(null); setForm(EMPTY_FORM); } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>{formEdit ? "Editar cheque recebido" : "Lançar cheque recebido"}</DialogTitle>
+            <DialogDescription>
+              Preencha os dados do cheque. Somente nº e valor são obrigatórios.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 mt-1">
+          <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">Nº do Cheque *</Label>
-                <Input value={form.numeroCheque} onChange={e => setForm(f => ({ ...f, numeroCheque: e.target.value }))} placeholder="000123" />
+                <Input className="mt-1" value={form.numeroCheque} onChange={e => setForm(f => ({ ...f, numeroCheque: e.target.value }))} placeholder="Ex.: 000123" />
               </div>
               <div>
                 <Label className="text-xs">Valor *</Label>
-                <Input
-                  value={form.valorMask}
-                  onChange={e => setForm(f => ({ ...f, valorMask: maskBRL(e.target.value) }))}
-                  placeholder="0,00"
-                  inputMode="numeric"
-                />
+                <div className="relative mt-1">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
+                  <Input className="pl-9 tabular-nums" inputMode="decimal" placeholder="0,00"
+                    value={form.valorMask}
+                    onChange={e => setForm(f => ({ ...f, valorMask: maskBRL(e.target.value) }))} />
+                </div>
               </div>
             </div>
             <div>
-              <Label className="text-xs">Emitente (cliente / sacado)</Label>
-              <Input value={form.emitenteNome} onChange={e => setForm(f => ({ ...f, emitenteNome: e.target.value }))} placeholder="Nome do emitente" />
+              <Label className="text-xs">Emitente (quem emitiu o cheque)</Label>
+              <Input className="mt-1" value={form.emitenteNome} onChange={e => setForm(f => ({ ...f, emitenteNome: e.target.value }))} placeholder="Nome do emitente" />
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <Label className="text-xs">Banco</Label>
-                <Input value={form.banco} onChange={e => setForm(f => ({ ...f, banco: e.target.value }))} placeholder="Ex.: Bradesco" />
+                <Input className="mt-1" value={form.banco} onChange={e => setForm(f => ({ ...f, banco: e.target.value }))} placeholder="Ex.: Bradesco" />
               </div>
               <div>
                 <Label className="text-xs">Agência</Label>
-                <Input value={form.agencia} onChange={e => setForm(f => ({ ...f, agencia: e.target.value }))} placeholder="0000" />
+                <Input className="mt-1" value={form.agencia} onChange={e => setForm(f => ({ ...f, agencia: e.target.value }))} placeholder="0000" />
               </div>
               <div>
                 <Label className="text-xs">Conta</Label>
-                <Input value={form.conta} onChange={e => setForm(f => ({ ...f, conta: e.target.value }))} placeholder="00000-0" />
+                <Input className="mt-1" value={form.conta} onChange={e => setForm(f => ({ ...f, conta: e.target.value }))} placeholder="00000-0" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">Data de emissão</Label>
-                <Input type="date" value={form.dataEmissao} onChange={e => setForm(f => ({ ...f, dataEmissao: e.target.value }))} />
+                <Input type="date" className="mt-1" value={form.dataEmissao} onChange={e => setForm(f => ({ ...f, dataEmissao: e.target.value }))} />
               </div>
               <div>
-                <Label className="text-xs">Bom para (vencimento)</Label>
-                <Input type="date" value={form.dataBomPara} onChange={e => setForm(f => ({ ...f, dataBomPara: e.target.value }))} />
+                <Label className="text-xs">Bom para (depósito)</Label>
+                <Input type="date" className="mt-1" value={form.dataBomPara} onChange={e => setForm(f => ({ ...f, dataBomPara: e.target.value }))} />
               </div>
             </div>
             <div>
               <Label className="text-xs">Observação</Label>
-              <Textarea rows={2} value={form.observacao} onChange={e => setForm(f => ({ ...f, observacao: e.target.value }))} placeholder="Opcional" />
+              <Textarea className="mt-1 resize-none" rows={2} value={form.observacao} onChange={e => setForm(f => ({ ...f, observacao: e.target.value }))} placeholder="Como foi recebido, quem trouxe, etc." />
             </div>
           </div>
-          <DialogFooter className="mt-2">
+          <DialogFooter>
             <Button variant="outline" onClick={() => setFormOpen(false)}>Cancelar</Button>
             <Button onClick={handleSalvar} disabled={criarMut.isPending || atualizarMut.isPending}
               className="bg-green-600 hover:bg-green-700 text-white">
-              {(criarMut.isPending || atualizarMut.isPending) ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <CheckCircle className="h-4 w-4 mr-1.5" />}
-              {formEdit ? "Salvar alterações" : "Cadastrar"}
+              {(criarMut.isPending || atualizarMut.isPending) && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
+              {formEdit ? "Salvar alterações" : "Cadastrar cheque"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Drilldown: detalhes do cheque alocado (Rev. 4096) */}
-      <Dialog open={alocDrilldown != null} onOpenChange={v => { if (!v) setAlocDrilldown(null); }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">Alocado</span>
-              Cheque Nº {alocDrilldown?.numero_cheque}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between py-1 border-b">
-              <span className="text-muted-foreground">Valor</span>
-              <span className="font-semibold">{alocDrilldown ? formatBRL(Number(alocDrilldown.valor)) : "—"}</span>
-            </div>
-            <div className="flex justify-between py-1 border-b">
-              <span className="text-muted-foreground">Emitente</span>
-              <span className="text-right max-w-[200px] break-words">{alocDrilldown?.emitente_nome || "—"}</span>
-            </div>
-            <div className="flex justify-between py-1 border-b">
-              <span className="text-muted-foreground">Fornecedor</span>
-              <span className="text-right max-w-[200px] break-words font-medium text-indigo-700">{alocDrilldown?.fornecedor_alocado_nome || "—"}</span>
-            </div>
-            <div className="flex justify-between py-1 border-b">
-              <span className="text-muted-foreground">Bom para</span>
-              <span>{alocDrilldown ? fmtData(alocDrilldown.data_bom_para) : "—"}</span>
-            </div>
-            {alocDrilldown?.entry_id && (
-              <div className="flex justify-between py-1 border-b">
-                <span className="text-muted-foreground">Lançamento financeiro</span>
-                <span className="font-mono text-xs">#{alocDrilldown.entry_id}</span>
-              </div>
-            )}
-            {alocDrilldown?.atualizado_em && (
-              <div className="flex justify-between py-1">
-                <span className="text-muted-foreground">Alocado em</span>
-                <span className="text-xs">{fmtData(alocDrilldown.atualizado_em)}</span>
-              </div>
-            )}
-          </div>
-          <DialogFooter className="mt-2">
-            <Button variant="outline" onClick={() => setAlocDrilldown(null)}>Fechar</Button>
-            <Button variant="ghost" className="text-gray-500 text-xs"
-              onClick={() => { atualizarStatusMut.mutate({ id: alocDrilldown.id, companyId, status: "disponivel", fornecedorAlocadoId: null, fornecedorAlocadoNome: null, entryId: null }); setAlocDrilldown(null); }}>
-              Liberar alocação
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Confirmar exclusão */}
-      <AlertDialog open={excluirId != null} onOpenChange={v => { if (!v) setExcluirId(null); }}>
+      {/* ════════════════════════════════════════════════════════
+          AlertDialog: Confirmar exclusão
+      ════════════════════════════════════════════════════════ */}
+      <AlertDialog open={!!excluirId} onOpenChange={(o) => { if (!o) setExcluirId(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir cheque recebido?</AlertDialogTitle>
+            <AlertDialogTitle>Excluir este cheque?</AlertDialogTitle>
             <AlertDialogDescription>
-              O cheque será removido do controle (exclusão lógica). Esta ação não pode ser desfeita facilmente.
+              O cheque será removido do controle. Esta ação não afeta lançamentos financeiros vinculados.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => excluirMut.mutate({ id: excluirId!, companyId })}
-              className="bg-red-600 hover:bg-red-700">
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => excluirId && excluirMut.mutate({ id: excluirId, companyId })}>
               {excluirMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Excluir"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+
+      {/* ════════════════════════════════════════════════════════
+          Dialog: Drilldown de alocação
+      ════════════════════════════════════════════════════════ */}
+      <Dialog open={!!alocDrilldown} onOpenChange={(o) => { if (!o) setAlocDrilldown(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Detalhes da alocação</DialogTitle>
+          </DialogHeader>
+          {alocDrilldown && (
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Nº Cheque</span>
+                <span className="font-mono font-semibold">{alocDrilldown.numero_cheque}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Valor</span>
+                <span className="font-semibold">{formatBRL(Number(alocDrilldown.valor))}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Fornecedor alocado</span>
+                <span className="font-medium text-right max-w-[200px] break-words">{alocDrilldown.fornecedor_alocado_nome}</span>
+              </div>
+              {alocDrilldown.alocado_em && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Data alocação</span>
+                  <span>{fmtData(alocDrilldown.alocado_em)}</span>
+                </div>
+              )}
+              {alocDrilldown.observacao && (
+                <div className="pt-1">
+                  <p className="text-muted-foreground text-xs mb-1">Observação</p>
+                  <p className="break-words">{alocDrilldown.observacao}</p>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAlocDrilldown(null)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+    </DashboardLayout>
   );
 }

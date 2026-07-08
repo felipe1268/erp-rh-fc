@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4096** — **CONTROLE DE CHEQUES RECEBIDOS: NOVO SUB-MÓDULO COMPLETO (CADASTRO + IMPORT XLSX + SUGESTÃO NO PAGAMENTO).** Novo router tRPC `chequesRecebidos` (listar/criar/atualizar/alocar/liberarAlocacao/excluir/importarPreview/importarConfirmar/sugerirPorValor/totais) + tabela `financial_cheques_recebidos` via SyncSchema+ + página `FinanceiroChequesRecebidos.tsx` (cards totais, tabela com ações inline, painel import xlsx com preview, dialog de cadastro manual) + abas "Emitidos/Recebidos" em `FinanceiroCheques.tsx` + opção "Cheque de Terceiro" em `PagarConsolidadoDialog.tsx` com seletor de cheques disponíveis por proximidade de valor. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+- **Rev. 4097** — **CHEQUES RECEBIDOS: REDESIGN COMPLETO DA PÁGINA (LAYOUT PADRÃO EMITIDOS + IMPORT MULTI-XLSX + BARRA DE PROGRESSO).** `FinanceiroChequesRecebidos.tsx` reescrito do zero: página standalone com `DashboardLayout`, 4 cards clicáveis (filtram lista por status), filtros em Card (busca + status + nav ano/mês com pills Jan-Dez idêntico aos emitidos), tabela redesenhada com badge "Bom para" colorido por urgência. Import multi-arquivo: Dialog gradiente navy FC, zona de drop, lista de arquivos com estado visual por etapa (aguardando/analisando/preview/importando/done/erro), barra de progresso 0→100% com `bg-white/15` no botão (Regra de Ouro). `FinanceiroCheques.tsx` limpo: removida aba "Recebidos" e import do componente (agora rota própria). ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
-- **Rev. 4095** — **NFS-e: FÓRMULA DO VALOR LÍQUIDO CORRIGIDA (ISS RETIDO ENTRA NO CÁLCULO) + CAMPO VOLTA A SER READ-ONLY.** Rev. 4094 tinha removido o ISS da fórmula por suposição errada e tornado o campo editável. Com a DANFSe real da NF #39 (ISSQN Retido pelo Tomador R$1.600 + INSS retido R$2.322,72 = Valor Líquido R$60.077,28 sobre bruto R$64.000), a fórmula correta é `Bruto − ISS − INSS − IRRF − PIS/COFINS (retidos)`. Campo volta a ser `<div>` read-only recalculado em tempo real; PIS/COFINS do form = só valor RETIDO (nunca "Débito Apuração Própria"). ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+- **Rev. 4096** — **CONTROLE DE CHEQUES RECEBIDOS: NOVO SUB-MÓDULO COMPLETO (CADASTRO + IMPORT XLSX + SUGESTÃO NO PAGAMENTO).** Novo router tRPC `chequesRecebidos` (listar/criar/atualizar/alocar/liberarAlocacao/excluir/importarPreview/importarConfirmar/sugerirPorValor/totais) + tabela `financial_cheques_recebidos` via SyncSchema+ + página `FinanceiroChequesRecebidos.tsx` + opção "Cheque de Terceiro" em `PagarConsolidadoDialog.tsx`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 ### 5 one-liners
+
+- **Rev. 4095** — **NFS-e: FÓRMULA DO VALOR LÍQUIDO CORRIGIDA (ISS RETIDO ENTRA NO CÁLCULO) + CAMPO VOLTA A SER READ-ONLY.** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4094** — **CORREÇÕES DE PRODUÇÃO: 3 BUGS (SQL $N, ferias.list coerce, getAlertasCompras try/catch).** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
