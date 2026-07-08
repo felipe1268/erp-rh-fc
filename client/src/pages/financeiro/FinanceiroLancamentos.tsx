@@ -834,10 +834,13 @@ export default function FinanceiroLancamentos() {
         }
       }
     }
-    cands.sort((a, b) => a.diferenca - b.diferenca);
+    // Rev. 4104-fix — nunca sugerir combinação que EXCEDE o valor a pagar (sobra > 0).
+    // Sugestões devem ter total ≤ valorNumCheque (falta algo ou é exato).
+    const candsValidos = cands.filter(c => c.total <= valorNumCheque + 0.001);
+    candsValidos.sort((a, b) => a.diferenca - b.diferenca);
     const result: Sug[] = [];
     const seen = new Set<string>();
-    for (const c of cands) {
+    for (const c of candsValidos) {
       const key = [...c.ids].sort().join(",");
       if (seen.has(key)) continue;
       seen.add(key);
