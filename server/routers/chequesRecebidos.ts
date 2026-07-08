@@ -99,9 +99,9 @@ type ColKey = "numero" | "emitente" | "banco" | "agencia" | "conta" | "valor" | 
 
 const COL_ALIASES: Record<ColKey, string[]> = {
   numero: ["numero", "num", "cheque", "nro", "nro cheque", "numero cheque",
-           "n cheque", "no cheque", "no", "nc", "numero do cheque", "num cheque",
-           "nro do cheque", "n do cheque"],
-  emitente: ["emitente", "emitente nome", "cliente", "sacado", "nome"],
+           "n cheque", "no cheque", "nc", "numero do cheque", "num cheque",
+           "nro do cheque", "n do cheque", "numero cheque emitido"],
+  emitente: ["emitente", "emitente nome", "cliente", "sacado", "nome", "no"],
   banco:    ["banco", "banco emitente"],
   agencia:  ["agencia", "ag", "agencia bancaria"],
   conta:    ["conta", "conta corrente", "cc"],
