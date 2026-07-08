@@ -1,4 +1,25 @@
 /**
+ * Rev. 4090 — **CONCILIAÇÃO: DEDUP DE IMPORTAÇÃO CIENTE DE DUPLICATAS LEGÍTIMAS NO BATCH.**
+ *
+ * BUG: `importBankStatement` e `checkStatementDuplicates` usavam `LIMIT 1` para verificar
+ * se uma linha já existia no extrato — se o DB já tinha 1 entrada com chave
+ * (data+descricao+valor+saldo), todas as demais entradas idênticas no batch eram descartadas.
+ * Resultado real: extrato IBPJ Santander Locknow com 2× "Pix Enviado FC ENGENHARIA PROJETOS E
+ * R$50.000" no dia 05/06/2026 importava apenas 1; outros 5 PIX idênticos em datas distintas
+ * (16/06 R$20k, 19/06 R$70k+R$25k, 22/06 R$25k, 29/06 R$65k) também sumiam.
+ *
+ * FIX: pré-passe que conta (a) quantas vezes cada chave aparece no batch e (b) quantas já
+ * existem no DB. Durante o loop de inserção, `sessionInserted` rastreia quantas foram inseridas
+ * nesta sessão. Só pula quando `alreadyInDb + alreadyInSess >= batchTotal`. Mesma lógica
+ * aplicada em `checkStatementDuplicates` (diálogo de revisão Rev. 4085).
+ * As 7 linhas faltantes do extrato jun/2026 da conta Locknow foram inseridas diretamente via
+ * SQL (banco de dados de produção) como parte do hotfix.
+ *
+ * Arquivos: server/routers/financial.ts (importBankStatement + checkStatementDuplicates).
+ * ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+ */
+
+/**
  * Rev. 4089 — **NOTAS FISCAIS: CARDS DE TOTAIS EXCLUEM CANCELADAS/SUBSTITUÍDAS.**
  *
  * BUG: `totais.total` e `totais.valorTotal` usavam `nfs.length` e `somarLiq(nfs)` —

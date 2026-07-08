@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4090** — **CONCILIAÇÃO: DEDUP DE IMPORTAÇÃO CIENTE DE DUPLICATAS LEGÍTIMAS NO BATCH.** Bug: `importBankStatement` e `checkStatementDuplicates` usavam `LIMIT 1` — se o DB tinha 1 linha com chave (data+desc+valor+saldo), todas as demais idênticas no batch eram descartadas. Extrato IBPJ Locknow jun/2026 perdia 7 "Pix Enviado FC ENGENHARIA PROJETOS E" (2× R$50k em 05/06 + 5 outros). Fix: pré-passe conta ocorrências no batch e no DB; só pula quando `alreadyInDb + alreadyInSess >= batchTotal`. As 7 linhas faltantes foram inseridas via SQL de produção. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+
 - **Rev. 4089** — **NOTAS FISCAIS: CARDS DE TOTAIS EXCLUEM CANCELADAS/SUBSTITUÍDAS.** Bug: `totais.total` e `totais.valorTotal` usavam `nfs.length`/`somarLiq(nfs)` — incluíam NFs canceladas e substituídas no card "Total NFs" e na barra de progresso. Fix: novo filtro `ativas = nfs.filter(!cancelada && !substituida)` como base dos dois campos. Os sub-totais por status já estavam corretos. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
-- **Rev. 4088** — **NF-e: AUTO-VÍNCULO CROSS-MÊS — NFS-e DE MÊS ANTERIOR CONCILIADA AUTOMATICAMENTE AO CONSOLIDAR O MÊS SEGUINTE (REGIME DE COMPETÊNCIA).** 3 bugs corrigidos: (1) `autoVincularNfsPorLinhas`: janela de data invertida buscava NFs emitidas *depois* do crédito — agora busca 90 dias *antes*; (2) `sincronizarNfsPeriodo` e `obterSugestoesPeriodo`: NF query restrita ao mesmo mês — expandida 90 dias atrás; (3) `consolidarMes`/`consolidarTodasContas` não disparavam auto-vínculo — agora passam IDs das linhas ao serviço. Resultado: ao consolidar janeiro, NFS-e de dezembro vira "Conciliada" com card mostrando data/valor do crédito de janeiro. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
 ### 5 one-liners
+
+- **Rev. 4088** — **NF-e: AUTO-VÍNCULO CROSS-MÊS — NFS-e DE MÊS ANTERIOR CONCILIADA AUTOMATICAMENTE AO CONSOLIDAR O MÊS SEGUINTE (REGIME DE COMPETÊNCIA).** 3 bugs corrigidos na janela de data invertida, período restrito e consolidarMes sem disparo. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4087** — **PANORAMA FISCAL: MATCHING RETROATIVO DE ENTRADAS BANCÁRIAS × NFS-e DE MESES ANTERIORES (REGIME DE COMPETÊNCIA).** Novo endpoint `nfseAntQ`; matching heurístico valor ≈ valor_liquido (±3%); AlertCard azul + badge "← NFS-e #N / data". ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
@@ -66,13 +68,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4083** — **CONCILIAÇÃO: PARSERS SANTANDER CORRIGIDOS — EXTRATO CONSOLIDADO INTELIGENTE (FEV/2026) E INTERNET BANKING EMPRESARIAL IBPJ (JUN/2026) FUNCIONAM INDEPENDENTEMENTE + TEMPLATES AUTO-SEEDED EM CONFIGURAÇÕES.** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
-- **Rev. 4082** — **CONCILIAÇÃO BANCÁRIA: "LANÇAR NO ERP" SUGERE CONDIÇÃO DE PAGAMENTO PRO FORNECEDOR COM CICLO DE FECHAMENTO CADASTRADO.** Novo endpoint `financial.getFornecedorCiclosConfig`; diálogo pré-preenche `cicloFormaPagamento`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
-- **Rev. 4081** — **CONCILIAÇÃO: CHEQUE DEVOLVIDO QUITADO POR MÚLTIPLOS PAGAMENTOS/FORMAS — CONTROLE DE CHEQUES PASSA A MOSTRAR COMO FOI PAGO.** Fix: nova coluna `forma_pagamento` no tipo 'ajuste'; seletor no diálogo Conciliação + popover "Ver pagamento". ZERO DELETE · ZERO UPDATE · 1 ALTER aditivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4079 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4082 e anteriores.
 
 ## User preferences
 

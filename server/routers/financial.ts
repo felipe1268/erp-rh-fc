@@ -9311,48 +9311,75 @@ export const financialRouter = router({
     let inserted = 0;
     let skipped = 0;
     const importadoEm = new Date().toISOString();
+
+    // Rev. 4090 — dedup ciente de duplicatas legítimas no próprio batch (ex: 2×
+    // "Pix Enviado MESMO FAVORECIDO R$50.000" no mesmo dia no extrato).
+    // Estratégia: contar quantas vezes cada chave (data+desc+valor+saldo) aparece
+    // no batch; consultar o DB uma vez por chave única; só pular se o DB já tem
+    // pelo menos tantas ocorrências quanto o batch pretende inserir para aquela chave.
+    // "sessionInserted" rastreia quantas já inserimos NESTA sessão por chave.
+    const lineKey = (l: { data: string; descricao: string; valor: number; saldo: number | null }) =>
+      `${l.data}|${l.descricao}|${l.valor}|${l.saldo ?? ""}`;
+
+    const batchCount = new Map<string, number>();
+    for (const l of lines) {
+      const k = lineKey(l);
+      batchCount.set(k, (batchCount.get(k) ?? 0) + 1);
+    }
+
+    const dbCount = new Map<string, number>();
+    for (const [k, _cnt] of batchCount) {
+      const [data, descricao, valorStr, salStr] = k.split("|");
+      const valor = parseFloat(valorStr);
+      const salParam = salStr === "" ? null : parseFloat(salStr);
+      const res = await dbExecute(db,
+        `SELECT COUNT(*) AS cnt FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 AND ($6::numeric IS NULL OR saldo_apos=$7) AND excluido_em IS NULL`,
+        [input.companyId, input.contaBancariaId, data, descricao, valor, salParam, salParam]
+      );
+      dbCount.set(k, parseInt((rows(res)[0] as any)?.cnt ?? "0", 10));
+    }
+
+    const sessionInserted = new Map<string, number>();
+
     for (const line of lines) {
       // Rev. 3533 — dedup inclui saldo_apos quando presente: lançamentos legítimos com
-      // mesmo valor/data/descricao mas saldos diferentes (ex: N capitalizações iguais
-      // no mesmo dia) deixam de ser descartados. Quando saldo é null (OFX sem saldo),
-      // $6::numeric IS NULL → cláusula é verdadeira para qualquer saldo_apos (compat).
-      // Rev. 3544 bugfix: $6 aparecia 2x na mesma query → dbExecute (split por $\d+)
-      // atribuía params[6]=undefined ao 2º $6 → SQL: saldo_apos=) → 42601 syntax error.
-      // Fix: segundo $6 virou $7 e salParam passado duas vezes no array.
-      // Rev. 3802 — dedup secundário por ID de transação: mesmo débito importado de
-      // formatos diferentes (PDF curto vs OFX longo) gera descrições distintas mas
-      // carrega o mesmo "Doc NNNNNN" ou código "E003..." → extrai e busca por ILIKE.
-      const salParam = line.saldo ?? null;
-      const existing = await dbExecute(db, 
-        `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 AND ($6::numeric IS NULL OR saldo_apos=$7) AND excluido_em IS NULL LIMIT 1`,
-        [input.companyId, input.contaBancariaId, line.data, line.descricao, line.valor, salParam, salParam]
-      );
-      if (rows(existing).length > 0) { skipped++; continue; }
+      // mesmo valor/data/descricao mas saldos diferentes deixam de ser descartados.
+      // Rev. 3544 bugfix: salParam passado duas vezes (segundo $6 virou $7).
+      // Rev. 3802 — dedup secundário por ID de transação (E003.../Doc NNNNNN).
+      // Rev. 4090 — dedup ciente do batch: permite N inserções quando o extrato tem
+      // N ocorrências idênticas legítimas (ex: 2× Pix mesmo valor, mesmo favorecido).
+      const k = lineKey(line);
+      const alreadyInDb   = dbCount.get(k) ?? 0;
+      const alreadyInSess = sessionInserted.get(k) ?? 0;
+      const batchTotal    = batchCount.get(k) ?? 1;
+
+      if (alreadyInDb + alreadyInSess >= batchTotal) {
+        skipped++;
+        continue;
+      }
+
       // Dedup secundário: extrai ID canônico da descrição (E003... ou Doc NNNNNN)
-      // Rev. 3949 — FIX: dedup secundário também verifica saldo_apos (igual ao
-      // primário). Sem isso, N lançamentos legítimos com o mesmo Doc/E-code no
-      // mesmo dia (ex.: 7x DEBITO CAPITALIZACAO "Doc 369639") eram copiados apenas
-      // 1x — o fuzzy match no 2º disparo encontrava o 1º inserido e descartava os
-      // demais. Com saldo_apos na guarda, cada entrada com saldo distinto passa.
-      // Rev. 4086b — dedup secundário restrito à mesma conta (cross-conta causava
-      // falso-positivo: PIX já importado em outra conta bloqueava inserção nesta).
-      // Regra: $5 e $6 distintos (evita bug dbExecute dup-placeholder → 42601).
+      // Rev. 3949 — FIX: dedup secundário também verifica saldo_apos.
+      // Rev. 4086b — restrito à mesma conta (cross-conta causava falso-positivo).
+      const salParam = line.saldo ?? null;
       const eCode = line.descricao?.match(/E[0-9A-Fa-f]{20,}/)?.[0];
       const docCode = line.descricao?.match(/Doc\s+(\d{5,})/i)?.[1];
       const txKey = eCode ?? (docCode ? `Doc ${docCode}` : null);
-      if (txKey) {
+      if (txKey && alreadyInDb === 0 && alreadyInSess === 0) {
         const fuzzy = await dbExecute(db,
           `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND valor=$4 AND descricao ILIKE $5 AND ($6::numeric IS NULL OR saldo_apos=$7) AND excluido_em IS NULL LIMIT 1`,
           [input.companyId, input.contaBancariaId, line.data, line.valor, `%${txKey}%`, salParam, salParam]
         );
         if (rows(fuzzy).length > 0) { skipped++; continue; }
       }
+
       await dbExecute(db, 
         `INSERT INTO bank_statement_lines (company_id, conta_bancaria_id, data, descricao, valor, tipo, saldo_apos, conciliado, importado_em)
          VALUES ($1,$2,$3,$4,$5,$6,$7,0,$8)`,
         [input.companyId, input.contaBancariaId, line.data, line.descricao, line.valor,
          line.valor >= 0 ? "credito" : "debito", line.saldo, importadoEm]
       );
+      sessionInserted.set(k, alreadyInSess + 1);
       inserted++;
     }
 
@@ -9556,27 +9583,55 @@ export const financialRouter = router({
     if (rows(ownerCheck).length === 0) {
       throw new TRPCError({ code: "FORBIDDEN", message: "Conta bancária não pertence a esta empresa" });
     }
+    // Rev. 4090 — dedup ciente de duplicatas legítimas no batch (mesma lógica de importBankStatement).
+    const lineKey2 = (l: { data: string; descricao: string; valor: number; saldo: number | null }) =>
+      `${l.data}|${l.descricao}|${l.valor}|${l.saldo ?? ""}`;
+
+    const batchCount2 = new Map<string, number>();
+    for (const l of input.linhas) {
+      const k = lineKey2(l);
+      batchCount2.set(k, (batchCount2.get(k) ?? 0) + 1);
+    }
+    const dbCount2 = new Map<string, number>();
+    for (const [k] of batchCount2) {
+      const [data, descricao, valorStr, salStr] = k.split("|");
+      const valor = parseFloat(valorStr);
+      const salParam = salStr === "" ? null : parseFloat(salStr);
+      const res = await dbExecute(db,
+        `SELECT COUNT(*) AS cnt FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 AND ($6::numeric IS NULL OR saldo_apos=$7) AND excluido_em IS NULL`,
+        [input.companyId, input.contaBancariaId, data, descricao, valor, salParam, salParam]
+      );
+      dbCount2.set(k, parseInt((rows(res)[0] as any)?.cnt ?? "0", 10));
+    }
+
     const duplicateIndices: number[] = [];
+    const seen2 = new Map<string, number>();
     for (let idx = 0; idx < input.linhas.length; idx++) {
       const line = input.linhas[idx];
+      const k = lineKey2(line);
+      const alreadyInDb   = dbCount2.get(k) ?? 0;
+      const alreadyInSess = seen2.get(k) ?? 0;
+      const batchTotal    = batchCount2.get(k) ?? 1;
+
+      if (alreadyInDb + alreadyInSess >= batchTotal) {
+        duplicateIndices.push(idx);
+        seen2.set(k, alreadyInSess + 1);
+        continue;
+      }
+
       const salParam = line.saldo ?? null;
-      const existing = await dbExecute(db,
-        `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 AND ($6::numeric IS NULL OR saldo_apos=$7) AND excluido_em IS NULL LIMIT 1`,
-        [input.companyId, input.contaBancariaId, line.data, line.descricao, line.valor, salParam, salParam]
-      );
-      if (rows(existing).length > 0) { duplicateIndices.push(idx); continue; }
       const eCode = line.descricao?.match(/E[0-9A-Fa-f]{20,}/)?.[0];
       const docCode = line.descricao?.match(/Doc\s+(\d{5,})/i)?.[1];
       const txKey = eCode ?? (docCode ? `Doc ${docCode}` : null);
-      if (txKey) {
-        // Rev. 4086b — dedup secundário restrito à mesma conta (cross-conta causava
-        // falso-positivo: PIX já importado em outra conta bloqueava inserção nesta).
+      if (txKey && alreadyInDb === 0 && alreadyInSess === 0) {
+        // Rev. 4086b — dedup secundário restrito à mesma conta.
         const fuzzy = await dbExecute(db,
           `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND valor=$4 AND descricao ILIKE $5 AND ($6::numeric IS NULL OR saldo_apos=$7) AND excluido_em IS NULL LIMIT 1`,
           [input.companyId, input.contaBancariaId, line.data, line.valor, `%${txKey}%`, salParam, salParam]
         );
-        if (rows(fuzzy).length > 0) { duplicateIndices.push(idx); }
+        if (rows(fuzzy).length > 0) { duplicateIndices.push(idx); seen2.set(k, alreadyInSess + 1); continue; }
       }
+      seen2.set(k, alreadyInSess + 1);
     }
     return { duplicateIndices };
   }),
