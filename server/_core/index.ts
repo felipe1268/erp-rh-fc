@@ -1394,6 +1394,40 @@ REGRAS DE EXTRAÇÃO:
           console.log(`[SyncSchema+] Tabela financial_cheques garantida (Controle de Cheques).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA financial_cheques:`, e?.message || e); }
 
+        // Rev. 4096 — Cheques Recebidos: cheques de terceiros recebidos de clientes,
+        // usados para pagamento de fornecedores ("endosso"). Status lifecycle:
+        // disponivel → alocado → compensado | devolvido.
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS financial_cheques_recebidos (
+              id SERIAL PRIMARY KEY,
+              company_id INTEGER NOT NULL,
+              numero_cheque VARCHAR(40) NOT NULL,
+              emitente_nome VARCHAR(255),
+              banco VARCHAR(120),
+              agencia VARCHAR(20),
+              conta VARCHAR(30),
+              valor NUMERIC(15,2) NOT NULL,
+              data_emissao DATE,
+              data_bom_para DATE,
+              status VARCHAR(20) NOT NULL DEFAULT 'disponivel',
+              fornecedor_alocado_id INTEGER,
+              fornecedor_alocado_nome VARCHAR(255),
+              entry_id INTEGER,
+              observacao TEXT,
+              criado_por_id INTEGER,
+              criado_por_nome VARCHAR(255),
+              criado_em TIMESTAMP DEFAULT NOW() NOT NULL,
+              atualizado_em TIMESTAMP DEFAULT NOW() NOT NULL,
+              excluido_em TIMESTAMP
+            )
+          `);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_chqr_company ON financial_cheques_recebidos(company_id) WHERE excluido_em IS NULL`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_chqr_status ON financial_cheques_recebidos(company_id, status) WHERE excluido_em IS NULL`);
+          await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_chqr_numero ON financial_cheques_recebidos(company_id, numero_cheque) WHERE excluido_em IS NULL`);
+          console.log(`[SyncSchema+] Rev. 4096: tabela financial_cheques_recebidos garantida (Cheques Recebidos).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA financial_cheques_recebidos:`, e?.message || e); }
+
         // Rev. 4068 — Controle de Cheques: persiste o MOTIVO de devolução (antes só
         // computado on-the-fly) e a CONTA BANCÁRIA em que o cheque foi tentado compensar
         // (linha do extrato na Conciliação Bancária). Colunas aditivas (R-001/R-007/R-010 OK).

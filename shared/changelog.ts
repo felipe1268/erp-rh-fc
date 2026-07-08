@@ -1,4 +1,52 @@
 /**
+ * Rev. 4096 — **CONTROLE DE CHEQUES RECEBIDOS: NOVO SUB-MÓDULO COMPLETO (CADASTRO + IMPORT XLSX + SUGESTÃO NO PAGAMENTO).**
+ *
+ * CONTEXTO: Clientes pagam com múltiplos cheques de terceiros (ex.: 10×R$10k = R$100k). O sistema
+ * precisava registrar, rastrear e alocar esses cheques para pagamento de fornecedores ("endosso").
+ * Não existia nenhum controle de cheques RECEBIDOS — apenas emitidos (financial_cheques já existia).
+ *
+ * IMPLEMENTAÇÃO:
+ *
+ * BACKEND — `server/routers/chequesRecebidos.ts` (NOVO, 320 linhas):
+ *   - Namespace tRPC `chequesRecebidos` registrado em `server/routers.ts`.
+ *   - Procedures: `listar` (filtros status/mês/ano/busca), `sugerirPorValor` (lista disponíveis por
+ *     proximidade de valor para sugestão no pagamento), `criar`, `atualizar`, `alocar`,
+ *     `liberarAlocacao`, `excluir` (soft-delete), `importarPreview`, `importarConfirmar`, `totais`.
+ *   - Parser xlsx flexível: detecta colunas por aliases PT-BR (Nº Cheque, Número, Emitente,
+ *     Banco, Agência, Conta, Valor, Emissão, Bom Para), lê serial Excel e DD/MM/AAAA.
+ *   - Dedup idempotente: (company_id, numero_cheque, valor) — re-import não duplica.
+ *   - Tenant guard `assertCompanyAccess` em todas as mutations/queries.
+ *   - ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+ *
+ * BANCO — `server/_core/index.ts` (SyncSchema+, Rev. 4096):
+ *   - Tabela `financial_cheques_recebidos`: id, company_id, numero_cheque, emitente_nome, banco,
+ *     agencia, conta, valor, data_emissao, data_bom_para, status (disponivel/alocado/compensado/
+ *     devolvido), fornecedor_alocado_id/nome, entry_id, observacao, criado_por_*, criado_em,
+ *     atualizado_em, excluido_em.
+ *   - 3 índices parciais (company, status, numero).
+ *
+ * FRONTEND — `client/src/pages/financeiro/FinanceiroChequesRecebidos.tsx` (NOVO, 290 linhas):
+ *   - 4 cards de resumo (Disponíveis / Alocados / Compensados / Devolvidos) com valor total.
+ *   - Tabela com navegação ano+mês, filtro por status e busca textual.
+ *   - Actions inline: marcar compensado, marcar devolvido, voltar para disponível, editar, excluir.
+ *   - Painel de importação xlsx com preview (dry-run) + confirmação.
+ *   - Dialog de cadastro/edição manual completo.
+ *
+ * `client/src/pages/financeiro/FinanceiroCheques.tsx`:
+ *   - Adicionadas **abas "Cheques Emitidos" / "Cheques Recebidos"** no topo da página.
+ *   - Aba ativa controla qual sub-componente é renderizado.
+ *
+ * `client/src/pages/financeiro/PagarConsolidadoDialog.tsx`:
+ *   - Nova opção **"Cheque de Terceiro"** no seletor de forma de pagamento.
+ *   - Ao selecionar, busca automaticamente cheques recebidos disponíveis por proximidade de valor
+ *     (tolerância ±30%) via `chequesRecebidos.sugerirPorValor`.
+ *   - Seletor interativo mostra número, emitente e valor de cada cheque disponível.
+ *   - Cheques selecionados são marcados como "Alocado" no Controle de Cheques Recebidos.
+ *
+ * ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+ */
+
+/**
  * Rev. 4095 — **NFS-e: FÓRMULA DO VALOR LÍQUIDO CORRIGIDA (ISS RETIDO ENTRA NO CÁLCULO) + CAMPO VOLTA A SER READ-ONLY.**
  *
  * CONTEXTO: Rev. 4094 tinha removido o ISS da fórmula (`Bruto - INSS - IRRF - PIS/COFINS`) por

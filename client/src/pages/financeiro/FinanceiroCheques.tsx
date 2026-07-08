@@ -1,5 +1,6 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
+import FinanceiroChequesRecebidos from "./FinanceiroChequesRecebidos";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -206,6 +207,9 @@ export default function FinanceiroCheques() {
   const { toast } = useToast();
   const utils = (trpc as any).useUtils?.() ?? (trpc as any).useContext?.();
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // ── Aba ──
+  const [aba, setAba] = useState<"emitidos" | "recebidos">("emitidos");
 
   // ── Filtros ──
   // Mesmo padrão da Conciliação Bancária: navegação por ANO + faixa de meses
@@ -838,6 +842,25 @@ export default function FinanceiroCheques() {
           </div>
         </div>
 
+        {/* ── Abas Emitidos / Recebidos (Rev. 4096) ── */}
+        <div className="flex gap-0 border-b -mb-2">
+          <button
+            onClick={() => setAba("emitidos")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${aba === "emitidos" ? "border-indigo-600 text-indigo-700" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          >
+            Cheques Emitidos
+          </button>
+          <button
+            onClick={() => setAba("recebidos")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${aba === "recebidos" ? "border-indigo-600 text-indigo-700" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          >
+            Cheques Recebidos
+          </button>
+        </div>
+
+        {aba === "recebidos" && <FinanceiroChequesRecebidos />}
+        {aba === "emitidos" && (<>
+
         {/* Alerta de divergência (Rev. 3234) — dupla checagem: o banco compensou cheques
             que no controle constam como devolvido/sustado/pendente. Não altera nada;
             só sinaliza p/ análise manual. */}
@@ -1244,6 +1267,7 @@ export default function FinanceiroCheques() {
             )}
           </CardContent>
         </Card>
+        </>)}
       </div>
 
       {/* ── Dupla checagem (Rev. 3234): confirmar a conferência com o extrato ── */}

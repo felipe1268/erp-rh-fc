@@ -31,7 +31,8 @@ function calcParcelasPreview(total: number, numParcelas: number, prazoDias: numb
 }
 
 const FORMAS_PAGAMENTO = [
-  { value: "cheque", label: "Cheque" },
+  { value: "cheque", label: "Cheque (próprio)" },
+  { value: "cheque_terceiro", label: "Cheque de Terceiro" },
   { value: "pix", label: "PIX" },
   { value: "ted", label: "TED/Transferência" },
   { value: "boleto", label: "Boleto" },
@@ -83,6 +84,18 @@ export default function PagarConsolidadoDialog({
   );
   const diffTotal = Math.round((totalParcelas - total) * 100) / 100;
   const isCheque = formaPagamento === "cheque";
+  const isChequeTerceiro = formaPagamento === "cheque_terceiro";
+
+  // Rev. 4096 — Sugestão de cheques recebidos disponíveis por proximidade de valor
+  const chequesDisponiveisQ = (trpc as any).chequesRecebidos?.sugerirPorValor?.useQuery(
+    { companyId, valorAlvo: total, toleranciaPercent: 30 },
+    { enabled: isChequeTerceiro && !!companyId && total > 0 }
+  );
+  const chequesDisponiveis: any[] = chequesDisponiveisQ?.data?.cheques ?? [];
+  const [chequesTerceiroSel, setChequesTerceiroSel] = useState<number[]>([]);
+
+  // Limpar seleção ao trocar forma
+  useEffect(() => { if (!isChequeTerceiro) setChequesTerceiroSel([]); }, [isChequeTerceiro]);
 
   function updateParcela(i: number, patch: Partial<{ numero: string; valor: number; dataVencimento: string }>) {
     setParcelas((prev) => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
@@ -171,6 +184,47 @@ export default function PagarConsolidadoDialog({
               </Select>
             </div>
           </div>
+
+          {isChequeTerceiro && (
+            <div className="border border-violet-200 bg-violet-50/50 rounded-lg p-3 space-y-2">
+              <Label className="text-sm text-violet-800 font-medium">Selecione o(s) cheque(s) recebido(s) disponíveis</Label>
+              {chequesDisponiveisQ?.isLoading ? (
+                <div className="text-xs text-muted-foreground py-2">Buscando cheques disponíveis…</div>
+              ) : chequesDisponiveis.length === 0 ? (
+                <div className="text-xs text-violet-700 bg-violet-100 rounded p-2">
+                  Nenhum cheque recebido disponível próximo ao valor de {formatBRL(total)}.
+                  Cadastre cheques na aba "Cheques Recebidos" do Controle de Cheques.
+                </div>
+              ) : (
+                <div className="space-y-1 max-h-48 overflow-y-auto">
+                  {chequesDisponiveis.map((c: any) => {
+                    const sel = chequesTerceiroSel.includes(c.id);
+                    return (
+                      <div
+                        key={c.id}
+                        onClick={() => setChequesTerceiroSel(prev =>
+                          sel ? prev.filter(id => id !== c.id) : [...prev, c.id]
+                        )}
+                        className={`flex items-center justify-between cursor-pointer rounded border px-3 py-1.5 transition-colors ${sel ? "bg-violet-100 border-violet-400" : "bg-white border-violet-100 hover:border-violet-300"}`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className={`w-3 h-3 rounded-full border-2 shrink-0 ${sel ? "bg-violet-600 border-violet-600" : "border-gray-300"}`} />
+                          <span className="font-mono text-xs font-semibold text-violet-800">{c.numero_cheque}</span>
+                          {c.emitente_nome && <span className="text-xs text-muted-foreground truncate">{c.emitente_nome}</span>}
+                        </div>
+                        <span className="text-xs font-semibold tabular-nums ml-2 shrink-0">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(c.valor))}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {chequesTerceiroSel.length > 0 && (
+                <p className="text-[10px] text-violet-700">
+                  {chequesTerceiroSel.length} cheque(s) selecionado(s) — os cheques selecionados serão marcados como "Alocado" no Controle de Cheques Recebidos.
+                </p>
+              )}
+            </div>
+          )}
 
           {isCheque && (
             <div className="border border-blue-200 bg-blue-50/50 rounded-lg p-3 space-y-2">

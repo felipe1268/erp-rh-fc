@@ -84,6 +84,7 @@ import { heSolicitacoesRouter } from "./routers/heSolicitacoes";
 import { financialRouter } from "./routers/financial";
 import { bankStatementTemplatesRouter } from "./routers/bankStatementTemplates";
 import { chequesRouter } from "./routers/cheques";
+import { chequesRecebidosRouter } from "./routers/chequesRecebidos";
 import { cartaoRouter } from "./routers/cartao";
 import { pontoDescontosRouter } from "./routers/pontoDescontos";
 import { feriadosRouter } from "./routers/feriados";
@@ -1757,6 +1758,7 @@ export const appRouter = router({
   heSolicitacoes: heSolicitacoesRouter,
   financial: financialRouter,
   cheques: chequesRouter,
+  chequesRecebidos: chequesRecebidosRouter,
   cartao: cartaoRouter,
   fiscalNotes: fiscalNotesRouter,
   sefaz: sefazRouter,
