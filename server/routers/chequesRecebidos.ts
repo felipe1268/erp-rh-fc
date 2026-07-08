@@ -211,26 +211,24 @@ export const chequesRecebidosRouter = router({
     }),
 
   // ── Buscar disponíveis por proximidade de valor (para sugerir no pagamento) ──
+  // Rev. 4096 — lista TODOS os disponíveis ordenados por proximidade de valor (sem filtro de tolerância);
+  // a UI compõe multi-cheque até atingir o total, portanto não se restringe por cheque individual.
   sugerirPorValor: protectedProcedure
     .input(z.object({
       companyId: z.coerce.number(),
       valorAlvo: z.number(),
-      toleranciaPercent: z.number().default(20),
     }))
     .query(async ({ ctx, input }) => {
       await assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível." });
 
-      const min = input.valorAlvo * (1 - input.toleranciaPercent / 100);
-      const max = input.valorAlvo * (1 + input.toleranciaPercent / 100);
       const res = await dbExecute(db, `
         SELECT * FROM financial_cheques_recebidos
         WHERE company_id=$1 AND status='disponivel' AND excluido_em IS NULL
-          AND valor >= $2 AND valor <= $3
-        ORDER BY ABS(valor - $4) ASC
-        LIMIT 20
-      `, [input.companyId, min, max, input.valorAlvo]);
+        ORDER BY ABS(valor - $2) ASC, data_bom_para ASC NULLS LAST
+        LIMIT 50
+      `, [input.companyId, input.valorAlvo]);
 
       return { cheques: res.rows };
     }),

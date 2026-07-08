@@ -292,6 +292,8 @@ export default function FinanceiroContasAPagar() {
   const [chequeTitular, setChequeTitular] = useState("");
   const [chequeDataEmissao, setChequeDataEmissao] = useState("");
   const [chequeDataBomPara, setChequeDataBomPara] = useState("");
+  // Rev. 4096 — Cheque de Terceiro (Cheques Recebidos): seleção multi-cheque na baixa avulsa
+  const [chequesTerceiroSelAvulso, setChequesTerceiroSelAvulso] = useState<number[]>([]);
   // Rev. 1620 — seleção em lote (Onda 2)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [showBulkPay, setShowBulkPay] = useState(false);
@@ -343,9 +345,28 @@ export default function FinanceiroContasAPagar() {
     { enabled: !!companyId }
   );
 
+  // Rev. 4096 — alocar lote de cheques recebidos na baixa avulsa
+  const alocarLoteMutAvulso = (trpc as any).chequesRecebidos?.alocarLote?.useMutation({
+    onError: (e: any) => toast({
+      title: "Baixa registrada, mas falha ao alocar cheques",
+      description: `Cheques de terceiro NÃO foram marcados como Alocados: ${e.message}. Acesse Controle de Cheques Recebidos para alocar manualmente.`,
+      variant: "destructive",
+    }),
+  });
+
   // Rev. 3743 — baixa via histórico (financial_entry_baixas): parcial ou total.
   const payMut = (trpc as any).financial.registrarBaixa.useMutation({
     onSuccess: (r: any) => {
+      // Rev. 4096 — se forma=cheque_terceiro, alocar os cheques recebidos selecionados
+      if (formaPagamento === "cheque_terceiro" && chequesTerceiroSelAvulso.length && alocarLoteMutAvulso) {
+        alocarLoteMutAvulso.mutate({
+          companyId,
+          ids: chequesTerceiroSelAvulso,
+          fornecedorAlocadoNome: showPay?.fornecedorNome ?? undefined,
+          entryId: showPay?.id ?? null,
+        });
+        setChequesTerceiroSelAvulso([]);
+      }
       toast({ title: r?.quitado ? "Título quitado!" : "Baixa parcial registrada!", description: r?.quitado ? undefined : `Saldo em aberto: ${formatBRL(Number(r?.saldo ?? 0))}` });
       setShowPay(null);
       refetch();
@@ -358,6 +379,18 @@ export default function FinanceiroContasAPagar() {
     { entryId: showPay?.id ?? 0, companyId },
     { enabled: !!companyId && !!showPay?.id }
   );
+
+  // Rev. 4096 — cheques recebidos disponíveis (para baixa avulsa com "Cheque de Terceiro")
+  const totalPagarNum = parseFloat(valorPagar || "0") + parseFloat(jurosPay || "0") - parseFloat(descontosPay || "0") + parseFloat(outrosPay || "0");
+  const chequesDisponiveisAvulsoQ = (trpc as any).chequesRecebidos?.sugerirPorValor?.useQuery(
+    { companyId, valorAlvo: totalPagarNum > 0 ? totalPagarNum : (showPay?.valorSaldo ?? showPay?.valor ?? 0) },
+    { enabled: !!companyId && formaPagamento === "cheque_terceiro" }
+  );
+  const chequesDisponiveisAvulso: any[] = chequesDisponiveisAvulsoQ?.data?.cheques ?? [];
+  const totalSelecionadoAvulso = chequesDisponiveisAvulso
+    .filter((c: any) => chequesTerceiroSelAvulso.includes(c.id))
+    .reduce((s: number, c: any) => s + Number(c.valor), 0);
+  const diffAvulso = Math.round((totalSelecionadoAvulso - (totalPagarNum > 0 ? totalPagarNum : (showPay?.valorSaldo ?? showPay?.valor ?? 0))) * 100) / 100;
   const estornoBaixaMut = (trpc as any).financial.estornarBaixaItem.useMutation({
     onSuccess: () => {
       toast({ title: "Baixa estornada!" });
@@ -2687,8 +2720,8 @@ export default function FinanceiroContasAPagar() {
                     <Select value={formaPagamento} onValueChange={setFormaPagamento}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {["pix","ted","boleto","cheque","dinheiro","cartao_credito","debito_automatico"].map(v => (
-                          <SelectItem key={v} value={v}>{v.replace(/_/g," ").toUpperCase()}</SelectItem>
+                        {["pix","ted","boleto","cheque","cheque_terceiro","dinheiro","cartao_credito","debito_automatico"].map(v => (
+                          <SelectItem key={v} value={v}>{v === "cheque_terceiro" ? "Cheque de Terceiro" : v.replace(/_/g," ").toUpperCase()}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -2817,6 +2850,56 @@ export default function FinanceiroContasAPagar() {
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Rev. 4096 — Cheque de Terceiro: seletor de cheques recebidos disponíveis */}
+                {formaPagamento === "cheque_terceiro" && (
+                  <div className="border border-violet-200 bg-violet-50/50 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm text-violet-800 font-medium">Cheques recebidos disponíveis</Label>
+                      {chequesTerceiroSelAvulso.length > 0 && (
+                        <span className={`text-xs font-semibold tabular-nums ${
+                          Math.abs(diffAvulso) <= 0.05 ? "text-green-700" :
+                          diffAvulso > 0 ? "text-amber-700" : "text-red-700"
+                        }`}>
+                          Selecionado: {formatBRL(totalSelecionadoAvulso)}
+                          {Math.abs(diffAvulso) > 0.05 && (diffAvulso > 0 ? ` (excede ${formatBRL(diffAvulso)})` : ` (falta ${formatBRL(-diffAvulso)})`)}
+                          {Math.abs(diffAvulso) <= 0.05 && " ✓"}
+                        </span>
+                      )}
+                    </div>
+                    {chequesDisponiveisAvulsoQ?.isLoading ? (
+                      <div className="text-xs text-muted-foreground py-2">Buscando cheques disponíveis…</div>
+                    ) : chequesDisponiveisAvulso.length === 0 ? (
+                      <div className="text-xs text-violet-700 bg-violet-100 rounded p-2">
+                        Nenhum cheque recebido disponível. Cadastre na aba "Cheques Recebidos" do Controle de Cheques.
+                      </div>
+                    ) : (
+                      <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
+                        {chequesDisponiveisAvulso.map((c: any) => {
+                          const sel = chequesTerceiroSelAvulso.includes(c.id);
+                          return (
+                            <div key={c.id}
+                              onClick={() => setChequesTerceiroSelAvulso(prev => sel ? prev.filter(id => id !== c.id) : [...prev, c.id])}
+                              className={`flex items-center justify-between cursor-pointer rounded border px-3 py-1.5 transition-colors ${sel ? "bg-violet-100 border-violet-400" : "bg-white border-violet-100 hover:border-violet-300"}`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className={`w-3 h-3 rounded-full border-2 shrink-0 ${sel ? "bg-violet-600 border-violet-600" : "border-gray-300"}`} />
+                                <span className="font-mono text-xs font-semibold text-violet-800">{c.numero_cheque}</span>
+                                {c.emitente_nome && <span className="text-xs text-muted-foreground truncate">{c.emitente_nome}</span>}
+                                {c.data_bom_para && <span className="text-[10px] text-muted-foreground shrink-0">bom {c.data_bom_para?.slice(0, 10)}</span>}
+                              </div>
+                              <span className="text-xs font-semibold tabular-nums ml-2 shrink-0">{formatBRL(Number(c.valor))}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {chequesTerceiroSelAvulso.length > 0
+                      ? <p className="text-[10px] text-violet-700">{chequesTerceiroSelAvulso.length} cheque(s) selecionado(s) · serão marcados como "Alocado" ao confirmar.</p>
+                      : <p className="text-[10px] text-violet-600">Selecione um ou mais cheques que somem o valor da baixa.</p>
+                    }
                   </div>
                 )}
 
