@@ -1428,6 +1428,14 @@ REGRAS DE EXTRAÇÃO:
           console.log(`[SyncSchema+] Rev. 4096: tabela financial_cheques_recebidos garantida (Cheques Recebidos).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA financial_cheques_recebidos:`, e?.message || e); }
 
+        // Rev. 4098 — Cheques Recebidos: vínculo com cliente (empresa terceira de origem do cheque).
+        // Permite filtrar carteira por cliente e rastrear recebíveis por empresa pagadora.
+        try {
+          await db.execute(sql`ALTER TABLE financial_cheques_recebidos ADD COLUMN IF NOT EXISTS cliente_id INTEGER`);
+          await db.execute(sql`ALTER TABLE financial_cheques_recebidos ADD COLUMN IF NOT EXISTS cliente_nome VARCHAR(255)`);
+          console.log(`[SyncSchema+] Rev. 4098: colunas cliente_id/cliente_nome em financial_cheques_recebidos.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA chqr cliente cols:`, e?.message || e); }
+
         // Rev. 4068 — Controle de Cheques: persiste o MOTIVO de devolução (antes só
         // computado on-the-fly) e a CONTA BANCÁRIA em que o cheque foi tentado compensar
         // (linha do extrato na Conciliação Bancária). Colunas aditivas (R-001/R-007/R-010 OK).

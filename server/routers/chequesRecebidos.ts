@@ -1,11 +1,12 @@
 /**
- * Controle de Cheques Recebidos — Rev. 4096
+ * Controle de Cheques Recebidos — Rev. 4098
  *
  * Registra cheques de terceiros recebidos como pagamento de clientes.
  * Serve para:
  *   1) Cadastro e controle (status disponivel/alocado/compensado/devolvido).
  *   2) Sugestão ao pagar fornecedor com "Cheque de Terceiro" (por proximidade de valor).
  *   3) Importação via .xlsx (headers flexíveis).
+ *   4) Vínculo com cliente (empresa terceira) para filtrar/rastrear recebíveis por cliente.
  *
  * ZERO ALTER/DROP/DELETE — exclusão é soft-delete via excluido_em.
  */
@@ -83,14 +84,12 @@ function parseData(v: any): string | null {
 }
 
 function normTxt(s: any): string {
-  // Rev. 4096 fix: substituir indicador ordinal (º U+00BA) e símbolo de grau (° U+00B0) por "o"
-  // ANTES do NFD para que planilhas com cabeçalho "Nº Cheque" sejam detectadas corretamente.
   return String(s ?? "")
-    .replace(/[\u00BA\u00B0]/g, "o")   // º / ° → o
+    .replace(/[\u00BA\u00B0]/g, "o")
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")   // strip diacríticos combinantes
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-    .replace(/[^a-z0-9 ]/g, " ")       // strip demais símbolos não alfanuméricos
+    .replace(/[^a-z0-9 ]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -99,7 +98,6 @@ function normTxt(s: any): string {
 type ColKey = "numero" | "emitente" | "banco" | "agencia" | "conta" | "valor" | "emissao" | "bomPara" | "observacao";
 
 const COL_ALIASES: Record<ColKey, string[]> = {
-  // "Nº Cheque" → normTxt → "no cheque"; aceitar também variantes comuns
   numero: ["numero", "num", "cheque", "nro", "nro cheque", "numero cheque",
            "n cheque", "no cheque", "no", "nc", "numero do cheque", "num cheque",
            "nro do cheque", "n do cheque"],
@@ -183,6 +181,7 @@ export const chequesRecebidosRouter = router({
       busca:     z.string().optional(),
       mes:       z.number().int().min(1).max(12).nullable().optional(),
       ano:       z.number().int().optional(),
+      clienteId: z.number().nullable().optional(),
     }))
     .query(async ({ ctx, input }) => {
       await assertCompanyAccess(ctx.user, input.companyId);
@@ -205,9 +204,13 @@ export const chequesRecebidosRouter = router({
         where += ` AND EXTRACT(YEAR FROM COALESCE(data_bom_para::date, data_emissao::date))=$${idx++}`;
         params.push(input.ano);
       }
+      if (input.clienteId != null) {
+        where += ` AND cliente_id=$${idx++}`;
+        params.push(input.clienteId);
+      }
       if (input.busca?.trim()) {
         const like = `%${input.busca.trim()}%`;
-        where += ` AND (numero_cheque ILIKE $${idx} OR emitente_nome ILIKE $${idx} OR banco ILIKE $${idx} OR fornecedor_alocado_nome ILIKE $${idx})`;
+        where += ` AND (numero_cheque ILIKE $${idx} OR emitente_nome ILIKE $${idx} OR banco ILIKE $${idx} OR fornecedor_alocado_nome ILIKE $${idx} OR cliente_nome ILIKE $${idx})`;
         params.push(like);
         idx++;
       }
@@ -222,9 +225,30 @@ export const chequesRecebidosRouter = router({
       return { cheques: res.rows };
     }),
 
-  // ── Buscar disponíveis por proximidade de valor (para sugerir no pagamento) ──
-  // Rev. 4096 — lista TODOS os disponíveis ordenados por proximidade de valor (sem filtro de tolerância);
-  // a UI compõe multi-cheque até atingir o total, portanto não se restringe por cheque individual.
+  // ── Lista clientes disponíveis (empresas_terceiras do tenant) ──
+  listarClientes: protectedProcedure
+    .input(z.object({ companyId: z.coerce.number() }))
+    .query(async ({ ctx, input }) => {
+      await assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível." });
+
+      const res = await dbExecute(db, `
+        SELECT id,
+               COALESCE(NULLIF(TRIM(razao_social), ''), nome_fantasia) AS nome,
+               nome_fantasia,
+               cnpj
+        FROM empresas_terceiras
+        WHERE "companyId"=$1
+          AND (excluido_em IS NULL OR excluido_em > NOW())
+        ORDER BY LOWER(COALESCE(NULLIF(TRIM(razao_social), ''), nome_fantasia))
+        LIMIT 500
+      `, [input.companyId]);
+
+      return { clientes: res.rows };
+    }),
+
+  // ── Buscar disponíveis por proximidade de valor ──
   sugerirPorValor: protectedProcedure
     .input(z.object({
       companyId: z.coerce.number(),
@@ -258,6 +282,8 @@ export const chequesRecebidosRouter = router({
       dataEmissao:  z.string().optional(),
       dataBomPara:  z.string().optional(),
       observacao:   z.string().optional(),
+      clienteId:    z.number().nullable().optional(),
+      clienteNome:  z.string().nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       await assertCompanyAccess(ctx.user, input.companyId);
@@ -268,11 +294,13 @@ export const chequesRecebidosRouter = router({
         INSERT INTO financial_cheques_recebidos
           (company_id, numero_cheque, emitente_nome, banco, agencia, conta,
            valor, data_emissao, data_bom_para, status, observacao,
+           cliente_id, cliente_nome,
            criado_por_id, criado_por_nome, criado_em, atualizado_em)
         VALUES
           ($1, $2, $3, $4, $5, $6,
            $7, $8, $9, 'disponivel', $10,
-           $11, $12, NOW(), NOW())
+           $11, $12,
+           $13, $14, NOW(), NOW())
         RETURNING id
       `, [
         input.companyId, input.numeroCheque, input.emitenteNome ?? null,
@@ -280,6 +308,7 @@ export const chequesRecebidosRouter = router({
         input.valor,
         input.dataEmissao ?? null, input.dataBomPara ?? null,
         input.observacao ?? null,
+        input.clienteId ?? null, input.clienteNome ?? null,
         ctx.user.id, ctx.user.name ?? ctx.user.email ?? null,
       ]);
 
@@ -304,6 +333,8 @@ export const chequesRecebidosRouter = router({
       fornecedorAlocadoNome: z.string().nullable().optional(),
       entryId:      z.number().nullable().optional(),
       observacao:   z.string().nullable().optional(),
+      clienteId:    z.number().nullable().optional(),
+      clienteNome:  z.string().nullable().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       await assertCompanyAccess(ctx.user, input.companyId);
@@ -336,6 +367,8 @@ export const chequesRecebidosRouter = router({
       maybeSet("fornecedor_alocado_nome", input.fornecedorAlocadoNome);
       maybeSet("entry_id", input.entryId);
       maybeSet("observacao", input.observacao);
+      maybeSet("cliente_id", input.clienteId);
+      maybeSet("cliente_nome", input.clienteNome);
 
       params.push(input.id);
       await dbExecute(db, `
@@ -345,6 +378,32 @@ export const chequesRecebidosRouter = router({
       `, params);
 
       return { ok: true };
+    }),
+
+  // ── Atribuir cliente em lote ──
+  atribuirCliente: protectedProcedure
+    .input(z.object({
+      companyId:   z.coerce.number(),
+      ids:         z.array(z.number().int()).min(1),
+      clienteId:   z.number().nullable(),
+      clienteNome: z.string().nullable(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível." });
+
+      let atualizados = 0;
+      for (const id of input.ids) {
+        const res = await dbExecute(db, `
+          UPDATE financial_cheques_recebidos
+          SET cliente_id=$1, cliente_nome=$2, atualizado_em=NOW()
+          WHERE id=$3 AND company_id=$4 AND excluido_em IS NULL
+          RETURNING id
+        `, [input.clienteId, input.clienteNome, id, input.companyId]);
+        if (res.rows.length) atualizados++;
+      }
+      return { atualizados };
     }),
 
   // ── Alocar para pagamento de fornecedor ──
@@ -452,7 +511,6 @@ export const chequesRecebidosRouter = router({
 
       let alocados = 0, ignorados = 0;
       for (const id of input.ids) {
-        // Race-safe: UPDATE WHERE status='disponivel' + RETURNING id
         const res = await dbExecute(db, `
           UPDATE financial_cheques_recebidos
           SET status='alocado',
@@ -492,7 +550,12 @@ export const chequesRecebidosRouter = router({
 
   // ── Importação via xlsx — confirmar ──
   importarConfirmar: protectedProcedure
-    .input(z.object({ companyId: z.coerce.number(), base64: z.string() }))
+    .input(z.object({
+      companyId:   z.coerce.number(),
+      base64:      z.string(),
+      clienteId:   z.number().nullable().optional(),
+      clienteNome: z.string().nullable().optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
       await assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
@@ -514,16 +577,19 @@ export const chequesRecebidosRouter = router({
           INSERT INTO financial_cheques_recebidos
             (company_id, numero_cheque, emitente_nome, banco, agencia, conta,
              valor, data_emissao, data_bom_para, status, observacao,
+             cliente_id, cliente_nome,
              criado_por_id, criado_por_nome, criado_em, atualizado_em)
           VALUES
             ($1, $2, $3, $4, $5, $6,
              $7, $8, $9, 'disponivel', $10,
-             $11, $12, NOW(), NOW())
+             $11, $12,
+             $13, $14, NOW(), NOW())
         `, [
           r.companyId, r.numeroCheque, r.emitenteNome,
           r.banco, r.agencia, r.conta,
           r.valor, r.dataEmissao, r.dataBomPara,
           r.observacao,
+          input.clienteId ?? null, input.clienteNome ?? null,
           ctx.user.id, ctx.user.name ?? ctx.user.email ?? null,
         ]);
         inseridos++;

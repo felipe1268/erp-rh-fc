@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Plus, Pencil, Trash2, Loader2, CheckCircle, RotateCcw, Banknote,
   ChevronLeft, ChevronRight, Search, FileSpreadsheet, X, Upload,
-  AlertCircle, FileText,
+  AlertCircle, FileText, Building2, Tag,
 } from "lucide-react";
 
 // ── Formatters ───────────────────────────────────────────────────────────────
@@ -96,6 +96,7 @@ function VencCell({ c }: { c: any }) {
 const EMPTY_FORM = {
   numeroCheque: "", emitenteNome: "", banco: "", agencia: "", conta: "",
   valorMask: "", dataEmissao: "", dataBomPara: "", observacao: "",
+  clienteId: null as number | null, clienteNome: "",
 };
 
 // ── Tipo de fila de importação ────────────────────────────────────────────────
@@ -107,6 +108,39 @@ type ImportItem = {
   resultado: any | null;
   erro: string | null;
 };
+
+// ── ClienteSelect inline ──────────────────────────────────────────────────────
+function ClienteSelect({
+  clientes, value, onChange, placeholder = "Nenhum cliente vinculado",
+}: {
+  clientes: any[];
+  value: number | null;
+  onChange: (id: number | null, nome: string | null) => void;
+  placeholder?: string;
+}) {
+  return (
+    <Select
+      value={value != null ? String(value) : "__none__"}
+      onValueChange={v => {
+        if (v === "__none__") { onChange(null, null); return; }
+        const c = clientes.find((c: any) => String(c.id) === v);
+        onChange(Number(v), c?.nome ?? null);
+      }}
+    >
+      <SelectTrigger className="mt-1 h-9 text-sm">
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="__none__">{placeholder}</SelectItem>
+        {clientes.map((c: any) => (
+          <SelectItem key={c.id} value={String(c.id)}>
+            {c.nome}{c.nome_fantasia && c.nome_fantasia !== c.nome ? ` (${c.nome_fantasia})` : ""}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function FinanceiroChequesRecebidos() {
@@ -120,6 +154,13 @@ export default function FinanceiroChequesRecebidos() {
   const [mesSel, setMesSel] = useState<number | null>(new Date().getMonth() + 1);
   const [fStatus, setFStatus] = useState("todos");
   const [busca, setBusca] = useState("");
+  const [fClienteId, setFClienteId] = useState<number | null>(null);
+
+  // ── Seleção em lote ──
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [atribuirOpen, setAtribuirOpen] = useState(false);
+  const [atribuirClienteId, setAtribuirClienteId] = useState<number | null>(null);
+  const [atribuirClienteNome, setAtribuirClienteNome] = useState<string | null>(null);
 
   // ── Dialogs ──
   const [formOpen, setFormOpen] = useState(false);
@@ -133,18 +174,24 @@ export default function FinanceiroChequesRecebidos() {
   const [importQueue, setImportQueue] = useState<ImportItem[]>([]);
   const [importProgress, setImportProgress] = useState(0);
   const [importRunning, setImportRunning] = useState(false);
+  const [importClienteId, setImportClienteId] = useState<number | null>(null);
+  const [importClienteNome, setImportClienteNome] = useState<string | null>(null);
   const importTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Queries ──
   const listQuery = (trpc as any).chequesRecebidos.listar.useQuery(
-    { companyId, status: fStatus !== "todos" ? fStatus : undefined, busca: busca || undefined, mes: mesSel, ano },
+    { companyId, status: fStatus !== "todos" ? fStatus : undefined, busca: busca || undefined, mes: mesSel, ano, clienteId: fClienteId ?? undefined },
     { enabled: !!companyId }
   );
   const totaisQuery = (trpc as any).chequesRecebidos.totais.useQuery(
     { companyId }, { enabled: !!companyId }
   );
+  const clientesQuery = (trpc as any).chequesRecebidos.listarClientes.useQuery(
+    { companyId }, { enabled: !!companyId }
+  );
   const cheques: any[] = listQuery.data?.cheques ?? [];
   const totais: any = totaisQuery.data ?? {};
+  const clientes: any[] = clientesQuery.data?.clientes ?? [];
 
   function invalidate() {
     utils?.chequesRecebidos?.listar?.invalidate?.();
@@ -178,6 +225,15 @@ export default function FinanceiroChequesRecebidos() {
     onSuccess: () => { toast({ title: "Status atualizado." }); invalidate(); },
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
+  const atribuirClienteMut = (trpc as any).chequesRecebidos.atribuirCliente.useMutation({
+    onSuccess: (r: any) => {
+      toast({ title: `Cliente atribuído a ${r.atualizados} cheque(s).` });
+      setAtribuirOpen(false);
+      setSelectedIds(new Set());
+      invalidate();
+    },
+    onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
   const previewMut = (trpc as any).chequesRecebidos.importarPreview.useMutation();
   const confirmarMut = (trpc as any).chequesRecebidos.importarConfirmar.useMutation();
 
@@ -195,6 +251,8 @@ export default function FinanceiroChequesRecebidos() {
       dataEmissao:  c.data_emissao ? String(c.data_emissao).slice(0, 10) : "",
       dataBomPara:  c.data_bom_para ? String(c.data_bom_para).slice(0, 10) : "",
       observacao:   c.observacao ?? "",
+      clienteId:    c.cliente_id ? Number(c.cliente_id) : null,
+      clienteNome:  c.cliente_nome ?? "",
     });
     setFormOpen(true);
   }
@@ -213,8 +271,23 @@ export default function FinanceiroChequesRecebidos() {
       dataEmissao:  form.dataEmissao || undefined,
       dataBomPara:  form.dataBomPara || undefined,
       observacao:   form.observacao.trim() || undefined,
+      clienteId:    form.clienteId ?? null,
+      clienteNome:  form.clienteNome.trim() || null,
     };
     formEdit ? atualizarMut.mutate({ ...payload, id: formEdit.id }) : criarMut.mutate(payload);
+  }
+
+  // ── Seleção em lote ──────────────────────────────────────────────────────
+  function toggleSelect(id: number) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+  function toggleSelectAll() {
+    if (selectedIds.size === cheques.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(cheques.map((c: any) => c.id)));
   }
 
   // ── Import multi-arquivo ──────────────────────────────────────────────────
@@ -223,6 +296,8 @@ export default function FinanceiroChequesRecebidos() {
     setImportQueue([]);
     setImportProgress(0);
     setImportRunning(false);
+    setImportClienteId(null);
+    setImportClienteNome(null);
     setImportOpen(true);
   }
 
@@ -237,12 +312,10 @@ export default function FinanceiroChequesRecebidos() {
     const files = Array.from(e.target.files ?? []);
     if (!files.length) return;
     e.target.value = "";
-
     const items: ImportItem[] = await Promise.all(files.map(async (file) => {
       const base64 = await fileToBase64(file);
       return { file, base64, step: "aguardando" as const, preview: null, resultado: null, erro: null };
     }));
-
     setImportQueue(prev => [...prev, ...items]);
   }
 
@@ -250,7 +323,6 @@ export default function FinanceiroChequesRecebidos() {
     setImportQueue(prev => prev.filter((_, i) => i !== idx));
   }
 
-  // Regra de Ouro: progresso simulado 0→33% (fase análise) + real 33→100% (fase gravação)
   function startSimulatedProgress(from: number, to: number, durationMs = 2500) {
     if (importTimerRef.current) clearInterval(importTimerRef.current);
     const steps = 40;
@@ -282,7 +354,6 @@ export default function FinanceiroChequesRecebidos() {
       const baseTo   = Math.round(((i + 1) / total) * 100);
       const midPoint = baseFrom + Math.round((baseTo - baseFrom) * 0.4);
 
-      // Fase análise (simulado baseFrom→midPoint)
       setImportQueue(prev => prev.map((it, idx) => idx === i ? { ...it, step: "analisando" } : it));
       startSimulatedProgress(baseFrom, midPoint, 2000);
 
@@ -299,12 +370,16 @@ export default function FinanceiroChequesRecebidos() {
         continue;
       }
 
-      // Fase gravação (simulado midPoint→baseTo)
       setImportQueue(prev => prev.map((it, idx) => idx === i ? { ...it, step: "importando" } : it));
       startSimulatedProgress(midPoint, baseTo, 1500);
 
       try {
-        const resultado = await confirmarMut.mutateAsync({ companyId, base64: item.base64 });
+        const resultado = await confirmarMut.mutateAsync({
+          companyId,
+          base64: item.base64,
+          clienteId: importClienteId,
+          clienteNome: importClienteNome,
+        });
         stopSimulatedProgress();
         setImportProgress(baseTo);
         setImportQueue(prev => prev.map((it, idx) => idx === i ? { ...it, step: "done", resultado } : it));
@@ -323,7 +398,6 @@ export default function FinanceiroChequesRecebidos() {
 
   useEffect(() => () => { if (importTimerRef.current) clearInterval(importTimerRef.current); }, []);
 
-  // totais resumo do dialog
   const queueTotals = useMemo(() => {
     let novos = 0, ignorados = 0, erros = 0;
     for (const it of importQueue) {
@@ -348,10 +422,16 @@ export default function FinanceiroChequesRecebidos() {
               <Banknote className="h-6 w-6 text-green-600" /> Controle de Cheques Recebidos
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Cheques de terceiros recebidos pela empresa — disponíveis para alocação em pagamentos.
+              Cheques de terceiros recebidos — disponíveis para alocação em pagamentos.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {selectedIds.size > 0 && (
+              <Button size="sm" variant="outline" onClick={() => setAtribuirOpen(true)}
+                className="gap-1.5 border-purple-300 text-purple-700 hover:bg-purple-50">
+                <Tag className="h-4 w-4" /> Atribuir cliente ({selectedIds.size})
+              </Button>
+            )}
             <Button size="sm" variant="outline" onClick={abrirNovo}
               className="gap-1.5 border-green-300 text-green-700 hover:bg-green-50">
               <Plus className="h-4 w-4" /> Lançar cheque
@@ -406,12 +486,12 @@ export default function FinanceiroChequesRecebidos() {
           </button>
         </div>
 
-        {/* ── Filtros (ano + meses + busca + status) ── */}
+        {/* ── Filtros ── */}
         <Card>
           <CardContent className="pt-4 pb-3 space-y-3">
-            {/* Linha 1 — busca + status */}
+            {/* Linha 1 — busca + status + cliente */}
             <div className="flex flex-wrap items-center gap-2">
-              <div className="relative flex-1 min-w-[200px] max-w-sm">
+              <div className="relative flex-1 min-w-[180px] max-w-xs">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
                 <Input value={busca} onChange={e => setBusca(e.target.value)}
                   placeholder="Buscar nº, emitente, banco…" className="pl-8 h-9 text-sm" />
@@ -423,9 +503,30 @@ export default function FinanceiroChequesRecebidos() {
                   {STATUS_OPTS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                 </SelectContent>
               </Select>
+              {/* Filtro por cliente */}
+              <Select
+                value={fClienteId != null ? String(fClienteId) : "__todos__"}
+                onValueChange={v => setFClienteId(v === "__todos__" ? null : Number(v))}
+              >
+                <SelectTrigger className="w-52 h-9 text-sm gap-1.5">
+                  <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <SelectValue placeholder="Todos os clientes" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__todos__">Todos os clientes</SelectItem>
+                  {clientes.map((c: any) => (
+                    <SelectItem key={c.id} value={String(c.id)}>{c.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {fClienteId != null && (
+                <Button size="sm" variant="ghost" className="h-9 px-2 text-xs text-muted-foreground" onClick={() => setFClienteId(null)}>
+                  <X className="h-3.5 w-3.5 mr-1" /> Limpar cliente
+                </Button>
+              )}
             </div>
 
-            {/* Linha 2 — navegação de ano + meses */}
+            {/* Linha 2 — navegação ano + meses */}
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-1">
                 <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setAno(a => a - 1)}>
@@ -470,8 +571,14 @@ export default function FinanceiroChequesRecebidos() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-muted/40 text-xs text-muted-foreground">
+                      <th className="px-3 py-3 w-8">
+                        <input type="checkbox" className="rounded"
+                          checked={selectedIds.size === cheques.length && cheques.length > 0}
+                          onChange={toggleSelectAll} />
+                      </th>
                       <th className="text-left px-4 py-3 font-medium">Nº Cheque</th>
                       <th className="text-left px-4 py-3 font-medium">Emitente</th>
+                      <th className="text-left px-4 py-3 font-medium">Cliente</th>
                       <th className="text-right px-4 py-3 font-medium">Valor</th>
                       <th className="text-left px-4 py-3 font-medium">Emissão</th>
                       <th className="text-left px-4 py-3 font-medium">Bom para</th>
@@ -482,11 +589,27 @@ export default function FinanceiroChequesRecebidos() {
                   </thead>
                   <tbody>
                     {cheques.map((c: any) => (
-                      <tr key={c.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                      <tr key={c.id} className={`border-b last:border-0 hover:bg-muted/30 transition-colors ${selectedIds.has(c.id) ? "bg-purple-50/60" : ""}`}>
+                        <td className="px-3 py-2.5 text-center">
+                          <input type="checkbox" className="rounded"
+                            checked={selectedIds.has(c.id)}
+                            onChange={() => toggleSelect(c.id)} />
+                        </td>
                         <td className="px-4 py-2.5 font-mono font-semibold text-indigo-800 text-sm">{c.numero_cheque}</td>
-                        <td className="px-4 py-2.5 max-w-[180px]">
+                        <td className="px-4 py-2.5 max-w-[160px]">
                           <span className="truncate block font-medium" title={c.emitente_nome}>{c.emitente_nome || "—"}</span>
                           {c.banco && <span className="text-[11px] text-muted-foreground block">{c.banco}{c.agencia ? ` · Ag ${c.agencia}` : ""}</span>}
+                        </td>
+                        {/* Coluna Cliente */}
+                        <td className="px-4 py-2.5 max-w-[160px]">
+                          {c.cliente_nome ? (
+                            <span className="flex items-center gap-1">
+                              <Building2 className="h-3 w-3 text-purple-400 shrink-0" />
+                              <span className="truncate text-xs font-medium text-purple-800" title={c.cliente_nome}>{c.cliente_nome}</span>
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
                         </td>
                         <td className="px-4 py-2.5 text-right font-semibold tabular-nums">{formatBRL(Number(c.valor))}</td>
                         <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{fmtData(c.data_emissao)}</td>
@@ -495,7 +618,7 @@ export default function FinanceiroChequesRecebidos() {
                         <td className="px-4 py-2.5">
                           {c.status === "alocado" && c.fornecedor_alocado_nome ? (
                             <button
-                              className="text-xs font-medium text-blue-700 underline decoration-dotted hover:text-blue-900 max-w-[140px] truncate block"
+                              className="text-xs font-medium text-blue-700 underline decoration-dotted hover:text-blue-900 max-w-[130px] truncate block"
                               title={`Fornecedor: ${c.fornecedor_alocado_nome}`}
                               onClick={() => setAlocDrilldown(c)}
                             >{c.fornecedor_alocado_nome}</button>
@@ -540,10 +663,15 @@ export default function FinanceiroChequesRecebidos() {
                     ))}
                   </tbody>
                 </table>
-                <div className="px-4 py-2.5 border-t bg-muted/20 text-xs text-muted-foreground">
-                  {cheques.length} cheque(s) · Total: <span className="font-semibold text-foreground">
-                    {formatBRL(cheques.reduce((s: number, c: any) => s + Number(c.valor ?? 0), 0))}
+                <div className="px-4 py-2.5 border-t bg-muted/20 text-xs text-muted-foreground flex items-center justify-between gap-2">
+                  <span>
+                    {cheques.length} cheque(s) · Total: <span className="font-semibold text-foreground">
+                      {formatBRL(cheques.reduce((s: number, c: any) => s + Number(c.valor ?? 0), 0))}
+                    </span>
                   </span>
+                  {selectedIds.size > 0 && (
+                    <span className="text-purple-600 font-medium">{selectedIds.size} selecionado(s)</span>
+                  )}
                 </div>
               </div>
             )}
@@ -551,6 +679,48 @@ export default function FinanceiroChequesRecebidos() {
         </Card>
 
       </div>
+
+      {/* ════════════════════════════════════════════════════════
+          Dialog: Atribuir cliente em lote
+      ════════════════════════════════════════════════════════ */}
+      <Dialog open={atribuirOpen} onOpenChange={o => { if (!o) setAtribuirOpen(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Tag className="h-5 w-5 text-purple-600" />
+              Atribuir cliente
+            </DialogTitle>
+            <DialogDescription>
+              Selecione o cliente para vincular aos <strong>{selectedIds.size}</strong> cheque(s) selecionado(s).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <Label className="text-xs">Cliente</Label>
+            <ClienteSelect
+              clientes={clientes}
+              value={atribuirClienteId}
+              onChange={(id, nome) => { setAtribuirClienteId(id); setAtribuirClienteNome(nome); }}
+              placeholder="Selecione o cliente…"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAtribuirOpen(false)}>Cancelar</Button>
+            <Button
+              disabled={atribuirClienteMut.isPending}
+              onClick={() => atribuirClienteMut.mutate({
+                companyId,
+                ids: Array.from(selectedIds),
+                clienteId: atribuirClienteId,
+                clienteNome: atribuirClienteNome,
+              })}
+              className="bg-purple-600 hover:bg-purple-700 text-white"
+            >
+              {atribuirClienteMut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
+              Atribuir cliente
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ════════════════════════════════════════════════════════
           Dialog: Importar múltiplas planilhas .xlsx
@@ -566,13 +736,31 @@ export default function FinanceiroChequesRecebidos() {
               Importar planilhas de cheques
             </DialogTitle>
             <DialogDescription className="text-white/70 text-xs mt-1">
-              Selecione uma ou mais planilhas .xlsx. Cada arquivo será analisado e importado em sequência.
-              Cheques já existentes (mesmo nº + valor + mês) serão ignorados automaticamente.
+              Selecione uma ou mais planilhas .xlsx. Cheques já existentes (mesmo nº + valor) serão ignorados.
             </DialogDescription>
           </DialogHeader>
 
           {/* Corpo */}
           <div className="flex-1 overflow-y-auto min-h-0 px-6 py-5 space-y-4">
+
+            {/* Vincular cliente (opcional) */}
+            <div className="rounded-xl border border-purple-100 bg-purple-50/40 p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Building2 className="h-4 w-4 text-purple-500 shrink-0" />
+                <span className="text-sm font-medium text-purple-800">Vincular a cliente (opcional)</span>
+              </div>
+              <ClienteSelect
+                clientes={clientes}
+                value={importClienteId}
+                onChange={(id, nome) => { setImportClienteId(id); setImportClienteNome(nome); }}
+                placeholder="Nenhum cliente — definir depois"
+              />
+              {importClienteId != null && (
+                <p className="text-xs text-purple-600 mt-1.5">
+                  Todos os cheques novos desta importação serão vinculados a <strong>{importClienteNome}</strong>.
+                </p>
+              )}
+            </div>
 
             {/* Zona de drop / seleção */}
             {!importRunning && (
@@ -605,7 +793,6 @@ export default function FinanceiroChequesRecebidos() {
                     "border-gray-200 bg-card"
                   }`}>
                     <div className="flex items-center gap-2">
-                      {/* Ícone de status */}
                       {item.step === "done" && <CheckCircle className="h-4 w-4 shrink-0 text-green-600" />}
                       {item.step === "erro" && <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />}
                       {(item.step === "analisando" || item.step === "importando") && <Loader2 className="h-4 w-4 shrink-0 text-indigo-600 animate-spin" />}
@@ -613,13 +800,10 @@ export default function FinanceiroChequesRecebidos() {
 
                       <span className="text-sm font-medium flex-1 truncate" title={item.file.name}>{item.file.name}</span>
 
-                      {/* Badge de situação */}
                       {item.step === "aguardando"  && <Badge variant="outline" className="text-[10px]">Aguardando</Badge>}
                       {item.step === "analisando"  && <Badge className="bg-indigo-100 text-indigo-700 text-[10px]">Analisando…</Badge>}
-                      {item.step === "preview"     && item.preview && (
-                        <Badge className="bg-amber-100 text-amber-700 text-[10px]">
-                          {item.preview.novos ?? item.preview.total} novos
-                        </Badge>
+                      {item.step === "preview" && item.preview && (
+                        <Badge className="bg-amber-100 text-amber-700 text-[10px]">{item.preview.novos ?? item.preview.total} novos</Badge>
                       )}
                       {item.step === "importando"  && <Badge className="bg-blue-100 text-blue-700 text-[10px]">Importando…</Badge>}
                       {item.step === "done" && item.resultado && (
@@ -629,7 +813,6 @@ export default function FinanceiroChequesRecebidos() {
                       )}
                       {item.step === "erro" && <Badge className="bg-red-100 text-red-700 text-[10px]">Erro</Badge>}
 
-                      {/* Remover (só se não rodando) */}
                       {!importRunning && item.step !== "done" && (
                         <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => removeFile(idx)}>
                           <X className="h-3.5 w-3.5" />
@@ -637,12 +820,10 @@ export default function FinanceiroChequesRecebidos() {
                       )}
                     </div>
 
-                    {/* Mensagem de erro */}
                     {item.step === "erro" && item.erro && (
                       <p className="text-xs text-red-600 mt-1.5 ml-6 break-words">{item.erro}</p>
                     )}
 
-                    {/* Preview resumo */}
                     {item.step === "preview" && item.preview && (
                       <div className="mt-2 ml-6 flex flex-wrap gap-2 text-xs text-muted-foreground">
                         <span><strong className="text-foreground">{item.preview.total}</strong> identificados</span>
@@ -655,7 +836,7 @@ export default function FinanceiroChequesRecebidos() {
               </div>
             )}
 
-            {/* Resumo final (quando tudo terminou) */}
+            {/* Resumo final */}
             {allDone && (
               <div className="rounded-xl border border-green-200 bg-green-50 p-4 flex flex-wrap items-center gap-4">
                 <CheckCircle className="h-5 w-5 text-green-600 shrink-0" />
@@ -664,6 +845,7 @@ export default function FinanceiroChequesRecebidos() {
                   <p className="text-xs text-green-700 mt-0.5">
                     {queueTotals.novos} inseridos · {queueTotals.ignorados} ignorados (dedup)
                     {queueTotals.erros > 0 && ` · ${queueTotals.erros} arquivo(s) com erro`}
+                    {importClienteNome && ` · vinculados a ${importClienteNome}`}
                   </p>
                 </div>
               </div>
@@ -694,7 +876,6 @@ export default function FinanceiroChequesRecebidos() {
                 disabled={importQueue.length === 0 || importRunning || !hasPending}
                 className="relative overflow-hidden bg-indigo-600 hover:bg-indigo-700 text-white min-w-[160px]"
               >
-                {/* Barra de fundo (Regra de Ouro) */}
                 {importRunning && (
                   <span
                     className="absolute inset-y-0 left-0 bg-white/15 transition-all duration-300 pointer-events-none"
@@ -740,6 +921,19 @@ export default function FinanceiroChequesRecebidos() {
                 </div>
               </div>
             </div>
+
+            {/* Cliente */}
+            <div>
+              <Label className="text-xs flex items-center gap-1">
+                <Building2 className="h-3 w-3 text-purple-500" /> Cliente (quem pagou com este cheque)
+              </Label>
+              <ClienteSelect
+                clientes={clientes}
+                value={form.clienteId}
+                onChange={(id, nome) => setForm(f => ({ ...f, clienteId: id, clienteNome: nome ?? "" }))}
+              />
+            </div>
+
             <div>
               <Label className="text-xs">Emitente (quem emitiu o cheque)</Label>
               <Input className="mt-1" value={form.emitenteNome} onChange={e => setForm(f => ({ ...f, emitenteNome: e.target.value }))} placeholder="Nome do emitente" />
@@ -800,22 +994,22 @@ export default function FinanceiroChequesRecebidos() {
             <AlertDialogAction
               className="bg-red-600 hover:bg-red-700"
               onClick={() => excluirId && excluirMut.mutate({ id: excluirId, companyId })}>
-              {excluirMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Excluir"}
+              Excluir
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       {/* ════════════════════════════════════════════════════════
-          Dialog: Drilldown de alocação
+          Dialog: Drilldown do cheque alocado
       ════════════════════════════════════════════════════════ */}
       <Dialog open={!!alocDrilldown} onOpenChange={(o) => { if (!o) setAlocDrilldown(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Detalhes da alocação</DialogTitle>
+            <DialogTitle>Cheque alocado</DialogTitle>
           </DialogHeader>
           {alocDrilldown && (
-            <div className="space-y-2 text-sm">
+            <div className="space-y-3 py-1 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Nº Cheque</span>
                 <span className="font-mono font-semibold">{alocDrilldown.numero_cheque}</span>
@@ -825,21 +1019,21 @@ export default function FinanceiroChequesRecebidos() {
                 <span className="font-semibold">{formatBRL(Number(alocDrilldown.valor))}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Fornecedor alocado</span>
-                <span className="font-medium text-right max-w-[200px] break-words">{alocDrilldown.fornecedor_alocado_nome}</span>
+                <span className="text-muted-foreground">Cliente</span>
+                <span className="font-medium text-purple-700">{alocDrilldown.cliente_nome || "—"}</span>
               </div>
-              {alocDrilldown.alocado_em && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Data alocação</span>
-                  <span>{fmtData(alocDrilldown.alocado_em)}</span>
-                </div>
-              )}
-              {alocDrilldown.observacao && (
-                <div className="pt-1">
-                  <p className="text-muted-foreground text-xs mb-1">Observação</p>
-                  <p className="break-words">{alocDrilldown.observacao}</p>
-                </div>
-              )}
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Emitente</span>
+                <span>{alocDrilldown.emitente_nome || "—"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Fornecedor alocado</span>
+                <span className="font-medium text-blue-700">{alocDrilldown.fornecedor_alocado_nome || "—"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Bom para</span>
+                <span>{fmtData(alocDrilldown.data_bom_para)}</span>
+              </div>
             </div>
           )}
           <DialogFooter>

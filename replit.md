@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4098** — **CHEQUES RECEBIDOS: VÍNCULO COM CLIENTE (FILTRO + ATRIBUIÇÃO EM LOTE + CAMPO NO IMPORT).** Novas colunas `cliente_id`/`cliente_nome` em `financial_cheques_recebidos` via SyncSchema+. Router `chequesRecebidos` ganhou `listarClientes` (empresas_terceiras do tenant) + `atribuirCliente` (UPDATE em lote) + `clienteId/clienteNome` em criar/atualizar/importarConfirmar/listar. Frontend: filtro "Todos os clientes" (Building2) nos filtros, coluna "Cliente" na tabela (ícone roxo), checkboxes por linha + botão "Atribuir cliente (N)" para lote, dialog de atribuição, campo Cliente no form manual e no import dialog. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+
 - **Rev. 4097** — **CHEQUES RECEBIDOS: REDESIGN COMPLETO DA PÁGINA (LAYOUT PADRÃO EMITIDOS + IMPORT MULTI-XLSX + BARRA DE PROGRESSO).** `FinanceiroChequesRecebidos.tsx` reescrito do zero: página standalone com `DashboardLayout`, 4 cards clicáveis (filtram lista por status), filtros em Card (busca + status + nav ano/mês com pills Jan-Dez idêntico aos emitidos), tabela redesenhada com badge "Bom para" colorido por urgência. Import multi-arquivo: Dialog gradiente navy FC, zona de drop, lista de arquivos com estado visual por etapa (aguardando/analisando/preview/importando/done/erro), barra de progresso 0→100% com `bg-white/15` no botão (Regra de Ouro). `FinanceiroCheques.tsx` limpo: removida aba "Recebidos" e import do componente (agora rota própria). ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
-- **Rev. 4096** — **CONTROLE DE CHEQUES RECEBIDOS: NOVO SUB-MÓDULO COMPLETO (CADASTRO + IMPORT XLSX + SUGESTÃO NO PAGAMENTO).** Novo router tRPC `chequesRecebidos` (listar/criar/atualizar/alocar/liberarAlocacao/excluir/importarPreview/importarConfirmar/sugerirPorValor/totais) + tabela `financial_cheques_recebidos` via SyncSchema+ + página `FinanceiroChequesRecebidos.tsx` + opção "Cheque de Terceiro" em `PagarConsolidadoDialog.tsx`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
 ### 5 one-liners
+
+- **Rev. 4096** — **CONTROLE DE CHEQUES RECEBIDOS: NOVO SUB-MÓDULO COMPLETO (CADASTRO + IMPORT XLSX + SUGESTÃO NO PAGAMENTO).** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4095** — **NFS-e: FÓRMULA DO VALOR LÍQUIDO CORRIGIDA (ISS RETIDO ENTRA NO CÁLCULO) + CAMPO VOLTA A SER READ-ONLY.** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 

@@ -1,4 +1,35 @@
 /**
+ * Rev. 4098 — **CHEQUES RECEBIDOS: VÍNCULO COM CLIENTE (FILTRO + ATRIBUIÇÃO EM LOTE + CAMPO NO IMPORT).**
+ *
+ * CONTEXTO: Os cheques recebidos na carteira pertencem a um cliente específico (ex.: HOTEL J Q LTDA).
+ * Era necessário poder identificar, filtrar e rastrear quais cheques vieram de cada cliente.
+ *
+ * IMPLEMENTAÇÃO:
+ *
+ * BACKEND — `server/_core/index.ts`:
+ *   - Rev. 4098 SyncSchema+: ADD COLUMN IF NOT EXISTS `cliente_id INTEGER` e `cliente_nome VARCHAR(255)`
+ *     em `financial_cheques_recebidos`. Standalone fora do ColFix.
+ *
+ * BACKEND — `server/routers/chequesRecebidos.ts` (atualizado):
+ *   - `listar`: novo filtro `clienteId` (WHERE cliente_id=$N); busca textual inclui `cliente_nome ILIKE`.
+ *   - `criar` / `atualizar`: aceitam `clienteId` + `clienteNome` opcionais; `atualizar` usa `maybeSet`.
+ *   - `importarConfirmar`: aceita `clienteId` + `clienteNome` → grava em TODOS os cheques novos do lote.
+ *   - `listarClientes` (NOVO): lista `empresas_terceiras` do tenant (id, nome, nome_fantasia, cnpj).
+ *   - `atribuirCliente` (NOVO): UPDATE em lote de N cheques → seta cliente_id + cliente_nome.
+ *
+ * FRONTEND — `client/src/pages/financeiro/FinanceiroChequesRecebidos.tsx` (atualizado):
+ *   - Select "Todos os clientes" no bloco de filtros (Building2 icon) — filtra a lista em tempo real.
+ *   - Coluna "Cliente" na tabela com ícone Building2 + nome em roxo (ou "—").
+ *   - Checkboxes por linha + "Selecionar todos" no thead → botão "Atribuir cliente (N)" no cabeçalho.
+ *   - Dialog "Atribuir cliente": ClienteSelect + mutation atribuirCliente em lote.
+ *   - Import dialog: card "Vincular a cliente (opcional)" com ClienteSelect acima da zona de drop;
+ *     cliente escolhido é passado ao confirmarMut → todos os cheques novos vinculados de uma vez.
+ *   - Form manual: campo "Cliente (quem pagou com este cheque)" com ClienteSelect (persiste no criar/editar).
+ *   - Drilldown de alocado mostra campo "Cliente" em roxo.
+ *
+ * ZERO DELETE · ZERO UPDATE · ZERO ALTER (colunas via ADD COLUMN IF NOT EXISTS).
+ */
+/**
  * Rev. 4097 — **CHEQUES RECEBIDOS: REDESIGN COMPLETO DA PÁGINA (LAYOUT PADRÃO EMITIDOS + IMPORT MULTI-XLSX + BARRA DE PROGRESSO).**
  *
  * CONTEXTO: A página FinanceiroChequesRecebidos.tsx existia como sub-componente embutido em FinanceiroCheques (aba),
