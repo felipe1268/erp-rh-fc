@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4104** — **NOVO LANÇAMENTO: CHEQUE EMPRESA × CHEQUE DE TERCEIRO (SELEÇÃO INTERATIVA + COMPLEMENTO).** Toggle segmentado azul/verde divide forma=Cheque em dois subtipos: Empresa (comportamento atual) e Terceiro (seleciona cheques da carteira com totalizador ao vivo, combinações clicáveis, lista com checkbox, painel âmbar de complemento quando falta valor). Ao salvar, chama `alocarLote` e grava `formaPagamento="cheque_terceiro"`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+
 - **Rev. 4103** — **CHEQUES RECEBIDOS: BOTÃO "LIMPAR INVÁLIDOS" (SOFT-DELETE DE TOTALIZADORES).** Backend `limparTotalizadores` (UPDATE excluido_em) + botão âmbar na barra de ações + AlertDialog + toast com lista dos removidos. Remove entradas "TOTAL/SOMA/GERAL" importadas antes do fix sem tocar cheques reais. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
-- **Rev. 4102** — **NOVO LANÇAMENTO: SUGESTÃO DE CHEQUES RECEBIDOS AO PAGAR COM CHEQUE.** Quando forma=Cheque numa despesa, painel verde mostra cheques disponíveis e sugere combinações de 1/2/3 cheques mais próximas do valor. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
 ### 5 one-liners
+
+- **Rev. 4102** — **NOVO LANÇAMENTO: SUGESTÃO DE CHEQUES RECEBIDOS AO PAGAR COM CHEQUE.** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4098** — **CHEQUES RECEBIDOS: VÍNCULO COM CLIENTE (FILTRO + ATRIBUIÇÃO EM LOTE + CAMPO NO IMPORT).** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4096** — **CONTROLE DE CHEQUES RECEBIDOS: NOVO SUB-MÓDULO COMPLETO (CADASTRO + IMPORT XLSX + SUGESTÃO NO PAGAMENTO).** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4095** — **NFS-e: FÓRMULA DO VALOR LÍQUIDO CORRIGIDA (ISS RETIDO ENTRA NO CÁLCULO) + CAMPO VOLTA A SER READ-ONLY.** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
-- **Rev. 4094** — **CORREÇÕES DE PRODUÇÃO: 3 BUGS (SQL $N, ferias.list coerce, getAlertasCompras try/catch).** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 ### Histórico completo
 

@@ -1,4 +1,33 @@
 /**
+ * Rev. 4104 — **NOVO LANÇAMENTO: CHEQUE EMPRESA × CHEQUE DE TERCEIRO (SELEÇÃO INTERATIVA + COMPLEMENTO).**
+ *
+ * CONTEXTO: A forma de pagamento "Cheque" numa despesa foi dividida em dois subtipos para
+ * cobrir os dois fluxos reais da FC Engenharia:
+ *   - **Cheque Empresa**: o usuário emite cheque próprio (comportamento anterior).
+ *   - **Cheque de Terceiro**: reutiliza cheques de clientes já em carteira (Controle de
+ *     Cheques Recebidos), com seleção interativa e complemento opcional.
+ *
+ * IMPLEMENTAÇÃO — `client/src/pages/financeiro/FinanceiroLancamentos.tsx`:
+ *   - `INITIAL_FORM`: novos campos `chequeSubtipo: "empresa"|"terceiros"` e `chequeComplementoForma`.
+ *   - Toggle visual (botão segmentado azul/verde) que aparece quando Forma=Cheque numa Despesa.
+ *   - **Cheque Empresa** = card azul já existente, sem alteração de comportamento.
+ *   - **Cheque de Terceiro** = painel verde interativo:
+ *     · Cabeçalho com totalizador ao vivo (selecionado vs. a pagar + "faltam/sobram/✓ Exato!").
+ *     · Sugestões de combinação clicáveis (1/2/3 cheques) — click aplica a seleção inteira.
+ *     · Lista completa de cheques disponíveis com checkbox inline (click toggle individual).
+ *     · Botão "Limpar seleção" quando há selecionados.
+ *     · Painel âmbar de "Complemento" aparece apenas quando valor selecionado < total a pagar,
+ *       permitindo escolher PIX / TED / Dinheiro / Boleto / Cheque próprio / Outro para a diferença.
+ *   - `handleSave`: valida que ≥ 1 cheque está selecionado no modo terceiros; captura IDs,
+ *     fornecedor e info do complemento ANTES do mutate (form é resetado no onSuccess);
+ *     grava `formaPagamento = "cheque_terceiro"` no entry; no `onSuccess` chama
+ *     `chequesRecebidos.alocarLote` para marcar os cheques como "alocado".
+ *   - Nota do complemento é injetada nas observações do lançamento (ex.: "Complemento R$ 20,00 via PIX").
+ *   - `useEffect` limpa `chequesTerceiroSel` ao sair do modo cheque.
+ *
+ * ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+ */
+/**
  * Rev. 4103 — **CHEQUES RECEBIDOS: BOTÃO "LIMPAR INVÁLIDOS" (SOFT-DELETE DE TOTALIZADORES).**
  *
  * CONTEXTO: Cheques importados ANTES do fix de Rev. 4101 (linha "TOTAL / 132 FOLHAS / R$ 421k")

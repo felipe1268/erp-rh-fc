@@ -238,6 +238,10 @@ const INITIAL_FORM = {
   chequeConta: "",
   chequePrimeiroVenc: "",
   chequeStatus: "pendente",
+  // Rev. 4104 — subtipo de cheque: "empresa" = cheque próprio emitido; "terceiros" = usa carteira de recebidos.
+  chequeSubtipo: "empresa" as "empresa" | "terceiros",
+  // Forma de pagamento do complemento quando cheques de terceiros não cobrem 100% do valor.
+  chequeComplementoForma: "pix",
 };
 
 export default function FinanceiroLancamentos() {
@@ -843,6 +847,28 @@ export default function FinanceiroLancamentos() {
     return result;
   }, [chequesRecDisponiveis, valorNumCheque]);
 
+  // Rev. 4104 — Cheque Terceiros: estado de seleção e derived values
+  const [chequesTerceiroSel, setChequesTerceiroSel] = useState<number[]>([]);
+  const totalSelecionadoTerceiro = useMemo(
+    () => chequesRecDisponiveis
+      .filter((c: any) => chequesTerceiroSel.includes(c.id))
+      .reduce((s: number, c: any) => s + Number(c.valor), 0),
+    [chequesRecDisponiveis, chequesTerceiroSel]
+  );
+  const diffTerceiro = Math.round((totalSelecionadoTerceiro - valorNumCheque) * 100) / 100;
+
+  // Limpa seleção ao sair do modo cheque
+  useEffect(() => { if (!chequeAtivo) setChequesTerceiroSel([]); }, [chequeAtivo]);
+
+  // Mutation para alocar cheques após salvar a despesa
+  const alocarLoteMut = (trpc as any).chequesRecebidos?.alocarLote?.useMutation({
+    onError: (e: any) => toast({
+      title: "Despesa salva, mas falha ao alocar cheques",
+      description: `Os cheques NÃO foram marcados como Alocados: ${e.message}. Acesse o Controle de Cheques Recebidos.`,
+      variant: "destructive",
+    }),
+  });
+
   function handleSave() {
     // Rev. 2693 — Transferência entre contas: fluxo enxuto (sem descrição/categoria).
     if (form.tipo === "transferencia") {
@@ -920,10 +946,20 @@ export default function FinanceiroLancamentos() {
           observacoes: form.observacoes || "",
         });
       } else {
-        // Rev. 3330 — se a despesa é por CHEQUE, captura o lote de parcelas ANTES de
+        // Rev. 4104 — Cheque Terceiros: validar seleção e capturar IDs antes do mutate.
+        const isChequeEmpresa = chequeAtivo && form.chequeSubtipo === "empresa";
+        const isChequeTerceiros = chequeAtivo && form.chequeSubtipo === "terceiros";
+
+        if (isChequeTerceiros && chequesTerceiroSel.length === 0) {
+          toast({ title: "Selecione pelo menos um cheque de terceiro", description: "Ou mude para Cheque Empresa.", variant: "destructive" });
+          return;
+        }
+        // Se terceiros + complemento obrigatório mas sem forma escolhida — não bloqueia (pix é default).
+
+        // Rev. 3330 — se a despesa é por CHEQUE EMPRESA, captura o lote de parcelas ANTES de
         // mutar (o onSuccess reseta o form) e dispara o cadastro no Controle de Cheques
         // assim que a despesa for salva.
-        const chequePayload = chequeAtivo && chequePreview.length > 0 ? {
+        const chequePayload = isChequeEmpresa && chequePreview.length > 0 ? {
           companyId,
           fornecedorNome: form.fornecedorNome || undefined,
           bancoNome: form.chequeBanco || undefined,
@@ -938,6 +974,17 @@ export default function FinanceiroLancamentos() {
             dataVencimento: p.dataVencimento || undefined,
           })),
         } : null;
+
+        // Captura IDs selecionados (terceiros) e nome do fornecedor antes do mutate reseitar o form.
+        const terceiroIds = isChequeTerceiros ? [...chequesTerceiroSel] : [];
+        const terceiroFornecedor = form.fornecedorNome || undefined;
+        const complementoInfo = isChequeTerceiros && diffTerceiro < -0.01
+          ? `Complemento ${formatBRL(Math.abs(diffTerceiro))} via ${form.chequeComplementoForma?.toUpperCase() ?? "PIX"}`
+          : undefined;
+
+        // Forma gravada: "cheque_terceiro" para diferenciar no histórico de pagamentos.
+        const formaFinal = isChequeTerceiros ? "cheque_terceiro" : (form.formaPagamento || undefined);
+
         createEntryMut.mutate({
           companyId,
           tipo: form.tipo,
@@ -948,16 +995,27 @@ export default function FinanceiroLancamentos() {
           descricao: form.descricao || undefined,
           contaNome: form.contaNome || undefined,
           obraNome: form.obraNome || undefined,
-          formaPagamento: form.formaPagamento || undefined,
+          formaPagamento: formaFinal,
           // Rev. 3211 — gancho cartão (backend só grava se forma="cartao_credito").
           cartaoId: form.formaPagamento === "cartao_credito" && form.cartaoId ? Number(form.cartaoId) : undefined,
           cartaoParcelas: form.formaPagamento === "cartao_credito" && form.cartaoParcelas ? parseInt(form.cartaoParcelas, 10) : undefined,
           cartaoEstabelecimento: form.formaPagamento === "cartao_credito" ? (form.cartaoEstabelecimento || undefined) : undefined,
           fornecedorNome: form.fornecedorNome || undefined,
-          observacoes: form.observacoes || undefined,
+          observacoes: complementoInfo
+            ? [form.observacoes, complementoInfo].filter(Boolean).join(" | ")
+            : form.observacoes || undefined,
           status: form.tipo === "receita" ? "a_receber" : form.status,
         }, chequePayload ? {
           onSuccess: () => { criarChequesLoteMut.mutate(chequePayload); },
+        } : terceiroIds.length > 0 ? {
+          onSuccess: (res: any) => {
+            alocarLoteMut.mutate({
+              companyId,
+              ids: terceiroIds,
+              fornecedorAlocadoNome: terceiroFornecedor,
+              entryId: res?.id ?? null,
+            });
+          },
         } : undefined);
       }
     }
@@ -2069,77 +2127,34 @@ export default function FinanceiroLancamentos() {
                 {chequeAtivo && (
                   <div className="mt-3 space-y-3">
 
-                  {/* Rev. 4102 — Sugestão de cheques recebidos disponíveis para repasse */}
-                  {valorNumCheque > 0 && chequesRecDisponiveis.length > 0 && (
-                    <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 space-y-2">
-                      <div className="flex items-start gap-2">
-                        <span className="text-base leading-none mt-0.5">💡</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[11px] font-semibold text-emerald-800">
-                            Você tem {chequesRecDisponiveis.length} cheque{chequesRecDisponiveis.length !== 1 ? "s" : ""} de clientes disponíveis para repassar
-                          </p>
-                          <p className="text-[10px] text-emerald-700 mt-0.5">
-                            Total em carteira: {formatBRL(totalChequesRecDisp)} · Abaixo as combinações mais próximas de {formatBRL(valorNumCheque)}
-                          </p>
-                        </div>
-                      </div>
+                  {/* Rev. 4104 — Seletor de subtipo: Cheque Empresa × Cheque Terceiros */}
+                  <div className="flex rounded-lg border border-gray-200 overflow-hidden text-[12px] font-medium">
+                    <button
+                      type="button"
+                      onClick={() => { setForm(f => ({ ...f, chequeSubtipo: "empresa" })); setChequesTerceiroSel([]); }}
+                      className={`flex-1 py-2 flex items-center justify-center gap-1.5 transition-colors ${
+                        form.chequeSubtipo === "empresa"
+                          ? "bg-blue-600 text-white"
+                          : "bg-white text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      <Banknote className="w-3.5 h-3.5" /> Cheque Empresa
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, chequeSubtipo: "terceiros" }))}
+                      className={`flex-1 py-2 flex items-center justify-center gap-1.5 transition-colors border-l border-gray-200 ${
+                        form.chequeSubtipo === "terceiros"
+                          ? "bg-emerald-600 text-white"
+                          : "bg-white text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      <ArrowLeftRight className="w-3.5 h-3.5" /> Cheque de Terceiro
+                    </button>
+                  </div>
 
-                      {sugestoesCheques.length > 0 && (
-                        <div className="space-y-1.5 mt-1">
-                          {sugestoesCheques.slice(0, 4).map((s, i) => {
-                            const sobra = Math.round((s.total - valorNumCheque) * 100) / 100;
-                            const falta = Math.round((valorNumCheque - s.total) * 100) / 100;
-                            return (
-                              <div key={i} className="flex items-start gap-2 bg-white rounded border border-emerald-100 px-2.5 py-2">
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-[11px] font-medium text-gray-800">
-                                    {s.numeros.map((n, ni) => (
-                                      <span key={ni}>
-                                        {ni > 0 && <span className="text-gray-400 mx-1">+</span>}
-                                        <span className="font-semibold">Cheque {n}</span>
-                                        {s.emitentes[ni] && <span className="text-gray-500 font-normal ml-1">({s.emitentes[ni]})</span>}
-                                      </span>
-                                    ))}
-                                  </p>
-                                  <p className="text-[10px] mt-0.5 flex items-center gap-2">
-                                    <span className="text-gray-500">
-                                      {s.ids.length === 1 ? "1 cheque" : `${s.ids.length} cheques`} · total {formatBRL(s.total)}
-                                    </span>
-                                    {s.diferenca < 0.01 && (
-                                      <span className="text-emerald-600 font-semibold">✓ Valor exato!</span>
-                                    )}
-                                    {sobra > 0.01 && (
-                                      <span className="text-amber-600">sobram {formatBRL(sobra)} → pague o restante em Pix/dinheiro</span>
-                                    )}
-                                    {falta > 0.01 && (
-                                      <span className="text-blue-600">faltam {formatBRL(falta)} → complete com Pix/cheque próprio</span>
-                                    )}
-                                  </p>
-                                </div>
-                              </div>
-                            );
-                          })}
-                          <p className="text-[10px] text-emerald-600/80 pt-1">
-                            Para usar cheques recebidos ao pagar títulos, acesse <strong>Contas a Pagar → Pagar</strong> e escolha a forma <strong>"Cheque de Terceiro"</strong>.
-                          </p>
-                        </div>
-                      )}
-
-                      {sugestoesCheques.length === 0 && valorNumCheque > 0 && (
-                        <p className="text-[10px] text-emerald-700/70">
-                          Nenhuma combinação encontrada para este valor. Use cheque próprio ou acesse o Controle de Cheques Recebidos.
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {valorNumCheque > 0 && chequesRecDisponiveis.length === 0 && !sugerirChequesQ?.isLoading && (
-                    <div className="rounded-lg border border-gray-200 bg-gray-50/60 px-3 py-2 flex items-center gap-2">
-                      <Banknote className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                      <p className="text-[10px] text-gray-500">Nenhum cheque de terceiro disponível em carteira. Usando cheque próprio.</p>
-                    </div>
-                  )}
-
+                  {/* ── CHEQUE EMPRESA ─────────────────────────────────────── */}
+                  {form.chequeSubtipo === "empresa" && (
                   <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-3 space-y-3">
                     <p className="text-[11px] font-semibold text-blue-700 flex items-center gap-1">
                       <Banknote className="w-3.5 h-3.5" /> Cheque próprio — cadastro automático no Controle de Cheques
@@ -2241,6 +2256,187 @@ export default function FinanceiroLancamentos() {
                       </p>
                     )}
                   </div>
+                  )}
+
+                  {/* ── CHEQUE DE TERCEIRO ─────────────────────────────────── */}
+                  {form.chequeSubtipo === "terceiros" && (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 space-y-3">
+
+                    {/* Cabeçalho com totalizador da seleção */}
+                    <div className="flex items-center justify-between bg-white rounded border border-emerald-100 px-3 py-2">
+                      <div>
+                        <p className="text-[11px] font-semibold text-gray-700">
+                          {chequesTerceiroSel.length === 0
+                            ? "Nenhum cheque selecionado"
+                            : `${chequesTerceiroSel.length} cheque${chequesTerceiroSel.length !== 1 ? "s" : ""} selecionado${chequesTerceiroSel.length !== 1 ? "s" : ""}`}
+                        </p>
+                        {chequesTerceiroSel.length > 0 && (
+                          <p className="text-[10px] text-gray-500 mt-0.5">
+                            Total selecionado: {formatBRL(totalSelecionadoTerceiro)}
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        {chequesTerceiroSel.length === 0 && valorNumCheque > 0 && (
+                          <span className="text-[10px] text-gray-400">A pagar: {formatBRL(valorNumCheque)}</span>
+                        )}
+                        {chequesTerceiroSel.length > 0 && diffTerceiro > 0.01 && (
+                          <span className="text-[11px] text-red-600 font-semibold">sobram {formatBRL(diffTerceiro)}</span>
+                        )}
+                        {chequesTerceiroSel.length > 0 && diffTerceiro < -0.01 && (
+                          <span className="text-[11px] text-amber-600 font-semibold">faltam {formatBRL(-diffTerceiro)}</span>
+                        )}
+                        {chequesTerceiroSel.length > 0 && Math.abs(diffTerceiro) <= 0.01 && (
+                          <span className="text-[11px] text-emerald-600 font-semibold">✓ Valor exato!</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Loading */}
+                    {sugerirChequesQ?.isLoading && (
+                      <p className="text-[10px] text-gray-400 text-center py-1">Carregando cheques disponíveis…</p>
+                    )}
+
+                    {/* Sem cheques disponíveis */}
+                    {!sugerirChequesQ?.isLoading && chequesRecDisponiveis.length === 0 && (
+                      <div className="flex items-center gap-2 bg-white rounded border border-gray-100 px-3 py-2">
+                        <Banknote className="w-3.5 h-3.5 text-gray-300 shrink-0" />
+                        <p className="text-[10px] text-gray-500">Nenhum cheque de terceiro disponível em carteira.</p>
+                      </div>
+                    )}
+
+                    {/* Sugestões de combinação clicáveis */}
+                    {sugestoesCheques.length > 0 && (
+                      <div>
+                        <p className="text-[10px] text-emerald-700 font-semibold mb-1.5">💡 Combinações sugeridas — clique para selecionar:</p>
+                        <div className="space-y-1.5">
+                          {sugestoesCheques.slice(0, 5).map((s, i) => {
+                            const sobra  = Math.round((s.total - valorNumCheque) * 100) / 100;
+                            const falta  = Math.round((valorNumCheque - s.total) * 100) / 100;
+                            const isSel  = s.ids.length === chequesTerceiroSel.length && s.ids.every((id: number) => chequesTerceiroSel.includes(id));
+                            return (
+                              <button
+                                key={i}
+                                type="button"
+                                onClick={() => setChequesTerceiroSel(s.ids)}
+                                className={`w-full text-left flex items-center gap-2 rounded border px-2.5 py-2 text-[11px] transition-all ${
+                                  isSel
+                                    ? "border-emerald-400 bg-emerald-100 ring-1 ring-emerald-300"
+                                    : "border-emerald-100 bg-white hover:border-emerald-300 hover:bg-emerald-50/60"
+                                }`}
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-gray-800 break-words">
+                                    {s.numeros.map((n: string, ni: number) => (
+                                      <span key={ni}>
+                                        {ni > 0 && <span className="text-gray-400 mx-1">+</span>}
+                                        <span className="font-semibold">Cheque {n}</span>
+                                        {s.emitentes[ni] && <span className="text-gray-500 font-normal ml-1">({s.emitentes[ni]})</span>}
+                                      </span>
+                                    ))}
+                                  </p>
+                                  <p className="text-[10px] text-gray-500 mt-0.5 flex flex-wrap items-center gap-x-2">
+                                    <span>{s.ids.length === 1 ? "1 cheque" : `${s.ids.length} cheques`} · total {formatBRL(s.total)}</span>
+                                    {s.diferenca < 0.01 && <span className="text-emerald-600 font-semibold">✓ Exato!</span>}
+                                    {sobra > 0.01  && <span className="text-red-600">sobram {formatBRL(sobra)}</span>}
+                                    {falta > 0.01  && <span className="text-amber-600">faltam {formatBRL(falta)}</span>}
+                                  </p>
+                                </div>
+                                {isSel && <span className="text-emerald-600 text-base shrink-0">✓</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Lista completa de cheques disponíveis */}
+                    {chequesRecDisponiveis.length > 0 && (
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <p className="text-[10px] text-emerald-700 font-semibold">
+                            Todos disponíveis ({chequesRecDisponiveis.length}) — selecione manualmente:
+                          </p>
+                          {chequesTerceiroSel.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setChequesTerceiroSel([])}
+                              className="text-[10px] text-gray-400 hover:text-red-500 transition-colors"
+                            >
+                              Limpar seleção
+                            </button>
+                          )}
+                        </div>
+                        <div className="max-h-52 overflow-y-auto space-y-1 pr-0.5">
+                          {(chequesRecDisponiveis as any[]).map((c: any) => {
+                            const sel = chequesTerceiroSel.includes(c.id);
+                            return (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => setChequesTerceiroSel(prev =>
+                                  sel ? prev.filter((id: number) => id !== c.id) : [...prev, c.id]
+                                )}
+                                className={`w-full text-left flex items-center gap-2 rounded border px-2.5 py-1.5 text-[11px] transition-all ${
+                                  sel
+                                    ? "border-emerald-400 bg-emerald-50 ring-1 ring-emerald-200"
+                                    : "border-gray-100 bg-white hover:border-emerald-200 hover:bg-gray-50"
+                                }`}
+                              >
+                                <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${sel ? "bg-emerald-600 border-emerald-600" : "border-gray-300"}`}>
+                                  {sel && <span className="text-white text-[9px] leading-none font-bold">✓</span>}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <span className="font-semibold text-gray-800">
+                                    Cheque {c.numero_cheque ?? "S/N"}
+                                  </span>
+                                  {c.emitente_nome && (
+                                    <span className="text-gray-500 ml-1">({c.emitente_nome})</span>
+                                  )}
+                                  {c.data_vencimento && (
+                                    <span className="text-gray-400 ml-1 text-[10px]">· venc. {fmtDateBR(c.data_vencimento)}</span>
+                                  )}
+                                </div>
+                                <span className="text-gray-700 font-semibold shrink-0">{formatBRL(Number(c.valor))}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Complemento: quando cheques selecionados não cobrem o total */}
+                    {chequesTerceiroSel.length > 0 && diffTerceiro < -0.01 && (
+                      <div className="rounded border border-amber-200 bg-amber-50/60 p-2.5 space-y-2">
+                        <p className="text-[11px] font-semibold text-amber-700 flex items-center gap-1">
+                          <ArrowLeftRight className="w-3.5 h-3.5" />
+                          Complemento: {formatBRL(-diffTerceiro)} a pagar por outra forma
+                        </p>
+                        <div>
+                          <p className="text-[10px] text-gray-500 mb-1">Forma do complemento</p>
+                          <Select
+                            value={form.chequeComplementoForma}
+                            onValueChange={v => setForm(f => ({ ...f, chequeComplementoForma: v }))}
+                          >
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue placeholder="Escolha a forma do complemento" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pix">PIX</SelectItem>
+                              <SelectItem value="ted">TED</SelectItem>
+                              <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                              <SelectItem value="boleto">Boleto</SelectItem>
+                              <SelectItem value="cheque">Cheque próprio</SelectItem>
+                              <SelectItem value="outro">Outro</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    )}
+
+                  </div>
+                  )}
+
                   </div>
                 )}
               </div>
