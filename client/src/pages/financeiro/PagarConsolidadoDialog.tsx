@@ -101,11 +101,22 @@ export default function PagarConsolidadoDialog({
     setParcelas((prev) => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
   }
 
+  const alocarLoteMut = (trpc as any).chequesRecebidos?.alocarLote?.useMutation();
+
   const payMut = (trpc as any).financial.pagarConsolidadoFornecedor.useMutation({
     onSuccess: (r: any) => {
+      // Rev. 4096 — se forma=cheque_terceiro e há cheques selecionados, marcar como alocado
+      if (isChequeTerceiro && chequesTerceiroSel.length && alocarLoteMut) {
+        alocarLoteMut.mutate({
+          companyId,
+          ids: chequesTerceiroSel,
+          fornecedorAlocadoNome: group?.fornecedorNome ?? undefined,
+          entryId: r?.entryId ?? null,
+        });
+      }
       toast({
         title: "Pagamento consolidado registrado!",
-        description: `${r.pagos} título(s) quitado(s)${r.chequesCriados ? ` · ${r.chequesCriados} cheque(s) lançado(s) no Controle de Cheques` : ""}.`,
+        description: `${r.pagos} título(s) quitado(s)${r.chequesCriados ? ` · ${r.chequesCriados} cheque(s) lançado(s) no Controle de Cheques` : ""}${isChequeTerceiro && chequesTerceiroSel.length ? ` · ${chequesTerceiroSel.length} cheque(s) de terceiro alocado(s)` : ""}.`,
       });
       onSuccess();
     },
@@ -123,6 +134,10 @@ export default function PagarConsolidadoDialog({
         toast({ title: "Soma dos cheques não bate com o total", description: `Diferença: ${formatBRL(diffTotal)}`, variant: "destructive" });
         return;
       }
+    }
+    if (isChequeTerceiro && chequesTerceiroSel.length === 0) {
+      toast({ title: "Selecione pelo menos um cheque recebido", variant: "destructive" });
+      return;
     }
     payMut.mutate({
       companyId,

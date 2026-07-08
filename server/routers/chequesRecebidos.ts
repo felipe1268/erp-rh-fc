@@ -426,13 +426,58 @@ export const chequesRecebidosRouter = router({
       return { ok: true };
     }),
 
+  // ── Alocar em lote (cheques de terceiro no pagamento consolidado) ──
+  alocarLote: protectedProcedure
+    .input(z.object({
+      companyId:             z.coerce.number(),
+      ids:                   z.array(z.number().int()),
+      fornecedorAlocadoNome: z.string().optional(),
+      entryId:               z.number().nullable().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      await assertCompanyAccess(ctx.user, input.companyId);
+      if (!input.ids.length) return { alocados: 0, ignorados: 0 };
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível." });
+
+      let alocados = 0, ignorados = 0;
+      for (const id of input.ids) {
+        // Race-safe: UPDATE WHERE status='disponivel' + RETURNING id
+        const res = await dbExecute(db, `
+          UPDATE financial_cheques_recebidos
+          SET status='alocado',
+              fornecedor_alocado_nome=$1,
+              entry_id=$2,
+              atualizado_em=NOW()
+          WHERE id=$3 AND company_id=$4 AND status='disponivel' AND excluido_em IS NULL
+          RETURNING id
+        `, [input.fornecedorAlocadoNome ?? null, input.entryId ?? null, id, input.companyId]);
+        if (res.rows.length) alocados++;
+        else ignorados++;
+      }
+      return { alocados, ignorados };
+    }),
+
   // ── Importação via xlsx — preview dry-run ──
   importarPreview: protectedProcedure
     .input(z.object({ companyId: z.coerce.number(), base64: z.string() }))
     .mutation(async ({ ctx, input }) => {
       await assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível." });
+
       const rows = parseWorkbookRecebidos(input.base64, input.companyId);
-      return { total: rows.length, amostra: rows.slice(0, 5) };
+      let novos = 0, duplicados = 0;
+      for (const r of rows) {
+        const ex = await dbExecute(db, `
+          SELECT id FROM financial_cheques_recebidos
+          WHERE company_id=$1 AND numero_cheque=$2 AND valor=$3 AND excluido_em IS NULL
+          LIMIT 1
+        `, [input.companyId, r.numeroCheque, r.valor]);
+        if (ex.rows.length) duplicados++;
+        else novos++;
+      }
+      return { total: rows.length, novos, duplicados, amostra: rows.slice(0, 5) };
     }),
 
   // ── Importação via xlsx — confirmar ──

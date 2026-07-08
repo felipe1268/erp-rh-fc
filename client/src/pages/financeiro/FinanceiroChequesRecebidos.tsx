@@ -116,6 +116,7 @@ export default function FinanceiroChequesRecebidos() {
   const [form, setForm] = useState(EMPTY_FORM);
 
   const [excluirId, setExcluirId] = useState<number | null>(null);
+  const [alocDrilldown, setAlocDrilldown] = useState<any | null>(null);
 
   const [importStep, setImportStep] = useState<"idle" | "preview" | "done">("idle");
   const [importPreview, setImportPreview] = useState<any>(null);
@@ -332,10 +333,20 @@ export default function FinanceiroChequesRecebidos() {
           <CardContent className="px-4 pb-3 space-y-2">
             {importStep === "preview" && importPreview && (
               <>
-                <p className="text-sm text-blue-700">
-                  <strong>{importPreview.total}</strong> cheques identificados na planilha.
-                  {importPreview.total === 0 && " Nenhuma linha válida encontrada — verifique os cabeçalhos."}
-                </p>
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  <span className="text-blue-700"><strong>{importPreview.total}</strong> cheques identificados</span>
+                  {importPreview.novos != null && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                      {importPreview.novos} novos
+                    </span>
+                  )}
+                  {importPreview.duplicados != null && importPreview.duplicados > 0 && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                      {importPreview.duplicados} já existentes (serão ignorados)
+                    </span>
+                  )}
+                  {importPreview.total === 0 && <span className="text-red-600"> — Nenhuma linha válida. Verifique os cabeçalhos.</span>}
+                </div>
                 {importPreview.amostra?.length > 0 && (
                   <div className="overflow-x-auto">
                     <table className="text-xs w-full border-collapse">
@@ -420,8 +431,20 @@ export default function FinanceiroChequesRecebidos() {
                       <td className="px-3 py-2 text-xs text-muted-foreground">{fmtData(c.data_emissao)}</td>
                       <td className="px-3 py-2">{vencCell(c)}</td>
                       <td className="px-3 py-2">{statusBadge(c.status)}</td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground max-w-[120px] truncate" title={c.fornecedor_alocado_nome}>
-                        {c.fornecedor_alocado_nome || "—"}
+                      <td className="px-3 py-2">
+                        {c.status === "alocado" && c.fornecedor_alocado_nome ? (
+                          <div className="group relative inline-block">
+                            <button
+                              className="text-xs font-medium text-blue-700 underline decoration-dotted hover:text-blue-900 max-w-[130px] truncate block"
+                              title={`Clique para detalhes da alocação — Fornecedor: ${c.fornecedor_alocado_nome}`}
+                              onClick={(e) => { e.stopPropagation(); setAlocDrilldown(c); }}
+                            >
+                              {c.fornecedor_alocado_nome}
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-1 justify-end">
@@ -528,6 +551,55 @@ export default function FinanceiroChequesRecebidos() {
               className="bg-green-600 hover:bg-green-700 text-white">
               {(criarMut.isPending || atualizarMut.isPending) ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <CheckCircle className="h-4 w-4 mr-1.5" />}
               {formEdit ? "Salvar alterações" : "Cadastrar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Drilldown: detalhes do cheque alocado (Rev. 4096) */}
+      <Dialog open={alocDrilldown != null} onOpenChange={v => { if (!v) setAlocDrilldown(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">Alocado</span>
+              Cheque Nº {alocDrilldown?.numero_cheque}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between py-1 border-b">
+              <span className="text-muted-foreground">Valor</span>
+              <span className="font-semibold">{alocDrilldown ? formatBRL(Number(alocDrilldown.valor)) : "—"}</span>
+            </div>
+            <div className="flex justify-between py-1 border-b">
+              <span className="text-muted-foreground">Emitente</span>
+              <span className="text-right max-w-[200px] break-words">{alocDrilldown?.emitente_nome || "—"}</span>
+            </div>
+            <div className="flex justify-between py-1 border-b">
+              <span className="text-muted-foreground">Fornecedor</span>
+              <span className="text-right max-w-[200px] break-words font-medium text-indigo-700">{alocDrilldown?.fornecedor_alocado_nome || "—"}</span>
+            </div>
+            <div className="flex justify-between py-1 border-b">
+              <span className="text-muted-foreground">Bom para</span>
+              <span>{alocDrilldown ? fmtData(alocDrilldown.data_bom_para) : "—"}</span>
+            </div>
+            {alocDrilldown?.entry_id && (
+              <div className="flex justify-between py-1 border-b">
+                <span className="text-muted-foreground">Lançamento financeiro</span>
+                <span className="font-mono text-xs">#{alocDrilldown.entry_id}</span>
+              </div>
+            )}
+            {alocDrilldown?.atualizado_em && (
+              <div className="flex justify-between py-1">
+                <span className="text-muted-foreground">Alocado em</span>
+                <span className="text-xs">{fmtData(alocDrilldown.atualizado_em)}</span>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="mt-2">
+            <Button variant="outline" onClick={() => setAlocDrilldown(null)}>Fechar</Button>
+            <Button variant="ghost" className="text-gray-500 text-xs"
+              onClick={() => { atualizarStatusMut.mutate({ id: alocDrilldown.id, companyId, status: "disponivel", fornecedorAlocadoId: null, fornecedorAlocadoNome: null, entryId: null }); setAlocDrilldown(null); }}>
+              Liberar alocação
             </Button>
           </DialogFooter>
         </DialogContent>
