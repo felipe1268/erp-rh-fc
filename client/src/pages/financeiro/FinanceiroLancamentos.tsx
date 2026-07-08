@@ -797,6 +797,52 @@ export default function FinanceiroLancamentos() {
     });
   }, [chequeAtivo, form.valorPrevisto, form.chequeParcelas, form.chequePrimeiroVenc, form.dataVencimento, form.dataCompetencia, form.chequeNumeroInicial]);
 
+  // Rev. 4102 — Quando forma=Cheque numa despesa, busca cheques recebidos disponíveis
+  // e calcula combinações (1, 2 ou 3 cheques) mais próximas do valor a pagar.
+  const valorNumCheque = parseFloat(form.valorPrevisto) || 0;
+  const sugerirChequesQ = (trpc as any).chequesRecebidos?.sugerirPorValor?.useQuery(
+    { companyId, valorAlvo: valorNumCheque },
+    { enabled: chequeAtivo && !!companyId && valorNumCheque > 0, staleTime: 30_000 }
+  );
+  const chequesRecDisponiveis: any[] = sugerirChequesQ?.data?.cheques ?? [];
+  const totalChequesRecDisp = chequesRecDisponiveis.reduce((s: number, c: any) => s + Number(c.valor), 0);
+
+  const sugestoesCheques = useMemo(() => {
+    if (!chequesRecDisponiveis.length || valorNumCheque <= 0) return [];
+    const pool = chequesRecDisponiveis.slice(0, 20);
+    type Sug = { ids: number[]; numeros: string[]; emitentes: string[]; total: number; diferenca: number };
+    const cands: Sug[] = [];
+    for (const c of pool) {
+      cands.push({ ids: [c.id], numeros: [c.numero_cheque ?? "S/N"], emitentes: [c.emitente_nome ?? ""], total: Number(c.valor), diferenca: Math.abs(Number(c.valor) - valorNumCheque) });
+    }
+    for (let i = 0; i < pool.length; i++) {
+      for (let j = i + 1; j < pool.length; j++) {
+        const tot = Number(pool[i].valor) + Number(pool[j].valor);
+        cands.push({ ids: [pool[i].id, pool[j].id], numeros: [pool[i].numero_cheque ?? "S/N", pool[j].numero_cheque ?? "S/N"], emitentes: [pool[i].emitente_nome ?? "", pool[j].emitente_nome ?? ""], total: tot, diferenca: Math.abs(tot - valorNumCheque) });
+      }
+    }
+    const top10 = pool.slice(0, 10);
+    for (let i = 0; i < top10.length; i++) {
+      for (let j = i + 1; j < top10.length; j++) {
+        for (let k = j + 1; k < top10.length; k++) {
+          const tot = Number(top10[i].valor) + Number(top10[j].valor) + Number(top10[k].valor);
+          cands.push({ ids: [top10[i].id, top10[j].id, top10[k].id], numeros: [top10[i].numero_cheque ?? "S/N", top10[j].numero_cheque ?? "S/N", top10[k].numero_cheque ?? "S/N"], emitentes: [top10[i].emitente_nome ?? "", top10[j].emitente_nome ?? "", top10[k].emitente_nome ?? ""], total: tot, diferenca: Math.abs(tot - valorNumCheque) });
+        }
+      }
+    }
+    cands.sort((a, b) => a.diferenca - b.diferenca);
+    const result: Sug[] = [];
+    const seen = new Set<string>();
+    for (const c of cands) {
+      const key = [...c.ids].sort().join(",");
+      if (seen.has(key)) continue;
+      seen.add(key);
+      result.push(c);
+      if (result.length >= 5) break;
+    }
+    return result;
+  }, [chequesRecDisponiveis, valorNumCheque]);
+
   function handleSave() {
     // Rev. 2693 — Transferência entre contas: fluxo enxuto (sem descrição/categoria).
     if (form.tipo === "transferencia") {
@@ -2021,9 +2067,82 @@ export default function FinanceiroLancamentos() {
                     DESPESA. Pergunta em quantas vezes (parcelas) + dados do cheque e
                     cadastra automaticamente os cheques no Controle de Cheques ao lançar. */}
                 {chequeAtivo && (
-                  <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/40 p-3 space-y-3">
+                  <div className="mt-3 space-y-3">
+
+                  {/* Rev. 4102 — Sugestão de cheques recebidos disponíveis para repasse */}
+                  {valorNumCheque > 0 && chequesRecDisponiveis.length > 0 && (
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 space-y-2">
+                      <div className="flex items-start gap-2">
+                        <span className="text-base leading-none mt-0.5">💡</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] font-semibold text-emerald-800">
+                            Você tem {chequesRecDisponiveis.length} cheque{chequesRecDisponiveis.length !== 1 ? "s" : ""} de clientes disponíveis para repassar
+                          </p>
+                          <p className="text-[10px] text-emerald-700 mt-0.5">
+                            Total em carteira: {formatBRL(totalChequesRecDisp)} · Abaixo as combinações mais próximas de {formatBRL(valorNumCheque)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {sugestoesCheques.length > 0 && (
+                        <div className="space-y-1.5 mt-1">
+                          {sugestoesCheques.slice(0, 4).map((s, i) => {
+                            const sobra = Math.round((s.total - valorNumCheque) * 100) / 100;
+                            const falta = Math.round((valorNumCheque - s.total) * 100) / 100;
+                            return (
+                              <div key={i} className="flex items-start gap-2 bg-white rounded border border-emerald-100 px-2.5 py-2">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-[11px] font-medium text-gray-800">
+                                    {s.numeros.map((n, ni) => (
+                                      <span key={ni}>
+                                        {ni > 0 && <span className="text-gray-400 mx-1">+</span>}
+                                        <span className="font-semibold">Cheque {n}</span>
+                                        {s.emitentes[ni] && <span className="text-gray-500 font-normal ml-1">({s.emitentes[ni]})</span>}
+                                      </span>
+                                    ))}
+                                  </p>
+                                  <p className="text-[10px] mt-0.5 flex items-center gap-2">
+                                    <span className="text-gray-500">
+                                      {s.ids.length === 1 ? "1 cheque" : `${s.ids.length} cheques`} · total {formatBRL(s.total)}
+                                    </span>
+                                    {s.diferenca < 0.01 && (
+                                      <span className="text-emerald-600 font-semibold">✓ Valor exato!</span>
+                                    )}
+                                    {sobra > 0.01 && (
+                                      <span className="text-amber-600">sobram {formatBRL(sobra)} → pague o restante em Pix/dinheiro</span>
+                                    )}
+                                    {falta > 0.01 && (
+                                      <span className="text-blue-600">faltam {formatBRL(falta)} → complete com Pix/cheque próprio</span>
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          <p className="text-[10px] text-emerald-600/80 pt-1">
+                            Para usar cheques recebidos ao pagar títulos, acesse <strong>Contas a Pagar → Pagar</strong> e escolha a forma <strong>"Cheque de Terceiro"</strong>.
+                          </p>
+                        </div>
+                      )}
+
+                      {sugestoesCheques.length === 0 && valorNumCheque > 0 && (
+                        <p className="text-[10px] text-emerald-700/70">
+                          Nenhuma combinação encontrada para este valor. Use cheque próprio ou acesse o Controle de Cheques Recebidos.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {valorNumCheque > 0 && chequesRecDisponiveis.length === 0 && !sugerirChequesQ?.isLoading && (
+                    <div className="rounded-lg border border-gray-200 bg-gray-50/60 px-3 py-2 flex items-center gap-2">
+                      <Banknote className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                      <p className="text-[10px] text-gray-500">Nenhum cheque de terceiro disponível em carteira. Usando cheque próprio.</p>
+                    </div>
+                  )}
+
+                  <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-3 space-y-3">
                     <p className="text-[11px] font-semibold text-blue-700 flex items-center gap-1">
-                      <Banknote className="w-3.5 h-3.5" /> Cheque — cadastro automático no Controle de Cheques
+                      <Banknote className="w-3.5 h-3.5" /> Cheque próprio — cadastro automático no Controle de Cheques
                     </p>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                       <div>
@@ -2121,6 +2240,7 @@ export default function FinanceiroLancamentos() {
                         Informe o valor da despesa acima para gerar os cheques.
                       </p>
                     )}
+                  </div>
                   </div>
                 )}
               </div>

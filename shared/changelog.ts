@@ -1,4 +1,30 @@
 /**
+ * Rev. 4102 — **NOVO LANÇAMENTO: SUGESTÃO DE CHEQUES RECEBIDOS AO PAGAR COM CHEQUE.**
+ *
+ * CONTEXTO: Ao selecionar forma de pagamento "Cheque" em uma despesa, o usuário agora
+ * vê um painel verde inteligente que consulta o estoque de cheques de terceiros disponíveis
+ * e sugere as melhores combinações (1, 2 ou 3 cheques) mais próximas do valor a pagar.
+ *
+ * IMPLEMENTAÇÃO — `client/src/pages/financeiro/FinanceiroLancamentos.tsx`:
+ *   - Nova query `sugerirChequesQ` → `chequesRecebidos.sugerirPorValor` (já existia no backend),
+ *     habilitada quando `chequeAtivo && valorNumCheque > 0`.
+ *   - `sugestoesCheques` useMemo: varre pool de 20 cheques, gera candidatos individuais +
+ *     pares + trios (top 10), ordena por diferença absoluta, retorna top 5 sem duplicatas.
+ *   - Painel JSX verde (emerald) acima dos campos de cheque próprio:
+ *       · Cabeçalho "💡 Você tem N cheques de clientes disponíveis" + total em carteira.
+ *       · Linha por sugestão: número(s) do cheque, emitente, total, e hint contextual
+ *         ("sobram R$X → pague o restante em Pix" / "faltam R$X → complete com Pix/cheque
+ *         próprio" / "✓ Valor exato!").
+ *       · Rodapé: direciona para Contas a Pagar → Pagar → "Cheque de Terceiro" para
+ *         alocar os cheques efetivamente.
+ *       · Se sem cheques disponíveis: mensagem discreta "Nenhum cheque de terceiro em
+ *         carteira. Usando cheque próprio."
+ *   - Wrapper `<div className="mt-3 space-y-3">` criado para separar o painel de sugestão
+ *     do card azul de cheque próprio.
+ *
+ * ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+ */
+/**
  * Rev. 4101 — **CHEQUES RECEBIDOS: FIX IMPORT — IGNORA LINHA DE TOTAL DA PLANILHA.**
  *
  * BUG: O parser XLSX importava a linha de rodapé "TOTAL" da planilha como se fosse um cheque
