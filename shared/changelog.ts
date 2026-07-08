@@ -1,4 +1,18 @@
 /**
+ * Rev. 4101 — **CHEQUES RECEBIDOS: FIX IMPORT — IGNORA LINHA DE TOTAL DA PLANILHA.**
+ *
+ * BUG: O parser XLSX importava a linha de rodapé "TOTAL" da planilha como se fosse um cheque
+ * real (nº = "TOTAL", emitente = "132 FOLHAS", valor = soma de todos os cheques). Isso poluía
+ * a carteira com um registro fantasma de R$ 421k.
+ *
+ * FIX — `server/routers/chequesRecebidos.ts`, função `parsearXlsx`:
+ *   - Após extrair `numero`, verifica se começa com palavra-chave de totalizador via regex
+ *     `^(total|subtotal|sub-total|soma|geral|resumo|grand\s*total)` (case-insensitive).
+ *   - Se sim, `continue` — pula a linha sem criar registro.
+ *
+ * ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+ */
+/**
  * Rev. 4100 — **CHEQUES RECEBIDOS: PADRONIZAÇÃO DO NAV DE MESES (GRID + BOLINHAS DE STATUS).**
  *
  * CONTEXTO: A página de Cheques Recebidos usava um seletor de meses inline simples (pills

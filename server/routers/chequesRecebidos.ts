@@ -152,6 +152,8 @@ function parseWorkbookRecebidos(base64: string, companyId: number) {
       const numero = String(row[cols.numero!] ?? "").trim();
       const valor = parseValor(row[cols.valor!]);
       if (!numero || !valor) continue;
+      // Pula linhas de totalizador/resumo da planilha (ex.: "TOTAL", "SUBTOTAL", "SOMA")
+      if (/^(total|subtotal|sub-total|soma|geral|resumo|grand\s*total)/i.test(numero)) continue;
 
       rows.push({
         numeroCheque: numero,

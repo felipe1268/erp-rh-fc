@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4100** — **CHEQUES RECEBIDOS: PADRONIZAÇÃO DO NAV DE MESES (GRID + BOLINHAS DE STATUS).** `resumoPorMes` adicionado ao router `chequesRecebidos` (agrupa por COALESCE(data_bom_para, data_emissao, criado_em)). Frontend: pills inline simples substituídas pelo grid 6×2/12×1 com bolinhas (azul=com lançamento, verde=consolidado, cinza=sem dados) + legenda — idêntico ao Emitidos. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+- **Rev. 4101** — **CHEQUES RECEBIDOS: FIX IMPORT — IGNORA LINHA DE TOTAL DA PLANILHA.** Parser XLSX importava rodapé "TOTAL" como cheque real (nº="TOTAL", valor=soma de todos). Fix: regex `^(total|subtotal|sub-total|soma|geral|resumo|grand total)` pula a linha antes de criar registro. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
-- **Rev. 4099** — **CHEQUES EMITIDOS: REDESIGN DO LAYOUT (PADRÃO RECEBIDOS) + FIX FILTRO DE MÊS SEM DATA.** 4 cards clicáveis com dot colorido (Pendentes/Compensados/Devolvidos/Outros), blocos RESUMO+CONFERÊNCIA removidos, filtros em Card único com pills Jan-Dez. Fix: filtro mês usa COALESCE. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+- **Rev. 4100** — **CHEQUES RECEBIDOS: PADRONIZAÇÃO DO NAV DE MESES (GRID + BOLINHAS DE STATUS).** `resumoPorMes` adicionado ao router `chequesRecebidos`; pills inline substituídas pelo grid 6×2/12×1 com bolinhas coloridas + legenda. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 ### 5 one-liners
 
