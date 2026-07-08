@@ -4924,6 +4924,31 @@ REGRAS DE EXTRAÇÃO:
             )
           `);
           console.log(`[SyncSchema+] Rev. 4092: tabela efd_icms_ipi_config garantida (configuração EFD-ICMS/IPI por empresa).`);
+
+          // Seed automático — FC Engenharia (CNPJ 29353906000171), dados do Cartão CNPJ + IM
+          // ON CONFLICT DO NOTHING: só aplica se ainda não há registro (não sobrescreve edições do usuário)
+          await db.$client.query(`
+            INSERT INTO efd_icms_ipi_config
+              (company_id, ie, im, cod_mun, cep, logradouro, numero_end, complemento,
+               bairro, telefone, email, perfil)
+            SELECT
+              c.id,
+              '332192715114',          -- IE SP
+              '13239401',              -- IM Guaratinguetá
+              '3518701',               -- IBGE Guaratinguetá
+              '12505300',              -- CEP
+              'AV JUSCELINO KUBITSCHEK DE OLIVEIRA',
+              '1301',
+              'SALA 1104',
+              'CAMPO DO GALVAO',
+              '1291443486',            -- Telefone
+              'ana@fcengenhariacivil.com.br',
+              'A'
+            FROM companies c
+            WHERE regexp_replace(c.cnpj, '[^0-9]', '', 'g') = '29353906000171'
+            LIMIT 1
+            ON CONFLICT (company_id) DO NOTHING
+          `);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.4092 efd_icms_ipi_config:`, e?.message || e); }
 
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
