@@ -83,14 +83,26 @@ function parseData(v: any): string | null {
 }
 
 function normTxt(s: any): string {
-  return String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+  // Rev. 4096 fix: substituir indicador ordinal (º U+00BA) e símbolo de grau (° U+00B0) por "o"
+  // ANTES do NFD para que planilhas com cabeçalho "Nº Cheque" sejam detectadas corretamente.
+  return String(s ?? "")
+    .replace(/[\u00BA\u00B0]/g, "o")   // º / ° → o
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")   // strip diacríticos combinantes
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, " ")       // strip demais símbolos não alfanuméricos
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 // ─────────────────────────── Mapeador de colunas xlsx ───────────────────────────
 type ColKey = "numero" | "emitente" | "banco" | "agencia" | "conta" | "valor" | "emissao" | "bomPara" | "observacao";
 
 const COL_ALIASES: Record<ColKey, string[]> = {
-  numero:   ["numero", "num", "cheque", "nro", "nro cheque", "numero cheque", "n cheque"],
+  // "Nº Cheque" → normTxt → "no cheque"; aceitar também variantes comuns
+  numero: ["numero", "num", "cheque", "nro", "nro cheque", "numero cheque",
+           "n cheque", "no cheque", "no", "nc", "numero do cheque", "num cheque",
+           "nro do cheque", "n do cheque"],
   emitente: ["emitente", "emitente nome", "cliente", "sacado", "nome"],
   banco:    ["banco", "banco emitente"],
   agencia:  ["agencia", "ag", "agencia bancaria"],

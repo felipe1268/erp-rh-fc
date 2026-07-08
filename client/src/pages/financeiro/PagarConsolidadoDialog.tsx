@@ -122,11 +122,12 @@ export default function PagarConsolidadoDialog({
     onSuccess: (r: any) => {
       // Rev. 4096 — após pagamento confirmado, alocar os cheques de terceiro selecionados
       if (isChequeTerceiro && chequesTerceiroSel.length && alocarLoteMut) {
+        // Rev. 4096: usar o primeiro entryId dos lançamentos pagos (pagarConsolidadoFornecedor agora retorna entryIds)
         alocarLoteMut.mutate({
           companyId,
           ids: chequesTerceiroSel,
           fornecedorAlocadoNome: group?.fornecedorNome ?? undefined,
-          entryId: r?.entryId ?? null,
+          entryId: r?.entryIds?.[0] ?? null,
         });
       }
       toast({

@@ -2949,11 +2949,23 @@ export default function FinanceiroContasAPagar() {
               {/* Opção C — Quitar saldo: fecha o título mesmo com sobra de centavo/juros/desconto */}
               <Button variant="outline" className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
                 disabled={payMut.isPending || uploadingComp}
-                onClick={() => payMut.mutate({ ...baixaPayload(), quitarTotal: true })}>
+                onClick={() => {
+                  // Rev. 4096 — validação: cheque_terceiro exige pelo menos 1 cheque selecionado
+                  if (formaPagamento === "cheque_terceiro" && chequesTerceiroSelAvulso.length === 0) {
+                    toast({ title: "Selecione pelo menos um cheque recebido", variant: "destructive" }); return;
+                  }
+                  payMut.mutate({ ...baixaPayload(), quitarTotal: true });
+                }}>
                 Quitar saldo
               </Button>
               <Button className="bg-green-600 hover:bg-green-700 text-white" disabled={payMut.isPending || uploadingComp}
-                onClick={() => payMut.mutate(baixaPayload())}>
+                onClick={() => {
+                  // Rev. 4096 — validação: cheque_terceiro exige pelo menos 1 cheque selecionado
+                  if (formaPagamento === "cheque_terceiro" && chequesTerceiroSelAvulso.length === 0) {
+                    toast({ title: "Selecione pelo menos um cheque recebido", variant: "destructive" }); return;
+                  }
+                  payMut.mutate(baixaPayload());
+                }}>
                 {payMut.isPending ? "Registrando..." : "Registrar baixa"}
               </Button>
             </DialogFooter>

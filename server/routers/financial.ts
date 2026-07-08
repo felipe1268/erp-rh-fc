@@ -10258,7 +10258,9 @@ export const financialRouter = router({
       userId: ctx.user?.id, companyId: input.companyId,
       details: `Pagamento consolidado: ${pendentes.length} título(s) de ${input.fornecedorNome || "fornecedor"} — R$${totalGrupo.toFixed(2)} via ${input.formaPagamento}${isCheque ? ` (${input.cheques!.length} cheque(s) registrados no Controle de Cheques)` : ""}.`,
     });
-    return { ok: true, pagos: pendentes.length, total: totalGrupo, chequesCriados: chequesCriados.length };
+    // Rev. 4096: retornar entryIds para que o cliente possa vincular a alocação de
+    // cheques de terceiro ao(s) lançamento(s) correspondente(s).
+    return { ok: true, pagos: pendentes.length, total: totalGrupo, chequesCriados: chequesCriados.length, entryIds: pendentes.map((e: any) => e.id as number) };
   }),
 
   // Estorna UMA baixa (soft): marca estornada_em e recalcula o rollup (reabre o título
