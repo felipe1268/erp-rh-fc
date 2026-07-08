@@ -1,4 +1,36 @@
 /**
+ * Rev. 4093 — **SPED: EFD CONTRIBUIÇÕES (PIS/COFINS) + SPED ECF (IRPJ/CSLL LP) + SPED ECD (ECD ANUAL).**
+ *
+ * CONTEXTO: FC Engenharia (construtora, Lucro Presumido) precisa entregar 3 obrigações SPED além do
+ * EFD-ICMS/IPI (Rev.4092): (1) EFD Contribuições — PIS/COFINS mensal; (2) SPED ECF — declaração
+ * anual de IRPJ/CSLL; (3) SPED ECD — escrituração contábil digital anual.
+ *
+ * IMPLEMENTAÇÃO:
+ *   - `server/routers/downloadEfdContribuicoes.ts` — `GET /api/download/efd-contribuicoes` —
+ *     EFD Contribuições COD_VER 006, regime cumulativo (LP 0,65%/3%): Blocos 0,A(NFS-e),C(NF-e),D,F,M,1,9.
+ *     M200/M210 apura PIS; M600/M610 apura COFINS. Participantes cadastrados em 0150.
+ *   - `server/routers/efdContribuicoes.ts` — tRPC `getConfig`/`saveConfig` → `efd_contrib_config`
+ *     (cod_inc_trib, ind_reg_cum, aliq_pis, aliq_cofins, perc_presumido).
+ *   - `server/routers/downloadSpedEcf.ts` — `GET /api/download/sped-ecf` — SPED ECF COD_VER 009 LP:
+ *     Bloco N (IRPJ trimestral 15%+10% adicional), Bloco P (CSLL trimestral 9%), J/K/L/M/T/X/Y sem mov.
+ *   - `server/routers/spedEcf.ts` — tRPC `getConfig`/`saveConfig` → `sped_ecf_config`
+ *     (cod_qualif_pj, setor_ativ, perc_pres_irpj, perc_pres_csll, nire).
+ *   - `server/routers/downloadSpedEcd.ts` — `GET /api/download/sped-ecd` — SPED ECD COD_VER 011:
+ *     Plano de contas de `financial_accounts`; Bloco I (lançamentos de `financial_entries` por conta);
+ *     Bloco J (DRE simplificado: receita total vs despesa total).
+ *   - `server/routers/spedEcd.ts` — tRPC `getConfig`/`saveConfig` → `sped_ecd_config`.
+ *   - `server/_core/index.ts` — SyncSchema+ Rev.4093 cria 3 tabelas com UNIQUE(company_id);
+ *     seed FC Engenharia ON CONFLICT DO NOTHING; registra 3 rotas Express.
+ *   - `client/src/pages/fiscal/EfdContribuicoes.tsx` — seletor mês/ano + collapsible regime tributário.
+ *   - `client/src/pages/fiscal/SpedEcf.tsx` — seletor ano + collapsible parâmetros ECF (% presunção).
+ *   - `client/src/pages/fiscal/SpedEcd.tsx` — seletor ano + collapsible parâmetros ECD.
+ *   - DashboardLayout: grupo Contabilidade + 3 novos itens (FileText/FileSpreadsheet/BookOpen).
+ *   - App.tsx: lazy imports + 3 rotas (/financeiro/efd-contribuicoes, /sped-ecf, /sped-ecd).
+ *
+ * ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+ */
+
+/**
  * Rev. 4092 — **EFD-ICMS/IPI: GERADOR DE ARQUIVO TXT (SPED) — GUIA PRÁTICO v3.2.2, COD_VER 017.**
  *
  * CONTEXTO: FC Engenharia (construtora) tem IE-SP mas NÃO é contribuinte ICMS (IE só para remessa).

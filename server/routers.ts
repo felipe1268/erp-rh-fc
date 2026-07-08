@@ -159,6 +159,9 @@ import { sefazRouter } from "./routers/sefaz";
 import { nfseEmitidasRouter } from "./routers/nfseEmitidas";
 import { omieRouter } from "./routers/omie";
 import { efdIcmsIpiRouter } from "./routers/efdIcmsIpi";
+import { efdContribuicoesRouter } from "./routers/efdContribuicoes";
+import { spedEcfRouter } from "./routers/spedEcf";
+import { spedEcdRouter } from "./routers/spedEcd";
 import { storagePut } from "./storage";
 import { dispararNotificacao, mapStatusToTipoMovimentacao, getMotivoAfastamento } from "./services/emailNotification";
 
@@ -1760,7 +1763,10 @@ export const appRouter = router({
   nfseEmitidas: nfseEmitidasRouter,
   contabilidade: contabilidadeRouter,
   omie: omieRouter,
-  efdIcmsIpi: efdIcmsIpiRouter,
+  efdIcmsIpi:       efdIcmsIpiRouter,
+  efdContribuicoes: efdContribuicoesRouter,
+  spedEcf:          spedEcfRouter,
+  spedEcd:          spedEcdRouter,
 
   // ============================================================
   // DESCONTOS CLT (Motor de Cálculo)

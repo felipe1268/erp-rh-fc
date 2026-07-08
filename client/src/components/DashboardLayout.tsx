@@ -528,8 +528,11 @@ const menuSectionsFinanceiro: MenuSection[] = [
   {
     title: "Contabilidade",
     items: [
-      { icon: Archive,       label: "Envios ao Contador", path: "/financeiro/contabilidade" },
-      { icon: FileOutput,    label: "EFD-ICMS/IPI",        path: "/financeiro/efd-icms-ipi" },
+      { icon: Archive,       label: "Envios ao Contador",  path: "/financeiro/contabilidade" },
+      { icon: FileOutput,    label: "EFD-ICMS/IPI",         path: "/financeiro/efd-icms-ipi" },
+      { icon: FileText,      label: "EFD Contribuições",    path: "/financeiro/efd-contribuicoes" },
+      { icon: FileSpreadsheet, label: "SPED ECF",           path: "/financeiro/sped-ecf" },
+      { icon: BookOpen,      label: "SPED ECD",             path: "/financeiro/sped-ecd" },
     ],
   },
   {

@@ -16,6 +16,9 @@ import { registerContabilidadeXlsxRoute } from "../routers/downloadContabilidade
 import { registerDanfeRoute } from "../routers/danfeRoute";
 import { registerPortalDocumentosRoute } from "../routers/portalDocumentos";
 import { registerEfdIcmsIpiRoute } from "../routers/downloadEfdIcmsIpi";
+import { registerEfdContribuicoesRoute } from "../routers/downloadEfdContribuicoes";
+import { registerSpedEcfRoute } from "../routers/downloadSpedEcf";
+import { registerSpedEcdRoute } from "../routers/downloadSpedEcd";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -315,6 +318,9 @@ async function startServer() {
   registerDanfeRoute(app);
   registerPortalDocumentosRoute(app);
   registerEfdIcmsIpiRoute(app);
+  registerEfdContribuicoesRoute(app);
+  registerSpedEcfRoute(app);
+  registerSpedEcdRoute(app);
 
   // Upload multipart para documentos SST grandes (PGR/PCMSO/LTCAT — até 150MB)
   const multer = (await import("multer")).default;
@@ -4950,6 +4956,82 @@ REGRAS DE EXTRAÇÃO:
             ON CONFLICT (company_id) DO NOTHING
           `);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.4092 efd_icms_ipi_config:`, e?.message || e); }
+
+        // Rev. 4093 — SPED: EFD Contribuições + SPED ECF + SPED ECD (configuração por empresa)
+        try {
+          await db.$client.query(`
+            CREATE TABLE IF NOT EXISTS efd_contrib_config (
+              id          SERIAL PRIMARY KEY,
+              company_id  INTEGER NOT NULL,
+              cod_inc_trib    TEXT DEFAULT '3',
+              ind_reg_cum     TEXT DEFAULT '1',
+              aliq_pis        TEXT DEFAULT '0.65',
+              aliq_cofins     TEXT DEFAULT '3.00',
+              perc_presumido  TEXT DEFAULT '32',
+              created_at  TIMESTAMPTZ DEFAULT now(),
+              updated_at  TIMESTAMPTZ DEFAULT now(),
+              UNIQUE (company_id)
+            )
+          `);
+          await db.$client.query(`
+            CREATE TABLE IF NOT EXISTS sped_ecf_config (
+              id          SERIAL PRIMARY KEY,
+              company_id  INTEGER NOT NULL,
+              cod_qualif_pj   TEXT DEFAULT '05',
+              setor_ativ      TEXT DEFAULT '04',
+              perc_pres_irpj  TEXT DEFAULT '32',
+              perc_pres_csll  TEXT DEFAULT '32',
+              cod_ind_eco     TEXT DEFAULT '',
+              ind_esc_cons_dem TEXT DEFAULT '0',
+              nire            TEXT DEFAULT '',
+              created_at  TIMESTAMPTZ DEFAULT now(),
+              updated_at  TIMESTAMPTZ DEFAULT now(),
+              UNIQUE (company_id)
+            )
+          `);
+          await db.$client.query(`
+            CREATE TABLE IF NOT EXISTS sped_ecd_config (
+              id          SERIAL PRIMARY KEY,
+              company_id  INTEGER NOT NULL,
+              nire            TEXT DEFAULT '',
+              ind_sit_especial TEXT DEFAULT '0',
+              ind_esc_cons    TEXT DEFAULT '0',
+              cod_scp         TEXT DEFAULT '',
+              setor_ativ      TEXT DEFAULT '04',
+              cod_hash_ent    TEXT DEFAULT '',
+              created_at  TIMESTAMPTZ DEFAULT now(),
+              updated_at  TIMESTAMPTZ DEFAULT now(),
+              UNIQUE (company_id)
+            )
+          `);
+          console.log(`[SyncSchema+] Rev. 4093: tabelas efd_contrib_config, sped_ecf_config, sped_ecd_config garantidas.`);
+
+          // Seed FC Engenharia Projetos e Obras (company_id=1) — ON CONFLICT DO NOTHING
+          await db.$client.query(`
+            INSERT INTO efd_contrib_config (company_id, cod_inc_trib, ind_reg_cum, aliq_pis, aliq_cofins, perc_presumido)
+            SELECT id, '3', '1', '0.65', '3.00', '32'
+            FROM companies
+            WHERE cnpj ILIKE '%29353906000171%'
+            LIMIT 1
+            ON CONFLICT (company_id) DO NOTHING
+          `);
+          await db.$client.query(`
+            INSERT INTO sped_ecf_config (company_id, cod_qualif_pj, setor_ativ, perc_pres_irpj, perc_pres_csll, nire)
+            SELECT id, '05', '04', '32', '32', ''
+            FROM companies
+            WHERE cnpj ILIKE '%29353906000171%'
+            LIMIT 1
+            ON CONFLICT (company_id) DO NOTHING
+          `);
+          await db.$client.query(`
+            INSERT INTO sped_ecd_config (company_id, setor_ativ, ind_sit_especial, ind_esc_cons)
+            SELECT id, '04', '0', '0'
+            FROM companies
+            WHERE cnpj ILIKE '%29353906000171%'
+            LIMIT 1
+            ON CONFLICT (company_id) DO NOTHING
+          `);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.4093 sped_configs:`, e?.message || e); }
 
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));

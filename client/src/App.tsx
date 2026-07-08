@@ -241,7 +241,10 @@ const FinanceiroAnaliseCustos = lazyWithRetry(() => import("./pages/financeiro/F
 const FinanceiroAnaliseCustosDetalhe = lazyWithRetry(() => import("./pages/financeiro/FinanceiroAnaliseCustosDetalhe"));
 const FinanceiroCFOSuite      = lazyWithRetry(() => import("./pages/financeiro/FinanceiroCFOSuite"));
 const FinanceiroContabilidade = lazyWithRetry(() => import("./pages/financeiro/FinanceiroContabilidade"));
-const EfdIcmsIpi = lazyWithRetry(() => import("./pages/fiscal/EfdIcmsIpi"));
+const EfdIcmsIpi        = lazyWithRetry(() => import("./pages/fiscal/EfdIcmsIpi"));
+const EfdContribuicoes  = lazyWithRetry(() => import("./pages/fiscal/EfdContribuicoes"));
+const SpedEcf           = lazyWithRetry(() => import("./pages/fiscal/SpedEcf"));
+const SpedEcd           = lazyWithRetry(() => import("./pages/fiscal/SpedEcd"));
 const DashReceber             = lazyWithRetry(() => import("./pages/financeiro/dashboards/DashReceber"));
 const DashPagar               = lazyWithRetry(() => import("./pages/financeiro/dashboards/DashPagar"));
 const DashConciliacao         = lazyWithRetry(() => import("./pages/financeiro/dashboards/DashConciliacao"));
@@ -577,7 +580,10 @@ function Router() {
         <Route path="/financeiro/configuracoes" component={() => <RouteGuard component={FinanceiroConfiguracoes} route="/financeiro/lancamentos" />} />
         <Route path="/financeiro/notas-fiscais" component={() => <RouteGuard component={FinanceiroNotasFiscais} route="/financeiro/lancamentos" />} />
         <Route path="/financeiro/contabilidade" component={() => <RouteGuard component={FinanceiroContabilidade} route="/financeiro/lancamentos" />} />
-        <Route path="/financeiro/efd-icms-ipi" component={() => <RouteGuard component={EfdIcmsIpi} route="/financeiro/lancamentos" />} />
+        <Route path="/financeiro/efd-icms-ipi"       component={() => <RouteGuard component={EfdIcmsIpi}       route="/financeiro/lancamentos" />} />
+        <Route path="/financeiro/efd-contribuicoes"  component={() => <RouteGuard component={EfdContribuicoes} route="/financeiro/lancamentos" />} />
+        <Route path="/financeiro/sped-ecf"           component={() => <RouteGuard component={SpedEcf}          route="/financeiro/lancamentos" />} />
+        <Route path="/financeiro/sped-ecd"           component={() => <RouteGuard component={SpedEcd}          route="/financeiro/lancamentos" />} />
         <Route path="/financeiro/conciliacao/workspace" component={() => <RouteGuard component={FinanceiroConciliacaoWorkspace} route="/financeiro/conciliacao" />} />
         <Route path="/financeiro/conciliacao" component={() => <RouteGuard component={FinanceiroConciliacao} route="/financeiro/conciliacao" />} />
         <Route path="/financeiro/cheques" component={() => <RouteGuard component={FinanceiroCheques} route="/financeiro/cheques" />} />
