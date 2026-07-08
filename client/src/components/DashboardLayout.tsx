@@ -39,7 +39,7 @@ import {
   Home, Tag, GripVertical, Network, ScanFace, PackageCheck, PenLine, ChevronLeft,
   Camera, Blocks, CheckSquare, FileCheck2, Milestone, Fuel,
   UserMinus, Search, X, GraduationCap, Sparkles, HeartPulse, Award,
-  RefreshCw, HandCoins, Scissors, Archive,
+  RefreshCw, HandCoins, Scissors, Archive, FileOutput,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -529,6 +529,7 @@ const menuSectionsFinanceiro: MenuSection[] = [
     title: "Contabilidade",
     items: [
       { icon: Archive,       label: "Envios ao Contador", path: "/financeiro/contabilidade" },
+      { icon: FileOutput,    label: "EFD-ICMS/IPI",        path: "/financeiro/efd-icms-ipi" },
     ],
   },
   {

@@ -1,4 +1,30 @@
 /**
+ * Rev. 4092 — **EFD-ICMS/IPI: GERADOR DE ARQUIVO TXT (SPED) — GUIA PRÁTICO v3.2.2, COD_VER 017.**
+ *
+ * CONTEXTO: FC Engenharia (construtora) tem IE-SP mas NÃO é contribuinte ICMS (IE só para remessa).
+ * O PVA-SPED exige entrega periódica do EFD-ICMS/IPI mesmo sem débito de ICMS (Perfil A, IND_ATIV=1).
+ *
+ * IMPLEMENTAÇÃO:
+ *   - `server/routers/efdIcmsIpi.ts` — tRPC router `getConfig`/`saveConfig` para `efd_icms_ipi_config`
+ *     (parâmetros fiscais IE/IM/CEP/endereço + dados do contabilista que alimentam os registros 0000/0005/0100).
+ *   - `server/routers/downloadEfdIcmsIpi.ts` — Express route `GET /api/download/efd-icms-ipi`
+ *     + `buildEfdIcmsIpiBuffer()`: gera arquivo pipe-delimited `|\r\n` com Blocos 0,B,C,D,E,G,H,1,9.
+ *     Parse de XML NF-e para C170 (itens, Perfil A); fallback sem XML usa CFOP 5933/1556 + CST 090.
+ *     Bloco E110 apura ICMS débitos (CFOP 5x/6x) × créditos (1x/2x); Blocos B/D/G/H/K com IND_MOV=1.
+ *     Bloco 9 conta cada REG + 9999 totaliza tudo.
+ *   - `server/_core/index.ts` — registra a rota Express + SyncSchema+ cria `efd_icms_ipi_config`
+ *     com UNIQUE(company_id); ColFix-v26 (version bump necessário se ainda não aplicado).
+ *   - `client/src/pages/fiscal/EfdIcmsIpi.tsx` — página de configuração + download:
+ *     seletor mês/ano/finalidade/perfil, collapsibles para parâmetros da empresa (0000/0005) e
+ *     contabilista (0100), botão "Salvar Configuração" + botão "Gerar EFD · Mês Ano".
+ *   - `client/src/App.tsx` — lazy import + rota `/financeiro/efd-icms-ipi`.
+ *   - `client/src/components/DashboardLayout.tsx` — item "EFD-ICMS/IPI" (ícone FileOutput)
+ *     no grupo Contabilidade, após "Envios ao Contador".
+ *
+ * ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+ */
+
+/**
  * Rev. 4091 — **PLANILHA CONTADOR: CNPJ DE FORNECEDOR + CATEGORIA + TODAS AS CONTAS (CAIXA INTERNO).**
  *
  * CONTEXTO: A planilha exportada para a contabilidade (`/api/download/contabilidade-xlsx`) tinha

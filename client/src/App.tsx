@@ -241,6 +241,7 @@ const FinanceiroAnaliseCustos = lazyWithRetry(() => import("./pages/financeiro/F
 const FinanceiroAnaliseCustosDetalhe = lazyWithRetry(() => import("./pages/financeiro/FinanceiroAnaliseCustosDetalhe"));
 const FinanceiroCFOSuite      = lazyWithRetry(() => import("./pages/financeiro/FinanceiroCFOSuite"));
 const FinanceiroContabilidade = lazyWithRetry(() => import("./pages/financeiro/FinanceiroContabilidade"));
+const EfdIcmsIpi = lazyWithRetry(() => import("./pages/fiscal/EfdIcmsIpi"));
 const DashReceber             = lazyWithRetry(() => import("./pages/financeiro/dashboards/DashReceber"));
 const DashPagar               = lazyWithRetry(() => import("./pages/financeiro/dashboards/DashPagar"));
 const DashConciliacao         = lazyWithRetry(() => import("./pages/financeiro/dashboards/DashConciliacao"));
@@ -576,6 +577,7 @@ function Router() {
         <Route path="/financeiro/configuracoes" component={() => <RouteGuard component={FinanceiroConfiguracoes} route="/financeiro/lancamentos" />} />
         <Route path="/financeiro/notas-fiscais" component={() => <RouteGuard component={FinanceiroNotasFiscais} route="/financeiro/lancamentos" />} />
         <Route path="/financeiro/contabilidade" component={() => <RouteGuard component={FinanceiroContabilidade} route="/financeiro/lancamentos" />} />
+        <Route path="/financeiro/efd-icms-ipi" component={() => <RouteGuard component={EfdIcmsIpi} route="/financeiro/lancamentos" />} />
         <Route path="/financeiro/conciliacao/workspace" component={() => <RouteGuard component={FinanceiroConciliacaoWorkspace} route="/financeiro/conciliacao" />} />
         <Route path="/financeiro/conciliacao" component={() => <RouteGuard component={FinanceiroConciliacao} route="/financeiro/conciliacao" />} />
         <Route path="/financeiro/cheques" component={() => <RouteGuard component={FinanceiroCheques} route="/financeiro/cheques" />} />

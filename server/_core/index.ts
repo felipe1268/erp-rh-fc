@@ -15,6 +15,7 @@ import { registerPacoteContadorRoute } from "../routers/downloadPacoteContador";
 import { registerContabilidadeXlsxRoute } from "../routers/downloadContabilidadeXlsx";
 import { registerDanfeRoute } from "../routers/danfeRoute";
 import { registerPortalDocumentosRoute } from "../routers/portalDocumentos";
+import { registerEfdIcmsIpiRoute } from "../routers/downloadEfdIcmsIpi";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -313,6 +314,7 @@ async function startServer() {
   registerContabilidadeXlsxRoute(app);
   registerDanfeRoute(app);
   registerPortalDocumentosRoute(app);
+  registerEfdIcmsIpiRoute(app);
 
   // Upload multipart para documentos SST grandes (PGR/PCMSO/LTCAT — até 150MB)
   const multer = (await import("multer")).default;
@@ -4884,6 +4886,45 @@ REGRAS DE EXTRAÇÃO:
           `);
           console.log(`[SyncSchema+] Rev. 3865: tabela docx_template_config garantida (template FC para documentos Word).`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.3865 docx_template_config:`, e?.message || e); }
+
+        // Rev. 4092 — EFD-ICMS/IPI: configuração por empresa (perfil, contabilista, endereço fiscal)
+        try {
+          await db.$client.query(`
+            CREATE TABLE IF NOT EXISTS efd_icms_ipi_config (
+              id          SERIAL PRIMARY KEY,
+              company_id  INTEGER NOT NULL,
+              ie          VARCHAR(20) DEFAULT '',
+              im          VARCHAR(20) DEFAULT '',
+              cod_mun     VARCHAR(7)  DEFAULT '',
+              cep         VARCHAR(8)  DEFAULT '',
+              logradouro  VARCHAR(60) DEFAULT '',
+              numero_end  VARCHAR(10) DEFAULT '',
+              complemento VARCHAR(60) DEFAULT '',
+              bairro      VARCHAR(60) DEFAULT '',
+              telefone    VARCHAR(11) DEFAULT '',
+              fax         VARCHAR(11) DEFAULT '',
+              email       VARCHAR(255) DEFAULT '',
+              suframa     VARCHAR(9)  DEFAULT '',
+              perfil      VARCHAR(1)  DEFAULT 'A',
+              cont_nome       VARCHAR(100) DEFAULT '',
+              cont_cpf        VARCHAR(11)  DEFAULT '',
+              cont_crc        VARCHAR(15)  DEFAULT '',
+              cont_cod_mun    VARCHAR(7)   DEFAULT '',
+              cont_cnpj       VARCHAR(14)  DEFAULT '',
+              cont_cep        VARCHAR(8)   DEFAULT '',
+              cont_logradouro VARCHAR(60)  DEFAULT '',
+              cont_numero     VARCHAR(10)  DEFAULT '',
+              cont_complemento VARCHAR(60) DEFAULT '',
+              cont_bairro     VARCHAR(60)  DEFAULT '',
+              cont_fone       VARCHAR(11)  DEFAULT '',
+              cont_fax        VARCHAR(11)  DEFAULT '',
+              cont_email      VARCHAR(255) DEFAULT '',
+              updated_at  TIMESTAMP DEFAULT now(),
+              UNIQUE(company_id)
+            )
+          `);
+          console.log(`[SyncSchema+] Rev. 4092: tabela efd_icms_ipi_config garantida (configuração EFD-ICMS/IPI por empresa).`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.4092 efd_icms_ipi_config:`, e?.message || e); }
 
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));

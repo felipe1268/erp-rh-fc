@@ -1,3 +1,5 @@
+- **Rev. 4085** — **CONCILIAÇÃO: DEDUP DE IMPORTAÇÃO PASSA A SER CONTROLADO PELO USUÁRIO (DIÁLOGO DE REVISÃO) + PARSER OFX ROBUSTO PARA FORMATO BR.** Fix: novo endpoint `checkStatementDuplicates` (dry-run) + `ReviewDuplicatesDialog`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+
 - **Rev. 4080** — **CONTAS A PAGAR: BOTÃO "ANO TODO" PADRONIZADO COM CONTAS A RECEBER.** Antes: barra tracejada full-width abaixo da grade de meses. Fix: `FinanceiroContasAPagar.tsx` — botão virou o mesmo pill compacto ao lado do seletor de ano (◀ 2026 ▶ [Ano todo]), igual ao Contas a Receber. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4079** — **CONCILIAÇÃO BANCÁRIA: CHEQUE DEVOLVIDO MAIS DE UMA VEZ (MESMA IDENTIDADE, MOTIVOS DIFERENTES) PASSA A QUITAR TODAS AS OCORRÊNCIAS DE UMA SÓ VEZ.** Fix: busca TODOS os pares da conta com a mesma identidade e desconsidera juntos. ZERO DELETE · ZERO ALTER · UPDATE só em `desconsiderado_em`.
