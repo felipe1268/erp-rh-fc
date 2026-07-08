@@ -8080,7 +8080,7 @@ export const financialRouter = router({
     try {
       const uniquePrefixes = [...new Set(sugestoes.map((s: any) =>
         (String(s.extratoDescricao ?? "")).toUpperCase().trim().slice(0, 30)
-      ))].filter(Boolean);
+      ))].filter(Boolean).filter(p => !/\$\d/.test(p)); // exclui $N que confunde dbExecute (split /\$\d+/g)
       if (uniquePrefixes.length > 0) {
         const safeEsc = (s: string) => s.replace(/'/g, "''");
         const valClauses = uniquePrefixes.map(p => `('${safeEsc(p)}')`).join(",");

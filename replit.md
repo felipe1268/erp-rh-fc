@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4094** — **CORREÇÕES DE PRODUÇÃO: 3 BUGS (SQL $N, ferias.list coerce, getAlertasCompras try/catch).** (1) `financial.ts`: uniquePrefixes com `$100` etc. quebravam `dbExecute` (split regex `\$\d+`); fix: filter antes do VALUES CTE. (2) `avisoPrevioFerias.ts`: `companyId: z.number()` → `z.coerce.number()` (frontend enviava string). (3) `compras.ts` `getAlertasCompras`: try/catch global com `console.error(stack)` + retorno de default seguro para "Cannot convert undefined or null to object". (4) `FinanceiroNotasFiscais.tsx`: `calcValorLiquido` remove ISS da fórmula; Valor Líquido vira `<input>` editável. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+
 - **Rev. 4093** — **SPED: EFD CONTRIBUIÇÕES (PIS/COFINS) + SPED ECF (IRPJ/CSLL LP) + SPED ECD.** 3 novos geradores de arquivo SPED: (1) EFD Contribuições COD_VER 006 — regime cumulativo LP, Blocos A(NFS-e)/C(NF-e)/M(apuração PIS M200-210/COFINS M600-610); (2) SPED ECF COD_VER 009 LP — Blocos N(IRPJ trim 15%+10%)/P(CSLL 9%); (3) SPED ECD COD_VER 011 — plano de contas + lançamentos de `financial_accounts`/`financial_entries`. 3 tRPC routers (efdContribuicoes/spedEcf/spedEcd) + 3 Express routes + 3 páginas frontend + SyncSchema+ cria `efd_contrib_config`, `sped_ecf_config`, `sped_ecd_config` (UNIQUE company_id) + seed FC. Menu Contabilidade: +3 itens. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
-- **Rev. 4092** — **EFD-ICMS/IPI: GERADOR DE ARQUIVO TXT (SPED) — GUIA PRÁTICO v3.2.2, COD_VER 017.** Novo tRPC router `efdIcmsIpi` (getConfig/saveConfig) + Express route `GET /api/download/efd-icms-ipi` com `buildEfdIcmsIpiBuffer()`. Gera Blocos 0,B,C,D,E,G,H,1,9 em formato pipe-delimited `|\r\n`; parse XML NF-e → C170 (Perfil A); C190 sempre; E110 apura ICMS; Blocos B/D/G/H com IND_MOV=1. Nova tabela `efd_icms_ipi_config` (UNIQUE company_id). Página `EfdIcmsIpi.tsx` com seletor período/finalidade/perfil + collapsibles para parâmetros empresa (0000/0005) e contabilista (0100) + botões Salvar/Gerar. Menu: grupo Contabilidade → item "EFD-ICMS/IPI" (ícone FileOutput). ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
 ### 5 one-liners
+
+- **Rev. 4092** — **EFD-ICMS/IPI: GERADOR DE ARQUIVO TXT (SPED) — GUIA PRÁTICO v3.2.2, COD_VER 017.** Novo tRPC router `efdIcmsIpi` (getConfig/saveConfig) + Express route. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4090** — **CONCILIAÇÃO: DEDUP DE IMPORTAÇÃO CIENTE DE DUPLICATAS LEGÍTIMAS NO BATCH.** Fix: pré-passe conta ocorrências no batch e no DB; só pula quando `alreadyInDb + alreadyInSess >= batchTotal`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4088** — **NF-e: AUTO-VÍNCULO CROSS-MÊS — NFS-e DE MÊS ANTERIOR CONCILIADA AUTOMATICAMENTE AO CONSOLIDAR O MÊS SEGUINTE (REGIME DE COMPETÊNCIA).** 3 bugs corrigidos na janela de data invertida, período restrito e consolidarMes sem disparo. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4087** — **PANORAMA FISCAL: MATCHING RETROATIVO DE ENTRADAS BANCÁRIAS × NFS-e DE MESES ANTERIORES (REGIME DE COMPETÊNCIA).** Novo endpoint `nfseAntQ`; matching heurístico valor ≈ valor_liquido (±3%); AlertCard azul + badge "← NFS-e #N / data". ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
-- **Rev. 4086** — **CONCILIAÇÃO: IMPORTAÇÃO EM LOTE INTELIGENTE — CONTA AUTO-DETECTADA DO CABEÇALHO OFX + DIÁLOGO DE REVISÃO POR ARQUIVO.** BatchImportDialog com auto-detect de conta do OFX + seletor de override. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 ### Histórico completo
 

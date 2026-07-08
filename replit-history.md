@@ -1,3 +1,5 @@
+- **Rev. 4086** — **CONCILIAÇÃO: IMPORTAÇÃO EM LOTE INTELIGENTE — CONTA AUTO-DETECTADA DO CABEÇALHO OFX + DIÁLOGO DE REVISÃO POR ARQUIVO.** BatchImportDialog com auto-detect de conta do OFX + seletor de override. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+
 - **Rev. 4085** — **CONCILIAÇÃO: DEDUP DE IMPORTAÇÃO PASSA A SER CONTROLADO PELO USUÁRIO (DIÁLOGO DE REVISÃO) + PARSER OFX ROBUSTO PARA FORMATO BR.** Fix: novo endpoint `checkStatementDuplicates` (dry-run) + `ReviewDuplicatesDialog`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4080** — **CONTAS A PAGAR: BOTÃO "ANO TODO" PADRONIZADO COM CONTAS A RECEBER.** Antes: barra tracejada full-width abaixo da grade de meses. Fix: `FinanceiroContasAPagar.tsx` — botão virou o mesmo pill compacto ao lado do seletor de ano (◀ 2026 ▶ [Ano todo]), igual ao Contas a Receber. ZERO DELETE · ZERO UPDATE · ZERO ALTER.

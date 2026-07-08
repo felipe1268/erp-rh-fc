@@ -10006,6 +10006,13 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
   getAlertasCompras: protectedProcedure
     .input(z.object({ companyIds: z.array(z.number()).min(1) }))
     .query(async ({ input, ctx }) => {
+      const _emptyAlertas = () => ({
+        pagamentos: { vencidas: [], proximas: [], bloqueadas: [], totalVencido: 0, totalProximo: 0, totalBloqueado: 0 },
+        entregas:   { atrasadas: 0, proximas: 0, listaAtrasadas: [], listaProximas: [] },
+        cobertura:  { scsSemCobertura: [], totalSemCobertura: 0 },
+        divergencias: { compras: [], financeiro: [], total: 0 },
+      });
+      try {
       const db = await getDb();
       const ids = input.companyIds;
       for (const _cid of ids) await _assertCompanyAccess(ctx.user, _cid);
@@ -10177,6 +10184,10 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           total: notifRows.length,
         },
       };
+      } catch (err: any) {
+        console.error("[getAlertasCompras] Erro inesperado — stack completo:", err?.stack ?? err);
+        return _emptyAlertas();
+      }
     }),
 
   getDashboardPorObra: protectedProcedure

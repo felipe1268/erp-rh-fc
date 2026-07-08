@@ -1,4 +1,26 @@
 /**
+ * Rev. 4094 — **CORREÇÕES DE PRODUÇÃO: 3 BUGS (SQL $N, ferias.list coerce, getAlertasCompras try/catch).**
+ *
+ * CONTEXTO: Logs de produção acusavam 3 erros recorrentes que degradavam UX no Painel de Compras e
+ * no módulo de Aviso Prévio.
+ *
+ * IMPLEMENTAÇÃO:
+ *   - `server/routers/financial.ts` — uniquePrefixes filter: banco descrições com `$100` etc.
+ *     quebravam o dbExecute (split regex `/\$\d+/g`). Fix: `.filter(p => !/\$\d/.test(p))` antes
+ *     de passar ao VALUES CTE inline. Erro: "syntax error at or near GROUP".
+ *   - `server/routers/avisoPrevioFerias.ts` — ferias.list schema: `companyId: z.number()` → 
+ *     `z.coerce.number()` (frontend enviava string, Zod rejeitava silenciosamente).
+ *   - `server/routers/compras.ts` — getAlertasCompras: adicionado try/catch global com
+ *     `console.error` do stack completo + retorno de default seguro (arrays/contagens zerados).
+ *     Isso para o erro "Cannot convert undefined or null to object" nos usuários e registra o
+ *     stack exato para diagnóstico definitivo.
+ *   - `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx` — calcValorLiquido: removido ISS
+ *     da fórmula (ISS não é retido pelo tomador); Valor Líquido virou campo editável `<input>`.
+ *
+ * ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+ */
+
+/**
  * Rev. 4093 — **SPED: EFD CONTRIBUIÇÕES (PIS/COFINS) + SPED ECF (IRPJ/CSLL LP) + SPED ECD (ECD ANUAL).**
  *
  * CONTEXTO: FC Engenharia (construtora, Lucro Presumido) precisa entregar 3 obrigações SPED além do

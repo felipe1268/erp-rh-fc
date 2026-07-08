@@ -2873,7 +2873,7 @@ export const avisoPrevioFeriasRouter = router({
   // ============================================================
   ferias: router({
     list: protectedProcedure
-      .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), status: z.string().optional(), employeeId: z.number().optional() }))
+      .input(z.object({ companyId: z.coerce.number(), companyIds: z.array(z.number()).optional(), status: z.string().optional(), employeeId: z.number().optional() }))
       .query(async ({ input }) => {
         const db = (await getDb())!;
         const conditions: any[] = [
