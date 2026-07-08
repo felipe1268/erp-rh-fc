@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/_core/hooks/useAuth";
 import {
   Plus, Pencil, Trash2, Loader2, CheckCircle, RotateCcw, Banknote,
   ChevronLeft, ChevronRight, Search, FileSpreadsheet, X, Upload,
@@ -146,8 +147,13 @@ function ClienteSelect({
 export default function FinanceiroChequesRecebidos() {
   const { companyId } = useCompany();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isMaster = user?.role === "admin_master";
   const utils = (trpc as any).useUtils?.() ?? (trpc as any).useContext?.();
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // ── Limpar todos (admin_master) ──
+  const [limparOpen, setLimparOpen] = useState(false);
 
   // ── Filtros ──
   const [ano, setAno] = useState(ANO_ATUAL);
@@ -236,6 +242,14 @@ export default function FinanceiroChequesRecebidos() {
   });
   const previewMut = (trpc as any).chequesRecebidos.importarPreview.useMutation();
   const confirmarMut = (trpc as any).chequesRecebidos.importarConfirmar.useMutation();
+  const limparTodosMut = (trpc as any).chequesRecebidos.limparTodos.useMutation({
+    onSuccess: (r: any) => {
+      toast({ title: `${r.excluidos} registro(s) excluído(s).` });
+      setLimparOpen(false);
+      invalidate();
+    },
+    onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
 
   // ── Form helpers ──
   function abrirNovo() { setFormEdit(null); setForm(EMPTY_FORM); setFormOpen(true); }
@@ -440,6 +454,12 @@ export default function FinanceiroChequesRecebidos() {
               className="gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white">
               <Upload className="h-4 w-4" /> Importar .xlsx
             </Button>
+            {isMaster && (
+              <Button size="sm" variant="outline" onClick={() => setLimparOpen(true)}
+                className="gap-1.5 border-red-300 text-red-600 hover:bg-red-50">
+                <Trash2 className="h-4 w-4" /> Limpar tudo
+              </Button>
+            )}
           </div>
         </div>
 
@@ -995,6 +1015,34 @@ export default function FinanceiroChequesRecebidos() {
               className="bg-red-600 hover:bg-red-700"
               onClick={() => excluirId && excluirMut.mutate({ id: excluirId, companyId })}>
               Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ════════════════════════════════════════════════════════
+          AlertDialog: Limpar todos (admin_master)
+      ════════════════════════════════════════════════════════ */}
+      <AlertDialog open={limparOpen} onOpenChange={o => { if (!o) setLimparOpen(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-red-600">Limpar todos os registros?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação irá <strong>excluir permanentemente</strong> todos os cheques recebidos desta empresa.
+              Os dados não poderão ser recuperados. Use apenas para reimportar uma planilha do zero.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={limparTodosMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={limparTodosMut.isPending}
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => limparTodosMut.mutate({ companyId })}
+            >
+              {limparTodosMut.isPending
+                ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" /> Excluindo…</>
+                : "Sim, excluir tudo"
+              }
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -598,6 +598,25 @@ export const chequesRecebidosRouter = router({
       return { inseridos, ignorados };
     }),
 
+  // ── Limpar todos os registros (HARD DELETE — somente admin_master) ──
+  limparTodos: protectedProcedure
+    .input(z.object({ companyId: z.coerce.number() }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin_master") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode executar esta ação." });
+      }
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível." });
+
+      const res = await dbExecute(db, `
+        DELETE FROM financial_cheques_recebidos
+        WHERE company_id=$1
+        RETURNING id
+      `, [input.companyId]);
+
+      return { excluidos: res.rows.length };
+    }),
+
   // ── Totais por status (resumo cards) ──
   totais: protectedProcedure
     .input(z.object({ companyId: z.coerce.number() }))
