@@ -235,13 +235,14 @@ export const chequesRecebidosRouter = router({
 
       const res = await dbExecute(db, `
         SELECT id,
-               COALESCE(NULLIF(TRIM(razao_social), ''), nome_fantasia) AS nome,
+               COALESCE(NULLIF(TRIM(razao_social), ''), nome_fantasia, '') AS nome,
                nome_fantasia,
-               cnpj
+               cnpj,
+               status
         FROM empresas_terceiras
         WHERE "companyId"=$1
-          AND (excluido_em IS NULL OR excluido_em > NOW())
-        ORDER BY LOWER(COALESCE(NULLIF(TRIM(razao_social), ''), nome_fantasia))
+          AND deleted_at IS NULL
+        ORDER BY LOWER(COALESCE(NULLIF(TRIM(razao_social), ''), nome_fantasia, ''))
         LIMIT 500
       `, [input.companyId]);
 
