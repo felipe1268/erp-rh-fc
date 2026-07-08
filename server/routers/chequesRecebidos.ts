@@ -237,11 +237,10 @@ export const chequesRecebidosRouter = router({
         SELECT id,
                COALESCE(NULLIF(TRIM(razao_social), ''), nome_fantasia, '') AS nome,
                nome_fantasia,
-               cnpj,
-               status
-        FROM empresas_terceiras
-        WHERE "companyId"=$1
-          AND deleted_at IS NULL
+               COALESCE(cnpj, cpf) AS cnpj
+        FROM clientes
+        WHERE company_id=$1
+          AND ativo = true
         ORDER BY LOWER(COALESCE(NULLIF(TRIM(razao_social), ''), nome_fantasia, ''))
         LIMIT 500
       `, [input.companyId]);
