@@ -2261,7 +2261,7 @@ export default function FinanceiroNotasFiscais() {
             <Button
               size="sm"
               className="bg-white/20 hover:bg-white/30 text-white gap-1.5 h-7 px-3"
-              onClick={() => setBulkRecStatusOpen(true)}
+              onClick={() => setBulkStatusOpen(true)}
             >
               <CheckIcon className="h-3.5 w-3.5" />
               Mudar Status
