@@ -9668,33 +9668,67 @@ export const financialRouter = router({
 
     let inserted = 0;
     let skipped = 0;
+
+    // Rev. 4104-fix — espelha a lógica batch-count-aware de importBankStatement.
+    // Sem isso, quando o mesmo lote contém N linhas com chave idêntica (ex: 2× PIX
+    // R$50.000 para o mesmo favorecido no mesmo dia), o SELECT LIMIT 1 encontrava a
+    // 1ª linha já inserida neste mesmo lote e pulava a 2ª, 3ª, etc.
+    // Estratégia: pré-calcular batchCount + dbCount UMA vez; usar sessionInserted
+    // para rastrear quantas já foram inseridas nesta sessão por chave.
+    const bsl_lineKey = (l: { data: string; descricao: string; valor: number; saldo: number | null }) =>
+      `${l.data}|${l.descricao}|${l.valor}|${l.saldo ?? ""}`;
+
+    let batchCountBSL = new Map<string, number>();
+    let dbCountBSL    = new Map<string, number>();
+    const sessionInsertedBSL = new Map<string, number>();
+
+    if (!input.forceInsert) {
+      for (const l of input.linhas) {
+        const k = bsl_lineKey(l);
+        batchCountBSL.set(k, (batchCountBSL.get(k) ?? 0) + 1);
+      }
+      for (const [k] of batchCountBSL) {
+        const [data, descricao, valorStr, salStr] = k.split("|");
+        const valor = parseFloat(valorStr);
+        const salParam = salStr === "" ? null : parseFloat(salStr);
+        const res = await dbExecute(db,
+          `SELECT COUNT(*) AS cnt FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 AND ($6::numeric IS NULL OR saldo_apos=$7) AND excluido_em IS NULL`,
+          [input.companyId, input.contaBancariaId, data, descricao, valor, salParam, salParam]
+        );
+        dbCountBSL.set(k, parseInt((rows(res)[0] as any)?.cnt ?? "0", 10));
+      }
+    }
+
     for (const line of input.linhas) {
       // Rev. 4085 — forceInsert=true pula dedup (linhas aprovadas pelo usuário no diálogo)
       if (!input.forceInsert) {
-        // Rev. 3533 — mesmo fix da Fase 1: saldo_apos integra a chave de dedup.
-        // Rev. 3544 bugfix: $6 aparecia 2x → segundo $6 virou $7 + salParam passado 2x.
-        // Rev. 3802 — dedup secundário por ID de transação (espelha Fase 1).
-        // Rev. 3804 — dedup secundário cross-conta (espelha Fase 1).
-        const salParam = line.saldo ?? null;
-        const existing = await dbExecute(db,
-          `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND conta_bancaria_id=$2 AND data=$3 AND descricao=$4 AND valor=$5 AND ($6::numeric IS NULL OR saldo_apos=$7) AND excluido_em IS NULL LIMIT 1`,
-          [input.companyId, input.contaBancariaId, line.data, line.descricao, line.valor, salParam, salParam]
-        );
-        if (rows(existing).length > 0) { skipped++; continue; }
+        const k = bsl_lineKey(line);
+        const alreadyInDb   = dbCountBSL.get(k) ?? 0;
+        const alreadyInSess = sessionInsertedBSL.get(k) ?? 0;
+        const batchTotal    = batchCountBSL.get(k) ?? 1;
+
+        if (alreadyInDb + alreadyInSess >= batchTotal) {
+          skipped++;
+          continue;
+        }
+
         // Dedup secundário: extrai ID canônico da descrição (E003... ou Doc NNNNNN)
         // Rev. 3804 — cross-conta: remove conta_bancaria_id do filtro para bloquear
         // o mesmo Doc/E-code sendo importado em uma conta diferente da empresa.
         // Rev. 3949 — FIX: espelha fix da Fase 1 — saldo_apos na guarda do fuzzy match
         // para não descartar N lançamentos legítimos com mesmo Doc/E-code no mesmo dia.
-        const eCode = line.descricao?.match(/E[0-9A-Fa-f]{20,}/)?.[0];
-        const docCode = line.descricao?.match(/Doc\s+(\d{5,})/i)?.[1];
-        const txKey = eCode ?? (docCode ? `Doc ${docCode}` : null);
-        if (txKey) {
-          const fuzzy = await dbExecute(db,
-            `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND data=$2 AND valor=$3 AND descricao ILIKE $4 AND ($5::numeric IS NULL OR saldo_apos=$6) AND excluido_em IS NULL LIMIT 1`,
-            [input.companyId, line.data, line.valor, `%${txKey}%`, salParam, salParam]
-          );
-          if (rows(fuzzy).length > 0) { skipped++; continue; }
+        const salParam = line.saldo ?? null;
+        if (alreadyInDb === 0 && alreadyInSess === 0) {
+          const eCode = line.descricao?.match(/E[0-9A-Fa-f]{20,}/)?.[0];
+          const docCode = line.descricao?.match(/Doc\s+(\d{5,})/i)?.[1];
+          const txKey = eCode ?? (docCode ? `Doc ${docCode}` : null);
+          if (txKey) {
+            const fuzzy = await dbExecute(db,
+              `SELECT id FROM bank_statement_lines WHERE company_id=$1 AND data=$2 AND valor=$3 AND descricao ILIKE $4 AND ($5::numeric IS NULL OR saldo_apos=$6) AND excluido_em IS NULL LIMIT 1`,
+              [input.companyId, line.data, line.valor, `%${txKey}%`, salParam, salParam]
+            );
+            if (rows(fuzzy).length > 0) { skipped++; continue; }
+          }
         }
       }
       await dbExecute(db,
@@ -9703,6 +9737,10 @@ export const financialRouter = router({
         [input.companyId, input.contaBancariaId, line.data, line.descricao, line.valor,
          line.valor >= 0 ? "credito" : "debito", line.saldo, input.importadoEm]
       );
+      if (!input.forceInsert) {
+        const k = bsl_lineKey(line);
+        sessionInsertedBSL.set(k, (sessionInsertedBSL.get(k) ?? 0) + 1);
+      }
       inserted++;
     }
 

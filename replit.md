@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4105** — **FIX CRÍTICO: IMPORTAÇÃO DE EXTRATO — DUPLICATAS LEGÍTIMAS PERDIDAS.** `insertBankStatementBatch` usava `SELECT LIMIT 1` simples; com N linhas idênticas no lote (ex: 6× R$25k ou 2× R$50k) só a 1ª era gravada. Fix: mesma lógica batch-count-aware da Fase 1 (batchCount + dbCount + sessionInserted). Reimportar os OFX de junho preenche as linhas faltantes automaticamente. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+
 - **Rev. 4104** — **NOVO LANÇAMENTO: CHEQUE EMPRESA × CHEQUE DE TERCEIRO (SELEÇÃO INTERATIVA + COMPLEMENTO).** Toggle segmentado azul/verde divide forma=Cheque em dois subtipos: Empresa (comportamento atual) e Terceiro (seleciona cheques da carteira com totalizador ao vivo, combinações clicáveis, lista com checkbox, painel âmbar de complemento quando falta valor). Ao salvar, chama `alocarLote` e grava `formaPagamento="cheque_terceiro"`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
-- **Rev. 4103** — **CHEQUES RECEBIDOS: BOTÃO "LIMPAR INVÁLIDOS" (SOFT-DELETE DE TOTALIZADORES).** Backend `limparTotalizadores` (UPDATE excluido_em) + botão âmbar na barra de ações + AlertDialog + toast com lista dos removidos. Remove entradas "TOTAL/SOMA/GERAL" importadas antes do fix sem tocar cheques reais. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
 ### 5 one-liners
+
+- **Rev. 4103** — **CHEQUES RECEBIDOS: BOTÃO "LIMPAR INVÁLIDOS" (SOFT-DELETE DE TOTALIZADORES).** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4102** — **NOVO LANÇAMENTO: SUGESTÃO DE CHEQUES RECEBIDOS AO PAGAR COM CHEQUE.** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 

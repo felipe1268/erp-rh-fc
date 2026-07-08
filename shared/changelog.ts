@@ -1,4 +1,31 @@
 /**
+ * Rev. 4105 — **FIX CRÍTICO: IMPORTAÇÃO DE EXTRATO — DUPLICATAS LEGÍTIMAS PERDIDAS (insertBankStatementBatch).**
+ *
+ * PROBLEMA: `insertBankStatementBatch` (Fase 2 da importação em progresso) usava `SELECT ... LIMIT 1`
+ * simples para dedup. Quando o mesmo lote contém N linhas com chave idêntica (mesmo dia, mesmo valor,
+ * mesma descrição — ex: 6× "TRANSFERENCIA ENTRE CONTAS R$25.000" ou 2× "PIX ENVIADO R$50.000"), o
+ * SELECT encontra a 1ª linha já inserida no lote e pula a 2ª, 3ª … etc.
+ * Resultado: apenas 1 das N linhas idênticas era gravada. Confirmado nos extratos de junho:
+ *   - Locnow 130051325 dia 03/06: 6 × R$25.000 → apenas 2 inseridos.
+ *   - Locnow 130051325 dia 05/06: 2 × R$50.000 → apenas 1 inserido.
+ *   - Santander 130026093 dia 12/06: 2 × R$0,73 → apenas 1 inserido.
+ *
+ * CAUSA RAIZ: a Fase 1 (`importBankStatement`) já tinha a lógica batch-count-aware (Rev. 4090), mas
+ * `insertBankStatementBatch` nunca foi atualizado para espelhar essa lógica.
+ *
+ * CORREÇÃO — `server/routers/financial.ts` → `insertBankStatementBatch`:
+ *   1. Pré-calcula `batchCountBSL` (quantas vezes cada chave aparece no lote atual).
+ *   2. Pré-calcula `dbCountBSL` (quantas já existem no DB para cada chave distinta — COUNT(*)).
+ *   3. Usa `sessionInsertedBSL` para rastrear inserções desta sessão por chave.
+ *   4. Só pula se `dbCount + sessionInserted >= batchTotal` (espelha exatamente a Fase 1).
+ *   5. Dedup secundário (E-code/Doc) mantido, mas restrito a linhas onde DB+sess == 0.
+ *
+ * RECUPERAÇÃO: reimportar os arquivos OFX de junho preencherá as linhas faltantes automaticamente,
+ * pois `dbCount` < `batchTotal` para essas chaves.
+ *
+ * ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+ */
+/**
  * Rev. 4104 — **NOVO LANÇAMENTO: CHEQUE EMPRESA × CHEQUE DE TERCEIRO (SELEÇÃO INTERATIVA + COMPLEMENTO).**
  *
  * CONTEXTO: A forma de pagamento "Cheque" numa despesa foi dividida em dois subtipos para
