@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4091** — **PLANILHA CONTADOR: CNPJ DE FORNECEDOR + CATEGORIA + TODAS AS CONTAS (CAIXA INTERNO).** 3 melhorias em `buildExtratoBancarioBuffer`: (1) CNPJ agora resolve em 4 camadas — NF-e/stmt_line_id → compras_ordens→fornecedores → comprovante_documento PIX → NF-e fuzzy; (2) nova coluna G "Categoria" (conta_nome do lançamento); layout B–J em vez de B–I; (3) `contasQ` passa a ler `company_bank_accounts` diretamente — contas sem extrato (ex.: Caixa Interno id=22) ganham aba própria usando `financial_entries`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+
 - **Rev. 4090** — **CONCILIAÇÃO: DEDUP DE IMPORTAÇÃO CIENTE DE DUPLICATAS LEGÍTIMAS NO BATCH.** Bug: `importBankStatement` e `checkStatementDuplicates` usavam `LIMIT 1` — se o DB tinha 1 linha com chave (data+desc+valor+saldo), todas as demais idênticas no batch eram descartadas. Extrato IBPJ Locknow jun/2026 perdia 7 "Pix Enviado FC ENGENHARIA PROJETOS E" (2× R$50k em 05/06 + 5 outros). Fix: pré-passe conta ocorrências no batch e no DB; só pula quando `alreadyInDb + alreadyInSess >= batchTotal`. As 7 linhas faltantes foram inseridas via SQL de produção. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
-- **Rev. 4089** — **NOTAS FISCAIS: CARDS DE TOTAIS EXCLUEM CANCELADAS/SUBSTITUÍDAS.** Bug: `totais.total` e `totais.valorTotal` usavam `nfs.length`/`somarLiq(nfs)` — incluíam NFs canceladas e substituídas no card "Total NFs" e na barra de progresso. Fix: novo filtro `ativas = nfs.filter(!cancelada && !substituida)` como base dos dois campos. Os sub-totais por status já estavam corretos. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
 ### 5 one-liners
+
+- **Rev. 4089** — **NOTAS FISCAIS: CARDS DE TOTAIS EXCLUEM CANCELADAS/SUBSTITUÍDAS.** Fix: `ativas = nfs.filter(!cancelada && !substituida)` como base de `total` e `valorTotal`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4088** — **NF-e: AUTO-VÍNCULO CROSS-MÊS — NFS-e DE MÊS ANTERIOR CONCILIADA AUTOMATICAMENTE AO CONSOLIDAR O MÊS SEGUINTE (REGIME DE COMPETÊNCIA).** 3 bugs corrigidos na janela de data invertida, período restrito e consolidarMes sem disparo. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
@@ -62,15 +64,11 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4086** — **CONCILIAÇÃO: IMPORTAÇÃO EM LOTE INTELIGENTE — CONTA AUTO-DETECTADA DO CABEÇALHO OFX + DIÁLOGO DE REVISÃO POR ARQUIVO.** BatchImportDialog com auto-detect de conta do OFX + seletor de override. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
-- **Rev. 4085** — **CONCILIAÇÃO: DEDUP DE IMPORTAÇÃO PASSA A SER CONTROLADO PELO USUÁRIO (DIÁLOGO DE REVISÃO) + PARSER OFX ROBUSTO PARA FORMATO BR.** Antes: duplicatas eram descartadas silenciosamente sem visibilidade. Fix: novo endpoint `checkStatementDuplicates` (dry-run, sem INSERT) + `handleImport` ganhou FASE 1.5 que pausa antes de gravar e abre `ReviewDuplicatesDialog`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
-- **Rev. 4084** — **CONTAS A RECEBER: "NOVO TÍTULO" ENRIQUECIDO COM CONTA BANCÁRIA DE RECEBIMENTO + VÍNCULO DE NFS-e + BADGE NA LISTA.** Nova tabela `financial_nfse_vinculos`; `criarTituloReceber` recebe `contaBancariaId`+campos NFS-e; upload XML DOMParser multi-padrão; badge na lista. ZERO DELETE · ZERO ALTER em dados existentes · 1 CREATE TABLE.
-
-- **Rev. 4083** — **CONCILIAÇÃO: PARSERS SANTANDER CORRIGIDOS — EXTRATO CONSOLIDADO INTELIGENTE (FEV/2026) E INTERNET BANKING EMPRESARIAL IBPJ (JUN/2026) FUNCIONAM INDEPENDENTEMENTE + TEMPLATES AUTO-SEEDED EM CONFIGURAÇÕES.** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+- **Rev. 4085** — **CONCILIAÇÃO: DEDUP DE IMPORTAÇÃO PASSA A SER CONTROLADO PELO USUÁRIO (DIÁLOGO DE REVISÃO) + PARSER OFX ROBUSTO PARA FORMATO BR.** Fix: novo endpoint `checkStatementDuplicates` (dry-run) + `ReviewDuplicatesDialog`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4082 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4084 e anteriores.
 
 ## User preferences
 

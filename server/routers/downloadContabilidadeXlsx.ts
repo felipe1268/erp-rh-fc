@@ -154,21 +154,18 @@ export async function buildExtratoBancarioBuffer(
   const fcCfg = await loadFcXlsxConfig(companyId).catch(() => null);
   const HEADER_COLOR = fcCfg?.corCabecalho ?? PURPLE;
 
-  // ── 1. Contas com lançamentos no mês ──────────────────────────────────────
+  // ── 1. TODAS as contas da empresa (com ou sem extrato) ────────────────────
+  // Rev. 4091 — busca direto de company_bank_accounts para incluir Caixa Interno
   const contasQ = await db.$client.query(
-    `SELECT DISTINCT bsl.conta_bancaria_id,
-            cba.banco,
-            cba.apelido   AS conta_desc,
-            cba.agencia,
-            cba.conta
-       FROM bank_statement_lines bsl
-       LEFT JOIN company_bank_accounts cba ON cba.id = bsl.conta_bancaria_id
-      WHERE bsl.company_id = $1
-        AND bsl.excluido_em IS NULL
-        AND EXTRACT(MONTH FROM bsl.data) = $2
-        AND EXTRACT(YEAR  FROM bsl.data) = $3
-      ORDER BY bsl.conta_bancaria_id`,
-    [companyId, mes, ano]
+    `SELECT id AS conta_bancaria_id,
+            banco,
+            apelido AS conta_desc,
+            agencia,
+            conta
+       FROM company_bank_accounts
+      WHERE "companyId" = $1
+      ORDER BY id`,
+    [companyId]
   );
 
   // ── 2. Saldo de abertura por conta ────────────────────────────────────────
@@ -186,10 +183,7 @@ export async function buildExtratoBancarioBuffer(
     }
   } catch { /* tabela pode não existir */ }
 
-  // ── 3. Pré-carregar TODAS as NFs do mês para cruzamento ──────────────────
-  // Mapas de cruzamento (fallback quando stmt_line_id não está preenchido):
-  //   nfByCnpjValor : cnpj_limpo|centavos → { numero_nf, cnpj }[]
-  //   nfByEntryId   : entry_id            → { numero_nf, cnpj }
+  // ── 3. Pré-carregar TODAS as NFs do período para cruzamento ──────────────
   interface NfInfo { numero_nf: string; cnpj: string }
   const nfByCnpjValor = new Map<string, NfInfo[]>();
   const nfByEntryId   = new Map<number, NfInfo>();
@@ -209,18 +203,12 @@ export async function buildExtratoBancarioBuffer(
         mes === 12 ? `${ano+1}-01-01` : `${ano}-${String(mes+1).padStart(2,"0")}-01`,
       ]
     );
-
     for (const r of nfQ.rows) {
-      const info: NfInfo = {
-        numero_nf: String(r.numero_nf || ""),
-        cnpj: String(r.cnpj || ""),
-      };
-      // por entry_id (link mais confiável)
+      const info: NfInfo = { numero_nf: String(r.numero_nf || ""), cnpj: String(r.cnpj || "") };
       if (r.entry_id) {
         const eid = Number(r.entry_id);
         if (!nfByEntryId.has(eid)) nfByEntryId.set(eid, info);
       }
-      // por CNPJ + valor (fallback)
       if (info.cnpj && r.valor) {
         const k = nfKey(info.cnpj, parseFloat(String(r.valor)));
         if (!nfByCnpjValor.has(k)) nfByCnpjValor.set(k, []);
@@ -239,11 +227,13 @@ export async function buildExtratoBancarioBuffer(
     ? wb.addImage({ buffer: logoResult.buffer, extension: logoResult.extension })
     : null;
 
-  for (const conta of contasQ.rows) {
+  // ── Helper: monta uma aba da planilha ─────────────────────────────────────
+  // Rev. 4091 — nova coluna G=Categoria; H=Entrada, I=Saída, J=Saldo
+  // Colunas: A(vazia) B(Data) C(Hist.Banco) D(Hist.Real) E(NF) F(CNPJ) G(Categoria) H(Entr) I(Saída) J(Saldo)
+  function buildSheet(lines: any[], conta: any) {
     const contaId   = Number(conta.conta_bancaria_id);
     const banco     = (conta.banco || "Banco").toUpperCase();
     const contaDesc = conta.conta_desc || conta.conta || "";
-    // Label completo: "BANCO SANTANDER – LOCNOW – APARECIDA – 130051325"
     const bancoLabel = contaDesc
       ? `BANCO ${banco} – ${contaDesc.toUpperCase()}`
       : `BANCO ${banco}`;
@@ -252,47 +242,20 @@ export async function buildExtratoBancarioBuffer(
     const saldoInicial = ob.saldo;
     const dataSaldoAnt = ob.data ?? prevMonthLastDate(mes, ano);
 
-    // ── Lançamentos da conta (inclui links via stmt_line_id E entry_id) ──────
-    const linesQ = await db.$client.query(
-      `SELECT
-          bsl.id          AS bsl_id,
-          bsl.data,
-          bsl.descricao,
-          bsl.valor::float  AS valor,
-          bsl.entry_id,
-          fe.fornecedor_nome,
-          NULL::text          AS entry_cnpj,
-          fe.descricao        AS entry_desc,
-          COALESCE(fn1.numero_nf, '')                         AS numero_nf,
-          COALESCE(fn1.emitente_cnpj, fn1.tomador_cnpj, '')  AS fornecedor_cnpj
-         FROM bank_statement_lines bsl
-         LEFT JOIN financial_entries fe  ON fe.id = bsl.entry_id
-         LEFT JOIN fiscal_notes fn1      ON fn1.stmt_line_id = bsl.id
-        WHERE bsl.company_id = $1
-          AND bsl.conta_bancaria_id = $2
-          AND bsl.excluido_em IS NULL
-          AND EXTRACT(MONTH FROM bsl.data) = $3
-          AND EXTRACT(YEAR  FROM bsl.data) = $4
-        ORDER BY bsl.data, bsl.id`,
-      [companyId, contaId, mes, ano]
-    );
-
-    const lines = linesQ.rows;
     const ws = wb.addWorksheet(sheetName(banco, contaDesc));
 
-    // ── Larguras das colunas (exatas do modelo) ───────────────────────────────
-    // A = vazia  B=Data  C=Hist.Banco  D=Hist.Real  E=NF  F=CNPJ  G=Entrada  H=Saída  I=Saldo
-    ws.getColumn("A").width = 1.0;
+    // Larguras — A(vazia) B(Data) C(HistBanco) D(HistReal) E(NF) F(CNPJ) G(Categ) H(Entr) I(Saída) J(Saldo)
+    ws.getColumn("A").width =  1.00;
     ws.getColumn("B").width = 12.33;
     ws.getColumn("C").width = 62.66;
-    ws.getColumn("D").width = 58.44;
+    ws.getColumn("D").width = 44.00;
     ws.getColumn("E").width = 20.00;
-    ws.getColumn("F").width = 18.33;
-    ws.getColumn("G").width = 20.78;
+    ws.getColumn("F").width = 20.00;
+    ws.getColumn("G").width = 28.00;
     ws.getColumn("H").width = 20.78;
     ws.getColumn("I").width = 20.78;
+    ws.getColumn("J").width = 20.78;
 
-    // ── Alturas das linhas do cabeçalho ───────────────────────────────────────
     ws.getRow(1).height = 15;
     ws.getRow(2).height = 14.4;
     ws.getRow(3).height = 14.4;
@@ -302,16 +265,15 @@ export async function buildExtratoBancarioBuffer(
     ws.getRow(8).height = 15;
     ws.getRow(9).height = 19.2;
 
-    // ── Logo: imagem em B2:C7 — tamanho FIXO (não estica para preencher a área) ─
     if (logoId !== null) {
       ws.addImage(logoId, {
-        tl: { col: 1, row: 1 } as any,  // canto superior-esquerdo em B2 (0-based)
-        ext: { width: 185, height: 78 }, // dimensões fixas em pixels (não distorce)
+        tl: { col: 1, row: 1 } as any,
+        ext: { width: 185, height: 78 },
         editAs: "oneCell",
       });
     }
 
-    // ── Bordas do bloco logo B2:C7 (contorno medium completo) ────────────────
+    // Bordas logo B2:C7
     ws.getCell("B2").border = { top: medium, left: medium };
     ws.getCell("C2").border = { top: medium, right: medium };
     for (const r of [3, 4, 5, 6]) {
@@ -321,80 +283,74 @@ export async function buildExtratoBancarioBuffer(
     ws.getCell("B7").border = { bottom: medium, left: medium };
     ws.getCell("C7").border = { bottom: medium, right: medium };
 
-    // ── D2:I5 — Nome da empresa (merge, Calibri 24pt bold, center) ───────────
-    ws.mergeCells("D2:I5");
+    // D2:J5 — Nome empresa (merge ampliado para J)
+    ws.mergeCells("D2:J5");
     const titleCell = ws.getCell("D2");
     titleCell.value     = tituloEmpresa;
     titleCell.font      = { bold: true, size: 24, name: "Calibri" };
     titleCell.alignment = { horizontal: "center", vertical: "middle" };
-    // Topo: D2=top+left, E-H2=top, I2=top+right
     ws.getCell("D2").border = { top: medium, left: medium };
-    for (const c of ["E","F","G","H"]) ws.getCell(`${c}2`).border = { top: medium };
-    ws.getCell("I2").border = { top: medium, right: medium };
-    // Laterais rows 3-4: D=left, I=right
+    for (const c of ["E","F","G","H","I"]) ws.getCell(`${c}2`).border = { top: medium };
+    ws.getCell("J2").border = { top: medium, right: medium };
     for (const r of [3, 4]) {
       ws.getCell(`D${r}`).border = { left: medium };
-      ws.getCell(`I${r}`).border = { right: medium };
+      ws.getCell(`J${r}`).border = { right: medium };
     }
-    // Borda inferior de D2:I5 (row 5) — COMPLETA: todos os cantos e lados
     ws.getCell("D5").border = { left: medium, bottom: medium };
-    for (const c of ["E","F","G","H"]) ws.getCell(`${c}5`).border = { bottom: medium };
-    ws.getCell("I5").border = { right: medium, bottom: medium };
+    for (const c of ["E","F","G","H","I"]) ws.getCell(`${c}5`).border = { bottom: medium };
+    ws.getCell("J5").border = { right: medium, bottom: medium };
 
-    // ── D6:G7 — Nome do banco (merge, bold 11pt, center, borda medium exterior) ─
-    ws.mergeCells("D6:G7");
-    const bankCell  = ws.getCell("D6");
+    // D6:H7 — Nome do banco (merge agora vai até H, deixando I/J para saldo anterior)
+    ws.mergeCells("D6:H7");
+    const bankCell = ws.getCell("D6");
     bankCell.value     = bancoLabel;
     bankCell.font      = { bold: true, size: 11, name: "Calibri" };
     bankCell.alignment = { horizontal: "center", vertical: "middle" };
-    // Topo row 6: D=top+left, E-F=top, G=top+right (fecha lado direito)
     ws.getCell("D6").border = { top: medium, left: medium };
-    ws.getCell("E6").border = { top: medium };
-    ws.getCell("F6").border = { top: medium };
-    ws.getCell("G6").border = { top: medium, right: medium };
-    // Base row 7: D=bottom+left, E-F=bottom, G=bottom+right (fecha lado direito)
+    for (const c of ["E","F","G"]) ws.getCell(`${c}6`).border = { top: medium };
+    ws.getCell("H6").border = { top: medium, right: medium };
     ws.getCell("D7").border = { bottom: medium, left: medium };
-    ws.getCell("E7").border = { bottom: medium };
-    ws.getCell("F7").border = { bottom: medium };
-    ws.getCell("G7").border = { bottom: medium, right: medium };
+    for (const c of ["E","F","G"]) ws.getCell(`${c}7`).border = { bottom: medium };
+    ws.getCell("H7").border = { bottom: medium, right: medium };
 
-    // ── H6 — "Data Saldo Anterior" (bordas medium em todos os lados) ──────────
-    const cellH6 = ws.getCell("H6");
-    cellH6.value  = "Data Saldo Anterior";
-    cellH6.font   = { size: 11, name: "Calibri" };
-    cellH6.border = { top: medium, bottom: medium, left: medium, right: medium };
-
-    // ── I6 — data do saldo anterior ───────────────────────────────────────────
+    // I6 — "Data Saldo Anterior"
     const cellI6 = ws.getCell("I6");
-    cellI6.value  = dataSaldoAnt;
-    cellI6.numFmt = "dd/mm/yyyy";
+    cellI6.value  = "Data Saldo Anterior";
     cellI6.font   = { size: 11, name: "Calibri" };
     cellI6.border = { top: medium, bottom: medium, left: medium, right: medium };
 
-    // ── H7 — "Saldo Anterior" label ───────────────────────────────────────────
-    const cellH7 = ws.getCell("H7");
-    cellH7.value  = "Saldo Anterior";
-    cellH7.font   = { size: 11, name: "Calibri" };
-    cellH7.border = { bottom: medium, left: medium, right: medium };
+    // J6 — data do saldo anterior
+    const cellJ6 = ws.getCell("J6");
+    cellJ6.value  = dataSaldoAnt;
+    cellJ6.numFmt = "dd/mm/yyyy";
+    cellJ6.font   = { size: 11, name: "Calibri" };
+    cellJ6.border = { top: medium, bottom: medium, left: medium, right: medium };
 
-    // ── I7 — valor do saldo anterior (âncora das fórmulas de saldo) ──────────
+    // I7 — "Saldo Anterior" label
     const cellI7 = ws.getCell("I7");
-    cellI7.value     = saldoInicial;
-    cellI7.numFmt    = BRL;
-    cellI7.font      = { size: 11, name: "Calibri" };
-    cellI7.alignment = { horizontal: "right", vertical: "middle" };
-    cellI7.border    = { bottom: medium, left: thin, right: medium };
+    cellI7.value  = "Saldo Anterior";
+    cellI7.font   = { size: 11, name: "Calibri" };
+    cellI7.border = { bottom: medium, left: medium, right: medium };
 
-    // ── Row 8 — vazia, borda inferior medium (separa cabeçalho dos headers) ───
+    // J7 — valor do saldo anterior (âncora das fórmulas)
+    const cellJ7 = ws.getCell("J7");
+    cellJ7.value     = saldoInicial;
+    cellJ7.numFmt    = BRL;
+    cellJ7.font      = { size: 11, name: "Calibri" };
+    cellJ7.alignment = { horizontal: "right", vertical: "middle" };
+    cellJ7.border    = { bottom: medium, left: thin, right: medium };
+
+    // Row 8 — separador (borda inferior medium B-J)
     ws.getCell("B8").border = { bottom: medium, left: medium };
-    for (const c of ["C","D","E","F","G","H"]) ws.getCell(`${c}8`).border = { bottom: medium };
-    ws.getCell("I8").border = { bottom: medium, right: medium };
+    for (const c of ["C","D","E","F","G","H","I"]) ws.getCell(`${c}8`).border = { bottom: medium };
+    ws.getCell("J8").border = { bottom: medium, right: medium };
 
-    // ── Row 9 — Cabeçalhos (roxo #7030A0, bold 11pt, branco, centralizado) ───
+    // Row 9 — cabeçalhos
     const HDRS: [string, string][] = [
       ["B","Data"], ["C","Histórico do Banco"], ["D","Histórico Real"],
-      ["E","Nº Nota Fiscal"], ["F","Nº CNPJ"],
-      ["G","Entrada"], ["H","Saída"], ["I","Saldo"],
+      ["E","Nº Nota Fiscal"], ["F","CNPJ"],
+      ["G","Categoria"],
+      ["H","Entrada"], ["I","Saída"], ["J","Saldo"],
     ];
     HDRS.forEach(([col, label]) => {
       const cell = ws.getCell(`${col}9`);
@@ -405,45 +361,61 @@ export async function buildExtratoBancarioBuffer(
       cell.border    = {
         bottom: thin,
         left:   col === "B" ? medium : thin,
-        right:  col === "I" ? medium : thin,
+        right:  col === "J" ? medium : thin,
       };
     });
 
-    // ── Rows 10+ — Dados ──────────────────────────────────────────────────────
+    // Rows 10+ — Dados
     const usedNfKeys = new Set<string>();
     let saldoAcum = saldoInicial;
 
     lines.forEach((line: any, idx: number) => {
-      const row   = idx + 10;  // dados começam na row 10
+      const row   = idx + 10;
       const valor = parseFloat(String(line.valor)) || 0;
       const ent   = valor > 0 ? valor : 0;
       const sai   = valor < 0 ? Math.abs(valor) : 0;
       saldoAcum   = Math.round((saldoAcum + valor) * 100) / 100;
 
-      const histReal = line.fornecedor_nome || line.entry_desc || "";
+      const histReal  = line.fornecedor_nome || line.entry_desc || "";
+      const categoria = String(line.categoria || "");
 
-      // ── Cruzamento NF (3 camadas) ────────────────────────────────────────────
+      // Resolução de CNPJ (4 camadas — Rev. 4091):
+      // 1. NF via stmt_line_id (já na query)
+      // 2. fornecedor da OC (compras_ordens → fornecedores)
+      // 3. comprovante_documento (PIX — CPF/CNPJ do beneficiário)
+      // 4. NF via entry_id (pré-carregada)
+      // 5. NF via CNPJ+valor (fallback fuzzy)
       let nfNumero = String(line.numero_nf || "");
       let nfCnpj   = String(line.fornecedor_cnpj || "");
+
+      if (!nfCnpj) {
+        const direct = String(line.fornecedor_cnpj_direto || "");
+        if (direct) nfCnpj = direct;
+      }
+      if (!nfCnpj) {
+        const compDoc = cleanDoc(line.comp_doc || "");
+        if (compDoc.length >= 11) nfCnpj = compDoc;
+      }
       if (!nfNumero && line.entry_id) {
         const byEntry = nfByEntryId.get(Number(line.entry_id));
-        if (byEntry) { nfNumero = byEntry.numero_nf; nfCnpj = byEntry.cnpj; }
+        if (byEntry) {
+          nfNumero = byEntry.numero_nf;
+          if (!nfCnpj) nfCnpj = byEntry.cnpj;
+        }
       }
-      if (!nfNumero) {
-        const cnpjRef = cleanDoc(line.entry_cnpj || line.fornecedor_cnpj || "");
-        if (cnpjRef && Math.abs(valor) > 0) {
+      if (!nfCnpj && Math.abs(valor) > 0) {
+        const cnpjRef = cleanDoc(line.fornecedor_cnpj || line.entry_cnpj || "");
+        if (cnpjRef) {
           const k = nfKey(cnpjRef, valor);
           const cands = nfByCnpjValor.get(k);
           if (cands) {
             const pick = cands.find(c => !usedNfKeys.has(`${k}|${c.numero_nf}`));
-            if (pick) { nfNumero = pick.numero_nf; nfCnpj = pick.cnpj; usedNfKeys.add(`${k}|${pick.numero_nf}`); }
+            if (pick) { nfNumero = nfNumero || pick.numero_nf; nfCnpj = pick.cnpj; usedNfKeys.add(`${k}|${pick.numero_nf}`); }
           }
         }
       }
       const cnpjFmt = nfCnpj ? fmtCnpj(nfCnpj) : "";
 
-      // Todas as células de dados: thin em todos os lados,
-      // exceto B (left=medium) e I (right=medium)
       const isLast = idx === lines.length - 1;
       const btm    = isLast ? medium : thin;
 
@@ -467,52 +439,52 @@ export async function buildExtratoBancarioBuffer(
       bCell.alignment = { horizontal: "left", vertical: "middle" };
       bCell.border    = { top: thin, bottom: btm, left: medium, right: thin };
 
-      // C, D, E, F — Texto
+      // C, D, E, F, G — colunas de texto
       const textCols: [string, string][] = [
         ["C", line.descricao || ""],
         ["D", histReal],
         ["E", nfNumero],
         ["F", cnpjFmt],
+        ["G", categoria],
       ];
       textCols.forEach(([col, val]) => {
-        const cell  = ws.getCell(`${col}${row}`);
+        const cell = ws.getCell(`${col}${row}`);
         cell.value     = val;
         cell.font      = { size: 11, name: "Calibri" };
         cell.alignment = { horizontal: col === "E" ? "center" : "left", vertical: "middle" };
         cell.border    = { top: thin, bottom: btm, left: thin, right: thin };
       });
 
-      // G — Entrada
-      const gCell = ws.getCell(`G${row}`);
-      gCell.value     = ent;
-      gCell.numFmt    = BRL;
-      gCell.font      = { size: 11, name: "Calibri" };
-      gCell.alignment = { horizontal: "right", vertical: "middle" };
-      gCell.border    = { top: thin, bottom: btm, left: thin, right: thin };
-
-      // H — Saída
+      // H — Entrada
       const hCell = ws.getCell(`H${row}`);
-      hCell.value     = sai;
+      hCell.value     = ent;
       hCell.numFmt    = BRL;
       hCell.font      = { size: 11, name: "Calibri" };
       hCell.alignment = { horizontal: "right", vertical: "middle" };
       hCell.border    = { top: thin, bottom: btm, left: thin, right: thin };
 
-      // I — Saldo (fórmula): I10=I7+G10-H10; In=I{n-1}+Gn-Hn
-      const prevRef = idx === 0 ? "I7" : `I${row - 1}`;
+      // I — Saída
       const iCell = ws.getCell(`I${row}`);
-      iCell.value     = { formula: `=${prevRef}+G${row}-H${row}`, result: saldoAcum };
+      iCell.value     = sai;
       iCell.numFmt    = BRL;
       iCell.font      = { size: 11, name: "Calibri" };
       iCell.alignment = { horizontal: "right", vertical: "middle" };
-      iCell.border    = { top: thin, bottom: btm, left: thin, right: medium };
+      iCell.border    = { top: thin, bottom: btm, left: thin, right: thin };
+
+      // J — Saldo (fórmula): J10=J7+H10-I10; Jn=J{n-1}+Hn-In
+      const prevRef = idx === 0 ? "J7" : `J${row - 1}`;
+      const jCell = ws.getCell(`J${row}`);
+      jCell.value     = { formula: `=${prevRef}+H${row}-I${row}`, result: saldoAcum };
+      jCell.numFmt    = BRL;
+      jCell.font      = { size: 11, name: "Calibri" };
+      jCell.alignment = { horizontal: "right", vertical: "middle" };
+      jCell.border    = { top: thin, bottom: btm, left: thin, right: medium };
     });
 
-    // ── Formatação condicional nativa Excel na coluna I (Saldo) ──────────────
-    // Aplica-se a: I10:I{lastDataRow}
+    // Formatação condicional na coluna J (Saldo)
     const lastDataRow = lines.length > 0 ? 9 + lines.length : 10;
     ws.addConditionalFormatting({
-      ref: `I10:I${lastDataRow}`,
+      ref: `J10:J${lastDataRow}`,
       rules: [
         {
           type: "cellIs", operator: "lessThan", formulae: [0], priority: 1,
@@ -534,6 +506,82 @@ export async function buildExtratoBancarioBuffer(
     if (lines.length === 0) {
       ws.getCell("B10").value = "Nenhum lançamento no período.";
     }
+  }
+
+  for (const conta of contasQ.rows) {
+    const contaId = Number(conta.conta_bancaria_id);
+
+    // ── Tenta bank_statement_lines primeiro ───────────────────────────────────
+    const bslQ = await db.$client.query(
+      `SELECT
+          bsl.id          AS bsl_id,
+          bsl.data,
+          bsl.descricao,
+          bsl.valor::float  AS valor,
+          bsl.entry_id,
+          fe.fornecedor_nome,
+          fe.conta_nome       AS categoria,
+          fe.comprovante_documento AS comp_doc,
+          COALESCE(forn.cnpj, '') AS fornecedor_cnpj_direto,
+          NULL::text             AS entry_cnpj,
+          fe.descricao           AS entry_desc,
+          COALESCE(fn1.numero_nf, '')                         AS numero_nf,
+          COALESCE(fn1.emitente_cnpj, fn1.tomador_cnpj, '')  AS fornecedor_cnpj
+         FROM bank_statement_lines bsl
+         LEFT JOIN financial_entries fe   ON fe.id = bsl.entry_id
+         LEFT JOIN fiscal_notes fn1       ON fn1.stmt_line_id = bsl.id
+         LEFT JOIN compras_ordens co      ON fe.origem_modulo = 'compra' AND fe.origem_id = co.id
+         LEFT JOIN fornecedores forn      ON forn.id = co.fornecedor_id
+        WHERE bsl.company_id = $1
+          AND bsl.conta_bancaria_id = $2
+          AND bsl.excluido_em IS NULL
+          AND EXTRACT(MONTH FROM bsl.data) = $3
+          AND EXTRACT(YEAR  FROM bsl.data) = $4
+        ORDER BY bsl.data, bsl.id`,
+      [companyId, contaId, mes, ano]
+    );
+
+    if (bslQ.rows.length > 0) {
+      buildSheet(bslQ.rows, conta);
+      continue;
+    }
+
+    // ── Sem BSL → usa financial_entries (Caixa Interno e contas sem extrato) ─
+    // Rev. 4091 — inclui todas as contas mesmo sem extrato importado
+    const feQ = await db.$client.query(
+      `SELECT
+          fe.id            AS bsl_id,
+          COALESCE(fe.data_pagamento, fe.data_competencia) AS data,
+          COALESCE(fe.extrato_banco_descricao, fe.descricao, '') AS descricao,
+          CASE WHEN fe.tipo = 'receita'
+               THEN  fe.valor_realizado::float
+               ELSE -fe.valor_realizado::float
+          END              AS valor,
+          fe.id            AS entry_id,
+          fe.fornecedor_nome,
+          fe.conta_nome    AS categoria,
+          fe.comprovante_documento AS comp_doc,
+          COALESCE(forn.cnpj, '') AS fornecedor_cnpj_direto,
+          NULL::text       AS entry_cnpj,
+          fe.descricao     AS entry_desc,
+          COALESCE(fn2.numero_nf, '')                         AS numero_nf,
+          COALESCE(fn2.emitente_cnpj, fn2.tomador_cnpj, '')  AS fornecedor_cnpj
+         FROM financial_entries fe
+         LEFT JOIN compras_ordens co ON fe.origem_modulo = 'compra' AND fe.origem_id = co.id
+         LEFT JOIN fornecedores forn  ON forn.id = co.fornecedor_id
+         LEFT JOIN fiscal_notes fn2   ON fn2.entry_id = fe.id
+                                     AND fn2.company_id = fe.company_id
+                                     AND fn2.status != 'cancelada'
+        WHERE fe.company_id = $1
+          AND fe.conta_bancaria_id = $2
+          AND fe.status != 'cancelado'
+          AND EXTRACT(MONTH FROM COALESCE(fe.data_pagamento, fe.data_competencia)) = $3
+          AND EXTRACT(YEAR  FROM COALESCE(fe.data_pagamento, fe.data_competencia)) = $4
+        ORDER BY COALESCE(fe.data_pagamento, fe.data_competencia), fe.id`,
+      [companyId, contaId, mes, ano]
+    );
+
+    buildSheet(feQ.rows, conta);
   }
 
   if (wb.worksheets.length === 0) {

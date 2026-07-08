@@ -1,4 +1,31 @@
 /**
+ * Rev. 4091 — **PLANILHA CONTADOR: CNPJ DE FORNECEDOR + CATEGORIA + TODAS AS CONTAS (CAIXA INTERNO).**
+ *
+ * CONTEXTO: A planilha exportada para a contabilidade (`/api/download/contabilidade-xlsx`) tinha
+ * três deficiências: (1) CNPJ vazio para pagamentos a fornecedores sem NF-e vinculada; (2) ausência
+ * de coluna Categoria; (3) contas sem extrato importado (ex.: Caixa Interno id=22) não apareciam.
+ *
+ * FIX 1 — CNPJ (4 camadas de resolução):
+ *   - Camada 1: NF-e via stmt_line_id (já existia).
+ *   - Camada 2 (nova): JOIN compras_ordens → fornecedores (quando origem_modulo='compra').
+ *   - Camada 3 (nova): fe.comprovante_documento (CPF/CNPJ do beneficiário PIX).
+ *   - Camada 4: NF-e via entry_id + CNPJ+valor (fallback fuzzy).
+ *
+ * FIX 2 — CATEGORIA: nova coluna G "Categoria" (fe.conta_nome). Layout ampliado:
+ *   B=Data · C=Hist.Banco · D=Hist.Real · E=NF · F=CNPJ · G=Categoria · H=Entrada · I=Saída · J=Saldo.
+ *   Saldo anterior movido para I6:J7; banco para D6:H7; empresa para D2:J5.
+ *   Fórmula de saldo: J10=J7+H10-I10; formatação condicional verde/vermelho em J.
+ *
+ * FIX 3 — TODAS AS CONTAS: `contasQ` agora busca direto de `company_bank_accounts` (não mais
+ *   DISTINCT via bank_statement_lines). Para cada conta: se tiver BSL → usa BSL (comportamento
+ *   anterior); se não tiver BSL → usa financial_entries da conta (Caixa Interno, contas
+ *   sem extrato importado). Conta 22 (CAIXA INTERNO – ADM) passa a ter aba própria.
+ *
+ * Arquivo: server/routers/downloadContabilidadeXlsx.ts (buildExtratoBancarioBuffer).
+ * ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+ */
+
+/**
  * Rev. 4090 — **CONCILIAÇÃO: DEDUP DE IMPORTAÇÃO CIENTE DE DUPLICATAS LEGÍTIMAS NO BATCH.**
  *
  * BUG: `importBankStatement` e `checkStatementDuplicates` usavam `LIMIT 1` para verificar
