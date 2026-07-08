@@ -181,11 +181,12 @@ function toNum(v: any): number {
 
 function calcValorLiquido(form: any) {
   const bruto = toNum(form.valorBruto);
-  const iss   = toNum(form.issRetido);
+  // ISS NÃO é retido pelo tomador — é pago pela prestadora à prefeitura.
+  // O valor que entra no banco = Bruto - INSS_retido - IRRF_retido - PIS/COFINS_retido
   const inss  = toNum(form.retencaoInss);
   const irrf  = toNum(form.retencaoIrrf);
   const pis   = toNum(form.retencaoPisCofins);
-  return Math.max(0, bruto - iss - inss - irrf - pis);
+  return Math.max(0, bruto - inss - irrf - pis);
 }
 
 export default function FinanceiroNotasFiscais() {
@@ -2604,12 +2605,19 @@ export default function FinanceiroNotasFiscais() {
                     ))}
                   </div>
                   {/* Valor Líquido destacado */}
-                  <div className="bg-emerald-600 rounded-xl px-4 py-3 flex items-center justify-between">
-                    <div>
+                  <div className="bg-emerald-600 rounded-xl px-4 py-3 flex items-center justify-between gap-4">
+                    <div className="shrink-0">
                       <p className="text-emerald-100 text-xs font-medium">Valor Líquido (entra no banco)</p>
-                      <p className="text-emerald-200 text-xs mt-0.5">Bruto − ISS − INSS − IRRF − PIS/COFINS</p>
+                      <p className="text-emerald-200 text-xs mt-0.5">Bruto − INSS − IRRF − PIS/COFINS retidos</p>
                     </div>
-                    <div className="text-white text-2xl font-bold tabular-nums">{form.valorLiquido}</div>
+                    <input
+                      type="text"
+                      value={form.valorLiquido}
+                      onChange={e => setF("valorLiquido", e.target.value)}
+                      onBlur={() => handleMoneyBlur("valorLiquido")}
+                      className="bg-white/20 text-white text-xl font-bold tabular-nums text-right rounded-lg px-3 py-1.5 w-48 focus:outline-none focus:ring-2 focus:ring-white/50 placeholder-emerald-200"
+                      placeholder="R$ 0,00"
+                    />
                   </div>
                 </div>
               </div>
