@@ -197,11 +197,11 @@ export const chequesRecebidosRouter = router({
         params.push(input.status);
       }
       if (input.mes && input.ano) {
-        where += ` AND (EXTRACT(MONTH FROM data_bom_para::date)=$${idx} AND EXTRACT(YEAR FROM data_bom_para::date)=$${idx + 1})`;
+        where += ` AND (EXTRACT(MONTH FROM COALESCE(data_bom_para, data_emissao, criado_em::date))=$${idx} AND EXTRACT(YEAR FROM COALESCE(data_bom_para, data_emissao, criado_em::date))=$${idx + 1})`;
         params.push(input.mes, input.ano);
         idx += 2;
       } else if (input.ano) {
-        where += ` AND EXTRACT(YEAR FROM COALESCE(data_bom_para::date, data_emissao::date))=$${idx++}`;
+        where += ` AND EXTRACT(YEAR FROM COALESCE(data_bom_para, data_emissao, criado_em::date))=$${idx++}`;
         params.push(input.ano);
       }
       if (input.clienteId != null) {
