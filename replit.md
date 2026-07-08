@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4094** — **CORREÇÕES DE PRODUÇÃO: 3 BUGS (SQL $N, ferias.list coerce, getAlertasCompras try/catch).** (1) `financial.ts`: uniquePrefixes com `$100` etc. quebravam `dbExecute` (split regex `\$\d+`); fix: filter antes do VALUES CTE. (2) `avisoPrevioFerias.ts`: `companyId: z.number()` → `z.coerce.number()` (frontend enviava string). (3) `compras.ts` `getAlertasCompras`: try/catch global com `console.error(stack)` + retorno de default seguro para "Cannot convert undefined or null to object". (4) `FinanceiroNotasFiscais.tsx`: `calcValorLiquido` remove ISS da fórmula; Valor Líquido vira `<input>` editável. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+- **Rev. 4095** — **NFS-e: FÓRMULA DO VALOR LÍQUIDO CORRIGIDA (ISS RETIDO ENTRA NO CÁLCULO) + CAMPO VOLTA A SER READ-ONLY.** Rev. 4094 tinha removido o ISS da fórmula por suposição errada e tornado o campo editável. Com a DANFSe real da NF #39 (ISSQN Retido pelo Tomador R$1.600 + INSS retido R$2.322,72 = Valor Líquido R$60.077,28 sobre bruto R$64.000), a fórmula correta é `Bruto − ISS − INSS − IRRF − PIS/COFINS (retidos)`. Campo volta a ser `<div>` read-only recalculado em tempo real; PIS/COFINS do form = só valor RETIDO (nunca "Débito Apuração Própria"). ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
-- **Rev. 4093** — **SPED: EFD CONTRIBUIÇÕES (PIS/COFINS) + SPED ECF (IRPJ/CSLL LP) + SPED ECD.** 3 novos geradores de arquivo SPED: (1) EFD Contribuições COD_VER 006 — regime cumulativo LP, Blocos A(NFS-e)/C(NF-e)/M(apuração PIS M200-210/COFINS M600-610); (2) SPED ECF COD_VER 009 LP — Blocos N(IRPJ trim 15%+10%)/P(CSLL 9%); (3) SPED ECD COD_VER 011 — plano de contas + lançamentos de `financial_accounts`/`financial_entries`. 3 tRPC routers (efdContribuicoes/spedEcf/spedEcd) + 3 Express routes + 3 páginas frontend + SyncSchema+ cria `efd_contrib_config`, `sped_ecf_config`, `sped_ecd_config` (UNIQUE company_id) + seed FC. Menu Contabilidade: +3 itens. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+- **Rev. 4094** — **CORREÇÕES DE PRODUÇÃO: 3 BUGS (SQL $N, ferias.list coerce, getAlertasCompras try/catch).** (1) `financial.ts`: uniquePrefixes com `$100` etc. quebravam `dbExecute` (split regex `\$\d+`); fix: filter antes do VALUES CTE. (2) `avisoPrevioFerias.ts`: `companyId: z.number()` → `z.coerce.number()` (frontend enviava string). (3) `compras.ts` `getAlertasCompras`: try/catch global com `console.error(stack)` + retorno de default seguro para "Cannot convert undefined or null to object". ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 ### 5 one-liners
+
+- **Rev. 4093** — **SPED: EFD CONTRIBUIÇÕES (PIS/COFINS) + SPED ECF (IRPJ/CSLL LP) + SPED ECD.** 3 novos geradores de arquivo SPED (EFD Contribuições/ECF/ECD) + 3 tRPC routers + 3 Express routes + 3 páginas frontend. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4092** — **EFD-ICMS/IPI: GERADOR DE ARQUIVO TXT (SPED) — GUIA PRÁTICO v3.2.2, COD_VER 017.** Novo tRPC router `efdIcmsIpi` (getConfig/saveConfig) + Express route. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4089** — **NOTAS FISCAIS: CARDS DE TOTAIS EXCLUEM CANCELADAS/SUBSTITUÍDAS.** Fix: `ativas = nfs.filter(!cancelada && !substituida)` como base de `total` e `valorTotal`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4088** — **NF-e: AUTO-VÍNCULO CROSS-MÊS — NFS-e DE MÊS ANTERIOR CONCILIADA AUTOMATICAMENTE AO CONSOLIDAR O MÊS SEGUINTE (REGIME DE COMPETÊNCIA).** 3 bugs corrigidos na janela de data invertida, período restrito e consolidarMes sem disparo. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
-- **Rev. 4087** — **PANORAMA FISCAL: MATCHING RETROATIVO DE ENTRADAS BANCÁRIAS × NFS-e DE MESES ANTERIORES (REGIME DE COMPETÊNCIA).** Novo endpoint `nfseAntQ`; matching heurístico valor ≈ valor_liquido (±3%); AlertCard azul + badge "← NFS-e #N / data". ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 ### Histórico completo
 

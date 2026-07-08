@@ -1,4 +1,27 @@
 /**
+ * Rev. 4095 — **NFS-e: FÓRMULA DO VALOR LÍQUIDO CORRIGIDA (ISS RETIDO ENTRA NO CÁLCULO) + CAMPO VOLTA A SER READ-ONLY.**
+ *
+ * CONTEXTO: Rev. 4094 tinha removido o ISS da fórmula (`Bruto - INSS - IRRF - PIS/COFINS`) por
+ * suposição errada de que ISS nunca é retido pelo tomador, e tornou o campo Valor Líquido editável.
+ * O usuário mostrou a DANFSe real da NF #39 (Guaratinguetá → Igarassu-PE, serviço de execução de
+ * obra sujeito a retenção na fonte do município de prestação): "Retenção do ISSQN: Retido pelo
+ * Tomador" R$1.600,00; "Contribuição Previdenciária Retida" R$2.322,72; "Valor Líquido da NFS-e"
+ * R$60.077,28 = 64.000,00 (bruto) − 1.600,00 (ISS retido) − 2.322,72 (INSS). O campo PIS/COFINS do
+ * form representa só o valor RETIDO pelo tomador — nunca o "Débito Apuração Própria" (obrigação do
+ * prestador, não afeta o valor que entra no banco).
+ *
+ * IMPLEMENTAÇÃO: `client/src/pages/financeiro/FinanceiroNotasFiscais.tsx`:
+ *   - `calcValorLiquido`: fórmula agora é `Bruto − ISS − INSS − IRRF − PIS/COFINS (retidos)`,
+ *     espelhando a seção "VALOR TOTAL DA NFS-e" do DANFSe.
+ *   - Campo "Valor Líquido (entra no banco)" no dialog de edição voltou a ser um `<div>` read-only,
+ *     recalculado em tempo real a cada keystroke via `calcValorLiquido(form)` — NÃO é mais digitável.
+ *   - `handleMoneyBlur` recalcula o Valor Líquido a cada blur de qualquer campo de valor/retenção.
+ *   - `handleSubmit` usa `calcValorLiquido(form)` diretamente no payload (não depende de blur prévio).
+ *
+ * ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+ */
+
+/**
  * Rev. 4094 — **CORREÇÕES DE PRODUÇÃO: 3 BUGS (SQL $N, ferias.list coerce, getAlertasCompras try/catch).**
  *
  * CONTEXTO: Logs de produção acusavam 3 erros recorrentes que degradavam UX no Painel de Compras e

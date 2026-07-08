@@ -180,13 +180,17 @@ function toNum(v: any): number {
 }
 
 function calcValorLiquido(form: any) {
+  // Espelha a seção "VALOR TOTAL DA NFS-e" do DANFSe:
+  // Valor Líquido da NFS-e = Valor do Serviço - ISSQN Retido - Total das Retenções Federais
+  // (INSS + IRRF + PIS/COFINS retidos pelo tomador). PIS/COFINS "Débito Apuração Própria"
+  // (obrigação do prestador, não retido) NÃO entra aqui — o campo PIS/COFINS deste form
+  // representa apenas o valor RETIDO, quando houver.
   const bruto = toNum(form.valorBruto);
-  // ISS NÃO é retido pelo tomador — é pago pela prestadora à prefeitura.
-  // O valor que entra no banco = Bruto - INSS_retido - IRRF_retido - PIS/COFINS_retido
+  const iss   = toNum(form.issRetido);
   const inss  = toNum(form.retencaoInss);
   const irrf  = toNum(form.retencaoIrrf);
   const pis   = toNum(form.retencaoPisCofins);
-  return Math.max(0, bruto - inss - irrf - pis);
+  return Math.max(0, bruto - iss - inss - irrf - pis);
 }
 
 export default function FinanceiroNotasFiscais() {
@@ -1130,10 +1134,8 @@ export default function FinanceiroNotasFiscais() {
   function handleMoneyBlur(key: string) {
     const v = parseBRL(String(form[key] || 0));
     setF(key, formatBRL(v));
-    if (key !== "valorLiquido") {
-      const liq = calcValorLiquido({ ...form, [key]: v });
-      setF("valorLiquido", formatBRL(liq));
-    }
+    const liq = calcValorLiquido({ ...form, [key]: v });
+    setF("valorLiquido", formatBRL(liq));
   }
 
   function handleSubmit() {
@@ -1160,7 +1162,7 @@ export default function FinanceiroNotasFiscais() {
       retencaoInss:       parseBRL(String(form.retencaoInss)),
       retencaoIrrf:       parseBRL(String(form.retencaoIrrf)),
       retencaoPisCofins:  parseBRL(String(form.retencaoPisCofins)),
-      valorLiquido:       parseBRL(String(form.valorLiquido)),
+      valorLiquido:       calcValorLiquido(form),
       arquivoUrl:         form.arquivoUrl || null,
       arquivoNome:        form.arquivoNome || null,
       observacoes:        form.observacoes || null,
@@ -2604,20 +2606,15 @@ export default function FinanceiroNotasFiscais() {
                       </div>
                     ))}
                   </div>
-                  {/* Valor Líquido destacado */}
+                  {/* Valor Líquido destacado — SEMPRE calculado automaticamente, nunca digitável */}
                   <div className="bg-emerald-600 rounded-xl px-4 py-3 flex items-center justify-between gap-4">
                     <div className="shrink-0">
                       <p className="text-emerald-100 text-xs font-medium">Valor Líquido (entra no banco)</p>
-                      <p className="text-emerald-200 text-xs mt-0.5">Bruto − INSS − IRRF − PIS/COFINS retidos</p>
+                      <p className="text-emerald-200 text-xs mt-0.5">Bruto − ISS − INSS − IRRF − PIS/COFINS retidos</p>
                     </div>
-                    <input
-                      type="text"
-                      value={form.valorLiquido}
-                      onChange={e => setF("valorLiquido", e.target.value)}
-                      onBlur={() => handleMoneyBlur("valorLiquido")}
-                      className="bg-white/20 text-white text-xl font-bold tabular-nums text-right rounded-lg px-3 py-1.5 w-48 focus:outline-none focus:ring-2 focus:ring-white/50 placeholder-emerald-200"
-                      placeholder="R$ 0,00"
-                    />
+                    <div className="text-white text-xl font-bold tabular-nums text-right px-3 py-1.5">
+                      {formatBRL(calcValorLiquido(form))}
+                    </div>
                   </div>
                 </div>
               </div>

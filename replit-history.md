@@ -1,3 +1,5 @@
+- **Rev. 4087** — **PANORAMA FISCAL: MATCHING RETROATIVO DE ENTRADAS BANCÁRIAS × NFS-e DE MESES ANTERIORES (REGIME DE COMPETÊNCIA).** Novo endpoint `nfseAntQ`; matching heurístico valor ≈ valor_liquido (±3%); AlertCard azul + badge "← NFS-e #N / data". ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+
 - **Rev. 4086** — **CONCILIAÇÃO: IMPORTAÇÃO EM LOTE INTELIGENTE — CONTA AUTO-DETECTADA DO CABEÇALHO OFX + DIÁLOGO DE REVISÃO POR ARQUIVO.** BatchImportDialog com auto-detect de conta do OFX + seletor de override. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4085** — **CONCILIAÇÃO: DEDUP DE IMPORTAÇÃO PASSA A SER CONTROLADO PELO USUÁRIO (DIÁLOGO DE REVISÃO) + PARSER OFX ROBUSTO PARA FORMATO BR.** Fix: novo endpoint `checkStatementDuplicates` (dry-run) + `ReviewDuplicatesDialog`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
