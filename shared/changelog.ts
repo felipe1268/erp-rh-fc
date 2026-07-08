@@ -1,4 +1,34 @@
 /**
+ * Rev. 4099 — **CHEQUES EMITIDOS: REDESIGN DO LAYOUT (PADRÃO RECEBIDOS) + FIX FILTRO DE MÊS SEM DATA.**
+ *
+ * CONTEXTO: A página FinanceiroCheques.tsx (Emitidos) tinha um layout diferente do Recebidos:
+ * 3 blocos de cards separados (top 4 totais + Resumo mês + Conferência extrato), botões espalhados
+ * na linha do cabeçalho e filtros soltos. O usuário solicitou o mesmo layout do Recebidos.
+ * Além disso, cheques importados sem data (data_bom_para=NULL e data_emissao=NULL) sumiam ao
+ * filtrar por mês porque o filtro do backend dependia exclusivamente de data_bom_para.
+ *
+ * IMPLEMENTAÇÃO:
+ *
+ * BACKEND — `server/routers/chequesRecebidos.ts`:
+ *   - Filtro de mês: de `data_bom_para::date` para `COALESCE(data_bom_para, data_emissao, criado_em::date)`.
+ *   - Filtro de ano: mesma correção aplicada ao branch `else if (input.ano)`.
+ *   - Resultado: cheques sem data aparecem no mês em que foram importados (via criado_em).
+ *
+ * FRONTEND — `client/src/pages/financeiro/FinanceiroCheques.tsx`:
+ *   - Cabeçalho: título + descrição à esquerda, botões à direita (Conferir c/ extrato, Lançar cheque,
+ *     Importar planilha, Limpar mês/ano — contextual ao mês selecionado). Botões menores (size="sm").
+ *   - 4 cards de status (clicáveis, com dot colorido — padrão Recebidos): Pendentes (âmbar),
+ *     Compensados (verde), Devolvidos (laranja), Outros sustado/cancelado (cinza). Todos usam
+ *     `cardTotais` = mês selecionado OU ano todo, reagindo à navegação de período.
+ *   - Removidos: bloco "RESUMO DE MÊS" (3 cards extras) + bloco "CONFERÊNCIA COM O EXTRATO" (3 cards).
+ *     As mesmas informações acessíveis via filtro de status (select) e alerta de divergência.
+ *   - Filtros: Card único com busca + status select (linha 1) + navegação ano + pills mês c/ bolinhas
+ *     (linha 2). Botão "Todos" (era "Ano todo"). Mesmo padrão visual do Recebidos.
+ *   - Alerta de divergência + tabela + todos os dialogs inalterados.
+ *
+ * ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+ */
+/**
  * Rev. 4098 — **CHEQUES RECEBIDOS: VÍNCULO COM CLIENTE (FILTRO + ATRIBUIÇÃO EM LOTE + CAMPO NO IMPORT).**
  *
  * CONTEXTO: Os cheques recebidos na carteira pertencem a um cliente específico (ex.: HOTEL J Q LTDA).
