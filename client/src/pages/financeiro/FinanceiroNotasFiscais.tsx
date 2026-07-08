@@ -174,12 +174,17 @@ const emptyForm = (): Omit<NF, "id" | "status" | "createdAt" | "updatedAt"> => (
   observacoes: "",
 });
 
+function toNum(v: any): number {
+  if (typeof v === "number") return isFinite(v) ? v : 0;
+  return parseBRL(String(v || 0));
+}
+
 function calcValorLiquido(form: any) {
-  const bruto = parseBRL(String(form.valorBruto || 0));
-  const iss = parseBRL(String(form.issRetido || 0));
-  const inss = parseBRL(String(form.retencaoInss || 0));
-  const irrf = parseBRL(String(form.retencaoIrrf || 0));
-  const pis = parseBRL(String(form.retencaoPisCofins || 0));
+  const bruto = toNum(form.valorBruto);
+  const iss   = toNum(form.issRetido);
+  const inss  = toNum(form.retencaoInss);
+  const irrf  = toNum(form.retencaoIrrf);
+  const pis   = toNum(form.retencaoPisCofins);
   return Math.max(0, bruto - iss - inss - irrf - pis);
 }
 
@@ -1125,7 +1130,7 @@ export default function FinanceiroNotasFiscais() {
     const v = parseBRL(String(form[key] || 0));
     setF(key, formatBRL(v));
     if (key !== "valorLiquido") {
-      const liq = calcValorLiquido({ ...form, [key]: String(v) });
+      const liq = calcValorLiquido({ ...form, [key]: v });
       setF("valorLiquido", formatBRL(liq));
     }
   }
