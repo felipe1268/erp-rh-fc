@@ -195,9 +195,22 @@ export default function FinanceiroChequesRecebidos() {
   const clientesQuery = (trpc as any).chequesRecebidos.listarClientes.useQuery(
     { companyId }, { enabled: !!companyId }
   );
+  const resumoPorMesQuery = (trpc as any).chequesRecebidos.resumoPorMes.useQuery(
+    { companyId, ano }, { enabled: !!companyId }
+  );
   const cheques: any[] = listQuery.data?.cheques ?? [];
   const totais: any = totaisQuery.data ?? {};
   const clientes: any[] = clientesQuery.data?.clientes ?? [];
+
+  const mesesStatus = useMemo(() => {
+    const m: Record<number, "consolidado" | "lancamento" | "vazio"> = {};
+    for (let i = 1; i <= 12; i++) m[i] = "vazio";
+    for (const r of (resumoPorMesQuery.data ?? []) as any[]) {
+      if (!r.mes) continue;
+      m[r.mes] = r.qtd > 0 && r.compensados >= r.qtd ? "consolidado" : r.qtd > 0 ? "lancamento" : "vazio";
+    }
+    return m;
+  }, [resumoPorMesQuery.data]);
 
   function invalidate() {
     utils?.chequesRecebidos?.listar?.invalidate?.();
@@ -546,28 +559,42 @@ export default function FinanceiroChequesRecebidos() {
               )}
             </div>
 
-            {/* Linha 2 — navegação ano + meses */}
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center gap-1">
-                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setAno(a => a - 1)}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-sm font-bold w-12 text-center tabular-nums">{ano}</span>
-                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setAno(a => a + 1)} disabled={ano >= ANO_ATUAL + 1}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+            {/* Linha 2 — navegação ano + pills de mês com bolinhas (padrão Emitidos) */}
+            <div>
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <div className="flex items-center gap-1.5">
+                  <button type="button" onClick={() => setAno(a => a - 1)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="text-base font-bold min-w-[3.5rem] text-center">{ano}</span>
+                  <button type="button" onClick={() => setAno(a => a + 1)} disabled={ano >= ANO_ATUAL + 1} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground disabled:opacity-40">
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                  <button type="button" onClick={() => setMesSel(null)}
+                    className={`ml-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${mesSel == null ? "bg-blue-600 text-white shadow-sm" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+                    Todos
+                  </button>
+                </div>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />Com lançamento</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Consolidado</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />Sem dados</span>
+                </div>
               </div>
-              <div className="flex flex-wrap gap-0.5">
-                <button
-                  onClick={() => setMesSel(null)}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${mesSel == null ? "bg-indigo-600 text-white shadow-sm" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-                >Todos</button>
-                {MESES_ABREV.slice(1).map((m, i) => (
-                  <button key={i + 1}
-                    onClick={() => setMesSel(i + 1)}
-                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${mesSel === i + 1 ? "bg-indigo-600 text-white shadow-sm" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-                  >{m}</button>
-                ))}
+              <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
+                {MESES_ABREV.slice(1).map((m, i) => {
+                  const num = i + 1;
+                  const st = mesesStatus[num];
+                  const isSel = mesSel === num;
+                  return (
+                    <button key={num} type="button" onClick={() => setMesSel(num)}
+                      className={`flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all
+                        ${isSel ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm" : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50"}`}>
+                      <span>{m}</span>
+                      <span className={`w-1.5 h-1.5 rounded-full ${st === "consolidado" ? "bg-green-500" : st === "lancamento" ? "bg-blue-500" : "bg-gray-300"}`} />
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </CardContent>

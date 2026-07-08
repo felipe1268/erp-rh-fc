@@ -617,6 +617,26 @@ export const chequesRecebidosRouter = router({
       return { excluidos: res.rows.length };
     }),
 
+  // ── Resumo por mês (bolinhas do nav) ──
+  resumoPorMes: protectedProcedure
+    .input(z.object({ companyId: z.coerce.number(), ano: z.coerce.number().int() }))
+    .query(async ({ ctx, input }) => {
+      await assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível." });
+      const res = await dbExecute(db, `
+        SELECT
+          EXTRACT(MONTH FROM COALESCE(data_bom_para, data_emissao, criado_em::date))::int AS mes,
+          COUNT(*)::int AS qtd,
+          COUNT(*) FILTER (WHERE status='compensado')::int AS compensados
+        FROM financial_cheques_recebidos
+        WHERE company_id=$1 AND excluido_em IS NULL
+          AND EXTRACT(YEAR FROM COALESCE(data_bom_para, data_emissao, criado_em::date))=$2
+        GROUP BY 1
+      `, [input.companyId, input.ano]);
+      return res.rows.map((r: any) => ({ mes: Number(r.mes), qtd: Number(r.qtd), compensados: Number(r.compensados) }));
+    }),
+
   // ── Totais por status (resumo cards) ──
   totais: protectedProcedure
     .input(z.object({ companyId: z.coerce.number() }))

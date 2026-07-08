@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4099** — **CHEQUES EMITIDOS: REDESIGN DO LAYOUT (PADRÃO RECEBIDOS) + FIX FILTRO DE MÊS SEM DATA.** `FinanceiroCheques.tsx` redesenhado: cabeçalho com título à esquerda e botões à direita (Conferir c/ extrato + Lançar cheque + Importar planilha + Limpar mês/ano contextual). 4 cards clicáveis com dot colorido — Pendentes (âmbar), Compensados (verde), Devolvidos (laranja), Outros (cinza) — todos usando `cardTotais` (mês ou ano). Bloco "RESUMO MÊS" e bloco "CONFERÊNCIA COM EXTRATO" removidos (informações acessíveis via filtro de status e alerta de divergência). Filtros: Card único com busca + select status + nav ano + pills Jan-Dez com bolinhas. Backend fix em `chequesRecebidos.ts`: filtro de mês usa `COALESCE(data_bom_para, data_emissao, criado_em::date)` — cheques sem data aparecem pelo mês de import. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+- **Rev. 4100** — **CHEQUES RECEBIDOS: PADRONIZAÇÃO DO NAV DE MESES (GRID + BOLINHAS DE STATUS).** `resumoPorMes` adicionado ao router `chequesRecebidos` (agrupa por COALESCE(data_bom_para, data_emissao, criado_em)). Frontend: pills inline simples substituídas pelo grid 6×2/12×1 com bolinhas (azul=com lançamento, verde=consolidado, cinza=sem dados) + legenda — idêntico ao Emitidos. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
-- **Rev. 4098** — **CHEQUES RECEBIDOS: VÍNCULO COM CLIENTE (FILTRO + ATRIBUIÇÃO EM LOTE + CAMPO NO IMPORT).** Novas colunas `cliente_id`/`cliente_nome` em `financial_cheques_recebidos` via SyncSchema+. Router `chequesRecebidos` ganhou `listarClientes` + `atribuirCliente` (UPDATE em lote) + `clienteId/clienteNome` em criar/atualizar/importarConfirmar/listar. Frontend: filtro "Todos os clientes", coluna "Cliente" na tabela, bulk-assign dialog, campo no form manual e no import dialog. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+- **Rev. 4099** — **CHEQUES EMITIDOS: REDESIGN DO LAYOUT (PADRÃO RECEBIDOS) + FIX FILTRO DE MÊS SEM DATA.** 4 cards clicáveis com dot colorido (Pendentes/Compensados/Devolvidos/Outros), blocos RESUMO+CONFERÊNCIA removidos, filtros em Card único com pills Jan-Dez. Fix: filtro mês usa COALESCE. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 ### 5 one-liners
+
+- **Rev. 4098** — **CHEQUES RECEBIDOS: VÍNCULO COM CLIENTE (FILTRO + ATRIBUIÇÃO EM LOTE + CAMPO NO IMPORT).** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4097** — **CHEQUES RECEBIDOS: REDESIGN COMPLETO DA PÁGINA (LAYOUT PADRÃO EMITIDOS + IMPORT MULTI-XLSX + BARRA DE PROGRESSO).** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4095** — **NFS-e: FÓRMULA DO VALOR LÍQUIDO CORRIGIDA (ISS RETIDO ENTRA NO CÁLCULO) + CAMPO VOLTA A SER READ-ONLY.** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4094** — **CORREÇÕES DE PRODUÇÃO: 3 BUGS (SQL $N, ferias.list coerce, getAlertasCompras try/catch).** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
-- **Rev. 4093** — **SPED: EFD CONTRIBUIÇÕES (PIS/COFINS) + SPED ECF (IRPJ/CSLL LP) + SPED ECD.** 3 novos geradores de arquivo SPED + 3 tRPC routers + 3 Express routes + 3 páginas frontend. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 ### Histórico completo
 

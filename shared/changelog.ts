@@ -1,4 +1,26 @@
 /**
+ * Rev. 4100 — **CHEQUES RECEBIDOS: PADRONIZAÇÃO DO NAV DE MESES (GRID + BOLINHAS DE STATUS).**
+ *
+ * CONTEXTO: A página de Cheques Recebidos usava um seletor de meses inline simples (pills
+ * horizontais sem indicador de dados), enquanto a de Emitidos tinha o padrão completo com grid
+ * 12 colunas, bolinhas coloridas (azul=com lançamento, verde=consolidado, cinza=sem dados) e
+ * legenda. O usuário solicitou padronização entre as duas páginas.
+ *
+ * IMPLEMENTAÇÃO:
+ *
+ * BACKEND — `server/routers/chequesRecebidos.ts`:
+ *   - `resumoPorMes` (NOVO): retorna [{mes, qtd, compensados}] agrupado por mês do ano via
+ *     COALESCE(data_bom_para, data_emissao, criado_em::date) — mesma lógica do filtro de mês.
+ *
+ * FRONTEND — `client/src/pages/financeiro/FinanceiroChequesRecebidos.tsx`:
+ *   - `resumoPorMesQuery`: nova query `chequesRecebidos.resumoPorMes` disparada por (companyId, ano).
+ *   - `mesesStatus`: useMemo calculando consolidado/lancamento/vazio por mês (mesma lógica Emitidos).
+ *   - Nav de meses: substituído de pills inline horizontais sem dots pelo grid 6×2 / 12×1 padrão:
+ *     linha de topo (< ano > + botão "Todos" + legenda); abaixo: 12 pills com bolinha colorida.
+ *
+ * ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+ */
+/**
  * Rev. 4099 — **CHEQUES EMITIDOS: REDESIGN DO LAYOUT (PADRÃO RECEBIDOS) + FIX FILTRO DE MÊS SEM DATA.**
  *
  * CONTEXTO: A página FinanceiroCheques.tsx (Emitidos) tinha um layout diferente do Recebidos:
