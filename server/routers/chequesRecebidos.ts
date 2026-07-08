@@ -600,6 +600,26 @@ export const chequesRecebidosRouter = router({
       return { inseridos, ignorados };
     }),
 
+  // ── Limpar registros de totalizador (soft-delete de linhas com numero_cheque = "TOTAL" etc.) ──
+  limparTotalizadores: protectedProcedure
+    .input(z.object({ companyId: z.coerce.number() }))
+    .mutation(async ({ ctx, input }) => {
+      await assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível." });
+
+      const res = await dbExecute(db, `
+        UPDATE financial_cheques_recebidos
+        SET excluido_em = NOW(), atualizado_em = NOW()
+        WHERE company_id = $1
+          AND excluido_em IS NULL
+          AND numero_cheque ~* '^(total|subtotal|sub-total|soma|geral|resumo|grand\\s*total)'
+        RETURNING id, numero_cheque, valor
+      `, [input.companyId]);
+
+      return { removidos: res.rows.length, registros: res.rows };
+    }),
+
   // ── Limpar todos os registros (HARD DELETE — somente admin_master) ──
   limparTodos: protectedProcedure
     .input(z.object({ companyId: z.coerce.number() }))

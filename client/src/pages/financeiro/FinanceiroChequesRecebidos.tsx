@@ -264,6 +264,21 @@ export default function FinanceiroChequesRecebidos() {
     onError: (e: any) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
 
+  // Rev. 4103 — Limpar totalizadores inválidos (cheques com numero="TOTAL" etc. importados antes do fix)
+  const [limparTotOpen, setLimparTotOpen] = useState(false);
+  const limparTotMut = (trpc as any).chequesRecebidos.limparTotalizadores.useMutation({
+    onSuccess: (r: any) => {
+      if (r.removidos === 0) {
+        toast({ title: "Nenhum registro inválido encontrado.", description: "Tudo certo — não há totalizadores na base." });
+      } else {
+        toast({ title: `${r.removidos} registro(s) inválido(s) removido(s).`, description: r.registros.map((x: any) => `Nº ${x.numero_cheque} · ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(x.valor))}`).join(" · ") });
+      }
+      setLimparTotOpen(false);
+      invalidate();
+    },
+    onError: (e: any) => toast({ title: "Erro ao limpar", description: e.message, variant: "destructive" }),
+  });
+
   // ── Form helpers ──
   function abrirNovo() { setFormEdit(null); setForm(EMPTY_FORM); setFormOpen(true); }
   function abrirEditar(c: any) {
@@ -466,6 +481,11 @@ export default function FinanceiroChequesRecebidos() {
             <Button size="sm" onClick={abrirImport}
               className="gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white">
               <Upload className="h-4 w-4" /> Importar .xlsx
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setLimparTotOpen(true)}
+              className="gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50"
+              title="Remove cheques com número 'TOTAL', 'SUBTOTAL' etc. importados erroneamente">
+              <Trash2 className="h-4 w-4" /> Limpar inválidos
             </Button>
             {isMaster && (
               <Button size="sm" variant="outline" onClick={() => setLimparOpen(true)}
@@ -1042,6 +1062,35 @@ export default function FinanceiroChequesRecebidos() {
               className="bg-red-600 hover:bg-red-700"
               onClick={() => excluirId && excluirMut.mutate({ id: excluirId, companyId })}>
               Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ════════════════════════════════════════════════════════
+          AlertDialog: Limpar totalizadores inválidos (Rev. 4103)
+      ════════════════════════════════════════════════════════ */}
+      <AlertDialog open={limparTotOpen} onOpenChange={o => { if (!o) setLimparTotOpen(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-amber-700">Remover registros inválidos?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação remove (soft-delete) todos os cheques cujo número seja um totalizador de planilha —
+              <strong> TOTAL, SUBTOTAL, SOMA, GERAL</strong> etc. — importados erroneamente antes do fix.
+              Os cheques reais <strong>não são afetados</strong>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={limparTotMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={limparTotMut.isPending}
+              className="bg-amber-600 hover:bg-amber-700"
+              onClick={() => limparTotMut.mutate({ companyId })}
+            >
+              {limparTotMut.isPending
+                ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" />Removendo…</>
+                : "Sim, remover inválidos"
+              }
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

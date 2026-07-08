@@ -1,4 +1,24 @@
 /**
+ * Rev. 4103 — **CHEQUES RECEBIDOS: BOTÃO "LIMPAR INVÁLIDOS" (SOFT-DELETE DE TOTALIZADORES).**
+ *
+ * CONTEXTO: Cheques importados ANTES do fix de Rev. 4101 (linha "TOTAL / 132 FOLHAS / R$ 421k")
+ * ficaram na base inflando os totais. Este recurso permite removê-los sem apagar os cheques reais.
+ *
+ * IMPLEMENTAÇÃO:
+ *   Backend — `server/routers/chequesRecebidos.ts`: nova proc `limparTotalizadores`
+ *     · Soft-delete (UPDATE excluido_em=NOW()) em todos os cheques cujo `numero_cheque`
+ *       bate com `~* '^(total|subtotal|sub-total|soma|geral|resumo|grand\s*total)'`.
+ *     · Acessível a qualquer usuário da empresa (assertCompanyAccess), não só admin_master.
+ *     · Retorna `{ removidos, registros[] }` com id/numero/valor de cada linha removida.
+ *   Frontend — `client/src/pages/financeiro/FinanceiroChequesRecebidos.tsx`:
+ *     · Botão âmbar "🗑 Limpar inválidos" na barra de ações (ao lado de "Importar .xlsx").
+ *     · AlertDialog de confirmação com descrição clara do escopo da operação.
+ *     · Toast de resultado: se 0 → "Tudo certo — sem totalizadores"; se N > 0 → lista os
+ *       registros removidos (nº + valor).
+ *
+ * ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+ */
+/**
  * Rev. 4102 — **NOVO LANÇAMENTO: SUGESTÃO DE CHEQUES RECEBIDOS AO PAGAR COM CHEQUE.**
  *
  * CONTEXTO: Ao selecionar forma de pagamento "Cheque" em uma despesa, o usuário agora

@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4102** — **NOVO LANÇAMENTO: SUGESTÃO DE CHEQUES RECEBIDOS AO PAGAR COM CHEQUE.** Quando forma=Cheque numa despesa, painel verde mostra cheques de terceiros disponíveis em carteira e sugere combinações de 1/2/3 cheques mais próximas do valor (com hint "sobram R$X → pague em Pix" / "faltam R$X"). ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+- **Rev. 4103** — **CHEQUES RECEBIDOS: BOTÃO "LIMPAR INVÁLIDOS" (SOFT-DELETE DE TOTALIZADORES).** Backend `limparTotalizadores` (UPDATE excluido_em) + botão âmbar na barra de ações + AlertDialog + toast com lista dos removidos. Remove entradas "TOTAL/SOMA/GERAL" importadas antes do fix sem tocar cheques reais. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
-- **Rev. 4101** — **CHEQUES RECEBIDOS: FIX IMPORT — IGNORA LINHA DE TOTAL DA PLANILHA.** Parser XLSX importava rodapé "TOTAL" como cheque real (nº="TOTAL", valor=soma de todos). Fix: regex pula a linha antes de criar registro. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+- **Rev. 4102** — **NOVO LANÇAMENTO: SUGESTÃO DE CHEQUES RECEBIDOS AO PAGAR COM CHEQUE.** Quando forma=Cheque numa despesa, painel verde mostra cheques disponíveis e sugere combinações de 1/2/3 cheques mais próximas do valor. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 ### 5 one-liners
 
