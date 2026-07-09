@@ -1,4 +1,40 @@
 /**
+ * Rev. 4114 — **FIX: SALVAR FORNECEDOR — FALHA SILENCIOSA + AUTO-MERGE CNPJ NA EDIÇÃO.**
+ *
+ * CONTEXTO: "Salvar Alterações" no dialog Editar Empresa Terceira (tela Compras → Fornecedores)
+ * falhava silenciosamente — o usuário clicava e nada acontecia, sem toast de erro.
+ *
+ * CAUSA RAIZ — dois problemas independentes:
+ * 1. `atualizarMut` em Fornecedores.tsx não tinha `onError` → erros do servidor eram
+ *    engolidos pelo tRPC sem chegar ao usuário.
+ *
+ * 2. O fornecedor #520 ("HÉLIO BASSANELLI", CNPJ vazio) estava sendo atualizado com os
+ *    dados corretos: razão social "BASSANELLI & PELEGRINI LTDA", nome fantasia "VALE
+ *    TOPOGRAFIA", CNPJ "16.805.597/0001-81". Porém, o fornecedor #1128 ("VALE TOPOGRAFIA")
+ *    já tinha esse mesmo CNPJ — ambos na company_id 60002. O check de duplicidade em
+ *    `atualizarFornecedor` detectava o conflito e lançava CONFLICT, bloqueando o save.
+ *    O boot job [AutoMergeFornecedores] (Rev. 4112) não tinha merged estes dois porque,
+ *    quando rodou, o #520 tinha CNPJ vazio — a normalização de 14 dígitos não os agrupava.
+ *
+ * O QUE FOI FEITO:
+ * 1. `onError: (e) => toast.error(e.message)` adicionado a `atualizarMut` em Fornecedores.tsx.
+ *
+ * 2. Em `atualizarFornecedor` (compras.ts): quando o fornecedor sendo editado tinha CNPJ
+ *    vazio e o CNPJ novo conflita com outro fornecedor ativo (o "dup"), em vez de bloquear,
+ *    executa auto-merge em db.transaction: migra as 10 FKs (ordens, cotações, respostas,
+ *    propostas, avaliacoes, cheques, databook, equipamentos, empresas_terceiras) do dup
+ *    para o atual, soft-delete do dup (ativo=false). Mesmo padrão e mesmas FKs do
+ *    [AutoMergeFornecedores]. Se o fornecedor atual JÁ tinha CNPJ e está TROCANDO,
+ *    mantém o bloqueio original (não é um merge seguro).
+ *
+ * ARQUIVOS TOCADOS:
+ * - client/src/pages/compras/Fornecedores.tsx (onError em atualizarMut)
+ * - server/routers/compras.ts (auto-merge no check de CNPJ dup em atualizarFornecedor)
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo · soft-delete apenas do fornecedor duplicado.
+ */
+
+/**
  * Rev. 4113 — **FIX CODE REVIEW: CHEQUES RECEBIDOS — 3 GAPS (compensado_em + import 2 fases + entry_valor).**
  *
  * CONTEXTO: Code review rejeitou o módulo Cheques Recebidos por 3 gaps funcionais.

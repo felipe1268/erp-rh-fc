@@ -319,7 +319,7 @@ export default function Fornecedores() {
     { enabled: false, retry: false }
   );
   const [dupDialog, setDupDialog] = useState<null | { mode: "block-same"; nome: string } | { mode: "replicate-from-terceira"; terceira: any }>(null);
-  const atualizarMut = trpc.compras.atualizarFornecedor.useMutation({ onSuccess: () => { refetch(); fecharModal(); toast.success("Empresa terceira atualizada!"); } });
+  const atualizarMut = trpc.compras.atualizarFornecedor.useMutation({ onSuccess: () => { refetch(); fecharModal(); toast.success("Empresa terceira atualizada!"); }, onError: (e) => toast.error(e.message) });
   const excluirMut  = trpc.compras.excluirFornecedor.useMutation({ onSuccess: () => { refetch(); toast.success("Empresa terceira desativada."); } });
   const reativarMut = trpc.compras.reativarFornecedor.useMutation({ onSuccess: () => { refetch(); toast.success("Empresa terceira reativada!"); } });
 

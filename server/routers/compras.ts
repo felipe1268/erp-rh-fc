@@ -1603,9 +1603,32 @@ export const comprasRouter = router({
         const candidatos = await db.select().from(fornecedores).where(eq(fornecedores.companyId, (existing as any).companyId));
         const dup = (candidatos as any[]).find(c => c.id !== id && norm(c.cnpj) === novoCnpj && c.ativo !== false);
         if (dup) {
-          throw new TRPCError({
-            code: "CONFLICT",
-            message: `Já existe outro fornecedor cadastrado com este CNPJ (#${dup.id} — ${dup.razaoSocial}). Não é permitido duplicar.`,
+          // Se o fornecedor atual não tinha CNPJ (campo vazio) e o dup é o mesmo
+          // fornecedor cadastrado com outro nome (caso real: HÉLIO BASSANELLI →
+          // BASSANELLI & PELEGRINI LTDA / VALE TOPOGRAFIA), auto-merge em vez de bloquear.
+          // Caso contrário, bloqueia normalmente.
+          const currentCnpjVazio = !norm((existing as any).cnpj);
+          if (!currentCnpjVazio) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: `Já existe outro fornecedor cadastrado com este CNPJ (#${dup.id} — ${dup.razaoSocial}). Não é permitido duplicar.`,
+            });
+          }
+          // Auto-merge: migra FKs do duplicado (dup) para o atual (id), mesmo padrão do [AutoMergeFornecedores].
+          const m = id, d = dup.id;
+          console.log(`[atualizarFornecedor] Auto-merge CNPJ ${novoCnpj}: #${d} (${dup.razaoSocial}) → #${m} (${(existing as any).razaoSocial})`);
+          await (db as any).transaction(async (tx: any) => {
+            await tx.execute(sql`UPDATE compras_ordens              SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+            await tx.execute(sql`UPDATE compras_cotacoes            SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+            await tx.execute(sql`UPDATE compras_cotacao_fornecedores SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+            await tx.execute(sql`UPDATE compras_cotacao_respostas   SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+            await tx.execute(sql`UPDATE compras_cotacao_propostas   SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+            await tx.execute(sql`UPDATE avaliacoes_fornecedor       SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+            await tx.execute(sql`UPDATE financial_cheques           SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+            await tx.execute(sql`UPDATE databook_fichas             SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+            await tx.execute(sql`UPDATE equipamentos_locados        SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+            await tx.execute(sql`UPDATE empresas_terceiras          SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+            await tx.execute(sql`UPDATE fornecedores SET ativo = false WHERE id = ${d}`);
           });
         }
       }
