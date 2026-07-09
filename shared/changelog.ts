@@ -1,4 +1,30 @@
 /**
+ * Rev. 4124 — **PLANILHA DE EXTRATO — RASTREABILIDADE DE NF-e CONCILIADA COM PAGAMENTO (ANÁLISE + HARDENING).**
+ *
+ * CONTEXTO: usuário pediu que notas fiscais identificadas/conciliadas na conciliação bancária (badge
+ * "Conciliada" na tela de Notas Fiscais, com a linha de extrato vinculada) também aparecessem de forma
+ * rastreável na planilha de extrato exportada, de forma automatizada.
+ *
+ * ANÁLISE: o vínculo NF↔pagamento já existe e é o mesmo em toda a base — `fiscal_notes.stmt_line_id`
+ * aponta para `bank_statement_lines.id` (gravado por `fiscalNotes.vincularExtrato`, que também seta
+ * `status='conciliada'`). Esse é o vínculo EXATO usado pela tela de Notas Fiscais pra mostrar o badge
+ * "Conciliada" + descrição/valor/data da linha do banco (`server/routers/fiscalNotes.ts`). A planilha
+ * de extrato (`buildExtratoBancarioBuffer` em `downloadContabilidadeXlsx.ts`) e o relatório
+ * "Extrato_Completo.xlsx" do Pacote Contador (`downloadPacoteContador.ts`) JÁ fazem
+ * `LEFT JOIN fiscal_notes fn ON fn.stmt_line_id = bsl.id` como camada 1 (mais forte que qualquer
+ * heurística de CNPJ/valor) para preencher as colunas "Nº Nota Fiscal"/"CNPJ" — ou seja, a conexão já
+ * é automática: assim que o usuário vincula a NF ao extrato na tela de conciliação/Notas Fiscais, a
+ * próxima geração da planilha já traz o número da NF e o CNPJ do emitente naquela linha, sem nenhuma
+ * ação manual extra.
+ *
+ * HARDENING: os dois JOINs não filtravam `company_id` nem excluíam notas com `status='cancelada'`;
+ * uma NF cancelada que ainda carregasse um `stmt_line_id` residual continuaria "vazando" pra planilha
+ * como se estivesse conciliada. Adicionado `AND fn.company_id = $1 AND fn.status != 'cancelada'` em
+ * ambos os JOINs (`downloadContabilidadeXlsx.ts`, `downloadPacoteContador.ts`).
+ * ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+ */
+
+/**
  * Rev. 4123 — **FIX: PLANILHA/PACOTE DE EXTRATO BANCÁRIO — CONTA DESATIVADA/EXCLUÍDA CONTINUAVA APARECENDO.**
  *
  * CONTEXTO: usuário reportou (com prints de "Contas Bancárias" mostrando 8 contas ativas) que a

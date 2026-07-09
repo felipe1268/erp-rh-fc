@@ -590,6 +590,8 @@ export async function buildExtratoBancarioBuffer(
          ) AS _dc
          LEFT JOIN financial_entries fe    ON fe.id = bsl.entry_id
          LEFT JOIN fiscal_notes fn1        ON fn1.stmt_line_id = bsl.id
+                                         AND fn1.company_id = $1
+                                         AND fn1.status != 'cancelada'
          LEFT JOIN compras_ordens co       ON fe.origem_modulo = 'compra' AND fe.origem_id = co.id
          LEFT JOIN fornecedores forn_oc    ON forn_oc.id = co.fornecedor_id
          -- Match por nome exato (fornecedor_nome)

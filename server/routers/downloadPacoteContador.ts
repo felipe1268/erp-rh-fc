@@ -139,6 +139,7 @@ async function queryData(db: any, companyId: number, di: string, df: string) {
         AND cba.ativo = 1 AND cba."deletedAt" IS NULL
       LEFT JOIN financial_entries fe ON fe.id = bsl.entry_id
       LEFT JOIN fiscal_notes fn ON fn.stmt_line_id = bsl.id
+        AND fn.company_id = $1 AND fn.status != 'cancelada'
       WHERE bsl.company_id = $1 AND bsl.data >= $2 AND bsl.data < $3
         AND bsl.excluido_em IS NULL
         AND COALESCE(cba."tipoConta", 'corrente') NOT ILIKE '%cartao%'

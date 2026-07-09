@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4124** — **PLANILHA DE EXTRATO — RASTREABILIDADE DE NF-e CONCILIADA COM PAGAMENTO (ANÁLISE + HARDENING).** O vínculo NF↔pagamento (`fiscal_notes.stmt_line_id → bank_statement_lines.id`, gravado por `fiscalNotes.vincularExtrato`) já é o mesmo usado no badge "Conciliada" da tela Notas Fiscais E já era a camada 1 (mais forte) do LEFT JOIN que preenche "Nº Nota Fiscal"/"CNPJ" na planilha de extrato e no Extrato_Completo.xlsx do Pacote Contador — ou seja, a conexão já é automática, sem ação manual extra. Hardening: os JOINs não filtravam `company_id` nem excluíam `status='cancelada'`; adicionado em ambos. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+
 - **Rev. 4123** — **FIX: PLANILHA/PACOTE DE EXTRATO BANCÁRIO — CONTA DESATIVADA/EXCLUÍDA CONTINUAVA APARECENDO.** `buildExtratoBancarioBuffer` (contabilidade-xlsx + Pacote Contador) listava contas direto de `company_bank_accounts` sem filtrar `ativo=1 AND deletedAt IS NULL`; toda conta já cadastrada um dia, mesmo desativada/excluída, ganhava aba própria. Mesmo gap no LEFT JOIN de `bank_statement_lines` → `company_bank_accounts` do relatório "Extrato_Completo.xlsx". Corrigido em ambos; planilha agora espelha exatamente as contas ativas de "Contas Bancárias". ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
-- **Rev. 4122** — **CATEGORIAS DE FORNECIMENTO: CRIAR NOVA CATEGORIA COM BLOQUEIO DE DUPLICIDADE.** Painel "Categorias de Fornecimento" do cadastro de fornecedor ganhou campo + botão para criar categoria nova; nome normalizado (acento/caixa/plural) e comparado via Levenshtein contra todas as categorias existentes — igualdade normalizada ou similaridade ≥0,8 bloqueia (sugere a existente). Sem tabela dedicada: reaproveita o array `categorias` já existente em `fornecedores`. ZERO DELETE · ZERO ALTER.
-
 ### 5 one-liners
+
+- **Rev. 4122** — **CATEGORIAS DE FORNECIMENTO: CRIAR NOVA CATEGORIA COM BLOQUEIO DE DUPLICIDADE.** ZERO DELETE · ZERO ALTER.
 
 - **Rev. 4121** — **BUSCA E PREENCHIMENTO AUTOMÁTICO DE CNPJ PARA FORNECEDORES SEM CADASTRO (LOTE 2/N — ANÁLISE REFINADA).** ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4118** — **EXECUÇÃO DO BACKFILL EM MASSA + 2 BUGS CRÍTICOS CORRIGIDOS + CLASSIFICAÇÃO DE CATEGORIA PARA TODOS.** ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4117** — **EMPRESAS TERCEIRAS (FORNECEDORES): FILTROS DE CADASTRO INCOMPLETO + AUTO-COMPLETAR VIA RECEITA FEDERAL/IA.** ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4116 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4117 e anteriores.
 
 ## User preferences
 
