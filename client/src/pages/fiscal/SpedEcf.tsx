@@ -2,7 +2,7 @@
  * SPED ECF — IRPJ / CSLL (Lucro Presumido, anual)
  */
 import { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, Download, Save, FileText, Settings } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Save, FileText, Settings, Info } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -125,6 +125,16 @@ export default function SpedEcf() {
               <span className="ml-auto">Ano {ano} · {finalidade==="1"?"Substituto":"Original"} · Lucro Presumido</span>
             </div>
           )}
+        </div>
+
+        {/* Legenda clara do período a encaminhar */}
+        <div className="rounded-xl border border-blue-200 bg-blue-50/70 px-4 py-3 flex items-start gap-2.5">
+          <Info className="h-4 w-4 text-blue-600 shrink-0 mt-0.5"/>
+          <p className="text-xs text-blue-800 leading-relaxed">
+            <strong>Período a encaminhar: o ANO {ano} COMPLETO</strong> (de 01/01/{ano} até 31/12/{ano}).
+            O SPED ECF não tem versão mensal — é sempre um arquivo por ano. Envie ao contador
+            depois de fechar todos os meses de {ano} no sistema.
+          </p>
         </div>
 
         {/* Parâmetros ECF */}

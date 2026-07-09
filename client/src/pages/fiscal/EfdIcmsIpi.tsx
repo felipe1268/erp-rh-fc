@@ -202,6 +202,24 @@ export default function EfdIcmsIpi() {
           </div>
         )}
 
+        {/* Legenda clara do período a encaminhar */}
+        <div className="rounded-xl border border-blue-200 bg-blue-50/70 px-4 py-3 flex items-start gap-2.5">
+          <Info className="h-4 w-4 text-blue-600 shrink-0 mt-0.5"/>
+          {mes === null ? (
+            <p className="text-xs text-blue-800 leading-relaxed">
+              <strong>Modo "Ano todo" selecionado:</strong> vai gerar um arquivo separado para
+              CADA mês de {ano} (compactados em um .zip). Use isso só se precisar enviar vários
+              meses atrasados de uma vez — no dia a dia, o normal é enviar mês a mês (clique num mês acima).
+            </p>
+          ) : (
+            <p className="text-xs text-blue-800 leading-relaxed">
+              <strong>Período a encaminhar: {MESES_FULL[mes-1]} de {ano}</strong> (mês fechado, referente
+              ao movimento daquele mês). É este o arquivo que normalmente você envia ao contador
+              todo mês, dentro do prazo definido pela Receita Federal.
+            </p>
+          )}
+        </div>
+
         {/* ── Parâmetros da Empresa ───────────────────────────────────── */}
         <Collapsible open={empresaOpen} onOpenChange={setEmpresaOpen}>
           <div className="bg-white rounded-xl border shadow-sm">

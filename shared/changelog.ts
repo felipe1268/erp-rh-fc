@@ -1,4 +1,25 @@
 /**
+ * Rev. 4131 — **SPED ECD/ECF + EFD CONTRIBUIÇÕES/ICMS-IPI: LEGENDA CLARA DO PERÍODO A ENCAMINHAR.**
+ *
+ * CONTEXTO: usuário (leigo em contabilidade) reportou confusão nas 4 telas de contabilidade
+ * fiscal — não ficava claro, olhando a tela, qual período exatamente ele precisava encaminhar ao
+ * contador (SPED ECD/ECF são sempre anuais; EFD Contribuições/ICMS-IPI são mensais com opção
+ * "Ano todo" pra gerar todos os meses de uma vez).
+ *
+ * IMPLEMENTAÇÃO: adicionado um banner azul (ícone Info) logo abaixo do seletor de período em
+ * `SpedEcd.tsx`, `SpedEcf.tsx`, `EfdContribuicoes.tsx` e `EfdIcmsIpi.tsx`, em linguagem simples:
+ * 1. SPED ECD/ECF (anual): reforça que "não existe versão mensal" e que o período é sempre o
+ *    ano completo (01/01 a 31/12).
+ * 2. EFD Contribuições/ICMS-IPI (mensal): texto condicional — com um mês selecionado, explica que
+ *    é o arquivo mensal normal a enviar; com "Ano todo" selecionado, avisa que vai gerar um
+ *    arquivo por mês (zip) e que isso só deve ser usado para enviar vários meses atrasados de vez.
+ * 3. Puramente visual/textual — nenhuma mudança de lógica de geração dos arquivos, schema ou
+ *    regra de negócio.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4130 — **FOTO DO FUNCIONÁRIO: FALLBACK POR CPF PARA CADASTRO DUPLICADO ENTRE EMPRESAS DO GRUPO.**
  *
  * CONTEXTO: usuário reportou que na lista "Funcionários com: [Habilidade]" o Henrique Lopes

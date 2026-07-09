@@ -2,6 +2,7 @@
 - [Conciliação → sub-razões (Controle de Cheques)](conciliacao-fanout-subledgers.md) — conciliar lançamento não baixa cheque sozinho; toda mutation de conciliação deve varrer sub-razões dependentes com match inequívoco + try/catch não-bloqueante.
 - [Cross-company-group employee duplication](employee-cross-company-group-duplication.md) — sibling companies sharing recursos already share employees; re-registering the same CPF in the other company creates status-drifting duplicates.
 - [Dashboard period selector standard](dashboard-period-selector-standard.md) — seletor de mês/ano = white-card (PanoramaFiscal), NUNCA DashHeader gradiente. Regra de ouro do usuário.
+- [Fiscal period legend clarity](fiscal-period-legend-clarity.md) — telas SPED/EFD precisam de legenda em linguagem simples explicando se o período é anual ou mensal; usuário leigo confunde.
 - [Marketing screenshot fictional data](marketing-screenshot-fictional-data.md) — public marketing screenshots of authenticated screens must use 100% fictional seed data, never real tenant PII; revert any temp auth bypass fully.
 - [Unguarded tRPC endpoints](unguarded-trpc-endpoints.md) — frontend route gating ≠ backend authorization; verify role/tenant checks live IN the procedure, not just behind the UI route guard.
 - [Contas a Pagar — base da janela de fechamento](contas-pagar-ciclo-window-basis.md) — agrupar por ciclo de fornecedor usa data da COMPRA (competência), nunca vencimento (varia por OC).
