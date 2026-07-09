@@ -1,4 +1,38 @@
 /**
+ * Rev. 4115 — **CNPJ ÚNICO EM FORNECEDORES: VERIFICAÇÃO EM TEMPO REAL + BLOQUEIO NO SALVAR + FILTRO DE INATIVOS.**
+ *
+ * CONTEXTO: O usuário não conseguia receber aviso claro ao tentar cadastrar/editar
+ * um fornecedor com CNPJ já existente. O diálogo de aviso às vezes não disparava
+ * (paste rápido, timer não executado) e o backend não filtrava fornecedores inativos.
+ *
+ * O QUE FOI FEITO:
+ * 1. `verificarDup` query: passa `excludeFornecedorId: editando ?? undefined` — ao editar,
+ *    o próprio fornecedor não é contado como duplicado.
+ *
+ * 2. useEffect de dup: removida a guarda `editando` que pulava a verificação em modo
+ *    edição. Agora verifica em criação E edição (quando CNPJ mudou em relação ao original).
+ *    Adicionado `originalCnpjRef` para rastrear o CNPJ ao abrir o form de edição.
+ *
+ * 3. `salvar()` agora async: antes de chamar a mutation, verifica duplicidade no momento
+ *    do clique (cobre paste rápido + troca de CNPJ em edição). Se dupDialog já está em
+ *    "block-same", retorna com toast antes mesmo de consultar.
+ *
+ * 4. Backend `verificarCadastroDuplicado` (terceiros.ts): filtro `f.ativo !== false`
+ *    adicionado — fornecedores soft-deleted (inativos) não bloqueiam mais novos cadastros.
+ *
+ * 5. Backend `criarFornecedor` (compras.ts): mesmo filtro `f.ativo !== false` — garante
+ *    que o bloqueio de duplicidade considera apenas fornecedores ATIVOS.
+ *
+ * ARQUIVOS TOCADOS:
+ * - client/src/pages/compras/Fornecedores.tsx (query excludeFornecedorId, useEffect,
+ *   originalCnpjRef, salvar async + guard)
+ * - server/routers/terceiros.ts (filtro ativo em verificarCadastroDuplicado)
+ * - server/routers/compras.ts (filtro ativo em criarFornecedor)
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4114 — **FIX: SALVAR FORNECEDOR — FALHA SILENCIOSA + AUTO-MERGE CNPJ NA EDIÇÃO.**
  *
  * CONTEXTO: "Salvar Alterações" no dialog Editar Empresa Terceira (tela Compras → Fornecedores)

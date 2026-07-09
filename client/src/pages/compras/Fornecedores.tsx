@@ -315,7 +315,7 @@ export default function Fornecedores() {
 
   const criarMut    = trpc.compras.criarFornecedor.useMutation({ onSuccess: () => { refetch(); fecharModal(); toast.success("Empresa terceira cadastrada!"); }, onError: (e) => toast.error(e.message) });
   const verificarDup = trpc.terceiros.empresas.verificarCadastroDuplicado.useQuery(
-    { companyId, cnpj: form.cnpj.replace(/\D/g, "") },
+    { companyId, cnpj: form.cnpj.replace(/\D/g, ""), excludeFornecedorId: editando ?? undefined },
     { enabled: false, retry: false }
   );
   const [dupDialog, setDupDialog] = useState<null | { mode: "block-same"; nome: string } | { mode: "replicate-from-terceira"; terceira: any }>(null);
@@ -424,6 +424,8 @@ export default function Fornecedores() {
     setEditando(f.id);
     setErroCNPJ(null);
     lastFetchedCNPJ.current = "";
+    lastCheckedDupCNPJ.current = "";
+    originalCnpjRef.current = (f.cnpj ?? "").replace(/\D/g, "");
     setModalAberto(true);
   }
 
@@ -548,17 +550,22 @@ export default function Fornecedores() {
 
   // Verificação anti-duplicidade cross-módulo (fornecedores + empresas_terceiras)
   const lastCheckedDupCNPJ = useRef("");
+  // CNPJ original ao abrir edição — usado para detectar se o usuário MUDOU o CNPJ.
+  const originalCnpjRef = useRef("");
   // Reset do cache sempre que o modal abre/fecha — evita pular a checagem ao reabrir o form com o mesmo CNPJ.
   useEffect(() => {
     if (!modalAberto) {
       lastCheckedDupCNPJ.current = "";
+      originalCnpjRef.current = "";
       setDupDialog(null);
     }
   }, [modalAberto]);
   useEffect(() => {
     const cnpjDigits = form.cnpj.replace(/\D/g, "");
-    if (!modalAberto || editando) return;
+    if (!modalAberto) return;
     if (cnpjDigits.length !== 14) return;
+    // Em edição: só verifica se o CNPJ foi alterado em relação ao original.
+    if (editando && cnpjDigits === originalCnpjRef.current) return;
     if (cnpjDigits === lastCheckedDupCNPJ.current) return;
     let cancelled = false;
     const timer = setTimeout(async () => {
@@ -574,7 +581,7 @@ export default function Fornecedores() {
           setDupDialog({ mode: "block-same", nome: `${d.fornecedor.razaoSocial} (#${d.fornecedor.id})` });
           return;
         }
-        if (d.empresaTerceira) {
+        if (d.empresaTerceira && !editando) {
           setDupDialog({ mode: "replicate-from-terceira", terceira: d.empresaTerceira });
         }
       } catch { /* silencioso — não bloqueia o usuário */ }
@@ -620,8 +627,35 @@ export default function Fornecedores() {
     }));
   }
 
-  function salvar() {
+  async function salvar() {
+    // Se o diálogo de duplicidade já foi exibido, não prosseguir.
+    if (dupDialog?.mode === "block-same") {
+      toast.error("Este CNPJ já está cadastrado. Use ou edite o fornecedor existente.");
+      return;
+    }
     if (!form.razaoSocial.trim()) { toast.error("Razão Social é obrigatória."); return; }
+    // Verificação de CNPJ duplicado no momento do clique — cobre casos de
+    // paste rápido onde o timer de 500ms ainda não disparou, ou edição com
+    // troca de CNPJ para um já existente.
+    const cnpjDigits = form.cnpj.replace(/\D/g, "");
+    const cnpjMudou = editando ? cnpjDigits !== originalCnpjRef.current : cnpjDigits.length === 14;
+    if (cnpjDigits.length === 14 && cnpjMudou && cnpjDigits !== lastCheckedDupCNPJ.current) {
+      try {
+        const res = await verificarDup.refetch();
+        const d: any = res.data;
+        lastCheckedDupCNPJ.current = cnpjDigits;
+        if (d?.found) {
+          if (d.fornecedor) {
+            setDupDialog({ mode: "block-same", nome: `${d.fornecedor.razaoSocial} (#${d.fornecedor.id})` });
+            return;
+          }
+          if (d.empresaTerceira && !editando) {
+            setDupDialog({ mode: "replicate-from-terceira", terceira: d.empresaTerceira });
+            return;
+          }
+        }
+      } catch { /* silencioso — backend ainda barra no pior caso */ }
+    }
     // Rev. 3440 — converter campos de ciclo: string→number/null/enum para o backend
     const parseCicloInt = (v: string) => { const n = parseInt(v); return isNaN(n) ? null : n; };
     const cicloFields = {

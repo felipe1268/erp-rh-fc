@@ -166,7 +166,7 @@ export const terceirosRouter = router({
           companyFilter(fornecedores.companyId, input)
         );
         const fornecedorMatch = (forns as any[]).find(f =>
-          norm(f.cnpj) === target && f.id !== input.excludeFornecedorId
+          norm(f.cnpj) === target && f.id !== input.excludeFornecedorId && f.ativo !== false
         );
         const ters = await db.select().from(empresasTerceiras).where(and(
           companyFilter(empresasTerceiras.companyId, input),

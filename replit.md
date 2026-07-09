@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4115** — **CNPJ ÚNICO EM FORNECEDORES: VERIFICAÇÃO EM TEMPO REAL + BLOQUEIO NO SALVAR + FILTRO DE INATIVOS.** `verificarDup` passa `excludeFornecedorId` ao editar; useEffect de dup ativo em edição (com `originalCnpjRef`); `salvar()` async verifica dup no clique (cobre paste rápido); backends `verificarCadastroDuplicado`+`criarFornecedor` filtram `ativo !== false`. ZERO DELETE · ZERO ALTER.
+
 - **Rev. 4114** — **FIX: SALVAR FORNECEDOR — FALHA SILENCIOSA + AUTO-MERGE CNPJ NA EDIÇÃO.** `onError` ausente em `atualizarMut` (Fornecedores.tsx) → erros silenciosos; `atualizarFornecedor` bloqueava update de fornecedor com CNPJ vazio → CNPJ correto: auto-merge em db.transaction (10 FKs + soft-delete do dup), mesmo padrão do [AutoMergeFornecedores]. ZERO DELETE · ZERO ALTER.
 
-- **Rev. 4113** — **FIX CODE REVIEW: CHEQUES RECEBIDOS — 3 GAPS (compensado_em + import 2 fases + entry_valor).** `compensado_em TIMESTAMP` via SyncSchema+; mutation `atualizar` seta/limpa ao mudar status; import dividido em Fase 1 (Analisar, dry-run) + Fase 2 (Confirmar — botão verde só após revisar totais); `fe.valor AS entry_valor` no SELECT do listar + exibe no drilldown. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4113** — **FIX CODE REVIEW: CHEQUES RECEBIDOS — 3 GAPS (compensado_em + import 2 fases + entry_valor).** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4112** — **AUTO-MERGE DE FORNECEDORES DUPLICADOS NO BOOT (MESMO CNPJ OU MESMO NOME).** ZERO DELETE DE DADOS REAIS · ZERO ALTER.
 

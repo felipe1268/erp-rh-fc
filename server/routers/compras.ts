@@ -1486,7 +1486,7 @@ export const comprasRouter = router({
         const existentes = await db.select().from(fornecedores).where(
           eq(fornecedores.companyId, input.companyId),
         );
-        const dup = (existentes as any[]).find(f => (f.cnpj || "").replace(/\D/g, "") === cnpjN);
+        const dup = (existentes as any[]).find(f => (f.cnpj || "").replace(/\D/g, "") === cnpjN && f.ativo !== false);
         if (dup) {
           throw new TRPCError({
             code: "CONFLICT",
