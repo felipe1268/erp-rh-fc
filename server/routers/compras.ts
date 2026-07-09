@@ -1693,6 +1693,159 @@ export const comprasRouter = router({
       return { success: true };
     }),
 
+  // ══════════════════════════════════════════════════════════════
+  // DUPLICIDADES
+  // ══════════════════════════════════════════════════════════════
+
+  listarDuplicatas: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+
+      const todos = await db.select({
+        id: fornecedores.id,
+        razaoSocial: fornecedores.razaoSocial,
+        nomeFantasia: fornecedores.nomeFantasia,
+        cnpj: fornecedores.cnpj,
+        ativo: fornecedores.ativo,
+        cidade: fornecedores.cidade,
+        estado: fornecedores.estado,
+        telefone: fornecedores.telefone,
+        email: fornecedores.email,
+        banco: fornecedores.banco,
+        agencia: fornecedores.agencia,
+        conta: fornecedores.conta,
+        pix: fornecedores.pix,
+        criadoEm: (fornecedores as any).criadoEm,
+      }).from(fornecedores)
+        .where(eq(fornecedores.companyId, input.companyId))
+        .orderBy(asc(fornecedores.razaoSocial));
+
+      const ocRaw = await db.execute(sql`
+        SELECT fornecedor_id, COUNT(*)::int AS cnt
+        FROM compras_ordens
+        WHERE company_id = ${input.companyId}
+        GROUP BY fornecedor_id
+      `);
+      const ocMap = new Map<number, number>();
+      for (const r of (ocRaw as any).rows ?? (ocRaw as any)) {
+        if (r?.fornecedor_id) ocMap.set(Number(r.fornecedor_id), Number(r.cnt ?? 0));
+      }
+
+      type FornItem = typeof todos[0] & { ocCount: number };
+      const enrich = (f: typeof todos[0]): FornItem => ({ ...f, ocCount: ocMap.get(f.id) ?? 0 });
+
+      // ── 1. Duplicatas por CNPJ ──
+      const cnpjMap = new Map<string, typeof todos>();
+      for (const f of todos) {
+        const digits = (f.cnpj ?? "").replace(/\D/g, "");
+        if (digits.length === 14) {
+          if (!cnpjMap.has(digits)) cnpjMap.set(digits, []);
+          cnpjMap.get(digits)!.push(f);
+        }
+      }
+      const cnpjGroups: { tipo: "cnpj"; fornecedores: FornItem[] }[] = [];
+      for (const group of cnpjMap.values()) {
+        if (group.length > 1) cnpjGroups.push({ tipo: "cnpj", fornecedores: group.map(enrich) });
+      }
+
+      // ── 2. Duplicatas por nome (excluindo já encontrados por CNPJ) ──
+      const cnpjDupIds = new Set(cnpjGroups.flatMap(g => g.fornecedores.map(f => f.id)));
+      const restantes = todos.filter(f => !cnpjDupIds.has(f.id));
+
+      function normName(nome: string) {
+        return (nome ?? "")
+          .toUpperCase()
+          .replace(/\b(LTDA|S\.?A\.?|ME|EPP|EIRELI|MICROEMPRESA|INDUSTRIA|INDUSTRIAS|COMERCIO|COMERCIAL|SERVICOS|SERVIÇOS|IND|COM|BRASIL|DO|DA|DE|E|EM|A)\b/g, " ")
+          .replace(/[^A-Z0-9 ]/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+      }
+
+      const nomeGroups: { tipo: "nome"; fornecedores: FornItem[] }[] = [];
+      const usedInNome = new Set<number>();
+
+      for (let i = 0; i < restantes.length; i++) {
+        if (usedInNome.has(restantes[i].id)) continue;
+        const wordsA = new Set(normName(restantes[i].razaoSocial ?? "").split(" ").filter(w => w.length > 2));
+        if (wordsA.size === 0) continue;
+        const group = [restantes[i]];
+        for (let j = i + 1; j < restantes.length; j++) {
+          if (usedInNome.has(restantes[j].id)) continue;
+          const wordsB = normName(restantes[j].razaoSocial ?? "").split(" ").filter(w => w.length > 2);
+          if (wordsB.length === 0) continue;
+          const matchCount = wordsB.filter(w => wordsA.has(w)).length;
+          const minLen = Math.min(wordsA.size, wordsB.length);
+          if (minLen >= 2 && matchCount / minLen >= 0.75) {
+            group.push(restantes[j]);
+            usedInNome.add(restantes[j].id);
+          }
+        }
+        if (group.length > 1) {
+          usedInNome.add(restantes[i].id);
+          nomeGroups.push({ tipo: "nome", fornecedores: group.map(enrich) });
+        }
+      }
+
+      return { cnpj: cnpjGroups, nome: nomeGroups };
+    }),
+
+  unificarFornecedores: protectedProcedure
+    .input(z.object({
+      manterId:   z.number(),
+      descartarId: z.number(),
+      companyId:  z.number(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+
+      const [manter]   = await db.select().from(fornecedores).where(and(eq(fornecedores.id, input.manterId),   eq(fornecedores.companyId, input.companyId)));
+      const [descartar] = await db.select().from(fornecedores).where(and(eq(fornecedores.id, input.descartarId), eq(fornecedores.companyId, input.companyId)));
+      if (!manter || !descartar) throw new TRPCError({ code: "NOT_FOUND", message: "Fornecedor não encontrado." });
+
+      const m = input.manterId;
+      const d = input.descartarId;
+
+      await db.transaction(async tx => {
+        // Migra todas as referências de FK para o registro mantido
+        await tx.execute(sql`UPDATE compras_ordens                SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+        await tx.execute(sql`UPDATE compras_cotacoes              SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+        await tx.execute(sql`UPDATE compras_cotacao_fornecedores  SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+        await tx.execute(sql`UPDATE compras_cotacao_respostas     SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+        await tx.execute(sql`UPDATE compras_cotacao_propostas     SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+        await tx.execute(sql`UPDATE avaliacoes_fornecedor         SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+        await tx.execute(sql`UPDATE financial_cheques             SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+        await tx.execute(sql`UPDATE databook_fichas               SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+        await tx.execute(sql`UPDATE equipamentos_locados          SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+        await tx.execute(sql`UPDATE fatura_locacao_conferencia    SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+        await tx.execute(sql`UPDATE empresas_terceiras            SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+
+        // Enriquece o registro mantido com campos nulos do descartado
+        await tx.execute(sql`
+          UPDATE fornecedores SET
+            cnpj     = COALESCE(NULLIF(cnpj,     ''), ${descartar.cnpj     ?? ""}),
+            telefone = COALESCE(NULLIF(telefone, ''), ${descartar.telefone ?? ""}),
+            email    = COALESCE(NULLIF(email,    ''), ${descartar.email    ?? ""}),
+            cidade   = COALESCE(NULLIF(cidade,   ''), ${descartar.cidade   ?? ""}),
+            estado   = COALESCE(NULLIF(estado,   ''), ${descartar.estado   ?? ""}),
+            banco    = COALESCE(NULLIF(banco,    ''), ${descartar.banco    ?? ""}),
+            agencia  = COALESCE(NULLIF(agencia,  ''), ${descartar.agencia  ?? ""}),
+            conta    = COALESCE(NULLIF(conta,    ''), ${descartar.conta    ?? ""}),
+            pix      = COALESCE(NULLIF(pix,      ''), ${descartar.pix      ?? ""})
+          WHERE id = ${m}
+        `);
+
+        // Soft-delete do descartado
+        await tx.update(fornecedores)
+          .set({ ativo: false, atualizadoEm: new Date().toISOString() })
+          .where(eq(fornecedores.id, d));
+      });
+
+      return { success: true };
+    }),
+
   // Busca dados do CNPJ via BrasilAPI (proxy server-side evita CORS)
   buscarCNPJ: protectedProcedure
     .input(z.object({ cnpj: z.string() }))

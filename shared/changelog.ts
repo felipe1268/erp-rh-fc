@@ -1,4 +1,36 @@
 /**
+ * Rev. 4111 — **EMPRESAS TERCEIRAS: ABA "DUPLICIDADES" — DETECÇÃO E UNIFICAÇÃO DE FORNECEDORES DUPLICADOS.**
+ *
+ * CONTEXTO: Com 1.269 empresas cadastradas, duplicatas por CNPJ idêntico ou nome similar
+ * acumulam e dificultam cotações, OCs e conciliação. O usuário precisava de uma ferramenta
+ * para revisar e decidir (unificar ou manter separado) sem risco de perda de dados.
+ *
+ * O QUE FOI FEITO:
+ * 1. Backend — `listarDuplicatas` (query): detecta 2 tipos de duplicata:
+ *    - CNPJ idêntico (14 dígitos normalizados): certeza de duplicata.
+ *    - Nome similar: remove sufixos (LTDA, S.A., ME, EPP, EIRELI...), normaliza, compara palavras
+ *      com ≥75% de sobreposição (mínimo 2 palavras significativas).
+ *    - Também retorna contagem de OCs por fornecedor (para orientar qual manter).
+ *    - Excluídos grupos por CNPJ do pool de comparação por nome (sem dupla contagem).
+ * 2. Backend — `unificarFornecedores` (mutation): em db.transaction:
+ *    - UPDATE 11 tabelas: compras_ordens, compras_cotacoes, compras_cotacao_fornecedores,
+ *      compras_cotacao_respostas, compras_cotacao_propostas, avaliacoes_fornecedor,
+ *      financial_cheques, databook_fichas, equipamentos_locados, fatura_locacao_conferencia,
+ *      empresas_terceiras — todas as FKs migram de descartarId → manterId.
+ *    - Enriquece o registro mantido: COALESCE preenchendo campos nulos com dados do descartado.
+ *    - Soft-delete do descartado (ativo=false).
+ * 3. Frontend — nova aba "Duplicidades" (laranja) na tela de Fornecedores:
+ *    - Botão com badge numérico mostrando total de grupos encontrados.
+ *    - Card por grupo: badge "Mesmo CNPJ" (vermelho) ou "Nome similar" (âmbar).
+ *    - Cards lado a lado — clique para selecionar qual MANTER (destaque verde "MANTER").
+ *    - Botões por grupo: "Ignorar" (salvo em localStorage, recuperável) e "Unificar".
+ *    - Loading state com Loader2, empty state com CheckCircle2.
+ * 4. localStorage `dup_ignorados`: pares descartados visualmente sem excluir do DB.
+ *
+ * ZERO DELETE · ZERO UPDATE EM TABELAS EXISTENTES SEM ROLLBACK · ZERO ALTER
+ */
+
+/**
  * Rev. 4110 — **FIX: EMPRESAS TERCEIRAS — BOTÃO "REATIVAR" AUSENTE PARA EMPRESAS INATIVAS.**
  *
  * CONTEXTO: A tela de Fornecedores/Empresas Terceiras mostrava badge "Inativo" para empresas

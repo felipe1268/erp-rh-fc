@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4110** — **FIX: EMPRESAS TERCEIRAS — BOTÃO "REATIVAR" AUSENTE PARA EMPRESAS INATIVAS + FIX JOIN `et."companyId"` NA PLANILHA CONTABILIDADE.** Sem botão de reativar: nova mutation `reativarFornecedor` (backend) + botão verde "Reativar" condicional no card da lista (frontend). JOIN em `downloadContabilidadeXlsx.ts` usava `et.company_id` mas coluna no Neon é `et."companyId"` (camelCase sem override Drizzle). ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+- **Rev. 4111** — **EMPRESAS TERCEIRAS: ABA "DUPLICIDADES" — DETECÇÃO E UNIFICAÇÃO DE FORNECEDORES DUPLICADOS.** Nova aba laranja "Duplicidades" na tela de Fornecedores. Backend: `listarDuplicatas` detecta por CNPJ idêntico (certeza) e nome similar (≥75% sobreposição). `unificarFornecedores` migra FKs de 11 tabelas em db.transaction + COALESCE enriquece dados + soft-delete do descartado. Frontend: cards lado a lado, seleção do registro a manter, botão "Ignorar" (localStorage), badge numérico na aba. ZERO DELETE · ZERO ALTER.
 
-- **Rev. 4109** — **PLANO DE CONTAS: COLUNA "CÓDIGO CONTABILIDADE" — MAPEAMENTO COM PLANO DO CONTADOR.** Nova coluna `codigo_contabilidade VARCHAR(50)` em `financial_accounts`. 101 contas mapeadas automaticamente via análise fuzzy do Excel do contador (PRONUS, formato 03.x/04.x). UI: badge índigo na lista + campo editável em "Configurações Avançadas". Router `getAccounts` retorna e `updateAccount` aceita o novo campo. ColFix Rev.4109 garante a coluna no boot. ZERO DELETE · ZERO UPDATE nas tabelas existentes.
+- **Rev. 4110** — **FIX: EMPRESAS TERCEIRAS — BOTÃO "REATIVAR" AUSENTE + FIX JOIN `et."companyId"` NA PLANILHA CONTABILIDADE.** Nova mutation `reativarFornecedor` + botão verde "Reativar" para inativas. JOIN em `downloadContabilidadeXlsx.ts` usava `et.company_id` mas coluna no Neon é `et."companyId"`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 ### 5 one-liners
+
+- **Rev. 4109** — **PLANO DE CONTAS: COLUNA "CÓDIGO CONTABILIDADE" — MAPEAMENTO COM PLANO DO CONTADOR.** ZERO DELETE · ZERO UPDATE nas tabelas existentes.
 
 - **Rev. 4108** — **FIX: CHEQUES RECEBIDOS — DROPDOWN "TODOS OS CLIENTES" LISTAVA SÓ OS COM CHEQUE VINCULADO.** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
