@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4121** — **BUSCA E PREENCHIMENTO AUTOMÁTICO DE CNPJ PARA FORNECEDORES SEM CADASTRO (LOTE 2/N — ANÁLISE REFINADA).** Dos 232 fornecedores ainda sem CNPJ, categorizados ~14 genéricos (descartados), ~70 pessoa física pura (deixados p/ revisão manual do usuário) e 125 candidatos PJ/instituição buscados na web + validados via BrasilAPI. 1ª rodada aprovou ~25 falsos positivos por coincidência de palavras genéricas (ex.: "Prefeitura de Aparecida" → CNPJ de uma Secretaria, não do município); todos auditados manualmente 1 a 1 e REVERTIDOS (`server/scripts/reverterCnpjFalsosPositivosLote2.ts`). Resultado final: 44 fornecedores com CNPJ + enriquecimento automático confirmados; restam 186 p/ revisão manual. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4120** — **BUSCA E PREENCHIMENTO AUTOMÁTICO DE CNPJ PARA FORNECEDORES SEM CADASTRO (LOTE 1/N).** Filtrados 28 dos 238 fornecedores sem CNPJ (company 60002) com sufixo societário claro; buscado CNPJ na web e validado via BrasilAPI (similaridade de nome ≥0,5 + situação ATIVA + CNPJ ainda não usado por outro fornecedor). 10 de 16 candidatos de alta confiança preenchidos com CNPJ + enriquecimento automático (endereço/telefone/categoria via IA, reaproveitando lógica de `autoCompletarFornecedor`); 6 pulados por já existir fornecedor duplicado com o mesmo CNPJ sob outro nome (candidatos a merge manual); restam 228 sem CNPJ (nomes de pessoa física/genéricos, exigem checagem manual). Script: `server/scripts/preencherCnpjFornecedores.ts`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4119** — **FIX: BADGE DE SITUAÇÃO CNPJ FALSO-POSITIVO EM VERMELHO + `regimeTributario` ARRAY QUEBRANDO O SALVAR.** Comparação estrita de `situacaoCodigo` disparava aviso vermelho mesmo com "ATIVA" — agora usa código OU texto. BrasilAPI retorna `regime_tributario` como array de registros anuais (não string) quando não é Simples/MEI — extrai `forma_de_tributacao` do ano mais recente + sanitização defensiva no submit do form (nunca envia array). ZERO DELETE · ZERO ALTER.
-
 ### 5 one-liners
+
+- **Rev. 4119** — **FIX: BADGE DE SITUAÇÃO CNPJ FALSO-POSITIVO EM VERMELHO + `regimeTributario` ARRAY QUEBRANDO O SALVAR.** ZERO DELETE · ZERO ALTER.
 
 - **Rev. 4118** — **EXECUÇÃO DO BACKFILL EM MASSA + 2 BUGS CRÍTICOS CORRIGIDOS + CLASSIFICAÇÃO DE CATEGORIA PARA TODOS.** ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4115** — **CNPJ ÚNICO EM FORNECEDORES: VERIFICAÇÃO EM TEMPO REAL + BLOQUEIO NO SALVAR + FILTRO DE INATIVOS.** ZERO DELETE · ZERO ALTER.
 
-- **Rev. 4114** — **FIX: SALVAR FORNECEDOR — FALHA SILENCIOSA + AUTO-MERGE CNPJ NA EDIÇÃO.** ZERO DELETE · ZERO ALTER.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4113 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4114 e anteriores.
 
 ## User preferences
 

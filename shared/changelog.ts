@@ -1,4 +1,38 @@
 /**
+ * Rev. 4121 — **BUSCA E PREENCHIMENTO AUTOMÁTICO DE CNPJ PARA FORNECEDORES SEM CADASTRO (LOTE 2/N — ANÁLISE REFINADA).**
+ *
+ * CONTEXTO: usuário apontou que o lote 1 (Rev. 4120) foi raso demais — muitos nomes que PARECEM
+ * pessoa física são na verdade PJ/instituições (ex.: "Prefeitura de Aparecida" tem CNPJ real).
+ * Pediu análise mais refinada e processar MUITO mais que os 28 do lote 1.
+ *
+ * EXECUÇÃO: dos 232 fornecedores ainda sem CNPJ (company 60002), categorizados manualmente em
+ * ~14 rótulos genéricos (IMPOSTOS, TESTE 1 etc. — descartados), ~70 nomes de pessoa física puros
+ * (deixados para revisão manual do usuário) e 125 candidatos PJ/instituição (nome fantasia, marca
+ * conhecida, sufixo societário, ou negócio local com contexto de cidade). Buscado CNPJ na web para
+ * os 125 e validado via BrasilAPI com o mesmo script de similaridade da Rev. 4120
+ * (`server/scripts/preencherCnpjFornecedoresLote2.ts`).
+ *
+ * CORREÇÃO DE ROTA IMPORTANTE: a 1ª rodada da similaridade por interseção de palavras (limiar 0,4)
+ * aprovou ~25 falsos positivos por coincidência de 1-2 palavras genéricas (ex.: "DU VIDRO E CIA" →
+ * "D.E DOS REIS FERRAGENS LTDA"; "RECOPEL..." → nome de pessoa física sem relação; "CEMIG" → filial
+ * específica errada; "PREFEITURA DE APARECIDA" → CNPJ de uma Secretaria, não do município). Todos os
+ * 25 foram auditados manualmente 1 a 1 contra o nome oficial retornado e REVERTIDOS antes de finalizar
+ * (script `server/scripts/reverterCnpjFalsosPositivosLote2.ts` — zera CNPJ + campos de enriquecimento
+ * que tinham sido preenchidos, restaurando o estado anterior exato).
+ *
+ * RESULTADO FINAL: 44 fornecedores receberam CNPJ + enriquecimento automático (endereço, telefone,
+ * natureza jurídica, porte, categoria via IA) após auditoria manual — incluindo marcas conhecidas
+ * (Amazon, Claro, Cemig* revertido por ambiguidade, Atlas Schindler, Stripe Brasil, Sem Parar,
+ * PagCerto, iFood Benefícios) e negócios locais (Arte Lajes, Geobase, Helpcad, Jacofer, Marmoraria
+ * Vitória, Nacional Borrachas, Overlog, Renascer Vidraçaria, Richard Transportes etc.). Restam 186
+ * sem CNPJ (pessoa física + institucionais ambíguos/sem match confiável) para revisão manual do
+ * usuário. Scripts e arquivos temporários de análise (`/tmp/*.json`) removidos ao final.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo — apenas UPDATE de campos vazios; falsos positivos revertidos
+ * na íntegra antes do fechamento da revisão.
+ */
+
+/**
  * Rev. 4120 — **BUSCA E PREENCHIMENTO AUTOMÁTICO DE CNPJ PARA FORNECEDORES SEM CADASTRO (LOTE 1/N).**
  *
  * CONTEXTO: usuário pediu para buscar na web o CNPJ de fornecedores sem CNPJ cadastrado, verificar
