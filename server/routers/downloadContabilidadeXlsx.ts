@@ -377,20 +377,28 @@ export async function buildExtratoBancarioBuffer(
       const sai   = valor < 0 ? Math.abs(valor) : 0;
       saldoAcum   = Math.round((saldoAcum + valor) * 100) / 100;
 
-      const fornecedor = line.fornecedor_nome || line.entry_desc || "";
+      // Resolução do nome do fornecedor — 3 fontes em ordem de prioridade:
+      // 1. fe.fornecedor_nome (vinculado no lançamento)
+      // 2. forn_name_from_desc (lookup por CNPJ extraído da descrição do banco)
+      // 3. entry_desc (fallback: descrição completa do banco)
+      const fornecedor = line.fornecedor_nome
+        || String(line.forn_name_from_desc || "")
+        || line.entry_desc
+        || "";
       const categoria  = String(line.categoria || "");
       const codCont    = String(line.codigo_contabilidade || "");
 
-      // Resolução de CNPJ (Rev.4109 — 5 camadas, com fallback textual):
-      // 1. NF via stmt_line_id (já na query)
-      // 2. JOIN direto em empresas_terceiras / fornecedores por razao_social (NEW)
-      // 3. fornecedor da OC (compras_ordens → fornecedores)
-      // 4. comprovante_documento (PIX — CPF/CNPJ do beneficiário)
-      // 5. NF via entry_id ou CNPJ+valor (fallback fuzzy)
+      // Resolução de CNPJ — 6 camadas:
+      // 1. NF via stmt_line_id
+      // 2. cadastro por nome exato (empresas_terceiras/fornecedores)
+      // 3. OC → fornecedor
+      // 4. comprovante PIX
+      // 5. CNPJ extraído da descrição bancária → cadastro (forn_desc/et_desc)
+      // 6. NF por entry_id ou CNPJ+valor (fuzzy)
       let nfNumero = String(line.numero_nf || "");
       let nfCnpj   = String(line.fornecedor_cnpj || "");
 
-      // Camada 2: cadastro direto por nome (NEW)
+      // Camada 2: cadastro direto por nome
       if (!nfCnpj) {
         const cadastro = String(line.cnpj_cadastro || "");
         if (cadastro) nfCnpj = cadastro;
@@ -405,7 +413,17 @@ export async function buildExtratoBancarioBuffer(
         const compDoc = cleanDoc(line.comp_doc || "");
         if (compDoc.length >= 11) nfCnpj = compDoc;
       }
-      // Camada 5a: NF por entry_id
+      // Camada 5: CNPJ extraído da descrição → lookup no cadastro
+      if (!nfCnpj) {
+        const fromDesc = String(line.cnpj_from_desc || "");
+        if (fromDesc) nfCnpj = fromDesc;
+      }
+      // Camada 5b: CNPJ bruto da descrição (mesmo sem match no cadastro)
+      if (!nfCnpj) {
+        const rawDesc = String(line.cnpj_from_desc_raw || "");
+        if (rawDesc.length === 14) nfCnpj = rawDesc;
+      }
+      // Camada 6a: NF por entry_id
       if (!nfNumero && line.entry_id) {
         const byEntry = nfByEntryId.get(Number(line.entry_id));
         if (byEntry) {
@@ -413,7 +431,7 @@ export async function buildExtratoBancarioBuffer(
           if (!nfCnpj) nfCnpj = byEntry.cnpj;
         }
       }
-      // Camada 5b: NF por CNPJ+valor
+      // Camada 6b: NF por CNPJ+valor
       if (!nfCnpj && Math.abs(valor) > 0) {
         const cnpjRef = cleanDoc(line.fornecedor_cnpj || line.entry_cnpj || "");
         if (cnpjRef) {
@@ -551,19 +569,42 @@ export async function buildExtratoBancarioBuffer(
           COALESCE(fn1.numero_nf, '')                         AS numero_nf,
           COALESCE(fn1.emitente_cnpj, fn1.tomador_cnpj, '')  AS fornecedor_cnpj,
           COALESCE(et.cnpj, forn_nm.cnpj, '')                AS cnpj_cadastro,
-          fa.codigo_contabilidade
+          fa.codigo_contabilidade,
+          -- Extrai CNPJ embutido na descrição do banco (ex: "PIX ENVIADO 12.345.678/0001-99...")
+          _dc.cnpj14                                          AS cnpj_from_desc_raw,
+          COALESCE(forn_desc.razao_social, et_desc.razao_social) AS forn_name_from_desc,
+          COALESCE(forn_desc.cnpj,         et_desc.cnpj)         AS cnpj_from_desc
          FROM bank_statement_lines bsl
+         -- Extrai o 1º CNPJ (14 dígitos com /) da descrição bancária
+         CROSS JOIN LATERAL (
+           SELECT COALESCE(
+             regexp_replace(
+               (regexp_match(bsl.descricao, '\\d{2}\\.?\\d{3}\\.?\\d{3}/\\d{4}-\\d{2}'))[1],
+               '[^0-9]', '', 'g'),
+             '') AS cnpj14
+         ) AS _dc
          LEFT JOIN financial_entries fe    ON fe.id = bsl.entry_id
          LEFT JOIN fiscal_notes fn1        ON fn1.stmt_line_id = bsl.id
          LEFT JOIN compras_ordens co       ON fe.origem_modulo = 'compra' AND fe.origem_id = co.id
          LEFT JOIN fornecedores forn_oc    ON forn_oc.id = co.fornecedor_id
+         -- Match por nome exato (fornecedor_nome)
          LEFT JOIN empresas_terceiras et   ON et."companyId" = $1
                                          AND et.deleted_at IS NULL
                                          AND fe.fornecedor_nome IS NOT NULL
                                          AND LOWER(TRIM(et.razao_social)) = LOWER(TRIM(fe.fornecedor_nome))
          LEFT JOIN fornecedores forn_nm    ON forn_nm.company_id = $1
+                                         AND forn_nm.ativo IS NOT FALSE
                                          AND fe.fornecedor_nome IS NOT NULL
                                          AND LOWER(TRIM(forn_nm.razao_social)) = LOWER(TRIM(fe.fornecedor_nome))
+         -- Match por CNPJ extraído da descrição
+         LEFT JOIN fornecedores forn_desc  ON forn_desc.company_id = $1
+                                         AND forn_desc.ativo IS NOT FALSE
+                                         AND _dc.cnpj14 != ''
+                                         AND regexp_replace(COALESCE(forn_desc.cnpj,''),'[^0-9]','','g') = _dc.cnpj14
+         LEFT JOIN empresas_terceiras et_desc ON et_desc."companyId" = $1
+                                         AND et_desc.deleted_at IS NULL
+                                         AND _dc.cnpj14 != ''
+                                         AND regexp_replace(COALESCE(et_desc.cnpj,''),'[^0-9]','','g') = _dc.cnpj14
          LEFT JOIN financial_accounts fa   ON fa.id = fe.conta_id
         WHERE bsl.company_id = $1
           AND bsl.conta_bancaria_id = $2
@@ -600,8 +641,18 @@ export async function buildExtratoBancarioBuffer(
           COALESCE(fn2.numero_nf, '')                         AS numero_nf,
           COALESCE(fn2.emitente_cnpj, fn2.tomador_cnpj, '')  AS fornecedor_cnpj,
           COALESCE(et.cnpj, forn_nm.cnpj, '')                AS cnpj_cadastro,
-          fa.codigo_contabilidade
+          fa.codigo_contabilidade,
+          _dc.cnpj14                                          AS cnpj_from_desc_raw,
+          COALESCE(forn_desc.razao_social, et_desc.razao_social) AS forn_name_from_desc,
+          COALESCE(forn_desc.cnpj,         et_desc.cnpj)         AS cnpj_from_desc
          FROM financial_entries fe
+         CROSS JOIN LATERAL (
+           SELECT COALESCE(
+             regexp_replace(
+               (regexp_match(COALESCE(fe.extrato_banco_descricao, fe.descricao,''), '\\d{2}\\.?\\d{3}\\.?\\d{3}/\\d{4}-\\d{2}'))[1],
+               '[^0-9]', '', 'g'),
+             '') AS cnpj14
+         ) AS _dc
          LEFT JOIN compras_ordens co       ON fe.origem_modulo = 'compra' AND fe.origem_id = co.id
          LEFT JOIN fornecedores forn_oc    ON forn_oc.id = co.fornecedor_id
          LEFT JOIN empresas_terceiras et   ON et."companyId" = $1
@@ -609,8 +660,17 @@ export async function buildExtratoBancarioBuffer(
                                          AND fe.fornecedor_nome IS NOT NULL
                                          AND LOWER(TRIM(et.razao_social)) = LOWER(TRIM(fe.fornecedor_nome))
          LEFT JOIN fornecedores forn_nm    ON forn_nm.company_id = $1
+                                         AND forn_nm.ativo IS NOT FALSE
                                          AND fe.fornecedor_nome IS NOT NULL
                                          AND LOWER(TRIM(forn_nm.razao_social)) = LOWER(TRIM(fe.fornecedor_nome))
+         LEFT JOIN fornecedores forn_desc  ON forn_desc.company_id = $1
+                                         AND forn_desc.ativo IS NOT FALSE
+                                         AND _dc.cnpj14 != ''
+                                         AND regexp_replace(COALESCE(forn_desc.cnpj,''),'[^0-9]','','g') = _dc.cnpj14
+         LEFT JOIN empresas_terceiras et_desc ON et_desc."companyId" = $1
+                                         AND et_desc.deleted_at IS NULL
+                                         AND _dc.cnpj14 != ''
+                                         AND regexp_replace(COALESCE(et_desc.cnpj,''),'[^0-9]','','g') = _dc.cnpj14
          LEFT JOIN financial_accounts fa   ON fa.id = fe.conta_id
          LEFT JOIN fiscal_notes fn2        ON fn2.entry_id = fe.id
                                          AND fn2.company_id = fe.company_id

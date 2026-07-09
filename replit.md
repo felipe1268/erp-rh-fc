@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4116** — **PLANILHA CONTABILIDADE: CNPJ + NOME FORNECEDOR — EXTRAÇÃO DA DESCRIÇÃO DO BANCO (6 CAMADAS).** CROSS JOIN LATERAL extrai CNPJ (regex XX.XXX.XXX/XXXX-XX) da descrição bancária; JOIN em fornecedores+terceiras pelo CNPJ extraído → `forn_name_from_desc`+`cnpj_from_desc`; buildSheet: 6 camadas CNPJ + 3 camadas nome. ZERO DELETE · ZERO ALTER.
+
 - **Rev. 4115** — **CNPJ ÚNICO EM FORNECEDORES: VERIFICAÇÃO EM TEMPO REAL + BLOQUEIO NO SALVAR + FILTRO DE INATIVOS.** `verificarDup` passa `excludeFornecedorId` ao editar; useEffect de dup ativo em edição (com `originalCnpjRef`); `salvar()` async verifica dup no clique (cobre paste rápido); backends `verificarCadastroDuplicado`+`criarFornecedor` filtram `ativo !== false`. ZERO DELETE · ZERO ALTER.
 
-- **Rev. 4114** — **FIX: SALVAR FORNECEDOR — FALHA SILENCIOSA + AUTO-MERGE CNPJ NA EDIÇÃO.** `onError` ausente em `atualizarMut` (Fornecedores.tsx) → erros silenciosos; `atualizarFornecedor` bloqueava update de fornecedor com CNPJ vazio → CNPJ correto: auto-merge em db.transaction (10 FKs + soft-delete do dup), mesmo padrão do [AutoMergeFornecedores]. ZERO DELETE · ZERO ALTER.
-
 ### 5 one-liners
+
+- **Rev. 4114** — **FIX: SALVAR FORNECEDOR — FALHA SILENCIOSA + AUTO-MERGE CNPJ NA EDIÇÃO.** ZERO DELETE · ZERO ALTER.
 
 - **Rev. 4113** — **FIX CODE REVIEW: CHEQUES RECEBIDOS — 3 GAPS (compensado_em + import 2 fases + entry_valor).** ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4111** — **EMPRESAS TERCEIRAS: ABA "DUPLICIDADES" (VERSÃO INICIAL MANUAL).** Supercedida pela Rev. 4112 (auto-merge). ZERO DELETE · ZERO ALTER.
 
 - **Rev. 4110** — **FIX: EMPRESAS TERCEIRAS — BOTÃO "REATIVAR" AUSENTE + FIX JOIN `et."companyId"` NA PLANILHA CONTABILIDADE.** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
-- **Rev. 4109** — **PLANO DE CONTAS: COLUNA "CÓDIGO CONTABILIDADE" — MAPEAMENTO COM PLANO DO CONTADOR.** ZERO DELETE · ZERO UPDATE nas tabelas existentes.
 
 - **Rev. 4108** — **FIX: CHEQUES RECEBIDOS — DROPDOWN "TODOS OS CLIENTES" LISTAVA SÓ OS COM CHEQUE VINCULADO.** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 

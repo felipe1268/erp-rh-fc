@@ -1,4 +1,31 @@
 /**
+ * Rev. 4116 — **PLANILHA CONTABILIDADE: CNPJ + NOME FORNECEDOR — EXTRAÇÃO DA DESCRIÇÃO DO BANCO (6 CAMADAS).**
+ *
+ * CONTEXTO: Muitas linhas do extrato exportado apareciam com "Sem CNPJ cadastrado" mesmo
+ * quando a descrição do banco continha o CNPJ embutido (ex: "PIX ENVIADO 29.353.906/0001-71…").
+ * O nome do fornecedor também ficava vazio quando a line não tinha entry vinculada.
+ *
+ * O QUE FOI FEITO:
+ * 1. SQL BSL + financial_entries: CROSS JOIN LATERAL que extrai o primeiro CNPJ no formato
+ *    XX.XXX.XXX/XXXX-XX da descrição bancária via regexp_match + regexp_replace.
+ * 2. JOIN `forn_desc` (fornecedores) + `et_desc` (empresas_terceiras) pelo CNPJ extraído
+ *    → retorna `forn_name_from_desc` e `cnpj_from_desc` para uso no buildSheet.
+ * 3. buildSheet — Resolução do Fornecedor: fe.fornecedor_nome → forn_name_from_desc → entry_desc.
+ * 4. buildSheet — Resolução CNPJ agora tem 6 camadas:
+ *    (1) NF stmt_line_id  (2) cadastro por nome  (3) OC→fornecedor  (4) PIX comprovante_documento
+ *    (5a) cnpj_from_desc (cadastro) · (5b) cnpj_from_desc_raw (bruto da descrição)
+ *    (6a) NF entry_id · (6b) NF CNPJ+valor fuzzy
+ *
+ * RESULTADO: linhas com CNPJ no texto do banco → preenchidas automaticamente.
+ * Fornecedores cadastrados com aquele CNPJ → nome também puxado.
+ *
+ * ARQUIVOS TOCADOS:
+ * - server/routers/downloadContabilidadeXlsx.ts (ambas as queries + buildSheet)
+ *
+ * ZERO DELETE · ZERO ALTER.
+ */
+
+/**
  * Rev. 4115 — **CNPJ ÚNICO EM FORNECEDORES: VERIFICAÇÃO EM TEMPO REAL + BLOQUEIO NO SALVAR + FILTRO DE INATIVOS.**
  *
  * CONTEXTO: O usuário não conseguia receber aviso claro ao tentar cadastrar/editar
