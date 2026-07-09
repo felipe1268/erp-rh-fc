@@ -782,27 +782,44 @@ export default function FinanceiroPlanoDeConta() {
                 </Popover>
               </div>
 
-              {/* ── Código (auto) + Nome ── */}
-              <div className="grid grid-cols-[110px,1fr] gap-3">
-                <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-                    Código
-                    <span className="ml-1 text-[10px] normal-case font-normal text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-200">auto</span>
-                  </p>
-                  <div className="h-12 flex items-center px-3 rounded-xl bg-slate-100 border border-slate-200 font-mono text-base text-slate-700 select-none">
-                    {form.codigo || <span className="text-slate-400 text-sm">—</span>}
+              {/* ── Códigos: interno (read-only) + contabilidade (editável) ── */}
+              <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3 space-y-2">
+                <p className="text-[11px] font-semibold text-indigo-700 uppercase tracking-wide flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-full bg-indigo-400 inline-block" />
+                  Códigos
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-[11px] text-slate-500 mb-1 flex items-center gap-1">
+                      Código interno
+                      <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-200 font-medium">auto</span>
+                    </p>
+                    <div className="h-10 flex items-center px-3 rounded-lg bg-white border border-slate-200 font-mono text-sm text-slate-500 select-none cursor-not-allowed">
+                      {form.codigo || <span className="text-slate-300">—</span>}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-slate-500 mb-1">Código contabilidade</p>
+                    <Input
+                      className="h-10 rounded-lg bg-white border-indigo-200 focus:border-indigo-400 font-mono text-sm"
+                      value={form.codigoContabilidade}
+                      onChange={e => setForm(f => ({ ...f, codigoContabilidade: e.target.value }))}
+                      placeholder="ex: 04.1.3.04.013"
+                    />
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Nome *</p>
-                  <Input
-                    className="h-12 text-base rounded-xl bg-slate-50 border-slate-200 focus:bg-white"
-                    value={form.nome}
-                    onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
-                    placeholder="Ex: Receitas de Obras"
-                    autoFocus
-                  />
-                </div>
+              </div>
+
+              {/* ── Nome ── */}
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Nome *</p>
+                <Input
+                  className="h-12 text-base rounded-xl bg-slate-50 border-slate-200 focus:bg-white"
+                  value={form.nome}
+                  onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
+                  placeholder="Ex: Receitas de Obras"
+                  autoFocus
+                />
               </div>
 
               {/* ── Tipo — grid de chips ── */}
@@ -849,16 +866,6 @@ export default function FinanceiroPlanoDeConta() {
                 </button>
                 {showAvancado && (
                   <div className="px-4 pb-4 pt-1 space-y-3 border-t border-slate-100 bg-slate-50">
-                    <div>
-                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Código Contabilidade</p>
-                      <p className="text-[11px] text-slate-400 mb-1.5">Código do plano de contas do contador — usado nas exportações contábeis.</p>
-                      <Input
-                        className="h-10 rounded-lg bg-white font-mono"
-                        value={form.codigoContabilidade}
-                        onChange={e => setForm(f => ({ ...f, codigoContabilidade: e.target.value }))}
-                        placeholder="Ex: 04.1.3.04.013"
-                      />
-                    </div>
                     <div>
                       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Classificação DRE</p>
                       <Input
