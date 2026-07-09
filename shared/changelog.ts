@@ -1,4 +1,28 @@
 /**
+ * Rev. 4130 — **FOTO DO FUNCIONÁRIO: FALLBACK POR CPF PARA CADASTRO DUPLICADO ENTRE EMPRESAS DO GRUPO.**
+ *
+ * CONTEXTO: usuário reportou que na lista "Funcionários com: [Habilidade]" o Henrique Lopes
+ * aparecia sem foto (só iniciais "HL"), enquanto os demais mostravam foto real. Investigação
+ * mostrou 2 cadastros de employees para a mesma pessoa (mesmo CPF), um em cada empresa irmã do
+ * grupo (companyId 60002 com foto, companyId 60005 sem foto) — padrão conhecido de duplicação
+ * entre empresas que compartilham recursos (ver `employee-cross-company-group-duplication.md`).
+ * A habilidade estava atribuída ao cadastro SEM foto.
+ *
+ * IMPLEMENTAÇÃO:
+ * 1. `server/routers/skills.ts` (`searchBySkill`) — select passou a trazer `empCpf`
+ *    (`employees.cpf`) além dos campos já existentes.
+ * 2. Após a query principal, para as linhas cujo `empFotoUrl` veio nulo, busca-se em `employees`
+ *    (sem filtro de empresa) outro registro com o MESMO CPF (normalizado via
+ *    `regexp_replace(cpf,'[^0-9]','','g')`, pois o CPF é gravado em formatos mistos) que possua
+ *    `fotoUrl` preenchida, e usa essa foto como fallback. `empCpf` é removido do payload antes de
+ *    retornar (não é um campo exposto na tela).
+ * 3. Nenhuma mudança de schema; nenhuma regra de negócio alterada — apenas enriquecimento de
+ *    leitura para exibição de avatar.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4129 — **REPAGINAÇÃO DO GRID DE HABILIDADES: CATEGORIA + FOTOS DOS COLABORADORES NO CARD.**
  *
  * CONTEXTO: usuário reportou que a tela "Cadastro de Habilidades" estava "muito ruim de

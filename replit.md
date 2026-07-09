@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4130** — **FOTO DO FUNCIONÁRIO: FALLBACK POR CPF PARA CADASTRO DUPLICADO ENTRE EMPRESAS DO GRUPO.** Usuário reportou funcionário (Henrique Lopes) aparecendo sem foto na lista "Funcionários com: [Habilidade]". Causa: cadastro duplicado (mesmo CPF) entre 2 empresas irmãs do grupo — a habilidade estava atribuída ao registro sem foto. `searchBySkill` (skills.ts) agora, quando `empFotoUrl` vem nulo, busca outro registro de `employees` com o mesmo CPF (normalizado) que tenha foto, e usa como fallback. Zero mudança de schema/regra de negócio. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4129** — **REPAGINAÇÃO DO GRID DE HABILIDADES: CATEGORIA + FOTOS DOS COLABORADORES NO CARD.** Usuário achou a tela "Cadastro de Habilidades" difícil de enxergar (categoria discreta, sem indicação visual de quem estava atribuído). `searchBySkill` (skills.ts) passou a trazer `empFotoUrl`; `Habilidades.tsx` ganhou query `allAssignmentsQuery` + memo `assignmentsBySkill` pra agrupar no client, cabeçalho de categoria mais forte (ícone em badge azul, título maior), e cada card ganhou badge de categoria + pilha de avatares (foto real, fallback iniciais, até 6 + "+N" overflow, clicável) no lugar do simples contador. Zero mudança de schema/regra de negócio. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4128** — **DIÁLOGO "ATRIBUIR HABILIDADE" MOSTRA FOTO + OBRA ATUAL DO FUNCIONÁRIO.** `Habilidades.tsx`: busca de funcionário no diálogo "Atribuir: [Habilidade]" ganhou `Avatar` (foto real via `fotoUrl`, fallback com iniciais) + linha secundária com a obra atual (`obraAtualNome`, já enriquecido pelo `employees.list`/`getEmployees` via join com `obra_funcionarios` ativo), ou "Sem obra alocada" quando não há alocação. Zero mudança de backend/schema — só exibição de dados já retornados pela API. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4128** — **DIÁLOGO "ATRIBUIR HABILIDADE" MOSTRA FOTO + OBRA ATUAL DO FUNCIONÁRIO.** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4127** — **CNPJ OBRIGATÓRIO PARA CRIAR NOVO FORNECEDOR/EMPRESA TERCEIRA.** ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4124** — **PLANILHA DE EXTRATO — RASTREABILIDADE DE NF-e CONCILIADA COM PAGAMENTO (ANÁLISE + HARDENING).** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
-- **Rev. 4123** — **FIX: PLANILHA/PACOTE DE EXTRATO BANCÁRIO — CONTA DESATIVADA/EXCLUÍDA CONTINUAVA APARECENDO.** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4122 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4123 e anteriores.
 
 ## User preferences
 

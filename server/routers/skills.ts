@@ -263,13 +263,44 @@ export const skillsRouter = router({
           empStatus: employees.status,
           empCompanyId: employees.companyId,
           empFotoUrl: employees.fotoUrl,
+          empCpf: employees.cpf,
         })
         .from(employeeSkills)
         .innerJoin(skills, eq(employeeSkills.skillId, skills.id))
         .innerJoin(employees, eq(employeeSkills.employeeId, employees.id))
         .where(and(...conditions))
         .orderBy(asc(skills.nome), asc(employees.nomeCompleto));
-      return rows;
+
+      // Fallback de foto: cadastro duplicado entre empresas do mesmo grupo
+      // (mesmo CPF) — se o registro atribuído não tem foto, usa a foto de
+      // outro registro com o mesmo CPF que a tenha.
+      const cpfsSemFoto = Array.from(new Set(
+        rows.filter(r => !r.empFotoUrl && r.empCpf).map(r => r.empCpf as string)
+      ));
+      if (cpfsSemFoto.length > 0) {
+        const cleanCpfs = cpfsSemFoto.map(c => c.replace(/[^0-9]/g, ""));
+        const fotoPorCpf = await db
+          .select({ cpf: employees.cpf, fotoUrl: employees.fotoUrl })
+          .from(employees)
+          .where(and(
+            sql`regexp_replace(${employees.cpf}, '[^0-9]', '', 'g') IN (${sql.join(cleanCpfs.map(c => sql`${c}`), sql`, `)})`,
+            sql`${employees.fotoUrl} IS NOT NULL`,
+          ));
+        const mapaFoto = new Map<string, string>();
+        for (const f of fotoPorCpf) {
+          const clean = (f.cpf || "").replace(/[^0-9]/g, "");
+          if (clean && f.fotoUrl && !mapaFoto.has(clean)) mapaFoto.set(clean, f.fotoUrl);
+        }
+        for (const r of rows) {
+          if (!r.empFotoUrl && r.empCpf) {
+            const clean = r.empCpf.replace(/[^0-9]/g, "");
+            const foto = mapaFoto.get(clean);
+            if (foto) r.empFotoUrl = foto;
+          }
+        }
+      }
+
+      return rows.map(({ empCpf, ...rest }) => rest);
     }),
 
   // Summary: count employees per skill (for obra cards)
