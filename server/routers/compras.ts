@@ -3669,6 +3669,142 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       return Array.from(set).sort();
     }),
 
+  // Rev. 4117 — lista fornecedores com CNPJ preenchido mas ficha incompleta
+  // (falta endereço/cidade/telefone/email OU sem categoria), candidatos ao
+  // preenchimento automático via Receita Federal + classificação por IA.
+  autoCompletarCandidatos: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      await _assertCompanyAccess(ctx.user, input.companyId);
+      const db = await getDb();
+      const rows = await db.select().from(fornecedores)
+        .where(and(
+          eq(fornecedores.companyId, input.companyId),
+          or(eq(fornecedores.ativo, true), isNull(fornecedores.ativo)),
+        ));
+      const incompletos = (rows as any[]).filter(f => {
+        const cnpjLimpo = (f.cnpj || "").replace(/\D/g, "");
+        if (cnpjLimpo.length !== 14) return false;
+        const semEndereco = !f.endereco || !f.cidade || !f.telefone && !f.email;
+        const semCategoria = !Array.isArray(f.categorias) || f.categorias.length === 0;
+        return semEndereco || semCategoria;
+      });
+      return incompletos.map(f => ({ id: f.id, razaoSocial: f.razaoSocial, cnpj: f.cnpj }));
+    }),
+
+  // Rev. 4117 — completa 1 fornecedor: busca dados oficiais na Receita Federal
+  // (BrasilAPI, com fallback ReceitaWS) e preenche SOMENTE os campos vazios
+  // (nunca sobrescreve dado já cadastrado). Se não houver categoria, classifica
+  // via IA escolhendo entre as categorias já usadas pela empresa (ou "Materiais
+  // diversos" como fallback), com base na atividade principal do CNPJ.
+  autoCompletarFornecedor: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const [existing] = await db.select().from(fornecedores).where(eq(fornecedores.id, input.id));
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Fornecedor não encontrado." });
+      await _assertCompanyAccess(ctx.user, (existing as any).companyId);
+      const cnpjLimpo = ((existing as any).cnpj || "").replace(/\D/g, "");
+      if (cnpjLimpo.length !== 14) {
+        return { id: input.id, skipped: true, motivo: "sem_cnpj" };
+      }
+
+      async function buscarBrasilAPI() {
+        try {
+          const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`, { signal: AbortSignal.timeout(8000) });
+          if (!res.ok) return null;
+          const d = await res.json() as any;
+          return {
+            endereco: d.logradouro ? `${d.descricao_tipo_de_logradouro ?? ""} ${d.logradouro}`.trim() : "",
+            numero: d.numero ?? "",
+            complemento: d.complemento ?? "",
+            bairro: d.bairro ?? "",
+            cidade: d.municipio ?? "",
+            estado: d.uf ?? "",
+            cep: d.cep ?? "",
+            telefone: d.ddd_telefone_1 ?? "",
+            email: d.email ?? "",
+            naturezaJuridica: d.natureza_juridica ?? "",
+            porte: d.porte ?? "",
+            atividadePrincipal: d.cnae_fiscal_descricao ?? "",
+            dataAbertura: d.data_inicio_atividade ?? "",
+          };
+        } catch { return null; }
+      }
+      async function buscarReceitaWS() {
+        try {
+          const res = await fetch(`https://receitaws.com.br/v1/cnpj/${cnpjLimpo}`, { signal: AbortSignal.timeout(8000) });
+          if (!res.ok) return null;
+          const d = await res.json() as any;
+          if (d.status === "ERROR") return null;
+          return {
+            endereco: d.logradouro ?? "",
+            numero: d.numero ?? "",
+            complemento: d.complemento ?? "",
+            bairro: d.bairro ?? "",
+            cidade: d.municipio ?? "",
+            estado: d.uf ?? "",
+            cep: (d.cep ?? "").replace(/[.\-]/g, ""),
+            telefone: d.telefone ?? "",
+            email: d.email ?? "",
+            naturezaJuridica: d.natureza_juridica ?? "",
+            porte: d.porte ?? "",
+            atividadePrincipal: d.atividade_principal?.[0]?.text ?? "",
+            dataAbertura: d.abertura ?? "",
+          };
+        } catch { return null; }
+      }
+
+      const dadosOficiais = await buscarBrasilAPI() || await buscarReceitaWS();
+      const patch: Record<string, any> = {};
+      if (dadosOficiais) {
+        const campos = ["endereco","numero","complemento","bairro","cidade","estado","cep","telefone","email","naturezaJuridica","porte","atividadePrincipal","dataAbertura"] as const;
+        for (const campo of campos) {
+          const atual = (existing as any)[campo];
+          const novo = (dadosOficiais as any)[campo];
+          if ((!atual || String(atual).trim() === "") && novo) patch[campo] = novo;
+        }
+      }
+
+      const semCategoria = !Array.isArray((existing as any).categorias) || (existing as any).categorias.length === 0;
+      let categoriaEscolhida: string | null = null;
+      if (semCategoria) {
+        const outrasCategorias = await db.select({ categorias: fornecedores.categorias })
+          .from(fornecedores)
+          .where(and(eq(fornecedores.companyId, (existing as any).companyId), eq(fornecedores.ativo, true)));
+        const set = new Set<string>();
+        outrasCategorias.forEach((r: any) => { if (Array.isArray(r.categorias)) r.categorias.forEach((c: string) => set.add(c)); });
+        const listaCategorias = Array.from(set).sort();
+        const atividade = patch.atividadePrincipal || (existing as any).atividadePrincipal || "";
+        try {
+          if (listaCategorias.length > 0) {
+            const result = await invokeLLM({
+              messages: [{
+                role: "user",
+                content: `Classifique este fornecedor de uma empresa de construção civil em UMA categoria da lista abaixo (responda só o nome exato da categoria, sem explicações).\n\nFornecedor: ${(existing as any).razaoSocial}\nAtividade principal (CNAE): ${atividade || "desconhecida"}\n\nCategorias disponíveis:\n${listaCategorias.join("\n")}\n\nSe nenhuma categoria da lista fizer sentido, responda exatamente: Materiais diversos`,
+              }],
+              maxTokens: 30,
+            });
+            const conteudo = result.choices?.[0]?.message?.content;
+            const resposta = (typeof conteudo === "string" ? conteudo : "").trim();
+            categoriaEscolhida = listaCategorias.find(c => c.toLowerCase() === resposta.toLowerCase()) || "Materiais diversos";
+          } else {
+            categoriaEscolhida = "Materiais diversos";
+          }
+        } catch {
+          categoriaEscolhida = "Materiais diversos";
+        }
+        patch.categorias = [categoriaEscolhida];
+      }
+
+      if (Object.keys(patch).length === 0) {
+        return { id: input.id, skipped: true, motivo: "nada_a_preencher" };
+      }
+      patch.atualizadoEm = new Date().toISOString();
+      await db.update(fornecedores).set(patch).where(eq(fornecedores.id, input.id));
+      return { id: input.id, skipped: false, camposPreenchidos: Object.keys(patch).filter(k => k !== "atualizadoEm"), categoria: categoriaEscolhida };
+    }),
+
   // ══════════════════════════════════════════════════════════════
   // SOLICITAÇÕES DE COMPRA (SC)
   // ══════════════════════════════════════════════════════════════

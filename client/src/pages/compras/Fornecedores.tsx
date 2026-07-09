@@ -254,6 +254,12 @@ export default function Fornecedores() {
   const [busca, setBusca]       = useState("");
   const [filtroCateg, setFiltroCateg] = useState("todas");
   const [apenasAtivos, setApenasAtivos] = useState(true);
+  const [filtroSemCnpj, setFiltroSemCnpj] = useState(false);
+  const [filtroSemCategoria, setFiltroSemCategoria] = useState(false);
+  const [filtroFichaIncompleta, setFiltroFichaIncompleta] = useState(false);
+  const [autoCompletando, setAutoCompletando] = useState(false);
+  const [autoCompletarProgresso, setAutoCompletarProgresso] = useState(0);
+  const [autoCompletarTotal, setAutoCompletarTotal] = useState(0);
 
   // Avaliação
   const [modalAvalId, setModalAvalId] = useState<number | null>(null);
@@ -271,6 +277,10 @@ export default function Fornecedores() {
     { companyId }, { enabled: !!companyId }
   );
 
+  const isSemCnpj = (f: any) => !(f.cnpj || "").replace(/\D/g, "");
+  const isSemCategoria = (f: any) => !Array.isArray(f.categorias) || f.categorias.length === 0;
+  const isFichaIncompleta = (f: any) => !f.cidade || !f.endereco || (!f.telefone && !f.email);
+
   const lista = useMemo(() => {
     let r = fornecedores;
     if (busca) {
@@ -285,8 +295,38 @@ export default function Fornecedores() {
     if (filtroCateg !== "todas") {
       r = r.filter(f => Array.isArray(f.categorias) && (f.categorias as string[]).includes(filtroCateg));
     }
+    if (filtroSemCnpj) r = r.filter(isSemCnpj);
+    if (filtroSemCategoria) r = r.filter(isSemCategoria);
+    if (filtroFichaIncompleta) r = r.filter(isFichaIncompleta);
     return r;
-  }, [fornecedores, busca, filtroCateg]);
+  }, [fornecedores, busca, filtroCateg, filtroSemCnpj, filtroSemCategoria, filtroFichaIncompleta]);
+
+  const candidatosAutoCompletarQuery = trpc.compras.autoCompletarCandidatos.useQuery(
+    { companyId }, { enabled: !!companyId }
+  );
+  const autoCompletarMut = trpc.compras.autoCompletarFornecedor.useMutation();
+
+  const rodarAutoCompletar = async () => {
+    const candidatos = candidatosAutoCompletarQuery.data || [];
+    if (candidatos.length === 0) { toast.info("Nenhum fornecedor com CNPJ e ficha incompleta encontrado."); return; }
+    setAutoCompletando(true);
+    setAutoCompletarTotal(candidatos.length);
+    setAutoCompletarProgresso(0);
+    let sucesso = 0, semAlteracao = 0, falhas = 0;
+    for (let i = 0; i < candidatos.length; i++) {
+      try {
+        const r = await autoCompletarMut.mutateAsync({ id: candidatos[i].id });
+        if (r.skipped) semAlteracao++; else sucesso++;
+      } catch {
+        falhas++;
+      }
+      setAutoCompletarProgresso(Math.round(((i + 1) / candidatos.length) * 100));
+    }
+    await refetch();
+    await candidatosAutoCompletarQuery.refetch();
+    toast.success(`Concluído! ${sucesso} atualizado(s), ${semAlteracao} sem alteração, ${falhas} falha(s).`);
+    setTimeout(() => { setAutoCompletando(false); setAutoCompletarProgresso(0); }, 800);
+  };
 
   // Modal
   const [modalAberto, setModalAberto] = useState(false);
@@ -791,6 +831,42 @@ export default function Fornecedores() {
             Apenas ativos
           </label>
           <span className="text-xs text-slate-400">{lista.length} resultado{lista.length !== 1 ? "s" : ""}</span>
+        </div>
+
+        {/* Rev. 4117 — filtros de cadastro incompleto + auto-completar via Receita Federal/IA */}
+        <div className="flex flex-wrap gap-3 items-center bg-amber-50/60 border border-amber-200 rounded-lg px-3 py-2">
+          <span className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Cadastro incompleto:</span>
+          <label className="flex items-center gap-1.5 text-sm text-slate-700 cursor-pointer select-none">
+            <input type="checkbox" checked={filtroSemCnpj} onChange={e => setFiltroSemCnpj(e.target.checked)} className="rounded" />
+            Sem CNPJ ({fornecedores.filter(isSemCnpj).length})
+          </label>
+          <label className="flex items-center gap-1.5 text-sm text-slate-700 cursor-pointer select-none">
+            <input type="checkbox" checked={filtroSemCategoria} onChange={e => setFiltroSemCategoria(e.target.checked)} className="rounded" />
+            Sem categoria ({fornecedores.filter(isSemCategoria).length})
+          </label>
+          <label className="flex items-center gap-1.5 text-sm text-slate-700 cursor-pointer select-none">
+            <input type="checkbox" checked={filtroFichaIncompleta} onChange={e => setFiltroFichaIncompleta(e.target.checked)} className="rounded" />
+            Ficha incompleta ({fornecedores.filter(isFichaIncompleta).length})
+          </label>
+          <div className="flex-1" />
+          <Button
+            size="sm"
+            disabled={autoCompletando || (candidatosAutoCompletarQuery.data || []).length === 0}
+            onClick={rodarAutoCompletar}
+            className="relative overflow-hidden bg-emerald-600 hover:bg-emerald-700 text-white h-8 text-xs"
+          >
+            {autoCompletando && (
+              <span
+                className="absolute inset-y-0 left-0 bg-white/15"
+                style={{ width: `${autoCompletarProgresso}%`, transition: "width .2s" }}
+              />
+            )}
+            <span className="relative z-10">
+              {autoCompletando
+                ? `Completando... ${autoCompletarProgresso}%`
+                : `Completar automaticamente (${(candidatosAutoCompletarQuery.data || []).length} c/ CNPJ)`}
+            </span>
+          </Button>
         </div>
 
         {/* Lista */}

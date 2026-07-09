@@ -1,4 +1,36 @@
 /**
+ * Rev. 4117 — **EMPRESAS TERCEIRAS (FORNECEDORES): FILTROS DE CADASTRO INCOMPLETO + AUTO-COMPLETAR VIA RECEITA FEDERAL/IA.**
+ *
+ * CONTEXTO: Levantamento na base (company 60002) mostrou 1257 fornecedores ativos: 242 sem CNPJ,
+ * 581 sem categoria, 941 com ficha incompleta (endereço/contato) — só 195 totalmente completos.
+ * Usuário aprovou completar automaticamente SÓ quem já tem CNPJ (evita inventar dado).
+ *
+ * O QUE FOI FEITO:
+ * 1. Backend (server/routers/compras.ts):
+ *    - `autoCompletarCandidatos` (query): lista fornecedores com CNPJ válido MAS faltando
+ *      endereco/cidade/telefone+email OU sem nenhuma categoria.
+ *    - `autoCompletarFornecedor` (mutation): reusa o fetch BrasilAPI→fallback ReceitaWS já
+ *      existente em `buscarCNPJ`; faz PATCH só nos campos VAZIOS (nunca sobrescreve dado existente).
+ *      Se não tem categoria, chama invokeLLM pedindo pra escolher dentre as categorias JÁ
+ *      cadastradas na empresa (lista real, não a lista estática de sugestão da UI); fallback
+ *      "Materiais diversos" se a IA não tiver confiança/match.
+ * 2. Frontend (client/src/pages/compras/Fornecedores.tsx):
+ *    - 3 filtros novos (checkboxes com contador): Sem CNPJ, Sem categoria, Ficha incompleta.
+ *    - Botão "Completar automaticamente" que roda o loop item-a-item (sequencial, progresso
+ *      real (i+1)/total — REGRA DE OURO do usuário: barra `bg-white/15` + texto "Completando... XX%").
+ *      Toast final com contagem de atualizados/sem-alteração/falhas.
+ *
+ * RESULTADO: usuário consegue achar rapidamente cadastros incompletos e completar em lote
+ * (dados oficiais da Receita + categoria sugerida por IA) só para quem tem CNPJ cadastrado.
+ *
+ * ARQUIVOS TOCADOS:
+ * - server/routers/compras.ts (2 procedures novas)
+ * - client/src/pages/compras/Fornecedores.tsx (filtros + botão + loop de auto-completar)
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo (só preenche campo vazio).
+ */
+
+/**
  * Rev. 4116 — **PLANILHA CONTABILIDADE: CNPJ + NOME FORNECEDOR — EXTRAÇÃO DA DESCRIÇÃO DO BANCO (6 CAMADAS).**
  *
  * CONTEXTO: Muitas linhas do extrato exportado apareciam com "Sem CNPJ cadastrado" mesmo
