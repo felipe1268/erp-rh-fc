@@ -557,7 +557,7 @@ export async function buildExtratoBancarioBuffer(
          LEFT JOIN fiscal_notes fn1        ON fn1.stmt_line_id = bsl.id
          LEFT JOIN compras_ordens co       ON fe.origem_modulo = 'compra' AND fe.origem_id = co.id
          LEFT JOIN fornecedores forn_oc    ON forn_oc.id = co.fornecedor_id
-         LEFT JOIN empresas_terceiras et   ON et.company_id = $1
+         LEFT JOIN empresas_terceiras et   ON et."companyId" = $1
                                          AND et.deleted_at IS NULL
                                          AND fe.fornecedor_nome IS NOT NULL
                                          AND LOWER(TRIM(et.razao_social)) = LOWER(TRIM(fe.fornecedor_nome))
@@ -604,7 +604,7 @@ export async function buildExtratoBancarioBuffer(
          FROM financial_entries fe
          LEFT JOIN compras_ordens co       ON fe.origem_modulo = 'compra' AND fe.origem_id = co.id
          LEFT JOIN fornecedores forn_oc    ON forn_oc.id = co.fornecedor_id
-         LEFT JOIN empresas_terceiras et   ON et.company_id = $1
+         LEFT JOIN empresas_terceiras et   ON et."companyId" = $1
                                          AND et.deleted_at IS NULL
                                          AND fe.fornecedor_nome IS NOT NULL
                                          AND LOWER(TRIM(et.razao_social)) = LOWER(TRIM(fe.fornecedor_nome))
