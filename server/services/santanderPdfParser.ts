@@ -2,50 +2,34 @@
 // Parser de extrato bancário em PDF do SANTANDER (PJ — "Extrato Consolidado
 // Inteligente")
 // ─────────────────────────────────────────────────────────────────────────────
-// O extrato PJ do Santander é PDF de TEXTO SELECIONÁVEL. O layout atual
-// ("Extrato_PJ_A4_Inteligente 1.0") coloca DATA + DESCRIÇÃO + VALOR na MESMA
-// linha — NÃO em linhas separadas. O modelo de colunas é:
+// Layout real extraído pelo pdf-parse (validado no extrato de março/2026 da
+// conta 13000464-5):
 //
-//   DD/MM   Descrição [Nº Doc]   [Créditos R$]   [Débitos R$-]   [Saldo R$]
+//   - CADA linha de lançamento é dividida em DUAS LINHAS pelo pdf-parse:
+//       Linha A (sem valor): [DD/MM] DESCRIÇÃO[DocNº]   ← data + descrição + doc concatenado
+//       Linha B (com valor): CR/DB-value                ← valor (prefix = vazio)
+//   - Data DD/MM só aparece na primeira transação do dia → carry-forward.
+//   - Doc de 6 dígitos é concatenado sem espaço ao final da descrição.
+//   - Doc "-" é concatenado ao final ou aparece na linha seguinte isolado.
+//   - Saldo da coluna Saldo(R$) aparece numa 3ª linha separada (vazia de prefixo).
+//   - Continuações (PERIODO:, datas de referência, motivo de devolução) aparecem
+//     como linhas sem valor entre a descrição e o valor.
+//   - Datas de referência como "26/02/2026" aparecem como continuação (DD/MM/YYYY)
+//     e NÃO devem atualizar currentDate (o "/YYYY" no resto as distingue).
 //
-// Regras observadas no PDF:
-// - CADA LINHA com valor monetário = UMA transação.
-// - Linhas SEM valor = continuação da transação anterior (beneficiário, CNPJ,
-//   parcela, período etc.).
-// - O PRIMEIRO valor monetário da linha é o da transação; valores adicionais
-//   na mesma linha são saldo (ignorados).
-// - Débito: valor termina em "-" (ex.: "3.000,00-"). Crédito: sem "-".
-// - DATA (DD/MM) só aparece na 1ª transação do dia → CARRY-FORWARD.
-// - O ANO vem do cabeçalho "janeiro/2026".
-// - A seção começa no 1º cabeçalho "Data  Descrição…" e termina em
-//   "Saldos por Período" / "Produtos e Serviços" / etc.
-//
-// Rev. 4106 — DOIS NOVOS CASOS TRATADOS:
-//
-// CASO A — Layout split (descrição e valor em linhas separadas):
-//   Alguns extratos Santander (especialmente contas com PIX RECEBIDO cujo CPF/
-//   CNPJ gera uma linha extra) têm a descrição numa linha sem valor e o valor
-//   monetário na linha seguinte (com apenas o Nº Doc no prefixo). O parser
-//   detecta esse padrão via `transactionStart`: quando uma linha sem valor
-//   começa com um dos verbos/tipos canônicos de transação (PIX, TED, CHEQUE,
-//   TARIFA, IOF, DEP, RESGATE, etc.), ela é tratada como início de nova
-//   transação e sua descrição é staged em `nextDesc`. Na linha seguinte com
-//   valor monetário, `nextDesc` substitui o prefixo.
-//
-// CASO B — Valor da coluna Saldo extraído como linha isolada:
-//   O pdf-parse pode extrair o conteúdo da coluna Saldo (ex: "3.896,71-",
-//   "0,00") como linha separada sem nenhum texto antes do valor. Essas linhas
-//   viravam débitos/créditos fantasma. Se a linha tem valor monetário mas
-//   prefixo VAZIO e nenhuma descrição staged (nextDesc=null), ela é ignorada.
+// ESTRATÉGIA (Rev. 4106):
+//   • Extrair data de linhas SEM valor (não só de linhas COM valor).
+//   • Limpar doc concatenado (/\d{6}$/) e doc "-" final antes de classificar.
+//   • Linhas COM valor + prefixo vazio + nextDesc staged → lançamento correto.
+//   • Linhas COM valor + prefixo vazio + nextDesc null → saldo orfão → ignorar.
 
 export interface ExtratoLine {
-  data: string; // YYYY-MM-DD
+  data: string;        // YYYY-MM-DD
   descricao: string;
-  valor: number; // com sinal (negativo = débito)
-  saldo: number | null; // sempre null (Santander não expõe saldo por linha)
+  valor: number;       // com sinal (negativo = débito)
+  saldo: number | null;
 }
 
-// Rev. 3363 — Rendimento de APLICAÇÃO/RESGATE AUTOMÁTICO (CDB ContaMax)
 export interface RendimentoAplicacao {
   competenciaMes: number;
   competenciaAno: number;
@@ -62,7 +46,6 @@ export interface SantanderParseResult {
   rendimentoAplicacao?: RendimentoAplicacao | null;
 }
 
-// Valor monetário BR: "1.234,56" com sufixo "-" opcional (débito).
 const RE_MONEY = /(\d{1,3}(?:\.\d{3})*,\d{2})(-?)/g;
 
 const MESES_PT: Record<string, number> = {
@@ -74,7 +57,6 @@ function moneyBR(s: string): number {
   return parseFloat(s.replace(/\./g, "").replace(",", "."));
 }
 
-// Todos os valores monetários de uma string como números absolutos.
 function moneyMagnitudes(s: string): number[] {
   const out: number[] = [];
   RE_MONEY.lastIndex = 0;
@@ -83,22 +65,23 @@ function moneyMagnitudes(s: string): number[] {
   return out;
 }
 
-// Linha SÓ-NÚMERO (sem letras) — usada p/ detectar continuação numérica na
-// tabela CDB ContaMax.
 function isPureNumberLine(s: string): boolean {
   const t = s.trim();
   return !!t && !/[A-Za-zÀ-ú]/.test(t) && /\d,\d{2}/.test(t);
 }
 
-// Remove sufixo doc ("-" final ou espaços) e espaço extra.
 function cleanDesc(s: string): string {
-  return s
-    .replace(/\s+/g, " ")
-    .replace(/\s*-\s*$/, "")
-    .trim();
+  return s.replace(/\s+/g, " ").replace(/\s*-\s*$/, "").trim();
 }
 
-// Extrai rendimento da seção "Movimentação Mensal CDB ContaMax".
+// Remove doc de 6 dígitos concatenado diretamente ao final da descrição (sem espaço).
+// Ex: "DEP DINHEIRO ATM152744" → "DEP DINHEIRO ATM"
+//     "PIX RECEBIDO 43010898886231841" → "PIX RECEBIDO 43010898886"
+// NÃO remove quando o número faz parte de uma data (últimos dígitos consecutivos < 6).
+function stripTrailingDoc6(s: string): string {
+  return s.replace(/\d{6}$/, "");
+}
+
 function parseRendimentoContaMax(
   rawLines: string[], refMonth: number, refYear: number,
 ): RendimentoAplicacao | null {
@@ -122,10 +105,8 @@ function parseRendimentoContaMax(
   return null;
 }
 
-// Rev. 4106 — Verbos/tipos que, quando aparecem numa linha SEM valor monetário,
-// indicam o início de uma nova transação cujo valor virá na linha seguinte
-// (layout split do PDF). Exige `\s` ou `\b` após o token p/ não fazer match
-// em substrings (ex: "DEPOSITANTE" ≠ "DEP ").
+// Verbos/tipos canônicos do Santander. Quando uma linha SEM valor começa com
+// esses termos, é o início de uma nova transação (o valor virá na próxima linha).
 const TRANSACTION_START_RE = /^(PIX\s|TED\s|DOC\s|CHEQUE\s|DEP\s|DEPOSITO\b|SAQUE\b|TARIFA\s|IOF\s|JUROS\s|MULTA\s|APLICA[ÇC][AÃ]O\s|RESGATE\s|CANCELAMENTO\s|TRANSFER[EÊ]NCIA\s|PAGAMENTO\s|D[EÉ]BITO\s|CR[EÉ]DITO\s|COBRAN[ÇC]A\s|TAXA\s|COMPENSA[ÇC][AÃ]O\s)/i;
 
 export async function parseSantanderExtratoPdf(base64: string): Promise<SantanderParseResult> {
@@ -139,10 +120,6 @@ export async function parseSantanderExtratoPdf(base64: string): Promise<Santande
   const data = await pdfParse(buf);
   const text: string = data?.text || "";
 
-  // Rev. 4083 — Restringir a detecção ao marcador ÚNICO do Extrato Consolidado
-  // Inteligente ("EXTRATO CONSOLIDADO INTELIGENTE"). O critério anterior incluía
-  // "|santander" que batia em QUALQUER PDF com "Santander" no texto — inclusive o
-  // formato IBPJ (Internet Banking Empresarial), causando confusão entre parsers.
   const isSantander =
     /EXTRATO CONSOLIDADO INTELIGENTE/i.test(text) &&
     !/Internet Banking Empresarial|IBPJ/i.test(text);
@@ -150,7 +127,6 @@ export async function parseSantanderExtratoPdf(base64: string): Promise<Santande
 
   const rawLines = text.split(/\r?\n/);
 
-  // ANO/MÊS de referência a partir do cabeçalho "janeiro/2026".
   let refYear = new Date().getFullYear();
   let refMonth = 0;
   const my = text.match(
@@ -171,16 +147,17 @@ export async function parseSantanderExtratoPdf(base64: string): Promise<Santande
     return refYear;
   }
 
-  // ─── ALGORITMO PRINCIPAL ────────────────────────────────────────────────────
-  // Regra principal: CADA linha com valor monetário = 1 transação.
-  // Linhas sem valor monetário = continuação da transação anterior OU início
-  // de nova transação (quando a linha começa com padrão canônico de transação).
+  // ─────────────────────────────────────────────────────────────────────────────
+  // ALGORITMO PRINCIPAL
   //
-  // Dentro de uma linha de transação:
-  //   prefix (antes do 1º valor) = data carry-forward + descrição + nº doc
-  //   1º valor = transação (débito se termina "-", crédito se não termina)
-  //   Demais valores na mesma linha = saldo (ignorados)
-  // ───────────────────────────────────────────────────────────────────────────
+  // Cada lançamento do Santander PJ tem:
+  //   Linha A (sem valor): "[DD/MM] DESCRIÇÃO[doc6]"   ← nova transação ou herda data
+  //   Linha B (com valor): "CR/DB value"               ← prefix vazio, usa nextDesc
+  //   Linha C (com valor): "Saldo value"               ← prefix vazio, nextDesc=null → ignora
+  //
+  // Linhas de continuação (PERIODO:, datas DD/MM/YYYY, motivos) também não têm valor
+  // e são distinguidas por NÃO começarem com verbo canônico e NÃO terem DD/MM + texto.
+  // ─────────────────────────────────────────────────────────────────────────────
 
   interface PendingTxn { date: string; parts: string[]; valor: number; }
 
@@ -188,8 +165,6 @@ export async function parseSantanderExtratoPdf(base64: string): Promise<Santande
   let started = false;
   let currentDate: string | null = null;
   let pending: PendingTxn | null = null;
-  // Rev. 4106 — descrição staged quando a linha de descrição aparece ANTES da
-  // linha de valor (layout split). Resetada a cada transação emitida.
   let nextDesc: string | null = null;
 
   function flushPending() {
@@ -204,12 +179,11 @@ export async function parseSantanderExtratoPdf(base64: string): Promise<Santande
     pending = null;
   }
 
-  const startMovement = /^Data\s*Descri|DataDescri|^Movimenta[çc][aã]o$/i;
+  const startMovement = /^DataDescri|^Data\s*Descri|^Movimenta[çc][aã]o$/i;
   const endMovement =
     /Saldos por Per[ií]odo|Produtos e Servi|Pacote de Servi[çc]os|[ÍI]ndices Econ[oô]micos|Valores Praticados|Resumo das Tarifas/i;
-  // Linhas de ruído: cabeçalhos, saldos agregados, rodapés de página.
   const noise =
-    /^Cr[ée]ditos\s*D[ée]bitos$|Cr[ée]ditos\s+D[ée]bitos|EXTRATO CONSOLIDADO INTELIGENTE|^Extrato_PJ|^BALP_|^P[áa]gina:|^SALDO\b|SALDO ANTERIOR|^Conta Corrente$|^Movimenta[çc][aã]o$/i;
+    /^Cr[ée]ditos\s*D[ée]bitos$|Cr[ée]ditos\s+D[ée]bitos|EXTRATO CONSOLIDADO INTELIGENTE|^Extrato_PJ|^BALP_|^P[áa]gina:|^SALDO\b|SALDO ANTERIOR|^Conta Corrente$|^Movimenta[çc][aã]o$|Se\s+sua\s+empresa\s+n[aã]o\s+tiver|sujeito\s+[aà]\s+cobran/i;
 
   for (const raw of rawLines) {
     const t = raw.trim();
@@ -221,51 +195,76 @@ export async function parseSantanderExtratoPdf(base64: string): Promise<Santande
     }
 
     if (endMovement.test(t)) { flushPending(); break; }
-
-    // Cabeçalho de seção repetido (nova página) — reinicia flag, não é dado.
-    if (startMovement.test(t)) continue;
-
+    if (startMovement.test(t)) continue; // cabeçalho repetido de página
     if (noise.test(t)) continue;
-
-    // Mês/ano isolado do cabeçalho de página ("janeiro/2026").
     if (/^(janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s*\/\s*\d{4}$/i.test(t)) continue;
 
-    // ── Detecta se a linha tem valor monetário ──────────────────────────────
     RE_MONEY.lastIndex = 0;
     const moneyMatch = RE_MONEY.exec(t);
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // LINHA SEM VALOR MONETÁRIO
+    // ══════════════════════════════════════════════════════════════════════════
     if (!moneyMatch) {
-      // Linha SEM valor monetário.
-      // Ignora doc sozinho ("-") e números puros de 6 dígitos (nº doc interno).
-      if (t !== "-" && !/^\d{6}$/.test(t)) {
-        const part = cleanDesc(t);
-        if (part) {
-          if (TRANSACTION_START_RE.test(part)) {
-            // Rev. 4106 — Início de NOVA transação numa linha sem valor.
-            // O valor monetário correspondente virá na próxima linha com número
-            // (ex: "PIX RECEBIDO 43010898886" em linha separada de "231841 111,33").
-            // Flush da transação anterior + staging da descrição.
+      // Doc sozinho ("-") ou 6 dígitos puros → ignorar
+      if (t === "-" || /^\d{6}$/.test(t)) continue;
+
+      // ── TENTA EXTRAIR DATA DD/MM ──────────────────────────────────────────
+      // Transações: "04/03 DEP DINHEIRO ATM152744" → data 04/03 + descrição
+      // Continuação: "26/02/2026" → DM[3]="/2026" começa com "/" → ignora data
+      const dm2 = t.match(/^(\d{2})\/(\d{2})\b(.*)/s);
+      let treated = false;
+
+      if (dm2) {
+        const dd = parseInt(dm2[1], 10);
+        const mm = parseInt(dm2[2], 10);
+        if (mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31) {
+          const restCleaned = cleanDesc(
+            stripTrailingDoc6(dm2[3]).replace(/\s*-\s*$/, "")
+          );
+          // Se o resto começa com "/" é data de continuação (ex: "26/02/2026" → "/2026")
+          if (restCleaned && !/^\//.test(restCleaned)) {
+            // Nova transação com data explícita
+            currentDate = `${resolveYear(mm)}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
             flushPending();
-            nextDesc = part;
-          } else if (nextDesc !== null) {
-            // Continuação da descrição staged (nova transação ainda sem valor).
-            nextDesc = (nextDesc + " " + part).replace(/\s+/g, " ").trim();
-          } else if (pending) {
-            // Continuação normal da transação pendente.
-            pending.parts.push(part);
+            nextDesc = restCleaned;
+            treated = true;
           }
+          // Se não tratado: cai para continuação abaixo
+        }
+      }
+
+      if (!treated) {
+        // Sem data nova: checar TRANSACTION_START_RE ou tratar como continuação
+        const part = cleanDesc(
+          stripTrailingDoc6(t).replace(/\s*-\s*$/, "")
+        );
+        if (!part) continue;
+
+        if (TRANSACTION_START_RE.test(part)) {
+          // Nova transação sem data (herda currentDate)
+          flushPending();
+          nextDesc = part;
+        } else if (nextDesc !== null) {
+          // Continuação da descrição staged (ex: PERIODO:, datas, motivo devolução)
+          nextDesc = (nextDesc + " " + part).replace(/\s+/g, " ").trim();
+        } else if (pending) {
+          // Continuação da transação pendente
+          pending.parts.push(part);
         }
       }
       continue;
     }
 
-    // ── LINHA DE TRANSAÇÃO: tem valor monetário ─────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════════
+    // LINHA COM VALOR MONETÁRIO
+    // ══════════════════════════════════════════════════════════════════════════
     const valor = moneyBR(moneyMatch[1]) * (moneyMatch[2] === "-" ? -1 : 1);
 
-    // Prefixo = tudo antes do 1º valor (data + descrição + nº doc).
+    // Prefixo = texto antes do 1º valor (raro neste layout — quase sempre vazio)
     let prefix = t.slice(0, moneyMatch.index).trim();
 
-    // Tenta extrair data DD/MM do início do prefixo.
+    // Tenta extrair data do prefixo (formato antigo ou edge-case)
     let dateFound = false;
     const dm = prefix.match(/^(\d{2})\/(\d{2})\b(.*)/s);
     if (dm) {
@@ -283,40 +282,33 @@ export async function parseSantanderExtratoPdf(base64: string): Promise<Santande
     let desc: string;
 
     if (nextDesc !== null && !dateFound) {
-      // Rev. 4106 — usa descrição staged de linha(s) anterior(es) sem valor.
-      // O prefixo desta linha costuma ter apenas o Nº Doc (6 dígitos) ou está
-      // vazio — não substitui a descrição real.
-      const extraFromPrefix = cleanDesc(
-        prefix.replace(/\s+\d{6}\s*$/, "").replace(/\s*-\s*$/, "")
-      );
-      const isDocOrEmpty = !extraFromPrefix || /^\d+$/.test(extraFromPrefix);
-      desc = isDocOrEmpty
+      // Usa descrição staged de linha(s) anterior(es) sem valor.
+      // O prefixo desta linha, se existir, tende a ser o nº doc — ignoramos.
+      const extra = cleanDesc(stripTrailingDoc6(prefix).replace(/\s*-\s*$/, ""));
+      const isDocOnly = !extra || /^\d+$/.test(extra);
+      desc = isDocOnly
         ? nextDesc
-        : (nextDesc + " " + extraFromPrefix).replace(/\s+/g, " ").trim();
+        : (nextDesc + " " + extra).replace(/\s+/g, " ").trim();
       nextDesc = null;
     } else if (nextDesc !== null && dateFound) {
-      // Nova data encontrada com nextDesc ainda pendente → a descrição staged
-      // era órfã (o valor nunca apareceu). Descarta e processa normalmente.
+      // Nova data com nextDesc pendente → nextDesc era órfão, descarta
       nextDesc = null;
-      desc = cleanDesc(prefix.replace(/\s+\d{6}\s*$/, ""));
+      desc = cleanDesc(stripTrailingDoc6(prefix));
     } else if (!prefix && !dateFound) {
-      // Rev. 4106 — linha com valor MAS sem prefixo e sem nextDesc staged:
-      // quase certamente é o valor da coluna Saldo do lançamento anterior que
-      // o pdf-parse extraiu na linha seguinte. Ignora para evitar lançamento fantasma.
+      // Valor sem prefixo e sem nextDesc staged: é o valor da coluna Saldo
+      // do lançamento anterior extraído como linha separada → ignorar.
       continue;
     } else {
-      // Caminho normal: prefixo tem descrição + nº doc.
-      desc = cleanDesc(prefix.replace(/\s+\d{6}\s*$/, ""));
+      desc = cleanDesc(stripTrailingDoc6(prefix));
     }
 
-    // Emite a transação anterior e inicia a nova.
     flushPending();
     pending = { date: currentDate, parts: desc ? [desc] : [], valor };
   }
 
   flushPending();
 
-  // Rendimento CDB ContaMax (seção após endMovement, varrida no texto completo).
+  // Rendimento CDB ContaMax (seção após endMovement, varrida no texto completo)
   let rendimentoAplicacao: RendimentoAplicacao | null = null;
   if (/ContaMax|CDB|Aplica[çc][aã]o\s+Autom/i.test(text)) {
     rendimentoAplicacao = parseRendimentoContaMax(rawLines, refMonth, refYear);
