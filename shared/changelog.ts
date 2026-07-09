@@ -1,4 +1,34 @@
 /**
+ * Rev. 4118 — **EXECUÇÃO DO BACKFILL EM MASSA (RECEITA FEDERAL + IA) + 2 BUGS CRÍTICOS CORRIGIDOS + CLASSIFICAÇÃO DE CATEGORIA PARA TODOS.**
+ *
+ * CONTEXTO: usuário pediu para rodar o backfill da Rev. 4117 imediatamente (não só deixar o botão)
+ * e também pediu para classificar por IA a categoria de TODOS os fornecedores (com ou sem CNPJ),
+ * não só os que já tinham CNPJ.
+ *
+ * BUGS ENCONTRADOS E CORRIGIDOS (em `server/routers/compras.ts`, afeta o botão da UI também):
+ * 1. BrasilAPI retornava 403 Forbidden sem header `User-Agent` — adicionado
+ *    `headers: { "User-Agent": "Mozilla/5.0" }` nas 3 chamadas fetch à BrasilAPI (`buscarCNPJ` e
+ *    `autoCompletarFornecedor`). Sem isso a maioria das consultas caía direto no fallback ReceitaWS
+ *    (que tem rate-limit apertado) e falhava silenciosamente.
+ * 2. `telefone` é varchar(20) mas a ReceitaWS às vezes retorna string com múltiplos telefones
+ *    concatenados (>20 chars) — INSERT/UPDATE falhava. Adicionado mapa `MAX_LEN` truncando todos os
+ *    campos buscados ao limite da coluna antes do PATCH.
+ *
+ * NOVO SCRIPT (`server/scripts/classificarCategoriasTodos.ts`): classifica via IA a categoria de
+ * TODOS os fornecedores ativos sem `categorias` preenchida (independente de ter CNPJ), usando
+ * razão social/nome fantasia/atividade principal, escolhendo dentre as categorias já cadastradas
+ * na empresa. Rodado em lotes até zerar: 581 → 0 sem categoria.
+ *
+ * SCRIPT DE BACKFILL (`server/scripts/autoCompletarFornecedoresBatch.ts`, resumível por natureza —
+ * só busca quem ainda está incompleto) rodado em vários lotes contra a base real (company 60002):
+ * ficha incompleta caiu de 941 → 503. Restante majoritariamente CNPJ com dígito verificador
+ * inválido (dado de cadastro errado, sem forma de buscar na Receita) ou rate-limit da ReceitaWS —
+ * pode ser resumido rodando os scripts novamente a qualquer momento.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo — só PATCH em campos vazios.
+ */
+
+/**
  * Rev. 4117 — **EMPRESAS TERCEIRAS (FORNECEDORES): FILTROS DE CADASTRO INCOMPLETO + AUTO-COMPLETAR VIA RECEITA FEDERAL/IA.**
  *
  * CONTEXTO: Levantamento na base (company 60002) mostrou 1257 fornecedores ativos: 242 sem CNPJ,

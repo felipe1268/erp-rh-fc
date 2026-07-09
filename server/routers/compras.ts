@@ -1911,7 +1911,7 @@ export const comprasRouter = router({
       }
 
       async function tentarBrasilAPI() {
-        const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`, { signal: AbortSignal.timeout(8000) });
+        const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`, { signal: AbortSignal.timeout(8000), headers: { "User-Agent": "Mozilla/5.0" } });
         if (!res.ok) return null;
         const data = await res.json() as any;
         const socios = extrairSocios(data.qsa);
@@ -3711,7 +3711,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
 
       async function buscarBrasilAPI() {
         try {
-          const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`, { signal: AbortSignal.timeout(8000) });
+          const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`, { signal: AbortSignal.timeout(8000), headers: { "User-Agent": "Mozilla/5.0" } });
           if (!res.ok) return null;
           const d = await res.json() as any;
           return {
@@ -3755,13 +3755,21 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         } catch { return null; }
       }
 
+      const MAX_LEN: Record<string, number> = {
+        endereco: 255, numero: 20, complemento: 100, bairro: 100, cidade: 100, estado: 2,
+        cep: 10, telefone: 20, email: 255, naturezaJuridica: 255, porte: 100,
+        atividadePrincipal: 500, dataAbertura: 20,
+      };
       const dadosOficiais = await buscarBrasilAPI() || await buscarReceitaWS();
       const patch: Record<string, any> = {};
       if (dadosOficiais) {
         const campos = ["endereco","numero","complemento","bairro","cidade","estado","cep","telefone","email","naturezaJuridica","porte","atividadePrincipal","dataAbertura"] as const;
         for (const campo of campos) {
           const atual = (existing as any)[campo];
-          const novo = (dadosOficiais as any)[campo];
+          let novo = (dadosOficiais as any)[campo];
+          if (novo && MAX_LEN[campo] && String(novo).length > MAX_LEN[campo]) {
+            novo = campo === "telefone" ? String(novo).split("/")[0].trim() : String(novo).slice(0, MAX_LEN[campo]);
+          }
           if ((!atual || String(atual).trim() === "") && novo) patch[campo] = novo;
         }
       }
