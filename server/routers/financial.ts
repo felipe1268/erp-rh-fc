@@ -7831,17 +7831,28 @@ export const financialRouter = router({
     // dizer QUEM é o favorecido. Identifica por nº + VALOR batendo (nunca pelo nome
     // sozinho). Indexado por `${numeroSemZeros}|${centavos}` e por nº (desempate visual).
     const chqRes = await dbExecute(db,
-      `SELECT numero_cheque AS "numeroCheque", valor, fornecedor_nome AS "fornecedorNome", status
+      `SELECT numero_cheque AS "numeroCheque", valor, fornecedor_nome AS "fornecedorNome", status,
+              data_compensacao AS "dataCompensacao", data_vencimento AS "dataVencimento"
          FROM financial_cheques
         WHERE company_id=$1 AND excluido_em IS NULL AND numero_cheque IS NOT NULL`,
       [input.companyId]);
     const chequesArr = rows(chqRes) as any[];
     const chequesByNumVal = new Map<string, any>();
     const chequesByNum = new Map<string, any[]>();
+    // Rev. 4132 — MUITOS bancos (ex.: Caixa) concatenam o nº do cheque ao final da
+    // descrição SEM separador nem palavra "cheque" antes dele ("Cheque Emitido/Debitado"
+    // + doc grudado noutra linha, ou nenhum nº quando o banco simplesmente não informa).
+    // Sem nº algum na descrição, o único jeito de identificar o favorecido é por
+    // VALOR + DATA DE COMPENSAÇÃO próxima — indexa por centavos p/ esse fallback.
+    const chequesByValor = new Map<number, any[]>();
     for (const c of chequesArr) {
       const num = String(c.numeroCheque ?? "").replace(/[^0-9]/g, "").replace(/^0+/, "");
-      if (!num) continue;
       const cts = c.valor != null ? Math.round(Math.abs(Number(c.valor)) * 100) : null;
+      if (cts != null) {
+        if (!chequesByValor.has(cts)) chequesByValor.set(cts, []);
+        chequesByValor.get(cts)!.push(c);
+      }
+      if (!num) continue;
       if (cts != null) {
         chequesByNumVal.set(`${num}|${cts}`, c);
         if (!chequesByNum.has(num)) chequesByNum.set(num, []);
@@ -7876,21 +7887,56 @@ export const financialRouter = router({
       if (doc && doc.length <= 8) return doc;
       return null;
     };
+    // Rev. 4132 — fallback p/ quando o banco gruda o nº do cheque no FIM da descrição
+    // SEM a palavra "cheque" ou "doc" na frente (ex.: "CHEQUE EMITIDO/DEBITADO001295").
+    const extrairNumChequeSufixo = (descricao: any): string | null => {
+      const s = String(descricao ?? "");
+      if (!/cheq/i.test(s)) return null;
+      const m = s.match(/(\d{3,12})\s*$/);
+      if (m && m[1]) return m[1].replace(/^0+/, "") || m[1];
+      return null;
+    };
     const identificarCheque = (ln: any): { numero: string; fornecedor: string } | null => {
       const ehCheque = /cheq|compensa/i.test(String(ln.descricao ?? ""));
-      const num = extrairNumCheque(ln.descricao) ?? (ehCheque ? extrairDocCheque(ln.descricao) : null);
-      if (!num) return null;
+      const num = extrairNumCheque(ln.descricao)
+        ?? (ehCheque ? extrairDocCheque(ln.descricao) : null)
+        ?? (ehCheque ? extrairNumChequeSufixo(ln.descricao) : null);
       const cts = Math.round(Math.abs(Number(ln.valor) || 0) * 100);
-      let c = chequesByNumVal.get(`${num}|${cts}`); // exige nº + VALOR
-      if (!c) {
-        const arr = chequesByNum.get(num);
-        if (arr) {
-          const perto = arr.filter((x) => { const v = x.valor != null ? Math.round(Math.abs(Number(x.valor)) * 100) : null; return v != null && Math.abs(v - cts) <= 2; });
-          if (perto.length === 1) c = perto[0];
+      if (num) {
+        let c = chequesByNumVal.get(`${num}|${cts}`); // exige nº + VALOR
+        if (!c) {
+          const arr = chequesByNum.get(num);
+          if (arr) {
+            const perto = arr.filter((x) => { const v = x.valor != null ? Math.round(Math.abs(Number(x.valor)) * 100) : null; return v != null && Math.abs(v - cts) <= 2; });
+            if (perto.length === 1) c = perto[0];
+          }
+        }
+        if (c) return { numero: num, fornecedor: c.fornecedorNome ?? "" };
+      }
+      // Rev. 4132 — sem nº ALGUM na descrição (ex.: "Cheque Emitido/Debitado" puro, banco
+      // não informa nº nenhum): casa por VALOR + DATA DE COMPENSAÇÃO/VENCIMENTO próxima
+      // (±5 dias), e SÓ se o resultado for ÚNICO (ambíguo nunca identifica — regra de ouro
+      // da conciliação: nada é atribuído sem certeza).
+      if (ehCheque && !num) {
+        const candidatos = chequesByValor.get(cts) ?? [];
+        if (candidatos.length) {
+          const lnMs = Date.parse(String(ln.data ?? "").slice(0, 10) + "T00:00:00Z");
+          if (!isNaN(lnMs)) {
+            const perto = candidatos.filter((x: any) => {
+              const ref = x.dataCompensacao ?? x.dataVencimento;
+              if (!ref) return false;
+              const cms = Date.parse(String(ref).slice(0, 10) + "T00:00:00Z");
+              return !isNaN(cms) && Math.abs(cms - lnMs) <= 5 * 86400000;
+            });
+            if (perto.length === 1) {
+              const c = perto[0];
+              const numC = String(c.numeroCheque ?? "").replace(/[^0-9]/g, "").replace(/^0+/, "");
+              return { numero: numC, fornecedor: c.fornecedorNome ?? "" };
+            }
+          }
         }
       }
-      if (!c) return null;
-      return { numero: num, fornecedor: c.fornecedorNome ?? "" };
+      return null;
     };
 
     const toMs = (v: any) => {
