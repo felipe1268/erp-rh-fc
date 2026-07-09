@@ -965,83 +965,122 @@ export function FinanceiroChequesRecebidosContent() {
           Dialog: Cadastro manual de cheque
       ════════════════════════════════════════════════════════ */}
       <Dialog open={formOpen} onOpenChange={(o) => { if (!o) { setFormOpen(false); setFormEdit(null); setForm(EMPTY_FORM); } }}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{formEdit ? "Editar cheque recebido" : "Lançar cheque recebido"}</DialogTitle>
-            <DialogDescription>
-              Preencha os dados do cheque. Somente nº e valor são obrigatórios.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">Nº do Cheque *</Label>
-                <Input className="mt-1" value={form.numeroCheque} onChange={e => setForm(f => ({ ...f, numeroCheque: e.target.value }))} placeholder="Ex.: 000123" />
-              </div>
-              <div>
-                <Label className="text-xs">Valor *</Label>
-                <div className="relative mt-1">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
-                  <Input className="pl-9 tabular-nums" inputMode="decimal" placeholder="0,00"
-                    value={form.valorMask}
-                    onChange={e => setForm(f => ({ ...f, valorMask: maskBRL(e.target.value) }))} />
+        <DialogContent className="max-w-lg w-[calc(100vw-1.5rem)] p-0 gap-0 overflow-hidden max-h-[92dvh] flex flex-col">
+
+          {/* ── Cabeçalho colorido ── */}
+          <div className="flex items-start gap-3 px-5 pt-5 pb-4 bg-gradient-to-r from-green-50 to-emerald-50 border-b">
+            <div className="flex-shrink-0 h-9 w-9 rounded-full bg-green-100 flex items-center justify-center">
+              <Banknote className="h-5 w-5 text-green-600" />
+            </div>
+            <div>
+              <DialogTitle className="text-base font-semibold leading-tight">
+                {formEdit ? "Editar cheque recebido" : "Lançar cheque recebido"}
+              </DialogTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">Nº e valor são obrigatórios · demais campos são opcionais</p>
+            </div>
+          </div>
+
+          {/* ── Corpo com scroll ── */}
+          <div className="overflow-y-auto flex-1 px-5 py-4 space-y-5">
+
+            {/* Bloco 1 — Identificação */}
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2.5">Identificação</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium">Nº do Cheque <span className="text-red-500">*</span></Label>
+                  <Input value={form.numeroCheque} onChange={e => setForm(f => ({ ...f, numeroCheque: e.target.value }))} placeholder="000123" className="h-10" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium">Valor <span className="text-red-500">*</span></Label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">R$</span>
+                    <Input className="pl-9 h-10 tabular-nums" inputMode="decimal" placeholder="0,00"
+                      value={form.valorMask}
+                      onChange={e => setForm(f => ({ ...f, valorMask: maskBRL(e.target.value) }))} />
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Cliente */}
+            {/* Bloco 2 — Origem */}
             <div>
-              <Label className="text-xs flex items-center gap-1">
-                <Building2 className="h-3 w-3 text-purple-500" /> Cliente (quem pagou com este cheque)
-              </Label>
-              <ClienteSelect
-                clientes={clientes}
-                value={form.clienteId}
-                onChange={(id, nome) => setForm(f => ({ ...f, clienteId: id, clienteNome: nome ?? "" }))}
-              />
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2.5">Origem</p>
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium flex items-center gap-1.5">
+                    <Building2 className="h-3.5 w-3.5 text-purple-500" /> Cliente
+                    <span className="font-normal text-muted-foreground text-xs">(quem pagou com este cheque)</span>
+                  </Label>
+                  <ClienteSelect
+                    clientes={clientes}
+                    value={form.clienteId}
+                    onChange={(id, nome) => setForm(f => ({ ...f, clienteId: id, clienteNome: nome ?? "" }))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium">Emitente
+                    <span className="font-normal text-muted-foreground text-xs ml-1">(quem assinou o cheque)</span>
+                  </Label>
+                  <Input className="h-10" value={form.emitenteNome} onChange={e => setForm(f => ({ ...f, emitenteNome: e.target.value }))} placeholder="Nome do emitente" />
+                </div>
+              </div>
             </div>
 
+            {/* Bloco 3 — Dados bancários */}
             <div>
-              <Label className="text-xs">Emitente (quem emitiu o cheque)</Label>
-              <Input className="mt-1" value={form.emitenteNome} onChange={e => setForm(f => ({ ...f, emitenteNome: e.target.value }))} placeholder="Nome do emitente" />
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <Label className="text-xs">Banco</Label>
-                <Input className="mt-1" value={form.banco} onChange={e => setForm(f => ({ ...f, banco: e.target.value }))} placeholder="Ex.: Bradesco" />
-              </div>
-              <div>
-                <Label className="text-xs">Agência</Label>
-                <Input className="mt-1" value={form.agencia} onChange={e => setForm(f => ({ ...f, agencia: e.target.value }))} placeholder="0000" />
-              </div>
-              <div>
-                <Label className="text-xs">Conta</Label>
-                <Input className="mt-1" value={form.conta} onChange={e => setForm(f => ({ ...f, conta: e.target.value }))} placeholder="00000-0" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">Data de emissão</Label>
-                <Input type="date" className="mt-1" value={form.dataEmissao} onChange={e => setForm(f => ({ ...f, dataEmissao: e.target.value }))} />
-              </div>
-              <div>
-                <Label className="text-xs">Bom para (depósito)</Label>
-                <Input type="date" className="mt-1" value={form.dataBomPara} onChange={e => setForm(f => ({ ...f, dataBomPara: e.target.value }))} />
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2.5">Dados bancários</p>
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium">Banco</Label>
+                  <Input className="h-10" value={form.banco} onChange={e => setForm(f => ({ ...f, banco: e.target.value }))} placeholder="Ex.: Bradesco, Itaú, Caixa..." />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-sm font-medium">Agência</Label>
+                    <Input className="h-10" value={form.agencia} onChange={e => setForm(f => ({ ...f, agencia: e.target.value }))} placeholder="0000" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-sm font-medium">Conta</Label>
+                    <Input className="h-10" value={form.conta} onChange={e => setForm(f => ({ ...f, conta: e.target.value }))} placeholder="00000-0" />
+                  </div>
+                </div>
               </div>
             </div>
+
+            {/* Bloco 4 — Datas */}
             <div>
-              <Label className="text-xs">Observação</Label>
-              <Textarea className="mt-1 resize-none" rows={2} value={form.observacao} onChange={e => setForm(f => ({ ...f, observacao: e.target.value }))} placeholder="Como foi recebido, quem trouxe, etc." />
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2.5">Datas</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium">Emissão</Label>
+                  <Input type="date" className="h-10" value={form.dataEmissao} onChange={e => setForm(f => ({ ...f, dataEmissao: e.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium">Bom para</Label>
+                  <Input type="date" className="h-10" value={form.dataBomPara} onChange={e => setForm(f => ({ ...f, dataBomPara: e.target.value }))} />
+                </div>
+              </div>
             </div>
+
+            {/* Bloco 5 — Observação */}
+            <div className="space-y-1">
+              <Label className="text-sm font-medium">Observação</Label>
+              <Textarea className="resize-none text-sm" rows={2} value={form.observacao} onChange={e => setForm(f => ({ ...f, observacao: e.target.value }))} placeholder="Como foi recebido, quem trouxe, etc." />
+            </div>
+
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setFormOpen(false)}>Cancelar</Button>
+
+          {/* ── Rodapé fixo ── */}
+          <div className="flex items-center justify-end gap-2 px-5 py-3 border-t bg-gray-50/80">
+            <Button variant="outline" onClick={() => setFormOpen(false)} className="min-w-[90px]">Cancelar</Button>
             <Button onClick={handleSalvar} disabled={criarMut.isPending || atualizarMut.isPending}
-              className="bg-green-600 hover:bg-green-700 text-white">
+              className="bg-green-600 hover:bg-green-700 text-white min-w-[130px]">
               {(criarMut.isPending || atualizarMut.isPending) && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
               {formEdit ? "Salvar alterações" : "Cadastrar cheque"}
             </Button>
-          </DialogFooter>
+          </div>
+
         </DialogContent>
       </Dialog>
 
