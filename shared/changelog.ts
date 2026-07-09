@@ -1,4 +1,24 @@
 /**
+ * Rev. 4110 — **FIX: EMPRESAS TERCEIRAS — BOTÃO "REATIVAR" AUSENTE PARA EMPRESAS INATIVAS.**
+ *
+ * CONTEXTO: A tela de Fornecedores/Empresas Terceiras mostrava badge "Inativo" para empresas
+ * desativadas, mas não oferecia nenhum botão para reativá-las. O botão de desativar (X vermelho)
+ * só aparecia para empresas ativas, deixando inativas sem opção de toggle.
+ *
+ * O QUE FOI FEITO:
+ * 1. Backend (`server/routers/compras.ts`): nova mutation `reativarFornecedor` — seta `ativo=true`
+ *    com tenant guard (`_assertCompanyAccess`) idêntico ao `excluirFornecedor`.
+ * 2. Frontend (`client/src/pages/compras/Fornecedores.tsx`):
+ *    - Hook `reativarMut` adicionado.
+ *    - Botão agora é condicional: ativo → X vermelho (desativar); inativo → ✓ verde "Reativar".
+ *    - Ambos os botões têm `disabled` durante loading para evitar duplo clique.
+ * 3. Também corrigido bug em `downloadContabilidadeXlsx.ts`: JOIN em `empresas_terceiras` usava
+ *    `et.company_id` mas a coluna no Neon é `et."companyId"` (camelCase sem override Drizzle).
+ *
+ * ZERO DELETE · ZERO UPDATE EM TABELAS EXISTENTES · ZERO ALTER
+ */
+
+/**
  * Rev. 4109 — **PLANO DE CONTAS: COLUNA "CÓDIGO CONTABILIDADE" — MAPEAMENTO COM PLANO DO CONTADOR.**
  *
  * CONTEXTO: O plano de contas interno (códigos 1–10) precisava ser linkado ao plano de contas do

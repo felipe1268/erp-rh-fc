@@ -1680,6 +1680,19 @@ export const comprasRouter = router({
       return { success: true };
     }),
 
+  reativarFornecedor: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      const [existing] = await db.select().from(fornecedores).where(eq(fornecedores.id, input.id));
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Fornecedor não encontrado." });
+      await _assertCompanyAccess(ctx.user, (existing as any).companyId);
+      await db.update(fornecedores)
+        .set({ ativo: true, atualizadoEm: new Date().toISOString() })
+        .where(eq(fornecedores.id, input.id));
+      return { success: true };
+    }),
+
   // Busca dados do CNPJ via BrasilAPI (proxy server-side evita CORS)
   buscarCNPJ: protectedProcedure
     .input(z.object({ cnpj: z.string() }))

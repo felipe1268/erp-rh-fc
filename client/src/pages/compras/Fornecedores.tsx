@@ -320,6 +320,7 @@ export default function Fornecedores() {
   const [dupDialog, setDupDialog] = useState<null | { mode: "block-same"; nome: string } | { mode: "replicate-from-terceira"; terceira: any }>(null);
   const atualizarMut = trpc.compras.atualizarFornecedor.useMutation({ onSuccess: () => { refetch(); fecharModal(); toast.success("Empresa terceira atualizada!"); } });
   const excluirMut  = trpc.compras.excluirFornecedor.useMutation({ onSuccess: () => { refetch(); toast.success("Empresa terceira desativada."); } });
+  const reativarMut = trpc.compras.reativarFornecedor.useMutation({ onSuccess: () => { refetch(); toast.success("Empresa terceira reativada!"); } });
 
   const avaliarMut  = trpc.compras.avaliarFornecedor.useMutation({
     onSuccess: () => {
@@ -820,10 +821,18 @@ export default function Fornecedores() {
                     <Button size="sm" variant="outline" className="h-8" onClick={() => abrirEditar(f)}>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
-                    {f.ativo && (
+                    {f.ativo ? (
                       <Button size="sm" variant="outline" className="h-8 text-red-600 border-red-200 hover:bg-red-50"
-                        onClick={() => excluirMut.mutate({ id: f.id })}>
+                        onClick={() => excluirMut.mutate({ id: f.id })}
+                        disabled={excluirMut.isPending}>
                         <XCircle className="h-3.5 w-3.5" />
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="outline" className="h-8 text-green-600 border-green-200 hover:bg-green-50 gap-1"
+                        onClick={() => reativarMut.mutate({ id: f.id })}
+                        disabled={reativarMut.isPending}>
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Reativar
                       </Button>
                     )}
                   </div>

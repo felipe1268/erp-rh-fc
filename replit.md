@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4110** — **FIX: EMPRESAS TERCEIRAS — BOTÃO "REATIVAR" AUSENTE PARA EMPRESAS INATIVAS + FIX JOIN `et."companyId"` NA PLANILHA CONTABILIDADE.** Sem botão de reativar: nova mutation `reativarFornecedor` (backend) + botão verde "Reativar" condicional no card da lista (frontend). JOIN em `downloadContabilidadeXlsx.ts` usava `et.company_id` mas coluna no Neon é `et."companyId"` (camelCase sem override Drizzle). ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+
 - **Rev. 4109** — **PLANO DE CONTAS: COLUNA "CÓDIGO CONTABILIDADE" — MAPEAMENTO COM PLANO DO CONTADOR.** Nova coluna `codigo_contabilidade VARCHAR(50)` em `financial_accounts`. 101 contas mapeadas automaticamente via análise fuzzy do Excel do contador (PRONUS, formato 03.x/04.x). UI: badge índigo na lista + campo editável em "Configurações Avançadas". Router `getAccounts` retorna e `updateAccount` aceita o novo campo. ColFix Rev.4109 garante a coluna no boot. ZERO DELETE · ZERO UPDATE nas tabelas existentes.
 
-- **Rev. 4108** — **FIX: CHEQUES RECEBIDOS — DROPDOWN "TODOS OS CLIENTES" LISTAVA SÓ OS COM CHEQUE VINCULADO.** Causa: `listarClientes` consultava tabela `clientes` em vez de `empresas_terceiras`. Fix: SQL alterado para `FROM empresas_terceiras WHERE company_id=$1 AND deleted_at IS NULL`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
 ### 5 one-liners
+
+- **Rev. 4108** — **FIX: CHEQUES RECEBIDOS — DROPDOWN "TODOS OS CLIENTES" LISTAVA SÓ OS COM CHEQUE VINCULADO.** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4107** — **FIX CRÍTICO: EFD CONTRIBUIÇÕES + SPED ECF/ECD — ERRO "Cannot read properties of undefined (reading 'query')" + VALORES ZERADOS.** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4105** — **FIX CRÍTICO: IMPORTAÇÃO DE EXTRATO — DUPLICATAS LEGÍTIMAS PERDIDAS.** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4104** — **NOVO LANÇAMENTO: CHEQUE EMPRESA × CHEQUE DE TERCEIRO (SELEÇÃO INTERATIVA + COMPLEMENTO).** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
-- **Rev. 4103** — **CHEQUES RECEBIDOS: BOTÃO "LIMPAR INVÁLIDOS" (SOFT-DELETE DE TOTALIZADORES).** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 ### Histórico completo
 
