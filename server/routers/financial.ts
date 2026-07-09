@@ -945,6 +945,16 @@ async function parseExtratoLines(input: {
       const trnamt = trn.match(/<TRNAMT>([-\d.,]+)/)?.[1] ?? "0";
       const memo = trn.match(/<MEMO>([^<\n]+)/)?.[1]?.trim() ?? "";
       const name = trn.match(/<NAME>([^<\n]+)/)?.[1]?.trim() ?? "";
+      // Rev. 4133 — extratos OFX mais novos trazem o Nº do cheque no campo estruturado
+      // CHECKNUM (coluna "Docto." da tela do banco), separado da descrição/MEMO. Quando
+      // presente e ≠ "00000000"/zero, prioriza sobre qualquer extração por regex do texto:
+      // anexa " Nº <num>" na descrição, formato que extrairNumCheque já reconhece.
+      const checknumRaw = trn.match(/<CHECKNUM>(\d+)/)?.[1] ?? "";
+      const checknum = checknumRaw.replace(/^0+/, "");
+      let descricaoFinal = memo || name || "Sem descrição";
+      if (checknum && /cheq/i.test(descricaoFinal) && !new RegExp(`\\b${checknum}\\b`).test(descricaoFinal)) {
+        descricaoFinal = `${descricaoFinal} Nº ${checknum}`;
+      }
       if (!dtposted) continue;
       const y = dtposted.slice(0, 4);
       const m = dtposted.slice(4, 6);
@@ -957,7 +967,7 @@ async function parseExtratoLines(input: {
       const valor = parseFloat(rawAmt);
       lines.push({
         data: dataStr,
-        descricao: memo || name || "Sem descrição",
+        descricao: descricaoFinal,
         valor: isNaN(valor) ? 0 : valor,
         saldo: null,
       });
