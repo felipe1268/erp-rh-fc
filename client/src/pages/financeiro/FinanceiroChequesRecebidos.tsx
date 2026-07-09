@@ -381,39 +381,60 @@ export function FinanceiroChequesRecebidosContent() {
     if (importTimerRef.current) { clearInterval(importTimerRef.current); importTimerRef.current = null; }
   }
 
-  async function executarImport() {
+  // Fase 1: só análise (dry-run) — mostra contagens sem gravar nada
+  async function executarPreview() {
     if (!importQueue.length || importRunning) return;
     setImportRunning(true);
     setImportProgress(0);
 
-    const total = importQueue.length;
+    const pending = importQueue.filter(it => it.step === "aguardando");
+    const total   = pending.length;
 
-    for (let i = 0; i < total; i++) {
+    for (let i = 0; i < importQueue.length; i++) {
       const item = importQueue[i];
-      if (item.step === "done" || item.step === "erro") continue;
+      if (item.step !== "aguardando") continue;
 
       const baseFrom = Math.round((i / total) * 100);
       const baseTo   = Math.round(((i + 1) / total) * 100);
-      const midPoint = baseFrom + Math.round((baseTo - baseFrom) * 0.4);
 
       setImportQueue(prev => prev.map((it, idx) => idx === i ? { ...it, step: "analisando" } : it));
-      startSimulatedProgress(baseFrom, midPoint, 2000);
+      startSimulatedProgress(baseFrom, baseTo, 2000);
 
-      let preview: any = null;
       try {
-        preview = await previewMut.mutateAsync({ companyId, base64: item.base64 });
+        const preview = await previewMut.mutateAsync({ companyId, base64: item.base64 });
         stopSimulatedProgress();
-        setImportProgress(midPoint);
+        setImportProgress(baseTo);
         setImportQueue(prev => prev.map((it, idx) => idx === i ? { ...it, step: "preview", preview } : it));
       } catch (err: any) {
         stopSimulatedProgress();
         setImportQueue(prev => prev.map((it, idx) => idx === i ? { ...it, step: "erro", erro: err.message } : it));
         setImportProgress(baseTo);
-        continue;
       }
+    }
+
+    setImportProgress(100);
+    setTimeout(() => { setImportProgress(0); }, 1200);
+    setImportRunning(false);
+  }
+
+  // Fase 2: confirmação explícita — grava os registros após o usuário revisar os totais
+  async function executarConfirmar() {
+    if (!importQueue.length || importRunning) return;
+    setImportRunning(true);
+    setImportProgress(0);
+
+    const previewed = importQueue.filter(it => it.step === "preview");
+    const total     = previewed.length;
+
+    for (let i = 0; i < importQueue.length; i++) {
+      const item = importQueue[i];
+      if (item.step !== "preview") continue;
+
+      const baseFrom = Math.round((i / total) * 100);
+      const baseTo   = Math.round(((i + 1) / total) * 100);
 
       setImportQueue(prev => prev.map((it, idx) => idx === i ? { ...it, step: "importando" } : it));
-      startSimulatedProgress(midPoint, baseTo, 1500);
+      startSimulatedProgress(baseFrom, baseTo, 1500);
 
       try {
         const resultado = await confirmarMut.mutateAsync({
@@ -449,8 +470,11 @@ export function FinanceiroChequesRecebidosContent() {
     return { novos, ignorados, erros };
   }, [importQueue]);
 
-  const allDone = importQueue.length > 0 && importQueue.every(it => it.step === "done" || it.step === "erro");
-  const hasPending = importQueue.some(it => it.step === "aguardando");
+  const allDone       = importQueue.length > 0 && importQueue.every(it => it.step === "done" || it.step === "erro");
+  const hasPending    = importQueue.some(it => it.step === "aguardando");
+  const allPreviewed  = importQueue.length > 0 && !hasPending && importQueue.some(it => it.step === "preview") &&
+                        importQueue.every(it => it.step === "preview" || it.step === "done" || it.step === "erro");
+  const previewNovos  = importQueue.reduce((s, it) => s + (it.preview?.novos ?? 0), 0);
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -937,22 +961,42 @@ export function FinanceiroChequesRecebidosContent() {
             <Button variant="outline" onClick={fecharImport} disabled={importRunning}>
               {allDone ? "Fechar" : "Cancelar"}
             </Button>
-            {!allDone && (
+
+            {/* Fase 1: Analisar arquivos (dry-run, sem gravar) */}
+            {!allDone && hasPending && (
               <Button
-                onClick={executarImport}
-                disabled={importQueue.length === 0 || importRunning || !hasPending}
+                onClick={executarPreview}
+                disabled={importRunning}
                 className="relative overflow-hidden bg-indigo-600 hover:bg-indigo-700 text-white min-w-[160px]"
               >
                 {importRunning && (
-                  <span
-                    className="absolute inset-y-0 left-0 bg-white/15 transition-all duration-300 pointer-events-none"
-                    style={{ width: `${importProgress}%` }}
-                  />
+                  <span className="absolute inset-y-0 left-0 bg-white/15 transition-all duration-300 pointer-events-none"
+                    style={{ width: `${importProgress}%` }} />
+                )}
+                <span className="relative flex items-center gap-2">
+                  {importRunning
+                    ? <><Loader2 className="h-4 w-4 animate-spin" /> Analisando… {importProgress}%</>
+                    : <><FileSpreadsheet className="h-4 w-4" /> Analisar {importQueue.filter(i => i.step === "aguardando").length} arquivo(s)</>
+                  }
+                </span>
+              </Button>
+            )}
+
+            {/* Fase 2: Confirmar importação (grava — só aparece após o usuário revisar os totais) */}
+            {!allDone && allPreviewed && (
+              <Button
+                onClick={executarConfirmar}
+                disabled={importRunning}
+                className="relative overflow-hidden bg-green-600 hover:bg-green-700 text-white min-w-[200px]"
+              >
+                {importRunning && (
+                  <span className="absolute inset-y-0 left-0 bg-white/15 transition-all duration-300 pointer-events-none"
+                    style={{ width: `${importProgress}%` }} />
                 )}
                 <span className="relative flex items-center gap-2">
                   {importRunning
                     ? <><Loader2 className="h-4 w-4 animate-spin" /> Importando… {importProgress}%</>
-                    : <><Upload className="h-4 w-4" /> Importar {importQueue.filter(i => i.step === "aguardando").length} arquivo(s)</>
+                    : <><Upload className="h-4 w-4" /> Confirmar importação ({previewNovos} novos)</>
                   }
                 </span>
               </Button>
@@ -1197,6 +1241,12 @@ export function FinanceiroChequesRecebidosContent() {
                 <span className="text-muted-foreground">Bom para</span>
                 <span>{fmtData(alocDrilldown.data_bom_para)}</span>
               </div>
+              {alocDrilldown.compensado_em && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Compensado em</span>
+                  <span className="font-medium text-teal-700">{fmtData(alocDrilldown.compensado_em)}</span>
+                </div>
+              )}
               {alocDrilldown.entry_data && (
                 <>
                   <div className="border-t border-border pt-2 mt-1" />
@@ -1204,6 +1254,12 @@ export function FinanceiroChequesRecebidosContent() {
                     <span className="text-muted-foreground">Data do pagamento</span>
                     <span className="font-medium">{fmtData(alocDrilldown.entry_data)}</span>
                   </div>
+                  {alocDrilldown.entry_valor != null && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Valor do pagamento</span>
+                      <span className="font-semibold">{formatBRL(Number(alocDrilldown.entry_valor))}</span>
+                    </div>
+                  )}
                   {alocDrilldown.entry_referencia && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Referência</span>

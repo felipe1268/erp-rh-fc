@@ -218,7 +218,7 @@ export const chequesRecebidosRouter = router({
       }
 
       const res = await dbExecute(db, `
-        SELECT cr.*, fe.data_competencia AS entry_data, fe.descricao AS entry_descricao, fe.referencia AS entry_referencia
+        SELECT cr.*, fe.data_competencia AS entry_data, fe.descricao AS entry_descricao, fe.referencia AS entry_referencia, fe.valor AS entry_valor
         FROM (SELECT * FROM financial_cheques_recebidos WHERE ${where}) cr
         LEFT JOIN financial_entries fe ON fe.id = cr.entry_id
         ORDER BY COALESCE(cr.data_bom_para, cr.data_emissao) DESC, cr.id DESC
@@ -366,6 +366,12 @@ export const chequesRecebidosRouter = router({
       maybeSet("data_emissao", input.dataEmissao);
       maybeSet("data_bom_para", input.dataBomPara);
       maybeSet("status", input.status);
+      // compensado_em: registra o momento exato da compensação para rastreabilidade
+      if (input.status === "compensado") {
+        sets.push(`compensado_em=NOW()`);
+      } else if (input.status !== undefined) {
+        sets.push(`compensado_em=NULL`);
+      }
       maybeSet("fornecedor_alocado_id", input.fornecedorAlocadoId);
       maybeSet("fornecedor_alocado_nome", input.fornecedorAlocadoNome);
       maybeSet("entry_id", input.entryId);

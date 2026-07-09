@@ -1,4 +1,33 @@
 /**
+ * Rev. 4113 — **FIX CODE REVIEW: CHEQUES RECEBIDOS — 3 GAPS (compensado_em + import 2 fases + entry_valor).**
+ *
+ * CONTEXTO: Code review rejeitou o módulo Cheques Recebidos por 3 gaps funcionais.
+ *
+ * O QUE FOI FEITO:
+ * 1. `compensado_em TIMESTAMP` adicionado via SyncSchema+ (ADD COLUMN IF NOT EXISTS).
+ *    Mutation `atualizar`: quando status→"compensado" seta `compensado_em=NOW()`;
+ *    quando qualquer outro status é setado, limpa `compensado_em=NULL`.
+ *    Drilldown exibe a data de compensação em teal.
+ *
+ * 2. Fluxo de import dividido em 2 fases EXPLÍCITAS:
+ *    - Fase 1 "Analisar": botão indigo → roda `importarPreview` para todos os arquivos
+ *      aguardando → mostra contagens (novos/duplicados) → pára com step="preview".
+ *    - Fase 2 "Confirmar importação (N novos)": botão verde → só aparece após o usuário
+ *      revisar os totais → roda `importarConfirmar` que grava de fato.
+ *    Antes: uma única função corria preview+confirm sequencialmente sem pausa.
+ *
+ * 3. `fe.valor AS entry_valor` adicionado ao SELECT do `listar` (JOIN com financial_entries).
+ *    Drilldown exibe "Valor do pagamento" junto com data/referência/descrição.
+ *
+ * ARQUIVOS TOCADOS:
+ * - server/_core/index.ts (SyncSchema+ compensado_em)
+ * - server/routers/chequesRecebidos.ts (atualizar mutation + fe.valor no listar)
+ * - client/src/pages/financeiro/FinanceiroChequesRecebidos.tsx (import 2 fases + drilldown)
+ *
+ * ZERO DELETE · ZERO UPDATE em tabelas existentes · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4112 — **AUTO-MERGE DE FORNECEDORES DUPLICADOS NO BOOT (MESMO CNPJ OU MESMO NOME).**
  *
  * CONTEXTO: O usuário não queria tela manual de revisão — apenas que duplicatas (mesmo CNPJ

@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4113** — **FIX CODE REVIEW: CHEQUES RECEBIDOS — 3 GAPS (compensado_em + import 2 fases + entry_valor).** `compensado_em TIMESTAMP` via SyncSchema+; mutation `atualizar` seta/limpa ao mudar status; import dividido em Fase 1 (Analisar, dry-run) + Fase 2 (Confirmar — botão verde só após revisar totais); `fe.valor AS entry_valor` no SELECT do listar + exibe no drilldown. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4112** — **AUTO-MERGE DE FORNECEDORES DUPLICADOS NO BOOT (MESMO CNPJ OU MESMO NOME).** Job `[AutoMergeFornecedores]` roda a cada restart (t=10s): detecta grupos por CNPJ idêntico (14 dígitos) ou UPPER(TRIM(razao_social)) idêntico, mantém o com mais OCs, migra 11 FKs em db.transaction, COALESCE-enriquece dados, soft-delete do descartado. Idempotente. 5 pares unificados na 1ª execução. Aba manual de "Duplicidades" removida. ZERO DELETE DE DADOS REAIS · ZERO ALTER.
 
-- **Rev. 4111** — **EMPRESAS TERCEIRAS: ABA "DUPLICIDADES" (VERSÃO INICIAL MANUAL).** Supercedida pela Rev. 4112 (auto-merge). ZERO DELETE · ZERO ALTER.
-
 ### 5 one-liners
+
+- **Rev. 4111** — **EMPRESAS TERCEIRAS: ABA "DUPLICIDADES" (VERSÃO INICIAL MANUAL).** Supercedida pela Rev. 4112 (auto-merge). ZERO DELETE · ZERO ALTER.
 
 - **Rev. 4110** — **FIX: EMPRESAS TERCEIRAS — BOTÃO "REATIVAR" AUSENTE + FIX JOIN `et."companyId"` NA PLANILHA CONTABILIDADE.** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
