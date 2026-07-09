@@ -154,8 +154,11 @@ export async function buildExtratoBancarioBuffer(
   const fcCfg = await loadFcXlsxConfig(companyId).catch(() => null);
   const HEADER_COLOR = fcCfg?.corCabecalho ?? PURPLE;
 
-  // ── 1. TODAS as contas da empresa (com ou sem extrato) ────────────────────
+  // ── 1. TODAS as contas ATIVAS da empresa (com ou sem extrato) ─────────────
   // Rev. 4091 — busca direto de company_bank_accounts para incluir Caixa Interno
+  // Rev. 4123 — restringe a contas ativas e não excluídas: sem esse filtro,
+  // contas desativadas/excluídas em "Contas Bancárias" continuavam aparecendo
+  // como aba/planilha na exportação (resquício de conta antiga).
   const contasQ = await db.$client.query(
     `SELECT id AS conta_bancaria_id,
             banco,
@@ -164,6 +167,8 @@ export async function buildExtratoBancarioBuffer(
             conta
        FROM company_bank_accounts
       WHERE "companyId" = $1
+        AND ativo = 1
+        AND "deletedAt" IS NULL
       ORDER BY id`,
     [companyId]
   );

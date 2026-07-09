@@ -136,6 +136,7 @@ async function queryData(db: any, companyId: number, di: string, df: string) {
              COALESCE(fn.emitente_cnpj, fn.tomador_cnpj, '') AS fornecedor_cnpj
       FROM bank_statement_lines bsl
       LEFT JOIN company_bank_accounts cba ON cba.id = bsl.conta_bancaria_id
+        AND cba.ativo = 1 AND cba."deletedAt" IS NULL
       LEFT JOIN financial_entries fe ON fe.id = bsl.entry_id
       LEFT JOIN fiscal_notes fn ON fn.stmt_line_id = bsl.id
       WHERE bsl.company_id = $1 AND bsl.data >= $2 AND bsl.data < $3

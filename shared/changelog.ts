@@ -1,4 +1,49 @@
 /**
+ * Rev. 4123 — **FIX: PLANILHA/PACOTE DE EXTRATO BANCÁRIO — CONTA DESATIVADA/EXCLUÍDA CONTINUAVA APARECENDO.**
+ *
+ * CONTEXTO: usuário reportou (com prints de "Contas Bancárias" mostrando 8 contas ativas) que a
+ * planilha de extrato exibia uma conta bancária que não existe mais no cadastro — resquício de uma
+ * conta antiga desativada/excluída.
+ *
+ * CAUSA-RAIZ: `buildExtratoBancarioBuffer` (usada tanto no download avulso "contabilidade-xlsx"
+ * quanto no ZIP "Pacote Contador") lista as contas da empresa direto de `company_bank_accounts`
+ * SEM filtrar `ativo=1 AND "deletedAt" IS NULL` — toda conta já cadastrada um dia, mesmo desativada
+ * ou soft-deletada, ganhava sua própria aba na planilha. O mesmo gap existia no LEFT JOIN de
+ * `bank_statement_lines` → `company_bank_accounts` do relatório "Extrato_Completo.xlsx" (Pacote
+ * Contador): linhas de extrato antigas vinculadas a uma conta já excluída ainda resolviam o
+ * apelido/banco da conta morta.
+ *
+ * CORREÇÃO: `server/routers/downloadContabilidadeXlsx.ts` — query de contas agora filtra
+ * `ativo=1 AND "deletedAt" IS NULL`. `server/routers/downloadPacoteContador.ts` — o LEFT JOIN com
+ * `company_bank_accounts` no relatório consolidado ganhou a mesma condição (linhas de conta morta
+ * caem para NULL/"" em vez de mostrar o nome da conta excluída). Resultado: a planilha de extrato
+ * passa a espelhar EXATAMENTE as contas ativas em "Contas Bancárias", nem mais nem menos.
+ * ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+ */
+
+/**
+ * Rev. 4122 — **CATEGORIAS DE FORNECIMENTO: CRIAR NOVA CATEGORIA COM BLOQUEIO DE DUPLICIDADE.**
+ *
+ * CONTEXTO: no painel "Categorias de Fornecimento" do cadastro de fornecedor só era possível
+ * selecionar entre categorias já existentes (padrão + usadas por outros fornecedores); usuário
+ * pediu a capacidade de CRIAR uma categoria nova diretamente dali, com uma regra explícita para
+ * impedir criar categorias duplicadas ou muito parecidas (ex.: "Ar Condicionado" vs
+ * "Ar condicionados").
+ *
+ * IMPLEMENTAÇÃO: `client/src/pages/compras/Fornecedores.tsx` — adicionado campo "Nova
+ * categoria..." + botão no painel de categorias. Ao criar, o nome digitado é normalizado
+ * (remove acento/caixa/plural simples) e comparado via distância de Levenshtein contra TODAS as
+ * categorias já existentes (padrão `CATEGORIAS_PADRAO` + distintas usadas por fornecedores via
+ * `listarCategoriasFornecedores` + criadas na sessão atual). Igualdade normalizada bloqueia e
+ * seleciona a existente; similaridade ≥ 0,8 bloqueia com sugestão da categoria parecida. Sem
+ * duplicidade, a categoria nova é adicionada localmente e já fica selecionada no fornecedor —
+ * passa a existir globalmente para os demais fornecedores assim que este for salvo (mesmo
+ * mecanismo já usado hoje: não há tabela dedicada de categorias, apenas o array `categorias` em
+ * `fornecedores`, com a lista de opções derivada por `listarCategoriasFornecedores`).
+ * ZERO DELETE · ZERO ALTER — reaproveita coluna JSON já existente, sem migração de schema.
+ */
+
+/**
  * Rev. 4121 — **BUSCA E PREENCHIMENTO AUTOMÁTICO DE CNPJ PARA FORNECEDORES SEM CADASTRO (LOTE 2/N — ANÁLISE REFINADA).**
  *
  * CONTEXTO: usuário apontou que o lote 1 (Rev. 4120) foi raso demais — muitos nomes que PARECEM
