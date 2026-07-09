@@ -190,7 +190,7 @@ type SiapGeoNota = {
   tomadorCnpj: string; tomadorNome: string;
   tomadorInscricao: string; tomadorEmail: string; tomadorTelefone: string;
   valorBruto: number; valorLiquido: number;
-  issRetido: number; retencaoInss: number; retencaoIrrf: number;
+  issRetido: number; valorIssInformado: number; retencaoInss: number; retencaoIrrf: number;
   retencaoCsll: number; retencaoPis: number; retencaoCofins: number; retencaoOutras: number;
   deducoesTotal: number; aliquotaIss: number;
   cdCnae: string; cdListaServico: string;
@@ -229,6 +229,16 @@ function parseSiapGeoExportXml(xml: string): SiapGeoNota[] | null {
       const retencoes  = inss + csll + pis + cofins + ir + outras;
       // alíquota: XML traz em centésimos de porcento (217 = 2.17%)
       const aliquota   = Math.round(parseInt(String(nf.aliquota ?? "0"), 10)) / 100;
+      // vl_iss deste formato (exportação SIAP GEO) é o ISS DEVIDO informado na nota, não um
+      // flag de retenção — o XML não traz nenhum campo indicando se o tomador reteve o ISS.
+      // Gravar isso como "issRetido" (coluna usada no recálculo de Valor Líquido em toda a
+      // tela de Notas Fiscais) faria o sistema subtrair o ISS do valor a receber mesmo quando
+      // ele NÃO foi retido (mais comum: prestador recolhe via guia própria) — foi essa
+      // confusão que causava o Valor Líquido divergir do valor real da nota após qualquer
+      // edição/reabertura do registro. Sem sinal explícito de retenção no XML, o padrão seguro
+      // é 0 (não retido); o Valor Líquido continua batendo com o valor bruto − retenções
+      // federais, exatamente como no documento fiscal original.
+      const issRetido  = 0;
       return {
         numero:           String(nf.nr_nf ?? ""),
         serie:            String(nf.serie ?? ""),
@@ -243,7 +253,8 @@ function parseSiapGeoExportXml(xml: string): SiapGeoNota[] | null {
         tomadorTelefone:  String(nf.t_telefone ?? ""),
         valorBruto:       bruto,
         valorLiquido:     Math.max(0, bruto - retencoes),
-        issRetido:        centsToReais(nf.vl_iss),
+        issRetido,
+        valorIssInformado: centsToReais(nf.vl_iss),
         retencaoInss:     inss,
         retencaoIrrf:     ir,
         retencaoCsll:     csll,
@@ -1412,7 +1423,9 @@ export const nfseEmitidasRouter = router({
                     nota.tomadorInscricao || null,
                     nota.tomadorEmail || null,
                     nota.tomadorTelefone || null,
-                    nota.discriminacao || null,
+                    nota.valorIssInformado > 0
+                      ? `${nota.discriminacao || ""} [ISS informado na nota: R$ ${nota.valorIssInformado.toFixed(2)} — recolhido pelo prestador, não retido]`.trim()
+                      : (nota.discriminacao || null),
                     nota.cdCnae || null,
                     nota.cdListaServico || null,
                     nota.optanteSimples,

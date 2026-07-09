@@ -1,4 +1,33 @@
 /**
+ * Rev. 4125 — **FIX RAIZ: VALOR LÍQUIDO DE NF-e/NFS-e IMPORTADA (EMITIDAS E RECEBIDAS) DIVERGINDO DO
+ * DOCUMENTO REAL — CAUSA: "ISS INFORMADO" CONFUNDIDO COM "ISS RETIDO".**
+ *
+ * CONTEXTO: usuário reportou que o Valor Líquido a Receber/a Pagar de notas importadas via XML (tanto
+ * emitidas quanto recebidas) saía diferente do valor real do documento, exigindo correção manual.
+ *
+ * CAUSA-RAIZ: o parser do formato de exportação em lote SIAP GEO (`parseSiapGeoExportXml`, usado na
+ * importação de NFS-e emitidas) gravava `iss_retido = vl_iss` (o ISS DEVIDO informado na nota) sem
+ * nenhum sinal no XML confirmando se esse ISS foi de fato retido pelo tomador — esse formato não traz
+ * flag de retenção. A tela de Notas Fiscais (`FinanceiroNotasFiscais.tsx`, `calcValorLiquido`) usa a
+ * coluna `iss_retido` para RECALCULAR o Valor Líquido (Bruto − ISS retido − retenções federais) toda
+ * vez que a nota é reaberta/salva no formulário de edição — então qualquer nota SIAP GEO que fosse
+ * reaberta e salva tinha seu Valor Líquido corretamente calculado na importação (`bruto − retenções
+ * federais`, sem tocar ISS) permanentemente CORROMPIDO ao subtrair um ISS que na maioria dos casos o
+ * prestador recolhe por guia própria, não retido pelo tomador.
+ *
+ * FIX: `parseSiapGeoExportXml` agora grava `iss_retido = 0` (sem sinal de retenção no XML, o padrão
+ * seguro é considerar não retido) e preserva o ISS informado apenas como anotação em
+ * "Discriminação" (`[ISS informado na nota: R$ X — recolhido pelo prestador, não retido]`), sem afetar
+ * o Valor Líquido. BACKFILL: 569 registros já importados (`origem='nfse_siapgeo_export'`) com
+ * `iss_retido > 0` foram corrigidos — `valor_liquido` recalculado para `bruto − retenções federais` e
+ * `iss_retido` zerado — restaurando o valor batendo com o documento original. Conferidos também os
+ * caminhos de NFS-e individual ABRASF (`parseSefinNfseXml`/Full) e NF-e recebida via SEFAZ (`sefaz.ts`,
+ * `vNF`) e o import por IA/PDF (`fiscalNotes.ts`) — todos já usam o Valor Líquido DECLARADO no próprio
+ * documento (não recalculam), então não apresentavam o mesmo problema. ZERO DELETE · ZERO ALTER
+ * destrutivo (backfill foi UPDATE de colunas já existentes, com WHERE restrito ao lote afetado).
+ */
+
+/**
  * Rev. 4124 — **PLANILHA DE EXTRATO — RASTREABILIDADE DE NF-e CONCILIADA COM PAGAMENTO (ANÁLISE + HARDENING).**
  *
  * CONTEXTO: usuário pediu que notas fiscais identificadas/conciliadas na conciliação bancária (badge

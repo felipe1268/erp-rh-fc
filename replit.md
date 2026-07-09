@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4125** — **FIX RAIZ: VALOR LÍQUIDO DE NF-e/NFS-e IMPORTADA DIVERGINDO DO DOCUMENTO REAL.** Causa: o parser de importação em lote SIAP GEO (NFS-e emitidas) gravava `iss_retido` = ISS informado na nota, sem sinal no XML de que era efetivamente retido; a tela de Notas Fiscais recalcula Valor Líquido subtraindo `iss_retido` toda vez que a nota é reaberta/salva, corrompendo permanentemente o valor correto calculado na importação. Fix: `iss_retido = 0` (sem sinal de retenção, padrão seguro é não retido); ISS informado vira anotação em Discriminação. Backfill corrigiu 569 registros já importados. Demais caminhos (ABRASF individual, NF-e via SEFAZ, import por IA/PDF) já usam o Valor Líquido declarado no documento — não afetados. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4124** — **PLANILHA DE EXTRATO — RASTREABILIDADE DE NF-e CONCILIADA COM PAGAMENTO (ANÁLISE + HARDENING).** O vínculo NF↔pagamento (`fiscal_notes.stmt_line_id → bank_statement_lines.id`, gravado por `fiscalNotes.vincularExtrato`) já é o mesmo usado no badge "Conciliada" da tela Notas Fiscais E já era a camada 1 (mais forte) do LEFT JOIN que preenche "Nº Nota Fiscal"/"CNPJ" na planilha de extrato e no Extrato_Completo.xlsx do Pacote Contador — ou seja, a conexão já é automática, sem ação manual extra. Hardening: os JOINs não filtravam `company_id` nem excluíam `status='cancelada'`; adicionado em ambos. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
-- **Rev. 4123** — **FIX: PLANILHA/PACOTE DE EXTRATO BANCÁRIO — CONTA DESATIVADA/EXCLUÍDA CONTINUAVA APARECENDO.** `buildExtratoBancarioBuffer` (contabilidade-xlsx + Pacote Contador) listava contas direto de `company_bank_accounts` sem filtrar `ativo=1 AND deletedAt IS NULL`; toda conta já cadastrada um dia, mesmo desativada/excluída, ganhava aba própria. Mesmo gap no LEFT JOIN de `bank_statement_lines` → `company_bank_accounts` do relatório "Extrato_Completo.xlsx". Corrigido em ambos; planilha agora espelha exatamente as contas ativas de "Contas Bancárias". ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
 ### 5 one-liners
+
+- **Rev. 4123** — **FIX: PLANILHA/PACOTE DE EXTRATO BANCÁRIO — CONTA DESATIVADA/EXCLUÍDA CONTINUAVA APARECENDO.** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4122** — **CATEGORIAS DE FORNECIMENTO: CRIAR NOVA CATEGORIA COM BLOQUEIO DE DUPLICIDADE.** ZERO DELETE · ZERO ALTER.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4119** — **FIX: BADGE DE SITUAÇÃO CNPJ FALSO-POSITIVO EM VERMELHO + `regimeTributario` ARRAY QUEBRANDO O SALVAR.** ZERO DELETE · ZERO ALTER.
 
-- **Rev. 4118** — **EXECUÇÃO DO BACKFILL EM MASSA + 2 BUGS CRÍTICOS CORRIGIDOS + CLASSIFICAÇÃO DE CATEGORIA PARA TODOS.** ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4117 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4118 e anteriores.
 
 ## User preferences
 

@@ -156,3 +156,4 @@
 - [Tenant isolation audit — recurring IDOR pattern](tenant-isolation-audit-idor-pattern.md) — lookup-by-id procedures often skip a companyId access check; standard fix + `admin` role is intentionally global (SaaS painel mestre needs a separate client-admin role).
 - [Contas a Pagar — FD nunca consolida](contas-pagar-fd-exclusion.md) — Faturamento Direto (cliente/terceiro paga o fornecedor) deve ficar SEMPRE fora de qualquer agrupamento por ciclo de fechamento de fornecedor.
 - [Marketing screenshot capture](marketing-screenshot-capture.md) — temp dev auth bypass for real screenshots must be grepped/reverted fully across ALL files it touched; user's own unmasked screenshots = implicit consent to publish as-is.
+- [SIAP GEO NFSe ISS informado vs retido](nfse-siapgeo-issretido-vs-informado.md) — bulk NFSe import format has no retention flag; never map "ISS due" into `iss_retido` (screen recomputes Valor Líquido from it on every save).
