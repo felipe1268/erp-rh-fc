@@ -874,6 +874,7 @@ function SkillEmployeesDialog({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-gray-50">
+                  <th className="text-left p-3 font-semibold"></th>
                   <th className="text-left p-3 font-semibold">Funcionário</th>
                   <th className="text-left p-3 font-semibold">Função</th>
                   <th className="text-left p-3 font-semibold">Nível</th>
@@ -886,6 +887,14 @@ function SkillEmployeesDialog({
               <tbody>
                 {employees.map((emp: any, idx: number) => (
                   <tr key={idx} className="border-b hover:bg-gray-50">
+                    <td className="p-3">
+                      <Avatar className="h-9 w-9">
+                        <AvatarImage src={emp.empFotoUrl || undefined} alt={emp.empNome} />
+                        <AvatarFallback className="bg-blue-100 text-blue-700 text-xs font-semibold">
+                          {getIniciais(emp.empNome)}
+                        </AvatarFallback>
+                      </Avatar>
+                    </td>
                     <td className="p-3 font-medium">{emp.empNome}</td>
                     <td className="p-3 text-muted-foreground">{emp.empFuncao}</td>
                     <td className="p-3">
