@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4127** — **CNPJ OBRIGATÓRIO PARA CRIAR NOVO FORNECEDOR/EMPRESA TERCEIRA.** Regra do usuário: só permite CRIAR (não edita) fornecedor/empresa terceira com CNPJ preenchido. `criarFornecedor` (compras.ts) e `empresas.create` (terceiros.ts) tiveram o schema Zod do `cnpj` endurecido pra `.refine()` exigindo 14 dígitos (antes era `.optional()`/`min(1)` fraco) — barreira real no backend, não só no formulário. Fornecedores.tsx ganhou checagem client-side espelhada + label "*" só na criação; EmpresasTerceiras.tsx já validava. Edição de cadastros antigos sem CNPJ continua permitida. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4126** — **PADRONIZAÇÃO DO FILTRO DE MÊS/ANO + BOTÃO "ANO TODO" (EFD CONTRIBUIÇÕES / EFD ICMS-IPI COM DOWNLOAD EM LOTE).** `PeriodSelectorCard.tsx` (componente compartilhado, já usado por 10 dashboards) ganhou `mes: number|null` + prop opcional `onAnoTodo` (botão "Ano todo", 100% retrocompatível). Aplicado em EfdContribuicoes.tsx/EfdIcmsIpi.tsx: "Ano todo" baixa um ZIP com os 12 TXT mensais (não existe arquivo anual único válido no leiaute SPED); novos endpoints `GET /api/download/efd-contribuicoes-ano` e `/efd-icms-ipi-ano` usam `archiver` reaproveitando os builders mensais existentes. BancoHoras.tsx (aba Saldos) migrada visualmente pro componente padrão (sem botão Ano Todo — lá o saldo é acumulado até o mês, não agregação anual). Restam ~19 telas (Financeiro, Folha, Medições, Parceiros) com seletor inline — migração ficará para revisões seguintes, tela por tela. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4125** — **FIX RAIZ: VALOR LÍQUIDO DE NF-e/NFS-e IMPORTADA DIVERGINDO DO DOCUMENTO REAL.** Causa: o parser de importação em lote SIAP GEO (NFS-e emitidas) gravava `iss_retido` = ISS informado na nota, sem sinal no XML de que era efetivamente retido; a tela de Notas Fiscais recalcula Valor Líquido subtraindo `iss_retido` toda vez que a nota é reaberta/salva, corrompendo permanentemente o valor correto calculado na importação. Fix: `iss_retido = 0` (sem sinal de retenção, padrão seguro é não retido); ISS informado vira anotação em Discriminação. Backfill corrigiu 569 registros já importados. Demais caminhos (ABRASF individual, NF-e via SEFAZ, import por IA/PDF) já usam o Valor Líquido declarado no documento — não afetados. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4125** — **FIX RAIZ: VALOR LÍQUIDO DE NF-e/NFS-e IMPORTADA DIVERGINDO DO DOCUMENTO REAL.** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4124** — **PLANILHA DE EXTRATO — RASTREABILIDADE DE NF-e CONCILIADA COM PAGAMENTO (ANÁLISE + HARDENING).** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4121** — **BUSCA E PREENCHIMENTO AUTOMÁTICO DE CNPJ PARA FORNECEDORES SEM CADASTRO (LOTE 2/N — ANÁLISE REFINADA).** ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4120** — **BUSCA E PREENCHIMENTO AUTOMÁTICO DE CNPJ PARA FORNECEDORES SEM CADASTRO (LOTE 1/N).** ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4118 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4120 e anteriores.
 
 ## User preferences
 

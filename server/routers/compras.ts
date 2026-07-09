@@ -1438,7 +1438,11 @@ export const comprasRouter = router({
   criarFornecedor: protectedProcedure
     .input(z.object({
       companyId:       z.number(),
-      cnpj:            z.string().optional(),
+      // Rev. 4127 — CNPJ é obrigatório para criar um novo fornecedor (regra do
+      // usuário); precisa ter 14 dígitos numéricos, com ou sem máscara.
+      cnpj:            z.string().refine(v => (v || "").replace(/\D/g, "").length === 14, {
+        message: "CNPJ é obrigatório e deve ter 14 dígitos para cadastrar um novo fornecedor.",
+      }),
       razaoSocial:     z.string().min(1),
       nomeFantasia:    z.string().optional(),
       situacaoReceita: z.string().optional(),

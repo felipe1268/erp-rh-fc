@@ -751,6 +751,12 @@ export default function Fornecedores() {
       return;
     }
     if (!form.razaoSocial.trim()) { toast.error("Razão Social é obrigatória."); return; }
+    // Rev. 4127 — CNPJ é obrigatório para CRIAR um novo fornecedor (edição de
+    // cadastros antigos sem CNPJ ainda é permitida, para não travar quem já existe).
+    if (!editando && form.cnpj.replace(/\D/g, "").length !== 14) {
+      toast.error("CNPJ é obrigatório para cadastrar um novo fornecedor. Digite um CNPJ completo (14 dígitos).");
+      return;
+    }
     // Verificação de CNPJ duplicado no momento do clique — cobre casos de
     // paste rápido onde o timer de 500ms ainda não disparou, ou edição com
     // troca de CNPJ para um já existente.
@@ -1197,7 +1203,7 @@ export default function Fornecedores() {
               {/* CNPJ + Identificação inline */}
               <div className="grid grid-cols-12 gap-3 items-end">
                 <div className="col-span-3">
-                  <Label className="text-xs font-medium text-slate-600 mb-1 block">CNPJ</Label>
+                  <Label className="text-xs font-medium text-slate-600 mb-1 block">CNPJ{!editando ? " *" : ""}</Label>
                   <div className="flex gap-1.5">
                     <Input
                       value={form.cnpj}

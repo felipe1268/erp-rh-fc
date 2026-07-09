@@ -1,4 +1,27 @@
 /**
+ * Rev. 4127 — **CNPJ OBRIGATÓRIO PARA CRIAR NOVO FORNECEDOR/EMPRESA TERCEIRA.**
+ *
+ * CONTEXTO: usuário pediu uma regra explícita: só permitir CRIAR um novo cadastro de fornecedor
+ * (Compras) ou empresa terceira quando o CNPJ for preenchido — é obrigatório.
+ *
+ * IMPLEMENTAÇÃO:
+ * 1. `server/routers/compras.ts` (`criarFornecedor`) — schema Zod do `cnpj` trocado de
+ *    `.optional()` para `.refine(...)` exigindo 14 dígitos numéricos (com ou sem máscara); é a
+ *    barreira real, pois bloqueia qualquer chamada direta à API, não só o formulário.
+ * 2. `server/routers/terceiros.ts` (`empresas.create`) — já exigia `cnpj: z.string().min(1)`
+ *    (aceitava qualquer string não vazia, ex. "-"); endurecido para o mesmo `.refine()` de 14
+ *    dígitos.
+ * 3. `client/src/pages/compras/Fornecedores.tsx` — `salvar()` ganhou checagem explícita "CNPJ
+ *    obrigatório" ANTES do submit quando `!editando` (criando um novo); label do campo mostra "*"
+ *    só na criação. `client/src/pages/terceiros/EmpresasTerceiras.tsx` já tinha essa validação no
+ *    client (mantida, sem alteração).
+ * 4. Regra é só para CRIAR: EDIÇÃO de cadastros antigos sem CNPJ continua permitida (não trava quem
+ *    já existe no sistema sem esse dado histórico).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4126 — **PADRONIZAÇÃO DO FILTRO DE MÊS/ANO + BOTÃO "ANO TODO" (EFD CONTRIBUIÇÕES / EFD ICMS-IPI
  * COM DOWNLOAD EM LOTE).**
  *

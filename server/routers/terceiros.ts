@@ -527,7 +527,11 @@ export const terceirosRouter = router({
     create: protectedProcedure
       .input(z.object({ companyId: z.number(), companyIds: z.array(z.number()).optional(), razaoSocial: z.string().min(1),
         nomeFantasia: z.string().optional(),
-        cnpj: z.string().min(1),
+        // Rev. 4127 — CNPJ é obrigatório para criar; precisa ter 14 dígitos
+        // numéricos (com ou sem máscara), não basta ser não-vazio.
+        cnpj: z.string().refine(v => (v || "").replace(/\D/g, "").length === 14, {
+          message: "CNPJ é obrigatório e deve ter 14 dígitos para cadastrar uma nova empresa terceira.",
+        }),
         inscricaoEstadual: z.string().optional(),
         inscricaoMunicipal: z.string().optional(),
         cep: z.string().optional(),
