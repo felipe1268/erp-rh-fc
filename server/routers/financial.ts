@@ -7915,7 +7915,7 @@ export const financialRouter = router({
       }
       // Rev. 4132 — sem nº ALGUM na descrição (ex.: "Cheque Emitido/Debitado" puro, banco
       // não informa nº nenhum): casa por VALOR + DATA DE COMPENSAÇÃO/VENCIMENTO próxima
-      // (±5 dias), e SÓ se o resultado for ÚNICO (ambíguo nunca identifica — regra de ouro
+      // (±15 dias), e SÓ se o resultado for ÚNICO (ambíguo nunca identifica — regra de ouro
       // da conciliação: nada é atribuído sem certeza).
       if (ehCheque && !num) {
         const candidatos = chequesByValor.get(cts) ?? [];
@@ -7926,7 +7926,7 @@ export const financialRouter = router({
               const ref = x.dataCompensacao ?? x.dataVencimento;
               if (!ref) return false;
               const cms = Date.parse(String(ref).slice(0, 10) + "T00:00:00Z");
-              return !isNaN(cms) && Math.abs(cms - lnMs) <= 5 * 86400000;
+              return !isNaN(cms) && Math.abs(cms - lnMs) <= 15 * 86400000;
             });
             if (perto.length === 1) {
               const c = perto[0];
