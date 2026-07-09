@@ -4,7 +4,7 @@
  * Guia Prático v3.2.2 (Ato COTEPE/ICMS 44/2018), COD_VER 017.
  */
 import { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, Download, Save, FileText, Settings, UserCheck } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Save, FileText, Settings, UserCheck, Info } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
