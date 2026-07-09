@@ -144,7 +144,7 @@ function ClienteSelect({
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function FinanceiroChequesRecebidos() {
+export function FinanceiroChequesRecebidosContent() {
   const { companyId } = useCompany();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -454,8 +454,8 @@ export default function FinanceiroChequesRecebidos() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <DashboardLayout>
-      <div className="space-y-5">
+    <>
+    <div className="space-y-5">
 
         {/* ── Cabeçalho ── */}
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1158,6 +1158,27 @@ export default function FinanceiroChequesRecebidos() {
                 <span className="text-muted-foreground">Bom para</span>
                 <span>{fmtData(alocDrilldown.data_bom_para)}</span>
               </div>
+              {alocDrilldown.entry_data && (
+                <>
+                  <div className="border-t border-border pt-2 mt-1" />
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Data do pagamento</span>
+                    <span className="font-medium">{fmtData(alocDrilldown.entry_data)}</span>
+                  </div>
+                  {alocDrilldown.entry_referencia && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Referência</span>
+                      <span className="font-mono text-xs break-all">{alocDrilldown.entry_referencia}</span>
+                    </div>
+                  )}
+                  {alocDrilldown.entry_descricao && (
+                    <div className="flex justify-between gap-4">
+                      <span className="text-muted-foreground shrink-0">Descrição</span>
+                      <span className="text-right break-words">{alocDrilldown.entry_descricao}</span>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
           <DialogFooter>
@@ -1166,6 +1187,10 @@ export default function FinanceiroChequesRecebidos() {
         </DialogContent>
       </Dialog>
 
-    </DashboardLayout>
+    </>
   );
+}
+
+export default function FinanceiroChequesRecebidos() {
+  return <DashboardLayout><FinanceiroChequesRecebidosContent /></DashboardLayout>;
 }

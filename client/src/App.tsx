@@ -588,7 +588,7 @@ function Router() {
         <Route path="/financeiro/conciliacao/workspace" component={() => <RouteGuard component={FinanceiroConciliacaoWorkspace} route="/financeiro/conciliacao" />} />
         <Route path="/financeiro/conciliacao" component={() => <RouteGuard component={FinanceiroConciliacao} route="/financeiro/conciliacao" />} />
         <Route path="/financeiro/cheques" component={() => <RouteGuard component={FinanceiroCheques} route="/financeiro/cheques" />} />
-        <Route path="/financeiro/cheques-recebidos" component={() => <RouteGuard component={FinanceiroChequesRecebidos} route="/financeiro/cheques" />} />
+        <Route path="/financeiro/cheques-recebidos" component={() => { window.location.replace("/financeiro/cheques"); return null; }} />
         <Route path="/financeiro/cartao" component={() => <RouteGuard component={FinanceiroCartaoCredito} route="/financeiro/cartao" />} />
         <Route path="/financeiro/analise-cfo" component={() => <RouteGuard component={FinanceiroAnaliseCFO} route="/financeiro/analise-cfo" />} />
         <Route path="/financeiro/analise-custos/detalhe" component={() => <RouteGuard component={FinanceiroAnaliseCustosDetalhe} route="/financeiro/analise-custos" />} />

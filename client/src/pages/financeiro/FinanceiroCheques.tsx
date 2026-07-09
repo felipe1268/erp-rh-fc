@@ -17,6 +17,7 @@ import { useCompany } from "@/hooks/useCompany";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, FileSpreadsheet, FileText, Sparkles, Loader2, CheckCircle, AlertCircle, AlertTriangle, ShieldCheck, Trash2, Pencil, Search, RotateCcw, Banknote, ChevronLeft, ChevronRight, Link2, X, Landmark, User, CalendarDays, Hash, FileSignature, ExternalLink, Keyboard, CheckCheck } from "lucide-react";
 import { SearchableSelect, type SearchableSelectOption } from "@/components/SearchableSelect";
+import { FinanceiroChequesRecebidosContent } from "./FinanceiroChequesRecebidos";
 
 function formatBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
@@ -206,6 +207,7 @@ export default function FinanceiroCheques() {
   const { toast } = useToast();
   const utils = (trpc as any).useUtils?.() ?? (trpc as any).useContext?.();
   const fileRef = useRef<HTMLInputElement>(null);
+  const [activeTab, setActiveTab] = useState<"emitidos"|"recebidos">("emitidos");
 
   // ── Filtros ──
   // Mesmo padrão da Conciliação Bancária: navegação por ANO + faixa de meses
@@ -787,6 +789,18 @@ export default function FinanceiroCheques() {
 
   return (
     <DashboardLayout>
+      {/* ── Tabs Emitidos / Recebidos ── */}
+      <div className="flex border-b border-border mb-4">
+        <button type="button" onClick={() => setActiveTab("emitidos")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === "emitidos" ? "border-blue-600 text-blue-700" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+          Emitidos
+        </button>
+        <button type="button" onClick={() => setActiveTab("recebidos")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === "recebidos" ? "border-blue-600 text-blue-700" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+          Recebidos
+        </button>
+      </div>
+      {activeTab === "recebidos" ? <FinanceiroChequesRecebidosContent /> : <>
       <div className="space-y-6">
         {/* ── Cabeçalho ── */}
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1867,6 +1881,7 @@ export default function FinanceiroCheques() {
           })()}
         </DialogContent>
       </Dialog>
+      </>}
     </DashboardLayout>
   );
 }

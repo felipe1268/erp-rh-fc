@@ -23,7 +23,7 @@ async function assertCompanyAccess(ctxUser: any, companyId: number) {
   if (ctxUser.role === "admin" || ctxUser.role === "admin_master") return;
   const links = await getUserCompanyLinks(ctxUser.id);
   const allowedIds = (links as any[]).map((l: any) => l.companyId).filter((v: any) => typeof v === "number");
-  if (allowedIds.length === 0) return;
+  if (allowedIds.length === 0) throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
   if (!allowedIds.includes(companyId)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta empresa." });
   }
@@ -218,9 +218,10 @@ export const chequesRecebidosRouter = router({
       }
 
       const res = await dbExecute(db, `
-        SELECT * FROM financial_cheques_recebidos
-        WHERE ${where}
-        ORDER BY COALESCE(data_bom_para, data_emissao) DESC, id DESC
+        SELECT cr.*, fe.data_competencia AS entry_data, fe.descricao AS entry_descricao, fe.referencia AS entry_referencia
+        FROM (SELECT * FROM financial_cheques_recebidos WHERE ${where}) cr
+        LEFT JOIN financial_entries fe ON fe.id = cr.entry_id
+        ORDER BY COALESCE(cr.data_bom_para, cr.data_emissao) DESC, cr.id DESC
         LIMIT 2000
       `, params);
 
@@ -620,19 +621,21 @@ export const chequesRecebidosRouter = router({
       return { removidos: res.rows.length, registros: res.rows };
     }),
 
-  // ── Limpar todos os registros (HARD DELETE — somente admin_master) ──
+  // ── Limpar todos os registros (soft-delete — somente admin_master) ──
   limparTodos: protectedProcedure
     .input(z.object({ companyId: z.coerce.number() }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin_master") {
         throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Admin Master pode executar esta ação." });
       }
+      await assertCompanyAccess(ctx.user, input.companyId);
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível." });
 
       const res = await dbExecute(db, `
-        DELETE FROM financial_cheques_recebidos
-        WHERE company_id=$1
+        UPDATE financial_cheques_recebidos
+        SET excluido_em = now()
+        WHERE company_id=$1 AND excluido_em IS NULL
         RETURNING id
       `, [input.companyId]);
 
