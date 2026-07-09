@@ -1,4 +1,19 @@
 /**
+ * Rev. 4108 — **FIX: CHEQUES RECEBIDOS — FILTRO "TODOS OS CLIENTES" LISTAVA APENAS OS COM CHEQUE VINCULADO.**
+ *
+ * CAUSA: `listarClientes` consultava a tabela `clientes` (comentário já dizia "empresas_terceiras").
+ * Como `cliente_id` em `financial_cheques_recebidos` aponta para `empresas_terceiras.id`, o dropdown
+ * mostrava apenas as empresas cujos IDs coincidiam na tabela errada — efetivamente só as que já
+ * tinham cheque alocado.
+ *
+ * FIX: SQL alterado para `FROM empresas_terceiras WHERE company_id=$1 AND deleted_at IS NULL`.
+ * Agora o dropdown lista TODAS as empresas cadastradas no tenant, independente de terem cheque.
+ *
+ * Arquivo: server/routers/chequesRecebidos.ts (procedure listarClientes)
+ * ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+ */
+
+/**
  * Rev. 4107 — **FIX CRÍTICO: EFD CONTRIBUIÇÕES + SPED ECF/ECD — ERRO "Cannot read properties of undefined (reading 'query')" + VALORES ZERADOS.**
  *
  * CONTEXTO: Páginas EFD Contribuições (PIS/COFINS) e SPED ECF (IRPJ/CSLL) exibiam todos os valores
