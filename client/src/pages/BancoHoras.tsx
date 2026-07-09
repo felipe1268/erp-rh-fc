@@ -363,43 +363,19 @@ export default function BancoHoras() {
           </CardContent>
         </Card>
 
-        {/* Rev. 3996 — navegador mensal (mesmo padrão da Folha de Pagamento) */}
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => mudarAno(-1)}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="font-bold text-lg min-w-[60px] text-center">{anoBanco}</span>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => mudarAno(1)}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-blue-500" /> Com lançamento</div>
-                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-gray-200" /> Sem dados</div>
-              </div>
+        {/* Rev. 4126 — navegador mensal padronizado (PeriodSelectorCard) */}
+        <PeriodSelectorCard
+          ano={anoBanco}
+          mes={mesBanco}
+          onAno={(a) => mudarAno(a - anoBanco)}
+          onMes={(m) => selecionarMes(m)}
+          actions={
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-blue-500" /> Com lançamento</div>
+              <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-gray-200" /> Sem dados</div>
             </div>
-            <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
-              {MESES_CURTOS.map((nome, i) => {
-                const mes = i + 1;
-                const isSelected = mes === mesBanco;
-                const temDados = mesesComLancamento.has(mes);
-                const statusClasses = temDados
-                  ? "bg-blue-500 text-white hover:bg-blue-600 border-blue-600"
-                  : "bg-gray-200 text-gray-500 hover:bg-gray-300 border-gray-300";
-                const selectionClasses = isSelected ? "ring-2 ring-offset-1 ring-[#1B2A4A] shadow-md scale-105" : "";
-                return (
-                  <button key={mes} onClick={() => selecionarMes(mes)}
-                    className={`relative rounded-lg py-2 px-1 text-center text-sm font-medium transition-all border-2 ${statusClasses} ${selectionClasses}`}>
-                    {nome}
-                  </button>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+          }
+        />
 
         <div className="flex items-center gap-2">
           <CalendarDays className="h-4 w-4 text-[#1B2A4A]" />

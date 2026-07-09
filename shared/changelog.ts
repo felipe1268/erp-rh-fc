@@ -1,4 +1,40 @@
 /**
+ * Rev. 4126 — **PADRONIZAÇÃO DO FILTRO DE MÊS/ANO + BOTÃO "ANO TODO" (EFD CONTRIBUIÇÕES / EFD ICMS-IPI
+ * COM DOWNLOAD EM LOTE).**
+ *
+ * CONTEXTO: usuário pediu para padronizar o seletor de mês/ano (card branco com navegação de ano + 12
+ * pills de mês) em todo o sistema, e adicionar um botão "Ano todo" que baixe/traga os dados do ano
+ * completo, começando pelas telas de EFD Contribuições e EFD ICMS/IPI (arquivos SPED mensais).
+ *
+ * IMPLEMENTAÇÃO:
+ * 1. `client/src/components/PeriodSelectorCard.tsx` — componente compartilhado (já usado por 10
+ *    dashboards) ganhou suporte nativo a `mes: number | null` + prop opcional `onAnoTodo`, que renderiza
+ *    um botão "Ano todo" ao lado da navegação de ano (mes=null = ano todo selecionado). 100%
+ *    retrocompatível — quem não passar `onAnoTodo` não vê o botão e nada muda.
+ * 2. `EfdContribuicoes.tsx` / `EfdIcmsIpi.tsx` — substituído o markup inline duplicado pelo componente
+ *    padrão; "Ano todo" agora baixa um ZIP com os 12 arquivos TXT mensais do ano (um arquivo por mês,
+ *    mesmo formato/nome de sempre) — não existe "arquivo anual único" válido no leiaute SPED, então a
+ *    semântica escolhida foi baixar TODOS os 12 arquivos de uma vez, como pedido pelo usuário.
+ * 3. Novos endpoints backend `GET /api/download/efd-contribuicoes-ano` e `GET /api/download/efd-icms-ipi-ano`
+ *    (server/routers/downloadEfdContribuicoes.ts, downloadEfdIcmsIpi.ts) — usam `archiver` (já dependência
+ *    do projeto) para montar o ZIP em streaming, reaproveitando os builders mensais existentes
+ *    (`buildEfdContribuicoesBuffer`, `buildEfdIcmsIpiBuffer`); mês que falhar é logado e pulado, sem
+ *    abortar o ZIP inteiro.
+ * 4. `BancoHoras.tsx` (aba Saldos) — navegador mensal inline convertido para o componente padrão (sem
+ *    "Ano todo" aqui: a aba mostra saldo ACUMULADO até o mês selecionado, não uma agregação anual, então
+ *    o botão não se aplica semanticamente — selecionar Dezembro já dá o fechamento do ano).
+ *
+ * ESCOPO: as ~19 telas restantes com seletor de mês/ano inline (Financeiro: DRE, Conciliação, Contas a
+ * Pagar/Receber, Cheques, Cartão de Crédito, Obrigações Fiscais, Lançamentos, Panorama Fiscal,
+ * Contabilidade, Dashboard; RH: Folha de Pagamento, Seguro de Vida; Terceiros: Medições; Parceiros:
+ * Aprovações, Lançamentos, Dashboard) ainda usam markup próprio e não foram tocadas nesta revisão — cada
+ * uma tem query/backend específico e "Ano todo" exigiria decidir caso a caso se significa "agregar dados
+ * do ano" (a maioria) ou não se aplica (ex.: saldo acumulado); migração ficará para revisões seguintes,
+ * tela por tela, para não arriscar telas financeiras críticas numa varredura única. ZERO DELETE · ZERO
+ * ALTER destrutivo.
+ */
+
+/**
  * Rev. 4125 — **FIX RAIZ: VALOR LÍQUIDO DE NF-e/NFS-e IMPORTADA (EMITIDAS E RECEBIDAS) DIVERGINDO DO
  * DOCUMENTO REAL — CAUSA: "ISS INFORMADO" CONFUNDIDO COM "ISS RETIDO".**
  *

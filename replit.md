@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4126** — **PADRONIZAÇÃO DO FILTRO DE MÊS/ANO + BOTÃO "ANO TODO" (EFD CONTRIBUIÇÕES / EFD ICMS-IPI COM DOWNLOAD EM LOTE).** `PeriodSelectorCard.tsx` (componente compartilhado, já usado por 10 dashboards) ganhou `mes: number|null` + prop opcional `onAnoTodo` (botão "Ano todo", 100% retrocompatível). Aplicado em EfdContribuicoes.tsx/EfdIcmsIpi.tsx: "Ano todo" baixa um ZIP com os 12 TXT mensais (não existe arquivo anual único válido no leiaute SPED); novos endpoints `GET /api/download/efd-contribuicoes-ano` e `/efd-icms-ipi-ano` usam `archiver` reaproveitando os builders mensais existentes. BancoHoras.tsx (aba Saldos) migrada visualmente pro componente padrão (sem botão Ano Todo — lá o saldo é acumulado até o mês, não agregação anual). Restam ~19 telas (Financeiro, Folha, Medições, Parceiros) com seletor inline — migração ficará para revisões seguintes, tela por tela. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4125** — **FIX RAIZ: VALOR LÍQUIDO DE NF-e/NFS-e IMPORTADA DIVERGINDO DO DOCUMENTO REAL.** Causa: o parser de importação em lote SIAP GEO (NFS-e emitidas) gravava `iss_retido` = ISS informado na nota, sem sinal no XML de que era efetivamente retido; a tela de Notas Fiscais recalcula Valor Líquido subtraindo `iss_retido` toda vez que a nota é reaberta/salva, corrompendo permanentemente o valor correto calculado na importação. Fix: `iss_retido = 0` (sem sinal de retenção, padrão seguro é não retido); ISS informado vira anotação em Discriminação. Backfill corrigiu 569 registros já importados. Demais caminhos (ABRASF individual, NF-e via SEFAZ, import por IA/PDF) já usam o Valor Líquido declarado no documento — não afetados. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4124** — **PLANILHA DE EXTRATO — RASTREABILIDADE DE NF-e CONCILIADA COM PAGAMENTO (ANÁLISE + HARDENING).** O vínculo NF↔pagamento (`fiscal_notes.stmt_line_id → bank_statement_lines.id`, gravado por `fiscalNotes.vincularExtrato`) já é o mesmo usado no badge "Conciliada" da tela Notas Fiscais E já era a camada 1 (mais forte) do LEFT JOIN que preenche "Nº Nota Fiscal"/"CNPJ" na planilha de extrato e no Extrato_Completo.xlsx do Pacote Contador — ou seja, a conexão já é automática, sem ação manual extra. Hardening: os JOINs não filtravam `company_id` nem excluíam `status='cancelada'`; adicionado em ambos. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
 ### 5 one-liners
+
+- **Rev. 4124** — **PLANILHA DE EXTRATO — RASTREABILIDADE DE NF-e CONCILIADA COM PAGAMENTO (ANÁLISE + HARDENING).** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4123** — **FIX: PLANILHA/PACOTE DE EXTRATO BANCÁRIO — CONTA DESATIVADA/EXCLUÍDA CONTINUAVA APARECENDO.** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4121** — **BUSCA E PREENCHIMENTO AUTOMÁTICO DE CNPJ PARA FORNECEDORES SEM CADASTRO (LOTE 2/N — ANÁLISE REFINADA).** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4120** — **BUSCA E PREENCHIMENTO AUTOMÁTICO DE CNPJ PARA FORNECEDORES SEM CADASTRO (LOTE 1/N).** ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4119** — **FIX: BADGE DE SITUAÇÃO CNPJ FALSO-POSITIVO EM VERMELHO + `regimeTributario` ARRAY QUEBRANDO O SALVAR.** ZERO DELETE · ZERO ALTER.
 
 ### Histórico completo
 

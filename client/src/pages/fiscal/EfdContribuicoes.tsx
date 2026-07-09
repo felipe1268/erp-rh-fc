@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import DashboardLayout from "@/components/DashboardLayout";
+import PeriodSelectorCard from "@/components/PeriodSelectorCard";
 
 const MESES_SHORT = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 const MESES_FULL  = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -38,7 +39,7 @@ export default function EfdContribuicoes() {
   const { companyIdNum, selectedCompanyId, companies } = useCompany();
   const { toast } = useToast();
   const [ano, setAno]       = useState(HOJE.getFullYear());
-  const [mes, setMes]       = useState(HOJE.getMonth()+1);
+  const [mes, setMes]       = useState<number|null>(HOJE.getMonth()+1);
   const [finalidade, setFinalidade] = useState<"0"|"1">("0");
   const [cfg, setCfg]       = useState<CfgState>(defaultCfg());
   const [cfgOpen, setCfgOpen] = useState(false);
@@ -68,13 +69,19 @@ export default function EfdContribuicoes() {
     if (!companyIdNum) { toast({variant:"destructive",title:"Selecione uma empresa"}); return; }
     setDownloading(true);
     try {
-      const url = `/api/download/efd-contribuicoes?companyId=${companyIdNum}&mes=${mes}&ano=${ano}&finalidade=${finalidade}`;
+      const anoTodo = mes === null;
+      const url = anoTodo
+        ? `/api/download/efd-contribuicoes-ano?companyId=${companyIdNum}&ano=${ano}&finalidade=${finalidade}`
+        : `/api/download/efd-contribuicoes?companyId=${companyIdNum}&mes=${mes}&ano=${ano}&finalidade=${finalidade}`;
       const res = await fetch(url, { credentials:"include" });
       if (!res.ok) { const e=await res.json().catch(()=>({error:"Erro"})); throw new Error(e.error); }
       const blob = await res.blob();
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = `EFD_CONTRIB_${companyIdNum}_${String(mes).padStart(2,"0")}_${ano}_${finalidade==="1"?"SUB":"ORI"}.txt`;
+      const fin = finalidade==="1"?"SUB":"ORI";
+      a.download = anoTodo
+        ? `EFD_CONTRIB_${companyIdNum}_${ano}_${fin}.zip`
+        : `EFD_CONTRIB_${companyIdNum}_${String(mes).padStart(2,"0")}_${ano}_${fin}.txt`;
       a.click(); URL.revokeObjectURL(a.href);
       toast({title:"Arquivo gerado com sucesso"});
     } catch(e:any) { toast({variant:"destructive",title:"Erro",description:e.message}); }
@@ -97,22 +104,14 @@ export default function EfdContribuicoes() {
         </div>
 
         {/* Seletor de período — padrão do sistema */}
-        <div className="rounded-2xl border border-slate-200 shadow-sm bg-white overflow-hidden">
-          <div className="px-4 py-3 flex flex-wrap items-center gap-3 border-b border-slate-100">
-            <div className="flex items-center gap-1">
-              <button type="button" onClick={()=>setAno(a=>a-1)} className="p-1 rounded hover:bg-gray-100 text-gray-500">
-                <ChevronLeft className="w-4 h-4"/>
-              </button>
-              <span className="text-base font-bold text-gray-800 min-w-[3.5rem] text-center">{ano}</span>
-              <button type="button" onClick={()=>setAno(a=>a+1)} className="p-1 rounded hover:bg-gray-100 text-gray-500">
-                <ChevronRight className="w-4 h-4"/>
-              </button>
-            </div>
-            <div className="hidden sm:flex items-center gap-3 text-xs text-gray-500">
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block"/>Mês selecionado</span>
-            </div>
-            <div className="flex-1"/>
-            <div className="flex items-center gap-2">
+        <PeriodSelectorCard
+          ano={ano}
+          mes={mes}
+          onAno={setAno}
+          onMes={setMes}
+          onAnoTodo={()=>setMes(null)}
+          actions={
+            <>
               <Select value={finalidade} onValueChange={v=>setFinalidade(v as "0"|"1")}>
                 <SelectTrigger className="h-8 text-xs w-28"><SelectValue/></SelectTrigger>
                 <SelectContent>
@@ -122,31 +121,18 @@ export default function EfdContribuicoes() {
               </Select>
               <Button size="sm" onClick={handleDownload} disabled={downloading||!companyIdNum} className="h-8 text-xs gap-1.5 px-3">
                 <Download className="h-3.5 w-3.5"/>
-                {downloading ? "Gerando…" : `Gerar · ${MESES_SHORT[mes-1]} ${ano}`}
+                {downloading ? "Gerando…" : mes===null ? `Baixar tudo · ${ano}` : `Gerar · ${MESES_SHORT[mes-1]} ${ano}`}
               </Button>
-            </div>
+            </>
+          }
+        />
+        {empresa && (
+          <div className="px-4 py-2 -mt-2 rounded-b-xl border border-t-0 border-slate-200 flex items-center gap-2 text-xs text-muted-foreground bg-slate-50/60">
+            <span className="font-medium text-gray-700">{nomeEmpresa}</span>
+            {empresa.cnpj && <span>· CNPJ {empresa.cnpj}</span>}
+            <span className="ml-auto">{mes===null ? `Ano todo ${ano}` : `${MESES_FULL[mes-1]} ${ano}`} · {finalidade==="1"?"Substituto":"Original"}</span>
           </div>
-          <div className="px-4 py-3 grid grid-cols-6 sm:grid-cols-12 gap-1.5">
-            {MESES_SHORT.map((m,i)=>{
-              const n=i+1; const sel=mes===n;
-              return (
-                <button key={m} type="button" onClick={()=>setMes(n)}
-                  className={`flex flex-col items-center gap-1 py-2 rounded-lg border text-xs font-medium transition-all
-                    ${sel?"border-green-500 bg-green-50 text-green-700 shadow-sm":"border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50"}`}>
-                  <span>{m}</span>
-                  <span className={`w-1.5 h-1.5 rounded-full ${sel?"bg-green-500":"bg-gray-300"}`}/>
-                </button>
-              );
-            })}
-          </div>
-          {empresa && (
-            <div className="px-4 py-2 border-t border-slate-100 flex items-center gap-2 text-xs text-muted-foreground bg-slate-50/60">
-              <span className="font-medium text-gray-700">{nomeEmpresa}</span>
-              {empresa.cnpj && <span>· CNPJ {empresa.cnpj}</span>}
-              <span className="ml-auto">{MESES_FULL[mes-1]} {ano} · {finalidade==="1"?"Substituto":"Original"}</span>
-            </div>
-          )}
-        </div>
+        )}
 
         {/* Config regime tributário */}
         <Collapsible open={cfgOpen} onOpenChange={setCfgOpen}>

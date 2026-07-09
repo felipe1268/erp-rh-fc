@@ -7,6 +7,7 @@
  * Formato: |REG|campo1|...|campo_n|\r\n
  */
 import type { Express } from "express";
+import archiver from "archiver";
 import { sdk } from "../_core/sdk";
 import { getDb } from "../db";
 
@@ -432,6 +433,44 @@ export function registerEfdContribuicoesRoute(app: Express) {
       res.send(buf);
     } catch(e:any) {
       console.error("[EfdContribuicoes]", e);
+      if (!res.headersSent) res.status(500).json({ error: e.message });
+    }
+  });
+
+  // GET /api/download/efd-contribuicoes-ano — ZIP com os 12 arquivos mensais do ano
+  app.get("/api/download/efd-contribuicoes-ano", async (req: any, res: any) => {
+    try {
+      try { await sdk.authenticateRequest(req); } catch {
+        return res.status(401).json({ error: "Não autenticado" });
+      }
+      const companyId = parseInt(req.query.companyId as string, 10);
+      const ano       = parseInt(req.query.ano as string, 10);
+      const finalidade= (req.query.finalidade as string) === "1" ? "1" : "0";
+      if (!companyId || ano < 2009 || ano > 2099) {
+        return res.status(400).json({ error: "Parâmetros inválidos" });
+      }
+      const fin = finalidade === "1" ? "SUB" : "ORI";
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader("Content-Disposition",
+        `attachment; filename="EFD_CONTRIB_${companyId}_${ano}_${fin}.zip"`);
+      const archive = archiver("zip", { zlib: { level: 9 } });
+      archive.on("error", (err: any) => {
+        console.error("[EfdContribuicoes][zip]", err);
+        if (!res.headersSent) res.status(500).end();
+      });
+      archive.pipe(res);
+      for (let mes = 1; mes <= 12; mes++) {
+        try {
+          const buf = await buildEfdContribuicoesBuffer(companyId, mes, ano, finalidade as "0"|"1");
+          const mesStr = String(mes).padStart(2, "0");
+          archive.append(buf, { name: `EFD_CONTRIB_${companyId}_${mesStr}_${ano}_${fin}.txt` });
+        } catch (e) {
+          console.error(`[EfdContribuicoes][zip] mês ${mes} falhou`, e);
+        }
+      }
+      await archive.finalize();
+    } catch(e:any) {
+      console.error("[EfdContribuicoes][zip]", e);
       if (!res.headersSent) res.status(500).json({ error: e.message });
     }
   });
