@@ -7258,6 +7258,8 @@ export const financialAccounts = pgTable("financial_accounts", {
   nivel: integer().default(1).notNull(),
   contaPaiId: integer("conta_pai_id"),
   classificacaoDRE: varchar("classificacao_dre", { length: 50 }),
+  // Rev. 4109 — código do plano de contas do contador (para exportações contábeis).
+  codigoContabilidade: varchar("codigo_contabilidade", { length: 50 }),
   // Rev. 2082 — link categoria → centro de custo (FK opcional p/ financial_cost_centers.id).
   centroCustoId: integer("centro_custo_id"),
   ativo: smallint().default(1).notNull(),

@@ -120,11 +120,13 @@ type FormState = {
   id?: number;
   codigo: string; nome: string; tipo: string; natureza: string;
   nivel: number; contaPaiId: string; classificacaoDRE: string; ordem: string;
+  codigoContabilidade: string;
 };
 
 const EMPTY_FORM: FormState = {
   codigo: "", nome: "", tipo: "custo_obra", natureza: "devedora",
   nivel: 1, contaPaiId: "", classificacaoDRE: "", ordem: "0",
+  codigoContabilidade: "",
 };
 
 // ─── Sub-componente: legenda de cores ─────────────────────────────────────────
@@ -366,6 +368,7 @@ export default function FinanceiroPlanoDeConta() {
       nivel: Number(c.nivel) || 1,
       contaPaiId: c.contaPaiId ? String(c.contaPaiId) : "",
       classificacaoDRE: c.classificacaoDRE ?? "", ordem: String(c.ordem ?? 0),
+      codigoContabilidade: c.codigoContabilidade ?? "",
     });
     setDialogOpen(true);
   }
@@ -401,6 +404,7 @@ export default function FinanceiroPlanoDeConta() {
       companyId, nome: form.nome, tipo: form.tipo, natureza: form.natureza,
       contaPaiId: form.contaPaiId ? Number(form.contaPaiId) : null,
       classificacaoDRE: form.classificacaoDRE || undefined,
+      codigoContabilidade: form.codigoContabilidade.trim() || null,
       ordem: parseInt(form.ordem) || 0,
       nivel: form.nivel, codigo: form.codigo,
     };
@@ -612,6 +616,14 @@ export default function FinanceiroPlanoDeConta() {
                         )} title={c.nome}>
                           {c.nome}
                         </span>
+                        {c.codigoContabilidade && (
+                          <span
+                            className="hidden md:inline-block font-mono text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100 flex-shrink-0 ml-1"
+                            title={`Código Contabilidade: ${c.codigoContabilidade}`}
+                          >
+                            {c.codigoContabilidade}
+                          </span>
+                        )}
                       </div>
 
                       {/* Badges + ações */}
@@ -837,6 +849,16 @@ export default function FinanceiroPlanoDeConta() {
                 </button>
                 {showAvancado && (
                   <div className="px-4 pb-4 pt-1 space-y-3 border-t border-slate-100 bg-slate-50">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Código Contabilidade</p>
+                      <p className="text-[11px] text-slate-400 mb-1.5">Código do plano de contas do contador — usado nas exportações contábeis.</p>
+                      <Input
+                        className="h-10 rounded-lg bg-white font-mono"
+                        value={form.codigoContabilidade}
+                        onChange={e => setForm(f => ({ ...f, codigoContabilidade: e.target.value }))}
+                        placeholder="Ex: 04.1.3.04.013"
+                      />
+                    </div>
                     <div>
                       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Classificação DRE</p>
                       <Input

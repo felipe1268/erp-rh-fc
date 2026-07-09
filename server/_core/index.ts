@@ -5079,7 +5079,7 @@ REGRAS DE EXTRAÇÃO:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v4073-2026-07-06-excecao-manual-cotacao";
+    const COLFIX_VERSION = "v4109-2026-07-09-codigo-contabilidade";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -6811,6 +6811,13 @@ REGRAS DE EXTRAÇÃO:
         `);
         console.log("[ColFix Rev.4059] billing_module_prices.is_active garantida (toggle comercializável).");
       } catch (e: any) { console.error("[ColFix Rev.4059] FALHA billing_module_prices.is_active:", e?.message ?? e); }
+
+      try {
+        const _db4109 = await getDb();
+        if (!_db4109) throw new Error("db indisponível");
+        await _db4109.$client.query(`ALTER TABLE financial_accounts ADD COLUMN IF NOT EXISTS codigo_contabilidade VARCHAR(50)`);
+        console.log("[ColFix Rev.4109] financial_accounts.codigo_contabilidade garantida.");
+      } catch (e: any) { console.error("[ColFix Rev.4109] FALHA financial_accounts.codigo_contabilidade:", e?.message ?? e); }
 
       // Rev. 4042 — Stripe: inicializar (schema stripe.* + webhook gerenciado)
       // Envolvido em try/catch isolado: falha na configuração do Stripe NÃO

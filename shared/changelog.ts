@@ -1,4 +1,30 @@
 /**
+ * Rev. 4109 — **PLANO DE CONTAS: COLUNA "CÓDIGO CONTABILIDADE" — MAPEAMENTO COM PLANO DO CONTADOR.**
+ *
+ * CONTEXTO: O plano de contas interno (códigos 1–10) precisava ser linkado ao plano de contas do
+ * contador (PRONUS — formato 03.x / 04.x) para que exportações contábeis usem a mesma numeração.
+ *
+ * O QUE FOI FEITO:
+ * 1. Nova coluna `codigo_contabilidade VARCHAR(50)` em `financial_accounts` (ADD COLUMN IF NOT EXISTS).
+ * 2. 101 contas internas mapeadas automaticamente via análise fuzzy do Excel do contador
+ *    (Plano_de_Contas_1783560828383.xlsx) — comparação palavra-a-palavra das 434 contas do contador
+ *    contra as 101 contas internas estruturadas.
+ * 3. Mapeamento principal (exemplos):
+ *    1 RECEITAS BRUTAS → 03.1.1 | 3 CUSTOS DIRETOS → 04.1.3 | 4 DESPESAS ADMIN → 04.2.1
+ *    7 DESPESAS FINANCEIRAS → 04.2.3.02 | 8 RECEITAS FINANCEIRAS → 03.1.3
+ * 4. Plano de Contas UI: novo campo editável em "Configurações Avançadas" (dialog de criar/editar).
+ * 5. Lista do Plano de Contas: badge azul-índigo mostra o código do contador em desktop (md+).
+ * 6. Router `getAccounts`: retorna `codigoContabilidade` no payload.
+ * 7. Router `updateAccount`: aceita `codigoContabilidade` (nullable) — permite corrigir mapeamento via UI.
+ * 8. Drizzle schema.ts: campo `codigoContabilidade` adicionado ao modelo `financialAccounts`.
+ * 9. ColFix Rev.4109: ALTER TABLE garantido no boot para futuros tenants.
+ *
+ * Arquivos: drizzle/schema.ts, server/routers/financial.ts, server/_core/index.ts,
+ *           client/src/pages/financeiro/FinanceiroPlanoDeConta.tsx
+ * ZERO DELETE · ZERO UPDATE nas tabelas existentes. Apenas ADD COLUMN IF NOT EXISTS.
+ */
+
+/**
  * Rev. 4108 — **FIX: CHEQUES RECEBIDOS — FILTRO "TODOS OS CLIENTES" LISTAVA APENAS OS COM CHEQUE VINCULADO.**
  *
  * CAUSA: `listarClientes` consultava a tabela `clientes` (comentário já dizia "empresas_terceiras").

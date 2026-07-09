@@ -2169,6 +2169,7 @@ export const financialRouter = router({
       `SELECT id, company_id AS "companyId", codigo, nome, tipo, natureza, nivel,
               conta_pai_id AS "contaPaiId", classificacao_dre AS "classificacaoDRE",
               centro_custo_id AS "centroCustoId",
+              codigo_contabilidade AS "codigoContabilidade",
               ativo, ordem
        FROM financial_accounts
        WHERE company_id IN (${inlineIds(ids)}) ${ativoPart} ${tipoPart} ${escopoPart}
@@ -2344,6 +2345,8 @@ export const financialRouter = router({
     // ignorava silenciosamente, deixando filhos órfãos como "3.1.1" mesmo
     // depois de trocar a Conta Pai).
     codigo: z.string().optional(),
+    // Rev. 4109 — código do plano de contas do contador (para exportações contábeis).
+    codigoContabilidade: z.string().nullable().optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -2359,6 +2362,7 @@ export const financialRouter = router({
     if (input.ativo !== undefined) { parts.push(`ativo=$${i++}`); vals.push(input.ativo ? 1 : 0); }
     if (input.ordem !== undefined) { parts.push(`ordem=$${i++}`); vals.push(input.ordem); }
     if (input.nivel !== undefined) { parts.push(`nivel=$${i++}`); vals.push(input.nivel); }
+    if (input.codigoContabilidade !== undefined) { parts.push(`codigo_contabilidade=$${i++}`); vals.push(input.codigoContabilidade ?? null); }
     if (input.codigo !== undefined) {
       // Rev. 2173 — mesma validação do create (formato contábil N.N.N até 5 níveis)
       const codigo = input.codigo.trim();

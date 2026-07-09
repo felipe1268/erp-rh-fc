@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4108** — **FIX: CHEQUES RECEBIDOS — DROPDOWN "TODOS OS CLIENTES" LISTAVA SÓ OS COM CHEQUE VINCULADO.** Causa: `listarClientes` consultava tabela `clientes` em vez de `empresas_terceiras` (comentário já indicava a tabela correta). Fix: SQL alterado para `FROM empresas_terceiras WHERE company_id=$1 AND deleted_at IS NULL`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+- **Rev. 4109** — **PLANO DE CONTAS: COLUNA "CÓDIGO CONTABILIDADE" — MAPEAMENTO COM PLANO DO CONTADOR.** Nova coluna `codigo_contabilidade VARCHAR(50)` em `financial_accounts`. 101 contas mapeadas automaticamente via análise fuzzy do Excel do contador (PRONUS, formato 03.x/04.x). UI: badge índigo na lista + campo editável em "Configurações Avançadas". Router `getAccounts` retorna e `updateAccount` aceita o novo campo. ColFix Rev.4109 garante a coluna no boot. ZERO DELETE · ZERO UPDATE nas tabelas existentes.
 
-- **Rev. 4107** — **FIX CRÍTICO: EFD CONTRIBUIÇÕES + SPED ECF/ECD — ERRO "Cannot read properties of undefined (reading 'query')" + VALORES ZERADOS.** Causa: `getDb()` é async mas era chamada **sem `await`** em 6 arquivos — `db` virava Promise, `db.$client` era `undefined` e qualquer `.query()` explodia. Fix: adicionado `await` em todos os 6 pontos: `efdContribuicoes.ts`, `spedEcf.ts`, `spedEcd.ts`, `downloadEfdContribuicoes.ts`, `downloadSpedEcf.ts`, `downloadSpedEcd.ts`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+- **Rev. 4108** — **FIX: CHEQUES RECEBIDOS — DROPDOWN "TODOS OS CLIENTES" LISTAVA SÓ OS COM CHEQUE VINCULADO.** Causa: `listarClientes` consultava tabela `clientes` em vez de `empresas_terceiras`. Fix: SQL alterado para `FROM empresas_terceiras WHERE company_id=$1 AND deleted_at IS NULL`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 ### 5 one-liners
+
+- **Rev. 4107** — **FIX CRÍTICO: EFD CONTRIBUIÇÕES + SPED ECF/ECD — ERRO "Cannot read properties of undefined (reading 'query')" + VALORES ZERADOS.** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4106** — **FIX PARSER SANTANDER PDF: PIX RECEBIDO SUMIDO + LANÇAMENTOS FANTASMA DE SALDO.** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4104** — **NOVO LANÇAMENTO: CHEQUE EMPRESA × CHEQUE DE TERCEIRO (SELEÇÃO INTERATIVA + COMPLEMENTO).** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4103** — **CHEQUES RECEBIDOS: BOTÃO "LIMPAR INVÁLIDOS" (SOFT-DELETE DE TOTALIZADORES).** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
-- **Rev. 4102** — **NOVO LANÇAMENTO: SUGESTÃO DE CHEQUES RECEBIDOS AO PAGAR COM CHEQUE.** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 ### Histórico completo
 
