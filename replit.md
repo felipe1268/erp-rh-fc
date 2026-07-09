@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4120** — **BUSCA E PREENCHIMENTO AUTOMÁTICO DE CNPJ PARA FORNECEDORES SEM CADASTRO (LOTE 1/N).** Filtrados 28 dos 238 fornecedores sem CNPJ (company 60002) com sufixo societário claro; buscado CNPJ na web e validado via BrasilAPI (similaridade de nome ≥0,5 + situação ATIVA + CNPJ ainda não usado por outro fornecedor). 10 de 16 candidatos de alta confiança preenchidos com CNPJ + enriquecimento automático (endereço/telefone/categoria via IA, reaproveitando lógica de `autoCompletarFornecedor`); 6 pulados por já existir fornecedor duplicado com o mesmo CNPJ sob outro nome (candidatos a merge manual); restam 228 sem CNPJ (nomes de pessoa física/genéricos, exigem checagem manual). Script: `server/scripts/preencherCnpjFornecedores.ts`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4119** — **FIX: BADGE DE SITUAÇÃO CNPJ FALSO-POSITIVO EM VERMELHO + `regimeTributario` ARRAY QUEBRANDO O SALVAR.** Comparação estrita de `situacaoCodigo` disparava aviso vermelho mesmo com "ATIVA" — agora usa código OU texto. BrasilAPI retorna `regime_tributario` como array de registros anuais (não string) quando não é Simples/MEI — extrai `forma_de_tributacao` do ano mais recente + sanitização defensiva no submit do form (nunca envia array). ZERO DELETE · ZERO ALTER.
 
-- **Rev. 4118** — **EXECUÇÃO DO BACKFILL EM MASSA + 2 BUGS CRÍTICOS CORRIGIDOS + CLASSIFICAÇÃO DE CATEGORIA PARA TODOS.** Rodado o backfill da Rev. 4117 direto na base real (company 60002) + novo script `classificarCategoriasTodos.ts` classifica por IA a categoria de TODOS os fornecedores sem categoria (com ou sem CNPJ): 581→0. Ficha incompleta: 941→503 (restante majoritariamente CNPJ com dígito verificador inválido). 2 bugs corrigidos em `compras.ts`: BrasilAPI exigia header `User-Agent` (403 sem ele); `telefone` varchar(20) estourava com telefones concatenados da ReceitaWS (novo mapa `MAX_LEN` trunca antes do PATCH). ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4118** — **EXECUÇÃO DO BACKFILL EM MASSA + 2 BUGS CRÍTICOS CORRIGIDOS + CLASSIFICAÇÃO DE CATEGORIA PARA TODOS.** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4117** — **EMPRESAS TERCEIRAS (FORNECEDORES): FILTROS DE CADASTRO INCOMPLETO + AUTO-COMPLETAR VIA RECEITA FEDERAL/IA.** ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4114** — **FIX: SALVAR FORNECEDOR — FALHA SILENCIOSA + AUTO-MERGE CNPJ NA EDIÇÃO.** ZERO DELETE · ZERO ALTER.
 
-- **Rev. 4113** — **FIX CODE REVIEW: CHEQUES RECEBIDOS — 3 GAPS (compensado_em + import 2 fases + entry_valor).** ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4112 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4113 e anteriores.
 
 ## User preferences
 

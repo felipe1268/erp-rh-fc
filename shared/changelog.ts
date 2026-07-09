@@ -1,4 +1,33 @@
 /**
+ * Rev. 4120 — **BUSCA E PREENCHIMENTO AUTOMÁTICO DE CNPJ PARA FORNECEDORES SEM CADASTRO (LOTE 1/N).**
+ *
+ * CONTEXTO: usuário pediu para buscar na web o CNPJ de fornecedores sem CNPJ cadastrado, verificar
+ * e preencher automaticamente — "tudo por aqui diretamente", sem criar botão/feature nova.
+ *
+ * EXECUÇÃO: dos 238 fornecedores sem CNPJ (company 60002), filtrados 28 com sufixo societário claro
+ * (LTDA/EIRELI/ME/EPP/S.A. — descartada a maioria por serem nomes de pessoa física ou genéricos
+ * demais pra busca segura). Buscado o CNPJ de cada um na web; script
+ * `server/scripts/preencherCnpjFornecedores.ts` valida CADA candidato contra a BrasilAPI antes de
+ * gravar: (1) similaridade de nome ≥ 0,5 (interseção de palavras normalizadas, ignorando LTDA/EIRELI/
+ * etc.), (2) situação cadastral = ATIVA, (3) CNPJ ainda não usado por outro fornecedor (evita
+ * duplicidade — há fornecedores duplicados sob nomes ligeiramente diferentes que já tinham o mesmo
+ * CNPJ cadastrado, ex.: FTTF LTDA #476 dup. de #742, JD COM DERIVADOS #582 dup. de #205, LOQUETUDO
+ * #661 dup. de #645, LS SOLUÇÃO #666 dup. de #1037, VALE UBERLANDIA 3 #1129 dup. de #1226, QUIACO
+ * #1236 dup. de #905 — CNPJ não gravado nesses 6 pra não colidir; candidatos a merge manual).
+ *
+ * RESULTADO: 10 de 16 candidatos de alta confiança receberam CNPJ + enriquecimento automático
+ * (endereço, telefone, natureza jurídica, porte, categoria via IA — reaproveitando a mesma lógica de
+ * `autoCompletarFornecedor`): #81 Ápice Guindastes, #132 AVM Meneguesso, #139 Banco Santander,
+ * #473 Frigelar, #635 Lider Serviços de Tornos, #643 Locar Locação, #714 Marelago Comércio,
+ * #961 Rodonaves Transporte, #1066 Tecnoluiz Cerâmica. #1102 Trimarmore-RPB pulado por baixa
+ * similaridade de razão social (0,25 — risco de CNPJ errado). Restam 228 fornecedores sem CNPJ
+ * (nomes de pessoa física/genéricos ou sem sufixo societário claro) — não processados neste lote por
+ * exigirem verificação manual mais cuidadosa.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo — apenas UPDATE de campos vazios, nunca sobrescreve dado existente.
+ */
+
+/**
  * Rev. 4119 — **FIX: BADGE DE SITUAÇÃO CNPJ FALSO-POSITIVO EM VERMELHO + `regimeTributario` ARRAY QUEBRANDO O SALVAR.**
  *
  * CONTEXTO: usuário reportou 2 erros na tela Empresas Terceiras (Fornecedores.tsx) ao editar um
