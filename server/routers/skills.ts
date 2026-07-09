@@ -65,8 +65,8 @@ export const skillsRouter = router({
         nome: input.nome,
         categoria: input.categoria || null,
         descricao: input.descricao || null,
-      });
-      return { id: result[0].id, success: true };
+      }).returning({ id: skills.id });
+      return { id: result.id, success: true };
     }),
 
   // Update a skill
@@ -184,8 +184,8 @@ export const skillsRouter = router({
         nivel: input.nivel,
         tempoExperiencia: input.tempoExperiencia || null,
         observacao: input.observacao || null,
-      });
-      return { id: result[0].id, success: true };
+      }).returning({ id: employeeSkills.id });
+      return { id: result.id, success: true };
     }),
 
   // Update an employee skill assignment
