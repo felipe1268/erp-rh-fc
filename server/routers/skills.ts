@@ -262,6 +262,7 @@ export const skillsRouter = router({
           empFuncao: employees.funcao,
           empStatus: employees.status,
           empCompanyId: employees.companyId,
+          empFotoUrl: employees.fotoUrl,
         })
         .from(employeeSkills)
         .innerJoin(skills, eq(employeeSkills.skillId, skills.id))

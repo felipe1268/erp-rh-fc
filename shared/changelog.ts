@@ -1,4 +1,30 @@
 /**
+ * Rev. 4129 — **REPAGINAÇÃO DO GRID DE HABILIDADES: CATEGORIA + FOTOS DOS COLABORADORES NO CARD.**
+ *
+ * CONTEXTO: usuário reportou que a tela "Cadastro de Habilidades" estava "muito ruim de
+ * enxergar" (print anexado) — cabeçalho de categoria discreto e nenhuma indicação visual de
+ * QUEM está atribuído a cada habilidade, só um número.
+ *
+ * IMPLEMENTAÇÃO:
+ * 1. `server/routers/skills.ts` (`searchBySkill`) — select passou a trazer `empFotoUrl`
+ *    (`employees.fotoUrl`) além dos campos já existentes, para permitir montar avatares na tela.
+ * 2. `client/src/pages/Habilidades.tsx`:
+ *    - Novo query `allAssignmentsQuery` (`skills.searchBySkill` sem filtro de skillId) + memo
+ *      `assignmentsBySkill` (Map skillId → linhas) pra agrupar no client sem N+1 de queries.
+ *    - Cabeçalho de categoria: ícone em badge azul + título maior/negrito + contagem de
+ *      habilidades (era um `<h2>` cinza pequeno, quase invisível).
+ *    - Cada card de habilidade ganhou: (a) badge da categoria no topo do card (visível mesmo
+ *      fora do agrupamento visual), (b) barra de destaque azul no topo do card, (c) pilha de
+ *      avatares dos funcionários atribuídos (foto real via `AvatarImage`, fallback iniciais,
+ *      até 6 visíveis + "+N" de overflow) — clicável, abre "Ver funcionários". Estado vazio
+ *      explícito ("Nenhum funcionário atribuído") quando a habilidade não tem ninguém.
+ * 3. Nenhuma mudança de schema; nenhuma regra de negócio alterada — puramente reorganização
+ *    visual + 1 campo a mais no select existente.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4128 — **DIÁLOGO "ATRIBUIR HABILIDADE" MOSTRA FOTO + OBRA ATUAL DO FUNCIONÁRIO.**
  *
  * CONTEXTO: usuário pediu para melhorar a busca de funcionário no diálogo "Atribuir:

@@ -102,6 +102,10 @@ export default function Habilidades() {
     { companyId, companyIds },
     { enabled: !!companyId || companyIds.length > 0 }
   );
+  const allAssignmentsQuery = trpc.skills.searchBySkill.useQuery(
+    { companyId, companyIds },
+    { enabled: !!companyId || companyIds.length > 0 }
+  );
 
   const utils = trpc.useUtils();
 
@@ -168,6 +172,18 @@ export default function Habilidades() {
     }
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [filtered]);
+
+  // Employees per skill (for avatar previews)
+  const assignmentsBySkill = useMemo(() => {
+    const map = new Map<number, any[]>();
+    const rows = Array.isArray(allAssignmentsQuery.data) ? allAssignmentsQuery.data : [];
+    for (const r of rows) {
+      const sid = Number(r.skillId);
+      if (!map.has(sid)) map.set(sid, []);
+      map.get(sid)!.push(r);
+    }
+    return map;
+  }, [allAssignmentsQuery.data]);
 
   // Summary stats
   const summaryData = globalSummary.data ?? [];
@@ -332,32 +348,44 @@ export default function Habilidades() {
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-8">
             {grouped.map(([cat, items]) => (
               <div key={cat}>
-                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <Award className="h-4 w-4" />
-                  {cat}
-                  <Badge variant="secondary" className="ml-1">{items.length}</Badge>
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div className="flex items-center gap-2 mb-3 pb-2 border-b-2 border-blue-100">
+                  <div className="p-1.5 bg-blue-100 rounded-md">
+                    <Award className="h-4 w-4 text-blue-700" />
+                  </div>
+                  <h2 className="text-base font-bold text-slate-800 uppercase tracking-wide">
+                    {cat}
+                  </h2>
+                  <Badge variant="secondary" className="ml-1">{items.length} habilidade{items.length !== 1 ? "s" : ""}</Badge>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {items.map((skill: any) => {
                     // Count from summary
                     const skillSummary = Array.isArray(summaryData)
                       ? summaryData.filter((r: any) => Number(r.skillId) === skill.id)
                       : [];
                     const totalEmp = skillSummary.reduce((a: number, r: any) => a + Number(r.qtd || 0), 0);
+                    const skillEmployees = assignmentsBySkill.get(skill.id) || [];
+                    const MAX_AVATARS = 6;
+                    const visibleEmployees = skillEmployees.slice(0, MAX_AVATARS);
+                    const overflowCount = skillEmployees.length - visibleEmployees.length;
                     return (
-                      <Card key={skill.id} className="hover:shadow-md transition-shadow">
+                      <Card key={skill.id} className="hover:shadow-md transition-shadow overflow-hidden">
+                        <div className="h-1 bg-gradient-to-r from-blue-500 to-blue-300" />
                         <CardContent className="p-4">
-                          <div className="flex items-start justify-between">
+                          <div className="flex items-start justify-between gap-2">
                             <div className="flex-1 min-w-0">
+                              <Badge variant="outline" className="mb-1.5 text-[10px] font-medium text-blue-700 border-blue-200 bg-blue-50">
+                                {cat}
+                              </Badge>
                               <h3 className="font-semibold text-base truncate">{skill.nome}</h3>
                               {skill.descricao && (
                                 <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{skill.descricao}</p>
                               )}
                             </div>
-                            <div className="flex items-center gap-1 ml-2 shrink-0">
+                            <div className="flex items-center gap-0.5 shrink-0">
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -396,12 +424,43 @@ export default function Habilidades() {
                               </Button>
                             </div>
                           </div>
-                          {/* Employee count badges */}
-                          <div className="flex items-center gap-2 mt-3 pt-3 border-t">
-                            <Users className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm text-muted-foreground">{totalEmp} funcionário{totalEmp !== 1 ? "s" : ""}</span>
+
+                          {/* Employee avatars preview */}
+                          <div className="mt-3 pt-3 border-t">
+                            {totalEmp > 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => handleViewEmployees(skill)}
+                                className="flex items-center gap-2 w-full group"
+                                title="Ver todos os funcionários"
+                              >
+                                <div className="flex -space-x-2">
+                                  {visibleEmployees.map((emp: any, idx: number) => (
+                                    <Avatar key={idx} className="h-8 w-8 border-2 border-white shadow-sm">
+                                      <AvatarImage src={emp.empFotoUrl || undefined} alt={emp.empNome} />
+                                      <AvatarFallback className="bg-blue-100 text-blue-700 text-[10px] font-semibold">
+                                        {getIniciais(emp.empNome)}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                  ))}
+                                  {overflowCount > 0 && (
+                                    <div className="h-8 w-8 rounded-full bg-slate-200 border-2 border-white shadow-sm flex items-center justify-center text-[10px] font-semibold text-slate-600">
+                                      +{overflowCount}
+                                    </div>
+                                  )}
+                                </div>
+                                <span className="text-sm text-muted-foreground group-hover:text-blue-700 group-hover:underline ml-1">
+                                  {totalEmp} funcionário{totalEmp !== 1 ? "s" : ""}
+                                </span>
+                              </button>
+                            ) : (
+                              <div className="flex items-center gap-2 text-muted-foreground">
+                                <Users className="h-4 w-4" />
+                                <span className="text-sm">Nenhum funcionário atribuído</span>
+                              </div>
+                            )}
                             {skillSummary.length > 0 && (
-                              <div className="flex gap-1 ml-auto">
+                              <div className="flex flex-wrap gap-1 mt-2">
                                 {skillSummary.map((r: any) => (
                                   <Badge key={r.nivel} className={`text-xs ${nivelColors[r.nivel] || ""}`}>
                                     {Number(r.qtd)} {nivelLabels[r.nivel] || r.nivel}
