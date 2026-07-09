@@ -259,11 +259,16 @@ export default function EmpresasTerceiras() {
 
   const handleSave = () => {
     if (!form.razaoSocial || !form.cnpj) { toast.error("Razão Social e CNPJ são obrigatórios"); return; }
-    const payload = { ...form, cnpj: form.cnpj.replace(/\D/g, "") };
+    const raw = { ...form, cnpj: form.cnpj.replace(/\D/g, "") };
+    // Zod enum(..).optional() aceita undefined mas NÃO null; converte todos os nulls
+    // para evitar falha silenciosa de validação client-side quando o banco devolve null
+    const payload = Object.fromEntries(
+      Object.entries(raw).map(([k, v]) => [k, v === null ? undefined : v])
+    );
     if (editingId) {
-      updateMut.mutate({ id: editingId, ...payload });
+      updateMut.mutate({ id: editingId, ...payload } as any);
     } else {
-      createMut.mutate(payload);
+      createMut.mutate(payload as any);
     }
   };
 
