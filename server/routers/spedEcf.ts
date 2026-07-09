@@ -21,7 +21,7 @@ export const spedEcfRouter = router({
   getConfig: protectedProcedure
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       const r = await db.$client.query(
         `SELECT * FROM sped_ecf_config WHERE company_id=$1 LIMIT 1`,
         [input.companyId]
@@ -32,7 +32,7 @@ export const spedEcfRouter = router({
   saveConfig: protectedProcedure
     .input(cfgSchema)
     .mutation(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       await db.$client.query(`
         INSERT INTO sped_ecf_config
           (company_id, cod_qualif_pj, setor_ativ, perc_pres_irpj, perc_pres_csll,

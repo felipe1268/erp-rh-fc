@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4106** — **FIX PARSER SANTANDER PDF: PIX RECEBIDO SUMIDO + LANÇAMENTOS FANTASMA DE SALDO.** Dois bugs: (A) pdf-parse às vezes extrai descrição ("PIX RECEBIDO 43010898886") e valor ("111,33") em linhas separadas — o parser antigo jogava a descrição no lançamento errado e o PIX sumia ou virava "Sem descrição". Fix: `TRANSACTION_START_RE` detecta linha sem valor que começa com verbo canônico (PIX, TED, CHEQUE, TARIFA, IOF, DEP, RESGATE…), faz flush do pendente e staged a descrição em `nextDesc`; a linha seguinte com valor usa `nextDesc` como descrição. (B) Valores da coluna Saldo (ex: 3.896,71-, 0,00) extraídos como linha isolada viravam lançamentos fantasma. Fix: linha com valor + prefixo vazio + `nextDesc=null` → ignorada. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+- **Rev. 4107** — **FIX CRÍTICO: EFD CONTRIBUIÇÕES + SPED ECF/ECD — ERRO "Cannot read properties of undefined (reading 'query')" + VALORES ZERADOS.** Causa: `getDb()` é async mas era chamada **sem `await`** em 6 arquivos — `db` virava Promise, `db.$client` era `undefined` e qualquer `.query()` explodia. Fix: adicionado `await` em todos os 6 pontos: `efdContribuicoes.ts`, `spedEcf.ts`, `spedEcd.ts`, `downloadEfdContribuicoes.ts`, `downloadSpedEcf.ts`, `downloadSpedEcd.ts`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
-- **Rev. 4105** — **FIX CRÍTICO: IMPORTAÇÃO DE EXTRATO — DUPLICATAS LEGÍTIMAS PERDIDAS.** `insertBankStatementBatch` usava `SELECT LIMIT 1` simples; com N linhas idênticas no lote (ex: 6× R$25k ou 2× R$50k) só a 1ª era gravada. Fix: mesma lógica batch-count-aware da Fase 1 (batchCount + dbCount + sessionInserted). Reimportar os OFX de junho preenche as linhas faltantes automaticamente. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+- **Rev. 4106** — **FIX PARSER SANTANDER PDF: PIX RECEBIDO SUMIDO + LANÇAMENTOS FANTASMA DE SALDO.** Dois bugs: (A) pdf-parse extrai descrição e valor em linhas separadas — parser antigo perdia PIX RECEBIDO. Fix: `TRANSACTION_START_RE` com verbos canônicos + `nextDesc`. (B) Valores de coluna Saldo viravam lançamentos fantasma. Fix: linha valor + prefixo vazio + `nextDesc=null` → ignorada. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 ### 5 one-liners
+
+- **Rev. 4105** — **FIX CRÍTICO: IMPORTAÇÃO DE EXTRATO — DUPLICATAS LEGÍTIMAS PERDIDAS.** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4104** — **NOVO LANÇAMENTO: CHEQUE EMPRESA × CHEQUE DE TERCEIRO (SELEÇÃO INTERATIVA + COMPLEMENTO).** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
@@ -63,10 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4102** — **NOVO LANÇAMENTO: SUGESTÃO DE CHEQUES RECEBIDOS AO PAGAR COM CHEQUE.** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4098** — **CHEQUES RECEBIDOS: VÍNCULO COM CLIENTE (FILTRO + ATRIBUIÇÃO EM LOTE + CAMPO NO IMPORT).** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
-- **Rev. 4097** — **CHEQUES RECEBIDOS: REDESIGN COMPLETO DA PÁGINA (LAYOUT PADRÃO EMITIDOS + IMPORT MULTI-XLSX + BARRA DE PROGRESSO).** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
-- **Rev. 4096** — **CONTROLE DE CHEQUES RECEBIDOS: NOVO SUB-MÓDULO COMPLETO (CADASTRO + IMPORT XLSX + SUGESTÃO NO PAGAMENTO).** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 ### Histórico completo
 

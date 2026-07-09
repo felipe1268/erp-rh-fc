@@ -1,4 +1,28 @@
 /**
+ * Rev. 4107 — **FIX CRÍTICO: EFD CONTRIBUIÇÕES + SPED ECF/ECD — ERRO "Cannot read properties of undefined (reading 'query')" + VALORES ZERADOS.**
+ *
+ * CONTEXTO: Páginas EFD Contribuições (PIS/COFINS) e SPED ECF (IRPJ/CSLL) exibiam todos os valores
+ * zerados e o toast de erro "Cannot read properties of undefined (reading 'query')" aparecia ao carregar
+ * e ao clicar em "Gerar". O SPED ECD tinha o mesmo problema.
+ *
+ * CAUSA RAIZ: `getDb()` é uma função **async** (retorna Promise<DrizzleDb>), mas nos 6 arquivos
+ * de roteamento SPED/EFD ela era chamada **sem `await`**:
+ *   `const db = getDb();`  →  `db` = Promise (não o objeto de banco)
+ *   `db.$client`           →  `undefined` (Promise não tem $client)
+ *   `db.$client.query(...)` → TypeError: Cannot read properties of undefined (reading 'query')
+ *
+ * Arquivos afetados (todos corrigidos com `await getDb()`):
+ *   - server/routers/efdContribuicoes.ts (getConfig + saveConfig)
+ *   - server/routers/spedEcf.ts          (getConfig + saveConfig)
+ *   - server/routers/spedEcd.ts          (getConfig + saveConfig)
+ *   - server/routers/downloadEfdContribuicoes.ts (buildEfdContribuicoesBuffer)
+ *   - server/routers/downloadSpedEcf.ts          (buildSpedEcfBuffer)
+ *   - server/routers/downloadSpedEcd.ts          (buildSpedEcdBuffer)
+ *
+ * ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+ */
+
+/**
  * Rev. 4106 — **FIX PARSER SANTANDER PDF: PIX RECEBIDO SUMIDO + LANÇAMENTOS FANTASMA DE SALDO.**
  *
  * CONTEXTO: Conta 13000464-5 (Júlio Ferraz / março 2026). Usuário reportou: (1) PIX RECEBIDO

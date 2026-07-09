@@ -40,7 +40,7 @@ export async function buildEfdContribuicoesBuffer(
   ano: number,
   finalidade: "0"|"1"
 ): Promise<Buffer> {
-  const db = getDb();
+  const db = await getDb();
 
   // Empresa
   const compQ = await db.$client.query(

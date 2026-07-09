@@ -20,7 +20,7 @@ export const efdContribuicoesRouter = router({
   getConfig: protectedProcedure
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       const r = await db.$client.query(
         `SELECT * FROM efd_contrib_config WHERE company_id=$1 LIMIT 1`,
         [input.companyId]
@@ -31,7 +31,7 @@ export const efdContribuicoesRouter = router({
   saveConfig: protectedProcedure
     .input(cfgSchema)
     .mutation(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       await db.$client.query(`
         INSERT INTO efd_contrib_config
           (company_id, cod_inc_trib, ind_reg_cum, aliq_pis, aliq_cofins, perc_presumido)

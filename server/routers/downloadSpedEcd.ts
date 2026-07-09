@@ -43,7 +43,7 @@ export async function buildSpedEcdBuffer(
   ano: number,
   finalidade: "0"|"1"
 ): Promise<Buffer> {
-  const db = getDb();
+  const db = await getDb();
 
   const compQ = await db.$client.query(
     `SELECT "razaoSocial","nomeFantasia",cnpj FROM companies WHERE id=$1 LIMIT 1`,
