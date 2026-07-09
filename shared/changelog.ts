@@ -1,4 +1,39 @@
 /**
+ * Rev. 4106 — **FIX PARSER SANTANDER PDF: PIX RECEBIDO SUMIDO + LANÇAMENTOS FANTASMA DE SALDO.**
+ *
+ * CONTEXTO: Conta 13000464-5 (Júlio Ferraz / março 2026). Usuário reportou: (1) PIX RECEBIDO
+ * R$111,33 em 04/03 não importado; (2) possíveis lançamentos duplicados/divergentes.
+ *
+ * CAUSA RAIZ A — Layout split (descrição e valor em linhas separadas):
+ *   O pdf-parse extrai alguns lançamentos do Santander com a coluna Descrição numa linha e o
+ *   valor monetário (+ Nº Doc) na linha seguinte — especialmente em PIX RECEBIDO cujo CPF/CNPJ
+ *   gera texto longo. O parser antigo tratava "PIX RECEBIDO 43010898886" (sem valor) como
+ *   *continuação* do lançamento anterior (DEP DINHEIRO ATM), e o valor "111,33" na linha seguinte
+ *   virava "231841" (só o nº doc) ou "Sem descrição" — o usuário não reconhecia e achava que faltava.
+ *
+ * CAUSA RAIZ B — Valor da coluna Saldo extraído como linha isolada:
+ *   O Santander "Extrato Consolidado Inteligente" exibe o saldo acumulado em algumas linhas
+ *   (ex: CHEQUE DEVOLVIDO → "3.896,71-"; APLICACAO CONTAMAX → "0,00"). O pdf-parse pode extrair
+ *   esse valor da coluna Saldo como linha separada sem texto antes → o parser criava lançamentos
+ *   fantasma (ex: débito de R$3.896,71 extra, crédito de R$0,00).
+ *
+ * CORREÇÃO — `server/services/santanderPdfParser.ts`:
+ *   1. Adicionado `TRANSACTION_START_RE`: regex com verbos canônicos do Santander (PIX, TED, CHEQUE,
+ *      DEP, TARIFA, IOF, JUROS, MULTA, APLICAÇÃO, RESGATE, CANCELAMENTO, TRANSFERÊNCIA, PAGAMENTO,
+ *      COMPENSAÇÃO, etc.). Quando linha SEM valor começa com esses verbos: flush da transação
+ *      anterior + descrição staged em `nextDesc`.
+ *   2. Na linha seguinte COM valor: se `nextDesc !== null` e nenhuma nova data foi detectada,
+ *      usa `nextDesc` como descrição (prefixo da linha — geralmente só o Nº Doc — é ignorado
+ *      ou descartado se for só dígitos).
+ *   3. Linha COM valor, prefixo VAZIO e `nextDesc === null`: ignorada (é coluna Saldo extraída
+ *      separadamente, não uma transação real).
+ *   4. Se nova data é encontrada numa money-line com `nextDesc` pendente: nextDesc era órfão
+ *      (sem valor correspondente), descartado e linha processada normalmente.
+ *
+ * ARQUIVOS: `server/services/santanderPdfParser.ts`.
+ * ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+ */
+/**
  * Rev. 4105 — **FIX CRÍTICO: IMPORTAÇÃO DE EXTRATO — DUPLICATAS LEGÍTIMAS PERDIDAS (insertBankStatementBatch).**
  *
  * PROBLEMA: `insertBankStatementBatch` (Fase 2 da importação em progresso) usava `SELECT ... LIMIT 1`

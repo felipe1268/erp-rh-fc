@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4106** — **FIX PARSER SANTANDER PDF: PIX RECEBIDO SUMIDO + LANÇAMENTOS FANTASMA DE SALDO.** Dois bugs: (A) pdf-parse às vezes extrai descrição ("PIX RECEBIDO 43010898886") e valor ("111,33") em linhas separadas — o parser antigo jogava a descrição no lançamento errado e o PIX sumia ou virava "Sem descrição". Fix: `TRANSACTION_START_RE` detecta linha sem valor que começa com verbo canônico (PIX, TED, CHEQUE, TARIFA, IOF, DEP, RESGATE…), faz flush do pendente e staged a descrição em `nextDesc`; a linha seguinte com valor usa `nextDesc` como descrição. (B) Valores da coluna Saldo (ex: 3.896,71-, 0,00) extraídos como linha isolada viravam lançamentos fantasma. Fix: linha com valor + prefixo vazio + `nextDesc=null` → ignorada. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+
 - **Rev. 4105** — **FIX CRÍTICO: IMPORTAÇÃO DE EXTRATO — DUPLICATAS LEGÍTIMAS PERDIDAS.** `insertBankStatementBatch` usava `SELECT LIMIT 1` simples; com N linhas idênticas no lote (ex: 6× R$25k ou 2× R$50k) só a 1ª era gravada. Fix: mesma lógica batch-count-aware da Fase 1 (batchCount + dbCount + sessionInserted). Reimportar os OFX de junho preenche as linhas faltantes automaticamente. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
-- **Rev. 4104** — **NOVO LANÇAMENTO: CHEQUE EMPRESA × CHEQUE DE TERCEIRO (SELEÇÃO INTERATIVA + COMPLEMENTO).** Toggle segmentado azul/verde divide forma=Cheque em dois subtipos: Empresa (comportamento atual) e Terceiro (seleciona cheques da carteira com totalizador ao vivo, combinações clicáveis, lista com checkbox, painel âmbar de complemento quando falta valor). Ao salvar, chama `alocarLote` e grava `formaPagamento="cheque_terceiro"`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
 ### 5 one-liners
+
+- **Rev. 4104** — **NOVO LANÇAMENTO: CHEQUE EMPRESA × CHEQUE DE TERCEIRO (SELEÇÃO INTERATIVA + COMPLEMENTO).** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4103** — **CHEQUES RECEBIDOS: BOTÃO "LIMPAR INVÁLIDOS" (SOFT-DELETE DE TOTALIZADORES).** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
@@ -66,11 +68,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4096** — **CONTROLE DE CHEQUES RECEBIDOS: NOVO SUB-MÓDULO COMPLETO (CADASTRO + IMPORT XLSX + SUGESTÃO NO PAGAMENTO).** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
-- **Rev. 4095** — **NFS-e: FÓRMULA DO VALOR LÍQUIDO CORRIGIDA (ISS RETIDO ENTRA NO CÁLCULO) + CAMPO VOLTA A SER READ-ONLY.** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4088 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4095 e anteriores.
 
 ## User preferences
 
