@@ -212,9 +212,9 @@ export const chequesRecebidosRouter = router({
       }
       if (input.busca?.trim()) {
         const like = `%${input.busca.trim()}%`;
-        where += ` AND (numero_cheque ILIKE $${idx} OR emitente_nome ILIKE $${idx} OR banco ILIKE $${idx} OR fornecedor_alocado_nome ILIKE $${idx} OR cliente_nome ILIKE $${idx})`;
-        params.push(like);
-        idx++;
+        where += ` AND (numero_cheque ILIKE $${idx} OR emitente_nome ILIKE $${idx+1} OR banco ILIKE $${idx+2} OR fornecedor_alocado_nome ILIKE $${idx+3} OR cliente_nome ILIKE $${idx+4})`;
+        params.push(like, like, like, like, like);
+        idx += 5;
       }
 
       const res = await dbExecute(db, `
