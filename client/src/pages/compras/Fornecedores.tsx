@@ -204,6 +204,46 @@ const CATEGORIAS_PADRAO = [
   "Mão de Obra", "Concreto e Blocos", "Impermeabilização", "EPI e Segurança", "Outros",
 ];
 
+// Rev. 4122 — utilitários de dedup de categoria (normaliza acento/caixa/plural
+// simples + distância de Levenshtein) pra impedir criar "Ar Condicionado" e
+// "Ar condicionados" como categorias diferentes.
+function normalizeCategoriaTexto(s: string): string {
+  return s
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/s$/, ""); // remove plural simples no final pra comparação
+}
+
+function levenshteinDist(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+function similaridadeCategoria(a: string, b: string): number {
+  const na = normalizeCategoriaTexto(a);
+  const nb = normalizeCategoriaTexto(b);
+  if (!na || !nb) return 0;
+  if (na === nb) return 1;
+  const maxLen = Math.max(na.length, nb.length);
+  return 1 - levenshteinDist(na, nb) / maxLen;
+}
+
+const LIMIAR_SIMILARIDADE_CATEGORIA = 0.8;
+
 function formatCNPJ(v: string) {
   const d = v.replace(/\D/g, "").slice(0, 14);
   return d
@@ -339,6 +379,8 @@ export default function Fornecedores() {
   const [novaRegra, setNovaRegra] = useState({ produto: "", formaPagamento: "cheque", numParcelas: "3", prazoEntreParcelas: "30" });
   const [buscandoCNPJ, setBuscandoCNPJ] = useState(false);
   const [buscaCategoria, setBuscaCategoria] = useState("");
+  const [novaCategoria, setNovaCategoria] = useState("");
+  const [categoriasCriadasLocal, setCategoriasCriadasLocal] = useState<string[]>([]);
   const [erroCNPJ, setErroCNPJ]       = useState<string | null>(null);
   const [detalheId, setDetalheId]     = useState<number | null>(null);
 
@@ -669,6 +711,39 @@ export default function Fornecedores() {
     }));
   }
 
+  // Rev. 4122 — cria uma nova categoria de fornecimento, bloqueando nomes
+  // iguais ou muito parecidos com uma categoria já existente (evita
+  // duplicidade tipo "Ar Condicionado" x "Ar condicionados").
+  function handleCriarCategoria() {
+    const nome = novaCategoria.trim();
+    if (!nome) return;
+    if (nome.length < 2) { toast.error("Nome de categoria muito curto."); return; }
+
+    const igual = todasCategorias.find(c => normalizeCategoriaTexto(c) === normalizeCategoriaTexto(nome));
+    if (igual) {
+      toast.error(`A categoria "${igual}" já existe.`);
+      if (!form.categorias.includes(igual)) toggleCategoria(igual);
+      setNovaCategoria("");
+      return;
+    }
+
+    let maisParecida: string | null = null;
+    let maiorSimilaridade = 0;
+    for (const c of todasCategorias) {
+      const sim = similaridadeCategoria(c, nome);
+      if (sim > maiorSimilaridade) { maiorSimilaridade = sim; maisParecida = c; }
+    }
+    if (maisParecida && maiorSimilaridade >= LIMIAR_SIMILARIDADE_CATEGORIA) {
+      toast.error(`Categoria muito parecida com "${maisParecida}" já cadastrada. Use a existente para não duplicar.`);
+      return;
+    }
+
+    setCategoriasCriadasLocal(prev => [...prev, nome]);
+    setForm(prev => ({ ...prev, categorias: [...prev.categorias, nome] }));
+    setNovaCategoria("");
+    toast.success(`Categoria "${nome}" criada e selecionada.`);
+  }
+
   async function salvar() {
     // Se o diálogo de duplicidade já foi exibido, não prosseguir.
     if (dupDialog?.mode === "block-same") {
@@ -728,9 +803,9 @@ export default function Fornecedores() {
   }
 
   const todasCategorias = useMemo(() => {
-    const set = new Set([...CATEGORIAS_PADRAO, ...categorias]);
+    const set = new Set([...CATEGORIAS_PADRAO, ...categorias, ...categoriasCriadasLocal]);
     return Array.from(set).sort();
-  }, [categorias]);
+  }, [categorias, categoriasCriadasLocal]);
 
   const detalhe = detalheId !== null ? fornecedores.find(f => f.id === detalheId) : null;
 
@@ -1518,6 +1593,26 @@ export default function Fornecedores() {
                         {todasCategorias.filter(c => !buscaCategoria || c.toLowerCase().includes(buscaCategoria.toLowerCase())).length === 0 && (
                           <p className="text-xs text-slate-400 text-center py-3">Nenhuma categoria encontrada</p>
                         )}
+                      </div>
+                      {/* Rev. 4122 — criar nova categoria (com bloqueio de duplicidade/similaridade) */}
+                      <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-slate-100">
+                        <Input
+                          value={novaCategoria}
+                          onChange={e => setNovaCategoria(e.target.value)}
+                          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleCriarCategoria(); } }}
+                          placeholder="Nova categoria..."
+                          className="h-8 text-xs"
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-8 px-2.5 shrink-0"
+                          disabled={!novaCategoria.trim()}
+                          onClick={handleCriarCategoria}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
                     </div>
                   </div>
