@@ -1281,59 +1281,28 @@ export default function FinanceiroNotasFiscais() {
                     </>
                   : <><Upload className="h-3.5 w-3.5" /> Importar XML</>}
               </Button>
-              <Button
-                size="sm"
-                className="gap-1.5 h-9 bg-indigo-600 hover:bg-indigo-700 text-white"
-                disabled={sefazSyncMut.isPending || sefazResetNsuMut.isPending}
-                onClick={() => sefazSyncMut.mutate({ companyId: companyId ?? 0 })}
-                title="Busca as NF-e novas desde a última sincronização"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${sefazSyncMut.isPending ? "animate-spin" : ""}`} />
-                {sefazSyncMut.isPending ? "Sincronizando..." : "Sincronizar SEFAZ"}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1.5 h-9 border-amber-300 text-amber-700 hover:bg-amber-50"
-                disabled={sefazSyncMut.isPending || sefazResetNsuMut.isPending}
-                onClick={() => setConfirmHistorico(true)}
-                title="Zera o NSU e baixa todas as NF-e desde o início"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${sefazResetNsuMut.isPending ? "animate-spin" : ""}`} />
-                {sefazResetNsuMut.isPending ? "Baixando..." : "Histórico completo"}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1.5 h-9 border-slate-300 text-slate-600 hover:bg-slate-50"
-                disabled={obterSugestoesMut.isPending}
-                onClick={() => {
-                  const m = recMes ?? 0;
-                  const dataInicio = m ? `${recAno}-${String(m).padStart(2,"0")}-01` : `${recAno}-01-01`;
-                  const dataFim = m ? `${recAno}-${String(m).padStart(2,"0")}-${new Date(recAno, m, 0).getDate()}` : `${recAno}-12-31`;
-                  obterSugestoesMut.mutate({ companyId: companyId ?? 0, dataInicio, dataFim, tipo: "recebida" });
-                }}
-                title="Ver sugestões de vínculo NF-e recebidas × débitos do extrato"
-              >
-                <Search className={`h-3.5 w-3.5 ${obterSugestoesMut.isPending ? "animate-pulse" : ""}`} />
-                {obterSugestoesMut.isPending ? "Buscando..." : "Revisar Sugestões"}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1.5 h-9 border-violet-300 text-violet-700 hover:bg-violet-50"
-                disabled={sincronizarNfMut.isPending}
-                onClick={() => {
-                  const m = recMes ?? 0;
-                  const dataInicio = m ? `${recAno}-${String(m).padStart(2,"0")}-01` : `${recAno}-01-01`;
-                  const dataFim = m ? `${recAno}-${String(m).padStart(2,"0")}-${new Date(recAno, m, 0).getDate()}` : `${recAno}-12-31`;
-                  sincronizarNfMut.mutate({ companyId: companyId ?? 0, dataInicio, dataFim, tipo: "recebida" });
-                }}
-                title="Vincula automaticamente NF-e recebidas × débitos de alta confiança"
-              >
-                <Link className={`h-3.5 w-3.5 ${sincronizarNfMut.isPending ? "animate-pulse" : ""}`} />
-                {sincronizarNfMut.isPending ? "Vinculando..." : "Vincular Automaticamente"}
-              </Button>
+              {(() => {
+                const syncOn = Boolean(Number(sefazCfg?.sync_enabled));
+                return (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className={`gap-1.5 h-9 ${syncOn
+                      ? "border-green-400 bg-green-50 text-green-700 hover:bg-green-100"
+                      : "border-slate-300 text-slate-600 hover:bg-slate-50"}`}
+                    disabled={sefazToggleMut.isPending}
+                    onClick={() => sefazToggleMut.mutate({ companyId: companyId ?? 0, enabled: !syncOn })}
+                    title={syncOn ? "Desligar sincronização automática com a SEFAZ" : "Ligar sincronização automática com a SEFAZ"}
+                  >
+                    {sefazToggleMut.isPending
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : syncOn
+                        ? <><span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" /> Sync Automático: ON</>
+                        : <><span className="h-2 w-2 rounded-full bg-slate-400" /> Sync Automático: OFF</>
+                    }
+                  </Button>
+                );
+              })()}
             </div>
           )}
         </div>
