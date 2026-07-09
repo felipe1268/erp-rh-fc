@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4128** — **DIÁLOGO "ATRIBUIR HABILIDADE" MOSTRA FOTO + OBRA ATUAL DO FUNCIONÁRIO.** `Habilidades.tsx`: busca de funcionário no diálogo "Atribuir: [Habilidade]" ganhou `Avatar` (foto real via `fotoUrl`, fallback com iniciais) + linha secundária com a obra atual (`obraAtualNome`, já enriquecido pelo `employees.list`/`getEmployees` via join com `obra_funcionarios` ativo), ou "Sem obra alocada" quando não há alocação. Zero mudança de backend/schema — só exibição de dados já retornados pela API. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4127** — **CNPJ OBRIGATÓRIO PARA CRIAR NOVO FORNECEDOR/EMPRESA TERCEIRA.** Regra do usuário: só permite CRIAR (não edita) fornecedor/empresa terceira com CNPJ preenchido. `criarFornecedor` (compras.ts) e `empresas.create` (terceiros.ts) tiveram o schema Zod do `cnpj` endurecido pra `.refine()` exigindo 14 dígitos (antes era `.optional()`/`min(1)` fraco) — barreira real no backend, não só no formulário. Fornecedores.tsx ganhou checagem client-side espelhada + label "*" só na criação; EmpresasTerceiras.tsx já validava. Edição de cadastros antigos sem CNPJ continua permitida. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4126** — **PADRONIZAÇÃO DO FILTRO DE MÊS/ANO + BOTÃO "ANO TODO" (EFD CONTRIBUIÇÕES / EFD ICMS-IPI COM DOWNLOAD EM LOTE).** `PeriodSelectorCard.tsx` (componente compartilhado, já usado por 10 dashboards) ganhou `mes: number|null` + prop opcional `onAnoTodo` (botão "Ano todo", 100% retrocompatível). Aplicado em EfdContribuicoes.tsx/EfdIcmsIpi.tsx: "Ano todo" baixa um ZIP com os 12 TXT mensais (não existe arquivo anual único válido no leiaute SPED); novos endpoints `GET /api/download/efd-contribuicoes-ano` e `/efd-icms-ipi-ano` usam `archiver` reaproveitando os builders mensais existentes. BancoHoras.tsx (aba Saldos) migrada visualmente pro componente padrão (sem botão Ano Todo — lá o saldo é acumulado até o mês, não agregação anual). Restam ~19 telas (Financeiro, Folha, Medições, Parceiros) com seletor inline — migração ficará para revisões seguintes, tela por tela. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4126** — **PADRONIZAÇÃO DO FILTRO DE MÊS/ANO + BOTÃO "ANO TODO" (EFD CONTRIBUIÇÕES / EFD ICMS-IPI COM DOWNLOAD EM LOTE).** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4125** — **FIX RAIZ: VALOR LÍQUIDO DE NF-e/NFS-e IMPORTADA DIVERGINDO DO DOCUMENTO REAL.** ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4122** — **CATEGORIAS DE FORNECIMENTO: CRIAR NOVA CATEGORIA COM BLOQUEIO DE DUPLICIDADE.** ZERO DELETE · ZERO ALTER.
 
-- **Rev. 4121** — **BUSCA E PREENCHIMENTO AUTOMÁTICO DE CNPJ PARA FORNECEDORES SEM CADASTRO (LOTE 2/N — ANÁLISE REFINADA).** ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4120 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4121 e anteriores.
 
 ## User preferences
 

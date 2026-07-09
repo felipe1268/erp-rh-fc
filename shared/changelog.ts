@@ -1,4 +1,26 @@
 /**
+ * Rev. 4128 — **DIÁLOGO "ATRIBUIR HABILIDADE" MOSTRA FOTO + OBRA ATUAL DO FUNCIONÁRIO.**
+ *
+ * CONTEXTO: usuário pediu para melhorar a busca de funcionário no diálogo "Atribuir:
+ * [Habilidade]" (tela Habilidades) mostrando a foto do funcionário e a obra em que ele está
+ * alocado hoje, para facilitar identificação em empresas com muitos funcionários homônimos/
+ * mesma função.
+ *
+ * IMPLEMENTAÇÃO:
+ * 1. `client/src/pages/Habilidades.tsx` — nenhuma mudança de backend foi necessária: o
+ *    `trpc.employees.list` já retornava `fotoUrl` (coluna existente em `employees`) e
+ *    `obraAtualId`/`obraAtualNome` (enriquecido via join com `obra_funcionarios` ativo em
+ *    `getEmployees`, server/db.ts).
+ * 2. Lista de resultados da busca e o chip do funcionário selecionado ganharam `Avatar` (foto
+ *    real via `AvatarImage`, fallback com iniciais via `AvatarFallback` + helper `getIniciais()`)
+ *    e uma linha secundária com ícone `HardHat` mostrando `obraAtualNome`, ou "Sem obra alocada"
+ *    em itálico quando o funcionário não tem alocação ativa.
+ * 3. Nenhuma lógica de negócio ou schema alterada — puramente exibição de dados já disponíveis.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4127 — **CNPJ OBRIGATÓRIO PARA CRIAR NOVO FORNECEDOR/EMPRESA TERCEIRA.**
  *
  * CONTEXTO: usuário pediu uma regra explícita: só permitir CRIAR um novo cadastro de fornecedor

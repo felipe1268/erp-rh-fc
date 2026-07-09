@@ -32,6 +32,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { HardHat } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────────────────
 type SkillForm = {
@@ -60,6 +62,16 @@ const nivelColors: Record<string, string> = {
   Intermediario: "bg-amber-100 text-amber-800",
   Avancado: "bg-green-100 text-green-800",
 };
+
+// Rev. 4128 — iniciais do nome pro fallback do avatar (foto do funcionário
+// na busca de "Atribuir Habilidade").
+function getIniciais(nome?: string): string {
+  if (!nome) return "?";
+  const partes = nome.trim().split(/\s+/).filter(Boolean);
+  if (partes.length === 0) return "?";
+  if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
+  return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
+}
 
 // ─── Main Component ─────────────────────────────────────────────
 export default function Habilidades() {
@@ -576,11 +588,29 @@ function AssignSkillDialog({
           <div>
             <Label>Funcionário *</Label>
             {selectedEmp ? (
-              <div className="flex items-center gap-2 p-2 border rounded-lg bg-blue-50">
-                <UserCheck className="h-4 w-4 text-blue-600" />
-                <span className="font-medium">{selectedEmp.nomeCompleto}</span>
-                <span className="text-sm text-muted-foreground">({selectedEmp.funcao})</span>
-                <Button variant="ghost" size="icon" className="h-6 w-6 ml-auto" onClick={() => setSelectedEmp(null)}>
+              <div className="flex items-center gap-3 p-2 border rounded-lg bg-blue-50">
+                <Avatar className="h-9 w-9 border border-blue-200">
+                  <AvatarImage src={selectedEmp.fotoUrl || undefined} alt={selectedEmp.nomeCompleto} />
+                  <AvatarFallback className="bg-blue-100 text-blue-700 text-xs font-semibold">
+                    {getIniciais(selectedEmp.nomeCompleto)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <UserCheck className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                    <span className="font-medium truncate">{selectedEmp.nomeCompleto}</span>
+                    <span className="text-sm text-muted-foreground shrink-0">({selectedEmp.funcao})</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <HardHat className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    {selectedEmp.obraAtualNome ? (
+                      <span className="text-xs text-muted-foreground truncate">{selectedEmp.obraAtualNome}</span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground/70 italic">Sem obra alocada</span>
+                    )}
+                  </div>
+                </div>
+                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setSelectedEmp(null)}>
                   <X className="h-4 w-4" />
                 </Button>
               </div>
@@ -605,19 +635,35 @@ function AssignSkillDialog({
                         <button
                           key={emp.id}
                           disabled={alreadyHas}
-                          className={`w-full text-left px-3 py-2 text-sm border-b last:border-0 flex items-center justify-between gap-2 ${
+                          className={`w-full text-left px-3 py-2 text-sm border-b last:border-0 flex items-center gap-2.5 ${
                             alreadyHas
                               ? "opacity-50 cursor-not-allowed bg-gray-50"
                               : "hover:bg-blue-50 cursor-pointer"
                           }`}
                           onClick={() => !alreadyHas && setSelectedEmp(emp)}
                         >
-                          <div>
-                            <span className="font-medium">{emp.nomeCompleto}</span>
-                            <span className="text-muted-foreground ml-2">({emp.funcao})</span>
+                          <Avatar className="h-8 w-8 shrink-0">
+                            <AvatarImage src={emp.fotoUrl || undefined} alt={emp.nomeCompleto} />
+                            <AvatarFallback className="bg-slate-100 text-slate-600 text-[11px] font-semibold">
+                              {getIniciais(emp.nomeCompleto)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate">
+                              <span className="font-medium">{emp.nomeCompleto}</span>
+                              <span className="text-muted-foreground ml-2">({emp.funcao})</span>
+                            </div>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <HardHat className="h-3 w-3 text-muted-foreground shrink-0" />
+                              {emp.obraAtualNome ? (
+                                <span className="text-xs text-muted-foreground truncate">{emp.obraAtualNome}</span>
+                              ) : (
+                                <span className="text-xs text-muted-foreground/70 italic">Sem obra alocada</span>
+                              )}
+                            </div>
                           </div>
                           {alreadyHas && (
-                            <Badge variant="secondary" className="text-xs">Já possui</Badge>
+                            <Badge variant="secondary" className="text-xs shrink-0">Já possui</Badge>
                           )}
                         </button>
                       );
