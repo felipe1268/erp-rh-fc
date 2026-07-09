@@ -20,7 +20,7 @@ import {
   CheckCircle2, XCircle, AlertTriangle, Loader2, X, ChevronDown, ChevronUp, Users,
   Star, Trophy, Medal, ShieldCheck, ShieldAlert, TrendingUp, Package, Clock, BarChart3, Truck,
   CreditCard, FileText, Tag, MessageSquare, Landmark, Hash, KeyRound,
-  GitMerge, RefreshCw, Eye, EyeOff, ShieldQuestion,
+  Eye, ShieldQuestion,
 } from "lucide-react";
 
 function maskPhone(v: string): string {
@@ -250,10 +250,7 @@ export default function Fornecedores() {
   const { user } = useAuth();
   const companyId = selectedCompany?.id ?? 0;
 
-  const [aba, setAba] = useState<"lista" | "ranking" | "duplicatas">("lista");
-  const [ignorados, setIgnorados] = useState<Set<string>>(() => {
-    try { return new Set(JSON.parse(localStorage.getItem("dup_ignorados") ?? "[]")); } catch { return new Set(); }
-  });
+  const [aba, setAba] = useState<"lista" | "ranking">("lista");
   const [busca, setBusca]       = useState("");
   const [filtroCateg, setFiltroCateg] = useState("todas");
   const [apenasAtivos, setApenasAtivos] = useState(true);
@@ -325,30 +322,6 @@ export default function Fornecedores() {
   const atualizarMut = trpc.compras.atualizarFornecedor.useMutation({ onSuccess: () => { refetch(); fecharModal(); toast.success("Empresa terceira atualizada!"); } });
   const excluirMut  = trpc.compras.excluirFornecedor.useMutation({ onSuccess: () => { refetch(); toast.success("Empresa terceira desativada."); } });
   const reativarMut = trpc.compras.reativarFornecedor.useMutation({ onSuccess: () => { refetch(); toast.success("Empresa terceira reativada!"); } });
-
-  const { data: dupData, isLoading: isDupLoading, refetch: refetchDups } = trpc.compras.listarDuplicatas.useQuery(
-    { companyId },
-    { enabled: !!companyId && aba === "duplicatas", staleTime: 60_000 }
-  );
-  const unificarMut = trpc.compras.unificarFornecedores.useMutation({
-    onSuccess: () => { refetchDups(); refetch(); toast.success("Fornecedores unificados com sucesso!"); },
-    onError: (e) => toast.error(e.message),
-  });
-
-  const [selecionados, setSelecionados] = useState<Record<string, number>>({});
-
-  function dupKey(ids: number[]) { return [...ids].sort((a,b) => a-b).join("_"); }
-
-  function handleIgnorar(ids: number[]) {
-    const key = dupKey(ids);
-    setIgnorados(prev => {
-      const next = new Set(prev); next.add(key);
-      localStorage.setItem("dup_ignorados", JSON.stringify([...next]));
-      return next;
-    });
-  }
-
-  const totalDups = ((dupData?.cnpj.length ?? 0) + (dupData?.nome.length ?? 0));
 
   const avaliarMut  = trpc.compras.avaliarFornecedor.useMutation({
     onSuccess: () => {
@@ -707,162 +680,10 @@ export default function Fornecedores() {
               {label}
             </button>
           ))}
-          <button
-            onClick={() => setAba("duplicatas")}
-            className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
-              aba === "duplicatas" ? "bg-orange-500 text-white shadow-sm" : "text-slate-500 hover:bg-slate-100"
-            }`}
-          >
-            <GitMerge className="h-3.5 w-3.5" />
-            Duplicidades
-            {dupData && totalDups > 0 && (
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${aba === "duplicatas" ? "bg-white/25 text-white" : "bg-orange-100 text-orange-600"}`}>
-                {totalDups}
-              </span>
-            )}
-          </button>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-5 space-y-4">
-
-        {/* ═══ ABA: DUPLICIDADES ═══ */}
-        {aba === "duplicatas" && (
-          <div>
-            <div className="flex items-center gap-3 mb-5">
-              <GitMerge className="h-5 w-5 text-orange-500" />
-              <h2 className="text-base font-bold text-slate-800">Verificação de Duplicidades</h2>
-              <span className="text-xs text-slate-400">Revise e unifique fornecedores duplicados</span>
-              <button onClick={() => refetchDups()} className="ml-auto flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50">
-                <RefreshCw className="h-3.5 w-3.5" /> Atualizar
-              </button>
-            </div>
-
-            {isDupLoading && (
-              <div className="flex items-center justify-center py-16">
-                <Loader2 className="h-8 w-8 animate-spin text-orange-400" />
-                <span className="ml-3 text-slate-500 text-sm">Analisando {fornecedores.length} empresas...</span>
-              </div>
-            )}
-
-            {!isDupLoading && dupData && (() => {
-              const allGroups = [
-                ...dupData.cnpj.map(g => ({ ...g, tipo: "cnpj" as const })),
-                ...dupData.nome.map(g => ({ ...g, tipo: "nome" as const })),
-              ].filter(g => !ignorados.has(dupKey(g.fornecedores.map(f => f.id))));
-
-              if (allGroups.length === 0) return (
-                <div className="bg-white rounded-xl border border-dashed border-slate-200 p-12 text-center">
-                  <CheckCircle2 className="h-10 w-10 text-emerald-400 mx-auto mb-3" />
-                  <p className="text-slate-600 font-medium">Nenhuma duplicidade detectada</p>
-                  <p className="text-xs text-slate-400 mt-1">Todos os {fornecedores.length} fornecedores parecem únicos</p>
-                  {ignorados.size > 0 && (
-                    <button onClick={() => { setIgnorados(new Set()); localStorage.removeItem("dup_ignorados"); }} className="mt-3 text-xs text-slate-400 hover:text-slate-600 underline">
-                      Mostrar {ignorados.size} ignorado(s)
-                    </button>
-                  )}
-                </div>
-              );
-
-              return (
-                <div className="space-y-5">
-                  {ignorados.size > 0 && (
-                    <button onClick={() => { setIgnorados(new Set()); localStorage.removeItem("dup_ignorados"); }} className="text-xs text-slate-400 hover:text-slate-600 underline">
-                      Mostrar {ignorados.size} grupo(s) ignorado(s)
-                    </button>
-                  )}
-                  {allGroups.map((group) => {
-                    const ids = group.fornecedores.map(f => f.id);
-                    const key = dupKey(ids);
-                    const manterId = selecionados[key] ?? ids[0];
-
-                    return (
-                      <div key={key} className="bg-white rounded-xl border border-orange-100 shadow-sm overflow-hidden">
-                        {/* Cabeçalho do grupo */}
-                        <div className="flex items-center gap-3 px-4 py-2.5 bg-orange-50 border-b border-orange-100">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide ${group.tipo === "cnpj" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
-                            {group.tipo === "cnpj" ? "Mesmo CNPJ" : "Nome similar"}
-                          </span>
-                          <span className="text-xs text-slate-500">{group.fornecedores.length} registros · clique para escolher qual manter</span>
-                          <div className="ml-auto flex gap-2">
-                            <button
-                              onClick={() => handleIgnorar(ids)}
-                              className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 px-2.5 py-1 rounded border border-slate-200 hover:bg-slate-50"
-                            >
-                              <EyeOff className="h-3 w-3" /> Ignorar
-                            </button>
-                            <button
-                              onClick={() => {
-                                const descartar = ids.find(id => id !== manterId)!;
-                                if (confirm(`Unificar: manter #${manterId}, descartar #${descartar}?\n\nTodas as OCs, cotações e vínculos serão transferidos para o registro mantido.`)) {
-                                  unificarMut.mutate({ manterId, descartarId: descartar, companyId });
-                                }
-                              }}
-                              disabled={unificarMut.isPending}
-                              className="flex items-center gap-1 text-xs font-semibold text-white bg-orange-500 hover:bg-orange-600 px-3 py-1 rounded disabled:opacity-50"
-                            >
-                              <GitMerge className="h-3 w-3" />
-                              {unificarMut.isPending ? "Unificando..." : "Unificar"}
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Cards lado a lado */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-0 divide-x divide-slate-100">
-                          {group.fornecedores.map((f) => {
-                            const isKept = f.id === manterId;
-                            const campos = [
-                              f.cnpj ? `CNPJ ${f.cnpj}` : null,
-                              (f.cidade && f.estado) ? `${f.cidade}/${f.estado}` : null,
-                              f.telefone || null,
-                              f.email || null,
-                              f.banco ? `Banco ${f.banco}` : null,
-                              f.pix ? `PIX ${f.pix}` : null,
-                            ].filter(Boolean);
-
-                            return (
-                              <button
-                                key={f.id}
-                                onClick={() => setSelecionados(prev => ({ ...prev, [key]: f.id }))}
-                                className={`text-left p-4 transition-all ${isKept ? "bg-emerald-50 ring-2 ring-inset ring-emerald-400" : "hover:bg-slate-50"}`}
-                              >
-                                <div className="flex items-start gap-2 mb-2">
-                                  <div className={`mt-0.5 h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center ${isKept ? "border-emerald-500 bg-emerald-500" : "border-slate-300"}`}>
-                                    {isKept && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className="font-semibold text-slate-800 text-sm break-words">{f.nomeFantasia || f.razaoSocial}</p>
-                                    {f.nomeFantasia && f.nomeFantasia !== f.razaoSocial && (
-                                      <p className="text-xs text-slate-500 break-words">{f.razaoSocial}</p>
-                                    )}
-                                  </div>
-                                  <div className="shrink-0 flex flex-col items-end gap-1">
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${f.ativo !== false ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
-                                      {f.ativo !== false ? "Ativo" : "Inativo"}
-                                    </span>
-                                    {isKept && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-700">MANTER</span>}
-                                  </div>
-                                </div>
-                                <div className="pl-6 space-y-0.5">
-                                  {campos.length > 0 ? campos.map((c, i) => (
-                                    <p key={i} className="text-xs text-slate-500">{c}</p>
-                                  )) : <p className="text-xs text-slate-400 italic">Sem dados cadastrais</p>}
-                                  {f.ocCount > 0 && (
-                                    <p className="text-xs font-medium text-blue-600 mt-1">📦 {f.ocCount} OC{f.ocCount !== 1 ? "s" : ""}</p>
-                                  )}
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
-          </div>
-        )}
 
         {/* ═══ ABA: RANKING ═══ */}
         {aba === "ranking" && (

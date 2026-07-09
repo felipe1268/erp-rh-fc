@@ -1,4 +1,26 @@
 /**
+ * Rev. 4112 — **AUTO-MERGE DE FORNECEDORES DUPLICADOS NO BOOT (MESMO CNPJ OU MESMO NOME).**
+ *
+ * CONTEXTO: O usuário não queria tela manual de revisão — apenas que duplicatas (mesmo CNPJ
+ * ou mesmo nome exato) fossem eliminadas automaticamente sem intervenção.
+ *
+ * O QUE FOI FEITO:
+ * 1. Job `[AutoMergeFornecedores]` no boot (t=10s) em server/_core/index.ts:
+ *    - Busca grupos com mesmo CNPJ normalizado (14 dígitos) por company_id.
+ *    - Busca grupos com mesmo UPPER(TRIM(razao_social)) por company_id.
+ *    - Para cada grupo: mantém o com mais OCs (tiebreaker: menor id).
+ *    - Migra 11 FKs em db.transaction + COALESCE-enriquece o mantido + soft-delete.
+ *    - Guard: verifica existência de `fatura_locacao_conferencia` antes de tocar a tabela
+ *      (pode não estar criada no Neon ainda) — evita rollback de toda a transação.
+ *    - Idempotente: no restart seguinte encontra 0 pares e loga "Nenhum duplicado".
+ * 2. Aba "Duplicidades" manual removida do frontend (Fornecedores.tsx) — sem botões.
+ * 3. Imports não usados (GitMerge, EyeOff, RefreshCw) removidos.
+ * 4. 5 pares unificados na primeira execução (2 por CNPJ, 3 por nome idêntico).
+ *
+ * ZERO DELETE DOS DADOS REAIS · ZERO ALTER
+ */
+
+/**
  * Rev. 4111 — **EMPRESAS TERCEIRAS: ABA "DUPLICIDADES" — DETECÇÃO E UNIFICAÇÃO DE FORNECEDORES DUPLICADOS.**
  *
  * CONTEXTO: Com 1.269 empresas cadastradas, duplicatas por CNPJ idêntico ou nome similar

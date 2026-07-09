@@ -6912,6 +6912,148 @@ REGRAS DE EXTRAÇÃO:
       import("../services/syncMonitorJob").then(m => m.startSyncMonitorJob()).catch(e => console.error("[SyncMonitor] Erro:", e))
     );
 
+    // Rev. 4112 — Auto-merge de fornecedores duplicados (mesmo CNPJ ou mesmo nome exato)
+    delay(10_000).then(() =>
+      import("../db").then(async ({ getDb }) => {
+        try {
+          const db = await getDb();
+          if (!db) return;
+          const { sql } = await import("drizzle-orm");
+
+          // Busca pares (manter_id, descartar_id) por CNPJ idêntico (14 dígitos normalizados)
+          const cnpjPairs = await db.execute(sql`
+            WITH grps AS (
+              SELECT company_id,
+                     regexp_replace(cnpj, '[^0-9]', '', 'g') AS cnpj_norm,
+                     id,
+                     (SELECT COUNT(*) FROM compras_ordens WHERE fornecedor_id = f.id) AS oc_count
+              FROM fornecedores f
+              WHERE ativo = true
+                AND cnpj IS NOT NULL AND cnpj <> ''
+                AND LENGTH(regexp_replace(cnpj, '[^0-9]', '', 'g')) = 14
+            ),
+            winners AS (
+              SELECT DISTINCT ON (company_id, cnpj_norm) company_id, cnpj_norm, id AS manter_id
+              FROM grps
+              ORDER BY company_id, cnpj_norm, oc_count DESC, id ASC
+            )
+            SELECT g.id AS descartar_id, w.manter_id
+            FROM grps g
+            JOIN winners w ON w.company_id = g.company_id AND w.cnpj_norm = g.cnpj_norm
+            WHERE g.id <> w.manter_id
+          `);
+
+          // Busca pares por nome exato (razao_social normalizado), excluindo já cobertos por CNPJ
+          const cnpjDescartados = new Set((cnpjPairs.rows as any[]).map(r => Number(r.descartar_id)));
+          const nomePairs = await db.execute(sql`
+            WITH grps AS (
+              SELECT company_id,
+                     UPPER(TRIM(razao_social)) AS nome_norm,
+                     id,
+                     (SELECT COUNT(*) FROM compras_ordens WHERE fornecedor_id = f.id) AS oc_count
+              FROM fornecedores f
+              WHERE ativo = true
+                AND razao_social IS NOT NULL AND TRIM(razao_social) <> ''
+            ),
+            winners AS (
+              SELECT DISTINCT ON (company_id, nome_norm) company_id, nome_norm, id AS manter_id
+              FROM grps
+              ORDER BY company_id, nome_norm, oc_count DESC, id ASC
+            )
+            SELECT g.id AS descartar_id, w.manter_id
+            FROM grps g
+            JOIN winners w ON w.company_id = g.company_id AND w.nome_norm = g.nome_norm
+            WHERE g.id <> w.manter_id
+          `);
+
+          // Combina e deduplica: um id só pode ser descartado uma vez
+          const allPairs: { manterId: number; descartarId: number }[] = [];
+          const seenDescartar = new Set<number>();
+
+          for (const row of (cnpjPairs.rows as any[])) {
+            const descartarId = Number(row.descartar_id);
+            const manterId    = Number(row.manter_id);
+            if (!seenDescartar.has(descartarId)) { seenDescartar.add(descartarId); allPairs.push({ manterId, descartarId }); }
+          }
+          for (const row of (nomePairs.rows as any[])) {
+            const descartarId = Number(row.descartar_id);
+            const manterId    = Number(row.manter_id);
+            if (!seenDescartar.has(descartarId) && !cnpjDescartados.has(descartarId)) {
+              seenDescartar.add(descartarId); allPairs.push({ manterId, descartarId });
+            }
+          }
+
+          if (allPairs.length === 0) {
+            console.log("[AutoMergeFornecedores] Nenhum duplicado encontrado.");
+            return;
+          }
+
+          // Verifica se a tabela fatura_locacao_conferencia existe no Neon
+          const flcExists = await db.execute(sql`
+            SELECT EXISTS (
+              SELECT 1 FROM information_schema.tables
+              WHERE table_schema = 'public' AND table_name = 'fatura_locacao_conferencia'
+            ) AS ok
+          `).then(r => (r.rows?.[0] as any)?.ok === true).catch(() => false);
+
+          console.log(`[AutoMergeFornecedores] ${allPairs.length} par(es) para unificar...`);
+          let merged = 0;
+
+          for (const { manterId, descartarId } of allPairs) {
+            try {
+              await db.transaction(async (tx) => {
+                const m = manterId, d = descartarId;
+                await tx.execute(sql`UPDATE compras_ordens                SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+                await tx.execute(sql`UPDATE compras_cotacoes               SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+                await tx.execute(sql`UPDATE compras_cotacao_fornecedores   SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+                await tx.execute(sql`UPDATE compras_cotacao_respostas      SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+                await tx.execute(sql`UPDATE compras_cotacao_propostas      SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+                await tx.execute(sql`UPDATE avaliacoes_fornecedor          SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+                await tx.execute(sql`UPDATE financial_cheques              SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+                await tx.execute(sql`UPDATE databook_fichas                SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+                await tx.execute(sql`UPDATE equipamentos_locados           SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+                if (flcExists) {
+                  await tx.execute(sql`
+                    DELETE FROM fatura_locacao_conferencia
+                    WHERE fornecedor_id = ${d}
+                      AND mes_referencia IN (
+                        SELECT mes_referencia FROM fatura_locacao_conferencia WHERE fornecedor_id = ${m}
+                      )
+                  `);
+                  await tx.execute(sql`UPDATE fatura_locacao_conferencia SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+                }
+                await tx.execute(sql`UPDATE empresas_terceiras             SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+                // Enriquece o registro mantido com campos nulos do descartado
+                await tx.execute(sql`
+                  UPDATE fornecedores SET
+                    cnpj          = COALESCE(NULLIF(cnpj,         ''), (SELECT cnpj         FROM fornecedores WHERE id=${d})),
+                    telefone      = COALESCE(NULLIF(telefone,     ''), (SELECT telefone     FROM fornecedores WHERE id=${d})),
+                    email         = COALESCE(NULLIF(email,        ''), (SELECT email        FROM fornecedores WHERE id=${d})),
+                    cidade        = COALESCE(NULLIF(cidade,       ''), (SELECT cidade       FROM fornecedores WHERE id=${d})),
+                    estado        = COALESCE(NULLIF(estado,       ''), (SELECT estado       FROM fornecedores WHERE id=${d})),
+                    banco         = COALESCE(NULLIF(banco,        ''), (SELECT banco        FROM fornecedores WHERE id=${d})),
+                    agencia       = COALESCE(NULLIF(agencia,      ''), (SELECT agencia      FROM fornecedores WHERE id=${d})),
+                    conta         = COALESCE(NULLIF(conta,        ''), (SELECT conta        FROM fornecedores WHERE id=${d})),
+                    pix           = COALESCE(NULLIF(pix,          ''), (SELECT pix          FROM fornecedores WHERE id=${d})),
+                    nome_fantasia = COALESCE(NULLIF(nome_fantasia,''), (SELECT nome_fantasia FROM fornecedores WHERE id=${d}))
+                  WHERE id = ${m}
+                `);
+                // Soft-delete do descartado
+                await tx.execute(sql`UPDATE fornecedores SET ativo = false WHERE id = ${d}`);
+              });
+              merged++;
+            } catch (e: any) {
+              console.warn(`[AutoMergeFornecedores] Par ${manterId}←${descartarId} falhou (não-fatal):`, e?.message ?? e);
+            }
+          }
+
+          console.log(`[AutoMergeFornecedores] Concluído: ${merged}/${allPairs.length} par(es) unificado(s).`);
+        } catch (e: any) {
+          console.error("[AutoMergeFornecedores] Erro geral:", e?.message ?? e);
+        }
+      }).catch(e => console.error("[AutoMergeFornecedores] Falha ao carregar DB:", e))
+    );
+
     // Rev. 3887 — Normalização de motivos de entrega EPI (idempotente; sem dano em rodar todo start)
     delay(8_000).then(() =>
       import("../db").then(async ({ getDb }) => {

@@ -1819,7 +1819,15 @@ export const comprasRouter = router({
         await tx.execute(sql`UPDATE financial_cheques             SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
         await tx.execute(sql`UPDATE databook_fichas               SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
         await tx.execute(sql`UPDATE equipamentos_locados          SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
-        await tx.execute(sql`UPDATE fatura_locacao_conferencia    SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
+        // fatura_locacao_conferencia tem unique (company_id, fornecedor_id, mes_referencia)
+        await tx.execute(sql`
+          DELETE FROM fatura_locacao_conferencia
+          WHERE fornecedor_id = ${d}
+            AND mes_referencia IN (
+              SELECT mes_referencia FROM fatura_locacao_conferencia WHERE fornecedor_id = ${m}
+            )
+        `);
+        await tx.execute(sql`UPDATE fatura_locacao_conferencia SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
         await tx.execute(sql`UPDATE empresas_terceiras            SET fornecedor_id=${m} WHERE fornecedor_id=${d}`);
 
         // Enriquece o registro mantido com campos nulos do descartado

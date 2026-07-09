@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4111** — **EMPRESAS TERCEIRAS: ABA "DUPLICIDADES" — DETECÇÃO E UNIFICAÇÃO DE FORNECEDORES DUPLICADOS.** Nova aba laranja "Duplicidades" na tela de Fornecedores. Backend: `listarDuplicatas` detecta por CNPJ idêntico (certeza) e nome similar (≥75% sobreposição). `unificarFornecedores` migra FKs de 11 tabelas em db.transaction + COALESCE enriquece dados + soft-delete do descartado. Frontend: cards lado a lado, seleção do registro a manter, botão "Ignorar" (localStorage), badge numérico na aba. ZERO DELETE · ZERO ALTER.
+- **Rev. 4112** — **AUTO-MERGE DE FORNECEDORES DUPLICADOS NO BOOT (MESMO CNPJ OU MESMO NOME).** Job `[AutoMergeFornecedores]` roda a cada restart (t=10s): detecta grupos por CNPJ idêntico (14 dígitos) ou UPPER(TRIM(razao_social)) idêntico, mantém o com mais OCs, migra 11 FKs em db.transaction, COALESCE-enriquece dados, soft-delete do descartado. Idempotente. 5 pares unificados na 1ª execução. Aba manual de "Duplicidades" removida. ZERO DELETE DE DADOS REAIS · ZERO ALTER.
 
-- **Rev. 4110** — **FIX: EMPRESAS TERCEIRAS — BOTÃO "REATIVAR" AUSENTE + FIX JOIN `et."companyId"` NA PLANILHA CONTABILIDADE.** Nova mutation `reativarFornecedor` + botão verde "Reativar" para inativas. JOIN em `downloadContabilidadeXlsx.ts` usava `et.company_id` mas coluna no Neon é `et."companyId"`. ZERO DELETE · ZERO UPDATE · ZERO ALTER.
+- **Rev. 4111** — **EMPRESAS TERCEIRAS: ABA "DUPLICIDADES" (VERSÃO INICIAL MANUAL).** Supercedida pela Rev. 4112 (auto-merge). ZERO DELETE · ZERO ALTER.
 
 ### 5 one-liners
+
+- **Rev. 4110** — **FIX: EMPRESAS TERCEIRAS — BOTÃO "REATIVAR" AUSENTE + FIX JOIN `et."companyId"` NA PLANILHA CONTABILIDADE.** ZERO DELETE · ZERO UPDATE · ZERO ALTER.
 
 - **Rev. 4109** — **PLANO DE CONTAS: COLUNA "CÓDIGO CONTABILIDADE" — MAPEAMENTO COM PLANO DO CONTADOR.** ZERO DELETE · ZERO UPDATE nas tabelas existentes.
 
