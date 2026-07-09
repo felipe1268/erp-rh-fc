@@ -244,13 +244,13 @@ export async function buildExtratoBancarioBuffer(
 
     const ws = wb.addWorksheet(sheetName(banco, contaDesc));
 
-    // Larguras — A(vazia) B(Data) C(HistBanco) D(HistReal) E(NF) F(CNPJ) G(Categ) H(Entr) I(Saída) J(Saldo)
-    ws.getColumn("A").width =  1.00;
+    // Larguras — A(CódCont) B(Data) C(HistBanco) D(Fornecedor) E(NF) F(CNPJ) G(Categ) H(Entr) I(Saída) J(Saldo)
+    ws.getColumn("A").width = 16.00;
     ws.getColumn("B").width = 12.33;
     ws.getColumn("C").width = 62.66;
     ws.getColumn("D").width = 44.00;
     ws.getColumn("E").width = 20.00;
-    ws.getColumn("F").width = 20.00;
+    ws.getColumn("F").width = 22.00;
     ws.getColumn("G").width = 28.00;
     ws.getColumn("H").width = 20.78;
     ws.getColumn("I").width = 20.78;
@@ -340,14 +340,15 @@ export async function buildExtratoBancarioBuffer(
     cellJ7.alignment = { horizontal: "right", vertical: "middle" };
     cellJ7.border    = { bottom: medium, left: thin, right: medium };
 
-    // Row 8 — separador (borda inferior medium B-J)
-    ws.getCell("B8").border = { bottom: medium, left: medium };
+    // Row 8 — separador (borda inferior medium A-J)
+    ws.getCell("A8").border = { bottom: medium, left: medium };
+    ws.getCell("B8").border = { bottom: medium };
     for (const c of ["C","D","E","F","G","H","I"]) ws.getCell(`${c}8`).border = { bottom: medium };
     ws.getCell("J8").border = { bottom: medium, right: medium };
 
-    // Row 9 — cabeçalhos
+    // Row 9 — cabeçalhos (A=Cód.Contabilidade, D=Fornecedor)
     const HDRS: [string, string][] = [
-      ["B","Data"], ["C","Histórico do Banco"], ["D","Histórico Real"],
+      ["A","Cód. Contabilidade"], ["B","Data"], ["C","Histórico do Banco"], ["D","Fornecedor"],
       ["E","Nº Nota Fiscal"], ["F","CNPJ"],
       ["G","Categoria"],
       ["H","Entrada"], ["I","Saída"], ["J","Saldo"],
@@ -360,7 +361,7 @@ export async function buildExtratoBancarioBuffer(
       cell.alignment = { horizontal: "center", vertical: "middle" };
       cell.border    = {
         bottom: thin,
-        left:   col === "B" ? medium : thin,
+        left:   col === "A" ? medium : thin,
         right:  col === "J" ? medium : thin,
       };
     });
@@ -376,26 +377,35 @@ export async function buildExtratoBancarioBuffer(
       const sai   = valor < 0 ? Math.abs(valor) : 0;
       saldoAcum   = Math.round((saldoAcum + valor) * 100) / 100;
 
-      const histReal  = line.fornecedor_nome || line.entry_desc || "";
-      const categoria = String(line.categoria || "");
+      const fornecedor = line.fornecedor_nome || line.entry_desc || "";
+      const categoria  = String(line.categoria || "");
+      const codCont    = String(line.codigo_contabilidade || "");
 
-      // Resolução de CNPJ (4 camadas — Rev. 4091):
+      // Resolução de CNPJ (Rev.4109 — 5 camadas, com fallback textual):
       // 1. NF via stmt_line_id (já na query)
-      // 2. fornecedor da OC (compras_ordens → fornecedores)
-      // 3. comprovante_documento (PIX — CPF/CNPJ do beneficiário)
-      // 4. NF via entry_id (pré-carregada)
-      // 5. NF via CNPJ+valor (fallback fuzzy)
+      // 2. JOIN direto em empresas_terceiras / fornecedores por razao_social (NEW)
+      // 3. fornecedor da OC (compras_ordens → fornecedores)
+      // 4. comprovante_documento (PIX — CPF/CNPJ do beneficiário)
+      // 5. NF via entry_id ou CNPJ+valor (fallback fuzzy)
       let nfNumero = String(line.numero_nf || "");
       let nfCnpj   = String(line.fornecedor_cnpj || "");
 
+      // Camada 2: cadastro direto por nome (NEW)
+      if (!nfCnpj) {
+        const cadastro = String(line.cnpj_cadastro || "");
+        if (cadastro) nfCnpj = cadastro;
+      }
+      // Camada 3: OC → fornecedor
       if (!nfCnpj) {
         const direct = String(line.fornecedor_cnpj_direto || "");
         if (direct) nfCnpj = direct;
       }
+      // Camada 4: comprovante PIX
       if (!nfCnpj) {
         const compDoc = cleanDoc(line.comp_doc || "");
         if (compDoc.length >= 11) nfCnpj = compDoc;
       }
+      // Camada 5a: NF por entry_id
       if (!nfNumero && line.entry_id) {
         const byEntry = nfByEntryId.get(Number(line.entry_id));
         if (byEntry) {
@@ -403,6 +413,7 @@ export async function buildExtratoBancarioBuffer(
           if (!nfCnpj) nfCnpj = byEntry.cnpj;
         }
       }
+      // Camada 5b: NF por CNPJ+valor
       if (!nfCnpj && Math.abs(valor) > 0) {
         const cnpjRef = cleanDoc(line.fornecedor_cnpj || line.entry_cnpj || "");
         if (cnpjRef) {
@@ -414,10 +425,20 @@ export async function buildExtratoBancarioBuffer(
           }
         }
       }
-      const cnpjFmt = nfCnpj ? fmtCnpj(nfCnpj) : "";
+
+      // CNPJ final: formatado ou aviso quando fornecedor existe mas CNPJ não foi encontrado
+      let cnpjFmt = nfCnpj ? fmtCnpj(nfCnpj) : "";
+      if (!cnpjFmt && fornecedor.trim()) cnpjFmt = "Sem CNPJ cadastrado";
 
       const isLast = idx === lines.length - 1;
       const btm    = isLast ? medium : thin;
+
+      // A — Código Contabilidade
+      const aCell = ws.getCell(`A${row}`);
+      aCell.value     = codCont;
+      aCell.font      = { size: 9, name: "Calibri", color: { argb: "FF4F46E5" } };
+      aCell.alignment = { horizontal: "center", vertical: "middle" };
+      aCell.border    = { top: thin, bottom: btm, left: medium, right: thin };
 
       // B — Data
       const bCell = ws.getCell(`B${row}`);
@@ -437,12 +458,12 @@ export async function buildExtratoBancarioBuffer(
       }
       bCell.font      = { size: 11, name: "Calibri" };
       bCell.alignment = { horizontal: "left", vertical: "middle" };
-      bCell.border    = { top: thin, bottom: btm, left: medium, right: thin };
+      bCell.border    = { top: thin, bottom: btm, left: thin, right: thin };
 
       // C, D, E, F, G — colunas de texto
       const textCols: [string, string][] = [
         ["C", line.descricao || ""],
-        ["D", histReal],
+        ["D", fornecedor],
         ["E", nfNumero],
         ["F", cnpjFmt],
         ["G", categoria],
@@ -450,7 +471,9 @@ export async function buildExtratoBancarioBuffer(
       textCols.forEach(([col, val]) => {
         const cell = ws.getCell(`${col}${row}`);
         cell.value     = val;
-        cell.font      = { size: 11, name: "Calibri" };
+        cell.font      = col === "F" && val === "Sem CNPJ cadastrado"
+          ? { size: 10, name: "Calibri", italic: true, color: { argb: "FFB45309" } }
+          : { size: 11, name: "Calibri" };
         cell.alignment = { horizontal: col === "E" ? "center" : "left", vertical: "middle" };
         cell.border    = { top: thin, bottom: btm, left: thin, right: thin };
       });
@@ -522,16 +545,26 @@ export async function buildExtratoBancarioBuffer(
           fe.fornecedor_nome,
           fe.conta_nome       AS categoria,
           fe.comprovante_documento AS comp_doc,
-          COALESCE(forn.cnpj, '') AS fornecedor_cnpj_direto,
+          COALESCE(forn_oc.cnpj, '') AS fornecedor_cnpj_direto,
           NULL::text             AS entry_cnpj,
           fe.descricao           AS entry_desc,
           COALESCE(fn1.numero_nf, '')                         AS numero_nf,
-          COALESCE(fn1.emitente_cnpj, fn1.tomador_cnpj, '')  AS fornecedor_cnpj
+          COALESCE(fn1.emitente_cnpj, fn1.tomador_cnpj, '')  AS fornecedor_cnpj,
+          COALESCE(et.cnpj, forn_nm.cnpj, '')                AS cnpj_cadastro,
+          fa.codigo_contabilidade
          FROM bank_statement_lines bsl
-         LEFT JOIN financial_entries fe   ON fe.id = bsl.entry_id
-         LEFT JOIN fiscal_notes fn1       ON fn1.stmt_line_id = bsl.id
-         LEFT JOIN compras_ordens co      ON fe.origem_modulo = 'compra' AND fe.origem_id = co.id
-         LEFT JOIN fornecedores forn      ON forn.id = co.fornecedor_id
+         LEFT JOIN financial_entries fe    ON fe.id = bsl.entry_id
+         LEFT JOIN fiscal_notes fn1        ON fn1.stmt_line_id = bsl.id
+         LEFT JOIN compras_ordens co       ON fe.origem_modulo = 'compra' AND fe.origem_id = co.id
+         LEFT JOIN fornecedores forn_oc    ON forn_oc.id = co.fornecedor_id
+         LEFT JOIN empresas_terceiras et   ON et.company_id = $1
+                                         AND et.deleted_at IS NULL
+                                         AND fe.fornecedor_nome IS NOT NULL
+                                         AND LOWER(TRIM(et.razao_social)) = LOWER(TRIM(fe.fornecedor_nome))
+         LEFT JOIN fornecedores forn_nm    ON forn_nm.company_id = $1
+                                         AND fe.fornecedor_nome IS NOT NULL
+                                         AND LOWER(TRIM(forn_nm.razao_social)) = LOWER(TRIM(fe.fornecedor_nome))
+         LEFT JOIN financial_accounts fa   ON fa.id = fe.conta_id
         WHERE bsl.company_id = $1
           AND bsl.conta_bancaria_id = $2
           AND bsl.excluido_em IS NULL
@@ -561,17 +594,27 @@ export async function buildExtratoBancarioBuffer(
           fe.fornecedor_nome,
           fe.conta_nome    AS categoria,
           fe.comprovante_documento AS comp_doc,
-          COALESCE(forn.cnpj, '') AS fornecedor_cnpj_direto,
+          COALESCE(forn_oc.cnpj, '') AS fornecedor_cnpj_direto,
           NULL::text       AS entry_cnpj,
           fe.descricao     AS entry_desc,
           COALESCE(fn2.numero_nf, '')                         AS numero_nf,
-          COALESCE(fn2.emitente_cnpj, fn2.tomador_cnpj, '')  AS fornecedor_cnpj
+          COALESCE(fn2.emitente_cnpj, fn2.tomador_cnpj, '')  AS fornecedor_cnpj,
+          COALESCE(et.cnpj, forn_nm.cnpj, '')                AS cnpj_cadastro,
+          fa.codigo_contabilidade
          FROM financial_entries fe
-         LEFT JOIN compras_ordens co ON fe.origem_modulo = 'compra' AND fe.origem_id = co.id
-         LEFT JOIN fornecedores forn  ON forn.id = co.fornecedor_id
-         LEFT JOIN fiscal_notes fn2   ON fn2.entry_id = fe.id
-                                     AND fn2.company_id = fe.company_id
-                                     AND fn2.status != 'cancelada'
+         LEFT JOIN compras_ordens co       ON fe.origem_modulo = 'compra' AND fe.origem_id = co.id
+         LEFT JOIN fornecedores forn_oc    ON forn_oc.id = co.fornecedor_id
+         LEFT JOIN empresas_terceiras et   ON et.company_id = $1
+                                         AND et.deleted_at IS NULL
+                                         AND fe.fornecedor_nome IS NOT NULL
+                                         AND LOWER(TRIM(et.razao_social)) = LOWER(TRIM(fe.fornecedor_nome))
+         LEFT JOIN fornecedores forn_nm    ON forn_nm.company_id = $1
+                                         AND fe.fornecedor_nome IS NOT NULL
+                                         AND LOWER(TRIM(forn_nm.razao_social)) = LOWER(TRIM(fe.fornecedor_nome))
+         LEFT JOIN financial_accounts fa   ON fa.id = fe.conta_id
+         LEFT JOIN fiscal_notes fn2        ON fn2.entry_id = fe.id
+                                         AND fn2.company_id = fe.company_id
+                                         AND fn2.status != 'cancelada'
         WHERE fe.company_id = $1
           AND fe.conta_bancaria_id = $2
           AND fe.status != 'cancelado'
