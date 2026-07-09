@@ -538,10 +538,12 @@ export default function Fornecedores() {
         return;
       }
 
-      const situacaoCod = d.situacaoCodigo ?? 0;
-      if (situacaoCod !== 2) {
+      const situacaoTexto = (d.situacaoReceita || "").toUpperCase();
+      const situacaoCod = Number(d.situacaoCodigo ?? 0);
+      const situacaoAtiva = situacaoCod === 2 || situacaoTexto.includes("ATIVA");
+      if (!situacaoAtiva) {
         setErroCNPJ(`Atenção: situação na Receita é "${d.situacaoReceita}".`);
-        if ([3, 4, 8].includes(situacaoCod)) return;
+        if ([3, 4, 8].includes(situacaoCod) || situacaoTexto.includes("SUSPENSA") || situacaoTexto.includes("INAPTA") || situacaoTexto.includes("BAIXADA")) return;
       }
 
       lastFetchedCNPJ.current = cnpj;
@@ -707,10 +709,21 @@ export default function Fornecedores() {
       cicloDataReferencia: (form.cicloPagamento === "quinzenal_semana" && form.cicloDataReferencia) ? form.cicloDataReferencia : null,
     };
     const { cicloPagamento: _cp, cicloDiaFechamento: _cd, cicloNumParcelas: _cn, cicloPrazoParcela: _cpr, cicloFormaPagamento: _cf, cicloDataReferencia: _cdr, ...restForm } = form;
+    // Rev. 4119 — regimeTributario pode ter sido gravado como array/objeto por um bug
+    // anterior na busca via BrasilAPI; sanitiza pra string antes de enviar (nunca envia array).
+    const regimeTributarioSaneado = (() => {
+      const v: any = (restForm as any).regimeTributario;
+      if (typeof v === "string") return v;
+      if (Array.isArray(v) && v.length > 0) {
+        const ultimo = v.slice().sort((a: any, b: any) => (b?.ano ?? 0) - (a?.ano ?? 0))[0];
+        return ultimo?.forma_de_tributacao ?? "";
+      }
+      return "";
+    })();
     if (editando) {
-      atualizarMut.mutate({ id: editando, ...restForm, ...cicloFields, regrasProdutoJson: JSON.stringify(regrasProduto) });
+      atualizarMut.mutate({ id: editando, ...restForm, regimeTributario: regimeTributarioSaneado, ...cicloFields, regrasProdutoJson: JSON.stringify(regrasProduto) });
     } else {
-      criarMut.mutate({ companyId, ...restForm });
+      criarMut.mutate({ companyId, ...restForm, regimeTributario: regimeTributarioSaneado });
     }
   }
 

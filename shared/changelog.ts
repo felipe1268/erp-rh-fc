@@ -1,4 +1,33 @@
 /**
+ * Rev. 4119 — **FIX: BADGE DE SITUAÇÃO CNPJ FALSO-POSITIVO EM VERMELHO + `regimeTributario` ARRAY QUEBRANDO O SALVAR.**
+ *
+ * CONTEXTO: usuário reportou 2 erros na tela Empresas Terceiras (Fornecedores.tsx) ao editar um
+ * fornecedor: (1) situação "ATIVA" na Receita aparecia com aviso VERMELHO mesmo estando correta;
+ * (2) erro ao salvar — "regimeTributario: Invalid input: expected string, received array".
+ *
+ * CAUSA-RAIZ:
+ * 1. Frontend comparava `d.situacaoCodigo !== 2` de forma estrita; quando a API retornava o
+ *    código em formato inesperado (ou ausente/0), a comparação falhava mesmo com o texto "ATIVA"
+ *    presente, disparando o aviso vermelho indevidamente.
+ * 2. BrasilAPI retorna `regime_tributario` como um ARRAY de registros anuais (não string) quando
+ *    a empresa não é Simples Nacional/MEI; o backend (`tentarBrasilAPI` em compras.ts) atribuía
+ *    esse array direto ao campo, e o schema Zod (string) rejeitava no submit.
+ *
+ * FIX:
+ * - `server/routers/compras.ts` (tentarBrasilAPI): extrai `forma_de_tributacao` do registro mais
+ *   recente (maior `ano`) do array `regime_tributario`, com fallback seguro pra string vazia.
+ * - `client/src/pages/compras/Fornecedores.tsx` (buscarCNPJ): decide o aviso usando código OU
+ *   texto ("ATIVA"/"SUSPENSA"/"INAPTA"/"BAIXADA"), evitando falso-positivo quando o código vem
+ *   em formato inesperado.
+ * - `client/src/pages/compras/Fornecedores.tsx` (salvar): sanitização defensiva do
+ *   `regimeTributario` antes do submit (nunca envia array/objeto ao backend), cobrindo edge-cases.
+ * - Verificado direto no Neon: 0 registros com `regime_tributario` corrompido persistido — o bug
+ *   só se manifestava ao reabrir/re-buscar o CNPJ durante a sessão (dado nunca chegou a salvar).
+ *
+ * ZERO DELETE · ZERO ALTER.
+ */
+
+/**
  * Rev. 4118 — **EXECUÇÃO DO BACKFILL EM MASSA (RECEITA FEDERAL + IA) + 2 BUGS CRÍTICOS CORRIGIDOS + CLASSIFICAÇÃO DE CATEGORIA PARA TODOS.**
  *
  * CONTEXTO: usuário pediu para rodar o backfill da Rev. 4117 imediatamente (não só deixar o botão)

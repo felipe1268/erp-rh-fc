@@ -1940,7 +1940,13 @@ export const comprasRouter = router({
           atividadePrincipal: data.cnae_fiscal_descricao ?? "",
           atividadesCnae:  cnaesSecundarios,
           dataAbertura:    data.data_inicio_atividade ?? "",
-          regimeTributario: data.opcao_pelo_simples ? "Simples Nacional" : data.opcao_pelo_mei ? "MEI" : data.regime_tributario ?? "",
+          regimeTributario: data.opcao_pelo_simples ? "Simples Nacional" : data.opcao_pelo_mei ? "MEI" : (
+            Array.isArray(data.regime_tributario) && data.regime_tributario.length > 0
+              ? (data.regime_tributario
+                  .slice()
+                  .sort((a: any, b: any) => (b.ano ?? 0) - (a.ano ?? 0))[0]?.forma_de_tributacao ?? "")
+              : (typeof data.regime_tributario === "string" ? data.regime_tributario : "")
+          ),
           socios,
           representanteLegal: rep.nome,
           representanteCpf:   rep.cpf,

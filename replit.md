@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4119** — **FIX: BADGE DE SITUAÇÃO CNPJ FALSO-POSITIVO EM VERMELHO + `regimeTributario` ARRAY QUEBRANDO O SALVAR.** Comparação estrita de `situacaoCodigo` disparava aviso vermelho mesmo com "ATIVA" — agora usa código OU texto. BrasilAPI retorna `regime_tributario` como array de registros anuais (não string) quando não é Simples/MEI — extrai `forma_de_tributacao` do ano mais recente + sanitização defensiva no submit do form (nunca envia array). ZERO DELETE · ZERO ALTER.
+
 - **Rev. 4118** — **EXECUÇÃO DO BACKFILL EM MASSA + 2 BUGS CRÍTICOS CORRIGIDOS + CLASSIFICAÇÃO DE CATEGORIA PARA TODOS.** Rodado o backfill da Rev. 4117 direto na base real (company 60002) + novo script `classificarCategoriasTodos.ts` classifica por IA a categoria de TODOS os fornecedores sem categoria (com ou sem CNPJ): 581→0. Ficha incompleta: 941→503 (restante majoritariamente CNPJ com dígito verificador inválido). 2 bugs corrigidos em `compras.ts`: BrasilAPI exigia header `User-Agent` (403 sem ele); `telefone` varchar(20) estourava com telefones concatenados da ReceitaWS (novo mapa `MAX_LEN` trunca antes do PATCH). ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4117** — **EMPRESAS TERCEIRAS (FORNECEDORES): FILTROS DE CADASTRO INCOMPLETO + AUTO-COMPLETAR VIA RECEITA FEDERAL/IA.** 3 filtros novos (Sem CNPJ / Sem categoria / Ficha incompleta) com contador; botão "Completar automaticamente" roda `autoCompletarFornecedor` item-a-item SÓ para quem já tem CNPJ — busca dados oficiais (BrasilAPI→ReceitaWS) e preenche apenas campos vazios (nunca sobrescreve), categoria sugerida por IA dentre as já cadastradas na empresa. Progresso real (i+1)/total no botão (regra de ouro). ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4117** — **EMPRESAS TERCEIRAS (FORNECEDORES): FILTROS DE CADASTRO INCOMPLETO + AUTO-COMPLETAR VIA RECEITA FEDERAL/IA.** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4116** — **PLANILHA CONTABILIDADE: CNPJ + NOME FORNECEDOR — EXTRAÇÃO DA DESCRIÇÃO DO BANCO (6 CAMADAS).** ZERO DELETE · ZERO ALTER.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4113** — **FIX CODE REVIEW: CHEQUES RECEBIDOS — 3 GAPS (compensado_em + import 2 fases + entry_valor).** ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4112** — **AUTO-MERGE DE FORNECEDORES DUPLICADOS NO BOOT (MESMO CNPJ OU MESMO NOME).** ZERO DELETE DE DADOS REAIS · ZERO ALTER.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4106 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4112 e anteriores.
 
 ## User preferences
 
