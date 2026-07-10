@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4133** — **BANCO DE HORAS: VIGÊNCIA COM ZERAMENTO DE SALDO ANTERIOR + TIMELINE DE REGIME.** Nova tabela `banco_horas_vigencias` (timeline de quando a empresa mudou entre banco de horas e pagamento de hora extra). Novo botão "Definir Vigência e Zerar Saldos Anteriores" em `BancoHoras.tsx` → aba "Regras & Orientação" (topo, antes da Fundamentação Legal): admin_master define uma data (padrão 15/05/2026) e confirma via AlertDialog; todo saldo (positivo ou negativo) anterior é neutralizado por lançamento de AJUSTE em `banco_horas_lancamentos` (nunca apaga histórico) + timeline de vigências exibida logo abaixo. Endpoints `horasExtras.definirVigencia`/`listarVigencias`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4132** — **RESCISÃO EM CONTRATO DE EXPERIÊNCIA: TÍTULO CORRETO DO "COMUNICADO DE DISPENSA".** Cálculo já estava correto (confirmado pelo usuário), mas o documento gerado saía com o título genérico "Aviso Prévio Indenizado" — juridicamente incorreto, pois contrato de experiência não tem aviso prévio. `AvisoPrevio.tsx` agora lê `isExperiencia`/`iniciativa`/`antecipado` de `previsaoRescisao` (já gravados por `desligarExperiencia`) e usa 1 dos 4 títulos exatos: "COMUNICADO DE DISPENSA PELO EMPREGADOR NO PRAZO/ANTECIPADO", "COMUNICADO DE DISPENSA PELO EMPREGADO NO PRAZO" ou "PEDIDO DE DEMISSAO EM CONTRATO DE EXPERIENCIA" (empregado antecipado). Badges da lista/detalhe também corrigidos. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4131** — **SPED ECD/ECF + EFD CONTRIBUIÇÕES/ICMS-IPI: LEGENDA CLARA DO PERÍODO A ENCAMINHAR.** Usuário (leigo em contabilidade) reportou confusão sobre qual período exatamente ele precisava encaminhar ao contador em cada uma das 4 telas fiscais. Adicionado banner azul (ícone Info) logo abaixo do seletor de período em `SpedEcd.tsx`, `SpedEcf.tsx`, `EfdContribuicoes.tsx` e `EfdIcmsIpi.tsx`: nas anuais (ECD/ECF) reforça que não existe versão mensal e o período é sempre o ano completo; nas mensais (EFD Contribuições/ICMS-IPI) o texto muda conforme mês selecionado ou "Ano todo" (avisando que gera 1 arquivo por mês em zip). Puramente visual/textual. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4131** — **SPED ECD/ECF + EFD CONTRIBUIÇÕES/ICMS-IPI: LEGENDA CLARA DO PERÍODO A ENCAMINHAR.** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4130** — **FOTO DO FUNCIONÁRIO: FALLBACK POR CPF PARA CADASTRO DUPLICADO ENTRE EMPRESAS DO GRUPO.** ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4128** — **DIÁLOGO "ATRIBUIR HABILIDADE" MOSTRA FOTO + OBRA ATUAL DO FUNCIONÁRIO.** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4127** — **CNPJ OBRIGATÓRIO PARA CRIAR NOVO FORNECEDOR/EMPRESA TERCEIRA.** ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4126** — **PADRONIZAÇÃO DO FILTRO DE MÊS/ANO + BOTÃO "ANO TODO" (EFD CONTRIBUIÇÕES / EFD ICMS-IPI COM DOWNLOAD EM LOTE).** ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

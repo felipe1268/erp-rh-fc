@@ -5085,7 +5085,7 @@ REGRAS DE EXTRAÇÃO:
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado
     // ColFix version guard: pula todos os blocos se já foram aplicados nesta versão
-    const COLFIX_VERSION = "v4109-2026-07-09-codigo-contabilidade";
+    const COLFIX_VERSION = "v4133-2026-07-10-banco-horas-vigencia";
     const colFixSkipPromise = import("../services/startupCache")
       .then(({ getCache }) => getCache("colfix_version"))
       .then(v => v === COLFIX_VERSION)
@@ -5830,6 +5830,23 @@ REGRAS DE EXTRAÇÃO:
         )`);
         console.log("[ColFix] HE + banco horas tables OK");
       } catch (e: any) { console.warn("[ColFix] HE/banco horas:", e?.message ?? e); }
+    });
+
+    // Rev. 4133 — Banco de Horas: tabela de timeline de vigência do regime (banco_horas x
+    // pagamento_horas_extras), isolada em bloco próprio (não reaproveitar o bloco acima).
+    import("../db").then(async ({ getDb }) => {
+      if (await colFixSkipPromise) return;
+      try {
+        const db = await getDb();
+        if (!db) return;
+        const { sql } = await import("drizzle-orm");
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS banco_horas_vigencias (
+          id SERIAL PRIMARY KEY, "companyId" INTEGER NOT NULL, regime TEXT NOT NULL,
+          "dataInicio" DATE NOT NULL, "zerouSaldos" INTEGER DEFAULT 0, observacao TEXT,
+          "criadoPor" TEXT, "criadoEm" TIMESTAMP DEFAULT NOW()
+        )`);
+        console.log("[ColFix] banco_horas_vigencias OK");
+      } catch (e: any) { console.warn("[ColFix] banco_horas_vigencias:", e?.message ?? e); }
     });
 
     // Rev.650: Limpeza automática de batidas duplicadas (mesmo employeeId+obraId+data)

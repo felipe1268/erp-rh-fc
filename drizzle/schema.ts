@@ -2227,6 +2227,24 @@ export const bancoHorasLancamentos = pgTable("banco_horas_lancamentos", {
   index("bhl_data").on(t.data),
 ]);
 
+// Rev. 4133 — timeline de vigência do regime de Banco de Horas x Pagamento de Hora Extra.
+// Cada linha é um marco: a partir de `dataInicio`, o regime `regime` passou a valer para a empresa.
+// Quando `zerouSaldos=true`, essa vigência também disparou o zeramento de saldo anterior a `dataInicio`
+// (histórico de horas anteriores já foi pago/descontado por outra via, então não deve contar no saldo).
+export const bancoHorasVigencias = pgTable("banco_horas_vigencias", {
+  id:            serial().primaryKey(),
+  companyId:     integer("companyId").notNull(),
+  regime:        text().notNull(), // 'banco_horas' | 'pagamento_horas_extras'
+  dataInicio:    date("dataInicio", { mode: "string" }).notNull(),
+  zerouSaldos:   integer("zerouSaldos").default(0), // 0/1 — se este marco zerou saldos anteriores
+  observacao:    text(),
+  criadoPor:     text("criadoPor"),
+  criadoEm:      timestamp("criadoEm").defaultNow(),
+}, (t) => [
+  index("bhv_company").on(t.companyId),
+  index("bhv_data").on(t.dataInicio),
+]);
+
 export const hydrants = pgTable("hydrants", {
         id: serial().notNull(),
         companyId: integer().notNull(),

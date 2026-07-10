@@ -1,4 +1,39 @@
 /**
+ * Rev. 4133 — **BANCO DE HORAS: VIGÊNCIA COM ZERAMENTO DE SALDO ANTERIOR + TIMELINE DE REGIME.**
+ *
+ * CONTEXTO: usuário reportou saldos negativos enormes no Banco de Horas (raiz identificada: redirect
+ * de atraso/falta/DSR perdido para débito no banco, Rev.3977/3983, incluindo uma anomalia de ~150h/
+ * funcionário no fechamento de 06/2026 — flagada separadamente ao usuário). Em vez de corrigir o
+ * cálculo retroativo, o usuário pediu uma forma de "zerar a régua": todo saldo (positivo ou negativo)
+ * anterior a uma data de vigência já foi pago/descontado por outra via e não deve mais contar.
+ *
+ * IMPLEMENTAÇÃO:
+ * 1. Nova tabela `banco_horas_vigencias` (companyId, regime, dataInicio, zerouSaldos, observacao,
+ *    criadoPor, criadoEm) — timeline de quando a empresa mudou entre "banco_horas" e
+ *    "pagamento_horas_extras", e se aquele marco disparou zeramento de saldo anterior.
+ * 2. `horasExtras.definirVigencia` (mutation, admin_master-only): para cada funcionário com saldo
+ *    ≠0 em `banco_horas_saldo`, insere um lançamento de AJUSTE em `banco_horas_lancamentos` que
+ *    neutraliza o saldo — ZERO DELETE, o histórico original de lançamentos nunca é apagado ou
+ *    alterado. Atenção ao sinal: a agregação de saldo (`getSaldoBancoMensal`) deriva o sinal do
+ *    `tipo` via `SUM(CASE WHEN tipo='credito' THEN ABS(minutos) ELSE -ABS(minutos) END)`, não do
+ *    valor gravado — por isso saldo positivo gera lançamento tipo `ajuste_vigencia` (debita) e saldo
+ *    negativo gera lançamento tipo `credito` (credita), ambos com minutos=ABS(saldo). Depois zera
+ *    `banco_horas_saldo.saldoMinutos` (cache) e registra o marco em `banco_horas_vigencias`.
+ * 3. `horasExtras.listarVigencias` (query): retorna a timeline ordenada por data desc, para exibir
+ *    o histórico completo de trocas de regime.
+ * 4. UI em `client/src/pages/BancoHoras.tsx`, aba "Regras & Orientação" (topo, antes da
+ *    Fundamentação Legal): novo Card "Vigência do Banco de Horas" com date picker (padrão inicial
+ *    15/05/2026), campo de observação opcional, botão "Definir Vigência e Zerar Saldos Anteriores"
+ *    (gate admin_master, mesmo padrão de `setHeDestinoPadrao`) que abre um AlertDialog de
+ *    confirmação explícita antes de executar — e uma lista da timeline de vigências abaixo do botão.
+ * 5. Tabela criada via bloco `[ColFix]` isolado próprio em `server/_core/index.ts`
+ *    (COLFIX_VERSION bumpado para não pular o bloco).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo — nenhum lançamento ou saldo histórico é apagado; a
+ * neutralização é feita por lançamento de ajuste auditável, e a tabela de vigências é aditiva.
+ */
+
+/**
  * Rev. 4132 — **RESCISÃO EM CONTRATO DE EXPERIÊNCIA: TÍTULO CORRETO DO "COMUNICADO DE DISPENSA".**
  *
  * CONTEXTO: usuário confirmou que o CÁLCULO da rescisão em Contrato de Experiência já estava

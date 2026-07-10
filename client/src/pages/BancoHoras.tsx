@@ -16,6 +16,10 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import PeriodSelectorCard from "@/components/PeriodSelectorCard";
 
 function minsToHHMM(mins: number): string {
@@ -93,6 +97,27 @@ export default function BancoHoras() {
     onError: (err) => toast.error(err.message),
   });
   const isBancoAtivo = (destinoPadrao.data ?? "banco_horas") === "banco_horas";
+
+  // Rev. 4133 — Vigência do Banco de Horas: zera saldos anteriores à data definida (já pagos/
+  // descontados por outra via) e mantém uma timeline de quando o regime mudou.
+  const [vigenciaData, setVigenciaData] = useState("2026-05-15");
+  const [vigenciaObs, setVigenciaObs] = useState("");
+  const [vigenciaConfirmOpen, setVigenciaConfirmOpen] = useState(false);
+  const vigenciasList = trpc.horasExtras.listarVigencias.useQuery(
+    { companyId },
+    { enabled: canAccess && companyId > 0 }
+  );
+  const definirVigenciaMut = trpc.horasExtras.definirVigencia.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Vigência definida em ${vigenciaData}. Saldos de ${data.funcionariosZerados} funcionário(s) zerados.`);
+      setVigenciaConfirmOpen(false);
+      setVigenciaObs("");
+      vigenciasList.refetch();
+      saldoBanco.refetch();
+      saldoBancoMensal.refetch();
+    },
+    onError: (err) => toast.error(err.message),
+  });
 
   const saldoBanco = trpc.horasExtras.getSaldoBanco.useQuery(
     { companyId },
@@ -1165,6 +1190,88 @@ export default function BancoHoras() {
 
         {activeTab === "configuracao" && (
           <div className="space-y-4">
+            <Card className="border-purple-200">
+              <CardContent className="p-6">
+                <h3 className="font-bold text-base mb-1 flex items-center gap-2">
+                  <CalendarDays className="h-5 w-5 text-purple-600" />
+                  Vigência do Banco de Horas
+                </h3>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Defina a partir de qual data o saldo do Banco de Horas passa a valer. Tudo o que foi
+                  lançado ANTES dessa data (positivo ou negativo) é zerado — pois já foi pago ou descontado
+                  por outra via — sem apagar o histórico de lançamentos (fica registrado como ajuste auditável).
+                </p>
+                <div className="flex items-end gap-3 flex-wrap">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-muted-foreground">Data de vigência</label>
+                    <Input
+                      type="date"
+                      value={vigenciaData}
+                      onChange={(e) => setVigenciaData(e.target.value)}
+                      disabled={!isAdminMaster}
+                      className="w-44"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1 flex-1 min-w-[220px]">
+                    <label className="text-xs font-medium text-muted-foreground">Observação (opcional)</label>
+                    <Input
+                      placeholder="Ex.: retomada do banco de horas após acordo com o sindicato"
+                      value={vigenciaObs}
+                      onChange={(e) => setVigenciaObs(e.target.value)}
+                      disabled={!isAdminMaster}
+                    />
+                  </div>
+                  <Button
+                    className="bg-purple-600 hover:bg-purple-700"
+                    disabled={!isAdminMaster || !vigenciaData || definirVigenciaMut.isPending}
+                    title={!isAdminMaster ? "Somente o Administrador Master pode definir a vigência" : undefined}
+                    onClick={() => setVigenciaConfirmOpen(true)}
+                  >
+                    <CalendarDays className="h-4 w-4 mr-1.5" />
+                    Definir Vigência e Zerar Saldos Anteriores
+                  </Button>
+                </div>
+                {!isAdminMaster && (
+                  <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-2">
+                    <ShieldAlert className="h-3 w-3" /> Somente Admin Master pode definir a vigência
+                  </p>
+                )}
+
+                <div className="mt-5 pt-4 border-t border-gray-100">
+                  <h4 className="font-semibold text-sm text-gray-800 mb-2">Timeline de Vigências</h4>
+                  {vigenciasList.isLoading ? (
+                    <p className="text-xs text-muted-foreground">Carregando...</p>
+                  ) : (vigenciasList.data as any[])?.length > 0 ? (
+                    <div className="space-y-2">
+                      {(vigenciasList.data as any[]).map((v) => (
+                        <div key={v.id} className="flex items-start gap-3 text-sm bg-gray-50 border border-gray-200 rounded-lg p-3">
+                          <div className={`h-7 w-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${v.regime === "banco_horas" ? "bg-blue-600" : "bg-orange-500"} text-white`}>
+                            {v.regime === "banco_horas" ? <ArrowLeftRight className="h-3.5 w-3.5" /> : <CreditCard className="h-3.5 w-3.5" />}
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-medium">
+                              A partir de {String(v.dataInicio).slice(0, 10).split("-").reverse().join("/")} — {v.regime === "banco_horas" ? "Banco de Horas" : "Pagamento de Hora Extra"}
+                              {Number(v.zerouSaldos) === 1 && (
+                                <span className="ml-2 text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-bold align-middle">
+                                  ZEROU SALDOS ANTERIORES
+                                </span>
+                              )}
+                            </p>
+                            {v.observacao && <p className="text-xs text-muted-foreground mt-0.5">{v.observacao}</p>}
+                            <p className="text-[11px] text-muted-foreground mt-0.5">
+                              registrado por {v.criadoPor || "Sistema"} em {v.criadoEm ? new Date(v.criadoEm).toLocaleString("pt-BR") : "—"}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Nenhuma vigência registrada ainda.</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
             <Card className="border-blue-200">
               <CardContent className="p-6">
                 <h3 className="font-bold text-base mb-4 flex items-center gap-2">
@@ -1345,6 +1452,37 @@ export default function BancoHoras() {
           </div>
         )}
       </div>
+
+      <AlertDialog open={vigenciaConfirmOpen} onOpenChange={setVigenciaConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar vigência do Banco de Horas</AlertDialogTitle>
+            <AlertDialogDescription className="break-words">
+              A partir de <strong>{vigenciaData.split("-").reverse().join("/")}</strong>, todo saldo de Banco de
+              Horas (positivo ou negativo) de TODOS os funcionários desta empresa lançado ANTES dessa data será
+              zerado — um lançamento de ajuste será registrado para cada funcionário afetado, preservando o
+              histórico. Essa ação não pode ser desfeita automaticamente. Deseja continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={definirVigenciaMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={definirVigenciaMut.isPending}
+              onClick={() => {
+                definirVigenciaMut.mutate({
+                  companyId,
+                  dataInicio: vigenciaData,
+                  regime: "banco_horas",
+                  zerarSaldosAnteriores: true,
+                  observacao: vigenciaObs || undefined,
+                });
+              }}
+            >
+              {definirVigenciaMut.isPending ? "Processando..." : "Confirmar e Zerar Saldos"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }
