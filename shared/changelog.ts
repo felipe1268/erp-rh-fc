@@ -1,4 +1,34 @@
 /**
+ * Rev. 4132 — **RESCISÃO EM CONTRATO DE EXPERIÊNCIA: TÍTULO CORRETO DO "COMUNICADO DE DISPENSA".**
+ *
+ * CONTEXTO: usuário confirmou que o CÁLCULO da rescisão em Contrato de Experiência já estava
+ * correto (sem aviso prévio, sem multa de 40% do FGTS fora do caso "empregador antecipado"), mas o
+ * documento gerado ("comunicado de dispensa") saía com o título genérico de aviso prévio normal
+ * ("Aviso Prévio Indenizado do Empregado"), o que é juridicamente incorreto — contrato de
+ * experiência não tem aviso prévio (Art. 443 §2º / 479 / 480 da CLT).
+ *
+ * IMPLEMENTAÇÃO (`client/src/pages/AvisoPrevio.tsx`):
+ * 1. `desligarExperiencia` (server/routers.ts) já gravava `isExperiencia`, `iniciativa` e
+ *    `antecipado` dentro de `previsaoRescisao` (JSON) — mas nada no client lia esses campos para
+ *    diferenciar o documento; o registro reaproveita os tipos `empregador_indenizado` /
+ *    `empregado_indenizado`, compartilhados com o fluxo normal de Aviso Prévio.
+ * 2. Nova função `tituloComunicadoExperiencia(iniciativa, antecipado)` mapeia os 4 cenários para os
+ *    títulos exigidos: "COMUNICADO DE DISPENSA PELO EMPREGADOR NO PRAZO/ANTECIPADO",
+ *    "COMUNICADO DE DISPENSA PELO EMPREGADO NO PRAZO" e "PEDIDO DE DEMISSAO EM CONTRATO DE
+ *    EXPERIENCIA" (empregado + antecipado).
+ * 3. `gerarDocumentoCore` ganhou um 4º parâmetro opcional `experiencia`; quando presente, PULA o
+ *    template Vigente de aviso prévio (não se aplica) e usa o fallback HTML com o título e corpo
+ *    específicos de cada cenário (fundamentação legal correta por caso, sem menção a aviso prévio).
+ * 4. `handleGerarDocumentoFromDetail` faz parse de `previsaoRescisao` e repassa `isExperiencia` /
+ *    `iniciativa` / `antecipado` para `gerarDocumentoCore`.
+ * 5. Badges da listagem e do diálogo de detalhes também passaram a mostrar o título correto (em
+ *    vez de "Empregador (Indenizado)"/"Empregado (Indenizado)") quando o registro é de experiência.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo — nenhuma mudança de cálculo, schema ou nos fluxos normais de
+ * Aviso Prévio/Pedido de Demissão (que não têm `isExperiencia` em `previsaoRescisao`).
+ */
+
+/**
  * Rev. 4131 — **SPED ECD/ECF + EFD CONTRIBUIÇÕES/ICMS-IPI: LEGENDA CLARA DO PERÍODO A ENCAMINHAR.**
  *
  * CONTEXTO: usuário (leigo em contabilidade) reportou confusão nas 4 telas de contabilidade

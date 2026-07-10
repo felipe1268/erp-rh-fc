@@ -24,7 +24,6 @@
 - [Dialog no-truncate rule](dialog-no-truncate.md) — dialogs NUNCA truncam texto; use break-words/break-all; truncate só em linhas compactas de tabela com title= tooltip.
 - [Which DB the app uses](db-connection.md) — `executeSql` tool hits the Replit Postgres (`DATABASE_URL`/helium), but the app reads `NEON_DATABASE_URL`. To inspect REAL app data, query Neon.
 - [Importar planilha financeira FC](financeiro-excel-import.md) — abas mensais têm linha TOTAL no rodapé (dobra o import; filtrar por regex DD/MM/AAAA); memoizar de-para fuzzy + execute_values; nohup& não sobrevive entre tool calls.
-- [Revision registry](revision-registry.md) — "Controle de Revisões" auto-registra via parse JSDoc do changelog.ts (NÃO carregar como módulo=OOM); array congelou na 1878; version sem UNIQUE → UPDATE não DELETE.
 - [MSP columns — % Concluída vs % Previsto](msp-analysis-columns.md) — previsto = coluna FIXA Texto10 (188743750), sem alias/fallback (faltou → "—"); realizado = % Concluída (`PercentComplete`).
 - [MSP %Previsto parity](msp-previsto-parity.md) — %PREVISTO must use baseline WITH TIME + minute-by-minute working-time engine (Fri shorter); date-only/day-granular diverge. Validate vs real XML.
 - [Sidebar menu visibility](sidebar-menu-visibility.md) — Rev.3795: nova regra: acesso ao módulo = acesso pleno por padrão; groupCanAccessRoute usa fallback de prefixo URL + libera rotas sem pageId; deny explícito (view=false) ainda funciona.
@@ -80,7 +79,6 @@
 - [Lazy chunk stale after deploy](lazy-chunk-stale-deploy.md) — every deploy rotates chunk hashes; open iOS tabs hit "Importing a module script failed". Wrap React.lazy (lazyWithRetry) to retry+reload; only fixes prod after re-publish.
 - [ColFix block is version-gated](colfix-version-gate.md) — new ALTER/backfill in the `[ColFix]` block of server/_core/index.ts needs a COLFIX_VERSION bump or it silently skips ("Versão ok, pulando migrations") and the column never lands.
 - [SyncSchema+ log is capped](syncschema-log-cap.md) — `[SyncSchema+]` is ONE long sequential block; captured log file caps ~49 lines, so a missing `Rev. N` line ≠ failure. Verify new tables by connecting to NEON_DATABASE_URL directly (pg), not executeSql.
-- [NPS open link had no per-use limit](nps-open-link-no-limit.md) — public NPS link (no credId) accepts unlimited submissions; enforce 1-per-link via embedded linkId + atomic claim row.
 - [Master-only field must gate at backend](master-only-field-backend-gate.md) — dashboardAvaliacoesCliente does `select()` of all columns; a "só Admin Master" field must be stripped from the payload by role server-side, not just hidden in the UI.
 - [react-pdf worker version match](pdfjs-worker-version-match.md) — "Erro ao carregar PDF" = bundled worker version ≠ react-pdf's internal pdfjs API; pin pdfjs-dist EXACTLY to react-pdf's dep, realign on every react-pdf upgrade.
 - [pdf-parse multi-line table cells](pdf-parse-multiline-table-cells.md) — a bank statement row can extract as separate date/desc/value lines, not one line; single-line regex parsers then silently return zero rows. Validate via reconciliation, not just non-zero output.

@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4132** — **RESCISÃO EM CONTRATO DE EXPERIÊNCIA: TÍTULO CORRETO DO "COMUNICADO DE DISPENSA".** Cálculo já estava correto (confirmado pelo usuário), mas o documento gerado saía com o título genérico "Aviso Prévio Indenizado" — juridicamente incorreto, pois contrato de experiência não tem aviso prévio. `AvisoPrevio.tsx` agora lê `isExperiencia`/`iniciativa`/`antecipado` de `previsaoRescisao` (já gravados por `desligarExperiencia`) e usa 1 dos 4 títulos exatos: "COMUNICADO DE DISPENSA PELO EMPREGADOR NO PRAZO/ANTECIPADO", "COMUNICADO DE DISPENSA PELO EMPREGADO NO PRAZO" ou "PEDIDO DE DEMISSAO EM CONTRATO DE EXPERIENCIA" (empregado antecipado). Badges da lista/detalhe também corrigidos. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4131** — **SPED ECD/ECF + EFD CONTRIBUIÇÕES/ICMS-IPI: LEGENDA CLARA DO PERÍODO A ENCAMINHAR.** Usuário (leigo em contabilidade) reportou confusão sobre qual período exatamente ele precisava encaminhar ao contador em cada uma das 4 telas fiscais. Adicionado banner azul (ícone Info) logo abaixo do seletor de período em `SpedEcd.tsx`, `SpedEcf.tsx`, `EfdContribuicoes.tsx` e `EfdIcmsIpi.tsx`: nas anuais (ECD/ECF) reforça que não existe versão mensal e o período é sempre o ano completo; nas mensais (EFD Contribuições/ICMS-IPI) o texto muda conforme mês selecionado ou "Ano todo" (avisando que gera 1 arquivo por mês em zip). Puramente visual/textual. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4130** — **FOTO DO FUNCIONÁRIO: FALLBACK POR CPF PARA CADASTRO DUPLICADO ENTRE EMPRESAS DO GRUPO.** Usuário reportou funcionário (Henrique Lopes) aparecendo sem foto na lista "Funcionários com: [Habilidade]". Causa: cadastro duplicado (mesmo CPF) entre 2 empresas irmãs do grupo — a habilidade estava atribuída ao registro sem foto. `searchBySkill` (skills.ts) agora, quando `empFotoUrl` vem nulo, busca outro registro de `employees` com o mesmo CPF (normalizado) que tenha foto, e usa como fallback. Zero mudança de schema/regra de negócio. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4130** — **FOTO DO FUNCIONÁRIO: FALLBACK POR CPF PARA CADASTRO DUPLICADO ENTRE EMPRESAS DO GRUPO.** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4129** — **REPAGINAÇÃO DO GRID DE HABILIDADES: CATEGORIA + FOTOS DOS COLABORADORES NO CARD.** ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4126** — **PADRONIZAÇÃO DO FILTRO DE MÊS/ANO + BOTÃO "ANO TODO" (EFD CONTRIBUIÇÕES / EFD ICMS-IPI COM DOWNLOAD EM LOTE).** ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4125** — **FIX RAIZ: VALOR LÍQUIDO DE NF-e/NFS-e IMPORTADA DIVERGINDO DO DOCUMENTO REAL.** ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4124 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4125 e anteriores.
 
 ## User preferences
 

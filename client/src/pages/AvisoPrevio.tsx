@@ -47,6 +47,18 @@ const TIPO_LABELS: Record<string, { label: string; color: string; bg: string }> 
   empregado_indenizado: { label: "Empregado (Indenizado)", color: "text-orange-700", bg: "bg-orange-100" },
 };
 
+// Rev. 4132 — Contrato de Experiência: rescisão não tem aviso prévio nem multa
+// FGTS; o documento "comunicado de dispensa" gerado precisa de um dos 4 títulos
+// exatos abaixo (conforme iniciativa × antecipado), nunca o genérico "AVISO
+// PRÉVIO INDENIZADO" usado nas rescisões normais (que reutilizam o mesmo tipo
+// empregador_indenizado/empregado_indenizado no banco).
+function tituloComunicadoExperiencia(iniciativa: 'empregador' | 'empregado', antecipado: boolean): string {
+  if (iniciativa === 'empregador') {
+    return antecipado ? 'COMUNICADO DE DISPENSA PELO EMPREGADOR ANTECIPADO' : 'COMUNICADO DE DISPENSA PELO EMPREGADOR NO PRAZO';
+  }
+  return antecipado ? 'PEDIDO DE DEMISSAO EM CONTRATO DE EXPERIENCIA' : 'COMUNICADO DE DISPENSA PELO EMPREGADO NO PRAZO';
+}
+
 const TIPO_LABELS_PEDIDO: Record<string, { label: string; color: string; bg: string }> = {
   empregado_trabalhado: { label: "Cumprindo Aviso", color: "text-blue-700", bg: "bg-blue-100" },
   empregado_indenizado: { label: "Não Cumpriu Aviso", color: "text-red-700", bg: "bg-red-100" },
@@ -500,7 +512,7 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
   // do modal de Detalhes (após o aviso já ter sido salvo). Aceita um objeto
   // `emp` mínimo (nomeCompleto, cpf, ctps, serieCtps, cargo/funcao, dataAdmissao),
   // o `tipo` do aviso e a `dataAvisoStr` (YYYY-MM-DD).
-  const gerarDocumentoCore = (emp: any, tipo: string, dataAvisoStr: string) => {
+  const gerarDocumentoCore = (emp: any, tipo: string, dataAvisoStr: string, experiencia?: { iniciativa: 'empregador' | 'empregado'; antecipado: boolean } | null) => {
     const empresa: any = selectedCompany || {};
     if (!emp) { toast.error("Colaborador não encontrado."); return; }
     if (!empresa?.razaoSocial && !empresa?.nomeFantasia) {
@@ -523,6 +535,8 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
       toast.error("Tipo de aviso inválido para gerar documento.");
       return;
     }
+    const isExperiencia = !!experiencia;
+    const tituloExperiencia = isExperiencia ? tituloComunicadoExperiencia(experiencia!.iniciativa, experiencia!.antecipado) : "";
 
     // === Datas ===
     const dtAviso = new Date(dataAvisoStr + "T00:00:00");
@@ -598,7 +612,10 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
     // a partir dele (renderTemplate → buildFcDocument). Sem Vigente, cai no HTML
     // hard-coded abaixo (fallback EXATO, trabalhado/indenizado). `dados` é escapado
     // (escV) porque o corpoHtml é injetado RAW por buildFcDocument.
-    const avisoVigenteHtml = avisoTplQ.data?.vigente ? avisoTplQ.data.conteudoHtml : null;
+    // Rev. 4132 — Contrato de Experiência NUNCA usa o template Vigente de aviso
+    // prévio (não existe aviso prévio em experiência); sempre cai no fallback
+    // hard-coded abaixo, com o título/corpo específico dos 4 cenários.
+    const avisoVigenteHtml = (avisoTplQ.data?.vigente && !isExperiencia) ? avisoTplQ.data.conteudoHtml : null;
     if (avisoVigenteHtml) {
       const escV = (s: any) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" } as any)[c]);
       const modalidade = isIndenizado ? "INDENIZADO" : "TRABALHADO";
@@ -757,7 +774,7 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
     }
 
     // ============================== INDENIZADO ==============================
-    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Aviso Prévio Indenizado — ${escapeHtml(empNome)}</title>
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>${escapeHtml(isExperiencia ? tituloExperiencia : "Aviso Prévio Indenizado")} — ${escapeHtml(empNome)}</title>
 <style>
   /* Rev. 1907 — force print of background colors (header azul + logo box branco + faixa amarela). */
   @media print {
@@ -791,7 +808,7 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
 <div class="doc-header">
   <div class="logo-wrap">${logoUrl ? `<img src="${escapeHtml(logoUrl)}" alt="Logo">` : `<span style="color:#1e3a8a;font-weight:700;font-size:11pt;font-family:Arial,sans-serif;">${escapeHtml((empresaNome || "").slice(0, 14))}</span>`}</div>
   <div class="titles">
-    <h1>Aviso Prévio Indenizado do Empregado</h1>
+    <h1>${escapeHtml(isExperiencia ? tituloExperiencia : "Aviso Prévio Indenizado do Empregado")}</h1>
     <div class="empresa-nome">${escapeHtml(empresaNome)}</div>
     ${empresaCnpj ? `<div class="empresa-cnpj">CNPJ: ${escapeHtml(empresaCnpj)}</div>` : ""}
   </div>
@@ -806,7 +823,22 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
 
 <p>Prezado Senhor(a):</p>
 
-<p class="corpo">Comunicamos que será rescindido seu contrato de trabalho nesta data ${fmtExtenso(dtAviso)}, encontrando-se vossa senhoria dispensado do cumprimento do aviso prévio, que lhe será pago de forma indenizatória junto às demais verbas rescisórias.</p>
+${isExperiencia ? (() => {
+  // Rev. 4132 — Contrato de Experiência (Art. 443 §2º / 479 / 480 CLT): NÃO há
+  // aviso prévio nem multa de FGTS; o corpo reflete cada um dos 4 cenários.
+  const iniciativa = experiencia!.iniciativa;
+  const antecipado = experiencia!.antecipado;
+  if (iniciativa === 'empregador' && !antecipado) {
+    return `<p class="corpo">Comunicamos que seu contrato de experiência não será prorrogado/efetivado, extinguindo-se ao término do prazo pactuado, em ${fmtExtenso(dtAviso)}, nos termos do Art. 443, §2º, da CLT, por iniciativa da empresa, sem qualquer ônus indenizatório para as partes.</p>`;
+  }
+  if (iniciativa === 'empregador' && antecipado) {
+    return `<p class="corpo">Comunicamos a rescisão antecipada do seu contrato de experiência, por iniciativa da empresa, com efeitos a partir de ${fmtExtenso(dtAviso)}, nos termos do Art. 479 da CLT, sendo devida indenização correspondente à metade da remuneração a que teria direito até o término do prazo contratado.</p>`;
+  }
+  if (iniciativa === 'empregado' && !antecipado) {
+    return `<p class="corpo">Comunicamos o encerramento do seu contrato de experiência ao término do prazo pactuado, em ${fmtExtenso(dtAviso)}, por iniciativa do(a) colaborador(a), nos termos do Art. 443, §2º, da CLT, sem qualquer ônus indenizatório para as partes.</p>`;
+  }
+  return `<p class="corpo">Eu, abaixo assinado(a), comunico meu pedido de demissão do contrato de experiência firmado com a empresa, com efeitos a partir de ${fmtExtenso(dtAviso)}, nos termos do Art. 480 da CLT, ciente de que poderei ser responsabilizado(a) pelos prejuízos decorrentes da rescisão antecipada, limitados à metade da remuneração a que teria direito até o término do prazo contratado.</p>`;
+})() : `<p class="corpo">Comunicamos que será rescindido seu contrato de trabalho nesta data ${fmtExtenso(dtAviso)}, encontrando-se vossa senhoria dispensado do cumprimento do aviso prévio, que lhe será pago de forma indenizatória junto às demais verbas rescisórias.</p>`}
 
 <p class="corpo">O recebimento das verbas rescisórias devidas e o cumprimento das formalidades legais exigidas para a Rescisão Contratual ocorrerá no dia ${fmtExtenso(dtPagamento)}.</p>
 
@@ -824,7 +856,7 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
 </body></html>`;
     w.document.write(html);
     w.document.close();
-    toast.success("Documento de Aviso Prévio Indenizado gerado!");
+    toast.success(isExperiencia ? `${tituloExperiencia} gerado!` : "Documento de Aviso Prévio Indenizado gerado!");
   };
 
   // Wrapper para o botão do modal de CRIAÇÃO (usa form + selectedEmp)
@@ -861,7 +893,17 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
       funcao: item.employeeCargo || "",
       dataAdmissao: item.employeeDataAdmissao || "",
     };
-    gerarDocumentoCore(emp, item.tipo, dataAvisoStr);
+    // Rev. 4132 — detecta rescisão em Contrato de Experiência (flag isExperiencia
+    // gravada em previsaoRescisao pelo endpoint desligarExperiencia) para gerar
+    // o "comunicado de dispensa" com o título correto (não "Aviso Prévio").
+    let experiencia: { iniciativa: 'empregador' | 'empregado'; antecipado: boolean } | null = null;
+    try {
+      const prev = JSON.parse(item.previsaoRescisao || '{}');
+      if (prev?.isExperiencia) {
+        experiencia = { iniciativa: prev.iniciativa === 'empregado' ? 'empregado' : 'empregador', antecipado: !!prev.antecipado };
+      }
+    } catch { /* previsaoRescisao ausente/ inválida — segue fluxo normal de aviso prévio */ }
+    gerarDocumentoCore(emp, item.tipo, dataAvisoStr, experiencia);
   };
 
   const handleEdit = (item: any) => {
@@ -1216,9 +1258,19 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
                                 {a.employeeName}
                               </button>
                               <div className="flex gap-1 mt-0.5 flex-wrap">
-                            {isPedidoDemissao && (() => {
-                              const tp = TIPO_LABELS_PEDIDO[a.tipo];
-                              return tp ? <span className={`text-[9px] ${a.tipo === 'empregado_indenizado' ? 'bg-red-600' : 'bg-blue-600'} text-white px-1.5 py-0.5 rounded-full font-semibold`}>{tp.label}</span> : null;
+                            {(() => {
+                              // Rev. 4132 — badge "Experiência" com o título correto, sobrepondo o
+                              // rótulo genérico de Aviso Prévio/Pedido de Demissão nesses registros.
+                              let prevExp: any = null;
+                              try { prevExp = JSON.parse((a as any).previsaoRescisao || '{}'); } catch { /* ignore */ }
+                              if (prevExp?.isExperiencia) {
+                                return <span className="text-[9px] bg-fuchsia-700 text-white px-1.5 py-0.5 rounded-full font-semibold">{tituloComunicadoExperiencia(prevExp.iniciativa === 'empregado' ? 'empregado' : 'empregador', !!prevExp.antecipado)}</span>;
+                              }
+                              if (isPedidoDemissao) {
+                                const tp = TIPO_LABELS_PEDIDO[a.tipo];
+                                return tp ? <span className={`text-[9px] ${a.tipo === 'empregado_indenizado' ? 'bg-red-600' : 'bg-blue-600'} text-white px-1.5 py-0.5 rounded-full font-semibold`}>{tp.label}</span> : null;
+                              }
+                              return null;
                             })()}
                             {!isPedidoDemissao && (a as any).novoEmpregoAtivo ? <span className="text-[9px] bg-orange-600 text-white px-1.5 py-0.5 rounded-full font-semibold">Novo Emprego · Súmula 276</span> : null}
                             {(a as any).fgtsEditadoManualmente ? <span className="text-[9px] bg-amber-500 text-white px-1.5 py-0.5 rounded-full font-semibold">FGTS Real</span> : null}
@@ -1353,7 +1405,12 @@ export default function AvisoPrevio({ mode = "aviso_previo" }: { mode?: AvisoPre
                 <div className="bg-muted/30 rounded-lg p-4">
                   <p className="text-xs text-muted-foreground uppercase">Status</p>
                   <p className="font-semibold text-lg">{STATUS_LABELS[selectedItem.status]?.label}</p>
-                  <p className="text-sm text-muted-foreground">{(isPedidoDemissao ? TIPO_LABELS_PEDIDO : TIPO_LABELS)[selectedItem.tipo]?.label || TIPO_LABELS[selectedItem.tipo]?.label}</p>
+                  <p className="text-sm text-muted-foreground">{(() => {
+                    let prevExp: any = null;
+                    try { prevExp = JSON.parse((selectedItem as any).previsaoRescisao || '{}'); } catch { /* ignore */ }
+                    if (prevExp?.isExperiencia) return tituloComunicadoExperiencia(prevExp.iniciativa === 'empregado' ? 'empregado' : 'empregador', !!prevExp.antecipado);
+                    return (isPedidoDemissao ? TIPO_LABELS_PEDIDO : TIPO_LABELS)[selectedItem.tipo]?.label || TIPO_LABELS[selectedItem.tipo]?.label;
+                  })()}</p>
                 </div>
               </div>
 
