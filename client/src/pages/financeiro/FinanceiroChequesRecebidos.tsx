@@ -144,7 +144,7 @@ function ClienteSelect({
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-export function FinanceiroChequesRecebidosContent() {
+export default function FinanceiroChequesRecebidos() {
   const { companyId } = useCompany();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -478,8 +478,8 @@ export function FinanceiroChequesRecebidosContent() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <>
-    <div className="space-y-5">
+    <DashboardLayout>
+      <div className="space-y-5">
 
         {/* ── Cabeçalho ── */}
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1282,10 +1282,6 @@ export function FinanceiroChequesRecebidosContent() {
         </DialogContent>
       </Dialog>
 
-    </>
+    </DashboardLayout>
   );
-}
-
-export default function FinanceiroChequesRecebidos() {
-  return <DashboardLayout><FinanceiroChequesRecebidosContent /></DashboardLayout>;
 }
