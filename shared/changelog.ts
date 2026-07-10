@@ -1,4 +1,30 @@
 /**
+ * Rev. 4134 — **BANCO DE HORAS: BOTÃO ATIVAR/DESATIVAR SEPARADO DO ZERAMENTO DE HISTÓRICO.**
+ *
+ * CONTEXTO: usuário apontou 2 lacunas na Rev. 4133: (1) faltava um botão para trocar o REGIME
+ * (banco de horas ↔ pagamento de hora extra) direto na tela de vigência — hoje a empresa pode estar
+ * em banco de horas e amanhã não, e essa troca precisa constar na timeline; (2) a função de zerar
+ * saldo estava amarrada ao botão de vigência, mas trocar o regime não implica necessariamente zerar
+ * histórico (e vice-versa) — precisam ser 2 ações independentes.
+ *
+ * IMPLEMENTAÇÃO:
+ * 1. `horasExtras.setHeDestinoPadrao` (já existente, troca `companies.heDestinoPadrao` +
+ *    `systemCriteria.he_banco_horas`) agora também insere em `banco_horas_vigencias`
+ *    (zerouSaldos=0) a cada chamada — toda troca de regime entra na timeline, mesmo sem zerar nada.
+ * 2. `horasExtras.definirVigencia` foi desmembrado em `horasExtras.zerarSaldosAnteriores` (mutation,
+ *    admin_master-only): só zera saldo (mesma lógica de ajuste auditável da Rev. 4133), e grava o
+ *    marco na timeline usando o regime ATUAL da empresa (lido de `companies.heDestinoPadrao` no
+ *    momento da chamada) — não força nem assume um regime.
+ * 3. UI em `client/src/pages/BancoHoras.tsx`: card "Vigência do Banco de Horas" agora tem 2 controles
+ *    lado a lado e independentes — bloco cinza com botão "Ativar/Desativar Banco de Horas" (mostra o
+ *    regime atual, abre AlertDialog próprio) + bloco com data/observação + botão "Zerar Histórico de
+ *    Saldos Anteriores" (AlertDialog próprio, deixa claro que o regime atual não é alterado).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo — ambos os botões só adicionam lançamentos/linhas na timeline;
+ * nenhum saldo ou histórico anterior é apagado.
+ */
+
+/**
  * Rev. 4133 — **BANCO DE HORAS: VIGÊNCIA COM ZERAMENTO DE SALDO ANTERIOR + TIMELINE DE REGIME.**
  *
  * CONTEXTO: usuário reportou saldos negativos enormes no Banco de Horas (raiz identificada: redirect

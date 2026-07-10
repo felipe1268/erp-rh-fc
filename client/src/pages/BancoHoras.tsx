@@ -98,18 +98,20 @@ export default function BancoHoras() {
   });
   const isBancoAtivo = (destinoPadrao.data ?? "banco_horas") === "banco_horas";
 
-  // Rev. 4133 — Vigência do Banco de Horas: zera saldos anteriores à data definida (já pagos/
-  // descontados por outra via) e mantém uma timeline de quando o regime mudou.
+  // Rev. 4133/4134 — Timeline de vigência do Banco de Horas: (1) botão Ativar/Desativar troca o
+  // regime (banco de horas x pagamento de hora extra) e sempre entra na timeline; (2) botão Zerar
+  // Histórico neutraliza saldos anteriores a uma data — ação SEPARADA, não implícita na troca de regime.
   const [vigenciaData, setVigenciaData] = useState("2026-05-15");
   const [vigenciaObs, setVigenciaObs] = useState("");
   const [vigenciaConfirmOpen, setVigenciaConfirmOpen] = useState(false);
+  const [regimeConfirmOpen, setRegimeConfirmOpen] = useState(false);
   const vigenciasList = trpc.horasExtras.listarVigencias.useQuery(
     { companyId },
     { enabled: canAccess && companyId > 0 }
   );
-  const definirVigenciaMut = trpc.horasExtras.definirVigencia.useMutation({
+  const zerarSaldosMut = trpc.horasExtras.zerarSaldosAnteriores.useMutation({
     onSuccess: (data) => {
-      toast.success(`Vigência definida em ${vigenciaData}. Saldos de ${data.funcionariosZerados} funcionário(s) zerados.`);
+      toast.success(`Saldos anteriores a ${vigenciaData.split("-").reverse().join("/")} zerados para ${data.funcionariosZerados} funcionário(s).`);
       setVigenciaConfirmOpen(false);
       setVigenciaObs("");
       vigenciasList.refetch();
@@ -1197,13 +1199,39 @@ export default function BancoHoras() {
                   Vigência do Banco de Horas
                 </h3>
                 <p className="text-xs text-muted-foreground mb-4">
-                  Defina a partir de qual data o saldo do Banco de Horas passa a valer. Tudo o que foi
-                  lançado ANTES dessa data (positivo ou negativo) é zerado — pois já foi pago ou descontado
-                  por outra via — sem apagar o histórico de lançamentos (fica registrado como ajuste auditável).
+                  Use os dois botões abaixo de forma independente: <strong>Ativar/Desativar</strong> troca o
+                  regime da empresa (Banco de Horas × Pagamento de Hora Extra) sem tocar em saldo nenhum;
+                  <strong> Zerar Histórico</strong> neutraliza todo saldo (positivo ou negativo) lançado ANTES
+                  da data escolhida — pois já foi pago ou descontado por outra via — sem apagar o histórico
+                  de lançamentos (fica registrado como ajuste auditável). Toda alteração fica na timeline abaixo.
                 </p>
+
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+                  <div className="flex items-center justify-between flex-wrap gap-3">
+                    <div>
+                      <p className="text-sm font-semibold flex items-center gap-2">
+                        {isBancoAtivo ? <ArrowLeftRight className="h-4 w-4 text-blue-600" /> : <CreditCard className="h-4 w-4 text-orange-500" />}
+                        Regime atual: {isBancoAtivo ? "Banco de Horas ATIVO" : "Pagamento de Hora Extra ATIVO"}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Hoje a empresa pode não estar no mesmo regime de amanhã — troque aqui quando mudar.
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      className={isBancoAtivo ? "border-orange-300 text-orange-700 hover:bg-orange-50" : "border-blue-300 text-blue-700 hover:bg-blue-50"}
+                      disabled={!isAdminMaster || setDestinoPadraoMut.isPending}
+                      title={!isAdminMaster ? "Somente o Administrador Master pode alterar o regime" : undefined}
+                      onClick={() => setRegimeConfirmOpen(true)}
+                    >
+                      {isBancoAtivo ? "Desativar Banco de Horas" : "Ativar Banco de Horas"}
+                    </Button>
+                  </div>
+                </div>
+
                 <div className="flex items-end gap-3 flex-wrap">
                   <div className="flex flex-col gap-1">
-                    <label className="text-xs font-medium text-muted-foreground">Data de vigência</label>
+                    <label className="text-xs font-medium text-muted-foreground">Zerar saldos anteriores a</label>
                     <Input
                       type="date"
                       value={vigenciaData}
@@ -1215,7 +1243,7 @@ export default function BancoHoras() {
                   <div className="flex flex-col gap-1 flex-1 min-w-[220px]">
                     <label className="text-xs font-medium text-muted-foreground">Observação (opcional)</label>
                     <Input
-                      placeholder="Ex.: retomada do banco de horas após acordo com o sindicato"
+                      placeholder="Ex.: saldo anterior já pago/descontado por fora"
                       value={vigenciaObs}
                       onChange={(e) => setVigenciaObs(e.target.value)}
                       disabled={!isAdminMaster}
@@ -1223,17 +1251,17 @@ export default function BancoHoras() {
                   </div>
                   <Button
                     className="bg-purple-600 hover:bg-purple-700"
-                    disabled={!isAdminMaster || !vigenciaData || definirVigenciaMut.isPending}
-                    title={!isAdminMaster ? "Somente o Administrador Master pode definir a vigência" : undefined}
+                    disabled={!isAdminMaster || !vigenciaData || zerarSaldosMut.isPending}
+                    title={!isAdminMaster ? "Somente o Administrador Master pode zerar o histórico" : undefined}
                     onClick={() => setVigenciaConfirmOpen(true)}
                   >
                     <CalendarDays className="h-4 w-4 mr-1.5" />
-                    Definir Vigência e Zerar Saldos Anteriores
+                    Zerar Histórico de Saldos Anteriores
                   </Button>
                 </div>
                 {!isAdminMaster && (
                   <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-2">
-                    <ShieldAlert className="h-3 w-3" /> Somente Admin Master pode definir a vigência
+                    <ShieldAlert className="h-3 w-3" /> Somente Admin Master pode alterar regime ou zerar histórico
                   </p>
                 )}
 
@@ -1456,29 +1484,58 @@ export default function BancoHoras() {
       <AlertDialog open={vigenciaConfirmOpen} onOpenChange={setVigenciaConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar vigência do Banco de Horas</AlertDialogTitle>
+            <AlertDialogTitle>Confirmar zeramento de histórico</AlertDialogTitle>
             <AlertDialogDescription className="break-words">
-              A partir de <strong>{vigenciaData.split("-").reverse().join("/")}</strong>, todo saldo de Banco de
-              Horas (positivo ou negativo) de TODOS os funcionários desta empresa lançado ANTES dessa data será
-              zerado — um lançamento de ajuste será registrado para cada funcionário afetado, preservando o
-              histórico. Essa ação não pode ser desfeita automaticamente. Deseja continuar?
+              Todo saldo de Banco de Horas (positivo ou negativo) de TODOS os funcionários desta empresa lançado
+              ANTES de <strong>{vigenciaData.split("-").reverse().join("/")}</strong> será zerado — um lançamento
+              de ajuste será registrado para cada funcionário afetado, preservando o histórico. O regime atual da
+              empresa ({isBancoAtivo ? "Banco de Horas" : "Pagamento de Hora Extra"}) NÃO será alterado por essa
+              ação. Essa ação não pode ser desfeita automaticamente. Deseja continuar?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={definirVigenciaMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel disabled={zerarSaldosMut.isPending}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              disabled={definirVigenciaMut.isPending}
+              disabled={zerarSaldosMut.isPending}
               onClick={() => {
-                definirVigenciaMut.mutate({
+                zerarSaldosMut.mutate({
                   companyId,
                   dataInicio: vigenciaData,
-                  regime: "banco_horas",
-                  zerarSaldosAnteriores: true,
                   observacao: vigenciaObs || undefined,
                 });
               }}
             >
-              {definirVigenciaMut.isPending ? "Processando..." : "Confirmar e Zerar Saldos"}
+              {zerarSaldosMut.isPending ? "Processando..." : "Confirmar e Zerar Saldos"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={regimeConfirmOpen} onOpenChange={setRegimeConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {isBancoAtivo ? "Desativar Banco de Horas?" : "Ativar Banco de Horas?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="break-words">
+              {isBancoAtivo
+                ? "A partir de agora, novas horas extras serão pagas na folha em vez de creditadas no Banco de Horas."
+                : "A partir de agora, novas horas extras serão creditadas no Banco de Horas em vez de pagas na folha."}
+              {" "}Essa troca de regime NÃO altera nenhum saldo já lançado — fica registrada na timeline abaixo. Deseja continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={setDestinoPadraoMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={setDestinoPadraoMut.isPending}
+              onClick={() => {
+                setDestinoPadraoMut.mutate(
+                  { companyId, destino: isBancoAtivo ? "pagamento" : "banco_horas" },
+                  { onSuccess: () => { setRegimeConfirmOpen(false); vigenciasList.refetch(); } }
+                );
+              }}
+            >
+              {setDestinoPadraoMut.isPending ? "Processando..." : "Confirmar"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

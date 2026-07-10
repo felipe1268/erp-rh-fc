@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4133** — **BANCO DE HORAS: VIGÊNCIA COM ZERAMENTO DE SALDO ANTERIOR + TIMELINE DE REGIME.** Nova tabela `banco_horas_vigencias` (timeline de quando a empresa mudou entre banco de horas e pagamento de hora extra). Novo botão "Definir Vigência e Zerar Saldos Anteriores" em `BancoHoras.tsx` → aba "Regras & Orientação" (topo, antes da Fundamentação Legal): admin_master define uma data (padrão 15/05/2026) e confirma via AlertDialog; todo saldo (positivo ou negativo) anterior é neutralizado por lançamento de AJUSTE em `banco_horas_lancamentos` (nunca apaga histórico) + timeline de vigências exibida logo abaixo. Endpoints `horasExtras.definirVigencia`/`listarVigencias`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4134** — **BANCO DE HORAS: BOTÃO ATIVAR/DESATIVAR SEPARADO DO ZERAMENTO DE HISTÓRICO.** No card "Vigência do Banco de Horas" (`BancoHoras.tsx` → aba "Regras & Orientação"), agora são 2 botões INDEPENDENTES: (1) "Ativar/Desativar Banco de Horas" — troca o regime da empresa (banco de horas × pagamento de hora extra) via `setHeDestinoPadrao`, sem tocar em saldo, com AlertDialog próprio; (2) "Zerar Histórico de Saldos Anteriores" (`horasExtras.zerarSaldosAnteriores`, novo endpoint que substitui o antigo `definirVigencia`) — só zera saldo anterior à data escolhida, sem alterar o regime. Toda troca de regime E todo zeramento entram na timeline de `banco_horas_vigencias`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4132** — **RESCISÃO EM CONTRATO DE EXPERIÊNCIA: TÍTULO CORRETO DO "COMUNICADO DE DISPENSA".** Cálculo já estava correto (confirmado pelo usuário), mas o documento gerado saía com o título genérico "Aviso Prévio Indenizado" — juridicamente incorreto, pois contrato de experiência não tem aviso prévio. `AvisoPrevio.tsx` agora lê `isExperiencia`/`iniciativa`/`antecipado` de `previsaoRescisao` (já gravados por `desligarExperiencia`) e usa 1 dos 4 títulos exatos: "COMUNICADO DE DISPENSA PELO EMPREGADOR NO PRAZO/ANTECIPADO", "COMUNICADO DE DISPENSA PELO EMPREGADO NO PRAZO" ou "PEDIDO DE DEMISSAO EM CONTRATO DE EXPERIENCIA" (empregado antecipado). Badges da lista/detalhe também corrigidos. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4133** — **BANCO DE HORAS: VIGÊNCIA COM ZERAMENTO DE SALDO ANTERIOR + TIMELINE DE REGIME.** Nova tabela `banco_horas_vigencias` (timeline de quando a empresa mudou entre banco de horas e pagamento de hora extra). Todo saldo (positivo ou negativo) anterior a uma data é neutralizado por lançamento de AJUSTE em `banco_horas_lancamentos` (nunca apaga histórico) + timeline de vigências exibida na aba "Regras & Orientação". ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
+
+- **Rev. 4132** — **RESCISÃO EM CONTRATO DE EXPERIÊNCIA: TÍTULO CORRETO DO "COMUNICADO DE DISPENSA".** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4131** — **SPED ECD/ECF + EFD CONTRIBUIÇÕES/ICMS-IPI: LEGENDA CLARA DO PERÍODO A ENCAMINHAR.** ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4128** — **DIÁLOGO "ATRIBUIR HABILIDADE" MOSTRA FOTO + OBRA ATUAL DO FUNCIONÁRIO.** ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4127** — **CNPJ OBRIGATÓRIO PARA CRIAR NOVO FORNECEDOR/EMPRESA TERCEIRA.** ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4125 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4126 e anteriores.
 
 ## User preferences
 

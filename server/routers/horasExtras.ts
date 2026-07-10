@@ -1422,11 +1422,18 @@ export const horasExtrasRouter = router({
           unidade: "bool",
         } as any);
       }
+      // Rev. 4134 — toda alteração do regime (Ativar/Desativar Banco de Horas) entra na
+      // timeline de vigências, mesmo sem zerar saldo nenhum (zerouSaldos=0).
+      const regimeVigencia = input.destino === "banco_horas" ? "banco_horas" : "pagamento_horas_extras";
+      await db.execute(sql`
+        INSERT INTO banco_horas_vigencias ("companyId", regime, "dataInicio", "zerouSaldos", observacao, "criadoPor")
+        VALUES (${input.companyId}, ${regimeVigencia}, CURRENT_DATE, 0, 'Alteração de regime via botão Ativar/Desativar Banco de Horas', ${ctx.user.username || 'Sistema'})
+      `);
       return { ok: true, destino: input.destino };
     }),
 
-  // Rev. 4133 — Timeline de vigência do regime de Banco de Horas (histórico de quando a empresa
-  // passou a usar banco de horas vs pagamento de hora extra, e se aquele marco zerou saldos antigos).
+  // Rev. 4133/4134 — Timeline de vigência do regime de Banco de Horas (histórico de quando a
+  // empresa alternou entre banco de horas e pagamento de hora extra, e de todo zeramento de saldo).
   listarVigencias: protectedProcedure
     .input(z.object({ companyId: z.number() }))
     .query(async ({ input }) => {
@@ -1441,57 +1448,60 @@ export const horasExtrasRouter = router({
       return rows;
     }),
 
-  // Define a data de vigência a partir da qual o saldo de Banco de Horas passa a ser confiável.
-  // Tudo que aconteceu ANTES dessa data é zerado (positivo ou negativo) via lançamento de ajuste
-  // auditável — nunca apagando o histórico de lançamentos, só neutralizando o saldo acumulado.
-  definirVigencia: protectedProcedure
+  // Rev. 4134 — Zera (neutraliza) todo saldo — positivo ou negativo — anterior à data informada,
+  // via lançamento de ajuste auditável (nunca apagando o histórico). Ação INDEPENDENTE da troca de
+  // regime (Ativar/Desativar): mudar o regime não implica necessariamente zerar saldo, e vice-versa.
+  zerarSaldosAnteriores: protectedProcedure
     .input(z.object({
       companyId: z.number(),
       dataInicio: z.string(), // YYYY-MM-DD
-      regime: z.enum(["banco_horas", "pagamento_horas_extras"]).default("banco_horas"),
-      zerarSaldosAnteriores: z.boolean().default(true),
       observacao: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       if (ctx.user.role !== 'admin_master') {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas o Administrador Master pode definir a vigência do Banco de Horas.' });
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas o Administrador Master pode zerar saldos anteriores do Banco de Horas.' });
       }
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
-      let zerados = 0;
-      if (input.zerarSaldosAnteriores) {
-        const saldosAtuais = ((await db.execute(sql`
-          SELECT bhs."employeeId", bhs."saldoMinutos"
-          FROM banco_horas_saldo bhs
-          WHERE bhs."companyId" = ${input.companyId} AND bhs."saldoMinutos" <> 0
-        `)) as any).rows || [];
+      const saldosAtuais = ((await db.execute(sql`
+        SELECT bhs."employeeId", bhs."saldoMinutos"
+        FROM banco_horas_saldo bhs
+        WHERE bhs."companyId" = ${input.companyId} AND bhs."saldoMinutos" <> 0
+      `)) as any).rows || [];
 
-        const dataAjuste = input.dataInicio;
-        const descAjuste = `Zeramento por vigência do Banco de Horas a partir de ${input.dataInicio} — saldo anterior já pago ou descontado`;
-        for (const s of saldosAtuais) {
-          const saldo = Number(s.saldoMinutos) || 0;
-          if (saldo === 0) continue;
-          // Agregação de saldo (getSaldoBancoMensal) deriva o sinal do TIPO, não do valor gravado
-          // (SUM CASE WHEN tipo='credito' THEN ABS(minutos) ELSE -ABS(minutos) END). Pra zerar:
-          // saldo positivo -> lançamento de débito de ABS(saldo); saldo negativo -> crédito de ABS(saldo).
-          const tipoAjuste = saldo > 0 ? 'ajuste_vigencia' : 'credito';
-          const minutosAjuste = Math.abs(saldo);
-          await db.execute(sql`
-            INSERT INTO banco_horas_lancamentos ("employeeId", "companyId", tipo, minutos, "minutosBase", "minutosAcrescimo", descricao, data, "criadoPor")
-            VALUES (${s.employeeId}, ${input.companyId}, ${tipoAjuste}, ${minutosAjuste}, ${minutosAjuste}, 0, ${descAjuste}, ${dataAjuste}::date, ${ctx.user.username || 'Sistema'})
-          `);
-          await db.execute(sql`
-            UPDATE banco_horas_saldo SET "saldoMinutos" = 0, "atualizadoEm" = NOW()
-            WHERE "employeeId" = ${s.employeeId} AND "companyId" = ${input.companyId}
-          `);
-          zerados++;
-        }
+      const dataAjuste = input.dataInicio;
+      const descAjuste = `Zeramento de saldo do Banco de Horas anterior a ${input.dataInicio} — saldo anterior já pago ou descontado`;
+      let zerados = 0;
+      for (const s of saldosAtuais) {
+        const saldo = Number(s.saldoMinutos) || 0;
+        if (saldo === 0) continue;
+        // Agregação de saldo (getSaldoBancoMensal) deriva o sinal do TIPO, não do valor gravado
+        // (SUM CASE WHEN tipo='credito' THEN ABS(minutos) ELSE -ABS(minutos) END). Pra zerar:
+        // saldo positivo -> lançamento de débito de ABS(saldo); saldo negativo -> crédito de ABS(saldo).
+        const tipoAjuste = saldo > 0 ? 'ajuste_vigencia' : 'credito';
+        const minutosAjuste = Math.abs(saldo);
+        await db.execute(sql`
+          INSERT INTO banco_horas_lancamentos ("employeeId", "companyId", tipo, minutos, "minutosBase", "minutosAcrescimo", descricao, data, "criadoPor")
+          VALUES (${s.employeeId}, ${input.companyId}, ${tipoAjuste}, ${minutosAjuste}, ${minutosAjuste}, 0, ${descAjuste}, ${dataAjuste}::date, ${ctx.user.username || 'Sistema'})
+        `);
+        await db.execute(sql`
+          UPDATE banco_horas_saldo SET "saldoMinutos" = 0, "atualizadoEm" = NOW()
+          WHERE "employeeId" = ${s.employeeId} AND "companyId" = ${input.companyId}
+        `);
+        zerados++;
       }
+
+      // Regime registrado na timeline reflete o regime ATIVO no momento do zeramento
+      // (companies.heDestinoPadrao), já que essa ação é independente da troca de regime.
+      const regimeAtualRows = ((await db.execute(sql`
+        SELECT "heDestinoPadrao" FROM companies WHERE id = ${input.companyId}
+      `)) as any).rows || [];
+      const regimeAtual = (regimeAtualRows[0]?.heDestinoPadrao as string) || "banco_horas";
 
       await db.execute(sql`
         INSERT INTO banco_horas_vigencias ("companyId", regime, "dataInicio", "zerouSaldos", observacao, "criadoPor")
-        VALUES (${input.companyId}, ${input.regime}, ${input.dataInicio}::date, ${input.zerarSaldosAnteriores ? 1 : 0}, ${input.observacao || null}, ${ctx.user.username || 'Sistema'})
+        VALUES (${input.companyId}, ${regimeAtual}, ${input.dataInicio}::date, 1, ${input.observacao || null}, ${ctx.user.username || 'Sistema'})
       `);
 
       return { ok: true, funcionariosZerados: zerados };
