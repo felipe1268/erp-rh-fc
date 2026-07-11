@@ -1,4 +1,30 @@
 /**
+ * Rev. 4145 — **NFS-e: BATCH DANFSes #29–#40 — ISS RETIDO + VALOR LÍQUIDO CORRIGIDOS POR 10 NOTAS.**
+ *
+ * CONTEXTO: usuário forneceu DANFSes oficiais das NFS-e #29 a #40. Para cada nota, o campo
+ * "ISSQN Retido pelo Tomador" estava zerado no banco (iss_retido=0) causando valor_liquido errado.
+ * Todas as 10 notas corrigidas usam tomadores que retêm ISS (Santuário Nacional, CAPE Igarassu,
+ * Chlorum Palmeira, Caramuru, Arquidiocese de Aparecida, Chlorum MG). A NFS-e #30 já estava
+ * correta (ISS "Não Retido" → valor_liquido = bruto − IRRF − CSLL = 119.469,32 ✓).
+ * As duas NFS-e #38 (canceladas) não foram alteradas. NFS-e #32 (substituída, status=substituida)
+ * teve iss_retido e valor_liquido corrigidos para preservar o histórico.
+ *
+ * BATCH SQL Neon (company_id=60002) — UPDATE por id + iss_retido + retencao_inss + valor_liquido:
+ *   NFS-e #29 (id=928): 185.679,87 → 177.779,87; iss_retido=7.900,00
+ *   NFS-e #31 (id=930):   9.882,25 →   9.359,38; iss_retido=522,87
+ *   NFS-e #32 (id=931):  22.391,46 →  20.914,46; iss_retido=223,91 (substituída)
+ *   NFS-e #33 (id=932):  21.530,37 →  21.302,54; iss_retido=227,83
+ *   NFS-e #34 (id=933):   7.432,70 →   7.015,13; iss_retido=417,57
+ *   NFS-e #35 (id=934):  35.599,89 →  33.794,72; iss_retido=1.805,17
+ *   NFS-e #36 (id=935): 137.512,08 → 133.146,62; iss_retido=4.365,46
+ *   NFS-e #37 (id=936): 624.936,09 → 604.878,76; iss_retido=20.057,33
+ *   NFS-e #39 (id=938):  64.000,00 →  60.077,28; iss_retido=1.600,00
+ *   NFS-e #40 (id=939):  20.311,35 →  18.686,45; iss_retido=507,78
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4144 — **NFS-e: BATCH GERAL — TODAS AS 571 NOTAS SIAP GEO CORRIGIDAS (7 RESTANTES COM FÓRMULA ANTIGA).**
  *
  * CONTEXTO: após Rev. 4142 (batch de 497 notas) e Rev. 4143 (7 notas por DANFSe), restavam 10 notas
