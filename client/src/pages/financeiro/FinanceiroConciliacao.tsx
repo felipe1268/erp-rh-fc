@@ -45,7 +45,20 @@ function isTransportError(e: any): boolean {
     m.includes("fetch is aborted")
   );
 }
+// Rev. 4137 — servidor reiniciando devolve HTML em vez de JSON (healthcheck 500).
+// Detecta pelo padrão "<!DOCTYPE" ou "Unexpected token '<'" na mensagem de erro.
+function isServerRestartError(e: any): boolean {
+  const m = String(e?.message ?? "");
+  return (
+    m.includes("<!DOCTYPE") ||
+    m.includes("Unexpected token '<'") ||
+    m.includes("is not valid JSON") ||
+    // Chrome / Firefox: "SyntaxError: Unexpected token <"
+    /unexpected token\s*[<'"]/i.test(m)
+  );
+}
 function transportErrMsg(e: any): string {
+  if (isServerRestartError(e)) return "Servidor temporariamente indisponível (reiniciando). Aguarde alguns segundos e tente novamente.";
   if (isTransportError(e)) return "Falha de rede (iPad/Safari). Toque novamente para tentar.";
   return e?.message ?? "Erro desconhecido";
 }

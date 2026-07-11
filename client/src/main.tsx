@@ -105,14 +105,23 @@ const queryClient = new QueryClient({
       refetchOnReconnect: "always",
     },
     mutations: {
-      // iOS WebView pode dropar requests com "The string did not match the expected pattern."
-      // Permitir 1 retry automático para esse padrão específico.
+      // iOS WebKit dropa requests com "The string did not match the expected pattern." / "Failed to fetch".
+      // Servidor reiniciando devolve HTML em vez de JSON → "Unexpected token '<'" / "is not valid JSON".
+      // Rev. 4137 — retry automático único (1,5s) para cobrir os dois casos.
       retry: (failureCount, error) => {
         if (failureCount >= 1) return false;
         const msg = error instanceof Error ? error.message : String(error ?? "");
-        return msg.includes("did not match the expected pattern") || msg.includes("Failed to fetch") || msg.includes("NetworkError");
+        return (
+          msg.includes("did not match the expected pattern") ||
+          msg.includes("Failed to fetch") ||
+          msg.includes("NetworkError") ||
+          // Rev. 4137 — servidor reiniciando: resposta HTML em vez de JSON
+          msg.includes("Unexpected token '<'") ||
+          msg.includes("is not valid JSON") ||
+          /unexpected token\s*[<'"]/i.test(msg)
+        );
       },
-      retryDelay: 800,
+      retryDelay: 1500,
     },
   },
 });

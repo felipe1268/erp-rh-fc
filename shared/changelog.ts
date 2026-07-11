@@ -1,4 +1,25 @@
 /**
+ * Rev. 4137 — **CONCILIAÇÃO: ERRO "<!DOCTYPE" AO LANÇAR NO CONTAS A PAGAR — MENSAGEM INTELIGÍVEL + RETRY AUTOMÁTICO.**
+ *
+ * CONTEXTO: quando o servidor reinicia (OOM ou deploy), por ~10s ele devolve uma página
+ * HTML (healthcheck 500) em vez de JSON. O cliente tRPC tentava parsear esse HTML como JSON
+ * e lançava `SyntaxError: Unexpected token '<', '<!DOCTYPE ...' is not valid JSON`.
+ * O `transportErrMsg` não reconhecia esse padrão e exibia o erro técnico bruto no toast.
+ * Além disso, não havia retry automático para esse tipo de falha transitória.
+ *
+ * CORREÇÃO (dois pontos):
+ * 1. `isServerRestartError` (FinanceiroConciliacao.tsx) — detecta `<!DOCTYPE`,
+ *    `Unexpected token '<'` e `is not valid JSON` e exibe:
+ *    "Servidor temporariamente indisponível (reiniciando). Aguarde alguns segundos e tente novamente."
+ * 2. `QueryClient mutations.retry` (main.tsx) — inclui o padrão de JSON inválido
+ *    na lista de erros com retry automático único (1,5 s).
+ *
+ * ARQUIVOS: client/src/pages/financeiro/FinanceiroConciliacao.tsx (isServerRestartError + transportErrMsg),
+ *           client/src/main.tsx (mutations.retry + retryDelay 800→1500).
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4136 — **CONCILIAÇÃO: CHEQUES EMITIDOS (SANTANDER) NÃO APARECIAM COMO SUGESTÃO EM "SEM LANÇAMENTO".**
  *
  * CONTEXTO: o cruzamento extrato × Controle de Cheques Emitidos (matchChequeLinha em

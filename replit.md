@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4137** — **CONCILIAÇÃO: ERRO "<!DOCTYPE" AO LANÇAR NO CONTAS A PAGAR — MENSAGEM INTELIGÍVEL + RETRY AUTOMÁTICO.** Quando o servidor reinicia (OOM/deploy), por ~10s devolve HTML (healthcheck 500) em vez de JSON. O cliente tRPC não reconhecia o padrão `Unexpected token '<'` e exibia o erro técnico bruto. Correção em dois pontos: (1) `isServerRestartError` em `FinanceiroConciliacao.tsx` detecta os padrões HTML e exibe mensagem em português; (2) `QueryClient.mutations.retry` em `main.tsx` inclui esse padrão na lista de erros com retry automático único (1,5 s). ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4136** — **CONCILIAÇÃO: CHEQUES EMITIDOS (SANTANDER) NÃO APARECIAM COMO SUGESTÃO EM "SEM LANÇAMENTO".** O cruzamento extrato × Controle de Cheques Emitidos (`matchChequeLinha` em `financial.ts`) usava função local `extrNumChq` com regex antiga — só entendia "CHEQUE Nº NNN". Formato Santander "CHEQUE EMITIDO/DEBITADO 001392" não tinha número extraído → sem sugestão automática de fornecedor/obra/forma e sem botão "Conciliar com cheque". Correção: substituída por `parseChequeNumero` (já corrigida no Rev. 4135), uma linha, zero impacto colateral. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4135** — **CONCILIAÇÃO: CHEQUE DEVOLVIDO FORMATO SANTANDER NÃO APARECIA EM "CHEQUES DEVOLVIDOS".** `parseChequeNumero` (shared/chequeMotivos.ts) só entendia "CHEQUE Nº 001393"; o Santander escreve "CHEQUE EMITIDO/DEBITADO 001393" e "CHEQUE DEVOLVIDO MOTIVO 001393 11-SEM FUNDO". Sem extrair o número, o algoritmo caía no fallback "mesmo valor + único candidato" — com dois cheques de R$ 2.900,00 no período, recusava parear. Correção: segunda cláusula `/(?:debitado|emitido|motivo)\s+0*(\d{4,12})/i` (≥4 dígitos, não confunde com código de motivo 1–3 dígitos). ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4135** — **CONCILIAÇÃO: CHEQUE DEVOLVIDO FORMATO SANTANDER NÃO APARECIA EM "CHEQUES DEVOLVIDOS".** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4134** — **BANCO DE HORAS: BOTÃO ATIVAR/DESATIVAR SEPARADO DO ZERAMENTO DE HISTÓRICO.** ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4131** — **SPED ECD/ECF + EFD CONTRIBUIÇÕES/ICMS-IPI: LEGENDA CLARA DO PERÍODO A ENCAMINHAR.** ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4130** — **FOTO DO FUNCIONÁRIO: FALLBACK POR CPF PARA CADASTRO DUPLICADO ENTRE EMPRESAS DO GRUPO.** ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4128 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4129 e anteriores.
 
 ## User preferences
 
