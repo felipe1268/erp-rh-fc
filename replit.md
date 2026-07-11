@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4149** — **FROTA: FILTRO MENSAL NOS 3 DASHBOARDS (Combustível, Manutenção, Pedágios).** Backend aceita `mes` opcional; white-card com "Ano todo" + Jan–Dez com badges de contagem; cores temáticas por tela; trocar ano reseta o mês. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4148** — **NFS-e: #30 VALOR LÍQUIDO CORRIGIDO (120.694,65 → 119.469,32).** Fórmula subtraía só IRRF, não retencao_csll; correção direta por id=929 alinhando ao DANFSe. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4147** — **NFS-e: BATCH DANFSes #43–#61 — ISS RETIDO + VALOR LÍQUIDO CORRIGIDOS (17 NOTAS).** 19 DANFSes fornecidas; #51 e #52 já corretas. Destaque: #43 ISS 2% (Chlorum Palmeira), #44 ISS 3% (ASCAN), #50 ISS não retido + retencao_inss corrigida. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4147** — **NFS-e: BATCH DANFSes #43–#61 — ISS RETIDO + VALOR LÍQUIDO CORRIGIDOS (17 NOTAS).** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4146** — **NFS-e: BATCH DANFSes #38, #41, #42 — ISS RETIDO + VALOR LÍQUIDO CORRIGIDOS.** ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,13 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4143** — **NFS-e: UPSERT NO UPLOAD ABRASF — XML CORRIGE NOTA EXISTENTE. BATCH CORRIGE #22–#28.** ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4142** — **NFS-e: VALOR LÍQUIDO LIDO DIRETAMENTE DO XML — ZERO CÁLCULO NO SERVIDOR.** ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4141** — **CONTROLE DE CHEQUES: EDIÇÃO COMPLETA — VALOR, FORNECEDOR, DATAS, BANCO, STATUS.** ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4137 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4141 e anteriores.
 
 ## User preferences
 

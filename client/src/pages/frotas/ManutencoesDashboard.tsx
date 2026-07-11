@@ -31,12 +31,14 @@ export default function ManutencoesDashboard() {
   const { selectedCompanyId } = useCompany();
   const cId = parseInt(selectedCompanyId || "0");
   const [ano, setAno] = useState(new Date().getFullYear());
+  const [mes, setMes] = useState<number | null>(null);
+  const [yearlyPorMes, setYearlyPorMes] = useState<Array<{mes: number; qtd: number}>>([]);
   const [sortVeiculo, setSortVeiculo] = useState<{ col: string; dir: "asc" | "desc" }>({ col: "custoTotal", dir: "desc" });
   const [expandedVehicle, setExpandedVehicle] = useState<string | null>(null);
   const [showMetodologia, setShowMetodologia] = useState(false);
 
   const dash = trpc.frotas.getMaintenanceDashboard.useQuery(
-    { companyId: cId, ano },
+    { companyId: cId, ano, mes: mes ?? undefined },
     { enabled: cId > 0 },
   );
 
@@ -127,6 +129,15 @@ export default function ManutencoesDashboard() {
   };
 
   const d = dash.data;
+
+  useEffect(() => {
+    if (mes === null && d?.porMes?.length) setYearlyPorMes(d.porMes as Array<{mes: number; qtd: number}>);
+  }, [mes, d]);
+  const badgeCounts = useMemo(() => {
+    const m: Record<number, number> = {};
+    for (const r of yearlyPorMes) m[r.mes] = r.qtd || 0;
+    return m;
+  }, [yearlyPorMes]);
 
   const porMes = d?.porMes || [];
   const custoMesPorTipo = d?.custoMesPorTipo || [];
@@ -225,10 +236,35 @@ export default function ManutencoesDashboard() {
               </div>
             </div>
             <div className="flex items-center gap-1 rounded-xl bg-white/10 px-2 py-1.5 ring-1 ring-white/15 backdrop-blur-md">
-              <button onClick={() => setAno(a => a - 1)} className="rounded-lg p-1.5 text-white/80 transition-colors hover:bg-white/10 hover:text-white"><ChevronLeft className="h-4 w-4" /></button>
+              <button onClick={() => { setAno(a => a - 1); setMes(null); setYearlyPorMes([]); }} className="rounded-lg p-1.5 text-white/80 transition-colors hover:bg-white/10 hover:text-white"><ChevronLeft className="h-4 w-4" /></button>
               <span className="min-w-[64px] text-center text-lg font-bold tabular-nums text-white">{ano}</span>
-              <button onClick={() => setAno(a => a + 1)} className="rounded-lg p-1.5 text-white/80 transition-colors hover:bg-white/10 hover:text-white"><ChevronRight className="h-4 w-4" /></button>
+              <button onClick={() => { setAno(a => a + 1); setMes(null); setYearlyPorMes([]); }} className="rounded-lg p-1.5 text-white/80 transition-colors hover:bg-white/10 hover:text-white"><ChevronRight className="h-4 w-4" /></button>
             </div>
+          </div>
+        </div>
+
+        {/* Seletor de Mês */}
+        <div className="bg-white dark:bg-slate-800 rounded-xl border shadow-sm px-3 py-2">
+          <div className="flex flex-wrap gap-1.5 items-center">
+            <button
+              onClick={() => setMes(null)}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${mes === null ? 'bg-orange-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300'}`}
+            >
+              Ano todo
+            </button>
+            <span className="w-px h-4 bg-slate-200 dark:bg-slate-600 mx-0.5 shrink-0" />
+            {MESES.map((m, i) => {
+              const qtd = badgeCounts[i + 1] || 0;
+              const active = mes === i + 1;
+              return (
+                <button key={i} onClick={() => setMes(active ? null : i + 1)}
+                  className={`relative px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${active ? 'bg-orange-500 text-white shadow-sm' : qtd > 0 ? 'bg-amber-50 text-amber-800 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300' : 'text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                >
+                  {m}
+                  {qtd > 0 && <span className={`absolute -top-1.5 -right-1.5 text-[9px] font-bold rounded-full min-w-[15px] h-[15px] flex items-center justify-center px-0.5 leading-none ${active ? 'bg-white text-orange-600' : 'bg-amber-400 text-white'}`}>{qtd > 99 ? '99+' : qtd}</span>}
+                </button>
+              );
+            })}
           </div>
         </div>
 

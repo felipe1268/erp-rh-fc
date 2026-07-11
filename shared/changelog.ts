@@ -1,4 +1,28 @@
 /**
+ * Rev. 4149 — **FROTA: FILTRO MENSAL NOS 3 DASHBOARDS (Combustível, Manutenção, Pedágios).**
+ *
+ * CONTEXTO: os 3 dashboards de frota só tinham seletor de ano. Usuário pediu
+ * filtro mês a mês (Jan–Dez) com toggle "Ano todo".
+ *
+ * BACKEND (server/routers/frotas.ts):
+ *   - getFuelDashboard, getMaintenanceDashboard, getPedagiosDashboard: novo
+ *     campo `mes?: number | null` no input. Quando presente, startDate/endDate
+ *     restringem ao mês exato (ex: mes=5 → 2026-05-01..2026-06-01).
+ *
+ * FRONTEND (3 arquivos em client/src/pages/frotas/):
+ *   - CombustivelDashboard.tsx, PedagiosDashboard.tsx, ManutencoesDashboard.tsx:
+ *   - Estado `mes: number | null` (null = ano todo) + `yearlyPorMes` para badges.
+ *   - useEffect salva porMes anual quando mes===null (para exibir contagem nos botões).
+ *   - White-card seletor abaixo do header: botão "Ano todo" + 12 botões Jan–Dez.
+ *   - Meses com registros ficam destacados (cor temática da tela) + badge com contagem.
+ *   - Clicar no mês ativo volta p/ "Ano todo" (toggle).
+ *   - Trocar ano reseta mes e yearlyPorMes automaticamente.
+ *   - Cores: Combustível=emerald, Pedágios=sky, Manutenção=orange (seguem o tema de cada tela).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4148 — **NFS-e: #30 VALOR LÍQUIDO CORRIGIDO (120.694,65 → 119.469,32).**
  *
  * CONTEXTO: NFS-e #30 (id=929, LACCA, bruto=122.532,64) aparecia como "já correto" em Rev.4145

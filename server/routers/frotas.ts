@@ -4487,14 +4487,14 @@ IMPORTANTE:
     }),
 
   getMaintenanceDashboard: protectedProcedure
-    .input(z.object({ companyId: z.number(), ano: z.number().optional() }))
+    .input(z.object({ companyId: z.number(), ano: z.number().optional(), mes: z.number().nullable().optional() }))
     .query(async ({ input }) => {
       if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
       const db = await getDb();
-      const { companyId, ano } = input;
+      const { companyId, ano, mes } = input;
       const anoFilter = ano || new Date().getFullYear();
-      const startDate = `${anoFilter}-01-01`;
-      const endDate = `${anoFilter + 1}-01-01`;
+      const startDate = mes != null ? `${anoFilter}-${String(mes).padStart(2, '0')}-01` : `${anoFilter}-01-01`;
+      const endDate = mes != null ? (mes === 12 ? `${anoFilter + 1}-01-01` : `${anoFilter}-${String(mes + 1).padStart(2, '0')}-01`) : `${anoFilter + 1}-01-01`;
 
       const kpiRes = await db.execute(sql`
         SELECT
@@ -5321,17 +5321,17 @@ IMPORTANTE:
   // mensal (litros + R$), por veículo (com consumo km/L derivado de km_atual),
   // por motorista (ranking), por posto e por tipo de combustível.
   getFuelDashboard: protectedProcedure
-    .input(z.object({ companyId: z.number(), ano: z.number().optional() }))
+    .input(z.object({ companyId: z.number(), ano: z.number().optional(), mes: z.number().nullable().optional() }))
     .query(async ({ ctx, input }) => {
       if (ctx.user?.companyId !== undefined && String(ctx.user.companyId) !== String(input.companyId)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para acessar dados desta empresa" });
       }
       if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
       const db = await getDb();
-      const { companyId, ano } = input;
+      const { companyId, ano, mes } = input;
       const anoFilter = ano || new Date().getFullYear();
-      const startDate = `${anoFilter}-01-01`;
-      const endDate = `${anoFilter + 1}-01-01`;
+      const startDate = mes != null ? `${anoFilter}-${String(mes).padStart(2, '0')}-01` : `${anoFilter}-01-01`;
+      const endDate = mes != null ? (mes === 12 ? `${anoFilter + 1}-01-01` : `${anoFilter}-${String(mes + 1).padStart(2, '0')}-01`) : `${anoFilter + 1}-01-01`;
 
       const kpiRes = await db.execute(sql`
         SELECT
@@ -5588,17 +5588,17 @@ IMPORTANTE:
   // mensal, ranking por veículo, por praça, por rodovia, e segmentação por
   // categoria (pedagio vs sem_parar).
   getPedagiosDashboard: protectedProcedure
-    .input(z.object({ companyId: z.number(), ano: z.number().optional() }))
+    .input(z.object({ companyId: z.number(), ano: z.number().optional(), mes: z.number().nullable().optional() }))
     .query(async ({ ctx, input }) => {
       if (ctx.user?.companyId !== undefined && String(ctx.user.companyId) !== String(input.companyId)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para acessar dados desta empresa" });
       }
       if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
       const db = await getDb();
-      const { companyId, ano } = input;
+      const { companyId, ano, mes } = input;
       const anoFilter = ano || new Date().getFullYear();
-      const startDate = `${anoFilter}-01-01`;
-      const endDate = `${anoFilter + 1}-01-01`;
+      const startDate = mes != null ? `${anoFilter}-${String(mes).padStart(2, '0')}-01` : `${anoFilter}-01-01`;
+      const endDate = mes != null ? (mes === 12 ? `${anoFilter + 1}-01-01` : `${anoFilter}-${String(mes + 1).padStart(2, '0')}-01`) : `${anoFilter + 1}-01-01`;
 
       const kpiRes = await db.execute(sql`
         SELECT

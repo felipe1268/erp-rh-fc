@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -32,13 +32,15 @@ export default function CombustivelDashboard() {
   const { selectedCompanyId } = useCompany();
   const cId = parseInt(selectedCompanyId || "0");
   const [ano, setAno] = useState(new Date().getFullYear());
+  const [mes, setMes] = useState<number | null>(null);
+  const [yearlyPorMes, setYearlyPorMes] = useState<Array<{mes: number; qtd: number}>>([]);
   const [sortVeic, setSortVeic] = useState<{ col: string; dir: "asc" | "desc" }>({ col: "valor", dir: "desc" });
   // Rev. 1883 — drill-down clicável em todos os gráficos. `drill` aberto =
   // modal fullscreen (Regra de Ouro tablet/iPad).
   const [drill, setDrill] = useState<DrillKey | null>(null);
 
   const dash = trpc.frotas.getFuelDashboard.useQuery(
-    { companyId: cId, ano },
+    { companyId: cId, ano, mes: mes ?? undefined },
     { enabled: cId > 0 },
   );
 
@@ -55,6 +57,15 @@ export default function CombustivelDashboard() {
   const porPosto = d?.porPosto || [];
   const porTipo = d?.porTipo || [];
   const topNotas = d?.topNotas || [];
+
+  useEffect(() => {
+    if (mes === null && d?.porMes?.length) setYearlyPorMes(d.porMes as Array<{mes: number; qtd: number}>);
+  }, [mes, d]);
+  const badgeCounts = useMemo(() => {
+    const m: Record<number, number> = {};
+    for (const r of yearlyPorMes) m[r.mes] = r.qtd || 0;
+    return m;
+  }, [yearlyPorMes]);
 
   const evolucao = useMemo(() => Array.from({ length: 12 }, (_, i) => {
     const m = porMes.find((x: any) => x.mes === i + 1);
@@ -114,9 +125,34 @@ export default function CombustivelDashboard() {
             </div>
           </div>
           <div className="flex items-center gap-2 bg-white dark:bg-slate-800 rounded-xl px-3 py-1.5 shadow-sm border">
-            <button onClick={() => setAno(a => a - 1)} className="hover:bg-slate-100 dark:hover:bg-slate-700 p-1 rounded"><ChevronLeft className="h-4 w-4" /></button>
+            <button onClick={() => { setAno(a => a - 1); setMes(null); setYearlyPorMes([]); }} className="hover:bg-slate-100 dark:hover:bg-slate-700 p-1 rounded"><ChevronLeft className="h-4 w-4" /></button>
             <span className="font-bold text-lg tabular-nums min-w-[60px] text-center">{ano}</span>
-            <button onClick={() => setAno(a => a + 1)} className="hover:bg-slate-100 dark:hover:bg-slate-700 p-1 rounded"><ChevronRight className="h-4 w-4" /></button>
+            <button onClick={() => { setAno(a => a + 1); setMes(null); setYearlyPorMes([]); }} className="hover:bg-slate-100 dark:hover:bg-slate-700 p-1 rounded"><ChevronRight className="h-4 w-4" /></button>
+          </div>
+        </div>
+
+        {/* Seletor de Mês */}
+        <div className="bg-white dark:bg-slate-800 rounded-xl border shadow-sm px-3 py-2">
+          <div className="flex flex-wrap gap-1.5 items-center">
+            <button
+              onClick={() => setMes(null)}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${mes === null ? 'bg-emerald-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300'}`}
+            >
+              Ano todo
+            </button>
+            <span className="w-px h-4 bg-slate-200 dark:bg-slate-600 mx-0.5 shrink-0" />
+            {MESES.map((m, i) => {
+              const qtd = badgeCounts[i + 1] || 0;
+              const active = mes === i + 1;
+              return (
+                <button key={i} onClick={() => setMes(active ? null : i + 1)}
+                  className={`relative px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${active ? 'bg-emerald-500 text-white shadow-sm' : qtd > 0 ? 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300' : 'text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                >
+                  {m}
+                  {qtd > 0 && <span className={`absolute -top-1.5 -right-1.5 text-[9px] font-bold rounded-full min-w-[15px] h-[15px] flex items-center justify-center px-0.5 leading-none ${active ? 'bg-white text-emerald-600' : 'bg-emerald-400 text-white'}`}>{qtd > 99 ? '99+' : qtd}</span>}
+                </button>
+              );
+            })}
           </div>
         </div>
 
