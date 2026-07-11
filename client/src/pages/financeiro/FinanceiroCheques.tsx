@@ -1738,53 +1738,94 @@ export default function FinanceiroCheques() {
         </DialogContent>
       </Dialog>
 
-      {/* Rev. 4141 — Dialog de edição completa do cheque (layout moderno) */}
+      {/* Rev. 4141 — Dialog de edição completa do cheque (layout moderno v2) */}
       <Dialog open={!!editItem} onOpenChange={(o) => { if (!o) setEditItem(null); }}>
-        <DialogContent resizable={false} className="max-w-2xl w-[calc(100vw-1rem)] sm:w-auto max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden">
-          {/* Cabeçalho navy */}
-          <DialogHeader className="shrink-0 bg-gradient-to-r from-[#1B2A4A] to-[#2c3f63] px-6 py-4 text-white">
-            <DialogTitle className="flex items-center gap-2.5 text-white">
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/15">
-                <Pencil className="h-5 w-5" />
-              </span>
-              Editar cheque {editItem?.numeroCheque ? `nº ${editItem.numeroCheque}` : ""}
-            </DialogTitle>
-            <DialogDescription className="text-white/70 text-xs leading-relaxed">
-              Edite qualquer campo abaixo — <strong className="text-white/90">valor</strong>, <strong className="text-white/90">fornecedor</strong>, <strong className="text-white/90">datas</strong>, banco e status. Apenas campos alterados serão gravados.
-            </DialogDescription>
+        <DialogContent resizable={false} className="max-w-lg w-[calc(100vw-1rem)] sm:w-auto max-h-[96vh] flex flex-col p-0 gap-0 overflow-hidden rounded-2xl shadow-2xl">
+
+          {/* ── Cabeçalho navy compacto ── */}
+          <DialogHeader className="shrink-0 bg-gradient-to-r from-[#1B2A4A] to-[#253757] px-5 pt-5 pb-4 text-white">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/20">
+                  <Pencil className="h-5 w-5 text-white" />
+                </span>
+                <div>
+                  <DialogTitle className="text-base font-semibold text-white leading-tight">
+                    Editar cheque
+                  </DialogTitle>
+                  <p className="text-[11px] text-white/60 mt-0.5">Todos os campos podem ser corrigidos</p>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Card de valor + nº ── */}
+            {editItem && (
+              <div className="mt-4 rounded-xl bg-white/10 ring-1 ring-white/15 px-4 py-3 flex items-center gap-4">
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-medium text-white/50 uppercase tracking-widest mb-1">Valor</p>
+                  <div className="relative">
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 text-sm font-medium text-white/60 pointer-events-none">R$</span>
+                    <input
+                      className="bg-transparent w-full pl-8 text-2xl font-bold text-white tabular-nums outline-none border-b border-white/25 focus:border-white/60 transition-colors pb-0.5 placeholder:text-white/30"
+                      inputMode="decimal" placeholder="0,00"
+                      value={editValorStr}
+                      onChange={(e) => setEditValorStr(maskBRL(e.target.value))}
+                    />
+                  </div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-[10px] font-medium text-white/50 uppercase tracking-widest mb-1">Nº Cheque</p>
+                  <input
+                    className="bg-transparent w-24 text-base font-semibold text-white tabular-nums outline-none border-b border-white/25 focus:border-white/60 transition-colors pb-0.5 text-right placeholder:text-white/30"
+                    value={editItem.numeroCheque ?? ""}
+                    onChange={(e) => setEditItem({ ...editItem, numeroCheque: e.target.value })}
+                    placeholder="000000"
+                  />
+                </div>
+              </div>
+            )}
           </DialogHeader>
 
           {editItem && (
-            <div className="flex-1 overflow-y-auto min-h-0 px-6 py-5 space-y-5">
-              {/* Bloco 1 — Valor + Nº */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs font-medium text-gray-600 flex items-center gap-1.5"><Banknote className="h-3.5 w-3.5 text-[#1B2A4A]" />Valor</Label>
-                  <div className="relative mt-1">
-                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">R$</span>
-                    <Input className="pl-9 tabular-nums text-base font-semibold h-11" inputMode="decimal" placeholder="0,00"
-                      value={editValorStr}
-                      onChange={(e) => setEditValorStr(maskBRL(e.target.value))} />
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-xs font-medium text-gray-600 flex items-center gap-1.5"><Hash className="h-3.5 w-3.5 text-[#1B2A4A]" />Nº do cheque</Label>
-                  <Input className="mt-1 h-11" value={editItem.numeroCheque ?? ""} onChange={(e) => setEditItem({ ...editItem, numeroCheque: e.target.value })} placeholder="Ex.: 000123" />
+            <div className="flex-1 overflow-y-auto min-h-0 px-5 py-4 space-y-5 bg-white">
+
+              {/* ── Status (pílulas) ── */}
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2">Status</p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {([
+                    { v: "compensado",  label: "Compensado",  cls: "bg-emerald-50 border-emerald-400 text-emerald-700" },
+                    { v: "pendente",    label: "Pendente",    cls: "bg-amber-50  border-amber-400  text-amber-700"  },
+                    { v: "sustado",     label: "Sustado",     cls: "bg-orange-50 border-orange-400 text-orange-700" },
+                    { v: "cancelado",   label: "Cancelado",   cls: "bg-red-50    border-red-400    text-red-700"    },
+                    { v: "devolvido",   label: "Devolvido",   cls: "bg-rose-50   border-rose-400   text-rose-700"   },
+                    { v: "indefinido",  label: "Indefinido",  cls: "bg-slate-50  border-slate-400  text-slate-600"  },
+                  ] as const).map(({ v, label, cls }) => (
+                    <button key={v} type="button"
+                      onClick={() => setEditItem({ ...editItem, status: v })}
+                      className={cn(
+                        "rounded-lg py-2 px-1 text-[11px] font-semibold border-2 transition-all leading-tight",
+                        editItem.status === v ? cls : "border-gray-200 text-gray-400 bg-white hover:border-gray-300 hover:text-gray-600"
+                      )}>
+                      {editItem.status === v && <span className="mr-0.5">✓ </span>}{label}
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              {/* Bloco 2 — Favorecido */}
-              <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <Label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5"><User className="h-3.5 w-3.5 text-[#1B2A4A]" />Favorecido</Label>
+              {/* ── Favorecido ── */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Favorecido</p>
+                  <div className="flex-1 h-px bg-gray-100" />
                   <button type="button"
                     onClick={() => { setEditFavorecidoManual((v) => !v); setEditItem((e: any) => e ? { ...e, fornecedorId: null } : e); }}
-                    className="text-[11px] font-medium text-[#1B2A4A] hover:underline flex items-center gap-1">
-                    {editFavorecidoManual ? (<><Search className="h-3 w-3" />Buscar no cadastro</>) : (<><Keyboard className="h-3 w-3" />Digitar manualmente</>)}
+                    className="text-[10px] font-semibold text-[#1B2A4A]/70 hover:text-[#1B2A4A] flex items-center gap-1 shrink-0">
+                    {editFavorecidoManual ? <><Search className="h-3 w-3" />Buscar cadastro</> : <><Keyboard className="h-3 w-3" />Digitar</>}
                   </button>
                 </div>
                 {editFavorecidoManual ? (
-                  <Input value={editItem.fornecedorNome ?? ""}
+                  <Input className="h-10" value={editItem.fornecedorNome ?? ""}
                     onChange={(e) => setEditItem({ ...editItem, fornecedorNome: e.target.value, fornecedorId: null })}
                     placeholder="Nome do favorecido" />
                 ) : (
@@ -1795,105 +1836,109 @@ export default function FinanceiroCheques() {
                       const f = (Array.isArray(fornecedoresList) ? fornecedoresList : []).find((x: any) => String(x.id) === val);
                       setEditItem({ ...editItem, fornecedorId: f ? f.id : null, fornecedorNome: f ? (f.nomeFantasia || f.razaoSocial || "") : editItem.fornecedorNome });
                     }}
-                    placeholder="Consultar fornecedor cadastrado…"
-                    searchPlaceholder="Buscar por nome ou CNPJ…"
+                    placeholder="Buscar fornecedor…"
+                    searchPlaceholder="Nome ou CNPJ…"
                     emptyMessage={fornecedorOpts.length === 0 ? "Nenhum fornecedor cadastrado." : "Nenhum resultado."}
                   />
                 )}
                 {!editFavorecidoManual && editItem.fornecedorId != null && (
-                  <p className="mt-1.5 text-[11px] text-green-700 flex items-center gap-1"><CheckCheck className="h-3 w-3" />Vinculado ao cadastro de fornecedores.</p>
+                  <p className="mt-1 text-[11px] text-emerald-600 flex items-center gap-1"><CheckCheck className="h-3 w-3" />Vinculado ao cadastro</p>
                 )}
               </div>
 
-              {/* Bloco 3 — Conta emitente */}
-              <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-4 space-y-3">
-                <Label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5"><Landmark className="h-3.5 w-3.5 text-[#1B2A4A]" />Conta de onde o cheque foi emitido</Label>
+              {/* ── Conta emitente ── */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Conta emitente</p>
+                  <div className="flex-1 h-px bg-gray-100" />
+                </div>
                 <SearchableSelect
                   options={contaOpts}
                   value={editItem.contaBancariaId != null ? String(editItem.contaBancariaId) : ""}
                   onValueChange={selecionarContaEdit}
-                  placeholder="Escolha a conta…"
-                  searchPlaceholder="Buscar banco / agência / conta…"
-                  emptyMessage={contaOpts.length === 0 ? "Nenhuma conta bancária com talão cadastrada." : "Nenhum resultado."}
+                  placeholder="Selecionar conta bancária…"
+                  searchPlaceholder="Banco / agência / conta…"
+                  emptyMessage={contaOpts.length === 0 ? "Nenhuma conta com talão." : "Nenhum resultado."}
                 />
-                {editItem.contaBancariaId != null && (
-                  <p className="text-[11px] text-green-700 flex items-center gap-1"><CheckCheck className="h-3 w-3" />Banco, agência e conta preenchidos — ajuste abaixo se precisar.</p>
-                )}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  {[
+                    { label: "Banco", key: "bancoNome", ph: "Santander" },
+                    { label: "Agência", key: "agencia", ph: "0000" },
+                    { label: "Conta", key: "contaCorrenteRaw", ph: "00000-0" },
+                  ].map(({ label, key, ph }) => (
+                    <div key={key}>
+                      <Label className="text-[10px] text-gray-400 font-medium">{label}</Label>
+                      <Input className="mt-0.5 h-8 text-xs" value={(editItem as any)[key] ?? ""}
+                        onChange={(e) => setEditItem({ ...editItem, [key]: e.target.value })}
+                        placeholder={ph} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── Datas ── */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Datas</p>
+                  <div className="flex-1 h-px bg-gray-100" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-[11px] text-gray-500">Banco</Label>
-                    <Input className="mt-1" value={editItem.bancoNome ?? ""} onChange={(e) => setEditItem({ ...editItem, bancoNome: e.target.value })} placeholder="Ex.: Santander" />
+                    <Label className="text-xs text-gray-500 flex items-center gap-1"><CalendarDays className="h-3 w-3 text-[#1B2A4A]/50" />Vencimento</Label>
+                    <Input className="mt-1 h-10" type="date"
+                      value={editItem.dataVencimento ? String(editItem.dataVencimento).slice(0, 10) : ""}
+                      onChange={(e) => setEditItem({ ...editItem, dataVencimento: e.target.value || null })} />
                   </div>
                   <div>
-                    <Label className="text-[11px] text-gray-500">Agência</Label>
-                    <Input className="mt-1" value={editItem.agencia ?? ""} onChange={(e) => setEditItem({ ...editItem, agencia: e.target.value })} placeholder="Ex.: 1234" />
-                  </div>
-                  <div>
-                    <Label className="text-[11px] text-gray-500">Conta corrente</Label>
-                    <Input className="mt-1" value={editItem.contaCorrenteRaw ?? ""} onChange={(e) => setEditItem({ ...editItem, contaCorrenteRaw: e.target.value })} placeholder="Ex.: 12345-6" />
+                    <Label className="text-xs text-gray-500 flex items-center gap-1"><CalendarDays className="h-3 w-3 text-[#1B2A4A]/50" />Compensação</Label>
+                    <Input className="mt-1 h-10" type="date"
+                      value={editItem.dataCompensacao ? String(editItem.dataCompensacao).slice(0, 10) : ""}
+                      onChange={(e) => setEditItem({ ...editItem, dataCompensacao: e.target.value || null })} />
                   </div>
                 </div>
               </div>
 
-              {/* Bloco 4 — Datas + Status */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <Label className="text-xs font-medium text-gray-600 flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 text-[#1B2A4A]" />Vencimento</Label>
-                  <Input className="mt-1" type="date"
-                    value={editItem.dataVencimento ? String(editItem.dataVencimento).slice(0, 10) : ""}
-                    onChange={(e) => setEditItem({ ...editItem, dataVencimento: e.target.value || null })} />
+              {/* ── NF + Observação ── */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Detalhes adicionais</p>
+                  <div className="flex-1 h-px bg-gray-100" />
                 </div>
-                <div>
-                  <Label className="text-xs font-medium text-gray-600 flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 text-[#1B2A4A]" />Compensação</Label>
-                  <Input className="mt-1" type="date"
-                    value={editItem.dataCompensacao ? String(editItem.dataCompensacao).slice(0, 10) : ""}
-                    onChange={(e) => setEditItem({ ...editItem, dataCompensacao: e.target.value || null })} />
-                </div>
-                <div>
-                  <Label className="text-xs font-medium text-gray-600 flex items-center gap-1.5"><FileSignature className="h-3.5 w-3.5 text-[#1B2A4A]" />Status</Label>
-                  <Select value={editItem.status} onValueChange={(v) => setEditItem({ ...editItem, status: v })}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
-                      {STATUS_OPTS.map((s) => <SelectItem key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <Label className="text-xs text-gray-500">NF / Ref.</Label>
+                    <Input className="mt-1 h-10" value={editItem.nf ?? ""} onChange={(e) => setEditItem({ ...editItem, nf: e.target.value })} placeholder="12345" />
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-xs text-gray-500">Observação</Label>
+                    <Textarea className="mt-1 resize-none text-sm" rows={2} value={editItem.observacao ?? ""} onChange={(e) => setEditItem({ ...editItem, observacao: e.target.value })} placeholder="Opcional…" />
+                  </div>
                 </div>
               </div>
 
-              {/* Bloco 5 — NF + Observação */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <Label className="text-xs font-medium text-gray-600">NF / Ref.</Label>
-                  <Input className="mt-1" value={editItem.nf ?? ""} onChange={(e) => setEditItem({ ...editItem, nf: e.target.value })} placeholder="Ex.: 12345" />
-                </div>
-                <div className="sm:col-span-2">
-                  <Label className="text-xs font-medium text-gray-600">Observação</Label>
-                  <Textarea className="mt-1 resize-none" rows={2} value={editItem.observacao ?? ""} onChange={(e) => setEditItem({ ...editItem, observacao: e.target.value })} placeholder="Observação opcional…" />
-                </div>
-              </div>
-
-              {/* Bloco 6 — Informações de conciliação (read-only) */}
+              {/* ── Informações de conciliação (read-only) ── */}
               {(editItem.contaBancariaTentativaNome || editItem.motivoDevolucaoTexto || editItem.extratoMotivoTexto) && (
-                <div className="rounded-md border border-slate-200 bg-slate-50 p-2.5 space-y-1">
-                  <div className="text-[11px] font-semibold text-slate-600">Informações de Conciliação (somente leitura)</div>
+                <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 space-y-1.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Conciliação (somente leitura)</p>
                   {editItem.contaBancariaTentativaNome && (
-                    <div className="text-xs text-slate-700 break-words">Conta bancária tentativa: <span className="font-medium">{editItem.contaBancariaTentativaNome}</span></div>
+                    <p className="text-xs text-slate-600 break-words">Conta: <span className="font-medium text-slate-800">{editItem.contaBancariaTentativaNome}</span></p>
                   )}
                   {(editItem.motivoDevolucaoTexto || editItem.extratoMotivoTexto) && (
-                    <div className="text-xs text-amber-700 break-words">
-                      Motivo da devolução{(editItem.motivoDevolucaoCodigo ?? editItem.extratoMotivoCodigo) ? ` (${editItem.motivoDevolucaoCodigo ?? editItem.extratoMotivoCodigo})` : ""}: <span className="font-medium">{editItem.motivoDevolucaoTexto || editItem.extratoMotivoTexto}</span>
-                    </div>
+                    <p className="text-xs text-amber-700 break-words">
+                      Devolução{(editItem.motivoDevolucaoCodigo ?? editItem.extratoMotivoCodigo) ? ` (${editItem.motivoDevolucaoCodigo ?? editItem.extratoMotivoCodigo})` : ""}: <span className="font-medium">{editItem.motivoDevolucaoTexto || editItem.extratoMotivoTexto}</span>
+                    </p>
                   )}
-                  {editItem.devolvidoEm && <div className="text-[11px] text-slate-500">Devolvido em {fmtData(editItem.devolvidoEm)}</div>}
+                  {editItem.devolvidoEm && <p className="text-[11px] text-slate-400">Em {fmtData(editItem.devolvidoEm)}</p>}
                 </div>
               )}
             </div>
           )}
 
-          <DialogFooter className="shrink-0 px-6 py-4 border-t bg-gray-50/50 gap-2">
-            <Button variant="outline" onClick={() => setEditItem(null)} disabled={atualizarMut.isPending}>Cancelar</Button>
-            <Button onClick={salvarEdicao} disabled={atualizarMut.isPending} className="bg-[#1B2A4A] hover:bg-[#2c3f63] gap-2">
-              {atualizarMut.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Salvar alterações
+          <DialogFooter className="shrink-0 px-5 py-4 border-t bg-white gap-2 flex flex-row justify-end">
+            <Button variant="outline" onClick={() => setEditItem(null)} disabled={atualizarMut.isPending} className="h-10 rounded-xl">Cancelar</Button>
+            <Button onClick={salvarEdicao} disabled={atualizarMut.isPending} className="h-10 rounded-xl bg-[#1B2A4A] hover:bg-[#253757] gap-2 px-5">
+              {atualizarMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />}
+              Salvar alterações
             </Button>
           </DialogFooter>
         </DialogContent>
