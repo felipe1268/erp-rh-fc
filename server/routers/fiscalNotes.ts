@@ -7,6 +7,7 @@ import { TRPCError } from "@trpc/server";
 import { getUserCompanyLinks } from "../db";
 import { invokeGeminiVision, invokeAnthropicVision } from "../_core/llm";
 import { sincronizarNfsPeriodo, obterSugestoesPeriodo } from "../services/autoVincularNfService";
+import { parseSefinNfseXmlFull } from "./nfseEmitidas";
 
 // ─── Prompt e helpers para parsing de DANFSe ───────────────────────────────
 
@@ -124,7 +125,7 @@ const nfInput = z.object({
   retencaoInss:        z.number().default(0),
   retencaoIrrf:        z.number().default(0),
   retencaoPisCofins:   z.number().default(0),
-  valorLiquido:        z.number(),
+  valorLiquido:        z.number().optional(),
   entryId:             z.number().nullable().optional(),
   stmtLineId:          z.number().nullable().optional(),
   arquivoUrl:          z.string().nullable().optional(),
@@ -210,6 +211,15 @@ export const fiscalNotesRouter = router({
       await _assertNfAccess(ctx.user, input.companyId);
       const db = await getDb();
       const now = new Date().toISOString();
+      // Valor líquido calculado server-side: Bruto − ISS retido − INSS − IRRF − PIS/COFINS retidos
+      // O frontend pode enviar uma sugestão mas o servidor sempre recalcula para consistência.
+      const valorLiquidoCalc = Math.max(0,
+        (input.valorBruto ?? 0)
+        - (input.issRetido ?? 0)
+        - (input.retencaoInss ?? 0)
+        - (input.retencaoIrrf ?? 0)
+        - (input.retencaoPisCofins ?? 0)
+      );
       const [row] = await db.insert(fiscalNotes).values({
         companyId:          input.companyId,
         numeroNf:           input.numeroNf,
@@ -232,7 +242,7 @@ export const fiscalNotesRouter = router({
         retencaoInss:       String(input.retencaoInss ?? 0),
         retencaoIrrf:       String(input.retencaoIrrf ?? 0),
         retencaoPisCofins:  String(input.retencaoPisCofins ?? 0),
-        valorLiquido:       String(input.valorLiquido),
+        valorLiquido:       String(valorLiquidoCalc),
         status:             "emitida",
         entryId:            input.entryId ?? null,
         stmtLineId:         input.stmtLineId ?? null,
@@ -253,6 +263,38 @@ export const fiscalNotesRouter = router({
       await _assertNfAccess(ctx.user, input.companyId);
       const db = await getDb();
       const now = new Date().toISOString();
+
+      // ── Valor líquido: fonte autoritativa = ValorLiquidoNfse do XML armazenado ──
+      // O frontend recalcula a partir dos campos individuais e envia como sugestão,
+      // mas o servidor sempre prefere o valor gravado no xml_payload (emitido pela prefeitura).
+      // Para notas sem xml_payload (manuais), calcula: Bruto − ISS − INSS − IRRF − PIS/COFINS ret.
+      const existRow = await db.$client.query<any>(
+        `SELECT xml_payload FROM fiscal_notes WHERE id=$1 AND company_id=$2`,
+        [input.id, input.companyId]
+      );
+      const xmlPayload = existRow.rows[0]?.xml_payload as string | null | undefined;
+      let valorLiquidoFinal: number;
+      if (xmlPayload) {
+        const xmlParsed = parseSefinNfseXmlFull(xmlPayload);
+        valorLiquidoFinal = (xmlParsed?.valorLiquido ?? 0) > 0
+          ? xmlParsed!.valorLiquido
+          : Math.max(0,
+              (input.valorBruto ?? 0)
+              - (input.issRetido ?? 0)
+              - (input.retencaoInss ?? 0)
+              - (input.retencaoIrrf ?? 0)
+              - (input.retencaoPisCofins ?? 0)
+            );
+      } else {
+        valorLiquidoFinal = Math.max(0,
+          (input.valorBruto ?? 0)
+          - (input.issRetido ?? 0)
+          - (input.retencaoInss ?? 0)
+          - (input.retencaoIrrf ?? 0)
+          - (input.retencaoPisCofins ?? 0)
+        );
+      }
+
       await db.update(fiscalNotes)
         .set({
           numeroNf:           input.numeroNf,
@@ -275,7 +317,7 @@ export const fiscalNotesRouter = router({
           retencaoInss:       String(input.retencaoInss ?? 0),
           retencaoIrrf:       String(input.retencaoIrrf ?? 0),
           retencaoPisCofins:  String(input.retencaoPisCofins ?? 0),
-          valorLiquido:       String(input.valorLiquido),
+          valorLiquido:       String(valorLiquidoFinal),
           arquivoUrl:         input.arquivoUrl ?? null,
           arquivoNome:        input.arquivoNome ?? null,
           observacoes:        input.observacoes ?? null,

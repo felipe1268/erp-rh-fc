@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4141** — **CONTROLE DE CHEQUES: EDIÇÃO COMPLETA — VALOR, FORNECEDOR, DATAS, BANCO, STATUS.** Dialog de edição substituído por layout moderno com cabeçalho navy: Valor (máscara BRL) + Nº, Favorecido (busca/manual), Conta emitente (auto-preenche banco/agência), Vencimento + Compensação + Status, NF + Observação. Backend `atualizar` aceita 7 novos campos. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4142** — **NFS-e: VALOR LÍQUIDO LIDO DIRETAMENTE DO XML — ZERO CÁLCULO NO SERVIDOR.** `parseSiapGeoExportXml` parou de subtrair PIS+COFINS (apuração própria). `fiscalNotes.atualizar` agora reparsa `xml_payload` e usa `ValorLiquidoNfse` da prefeitura — frontend não influencia mais. Upload ABRASF usa `parseSefinNfseXmlFull` (completo) e grava todos os campos de retenção. Batch SQL corrigiu 497 notas SIAP GEO históricas. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4140** — **CONCILIAÇÃO: IDENTIFICAÇÃO DE CHEQUE POR NÚMERO + DATA DE COMPENSAÇÃO (MATCH FRACO).** `matchChequeLinha` ganhava 2 novos fallbacks: nº + `data_compensacao` (unívoco) e nº único no BD. Cheques 222 (GILO, Δ R$ 100) e 204 (AHMAD, Δ R$ 20) agora aparecem em âmbar 🔍 "Possível cheque nº X". ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4141** — **CONTROLE DE CHEQUES: EDIÇÃO COMPLETA — VALOR, FORNECEDOR, DATAS, BANCO, STATUS.** Dialog de edição substituído por layout moderno com cabeçalho navy: Valor (máscara BRL) + Nº, Favorecido (busca/manual), Conta emitente (auto-preenche banco/agência), Vencimento + Compensação + Status, NF + Observação. Backend `atualizar` aceita 7 novos campos. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 

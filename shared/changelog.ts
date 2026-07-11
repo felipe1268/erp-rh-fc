@@ -1,4 +1,43 @@
 /**
+ * Rev. 4142 — **NFS-e: VALOR LÍQUIDO LIDO DIRETAMENTE DO XML — ZERO CÁLCULO NO SERVIDOR.**
+ *
+ * CONTEXTO: o ERP recalculava o Valor Líquido a partir dos campos individuais de retenção
+ * (ISS, INSS, IRRF, PIS/COFINS), divergindo do valor emitido pela prefeitura. Caso mais
+ * grave: NFS-e #21 Guaratinguetá — ERP mostrava R$ 61.158,28 enquanto o DANFSe dizia
+ * R$ 61.917,28 (delta de R$ 759,00). Raiz: (1) parseSiapGeoExportXml subtraía PIS+COFINS
+ * (débito apuração própria, não retidos pelo tomador) do valor_liquido; (2) fiscalNotes.atualizar
+ * aceitava o valorLiquido recalculado pelo frontend, sobrescrevendo o valor correto do XML;
+ * (3) upload de XML ABRASF individual (parseSefinNfseXml, simplificado) não gravava campos
+ * individuais de retenção, forçando recalculação errada na reabertura.
+ *
+ * CORREÇÃO — server/routers/nfseEmitidas.ts:
+ *   • parseSiapGeoExportXml: retencoes agora = inss + csll + ir + outras (PIS e COFINS removidos —
+ *     são "débito apuração própria" do prestador, não retidos pelo tomador; o vl_pis/vl_cofins
+ *     do SIAP GEO é informativo, não subtrai do líquido).
+ *   • Upload ABRASF individual: trocado parseSefinNfseXml (básico) por parseSefinNfseXmlFull;
+ *     INSERT agora grava todos os campos: iss_retido (= valorIssRetido quando IssRetido='1'),
+ *     retencao_inss, retencao_irrf, retencao_csll, retencao_pis, retencao_cofins, retencao_outras,
+ *     deducoes_total, base_calculo_iss, aliquota_iss, retencao_pis_cofins=0; valor_liquido =
+ *     ValorLiquidoNfse lido direto do XML.
+ *
+ * CORREÇÃO — server/routers/fiscalNotes.ts:
+ *   • Import de parseSefinNfseXmlFull adicionado.
+ *   • valorLiquido tornado opcional no nfInput (backend não confia mais no valor do frontend).
+ *   • criar: valorLiquidoCalc = max(0, bruto − issRetido − inss − irrf − pisCofins) server-side.
+ *   • atualizar: antes de UPDATE lê xml_payload existente; se presente, reparsa ValorLiquidoNfse
+ *     e usa esse valor (fonte autoritativa da prefeitura); se ausente (nota manual), calcula pela
+ *     fórmula das retenções. O frontend pode enviar sugestão mas o servidor sempre ignora.
+ *
+ * CORREÇÃO — banco de dados (batch SQL):
+ *   • UPDATE fiscal_notes WHERE origem='nfse_siapgeo_export': recalculou valor_liquido de 497
+ *     registros removendo PIS e COFINS da dedução.
+ *     Fórmula usada: GREATEST(0, bruto − iss_retido − retencao_inss − retencao_irrf −
+ *     retencao_csll − retencao_outras − retencao_pis_cofins).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4141 — **CONTROLE DE CHEQUES: EDIÇÃO COMPLETA — VALOR, FORNECEDOR, DATAS, BANCO, STATUS.**
  *
  * CONTEXTO: o dialog "Editar cheque" exibia apenas 3 campos (Fornecedor, Status, Observação)

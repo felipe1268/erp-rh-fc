@@ -226,7 +226,9 @@ function parseSiapGeoExportXml(xml: string): SiapGeoNota[] | null {
       const ir         = centsToReais(nf.vl_ir);
       const outras     = centsToReais(nf.vl_outras_retencoes);
       const deducoes   = centsToReais(nf.vl_deducoes);
-      const retencoes  = inss + csll + pis + cofins + ir + outras;
+      // pis e cofins no formato SIAP GEO são valores informados na nota (apuração própria do
+      // prestador), não retenções pelo tomador. Subtrair apenas retenções federais efetivas.
+      const retencoes  = inss + csll + ir + outras;
       // alíquota: XML traz em centésimos de porcento (217 = 2.17%)
       const aliquota   = Math.round(parseInt(String(nf.aliquota ?? "0"), 10)) / 100;
       // vl_iss deste formato (exportação SIAP GEO) é o ISS DEVIDO informado na nota, não um
@@ -1453,43 +1455,68 @@ export const nfseEmitidasRouter = router({
           }
 
           // ── Formato ABRASF individual (Portal Nacional, uma nota por XML) ─
-          const nota = parseSefinNfseXml(file.content);
+          // Usa parseSefinNfseXmlFull para extrair TODOS os campos, incluindo
+          // ValorLiquidoNfse diretamente do XML (fonte autoritativa — sem recalcular).
+          const nota = parseSefinNfseXmlFull(file.content);
           if (!nota || !nota.numero) {
             erros.push(`${file.name}: XML inválido ou formato não reconhecido (suporte: ABRASF individual ou exportação SIAP GEO)`);
             continue;
           }
+          // issRetido '1'=retido pelo tomador → usar valorIssRetido; '2'=prestador recolhe via guia
+          const issRetidoValor = nota.issRetido === "1"
+            ? (nota.valorIssRetido || nota.valorIss || 0)
+            : 0;
           // Dedup robusto: por chave_acesso (quando preenchida) OU (numero_nf + ano_emissao)
-          const hasChaveAbrasf = nota.chave && nota.chave.length >= 4;
+          const hasChaveAbrasf = nota.codigoVerificacao && nota.codigoVerificacao.length >= 4;
           const dupAbrasf = hasChaveAbrasf
             ? await db.$client.query<any>(
                 `SELECT id FROM fiscal_notes WHERE company_id=$1 AND chave_acesso=$2 AND origem LIKE 'nfse%' LIMIT 1`,
-                [input.companyId, nota.chave]
+                [input.companyId, nota.codigoVerificacao]
               )
             : await db.$client.query<any>(
                 `SELECT id FROM fiscal_notes
                  WHERE company_id=$1 AND numero_nf=$2
                    AND EXTRACT(YEAR FROM data_emissao)=EXTRACT(YEAR FROM $3::date)
                    AND origem LIKE 'nfse%' LIMIT 1`,
-                [input.companyId, nota.numero, nota.dataEmissao || new Date().toISOString().slice(0,10)]
+                [input.companyId, nota.numero, nota.dataEmissao?.slice(0, 10) || new Date().toISOString().slice(0,10)]
               );
           if (dupAbrasf.rows[0]) { ignoradas++; continue; }
           await db.$client.query(
             `INSERT INTO fiscal_notes
               (company_id, numero_nf, chave_acesso, data_emissao,
                tomador_cnpj, tomador_razao_social, descricao_servico,
-               valor_bruto, valor_liquido, status, origem, xml_payload,
+               valor_bruto, deducoes_total, base_calculo_iss, aliquota_iss,
+               iss_retido, retencao_inss, retencao_irrf,
+               retencao_csll, retencao_pis, retencao_cofins, retencao_outras,
+               retencao_pis_cofins,
+               valor_liquido, status, origem, xml_payload,
                created_at, updated_at)
-             VALUES ($1,$2,$3,$4::date,$5,$6,$7,$8,$9,'pendente','nfse_xml_manual',$10,NOW(),NOW())`,
+             VALUES ($1,$2,$3,$4::date,$5,$6,$7,
+                     $8,$9,$10,$11,
+                     $12,$13,$14,
+                     $15,$16,$17,$18,
+                     0,
+                     $19,'pendente','nfse_xml_manual',$20,NOW(),NOW())`,
             [
               input.companyId,
               nota.numero,
-              nota.chave || null,
-              nota.dataEmissao || hoje,
-              nota.tomadorCnpj || null,
+              nota.codigoVerificacao || null,
+              nota.dataEmissao?.slice(0, 10) || hoje,
+              nota.tomadorCnpj?.replace(/\D/g, "") || null,
               nota.tomadorNome || null,
               nota.discriminacao || null,
-              nota.valorBruto,
-              nota.valorLiquido,
+              nota.valorServicos || 0,
+              nota.valorDeducoes || 0,
+              nota.baseCalculo || null,
+              nota.aliquota || null,
+              issRetidoValor,
+              nota.valorInss || 0,
+              nota.valorIr || 0,
+              nota.valorCsll || 0,
+              nota.valorPis || 0,
+              nota.valorCofins || 0,
+              nota.valorOutrasRetencoes || 0,
+              nota.valorLiquido,   // ValorLiquidoNfse — lido diretamente do XML, nunca recalculado
               file.content,
             ]
           );
