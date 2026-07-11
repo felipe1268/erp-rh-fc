@@ -1,4 +1,5 @@
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useMemo, useState, useRef, useEffect, lazy, Suspense } from "react";
+const FinanceiroChequesRecebidos = lazy(() => import("./FinanceiroChequesRecebidos"));
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -206,6 +207,9 @@ export default function FinanceiroCheques() {
   const { toast } = useToast();
   const utils = (trpc as any).useUtils?.() ?? (trpc as any).useContext?.();
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // ── Abas (Emitidos / Recebidos) ──
+  const [activeTab, setActiveTab] = useState<'emitidos' | 'recebidos'>('emitidos');
 
   // ── Filtros ──
   // Mesmo padrão da Conciliação Bancária: navegação por ANO + faixa de meses
@@ -789,35 +793,66 @@ export default function FinanceiroCheques() {
     <DashboardLayout>
       <div className="space-y-6">
         {/* ── Cabeçalho ── */}
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Banknote className="h-6 w-6 text-blue-700" /> Controle de Cheques
-            </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Cheques emitidos para fornecedores — acompanhe compensações e confira com o extrato.
-            </p>
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-bold flex items-center gap-2">
+                <Banknote className="h-6 w-6 text-blue-700" /> Controle de Cheques
+              </h1>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {activeTab === 'emitidos'
+                  ? "Cheques emitidos para fornecedores — acompanhe compensações e confira com o extrato."
+                  : "Cheques de terceiros recebidos — disponíveis para alocação em pagamentos."}
+              </p>
+            </div>
+            {activeTab === 'emitidos' && (
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" onClick={() => setConferirOpen(true)}
+                  className="gap-1.5 border-emerald-300 text-emerald-700 hover:bg-emerald-50">
+                  <ShieldCheck className="h-4 w-4" /> Conferir c/ extrato
+                </Button>
+                <Button size="sm" variant="outline" onClick={abrirManual}
+                  className="gap-1.5 border-green-300 text-green-700 hover:bg-green-50">
+                  <Banknote className="h-4 w-4" /> Lançar cheque
+                </Button>
+                <Button size="sm" onClick={() => setImportOpen(true)}
+                  className="gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white">
+                  <Upload className="h-4 w-4" /> Importar planilha
+                </Button>
+                <Button size="sm" variant="outline"
+                  onClick={() => { setLimparEtapa(1); setLimparSenha(""); setLimparEscopo(mesSel != null ? "mes" : "ano"); }}
+                  className="gap-1.5 border-red-300 text-red-600 hover:bg-red-50">
+                  <Trash2 className="h-4 w-4" /> {mesSel != null ? "Limpar mês" : "Limpar ano"}
+                </Button>
+              </div>
+            )}
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={() => setConferirOpen(true)}
-              className="gap-1.5 border-emerald-300 text-emerald-700 hover:bg-emerald-50">
-              <ShieldCheck className="h-4 w-4" /> Conferir c/ extrato
-            </Button>
-            <Button size="sm" variant="outline" onClick={abrirManual}
-              className="gap-1.5 border-green-300 text-green-700 hover:bg-green-50">
-              <Banknote className="h-4 w-4" /> Lançar cheque
-            </Button>
-            <Button size="sm" onClick={() => setImportOpen(true)}
-              className="gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white">
-              <Upload className="h-4 w-4" /> Importar planilha
-            </Button>
-            <Button size="sm" variant="outline"
-              onClick={() => { setLimparEtapa(1); setLimparSenha(""); setLimparEscopo(mesSel != null ? "mes" : "ano"); }}
-              className="gap-1.5 border-red-300 text-red-600 hover:bg-red-50">
-              <Trash2 className="h-4 w-4" /> {mesSel != null ? "Limpar mês" : "Limpar ano"}
-            </Button>
+          {/* ── Seletor de aba ── */}
+          <div className="flex border-b">
+            <button
+              type="button"
+              onClick={() => setActiveTab('emitidos')}
+              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'emitidos' ? 'border-blue-600 text-blue-700' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            >
+              Emitidos
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('recebidos')}
+              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'recebidos' ? 'border-green-600 text-green-700' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            >
+              Recebidos
+            </button>
           </div>
         </div>
+
+        {activeTab === 'recebidos' && (
+          <Suspense fallback={<div className="flex items-center justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
+            <FinanceiroChequesRecebidos standalone={false} />
+          </Suspense>
+        )}
+
+        {activeTab === 'emitidos' && (<>
 
         {/* ── Alerta de divergência ── */}
         {verif && verif.divergencias > 0 && (
@@ -1103,6 +1138,7 @@ export default function FinanceiroCheques() {
             )}
           </CardContent>
         </Card>
+      </>)}
       </div>
 
       {/* ── Dupla checagem (Rev. 3234): confirmar a conferência com o extrato ── */}

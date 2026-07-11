@@ -144,7 +144,7 @@ function ClienteSelect({
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function FinanceiroChequesRecebidos() {
+export default function FinanceiroChequesRecebidos({ standalone = true }: { standalone?: boolean }) {
   const { companyId } = useCompany();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -477,9 +477,8 @@ export default function FinanceiroChequesRecebidos() {
   const previewNovos  = importQueue.reduce((s, it) => s + (it.preview?.novos ?? 0), 0);
 
   // ── Render ────────────────────────────────────────────────────────────────
-  return (
-    <DashboardLayout>
-      <div className="space-y-5">
+  const _inner = (
+    <div className="space-y-5">
 
         {/* ── Cabeçalho ── */}
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1282,6 +1281,7 @@ export default function FinanceiroChequesRecebidos() {
         </DialogContent>
       </Dialog>
 
-    </DashboardLayout>
+    </div>
   );
+  return standalone ? <DashboardLayout>{_inner}</DashboardLayout> : _inner;
 }
