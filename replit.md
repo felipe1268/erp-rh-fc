@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4144** — **NFS-e: BATCH GERAL — TODAS AS 571 NOTAS SIAP GEO CORRIGIDAS (7 RESTANTES COM FÓRMULA ANTIGA).** Após Rev. 4142/4143, restavam 10 notas com valor_liquido divergente. Análise identificou 3 com valores confirmados por DANFSe (#24, #26, #27 — preservadas) e 7 com fórmula antiga que subtraía PIS+COFINS indevidamente (#2, #6, #8, #9, #32, #38, #57 — corrigidas). ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4143** — **NFS-e: UPSERT NO UPLOAD ABRASF — XML CORRIGE NOTA EXISTENTE (SIAP GEO OU OUTRA). BATCH CORRIGE #22–#28.** Importador ABRASF individual substituiu "skip if exists" por UPSERT: se nota já existe (de qualquer origem), atualiza `valor_liquido` + `xml_payload` + retenções com o ValorLiquidoNfse do XML da prefeitura — zero cálculo. Batch SQL corrigiu 7 notas (#22–#28) com valores das DANFSes oficiais. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4142** — **NFS-e: VALOR LÍQUIDO LIDO DIRETAMENTE DO XML — ZERO CÁLCULO NO SERVIDOR.** `parseSiapGeoExportXml` parou de subtrair PIS+COFINS (apuração própria). `fiscalNotes.atualizar` agora reparsa `xml_payload` e usa `ValorLiquidoNfse` da prefeitura — frontend não influencia mais. Upload ABRASF usa `parseSefinNfseXmlFull` (completo) e grava todos os campos de retenção. Batch SQL corrigiu 497 notas SIAP GEO históricas. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4142** — **NFS-e: VALOR LÍQUIDO LIDO DIRETAMENTE DO XML — ZERO CÁLCULO NO SERVIDOR.** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4141** — **CONTROLE DE CHEQUES: EDIÇÃO COMPLETA — VALOR, FORNECEDOR, DATAS, BANCO, STATUS.** ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4138** — **CHEQUES RECEBIDOS: ALOCAÇÃO ATÔMICA NO PAGAMENTO CONSOLIDADO + RASTREIO POR GRUPO + SCHEMA DRIZZLE.** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4137** — **CONCILIAÇÃO: ERRO "<!DOCTYPE" AO LANÇAR NO CONTAS A PAGAR — MENSAGEM INTELIGÍVEL + RETRY AUTOMÁTICO.** ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4136** — **CONCILIAÇÃO: CHEQUES EMITIDOS (SANTANDER) NÃO APARECIAM COMO SUGESTÃO EM "SEM LANÇAMENTO".** ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

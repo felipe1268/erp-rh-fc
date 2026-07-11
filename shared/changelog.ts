@@ -1,4 +1,33 @@
 /**
+ * Rev. 4144 — **NFS-e: BATCH GERAL — TODAS AS 571 NOTAS SIAP GEO CORRIGIDAS (7 RESTANTES COM FÓRMULA ANTIGA).**
+ *
+ * CONTEXTO: após Rev. 4142 (batch de 497 notas) e Rev. 4143 (7 notas por DANFSe), restavam 10 notas
+ * com valor_liquido divergente da fórmula correta. Análise revelou:
+ *   — 3 notas (#24/id=923, #26/id=925, #27/id=926): valor confirmado por DANFSe → NÃO tocadas.
+ *   — 7 notas (#2/id=907, #6/id=911, #8/id=913, #9/id=914, #32/id=931, #38/id=937, #57/id=956):
+ *     valor_liquido usava fórmula antiga (subtraía retencao_pis + retencao_cofins indevidamente).
+ *
+ * CORREÇÃO — batch SQL Neon (company_id=60002, origem='nfse_siapgeo_export', excluindo ids 923/925/926):
+ *   valor_liquido = GREATEST(0, valor_bruto − iss_retido − retencao_inss − retencao_irrf
+ *                              − retencao_csll − retencao_outras − retencao_pis_cofins)
+ *   (PIS e COFINS de apuração própria NÃO subtraídos — regra SIAP GEO)
+ *
+ *   NFS-e  #2 (id=907): 96,35 → 100,00
+ *   NFS-e  #6 (id=911): 59.945,06 → 62.215,94
+ *   NFS-e  #8 (id=913): 178.973,47 → 185.753,47
+ *   NFS-e  #9 (id=914): 116.318,61 → 120.725,07
+ *   NFS-e #32 (id=931): 21.574,18 → 22.391,46
+ *   NFS-e #38 (id=937): 138.071,48 → 143.302,00
+ *   NFS-e #57 (id=956): 42.092,72 → 43.687,31
+ *
+ * OBSERVAÇÃO: notas onde apenas PIS/COFINS são deduções (sem ISS retido) podem ter valor_liquido
+ * definitivo diferente se a prefeitura os deduzir (como #26/#27). Para certeza absoluta, o usuário
+ * deve carregar o XML ABRASF individual (mecanismo UPSERT de Rev. 4143 resolve automaticamente).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4143 — **NFS-e: UPSERT NO UPLOAD ABRASF — XML CORRIGE NOTA EXISTENTE (SIAP GEO OU OUTRA). BATCH CORRIGE #22–#28.**
  *
  * CONTEXTO: o importador de XMLs ABRASF individuais pulava notas já existentes (inclusive as
