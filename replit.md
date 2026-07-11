@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4145** — **NFS-e: BATCH DANFSes #29–#40 — ISS RETIDO + VALOR LÍQUIDO CORRIGIDOS POR 10 NOTAS.** Usuário forneceu DANFSes de 11 notas; #30 já estava correta. 10 notas corrigidas: iss_retido zerado no banco → atualizado com valor real da prefeitura; valor_liquido recalculado sem cálculo ERP (lido da DANFSe). #38 canceladas não alteradas. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4146** — **NFS-e: BATCH DANFSes #38, #41, #42 — ISS RETIDO + VALOR LÍQUIDO CORRIGIDOS.** Santuário Nacional: #38 (cancelada) 143.302→125.188,63; #41 103.220→90.173,33; #42 40.082→35.016,26. #37/#39/#40 já corretas. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4144** — **NFS-e: BATCH GERAL — TODAS AS 571 NOTAS SIAP GEO CORRIGIDAS (7 RESTANTES COM FÓRMULA ANTIGA).** Após Rev. 4142/4143, restavam 10 notas com valor_liquido divergente. Análise identificou 3 com valores confirmados por DANFSe (#24, #26, #27 — preservadas) e 7 com fórmula antiga que subtraía PIS+COFINS indevidamente (#2, #6, #8, #9, #32, #38, #57 — corrigidas). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4145** — **NFS-e: BATCH DANFSes #29–#40 — ISS RETIDO + VALOR LÍQUIDO CORRIGIDOS POR 10 NOTAS.** Usuário forneceu DANFSes de 11 notas; #30 já estava correta. 10 notas corrigidas com iss_retido e valor_liquido exatos da prefeitura. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
+
+- **Rev. 4144** — **NFS-e: BATCH GERAL — 571 NOTAS SIAP GEO, 7 COM FÓRMULA ANTIGA CORRIGIDAS.** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4143** — **NFS-e: UPSERT NO UPLOAD ABRASF — XML CORRIGE NOTA EXISTENTE. BATCH CORRIGE #22–#28.** ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4141** — **CONTROLE DE CHEQUES: EDIÇÃO COMPLETA — VALOR, FORNECEDOR, DATAS, BANCO, STATUS.** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4139** — **BUILD: SINTAXE JSX INVÁLIDA EM FinanceiroChequesRecebidos.tsx — FRAGMENT WRAPPER.** ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4138** — **CHEQUES RECEBIDOS: ALOCAÇÃO ATÔMICA NO PAGAMENTO CONSOLIDADO + RASTREIO POR GRUPO + SCHEMA DRIZZLE.** ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

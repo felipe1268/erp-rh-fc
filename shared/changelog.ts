@@ -1,4 +1,19 @@
 /**
+ * Rev. 4146 — **NFS-e: BATCH DANFSes #38, #41, #42 — ISS RETIDO + VALOR LÍQUIDO CORRIGIDOS.**
+ *
+ * CONTEXTO: usuário forneceu DANFSes de #38, #41, #42 (Santuário Nacional). #37/#39/#40 já estavam
+ * corretas pela Rev. 4145. NFS-e #38 (id=937, status=cancelada) recebeu correção de valor mas
+ * status de cancelamento não foi alterado (questão de negócio separada).
+ *
+ * BATCH SQL Neon (company_id=60002):
+ *   NFS-e #38 (id=937): 143.302,00 → 125.188,63; iss_retido=5.660,43; inss=12.452,94
+ *   NFS-e #41 (id=940): 103.220,39 →  90.173,33; iss_retido=4.077,21; inss=8.969,85
+ *   NFS-e #42 (id=941):  40.082,72 →  35.016,26; iss_retido=1.583,27; inss=3.483,19
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4145 — **NFS-e: BATCH DANFSes #29–#40 — ISS RETIDO + VALOR LÍQUIDO CORRIGIDOS POR 10 NOTAS.**
  *
  * CONTEXTO: usuário forneceu DANFSes oficiais das NFS-e #29 a #40. Para cada nota, o campo
