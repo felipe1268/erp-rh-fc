@@ -1,4 +1,22 @@
 /**
+ * Rev. 4136 — **CONCILIAÇÃO: CHEQUES EMITIDOS (SANTANDER) NÃO APARECIAM COMO SUGESTÃO EM "SEM LANÇAMENTO".**
+ *
+ * CONTEXTO: o cruzamento extrato × Controle de Cheques Emitidos (matchChequeLinha em
+ * financial.ts) usava uma função local `extrNumChq` com a regex antiga — só entendia
+ * "CHEQUE Nº NNN". Com o formato Santander ("CHEQUE EMITIDO/DEBITADO 001392"), o número
+ * não era extraído, então as linhas sem lançamento não recebiam a sugestão automática
+ * do cheque correspondente (fornecedor/obra/forma pré-preenchidos) e tampouco o botão
+ * "Conciliar com cheque" aparecia para o usuário.
+ *
+ * CORREÇÃO: substituída a função local pelo `parseChequeNumero` (shared/chequeMotivos.ts)
+ * que, após Rev. 4135, já entende tanto "CHEQUE Nº NNN" quanto "CHEQUE EMITIDO/DEBITADO NNN"
+ * e "CHEQUE DEVOLVIDO MOTIVO NNN". Uma linha, zero impacto colateral.
+ *
+ * ARQUIVOS: server/routers/financial.ts (matchChequeLinha — extrNumChq → parseChequeNumero).
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4135 — **CONCILIAÇÃO: CHEQUE DEVOLVIDO NO FORMATO SANTANDER NÃO APARECIA EM "CHEQUES DEVOLVIDOS".**
  *
  * CONTEXTO: o Santander descreve os lançamentos de cheque no formato "CHEQUE EMITIDO/DEBITADO 001393"

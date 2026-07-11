@@ -1428,11 +1428,9 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
       const dc = chqDia(c.dataCompensacao);
       if (dc) { const k = `${cts}|${dc}`; if (!chqByValData.has(k)) chqByValData.set(k, []); chqByValData.get(k)!.push(c); }
     }
-    const extrNumChq = (descricao: any): string | null => {
-      const m = String(descricao ?? "").match(/cheque\s*n?[ºo°.]*\s*0*(\d{1,12})/i);
-      if (m && m[1]) return m[1].replace(/^0+/, "") || m[1];
-      return null;
-    };
+    // Rev. 4136 — usa parseChequeNumero (shared/chequeMotivos.ts) que entende tanto
+    // "CHEQUE Nº 001392" quanto "CHEQUE EMITIDO/DEBITADO 001392" (formato Santander).
+    const extrNumChq = (descricao: any): string | null => parseChequeNumero(descricao);
     // Rev. 3263 — A Caixa identifica o cheque na descrição como "Doc NNNNNN"
     // ("CHEQUE COMPENSADO · Doc 000990", "DEBITO CHEQUE PAG AGENCIA ... Doc 000981"),
     // sem a palavra "cheque nº". Esse extrator pega o número do "Doc" — mas SÓ é usado
