@@ -1,4 +1,33 @@
 /**
+ * Rev. 4140 — **CONCILIAÇÃO: IDENTIFICAÇÃO DE CHEQUE POR NÚMERO + DATA DE COMPENSAÇÃO (MATCH FRACO).**
+ *
+ * CONTEXTO: cheques cadastrados no Controle de Cheques com pequenos erros de valor (ex.: talão
+ * digitado como R$ 2.233,33 mas compensado por R$ 2.333,33) não apareciam identificados na
+ * Conciliação Bancária ("Sem lançamento") porque o `matchChequeLinha` exigia número+valor exato
+ * ou tolerância de ≤2 centavos. Cheques como 222 (GILO, Δ R$ 100) e 204 (AHMAD, Δ R$ 20)
+ * tinham número E data de compensação idênticos aos do extrato, mas falhavam no match de valor.
+ *
+ * CORREÇÃO — dois novos fallbacks em `matchChequeLinha` (server/routers/financial.ts):
+ * • Fallback 3 (nº + data_compensacao): se número do cheque extraído da descrição do extrato
+ *   bate com a `data_compensacao` cadastrada no talão E o resultado é unívoco (1 cheque),
+ *   retorna o cheque com `matchFraco: true`.
+ * • Fallback 4 (nº único no BD): se o número existe apenas uma vez no BD sem data de
+ *   compensação correspondente, sinaliza como `matchFraco: true` também.
+ *
+ * VISUAL DIFERENCIADO NO FRONT (FinanceiroConciliacao.tsx):
+ * • Match forte (valor exato ±2¢): 🪙 verde "Cheque nº X · Fornecedor" — sem mudança.
+ * • Match fraco (nº+data ou nº-único): 🔍 âmbar "Possível cheque nº X · Fornecedor".
+ *   No dialog de Lançar aparece banner âmbar informando que o valor do talão difere do extrato
+ *   e pedindo confirmação antes de lançar.
+ *
+ * NOTA: cheques 240 (R$ 6.854) e 224 (R$ 180) de fev/26 não estão cadastrados no Controle de
+ * Cheques — precisam ser inseridos manualmente para aparecer na identificação.
+ *
+ * ARQUIVOS: server/routers/financial.ts · client/src/pages/financeiro/FinanceiroConciliacao.tsx.
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4139 — **BUILD: SINTAXE JSX INVÁLIDA EM FinanceiroChequesRecebidos.tsx — FRAGMENT WRAPPER.**
  *
  * CONTEXTO: o build de produção (esbuild via Vite) falhava com

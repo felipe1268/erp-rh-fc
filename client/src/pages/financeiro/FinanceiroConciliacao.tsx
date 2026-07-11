@@ -1950,8 +1950,9 @@ export default function FinanceiroConciliacao() {
           </p>
           <p className="text-sm font-medium text-gray-700 truncate">{s.descricao || "—"}</p>
           {s.chequeFornecedor && (
-            <p className="text-[11px] text-emerald-700 truncate" title={`Cheque nº ${s.chequeNumero ?? "—"} — ${s.chequeFornecedor}${s.chequeObraNome ? ` · ${s.chequeObraNome}` : ""}${s.chequeNf ? ` · NF ${s.chequeNf}` : ""}`}>
-              🪙 Cheque nº {s.chequeNumero ?? "—"} · {s.chequeFornecedor}{s.chequeObraNome ? ` · ${s.chequeObraNome}` : ""}
+            <p className={`text-[11px] truncate ${s.chequeFraco ? "text-amber-700" : "text-emerald-700"}`}
+              title={`${s.chequeFraco ? "Possível " : ""}Cheque nº ${s.chequeNumero ?? "—"} — ${s.chequeFornecedor}${s.chequeObraNome ? ` · ${s.chequeObraNome}` : ""}${s.chequeNf ? ` · NF ${s.chequeNf}` : ""}${s.chequeFraco ? " (valor no talão difere do extrato — confirme)" : ""}`}>
+              {s.chequeFraco ? "🔍" : "🪙"} {s.chequeFraco ? "Possível c" : "C"}heque nº {s.chequeNumero ?? "—"} · {s.chequeFornecedor}{s.chequeObraNome ? ` · ${s.chequeObraNome}` : ""}
             </p>
           )}
           {s.faturaId && !s.chequeFornecedor && (
@@ -6973,13 +6974,22 @@ export default function FinanceiroConciliacao() {
                     </div>
                   </div>
                 )}
-                {lancStatement.chequeFornecedor && (
+                {lancStatement.chequeFornecedor && !lancStatement.chequeFraco && (
                   <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2 text-xs text-emerald-800">
                     🪙 Identificado no <strong>Controle de Cheques</strong>: cheque nº <strong>{lancStatement.chequeNumero ?? "—"}</strong> — <strong>{lancStatement.chequeFornecedor}</strong>
                     {lancStatement.chequeObraNome ? <> · obra <strong>{lancStatement.chequeObraNome}</strong></> : null}
                     {lancStatement.chequeNf ? <> · NF {lancStatement.chequeNf}</> : null}
                     {lancStatement.chequeVencimento ? <> · venc. {fmtData(lancStatement.chequeVencimento)}</> : null}
                     . Fornecedor, obra e forma de pagamento já foram pré-preenchidos — confira a categoria e o centro de custo.
+                  </div>
+                )}
+                {lancStatement.chequeFornecedor && lancStatement.chequeFraco && (
+                  <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+                    🔍 <strong>Possível correspondência</strong> no Controle de Cheques: cheque nº <strong>{lancStatement.chequeNumero ?? "—"}</strong> — <strong>{lancStatement.chequeFornecedor}</strong>
+                    {lancStatement.chequeObraNome ? <> · obra <strong>{lancStatement.chequeObraNome}</strong></> : null}
+                    {lancStatement.chequeNf ? <> · NF {lancStatement.chequeNf}</> : null}
+                    {lancStatement.chequeVencimento ? <> · venc. {fmtData(lancStatement.chequeVencimento)}</> : null}
+                    . O valor no talão (<strong>Controle de Cheques</strong>) difere do extrato — confirme se é o mesmo cheque antes de lançar.
                   </div>
                 )}
                 {lancStatement.faturaId && !lancStatement.chequeFornecedor && (

@@ -1445,6 +1445,20 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
     // mesmo valor+data de UM cheque seria marcada como cheque e pré-preencheria fornecedor/
     // obra ERRADOS. O caminho nº+valor já é seguro (a regex exige a palavra "cheque").
     const pareceCheque = (descricao: any) => /cheq|compensa/i.test(String(descricao ?? ""));
+    // Rev. 4140 — índice auxiliar: número → lista de cheques (todos, sem filtro de valor)
+    // Usado no fallback 3 (número + data de compensação) e no fallback 4 (número único).
+    // O chqByNum já existe — não recriamos; adicionamos só o índice por compensação.
+    const chqByNumComp = new Map<string, any[]>();
+    for (const c of chequesRep) {
+      const num = String(c.numeroCheque ?? "").replace(/[^0-9]/g, "").replace(/^0+/, "");
+      if (!num) continue;
+      const dc = chqDia(c.dataCompensacao);
+      if (dc) {
+        const k = `${num}|${dc}`;
+        if (!chqByNumComp.has(k)) chqByNumComp.set(k, []);
+        chqByNumComp.get(k)!.push(c);
+      }
+    }
     const matchChequeLinha = (l: any): any | null => {
       const cts = chqCents(l.valor);
       if (cts == null || cts === 0) return null;
@@ -1454,6 +1468,7 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
       //    compensação (cheque R$ 2.410,12 → extrato R$ 2.410,13); então, achado o número,
       //    casa por VALOR EXATO e, se falhar, por número com tolerância de ≤2 centavos ÚNICO.
       const num = extrNumChq(l.descricao) ?? (ehCheque ? extrDocNum(l.descricao) : null);
+      const dia = chqDia(l.data);
       if (num) {
         const exato = chqByNumVal.get(`${num}|${cts}`);
         if (exato) return exato;
@@ -1461,9 +1476,18 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
         if (arr) {
           const perto = arr.filter((c) => { const v = chqCents(c.valor); return v != null && Math.abs(v - cts) <= 2; });
           if (perto.length === 1) return perto[0];
+          // Rev. 4140 — Fallback 3: número + data_compensacao bate com data do extrato
+          // (valor pode diferir — ex.: erro de digitação no talão). Sinaliza como "fraco"
+          // para o front exibir aviso âmbar ("Possível cheque nº X · Fornecedor").
+          if (dia) {
+            const porNumComp = chqByNumComp.get(`${num}|${dia}`);
+            if (porNumComp && porNumComp.length === 1) return { ...porNumComp[0], matchFraco: true };
+          }
+          // Rev. 4140 — Fallback 4: número existe UMA ÚNICA VEZ no BD (talão sem data
+          // de compensação cadastrada). Só sinaliza quando há exatamente 1 cheque com esse nº.
+          if (arr.length === 1) return { ...arr[0], matchFraco: true };
         }
       }
-      const dia = chqDia(l.data);
       if (dia && ehCheque) { const arr = chqByValData.get(`${cts}|${dia}`); if (arr && arr.length === 1) return arr[0]; }
       return null;
     };
@@ -1760,6 +1784,9 @@ async function _computeConciliacaoReport(db: any, companyId: number, contaBancar
           chequeNf: c.nf ?? null,
           chequeVencimento: c.dataVencimento ?? null,
           chequeBanco: c.bancoNome ?? null,
+          // Rev. 4140 — true quando o match é por nº+data ou nº-único (valor diferente
+          // do extrato). Front exibe visual âmbar em vez do verde confirmado.
+          chequeFraco: c.matchFraco === true,
         };
       } else {
         const f = matchFaturaLinha(l);
