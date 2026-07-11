@@ -1,4 +1,29 @@
 /**
+ * Rev. 4147 — **NFS-e: BATCH DANFSes #43–#61 — ISS RETIDO + VALOR LÍQUIDO CORRIGIDOS (17 NOTAS).**
+ *
+ * CONTEXTO: usuário forneceu 19 DANFSes (#43-#61). #51 e #52 já estavam corretas.
+ * 17 notas corrigidas. Destaques especiais:
+ *   - #43 (Chlorum Palmeira): alíquota ISS 2% (não 5%), iss_retido=1.953,56
+ *   - #44 (ASCAN): ISS 3% retido, IRRF+CSLL/PIS/COFINS retidos (sem INSS)
+ *   - #50 (Santuário): ISS NÃO retido; retencao_inss errada (293,71→0); irrf=139,86
+ *   - #57 (CAPE, substituida) e #58 (substituta): mesmos valores (mesmo serviço)
+ *   - 3 notas com status conciliada (#44, #46, #48) — apenas valores corrigidos
+ *
+ * BATCH SQL Neon (company_id=60002, 17 updates por id):
+ *   #43(942): 184.611,48→182.657,92  #44(943): 8.264,26→8.253,17
+ *   #45(944): 8.845,60→8.611,59      #46(945): 33.942,84→33.044,88
+ *   #47(946): 16.432,17→15.997,46    #48(947): 7.214,00→6.808,72
+ *   #49(948): 33.938,77→33.040,92    #50(949): 8.596,72→8.750,57
+ *   #53(952): 36.472,50→34.578,10    #54(953): 28.559,79→27.804,24
+ *   #55(954): 19.440,81→18.926,50    #56(955): 36.043,33→35.089,80
+ *   #57(956): 43.687,31→40.192,33    #58(957): 41.284,51→40.192,33
+ *   #59(958): 22.672,60→21.398,86    #60(959): 3.724,34→3.515,11
+ *   #61(960): 6.563,00→6.194,29
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4146 — **NFS-e: BATCH DANFSes #38, #41, #42 — ISS RETIDO + VALOR LÍQUIDO CORRIGIDOS.**
  *
  * CONTEXTO: usuário forneceu DANFSes de #38, #41, #42 (Santuário Nacional). #37/#39/#40 já estavam

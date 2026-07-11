@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4146** — **NFS-e: BATCH DANFSes #38, #41, #42 — ISS RETIDO + VALOR LÍQUIDO CORRIGIDOS.** Santuário Nacional: #38 (cancelada) 143.302→125.188,63; #41 103.220→90.173,33; #42 40.082→35.016,26. #37/#39/#40 já corretas. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4147** — **NFS-e: BATCH DANFSes #43–#61 — ISS RETIDO + VALOR LÍQUIDO CORRIGIDOS (17 NOTAS).** 19 DANFSes fornecidas; #51 e #52 já corretas. Destaque: #43 ISS 2% (Chlorum Palmeira), #44 ISS 3% (ASCAN), #50 ISS não retido + retencao_inss corrigida. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4145** — **NFS-e: BATCH DANFSes #29–#40 — ISS RETIDO + VALOR LÍQUIDO CORRIGIDOS POR 10 NOTAS.** Usuário forneceu DANFSes de 11 notas; #30 já estava correta. 10 notas corrigidas com iss_retido e valor_liquido exatos da prefeitura. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4146** — **NFS-e: BATCH DANFSes #38, #41, #42 — ISS RETIDO + VALOR LÍQUIDO CORRIGIDOS.** Santuário Nacional: #38 (cancelada) 143.302→125.188,63; #41 103.220→90.173,33; #42 40.082→35.016,26. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
+
+- **Rev. 4145** — **NFS-e: BATCH DANFSes #29–#40 — ISS RETIDO + VALOR LÍQUIDO CORRIGIDOS, 10 NOTAS.** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4144** — **NFS-e: BATCH GERAL — 571 NOTAS SIAP GEO, 7 COM FÓRMULA ANTIGA CORRIGIDAS.** ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4142** — **NFS-e: VALOR LÍQUIDO LIDO DIRETAMENTE DO XML — ZERO CÁLCULO NO SERVIDOR.** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4141** — **CONTROLE DE CHEQUES: EDIÇÃO COMPLETA — VALOR, FORNECEDOR, DATAS, BANCO, STATUS.** ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4139** — **BUILD: SINTAXE JSX INVÁLIDA EM FinanceiroChequesRecebidos.tsx — FRAGMENT WRAPPER.** ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 
