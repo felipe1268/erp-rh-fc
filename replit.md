@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4138** — **CHEQUES RECEBIDOS: ALOCAÇÃO ATÔMICA NO PAGAMENTO CONSOLIDADO + RASTREIO POR GRUPO + SCHEMA DRIZZLE.** `alocarLoteMut.mutate()` era fire-and-forget no `onSuccess` do cliente — falha não detectável, só o 1º `entryId` passado. Correção: alocação movida para dentro da transação de `pagarConsolidadoFornecedor` com `pagamento_grupo_id` UUID de lote; `financialChequesRecebidos` adicionada ao `drizzle/schema.ts`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4137** — **CONCILIAÇÃO: ERRO "<!DOCTYPE" AO LANÇAR NO CONTAS A PAGAR — MENSAGEM INTELIGÍVEL + RETRY AUTOMÁTICO.** Quando o servidor reinicia (OOM/deploy), por ~10s devolve HTML (healthcheck 500) em vez de JSON. O cliente tRPC não reconhecia o padrão `Unexpected token '<'` e exibia o erro técnico bruto. Correção em dois pontos: (1) `isServerRestartError` em `FinanceiroConciliacao.tsx` detecta os padrões HTML e exibe mensagem em português; (2) `QueryClient.mutations.retry` em `main.tsx` inclui esse padrão na lista de erros com retry automático único (1,5 s). ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4136** — **CONCILIAÇÃO: CHEQUES EMITIDOS (SANTANDER) NÃO APARECIAM COMO SUGESTÃO EM "SEM LANÇAMENTO".** O cruzamento extrato × Controle de Cheques Emitidos (`matchChequeLinha` em `financial.ts`) usava função local `extrNumChq` com regex antiga — só entendia "CHEQUE Nº NNN". Formato Santander "CHEQUE EMITIDO/DEBITADO 001392" não tinha número extraído → sem sugestão automática de fornecedor/obra/forma e sem botão "Conciliar com cheque". Correção: substituída por `parseChequeNumero` (já corrigida no Rev. 4135), uma linha, zero impacto colateral. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4136** — **CONCILIAÇÃO: CHEQUES EMITIDOS (SANTANDER) NÃO APARECIAM COMO SUGESTÃO EM "SEM LANÇAMENTO".** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4135** — **CONCILIAÇÃO: CHEQUE DEVOLVIDO FORMATO SANTANDER NÃO APARECIA EM "CHEQUES DEVOLVIDOS".** ZERO DELETE · ZERO ALTER destrutivo.
 

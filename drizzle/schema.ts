@@ -10423,3 +10423,37 @@ export const aprRiscos = pgTable("apr_riscos", {
   index("idx_apr_riscos_apr").on(table.aprId),
   index("idx_apr_riscos_company").on(table.companyId),
 ]);
+
+// Rev. 4096 — Cheques de terceiro recebidos de clientes, usados para pagamento de
+// fornecedores via endosso. Status lifecycle: disponivel → alocado → compensado | devolvido.
+// Rev. 4138 — coluna pagamento_grupo_id adicionada (rastreio de pagamentos consolidados).
+export const financialChequesRecebidos = pgTable("financial_cheques_recebidos", {
+  id:                    serial("id").primaryKey(),
+  companyId:             integer("company_id").notNull(),
+  numeroCheque:          varchar("numero_cheque", { length: 40 }).notNull(),
+  emitenteNome:          varchar("emitente_nome", { length: 255 }),
+  banco:                 varchar("banco", { length: 120 }),
+  agencia:               varchar("agencia", { length: 20 }),
+  conta:                 varchar("conta", { length: 30 }),
+  valor:                 numeric("valor", { precision: 15, scale: 2 }).notNull(),
+  dataEmissao:           varchar("data_emissao", { length: 10 }),
+  dataBomPara:           varchar("data_bom_para", { length: 10 }),
+  status:                varchar("status", { length: 20 }).notNull().default("disponivel"),
+  fornecedorAlocadoId:   integer("fornecedor_alocado_id"),
+  fornecedorAlocadoNome: varchar("fornecedor_alocado_nome", { length: 255 }),
+  entryId:               integer("entry_id"),
+  pagamentoGrupoId:      varchar("pagamento_grupo_id", { length: 36 }),
+  clienteId:             integer("cliente_id"),
+  clienteNome:           varchar("cliente_nome", { length: 255 }),
+  observacao:            text("observacao"),
+  criadoPorId:           integer("criado_por_id"),
+  criadoPorNome:         varchar("criado_por_nome", { length: 255 }),
+  compensadoEm:          timestamp("compensado_em", { mode: "string" }),
+  criadoEm:              timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+  atualizadoEm:          timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
+  excluidoEm:            timestamp("excluido_em", { mode: "string" }),
+}, (table) => [
+  index("idx_chqr_company").on(table.companyId),
+  index("idx_chqr_status").on(table.companyId, table.status),
+  index("idx_chqr_numero").on(table.companyId, table.numeroCheque),
+]);

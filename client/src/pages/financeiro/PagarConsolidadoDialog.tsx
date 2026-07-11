@@ -110,29 +110,14 @@ export default function PagarConsolidadoDialog({
     setParcelas((prev) => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
   }
 
-  const alocarLoteMut = (trpc as any).chequesRecebidos?.alocarLote?.useMutation({
-    onError: (e: any) => toast({
-      title: "Pagamento registrado, mas falha ao alocar cheques",
-      description: `Os cheques de terceiro NÃO foram marcados como Alocados: ${e.message}. Acesse o Controle de Cheques Recebidos e aloque manualmente.`,
-      variant: "destructive",
-    }),
-  });
-
+  // Rev. 4138 — Alocação de cheques de terceiro foi movida para dentro da transação
+  // server-side (pagarConsolidadoFornecedor agora recebe chequesTerceiroIds).
+  // Removido o fire-and-forget alocarLoteMut que ocorria após onSuccess.
   const payMut = (trpc as any).financial.pagarConsolidadoFornecedor.useMutation({
     onSuccess: (r: any) => {
-      // Rev. 4096 — após pagamento confirmado, alocar os cheques de terceiro selecionados
-      if (isChequeTerceiro && chequesTerceiroSel.length && alocarLoteMut) {
-        // Rev. 4096: usar o primeiro entryId dos lançamentos pagos (pagarConsolidadoFornecedor agora retorna entryIds)
-        alocarLoteMut.mutate({
-          companyId,
-          ids: chequesTerceiroSel,
-          fornecedorAlocadoNome: group?.fornecedorNome ?? undefined,
-          entryId: r?.entryIds?.[0] ?? null,
-        });
-      }
       toast({
         title: "Pagamento consolidado registrado!",
-        description: `${r.pagos} título(s) quitado(s)${r.chequesCriados ? ` · ${r.chequesCriados} cheque(s) lançado(s) no Controle de Cheques` : ""}${isChequeTerceiro && chequesTerceiroSel.length ? ` · ${chequesTerceiroSel.length} cheque(s) de terceiro sendo alocados…` : ""}.`,
+        description: `${r.pagos} título(s) quitado(s)${r.chequesCriados ? ` · ${r.chequesCriados} cheque(s) lançado(s) no Controle de Cheques` : ""}${r.chequesAlocados ? ` · ${r.chequesAlocados} cheque(s) de terceiro alocados` : ""}.`,
       });
       onSuccess();
     },
@@ -164,6 +149,8 @@ export default function PagarConsolidadoDialog({
       fornecedorNome: group.fornecedorNome ?? undefined,
       observacoes: observacoes || undefined,
       cheques: isCheque ? parcelas.map((p) => ({ numero: p.numero.trim(), valor: Number(p.valor) || 0, dataVencimento: p.dataVencimento })) : undefined,
+      // Rev. 4138 — cheques de terceiro alocados atomicamente no servidor
+      chequesTerceiroIds: isChequeTerceiro && chequesTerceiroSel.length ? chequesTerceiroSel : undefined,
     });
   }
 

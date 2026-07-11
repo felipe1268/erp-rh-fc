@@ -1,4 +1,30 @@
 /**
+ * Rev. 4138 — **CHEQUES RECEBIDOS: ALOCAÇÃO ATÔMICA NO PAGAMENTO CONSOLIDADO + RASTREIO POR GRUPO + SCHEMA DRIZZLE.**
+ *
+ * CONTEXTO: ao pagar um fornecedor com "Cheque de Terceiro" no Pagar Consolidado,
+ * a alocação dos cheques recebidos (financial_cheques_recebidos) ocorria via
+ * `alocarLoteMut.mutate(...)` fire-and-forget no `onSuccess` do cliente. Isso significava:
+ * (1) falha de alocação não era detectada; (2) só o primeiro entryId era passado mesmo em
+ * pagamentos multi-entry; (3) a tabela estava ausente do drizzle/schema.ts.
+ *
+ * CORREÇÃO (três pontos):
+ * 1. `pagarConsolidadoFornecedor` (financial.ts) — novo input `chequesTerceiroIds`.
+ *    A alocação é feita DENTRO da transação, com UUID `pagamento_grupo_id` único para o lote,
+ *    permitindo rastrear todos os cheques de um mesmo pagamento mesmo em multi-entry.
+ *    Retorna `chequesAlocados` no resultado.
+ * 2. `PagarConsolidadoDialog.tsx` — removido `alocarLoteMut` (fire-and-forget);
+ *    `chequesTerceiroIds` passado para `payMut.mutate(...)`.
+ * 3. `drizzle/schema.ts` — adicionada definição `financialChequesRecebidos` com todas as
+ *    colunas (incluindo `pagamentoGrupoId` nova).
+ * 4. `server/_core/index.ts` — SyncSchema+ Rev. 4138: coluna `pagamento_grupo_id VARCHAR(36)`
+ *    adicionada a `financial_cheques_recebidos`.
+ *
+ * ARQUIVOS: server/routers/financial.ts, client/src/pages/financeiro/PagarConsolidadoDialog.tsx,
+ *           drizzle/schema.ts, server/_core/index.ts.
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4137 — **CONCILIAÇÃO: ERRO "<!DOCTYPE" AO LANÇAR NO CONTAS A PAGAR — MENSAGEM INTELIGÍVEL + RETRY AUTOMÁTICO.**
  *
  * CONTEXTO: quando o servidor reinicia (OOM ou deploy), por ~10s ele devolve uma página

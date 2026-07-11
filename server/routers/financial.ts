@@ -10265,6 +10265,9 @@ export const financialRouter = router({
       valor: z.number().positive("Valor do cheque inválido."),
       dataVencimento: z.string(),
     })).optional(),
+    // Rev. 4138 — IDs de cheques de terceiro (financial_cheques_recebidos) a alocar
+    // atomicamente junto com o pagamento. Antes era fire-and-forget no cliente.
+    chequesTerceiroIds: z.array(z.number().int()).optional(),
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -10348,15 +10351,34 @@ export const financialRouter = router({
           if (id) chequesCriados.push(id);
         }
       }
+      // Rev. 4138 — Alocar cheques de terceiro DENTRO da transação (era fire-and-forget
+      // client-side). pagamento_grupo_id = UUID único do lote; entry_id = primeiro entry
+      // quitado (referência de auditoria). Todos os cheques do mesmo pagamento compartilham
+      // o mesmo pagamento_grupo_id para rastreio completo mesmo em pagamentos multi-entry.
+      if (input.chequesTerceiroIds?.length) {
+        const primeiroEntryId = pendentes[0]?.id ?? null;
+        const pagamentoGrupoId = randomUUID();
+        for (const chqId of input.chequesTerceiroIds) {
+          await dbExecute(tx,
+            `UPDATE financial_cheques_recebidos
+             SET status='alocado',
+                 fornecedor_alocado_nome=$1,
+                 entry_id=$2,
+                 pagamento_grupo_id=$3,
+                 atualizado_em=NOW()
+             WHERE id=$4 AND company_id=$5 AND status='disponivel' AND excluido_em IS NULL`,
+            [input.fornecedorNome ?? null, primeiroEntryId, pagamentoGrupoId, chqId, input.companyId]
+          );
+        }
+      }
     });
+    const chequesAlocados = input.chequesTerceiroIds?.length ?? 0;
     await createAuditLog({
       action: "financial_payable_consolidated_paid",
       userId: ctx.user?.id, companyId: input.companyId,
-      details: `Pagamento consolidado: ${pendentes.length} título(s) de ${input.fornecedorNome || "fornecedor"} — R$${totalGrupo.toFixed(2)} via ${input.formaPagamento}${isCheque ? ` (${input.cheques!.length} cheque(s) registrados no Controle de Cheques)` : ""}.`,
+      details: `Pagamento consolidado: ${pendentes.length} título(s) de ${input.fornecedorNome || "fornecedor"} — R$${totalGrupo.toFixed(2)} via ${input.formaPagamento}${isCheque ? ` (${input.cheques!.length} cheque(s) registrados no Controle de Cheques)` : ""}${chequesAlocados ? ` (${chequesAlocados} cheque(s) de terceiro alocados)` : ""}.`,
     });
-    // Rev. 4096: retornar entryIds para que o cliente possa vincular a alocação de
-    // cheques de terceiro ao(s) lançamento(s) correspondente(s).
-    return { ok: true, pagos: pendentes.length, total: totalGrupo, chequesCriados: chequesCriados.length, entryIds: pendentes.map((e: any) => e.id as number) };
+    return { ok: true, pagos: pendentes.length, total: totalGrupo, chequesCriados: chequesCriados.length, chequesAlocados, entryIds: pendentes.map((e: any) => e.id as number) };
   }),
 
   // Estorna UMA baixa (soft): marca estornada_em e recalcula o rollup (reabre o título
