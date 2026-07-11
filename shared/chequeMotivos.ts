@@ -162,9 +162,18 @@ export function parseDocNumero(descricao: any): string | null {
 }
 
 // Nº do cheque embutido na descrição ("CHEQUE Nº 001037" → "1037").
+// Rev. 4135 — Suporte ao formato Santander:
+//   "CHEQUE EMITIDO/DEBITADO 001393"  → captura após DEBITADO/EMITIDO
+//   "CHEQUE DEVOLVIDO MOTIVO 001393 11-SEM FUNDO" → captura após MOTIVO (≥4 dígitos, não confunde com código de motivo de 1-3 dígitos)
 export function parseChequeNumero(descricao: any): string | null {
-  const m = String(descricao ?? "").match(/cheque\s*n?[ºo°.]*\s*0*(\d{1,12})/i);
+  const s = String(descricao ?? "");
+  // Formato padrão: "CHEQUE Nº 001037" ou "CHEQUE 001037"
+  const m = s.match(/cheque\s*n?[ºo°.]*\s*0*(\d{1,12})/i);
   if (m && m[1]) return m[1].replace(/^0+/, "") || m[1];
+  // Formato Santander: "CHEQUE EMITIDO/DEBITADO 001393" ou "CHEQUE DEVOLVIDO MOTIVO 001393 ..."
+  // ≥4 dígitos p/ não confundir com código de motivo (1–3 dígitos)
+  const m2 = s.match(/(?:debitado|emitido|motivo)\s+0*(\d{4,12})/i);
+  if (m2 && m2[1]) return m2[1].replace(/^0+/, "") || m2[1];
   return null;
 }
 

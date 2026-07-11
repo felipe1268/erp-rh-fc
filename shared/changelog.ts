@@ -1,4 +1,28 @@
 /**
+ * Rev. 4135 — **CONCILIAÇÃO: CHEQUE DEVOLVIDO NO FORMATO SANTANDER NÃO APARECIA EM "CHEQUES DEVOLVIDOS".**
+ *
+ * CONTEXTO: o Santander descreve os lançamentos de cheque no formato "CHEQUE EMITIDO/DEBITADO 001393"
+ * (débito) e "CHEQUE DEVOLVIDO MOTIVO 001393 11-SEM FUNDO 1A.PRES" (crédito). O parser
+ * `parseChequeNumero` (shared/chequeMotivos.ts) só capturava o número quando ele aparecia
+ * imediatamente após "CHEQUE" (ex.: "CHEQUE Nº 001393"). Com o formato Santander o número vem
+ * depois de "DEBITADO"/"EMITIDO" (débito) e "MOTIVO" (crédito), então o parser retornava null
+ * nos dois lados do par. Sem número de cheque para usar como chave de pareamento, o algoritmo
+ * cai no fallback "mesmo valor + único candidato" — mas havia dois cheques de R$ 2.900,00 no
+ * período (001392 e 001393), tornando o casamento ambíguo → o algoritmo recusava parear → os
+ * dois lançamentos ficavam soltos em "No extrato, sem lançamento" em vez de aparecerem em
+ * "Cheques devolvidos no banco".
+ *
+ * CORREÇÃO: segunda cláusula adicionada ao `parseChequeNumero`:
+ *   regex /(?:debitado|emitido|motivo)\s+0*(\d{4,12})/i
+ *   ≥ 4 dígitos para não confundir com os códigos de motivo de devolução (1–3 dígitos).
+ * Com isso, "DEBITADO 001393" extrai "1393" e "MOTIVO 001393 11-SEM FUNDO" extrai "1393" — o
+ * algoritmo encontra o mesmo número nos dois lados, pareia corretamente e o par aparece em
+ * "Cheques devolvidos no banco" como esperado.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo — só correção de parsing, sem toque em dados.
+ */
+
+/**
  * Rev. 4134 — **BANCO DE HORAS: BOTÃO ATIVAR/DESATIVAR SEPARADO DO ZERAMENTO DE HISTÓRICO.**
  *
  * CONTEXTO: usuário apontou 2 lacunas na Rev. 4133: (1) faltava um botão para trocar o REGIME

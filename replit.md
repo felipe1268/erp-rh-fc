@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4135** — **CONCILIAÇÃO: CHEQUE DEVOLVIDO FORMATO SANTANDER NÃO APARECIA EM "CHEQUES DEVOLVIDOS".** `parseChequeNumero` (shared/chequeMotivos.ts) só entendia "CHEQUE Nº 001393"; o Santander escreve "CHEQUE EMITIDO/DEBITADO 001393" e "CHEQUE DEVOLVIDO MOTIVO 001393 11-SEM FUNDO". Sem extrair o número, o algoritmo caía no fallback "mesmo valor + único candidato" — com dois cheques de R$ 2.900,00 no período, recusava parear. Correção: segunda cláusula `/(?:debitado|emitido|motivo)\s+0*(\d{4,12})/i` (≥4 dígitos, não confunde com código de motivo 1–3 dígitos). ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4134** — **BANCO DE HORAS: BOTÃO ATIVAR/DESATIVAR SEPARADO DO ZERAMENTO DE HISTÓRICO.** No card "Vigência do Banco de Horas" (`BancoHoras.tsx` → aba "Regras & Orientação"), agora são 2 botões INDEPENDENTES: (1) "Ativar/Desativar Banco de Horas" — troca o regime da empresa (banco de horas × pagamento de hora extra) via `setHeDestinoPadrao`, sem tocar em saldo, com AlertDialog próprio; (2) "Zerar Histórico de Saldos Anteriores" (`horasExtras.zerarSaldosAnteriores`, novo endpoint que substitui o antigo `definirVigencia`) — só zera saldo anterior à data escolhida, sem alterar o regime. Toda troca de regime E todo zeramento entram na timeline de `banco_horas_vigencias`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4133** — **BANCO DE HORAS: VIGÊNCIA COM ZERAMENTO DE SALDO ANTERIOR + TIMELINE DE REGIME.** Nova tabela `banco_horas_vigencias` (timeline de quando a empresa mudou entre banco de horas e pagamento de hora extra). Todo saldo (positivo ou negativo) anterior a uma data é neutralizado por lançamento de AJUSTE em `banco_horas_lancamentos` (nunca apaga histórico) + timeline de vigências exibida na aba "Regras & Orientação". ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4133** — **BANCO DE HORAS: VIGÊNCIA COM ZERAMENTO DE SALDO ANTERIOR + TIMELINE DE REGIME.** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4132** — **RESCISÃO EM CONTRATO DE EXPERIÊNCIA: TÍTULO CORRETO DO "COMUNICADO DE DISPENSA".** ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4129** — **REPAGINAÇÃO DO GRID DE HABILIDADES: CATEGORIA + FOTOS DOS COLABORADORES NO CARD.** ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4128** — **DIÁLOGO "ATRIBUIR HABILIDADE" MOSTRA FOTO + OBRA ATUAL DO FUNCIONÁRIO.** ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4126 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4127 e anteriores.
 
 ## User preferences
 
