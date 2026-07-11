@@ -1,4 +1,17 @@
 /**
+ * Rev. 4148 — **NFS-e: #30 VALOR LÍQUIDO CORRIGIDO (120.694,65 → 119.469,32).**
+ *
+ * CONTEXTO: NFS-e #30 (id=929, LACCA, bruto=122.532,64) aparecia como "já correto" em Rev.4145
+ * porque o valor_liquido coincidia com o cálculo parcial. Na verdade a fórmula subtraía só
+ * retencao_irrf (1.837,99) mas não retencao_csll (1.225,33), resultando em 120.694,65 em vez de
+ * 119.469,32 conforme a DANFSe oficial (ISS não retido; IRRF=1.837,99; Contrib.Sociais=1.225,33;
+ * Total Ret.Fed=3.063,32).
+ *
+ * UPDATE fiscal_notes SET valor_liquido=119469.32 WHERE id=929 AND company_id=60002
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4147 — **NFS-e: BATCH DANFSes #43–#61 — ISS RETIDO + VALOR LÍQUIDO CORRIGIDOS (17 NOTAS).**
  *
  * CONTEXTO: usuário forneceu 19 DANFSes (#43-#61). #51 e #52 já estavam corretas.
