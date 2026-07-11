@@ -478,6 +478,7 @@ export default function FinanceiroChequesRecebidos({ standalone = true }: { stan
 
   // ── Render ────────────────────────────────────────────────────────────────
   const _inner = (
+    <>
     <div className="space-y-5">
 
         {/* ── Cabeçalho ── */}
@@ -1281,7 +1282,7 @@ export default function FinanceiroChequesRecebidos({ standalone = true }: { stan
         </DialogContent>
       </Dialog>
 
-    </div>
+    </>
   );
   return standalone ? <DashboardLayout>{_inner}</DashboardLayout> : _inner;
 }

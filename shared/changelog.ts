@@ -1,4 +1,22 @@
 /**
+ * Rev. 4139 — **BUILD: SINTAXE JSX INVÁLIDA EM FinanceiroChequesRecebidos.tsx — FRAGMENT WRAPPER.**
+ *
+ * CONTEXTO: o build de produção (esbuild via Vite) falhava com
+ * `Expected ")" but found "{"` na linha 773 do arquivo. A causa raiz:
+ * o `const _inner = (<div className="space-y-5">...)` fechava o div principal
+ * na linha 771, deixando todos os Dialogs (linhas 773–1282) FORA do elemento
+ * raiz JSX. O esbuild produção é estrito quanto à gramática JSX; o dev server
+ * (Vite HMR) processava sem erro mas o build estático falhava.
+ *
+ * CORREÇÃO: envolver o conteúdo de `_inner` em um Fragment `<>…</>`, de modo
+ * que `<div className="space-y-5">` e todos os Dialogs sejam irmãos dentro do
+ * mesmo elemento raiz.
+ *
+ * ARQUIVO: client/src/pages/financeiro/FinanceiroChequesRecebidos.tsx.
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4138 — **CHEQUES RECEBIDOS: ALOCAÇÃO ATÔMICA NO PAGAMENTO CONSOLIDADO + RASTREIO POR GRUPO + SCHEMA DRIZZLE.**
  *
  * CONTEXTO: ao pagar um fornecedor com "Cheque de Terceiro" no Pagar Consolidado,
