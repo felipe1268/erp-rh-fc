@@ -1,4 +1,41 @@
 /**
+ * Rev. 4143 — **NFS-e: UPSERT NO UPLOAD ABRASF — XML CORRIGE NOTA EXISTENTE (SIAP GEO OU OUTRA). BATCH CORRIGE #22–#28.**
+ *
+ * CONTEXTO: o importador de XMLs ABRASF individuais pulava notas já existentes (inclusive as
+ * importadas via SIAP GEO export sem ValorLiquidoNfse). Isso impedia que o usuário corrigisse
+ * notas com valor errado simplesmente carregando o XML oficial da prefeitura. Além disso, o
+ * batch SQL de Rev. 4142 não tinha corrigido as notas #22–#28 por fórmula incompleta (ISS
+ * retido ausente + PIS/COFINS de apuração própria ignorados onde a prefeitura os deduzia).
+ *
+ * CORREÇÃO 1 — server/routers/nfseEmitidas.ts, importNfseXmlManual:
+ *   Bloco ABRASF individual: substituída lógica "skip if exists" por UPSERT.
+ *   Quando chave_acesso (ou numero_nf+ano) já existe, executa UPDATE:
+ *     valor_liquido = ValorLiquidoNfse do XML (fonte autoritativa)
+ *     xml_payload   = XML completo (para reparses futuros)
+ *     iss_retido, retencao_inss/irrf/csll/pis/cofins/outras, base_calculo_iss, aliquota_iss
+ *     retencao_pis_cofins = 0 (ABRASF usa colunas separadas)
+ *     chave_acesso = COALESCE(nova, existente) — preserva se já preenchida
+ *   Resultado: o usuário pode carregar o XML oficial a qualquer momento para "selar" a nota
+ *   com o ValorLiquidoNfse exato da prefeitura, sem nenhum cálculo no ERP.
+ *
+ * CORREÇÃO 2 — batch SQL Neon (company_id=60002):
+ *   NFS-e #22 (id=921): líquido 30.427,39 → 29.622,43; iss_retido=804,96
+ *   NFS-e #23 (id=922): líquido 4.964,01 → 4.832,69; iss_retido=131,32
+ *   NFS-e #24 (id=923): líquido 10.457,41 → 9.620,81; iss_retido=261,44
+ *   NFS-e #25 (id=924): líquido 33.624,00 → 32.544,00; iss_retido=1.080,00
+ *   NFS-e #26 (id=925): líquido 110.681,58 → 106.538,11 (PIS+COFINS apur.própria deduzidos pela prefeitura)
+ *   NFS-e #27 (id=926): líquido 110.681,58 → 106.538,11 (substituta de #26, mesmo tomador)
+ *   NFS-e #28 (id=927): líquido 398.602,54 → 385.823,36; iss_retido=12.779,18
+ *   Valores lidos das DANFSes oficiais (seção "VALOR TOTAL DA NFS-e → Valor Líquido da NFS-e").
+ *
+ * PRINCÍPIO FINAL: o ERP nunca calcula ValorLiquidoNfse. Lê do XML (ABRASF) ou do batch de
+ * reprocessamento. Notas SIAP GEO sem xml_payload só serão definitivamente corrigidas ao
+ * usuário carregar o XML individual da prefeitura (que aciona o UPSERT acima).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4142 — **NFS-e: VALOR LÍQUIDO LIDO DIRETAMENTE DO XML — ZERO CÁLCULO NO SERVIDOR.**
  *
  * CONTEXTO: o ERP recalculava o Valor Líquido a partir dos campos individuais de retenção

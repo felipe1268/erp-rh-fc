@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4143** — **NFS-e: UPSERT NO UPLOAD ABRASF — XML CORRIGE NOTA EXISTENTE (SIAP GEO OU OUTRA). BATCH CORRIGE #22–#28.** Importador ABRASF individual substituiu "skip if exists" por UPSERT: se nota já existe (de qualquer origem), atualiza `valor_liquido` + `xml_payload` + retenções com o ValorLiquidoNfse do XML da prefeitura — zero cálculo. Batch SQL corrigiu 7 notas (#22–#28) com valores das DANFSes oficiais. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4142** — **NFS-e: VALOR LÍQUIDO LIDO DIRETAMENTE DO XML — ZERO CÁLCULO NO SERVIDOR.** `parseSiapGeoExportXml` parou de subtrair PIS+COFINS (apuração própria). `fiscalNotes.atualizar` agora reparsa `xml_payload` e usa `ValorLiquidoNfse` da prefeitura — frontend não influencia mais. Upload ABRASF usa `parseSefinNfseXmlFull` (completo) e grava todos os campos de retenção. Batch SQL corrigiu 497 notas SIAP GEO históricas. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4141** — **CONTROLE DE CHEQUES: EDIÇÃO COMPLETA — VALOR, FORNECEDOR, DATAS, BANCO, STATUS.** Dialog de edição substituído por layout moderno com cabeçalho navy: Valor (máscara BRL) + Nº, Favorecido (busca/manual), Conta emitente (auto-preenche banco/agência), Vencimento + Compensação + Status, NF + Observação. Backend `atualizar` aceita 7 novos campos. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4141** — **CONTROLE DE CHEQUES: EDIÇÃO COMPLETA — VALOR, FORNECEDOR, DATAS, BANCO, STATUS.** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4139** — **BUILD: SINTAXE JSX INVÁLIDA EM FinanceiroChequesRecebidos.tsx — FRAGMENT WRAPPER.** ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,19 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4136** — **CONCILIAÇÃO: CHEQUES EMITIDOS (SANTANDER) NÃO APARECIAM COMO SUGESTÃO EM "SEM LANÇAMENTO".** ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4135** — **CONCILIAÇÃO: CHEQUE DEVOLVIDO FORMATO SANTANDER NÃO APARECIA EM "CHEQUES DEVOLVIDOS".** ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4134** — **BANCO DE HORAS: BOTÃO ATIVAR/DESATIVAR SEPARADO DO ZERAMENTO DE HISTÓRICO.** ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4133** — **BANCO DE HORAS: VIGÊNCIA COM ZERAMENTO DE SALDO ANTERIOR + TIMELINE DE REGIME.** ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4132** — **RESCISÃO EM CONTRATO DE EXPERIÊNCIA: TÍTULO CORRETO DO "COMUNICADO DE DISPENSA".** ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4131** — **SPED ECD/ECF + EFD CONTRIBUIÇÕES/ICMS-IPI: LEGENDA CLARA DO PERÍODO A ENCAMINHAR.** ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4129 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4135 e anteriores.
 
 ## User preferences
 

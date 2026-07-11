@@ -1480,7 +1480,46 @@ export const nfseEmitidasRouter = router({
                    AND origem LIKE 'nfse%' LIMIT 1`,
                 [input.companyId, nota.numero, nota.dataEmissao?.slice(0, 10) || new Date().toISOString().slice(0,10)]
               );
-          if (dupAbrasf.rows[0]) { ignoradas++; continue; }
+          if (dupAbrasf.rows[0]) {
+            // UPSERT: nota já existe (pode ser de importação SIAP GEO ou outra).
+            // Atualiza valor_liquido e xml_payload com os dados do XML ABRASF autoritativo —
+            // ValorLiquidoNfse vem diretamente da prefeitura, sem nenhum cálculo no ERP.
+            await db.$client.query(
+              `UPDATE fiscal_notes SET
+                valor_liquido       = $1,
+                xml_payload         = $2,
+                iss_retido          = $3,
+                retencao_inss       = $4,
+                retencao_irrf       = $5,
+                retencao_csll       = $6,
+                retencao_pis        = $7,
+                retencao_cofins     = $8,
+                retencao_outras     = $9,
+                retencao_pis_cofins = 0,
+                base_calculo_iss    = $10,
+                aliquota_iss        = $11,
+                chave_acesso        = COALESCE(NULLIF($12,''), chave_acesso),
+                updated_at          = NOW()
+               WHERE id = $13`,
+              [
+                nota.valorLiquido,
+                file.content,
+                issRetidoValor,
+                nota.valorInss || 0,
+                nota.valorIr   || 0,
+                nota.valorCsll || 0,
+                nota.valorPis  || 0,
+                nota.valorCofins || 0,
+                nota.valorOutrasRetencoes || 0,
+                nota.baseCalculo || null,
+                nota.aliquota   || null,
+                nota.codigoVerificacao || null,
+                dupAbrasf.rows[0].id,
+              ]
+            );
+            importadas++;
+            continue;
+          }
           await db.$client.query(
             `INSERT INTO fiscal_notes
               (company_id, numero_nf, chave_acesso, data_emissao,
