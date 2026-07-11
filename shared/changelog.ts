@@ -1,4 +1,35 @@
 /**
+ * Rev. 4141 — **CONTROLE DE CHEQUES: EDIÇÃO COMPLETA — VALOR, FORNECEDOR, DATAS, BANCO, STATUS.**
+ *
+ * CONTEXTO: o dialog "Editar cheque" exibia apenas 3 campos (Fornecedor, Status, Observação)
+ * e mostrava os demais (Valor, Vencimento, Compensação) apenas como texto somente-leitura.
+ * O usuário precisava poder corrigir todos os dados de um cheque importado ou lançado
+ * manualmente, especialmente valor e datas que frequentemente chegam com pequenas divergências
+ * da planilha de controle.
+ *
+ * CORREÇÃO — backend (server/routers/cheques.ts):
+ * • `atualizar` aceita agora: `valor`, `dataVencimento`, `numeroCheque`, `bancoNome`,
+ *   `agencia`, `contaCorrenteRaw`, `nf` — além dos campos já existentes.
+ * • Padrão `add(col, val)` já garante que só colunas com valor !== undefined são atualizadas.
+ *
+ * CORREÇÃO — frontend (client/src/pages/financeiro/FinanceiroCheques.tsx):
+ * • Dialog substituído por layout moderno com cabeçalho navy (idêntico ao "Lançar cheque"):
+ *   – Bloco 1: Valor (máscara BRL) + Nº do cheque (lado a lado)
+ *   – Bloco 2: Favorecido com toggle "Buscar no cadastro ↔ Digitar manualmente"
+ *   – Bloco 3: Conta emitente (SearchableSelect + grade banco/agência/conta manual)
+ *   – Bloco 4: Vencimento + Compensação + Status (3 colunas)
+ *   – Bloco 5: NF/Ref + Observação (2 colunas)
+ *   – Bloco 6: Informações de conciliação (somente leitura, aparece quando há dados)
+ * • Estado `editValorStr` (máscara BRL) + `editFavorecidoManual` (toggle)
+ *   inicializados via `useEffect` na abertura do dialog.
+ * • `selecionarContaEdit()` auto-preenche banco/agência/conta ao escolher conta emitente.
+ * • `salvarEdicao()` envia todos os campos novos para o backend.
+ *
+ * ARQUIVOS: server/routers/cheques.ts · client/src/pages/financeiro/FinanceiroCheques.tsx.
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4140 — **CONCILIAÇÃO: IDENTIFICAÇÃO DE CHEQUE POR NÚMERO + DATA DE COMPENSAÇÃO (MATCH FRACO).**
  *
  * CONTEXTO: cheques cadastrados no Controle de Cheques com pequenos erros de valor (ex.: talão

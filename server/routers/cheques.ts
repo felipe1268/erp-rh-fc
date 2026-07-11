@@ -1483,6 +1483,14 @@ export const chequesRouter = router({
     obraNome: z.string().max(255).nullable().optional(),
     dataCompensacao: z.string().nullable().optional(),
     observacao: z.string().max(500).nullable().optional(),
+    // Rev. 4141 — campos adicionais para edição completa do cheque
+    valor: z.number().positive().nullable().optional(),
+    dataVencimento: z.string().nullable().optional(),
+    numeroCheque: z.string().max(30).nullable().optional(),
+    bancoNome: z.string().max(120).nullable().optional(),
+    agencia: z.string().max(20).nullable().optional(),
+    contaCorrenteRaw: z.string().max(60).nullable().optional(),
+    nf: z.string().max(60).nullable().optional(),
   })).mutation(async ({ input, ctx }) => {
     await assertCompanyAccess(ctx.user, input.companyId);
     const db = await getDb();
@@ -1498,6 +1506,14 @@ export const chequesRouter = router({
     if (input.obraNome !== undefined) add("obra_nome", input.obraNome);
     if (input.dataCompensacao !== undefined) add("data_compensacao", input.dataCompensacao);
     if (input.observacao !== undefined) add("observacao", input.observacao);
+    // Rev. 4141
+    if (input.valor !== undefined && input.valor != null) add("valor", input.valor);
+    if (input.dataVencimento !== undefined) add("data_vencimento", input.dataVencimento);
+    if (input.numeroCheque !== undefined) add("numero_cheque", input.numeroCheque);
+    if (input.bancoNome !== undefined) add("banco_nome", input.bancoNome);
+    if (input.agencia !== undefined) add("agencia", input.agencia);
+    if (input.contaCorrenteRaw !== undefined) add("conta_corrente_raw", input.contaCorrenteRaw);
+    if (input.nf !== undefined) add("nf", input.nf);
     if (sets.length === 0) return { ok: true, alterado: 0 };
     sets.push(`updated_at=NOW()`);
     const idP = p++, coP = p;

@@ -287,6 +287,16 @@ export default function FinanceiroCheques() {
 
   // ── Edição ──
   const [editItem, setEditItem] = useState<any>(null);
+  // Rev. 4141 — valor do cheque em edição (máscara BRL) e toggle de fornecedor
+  const [editValorStr, setEditValorStr] = useState("");
+  const [editFavorecidoManual, setEditFavorecidoManual] = useState(false);
+  useEffect(() => {
+    if (editItem?.id != null) {
+      const v = editItem.valor != null ? Number(editItem.valor) : 0;
+      setEditValorStr(v > 0 ? v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "");
+      setEditFavorecidoManual(!editItem.fornecedorId);
+    }
+  }, [editItem?.id]);
   const [excluirItem, setExcluirItem] = useState<any>(null);
   // Rev. 3245 — múltipla seleção p/ alterar status em lote.
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -732,14 +742,37 @@ export default function FinanceiroCheques() {
     if (pdfRef.current) pdfRef.current.value = "";
   }
 
+  // Rev. 4141 — selecionar conta bancária no dialog de edição (auto-preenche banco/agência/conta)
+  function selecionarContaEdit(val: string) {
+    const acc = (Array.isArray(bankAccounts) ? bankAccounts : []).find((b: any) => String(b.id) === val);
+    if (!acc) { setEditItem((e: any) => e ? { ...e, contaBancariaId: null } : e); return; }
+    setEditItem((e: any) => e ? {
+      ...e, contaBancariaId: acc.id,
+      bancoNome: acc.banco || e.bancoNome || "",
+      agencia: acc.agencia || e.agencia || "",
+      contaCorrenteRaw: acc.conta || e.contaCorrenteRaw || "",
+    } : e);
+  }
+
   async function salvarEdicao() {
     if (!editItem) return;
     try {
+      const valor = parseMaskBRL(editValorStr);
       await atualizarMut.mutateAsync({
         id: editItem.id, companyId,
         status: editItem.status,
         fornecedorNome: editItem.fornecedorNome ?? "",
+        fornecedorId: editItem.fornecedorId ?? null,
+        contaBancariaId: editItem.contaBancariaId ?? null,
         observacao: editItem.observacao ?? "",
+        dataVencimento: editItem.dataVencimento ? String(editItem.dataVencimento).slice(0, 10) : null,
+        dataCompensacao: editItem.dataCompensacao ? String(editItem.dataCompensacao).slice(0, 10) : null,
+        numeroCheque: editItem.numeroCheque ?? null,
+        bancoNome: editItem.bancoNome ?? null,
+        agencia: editItem.agencia ?? null,
+        contaCorrenteRaw: editItem.contaCorrenteRaw ?? null,
+        nf: editItem.nf ?? null,
+        ...(valor > 0 ? { valor } : {}),
       });
       toast({ title: "Cheque atualizado." });
       setEditItem(null);
@@ -1705,55 +1738,162 @@ export default function FinanceiroCheques() {
         </DialogContent>
       </Dialog>
 
+      {/* Rev. 4141 — Dialog de edição completa do cheque (layout moderno) */}
       <Dialog open={!!editItem} onOpenChange={(o) => { if (!o) setEditItem(null); }}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Editar cheque {editItem?.numeroCheque}</DialogTitle></DialogHeader>
+        <DialogContent resizable={false} className="max-w-2xl w-[calc(100vw-1rem)] sm:w-auto max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden">
+          {/* Cabeçalho navy */}
+          <DialogHeader className="shrink-0 bg-gradient-to-r from-[#1B2A4A] to-[#2c3f63] px-6 py-4 text-white">
+            <DialogTitle className="flex items-center gap-2.5 text-white">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/15">
+                <Pencil className="h-5 w-5" />
+              </span>
+              Editar cheque {editItem?.numeroCheque ? `nº ${editItem.numeroCheque}` : ""}
+            </DialogTitle>
+            <DialogDescription className="text-white/70 text-xs leading-relaxed">
+              Edite qualquer campo abaixo — <strong className="text-white/90">valor</strong>, <strong className="text-white/90">fornecedor</strong>, <strong className="text-white/90">datas</strong>, banco e status. Apenas campos alterados serão gravados.
+            </DialogDescription>
+          </DialogHeader>
+
           {editItem && (
-            <div className="space-y-3">
-              <div>
-                <Label className="text-xs">Fornecedor</Label>
-                <Input value={editItem.fornecedorNome ?? ""} onChange={(e) => setEditItem({ ...editItem, fornecedorNome: e.target.value })} />
+            <div className="flex-1 overflow-y-auto min-h-0 px-6 py-5 space-y-5">
+              {/* Bloco 1 — Valor + Nº */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs font-medium text-gray-600 flex items-center gap-1.5"><Banknote className="h-3.5 w-3.5 text-[#1B2A4A]" />Valor</Label>
+                  <div className="relative mt-1">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">R$</span>
+                    <Input className="pl-9 tabular-nums text-base font-semibold h-11" inputMode="decimal" placeholder="0,00"
+                      value={editValorStr}
+                      onChange={(e) => setEditValorStr(maskBRL(e.target.value))} />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs font-medium text-gray-600 flex items-center gap-1.5"><Hash className="h-3.5 w-3.5 text-[#1B2A4A]" />Nº do cheque</Label>
+                  <Input className="mt-1 h-11" value={editItem.numeroCheque ?? ""} onChange={(e) => setEditItem({ ...editItem, numeroCheque: e.target.value })} placeholder="Ex.: 000123" />
+                </div>
               </div>
-              <div>
-                <Label className="text-xs">Status</Label>
-                <Select value={editItem.status} onValueChange={(v) => setEditItem({ ...editItem, status: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
-                    {STATUS_OPTS.map((s) => <SelectItem key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+
+              {/* Bloco 2 — Favorecido */}
+              <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <Label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5"><User className="h-3.5 w-3.5 text-[#1B2A4A]" />Favorecido</Label>
+                  <button type="button"
+                    onClick={() => { setEditFavorecidoManual((v) => !v); setEditItem((e: any) => e ? { ...e, fornecedorId: null } : e); }}
+                    className="text-[11px] font-medium text-[#1B2A4A] hover:underline flex items-center gap-1">
+                    {editFavorecidoManual ? (<><Search className="h-3 w-3" />Buscar no cadastro</>) : (<><Keyboard className="h-3 w-3" />Digitar manualmente</>)}
+                  </button>
+                </div>
+                {editFavorecidoManual ? (
+                  <Input value={editItem.fornecedorNome ?? ""}
+                    onChange={(e) => setEditItem({ ...editItem, fornecedorNome: e.target.value, fornecedorId: null })}
+                    placeholder="Nome do favorecido" />
+                ) : (
+                  <SearchableSelect
+                    options={fornecedorOpts}
+                    value={editItem.fornecedorId != null ? String(editItem.fornecedorId) : ""}
+                    onValueChange={(val) => {
+                      const f = (Array.isArray(fornecedoresList) ? fornecedoresList : []).find((x: any) => String(x.id) === val);
+                      setEditItem({ ...editItem, fornecedorId: f ? f.id : null, fornecedorNome: f ? (f.nomeFantasia || f.razaoSocial || "") : editItem.fornecedorNome });
+                    }}
+                    placeholder="Consultar fornecedor cadastrado…"
+                    searchPlaceholder="Buscar por nome ou CNPJ…"
+                    emptyMessage={fornecedorOpts.length === 0 ? "Nenhum fornecedor cadastrado." : "Nenhum resultado."}
+                  />
+                )}
+                {!editFavorecidoManual && editItem.fornecedorId != null && (
+                  <p className="mt-1.5 text-[11px] text-green-700 flex items-center gap-1"><CheckCheck className="h-3 w-3" />Vinculado ao cadastro de fornecedores.</p>
+                )}
               </div>
-              <div>
-                <Label className="text-xs">Observação</Label>
-                <Textarea value={editItem.observacao ?? ""} onChange={(e) => setEditItem({ ...editItem, observacao: e.target.value })} />
+
+              {/* Bloco 3 — Conta emitente */}
+              <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-4 space-y-3">
+                <Label className="text-xs font-semibold text-gray-700 flex items-center gap-1.5"><Landmark className="h-3.5 w-3.5 text-[#1B2A4A]" />Conta de onde o cheque foi emitido</Label>
+                <SearchableSelect
+                  options={contaOpts}
+                  value={editItem.contaBancariaId != null ? String(editItem.contaBancariaId) : ""}
+                  onValueChange={selecionarContaEdit}
+                  placeholder="Escolha a conta…"
+                  searchPlaceholder="Buscar banco / agência / conta…"
+                  emptyMessage={contaOpts.length === 0 ? "Nenhuma conta bancária com talão cadastrada." : "Nenhum resultado."}
+                />
+                {editItem.contaBancariaId != null && (
+                  <p className="text-[11px] text-green-700 flex items-center gap-1"><CheckCheck className="h-3 w-3" />Banco, agência e conta preenchidos — ajuste abaixo se precisar.</p>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                  <div>
+                    <Label className="text-[11px] text-gray-500">Banco</Label>
+                    <Input className="mt-1" value={editItem.bancoNome ?? ""} onChange={(e) => setEditItem({ ...editItem, bancoNome: e.target.value })} placeholder="Ex.: Santander" />
+                  </div>
+                  <div>
+                    <Label className="text-[11px] text-gray-500">Agência</Label>
+                    <Input className="mt-1" value={editItem.agencia ?? ""} onChange={(e) => setEditItem({ ...editItem, agencia: e.target.value })} placeholder="Ex.: 1234" />
+                  </div>
+                  <div>
+                    <Label className="text-[11px] text-gray-500">Conta corrente</Label>
+                    <Input className="mt-1" value={editItem.contaCorrenteRaw ?? ""} onChange={(e) => setEditItem({ ...editItem, contaCorrenteRaw: e.target.value })} placeholder="Ex.: 12345-6" />
+                  </div>
+                </div>
               </div>
-              <div className="text-xs text-muted-foreground">
-                Valor {editItem.valor != null ? formatBRL(Number(editItem.valor)) : "—"} · Venc. {fmtData(editItem.dataVencimento)} · Comp. {fmtData(editItem.dataCompensacao)}
+
+              {/* Bloco 4 — Datas + Status */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <Label className="text-xs font-medium text-gray-600 flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 text-[#1B2A4A]" />Vencimento</Label>
+                  <Input className="mt-1" type="date"
+                    value={editItem.dataVencimento ? String(editItem.dataVencimento).slice(0, 10) : ""}
+                    onChange={(e) => setEditItem({ ...editItem, dataVencimento: e.target.value || null })} />
+                </div>
+                <div>
+                  <Label className="text-xs font-medium text-gray-600 flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5 text-[#1B2A4A]" />Compensação</Label>
+                  <Input className="mt-1" type="date"
+                    value={editItem.dataCompensacao ? String(editItem.dataCompensacao).slice(0, 10) : ""}
+                    onChange={(e) => setEditItem({ ...editItem, dataCompensacao: e.target.value || null })} />
+                </div>
+                <div>
+                  <Label className="text-xs font-medium text-gray-600 flex items-center gap-1.5"><FileSignature className="h-3.5 w-3.5 text-[#1B2A4A]" />Status</Label>
+                  <Select value={editItem.status} onValueChange={(v) => setEditItem({ ...editItem, status: v })}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
+                      {STATUS_OPTS.map((s) => <SelectItem key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
+
+              {/* Bloco 5 — NF + Observação */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <Label className="text-xs font-medium text-gray-600">NF / Ref.</Label>
+                  <Input className="mt-1" value={editItem.nf ?? ""} onChange={(e) => setEditItem({ ...editItem, nf: e.target.value })} placeholder="Ex.: 12345" />
+                </div>
+                <div className="sm:col-span-2">
+                  <Label className="text-xs font-medium text-gray-600">Observação</Label>
+                  <Textarea className="mt-1 resize-none" rows={2} value={editItem.observacao ?? ""} onChange={(e) => setEditItem({ ...editItem, observacao: e.target.value })} placeholder="Observação opcional…" />
+                </div>
+              </div>
+
+              {/* Bloco 6 — Informações de conciliação (read-only) */}
               {(editItem.contaBancariaTentativaNome || editItem.motivoDevolucaoTexto || editItem.extratoMotivoTexto) && (
                 <div className="rounded-md border border-slate-200 bg-slate-50 p-2.5 space-y-1">
-                  <div className="text-[11px] font-semibold text-slate-600">Informações de Conciliação</div>
+                  <div className="text-[11px] font-semibold text-slate-600">Informações de Conciliação (somente leitura)</div>
                   {editItem.contaBancariaTentativaNome && (
-                    <div className="text-xs text-slate-700 break-words">
-                      Conta bancária tentativa: <span className="font-medium">{editItem.contaBancariaTentativaNome}</span>
-                    </div>
+                    <div className="text-xs text-slate-700 break-words">Conta bancária tentativa: <span className="font-medium">{editItem.contaBancariaTentativaNome}</span></div>
                   )}
                   {(editItem.motivoDevolucaoTexto || editItem.extratoMotivoTexto) && (
                     <div className="text-xs text-amber-700 break-words">
                       Motivo da devolução{(editItem.motivoDevolucaoCodigo ?? editItem.extratoMotivoCodigo) ? ` (${editItem.motivoDevolucaoCodigo ?? editItem.extratoMotivoCodigo})` : ""}: <span className="font-medium">{editItem.motivoDevolucaoTexto || editItem.extratoMotivoTexto}</span>
                     </div>
                   )}
-                  {editItem.devolvidoEm && (
-                    <div className="text-[11px] text-slate-500">Devolvido em {fmtData(editItem.devolvidoEm)}</div>
-                  )}
+                  {editItem.devolvidoEm && <div className="text-[11px] text-slate-500">Devolvido em {fmtData(editItem.devolvidoEm)}</div>}
                 </div>
               )}
             </div>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditItem(null)}>Cancelar</Button>
-            <Button onClick={salvarEdicao} disabled={atualizarMut.isPending}>
-              {atualizarMut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />} Salvar
+
+          <DialogFooter className="shrink-0 px-6 py-4 border-t bg-gray-50/50 gap-2">
+            <Button variant="outline" onClick={() => setEditItem(null)} disabled={atualizarMut.isPending}>Cancelar</Button>
+            <Button onClick={salvarEdicao} disabled={atualizarMut.isPending} className="bg-[#1B2A4A] hover:bg-[#2c3f63] gap-2">
+              {atualizarMut.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Salvar alterações
             </Button>
           </DialogFooter>
         </DialogContent>
