@@ -27,7 +27,8 @@ const OC_STATUS: Record<string, { label: string; cls: string }> = {
 };
 
 // ─── Mini-dialog de detalhe da OC ────────────────────────────────────────────
-function OcMiniDialog({
+export { OC_STATUS };
+export function OcMiniDialog({
   companyId, ordemId, onClose,
 }: { companyId: number; ordemId: number; onClose: () => void }) {
   const q = trpc.compras.getOrdemMiniDetalhe.useQuery(

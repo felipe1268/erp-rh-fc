@@ -16216,6 +16216,7 @@ Responda APENAS com JSON válido, sem markdown, no formato:
         SELECT
           LOWER(TRIM(coi.descricao))                        AS desc_key,
           coi.unidade,
+          co.id                                             AS ordem_id,
           co.numero_oc,
           co.created_at::date::text                         AS data,
           COALESCE(ob.nome, '')                             AS obra_nome,
@@ -16273,6 +16274,7 @@ Responda APENAS com JSON válido, sem markdown, no formato:
         const nk = normItemDesc(String(r.desc_key ?? ''));
         if (!ocMap.has(nk)) ocMap.set(nk, []);
         ocMap.get(nk)!.push({
+          ordemId: Number(r.ordem_id ?? 0),
           numeroOc: r.numero_oc ?? '',
           data: r.data ?? null,
           obraNome: r.obra_nome ?? null,

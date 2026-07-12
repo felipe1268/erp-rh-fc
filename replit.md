@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4172** — **COMPRAS/FINANCEIRO: OC CLICÁVEL NA TABELA DE OCORRÊNCIAS DA ANÁLISE DE FORNECEDOR.** `ordem_id` adicionado ao `ocorrRes`; `OcMiniDialog` exportado de `ItemCatalogo.tsx`; célula Nº OC virou `<button>` que abre o mini-dialog com todos os detalhes da OC. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4171** — **COMPRAS/FINANCEIRO: UNIDADE NAS CÉLULAS DE PREÇO DA ANÁLISE DE FORNECEDOR.** Sufixo `/un`, `/sc`, `/m³` etc. abaixo do valor nas colunas Preço mín. e Preço máx.; itens de unidade mista não exibem sufixo (sem unidade canônica). ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4170** — **COMPRAS/FINANCEIRO: REVERTE FILTRO FINANCEIRO POR OBRA (CARDS ZERADOS).** Rev. 4169 zerava cards financeiros para obras sem `obra_id` em `financial_entries`; removido o filtro de `rows` — top cards voltam a mostrar total do fornecedor/ano; cards de OCs (aba Itens & Preços) já filtravam corretamente via backend (Rev. 4168). ZERO DELETE · ZERO ALTER destrutivo.

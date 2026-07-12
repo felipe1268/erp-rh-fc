@@ -29,6 +29,7 @@ import {
   Tooltip as RechTooltip, LabelList, LineChart, Line, ReferenceLine,
 } from "recharts";
 import { classificarGrupoCusto } from "@shared/custosCategorias";
+import { OcMiniDialog } from "@/components/compras/ItemCatalogo";
 import { buildCentroCustoMaps, centroCustoNomeDe, SEM_CENTRO_CUSTO } from "@shared/centroCusto";
 
 function formatBRL(value: number): string {
@@ -223,6 +224,8 @@ export default function FinanceiroAnaliseCustosDetalhe() {
   const [chartItem, setChartItem] = useState<string | null>(null);
   // Filtro de obra para aba de itens
   const [obraIdFiltro, setObraIdFiltro] = useState<number | null>(null);
+  // OC selecionada para mini-dialog
+  const [selectedOcId, setSelectedOcId] = useState<number | null>(null);
 
   const { data: analiseData, isLoading: analiseLoading } = (trpc as any).compras.getAnaliseFornecedor.useQuery(
     { companyId, fornecedorNome: fornecedorFoco ?? '', ano, ...(obraIdFiltro ? { obraId: obraIdFiltro } : {}) },
@@ -1259,7 +1262,12 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                                                   const isZero = oc.precoUnitario === 0;
                                                   return (
                                                   <tr key={oi} className={`border-b border-gray-50 ${isZero ? 'bg-orange-50/60' : 'hover:bg-indigo-50/30'}`}>
-                                                    <td className="py-2 px-3 font-mono font-semibold text-indigo-700 whitespace-nowrap">{oc.numeroOc || '—'}</td>
+                                                    <td className="py-2 px-3 whitespace-nowrap">
+                                                      {oc.ordemId
+                                                        ? <button type="button" onClick={(e) => { e.stopPropagation(); setSelectedOcId(oc.ordemId); }} className="font-mono font-semibold text-indigo-700 underline underline-offset-2 hover:text-indigo-900 transition-colors">{oc.numeroOc || '—'}</button>
+                                                        : <span className="font-mono font-semibold text-indigo-700">{oc.numeroOc || '—'}</span>
+                                                      }
+                                                    </td>
                                                     <td className="py-2 px-2 tabular-nums text-gray-600 whitespace-nowrap">{fmtData(oc.data)}</td>
                                                     <td className="py-2 px-2 text-gray-600 break-words max-w-[160px]">{oc.obraNome || '—'}</td>
                                                     <td className="py-2 px-2 text-right tabular-nums text-gray-700">
@@ -1387,6 +1395,15 @@ export default function FinanceiroAnaliseCustosDetalhe() {
           );
         })()}
       </div>
+
+      {/* Dialog de detalhe da OC */}
+      {selectedOcId !== null && companyId && (
+        <OcMiniDialog
+          companyId={companyId}
+          ordemId={selectedOcId}
+          onClose={() => setSelectedOcId(null)}
+        />
+      )}
 
       {/* Dialog de edição de UMA linha */}
       <Dialog open={!!editRow} onOpenChange={(o) => { if (!o) fecharEdicao(); }}>

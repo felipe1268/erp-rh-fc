@@ -1,4 +1,28 @@
 /**
+ * Rev. 4172 — **COMPRAS/FINANCEIRO: OC CLICÁVEL NA TABELA DE OCORRÊNCIAS DA ANÁLISE DE FORNECEDOR.**
+ *
+ * CONTEXTO: usuário clicava nos números de OC (ex.: "OC-2026-0105") na seção expandida
+ * de itens da Análise de Fornecedor, mas nada acontecia — eram texto puro.
+ *
+ * ENTREGAS:
+ * - Backend (`getAnaliseFornecedor`): `ocorrRes` SELECT agora inclui `co.id AS ordem_id`;
+ *   campo `ordemId` propagado no objeto de ocorrência via `ocMap`.
+ * - `ItemCatalogo.tsx`: `OcMiniDialog` e `OC_STATUS` exportados (eram funções locais).
+ * - `FinanceiroAnaliseCustosDetalhe.tsx`:
+ *   - Import de `OcMiniDialog` adicionado.
+ *   - Estado `selectedOcId: number | null` adicionado.
+ *   - Célula de Nº OC virou `<button>` com sublinhado ao hover; dispara `setSelectedOcId`.
+ *   - `OcMiniDialog` renderizado no root quando `selectedOcId !== null`.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ *
+ * Arquivos tocados:
+ *   server/routers/compras.ts
+ *   client/src/components/compras/ItemCatalogo.tsx
+ *   client/src/pages/financeiro/FinanceiroAnaliseCustosDetalhe.tsx
+ */
+
+/**
  * Rev. 4171 — **COMPRAS/FINANCEIRO: UNIDADE VISÍVEL NAS CÉLULAS DE PREÇO DA ANÁLISE DE FORNECEDOR.**
  *
  * CONTEXTO: usuário pediu que a unidade fosse exibida de forma mais clara na tabela
