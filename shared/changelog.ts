@@ -1,4 +1,26 @@
 /**
+ * Rev. 4156 — **FROTA: NOVA VIAGEM — FIX: "ERRO AO CALCULAR ROTA" → GEOCODING + HAVERSINE FALLBACK.**
+ *
+ * CONTEXTO: a abordagem de Rev. 4155 de chamar a Directions API via fetch() do browser causava erro
+ * de CORS (a REST API `maps.googleapis.com/maps/api/directions/json` não inclui Access-Control-Allow-Origin
+ * para XHR de browser — ela é projetada para SDK JS / mobile / server-side). Resultado: `.catch()` sempre
+ * disparava e o banner "Erro ao calcular rota." aparecia.
+ *
+ * Causa raiz: a Directions API está desabilitada para esta GOOGLE_API_KEY (retorna REQUEST_DENIED no
+ * servidor) E não é acessível via fetch browser (CORS). Só a Geocoding API está habilitada.
+ *
+ * MUDANÇAS:
+ * - server/routers/frotas.ts `getRouteInfo`: Tentativa 1 = Directions API (preservada, funciona se
+ *   habilitada futuramente). Tentativa 2 = **Geocoding ambos os endpoints + fórmula de Haversine** ×1,35
+ *   (fator de estrada BR) — funciona com a key atual; retorna `estimado: true` para UI diferenciar.
+ * - client/src/pages/frotas/ViagensFrotas.tsx `RoutePreview`: **revertido para `trpc.frotas.getRouteInfo
+ *   .useQuery()`** (sem fetch browser); tipo `RouteInfo` ganhou campo `estimado?`; rodapé exibe badge
+ *   âmbar "Estimativa" quando Haversine for usado.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4155 — **FROTA: NOVA VIAGEM — FIXES: fleet_trips COLUNAS FALTANDO + DIRECTIONS API DO BROWSER.**
  *
  * CONTEXTO: após Rev. 4154, dois bloqueios restantes:

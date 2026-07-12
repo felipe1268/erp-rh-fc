@@ -8195,6 +8195,13 @@ Sempre retorne JSON válido, sem markdown.`;
       if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
       }
+
+      const calcEstimates = (distanceKm: number) => ({
+        tollEstimate: distanceKm > 40 ? Math.round(distanceKm * 0.22 * 10) / 10 : 0,
+        fuelEstimate: Math.round(distanceKm / 10 * 5.80 * 10) / 10,
+      });
+
+      // Tentativa 1: Directions API (funciona se a key tiver a API habilitada)
       try {
         const result = await makeMapsRequest<DirectionsResult>('/maps/api/directions/json', {
           origin: input.origin,
@@ -8205,37 +8212,58 @@ Sempre retorne JSON válido, sem markdown.`;
           avoid: 'ferries',
         });
 
-        if (result.status !== 'OK' || !result.routes?.[0]) {
-          return { ok: false as const, erro: result.status === 'ZERO_RESULTS' ? 'Rota não encontrada entre os locais informados.' : `Erro Google Maps: ${result.status}` };
+        if (result.status === 'OK' && result.routes?.[0]) {
+          const route = result.routes[0];
+          const leg = route.legs[0];
+          const distanceKm = Math.round((leg.distance.value / 1000) * 10) / 10;
+          return {
+            ok: true as const,
+            distanceText: leg.distance.text,
+            distanceKm,
+            durationText: leg.duration.text,
+            durationMin: Math.round(leg.duration.value / 60),
+            summary: route.summary,
+            estimado: false,
+            ...calcEstimates(distanceKm),
+          };
         }
+      } catch { /* fallback abaixo */ }
 
-        const route = result.routes[0];
-        const leg = route.legs[0];
-        const distanceKm = leg.distance.value / 1000;
+      // Tentativa 2: Geocoding + Haversine (funciona com a key atual, sem Directions API)
+      try {
+        type GeoResult = { results: Array<{ geometry: { location: { lat: number; lng: number } } }>; status: string };
+        const [og, dg] = await Promise.all([
+          makeMapsRequest<GeoResult>('/maps/api/geocode/json', { address: input.origin,  region: 'BR', language: 'pt-BR' }),
+          makeMapsRequest<GeoResult>('/maps/api/geocode/json', { address: input.destination, region: 'BR', language: 'pt-BR' }),
+        ]);
 
-        // Estimativa de pedágio: média BR ~R$0,22/km em rodovias concessionadas acima de 50km
-        const tollEstimate = distanceKm > 40
-          ? Math.round(distanceKm * 0.22 * 10) / 10
-          : 0;
+        if (og.status === 'OK' && og.results?.[0] && dg.status === 'OK' && dg.results?.[0]) {
+          const { lat: lat1, lng: lng1 } = og.results[0].geometry.location;
+          const { lat: lat2, lng: lng2 } = dg.results[0].geometry.location;
 
-        // Estimativa de combustível: consumo médio 10km/L, diesel R$5,80/L
-        const fuelEstimate = Math.round(distanceKm / 10 * 5.80 * 10) / 10;
+          const R = 6371;
+          const dLat = (lat2 - lat1) * Math.PI / 180;
+          const dLng = (lng2 - lng1) * Math.PI / 180;
+          const a = Math.sin(dLat / 2) ** 2
+            + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+          const straightKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          const distanceKm = Math.round(straightKm * 1.35 * 10) / 10;
+          const durationMin = Math.round((distanceKm / 80) * 60);
 
-        return {
-          ok: true as const,
-          distanceText: leg.distance.text,
-          distanceKm: Math.round(distanceKm * 10) / 10,
-          durationText: leg.duration.text,
-          durationMin: Math.round(leg.duration.value / 60),
-          startAddress: leg.start_address,
-          endAddress: leg.end_address,
-          summary: route.summary,
-          tollEstimate,
-          fuelEstimate,
-        };
-      } catch (e: any) {
-        return { ok: false as const, erro: 'Não foi possível calcular a rota. Verifique os endereços.' };
-      }
+          return {
+            ok: true as const,
+            distanceText: `≈ ${distanceKm} km`,
+            distanceKm,
+            durationText: `≈ ${durationMin} min`,
+            durationMin,
+            summary: 'Estimativa baseada em linha reta × 1,35',
+            estimado: true,
+            ...calcEstimates(distanceKm),
+          };
+        }
+      } catch { /* retorna erro abaixo */ }
+
+      return { ok: false as const, erro: 'Não foi possível estimar a rota. Verifique os endereços.' };
     }),
 
   // Retorna a GOOGLE_API_KEY para chamadas diretas do browser (onde restrições de HTTP referrer são satisfeitas)

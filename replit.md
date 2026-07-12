@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4155** — **FROTA: NOVA VIAGEM — FIXES: fleet_trips COLUNAS FALTANDO + DIRECTIONS API DO BROWSER.** `[SyncSchema+] Rev. 4155` em `index.ts`: loop `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS` para as 17 colunas (vehicle_id, motorista_nome, etc.) — resolve INSERT "column does not exist". `RoutePreview` reescrito com `useEffect`+`fetch` direto para `maps.googleapis.com` do browser (GOOGLE_API_KEY tem restrição de referrer — REQUEST_DENIED no servidor). `getGoogleMapsKey` procedure entrega a key via tRPC autenticado. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4156** — **FROTA: NOVA VIAGEM — FIX: "ERRO AO CALCULAR ROTA" → GEOCODING + HAVERSINE FALLBACK.** Directions API via fetch() do browser gerava CORS (REST API do Google não tem Access-Control-Allow-Origin). Fix: `getRouteInfo` agora tenta Directions API e, se falhar (REQUEST_DENIED ou qualquer erro), cai em **Geocoding ambos os lados + Haversine ×1,35** (Geocoding funciona com a key atual). `RoutePreview` revertido para `trpc.frotas.getRouteInfo.useQuery()`; badge âmbar "Estimativa" indica quando Haversine foi usado. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4154** — **FROTA: NOVA VIAGEM — FIXES: DROPDOWN FIXED, SUBMIT, ERRO VISÍVEL + API GOOGLE DIRETA.** `makeGoogleDirect` + `makeMapsRequest` em `map.ts` para usar `GOOGLE_API_KEY` quando proxy Replit ausente; autocomplete e GPS passam a funcionar. Dropdown: `position:fixed` + `getBoundingClientRect`. Botão "Criar": `formRef.current?.requestSubmit()`. Erro de submit inline no footer. `|| null → || undefined` nos opcionais do Zod. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4155** — **FROTA: NOVA VIAGEM — FIXES: fleet_trips COLUNAS FALTANDO + DIRECTIONS API DO BROWSER.** `[SyncSchema+] Rev. 4155` em `index.ts`: loop `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS` para as 17 colunas (vehicle_id, motorista_nome, etc.) — resolve INSERT "column does not exist". `getGoogleMapsKey` procedure criado (não mais usado). ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 

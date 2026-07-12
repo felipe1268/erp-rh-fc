@@ -520,13 +520,12 @@ type RouteInfo = {
   distanceText: string; distanceKm: number;
   durationText: string; durationMin: number;
   summary: string; tollEstimate: number; fuelEstimate: number;
+  estimado?: boolean;
 } | { ok: false; erro: string };
 
 function RoutePreview({ cId, origin, destination }: { cId: number; origin: string; destination: string }) {
   const [debouncedOrigin, setDebouncedOrigin] = useState(origin);
   const [debouncedDest, setDebouncedDest] = useState(destination);
-  const [route, setRoute] = useState<RouteInfo | null>(null);
-  const [fetching, setFetching] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedOrigin(origin), 900);
@@ -538,57 +537,12 @@ function RoutePreview({ cId, origin, destination }: { cId: number; origin: strin
     return () => clearTimeout(t);
   }, [destination]);
 
-  // Busca a key uma única vez por sessão
-  const { data: keyData } = trpc.frotas.getGoogleMapsKey.useQuery(
-    { companyId: cId }, { staleTime: Infinity, retry: false }
-  );
-
   const enabled = debouncedOrigin.length >= 4 && debouncedDest.length >= 4;
 
-  // Chama Directions API direto do browser (evita REQUEST_DENIED por restrição de referrer na key)
-  useEffect(() => {
-    if (!enabled || !keyData?.key) return;
-    let cancelled = false;
-    setFetching(true);
-    const params = new URLSearchParams({
-      origin: debouncedOrigin,
-      destination: debouncedDest,
-      mode: "driving",
-      language: "pt-BR",
-      region: "BR",
-      avoid: "ferries",
-      key: keyData.key,
-    });
-    fetch(`https://maps.googleapis.com/maps/api/directions/json?${params}`)
-      .then((r) => r.json())
-      .then((data: any) => {
-        if (cancelled) return;
-        if (data.status !== "OK" || !data.routes?.[0]) {
-          setRoute({ ok: false, erro: data.status === "ZERO_RESULTS" ? "Rota não encontrada." : `Erro Google Maps: ${data.status}` });
-          return;
-        }
-        const leg = data.routes[0].legs[0];
-        const distanceKm = leg.distance.value / 1000;
-        const tollEstimate = distanceKm > 40 ? Math.round(distanceKm * 0.22 * 10) / 10 : 0;
-        const fuelEstimate = Math.round(distanceKm / 10 * 5.80 * 10) / 10;
-        setRoute({
-          ok: true,
-          distanceText: leg.distance.text,
-          distanceKm: Math.round(distanceKm * 10) / 10,
-          durationText: leg.duration.text,
-          durationMin: Math.round(leg.duration.value / 60),
-          summary: data.routes[0].summary,
-          tollEstimate,
-          fuelEstimate,
-        });
-      })
-      .catch(() => { if (!cancelled) setRoute({ ok: false, erro: "Erro ao calcular rota." }); })
-      .finally(() => { if (!cancelled) setFetching(false); });
-    return () => { cancelled = true; };
-  }, [debouncedOrigin, debouncedDest, keyData?.key, enabled]);
-
-  // Limpa resultado quando origem/destino ainda não estão prontos
-  useEffect(() => { if (!enabled) setRoute(null); }, [enabled]);
+  const { data: route, isFetching: fetching } = trpc.frotas.getRouteInfo.useQuery(
+    { companyId: cId, origin: debouncedOrigin, destination: debouncedDest },
+    { enabled, staleTime: 5 * 60_000, retry: false }
+  );
 
   const mapSrc = enabled
     ? `https://maps.google.com/maps?saddr=${encodeURIComponent(debouncedOrigin)}&daddr=${encodeURIComponent(debouncedDest)}&output=embed&hl=pt-BR`
@@ -654,8 +608,12 @@ function RoutePreview({ cId, origin, destination }: { cId: number; origin: strin
       )}
 
       {route?.ok && (
-        <div className="px-3 py-1.5 bg-gray-50 border-t text-[10px] text-muted-foreground">
-          Via {route.summary} · Estimativas baseadas em consumo médio e tarifa média de pedágios BR
+        <div className="px-3 py-1.5 bg-gray-50 border-t text-[10px] text-muted-foreground flex items-center gap-1.5 flex-wrap">
+          {route.estimado
+            ? <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">Estimativa</span>
+            : <span>Via {route.summary}</span>
+          }
+          · Estimativas baseadas em consumo médio e tarifa média de pedágios BR
         </div>
       )}
     </div>
