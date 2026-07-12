@@ -1,4 +1,26 @@
 /**
+ * Rev. 4176 - COMPRAS/FINANCEIRO: PAINEL ANÁLISE SEPARADO DA TABELA (FULL-WIDTH).
+ *
+ * O QUE FOI FEITO:
+ * - AnaliseDashPanel redesenhado de sidebar vertical para bloco horizontal full-width
+ *   com 3 colunas (Curva ABC · Pareto | Destaques em grade 2×3 | Fragmentação de Compras).
+ * - Cabeçalho colapsável com ChevronDown + badge de alertas de fragmentação.
+ * - InsightCard: mini-cards coloridos por categoria (rose/orange/emerald/red/indigo/purple).
+ * - Layout da tela Itens & Preços reestruturado:
+ *   Antes: grid 3 colunas (tabela 2/3 + sidebar 1/3 com sticky).
+ *   Depois: stack vertical: [KPI cards] → [AnaliseDashPanel full-width] → [Tabela full-width]
+ *   → [Formas de Pagamento + Obras Atendidas em grid 2 colunas].
+ * - Tabela agora ocupa 100% da largura disponível (muito mais espaço para ver itens).
+ * - Formas de Pagamento e Obras Atendidas ficam em rodapé lado a lado.
+ *
+ * ARQUIVOS:
+ * - client/src/pages/financeiro/AnaliseDashPanel.tsx (reescrito)
+ * - client/src/pages/financeiro/FinanceiroAnaliseCustosDetalhe.tsx (layout)
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4175 - COMPRAS: REDESIGN MODERNO DO OcMiniDialog.
  *
  * O QUE FOI FEITO - redesign completo do dialog de detalhe de OC (OcMiniDialog):

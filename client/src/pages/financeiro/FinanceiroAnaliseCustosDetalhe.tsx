@@ -1065,9 +1065,11 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                 })}
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                {/* ── Tabela de itens (ocupa 2 colunas no LG+) ── */}
-                <div className="lg:col-span-2">
+              {/* ── Painel de Análise (full-width, separado) ── */}
+              <AnaliseDashPanel itens={itens} totalGasto={resumo.totalGasto} />
+
+              {/* ── Tabela de itens (full-width) ── */}
+              <div>
                   <Card className="border-0 shadow-sm">
                     {/* Barra de busca + filtro de obra */}
                     <div className="px-5 pt-4 pb-0 flex flex-wrap items-center gap-2">
@@ -1358,85 +1360,83 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                   </Card>
                 </div>
 
-                {/* ── Coluna lateral: Dash + Formas de pagamento + Obras ── */}
-                <div className="space-y-4 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-120px)] lg:overflow-y-auto">
-                  {/* Dash panel — análises inteligentes */}
-                  <AnaliseDashPanel itens={itens} totalGasto={resumo.totalGasto} />
+              </div>
 
-                  {/* Formas de pagamento */}
+              {/* ── Formas de Pagamento + Obras Atendidas (full-width, abaixo da tabela) ── */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Formas de pagamento */}
+                <Card className="border-0 shadow-sm">
+                  <CardHeader className="pb-2 pt-4 px-5">
+                    <CardTitle className="text-sm font-semibold text-gray-600 flex items-center gap-2">
+                      <CreditCard className="w-4 h-4" /> Formas de Pagamento
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-4 pb-4">
+                    {formasPagamento.length === 0 ? (
+                      <p className="text-xs text-gray-400 py-6 text-center">Sem dados de pagamento</p>
+                    ) : (
+                      <div className="space-y-2.5">
+                        {formasPagamento.map((fp: any, i: number) => (
+                          <div key={i} className="space-y-0.5">
+                            <div className="flex items-center justify-between">
+                              <div className="min-w-0">
+                                <span className="text-xs font-semibold text-gray-700 break-words">{fp.forma}</span>
+                                {fp.condicao && <span className="text-[10px] text-gray-400 ml-1.5">{fp.condicao}</span>}
+                              </div>
+                              <div className="text-right shrink-0 ml-2">
+                                <span className="text-xs font-bold text-gray-800 tabular-nums">{fp.pct}%</span>
+                                <span className="text-[10px] text-gray-400 ml-1">({fp.qtdOcs} OC{fp.qtdOcs !== 1 ? 's' : ''})</span>
+                              </div>
+                            </div>
+                            <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-indigo-400 transition-all"
+                                style={{ width: `${fp.pct}%` }}
+                              />
+                            </div>
+                            <p className="text-[10px] text-gray-400 tabular-nums">{formatBRL(fp.valorTotal)}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Obras atendidas */}
+                {resumo.obrasAtendidas.length > 0 ? (
                   <Card className="border-0 shadow-sm">
                     <CardHeader className="pb-2 pt-4 px-5">
                       <CardTitle className="text-sm font-semibold text-gray-600 flex items-center gap-2">
-                        <CreditCard className="w-4 h-4" /> Formas de Pagamento
+                        <MapPin className="w-4 h-4" /> Obras Atendidas
+                        {obraIdFiltro !== null && (
+                          <span className="text-[10px] font-normal text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">filtrada</span>
+                        )}
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="px-4 pb-4">
-                      {formasPagamento.length === 0 ? (
-                        <p className="text-xs text-gray-400 py-6 text-center">Sem dados de pagamento</p>
-                      ) : (
-                        <div className="space-y-2.5">
-                          {formasPagamento.map((fp: any, i: number) => (
-                            <div key={i} className="space-y-0.5">
-                              <div className="flex items-center justify-between">
-                                <div className="min-w-0">
-                                  <span className="text-xs font-semibold text-gray-700 break-words">{fp.forma}</span>
-                                  {fp.condicao && <span className="text-[10px] text-gray-400 ml-1.5">{fp.condicao}</span>}
-                                </div>
-                                <div className="text-right shrink-0 ml-2">
-                                  <span className="text-xs font-bold text-gray-800 tabular-nums">{fp.pct}%</span>
-                                  <span className="text-[10px] text-gray-400 ml-1">({fp.qtdOcs} OC{fp.qtdOcs !== 1 ? 's' : ''})</span>
-                                </div>
-                              </div>
-                              <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                                <div
-                                  className="h-full rounded-full bg-indigo-400 transition-all"
-                                  style={{ width: `${fp.pct}%` }}
-                                />
-                              </div>
-                              <p className="text-[10px] text-gray-400 tabular-nums">{formatBRL(fp.valorTotal)}</p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      <div className="space-y-1">
+                        {resumo.obrasAtendidas.map((ob: { id: number | null; nome: string }, i: number) => {
+                          const isAtiva = obraIdFiltro !== null && obraIdFiltro === ob.id;
+                          return (
+                            <button
+                              key={i}
+                              onClick={() => {
+                                if (isAtiva) { setObraIdFiltro(null); setExpandedItems(new Set()); setChartItem(null); }
+                                else if (ob.id != null) { setObraIdFiltro(ob.id); setExpandedItems(new Set()); setChartItem(null); }
+                              }}
+                              disabled={ob.id == null}
+                              className={`w-full flex items-start gap-1.5 text-xs rounded px-1 py-0.5 transition-colors text-left ${isAtiva ? 'bg-amber-100 text-amber-800 font-medium' : ob.id != null ? 'hover:bg-gray-50 text-gray-600' : 'text-gray-400 cursor-default'}`}
+                            >
+                              <MapPin className={`w-3 h-3 shrink-0 mt-0.5 ${isAtiva ? 'text-amber-500' : 'text-gray-400'}`} />
+                              <span className="break-words">{ob.nome}</span>
+                              {isAtiva && <span className="ml-auto text-[10px] text-amber-500 shrink-0">✓ ativo</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </CardContent>
                   </Card>
-
-                  {/* Obras atendidas */}
-                  {resumo.obrasAtendidas.length > 0 && (
-                    <Card className="border-0 shadow-sm">
-                      <CardHeader className="pb-2 pt-4 px-5">
-                        <CardTitle className="text-sm font-semibold text-gray-600 flex items-center gap-2">
-                          <MapPin className="w-4 h-4" /> Obras Atendidas
-                          {obraIdFiltro !== null && (
-                            <span className="text-[10px] font-normal text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">filtrada</span>
-                          )}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="px-4 pb-4">
-                        <div className="space-y-1">
-                          {resumo.obrasAtendidas.map((ob: { id: number | null; nome: string }, i: number) => {
-                            const isAtiva = obraIdFiltro !== null && obraIdFiltro === ob.id;
-                            return (
-                              <button
-                                key={i}
-                                onClick={() => {
-                                  if (isAtiva) { setObraIdFiltro(null); setExpandedItems(new Set()); setChartItem(null); }
-                                  else if (ob.id != null) { setObraIdFiltro(ob.id); setExpandedItems(new Set()); setChartItem(null); }
-                                }}
-                                disabled={ob.id == null}
-                                className={`w-full flex items-start gap-1.5 text-xs rounded px-1 py-0.5 transition-colors text-left ${isAtiva ? 'bg-amber-100 text-amber-800 font-medium' : ob.id != null ? 'hover:bg-gray-50 text-gray-600' : 'text-gray-400 cursor-default'}`}
-                              >
-                                <MapPin className={`w-3 h-3 shrink-0 mt-0.5 ${isAtiva ? 'text-amber-500' : 'text-gray-400'}`} />
-                                <span className="break-words">{ob.nome}</span>
-                                {isAtiva && <span className="ml-auto text-[10px] text-amber-500 shrink-0">✓ ativo</span>}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
-                </div>
+                ) : <div />}
               </div>
             </div>
           );

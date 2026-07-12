@@ -50,51 +50,21 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4176** — **COMPRAS/FINANCEIRO: PAINEL ANÁLISE SEPARADO DA TABELA (FULL-WIDTH).** `AnaliseDashPanel` redesenhado: 3 colunas horizontais (Curva ABC | Destaques em grade 2×3 | Fragmentação) com cabeçalho colapsável e badge de alertas. Layout da tela Itens & Preços reestruturado: stack vertical [KPI cards] → [Análise full-width] → [Tabela full-width] → [Formas de Pgto + Obras em grid 2 col]. Tabela agora ocupa 100% da largura. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4175** — **COMPRAS: REDESIGN MODERNO DO OcMiniDialog.** Header gradiente dinâmico (cor varia por status: verde=entregue, azul=aprovada, âmbar=pendente), total da OC em destaque 2xl, chips de pagamento/itens/almox em glass effect. Timeline horizontal 4 etapas (Solicitação→OC→Aprovação→Entrega) com círculos preenchidos. Chips de detalhes em pill cards coloridos. Itens colapsáveis com mini-barra de proporção (peso % no total) por linha. Almoxarifado colapsável em timeline vertical com dots teal/rose. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4174** — **COMPRAS/FINANCEIRO: NOVO LAYOUT DA ABA ITENS + PAINEL DASH + ALMOXARIFADO NA OC.** Novo `AnaliseDashPanel.tsx`: Curva ABC (barras visuais A/B/C), maior gasto/preço alto/preço baixo/maior alta, produto mais recorrente, maior ciclo de compra, **alerta de fragmentação** (≥3 OCs em ≤30 dias — perda de poder de negociação). Barra de busca com filtro real-time na tabela. `getOrdemMiniDetalhe` consulta `almoxarifado_movimentacoes` via `motivo ILIKE '%numero_oc%'`; `OcMiniDialog` ganha seção "Almoxarifado" com entradas/saídas: quem retirou, obra e data. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4173** — **COMPRAS/FINANCEIRO: REDESIGN DO MINI-DIALOG DE DETALHE DA OC.** Novo backend com `criado_por_nome`, `aprovador_nome`, datas formatadas, SC via 2 caminhos (cotação + direto). Novo layout: cabeçalho compacto, seção Rastreabilidade (SC→OC→Aprovação com nomes/datas), grid Detalhes, Observações, tabela de Itens com preço unit., composição do total. Corpo com `max-h-[70vh]` elimina espaço vazio. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4172** — **COMPRAS/FINANCEIRO: OC CLICÁVEL NA TABELA DE OCORRÊNCIAS DA ANÁLISE DE FORNECEDOR.** `ordem_id` adicionado ao `ocorrRes`; `OcMiniDialog` exportado de `ItemCatalogo.tsx`; célula Nº OC virou `<button>` que abre o mini-dialog com todos os detalhes da OC. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4171** — **COMPRAS/FINANCEIRO: UNIDADE NAS CÉLULAS DE PREÇO DA ANÁLISE DE FORNECEDOR.** Sufixo `/un`, `/sc`, `/m³` etc. abaixo do valor nas colunas Preço mín. e Preço máx.; itens de unidade mista não exibem sufixo (sem unidade canônica). ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4170** — **COMPRAS/FINANCEIRO: REVERTE FILTRO FINANCEIRO POR OBRA (CARDS ZERADOS).** Rev. 4169 zerava cards financeiros para obras sem `obra_id` em `financial_entries`; removido o filtro de `rows` — top cards voltam a mostrar total do fornecedor/ano; cards de OCs (aba Itens & Preços) já filtravam corretamente via backend (Rev. 4168). ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4169** — **COMPRAS/FINANCEIRO: FILTRO DE OBRA SINCRONIZA CARDS FINANCEIROS.** `rows` useMemo inclui `obraIdFiltro` como dep; filtra `r.obraId === obraIdFiltro` quando ativo → cards Pago/Em aberto/Vencido/Lançamentos refletem a obra selecionada. Sem mudança de backend. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4168** — **COMPRAS/FINANCEIRO: FILTRO DE OBRA NA ANÁLISE DE FORNECEDOR.** `obraId?: number` no input de `getAnaliseFornecedor`; aplicado nas 3 queries de itens/ocorrências/pagamento (query de obras fica sem filtro para popular o seletor); `resumo.obrasAtendidas` migrado para `{ id, nome }[]`; seletor de obra (Select) aparece acima da tabela quando ≥2 obras; card lateral "Obras Atendidas" virou lista clicável para ativar/limpar filtro diretamente. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4167** — **COMPRAS/FINANCEIRO: DIAGNÓSTICO DE OSCILAÇÃO DE PREÇOS NA ANÁLISE DE FORNECEDOR.** `variacaoPct` zerado quando unidades são diferentes (evita +750% sem sentido); `variacaoReason` ('unidade_mista'|'preco_zero'|'variacao_real'|'ok'); `mesesSpan`; badge roxo "unid. mista" no lugar do %; chips de diagnóstico na linha expandida; R$0,00 destacado em laranja. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
-- **Rev. 4166** — **COMPRAS: CATÁLOGO — OC CLICÁVEL COM MINI-DIALOG DE DETALHE.** Número da OC no Catálogo virou botão. `OcMiniDialog` com quem pediu/quando/fornecedor/entrega/itens. `getOrdemMiniDetalhe`. Fix `[UnitFix Rev.4165]` db→getDb(). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4174** — **COMPRAS/FINANCEIRO: PAINEL DASH + ALMOXARIFADO NA OC.** `AnaliseDashPanel.tsx` (Curva ABC, destaques, fragmentação). Barra busca na tabela. `getOrdemMiniDetalhe` almox via `motivo ILIKE`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4165** — **COMPRAS: NORMALIZAÇÃO DE UNIDADES + AUTO-PADRONIZAÇÃO DE ITENS EM LOTE.** `[UnitFix]` startup; `normItemDesc` expandido; `autoNormalizarItens`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4173** — **COMPRAS/FINANCEIRO: REDESIGN DO MINI-DIALOG DE DETALHE DA OC.** Backend com nomes de criador/aprovador; layout rastreabilidade SC→OC→Aprovação; tabela de Itens com total. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4163** — **COMPRAS: CATÁLOGO — AUDITORIA REAL 1753 DESCRIÇÕES → CORREÇÃO ALGORITMO DE GRUPOS.** FAM=TIGRE fix; remoção de preposições DE/DA/DO/DAS/DOS; `_BRAND_FIRST` Set. 507 famílias. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4172** — **COMPRAS/FINANCEIRO: OC CLICÁVEL NA TABELA DE OCORRÊNCIAS DA ANÁLISE DE FORNECEDOR.** `ordem_id` no `ocorrRes`; `OcMiniDialog` exportado; célula Nº OC virou `<button>`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4162** — **COMPRAS: CATÁLOGO DE ITENS — VISÃO HIERÁRQUICA FAMÍLIA → VARIANTE → OCs POR OBRA.** `getItemFamilia` extrai 1ª palavra significativa; `getItensFamilias` agrupa; `getItemOcDetalhes` lazy-load OCs. Novo `ItemCatalogo.tsx` (3 níveis, search, KPIs). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4171** — **COMPRAS/FINANCEIRO: UNIDADE NAS CÉLULAS DE PREÇO DA ANÁLISE DE FORNECEDOR.** Sufixo `/un`, `/sc`, `/m³` etc.; itens unidade mista sem sufixo. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4160** — **COMPRAS: AUDITORIA DE ITENS — NORMALIZAÇÃO DE NOMES E AUTOCOMPLETE NA SC/OC.** 3 procedures: `auditarItens`, `padronizarItens`, `getItemSugestoes`. Novo `ItemDescricaoInput`. Aba "Itens" na Auditoria. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4159** — **COMPRAS: AUDITORIA DE FORNECEDORES — DUPLICATAS, VARIANTES DE NOME E MESCLAGEM.** 4 procedures + tela `/compras/auditoria-fornecedores`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4158** — **FINANCEIRO: ANÁLISE APROFUNDADA POR FORNECEDOR — ITENS & PREÇOS (OCs).** Novo `compras.getAnaliseFornecedor` (4 queries). `FinanceiroAnaliseCustosDetalhe`: 2 abas, KPI cards, tabela expand/collapse com badge variação preço, mini LineChart, formas pgto. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4151** — **FROTA: CONTROLE DE VIAGENS — MÓDULO COMPLETO.** 2 tabelas novas (`fleet_trips`, `fleet_trip_expenses`); 10 procedures tRPC; fluxo pendente→autorizada→em_andamento→concluída; km inicial/final com foto; despesas + reembolso PIX/TED. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4150** — **FROTA: PEDÁGIOS — CATEGORIA sem_parar CORRIGIDA EM LOTE + IMPORTADOR FIXADO.** 2558 registros `pedagio` → `sem_parar`; tipoUsoToCategoria corrigida; 317 praças duplicadas unificadas. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4149** — **FROTA: FILTRO MENSAL NOS 3 DASHBOARDS (Combustível, Manutenção, Pedágios).** Backend aceita `mes` opcional; white-card com "Ano todo" + Jan–Dez com badges de contagem; cores temáticas por tela; trocar ano reseta o mês. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4148** — **NFS-e: #30 VALOR LÍQUIDO CORRIGIDO (120.694,65 → 119.469,32).** Fórmula subtraía só IRRF, não retencao_csll; correção direta por id=929 alinhando ao DANFSe. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4146** — **NFS-e: BATCH DANFSes #38, #41, #42 — ISS RETIDO + VALOR LÍQUIDO CORRIGIDOS.** ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4145** — **NFS-e: BATCH DANFSes #29–#40 — ISS RETIDO + VALOR LÍQUIDO CORRIGIDOS, 10 NOTAS.** ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4170** — **COMPRAS/FINANCEIRO: REVERTE FILTRO FINANCEIRO POR OBRA (CARDS ZERADOS).** Removido filtro de `rows` — top cards voltam a mostrar total do fornecedor/ano. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 
