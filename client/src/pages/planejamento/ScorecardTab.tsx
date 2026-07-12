@@ -234,6 +234,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
   const [showEventos, setShowEventos] = useState(true);
   const [showFerramentas, setShowFerramentas] = useState(false);
   const [showRetrabalhos, setShowRetrabalhos] = useState(false);
+  const [showMemoria, setShowMemoria] = useState(false);
 
   const enabled = !!obraId;
 
@@ -543,6 +544,99 @@ export default function ScorecardTab({ proj }: { proj: any }) {
               <AlertTriangle className="w-3 h-3" />Obra com resultado negativo — bônus não calculado sobre lucro negativo.
             </p>
           )}
+
+          {/* ── Memória de Cálculo (colapsável) ──────────────────── */}
+          <div className="border border-gray-200 rounded-lg overflow-hidden">
+            <button
+              className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 text-xs font-medium text-gray-600 transition-colors"
+              onClick={() => setShowMemoria(v => !v)}
+            >
+              <span className="flex items-center gap-1.5">
+                <Info className="w-3.5 h-3.5 text-blue-500" />
+                Memória de Cálculo
+              </span>
+              {showMemoria ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
+            {showMemoria && (
+              <div className="px-3 py-3 space-y-4 text-xs bg-white">
+
+                {/* Fonte do orçamento */}
+                {financeiro.orcamentoInfo ? (
+                  <div className="bg-blue-50 border border-blue-100 rounded px-2.5 py-1.5 text-[10px] text-blue-700 space-y-0.5">
+                    <p className="font-semibold">Orçamento de referência</p>
+                    <p>Código: <span className="font-mono">{financeiro.orcamentoInfo.codigo}</span> — Status: <span className="capitalize">{financeiro.orcamentoInfo.status}</span></p>
+                    <p>Fonte do Valor do Contrato: <span className="font-mono">{financeiro.orcamentoInfo.fonteContrato === "valorNegociado" ? "valorNegociado (preço negociado com cliente)" : "totalVenda (preço de venda do orçamento)"}</span></p>
+                  </div>
+                ) : (
+                  <p className="text-amber-600 text-[10px]">⚠ Nenhum orçamento vinculado — valores do contrato indisponíveis.</p>
+                )}
+
+                {/* Fórmula Previsto */}
+                <div className="space-y-1">
+                  <p className="font-semibold text-gray-700 uppercase tracking-wide text-[10px]">Previsto</p>
+                  <div className="font-mono space-y-0.5 text-[11px]">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">(A) Valor do Contrato</span>
+                      <span className="font-semibold">{fmt(financeiro.valorContrato)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">(B) Custo Previsto</span>
+                      <span className="font-semibold text-red-600">− {fmt(financeiro.custoPrevisto)}</span>
+                    </div>
+                    <div className="flex justify-between border-t border-dashed border-gray-200 pt-1 mt-0.5">
+                      <span className="font-semibold text-gray-700">Lucro Previsto = A − B</span>
+                      <span className={`font-bold ${financeiro.lucroPrevisto >= 0 ? "text-green-700" : "text-red-600"}`}>
+                        {fmt(financeiro.lucroPrevisto)} ({financeiro.margemPrevista.toFixed(1)}%)
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Fórmula Realizado */}
+                <div className="space-y-1">
+                  <p className="font-semibold text-gray-700 uppercase tracking-wide text-[10px]">Realizado</p>
+                  <div className="font-mono space-y-0.5 text-[11px]">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">(A) Valor do Contrato</span>
+                      <span className="font-semibold">{fmt(financeiro.valorContrato)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">(C) Custo Realizado</span>
+                      <span className="font-semibold text-red-600">− {fmt(financeiro.custoRealizado)}</span>
+                    </div>
+                    <div className="flex justify-between border-t border-dashed border-gray-200 pt-1 mt-0.5">
+                      <span className="font-semibold text-gray-700">Lucro Realizado = A − C</span>
+                      <span className={`font-bold ${financeiro.lucroRealizado >= 0 ? "text-green-700" : "text-red-600"}`}>
+                        {fmt(financeiro.lucroRealizado)} ({financeiro.margemRealizada.toFixed(1)}%)
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-1">
+                    Fonte (C): <span className="font-mono">financial_entries</span> WHERE natureza=&#39;despesa&#39; AND status IN (&#39;pago&#39;, &#39;pago_parcial&#39;, &#39;liquidado&#39;, &#39;baixado&#39;)
+                  </p>
+                </div>
+
+                {/* Breakdown custo por categoria */}
+                {financeiro.custoPorCategoria.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="font-semibold text-gray-700 uppercase tracking-wide text-[10px]">Composição do Custo Realizado (C)</p>
+                    <div className="space-y-0.5 max-h-40 overflow-y-auto pr-1">
+                      {financeiro.custoPorCategoria.map((cat: any, i: number) => (
+                        <div key={i} className="flex justify-between text-[10px] py-0.5 border-b border-gray-50">
+                          <span className="text-gray-500 truncate max-w-[60%]">
+                            <span className="text-blue-600">[{cat.origem}]</span> {cat.conta}
+                          </span>
+                          <span className="font-semibold text-gray-700 shrink-0">{fmt(cat.total)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            )}
+          </div>
+
         </CardContent>
       </Card>
 

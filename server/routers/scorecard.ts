@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { sql, eq, and, isNull } from "drizzle-orm";
+import { sql, eq, and, isNull, desc } from "drizzle-orm";
 import { accidents, orcamentos } from "../../drizzle/schema";
 
 function clamp(v: number, lo = 0, hi = 100): number {
@@ -98,15 +98,19 @@ export const scorecardRouter = router({
       const { companyId, obraId } = input;
 
       // Drizzle ORM para orcamentos (colunas camelCase sem mapeamento explícito)
+      // Pega o mais recente não-excluído
       const orcRow = await db
         .select({
+          id:             orcamentos.id,
+          codigo:         orcamentos.codigo,
+          status:         orcamentos.status,
           totalVenda:     orcamentos.totalVenda,
           totalCusto:     orcamentos.totalCusto,
           valorNegociado: orcamentos.valorNegociado,
         })
         .from(orcamentos)
         .where(and(eq(orcamentos.companyId, companyId), eq(orcamentos.obraId, obraId), isNull(orcamentos.deletedAt)))
-        .orderBy(orcamentos.id)
+        .orderBy(desc(orcamentos.id))
         .limit(1)
         .catch(() => [] as any[]);
 
@@ -139,6 +143,7 @@ export const scorecardRouter = router({
         receitaRealRows,
         custoRealRows,
         configRowsData,
+        custoCategoriaRows,
       ] = await Promise.all([
         safeExec(db.execute(sql`
           SELECT id, data FROM dds_sessoes
@@ -217,10 +222,24 @@ export const scorecardRouter = router({
           SELECT * FROM obra_scorecard_config
           WHERE company_id = ${companyId} AND obra_id = ${obraId} LIMIT 1
         `)),
+        safeExec(db.execute(sql`
+          SELECT
+            COALESCE(origem_modulo, 'financeiro') AS origem,
+            COALESCE(conta_nome, 'Sem conta classificada') AS conta,
+            SUM(COALESCE(valor_realizado, valor_previsto))::numeric AS total
+          FROM financial_entries
+          WHERE company_id = ${companyId} AND obra_id = ${obraId}
+          AND natureza = 'despesa'
+          AND status IN ('pago','pago_parcial','liquidado','baixado')
+          GROUP BY COALESCE(origem_modulo, 'financeiro'), COALESCE(conta_nome, 'Sem conta classificada')
+          ORDER BY total DESC
+          LIMIT 20
+        `)),
       ]);
 
       // Normalizar para o formato usado pelo resto da função
       const acidentes       = { rows: acidentesRows.map((a: any) => ({ gravidade: a.gravidade, dias_afastamento: a.diasAfastamento ?? 0, data_acidente: a.dataAcidente })) };
+      const custoPorCategoria = custoCategoriaRows as any[];
       const ddsSessoes      = { rows: ddsSessoesRows };
       const warningsTerceiros = { rows: warningsTerceirosRows };
       const warningsProps   = { rows: warningsPropsRows };
@@ -364,18 +383,21 @@ export const scorecardRouter = router({
 
       // ── FINANCEIRO ───────────────────────────────────────────────────────────
       const orc = (orcRow as any[])[0] ?? {};
+      const orcUsouNegociado = !!(orc.valorNegociado && parseFloat(String(orc.valorNegociado)) > 0);
       // Valor do Contrato: valorNegociado (se preenchido) > totalVenda > 0
       const valorContrato  = parseFloat(String(orc.valorNegociado || orc.totalVenda || "0"));
       const custoPrevisto  = parseFloat(String(orc.totalCusto ?? "0"));
       const lucroPrevisto  = valorContrato - custoPrevisto;
+      const margemPrevista = valorContrato > 0 ? (lucroPrevisto / valorContrato) * 100 : 0;
 
       const receitaRealizada  = parseFloat(String((receitaReal.rows as any[])[0]?.total ?? "0"));
       const custoRealizado    = parseFloat(String((custoReal.rows as any[])[0]?.total ?? "0"));
-      // Lucro realizado = Valor do Contrato − Custo Realizado (não receita−custo,
-      // pois a receita pode ainda não ter entrado enquanto o custo já correu)
+      // Lucro realizado = Valor do Contrato − Custo Realizado
+      // (receita pode ainda não ter entrado; custo já correu)
       const lucroRealizado    = valorContrato > 0
         ? valorContrato - custoRealizado
         : receitaRealizada - custoRealizado;
+      const margemRealizada = valorContrato > 0 ? (lucroRealizado / valorContrato) * 100 : 0;
 
       // ── BÔNUS ────────────────────────────────────────────────────────────────
       const fatorBonus   = getBonusFator(scoreTotal);
@@ -416,12 +438,27 @@ export const scorecardRouter = router({
           mediaAvaliacao,
         },
         financeiro: {
+          // Orçamento de referência
+          orcamentoInfo: orc.id ? {
+            id:     orc.id,
+            codigo: orc.codigo ?? "—",
+            status: orc.status ?? "—",
+            fonteContrato: orcUsouNegociado ? "valorNegociado" : "totalVenda",
+          } : null,
           valorContrato,
           custoPrevisto,
           lucroPrevisto,
+          margemPrevista,
+          // Realizado
           receitaRealizada,
           custoRealizado,
           lucroRealizado,
+          margemRealizada,
+          custoPorCategoria: custoPorCategoria.map((r: any) => ({
+            origem: String(r.origem ?? "financeiro"),
+            conta:  String(r.conta  ?? "Sem conta"),
+            total:  parseFloat(String(r.total ?? "0")),
+          })),
         },
         bonus: {
           fatorBonus,
