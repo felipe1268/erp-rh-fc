@@ -10457,3 +10457,37 @@ export const financialChequesRecebidos = pgTable("financial_cheques_recebidos", 
   index("idx_chqr_status").on(table.companyId, table.status),
   index("idx_chqr_numero").on(table.companyId, table.numeroCheque),
 ]);
+
+// ── Rev. 4182 — Scorecard do Gestor ────────────────────────────────────────
+export const obraScorecardConfig = pgTable("obra_scorecard_config", {
+  id:                   serial().primaryKey(),
+  companyId:            integer("company_id").notNull(),
+  obraId:               integer("obra_id").notNull().unique(),
+  bonusTipo:            varchar("bonus_tipo", { length: 20 }).notNull().default("percentual_lucro"),
+  bonusValor:           numeric("bonus_valor", { precision: 10, scale: 2 }).default("5"),
+  pesoSeguranca:        integer("peso_seguranca").notNull().default(30),
+  pesoPlanejamento:     integer("peso_planejamento").notNull().default(25),
+  pesoCompras:          integer("peso_compras").notNull().default(20),
+  pesoAlmox:            integer("peso_almox").notNull().default(15),
+  pesoQualidade:        integer("peso_qualidade").notNull().default(10),
+  metaSpi:              numeric("meta_spi", { precision: 4, scale: 2 }).default("0.90"),
+  metaCpi:              numeric("meta_cpi", { precision: 4, scale: 2 }).default("0.90"),
+  maxAcidentesGraves:   integer("max_acidentes_graves").default(0),
+  maxEmergenciaisPct:   integer("max_emergenciais_pct").default(10),
+  criadoEm:             timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+  atualizadoEm:         timestamp("atualizado_em", { mode: "string" }).defaultNow().notNull(),
+});
+
+export const obraRetrabalho = pgTable("obra_retrabalho", {
+  id:                 serial().primaryKey(),
+  companyId:          integer("company_id").notNull(),
+  obraId:             integer("obra_id").notNull(),
+  dataOcorrencia:     date("data_ocorrencia", { mode: "string" }).notNull(),
+  servicoAfetado:     varchar("servico_afetado", { length: 500 }).notNull(),
+  causaRaiz:          text("causa_raiz"),
+  custoEstimado:      numeric("custo_estimado", { precision: 15, scale: 2 }),
+  registradoPorId:    integer("registrado_por_id"),
+  registradoPorNome:  varchar("registrado_por_nome", { length: 255 }),
+  excluidoEm:         timestamp("excluido_em", { mode: "string" }),
+  criadoEm:           timestamp("criado_em", { mode: "string" }).defaultNow().notNull(),
+});

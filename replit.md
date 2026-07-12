@@ -50,25 +50,21 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4182** — **PLANEJAMENTO: SCORECARD DO GESTOR COM KPIs, BÔNUS E CONTROLE DE FERRAMENTAS/RETRABALHO.** Nova aba "Scorecard" (ícone Trophy) no PlanejamentoDetalhe. Score 0-100 em 5 dimensões ponderadas: Segurança(30%), Planejamento(25%), Compras(20%), Almox(15%), Qualidade(10%) — pesos configuráveis por Admin por obra. Bônus = % lucro líquido ou valor fixo × fator (score≥90→100%, ≥75→80%, ≥60→50%, ≥40→20%). Raio-X financeiro, Controle de Ferramentas (warehouse_loans) e Controle de Retrabalho (admin-only). Log de eventos por dimensão. Backend: `scorecardRouter` (getConfig/saveConfig/getScore/retrabalhoList|Create|Delete/ferramentasList). Novas tabelas: `obra_scorecard_config` + `obra_retrabalho`. SyncSchema+ Rev.4182. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4181** — **COMPRAS: CONDIÇÃO DE PAGAMENTO VIRA SELECT PADRONIZADO NAS OCs.** Campo "Condição de Pagamento" era `<Input>` livre → gerava 38+ variantes ("cheque cheques", "cheque 3Z" etc.). Substituído por `<Select>` com as opções de `TIPOS_PAGAMENTO`. Pré-preenchimento automático ao selecionar fornecedor (deriva do ciclo configurado: 1×30d → "30 DDL"). Donut de Formas de Pagamento no painel de análise agrupa por meio normalizado (FORMA_LABEL_MAP). ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4180** — **COMPRAS/FINANCEIRO: ANÁLISE FORNECEDOR — TOGGLE MÊS/SEMANA + GRUPOS SIMILARES + INTERVALO.** Toggle "Mês | Semana" no gráfico de gastos (barras azul-sky, estatísticas de pico/média). Seção "Grupos Similares" agrupa variantes de nome por família léxica ("Prego 17x21" + "Prego de Aço 17x21" → Prego). Intervalo entre compras no drill-down: KPI "Frequência" + mini bar chart dos intervalos consecutivos colorido por urgência. Backend: `intervaloDias` e `familiaKey` em cada item. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4176** — **COMPRAS/FINANCEIRO: PAINEL ANÁLISE SEPARADO DA TABELA (FULL-WIDTH).** `AnaliseDashPanel` redesenhado: 3 colunas horizontais (Curva ABC | Destaques em grade 2×3 | Fragmentação) com cabeçalho colapsável e badge de alertas. Tabela full-width; Formas de Pgto + Obras em grid 2 col. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4175** — **COMPRAS: REDESIGN MODERNO DO OcMiniDialog.** Header gradiente dinâmico (cor varia por status: verde=entregue, azul=aprovada, âmbar=pendente), total da OC em destaque 2xl, chips de pagamento/itens/almox em glass effect. Timeline horizontal 4 etapas (Solicitação→OC→Aprovação→Entrega) com círculos preenchidos. Chips de detalhes em pill cards coloridos. Itens colapsáveis com mini-barra de proporção (peso % no total) por linha. Almoxarifado colapsável em timeline vertical com dots teal/rose. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
-- **Rev. 4177** — **COMPRAS/FINANCEIRO: ABA DEDICADA "ANÁLISE" NO DETALHE DE FORNECEDOR.** 3º tab "Análise" (badge "IA"); AnaliseDashPanel + Formas de Pagamento + Obras Atendidas. State `'lancamentos' | 'itens' | 'analise'`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4180** — **COMPRAS/FINANCEIRO: ANÁLISE FORNECEDOR — TOGGLE MÊS/SEMANA + GRUPOS SIMILARES + INTERVALO.** Toggle "Mês | Semana", Grupos Similares por família léxica, Intervalo entre compras no drill-down. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4174** — **COMPRAS/FINANCEIRO: PAINEL DASH + ALMOXARIFADO NA OC.** `AnaliseDashPanel.tsx` (Curva ABC, destaques, fragmentação). Barra busca na tabela. `getOrdemMiniDetalhe` almox via `motivo ILIKE`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4177** — **COMPRAS/FINANCEIRO: ABA DEDICADA "ANÁLISE" NO DETALHE DE FORNECEDOR.** 3º tab "Análise" (badge "IA"); AnaliseDashPanel + Formas de Pagamento + Obras Atendidas. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4173** — **COMPRAS/FINANCEIRO: REDESIGN DO MINI-DIALOG DE DETALHE DA OC.** Backend com nomes de criador/aprovador; layout rastreabilidade SC→OC→Aprovação; tabela de Itens com total. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4176** — **COMPRAS/FINANCEIRO: PAINEL ANÁLISE SEPARADO DA TABELA (FULL-WIDTH).** `AnaliseDashPanel` 3 colunas horizontais + cabeçalho colapsável. Tabela full-width. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4172** — **COMPRAS/FINANCEIRO: OC CLICÁVEL NA TABELA DE OCORRÊNCIAS DA ANÁLISE DE FORNECEDOR.** `ordem_id` no `ocorrRes`; `OcMiniDialog` exportado; célula Nº OC virou `<button>`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4175** — **COMPRAS: REDESIGN MODERNO DO OcMiniDialog.** Header gradiente dinâmico, timeline horizontal 4 etapas, itens colapsáveis com mini-barra de proporção. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4171** — **COMPRAS/FINANCEIRO: UNIDADE NAS CÉLULAS DE PREÇO DA ANÁLISE DE FORNECEDOR.** Sufixo `/un`, `/sc`, `/m³` etc.; itens unidade mista sem sufixo. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4174** — **COMPRAS/FINANCEIRO: PAINEL DASH + ALMOXARIFADO NA OC.** `AnaliseDashPanel.tsx` (Curva ABC, destaques, fragmentação). Barra busca. Almox via `motivo ILIKE`. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

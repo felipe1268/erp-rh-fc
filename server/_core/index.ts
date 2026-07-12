@@ -5128,6 +5128,46 @@ REGRAS DE EXTRAÇÃO:
           console.log("[SyncSchema+] Rev. 4157: fleet_trips garantida (data DEFAULT CURRENT_DATE + todas as colunas core/extras)");
         } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4156 fleet_trips cols:", e?.message || e); }
 
+        // Rev. 4182 — Scorecard do Gestor + Controle de Retrabalho
+        try {
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS obra_scorecard_config (
+              id                  SERIAL PRIMARY KEY,
+              company_id          INTEGER NOT NULL,
+              obra_id             INTEGER NOT NULL UNIQUE,
+              bonus_tipo          VARCHAR(20) NOT NULL DEFAULT 'percentual_lucro',
+              bonus_valor         NUMERIC(10,2) DEFAULT 5,
+              peso_seguranca      INTEGER NOT NULL DEFAULT 30,
+              peso_planejamento   INTEGER NOT NULL DEFAULT 25,
+              peso_compras        INTEGER NOT NULL DEFAULT 20,
+              peso_almox          INTEGER NOT NULL DEFAULT 15,
+              peso_qualidade      INTEGER NOT NULL DEFAULT 10,
+              meta_spi            NUMERIC(4,2) DEFAULT 0.90,
+              meta_cpi            NUMERIC(4,2) DEFAULT 0.90,
+              max_acidentes_graves  INTEGER DEFAULT 0,
+              max_emergenciais_pct  INTEGER DEFAULT 10,
+              criado_em           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              atualizado_em       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+          `);
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS obra_retrabalho (
+              id                    SERIAL PRIMARY KEY,
+              company_id            INTEGER NOT NULL,
+              obra_id               INTEGER NOT NULL,
+              data_ocorrencia       DATE NOT NULL,
+              servico_afetado       VARCHAR(500) NOT NULL,
+              causa_raiz            TEXT,
+              custo_estimado        NUMERIC(15,2),
+              registrado_por_id     INTEGER,
+              registrado_por_nome   VARCHAR(255),
+              excluido_em           TIMESTAMPTZ,
+              criado_em             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+          `);
+          console.log("[SyncSchema+] Rev. 4182: obra_scorecard_config + obra_retrabalho garantidas (Scorecard do Gestor).");
+        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4182 scorecard:", e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

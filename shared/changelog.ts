@@ -1,4 +1,40 @@
 /**
+ * Rev. 4182 - SCORECARD DO GESTOR: KPIs DE OBRA COM BÔNUS, RETRABALHO E CONTROLE DE FERRAMENTAS.
+ *
+ * O QUE FOI FEITO:
+ * - Nova aba "Scorecard" no PlanejamentoDetalhe (ícone Trophy) — disponível para qualquer usuário
+ *   com acesso à obra, configurável por Admin/Admin Master.
+ * - Score de 0-100 composto por 5 dimensões ponderadas (pesos configuráveis por obra):
+ *     • Segurança (30% padrão): −30pts/acidente grave, −5pts/advertência, +5pts/DDS realizado.
+ *     • Planejamento (25%): score derivado de SPI (via Curva S/REFI) e contagem de REFIs.
+ *     • Compras (20%): −10pts/% OC emergencial acima da meta (>10% por padrão).
+ *     • Almoxarifado (15%): −15pts/ferramenta perdida (warehouse_loans status="perdido").
+ *     • Qualidade (10%): −5pts/retrabalho registrado + score de avaliação de cliente (0-20pts).
+ * - Score total calcula fator de bônus: ≥90→100%, ≥75→80%, ≥60→50%, ≥40→20%, <40→0%.
+ * - Bônus pode ser "% do Lucro Líquido" ou "Valor Fixo" — configurado por Admin por obra.
+ * - Raio-X Financeiro: receita realizada, custo realizado e lucro líquido da obra (financial_entries).
+ * - Controle de Ferramentas: tabela das warehouse_loans da obra com status (em uso/devolvido/perdido).
+ * - Controle de Retrabalho: Admin registra ocorrências (serviço, causa-raiz, custo estimado).
+ * - Log de Eventos: linha a linha por dimensão mostrando pontos ganhos/perdidos com razão.
+ * - Gauge visual (RadialBarChart Recharts) com cor dinâmica por faixa de score.
+ * - Backend: `server/routers/scorecard.ts` — getConfig, saveConfig, getScore, retrabalhoList,
+ *   retrabalhoCreate, retrabalhoDelete, ferramentasList — todas com guard de companyId.
+ * - Novas tabelas: `obra_scorecard_config` (UNIQUE por obra_id) + `obra_retrabalho` (soft-delete).
+ * - SyncSchema+: CREATE TABLE IF NOT EXISTS para ambas as tabelas (Rev. 4182).
+ * - Drizzle schema: obraScorecardConfig + obraRetrabalho exportadas em drizzle/schema.ts.
+ * - Router registrado em server/routers.ts (scorecard: scorecardRouter).
+ * - ZERO DELETE · ZERO ALTER destrutivo.
+ *
+ * ARQUIVOS PRINCIPAIS:
+ * - server/routers/scorecard.ts (NOVO)
+ * - client/src/pages/planejamento/ScorecardTab.tsx (NOVO)
+ * - client/src/pages/planejamento/PlanejamentoDetalhe.tsx (Tab + import)
+ * - server/_core/index.ts (SyncSchema+ Rev. 4182)
+ * - drizzle/schema.ts (2 novas tabelas)
+ * - server/routers.ts (registro do router)
+ */
+
+/**
  * Rev. 4181 - COMPRAS: CONDIÇÃO DE PAGAMENTO VIRA SELECT PADRONIZADO NAS ORDENS DE COMPRA.
  *
  * O QUE FOI FEITO:

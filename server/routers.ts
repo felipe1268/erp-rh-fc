@@ -152,6 +152,7 @@ import { sstDocumentsRouter } from "./routers/sstDocuments";
 import { integracaoSSTRouter } from "./routers/integracaoSST";
 import { sstAnalyticsRouter } from "./routers/sstAnalytics";
 import { acidentesRouter } from "./routers/acidentes";
+import { scorecardRouter } from "./routers/scorecard";
 import { avaliacaoFuncionariosRouter } from "./routers/avaliacaoFuncionarios";
 import { systemDocumentTemplatesRouter } from "./routers/systemDocumentTemplates";
 import { fiscalNotesRouter } from "./routers/fiscalNotes";
@@ -264,6 +265,7 @@ export const appRouter = router({
   integracaoSST: integracaoSSTRouter,
   sstAnalytics: sstAnalyticsRouter,
   acidentes: acidentesRouter,
+  scorecard: scorecardRouter,
   avaliacaoFuncionarios: avaliacaoFuncionariosRouter,
   systemDocumentTemplates: systemDocumentTemplatesRouter,
   bankStatementTemplates: bankStatementTemplatesRouter,

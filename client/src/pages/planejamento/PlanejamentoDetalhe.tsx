@@ -17,6 +17,7 @@ import { ProgramacaoSemanal } from "./ProgramacaoSemanal";
 import { DiagramaRede } from "./DiagramaRede";
 import { CipaBadge } from "@/components/CipaBadge";
 const BimViewer = React.lazy(() => import("./BimViewer"));
+import ScorecardTab from "./ScorecardTab";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,7 +43,7 @@ import {
   TrendingDown, ArrowUpRight, ArrowDownRight, CalendarClock, Network, ArrowRightLeft,
   Users, HardHat, CheckCircle, Calculator, Info, Box,
   FileCheck2, FileX2, FileWarning, GraduationCap,
-  Star, Smile, Meh, Frown, ListTree, Target,
+  Star, Smile, Meh, Frown, ListTree, Target, Trophy,
 } from "lucide-react";
 import { getNrDescricao } from "@shared/trainingRules";
 import {
@@ -55,7 +56,7 @@ const n = (v: any) => parseFloat(v || "0") || 0;
 function fmt(v: number) { return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 function fPct(v: number) { return `${n(v).toFixed(2)}%`; }
 
-type Tab = "visao-geral" | "cronograma" | "gantt" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "prog-semanal" | "diagrama-rede" | "custo-rh" | "efetivo" | "efetivo-ia" | "bim-3d" | "avaliacao-cliente";
+type Tab = "visao-geral" | "cronograma" | "gantt" | "curva-s" | "avanco" | "revisoes" | "refis" | "caminho-critico" | "compras" | "cronograma-financeiro" | "prev-medicao" | "prog-semanal" | "diagrama-rede" | "custo-rh" | "efetivo" | "efetivo-ia" | "bim-3d" | "avaliacao-cliente" | "scorecard";
 
 // ── Cálculo de desvio de prazo ────────────────────────────────────────────────
 function calcDesvio(dataTermino: string | null) {
@@ -221,6 +222,7 @@ const TAB_DEFS: { id: Tab; label: string; Icon: React.ComponentType<{ className?
   { id: "bim-3d",               label: "BIM 3D",             Icon: Box },
   // Rev. 1593 — Avaliação Anônima do Cliente filtrada por esta obra
   { id: "avaliacao-cliente",    label: "Avaliação Cliente",  Icon: Star },
+  { id: "scorecard",            label: "Scorecard",           Icon: Trophy },
 ];
 const TAB_IDS = TAB_DEFS.map(t => t.id);
 const LS_KEY  = "plan-tab-order";
@@ -279,6 +281,7 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
     "refis": "refis",
     "bim-3d": "bim_3d",
     "avaliacao-cliente": "avaliacao_cliente",
+    "scorecard":         "avaliacao_cliente",
   };
 
   const canViewTab = (tabId: string): boolean => {
@@ -1640,6 +1643,9 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
 
         {canViewTab(aba) && aba === "avaliacao-cliente" && (
           <AvaliacaoClienteObraTab proj={proj} />
+        )}
+        {canViewTab(aba) && aba === "scorecard" && (
+          <ScorecardTab proj={proj} />
         )}
 
       </div>
