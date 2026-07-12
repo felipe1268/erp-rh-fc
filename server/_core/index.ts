@@ -5090,6 +5090,36 @@ REGRAS DE EXTRAÇÃO:
           `);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.4093 sped_configs:`, e?.message || e); }
 
+        // Rev. 4155 — fleet_trips: ADD COLUMN IF NOT EXISTS para colunas criadas após a tabela
+        // (CREATE TABLE IF NOT EXISTS não altera tabela já existente — ALTER é idempotente)
+        try {
+          const ftCols: string[] = [
+            "vehicle_id INTEGER",
+            "placa VARCHAR(20)",
+            "motorista_nome VARCHAR(255)",
+            "motorista_id INTEGER",
+            "motivo_descricao TEXT",
+            "obra_id INTEGER",
+            "obra_nome VARCHAR(255)",
+            "km_inicial NUMERIC(10,1)",
+            "km_final NUMERIC(10,1)",
+            "foto_km_inicial_url TEXT",
+            "foto_km_final_url TEXT",
+            "data_saida TIMESTAMPTZ",
+            "data_retorno TIMESTAMPTZ",
+            "autorizado_por VARCHAR(255)",
+            "data_autorizacao TIMESTAMPTZ",
+            "observacoes_gestor TEXT",
+            "criado_por VARCHAR(255)",
+          ];
+          for (const colDef of ftCols) {
+            try {
+              await db.execute(sql.raw(`ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS ${colDef}`));
+            } catch { /* coluna já existe */ }
+          }
+          console.log("[SyncSchema+] Rev. 4155: colunas fleet_trips garantidas (ADD COLUMN IF NOT EXISTS)");
+        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4155 fleet_trips cols:", e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

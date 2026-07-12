@@ -469,6 +469,29 @@ async function ensureFleetTables() {
       atualizado_em TIMESTAMPTZ DEFAULT NOW() NOT NULL
     )
   `);
+  // Rev. 4155 — garante colunas novas em fleet_trips (CREATE TABLE IF NOT EXISTS não altera tabela já existente)
+  for (const stmt of [
+    `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS vehicle_id INTEGER`,
+    `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS placa VARCHAR(20)`,
+    `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS motorista_nome VARCHAR(255)`,
+    `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS motorista_id INTEGER`,
+    `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS motivo_descricao TEXT`,
+    `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS obra_id INTEGER`,
+    `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS obra_nome VARCHAR(255)`,
+    `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS km_inicial NUMERIC(10,1)`,
+    `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS km_final NUMERIC(10,1)`,
+    `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS foto_km_inicial_url TEXT`,
+    `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS foto_km_final_url TEXT`,
+    `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS data_saida TIMESTAMPTZ`,
+    `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS data_retorno TIMESTAMPTZ`,
+    `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS autorizado_por VARCHAR(255)`,
+    `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS data_autorizacao TIMESTAMPTZ`,
+    `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS observacoes_gestor TEXT`,
+    `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS criado_por VARCHAR(255)`,
+  ]) {
+    try { await db.execute(sql.raw(stmt)); } catch { /* já existe */ }
+  }
+  console.log("[SyncSchema+] Rev. 4155: colunas fleet_trips garantidas (ADD COLUMN IF NOT EXISTS)");
 
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS fleet_trip_expenses (
@@ -8213,6 +8236,17 @@ Sempre retorne JSON válido, sem markdown.`;
       } catch (e: any) {
         return { ok: false as const, erro: 'Não foi possível calcular a rota. Verifique os endereços.' };
       }
+    }),
+
+  // Retorna a GOOGLE_API_KEY para chamadas diretas do browser (onde restrições de HTTP referrer são satisfeitas)
+  getGoogleMapsKey: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
+      }
+      const key = process.env.GOOGLE_API_KEY ?? "";
+      return { key };
     }),
 });
 

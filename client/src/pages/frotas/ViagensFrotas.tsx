@@ -515,9 +515,18 @@ function VehiclePickerSheet({ open, onClose, vehicles, selectedId, onSelect }: {
   );
 }
 
+type RouteInfo = {
+  ok: true;
+  distanceText: string; distanceKm: number;
+  durationText: string; durationMin: number;
+  summary: string; tollEstimate: number; fuelEstimate: number;
+} | { ok: false; erro: string };
+
 function RoutePreview({ cId, origin, destination }: { cId: number; origin: string; destination: string }) {
   const [debouncedOrigin, setDebouncedOrigin] = useState(origin);
   const [debouncedDest, setDebouncedDest] = useState(destination);
+  const [route, setRoute] = useState<RouteInfo | null>(null);
+  const [fetching, setFetching] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedOrigin(origin), 900);
@@ -529,12 +538,57 @@ function RoutePreview({ cId, origin, destination }: { cId: number; origin: strin
     return () => clearTimeout(t);
   }, [destination]);
 
+  // Busca a key uma única vez por sessão
+  const { data: keyData } = trpc.frotas.getGoogleMapsKey.useQuery(
+    { companyId: cId }, { staleTime: Infinity, retry: false }
+  );
+
   const enabled = debouncedOrigin.length >= 4 && debouncedDest.length >= 4;
 
-  const { data: route, isFetching, error } = trpc.frotas.getRouteInfo.useQuery(
-    { companyId: cId, origin: debouncedOrigin, destination: debouncedDest },
-    { enabled, staleTime: 60_000, retry: false }
-  );
+  // Chama Directions API direto do browser (evita REQUEST_DENIED por restrição de referrer na key)
+  useEffect(() => {
+    if (!enabled || !keyData?.key) return;
+    let cancelled = false;
+    setFetching(true);
+    const params = new URLSearchParams({
+      origin: debouncedOrigin,
+      destination: debouncedDest,
+      mode: "driving",
+      language: "pt-BR",
+      region: "BR",
+      avoid: "ferries",
+      key: keyData.key,
+    });
+    fetch(`https://maps.googleapis.com/maps/api/directions/json?${params}`)
+      .then((r) => r.json())
+      .then((data: any) => {
+        if (cancelled) return;
+        if (data.status !== "OK" || !data.routes?.[0]) {
+          setRoute({ ok: false, erro: data.status === "ZERO_RESULTS" ? "Rota não encontrada." : `Erro Google Maps: ${data.status}` });
+          return;
+        }
+        const leg = data.routes[0].legs[0];
+        const distanceKm = leg.distance.value / 1000;
+        const tollEstimate = distanceKm > 40 ? Math.round(distanceKm * 0.22 * 10) / 10 : 0;
+        const fuelEstimate = Math.round(distanceKm / 10 * 5.80 * 10) / 10;
+        setRoute({
+          ok: true,
+          distanceText: leg.distance.text,
+          distanceKm: Math.round(distanceKm * 10) / 10,
+          durationText: leg.duration.text,
+          durationMin: Math.round(leg.duration.value / 60),
+          summary: data.routes[0].summary,
+          tollEstimate,
+          fuelEstimate,
+        });
+      })
+      .catch(() => { if (!cancelled) setRoute({ ok: false, erro: "Erro ao calcular rota." }); })
+      .finally(() => { if (!cancelled) setFetching(false); });
+    return () => { cancelled = true; };
+  }, [debouncedOrigin, debouncedDest, keyData?.key, enabled]);
+
+  // Limpa resultado quando origem/destino ainda não estão prontos
+  useEffect(() => { if (!enabled) setRoute(null); }, [enabled]);
 
   const mapSrc = enabled
     ? `https://maps.google.com/maps?saddr=${encodeURIComponent(debouncedOrigin)}&daddr=${encodeURIComponent(debouncedDest)}&output=embed&hl=pt-BR`
@@ -554,7 +608,7 @@ function RoutePreview({ cId, origin, destination }: { cId: number; origin: strin
             title="Mapa do trajeto"
           />
         )}
-        {isFetching && (
+        {fetching && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/60 backdrop-blur-sm">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin text-sky-600" />
@@ -595,7 +649,7 @@ function RoutePreview({ cId, origin, destination }: { cId: number; origin: strin
       {route && !route.ok && (
         <div className="p-3 text-xs text-amber-700 bg-amber-50 flex items-center gap-2 border-t">
           <AlertCircle className="h-4 w-4 shrink-0" />
-          {route.erro || "Não foi possível calcular a rota. Insira endereços mais específicos."}
+          {route.erro}
         </div>
       )}
 

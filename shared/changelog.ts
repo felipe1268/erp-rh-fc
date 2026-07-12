@@ -1,4 +1,26 @@
 /**
+ * Rev. 4155 — **FROTA: NOVA VIAGEM — FIXES: fleet_trips COLUNAS FALTANDO + DIRECTIONS API DO BROWSER.**
+ *
+ * CONTEXTO: após Rev. 4154, dois bloqueios restantes:
+ * (1) `fleet_trips` foi criada em Rev. 4151 sem as colunas `vehicle_id`, `motorista_nome` e outras
+ *     porque a tabela já existia parcialmente — `CREATE TABLE IF NOT EXISTS` é no-op em tabela existente.
+ *     Resultado: INSERT falhava com "column does not exist" e getTrips também.
+ * (2) Directions API retornava REQUEST_DENIED server-side: a GOOGLE_API_KEY tem restrição de HTTP
+ *     referrer (aceita só browser, não servidor Node.js). Pedágio estimado nunca aparecia.
+ *
+ * MUDANÇAS:
+ * - server/_core/index.ts: bloco `[SyncSchema+] Rev. 4155` — loop de ALTER TABLE fleet_trips
+ *   ADD COLUMN IF NOT EXISTS para todas as 17 colunas opcionais (idempotente em qualquer estado).
+ * - server/routers/frotas.ts: loop equivalente em `ensureFleetTables` (garante lazy-init também);
+ *   novo procedure `getGoogleMapsKey` devolve a key via tRPC autenticado.
+ * - client/src/pages/frotas/ViagensFrotas.tsx: `RoutePreview` reescrito com `useEffect` + `fetch`
+ *   direto para `maps.googleapis.com/maps/api/directions/json` do browser (onde o referrer satisfaz
+ *   as restrições da key). Cálculo de pedágio e combustível permanecem idênticos client-side.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4154 — **FROTA: NOVA VIAGEM — FIXES: DROPDOWN FIXED, SUBMIT, ERRO VISÍVEL + API GOOGLE DIRETA.**
  *
  * CONTEXTO: após Rev. 4153, 3 bugs bloqueavam o uso real:

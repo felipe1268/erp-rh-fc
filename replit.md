@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4154** — **FROTA: NOVA VIAGEM — FIXES: DROPDOWN FIXED, SUBMIT, ERRO VISÍVEL + API GOOGLE DIRETA.** `makeGoogleDirect` + `makeMapsRequest` em `map.ts` para usar `GOOGLE_API_KEY` quando proxy Replit ausente; autocomplete, GPS e pedágio estimado passam a funcionar. Dropdown: `position:fixed` + `getBoundingClientRect` (não clipa mais dentro do Dialog). Botão "Criar": `formRef.current?.requestSubmit()` (funciona em Dialog/iOS). Erro de submit exibido inline no footer. `|| null → || undefined` nos opcionais do Zod. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4155** — **FROTA: NOVA VIAGEM — FIXES: fleet_trips COLUNAS FALTANDO + DIRECTIONS API DO BROWSER.** `[SyncSchema+] Rev. 4155` em `index.ts`: loop `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS` para as 17 colunas (vehicle_id, motorista_nome, etc.) — resolve INSERT "column does not exist". `RoutePreview` reescrito com `useEffect`+`fetch` direto para `maps.googleapis.com` do browser (GOOGLE_API_KEY tem restrição de referrer — REQUEST_DENIED no servidor). `getGoogleMapsKey` procedure entrega a key via tRPC autenticado. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4153** — **FROTA: NOVA VIAGEM — AUTOCOMPLETE DE ENDEREÇO (GOOGLE PLACES) + BOTÃO GPS.** `getPlaceAutocomplete` via Places API (country:br, pt-BR, até 6 sugestões com `structured_formatting`); `reverseGeocode` via Geocoding API; componente `AddressAutocomplete` com dropdown z-50, debounce 400 ms, erro GPS inline (sem alert nativo); botão GPS (LocateFixed) só no campo de saída. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4154** — **FROTA: NOVA VIAGEM — FIXES: DROPDOWN FIXED, SUBMIT, ERRO VISÍVEL + API GOOGLE DIRETA.** `makeGoogleDirect` + `makeMapsRequest` em `map.ts` para usar `GOOGLE_API_KEY` quando proxy Replit ausente; autocomplete e GPS passam a funcionar. Dropdown: `position:fixed` + `getBoundingClientRect`. Botão "Criar": `formRef.current?.requestSubmit()`. Erro de submit inline no footer. `|| null → || undefined` nos opcionais do Zod. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
