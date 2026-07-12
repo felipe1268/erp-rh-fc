@@ -412,44 +412,101 @@ export default function ViagensFrotas() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NOVA VIAGEM DIALOG — redesigned
+// NOVA VIAGEM DIALOG — vehicle picker as a list Sheet
 // ─────────────────────────────────────────────────────────────────────────────
-function VehicleCard({ vehicle, selected, onClick }: { vehicle: any; selected: boolean; onClick: () => void }) {
+
+function VehicleThumb({ vehicle, size = 48 }: { vehicle: any; size?: number }) {
   const gradient = getGradient(vehicle.tipoVeiculo || "");
   return (
-    <button type="button" onClick={onClick}
-      className={`relative flex flex-col rounded-xl border-2 overflow-hidden transition-all text-left shrink-0 w-36 ${
-        selected
-          ? "border-sky-500 shadow-lg shadow-sky-200 scale-[1.02]"
-          : "border-transparent hover:border-sky-200 hover:shadow-md"
-      }`}>
-      {/* Photo / Gradient bg */}
-      <div className={`relative h-20 bg-gradient-to-br ${gradient} flex items-center justify-center`}>
-        {vehicle.fotoUrl ? (
-          <img src={vehicle.fotoUrl} alt={vehicle.placa}
-            className="w-full h-full object-cover" />
-        ) : (
-          <Car className="h-10 w-10 text-white/70" />
-        )}
-        {selected && (
-          <div className="absolute top-1 right-1 h-5 w-5 rounded-full bg-sky-500 flex items-center justify-center">
-            <CheckCircle2 className="h-3.5 w-3.5 text-white" />
-          </div>
-        )}
-      </div>
-      {/* Info */}
-      <div className="p-2 bg-white flex-1">
-        <p className="font-mono text-sm font-bold tracking-widest text-gray-800 leading-tight">{vehicle.placa || "—"}</p>
-        <p className="text-[11px] text-muted-foreground leading-tight mt-0.5 truncate">
-          {vehicle.marca} {vehicle.modelo}
-        </p>
-        {vehicle.km_atual > 0 && (
-          <p className="text-[10px] text-sky-600 mt-1 flex items-center gap-0.5">
-            <Gauge className="h-2.5 w-2.5" /> {Number(vehicle.km_atual).toLocaleString("pt-BR")} km
-          </p>
-        )}
-      </div>
-    </button>
+    <div
+      className={`rounded-lg overflow-hidden flex items-center justify-center shrink-0 bg-gradient-to-br ${gradient}`}
+      style={{ width: size, height: size }}>
+      {vehicle.fotoUrl || vehicle.foto_url ? (
+        <img src={vehicle.fotoUrl || vehicle.foto_url} alt={vehicle.placa}
+          className="w-full h-full object-cover" />
+      ) : (
+        <Car className="text-white/80" style={{ width: size * 0.5, height: size * 0.5 }} />
+      )}
+    </div>
+  );
+}
+
+function VehiclePickerSheet({ open, onClose, vehicles, selectedId, onSelect }: {
+  open: boolean; onClose: () => void; vehicles: any[];
+  selectedId: number | null; onSelect: (v: any) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const filtered = vehicles.filter((v: any) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (v.placa || "").toLowerCase().includes(q)
+      || (v.modelo || "").toLowerCase().includes(q)
+      || (v.marca || "").toLowerCase().includes(q)
+      || (v.motorista_padrao || "").toLowerCase().includes(q);
+  });
+
+  return (
+    <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <SheetContent side="bottom" className="h-[85vh] flex flex-col p-0 rounded-t-2xl">
+        <SheetHeader className="px-5 pt-5 pb-3 border-b">
+          <SheetTitle className="flex items-center gap-2 text-sky-700">
+            <Car className="h-5 w-5" /> Selecionar Veículo
+          </SheetTitle>
+          <Input
+            placeholder="Buscar por placa, modelo ou motorista..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="mt-2"
+            autoFocus
+          />
+        </SheetHeader>
+
+        <div className="flex-1 overflow-y-auto divide-y">
+          {filtered.length === 0 && (
+            <div className="p-8 text-center text-muted-foreground text-sm">
+              Nenhum veículo ativo encontrado
+            </div>
+          )}
+          {filtered.map((v: any) => {
+            const isSelected = v.id === selectedId;
+            return (
+              <button key={v.id} type="button"
+                onClick={() => { onSelect(v); onClose(); }}
+                className={`w-full flex items-center gap-4 p-4 text-left transition-colors ${
+                  isSelected ? "bg-sky-50" : "hover:bg-gray-50 active:bg-gray-100"
+                }`}>
+                <VehicleThumb vehicle={v} size={56} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono text-base font-bold tracking-widest text-gray-900">
+                      {v.placa || "Sem placa"}
+                    </span>
+                    {v.tipoVeiculo && (
+                      <Badge variant="outline" className="text-xs font-normal">{v.tipoVeiculo}</Badge>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-700 mt-0.5">
+                    {[v.marca, v.modelo, v.anoFabricacao].filter(Boolean).join(" ")}
+                  </p>
+                  <div className="flex gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
+                    {(v.motorista_nome || v.motorista_padrao) && (
+                      <span>👤 {v.motorista_nome || v.motorista_padrao}</span>
+                    )}
+                    {parseFloat(v.km_atual || "0") > 0 && (
+                      <span className="flex items-center gap-1">
+                        <Gauge className="h-3 w-3" />
+                        {Number(v.km_atual).toLocaleString("pt-BR")} km
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {isSelected && <CheckCircle2 className="h-5 w-5 text-sky-600 shrink-0" />}
+              </button>
+            );
+          })}
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -548,6 +605,7 @@ function RoutePreview({ cId, origin, destination }: { cId: number; origin: strin
 
 function NovaViagemDialog({ open, onClose, cId, vehicles, onSubmit, loading }: any) {
   const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null);
+  const [showPicker, setShowPicker] = useState(false);
   const [motoristaNome, setMotoristaNome] = useState("");
   const [kmAtual, setKmAtual] = useState("");
   const [origem, setOrigem] = useState("");
@@ -556,7 +614,6 @@ function NovaViagemDialog({ open, onClose, cId, vehicles, onSubmit, loading }: a
   const [motivoDescricao, setMotivoDescricao] = useState("");
   const [obraNome, setObraNome] = useState("");
 
-  // Reset on open
   useEffect(() => {
     if (open) {
       setSelectedVehicleId(null);
@@ -574,7 +631,6 @@ function NovaViagemDialog({ open, onClose, cId, vehicles, onSubmit, loading }: a
 
   const handleSelectVehicle = (v: any) => {
     setSelectedVehicleId(v.id);
-    // Auto-fill placa (via vehicle) + km + motorista
     if (v.km_atual && parseFloat(v.km_atual) > 0) {
       setKmAtual(String(Math.round(parseFloat(v.km_atual))));
     }
@@ -600,138 +656,190 @@ function NovaViagemDialog({ open, onClose, cId, vehicles, onSubmit, loading }: a
   const showMap = origem.length >= 4 && destino.length >= 4;
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="sm:max-w-2xl max-h-[95vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex gap-2 text-sky-700">
-            <Navigation className="h-5 w-5" /> Nova Viagem
-          </DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+        <DialogContent className="w-full max-w-lg max-h-[92vh] flex flex-col p-0 gap-0">
+          {/* Header fixo */}
+          <DialogHeader className="px-5 pt-5 pb-3 border-b shrink-0">
+            <DialogTitle className="flex gap-2 text-sky-700 text-lg">
+              <Navigation className="h-5 w-5 mt-0.5" /> Nova Viagem
+            </DialogTitle>
+          </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Corpo rolável */}
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+            <form id="nova-viagem-form" onSubmit={handleSubmit} className="space-y-5">
 
-          {/* ── 1. Seleção de Veículo ── */}
-          <div className="space-y-2">
-            <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-              <Car className="h-4 w-4 text-sky-600" /> Veículo
-              <Badge variant="outline" className="text-[10px] font-normal">somente ativos</Badge>
-            </Label>
-            {vehicles.length === 0 ? (
-              <p className="text-sm text-muted-foreground italic">Nenhum veículo ativo cadastrado.</p>
-            ) : (
-              <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
-                {vehicles.map((v: any) => (
-                  <VehicleCard key={v.id} vehicle={v}
-                    selected={selectedVehicleId === v.id}
-                    onClick={() => handleSelectVehicle(v)} />
-                ))}
-              </div>
-            )}
-            {selectedVehicle && (
-              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-sky-50 border border-sky-200 text-sm">
-                <CheckCircle2 className="h-4 w-4 text-sky-600 shrink-0" />
-                <span className="font-mono font-bold text-sky-800">{selectedVehicle.placa}</span>
-                <span className="text-muted-foreground">{selectedVehicle.marca} {selectedVehicle.modelo} · {selectedVehicle.anoFabricacao}</span>
-              </div>
-            )}
-          </div>
+              {/* ── 1. Veículo ── */}
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold flex items-center gap-2">
+                  <Car className="h-4 w-4 text-sky-600" /> Veículo
+                </Label>
 
-          <Separator />
-
-          {/* ── 2. Motorista + KM ── */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label className="flex items-center gap-1.5 text-sm font-semibold">
-                Motorista *
-                {motoristaNome && motoristaNome === (selectedVehicle?.motorista_nome || selectedVehicle?.motorista_padrao) && (
-                  <Badge className="text-[9px] font-normal bg-green-100 text-green-700 h-4">auto</Badge>
+                {selectedVehicle ? (
+                  /* Veículo selecionado — mostra linha completa + botão trocar */
+                  <div className="flex items-center gap-3 p-3 rounded-xl border-2 border-sky-400 bg-sky-50">
+                    <VehicleThumb vehicle={selectedVehicle} size={52} />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-mono text-base font-bold tracking-widest text-gray-900">
+                        {selectedVehicle.placa}
+                      </p>
+                      <p className="text-sm text-gray-600 mt-0.5">
+                        {[selectedVehicle.marca, selectedVehicle.modelo, selectedVehicle.anoFabricacao].filter(Boolean).join(" ")}
+                      </p>
+                      {parseFloat(selectedVehicle.km_atual || "0") > 0 && (
+                        <p className="text-xs text-sky-600 mt-0.5 flex items-center gap-1">
+                          <Gauge className="h-3 w-3" />
+                          {Number(selectedVehicle.km_atual).toLocaleString("pt-BR")} km registrados
+                        </p>
+                      )}
+                    </div>
+                    <Button type="button" variant="outline" size="sm"
+                      className="shrink-0 text-sky-700 border-sky-300"
+                      onClick={() => setShowPicker(true)}>
+                      Trocar
+                    </Button>
+                  </div>
+                ) : (
+                  /* Nenhum selecionado — botão para abrir lista */
+                  <button type="button" onClick={() => setShowPicker(true)}
+                    className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-dashed border-gray-300 hover:border-sky-400 hover:bg-sky-50 transition-colors text-left">
+                    <div className="h-12 w-12 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
+                      <Car className="h-6 w-6 text-gray-400" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-700">Selecionar veículo</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {vehicles.length} veículo{vehicles.length !== 1 ? "s" : ""} ativo{vehicles.length !== 1 ? "s" : ""} disponível{vehicles.length !== 1 ? "is" : ""}
+                      </p>
+                    </div>
+                    <span className="ml-auto text-sky-600 text-sm font-medium">Ver lista →</span>
+                  </button>
                 )}
-              </Label>
-              <Input placeholder="Nome completo do motorista" value={motoristaNome}
-                onChange={e => setMotoristaNome(e.target.value)} required />
-            </div>
-            <div className="space-y-1">
-              <Label className="flex items-center gap-1.5 text-sm font-semibold">
-                <Gauge className="h-3.5 w-3.5 text-sky-600" /> KM Atual do Veículo
-                {kmAtual && selectedVehicle && (
-                  <Badge className="text-[9px] font-normal bg-sky-100 text-sky-700 h-4">auto</Badge>
+              </div>
+
+              <Separator />
+
+              {/* ── 2. Motorista ── */}
+              <div className="space-y-1">
+                <Label className="text-sm font-semibold flex items-center gap-2">
+                  Motorista *
+                  {motoristaNome && selectedVehicle &&
+                    motoristaNome === (selectedVehicle.motorista_nome || selectedVehicle.motorista_padrao) && (
+                    <Badge className="text-[10px] font-normal bg-green-100 text-green-700 border-green-200">
+                      preenchido automaticamente
+                    </Badge>
+                  )}
+                </Label>
+                <Input placeholder="Nome completo do motorista" value={motoristaNome}
+                  onChange={e => setMotoristaNome(e.target.value)} required className="h-11 text-base" />
+              </div>
+
+              {/* ── 3. KM Atual ── */}
+              <div className="space-y-1">
+                <Label className="text-sm font-semibold flex items-center gap-2">
+                  <Gauge className="h-4 w-4 text-sky-600" /> KM Atual do Veículo
+                  {kmAtual && selectedVehicle && (
+                    <Badge className="text-[10px] font-normal bg-sky-100 text-sky-700 border-sky-200">
+                      preenchido automaticamente
+                    </Badge>
+                  )}
+                </Label>
+                <Input type="number" placeholder="Ex: 125.400" value={kmAtual}
+                  onChange={e => setKmAtual(e.target.value)} className="h-11 text-base font-mono" />
+                <p className="text-xs text-muted-foreground">
+                  Informação do último KM registrado — edite se necessário
+                </p>
+              </div>
+
+              <Separator />
+
+              {/* ── 4. Trajeto ── */}
+              <div className="space-y-3">
+                <Label className="text-sm font-semibold flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-emerald-600" /> Trajeto
+                </Label>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    Local de Saída *
+                  </Label>
+                  <Input placeholder="Ex: Guará, Brasília - DF" value={origem}
+                    onChange={e => setOrigem(e.target.value)} required className="h-11 text-base" />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    Destino *
+                  </Label>
+                  <Input placeholder="Ex: Campinas, SP" value={destino}
+                    onChange={e => setDestino(e.target.value)} required className="h-11 text-base" />
+                </div>
+
+                {/* Mapa e info de rota */}
+                {showMap ? (
+                  <RoutePreview cId={cId} origin={origem} destination={destino} />
+                ) : (
+                  <div className="flex items-center gap-2 py-3 px-4 rounded-xl border border-dashed text-sm text-muted-foreground">
+                    <Route className="h-4 w-4 opacity-40 shrink-0" />
+                    Preencha origem e destino para ver o trajeto no mapa
+                  </div>
                 )}
-              </Label>
-              <Input type="number" placeholder="Ex: 125400" value={kmAtual}
-                onChange={e => setKmAtual(e.target.value)} />
-              <p className="text-[10px] text-muted-foreground">Pré-preenchido com o último KM registrado — edite se necessário</p>
-            </div>
+              </div>
+
+              <Separator />
+
+              {/* ── 5. Motivo ── */}
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label className="text-sm font-semibold">Motivo da Viagem *</Label>
+                  <Select value={motivo} onValueChange={setMotivo}>
+                    <SelectTrigger className="h-11 text-base"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {MOTIVOS.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {motivo === "obra" && (
+                  <div className="space-y-1">
+                    <Label className="text-sm font-medium">Nome da Obra / Projeto</Label>
+                    <Input placeholder="Ex: Edifício Solar - Bl. A" value={obraNome}
+                      onChange={e => setObraNome(e.target.value)} className="h-11 text-base" />
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium">Observações</Label>
+                  <Textarea placeholder="Detalhes adicionais sobre a viagem..." rows={3}
+                    value={motivoDescricao} onChange={e => setMotivoDescricao(e.target.value)} />
+                </div>
+              </div>
+
+            </form>
           </div>
 
-          <Separator />
-
-          {/* ── 3. Origem + Destino + Mapa ── */}
-          <div className="space-y-3">
-            <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-emerald-600" /> Trajeto
-            </Label>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Local de Saída *</Label>
-                <Input placeholder="Ex: Guará, Brasília - DF" value={origem}
-                  onChange={e => setOrigem(e.target.value)} required />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Destino *</Label>
-                <Input placeholder="Ex: Campinas, SP" value={destino}
-                  onChange={e => setDestino(e.target.value)} required />
-              </div>
-            </div>
-
-            {/* Route preview */}
-            {showMap && (
-              <RoutePreview cId={cId} origin={origem} destination={destino} />
-            )}
-            {!showMap && (
-              <div className="h-10 rounded-xl border border-dashed flex items-center justify-center text-xs text-muted-foreground gap-2">
-                <Route className="h-4 w-4 opacity-40" />
-                Digite origem e destino para visualizar o trajeto no mapa
-              </div>
-            )}
-          </div>
-
-          <Separator />
-
-          {/* ── 4. Motivo + Obs ── */}
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label className="text-sm font-semibold">Motivo da Viagem *</Label>
-              <Select value={motivo} onValueChange={setMotivo}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {MOTIVOS.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            {motivo === "obra" && (
-              <div className="space-y-1">
-                <Label className="text-sm">Nome da Obra / Projeto</Label>
-                <Input placeholder="Ex: Edifício Solar - Bl. A" value={obraNome}
-                  onChange={e => setObraNome(e.target.value)} />
-              </div>
-            )}
-            <div className="space-y-1">
-              <Label className="text-sm">Observações</Label>
-              <Textarea placeholder="Detalhes adicionais..." rows={2}
-                value={motivoDescricao} onChange={e => setMotivoDescricao(e.target.value)} />
-            </div>
-          </div>
-
-          <DialogFooter className="pt-2">
-            <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-            <Button type="submit" disabled={loading} className="gap-2 bg-sky-600 hover:bg-sky-700 min-w-[140px]">
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          {/* Footer fixo */}
+          <div className="px-5 py-4 border-t bg-gray-50 flex gap-3 shrink-0">
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1 h-11">
+              Cancelar
+            </Button>
+            <Button type="submit" form="nova-viagem-form" disabled={loading}
+              className="flex-2 h-11 gap-2 bg-sky-600 hover:bg-sky-700 text-base font-semibold px-8">
+              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
               {loading ? "Criando..." : "Criar Viagem"}
             </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Picker de veículo como Sheet bottom */}
+      <VehiclePickerSheet
+        open={showPicker}
+        onClose={() => setShowPicker(false)}
+        vehicles={vehicles}
+        selectedId={selectedVehicleId}
+        onSelect={handleSelectVehicle}
+      />
+    </>
   );
 }
 
