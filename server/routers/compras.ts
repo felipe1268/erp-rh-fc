@@ -1346,9 +1346,15 @@ export function normItemDesc(s: string): string {
   let n = _removeAcc(s.toUpperCase()).trim();
   // 1. remove conteúdo entre parênteses (especificações técnicas) ANTES de expandir pontuação
   n = n.replace(/\s*\([^)]*\)\s*/g, " ").trim();
-  // 2. expande pontuação para espaços
+  // 2. normaliza símbolo ordinal/grau (não é diacrítico, não sai no NFD)
+  //    "Brita Nº 1" → "BRITA N 1" → depois "BRITA 1" pela regra Nº abaixo
+  n = n.replace(/[º°]/g, " ");
+  // expande pontuação para espaços
   n = n.replace(/[\/\\\-_.,;:!?()\[\]{}"'`]/g, " ");
   n = n.replace(/\s+/g, " ").trim();
+  // remove "Nº" / "N°" / "N." como prefixo ordinal antes de número
+  //   "BRITA N  1" → "BRITA 1",  "PREGO N  17X27" → "PREGO 17X27"
+  n = n.replace(/\bN\s+(?=\d)/g, "");
   // 3. números romanos isolados
   const rm: Record<string, string> = {
     VIII:"8",VII:"7",VI:"6",IV:"4",IX:"9",XII:"12",XI:"11",X:"10",III:"3",II:"2",V:"5",
