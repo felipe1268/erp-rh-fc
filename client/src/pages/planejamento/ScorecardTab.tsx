@@ -95,6 +95,8 @@ function ConfigModal({ open, onClose, companyId, obraId, currentConfig, onSaved 
 }) {
   const [bonusTipo, setBonusTipo]   = useState<"percentual_lucro" | "valor_fixo">(currentConfig?.bonus_tipo ?? "percentual_lucro");
   const [bonusValor, setBonusValor] = useState(String(currentConfig?.bonus_valor ?? "5"));
+  const [aliquotaImpostos, setAliquotaImpostos] = useState(String(parseFloat(currentConfig?.aliquota_impostos ?? "0")));
+  const [pctCustosFixos,   setPctCustosFixos]   = useState(String(parseFloat(currentConfig?.pct_custos_fixos  ?? "0")));
   const [pesos, setPesos] = useState({
     seguranca:    parseInt(currentConfig?.peso_seguranca    ?? "30"),
     planejamento: parseInt(currentConfig?.peso_planejamento ?? "25"),
@@ -111,13 +113,14 @@ function ConfigModal({ open, onClose, companyId, obraId, currentConfig, onSaved 
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings className="w-5 h-5 text-gray-500" /> Configurar Scorecard
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
+          {/* Bônus */}
           <div>
             <Label>Tipo de Bônus</Label>
             <Select value={bonusTipo} onValueChange={(v) => setBonusTipo(v as any)}>
@@ -133,6 +136,31 @@ function ConfigModal({ open, onClose, companyId, obraId, currentConfig, onSaved 
             <Input type="number" min={0} step={0.5} value={bonusValor}
               onChange={e => setBonusValor(e.target.value)} className="mt-1" />
           </div>
+
+          {/* Alíquotas para Lucro Líquido */}
+          <div className="border-t pt-3 space-y-3">
+            <Label className="block text-sm font-semibold text-gray-700">Deduções para Lucro Líquido</Label>
+            <p className="text-[11px] text-gray-400 -mt-1">
+              Aplicadas sobre o Valor do Contrato para calcular o Lucro Líquido (após impostos e overhead).
+            </p>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-gray-600 w-40">Alíquota de Impostos</span>
+              <Input type="number" min={0} max={100} step={0.1} value={aliquotaImpostos}
+                onChange={e => setAliquotaImpostos(e.target.value)} className="w-20 text-center text-sm h-8" />
+              <span className="text-xs text-gray-400">% sobre receita</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-gray-600 w-40">Custos Fixos / Overhead</span>
+              <Input type="number" min={0} max={100} step={0.1} value={pctCustosFixos}
+                onChange={e => setPctCustosFixos(e.target.value)} className="w-20 text-center text-sm h-8" />
+              <span className="text-xs text-gray-400">% sobre receita</span>
+            </div>
+            <p className="text-[11px] text-gray-400">
+              Ex: ISS 3% + PIS/COFINS 3,65% + IRPJ/CSLL ~5% = ~11,65% de impostos. Custos fixos (adm, aluguel) à parte.
+            </p>
+          </div>
+
+          {/* Pesos por dimensão */}
           <div className="border-t pt-3">
             <div className="flex items-center justify-between mb-2">
               <Label>Pesos por Dimensão</Label>
@@ -163,6 +191,8 @@ function ConfigModal({ open, onClose, companyId, obraId, currentConfig, onSaved 
               pesoSeguranca: pesos.seguranca, pesoPlanejamento: pesos.planejamento,
               pesoCompras: pesos.compras, pesoAlmox: pesos.almox, pesoQualidade: pesos.qualidade,
               metaSpi: 0.9, metaCpi: 0.9, maxAcidentesGraves: 0, maxEmergenciaisPct: 10,
+              aliquotaImpostos: parseFloat(aliquotaImpostos) || 0,
+              pctCustosFixos:   parseFloat(pctCustosFixos)   || 0,
             })}
           >
             {saveConfig.isPending ? <><Loader2 className="w-4 h-4 animate-spin mr-1" />Salvando…</> : "Salvar"}
@@ -481,21 +511,42 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                   <span className="text-sm font-semibold text-gray-800">{fmt(financeiro.valorContrato)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-500">Custo Previsto</span>
+                  <span className="text-xs text-gray-500">(−) Custo Direto Previsto</span>
                   <span className="text-sm font-semibold text-red-600">{fmt(financeiro.custoPrevisto)}</span>
                 </div>
-                <div className="flex items-center justify-between border-t border-gray-200 pt-1.5 mt-0.5">
-                  <span className="text-xs font-semibold text-gray-700">Lucro Previsto</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full ${financeiro.lucroPrevisto >= 0 ? "bg-green-500" : "bg-red-500"}`} />
-                    <span className={`text-sm font-bold ${financeiro.lucroPrevisto >= 0 ? "text-green-700" : "text-red-600"}`}>
-                      {fmt(financeiro.lucroPrevisto)}
-                    </span>
-                    {financeiro.valorContrato > 0 && (
-                      <span className="text-[10px] text-gray-400">
-                        ({((financeiro.lucroPrevisto / financeiro.valorContrato) * 100).toFixed(1)}%)
-                      </span>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">= Lucro Bruto Previsto</span>
+                  <span className="text-sm font-semibold text-gray-700">{fmt(financeiro.lucroBrutoPrevisto)}</span>
+                </div>
+                {(financeiro.aliquotaImpostos > 0 || financeiro.pctCustosFixos > 0) && (
+                  <>
+                    {financeiro.aliquotaImpostos > 0 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-500">(−) Impostos ({financeiro.aliquotaImpostos.toFixed(1)}%)</span>
+                        <span className="text-xs font-medium text-orange-600">{fmt(financeiro.impostosPrevistos)}</span>
+                      </div>
                     )}
+                    {financeiro.pctCustosFixos > 0 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-500">(−) Custos Fixos ({financeiro.pctCustosFixos.toFixed(1)}%)</span>
+                        <span className="text-xs font-medium text-orange-600">{fmt(financeiro.custosFixosPrevistos)}</span>
+                      </div>
+                    )}
+                  </>
+                )}
+                <div className="flex items-center justify-between border-t border-gray-200 pt-1.5 mt-0.5">
+                  <span className="text-xs font-bold text-gray-700">
+                    = Lucro Líquido Previsto
+                    {financeiro.aliquotaImpostos === 0 && financeiro.pctCustosFixos === 0 && (
+                      <button onClick={() => setShowConfig(true)} className="ml-1.5 text-[10px] text-blue-500 font-normal underline">configurar deduções</button>
+                    )}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`w-2 h-2 rounded-full ${financeiro.lucroLiquidoPrevisto >= 0 ? "bg-green-500" : "bg-red-500"}`} />
+                    <span className={`text-sm font-bold ${financeiro.lucroLiquidoPrevisto >= 0 ? "text-green-700" : "text-red-600"}`}>
+                      {fmt(financeiro.lucroLiquidoPrevisto)}
+                    </span>
+                    <span className="text-[10px] text-gray-400">({financeiro.margemPrevista.toFixed(1)}%)</span>
                   </div>
                 </div>
               </>
@@ -503,15 +554,18 @@ export default function ScorecardTab({ proj }: { proj: any }) {
           </div>
 
           {/* ── Realizado ────────────────────────────────────────── */}
-          <div className={`rounded-lg border px-3 py-2.5 space-y-1.5 ${financeiro.lucroRealizado >= 0 ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}>
+          <div className={`rounded-lg border px-3 py-2.5 space-y-1.5 ${financeiro.lucroLiquidoRealizado >= 0 ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}>
             <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Realizado (financeiro + compras)</p>
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500">Custo Realizado</span>
+              <span className="text-xs text-gray-500">Valor do Contrato</span>
+              <span className="text-sm font-semibold text-gray-700">{fmt(financeiro.valorContrato)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-500">(−) Custo Realizado</span>
               <span className="text-sm font-semibold text-red-600">{fmt(financeiro.custoRealizado)}</span>
             </div>
-            {/* Barra de progresso custo realizado vs previsto */}
             {financeiro.custoPrevisto > 0 && (
-              <div className="space-y-0.5">
+              <div className="space-y-0.5 pb-0.5">
                 <div className="h-1.5 w-full rounded-full bg-gray-200 overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all ${financeiro.custoRealizado / financeiro.custoPrevisto > 1 ? "bg-red-500" : financeiro.custoRealizado / financeiro.custoPrevisto > 0.85 ? "bg-amber-500" : "bg-blue-500"}`}
@@ -523,18 +577,34 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                 </p>
               </div>
             )}
-            <div className="flex items-center justify-between border-t border-gray-200 pt-1.5 mt-0.5">
-              <span className="text-sm font-semibold text-gray-700">Lucro Realizado</span>
-              <div className="flex items-center gap-1.5">
-                <span className={`w-2.5 h-2.5 rounded-full ${financeiro.lucroRealizado >= 0 ? "bg-green-500" : "bg-red-500"}`} />
-                <span className={`text-base font-black ${financeiro.lucroRealizado >= 0 ? "text-green-700" : "text-red-600"}`}>
-                  {fmt(financeiro.lucroRealizado)}
-                </span>
-                {financeiro.valorContrato > 0 && (
-                  <span className="text-[10px] text-gray-400">
-                    ({((financeiro.lucroRealizado / financeiro.valorContrato) * 100).toFixed(1)}%)
-                  </span>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-500">= Lucro Bruto Realizado</span>
+              <span className="text-sm font-semibold text-gray-700">{fmt(financeiro.lucroBrutoRealizado)}</span>
+            </div>
+            {(financeiro.aliquotaImpostos > 0 || financeiro.pctCustosFixos > 0) && (
+              <>
+                {financeiro.aliquotaImpostos > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-500">(−) Impostos ({financeiro.aliquotaImpostos.toFixed(1)}%)</span>
+                    <span className="text-xs font-medium text-orange-600">{fmt(financeiro.impostosRealizados)}</span>
+                  </div>
                 )}
+                {financeiro.pctCustosFixos > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-500">(−) Custos Fixos ({financeiro.pctCustosFixos.toFixed(1)}%)</span>
+                    <span className="text-xs font-medium text-orange-600">{fmt(financeiro.custosFixosRealizados)}</span>
+                  </div>
+                )}
+              </>
+            )}
+            <div className="flex items-center justify-between border-t border-gray-200 pt-1.5 mt-0.5">
+              <span className="text-sm font-bold text-gray-700">= Lucro Líquido Realizado</span>
+              <div className="flex items-center gap-1.5">
+                <span className={`w-2.5 h-2.5 rounded-full ${financeiro.lucroLiquidoRealizado >= 0 ? "bg-green-500" : "bg-red-500"}`} />
+                <span className={`text-base font-black ${financeiro.lucroLiquidoRealizado >= 0 ? "text-green-700" : "text-red-600"}`}>
+                  {fmt(financeiro.lucroLiquidoRealizado)}
+                </span>
+                <span className="text-[10px] text-gray-400">({financeiro.margemRealizada.toFixed(1)}%)</span>
               </div>
             </div>
           </div>
@@ -580,15 +650,36 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                       <span className="font-semibold">{fmt(financeiro.valorContrato)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-500">(B) Custo Previsto</span>
+                      <span className="text-gray-500">(B) Custo Direto Previsto</span>
                       <span className="font-semibold text-red-600">− {fmt(financeiro.custoPrevisto)}</span>
                     </div>
                     <div className="flex justify-between border-t border-dashed border-gray-200 pt-1 mt-0.5">
-                      <span className="font-semibold text-gray-700">Lucro Previsto = A − B</span>
-                      <span className={`font-bold ${financeiro.lucroPrevisto >= 0 ? "text-green-700" : "text-red-600"}`}>
-                        {fmt(financeiro.lucroPrevisto)} ({financeiro.margemPrevista.toFixed(1)}%)
+                      <span className="text-gray-600">Lucro Bruto = A − B</span>
+                      <span className="font-semibold text-gray-700">{fmt(financeiro.lucroBrutoPrevisto)}</span>
+                    </div>
+                    {financeiro.aliquotaImpostos > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">(C) Impostos ({financeiro.aliquotaImpostos.toFixed(2)}% × A)</span>
+                        <span className="font-semibold text-orange-600">− {fmt(financeiro.impostosPrevistos)}</span>
+                      </div>
+                    )}
+                    {financeiro.pctCustosFixos > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">(D) Custos Fixos ({financeiro.pctCustosFixos.toFixed(2)}% × A)</span>
+                        <span className="font-semibold text-orange-600">− {fmt(financeiro.custosFixosPrevistos)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between border-t border-dashed border-gray-200 pt-1 mt-0.5">
+                      <span className="font-bold text-gray-800">
+                        Lucro Líquido = A − B{financeiro.aliquotaImpostos > 0 ? " − C" : ""}{financeiro.pctCustosFixos > 0 ? " − D" : ""}
+                      </span>
+                      <span className={`font-bold ${financeiro.lucroLiquidoPrevisto >= 0 ? "text-green-700" : "text-red-600"}`}>
+                        {fmt(financeiro.lucroLiquidoPrevisto)} ({financeiro.margemPrevista.toFixed(1)}%)
                       </span>
                     </div>
+                    {financeiro.aliquotaImpostos === 0 && financeiro.pctCustosFixos === 0 && (
+                      <p className="text-[10px] text-amber-600 mt-1">⚠ Sem impostos/custos fixos configurados — Lucro Líquido = Lucro Bruto. Configure em "Configurar".</p>
+                    )}
                   </div>
                 </div>
 
@@ -601,18 +692,36 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                       <span className="font-semibold">{fmt(financeiro.valorContrato)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-500">(C) Custo Realizado</span>
+                      <span className="text-gray-500">(E) Custo Realizado</span>
                       <span className="font-semibold text-red-600">− {fmt(financeiro.custoRealizado)}</span>
                     </div>
                     <div className="flex justify-between border-t border-dashed border-gray-200 pt-1 mt-0.5">
-                      <span className="font-semibold text-gray-700">Lucro Realizado = A − C</span>
-                      <span className={`font-bold ${financeiro.lucroRealizado >= 0 ? "text-green-700" : "text-red-600"}`}>
-                        {fmt(financeiro.lucroRealizado)} ({financeiro.margemRealizada.toFixed(1)}%)
+                      <span className="text-gray-600">Lucro Bruto = A − E</span>
+                      <span className="font-semibold text-gray-700">{fmt(financeiro.lucroBrutoRealizado)}</span>
+                    </div>
+                    {financeiro.aliquotaImpostos > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">(C) Impostos ({financeiro.aliquotaImpostos.toFixed(2)}% × A)</span>
+                        <span className="font-semibold text-orange-600">− {fmt(financeiro.impostosRealizados)}</span>
+                      </div>
+                    )}
+                    {financeiro.pctCustosFixos > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">(D) Custos Fixos ({financeiro.pctCustosFixos.toFixed(2)}% × A)</span>
+                        <span className="font-semibold text-orange-600">− {fmt(financeiro.custosFixosRealizados)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between border-t border-dashed border-gray-200 pt-1 mt-0.5">
+                      <span className="font-bold text-gray-800">
+                        Lucro Líquido = A − E{financeiro.aliquotaImpostos > 0 ? " − C" : ""}{financeiro.pctCustosFixos > 0 ? " − D" : ""}
+                      </span>
+                      <span className={`font-bold ${financeiro.lucroLiquidoRealizado >= 0 ? "text-green-700" : "text-red-600"}`}>
+                        {fmt(financeiro.lucroLiquidoRealizado)} ({financeiro.margemRealizada.toFixed(1)}%)
                       </span>
                     </div>
                   </div>
                   <p className="text-[10px] text-gray-400 mt-1">
-                    Fonte (C): <span className="font-mono">financial_entries</span> WHERE natureza=&#39;despesa&#39; AND status IN (&#39;pago&#39;, &#39;pago_parcial&#39;, &#39;liquidado&#39;, &#39;baixado&#39;)
+                    Fonte (E): <span className="font-mono">financial_entries</span> WHERE natureza=&#39;despesa&#39; AND status IN (&#39;pago&#39;, &#39;pago_parcial&#39;, &#39;liquidado&#39;, &#39;baixado&#39;)
                   </p>
                 </div>
 

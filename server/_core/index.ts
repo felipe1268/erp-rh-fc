@@ -5165,6 +5165,9 @@ REGRAS DE EXTRAÇÃO:
               criado_em             TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
           `);
+          // Rev. 4182-b — colunas de impostos e custos fixos no scorecard
+          await db.execute(sql`ALTER TABLE obra_scorecard_config ADD COLUMN IF NOT EXISTS aliquota_impostos NUMERIC(6,2) DEFAULT 0`);
+          await db.execute(sql`ALTER TABLE obra_scorecard_config ADD COLUMN IF NOT EXISTS pct_custos_fixos  NUMERIC(6,2) DEFAULT 0`);
           console.log("[SyncSchema+] Rev. 4182: obra_scorecard_config + obra_retrabalho garantidas (Scorecard do Gestor).");
         } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4182 scorecard:", e?.message || e); }
 

@@ -53,6 +53,8 @@ export const scorecardRouter = router({
       metaCpi: z.number().min(0).max(3),
       maxAcidentesGraves: z.number().int().min(0),
       maxEmergenciaisPct: z.number().int().min(0).max(100),
+      aliquotaImpostos: z.number().min(0).max(100).default(0),
+      pctCustosFixos: z.number().min(0).max(100).default(0),
     }))
     .mutation(async ({ ctx, input }) => {
       if (!["admin", "admin_master"].includes(ctx.user.role ?? "")) {
@@ -65,13 +67,15 @@ export const scorecardRouter = router({
           company_id, obra_id, bonus_tipo, bonus_valor,
           peso_seguranca, peso_planejamento, peso_compras, peso_almox, peso_qualidade,
           meta_spi, meta_cpi, max_acidentes_graves, max_emergenciais_pct,
+          aliquota_impostos, pct_custos_fixos,
           criado_em, atualizado_em
         ) VALUES (
           ${input.companyId}, ${input.obraId}, ${input.bonusTipo}, ${input.bonusValor},
           ${input.pesoSeguranca}, ${input.pesoPlanejamento}, ${input.pesoCompras},
           ${input.pesoAlmox}, ${input.pesoQualidade},
           ${input.metaSpi}, ${input.metaCpi}, ${input.maxAcidentesGraves},
-          ${input.maxEmergenciaisPct}, NOW(), NOW()
+          ${input.maxEmergenciaisPct}, ${input.aliquotaImpostos}, ${input.pctCustosFixos},
+          NOW(), NOW()
         )
         ON CONFLICT (obra_id) DO UPDATE SET
           bonus_tipo             = EXCLUDED.bonus_tipo,
@@ -85,6 +89,8 @@ export const scorecardRouter = router({
           meta_cpi               = EXCLUDED.meta_cpi,
           max_acidentes_graves   = EXCLUDED.max_acidentes_graves,
           max_emergenciais_pct   = EXCLUDED.max_emergenciais_pct,
+          aliquota_impostos      = EXCLUDED.aliquota_impostos,
+          pct_custos_fixos       = EXCLUDED.pct_custos_fixos,
           atualizado_em          = NOW()
       `);
       return { ok: true };
@@ -264,6 +270,8 @@ export const scorecardRouter = router({
         meta_cpi: 0.90,
         max_acidentes_graves: 0,
         max_emergenciais_pct: 10,
+        aliquota_impostos: 0,
+        pct_custos_fixos: 0,
       };
 
       const eventos: { tipo: string; descricao: string; pontos: number; data: string }[] = [];
@@ -384,28 +392,42 @@ export const scorecardRouter = router({
       // ── FINANCEIRO ───────────────────────────────────────────────────────────
       const orc = (orcRow as any[])[0] ?? {};
       const orcUsouNegociado = !!(orc.valorNegociado && parseFloat(String(orc.valorNegociado)) > 0);
-      // Valor do Contrato: valorNegociado (se preenchido) > totalVenda > 0
       const valorContrato  = parseFloat(String(orc.valorNegociado || orc.totalVenda || "0"));
       const custoPrevisto  = parseFloat(String(orc.totalCusto ?? "0"));
-      const lucroPrevisto  = valorContrato - custoPrevisto;
-      const margemPrevista = valorContrato > 0 ? (lucroPrevisto / valorContrato) * 100 : 0;
+
+      // Alíquotas configuradas no Scorecard
+      const aliquotaImpostos = parseFloat(String(config.aliquota_impostos ?? "0"));
+      const pctCustosFixos   = parseFloat(String(config.pct_custos_fixos  ?? "0"));
+
+      // PREVISTO — Lucro Bruto → deduz impostos e custos fixos → Lucro Líquido
+      const lucroBrutoPrevisto    = valorContrato - custoPrevisto;
+      const impostosPrevistos     = valorContrato * (aliquotaImpostos / 100);
+      const custosFixosPrevistos  = valorContrato * (pctCustosFixos   / 100);
+      const lucroLiquidoPrevisto  = lucroBrutoPrevisto - impostosPrevistos - custosFixosPrevistos;
+      const margemPrevista = valorContrato > 0 ? (lucroLiquidoPrevisto / valorContrato) * 100 : 0;
 
       const receitaRealizada  = parseFloat(String((receitaReal.rows as any[])[0]?.total ?? "0"));
       const custoRealizado    = parseFloat(String((custoReal.rows as any[])[0]?.total ?? "0"));
-      // Lucro realizado = Valor do Contrato − Custo Realizado
-      // (receita pode ainda não ter entrado; custo já correu)
-      const lucroRealizado    = valorContrato > 0
-        ? valorContrato - custoRealizado
-        : receitaRealizada - custoRealizado;
-      const margemRealizada = valorContrato > 0 ? (lucroRealizado / valorContrato) * 100 : 0;
 
-      // ── BÔNUS ────────────────────────────────────────────────────────────────
+      // REALIZADO — mesma estrutura, com custo real e mesmas alíquotas sobre o valor do contrato
+      const baseRef = valorContrato > 0 ? valorContrato : receitaRealizada;
+      const lucroBrutoRealizado   = baseRef - custoRealizado;
+      const impostosRealizados    = baseRef * (aliquotaImpostos / 100);
+      const custosFixosRealizados = baseRef * (pctCustosFixos   / 100);
+      const lucroLiquidoRealizado = lucroBrutoRealizado - impostosRealizados - custosFixosRealizados;
+      const margemRealizada = baseRef > 0 ? (lucroLiquidoRealizado / baseRef) * 100 : 0;
+
+      // Aliases para compatibilidade com resto do código que usa "lucroRealizado"
+      const lucroPrevisto  = lucroLiquidoPrevisto;
+      const lucroRealizado = lucroLiquidoRealizado;
+
+      // ── BÔNUS (calculado sobre o Lucro Líquido Realizado) ────────────────────
       const fatorBonus   = getBonusFator(scoreTotal);
       const bonusValor   = parseFloat(String(config.bonus_valor ?? "5"));
       const bonusTipo    = String(config.bonus_tipo ?? "percentual_lucro");
       let bonusMaximo = 0;
       if (bonusTipo === "percentual_lucro") {
-        bonusMaximo = Math.max(0, lucroRealizado) * (bonusValor / 100);
+        bonusMaximo = Math.max(0, lucroLiquidoRealizado) * (bonusValor / 100);
       } else {
         bonusMaximo = bonusValor;
       }
@@ -438,27 +460,39 @@ export const scorecardRouter = router({
           mediaAvaliacao,
         },
         financeiro: {
-          // Orçamento de referência
           orcamentoInfo: orc.id ? {
             id:     orc.id,
             codigo: orc.codigo ?? "—",
             status: orc.status ?? "—",
             fonteContrato: orcUsouNegociado ? "valorNegociado" : "totalVenda",
           } : null,
+          // Config de alíquotas
+          aliquotaImpostos,
+          pctCustosFixos,
+          // PREVISTO
           valorContrato,
           custoPrevisto,
-          lucroPrevisto,
+          lucroBrutoPrevisto,
+          impostosPrevistos,
+          custosFixosPrevistos,
+          lucroLiquidoPrevisto,
           margemPrevista,
-          // Realizado
+          // REALIZADO
           receitaRealizada,
           custoRealizado,
-          lucroRealizado,
+          lucroBrutoRealizado,
+          impostosRealizados,
+          custosFixosRealizados,
+          lucroLiquidoRealizado,
           margemRealizada,
           custoPorCategoria: custoPorCategoria.map((r: any) => ({
             origem: String(r.origem ?? "financeiro"),
             conta:  String(r.conta  ?? "Sem conta"),
             total:  parseFloat(String(r.total ?? "0")),
           })),
+          // aliases (usados nos alias-dependentes: lucroRealizado, lucroPrevisto)
+          lucroPrevisto,
+          lucroRealizado,
         },
         bonus: {
           fatorBonus,
