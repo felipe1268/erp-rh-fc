@@ -1,4 +1,47 @@
 /**
+ * Rev. 4185 - SCORECARD: ABA "👥 RH / FOLHA" — CUSTO PROPORCIONAL DE MÃO DE OBRA POR OBRA.
+ *
+ * O QUE FOI FEITO:
+ * - Nova procedure `scorecard.getCustosRH` com fracionação proporcional de custo por dias de obra:
+ *     1. `site_periods` CTE: união de `employee_site_history` (transferências registradas) com fallback
+ *        para funcionários atuais sem histórico de transferência (usa data_admissao como início).
+ *     2. `payroll_frac` CTE: para cada `payroll_payments` (employee × mês), calcula os dias que o
+ *        funcionário estava NESTA obra naquele mês via subquery de soma de overlap:
+ *        `LEAST(periodo_fim, mes_fim) - GREATEST(periodo_inicio, mes_ini) + 1`.
+ *     3. Fracionamento: `custo_proporcional = custo_total × (dias_na_obra / dias_no_mes)`.
+ *     4. Fontes cruzadas: `payroll_payments` (salário bruto, HE, adicionais, INSS, FGTS, líquido) +
+ *        `vr_benefits` (VR + VA via iFood), ambos proporcionais ao período na obra.
+ *     5. Retorno: `resumo` (totalFuncionários, custoTotalEmpresa, salarioBrutoTotal, heTotal, vrTotal,
+ *        vaTotal, fgtsTotal, inssTotal, liquidoTotal) + `funcionarios[]` ordenados por custo decrescente.
+ *     6. Cada funcionário inclui `historico_mensal` JSON_AGG com breakdown mês a mês.
+ *     7. Filtros opcionais: `mesInicio` / `mesFim` (YYYY-MM) para filtrar o período consultado.
+ * - Nova aba "👥 RH / Folha" na segunda posição do card Análise Gerencial:
+ *     • Filtro de período (De/Até) tipo "month" com botão limpar.
+ *     • 6 KPIs: Funcionários, Custo Total Empresa, Salário Bruto, Horas Extras, VR+VA, FGTS.
+ *     • Nota metodológica explicando a lógica de fracionamento.
+ *     • Tabela expansível por funcionário: Nome/Matrícula/Cargo | Dias | Sal. Bruto | HE | VR+VA | FGTS | Custo Empresa.
+ *     • Linha expandida: detalhamento mensal completo (mês, dias/total, fração %, todos os valores).
+ *     • Rodapé da tabela: totais da obra.
+ * - Lazy load: `getCustosRH` só é chamado quando `abaAnalise === "rh"`.
+ * - ZERO DELETE · ZERO ALTER destrutivo.
+ *
+ * ARQUIVOS TOCADOS:
+ * - server/routers/scorecard.ts → procedure getCustosRH adicionada
+ * - client/src/pages/planejamento/ScorecardTab.tsx → abaAnalise type + rh; estados expandedRH,
+ *   rhMesInicio, rhMesFim; analiseRH query; tab "👥 RH / Folha"; conteúdo completo da aba
+ * - shared/version.ts → bump Rev. 4185
+ *
+ * RACIONAL:
+ * - Obra com 50 funcionários, mas cada um pode ter ficado por períodos diferentes (transferências).
+ *   Um funcionário que ficou 15 dias nesta obra e 15 em outra deve ter 50% do custo alocado aqui.
+ * - Custo Total Empresa = Salário Bruto + FGTS (empregador) + HE + Adicionais + VR + VA.
+ *   Não inclui INSS do empregador (não capturado na folha simplificada), mas inclui INSS do funcionário
+ *   para referência (mostrado no detalhamento mensal).
+ * - employee_site_history é a fonte primária de alocações; funcionários sem histórico (nunca
+ *   transferidos) usam data_admissao como início do período na obra atual.
+ */
+
+/**
  * Rev. 4184 - SCORECARD: ABA SEGURANÇA — QUADRO CLT/TERCEIROS, ASO, TREINAMENTOS, ADVERTÊNCIAS E EPI.
  *
  * O QUE FOI FEITO:

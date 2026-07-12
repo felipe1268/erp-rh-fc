@@ -266,7 +266,10 @@ export default function ScorecardTab({ proj }: { proj: any }) {
   const [showRetrabalhos, setShowRetrabalhos] = useState(false);
   const [showMemoria, setShowMemoria] = useState(false);
   const [showAnalise, setShowAnalise] = useState(false);
-  const [abaAnalise, setAbaAnalise] = useState<"compras" | "ferramentas" | "locacoes" | "seguranca">("seguranca");
+  const [abaAnalise, setAbaAnalise] = useState<"compras" | "ferramentas" | "locacoes" | "seguranca" | "rh">("seguranca");
+  const [expandedRH, setExpandedRH] = useState<Set<number>>(new Set());
+  const [rhMesInicio, setRhMesInicio] = useState<string>("");
+  const [rhMesFim, setRhMesFim]   = useState<string>("");
 
   const enabled = !!obraId;
 
@@ -280,11 +283,15 @@ export default function ScorecardTab({ proj }: { proj: any }) {
   );
   const analise = trpc.scorecard.getAnalise.useQuery(
     { companyId, obraId: obraId! },
-    { enabled: enabled && showAnalise && abaAnalise !== "seguranca", staleTime: 120_000 }
+    { enabled: enabled && showAnalise && abaAnalise !== "seguranca" && abaAnalise !== "rh", staleTime: 120_000 }
   );
   const analiseSeguranca = trpc.scorecard.getSeguranca.useQuery(
     { companyId, obraId: obraId! },
     { enabled: enabled && showAnalise && abaAnalise === "seguranca", staleTime: 120_000 }
+  );
+  const analiseRH = trpc.scorecard.getCustosRH.useQuery(
+    { companyId, obraId: obraId!, mesInicio: rhMesInicio || undefined, mesFim: rhMesFim || undefined },
+    { enabled: enabled && showAnalise && abaAnalise === "rh", staleTime: 120_000 }
   );
   const utils = trpc.useUtils();
   const refetch = () => { utils.scorecard.getScore.invalidate(); utils.scorecard.ferramentasList.invalidate(); };
@@ -812,10 +819,10 @@ export default function ScorecardTab({ proj }: { proj: any }) {
 
                 {/* ── Abas ─── */}
                 <div className="flex gap-1 border-b border-gray-200 pb-0 flex-wrap">
-                  {(["seguranca", "compras", "ferramentas", "locacoes"] as const).map(aba => (
+                  {(["seguranca", "rh", "compras", "ferramentas", "locacoes"] as const).map(aba => (
                     <button key={aba} onClick={() => setAbaAnalise(aba)}
                       className={`px-3 py-1.5 text-xs font-medium rounded-t-md border-b-2 transition-colors ${abaAnalise === aba ? "border-violet-500 text-violet-700 bg-violet-50" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
-                      {aba === "seguranca" ? "🛡️ Segurança" : aba === "compras" ? "📦 Compras" : aba === "ferramentas" ? "🔧 Ferramentas" : "🚜 Locações"}
+                      {aba === "seguranca" ? "🛡️ Segurança" : aba === "rh" ? "👥 RH / Folha" : aba === "compras" ? "📦 Compras" : aba === "ferramentas" ? "🔧 Ferramentas" : "🚜 Locações"}
                     </button>
                   ))}
                 </div>
@@ -1075,6 +1082,196 @@ export default function ScorecardTab({ proj }: { proj: any }) {
 
                         {analiseSeguranca.data.clt.length === 0 && analiseSeguranca.data.terceiros.length === 0 && (
                           <p className="text-xs text-gray-400 text-center py-4">Nenhum colaborador cadastrado nesta obra.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ════════════ ABA: RH / FOLHA ════════════ */}
+                {abaAnalise === "rh" && (
+                  <div className="space-y-4">
+                    {/* Filtro de período */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Período:</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] text-gray-400">De</span>
+                        <input type="month" value={rhMesInicio}
+                          onChange={e => { setRhMesInicio(e.target.value); }}
+                          className="border border-gray-200 rounded px-1.5 py-0.5 text-[10px] text-gray-700 bg-white" />
+                        <span className="text-[10px] text-gray-400">Até</span>
+                        <input type="month" value={rhMesFim}
+                          onChange={e => { setRhMesFim(e.target.value); }}
+                          className="border border-gray-200 rounded px-1.5 py-0.5 text-[10px] text-gray-700 bg-white" />
+                        {(rhMesInicio || rhMesFim) && (
+                          <button onClick={() => { setRhMesInicio(""); setRhMesFim(""); }}
+                            className="text-[9px] text-gray-400 hover:text-red-500 px-1">✕ limpar</button>
+                        )}
+                      </div>
+                    </div>
+
+                    {analiseRH.isLoading ? (
+                      <div className="flex items-center justify-center py-8 gap-2 text-gray-400 text-sm">
+                        <Loader2 className="w-4 h-4 animate-spin" />Calculando custos da folha…
+                      </div>
+                    ) : !analiseRH.data ? (
+                      <p className="text-xs text-gray-400 py-4 text-center">Sem dados de folha para esta obra.</p>
+                    ) : (
+                      <div className="space-y-4">
+                        {/* ── KPIs ── */}
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            { label: "Funcionários", v: String(analiseRH.data.resumo.totalFuncionarios), color: "text-indigo-700" },
+                            { label: "Custo Total Empresa", v: fmt(analiseRH.data.resumo.custoTotalEmpresa), color: "text-violet-700 font-bold" },
+                            { label: "Salário Bruto Total", v: fmt(analiseRH.data.resumo.salarioBrutoTotal), color: "text-gray-800" },
+                            { label: "Horas Extras", v: fmt(analiseRH.data.resumo.heTotal), color: analiseRH.data.resumo.heTotal > 0 ? "text-amber-700" : "text-gray-400" },
+                            { label: "VR + VA", v: fmt(analiseRH.data.resumo.vrTotal + analiseRH.data.resumo.vaTotal), color: "text-teal-700" },
+                            { label: "FGTS (Empregador)", v: fmt(analiseRH.data.resumo.fgtsTotal), color: "text-blue-700" },
+                          ].map((k, i) => (
+                            <div key={i} className="rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-2 text-center">
+                              <p className={`text-sm font-bold ${k.color}`}>{k.v}</p>
+                              <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{k.label}</p>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* ── Nota metodológica ── */}
+                        <p className="text-[10px] text-gray-400 italic bg-blue-50 border border-blue-100 rounded px-2 py-1.5 leading-snug">
+                          Custo proporcional ao período de alocação na obra.
+                          Funcionário que ficou 15 dias aqui e 15 dias em outra obra tem <strong>50% do custo mensal</strong> alocado aqui.
+                          Fonte: Folha de Pagamento (RH) + VR/VA (iFood) × histórico de obra.
+                        </p>
+
+                        {/* ── Tabela de funcionários ── */}
+                        {analiseRH.data.funcionarios.length === 0 ? (
+                          <p className="text-xs text-gray-400 py-4 text-center">Nenhuma folha encontrada para esta obra no período.</p>
+                        ) : (
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">
+                              Custo por Funcionário — ordenado por custo total
+                            </p>
+                            <div className="overflow-x-auto rounded border border-gray-200">
+                              <table className="w-full text-xs">
+                                <thead>
+                                  <tr className="bg-gray-50 text-[10px] uppercase tracking-wide text-gray-500">
+                                    <th className="text-left px-2 py-1.5 font-semibold">Funcionário</th>
+                                    <th className="text-center px-2 py-1.5 font-semibold">Dias</th>
+                                    <th className="text-right px-2 py-1.5 font-semibold">Sal. Bruto</th>
+                                    <th className="text-right px-2 py-1.5 font-semibold">HE</th>
+                                    <th className="text-right px-2 py-1.5 font-semibold">VR+VA</th>
+                                    <th className="text-right px-2 py-1.5 font-semibold">FGTS</th>
+                                    <th className="text-right px-2 py-1.5 font-semibold">Custo Empresa</th>
+                                    <th className="w-6"></th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {analiseRH.data.funcionarios.map((f: any) => {
+                                    const isOpen = expandedRH.has(Number(f.employee_id));
+                                    const toggle = () => setExpandedRH(prev => {
+                                      const n = new Set(prev);
+                                      if (n.has(Number(f.employee_id))) n.delete(Number(f.employee_id));
+                                      else n.add(Number(f.employee_id));
+                                      return n;
+                                    });
+                                    const vr = Number(f.vr_total ?? 0);
+                                    const va = Number(f.va_total ?? 0);
+                                    return (
+                                      <>
+                                        <tr key={f.employee_id}
+                                          onClick={toggle}
+                                          className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors">
+                                          <td className="px-2 py-1.5">
+                                            <p className="font-medium text-gray-800 leading-tight">{f.nome}</p>
+                                            <p className="text-[9px] text-gray-400">{f.matricula ?? "—"} · {f.cargo ?? "—"}</p>
+                                          </td>
+                                          <td className="text-center px-2 py-1.5 text-gray-600">{f.total_dias_na_obra}</td>
+                                          <td className="text-right px-2 py-1.5 text-gray-700">{fmt(Number(f.salario_bruto_total))}</td>
+                                          <td className="text-right px-2 py-1.5 text-amber-700">{Number(f.he_total) > 0 ? fmt(Number(f.he_total)) : <span className="text-gray-300">—</span>}</td>
+                                          <td className="text-right px-2 py-1.5 text-teal-700">{(vr + va) > 0 ? fmt(vr + va) : <span className="text-gray-300">—</span>}</td>
+                                          <td className="text-right px-2 py-1.5 text-blue-700">{fmt(Number(f.fgts_total))}</td>
+                                          <td className="text-right px-2 py-1.5 font-semibold text-violet-700">{fmt(Number(f.custo_total_empresa))}</td>
+                                          <td className="px-1 py-1.5 text-gray-400">{isOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}</td>
+                                        </tr>
+                                        {isOpen && (
+                                          <tr key={`${f.employee_id}-detail`} className="bg-indigo-50/40">
+                                            <td colSpan={8} className="px-3 py-2">
+                                              <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">
+                                                Detalhamento mensal — {f.nome}
+                                              </p>
+                                              <div className="overflow-x-auto">
+                                                <table className="w-full text-[10px]">
+                                                  <thead>
+                                                    <tr className="text-gray-400 border-b border-indigo-100">
+                                                      <th className="text-left py-1 pr-3 font-semibold">Mês</th>
+                                                      <th className="text-center py-1 pr-3 font-semibold">Dias / Total</th>
+                                                      <th className="text-center py-1 pr-3 font-semibold">Fração</th>
+                                                      <th className="text-right py-1 pr-3 font-semibold">Sal. Bruto</th>
+                                                      <th className="text-right py-1 pr-3 font-semibold">HE</th>
+                                                      <th className="text-right py-1 pr-3 font-semibold">VR</th>
+                                                      <th className="text-right py-1 pr-3 font-semibold">VA</th>
+                                                      <th className="text-right py-1 pr-3 font-semibold">FGTS</th>
+                                                      <th className="text-right py-1 pr-3 font-semibold">INSS</th>
+                                                      <th className="text-right py-1 font-semibold">Custo Empresa</th>
+                                                    </tr>
+                                                  </thead>
+                                                  <tbody>
+                                                    {(f.historico_mensal ?? []).map((m: any, mi: number) => (
+                                                      <tr key={mi} className="border-b border-indigo-100/50 hover:bg-indigo-100/30">
+                                                        <td className="py-1 pr-3 text-gray-700 font-medium">{m.mes}</td>
+                                                        <td className="py-1 pr-3 text-center text-gray-500">{m.diasNaObra}/{m.diasNoMes}</td>
+                                                        <td className="py-1 pr-3 text-center">
+                                                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${Number(m.fracao) < 1 ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}>
+                                                            {(Number(m.fracao) * 100).toFixed(0)}%
+                                                          </span>
+                                                        </td>
+                                                        <td className="py-1 pr-3 text-right text-gray-700">{fmt(Number(m.salarioBruto))}</td>
+                                                        <td className="py-1 pr-3 text-right text-amber-700">{Number(m.horasExtras) > 0 ? fmt(Number(m.horasExtras)) : <span className="text-gray-300">—</span>}</td>
+                                                        <td className="py-1 pr-3 text-right text-teal-700">{Number(m.vr) > 0 ? fmt(Number(m.vr)) : <span className="text-gray-300">—</span>}</td>
+                                                        <td className="py-1 pr-3 text-right text-teal-600">{Number(m.va) > 0 ? fmt(Number(m.va)) : <span className="text-gray-300">—</span>}</td>
+                                                        <td className="py-1 pr-3 text-right text-blue-700">{fmt(Number(m.fgts))}</td>
+                                                        <td className="py-1 pr-3 text-right text-gray-600">{fmt(Number(m.inss))}</td>
+                                                        <td className="py-1 text-right font-semibold text-violet-700">{fmt(Number(m.custoEmpresa))}</td>
+                                                      </tr>
+                                                    ))}
+                                                  </tbody>
+                                                  <tfoot>
+                                                    <tr className="border-t-2 border-indigo-200 font-semibold text-gray-700">
+                                                      <td className="py-1 pr-3 text-[9px] uppercase">Total</td>
+                                                      <td className="py-1 pr-3 text-center text-gray-500">{f.total_dias_na_obra}d</td>
+                                                      <td></td>
+                                                      <td className="py-1 pr-3 text-right">{fmt(Number(f.salario_bruto_total))}</td>
+                                                      <td className="py-1 pr-3 text-right text-amber-700">{fmt(Number(f.he_total))}</td>
+                                                      <td className="py-1 pr-3 text-right text-teal-700">{fmt(Number(f.vr_total))}</td>
+                                                      <td className="py-1 pr-3 text-right text-teal-600">{fmt(Number(f.va_total))}</td>
+                                                      <td className="py-1 pr-3 text-right text-blue-700">{fmt(Number(f.fgts_total))}</td>
+                                                      <td className="py-1 pr-3 text-right">{fmt(Number(f.inss_total))}</td>
+                                                      <td className="py-1 text-right text-violet-700">{fmt(Number(f.custo_total_empresa))}</td>
+                                                    </tr>
+                                                  </tfoot>
+                                                </table>
+                                              </div>
+                                            </td>
+                                          </tr>
+                                        )}
+                                      </>
+                                    );
+                                  })}
+                                </tbody>
+                                <tfoot>
+                                  <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold text-xs text-gray-700">
+                                    <td className="px-2 py-2 text-[10px] uppercase tracking-wide">TOTAL OBRA</td>
+                                    <td className="text-center px-2 py-2 text-gray-500">—</td>
+                                    <td className="text-right px-2 py-2">{fmt(analiseRH.data.resumo.salarioBrutoTotal)}</td>
+                                    <td className="text-right px-2 py-2 text-amber-700">{fmt(analiseRH.data.resumo.heTotal)}</td>
+                                    <td className="text-right px-2 py-2 text-teal-700">{fmt(analiseRH.data.resumo.vrTotal + analiseRH.data.resumo.vaTotal)}</td>
+                                    <td className="text-right px-2 py-2 text-blue-700">{fmt(analiseRH.data.resumo.fgtsTotal)}</td>
+                                    <td className="text-right px-2 py-2 font-bold text-violet-700">{fmt(analiseRH.data.resumo.custoTotalEmpresa)}</td>
+                                    <td></td>
+                                  </tr>
+                                </tfoot>
+                              </table>
+                            </div>
+                          </div>
                         )}
                       </div>
                     )}

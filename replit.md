@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4185** — **SCORECARD: ABA "👥 RH / FOLHA" — CUSTO PROPORCIONAL DE MÃO DE OBRA POR OBRA.** `getCustosRH` procedure com fracionação proporcional por dias de obra: `site_periods` CTE (employee_site_history + fallback data_admissao) × `payroll_payments` × `vr_benefits`. Custo = Sal. Bruto + FGTS + HE + Adicionais + VR + VA × (diasNaObra/diasNoMes). Filtro de período (De/Até). Tabela expansível por funcionário com detalhamento mensal. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4184** — **SCORECARD: ABA SEGURANÇA — QUADRO CLT/TERCEIROS, ASO, TREINAMENTOS, ADVERTÊNCIAS E EPI.** Nova aba 🛡️ Segurança (padrão) no card Análise Gerencial. Backend: `getSeguranca` procedure — 7 queries paralelas (CLT+ASO+treinamentos+advertências; Terceiros+docs NR; Treinamentos por norma; Advertências CLT; Advertências terceiros; EPI por funcionário; Curva ABC EPI). Frontend: KPIs CLT/Terceiros/Advertências/ASO/Custo EPI; quadro CLT com ASO/treinamentos/advert.; quadro terceiros com docs + NRs; tabela treinamentos por norma; lista unificada de advertências; Curva ABC EPI + bar chart por funcionário. Badges no header. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4183** — **SCORECARD: PAINEL ANÁLISE GERENCIAL DA OBRA (CURVA ABC, RECOMPRAS, FERRAMENTAS, LOCAÇÕES).** Novo card colapsável "Análise Gerencial da Obra" com 4 abas (🛡️+📦+🔧+🚜). `getAnalise` — 6 queries: Curva ABC materiais, recompra ≥3 OCs/mês, gastos mensais, ferramentas almox, OC sem almox, locações. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4183** — **SCORECARD: PAINEL ANÁLISE GERENCIAL DA OBRA (CURVA ABC, RECOMPRAS, FERRAMENTAS, LOCAÇÕES).** Novo card colapsável "Análise Gerencial da Obra" com 4 abas (🛡️+📦+🔧+🚜). `getAnalise` — 6 queries: Curva ABC materiais, recompra ≥3 OCs/mês, gastos mensais, ferramentas almox, OC sem almox, locações. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4182** — **PLANEJAMENTO: SCORECARD DO GESTOR COM KPIs, BÔNUS E CONTROLE DE FERRAMENTAS/RETRABALHO.** Score 0-100 em 5 dimensões ponderadas. Bônus financeiro. Retrabalho (admin). Ferramentas warehouse_loans. `obra_scorecard_config` + `obra_retrabalho`. ZERO DELETE · ZERO ALTER destrutivo.
 

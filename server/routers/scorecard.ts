@@ -1031,6 +1031,174 @@ export const scorecardRouter = router({
       };
     }),
 
+  getCustosRH: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      obraId:    z.number(),
+      mesInicio: z.string().optional(),
+      mesFim:    z.string().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return null;
+
+      const mesInicioFilter = input.mesInicio
+        ? sql`AND pp.mes_referencia >= ${input.mesInicio}`
+        : sql``;
+      const mesFimFilter = input.mesFim
+        ? sql`AND pp.mes_referencia <= ${input.mesFim}`
+        : sql``;
+
+      const r = await db.execute(sql`
+        WITH site_periods AS (
+          -- Períodos registrados em employee_site_history para esta obra
+          SELECT
+            esh.employee_id,
+            esh.data_inicio::date                           AS periodo_inicio,
+            COALESCE(esh.data_fim::date, CURRENT_DATE)      AS periodo_fim
+          FROM employee_site_history esh
+          WHERE esh.obra_id    = ${input.obraId}
+            AND esh.company_id = ${input.companyId}
+
+          UNION ALL
+
+          -- Funcionários atualmente na obra sem nenhum registro de histórico
+          SELECT
+            e.id AS employee_id,
+            COALESCE(e.data_admissao::date, e.created_at::date) AS periodo_inicio,
+            CURRENT_DATE AS periodo_fim
+          FROM employees e
+          WHERE e.obra_id    = ${input.obraId}
+            AND e.company_id = ${input.companyId}
+            AND e.status NOT IN ('Desligado','Lista_Negra','Inativo')
+            AND NOT EXISTS (
+              SELECT 1 FROM employee_site_history esh2
+              WHERE esh2.employee_id = e.id
+                AND esh2.obra_id     = ${input.obraId}
+                AND esh2.company_id  = ${input.companyId}
+            )
+        ),
+        relevant_emp AS (
+          SELECT DISTINCT employee_id FROM site_periods
+        ),
+        payroll_frac AS (
+          SELECT
+            pp.employee_id,
+            pp.mes_referencia,
+            pp.status                                              AS folha_status,
+            (pp.mes_referencia || '-01')::date                    AS mes_ini,
+            ((pp.mes_referencia || '-01')::date
+              + INTERVAL '1 month' - INTERVAL '1 day')::date     AS mes_fim_d,
+            DATE_PART('day', ((pp.mes_referencia || '-01')::date
+              + INTERVAL '1 month' - INTERVAL '1 day')::timestamp)::int AS dias_no_mes,
+            COALESCE(pp.salario_bruto_mes::numeric,  0)           AS salario_bruto,
+            COALESCE(pp.horas_extras_valor::numeric, 0)           AS he_valor,
+            COALESCE(pp.adicionais_valor::numeric,   0)           AS adicionais,
+            COALESCE(pp.desconto_inss::numeric,      0)           AS inss_valor,
+            COALESCE(pp.desconto_fgts::numeric,      0)           AS fgts_valor,
+            COALESCE(pp.total_proventos::numeric,    0)           AS total_proventos,
+            COALESCE(pp.total_descontos::numeric,    0)           AS total_descontos,
+            COALESCE(pp.salario_liquido::numeric,    0)           AS liquido,
+            -- Dias em que este funcionário estava NESTA obra dentro do mês
+            (
+              SELECT COALESCE(SUM(
+                GREATEST(0,
+                  LEAST(sp.periodo_fim,
+                        ((pp.mes_referencia||'-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date)
+                  - GREATEST(sp.periodo_inicio, (pp.mes_referencia||'-01')::date)
+                  + 1
+                )
+              ), 0)::int
+              FROM site_periods sp
+              WHERE sp.employee_id = pp.employee_id
+                AND sp.periodo_fim  >= (pp.mes_referencia||'-01')::date
+                AND sp.periodo_inicio <= ((pp.mes_referencia||'-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date
+            ) AS dias_na_obra
+          FROM payroll_payments pp
+          WHERE pp.company_id  = ${input.companyId}
+            AND pp.employee_id IN (SELECT employee_id FROM relevant_emp)
+            ${mesInicioFilter}
+            ${mesFimFilter}
+        ),
+        pf AS (
+          SELECT * FROM payroll_frac WHERE dias_na_obra > 0
+        ),
+        vr_data AS (
+          SELECT employee_id, mes_referencia,
+            COALESCE(valor_total::numeric, 0) AS vr_total,
+            COALESCE(valor_va::numeric,    0) AS va_total
+          FROM vr_benefits
+          WHERE company_id  = ${input.companyId}
+            AND employee_id IN (SELECT employee_id FROM relevant_emp)
+        ),
+        custos AS (
+          SELECT
+            pf.employee_id,
+            e.nome_completo                                       AS nome,
+            e.matricula,
+            e.cargo,
+            e.salario_base                                        AS salario_base_cadastro,
+            COUNT(DISTINCT pf.mes_referencia)                    AS meses_na_obra,
+            SUM(pf.dias_na_obra)                                 AS total_dias_na_obra,
+            SUM(ROUND(pf.salario_bruto * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)) AS salario_bruto_total,
+            SUM(ROUND(pf.he_valor      * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)) AS he_total,
+            SUM(ROUND(pf.adicionais    * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)) AS adicionais_total,
+            SUM(ROUND(pf.inss_valor    * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)) AS inss_total,
+            SUM(ROUND(pf.fgts_valor    * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)) AS fgts_total,
+            SUM(ROUND(pf.liquido       * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)) AS liquido_total,
+            SUM(ROUND(COALESCE(v.vr_total,0) * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)) AS vr_total,
+            SUM(ROUND(COALESCE(v.va_total,0) * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)) AS va_total,
+            SUM(ROUND(
+              (pf.salario_bruto + pf.fgts_valor + pf.he_valor + pf.adicionais
+               + COALESCE(v.vr_total,0) + COALESCE(v.va_total,0))
+              * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2
+            )) AS custo_total_empresa,
+            JSON_AGG(
+              JSON_BUILD_OBJECT(
+                'mes',          pf.mes_referencia,
+                'diasNaObra',   pf.dias_na_obra,
+                'diasNoMes',    pf.dias_no_mes,
+                'fracao',       ROUND(pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 3),
+                'salarioBruto', ROUND(pf.salario_bruto * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
+                'horasExtras',  ROUND(pf.he_valor      * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
+                'adicionais',   ROUND(pf.adicionais    * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
+                'vr',           ROUND(COALESCE(v.vr_total,0) * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
+                'va',           ROUND(COALESCE(v.va_total,0) * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
+                'fgts',         ROUND(pf.fgts_valor    * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
+                'inss',         ROUND(pf.inss_valor     * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
+                'liquido',      ROUND(pf.liquido        * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
+                'custoEmpresa', ROUND(
+                  (pf.salario_bruto + pf.fgts_valor + pf.he_valor + pf.adicionais
+                   + COALESCE(v.vr_total,0) + COALESCE(v.va_total,0))
+                  * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2
+                ),
+                'folhaStatus',  pf.folha_status
+              ) ORDER BY pf.mes_referencia
+            ) AS historico_mensal
+          FROM pf
+          JOIN employees e ON e.id = pf.employee_id AND e.company_id = ${input.companyId}
+          LEFT JOIN vr_data v ON v.employee_id = pf.employee_id AND v.mes_referencia = pf.mes_referencia
+          GROUP BY pf.employee_id, e.nome_completo, e.matricula, e.cargo, e.salario_base
+        )
+        SELECT * FROM custos ORDER BY custo_total_empresa DESC NULLS LAST
+      `);
+
+      const funcs = r.rows as any[];
+      const n = (v: any) => Number(v ?? 0);
+      const resumo = {
+        totalFuncionarios: funcs.length,
+        custoTotalEmpresa: funcs.reduce((s, f) => s + n(f.custo_total_empresa), 0),
+        salarioBrutoTotal: funcs.reduce((s, f) => s + n(f.salario_bruto_total), 0),
+        heTotal:           funcs.reduce((s, f) => s + n(f.he_total),            0),
+        vrTotal:           funcs.reduce((s, f) => s + n(f.vr_total),            0),
+        vaTotal:           funcs.reduce((s, f) => s + n(f.va_total),            0),
+        fgtsTotal:         funcs.reduce((s, f) => s + n(f.fgts_total),          0),
+        inssTotal:         funcs.reduce((s, f) => s + n(f.inss_total),          0),
+        liquidoTotal:      funcs.reduce((s, f) => s + n(f.liquido_total),       0),
+      };
+      return { resumo, funcionarios: funcs };
+    }),
+
   ferramentasList: protectedProcedure
     .input(z.object({ companyId: z.number(), obraId: z.number() }))
     .query(async ({ input }) => {
