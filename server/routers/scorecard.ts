@@ -561,6 +561,235 @@ export const scorecardRouter = router({
       return { ok: true };
     }),
 
+  getAnalise: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return null;
+      const safe = async (label: string, fn: () => Promise<any[]>) => {
+        try { return await fn(); } catch (e: any) {
+          console.warn(`[Scorecard.getAnalise] ${label}:`, e?.message);
+          return [];
+        }
+      };
+
+      const [curvaMat, recorrencia, mensal, ferramentasAlmox, ocsSemAlmox, locacoes] = await Promise.all([
+        // ── 1. CURVA ABC DE MATERIAIS ────────────────────────────────────────
+        safe("curvaABC", async () => {
+          const r = await db.execute(sql`
+            WITH totais AS (
+              SELECT
+                TRIM(coi.descricao)          AS item,
+                SUM(coi.total)               AS total_valor,
+                SUM(coi.quantidade)          AS total_qtd,
+                COUNT(DISTINCT co.id)        AS num_ocs,
+                MIN(co.created_at)           AS primeira_compra,
+                MAX(co.created_at)           AS ultima_compra
+              FROM compras_ordens co
+              JOIN compras_ordens_itens coi ON coi.ordem_id = co.id
+              WHERE co.obra_id    = ${input.obraId}
+                AND co.company_id = ${input.companyId}
+                AND co.status NOT IN ('cancelado')
+              GROUP BY TRIM(coi.descricao)
+            ),
+            soma AS (SELECT SUM(total_valor) AS total_geral FROM totais),
+            ranked AS (
+              SELECT t.*, s.total_geral,
+                SUM(t.total_valor) OVER (ORDER BY t.total_valor DESC
+                  ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS acum_valor
+              FROM totais t, soma s
+            )
+            SELECT
+              item, total_valor, total_qtd, num_ocs, primeira_compra, ultima_compra,
+              total_geral,
+              ROUND((total_valor / NULLIF(total_geral, 0) * 100)::numeric, 2) AS pct,
+              ROUND((acum_valor  / NULLIF(total_geral, 0) * 100)::numeric, 2) AS pct_acum,
+              CASE
+                WHEN (acum_valor - total_valor) / NULLIF(total_geral, 0) < 0.80 THEN 'A'
+                WHEN (acum_valor - total_valor) / NULLIF(total_geral, 0) < 0.95 THEN 'B'
+                ELSE 'C'
+              END AS classe_abc
+            FROM ranked
+            ORDER BY total_valor DESC
+            LIMIT 40
+          `);
+          return r.rows as any[];
+        }),
+
+        // ── 2. ALERTAS DE RECORRÊNCIA ────────────────────────────────────────
+        safe("recorrencia", async () => {
+          const r = await db.execute(sql`
+            SELECT
+              TRIM(coi.descricao) AS item,
+              TO_CHAR(DATE_TRUNC('month', co.created_at), 'MM/YYYY') AS mes,
+              DATE_TRUNC('month', co.created_at)                     AS mes_sort,
+              COUNT(DISTINCT co.id)                                  AS num_ocs,
+              SUM(coi.total)                                         AS total_mes
+            FROM compras_ordens co
+            JOIN compras_ordens_itens coi ON coi.ordem_id = co.id
+            WHERE co.obra_id    = ${input.obraId}
+              AND co.company_id = ${input.companyId}
+              AND co.status NOT IN ('cancelado')
+            GROUP BY TRIM(coi.descricao), DATE_TRUNC('month', co.created_at)
+            HAVING COUNT(DISTINCT co.id) >= 3
+            ORDER BY num_ocs DESC, total_mes DESC
+            LIMIT 15
+          `);
+          return r.rows as any[];
+        }),
+
+        // ── 3. GASTOS MENSAIS DE COMPRAS ─────────────────────────────────────
+        safe("mensal", async () => {
+          const r = await db.execute(sql`
+            SELECT
+              TO_CHAR(DATE_TRUNC('month', co.created_at), 'MM/YYYY') AS mes,
+              DATE_TRUNC('month', co.created_at)                     AS mes_sort,
+              SUM(co.total)                                          AS total_compras,
+              COUNT(*)                                               AS num_ocs,
+              COUNT(DISTINCT co.fornecedor_id)                       AS num_fornecedores
+            FROM compras_ordens co
+            WHERE co.obra_id    = ${input.obraId}
+              AND co.company_id = ${input.companyId}
+              AND co.status NOT IN ('cancelado')
+            GROUP BY DATE_TRUNC('month', co.created_at)
+            ORDER BY mes_sort
+          `);
+          return r.rows as any[];
+        }),
+
+        // ── 4. FERRAMENTAS NO ALMOX ───────────────────────────────────────────
+        safe("ferramentasAlmox", async () => {
+          const r = await db.execute(sql`
+            SELECT
+              ai.id, ai.nome, ai.categoria, ai.quantidade_atual, ai.valor_unitario,
+              ai.equipamento_vinculado_tipo, ai.equipamento_vinculado_id,
+              ai.criado_em,
+              COALESCE(emp.cnt, 0)    AS em_uso_cnt,
+              COALESCE(emp.pessoas,'') AS em_uso_pessoas,
+              COALESCE(dev.total_dev, 0) AS total_devolvidos,
+              -- Alerta: comprado mas nunca deu entrada no almox (qtd=0 e nenhum empréstimo)
+              CASE WHEN ai.quantidade_atual <= 0 AND COALESCE(emp.cnt, 0) = 0
+                        AND COALESCE(dev.total_dev, 0) = 0 THEN true ELSE false
+              END AS suspeita_desvio
+            FROM almoxarifado_itens ai
+            LEFT JOIN (
+              SELECT item_id,
+                COUNT(*)                                         AS cnt,
+                STRING_AGG(DISTINCT funcionario_nome, ', ')     AS pessoas
+              FROM warehouse_loans
+              WHERE obra_id = ${input.obraId}
+                AND status  = 'emprestado'
+              GROUP BY item_id
+            ) emp ON emp.item_id = ai.id
+            LEFT JOIN (
+              SELECT item_id, COUNT(*) AS total_dev
+              FROM warehouse_loans
+              WHERE obra_id = ${input.obraId}
+                AND status  = 'devolvido'
+              GROUP BY item_id
+            ) dev ON dev.item_id = ai.id
+            WHERE ai.obra_id    = ${input.obraId}
+              AND ai.company_id = ${input.companyId}
+              AND ai.ativo      = true
+              AND (
+                ai.categoria ILIKE '%ferramenta%'
+                OR ai.categoria ILIKE '%equipamento%'
+                OR ai.categoria ILIKE '%EPI%'
+                OR ai.equipamento_vinculado_tipo IS NOT NULL
+              )
+            ORDER BY ai.nome
+          `);
+          return r.rows as any[];
+        }),
+
+        // ── 5. OCs ENTREGUES SEM ENTRADA NO ALMOX (possível desvio) ──────────
+        safe("ocsSemAlmox", async () => {
+          const r = await db.execute(sql`
+            SELECT
+              co.id, co.numero_oc, co.created_at, co.fornecedor_nome, co.total,
+              COUNT(DISTINCT coi.id) AS num_itens
+            FROM compras_ordens co
+            JOIN compras_ordens_itens coi ON coi.ordem_id = co.id
+            WHERE co.obra_id    = ${input.obraId}
+              AND co.company_id = ${input.companyId}
+              AND co.status IN ('entregue', 'entregue_parcial')
+              AND co.is_locacao = false
+              AND NOT EXISTS (
+                SELECT 1 FROM almoxarifado_movimentacoes am
+                WHERE am.obra_id       = ${input.obraId}
+                  AND am.tipo          = 'entrada'
+                  AND am.estornada_em  IS NULL
+                  AND am.motivo        ILIKE '%' || co.numero_oc || '%'
+              )
+            GROUP BY co.id
+            ORDER BY co.created_at DESC
+            LIMIT 20
+          `);
+          return r.rows as any[];
+        }),
+
+        // ── 6. EQUIPAMENTOS LOCADOS ───────────────────────────────────────────
+        safe("locacoes", async () => {
+          const r = await db.execute(sql`
+            SELECT
+              el.id, el.descricao, el.categoria, el.status,
+              el.data_inicio, el.data_fim_prevista, el.data_fim_real,
+              el.valor_mensal, el.valor_diario,
+              el.funcionario_responsavel_nome,
+              el.numero_contrato_fornecedor,
+              el.fornecedor_nome,
+              CASE
+                WHEN el.data_fim_real IS NOT NULL
+                THEN (el.data_fim_real::date - el.data_inicio::date)
+                ELSE (CURRENT_DATE  - el.data_inicio::date)
+              END AS dias_locado,
+              CASE
+                WHEN el.valor_mensal IS NOT NULL AND el.valor_mensal > 0
+                THEN ROUND(
+                  el.valor_mensal *
+                  EXTRACT(days FROM (
+                    COALESCE(el.data_fim_real::date, CURRENT_DATE) - el.data_inicio::date
+                  )) / 30.0, 2)
+                ELSE NULL
+              END AS custo_estimado
+            FROM equipamentos_locados el
+            WHERE el.obra_id    = ${input.obraId}
+              AND el.company_id = ${input.companyId}
+            ORDER BY
+              CASE el.status WHEN 'em_uso' THEN 0 WHEN 'atrasado' THEN 1 ELSE 2 END,
+              el.data_inicio DESC
+            LIMIT 60
+          `);
+          return r.rows as any[];
+        }),
+      ]);
+
+      // Totais agregados
+      const totalGastoCompras = curvaMat.reduce((s: number, r: any) => s + parseFloat(String(r.total_valor ?? 0)), 0);
+      const totalLocacoes = locacoes.reduce((s: number, r: any) => s + parseFloat(String(r.custo_estimado ?? 0)), 0);
+      const totalFerramentasEmUso = ferramentasAlmox.filter((f: any) => parseInt(String(f.em_uso_cnt)) > 0).length;
+      const alertasDesvio = ocsSemAlmox.length;
+      const alertasRecorrencia = recorrencia.length;
+
+      return {
+        curvaMat,
+        recorrencia,
+        mensal,
+        ferramentasAlmox,
+        ocsSemAlmox,
+        locacoes,
+        resumo: {
+          totalGastoCompras,
+          totalLocacoes,
+          totalFerramentasEmUso,
+          alertasDesvio,
+          alertasRecorrencia,
+          numItensAlmox: ferramentasAlmox.length,
+          numLocacoesAtivas: locacoes.filter((l: any) => l.status === 'em_uso').length,
+        },
+      };
+    }),
+
   ferramentasList: protectedProcedure
     .input(z.object({ companyId: z.number(), obraId: z.number() }))
     .query(async ({ input }) => {

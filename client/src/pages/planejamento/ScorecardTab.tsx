@@ -20,7 +20,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Trophy, ShieldCheck, BarChart3, ShoppingCart, Package, Star,
+  Trophy, ShieldCheck, BarChart3, BarChart2, ShoppingCart, Package, Star,
   Settings, Plus, Trash2, TrendingUp, TrendingDown, AlertTriangle,
   CheckCircle2, Loader2, Wrench, DollarSign, ChevronDown, ChevronUp,
   Users, HardHat, RefreshCw, Info,
@@ -265,6 +265,8 @@ export default function ScorecardTab({ proj }: { proj: any }) {
   const [showFerramentas, setShowFerramentas] = useState(false);
   const [showRetrabalhos, setShowRetrabalhos] = useState(false);
   const [showMemoria, setShowMemoria] = useState(false);
+  const [showAnalise, setShowAnalise] = useState(false);
+  const [abaAnalise, setAbaAnalise] = useState<"compras" | "ferramentas" | "locacoes">("compras");
 
   const enabled = !!obraId;
 
@@ -275,6 +277,10 @@ export default function ScorecardTab({ proj }: { proj: any }) {
   const ferramentas = trpc.scorecard.ferramentasList.useQuery(
     { companyId, obraId: obraId! },
     { enabled: enabled && showFerramentas }
+  );
+  const analise = trpc.scorecard.getAnalise.useQuery(
+    { companyId, obraId: obraId! },
+    { enabled: enabled && showAnalise, staleTime: 120_000 }
   );
   const utils = trpc.useUtils();
   const refetch = () => { utils.scorecard.getScore.invalidate(); utils.scorecard.ferramentasList.invalidate(); };
@@ -747,6 +753,297 @@ export default function ScorecardTab({ proj }: { proj: any }) {
           </div>
 
         </CardContent>
+      </Card>
+
+      {/* ── Análise Gerencial ────────────────────────────────────────────────── */}
+      <Card className="border shadow-sm">
+        <CardHeader className="pb-2 pt-3 px-4 cursor-pointer" onClick={() => setShowAnalise(v => !v)}>
+          <CardTitle className="text-sm flex items-center gap-2">
+            <BarChart2 className="w-4 h-4 text-violet-600" />
+            Análise Gerencial da Obra
+            {analise.data?.resumo && (
+              <div className="flex gap-1 ml-1 flex-wrap">
+                {analise.data.resumo.alertasDesvio > 0 && (
+                  <Badge className="bg-red-100 text-red-700 text-[9px]">{analise.data.resumo.alertasDesvio} OC sem almox</Badge>
+                )}
+                {analise.data.resumo.alertasRecorrencia > 0 && (
+                  <Badge className="bg-amber-100 text-amber-700 text-[9px]">{analise.data.resumo.alertasRecorrencia} alertas recompra</Badge>
+                )}
+              </div>
+            )}
+            <span className="ml-auto">{showAnalise ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}</span>
+          </CardTitle>
+        </CardHeader>
+        {showAnalise && (
+          <CardContent className="px-4 pb-4">
+            {analise.isLoading ? (
+              <div className="flex items-center justify-center py-8 gap-2 text-gray-400 text-sm">
+                <Loader2 className="w-4 h-4 animate-spin" />Carregando análise…
+              </div>
+            ) : !analise.data ? (
+              <p className="text-xs text-gray-400 py-4 text-center">Sem dados disponíveis.</p>
+            ) : (
+              <div className="space-y-4">
+
+                {/* ── KPIs resumo ─── */}
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: "Gasto em Compras", v: fmt(analise.data.resumo.totalGastoCompras), color: "text-gray-800" },
+                    { label: "Custo de Locações", v: fmt(analise.data.resumo.totalLocacoes), color: "text-gray-800" },
+                    { label: "Locações Ativas", v: String(analise.data.resumo.numLocacoesAtivas), color: "text-blue-700" },
+                    { label: "Ferramentas Almox", v: String(analise.data.resumo.numItensAlmox), color: "text-teal-700" },
+                    { label: "Em Uso (equipe)", v: String(analise.data.resumo.totalFerramentasEmUso), color: "text-indigo-700" },
+                    { label: "OC sem entrada almox", v: String(analise.data.resumo.alertasDesvio), color: analise.data.resumo.alertasDesvio > 0 ? "text-red-600 font-bold" : "text-gray-500" },
+                  ].map((k, i) => (
+                    <div key={i} className="rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-2 text-center">
+                      <p className={`text-sm font-bold ${k.color}`}>{k.v}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{k.label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* ── Abas ─── */}
+                <div className="flex gap-1 border-b border-gray-200 pb-0">
+                  {(["compras", "ferramentas", "locacoes"] as const).map(aba => (
+                    <button key={aba} onClick={() => setAbaAnalise(aba)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-t-md border-b-2 transition-colors ${abaAnalise === aba ? "border-violet-500 text-violet-700 bg-violet-50" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
+                      {aba === "compras" ? "📦 Compras" : aba === "ferramentas" ? "🔧 Ferramentas" : "🚜 Locações"}
+                    </button>
+                  ))}
+                </div>
+
+                {/* ════════════ ABA: COMPRAS ════════════ */}
+                {abaAnalise === "compras" && (
+                  <div className="space-y-4">
+
+                    {/* Gastos mensais */}
+                    {analise.data.mensal.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Gastos por mês</p>
+                        <div className="space-y-1">
+                          {(() => {
+                            const maxVal = Math.max(...analise.data!.mensal.map((m: any) => parseFloat(String(m.total_compras ?? 0))));
+                            return analise.data!.mensal.map((m: any, i: number) => {
+                              const v = parseFloat(String(m.total_compras ?? 0));
+                              const pct = maxVal > 0 ? (v / maxVal) * 100 : 0;
+                              return (
+                                <div key={i} className="flex items-center gap-2 text-xs">
+                                  <span className="w-14 text-right text-gray-500 shrink-0">{m.mes}</span>
+                                  <div className="flex-1 h-5 bg-gray-100 rounded overflow-hidden">
+                                    <div className="h-full bg-violet-400 rounded transition-all flex items-center pl-1.5"
+                                      style={{ width: `${pct}%` }}>
+                                      {pct > 20 && <span className="text-white text-[9px] font-semibold truncate">{fmt(v)}</span>}
+                                    </div>
+                                  </div>
+                                  {pct <= 20 && <span className="text-gray-600 shrink-0 text-[10px]">{fmt(v)}</span>}
+                                  <span className="text-gray-400 shrink-0 text-[10px]">{m.num_ocs} OC(s)</span>
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Alertas de recorrência */}
+                    {analise.data.recorrencia.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-600 mb-1.5 flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3" />Alertas de Recompra Excessiva (≥3 OCs/mês)
+                        </p>
+                        <div className="space-y-1">
+                          {analise.data.recorrencia.map((r: any, i: number) => (
+                            <div key={i} className="flex items-center gap-2 rounded bg-amber-50 border border-amber-100 px-2.5 py-1.5 text-xs">
+                              <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" />
+                              <span className="flex-1 text-gray-700 truncate font-medium">{r.item}</span>
+                              <span className="text-amber-700 shrink-0 font-bold">{r.num_ocs}× em {r.mes}</span>
+                              <span className="text-gray-400 shrink-0">{fmt(parseFloat(String(r.total_mes)))}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-[10px] text-amber-600 mt-1">Comprar o mesmo item ≥3 vezes no mês indica falta de planejamento.</p>
+                      </div>
+                    )}
+
+                    {/* OCs sem entrada no almox */}
+                    {analise.data.ocsSemAlmox.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-red-600 mb-1.5 flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3" />OCs entregues sem entrada no almox
+                        </p>
+                        <div className="space-y-1">
+                          {analise.data.ocsSemAlmox.map((oc: any, i: number) => (
+                            <div key={i} className="flex items-center gap-2 rounded bg-red-50 border border-red-100 px-2.5 py-1.5 text-xs">
+                              <span className="text-red-700 font-mono font-bold shrink-0">{oc.numero_oc}</span>
+                              <span className="flex-1 text-gray-600 truncate">{oc.fornecedor_nome ?? "—"}</span>
+                              <span className="text-gray-400 text-[10px] shrink-0">{oc.num_itens} iten(s)</span>
+                              <span className="text-red-700 font-semibold shrink-0">{fmt(parseFloat(String(oc.total ?? 0)))}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-[10px] text-red-600 mt-1">⚠ Material possivelmente entregue direto ao campo sem passar pelo almox — risco de desvio.</p>
+                      </div>
+                    )}
+
+                    {/* Curva ABC */}
+                    {analise.data.curvaMat.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Curva ABC de Materiais</p>
+                        <div className="rounded border border-gray-100 overflow-hidden">
+                          <table className="w-full text-[10px]">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="text-left px-2 py-1.5 text-gray-500 font-semibold w-6">Cl.</th>
+                                <th className="text-left px-2 py-1.5 text-gray-500 font-semibold">Item</th>
+                                <th className="text-right px-2 py-1.5 text-gray-500 font-semibold">Valor</th>
+                                <th className="text-right px-2 py-1.5 text-gray-500 font-semibold w-10">%</th>
+                                <th className="text-right px-2 py-1.5 text-gray-500 font-semibold w-10">OCs</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {analise.data.curvaMat.map((m: any, i: number) => (
+                                <tr key={i} className="border-t border-gray-50">
+                                  <td className="px-2 py-1">
+                                    <span className={`font-bold text-xs ${m.classe_abc === 'A' ? 'text-green-600' : m.classe_abc === 'B' ? 'text-blue-600' : 'text-gray-400'}`}>
+                                      {m.classe_abc}
+                                    </span>
+                                  </td>
+                                  <td className="px-2 py-1 text-gray-700 max-w-[140px] truncate">{m.item}</td>
+                                  <td className="px-2 py-1 text-right font-semibold text-gray-700">{fmt(parseFloat(String(m.total_valor)))}</td>
+                                  <td className="px-2 py-1 text-right text-gray-400">{m.pct}%</td>
+                                  <td className="px-2 py-1 text-right text-gray-400">{m.num_ocs}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-1">
+                          <span className="text-green-600 font-bold">A</span>=80% do gasto &nbsp;
+                          <span className="text-blue-600 font-bold">B</span>=15% &nbsp;
+                          <span className="text-gray-400 font-bold">C</span>=5%
+                        </p>
+                      </div>
+                    )}
+
+                    {analise.data.curvaMat.length === 0 && (
+                      <p className="text-xs text-gray-400 text-center py-4">Nenhuma OC registrada para esta obra.</p>
+                    )}
+                  </div>
+                )}
+
+                {/* ════════════ ABA: FERRAMENTAS ════════════ */}
+                {abaAnalise === "ferramentas" && (
+                  <div className="space-y-3">
+                    {analise.data.ferramentasAlmox.length === 0 ? (
+                      <p className="text-xs text-gray-400 text-center py-4">Nenhuma ferramenta ou equipamento cadastrado no almox desta obra.</p>
+                    ) : (
+                      <>
+                        <p className="text-[10px] text-gray-400">Lista de ferramentas e equipamentos no almoxarifado, cruzada com os empréstimos (warehouse).</p>
+                        <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                          {analise.data.ferramentasAlmox.map((f: any, i: number) => {
+                            const qtdAlmox = parseFloat(String(f.quantidade_atual ?? 0));
+                            const emUso = parseInt(String(f.em_uso_cnt ?? 0));
+                            const suspeita = f.suspeita_desvio === true || f.suspeita_desvio === "true";
+                            return (
+                              <div key={i} className={`rounded border px-2.5 py-2 text-xs ${suspeita ? "border-red-200 bg-red-50" : emUso > 0 ? "border-indigo-100 bg-indigo-50" : "border-gray-100 bg-gray-50"}`}>
+                                <div className="flex items-center gap-2">
+                                  <span className="flex-1 font-medium text-gray-800 truncate">{f.nome}</span>
+                                  {suspeita ? (
+                                    <Badge className="bg-red-100 text-red-700 text-[9px]">⚠ Possível Desvio</Badge>
+                                  ) : emUso > 0 ? (
+                                    <Badge className="bg-indigo-100 text-indigo-700 text-[9px]">Em Uso</Badge>
+                                  ) : qtdAlmox > 0 ? (
+                                    <Badge className="bg-green-100 text-green-700 text-[9px]">No Almox</Badge>
+                                  ) : (
+                                    <Badge className="bg-gray-100 text-gray-500 text-[9px]">Zerado</Badge>
+                                  )}
+                                </div>
+                                <div className="flex gap-3 mt-1 text-[10px] text-gray-500">
+                                  {f.categoria && <span>{f.categoria}</span>}
+                                  <span>Almox: <strong>{qtdAlmox}</strong></span>
+                                  {emUso > 0 && <span className="text-indigo-600">Em uso: <strong>{emUso}</strong> — {f.em_uso_pessoas}</span>}
+                                  {f.valor_unitario && <span>{fmt(parseFloat(String(f.valor_unitario)))}/un</span>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* ════════════ ABA: LOCAÇÕES ════════════ */}
+                {abaAnalise === "locacoes" && (
+                  <div className="space-y-3">
+                    {analise.data.locacoes.length === 0 ? (
+                      <p className="text-xs text-gray-400 text-center py-4">Nenhum equipamento locado registrado para esta obra.</p>
+                    ) : (
+                      <>
+                        {/* Curva ABC locações */}
+                        {(() => {
+                          const comCusto = analise.data!.locacoes.filter((l: any) => parseFloat(String(l.custo_estimado ?? 0)) > 0);
+                          if (comCusto.length < 2) return null;
+                          const total = comCusto.reduce((s: number, l: any) => s + parseFloat(String(l.custo_estimado)), 0);
+                          let acum = 0;
+                          return (
+                            <div>
+                              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Curva ABC — Custo de Locação</p>
+                              <div className="space-y-1">
+                                {comCusto.sort((a: any, b: any) => parseFloat(String(b.custo_estimado)) - parseFloat(String(a.custo_estimado))).map((l: any, i: number) => {
+                                  const v = parseFloat(String(l.custo_estimado));
+                                  const pct = total > 0 ? (v / total) * 100 : 0;
+                                  acum += pct;
+                                  const classe = acum - pct < 80 ? "A" : acum - pct < 95 ? "B" : "C";
+                                  return (
+                                    <div key={i} className="flex items-center gap-2 text-[10px]">
+                                      <span className={`w-4 font-bold ${classe === 'A' ? 'text-green-600' : classe === 'B' ? 'text-blue-600' : 'text-gray-400'}`}>{classe}</span>
+                                      <span className="flex-1 truncate text-gray-700">{l.descricao}</span>
+                                      <span className="text-gray-400">{l.dias_locado}d</span>
+                                      <span className="font-semibold text-gray-700">{fmt(v)}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {/* Lista completa */}
+                        <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                          {analise.data.locacoes.map((l: any, i: number) => {
+                            const dias = parseInt(String(l.dias_locado ?? 0));
+                            const custo = parseFloat(String(l.custo_estimado ?? 0));
+                            const statusColor = l.status === 'em_uso' ? "border-blue-200 bg-blue-50" : l.status === 'atrasado' ? "border-red-200 bg-red-50" : "border-gray-100 bg-gray-50";
+                            return (
+                              <div key={i} className={`rounded border px-2.5 py-2 text-xs ${statusColor}`}>
+                                <div className="flex items-center gap-2">
+                                  <span className="flex-1 font-medium text-gray-800 truncate">{l.descricao}</span>
+                                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${l.status === 'em_uso' ? 'bg-blue-200 text-blue-800' : l.status === 'atrasado' ? 'bg-red-200 text-red-800' : 'bg-gray-200 text-gray-600'}`}>
+                                    {l.status === 'em_uso' ? 'Em uso' : l.status === 'atrasado' ? 'Atrasado' : 'Devolvido'}
+                                  </span>
+                                </div>
+                                <div className="flex gap-3 mt-1 text-[10px] text-gray-500 flex-wrap">
+                                  {l.fornecedor_nome && <span>{l.fornecedor_nome}</span>}
+                                  <span>Início: {l.data_inicio}</span>
+                                  <span>Prev.: {l.data_fim_prevista}</span>
+                                  <span className="font-medium text-gray-700">{dias} dia(s)</span>
+                                  {custo > 0 && <span className="text-indigo-700 font-semibold">{fmt(custo)}</span>}
+                                  {l.funcionario_responsavel_nome && <span>Resp: {l.funcionario_responsavel_nome}</span>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+              </div>
+            )}
+          </CardContent>
+        )}
       </Card>
 
       {/* ── Log de Eventos ──────────────────────────────────────────────────── */}

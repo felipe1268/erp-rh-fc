@@ -1,4 +1,41 @@
 /**
+ * Rev. 4183 - SCORECARD: PAINEL ANÁLISE GERENCIAL DA OBRA (CURVA ABC, RECOMPRAS, FERRAMENTAS, LOCAÇÕES).
+ *
+ * O QUE FOI FEITO:
+ * - Novo procedimento `scorecard.getAnalise` no backend (scorecard.ts) com 6 queries paralelas:
+ *     1. Curva ABC de materiais (compras_ordens_itens agrupados, classificação A/B/C cumulativa).
+ *     2. Alertas de recompra excessiva: mesmo item com ≥3 OCs no mesmo mês (falta de planejamento).
+ *     3. Gastos mensais: SUM(co.total) + COUNT(OCs) + COUNT(fornecedores) por mês.
+ *     4. Ferramentas no almox: almoxarifado_itens (categoria ferramenta/equipamento/EPI) cruzado com
+ *        warehouse_loans para mostrar "Em Uso" (quem tem) e flag "Suspeita Desvio" (qtd=0 sem uso).
+ *     5. OCs entregues sem entrada no almox: co.status IN (entregue/entregue_parcial) sem registro em
+ *        almoxarifado_movimentacoes.tipo='entrada' com motivo ILIKE '%numero_oc%'.
+ *     6. Equipamentos locados: lista completa com dias locado + custo estimado (valor_mensal × dias/30).
+ * - Objeto `resumo` agrega KPIs: totalGastoCompras, totalLocacoes, numLocacoesAtivas,
+ *   totalFerramentasEmUso, alertasDesvio, alertasRecorrencia, numItensAlmox.
+ * - Novo card colapsável "Análise Gerencial da Obra" no ScorecardTab.tsx (antes do Log de Eventos):
+ *     • 6 KPI cards no topo (gasto compras, custo locações, locações ativas, ferramentas, em uso, desvio).
+ *     • 3 abas: 📦 Compras | 🔧 Ferramentas | 🚜 Locações.
+ *     • Compras: bar chart de gastos mensais + alertas de recompra (amber) + OCs sem almox (red) + tabela ABC.
+ *     • Ferramentas: lista com badges coloridos (No Almox / Em Uso / Zerado / ⚠ Possível Desvio).
+ *     • Locações: Curva ABC de custo + lista detalhada com status, dias e custo estimado.
+ *     • Badges de alerta no cabeçalho do card ficam visíveis mesmo com card fechado.
+ * - Lazy load: query só dispara quando o card é aberto (`enabled: enabled && showAnalise`).
+ * - ZERO DELETE · ZERO ALTER destrutivo.
+ *
+ * ARQUIVOS TOCADOS:
+ * - server/routers/scorecard.ts  → procedure getAnalise adicionada
+ * - client/src/pages/planejamento/ScorecardTab.tsx → estados showAnalise/abaAnalise + query + card UI
+ * - shared/version.ts → bump Rev. 4183
+ *
+ * RACIONAL:
+ * - O Scorecard Rev.4182 media o desempenho do gestor por dimensões (score 0-100).
+ * - Rev.4183 acrescenta a "inteligência" gerencial: não só o score, mas os dados brutos que explicam
+ *   por que o score está bom ou ruim — quais materiais consomem 80% do orçamento, se há compras
+ *   emergenciais repetitivas, se ferramentas caras estão sumindo, se locações estão sendo subutilizadas.
+ */
+
+/**
  * Rev. 4182 - SCORECARD DO GESTOR: KPIs DE OBRA COM BÔNUS, RETRABALHO E CONTROLE DE FERRAMENTAS.
  *
  * O QUE FOI FEITO:

@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4183** — **SCORECARD: PAINEL ANÁLISE GERENCIAL DA OBRA (CURVA ABC, RECOMPRAS, FERRAMENTAS, LOCAÇÕES).** Novo card colapsável "Análise Gerencial da Obra" no ScorecardTab com lazy load. Backend: `getAnalise` procedure — 6 queries paralelas (Curva ABC materiais, alertas recompra ≥3 OCs/mês, gastos mensais, ferramentas almox×warehouse_loans, OCs entregues sem entrada almox, equipamentos locados). Frontend: 6 KPI cards + 3 abas (📦 Compras | 🔧 Ferramentas | 🚜 Locações). Compras: bar chart mensal + alertas amber + lista red OC-sem-almox + tabela ABC. Ferramentas: badges (Almox/Em Uso/Desvio). Locações: Curva ABC de custo + lista com dias e custo estimado. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4182** — **PLANEJAMENTO: SCORECARD DO GESTOR COM KPIs, BÔNUS E CONTROLE DE FERRAMENTAS/RETRABALHO.** Nova aba "Scorecard" (ícone Trophy) no PlanejamentoDetalhe. Score 0-100 em 5 dimensões ponderadas: Segurança(30%), Planejamento(25%), Compras(20%), Almox(15%), Qualidade(10%) — pesos configuráveis por Admin por obra. Bônus = % lucro líquido ou valor fixo × fator (score≥90→100%, ≥75→80%, ≥60→50%, ≥40→20%). Raio-X financeiro, Controle de Ferramentas (warehouse_loans) e Controle de Retrabalho (admin-only). Log de eventos por dimensão. Backend: `scorecardRouter` (getConfig/saveConfig/getScore/retrabalhoList|Create|Delete/ferramentasList). Novas tabelas: `obra_scorecard_config` + `obra_retrabalho`. SyncSchema+ Rev.4182. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4181** — **COMPRAS: CONDIÇÃO DE PAGAMENTO VIRA SELECT PADRONIZADO NAS OCs.** Campo "Condição de Pagamento" era `<Input>` livre → gerava 38+ variantes ("cheque cheques", "cheque 3Z" etc.). Substituído por `<Select>` com as opções de `TIPOS_PAGAMENTO`. Pré-preenchimento automático ao selecionar fornecedor (deriva do ciclo configurado: 1×30d → "30 DDL"). Donut de Formas de Pagamento no painel de análise agrupa por meio normalizado (FORMA_LABEL_MAP). ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4181** — **COMPRAS: CONDIÇÃO DE PAGAMENTO VIRA SELECT PADRONIZADO NAS OCs.** Campo livre → `<Select>` com `TIPOS_PAGAMENTO`. Pré-preenchimento automático por ciclo. Donut de Formas de Pagamento com `FORMA_LABEL_MAP`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4180** — **COMPRAS/FINANCEIRO: ANÁLISE FORNECEDOR — TOGGLE MÊS/SEMANA + GRUPOS SIMILARES + INTERVALO.** Toggle "Mês | Semana", Grupos Similares por família léxica, Intervalo entre compras no drill-down. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4176** — **COMPRAS/FINANCEIRO: PAINEL ANÁLISE SEPARADO DA TABELA (FULL-WIDTH).** `AnaliseDashPanel` 3 colunas horizontais + cabeçalho colapsável. Tabela full-width. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4175** — **COMPRAS: REDESIGN MODERNO DO OcMiniDialog.** Header gradiente dinâmico, timeline horizontal 4 etapas, itens colapsáveis com mini-barra de proporção. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4174** — **COMPRAS/FINANCEIRO: PAINEL DASH + ALMOXARIFADO NA OC.** `AnaliseDashPanel.tsx` (Curva ABC, destaques, fragmentação). Barra busca. Almox via `motivo ILIKE`. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 
