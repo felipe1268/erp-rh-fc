@@ -16896,6 +16896,7 @@ Responda APENAS com JSON válido, sem markdown, no formato:
     .query(async ({ input, ctx }) => {
       const { companyId, ordemId } = input;
       await _assertCompanyAccess(ctx.user, companyId);
+      const db = await getDb();
       const r = await db.execute(sql`
         SELECT
           co.id,
