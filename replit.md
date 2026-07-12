@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4175** — **COMPRAS: REDESIGN MODERNO DO OcMiniDialog.** Header gradiente dinâmico (cor varia por status: verde=entregue, azul=aprovada, âmbar=pendente), total da OC em destaque 2xl, chips de pagamento/itens/almox em glass effect. Timeline horizontal 4 etapas (Solicitação→OC→Aprovação→Entrega) com círculos preenchidos. Chips de detalhes em pill cards coloridos. Itens colapsáveis com mini-barra de proporção (peso % no total) por linha. Almoxarifado colapsável em timeline vertical com dots teal/rose. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4174** — **COMPRAS/FINANCEIRO: NOVO LAYOUT DA ABA ITENS + PAINEL DASH + ALMOXARIFADO NA OC.** Novo `AnaliseDashPanel.tsx`: Curva ABC (barras visuais A/B/C), maior gasto/preço alto/preço baixo/maior alta, produto mais recorrente, maior ciclo de compra, **alerta de fragmentação** (≥3 OCs em ≤30 dias — perda de poder de negociação). Barra de busca com filtro real-time na tabela. `getOrdemMiniDetalhe` consulta `almoxarifado_movimentacoes` via `motivo ILIKE '%numero_oc%'`; `OcMiniDialog` ganha seção "Almoxarifado" com entradas/saídas: quem retirou, obra e data. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4173** — **COMPRAS/FINANCEIRO: REDESIGN DO MINI-DIALOG DE DETALHE DA OC.** Novo backend com `criado_por_nome`, `aprovador_nome`, datas formatadas, SC via 2 caminhos (cotação + direto). Novo layout: cabeçalho compacto, seção Rastreabilidade (SC→OC→Aprovação com nomes/datas), grid Detalhes, Observações, tabela de Itens com preço unit., composição do total. Corpo com `max-h-[70vh]` elimina espaço vazio. ZERO DELETE · ZERO ALTER destrutivo.

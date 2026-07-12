@@ -1,4 +1,43 @@
 /**
+ * Rev. 4175 - COMPRAS: REDESIGN MODERNO DO OcMiniDialog.
+ *
+ * O QUE FOI FEITO - redesign completo do dialog de detalhe de OC (OcMiniDialog):
+ *
+ * HEADER GRADIENTE DINAMICO:
+ * - Cor do gradiente varia por STATUS da OC: entregue=emerald/teal, aprovada=blue/indigo,
+ *   pendente=amber/orange, aguard_extra=red/rose, cancelada=slate/slate.
+ * - Numero da OC em fonte mono tamanho lg/bold + badges status/tipo em glass effect (bg-white/20).
+ * - Total da OC em tipografia 2xl/bold destacado no canto inferior do header.
+ * - Chips rapidos: pagamento, qtd de itens, movimentos almox (glass pill).
+ * - Botao X proprio no canto superior direito (glass, sem X automatico do shadcn).
+ *
+ * TIMELINE HORIZONTAL (Rastreabilidade):
+ * - 4 etapas: Solicitacao, OC Emitida, Aprovacao, Entrega.
+ * - Circulo preenchido indigo quando concluido, borda-cinza quando pendente.
+ * - Linha horizontal de fundo (absolute, z-0) conectando as etapas.
+ * - Nome/data de cada etapa em tipografia compacta.
+ *
+ * CHIPS DE DETALHES:
+ * - Fornecedor, Obra, Entrega prevista (amber), Entregue (emerald), NF.
+ * - Cards pill com icone + label + valor.
+ *
+ * ITENS - SECAO COLAPSAVEL:
+ * - Header clicavel com ChevronDown + total a direita.
+ * - Mini-barra de proporcao indigo acima do nome de cada item
+ *   mostrando o peso percentual no total maximo - feedback visual imediato.
+ * - Hover por linha com bg-indigo-50.
+ * - Tabela com border-radius e shadow-sm.
+ *
+ * ALMOXARIFADO - SECAO COLAPSAVEL:
+ * - Timeline vertical: dot colorido (teal=entrada, rose=saida/consumo) + linha vertical.
+ * - Card por movimentacao com icones User/MapPin/CalendarDays.
+ * - Estado vazio: borda dashed + icone + mensagem.
+ *
+ * ARQUIVO: client/src/components/compras/ItemCatalogo.tsx
+ * ZERO DELETE. ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4174 - COMPRAS/FINANCEIRO: NOVO LAYOUT DA ABA ITENS + PAINEL DASH + ALMOXARIFADO NA OC.
  *
  * CONTEXTO: usuario precisava de busca rapida de produto, analise inteligente de compras (Curva ABC,

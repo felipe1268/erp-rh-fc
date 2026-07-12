@@ -8,6 +8,7 @@ import {
   RefreshCw, Search, Building2, ShoppingCart, Package2,
   User, CalendarDays, PackageCheck, Truck, ThumbsUp,
   FileText, CreditCard, MapPin, Hash, Warehouse, ArrowDownToLine, ArrowUpFromLine,
+  X, TrendingUp, TrendingDown, BarChart2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -54,6 +55,8 @@ export function OcMiniDialog({
   );
   const d = q.data;
   const st = d ? (OC_STATUS[d.status] ?? OC_STATUS.pendente) : null;
+  const [itensOpen, setItensOpen] = useState(true);
+  const [almoxOpen, setAlmoxOpen] = useState(true);
 
   const tipoLabel = (t?: string | null) => {
     if (!t) return null;
@@ -61,257 +64,402 @@ export function OcMiniDialog({
   };
 
   const pgto = [d?.forma_pagamento, d?.condicao_pagamento].filter(Boolean).join(" · ") || null;
+  const almox: any[] = (d as any)?.almoxMovimentos ?? [];
+
+  /* Proporção de cada item no total para a mini-barra */
+  const maxItemTotal = d ? Math.max(...d.itens.map(i => i.total ?? 0), 1) : 1;
+
+  /* Status color mapping for header gradient */
+  const headerGradient: Record<string, string> = {
+    rascunho:         "from-yellow-600 to-amber-500",
+    pendente:         "from-amber-600 to-orange-500",
+    aprovada:         "from-blue-700 to-indigo-600",
+    aguardando_aprovacao_extra: "from-red-700 to-rose-600",
+    entregue_parcial: "from-orange-600 to-amber-500",
+    entregue:         "from-emerald-700 to-teal-600",
+    cancelada:        "from-slate-600 to-slate-500",
+  };
+  const grad = d ? (headerGradient[d.status] ?? "from-slate-700 to-slate-600") : "from-slate-700 to-slate-600";
+
+  /* Step state */
+  const steps = d ? [
+    {
+      icon: FileText,
+      label: "Solicitação",
+      done: !!d.numero_sc,
+      sub: d.numero_sc ?? "OC direta",
+      who: d.sc_criado_por_nome,
+      when: d.sc_criado_em,
+    },
+    {
+      icon: ShoppingCart,
+      label: "OC Emitida",
+      done: true,
+      sub: d.numero_oc,
+      who: d.criado_por_nome,
+      when: d.criado_em,
+    },
+    {
+      icon: ThumbsUp,
+      label: "Aprovação",
+      done: !!d.aprovador_nome,
+      sub: d.aprovador_nome ?? "Pendente",
+      who: null,
+      when: d.aprovado_em,
+    },
+    {
+      icon: PackageCheck,
+      label: "Entrega",
+      done: !!d.data_entrega_real,
+      sub: d.data_entrega_real ?? (d.data_entrega_prevista ? `Prev. ${d.data_entrega_prevista}` : "—"),
+      who: null,
+      when: null,
+    },
+  ] : [];
 
   return (
     <Dialog open onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-xl w-full p-0 overflow-hidden">
-        {/* Cabeçalho colorido */}
-        <div className="flex items-center gap-3 px-5 py-4 bg-slate-50 border-b border-slate-200">
-          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 shrink-0">
-            <ShoppingCart className="w-4 h-4 text-blue-600" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-base font-bold text-slate-800 font-mono">
-                {d ? d.numero_oc : "Carregando…"}
-              </span>
-              {st && (
-                <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${st.cls}`}>
-                  {st.label}
+      <DialogContent className="max-w-2xl w-full p-0 overflow-hidden rounded-2xl shadow-2xl border-0">
+
+        {/* ── HEADER GRADIENTE ─────────────────────────────────────── */}
+        <div className={`relative bg-gradient-to-br ${grad} px-5 pt-5 pb-4`}>
+          {/* Fechar */}
+          <button
+            onClick={onClose}
+            className="absolute top-3 right-3 w-7 h-7 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors"
+          >
+            <X className="w-3.5 h-3.5 text-white" />
+          </button>
+
+          {/* Número + badges */}
+          <div className="flex items-start gap-3 pr-8">
+            <div className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center shrink-0 mt-0.5">
+              <ShoppingCart className="w-4.5 h-4.5 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-white font-bold font-mono text-lg tracking-tight leading-none">
+                  {d ? d.numero_oc : "Carregando…"}
                 </span>
-              )}
-              {d?.tipo && tipoLabel(d.tipo) && (
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600">
-                  {tipoLabel(d.tipo)}
-                </span>
+                {st && (
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-white/20 text-white border border-white/30">
+                    {st.label}
+                  </span>
+                )}
+                {d?.tipo && tipoLabel(d.tipo) && (
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-white/10 text-white/80">
+                    {tipoLabel(d.tipo)}
+                  </span>
+                )}
+              </div>
+              {d && (
+                <p className="text-white/60 text-xs mt-1">
+                  {[d.fornecedor_nome, d.obra_nome].filter(Boolean).join(" · ")}
+                </p>
               )}
             </div>
-            {d?.numero_nf && (
-              <p className="text-xs text-slate-400 mt-0.5">NF: {d.numero_nf}</p>
-            )}
           </div>
-        </div>
 
-        {/* Corpo com scroll */}
-        <div className="overflow-y-auto max-h-[70vh]">
-          {q.isLoading && (
-            <div className="py-12 flex justify-center">
-              <RefreshCw className="w-5 h-5 animate-spin text-slate-400" />
+          {/* Total destacado + chips rápidos */}
+          {d && (
+            <div className="mt-4 flex items-end justify-between gap-3 flex-wrap">
+              <div>
+                <p className="text-white/50 text-[10px] uppercase tracking-widest font-semibold mb-0.5">Total da OC</p>
+                <p className="text-white text-2xl font-bold tabular-nums">{fmt(d.total_oc)}</p>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {pgto && (
+                  <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/15 text-white/90 text-[11px] font-medium">
+                    <CreditCard className="w-3 h-3" />{pgto}
+                  </span>
+                )}
+                {d.itens.length > 0 && (
+                  <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/15 text-white/90 text-[11px] font-medium">
+                    <BarChart2 className="w-3 h-3" />{d.itens.length} itens
+                  </span>
+                )}
+                {almox.length > 0 && (
+                  <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/15 text-white/90 text-[11px] font-medium">
+                    <Warehouse className="w-3 h-3" />{almox.length} mov. almox
+                  </span>
+                )}
+              </div>
             </div>
           )}
+        </div>
 
+        {/* ── CORPO ────────────────────────────────────────────────── */}
+        <div className="overflow-y-auto max-h-[60vh] bg-white">
+          {q.isLoading && (
+            <div className="py-14 flex flex-col items-center gap-2 text-slate-400">
+              <RefreshCw className="w-5 h-5 animate-spin" />
+              <p className="text-xs">Carregando OC…</p>
+            </div>
+          )}
           {!q.isLoading && !d && (
-            <p className="text-sm text-slate-500 py-8 text-center">OC não encontrada.</p>
+            <p className="text-sm text-slate-500 py-10 text-center">OC não encontrada.</p>
           )}
 
           {d && (
-            <div className="divide-y divide-slate-100">
-
-              {/* ── Rastreabilidade ─────────────────────────────── */}
-              <div className="px-5 py-4">
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">Rastreabilidade</p>
-                <div className="flex items-start gap-0">
-
-                  {/* Etapa 1: Solicitação */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
-                        <FileText className="w-3 h-3 text-indigo-500" />
-                      </div>
-                      <span className="text-[11px] font-semibold text-indigo-600">Solicitação</span>
-                    </div>
-                    {d.numero_sc
-                      ? <>
-                          <p className="text-xs font-medium text-slate-700 pl-6">{d.numero_sc}</p>
-                          {d.sc_criado_por_nome && <p className="text-xs text-slate-500 pl-6">{d.sc_criado_por_nome}</p>}
-                          {d.sc_criado_em && <p className="text-[11px] text-slate-400 pl-6">{d.sc_criado_em}</p>}
-                        </>
-                      : <p className="text-xs text-slate-400 pl-6">OC direta (sem SC)</p>
-                    }
-                  </div>
-
-                  {/* Conector */}
-                  <div className="flex items-start pt-2.5 px-1">
-                    <div className="w-8 border-t border-dashed border-slate-300 mt-0" />
-                  </div>
-
-                  {/* Etapa 2: OC emitida */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                        <ShoppingCart className="w-3 h-3 text-blue-500" />
-                      </div>
-                      <span className="text-[11px] font-semibold text-blue-600">OC Emitida</span>
-                    </div>
-                    {d.criado_por_nome && <p className="text-xs font-medium text-slate-700 pl-6">{d.criado_por_nome}</p>}
-                    {d.criado_em && <p className="text-[11px] text-slate-400 pl-6">{d.criado_em}</p>}
-                  </div>
-
-                  {/* Conector */}
-                  <div className="flex items-start pt-2.5 px-1">
-                    <div className="w-8 border-t border-dashed border-slate-300 mt-0" />
-                  </div>
-
-                  {/* Etapa 3: Aprovação */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${d.aprovador_nome ? "bg-emerald-100" : "bg-slate-100"}`}>
-                        <ThumbsUp className={`w-3 h-3 ${d.aprovador_nome ? "text-emerald-500" : "text-slate-400"}`} />
-                      </div>
-                      <span className={`text-[11px] font-semibold ${d.aprovador_nome ? "text-emerald-600" : "text-slate-400"}`}>Aprovação</span>
-                    </div>
-                    {d.aprovador_nome
-                      ? <>
-                          <p className="text-xs font-medium text-slate-700 pl-6">{d.aprovador_nome}</p>
-                          {d.aprovado_em && <p className="text-[11px] text-slate-400 pl-6">{d.aprovado_em}</p>}
-                        </>
-                      : <p className="text-xs text-slate-400 pl-6">Pendente</p>
-                    }
-                  </div>
-                </div>
-              </div>
-
-              {/* ── Detalhes logísticos ──────────────────────────── */}
-              <div className="px-5 py-4">
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">Detalhes</p>
-                <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-                  <InfoCell icon={Building2}    label="Fornecedor"       value={d.fornecedor_nome} />
-                  <InfoCell icon={MapPin}        label="Obra"             value={d.obra_nome || null} />
-                  <InfoCell icon={Truck}         label="Entrega prevista" value={d.data_entrega_prevista} />
-                  <InfoCell icon={CheckCircle2}  label="Entregue em"     value={d.data_entrega_real} colorCls="text-emerald-700" />
-                  <InfoCell icon={CreditCard}    label="Pagamento"        value={pgto} />
-                  <InfoCell icon={Hash}          label="Nota fiscal"      value={d.numero_nf} />
-                </div>
-              </div>
-
-              {/* ── Observações ─────────────────────────────────── */}
-              {d.observacoes && (
-                <div className="px-5 py-4">
-                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Observações</p>
-                  <p className="text-sm text-slate-600 break-words whitespace-pre-wrap">{d.observacoes}</p>
-                </div>
-              )}
-
-              {/* ── Itens ───────────────────────────────────────── */}
-              {d.itens.length > 0 && (
-                <div className="px-5 py-4">
-                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">
-                    Itens ({d.itens.length})
-                  </p>
-                  <div className="rounded-lg border border-slate-200 overflow-hidden">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="bg-slate-50 border-b border-slate-200">
-                          <th className="text-left px-3 py-2 font-semibold text-slate-500">Descrição</th>
-                          <th className="text-right px-3 py-2 font-semibold text-slate-500 whitespace-nowrap">Qtd</th>
-                          <th className="text-right px-3 py-2 font-semibold text-slate-500 whitespace-nowrap">Preço unit.</th>
-                          <th className="text-right px-3 py-2 font-semibold text-slate-500 whitespace-nowrap">Total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {d.itens.map((it, i) => (
-                          <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
-                            <td className="px-3 py-2 text-slate-700 break-words max-w-[180px]">{it.descricao}</td>
-                            <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">
-                              {it.qtd?.toLocaleString("pt-BR", { maximumFractionDigits: 3 })} {it.unidade}
-                            </td>
-                            <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">
-                              {fmt(it.preco_unit ?? 0)}
-                            </td>
-                            <td className="px-3 py-2 text-right font-medium text-slate-800 whitespace-nowrap">
-                              {fmt(it.total ?? 0)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Composição do total */}
-                  <div className="mt-3 space-y-1 text-xs">
-                    {d.frete > 0 && (
-                      <div className="flex justify-between text-slate-500">
-                        <span>Frete</span><span>{fmt(d.frete)}</span>
-                      </div>
-                    )}
-                    {d.outras_despesas > 0 && (
-                      <div className="flex justify-between text-slate-500">
-                        <span>Outras despesas</span><span>{fmt(d.outras_despesas)}</span>
-                      </div>
-                    )}
-                    {d.desconto > 0 && (
-                      <div className="flex justify-between text-emerald-600">
-                        <span>Desconto</span><span>− {fmt(d.desconto)}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between font-bold text-sm text-slate-800 pt-2 border-t border-slate-200">
-                      <span>Total</span><span>{fmt(d.total_oc)}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-            </div>
-          )}
-
-          {/* ── Almoxarifado ─────────────────────────────── */}
-          {d && Array.isArray((d as any).almoxMovimentos) && (d as any).almoxMovimentos.length > 0 && (
-            <div className="px-5 py-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Warehouse className="w-3.5 h-3.5 text-teal-500" />
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
-                  Almoxarifado ({(d as any).almoxMovimentos.length} mov.)
-                </p>
-              </div>
-              <div className="rounded-lg border border-slate-200 overflow-hidden divide-y divide-slate-100">
-                {(d as any).almoxMovimentos.map((mv: any, i: number) => {
-                  const isEntrada = mv.tipo === 'entrada';
-                  const isConsumo = mv.tipo === 'consumo_direto';
-                  return (
-                    <div key={i} className={`flex items-start gap-3 px-3 py-2.5 text-xs ${isEntrada ? 'bg-emerald-50/50' : isConsumo ? 'bg-amber-50/50' : 'bg-white'}`}>
-                      <div className={`mt-0.5 w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${isEntrada ? 'bg-emerald-100' : 'bg-rose-100'}`}>
-                        {isEntrada
-                          ? <ArrowDownToLine className="w-3 h-3 text-emerald-600" />
-                          : <ArrowUpFromLine className="w-3 h-3 text-rose-500" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className={`font-semibold ${isEntrada ? 'text-emerald-700' : 'text-rose-700'}`}>
-                            {isEntrada ? 'Entrada' : isConsumo ? 'Consumo' : 'Saída'}
-                          </span>
-                          <span className="font-bold text-slate-800 tabular-nums">
-                            {(mv.quantidade ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}
-                          </span>
-                          {mv.itemNome && (
-                            <span className="text-slate-600 truncate max-w-[160px]" title={mv.itemNome}>{mv.itemNome}</span>
-                          )}
+            <>
+              {/* ── TIMELINE ─────────────────────────────────────── */}
+              <div className="px-5 pt-5 pb-4">
+                <div className="flex items-start relative">
+                  {/* linha de fundo */}
+                  <div className="absolute top-4 left-4 right-4 h-px bg-slate-200 z-0" />
+                  {steps.map((s, i) => {
+                    const Icon = s.icon;
+                    const isLast = i === steps.length - 1;
+                    return (
+                      <div key={i} className={`flex-1 flex flex-col items-center relative z-10 ${!isLast ? "pr-1" : ""}`}>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
+                          s.done
+                            ? "bg-indigo-600 border-indigo-600 shadow-md shadow-indigo-200"
+                            : "bg-white border-slate-300"
+                        }`}>
+                          <Icon className={`w-3.5 h-3.5 ${s.done ? "text-white" : "text-slate-400"}`} />
                         </div>
-                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
-                          {mv.usuarioNome && (
-                            <span className="text-slate-500"><span className="text-slate-400">por </span>{mv.usuarioNome}</span>
-                          )}
-                          {mv.obraNome && (
-                            <span className="text-slate-500"><span className="text-slate-400">obra </span>{mv.obraNome}</span>
-                          )}
-                          {mv.criadoEm && <span className="text-slate-400">{mv.criadoEm}</span>}
-                        </div>
-                        {mv.motivo && (
-                          <p className="text-[10px] text-slate-400 mt-0.5 break-words">{mv.motivo}</p>
+                        <p className={`text-[10px] font-semibold mt-1.5 text-center ${s.done ? "text-indigo-700" : "text-slate-400"}`}>
+                          {s.label}
+                        </p>
+                        <p className={`text-[11px] font-medium text-center truncate w-full px-1 ${s.done ? "text-slate-700" : "text-slate-400 italic"}`}>
+                          {s.sub}
+                        </p>
+                        {(s.who || s.when) && (
+                          <p className="text-[10px] text-slate-400 text-center leading-tight px-1">
+                            {[s.who, s.when].filter(Boolean).join(" · ")}
+                          </p>
                         )}
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
-          {d && Array.isArray((d as any).almoxMovimentos) && (d as any).almoxMovimentos.length === 0 && (
-            <div className="px-5 py-3 flex items-center gap-2 text-slate-400">
-              <Warehouse className="w-3.5 h-3.5 shrink-0" />
-              <p className="text-[11px]">Nenhuma movimentação no almoxarifado para esta OC.</p>
-            </div>
-          )}
 
+              {/* ── CHIPS DE DETALHE ─────────────────────────────── */}
+              <div className="px-5 pb-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+                {d.fornecedor_nome && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs">
+                    <Building2 className="w-3 h-3 text-slate-400 shrink-0" />
+                    <span className="text-slate-500 font-medium">Fornecedor</span>
+                    <span className="text-slate-800 font-semibold">{d.fornecedor_nome}</span>
+                  </div>
+                )}
+                {d.obra_nome && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs">
+                    <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                    <span className="text-slate-500 font-medium">Obra</span>
+                    <span className="text-slate-800 font-semibold truncate max-w-[200px]">{d.obra_nome}</span>
+                  </div>
+                )}
+                {d.data_entrega_prevista && !d.data_entrega_real && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-xs">
+                    <Truck className="w-3 h-3 text-amber-500 shrink-0" />
+                    <span className="text-amber-600 font-medium">Prev.</span>
+                    <span className="text-amber-800 font-semibold">{d.data_entrega_prevista}</span>
+                  </div>
+                )}
+                {d.data_entrega_real && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+                    <span className="text-emerald-600 font-medium">Entregue</span>
+                    <span className="text-emerald-800 font-semibold">{d.data_entrega_real}</span>
+                  </div>
+                )}
+                {d.numero_nf && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs">
+                    <Hash className="w-3 h-3 text-slate-400 shrink-0" />
+                    <span className="text-slate-500 font-medium">NF</span>
+                    <span className="text-slate-800 font-semibold">{d.numero_nf}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* ── OBSERVAÇÕES ──────────────────────────────────── */}
+              {d.observacoes && (
+                <div className="px-5 pb-4 border-t border-slate-100 pt-3">
+                  <p className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold mb-1.5">Observações</p>
+                  <p className="text-sm text-slate-600 break-words whitespace-pre-wrap leading-relaxed">{d.observacoes}</p>
+                </div>
+              )}
+
+              {/* ── ITENS ────────────────────────────────────────── */}
+              {d.itens.length > 0 && (
+                <div className="border-t border-slate-100">
+                  {/* Cabeçalho colapsável */}
+                  <button
+                    className="w-full flex items-center justify-between px-5 py-3 hover:bg-slate-50 transition-colors group"
+                    onClick={() => setItensOpen(o => !o)}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="w-5 h-5 rounded-md bg-indigo-100 flex items-center justify-center">
+                        <BarChart2 className="w-3 h-3 text-indigo-600" />
+                      </div>
+                      <span className="text-sm font-semibold text-slate-700">Itens</span>
+                      <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium">
+                        {d.itens.length}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-indigo-700">{fmt(d.total_oc)}</span>
+                      <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${itensOpen ? "" : "-rotate-90"}`} />
+                    </div>
+                  </button>
+
+                  {itensOpen && (
+                    <div className="px-5 pb-4">
+                      <div className="rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+                              <th className="text-left px-3 py-2.5 font-semibold text-slate-500">Descrição</th>
+                              <th className="text-right px-3 py-2.5 font-semibold text-slate-500 whitespace-nowrap">Qtd</th>
+                              <th className="text-right px-3 py-2.5 font-semibold text-slate-500 whitespace-nowrap">Unit.</th>
+                              <th className="text-right px-3 py-2.5 font-semibold text-slate-500 whitespace-nowrap">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {d.itens.map((it, i) => {
+                              const pct = Math.round(((it.total ?? 0) / maxItemTotal) * 100);
+                              return (
+                                <tr key={i} className="group hover:bg-indigo-50/40 transition-colors">
+                                  <td className="px-3 py-2.5 text-slate-700 break-words max-w-[180px]">
+                                    {/* Mini barra de proporção */}
+                                    <div className="mb-1 h-1 rounded-full bg-slate-100 overflow-hidden">
+                                      <div
+                                        className="h-full rounded-full bg-indigo-400 transition-all"
+                                        style={{ width: `${pct}%` }}
+                                      />
+                                    </div>
+                                    {it.descricao}
+                                  </td>
+                                  <td className="px-3 py-2.5 text-right text-slate-500 whitespace-nowrap">
+                                    {it.qtd?.toLocaleString("pt-BR", { maximumFractionDigits: 3 })}
+                                    <span className="text-slate-400 ml-0.5">{it.unidade}</span>
+                                  </td>
+                                  <td className="px-3 py-2.5 text-right text-slate-500 whitespace-nowrap">
+                                    {fmt(it.preco_unit ?? 0)}
+                                  </td>
+                                  <td className="px-3 py-2.5 text-right font-semibold text-slate-800 whitespace-nowrap">
+                                    {fmt(it.total ?? 0)}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Composição do total */}
+                      <div className="mt-2 space-y-1 text-xs">
+                        {d.frete > 0 && (
+                          <div className="flex justify-between px-1 text-slate-500">
+                            <span className="flex items-center gap-1"><Truck className="w-3 h-3" />Frete</span>
+                            <span>{fmt(d.frete)}</span>
+                          </div>
+                        )}
+                        {d.outras_despesas > 0 && (
+                          <div className="flex justify-between px-1 text-slate-500">
+                            <span>Outras despesas</span><span>{fmt(d.outras_despesas)}</span>
+                          </div>
+                        )}
+                        {d.desconto > 0 && (
+                          <div className="flex justify-between px-1 text-emerald-600">
+                            <span className="flex items-center gap-1"><TrendingDown className="w-3 h-3" />Desconto</span>
+                            <span>− {fmt(d.desconto)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between font-bold text-sm text-slate-900 pt-2 border-t border-slate-200 px-1">
+                          <span>Total</span><span className="text-indigo-700">{fmt(d.total_oc)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── ALMOXARIFADO ─────────────────────────────────── */}
+              <div className="border-t border-slate-100">
+                <button
+                  className="w-full flex items-center justify-between px-5 py-3 hover:bg-slate-50 transition-colors"
+                  onClick={() => setAlmoxOpen(o => !o)}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className={`w-5 h-5 rounded-md flex items-center justify-center ${almox.length > 0 ? "bg-teal-100" : "bg-slate-100"}`}>
+                      <Warehouse className={`w-3 h-3 ${almox.length > 0 ? "text-teal-600" : "text-slate-400"}`} />
+                    </div>
+                    <span className="text-sm font-semibold text-slate-700">Almoxarifado</span>
+                    {almox.length > 0 && (
+                      <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-teal-50 text-teal-600 font-medium border border-teal-200">
+                        {almox.length} mov.
+                      </span>
+                    )}
+                  </div>
+                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${almoxOpen ? "" : "-rotate-90"}`} />
+                </button>
+
+                {almoxOpen && (
+                  <div className="px-5 pb-4">
+                    {almox.length === 0 ? (
+                      <div className="flex items-center gap-2.5 px-3 py-3 rounded-xl bg-slate-50 border border-dashed border-slate-200">
+                        <Warehouse className="w-4 h-4 text-slate-300 shrink-0" />
+                        <p className="text-xs text-slate-400">Nenhuma movimentação no almoxarifado para esta OC.</p>
+                      </div>
+                    ) : (
+                      <div className="relative pl-5">
+                        {/* linha vertical de timeline */}
+                        <div className="absolute left-[9px] top-2 bottom-2 w-px bg-slate-200" />
+                        <div className="space-y-3">
+                          {almox.map((mv: any, i: number) => {
+                            const isEntrada = mv.tipo === 'entrada';
+                            return (
+                              <div key={i} className="relative flex items-start gap-3">
+                                {/* dot */}
+                                <div className={`absolute -left-5 mt-0.5 w-4 h-4 rounded-full flex items-center justify-center border-2 bg-white ${isEntrada ? "border-teal-400" : "border-rose-400"}`}>
+                                  {isEntrada
+                                    ? <ArrowDownToLine className="w-2 h-2 text-teal-500" />
+                                    : <ArrowUpFromLine className="w-2 h-2 text-rose-500" />}
+                                </div>
+                                {/* card */}
+                                <div className={`flex-1 rounded-xl border px-3 py-2.5 text-xs ${isEntrada ? "bg-teal-50/60 border-teal-200" : "bg-rose-50/60 border-rose-200"}`}>
+                                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                                    <span className={`font-bold text-[11px] uppercase tracking-wide ${isEntrada ? "text-teal-700" : "text-rose-700"}`}>
+                                      {isEntrada ? "Entrada" : mv.tipo === "consumo_direto" ? "Consumo" : "Saída"}
+                                    </span>
+                                    <span className="font-bold tabular-nums text-slate-800">
+                                      {(mv.quantidade ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 3 })}
+                                      {mv.itemNome && <span className="font-normal text-slate-500 ml-1">{mv.itemNome}</span>}
+                                    </span>
+                                  </div>
+                                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-[11px] text-slate-500">
+                                    {mv.usuarioNome && (
+                                      <span className="flex items-center gap-1">
+                                        <User className="w-2.5 h-2.5 text-slate-400" />{mv.usuarioNome}
+                                      </span>
+                                    )}
+                                    {mv.obraNome && (
+                                      <span className="flex items-center gap-1">
+                                        <MapPin className="w-2.5 h-2.5 text-slate-400" />{mv.obraNome}
+                                      </span>
+                                    )}
+                                    {mv.criadoEm && (
+                                      <span className="flex items-center gap-1">
+                                        <CalendarDays className="w-2.5 h-2.5 text-slate-400" />{mv.criadoEm}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>
