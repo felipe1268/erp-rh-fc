@@ -1,4 +1,30 @@
 /**
+ * Rev. 4181 - COMPRAS: CONDIÇÃO DE PAGAMENTO VIRA SELECT PADRONIZADO NAS ORDENS DE COMPRA.
+ *
+ * O QUE FOI FEITO:
+ * - Campo "Condição de Pagamento" na tela de criação/edição de OC (`Ordens.tsx`) era um
+ *   `<Input>` livre — causava 38+ variantes ("cheque 30 DDL", "cheque cheques", "cheque 3Z"
+ *   etc.) por digitação inconsistente entre usuários.
+ * - Substituído por `<Select>` com as opções canônicas de `TIPOS_PAGAMENTO`
+ *   (À Vista / 7 DDL / 14 DDL / 21 DDL / 28 DDL / 30 DDL / 30/60 DDL / 30/60/90 DDL /
+ *    Entrada + 30 DDL / Entrada + 30/60 DDL / Medição Mensal).
+ * - O SELECT grava o **label** (ex: "30 DDL") — compatível com registros existentes no banco.
+ * - Pré-preenchimento automático da condição ao selecionar fornecedor: deriva o label correto
+ *   a partir de `cicloNumParcelas` + `cicloPrazoParcela` + `cicloPagamento` do cadastro do
+ *   fornecedor (ex: 1 parcela × 30 dias → "30 DDL"; avista → "À Vista").
+ * - Painel Análise de Fornecedor (AnaliseDashPanel): donut de Formas de Pagamento agora
+ *   AGRUPA por meio normalizado (cheque + cheque 30 DDL → "Cheque") mostrando fatia correta;
+ *   lista detalhada mostra todas as variações históricas como chips abaixo do gráfico.
+ * - `FORMA_LABEL_MAP` normaliza exibição: "cheque"→"Cheque", "pix"→"PIX", "transferencia"→
+ *   "Transferência", "cartao_credito"→"Cartão Crédito" etc.
+ *
+ * ARQUIVOS TOCADOS: client/src/pages/compras/Ordens.tsx (import TIPOS_PAGAMENTO, select handler,
+ *   campo condicaoPagamento), client/src/pages/financeiro/AnaliseDashPanel.tsx (FORMA_LABEL_MAP +
+ *   normalizeFormaLabel + donut agrupado por meio).
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4180 - COMPRAS/FINANCEIRO: ANÁLISE DE FORNECEDOR — GRÁFICO SEMANA/MÊS + GRUPOS SIMILARES + INTERVALO.
  *
  * O QUE FOI FEITO:

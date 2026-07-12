@@ -18,6 +18,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { normalizarTexto } from "@shared/textNormalization";
+import { TIPOS_PAGAMENTO } from "@shared/paymentConditions";
 import { formatNumeroCotacaoDisplay } from "@shared/numeroCotacao";
 import { formatNumeroOcDisplay } from "@shared/numeroOc";
 import { consolidarOcItens } from "@shared/ocItensConsolidados";
@@ -1489,11 +1490,25 @@ export default function Ordens() {
                             value={`${f.nomeFantasia ?? ""} ${f.razaoSocial ?? ""}`}
                             onSelect={() => {
                               // Rev. 3442 — pré-preenche formaPagamento do ciclo do fornecedor
+                              // Rev. 4180 — pré-preenche condicaoPagamento do ciclo do fornecedor
                               const cicloFP = (f as any).cicloFormaPagamento as string | undefined;
+                              const cicloN = (f as any).cicloNumParcelas as number | undefined;
+                              const cicloD = (f as any).cicloPrazoParcela as number | undefined;
+                              const cicloPag = (f as any).cicloPagamento as string | undefined;
+                              // Deriva o label da condição a partir do ciclo configurado no fornecedor
+                              let cicloCondicao: string | undefined;
+                              if (cicloPag === "avista") cicloCondicao = "À Vista";
+                              else if (cicloN && cicloD != null) {
+                                const match = TIPOS_PAGAMENTO.find(
+                                  t => t.parcelas === cicloN && t.diasDDL[0] === cicloD
+                                );
+                                cicloCondicao = match?.label;
+                              }
                               setForm(p => ({
                                 ...p,
                                 fornecedorId: String(f.id),
                                 ...(cicloFP ? { formaPagamento: cicloFP } : {}),
+                                ...(cicloCondicao ? { condicaoPagamento: cicloCondicao } : {}),
                               }));
                               setFornecedorPopoverOpen(false);
                             }}
@@ -1737,9 +1752,22 @@ export default function Ordens() {
               <Label className="text-gray-700 text-sm font-medium">
                 Condição de Pagamento *
               </Label>
-              <Input className="bg-white border-gray-300 text-gray-900" placeholder="Ex: 30/60/90 dias, à vista, boleto 28 dias..."
-                value={form.condicaoPagamento} onChange={e => setForm(p => ({ ...p, condicaoPagamento: e.target.value }))} />
-              <p className="text-xs text-gray-400">Obrigatório — informe a forma/condição de pagamento negociada.</p>
+              <Select
+                value={form.condicaoPagamento}
+                onValueChange={v => setForm(p => ({ ...p, condicaoPagamento: v }))}
+              >
+                <SelectTrigger className="bg-white border-gray-300 text-gray-900">
+                  <SelectValue placeholder="Selecione a condição..." />
+                </SelectTrigger>
+                <SelectContent className="bg-white border-gray-200">
+                  {TIPOS_PAGAMENTO.map(opt => (
+                    <SelectItem key={opt.value} value={opt.label}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-400">Obrigatório — pré-preenchido pelo ciclo do fornecedor quando disponível.</p>
             </div>
 
             {/* Parcelamento */}

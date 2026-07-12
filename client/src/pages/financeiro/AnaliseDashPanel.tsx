@@ -23,6 +23,25 @@ const fmtK = (v: number) => {
 const CURVA_COLORS: Record<"A" | "B" | "C", string> = { A: "#ef4444", B: "#f59e0b", C: "#94a3b8" };
 const FORMA_COLORS = ["#6366f1", "#8b5cf6", "#0ea5e9", "#10b981", "#f59e0b", "#ec4899", "#64748b"];
 
+const FORMA_LABEL_MAP: Record<string, string> = {
+  cheque: "Cheque",
+  pix: "PIX",
+  boleto: "Boleto",
+  transferencia: "Transferência",
+  transferencia_bancaria: "Transferência",
+  deposito: "Depósito",
+  dinheiro: "Dinheiro",
+  cartao_credito: "Cartão Crédito",
+  cartao_debito: "Cartão Débito",
+  transferencia_estoque: "Transf. Estoque",
+};
+
+function normalizeFormaLabel(forma: string, condicao?: string): string {
+  const f = FORMA_LABEL_MAP[forma.toLowerCase().trim()] ?? (forma.charAt(0).toUpperCase() + forma.slice(1));
+  const c = (condicao ?? "").trim();
+  return c ? `${f} · ${c}` : f;
+}
+
 /* ── ISO week anchor: Monday of the week containing the date ── */
 function toWeekKey(dateStr: string): string {
   const d = new Date(dateStr + "T12:00:00");
@@ -323,31 +342,63 @@ export default function AnaliseDashPanel({
               <div className="flex items-center justify-center h-40 text-xs text-gray-400">Sem dados de pagamento</div>
             ) : (
               <>
-                <ResponsiveContainer width="100%" height={160}>
-                  <PieChart>
-                    <Pie data={formasPagamento.slice(0, 7)} cx="50%" cy="50%" outerRadius={70} dataKey="valorTotal" nameKey="forma" paddingAngle={2}>
-                      {formasPagamento.slice(0, 7).map((_: any, i: number) => <Cell key={i} fill={FORMA_COLORS[i % FORMA_COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip formatter={(val: number) => [fmt(val), ""]} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="space-y-1.5 mt-1">
-                  {formasPagamento.slice(0, 5).map((fp: FormaPgto, i: number) => (
-                    <div key={i} className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: FORMA_COLORS[i % FORMA_COLORS.length] }} />
-                        <span className="text-[11px] text-gray-600 truncate">{fp.forma}{fp.condicao ? ` ${fp.condicao}` : ""}</span>
+                {/* Agrupa por forma normalizada para o donut — une "cheque", "cheque 30 DDL", etc. */}
+                {(() => {
+                  const grouped = new Map<string, { valor: number; qtd: number }>();
+                  for (const fp of formasPagamento) {
+                    const fLabel = FORMA_LABEL_MAP[(fp.forma ?? "").toLowerCase().trim()] ?? (fp.forma ?? "Outro");
+                    const ex = grouped.get(fLabel);
+                    if (ex) { ex.valor += fp.valorTotal; ex.qtd += fp.qtdOcs; }
+                    else grouped.set(fLabel, { valor: fp.valorTotal, qtd: fp.qtdOcs });
+                  }
+                  const pieData = Array.from(grouped.entries())
+                    .map(([name, d]) => ({ name, value: d.valor, qtd: d.qtd }))
+                    .sort((a, b) => b.value - a.value);
+                  return (
+                    <>
+                      <ResponsiveContainer width="100%" height={160}>
+                        <PieChart>
+                          <Pie data={pieData} cx="50%" cy="50%" outerRadius={70} dataKey="value" nameKey="name" paddingAngle={2}>
+                            {pieData.map((_: any, i: number) => <Cell key={i} fill={FORMA_COLORS[i % FORMA_COLORS.length]} />)}
+                          </Pie>
+                          <Tooltip formatter={(val: number, _n: any, props: any) => [fmt(val), props.payload?.name ?? ""]} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="space-y-1.5 mt-1">
+                        {pieData.slice(0, 5).map((fp: any, i: number) => (
+                          <div key={i} className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: FORMA_COLORS[i % FORMA_COLORS.length] }} />
+                              <span className="text-[11px] text-gray-600 truncate">{fp.name}</span>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-[11px] font-bold text-gray-700">
+                                {totalGasto > 0 ? Math.round((fp.value / totalGasto) * 100) : 0}%
+                              </span>
+                              <span className="text-[10px] text-gray-400">({fp.qtd} OC)</span>
+                            </div>
+                          </div>
+                        ))}
+                        {pieData.length > 5 && (
+                          <p className="text-[10px] text-gray-400">+{pieData.length - 5} outros meios…</p>
+                        )}
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-[11px] font-bold text-gray-700">{fp.pct}%</span>
-                        <span className="text-[10px] text-gray-400">({fp.qtdOcs} OC)</span>
-                      </div>
-                    </div>
-                  ))}
-                  {formasPagamento.length > 5 && (
-                    <p className="text-[10px] text-gray-400">+{formasPagamento.length - 5} outras condições…</p>
-                  )}
-                </div>
+                      {/* Detalhamento por condição */}
+                      {formasPagamento.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-gray-100">
+                          <p className="text-[10px] text-gray-400 mb-1.5">{formasPagamento.length} variação{formasPagamento.length !== 1 ? "ões" : ""} no histórico:</p>
+                          <div className="flex flex-wrap gap-1">
+                            {formasPagamento.map((fp: FormaPgto, i: number) => (
+                              <span key={i} className="text-[9px] bg-gray-100 text-gray-500 rounded px-1.5 py-0.5 whitespace-nowrap">
+                                {normalizeFormaLabel(fp.forma, fp.condicao)}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </>
             )}
           </CardContent>
