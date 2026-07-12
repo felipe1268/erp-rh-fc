@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import { ItemDescricaoInput } from "@/components/compras/ItemDescricaoInput";
 import FullScreenDialog from "@/components/FullScreenDialog";
 import { DraggableCommandBar } from "@/components/DraggableCommandBar";
 import { useState, useEffect, useRef, useCallback, useMemo, Fragment } from "react";
@@ -1630,7 +1631,15 @@ export default function Ordens() {
                           {g.itens.map((it, ii) => (
                             <div key={ii} className="p-2.5 rounded bg-white border border-gray-200 space-y-2">
                               <div className="flex gap-2">
-                                <Input className="flex-1 bg-white border-gray-300 text-gray-900 text-sm" placeholder="Descrição *" value={it.descricao} onChange={e => updateItem(gi, ii, "descricao", e.target.value)} onBlur={e => updateItem(gi, ii, "descricao", normalizarTexto(e.target.value))} />
+                                <ItemDescricaoInput
+                                  companyId={companyId}
+                                  value={it.descricao}
+                                  placeholder="Descrição *"
+                                  className="flex-1 h-9 px-3 bg-white border border-gray-300 text-gray-900 text-sm rounded-md outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-300"
+                                  onChange={v => updateItem(gi, ii, "descricao", v)}
+                                  onBlur={v => updateItem(gi, ii, "descricao", normalizarTexto(v))}
+                                  onSelectUnidade={u => updateItem(gi, ii, "unidade", u)}
+                                />
                                 {g.itens.length > 1 && (
                                   <button onClick={() => removeItem(gi, ii)} className="p-1 text-gray-400 hover:text-red-500" title="Remover item"><Trash2 className="h-4 w-4" /></button>
                                 )}

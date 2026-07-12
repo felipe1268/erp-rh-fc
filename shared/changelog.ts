@@ -1,4 +1,38 @@
 /**
+ * Rev. 4160 — **COMPRAS: AUDITORIA DE ITENS — NORMALIZAÇÃO DE NOMES E AUTOCOMPLETE NA SC/OC.**
+ *
+ * CONTEXTO: itens de compra são digitados com variações de acento, números romanos (CPIII) vs arábicos
+ * (CP3), sufixos (com/sem especificação técnica), tornando análises de custo por material fragmentadas.
+ * A FERRAGENS SANTA RITA mostrava "Cimento Cpiii-e-32" e "Cimento Cp3" como 2 barras distintas.
+ *
+ * MUDANÇA BACKEND — `server/routers/compras.ts` (3 novos procedures):
+ * - `auditarItens(companyId)`: fetches all distinct (descricao, unidade) from non-cancelled OCs,
+ *   normalizes server-side (strip accents + roman numeral conversion + strip parentheticals),
+ *   groups by normalized key, returns only groups with ≥2 different original strings + totalGasto.
+ * - `padronizarItens(companyId, substituicoes[{de, para}])`: UPDATE em lote em
+ *   compras_ordens_itens + compras_solicitacoes_itens + compras_cotacoes_itens.
+ * - `getItemSugestoes(companyId, q)`: ILIKE autocomplete de descrições históricas, ordenado por
+ *   frequência de uso (n_ocs DESC), limite 12 — alimenta o autocomplete de SC/OC.
+ *
+ * MUDANÇA FRONTEND:
+ * - Novo componente `client/src/components/compras/ItemDescricaoInput.tsx`: input com dropdown de
+ *   sugestões de nomes históricos ao digitar ≥2 chars (debounce 250ms); ao clicar numa sugestão,
+ *   preenche o nome E propaga a unidade mais usada. Não substitui o onBlur normalizarTexto.
+ * - `Solicitacoes.tsx` + `Ordens.tsx`: campo Descrição de item substituído pelo novo componente.
+ * - `AuditoriaFornecedores.tsx`: 4ª aba "Itens" — lista grupos de variantes, expand/collapse,
+ *   botão "Corrigir" por variante individual OU "Padronizar Todos" em lote; card de KPI roxo
+ *   adicionado à grade de resumo (2×4).
+ *
+ * ANÁLISE EXECUTADA (1.753 itens distintos → 10 grupos de duplicatas confirmadas):
+ * Acentos: Película/Pelicula, Mão de Obra/Mao, Copo Descartável/Descartavel, Papel Higiênico,
+ * Fardo Papel Higiênico, Plug Fêmea, Lápis Carpinteiro, Caneta Esferográfica.
+ * Aspas rogue: Dobradiça 3"", Trincha 2"" (trailing quote no campo).
+ * CPIII vs CP3 (romana→arábica): Cimento Cpiii-e-32 vs Cimento Cp3 — usuário confirma se é mesmo produto.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4159 — **COMPRAS: AUDITORIA DE FORNECEDORES — DUPLICATAS, VARIANTES DE NOME E MESCLAGEM.**
  *
  * CONTEXTO: nomes de fornecedores cadastrados com grafias diferentes (maiúsculas/minúsculas, com/sem

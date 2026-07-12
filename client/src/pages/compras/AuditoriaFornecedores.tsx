@@ -7,14 +7,14 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AlertTriangle, CheckCircle2, RefreshCw, Merge, FileText,
-  ShoppingCart, CreditCard, ChevronDown, ChevronRight, Wrench,
+  ShoppingCart, CreditCard, ChevronDown, ChevronRight, Wrench, Package,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from "@/components/ui/dialog";
 
-type Aba = "ocs" | "lancamentos" | "cadastro";
+type Aba = "ocs" | "lancamentos" | "cadastro" | "itens";
 
 export default function AuditoriaFornecedores() {
   const { user } = useAuth();
@@ -23,6 +23,7 @@ export default function AuditoriaFornecedores() {
   const [aba, setAba] = useState<Aba>("ocs");
   const [expandedFE, setExpandedFE] = useState<Set<string>>(new Set());
   const [expandedDup, setExpandedDup] = useState<Set<string>>(new Set());
+  const [expandedItem, setExpandedItem] = useState<Set<string>>(new Set());
   const [mergeDialog, setMergeDialog] = useState<{
     canonicalId: number; duplicateId: number;
     canonicalNome: string; duplicateNome: string;
@@ -32,6 +33,19 @@ export default function AuditoriaFornecedores() {
     { companyId },
     { enabled: companyId > 0 }
   );
+
+  const itensQ = trpc.compras.auditarItens.useQuery(
+    { companyId },
+    { enabled: companyId > 0 && aba === "itens" }
+  );
+
+  const padronizarItens = trpc.compras.padronizarItens.useMutation({
+    onSuccess: (r) => {
+      toast({ title: "Itens padronizados", description: `${r.updated} registro(s) corrigido(s) em OCs, SCs e Cotações.` });
+      itensQ.refetch();
+    },
+    onError: (e) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
 
   const padronizarOC = trpc.compras.padronizarNomesOC.useMutation({
     onSuccess: (r) => {
@@ -64,8 +78,9 @@ export default function AuditoriaFornecedores() {
   const ocIssues = data?.variantesOC ?? [];
   const feIssues = data?.variantesFE ?? [];
   const dupIssues = data?.duplicatasCadastro ?? [];
+  const itemIssues = itensQ.data?.duplicatas ?? [];
 
-  const totalProblemas = ocIssues.length + feIssues.length + dupIssues.length;
+  const totalProblemas = ocIssues.length + feIssues.length + dupIssues.length + itemIssues.length;
 
   function toggleFE(key: string) {
     setExpandedFE(prev => {
@@ -77,6 +92,14 @@ export default function AuditoriaFornecedores() {
 
   function toggleDup(key: string) {
     setExpandedDup(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
+
+  function toggleItem(key: string) {
+    setExpandedItem(prev => {
       const next = new Set(prev);
       next.has(key) ? next.delete(key) : next.add(key);
       return next;
@@ -104,11 +127,12 @@ export default function AuditoriaFornecedores() {
 
       {/* Summary cards */}
       {!isLoading && (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
             { label: "Variantes em OCs", count: ocIssues.length, icon: ShoppingCart, color: "text-blue-500", tab: "ocs" as Aba },
             { label: "Variantes em Lançamentos", count: feIssues.length, icon: CreditCard, color: "text-amber-500", tab: "lancamentos" as Aba },
             { label: "Duplicatas no Cadastro", count: dupIssues.length, icon: FileText, color: "text-red-500", tab: "cadastro" as Aba },
+            { label: "Itens com Nomes Variantes", count: itemIssues.length, icon: Package, color: "text-purple-500", tab: "itens" as Aba },
           ].map(c => (
             <button
               key={c.tab}
@@ -135,11 +159,12 @@ export default function AuditoriaFornecedores() {
       )}
 
       {/* Tab selector */}
-      <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
+      <div className="flex flex-wrap gap-1 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
         {([
           ["ocs", "OCs", ShoppingCart, ocIssues.length],
-          ["lancamentos", "Lançamentos Financeiros", CreditCard, feIssues.length],
-          ["cadastro", "Duplicatas no Cadastro", FileText, dupIssues.length],
+          ["lancamentos", "Lançamentos Fin.", CreditCard, feIssues.length],
+          ["cadastro", "Duplicatas Cadastro", FileText, dupIssues.length],
+          ["itens", "Itens", Package, itemIssues.length],
         ] as [Aba, string, any, number][]).map(([tab, label, Icon, count]) => (
           <button
             key={tab}
@@ -445,6 +470,117 @@ export default function AuditoriaFornecedores() {
                           {ativos.length <= 1 && inativos.length > 0 && (
                             <p className="text-xs text-slate-400 italic">Duplicato(s) inativo(s) — use "Migrar para ativo" para garantir que dados históricos apontem para o registro correto.</p>
                           )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ─── ABA: Itens ─── */}
+      {aba === "itens" && (
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  Itens com descrições variantes
+                </CardTitle>
+                <p className="text-xs text-slate-400 mt-1">
+                  Mesmo produto digitado de formas diferentes (acento, número romano vs arábico, abreviações). Padronize para um único nome.
+                </p>
+              </div>
+              {itemIssues.length > 0 && (
+                <Button
+                  size="sm"
+                  className="bg-purple-600 hover:bg-purple-700 text-white text-xs shrink-0"
+                  disabled={padronizarItens.isPending}
+                  onClick={() => {
+                    const subs = itemIssues.flatMap(g =>
+                      g.variantes.filter(v => v.nome !== g.canonical).map(v => ({ de: v.nome, para: g.canonical }))
+                    );
+                    if (subs.length > 0) padronizarItens.mutate({ companyId, substituicoes: subs });
+                  }}
+                >
+                  {padronizarItens.isPending ? (
+                    <><RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Padronizando…</>
+                  ) : (
+                    <><CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> Padronizar Todos</>
+                  )}
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {itensQ.isLoading ? (
+              <div className="text-center py-8 text-slate-400 text-sm">Analisando itens…</div>
+            ) : itemIssues.length === 0 ? (
+              <div className="text-center py-8 text-green-600 text-sm flex flex-col items-center gap-2">
+                <CheckCircle2 className="w-8 h-8" />
+                Todos os itens estão com nomes consistentes
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {itemIssues.map((grp) => {
+                  const isOpen = expandedItem.has(grp.key);
+                  return (
+                    <div key={grp.key} className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                      <button
+                        className="w-full flex items-center justify-between px-3 py-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-left"
+                        onClick={() => toggleItem(grp.key)}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          {isOpen ? <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />}
+                          <span className="font-medium text-sm text-slate-800 dark:text-slate-200 truncate">{grp.canonical}</span>
+                          <span className="text-xs text-slate-400 shrink-0">{grp.totalOcs} OC(s)</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                          <span className="text-xs text-slate-400">
+                            R${grp.totalGasto.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                          <Badge variant="outline" className="text-xs border-purple-300 text-purple-700 bg-purple-50">
+                            {grp.variantes.length} variantes
+                          </Badge>
+                        </div>
+                      </button>
+                      {isOpen && (
+                        <div className="px-3 py-3 space-y-2">
+                          <p className="text-xs text-slate-500 font-medium mb-1">
+                            Será padronizado para: <strong className="text-green-700">"{grp.canonical}"</strong>
+                          </p>
+                          {grp.variantes.map((v) => (
+                            <div key={v.nome} className="flex items-center justify-between gap-2 py-1.5 border-b border-slate-100 dark:border-slate-700 last:border-0">
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                {v.nome === grp.canonical ? (
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                                ) : (
+                                  <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                                )}
+                                <span className={`text-sm break-all ${v.nome === grp.canonical ? "text-green-700 font-medium" : "text-slate-700 dark:text-slate-300"}`}>
+                                  {v.nome}
+                                </span>
+                                <span className="text-xs text-slate-400 shrink-0">{v.n_ocs} OC(s) · {v.unidade}</span>
+                              </div>
+                              {v.nome !== grp.canonical && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-xs h-7 shrink-0"
+                                  disabled={padronizarItens.isPending}
+                                  onClick={() => padronizarItens.mutate({
+                                    companyId,
+                                    substituicoes: [{ de: v.nome, para: grp.canonical }],
+                                  })}
+                                >
+                                  Corrigir
+                                </Button>
+                              )}
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>

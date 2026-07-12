@@ -16450,4 +16450,128 @@ Responda APENAS com JSON válido, sem markdown, no formato:
         canonicalNome,
       };
     }),
+
+  // ─── AUDITORIA DE ITENS ────────────────────────────────────────────────────
+  auditarItens: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const { companyId } = input;
+
+      const r = await db.execute(sql`
+        SELECT
+          oi.descricao,
+          oi.unidade,
+          COUNT(DISTINCT oi.ordem_id)::int AS n_ocs,
+          SUM(oi.quantidade::numeric * oi.preco_unitario::numeric)::numeric(14,2) AS total_gasto
+        FROM compras_ordens_itens oi
+        JOIN compras_ordens co ON co.id = oi.ordem_id AND co.company_id = ${companyId}
+        WHERE co.status NOT IN ('cancelada','rascunho')
+          AND oi.descricao IS NOT NULL AND TRIM(oi.descricao) <> ''
+        GROUP BY oi.descricao, oi.unidade
+      `);
+
+      function removeAcc(s: string) {
+        return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      }
+      function normItem(s: string): string {
+        let n = removeAcc(s.toUpperCase()).trim();
+        n = n.replace(/[\/\\\-_.,;:!?()\[\]{}\"'`]/g, " ");
+        n = n.replace(/\s+/g, " ").trim();
+        const rm: Record<string, string> = {
+          VIII:"8",VII:"7",VI:"6",IV:"4",IX:"9",XII:"12",XI:"11",X:"10",III:"3",II:"2",V:"5",
+        };
+        n = n.replace(/\b(VIII|VII|VI|IV|IX|XII|XI|X|III|II|V)\b/g, (m) => rm[m]);
+        n = n.replace(/CP\s*III/g, "CP3").replace(/CP\s*II\b/g, "CP2");
+        n = n.replace(/\s*\(.*?\)\s*/g, " ");
+        n = n.replace(/\s+/g, " ").trim();
+        return n;
+      }
+
+      type Row = { descricao: string; unidade: string; n_ocs: number; total_gasto: string };
+      const rows = r.rows as Row[];
+      const groups: Record<string, Row[]> = {};
+      for (const row of rows) {
+        const key = normItem(row.descricao);
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(row);
+      }
+
+      const duplicatas = Object.entries(groups)
+        .filter(([, v]) => new Set(v.map(r => r.descricao)).size > 1)
+        .map(([key, v]) => {
+          const byName: Record<string, { n_ocs: number; total_gasto: number; unidade: string }> = {};
+          for (const row of v) {
+            if (!byName[row.descricao]) byName[row.descricao] = { n_ocs: 0, total_gasto: 0, unidade: row.unidade };
+            byName[row.descricao].n_ocs += row.n_ocs;
+            byName[row.descricao].total_gasto += parseFloat(row.total_gasto || "0");
+          }
+          const sorted = Object.entries(byName).sort((a, b) => b[1].n_ocs - a[1].n_ocs);
+          const totalGasto = sorted.reduce((s, [, x]) => s + x.total_gasto, 0);
+          const totalOcs = sorted.reduce((s, [, x]) => s + x.n_ocs, 0);
+          return {
+            key,
+            canonical: sorted[0][0],
+            variantes: sorted.map(([nome, info]) => ({ nome, n_ocs: info.n_ocs, total_gasto: info.total_gasto, unidade: info.unidade })),
+            totalGasto,
+            totalOcs,
+          };
+        })
+        .sort((a, b) => b.totalGasto - a.totalGasto);
+
+      return { duplicatas };
+    }),
+
+  padronizarItens: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      substituicoes: z.array(z.object({ de: z.string(), para: z.string() })),
+    }))
+    .mutation(async ({ input }) => {
+      const { companyId, substituicoes } = input;
+      let updated = 0;
+      for (const { de, para } of substituicoes) {
+        const r1 = await db.execute(sql`
+          UPDATE compras_ordens_itens SET descricao = ${para}
+          WHERE descricao = ${de}
+            AND ordem_id IN (SELECT id FROM compras_ordens WHERE company_id = ${companyId})
+        `);
+        updated += Number((r1 as any).rowCount ?? 0);
+
+        const r2 = await db.execute(sql`
+          UPDATE compras_solicitacoes_itens SET descricao = ${para}
+          WHERE descricao = ${de}
+            AND solicitacao_id IN (SELECT id FROM compras_solicitacoes WHERE company_id = ${companyId})
+        `);
+        updated += Number((r2 as any).rowCount ?? 0);
+
+        const r3 = await db.execute(sql`
+          UPDATE compras_cotacoes_itens SET descricao = ${para}
+          WHERE descricao = ${de}
+            AND cotacao_id IN (SELECT id FROM compras_cotacoes WHERE company_id = ${companyId})
+        `);
+        updated += Number((r3 as any).rowCount ?? 0);
+      }
+      return { updated };
+    }),
+
+  getItemSugestoes: protectedProcedure
+    .input(z.object({ companyId: z.number(), q: z.string().min(1) }))
+    .query(async ({ input }) => {
+      const { companyId, q } = input;
+      const pat = `%${q}%`;
+      const r = await db.execute(sql`
+        SELECT
+          oi.descricao,
+          oi.unidade,
+          COUNT(DISTINCT oi.ordem_id)::int AS n_ocs
+        FROM compras_ordens_itens oi
+        JOIN compras_ordens co ON co.id = oi.ordem_id AND co.company_id = ${companyId}
+        WHERE co.status NOT IN ('cancelada','rascunho')
+          AND oi.descricao ILIKE ${pat}
+        GROUP BY oi.descricao, oi.unidade
+        ORDER BY COUNT(DISTINCT oi.ordem_id) DESC
+        LIMIT 12
+      `);
+      return r.rows as Array<{ descricao: string; unidade: string; n_ocs: number }>;
+    }),
 });

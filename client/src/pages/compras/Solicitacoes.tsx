@@ -1,5 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { DraggableCommandBar } from "@/components/DraggableCommandBar";
+import { ItemDescricaoInput } from "@/components/compras/ItemDescricaoInput";
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -4604,12 +4605,14 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                       <div className="flex gap-2 items-end">
                         <div className="flex-1 min-w-0">
                           <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-wider leading-none mb-0.5 px-0.5">Descrição</label>
-                          <input
-                            className="w-full h-7 px-2 text-xs rounded border border-gray-300 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-300"
-                            placeholder={isChild ? "Descrição do insumo *" : "Descrição do item *"}
+                          <ItemDescricaoInput
+                            companyId={companyId}
                             value={it.descricao}
-                            onChange={e => setItens(p => p.map((x, i) => i === idx ? { ...x, descricao: e.target.value } : x))}
-                            onBlur={e => setItens(p => p.map((x, i) => i === idx ? { ...x, descricao: normalizarTexto(e.target.value) } : x))}
+                            placeholder={isChild ? "Descrição do insumo *" : "Descrição do item *"}
+                            className="w-full h-7 px-2 text-xs rounded border border-gray-300 bg-white text-gray-900 placeholder-gray-400 outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-300"
+                            onChange={v => setItens(p => p.map((x, i) => i === idx ? { ...x, descricao: v } : x))}
+                            onBlur={v => setItens(p => p.map((x, i) => i === idx ? { ...x, descricao: normalizarTexto(v) } : x))}
+                            onSelectUnidade={u => setItens(p => p.map((x, i) => i === idx ? { ...x, unidade: u } : x))}
                           />
                         </div>
                         <div className="shrink-0">

@@ -50,13 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4159** — **COMPRAS: AUDITORIA DE FORNECEDORES — DUPLICATAS, VARIANTES DE NOME E MESCLAGEM.** 4 procedures backend: `auditarFornecedores` (duplicatas cadastro + variantes OC + variantes FE por prefixo), `padronizarNomesOC` (normaliza para razao_social mestre), `padronizarNomeFE` (substituições em lote), `mesclarFornecedor` (reatribui OCs+lançamentos, desativa duplicado). Nova tela `/compras/auditoria-fornecedores` com 3 abas e dialog de confirmação. Botão "Auditoria" no CommandBar de Fornecedores. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4160** — **COMPRAS: AUDITORIA DE ITENS — NORMALIZAÇÃO DE NOMES E AUTOCOMPLETE NA SC/OC.** 3 procedures: `auditarItens` (normalização romano→arábico+acento+parênteses, 10 grupos encontrados), `padronizarItens` (UPDATE em lote em OC+SC+Cotação), `getItemSugestoes` (autocomplete). Novo `ItemDescricaoInput` (dropdown histórico ao digitar ≥2 chars, propaga unidade). Aba "Itens" na Auditoria. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4158** — **FINANCEIRO: ANÁLISE APROFUNDADA POR FORNECEDOR — ITENS & PREÇOS (OCs).** Novo `compras.getAnaliseFornecedor` (4 queries: itens agrupados+ocorrências, formas pgto, obras). `FinanceiroAnaliseCustosDetalhe`: 2 abas ao clicar num fornecedor — "Lançamentos" (original) e "Itens & Preços (OCs)" (nova). Aba nova: KPI cards, tabela expand/collapse por produto com badge de variação de preço (âmbar ≥10%/vermelho), mini LineChart evolução preço, tabela de ocorrências por OC (Nº OC, Data, Obra, Preço unit., Forma pgto), painel lateral formas pgto (%) + obras atendidas. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4159** — **COMPRAS: AUDITORIA DE FORNECEDORES — DUPLICATAS, VARIANTES DE NOME E MESCLAGEM.** 4 procedures backend: `auditarFornecedores` (duplicatas cadastro + variantes OC + variantes FE por prefixo), `padronizarNomesOC` (normaliza para razao_social mestre), `padronizarNomeFE` (substituições em lote), `mesclarFornecedor` (reatribui OCs+lançamentos, desativa duplicado). Nova tela `/compras/auditoria-fornecedores` com 3 abas e dialog de confirmação. Botão "Auditoria" no CommandBar de Fornecedores. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
-- **Rev. 4157** — **FROTA: NOVA VIAGEM — FIX: fleet_trips.data NOT NULL SEM DEFAULT (coluna legada).** `ALTER TABLE fleet_trips ALTER COLUMN "data" SET DEFAULT CURRENT_DATE` em ensureFleetTables + SyncSchema+. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4158** — **FINANCEIRO: ANÁLISE APROFUNDADA POR FORNECEDOR — ITENS & PREÇOS (OCs).** Novo `compras.getAnaliseFornecedor` (4 queries). `FinanceiroAnaliseCustosDetalhe`: 2 abas, KPI cards, tabela expand/collapse com badge variação preço, mini LineChart, formas pgto. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4155** — **FROTA: NOVA VIAGEM — FIXES: fleet_trips COLUNAS FALTANDO + DIRECTIONS API DO BROWSER.** Loop ALTER TABLE 17 colunas; getGoogleMapsKey procedure. ZERO DELETE · ZERO ALTER destrutivo.
 
