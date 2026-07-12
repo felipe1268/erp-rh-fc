@@ -1406,6 +1406,13 @@ export function normItemDesc(s: string): string {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Família = primeira palavra significativa da chave normalizada (ignora stopwords e números puros)
+const _FAM_SW = new Set(["DE","DA","DO","DAS","DOS","EM","COM","PARA","E","A","O","AS","OS","UM","UMA","POR","NA","NO","NAS","NOS","AO","AOS","SE","SEM","OU","MAS"]);
+export function getItemFamilia(normKey: string): string {
+  const words = normKey.split(" ").filter(w => w.length > 0 && !_FAM_SW.has(w) && !/^\d/.test(w));
+  return words[0] ?? normKey.split(" ")[0] ?? "OUTROS";
+}
+
 export const comprasRouter = router({
 
   // ══════════════════════════════════════════════════════════════
@@ -16648,6 +16655,101 @@ Responda APENAS com JSON válido, sem markdown, no formato:
         updated += Number((r3 as any).rowCount ?? 0);
       }
       return { updated };
+    }),
+
+  // Catálogo hierárquico: família → variantes → OC details
+  getItensFamilias: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const { companyId } = input;
+      const r = await db.execute(sql`
+        SELECT
+          oi.descricao,
+          oi.unidade,
+          COUNT(DISTINCT oi.ordem_id)::int AS n_ocs,
+          COALESCE(SUM(oi.quantidade::numeric * oi.preco_unitario::numeric),0)::numeric(14,2) AS total_gasto
+        FROM compras_ordens_itens oi
+        JOIN compras_ordens co ON co.id = oi.ordem_id AND co.company_id = ${companyId}
+        WHERE co.status NOT IN ('cancelada','rascunho')
+          AND oi.descricao IS NOT NULL AND TRIM(oi.descricao) <> ''
+        GROUP BY oi.descricao, oi.unidade
+      `);
+
+      type Row = { descricao: string; unidade: string; n_ocs: number; total_gasto: string };
+      const rows = r.rows as Row[];
+
+      // 1) Agrupa por normItemDesc (nível de variante)
+      const variantMap: Record<string, Array<{ descricao: string; n_ocs: number; unidade: string; totalGasto: number }>> = {};
+      for (const row of rows) {
+        const key = normItemDesc(row.descricao);
+        if (!variantMap[key]) variantMap[key] = [];
+        const ex = variantMap[key].find(x => x.descricao === row.descricao);
+        if (ex) { ex.n_ocs += row.n_ocs; ex.totalGasto += parseFloat(row.total_gasto || "0"); }
+        else variantMap[key].push({ descricao: row.descricao, n_ocs: row.n_ocs, unidade: row.unidade ?? "", totalGasto: parseFloat(row.total_gasto || "0") });
+      }
+
+      // 2) Agrupa variantes por família (primeira palavra significativa)
+      const familiaMap: Record<string, typeof variantMap> = {};
+      for (const [normKey, descs] of Object.entries(variantMap)) {
+        const fam = getItemFamilia(normKey);
+        if (!familiaMap[fam]) familiaMap[fam] = {};
+        familiaMap[fam][normKey] = descs;
+      }
+
+      // 3) Serializa em estrutura hierárquica
+      const familias = Object.entries(familiaMap).map(([famKey, variants]) => {
+        const variantList = Object.entries(variants).map(([normKey, descs]) => {
+          const sorted = [...descs].sort((a, b) => b.n_ocs - a.n_ocs);
+          const totalGasto = sorted.reduce((s, x) => s + x.totalGasto, 0);
+          const totalOcs = sorted.reduce((s, x) => s + x.n_ocs, 0);
+          return {
+            normKey,
+            canonical: sorted[0].descricao,
+            descricoes: sorted.map(d => ({ nome: d.descricao, n_ocs: d.n_ocs, unidade: d.unidade, totalGasto: d.totalGasto })),
+            totalGasto,
+            totalOcs,
+            hasDuplicates: new Set(sorted.map(x => x.descricao)).size > 1,
+          };
+        }).sort((a, b) => b.totalGasto - a.totalGasto);
+
+        return {
+          key: famKey,
+          nome: famKey,
+          totalGasto: variantList.reduce((s, v) => s + v.totalGasto, 0),
+          totalOcs: variantList.reduce((s, v) => s + v.totalOcs, 0),
+          variantes: variantList,
+        };
+      }).sort((a, b) => b.totalGasto - a.totalGasto);
+
+      return { familias };
+    }),
+
+  // Detalhe lazy por descrição: lista de OCs com obra
+  getItemOcDetalhes: protectedProcedure
+    .input(z.object({ companyId: z.number(), descricao: z.string() }))
+    .query(async ({ input }) => {
+      const { companyId, descricao } = input;
+      const r = await db.execute(sql`
+        SELECT
+          co.numero_oc,
+          co.created_at::date::text AS data,
+          COALESCE(ob.nome, 'Sem obra') AS obra_nome,
+          oi.quantidade::float AS qtd,
+          oi.unidade,
+          oi.preco_unitario::float AS preco_unit,
+          COALESCE(oi.total::float, oi.quantidade::float * oi.preco_unitario::float) AS total
+        FROM compras_ordens_itens oi
+        JOIN compras_ordens co ON co.id = oi.ordem_id AND co.company_id = ${companyId}
+        LEFT JOIN obras ob ON ob.id = co.obra_id
+        WHERE oi.descricao = ${descricao}
+          AND co.status NOT IN ('cancelada','rascunho')
+        ORDER BY co.created_at DESC, co.id DESC
+        LIMIT 50
+      `);
+      return r.rows as Array<{
+        numero_oc: string; data: string; obra_nome: string;
+        qtd: number; unidade: string; preco_unit: number; total: number;
+      }>;
     }),
 
   getItemSugestoes: protectedProcedure

@@ -1,4 +1,43 @@
 /**
+ * Rev. 4162 — **COMPRAS: CATÁLOGO DE ITENS — VISÃO HIERÁRQUICA FAMÍLIA → VARIANTE → OCs POR OBRA.**
+ *
+ * CONTEXTO: usuário solicitou visão geral agrupada de TODOS os itens comprados por família de produto
+ * (AREIA, PREGO, CIMENTO, BARRA, DISCO...), com drill-down para variantes e, dentro de cada variante,
+ * as OCs individuais com obra, data, qtd, preço unit e total. Objetivo: identificar e unificar itens
+ * similares comprados com nomenclaturas ligeiramente distintas.
+ *
+ * NOVO — `getItemFamilia(normKey)` (`server/routers/compras.ts` module-level):
+ *   - Extrai a família como primeira palavra significativa da chave normalizada (ignora stopwords:
+ *     DE/DA/DO/DAS/DOS/EM/COM/PARA/E/A/O/... e tokens que começam com dígito).
+ *   - Exemplos: "AREIA MEDIA" → "AREIA", "BARRA DE VERGALHAO" → "BARRA", "CIMENTO CP3" → "CIMENTO".
+ *
+ * NOVO — `getItensFamilias(companyId)` (tRPC procedure):
+ *   - Fetcha todos os itens de OCs ativas (status ≠ cancelada/rascunho) com COUNT(OCs) e SUM(total).
+ *   - Agrupa em JS por `normItemDesc` (variante) → depois por `getItemFamilia` (família).
+ *   - Retorna: `{ familias: [{ key, nome, totalGasto, totalOcs, variantes: [{ normKey, canonical,
+ *     descricoes: [{nome, n_ocs, unidade, totalGasto}], totalGasto, totalOcs, hasDuplicates }] }] }`
+ *   - Famílias e variantes ordenadas por totalGasto DESC.
+ *
+ * NOVO — `getItemOcDetalhes(companyId, descricao)` (tRPC procedure):
+ *   - Busca lazy as OCs individuais para uma descrição específica: numero_oc, data, obra_nome
+ *     (JOIN obras), qtd, unidade, preco_unit, total. LIMIT 50 ORDER BY created_at DESC.
+ *
+ * NOVO — `client/src/components/compras/ItemCatalogo.tsx`:
+ *   - Componente com 3 níveis de expansão: Família → Variante → Descrição → OC rows (lazy).
+ *   - Search/filter por família ou descrição.
+ *   - KPIs: Nº famílias, Nº produtos, R$ total, alertas de variantes com duplicatas.
+ *   - Botão "Padronizar" por grupo de variantes (chama `padronizarItens`).
+ *   - `OcDetalheRows` sub-componente que dispara `getItemOcDetalhes` apenas quando expandido.
+ *
+ * MODIFICADO — `AuditoriaFornecedores.tsx`:
+ *   - Aba type expandida para incluir "catalogo".
+ *   - 5ª aba "Catálogo de Itens" (ícone BookOpen) no seletor.
+ *   - Render da aba: Card wrapping `<ItemCatalogo companyId={companyId} />`.
+ *
+ * ZERO DELETE · ZERO ALTER DESTRUTIVO.
+ */
+
+/**
  * Rev. 4161 — **COMPRAS: NORMALIZAÇÃO DE ITENS V2 — CIMENTO CP3 UNIFICADO + CAÇAMBA + REMOÇÃO SELETIVA DE PARÊNTESES.**
  *
  * CONTEXTO: após a Rev. 4160, análise completa do banco identificou falsos positivos (Telha Galvalume com

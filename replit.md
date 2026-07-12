@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4162** — **COMPRAS: CATÁLOGO DE ITENS — VISÃO HIERÁRQUICA FAMÍLIA → VARIANTE → OCs POR OBRA.** `getItemFamilia` extrai 1ª palavra significativa da chave normalizada (ignora stopwords+números). `getItensFamilias` agrupa TODOS os itens em família→variante com totais. `getItemOcDetalhes` lazy-load OCs por descrição (obra, data, qtd, preço). Novo `ItemCatalogo.tsx` (3 níveis expand, search, KPIs, Padronizar por variante). 5ª aba "Catálogo" na Auditoria. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4161** — **COMPRAS: NORMALIZAÇÃO DE ITENS V2 — CIMENTO CP3 + CAÇAMBA + PARÊNTESES SELETIVOS.** `normItemDesc` corrigida: parênteses de embalagem (Sacos de, Balde, Galão) removidos; specs de produto (dimensões, período, tipo) incorporados como palavras na chave; colapso "CP 3"→"CP3" pós-romano; "DE 4M"→"4M"; "4 M"→"4M". 16/17 testes OK. Auditoria real: 21 grupos/R$170k (Cimento CP3 agora 3 variantes; Caçamba 4M novo grupo; Telha Galvalume e Prego Cabeça Dupla false positives corrigidos). `getItemSugestoes` normaliza+agrupa sugestões retornando nome canônico. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4160** — **COMPRAS: AUDITORIA DE ITENS — NORMALIZAÇÃO DE NOMES E AUTOCOMPLETE NA SC/OC.** 3 procedures: `auditarItens` (normalização romano→arábico+acento+parênteses, 10 grupos encontrados), `padronizarItens` (UPDATE em lote em OC+SC+Cotação), `getItemSugestoes` (autocomplete). Novo `ItemDescricaoInput` (dropdown histórico ao digitar ≥2 chars, propaga unidade). Aba "Itens" na Auditoria. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4160** — **COMPRAS: AUDITORIA DE ITENS — NORMALIZAÇÃO DE NOMES E AUTOCOMPLETE NA SC/OC.** 3 procedures: `auditarItens`, `padronizarItens`, `getItemSugestoes`. Novo `ItemDescricaoInput`. Aba "Itens" na Auditoria. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4159** — **COMPRAS: AUDITORIA DE FORNECEDORES — DUPLICATAS, VARIANTES DE NOME E MESCLAGEM.** 4 procedures + tela `/compras/auditoria-fornecedores`. ZERO DELETE · ZERO ALTER destrutivo.
 

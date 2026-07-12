@@ -7,14 +7,15 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AlertTriangle, CheckCircle2, RefreshCw, Merge, FileText,
-  ShoppingCart, CreditCard, ChevronDown, ChevronRight, Wrench, Package,
+  ShoppingCart, CreditCard, ChevronDown, ChevronRight, Wrench, Package, BookOpen,
 } from "lucide-react";
+import ItemCatalogo from "@/components/compras/ItemCatalogo";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from "@/components/ui/dialog";
 
-type Aba = "ocs" | "lancamentos" | "cadastro" | "itens";
+type Aba = "ocs" | "lancamentos" | "cadastro" | "itens" | "catalogo";
 
 export default function AuditoriaFornecedores() {
   const { user } = useAuth();
@@ -165,6 +166,7 @@ export default function AuditoriaFornecedores() {
           ["lancamentos", "Lançamentos Fin.", CreditCard, feIssues.length],
           ["cadastro", "Duplicatas Cadastro", FileText, dupIssues.length],
           ["itens", "Itens", Package, itemIssues.length],
+          ["catalogo", "Catálogo de Itens", BookOpen, 0],
         ] as [Aba, string, any, number][]).map(([tab, label, Icon, count]) => (
           <button
             key={tab}
@@ -588,6 +590,25 @@ export default function AuditoriaFornecedores() {
                 })}
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ─── ABA: Catálogo de Itens ─── */}
+      {aba === "catalogo" && (
+        <Card>
+          <CardHeader className="pb-2">
+            <div>
+              <CardTitle className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                Catálogo de Itens
+              </CardTitle>
+              <p className="text-xs text-slate-400 mt-1">
+                Todos os itens comprados agrupados por família de produto. Expanda uma família para ver as variantes e, em cada variante, as OCs por obra.
+              </p>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <ItemCatalogo companyId={companyId} />
           </CardContent>
         </Card>
       )}
