@@ -1342,35 +1342,65 @@ export async function lockEGerarNumeroSc(tx: any, companyId: number): Promise<st
 function _removeAcc(s: string) {
   return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
+// Palavras genéricas em parênteses que são apenas notas, não specs de produto
+const _GENERIC_NOTE_RE = /^\s*(normal|padrao|padrão|comum|geral|de\s+sempre|outros?|demais|variados?|diversos?|sem\s+marca)\s*$/i;
+// Palavras de embalagem/recipiente em parênteses — descrevem a embalagem, não o produto
+const _EMBALAGEM_RE = /\bSACOS?\s+DE\b|\bSACO\s+DE\b|\bVOLUME\s+DO\b|\bVOLUME\s+DA\b|\bBALDE\b|\bGALÃO\b|\bGALAO\b|\bFARDO\b/;
+
 export function normItemDesc(s: string): string {
   let n = _removeAcc(s.toUpperCase()).trim();
-  // 1. remove conteúdo entre parênteses (especificações técnicas) ANTES de expandir pontuação
-  n = n.replace(/\s*\([^)]*\)\s*/g, " ").trim();
+
+  // 1. tratamento seletivo de parênteses ANTES de expandir pontuação
+  n = n.replace(/\(([^)]*)\)/g, (_match, inner: string) => {
+    const innerT = inner.trim();
+    // Embalagem/recipiente → remove completamente
+    if (_EMBALAGEM_RE.test(innerT)) return " ";
+    // Nota genérica sem número → remove (ex: "(Normal)", "(de Sempre)")
+    if (!(/\d/.test(innerT)) && _GENERIC_NOTE_RE.test(innerT)) return " ";
+    // Spec de produto (dimensões, período, tipo) → incorpora como palavras
+    return " " + innerT + " ";
+  });
+  n = n.trim();
+
   // 2. normaliza símbolo ordinal/grau (não é diacrítico, não sai no NFD)
-  //    "Brita Nº 1" → "BRITA N 1" → depois "BRITA 1" pela regra Nº abaixo
   n = n.replace(/[º°]/g, " ");
-  // expande pontuação para espaços
+  // expande pontuação restante para espaços
   n = n.replace(/[\/\\\-_.,;:!?()\[\]{}"'`]/g, " ");
   n = n.replace(/\s+/g, " ").trim();
-  // remove "Nº" / "N°" / "N." como prefixo ordinal antes de número
-  //   "BRITA N  1" → "BRITA 1",  "PREGO N  17X27" → "PREGO 17X27"
+
+  // 3. remove "Nº" / "N°" como prefixo ordinal antes de número: "N 1" → "1"
   n = n.replace(/\bN\s+(?=\d)/g, "");
-  // 3. números romanos isolados
+
+  // 4. números romanos isolados (\b funciona pois agora há espaços em volta)
   const rm: Record<string, string> = {
     VIII:"8",VII:"7",VI:"6",IV:"4",IX:"9",XII:"12",XI:"11",X:"10",III:"3",II:"2",V:"5",
   };
   n = n.replace(/\b(VIII|VII|VI|IV|IX|XII|XI|X|III|II|V)\b/g, (m) => rm[m]);
-  // 4. tipo de cimento: CPIII→CP3, CPII→CP2 (colado sem espaço, fora do \b)
+
+  // 5. tipo de cimento: CPIII→CP3, CPII→CP2
+  //    cobre "CPIII" (colado) e "CP III" (com espaço, já virou "CP 3" pelo passo 4)
   n = n.replace(/CP\s*III/g, "CP3").replace(/CP\s*II\b/g, "CP2");
-  // 5. remove classe de resistência após tipo (CP3-E-32, CP3 E 32, CP5-E40)
+  // colapsa "CP 3" → "CP3" (caso em que III era isolado e foi convertido para "3" com espaço)
+  n = n.replace(/\bCP\s+(\d+)\b/g, "CP$1");
+
+  // 6. remove classe de resistência após tipo (CP3-E-32, CP3 E 32, CP5-E40)
   n = n.replace(/\b(CP\s*\d+)\s*[-–]?\s*E\s*[-–]?\s*\d+\b/g, "$1");
-  // 6. qualificadores redundantes de construção civil
+
+  // 7. normaliza tamanhos numéricos
+  //    "DE 4M" → "4M" (preposição antes de número: "Caçamba de 4M" = "Caçamba 4M")
+  n = n.replace(/\bDE\s+(\d)/g, "$1");
+  //    "4 M" → "4M" (colapsa número + espaço + unidade de medida)
+  n = n.replace(/(\d)\s+(M3|M2|M\b|KG|ML\b|LT\b|L\b|CM\b|MM\b)/g, "$1$2");
+
+  // 8. qualificadores redundantes de construção civil
   n = n.replace(/\bLAVADA\b/g, "");
   n = n.replace(/\bA GRANEL\b/g, "");
-  // "areia" sem granulometria = areia média (padrão de mercado)
+
+  // 9. "AREIA" sem granulometria = areia média (padrão de mercado)
   if (/^AREIA\b/.test(n) && !/\b(FINA|GROSSA|MEDIA)\b/.test(n)) {
     n = n.replace(/^AREIA\b/, "AREIA MEDIA");
   }
+
   n = n.replace(/\s+/g, " ").trim();
   return n;
 }
@@ -16625,6 +16655,7 @@ Responda APENAS com JSON válido, sem markdown, no formato:
     .query(async ({ input }) => {
       const { companyId, q } = input;
       const pat = `%${q}%`;
+      // Busca mais do que o necessário para poder agrupar por normItemDesc
       const r = await db.execute(sql`
         SELECT
           oi.descricao,
@@ -16636,8 +16667,25 @@ Responda APENAS com JSON válido, sem markdown, no formato:
           AND oi.descricao ILIKE ${pat}
         GROUP BY oi.descricao, oi.unidade
         ORDER BY COUNT(DISTINCT oi.ordem_id) DESC
-        LIMIT 12
+        LIMIT 60
       `);
-      return r.rows as Array<{ descricao: string; unidade: string; n_ocs: number }>;
+      // Agrupa por chave normalizada: para cada grupo, usa o nome mais frequente (canônico)
+      const groups = new Map<string, { descricao: string; unidade: string; n_ocs: number }>();
+      for (const row of r.rows as Array<{ descricao: string; unidade: string | null; n_ocs: number }>) {
+        const key = normItemDesc(row.descricao);
+        const existing = groups.get(key);
+        if (!existing || row.n_ocs > existing.n_ocs) {
+          groups.set(key, {
+            descricao: row.descricao,
+            unidade: row.unidade ?? "",
+            n_ocs: row.n_ocs,
+          });
+        } else if (existing) {
+          existing.n_ocs += row.n_ocs; // acumula contagem para ordenação
+        }
+      }
+      return Array.from(groups.values())
+        .sort((a, b) => b.n_ocs - a.n_ocs)
+        .slice(0, 12);
     }),
 });

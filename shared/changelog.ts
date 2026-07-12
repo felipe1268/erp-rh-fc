@@ -1,4 +1,36 @@
 /**
+ * Rev. 4161 — **COMPRAS: NORMALIZAÇÃO DE ITENS V2 — CIMENTO CP3 UNIFICADO + CAÇAMBA + REMOÇÃO SELETIVA DE PARÊNTESES.**
+ *
+ * CONTEXTO: após a Rev. 4160, análise completa do banco identificou falsos positivos (Telha Galvalume com
+ * comprimentos diferentes agrupadas indevidamente) e falsos negativos (Cimento Cp Iii não agrupava com CP3,
+ * Caçamba 4 M ≠ Caçamba de 4M ≠ Caçamba 4M permaneciam separadas).
+ *
+ * MUDANÇAS EM `normItemDesc` (`server/routers/compras.ts`):
+ * 1. Remoção seletiva de parênteses (era total, agora diferencia 3 categorias):
+ *    a) EMBALAGEM (Sacos de, Volume do, Balde, Galão, Fardo) → remove completamente;
+ *    b) Notas genéricas sem número (Normal, de Sempre, Comum) → remove;
+ *    c) Specs de produto (dimensões "3M Comprimento X 1M Largura", período, tipo "Cabeça Dupla") → incorpora
+ *       o conteúdo como palavras na chave de normalização, mantendo produtos com specs diferentes separados.
+ * 2. Colapso "CP 3" → "CP3" após substituição de romano: "Cimento Cp Iii" → romano III→3 → "CP 3" → "CP3" ✓
+ * 3. Preposição antes de número: "\bDE\s+(\d)" → "$1" — "Caçamba de 4M" = "Caçamba 4M" ✓
+ * 4. Colapso número+espaço+unidade: "4 M" → "4M", "23 Cm" → "23CM", "1 Kg" → "1KG" etc.
+ *
+ * RESULTADO da auditoria pós-correção (60002, FC ENGENHARIA):
+ * - Cimento CP3: 3 variantes unificadas (era 2) — R$90k
+ * - Caçamba 4M: novo grupo — R$4.7k
+ * - Telha Galvalume: false positive CORRIGIDO — tamanhos 3M/2M/1,60M ficam separados
+ * - Prego (Cabeça Dupla): false positive CORRIGIDO — tipo diferente fica separado
+ * - Cal Líquido (3L) ≠ Cal Líquido (Balde): ficam separados ✓
+ * - 21 grupos reais · R$170k consolidáveis
+ *
+ * `getItemSugestoes`: atualizado para buscar 60 registros brutos, agrupar por normItemDesc em JS e
+ * retornar o nome canônico (mais frequente) por grupo — autocomplete agora sugere "Cimento CP3" mesmo
+ * quando o histórico contém "Cimento Cpiii-e-32 (Sacos de 50 Kg)...".
+ *
+ * ZERO DELETE · ZERO ALTER DESTRUTIVO.
+ */
+
+/**
  * Rev. 4160 — **COMPRAS: AUDITORIA DE ITENS — NORMALIZAÇÃO DE NOMES E AUTOCOMPLETE NA SC/OC.**
  *
  * CONTEXTO: itens de compra são digitados com variações de acento, números romanos (CPIII) vs arábicos

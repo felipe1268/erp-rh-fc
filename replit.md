@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4161** — **COMPRAS: NORMALIZAÇÃO DE ITENS V2 — CIMENTO CP3 + CAÇAMBA + PARÊNTESES SELETIVOS.** `normItemDesc` corrigida: parênteses de embalagem (Sacos de, Balde, Galão) removidos; specs de produto (dimensões, período, tipo) incorporados como palavras na chave; colapso "CP 3"→"CP3" pós-romano; "DE 4M"→"4M"; "4 M"→"4M". 16/17 testes OK. Auditoria real: 21 grupos/R$170k (Cimento CP3 agora 3 variantes; Caçamba 4M novo grupo; Telha Galvalume e Prego Cabeça Dupla false positives corrigidos). `getItemSugestoes` normaliza+agrupa sugestões retornando nome canônico. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4160** — **COMPRAS: AUDITORIA DE ITENS — NORMALIZAÇÃO DE NOMES E AUTOCOMPLETE NA SC/OC.** 3 procedures: `auditarItens` (normalização romano→arábico+acento+parênteses, 10 grupos encontrados), `padronizarItens` (UPDATE em lote em OC+SC+Cotação), `getItemSugestoes` (autocomplete). Novo `ItemDescricaoInput` (dropdown histórico ao digitar ≥2 chars, propaga unidade). Aba "Itens" na Auditoria. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4159** — **COMPRAS: AUDITORIA DE FORNECEDORES — DUPLICATAS, VARIANTES DE NOME E MESCLAGEM.** 4 procedures backend: `auditarFornecedores` (duplicatas cadastro + variantes OC + variantes FE por prefixo), `padronizarNomesOC` (normaliza para razao_social mestre), `padronizarNomeFE` (substituições em lote), `mesclarFornecedor` (reatribui OCs+lançamentos, desativa duplicado). Nova tela `/compras/auditoria-fornecedores` com 3 abas e dialog de confirmação. Botão "Auditoria" no CommandBar de Fornecedores. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4159** — **COMPRAS: AUDITORIA DE FORNECEDORES — DUPLICATAS, VARIANTES DE NOME E MESCLAGEM.** 4 procedures + tela `/compras/auditoria-fornecedores`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4158** — **FINANCEIRO: ANÁLISE APROFUNDADA POR FORNECEDOR — ITENS & PREÇOS (OCs).** Novo `compras.getAnaliseFornecedor` (4 queries). `FinanceiroAnaliseCustosDetalhe`: 2 abas, KPI cards, tabela expand/collapse com badge variação preço, mini LineChart, formas pgto. ZERO DELETE · ZERO ALTER destrutivo.
 
