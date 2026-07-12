@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4178** — **COMPRAS/FINANCEIRO: REDESIGN COMPLETO DA ABA ANÁLISE — DASHBOARD RICO.** AnaliseDashPanel reescrito: KPI Strip (4 cards) + Donut ABC + Pie Formas Pgto + Cards Destaques clicáveis + Bar Gastos/Mês + Top 10 Produtos com barra clicável + Chips Obras + Grid Fragmentação. Sheet lateral de drill-down por produto: Header colorido, KPIs, Line Chart histórico de preços, lista OCs. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4177** — **COMPRAS/FINANCEIRO: ABA DEDICADA "ANÁLISE" NO DETALHE DE FORNECEDOR.** 3º tab "Análise" (badge "IA") ao lado de Lançamentos e Itens & Preços. Contém AnaliseDashPanel (3 colunas: Curva ABC | Destaques | Fragmentação) + Formas de Pagamento + Obras Atendidas. Tab Itens exibe apenas a tabela limpa. State `'lancamentos' | 'itens' | 'analise'`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4176** — **COMPRAS/FINANCEIRO: PAINEL ANÁLISE SEPARADO DA TABELA (FULL-WIDTH).** `AnaliseDashPanel` redesenhado: 3 colunas horizontais (Curva ABC | Destaques em grade 2×3 | Fragmentação) com cabeçalho colapsável e badge de alertas. Tabela full-width; Formas de Pgto + Obras em grid 2 col. ZERO DELETE · ZERO ALTER destrutivo.

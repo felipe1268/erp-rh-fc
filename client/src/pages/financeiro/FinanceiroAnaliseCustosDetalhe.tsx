@@ -1385,66 +1385,13 @@ export default function FinanceiroAnaliseCustosDetalhe() {
           );
           const { resumo, itens, formasPagamento } = analiseData;
           return (
-            <div className="space-y-4">
-              <AnaliseDashPanel itens={itens} totalGasto={resumo.totalGasto} />
-
-              {/* Formas de Pagamento + Obras Atendidas */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card className="border-0 shadow-sm">
-                  <CardHeader className="pb-2 pt-4 px-5">
-                    <CardTitle className="text-sm font-semibold text-gray-600 flex items-center gap-2">
-                      <CreditCard className="w-4 h-4" /> Formas de Pagamento
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="px-4 pb-4">
-                    {formasPagamento.length === 0 ? (
-                      <p className="text-xs text-gray-400 py-6 text-center">Sem dados de pagamento</p>
-                    ) : (
-                      <div className="space-y-2.5">
-                        {formasPagamento.map((fp: any, i: number) => (
-                          <div key={i} className="space-y-0.5">
-                            <div className="flex items-center justify-between">
-                              <div className="min-w-0">
-                                <span className="text-xs font-semibold text-gray-700 break-words">{fp.forma}</span>
-                                {fp.condicao && <span className="text-[10px] text-gray-400 ml-1.5">{fp.condicao}</span>}
-                              </div>
-                              <div className="text-right shrink-0 ml-2">
-                                <span className="text-xs font-bold text-gray-800 tabular-nums">{fp.pct}%</span>
-                                <span className="text-[10px] text-gray-400 ml-1">({fp.qtdOcs} OC{fp.qtdOcs !== 1 ? 's' : ''})</span>
-                              </div>
-                            </div>
-                            <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                              <div className="h-full rounded-full bg-indigo-400 transition-all" style={{ width: `${fp.pct}%` }} />
-                            </div>
-                            <p className="text-[10px] text-gray-400 tabular-nums">{formatBRL(fp.valorTotal)}</p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {resumo.obrasAtendidas.length > 0 ? (
-                  <Card className="border-0 shadow-sm">
-                    <CardHeader className="pb-2 pt-4 px-5">
-                      <CardTitle className="text-sm font-semibold text-gray-600 flex items-center gap-2">
-                        <MapPin className="w-4 h-4" /> Obras Atendidas
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="px-4 pb-4">
-                      <div className="space-y-1">
-                        {resumo.obrasAtendidas.map((ob: { id: number | null; nome: string }, i: number) => (
-                          <div key={i} className="flex items-center gap-1.5 text-xs text-gray-600 px-1 py-0.5">
-                            <MapPin className="w-3 h-3 shrink-0 text-gray-400" />
-                            <span className="break-words">{ob.nome}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ) : <div />}
-              </div>
-            </div>
+            <AnaliseDashPanel
+              itens={itens}
+              totalGasto={resumo.totalGasto}
+              formasPagamento={formasPagamento}
+              obrasAtendidas={resumo.obrasAtendidas}
+              qtdOcs={resumo.qtdOcs}
+            />
           );
         })()}
       </div>

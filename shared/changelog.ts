@@ -1,4 +1,33 @@
 /**
+ * Rev. 4178 - COMPRAS/FINANCEIRO: REDESIGN COMPLETO DA ABA ANÁLISE — DASHBOARD RICO COM GRÁFICOS.
+ *
+ * O QUE FOI FEITO:
+ * - AnaliseDashPanel.tsx completamente reescrito com layout expandido, gráficos Recharts e drill-down.
+ * - KPI Strip (4 cards): Total Gasto | Ordens de Compra | Obras Atendidas | Fragmentação.
+ * - Donut (PieChart) — Curva ABC com legenda de contagem por classe A/B/C.
+ * - Pie Chart — Formas de Pagamento (até 7 fatias com legenda e percentual).
+ * - Cards de Destaques clicáveis: Maior Gasto | Preço Mais Alto | Maior Variação | Mais Recorrente.
+ * - Bar Chart vertical — Evolução de Gastos por Mês (agregado das ocorrências de OC).
+ * - Lista Top 10 Produtos: barra horizontal colorida por classe, clicável p/ drill-down.
+ * - Chips de Obras Atendidas em tags arredondadas.
+ * - Card de Fragmentação com grid 2-col clicável p/ drill-down.
+ * - Sheet (Drawer) lateral de Drill-down por produto:
+ *     * Header colorido por classe ABC.
+ *     * KPIs: Total Gasto / Preço Min→Max / Variação.
+ *     * Line Chart — Histórico de Preços no tempo (por OC).
+ *     * Lista de OCs com data, obra, qtd, preço unitário, total, forma de pagamento.
+ *     * Alerta de fragmentação inline.
+ * - FinanceiroAnaliseCustosDetalhe: chamada do AnaliseDashPanel agora passa formasPagamento,
+ *   obrasAtendidas e qtdOcs; grid redundante de Formas/Obras removido.
+ *
+ * ARQUIVOS:
+ * - client/src/pages/financeiro/AnaliseDashPanel.tsx (reescrito)
+ * - client/src/pages/financeiro/FinanceiroAnaliseCustosDetalhe.tsx
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4177 - COMPRAS/FINANCEIRO: ABA DEDICADA "ANÁLISE" NO DETALHE DE FORNECEDOR.
  *
  * O QUE FOI FEITO:
