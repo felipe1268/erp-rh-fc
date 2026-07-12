@@ -1,4 +1,27 @@
 /**
+ * Rev. 4150 — **FROTA: PEDÁGIOS — CATEGORIA sem_parar CORRIGIDA EM LOTE + IMPORTADOR FIXADO.**
+ *
+ * CONTEXTO: o Dashboard de Pedágios exibia "Pedágio Físico R$8.458 · 932" vs "Sem Parar R$876 · 40"
+ * quando na verdade TODOS os pedágios da FC Engenharia passam pelo Sem Parar. A separação existia
+ * porque o importador de planilha Sem Parar classificava "PASSAGEM" como `categoria='pedagio'`
+ * (físico) — lógica incorreta, pois qualquer registro vindo de planilha Sem Parar é por definição
+ * eletrônico.
+ *
+ * DADOS (Neon, company_id=60002):
+ *   UPDATE fleet_toll_records SET categoria='sem_parar' WHERE categoria='pedagio' → 2558 linhas.
+ *
+ * IMPORTADOR (server/routers/frotas.ts — tipoUsoToCategoria):
+ *   - "passag"/"pedagio"/"pedágio" agora retorna 'sem_parar' (antes: 'pedagio').
+ *   - Fallback quando tipoUso vazio: 'sem_parar' (antes: 'pedagio').
+ *
+ * BÔNUS (mesma sessão): 317 registros de praca_pedagio sem sufixo (ex: "MOREIRA CESAR NORTE")
+ * foram unificados com os canônicos com sufixo "(Norte)"/"(Sul)"/(etc.), eliminando duplicatas
+ * nos gráficos de ranking por praça.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4149 — **FROTA: FILTRO MENSAL NOS 3 DASHBOARDS (Combustível, Manutenção, Pedágios).**
  *
  * CONTEXTO: os 3 dashboards de frota só tinham seletor de ano. Usuário pediu

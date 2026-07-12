@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4150** — **FROTA: PEDÁGIOS — CATEGORIA sem_parar CORRIGIDA EM LOTE + IMPORTADOR FIXADO.** 2558 registros `pedagio` → `sem_parar` (FC usa 100% Sem Parar); tipoUsoToCategoria corrigida; 317 praças duplicadas (sem sufixo vs "(Norte)"/"(Sul)") unificadas. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4149** — **FROTA: FILTRO MENSAL NOS 3 DASHBOARDS (Combustível, Manutenção, Pedágios).** Backend aceita `mes` opcional; white-card com "Ano todo" + Jan–Dez com badges de contagem; cores temáticas por tela; trocar ano reseta o mês. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4148** — **NFS-e: #30 VALOR LÍQUIDO CORRIGIDO (120.694,65 → 119.469,32).** Fórmula subtraía só IRRF, não retencao_csll; correção direta por id=929 alinhando ao DANFSe. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4148** — **NFS-e: #30 VALOR LÍQUIDO CORRIGIDO (120.694,65 → 119.469,32).** Fórmula subtraía só IRRF, não retencao_csll; correção direta por id=929 alinhando ao DANFSe. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4147** — **NFS-e: BATCH DANFSes #43–#61 — ISS RETIDO + VALOR LÍQUIDO CORRIGIDOS (17 NOTAS).** ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4144** — **NFS-e: BATCH GERAL — 571 NOTAS SIAP GEO, 7 COM FÓRMULA ANTIGA CORRIGIDAS.** ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4143** — **NFS-e: UPSERT NO UPLOAD ABRASF — XML CORRIGE NOTA EXISTENTE. BATCH CORRIGE #22–#28.** ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4141 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4143 e anteriores.
 
 ## User preferences
 

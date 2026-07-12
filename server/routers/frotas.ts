@@ -6571,7 +6571,8 @@ Sempre retorne JSON válido, sem markdown.`;
 
       const tipoUsoToCategoria = (tipo: string): string => {
         const t = tipo.toLowerCase().trim();
-        if (t.includes("passag") || t.includes("pedagio") || t.includes("pedágio")) return "pedagio";
+        // "PASSAGEM" numa planilha Sem Parar É Sem Parar — nunca físico
+        if (t.includes("passag") || t.includes("pedagio") || t.includes("pedágio")) return "sem_parar";
         if (t.includes("estacion")) return "estacionamento";
         if (t.includes("recarga") || t.includes("tag")) return "recarga_tag";
         return "sem_parar";
@@ -6623,7 +6624,7 @@ Sempre retorne JSON válido, sem markdown.`;
 
         const descricao = colMap.descricao !== undefined ? String(row[colMap.descricao] || "").trim() : "";
         const tipoUso = colMap.tipoUso !== undefined ? String(row[colMap.tipoUso] || "").trim() : "";
-        const categoria = tipoUso ? tipoUsoToCategoria(tipoUso) : "pedagio";
+        const categoria = tipoUso ? tipoUsoToCategoria(tipoUso) : "sem_parar";
         const horario = colMap.horario !== undefined ? String(row[colMap.horario] || "").trim() : "";
         const fatura = colMap.fatura !== undefined ? String(row[colMap.fatura] || "").trim() : "";
         const sentido = colMap.sentido !== undefined ? String(row[colMap.sentido] || "").trim() : "";
