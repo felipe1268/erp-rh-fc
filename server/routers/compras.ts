@@ -1345,7 +1345,7 @@ function _removeAcc(s: string) {
 // Palavras genéricas em parênteses que são apenas notas, não specs de produto
 const _GENERIC_NOTE_RE = /^\s*(normal|padrao|padrão|comum|geral|de\s+sempre|outros?|demais|variados?|diversos?|sem\s+marca)\s*$/i;
 // Palavras de embalagem/recipiente em parênteses — descrevem a embalagem, não o produto
-const _EMBALAGEM_RE = /\bSACOS?\s+DE\b|\bSACO\s+DE\b|\bVOLUME\s+DO\b|\bVOLUME\s+DA\b|\bBALDE\b|\bGALÃO\b|\bGALAO\b|\bFARDO\b/;
+const _EMBALAGEM_RE = /\bSACOS?\s+DE\b|\bSACO\s+DE\b|\bSACO\b|\bVOLUME\s+DO\b|\bVOLUME\s+DA\b|\bBALDE\b|\bGALÃO\b|\bGALAO\b|\bFARDO\b|\bCAMINHAO\b|\bCAMINHÃO\b|\bCARRETA\b|\bTRUCK\b/;
 
 export function normItemDesc(s: string): string {
   let n = _removeAcc(s.toUpperCase()).trim();
@@ -1390,9 +1390,8 @@ export function normItemDesc(s: string): string {
   //    "4 M" → "4M" (colapsa número + espaço + unidade de medida)
   n = n.replace(/(\d)\s+(M3|M2|M\b|KG|ML\b|LT\b|L\b|CM\b|MM\b)/g, "$1$2");
   // Remove preposições de ligação que não alteram a identidade do produto:
-  //   "Lapis de Carpinteiro" → "Lapis Carpinteiro"  (antes só cobria DE+dígito)
-  //   "Tubo de Esgoto 100MM" → "Tubo Esgoto 100MM"  (unifica "Tubo de Esgoto" ≡ "Tubo Esgoto")
-  //   "Caçamba de 4M" → "Caçamba 4M"                (cobre o caso anterior de \bDE\s+\d)
+  //   "Lapis de Carpinteiro" → "Lapis Carpinteiro"
+  //   "Tubo de Esgoto 100MM" → "Tubo Esgoto 100MM"
   n = n.replace(/\b(DE|DA|DO|DAS|DOS)\b\s*/g, " ");
 
   // 8. qualificadores redundantes de construção civil
@@ -1403,6 +1402,21 @@ export function normItemDesc(s: string): string {
   if (/^AREIA\b/.test(n) && !/\b(FINA|GROSSA|MEDIA)\b/.test(n)) {
     n = n.replace(/^AREIA\b/, "AREIA MEDIA");
   }
+
+  // 10. Remove referências de pedido/protocolo no final da descrição
+  //     Ex: "Viagem de Entulho 10M³ - Pedido 3263 (12/06/2026)" → "Viagem Entulho 10M3"
+  //     (a pontuação já foi removida no step 2; trata o padrão já expandido)
+  n = n.replace(/\bPEDIDO\s+\d+\b.*/g, "").trim();
+  // Remove datas soltas no final: "... 12 06 2026" ou "periodo DD MM AAAA"
+  n = n.replace(/\s+\d{2}\s+\d{2}\s+\d{4}\s*$/, "").trim();
+  // Remove "PERIODO" + conteúdo de data/período no final
+  n = n.replace(/\bPERIODO\b.*/g, "").trim();
+
+  // 11. Normaliza plurais de itens de serviço para unificar família:
+  //     VIAGENS → VIAGEM (senão cria família VIAGENS ≠ VIAGEM)
+  n = n.replace(/^VIAGENS\b/, "VIAGEM");
+  // Generalização: palavras terminadas em AGENS → AGEM (serviços de transporte)
+  n = n.replace(/\bVIAGENS\b/g, "VIAGEM");
 
   n = n.replace(/\s+/g, " ").trim();
   return n;
@@ -16664,6 +16678,84 @@ Responda APENAS com JSON válido, sem markdown, no formato:
         updated += Number((r3 as any).rowCount ?? 0);
       }
       return { updated };
+    }),
+
+  // Auto-normalização em lote: unifica descrições que mapeiam para o mesmo normKey
+  autoNormalizarItens: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .mutation(async ({ input }) => {
+      const { companyId } = input;
+
+      // 1. Busca todas as descrições distintas com contagem de OCs
+      const r = await db.execute(sql`
+        SELECT oi.descricao, COUNT(DISTINCT oi.ordem_id)::int AS n_ocs
+        FROM compras_ordens_itens oi
+        JOIN compras_ordens co ON co.id = oi.ordem_id AND co.company_id = ${companyId}
+        WHERE co.status NOT IN ('cancelada','rascunho')
+          AND oi.descricao IS NOT NULL AND TRIM(oi.descricao) <> ''
+        GROUP BY oi.descricao
+      `);
+
+      type Row = { descricao: string; n_ocs: number };
+      const rows = r.rows as Row[];
+
+      // 2. Agrupa por normItemDesc → elege canônica (maior n_ocs; em empate, a mais longa/descritiva)
+      const groups = new Map<string, { canonical: string; nOcs: number; alts: string[] }>();
+      for (const row of rows) {
+        const key = normItemDesc(row.descricao);
+        if (!key) continue;
+        const existing = groups.get(key);
+        if (!existing) {
+          groups.set(key, { canonical: row.descricao, nOcs: row.n_ocs, alts: [] });
+        } else {
+          // Escolhe canônica: maior n_ocs; em empate, descrição mais longa (mais informativa)
+          if (row.n_ocs > existing.nOcs ||
+             (row.n_ocs === existing.nOcs && row.descricao.length > existing.canonical.length)) {
+            existing.alts.push(existing.canonical);
+            existing.canonical = row.descricao;
+            existing.nOcs = row.n_ocs;
+          } else {
+            existing.alts.push(row.descricao);
+          }
+        }
+      }
+
+      // 3. Gera lista de substituições (só grupos com alternativas)
+      const substituicoes: Array<{ de: string; para: string }> = [];
+      for (const { canonical, alts } of groups.values()) {
+        for (const alt of alts) {
+          if (alt !== canonical) substituicoes.push({ de: alt, para: canonical });
+        }
+      }
+
+      if (substituicoes.length === 0) return { updated: 0, groups: 0, substituicoes: 0 };
+
+      // 4. Aplica substituições em todas as tabelas
+      let updated = 0;
+      for (const { de, para } of substituicoes) {
+        const r1 = await db.execute(sql`
+          UPDATE compras_ordens_itens SET descricao = ${para}
+          WHERE descricao = ${de}
+            AND ordem_id IN (SELECT id FROM compras_ordens WHERE company_id = ${companyId})
+        `);
+        updated += Number((r1 as any).rowCount ?? 0);
+
+        const r2 = await db.execute(sql`
+          UPDATE compras_solicitacoes_itens SET descricao = ${para}
+          WHERE descricao = ${de}
+            AND solicitacao_id IN (SELECT id FROM compras_solicitacoes WHERE company_id = ${companyId})
+        `);
+        updated += Number((r2 as any).rowCount ?? 0);
+
+        const r3 = await db.execute(sql`
+          UPDATE compras_cotacoes_itens SET descricao = ${para}
+          WHERE descricao = ${de}
+            AND cotacao_id IN (SELECT id FROM compras_cotacoes WHERE company_id = ${companyId})
+        `);
+        updated += Number((r3 as any).rowCount ?? 0);
+      }
+
+      return { updated, groups: groups.size, substituicoes: substituicoes.length };
     }),
 
   // Catálogo hierárquico: família → variantes → OC details

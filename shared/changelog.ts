@@ -1,4 +1,32 @@
 /**
+ * Rev. 4165 — **COMPRAS: NORMALIZAÇÃO DE UNIDADES + AUTO-PADRONIZAÇÃO DE ITENS EM LOTE.**
+ *
+ * CONTEXTO: catálogo de compras acumulou erros de unidade (cimento em kg/m², areia em m/un/vb/m²,
+ * chapisco em un, conduíte em un) e variações de descrição que impedem agrupamento correto por família.
+ *
+ * ENTREGAS:
+ * 1. **[UnitFix Rev.4165]** — bloco de startup em `server/_core/index.ts` (t=25s) corrige
+ *    idempotentemente as unidades erradas diretamente no banco:
+ *    - id 507 (Cimento CP-II-Z-32): kg → sc
+ *    - ids 1773/723/1861/786/3635/3874/4352 (areias diversas): m/un/vb/m² → m³
+ *    - ids 794/1033/322/506 (chapisco/graute/argamassa): un → sc
+ *    - id 436 (conduíte/eletroduto): un → m
+ *
+ * 2. **normItemDesc melhorado** (`server/routers/compras.ts`):
+ *    - `_EMBALAGEM_RE` expandido: SACO sozinho, CAMINHAO/CAMINHÃO, CARRETA, TRUCK
+ *    - step 10: remove sufixos "PEDIDO NNNN / DD/MM/AAAA"
+ *    - step 11: normaliza VIAGENS → VIAGEM (plural → singular)
+ *
+ * 3. **autoNormalizarItens** — nova procedure tRPC que agrupa todas as descrições pelo normKey,
+ *    elege a canônica (maior nº de OCs; empate → descrição mais longa) e propaga para
+ *    compras_ordens_itens + compras_solicitacoes_itens + compras_cotacoes_itens.
+ *    Chamável diretamente no código, sem UI de botão.
+ *
+ * ARQUIVOS: server/_core/index.ts, server/routers/compras.ts, shared/version.ts
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4164 — **COMPRAS: SC — SUGESTÃO DE CONVERSÃO DE UNIDADE (Opção B: alerta + botão "Converter").**
  *
  * CONTEXTO: o orçamento usa kg para cimento, a SC herda kg, a OC fica kg — misturando

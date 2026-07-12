@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4165** — **COMPRAS: NORMALIZAÇÃO DE UNIDADES + AUTO-PADRONIZAÇÃO DE ITENS EM LOTE.** Bloco `[UnitFix Rev.4165]` no startup corrige idempotentemente unidades erradas no Neon (cimento kg→sc, areias →m³, chapisco/graute →sc, conduíte →m). `normItemDesc` expandido: SACO sozinho, CAMINHAO/CARRETA/TRUCK, remove sufixos "PEDIDO NNNN/data", VIAGENS→VIAGEM. Nova procedure `autoNormalizarItens` que elege descrição canônica por normKey e propaga para OCs/SCs/cotações. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4164** — **COMPRAS: SC — SUGESTÃO DE CONVERSÃO DE UNIDADE (Opção B: alerta + botão "Converter").** Quando SC tem item em `kg` mas padrão histórico de compra é `sc` (ou outra embalagem), aparece chip roxo "Padrão de compra: X sc — Converter" nos formulários de item. Ao clicar, converte `unidade` e `quantidade` automaticamente. Usa `getConversaoComercial` (cache+IA, já existente). Chip adicionado em `renderInsumoRow` e na seção de itens avulsos. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4163** — **COMPRAS: CATÁLOGO — AUDITORIA REAL 1753 DESCRIÇÕES → CORREÇÃO ALGORITMO DE GRUPOS.** Auditoria item-a-item contra Neon revelou: FAM=TIGRE acumulava 60 produtos/R$37k (marca no lugar de tipo); "Lapis de Carpinteiro"≠"Lapis Carpinteiro" (preposição DE criava chave falsa); regra `\bDE\s+(\d)` só cobria DE antes de dígito. Correções: (1) `normItemDesc` step 7: `\b(DE|DA|DO|DAS|DOS)\b\s*`→" " (remove todas as preposições de ligação); (2) `getItemFamilia`: `_BRAND_FIRST` Set (TIGRE, STECK, AMANCO, CIPLA…) — quando marca no 1º token, usa 2º como família. Resultado: 507 famílias (era 517), TUBO absorveu todos os tubos Tigre+genéricos. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4163** — **COMPRAS: CATÁLOGO — AUDITORIA REAL 1753 DESCRIÇÕES → CORREÇÃO ALGORITMO DE GRUPOS.** FAM=TIGRE fix; remoção de preposições DE/DA/DO/DAS/DOS; `_BRAND_FIRST` Set. 507 famílias. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4162** — **COMPRAS: CATÁLOGO DE ITENS — VISÃO HIERÁRQUICA FAMÍLIA → VARIANTE → OCs POR OBRA.** `getItemFamilia` extrai 1ª palavra significativa; `getItensFamilias` agrupa; `getItemOcDetalhes` lazy-load OCs. Novo `ItemCatalogo.tsx` (3 níveis, search, KPIs). ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4159** — **COMPRAS: AUDITORIA DE FORNECEDORES — DUPLICATAS, VARIANTES DE NOME E MESCLAGEM.** 4 procedures + tela `/compras/auditoria-fornecedores`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4158** — **FINANCEIRO: ANÁLISE APROFUNDADA POR FORNECEDOR — ITENS & PREÇOS (OCs).** Novo `compras.getAnaliseFornecedor` (4 queries). `FinanceiroAnaliseCustosDetalhe`: 2 abas, KPI cards, tabela expand/collapse com badge variação preço, mini LineChart, formas pgto. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4155** — **FROTA: NOVA VIAGEM — FIXES: fleet_trips COLUNAS FALTANDO + DIRECTIONS API DO BROWSER.** Loop ALTER TABLE 17 colunas; getGoogleMapsKey procedure. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4151** — **FROTA: CONTROLE DE VIAGENS — MÓDULO COMPLETO.** 2 tabelas novas (`fleet_trips`, `fleet_trip_expenses`); 10 procedures tRPC; fluxo pendente→autorizada→em_andamento→concluída; km inicial/final com foto; despesas + reembolso PIX/TED. ZERO DELETE · ZERO ALTER destrutivo.
 

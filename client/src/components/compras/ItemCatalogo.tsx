@@ -62,7 +62,6 @@ export default function ItemCatalogo({ companyId }: Props) {
   const [expandedFamilias, setExpandedFamilias] = useState<Set<string>>(new Set());
   const [expandedVariantes, setExpandedVariantes] = useState<Set<string>>(new Set());
   const [expandedDescs, setExpandedDescs] = useState<Set<string>>(new Set());
-
   const q = trpc.compras.getItensFamilias.useQuery(
     { companyId },
     { enabled: companyId > 0, staleTime: 120_000 }
@@ -125,7 +124,7 @@ export default function ItemCatalogo({ companyId }: Props) {
             onChange={e => setBusca(e.target.value)}
           />
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap items-center">
           <span className="text-xs bg-slate-100 dark:bg-slate-800 rounded px-2 py-1 text-slate-600 dark:text-slate-300">
             <strong>{totalFamilias}</strong> famílias · <strong>{totalItens}</strong> produtos
           </span>

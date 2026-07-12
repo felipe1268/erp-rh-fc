@@ -6937,6 +6937,32 @@ REGRAS DE EXTRAÇÃO:
       import("../routers/avisoPrevioFerias").then(m => m.startFeriasAutoConcludeJob()).catch(e => console.error("[FeriasAutoConclude] Falha ao iniciar:", e))
     );
 
+    // t=25s — UnitFix Rev.4165: corrige unidades erradas em compras_ordens_itens
+    // IDs mapeados item-a-item: cimento m²→sc, areia m/un/vb/m²→m³, chapisco un→sc, conduíte un→m
+    delay(25_000).then(async () => {
+      try {
+        const fixes: Array<{ ids: number[]; unit: string; label: string }> = [
+          { ids: [507],                           unit: "sc",  label: "Cimento Cp3 m²→sc" },
+          { ids: [1773, 723, 1861, 786, 3635, 3874, 4352], unit: "m³", label: "Areia (m/un/vb/m²)→m³" },
+          { ids: [794, 1033, 322, 506],            unit: "sc",  label: "Chapisco un→sc" },
+          { ids: [436],                            unit: "m",   label: "Conduíte un→m" },
+        ];
+        let total = 0;
+        for (const f of fixes) {
+          const r = await db.execute(
+            sql`UPDATE compras_ordens_itens SET unidade = ${f.unit} WHERE id = ANY(${f.ids}::int[])`
+          );
+          const n = Number((r as any).rowCount ?? 0);
+          if (n > 0) console.log(`[UnitFix] ${f.label}: ${n} linha(s)`);
+          total += n;
+        }
+        if (total > 0) console.log(`[UnitFix] Rev.4165 concluído — ${total} linha(s) corrigida(s).`);
+        else console.log("[UnitFix] Rev.4165 — nenhuma linha a corrigir (já aplicado).");
+      } catch (e: any) {
+        console.error("[UnitFix] Erro:", e?.message ?? e);
+      }
+    });
+
     // t=30s — Backup (só agenda cron para 03h)
     delay(30_000).then(() =>
       import("../services/backupService").then(m => m.startBackupJob()).catch(e => console.error("[Backup] Falha ao iniciar job:", e))
