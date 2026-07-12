@@ -1,4 +1,22 @@
 /**
+ * Rev. 4169 — **COMPRAS/FINANCEIRO: FILTRO DE OBRA SINCRONIZA CARDS FINANCEIROS.**
+ *
+ * CONTEXTO: Rev. 4168 adicionou filtro de obra na aba "Itens & Preços", mas os cards
+ * financeiros do topo (Custo do recorte, Pago, Em aberto, Vencido, Lançamentos)
+ * continuavam mostrando o total de todas as obras. Usuário pediu que esses cards
+ * também reflitam a obra selecionada.
+ *
+ * SOLUÇÃO: `rows` useMemo em `FinanceiroAnaliseCustosDetalhe.tsx` agora inclui
+ * `obraIdFiltro` como dependência e filtra `r.obraId === obraIdFiltro` quando o
+ * filtro está ativo. Como `kpis` deriva de `rows`, todos os cards do topo e a
+ * tabela da aba "Lançamentos Financeiros" atualizam automaticamente.
+ * Nenhuma mudança de backend necessária — entradas financeiras já carregam `obraId`.
+ *
+ * ARQUIVOS: client/src/pages/financeiro/FinanceiroAnaliseCustosDetalhe.tsx
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4168 — **COMPRAS/FINANCEIRO: FILTRO DE OBRA NA ANÁLISE DE FORNECEDOR.**
  *
  * CONTEXTO: tela "Análise de Fornecedor" (aba Itens & Preços) exibia a análise

@@ -275,8 +275,12 @@ export default function FinanceiroAnaliseCustosDetalhe() {
     }
     base = aplicaFiltro(base, tipo, valor);
     for (const f of extra) base = aplicaFiltro(base, f.t, f.v);
+    // Filtro de obra (sincronizado com o seletor da aba Itens & Preços)
+    if (obraIdFiltro !== null) {
+      base = base.filter((r) => Number(r.obraId) === obraIdFiltro);
+    }
     return base;
-  }, [rowsAll, tipo, valor, mes, extra]);
+  }, [rowsAll, tipo, valor, mes, extra, obraIdFiltro]);
 
   const kpis = useMemo(() => {
     let total = 0, pago = 0, aberto = 0, vencido = 0, qtdVencido = 0;
