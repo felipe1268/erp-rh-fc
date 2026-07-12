@@ -269,6 +269,17 @@ export default function ScorecardTab({ proj }: { proj: any }) {
     return <div className="flex items-center justify-center h-64"><Loader2 className="w-8 h-8 animate-spin text-gray-400" /></div>;
   }
 
+  if (score.isError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-2 text-center px-4">
+        <AlertTriangle className="w-8 h-8 text-amber-500" />
+        <p className="text-sm font-medium text-gray-700">Erro ao carregar o Scorecard</p>
+        <p className="text-xs text-gray-400 break-all">{(score.error as any)?.message ?? "Erro desconhecido"}</p>
+        <Button size="sm" variant="outline" className="mt-2" onClick={refetch}><RefreshCw className="w-3.5 h-3.5 mr-1" />Tentar novamente</Button>
+      </div>
+    );
+  }
+
   const data = score.data;
   if (!data) {
     return <div className="flex items-center justify-center h-64 text-gray-400 text-sm">Sem dados disponíveis.</div>;

@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { sql } from "drizzle-orm";
+import { sql, eq, and, isNull } from "drizzle-orm";
+import { accidents } from "../../drizzle/schema";
 
 function clamp(v: number, lo = 0, hi = 100): number {
   return Math.max(lo, Math.min(hi, v));
@@ -96,38 +97,48 @@ export const scorecardRouter = router({
       if (!db) return null;
       const { companyId, obraId } = input;
 
+      // Drizzle ORM para accidents (colunas camelCase sem mapeamento explícito)
+      const acidentesRows = await db
+        .select({
+          gravidade:        accidents.gravidade,
+          diasAfastamento:  accidents.diasAfastamento,
+          dataAcidente:     accidents.dataAcidente,
+        })
+        .from(accidents)
+        .where(and(eq(accidents.companyId, companyId), eq(accidents.obraId, obraId), isNull(accidents.deletedAt)))
+        .catch(() => [] as any[]);
+
+      // Sub-queries restantes com try/catch individualmente para resiliência
+      const safeExec = async (q: Promise<any>) => {
+        try { const r = await q; return r?.rows ?? []; }
+        catch (e: any) { console.warn("[Scorecard] sub-query falhou:", e?.message ?? e); return []; }
+      };
+
       const [
-        acidentes,
-        ddsSessoes,
-        warningsTerceiros,
-        warningsProps,
-        refisRows,
-        emergRow,
-        ferramentasPerdidas,
-        retrabalhos,
-        avaliacoes,
-        receitaReal,
-        custoReal,
-        configRows,
+        ddsSessoesRows,
+        warningsTerceirosRows,
+        warningsPropsRows,
+        refisRowsData,
+        emergRowData,
+        ferramentasPerdidasRows,
+        retrabalhosRows,
+        avaliacoesRows,
+        receitaRealRows,
+        custoRealRows,
+        configRowsData,
       ] = await Promise.all([
-        db.execute(sql`
-          SELECT gravidade, COALESCE(dias_afastamento, 0)::int AS dias_afastamento, data_acidente
-          FROM accidents
-          WHERE company_id = ${companyId} AND obra_id = ${obraId}
-          ORDER BY data_acidente DESC
-        `),
-        db.execute(sql`
+        safeExec(db.execute(sql`
           SELECT id, data FROM dds_sessoes
           WHERE company_id = ${companyId} AND obra_id = ${obraId}
           AND status != 'cancelada' AND deleted_at IS NULL
-        `),
-        db.execute(sql`
+        `)),
+        safeExec(db.execute(sql`
           SELECT tipo_advertencia, data_ocorrencia FROM warnings_terceiros
           WHERE company_id = ${companyId} AND obra_id = ${obraId}
           AND deleted_at IS NULL
           ORDER BY data_ocorrencia DESC
-        `),
-        db.execute(sql`
+        `)),
+        safeExec(db.execute(sql`
           SELECT w.tipo_advertencia, w.data_ocorrencia
           FROM warnings w
           WHERE w.company_id = ${companyId}
@@ -137,8 +148,8 @@ export const scorecardRouter = router({
             WHERE obra_id = ${obraId} AND company_id = ${companyId}
           )
           ORDER BY w.data_ocorrencia DESC
-        `),
-        db.execute(sql`
+        `)),
+        safeExec(db.execute(sql`
           SELECT r.spi, r.cpi, r.avanco_realizado, r.avanco_previsto, r.semana
           FROM planejamento_refis r
           JOIN planejamento_projetos p ON p.id = r.projeto_id
@@ -146,52 +157,68 @@ export const scorecardRouter = router({
           AND r.status = 'emitido'
           ORDER BY r.semana DESC
           LIMIT 5
-        `),
-        db.execute(sql`
+        `)),
+        safeExec(db.execute(sql`
           SELECT
             COUNT(co.id)::int AS total_emergenciais,
-            (SELECT COUNT(*)::int FROM compras_ordens WHERE obra_id = ${obraId} AND company_id = ${companyId} AND status NOT IN ('cancelada')) AS total_ocs
+            (SELECT COUNT(*)::int FROM compras_ordens
+             WHERE obra_id = ${obraId} AND company_id = ${companyId}
+             AND status NOT IN ('cancelada')) AS total_ocs
           FROM compras_ordens co
           JOIN purchase_requests pr ON pr.id = co.solicitacao_id
           WHERE co.obra_id = ${obraId} AND co.company_id = ${companyId}
           AND pr.emergencial = 1 AND co.status NOT IN ('cancelada')
-        `),
-        db.execute(sql`
+        `)),
+        safeExec(db.execute(sql`
           SELECT id, item_nome, funcionario_nome, data_emprestimo
           FROM warehouse_loans
           WHERE company_id = ${companyId} AND obra_id = ${obraId} AND status = 'perdido'
           ORDER BY data_emprestimo DESC
-        `),
-        db.execute(sql`
+        `)),
+        safeExec(db.execute(sql`
           SELECT id, data_ocorrencia, servico_afetado, custo_estimado, registrado_por_nome
           FROM obra_retrabalho
           WHERE company_id = ${companyId} AND obra_id = ${obraId} AND excluido_em IS NULL
           ORDER BY data_ocorrencia DESC
-        `),
-        db.execute(sql`
+        `)),
+        safeExec(db.execute(sql`
           SELECT nota_geral, nota_qualidade, nota_prazo, nota_gestor
           FROM cliente_avaliacoes
           WHERE company_id = ${companyId} AND obra_id = ${obraId}
           AND cancelled_at IS NULL
           ORDER BY id DESC LIMIT 10
-        `),
-        db.execute(sql`
+        `)),
+        safeExec(db.execute(sql`
           SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)), 0)::numeric AS total
           FROM financial_entries
           WHERE company_id = ${companyId} AND obra_id = ${obraId}
           AND natureza = 'receita' AND status IN ('pago','recebido','liquidado','baixado')
-        `),
-        db.execute(sql`
+        `)),
+        safeExec(db.execute(sql`
           SELECT COALESCE(SUM(COALESCE(valor_realizado, valor_previsto)), 0)::numeric AS total
           FROM financial_entries
           WHERE company_id = ${companyId} AND obra_id = ${obraId}
           AND natureza = 'despesa' AND status IN ('pago','pago_parcial','liquidado','baixado')
-        `),
-        db.execute(sql`
+        `)),
+        safeExec(db.execute(sql`
           SELECT * FROM obra_scorecard_config
           WHERE company_id = ${companyId} AND obra_id = ${obraId} LIMIT 1
-        `),
+        `)),
       ]);
+
+      // Normalizar para o formato usado pelo resto da função
+      const acidentes       = { rows: acidentesRows.map((a: any) => ({ gravidade: a.gravidade, dias_afastamento: a.diasAfastamento ?? 0, data_acidente: a.dataAcidente })) };
+      const ddsSessoes      = { rows: ddsSessoesRows };
+      const warningsTerceiros = { rows: warningsTerceirosRows };
+      const warningsProps   = { rows: warningsPropsRows };
+      const refisRows       = { rows: refisRowsData };
+      const emergRow        = { rows: emergRowData };
+      const ferramentasPerdidas = { rows: ferramentasPerdidasRows };
+      const retrabalhos     = { rows: retrabalhosRows };
+      const avaliacoes      = { rows: avaliacoesRows };
+      const receitaReal     = { rows: receitaRealRows };
+      const custoReal       = { rows: custoRealRows };
+      const configRows      = { rows: configRowsData };
 
       const config = (configRows.rows[0] as any) ?? {
         bonus_tipo: "percentual_lucro",
