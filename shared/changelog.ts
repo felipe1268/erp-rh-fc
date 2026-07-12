@@ -1,4 +1,19 @@
 /**
+ * Rev. 4157 — **FROTA: NOVA VIAGEM — FIX: fleet_trips.data NOT NULL SEM DEFAULT (coluna legada).**
+ *
+ * CONTEXTO: após Rev. 4156 adicionar todas as colunas core (status, origem, destino…), o INSERT
+ * passou a falhar com "null value in column 'data' violates not-null constraint". A tabela foi
+ * criada originalmente (antes de Rev. 4151) com uma coluna `data DATE NOT NULL` sem DEFAULT —
+ * coluna essa que não existe no CREATE TABLE atual nem no loop ALTER TABLE de Rev. 4156.
+ *
+ * MUDANÇA: `ALTER TABLE fleet_trips ALTER COLUMN "data" SET DEFAULT CURRENT_DATE` adicionado
+ * como PRIMEIRO statement do loop em ensureFleetTables (frotas.ts) e no bloco SyncSchema+ (index.ts).
+ * O SET DEFAULT é idempotente: se a coluna não existir, o catch engole silenciosamente.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4156 — **FROTA: NOVA VIAGEM — FIX: "ERRO AO CALCULAR ROTA" → GEOCODING + HAVERSINE FALLBACK.**
  *
  * CONTEXTO: a abordagem de Rev. 4155 de chamar a Directions API via fetch() do browser causava erro

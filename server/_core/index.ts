@@ -5090,10 +5090,11 @@ REGRAS DE EXTRAÇÃO:
           `);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.4093 sped_configs:`, e?.message || e); }
 
-        // Rev. 4156 — fleet_trips: TODAS as colunas (core + extras) via ADD COLUMN IF NOT EXISTS
-        // CREATE TABLE IF NOT EXISTS é no-op se a tabela já existia com schema diferente (ex: só id).
-        // Colunas NOT NULL do schema original ficam sem NOT NULL aqui (INSERT sempre fornece o valor).
+        // Rev. 4157 — fleet_trips: coluna legada "data" (NOT NULL sem DEFAULT) ganha SET DEFAULT CURRENT_DATE
+        // para que INSERT sem ela não viole a constraint. Também garante todas as colunas core + extras.
         try {
+          // Primeiro: corrige constraint da coluna legada "data" (SET DEFAULT é idempotente)
+          try { await db.execute(sql.raw(`ALTER TABLE fleet_trips ALTER COLUMN "data" SET DEFAULT CURRENT_DATE`)); } catch { /* coluna não existe ou já tem default */ }
           const ftCols: string[] = [
             "vehicle_id INTEGER",
             "placa VARCHAR(20)",
@@ -5124,7 +5125,7 @@ REGRAS DE EXTRAÇÃO:
               await db.execute(sql.raw(`ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS ${colDef}`));
             } catch { /* coluna já existe */ }
           }
-          console.log("[SyncSchema+] Rev. 4156: TODAS as colunas fleet_trips garantidas (status/origem/destino/motivo/criado_em incluídas)");
+          console.log("[SyncSchema+] Rev. 4157: fleet_trips garantida (data DEFAULT CURRENT_DATE + todas as colunas core/extras)");
         } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4156 fleet_trips cols:", e?.message || e); }
 
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }

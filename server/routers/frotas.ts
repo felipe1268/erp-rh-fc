@@ -472,7 +472,9 @@ async function ensureFleetTables() {
   // Rev. 4156 — garante TODAS as colunas de fleet_trips (CREATE TABLE IF NOT EXISTS é no-op em tabela existente)
   // Incluindo colunas CORE (status, origem, destino, motivo, criado_em, atualizado_em) que faltavam no loop anterior.
   // Colunas com NOT NULL no schema original ficam sem NOT NULL no ALTER (idempotente; INSERT sempre fornece o valor).
+  // Rev. 4157 — coluna legada "data" (do schema anterior) ganha DEFAULT para que INSERT sem ela não quebre.
   for (const stmt of [
+    `ALTER TABLE fleet_trips ALTER COLUMN "data" SET DEFAULT CURRENT_DATE`,
     `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS vehicle_id INTEGER`,
     `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS placa VARCHAR(20)`,
     `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS motorista_nome VARCHAR(255)`,
@@ -499,7 +501,7 @@ async function ensureFleetTables() {
   ]) {
     try { await db.execute(sql.raw(stmt)); } catch { /* já existe */ }
   }
-  console.log("[ensureFleetTables] Rev. 4156: TODAS as colunas fleet_trips garantidas (status/origem/destino/motivo/criado_em incluídas)");
+  console.log("[ensureFleetTables] Rev. 4157: fleet_trips garantida (data DEFAULT + todas as colunas core/extras)");
 
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS fleet_trip_expenses (
@@ -7814,17 +7816,18 @@ Sempre retorne JSON válido, sem markdown.`;
       if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
       }
+      if (!tablesReady) { await ensureFleetTables(); tablesReady = true; }
       const db = await getDb();
       const res = await db.execute(sql`
         INSERT INTO fleet_trips
           (company_id, vehicle_id, placa, motorista_nome, motorista_id, status,
-           origem, destino, motivo, motivo_descricao, obra_id, obra_nome, criado_por)
+           origem, destino, motivo, motivo_descricao, obra_id, obra_nome, criado_por, "data")
         VALUES
           (${input.companyId}, ${input.vehicleId ?? null}, ${input.placa ?? null},
            ${input.motoristaNome}, ${input.motoristaId ?? null}, 'pendente',
            ${input.origem}, ${input.destino}, ${input.motivo},
            ${input.motivoDescricao ?? null}, ${input.obraId ?? null},
-           ${input.obraNome ?? null}, ${input.criadoPor ?? null})
+           ${input.obraNome ?? null}, ${input.criadoPor ?? null}, CURRENT_DATE)
         RETURNING id
       `);
       return { id: ((res as any).rows || res)[0]?.id };
