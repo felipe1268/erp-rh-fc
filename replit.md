@@ -50,13 +50,15 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4158** — **FINANCEIRO: ANÁLISE APROFUNDADA POR FORNECEDOR — ITENS & PREÇOS (OCs).** Novo `compras.getAnaliseFornecedor` (4 queries: itens agrupados+ocorrências, formas pgto, obras). `FinanceiroAnaliseCustosDetalhe`: 2 abas ao clicar num fornecedor — "Lançamentos" (original) e "Itens & Preços (OCs)" (nova). Aba nova: KPI cards, tabela expand/collapse por produto com badge de variação de preço (âmbar ≥10%/vermelho), mini LineChart evolução preço, tabela de ocorrências por OC (Nº OC, Data, Obra, Preço unit., Forma pgto), painel lateral formas pgto (%) + obras atendidas. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4157** — **FROTA: NOVA VIAGEM — FIX: fleet_trips.data NOT NULL SEM DEFAULT (coluna legada).** `ALTER TABLE fleet_trips ALTER COLUMN "data" SET DEFAULT CURRENT_DATE` em ensureFleetTables + SyncSchema+. Coluna `data` existia no schema original (pré-Rev.4151) sem DEFAULT; INSERT sem ela quebrava com not-null constraint. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4156** — **FROTA: NOVA VIAGEM — FIX: "ERRO AO CALCULAR ROTA" → GEOCODING + HAVERSINE FALLBACK.** Directions API via fetch() do browser gerava CORS (REST API do Google não tem Access-Control-Allow-Origin). Fix: `getRouteInfo` agora tenta Directions API e, se falhar (REQUEST_DENIED ou qualquer erro), cai em **Geocoding ambos os lados + Haversine ×1,35** (Geocoding funciona com a key atual). `RoutePreview` revertido para `trpc.frotas.getRouteInfo.useQuery()`; badge âmbar "Estimativa" indica quando Haversine foi usado. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4155** — **FROTA: NOVA VIAGEM — FIXES: fleet_trips COLUNAS FALTANDO + DIRECTIONS API DO BROWSER.** `[SyncSchema+] Rev. 4155` em `index.ts`: loop `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS` para as 17 colunas (vehicle_id, motorista_nome, etc.) — resolve INSERT "column does not exist". `getGoogleMapsKey` procedure criado (não mais usado). ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4156** — **FROTA: NOVA VIAGEM — FIX: "ERRO AO CALCULAR ROTA" → GEOCODING + HAVERSINE FALLBACK.** Directions API via fetch() CORS; fallback Geocoding + Haversine ×1,35; badge âmbar "Estimativa". ZERO DELETE · ZERO ALTER destrutivo.
+
+- **Rev. 4155** — **FROTA: NOVA VIAGEM — FIXES: fleet_trips COLUNAS FALTANDO + DIRECTIONS API DO BROWSER.** Loop ALTER TABLE 17 colunas; getGoogleMapsKey procedure. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4152** — **FROTA: NOVA VIAGEM — SELETOR VISUAL DE VEÍCULOS + MAPA GOOGLE + AUTO-PREENCHIMENTO.** `VehiclePickerSheet`; `NovaViagemDialog` single-column; auto-fill motorista+km; `RoutePreview` iframe + 4 cards; backend `getRouteInfo`. ZERO DELETE · ZERO ALTER destrutivo.
 

@@ -16072,4 +16072,158 @@ Responda APENAS com JSON válido, sem markdown, no formato:
         };
       });
     }),
+
+  // ─── Rev. 4158 — Análise Aprofundada por Fornecedor ───────────────────────
+  // Retorna itens comprados (agrupados por descrição+unidade), ocorrências por OC,
+  // formas de pagamento e resumo geral para o drill-down de fornecedor em Análise de Custos.
+  getAnaliseFornecedor: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      fornecedorNome: z.string().min(1),
+      ano: z.number().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const anoSql = input.ano ? sql`AND EXTRACT(year FROM co.created_at) = ${input.ano}` : sql``;
+
+      // 1) Itens agrupados por (descricao normalizada, unidade)
+      const itensRes = await db.execute(sql`
+        SELECT
+          LOWER(TRIM(coi.descricao))                        AS desc_key,
+          MAX(coi.descricao)                                AS descricao,
+          coi.unidade,
+          SUM(coi.quantidade)::float                        AS qtd_total,
+          MIN(coi.preco_unitario)::float                    AS preco_min,
+          MAX(coi.preco_unitario)::float                    AS preco_max,
+          ROUND(AVG(coi.preco_unitario)::numeric,4)::float  AS preco_avg,
+          ROUND(SUM(coi.total)::numeric,2)::float           AS valor_total,
+          COUNT(DISTINCT co.id)::int                        AS qtd_ocs,
+          MAX(co.created_at::date)::text                    AS ultima_compra
+        FROM compras_ordens co
+        JOIN compras_ordens_itens coi ON coi.ordem_id = co.id
+        WHERE co.company_id = ${input.companyId}
+          AND LOWER(TRIM(co.fornecedor_nome)) = LOWER(TRIM(${input.fornecedorNome}))
+          AND co.status NOT IN ('cancelado', 'cancelada')
+          ${anoSql}
+        GROUP BY LOWER(TRIM(coi.descricao)), coi.unidade
+        ORDER BY valor_total DESC
+      `);
+
+      // 2) Ocorrências individuais (todas as linhas de OC, para expandir por item)
+      const ocorrRes = await db.execute(sql`
+        SELECT
+          LOWER(TRIM(coi.descricao))                        AS desc_key,
+          coi.unidade,
+          co.numero_oc,
+          co.created_at::date::text                         AS data,
+          COALESCE(ob.nome, '')                             AS obra_nome,
+          COALESCE(NULLIF(TRIM(co.forma_pagamento),''), '')  AS forma_pagamento,
+          COALESCE(NULLIF(TRIM(co.condicao_pagamento),''), '') AS condicao_pagamento,
+          coi.quantidade::float,
+          coi.preco_unitario::float,
+          coi.total::float
+        FROM compras_ordens co
+        JOIN compras_ordens_itens coi ON coi.ordem_id = co.id
+        LEFT JOIN obras ob ON ob.id = co.obra_id AND ob."companyId" = co.company_id
+        WHERE co.company_id = ${input.companyId}
+          AND LOWER(TRIM(co.fornecedor_nome)) = LOWER(TRIM(${input.fornecedorNome}))
+          AND co.status NOT IN ('cancelado', 'cancelada')
+          ${anoSql}
+        ORDER BY co.created_at DESC, co.id DESC
+      `);
+
+      // 3) Formas de pagamento (agrupado por OC, não por item)
+      const pagRes = await db.execute(sql`
+        SELECT
+          COALESCE(NULLIF(TRIM(co.forma_pagamento),''), 'Não informado') AS forma,
+          COALESCE(NULLIF(TRIM(co.condicao_pagamento),''), '')            AS condicao,
+          ROUND(SUM(co.total)::numeric,2)::float                         AS valor_total,
+          COUNT(*)::int                                                   AS qtd_ocs
+        FROM compras_ordens co
+        WHERE co.company_id = ${input.companyId}
+          AND LOWER(TRIM(co.fornecedor_nome)) = LOWER(TRIM(${input.fornecedorNome}))
+          AND co.status NOT IN ('cancelado', 'cancelada')
+          ${anoSql}
+        GROUP BY TRIM(co.forma_pagamento), TRIM(co.condicao_pagamento)
+        ORDER BY valor_total DESC
+      `);
+
+      // 4) Obras atendidas (distinct)
+      const obrasRes = await db.execute(sql`
+        SELECT DISTINCT COALESCE(NULLIF(ob.nome,''), 'Sem obra') AS obra_nome
+        FROM compras_ordens co
+        LEFT JOIN obras ob ON ob.id = co.obra_id AND ob."companyId" = co.company_id
+        WHERE co.company_id = ${input.companyId}
+          AND LOWER(TRIM(co.fornecedor_nome)) = LOWER(TRIM(${input.fornecedorNome}))
+          AND co.status NOT IN ('cancelado', 'cancelada')
+          ${anoSql}
+        ORDER BY obra_nome
+      `);
+
+      // Montar mapa desc_key+unidade → ocorrências
+      const ocRows = (ocorrRes as any).rows ?? ocorrRes;
+      const ocMap = new Map<string, any[]>();
+      for (const r of ocRows) {
+        const key = `${r.desc_key}|||${r.unidade ?? ''}`;
+        if (!ocMap.has(key)) ocMap.set(key, []);
+        ocMap.get(key)!.push({
+          numeroOc: r.numero_oc ?? '',
+          data: r.data ?? null,
+          obraNome: r.obra_nome ?? null,
+          formaPagamento: r.forma_pagamento ?? null,
+          condicaoPagamento: r.condicao_pagamento ?? null,
+          quantidade: Number(r.quantidade ?? 0),
+          precoUnitario: Number(r.preco_unitario ?? 0),
+          total: Number(r.total ?? 0),
+        });
+      }
+
+      // Montar lista de itens com variação de preço + ocorrências
+      const rawItens = (itensRes as any).rows ?? itensRes;
+      const itens = rawItens.map((r: any) => {
+        const precoMin = Number(r.preco_min ?? 0);
+        const precoMax = Number(r.preco_max ?? 0);
+        const variacaoPct = precoMin > 0 ? ((precoMax - precoMin) / precoMin) * 100 : 0;
+        const key = `${r.desc_key}|||${r.unidade ?? ''}`;
+        return {
+          descricao: r.descricao ?? '',
+          unidade: r.unidade ?? null,
+          qtdTotal: Number(r.qtd_total ?? 0),
+          precoMin,
+          precoMax,
+          precoAvg: Number(r.preco_avg ?? 0),
+          variacaoPct,
+          valorTotal: Number(r.valor_total ?? 0),
+          qtdOcs: Number(r.qtd_ocs ?? 0),
+          ultimaCompra: r.ultima_compra ?? null,
+          ocorrencias: ocMap.get(key) ?? [],
+        };
+      });
+
+      // Formas de pagamento com percentual
+      const rawPag = (pagRes as any).rows ?? pagRes;
+      const totalGasto = rawPag.reduce((s: number, r: any) => s + Number(r.valor_total ?? 0), 0);
+      const pagTotal = totalGasto || 1;
+      const formasPagamento = rawPag.map((r: any) => ({
+        forma: r.forma ?? 'Não informado',
+        condicao: r.condicao ?? '',
+        valorTotal: Number(r.valor_total ?? 0),
+        qtdOcs: Number(r.qtd_ocs ?? 0),
+        pct: Math.round((Number(r.valor_total ?? 0) / pagTotal) * 100),
+      }));
+
+      const qtdOcsTot = rawPag.reduce((s: number, r: any) => s + Number(r.qtd_ocs ?? 0), 0);
+      const rawObras = (obrasRes as any).rows ?? obrasRes;
+
+      return {
+        resumo: {
+          totalGasto,
+          qtdOcs: qtdOcsTot,
+          qtdItensdistintos: itens.length,
+          obrasAtendidas: rawObras.map((r: any) => String(r.obra_nome ?? '')).filter(Boolean),
+        },
+        itens,
+        formasPagamento,
+      };
+    }),
 });

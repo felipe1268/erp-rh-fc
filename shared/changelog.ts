@@ -1,4 +1,41 @@
 /**
+ * Rev. 4158 — **FINANCEIRO: ANÁLISE APROFUNDADA POR FORNECEDOR — ITENS & PREÇOS (OCs).**
+ *
+ * CONTEXTO: a tela "Análise de Custos" exibia lançamentos financeiros ao clicar num fornecedor,
+ * mas sem capacidade de ir ao detalhe dos itens comprados. O objetivo é entender quais produtos
+ * são adquiridos, a que preços, se há variação de preço suspeita e como os pagamentos se distribuem.
+ *
+ * MUDANÇA BACKEND — `server/routers/compras.ts`:
+ * - Novo procedure `compras.getAnaliseFornecedor`:
+ *   - Input: `{companyId, fornecedorNome, ano?}` — match case-insensitive via LOWER(TRIM())
+ *   - Query 1: itens agrupados por (descricao normalizada, unidade) → qtd_total, preco_min,
+ *     preco_max, preco_avg, valor_total, qtd_ocs, ultima_compra
+ *   - Query 2: ocorrências individuais de cada item (JOIN obras para nome) → numero_oc, data,
+ *     obra_nome, forma_pagamento, condicao_pagamento, quantidade, preco_unitario, total
+ *   - Query 3: formas de pagamento agrupadas por OC (agrupadas por forma+condição) → pct
+ *   - Query 4: obras atendidas (DISTINCT)
+ *   - Output: `{resumo:{totalGasto,qtdOcs,qtdItensdistintos,obrasAtendidas}, itens:[...+ocorrencias], formasPagamento}`
+ *   - `variacaoPct = (max-min)/min*100`; inclui todas as ocorrências de OC para cada item
+ *
+ * MUDANÇA FRONTEND — `client/src/pages/financeiro/FinanceiroAnaliseCustosDetalhe.tsx`:
+ * - Novo estado: `aba` ('lancamentos'|'itens'), `expandedItems` (Set), `chartItem`, `fornecedorFoco`
+ * - `fornecedorFoco`: derivado do `tipo==='fornecedor'?valor` OU do último drill de fornecedor em `extra`
+ * - Seletor de abas: visível apenas quando `fornecedorFoco` está definido; badge com count de itens
+ * - Aba "Itens & Preços (OCs)" com:
+ *   a) 4 KPI cards: Total em OCs / OCs / Itens distintos / Obras atendidas
+ *   b) Tabela de produtos com expand/collapse por linha (Fragment com key):
+ *      - colunas: Produto, Qtd. total, Preço mín., Preço máx., Variação (badge âmbar/vermelho ≥10%),
+ *        Total gasto, OCs, Última compra
+ *      - linha expandida: botão "Evolução de preço" → mini LineChart preço ao longo das OCs +
+ *        tabela de ocorrências (Nº OC, Data, Obra, Qtd, Preço unit., Total, Forma/Condição pgto)
+ *   c) Coluna lateral: Formas de Pagamento (barra de progresso + %) + Obras atendidas
+ * - Aba "Lançamentos Financeiros": conteúdo original 100% preservado
+ * - Alert consolidado no cabeçalho da tabela indicando quantos itens têm variação alta (>10%)
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4157 — **FROTA: NOVA VIAGEM — FIX: fleet_trips.data NOT NULL SEM DEFAULT (coluna legada).**
  *
  * CONTEXTO: após Rev. 4156 adicionar todas as colunas core (status, origem, destino…), o INSERT

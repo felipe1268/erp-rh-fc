@@ -5,7 +5,7 @@
 // PERTINENTES ao item clicado: KPIs do recorte, distribuição por mês,
 // quebra por uma dimensão secundária e a tabela detalhada completa.
 // 100% client-side (ZERO novo backend).
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Fragment } from "react";
 import { useLocation, useSearch } from "wouter";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -22,10 +22,11 @@ import { useCompany } from "@/hooks/useCompany";
 import {
   ChevronLeft, CircleDollarSign, CheckCircle2, Receipt, AlertTriangle,
   BarChart2, Layers, Tag, Building2, Calendar, ListChecks, Pencil, X, Loader2, Lock, ExternalLink,
+  ChevronDown, ChevronRight, Package, ShoppingCart, TrendingUp, TrendingDown, Minus, CreditCard, MapPin, Hash,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip as RechTooltip, LabelList,
+  Tooltip as RechTooltip, LabelList, LineChart, Line, ReferenceLine,
 } from "recharts";
 import { classificarGrupoCusto } from "@shared/custosCategorias";
 import { buildCentroCustoMaps, centroCustoNomeDe, SEM_CENTRO_CUSTO } from "@shared/centroCusto";
@@ -201,6 +202,30 @@ export default function FinanceiroAnaliseCustosDetalhe() {
     if (!mn) return;
     irPara([...extra, { t: "mes", v: String(mn) }]);
   };
+
+  // ─── Rev. 4158 — Aba de análise por item (só exibida quando tipo === 'fornecedor')
+  const [aba, setAba] = useState<'lancamentos' | 'itens'>('lancamentos');
+  // Derived: nome do fornecedor que está em foco (primário ou último drill de fornecedor)
+  const fornecedorFoco: string | null = useMemo(() => {
+    if (tipo === 'fornecedor') return valor;
+    const step = [...extra].reverse().find((f) => f.t === 'fornecedor');
+    return step ? step.v : null;
+  }, [tipo, valor, extra]);
+  // Linha de OC expandida na aba de itens
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const toggleExpand = (key: string) =>
+    setExpandedItems((prev) => {
+      const n = new Set(prev);
+      if (n.has(key)) n.delete(key); else n.add(key);
+      return n;
+    });
+  // Item selecionado para mini-chart de evolução de preço
+  const [chartItem, setChartItem] = useState<string | null>(null);
+
+  const { data: analiseData, isLoading: analiseLoading } = (trpc as any).compras.getAnaliseFornecedor.useQuery(
+    { companyId, fornecedorNome: fornecedorFoco ?? '', ano },
+    { enabled: !!companyId && !!fornecedorFoco }
+  );
 
   // Rev. 3134 — base CAIXA: espelha o gráfico "Custo por Mês" (pago → data de
   // pagamento; em aberto → vencimento), pra o drill-down bater com as barras.
@@ -621,7 +646,41 @@ export default function FinanceiroAnaliseCustosDetalhe() {
           })}
         </div>
 
-        {semDados ? (
+        {/* ─── Rev. 4158 — Seletor de abas (só para fornecedor) ─── */}
+        {fornecedorFoco && (
+          <div className="flex gap-1 border-b border-gray-200 pb-0 -mb-1">
+            {([
+              { id: 'lancamentos' as const, label: 'Lançamentos Financeiros', icon: ListChecks },
+              { id: 'itens' as const, label: 'Itens & Preços (OCs)', icon: Package },
+            ] as { id: 'lancamentos' | 'itens'; label: string; icon: any }[]).map((t) => {
+              const I = t.icon;
+              const ativo = aba === t.id;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setAba(t.id)}
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-t-lg border border-b-0 transition-colors ${
+                    ativo
+                      ? 'bg-white border-gray-200 text-indigo-700 shadow-sm -mb-px'
+                      : 'bg-gray-50 border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <I className="w-3.5 h-3.5" />
+                  {t.label}
+                  {t.id === 'itens' && analiseData?.resumo && (
+                    <span className="ml-1 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold px-1.5 py-0.5 leading-none">
+                      {analiseData.resumo.qtdItensdistintos}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ─── Aba: Lançamentos (conteúdo original) ─── */}
+        {(aba === 'lancamentos' || !fornecedorFoco) && (semDados ? (
           <Card className="border-0 shadow-sm">
             <CardContent className="py-16 text-center">
               <CircleDollarSign className="w-10 h-10 text-gray-300 mx-auto mb-3" />
@@ -926,7 +985,300 @@ export default function FinanceiroAnaliseCustosDetalhe() {
               </CardContent>
             </Card>
           </>
-        )}
+        ))}
+
+        {/* ─── Aba: Itens & Preços (OCs) — Rev. 4158 ─── */}
+        {aba === 'itens' && fornecedorFoco && (() => {
+          if (analiseLoading) return (
+            <div className="flex items-center justify-center py-20 gap-2 text-sm text-gray-500">
+              <Loader2 className="w-5 h-5 animate-spin text-indigo-400" /> Carregando análise de itens…
+            </div>
+          );
+          if (!analiseData) return (
+            <Card className="border-0 shadow-sm">
+              <CardContent className="py-16 text-center">
+                <Package className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                <p className="text-sm text-gray-500">Sem dados de OC para este fornecedor.</p>
+                <p className="text-xs text-gray-400 mt-1">As análises de itens requerem Ordens de Compra registradas no módulo de Compras.</p>
+              </CardContent>
+            </Card>
+          );
+          const { resumo, itens, formasPagamento } = analiseData;
+
+          // Helper: badge de variação de preço
+          const VariacaoBadge = ({ pct }: { pct: number }) => {
+            if (pct <= 2) return <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-emerald-700 bg-emerald-50 rounded-full px-1.5 py-0.5"><Minus className="w-2.5 h-2.5" />{pct.toFixed(1)}%</span>;
+            if (pct <= 10) return <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-amber-700 bg-amber-50 rounded-full px-1.5 py-0.5"><TrendingUp className="w-2.5 h-2.5" />{pct.toFixed(1)}%</span>;
+            return <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-red-700 bg-red-50 rounded-full px-1.5 py-0.5 ring-1 ring-red-200"><TrendingUp className="w-2.5 h-2.5" />{pct.toFixed(1)}%</span>;
+          };
+
+          // Dados do mini-chart de preço do item selecionado
+          const chartItemData = chartItem
+            ? (itens.find((it: any) => `${it.descricao}|||${it.unidade ?? ''}` === chartItem)?.ocorrencias ?? [])
+                .slice()
+                .reverse()
+                .map((oc: any) => ({ data: oc.data ?? '', preco: oc.precoUnitario, oc: oc.numeroOc }))
+            : [];
+
+          return (
+            <div className="space-y-4">
+              {/* ── KPIs da análise de OCs ── */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { label: 'Total em OCs', value: formatBRL(resumo.totalGasto), icon: CircleDollarSign, color: 'text-rose-600', bg: 'bg-rose-50' },
+                  { label: 'Ordens de Compra', value: resumo.qtdOcs.toString(), icon: ShoppingCart, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+                  { label: 'Itens distintos', value: resumo.qtdItensdistintos.toString(), icon: Package, color: 'text-teal-600', bg: 'bg-teal-50' },
+                  { label: 'Obras atendidas', value: resumo.obrasAtendidas.length.toString(), icon: MapPin, color: 'text-amber-600', bg: 'bg-amber-50', tooltip: resumo.obrasAtendidas.join(', ') },
+                ].map((c) => {
+                  const I = c.icon;
+                  return (
+                    <Card key={c.label} className="border-0 shadow-sm" title={(c as any).tooltip}>
+                      <CardContent className="p-3.5">
+                        <div className={`w-8 h-8 rounded-lg ${c.bg} flex items-center justify-center mb-2`}>
+                          <I className={`w-4 h-4 ${c.color}`} />
+                        </div>
+                        <p className="text-[11px] text-gray-500 font-medium">{c.label}</p>
+                        <p className={`text-sm font-bold ${c.color} mt-0.5 tabular-nums`}>{c.value}</p>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                {/* ── Tabela de itens (ocupa 2 colunas no XL) ── */}
+                <div className="xl:col-span-2">
+                  <Card className="border-0 shadow-sm">
+                    <CardHeader className="pb-2 pt-4 px-5">
+                      <CardTitle className="text-sm font-semibold text-gray-600 flex items-center gap-2">
+                        <Package className="w-4 h-4" /> Produtos comprados
+                        <span className="text-xs font-normal text-gray-400">({itens.length})</span>
+                        {itens.some((it: any) => it.variacaoPct > 10) && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-red-700 bg-red-50 rounded-full px-2 py-0.5 ring-1 ring-red-200">
+                            <AlertTriangle className="w-3 h-3" />
+                            {itens.filter((it: any) => it.variacaoPct > 10).length} com variação alta
+                          </span>
+                        )}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-2 sm:px-4 pb-4">
+                      {itens.length === 0 ? (
+                        <p className="text-center text-sm text-gray-400 py-10">Nenhum item encontrado para este fornecedor{resumo.qtdOcs === 0 ? ' — sem OCs no período' : ''}.</p>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs min-w-[640px]">
+                            <thead>
+                              <tr className="text-gray-400 border-b border-gray-200">
+                                <th className="py-2 pr-2 w-6" />
+                                <th className="text-left font-medium py-2 pr-3">Produto</th>
+                                <th className="text-right font-medium py-2 px-2 whitespace-nowrap">Qtd. total</th>
+                                <th className="text-right font-medium py-2 px-2 whitespace-nowrap">Preço mín.</th>
+                                <th className="text-right font-medium py-2 px-2 whitespace-nowrap">Preço máx.</th>
+                                <th className="text-center font-medium py-2 px-2">Variação</th>
+                                <th className="text-right font-medium py-2 px-2 whitespace-nowrap">Total gasto</th>
+                                <th className="text-center font-medium py-2 px-2">OCs</th>
+                                <th className="text-left font-medium py-2 pl-2 whitespace-nowrap">Última compra</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {itens.map((item: any, idx: number) => {
+                                const ikey = `${item.descricao}|||${item.unidade ?? ''}`;
+                                const expanded = expandedItems.has(ikey);
+                                const isChartSel = chartItem === ikey;
+                                return (
+                                  <Fragment key={ikey}>
+                                    <tr
+                                      className={`border-b border-gray-100 cursor-pointer transition-colors ${expanded ? 'bg-indigo-50/40' : 'hover:bg-gray-50'} ${item.variacaoPct > 10 ? 'border-l-2 border-l-amber-400' : ''}`}
+                                      onClick={() => toggleExpand(ikey)}
+                                    >
+                                      <td className="py-3 pr-1 pl-1 text-gray-400">
+                                        {expanded
+                                          ? <ChevronDown className="w-3.5 h-3.5 text-indigo-500" />
+                                          : <ChevronRight className="w-3.5 h-3.5" />}
+                                      </td>
+                                      <td className="py-3 pr-3 align-top">
+                                        <div className="font-medium text-gray-800 break-words leading-snug">{item.descricao}</div>
+                                        {item.unidade && <span className="text-[10px] text-gray-400 mt-0.5">{item.unidade}</span>}
+                                      </td>
+                                      <td className="py-3 px-2 text-right tabular-nums text-gray-700">
+                                        {item.qtdTotal % 1 === 0
+                                          ? item.qtdTotal.toLocaleString('pt-BR')
+                                          : item.qtdTotal.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 3 })}
+                                        {item.unidade ? <span className="text-gray-400 ml-0.5">{item.unidade}</span> : null}
+                                      </td>
+                                      <td className="py-3 px-2 text-right tabular-nums text-gray-700 whitespace-nowrap">{formatBRL(item.precoMin)}</td>
+                                      <td className="py-3 px-2 text-right tabular-nums text-gray-700 whitespace-nowrap">{formatBRL(item.precoMax)}</td>
+                                      <td className="py-3 px-2 text-center"><VariacaoBadge pct={item.variacaoPct} /></td>
+                                      <td className="py-3 px-2 text-right tabular-nums font-bold text-gray-800 whitespace-nowrap">{formatBRL(item.valorTotal)}</td>
+                                      <td className="py-3 px-2 text-center tabular-nums text-gray-600">{item.qtdOcs}</td>
+                                      <td className="py-3 pl-2 text-left tabular-nums text-gray-500 whitespace-nowrap">
+                                        {item.ultimaCompra ? fmtData(item.ultimaCompra) : '—'}
+                                      </td>
+                                    </tr>
+                                    {/* Sub-linha: ocorrências expandidas */}
+                                    {expanded && (
+                                      <tr key={`${ikey}-expanded`} className="bg-indigo-50/30">
+                                        <td />
+                                        <td colSpan={8} className="pb-3 pt-1 px-2">
+                                          {/* Mini-chart botão */}
+                                          <div className="flex items-center justify-between mb-2 px-1">
+                                            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">
+                                              {item.ocorrencias.length} ocorrência{item.ocorrencias.length !== 1 ? 's' : ''}
+                                            </p>
+                                            <button
+                                              type="button"
+                                              onClick={(e) => { e.stopPropagation(); setChartItem(isChartSel ? null : ikey); }}
+                                              className={`inline-flex items-center gap-1 text-[10px] font-semibold rounded-full px-2 py-0.5 transition-colors ${isChartSel ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500 hover:bg-indigo-50 hover:text-indigo-600'}`}
+                                            >
+                                              <TrendingUp className="w-3 h-3" /> Evolução de preço
+                                            </button>
+                                          </div>
+                                          {/* Mini-chart de evolução de preço */}
+                                          {isChartSel && chartItemData.length >= 2 && (
+                                            <div className="mb-3 rounded-lg bg-white border border-gray-100 p-3" onClick={(e) => e.stopPropagation()}>
+                                              <p className="text-[10px] text-gray-400 mb-1">Preço unitário por OC (mais antigas → mais recentes)</p>
+                                              <div style={{ width: '100%', height: 120 }}>
+                                                <ResponsiveContainer>
+                                                  <LineChart data={chartItemData} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
+                                                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                                                    <XAxis dataKey="data" tick={{ fontSize: 9, fill: '#94a3b8' }} tickFormatter={(v: string) => v ? v.slice(5) : ''} />
+                                                    <YAxis tickFormatter={(v: number) => `R$${v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}`} tick={{ fontSize: 9, fill: '#94a3b8' }} width={60} />
+                                                    <RechTooltip
+                                                      formatter={(v: any, _n: any, p: any) => [`R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`, p.payload.oc]}
+                                                      labelFormatter={(l: string) => `Data: ${l}`}
+                                                      contentStyle={{ fontSize: 11 }}
+                                                    />
+                                                    <ReferenceLine y={item.precoAvg} stroke="#6366f1" strokeDasharray="4 2" label={{ value: 'Média', fontSize: 9, fill: '#6366f1' }} />
+                                                    <Line type="monotone" dataKey="preco" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3, fill: '#f59e0b' }} activeDot={{ r: 4 }} name="Preço" />
+                                                  </LineChart>
+                                                </ResponsiveContainer>
+                                              </div>
+                                            </div>
+                                          )}
+                                          {/* Tabela de ocorrências */}
+                                          <div className="rounded-lg border border-gray-100 overflow-hidden bg-white" onClick={(e) => e.stopPropagation()}>
+                                            <table className="w-full text-xs">
+                                              <thead>
+                                                <tr className="bg-gray-50 text-gray-400 border-b border-gray-100">
+                                                  <th className="text-left font-medium py-1.5 px-3 whitespace-nowrap">Nº OC</th>
+                                                  <th className="text-left font-medium py-1.5 px-2 whitespace-nowrap">Data</th>
+                                                  <th className="text-left font-medium py-1.5 px-2">Obra</th>
+                                                  <th className="text-right font-medium py-1.5 px-2 whitespace-nowrap">Qtd</th>
+                                                  <th className="text-right font-medium py-1.5 px-2 whitespace-nowrap">Preço unit.</th>
+                                                  <th className="text-right font-medium py-1.5 px-2 whitespace-nowrap">Total</th>
+                                                  <th className="text-left font-medium py-1.5 px-2 whitespace-nowrap">Pagamento</th>
+                                                </tr>
+                                              </thead>
+                                              <tbody>
+                                                {item.ocorrencias.map((oc: any, oi: number) => (
+                                                  <tr key={oi} className="border-b border-gray-50 hover:bg-indigo-50/30">
+                                                    <td className="py-2 px-3 font-mono font-semibold text-indigo-700 whitespace-nowrap">{oc.numeroOc || '—'}</td>
+                                                    <td className="py-2 px-2 tabular-nums text-gray-600 whitespace-nowrap">{fmtData(oc.data)}</td>
+                                                    <td className="py-2 px-2 text-gray-600 break-words max-w-[160px]">{oc.obraNome || '—'}</td>
+                                                    <td className="py-2 px-2 text-right tabular-nums text-gray-700">
+                                                      {oc.quantidade % 1 === 0
+                                                        ? oc.quantidade.toLocaleString('pt-BR')
+                                                        : oc.quantidade.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 3 })}
+                                                    </td>
+                                                    <td className="py-2 px-2 text-right tabular-nums font-semibold text-gray-800 whitespace-nowrap">{formatBRL(oc.precoUnitario)}</td>
+                                                    <td className="py-2 px-2 text-right tabular-nums text-gray-700 whitespace-nowrap">{formatBRL(oc.total)}</td>
+                                                    <td className="py-2 px-2">
+                                                      {oc.formaPagamento
+                                                        ? <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 text-gray-600 px-1.5 py-0.5 text-[10px] font-medium"><CreditCard className="w-2.5 h-2.5" />{oc.formaPagamento}{oc.condicaoPagamento ? ` · ${oc.condicaoPagamento}` : ''}</span>
+                                                        : <span className="text-gray-300">—</span>}
+                                                    </td>
+                                                  </tr>
+                                                ))}
+                                              </tbody>
+                                            </table>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    )}
+                                  </Fragment>
+                                );
+                              })}
+                            </tbody>
+                            <tfoot>
+                              <tr className="border-t-2 border-gray-200">
+                                <td colSpan={6} className="py-2.5 pr-2 text-right font-semibold text-gray-600 text-xs">Total em OCs</td>
+                                <td className="py-2.5 px-2 text-right tabular-nums font-bold text-rose-600 text-xs whitespace-nowrap">
+                                  {formatBRL(itens.reduce((s: number, it: any) => s + it.valorTotal, 0))}
+                                </td>
+                                <td colSpan={2} />
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* ── Formas de pagamento (coluna lateral) ── */}
+                <div className="space-y-4">
+                  <Card className="border-0 shadow-sm">
+                    <CardHeader className="pb-2 pt-4 px-5">
+                      <CardTitle className="text-sm font-semibold text-gray-600 flex items-center gap-2">
+                        <CreditCard className="w-4 h-4" /> Formas de Pagamento
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-4 pb-4">
+                      {formasPagamento.length === 0 ? (
+                        <p className="text-xs text-gray-400 py-6 text-center">Sem dados de pagamento</p>
+                      ) : (
+                        <div className="space-y-2.5">
+                          {formasPagamento.map((fp: any, i: number) => (
+                            <div key={i} className="space-y-0.5">
+                              <div className="flex items-center justify-between">
+                                <div className="min-w-0">
+                                  <span className="text-xs font-semibold text-gray-700 break-words">{fp.forma}</span>
+                                  {fp.condicao && <span className="text-[10px] text-gray-400 ml-1.5">{fp.condicao}</span>}
+                                </div>
+                                <div className="text-right shrink-0 ml-2">
+                                  <span className="text-xs font-bold text-gray-800 tabular-nums">{fp.pct}%</span>
+                                  <span className="text-[10px] text-gray-400 ml-1">({fp.qtdOcs} OC{fp.qtdOcs !== 1 ? 's' : ''})</span>
+                                </div>
+                              </div>
+                              <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                                <div
+                                  className="h-full rounded-full bg-indigo-400 transition-all"
+                                  style={{ width: `${fp.pct}%` }}
+                                />
+                              </div>
+                              <p className="text-[10px] text-gray-400 tabular-nums">{formatBRL(fp.valorTotal)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Obras atendidas */}
+                  {resumo.obrasAtendidas.length > 0 && (
+                    <Card className="border-0 shadow-sm">
+                      <CardHeader className="pb-2 pt-4 px-5">
+                        <CardTitle className="text-sm font-semibold text-gray-600 flex items-center gap-2">
+                          <MapPin className="w-4 h-4" /> Obras Atendidas
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="px-4 pb-4">
+                        <div className="space-y-1">
+                          {resumo.obrasAtendidas.map((ob: string, i: number) => (
+                            <div key={i} className="flex items-start gap-1.5 text-xs text-gray-600">
+                              <MapPin className="w-3 h-3 shrink-0 text-gray-400 mt-0.5" />
+                              <span className="break-words">{ob}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Dialog de edição de UMA linha */}
