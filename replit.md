@@ -50,13 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4163** — **COMPRAS: CATÁLOGO — AUDITORIA REAL 1753 DESCRIÇÕES → CORREÇÃO ALGORITMO DE GRUPOS.** Auditoria item-a-item contra Neon revelou: FAM=TIGRE acumulava 60 produtos/R$37k (marca no lugar de tipo); "Lapis de Carpinteiro"≠"Lapis Carpinteiro" (preposição DE criava chave falsa); regra `\bDE\s+(\d)` só cobria DE antes de dígito. Correções: (1) `normItemDesc` step 7: `\b(DE|DA|DO|DAS|DOS)\b\s*`→" " (remove todas as preposições de ligação); (2) `getItemFamilia`: `_BRAND_FIRST` Set (TIGRE, STECK, AMANCO, CIPLA…) — quando marca no 1º token, usa 2º como família. Resultado: 507 famílias (era 517), TUBO absorveu todos os tubos Tigre+genéricos. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4164** — **COMPRAS: SC — SUGESTÃO DE CONVERSÃO DE UNIDADE (Opção B: alerta + botão "Converter").** Quando SC tem item em `kg` mas padrão histórico de compra é `sc` (ou outra embalagem), aparece chip roxo "Padrão de compra: X sc — Converter" nos formulários de item. Ao clicar, converte `unidade` e `quantidade` automaticamente. Usa `getConversaoComercial` (cache+IA, já existente). Chip adicionado em `renderInsumoRow` e na seção de itens avulsos. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4162** — **COMPRAS: CATÁLOGO DE ITENS — VISÃO HIERÁRQUICA FAMÍLIA → VARIANTE → OCs POR OBRA.** `getItemFamilia` extrai 1ª palavra significativa da chave normalizada (ignora stopwords+números). `getItensFamilias` agrupa TODOS os itens em família→variante com totais. `getItemOcDetalhes` lazy-load OCs por descrição (obra, data, qtd, preço). Novo `ItemCatalogo.tsx` (3 níveis expand, search, KPIs, Padronizar por variante). 5ª aba "Catálogo" na Auditoria. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4163** — **COMPRAS: CATÁLOGO — AUDITORIA REAL 1753 DESCRIÇÕES → CORREÇÃO ALGORITMO DE GRUPOS.** Auditoria item-a-item contra Neon revelou: FAM=TIGRE acumulava 60 produtos/R$37k (marca no lugar de tipo); "Lapis de Carpinteiro"≠"Lapis Carpinteiro" (preposição DE criava chave falsa); regra `\bDE\s+(\d)` só cobria DE antes de dígito. Correções: (1) `normItemDesc` step 7: `\b(DE|DA|DO|DAS|DOS)\b\s*`→" " (remove todas as preposições de ligação); (2) `getItemFamilia`: `_BRAND_FIRST` Set (TIGRE, STECK, AMANCO, CIPLA…) — quando marca no 1º token, usa 2º como família. Resultado: 507 famílias (era 517), TUBO absorveu todos os tubos Tigre+genéricos. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
-- **Rev. 4161** — **COMPRAS: NORMALIZAÇÃO DE ITENS V2 — CIMENTO CP3 + CAÇAMBA + PARÊNTESES SELETIVOS.** `normItemDesc` corrigida: embalagem removida; specs incorporados; "CP 3"→"CP3"; "DE 4M"→"4M". ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4162** — **COMPRAS: CATÁLOGO DE ITENS — VISÃO HIERÁRQUICA FAMÍLIA → VARIANTE → OCs POR OBRA.** `getItemFamilia` extrai 1ª palavra significativa; `getItensFamilias` agrupa; `getItemOcDetalhes` lazy-load OCs. Novo `ItemCatalogo.tsx` (3 níveis, search, KPIs). ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4160** — **COMPRAS: AUDITORIA DE ITENS — NORMALIZAÇÃO DE NOMES E AUTOCOMPLETE NA SC/OC.** 3 procedures: `auditarItens`, `padronizarItens`, `getItemSugestoes`. Novo `ItemDescricaoInput`. Aba "Itens" na Auditoria. ZERO DELETE · ZERO ALTER destrutivo.
 

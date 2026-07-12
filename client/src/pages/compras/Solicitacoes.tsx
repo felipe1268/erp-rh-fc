@@ -1309,6 +1309,46 @@ export default function Solicitacoes() {
     return `≈ ${qtdConvertida < 1 ? qtdConvertida.toFixed(2) : Math.ceil(qtdConvertida).toLocaleString("pt-BR")} ${conv.embalagem}`;
   }
 
+  const conversaoManualInput = useMemo(() => {
+    return itens
+      .filter(it => it.descricao.trim().length >= 3)
+      .slice(0, 50)
+      .map(it => ({
+        descricao: it.descricao.trim(),
+        unidade: it.unidade || "un",
+        quantidade: parseFloat(it.quantidade) || 1,
+      }));
+  }, [itens]);
+
+  const conversaoManualQ = trpc.compras.getConversaoComercial.useQuery(
+    { insumos: conversaoManualInput },
+    { enabled: conversaoManualInput.length > 0, staleTime: 5 * 60_000 }
+  );
+
+  const conversaoManualMap = useMemo(() => {
+    const map: Record<string, { embalagem: string; fator: number }> = {};
+    if (!conversaoManualQ.data) return map;
+    for (let i = 0; i < conversaoManualQ.data.length; i++) {
+      const item = conversaoManualQ.data[i];
+      if (item.conversao && conversaoManualInput[i]) {
+        const key = `${conversaoManualInput[i].descricao.toLowerCase().trim()}|${conversaoManualInput[i].unidade.toLowerCase().trim()}`;
+        map[key] = { embalagem: item.conversao.embalagem, fator: item.conversao.fator };
+      }
+    }
+    return map;
+  }, [conversaoManualQ.data, conversaoManualInput]);
+
+  function getConversaoManual(descricao: string, unidade: string, quantidade: number): { display: string; unidadeNova: string; qtdNova: number } | null {
+    if (quantidade <= 0) return null;
+    const key = `${descricao.toLowerCase().trim()}|${unidade.toLowerCase().trim()}`;
+    const conv = conversaoManualMap[key];
+    if (!conv || !conv.fator || conv.fator <= 0) return null;
+    const qtdNova = quantidade / conv.fator;
+    const qtdArred = Math.ceil(qtdNova * 1000) / 1000;
+    const display = `${qtdNova < 1 ? qtdNova.toFixed(2) : Math.ceil(qtdNova).toLocaleString("pt-BR")} ${conv.embalagem}`;
+    return { display, unidadeNova: conv.embalagem, qtdNova: qtdArred };
+  }
+
   const sugestoesQ = trpc.compras.getSugestoesCompra.useQuery(
     { companyId, obraId: parseInt(form.obraId) },
     { enabled: showNova && !!form.obraId && parseInt(form.obraId) > 0 && companyId > 0, staleTime: 60_000 }
@@ -4563,6 +4603,24 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                               value={it.observacoes}
                               onChange={e => setItens(p => p.map((x, j) => j === idx ? { ...x, observacoes: e.target.value } : x))}
                             />
+                            {(() => {
+                              const qtd = parseFloat(it.quantidade) || 0;
+                              const conv = getConversaoManual(it.descricao, it.unidade, qtd);
+                              if (!conv) return null;
+                              return (
+                                <div className="flex items-center gap-1.5 text-[9px] text-purple-700 bg-purple-50 border border-purple-200 rounded px-2 py-1">
+                                  <ArrowRightLeft className="h-2.5 w-2.5 shrink-0 text-purple-500" />
+                                  <span>Padrão de compra: <strong>{conv.display}</strong></span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setItens(p => p.map((x, j) => j === idx ? { ...x, unidade: conv.unidadeNova, quantidade: String(Math.ceil(conv.qtdNova)) } : x))}
+                                    className="ml-auto px-1.5 py-0.5 rounded bg-purple-600 text-white font-semibold hover:bg-purple-700 transition text-[9px]"
+                                  >
+                                    Converter
+                                  </button>
+                                </div>
+                              );
+                            })()}
                             {it.descricao.trim() && (
                               <div className="flex items-center gap-1 text-[9px] text-orange-600 font-medium">
                                 <AlertTriangle className="h-2.5 w-2.5" /> Item fora do orçamento — será necessário verba realocada para liberar OC/OS
@@ -4648,6 +4706,24 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                       {it.descricao.trim().length >= 3 && (
                         <UltimaCompraCard companyId={companyId} descricao={it.descricao} />
                       )}
+                      {(() => {
+                        const qtd = parseFloat(it.quantidade) || 0;
+                        const conv = getConversaoManual(it.descricao, it.unidade, qtd);
+                        if (!conv) return null;
+                        return (
+                          <div className="flex items-center gap-1.5 text-[9px] text-purple-700 bg-purple-50 border border-purple-200 rounded px-2 py-1">
+                            <ArrowRightLeft className="h-2.5 w-2.5 shrink-0 text-purple-500" />
+                            <span>Padrão de compra: <strong>{conv.display}</strong></span>
+                            <button
+                              type="button"
+                              onClick={() => setItens(p => p.map((x, i) => i === idx ? { ...x, unidade: conv.unidadeNova, quantidade: String(Math.ceil(conv.qtdNova)) } : x))}
+                              className="ml-auto px-1.5 py-0.5 rounded bg-purple-600 text-white font-semibold hover:bg-purple-700 transition text-[9px]"
+                            >
+                              Converter
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 };

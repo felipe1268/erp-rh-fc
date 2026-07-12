@@ -1,4 +1,28 @@
 /**
+ * Rev. 4164 — **COMPRAS: SC — SUGESTÃO DE CONVERSÃO DE UNIDADE (Opção B: alerta + botão "Converter").**
+ *
+ * CONTEXTO: o orçamento usa kg para cimento, a SC herda kg, a OC fica kg — misturando
+ * kg e sc na análise de fornecedor (6616% de "variação" falsa, corrigida via batch na Rev. 4163-data).
+ * Solução preventiva pedida pelo usuário: quando a SC tem item em kg mas o padrão de compra é saco,
+ * mostrar uma sugestão discreta com botão "Converter".
+ *
+ * IMPLEMENTAÇÃO (client/src/pages/compras/Solicitacoes.tsx):
+ * - `conversaoManualInput` (useMemo): deriva da lista `itens` do formulário (descrição ≥ 3 chars).
+ * - `conversaoManualQ`: chama `compras.getConversaoComercial` (já existente, usa cache+IA para
+ *   determinar fator de conversão, ex: 1 saco cimento = 50 kg → fator = 50).
+ * - `conversaoManualMap`: mapeia `descricao|unidade` → `{ embalagem, fator }`.
+ * - `getConversaoManual(desc, un, qtd)`: retorna `{ display, unidadeNova, qtdNova }` ou null.
+ * - Chip de sugestão adicionado em DOIS locais da SC:
+ *   1. `renderInsumoRow` (modo insumo/EAP com itens avulsos) — após UltimaCompraCard.
+ *   2. Seção "Itens avulsos" (modo manual) — após campo de especificação.
+ * - Chip: fundo roxo suave, ícone ArrowRightLeft, texto "Padrão de compra: X sc", botão "Converter"
+ *   que ao clicar faz `setItens` com `unidade = unidadeNova` e `quantidade = Math.ceil(qtdNova)`.
+ * - ZERO impacto em OCs/cotações existentes; ZERO ALTER/DELETE no banco.
+ *
+ * ZERO DELETE · ZERO ALTER DESTRUTIVO.
+ */
+
+/**
  * Rev. 4163 — **COMPRAS: CATÁLOGO — AUDITORIA REAL 1753 DESCRIÇÕES → CORREÇÃO ALGORITMO DE GRUPOS.**
  *
  * CONTEXTO: auditoria item-a-item contra Neon (company 60002) revelou 3 falhas críticas no agrupamento:
