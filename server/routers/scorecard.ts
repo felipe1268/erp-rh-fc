@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { sql, eq, and, isNull } from "drizzle-orm";
-import { accidents } from "../../drizzle/schema";
+import { accidents, orcamentos } from "../../drizzle/schema";
 
 function clamp(v: number, lo = 0, hi = 100): number {
   return Math.max(lo, Math.min(hi, v));
@@ -96,6 +96,19 @@ export const scorecardRouter = router({
       const db = await getDb();
       if (!db) return null;
       const { companyId, obraId } = input;
+
+      // Drizzle ORM para orcamentos (colunas camelCase sem mapeamento explícito)
+      const orcRow = await db
+        .select({
+          totalVenda:     orcamentos.totalVenda,
+          totalCusto:     orcamentos.totalCusto,
+          valorNegociado: orcamentos.valorNegociado,
+        })
+        .from(orcamentos)
+        .where(and(eq(orcamentos.companyId, companyId), eq(orcamentos.obraId, obraId), isNull(orcamentos.deletedAt)))
+        .orderBy(orcamentos.id)
+        .limit(1)
+        .catch(() => [] as any[]);
 
       // Drizzle ORM para accidents (colunas camelCase sem mapeamento explícito)
       const acidentesRows = await db
@@ -350,9 +363,19 @@ export const scorecardRouter = router({
       ));
 
       // ── FINANCEIRO ───────────────────────────────────────────────────────────
+      const orc = (orcRow as any[])[0] ?? {};
+      // Valor do Contrato: valorNegociado (se preenchido) > totalVenda > 0
+      const valorContrato  = parseFloat(String(orc.valorNegociado || orc.totalVenda || "0"));
+      const custoPrevisto  = parseFloat(String(orc.totalCusto ?? "0"));
+      const lucroPrevisto  = valorContrato - custoPrevisto;
+
       const receitaRealizada  = parseFloat(String((receitaReal.rows as any[])[0]?.total ?? "0"));
       const custoRealizado    = parseFloat(String((custoReal.rows as any[])[0]?.total ?? "0"));
-      const lucroRealizado    = receitaRealizada - custoRealizado;
+      // Lucro realizado = Valor do Contrato − Custo Realizado (não receita−custo,
+      // pois a receita pode ainda não ter entrado enquanto o custo já correu)
+      const lucroRealizado    = valorContrato > 0
+        ? valorContrato - custoRealizado
+        : receitaRealizada - custoRealizado;
 
       // ── BÔNUS ────────────────────────────────────────────────────────────────
       const fatorBonus   = getBonusFator(scoreTotal);
@@ -393,6 +416,9 @@ export const scorecardRouter = router({
           mediaAvaliacao,
         },
         financeiro: {
+          valorContrato,
+          custoPrevisto,
+          lucroPrevisto,
           receitaRealizada,
           custoRealizado,
           lucroRealizado,
