@@ -1,4 +1,48 @@
 /**
+ * Rev. 4184 - SCORECARD: ABA SEGURANÇA — QUADRO CLT/TERCEIROS, ASO, TREINAMENTOS, ADVERTÊNCIAS E EPI.
+ *
+ * O QUE FOI FEITO:
+ * - Nova procedure `scorecard.getSeguranca` (server/routers/scorecard.ts) com 7 queries paralelas:
+ *     Q1. CLT na obra — LEFT JOIN LATERAL p/ ASO vigente + contagem de treinamentos (válidos/vencidos)
+ *         + contagem de advertências. Fonte: employees + asos + trainings + warnings.
+ *     Q2. Terceiros na obra — documentação (ASO, NR-35, NR-10, NR-33, integração), aptidão,
+ *         contagem de advertências. Fonte: funcionarios_terceiros + empresas_terceiras + warnings_terceiros.
+ *     Q3. Treinamentos por norma — breakdown NR-35/NR-10/NR-33/etc. com validos/vencidos/total.
+ *     Q4. Advertências CLT — warnings JOIN employees WHERE obra_id.
+ *     Q5. Advertências terceiros — warnings_terceiros WHERE obra_id.
+ *     Q6. EPI por funcionário — epi_deliveries JOIN employees + epis, custo_estimado = valor_produto × qtd.
+ *     Q7. EPI por tipo — Curva ABC de custo com window function acumulativa.
+ * - Objeto `resumo`: totalClt, totalTerceiros, cltSemAso, cltAsoVencido, cltComAdvertencia,
+ *   cltSemTreinamento, terceirosSemDoc, totalCustoEpi, totalAdvertencias.
+ * - Nova aba "🛡️ Segurança" adicionada como PRIMEIRA aba no card Análise Gerencial:
+ *     • KPIs: CLT, Terceiros, Advertências, Sem ASO, ASO Vencido, Custo EPI.
+ *     • Quadro CLT: tabela com ASO (✓/!/—), treinamentos (válidos + vencidos), advertências.
+ *     • Quadro Terceiros: lista com docs preenchidos, ASO status, NR-35/NR-10/NR-33, badges.
+ *     • Treinamentos por Norma: tabela com norma, total funcionários, válidos, vencidos.
+ *     • Advertências CLT + Terceiros: lista unificada ordenada por data.
+ *     • Curva ABC de EPI: tabela com classe, EPI, custo, unidades, funcionários.
+ *     • EPI por Funcionário: bar chart horizontal (top 15, ordenado por custo estimado).
+ * - Badges de alerta no cabeçalho do card (sempre visíveis): "X advert." + "X sem ASO".
+ * - Estado padrão da aba: "seguranca" (lazy load separado por aba — getSeguranca só carrega quando
+ *   abaAnalise === "seguranca"; getAnalise só carrega quando ≠ "seguranca").
+ * - ZERO DELETE · ZERO ALTER destrutivo.
+ *
+ * ARQUIVOS TOCADOS:
+ * - server/routers/scorecard.ts → procedure getSeguranca adicionada (antes de getAnalise)
+ * - client/src/pages/planejamento/ScorecardTab.tsx → estado abaAnalise default "seguranca",
+ *   analiseSeguranca query, badges no header, nova aba 🛡️ Segurança com todo o UI
+ * - shared/version.ts → bump Rev. 4184
+ *
+ * RACIONAL:
+ * - Dimensão Segurança do scorecard valia 30% do score mas não tinha inteligência analítica.
+ * - Gestor precisa saber: quem está na obra, quem tem ASO válido, quem recebeu advertência,
+ *   qual EPI está sendo mais consumido e por quem — para bonificar ou penalizar com base em dados.
+ * - Terceiros são tratados separadamente (funcionarios_terceiros + warnings_terceiros) pois têm
+ *   esquema de documentação próprio (ASO manual + NR-35/NR-10/NR-33 individuais, não tabela asos).
+ * - EPI usa epi_deliveries.obra_id para filtrar por obra; custo estimado = valor_produto × quantidade.
+ */
+
+/**
  * Rev. 4183 - SCORECARD: PAINEL ANÁLISE GERENCIAL DA OBRA (CURVA ABC, RECOMPRAS, FERRAMENTAS, LOCAÇÕES).
  *
  * O QUE FOI FEITO:

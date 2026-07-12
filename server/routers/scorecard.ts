@@ -561,6 +561,247 @@ export const scorecardRouter = router({
       return { ok: true };
     }),
 
+  getSeguranca: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return null;
+      const safe = async (label: string, fn: () => Promise<any[]>) => {
+        try { return await fn(); } catch (e: any) {
+          console.warn(`[Scorecard.getSeguranca] ${label}:`, e?.message);
+          return [];
+        }
+      };
+
+      const [clt, terceiros, treinamentosNorma, advertencias, advertenciasTerceiros, epiPorFuncionario, epiPorTipo] = await Promise.all([
+
+        // ── Q1: FUNCIONÁRIOS CLT com ASO + treinamentos + advertências ────────
+        safe("cltFuncionarios", async () => {
+          const r = await db.execute(sql`
+            SELECT
+              e.id, e.nome, e.cargo, e.status, e.cpf,
+              aso.data_validade   AS aso_validade,
+              aso.resultado       AS aso_resultado,
+              CASE
+                WHEN aso.data_validade::date >= CURRENT_DATE THEN 'valido'
+                WHEN aso.data_validade IS NOT NULL           THEN 'vencido'
+                ELSE 'sem_aso'
+              END                 AS aso_status,
+              COALESCE(tr.validos,  0) AS treinamentos_validos,
+              COALESCE(tr.vencidos, 0) AS treinamentos_vencidos,
+              COALESCE(wn.cnt,      0) AS num_advertencias
+            FROM employees e
+            LEFT JOIN LATERAL (
+              SELECT data_validade, resultado
+              FROM asos
+              WHERE employee_id = e.id AND deleted_at IS NULL
+              ORDER BY data_validade DESC NULLS LAST LIMIT 1
+            ) aso ON true
+            LEFT JOIN LATERAL (
+              SELECT
+                COUNT(*) FILTER (WHERE data_validade IS NULL OR data_validade::date >= CURRENT_DATE) AS validos,
+                COUNT(*) FILTER (WHERE data_validade IS NOT NULL AND data_validade::date < CURRENT_DATE) AS vencidos
+              FROM trainings
+              WHERE employee_id = e.id AND deleted_at IS NULL
+            ) tr ON true
+            LEFT JOIN LATERAL (
+              SELECT COUNT(*) AS cnt
+              FROM warnings
+              WHERE employee_id = e.id AND deleted_at IS NULL
+            ) wn ON true
+            WHERE e.obra_id    = ${input.obraId}
+              AND e.company_id = ${input.companyId}
+              AND e.status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')
+            ORDER BY e.nome
+          `);
+          return r.rows as any[];
+        }),
+
+        // ── Q2: TERCEIROS com documentação ───────────────────────────────────
+        safe("terceiros", async () => {
+          const r = await db.execute(sql`
+            SELECT
+              ft.id, ft.nome, ft.funcao, ft.cpf, ft.status_aptidao,
+              ft.aso_validade, ft.aso_url,
+              ft.treinamento_nr_url, ft.treinamento_nr_validade,
+              ft.nr35_validade, ft.nr35_doc_url,
+              ft.nr10_validade, ft.nr10_doc_url,
+              ft.nr33_validade, ft.nr33_doc_url,
+              ft.integracao_doc_url,
+              COALESCE(et.nome_fantasia, et.razao_social) AS empresa_nome,
+              COALESCE(wt.cnt, 0) AS num_advertencias,
+              CASE
+                WHEN ft.aso_validade IS NOT NULL AND ft.aso_validade::date >= CURRENT_DATE THEN 'valido'
+                WHEN ft.aso_validade IS NOT NULL THEN 'vencido'
+                ELSE 'sem_doc'
+              END AS aso_status,
+              (CASE WHEN ft.aso_url IS NOT NULL THEN 1 ELSE 0 END +
+               CASE WHEN ft.nr35_doc_url IS NOT NULL THEN 1 ELSE 0 END +
+               CASE WHEN ft.nr10_doc_url IS NOT NULL THEN 1 ELSE 0 END +
+               CASE WHEN ft.nr33_doc_url IS NOT NULL THEN 1 ELSE 0 END +
+               CASE WHEN ft.integracao_doc_url IS NOT NULL THEN 1 ELSE 0 END) AS docs_preenchidos
+            FROM funcionarios_terceiros ft
+            JOIN empresas_terceiras et ON et.id = ft.empresa_terceira_id
+            LEFT JOIN LATERAL (
+              SELECT COUNT(*) AS cnt
+              FROM warnings_terceiros wt2
+              WHERE wt2.funcionario_terceiro_id = ft.id AND wt2.deleted_at IS NULL
+            ) wt ON true
+            WHERE ft.obra_id    = ${input.obraId}
+              AND ft.company_id = ${input.companyId}
+            ORDER BY ft.nome
+          `);
+          return r.rows as any[];
+        }),
+
+        // ── Q3: TREINAMENTOS por norma (CLT desta obra) ───────────────────────
+        safe("treinamentosNorma", async () => {
+          const r = await db.execute(sql`
+            SELECT
+              COALESCE(NULLIF(TRIM(t.norma), ''), 'Outros / Sem norma') AS norma,
+              COUNT(DISTINCT t.employee_id) AS total_funcionarios,
+              COUNT(*) FILTER (WHERE t.data_validade IS NULL OR t.data_validade::date >= CURRENT_DATE) AS validos,
+              COUNT(*) FILTER (WHERE t.data_validade IS NOT NULL AND t.data_validade::date < CURRENT_DATE) AS vencidos,
+              MIN(t.data_validade) FILTER (WHERE t.data_validade IS NOT NULL AND t.data_validade::date >= CURRENT_DATE) AS proxima_validade
+            FROM trainings t
+            WHERE t.company_id = ${input.companyId}
+              AND t.deleted_at  IS NULL
+              AND t.employee_id IN (
+                SELECT id FROM employees
+                WHERE obra_id    = ${input.obraId}
+                  AND company_id = ${input.companyId}
+                  AND status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')
+              )
+            GROUP BY COALESCE(NULLIF(TRIM(t.norma), ''), 'Outros / Sem norma')
+            ORDER BY total_funcionarios DESC
+          `);
+          return r.rows as any[];
+        }),
+
+        // ── Q4: ADVERTÊNCIAS CLT (employees desta obra) ───────────────────────
+        safe("advertencias", async () => {
+          const r = await db.execute(sql`
+            SELECT
+              w.id, w.tipo_advertencia, w.data_ocorrencia, w.motivo,
+              e.nome AS funcionario_nome, e.cargo
+            FROM warnings w
+            JOIN employees e ON e.id = w.employee_id
+            WHERE e.obra_id    = ${input.obraId}
+              AND w.company_id = ${input.companyId}
+              AND w.deleted_at IS NULL
+            ORDER BY w.data_ocorrencia DESC
+            LIMIT 20
+          `);
+          return r.rows as any[];
+        }),
+
+        // ── Q5: ADVERTÊNCIAS TERCEIROS desta obra ─────────────────────────────
+        safe("advertenciasTerceiros", async () => {
+          const r = await db.execute(sql`
+            SELECT
+              wt.id, wt.tipo_advertencia, wt.data_ocorrencia, wt.motivo,
+              COALESCE(ft.nome, wt.funcionario_nome_manual)     AS funcionario_nome,
+              COALESCE(ft.funcao, wt.funcionario_funcao_manual) AS funcao,
+              COALESCE(et.nome_fantasia, et.razao_social)       AS empresa_nome
+            FROM warnings_terceiros wt
+            LEFT JOIN funcionarios_terceiros ft ON ft.id = wt.funcionario_terceiro_id
+            LEFT JOIN empresas_terceiras et ON et.id = wt.empresa_terceira_id
+            WHERE wt.obra_id    = ${input.obraId}
+              AND wt.company_id = ${input.companyId}
+              AND wt.deleted_at IS NULL
+            ORDER BY wt.data_ocorrencia DESC
+            LIMIT 20
+          `);
+          return r.rows as any[];
+        }),
+
+        // ── Q6: EPI por funcionário desta obra ────────────────────────────────
+        safe("epiPorFuncionario", async () => {
+          const r = await db.execute(sql`
+            SELECT
+              e.id AS employee_id, e.nome AS funcionario_nome, e.cargo,
+              COUNT(ed.id)                                                           AS total_entregas,
+              SUM(ed.quantidade)                                                     AS total_unidades,
+              SUM(COALESCE(ep.valor_produto::numeric, 0) * ed.quantidade)            AS custo_estimado,
+              MAX(ed.data_entrega)                                                   AS ultima_entrega
+            FROM epi_deliveries ed
+            JOIN employees e  ON e.id  = ed.employee_id
+            JOIN epis      ep ON ep.id = ed.epi_id
+            WHERE ed.obra_id    = ${input.obraId}
+              AND ed.company_id = ${input.companyId}
+              AND ed.deleted_at IS NULL
+            GROUP BY e.id, e.nome, e.cargo
+            ORDER BY custo_estimado DESC
+            LIMIT 30
+          `);
+          return r.rows as any[];
+        }),
+
+        // ── Q7: EPI por tipo (Curva ABC de custo) ────────────────────────────
+        safe("epiPorTipo", async () => {
+          const r = await db.execute(sql`
+            WITH base AS (
+              SELECT
+                ep.nome        AS epi_nome,
+                ep.categoria,
+                ep.valor_produto::numeric AS valor_unit,
+                SUM(ed.quantidade)                                          AS total_unidades,
+                SUM(COALESCE(ep.valor_produto::numeric, 0) * ed.quantidade) AS custo_total,
+                COUNT(DISTINCT ed.employee_id)                              AS num_funcionarios,
+                COUNT(ed.id)                                                AS total_entregas
+              FROM epi_deliveries ed
+              JOIN epis ep ON ep.id = ed.epi_id
+              WHERE ed.obra_id    = ${input.obraId}
+                AND ed.company_id = ${input.companyId}
+                AND ed.deleted_at IS NULL
+              GROUP BY ep.id, ep.nome, ep.categoria, ep.valor_produto
+            ),
+            soma   AS (SELECT SUM(custo_total) AS total_geral FROM base),
+            ranked AS (
+              SELECT b.*, s.total_geral,
+                SUM(b.custo_total) OVER (ORDER BY b.custo_total DESC
+                  ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS acum_custo
+              FROM base b, soma s
+            )
+            SELECT *,
+              ROUND((custo_total / NULLIF(total_geral, 0) * 100)::numeric, 2) AS pct,
+              CASE
+                WHEN (acum_custo - custo_total) / NULLIF(total_geral, 0) < 0.80 THEN 'A'
+                WHEN (acum_custo - custo_total) / NULLIF(total_geral, 0) < 0.95 THEN 'B'
+                ELSE 'C'
+              END AS classe_abc
+            FROM ranked
+            ORDER BY custo_total DESC
+            LIMIT 20
+          `);
+          return r.rows as any[];
+        }),
+      ]);
+
+      const totalClt          = clt.length;
+      const totalTerceiros    = terceiros.length;
+      const cltSemAso         = clt.filter((e: any) => e.aso_status === 'sem_aso').length;
+      const cltAsoVencido     = clt.filter((e: any) => e.aso_status === 'vencido').length;
+      const cltComAdvertencia = clt.filter((e: any) => parseInt(String(e.num_advertencias)) > 0).length;
+      const cltSemTreinamento = clt.filter((e: any) => parseInt(String(e.treinamentos_validos)) === 0).length;
+      const terceirosSemDoc   = terceiros.filter((t: any) => parseInt(String(t.docs_preenchidos)) === 0).length;
+      const totalCustoEpi     = epiPorTipo.reduce((s: number, e: any) => s + parseFloat(String(e.custo_total ?? 0)), 0);
+      const totalAdvertencias = advertencias.length + advertenciasTerceiros.length;
+
+      return {
+        clt, terceiros, treinamentosNorma,
+        advertencias, advertenciasTerceiros,
+        epiPorFuncionario, epiPorTipo,
+        resumo: {
+          totalClt, totalTerceiros,
+          cltSemAso, cltAsoVencido,
+          cltComAdvertencia, cltSemTreinamento,
+          terceirosSemDoc, totalCustoEpi,
+          totalAdvertencias,
+        },
+      };
+    }),
+
   getAnalise: protectedProcedure
     .input(z.object({ companyId: z.number(), obraId: z.number() }))
     .query(async ({ input }) => {

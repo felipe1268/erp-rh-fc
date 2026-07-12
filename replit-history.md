@@ -1,3 +1,5 @@
+- **Rev. 4175** — **COMPRAS: REDESIGN MODERNO DO OcMiniDialog.** Header gradiente dinâmico, timeline horizontal 4 etapas, itens colapsáveis com mini-barra de proporção. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4174** — **COMPRAS/FINANCEIRO: PAINEL DASH + ALMOXARIFADO NA OC.** `AnaliseDashPanel.tsx` (Curva ABC, destaques, fragmentação). Barra busca. Almox via `motivo ILIKE`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4143** — **NFS-e: UPSERT NO UPLOAD ABRASF — XML CORRIGE NOTA EXISTENTE. BATCH CORRIGE #22–#28.** ZERO DELETE · ZERO ALTER destrutivo.
