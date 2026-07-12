@@ -1386,11 +1386,14 @@ export function normItemDesc(s: string): string {
   // 6. remove classe de resistência após tipo (CP3-E-32, CP3 E 32, CP5-E40)
   n = n.replace(/\b(CP\s*\d+)\s*[-–]?\s*E\s*[-–]?\s*\d+\b/g, "$1");
 
-  // 7. normaliza tamanhos numéricos
-  //    "DE 4M" → "4M" (preposição antes de número: "Caçamba de 4M" = "Caçamba 4M")
-  n = n.replace(/\bDE\s+(\d)/g, "$1");
+  // 7. normaliza tamanhos numéricos e remove preposições de ligação
   //    "4 M" → "4M" (colapsa número + espaço + unidade de medida)
   n = n.replace(/(\d)\s+(M3|M2|M\b|KG|ML\b|LT\b|L\b|CM\b|MM\b)/g, "$1$2");
+  // Remove preposições de ligação que não alteram a identidade do produto:
+  //   "Lapis de Carpinteiro" → "Lapis Carpinteiro"  (antes só cobria DE+dígito)
+  //   "Tubo de Esgoto 100MM" → "Tubo Esgoto 100MM"  (unifica "Tubo de Esgoto" ≡ "Tubo Esgoto")
+  //   "Caçamba de 4M" → "Caçamba 4M"                (cobre o caso anterior de \bDE\s+\d)
+  n = n.replace(/\b(DE|DA|DO|DAS|DOS)\b\s*/g, " ");
 
   // 8. qualificadores redundantes de construção civil
   n = n.replace(/\bLAVADA\b/g, "");
@@ -1408,9 +1411,15 @@ export function normItemDesc(s: string): string {
 
 // Família = primeira palavra significativa da chave normalizada (ignora stopwords e números puros)
 const _FAM_SW = new Set(["DE","DA","DO","DAS","DOS","EM","COM","PARA","E","A","O","AS","OS","UM","UMA","POR","NA","NO","NAS","NOS","AO","AOS","SE","SEM","OU","MAS"]);
+// Marcas brasileiras de construção que aparecem como primeiro token — pula para o tipo de produto
+const _BRAND_FIRST = new Set(["TIGRE","STECK","AMANCO","CIPLA","PLASTUBOS","FORTLEV","DOCOL","DECA","BRASILIT","ETERNIT","VEDACIT","OTTO","BAUGM"]);
 export function getItemFamilia(normKey: string): string {
   const words = normKey.split(" ").filter(w => w.length > 0 && !_FAM_SW.has(w) && !/^\d/.test(w));
-  return words[0] ?? normKey.split(" ")[0] ?? "OUTROS";
+  // Se a primeira palavra é uma marca conhecida, usa a segunda como família
+  let idx = 0;
+  if (words[0] && _BRAND_FIRST.has(words[0]) && words[1]) idx = 1;
+  const first = words[idx];
+  return first ?? normKey.split(" ").find(w => w.length > 0) ?? "OUTROS";
 }
 
 export const comprasRouter = router({

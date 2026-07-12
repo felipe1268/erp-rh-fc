@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4163** — **COMPRAS: CATÁLOGO — AUDITORIA REAL 1753 DESCRIÇÕES → CORREÇÃO ALGORITMO DE GRUPOS.** Auditoria item-a-item contra Neon revelou: FAM=TIGRE acumulava 60 produtos/R$37k (marca no lugar de tipo); "Lapis de Carpinteiro"≠"Lapis Carpinteiro" (preposição DE criava chave falsa); regra `\bDE\s+(\d)` só cobria DE antes de dígito. Correções: (1) `normItemDesc` step 7: `\b(DE|DA|DO|DAS|DOS)\b\s*`→" " (remove todas as preposições de ligação); (2) `getItemFamilia`: `_BRAND_FIRST` Set (TIGRE, STECK, AMANCO, CIPLA…) — quando marca no 1º token, usa 2º como família. Resultado: 507 famílias (era 517), TUBO absorveu todos os tubos Tigre+genéricos. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4162** — **COMPRAS: CATÁLOGO DE ITENS — VISÃO HIERÁRQUICA FAMÍLIA → VARIANTE → OCs POR OBRA.** `getItemFamilia` extrai 1ª palavra significativa da chave normalizada (ignora stopwords+números). `getItensFamilias` agrupa TODOS os itens em família→variante com totais. `getItemOcDetalhes` lazy-load OCs por descrição (obra, data, qtd, preço). Novo `ItemCatalogo.tsx` (3 níveis expand, search, KPIs, Padronizar por variante). 5ª aba "Catálogo" na Auditoria. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4161** — **COMPRAS: NORMALIZAÇÃO DE ITENS V2 — CIMENTO CP3 + CAÇAMBA + PARÊNTESES SELETIVOS.** `normItemDesc` corrigida: parênteses de embalagem (Sacos de, Balde, Galão) removidos; specs de produto (dimensões, período, tipo) incorporados como palavras na chave; colapso "CP 3"→"CP3" pós-romano; "DE 4M"→"4M"; "4 M"→"4M". 16/17 testes OK. Auditoria real: 21 grupos/R$170k (Cimento CP3 agora 3 variantes; Caçamba 4M novo grupo; Telha Galvalume e Prego Cabeça Dupla false positives corrigidos). `getItemSugestoes` normaliza+agrupa sugestões retornando nome canônico. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4161** — **COMPRAS: NORMALIZAÇÃO DE ITENS V2 — CIMENTO CP3 + CAÇAMBA + PARÊNTESES SELETIVOS.** `normItemDesc` corrigida: embalagem removida; specs incorporados; "CP 3"→"CP3"; "DE 4M"→"4M". ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4160** — **COMPRAS: AUDITORIA DE ITENS — NORMALIZAÇÃO DE NOMES E AUTOCOMPLETE NA SC/OC.** 3 procedures: `auditarItens`, `padronizarItens`, `getItemSugestoes`. Novo `ItemDescricaoInput`. Aba "Itens" na Auditoria. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4158** — **FINANCEIRO: ANÁLISE APROFUNDADA POR FORNECEDOR — ITENS & PREÇOS (OCs).** Novo `compras.getAnaliseFornecedor` (4 queries). `FinanceiroAnaliseCustosDetalhe`: 2 abas, KPI cards, tabela expand/collapse com badge variação preço, mini LineChart, formas pgto. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4155** — **FROTA: NOVA VIAGEM — FIXES: fleet_trips COLUNAS FALTANDO + DIRECTIONS API DO BROWSER.** Loop ALTER TABLE 17 colunas; getGoogleMapsKey procedure. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4152** — **FROTA: NOVA VIAGEM — SELETOR VISUAL DE VEÍCULOS + MAPA GOOGLE + AUTO-PREENCHIMENTO.** `VehiclePickerSheet`; `NovaViagemDialog` single-column; auto-fill motorista+km; `RoutePreview` iframe + 4 cards; backend `getRouteInfo`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4151** — **FROTA: CONTROLE DE VIAGENS — MÓDULO COMPLETO.** 2 tabelas novas (`fleet_trips`, `fleet_trip_expenses`); 10 procedures tRPC; fluxo pendente→autorizada→em_andamento→concluída; km inicial/final com foto; despesas + reembolso PIX/TED. ZERO DELETE · ZERO ALTER destrutivo.
 

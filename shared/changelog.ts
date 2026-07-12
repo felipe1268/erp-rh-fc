@@ -1,4 +1,33 @@
 /**
+ * Rev. 4163 — **COMPRAS: CATÁLOGO — AUDITORIA REAL 1753 DESCRIÇÕES → CORREÇÃO ALGORITMO DE GRUPOS.**
+ *
+ * CONTEXTO: auditoria item-a-item contra Neon (company 60002) revelou 3 falhas críticas no agrupamento:
+ * (1) FAM=TIGRE acumulava 60 produtos/R$37k (marca no lugar de tipo de produto);
+ * (2) "Lapis de Carpinteiro" ≠ "Lapis Carpinteiro" (DE entre palavras gerava chave diferente);
+ * (3) Preposição só era removida antes de dígito (`\bDE\s+(\d)`), nunca antes de letra.
+ *
+ * CORREÇÃO 1 — `normItemDesc` (step 7 de `server/routers/compras.ts`):
+ *   - Substituiu regra estreita `\bDE\s+(\d)→$1` por remoção GLOBAL de preposições de ligação:
+ *     `\b(DE|DA|DO|DAS|DOS)\b\s*` → " "
+ *   - Efeitos: "Lapis de Carpinteiro"≡"Lapis Carpinteiro"; "Tubo de Esgoto 100MM"≡"Tubo Esgoto 100MM";
+ *     "Caçamba de 4M"≡"Caçamba 4M" (caso anterior também coberto).
+ *   - ZERO impacto destrutivo: chaves existentes só COLAPSAM duplicatas legítimas, nunca criam falsos matches.
+ *
+ * CORREÇÃO 2 — `getItemFamilia` (module-level em `server/routers/compras.ts`):
+ *   - Adicionado `_BRAND_FIRST: Set<string>` com marcas que aparecem como PRIMEIRO TOKEN:
+ *     TIGRE, STECK, AMANCO, CIPLA, PLASTUBOS, FORTLEV, DOCOL, DECA, BRASILIT, ETERNIT, VEDACIT, OTTO, BAUGM.
+ *   - Quando primeiro token é marca conhecida, família passa para o SEGUNDO token (tipo de produto).
+ *   - Efeito: "Tigre Tubo Soldavel 75Mm" → FAM=TUBO (não mais TIGRE); os 60 produtos Tigre agora
+ *     distribuídos em TUBO (22var), JOELHO, TE, BUCHA, CURVA, etc. — agrupamento por tipo correto.
+ *
+ * RESULTADO: 507 famílias (era 517) com grupos semanticamente corretos; TUBO absorveu todos os tubos
+ * independente de marca; ACO agrupa todos os aços Ca-50/Ca-60; AREIA unificou "Areia Média Lavada"
+ * e variantes; CIMENTO CP3 unificou CPIII/CP III.
+ *
+ * ZERO DELETE · ZERO ALTER DESTRUTIVO.
+ */
+
+/**
  * Rev. 4162 — **COMPRAS: CATÁLOGO DE ITENS — VISÃO HIERÁRQUICA FAMÍLIA → VARIANTE → OCs POR OBRA.**
  *
  * CONTEXTO: usuário solicitou visão geral agrupada de TODOS os itens comprados por família de produto
