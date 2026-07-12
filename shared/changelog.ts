@@ -1,4 +1,47 @@
 /**
+ * Rev. 4159 — **COMPRAS: AUDITORIA DE FORNECEDORES — DUPLICATAS, VARIANTES DE NOME E MESCLAGEM.**
+ *
+ * CONTEXTO: nomes de fornecedores cadastrados com grafias diferentes (maiúsculas/minúsculas, com/sem
+ * sufixo LTDA, variações de fantasia) fragmentavam relatórios de análise de custos. A PROMATEL
+ * aparecia como 4 entradas distintas nos lançamentos financeiros; o dashboard "Por Fornecedor" somava
+ * cada variante separadamente. O objetivo é dar visibilidade completa dessas inconsistências e
+ * permitir correção com 1 clique.
+ *
+ * MUDANÇA BACKEND — `server/routers/compras.ts` (4 novos procedures):
+ * - `auditarFornecedores(companyId)`:
+ *   - Query 1: duplicatas no cadastro (REGEXP_REPLACE strips LTDA/ME/EPP/SA suffix + GROUP BY HAVING >1)
+ *   - Query 2: OCs com mesmo fornecedor_id mas fornecedor_nome distintos (HAVING COUNT(DISTINCT nome)>1)
+ *   - Query 3: lançamentos financeiros com nomes similares (agrupa por prefixo de 12 chars normalizados)
+ *   - Retorna: {duplicatasCadastro, variantesOC, variantesFE}
+ * - `padronizarNomesOC(companyId, fornecedorId?)`:
+ *   - UPDATE compras_ordens SET fornecedor_nome = f.razao_social (por forn_id ou todos)
+ *   - Retorna: {updated: N}
+ * - `padronizarNomeFE(companyId, substituicoes[])`:
+ *   - Array de {de, para} → UPDATE financial_entries per substituição
+ *   - Retorna: {updated: N}
+ * - `mesclarFornecedor(companyId, canonicalId, duplicateId)`:
+ *   - Reatribui OCs: UPDATE compras_ordens SET fornecedor_id=canonical, nome=canonical.razao_social
+ *   - Reatribui lançamentos: UPDATE financial_entries SET fornecedor_nome=canonical WHERE nome=duplicado
+ *   - Desativa: UPDATE fornecedores SET ativo=false WHERE id=duplicateId
+ *   - Retorna: {ocsReatribuidas, lancamentosAtualizados, duplicateNome, canonicalNome}
+ *
+ * MUDANÇA FRONTEND — `client/src/pages/compras/AuditoriaFornecedores.tsx` (nova tela):
+ * - Rota: `/compras/auditoria-fornecedores`
+ * - Botão "Auditoria" adicionado ao CommandBar da tela de Fornecedores
+ * - 3 cards de resumo clicáveis: OCs (azul), Lançamentos (âmbar), Cadastro (vermelho)
+ * - 3 abas:
+ *   a) "OCs": lista de grupos com variantes de nome, badge indicando qtd variantes, botão
+ *      "Padronizar Todos" (aplica em lote) ou por fornecedor individual
+ *   b) "Lançamentos Financeiros": grupos por prefixo, expandable, escolha do nome canônico (mais frequente),
+ *      botão "Padronizar todos" por grupo
+ *   c) "Duplicatas no Cadastro": pares de fornecedores similares, badge "Ativos" em vermelho quando ambos
+ *      ativos, botão "Mesclar" com Dialog de confirmação
+ * - Dialog de confirmação de mesclagem: mostra qual será desativado, quais dados serão migrados
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4158 — **FINANCEIRO: ANÁLISE APROFUNDADA POR FORNECEDOR — ITENS & PREÇOS (OCs).**
  *
  * CONTEXTO: a tela "Análise de Custos" exibia lançamentos financeiros ao clicar num fornecedor,

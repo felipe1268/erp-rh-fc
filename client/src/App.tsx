@@ -416,6 +416,7 @@ const PortalServicoPage = lazyWithRetry(() => import("./pages/PortalServico"));
 const MedicoesServicoPage = lazyWithRetry(() => import("./pages/compras/MedicoesServico"));
 const DatabookPage = lazyWithRetry(() => import("./pages/compras/Databook"));
 const PortalOCEntregaPage = lazyWithRetry(() => import("./pages/PortalOCEntrega"));
+const ComprasAuditoriaFornecedores = lazyWithRetry(() => import("./pages/compras/AuditoriaFornecedores"));
 
 // Frotas
 const PainelFrotas = lazyWithRetry(() => import("./pages/frotas/PainelFrotas"));
@@ -719,6 +720,7 @@ function Router() {
         <Route path="/equipamentos/locados"          component={() => <RouteGuard component={EquipamentosLocados} route="/almoxarifado" />} />
         <Route path="/compras/painel"            component={() => <RouteGuard component={PainelCompras} route="/compras/painel" />} />
         <Route path="/compras/fornecedores"      component={() => <RouteGuard component={Fornecedores} route="/compras/fornecedores" />} />
+        <Route path="/compras/auditoria-fornecedores" component={() => <RouteGuard component={ComprasAuditoriaFornecedores} route="/compras/fornecedores" />} />
         <Route path="/compras/almoxarifado"      component={() => <RouteGuard component={Almoxarifado} route="/compras/painel" />} />
         <Route path="/compras/solicitacoes"      component={() => <RouteGuard component={Solicitacoes} route="/compras/solicitacoes" />} />
         <Route path="/compras/cotacoes"          component={() => <RouteGuard component={Cotacoes} route="/compras/cotacoes" />} />

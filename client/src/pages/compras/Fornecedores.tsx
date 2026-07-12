@@ -20,8 +20,9 @@ import {
   CheckCircle2, XCircle, AlertTriangle, Loader2, X, ChevronDown, ChevronUp, Users,
   Star, Trophy, Medal, ShieldCheck, ShieldAlert, TrendingUp, Package, Clock, BarChart3, Truck,
   CreditCard, FileText, Tag, MessageSquare, Landmark, Hash, KeyRound,
-  Eye, ShieldQuestion,
+  Eye, ShieldQuestion, Wrench,
 } from "lucide-react";
+import { useLocation } from "wouter";
 
 function maskPhone(v: string): string {
   const d = v.replace(/\D/g, "").slice(0, 11);
@@ -289,6 +290,7 @@ export default function Fornecedores() {
   const { selectedCompany } = useCompany();
   const { user } = useAuth();
   const companyId = selectedCompany?.id ?? 0;
+  const [, setLocation] = useLocation();
 
   const [aba, setAba] = useState<"lista" | "ranking">("lista");
   const [busca, setBusca]       = useState("");
@@ -831,6 +833,7 @@ export default function Fornecedores() {
             </p>
           </div>
           <DraggableCommandBar barId="fornecedores" items={[
+            { id: "auditoria", node: <Button variant="outline" onClick={() => setLocation("/compras/auditoria-fornecedores")}><Wrench className="h-4 w-4 mr-2 text-amber-500" /> Auditoria</Button> },
             { id: "novo", node: <Button onClick={abrirNovo} className="bg-blue-600 hover:bg-blue-700 text-white"><Plus className="h-4 w-4 mr-2" /> Nova Empresa Terceira</Button> },
           ]} />
         </div>

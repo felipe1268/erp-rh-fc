@@ -16226,4 +16226,228 @@ Responda APENAS com JSON válido, sem markdown, no formato:
         formasPagamento,
       };
     }),
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Rev. 4159 — AUDITORIA DE FORNECEDORES
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /** Retorna todos os problemas de qualidade de dados nos fornecedores:
+   * 1. Duplicatas no cadastro (mesmo nome, ids diferentes)
+   * 2. Variantes de nome nas OCs (mesmo forn_id, nomes diferentes)
+   * 3. Variantes de nome nos lançamentos financeiros (texto livre, agrupado por prefixo)
+   */
+  auditarFornecedores: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const { db } = await getDb();
+      const { companyId } = input;
+
+      // 1. Duplicatas no cadastro
+      const dupRes = await db.execute(sql`
+        WITH norm AS (
+          SELECT id, razao_social, nome_fantasia, cnpj, ativo,
+            REGEXP_REPLACE(UPPER(TRIM(razao_social)), '\\s+(LTDA ME|LTDA EPP|LTDA|EIRELI|EPP|ME|S\\.A\\.|SA|SS)\\s*$', '', 'i') AS razao_norm
+          FROM fornecedores
+          WHERE company_id = ${companyId}
+        )
+        SELECT
+          razao_norm,
+          json_agg(json_build_object('id', id, 'razaoSocial', razao_social, 'nomeFantasia', nome_fantasia, 'cnpj', cnpj, 'ativo', ativo) ORDER BY ativo DESC, id) AS registros,
+          COUNT(*) AS total
+        FROM norm
+        GROUP BY razao_norm
+        HAVING COUNT(*) > 1
+        ORDER BY LOWER(razao_norm)
+      `);
+
+      // 2. Variantes de nome nas OCs (mesmo forn_id, nomes distintos)
+      const ocRes = await db.execute(sql`
+        SELECT
+          co.fornecedor_id,
+          f.razao_social AS razao_canonical,
+          array_agg(DISTINCT co.fornecedor_nome ORDER BY co.fornecedor_nome) AS nomes_usados,
+          COUNT(DISTINCT LOWER(TRIM(co.fornecedor_nome))) AS qtd_variantes,
+          COUNT(*) AS total_ocs
+        FROM compras_ordens co
+        JOIN fornecedores f ON f.id = co.fornecedor_id AND f.company_id = co.company_id
+        WHERE co.company_id = ${companyId}
+          AND co.status NOT IN ('cancelada', 'rascunho')
+          AND co.fornecedor_nome IS NOT NULL
+        GROUP BY co.fornecedor_id, f.razao_social
+        HAVING COUNT(DISTINCT LOWER(TRIM(co.fornecedor_nome))) > 1
+        ORDER BY LOWER(f.razao_social)
+      `);
+
+      // 3. Variantes de nome nos lançamentos financeiros
+      // Agrupa por prefixo (primeiras 10 letras normalizadas) — detecta variações de case/sufixo
+      const feRes = await db.execute(sql`
+        WITH base AS (
+          SELECT
+            fornecedor_nome,
+            COUNT(*)::int AS n,
+            SUM(valor_realizado) AS total_valor,
+            LEFT(REGEXP_REPLACE(UPPER(TRIM(fornecedor_nome)), '[^A-Z0-9 ]', '', 'g'), 12) AS prefixo
+          FROM financial_entries
+          WHERE company_id = ${companyId}
+            AND fornecedor_nome IS NOT NULL
+            AND fornecedor_nome <> ''
+          GROUP BY fornecedor_nome
+        )
+        SELECT
+          prefixo,
+          array_agg(json_build_object(
+            'nome', fornecedor_nome,
+            'n', n,
+            'total', COALESCE(total_valor, 0)
+          ) ORDER BY n DESC) AS variantes,
+          COUNT(*) AS qtd_variantes,
+          SUM(n) AS total_lancamentos
+        FROM base
+        GROUP BY prefixo
+        HAVING COUNT(*) > 1
+        ORDER BY SUM(n) DESC
+        LIMIT 80
+      `);
+
+      const rawDup = (dupRes as any).rows ?? dupRes;
+      const rawOc = (ocRes as any).rows ?? ocRes;
+      const rawFe = (feRes as any).rows ?? feRes;
+
+      return {
+        duplicatasCadastro: rawDup.map((r: any) => ({
+          razaoNorm: String(r.razao_norm ?? ''),
+          registros: Array.isArray(r.registros) ? r.registros : JSON.parse(r.registros ?? '[]'),
+        })),
+        variantesOC: rawOc.map((r: any) => ({
+          fornecedorId: Number(r.fornecedor_id),
+          razaoCanonical: String(r.razao_canonical ?? ''),
+          nomesUsados: Array.isArray(r.nomes_usados) ? r.nomes_usados : [],
+          qtdVariantes: Number(r.qtd_variantes),
+          totalOcs: Number(r.total_ocs),
+        })),
+        variantesFE: rawFe.map((r: any) => ({
+          prefixo: String(r.prefixo ?? ''),
+          variantes: Array.isArray(r.variantes) ? r.variantes : JSON.parse(r.variantes ?? '[]'),
+          qtdVariantes: Number(r.qtd_variantes),
+          totalLancamentos: Number(r.total_lancamentos),
+        })),
+      };
+    }),
+
+  /** Normaliza fornecedor_nome nas OCs: atualiza todos os registros de um forn_id
+   * para usar o razao_social do cadastro mestre. */
+  padronizarNomesOC: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      fornecedorId: z.number().optional(), // se omitido, aplica em todos
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const { db } = await getDb();
+      const { companyId, fornecedorId } = input;
+
+      let updRes;
+      if (fornecedorId) {
+        updRes = await db.execute(sql`
+          UPDATE compras_ordens co
+          SET fornecedor_nome = f.razao_social
+          FROM fornecedores f
+          WHERE co.company_id = ${companyId}
+            AND co.fornecedor_id = ${fornecedorId}
+            AND f.id = co.fornecedor_id
+            AND f.company_id = co.company_id
+            AND LOWER(TRIM(co.fornecedor_nome)) <> LOWER(TRIM(f.razao_social))
+        `);
+      } else {
+        updRes = await db.execute(sql`
+          UPDATE compras_ordens co
+          SET fornecedor_nome = f.razao_social
+          FROM fornecedores f
+          WHERE co.company_id = ${companyId}
+            AND co.fornecedor_id = f.id
+            AND f.company_id = co.company_id
+            AND LOWER(TRIM(co.fornecedor_nome)) <> LOWER(TRIM(f.razao_social))
+        `);
+      }
+      const count = Number((updRes as any).rowCount ?? 0);
+      return { updated: count };
+    }),
+
+  /** Normaliza fornecedor_nome em lançamentos financeiros:
+   * substitui nomes variantes pelo nome canônico. */
+  padronizarNomeFE: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      substituicoes: z.array(z.object({
+        de: z.string(),
+        para: z.string(),
+      })),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const { db } = await getDb();
+      const { companyId, substituicoes } = input;
+      let totalUpdated = 0;
+      for (const sub of substituicoes) {
+        if (sub.de === sub.para) continue;
+        const r = await db.execute(sql`
+          UPDATE financial_entries
+          SET fornecedor_nome = ${sub.para}
+          WHERE company_id = ${companyId}
+            AND fornecedor_nome = ${sub.de}
+        `);
+        totalUpdated += Number((r as any).rowCount ?? 0);
+      }
+      return { updated: totalUpdated };
+    }),
+
+  /** Mescla dois fornecedores: reatribui todas as OCs e lançamentos do duplicado
+   * para o canônico e desativa o duplicado no cadastro. */
+  mesclarFornecedor: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      canonicalId: z.number(),
+      duplicateId: z.number(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const { db } = await getDb();
+      const { companyId, canonicalId, duplicateId } = input;
+
+      // Busca nomes de ambos
+      const [canonical, duplicate] = await Promise.all([
+        db.execute(sql`SELECT razao_social FROM fornecedores WHERE id=${canonicalId} AND company_id=${companyId}`),
+        db.execute(sql`SELECT razao_social FROM fornecedores WHERE id=${duplicateId} AND company_id=${companyId}`),
+      ]);
+      const canonicalRows = (canonical as any).rows ?? canonical;
+      const duplicateRows = (duplicate as any).rows ?? duplicate;
+      if (!canonicalRows[0] || !duplicateRows[0]) throw new TRPCError({ code: 'NOT_FOUND', message: 'Fornecedor não encontrado' });
+      const canonicalNome = String(canonicalRows[0].razao_social ?? '');
+      const duplicateNome = String(duplicateRows[0].razao_social ?? '');
+
+      // Reatribui OCs
+      const ocUpd = await db.execute(sql`
+        UPDATE compras_ordens
+        SET fornecedor_id = ${canonicalId}, fornecedor_nome = ${canonicalNome}
+        WHERE company_id = ${companyId} AND fornecedor_id = ${duplicateId}
+      `);
+
+      // Reatribui lançamentos financeiros pelo nome
+      const feUpd = await db.execute(sql`
+        UPDATE financial_entries
+        SET fornecedor_nome = ${canonicalNome}
+        WHERE company_id = ${companyId}
+          AND LOWER(TRIM(fornecedor_nome)) = LOWER(TRIM(${duplicateNome}))
+      `);
+
+      // Desativa o duplicado
+      await db.execute(sql`
+        UPDATE fornecedores SET ativo = false
+        WHERE id = ${duplicateId} AND company_id = ${companyId}
+      `);
+
+      return {
+        ocsReatribuidas: Number((ocUpd as any).rowCount ?? 0),
+        lancamentosAtualizados: Number((feUpd as any).rowCount ?? 0),
+        duplicateNome,
+        canonicalNome,
+      };
+    }),
 });
