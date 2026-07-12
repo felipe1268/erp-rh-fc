@@ -1,4 +1,21 @@
 /**
+ * Rev. 4177 - COMPRAS/FINANCEIRO: ABA DEDICADA "ANÁLISE" NO DETALHE DE FORNECEDOR.
+ *
+ * O QUE FOI FEITO:
+ * - Adicionado 3º tab "Análise" ao lado de "Lançamentos Financeiros" e "Itens & Preços (OCs)".
+ * - Badge "IA" (indigo) no botão do tab Análise quando houver dados carregados.
+ * - Tab Análise contém: AnaliseDashPanel (Curva ABC | Destaques | Fragmentação) +
+ *   Formas de Pagamento + Obras Atendidas (grid 2 colunas abaixo do painel).
+ * - Tab Itens & Preços agora mostra APENAS a tabela de produtos (limpa, sem análise embaixo).
+ * - State: `'lancamentos' | 'itens' | 'analise'` (init = 'lancamentos').
+ *
+ * ARQUIVOS:
+ * - client/src/pages/financeiro/FinanceiroAnaliseCustosDetalhe.tsx
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4176 - COMPRAS/FINANCEIRO: PAINEL ANÁLISE SEPARADO DA TABELA (FULL-WIDTH).
  *
  * O QUE FOI FEITO:

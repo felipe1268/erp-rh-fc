@@ -50,7 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4176** — **COMPRAS/FINANCEIRO: PAINEL ANÁLISE SEPARADO DA TABELA (FULL-WIDTH).** `AnaliseDashPanel` redesenhado: 3 colunas horizontais (Curva ABC | Destaques em grade 2×3 | Fragmentação) com cabeçalho colapsável e badge de alertas. Layout da tela Itens & Preços reestruturado: stack vertical [KPI cards] → [Análise full-width] → [Tabela full-width] → [Formas de Pgto + Obras em grid 2 col]. Tabela agora ocupa 100% da largura. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4177** — **COMPRAS/FINANCEIRO: ABA DEDICADA "ANÁLISE" NO DETALHE DE FORNECEDOR.** 3º tab "Análise" (badge "IA") ao lado de Lançamentos e Itens & Preços. Contém AnaliseDashPanel (3 colunas: Curva ABC | Destaques | Fragmentação) + Formas de Pagamento + Obras Atendidas. Tab Itens exibe apenas a tabela limpa. State `'lancamentos' | 'itens' | 'analise'`. ZERO DELETE · ZERO ALTER destrutivo.
+
+- **Rev. 4176** — **COMPRAS/FINANCEIRO: PAINEL ANÁLISE SEPARADO DA TABELA (FULL-WIDTH).** `AnaliseDashPanel` redesenhado: 3 colunas horizontais (Curva ABC | Destaques em grade 2×3 | Fragmentação) com cabeçalho colapsável e badge de alertas. Tabela full-width; Formas de Pgto + Obras em grid 2 col. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4175** — **COMPRAS: REDESIGN MODERNO DO OcMiniDialog.** Header gradiente dinâmico (cor varia por status: verde=entregue, azul=aprovada, âmbar=pendente), total da OC em destaque 2xl, chips de pagamento/itens/almox em glass effect. Timeline horizontal 4 etapas (Solicitação→OC→Aprovação→Entrega) com círculos preenchidos. Chips de detalhes em pill cards coloridos. Itens colapsáveis com mini-barra de proporção (peso % no total) por linha. Almoxarifado colapsável em timeline vertical com dots teal/rose. ZERO DELETE · ZERO ALTER destrutivo.
 

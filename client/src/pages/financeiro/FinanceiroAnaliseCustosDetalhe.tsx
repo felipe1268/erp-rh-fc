@@ -207,7 +207,7 @@ export default function FinanceiroAnaliseCustosDetalhe() {
   };
 
   // ─── Rev. 4158 — Aba de análise por item (só exibida quando tipo === 'fornecedor')
-  const [aba, setAba] = useState<'lancamentos' | 'itens'>('lancamentos');
+  const [aba, setAba] = useState<'lancamentos' | 'itens' | 'analise'>('lancamentos');
   // Derived: nome do fornecedor que está em foco (primário ou último drill de fornecedor)
   const fornecedorFoco: string | null = useMemo(() => {
     if (tipo === 'fornecedor') return valor;
@@ -661,7 +661,8 @@ export default function FinanceiroAnaliseCustosDetalhe() {
             {([
               { id: 'lancamentos' as const, label: 'Lançamentos Financeiros', icon: ListChecks },
               { id: 'itens' as const, label: 'Itens & Preços (OCs)', icon: Package },
-            ] as { id: 'lancamentos' | 'itens'; label: string; icon: any }[]).map((t) => {
+              { id: 'analise' as const, label: 'Análise', icon: BarChart2 },
+            ] as { id: 'lancamentos' | 'itens' | 'analise'; label: string; icon: any }[]).map((t) => {
               const I = t.icon;
               const ativo = aba === t.id;
               return (
@@ -680,6 +681,11 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                   {t.id === 'itens' && analiseData?.resumo && (
                     <span className="ml-1 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold px-1.5 py-0.5 leading-none">
                       {analiseData.resumo.qtdItensdistintos}
+                    </span>
+                  )}
+                  {t.id === 'analise' && analiseData && (
+                    <span className="ml-1 rounded-full bg-indigo-600 text-white text-[10px] font-bold px-1.5 py-0.5 leading-none">
+                      IA
                     </span>
                   )}
                 </button>
@@ -1065,9 +1071,6 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                 })}
               </div>
 
-              {/* ── Painel de Análise (full-width, separado) ── */}
-              <AnaliseDashPanel itens={itens} totalGasto={resumo.totalGasto} />
-
               {/* ── Tabela de itens (full-width) ── */}
               <div>
                   <Card className="border-0 shadow-sm">
@@ -1360,9 +1363,33 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                   </Card>
                 </div>
 
-              {/* ── Formas de Pagamento + Obras Atendidas (full-width, abaixo da tabela) ── */}
+            </div>
+          );
+        })()}
+
+        {/* ─── Aba: Análise — Rev. 4177 ─── */}
+        {aba === 'analise' && fornecedorFoco && (() => {
+          if (analiseLoading) return (
+            <div className="flex items-center justify-center py-20 gap-2 text-sm text-gray-500">
+              <Loader2 className="w-5 h-5 animate-spin text-indigo-400" /> Carregando análise…
+            </div>
+          );
+          if (!analiseData) return (
+            <Card className="border-0 shadow-sm">
+              <CardContent className="py-16 text-center">
+                <BarChart2 className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                <p className="text-sm text-gray-500">Sem dados para análise.</p>
+                <p className="text-xs text-gray-400 mt-1">As análises requerem Ordens de Compra registradas no módulo de Compras.</p>
+              </CardContent>
+            </Card>
+          );
+          const { resumo, itens, formasPagamento } = analiseData;
+          return (
+            <div className="space-y-4">
+              <AnaliseDashPanel itens={itens} totalGasto={resumo.totalGasto} />
+
+              {/* Formas de Pagamento + Obras Atendidas */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Formas de pagamento */}
                 <Card className="border-0 shadow-sm">
                   <CardHeader className="pb-2 pt-4 px-5">
                     <CardTitle className="text-sm font-semibold text-gray-600 flex items-center gap-2">
@@ -1387,10 +1414,7 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                               </div>
                             </div>
                             <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                              <div
-                                className="h-full rounded-full bg-indigo-400 transition-all"
-                                style={{ width: `${fp.pct}%` }}
-                              />
+                              <div className="h-full rounded-full bg-indigo-400 transition-all" style={{ width: `${fp.pct}%` }} />
                             </div>
                             <p className="text-[10px] text-gray-400 tabular-nums">{formatBRL(fp.valorTotal)}</p>
                           </div>
@@ -1400,37 +1424,21 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                   </CardContent>
                 </Card>
 
-                {/* Obras atendidas */}
                 {resumo.obrasAtendidas.length > 0 ? (
                   <Card className="border-0 shadow-sm">
                     <CardHeader className="pb-2 pt-4 px-5">
                       <CardTitle className="text-sm font-semibold text-gray-600 flex items-center gap-2">
                         <MapPin className="w-4 h-4" /> Obras Atendidas
-                        {obraIdFiltro !== null && (
-                          <span className="text-[10px] font-normal text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">filtrada</span>
-                        )}
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="px-4 pb-4">
                       <div className="space-y-1">
-                        {resumo.obrasAtendidas.map((ob: { id: number | null; nome: string }, i: number) => {
-                          const isAtiva = obraIdFiltro !== null && obraIdFiltro === ob.id;
-                          return (
-                            <button
-                              key={i}
-                              onClick={() => {
-                                if (isAtiva) { setObraIdFiltro(null); setExpandedItems(new Set()); setChartItem(null); }
-                                else if (ob.id != null) { setObraIdFiltro(ob.id); setExpandedItems(new Set()); setChartItem(null); }
-                              }}
-                              disabled={ob.id == null}
-                              className={`w-full flex items-start gap-1.5 text-xs rounded px-1 py-0.5 transition-colors text-left ${isAtiva ? 'bg-amber-100 text-amber-800 font-medium' : ob.id != null ? 'hover:bg-gray-50 text-gray-600' : 'text-gray-400 cursor-default'}`}
-                            >
-                              <MapPin className={`w-3 h-3 shrink-0 mt-0.5 ${isAtiva ? 'text-amber-500' : 'text-gray-400'}`} />
-                              <span className="break-words">{ob.nome}</span>
-                              {isAtiva && <span className="ml-auto text-[10px] text-amber-500 shrink-0">✓ ativo</span>}
-                            </button>
-                          );
-                        })}
+                        {resumo.obrasAtendidas.map((ob: { id: number | null; nome: string }, i: number) => (
+                          <div key={i} className="flex items-center gap-1.5 text-xs text-gray-600 px-1 py-0.5">
+                            <MapPin className="w-3 h-3 shrink-0 text-gray-400" />
+                            <span className="break-words">{ob.nome}</span>
+                          </div>
+                        ))}
                       </div>
                     </CardContent>
                   </Card>
