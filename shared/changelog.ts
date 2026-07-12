@@ -1,4 +1,37 @@
 /**
+ * Rev. 4168 — **COMPRAS/FINANCEIRO: FILTRO DE OBRA NA ANÁLISE DE FORNECEDOR.**
+ *
+ * CONTEXTO: tela "Análise de Fornecedor" (aba Itens & Preços) exibia a análise
+ * de preços do fornecedor sempre consolidada por todas as obras. Usuário precisava
+ * isolar variação de preço por obra individualmente.
+ *
+ * ENTREGAS (backend — `getAnaliseFornecedor` em `server/routers/compras.ts`):
+ * - Input expandido com `obraId?: number`.
+ * - `obraIdSql` aplicado nas 3 queries que somam/listam itens (itensRes, ocorrRes, pagRes).
+ * - Query 4 (obrasRes / lista de obras) permanece SEM filtro para popular o seletor completo.
+ * - obrasRes agora retorna `co.obra_id` (além de `obra_nome`).
+ * - `resumo.obrasAtendidas` migrado de `string[]` para `{ id: number|null; nome: string }[]`.
+ *
+ * ENTREGAS (frontend — `FinanceiroAnaliseCustosDetalhe.tsx`):
+ * - Estado `obraIdFiltro: number | null` adicionado.
+ * - `getAnaliseFornecedor` recebe `obraId` quando filtro ativo.
+ * - Seletor de obra (shadcn Select) aparece acima da tabela de itens quando há ≥2 obras;
+ *   troca de obra reseta `expandedItems` e `chartItem`.
+ * - Botão "Limpar filtro" inline quando filtro ativo.
+ * - Card "Obras Atendidas" (coluna lateral) virou lista clicável: clicar na obra ativa o
+ *   filtro naquela obra; clicar novamente limpa. Badge "filtrada" no título do card quando ativo.
+ *   Itens sem obra_id ficam desabilitados.
+ * - KPI tooltip "Obras atendidas" usa `.map(o => o.nome)` para o novo shape.
+ *
+ * REGRAS: ZERO DELETE · ZERO ALTER destrutivo.
+ *
+ * Arquivos tocados:
+ *   server/routers/compras.ts (getAnaliseFornecedor)
+ *   client/src/pages/financeiro/FinanceiroAnaliseCustosDetalhe.tsx
+ *   shared/version.ts + shared/changelog.ts + replit.md
+ */
+
+/**
  * Rev. 4167 — **COMPRAS/FINANCEIRO: DIAGNÓSTICO DE OSCILAÇÃO DE PREÇOS NA ANÁLISE DE FORNECEDOR.**
  *
  * CONTEXTO: tela "Análise de Fornecedor" (aba Itens & Preços) exibia variações absurdas (+750%,

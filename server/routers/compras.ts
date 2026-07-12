@@ -16180,10 +16180,12 @@ Responda APENAS com JSON válido, sem markdown, no formato:
       companyId: z.number(),
       fornecedorNome: z.string().min(1),
       ano: z.number().optional(),
+      obraId: z.number().optional(),
     }))
     .query(async ({ input }) => {
       const db = await getDb();
       const anoSql = input.ano ? sql`AND EXTRACT(year FROM co.created_at) = ${input.ano}` : sql``;
+      const obraIdSql = input.obraId ? sql`AND co.obra_id = ${input.obraId}` : sql``;
 
       // 1) Itens agrupados por (descricao normalizada, unidade)
       const itensRes = await db.execute(sql`
@@ -16204,6 +16206,7 @@ Responda APENAS com JSON válido, sem markdown, no formato:
           AND LOWER(TRIM(co.fornecedor_nome)) = LOWER(TRIM(${input.fornecedorNome}))
           AND co.status NOT IN ('cancelado', 'cancelada')
           ${anoSql}
+          ${obraIdSql}
         GROUP BY LOWER(TRIM(coi.descricao)), coi.unidade
         ORDER BY valor_total DESC
       `);
@@ -16228,6 +16231,7 @@ Responda APENAS com JSON válido, sem markdown, no formato:
           AND LOWER(TRIM(co.fornecedor_nome)) = LOWER(TRIM(${input.fornecedorNome}))
           AND co.status NOT IN ('cancelado', 'cancelada')
           ${anoSql}
+          ${obraIdSql}
         ORDER BY co.created_at DESC, co.id DESC
       `);
 
@@ -16243,13 +16247,16 @@ Responda APENAS com JSON válido, sem markdown, no formato:
           AND LOWER(TRIM(co.fornecedor_nome)) = LOWER(TRIM(${input.fornecedorNome}))
           AND co.status NOT IN ('cancelado', 'cancelada')
           ${anoSql}
+          ${obraIdSql}
         GROUP BY TRIM(co.forma_pagamento), TRIM(co.condicao_pagamento)
         ORDER BY valor_total DESC
       `);
 
-      // 4) Obras atendidas (distinct)
+      // 4) Obras atendidas (distinct) — SEM filtro de obraId para popular o seletor completo
       const obrasRes = await db.execute(sql`
-        SELECT DISTINCT COALESCE(NULLIF(ob.nome,''), 'Sem obra') AS obra_nome
+        SELECT DISTINCT
+          co.obra_id,
+          COALESCE(NULLIF(ob.nome,''), 'Sem obra') AS obra_nome
         FROM compras_ordens co
         LEFT JOIN obras ob ON ob.id = co.obra_id AND ob."companyId" = co.company_id
         WHERE co.company_id = ${input.companyId}
@@ -16387,7 +16394,7 @@ Responda APENAS com JSON válido, sem markdown, no formato:
           totalGasto,
           qtdOcs: qtdOcsTot,
           qtdItensdistintos: itens.length,
-          obrasAtendidas: rawObras.map((r: any) => String(r.obra_nome ?? '')).filter(Boolean),
+          obrasAtendidas: rawObras.map((r: any) => ({ id: r.obra_id as number | null, nome: String(r.obra_nome ?? '') })).filter((o: any) => o.nome),
         },
         itens,
         formasPagamento,

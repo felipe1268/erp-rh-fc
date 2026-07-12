@@ -50,13 +50,15 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4168** — **COMPRAS/FINANCEIRO: FILTRO DE OBRA NA ANÁLISE DE FORNECEDOR.** `obraId?: number` no input de `getAnaliseFornecedor`; aplicado nas 3 queries de itens/ocorrências/pagamento (query de obras fica sem filtro para popular o seletor); `resumo.obrasAtendidas` migrado para `{ id, nome }[]`; seletor de obra (Select) aparece acima da tabela quando ≥2 obras; card lateral "Obras Atendidas" virou lista clicável para ativar/limpar filtro diretamente. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4167** — **COMPRAS/FINANCEIRO: DIAGNÓSTICO DE OSCILAÇÃO DE PREÇOS NA ANÁLISE DE FORNECEDOR.** `variacaoPct` zerado quando unidades são diferentes (evita +750% sem sentido); `variacaoReason` ('unidade_mista'|'preco_zero'|'variacao_real'|'ok'); `mesesSpan`; badge roxo "unid. mista" no lugar do %; chips de diagnóstico na linha expandida; R$0,00 destacado em laranja. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4166** — **COMPRAS: CATÁLOGO — OC CLICÁVEL COM MINI-DIALOG DE DETALHE.** Número da OC no Catálogo de Itens virou botão clicável. Abre `OcMiniDialog` com: Quem pediu (SC criadoPorNome), Quando pediu (SC data), OC criada em, Fornecedor, Entrega prevista/real, Obra, lista de itens com totais. Nova procedure `getOrdemMiniDetalhe` (join OC→obras→cotação→SC). Fix: `[UnitFix Rev.4165]` usava `db` bare — corrigido para `await getDb()`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4165** — **COMPRAS: NORMALIZAÇÃO DE UNIDADES + AUTO-PADRONIZAÇÃO DE ITENS EM LOTE.** Bloco `[UnitFix Rev.4165]` no startup corrige idempotentemente unidades erradas no Neon (cimento kg→sc, areias →m³, chapisco/graute →sc, conduíte →m). `normItemDesc` expandido: SACO sozinho, CAMINHAO/CARRETA/TRUCK, remove sufixos "PEDIDO NNNN/data", VIAGENS→VIAGEM. Nova procedure `autoNormalizarItens` que elege descrição canônica por normKey e propaga para OCs/SCs/cotações. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4166** — **COMPRAS: CATÁLOGO — OC CLICÁVEL COM MINI-DIALOG DE DETALHE.** Número da OC no Catálogo virou botão. `OcMiniDialog` com quem pediu/quando/fornecedor/entrega/itens. `getOrdemMiniDetalhe`. Fix `[UnitFix Rev.4165]` db→getDb(). ZERO DELETE · ZERO ALTER destrutivo.
+
+- **Rev. 4165** — **COMPRAS: NORMALIZAÇÃO DE UNIDADES + AUTO-PADRONIZAÇÃO DE ITENS EM LOTE.** `[UnitFix]` startup; `normItemDesc` expandido; `autoNormalizarItens`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4163** — **COMPRAS: CATÁLOGO — AUDITORIA REAL 1753 DESCRIÇÕES → CORREÇÃO ALGORITMO DE GRUPOS.** FAM=TIGRE fix; remoção de preposições DE/DA/DO/DAS/DOS; `_BRAND_FIRST` Set. 507 famílias. ZERO DELETE · ZERO ALTER destrutivo.
 

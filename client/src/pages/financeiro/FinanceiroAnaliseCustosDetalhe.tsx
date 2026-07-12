@@ -221,9 +221,11 @@ export default function FinanceiroAnaliseCustosDetalhe() {
     });
   // Item selecionado para mini-chart de evolução de preço
   const [chartItem, setChartItem] = useState<string | null>(null);
+  // Filtro de obra para aba de itens
+  const [obraIdFiltro, setObraIdFiltro] = useState<number | null>(null);
 
   const { data: analiseData, isLoading: analiseLoading } = (trpc as any).compras.getAnaliseFornecedor.useQuery(
-    { companyId, fornecedorNome: fornecedorFoco ?? '', ano },
+    { companyId, fornecedorNome: fornecedorFoco ?? '', ano, ...(obraIdFiltro ? { obraId: obraIdFiltro } : {}) },
     { enabled: !!companyId && !!fornecedorFoco }
   );
 
@@ -1033,7 +1035,7 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                   { label: 'Total em OCs', value: formatBRL(resumo.totalGasto), icon: CircleDollarSign, color: 'text-rose-600', bg: 'bg-rose-50' },
                   { label: 'Ordens de Compra', value: resumo.qtdOcs.toString(), icon: ShoppingCart, color: 'text-indigo-600', bg: 'bg-indigo-50' },
                   { label: 'Itens distintos', value: resumo.qtdItensdistintos.toString(), icon: Package, color: 'text-teal-600', bg: 'bg-teal-50' },
-                  { label: 'Obras atendidas', value: resumo.obrasAtendidas.length.toString(), icon: MapPin, color: 'text-amber-600', bg: 'bg-amber-50', tooltip: resumo.obrasAtendidas.join(', ') },
+                  { label: 'Obras atendidas', value: resumo.obrasAtendidas.length.toString(), icon: MapPin, color: 'text-amber-600', bg: 'bg-amber-50', tooltip: resumo.obrasAtendidas.map((o: any) => o.nome ?? o).join(', ') },
                 ].map((c) => {
                   const I = c.icon;
                   return (
@@ -1054,6 +1056,41 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                 {/* ── Tabela de itens (ocupa 2 colunas no XL) ── */}
                 <div className="xl:col-span-2">
                   <Card className="border-0 shadow-sm">
+                    {/* Filtro de obra */}
+                    {resumo.obrasAtendidas.length > 1 && (
+                      <div className="px-5 pt-4 pb-0 flex items-center gap-2">
+                        <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                        <Select
+                          value={obraIdFiltro !== null ? String(obraIdFiltro) : 'todas'}
+                          onValueChange={(v) => {
+                            const newId = v === 'todas' ? null : Number(v);
+                            setObraIdFiltro(newId);
+                            setExpandedItems(new Set());
+                            setChartItem(null);
+                          }}
+                        >
+                          <SelectTrigger className="h-7 text-xs border-gray-200 bg-white w-auto min-w-[180px] max-w-full">
+                            <SelectValue placeholder="Filtrar por obra…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="todas" className="text-xs">Todas as obras</SelectItem>
+                            {resumo.obrasAtendidas.map((ob: { id: number | null; nome: string }) => (
+                              <SelectItem key={ob.id ?? 'null'} value={String(ob.id ?? 0)} className="text-xs">
+                                {ob.nome}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {obraIdFiltro !== null && (
+                          <button
+                            onClick={() => { setObraIdFiltro(null); setExpandedItems(new Set()); setChartItem(null); }}
+                            className="text-[10px] text-gray-400 hover:text-gray-600 underline whitespace-nowrap"
+                          >
+                            Limpar filtro
+                          </button>
+                        )}
+                      </div>
+                    )}
                     <CardHeader className="pb-2 pt-4 px-5">
                       <CardTitle className="text-sm font-semibold text-gray-600 flex items-center gap-2">
                         <Package className="w-4 h-4" /> Produtos comprados
@@ -1305,16 +1342,31 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                       <CardHeader className="pb-2 pt-4 px-5">
                         <CardTitle className="text-sm font-semibold text-gray-600 flex items-center gap-2">
                           <MapPin className="w-4 h-4" /> Obras Atendidas
+                          {obraIdFiltro !== null && (
+                            <span className="text-[10px] font-normal text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">filtrada</span>
+                          )}
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="px-4 pb-4">
                         <div className="space-y-1">
-                          {resumo.obrasAtendidas.map((ob: string, i: number) => (
-                            <div key={i} className="flex items-start gap-1.5 text-xs text-gray-600">
-                              <MapPin className="w-3 h-3 shrink-0 text-gray-400 mt-0.5" />
-                              <span className="break-words">{ob}</span>
-                            </div>
-                          ))}
+                          {resumo.obrasAtendidas.map((ob: { id: number | null; nome: string }, i: number) => {
+                            const isAtiva = obraIdFiltro !== null && obraIdFiltro === ob.id;
+                            return (
+                              <button
+                                key={i}
+                                onClick={() => {
+                                  if (isAtiva) { setObraIdFiltro(null); setExpandedItems(new Set()); setChartItem(null); }
+                                  else if (ob.id != null) { setObraIdFiltro(ob.id); setExpandedItems(new Set()); setChartItem(null); }
+                                }}
+                                disabled={ob.id == null}
+                                className={`w-full flex items-start gap-1.5 text-xs rounded px-1 py-0.5 transition-colors text-left ${isAtiva ? 'bg-amber-100 text-amber-800 font-medium' : ob.id != null ? 'hover:bg-gray-50 text-gray-600' : 'text-gray-400 cursor-default'}`}
+                              >
+                                <MapPin className={`w-3 h-3 shrink-0 mt-0.5 ${isAtiva ? 'text-amber-500' : 'text-gray-400'}`} />
+                                <span className="break-words">{ob.nome}</span>
+                                {isAtiva && <span className="ml-auto text-[10px] text-amber-500 shrink-0">✓ ativo</span>}
+                              </button>
+                            );
+                          })}
                         </div>
                       </CardContent>
                     </Card>
