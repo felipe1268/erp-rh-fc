@@ -1159,8 +1159,18 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                                             </>
                                         }
                                       </td>
-                                      <td className="py-3 px-2 text-right tabular-nums text-gray-700 whitespace-nowrap">{formatBRL(item.precoMin)}</td>
-                                      <td className="py-3 px-2 text-right tabular-nums text-gray-700 whitespace-nowrap">{formatBRL(item.precoMax)}</td>
+                                      <td className="py-3 px-2 text-right tabular-nums text-gray-700 whitespace-nowrap">
+                                        {formatBRL(item.precoMin)}
+                                        {item.unidade && !item.qtdMixed && (
+                                          <div className="text-[10px] text-gray-400 leading-none mt-0.5">/{item.unidade}</div>
+                                        )}
+                                      </td>
+                                      <td className="py-3 px-2 text-right tabular-nums text-gray-700 whitespace-nowrap">
+                                        {formatBRL(item.precoMax)}
+                                        {item.unidade && !item.qtdMixed && (
+                                          <div className="text-[10px] text-gray-400 leading-none mt-0.5">/{item.unidade}</div>
+                                        )}
+                                      </td>
                                       <td className="py-3 px-2 text-center"><VariacaoBadge pct={item.variacaoPct} reason={item.variacaoReason} /></td>
                                       <td className="py-3 px-2 text-right tabular-nums font-bold text-gray-800 whitespace-nowrap">{formatBRL(item.valorTotal)}</td>
                                       <td className="py-3 px-2 text-center tabular-nums text-gray-600">{item.qtdOcs}</td>

@@ -1,4 +1,20 @@
 /**
+ * Rev. 4171 — **COMPRAS/FINANCEIRO: UNIDADE VISÍVEL NAS CÉLULAS DE PREÇO DA ANÁLISE DE FORNECEDOR.**
+ *
+ * CONTEXTO: usuário pediu que a unidade fosse exibida de forma mais clara na tabela
+ * de itens da Análise de Fornecedor, para facilitar comparação de preços.
+ *
+ * SOLUÇÃO: nas colunas "Preço mín." e "Preço máx.", adicionado sublinhado em cinza
+ * claro mostrando "/un", "/sc", "/m³" etc. abaixo do valor. Para itens de unidade
+ * mista (variacaoReason='unidade_mista'), o sufixo NÃO é exibido pois não há
+ * unidade canônica. A unidade continua aparecendo no nome do produto e no Qtd. total
+ * como já existia.
+ *
+ * ARQUIVOS: client/src/pages/financeiro/FinanceiroAnaliseCustosDetalhe.tsx
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4170 — **COMPRAS/FINANCEIRO: REVERTE FILTRO FINANCEIRO POR OBRA (CARDS ZERADOS).**
  *
  * PROBLEMA: Rev. 4169 aplicou `obraIdFiltro` no `rows` useMemo para filtrar os
