@@ -13,6 +13,7 @@ import {
 } from "../../drizzle/schema";
 import { invokeLLM, invokeAnthropicVision } from "../_core/llm";
 import { storagePut } from "../storage";
+import { makeRequest, DirectionsResult } from "../_core/map";
 import { lockEGerarNumeroSc } from "./compras";
 
 const n = (v: any) => parseFloat(v ?? "0") || 0;
@@ -8084,6 +8085,59 @@ Sempre retorne JSON válido, sem markdown.`;
         ORDER BY e.criado_em DESC
       `);
       return ((rows as any).rows || rows) as any[];
+    }),
+
+  getRouteInfo: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      origin: z.string().min(3),
+      destination: z.string().min(3),
+    }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
+      }
+      try {
+        const result = await makeRequest<DirectionsResult>('/maps/api/directions/json', {
+          origin: input.origin,
+          destination: input.destination,
+          mode: 'driving',
+          language: 'pt-BR',
+          region: 'BR',
+          avoid: 'ferries',
+        });
+
+        if (result.status !== 'OK' || !result.routes?.[0]) {
+          return { ok: false as const, erro: result.status === 'ZERO_RESULTS' ? 'Rota não encontrada entre os locais informados.' : `Erro Google Maps: ${result.status}` };
+        }
+
+        const route = result.routes[0];
+        const leg = route.legs[0];
+        const distanceKm = leg.distance.value / 1000;
+
+        // Estimativa de pedágio: média BR ~R$0,22/km em rodovias concessionadas acima de 50km
+        const tollEstimate = distanceKm > 40
+          ? Math.round(distanceKm * 0.22 * 10) / 10
+          : 0;
+
+        // Estimativa de combustível: consumo médio 10km/L, diesel R$5,80/L
+        const fuelEstimate = Math.round(distanceKm / 10 * 5.80 * 10) / 10;
+
+        return {
+          ok: true as const,
+          distanceText: leg.distance.text,
+          distanceKm: Math.round(distanceKm * 10) / 10,
+          durationText: leg.duration.text,
+          durationMin: Math.round(leg.duration.value / 60),
+          startAddress: leg.start_address,
+          endAddress: leg.end_address,
+          summary: route.summary,
+          tollEstimate,
+          fuelEstimate,
+        };
+      } catch (e: any) {
+        return { ok: false as const, erro: 'Não foi possível calcular a rota. Verifique os endereços.' };
+      }
     }),
 });
 

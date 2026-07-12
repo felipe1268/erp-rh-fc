@@ -1,4 +1,31 @@
 /**
+ * Rev. 4152 — **FROTA: NOVA VIAGEM — SELETOR VISUAL DE VEÍCULOS + MAPA GOOGLE + AUTO-PREENCHIMENTO.**
+ *
+ * CONTEXTO: o dialog "Nova Viagem" listava todos os veículos numa lista simples sem filtro,
+ * incluindo vendidos e em manutenção. Sem foto, sem placa destacada, sem auto-preenchimento
+ * de motorista/km, e sem visualização do trajeto.
+ *
+ * MUDANÇAS:
+ *   Backend — `getRouteInfo` (query) em server/routers/frotas.ts:
+ *     · Chama Google Directions API via makeRequest (map.ts) com origin/destination/driving/pt-BR.
+ *     · Retorna distância, tempo de viagem, endereços validados, estimativa de pedágio
+ *       (R$0,22/km acima de 40 km) e estimativa de combustível (10km/L × R$5,80/L).
+ *     · Import de makeRequest + DirectionsResult adicionado em frotas.ts.
+ *
+ *   Frontend — ViagensFrotas.tsx completamente reescrito (~900 linhas):
+ *     · `listVehicles` agora passa `status: "Ativo"` → vendidos e em manutenção não aparecem.
+ *     · `VehicleCard`: card visual com foto (gradient fallback por tipo), placa em destaque
+ *       monospace, marca/modelo, km atual. Grade horizontal rolável no dialog.
+ *     · Auto-preenchimento: selecionar veículo → preenche motorista_padrao + km_atual (editáveis).
+ *     · `RoutePreview`: debounce 900ms em origem/destino → chama `getRouteInfo` →
+ *       exibe iframe Google Maps embed (saddr/daddr, sem key exposta) + 4 cards de info
+ *       (distância, tempo, pedágio estimado, combustível estimado).
+ *     · Layout geral mais colorido: KPI cards com bg temático, botões sky-600, gradiente no detalhe.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4151 — **FROTA: CONTROLE DE VIAGENS — MÓDULO COMPLETO.**
  *
  * CONTEXTO: a FC Engenharia não possuía controle formal de viagens dos veículos da frota.
