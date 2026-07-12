@@ -1222,4 +1222,147 @@ export const scorecardRouter = router({
       `);
       return r.rows as any[];
     }),
+
+  getMetasDesvios: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return null;
+      const { companyId, obraId } = input;
+      const safe = async (q: Promise<any>) => {
+        try { const r = await q; return r?.rows ?? []; } catch (e: any) { return []; }
+      };
+
+      const orcRows = await safe(db.execute(sql`
+        SELECT id, total_custo::numeric AS total_custo,
+               total_venda::numeric AS total_venda,
+               valor_negociado::numeric AS valor_negociado,
+               COALESCE(tempo_obra_meses, 12)::int AS tempo_meses
+        FROM orcamentos
+        WHERE company_id = ${companyId} AND obra_id = ${obraId} AND deleted_at IS NULL
+        ORDER BY id DESC LIMIT 1
+      `));
+      if (!orcRows.length) return null;
+      const orc = orcRows[0] as any;
+      const orcId = orc.id;
+      const totalCustoOrc = parseFloat(String(orc.total_custo ?? 0));
+      const tempoMeses = parseInt(String(orc.tempo_meses ?? 12)) || 12;
+      const metaMensal = totalCustoOrc > 0 ? totalCustoOrc / tempoMeses : 0;
+
+      const [desviosRows, mensalRows, totalOCRows] = await Promise.all([
+        safe(db.execute(sql`
+          WITH orca_itens AS (
+            SELECT
+              LOWER(TRIM(descricao)) AS desc_norm,
+              descricao,
+              COALESCE(NULLIF(meta_unit_total::text,'')::numeric,
+                       NULLIF(custo_unit_total::text,'')::numeric, 0) AS preco_meta
+            FROM orcamento_itens
+            WHERE orcamento_id = ${orcId} AND company_id = ${companyId}
+              AND tipo IN ('insumo','servico','composicao')
+            GROUP BY LOWER(TRIM(descricao)), descricao,
+              COALESCE(NULLIF(meta_unit_total::text,'')::numeric,
+                       NULLIF(custo_unit_total::text,'')::numeric, 0)
+          ),
+          oc_resumo AS (
+            SELECT
+              LOWER(TRIM(coi.descricao)) AS desc_norm,
+              coi.descricao,
+              AVG(NULLIF(coi.preco_unitario::text,'0')::numeric) AS preco_medio,
+              SUM(NULLIF(coi.total::text,'')::numeric)           AS total_gasto,
+              COUNT(DISTINCT co.id)::int                         AS num_ocs
+            FROM compras_ordens_itens coi
+            JOIN compras_ordens co ON co.id = coi.ordem_id
+            WHERE co.obra_id = ${obraId} AND co.company_id = ${companyId}
+              AND co.status NOT IN ('cancelada')
+            GROUP BY LOWER(TRIM(coi.descricao)), coi.descricao
+          )
+          SELECT
+            ocr.descricao        AS desc_oc,
+            oi.descricao         AS desc_orc,
+            ROUND(ocr.preco_medio::numeric, 4)  AS preco_medio,
+            ROUND(oi.preco_meta::numeric,   4)  AS preco_meta,
+            ROUND(ocr.total_gasto::numeric,  2) AS total_gasto,
+            ocr.num_ocs,
+            CASE
+              WHEN oi.preco_meta IS NULL OR oi.preco_meta = 0 THEN NULL
+              ELSE ROUND(((ocr.preco_medio - oi.preco_meta) / oi.preco_meta * 100)::numeric, 1)
+            END AS desvio_pct,
+            CASE
+              WHEN oi.preco_meta IS NULL OR oi.preco_meta = 0 THEN 'sem_referencia'
+              WHEN ocr.preco_medio <= oi.preco_meta                THEN 'dentro'
+              ELSE 'acima'
+            END AS status_meta
+          FROM oc_resumo ocr
+          LEFT JOIN orca_itens oi ON oi.desc_norm = ocr.desc_norm
+          ORDER BY
+            CASE status_meta WHEN 'acima' THEN 1 WHEN 'sem_referencia' THEN 2 ELSE 3 END,
+            total_gasto DESC
+          LIMIT 60
+        `)),
+        safe(db.execute(sql`
+          SELECT
+            TO_CHAR(co.data_emissao::date, 'YYYY-MM') AS mes,
+            ROUND(SUM(coi.total::numeric), 2)::numeric AS total_compras,
+            COUNT(DISTINCT co.id)::int                 AS num_ocs
+          FROM compras_ordens co
+          JOIN compras_ordens_itens coi ON coi.ordem_id = co.id
+          WHERE co.obra_id = ${obraId} AND co.company_id = ${companyId}
+            AND co.status NOT IN ('cancelada')
+            AND co.data_emissao IS NOT NULL
+          GROUP BY TO_CHAR(co.data_emissao::date, 'YYYY-MM')
+          ORDER BY mes DESC
+          LIMIT 12
+        `)),
+        safe(db.execute(sql`
+          SELECT COALESCE(SUM(coi.total::numeric), 0)::numeric AS total
+          FROM compras_ordens co
+          JOIN compras_ordens_itens coi ON coi.ordem_id = co.id
+          WHERE co.obra_id = ${obraId} AND co.company_id = ${companyId}
+            AND co.status NOT IN ('cancelada')
+        `)),
+      ]);
+
+      const totalGastoOC  = parseFloat(String(totalOCRows[0]?.total ?? 0));
+      const dentro        = desviosRows.filter((r: any) => r.status_meta === 'dentro').length;
+      const acima         = desviosRows.filter((r: any) => r.status_meta === 'acima').length;
+      const semRef        = desviosRows.filter((r: any) => r.status_meta === 'sem_referencia').length;
+      const maiorDesvio   = [...desviosRows]
+        .filter((r: any) => r.status_meta === 'acima')
+        .sort((a: any, b: any) => parseFloat(String(b.desvio_pct ?? 0)) - parseFloat(String(a.desvio_pct ?? 0)))[0];
+
+      return {
+        resumo: {
+          totalOrcamento: totalCustoOrc,
+          totalGastoOC,
+          pctConsumido: totalCustoOrc > 0 ? Math.round((totalGastoOC / totalCustoOrc) * 1000) / 10 : 0,
+          numItensDentroMeta: dentro,
+          numItensAcimaMeta:  acima,
+          numItensSemReferencia: semRef,
+          metaMensal,
+          tempoMeses,
+          maiorDesvioNome: maiorDesvio?.desc_oc ?? null,
+          maiorDesvioPct:  maiorDesvio ? parseFloat(String(maiorDesvio.desvio_pct ?? 0)) : 0,
+        },
+        desvios: desviosRows.map((r: any) => ({
+          descricao:   r.desc_oc,
+          precoMeta:   parseFloat(String(r.preco_meta ?? 0)),
+          precoOC:     parseFloat(String(r.preco_medio ?? 0)),
+          desvio_pct:  r.desvio_pct !== null ? parseFloat(String(r.desvio_pct)) : null,
+          total_gasto: parseFloat(String(r.total_gasto ?? 0)),
+          num_ocs:     parseInt(String(r.num_ocs ?? 0)),
+          status_meta: r.status_meta as 'dentro' | 'acima' | 'sem_referencia',
+        })),
+        mensal: mensalRows.map((m: any) => {
+          const v = parseFloat(String(m.total_compras ?? 0));
+          return {
+            mes:           m.mes,
+            total_compras: v,
+            num_ocs:       parseInt(String(m.num_ocs ?? 0)),
+            meta_mensal:   metaMensal,
+            status:        metaMensal <= 0 ? 'ok' : v <= metaMensal ? 'ok' : v <= metaMensal * 1.15 ? 'alerta' : 'critico',
+          };
+        }).reverse(),
+      };
+    }),
 });

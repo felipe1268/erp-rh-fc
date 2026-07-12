@@ -50,21 +50,21 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4185** — **SCORECARD: ABA "👥 RH / FOLHA" — CUSTO PROPORCIONAL DE MÃO DE OBRA POR OBRA.** `getCustosRH` procedure com fracionação proporcional por dias de obra: `site_periods` CTE (employee_site_history + fallback data_admissao) × `payroll_payments` × `vr_benefits`. Custo = Sal. Bruto + FGTS + HE + Adicionais + VR + VA × (diasNaObra/diasNoMes). Filtro de período (De/Até). Tabela expansível por funcionário com detalhamento mensal. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4186** — **SCORECARD: REDESIGN COMPLETO — 6 ABAS TOP-LEVEL + DRE WATERFALL + METAS & DESVIOS.** `ScorecardTab.tsx` reescrito. 6 abas Pareto: 📊 Resultado | 🎯 Metas & Desvios | 👥 RH/Folha | 🛡️ Segurança | 📦 Compras | 🔧 Operacional. DRE waterfall 3 colunas (Contrato | (−) Custo | = Lucro LL). Warning explícito quando custoRealizado=0 (remove bug "Lucro R$9.5M"). Metas & Desvios: KPIs orçamento vs OC + gráfico mensal + tabela item-a-item (dentro/acima/sem-ref). Score+dimensões+KPI strip sempre visíveis. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4184** — **SCORECARD: ABA SEGURANÇA — QUADRO CLT/TERCEIROS, ASO, TREINAMENTOS, ADVERTÊNCIAS E EPI.** Nova aba 🛡️ Segurança (padrão) no card Análise Gerencial. Backend: `getSeguranca` procedure — 7 queries paralelas (CLT+ASO+treinamentos+advertências; Terceiros+docs NR; Treinamentos por norma; Advertências CLT; Advertências terceiros; EPI por funcionário; Curva ABC EPI). Frontend: KPIs CLT/Terceiros/Advertências/ASO/Custo EPI; quadro CLT com ASO/treinamentos/advert.; quadro terceiros com docs + NRs; tabela treinamentos por norma; lista unificada de advertências; Curva ABC EPI + bar chart por funcionário. Badges no header. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4185** — **SCORECARD: ABA "👥 RH / FOLHA" + BACKEND getMetasDesvios.** `getCustosRH` procedure com fracionação proporcional por dias de obra. `getMetasDesvios` procedure: join OC itens × orçamento itens por nome, desvios de preço, gasto mensal vs meta. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
-- **Rev. 4183** — **SCORECARD: PAINEL ANÁLISE GERENCIAL DA OBRA (CURVA ABC, RECOMPRAS, FERRAMENTAS, LOCAÇÕES).** Novo card colapsável "Análise Gerencial da Obra" com 4 abas (🛡️+📦+🔧+🚜). `getAnalise` — 6 queries: Curva ABC materiais, recompra ≥3 OCs/mês, gastos mensais, ferramentas almox, OC sem almox, locações. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4184** — **SCORECARD: ABA SEGURANÇA — QUADRO CLT/TERCEIROS, ASO, TREINAMENTOS, ADVERTÊNCIAS E EPI.** `getSeguranca` procedure — 7 queries. KPIs + quadros + Curva ABC EPI. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4182** — **PLANEJAMENTO: SCORECARD DO GESTOR COM KPIs, BÔNUS E CONTROLE DE FERRAMENTAS/RETRABALHO.** Score 0-100 em 5 dimensões ponderadas. Bônus financeiro. Retrabalho (admin). Ferramentas warehouse_loans. `obra_scorecard_config` + `obra_retrabalho`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4183** — **SCORECARD: PAINEL ANÁLISE GERENCIAL DA OBRA (CURVA ABC, RECOMPRAS, FERRAMENTAS, LOCAÇÕES).** `getAnalise` — 6 queries. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4181** — **COMPRAS: CONDIÇÃO DE PAGAMENTO VIRA SELECT PADRONIZADO NAS OCs.** Campo livre → `<Select>` com `TIPOS_PAGAMENTO`. Pré-preenchimento automático por ciclo. Donut de Formas de Pagamento com `FORMA_LABEL_MAP`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4182** — **PLANEJAMENTO: SCORECARD DO GESTOR COM KPIs, BÔNUS E CONTROLE DE FERRAMENTAS/RETRABALHO.** Score 0-100 em 5 dimensões ponderadas. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4180** — **COMPRAS/FINANCEIRO: ANÁLISE FORNECEDOR — TOGGLE MÊS/SEMANA + GRUPOS SIMILARES + INTERVALO.** Toggle "Mês | Semana", Grupos Similares por família léxica, Intervalo entre compras no drill-down. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4181** — **COMPRAS: CONDIÇÃO DE PAGAMENTO VIRA SELECT PADRONIZADO NAS OCs.** Campo livre → `<Select>` com `TIPOS_PAGAMENTO`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4177** — **COMPRAS/FINANCEIRO: ABA DEDICADA "ANÁLISE" NO DETALHE DE FORNECEDOR.** 3º tab "Análise" (badge "IA"); AnaliseDashPanel + Formas de Pagamento + Obras Atendidas. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4180** — **COMPRAS/FINANCEIRO: ANÁLISE FORNECEDOR — TOGGLE MÊS/SEMANA + GRUPOS SIMILARES + INTERVALO.** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4176** — **COMPRAS/FINANCEIRO: PAINEL ANÁLISE SEPARADO DA TABELA (FULL-WIDTH).** `AnaliseDashPanel` 3 colunas horizontais + cabeçalho colapsável. Tabela full-width. ZERO DELETE · ZERO ALTER destrutivo.
 

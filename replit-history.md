@@ -1,3 +1,5 @@
+- **Rev. 4183** — **SCORECARD: PAINEL ANÁLISE GERENCIAL DA OBRA (CURVA ABC, RECOMPRAS, FERRAMENTAS, LOCAÇÕES).** Novo card colapsável "Análise Gerencial da Obra" com 4 abas. `getAnalise` — 6 queries. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4175** — **COMPRAS: REDESIGN MODERNO DO OcMiniDialog.** Header gradiente dinâmico, timeline horizontal 4 etapas, itens colapsáveis com mini-barra de proporção. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4174** — **COMPRAS/FINANCEIRO: PAINEL DASH + ALMOXARIFADO NA OC.** `AnaliseDashPanel.tsx` (Curva ABC, destaques, fragmentação). Barra busca. Almox via `motivo ILIKE`. ZERO DELETE · ZERO ALTER destrutivo.

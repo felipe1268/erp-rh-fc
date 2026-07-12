@@ -1,4 +1,27 @@
 /**
+ * Rev. 4186 - SCORECARD: REDESIGN COMPLETO — 6 ABAS TOP-LEVEL + DRE WATERFALL + METAS & DESVIOS.
+ *
+ * O QUE FOI FEITO:
+ * - ScorecardTab.tsx completamente reescrito de ~1673 linhas com layout tab-based novo.
+ * - 6 abas top-level em ordem Pareto: 📊 Resultado | 🎯 Metas & Desvios | 👥 RH/Folha | 🛡️ Segurança | 📦 Compras | 🔧 Operacional.
+ * - Aba Resultado: SPI/CPI + DRE Waterfall redesenhado (3 colunas: Contrato | (−) Custo | = Lucro LL) +
+ *   warning explícito quando custoRealizado=0 (remove o bug de "Lucro R$9.5M" com custo=0) + Log de Eventos.
+ * - Aba Metas & Desvios: query `getMetasDesvios` (backend já adicionado em Rev. 4185+) — KPIs orçamento
+ *   vs OC, gráfico mensal com meta-linha tracejada, tabela item-a-item com status dentro/acima/sem-ref.
+ * - Aba RH: getCustosRH — tabela expansível por funcionário com detalhamento mensal (mesmo conteúdo da
+ *   aba anterior, agora no nível top-level, sem card Análise Gerencial colapsável).
+ * - Aba Segurança: getSeguranca — KPIs, quadro CLT/terceiros, treinamentos por norma, advertências, EPI ABC.
+ * - Aba Compras: getAnalise — sub-abas Compras/Ferramentas Almox/Locações (mesma lógica anterior).
+ * - Aba Operacional: warehouse_loans (ferramentas) + retrabalhos com botão admin de registrar.
+ * - Score total, 5 dimensões, KPI strip e Bônus do Gestor ficam SEMPRE visíveis (acima das abas).
+ * - ZERO DELETE · ZERO ALTER destrutivo.
+ *
+ * ARQUIVOS:
+ * - client/src/pages/planejamento/ScorecardTab.tsx — reescrito completo
+ * - shared/version.ts — bump Rev. 4186
+ */
+
+/**
  * Rev. 4185 - SCORECARD: ABA "👥 RH / FOLHA" — CUSTO PROPORCIONAL DE MÃO DE OBRA POR OBRA.
  *
  * O QUE FOI FEITO:
