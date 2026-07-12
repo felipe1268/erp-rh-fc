@@ -89,6 +89,50 @@ export async function makeRequest<T = unknown>(
   return (await response.json()) as T;
 }
 
+/**
+ * Direct Google Maps API request using GOOGLE_API_KEY (bypasses the Replit proxy).
+ * Use this when BUILT_IN_FORGE_API_URL / BUILT_IN_FORGE_API_KEY are not available.
+ */
+export async function makeGoogleDirect<T = unknown>(
+  endpoint: string,
+  params: Record<string, unknown> = {},
+): Promise<T> {
+  const apiKey = ENV.googleApiKey;
+  if (!apiKey) throw new Error("GOOGLE_API_KEY not configured");
+
+  const url = new URL(`https://maps.googleapis.com${endpoint}`);
+  url.searchParams.append("key", apiKey);
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      url.searchParams.append(key, String(value));
+    }
+  });
+
+  const response = await fetch(url.toString(), { headers: { "Content-Type": "application/json" } });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Google Maps API error (${response.status}): ${errorText}`);
+  }
+  return (await response.json()) as T;
+}
+
+/**
+ * Try proxy first; fall back to direct Google API if proxy credentials are missing.
+ */
+export async function makeMapsRequest<T = unknown>(
+  endpoint: string,
+  params: Record<string, unknown> = {},
+): Promise<T> {
+  try {
+    return await makeRequest<T>(endpoint, params);
+  } catch (e: any) {
+    if (e?.message?.includes("proxy credentials missing") || e?.message?.includes("BUILT_IN_FORGE")) {
+      return makeGoogleDirect<T>(endpoint, params);
+    }
+    throw e;
+  }
+}
+
 // ============================================================================
 // Type Definitions
 // ============================================================================

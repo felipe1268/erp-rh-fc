@@ -162,7 +162,11 @@ export default function ViagensFrotas() {
     { companyId: cId }, { enabled: cId > 0 && isAdmin }
   );
 
-  const createTrip = trpc.frotas.createTrip.useMutation({ onSuccess: () => { refetchTrips(); setShowNew(false); } });
+  const [createTripError, setCreateTripError] = useState<string | null>(null);
+  const createTrip = trpc.frotas.createTrip.useMutation({
+    onSuccess: () => { refetchTrips(); setShowNew(false); setCreateTripError(null); },
+    onError: (e) => setCreateTripError(e.message || "Erro ao criar viagem"),
+  });
   const updateStatus = trpc.frotas.updateTripStatus.useMutation({ onSuccess: () => { refetchTrips(); refetchDetail(); setActionDlg(null); } });
   const getOdometer = trpc.frotas.getVehicleOdometerInfleet.useMutation();
   const addExpense = trpc.frotas.addTripExpense.useMutation({ onSuccess: () => { refetchDetail(); setShowExpense(false); } });
@@ -352,10 +356,11 @@ export default function ViagensFrotas() {
 
       {/* ─── Nova Viagem Dialog ─── */}
       <NovaViagemDialog
-        open={showNew} onClose={() => setShowNew(false)}
+        open={showNew} onClose={() => { setShowNew(false); setCreateTripError(null); }}
         cId={cId} vehicles={vehicles as any[]}
         onSubmit={(data) => createTrip.mutateAsync({ ...data, companyId: cId, criadoPor: userName })}
         loading={createTrip.isPending}
+        submitError={createTripError}
       />
 
       {/* ─── Trip Detail Sheet ─── */}
@@ -613,6 +618,7 @@ function AddressAutocomplete({
   const [query, setQuery] = useState(value);
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [dropOpen, setDropOpen] = useState(false);
+  const [dropRect, setDropRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -701,10 +707,20 @@ function AddressAutocomplete({
             onChange={e => {
               setQuery(e.target.value);
               onChange(e.target.value);
-              setDropOpen(true);
               setGpsError(null);
+              if (containerRef.current) {
+                const r = containerRef.current.getBoundingClientRect();
+                setDropRect({ top: r.bottom + 4, left: r.left, width: r.width });
+              }
+              setDropOpen(true);
             }}
-            onFocus={() => { if (query.length >= 2) setDropOpen(true); }}
+            onFocus={() => {
+              if (query.length >= 2 && containerRef.current) {
+                const r = containerRef.current.getBoundingClientRect();
+                setDropRect({ top: r.bottom + 4, left: r.left, width: r.width });
+                setDropOpen(true);
+              }
+            }}
             placeholder={placeholder}
             className="h-11 text-base pl-9 pr-2"
           />
@@ -731,9 +747,10 @@ function AddressAutocomplete({
         </p>
       )}
 
-      {/* Dropdown de sugestões */}
-      {dropOpen && suggestions.length > 0 && (
-        <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white rounded-xl border shadow-xl overflow-hidden max-h-64 overflow-y-auto">
+      {/* Dropdown de sugestões — posição fixed para não ser clipado pelo overflow-y-auto do Dialog */}
+      {dropOpen && suggestions.length > 0 && dropRect && (
+        <div className="fixed z-[9999] bg-white rounded-xl border shadow-xl overflow-hidden max-h-64 overflow-y-auto"
+          style={{ top: dropRect.top, left: dropRect.left, width: dropRect.width }}>
           {suggestions.map((s: any) => (
             <button key={s.place_id} type="button"
               onMouseDown={(e) => e.preventDefault()} // evita onBlur antes do click
@@ -762,7 +779,8 @@ function AddressAutocomplete({
   );
 }
 
-function NovaViagemDialog({ open, onClose, cId, vehicles, onSubmit, loading }: any) {
+function NovaViagemDialog({ open, onClose, cId, vehicles, onSubmit, loading, submitError }: any) {
+  const formRef = useRef<HTMLFormElement>(null);
   const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null);
   const [showPicker, setShowPicker] = useState(false);
   const [motoristaNome, setMotoristaNome] = useState("");
@@ -799,16 +817,16 @@ function NovaViagemDialog({ open, onClose, cId, vehicles, onSubmit, loading }: a
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!motoristaNome || !origem || !destino) return;
+    if (!motoristaNome.trim() || !origem.trim() || !destino.trim()) return;
     await onSubmit({
       vehicleId: selectedVehicleId,
-      placa: selectedVehicle?.placa || null,
-      motoristaNome,
-      origem,
-      destino,
+      placa: selectedVehicle?.placa || undefined,
+      motoristaNome: motoristaNome.trim(),
+      origem: origem.trim(),
+      destino: destino.trim(),
       motivo: motivo as any,
-      motivoDescricao: motivoDescricao || null,
-      obraNome: motivo === "obra" ? obraNome || null : null,
+      motivoDescricao: motivoDescricao.trim() || undefined,
+      obraNome: motivo === "obra" ? obraNome.trim() || undefined : undefined,
     });
   };
 
@@ -827,7 +845,7 @@ function NovaViagemDialog({ open, onClose, cId, vehicles, onSubmit, loading }: a
 
           {/* Corpo rolável */}
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
-            <form id="nova-viagem-form" onSubmit={handleSubmit} className="space-y-5">
+            <form ref={formRef} id="nova-viagem-form" onSubmit={handleSubmit} className="space-y-5">
 
               {/* ── 1. Veículo ── */}
               <div className="space-y-2">
@@ -974,15 +992,23 @@ function NovaViagemDialog({ open, onClose, cId, vehicles, onSubmit, loading }: a
           </div>
 
           {/* Footer fixo */}
-          <div className="px-5 py-4 border-t bg-gray-50 flex gap-3 shrink-0">
-            <Button type="button" variant="outline" onClick={onClose} className="flex-1 h-11">
-              Cancelar
-            </Button>
-            <Button type="submit" form="nova-viagem-form" disabled={loading}
-              className="flex-2 h-11 gap-2 bg-sky-600 hover:bg-sky-700 text-base font-semibold px-8">
-              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
-              {loading ? "Criando..." : "Criar Viagem"}
-            </Button>
+          <div className="px-5 py-3 border-t bg-gray-50 space-y-2 shrink-0">
+            {submitError && (
+              <p className="text-xs text-red-600 flex items-center gap-1.5 px-1">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" />{submitError}
+              </p>
+            )}
+            <div className="flex gap-3">
+              <Button type="button" variant="outline" onClick={onClose} className="flex-1 h-11">
+                Cancelar
+              </Button>
+              <Button type="button" disabled={loading}
+                onClick={() => formRef.current?.requestSubmit()}
+                className="flex-2 h-11 gap-2 bg-sky-600 hover:bg-sky-700 text-base font-semibold px-8">
+                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
+                {loading ? "Criando..." : "Criar Viagem"}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

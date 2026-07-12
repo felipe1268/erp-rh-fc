@@ -13,7 +13,7 @@ import {
 } from "../../drizzle/schema";
 import { invokeLLM, invokeAnthropicVision } from "../_core/llm";
 import { storagePut } from "../storage";
-import { makeRequest, DirectionsResult } from "../_core/map";
+import { makeRequest, makeMapsRequest, DirectionsResult } from "../_core/map";
 import { lockEGerarNumeroSc } from "./compras";
 
 const n = (v: any) => parseFloat(v ?? "0") || 0;
@@ -8095,7 +8095,7 @@ Sempre retorne JSON válido, sem markdown.`;
       }
       // Tenta Places Autocomplete primeiro
       try {
-        const result = await makeRequest<{ predictions: Array<{ description: string; place_id: string; structured_formatting?: { main_text: string; secondary_text: string } }>; status: string }>(
+        const result = await makeMapsRequest<{ predictions: Array<{ description: string; place_id: string; structured_formatting?: { main_text: string; secondary_text: string } }>; status: string }>(
           '/maps/api/place/autocomplete/json', {
             input: input.input,
             language: 'pt-BR',
@@ -8114,7 +8114,7 @@ Sempre retorne JSON válido, sem markdown.`;
       }
       // Fallback: Geocoding API com texto livre
       try {
-        const geo = await makeRequest<{ results: Array<{ formatted_address: string; place_id: string; address_components: Array<{ long_name: string; types: string[] }> }>; status: string }>(
+        const geo = await makeMapsRequest<{ results: Array<{ formatted_address: string; place_id: string; address_components: Array<{ long_name: string; types: string[] }> }>; status: string }>(
           '/maps/api/geocode/json', {
             address: `${input.input}, Brasil`,
             language: 'pt-BR',
@@ -8145,7 +8145,7 @@ Sempre retorne JSON válido, sem markdown.`;
       }
       try {
         // Sem filtro result_type — aceita qualquer tipo de resultado (rodovias, área rural, etc.)
-        const result = await makeRequest<{ results: Array<{ formatted_address: string }>; status: string }>(
+        const result = await makeMapsRequest<{ results: Array<{ formatted_address: string }>; status: string }>(
           '/maps/api/geocode/json', {
             latlng: `${input.lat},${input.lng}`,
             language: 'pt-BR',
@@ -8173,7 +8173,7 @@ Sempre retorne JSON válido, sem markdown.`;
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
       }
       try {
-        const result = await makeRequest<DirectionsResult>('/maps/api/directions/json', {
+        const result = await makeMapsRequest<DirectionsResult>('/maps/api/directions/json', {
           origin: input.origin,
           destination: input.destination,
           mode: 'driving',

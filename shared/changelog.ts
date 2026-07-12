@@ -1,4 +1,30 @@
 /**
+ * Rev. 4154 — **FROTA: NOVA VIAGEM — FIXES: DROPDOWN FIXED, SUBMIT, ERRO VISÍVEL + API GOOGLE DIRETA.**
+ *
+ * CONTEXTO: após Rev. 4153, 3 bugs bloqueavam o uso real:
+ * (1) Dropdown de autocomplete era clipado pelo overflow-y-auto do Dialog (não aparecia);
+ * (2) Botão "Criar Viagem" usava form="..." que falha em Dialog/iOS — submit silencioso;
+ * (3) Toda chamada Google Maps (autocomplete, GPS, rota, pedágio) falhava porque
+ *     BUILT_IN_FORGE_API_URL/BUILT_IN_FORGE_API_KEY não estão configuradas neste ambiente,
+ *     e o fallback direto via GOOGLE_API_KEY não existia.
+ *
+ * MUDANÇAS:
+ * - server/_core/map.ts:
+ *   · `makeGoogleDirect<T>`: chama https://maps.googleapis.com diretamente com GOOGLE_API_KEY.
+ *   · `makeMapsRequest<T>`: tenta proxy → se "proxy credentials missing" → fallback direto.
+ * - server/routers/frotas.ts:
+ *   · Todas as 4 chamadas makeRequest (getPlaceAutocomplete×2, reverseGeocode, getRouteInfo)
+ *     trocadas para makeMapsRequest → autocomplete, GPS e pedágio estimado passam a funcionar.
+ * - client/src/pages/frotas/ViagensFrotas.tsx:
+ *   · Dropdown: position:fixed + dropRect (getBoundingClientRect no input) → não clipa mais.
+ *   · Submit: formRef.current?.requestSubmit() em vez de form="nova-viagem-form" → funciona em Dialog/iOS.
+ *   · Erro de submit: onError em createTrip.useMutation → banner vermelho inline no footer.
+ *   · handleSubmit: || null → || undefined nos campos opcionais (Zod rejeitava null).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4153 — **FROTA: NOVA VIAGEM — AUTOCOMPLETE DE ENDEREÇO (GOOGLE PLACES) + BOTÃO GPS.**
  *
  * CONTEXTO: os campos de origem e destino eram inputs de texto livre sem sugestão — o usuário

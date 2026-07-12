@@ -50,21 +50,21 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4153** — **FROTA: NOVA VIAGEM — AUTOCOMPLETE DE ENDEREÇO (GOOGLE PLACES) + BOTÃO GPS.** `getPlaceAutocomplete` via Places API (country:br, pt-BR, até 6 sugestões com `structured_formatting`); `reverseGeocode` via Geocoding API; componente `AddressAutocomplete` com dropdown z-50, debounce 400 ms, erro GPS inline (sem alert nativo); botão GPS (LocateFixed) só no campo de saída. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4154** — **FROTA: NOVA VIAGEM — FIXES: DROPDOWN FIXED, SUBMIT, ERRO VISÍVEL + API GOOGLE DIRETA.** `makeGoogleDirect` + `makeMapsRequest` em `map.ts` para usar `GOOGLE_API_KEY` quando proxy Replit ausente; autocomplete, GPS e pedágio estimado passam a funcionar. Dropdown: `position:fixed` + `getBoundingClientRect` (não clipa mais dentro do Dialog). Botão "Criar": `formRef.current?.requestSubmit()` (funciona em Dialog/iOS). Erro de submit exibido inline no footer. `|| null → || undefined` nos opcionais do Zod. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4152** — **FROTA: NOVA VIAGEM — SELETOR VISUAL DE VEÍCULOS + MAPA GOOGLE + AUTO-PREENCHIMENTO.** `listVehicles` filtra `status='Ativo'`; `VehiclePickerSheet` (Sheet bottom 85vh, busca, lista coluna única com foto/placa/modelo/km/motorista); `NovaViagemDialog` single-column com header/footer fixos; auto-fill motorista + km; `RoutePreview` iframe Google Maps + 4 cards; backend `getRouteInfo` via Directions API. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4153** — **FROTA: NOVA VIAGEM — AUTOCOMPLETE DE ENDEREÇO (GOOGLE PLACES) + BOTÃO GPS.** `getPlaceAutocomplete` via Places API (country:br, pt-BR, até 6 sugestões com `structured_formatting`); `reverseGeocode` via Geocoding API; componente `AddressAutocomplete` com dropdown z-50, debounce 400 ms, erro GPS inline (sem alert nativo); botão GPS (LocateFixed) só no campo de saída. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
-- **Rev. 4151** — **FROTA: CONTROLE DE VIAGENS — MÓDULO COMPLETO.** 2 tabelas novas (`fleet_trips`, `fleet_trip_expenses`); 10 procedures tRPC; `ViagensFrotas.tsx` com fluxo pendente→autorizada→em_andamento→concluída; km inicial/final com foto do hodômetro; botão GPS odômetro Infleet; despesas com comprovante + reembolso PIX/TED. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4152** — **FROTA: NOVA VIAGEM — SELETOR VISUAL DE VEÍCULOS + MAPA GOOGLE + AUTO-PREENCHIMENTO.** `VehiclePickerSheet`; `NovaViagemDialog` single-column; auto-fill motorista+km; `RoutePreview` iframe + 4 cards; backend `getRouteInfo`. ZERO DELETE · ZERO ALTER destrutivo.
+
+- **Rev. 4151** — **FROTA: CONTROLE DE VIAGENS — MÓDULO COMPLETO.** 2 tabelas novas (`fleet_trips`, `fleet_trip_expenses`); 10 procedures tRPC; fluxo pendente→autorizada→em_andamento→concluída; km inicial/final com foto; despesas + reembolso PIX/TED. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4150** — **FROTA: PEDÁGIOS — CATEGORIA sem_parar CORRIGIDA EM LOTE + IMPORTADOR FIXADO.** 2558 registros `pedagio` → `sem_parar`; tipoUsoToCategoria corrigida; 317 praças duplicadas unificadas. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4149** — **FROTA: FILTRO MENSAL NOS 3 DASHBOARDS (Combustível, Manutenção, Pedágios).** Backend aceita `mes` opcional; white-card com "Ano todo" + Jan–Dez com badges de contagem; cores temáticas por tela; trocar ano reseta o mês. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4148** — **NFS-e: #30 VALOR LÍQUIDO CORRIGIDO (120.694,65 → 119.469,32).** Fórmula subtraía só IRRF, não retencao_csll; correção direta por id=929 alinhando ao DANFSe. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4147** — **NFS-e: BATCH DANFSes #43–#61 — ISS RETIDO + VALOR LÍQUIDO CORRIGIDOS (17 NOTAS).** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4146** — **NFS-e: BATCH DANFSes #38, #41, #42 — ISS RETIDO + VALOR LÍQUIDO CORRIGIDOS.** ZERO DELETE · ZERO ALTER destrutivo.
 
