@@ -16475,14 +16475,21 @@ Responda APENAS com JSON válido, sem markdown, no formato:
       }
       function normItem(s: string): string {
         let n = removeAcc(s.toUpperCase()).trim();
+        // 1. remover conteúdo entre parênteses ANTES de expandir pontuação
+        //    ex: "Cimento CP3 (Sacos de 50 Kg) (Volume 0,036 M³)" → "Cimento CP3"
+        n = n.replace(/\s*\([^)]*\)\s*/g, " ").trim();
+        // 2. expandir pontuação para espaços
         n = n.replace(/[\/\\\-_.,;:!?()\[\]{}\"'`]/g, " ");
         n = n.replace(/\s+/g, " ").trim();
+        // 3. números romanos isolados
         const rm: Record<string, string> = {
           VIII:"8",VII:"7",VI:"6",IV:"4",IX:"9",XII:"12",XI:"11",X:"10",III:"3",II:"2",V:"5",
         };
         n = n.replace(/\b(VIII|VII|VI|IV|IX|XII|XI|X|III|II|V)\b/g, (m) => rm[m]);
+        // 4. tipo de cimento: CPIII → CP3 (colado sem espaço, fora da regex de palavras)
         n = n.replace(/CP\s*III/g, "CP3").replace(/CP\s*II\b/g, "CP2");
-        n = n.replace(/\s*\(.*?\)\s*/g, " ");
+        // 5. remover classe de resistência após tipo (CP3-E-32, CP3 E 32, CP5-E40)
+        n = n.replace(/\b(CP\s*\d+)\s*[-–]?\s*E\s*[-–]?\s*\d+\b/g, "$1");
         n = n.replace(/\s+/g, " ").trim();
         return n;
       }
