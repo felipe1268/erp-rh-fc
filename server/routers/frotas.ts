@@ -8093,6 +8093,7 @@ Sempre retorne JSON válido, sem markdown.`;
       if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
       }
+      // Tenta Places Autocomplete primeiro
       try {
         const result = await makeRequest<{ predictions: Array<{ description: string; place_id: string; structured_formatting?: { main_text: string; secondary_text: string } }>; status: string }>(
           '/maps/api/place/autocomplete/json', {
@@ -8102,8 +8103,37 @@ Sempre retorne JSON válido, sem markdown.`;
             types: 'geocode',
           }
         );
-        if (result.status !== 'OK' && result.status !== 'ZERO_RESULTS') return [];
-        return (result.predictions || []).slice(0, 6);
+        if (result.status === 'OK') {
+          return (result.predictions || []).slice(0, 6);
+        }
+        if (result.status === 'ZERO_RESULTS') return [];
+        // Status inesperado (ex: NOT_FOUND, REQUEST_DENIED) → fallback
+        console.warn('[getPlaceAutocomplete] Places status:', result.status, '— usando fallback Geocoding');
+      } catch (e: any) {
+        console.warn('[getPlaceAutocomplete] Places erro:', e.message, '— usando fallback Geocoding');
+      }
+      // Fallback: Geocoding API com texto livre
+      try {
+        const geo = await makeRequest<{ results: Array<{ formatted_address: string; place_id: string; address_components: Array<{ long_name: string; types: string[] }> }>; status: string }>(
+          '/maps/api/geocode/json', {
+            address: `${input.input}, Brasil`,
+            language: 'pt-BR',
+            components: 'country:BR',
+          }
+        );
+        if (geo.status !== 'OK' || !geo.results?.length) return [];
+        return geo.results.slice(0, 6).map((r) => {
+          const city = r.address_components?.find((c) => c.types.includes('locality') || c.types.includes('administrative_area_level_2'))?.long_name || '';
+          const state = r.address_components?.find((c) => c.types.includes('administrative_area_level_1'))?.long_name || '';
+          return {
+            place_id: r.place_id,
+            description: r.formatted_address,
+            structured_formatting: {
+              main_text: city || r.formatted_address,
+              secondary_text: state,
+            },
+          };
+        });
       } catch { return []; }
     }),
 
@@ -8114,18 +8144,22 @@ Sempre retorne JSON válido, sem markdown.`;
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
       }
       try {
+        // Sem filtro result_type — aceita qualquer tipo de resultado (rodovias, área rural, etc.)
         const result = await makeRequest<{ results: Array<{ formatted_address: string }>; status: string }>(
           '/maps/api/geocode/json', {
             latlng: `${input.lat},${input.lng}`,
             language: 'pt-BR',
-            result_type: 'street_address|sublocality|locality',
           }
         );
+        console.log('[reverseGeocode] status:', result.status, 'results:', result.results?.length);
         if (result.status === 'OK' && result.results?.[0]) {
           return { address: result.results[0].formatted_address };
         }
         return { address: null, erro: result.status };
-      } catch (e: any) { return { address: null, erro: e.message }; }
+      } catch (e: any) {
+        console.error('[reverseGeocode] erro:', e.message);
+        return { address: null, erro: e.message };
+      }
     }),
 
   getRouteInfo: protectedProcedure
