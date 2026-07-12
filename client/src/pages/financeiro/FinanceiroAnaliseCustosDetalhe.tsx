@@ -1065,9 +1065,9 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                 })}
               </div>
 
-              <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                {/* ── Tabela de itens (ocupa 2 colunas no XL) ── */}
-                <div className="xl:col-span-2">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {/* ── Tabela de itens (ocupa 2 colunas no LG+) ── */}
+                <div className="lg:col-span-2">
                   <Card className="border-0 shadow-sm">
                     {/* Barra de busca + filtro de obra */}
                     <div className="px-5 pt-4 pb-0 flex flex-wrap items-center gap-2">
@@ -1359,7 +1359,7 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                 </div>
 
                 {/* ── Coluna lateral: Dash + Formas de pagamento + Obras ── */}
-                <div className="space-y-4">
+                <div className="space-y-4 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-120px)] lg:overflow-y-auto">
                   {/* Dash panel — análises inteligentes */}
                   <AnaliseDashPanel itens={itens} totalGasto={resumo.totalGasto} />
 
