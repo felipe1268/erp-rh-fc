@@ -13,6 +13,11 @@ interface PeriodSelectorCardProps {
   /** Nó opcional renderizado à direita do cabeçalho (botões de ação, legend, etc.) */
   actions?: React.ReactNode;
   className?: string;
+  /**
+   * Status por mês (1–12). "data" = mostra ponto azul; ausente/undefined = ponto cinza.
+   * Quando informado, todos os 12 meses recebem um ponto colorido indicando presença de dados.
+   */
+  monthStatus?: Record<number, "data" | "none">;
 }
 
 /**
@@ -20,7 +25,7 @@ interface PeriodSelectorCardProps {
  * pills + botão opcional "Ano todo" (mes=null) para telas que suportam visão anual.
  */
 export default function PeriodSelectorCard({
-  ano, mes, onAno, onMes, onAnoTodo, actions, className,
+  ano, mes, onAno, onMes, onAnoTodo, actions, className, monthStatus,
 }: PeriodSelectorCardProps) {
   const anoTodoSelecionado = mes === null;
   return (
@@ -72,13 +77,16 @@ export default function PeriodSelectorCard({
               key={m}
               type="button"
               onClick={() => onMes(numMes)}
-              className={`flex items-center justify-center py-2 rounded-xl text-xs font-medium transition-all
+              className={`flex flex-col items-center justify-center py-2 gap-0.5 rounded-xl text-xs font-medium transition-all
                 ${isSelected
                   ? "border-2 border-slate-800 bg-slate-50 text-slate-800 font-semibold shadow-sm"
                   : "border border-slate-200 bg-white text-slate-500 hover:border-slate-400 hover:bg-slate-50"
                 }`}
             >
               {m}
+              {monthStatus && (
+                <span className={`w-1.5 h-1.5 rounded-full ${monthStatus[numMes] === "data" ? "bg-blue-500" : "bg-gray-300"}`} />
+              )}
             </button>
           );
         })}

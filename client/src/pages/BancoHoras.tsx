@@ -214,6 +214,17 @@ export default function BancoHoras() {
   const lancamentosExtratoList = useMemo(() => (lancamentosExtrato.data ?? []) as any[], [lancamentosExtrato.data]);
   const totalBancoMins = useMemo(() => saldos.reduce((acc: number, s: any) => acc + Number(s.saldoMinutos || 0), 0), [saldos]);
 
+  // Deriva quais meses do ano têm lançamentos (para pintar pontos no seletor)
+  const monthStatusMap = useMemo<Record<number, "data" | "none">>(() => {
+    const map: Record<number, "data" | "none"> = {};
+    for (let m = 1; m <= 12; m++) map[m] = "none";
+    for (const row of (resumoMensalBanco.data ?? []) as any[]) {
+      const m = Number(row.mes);
+      if (m >= 1 && m <= 12 && Number(row.qtd) > 0) map[m] = "data";
+    }
+    return map;
+  }, [resumoMensalBanco.data]);
+
   const saldoMap = useMemo(() => {
     const m = new Map<number, number>();
     for (const s of saldos) m.set(Number(s.employeeId), Number(s.saldoMinutos || 0));
@@ -396,10 +407,11 @@ export default function BancoHoras() {
           mes={mesBanco}
           onAno={(a) => mudarAno(a - anoBanco)}
           onMes={(m) => selecionarMes(m)}
+          monthStatus={monthStatusMap}
           actions={
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
-              <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-blue-500" /> Com lançamento</div>
-              <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-gray-200" /> Sem dados</div>
+              <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> Com lançamento</div>
+              <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" /> Sem dados</div>
             </div>
           }
         />
