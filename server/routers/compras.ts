@@ -16356,6 +16356,18 @@ Responda APENAS com JSON válido, sem markdown, no formato:
         if (isMultiUnit) variacaoReason = 'unidade_mista';
         else if (g.temPrecoZero) variacaoReason = 'preco_zero';
         else if (variacaoPct > 15) variacaoReason = 'variacao_real';
+        // intervaloDias: média de dias entre compras consecutivas do item
+        const occs = ocMap.get(nk) ?? [];
+        const ocDates = occs
+          .filter((oc: any) => oc.data)
+          .map((oc: any) => new Date((oc.data as string) + 'T00:00:00').getTime())
+          .sort((a: number, b: number) => a - b);
+        let intervaloDias: number | null = null;
+        if (ocDates.length >= 2) {
+          let totalDiff = 0;
+          for (let i = 1; i < ocDates.length; i++) totalDiff += ocDates[i] - ocDates[i - 1];
+          intervaloDias = Math.round(totalDiff / (ocDates.length - 1) / 86400000);
+        }
         return {
           descricao: bestDesc,
           unidade: isMultiUnit ? 'var.' : (bestUnit || null),
@@ -16372,7 +16384,9 @@ Responda APENAS com JSON válido, sem markdown, no formato:
           qtdOcs: g.qtdOcs,
           ultimaCompra: g.ultimaCompra,
           primeiraCompra: g.primeiraCompra,
-          ocorrencias: ocMap.get(nk) ?? [],
+          intervaloDias,
+          familiaKey: getItemFamilia(nk),
+          ocorrencias: occs,
         };
       }).sort((a: any, b: any) => b.valorTotal - a.valorTotal);
 

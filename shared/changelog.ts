@@ -1,4 +1,31 @@
 /**
+ * Rev. 4180 - COMPRAS/FINANCEIRO: ANÁLISE DE FORNECEDOR — GRÁFICO SEMANA/MÊS + GRUPOS SIMILARES + INTERVALO.
+ *
+ * O QUE FOI FEITO:
+ * - Backend `getAnaliseFornecedor`: cada item agora carrega `intervaloDias` (média de dias entre
+ *   compras consecutivas, calculada das ocorrências) e `familiaKey` (raiz léxica via getItemFamilia).
+ * - Frontend AnaliseDashPanel — TOGGLE MÊS/SEMANA no gráfico de Evolução de Gastos:
+ *     * Botão "Mês | Semana" no header do card; barras em azul-sky na view semanal.
+ *     * Intervalo automático no eixo X quando muitas semanas; tooltip BRL preservado.
+ *     * Estatísticas adicionais em view semanal: total de semanas com compras, pico (data+valor), média/semana.
+ * - Frontend — SEÇÃO "GRUPOS SIMILARES" (azul):
+ *     * Agrupa itens que compartilham a mesma familiaKey (ex: "Prego 17x21" + "Prego 18x30" + "Prego de Aço 17x21" → família "Prego").
+ *     * Cada grupo mostra cabeçalho com totalOCs + totalGasto, e lista clicável dos sub-itens com intervaloDias.
+ *     * Expansível (mostrar 4 / ver todos) — colapsa por padrão p/ não poluir o layout.
+ *     * Call-to-action: "Padronizar nomes desses itens facilita análise e negociação em bloco."
+ * - Frontend — INTERVALO ENTRE COMPRAS no drill-down (Sheet lateral de item):
+ *     * 4º KPI card "Frequência" (azul): média de dias entre pedidos.
+ *     * Seção detalhada "Intervalo entre Compras": mínimo / média / máximo + mini bar chart
+ *       dos intervalos consecutivos colorido por urgência (≤7d=vermelho, 8–14d=âmbar, >14d=azul).
+ * - IntervaloDias visível também nos cards de Fragmentação (↻Nd) e na lista Top Produtos.
+ * - Badge "familiaKey" no header do drill-down (ex: "Prego").
+ *
+ * ARQUIVOS TOCADOS: server/routers/compras.ts (getAnaliseFornecedor +intervaloDias +familiaKey),
+ *   client/src/pages/financeiro/AnaliseDashPanel.tsx (reescrita com novos blocos).
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4179 - PLANEJAMENTO: FIX % PREVISTO GLOBAL — FALLBACK PARA REVISÃO BASELINE QUANDO REVISÃO ATIVA SEM BASELINE.
  *
  * CAUSA-RAIZ DIAGNOSTICADA:

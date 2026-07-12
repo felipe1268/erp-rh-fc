@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4179** — **PLANEJAMENTO: FIX % PREVISTO GLOBAL — FALLBACK PARA REVISÃO BASELINE.** `regenerarPrevistoSemanasCaminhoB` agora detecta revisão ativa sem baseline e usa automaticamente a revisão `is_baseline=true` do mesmo projeto, mantendo o revisaoId ativo no snapshot. Self-heal no getProjeto simplificado (sem pré-check de cnt). Corrige discrepância 51,80% vs 41% (MSP Text10) no QIU 2 - FASE 4. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4180** — **COMPRAS/FINANCEIRO: ANÁLISE FORNECEDOR — TOGGLE MÊS/SEMANA + GRUPOS SIMILARES + INTERVALO.** Toggle "Mês | Semana" no gráfico de gastos (barras azul-sky, estatísticas de pico/média). Seção "Grupos Similares" agrupa variantes de nome por família léxica ("Prego 17x21" + "Prego de Aço 17x21" → Prego). Intervalo entre compras no drill-down: KPI "Frequência" + mini bar chart dos intervalos consecutivos colorido por urgência. Backend: `intervaloDias` e `familiaKey` em cada item. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4178** — **COMPRAS/FINANCEIRO: REDESIGN COMPLETO DA ABA ANÁLISE — DASHBOARD RICO.** AnaliseDashPanel reescrito: KPI Strip (4 cards) + Donut ABC + Pie Formas Pgto + Cards Destaques clicáveis + Bar Gastos/Mês + Top 10 Produtos com barra clicável + Chips Obras + Grid Fragmentação. Sheet lateral de drill-down por produto: Header colorido, KPIs, Line Chart histórico de preços, lista OCs. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4179** — **PLANEJAMENTO: FIX % PREVISTO GLOBAL — FALLBACK PARA REVISÃO BASELINE.** `regenerarPrevistoSemanasCaminhoB` agora detecta revisão ativa sem baseline e usa automaticamente a revisão `is_baseline=true` do mesmo projeto, mantendo o revisaoId ativo no snapshot. Self-heal no getProjeto simplificado (sem pré-check de cnt). Corrige discrepância 51,80% vs 41% (MSP Text10) no QIU 2 - FASE 4. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4176** — **COMPRAS/FINANCEIRO: PAINEL ANÁLISE SEPARADO DA TABELA (FULL-WIDTH).** `AnaliseDashPanel` redesenhado: 3 colunas horizontais (Curva ABC | Destaques em grade 2×3 | Fragmentação) com cabeçalho colapsável e badge de alertas. Tabela full-width; Formas de Pgto + Obras em grid 2 col. ZERO DELETE · ZERO ALTER destrutivo.
 
