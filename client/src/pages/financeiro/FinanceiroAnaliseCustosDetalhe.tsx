@@ -1101,10 +1101,15 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                                         {item.unidade && <span className="text-[10px] text-gray-400 mt-0.5">{item.unidade}</span>}
                                       </td>
                                       <td className="py-3 px-2 text-right tabular-nums text-gray-700">
-                                        {item.qtdTotal % 1 === 0
-                                          ? item.qtdTotal.toLocaleString('pt-BR')
-                                          : item.qtdTotal.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 3 })}
-                                        {item.unidade ? <span className="text-gray-400 ml-0.5">{item.unidade}</span> : null}
+                                        {item.qtdMixed
+                                          ? <span className="text-gray-400 text-[11px]">unid. var.</span>
+                                          : <>
+                                              {item.qtdTotal % 1 === 0
+                                                ? item.qtdTotal.toLocaleString('pt-BR')
+                                                : item.qtdTotal.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 3 })}
+                                              {item.unidade ? <span className="text-gray-400 ml-0.5">{item.unidade}</span> : null}
+                                            </>
+                                        }
                                       </td>
                                       <td className="py-3 px-2 text-right tabular-nums text-gray-700 whitespace-nowrap">{formatBRL(item.precoMin)}</td>
                                       <td className="py-3 px-2 text-right tabular-nums text-gray-700 whitespace-nowrap">{formatBRL(item.precoMax)}</td>

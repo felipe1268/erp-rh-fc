@@ -13,6 +13,7 @@
  *   compras_ordens_itens + compras_solicitacoes_itens + compras_cotacoes_itens.
  * - `getItemSugestoes(companyId, q)`: ILIKE autocomplete de descrições históricas, ordenado por
  *   frequência de uso (n_ocs DESC), limite 12 — alimenta o autocomplete de SC/OC.
+ * - `normItemDesc(s)`: função de módulo exportada, usada em AMBOS auditarItens e getAnaliseFornecedor.
  *
  * MUDANÇA FRONTEND:
  * - Novo componente `client/src/components/compras/ItemDescricaoInput.tsx`: input com dropdown de

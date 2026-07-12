@@ -1337,6 +1337,39 @@ export async function lockEGerarNumeroSc(tx: any, companyId: number): Promise<st
   return await gerarProximoNumeroScAtomico(tx, companyId);
 }
 
+// ─── Normalização canônica de nomes de itens ─────────────────────────────────
+// Usada em auditarItens (detecção de duplicatas) e getAnaliseFornecedor (agrupamento)
+function _removeAcc(s: string) {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+export function normItemDesc(s: string): string {
+  let n = _removeAcc(s.toUpperCase()).trim();
+  // 1. remove conteúdo entre parênteses (especificações técnicas) ANTES de expandir pontuação
+  n = n.replace(/\s*\([^)]*\)\s*/g, " ").trim();
+  // 2. expande pontuação para espaços
+  n = n.replace(/[\/\\\-_.,;:!?()\[\]{}"'`]/g, " ");
+  n = n.replace(/\s+/g, " ").trim();
+  // 3. números romanos isolados
+  const rm: Record<string, string> = {
+    VIII:"8",VII:"7",VI:"6",IV:"4",IX:"9",XII:"12",XI:"11",X:"10",III:"3",II:"2",V:"5",
+  };
+  n = n.replace(/\b(VIII|VII|VI|IV|IX|XII|XI|X|III|II|V)\b/g, (m) => rm[m]);
+  // 4. tipo de cimento: CPIII→CP3, CPII→CP2 (colado sem espaço, fora do \b)
+  n = n.replace(/CP\s*III/g, "CP3").replace(/CP\s*II\b/g, "CP2");
+  // 5. remove classe de resistência após tipo (CP3-E-32, CP3 E 32, CP5-E40)
+  n = n.replace(/\b(CP\s*\d+)\s*[-–]?\s*E\s*[-–]?\s*\d+\b/g, "$1");
+  // 6. qualificadores redundantes de construção civil
+  n = n.replace(/\bLAVADA\b/g, "");
+  n = n.replace(/\bA GRANEL\b/g, "");
+  // "areia" sem granulometria = areia média (padrão de mercado)
+  if (/^AREIA\b/.test(n) && !/\b(FINA|GROSSA|MEDIA)\b/.test(n)) {
+    n = n.replace(/^AREIA\b/, "AREIA MEDIA");
+  }
+  n = n.replace(/\s+/g, " ").trim();
+  return n;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const comprasRouter = router({
 
   // ══════════════════════════════════════════════════════════════
@@ -16160,13 +16193,13 @@ Responda APENAS com JSON válido, sem markdown, no formato:
         ORDER BY obra_nome
       `);
 
-      // Montar mapa desc_key+unidade → ocorrências
+      // Montar mapa normKey → ocorrências (usando a mesma normalização da auditoria)
       const ocRows = (ocorrRes as any).rows ?? ocorrRes;
       const ocMap = new Map<string, any[]>();
       for (const r of ocRows) {
-        const key = `${r.desc_key}|||${r.unidade ?? ''}`;
-        if (!ocMap.has(key)) ocMap.set(key, []);
-        ocMap.get(key)!.push({
+        const nk = normItemDesc(String(r.desc_key ?? ''));
+        if (!ocMap.has(nk)) ocMap.set(nk, []);
+        ocMap.get(nk)!.push({
           numeroOc: r.numero_oc ?? '',
           data: r.data ?? null,
           obraNome: r.obra_nome ?? null,
@@ -16178,27 +16211,69 @@ Responda APENAS com JSON válido, sem markdown, no formato:
         });
       }
 
-      // Montar lista de itens com variação de preço + ocorrências
+      // Re-agrupar itens brutos pela chave normalizada (CPIII=CP3, lavada=média, etc.)
       const rawItens = (itensRes as any).rows ?? itensRes;
-      const itens = rawItens.map((r: any) => {
-        const precoMin = Number(r.preco_min ?? 0);
-        const precoMax = Number(r.preco_max ?? 0);
+      type NormGroup = {
+        descFreq: Map<string, number>;
+        unidades: Map<string, { qtd: number; valor: number }>;
+        valorTotal: number; qtdOcs: number;
+        precoMin: number; precoMax: number;
+        ultimaCompra: string | null;
+      };
+      const normGroups = new Map<string, NormGroup>();
+      for (const r of rawItens) {
+        const nk = normItemDesc(String(r.descricao ?? ''));
+        if (!normGroups.has(nk)) {
+          normGroups.set(nk, {
+            descFreq: new Map(), unidades: new Map(),
+            valorTotal: 0, qtdOcs: 0,
+            precoMin: Infinity, precoMax: -Infinity, ultimaCompra: null,
+          });
+        }
+        const g = normGroups.get(nk)!;
+        const desc = String(r.descricao ?? '');
+        g.descFreq.set(desc, (g.descFreq.get(desc) ?? 0) + Number(r.qtd_ocs ?? 1));
+        const u = String(r.unidade ?? '');
+        const uv = g.unidades.get(u) ?? { qtd: 0, valor: 0 };
+        uv.qtd += Number(r.qtd_total ?? 0);
+        uv.valor += Number(r.valor_total ?? 0);
+        g.unidades.set(u, uv);
+        g.valorTotal += Number(r.valor_total ?? 0);
+        g.qtdOcs += Number(r.qtd_ocs ?? 0);
+        const pMin = Number(r.preco_min ?? 0);
+        const pMax = Number(r.preco_max ?? 0);
+        if (pMin > 0 && pMin < g.precoMin) g.precoMin = pMin;
+        if (pMax > g.precoMax) g.precoMax = pMax;
+        const uc = String(r.ultima_compra ?? '');
+        if (uc && (!g.ultimaCompra || uc > g.ultimaCompra)) g.ultimaCompra = uc;
+      }
+      const itens = Array.from(normGroups.entries()).map(([nk, g]) => {
+        // Nome mais frequente (por OCs) como canônico
+        let bestDesc = ''; let bestFreq = 0;
+        for (const [d, f] of g.descFreq) { if (f > bestFreq) { bestFreq = f; bestDesc = d; } }
+        // Unidade mais representativa (por valor total)
+        let bestUnit = ''; let bestUnitVal = -1;
+        for (const [u, uv] of g.unidades) { if (uv.valor > bestUnitVal) { bestUnitVal = uv.valor; bestUnit = u; } }
+        const isMultiUnit = g.unidades.size > 1;
+        const qtdTotal = isMultiUnit ? 0 : (g.unidades.get(bestUnit)?.qtd ?? 0);
+        const precoMin = g.precoMin === Infinity ? 0 : g.precoMin;
+        const precoMax = g.precoMax === -Infinity ? 0 : g.precoMax;
         const variacaoPct = precoMin > 0 ? ((precoMax - precoMin) / precoMin) * 100 : 0;
-        const key = `${r.desc_key}|||${r.unidade ?? ''}`;
         return {
-          descricao: r.descricao ?? '',
-          unidade: r.unidade ?? null,
-          qtdTotal: Number(r.qtd_total ?? 0),
+          descricao: bestDesc,
+          unidade: isMultiUnit ? 'var.' : (bestUnit || null),
+          qtdTotal,
+          qtdMixed: isMultiUnit,
           precoMin,
           precoMax,
-          precoAvg: Number(r.preco_avg ?? 0),
+          precoAvg: precoMin > 0 ? (precoMin + precoMax) / 2 : 0,
           variacaoPct,
-          valorTotal: Number(r.valor_total ?? 0),
-          qtdOcs: Number(r.qtd_ocs ?? 0),
-          ultimaCompra: r.ultima_compra ?? null,
-          ocorrencias: ocMap.get(key) ?? [],
+          valorTotal: g.valorTotal,
+          qtdOcs: g.qtdOcs,
+          ultimaCompra: g.ultimaCompra,
+          ocorrencias: ocMap.get(nk) ?? [],
         };
-      });
+      }).sort((a: any, b: any) => b.valorTotal - a.valorTotal);
 
       // Formas de pagamento com percentual
       const rawPag = (pagRes as any).rows ?? pagRes;
@@ -16470,44 +16545,13 @@ Responda APENAS com JSON válido, sem markdown, no formato:
         GROUP BY oi.descricao, oi.unidade
       `);
 
-      function removeAcc(s: string) {
-        return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      }
-      function normItem(s: string): string {
-        let n = removeAcc(s.toUpperCase()).trim();
-        // 1. remover conteúdo entre parênteses ANTES de expandir pontuação
-        //    ex: "Cimento CP3 (Sacos de 50 Kg) (Volume 0,036 M³)" → "Cimento CP3"
-        n = n.replace(/\s*\([^)]*\)\s*/g, " ").trim();
-        // 2. expandir pontuação para espaços
-        n = n.replace(/[\/\\\-_.,;:!?()\[\]{}\"'`]/g, " ");
-        n = n.replace(/\s+/g, " ").trim();
-        // 3. números romanos isolados
-        const rm: Record<string, string> = {
-          VIII:"8",VII:"7",VI:"6",IV:"4",IX:"9",XII:"12",XI:"11",X:"10",III:"3",II:"2",V:"5",
-        };
-        n = n.replace(/\b(VIII|VII|VI|IV|IX|XII|XI|X|III|II|V)\b/g, (m) => rm[m]);
-        // 4. tipo de cimento: CPIII → CP3 (colado sem espaço, fora da regex de palavras)
-        n = n.replace(/CP\s*III/g, "CP3").replace(/CP\s*II\b/g, "CP2");
-        // 5. remover classe de resistência após tipo (CP3-E-32, CP3 E 32, CP5-E40)
-        n = n.replace(/\b(CP\s*\d+)\s*[-–]?\s*E\s*[-–]?\s*\d+\b/g, "$1");
-        // 6. qualificadores redundantes de construção civil
-        //    "lavada" é atributo padrão de areia — "areia média" = "areia média lavada"
-        //    "a granel" é forma de entrega, não tipo do produto
-        n = n.replace(/\bLAVADA\b/g, "");
-        n = n.replace(/\bA GRANEL\b/g, "");
-        // "areia" sem granulometria = areia média (padrão de mercado)
-        if (/^AREIA\b/.test(n) && !/\b(FINA|GROSSA|MEDIA)\b/.test(n)) {
-          n = n.replace(/^AREIA\b/, "AREIA MEDIA");
-        }
-        n = n.replace(/\s+/g, " ").trim();
-        return n;
-      }
+      // usa normItemDesc de módulo (mesma lógica do getAnaliseFornecedor)
 
       type Row = { descricao: string; unidade: string; n_ocs: number; total_gasto: string };
       const rows = r.rows as Row[];
       const groups: Record<string, Row[]> = {};
       for (const row of rows) {
-        const key = normItem(row.descricao);
+        const key = normItemDesc(row.descricao);
         if (!groups[key]) groups[key] = [];
         groups[key].push(row);
       }
