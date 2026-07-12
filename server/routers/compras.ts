@@ -16897,50 +16897,77 @@ Responda APENAS com JSON válido, sem markdown, no formato:
       const { companyId, ordemId } = input;
       await _assertCompanyAccess(ctx.user, companyId);
       const db = await getDb();
-      const r = await db.execute(sql`
-        SELECT
-          co.id,
-          co.numero_oc,
-          co.status,
-          to_char(co.created_at, 'DD/MM/YYYY') AS criado_em,
-          co.data_entrega_prevista,
-          co.data_entrega_real,
-          co.fornecedor_nome,
-          COALESCE(ob.nome, '') AS obra_nome,
-          co.total::float AS total_oc,
-          -- SC (via cotação)
-          sc.numero_sc,
-          sc.criado_por_nome AS sc_criado_por_nome,
-          to_char(sc.created_at, 'DD/MM/YYYY') AS sc_criado_em
-        FROM compras_ordens co
-        LEFT JOIN obras ob ON ob.id = co.obra_id
-        LEFT JOIN compras_cotacoes cot ON cot.id = co.cotacao_id
-        LEFT JOIN compras_solicitacoes sc ON sc.id = cot.solicitacao_id
-        WHERE co.id = ${ordemId} AND co.company_id = ${companyId}
-      `);
+      const [r, itensR] = await Promise.all([
+        db.execute(sql`
+          SELECT
+            co.id,
+            co.numero_oc,
+            co.status,
+            co.tipo,
+            to_char(co.created_at, 'DD/MM/YYYY')              AS criado_em,
+            co.criado_por_nome,
+            co.aprovador_nome,
+            to_char(co.aprovado_em, 'DD/MM/YYYY')             AS aprovado_em,
+            to_char(co.data_entrega_prevista, 'DD/MM/YYYY')   AS data_entrega_prevista,
+            to_char(co.data_entrega_real,     'DD/MM/YYYY')   AS data_entrega_real,
+            co.fornecedor_nome,
+            co.forma_pagamento,
+            co.condicao_pagamento,
+            co.numero_nf,
+            co.observacoes,
+            co.subtotal::float        AS subtotal,
+            COALESCE(co.frete,0)::float AS frete,
+            COALESCE(co.outras_despesas,0)::float AS outras_despesas,
+            COALESCE(co.desconto,0)::float AS desconto,
+            co.total::float           AS total_oc,
+            COALESCE(ob.nome, '')     AS obra_nome,
+            -- SC: tenta via cotação (sc1) e via vínculo direto na OC (sc2)
+            COALESCE(sc1.numero_sc,   sc2.numero_sc)          AS numero_sc,
+            COALESCE(sc1.criado_por_nome, sc2.criado_por_nome) AS sc_criado_por_nome,
+            to_char(COALESCE(sc1.created_at, sc2.created_at), 'DD/MM/YYYY') AS sc_criado_em
+          FROM compras_ordens co
+          LEFT JOIN obras ob  ON ob.id = co.obra_id
+          LEFT JOIN compras_cotacoes cot ON cot.id = co.cotacao_id
+          LEFT JOIN compras_solicitacoes sc1 ON sc1.id = cot.solicitacao_id
+          LEFT JOIN compras_solicitacoes sc2 ON sc2.id = co.solicitacao_id
+          WHERE co.id = ${ordemId} AND co.company_id = ${companyId}
+        `),
+        db.execute(sql`
+          SELECT descricao, quantidade::float AS qtd, unidade,
+                 preco_unitario::float AS preco_unit,
+                 COALESCE(total::float, quantidade::float * preco_unitario::float) AS total
+          FROM compras_ordens_itens
+          WHERE ordem_id = ${ordemId}
+          ORDER BY id
+        `),
+      ]);
+
       const rows = r.rows as any[];
       if (!rows.length) return null;
       const h = rows[0];
-
-      const itensR = await db.execute(sql`
-        SELECT descricao, quantidade::float AS qtd, unidade,
-               preco_unitario::float AS preco_unit,
-               COALESCE(total::float, quantidade::float * preco_unitario::float) AS total
-        FROM compras_ordens_itens
-        WHERE ordem_id = ${ordemId}
-        ORDER BY id
-      `);
 
       return {
         id: h.id as number,
         numero_oc: h.numero_oc as string,
         status: h.status as string,
+        tipo: h.tipo as string | null,
         criado_em: h.criado_em as string | null,
+        criado_por_nome: h.criado_por_nome as string | null,
+        aprovador_nome: h.aprovador_nome as string | null,
+        aprovado_em: h.aprovado_em as string | null,
         data_entrega_prevista: h.data_entrega_prevista as string | null,
         data_entrega_real: h.data_entrega_real as string | null,
         fornecedor_nome: h.fornecedor_nome as string | null,
+        forma_pagamento: h.forma_pagamento as string | null,
+        condicao_pagamento: h.condicao_pagamento as string | null,
+        numero_nf: h.numero_nf as string | null,
+        observacoes: h.observacoes as string | null,
+        subtotal: Number(h.subtotal ?? 0),
+        frete: Number(h.frete ?? 0),
+        outras_despesas: Number(h.outras_despesas ?? 0),
+        desconto: Number(h.desconto ?? 0),
+        total_oc: Number(h.total_oc ?? 0),
         obra_nome: h.obra_nome as string,
-        total_oc: h.total_oc as number,
         numero_sc: h.numero_sc as string | null,
         sc_criado_por_nome: h.sc_criado_por_nome as string | null,
         sc_criado_em: h.sc_criado_em as string | null,

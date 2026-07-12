@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import {
   ChevronDown, ChevronRight, AlertTriangle, CheckCircle2,
   RefreshCw, Search, Building2, ShoppingCart, Package2,
-  User, CalendarDays, PackageCheck, Truck,
+  User, CalendarDays, PackageCheck, Truck, ThumbsUp,
+  FileText, CreditCard, MapPin, Hash,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -28,6 +29,22 @@ const OC_STATUS: Record<string, { label: string; cls: string }> = {
 
 // ─── Mini-dialog de detalhe da OC ────────────────────────────────────────────
 export { OC_STATUS };
+
+function InfoCell({ icon: Icon, label, value, colorCls }: {
+  icon: React.ElementType; label: string; value?: string | null; colorCls?: string;
+}) {
+  if (!value) return null;
+  return (
+    <div className="flex items-start gap-2 min-w-0">
+      <Icon className="w-3.5 h-3.5 text-slate-400 mt-[3px] shrink-0" />
+      <div className="min-w-0">
+        <p className="text-[10px] text-slate-400 uppercase tracking-wide leading-none mb-0.5">{label}</p>
+        <p className={`text-sm font-medium break-words ${colorCls ?? "text-slate-800"}`}>{value}</p>
+      </div>
+    </div>
+  );
+}
+
 export function OcMiniDialog({
   companyId, ordemId, onClose,
 }: { companyId: number; ordemId: number; onClose: () => void }) {
@@ -38,145 +55,205 @@ export function OcMiniDialog({
   const d = q.data;
   const st = d ? (OC_STATUS[d.status] ?? OC_STATUS.pendente) : null;
 
+  const tipoLabel = (t?: string | null) => {
+    if (!t) return null;
+    return { compra: "Compra", servico: "Serviço", pacote: "Pacote", equipamento: "Equipamento" }[t] ?? t;
+  };
+
+  const pgto = [d?.forma_pagamento, d?.condicao_pagamento].filter(Boolean).join(" · ") || null;
+
   return (
     <Dialog open onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-lg w-full">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-base">
-            <ShoppingCart className="w-4 h-4 text-blue-500 shrink-0" />
-            {d ? d.numero_oc : "Carregando…"}
-            {st && (
-              <span className={`ml-1 px-2 py-0.5 rounded text-[11px] font-semibold ${st.cls}`}>
-                {st.label}
-              </span>
-            )}
-          </DialogTitle>
-        </DialogHeader>
-
-        {q.isLoading && (
-          <div className="py-8 flex justify-center">
-            <RefreshCw className="w-5 h-5 animate-spin text-slate-400" />
+      <DialogContent className="max-w-xl w-full p-0 overflow-hidden">
+        {/* Cabeçalho colorido */}
+        <div className="flex items-center gap-3 px-5 py-4 bg-slate-50 border-b border-slate-200">
+          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 shrink-0">
+            <ShoppingCart className="w-4 h-4 text-blue-600" />
           </div>
-        )}
-
-        {!q.isLoading && !d && (
-          <p className="text-sm text-slate-500 py-4">OC não encontrada.</p>
-        )}
-
-        {d && (
-          <div className="space-y-4 pt-1">
-            {/* Metadados principais */}
-            <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-
-              {/* Quem pediu */}
-              <div className="flex items-start gap-2">
-                <User className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-[11px] text-slate-400 uppercase tracking-wide leading-none mb-0.5">Quem pediu</p>
-                  <p className="font-medium text-slate-800 dark:text-slate-200">
-                    {d.sc_criado_por_nome ?? "—"}
-                  </p>
-                  {d.numero_sc && (
-                    <p className="text-[11px] text-slate-400 mt-0.5">SC: {d.numero_sc}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Quando pediu */}
-              <div className="flex items-start gap-2">
-                <CalendarDays className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-[11px] text-slate-400 uppercase tracking-wide leading-none mb-0.5">Quando pediu</p>
-                  <p className="font-medium text-slate-800 dark:text-slate-200">
-                    {d.sc_criado_em ?? "—"}
-                  </p>
-                </div>
-              </div>
-
-              {/* Quando foi feita (OC criada) */}
-              <div className="flex items-start gap-2">
-                <PackageCheck className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-[11px] text-slate-400 uppercase tracking-wide leading-none mb-0.5">OC criada em</p>
-                  <p className="font-medium text-slate-800 dark:text-slate-200">
-                    {d.criado_em ?? "—"}
-                  </p>
-                </div>
-              </div>
-
-              {/* Fornecedor */}
-              <div className="flex items-start gap-2">
-                <Building2 className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-[11px] text-slate-400 uppercase tracking-wide leading-none mb-0.5">Fornecedor</p>
-                  <p className="font-medium text-slate-800 dark:text-slate-200 break-words">
-                    {d.fornecedor_nome ?? "—"}
-                  </p>
-                </div>
-              </div>
-
-              {/* Entrega prevista */}
-              {d.data_entrega_prevista && (
-                <div className="flex items-start gap-2">
-                  <Truck className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-[11px] text-slate-400 uppercase tracking-wide leading-none mb-0.5">Entrega prevista</p>
-                    <p className="font-medium text-slate-800 dark:text-slate-200">{d.data_entrega_prevista}</p>
-                  </div>
-                </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-base font-bold text-slate-800 font-mono">
+                {d ? d.numero_oc : "Carregando…"}
+              </span>
+              {st && (
+                <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${st.cls}`}>
+                  {st.label}
+                </span>
               )}
-
-              {/* Entregue em */}
-              {d.data_entrega_real && (
-                <div className="flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-[11px] text-slate-400 uppercase tracking-wide leading-none mb-0.5">Entregue em</p>
-                    <p className="font-medium text-emerald-700 dark:text-emerald-400">{d.data_entrega_real}</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Obra */}
-              {d.obra_nome && (
-                <div className="flex items-start gap-2 col-span-2">
-                  <Building2 className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-[11px] text-slate-400 uppercase tracking-wide leading-none mb-0.5">Obra</p>
-                    <p className="font-medium text-slate-800 dark:text-slate-200">{d.obra_nome}</p>
-                  </div>
-                </div>
+              {d?.tipo && tipoLabel(d.tipo) && (
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600">
+                  {tipoLabel(d.tipo)}
+                </span>
               )}
             </div>
-
-            {/* Itens */}
-            {d.itens.length > 0 && (
-              <div className="border-t border-slate-100 dark:border-slate-700 pt-3">
-                <p className="text-[11px] text-slate-400 uppercase tracking-wide mb-2">Itens ({d.itens.length})</p>
-                <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
-                  {d.itens.map((it, i) => (
-                    <div key={i} className="flex items-center justify-between text-xs gap-2">
-                      <span className="text-slate-700 dark:text-slate-300 truncate flex-1" title={it.descricao}>
-                        {it.descricao}
-                      </span>
-                      <span className="text-slate-500 whitespace-nowrap shrink-0">
-                        {it.qtd?.toLocaleString("pt-BR", { maximumFractionDigits: 3 })} {it.unidade}
-                      </span>
-                      <span className="text-slate-800 dark:text-slate-200 font-medium whitespace-nowrap shrink-0">
-                        {fmt(it.total ?? 0)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex justify-end pt-2 border-t border-slate-100 dark:border-slate-700 mt-2">
-                  <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                    Total: {fmt(d.total_oc ?? 0)}
-                  </span>
-                </div>
-              </div>
+            {d?.numero_nf && (
+              <p className="text-xs text-slate-400 mt-0.5">NF: {d.numero_nf}</p>
             )}
           </div>
-        )}
+        </div>
+
+        {/* Corpo com scroll */}
+        <div className="overflow-y-auto max-h-[70vh]">
+          {q.isLoading && (
+            <div className="py-12 flex justify-center">
+              <RefreshCw className="w-5 h-5 animate-spin text-slate-400" />
+            </div>
+          )}
+
+          {!q.isLoading && !d && (
+            <p className="text-sm text-slate-500 py-8 text-center">OC não encontrada.</p>
+          )}
+
+          {d && (
+            <div className="divide-y divide-slate-100">
+
+              {/* ── Rastreabilidade ─────────────────────────────── */}
+              <div className="px-5 py-4">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">Rastreabilidade</p>
+                <div className="flex items-start gap-0">
+
+                  {/* Etapa 1: Solicitação */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
+                        <FileText className="w-3 h-3 text-indigo-500" />
+                      </div>
+                      <span className="text-[11px] font-semibold text-indigo-600">Solicitação</span>
+                    </div>
+                    {d.numero_sc
+                      ? <>
+                          <p className="text-xs font-medium text-slate-700 pl-6">{d.numero_sc}</p>
+                          {d.sc_criado_por_nome && <p className="text-xs text-slate-500 pl-6">{d.sc_criado_por_nome}</p>}
+                          {d.sc_criado_em && <p className="text-[11px] text-slate-400 pl-6">{d.sc_criado_em}</p>}
+                        </>
+                      : <p className="text-xs text-slate-400 pl-6">OC direta (sem SC)</p>
+                    }
+                  </div>
+
+                  {/* Conector */}
+                  <div className="flex items-start pt-2.5 px-1">
+                    <div className="w-8 border-t border-dashed border-slate-300 mt-0" />
+                  </div>
+
+                  {/* Etapa 2: OC emitida */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                        <ShoppingCart className="w-3 h-3 text-blue-500" />
+                      </div>
+                      <span className="text-[11px] font-semibold text-blue-600">OC Emitida</span>
+                    </div>
+                    {d.criado_por_nome && <p className="text-xs font-medium text-slate-700 pl-6">{d.criado_por_nome}</p>}
+                    {d.criado_em && <p className="text-[11px] text-slate-400 pl-6">{d.criado_em}</p>}
+                  </div>
+
+                  {/* Conector */}
+                  <div className="flex items-start pt-2.5 px-1">
+                    <div className="w-8 border-t border-dashed border-slate-300 mt-0" />
+                  </div>
+
+                  {/* Etapa 3: Aprovação */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${d.aprovador_nome ? "bg-emerald-100" : "bg-slate-100"}`}>
+                        <ThumbsUp className={`w-3 h-3 ${d.aprovador_nome ? "text-emerald-500" : "text-slate-400"}`} />
+                      </div>
+                      <span className={`text-[11px] font-semibold ${d.aprovador_nome ? "text-emerald-600" : "text-slate-400"}`}>Aprovação</span>
+                    </div>
+                    {d.aprovador_nome
+                      ? <>
+                          <p className="text-xs font-medium text-slate-700 pl-6">{d.aprovador_nome}</p>
+                          {d.aprovado_em && <p className="text-[11px] text-slate-400 pl-6">{d.aprovado_em}</p>}
+                        </>
+                      : <p className="text-xs text-slate-400 pl-6">Pendente</p>
+                    }
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Detalhes logísticos ──────────────────────────── */}
+              <div className="px-5 py-4">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">Detalhes</p>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                  <InfoCell icon={Building2}    label="Fornecedor"       value={d.fornecedor_nome} />
+                  <InfoCell icon={MapPin}        label="Obra"             value={d.obra_nome || null} />
+                  <InfoCell icon={Truck}         label="Entrega prevista" value={d.data_entrega_prevista} />
+                  <InfoCell icon={CheckCircle2}  label="Entregue em"     value={d.data_entrega_real} colorCls="text-emerald-700" />
+                  <InfoCell icon={CreditCard}    label="Pagamento"        value={pgto} />
+                  <InfoCell icon={Hash}          label="Nota fiscal"      value={d.numero_nf} />
+                </div>
+              </div>
+
+              {/* ── Observações ─────────────────────────────────── */}
+              {d.observacoes && (
+                <div className="px-5 py-4">
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Observações</p>
+                  <p className="text-sm text-slate-600 break-words whitespace-pre-wrap">{d.observacoes}</p>
+                </div>
+              )}
+
+              {/* ── Itens ───────────────────────────────────────── */}
+              {d.itens.length > 0 && (
+                <div className="px-5 py-4">
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">
+                    Itens ({d.itens.length})
+                  </p>
+                  <div className="rounded-lg border border-slate-200 overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200">
+                          <th className="text-left px-3 py-2 font-semibold text-slate-500">Descrição</th>
+                          <th className="text-right px-3 py-2 font-semibold text-slate-500 whitespace-nowrap">Qtd</th>
+                          <th className="text-right px-3 py-2 font-semibold text-slate-500 whitespace-nowrap">Preço unit.</th>
+                          <th className="text-right px-3 py-2 font-semibold text-slate-500 whitespace-nowrap">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {d.itens.map((it, i) => (
+                          <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                            <td className="px-3 py-2 text-slate-700 break-words max-w-[180px]">{it.descricao}</td>
+                            <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">
+                              {it.qtd?.toLocaleString("pt-BR", { maximumFractionDigits: 3 })} {it.unidade}
+                            </td>
+                            <td className="px-3 py-2 text-right text-slate-600 whitespace-nowrap">
+                              {fmt(it.preco_unit ?? 0)}
+                            </td>
+                            <td className="px-3 py-2 text-right font-medium text-slate-800 whitespace-nowrap">
+                              {fmt(it.total ?? 0)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Composição do total */}
+                  <div className="mt-3 space-y-1 text-xs">
+                    {d.frete > 0 && (
+                      <div className="flex justify-between text-slate-500">
+                        <span>Frete</span><span>{fmt(d.frete)}</span>
+                      </div>
+                    )}
+                    {d.outras_despesas > 0 && (
+                      <div className="flex justify-between text-slate-500">
+                        <span>Outras despesas</span><span>{fmt(d.outras_despesas)}</span>
+                      </div>
+                    )}
+                    {d.desconto > 0 && (
+                      <div className="flex justify-between text-emerald-600">
+                        <span>Desconto</span><span>− {fmt(d.desconto)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-bold text-sm text-slate-800 pt-2 border-t border-slate-200">
+                      <span>Total</span><span>{fmt(d.total_oc)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            </div>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );

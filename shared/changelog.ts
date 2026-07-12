@@ -1,4 +1,38 @@
 /**
+ * Rev. 4173 — **COMPRAS/FINANCEIRO: REDESIGN COMPLETO DO MINI-DIALOG DE DETALHE DA OC.**
+ *
+ * CONTEXTO: mini-dialog exibia espaço vazio enorme, "Quem Pediu / Quando Pediu" sempre em "—"
+ * (SC não encontrada por falta de `getDb()`), datas de entrega em formato raw (YYYY-MM-DD),
+ * e layout com grade esparsa sem informações de quem criou/aprovou a OC.
+ *
+ * ENTREGAS BACKEND (`getOrdemMiniDetalhe`):
+ * - Adicionado `const db = await getDb()` (fix: consultava Replit Postgres vazio).
+ * - Novos campos: `criado_por_nome`, `aprovador_nome`, `aprovado_em`, `tipo`, `observacoes`,
+ *   `forma_pagamento`, `condicao_pagamento`, `numero_nf`, `subtotal`, `frete`,
+ *   `outras_despesas`, `desconto`.
+ * - Datas `data_entrega_prevista` e `data_entrega_real` formatadas via `to_char` (DD/MM/YYYY).
+ * - SC buscada por 2 caminhos: via `cotacao_id→cot→sc1` E via `co.solicitacao_id→sc2`
+ *   (COALESCE); cobre OCs diretas e OCs com cotação.
+ * - Queries em `Promise.all` (paralelas).
+ *
+ * ENTREGAS FRONTEND (`OcMiniDialog` em `ItemCatalogo.tsx`):
+ * - `max-h-[70vh] overflow-y-auto` no corpo — elimina espaço vazio.
+ * - Cabeçalho compacto com avatar OC, nº, badge status, badge tipo.
+ * - Seção "Rastreabilidade": timeline SC → OC Emitida → Aprovação com nomes e datas.
+ * - Seção "Detalhes": grid 2 colunas (Fornecedor, Obra, Entrega, Pagamento, NF).
+ * - Seção "Observações" (condicional).
+ * - Seção "Itens": tabela com coluna Preço unit. e Total por linha.
+ * - Composição do total (Frete, Outras despesas, Desconto, Total).
+ * - Helper `InfoCell` (ícone + label + valor, auto-oculta quando null).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ *
+ * Arquivos tocados:
+ *   server/routers/compras.ts
+ *   client/src/components/compras/ItemCatalogo.tsx
+ */
+
+/**
  * Rev. 4172 — **COMPRAS/FINANCEIRO: OC CLICÁVEL NA TABELA DE OCORRÊNCIAS DA ANÁLISE DE FORNECEDOR.**
  *
  * CONTEXTO: usuário clicava nos números de OC (ex.: "OC-2026-0105") na seção expandida
