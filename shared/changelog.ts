@@ -1,4 +1,37 @@
 /**
+ * Rev. 4153 — **FROTA: NOVA VIAGEM — AUTOCOMPLETE DE ENDEREÇO (GOOGLE PLACES) + BOTÃO GPS.**
+ *
+ * CONTEXTO: os campos de origem e destino eram inputs de texto livre sem sugestão — o usuário
+ * tinha que digitar o endereço completo na mão, sem confirmação de que o Google Maps ia
+ * reconhecer. Pedido: sugestões automáticas enquanto digita (Places Autocomplete) e um
+ * botão para preencher a saída com a posição atual via GPS.
+ *
+ * MUDANÇAS:
+ * - Backend: 2 procedures novas em frotas.ts:
+ *   · `getPlaceAutocomplete`: chama `/maps/api/place/autocomplete/json` (country:br, pt-BR),
+ *     retorna até 6 sugestões com `description` + `structured_formatting` (texto principal /
+ *     secundário separados para exibição em 2 linhas).
+ *   · `reverseGeocode`: chama `/maps/api/geocode/json?latlng=LAT,LNG` (pt-BR), retorna
+ *     `formatted_address` do primeiro resultado.
+ * - Frontend: componente `AddressAutocomplete` novo (ViagensFrotas.tsx):
+ *   · Input com ícone de busca + debounce 400 ms antes de disparar a query.
+ *   · Dropdown absoluto z-50 com até 6 sugestões, cada uma com linha principal em negrito
+ *     e secundária em cinza; clique fecha e preenche o campo.
+ *   · Botão 🎯 (LocateFixed) com prop `showGps`: chama `navigator.geolocation.getCurrentPosition`
+ *     (enableHighAccuracy, timeout 12s) → `reverseGeocode` → preenche o campo; spinner durante
+ *     a espera; erros exibidos inline (sem alert/confirm nativo) — mensagem vermelha com
+ *     ícone AlertCircle abaixo do campo (permissão negada / timeout / genérico).
+ *   · Botão GPS aparece APENAS no campo "Local de Saída" (prop showGps=true).
+ * - Campos de origem e destino no dialog NovaViagemDialog substituídos por AddressAutocomplete.
+ * - ZERO DELETE · ZERO ALTER destrutivo · ZERO tabelas novas.
+ *
+ * ARQUIVOS TOCADOS:
+ * - server/routers/frotas.ts (+getPlaceAutocomplete, +reverseGeocode)
+ * - client/src/pages/frotas/ViagensFrotas.tsx (+AddressAutocomplete, +LocateFixed, +Search)
+ * - shared/version.ts (4152 → 4153)
+ */
+
+/**
  * Rev. 4152 — **FROTA: NOVA VIAGEM — SELETOR VISUAL DE VEÍCULOS + MAPA GOOGLE + AUTO-PREENCHIMENTO.**
  *
  * CONTEXTO: o dialog "Nova Viagem" listava todos os veículos numa lista simples sem filtro,

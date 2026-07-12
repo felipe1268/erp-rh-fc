@@ -16,7 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   Car, Plus, MapPin, CheckCircle2, XCircle, PlayCircle, FlagTriangleRight,
   Camera, Gauge, Receipt, Banknote, Trash2, FileText, AlertCircle, Loader2,
-  Clock, TrendingUp, Navigation, Route, Fuel, TriangleAlert,
+  Clock, TrendingUp, Navigation, Route, Fuel, TriangleAlert, LocateFixed, Search,
 } from "lucide-react";
 import { compressImageIfNeeded } from "@/lib/imageCompress";
 
@@ -603,6 +603,165 @@ function RoutePreview({ cId, origin, destination }: { cId: number; origin: strin
   );
 }
 
+// ─── Address Autocomplete ─────────────────────────────────────────────────────
+function AddressAutocomplete({
+  value, onChange, placeholder, label, cId, showGps = false,
+}: {
+  value: string; onChange: (v: string) => void;
+  placeholder: string; label: string; cId: number; showGps?: boolean;
+}) {
+  const [query, setQuery] = useState(value);
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [dropOpen, setDropOpen] = useState(false);
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [gpsError, setGpsError] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { setQuery(value); }, [value]);
+
+  // Debounce the search
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query), 400);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  const enabled = debouncedQuery.length >= 2;
+
+  const { data: suggestions = [], isFetching } = trpc.frotas.getPlaceAutocomplete.useQuery(
+    { companyId: cId, input: debouncedQuery },
+    { enabled, staleTime: 30_000, retry: false }
+  );
+
+  // Use reverseGeocode as a lazy query via utils
+  const utils = trpc.useUtils();
+
+  const handleGps = async () => {
+    setGpsError(null);
+    if (!navigator.geolocation) {
+      setGpsError("GPS não disponível neste navegador.");
+      return;
+    }
+    setGpsLoading(true);
+    try {
+      const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true, timeout: 12000,
+        })
+      );
+      const result = await utils.frotas.reverseGeocode.fetch({
+        companyId: cId,
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+      });
+      if (result?.address) {
+        setQuery(result.address);
+        onChange(result.address);
+      } else {
+        setGpsError("Endereço não identificado — tente digitar manualmente.");
+      }
+    } catch (e: any) {
+      if (e?.code === 1)
+        setGpsError("Permissão negada. Ative a localização nas configurações do dispositivo.");
+      else if (e?.code === 3)
+        setGpsError("Tempo esgotado. Verifique o sinal de GPS e tente novamente.");
+      else
+        setGpsError("Erro ao obter localização. Digite o endereço manualmente.");
+    } finally {
+      setGpsLoading(false);
+    }
+  };
+
+  const handleSelect = (description: string) => {
+    setQuery(description);
+    onChange(description);
+    setDropOpen(false);
+    setGpsError(null);
+  };
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setDropOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative space-y-1">
+      <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+        {label}
+      </Label>
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Input
+            value={query}
+            onChange={e => {
+              setQuery(e.target.value);
+              onChange(e.target.value);
+              setDropOpen(true);
+              setGpsError(null);
+            }}
+            onFocus={() => { if (query.length >= 2) setDropOpen(true); }}
+            placeholder={placeholder}
+            className="h-11 text-base pl-9 pr-2"
+          />
+          {isFetching && (
+            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-sky-500 pointer-events-none" />
+          )}
+        </div>
+        {showGps && (
+          <Button type="button" variant="outline" size="icon"
+            className="h-11 w-11 shrink-0 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+            title="Usar minha localização atual (GPS)"
+            onClick={handleGps} disabled={gpsLoading}>
+            {gpsLoading
+              ? <Loader2 className="h-4 w-4 animate-spin" />
+              : <LocateFixed className="h-4 w-4" />}
+          </Button>
+        )}
+      </div>
+
+      {/* Erro GPS inline */}
+      {gpsError && (
+        <p className="text-xs text-red-600 flex items-center gap-1 mt-1">
+          <AlertCircle className="h-3 w-3 shrink-0" />{gpsError}
+        </p>
+      )}
+
+      {/* Dropdown de sugestões */}
+      {dropOpen && suggestions.length > 0 && (
+        <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white rounded-xl border shadow-xl overflow-hidden max-h-64 overflow-y-auto">
+          {suggestions.map((s: any) => (
+            <button key={s.place_id} type="button"
+              onMouseDown={(e) => e.preventDefault()} // evita onBlur antes do click
+              onClick={() => handleSelect(s.description)}
+              className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-sky-50 active:bg-sky-100 transition-colors border-b last:border-b-0">
+              <MapPin className="h-4 w-4 text-sky-500 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                {s.structured_formatting ? (
+                  <>
+                    <p className="text-sm font-medium text-gray-900 leading-tight">
+                      {s.structured_formatting.main_text}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5 leading-tight">
+                      {s.structured_formatting.secondary_text}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-800 leading-tight">{s.description}</p>
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NovaViagemDialog({ open, onClose, cId, vehicles, onSubmit, loading }: any) {
   const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null);
   const [showPicker, setShowPicker] = useState(false);
@@ -760,21 +919,18 @@ function NovaViagemDialog({ open, onClose, cId, vehicles, onSubmit, loading }: a
                   <MapPin className="h-4 w-4 text-emerald-600" /> Trajeto
                 </Label>
 
-                <div className="space-y-1">
-                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    Local de Saída *
-                  </Label>
-                  <Input placeholder="Ex: Guará, Brasília - DF" value={origem}
-                    onChange={e => setOrigem(e.target.value)} required className="h-11 text-base" />
-                </div>
+                <AddressAutocomplete
+                  cId={cId} value={origem} onChange={setOrigem}
+                  label="Local de Saída *"
+                  placeholder="Digite cidade, rua ou CEP..."
+                  showGps
+                />
 
-                <div className="space-y-1">
-                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    Destino *
-                  </Label>
-                  <Input placeholder="Ex: Campinas, SP" value={destino}
-                    onChange={e => setDestino(e.target.value)} required className="h-11 text-base" />
-                </div>
+                <AddressAutocomplete
+                  cId={cId} value={destino} onChange={setDestino}
+                  label="Destino *"
+                  placeholder="Digite cidade, rua ou CEP..."
+                />
 
                 {/* Mapa e info de rota */}
                 {showMap ? (

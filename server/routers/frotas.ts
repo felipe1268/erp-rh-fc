@@ -8087,6 +8087,47 @@ Sempre retorne JSON válido, sem markdown.`;
       return ((rows as any).rows || rows) as any[];
     }),
 
+  getPlaceAutocomplete: protectedProcedure
+    .input(z.object({ companyId: z.number(), input: z.string().min(2) }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
+      }
+      try {
+        const result = await makeRequest<{ predictions: Array<{ description: string; place_id: string; structured_formatting?: { main_text: string; secondary_text: string } }>; status: string }>(
+          '/maps/api/place/autocomplete/json', {
+            input: input.input,
+            language: 'pt-BR',
+            components: 'country:br',
+            types: 'geocode',
+          }
+        );
+        if (result.status !== 'OK' && result.status !== 'ZERO_RESULTS') return [];
+        return (result.predictions || []).slice(0, 6);
+      } catch { return []; }
+    }),
+
+  reverseGeocode: protectedProcedure
+    .input(z.object({ companyId: z.number(), lat: z.number(), lng: z.number() }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
+      }
+      try {
+        const result = await makeRequest<{ results: Array<{ formatted_address: string }>; status: string }>(
+          '/maps/api/geocode/json', {
+            latlng: `${input.lat},${input.lng}`,
+            language: 'pt-BR',
+            result_type: 'street_address|sublocality|locality',
+          }
+        );
+        if (result.status === 'OK' && result.results?.[0]) {
+          return { address: result.results[0].formatted_address };
+        }
+        return { address: null, erro: result.status };
+      } catch (e: any) { return { address: null, erro: e.message }; }
+    }),
+
   getRouteInfo: protectedProcedure
     .input(z.object({
       companyId: z.number(),

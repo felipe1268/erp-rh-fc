@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4152** — **FROTA: NOVA VIAGEM — SELETOR VISUAL DE VEÍCULOS + MAPA GOOGLE + AUTO-PREENCHIMENTO.** `listVehicles` filtra `status='Ativo'` (sem vendidos/em manutenção); `VehicleCard` com foto/gradient/placa destacada; auto-fill motorista + km ao selecionar veículo; `RoutePreview` com iframe Google Maps + 4 cards (distância, tempo, pedágio est. R$0,22/km, combustível est.); backend `getRouteInfo` via Directions API. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4153** — **FROTA: NOVA VIAGEM — AUTOCOMPLETE DE ENDEREÇO (GOOGLE PLACES) + BOTÃO GPS.** `getPlaceAutocomplete` via Places API (country:br, pt-BR, até 6 sugestões com `structured_formatting`); `reverseGeocode` via Geocoding API; componente `AddressAutocomplete` com dropdown z-50, debounce 400 ms, erro GPS inline (sem alert nativo); botão GPS (LocateFixed) só no campo de saída. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4151** — **FROTA: CONTROLE DE VIAGENS — MÓDULO COMPLETO.** 2 tabelas novas (`fleet_trips`, `fleet_trip_expenses`); 10 procedures tRPC; página `ViagensFrotas.tsx` com fluxo pendente→autorizada→em_andamento→concluída; km inicial/final com foto obrigatória do hodômetro; botão GPS busca odômetro ao vivo do Infleet; despesas com comprovante + reembolso PIX/TED. Sidebar Frotas → Operacional → Viagens. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4152** — **FROTA: NOVA VIAGEM — SELETOR VISUAL DE VEÍCULOS + MAPA GOOGLE + AUTO-PREENCHIMENTO.** `listVehicles` filtra `status='Ativo'`; `VehiclePickerSheet` (Sheet bottom 85vh, busca, lista coluna única com foto/placa/modelo/km/motorista); `NovaViagemDialog` single-column com header/footer fixos; auto-fill motorista + km; `RoutePreview` iframe Google Maps + 4 cards; backend `getRouteInfo` via Directions API. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
+
+- **Rev. 4151** — **FROTA: CONTROLE DE VIAGENS — MÓDULO COMPLETO.** 2 tabelas novas (`fleet_trips`, `fleet_trip_expenses`); 10 procedures tRPC; `ViagensFrotas.tsx` com fluxo pendente→autorizada→em_andamento→concluída; km inicial/final com foto do hodômetro; botão GPS odômetro Infleet; despesas com comprovante + reembolso PIX/TED. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4150** — **FROTA: PEDÁGIOS — CATEGORIA sem_parar CORRIGIDA EM LOTE + IMPORTADOR FIXADO.** 2558 registros `pedagio` → `sem_parar`; tipoUsoToCategoria corrigida; 317 praças duplicadas unificadas. ZERO DELETE · ZERO ALTER destrutivo.
 
