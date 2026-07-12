@@ -16490,6 +16490,15 @@ Responda APENAS com JSON válido, sem markdown, no formato:
         n = n.replace(/CP\s*III/g, "CP3").replace(/CP\s*II\b/g, "CP2");
         // 5. remover classe de resistência após tipo (CP3-E-32, CP3 E 32, CP5-E40)
         n = n.replace(/\b(CP\s*\d+)\s*[-–]?\s*E\s*[-–]?\s*\d+\b/g, "$1");
+        // 6. qualificadores redundantes de construção civil
+        //    "lavada" é atributo padrão de areia — "areia média" = "areia média lavada"
+        //    "a granel" é forma de entrega, não tipo do produto
+        n = n.replace(/\bLAVADA\b/g, "");
+        n = n.replace(/\bA GRANEL\b/g, "");
+        // "areia" sem granulometria = areia média (padrão de mercado)
+        if (/^AREIA\b/.test(n) && !/\b(FINA|GROSSA|MEDIA)\b/.test(n)) {
+          n = n.replace(/^AREIA\b/, "AREIA MEDIA");
+        }
         n = n.replace(/\s+/g, " ").trim();
         return n;
       }
