@@ -95,7 +95,7 @@ function ConfigModal({ open, onClose, companyId, obraId, currentConfig, onSaved 
 }) {
   const [bonusTipo, setBonusTipo]   = useState<"percentual_lucro" | "valor_fixo">(currentConfig?.bonus_tipo ?? "percentual_lucro");
   const [bonusValor, setBonusValor] = useState(String(currentConfig?.bonus_valor ?? "5"));
-  const [aliquotaImpostos, setAliquotaImpostos] = useState(String(parseFloat(currentConfig?.aliquota_impostos ?? "0")));
+  const [aliquotaImpostos, setAliquotaImpostos] = useState(String(parseFloat(currentConfig?.aliquota_impostos ?? "17")));
   const [pctCustosFixos,   setPctCustosFixos]   = useState(String(parseFloat(currentConfig?.pct_custos_fixos  ?? "0")));
   const [pesos, setPesos] = useState({
     seguranca:    parseInt(currentConfig?.peso_seguranca    ?? "30"),
@@ -156,7 +156,7 @@ function ConfigModal({ open, onClose, companyId, obraId, currentConfig, onSaved 
               <span className="text-xs text-gray-400">% sobre receita</span>
             </div>
             <p className="text-[11px] text-gray-400">
-              Ex: ISS 3% + PIS/COFINS 3,65% + IRPJ/CSLL ~5% = ~11,65% de impostos. Custos fixos (adm, aluguel) à parte.
+              Alíquota real de referência: <strong>15,16%</strong> (≈ 17% arredondado). Inclui ISS, PIS/COFINS, IRPJ e CSLL sobre receita bruta.
             </p>
           </div>
 
