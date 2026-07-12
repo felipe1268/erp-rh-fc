@@ -1360,8 +1360,6 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                   </Card>
                 </div>
 
-              </div>
-
               {/* ── Formas de Pagamento + Obras Atendidas (full-width, abaixo da tabela) ── */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Formas de pagamento */}
