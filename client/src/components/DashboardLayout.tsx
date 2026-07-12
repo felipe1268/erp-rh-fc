@@ -25,7 +25,7 @@ import { APP_VERSION } from "../../../shared/version";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
   LayoutDashboard, LogOut, PanelLeft, Users,
-  Clock, Star, Lock, Building2, FileText,
+  Clock, Star, Lock, Building2, FileText, Trophy,
   ChevronDown, ChevronRight,
   BarChart3, Settings, Grid2X2,
   Landmark, Wallet, FolderOpen, UtensilsCrossed, Layers, Briefcase, Megaphone,
@@ -1524,6 +1524,8 @@ function DashboardLayoutContent({
           "refis": "refis",
           "efetivo": "efetivo",
           "bim-3d": "bim_3d",
+          "avaliacao-cliente": "avaliacao_cliente",
+          "scorecard": "avaliacao_cliente",
         };
         const canSeeTab = (tabId: string) => {
           if (permIsAdminMaster) return true;
@@ -1549,6 +1551,8 @@ function DashboardLayoutContent({
           { icon: GitBranch,     label: "Revisões",          path: `/planejamento/${planId}?tab=revisoes`, tabId: "revisoes" },
           { icon: FileText,      label: "REFIS",             path: `/planejamento/${planId}?tab=refis`, tabId: "refis" },
           { icon: Brain,         label: "BIM 3D",            path: `/planejamento/${planId}?tab=bim-3d`, tabId: "bim-3d" },
+          { icon: Star,          label: "Avaliação Cliente",  path: `/planejamento/${planId}?tab=avaliacao-cliente`, tabId: "avaliacao-cliente" },
+          { icon: Trophy,        label: "Scorecard",          path: `/planejamento/${planId}?tab=scorecard`, tabId: "scorecard" },
         ];
         const planTabItems: MenuItem[] = allPlanTabs.filter(t => canSeeTab(t.tabId));
         sections = [...sections, { title: "Abas do Projeto", items: planTabItems }];
