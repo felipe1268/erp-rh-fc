@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4151** — **FROTA: CONTROLE DE VIAGENS — MÓDULO COMPLETO.** 2 tabelas novas (`fleet_trips`, `fleet_trip_expenses`); 10 procedures tRPC; página `ViagensFrotas.tsx` com fluxo pendente→autorizada→em_andamento→concluída; km inicial/final com foto obrigatória do hodômetro; botão GPS busca odômetro ao vivo do Infleet; despesas com comprovante + reembolso PIX/TED. Sidebar Frotas → Operacional → Viagens. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4150** — **FROTA: PEDÁGIOS — CATEGORIA sem_parar CORRIGIDA EM LOTE + IMPORTADOR FIXADO.** 2558 registros `pedagio` → `sem_parar` (FC usa 100% Sem Parar); tipoUsoToCategoria corrigida; 317 praças duplicadas (sem sufixo vs "(Norte)"/"(Sul)") unificadas. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4149** — **FROTA: FILTRO MENSAL NOS 3 DASHBOARDS (Combustível, Manutenção, Pedágios).** Backend aceita `mes` opcional; white-card com "Ano todo" + Jan–Dez com badges de contagem; cores temáticas por tela; trocar ano reseta o mês. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4149** — **FROTA: FILTRO MENSAL NOS 3 DASHBOARDS (Combustível, Manutenção, Pedágios).** Backend aceita `mes` opcional; white-card com "Ano todo" + Jan–Dez com badges de contagem; cores temáticas por tela; trocar ano reseta o mês. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4148** — **NFS-e: #30 VALOR LÍQUIDO CORRIGIDO (120.694,65 → 119.469,32).** Fórmula subtraía só IRRF, não retencao_csll; correção direta por id=929 alinhando ao DANFSe. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4146** — **NFS-e: BATCH DANFSes #38, #41, #42 — ISS RETIDO + VALOR LÍQUIDO CORRIGIDOS.** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4145** — **NFS-e: BATCH DANFSes #29–#40 — ISS RETIDO + VALOR LÍQUIDO CORRIGIDOS, 10 NOTAS.** ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4144** — **NFS-e: BATCH GERAL — 571 NOTAS SIAP GEO, 7 COM FÓRMULA ANTIGA CORRIGIDAS.** ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

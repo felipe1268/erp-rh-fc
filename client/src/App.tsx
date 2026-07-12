@@ -436,6 +436,7 @@ const PrecosCombustivel = lazyWithRetry(() => import("./pages/frotas/PrecosCombu
 const FrotasPedagios = lazyWithRetry(() => import("./pages/frotas/Pedagios"));
 const FrotasRaioX = lazyWithRetry(() => import("./pages/frotas/RaioXVeiculo"));
 const FrotasChecklist = lazyWithRetry(() => import("./pages/frotas/ChecklistVeiculos"));
+const FrotasViagens = lazyWithRetry(() => import("./pages/frotas/ViagensFrotas"));
 
 // Operacional
 const PainelOperacional = lazyWithRetry(() => import("./pages/operacional/PainelOperacional"));
@@ -758,6 +759,7 @@ function Router() {
         <Route path="/frotas/precos-combustivel" component={() => <RouteGuard component={PrecosCombustivel} route="/frotas/combustivel" />} />
         <Route path="/frotas/raio-x" component={() => <RouteGuard component={FrotasRaioX} route="/frotas/painel" />} />
         <Route path="/frotas/checklist" component={() => <RouteGuard component={FrotasChecklist} route="/frotas/painel" />} />
+        <Route path="/frotas/viagens" component={() => <RouteGuard component={FrotasViagens} route="/frotas/painel" />} />
         {/* Operacional */}
         <Route path="/operacional/painel" component={() => <RouteGuard component={PainelOperacional} route="/operacional/painel" />} />
         <Route path="/operacional/rdo" component={() => <RouteGuard component={RDOPage} route="/operacional/rdo" />} />

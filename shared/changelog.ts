@@ -1,4 +1,35 @@
 /**
+ * Rev. 4151 — **FROTA: CONTROLE DE VIAGENS — MÓDULO COMPLETO.**
+ *
+ * CONTEXTO: a FC Engenharia não possuía controle formal de viagens dos veículos da frota.
+ * Motoristas saíam sem autorização, não havia registro de km (com foto obrigatória do hodômetro),
+ * e despesas viram reembolso sem processo. Este módulo resolve tudo com um fluxo de 5 etapas:
+ * pendente → autorizada → em_andamento → concluída, com suporte a cancelamento e rejeição.
+ *
+ * TABELAS NOVAS (self-heal em server/routers/frotas.ts):
+ *   - `fleet_trips` — viagem (veículo, motorista, origem, destino, motivo, km, fotos, status, autorização).
+ *   - `fleet_trip_expenses` — despesas da viagem (tipo, valor, comprovante, dados bancários, status reembolso).
+ *
+ * PROCEDURES (10 novas em frotasRouter):
+ *   createTrip, getTrips, getTripById, updateTripStatus,
+ *   uploadTripPhoto, uploadTripExpenseReceipt,
+ *   getVehicleOdometerInfleet (mutation — busca KM ao vivo do rastreador Infleet),
+ *   addTripExpense, deleteTripExpense, updateTripExpenseReimbursement, getPendingReimbursements.
+ *
+ * FRONTEND (client/src/pages/frotas/ViagensFrotas.tsx — ~650 linhas):
+ *   - KPI cards: Total / Ag. Autorização / Em Andamento / Concluídas.
+ *   - Filtros por status + Sheet de detalhe com 3 abas (Viagem / Despesas / Reembolso).
+ *   - "Iniciar Viagem": km_inicial + foto obrigatória do hodômetro + botão "GPS" busca Infleet.
+ *   - "Finalizar Viagem": km_final + foto obrigatória + km percorridos calculado automaticamente.
+ *   - Despesas: tipo (alimentação/combustível/estacionamento/hospedagem/outro), valor, comprovante (foto/PDF).
+ *   - Reembolso (admin): dados bancários PIX ou TED + fluxo aprovado → pago.
+ *   - Painel "Reembolsos Pendentes" para o financeiro.
+ *
+ * ROTA: /frotas/viagens (sidebar Frotas → Operacional → Viagens).
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4150 — **FROTA: PEDÁGIOS — CATEGORIA sem_parar CORRIGIDA EM LOTE + IMPORTADOR FIXADO.**
  *
  * CONTEXTO: o Dashboard de Pedágios exibia "Pedágio Físico R$8.458 · 932" vs "Sem Parar R$876 · 40"

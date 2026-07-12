@@ -437,6 +437,64 @@ async function ensureFleetTables() {
       updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
     )
   `);
+
+  // Rev. 4151 — Controle de Viagens
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS fleet_trips (
+      id SERIAL PRIMARY KEY,
+      company_id INTEGER NOT NULL,
+      vehicle_id INTEGER,
+      placa VARCHAR(20),
+      motorista_nome VARCHAR(255) NOT NULL,
+      motorista_id INTEGER,
+      status VARCHAR(30) NOT NULL DEFAULT 'pendente',
+      origem VARCHAR(255) NOT NULL,
+      destino VARCHAR(255) NOT NULL,
+      motivo VARCHAR(50) NOT NULL DEFAULT 'outro',
+      motivo_descricao TEXT,
+      obra_id INTEGER,
+      obra_nome VARCHAR(255),
+      km_inicial NUMERIC(10,1),
+      km_final NUMERIC(10,1),
+      foto_km_inicial_url TEXT,
+      foto_km_final_url TEXT,
+      data_saida TIMESTAMPTZ,
+      data_retorno TIMESTAMPTZ,
+      autorizado_por VARCHAR(255),
+      data_autorizacao TIMESTAMPTZ,
+      observacoes_gestor TEXT,
+      criado_por VARCHAR(255),
+      criado_em TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+      atualizado_em TIMESTAMPTZ DEFAULT NOW() NOT NULL
+    )
+  `);
+
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS fleet_trip_expenses (
+      id SERIAL PRIMARY KEY,
+      trip_id INTEGER NOT NULL,
+      company_id INTEGER NOT NULL,
+      tipo VARCHAR(50) NOT NULL,
+      valor NUMERIC(14,2) NOT NULL,
+      descricao TEXT,
+      data DATE NOT NULL,
+      comprovante_url TEXT,
+      forma_pagamento VARCHAR(20),
+      pix_chave_tipo VARCHAR(20),
+      pix_chave VARCHAR(255),
+      ted_banco VARCHAR(100),
+      ted_agencia VARCHAR(20),
+      ted_conta VARCHAR(30),
+      ted_tipo_conta VARCHAR(20),
+      nome_favorecido VARCHAR(255),
+      status_reembolso VARCHAR(30) NOT NULL DEFAULT 'pendente',
+      aprovado_por VARCHAR(255),
+      data_aprovacao TIMESTAMPTZ,
+      observacoes_financeiro TEXT,
+      criado_por VARCHAR(255),
+      criado_em TIMESTAMPTZ DEFAULT NOW() NOT NULL
+    )
+  `);
 }
 let tablesReady = false;
 
@@ -7699,6 +7757,333 @@ Sempre retorne JSON válido, sem markdown.`;
         WHERE id = ${input.vehicleId} AND "companyId" = ${input.companyId}
       `);
       return { ok: true };
+    }),
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // CONTROLE DE VIAGENS — Rev. 4151
+  // ═══════════════════════════════════════════════════════════════════════
+
+  createTrip: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      vehicleId: z.number().nullable().optional(),
+      placa: z.string().optional(),
+      motoristaNome: z.string(),
+      motoristaId: z.number().nullable().optional(),
+      origem: z.string(),
+      destino: z.string(),
+      motivo: z.enum(['obra', 'orcamento', 'prospeccao', 'manutencao', 'outro']),
+      motivoDescricao: z.string().optional(),
+      obraId: z.number().nullable().optional(),
+      obraNome: z.string().optional(),
+      criadoPor: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
+      }
+      const db = await getDb();
+      const res = await db.execute(sql`
+        INSERT INTO fleet_trips
+          (company_id, vehicle_id, placa, motorista_nome, motorista_id, status,
+           origem, destino, motivo, motivo_descricao, obra_id, obra_nome, criado_por)
+        VALUES
+          (${input.companyId}, ${input.vehicleId ?? null}, ${input.placa ?? null},
+           ${input.motoristaNome}, ${input.motoristaId ?? null}, 'pendente',
+           ${input.origem}, ${input.destino}, ${input.motivo},
+           ${input.motivoDescricao ?? null}, ${input.obraId ?? null},
+           ${input.obraNome ?? null}, ${input.criadoPor ?? null})
+        RETURNING id
+      `);
+      return { id: ((res as any).rows || res)[0]?.id };
+    }),
+
+  getTrips: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      status: z.string().optional(),
+      vehicleId: z.number().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
+      }
+      const db = await getDb();
+      const rows = await db.execute(sql`
+        SELECT t.*,
+               v.modelo as v_modelo, v.marca as v_marca,
+               COALESCE((SELECT SUM(valor) FROM fleet_trip_expenses
+                         WHERE trip_id = t.id AND status_reembolso <> 'nao_reembolsavel'), 0) as total_despesas,
+               (SELECT COUNT(*) FROM fleet_trip_expenses
+                WHERE trip_id = t.id AND status_reembolso = 'pendente')::int as despesas_pendentes
+        FROM fleet_trips t
+        LEFT JOIN vehicles v ON v.id = t.vehicle_id AND v."companyId" = ${input.companyId}
+        WHERE t.company_id = ${input.companyId}
+          ${input.status && input.status !== 'todos' ? sql`AND t.status = ${input.status}` : sql``}
+          ${input.vehicleId ? sql`AND t.vehicle_id = ${input.vehicleId}` : sql``}
+        ORDER BY t.criado_em DESC
+        LIMIT 300
+      `);
+      return ((rows as any).rows || rows) as any[];
+    }),
+
+  getTripById: protectedProcedure
+    .input(z.object({ companyId: z.number(), tripId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
+      }
+      const db = await getDb();
+      const tripRes = await db.execute(sql`
+        SELECT t.*, v.modelo as v_modelo, v.marca as v_marca
+        FROM fleet_trips t
+        LEFT JOIN vehicles v ON v.id = t.vehicle_id AND v."companyId" = ${input.companyId}
+        WHERE t.id = ${input.tripId} AND t.company_id = ${input.companyId}
+      `);
+      const trip = ((tripRes as any).rows || tripRes)[0];
+      if (!trip) throw new TRPCError({ code: "NOT_FOUND", message: "Viagem não encontrada" });
+      const expRes = await db.execute(sql`
+        SELECT * FROM fleet_trip_expenses
+        WHERE trip_id = ${input.tripId}
+        ORDER BY data ASC, criado_em ASC
+      `);
+      return { ...trip, expenses: ((expRes as any).rows || expRes) } as any;
+    }),
+
+  updateTripStatus: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      tripId: z.number(),
+      action: z.enum(['autorizar', 'rejeitar', 'iniciar', 'finalizar', 'cancelar']),
+      kmInicial: z.number().nullable().optional(),
+      kmFinal: z.number().nullable().optional(),
+      fotoKmInicialUrl: z.string().nullable().optional(),
+      fotoKmFinalUrl: z.string().nullable().optional(),
+      observacoesGestor: z.string().nullable().optional(),
+      autorizadoPor: z.string().nullable().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
+      }
+      const db = await getDb();
+      if (input.action === 'autorizar') {
+        await db.execute(sql`
+          UPDATE fleet_trips SET status = 'autorizada',
+            autorizado_por = ${input.autorizadoPor ?? null},
+            data_autorizacao = NOW(),
+            observacoes_gestor = COALESCE(${input.observacoesGestor ?? null}, observacoes_gestor),
+            atualizado_em = NOW()
+          WHERE id = ${input.tripId} AND company_id = ${input.companyId}
+        `);
+      } else if (input.action === 'rejeitar') {
+        await db.execute(sql`
+          UPDATE fleet_trips SET status = 'rejeitada',
+            observacoes_gestor = COALESCE(${input.observacoesGestor ?? null}, observacoes_gestor),
+            atualizado_em = NOW()
+          WHERE id = ${input.tripId} AND company_id = ${input.companyId}
+        `);
+      } else if (input.action === 'iniciar') {
+        await db.execute(sql`
+          UPDATE fleet_trips SET status = 'em_andamento',
+            data_saida = NOW(),
+            km_inicial = COALESCE(${input.kmInicial ?? null}::numeric, km_inicial),
+            foto_km_inicial_url = COALESCE(${input.fotoKmInicialUrl ?? null}, foto_km_inicial_url),
+            atualizado_em = NOW()
+          WHERE id = ${input.tripId} AND company_id = ${input.companyId}
+        `);
+      } else if (input.action === 'finalizar') {
+        await db.execute(sql`
+          UPDATE fleet_trips SET status = 'concluida',
+            data_retorno = NOW(),
+            km_final = COALESCE(${input.kmFinal ?? null}::numeric, km_final),
+            foto_km_final_url = COALESCE(${input.fotoKmFinalUrl ?? null}, foto_km_final_url),
+            atualizado_em = NOW()
+          WHERE id = ${input.tripId} AND company_id = ${input.companyId}
+        `);
+      } else if (input.action === 'cancelar') {
+        await db.execute(sql`
+          UPDATE fleet_trips SET status = 'cancelada', atualizado_em = NOW()
+          WHERE id = ${input.tripId} AND company_id = ${input.companyId}
+        `);
+      }
+      return { ok: true };
+    }),
+
+  uploadTripPhoto: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      base64: z.string(),
+      contentType: z.string().default("image/jpeg"),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
+      }
+      const buf = Buffer.from(input.base64, 'base64');
+      if (buf.length > 15 * 1024 * 1024) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Foto muito grande (máx 15MB)" });
+      }
+      const ext = input.contentType.includes('png') ? 'png' : 'jpg';
+      const key = `frotas/viagens/${input.companyId}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { url } = await storagePut(key, buf, input.contentType);
+      return { url: url || `/api/files/${key}` };
+    }),
+
+  uploadTripExpenseReceipt: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      base64: z.string(),
+      contentType: z.string().default("image/jpeg"),
+      fileName: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
+      }
+      const buf = Buffer.from(input.base64, 'base64');
+      if (buf.length > 20 * 1024 * 1024) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Arquivo muito grande (máx 20MB)" });
+      }
+      const isPdf = input.contentType.includes('pdf') || (input.fileName || '').toLowerCase().endsWith('.pdf');
+      const ext = isPdf ? 'pdf' : input.contentType.includes('png') ? 'png' : 'jpg';
+      const key = `frotas/despesas/${input.companyId}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { url } = await storagePut(key, buf, input.contentType);
+      return { url: url || `/api/files/${key}` };
+    }),
+
+  getVehicleOdometerInfleet: protectedProcedure
+    .input(z.object({ companyId: z.number(), placa: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
+      }
+      const token = process.env.FROTA_API_TOKEN;
+      if (!token) return { km: null as number | null, erro: "Token Infleet não configurado" };
+      try {
+        const query = `{ listVehicles { id plate odometer } }`;
+        const resp = await fetch('https://api.infleet.com.br/v1/graphql', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ query }),
+          signal: AbortSignal.timeout(10000),
+        });
+        const data: any = await resp.json();
+        const veiculos = data?.data?.listVehicles || [];
+        const placaNorm = input.placa.replace(/[-\s]/g, '').toUpperCase();
+        const v = veiculos.find((x: any) => String(x.plate || '').replace(/[-\s]/g, '').toUpperCase() === placaNorm);
+        if (!v) return { km: null as number | null, erro: "Veículo não encontrado no rastreador" };
+        return { km: v.odometer ? Math.round(v.odometer) : null as number | null, erro: null };
+      } catch (e: any) {
+        return { km: null as number | null, erro: e.message };
+      }
+    }),
+
+  addTripExpense: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      tripId: z.number(),
+      tipo: z.string(),
+      valor: z.number(),
+      descricao: z.string().optional(),
+      data: z.string(),
+      comprovanteUrl: z.string().nullable().optional(),
+      criadoPor: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
+      }
+      const db = await getDb();
+      const tripCheck = await db.execute(sql`
+        SELECT id FROM fleet_trips WHERE id = ${input.tripId} AND company_id = ${input.companyId}
+      `);
+      if (!((tripCheck as any).rows || tripCheck)[0]) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Viagem não encontrada" });
+      }
+      const res = await db.execute(sql`
+        INSERT INTO fleet_trip_expenses
+          (trip_id, company_id, tipo, valor, descricao, data, comprovante_url, criado_por)
+        VALUES
+          (${input.tripId}, ${input.companyId}, ${input.tipo}, ${input.valor},
+           ${input.descricao ?? null}, ${input.data}::date,
+           ${input.comprovanteUrl ?? null}, ${input.criadoPor ?? null})
+        RETURNING id
+      `);
+      return { id: ((res as any).rows || res)[0]?.id };
+    }),
+
+  deleteTripExpense: protectedProcedure
+    .input(z.object({ companyId: z.number(), expenseId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
+      }
+      const db = await getDb();
+      await db.execute(sql`
+        DELETE FROM fleet_trip_expenses
+        WHERE id = ${input.expenseId} AND company_id = ${input.companyId}
+      `);
+      return { ok: true };
+    }),
+
+  updateTripExpenseReimbursement: protectedProcedure
+    .input(z.object({
+      companyId: z.number(),
+      expenseId: z.number(),
+      formaPagamento: z.string().nullable().optional(),
+      pixChaveTipo: z.string().nullable().optional(),
+      pixChave: z.string().nullable().optional(),
+      tedBanco: z.string().nullable().optional(),
+      tedAgencia: z.string().nullable().optional(),
+      tedConta: z.string().nullable().optional(),
+      tedTipoConta: z.string().nullable().optional(),
+      nomeFavorecido: z.string().nullable().optional(),
+      statusReembolso: z.string().nullable().optional(),
+      aprovadoPor: z.string().nullable().optional(),
+      observacoesFinanceiro: z.string().nullable().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
+      }
+      const db = await getDb();
+      const isApproved = input.statusReembolso === 'aprovado' || input.statusReembolso === 'pago';
+      await db.execute(sql`
+        UPDATE fleet_trip_expenses SET
+          forma_pagamento    = COALESCE(${input.formaPagamento ?? null}, forma_pagamento),
+          pix_chave_tipo     = COALESCE(${input.pixChaveTipo ?? null}, pix_chave_tipo),
+          pix_chave          = COALESCE(${input.pixChave ?? null}, pix_chave),
+          ted_banco          = COALESCE(${input.tedBanco ?? null}, ted_banco),
+          ted_agencia        = COALESCE(${input.tedAgencia ?? null}, ted_agencia),
+          ted_conta          = COALESCE(${input.tedConta ?? null}, ted_conta),
+          ted_tipo_conta     = COALESCE(${input.tedTipoConta ?? null}, ted_tipo_conta),
+          nome_favorecido    = COALESCE(${input.nomeFavorecido ?? null}, nome_favorecido),
+          status_reembolso   = COALESCE(${input.statusReembolso ?? null}, status_reembolso),
+          aprovado_por       = COALESCE(${input.aprovadoPor ?? null}, aprovado_por),
+          data_aprovacao     = CASE WHEN ${isApproved} THEN NOW() ELSE data_aprovacao END,
+          observacoes_financeiro = COALESCE(${input.observacoesFinanceiro ?? null}, observacoes_financeiro)
+        WHERE id = ${input.expenseId} AND company_id = ${input.companyId}
+      `);
+      return { ok: true };
+    }),
+
+  getPendingReimbursements: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user?.companyId && String(ctx.user.companyId) !== String(input.companyId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão" });
+      }
+      const db = await getDb();
+      const rows = await db.execute(sql`
+        SELECT e.*, t.motorista_nome, t.placa, t.origem, t.destino, t.data_saida, t.data_retorno
+        FROM fleet_trip_expenses e
+        JOIN fleet_trips t ON t.id = e.trip_id AND t.company_id = ${input.companyId}
+        WHERE e.company_id = ${input.companyId}
+          AND e.status_reembolso IN ('pendente', 'aprovado')
+        ORDER BY e.criado_em DESC
+      `);
+      return ((rows as any).rows || rows) as any[];
     }),
 });
 

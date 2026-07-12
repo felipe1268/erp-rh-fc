@@ -37,7 +37,7 @@ import {
   FileBarChart, DollarSign, Construction, ArrowLeftRight, Ban, Settings2, Banknote,
   Warehouse, Wrench, Calculator, Target, Package, ShoppingCart, Truck, ArrowRightLeft, Gauge,
   Home, Tag, GripVertical, Network, ScanFace, PackageCheck, PenLine, ChevronLeft,
-  Camera, Blocks, CheckSquare, FileCheck2, Milestone, Fuel,
+  Camera, Blocks, CheckSquare, FileCheck2, Milestone, Fuel, MapPin,
   UserMinus, Search, X, GraduationCap, Sparkles, HeartPulse, Award,
   RefreshCw, HandCoins, Scissors, Archive, FileOutput,
 } from "lucide-react";
@@ -663,6 +663,7 @@ const menuSectionsFrotas: MenuSection[] = [
       { icon: Construction, label: "Combustível", path: "/frotas/combustivel" },
       { icon: DollarSign, label: "Preços Combustível", path: "/frotas/precos-combustivel" },
       { icon: Milestone, label: "Pedágios", path: "/frotas/pedagios" },
+      { icon: MapPin, label: "Viagens", path: "/frotas/viagens" },
     ],
   },
   {
