@@ -98,9 +98,21 @@ const queryClient = new QueryClient({
           const code = error.data?.code;
           if (code === 'UNAUTHORIZED' || code === 'FORBIDDEN' || code === 'NOT_FOUND') return false;
         }
+        // iOS WebKit dropa requests silenciosamente com "The string did not match the expected pattern" / "Failed to fetch"
+        // Rev. 4187 — retry até 3x (2s, 4s, 8s) para cobrir drops de rede do iOS
+        const msg = error instanceof Error ? error.message : String(error ?? "");
+        if (
+          msg.includes("did not match the expected pattern") ||
+          msg.includes("Failed to fetch") ||
+          msg.includes("NetworkError") ||
+          msg.includes("Unexpected token '<'") ||
+          msg.includes("is not valid JSON")
+        ) {
+          return failureCount < 3;
+        }
         return failureCount < 1;   // apenas 1 retry para falhar rápido
       },
-      retryDelay: 1000,            // retry fixo em 1s
+      retryDelay: (failureCount) => Math.min(1000 * 2 ** failureCount, 8000), // backoff: 2s, 4s, 8s
       refetchOnWindowFocus: false,
       refetchOnReconnect: "always",
     },

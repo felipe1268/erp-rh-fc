@@ -1,4 +1,34 @@
 /**
+ * Rev. 4187 - SCORECARD: ABA "👥 RH" GANHA SUB-ABA "BANCO DE HORAS" + FIX RETRY iOS WEBKIT.
+ *
+ * O QUE FOI FEITO:
+ * 1. ScorecardTab.tsx — aba RH dividida em 2 sub-abas: "Folha / Custos" (conteúdo anterior
+ *    intocado) e "Banco de Horas" (novo).
+ *    - Sub-tab nav com highlight indigo, mesma convenção das outras abas do Scorecard.
+ *    - Sub-aba Banco de Horas: KPI strip (Funcionários c/ HE | Total HE | HE Pagas | Saldo Banco),
+ *      tabela expansível por funcionário (total/pago/banco/saldo), sub-tabela de histórico HE
+ *      por mês (destino Banco ou Pagamento, valor, status).
+ *    - Dados vindos do procedure `getBancoHorasObra` adicionado em sessão anterior.
+ *    - Query lazy (enabled: tabScore==="rh" && abaRH==="banco"), staleTime 2min.
+ * 2. main.tsx — queries retry melhorado para erros de rede iOS WebKit:
+ *    "The string did not match the expected pattern" / "Failed to fetch" agora reentam
+ *    até 3x com backoff exponencial (2s, 4s, 8s), em vez de apenas 1 retry fixo.
+ *    (Mutations já tinham tratamento equivalente desde Rev. 4137.)
+ *
+ * CAUSA-RAIZ DO ERRO "The string did not match the expected pattern":
+ *   Erro de rede nativo do iOS WebKit — o browser dropa o request tRPC silenciosamente
+ *   antes de chegar ao servidor. Não é bug do backend nem do Zod. A evidência é que
+ *   o próprio main.tsx (linha 108) já documentava esse comportamento para mutations.
+ *
+ * ARQUIVOS PRINCIPAIS:
+ *   client/src/pages/planejamento/ScorecardTab.tsx
+ *   client/src/main.tsx
+ *   shared/version.ts
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4186 - SCORECARD: REDESIGN COMPLETO — 6 ABAS TOP-LEVEL + DRE WATERFALL + METAS & DESVIOS.
  *
  * O QUE FOI FEITO:

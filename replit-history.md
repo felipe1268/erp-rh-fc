@@ -1,3 +1,5 @@
+- **Rev. 4184** — **SCORECARD: ABA "🛡️ SEGURANÇA" — QUADRO CLT/TERCEIROS, ASO, TREINAMENTOS, ADVERTÊNCIAS E EPI.** `getSeguranca` procedure — 7 queries. KPIs + quadros + Curva ABC EPI. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4183** — **SCORECARD: PAINEL ANÁLISE GERENCIAL DA OBRA (CURVA ABC, RECOMPRAS, FERRAMENTAS, LOCAÇÕES).** Novo card colapsável "Análise Gerencial da Obra" com 4 abas. `getAnalise` — 6 queries. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4175** — **COMPRAS: REDESIGN MODERNO DO OcMiniDialog.** Header gradiente dinâmico, timeline horizontal 4 etapas, itens colapsáveis com mini-barra de proporção. ZERO DELETE · ZERO ALTER destrutivo.

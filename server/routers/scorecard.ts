@@ -1365,4 +1365,153 @@ export const scorecardRouter = router({
         }).reverse(),
       };
     }),
+
+  // ── getBancoHorasObra ────────────────────────────────────────────────────
+  // Horas extras e banco de horas dos funcionários desta obra.
+  // Liga funcionários à obra via employee_site_history (ou employees.obraId como fallback),
+  // agrega he_period_employees por funcionário e puxa saldo atual do banco.
+  getBancoHorasObra: protectedProcedure
+    .input(z.object({ companyId: z.number(), obraId: z.number() }))
+    .query(async ({ input }) => {
+      const { companyId, obraId } = input;
+      const db = await getDb();
+      if (!db) return { resumo: { totalFuncionarios: 0, totalHEMins: 0, totalHEPagoMins: 0, totalHEBancoMins: 0, totalSaldoBancoMins: 0 }, funcionarios: [] };
+
+      const safe = <T>(p: Promise<T>): Promise<T | null> => p.catch(() => null);
+
+      const [heRows, saldoRows] = await Promise.all([
+        // Funcionários desta obra × seus registros de HE
+        safe(db.execute(sql`
+          WITH emp_obra AS (
+            -- Funcionários que aparecem no histórico desta obra
+            SELECT DISTINCT esh.employee_id AS "employeeId"
+            FROM employee_site_history esh
+            WHERE esh.obra_id = ${obraId} AND esh.company_id = ${companyId}
+
+            UNION
+
+            -- Fallback: funcionários atualmente na obra
+            SELECT id AS "employeeId"
+            FROM employees
+            WHERE "obraId" = ${obraId} AND "companyId" = ${companyId}
+              AND status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')
+          ),
+          he_agg AS (
+            SELECT
+              pe."employeeId",
+              -- Horas totais
+              SUM(pe."heTotalMins")::int                                                         AS he_total_mins,
+              -- Horas pagas (destinacao=pagamento E período pago)
+              SUM(CASE WHEN pe.destinacao = 'pagamento' AND hp.status = 'pago'
+                   THEN pe."heTotalMins" ELSE 0 END)::int                                       AS he_pago_mins,
+              -- Horas em banco de horas (destinacao=banco_horas)
+              SUM(CASE WHEN pe.destinacao = 'banco_horas'
+                   THEN pe."heTotalMins" ELSE 0 END)::int                                       AS he_banco_mins,
+              -- Valor total HE pago
+              SUM(CASE WHEN pe.destinacao = 'pagamento' AND hp.status = 'pago'
+                   THEN pe."valorHETotal"::numeric ELSE 0 END)                                  AS valor_he_pago,
+              -- Valor total HE em banco
+              SUM(CASE WHEN pe.destinacao = 'banco_horas'
+                   THEN pe."valorHETotal"::numeric ELSE 0 END)                                  AS valor_he_banco,
+              -- Meses de HE (resumo)
+              JSON_AGG(
+                JSON_BUILD_OBJECT(
+                  'mes',        hp."mesReferencia",
+                  'heMins',     pe."heTotalMins",
+                  'valorHE',    pe."valorHETotal"::numeric,
+                  'destinacao', pe.destinacao,
+                  'status',     hp.status,
+                  'pagoEm',     hp."pagoEm",
+                  'aprovadoPor',hp."aprovadoPor"
+                ) ORDER BY hp."mesReferencia" DESC
+              ) FILTER (WHERE pe."heTotalMins" > 0)                                             AS historico_he
+            FROM he_period_employees pe
+            JOIN he_periods hp ON hp.id = pe."hePeriodId"
+            WHERE pe."companyId" = ${companyId}
+              AND pe."employeeId" IN (SELECT "employeeId" FROM emp_obra)
+            GROUP BY pe."employeeId"
+          )
+          SELECT
+            e.id              AS "employeeId",
+            e."nomeCompleto"  AS nome,
+            e.funcao          AS cargo,
+            e.matricula,
+            COALESCE(ha.he_total_mins, 0)::int  AS he_total_mins,
+            COALESCE(ha.he_pago_mins,  0)::int  AS he_pago_mins,
+            COALESCE(ha.he_banco_mins, 0)::int  AS he_banco_mins,
+            COALESCE(ha.valor_he_pago,  0)      AS valor_he_pago,
+            COALESCE(ha.valor_he_banco, 0)      AS valor_he_banco,
+            COALESCE(ha.historico_he, '[]'::json) AS historico_he
+          FROM emp_obra eo
+          JOIN employees e ON e.id = eo."employeeId"
+          LEFT JOIN he_agg ha ON ha."employeeId" = eo."employeeId"
+          WHERE COALESCE(ha.he_total_mins, 0) > 0
+          ORDER BY COALESCE(ha.he_banco_mins, 0) DESC, COALESCE(ha.he_total_mins, 0) DESC
+        `)),
+
+        // Saldo atual do banco de horas para funcionários desta obra
+        safe(db.execute(sql`
+          WITH emp_obra AS (
+            SELECT DISTINCT esh.employee_id AS "employeeId"
+            FROM employee_site_history esh
+            WHERE esh.obra_id = ${obraId} AND esh.company_id = ${companyId}
+            UNION
+            SELECT id AS "employeeId"
+            FROM employees
+            WHERE "obraId" = ${obraId} AND "companyId" = ${companyId}
+              AND status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')
+          )
+          SELECT bhs."employeeId", bhs."saldoMinutos"
+          FROM banco_horas_saldo bhs
+          WHERE bhs."companyId" = ${companyId}
+            AND bhs."employeeId" IN (SELECT "employeeId" FROM emp_obra)
+            AND bhs."saldoMinutos" <> 0
+        `)),
+      ]);
+
+      const heList   = (heRows as any)?.rows   ?? [];
+      const saldoMap = new Map<number, number>();
+      for (const s of ((saldoRows as any)?.rows ?? [])) {
+        saldoMap.set(Number(s.employeeId), Number(s.saldoMinutos));
+      }
+
+      const funcionarios = heList.map((r: any) => {
+        const empId         = Number(r.employeeId);
+        const saldoBanco    = saldoMap.get(empId) ?? 0;
+        const heBancoMins   = Number(r.he_banco_mins);
+        const hePagoMins    = Number(r.he_pago_mins);
+        const heTotalMins   = Number(r.he_total_mins);
+        return {
+          employeeId:    empId,
+          nome:          r.nome,
+          cargo:         r.cargo,
+          matricula:     r.matricula,
+          heTotalMins,
+          hePagoMins,
+          heBancoMins,
+          valorHePago:   parseFloat(String(r.valor_he_pago  ?? 0)),
+          valorHeBanco:  parseFloat(String(r.valor_he_banco ?? 0)),
+          saldoBancoMins: saldoBanco,
+          // pendente = banco_horas mas ainda não compensado (saldo vivo no banco)
+          pendenteMins:   Math.max(0, saldoBanco),
+          historicoHe:    Array.isArray(r.historico_he) ? r.historico_he : (typeof r.historico_he === 'string' ? JSON.parse(r.historico_he) : []),
+        };
+      });
+
+      const totalHEMins       = funcionarios.reduce((s: number, f: any) => s + f.heTotalMins,   0);
+      const totalHEPagoMins   = funcionarios.reduce((s: number, f: any) => s + f.hePagoMins,    0);
+      const totalHEBancoMins  = funcionarios.reduce((s: number, f: any) => s + f.heBancoMins,   0);
+      const totalSaldoBancoMins = funcionarios.reduce((s: number, f: any) => s + Math.max(0, f.saldoBancoMins), 0);
+
+      return {
+        resumo: {
+          totalFuncionarios:    funcionarios.length,
+          totalHEMins,
+          totalHEPagoMins,
+          totalHEBancoMins,
+          totalSaldoBancoMins,
+        },
+        funcionarios,
+      };
+    }),
 });
