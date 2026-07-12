@@ -1,4 +1,22 @@
 /**
+ * Rev. 4170 — **COMPRAS/FINANCEIRO: REVERTE FILTRO FINANCEIRO POR OBRA (CARDS ZERADOS).**
+ *
+ * PROBLEMA: Rev. 4169 aplicou `obraIdFiltro` no `rows` useMemo para filtrar os
+ * lançamentos financeiros pelos cards do topo (Pago, Em aberto, Vencido, Lançamentos).
+ * Isso zerava os cards para obras como "POS OBRA" que possuem OCs em compras mas
+ * não têm `obra_id` preenchido nas entradas financeiras (financial_entries) — o
+ * vínculo obra↔lançamento financeiro não é confiável o suficiente para esta filtragem.
+ *
+ * SOLUÇÃO: Removido o filtro de obra do `rows` useMemo. Os cards financeiros do topo
+ * continuam mostrando o total do fornecedor no ano (sem filtragem por obra), enquanto
+ * os cards da aba "Itens & Preços" (Total em OCs, Ordens, Itens distintos) já refletem
+ * corretamente a obra selecionada via resposta filtrada do backend (Rev. 4168).
+ *
+ * ARQUIVOS: client/src/pages/financeiro/FinanceiroAnaliseCustosDetalhe.tsx
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4169 — **COMPRAS/FINANCEIRO: FILTRO DE OBRA SINCRONIZA CARDS FINANCEIROS.**
  *
  * CONTEXTO: Rev. 4168 adicionou filtro de obra na aba "Itens & Preços", mas os cards

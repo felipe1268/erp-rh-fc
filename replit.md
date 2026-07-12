@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4170** — **COMPRAS/FINANCEIRO: REVERTE FILTRO FINANCEIRO POR OBRA (CARDS ZERADOS).** Rev. 4169 zerava cards financeiros para obras sem `obra_id` em `financial_entries`; removido o filtro de `rows` — top cards voltam a mostrar total do fornecedor/ano; cards de OCs (aba Itens & Preços) já filtravam corretamente via backend (Rev. 4168). ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4169** — **COMPRAS/FINANCEIRO: FILTRO DE OBRA SINCRONIZA CARDS FINANCEIROS.** `rows` useMemo inclui `obraIdFiltro` como dep; filtra `r.obraId === obraIdFiltro` quando ativo → cards Pago/Em aberto/Vencido/Lançamentos refletem a obra selecionada. Sem mudança de backend. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4168** — **COMPRAS/FINANCEIRO: FILTRO DE OBRA NA ANÁLISE DE FORNECEDOR.** `obraId?: number` no input de `getAnaliseFornecedor`; aplicado nas 3 queries de itens/ocorrências/pagamento (query de obras fica sem filtro para popular o seletor); `resumo.obrasAtendidas` migrado para `{ id, nome }[]`; seletor de obra (Select) aparece acima da tabela quando ≥2 obras; card lateral "Obras Atendidas" virou lista clicável para ativar/limpar filtro diretamente. ZERO DELETE · ZERO ALTER destrutivo.
