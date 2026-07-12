@@ -50,15 +50,17 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4178** — **COMPRAS/FINANCEIRO: REDESIGN COMPLETO DA ABA ANÁLISE — DASHBOARD RICO.** AnaliseDashPanel reescrito: KPI Strip (4 cards) + Donut ABC + Pie Formas Pgto + Cards Destaques clicáveis + Bar Gastos/Mês + Top 10 Produtos com barra clicável + Chips Obras + Grid Fragmentação. Sheet lateral de drill-down por produto: Header colorido, KPIs, Line Chart histórico de preços, lista OCs. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4179** — **PLANEJAMENTO: FIX % PREVISTO GLOBAL — FALLBACK PARA REVISÃO BASELINE.** `regenerarPrevistoSemanasCaminhoB` agora detecta revisão ativa sem baseline e usa automaticamente a revisão `is_baseline=true` do mesmo projeto, mantendo o revisaoId ativo no snapshot. Self-heal no getProjeto simplificado (sem pré-check de cnt). Corrige discrepância 51,80% vs 41% (MSP Text10) no QIU 2 - FASE 4. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4177** — **COMPRAS/FINANCEIRO: ABA DEDICADA "ANÁLISE" NO DETALHE DE FORNECEDOR.** 3º tab "Análise" (badge "IA") ao lado de Lançamentos e Itens & Preços. Contém AnaliseDashPanel (3 colunas: Curva ABC | Destaques | Fragmentação) + Formas de Pagamento + Obras Atendidas. Tab Itens exibe apenas a tabela limpa. State `'lancamentos' | 'itens' | 'analise'`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4178** — **COMPRAS/FINANCEIRO: REDESIGN COMPLETO DA ABA ANÁLISE — DASHBOARD RICO.** AnaliseDashPanel reescrito: KPI Strip (4 cards) + Donut ABC + Pie Formas Pgto + Cards Destaques clicáveis + Bar Gastos/Mês + Top 10 Produtos com barra clicável + Chips Obras + Grid Fragmentação. Sheet lateral de drill-down por produto: Header colorido, KPIs, Line Chart histórico de preços, lista OCs. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4176** — **COMPRAS/FINANCEIRO: PAINEL ANÁLISE SEPARADO DA TABELA (FULL-WIDTH).** `AnaliseDashPanel` redesenhado: 3 colunas horizontais (Curva ABC | Destaques em grade 2×3 | Fragmentação) com cabeçalho colapsável e badge de alertas. Tabela full-width; Formas de Pgto + Obras em grid 2 col. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4175** — **COMPRAS: REDESIGN MODERNO DO OcMiniDialog.** Header gradiente dinâmico (cor varia por status: verde=entregue, azul=aprovada, âmbar=pendente), total da OC em destaque 2xl, chips de pagamento/itens/almox em glass effect. Timeline horizontal 4 etapas (Solicitação→OC→Aprovação→Entrega) com círculos preenchidos. Chips de detalhes em pill cards coloridos. Itens colapsáveis com mini-barra de proporção (peso % no total) por linha. Almoxarifado colapsável em timeline vertical com dots teal/rose. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
+
+- **Rev. 4177** — **COMPRAS/FINANCEIRO: ABA DEDICADA "ANÁLISE" NO DETALHE DE FORNECEDOR.** 3º tab "Análise" (badge "IA"); AnaliseDashPanel + Formas de Pagamento + Obras Atendidas. State `'lancamentos' | 'itens' | 'analise'`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4174** — **COMPRAS/FINANCEIRO: PAINEL DASH + ALMOXARIFADO NA OC.** `AnaliseDashPanel.tsx` (Curva ABC, destaques, fragmentação). Barra busca na tabela. `getOrdemMiniDetalhe` almox via `motivo ILIKE`. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -67,8 +69,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4172** — **COMPRAS/FINANCEIRO: OC CLICÁVEL NA TABELA DE OCORRÊNCIAS DA ANÁLISE DE FORNECEDOR.** `ordem_id` no `ocorrRes`; `OcMiniDialog` exportado; célula Nº OC virou `<button>`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4171** — **COMPRAS/FINANCEIRO: UNIDADE NAS CÉLULAS DE PREÇO DA ANÁLISE DE FORNECEDOR.** Sufixo `/un`, `/sc`, `/m³` etc.; itens unidade mista sem sufixo. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4170** — **COMPRAS/FINANCEIRO: REVERTE FILTRO FINANCEIRO POR OBRA (CARDS ZERADOS).** Removido filtro de `rows` — top cards voltam a mostrar total do fornecedor/ano. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

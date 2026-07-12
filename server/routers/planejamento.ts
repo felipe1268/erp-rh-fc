@@ -173,6 +173,50 @@ async function regenerarPrevistoSemanasCaminhoB(
   }).from(planejamentoAtividades)
     .where(eq(planejamentoAtividades.revisaoId, revisaoId));
 
+  // Rev. 4179 — Fallback para revisão baseline quando a revisão ativa não tem
+  // datas de baseline. Isso ocorre quando uma nova revisão é criada sem reimport
+  // do XML (as atividades são copiadas sem os campos baseline_start/finish).
+  // Nesse caso, usamos as atividades DA REVISÃO BASELINE (is_baseline=true) para
+  // gerar a curva, mas mantemos o revisaoId da revisão ATIVA no snapshot — assim
+  // os guards de revisão no `capturarPrevistoLiteralSemana` e no cliente casam.
+  let ativsParaUsar: any[] = ativs as any[];
+  const temBaselineNaRev = (ativsParaUsar as any[]).some(
+    (a: any) => !a.isGrupo && !a.disabled && a.baselineStart && a.baselineFinish,
+  );
+  if (!temBaselineNaRev) {
+    try {
+      const [blRev] = await db.select({ id: planejamentoRevisoes.id })
+        .from(planejamentoRevisoes)
+        .where(and(
+          eq(planejamentoRevisoes.projetoId, projetoId),
+          eq(planejamentoRevisoes.isBaseline, true),
+        ))
+        .limit(1);
+      if (blRev?.id && blRev.id !== revisaoId) {
+        const blAtivs = await db.select({
+          id: planejamentoAtividades.id,
+          isGrupo: planejamentoAtividades.isGrupo,
+          disabled: planejamentoAtividades.disabled,
+          pesoFinanceiro: planejamentoAtividades.pesoFinanceiro,
+          baselineStart: planejamentoAtividades.baselineStart,
+          baselineFinish: planejamentoAtividades.baselineFinish,
+          baselineStartTs: planejamentoAtividades.baselineStartTs,
+          baselineFinishTs: planejamentoAtividades.baselineFinishTs,
+        }).from(planejamentoAtividades)
+          .where(eq(planejamentoAtividades.revisaoId, blRev.id));
+        const temBaseBl = (blAtivs as any[]).some(
+          (a: any) => !a.isGrupo && !a.disabled && a.baselineStart && a.baselineFinish,
+        );
+        if (temBaseBl) {
+          ativsParaUsar = blAtivs as any[];
+          console.log(`[regenerarPrevistoSemanasCaminhoB] projeto=${projetoId} rev=${revisaoId} sem baseline → usando rev baseline ${blRev.id}`);
+        }
+      }
+    } catch (e: any) {
+      console.warn(`[regenerarPrevistoSemanasCaminhoB] fallback baseline falhou:`, e?.message);
+    }
+  }
+
   // Rev. 2617 — parse "wall-clock" determinístico (sem TZ) do timestamp ISO da
   // baseline ("2026-06-01T07:00:00" → UTC ms). A HORA é essencial: date-only dá
   // 2/9/16/22 no PLN_816 R04, com hora dá o correto 2/9/15/20.
@@ -186,7 +230,7 @@ async function regenerarPrevistoSemanasCaminhoB(
   // dia (XML completo); senão cai no day-granular legado (backward compat).
   const hasMin = temIntervalosUteis(cal as any);
 
-  const folhas = (ativs as any[])
+  const folhas = (ativsParaUsar as any[])
     .filter(a => !a.isGrupo && !a.disabled && a.baselineStart && a.baselineFinish)
     .map(a => {
       const bsTs = tsToMs(a.baselineStartTs);
@@ -899,26 +943,17 @@ export const planejamentoRouter = router({
             if (fonteGlobal === "manual") {
               res = await regenerarPrevistoManual(db, input.id, alvo.id);
             } else {
-              const [cnt] = await db.select({ n: sql<number>`count(*)::int` })
-                .from(planejamentoAtividades)
-                .where(and(
-                  eq(planejamentoAtividades.revisaoId, alvo.id),
-                  isNotNull(planejamentoAtividades.baselineStart),
-                  isNotNull(planejamentoAtividades.baselineFinish),
-                ));
-              if ((cnt?.n ?? 0) > 0) {
-                res = await regenerarPrevistoSemanasCaminhoB(db, input.id, alvo.id);
-              } else {
-                // Motor não consegue reconstruir (zero folhas com baseline). Se a
-                // curva persistida ainda é "manual", ela está OBSOLETA (a fonte
-                // global virou motor) — limpa pra a tela cair no "—" em vez de
-                // mostrar uma curva manual fantasma (achado code review).
-                if (curvaFonte === "manual") {
-                  await db.update(planejamentoProjetos)
-                    .set({ previstoSemanasJson: null as any, previstoSemanasGeradoEm: null as any })
-                    .where(eq(planejamentoProjetos.id, input.id));
-                }
-                res = null;
+              // Rev. 4179 — `regenerarPrevistoSemanasCaminhoB` agora faz fallback
+              // interno para a revisão baseline quando a revisão ativa não tem
+              // atividades com baseline. Chamamos diretamente sem pre-check de cnt;
+              // a função retorna 0 e limpa a curva apenas se NENHUMA revisão (nem a
+              // baseline) tiver baseline — nesse caso limpa a curva manual obsoleta.
+              res = await regenerarPrevistoSemanasCaminhoB(db, input.id, alvo.id);
+              if ((res?.semanas ?? 0) === 0 && curvaFonte === "manual") {
+                // Motor não conseguiu reconstruir nem via baseline. Se a curva
+                // persistida era "manual", estava OBSOLETA — já foi limpa pela
+                // função; log para rastreabilidade.
+                console.log(`[Previsto self-heal] projeto ${input.id}: zero folhas em todas as revisões, curva manual obsoleta removida.`);
               }
             }
             // Relê o estado pós-rebuild (a curva pode ter sido gerada OU zerada).

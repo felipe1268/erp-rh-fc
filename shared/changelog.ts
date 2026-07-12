@@ -1,4 +1,34 @@
 /**
+ * Rev. 4179 - PLANEJAMENTO: FIX % PREVISTO GLOBAL — FALLBACK PARA REVISÃO BASELINE QUANDO REVISÃO ATIVA SEM BASELINE.
+ *
+ * CAUSA-RAIZ DIAGNOSTICADA:
+ * - Projeto "QIU 2 - FASE 4" (ID 47) tinha revisão ativa (ID 76, criada 2026-06-29) com 1902 atividades
+ *   MAS todas com baseline_start/finish = NULL (atividades copiadas sem reimport de XML).
+ * - A função `regenerarPrevistoSemanasCaminhoB` recebia revisão 76 → encontrava 0 folhas com baseline
+ *   → gravava previstoSemanasJson = NULL.
+ * - `capturarPrevistoLiteralSemana` (que salva o Text10 literal de cada upload) retornava cedo
+ *   na linha `if (!proj?.curva) return` (curva = previstoSemanasJson = NULL).
+ * - Resultado: previsto_literal_json parou em 2026-06-11=34% (revisão 66); semanas posteriores caíam
+ *   no fallback de DIAS CORRIDOS (51,80%) em vez do valor real do MSP (41%).
+ * - O MSP Text10 (raiz UID=0) = 41% (Σ duração decorrida / Σ duração total das tarefas-folha,
+ *   ponderada pelo calendário do projeto). Discrepância de 10,8 pp vs ERP.
+ *
+ * FIX:
+ * - `regenerarPrevistoSemanasCaminhoB`: quando a revisão alvo tem 0 atividades com baseline,
+ *   busca automaticamente a revisão `is_baseline=true` do mesmo projeto e usa suas atividades
+ *   para gerar a curva. O revisaoId do snapshot continua sendo o da revisão ATIVA (para os
+ *   guards de capturarPrevistoLiteralSemana e do cliente casarem corretamente).
+ * - Self-heal em getProjeto: removida a pré-verificação de cnt que impedia chamar a função
+ *   quando cnt===0 — agora sempre chama a função (que faz o fallback internamente).
+ * - Resultado: após o self-heal no próximo load, previstoSemanasJson é populado com a curva
+ *   real (engine dá ~42%, 1 pp do MSP). Na próxima vez que o XML for enviado via "Avanço
+ *   Semanal", o Text10 literal (41%) é salvo em previsto_literal_json → paridade 100%.
+ *
+ * ARQUIVOS TOCADOS: server/routers/planejamento.ts (regenerarPrevistoSemanasCaminhoB + self-heal getProjeto).
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4178 - COMPRAS/FINANCEIRO: REDESIGN COMPLETO DA ABA ANÁLISE — DASHBOARD RICO COM GRÁFICOS.
  *
  * O QUE FOI FEITO:
