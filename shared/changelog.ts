@@ -1,4 +1,25 @@
 /**
+ * Rev. 4166 — **COMPRAS: CATÁLOGO — OC CLICÁVEL COM MINI-DIALOG DE DETALHE.**
+ *
+ * CONTEXTO: no Catálogo de Itens, o número da OC (ex: "OC-2026-662") era texto puro. Usuário
+ * queria clicar para ver quem pediu, quando pediu e quando a OC foi feita.
+ *
+ * ENTREGAS:
+ * - `getItemOcDetalhes` enriquecido com `ordem_id` e `status` por linha.
+ * - Nova procedure `getOrdemMiniDetalhe(companyId, ordemId)`: SQL único com join
+ *   compras_ordens → obras → compras_cotacoes → compras_solicitacoes, retorna
+ *   header da OC + info da SC (quem pediu / quando pediu) + lista de itens.
+ * - `OcDetalheRows` aceita callback `onSelectOc`; número da OC virou botão azul sublinhável.
+ * - `OcMiniDialog` (Dialog shadcn): mostra Quem pediu (SC criadoPorNome), Quando pediu (SC data),
+ *   OC criada em, Fornecedor, Entrega prevista/real, Obra, Itens com totais.
+ * - Bug fix: `[UnitFix Rev.4165]` usava `db` bare em vez de `await getDb()` → corrigido.
+ *
+ * ARQUIVOS: server/routers/compras.ts, client/src/components/compras/ItemCatalogo.tsx,
+ *           server/_core/index.ts, shared/version.ts
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4165 — **COMPRAS: NORMALIZAÇÃO DE UNIDADES + AUTO-PADRONIZAÇÃO DE ITENS EM LOTE.**
  *
  * CONTEXTO: catálogo de compras acumulou erros de unidade (cimento em kg/m², areia em m/un/vb/m²,

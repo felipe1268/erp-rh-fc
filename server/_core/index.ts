@@ -6941,16 +6941,19 @@ REGRAS DE EXTRAÇÃO:
     // IDs mapeados item-a-item: cimento m²→sc, areia m/un/vb/m²→m³, chapisco un→sc, conduíte un→m
     delay(25_000).then(async () => {
       try {
+        const _dbUF = await getDb();
+        if (!_dbUF) return;
+        const { sql: sqlUF } = await import("drizzle-orm");
         const fixes: Array<{ ids: number[]; unit: string; label: string }> = [
-          { ids: [507],                           unit: "sc",  label: "Cimento Cp3 m²→sc" },
-          { ids: [1773, 723, 1861, 786, 3635, 3874, 4352], unit: "m³", label: "Areia (m/un/vb/m²)→m³" },
-          { ids: [794, 1033, 322, 506],            unit: "sc",  label: "Chapisco un→sc" },
-          { ids: [436],                            unit: "m",   label: "Conduíte un→m" },
+          { ids: [507],                                     unit: "sc",  label: "Cimento Cp3 kg/m²→sc" },
+          { ids: [1773, 723, 1861, 786, 3635, 3874, 4352], unit: "m³",  label: "Areia (m/un/vb/m²)→m³" },
+          { ids: [794, 1033, 322, 506],                    unit: "sc",  label: "Chapisco/graute un→sc" },
+          { ids: [436],                                     unit: "m",   label: "Conduíte un→m" },
         ];
         let total = 0;
         for (const f of fixes) {
-          const r = await db.execute(
-            sql`UPDATE compras_ordens_itens SET unidade = ${f.unit} WHERE id = ANY(${f.ids}::int[])`
+          const r = await _dbUF.execute(
+            sqlUF`UPDATE compras_ordens_itens SET unidade = ${f.unit} WHERE id = ANY(${f.ids}::int[])`
           );
           const n = Number((r as any).rowCount ?? 0);
           if (n > 0) console.log(`[UnitFix] ${f.label}: ${n} linha(s)`);

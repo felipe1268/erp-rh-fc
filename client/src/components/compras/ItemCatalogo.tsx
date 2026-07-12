@@ -6,14 +6,185 @@ import { Input } from "@/components/ui/input";
 import {
   ChevronDown, ChevronRight, AlertTriangle, CheckCircle2,
   RefreshCw, Search, Building2, ShoppingCart, Package2,
+  User, CalendarDays, PackageCheck, Truck,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 
 const fmt = (v: number) =>
   "R$" + v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const OC_STATUS: Record<string, { label: string; cls: string }> = {
+  rascunho:         { label: "Rascunho",        cls: "bg-yellow-100 text-yellow-700" },
+  pendente:         { label: "Pendente",         cls: "bg-amber-100 text-amber-700" },
+  aprovada:         { label: "Aprovada",         cls: "bg-blue-100 text-blue-700" },
+  aguardando_aprovacao_extra: { label: "Aguard. Admin", cls: "bg-red-100 text-red-700" },
+  entregue_parcial: { label: "Entrega Parcial",  cls: "bg-orange-100 text-orange-700" },
+  entregue:         { label: "Entregue",         cls: "bg-emerald-100 text-emerald-700" },
+  cancelada:        { label: "Cancelada",        cls: "bg-gray-100 text-gray-500" },
+};
+
+// ─── Mini-dialog de detalhe da OC ────────────────────────────────────────────
+function OcMiniDialog({
+  companyId, ordemId, onClose,
+}: { companyId: number; ordemId: number; onClose: () => void }) {
+  const q = trpc.compras.getOrdemMiniDetalhe.useQuery(
+    { companyId, ordemId },
+    { staleTime: 60_000 }
+  );
+  const d = q.data;
+  const st = d ? (OC_STATUS[d.status] ?? OC_STATUS.pendente) : null;
+
+  return (
+    <Dialog open onOpenChange={v => !v && onClose()}>
+      <DialogContent className="max-w-lg w-full">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <ShoppingCart className="w-4 h-4 text-blue-500 shrink-0" />
+            {d ? d.numero_oc : "Carregando…"}
+            {st && (
+              <span className={`ml-1 px-2 py-0.5 rounded text-[11px] font-semibold ${st.cls}`}>
+                {st.label}
+              </span>
+            )}
+          </DialogTitle>
+        </DialogHeader>
+
+        {q.isLoading && (
+          <div className="py-8 flex justify-center">
+            <RefreshCw className="w-5 h-5 animate-spin text-slate-400" />
+          </div>
+        )}
+
+        {!q.isLoading && !d && (
+          <p className="text-sm text-slate-500 py-4">OC não encontrada.</p>
+        )}
+
+        {d && (
+          <div className="space-y-4 pt-1">
+            {/* Metadados principais */}
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+
+              {/* Quem pediu */}
+              <div className="flex items-start gap-2">
+                <User className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-[11px] text-slate-400 uppercase tracking-wide leading-none mb-0.5">Quem pediu</p>
+                  <p className="font-medium text-slate-800 dark:text-slate-200">
+                    {d.sc_criado_por_nome ?? "—"}
+                  </p>
+                  {d.numero_sc && (
+                    <p className="text-[11px] text-slate-400 mt-0.5">SC: {d.numero_sc}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Quando pediu */}
+              <div className="flex items-start gap-2">
+                <CalendarDays className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-[11px] text-slate-400 uppercase tracking-wide leading-none mb-0.5">Quando pediu</p>
+                  <p className="font-medium text-slate-800 dark:text-slate-200">
+                    {d.sc_criado_em ?? "—"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Quando foi feita (OC criada) */}
+              <div className="flex items-start gap-2">
+                <PackageCheck className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-[11px] text-slate-400 uppercase tracking-wide leading-none mb-0.5">OC criada em</p>
+                  <p className="font-medium text-slate-800 dark:text-slate-200">
+                    {d.criado_em ?? "—"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Fornecedor */}
+              <div className="flex items-start gap-2">
+                <Building2 className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-[11px] text-slate-400 uppercase tracking-wide leading-none mb-0.5">Fornecedor</p>
+                  <p className="font-medium text-slate-800 dark:text-slate-200 break-words">
+                    {d.fornecedor_nome ?? "—"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Entrega prevista */}
+              {d.data_entrega_prevista && (
+                <div className="flex items-start gap-2">
+                  <Truck className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-[11px] text-slate-400 uppercase tracking-wide leading-none mb-0.5">Entrega prevista</p>
+                    <p className="font-medium text-slate-800 dark:text-slate-200">{d.data_entrega_prevista}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Entregue em */}
+              {d.data_entrega_real && (
+                <div className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-[11px] text-slate-400 uppercase tracking-wide leading-none mb-0.5">Entregue em</p>
+                    <p className="font-medium text-emerald-700 dark:text-emerald-400">{d.data_entrega_real}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Obra */}
+              {d.obra_nome && (
+                <div className="flex items-start gap-2 col-span-2">
+                  <Building2 className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-[11px] text-slate-400 uppercase tracking-wide leading-none mb-0.5">Obra</p>
+                    <p className="font-medium text-slate-800 dark:text-slate-200">{d.obra_nome}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Itens */}
+            {d.itens.length > 0 && (
+              <div className="border-t border-slate-100 dark:border-slate-700 pt-3">
+                <p className="text-[11px] text-slate-400 uppercase tracking-wide mb-2">Itens ({d.itens.length})</p>
+                <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                  {d.itens.map((it, i) => (
+                    <div key={i} className="flex items-center justify-between text-xs gap-2">
+                      <span className="text-slate-700 dark:text-slate-300 truncate flex-1" title={it.descricao}>
+                        {it.descricao}
+                      </span>
+                      <span className="text-slate-500 whitespace-nowrap shrink-0">
+                        {it.qtd?.toLocaleString("pt-BR", { maximumFractionDigits: 3 })} {it.unidade}
+                      </span>
+                      <span className="text-slate-800 dark:text-slate-200 font-medium whitespace-nowrap shrink-0">
+                        {fmt(it.total ?? 0)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-end pt-2 border-t border-slate-100 dark:border-slate-700 mt-2">
+                  <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                    Total: {fmt(d.total_oc ?? 0)}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── OC detail row (lazy loaded per descricao) ───────────────────────────────
-function OcDetalheRows({ companyId, descricao }: { companyId: number; descricao: string }) {
+function OcDetalheRows({
+  companyId, descricao, onSelectOc,
+}: { companyId: number; descricao: string; onSelectOc: (id: number) => void }) {
   const q = trpc.compras.getItemOcDetalhes.useQuery(
     { companyId, descricao },
     { staleTime: 60_000 }
@@ -26,8 +197,13 @@ function OcDetalheRows({ companyId, descricao }: { companyId: number; descricao:
     <>
       {q.data.map((oc, i) => (
         <tr key={i} className="border-t border-slate-100 dark:border-slate-700/50 text-xs">
-          <td className="px-3 py-1.5 font-mono text-blue-600 dark:text-blue-400 whitespace-nowrap">
-            {oc.numero_oc ?? "—"}
+          <td className="px-3 py-1.5 whitespace-nowrap">
+            <button
+              className="font-mono text-blue-600 dark:text-blue-400 hover:underline hover:text-blue-800 dark:hover:text-blue-300 transition-colors text-left"
+              onClick={() => onSelectOc(oc.ordem_id)}
+            >
+              {oc.numero_oc ?? "—"}
+            </button>
           </td>
           <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{oc.data}</td>
           <td className="px-3 py-1.5 text-slate-700 dark:text-slate-300 max-w-[220px] truncate" title={oc.obra_nome}>
@@ -62,6 +238,8 @@ export default function ItemCatalogo({ companyId }: Props) {
   const [expandedFamilias, setExpandedFamilias] = useState<Set<string>>(new Set());
   const [expandedVariantes, setExpandedVariantes] = useState<Set<string>>(new Set());
   const [expandedDescs, setExpandedDescs] = useState<Set<string>>(new Set());
+  const [selectedOcId, setSelectedOcId] = useState<number | null>(null);
+
   const q = trpc.compras.getItensFamilias.useQuery(
     { companyId },
     { enabled: companyId > 0, staleTime: 120_000 }
@@ -292,7 +470,7 @@ export default function ItemCatalogo({ companyId }: Props) {
                                             </tr>
                                           </thead>
                                           <tbody>
-                                            <OcDetalheRows companyId={companyId} descricao={desc.nome} />
+                                            <OcDetalheRows companyId={companyId} descricao={desc.nome} onSelectOc={setSelectedOcId} />
                                           </tbody>
                                         </table>
                                       </div>
@@ -311,6 +489,14 @@ export default function ItemCatalogo({ companyId }: Props) {
             );
           })}
         </div>
+      )}
+
+      {selectedOcId !== null && (
+        <OcMiniDialog
+          companyId={companyId}
+          ordemId={selectedOcId}
+          onClose={() => setSelectedOcId(null)}
+        />
       )}
     </div>
   );

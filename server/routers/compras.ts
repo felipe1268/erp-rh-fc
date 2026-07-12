@@ -16832,7 +16832,9 @@ Responda APENAS com JSON válido, sem markdown, no formato:
       const { companyId, descricao } = input;
       const r = await db.execute(sql`
         SELECT
+          co.id AS ordem_id,
           co.numero_oc,
+          co.status,
           co.created_at::date::text AS data,
           COALESCE(ob.nome, 'Sem obra') AS obra_nome,
           oi.quantidade::float AS qtd,
@@ -16848,9 +16850,66 @@ Responda APENAS com JSON válido, sem markdown, no formato:
         LIMIT 50
       `);
       return r.rows as Array<{
-        numero_oc: string; data: string; obra_nome: string;
-        qtd: number; unidade: string; preco_unit: number; total: number;
+        ordem_id: number; numero_oc: string; status: string; data: string;
+        obra_nome: string; qtd: number; unidade: string; preco_unit: number; total: number;
       }>;
+    }),
+
+  // Resumo leve da OC para o mini-dialog do catálogo
+  getOrdemMiniDetalhe: protectedProcedure
+    .input(z.object({ companyId: z.number(), ordemId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const { companyId, ordemId } = input;
+      await _assertCompanyAccess(ctx.user, companyId);
+      const r = await db.execute(sql`
+        SELECT
+          co.id,
+          co.numero_oc,
+          co.status,
+          to_char(co.created_at, 'DD/MM/YYYY') AS criado_em,
+          co.data_entrega_prevista,
+          co.data_entrega_real,
+          co.fornecedor_nome,
+          COALESCE(ob.nome, '') AS obra_nome,
+          co.total::float AS total_oc,
+          -- SC (via cotação)
+          sc.numero_sc,
+          sc.criado_por_nome AS sc_criado_por_nome,
+          to_char(sc.created_at, 'DD/MM/YYYY') AS sc_criado_em
+        FROM compras_ordens co
+        LEFT JOIN obras ob ON ob.id = co.obra_id
+        LEFT JOIN compras_cotacoes cot ON cot.id = co.cotacao_id
+        LEFT JOIN compras_solicitacoes sc ON sc.id = cot.solicitacao_id
+        WHERE co.id = ${ordemId} AND co.company_id = ${companyId}
+      `);
+      const rows = r.rows as any[];
+      if (!rows.length) return null;
+      const h = rows[0];
+
+      const itensR = await db.execute(sql`
+        SELECT descricao, quantidade::float AS qtd, unidade,
+               preco_unitario::float AS preco_unit,
+               COALESCE(total::float, quantidade::float * preco_unitario::float) AS total
+        FROM compras_ordens_itens
+        WHERE ordem_id = ${ordemId}
+        ORDER BY id
+      `);
+
+      return {
+        id: h.id as number,
+        numero_oc: h.numero_oc as string,
+        status: h.status as string,
+        criado_em: h.criado_em as string | null,
+        data_entrega_prevista: h.data_entrega_prevista as string | null,
+        data_entrega_real: h.data_entrega_real as string | null,
+        fornecedor_nome: h.fornecedor_nome as string | null,
+        obra_nome: h.obra_nome as string,
+        total_oc: h.total_oc as number,
+        numero_sc: h.numero_sc as string | null,
+        sc_criado_por_nome: h.sc_criado_por_nome as string | null,
+        sc_criado_em: h.sc_criado_em as string | null,
+        itens: itensR.rows as Array<{ descricao: string; qtd: number; unidade: string; preco_unit: number; total: number }>,
+      };
     }),
 
   getItemSugestoes: protectedProcedure
