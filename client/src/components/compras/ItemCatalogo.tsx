@@ -7,7 +7,7 @@ import {
   ChevronDown, ChevronRight, AlertTriangle, CheckCircle2,
   RefreshCw, Search, Building2, ShoppingCart, Package2,
   User, CalendarDays, PackageCheck, Truck, ThumbsUp,
-  FileText, CreditCard, MapPin, Hash,
+  FileText, CreditCard, MapPin, Hash, Warehouse, ArrowDownToLine, ArrowUpFromLine,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -253,6 +253,65 @@ export function OcMiniDialog({
 
             </div>
           )}
+
+          {/* ── Almoxarifado ─────────────────────────────── */}
+          {d && Array.isArray((d as any).almoxMovimentos) && (d as any).almoxMovimentos.length > 0 && (
+            <div className="px-5 py-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Warehouse className="w-3.5 h-3.5 text-teal-500" />
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+                  Almoxarifado ({(d as any).almoxMovimentos.length} mov.)
+                </p>
+              </div>
+              <div className="rounded-lg border border-slate-200 overflow-hidden divide-y divide-slate-100">
+                {(d as any).almoxMovimentos.map((mv: any, i: number) => {
+                  const isEntrada = mv.tipo === 'entrada';
+                  const isConsumo = mv.tipo === 'consumo_direto';
+                  return (
+                    <div key={i} className={`flex items-start gap-3 px-3 py-2.5 text-xs ${isEntrada ? 'bg-emerald-50/50' : isConsumo ? 'bg-amber-50/50' : 'bg-white'}`}>
+                      <div className={`mt-0.5 w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${isEntrada ? 'bg-emerald-100' : 'bg-rose-100'}`}>
+                        {isEntrada
+                          ? <ArrowDownToLine className="w-3 h-3 text-emerald-600" />
+                          : <ArrowUpFromLine className="w-3 h-3 text-rose-500" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`font-semibold ${isEntrada ? 'text-emerald-700' : 'text-rose-700'}`}>
+                            {isEntrada ? 'Entrada' : isConsumo ? 'Consumo' : 'Saída'}
+                          </span>
+                          <span className="font-bold text-slate-800 tabular-nums">
+                            {(mv.quantidade ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 })}
+                          </span>
+                          {mv.itemNome && (
+                            <span className="text-slate-600 truncate max-w-[160px]" title={mv.itemNome}>{mv.itemNome}</span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                          {mv.usuarioNome && (
+                            <span className="text-slate-500"><span className="text-slate-400">por </span>{mv.usuarioNome}</span>
+                          )}
+                          {mv.obraNome && (
+                            <span className="text-slate-500"><span className="text-slate-400">obra </span>{mv.obraNome}</span>
+                          )}
+                          {mv.criadoEm && <span className="text-slate-400">{mv.criadoEm}</span>}
+                        </div>
+                        {mv.motivo && (
+                          <p className="text-[10px] text-slate-400 mt-0.5 break-words">{mv.motivo}</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {d && Array.isArray((d as any).almoxMovimentos) && (d as any).almoxMovimentos.length === 0 && (
+            <div className="px-5 py-3 flex items-center gap-2 text-slate-400">
+              <Warehouse className="w-3.5 h-3.5 shrink-0" />
+              <p className="text-[11px]">Nenhuma movimentação no almoxarifado para esta OC.</p>
+            </div>
+          )}
+
         </div>
       </DialogContent>
     </Dialog>

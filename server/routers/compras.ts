@@ -16946,6 +16946,42 @@ Responda APENAS com JSON válido, sem markdown, no formato:
       if (!rows.length) return null;
       const h = rows[0];
 
+      // Almoxarifado: movimentos vinculados a esta OC via motivo
+      const numeroOcAlmox = String(h.numero_oc ?? '');
+      let almoxMovimentos: Array<{ tipo: string; quantidade: number; usuarioNome: string | null; motivo: string | null; obraNome: string | null; criadoEm: string | null; itemNome: string | null }> = [];
+      if (numeroOcAlmox) {
+        try {
+          const almoxR = await db.execute(sql`
+            SELECT
+              am.tipo,
+              am.quantidade::float AS quantidade,
+              am."usuarioNome"    AS usuario_nome,
+              am.motivo,
+              am."obraNome"       AS obra_nome,
+              to_char(am."criadoEm", 'DD/MM/YYYY HH24:MI') AS criado_em_fmt,
+              ai.nome             AS item_nome
+            FROM almoxarifado_movimentacoes am
+            LEFT JOIN almoxarifado_itens ai ON ai.id = am."itemId"
+            WHERE am."companyId" = ${companyId}
+              AND am.motivo ILIKE ${'%' + numeroOcAlmox + '%'}
+              AND am."estornadaEm" IS NULL
+            ORDER BY am."criadoEm" ASC
+            LIMIT 50
+          `);
+          almoxMovimentos = (almoxR.rows as any[]).map((mv: any) => ({
+            tipo: mv.tipo as string,
+            quantidade: Number(mv.quantidade ?? 0),
+            usuarioNome: mv.usuario_nome as string | null,
+            motivo: mv.motivo as string | null,
+            obraNome: mv.obra_nome as string | null,
+            criadoEm: mv.criado_em_fmt as string | null,
+            itemNome: mv.item_nome as string | null,
+          }));
+        } catch (_) {
+          // falha silenciosa — seção simplesmente não aparece
+        }
+      }
+
       return {
         id: h.id as number,
         numero_oc: h.numero_oc as string,
@@ -16972,6 +17008,7 @@ Responda APENAS com JSON válido, sem markdown, no formato:
         sc_criado_por_nome: h.sc_criado_por_nome as string | null,
         sc_criado_em: h.sc_criado_em as string | null,
         itens: itensR.rows as Array<{ descricao: string; qtd: number; unidade: string; preco_unit: number; total: number }>,
+        almoxMovimentos,
       };
     }),
 

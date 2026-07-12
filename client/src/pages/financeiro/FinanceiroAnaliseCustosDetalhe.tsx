@@ -31,6 +31,8 @@ import {
 import { classificarGrupoCusto } from "@shared/custosCategorias";
 import { OcMiniDialog } from "@/components/compras/ItemCatalogo";
 import { buildCentroCustoMaps, centroCustoNomeDe, SEM_CENTRO_CUSTO } from "@shared/centroCusto";
+import AnaliseDashPanel from "./AnaliseDashPanel";
+import { Search } from "lucide-react";
 
 function formatBRL(value: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
@@ -226,6 +228,8 @@ export default function FinanceiroAnaliseCustosDetalhe() {
   const [obraIdFiltro, setObraIdFiltro] = useState<number | null>(null);
   // OC selecionada para mini-dialog
   const [selectedOcId, setSelectedOcId] = useState<number | null>(null);
+  // Busca de produto na tabela de itens
+  const [searchTerm, setSearchTerm] = useState("");
 
   const { data: analiseData, isLoading: analiseLoading } = (trpc as any).compras.getAnaliseFornecedor.useQuery(
     { companyId, fornecedorNome: fornecedorFoco ?? '', ano, ...(obraIdFiltro ? { obraId: obraIdFiltro } : {}) },
@@ -1030,6 +1034,12 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                 .map((oc: any) => ({ data: oc.data ?? '', preco: oc.precoUnitario, oc: oc.numeroOc }))
             : [];
 
+          // Itens filtrados pela busca
+          const searchLow = searchTerm.trim().toLowerCase();
+          const itensFiltrados = searchLow
+            ? itens.filter((it: any) => it.descricao?.toLowerCase().includes(searchLow))
+            : itens;
+
           return (
             <div className="space-y-4">
               {/* ── KPIs da análise de OCs ── */}
@@ -1059,62 +1069,93 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                 {/* ── Tabela de itens (ocupa 2 colunas no XL) ── */}
                 <div className="xl:col-span-2">
                   <Card className="border-0 shadow-sm">
-                    {/* Filtro de obra */}
-                    {resumo.obrasAtendidas.length > 1 && (
-                      <div className="px-5 pt-4 pb-0 flex items-center gap-2">
-                        <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                        <Select
-                          value={obraIdFiltro !== null ? String(obraIdFiltro) : 'todas'}
-                          onValueChange={(v) => {
-                            const newId = v === 'todas' ? null : Number(v);
-                            setObraIdFiltro(newId);
-                            setExpandedItems(new Set());
-                            setChartItem(null);
-                          }}
-                        >
-                          <SelectTrigger className="h-7 text-xs border-gray-200 bg-white w-auto min-w-[180px] max-w-full">
-                            <SelectValue placeholder="Filtrar por obra…" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="todas" className="text-xs">Todas as obras</SelectItem>
-                            {resumo.obrasAtendidas.map((ob: { id: number | null; nome: string }) => (
-                              <SelectItem key={ob.id ?? 'null'} value={String(ob.id ?? 0)} className="text-xs">
-                                {ob.nome}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {obraIdFiltro !== null && (
-                          <button
-                            onClick={() => { setObraIdFiltro(null); setExpandedItems(new Set()); setChartItem(null); }}
-                            className="text-[10px] text-gray-400 hover:text-gray-600 underline whitespace-nowrap"
-                          >
-                            Limpar filtro
+                    {/* Barra de busca + filtro de obra */}
+                    <div className="px-5 pt-4 pb-0 flex flex-wrap items-center gap-2">
+                      {/* Busca por produto */}
+                      <div className="relative flex-1 min-w-[180px] max-w-xs">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                        <input
+                          type="text"
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          placeholder="Buscar produto…"
+                          className="w-full h-8 pl-8 pr-3 text-xs border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                        />
+                        {searchTerm && (
+                          <button onClick={() => setSearchTerm("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                            <X className="w-3 h-3" />
                           </button>
                         )}
                       </div>
-                    )}
-                    <CardHeader className="pb-2 pt-4 px-5">
-                      <CardTitle className="text-sm font-semibold text-gray-600 flex items-center gap-2">
+                      {/* Filtro de obra */}
+                      {resumo.obrasAtendidas.length > 1 && (
+                        <>
+                          <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                          <Select
+                            value={obraIdFiltro !== null ? String(obraIdFiltro) : 'todas'}
+                            onValueChange={(v) => {
+                              const newId = v === 'todas' ? null : Number(v);
+                              setObraIdFiltro(newId);
+                              setExpandedItems(new Set());
+                              setChartItem(null);
+                            }}
+                          >
+                            <SelectTrigger className="h-8 text-xs border-gray-200 bg-white w-auto min-w-[160px] max-w-full">
+                              <SelectValue placeholder="Filtrar por obra…" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="todas" className="text-xs">Todas as obras</SelectItem>
+                              {resumo.obrasAtendidas.map((ob: { id: number | null; nome: string }) => (
+                                <SelectItem key={ob.id ?? 'null'} value={String(ob.id ?? 0)} className="text-xs">
+                                  {ob.nome}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {obraIdFiltro !== null && (
+                            <button
+                              onClick={() => { setObraIdFiltro(null); setExpandedItems(new Set()); setChartItem(null); }}
+                              className="text-[10px] text-gray-400 hover:text-gray-600 underline whitespace-nowrap"
+                            >
+                              Limpar
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    <CardHeader className="pb-2 pt-3 px-5">
+                      <CardTitle className="text-sm font-semibold text-gray-600 flex items-center gap-2 flex-wrap">
                         <Package className="w-4 h-4" /> Produtos comprados
-                        <span className="text-xs font-normal text-gray-400">({itens.length})</span>
+                        <span className="text-xs font-normal text-gray-400">
+                          {searchLow ? `${itensFiltrados.length} de ${itens.length}` : itens.length}
+                        </span>
                         {itens.some((it: any) => it.variacaoPct > 10 && it.variacaoReason !== 'unidade_mista') && (
                           <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-red-700 bg-red-50 rounded-full px-2 py-0.5 ring-1 ring-red-200">
                             <AlertTriangle className="w-3 h-3" />
-                            {itens.filter((it: any) => it.variacaoPct > 10 && it.variacaoReason !== 'unidade_mista').length} com variação real alta
+                            {itens.filter((it: any) => it.variacaoPct > 10 && it.variacaoReason !== 'unidade_mista').length} variação alta
                           </span>
                         )}
                         {itens.some((it: any) => it.variacaoReason === 'unidade_mista') && (
                           <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-purple-700 bg-purple-50 rounded-full px-2 py-0.5 ring-1 ring-purple-200">
                             <AlertTriangle className="w-3 h-3" />
-                            {itens.filter((it: any) => it.variacaoReason === 'unidade_mista').length} unidade mista
+                            {itens.filter((it: any) => it.variacaoReason === 'unidade_mista').length} unid. mista
                           </span>
                         )}
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="px-2 sm:px-4 pb-4">
-                      {itens.length === 0 ? (
-                        <p className="text-center text-sm text-gray-400 py-10">Nenhum item encontrado para este fornecedor{resumo.qtdOcs === 0 ? ' — sem OCs no período' : ''}.</p>
+                      {itensFiltrados.length === 0 ? (
+                        <div className="text-center py-10">
+                          <Package className="w-8 h-8 text-gray-200 mx-auto mb-2" />
+                          <p className="text-sm text-gray-400">
+                            {searchLow
+                              ? `Nenhum produto encontrado para "${searchTerm}"`
+                              : `Nenhum item${resumo.qtdOcs === 0 ? ' — sem OCs no período' : ''}`}
+                          </p>
+                          {searchLow && (
+                            <button onClick={() => setSearchTerm("")} className="text-xs text-indigo-500 underline mt-1">Limpar busca</button>
+                          )}
+                        </div>
                       ) : (
                         <div className="overflow-x-auto">
                           <table className="w-full text-xs min-w-[640px]">
@@ -1132,7 +1173,7 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                               </tr>
                             </thead>
                             <tbody>
-                              {itens.map((item: any, idx: number) => {
+                              {itensFiltrados.map((item: any, idx: number) => {
                                 const ikey = `${item.descricao}|||${item.unidade ?? ''}`;
                                 const expanded = expandedItems.has(ikey);
                                 const isChartSel = chartItem === ikey;
@@ -1301,9 +1342,11 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                             </tbody>
                             <tfoot>
                               <tr className="border-t-2 border-gray-200">
-                                <td colSpan={6} className="py-2.5 pr-2 text-right font-semibold text-gray-600 text-xs">Total em OCs</td>
+                                <td colSpan={6} className="py-2.5 pr-2 text-right font-semibold text-gray-600 text-xs">
+                                  {searchLow ? `Total filtrado` : `Total em OCs`}
+                                </td>
                                 <td className="py-2.5 px-2 text-right tabular-nums font-bold text-rose-600 text-xs whitespace-nowrap">
-                                  {formatBRL(itens.reduce((s: number, it: any) => s + it.valorTotal, 0))}
+                                  {formatBRL(itensFiltrados.reduce((s: number, it: any) => s + it.valorTotal, 0))}
                                 </td>
                                 <td colSpan={2} />
                               </tr>
@@ -1315,8 +1358,12 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                   </Card>
                 </div>
 
-                {/* ── Formas de pagamento (coluna lateral) ── */}
+                {/* ── Coluna lateral: Dash + Formas de pagamento + Obras ── */}
                 <div className="space-y-4">
+                  {/* Dash panel — análises inteligentes */}
+                  <AnaliseDashPanel itens={itens} totalGasto={resumo.totalGasto} />
+
+                  {/* Formas de pagamento */}
                   <Card className="border-0 shadow-sm">
                     <CardHeader className="pb-2 pt-4 px-5">
                       <CardTitle className="text-sm font-semibold text-gray-600 flex items-center gap-2">

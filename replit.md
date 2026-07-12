@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4174** — **COMPRAS/FINANCEIRO: NOVO LAYOUT DA ABA ITENS + PAINEL DASH + ALMOXARIFADO NA OC.** Novo `AnaliseDashPanel.tsx`: Curva ABC (barras visuais A/B/C), maior gasto/preço alto/preço baixo/maior alta, produto mais recorrente, maior ciclo de compra, **alerta de fragmentação** (≥3 OCs em ≤30 dias — perda de poder de negociação). Barra de busca com filtro real-time na tabela. `getOrdemMiniDetalhe` consulta `almoxarifado_movimentacoes` via `motivo ILIKE '%numero_oc%'`; `OcMiniDialog` ganha seção "Almoxarifado" com entradas/saídas: quem retirou, obra e data. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4173** — **COMPRAS/FINANCEIRO: REDESIGN DO MINI-DIALOG DE DETALHE DA OC.** Novo backend com `criado_por_nome`, `aprovador_nome`, datas formatadas, SC via 2 caminhos (cotação + direto). Novo layout: cabeçalho compacto, seção Rastreabilidade (SC→OC→Aprovação com nomes/datas), grid Detalhes, Observações, tabela de Itens com preço unit., composição do total. Corpo com `max-h-[70vh]` elimina espaço vazio. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4172** — **COMPRAS/FINANCEIRO: OC CLICÁVEL NA TABELA DE OCORRÊNCIAS DA ANÁLISE DE FORNECEDOR.** `ordem_id` adicionado ao `ocorrRes`; `OcMiniDialog` exportado de `ItemCatalogo.tsx`; célula Nº OC virou `<button>` que abre o mini-dialog com todos os detalhes da OC. ZERO DELETE · ZERO ALTER destrutivo.

@@ -1,4 +1,42 @@
 /**
+ * Rev. 4174 - COMPRAS/FINANCEIRO: NOVO LAYOUT DA ABA ITENS + PAINEL DASH + ALMOXARIFADO NA OC.
+ *
+ * CONTEXTO: usuario precisava de busca rapida de produto, analise inteligente de compras (Curva ABC,
+ * fragmentacao, maior alta, ciclo de compra) e rastreabilidade almoxarifado - OC.
+ *
+ * 1. NOVO ARQUIVO AnaliseDashPanel.tsx - painel lateral com analises computadas dos itens:
+ *    Curva ABC (Pareto): classifica itens em A/B/C por % do gasto total, barras visuais + Top 3 Classe A.
+ *    Maior gasto total, preco unitario mais alto, preco mais baixo, maior alta de preco.
+ *    Produto mais recorrente (mais OCs), maior ciclo de compra (intervalo 1a->ultima OC em dias).
+ *    ALERTA DE FRAGMENTACAO: detecta produtos comprados 3+ vezes em 30 dias ou menos - explica
+ *    perda de poder de negociacao e durabilidade, lista os fragmentados com qtd de OCs.
+ *
+ * 2. LAYOUT REDESENHADO - FinanceiroAnaliseCustosDetalhe.tsx:
+ *    Barra de busca de produto com icone lupa + botao X para limpar (filtro real-time em itensFiltrados).
+ *    Filtro de obra mantido na mesma linha da busca (layout flex-wrap).
+ *    Total do rodape da tabela exibe Total filtrado quando busca ativa.
+ *    Estado de lista vazia adaptativo: mensagem especifica para busca vs. ausencia de dados.
+ *    Sidebar: AnaliseDashPanel aparece acima de Formas de Pagamento + Obras Atendidas.
+ *
+ * 3. ALMOXARIFADO NO MINI-DIALOG (getOrdemMiniDetalhe + OcMiniDialog):
+ *    Backend: apos buscar OC, executa query em almoxarifado_movimentacoes WHERE motivo ILIKE numero_oc;
+ *    JOIN em almoxarifado_itens para nome do item; retorna almoxMovimentos[].
+ *    Frontend: nova secao Almoxarifado no OcMiniDialog com icone Warehouse.
+ *    Entrada: fundo verde, seta para baixo, quem deu entrada + data + obra.
+ *    Saida/Consumo: fundo rose, seta para cima, quem retirou + data + obra.
+ *    Permite rastrear: este lapiz foi entregue da OC X? Quem retirou?
+ *
+ * ARQUIVOS TOCADOS:
+ *   client/src/pages/financeiro/AnaliseDashPanel.tsx (NOVO)
+ *   client/src/pages/financeiro/FinanceiroAnaliseCustosDetalhe.tsx
+ *   client/src/components/compras/ItemCatalogo.tsx
+ *   server/routers/compras.ts (getOrdemMiniDetalhe)
+ *   shared/version.ts, shared/changelog.ts, replit.md
+ *
+ * ZERO DELETE. ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4173 — **COMPRAS/FINANCEIRO: REDESIGN COMPLETO DO MINI-DIALOG DE DETALHE DA OC.**
  *
  * CONTEXTO: mini-dialog exibia espaço vazio enorme, "Quem Pediu / Quando Pediu" sempre em "—"
