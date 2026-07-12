@@ -469,12 +469,18 @@ async function ensureFleetTables() {
       atualizado_em TIMESTAMPTZ DEFAULT NOW() NOT NULL
     )
   `);
-  // Rev. 4155 — garante colunas novas em fleet_trips (CREATE TABLE IF NOT EXISTS não altera tabela já existente)
+  // Rev. 4156 — garante TODAS as colunas de fleet_trips (CREATE TABLE IF NOT EXISTS é no-op em tabela existente)
+  // Incluindo colunas CORE (status, origem, destino, motivo, criado_em, atualizado_em) que faltavam no loop anterior.
+  // Colunas com NOT NULL no schema original ficam sem NOT NULL no ALTER (idempotente; INSERT sempre fornece o valor).
   for (const stmt of [
     `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS vehicle_id INTEGER`,
     `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS placa VARCHAR(20)`,
     `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS motorista_nome VARCHAR(255)`,
     `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS motorista_id INTEGER`,
+    `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS status VARCHAR(30) DEFAULT 'pendente'`,
+    `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS origem VARCHAR(255)`,
+    `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS destino VARCHAR(255)`,
+    `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS motivo VARCHAR(50) DEFAULT 'outro'`,
     `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS motivo_descricao TEXT`,
     `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS obra_id INTEGER`,
     `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS obra_nome VARCHAR(255)`,
@@ -488,10 +494,12 @@ async function ensureFleetTables() {
     `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS data_autorizacao TIMESTAMPTZ`,
     `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS observacoes_gestor TEXT`,
     `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS criado_por VARCHAR(255)`,
+    `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS criado_em TIMESTAMPTZ DEFAULT NOW()`,
+    `ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMPTZ DEFAULT NOW()`,
   ]) {
     try { await db.execute(sql.raw(stmt)); } catch { /* já existe */ }
   }
-  console.log("[SyncSchema+] Rev. 4155: colunas fleet_trips garantidas (ADD COLUMN IF NOT EXISTS)");
+  console.log("[ensureFleetTables] Rev. 4156: TODAS as colunas fleet_trips garantidas (status/origem/destino/motivo/criado_em incluídas)");
 
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS fleet_trip_expenses (

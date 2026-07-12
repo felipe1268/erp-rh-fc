@@ -5090,14 +5090,19 @@ REGRAS DE EXTRAÇÃO:
           `);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.4093 sped_configs:`, e?.message || e); }
 
-        // Rev. 4155 — fleet_trips: ADD COLUMN IF NOT EXISTS para colunas criadas após a tabela
-        // (CREATE TABLE IF NOT EXISTS não altera tabela já existente — ALTER é idempotente)
+        // Rev. 4156 — fleet_trips: TODAS as colunas (core + extras) via ADD COLUMN IF NOT EXISTS
+        // CREATE TABLE IF NOT EXISTS é no-op se a tabela já existia com schema diferente (ex: só id).
+        // Colunas NOT NULL do schema original ficam sem NOT NULL aqui (INSERT sempre fornece o valor).
         try {
           const ftCols: string[] = [
             "vehicle_id INTEGER",
             "placa VARCHAR(20)",
             "motorista_nome VARCHAR(255)",
             "motorista_id INTEGER",
+            "status VARCHAR(30) DEFAULT 'pendente'",
+            "origem VARCHAR(255)",
+            "destino VARCHAR(255)",
+            "motivo VARCHAR(50) DEFAULT 'outro'",
             "motivo_descricao TEXT",
             "obra_id INTEGER",
             "obra_nome VARCHAR(255)",
@@ -5111,14 +5116,16 @@ REGRAS DE EXTRAÇÃO:
             "data_autorizacao TIMESTAMPTZ",
             "observacoes_gestor TEXT",
             "criado_por VARCHAR(255)",
+            "criado_em TIMESTAMPTZ DEFAULT NOW()",
+            "atualizado_em TIMESTAMPTZ DEFAULT NOW()",
           ];
           for (const colDef of ftCols) {
             try {
               await db.execute(sql.raw(`ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS ${colDef}`));
             } catch { /* coluna já existe */ }
           }
-          console.log("[SyncSchema+] Rev. 4155: colunas fleet_trips garantidas (ADD COLUMN IF NOT EXISTS)");
-        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4155 fleet_trips cols:", e?.message || e); }
+          console.log("[SyncSchema+] Rev. 4156: TODAS as colunas fleet_trips garantidas (status/origem/destino/motivo/criado_em incluídas)");
+        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4156 fleet_trips cols:", e?.message || e); }
 
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
