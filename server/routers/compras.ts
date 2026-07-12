@@ -16285,6 +16285,8 @@ Responda APENAS com JSON válido, sem markdown, no formato:
         valorTotal: number; qtdOcs: number;
         precoMin: number; precoMax: number;
         ultimaCompra: string | null;
+        primeiraCompra: string | null;
+        temPrecoZero: boolean;
       };
       const normGroups = new Map<string, NormGroup>();
       for (const r of rawItens) {
@@ -16293,7 +16295,8 @@ Responda APENAS com JSON válido, sem markdown, no formato:
           normGroups.set(nk, {
             descFreq: new Map(), unidades: new Map(),
             valorTotal: 0, qtdOcs: 0,
-            precoMin: Infinity, precoMax: -Infinity, ultimaCompra: null,
+            precoMin: Infinity, precoMax: -Infinity,
+            ultimaCompra: null, primeiraCompra: null, temPrecoZero: false,
           });
         }
         const g = normGroups.get(nk)!;
@@ -16308,10 +16311,14 @@ Responda APENAS com JSON válido, sem markdown, no formato:
         g.qtdOcs += Number(r.qtd_ocs ?? 0);
         const pMin = Number(r.preco_min ?? 0);
         const pMax = Number(r.preco_max ?? 0);
+        if (pMin === 0) g.temPrecoZero = true;
         if (pMin > 0 && pMin < g.precoMin) g.precoMin = pMin;
         if (pMax > g.precoMax) g.precoMax = pMax;
         const uc = String(r.ultima_compra ?? '');
-        if (uc && (!g.ultimaCompra || uc > g.ultimaCompra)) g.ultimaCompra = uc;
+        if (uc) {
+          if (!g.ultimaCompra || uc > g.ultimaCompra) g.ultimaCompra = uc;
+          if (!g.primeiraCompra || uc < g.primeiraCompra) g.primeiraCompra = uc;
+        }
       }
       const itens = Array.from(normGroups.entries()).map(([nk, g]) => {
         // Nome mais frequente (por OCs) como canônico
@@ -16324,7 +16331,22 @@ Responda APENAS com JSON válido, sem markdown, no formato:
         const qtdTotal = isMultiUnit ? 0 : (g.unidades.get(bestUnit)?.qtd ?? 0);
         const precoMin = g.precoMin === Infinity ? 0 : g.precoMin;
         const precoMax = g.precoMax === -Infinity ? 0 : g.precoMax;
-        const variacaoPct = precoMin > 0 ? ((precoMax - precoMin) / precoMin) * 100 : 0;
+        // Quando unidades são diferentes, comparar min/max não faz sentido → zera a variação
+        const variacaoPct = (!isMultiUnit && precoMin > 0)
+          ? ((precoMax - precoMin) / precoMin) * 100
+          : 0;
+        // Span temporal em meses entre primeira e última compra
+        let mesesSpan = 0;
+        if (g.primeiraCompra && g.ultimaCompra && g.primeiraCompra !== g.ultimaCompra) {
+          const d1 = new Date(g.primeiraCompra + 'T00:00:00Z');
+          const d2 = new Date(g.ultimaCompra + 'T00:00:00Z');
+          mesesSpan = Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24 * 30.5));
+        }
+        // Razão da variação para diagnóstico na UI
+        let variacaoReason: 'unidade_mista' | 'preco_zero' | 'variacao_real' | 'ok' = 'ok';
+        if (isMultiUnit) variacaoReason = 'unidade_mista';
+        else if (g.temPrecoZero) variacaoReason = 'preco_zero';
+        else if (variacaoPct > 15) variacaoReason = 'variacao_real';
         return {
           descricao: bestDesc,
           unidade: isMultiUnit ? 'var.' : (bestUnit || null),
@@ -16334,9 +16356,13 @@ Responda APENAS com JSON válido, sem markdown, no formato:
           precoMax,
           precoAvg: precoMin > 0 ? (precoMin + precoMax) / 2 : 0,
           variacaoPct,
+          variacaoReason,
+          mesesSpan,
+          temPrecoZero: g.temPrecoZero,
           valorTotal: g.valorTotal,
           qtdOcs: g.qtdOcs,
           ultimaCompra: g.ultimaCompra,
+          primeiraCompra: g.primeiraCompra,
           ocorrencias: ocMap.get(nk) ?? [],
         };
       }).sort((a: any, b: any) => b.valorTotal - a.valorTotal);

@@ -1,4 +1,33 @@
 /**
+ * Rev. 4167 — **COMPRAS/FINANCEIRO: DIAGNÓSTICO DE OSCILAÇÃO DE PREÇOS NA ANÁLISE DE FORNECEDOR.**
+ *
+ * CONTEXTO: tela "Análise de Fornecedor" (aba Itens & Preços) exibia variações absurdas (+750%,
+ * +266%) porque: (a) itens com unidades diferentes eram comparados no mesmo grupo; (b) preços
+ * R$0,00 confundiam visualmente; (c) não havia contexto temporal da variação.
+ *
+ * ENTREGAS (backend — `getAnaliseFornecedor` em `server/routers/compras.ts`):
+ * - `primeiraCompra` rastreada junto com `ultimaCompra` em NormGroup.
+ * - `temPrecoZero` flagged quando alguma linha de OC tem preco_unitario=0.
+ * - `variacaoPct` zerado quando `isMultiUnit=true` (unidades diferentes → comparação inválida).
+ * - `mesesSpan` calculado (arredondado) entre primeira e última compra do item.
+ * - `variacaoReason`: 'unidade_mista' | 'preco_zero' | 'variacao_real' | 'ok'.
+ *
+ * ENTREGAS (frontend — `FinanceiroAnaliseCustosDetalhe.tsx`):
+ * - `VariacaoBadge` ganha prop `reason`; quando `unidade_mista` mostra badge roxo "unid. mista"
+ *   (em vez de % inválido) com title explicativo.
+ * - Linha com borda roxa para `unidade_mista`, âmbar para variação real alta.
+ * - Contadores no header separados: "X com variação real alta" (exclui unid.mista) +
+ *   "Y unidade mista".
+ * - Seção expandida: chips de diagnóstico mostram causa exata (unidades diferentes, R$0,00,
+ *   intervalo de N meses).
+ * - OC com preço R$0,00 destacada em fundo laranja + ícone ⚠ na célula de preço.
+ *
+ * ARQUIVOS: server/routers/compras.ts, client/src/pages/financeiro/FinanceiroAnaliseCustosDetalhe.tsx,
+ *           shared/version.ts
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4166 — **COMPRAS: CATÁLOGO — OC CLICÁVEL COM MINI-DIALOG DE DETALHE.**
  *
  * CONTEXTO: no Catálogo de Itens, o número da OC (ex: "OC-2026-662") era texto puro. Usuário

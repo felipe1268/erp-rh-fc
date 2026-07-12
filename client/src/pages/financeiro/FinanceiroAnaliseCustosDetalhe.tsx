@@ -1006,7 +1006,12 @@ export default function FinanceiroAnaliseCustosDetalhe() {
           const { resumo, itens, formasPagamento } = analiseData;
 
           // Helper: badge de variação de preço
-          const VariacaoBadge = ({ pct }: { pct: number }) => {
+          const VariacaoBadge = ({ pct, reason }: { pct: number; reason?: string }) => {
+            if (reason === 'unidade_mista') return (
+              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-purple-700 bg-purple-50 rounded-full px-1.5 py-0.5 ring-1 ring-purple-200" title="Unidades diferentes foram compradas — comparação de preços não é válida">
+                <AlertTriangle className="w-2.5 h-2.5" />unid. mista
+              </span>
+            );
             if (pct <= 2) return <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-emerald-700 bg-emerald-50 rounded-full px-1.5 py-0.5"><Minus className="w-2.5 h-2.5" />{pct.toFixed(1)}%</span>;
             if (pct <= 10) return <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-amber-700 bg-amber-50 rounded-full px-1.5 py-0.5"><TrendingUp className="w-2.5 h-2.5" />{pct.toFixed(1)}%</span>;
             return <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-red-700 bg-red-50 rounded-full px-1.5 py-0.5 ring-1 ring-red-200"><TrendingUp className="w-2.5 h-2.5" />{pct.toFixed(1)}%</span>;
@@ -1053,10 +1058,16 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                       <CardTitle className="text-sm font-semibold text-gray-600 flex items-center gap-2">
                         <Package className="w-4 h-4" /> Produtos comprados
                         <span className="text-xs font-normal text-gray-400">({itens.length})</span>
-                        {itens.some((it: any) => it.variacaoPct > 10) && (
+                        {itens.some((it: any) => it.variacaoPct > 10 && it.variacaoReason !== 'unidade_mista') && (
                           <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-red-700 bg-red-50 rounded-full px-2 py-0.5 ring-1 ring-red-200">
                             <AlertTriangle className="w-3 h-3" />
-                            {itens.filter((it: any) => it.variacaoPct > 10).length} com variação alta
+                            {itens.filter((it: any) => it.variacaoPct > 10 && it.variacaoReason !== 'unidade_mista').length} com variação real alta
+                          </span>
+                        )}
+                        {itens.some((it: any) => it.variacaoReason === 'unidade_mista') && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-purple-700 bg-purple-50 rounded-full px-2 py-0.5 ring-1 ring-purple-200">
+                            <AlertTriangle className="w-3 h-3" />
+                            {itens.filter((it: any) => it.variacaoReason === 'unidade_mista').length} unidade mista
                           </span>
                         )}
                       </CardTitle>
@@ -1088,7 +1099,7 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                                 return (
                                   <Fragment key={ikey}>
                                     <tr
-                                      className={`border-b border-gray-100 cursor-pointer transition-colors ${expanded ? 'bg-indigo-50/40' : 'hover:bg-gray-50'} ${item.variacaoPct > 10 ? 'border-l-2 border-l-amber-400' : ''}`}
+                                      className={`border-b border-gray-100 cursor-pointer transition-colors ${expanded ? 'bg-indigo-50/40' : 'hover:bg-gray-50'} ${item.variacaoReason === 'unidade_mista' ? 'border-l-2 border-l-purple-400' : item.variacaoPct > 10 ? 'border-l-2 border-l-amber-400' : ''}`}
                                       onClick={() => toggleExpand(ikey)}
                                     >
                                       <td className="py-3 pr-1 pl-1 text-gray-400">
@@ -1113,7 +1124,7 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                                       </td>
                                       <td className="py-3 px-2 text-right tabular-nums text-gray-700 whitespace-nowrap">{formatBRL(item.precoMin)}</td>
                                       <td className="py-3 px-2 text-right tabular-nums text-gray-700 whitespace-nowrap">{formatBRL(item.precoMax)}</td>
-                                      <td className="py-3 px-2 text-center"><VariacaoBadge pct={item.variacaoPct} /></td>
+                                      <td className="py-3 px-2 text-center"><VariacaoBadge pct={item.variacaoPct} reason={item.variacaoReason} /></td>
                                       <td className="py-3 px-2 text-right tabular-nums font-bold text-gray-800 whitespace-nowrap">{formatBRL(item.valorTotal)}</td>
                                       <td className="py-3 px-2 text-center tabular-nums text-gray-600">{item.qtdOcs}</td>
                                       <td className="py-3 pl-2 text-left tabular-nums text-gray-500 whitespace-nowrap">
@@ -1138,6 +1149,28 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                                               <TrendingUp className="w-3 h-3" /> Evolução de preço
                                             </button>
                                           </div>
+                                          {/* Diagnóstico de variação */}
+                                          {(item.variacaoReason !== 'ok' || item.mesesSpan > 1) && (
+                                            <div className="flex flex-wrap gap-1.5 mb-2 px-1">
+                                              {item.variacaoReason === 'unidade_mista' && (
+                                                <span className="inline-flex items-center gap-1 text-[10px] font-medium text-purple-700 bg-purple-50 rounded px-2 py-0.5 border border-purple-200">
+                                                  <AlertTriangle className="w-2.5 h-2.5" />
+                                                  Unidades diferentes: comparação de preços inválida
+                                                </span>
+                                              )}
+                                              {item.temPrecoZero && (
+                                                <span className="inline-flex items-center gap-1 text-[10px] font-medium text-orange-700 bg-orange-50 rounded px-2 py-0.5 border border-orange-200">
+                                                  <AlertTriangle className="w-2.5 h-2.5" />
+                                                  Contém OC com preço R$0,00 (excluída do % de variação)
+                                                </span>
+                                              )}
+                                              {item.mesesSpan > 1 && (
+                                                <span className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-700 bg-blue-50 rounded px-2 py-0.5 border border-blue-200">
+                                                  Intervalo de {item.mesesSpan} mês{item.mesesSpan !== 1 ? 'es' : ''} entre compras
+                                                </span>
+                                              )}
+                                            </div>
+                                          )}
                                           {/* Mini-chart de evolução de preço */}
                                           {isChartSel && chartItemData.length >= 2 && (
                                             <div className="mb-3 rounded-lg bg-white border border-gray-100 p-3" onClick={(e) => e.stopPropagation()}>
@@ -1175,8 +1208,10 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                                                 </tr>
                                               </thead>
                                               <tbody>
-                                                {item.ocorrencias.map((oc: any, oi: number) => (
-                                                  <tr key={oi} className="border-b border-gray-50 hover:bg-indigo-50/30">
+                                                {item.ocorrencias.map((oc: any, oi: number) => {
+                                                  const isZero = oc.precoUnitario === 0;
+                                                  return (
+                                                  <tr key={oi} className={`border-b border-gray-50 ${isZero ? 'bg-orange-50/60' : 'hover:bg-indigo-50/30'}`}>
                                                     <td className="py-2 px-3 font-mono font-semibold text-indigo-700 whitespace-nowrap">{oc.numeroOc || '—'}</td>
                                                     <td className="py-2 px-2 tabular-nums text-gray-600 whitespace-nowrap">{fmtData(oc.data)}</td>
                                                     <td className="py-2 px-2 text-gray-600 break-words max-w-[160px]">{oc.obraNome || '—'}</td>
@@ -1185,7 +1220,11 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                                                         ? oc.quantidade.toLocaleString('pt-BR')
                                                         : oc.quantidade.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 3 })}
                                                     </td>
-                                                    <td className="py-2 px-2 text-right tabular-nums font-semibold text-gray-800 whitespace-nowrap">{formatBRL(oc.precoUnitario)}</td>
+                                                    <td className={`py-2 px-2 text-right tabular-nums font-semibold whitespace-nowrap ${isZero ? 'text-orange-600' : 'text-gray-800'}`}>
+                                                      {isZero
+                                                        ? <span className="inline-flex items-center gap-0.5"><AlertTriangle className="w-3 h-3" />R$0,00</span>
+                                                        : formatBRL(oc.precoUnitario)}
+                                                    </td>
                                                     <td className="py-2 px-2 text-right tabular-nums text-gray-700 whitespace-nowrap">{formatBRL(oc.total)}</td>
                                                     <td className="py-2 px-2">
                                                       {oc.formaPagamento
@@ -1193,7 +1232,8 @@ export default function FinanceiroAnaliseCustosDetalhe() {
                                                         : <span className="text-gray-300">—</span>}
                                                     </td>
                                                   </tr>
-                                                ))}
+                                                  );
+                                                })}
                                               </tbody>
                                             </table>
                                           </div>
