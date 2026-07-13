@@ -58,71 +58,85 @@ function PeriodoDiasTable({ hePeriodId, employeeId }: { hePeriodId: number; empl
   const totalSemAutorizacao = dias.filter((d: any) => !d.autorizado).reduce((acc: number, d: any) => acc + (d.heMins || 0), 0);
   return (
     <div className="rounded border border-gray-100 overflow-hidden text-xs mt-1">
-      {/* Legenda de totais por status */}
-      <div className="flex items-center gap-4 px-2 py-1.5 bg-gray-50 border-b border-gray-200 text-[10px]">
-        <span className="flex items-center gap-1 text-green-700 font-semibold">
-          <CheckCircle2 className="h-3 w-3" /> Autorizado: <strong>+{minsToHHMM(totalAutorizado)}</strong>
-        </span>
+      {/* Legenda de totais */}
+      <div className="flex items-center gap-4 px-3 py-1.5 bg-gray-50 border-b border-gray-200 text-[11px]">
+        {totalAutorizado > 0 && (
+          <span className="flex items-center gap-1 text-green-700 font-semibold">
+            <CheckCircle2 className="h-3 w-3 shrink-0" /> Autorizado: +{minsToHHMM(totalAutorizado)}
+          </span>
+        )}
         {totalSemAutorizacao > 0 && (
           <span className="flex items-center gap-1 text-amber-700 font-semibold">
-            <AlertTriangle className="h-3 w-3" /> Sem autorização: <strong>+{minsToHHMM(totalSemAutorizacao)}</strong>
+            <AlertTriangle className="h-3 w-3 shrink-0" /> Sem autorização: +{minsToHHMM(totalSemAutorizacao)}
           </span>
         )}
       </div>
-      {/* Cabeçalho da tabela */}
-      <div className="grid grid-cols-[28px_90px_56px_52px_52px_44px_1fr] bg-gray-50 border-b border-gray-200 px-2 py-1 text-[10px] text-muted-foreground font-semibold uppercase tracking-wide gap-1.5">
-        <span title="Status de autorização">Aut.</span>
-        <span>Data</span>
-        <span className="text-right">Trabalhado</span>
-        <span className="text-right">Jornada</span>
-        <span className="text-right">HE</span>
-        <span className="text-right">Adic.</span>
-        <span>Horários</span>
-      </div>
-      {dias.map((d: any, i: number) => {
-        const dataBR = new Date(d.data + "T12:00:00Z").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-        const isFeriado = !!d.feriado;
-        const isDom = d.diaSemana === "Dom";
-        const isSab = d.diaSemana === "Sáb";
-        const isAutorizado = !!d.autorizado;
-        const rowBg = !isAutorizado
-          ? "bg-amber-50/60"
-          : isFeriado ? "bg-purple-50"
-          : isDom ? "bg-red-50/40"
-          : isSab ? "bg-amber-50/30"
-          : i % 2 === 0 ? "bg-white" : "bg-gray-50/40";
-        return (
-          <div key={i} className={`grid grid-cols-[28px_90px_56px_52px_52px_44px_1fr] px-2 py-1.5 gap-1.5 items-center border-b border-gray-100 last:border-0 ${rowBg}`}>
-            {/* Coluna de autorização */}
-            <span title={isAutorizado ? "HE autorizada pelo gestor" : "HE computada sem autorização prévia"}>
-              {isAutorizado
-                ? <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-                : <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-              }
-            </span>
-            <span className="font-medium text-gray-700 flex items-center gap-1">
-              {dataBR}
-              <span className={`text-[10px] font-semibold px-0.5 rounded ${
-                isFeriado ? "bg-purple-100 text-purple-700" :
-                isDom ? "text-red-500" :
-                isSab ? "text-amber-600" :
-                "text-gray-400"
-              }`}>{isFeriado ? "Fer" : d.diaSemana}</span>
-            </span>
-            <span className="text-right text-gray-600">{d.trabalhado || "—"}</span>
-            <span className="text-right text-gray-500">{d.jornada}</span>
-            <span className={`text-right font-semibold ${isAutorizado ? "text-green-700" : "text-amber-600"}`}>
-              +{minsToHHMM(d.heMins)}
-            </span>
-            <span className="text-right text-gray-500">{d.percentual}%</span>
-            <span className="text-gray-400 truncate">{d.horarios}</span>
-          </div>
-        );
-      })}
-      <div className="grid grid-cols-[28px_90px_56px_52px_52px_44px_1fr] px-2 py-1.5 gap-1.5 bg-gray-100 border-t border-gray-200 font-semibold text-xs">
-        <span /><span className="text-[10px] text-muted-foreground uppercase col-span-3">Total</span>
-        <span className="text-right text-green-700">+{minsToHHMM(totalHE)}</span>
-        <span /><span />
+      {/* Tabela */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs border-collapse">
+          <thead>
+            <tr className="bg-gray-50 text-[10px] text-muted-foreground uppercase tracking-wide">
+              <th className="px-2 py-1.5 text-center w-8 font-semibold" title="Autorização">Aut.</th>
+              <th className="px-2 py-1.5 text-left font-semibold">Data</th>
+              <th className="px-2 py-1.5 text-right font-semibold whitespace-nowrap">Trabalhado</th>
+              <th className="px-2 py-1.5 text-right font-semibold">Jornada</th>
+              <th className="px-2 py-1.5 text-right font-semibold">HE</th>
+              <th className="px-2 py-1.5 text-right font-semibold">Adic.</th>
+              <th className="px-2 py-1.5 text-left font-semibold">Horários</th>
+            </tr>
+          </thead>
+          <tbody>
+            {dias.map((d: any, i: number) => {
+              const dataBR = new Date(d.data + "T12:00:00Z").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+              const isFeriado = !!d.feriado;
+              const isDom = d.diaSemana === "Dom";
+              const isSab = d.diaSemana === "Sáb";
+              const isAutorizado = !!d.autorizado;
+              const rowCls = !isAutorizado
+                ? "bg-amber-50"
+                : isFeriado ? "bg-purple-50"
+                : isDom ? "bg-red-50/40"
+                : isSab ? "bg-amber-50/30"
+                : i % 2 === 0 ? "bg-white" : "bg-gray-50/40";
+              return (
+                <tr key={i} className={`border-t border-gray-100 ${rowCls}`}>
+                  <td className="px-2 py-1.5 text-center">
+                    <span title={isAutorizado ? "HE autorizada pelo gestor" : "Sem solicitação aprovada"}>
+                      {isAutorizado
+                        ? <CheckCircle2 className="h-3.5 w-3.5 text-green-600 mx-auto" />
+                        : <AlertTriangle className="h-3.5 w-3.5 text-amber-500 mx-auto" />
+                      }
+                    </span>
+                  </td>
+                  <td className="px-2 py-1.5 whitespace-nowrap">
+                    <span className="font-medium text-gray-700">{dataBR}</span>
+                    <span className={`ml-1.5 text-[10px] font-semibold ${
+                      isFeriado ? "bg-purple-100 text-purple-700 px-1 py-0.5 rounded" :
+                      isDom ? "text-red-500" :
+                      isSab ? "text-amber-600" :
+                      "text-gray-400"
+                    }`}>{isFeriado ? "Fer" : d.diaSemana}</span>
+                  </td>
+                  <td className="px-2 py-1.5 text-right text-gray-600 tabular-nums">{d.trabalhado || "—"}</td>
+                  <td className="px-2 py-1.5 text-right text-gray-500 tabular-nums">{d.jornada}</td>
+                  <td className={`px-2 py-1.5 text-right font-semibold tabular-nums ${isAutorizado ? "text-green-700" : "text-amber-600"}`}>
+                    +{minsToHHMM(d.heMins)}
+                  </td>
+                  <td className="px-2 py-1.5 text-right text-gray-500">{d.percentual}%</td>
+                  <td className="px-2 py-1.5 text-gray-400 tabular-nums">{d.horarios}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-gray-200 bg-gray-100 font-semibold">
+              <td className="px-2 py-1.5" />
+              <td className="px-2 py-1.5 text-[10px] text-muted-foreground uppercase col-span-3" colSpan={3}>Total</td>
+              <td className="px-2 py-1.5 text-right text-green-700 tabular-nums">+{minsToHHMM(totalHE)}</td>
+              <td colSpan={2} />
+            </tr>
+          </tfoot>
+        </table>
       </div>
     </div>
   );
