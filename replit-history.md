@@ -1,3 +1,4 @@
+- **Rev. 4208** — **SCORECARD RH/FOLHA: FIX SEGURO DE VIDA (R$0→real) + VR/VA DOUBLE-COUNT + PONTO FALLBACK.** ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4206** — **SCORECARD RH/FOLHA: FIX CAST VARCHAR→NUMERIC COM PADRÃO SEGURO.** ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4205** — **SCORECARD RH/FOLHA: FIX camelCase em payroll_payments + employee_site_history + vr_benefits + vacation_periods.** 289 linhas existiam mas ficavam invisíveis. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4204** — **SCORECARD RH/FOLHA: FIX employees camelCase + REDESIGN ABA + FÉRIAS + SEGURO DE VIDA.** Bug raiz: snake_case em `employees`; Fix camelCase + 3 queries paralelas + UI com seletor ano/mês. ZERO DELETE · ZERO ALTER destrutivo.

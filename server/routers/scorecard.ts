@@ -581,7 +581,7 @@ export const scorecardRouter = router({
     }),
 
   getSeguranca: protectedProcedure
-    .input(z.object({ companyId: z.number(), obraId: z.number() }))
+    .input(z.object({ companyId: z.number(), obraId: z.number(), mesRef: z.string().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return null;
@@ -591,15 +591,17 @@ export const scorecardRouter = router({
           return [];
         }
       };
+      const mr = input.mesRef ?? null; // null = sem filtro (mostra tudo)
 
       const [clt, terceiros, treinamentosNorma, advertencias, advertenciasTerceiros, epiPorFuncionario, epiPorTipo,
-             acidentes, dds, apr, pt, atestados] = await Promise.all([
+             acidentes, dds, apr, pt, atestados, historico] = await Promise.all([
 
         // ── Q1: FUNCIONÁRIOS CLT com ASO + treinamentos + advertências ────────
         safe("cltFuncionarios", async () => {
           const r = await db.execute(sql`
             SELECT
               e.id, e."nomeCompleto" AS nome, e.cargo, e.status, e.cpf,
+              e."fotoUrl"         AS foto_url,
               aso.data_validade   AS aso_validade,
               aso.resultado       AS aso_resultado,
               CASE
@@ -815,6 +817,7 @@ export const scorecardRouter = router({
             WHERE a."companyId" = ${input.companyId}
               AND a.obra_id     = ${input.obraId}
               AND a."deletedAt" IS NULL
+              AND (${mr}::text IS NULL OR TO_CHAR(a."dataAcidente", 'YYYY-MM') = ${mr})
             ORDER BY a."dataAcidente" DESC
           `);
           return r.rows as any[];
@@ -830,8 +833,9 @@ export const scorecardRouter = router({
               AND obra_id    = ${input.obraId}
               AND status != 'cancelada'
               AND deleted_at IS NULL
+              AND (${mr}::text IS NULL OR TO_CHAR(data, 'YYYY-MM') = ${mr})
             ORDER BY data DESC
-            LIMIT 30
+            LIMIT 60
           `);
           return r.rows as any[];
         }),
@@ -847,8 +851,9 @@ export const scorecardRouter = router({
             WHERE a.company_id = ${input.companyId}
               AND a.obra_id    = ${input.obraId}
               AND a.deleted_at IS NULL
+              AND (${mr}::text IS NULL OR LEFT(COALESCE(a.data_emissao,''), 7) = ${mr})
             ORDER BY a.data_emissao DESC NULLS LAST
-            LIMIT 30
+            LIMIT 60
           `);
           return r.rows as any[];
         }),
@@ -864,28 +869,112 @@ export const scorecardRouter = router({
             WHERE p.company_id = ${input.companyId}
               AND p.obra_id    = ${input.obraId}
               AND p.deleted_at IS NULL
+              AND (${mr}::text IS NULL OR LEFT(COALESCE(p.data_emissao,''), 7) = ${mr})
             ORDER BY p.data_emissao DESC NULLS LAST
-            LIMIT 30
+            LIMIT 60
           `);
           return r.rows as any[];
         }),
 
-        // ── Q12: ATESTADOS — funcionários CLT desta obra ──────────────────────
+        // ── Q12: ATESTADOS — CLT desta obra, com custo (salário + encargos + VR) ──
         safe("atestados", async () => {
           const r = await db.execute(sql`
-            SELECT a.id, a."dataEmissao", a.tipo, a."diasAfastamento",
-                   a."horas_afastamento", a.cid, a.motivo, a."dataRetorno",
-                   e."nomeCompleto" AS funcionario_nome, e.cargo
+            SELECT
+              a.id, a."dataEmissao", a.tipo, a."diasAfastamento",
+              a."horas_afastamento", a.cid, a.motivo, a."dataRetorno",
+              e."nomeCompleto" AS funcionario_nome, e.cargo,
+              e."fotoUrl"      AS foto_url,
+              COALESCE(e."salarioBase"::numeric, 0) AS salario_base,
+              -- Custo proporcional do salário (salário/30 × dias)
+              ROUND(COALESCE(e."salarioBase"::numeric, 0) / 30
+                    * COALESCE(a."diasAfastamento", 0), 2)            AS custo_salario,
+              -- Encargos trabalhistas: FGTS 8% + INSS patronal 20% + RAT+Terceiros 5% = 33%
+              ROUND(COALESCE(e."salarioBase"::numeric, 0) / 30
+                    * COALESCE(a."diasAfastamento", 0) * 0.33, 2)     AS custo_encargos,
+              -- VR proporcional (valorDiario × dias)
+              ROUND(COALESCE(vr.valor_diario, 0)
+                    * COALESCE(a."diasAfastamento", 0), 2)            AS custo_vr,
+              -- Custo total do dia pago sem produção
+              ROUND(
+                (COALESCE(e."salarioBase"::numeric, 0) / 30 * 1.33)
+                * COALESCE(a."diasAfastamento", 0)
+                + COALESCE(vr.valor_diario, 0) * COALESCE(a."diasAfastamento", 0),
+              2) AS custo_total
             FROM atestados a
             JOIN employees e ON e.id = a."employeeId"
+            LEFT JOIN LATERAL (
+              SELECT COALESCE(NULLIF(TRIM(vr2."valorDiario"), ''), '0')::numeric AS valor_diario
+              FROM vr_benefits vr2
+              WHERE vr2."employeeId" = a."employeeId"
+                AND vr2."mesReferencia" = TO_CHAR(a."dataEmissao", 'YYYY-MM')
+              ORDER BY vr2."createdAt" DESC LIMIT 1
+            ) vr ON true
             WHERE a."companyId" = ${input.companyId}
               AND a."deletedAt" IS NULL
+              AND (${mr}::text IS NULL OR TO_CHAR(a."dataEmissao", 'YYYY-MM') = ${mr})
               AND e.id IN (
                 SELECT "employeeId" FROM obra_funcionarios
                 WHERE "obraId" = ${input.obraId} AND "companyId" = ${input.companyId}
               )
             ORDER BY a."dataEmissao" DESC
-            LIMIT 30
+            LIMIT 60
+          `);
+          return r.rows as any[];
+        }),
+
+        // ── Q13: HISTÓRICO MENSAL — últimos 12 meses (atestados, DDS, acidentes) ──
+        safe("historico", async () => {
+          const r = await db.execute(sql`
+            WITH meses AS (
+              SELECT TO_CHAR(generate_series(
+                date_trunc('month', CURRENT_DATE - INTERVAL '11 months'),
+                date_trunc('month', CURRENT_DATE),
+                '1 month'
+              ), 'YYYY-MM') AS mes
+            ),
+            ates AS (
+              SELECT TO_CHAR(a."dataEmissao", 'YYYY-MM') AS mes,
+                     COUNT(*) AS atestados,
+                     SUM(COALESCE(a."diasAfastamento", 0)) AS dias_ates,
+                     ROUND(SUM(
+                       (COALESCE(e."salarioBase"::numeric, 0) / 30 * 1.33)
+                       * COALESCE(a."diasAfastamento", 0)
+                     ), 2) AS custo_ates
+              FROM atestados a
+              JOIN employees e ON e.id = a."employeeId"
+              WHERE a."companyId" = ${input.companyId}
+                AND a."deletedAt" IS NULL
+                AND e.id IN (SELECT "employeeId" FROM obra_funcionarios WHERE "obraId" = ${input.obraId} AND "companyId" = ${input.companyId})
+                AND a."dataEmissao" >= (CURRENT_DATE - INTERVAL '11 months')
+              GROUP BY TO_CHAR(a."dataEmissao", 'YYYY-MM')
+            ),
+            dds_agg AS (
+              SELECT TO_CHAR(data, 'YYYY-MM') AS mes, COUNT(*) AS dds
+              FROM dds_sessoes
+              WHERE company_id = ${input.companyId} AND obra_id = ${input.obraId}
+                AND status != 'cancelada' AND deleted_at IS NULL
+                AND data >= (CURRENT_DATE - INTERVAL '11 months')
+              GROUP BY TO_CHAR(data, 'YYYY-MM')
+            ),
+            acid_agg AS (
+              SELECT TO_CHAR("dataAcidente", 'YYYY-MM') AS mes, COUNT(*) AS acidentes
+              FROM accidents
+              WHERE "companyId" = ${input.companyId} AND obra_id = ${input.obraId}
+                AND "deletedAt" IS NULL
+                AND "dataAcidente" >= (CURRENT_DATE - INTERVAL '11 months')
+              GROUP BY TO_CHAR("dataAcidente", 'YYYY-MM')
+            )
+            SELECT m.mes,
+                   COALESCE(a.atestados, 0)  AS atestados,
+                   COALESCE(a.dias_ates, 0)  AS dias_ates,
+                   COALESCE(a.custo_ates, 0) AS custo_ates,
+                   COALESCE(d.dds, 0)        AS dds,
+                   COALESCE(c.acidentes, 0)  AS acidentes
+            FROM meses m
+            LEFT JOIN ates      a ON a.mes = m.mes
+            LEFT JOIN dds_agg   d ON d.mes = m.mes
+            LEFT JOIN acid_agg  c ON c.mes = m.mes
+            ORDER BY m.mes
           `);
           return r.rows as any[];
         }),
@@ -910,12 +999,16 @@ export const scorecardRouter = router({
       const ptAbertas         = pt.filter((p: any) => p.status === 'aberta' || p.status === 'aprovada').length;
       const totalAtestados    = atestados.length;
       const totalDiasAtestado = atestados.reduce((s: number, a: any) => s + (parseInt(String(a.diasAfastamento ?? 0)) || 0), 0);
+      const custoTotalAtestados = atestados.reduce((s: number, a: any) => s + parseFloat(String(a.custo_total ?? 0)), 0);
+      const custoSalarioAtestados = atestados.reduce((s: number, a: any) => s + parseFloat(String(a.custo_salario ?? 0)), 0);
+      const custoEncargosAtestados = atestados.reduce((s: number, a: any) => s + parseFloat(String(a.custo_encargos ?? 0)), 0);
+      const custoVrAtestados = atestados.reduce((s: number, a: any) => s + parseFloat(String(a.custo_vr ?? 0)), 0);
 
       return {
         clt, terceiros, treinamentosNorma,
         advertencias, advertenciasTerceiros,
         epiPorFuncionario, epiPorTipo,
-        acidentes, dds, apr, pt, atestados,
+        acidentes, dds, apr, pt, atestados, historico,
         resumo: {
           totalClt, totalTerceiros,
           cltSemAso, cltAsoVencido,
@@ -926,6 +1019,8 @@ export const scorecardRouter = router({
           totalDds, totalApr, aprAbertas,
           totalPt, ptAbertas,
           totalAtestados, totalDiasAtestado,
+          custoTotalAtestados, custoSalarioAtestados,
+          custoEncargosAtestados, custoVrAtestados,
         },
       };
     }),

@@ -1,4 +1,48 @@
 /**
+ * Rev. 4215 - SCORECARD: ABA SEGURANÇA — REDESIGN BOARD-LEVEL (FOTOS, GRÁFICOS, CUSTO ATESTADOS, DATAS BR, SELETOR MÊS/ANO).
+ *
+ * MELHORIA — Layout anterior considerado "bagunçado". Redesign completo para relatório de nível diretoria:
+ *   • Seletor de período mês/ano (navegação ‹/›, botão "Tudo") filtra acidentes, DDS, APR, PT, atestados.
+ *   • KPI Row 1 (5 cards): Efetivo CLT (+terceiros), Acidentes (graves), DDS realizados, APR/PT, Atestados (dias).
+ *   • KPI Row 2 (4 cards): Sem ASO, ASO Vencido, Advertências, Custo EPI.
+ *   • Banner de custo de atestados: Salário proporcional + Encargos 33% (FGTS+INSS Pat.+outros) + VR + TOTAL.
+ *   • 2 gráficos recharts (BarChart): Atestados/Mês e DDS/Mês — últimos 12 meses (sem filtro de período).
+ *   • Acidentes em destaque com borda vermelha (alert board-level) com datas DD/MM/AAAA.
+ *   • Tabela atestados com foto do funcionário (employees.fotoUrl), custo por linha + totalização no rodapé.
+ *   • Grade de fotos da equipe CLT: avatar (foto ou iniciais), badge ASO colorido, badge advertências.
+ *   • DDS, APR, PT, Advertências, Terceiros, EPI, Treinamentos: layout limpo com bordas coloridas por módulo.
+ *   • fDate() helper global para datas BR (DD/MM/AAAA). MESES_BR[] para labels dos gráficos.
+ *
+ * BACKEND — getSeguranca (server/routers/scorecard.ts):
+ *   • Input: adicionado mesRef?: string (filtro de período).
+ *   • mr = input.mesRef ?? null — filtro condicional: (mr::text IS NULL OR TO_CHAR(...) = mr).
+ *   • Q1 (CLT): adicionado e."fotoUrl" AS foto_url.
+ *   • Q8 (acidentes): filtro mesRef por TO_CHAR("dataAcidente", 'YYYY-MM').
+ *   • Q9 (DDS): filtro mesRef por TO_CHAR(data, 'YYYY-MM'). LIMIT 30→60.
+ *   • Q10 (APR): filtro mesRef por LEFT(data_emissao, 7). LIMIT 30→60.
+ *   • Q11 (PT): filtro mesRef por LEFT(data_emissao, 7). LIMIT 30→60.
+ *   • Q12 (atestados): reescrita completa — JOIN LATERAL em vr_benefits (valorDiario × dias),
+ *     cálculo de custo_salario (sal/30 × dias), custo_encargos (×0.33), custo_vr, custo_total.
+ *     Filtro mesRef + fotoUrl + salario_base expostos.
+ *   • Q13 (histórico, NOVO): CTE com generate_series 12 meses + LEFT JOIN de atestados/DDS/acidentes
+ *     por mês → array para recharts (sem filtro de período, sempre 12 meses).
+ *   • Resumo ganhou: custoTotalAtestados, custoSalarioAtestados, custoEncargosAtestados, custoVrAtestados.
+ *
+ * FRONTEND — ScorecardTab.tsx:
+ *   • Imports: adicionados Calendar, Activity, FileText, ClipboardCheck, Heart, Shield, UserCheck (lucide).
+ *   • Import recharts: BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell.
+ *   • Helpers globais: fDate(d) → "DD/MM/AAAA", MESES_BR[] para labels.
+ *   • Estado: segAno (number), segMes (string padded "01"–"12").
+ *   • segMesRef derivado de segAno+segMes; passado para getSeguranca query.
+ *   • Seletor de período: card white fora do bloco de dados (sempre visível), navegação ‹/› + botão "Tudo".
+ *   • Conteúdo redesenhado via IIFE com const d + const r + const chartData para clareza.
+ *
+ * ARQUIVOS: server/routers/scorecard.ts, client/src/pages/planejamento/ScorecardTab.tsx,
+ *           shared/version.ts, shared/changelog.ts, replit.md
+ * ZERO DELETE · ZERO ALTER destrutivo
+ */
+
+/**
  * Rev. 4214 - SCORECARD: ABA SEGURANÇA — APR, PT, DDS, ACIDENTES E ATESTADOS.
  *
  * MELHORIA — A aba "Segurança" do Scorecard exibia apenas ASO, treinamentos, EPI e advertências.

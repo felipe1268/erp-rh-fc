@@ -12,11 +12,23 @@ import {
   Trophy, ShieldCheck, BarChart3, BarChart2, ShoppingCart, Package, Star,
   Settings, Plus, Trash2, TrendingUp, TrendingDown, AlertTriangle,
   CheckCircle2, ChevronDown, ChevronUp, DollarSign, Loader2, Wrench,
-  Users, HardHat, RefreshCw, Info,
+  Users, HardHat, RefreshCw, Info, Calendar, Activity, FileText,
+  ClipboardCheck, Heart, Shield, UserCheck,
 } from "lucide-react";
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip as RcTooltip, ResponsiveContainer, Cell,
+} from "recharts";
 
 const fmt  = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fPct = (v: number) => `${v.toFixed(1)}%`;
+const fDate = (d: any): string => {
+  if (!d) return "—";
+  const s = String(d).slice(0, 10);
+  if (s.length < 10) return s;
+  const [y, m, dd] = s.split("-");
+  return `${dd}/${m}/${y}`;
+};
+const MESES_BR = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
 // ─── ScoreGauge ──────────────────────────────────────────────────────────────
 function ScoreGauge({ score, size = 120 }: { score: number; size?: number }) {
@@ -225,6 +237,8 @@ export default function ScorecardTab({ proj }: { proj: any }) {
   const [expandedBanco, setExpandedBanco] = useState<Set<number>>(new Set());
   const [rhAno,         setRhAno]         = useState(new Date().getFullYear());
   const [rhMes,         setRhMes]         = useState<string>("all");
+  const [segAno,        setSegAno]        = useState(new Date().getFullYear());
+  const [segMes,        setSegMes]        = useState<string>(String(new Date().getMonth() + 1).padStart(2, "0"));
 
   const enabled = !!obraId;
 
@@ -240,8 +254,9 @@ export default function ScorecardTab({ proj }: { proj: any }) {
     { companyId, obraId: obraId! },
     { enabled: enabled && (tabScore === "compras" || tabScore === "operacional"), staleTime: 120_000 }
   );
+  const segMesRef = segMes === "all" ? undefined : `${segAno}-${segMes}`;
   const analiseSeguranca = trpc.scorecard.getSeguranca.useQuery(
-    { companyId, obraId: obraId! },
+    { companyId, obraId: obraId!, mesRef: segMesRef },
     { enabled: enabled && tabScore === "seguranca", staleTime: 120_000 }
   );
   const rhMesInicio = rhMes === "all" ? `${rhAno}-01` : `${rhAno}-${rhMes}`;
@@ -1371,7 +1386,34 @@ export default function ScorecardTab({ proj }: { proj: any }) {
 
       {/* ════════════ TAB: SEGURANÇA ════════════ */}
       {tabScore === "seguranca" && (
-        <div className="space-y-4">
+        <div className="space-y-3">
+
+          {/* ── Seletor de Período ─────────────────────────────────────────── */}
+          <div className="flex items-center justify-between bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
+            <button onClick={() => {
+              const m = segMes === "all" ? 12 : parseInt(segMes);
+              const y = segMes === "all" ? segAno - 1 : (m === 1 ? segAno - 1 : segAno);
+              const nm = segMes === "all" ? 12 : (m === 1 ? 12 : m - 1);
+              setSegAno(y); setSegMes(String(nm).padStart(2, "0"));
+            }} className="p-1 rounded hover:bg-gray-100 text-gray-400">‹</button>
+            <div className="text-center">
+              <p className="text-[11px] font-bold text-gray-700">
+                {segMes === "all" ? "Acumulado (tudo)" : `${MESES_BR[parseInt(segMes)-1]} / ${segAno}`}
+              </p>
+              <p className="text-[9px] text-gray-400">Período de referência</p>
+            </div>
+            <button onClick={() => {
+              const m = segMes === "all" ? 1 : parseInt(segMes);
+              const y = segMes === "all" ? segAno + 1 : (m === 12 ? segAno + 1 : segAno);
+              const nm = segMes === "all" ? 1 : (m === 12 ? 1 : m + 1);
+              setSegAno(y); setSegMes(String(nm).padStart(2, "0"));
+            }} className="p-1 rounded hover:bg-gray-100 text-gray-400">›</button>
+            <button onClick={() => setSegMes("all")}
+              className={`ml-2 text-[9px] px-2 py-0.5 rounded-full border transition-colors ${segMes === "all" ? "bg-blue-100 text-blue-700 border-blue-200" : "text-gray-400 border-gray-200 hover:bg-gray-50"}`}>
+              Tudo
+            </button>
+          </div>
+
           {analiseSeguranca.isLoading ? (
             <div className="flex items-center justify-center py-12 gap-2 text-gray-400">
               <Loader2 className="w-5 h-5 animate-spin" />Carregando dados de segurança…
@@ -1380,396 +1422,484 @@ export default function ScorecardTab({ proj }: { proj: any }) {
             <p className="text-xs text-gray-400 py-8 text-center">Sem dados disponíveis.</p>
           ) : (
             <div className="space-y-4">
-              {/* ── KPIs — Linha 1: Acidentes / DDS / APR / PT / Atestados ── */}
-              <div className="grid grid-cols-5 gap-2">
-                {(() => {
-                  const r = analiseSeguranca.data.resumo;
-                  return [
-                    { label: "Acidentes",  v: String(r.totalAcidentes ?? 0),  color: (r.totalAcidentes ?? 0) > 0 ? "text-red-600 font-bold" : "text-gray-500", bg: (r.totalAcidentes ?? 0) > 0 ? "bg-red-50 border-red-200" : "bg-gray-50 border-gray-100" },
-                    { label: "DDS Realiz.", v: String(r.totalDds ?? 0),        color: (r.totalDds ?? 0) > 0 ? "text-green-700 font-bold" : "text-gray-500", bg: (r.totalDds ?? 0) > 0 ? "bg-green-50 border-green-100" : "bg-gray-50 border-gray-100" },
-                    { label: "APR Emitidas", v: String(r.totalApr ?? 0),       color: (r.totalApr ?? 0) > 0 ? "text-blue-700 font-bold" : "text-gray-500",  bg: "bg-gray-50 border-gray-100" },
-                    { label: "PT Emitidas", v: String(r.totalPt ?? 0),         color: (r.totalPt ?? 0) > 0 ? "text-purple-700 font-bold" : "text-gray-500", bg: "bg-gray-50 border-gray-100" },
-                    { label: "Atestados",  v: String(r.totalAtestados ?? 0),   color: (r.totalAtestados ?? 0) > 0 ? "text-amber-600 font-bold" : "text-gray-500", bg: (r.totalAtestados ?? 0) > 0 ? "bg-amber-50 border-amber-100" : "bg-gray-50 border-gray-100" },
-                  ].map((k, i) => (
-                    <div key={i} className={`rounded-lg border px-1.5 py-2 text-center ${k.bg}`}>
-                      <p className={`text-sm ${k.color}`}>{k.v}</p>
-                      <p className="text-[9px] text-gray-400 mt-0.5 leading-tight">{k.label}</p>
+              {/* ── Conteúdo principal da aba Segurança ─────────────────────── */}
+              {(() => {
+                const d      = analiseSeguranca.data!;
+                const r      = d.resumo;
+                const chartData = (d.historico ?? []).map((h: any) => {
+                  const [y, mm] = String(h.mes ?? "").split("-");
+                  return {
+                    mes: `${MESES_BR[parseInt(mm ?? "1") - 1]}/${String(y ?? "").slice(2)}`,
+                    atestados : parseInt(String(h.atestados ?? 0)),
+                    dds       : parseInt(String(h.dds ?? 0)),
+                    acidentes : parseInt(String(h.acidentes ?? 0)),
+                    custo_ates: parseFloat(String(h.custo_ates ?? 0)),
+                  };
+                });
+                const hasData = chartData.some(h => h.atestados > 0 || h.dds > 0 || h.acidentes > 0);
+
+                return (
+                  <>
+                    {/* ── LINHA 1: KPIs grandes ──────────────────────────────── */}
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {[
+                        { label: "Efetivo CLT",  v: r.totalClt ?? 0,      sub: `+${r.totalTerceiros ?? 0} terc.`, color: "text-gray-800", bg: "bg-white border-gray-200" },
+                        { label: "Acidentes",    v: r.totalAcidentes ?? 0, sub: `${r.totalGraves ?? 0} grave(s)`,  color: (r.totalAcidentes ?? 0) > 0 ? "text-red-600" : "text-gray-400",  bg: (r.totalAcidentes ?? 0) > 0 ? "bg-red-50 border-red-200" : "bg-gray-50 border-gray-100" },
+                        { label: "DDS",          v: r.totalDds ?? 0,       sub: "realizados",                     color: (r.totalDds ?? 0) > 0 ? "text-green-700" : "text-gray-400", bg: (r.totalDds ?? 0) > 0 ? "bg-green-50 border-green-200" : "bg-gray-50 border-gray-100" },
+                        { label: "APR / PT",     v: `${r.totalApr ?? 0}/${r.totalPt ?? 0}`, sub: `${(r.aprAbertas ?? 0) + (r.ptAbertas ?? 0)} ativ.`, color: "text-blue-700", bg: "bg-blue-50 border-blue-100" },
+                        { label: "Atestados",    v: r.totalAtestados ?? 0, sub: `${r.totalDiasAtestado ?? 0}d afas.`, color: (r.totalAtestados ?? 0) > 0 ? "text-amber-600" : "text-gray-400", bg: (r.totalAtestados ?? 0) > 0 ? "bg-amber-50 border-amber-200" : "bg-gray-50 border-gray-100" },
+                      ].map((k, i) => (
+                        <div key={i} className={`rounded-xl border px-1.5 py-2.5 text-center ${k.bg}`}>
+                          <p className={`text-base font-bold leading-none ${k.color}`}>{k.v}</p>
+                          <p className="text-[8px] text-gray-400 mt-0.5 leading-tight">{k.sub}</p>
+                          <p className="text-[9px] font-semibold text-gray-500 mt-1 leading-tight">{k.label}</p>
+                        </div>
+                      ))}
                     </div>
-                  ));
-                })()}
-              </div>
 
-              {/* ── KPIs — Linha 2: Efetivo / ASO / Advertências / EPI ── */}
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { label: "CLT na Obra",  v: String(analiseSeguranca.data.resumo.totalClt),          color: "text-gray-800" },
-                  { label: "Terceiros",    v: String(analiseSeguranca.data.resumo.totalTerceiros),     color: "text-gray-800" },
-                  { label: "Advertências", v: String(analiseSeguranca.data.resumo.totalAdvertencias),  color: analiseSeguranca.data.resumo.totalAdvertencias > 0 ? "text-red-600 font-bold" : "text-gray-500" },
-                  { label: "Sem ASO",      v: String(analiseSeguranca.data.resumo.cltSemAso),          color: analiseSeguranca.data.resumo.cltSemAso > 0 ? "text-amber-600 font-bold" : "text-gray-500" },
-                  { label: "ASO Vencido",  v: String(analiseSeguranca.data.resumo.cltAsoVencido),      color: analiseSeguranca.data.resumo.cltAsoVencido > 0 ? "text-red-600 font-bold" : "text-gray-500" },
-                  { label: "Custo EPI",    v: fmt(analiseSeguranca.data.resumo.totalCustoEpi),         color: "text-indigo-700" },
-                ].map((k, i) => (
-                  <div key={i} className="rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-2 text-center">
-                    <p className={`text-sm font-bold ${k.color}`}>{k.v}</p>
-                    <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{k.label}</p>
-                  </div>
-                ))}</div>
-
-              {/* Quadro CLT */}
-              {analiseSeguranca.data.clt.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5 flex items-center gap-1">
-                    <Users className="w-3 h-3" />Funcionários CLT ({analiseSeguranca.data.clt.length})
-                  </p>
-                  <div className="rounded border border-gray-100 overflow-hidden">
-                    <table className="w-full text-[10px]">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="text-left px-2 py-1.5 text-gray-500 font-semibold">Nome / Função</th>
-                          <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-16">ASO</th>
-                          <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-16">Trein.</th>
-                          <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-12">Advert.</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {analiseSeguranca.data.clt.map((e: any, i: number) => {
-                          const asoOk   = e.aso_status === "valido";
-                          const asoVenc = e.aso_status === "vencido";
-                          const trVal   = parseInt(String(e.treinamentos_validos  ?? 0));
-                          const trVenc  = parseInt(String(e.treinamentos_vencidos ?? 0));
-                          const adv     = parseInt(String(e.num_advertencias      ?? 0));
-                          return (
-                            <tr key={i} className={`border-t border-gray-50 ${adv > 0 ? "bg-red-50/50" : ""}`}>
-                              <td className="px-2 py-1.5">
-                                <p className="font-medium text-gray-800 truncate max-w-[130px]">{e.nome}</p>
-                                {e.cargo && <p className="text-gray-400 truncate max-w-[130px]">{e.cargo}</p>}
-                              </td>
-                              <td className="px-2 py-1.5 text-center">
-                                {asoOk ? <span className="text-green-600 font-bold">✓</span> : asoVenc ? <span className="text-red-600 font-bold" title={`Vencido em ${e.aso_validade}`}>!</span> : <span className="text-amber-500 font-bold">—</span>}
-                              </td>
-                              <td className="px-2 py-1.5 text-center">
-                                {trVal > 0 ? <span className="text-green-600 font-bold">{trVal}</span> : <span className="text-gray-300">0</span>}
-                                {trVenc > 0 && <span className="text-red-500 ml-0.5">({trVenc}v)</span>}
-                              </td>
-                              <td className="px-2 py-1.5 text-center">
-                                {adv > 0 ? <span className="text-red-600 font-bold">{adv}</span> : <span className="text-gray-300">—</span>}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                  <p className="text-[9px] text-gray-400 mt-1">ASO: ✓=válido  !=vencido  —=sem registro · Trein.: qtd válida (v=vencidos)</p>
-                </div>
-              )}
-
-              {/* Quadro Terceiros */}
-              {analiseSeguranca.data.terceiros.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5 flex items-center gap-1">
-                    <HardHat className="w-3 h-3" />Terceiros ({analiseSeguranca.data.terceiros.length})
-                    {analiseSeguranca.data.resumo.terceirosSemDoc > 0 && (
-                      <Badge className="ml-1 bg-amber-100 text-amber-700 text-[9px]">{analiseSeguranca.data.resumo.terceirosSemDoc} sem doc</Badge>
-                    )}
-                  </p>
-                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                    {analiseSeguranca.data.terceiros.map((t: any, i: number) => {
-                      const docs   = parseInt(String(t.docs_preenchidos ?? 0));
-                      const adv    = parseInt(String(t.num_advertencias ?? 0));
-                      const semDoc = docs === 0;
-                      return (
-                        <div key={i} className={`rounded border px-2.5 py-1.5 text-[10px] ${semDoc ? "border-amber-200 bg-amber-50" : adv > 0 ? "border-red-200 bg-red-50" : "border-gray-100 bg-gray-50"}`}>
-                          <div className="flex items-center gap-2">
-                            <span className="flex-1 font-medium text-gray-800 truncate">{t.nome}</span>
-                            <span className="text-gray-400 shrink-0">{t.empresa_nome}</span>
-                            {adv > 0 && <Badge className="bg-red-100 text-red-700 text-[9px]">{adv} advert.</Badge>}
-                            {semDoc ? <Badge className="bg-amber-100 text-amber-700 text-[9px]">⚠ Sem docs</Badge> : <Badge className="bg-green-100 text-green-700 text-[9px]">{docs} doc(s)</Badge>}
-                          </div>
-                          <div className="flex gap-3 mt-0.5 text-gray-400 flex-wrap">
-                            {t.funcao && <span>{t.funcao}</span>}
-                            <span>ASO: {t.aso_status === "valido" ? "✓" : t.aso_status === "vencido" ? "⚠ Vencido" : "—"}</span>
-                            {t.nr35_validade && <span>NR-35: {t.nr35_validade.slice(0, 10)}</span>}
-                            {t.nr10_validade && <span>NR-10: {t.nr10_validade.slice(0, 10)}</span>}
-                          </div>
+                    {/* ── LINHA 2: KPIs compliance ───────────────────────────── */}
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {[
+                        { label: "Sem ASO",     v: r.cltSemAso ?? 0,          color: (r.cltSemAso ?? 0) > 0 ? "text-amber-600" : "text-gray-400", bg: (r.cltSemAso ?? 0) > 0 ? "bg-amber-50 border-amber-100" : "bg-gray-50 border-gray-100" },
+                        { label: "ASO Vencido", v: r.cltAsoVencido ?? 0,       color: (r.cltAsoVencido ?? 0) > 0 ? "text-red-600" : "text-gray-400", bg: (r.cltAsoVencido ?? 0) > 0 ? "bg-red-50 border-red-100" : "bg-gray-50 border-gray-100" },
+                        { label: "Advertências",v: r.totalAdvertencias ?? 0,   color: (r.totalAdvertencias ?? 0) > 0 ? "text-red-600" : "text-gray-400", bg: (r.totalAdvertencias ?? 0) > 0 ? "bg-red-50 border-red-100" : "bg-gray-50 border-gray-100" },
+                        { label: "Custo EPI",   v: fmt(r.totalCustoEpi ?? 0),  color: "text-indigo-700", bg: "bg-indigo-50 border-indigo-100" },
+                      ].map((k, i) => (
+                        <div key={i} className={`rounded-lg border px-2 py-2 text-center ${k.bg}`}>
+                          <p className={`text-xs font-bold ${k.color}`}>{k.v}</p>
+                          <p className="text-[9px] text-gray-400 mt-0.5 leading-tight">{k.label}</p>
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+                      ))}
+                    </div>
 
-              {/* Treinamentos por norma */}
-              {analiseSeguranca.data.treinamentosNorma?.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Treinamentos por Norma</p>
-                  <div className="rounded border border-gray-100 overflow-hidden">
-                    <table className="w-full text-[10px]">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="text-left px-2 py-1.5 text-gray-500 font-semibold">Norma</th>
-                          <th className="text-right px-2 py-1.5 text-gray-500 font-semibold w-16">Total</th>
-                          <th className="text-right px-2 py-1.5 text-gray-500 font-semibold w-16">Válidos</th>
-                          <th className="text-right px-2 py-1.5 text-gray-500 font-semibold w-16">Vencidos</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {analiseSeguranca.data.treinamentosNorma.map((n: any, i: number) => {
-                          const venc = parseInt(String(n.total_funcionarios ?? 0)) - parseInt(String(n.validos ?? 0));
-                          return (
-                            <tr key={i} className={`border-t border-gray-50 ${venc > 0 ? "bg-red-50/40" : ""}`}>
-                              <td className="px-2 py-1.5 text-gray-700 font-medium">{n.norma}</td>
-                              <td className="px-2 py-1.5 text-right text-gray-500">{n.total_funcionarios}</td>
-                              <td className="px-2 py-1.5 text-right text-green-600 font-semibold">{n.validos}</td>
-                              <td className={`px-2 py-1.5 text-right font-semibold ${venc > 0 ? "text-red-600" : "text-gray-300"}`}>{venc > 0 ? venc : "—"}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {/* Advertências */}
-              {(analiseSeguranca.data.advertencias.length > 0 || analiseSeguranca.data.advertenciasTerceiros.length > 0) && (
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-red-500 mb-1.5 flex items-center gap-1">
-                    <AlertTriangle className="w-3 h-3" />Advertências ({analiseSeguranca.data.resumo.totalAdvertencias})
-                  </p>
-                  <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
-                    {[...analiseSeguranca.data.advertencias.map((w: any) => ({ ...w, tipo: "clt" })),
-                      ...analiseSeguranca.data.advertenciasTerceiros.map((w: any) => ({ ...w, tipo: "terceiro" }))]
-                      .sort((a: any, b: any) => (b.data_ocorrencia ?? "").localeCompare(a.data_ocorrencia ?? ""))
-                      .map((w: any, i: number) => (
-                      <div key={i} className="flex items-start gap-2 rounded bg-red-50 border border-red-100 px-2.5 py-1.5 text-[10px]">
-                        <div className="flex-1">
-                          <span className="font-semibold text-red-700">{w.tipo_advertencia}</span>
-                          <span className="text-gray-400 mx-1">·</span>
-                          <span className="text-gray-700">{w.funcionario_nome}</span>
-                          {w.tipo === "terceiro" && w.empresa_nome && <span className="text-gray-400 ml-1">({w.empresa_nome})</span>}
-                          {w.motivo && <p className="text-gray-500 mt-0.5 truncate">{w.motivo}</p>}
+                    {/* ── LINHA 3: Custo total de atestados (destaque financeiro) */}
+                    {(r.totalAtestados ?? 0) > 0 && (
+                      <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5">
+                        <p className="text-[9px] font-bold uppercase tracking-wide text-amber-700 mb-1.5">Custo estimado de atestados</p>
+                        <div className="grid grid-cols-4 gap-1 text-center">
+                          {[
+                            { label: "Salário", v: fmt(r.custoSalarioAtestados ?? 0), color: "text-amber-700" },
+                            { label: "+ Encargos (33%)", v: fmt(r.custoEncargosAtestados ?? 0), color: "text-orange-700" },
+                            { label: "+ VR/VA", v: fmt(r.custoVrAtestados ?? 0), color: "text-yellow-700" },
+                            { label: "TOTAL", v: fmt(r.custoTotalAtestados ?? 0), color: "text-red-700 font-bold text-sm" },
+                          ].map((k, i) => (
+                            <div key={i} className="bg-white/70 rounded-lg px-1 py-1.5">
+                              <p className={`text-xs font-bold leading-tight ${k.color}`}>{k.v}</p>
+                              <p className="text-[8px] text-gray-500 leading-tight mt-0.5">{k.label}</p>
+                            </div>
+                          ))}
                         </div>
-                        <span className="text-gray-400 shrink-0">{w.data_ocorrencia}</span>
+                        <p className="text-[8px] text-amber-600 mt-1.5">* Salário proporcional (÷30×dias) + encargos (FGTS 8% + INSS Patronal 20% + outros 5%) + VR diário</p>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                    )}
 
-              {/* EPI Curva ABC */}
-              {analiseSeguranca.data.epiPorTipo.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Curva ABC — Consumo de EPI</p>
-                  <div className="rounded border border-gray-100 overflow-hidden">
-                    <table className="w-full text-[10px]">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="text-left px-2 py-1.5 text-gray-500 font-semibold w-6">Cl.</th>
-                          <th className="text-left px-2 py-1.5 text-gray-500 font-semibold">EPI</th>
-                          <th className="text-right px-2 py-1.5 text-gray-500 font-semibold w-20">Custo</th>
-                          <th className="text-right px-2 py-1.5 text-gray-500 font-semibold w-10">Un.</th>
-                          <th className="text-right px-2 py-1.5 text-gray-500 font-semibold w-10">Func.</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {analiseSeguranca.data.epiPorTipo.map((ep: any, i: number) => (
-                          <tr key={i} className="border-t border-gray-50">
-                            <td className="px-2 py-1"><span className={`font-bold text-xs ${ep.classe_abc === "A" ? "text-green-600" : ep.classe_abc === "B" ? "text-blue-600" : "text-gray-400"}`}>{ep.classe_abc}</span></td>
-                            <td className="px-2 py-1 text-gray-700 max-w-[130px] truncate">{ep.epi_nome}</td>
-                            <td className="px-2 py-1 text-right font-semibold text-gray-700">{fmt(parseFloat(String(ep.custo_total ?? 0)))}</td>
-                            <td className="px-2 py-1 text-right text-gray-400">{ep.total_unidades}</td>
-                            <td className="px-2 py-1 text-right text-gray-400">{ep.num_funcionarios}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {/* ── ACIDENTES / INCIDENTES ─────────────────────────────────────── */}
-              {(analiseSeguranca.data.acidentes?.length ?? 0) > 0 && (
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-red-500 mb-1.5 flex items-center gap-1">
-                    <AlertTriangle className="w-3 h-3" />Acidentes / Incidentes ({analiseSeguranca.data.acidentes.length})
-                  </p>
-                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                    {analiseSeguranca.data.acidentes.map((a: any, i: number) => {
-                      const grave = a.gravidade === "Grave" || a.gravidade === "Com Afastamento";
-                      return (
-                        <div key={i} className={`rounded border px-2.5 py-1.5 text-[10px] ${grave ? "border-red-200 bg-red-50" : "border-orange-100 bg-orange-50"}`}>
-                          <div className="flex items-center gap-2">
-                            <span className={`font-bold shrink-0 ${grave ? "text-red-600" : "text-orange-600"}`}>{a.gravidade}</span>
-                            <span className="flex-1 font-medium text-gray-700 truncate">{a.funcionario_nome ?? "—"}</span>
-                            <span className="text-gray-400 shrink-0">{a.dataAcidente ?? ""}</span>
-                          </div>
-                          <div className="flex gap-3 mt-0.5 text-gray-500 flex-wrap">
-                            <span>{a.tipoAcidente}</span>
-                            {(parseInt(String(a.diasAfastamento ?? 0)) > 0) && <span className="text-red-600 font-semibold">{a.diasAfastamento}d afastamento</span>}
-                            {a.localAcidente && <span>{a.localAcidente}</span>}
-                            <span className={`${a.status_acao === "Concluída" ? "text-green-600" : "text-amber-600"}`}>Ação: {a.status_acao ?? "Pendente"}</span>
-                          </div>
+                    {/* ── LINHA 4: Gráficos de tendência ─────────────────────── */}
+                    {hasData && (
+                      <div className="grid grid-cols-2 gap-2">
+                        {/* Gráfico: Atestados por mês */}
+                        <div className="bg-white border border-gray-100 rounded-xl px-2 pt-2 pb-1">
+                          <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wide mb-1">Atestados / Mês</p>
+                          <ResponsiveContainer width="100%" height={90}>
+                            <BarChart data={chartData} barSize={10} margin={{ top: 0, right: 2, left: -22, bottom: 0 }}>
+                              <XAxis dataKey="mes" tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                              <YAxis tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                              <RcTooltip contentStyle={{ fontSize: 10 }} formatter={(v: any) => [v, "Atestados"]} />
+                              <Bar dataKey="atestados" radius={[2, 2, 0, 0]}>
+                                {chartData.map((_: any, i: number) => (
+                                  <Cell key={i} fill={chartData[i].atestados > 0 ? "#f59e0b" : "#e5e7eb"} />
+                                ))}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* ── DDS ─────────────────────────────────────────────────────────── */}
-              {(analiseSeguranca.data.dds?.length ?? 0) > 0 && (
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-green-600 mb-1.5 flex items-center gap-1">
-                    <span className="text-xs">📋</span>DDS — Diálogo Diário de Segurança ({analiseSeguranca.data.dds.length})
-                  </p>
-                  <div className="rounded border border-gray-100 overflow-hidden">
-                    <table className="w-full text-[10px]">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="text-left px-2 py-1.5 text-gray-500 font-semibold">Tema</th>
-                          <th className="text-left px-2 py-1.5 text-gray-500 font-semibold w-24">Instrutor</th>
-                          <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-16">Data</th>
-                          <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-14">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {analiseSeguranca.data.dds.slice(0, 10).map((d: any, i: number) => (
-                          <tr key={i} className="border-t border-gray-50">
-                            <td className="px-2 py-1.5 text-gray-700 truncate max-w-[140px]">{d.titulo_tema}</td>
-                            <td className="px-2 py-1.5 text-gray-400 truncate max-w-[90px]">{d.instrutor ?? "—"}</td>
-                            <td className="px-2 py-1.5 text-center text-gray-400">{d.data}</td>
-                            <td className="px-2 py-1.5 text-center">
-                              <span className={`font-semibold ${d.status === "finalizada" ? "text-green-600" : "text-amber-600"}`}>{d.status === "finalizada" ? "✓" : d.status}</span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {/* ── APR ─────────────────────────────────────────────────────────── */}
-              {(analiseSeguranca.data.apr?.length ?? 0) > 0 && (
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-600 mb-1.5 flex items-center gap-1">
-                    <span className="text-xs">🔍</span>APR — Análise Preliminar de Risco ({analiseSeguranca.data.apr.length})
-                    {(analiseSeguranca.data.resumo.aprAbertas ?? 0) > 0 && (
-                      <Badge className="ml-1 bg-blue-100 text-blue-700 text-[9px]">{analiseSeguranca.data.resumo.aprAbertas} ativas</Badge>
+                        {/* Gráfico: DDS por mês */}
+                        <div className="bg-white border border-gray-100 rounded-xl px-2 pt-2 pb-1">
+                          <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wide mb-1">DDS / Mês</p>
+                          <ResponsiveContainer width="100%" height={90}>
+                            <BarChart data={chartData} barSize={10} margin={{ top: 0, right: 2, left: -22, bottom: 0 }}>
+                              <XAxis dataKey="mes" tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                              <YAxis tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                              <RcTooltip contentStyle={{ fontSize: 10 }} formatter={(v: any) => [v, "DDS"]} />
+                              <Bar dataKey="dds" radius={[2, 2, 0, 0]}>
+                                {chartData.map((_: any, i: number) => (
+                                  <Cell key={i} fill={chartData[i].dds > 0 ? "#16a34a" : "#e5e7eb"} />
+                                ))}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
                     )}
-                  </p>
-                  <div className="rounded border border-gray-100 overflow-hidden">
-                    <table className="w-full text-[10px]">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="text-left px-2 py-1.5 text-gray-500 font-semibold w-14">Nº</th>
-                          <th className="text-left px-2 py-1.5 text-gray-500 font-semibold">Atividade</th>
-                          <th className="text-left px-2 py-1.5 text-gray-500 font-semibold w-24">Responsável</th>
-                          <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-16">Data</th>
-                          <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-16">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {analiseSeguranca.data.apr.slice(0, 10).map((a: any, i: number) => (
-                          <tr key={i} className="border-t border-gray-50">
-                            <td className="px-2 py-1.5 font-mono text-gray-500">{a.numero}</td>
-                            <td className="px-2 py-1.5 text-gray-700 truncate max-w-[120px]">{a.atividade ?? "—"}</td>
-                            <td className="px-2 py-1.5 text-gray-400 truncate max-w-[90px]">{a.responsavel_nome ?? "—"}</td>
-                            <td className="px-2 py-1.5 text-center text-gray-400">{a.data_emissao ?? "—"}</td>
-                            <td className="px-2 py-1.5 text-center">
-                              <span className={`font-semibold capitalize ${a.status === "aprovada" || a.status === "aberta" ? "text-blue-600" : a.status === "fechada" ? "text-green-600" : "text-gray-400"}`}>{a.status}</span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
 
-              {/* ── PT ──────────────────────────────────────────────────────────── */}
-              {(analiseSeguranca.data.pt?.length ?? 0) > 0 && (
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-purple-600 mb-1.5 flex items-center gap-1">
-                    <span className="text-xs">📝</span>PT — Permissão de Trabalho ({analiseSeguranca.data.pt.length})
-                    {(analiseSeguranca.data.resumo.ptAbertas ?? 0) > 0 && (
-                      <Badge className="ml-1 bg-purple-100 text-purple-700 text-[9px]">{analiseSeguranca.data.resumo.ptAbertas} ativas</Badge>
+                    {/* ── ACIDENTES / INCIDENTES (alert em destaque) ─────────── */}
+                    {d.acidentes.length > 0 && (
+                      <div className="rounded-xl border-2 border-red-300 bg-red-50 p-3">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-red-600 mb-2 flex items-center gap-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5" />Acidentes / Incidentes — {d.acidentes.length} ocorrência(s)
+                        </p>
+                        <div className="space-y-2">
+                          {d.acidentes.map((a: any, i: number) => {
+                            const grave = a.gravidade === "Grave" || a.gravidade === "Com Afastamento";
+                            return (
+                              <div key={i} className={`rounded-lg border px-2.5 py-2 text-[10px] ${grave ? "border-red-300 bg-white" : "border-orange-200 bg-orange-50"}`}>
+                                <div className="flex items-start gap-2">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className={`font-bold ${grave ? "text-red-600" : "text-orange-600"}`}>{a.gravidade}</span>
+                                      {parseInt(String(a.diasAfastamento ?? 0)) > 0 && (
+                                        <span className="bg-red-100 text-red-700 text-[9px] font-bold px-1 rounded">{a.diasAfastamento}d afastamento</span>
+                                      )}
+                                    </div>
+                                    <p className="font-semibold text-gray-800 mt-0.5">{a.funcionario_nome ?? "—"}</p>
+                                    <div className="flex gap-2 text-gray-500 mt-0.5 flex-wrap">
+                                      {a.tipoAcidente && <span>{a.tipoAcidente}</span>}
+                                      {a.localAcidente && <span>· {a.localAcidente}</span>}
+                                      <span className={a.status_acao === "Concluída" ? "text-green-600" : "text-amber-600"}>· Ação: {a.status_acao ?? "Pendente"}</span>
+                                    </div>
+                                  </div>
+                                  <span className="text-gray-400 shrink-0 text-[9px]">{fDate(a.dataAcidente)}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
                     )}
-                  </p>
-                  <div className="rounded border border-gray-100 overflow-hidden">
-                    <table className="w-full text-[10px]">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="text-left px-2 py-1.5 text-gray-500 font-semibold w-14">Nº</th>
-                          <th className="text-left px-2 py-1.5 text-gray-500 font-semibold">Descrição</th>
-                          <th className="text-left px-2 py-1.5 text-gray-500 font-semibold w-24">Responsável</th>
-                          <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-16">Data</th>
-                          <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-16">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {analiseSeguranca.data.pt.slice(0, 10).map((p: any, i: number) => (
-                          <tr key={i} className="border-t border-gray-50">
-                            <td className="px-2 py-1.5 font-mono text-gray-500">{p.numero}</td>
-                            <td className="px-2 py-1.5 text-gray-700 truncate max-w-[120px]">{p.descricao_trabalho ?? "—"}</td>
-                            <td className="px-2 py-1.5 text-gray-400 truncate max-w-[90px]">{p.responsavel_nome ?? "—"}</td>
-                            <td className="px-2 py-1.5 text-center text-gray-400">{p.data_emissao ?? "—"}</td>
-                            <td className="px-2 py-1.5 text-center">
-                              <span className={`font-semibold capitalize ${p.status === "aprovada" || p.status === "aberta" ? "text-purple-600" : p.status === "fechada" ? "text-green-600" : "text-gray-400"}`}>{p.status}</span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
 
-              {/* ── ATESTADOS ───────────────────────────────────────────────────── */}
-              {(analiseSeguranca.data.atestados?.length ?? 0) > 0 && (
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-600 mb-1.5 flex items-center gap-1">
-                    <span className="text-xs">🏥</span>Atestados Médicos ({analiseSeguranca.data.atestados.length})
-                    {(analiseSeguranca.data.resumo.totalDiasAtestado ?? 0) > 0 && (
-                      <Badge className="ml-1 bg-amber-100 text-amber-700 text-[9px]">{analiseSeguranca.data.resumo.totalDiasAtestado} dias afastamento</Badge>
+                    {/* ── ATESTADOS: tabela com custo ─────────────────────────── */}
+                    {d.atestados.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700 mb-1.5 flex items-center gap-1">
+                          <Heart className="w-3 h-3" />Atestados Médicos ({d.atestados.length})
+                          <span className="ml-1 text-[9px] font-normal text-gray-400">com custo estimado</span>
+                        </p>
+                        <div className="rounded-xl border border-amber-200 overflow-hidden">
+                          <table className="w-full text-[10px]">
+                            <thead className="bg-amber-50">
+                              <tr>
+                                <th className="text-left px-2 py-1.5 text-gray-500 font-semibold">Funcionário</th>
+                                <th className="text-center px-1.5 py-1.5 text-gray-500 font-semibold w-14">Data</th>
+                                <th className="text-center px-1.5 py-1.5 text-gray-500 font-semibold w-8">Dias</th>
+                                <th className="text-right px-1.5 py-1.5 text-gray-500 font-semibold w-16">Salário</th>
+                                <th className="text-right px-1.5 py-1.5 text-gray-500 font-semibold w-16">Encargos</th>
+                                <th className="text-right px-1.5 py-1.5 text-gray-500 font-semibold w-14">VR</th>
+                                <th className="text-right px-1.5 py-1.5 text-amber-700 font-bold w-18">Total</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {d.atestados.map((a: any, i: number) => {
+                                const dias     = parseInt(String(a.diasAfastamento ?? 0));
+                                const cSal     = parseFloat(String(a.custo_salario ?? 0));
+                                const cEnc     = parseFloat(String(a.custo_encargos ?? 0));
+                                const cVr      = parseFloat(String(a.custo_vr ?? 0));
+                                const cTotal   = parseFloat(String(a.custo_total ?? 0));
+                                const primeiroNome = String(a.funcionario_nome ?? "").split(" ").slice(0, 2).join(" ");
+                                return (
+                                  <tr key={i} className="border-t border-amber-100 hover:bg-amber-50/40">
+                                    <td className="px-2 py-1.5">
+                                      <div className="flex items-center gap-1.5">
+                                        {a.foto_url ? (
+                                          <img src={a.foto_url} alt={primeiroNome} className="w-5 h-5 rounded-full object-cover shrink-0" />
+                                        ) : (
+                                          <div className="w-5 h-5 rounded-full bg-amber-200 text-amber-700 text-[8px] font-bold flex items-center justify-center shrink-0">
+                                            {String(a.funcionario_nome ?? "?").split(" ").slice(0, 2).map((n: string) => n[0]).join("")}
+                                          </div>
+                                        )}
+                                        <div>
+                                          <p className="font-medium text-gray-800 leading-tight">{primeiroNome}</p>
+                                          {a.cid && <p className="text-gray-400 leading-tight font-mono">{a.cid}</p>}
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="px-1.5 py-1.5 text-center text-gray-400">{fDate(a.dataEmissao ?? a.dataemissao)}</td>
+                                    <td className="px-1.5 py-1.5 text-center">
+                                      {dias > 0 ? <span className="text-amber-600 font-bold">{dias}</span> : <span className="text-gray-300">—</span>}
+                                    </td>
+                                    <td className="px-1.5 py-1.5 text-right text-gray-600">{cSal > 0 ? fmt(cSal) : <span className="text-gray-300">—</span>}</td>
+                                    <td className="px-1.5 py-1.5 text-right text-orange-600">{cEnc > 0 ? fmt(cEnc) : <span className="text-gray-300">—</span>}</td>
+                                    <td className="px-1.5 py-1.5 text-right text-yellow-600">{cVr > 0 ? fmt(cVr) : <span className="text-gray-300">—</span>}</td>
+                                    <td className="px-1.5 py-1.5 text-right font-bold text-amber-700">{cTotal > 0 ? fmt(cTotal) : <span className="text-gray-300">—</span>}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                            {d.atestados.length > 1 && (
+                              <tfoot className="bg-amber-100">
+                                <tr>
+                                  <td colSpan={3} className="px-2 py-1.5 font-bold text-amber-800 text-[9px] uppercase">Total {d.atestados.length} atestados · {r.totalDiasAtestado ?? 0} dias</td>
+                                  <td className="px-1.5 py-1.5 text-right font-bold text-gray-700">{fmt(r.custoSalarioAtestados ?? 0)}</td>
+                                  <td className="px-1.5 py-1.5 text-right font-bold text-orange-700">{fmt(r.custoEncargosAtestados ?? 0)}</td>
+                                  <td className="px-1.5 py-1.5 text-right font-bold text-yellow-700">{fmt(r.custoVrAtestados ?? 0)}</td>
+                                  <td className="px-1.5 py-1.5 text-right font-bold text-amber-800">{fmt(r.custoTotalAtestados ?? 0)}</td>
+                                </tr>
+                              </tfoot>
+                            )}
+                          </table>
+                        </div>
+                      </div>
                     )}
-                  </p>
-                  <div className="rounded border border-gray-100 overflow-hidden">
-                    <table className="w-full text-[10px]">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="text-left px-2 py-1.5 text-gray-500 font-semibold">Funcionário</th>
-                          <th className="text-left px-2 py-1.5 text-gray-500 font-semibold w-20">Tipo</th>
-                          <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-16">Data</th>
-                          <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-12">Dias</th>
-                          <th className="text-left px-2 py-1.5 text-gray-500 font-semibold w-14">CID</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {analiseSeguranca.data.atestados.map((a: any, i: number) => {
-                          const dias = parseInt(String(a.diasAfastamento ?? 0));
-                          return (
-                            <tr key={i} className={`border-t border-gray-50 ${dias > 0 ? "bg-amber-50/40" : ""}`}>
-                              <td className="px-2 py-1.5 font-medium text-gray-700 truncate max-w-[120px]">{a.funcionario_nome}</td>
-                              <td className="px-2 py-1.5 text-gray-500 truncate">{a.tipo}</td>
-                              <td className="px-2 py-1.5 text-center text-gray-400">{a.dataEmissao ?? a.dataemissao ?? ""}</td>
-                              <td className="px-2 py-1.5 text-center">
-                                {dias > 0 ? <span className="text-amber-600 font-bold">{dias}d</span> : <span className="text-gray-300">—</span>}
-                              </td>
-                              <td className="px-2 py-1.5 text-gray-400 font-mono">{a.cid ?? "—"}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
 
-              {analiseSeguranca.data.clt.length === 0 && analiseSeguranca.data.terceiros.length === 0 && (
-                <p className="text-xs text-gray-400 text-center py-8">Nenhum colaborador cadastrado nesta obra.</p>
-              )}
+                    {/* ── EQUIPE CLT: Fotos + status ─────────────────────────── */}
+                    {d.clt.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-2 flex items-center gap-1.5">
+                          <UserCheck className="w-3 h-3" />Equipe CLT na Obra ({d.clt.length})
+                        </p>
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {d.clt.map((e: any, i: number) => {
+                            const asoOk   = e.aso_status === "valido";
+                            const asoVenc = e.aso_status === "vencido";
+                            const adv     = parseInt(String(e.num_advertencias ?? 0));
+                            const prNome  = String(e.nome ?? "").split(" ").slice(0, 2).join(" ");
+                            const initials = String(e.nome ?? "?").split(" ").slice(0, 2).map((n: string) => n[0]).join("");
+                            return (
+                              <div key={i} className={`flex flex-col items-center gap-1 rounded-xl border px-1.5 py-2 ${adv > 0 ? "border-red-200 bg-red-50" : !asoOk ? "border-amber-200 bg-amber-50" : "border-gray-100 bg-white"}`}>
+                                {e.foto_url ? (
+                                  <img src={e.foto_url} alt={prNome} className="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm" />
+                                ) : (
+                                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold border-2 border-white shadow-sm ${adv > 0 ? "bg-red-200 text-red-700" : !asoOk ? "bg-amber-200 text-amber-700" : "bg-gray-200 text-gray-600"}`}>
+                                    {initials}
+                                  </div>
+                                )}
+                                <p className="text-[9px] font-semibold text-gray-700 text-center leading-tight line-clamp-2">{prNome}</p>
+                                <div className="flex flex-wrap gap-0.5 justify-center">
+                                  <span className={`text-[8px] px-1 py-0.5 rounded-full font-semibold ${asoOk ? "bg-green-100 text-green-700" : asoVenc ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-500"}`}>
+                                    {asoOk ? "ASO ✓" : asoVenc ? "ASO !" : "Sem ASO"}
+                                  </span>
+                                  {adv > 0 && <span className="text-[8px] px-1 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold">{adv} adv.</span>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── DDS ────────────────────────────────────────────────── */}
+                    {d.dds.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-green-700 mb-1.5 flex items-center gap-1.5">
+                          <ClipboardCheck className="w-3 h-3" />DDS — Diálogo Diário de Segurança ({d.dds.length})
+                        </p>
+                        <div className="rounded-xl border border-green-200 overflow-hidden">
+                          <table className="w-full text-[10px]">
+                            <thead className="bg-green-50">
+                              <tr>
+                                <th className="text-left px-2 py-1.5 text-gray-500 font-semibold">Tema</th>
+                                <th className="text-left px-2 py-1.5 text-gray-500 font-semibold w-20">Instrutor</th>
+                                <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-18">Data</th>
+                                <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-14">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {d.dds.slice(0, 15).map((dd: any, i: number) => (
+                                <tr key={i} className="border-t border-green-50">
+                                  <td className="px-2 py-1.5 text-gray-700 truncate max-w-[130px]">{dd.titulo_tema ?? "—"}</td>
+                                  <td className="px-2 py-1.5 text-gray-400 truncate">{dd.instrutor ?? "—"}</td>
+                                  <td className="px-2 py-1.5 text-center text-gray-400">{fDate(dd.data)}</td>
+                                  <td className="px-2 py-1.5 text-center">
+                                    <span className={`font-semibold ${dd.status === "finalizada" ? "text-green-600" : "text-amber-600"}`}>{dd.status === "finalizada" ? "✓" : dd.status}</span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── APR + PT (lado a lado se ambos existem) ─────────────── */}
+                    {(d.apr.length > 0 || d.pt.length > 0) && (
+                      <div className="grid grid-cols-1 gap-2">
+                        {d.apr.length > 0 && (
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-wide text-blue-700 mb-1.5 flex items-center gap-1.5">
+                              <Shield className="w-3 h-3" />APR — Análise de Risco ({d.apr.length})
+                              {(r.aprAbertas ?? 0) > 0 && <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-semibold">{r.aprAbertas} ativas</span>}
+                            </p>
+                            <div className="rounded-xl border border-blue-100 overflow-hidden">
+                              <table className="w-full text-[10px]">
+                                <thead className="bg-blue-50">
+                                  <tr>
+                                    <th className="text-left px-2 py-1.5 text-gray-500 font-semibold">Atividade</th>
+                                    <th className="text-left px-2 py-1.5 text-gray-500 font-semibold w-22">Responsável</th>
+                                    <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-18">Data</th>
+                                    <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-14">Status</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {d.apr.slice(0, 12).map((a: any, i: number) => (
+                                    <tr key={i} className="border-t border-blue-50">
+                                      <td className="px-2 py-1.5 text-gray-700 truncate max-w-[120px]">{a.atividade ?? a.numero ?? "—"}</td>
+                                      <td className="px-2 py-1.5 text-gray-400 truncate">{a.responsavel_nome ?? "—"}</td>
+                                      <td className="px-2 py-1.5 text-center text-gray-400">{fDate(a.data_emissao)}</td>
+                                      <td className="px-2 py-1.5 text-center">
+                                        <span className={`font-semibold capitalize ${a.status === "aprovada" || a.status === "aberta" ? "text-blue-600" : a.status === "fechada" ? "text-green-600" : "text-gray-400"}`}>{a.status}</span>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+                        {d.pt.length > 0 && (
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-wide text-purple-700 mb-1.5 flex items-center gap-1.5">
+                              <FileText className="w-3 h-3" />PT — Permissão de Trabalho ({d.pt.length})
+                              {(r.ptAbertas ?? 0) > 0 && <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-semibold">{r.ptAbertas} ativas</span>}
+                            </p>
+                            <div className="rounded-xl border border-purple-100 overflow-hidden">
+                              <table className="w-full text-[10px]">
+                                <thead className="bg-purple-50">
+                                  <tr>
+                                    <th className="text-left px-2 py-1.5 text-gray-500 font-semibold">Descrição</th>
+                                    <th className="text-left px-2 py-1.5 text-gray-500 font-semibold w-22">Responsável</th>
+                                    <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-18">Data</th>
+                                    <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-14">Status</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {d.pt.slice(0, 12).map((p: any, i: number) => (
+                                    <tr key={i} className="border-t border-purple-50">
+                                      <td className="px-2 py-1.5 text-gray-700 truncate max-w-[120px]">{p.descricao_trabalho ?? p.numero ?? "—"}</td>
+                                      <td className="px-2 py-1.5 text-gray-400 truncate">{p.responsavel_nome ?? "—"}</td>
+                                      <td className="px-2 py-1.5 text-center text-gray-400">{fDate(p.data_emissao)}</td>
+                                      <td className="px-2 py-1.5 text-center">
+                                        <span className={`font-semibold capitalize ${p.status === "aprovada" || p.status === "aberta" ? "text-purple-600" : p.status === "fechada" ? "text-green-600" : "text-gray-400"}`}>{p.status}</span>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ── ADVERTÊNCIAS ────────────────────────────────────────── */}
+                    {(d.advertencias.length + d.advertenciasTerceiros.length) > 0 && (
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-red-600 mb-1.5 flex items-center gap-1.5">
+                          <AlertTriangle className="w-3 h-3" />Advertências ({r.totalAdvertencias ?? 0})
+                        </p>
+                        <div className="space-y-1 max-h-44 overflow-y-auto pr-1">
+                          {[...d.advertencias.map((w: any) => ({ ...w, _tipo: "clt" })),
+                            ...d.advertenciasTerceiros.map((w: any) => ({ ...w, _tipo: "terceiro" }))]
+                            .sort((a: any, b: any) => (b.data_ocorrencia ?? "").localeCompare(a.data_ocorrencia ?? ""))
+                            .map((w: any, i: number) => (
+                              <div key={i} className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-100 px-2.5 py-1.5 text-[10px]">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1 flex-wrap">
+                                    <span className="font-bold text-red-700">{w.tipo_advertencia}</span>
+                                    <span className="text-gray-700 truncate">· {w.funcionario_nome}</span>
+                                    {w._tipo === "terceiro" && w.empresa_nome && <span className="text-gray-400">({w.empresa_nome})</span>}
+                                  </div>
+                                  {w.motivo && <p className="text-gray-500 mt-0.5 truncate">{w.motivo}</p>}
+                                </div>
+                                <span className="text-gray-400 shrink-0">{fDate(w.data_ocorrencia)}</span>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── TERCEIROS (condensado) ──────────────────────────────── */}
+                    {d.terceiros.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-1.5 flex items-center gap-1.5">
+                          <HardHat className="w-3 h-3" />Terceiros ({d.terceiros.length})
+                          {(r.terceirosSemDoc ?? 0) > 0 && <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-semibold">{r.terceirosSemDoc} sem doc</span>}
+                        </p>
+                        <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
+                          {d.terceiros.map((t: any, i: number) => {
+                            const docs   = parseInt(String(t.docs_preenchidos ?? 0));
+                            const adv    = parseInt(String(t.num_advertencias ?? 0));
+                            const semDoc = docs === 0;
+                            return (
+                              <div key={i} className={`rounded-lg border px-2 py-1.5 text-[10px] flex items-center gap-2 ${semDoc ? "border-amber-200 bg-amber-50" : adv > 0 ? "border-red-200 bg-red-50" : "border-gray-100 bg-gray-50"}`}>
+                                <div className="flex-1 min-w-0">
+                                  <span className="font-medium text-gray-800">{t.nome}</span>
+                                  {t.empresa_nome && <span className="text-gray-400 ml-1">· {t.empresa_nome}</span>}
+                                </div>
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold shrink-0 ${t.aso_status === "valido" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>ASO {t.aso_status === "valido" ? "✓" : "!"}</span>
+                                {semDoc ? <span className="text-[9px] bg-amber-100 text-amber-700 px-1 py-0.5 rounded shrink-0">Sem docs</span> : <span className="text-[9px] bg-green-100 text-green-700 px-1 py-0.5 rounded shrink-0">{docs}doc</span>}
+                                {adv > 0 && <span className="text-[9px] bg-red-100 text-red-700 px-1 py-0.5 rounded shrink-0">{adv}adv</span>}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── EPI Curva ABC (condensado) ──────────────────────────── */}
+                    {d.epiPorTipo.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">EPI — Curva ABC de Consumo</p>
+                        <div className="rounded-xl border border-gray-100 overflow-hidden">
+                          <table className="w-full text-[10px]">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="text-left px-2 py-1 text-gray-500 font-semibold w-5">Cl.</th>
+                                <th className="text-left px-2 py-1 text-gray-500 font-semibold">EPI</th>
+                                <th className="text-right px-2 py-1 text-gray-500 font-semibold w-20">Custo</th>
+                                <th className="text-right px-2 py-1 text-gray-500 font-semibold w-8">Un.</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {d.epiPorTipo.map((ep: any, i: number) => (
+                                <tr key={i} className="border-t border-gray-50">
+                                  <td className="px-2 py-1"><span className={`font-bold ${ep.classe_abc === "A" ? "text-green-600" : ep.classe_abc === "B" ? "text-blue-600" : "text-gray-400"}`}>{ep.classe_abc}</span></td>
+                                  <td className="px-2 py-1 text-gray-700 truncate max-w-[130px]">{ep.epi_nome}</td>
+                                  <td className="px-2 py-1 text-right font-semibold text-gray-700">{fmt(parseFloat(String(ep.custo_total ?? 0)))}</td>
+                                  <td className="px-2 py-1 text-right text-gray-400">{ep.total_unidades}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Treinamentos por norma (condensado) ────────────────── */}
+                    {(d.treinamentosNorma?.length ?? 0) > 0 && (
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">Treinamentos por Norma</p>
+                        <div className="rounded-xl border border-gray-100 overflow-hidden">
+                          <table className="w-full text-[10px]">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="text-left px-2 py-1 text-gray-500 font-semibold">Norma</th>
+                                <th className="text-right px-2 py-1 text-gray-500 font-semibold w-12">Total</th>
+                                <th className="text-right px-2 py-1 text-gray-500 font-semibold w-12">Válidos</th>
+                                <th className="text-right px-2 py-1 text-gray-500 font-semibold w-12">Venc.</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {d.treinamentosNorma.map((n: any, i: number) => {
+                                const venc = parseInt(String(n.total_funcionarios ?? 0)) - parseInt(String(n.validos ?? 0));
+                                return (
+                                  <tr key={i} className={`border-t border-gray-50 ${venc > 0 ? "bg-red-50/40" : ""}`}>
+                                    <td className="px-2 py-1 text-gray-700 font-medium truncate">{n.norma}</td>
+                                    <td className="px-2 py-1 text-right text-gray-500">{n.total_funcionarios}</td>
+                                    <td className="px-2 py-1 text-right text-green-600 font-semibold">{n.validos}</td>
+                                    <td className={`px-2 py-1 text-right font-semibold ${venc > 0 ? "text-red-600" : "text-gray-300"}`}>{venc > 0 ? venc : "—"}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {d.clt.length === 0 && d.terceiros.length === 0 && (
+                      <p className="text-xs text-gray-400 text-center py-8">Nenhum colaborador cadastrado nesta obra.</p>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           )}
         </div>
