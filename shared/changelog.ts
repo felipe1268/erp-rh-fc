@@ -1,4 +1,27 @@
 /**
+ * Rev. 4193 - BANCO DE HORAS: HISTÓRICO DIA A DIA — "VER DIA A DIA" EXPANSÍVEL NO DIALOG.
+ *
+ * MOTIVAÇÃO:
+ * O card de crédito do histórico mostrava o total do período (ex.: "21:00 HE Realizada")
+ * sem detalhar quais dias geraram a hora extra. O usuário pediu ver cada dia separadamente.
+ *
+ * O QUE FOI FEITO:
+ * 1. Estado `expandedHePeriodId` adicionado — controla qual card está expandido.
+ * 2. Query `memorialCalculo` adicionada (already existia no backend), ativada só quando
+ *    um card está expandido. Retorna array `dias[]` com HE por dia do período.
+ * 3. Cada card de crédito com `hePeriodId` ganha link "Ver dia a dia" (chevron rotativo).
+ *    Ao clicar, expande mini-tabela inline com colunas:
+ *    Data | Trabalhado | Jornada | HE | Adicional% | Horários
+ *    Feriados marcados com badge "FER" em roxo; linha totalizadora no rodapé.
+ * 4. Dialog onOpenChange reseta `expandedHePeriodId` ao fechar.
+ *
+ * ARQUIVOS:
+ * - client/src/pages/BancoHoras.tsx
+ *
+ * ZERO DELETE · ZERO ALTER DESTRUTIVO.
+ */
+
+/**
  * Rev. 4192 - BANCO DE HORAS: CARGO DE CONFIANÇA (ART. 62 CLT) EXCLUÍDO AUTOMATICAMENTE.
  *
  * MOTIVAÇÃO:

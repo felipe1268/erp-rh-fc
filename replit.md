@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4193** — **BANCO DE HORAS: HISTÓRICO DIA A DIA — "VER DIA A DIA" EXPANSÍVEL NO DIALOG.** Cada card de crédito com período HE ganha botão expansível que mostra mini-tabela dia a dia (Data, Trabalhado, Jornada, HE, Adicional%, Horários) via `memorialCalculo` existente. Feriados em roxo; rodapé totalizador. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4192** — **BANCO DE HORAS: CARGO DE CONFIANÇA (ART. 62 CLT) EXCLUÍDO AUTOMATICAMENTE.** Filtro `cargo_confianca=0` em todos os 4 pontos de leitura (getSaldoBancoMensal, getAlertasExpiracao, getAlertasSaldoNegativo, getAlertasSaldoPositivoTrimestral). Banner azul informativo na aba Saldos. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4191** — **BANCO DE HORAS: HISTÓRICO REDESENHADO — CARDS MODERNOS COM SOLICITANTE, AUTORIZADOR, DATA/HORA E HORAS NÃO AUTORIZADAS.** Tabela substituída por cards individuais com barra lateral colorida, data+hora, "Solicitado por"/"Autorizado por", horas não autorizadas em âmbar. Backend: +3 colunas do `he_periods`. Fix TDZ. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4191** — **BANCO DE HORAS: HISTÓRICO REDESENHADO — CARDS MODERNOS COM SOLICITANTE, AUTORIZADOR, DATA/HORA E HORAS NÃO AUTORIZADAS.** Cards com barra lateral colorida, data+hora, "Solicitado por"/"Autorizado por", horas não autorizadas em âmbar. Backend: +3 colunas do `he_periods`. Fix TDZ. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4190** — **BANCO DE HORAS: HISTÓRICO INTERATIVO COM FOTO E STATUS DE AUTORIZAÇÃO.** Foto (PersonPhoto xs) em Saldos; clique abre Dialog com histórico rico de lançamentos (período HE, tipo, HE Realizada, Creditado, Autorização). ZERO DELETE · ZERO ALTER destrutivo.
 
