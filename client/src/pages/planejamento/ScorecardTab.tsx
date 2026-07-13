@@ -250,6 +250,12 @@ export default function ScorecardTab({ proj }: { proj: any }) {
     { companyId, obraId: obraId!, mesInicio: rhMesInicio, mesFim: rhMesFim },
     { enabled: enabled && tabScore === "rh", staleTime: 120_000 }
   );
+  // Query dedicada ao ano inteiro — usada APENAS para calcular quais meses têm dados
+  // (bolinhas azuis no seletor de período). Não muda com o filtro de mês selecionado.
+  const analiseRHAnoTodo = trpc.scorecard.getCustosRH.useQuery(
+    { companyId, obraId: obraId!, mesInicio: `${rhAno}-01`, mesFim: `${rhAno}-12` },
+    { enabled: enabled && tabScore === "rh", staleTime: 300_000 }
+  );
   const analiseMetasDesvios = trpc.scorecard.getMetasDesvios.useQuery(
     { companyId, obraId: obraId!, orcamentoId: proj?.orcamentoId ?? undefined },
     { enabled: enabled && tabScore === "metas", staleTime: 120_000 }
@@ -966,7 +972,9 @@ export default function ScorecardTab({ proj }: { proj: any }) {
             const rhMonthStatus: Record<number, "data" | "none"> = Object.fromEntries(
               Array.from({ length: 12 }, (_, i) => [i + 1, "none" as const])
             );
-            for (const entry of (analiseRH.data?.mensal ?? [])) {
+            // Usa analiseRHAnoTodo (sempre ano completo) para que as bolinhas
+            // permaneçam acesas independentemente do mês filtrado atualmente.
+            for (const entry of (analiseRHAnoTodo.data?.mensal ?? analiseRH.data?.mensal ?? [])) {
               const [y, mm] = (entry.mes as string).split('-');
               if (y === String(rhAno)) rhMonthStatus[parseInt(mm)] = "data";
             }
