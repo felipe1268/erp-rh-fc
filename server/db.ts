@@ -2351,6 +2351,39 @@ export async function getObraFuncionarios(obraId: number, obraIds?: number[]) {
   // Rev. 2479 — enrich com status CIPA (ativo/estabilidade).
   const cipaMap = await getCipaStatusByEmployeeIds(db, companyIdsArr, empIds);
 
+  // Rev. 4213 — ORIGEM de transferência: mostra "Veio da obra X em DD/MM/YYYY" na tela
+  // de Equipe quando o funcionário entrou via transferência formal (tipo='transferencia').
+  // Apenas registros abertos (dataFim IS NULL) na obra atual com obraOrigemId preenchido.
+  const transferOrigemMap = new Map<number, { obraOrigemId: number; obraOrigemNome: string; dataTransferencia: string }>();
+  if (empIds.length > 0 && idsToQuery.length > 0) {
+    try {
+      const transferOrigemRows = await db.execute(sql`
+        SELECT DISTINCT ON (esh."employeeId")
+          esh."employeeId" AS "employeeId",
+          esh."obraOrigemId",
+          esh."dataInicio"::text AS "dataTransferencia",
+          o.nome AS "obraOrigemNome"
+        FROM employee_site_history esh
+        LEFT JOIN obras o ON o.id = esh."obraOrigemId"
+        WHERE esh."obraId" IN (${sql.raw(idsToQuery.join(','))})
+          AND esh.tipo = 'transferencia'
+          AND esh."obraOrigemId" IS NOT NULL
+          AND esh."employeeId" IN (${sql.raw(empIds.join(','))})
+          AND esh."dataFim" IS NULL
+        ORDER BY esh."employeeId", esh."dataInicio" DESC
+      `);
+      for (const r of (transferOrigemRows.rows as any[])) {
+        if (r.obraOrigemId) {
+          transferOrigemMap.set(Number(r.employeeId), {
+            obraOrigemId: Number(r.obraOrigemId),
+            obraOrigemNome: r.obraOrigemNome || `Obra #${r.obraOrigemId}`,
+            dataTransferencia: String(r.dataTransferencia || '').slice(0, 10),
+          });
+        }
+      }
+    } catch (_) { /* non-blocking */ }
+  }
+
   return allocs
     .filter(a => empMap[a.employeeId])
     .map(a => {
@@ -2362,6 +2395,7 @@ export async function getObraFuncionarios(obraId: number, obraIds?: number[]) {
         effectiveStatus = avisoInfo.dispensado ? 'AvisoDispensado' : 'Aviso';
       } else if (feriasInfo) effectiveStatus = 'Ferias';
       const cipa = projectCipaFields(cipaMap, a.employeeId);
+      const origem = transferOrigemMap.get(a.employeeId);
       return {
         ...a,
         employee: { ...emp, status: effectiveStatus as any, ...cipa },
@@ -2375,6 +2409,10 @@ export async function getObraFuncionarios(obraId: number, obraIds?: number[]) {
         feriasAgendadaFim: feriasFuturasMap.get(a.employeeId)?.dataFim || null,
         integracoes: integracoesMap.get(a.employeeId) || [],
         nrs: nrsMap.get(a.employeeId) || [],
+        // Rev. 4213 — origem de transferência (para badge "Veio da obra X em DD/MM")
+        obraOrigemId: origem?.obraOrigemId ?? null,
+        obraOrigemNome: origem?.obraOrigemNome ?? null,
+        dataTransferencia: origem?.dataTransferencia ?? null,
         ...cipa,
       };
     });

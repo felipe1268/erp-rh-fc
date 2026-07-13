@@ -5224,6 +5224,25 @@ REGRAS DE EXTRAÇÃO:
           console.log("[SyncSchema+] Rev. 4212: backfill employee_site_history — alocações sem histórico formal migradas.");
         } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4212 backfill-site-history:", e?.message || e); }
 
+        // Rev. 4213 — Backfill: fecha alocacao.dataFim a partir do registro de saida.dataFim
+        // correspondente. Causa-raiz: alocações abertas (dataFim IS NULL) existiam mesmo quando
+        // o funcionário tinha um registro de 'saida' com dataFim preenchido na mesma obra.
+        // Fix idempotente: só toca alocacoes ainda abertas onde a saida já tem dataFim.
+        try {
+          await db.execute(sql`
+            UPDATE employee_site_history aloc
+            SET "dataFim" = saida."dataFim"
+            FROM employee_site_history saida
+            WHERE aloc.tipo = 'alocacao'
+              AND aloc."dataFim" IS NULL
+              AND saida.tipo = 'saida'
+              AND saida."employeeId" = aloc."employeeId"
+              AND saida."obraId" = aloc."obraId"
+              AND saida."dataFim" IS NOT NULL
+          `);
+          console.log("[SyncSchema+] Rev. 4213: backfill alocacao.dataFim fechado a partir de saida.dataFim — concluído.");
+        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4213 close-alocacao-from-saida:", e?.message || e); }
+
         // Rev. 4188 — Backfill: períodos HE aprovados sem lancamentos no banco de horas.
         // Causa-raiz: String(date).slice(0,10) gerava "Fri May 15" em vez de "2026-05-15";
         // o INSERT em banco_horas_lancamentos lançava erro silencioso. O saldo ficava

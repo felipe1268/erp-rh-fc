@@ -2017,6 +2017,14 @@ const statusBg: Record<string, string> = { Ativo: '#d4edda', Aviso: '#fee2e2', A
                                             cargo={f.cipaCargo ?? f.employee?.cipaCargo}
                                           />
                                         </p>
+                                        {f.obraOrigemNome && (
+                                          <p className="inline-flex items-center gap-1 text-[10px] font-medium text-indigo-600 mt-0.5 flex-wrap">
+                                            <ArrowRight className="h-2.5 w-2.5 shrink-0" />
+                                            <span>Veio de:</span>
+                                            <span className="font-semibold truncate max-w-[160px]" title={f.obraOrigemNome}>{f.obraOrigemNome}</span>
+                                            {f.dataTransferencia ? <span className="text-indigo-400">em {new Date(String(f.dataTransferencia).slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR')}</span> : null}
+                                          </p>
+                                        )}
                                         <p className="text-[11px] text-muted-foreground md:hidden">
                                           {f.employee?.cargo || f.employee?.funcao || f.funcaoNaObra || "—"}
                                         </p>

@@ -1,4 +1,33 @@
 /**
+ * Rev. 4213 - SCORECARD + EQUIPE: FIX RAMO A (saida.dataFim prioridade) + BADGE "VEIO DA OBRA X" + SYNCSCHEMA+.
+ *
+ * PROBLEMA — Três pendências da Rev. 4211/4212:
+ *   1. Scorecard Ramo A: alocacao.dataFim ainda era NULL em Neon para funcionários transferidos
+ *      (Antônio, Agostinho, Régis, Rodrigo em Luciana/90002). Fix manual já aplicado no Neon
+ *      (78+43+67 registros). Faltava o bloco SyncSchema+ idempotente para novos ambientes.
+ *   2. Equipe (ObraEfetivo): nenhum badge informava que um funcionário veio de outra obra.
+ *   3. Sem backfill automático de alocacao.dataFim para ambientes futuros.
+ *
+ * FIX 1 — SyncSchema+ Rev. 4213 (server/_core/index.ts):
+ *   UPDATE idempotente: fecha employee_site_history alocacao.dataFim = saida.dataFim
+ *   quando existir um registro de saída (mesmo obraId + employeeId) com dataFim preenchido.
+ *   Executa em todo startup; ZERO DELETE · ZERO ALTER destrutivo.
+ *
+ * FIX 2 — Badge "Veio da obra X em DD/MM/AAAA" (client/src/pages/ObraEfetivo.tsx):
+ *   Exibido abaixo do nome do funcionário na tabela de equipe (desktop lg+) quando o registro
+ *   mais recente do tipo='transferencia' com dataFim IS NULL em employee_site_history tiver
+ *   obraOrigemId preenchido. Badge indigo, compacto, com nome truncado + tooltip.
+ *
+ * FIX 3 — getObraFuncionarios (server/db.ts):
+ *   Query DISTINCT ON (employeeId) em employee_site_history para buscar o registro mais
+ *   recente de transferencia aberta na obra atual. Campos novos: obraOrigemId, obraOrigemNome,
+ *   dataTransferencia. Try/catch não-bloqueante — erro na origem não quebra a listagem.
+ *
+ * ARQUIVOS: server/db.ts, client/src/pages/ObraEfetivo.tsx, server/_core/index.ts, shared/version.ts
+ * ZERO DELETE · ZERO ALTER destrutivo
+ */
+
+/**
  * Rev. 4212 - SCORECARD: BACKFILL AUTOMÁTICO — employee_site_history PARA TODAS AS ALOCAÇÕES ATIVAS.
  *
  * PROBLEMA — Raiz do custo duplicado multi-obra:
