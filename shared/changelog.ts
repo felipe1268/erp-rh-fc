@@ -1,4 +1,32 @@
 /**
+ * Rev. 4211 - SCORECARD RH/FOLHA: FIX EQUIPE — ELIMINA DUPLICAÇÃO MULTI-OBRA E PONTO-SEM-ALOCAÇÃO.
+ *
+ * PROBLEMA 1 — Funcionário aparecia em MÚLTIPLAS obras ao mesmo tempo (custo duplicado):
+ *   O Ramo B da CTE `site_periods` (funcionários em `obra_funcionarios` sem `employee_site_history`)
+ *   não tinha guard para o caso em que o mesmo funcionário estava em `obra_funcionarios` de VÁRIAS
+ *   obras simultaneamente. Ex: Antônio Carlos Santos aparecia no Scorecard da obra Luciana, da
+ *   REVTE-CIVIL e de outra obra — todos com 30 dias completos — porque havia sido alocado em cada
+ *   uma delas sem ter sido formalmente transferido (via botão "Transferir") entre elas.
+ *   Fix: Adicionado `AND NOT EXISTS (SELECT 1 FROM obra_funcionarios of3 WHERE of3.employeeId =
+ *   of2.employeeId AND of3.obraId <> of2.obraId AND of3.createdAt > of2.createdAt)` no Ramo B.
+ *   Isso garante que o funcionário só aparece na obra onde foi MAIS RECENTEMENTE alocado.
+ *
+ * PROBLEMA 2 — Funcionários fantasma (bateram ponto mas não fazem parte da equipe):
+ *   A CTE `relevant_emp` fazia UNION com `time_records` para incluir funcionários que bateram
+ *   ponto nesta obra mesmo sem alocação formal. Isso puxava extras que não estavam na tela de
+ *   Equipe da obra, inflando a contagem e o custo.
+ *   Fix: Removido o UNION com time_records do `relevant_emp`. O time_records continua sendo usado
+ *   como fallback de CONTAGEM DE DIAS dentro da subquery de `payroll_frac` (GREATEST), mas não
+ *   define mais QUEM pertence à equipe.
+ *
+ * RESULTADO: A lista de funcionários do Scorecard RH/Folha passa a espelhar exatamente a tela
+ *   de Equipe da obra. Custo de cada funcionário cai apenas na obra onde está alocado atualmente.
+ *
+ * ARQUIVOS: server/routers/scorecard.ts (getCustosRH, CTE site_periods Ramo B + relevant_emp)
+ * ZERO DELETE · ZERO ALTER destrutivo
+ */
+
+/**
  * Rev. 4210 - SCORECARD RH/FOLHA: FIX CUSTO MO — PISO = dataInicio DA OBRA.
  *
  * PROBLEMA — Custo de mão de obra aparecia em meses ANTERIORES ao início da obra:

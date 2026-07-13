@@ -1114,6 +1114,8 @@ export const scorecardRouter = router({
             -- Ramo B: funcionários em obra_funcionarios SEM registro de history
             -- periodo_inicio = MAX(data que foi cadastrado na obra, dataInicio da obra)
             -- NÃO usa dataAdmissão (pode ser de anos atrás e infla custo retroativo)
+            -- Guard multi-obra: só inclui se esta obra é a MAIS RECENTE alocação do funcionário
+            -- (evita contar Antonio em 3 obras simultaneamente quando não houve transferência formal)
             SELECT
               of2."employeeId"                                               AS employee_id,
               GREATEST(
@@ -1132,13 +1134,20 @@ export const scorecardRouter = router({
                   AND esh2."obraId"     = ${input.obraId}
                   AND esh2."companyId"  = ${input.companyId}
               )
+              -- Não inclui se o funcionário tem alocação mais recente em outra obra
+              AND NOT EXISTS (
+                SELECT 1 FROM obra_funcionarios of3
+                WHERE of3."employeeId" = of2."employeeId"
+                  AND of3."companyId"  = of2."companyId"
+                  AND of3."obraId"    <> of2."obraId"
+                  AND of3."createdAt"  > of2."createdAt"
+              )
           ),
           relevant_emp AS (
+            -- Apenas funcionários formalmente alocados (site_periods).
+            -- time_records NÃO define "quem está na equipe": serve só como fallback
+            -- de dias na subquery de payroll_frac abaixo, mas não puxa novos funcionários.
             SELECT DISTINCT employee_id FROM site_periods
-            UNION
-            -- Funcionários que bateram ponto nesta obra mas não têm alocação registrada
-            SELECT DISTINCT "employeeId" AS employee_id FROM time_records
-            WHERE "obraId" = ${input.obraId} AND "companyId" = ${input.companyId}
           ),
           payroll_frac AS (
             SELECT

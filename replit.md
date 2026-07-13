@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4211** — **SCORECARD RH/FOLHA: FIX EQUIPE — ELIMINA DUPLICAÇÃO MULTI-OBRA E PONTO-SEM-ALOCAÇÃO.** Bug 1: Antônio (e outros) aparecia em todas as obras onde tinha `obra_funcionarios` sem transfer formal → custo duplicado. Fix: Ramo B agora exige `NOT EXISTS(obraId <> esta AND createdAt > esta)` — só conta na obra mais recente. Bug 2: `relevant_emp` fazia UNION com `time_records` → puxava quem só bateu ponto, sem alocação formal. Fix: removido o UNION; `time_records` permanece só como fallback de contagem de dias. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4210** — **SCORECARD RH/FOLHA: FIX CUSTO MO — PISO = dataInicio DA OBRA.** Bug: `site_periods` Ramo B usava `dataAdmissao` (ex: 2016) → custo de março aparecia em obra iniciada em maio. Fix: CTE `obra_inicio` + `GREATEST(periodo_inicio, obra.dataInicio)` em ambos os ramos + Ramo B usa `obra_funcionarios.createdAt` no lugar de `dataAdmissao`. Nenhum custo pode anteceder o início da obra. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4209** — **SCORECARD: FIX BÔNUS (LL realizado→previsto quando sem custo real) + BETA GATE POR EMPRESA.** Bug bônus: `custoRealizado=0` → `llRealizado=contrato=R$9,5M` → bônus inflado R$19k; fix usa `lucroLiquidoPrevisto` como fallback. Gate: `companies.scorecard_beta_ativo SMALLINT DEFAULT 0`; `canViewTab("scorecard")` retorna false para não-Admin-Master; toggle em Configurações→"Scorecard do Gestor". ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4209** — **SCORECARD: FIX BÔNUS (LL realizado→previsto quando sem custo real) + BETA GATE POR EMPRESA.** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4208** — **SCORECARD RH/FOLHA: FIX SEGURO DE VIDA (R$0→real) + VR/VA DOUBLE-COUNT + PONTO FALLBACK.** ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,13 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4205** — **SCORECARD RH/FOLHA: FIX camelCase em payroll_payments + employee_site_history + vr_benefits + vacation_periods.** 289 linhas existiam mas ficavam invisíveis. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4204** — **SCORECARD RH/FOLHA: FIX employees camelCase + REDESIGN ABA + FÉRIAS + SEGURO DE VIDA.** Bug raiz: snake_case em `employees`; Fix camelCase + 3 queries paralelas + UI com seletor ano/mês. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4203** — **SCORECARD METAS & DESVIOS: FIX orcamento_itens camelCase + CONTRATOS DE TERCEIROS.** CTE `orca_itens` usava snake_case → lista vazia silenciosa. Fix + nova query `terceiro_contratos`. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4143 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4204 e anteriores.
 
 ## User preferences
 

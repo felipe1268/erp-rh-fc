@@ -1,3 +1,5 @@
+- **Rev. 4204** — **SCORECARD RH/FOLHA: FIX employees camelCase + REDESIGN ABA + FÉRIAS + SEGURO DE VIDA.** Bug raiz: snake_case em `employees`; Fix camelCase + 3 queries paralelas + UI com seletor ano/mês. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4203** — **SCORECARD METAS & DESVIOS: FIX orcamento_itens camelCase + CONTRATOS DE TERCEIROS.** CTE `orca_itens` usava snake_case → lista vazia silenciosa. Fix + nova query `terceiro_contratos`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4201** — **SCORECARD: FIX RAIZ — BUSCA POR obraId SEM FILTRO companyId.** ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4196** — **BANCO DE HORAS: TABELA DIA A DIA REFATORADA COMO TABLE HTML.** Grid CSS causava sobreposição "TRABALHADOJORNADA" em mobile. Substituída por `<table>`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4187** — **SCORECARD: SUB-ABA "BANCO DE HORAS" NA ABA RH + FIX RETRY iOS WEBKIT.** Aba RH dividida em sub-abas Folha/Banco de Horas. Fix retry 3× backoff iOS WebKit. ZERO DELETE · ZERO ALTER destrutivo.
