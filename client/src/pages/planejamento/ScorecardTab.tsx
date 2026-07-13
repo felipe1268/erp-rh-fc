@@ -1002,7 +1002,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                     { label: "Funcionários",      v: String(analiseRH.data.resumo.totalFuncionarios),                                            color: "text-indigo-700" },
                     { label: "Custo Total",        v: fmt(analiseRH.data.resumo.custoTotalEmpresa),                                               color: "text-violet-700 font-bold" },
                     { label: "Salário Bruto",      v: fmt(analiseRH.data.resumo.salarioBrutoTotal),                                               color: "text-gray-800" },
-                    { label: "VA",                 v: fmt(analiseRH.data.resumo.vaTotal),                                                        color: "text-teal-700" },
+                    { label: "VR/VA",              v: fmt(analiseRH.data.resumo.vaTotal),                                                        color: "text-teal-700" },
                     { label: "Férias",             v: fmt(analiseRH.data.resumo.feriasTotal ?? 0),                                                color: (analiseRH.data.resumo.feriasTotal ?? 0) > 0 ? "text-orange-700" : "text-gray-300" },
                     { label: "Seg. de Vida",       v: fmt(analiseRH.data.resumo.seguroVidaTotal ?? 0),                                            color: (analiseRH.data.resumo.seguroVidaTotal ?? 0) > 0 ? "text-rose-700" : "text-gray-300" },
                     { label: "HE",                 v: fmt(analiseRH.data.resumo.heTotal),                                                         color: analiseRH.data.resumo.heTotal > 0 ? "text-amber-700" : "text-gray-300" },
@@ -1027,7 +1027,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                             <th className="text-center px-2 py-1.5 font-semibold">Funcs</th>
                             <th className="text-right px-2 py-1.5 font-semibold">Salário</th>
                             <th className="text-right px-2 py-1.5 font-semibold">HE</th>
-                            <th className="text-right px-2 py-1.5 font-semibold">VA</th>
+                            <th className="text-right px-2 py-1.5 font-semibold">VR/VA</th>
                             <th className="text-right px-2 py-1.5 font-semibold">Férias</th>
                             <th className="text-right px-2 py-1.5 font-semibold">Seg.Vida</th>
                             <th className="text-right px-2 py-1.5 font-semibold">FGTS</th>
@@ -1093,7 +1093,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                           <th className="text-center px-2 py-1.5 font-semibold">Dias</th>
                           <th className="text-right px-2 py-1.5 font-semibold">Sal. Bruto</th>
                           <th className="text-right px-2 py-1.5 font-semibold">HE</th>
-                          <th className="text-right px-2 py-1.5 font-semibold">VA</th>
+                          <th className="text-right px-2 py-1.5 font-semibold">VR/VA</th>
                           <th className="text-right px-2 py-1.5 font-semibold">Férias</th>
                           <th className="text-right px-2 py-1.5 font-semibold">Seg.</th>
                           <th className="text-right px-2 py-1.5 font-semibold">FGTS</th>
@@ -1156,7 +1156,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                             <th className="text-center py-1 pr-3 font-semibold">Fração</th>
                                             <th className="text-right py-1 pr-3 font-semibold">Sal. Bruto</th>
                                             <th className="text-right py-1 pr-3 font-semibold">HE</th>
-                                            <th className="text-right py-1 pr-3 font-semibold">VA</th>
+                                            <th className="text-right py-1 pr-3 font-semibold">VR/VA</th>
                                             <th className="text-right py-1 pr-3 font-semibold">Férias</th>
                                             <th className="text-right py-1 pr-3 font-semibold">Seg.</th>
                                             <th className="text-right py-1 pr-3 font-semibold">FGTS</th>
