@@ -1,4 +1,33 @@
 /**
+ * Rev. 4216 - SCORECARD: SEGURANÇA — GRADE CLT COM STATUS COMPLETO, DESLIGADOS VISÍVEIS, CIPA E PERÍODO DE EXPERIÊNCIA.
+ *
+ * MELHORIA — Grade de fotos da equipe CLT estava ocultando funcionários desligados (tinham foto mas eram filtrados
+ * por `status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')`). Agora exibe TODOS que já passaram pela obra.
+ *
+ * Backend (Q1 — server/routers/scorecard.ts):
+ *   • Removido filtro de status: exibe ativos + férias + afastados + aviso prévio + desligados + inativos.
+ *   • Novos campos: `dataAdmissao`, `data_desligamento` (COALESCE dataDesligamentoEfetiva/dataDemissao).
+ *   • CASE `periodo_experiencia`: 'exp1' (0-45 dias), 'exp2' (46-90 dias), NULL — só para não-desligados.
+ *   • JOIN LATERAL em `cipa_members`: `cargo_cipa` quando membro ativo com estabilidade vigente.
+ *   • ORDER BY: Ativo→Férias→Afastado→Aviso→Desligado→Inativo→Lista_Negra, depois por nome.
+ *
+ * Frontend (ScorecardTab.tsx — grade CLT):
+ *   • Layout horizontal (3 colunas, card em linha): foto + nome + cargo + badges em uma linha.
+ *   • Card colorido por status: branco (Ativo), azul (Férias), roxo (Afastado), laranja (Aviso), cinza (Desligado).
+ *   • Foto em grayscale + ring vermelho para desligados; opacity-60 no card.
+ *   • Badges por card (da esq. para dir.):
+ *       1. Status: "Ativo" (verde) | "De Férias" (azul) | "Aviso Prévio" (laranja) |
+ *                  "Desligado" (vermelho) | "Afastado" (roxo) | "Inativo" (cinza) | "Lista Negra" (escarlate)
+ *       2. Período de experiência: "Exp. 1º Per." (amarelo) ou "Exp. 2º Per." (âmbar) — apenas ativos <90 dias
+ *       3. CIPA: badge índigo com cargo_cipa no title
+ *       4. ASO: ASO ✓ / ASO ! / Sem ASO
+ *       5. Advertências: "N adv." em vermelho
+ *   • Sumário de contagem acima da grade: "X ativos · Y de férias · Z desligados".
+ *   • Iniciais com ring colorido refletindo ASO/advertências (sem depender da foto).
+ *   • ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4215 - SCORECARD: ABA SEGURANÇA — REDESIGN BOARD-LEVEL (FOTOS, GRÁFICOS, CUSTO ATESTADOS, DATAS BR, SELETOR MÊS/ANO).
  *
  * MELHORIA — Layout anterior considerado "bagunçado". Redesign completo para relatório de nível diretoria:

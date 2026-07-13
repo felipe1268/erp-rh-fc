@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4216** — **SCORECARD: SEGURANÇA — GRADE CLT COM STATUS COMPLETO, DESLIGADOS VISÍVEIS, CIPA E PERÍODO DE EXPERIÊNCIA.** Root-cause das fotos ausentes: filtro `status NOT IN ('Desligado',...)` escondia desligados que tinham foto. Fix: Q1 sem filtro de status → exibe todos que já passaram pela obra. Novos campos: `dataAdmissao`, `data_desligamento`, `periodo_experiencia` (exp1/exp2), `cargo_cipa` (JOIN LATERAL cipa_members). ORDER BY: Ativo→Férias→Afastado→Aviso→Desligado→Inativo. Frontend: card horizontal (3 colunas) com foto (grayscale+ring p/ desligados), badge de status colorido, Exp. 1º/2º Per., CIPA, ASO, advertências. Sumário de contagem acima da grade. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4215** — **SCORECARD: ABA SEGURANÇA — REDESIGN BOARD-LEVEL (FOTOS, GRÁFICOS, CUSTO ATESTADOS, DATAS BR, SELETOR MÊS/ANO).** Seletor período ‹/› filtra todas as queries (mesRef). KPI Row 1 (5 cards): Efetivo CLT, Acidentes, DDS, APR/PT, Atestados. Banner custo atestados: salário÷30×dias + encargos 33% + VR proporcional. 2 gráficos recharts (12 meses). Grade de fotos CLT com badge ASO+advertências. Tabela atestados com foto, custo por linha e rodapé totalizado. Backend: Q12 reescrita (JOIN LATERAL vr_benefits), Q13 nova (historico mensal), mesRef propagado p/ Q8–Q12. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4214** — **SCORECARD: ABA SEGURANÇA — APR, PT, DDS, ACIDENTES E ATESTADOS.** Backend: 5 novas queries em `getSeguranca` (Q8–Q12) para `accidents`, `dds_sessoes`, `apr_analises`, `pt_permissoes`, `atestados`. Resumo ganhou 9 novos indicadores. Frontend: linha de KPIs nova (5 cards coloridos) + 5 seções detalhadas condicionais. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4214** — **SCORECARD: ABA SEGURANÇA — APR, PT, DDS, ACIDENTES E ATESTADOS.** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4213** — **SCORECARD + EQUIPE: FIX RAMO A + BADGE "VEIO DA OBRA X".** ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -62,9 +64,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4211** — **SCORECARD RH/FOLHA: FIX EQUIPE — ELIMINA DUPLICAÇÃO MULTI-OBRA E PONTO-SEM-ALOCAÇÃO.** ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4210** — **SCORECARD RH/FOLHA: FIX CUSTO MO — PISO = dataInicio DA OBRA.** site_periods Ramo B usava dataAdmissao → custo retroativo. Fix: GREATEST(createdAt, obra.dataInicio). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4210** — **SCORECARD RH/FOLHA: FIX CUSTO MO — PISO = dataInicio DA OBRA.** ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4209** — **SCORECARD: FIX BÔNUS (LL realizado→previsto quando sem custo real) + BETA GATE POR EMPRESA.** ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4209** — **SCORECARD: FIX BÔNUS + BETA GATE POR EMPRESA.** ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

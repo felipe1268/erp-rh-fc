@@ -1639,41 +1639,95 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                       </div>
                     )}
 
-                    {/* ── EQUIPE CLT: Fotos + status ─────────────────────────── */}
-                    {d.clt.length > 0 && (
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-2 flex items-center gap-1.5">
-                          <UserCheck className="w-3 h-3" />Equipe CLT na Obra ({d.clt.length})
-                        </p>
-                        <div className="grid grid-cols-4 gap-1.5">
-                          {d.clt.map((e: any, i: number) => {
-                            const asoOk   = e.aso_status === "valido";
-                            const asoVenc = e.aso_status === "vencido";
-                            const adv     = parseInt(String(e.num_advertencias ?? 0));
-                            const prNome  = String(e.nome ?? "").split(" ").slice(0, 2).join(" ");
-                            const initials = String(e.nome ?? "?").split(" ").slice(0, 2).map((n: string) => n[0]).join("");
-                            return (
-                              <div key={i} className={`flex flex-col items-center gap-1 rounded-xl border px-1.5 py-2 ${adv > 0 ? "border-red-200 bg-red-50" : !asoOk ? "border-amber-200 bg-amber-50" : "border-gray-100 bg-white"}`}>
-                                {e.foto_url ? (
-                                  <img src={e.foto_url} alt={prNome} className="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm" />
-                                ) : (
-                                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold border-2 border-white shadow-sm ${adv > 0 ? "bg-red-200 text-red-700" : !asoOk ? "bg-amber-200 text-amber-700" : "bg-gray-200 text-gray-600"}`}>
-                                    {initials}
+                    {/* ── EQUIPE CLT: Fotos + status completo ────────────────── */}
+                    {d.clt.length > 0 && (() => {
+                      // helpers de status
+                      const statusInfo = (st: string) => {
+                        switch (st) {
+                          case "Ativo":       return { label: "Ativo",        bg: "bg-green-100",  text: "text-green-700",  cardBg: "bg-white border-gray-100",          opacity: "" };
+                          case "Ferias":
+                          case "Férias":      return { label: "De Férias",    bg: "bg-blue-100",   text: "text-blue-700",   cardBg: "bg-blue-50 border-blue-200",        opacity: "" };
+                          case "Afastado":    return { label: "Afastado",     bg: "bg-purple-100", text: "text-purple-700", cardBg: "bg-purple-50 border-purple-200",    opacity: "" };
+                          case "Aviso":       return { label: "Aviso Prévio", bg: "bg-orange-100", text: "text-orange-700", cardBg: "bg-orange-50 border-orange-200",    opacity: "" };
+                          case "Desligado":   return { label: "Desligado",    bg: "bg-red-100",    text: "text-red-600",    cardBg: "bg-gray-50 border-gray-200",        opacity: "opacity-60" };
+                          case "Inativo":     return { label: "Inativo",      bg: "bg-gray-100",   text: "text-gray-500",   cardBg: "bg-gray-50 border-gray-100",        opacity: "opacity-50" };
+                          case "Lista_Negra": return { label: "Lista Negra",  bg: "bg-red-200",    text: "text-red-800",    cardBg: "bg-red-50 border-red-200",          opacity: "opacity-50" };
+                          default:            return { label: st,             bg: "bg-gray-100",   text: "text-gray-500",   cardBg: "bg-white border-gray-100",          opacity: "" };
+                        }
+                      };
+                      const ativoCount     = d.clt.filter((x: any) => x.status === "Ativo").length;
+                      const feriasCount    = d.clt.filter((x: any) => x.status === "Ferias" || x.status === "Férias").length;
+                      const desligadoCount = d.clt.filter((x: any) => x.status === "Desligado" || x.status === "Inativo" || x.status === "Lista_Negra").length;
+                      return (
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-1 flex items-center gap-1.5">
+                            <UserCheck className="w-3 h-3" />Equipe CLT — Histórico da Obra ({d.clt.length})
+                          </p>
+                          <p className="text-[9px] text-gray-400 mb-2">
+                            {ativoCount > 0 && <span className="text-green-600 font-semibold">{ativoCount} ativos</span>}
+                            {feriasCount > 0 && <span className="text-blue-600 font-semibold ml-1.5">{feriasCount} de férias</span>}
+                            {desligadoCount > 0 && <span className="text-red-500 font-semibold ml-1.5">{desligadoCount} desligados</span>}
+                          </p>
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {d.clt.map((e: any, i: number) => {
+                              const st      = statusInfo(e.status ?? "Ativo");
+                              const asoOk   = e.aso_status === "valido";
+                              const asoVenc = e.aso_status === "vencido";
+                              const adv     = parseInt(String(e.num_advertencias ?? 0));
+                              const prNome  = String(e.nome ?? "").split(" ").slice(0, 2).join(" ");
+                              const sobrenome = String(e.nome ?? "").split(" ").slice(2).join(" ");
+                              const initials = String(e.nome ?? "?").split(" ").filter(Boolean).slice(0, 2).map((n: string) => n[0]).join("");
+                              const isDesligado = ["Desligado","Inativo","Lista_Negra"].includes(e.status ?? "");
+                              return (
+                                <div key={i} className={`flex items-start gap-2 rounded-xl border px-2 py-2 ${st.cardBg} ${st.opacity}`}>
+                                  {/* Foto */}
+                                  <div className="shrink-0">
+                                    {e.foto_url ? (
+                                      <img src={e.foto_url} alt={prNome}
+                                        className={`w-9 h-9 rounded-full object-cover ring-2 ${isDesligado ? "ring-red-300 grayscale" : asoOk ? "ring-green-300" : asoVenc ? "ring-amber-300" : "ring-gray-200"}`} />
+                                    ) : (
+                                      <div className={`w-9 h-9 rounded-full flex items-center justify-center text-[10px] font-bold ring-2 ${isDesligado ? "bg-gray-300 text-gray-500 ring-red-200 grayscale" : adv > 0 ? "bg-red-200 text-red-700 ring-red-300" : !asoOk ? "bg-amber-200 text-amber-700 ring-amber-300" : "bg-indigo-100 text-indigo-700 ring-indigo-200"}`}>
+                                        {initials}
+                                      </div>
+                                    )}
                                   </div>
-                                )}
-                                <p className="text-[9px] font-semibold text-gray-700 text-center leading-tight line-clamp-2">{prNome}</p>
-                                <div className="flex flex-wrap gap-0.5 justify-center">
-                                  <span className={`text-[8px] px-1 py-0.5 rounded-full font-semibold ${asoOk ? "bg-green-100 text-green-700" : asoVenc ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-500"}`}>
-                                    {asoOk ? "ASO ✓" : asoVenc ? "ASO !" : "Sem ASO"}
-                                  </span>
-                                  {adv > 0 && <span className="text-[8px] px-1 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold">{adv} adv.</span>}
+                                  {/* Info */}
+                                  <div className="flex-1 min-w-0">
+                                    <p className={`text-[10px] font-bold leading-tight truncate ${isDesligado ? "text-gray-400 line-through" : "text-gray-800"}`}>{prNome}</p>
+                                    {sobrenome && <p className={`text-[8px] leading-tight truncate ${isDesligado ? "text-gray-300" : "text-gray-400"}`}>{sobrenome}</p>}
+                                    {e.cargo && <p className="text-[8px] text-gray-400 leading-tight truncate">{e.cargo}</p>}
+                                    {/* Badges */}
+                                    <div className="flex flex-wrap gap-0.5 mt-0.5">
+                                      {/* Status */}
+                                      <span className={`text-[7px] px-1 py-0.5 rounded font-bold leading-tight ${st.bg} ${st.text}`}>{st.label}</span>
+                                      {/* Período de experiência */}
+                                      {e.periodo_experiencia === "exp1" && (
+                                        <span className="text-[7px] px-1 py-0.5 rounded font-bold bg-yellow-100 text-yellow-700 leading-tight">Exp. 1º Per.</span>
+                                      )}
+                                      {e.periodo_experiencia === "exp2" && (
+                                        <span className="text-[7px] px-1 py-0.5 rounded font-bold bg-amber-100 text-amber-700 leading-tight">Exp. 2º Per.</span>
+                                      )}
+                                      {/* CIPA */}
+                                      {e.cargo_cipa && (
+                                        <span className="text-[7px] px-1 py-0.5 rounded font-bold bg-indigo-100 text-indigo-700 leading-tight" title={e.cargo_cipa}>CIPA</span>
+                                      )}
+                                      {/* ASO */}
+                                      <span className={`text-[7px] px-1 py-0.5 rounded font-bold leading-tight ${asoOk ? "bg-green-100 text-green-700" : asoVenc ? "bg-red-100 text-red-600" : "bg-gray-100 text-gray-400"}`}>
+                                        {asoOk ? "ASO ✓" : asoVenc ? "ASO !" : "Sem ASO"}
+                                      </span>
+                                      {/* Advertências */}
+                                      {adv > 0 && (
+                                        <span className="text-[7px] px-1 py-0.5 rounded font-bold bg-red-100 text-red-700 leading-tight">{adv} adv.</span>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
-                              </div>
-                            );
-                          })}
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
 
                     {/* ── DDS ────────────────────────────────────────────────── */}
                     {d.dds.length > 0 && (

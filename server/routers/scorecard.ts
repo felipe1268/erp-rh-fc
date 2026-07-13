@@ -601,7 +601,23 @@ export const scorecardRouter = router({
           const r = await db.execute(sql`
             SELECT
               e.id, e."nomeCompleto" AS nome, e.cargo, e.status, e.cpf,
-              e."fotoUrl"         AS foto_url,
+              e."fotoUrl"           AS foto_url,
+              e."dataAdmissao",
+              COALESCE(e."dataDesligamentoEfetiva", e."dataDemissao") AS data_desligamento,
+              -- Período de experiência (CLT ativo/férias/afastado com < 90 dias de casa)
+              CASE
+                WHEN e.status IN ('Ativo', 'Ferias', 'Férias', 'Afastado')
+                  AND e."dataAdmissao" IS NOT NULL
+                  AND (CURRENT_DATE - e."dataAdmissao"::date) BETWEEN 0 AND 45
+                THEN 'exp1'
+                WHEN e.status IN ('Ativo', 'Ferias', 'Férias', 'Afastado')
+                  AND e."dataAdmissao" IS NOT NULL
+                  AND (CURRENT_DATE - e."dataAdmissao"::date) BETWEEN 46 AND 90
+                THEN 'exp2'
+                ELSE NULL
+              END AS periodo_experiencia,
+              -- CIPA (membro ativo com estabilidade vigente)
+              cipa.cargo_cipa,
               aso.data_validade   AS aso_validade,
               aso.resultado       AS aso_resultado,
               CASE
@@ -613,6 +629,16 @@ export const scorecardRouter = router({
               COALESCE(tr.vencidos, 0) AS treinamentos_vencidos,
               COALESCE(wn.cnt,      0) AS num_advertencias
             FROM employees e
+            -- CIPA: membro ativo com estabilidade não vencida
+            LEFT JOIN LATERAL (
+              SELECT cm."cargoCipa" AS cargo_cipa
+              FROM cipa_members cm
+              WHERE cm."employeeId" = e.id
+                AND cm."companyId" = ${input.companyId}
+                AND cm."statusMembro" = 'Ativo'
+                AND (cm."fimEstabilidade" IS NULL OR cm."fimEstabilidade"::date >= CURRENT_DATE)
+              ORDER BY cm."createdAt" DESC LIMIT 1
+            ) cipa ON true
             LEFT JOIN LATERAL (
               SELECT data_validade, resultado
               FROM asos
@@ -632,12 +658,23 @@ export const scorecardRouter = router({
               WHERE employee_id = e.id AND deleted_at IS NULL
             ) wn ON true
             WHERE e."companyId" = ${input.companyId}
-              AND e.status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')
               AND e.id IN (
                 SELECT "employeeId" FROM obra_funcionarios
                 WHERE "obraId" = ${input.obraId} AND "companyId" = ${input.companyId}
               )
-            ORDER BY e."nomeCompleto"
+            ORDER BY
+              CASE e.status
+                WHEN 'Ativo'        THEN 1
+                WHEN 'Ferias'       THEN 2
+                WHEN 'Férias'       THEN 2
+                WHEN 'Afastado'     THEN 3
+                WHEN 'Aviso'        THEN 4
+                WHEN 'Desligado'    THEN 5
+                WHEN 'Inativo'      THEN 6
+                WHEN 'Lista_Negra'  THEN 7
+                ELSE 8
+              END,
+              e."nomeCompleto"
           `);
           return r.rows as any[];
         }),
