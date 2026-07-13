@@ -4,11 +4,13 @@ import {
   Tooltip, ResponsiveContainer, LineChart, Line,
 } from "recharts";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   BarChart2, AlertTriangle, TrendingUp, Clock, Repeat2,
   DollarSign, Package, MapPin, CreditCard, ChevronRight,
   ArrowUpRight, Layers, GitMerge, CalendarDays, ChevronDown,
+  MousePointerClick, ShieldAlert,
 } from "lucide-react";
 
 const fmt = (v: number) =>
@@ -119,6 +121,9 @@ export default function AnaliseDashPanel({
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [gastoView, setGastoView] = useState<"mes" | "semana">("mes");
   const [gruposAberto, setGruposAberto] = useState(false);
+  const [selectedForma, setSelectedForma] = useState<string | null>(null);
+  const [selectedCurvaClass, setSelectedCurvaClass] = useState<"A" | "B" | "C" | null>(null);
+  const [selectedPeriodo, setSelectedPeriodo] = useState<{ key: string; label: string } | null>(null);
 
   const data = useMemo(() => {
     if (!itens?.length) return null;
@@ -296,17 +301,30 @@ export default function AnaliseDashPanel({
       {/* ── 2. Gráficos: Curva ABC + Formas de Pagamento + Destaques ── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
-        {/* Donut Curva ABC */}
+        {/* Donut Curva ABC — clicável */}
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-1 pt-4 px-5">
             <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
               <Layers className="w-4 h-4 text-indigo-500" /> Curva ABC
+              <span className="ml-auto flex items-center gap-1 text-[10px] text-gray-400 font-normal">
+                <MousePointerClick className="w-3 h-3" /> toque para detalhar
+              </span>
             </CardTitle>
           </CardHeader>
           <CardContent className="px-4 pb-4">
             <ResponsiveContainer width="100%" height={160}>
               <PieChart>
-                <Pie data={abcDonut} cx="50%" cy="50%" innerRadius={45} outerRadius={72} dataKey="value" paddingAngle={3}>
+                <Pie
+                  data={abcDonut}
+                  cx="50%" cy="50%"
+                  innerRadius={45} outerRadius={72}
+                  dataKey="value" paddingAngle={3}
+                  onClick={(_d: any, idx: number) => {
+                    const cls = (["A","B","C"] as const)[idx] ?? null;
+                    if (cls) setSelectedCurvaClass(cls);
+                  }}
+                  style={{ cursor: "pointer" }}
+                >
                   {abcDonut.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                 </Pie>
                 <Tooltip formatter={(val: number, _name: any, props: any) => [fmt(val), props.payload?.name ?? ""]} />
@@ -318,23 +336,30 @@ export default function AnaliseDashPanel({
                 { cls: "B" as const, items: curvaB, label: "≈15% do gasto", bg: "bg-amber-100 text-amber-700" },
                 { cls: "C" as const, items: curvaC, label: "≈5% do gasto",  bg: "bg-slate-100 text-slate-600" },
               ]).map(({ cls, items, label, bg }) => (
-                <div key={cls} className="flex items-center justify-between">
+                <button
+                  key={cls}
+                  onClick={() => setSelectedCurvaClass(cls)}
+                  className="w-full flex items-center justify-between hover:bg-gray-50 rounded-lg px-1 py-0.5 transition-colors"
+                >
                   <div className="flex items-center gap-2">
                     <span className="w-5 h-5 rounded text-[9px] font-bold text-white flex items-center justify-center shrink-0" style={{ background: CURVA_COLORS[cls] }}>{cls}</span>
                     <span className="text-xs text-gray-600">{items.length} item{items.length !== 1 ? "s" : ""}</span>
                   </div>
                   <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${bg}`}>{label}</span>
-                </div>
+                </button>
               ))}
             </div>
           </CardContent>
         </Card>
 
-        {/* Pie Formas de Pagamento */}
+        {/* Pie Formas de Pagamento — clicável */}
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-1 pt-4 px-5">
             <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
               <CreditCard className="w-4 h-4 text-indigo-500" /> Formas de Pagamento
+              <span className="ml-auto flex items-center gap-1 text-[10px] text-gray-400 font-normal">
+                <MousePointerClick className="w-3 h-3" /> toque para detalhar
+              </span>
             </CardTitle>
           </CardHeader>
           <CardContent className="px-4 pb-4">
@@ -358,7 +383,15 @@ export default function AnaliseDashPanel({
                     <>
                       <ResponsiveContainer width="100%" height={160}>
                         <PieChart>
-                          <Pie data={pieData} cx="50%" cy="50%" outerRadius={70} dataKey="value" nameKey="name" paddingAngle={2}>
+                          <Pie
+                            data={pieData}
+                            cx="50%" cy="50%"
+                            outerRadius={70}
+                            dataKey="value" nameKey="name"
+                            paddingAngle={2}
+                            onClick={(_d: any, idx: number) => setSelectedForma(pieData[idx]?.name ?? null)}
+                            style={{ cursor: "pointer" }}
+                          >
                             {pieData.map((_: any, i: number) => <Cell key={i} fill={FORMA_COLORS[i % FORMA_COLORS.length]} />)}
                           </Pie>
                           <Tooltip formatter={(val: number, _n: any, props: any) => [fmt(val), props.payload?.name ?? ""]} />
@@ -366,7 +399,11 @@ export default function AnaliseDashPanel({
                       </ResponsiveContainer>
                       <div className="space-y-1.5 mt-1">
                         {pieData.slice(0, 5).map((fp: any, i: number) => (
-                          <div key={i} className="flex items-center justify-between gap-2">
+                          <button
+                            key={i}
+                            onClick={() => setSelectedForma(fp.name)}
+                            className="w-full flex items-center justify-between gap-2 hover:bg-gray-50 rounded-lg px-1 py-0.5 transition-colors"
+                          >
                             <div className="flex items-center gap-1.5 min-w-0">
                               <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: FORMA_COLORS[i % FORMA_COLORS.length] }} />
                               <span className="text-[11px] text-gray-600 truncate">{fp.name}</span>
@@ -376,8 +413,9 @@ export default function AnaliseDashPanel({
                                 {totalGasto > 0 ? Math.round((fp.value / totalGasto) * 100) : 0}%
                               </span>
                               <span className="text-[10px] text-gray-400">({fp.qtd} OC)</span>
+                              <ChevronRight className="w-3 h-3 text-gray-300" />
                             </div>
-                          </div>
+                          </button>
                         ))}
                         {pieData.length > 5 && (
                           <p className="text-[10px] text-gray-400">+{pieData.length - 5} outros meios…</p>
@@ -389,9 +427,16 @@ export default function AnaliseDashPanel({
                           <p className="text-[10px] text-gray-400 mb-1.5">{formasPagamento.length} variação{formasPagamento.length !== 1 ? "ões" : ""} no histórico:</p>
                           <div className="flex flex-wrap gap-1">
                             {formasPagamento.map((fp: FormaPgto, i: number) => (
-                              <span key={i} className="text-[9px] bg-gray-100 text-gray-500 rounded px-1.5 py-0.5 whitespace-nowrap">
+                              <button
+                                key={i}
+                                onClick={() => {
+                                  const lbl = FORMA_LABEL_MAP[(fp.forma ?? "").toLowerCase().trim()] ?? (fp.forma ?? "Outro");
+                                  setSelectedForma(lbl);
+                                }}
+                                className="text-[9px] bg-gray-100 hover:bg-indigo-100 hover:text-indigo-700 text-gray-500 rounded px-1.5 py-0.5 whitespace-nowrap transition-colors"
+                              >
                                 {normalizeFormaLabel(fp.forma, fp.condicao)}
-                              </span>
+                              </button>
                             ))}
                           </div>
                         </div>
@@ -465,13 +510,16 @@ export default function AnaliseDashPanel({
         </Card>
       </div>
 
-      {/* ── 3. Gastos por Período (bar chart com toggle Mês / Semana) ── */}
+      {/* ── 3. Gastos por Período (bar chart com toggle Mês / Semana) — clicável ── */}
       {(gastosMes.length > 1 || gastosSemana.length > 1) && (
         <Card className="border-0 shadow-sm">
           <CardHeader className="pb-1 pt-4 px-5">
             <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
               <BarChart2 className="w-4 h-4 text-indigo-500" />
               Evolução de Gastos
+              <span className="flex items-center gap-1 text-[10px] text-gray-400 font-normal">
+                <MousePointerClick className="w-3 h-3" /> toque na barra para detalhar
+              </span>
               {/* Toggle Mês / Semana */}
               <div className="ml-auto flex items-center gap-0 rounded-lg border border-gray-200 overflow-hidden bg-gray-50">
                 {(["mes", "semana"] as const).map((v) => (
@@ -516,7 +564,14 @@ export default function AnaliseDashPanel({
                     }
                   />
                   <Tooltip content={<TooltipBRL />} />
-                  <Bar dataKey="valor" fill={gastoView === "semana" ? "#0ea5e9" : "#6366f1"} radius={[4, 4, 0, 0]} maxBarSize={gastoView === "semana" ? 28 : 60} />
+                  <Bar
+                    dataKey="valor"
+                    fill={gastoView === "semana" ? "#0ea5e9" : "#6366f1"}
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={gastoView === "semana" ? 28 : 60}
+                    style={{ cursor: "pointer" }}
+                    onClick={(d: any) => setSelectedPeriodo({ key: d.key, label: d.label })}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -737,12 +792,34 @@ export default function AnaliseDashPanel({
         </Card>
       )}
 
-      {/* ── Drill-down Sheet ── */}
+      {/* ── Drill-down Sheets ── */}
       <ItemDrilldown
         item={selectedItem}
         totalGasto={totalGasto}
         itemClass={itemClass}
         onClose={() => setSelectedItem(null)}
+      />
+      <FormaDrilldown
+        forma={selectedForma}
+        itens={itens}
+        totalGasto={totalGasto}
+        onClose={() => setSelectedForma(null)}
+        onOpenItem={setSelectedItem}
+      />
+      <CurvaClassDrilldown
+        cls={selectedCurvaClass}
+        itens={selectedCurvaClass === "A" ? curvaA : selectedCurvaClass === "B" ? curvaB : curvaC}
+        itemClass={itemClass}
+        totalGasto={totalGasto}
+        onClose={() => setSelectedCurvaClass(null)}
+        onOpenItem={setSelectedItem}
+      />
+      <PeriodoDrilldown
+        periodo={selectedPeriodo}
+        gastoView={gastoView}
+        itens={itens}
+        onClose={() => setSelectedPeriodo(null)}
+        onOpenItem={setSelectedItem}
       />
     </div>
   );
@@ -1025,6 +1102,328 @@ function ItemDrilldown({
                   </div>
                 );
               })()}
+            </div>
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+/* ─────────────────────── Forma de Pagamento Drilldown ─────────────────────── */
+const FORMAS_ESPERADAS = ["cheque", "pix"];
+
+function isSuspeita(formaLabel: string): boolean {
+  const fl = formaLabel.toLowerCase();
+  return !FORMAS_ESPERADAS.some((f) => fl.startsWith(f));
+}
+
+function FormaDrilldown({
+  forma, itens, totalGasto, onClose, onOpenItem,
+}: {
+  forma: string | null;
+  itens: Item[];
+  totalGasto: number;
+  onClose: () => void;
+  onOpenItem: (item: Item) => void;
+}) {
+  const fmt = (v: number) =>
+    "R$\u00a0" + (v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const ocsForma = useMemo(() => {
+    if (!forma) return [];
+    return itens
+      .flatMap((item) =>
+        (item.ocorrencias ?? [])
+          .filter((oc) => {
+            const fLabel = FORMA_LABEL_MAP[(oc.formaPagamento ?? "").toLowerCase().trim()] ?? (oc.formaPagamento ?? "Não informado");
+            return fLabel === forma || (!oc.formaPagamento && forma === "Não informado");
+          })
+          .map((oc) => ({ ...oc, itemDescricao: item.descricao, itemUnidade: item.unidade, item }))
+      )
+      .sort((a, b) => (b.data ?? "").localeCompare(a.data ?? ""));
+  }, [forma, itens]);
+
+  const totalForma = ocsForma.reduce((s, oc) => s + (oc.total ?? 0), 0);
+  const semObra = ocsForma.filter((oc) => !oc.obraNome || oc.obraNome === "Não informado" || oc.obraNome === "—");
+  const suspeita = forma ? isSuspeita(forma) : false;
+
+  return (
+    <Sheet open={!!forma} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto p-0">
+        {forma && (
+          <div className="flex flex-col h-full">
+            <div className={`px-6 py-5 border-b ${suspeita ? "bg-amber-50 border-amber-200" : "bg-indigo-50 border-indigo-100"}`}>
+              <SheetHeader>
+                <div className="flex items-start gap-3">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${suspeita ? "bg-amber-200" : "bg-indigo-200"}`}>
+                    <CreditCard className={`w-5 h-5 ${suspeita ? "text-amber-700" : "text-indigo-700"}`} />
+                  </div>
+                  <div className="min-w-0">
+                    <SheetTitle className="text-base font-bold text-gray-800 break-words">{forma}</SheetTitle>
+                    <p className="text-xs text-gray-500 mt-0.5">{ocsForma.length} OC{ocsForma.length !== 1 ? "s" : ""} · {fmt(totalForma)}</p>
+                  </div>
+                </div>
+              </SheetHeader>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+              {/* Alertas */}
+              {suspeita && (
+                <div className="flex items-start gap-3 bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
+                  <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-bold text-amber-800">Forma de pagamento incomum</p>
+                    <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
+                      Esta forma não é Cheque nem PIX. Verifique se as OCs abaixo estão corretas.
+                    </p>
+                  </div>
+                </div>
+              )}
+              {semObra.length > 0 && (
+                <div className="flex items-start gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3">
+                  <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-bold text-rose-700">{semObra.length} OC{semObra.length !== 1 ? "s" : ""} sem obra alocada</p>
+                    <p className="text-xs text-rose-600 mt-0.5 leading-relaxed">
+                      Compras sem obra de destino podem indicar aquisições não planejadas ou erro de cadastro.
+                    </p>
+                  </div>
+                </div>
+              )}
+              {/* KPIs */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 text-center">
+                  <p className="text-[10px] text-gray-400 mb-1">Total</p>
+                  <p className="text-sm font-bold text-gray-800 tabular-nums">{fmt(totalForma)}</p>
+                  <p className="text-[10px] text-indigo-500 font-semibold">{totalGasto > 0 ? ((totalForma / totalGasto) * 100).toFixed(1) : 0}% do fornecedor</p>
+                </div>
+                <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 text-center">
+                  <p className="text-[10px] text-gray-400 mb-1">OCs</p>
+                  <p className="text-sm font-bold text-gray-800">{ocsForma.length}</p>
+                </div>
+                <div className={`border rounded-xl p-3 text-center ${semObra.length > 0 ? "bg-rose-50 border-rose-100" : "bg-gray-50 border-gray-100"}`}>
+                  <p className="text-[10px] text-gray-400 mb-1">Sem obra</p>
+                  <p className={`text-sm font-bold ${semObra.length > 0 ? "text-rose-600" : "text-gray-400"}`}>{semObra.length}</p>
+                </div>
+              </div>
+              {/* Lista de OCs */}
+              <div>
+                <p className="text-xs font-bold text-gray-500 mb-2 uppercase tracking-wider">Ordens de Compra</p>
+                <div className="space-y-2">
+                  {ocsForma.map((oc, i) => {
+                    const d = oc.data ? new Date(oc.data + "T00:00:00").toLocaleDateString("pt-BR") : "—";
+                    const semObraFlag = !oc.obraNome || oc.obraNome === "Não informado" || oc.obraNome === "—";
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => { onClose(); onOpenItem(oc.item); }}
+                        className="w-full text-left bg-gray-50 hover:bg-indigo-50 border border-gray-100 hover:border-indigo-200 rounded-xl px-4 py-3 transition-colors group"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-bold text-indigo-600 group-hover:text-indigo-800">OC {oc.numeroOc || "—"}</span>
+                          <span className="text-[10px] text-gray-400">{d}</span>
+                        </div>
+                        <p className="text-[11px] text-gray-700 font-medium truncate mb-1">{oc.itemDescricao}</p>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {semObraFlag ? (
+                              <Badge variant="destructive" className="text-[9px] px-1.5 py-0 h-4 font-semibold">Sem obra</Badge>
+                            ) : (
+                              <span className="text-[10px] text-gray-500 truncate">{oc.obraNome}</span>
+                            )}
+                          </div>
+                          <span className="text-xs font-bold text-gray-800 tabular-nums shrink-0">{fmt(oc.total ?? 0)}</span>
+                        </div>
+                        {(oc.formaPagamento || oc.condicaoPagamento) && (
+                          <p className="text-[9px] text-gray-400 mt-1">{[oc.formaPagamento, oc.condicaoPagamento].filter(Boolean).join(" · ")}</p>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+/* ─────────────────────── Curva ABC Class Drilldown ─────────────────────── */
+function CurvaClassDrilldown({
+  cls, itens: classItens, itemClass, totalGasto, onClose, onOpenItem,
+}: {
+  cls: "A" | "B" | "C" | null;
+  itens: Item[];
+  itemClass: Record<string, "A" | "B" | "C">;
+  totalGasto: number;
+  onClose: () => void;
+  onOpenItem: (item: Item) => void;
+}) {
+  const fmt = (v: number) =>
+    "R$\u00a0" + (v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const totalClasse = classItens.reduce((s, it) => s + it.valorTotal, 0);
+  const clsLabel = cls === "A" ? "Críticos (≈80% do gasto)" : cls === "B" ? "Secundários (≈15% do gasto)" : "Terciários (≈5% do gasto)";
+  const clsDesc = cls === "A"
+    ? "Itens que concentram a maior parte do gasto. Foco de negociação e controle."
+    : cls === "B"
+    ? "Itens de gasto intermediário. Monitorar variações de preço."
+    : "Itens de baixo impacto financeiro. Verificar necessidade de manter estoque.";
+
+  return (
+    <Sheet open={!!cls} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto p-0">
+        {cls && (
+          <div className="flex flex-col h-full">
+            <div className="px-6 py-5 border-b" style={{ background: cls === "A" ? "#fef2f2" : cls === "B" ? "#fffbeb" : "#f8fafc" }}>
+              <SheetHeader>
+                <div className="flex items-start gap-3">
+                  <span
+                    className="text-sm font-bold text-white px-3 py-1.5 rounded-lg shrink-0 shadow-sm"
+                    style={{ background: CURVA_COLORS[cls] }}
+                  >{cls}</span>
+                  <div>
+                    <SheetTitle className="text-base font-bold text-gray-800">{clsLabel}</SheetTitle>
+                    <p className="text-xs text-gray-500 mt-0.5">{classItens.length} item{classItens.length !== 1 ? "s" : ""} · {fmt(totalClasse)}</p>
+                  </div>
+                </div>
+              </SheetHeader>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+              <p className="text-xs text-gray-500 leading-relaxed">{clsDesc}</p>
+              <div className="space-y-2">
+                {[...classItens]
+                  .sort((a, b) => b.valorTotal - a.valorTotal)
+                  .map((item, i) => {
+                    const pct = totalGasto > 0 ? ((item.valorTotal / totalGasto) * 100).toFixed(1) : "0";
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => { onClose(); onOpenItem(item); }}
+                        className="w-full text-left bg-gray-50 hover:bg-indigo-50 border border-gray-100 hover:border-indigo-200 rounded-xl px-4 py-3 transition-colors group"
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-[9px] font-bold text-white px-1.5 py-0.5 rounded shrink-0" style={{ background: CURVA_COLORS[cls] }}>{cls}</span>
+                            <span className="text-xs font-medium text-gray-700 truncate group-hover:text-indigo-700">{item.descricao}</span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-xs font-bold text-gray-800 tabular-nums">{fmt(item.valorTotal)}</span>
+                            <span className="text-[10px] text-gray-400">{pct}%</span>
+                            <ChevronRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-indigo-400" />
+                          </div>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: CURVA_COLORS[cls] }} />
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-1">{item.qtdOcs} OC{item.qtdOcs !== 1 ? "s" : ""} · {item.unidade}</p>
+                      </button>
+                    );
+                  })}
+              </div>
+            </div>
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+/* ─────────────────────── Período (Mês / Semana) Drilldown ─────────────────────── */
+function PeriodoDrilldown({
+  periodo, gastoView, itens, onClose, onOpenItem,
+}: {
+  periodo: { key: string; label: string } | null;
+  gastoView: "mes" | "semana";
+  itens: Item[];
+  onClose: () => void;
+  onOpenItem: (item: Item) => void;
+}) {
+  const fmt = (v: number) =>
+    "R$\u00a0" + (v || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const ocsperiodo = useMemo(() => {
+    if (!periodo) return [];
+    return itens
+      .flatMap((item) =>
+        (item.ocorrencias ?? [])
+          .filter((oc) => {
+            if (!oc.data) return false;
+            if (gastoView === "mes") return oc.data.slice(0, 7) === periodo.key;
+            return toWeekKey(oc.data) === periodo.key;
+          })
+          .map((oc) => ({ ...oc, item }))
+      )
+      .sort((a, b) => (b.data ?? "").localeCompare(a.data ?? ""));
+  }, [periodo, gastoView, itens]);
+
+  const totalPeriodo = ocsperiodo.reduce((s, oc) => s + (oc.total ?? 0), 0);
+
+  const byItem = useMemo(() => {
+    const m = new Map<string, { item: Item; total: number; qtd: number }>();
+    for (const oc of ocsperiodo) {
+      const ex = m.get(oc.item.descricao);
+      if (ex) { ex.total += oc.total ?? 0; ex.qtd++; }
+      else m.set(oc.item.descricao, { item: oc.item, total: oc.total ?? 0, qtd: 1 });
+    }
+    return Array.from(m.values()).sort((a, b) => b.total - a.total);
+  }, [ocsperiodo]);
+
+  return (
+    <Sheet open={!!periodo} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto p-0">
+        {periodo && (
+          <div className="flex flex-col h-full">
+            <div className="px-6 py-5 border-b bg-indigo-50 border-indigo-100">
+              <SheetHeader>
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-200 flex items-center justify-center shrink-0">
+                    <CalendarDays className="w-5 h-5 text-indigo-700" />
+                  </div>
+                  <div>
+                    <SheetTitle className="text-base font-bold text-gray-800">{periodo.label}</SheetTitle>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {gastoView === "mes" ? "Mês" : "Semana"} · {ocsperiodo.length} OC{ocsperiodo.length !== 1 ? "s" : ""} · {fmt(totalPeriodo)}
+                    </p>
+                  </div>
+                </div>
+              </SheetHeader>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+              {/* Top itens do período */}
+              <div>
+                <p className="text-xs font-bold text-gray-500 mb-2 uppercase tracking-wider">Top Itens no Período</p>
+                <div className="space-y-2">
+                  {byItem.slice(0, 15).map((row, i) => {
+                    const pct = totalPeriodo > 0 ? ((row.total / totalPeriodo) * 100).toFixed(0) : "0";
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => { onClose(); onOpenItem(row.item); }}
+                        className="w-full text-left bg-gray-50 hover:bg-indigo-50 border border-gray-100 hover:border-indigo-200 rounded-xl px-4 py-3 transition-colors group"
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <span className="text-xs font-medium text-gray-700 truncate group-hover:text-indigo-700">{row.item.descricao}</span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-xs font-bold text-gray-800 tabular-nums">{fmt(row.total)}</span>
+                            <span className="text-[10px] text-gray-400">{pct}%</span>
+                            <ChevronRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-indigo-400" />
+                          </div>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                          <div className="h-full rounded-full bg-indigo-400" style={{ width: `${pct}%` }} />
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-1">{row.qtd} OC{row.qtd !== 1 ? "s" : ""} · {row.item.unidade}</p>
+                      </button>
+                    );
+                  })}
+                  {byItem.length > 15 && (
+                    <p className="text-xs text-center text-gray-400 py-1">+{byItem.length - 15} outros itens</p>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         )}
