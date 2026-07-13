@@ -1,4 +1,40 @@
 /**
+ * Rev. 4197 - SCORECARD METAS & DESVIOS: FIX VÍNCULO DIRETO POR orcamentoId.
+ *
+ * MOTIVAÇÃO:
+ * A aba "Metas & Desvios" exibia "Nenhum orçamento vinculado a esta obra" mesmo
+ * quando o projeto tinha um orçamento vinculado via `planejamento_projetos.orcamentoId`.
+ * O endpoint `getMetasDesvios` buscava SOMENTE por `orcamentos."obraId" = obraId`,
+ * mas o orçamento do projeto pode ter `obraId` diferente (ou nulo) — o vínculo
+ * canônico do projeto planejamento é `orcamentoId` (FK direta).
+ *
+ * O QUE FOI FEITO:
+ * 1. Backend (getMetasDesvios): input agora aceita `orcamentoId?: number`.
+ *    Se fornecido → busca `WHERE id = orcamentoId AND companyId = ...` (lookup direto).
+ *    Sem ele → fallback legacy `WHERE "obraId" = obraId AND companyId = ...`.
+ *
+ * 2. Frontend (ScorecardTab): passa `orcamentoId: proj?.orcamentoId ?? undefined`
+ *    para ativar o lookup direto quando o projeto tem o vínculo salvo.
+ *
+ * ARQUIVOS:
+ * - server/routers/scorecard.ts (getMetasDesvios: input + query dual-path)
+ * - client/src/pages/planejamento/ScorecardTab.tsx (passa orcamentoId)
+ *
+ * ZERO DELETE · ZERO ALTER DESTRUTIVO.
+ */
+
+/**
+ * Rev. 4196 - BANCO DE HORAS: TABELA DIA A DIA REFATORADA COMO TABLE HTML.
+ *
+ * MOTIVAÇÃO:
+ * Grid CSS (grid-cols) causava sobreposição de texto entre colunas "TRABALHADO"
+ * e "JORNADA" em dispositivos móveis. Substituído por <table>/<thead>/<tbody>/<tfoot>
+ * para que cada coluna use sua largura natural sem colisão.
+ *
+ * ZERO DELETE · ZERO ALTER DESTRUTIVO.
+ */
+
+/**
  * Rev. 4195 - BANCO DE HORAS: STATUS DE AUTORIZAÇÃO DIA A DIA — ✓ AUTORIZADO vs ⚠ SEM AUTORIZAÇÃO.
  *
  * MOTIVAÇÃO:

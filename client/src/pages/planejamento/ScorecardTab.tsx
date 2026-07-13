@@ -248,7 +248,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
     { enabled: enabled && tabScore === "rh", staleTime: 120_000 }
   );
   const analiseMetasDesvios = trpc.scorecard.getMetasDesvios.useQuery(
-    { companyId, obraId: obraId! },
+    { companyId, obraId: obraId!, orcamentoId: proj?.orcamentoId ?? undefined },
     { enabled: enabled && tabScore === "metas", staleTime: 120_000 }
   );
   const analiseBancoHoras = trpc.scorecard.getBancoHorasObra.useQuery(

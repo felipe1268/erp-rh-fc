@@ -50,6 +50,10 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4197** — **SCORECARD METAS & DESVIOS: FIX VÍNCULO POR orcamentoId.** `getMetasDesvios` agora aceita `orcamentoId` opcional e prioriza lookup direto (`WHERE id=orcamentoId`) antes de fallback por `obraId`. Frontend passa `proj.orcamentoId`. ZERO DELETE · ZERO ALTER destrutivo.
+
+- **Rev. 4196** — **BANCO DE HORAS: TABELA DIA A DIA REFATORADA COMO TABLE HTML.** Grid CSS causava sobreposição "TRABALHADOJORNADA" em mobile. Substituída por `<table>` com colunas de largura natural + `tabular-nums`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4195** — **BANCO DE HORAS: STATUS DE AUTORIZAÇÃO DIA A DIA — ✓ AUTORIZADO vs ⚠ SEM AUTORIZAÇÃO.** Backend: `approvedSet` por funcionário+período em `memorialCalculo`; campo `autorizado` em cada dia. Frontend: coluna Aut. (✓ verde/⚠ âmbar), fundo âmbar nos dias sem autorização, resumo "Autorizado: +Xh / Sem autorização: +Xh". ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4194** — **BANCO DE HORAS: TABELA DIA A DIA SEMPRE ABERTA + DIA DA SEMANA COLORIDO + FERIADO MARCADO.** Sub-componente `PeriodoDiasTable` com useQuery próprio; tabela sem toggle — sempre visível. Dom em vermelho, Sáb em âmbar, Feriado com badge roxo "Fer" e fundo purple. ZERO DELETE · ZERO ALTER destrutivo.

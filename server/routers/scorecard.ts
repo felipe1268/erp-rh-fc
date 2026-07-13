@@ -1225,25 +1225,38 @@ export const scorecardRouter = router({
     }),
 
   getMetasDesvios: protectedProcedure
-    .input(z.object({ companyId: z.number(), obraId: z.number() }))
+    .input(z.object({ companyId: z.number(), obraId: z.number(), orcamentoId: z.number().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return null;
-      const { companyId, obraId } = input;
+      const { companyId, obraId, orcamentoId } = input;
       const safe = async (q: Promise<any>) => {
         try { const r = await q; return r?.rows ?? []; } catch (e: any) { return []; }
       };
 
-      const orcRows = await safe(db.execute(sql`
-        SELECT id,
-               "totalCusto"::numeric     AS total_custo,
-               "totalVenda"::numeric     AS total_venda,
-               "valorNegociado"::numeric AS valor_negociado,
-               COALESCE("tempoObraMeses", 12)::int AS tempo_meses
-        FROM orcamentos
-        WHERE "companyId" = ${companyId} AND "obraId" = ${obraId} AND deleted_at IS NULL
-        ORDER BY id DESC LIMIT 1
-      `));
+      // Prioridade 1: vínculo direto pelo orcamentoId do projeto
+      // Prioridade 2: fallback por obraId (compatibilidade)
+      const orcRows = orcamentoId
+        ? await safe(db.execute(sql`
+            SELECT id,
+                   "totalCusto"::numeric     AS total_custo,
+                   "totalVenda"::numeric     AS total_venda,
+                   "valorNegociado"::numeric AS valor_negociado,
+                   COALESCE("tempoObraMeses", 12)::int AS tempo_meses
+            FROM orcamentos
+            WHERE id = ${orcamentoId} AND "companyId" = ${companyId} AND deleted_at IS NULL
+            LIMIT 1
+          `))
+        : await safe(db.execute(sql`
+            SELECT id,
+                   "totalCusto"::numeric     AS total_custo,
+                   "totalVenda"::numeric     AS total_venda,
+                   "valorNegociado"::numeric AS valor_negociado,
+                   COALESCE("tempoObraMeses", 12)::int AS tempo_meses
+            FROM orcamentos
+            WHERE "companyId" = ${companyId} AND "obraId" = ${obraId} AND deleted_at IS NULL
+            ORDER BY id DESC LIMIT 1
+          `));
       if (!orcRows.length) return null;
       const orc = orcRows[0] as any;
       const orcId = orc.id;
