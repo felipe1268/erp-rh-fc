@@ -1118,8 +1118,21 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                             <React.Fragment key={empId}>
                               <tr onClick={toggle} className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors">
                                 <td className="px-2 py-1.5">
-                                  <p className="font-medium text-gray-800 leading-tight">{f.nome}</p>
-                                  <p className="text-[9px] text-gray-400">{f.matricula ?? "—"} · {f.cargo ?? "—"}</p>
+                                  <div className="flex items-center gap-1.5">
+                                    {f.foto_url ? (
+                                      <img src={f.foto_url} alt={f.nome} className="w-7 h-7 rounded-full object-cover flex-shrink-0 border border-gray-200" />
+                                    ) : (
+                                      <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 border border-indigo-200">
+                                        <span className="text-[9px] font-bold text-indigo-600">
+                                          {(f.nome ?? "?").split(" ").slice(0, 2).map((w: string) => w[0]).join("")}
+                                        </span>
+                                      </div>
+                                    )}
+                                    <div>
+                                      <p className="font-medium text-gray-800 leading-tight">{f.nome}</p>
+                                      <p className="text-[9px] text-gray-400">{f.matricula ?? "—"} · {f.cargo ?? "—"}</p>
+                                    </div>
+                                  </div>
                                 </td>
                                 <td className="text-center px-2 py-1.5 text-gray-600">{f.total_dias_na_obra}</td>
                                 <td className="text-right px-2 py-1.5 text-gray-700">{fmt(Number(f.salario_bruto_total))}</td>

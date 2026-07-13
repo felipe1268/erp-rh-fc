@@ -50,21 +50,21 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4206** — **SCORECARD RH/FOLHA: FIX CAST VÍRGULA — `REPLACE(',','.')::numeric` em todos os casts de colunas varchar.** Bug persistia após Rev.4205 (camelCase correto): a `Promise.all` das 3 queries rejeitava com `ERROR: invalid input syntax for type numeric: "680,75"`. Todas as colunas numéricas são VARCHAR no Neon — `vr_benefits.valorTotal` e outros guardam valores com vírgula BR. Cast `::numeric` direto falha → endpoint lança exceção → `analiseRH.data` fica `undefined` → UI mostra "Sem dados" silenciosamente. Fix: `COALESCE(REPLACE(col, ',', '.')::numeric, 0)` em `payroll_payments` (8 colunas), `vr_benefits` (2 colunas), `vacation_periods.valorTotal`, `employees.seguroVida`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4207** — **SCORECARD RH/FOLHA: FIX DIAS_NA_OBRA (150→30) + FOTO DO COLABORADOR.** Bug: `site_periods` CTE listava TODAS as linhas de `employee_site_history` sem agrupar por funcionário. ACACIO tinha 8 linhas → SUM somava 8× o overlap de Abril → 150 dias impossível. Fix: GROUP BY `"employeeId"` com `MIN("dataInicio")` + `CASE WHEN BOOL_OR("dataFim" IS NULL) THEN CURRENT_DATE ELSE MAX("dataFim")`. Foto: backend retorna `e."fotoUrl"` na CTE custos; frontend exibe avatar 28px (foto real ou iniciais com bg-indigo). ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4205** — **SCORECARD RH/FOLHA: FIX RAIZ DEFINITIVO — payroll_payments + employee_site_history + vr_benefits + vacation_periods SÃO camelCase.** Bug persistia após Rev.4204: `getCustosRH` usava snake_case em TODAS as outras tabelas também. Diagnóstico via Neon confirmou 289 linhas de folha existentes para a obra (obraId=90001, companyId=60002, 2026-01→2026-06). Fix: `employee_site_history` (`"obraId"`, `"companyId"`, `"employeeId"`, `"dataInicio"`, `"dataFim"`); `payroll_payments` (`"companyId"`, `"employeeId"`, `"mesReferencia"`, `"salarioBrutoMes"`, etc.); `vr_benefits` + `vacation_periods` idem. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4206** — **SCORECARD RH/FOLHA: FIX CAST VARCHAR→NUMERIC COM PADRÃO SEGURO.** Dois bugs consecutivos: (1) `"680,75"` em vr_benefits → `REPLACE(',','.')` resolve; (2) `"sim"` em `employees.seguroVida` → `REPLACE` não ajuda. Fix definitivo: `CASE WHEN col ~ '^-?[0-9]' THEN REPLACE(col, ',', '.')::numeric ELSE NULL END` em todas as 12 colunas VARCHAR numéricas. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
+- **Rev. 4205** — **SCORECARD RH/FOLHA: FIX camelCase em payroll_payments + employee_site_history + vr_benefits + vacation_periods.** 289 linhas existiam mas ficavam invisíveis. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4204** — **SCORECARD RH/FOLHA: FIX employees camelCase + REDESIGN ABA + FÉRIAS + SEGURO DE VIDA.** Bug raiz: snake_case em `employees`; Fix camelCase + 3 queries paralelas + UI com seletor ano/mês. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4203** — **SCORECARD METAS & DESVIOS: FIX orcamento_itens camelCase + CONTRATOS DE TERCEIROS.** CTE `orca_itens` usava snake_case (`orcamento_id`, `meta_unit_total`, `custo_unit_total`) para colunas camelCase → lista vazia silenciosa. Fix + nova query `terceiro_contratos` com medições aprovadas. Frontend: total comprometido = OCs + Contratos. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4203** — **SCORECARD METAS & DESVIOS: FIX orcamento_itens camelCase + CONTRATOS DE TERCEIROS.** CTE `orca_itens` usava snake_case → lista vazia silenciosa. Fix + nova query `terceiro_contratos`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4201** — **SCORECARD: FIX RAIZ — BUSCA POR obraId SEM FILTRO companyId.** Path 2 simplificado para `"obraId"=O` sem companyId. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4201** — **SCORECARD: FIX RAIZ — BUSCA POR obraId SEM FILTRO companyId.** ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4198** — **SCORECARD METAS & DESVIOS: QUERY TRI-CAMINHOS PARA DETECTAR ORÇAMENTO.** Query com OR em 3 caminhos: `id=orcamentoId` | `"obraId"=obraId` | `id IN (SELECT orcamento_id FROM planejamento_projetos WHERE obra_id=obraId)`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4197** — **SCORECARD METAS & DESVIOS: FIX VÍNCULO POR orcamentoId.** `getMetasDesvios` aceita `orcamentoId` opcional, prioriza lookup direto. Frontend passa `proj.orcamentoId`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4198** — **SCORECARD METAS & DESVIOS: QUERY TRI-CAMINHOS PARA DETECTAR ORÇAMENTO.** ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

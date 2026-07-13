@@ -1082,13 +1082,20 @@ export const scorecardRouter = router({
       const [r, feriasR, seguroR] = await Promise.all([
         db.execute(sql`
           WITH site_periods AS (
+            -- Colapsa todos os registros de history do funcionário em UMA faixa por obra:
+            -- início = dia que ele entrou pela primeira vez; fim = último dia registrado
+            -- (se qualquer linha tiver dataFim NULL = ainda ativo, usa CURRENT_DATE)
             SELECT
-              esh."employeeId"                                 AS employee_id,
-              esh."dataInicio"::date                           AS periodo_inicio,
-              COALESCE(esh."dataFim"::date, CURRENT_DATE)     AS periodo_fim
+              esh."employeeId"                                               AS employee_id,
+              MIN(esh."dataInicio"::date)                                    AS periodo_inicio,
+              CASE
+                WHEN BOOL_OR(esh."dataFim" IS NULL) THEN CURRENT_DATE
+                ELSE MAX(esh."dataFim"::date)
+              END                                                            AS periodo_fim
             FROM employee_site_history esh
             WHERE esh."obraId"    = ${input.obraId}
               AND esh."companyId" = ${input.companyId}
+            GROUP BY esh."employeeId"
 
             UNION ALL
 
@@ -1168,6 +1175,7 @@ export const scorecardRouter = router({
             SELECT
               pf.employee_id,
               e."nomeCompleto"                                      AS nome,
+              e."fotoUrl"                                           AS foto_url,
               e.matricula,
               e.cargo,
               e."salarioBase"                                       AS salario_base_cadastro,
@@ -1211,7 +1219,7 @@ export const scorecardRouter = router({
             FROM pf
             JOIN employees e ON e.id = pf.employee_id AND e."companyId" = ${input.companyId}
             LEFT JOIN vr_data v ON v.employee_id = pf.employee_id AND v.mes_referencia = pf.mes_referencia
-            GROUP BY pf.employee_id, e."nomeCompleto", e.matricula, e.cargo, e."salarioBase"
+            GROUP BY pf.employee_id, e."nomeCompleto", e."fotoUrl", e.matricula, e.cargo, e."salarioBase"
           )
           SELECT * FROM custos ORDER BY custo_folha_empresa DESC NULLS LAST
         `),

@@ -1,4 +1,25 @@
 /**
+ * Rev. 4207 - SCORECARD RH/FOLHA: FIX DIAS_NA_OBRA (150→30) + FOTO DO COLABORADOR.
+ *
+ * CAUSA RAIZ (150 dias):
+ *   `site_periods` CTE listava TODAS as linhas de employee_site_history sem agrupar por funcionário.
+ *   ACACIO tinha 8 linhas → a subquery de overlap somava 8× os dias de Abril → 150 dias impossível.
+ *
+ * FIX dias:
+ *   `site_periods` agora usa GROUP BY "employeeId" com:
+ *     - MIN("dataInicio"::date)   → primeiro dia na obra
+ *     - CASE WHEN BOOL_OR("dataFim" IS NULL) THEN CURRENT_DATE ELSE MAX("dataFim"::date) END
+ *       → ainda ativo se qualquer linha tiver dataFim NULL, senão último dia registrado
+ *   Resultado: 1 faixa por funcionário por obra → overlap com mês sempre ≤ dias_no_mes.
+ *
+ * FOTO:
+ *   Backend: adicionado e."fotoUrl" AS foto_url na CTE custos + GROUP BY.
+ *   Frontend: célula FUNCIONÁRIO agora mostra avatar 28px (foto real ou iniciais AC com bg-indigo).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4206 - SCORECARD RH/FOLHA: FIX CAST VÍRGULA — REPLACE(',','.') em todos os casts ::numeric de colunas varchar.
  *
  * CAUSA RAIZ:
