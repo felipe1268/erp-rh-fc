@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4216** — **SCORECARD: SEGURANÇA — GRADE CLT COM STATUS COMPLETO, DESLIGADOS VISÍVEIS, CIPA E PERÍODO DE EXPERIÊNCIA.** Root-cause das fotos ausentes: filtro `status NOT IN ('Desligado',...)` escondia desligados que tinham foto. Fix: Q1 sem filtro de status → exibe todos que já passaram pela obra. Novos campos: `dataAdmissao`, `data_desligamento`, `periodo_experiencia` (exp1/exp2), `cargo_cipa` (JOIN LATERAL cipa_members). ORDER BY: Ativo→Férias→Afastado→Aviso→Desligado→Inativo. Frontend: card horizontal (3 colunas) com foto (grayscale+ring p/ desligados), badge de status colorido, Exp. 1º/2º Per., CIPA, ASO, advertências. Sumário de contagem acima da grade. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4217** — **REGRA DE OURO GRAVADA: SELETOR DE MÊS/ANO → SEMPRE `<PeriodSelectorCard>`.** Substituído seletor inline customizado da aba Segurança pelo componente padrão. `segMes: string → number | null`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4215** — **SCORECARD: ABA SEGURANÇA — REDESIGN BOARD-LEVEL (FOTOS, GRÁFICOS, CUSTO ATESTADOS, DATAS BR, SELETOR MÊS/ANO).** Seletor período ‹/› filtra todas as queries (mesRef). KPI Row 1 (5 cards): Efetivo CLT, Acidentes, DDS, APR/PT, Atestados. Banner custo atestados: salário÷30×dias + encargos 33% + VR proporcional. 2 gráficos recharts (12 meses). Grade de fotos CLT com badge ASO+advertências. Tabela atestados com foto, custo por linha e rodapé totalizado. Backend: Q12 reescrita (JOIN LATERAL vr_benefits), Q13 nova (historico mensal), mesRef propagado p/ Q8–Q12. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4216** — **SCORECARD: SEGURANÇA — GRADE CLT COM STATUS COMPLETO, DESLIGADOS VISÍVEIS, CIPA E PERÍODO DE EXPERIÊNCIA.** Root-cause das fotos ausentes: filtro `status NOT IN ('Desligado',...)` escondia desligados com foto. Q1 sem filtro. Novos campos: periodo_experiencia, cargo_cipa. Badges: Status · Exp. 1º/2º · CIPA · ASO · Advertências. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
@@ -74,6 +74,7 @@ Ver `replit-history.md` para revisões Rev. 4205 e anteriores.
 
 ## User preferences
 
+- **REGRA DE OURO — Seletor de mês/ano:** SEMPRE usar `<PeriodSelectorCard>` (`client/src/components/PeriodSelectorCard.tsx`). Layout padrão: navegação `< ANO >` + botão "Ano todo" no cabeçalho + 12 pills de mês (Jan…Dez) em grade horizontal. Estado: `mes: number | null` (null = ano todo). NUNCA usar seletor inline customizado (‹/›, dropdown, ou similar). Aplicar em TODA tela que filtra por mês/ano.
 - Seletor de período nos dashboards = white-card (padrão PanoramaFiscal), NUNCA DashHeader gradiente.
 - Dialogs nunca truncam texto; use break-words/break-all.
 - Commits/revisões seguem convenção acima; detalhe sempre em `shared/changelog.ts`.

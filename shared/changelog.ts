@@ -1,4 +1,29 @@
 /**
+ * Rev. 4217 - REGRA DE OURO: SELETOR DE MÊS/ANO — PADRONIZAÇÃO PARA PeriodSelectorCard EM TODA A PLATAFORMA.
+ *
+ * MELHORIA — Usuário definiu regra de ouro: todo seletor de período (mês/ano) deve usar o componente
+ * padrão `PeriodSelectorCard` (`client/src/components/PeriodSelectorCard.tsx`). O seletor inline
+ * customizado (‹/› com texto "Jun / 2026") da aba Segurança foi substituído.
+ *
+ * Layout padrão (PeriodSelectorCard):
+ *   • Cabeçalho: < ANO > + botão "Ano todo" (mes=null) alinhados à esquerda + slot `actions` à direita.
+ *   • Grade de 12 pills: Jan Fev Mar Abr Mai Jun Jul Ago Set Out Nov Dez.
+ *   • Pill selecionado: border-2 border-slate-800, fundo slate-50, texto slate-800 bold.
+ *   • Pill "Ano todo" selecionado: mesma aparência que pill de mês selecionado.
+ *   • Ponto colorido opcional por mês via `monthStatus`: azul=com dados, cinza=sem dados.
+ *
+ * Mudanças nesta revisão (ScorecardTab.tsx — aba Segurança):
+ *   • Estado: `segMes: string` → `segMes: number | null` (null = ano todo).
+ *   • `segMesRef`: atualizado para `segMes === null ? undefined : \`${segAno}-${padStart}\``.
+ *   • Seletor inline removido; substituído por `<PeriodSelectorCard ... onAnoTodo />`.
+ *
+ * Regra gravada em:
+ *   • `replit.md` → seção "User preferences" (regra de ouro).
+ *   • `.agents/memory/MEMORY.md` (pointer) + `period-selector-golden-rule.md` (detalhe).
+ *   • ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4216 - SCORECARD: SEGURANÇA — GRADE CLT COM STATUS COMPLETO, DESLIGADOS VISÍVEIS, CIPA E PERÍODO DE EXPERIÊNCIA.
  *
  * MELHORIA — Grade de fotos da equipe CLT estava ocultando funcionários desligados (tinham foto mas eram filtrados

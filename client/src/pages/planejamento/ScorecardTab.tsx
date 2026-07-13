@@ -238,7 +238,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
   const [rhAno,         setRhAno]         = useState(new Date().getFullYear());
   const [rhMes,         setRhMes]         = useState<string>("all");
   const [segAno,        setSegAno]        = useState(new Date().getFullYear());
-  const [segMes,        setSegMes]        = useState<string>(String(new Date().getMonth() + 1).padStart(2, "0"));
+  const [segMes,        setSegMes]        = useState<number | null>(new Date().getMonth() + 1);
 
   const enabled = !!obraId;
 
@@ -254,7 +254,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
     { companyId, obraId: obraId! },
     { enabled: enabled && (tabScore === "compras" || tabScore === "operacional"), staleTime: 120_000 }
   );
-  const segMesRef = segMes === "all" ? undefined : `${segAno}-${segMes}`;
+  const segMesRef = segMes === null ? undefined : `${segAno}-${String(segMes).padStart(2, "0")}`;
   const analiseSeguranca = trpc.scorecard.getSeguranca.useQuery(
     { companyId, obraId: obraId!, mesRef: segMesRef },
     { enabled: enabled && tabScore === "seguranca", staleTime: 120_000 }
@@ -1388,31 +1388,14 @@ export default function ScorecardTab({ proj }: { proj: any }) {
       {tabScore === "seguranca" && (
         <div className="space-y-3">
 
-          {/* ── Seletor de Período ─────────────────────────────────────────── */}
-          <div className="flex items-center justify-between bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
-            <button onClick={() => {
-              const m = segMes === "all" ? 12 : parseInt(segMes);
-              const y = segMes === "all" ? segAno - 1 : (m === 1 ? segAno - 1 : segAno);
-              const nm = segMes === "all" ? 12 : (m === 1 ? 12 : m - 1);
-              setSegAno(y); setSegMes(String(nm).padStart(2, "0"));
-            }} className="p-1 rounded hover:bg-gray-100 text-gray-400">‹</button>
-            <div className="text-center">
-              <p className="text-[11px] font-bold text-gray-700">
-                {segMes === "all" ? "Acumulado (tudo)" : `${MESES_BR[parseInt(segMes)-1]} / ${segAno}`}
-              </p>
-              <p className="text-[9px] text-gray-400">Período de referência</p>
-            </div>
-            <button onClick={() => {
-              const m = segMes === "all" ? 1 : parseInt(segMes);
-              const y = segMes === "all" ? segAno + 1 : (m === 12 ? segAno + 1 : segAno);
-              const nm = segMes === "all" ? 1 : (m === 12 ? 1 : m + 1);
-              setSegAno(y); setSegMes(String(nm).padStart(2, "0"));
-            }} className="p-1 rounded hover:bg-gray-100 text-gray-400">›</button>
-            <button onClick={() => setSegMes("all")}
-              className={`ml-2 text-[9px] px-2 py-0.5 rounded-full border transition-colors ${segMes === "all" ? "bg-blue-100 text-blue-700 border-blue-200" : "text-gray-400 border-gray-200 hover:bg-gray-50"}`}>
-              Tudo
-            </button>
-          </div>
+          {/* ── Seletor de Período (padrão PeriodSelectorCard) ─────────── */}
+          <PeriodSelectorCard
+            ano={segAno}
+            mes={segMes}
+            onAno={setSegAno}
+            onMes={setSegMes}
+            onAnoTodo={() => setSegMes(null)}
+          />
 
           {analiseSeguranca.isLoading ? (
             <div className="flex items-center justify-center py-12 gap-2 text-gray-400">
