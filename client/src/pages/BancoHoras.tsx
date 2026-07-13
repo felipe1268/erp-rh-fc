@@ -42,6 +42,62 @@ const MESES_LONGOS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho"
 
 type TabView = "saldos" | "extrato" | "alertas" | "configuracao";
 
+function PeriodoDiasTable({ hePeriodId, employeeId }: { hePeriodId: number; employeeId: number }) {
+  const q = trpc.horasExtras.memorialCalculo.useQuery({ hePeriodId, employeeId });
+  const dias: any[] = q.data?.dias ?? [];
+  if (q.isLoading) return (
+    <div className="flex items-center gap-1.5 text-xs text-muted-foreground py-2">
+      <RefreshCw className="h-3 w-3 animate-spin" /> Carregando dias...
+    </div>
+  );
+  if (!dias.length) return (
+    <p className="text-xs text-muted-foreground italic py-1">Nenhum registro de ponto encontrado no período.</p>
+  );
+  const totalHE = dias.reduce((acc: number, d: any) => acc + (d.heMins || 0), 0);
+  return (
+    <div className="rounded border border-gray-100 overflow-hidden text-xs mt-1">
+      <div className="grid grid-cols-[90px_60px_56px_56px_56px_1fr] bg-gray-50 border-b border-gray-200 px-2 py-1 text-[10px] text-muted-foreground font-semibold uppercase tracking-wide gap-2">
+        <span>Data</span>
+        <span className="text-right">Trabalhado</span>
+        <span className="text-right">Jornada</span>
+        <span className="text-right">HE</span>
+        <span className="text-right">Adicional</span>
+        <span>Horários</span>
+      </div>
+      {dias.map((d: any, i: number) => {
+        const dataBR = new Date(d.data + "T12:00:00Z").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+        const isFeriado = !!d.feriado;
+        const isDom = d.diaSemana === "Dom";
+        const isSab = d.diaSemana === "Sáb";
+        const rowBg = isFeriado ? "bg-purple-50" : isDom ? "bg-red-50/40" : isSab ? "bg-amber-50/40" : i % 2 === 0 ? "bg-white" : "bg-gray-50/40";
+        return (
+          <div key={i} className={`grid grid-cols-[90px_60px_56px_56px_56px_1fr] px-2 py-1.5 gap-2 items-center border-b border-gray-100 last:border-0 ${rowBg}`}>
+            <span className="font-medium text-gray-700 flex items-center gap-1">
+              {dataBR}
+              <span className={`text-[10px] font-semibold px-1 py-0.5 rounded ${
+                isFeriado ? "bg-purple-100 text-purple-700" :
+                isDom ? "text-red-500" :
+                isSab ? "text-amber-600" :
+                "text-gray-400"
+              }`}>{isFeriado ? "Fer" : d.diaSemana}</span>
+            </span>
+            <span className="text-right text-gray-600">{d.trabalhado || "—"}</span>
+            <span className="text-right text-gray-500">{d.jornada}</span>
+            <span className="text-right font-semibold text-green-700">+{minsToHHMM(d.heMins)}</span>
+            <span className="text-right text-gray-500">{d.percentual}%</span>
+            <span className="text-gray-400 truncate">{d.horarios}</span>
+          </div>
+        );
+      })}
+      <div className="grid grid-cols-[90px_60px_56px_56px_56px_1fr] px-2 py-1.5 gap-2 bg-gray-100 border-t border-gray-200 font-semibold text-xs">
+        <span className="text-muted-foreground col-span-3 text-[10px] uppercase">Total</span>
+        <span className="text-right text-green-700">+{minsToHHMM(totalHE)}</span>
+        <span /><span />
+      </div>
+    </div>
+  );
+}
+
 export default function BancoHoras() {
   const { isAdminMaster, hasGroup, groupCanAccessRoute, isLoading: permissionsLoading } = usePermissions();
   const { selectedCompanyId } = useCompany();
@@ -51,7 +107,6 @@ export default function BancoHoras() {
   const [searchTerm, setSearchTerm] = useState("");
 
   const [histDialogEmpId, setHistDialogEmpId] = useState<number | null>(null);
-  const [expandedHePeriodId, setExpandedHePeriodId] = useState<number | null>(null);
   const [debitEmpId, setDebitEmpId] = useState<number | null>(null);
   const [debitHoras, setDebitHoras] = useState(0);
   const [debitMins, setDebitMins] = useState(0);
@@ -155,10 +210,7 @@ export default function BancoHoras() {
     { employeeId: histDialogEmpId ?? 0, companyId },
     { enabled: !!histDialogEmpId && companyId > 0 }
   );
-  const memorialDias = trpc.horasExtras.memorialCalculo.useQuery(
-    { hePeriodId: expandedHePeriodId ?? 0, employeeId: histDialogEmpId ?? 0 },
-    { enabled: !!expandedHePeriodId && !!histDialogEmpId }
-  );
+
   const lancamentosExtrato = trpc.horasExtras.getLancamentos.useQuery(
     { employeeId: extratoEmpId ?? 0, companyId },
     { enabled: !!extratoEmpId && companyId > 0 }
@@ -653,7 +705,7 @@ export default function BancoHoras() {
             )}
 
             {/* Dialog rico de histórico individual — Rev. 4190 */}
-            <Dialog open={!!histDialogEmpId} onOpenChange={(o) => { if (!o) { setHistDialogEmpId(null); setExpandedHePeriodId(null); } }}>
+            <Dialog open={!!histDialogEmpId} onOpenChange={(o) => { if (!o) setHistDialogEmpId(null); }}>
               <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
                 <DialogHeader className="shrink-0">
                   <DialogTitle className="flex items-center gap-3">
@@ -843,64 +895,10 @@ export default function BancoHoras() {
                                 )}
                               </div>
 
-                              {/* Seção dia a dia — só para créditos vinculados a um período HE */}
+                              {/* Dias de HE — sempre visível para créditos vinculados a período */}
                               {isCredito && l.hePeriodId && (
                                 <div className="pt-1.5 border-t border-black/5">
-                                  <button
-                                    onClick={() => setExpandedHePeriodId(expandedHePeriodId === l.hePeriodId ? null : l.hePeriodId)}
-                                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
-                                  >
-                                    <ChevronDown className={`h-3.5 w-3.5 transition-transform ${expandedHePeriodId === l.hePeriodId ? "rotate-180" : ""}`} />
-                                    {expandedHePeriodId === l.hePeriodId ? "Ocultar dias" : "Ver dia a dia"}
-                                  </button>
-
-                                  {expandedHePeriodId === l.hePeriodId && (
-                                    <div className="mt-2">
-                                      {memorialDias.isLoading ? (
-                                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground py-2">
-                                          <RefreshCw className="h-3 w-3 animate-spin" /> Carregando dias...
-                                        </div>
-                                      ) : !memorialDias.data?.dias?.length ? (
-                                        <p className="text-xs text-muted-foreground italic py-1">Nenhum registro de ponto encontrado no período.</p>
-                                      ) : (
-                                        <div className="rounded border border-gray-100 overflow-hidden text-xs">
-                                          <div className="grid grid-cols-[80px_50px_56px_56px_60px_1fr] bg-gray-50 border-b border-gray-200 px-2 py-1 text-[10px] text-muted-foreground font-semibold uppercase tracking-wide gap-2">
-                                            <span>Data</span>
-                                            <span className="text-right">Trabalhado</span>
-                                            <span className="text-right">Jornada</span>
-                                            <span className="text-right">HE</span>
-                                            <span className="text-right">Adicional</span>
-                                            <span>Horários</span>
-                                          </div>
-                                          {(memorialDias.data.dias as any[]).map((d: any, i: number) => {
-                                            const dataBR = new Date(d.data + "T12:00:00Z").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-                                            return (
-                                              <div
-                                                key={i}
-                                                className={`grid grid-cols-[80px_50px_56px_56px_60px_1fr] px-2 py-1.5 gap-2 items-center border-b border-gray-100 last:border-0 ${d.feriado ? "bg-purple-50/50" : i % 2 === 0 ? "bg-white" : "bg-gray-50/40"}`}
-                                              >
-                                                <span className="font-medium text-gray-700">
-                                                  {dataBR}
-                                                  <span className="text-gray-400 ml-1">{d.diaSemana}</span>
-                                                  {d.feriado && <span className="ml-1 text-[9px] text-purple-600 font-bold">FER</span>}
-                                                </span>
-                                                <span className="text-right text-gray-600">{d.trabalhado || "—"}</span>
-                                                <span className="text-right text-gray-500">{d.jornada}</span>
-                                                <span className="text-right font-semibold text-green-700">+{minsToHHMM(d.heMins)}</span>
-                                                <span className="text-right text-gray-500">{d.percentual}%</span>
-                                                <span className="text-gray-400 truncate">{d.horarios}</span>
-                                              </div>
-                                            );
-                                          })}
-                                          <div className="grid grid-cols-[80px_50px_56px_56px_60px_1fr] px-2 py-1.5 gap-2 bg-gray-50 border-t border-gray-200 font-semibold">
-                                            <span className="text-[10px] text-muted-foreground uppercase col-span-3">Total</span>
-                                            <span className="text-right text-green-700">+{minsToHHMM((memorialDias.data.dias as any[]).reduce((acc: number, d: any) => acc + (d.heMins || 0), 0))}</span>
-                                            <span /><span />
-                                          </div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
+                                  <PeriodoDiasTable hePeriodId={l.hePeriodId} employeeId={l.employeeId} />
                                 </div>
                               )}
                             </div>

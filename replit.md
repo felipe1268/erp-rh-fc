@@ -50,7 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4193** — **BANCO DE HORAS: HISTÓRICO DIA A DIA — "VER DIA A DIA" EXPANSÍVEL NO DIALOG.** Cada card de crédito com período HE ganha botão expansível que mostra mini-tabela dia a dia (Data, Trabalhado, Jornada, HE, Adicional%, Horários) via `memorialCalculo` existente. Feriados em roxo; rodapé totalizador. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4194** — **BANCO DE HORAS: TABELA DIA A DIA SEMPRE ABERTA + DIA DA SEMANA COLORIDO + FERIADO MARCADO.** Sub-componente `PeriodoDiasTable` com useQuery próprio; tabela sem toggle — sempre visível. Dom em vermelho, Sáb em âmbar, Feriado com badge roxo "Fer" e fundo purple. ZERO DELETE · ZERO ALTER destrutivo.
+
+- **Rev. 4193** — **BANCO DE HORAS: HISTÓRICO DIA A DIA EXPANSÍVEL.** Toggle "Ver dia a dia" em cada card de crédito; `memorialCalculo` lazy. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4192** — **BANCO DE HORAS: CARGO DE CONFIANÇA (ART. 62 CLT) EXCLUÍDO AUTOMATICAMENTE.** Filtro `cargo_confianca=0` em todos os 4 pontos de leitura (getSaldoBancoMensal, getAlertasExpiracao, getAlertasSaldoNegativo, getAlertasSaldoPositivoTrimestral). Banner azul informativo na aba Saldos. ZERO DELETE · ZERO ALTER destrutivo.
 

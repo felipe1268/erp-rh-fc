@@ -1,4 +1,28 @@
 /**
+ * Rev. 4194 - BANCO DE HORAS: TABELA DIA A DIA SEMPRE ABERTA + DIA DA SEMANA COLORIDO + FERIADO MARCADO.
+ *
+ * MOTIVAÇÃO:
+ * Rev. 4193 implementou "Ver dia a dia" como botão colapsável. O usuário pediu que a tabela
+ * fique sempre aberta (sem toggle), com dia da semana visível e feriados claramente marcados.
+ *
+ * O QUE FOI FEITO:
+ * 1. Extração do sub-componente `PeriodoDiasTable` (antes da função principal BancoHoras)
+ *    com useQuery próprio — permite múltiplas instâncias simultâneas, uma por card de crédito.
+ * 2. Tabela sempre visível (sem botão toggle / sem estado expandedHePeriodId).
+ * 3. Formatação do dia da semana por cor:
+ *    - Domingo → "Dom" em vermelho
+ *    - Sábado  → "Sáb" em âmbar
+ *    - Feriado → badge "Fer" em roxo (bg-purple-100) + fundo de linha bg-purple-50
+ *    - Dias úteis → cinza neutro
+ * 4. Removidos: estado expandedHePeriodId, query memorialDias inline, botão "Ver dia a dia".
+ *
+ * ARQUIVOS:
+ * - client/src/pages/BancoHoras.tsx
+ *
+ * ZERO DELETE · ZERO ALTER DESTRUTIVO.
+ */
+
+/**
  * Rev. 4193 - BANCO DE HORAS: HISTÓRICO DIA A DIA — "VER DIA A DIA" EXPANSÍVEL NO DIALOG.
  *
  * MOTIVAÇÃO:
