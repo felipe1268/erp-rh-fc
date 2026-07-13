@@ -1252,8 +1252,35 @@ export const scorecardRouter = router({
       if (!db) return null;
       const { companyId, obraId, orcamentoId } = input;
       const safe = async (q: Promise<any>) => {
-        try { const r = await q; return r?.rows ?? []; } catch (e: any) { return []; }
+        try { const r = await q; return r?.rows ?? []; } catch (e: any) {
+          console.error('[ScoreDebug] safe() caught:', e?.message ?? e);
+          return [];
+        }
       };
+
+      // === DIAGNÓSTICO TEMPORÁRIO ===
+      console.log('[ScoreDebug] getMetasDesvios input:', JSON.stringify({ companyId, obraId, orcamentoId }));
+      try {
+        const diagOrc = await db.execute(sql`
+          SELECT id, "obraId", "companyId", codigo, deleted_at
+          FROM orcamentos
+          WHERE "companyId" = ${companyId}
+             OR "obraId" = ${obraId}
+          ORDER BY id DESC LIMIT 10
+        `);
+        console.log('[ScoreDebug] orcamentos (by companyId OR obraId):', JSON.stringify(diagOrc.rows));
+        const diagProj = await db.execute(sql`
+          SELECT id, obra_id, orcamento_id, company_id, nome
+          FROM planejamento_projetos
+          WHERE company_id = ${companyId}
+             OR obra_id = ${obraId}
+          LIMIT 10
+        `);
+        console.log('[ScoreDebug] planejamento_projetos:', JSON.stringify(diagProj.rows));
+      } catch (diagErr: any) {
+        console.error('[ScoreDebug] diagnóstico falhou:', diagErr?.message ?? diagErr);
+      }
+      // === FIM DIAGNÓSTICO ===
 
       // Busca o orçamento por 3 caminhos em ordem de prioridade
       // (sem filtro companyId no path 1 — orçamento pode estar em empresa diferente
