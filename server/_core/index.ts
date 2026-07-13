@@ -5171,6 +5171,65 @@ REGRAS DE EXTRAÇÃO:
           console.log("[SyncSchema+] Rev. 4182: obra_scorecard_config + obra_retrabalho garantidas (Scorecard do Gestor).");
         } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4182 scorecard:", e?.message || e); }
 
+        // Rev. 4188 — Backfill: períodos HE aprovados sem lancamentos no banco de horas.
+        // Causa-raiz: String(date).slice(0,10) gerava "Fri May 15" em vez de "2026-05-15";
+        // o INSERT em banco_horas_lancamentos lançava erro silencioso. O saldo ficava
+        // desatualizado; os lancamentos jamais foram gravados. Esse bloco detecta e corrige.
+        try {
+          const toDs = (v: any) => v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10);
+          // Períodos aprovados onde NENHUM lancamento existe para aquele hePeriodId
+          const periodsToFix = ((await db.execute(sql`
+            SELECT hp.id, hp."companyId", hp."dataInicio", hp."dataFim"
+            FROM he_periods hp
+            WHERE hp.status = 'aprovado'
+              AND NOT EXISTS (
+                SELECT 1 FROM banco_horas_lancamentos bhl WHERE bhl."hePeriodId" = hp.id
+              )
+          `)) as any).rows || [];
+
+          let totalFixados = 0;
+          for (const p of periodsToFix) {
+            const dataFimStr = toDs(p.dataFim);
+            const dataInicioStr = toDs(p.dataInicio);
+            const descricao = `Crédito HE ${dataInicioStr} → ${dataFimStr} (backfill)`;
+            const empRows = ((await db.execute(sql`
+              SELECT "employeeId", "heTotalMins" FROM he_period_employees
+              WHERE "hePeriodId" = ${p.id} AND destinacao = 'banco_horas' AND "heTotalMins" > 0
+            `)) as any).rows || [];
+            for (const emp of empRows) {
+              const mins = Number(emp.heTotalMins || 0);
+              if (mins <= 0) continue;
+              const minutosBase = mins;
+              const minutosAcrescimo = Math.round(minutosBase * 0.5);
+              const total = minutosBase + minutosAcrescimo;
+              try {
+                // Guarda extra: só insere se não existe já (sem unique constraint na tabela)
+                const exists = ((await db.execute(sql`
+                  SELECT 1 FROM banco_horas_lancamentos
+                  WHERE "employeeId" = ${emp.employeeId} AND "hePeriodId" = ${p.id} LIMIT 1
+                `)) as any).rows;
+                if (exists.length > 0) continue;
+                await db.execute(sql`
+                  INSERT INTO banco_horas_lancamentos
+                    ("employeeId", "companyId", "hePeriodId", tipo, minutos, "minutosBase", "minutosAcrescimo", descricao, data, "criadoPor")
+                  VALUES (${emp.employeeId}, ${p.companyId}, ${p.id}, 'credito', ${total},
+                    ${minutosBase}, ${minutosAcrescimo}, ${descricao}, ${dataFimStr}::date, 'Sistema/Backfill')
+                `);
+                await db.execute(sql`
+                  INSERT INTO banco_horas_saldo ("employeeId", "companyId", "saldoMinutos", "atualizadoEm")
+                  VALUES (${emp.employeeId}, ${p.companyId}, ${total}, NOW())
+                  ON CONFLICT ("employeeId", "companyId") DO UPDATE SET
+                    "saldoMinutos" = banco_horas_saldo."saldoMinutos" + ${total},
+                    "atualizadoEm" = NOW()
+                `);
+                totalFixados++;
+              } catch (eEmp: any) { console.error(`[SyncSchema+] FALHA backfill emp ${emp.employeeId}:`, eEmp?.message); }
+            }
+          }
+          if (totalFixados > 0 || periodsToFix.length > 0)
+            console.log(`[SyncSchema+] Rev. 4188 backfill BH: ${periodsToFix.length} período(s), ${totalFixados} lançamento(s) inserido(s).`);
+        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4188 backfill BH:", e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

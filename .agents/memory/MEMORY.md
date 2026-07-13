@@ -84,7 +84,6 @@
 - [react-pdf worker version match](pdfjs-worker-version-match.md) — "Erro ao carregar PDF" = bundled worker version ≠ react-pdf's internal pdfjs API; pin pdfjs-dist EXACTLY to react-pdf's dep, realign on every react-pdf upgrade.
 - [pdf-parse multi-line table cells](pdf-parse-multiline-table-cells.md) — a bank statement row can extract as separate date/desc/value lines, not one line; single-line regex parsers then silently return zero rows. Validate via reconciliation, not just non-zero output.
 - [Santander PDF split-row parser](santander-pdf-split-row.md) — pdf-parse splits EVERY Santander PJ row: date+desc on line A (no money), value on line B (empty prefix). Extract date from line A, not line B. Doc6 concatenated without space → /\d{6}$/. Empty-prefix value + no nextDesc = saldo orphan → ignore.
-
 - [SEFAZ sync gating & NSU](sefaz-nsu-rate-limit-loop.md) — cStat=656 deve persistir ultNSU (senão loop eterno, fallback via XML); 4 fórmulas de gate DEVEM casar `intervalo*60+3`×backoff (sefaz-gate-formula-parity.md); calcule elapsed via SQL/EXTRACT EPOCH não `new Date()` JS (skew 3h, sefaz-gate-tz-skew.md); log do bloco sequencial parece "morto" antes do fim mas não é (syncschema-log-capture.md).
 - [Saldo inicial conta bancária](saldo-inicial-conta-bancaria.md) — saldo de abertura vive em `financial_opening_balances` (1 linha/conta), NÃO em coluna; Fluxo de Caixa soma p/ semear o Acumulado; mutações de conta precisam de tenant guard.
 - [Notification recipient tenancy](notification-recipient-tenancy.md) — notify queries must join `user_companies` (users has NO companyId; admin roles are global in getCompaniesForUser) or you leak across tenants.
@@ -109,7 +108,6 @@
 - [PDF export XSS / per-function esc](pdf-export-xss-esc-scope.md) — print/PDF builders (document.write) define esc LOCALLY; new fields (esp. AI-sourced) must esc()/escAttr() or it's DOM XSS.
 - [ControleDocumentos hooks order](controledocumentos-hooks-order.md) — ControleDocumentos.tsx has mid-component early returns; new hooks MUST go above them or /controle-documentos crashes ("Rendered more hooks").
 - [Shared onSaved must refetch all lists](shared-onsaved-refetch-lists.md) — a save dialog's onSaved must invalidate EVERY query the write affects (incl. cascaded status flips), not just the host screen; auto-resolve UPDATEs need tenant + status='pendente' guards.
-
 - [Gemini free-tier transient failures](gemini-freetier-transient.md) — batch vision reads fail ~95% on transient 429/503; fix=backend retry on 429+5xx honoring retryDelay + client pacing; daily quota = hard ceiling.
 - [Financeiro "só real" lock](financeiro-so-real-trava.md) — flag global esconde projeções; despesa via sqlNotProjecao no server, MAS receita do Fluxo de Caixa vem do getContasReceberMatrix e o split é client-side (forçar natureza=efetivo).
 - [canAccessObra true só p/ admin_master](canaccessobra-admin-semantics.md) — canAccessObra é true-p/-todas só quando allowedObraIds===null (admin_master); isAdmin comum=[] → lista filtrada fica VAZIA. Listas de "obras com escrita" devem espelhar canWriteCentral, não canAccessObra.
@@ -122,6 +120,7 @@
 - [Payroll rounding carry-forward](payroll-rounding-carry.md) — pago=round(exato+ÚLTIMO residual anterior, não soma); TODO writer do pago (vale/folha + edições manuais + decidirVale) deve reaplicar arred + atualizar ledger, ou o carry quebra.
 - [Blacklist visibility backend gate](blacklist-visibility-backend-gate.md) — Lista_Negra é admin_master-only; gateie em employees.list E faça o cacheKey variar por papel (senão vaza por cache).
 - [Self-heal date/timestamp typecast](selfheal-date-timestamp-typecast.md) — cure UPDATE into date/timestamp col needs `::date`/`now()`, NOT `to_char` text; type error is swallowed by catch + capped log → cura silently no-ops. Verify via direct Neon pg, not executeSql.
+- [Date object String().slice bug](date-object-string-slice-bug.md) — `String(pgDateObj).slice(0,10)` → "Fri May 15" not "2026-05-15"; always `instanceof Date ? .toISOString().slice(0,10) : String(v).slice(0,10)` when value may come from DB driver.
 
 - [RQ cache-hit hydration race](rq-cache-hit-hydration-race.md) — dois useEffects (um hidrata de query.data, outro reseta por outra dep) anulam estado em cache hit; unifique num só effect chaveado pela identidade do dado.
 - [Conceder obra implica empresa](grant-obra-implies-company.md) — usuário comum: empresas visíveis = user_companies + DONAS das obras de getEffectiveAllowedObraIds; sem isso, obra concedida sem vínculo de empresa some (só vê como Adm).

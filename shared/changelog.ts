@@ -1,4 +1,42 @@
 /**
+ * Rev. 4189 - BANCO DE HORAS: FIX CRÍTICO — LANÇAMENTOS NUNCA ERAM GRAVADOS + BACKFILL AUTOMÁTICO.
+ *
+ * CAUSA-RAIZ:
+ * Em `aprovarComDestinacao` (horasExtras.ts):
+ *   const dataFimStr = String(period.dataFim).slice(0, 10);
+ * O driver pg retorna datas como objetos Date. `String(new Date(...))` produz
+ * "Fri May 15 2026 00:00:00 GMT+0000 (UTC)" → `.slice(0, 10)` → "Fri May 15".
+ * O INSERT em `banco_horas_lancamentos` tentava `"Fri May 15"::date` → FALHA no Postgres.
+ * O INSERT em `banco_horas_saldo` (linha anterior, sem transação) já havia executado,
+ * mas como o saldo era acumulado com UPSERT e o lancamento nunca foi gravado,
+ * qualquer operação posterior de "zerar" (regime change, etc.) zerava o saldo
+ * sem ter lancamento de crédito para desfazer.
+ * Resultado: banco_horas_lancamentos = 0 linhas; tela "Banco de Horas" = vazia.
+ *
+ * CORREÇÃO:
+ * 1. horasExtras.ts `aprovarComDestinacao`: substituiu `String(date).slice(0,10)` por
+ *    helper `toDateStr = (v) => v instanceof Date ? v.toISOString().slice(0,10) : String(v).slice(0,10)`.
+ *    Garante formato YYYY-MM-DD para qualquer tipo retornado pelo driver.
+ *
+ * 2. server/_core/index.ts SyncSchema+ (Rev. 4188/4189 backfill):
+ *    Detecta períodos HE com status='aprovado' mas SEM lancamentos no banco de horas.
+ *    Para cada um: (a) insere lancamentos faltantes em banco_horas_lancamentos
+ *    com minutosBase × 1.5 e criadoPor='Sistema/Backfill';
+ *    (b) atualiza banco_horas_saldo com ON CONFLICT DO UPDATE.
+ *    Guard "SELECT 1 WHERE EXISTS" por (employeeId, hePeriodId) para idempotência.
+ *    Resultado: período 18 (maio 2026) → 53 lancamentos inseridos, saldo total 15.932 min.
+ *
+ * NOTA PARA O USUÁRIO:
+ * O período 19 (junho 2026, dataFim=15/06) ainda está em status "calculado".
+ * Para ele aparecer no Banco de Horas, é necessário aprová-lo via o módulo
+ * Horas Extras → clicar em "Aprovar" no período de referência 2026-06.
+ * O bug de data está corrigido, então a aprovação agora vai gravar corretamente.
+ *
+ * ARQUIVOS: server/routers/horasExtras.ts, server/_core/index.ts.
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4188 - SCORECARD: FIX MULTI-ABA — ORÇAMENTO, SEGURANÇA, RH E METAS & DESVIOS RETORNAVAM VAZIO.
  *
  * CAUSA-RAIZ:

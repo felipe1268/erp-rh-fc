@@ -1072,8 +1072,9 @@ export const horasExtrasRouter = router({
 
       let bancoCreditados = 0;
       let pagamentos = 0;
-      const dataFimStr = String(period.dataFim).slice(0, 10);
-      const dataInicioStr = String(period.dataInicio).slice(0, 10);
+      const toDateStr = (v: any) => v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10);
+      const dataFimStr = toDateStr(period.dataFim);
+      const dataInicioStr = toDateStr(period.dataInicio);
 
       for (const emp of empRows) {
         if (emp.destinacao === "banco_horas") {
