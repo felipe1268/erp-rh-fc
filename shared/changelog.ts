@@ -1,4 +1,31 @@
 /**
+ * Rev. 4200 - SCORECARD: FIX COMPLEMENTAR — PATH 3 SEM FILTRO companyId EM orcamentos.
+ *
+ * MOTIVAÇÃO:
+ * Rev. 4199 removeu o filtro companyId do nível outer, mas paths 2 e 3 ainda tinham
+ * ("companyId" = ${companyId} AND ...) como condição conjunta. No path 3 (busca via
+ * planejamento_projetos.orcamento_id), o "companyId" filtrava sobre a tabela orcamentos —
+ * então se o orçamento está em outra empresa, o path 3 também falhava.
+ * O path 3 já valida acesso via planejamento_projetos.company_id = companyId no subquery,
+ * então o filtro outer era redundante E bloqueante no cenário cross-company.
+ *
+ * O QUE FOI FEITO:
+ * - getScore (scorecard.ts): path 3 reescrito sem "companyId" = ${companyId} outer.
+ *   O subquery (WHERE obra_id=obraId AND company_id=companyId AND orcamento_id IS NOT NULL)
+ *   já garante que o projeto pertence à empresa/obra correta.
+ * - getMetasDesvios (scorecard.ts): mesma correção.
+ * - shared/version.ts bumped para 4200.
+ *
+ * COBERTURA FINAL DOS 3 CAMINHOS:
+ *   Path 1: id = orcamentoId       → sem companyId (FK do projeto é âncora de confiança)
+ *   Path 2: "companyId"=C AND "obraId"=O → mesma empresa, mesmo obraId
+ *   Path 3: id IN (SELECT orcamento_id FROM planejamento_projetos WHERE obra_id=O AND company_id=C)
+ *           → cross-company OK; acesso validado pelo projeto, não pelo orçamento
+ *
+ * ZERO DELETE · ZERO ALTER DESTRUTIVO.
+ */
+
+/**
  * Rev. 4199 - SCORECARD: FIX DEFINITIVO — ORÇAMENTO EM EMPRESA DIFERENTE DO GRUPO AGORA É ENCONTRADO.
  *
  * MOTIVAÇÃO:

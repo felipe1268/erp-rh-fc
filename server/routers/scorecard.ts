@@ -118,12 +118,12 @@ export const scorecardRouter = router({
           AND (
             ${orcamentoId ? sql`id = ${orcamentoId}` : sql`FALSE`}
             OR ("companyId" = ${companyId} AND "obraId" = ${obraId})
-            OR ("companyId" = ${companyId} AND id IN (
+            OR id IN (
               SELECT orcamento_id FROM planejamento_projetos
               WHERE obra_id = ${obraId}
                 AND company_id = ${companyId}
                 AND orcamento_id IS NOT NULL
-            ))
+            )
           )
         ORDER BY
           CASE
@@ -1272,12 +1272,12 @@ export const scorecardRouter = router({
           AND (
             ${orcamentoId ? sql`id = ${orcamentoId}` : sql`FALSE`}
             OR ("companyId" = ${companyId} AND "obraId" = ${obraId})
-            OR ("companyId" = ${companyId} AND id IN (
+            OR id IN (
               SELECT orcamento_id FROM planejamento_projetos
               WHERE obra_id = ${obraId}
                 AND company_id = ${companyId}
                 AND orcamento_id IS NOT NULL
-            ))
+            )
           )
         ORDER BY
           CASE
