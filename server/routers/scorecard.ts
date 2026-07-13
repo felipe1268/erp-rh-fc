@@ -1123,14 +1123,14 @@ export const scorecardRouter = router({
                 + INTERVAL '1 month' - INTERVAL '1 day')::date     AS mes_fim_d,
               DATE_PART('day', ((pp."mesReferencia" || '-01')::date
                 + INTERVAL '1 month' - INTERVAL '1 day')::timestamp)::int AS dias_no_mes,
-              COALESCE(pp."salarioBrutoMes"::numeric,  0)           AS salario_bruto,
-              COALESCE(pp."horasExtrasValor"::numeric, 0)           AS he_valor,
-              COALESCE(pp."adicionaisValor"::numeric,  0)           AS adicionais,
-              COALESCE(pp."descontoInss"::numeric,     0)           AS inss_valor,
-              COALESCE(pp."descontoFgts"::numeric,     0)           AS fgts_valor,
-              COALESCE(pp."totalProventos"::numeric,   0)           AS total_proventos,
-              COALESCE(pp."totalDescontos"::numeric,   0)           AS total_descontos,
-              COALESCE(pp."salarioLiquido"::numeric,   0)           AS liquido,
+              COALESCE(REPLACE(pp."salarioBrutoMes",  ',', '.')::numeric, 0) AS salario_bruto,
+              COALESCE(REPLACE(pp."horasExtrasValor", ',', '.')::numeric, 0) AS he_valor,
+              COALESCE(REPLACE(pp."adicionaisValor",  ',', '.')::numeric, 0) AS adicionais,
+              COALESCE(REPLACE(pp."descontoInss",     ',', '.')::numeric, 0) AS inss_valor,
+              COALESCE(REPLACE(pp."descontoFgts",     ',', '.')::numeric, 0) AS fgts_valor,
+              COALESCE(REPLACE(pp."totalProventos",   ',', '.')::numeric, 0) AS total_proventos,
+              COALESCE(REPLACE(pp."totalDescontos",   ',', '.')::numeric, 0) AS total_descontos,
+              COALESCE(REPLACE(pp."salarioLiquido",   ',', '.')::numeric, 0) AS liquido,
               (
                 SELECT COALESCE(SUM(
                   GREATEST(0,
@@ -1158,8 +1158,8 @@ export const scorecardRouter = router({
             SELECT
               "employeeId" AS employee_id,
               "mesReferencia" AS mes_referencia,
-              COALESCE("valorTotal"::numeric, 0) AS vr_total,
-              COALESCE("valorVa"::numeric,    0) AS va_total
+              COALESCE(REPLACE("valorTotal", ',', '.')::numeric, 0) AS vr_total,
+              COALESCE(REPLACE("valorVa",    ',', '.')::numeric, 0) AS va_total
             FROM vr_benefits
             WHERE "companyId"  = ${input.companyId}
               AND "employeeId" IN (SELECT employee_id FROM relevant_emp)
@@ -1220,7 +1220,7 @@ export const scorecardRouter = router({
           SELECT
             vp."employeeId"                                                         AS employee_id,
             TO_CHAR(COALESCE(vp."dataPagamento"::date, vp."dataInicio"::date), 'YYYY-MM') AS mes_ref,
-            COALESCE(vp."valorTotal"::numeric, 0)                                   AS valor_total
+            COALESCE(REPLACE(vp."valorTotal", ',', '.')::numeric, 0)                 AS valor_total
           FROM vacation_periods vp
           WHERE vp."companyId" = ${input.companyId}
             AND vp.status IN ('agendada', 'concluida', 'em_gozo', 'pago', 'paga')
@@ -1234,12 +1234,12 @@ export const scorecardRouter = router({
         db.execute(sql`
           SELECT
             svc.employee_id,
-            COALESCE(e."seguroVida"::numeric, 0) AS custo_mensal
+            COALESCE(REPLACE(e."seguroVida", ',', '.')::numeric, 0) AS custo_mensal
           FROM seguro_vida_coberturas svc
           JOIN employees e ON e.id = svc.employee_id AND e."companyId" = ${input.companyId}
           WHERE svc.company_id = ${input.companyId}
             AND svc.status = 'ativo'
-            AND COALESCE(e."seguroVida"::numeric, 0) > 0
+            AND COALESCE(REPLACE(e."seguroVida", ',', '.')::numeric, 0) > 0
             AND svc.employee_id IN (${relevantEmpSql})
         `),
       ]);
@@ -1247,6 +1247,7 @@ export const scorecardRouter = router({
       const funcs = r.rows as any[];
       const feriasRows = feriasR.rows as any[];
       const seguroRows  = seguroR.rows  as any[];
+      console.log(`[getCustosRH] obraId=${input.obraId} companyId=${input.companyId} mesInicio=${input.mesInicio} mesFim=${input.mesFim} funcs=${funcs.length} ferias=${feriasRows.length} seguro=${seguroRows.length}`);
       const n = (v: any) => Number(v ?? 0);
 
       const feriasKeyMap  = new Map<string, number>();

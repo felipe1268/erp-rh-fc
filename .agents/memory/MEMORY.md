@@ -1,3 +1,4 @@
+- [VARCHAR BR decimal cast](varchar-br-decimal-cast.md) — colunas numéricas VARCHAR guardam "680,75" (vírgula BR); `::numeric` direto falha → Promise.all rejeita → UI mostra "Sem dados" silenciosamente. Use `REPLACE(col,',','.')::numeric`.
 - [orcamentos valor_negociado snake_case](orcamentos-valor-negociado-snake.md) — `orcamentos.valorNegociado` tem nome explícito `"valor_negociado"` (snake); safe() engole erros → diagnose silent failures com logging antes de mudar query logic.
 - [Billing module active/inactive toggle](billing-module-active-toggle.md) — isActive (comercializável) ≠ preço; grandfather: desativar módulo nunca revoga de quem já tem, só bloqueia ADICIONAR novo.
 - [Conciliação → sub-razões (Controle de Cheques)](conciliacao-fanout-subledgers.md) — conciliar lançamento não baixa cheque sozinho; toda mutation de conciliação deve varrer sub-razões dependentes com match inequívoco + try/catch não-bloqueante.

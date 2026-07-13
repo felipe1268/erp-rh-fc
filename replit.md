@@ -50,9 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4206** — **SCORECARD RH/FOLHA: FIX CAST VÍRGULA — `REPLACE(',','.')::numeric` em todos os casts de colunas varchar.** Bug persistia após Rev.4205 (camelCase correto): a `Promise.all` das 3 queries rejeitava com `ERROR: invalid input syntax for type numeric: "680,75"`. Todas as colunas numéricas são VARCHAR no Neon — `vr_benefits.valorTotal` e outros guardam valores com vírgula BR. Cast `::numeric` direto falha → endpoint lança exceção → `analiseRH.data` fica `undefined` → UI mostra "Sem dados" silenciosamente. Fix: `COALESCE(REPLACE(col, ',', '.')::numeric, 0)` em `payroll_payments` (8 colunas), `vr_benefits` (2 colunas), `vacation_periods.valorTotal`, `employees.seguroVida`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4205** — **SCORECARD RH/FOLHA: FIX RAIZ DEFINITIVO — payroll_payments + employee_site_history + vr_benefits + vacation_periods SÃO camelCase.** Bug persistia após Rev.4204: `getCustosRH` usava snake_case em TODAS as outras tabelas também. Diagnóstico via Neon confirmou 289 linhas de folha existentes para a obra (obraId=90001, companyId=60002, 2026-01→2026-06). Fix: `employee_site_history` (`"obraId"`, `"companyId"`, `"employeeId"`, `"dataInicio"`, `"dataFim"`); `payroll_payments` (`"companyId"`, `"employeeId"`, `"mesReferencia"`, `"salarioBrutoMes"`, etc.); `vr_benefits` + `vacation_periods` idem. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4204** — **SCORECARD RH/FOLHA: FIX employees camelCase + REDESIGN ABA + FÉRIAS + SEGURO DE VIDA.** Bug raiz: `getCustosRH` usava `e.nome_completo`/`e.salario_base`/`e.company_id` (snake_case) mas `employees` tem colunas camelCase → PostgreSQL lançava "column does not exist" → estado vazio silencioso. Fix: `e."nomeCompleto"`, `e."salarioBase"`, `e."companyId"`. Novo backend: 3 queries paralelas (folha + férias + seguro de vida); retorna `mensal[]` por mês. Nova UI: seletor ano ‹›+ abas de mês (Ano Todo/Jan-Dez); tabela mensal clicável; KPI com Férias + Seg.Vida. ZERO DELETE · ZERO ALTER destrutivo.
+### 5 one-liners
+
+- **Rev. 4204** — **SCORECARD RH/FOLHA: FIX employees camelCase + REDESIGN ABA + FÉRIAS + SEGURO DE VIDA.** Bug raiz: snake_case em `employees`; Fix camelCase + 3 queries paralelas + UI com seletor ano/mês. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4203** — **SCORECARD METAS & DESVIOS: FIX orcamento_itens camelCase + CONTRATOS DE TERCEIROS.** CTE `orca_itens` usava snake_case (`orcamento_id`, `meta_unit_total`, `custo_unit_total`) para colunas camelCase → lista vazia silenciosa. Fix + nova query `terceiro_contratos` com medições aprovadas. Frontend: total comprometido = OCs + Contratos. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -61,22 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4198** — **SCORECARD METAS & DESVIOS: QUERY TRI-CAMINHOS PARA DETECTAR ORÇAMENTO.** Query com OR em 3 caminhos: `id=orcamentoId` | `"obraId"=obraId` | `id IN (SELECT orcamento_id FROM planejamento_projetos WHERE obra_id=obraId)`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4197** — **SCORECARD METAS & DESVIOS: FIX VÍNCULO POR orcamentoId.** `getMetasDesvios` aceita `orcamentoId` opcional, prioriza lookup direto. Frontend passa `proj.orcamentoId`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4196** — **BANCO DE HORAS: TABELA DIA A DIA REFATORADA COMO TABLE HTML.** Grid CSS causava sobreposição "TRABALHADOJORNADA" em mobile. Substituída por `<table>`. ZERO DELETE · ZERO ALTER destrutivo.
-
-### 5 one-liners
-
-- **Rev. 4195** — **BANCO DE HORAS: STATUS DE AUTORIZAÇÃO DIA A DIA — ✓ AUTORIZADO vs ⚠ SEM AUTORIZAÇÃO.** Backend: `approvedSet`; Frontend: coluna Aut., fundo âmbar, resumo. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4194** — **BANCO DE HORAS: TABELA DIA A DIA SEMPRE ABERTA + DIA DA SEMANA COLORIDO + FERIADO MARCADO.** Dom vermelho, Sáb âmbar, Feriado badge roxo. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4193** — **BANCO DE HORAS: HISTÓRICO DIA A DIA EXPANSÍVEL.** Toggle "Ver dia a dia"; `memorialCalculo` lazy. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4192** — **BANCO DE HORAS: CARGO DE CONFIANÇA (ART. 62 CLT) EXCLUÍDO AUTOMATICAMENTE.** Filtro `cargo_confianca=0` em 4 pontos. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4191** — **BANCO DE HORAS: HISTÓRICO REDESENHADO — CARDS MODERNOS.** Cards barra lateral colorida, "Solicitado por"/"Autorizado por", horas não autorizadas em âmbar. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4190** — **BANCO DE HORAS: HISTÓRICO INTERATIVO COM FOTO E STATUS DE AUTORIZAÇÃO.** Foto xs; Dialog rico (período HE, tipo, creditado, autorização). ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

@@ -1,4 +1,34 @@
 /**
+ * Rev. 4206 - SCORECARD RH/FOLHA: FIX CAST VÍRGULA — REPLACE(',','.') em todos os casts ::numeric de colunas varchar.
+ *
+ * CAUSA RAIZ:
+ *   Mesmo com todos os nomes de coluna corrigidos para camelCase (Rev.4205), a Promise.all
+ *   continuava rejeitando silenciosamente. Diagnóstico via psql direto no Neon revelou:
+ *     ERROR: invalid input syntax for type numeric: "680,75"
+ *   Todas as colunas numéricas das tabelas (payroll_payments, vr_benefits, vacation_periods,
+ *   employees) são do tipo VARCHAR. Alguns registros usam vírgula como separador decimal
+ *   (formato BR: "680,75") — o cast direto ::numeric falha.
+ *   Como a Promise.all rejeita inteiramente, o endpoint lança exceção, analiseRH.data
+ *   fica undefined, e a UI exibe "Sem dados" em vez de mostrar o erro real.
+ *
+ * FIX:
+ *   Todos os COALESCE(col::numeric, 0) substituídos por
+ *   COALESCE(REPLACE(col, ',', '.')::numeric, 0) nas seguintes colunas:
+ *     - payroll_payments: salarioBrutoMes, horasExtrasValor, adicionaisValor,
+ *       descontoInss, descontoFgts, totalProventos, totalDescontos, salarioLiquido
+ *     - vr_benefits: valorTotal, valorVa
+ *     - vacation_periods: valorTotal
+ *     - employees: seguroVida (em seguroR)
+ *   Compatível com ambos os formatos: "680,75" → "680.75" → 680.75 ✓
+ *                                     "2723.76" → "2723.76" → 2723.76 ✓
+ *
+ * ARQUIVOS:
+ *   server/routers/scorecard.ts (getCustosRH — linhas 1129–1165, 1226, 1240–1245)
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4205 - SCORECARD RH/FOLHA: FIX RAIZ DEFINITIVO — payroll_payments + employee_site_history + vr_benefits + vacation_periods SÃO camelCase.
  *
  * CAUSA RAIZ DA PERSISTÊNCIA DO BUG:
