@@ -110,9 +110,9 @@ export const scorecardRouter = router({
       // 3. planejamento_projetos.orcamento_id para a mesma obra (fallback via cronograma)
       const orcRow = await db.execute(sql`
         SELECT id, status, codigo,
-          "totalVenda"::numeric     AS "totalVenda",
-          "totalCusto"::numeric     AS "totalCusto",
-          "valorNegociado"::numeric AS "valorNegociado"
+          "totalVenda"::numeric        AS "totalVenda",
+          "totalCusto"::numeric        AS "totalCusto",
+          valor_negociado::numeric     AS "valorNegociado"
         FROM orcamentos
         WHERE deleted_at IS NULL
           AND (
@@ -1252,35 +1252,8 @@ export const scorecardRouter = router({
       if (!db) return null;
       const { companyId, obraId, orcamentoId } = input;
       const safe = async (q: Promise<any>) => {
-        try { const r = await q; return r?.rows ?? []; } catch (e: any) {
-          console.error('[ScoreDebug] safe() caught:', e?.message ?? e);
-          return [];
-        }
+        try { const r = await q; return r?.rows ?? []; } catch (e: any) { return []; }
       };
-
-      // === DIAGNÓSTICO TEMPORÁRIO ===
-      console.log('[ScoreDebug] getMetasDesvios input:', JSON.stringify({ companyId, obraId, orcamentoId }));
-      try {
-        const diagOrc = await db.execute(sql`
-          SELECT id, "obraId", "companyId", codigo, deleted_at
-          FROM orcamentos
-          WHERE "companyId" = ${companyId}
-             OR "obraId" = ${obraId}
-          ORDER BY id DESC LIMIT 10
-        `);
-        console.log('[ScoreDebug] orcamentos (by companyId OR obraId):', JSON.stringify(diagOrc.rows));
-        const diagProj = await db.execute(sql`
-          SELECT id, obra_id, orcamento_id, company_id, nome
-          FROM planejamento_projetos
-          WHERE company_id = ${companyId}
-             OR obra_id = ${obraId}
-          LIMIT 10
-        `);
-        console.log('[ScoreDebug] planejamento_projetos:', JSON.stringify(diagProj.rows));
-      } catch (diagErr: any) {
-        console.error('[ScoreDebug] diagnóstico falhou:', diagErr?.message ?? diagErr);
-      }
-      // === FIM DIAGNÓSTICO ===
 
       // Busca o orçamento por 3 caminhos em ordem de prioridade
       // (sem filtro companyId no path 1 — orçamento pode estar em empresa diferente
@@ -1292,7 +1265,7 @@ export const scorecardRouter = router({
         SELECT id,
                "totalCusto"::numeric     AS total_custo,
                "totalVenda"::numeric     AS total_venda,
-               "valorNegociado"::numeric AS valor_negociado,
+               valor_negociado::numeric  AS valor_negociado,
                COALESCE("tempoObraMeses", 12)::int AS tempo_meses
         FROM orcamentos
         WHERE deleted_at IS NULL

@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4201** — **SCORECARD: FIX RAIZ — BUSCA POR obraId SEM FILTRO companyId.** Orçamento `CUSTO_747_09_2025_R05` não tem badge "Cronograma vinculado" (planejamento_projetos.orcamento_id=NULL), logo paths 1+3 falham. Path 2 ainda exigia `"companyId"=C AND "obraId"=O` — bloqueado cross-company. Fix: path 2 simplificado para `"obraId"=O` (obra é unívoca). getScore + getMetasDesvios. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4202** — **SCORECARD: FIX DEFINITIVO — COLUNA valor_negociado (snake_case).** Causa raiz: schema define `numeric("valor_negociado",...)` (explícito), mas queries usavam `"valorNegociado"` → "column does not exist" silenciado pelo safe() → return null. Diagnóstico confirmou dados corretos (obraId=90001, orcId=42). Fix em getScore + getMetasDesvios. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4200** — **SCORECARD: FIX PATH 3 — REMOVE companyId OUTER DO orcamentos NO PATH VIA PLANEJAMENTO FK.** Path 3 tinha `"companyId"=C AND` redundante sobre orcamentos, bloqueando cross-company. Removido. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4201** — **SCORECARD: FIX RAIZ — BUSCA POR obraId SEM FILTRO companyId.** Path 2 simplificado para `"obraId"=O` sem companyId (obra é unívoca). getScore + getMetasDesvios. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4198** — **SCORECARD METAS & DESVIOS: QUERY TRI-CAMINHOS PARA DETECTAR ORÇAMENTO.** Query com OR em 3 caminhos: `id=orcamentoId` | `"obraId"=obraId` | `id IN (SELECT orcamento_id FROM planejamento_projetos WHERE obra_id=obraId)`. ZERO DELETE · ZERO ALTER destrutivo.
 

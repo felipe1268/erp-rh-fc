@@ -1,4 +1,28 @@
 /**
+ * Rev. 4202 - SCORECARD: FIX DEFINITIVO — COLUNA valor_negociado (snake_case) EM VEZ DE "valorNegociado".
+ *
+ * CAUSA RAIZ REAL (confirmada via logging de diagnóstico):
+ * O schema Drizzle define: `valorNegociado: numeric("valor_negociado", ...)`.
+ * Com o nome explícito, a coluna no Neon é `valor_negociado` (snake_case).
+ * As queries em getScore e getMetasDesvios usavam `"valorNegociado"` (camelCase)
+ * → "column does not exist" no Postgres.
+ * O `safe()` engolia o erro silenciosamente → orcRows = [] → return null
+ * → frontend exibe "Nenhum orçamento vinculado".
+ *
+ * Diagnóstico confirmou que os dados estão 100% corretos:
+ *   companyId=60002, obraId=90001, orcamentoId=42
+ *   orcamentos: id=42, "obraId"=90001, codigo="CUSTO_747_09_2025_R05 - FASE 4"
+ *   planejamento_projetos: id=47, obra_id=90001, orcamento_id=42, nome="QIU 2 - FASE 4"
+ *
+ * O QUE FOI FEITO:
+ * - getScore: `"valorNegociado"::numeric` → `valor_negociado::numeric`
+ * - getMetasDesvios: mesma correção.
+ * - shared/version.ts bumped para 4202.
+ *
+ * ZERO DELETE · ZERO ALTER DESTRUTIVO.
+ */
+
+/**
  * Rev. 4201 - SCORECARD: FIX RAIZ — BUSCA POR obraId SEM FILTRO companyId.
  *
  * MOTIVAÇÃO:
