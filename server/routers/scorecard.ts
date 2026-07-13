@@ -592,7 +592,8 @@ export const scorecardRouter = router({
         }
       };
 
-      const [clt, terceiros, treinamentosNorma, advertencias, advertenciasTerceiros, epiPorFuncionario, epiPorTipo] = await Promise.all([
+      const [clt, terceiros, treinamentosNorma, advertencias, advertenciasTerceiros, epiPorFuncionario, epiPorTipo,
+             acidentes, dds, apr, pt, atestados] = await Promise.all([
 
         // ── Q1: FUNCIONÁRIOS CLT com ASO + treinamentos + advertências ────────
         safe("cltFuncionarios", async () => {
@@ -799,6 +800,95 @@ export const scorecardRouter = router({
           `);
           return r.rows as any[];
         }),
+
+        // ── Q8: ACIDENTES / INCIDENTES desta obra ─────────────────────────────
+        safe("acidentes", async () => {
+          const r = await db.execute(sql`
+            SELECT
+              a.id, a."dataAcidente", a."tipoAcidente", a.gravidade,
+              a."diasAfastamento", a."localAcidente", a."descricao",
+              a."statusAcaoCorretiva" AS status_acao,
+              a."houve_cat"          AS houve_cat,
+              e."nomeCompleto"       AS funcionario_nome, e.cargo
+            FROM accidents a
+            LEFT JOIN employees e ON e.id = a."employeeId"
+            WHERE a."companyId" = ${input.companyId}
+              AND a.obra_id     = ${input.obraId}
+              AND a."deletedAt" IS NULL
+            ORDER BY a."dataAcidente" DESC
+          `);
+          return r.rows as any[];
+        }),
+
+        // ── Q9: DDS (Diálogo Diário de Segurança) ─────────────────────────────
+        safe("dds", async () => {
+          const r = await db.execute(sql`
+            SELECT id, data, titulo_tema, instrutor, status,
+                   categoria, local, observacoes
+            FROM dds_sessoes
+            WHERE company_id = ${input.companyId}
+              AND obra_id    = ${input.obraId}
+              AND status != 'cancelada'
+              AND deleted_at IS NULL
+            ORDER BY data DESC
+            LIMIT 30
+          `);
+          return r.rows as any[];
+        }),
+
+        // ── Q10: APR (Análise Preliminar de Risco) ────────────────────────────
+        safe("apr", async () => {
+          const r = await db.execute(sql`
+            SELECT a.id, a.numero, a.status, a.data_emissao,
+                   a.atividade, a.local_servico,
+                   e."nomeCompleto" AS responsavel_nome
+            FROM apr_analises a
+            LEFT JOIN employees e ON e.id = a.employee_id
+            WHERE a.company_id = ${input.companyId}
+              AND a.obra_id    = ${input.obraId}
+              AND a.deleted_at IS NULL
+            ORDER BY a.data_emissao DESC NULLS LAST
+            LIMIT 30
+          `);
+          return r.rows as any[];
+        }),
+
+        // ── Q11: PT (Permissão de Trabalho) ───────────────────────────────────
+        safe("pt", async () => {
+          const r = await db.execute(sql`
+            SELECT p.id, p.numero, p.status, p.data_emissao,
+                   p.descricao_trabalho, p.hora_inicio, p.hora_termino,
+                   e."nomeCompleto" AS responsavel_nome
+            FROM pt_permissoes p
+            LEFT JOIN employees e ON e.id = p.employee_id
+            WHERE p.company_id = ${input.companyId}
+              AND p.obra_id    = ${input.obraId}
+              AND p.deleted_at IS NULL
+            ORDER BY p.data_emissao DESC NULLS LAST
+            LIMIT 30
+          `);
+          return r.rows as any[];
+        }),
+
+        // ── Q12: ATESTADOS — funcionários CLT desta obra ──────────────────────
+        safe("atestados", async () => {
+          const r = await db.execute(sql`
+            SELECT a.id, a."dataEmissao", a.tipo, a."diasAfastamento",
+                   a."horas_afastamento", a.cid, a.motivo, a."dataRetorno",
+                   e."nomeCompleto" AS funcionario_nome, e.cargo
+            FROM atestados a
+            JOIN employees e ON e.id = a."employeeId"
+            WHERE a."companyId" = ${input.companyId}
+              AND a."deletedAt" IS NULL
+              AND e.id IN (
+                SELECT "employeeId" FROM obra_funcionarios
+                WHERE "obraId" = ${input.obraId} AND "companyId" = ${input.companyId}
+              )
+            ORDER BY a."dataEmissao" DESC
+            LIMIT 30
+          `);
+          return r.rows as any[];
+        }),
       ]);
 
       const totalClt          = clt.length;
@@ -811,16 +901,31 @@ export const scorecardRouter = router({
       const totalCustoEpi     = epiPorTipo.reduce((s: number, e: any) => s + parseFloat(String(e.custo_total ?? 0)), 0);
       const totalAdvertencias = advertencias.length + advertenciasTerceiros.length;
 
+      const totalAcidentes    = acidentes.length;
+      const totalGraves       = acidentes.filter((a: any) => a.gravidade === 'Grave' || a.gravidade === 'Com Afastamento').length;
+      const totalDds          = dds.length;
+      const totalApr          = apr.length;
+      const aprAbertas        = apr.filter((a: any) => a.status === 'aberta' || a.status === 'aprovada').length;
+      const totalPt           = pt.length;
+      const ptAbertas         = pt.filter((p: any) => p.status === 'aberta' || p.status === 'aprovada').length;
+      const totalAtestados    = atestados.length;
+      const totalDiasAtestado = atestados.reduce((s: number, a: any) => s + (parseInt(String(a.diasAfastamento ?? 0)) || 0), 0);
+
       return {
         clt, terceiros, treinamentosNorma,
         advertencias, advertenciasTerceiros,
         epiPorFuncionario, epiPorTipo,
+        acidentes, dds, apr, pt, atestados,
         resumo: {
           totalClt, totalTerceiros,
           cltSemAso, cltAsoVencido,
           cltComAdvertencia, cltSemTreinamento,
           terceirosSemDoc, totalCustoEpi,
           totalAdvertencias,
+          totalAcidentes, totalGraves,
+          totalDds, totalApr, aprAbertas,
+          totalPt, ptAbertas,
+          totalAtestados, totalDiasAtestado,
         },
       };
     }),

@@ -1380,7 +1380,26 @@ export default function ScorecardTab({ proj }: { proj: any }) {
             <p className="text-xs text-gray-400 py-8 text-center">Sem dados disponíveis.</p>
           ) : (
             <div className="space-y-4">
-              {/* KPIs */}
+              {/* ── KPIs — Linha 1: Acidentes / DDS / APR / PT / Atestados ── */}
+              <div className="grid grid-cols-5 gap-2">
+                {(() => {
+                  const r = analiseSeguranca.data.resumo;
+                  return [
+                    { label: "Acidentes",  v: String(r.totalAcidentes ?? 0),  color: (r.totalAcidentes ?? 0) > 0 ? "text-red-600 font-bold" : "text-gray-500", bg: (r.totalAcidentes ?? 0) > 0 ? "bg-red-50 border-red-200" : "bg-gray-50 border-gray-100" },
+                    { label: "DDS Realiz.", v: String(r.totalDds ?? 0),        color: (r.totalDds ?? 0) > 0 ? "text-green-700 font-bold" : "text-gray-500", bg: (r.totalDds ?? 0) > 0 ? "bg-green-50 border-green-100" : "bg-gray-50 border-gray-100" },
+                    { label: "APR Emitidas", v: String(r.totalApr ?? 0),       color: (r.totalApr ?? 0) > 0 ? "text-blue-700 font-bold" : "text-gray-500",  bg: "bg-gray-50 border-gray-100" },
+                    { label: "PT Emitidas", v: String(r.totalPt ?? 0),         color: (r.totalPt ?? 0) > 0 ? "text-purple-700 font-bold" : "text-gray-500", bg: "bg-gray-50 border-gray-100" },
+                    { label: "Atestados",  v: String(r.totalAtestados ?? 0),   color: (r.totalAtestados ?? 0) > 0 ? "text-amber-600 font-bold" : "text-gray-500", bg: (r.totalAtestados ?? 0) > 0 ? "bg-amber-50 border-amber-100" : "bg-gray-50 border-gray-100" },
+                  ].map((k, i) => (
+                    <div key={i} className={`rounded-lg border px-1.5 py-2 text-center ${k.bg}`}>
+                      <p className={`text-sm ${k.color}`}>{k.v}</p>
+                      <p className="text-[9px] text-gray-400 mt-0.5 leading-tight">{k.label}</p>
+                    </div>
+                  ));
+                })()}
+              </div>
+
+              {/* ── KPIs — Linha 2: Efetivo / ASO / Advertências / EPI ── */}
               <div className="grid grid-cols-3 gap-2">
                 {[
                   { label: "CLT na Obra",  v: String(analiseSeguranca.data.resumo.totalClt),          color: "text-gray-800" },
@@ -1394,8 +1413,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                     <p className={`text-sm font-bold ${k.color}`}>{k.v}</p>
                     <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{k.label}</p>
                   </div>
-                ))}
-              </div>
+                ))}</div>
 
               {/* Quadro CLT */}
               {analiseSeguranca.data.clt.length > 0 && (
@@ -1564,6 +1582,185 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                             <td className="px-2 py-1 text-right text-gray-400">{ep.num_funcionarios}</td>
                           </tr>
                         ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* ── ACIDENTES / INCIDENTES ─────────────────────────────────────── */}
+              {(analiseSeguranca.data.acidentes?.length ?? 0) > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-red-500 mb-1.5 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" />Acidentes / Incidentes ({analiseSeguranca.data.acidentes.length})
+                  </p>
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                    {analiseSeguranca.data.acidentes.map((a: any, i: number) => {
+                      const grave = a.gravidade === "Grave" || a.gravidade === "Com Afastamento";
+                      return (
+                        <div key={i} className={`rounded border px-2.5 py-1.5 text-[10px] ${grave ? "border-red-200 bg-red-50" : "border-orange-100 bg-orange-50"}`}>
+                          <div className="flex items-center gap-2">
+                            <span className={`font-bold shrink-0 ${grave ? "text-red-600" : "text-orange-600"}`}>{a.gravidade}</span>
+                            <span className="flex-1 font-medium text-gray-700 truncate">{a.funcionario_nome ?? "—"}</span>
+                            <span className="text-gray-400 shrink-0">{a.dataAcidente ?? ""}</span>
+                          </div>
+                          <div className="flex gap-3 mt-0.5 text-gray-500 flex-wrap">
+                            <span>{a.tipoAcidente}</span>
+                            {(parseInt(String(a.diasAfastamento ?? 0)) > 0) && <span className="text-red-600 font-semibold">{a.diasAfastamento}d afastamento</span>}
+                            {a.localAcidente && <span>{a.localAcidente}</span>}
+                            <span className={`${a.status_acao === "Concluída" ? "text-green-600" : "text-amber-600"}`}>Ação: {a.status_acao ?? "Pendente"}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ── DDS ─────────────────────────────────────────────────────────── */}
+              {(analiseSeguranca.data.dds?.length ?? 0) > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-green-600 mb-1.5 flex items-center gap-1">
+                    <span className="text-xs">📋</span>DDS — Diálogo Diário de Segurança ({analiseSeguranca.data.dds.length})
+                  </p>
+                  <div className="rounded border border-gray-100 overflow-hidden">
+                    <table className="w-full text-[10px]">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="text-left px-2 py-1.5 text-gray-500 font-semibold">Tema</th>
+                          <th className="text-left px-2 py-1.5 text-gray-500 font-semibold w-24">Instrutor</th>
+                          <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-16">Data</th>
+                          <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-14">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {analiseSeguranca.data.dds.slice(0, 10).map((d: any, i: number) => (
+                          <tr key={i} className="border-t border-gray-50">
+                            <td className="px-2 py-1.5 text-gray-700 truncate max-w-[140px]">{d.titulo_tema}</td>
+                            <td className="px-2 py-1.5 text-gray-400 truncate max-w-[90px]">{d.instrutor ?? "—"}</td>
+                            <td className="px-2 py-1.5 text-center text-gray-400">{d.data}</td>
+                            <td className="px-2 py-1.5 text-center">
+                              <span className={`font-semibold ${d.status === "finalizada" ? "text-green-600" : "text-amber-600"}`}>{d.status === "finalizada" ? "✓" : d.status}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* ── APR ─────────────────────────────────────────────────────────── */}
+              {(analiseSeguranca.data.apr?.length ?? 0) > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-600 mb-1.5 flex items-center gap-1">
+                    <span className="text-xs">🔍</span>APR — Análise Preliminar de Risco ({analiseSeguranca.data.apr.length})
+                    {(analiseSeguranca.data.resumo.aprAbertas ?? 0) > 0 && (
+                      <Badge className="ml-1 bg-blue-100 text-blue-700 text-[9px]">{analiseSeguranca.data.resumo.aprAbertas} ativas</Badge>
+                    )}
+                  </p>
+                  <div className="rounded border border-gray-100 overflow-hidden">
+                    <table className="w-full text-[10px]">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="text-left px-2 py-1.5 text-gray-500 font-semibold w-14">Nº</th>
+                          <th className="text-left px-2 py-1.5 text-gray-500 font-semibold">Atividade</th>
+                          <th className="text-left px-2 py-1.5 text-gray-500 font-semibold w-24">Responsável</th>
+                          <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-16">Data</th>
+                          <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-16">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {analiseSeguranca.data.apr.slice(0, 10).map((a: any, i: number) => (
+                          <tr key={i} className="border-t border-gray-50">
+                            <td className="px-2 py-1.5 font-mono text-gray-500">{a.numero}</td>
+                            <td className="px-2 py-1.5 text-gray-700 truncate max-w-[120px]">{a.atividade ?? "—"}</td>
+                            <td className="px-2 py-1.5 text-gray-400 truncate max-w-[90px]">{a.responsavel_nome ?? "—"}</td>
+                            <td className="px-2 py-1.5 text-center text-gray-400">{a.data_emissao ?? "—"}</td>
+                            <td className="px-2 py-1.5 text-center">
+                              <span className={`font-semibold capitalize ${a.status === "aprovada" || a.status === "aberta" ? "text-blue-600" : a.status === "fechada" ? "text-green-600" : "text-gray-400"}`}>{a.status}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* ── PT ──────────────────────────────────────────────────────────── */}
+              {(analiseSeguranca.data.pt?.length ?? 0) > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-purple-600 mb-1.5 flex items-center gap-1">
+                    <span className="text-xs">📝</span>PT — Permissão de Trabalho ({analiseSeguranca.data.pt.length})
+                    {(analiseSeguranca.data.resumo.ptAbertas ?? 0) > 0 && (
+                      <Badge className="ml-1 bg-purple-100 text-purple-700 text-[9px]">{analiseSeguranca.data.resumo.ptAbertas} ativas</Badge>
+                    )}
+                  </p>
+                  <div className="rounded border border-gray-100 overflow-hidden">
+                    <table className="w-full text-[10px]">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="text-left px-2 py-1.5 text-gray-500 font-semibold w-14">Nº</th>
+                          <th className="text-left px-2 py-1.5 text-gray-500 font-semibold">Descrição</th>
+                          <th className="text-left px-2 py-1.5 text-gray-500 font-semibold w-24">Responsável</th>
+                          <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-16">Data</th>
+                          <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-16">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {analiseSeguranca.data.pt.slice(0, 10).map((p: any, i: number) => (
+                          <tr key={i} className="border-t border-gray-50">
+                            <td className="px-2 py-1.5 font-mono text-gray-500">{p.numero}</td>
+                            <td className="px-2 py-1.5 text-gray-700 truncate max-w-[120px]">{p.descricao_trabalho ?? "—"}</td>
+                            <td className="px-2 py-1.5 text-gray-400 truncate max-w-[90px]">{p.responsavel_nome ?? "—"}</td>
+                            <td className="px-2 py-1.5 text-center text-gray-400">{p.data_emissao ?? "—"}</td>
+                            <td className="px-2 py-1.5 text-center">
+                              <span className={`font-semibold capitalize ${p.status === "aprovada" || p.status === "aberta" ? "text-purple-600" : p.status === "fechada" ? "text-green-600" : "text-gray-400"}`}>{p.status}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* ── ATESTADOS ───────────────────────────────────────────────────── */}
+              {(analiseSeguranca.data.atestados?.length ?? 0) > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-600 mb-1.5 flex items-center gap-1">
+                    <span className="text-xs">🏥</span>Atestados Médicos ({analiseSeguranca.data.atestados.length})
+                    {(analiseSeguranca.data.resumo.totalDiasAtestado ?? 0) > 0 && (
+                      <Badge className="ml-1 bg-amber-100 text-amber-700 text-[9px]">{analiseSeguranca.data.resumo.totalDiasAtestado} dias afastamento</Badge>
+                    )}
+                  </p>
+                  <div className="rounded border border-gray-100 overflow-hidden">
+                    <table className="w-full text-[10px]">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="text-left px-2 py-1.5 text-gray-500 font-semibold">Funcionário</th>
+                          <th className="text-left px-2 py-1.5 text-gray-500 font-semibold w-20">Tipo</th>
+                          <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-16">Data</th>
+                          <th className="text-center px-2 py-1.5 text-gray-500 font-semibold w-12">Dias</th>
+                          <th className="text-left px-2 py-1.5 text-gray-500 font-semibold w-14">CID</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {analiseSeguranca.data.atestados.map((a: any, i: number) => {
+                          const dias = parseInt(String(a.diasAfastamento ?? 0));
+                          return (
+                            <tr key={i} className={`border-t border-gray-50 ${dias > 0 ? "bg-amber-50/40" : ""}`}>
+                              <td className="px-2 py-1.5 font-medium text-gray-700 truncate max-w-[120px]">{a.funcionario_nome}</td>
+                              <td className="px-2 py-1.5 text-gray-500 truncate">{a.tipo}</td>
+                              <td className="px-2 py-1.5 text-center text-gray-400">{a.dataEmissao ?? a.dataemissao ?? ""}</td>
+                              <td className="px-2 py-1.5 text-center">
+                                {dias > 0 ? <span className="text-amber-600 font-bold">{dias}d</span> : <span className="text-gray-300">—</span>}
+                              </td>
+                              <td className="px-2 py-1.5 text-gray-400 font-mono">{a.cid ?? "—"}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

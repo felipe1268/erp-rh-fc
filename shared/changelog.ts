@@ -1,4 +1,34 @@
 /**
+ * Rev. 4214 - SCORECARD: ABA SEGURANÇA — APR, PT, DDS, ACIDENTES E ATESTADOS.
+ *
+ * MELHORIA — A aba "Segurança" do Scorecard exibia apenas ASO, treinamentos, EPI e advertências.
+ *   O usuário solicitou que TODOS os indicadores de segurança fossem exibidos de forma clara e objetiva.
+ *
+ * BACKEND — getSeguranca (server/routers/scorecard.ts):
+ *   5 novas queries adicionadas ao Promise.all:
+ *   Q8  acidentes:  accidents (companyId, obra_id) → gravidade, tipo, diasAfastamento, status_acao_corretiva
+ *   Q9  dds:        dds_sessoes (company_id, obra_id, status≠cancelada) → tema, instrutor, data, status
+ *   Q10 apr:        apr_analises (company_id, obra_id) → número, status, atividade, responsável
+ *   Q11 pt:         pt_permissoes (company_id, obra_id) → número, status, descrição, responsável
+ *   Q12 atestados:  atestados JOIN obra_funcionarios → tipo, dias, CID, retorno
+ *   Resumo ganhou: totalAcidentes, totalGraves, totalDds, totalApr, aprAbertas, totalPt, ptAbertas,
+ *   totalAtestados, totalDiasAtestado.
+ *
+ * FRONTEND — ScorecardTab.tsx:
+ *   • KPIs Linha 1 (nova): 5 cards — Acidentes (vermelho), DDS (verde), APR, PT, Atestados (âmbar).
+ *   • KPIs Linha 2 (existente): CLT, Terceiros, Advertências, Sem ASO, ASO Vencido, Custo EPI.
+ *   • Seção Acidentes/Incidentes: cards com gravidade colorida, tipo, dias afastamento, local, ação corretiva.
+ *   • Seção DDS: tabela com tema, instrutor, data, status (✓ finalizada / nome do status).
+ *   • Seção APR: tabela com número, atividade, responsável, data, status (colorido).
+ *   • Seção PT: tabela com número, descrição, responsável, data, status (colorido).
+ *   • Seção Atestados: tabela com funcionário, tipo, data, dias (destaque âmbar), CID.
+ *   Todas as seções são condicionais (só aparecem se houver dados). Limite de 10 linhas por tabela.
+ *
+ * ARQUIVOS: server/routers/scorecard.ts, client/src/pages/planejamento/ScorecardTab.tsx, shared/version.ts
+ * ZERO DELETE · ZERO ALTER destrutivo
+ */
+
+/**
  * Rev. 4213 - SCORECARD + EQUIPE: FIX RAMO A (saida.dataFim prioridade) + BADGE "VEIO DA OBRA X" + SYNCSCHEMA+.
  *
  * PROBLEMA — Três pendências da Rev. 4211/4212:

@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4214** — **SCORECARD: ABA SEGURANÇA — APR, PT, DDS, ACIDENTES E ATESTADOS.** Backend: 5 novas queries em `getSeguranca` (Q8–Q12) para `accidents`, `dds_sessoes`, `apr_analises`, `pt_permissoes`, `atestados`. Resumo ganhou 9 novos indicadores (totalAcidentes, totalGraves, totalDds, totalApr, aprAbertas, totalPt, ptAbertas, totalAtestados, totalDiasAtestado). Frontend: linha de KPIs nova (5 cards coloridos) + 5 seções detalhadas condicionais abaixo das tabelas existentes. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4213** — **SCORECARD + EQUIPE: FIX RAMO A (SyncSchema+ fecha alocacao.dataFim) + BADGE "VEIO DA OBRA X".** SyncSchema+ idempotente fecha `alocacao.dataFim` a partir de `saida.dataFim` (cobre 78+43+67 registros já corrigidos manualmente). Badge indigo exibido na tabela de equipe quando funcionário entrou via transferência formal (`tipo='transferencia'`). Backend: `getObraFuncionarios` ganha `obraOrigemId/Nome/dataTransferencia` via `DISTINCT ON` em `employee_site_history`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4212** — **SCORECARD: BACKFILL AUTOMÁTICO employee_site_history PARA ALOCAÇÕES SEM HISTÓRICO.** Todo funcionário ativo em `obra_funcionarios` sem registro em `employee_site_history` recebe um (idempotente via NOT EXISTS, apenas obra mais recente, dataInicio=GREATEST(createdAt, obra.dataInicio)). Executado 1x manualmente (20 registros) + bloco SyncSchema+ para futuros envs. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4212** — **SCORECARD: BACKFILL AUTOMÁTICO employee_site_history PARA ALOCAÇÕES SEM HISTÓRICO.** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4211** — **SCORECARD RH/FOLHA: FIX EQUIPE — ELIMINA DUPLICAÇÃO MULTI-OBRA E PONTO-SEM-ALOCAÇÃO.** ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4209** — **SCORECARD: FIX BÔNUS (LL realizado→previsto quando sem custo real) + BETA GATE POR EMPRESA.** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4208** — **SCORECARD RH/FOLHA: FIX SEGURO DE VIDA (R$0→real) + VR/VA DOUBLE-COUNT + PONTO FALLBACK.** ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4207** — **SCORECARD RH/FOLHA: FIX DIAS_NA_OBRA (150→30) + FOTO DO COLABORADOR.** ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 
