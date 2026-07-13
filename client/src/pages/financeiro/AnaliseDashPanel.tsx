@@ -10,7 +10,7 @@ import {
   BarChart2, AlertTriangle, TrendingUp, Clock, Repeat2,
   DollarSign, Package, MapPin, CreditCard, ChevronRight,
   ArrowUpRight, Layers, GitMerge, CalendarDays, ChevronDown,
-  MousePointerClick, ShieldAlert,
+  MousePointerClick, ShieldAlert, Info,
 } from "lucide-react";
 
 const fmt = (v: number) =>
@@ -1118,6 +1118,11 @@ function isSuspeita(formaLabel: string): boolean {
   return !FORMAS_ESPERADAS.some((f) => fl.startsWith(f));
 }
 
+/** OC de Faturamento Direto: obra PAPA → quem paga é o cliente (efetivo = PIX) */
+function isPapaFD(obraNome: string | null | undefined): boolean {
+  return !!(obraNome && obraNome.toUpperCase().includes("PAPA"));
+}
+
 function FormaDrilldown({
   forma, itens, totalGasto, onClose, onOpenItem,
 }: {
@@ -1144,20 +1149,28 @@ function FormaDrilldown({
       .sort((a, b) => (b.data ?? "").localeCompare(a.data ?? ""));
   }, [forma, itens]);
 
+  const isNaoInformado = forma === "Não informado";
+
+  // Separa OCs de PAPA (Faturamento Direto → cliente paga → PIX) das demais
+  const papaOcs = isNaoInformado ? ocsForma.filter((oc) => isPapaFD(oc.obraNome)) : [];
+  const outrasOcs = isNaoInformado ? ocsForma.filter((oc) => !isPapaFD(oc.obraNome)) : ocsForma;
+
   const totalForma = ocsForma.reduce((s, oc) => s + (oc.total ?? 0), 0);
-  const semObra = ocsForma.filter((oc) => !oc.obraNome || oc.obraNome === "Não informado" || oc.obraNome === "—");
-  const suspeita = forma ? isSuspeita(forma) : false;
+  const semObra = outrasOcs.filter((oc) => !oc.obraNome || oc.obraNome === "Não informado" || oc.obraNome === "—");
+
+  // "Não informado" só é suspeito se houver OCs que NÃO são do PAPA
+  const suspeita = forma ? (isNaoInformado ? outrasOcs.length > 0 : isSuspeita(forma)) : false;
 
   return (
     <Sheet open={!!forma} onOpenChange={(o) => { if (!o) onClose(); }}>
       <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto p-0">
         {forma && (
           <div className="flex flex-col h-full">
-            <div className={`px-6 py-5 border-b ${suspeita ? "bg-amber-50 border-amber-200" : "bg-indigo-50 border-indigo-100"}`}>
+            <div className={`px-6 py-5 border-b ${suspeita ? "bg-amber-50 border-amber-200" : isNaoInformado && papaOcs.length > 0 ? "bg-blue-50 border-blue-100" : "bg-indigo-50 border-indigo-100"}`}>
               <SheetHeader>
                 <div className="flex items-start gap-3">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${suspeita ? "bg-amber-200" : "bg-indigo-200"}`}>
-                    <CreditCard className={`w-5 h-5 ${suspeita ? "text-amber-700" : "text-indigo-700"}`} />
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${suspeita ? "bg-amber-200" : isNaoInformado && papaOcs.length > 0 ? "bg-blue-200" : "bg-indigo-200"}`}>
+                    <CreditCard className={`w-5 h-5 ${suspeita ? "text-amber-700" : isNaoInformado && papaOcs.length > 0 ? "text-blue-700" : "text-indigo-700"}`} />
                   </div>
                   <div className="min-w-0">
                     <SheetTitle className="text-base font-bold text-gray-800 break-words">{forma}</SheetTitle>
@@ -1167,8 +1180,37 @@ function FormaDrilldown({
               </SheetHeader>
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
-              {/* Alertas */}
-              {suspeita && (
+
+              {/* Banner PAPA / Faturamento Direto */}
+              {papaOcs.length > 0 && (
+                <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
+                  <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-bold text-blue-800">
+                      {papaOcs.length} OC{papaOcs.length !== 1 ? "s" : ""} do PAPA — Faturamento Direto
+                    </p>
+                    <p className="text-xs text-blue-700 mt-0.5 leading-relaxed">
+                      Nessas OCs <strong>quem paga é o cliente</strong> (Faturamento Direto). A forma de pagamento efetiva é <strong>PIX</strong>. Não há pendência com FC Engenharia.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Alertas para OCs sem explicação (não PAPA) */}
+              {suspeita && outrasOcs.length > 0 && (
+                <div className="flex items-start gap-3 bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
+                  <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-bold text-amber-800">
+                      {outrasOcs.length} OC{outrasOcs.length !== 1 ? "s" : ""} sem forma de pagamento definida
+                    </p>
+                    <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
+                      Essas OCs não são do PAPA e não têm forma de pagamento informada. Verifique e corrija.
+                    </p>
+                  </div>
+                </div>
+              )}
+              {!isNaoInformado && suspeita && (
                 <div className="flex items-start gap-3 bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
                   <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <div>
@@ -1190,6 +1232,7 @@ function FormaDrilldown({
                   </div>
                 </div>
               )}
+
               {/* KPIs */}
               <div className="grid grid-cols-3 gap-2">
                 <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 text-center">
@@ -1200,48 +1243,96 @@ function FormaDrilldown({
                 <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 text-center">
                   <p className="text-[10px] text-gray-400 mb-1">OCs</p>
                   <p className="text-sm font-bold text-gray-800">{ocsForma.length}</p>
+                  {papaOcs.length > 0 && (
+                    <p className="text-[10px] text-blue-500 font-semibold">{papaOcs.length} FD/PAPA</p>
+                  )}
                 </div>
                 <div className={`border rounded-xl p-3 text-center ${semObra.length > 0 ? "bg-rose-50 border-rose-100" : "bg-gray-50 border-gray-100"}`}>
                   <p className="text-[10px] text-gray-400 mb-1">Sem obra</p>
                   <p className={`text-sm font-bold ${semObra.length > 0 ? "text-rose-600" : "text-gray-400"}`}>{semObra.length}</p>
                 </div>
               </div>
-              {/* Lista de OCs */}
-              <div>
-                <p className="text-xs font-bold text-gray-500 mb-2 uppercase tracking-wider">Ordens de Compra</p>
-                <div className="space-y-2">
-                  {ocsForma.map((oc, i) => {
-                    const d = oc.data ? new Date(oc.data + "T00:00:00").toLocaleDateString("pt-BR") : "—";
-                    const semObraFlag = !oc.obraNome || oc.obraNome === "Não informado" || oc.obraNome === "—";
-                    return (
-                      <button
-                        key={i}
-                        onClick={() => { onClose(); onOpenItem(oc.item); }}
-                        className="w-full text-left bg-gray-50 hover:bg-indigo-50 border border-gray-100 hover:border-indigo-200 rounded-xl px-4 py-3 transition-colors group"
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs font-bold text-indigo-600 group-hover:text-indigo-800">OC {oc.numeroOc || "—"}</span>
-                          <span className="text-[10px] text-gray-400">{d}</span>
-                        </div>
-                        <p className="text-[11px] text-gray-700 font-medium truncate mb-1">{oc.itemDescricao}</p>
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            {semObraFlag ? (
-                              <Badge variant="destructive" className="text-[9px] px-1.5 py-0 h-4 font-semibold">Sem obra</Badge>
-                            ) : (
-                              <span className="text-[10px] text-gray-500 truncate">{oc.obraNome}</span>
-                            )}
+
+              {/* Lista PAPA / Faturamento Direto */}
+              {papaOcs.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold text-blue-600 mb-2 uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />
+                    Faturamento Direto — Cliente paga (PIX)
+                  </p>
+                  <div className="space-y-2">
+                    {papaOcs.map((oc, i) => {
+                      const d = oc.data ? new Date(oc.data + "T00:00:00").toLocaleDateString("pt-BR") : "—";
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => { onClose(); onOpenItem(oc.item); }}
+                          className="w-full text-left bg-blue-50/60 hover:bg-blue-100 border border-blue-100 hover:border-blue-300 rounded-xl px-4 py-3 transition-colors group"
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-bold text-blue-700 group-hover:text-blue-900">OC {oc.numeroOc || "—"}</span>
+                            <span className="text-[10px] text-gray-400">{d}</span>
                           </div>
-                          <span className="text-xs font-bold text-gray-800 tabular-nums shrink-0">{fmt(oc.total ?? 0)}</span>
-                        </div>
-                        {(oc.formaPagamento || oc.condicaoPagamento) && (
-                          <p className="text-[9px] text-gray-400 mt-1">{[oc.formaPagamento, oc.condicaoPagamento].filter(Boolean).join(" · ")}</p>
-                        )}
-                      </button>
-                    );
-                  })}
+                          <p className="text-[11px] text-gray-700 font-medium truncate mb-1.5">{oc.itemDescricao}</p>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <Badge className="text-[9px] px-1.5 py-0 h-4 bg-green-100 text-green-700 border-green-200 font-semibold">PIX</Badge>
+                              <Badge className="text-[9px] px-1.5 py-0 h-4 bg-blue-100 text-blue-700 border-blue-200 font-semibold">Faturamento Direto</Badge>
+                              <span className="text-[10px] text-gray-500 truncate">{oc.obraNome}</span>
+                            </div>
+                            <span className="text-xs font-bold text-gray-800 tabular-nums shrink-0">{fmt(oc.total ?? 0)}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* Lista de OCs sem explicação */}
+              {outrasOcs.length > 0 && (
+                <div>
+                  <p className={`text-xs font-bold mb-2 uppercase tracking-wider flex items-center gap-1.5 ${isNaoInformado ? "text-amber-600" : "text-gray-500"}`}>
+                    {isNaoInformado && <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />}
+                    {isNaoInformado ? "Sem forma definida — verificar" : "Ordens de Compra"}
+                  </p>
+                  <div className="space-y-2">
+                    {outrasOcs.map((oc, i) => {
+                      const d = oc.data ? new Date(oc.data + "T00:00:00").toLocaleDateString("pt-BR") : "—";
+                      const semObraFlag = !oc.obraNome || oc.obraNome === "Não informado" || oc.obraNome === "—";
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => { onClose(); onOpenItem(oc.item); }}
+                          className={`w-full text-left border rounded-xl px-4 py-3 transition-colors group ${isNaoInformado ? "bg-amber-50/40 hover:bg-amber-50 border-amber-100 hover:border-amber-300" : "bg-gray-50 hover:bg-indigo-50 border-gray-100 hover:border-indigo-200"}`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className={`text-xs font-bold group-hover:opacity-80 ${isNaoInformado ? "text-amber-700" : "text-indigo-600"}`}>OC {oc.numeroOc || "—"}</span>
+                            <span className="text-[10px] text-gray-400">{d}</span>
+                          </div>
+                          <p className="text-[11px] text-gray-700 font-medium truncate mb-1.5">{oc.itemDescricao}</p>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                              {isNaoInformado && (
+                                <Badge className="text-[9px] px-1.5 py-0 h-4 bg-amber-100 text-amber-700 border-amber-200 font-semibold">⚠ Não informado</Badge>
+                              )}
+                              {semObraFlag ? (
+                                <Badge variant="destructive" className="text-[9px] px-1.5 py-0 h-4 font-semibold">Sem obra</Badge>
+                              ) : (
+                                <span className="text-[10px] text-gray-500 truncate">{oc.obraNome}</span>
+                              )}
+                            </div>
+                            <span className="text-xs font-bold text-gray-800 tabular-nums shrink-0">{fmt(oc.total ?? 0)}</span>
+                          </div>
+                          {(oc.formaPagamento || oc.condicaoPagamento) && (
+                            <p className="text-[9px] text-gray-400 mt-1">{[oc.formaPagamento, oc.condicaoPagamento].filter(Boolean).join(" · ")}</p>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
