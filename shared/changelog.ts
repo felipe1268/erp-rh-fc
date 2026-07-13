@@ -1,4 +1,31 @@
 /**
+ * Rev. 4192 - BANCO DE HORAS: CARGO DE CONFIANÇA (ART. 62 CLT) EXCLUÍDO AUTOMATICAMENTE.
+ *
+ * MOTIVAÇÃO:
+ * Funcionários com isenção de jornada (Art. 62 CLT — cargo de gestão/confiança) não estão
+ * sujeitos a controle de jornada nem horas extras, portanto não devem acumular banco de horas.
+ * Mesmo batendo ponto, seus registros NÃO devem aparecer no Banco de Horas.
+ *
+ * O QUE FOI FEITO:
+ * 1. Backend — filtro `AND COALESCE(e."cargo_confianca", 0) = 0` adicionado em TODOS os
+ *    4 pontos de leitura/listagem do Banco de Horas:
+ *    a. getSaldoBancoMensal (aba "Saldos" — lista principal)
+ *    b. getAlertasExpiracao (créditos acumulados há mais de N meses)
+ *    c. getAlertasSaldoNegativo (alerta de funcionários com saldo negativo)
+ *    d. getAlertasSaldoPositivoTrimestral (alerta trimestral de saldo positivo elevado)
+ *
+ * 2. Frontend BancoHoras.tsx — banner azul informativo adicionado na aba "Saldos":
+ *    "Funcionários com cargo de confiança (Art. 62 CLT) são automaticamente excluídos desta
+ *    tela — não acumulam banco de horas, independentemente de baterem ponto."
+ *
+ * ARQUIVOS:
+ * - server/routers/horasExtras.ts (4 queries filtradas)
+ * - client/src/pages/BancoHoras.tsx (banner informativo)
+ *
+ * ZERO DELETE · ZERO ALTER DESTRUTIVO.
+ */
+
+/**
  * Rev. 4191 - BANCO DE HORAS: HISTÓRICO REDESENHADO — CARDS MODERNOS COM SOLICITANTE, AUTORIZADOR, DATA/HORA E HORAS NÃO AUTORIZADAS.
  *
  * MOTIVAÇÃO:

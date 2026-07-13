@@ -1174,6 +1174,7 @@ export const horasExtrasRouter = router({
         LEFT JOIN acumulado a ON a."employeeId" = e.id
         LEFT JOIN movimento m ON m."employeeId" = e.id
         WHERE e."companyId" = ${input.companyId}
+          AND COALESCE(e."cargo_confianca", 0) = 0
           AND (COALESCE(a.saldo, 0) <> 0 OR m.movimento IS NOT NULL)
         ORDER BY COALESCE(a.saldo, 0) DESC
       `)) as any).rows || [];
@@ -1342,6 +1343,7 @@ export const horasExtrasRouter = router({
         JOIN employees e ON e.id = bhl."employeeId"
         JOIN banco_horas_saldo bhs ON bhs."employeeId" = bhl."employeeId" AND bhs."companyId" = bhl."companyId"
         WHERE bhl."companyId" = ${input.companyId}
+          AND COALESCE(e."cargo_confianca", 0) = 0
           AND bhl.tipo = 'credito'
           AND bhl.data < ${cutoffStr}::date
           AND bhs."saldoMinutos" > 0
@@ -1363,6 +1365,7 @@ export const horasExtrasRouter = router({
         FROM banco_horas_saldo bhs
         JOIN employees e ON e.id = bhs."employeeId"
         WHERE bhs."companyId" = ${input.companyId}
+          AND COALESCE(e."cargo_confianca", 0) = 0
           AND bhs."saldoMinutos" < 0
         ORDER BY bhs."saldoMinutos" ASC
       `)) as any).rows || [];
@@ -1386,6 +1389,7 @@ export const horasExtrasRouter = router({
         JOIN employees e ON e.id = bhl."employeeId"
         JOIN banco_horas_saldo bhs ON bhs."employeeId" = bhl."employeeId" AND bhs."companyId" = bhl."companyId"
         WHERE bhl."companyId" = ${input.companyId}
+          AND COALESCE(e."cargo_confianca", 0) = 0
           AND bhl.tipo = 'credito'
           AND bhl.data < ${cutoffStr}::date
           AND bhs."saldoMinutos" > 0

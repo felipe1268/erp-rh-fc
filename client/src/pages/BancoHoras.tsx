@@ -501,6 +501,15 @@ export default function BancoHoras() {
               </div>
             </div>
 
+            {/* Aviso: cargo de confiança excluído do banco de horas */}
+            <div className="flex items-start gap-2.5 bg-blue-50 border border-blue-100 rounded-lg px-4 py-2.5 text-xs text-blue-700">
+              <Info className="h-3.5 w-3.5 shrink-0 mt-0.5 text-blue-500" />
+              <span>
+                <strong>Funcionários com cargo de confiança (Art. 62 CLT)</strong> são automaticamente excluídos desta tela —
+                não acumulam banco de horas, independentemente de baterem ponto.
+              </span>
+            </div>
+
             {/* Rev. 2575 — barra de ação em lote (aparece com ≥1 selecionado) */}
             {selectedIds.size > 0 && (
               <div className="flex items-center gap-3 flex-wrap bg-orange-50 border border-orange-200 rounded-lg px-4 py-3 no-print">

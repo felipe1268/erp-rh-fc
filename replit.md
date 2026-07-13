@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4191** — **BANCO DE HORAS: HISTÓRICO REDESENHADO — CARDS MODERNOS COM SOLICITANTE, AUTORIZADOR, DATA/HORA E HORAS NÃO AUTORIZADAS.** Tabela substituída por cards individuais com barra lateral colorida (verde/laranja/âmbar/cinza), badge de tipo + status, data + hora de registro, período HE com intervalo, KPIs de HE Realizada e Creditado, "Solicitado por" e "Autorizado por [nome] em DD/MM" — e destaque âmbar para horas ainda não autorizadas. Backend: +3 colunas do `he_periods` (`criadoPor`, `aprovadoPor`, `aprovadoEm`). Fix crash TDZ: `histDialogRow` movido após `saldosMensal`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4192** — **BANCO DE HORAS: CARGO DE CONFIANÇA (ART. 62 CLT) EXCLUÍDO AUTOMATICAMENTE.** Filtro `cargo_confianca=0` em todos os 4 pontos de leitura (getSaldoBancoMensal, getAlertasExpiracao, getAlertasSaldoNegativo, getAlertasSaldoPositivoTrimestral). Banner azul informativo na aba Saldos. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4190** — **BANCO DE HORAS: HISTÓRICO INTERATIVO COM FOTO E STATUS DE AUTORIZAÇÃO.** Foto (PersonPhoto xs) em cada linha da tabela de Saldos; clique no nome abre Dialog modal com foto grande + saldo + tabela rica de lançamentos: período HE, tipo (badge), HE Realizada (util/fim), Creditado, Autorização (✓ Autorizado / ⏳ Em análise / — Manual). Backend getLancamentos enriquecido com JOIN em `he_periods`+`he_period_employees`; `getSaldoBancoMensal` inclui `fotoUrl`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4191** — **BANCO DE HORAS: HISTÓRICO REDESENHADO — CARDS MODERNOS COM SOLICITANTE, AUTORIZADOR, DATA/HORA E HORAS NÃO AUTORIZADAS.** Tabela substituída por cards individuais com barra lateral colorida, data+hora, "Solicitado por"/"Autorizado por", horas não autorizadas em âmbar. Backend: +3 colunas do `he_periods`. Fix TDZ. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
+
+- **Rev. 4190** — **BANCO DE HORAS: HISTÓRICO INTERATIVO COM FOTO E STATUS DE AUTORIZAÇÃO.** Foto (PersonPhoto xs) em Saldos; clique abre Dialog com histórico rico de lançamentos (período HE, tipo, HE Realizada, Creditado, Autorização). ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4189** — **BANCO DE HORAS: FIX CRÍTICO — LANÇAMENTOS NUNCA ERAM GRAVADOS + BACKFILL AUTOMÁTICO.** `String(period.dataFim).slice(0,10)` gerava `"Fri May 15"` → `::date` falha no Postgres. Fix: helper `toDateStr` + backfill 53 lançamentos. ZERO DELETE · ZERO ALTER destrutivo.
 
