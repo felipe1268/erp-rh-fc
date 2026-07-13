@@ -1002,7 +1002,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                     { label: "Funcionários",      v: String(analiseRH.data.resumo.totalFuncionarios),                                            color: "text-indigo-700" },
                     { label: "Custo Total",        v: fmt(analiseRH.data.resumo.custoTotalEmpresa),                                               color: "text-violet-700 font-bold" },
                     { label: "Salário Bruto",      v: fmt(analiseRH.data.resumo.salarioBrutoTotal),                                               color: "text-gray-800" },
-                    { label: "VR + VA",            v: fmt(analiseRH.data.resumo.vrTotal + analiseRH.data.resumo.vaTotal),                         color: "text-teal-700" },
+                    { label: "VA",                 v: fmt(analiseRH.data.resumo.vaTotal),                                                        color: "text-teal-700" },
                     { label: "Férias",             v: fmt(analiseRH.data.resumo.feriasTotal ?? 0),                                                color: (analiseRH.data.resumo.feriasTotal ?? 0) > 0 ? "text-orange-700" : "text-gray-300" },
                     { label: "Seg. de Vida",       v: fmt(analiseRH.data.resumo.seguroVidaTotal ?? 0),                                            color: (analiseRH.data.resumo.seguroVidaTotal ?? 0) > 0 ? "text-rose-700" : "text-gray-300" },
                     { label: "HE",                 v: fmt(analiseRH.data.resumo.heTotal),                                                         color: analiseRH.data.resumo.heTotal > 0 ? "text-amber-700" : "text-gray-300" },
@@ -1027,7 +1027,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                             <th className="text-center px-2 py-1.5 font-semibold">Funcs</th>
                             <th className="text-right px-2 py-1.5 font-semibold">Salário</th>
                             <th className="text-right px-2 py-1.5 font-semibold">HE</th>
-                            <th className="text-right px-2 py-1.5 font-semibold">VR+VA</th>
+                            <th className="text-right px-2 py-1.5 font-semibold">VA</th>
                             <th className="text-right px-2 py-1.5 font-semibold">Férias</th>
                             <th className="text-right px-2 py-1.5 font-semibold">Seg.Vida</th>
                             <th className="text-right px-2 py-1.5 font-semibold">FGTS</th>
@@ -1047,7 +1047,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                 <td className="px-2 py-1.5 text-center text-gray-500">{m.qtdFuncionarios}</td>
                                 <td className="px-2 py-1.5 text-right text-gray-700">{fmt(m.salarioBruto)}</td>
                                 <td className="px-2 py-1.5 text-right text-amber-700">{m.he > 0 ? fmt(m.he) : <span className="text-gray-200">—</span>}</td>
-                                <td className="px-2 py-1.5 text-right text-teal-700">{(m.vr + m.va) > 0 ? fmt(m.vr + m.va) : <span className="text-gray-200">—</span>}</td>
+                                <td className="px-2 py-1.5 text-right text-teal-700">{m.va > 0 ? fmt(m.va) : <span className="text-gray-200">—</span>}</td>
                                 <td className="px-2 py-1.5 text-right text-orange-700">{m.ferias > 0 ? fmt(m.ferias) : <span className="text-gray-200">—</span>}</td>
                                 <td className="px-2 py-1.5 text-right text-rose-700">{m.seguroVida > 0 ? fmt(m.seguroVida) : <span className="text-gray-200">—</span>}</td>
                                 <td className="px-2 py-1.5 text-right text-blue-700">{fmt(m.fgts)}</td>
@@ -1062,7 +1062,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                             <td className="px-2 py-1.5 text-center">{analiseRH.data.resumo.totalFuncionarios}</td>
                             <td className="px-2 py-1.5 text-right">{fmt(analiseRH.data.resumo.salarioBrutoTotal)}</td>
                             <td className="px-2 py-1.5 text-right text-amber-700">{fmt(analiseRH.data.resumo.heTotal)}</td>
-                            <td className="px-2 py-1.5 text-right text-teal-700">{fmt(analiseRH.data.resumo.vrTotal + analiseRH.data.resumo.vaTotal)}</td>
+                            <td className="px-2 py-1.5 text-right text-teal-700">{fmt(analiseRH.data.resumo.vaTotal)}</td>
                             <td className="px-2 py-1.5 text-right text-orange-700">{fmt(analiseRH.data.resumo.feriasTotal ?? 0)}</td>
                             <td className="px-2 py-1.5 text-right text-rose-700">{fmt(analiseRH.data.resumo.seguroVidaTotal ?? 0)}</td>
                             <td className="px-2 py-1.5 text-right text-blue-700">{fmt(analiseRH.data.resumo.fgtsTotal)}</td>
@@ -1093,7 +1093,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                           <th className="text-center px-2 py-1.5 font-semibold">Dias</th>
                           <th className="text-right px-2 py-1.5 font-semibold">Sal. Bruto</th>
                           <th className="text-right px-2 py-1.5 font-semibold">HE</th>
-                          <th className="text-right px-2 py-1.5 font-semibold">VR+VA</th>
+                          <th className="text-right px-2 py-1.5 font-semibold">VA</th>
                           <th className="text-right px-2 py-1.5 font-semibold">Férias</th>
                           <th className="text-right px-2 py-1.5 font-semibold">Seg.</th>
                           <th className="text-right px-2 py-1.5 font-semibold">FGTS</th>
@@ -1112,7 +1112,6 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                           });
                           const hist: any[] = Array.isArray(f.historico_mensal) ? f.historico_mensal : [];
                           const histFiltered = rhMes === 'all' ? hist : hist.filter((h: any) => h.mes === `${rhAno}-${rhMes}`);
-                          const vr = Number(f.vr_total ?? 0);
                           const va = Number(f.va_total ?? 0);
                           return (
                             <React.Fragment key={empId}>
@@ -1137,7 +1136,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                 <td className="text-center px-2 py-1.5 text-gray-600">{f.total_dias_na_obra}</td>
                                 <td className="text-right px-2 py-1.5 text-gray-700">{fmt(Number(f.salario_bruto_total))}</td>
                                 <td className="text-right px-2 py-1.5 text-amber-700">{Number(f.he_total) > 0 ? fmt(Number(f.he_total)) : <span className="text-gray-300">—</span>}</td>
-                                <td className="text-right px-2 py-1.5 text-teal-700">{(vr + va) > 0 ? fmt(vr + va) : <span className="text-gray-300">—</span>}</td>
+                                <td className="text-right px-2 py-1.5 text-teal-700">{va > 0 ? fmt(va) : <span className="text-gray-300">—</span>}</td>
                                 <td className="text-right px-2 py-1.5 text-orange-700">{Number(f.ferias_total) > 0 ? fmt(Number(f.ferias_total)) : <span className="text-gray-300">—</span>}</td>
                                 <td className="text-right px-2 py-1.5 text-rose-700">{Number(f.seguro_vida_total) > 0 ? fmt(Number(f.seguro_vida_total)) : <span className="text-gray-300">—</span>}</td>
                                 <td className="text-right px-2 py-1.5 text-blue-700">{fmt(Number(f.fgts_total))}</td>
@@ -1157,7 +1156,6 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                             <th className="text-center py-1 pr-3 font-semibold">Fração</th>
                                             <th className="text-right py-1 pr-3 font-semibold">Sal. Bruto</th>
                                             <th className="text-right py-1 pr-3 font-semibold">HE</th>
-                                            <th className="text-right py-1 pr-3 font-semibold">VR</th>
                                             <th className="text-right py-1 pr-3 font-semibold">VA</th>
                                             <th className="text-right py-1 pr-3 font-semibold">Férias</th>
                                             <th className="text-right py-1 pr-3 font-semibold">Seg.</th>
@@ -1177,8 +1175,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                               </td>
                                               <td className="py-1 pr-3 text-right text-gray-700">{fmt(Number(hm.salarioBruto))}</td>
                                               <td className="py-1 pr-3 text-right text-amber-700">{Number(hm.horasExtras) > 0 ? fmt(Number(hm.horasExtras)) : <span className="text-gray-300">—</span>}</td>
-                                              <td className="py-1 pr-3 text-right text-teal-700">{Number(hm.vr) > 0 ? fmt(Number(hm.vr)) : <span className="text-gray-300">—</span>}</td>
-                                              <td className="py-1 pr-3 text-right text-teal-600">{Number(hm.va) > 0 ? fmt(Number(hm.va)) : <span className="text-gray-300">—</span>}</td>
+                                              <td className="py-1 pr-3 text-right text-teal-700">{Number(hm.va) > 0 ? fmt(Number(hm.va)) : <span className="text-gray-300">—</span>}</td>
                                               <td className="py-1 pr-3 text-right text-orange-700">{Number(hm.ferias) > 0 ? fmt(Number(hm.ferias)) : <span className="text-gray-300">—</span>}</td>
                                               <td className="py-1 pr-3 text-right text-rose-700">{Number(hm.seguroVida) > 0 ? fmt(Number(hm.seguroVida)) : <span className="text-gray-300">—</span>}</td>
                                               <td className="py-1 pr-3 text-right text-blue-700">{fmt(Number(hm.fgts))}</td>
@@ -1201,7 +1198,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                           <td className="text-center px-2 py-2 text-gray-500">—</td>
                           <td className="text-right px-2 py-2">{fmt(analiseRH.data.resumo.salarioBrutoTotal)}</td>
                           <td className="text-right px-2 py-2 text-amber-700">{fmt(analiseRH.data.resumo.heTotal)}</td>
-                          <td className="text-right px-2 py-2 text-teal-700">{fmt(analiseRH.data.resumo.vrTotal + analiseRH.data.resumo.vaTotal)}</td>
+                          <td className="text-right px-2 py-2 text-teal-700">{fmt(analiseRH.data.resumo.vaTotal)}</td>
                           <td className="text-right px-2 py-2 text-orange-700">{fmt(analiseRH.data.resumo.feriasTotal ?? 0)}</td>
                           <td className="text-right px-2 py-2 text-rose-700">{fmt(analiseRH.data.resumo.seguroVidaTotal ?? 0)}</td>
                           <td className="text-right px-2 py-2 text-blue-700">{fmt(analiseRH.data.resumo.fgtsTotal)}</td>

@@ -1,4 +1,35 @@
 /**
+ * Rev. 4208 - SCORECARD RH/FOLHA: FIX SEGURO DE VIDA (R$0→real) + VR/VA DOUBLE-COUNT + PONTO COMO FALLBACK DE DIAS.
+ *
+ * PROBLEMA 1 — Seguro de Vida mostrava R$0:
+ *   A query juntava `employees.seguroVida` (campo de texto "sim/não", nunca numérico) como custo_mensal.
+ *   Fix: custo_mensal = `svc.premio_vg + svc.premio_apc` diretamente de `seguro_vida_coberturas`
+ *   (ambos armazenados como texto BR "12,37176" → safe-cast via CASE WHEN ~ '^-?[0-9]').
+ *   Removido JOIN desnecessário com `employees` na query de seguro.
+ *
+ * PROBLEMA 2 — VR+VA mostrava valor em dobro:
+ *   `vr_benefits.valorTotal` já inclui café+lanche+janta+VA (total líquido de faltas).
+ *   `vr_benefits.valorVa` = só a parcela VA. O código anterior somava ambos → double-count.
+ *   Fix: CTE `vr_data` usa apenas `valorTotal` como `va_total` (coluna única).
+ *   Removidas todas as referências a `vr_total` em: CTE vr_data, CTE custos, historico_mensal JSON,
+ *   mensalMap JS (backend), resumo JS (backend), e em todos os 7 pontos do frontend (ScorecardTab.tsx).
+ *   Labels "VR+VA" renomeados para "VA" em cards, headers de tabela e detail table.
+ *
+ * PROBLEMA 3 — dias_na_obra potencialmente subestimado para funcionários sem alocação formal:
+ *   Adicionado GREATEST(alocação_overlap, COUNT DISTINCT ponto) na CTE payroll_frac.
+ *   `relevant_emp` agora inclui UNION com `time_records` (obraId+companyId) para capturar
+ *   funcionários que bateram ponto mas não têm linha em employee_site_history.
+ *
+ * ARQUIVOS:
+ *   server/routers/scorecard.ts — getCustosRH: relevant_emp UNION, dias_na_obra GREATEST,
+ *                                  vr_data sem vr_total, custo_folha_empresa sem vr, seguro fix
+ *   client/src/pages/planejamento/ScorecardTab.tsx — remove vr variable/cells, label VA
+ *   shared/version.ts — Rev. 4208
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4207 - SCORECARD RH/FOLHA: FIX DIAS_NA_OBRA (150→30) + FOTO DO COLABORADOR.
  *
  * CAUSA RAIZ (150 dias):

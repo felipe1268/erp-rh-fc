@@ -1119,6 +1119,10 @@ export const scorecardRouter = router({
           ),
           relevant_emp AS (
             SELECT DISTINCT employee_id FROM site_periods
+            UNION
+            -- Funcionários que bateram ponto nesta obra mas não têm alocação registrada
+            SELECT DISTINCT "employeeId" AS employee_id FROM time_records
+            WHERE "obraId" = ${input.obraId} AND "companyId" = ${input.companyId}
           ),
           payroll_frac AS (
             SELECT
@@ -1138,19 +1142,31 @@ export const scorecardRouter = router({
               COALESCE(CASE WHEN pp."totalProventos"   ~ '^-?[0-9]' THEN REPLACE(pp."totalProventos",   ',', '.')::numeric ELSE NULL END, 0) AS total_proventos,
               COALESCE(CASE WHEN pp."totalDescontos"   ~ '^-?[0-9]' THEN REPLACE(pp."totalDescontos",   ',', '.')::numeric ELSE NULL END, 0) AS total_descontos,
               COALESCE(CASE WHEN pp."salarioLiquido"   ~ '^-?[0-9]' THEN REPLACE(pp."salarioLiquido",   ',', '.')::numeric ELSE NULL END, 0) AS liquido,
-              (
-                SELECT COALESCE(SUM(
-                  GREATEST(0,
-                    LEAST(sp.periodo_fim,
-                          ((pp."mesReferencia"||'-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date)
-                    - GREATEST(sp.periodo_inicio, (pp."mesReferencia"||'-01')::date)
-                    + 1
-                  )
-                ), 0)::int
-                FROM site_periods sp
-                WHERE sp.employee_id = pp."employeeId"
-                  AND sp.periodo_fim  >= (pp."mesReferencia"||'-01')::date
-                  AND sp.periodo_inicio <= ((pp."mesReferencia"||'-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date
+              GREATEST(
+                -- Dias pela alocação (employee_site_history)
+                (
+                  SELECT COALESCE(SUM(
+                    GREATEST(0,
+                      LEAST(sp.periodo_fim,
+                            ((pp."mesReferencia"||'-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date)
+                      - GREATEST(sp.periodo_inicio, (pp."mesReferencia"||'-01')::date)
+                      + 1
+                    )
+                  ), 0)::int
+                  FROM site_periods sp
+                  WHERE sp.employee_id = pp."employeeId"
+                    AND sp.periodo_fim  >= (pp."mesReferencia"||'-01')::date
+                    AND sp.periodo_inicio <= ((pp."mesReferencia"||'-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date
+                ),
+                -- Dias pelo cartão de ponto nesta obra (verificação / complemento)
+                (
+                  SELECT COUNT(DISTINCT tr.data)::int
+                  FROM time_records tr
+                  WHERE tr."companyId"     = ${input.companyId}
+                    AND tr."obraId"        = ${input.obraId}
+                    AND tr."employeeId"    = pp."employeeId"
+                    AND tr."mesReferencia" = pp."mesReferencia"
+                )
               ) AS dias_na_obra
             FROM payroll_payments pp
             WHERE pp."companyId"  = ${input.companyId}
@@ -1162,11 +1178,11 @@ export const scorecardRouter = router({
             SELECT * FROM payroll_frac WHERE dias_na_obra > 0
           ),
           vr_data AS (
+            -- valorTotal já inclui café+lanche+janta+VA (líquido após desconto de faltas)
             SELECT
               "employeeId" AS employee_id,
               "mesReferencia" AS mes_referencia,
-              COALESCE(CASE WHEN "valorTotal" ~ '^-?[0-9]' THEN REPLACE("valorTotal", ',', '.')::numeric ELSE NULL END, 0) AS vr_total,
-              COALESCE(CASE WHEN "valorVa"    ~ '^-?[0-9]' THEN REPLACE("valorVa",    ',', '.')::numeric ELSE NULL END, 0) AS va_total
+              COALESCE(CASE WHEN "valorTotal" ~ '^-?[0-9]' THEN REPLACE("valorTotal", ',', '.')::numeric ELSE NULL END, 0) AS va_total
             FROM vr_benefits
             WHERE "companyId"  = ${input.companyId}
               AND "employeeId" IN (SELECT employee_id FROM relevant_emp)
@@ -1187,11 +1203,10 @@ export const scorecardRouter = router({
               SUM(ROUND(pf.inss_valor    * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)) AS inss_total,
               SUM(ROUND(pf.fgts_valor    * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)) AS fgts_total,
               SUM(ROUND(pf.liquido       * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)) AS liquido_total,
-              SUM(ROUND(COALESCE(v.vr_total,0) * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)) AS vr_total,
               SUM(ROUND(COALESCE(v.va_total,0) * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2)) AS va_total,
               SUM(ROUND(
                 (pf.salario_bruto + pf.fgts_valor + pf.he_valor + pf.adicionais
-                 + COALESCE(v.vr_total,0) + COALESCE(v.va_total,0))
+                 + COALESCE(v.va_total,0))
                 * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2
               )) AS custo_folha_empresa,
               JSON_AGG(
@@ -1203,14 +1218,13 @@ export const scorecardRouter = router({
                   'salarioBruto', ROUND(pf.salario_bruto * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
                   'horasExtras',  ROUND(pf.he_valor      * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
                   'adicionais',   ROUND(pf.adicionais    * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
-                  'vr',           ROUND(COALESCE(v.vr_total,0) * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
                   'va',           ROUND(COALESCE(v.va_total,0) * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
                   'fgts',         ROUND(pf.fgts_valor    * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
                   'inss',         ROUND(pf.inss_valor     * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
                   'liquido',      ROUND(pf.liquido        * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2),
                   'custoEmpresa', ROUND(
                     (pf.salario_bruto + pf.fgts_valor + pf.he_valor + pf.adicionais
-                     + COALESCE(v.vr_total,0) + COALESCE(v.va_total,0))
+                     + COALESCE(v.va_total,0))
                     * pf.dias_na_obra::numeric / NULLIF(pf.dias_no_mes,0), 2
                   ),
                   'folhaStatus',  pf.folha_status
@@ -1242,12 +1256,12 @@ export const scorecardRouter = router({
         db.execute(sql`
           SELECT
             svc.employee_id,
-            COALESCE(CASE WHEN e."seguroVida" ~ '^-?[0-9]' THEN REPLACE(e."seguroVida", ',', '.')::numeric ELSE NULL END, 0) AS custo_mensal
+            -- Custo/Mês = VG + APC (prêmios mensais da apólice)
+            COALESCE(CASE WHEN svc.premio_vg  ~ '^-?[0-9]' THEN REPLACE(svc.premio_vg,  ',', '.')::numeric ELSE 0 END, 0)
+            + COALESCE(CASE WHEN svc.premio_apc ~ '^-?[0-9]' THEN REPLACE(svc.premio_apc, ',', '.')::numeric ELSE 0 END, 0) AS custo_mensal
           FROM seguro_vida_coberturas svc
-          JOIN employees e ON e.id = svc.employee_id AND e."companyId" = ${input.companyId}
           WHERE svc.company_id = ${input.companyId}
             AND svc.status = 'ativo'
-            AND COALESCE(CASE WHEN e."seguroVida" ~ '^-?[0-9]' THEN REPLACE(e."seguroVida", ',', '.')::numeric ELSE NULL END, 0) > 0
             AND svc.employee_id IN (${relevantEmpSql})
         `),
       ]);
@@ -1294,13 +1308,12 @@ export const scorecardRouter = router({
         for (const h of (f.historico_mensal as any[] || [])) {
           const mes = h.mes as string;
           if (!mensalMap.has(mes)) {
-            mensalMap.set(mes, { mes, qtdFuncionarios: 0, salarioBruto: 0, he: 0, vr: 0, va: 0, fgts: 0, inss: 0, ferias: 0, seguroVida: 0, custoEmpresa: 0, custoTotal: 0 });
+            mensalMap.set(mes, { mes, qtdFuncionarios: 0, salarioBruto: 0, he: 0, va: 0, fgts: 0, inss: 0, ferias: 0, seguroVida: 0, custoEmpresa: 0, custoTotal: 0 });
           }
           const m = mensalMap.get(mes)!;
           m.qtdFuncionarios++;
           m.salarioBruto += n(h.salarioBruto);
           m.he           += n(h.horasExtras);
-          m.vr           += n(h.vr);
           m.va           += n(h.va);
           m.fgts         += n(h.fgts);
           m.inss         += n(h.inss);
@@ -1317,7 +1330,6 @@ export const scorecardRouter = router({
         custoTotalEmpresa:  funcs.reduce((s, f) => s + n(f.custo_total_empresa), 0),
         salarioBrutoTotal:  funcs.reduce((s, f) => s + n(f.salario_bruto_total), 0),
         heTotal:            funcs.reduce((s, f) => s + n(f.he_total),            0),
-        vrTotal:            funcs.reduce((s, f) => s + n(f.vr_total),            0),
         vaTotal:            funcs.reduce((s, f) => s + n(f.va_total),            0),
         fgtsTotal:          funcs.reduce((s, f) => s + n(f.fgts_total),          0),
         inssTotal:          funcs.reduce((s, f) => s + n(f.inss_total),          0),

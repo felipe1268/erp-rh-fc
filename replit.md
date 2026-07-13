@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4208** — **SCORECARD RH/FOLHA: FIX SEGURO DE VIDA (R$0→real) + VR/VA DOUBLE-COUNT + PONTO FALLBACK.** (1) Seguro: `employees.seguroVida` era texto "sim/não" → zero; fix usa `svc.premio_vg + svc.premio_apc` direto. (2) VR/VA: `valorTotal` já inclui tudo; `valorVa` separado = double-count; fix = coluna única `va_total`. (3) Ponto: `dias_na_obra` agora é `GREATEST(alocação, COUNT ponto)`; `relevant_emp` inclui UNION de `time_records`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4207** — **SCORECARD RH/FOLHA: FIX DIAS_NA_OBRA (150→30) + FOTO DO COLABORADOR.** Bug: `site_periods` CTE listava TODAS as linhas de `employee_site_history` sem agrupar por funcionário. ACACIO tinha 8 linhas → SUM somava 8× o overlap de Abril → 150 dias impossível. Fix: GROUP BY `"employeeId"` com `MIN("dataInicio")` + `CASE WHEN BOOL_OR("dataFim" IS NULL) THEN CURRENT_DATE ELSE MAX("dataFim")`. Foto: backend retorna `e."fotoUrl"` na CTE custos; frontend exibe avatar 28px (foto real ou iniciais com bg-indigo). ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4206** — **SCORECARD RH/FOLHA: FIX CAST VARCHAR→NUMERIC COM PADRÃO SEGURO.** Dois bugs consecutivos: (1) `"680,75"` em vr_benefits → `REPLACE(',','.')` resolve; (2) `"sim"` em `employees.seguroVida` → `REPLACE` não ajuda. Fix definitivo: `CASE WHEN col ~ '^-?[0-9]' THEN REPLACE(col, ',', '.')::numeric ELSE NULL END` em todas as 12 colunas VARCHAR numéricas. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4206** — **SCORECARD RH/FOLHA: FIX CAST VARCHAR→NUMERIC COM PADRÃO SEGURO.** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4205** — **SCORECARD RH/FOLHA: FIX camelCase em payroll_payments + employee_site_history + vr_benefits + vacation_periods.** 289 linhas existiam mas ficavam invisíveis. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4203** — **SCORECARD METAS & DESVIOS: FIX orcamento_itens camelCase + CONTRATOS DE TERCEIROS.** CTE `orca_itens` usava snake_case → lista vazia silenciosa. Fix + nova query `terceiro_contratos`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4201** — **SCORECARD: FIX RAIZ — BUSCA POR obraId SEM FILTRO companyId.** ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4198** — **SCORECARD METAS & DESVIOS: QUERY TRI-CAMINHOS PARA DETECTAR ORÇAMENTO.** ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 
