@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4212** — **SCORECARD: BACKFILL AUTOMÁTICO employee_site_history PARA ALOCAÇÕES SEM HISTÓRICO.** Todo funcionário ativo em `obra_funcionarios` sem registro em `employee_site_history` recebe um (idempotente via NOT EXISTS, apenas obra mais recente, dataInicio=GREATEST(createdAt, obra.dataInicio)). Executado 1x manualmente (20 registros) + bloco SyncSchema+ para futuros envs. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4211** — **SCORECARD RH/FOLHA: FIX EQUIPE — ELIMINA DUPLICAÇÃO MULTI-OBRA E PONTO-SEM-ALOCAÇÃO.** Bug 1: Antônio (e outros) aparecia em todas as obras onde tinha `obra_funcionarios` sem transfer formal → custo duplicado. Fix: Ramo B agora exige `NOT EXISTS(obraId <> esta AND createdAt > esta)` — só conta na obra mais recente. Bug 2: `relevant_emp` fazia UNION com `time_records` → puxava quem só bateu ponto, sem alocação formal. Fix: removido o UNION; `time_records` permanece só como fallback de contagem de dias. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4210** — **SCORECARD RH/FOLHA: FIX CUSTO MO — PISO = dataInicio DA OBRA.** Bug: `site_periods` Ramo B usava `dataAdmissao` (ex: 2016) → custo de março aparecia em obra iniciada em maio. Fix: CTE `obra_inicio` + `GREATEST(periodo_inicio, obra.dataInicio)` em ambos os ramos + Ramo B usa `obra_funcionarios.createdAt` no lugar de `dataAdmissao`. Nenhum custo pode anteceder o início da obra. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4210** — **SCORECARD RH/FOLHA: FIX CUSTO MO — PISO = dataInicio DA OBRA.** site_periods Ramo B usava dataAdmissao → custo retroativo. Fix: GREATEST(createdAt, obra.dataInicio). ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4209** — **SCORECARD: FIX BÔNUS (LL realizado→previsto quando sem custo real) + BETA GATE POR EMPRESA.** ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -64,11 +66,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4206** — **SCORECARD RH/FOLHA: FIX CAST VARCHAR→NUMERIC COM PADRÃO SEGURO.** ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4205** — **SCORECARD RH/FOLHA: FIX camelCase em payroll_payments + employee_site_history + vr_benefits + vacation_periods.** 289 linhas existiam mas ficavam invisíveis. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4204 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4205 e anteriores.
 
 ## User preferences
 

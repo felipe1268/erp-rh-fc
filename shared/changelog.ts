@@ -1,4 +1,29 @@
 /**
+ * Rev. 4212 - SCORECARD: BACKFILL AUTOMÁTICO — employee_site_history PARA TODAS AS ALOCAÇÕES ATIVAS.
+ *
+ * PROBLEMA — Raiz do custo duplicado multi-obra:
+ *   Funcionários alocados via tela de Equipe (botão "Alocar") sem uso do botão "Transferir"
+ *   ficavam apenas em `obra_funcionarios` sem registro em `employee_site_history`. O Ramo B
+ *   da CTE `site_periods` (Rev. 4211) já foi corrigido para usar o guard multi-obra, mas os
+ *   dados históricos precisavam ser normalizados para que todas as consultas de timeline e
+ *   Scorecard usem apenas a tabela de histórico (Ramo A) — a fonte mais confiável.
+ *
+ * FIX — Bloco `[SyncSchema+]` Rev. 4212 em server/_core/index.ts:
+ *   INSERT idempotente (via NOT EXISTS) em `employee_site_history` para todo funcionário ativo
+ *   em `obra_funcionarios` que não tenha ainda um registro de history para aquela obra.
+ *   Critério: apenas a obra mais recente por funcionário recebe o registro (ROW_NUMBER DESC),
+ *   espelhando o guard do Ramo B (Rev. 4211). dataInicio = GREATEST(createdAt, obra.dataInicio).
+ *   tipo = 'alocacao', dataFim = NULL, registradoPor = 'Sistema'.
+ *   Executado 1x manualmente no Neon (20 registros criados) e agora automático em cada startup.
+ *
+ * RESULTADO: Alocações futuras via "Alocar" que não usem "Transferir" serão corrigidas
+ *   automaticamente no próximo startup do servidor. Histórico de equipe fidedigno.
+ *
+ * ARQUIVOS: server/_core/index.ts (bloco SyncSchema+ Rev.4212), shared/version.ts
+ * ZERO DELETE · ZERO ALTER destrutivo
+ */
+
+/**
  * Rev. 4211 - SCORECARD RH/FOLHA: FIX EQUIPE — ELIMINA DUPLICAÇÃO MULTI-OBRA E PONTO-SEM-ALOCAÇÃO.
  *
  * PROBLEMA 1 — Funcionário aparecia em MÚLTIPLAS obras ao mesmo tempo (custo duplicado):

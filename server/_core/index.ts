@@ -5178,6 +5178,52 @@ REGRAS DE EXTRAÇÃO:
           console.log("[SyncSchema+] Rev. 4182: obra_scorecard_config + obra_retrabalho garantidas (Scorecard do Gestor).");
         } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4182 scorecard:", e?.message || e); }
 
+        // Rev. 4212 — Backfill: garante que todo funcionário ativo em obra_funcionarios
+        // tenha ao menos um registro em employee_site_history para essa obra.
+        // Sem isso, o Ramo B do site_periods (scorecard) conta o funcionário em TODAS as
+        // obras em que foi alocado (sem transferência formal) → custo duplicado.
+        // Idempotente: o NOT EXISTS garante que já existentes não são duplicados.
+        // Apenas a obra mais recente por funcionário recebe o registro (mesmo critério
+        // do guard multi-obra adicionado em Rev. 4211).
+        try {
+          await db.execute(sql`
+            INSERT INTO employee_site_history
+              ("companyId", "employeeId", "obraId", tipo, "dataInicio", "dataFim",
+               "motivoTransferencia", "registradoPor")
+            SELECT
+              of2."companyId",
+              of2."employeeId",
+              of2."obraId",
+              'alocacao',
+              GREATEST(
+                of2."createdAt"::date,
+                COALESCE((SELECT o."dataInicio"::date FROM obras o WHERE o.id = of2."obraId"), of2."createdAt"::date)
+              ),
+              NULL,
+              'Migração automática Rev.4212 — backfill de alocações sem histórico formal',
+              'Sistema'
+            FROM (
+              SELECT
+                of2.*,
+                ROW_NUMBER() OVER (
+                  PARTITION BY of2."employeeId", of2."companyId"
+                  ORDER BY of2."createdAt" DESC
+                ) AS rn
+              FROM obra_funcionarios of2
+              JOIN employees e ON e.id = of2."employeeId"
+              WHERE e.status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')
+                AND NOT EXISTS (
+                  SELECT 1 FROM employee_site_history esh
+                  WHERE esh."employeeId" = of2."employeeId"
+                    AND esh."obraId"     = of2."obraId"
+                    AND esh."companyId"  = of2."companyId"
+                )
+            ) of2
+            WHERE of2.rn = 1
+          `);
+          console.log("[SyncSchema+] Rev. 4212: backfill employee_site_history — alocações sem histórico formal migradas.");
+        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4212 backfill-site-history:", e?.message || e); }
+
         // Rev. 4188 — Backfill: períodos HE aprovados sem lancamentos no banco de horas.
         // Causa-raiz: String(date).slice(0,10) gerava "Fri May 15" em vez de "2026-05-15";
         // o INSERT em banco_horas_lancamentos lançava erro silencioso. O saldo ficava
