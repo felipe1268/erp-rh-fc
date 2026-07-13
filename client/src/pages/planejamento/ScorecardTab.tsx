@@ -681,17 +681,28 @@ export default function ScorecardTab({ proj }: { proj: any }) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <Card className="border shadow-sm">
                   <CardContent className="p-4">
-                    <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-2 font-semibold">Orçamento vs. Gasto em Compras</p>
-                    <div className="flex items-end gap-3 mb-3">
+                    <p className="text-[10px] text-gray-400 uppercase tracking-wide mb-2 font-semibold">Orçamento vs. Custo Comprometido</p>
+                    <div className="flex items-end gap-3 mb-2">
                       <div>
                         <p className="text-[10px] text-gray-400">Orçado (custo)</p>
                         <p className="text-xl font-black text-gray-800">{fmt(analiseMetasDesvios.data.resumo.totalOrcamento)}</p>
                       </div>
                       <div className="flex-1 text-right">
-                        <p className="text-[10px] text-gray-400">Gasto em OCs</p>
-                        <p className={`text-xl font-black ${analiseMetasDesvios.data.resumo.totalGastoOC > analiseMetasDesvios.data.resumo.totalOrcamento ? "text-red-600" : "text-blue-700"}`}>
-                          {fmt(analiseMetasDesvios.data.resumo.totalGastoOC)}
+                        <p className="text-[10px] text-gray-400">Total comprometido</p>
+                        <p className={`text-xl font-black ${(analiseMetasDesvios.data.resumo.totalCustoComprometido ?? analiseMetasDesvios.data.resumo.totalGastoOC) > analiseMetasDesvios.data.resumo.totalOrcamento ? "text-red-600" : "text-blue-700"}`}>
+                          {fmt(analiseMetasDesvios.data.resumo.totalCustoComprometido ?? analiseMetasDesvios.data.resumo.totalGastoOC)}
                         </p>
+                      </div>
+                    </div>
+                    {/* Detalhamento OC + Terceiros */}
+                    <div className="flex gap-3 mb-2 text-[10px]">
+                      <div className="flex-1 bg-blue-50 rounded-lg px-2.5 py-1.5">
+                        <p className="text-gray-400">OCs de Material/Serviço</p>
+                        <p className="font-bold text-blue-700">{fmt(analiseMetasDesvios.data.resumo.totalGastoOC)}</p>
+                      </div>
+                      <div className="flex-1 bg-purple-50 rounded-lg px-2.5 py-1.5">
+                        <p className="text-gray-400">Contratos de Terceiros</p>
+                        <p className="font-bold text-purple-700">{fmt(analiseMetasDesvios.data.resumo.totalTerceiros ?? 0)}</p>
                       </div>
                     </div>
                     <div className="h-3 w-full rounded-full bg-gray-100 overflow-hidden mb-1">
@@ -833,7 +844,93 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                 </Card>
               )}
               {analiseMetasDesvios.data.desvios.length === 0 && (
-                <p className="text-xs text-gray-400 text-center py-8">Nenhuma OC registrada para esta obra.</p>
+                <p className="text-xs text-gray-400 text-center py-4">Nenhuma OC registrada com itens para esta obra.</p>
+              )}
+
+              {/* Contratos de Terceiros */}
+              {(analiseMetasDesvios.data.terceiros ?? []).length > 0 && (
+                <Card className="border shadow-sm">
+                  <CardHeader className="pb-1 pt-4 px-4">
+                    <CardTitle className="text-xs flex items-center gap-2">
+                      <span className="text-purple-600">🏗</span>
+                      Contratos de Terceiros (Empreiteiras / Subcontratados)
+                      <span className="ml-auto text-[10px] font-normal text-gray-400">
+                        {(analiseMetasDesvios.data.terceiros ?? []).length} contrato(s)
+                      </span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-4 pb-4 pt-2">
+                    <div className="rounded border border-gray-100 overflow-hidden overflow-x-auto">
+                      <table className="w-full text-[10px]">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="text-left px-2.5 py-2 text-gray-500 font-semibold">Contrato / Empresa</th>
+                            <th className="text-center px-2.5 py-2 text-gray-500 font-semibold w-20">Tipo</th>
+                            <th className="text-right px-2.5 py-2 text-gray-500 font-semibold w-24">Valor Contrato</th>
+                            <th className="text-right px-2.5 py-2 text-gray-500 font-semibold w-24">Medido (aprov.)</th>
+                            <th className="text-center px-2.5 py-2 text-gray-500 font-semibold w-16">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(analiseMetasDesvios.data.terceiros ?? []).map((tc, i) => {
+                            const pctMedido = tc.valorContrato > 0 ? (tc.valorMedido / tc.valorContrato) * 100 : 0;
+                            const statusColor =
+                              tc.status === "concluido" ? "bg-green-100 text-green-700" :
+                              tc.status === "encerrado" ? "bg-gray-100 text-gray-600" :
+                              tc.status === "suspenso"  ? "bg-red-100 text-red-700" :
+                              "bg-blue-100 text-blue-700";
+                            const statusLabel =
+                              tc.status === "concluido" ? "Concluído" :
+                              tc.status === "encerrado" ? "Encerrado" :
+                              tc.status === "suspenso"  ? "Suspenso"  :
+                              "Ativo";
+                            return (
+                              <tr key={tc.id} className="border-t border-gray-50 hover:bg-gray-50/50">
+                                <td className="px-2.5 py-2 text-gray-700 max-w-[180px]">
+                                  <span className="line-clamp-2 font-medium">{tc.descricao}</span>
+                                  {tc.natureza && tc.natureza !== "mao_de_obra" && (
+                                    <span className="text-gray-400 text-[9px] block">
+                                      {tc.natureza === "material" ? "Material" : tc.natureza === "mao_de_obra_material" ? "MDO + Material" : tc.natureza}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-2.5 py-2 text-center text-gray-500">
+                                  {tc.tipoContrato === "preco_unitario" ? "Preço Unit." : tc.tipoContrato === "misto" ? "Misto" : "Global"}
+                                </td>
+                                <td className="px-2.5 py-2 text-right font-semibold text-purple-700">{fmt(tc.valorContrato)}</td>
+                                <td className="px-2.5 py-2 text-right">
+                                  <span className="font-semibold text-gray-700">{fmt(tc.valorMedido)}</span>
+                                  {tc.valorContrato > 0 && (
+                                    <span className="block text-[9px] text-gray-400">{pctMedido.toFixed(1)}%</span>
+                                  )}
+                                </td>
+                                <td className="px-2.5 py-2 text-center">
+                                  <span className={`px-1.5 py-0.5 rounded-full font-semibold ${statusColor}`}>{statusLabel}</span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                        <tfoot className="bg-gray-50 border-t-2 border-gray-200">
+                          <tr>
+                            <td colSpan={2} className="px-2.5 py-2 font-bold text-gray-600 text-[10px]">Total Contratos</td>
+                            <td className="px-2.5 py-2 text-right font-black text-purple-700">
+                              {fmt((analiseMetasDesvios.data.terceiros ?? []).reduce((s, r) => s + r.valorContrato, 0))}
+                            </td>
+                            <td className="px-2.5 py-2 text-right font-black text-gray-700">
+                              {fmt((analiseMetasDesvios.data.terceiros ?? []).reduce((s, r) => s + r.valorMedido, 0))}
+                            </td>
+                            <td />
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-2">
+                      Medido = soma das medições com status <strong>aprovada</strong> ou <strong>paga</strong>.
+                      O valor do contrato representa o comprometido total.
+                    </p>
+                  </CardContent>
+                </Card>
               )}
             </>
           )}

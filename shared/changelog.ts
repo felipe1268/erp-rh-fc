@@ -1,4 +1,38 @@
 /**
+ * Rev. 4203 - SCORECARD METAS & DESVIOS: FIX COLUNA orcamento_itens (camelCase) + CONTRATOS DE TERCEIROS.
+ *
+ * DOIS PROBLEMAS CORRIGIDOS:
+ *
+ * 1. LISTA DE OC ITEMS VAZIA (bug silencioso — mesma raiz do Rev 4202):
+ *    A CTE `orca_itens` em `getMetasDesvios` usava nomes snake_case para colunas
+ *    de `orcamento_itens` que NÃO têm nome explícito no schema Drizzle — portanto
+ *    ficam como camelCase no banco:
+ *      - `orcamento_id`   → `"orcamentoId"`
+ *      - `meta_unit_total` → `"metaUnitTotal"`
+ *      - `custo_unit_total` → `"custoUnitTotal"`
+ *    Com isso a CTE falhava silenciosamente via safe() → desviosRows = [] →
+ *    "Nenhuma OC registrada" mesmo com R$ 984k em OCs.
+ *    Fix: renomear todas as referências para camelCase com aspas duplas.
+ *
+ * 2. CONTRATOS DE TERCEIROS NÃO APARECIAM:
+ *    O scorecard buscava apenas `compras_ordens` (OCs de material). Empreiteiras,
+ *    subcontratados e contratos de MDO vivem em `terceiro_contratos` + `terceiro_medicoes`.
+ *    Fix: nova query paralela que busca todos os contratos ativos (cancelado_em IS NULL)
+ *    para a obra, incluindo valor_medido (medições aprovada/paga acumuladas).
+ *    Retorno: `terceiros[]` + `resumo.totalTerceiros` + `resumo.totalCustoComprometido`.
+ *
+ * FRONTEND (ScorecardTab.tsx — aba Metas & Desvios):
+ *    - Card "Orçamento vs. Gasto" renomeado → "Orçamento vs. Custo Comprometido"
+ *    - Novo split OCs (azul) + Contratos de Terceiros (roxo) no card de resumo
+ *    - Nova seção tabela: "Contratos de Terceiros (Empreiteiras / Subcontratados)"
+ *      com valor_contrato, medido aprovado/pago, tipo e status.
+ *
+ * Query mensalRows: `data_emissao` inexistente → trocado por `created_at` (campo correto do schema).
+ *
+ * ZERO DELETE · ZERO ALTER DESTRUTIVO.
+ */
+
+/**
  * Rev. 4202 - SCORECARD: FIX DEFINITIVO — COLUNA valor_negociado (snake_case) EM VEZ DE "valorNegociado".
  *
  * CAUSA RAIZ REAL (confirmada via logging de diagnóstico):

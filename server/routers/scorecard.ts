@@ -1295,20 +1295,20 @@ export const scorecardRouter = router({
       const tempoMeses = parseInt(String(orc.tempo_meses ?? 12)) || 12;
       const metaMensal = totalCustoOrc > 0 ? totalCustoOrc / tempoMeses : 0;
 
-      const [desviosRows, mensalRows, totalOCRows] = await Promise.all([
+      const [desviosRows, mensalRows, totalOCRows, terceirosRows] = await Promise.all([
         safe(db.execute(sql`
           WITH orca_itens AS (
             SELECT
               LOWER(TRIM(descricao)) AS desc_norm,
               descricao,
-              COALESCE(NULLIF(meta_unit_total::text,'')::numeric,
-                       NULLIF(custo_unit_total::text,'')::numeric, 0) AS preco_meta
+              COALESCE(NULLIF("metaUnitTotal"::text,'')::numeric,
+                       NULLIF("custoUnitTotal"::text,'')::numeric, 0) AS preco_meta
             FROM orcamento_itens
-            WHERE orcamento_id = ${orcId} AND "companyId" = ${companyId}
+            WHERE "orcamentoId" = ${orcId} AND "companyId" = ${companyId}
               AND tipo IN ('insumo','servico','composicao')
             GROUP BY LOWER(TRIM(descricao)), descricao,
-              COALESCE(NULLIF(meta_unit_total::text,'')::numeric,
-                       NULLIF(custo_unit_total::text,'')::numeric, 0)
+              COALESCE(NULLIF("metaUnitTotal"::text,'')::numeric,
+                       NULLIF("custoUnitTotal"::text,'')::numeric, 0)
           ),
           oc_resumo AS (
             SELECT
@@ -1348,15 +1348,14 @@ export const scorecardRouter = router({
         `)),
         safe(db.execute(sql`
           SELECT
-            TO_CHAR(co.data_emissao::date, 'YYYY-MM') AS mes,
+            TO_CHAR(co.created_at::date, 'YYYY-MM') AS mes,
             ROUND(SUM(coi.total::numeric), 2)::numeric AS total_compras,
             COUNT(DISTINCT co.id)::int                 AS num_ocs
           FROM compras_ordens co
           JOIN compras_ordens_itens coi ON coi.ordem_id = co.id
           WHERE co.obra_id = ${obraId} AND co.company_id = ${companyId}
             AND co.status NOT IN ('cancelada')
-            AND co.data_emissao IS NOT NULL
-          GROUP BY TO_CHAR(co.data_emissao::date, 'YYYY-MM')
+          GROUP BY TO_CHAR(co.created_at::date, 'YYYY-MM')
           ORDER BY mes DESC
           LIMIT 12
         `)),
@@ -1366,6 +1365,29 @@ export const scorecardRouter = router({
           JOIN compras_ordens_itens coi ON coi.ordem_id = co.id
           WHERE co.obra_id = ${obraId} AND co.company_id = ${companyId}
             AND co.status NOT IN ('cancelada')
+        `)),
+        safe(db.execute(sql`
+          SELECT
+            tc.id,
+            tc.descricao,
+            tc.tipo_contrato,
+            tc.natureza_contrato,
+            tc.status,
+            COALESCE(tc.valor_total::numeric, 0)  AS valor_contrato,
+            COALESCE(tc.valor_pago::numeric,  0)  AS valor_pago,
+            COALESCE(
+              (SELECT SUM(tm.valor_medido::numeric)
+               FROM terceiro_medicoes tm
+               WHERE tm.contrato_id = tc.id
+                 AND tm.company_id = ${companyId}
+                 AND tm.status IN ('aprovada','paga')
+              ), 0
+            ) AS valor_medido
+          FROM terceiro_contratos tc
+          WHERE tc.obra_id = ${obraId}
+            AND tc.company_id = ${companyId}
+            AND tc.cancelado_em IS NULL
+          ORDER BY valor_contrato DESC
         `)),
       ]);
 
@@ -1377,11 +1399,28 @@ export const scorecardRouter = router({
         .filter((r: any) => r.status_meta === 'acima')
         .sort((a: any, b: any) => parseFloat(String(b.desvio_pct ?? 0)) - parseFloat(String(a.desvio_pct ?? 0)))[0];
 
+      const terceiros = (terceirosRows as any[]).map((r: any) => ({
+        id:               parseInt(String(r.id)),
+        descricao:        String(r.descricao ?? ''),
+        tipoContrato:     String(r.tipo_contrato ?? ''),
+        natureza:         String(r.natureza_contrato ?? ''),
+        status:           String(r.status ?? ''),
+        valorContrato:    parseFloat(String(r.valor_contrato ?? 0)),
+        valorPago:        parseFloat(String(r.valor_pago ?? 0)),
+        valorMedido:      parseFloat(String(r.valor_medido ?? 0)),
+      }));
+      const totalTerceiros     = terceiros.reduce((s, r) => s + r.valorContrato, 0);
+      const totalMedidoTerceiros = terceiros.reduce((s, r) => s + r.valorMedido, 0);
+      const totalCustoComprometido = totalGastoOC + totalTerceiros;
+
       return {
         resumo: {
           totalOrcamento: totalCustoOrc,
           totalGastoOC,
-          pctConsumido: totalCustoOrc > 0 ? Math.round((totalGastoOC / totalCustoOrc) * 1000) / 10 : 0,
+          totalTerceiros,
+          totalMedidoTerceiros,
+          totalCustoComprometido,
+          pctConsumido: totalCustoOrc > 0 ? Math.round((totalCustoComprometido / totalCustoOrc) * 1000) / 10 : 0,
           numItensDentroMeta: dentro,
           numItensAcimaMeta:  acima,
           numItensSemReferencia: semRef,
@@ -1409,6 +1448,7 @@ export const scorecardRouter = router({
             status:        metaMensal <= 0 ? 'ok' : v <= metaMensal ? 'ok' : v <= metaMensal * 1.15 ? 'alerta' : 'critico',
           };
         }).reverse(),
+        terceiros,
       };
     }),
 

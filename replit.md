@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4203** — **SCORECARD METAS & DESVIOS: FIX orcamento_itens camelCase + CONTRATOS DE TERCEIROS.** CTE `orca_itens` usava snake_case (`orcamento_id`, `meta_unit_total`, `custo_unit_total`) para colunas camelCase → lista vazia silenciosa. Fix + nova query `terceiro_contratos` com medições aprovadas. Frontend: total comprometido = OCs + Contratos. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4202** — **SCORECARD: FIX DEFINITIVO — COLUNA valor_negociado (snake_case).** Causa raiz: schema define `numeric("valor_negociado",...)` (explícito), mas queries usavam `"valorNegociado"` → "column does not exist" silenciado pelo safe() → return null. Diagnóstico confirmou dados corretos (obraId=90001, orcId=42). Fix em getScore + getMetasDesvios. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4201** — **SCORECARD: FIX RAIZ — BUSCA POR obraId SEM FILTRO companyId.** Path 2 simplificado para `"obraId"=O` sem companyId (obra é unívoca). getScore + getMetasDesvios. ZERO DELETE · ZERO ALTER destrutivo.
@@ -62,21 +64,17 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4195** — **BANCO DE HORAS: STATUS DE AUTORIZAÇÃO DIA A DIA — ✓ AUTORIZADO vs ⚠ SEM AUTORIZAÇÃO.** Backend: `approvedSet`; Frontend: coluna Aut., fundo âmbar, resumo. ZERO DELETE · ZERO ALTER destrutivo.
 
+### 5 one-liners
+
 - **Rev. 4194** — **BANCO DE HORAS: TABELA DIA A DIA SEMPRE ABERTA + DIA DA SEMANA COLORIDO + FERIADO MARCADO.** Dom vermelho, Sáb âmbar, Feriado badge roxo. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4193** — **BANCO DE HORAS: HISTÓRICO DIA A DIA EXPANSÍVEL.** Toggle "Ver dia a dia"; `memorialCalculo` lazy. ZERO DELETE · ZERO ALTER destrutivo.
-
-### 5 one-liners
 
 - **Rev. 4192** — **BANCO DE HORAS: CARGO DE CONFIANÇA (ART. 62 CLT) EXCLUÍDO AUTOMATICAMENTE.** Filtro `cargo_confianca=0` em 4 pontos. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4191** — **BANCO DE HORAS: HISTÓRICO REDESENHADO — CARDS MODERNOS.** Cards barra lateral colorida, "Solicitado por"/"Autorizado por", horas não autorizadas em âmbar. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4190** — **BANCO DE HORAS: HISTÓRICO INTERATIVO COM FOTO E STATUS DE AUTORIZAÇÃO.** Foto xs; Dialog rico (período HE, tipo, creditado, autorização). ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4189** — **BANCO DE HORAS: FIX CRÍTICO — LANÇAMENTOS NUNCA ERAM GRAVADOS + BACKFILL AUTOMÁTICO.** `toDateStr` helper; backfill 53 lançamentos. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4188** — **SCORECARD: FIX MULTI-ABA — ORÇAMENTO, SEGURANÇA, RH E METAS & DESVIOS RETORNAVAM VAZIO.** camelCase columns em `orcamentos`/`obra_funcionarios`/`employees`. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 
