@@ -1,4 +1,12 @@
 /**
+ * Rev. 4220 - SCORECARD RH/FOLHA: MATRÍCULA + CARGO MAIS LEGÍVEIS NA TABELA DE CUSTO POR FUNCIONÁRIO.
+ *
+ * MELHORIA — Matrícula agora exibida em fonte mono gray-500; cargo/função em indigo-500 negrito,
+ * e oculto quando nulo (em vez de mostrar "—"). Aplicado nas 2 tabelas: "Custo por Funcionário"
+ * e "Horas Extras / Banco de Horas". ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4219 - SCORECARD COMPRAS: FERRAMENTAS ALMOX + LOCAÇÕES — LAYOUT CARD COM FOTO + FIX LOCAÇÕES VAZIAS.
  *
  * MELHORIA — Solicitado pelo usuário: (1) layout mais fluido em cards com foto thumbnail, (2) mostrar

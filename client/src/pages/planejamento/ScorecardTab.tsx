@@ -1165,7 +1165,8 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                     )}
                                     <div>
                                       <p className="font-medium text-gray-800 leading-tight">{f.nome}</p>
-                                      <p className="text-[9px] text-gray-400">{f.matricula ?? "—"} · {f.cargo ?? "—"}</p>
+                                      <p className="text-[8px] text-gray-500 font-mono leading-tight">{f.matricula ?? "—"}</p>
+                                      {f.cargo && <p className="text-[8px] text-indigo-500 font-medium leading-tight">{f.cargo}</p>}
                                     </div>
                                   </div>
                                 </td>
@@ -1312,7 +1313,8 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                               <tr onClick={toggle} className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors">
                                 <td className="px-2 py-1.5">
                                   <p className="font-medium text-gray-800 leading-tight">{f.nome}</p>
-                                  <p className="text-[9px] text-gray-400">{f.matricula ?? "—"} · {f.cargo ?? "—"}</p>
+                                  <p className="text-[8px] text-gray-500 font-mono leading-tight">{f.matricula ?? "—"}</p>
+                                  {f.cargo && <p className="text-[8px] text-indigo-500 font-medium leading-tight">{f.cargo}</p>}
                                 </td>
                                 <td className="text-right px-2 py-1.5 text-amber-700 font-medium">{heTotalH}h</td>
                                 <td className="text-right px-2 py-1.5 text-green-700">{Number(f.hePagoMins) > 0 ? `${hePagoH}h` : <span className="text-gray-300">—</span>}</td>
