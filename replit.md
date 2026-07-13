@@ -50,11 +50,11 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4205** — **SCORECARD RH/FOLHA: FIX RAIZ DEFINITIVO — payroll_payments + employee_site_history + vr_benefits + vacation_periods SÃO camelCase.** Bug persistia após Rev.4204: `getCustosRH` usava snake_case em TODAS as outras tabelas também. Diagnóstico via Neon confirmou 289 linhas de folha existentes para a obra (obraId=90001, companyId=60002, 2026-01→2026-06). Fix: `employee_site_history` (`"obraId"`, `"companyId"`, `"employeeId"`, `"dataInicio"`, `"dataFim"`); `payroll_payments` (`"companyId"`, `"employeeId"`, `"mesReferencia"`, `"salarioBrutoMes"`, etc.); `vr_benefits` + `vacation_periods` idem. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4204** — **SCORECARD RH/FOLHA: FIX employees camelCase + REDESIGN ABA + FÉRIAS + SEGURO DE VIDA.** Bug raiz: `getCustosRH` usava `e.nome_completo`/`e.salario_base`/`e.company_id` (snake_case) mas `employees` tem colunas camelCase → PostgreSQL lançava "column does not exist" → estado vazio silencioso. Fix: `e."nomeCompleto"`, `e."salarioBase"`, `e."companyId"`. Novo backend: 3 queries paralelas (folha + férias + seguro de vida); retorna `mensal[]` por mês. Nova UI: seletor ano ‹›+ abas de mês (Ano Todo/Jan-Dez); tabela mensal clicável; KPI com Férias + Seg.Vida. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4203** — **SCORECARD METAS & DESVIOS: FIX orcamento_itens camelCase + CONTRATOS DE TERCEIROS.** CTE `orca_itens` usava snake_case (`orcamento_id`, `meta_unit_total`, `custo_unit_total`) para colunas camelCase → lista vazia silenciosa. Fix + nova query `terceiro_contratos` com medições aprovadas. Frontend: total comprometido = OCs + Contratos. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4202** — **SCORECARD: FIX DEFINITIVO — COLUNA valor_negociado (snake_case).** Causa raiz: schema define `numeric("valor_negociado",...)` (explícito), mas queries usavam `"valorNegociado"` → "column does not exist" silenciado pelo safe() → return null. Fix em getScore + getMetasDesvios. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4201** — **SCORECARD: FIX RAIZ — BUSCA POR obraId SEM FILTRO companyId.** Path 2 simplificado para `"obraId"=O` sem companyId. ZERO DELETE · ZERO ALTER destrutivo.
 

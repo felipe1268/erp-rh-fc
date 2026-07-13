@@ -1062,18 +1062,18 @@ export const scorecardRouter = router({
       if (!db) return null;
 
       const mesInicioFilter = input.mesInicio
-        ? sql`AND pp.mes_referencia >= ${input.mesInicio}`
+        ? sql`AND pp."mesReferencia" >= ${input.mesInicio}`
         : sql``;
       const mesFimFilter = input.mesFim
-        ? sql`AND pp.mes_referencia <= ${input.mesFim}`
+        ? sql`AND pp."mesReferencia" <= ${input.mesFim}`
         : sql``;
 
       const mesFeriasIni = input.mesInicio ?? '2000-01';
       const mesFeriasFim = input.mesFim   ?? '2099-12';
 
       const relevantEmpSql = sql`
-        SELECT DISTINCT esh.employee_id FROM employee_site_history esh
-        WHERE esh.obra_id = ${input.obraId} AND esh.company_id = ${input.companyId}
+        SELECT DISTINCT esh."employeeId" FROM employee_site_history esh
+        WHERE esh."obraId" = ${input.obraId} AND esh."companyId" = ${input.companyId}
         UNION
         SELECT "employeeId" FROM obra_funcionarios
         WHERE "obraId" = ${input.obraId} AND "companyId" = ${input.companyId}
@@ -1083,12 +1083,12 @@ export const scorecardRouter = router({
         db.execute(sql`
           WITH site_periods AS (
             SELECT
-              esh.employee_id,
-              esh.data_inicio::date                           AS periodo_inicio,
-              COALESCE(esh.data_fim::date, CURRENT_DATE)      AS periodo_fim
+              esh."employeeId"                                 AS employee_id,
+              esh."dataInicio"::date                           AS periodo_inicio,
+              COALESCE(esh."dataFim"::date, CURRENT_DATE)     AS periodo_fim
             FROM employee_site_history esh
-            WHERE esh.obra_id    = ${input.obraId}
-              AND esh.company_id = ${input.companyId}
+            WHERE esh."obraId"    = ${input.obraId}
+              AND esh."companyId" = ${input.companyId}
 
             UNION ALL
 
@@ -1105,9 +1105,9 @@ export const scorecardRouter = router({
               )
               AND NOT EXISTS (
                 SELECT 1 FROM employee_site_history esh2
-                WHERE esh2.employee_id = e.id
-                  AND esh2.obra_id     = ${input.obraId}
-                  AND esh2.company_id  = ${input.companyId}
+                WHERE esh2."employeeId" = e.id
+                  AND esh2."obraId"     = ${input.obraId}
+                  AND esh2."companyId"  = ${input.companyId}
               )
           ),
           relevant_emp AS (
@@ -1115,39 +1115,39 @@ export const scorecardRouter = router({
           ),
           payroll_frac AS (
             SELECT
-              pp.employee_id,
-              pp.mes_referencia,
+              pp."employeeId"                                        AS employee_id,
+              pp."mesReferencia"                                     AS mes_referencia,
               pp.status                                              AS folha_status,
-              (pp.mes_referencia || '-01')::date                    AS mes_ini,
-              ((pp.mes_referencia || '-01')::date
+              (pp."mesReferencia" || '-01')::date                   AS mes_ini,
+              ((pp."mesReferencia" || '-01')::date
                 + INTERVAL '1 month' - INTERVAL '1 day')::date     AS mes_fim_d,
-              DATE_PART('day', ((pp.mes_referencia || '-01')::date
+              DATE_PART('day', ((pp."mesReferencia" || '-01')::date
                 + INTERVAL '1 month' - INTERVAL '1 day')::timestamp)::int AS dias_no_mes,
-              COALESCE(pp.salario_bruto_mes::numeric,  0)           AS salario_bruto,
-              COALESCE(pp.horas_extras_valor::numeric, 0)           AS he_valor,
-              COALESCE(pp.adicionais_valor::numeric,   0)           AS adicionais,
-              COALESCE(pp.desconto_inss::numeric,      0)           AS inss_valor,
-              COALESCE(pp.desconto_fgts::numeric,      0)           AS fgts_valor,
-              COALESCE(pp.total_proventos::numeric,    0)           AS total_proventos,
-              COALESCE(pp.total_descontos::numeric,    0)           AS total_descontos,
-              COALESCE(pp.salario_liquido::numeric,    0)           AS liquido,
+              COALESCE(pp."salarioBrutoMes"::numeric,  0)           AS salario_bruto,
+              COALESCE(pp."horasExtrasValor"::numeric, 0)           AS he_valor,
+              COALESCE(pp."adicionaisValor"::numeric,  0)           AS adicionais,
+              COALESCE(pp."descontoInss"::numeric,     0)           AS inss_valor,
+              COALESCE(pp."descontoFgts"::numeric,     0)           AS fgts_valor,
+              COALESCE(pp."totalProventos"::numeric,   0)           AS total_proventos,
+              COALESCE(pp."totalDescontos"::numeric,   0)           AS total_descontos,
+              COALESCE(pp."salarioLiquido"::numeric,   0)           AS liquido,
               (
                 SELECT COALESCE(SUM(
                   GREATEST(0,
                     LEAST(sp.periodo_fim,
-                          ((pp.mes_referencia||'-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date)
-                    - GREATEST(sp.periodo_inicio, (pp.mes_referencia||'-01')::date)
+                          ((pp."mesReferencia"||'-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date)
+                    - GREATEST(sp.periodo_inicio, (pp."mesReferencia"||'-01')::date)
                     + 1
                   )
                 ), 0)::int
                 FROM site_periods sp
-                WHERE sp.employee_id = pp.employee_id
-                  AND sp.periodo_fim  >= (pp.mes_referencia||'-01')::date
-                  AND sp.periodo_inicio <= ((pp.mes_referencia||'-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date
+                WHERE sp.employee_id = pp."employeeId"
+                  AND sp.periodo_fim  >= (pp."mesReferencia"||'-01')::date
+                  AND sp.periodo_inicio <= ((pp."mesReferencia"||'-01')::date + INTERVAL '1 month' - INTERVAL '1 day')::date
               ) AS dias_na_obra
             FROM payroll_payments pp
-            WHERE pp.company_id  = ${input.companyId}
-              AND pp.employee_id IN (SELECT employee_id FROM relevant_emp)
+            WHERE pp."companyId"  = ${input.companyId}
+              AND pp."employeeId" IN (SELECT employee_id FROM relevant_emp)
               ${mesInicioFilter}
               ${mesFimFilter}
           ),
@@ -1155,12 +1155,14 @@ export const scorecardRouter = router({
             SELECT * FROM payroll_frac WHERE dias_na_obra > 0
           ),
           vr_data AS (
-            SELECT employee_id, mes_referencia,
-              COALESCE(valor_total::numeric, 0) AS vr_total,
-              COALESCE(valor_va::numeric,    0) AS va_total
+            SELECT
+              "employeeId" AS employee_id,
+              "mesReferencia" AS mes_referencia,
+              COALESCE("valorTotal"::numeric, 0) AS vr_total,
+              COALESCE("valorVa"::numeric,    0) AS va_total
             FROM vr_benefits
-            WHERE company_id  = ${input.companyId}
-              AND employee_id IN (SELECT employee_id FROM relevant_emp)
+            WHERE "companyId"  = ${input.companyId}
+              AND "employeeId" IN (SELECT employee_id FROM relevant_emp)
           ),
           custos AS (
             SELECT
@@ -1216,17 +1218,17 @@ export const scorecardRouter = router({
 
         db.execute(sql`
           SELECT
-            vp.employee_id,
-            TO_CHAR(COALESCE(vp.data_pagamento::date, vp.data_inicio::date), 'YYYY-MM') AS mes_ref,
-            COALESCE(vp.valor_total::numeric, 0) AS valor_total
+            vp."employeeId"                                                         AS employee_id,
+            TO_CHAR(COALESCE(vp."dataPagamento"::date, vp."dataInicio"::date), 'YYYY-MM') AS mes_ref,
+            COALESCE(vp."valorTotal"::numeric, 0)                                   AS valor_total
           FROM vacation_periods vp
-          WHERE vp.company_id = ${input.companyId}
+          WHERE vp."companyId" = ${input.companyId}
             AND vp.status IN ('agendada', 'concluida', 'em_gozo', 'pago', 'paga')
-            AND vp.valor_total IS NOT NULL
-            AND vp.data_inicio IS NOT NULL
-            AND TO_CHAR(COALESCE(vp.data_pagamento::date, vp.data_inicio::date), 'YYYY-MM')
+            AND vp."valorTotal" IS NOT NULL
+            AND vp."dataInicio" IS NOT NULL
+            AND TO_CHAR(COALESCE(vp."dataPagamento"::date, vp."dataInicio"::date), 'YYYY-MM')
                 BETWEEN ${mesFeriasIni} AND ${mesFeriasFim}
-            AND vp.employee_id IN (${relevantEmpSql})
+            AND vp."employeeId" IN (${relevantEmpSql})
         `),
 
         db.execute(sql`

@@ -1,4 +1,43 @@
 /**
+ * Rev. 4205 - SCORECARD RH/FOLHA: FIX RAIZ DEFINITIVO — payroll_payments + employee_site_history + vr_benefits + vacation_periods SÃO camelCase.
+ *
+ * CAUSA RAIZ DA PERSISTÊNCIA DO BUG:
+ *   Após o fix Rev. 4204 (employees camelCase), a query continuava retornando 0 linhas
+ *   porque TODAS as outras tabelas do query também têm colunas camelCase no Neon:
+ *     - employee_site_history: obra_id→"obraId", company_id→"companyId", employee_id→"employeeId",
+ *                              data_inicio→"dataInicio", data_fim→"dataFim"
+ *     - payroll_payments: company_id→"companyId", employee_id→"employeeId",
+ *                         mes_referencia→"mesReferencia", salario_bruto_mes→"salarioBrutoMes",
+ *                         horas_extras_valor→"horasExtrasValor", adicionais_valor→"adicionaisValor",
+ *                         desconto_inss→"descontoInss", desconto_fgts→"descontoFgts",
+ *                         total_proventos→"totalProventos", total_descontos→"totalDescontos",
+ *                         salario_liquido→"salarioLiquido"
+ *     - vr_benefits: company_id→"companyId", employee_id→"employeeId",
+ *                    mes_referencia→"mesReferencia", valor_total→"valorTotal", valor_va→"valorVa"
+ *     - vacation_periods: company_id→"companyId", employee_id→"employeeId",
+ *                         data_inicio→"dataInicio", data_pagamento→"dataPagamento",
+ *                         valor_total→"valorTotal"
+ *   (seguro_vida_coberturas é snake_case — permanece correto)
+ *
+ * DIAGNÓSTICO VIA NEON:
+ *   - obra 90001 tem 132 registros em employee_site_history (correto para QIU 2 - FASE 4)
+ *   - payroll_payments para companyId=60002: 512 registros de 2026-01 a 2026-06
+ *   - cruzando employeeId de employee_site_history (obraId=90001) com payroll_payments: 289 linhas
+ *   - Prova: dados EXISTEM, a query não os encontrava por usar snake_case errado
+ *
+ * FIX APLICADO (server/routers/scorecard.ts — getCustosRH):
+ *   - mesInicioFilter/mesFimFilter: pp.mes_referencia → pp."mesReferencia"
+ *   - relevantEmpSql: esh.employee_id/"obraId"/"companyId" com quotes corretas
+ *   - site_periods CTE: esh.* → esh."employeeId"/"dataInicio"/"dataFim"/"obraId"/"companyId"
+ *   - payroll_frac CTE: pp.* → pp."employeeId"/"mesReferencia"/"salarioBrutoMes" etc.
+ *                       Aliases snake_case para downstream não precisar mudar
+ *   - vr_data CTE: "employeeId"/"mesReferencia"/"valorTotal"/"valorVa"/"companyId"
+ *   - feriasR query: vp."employeeId"/"dataPagamento"/"dataInicio"/"valorTotal"/"companyId"
+ *
+ * ZERO DELETE · ZERO ALTER DESTRUTIVO.
+ */
+
+/**
  * Rev. 4204 - SCORECARD RH/FOLHA: FIX COLUNA employees (camelCase) + REDESIGN ABA + FÉRIAS + SEGURO DE VIDA.
  *
  * RAIZ DO BUG "Sem dados de folha para esta obra no período":

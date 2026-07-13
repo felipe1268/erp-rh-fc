@@ -67,6 +67,7 @@
 - [financial_accounts categorias gotchas](financial-accounts-categorias.md) — `tipo` só receita/despesa (sem transferência); índice único `(company,lower(nome)) WHERE ativo=1` abrange Plano+Categorias → rename colide com plano de contas.
 - [obras schema quirks](obras-orcamento-schema-quirks.md) — `obras` columns are camelCase (`companyId`/`isActive`) and have NO orcamento col; obra→orçamento link lives in `orcamentos.obraId`. Raw snake_case SQL on obras throws.
 - [orcamentos/employees camelCase columns](orcamentos-employees-camelcase.md) — `orcamentos`/`orcamento_itens`/`obra_funcionarios` all camelCase (`"companyId"`,`"obraId"`,`"totalVenda"`,…); `employees` has NO `obra_id` — link is via `obra_funcionarios."obraId"/"employeeId"`. Raw snake SQL = silent safe() failure.
+- [payroll/HR tables camelCase](payroll-hr-tables-camelcase.md) — `payroll_payments`, `employee_site_history`, `vr_benefits`, `vacation_periods` são TODOS camelCase; `seguro_vida_coberturas` é snake_case. Erros silenciosos: query retorna 0 linhas sem lançar exceção visível.
 - [Numeração de FD (Painel FD)](fd-numbering.md) — FD-001… é DERIVADO (não persistido): por obra, data/criadoEm asc + id; mesma regra nas 2 rotas; cancelar reindexar.
 - [Coleta de Campo — grupos](coleta-campo-grupos.md) — link público coleta por GRUPO (campos_json; NULL=todos); "Gerar todos" deve atualizar campos_json no reaproveitamento; whitelist server-side.
 - [Fornecedor write paths](fornecedor-write-paths.md) — tela "Fornecedores" salva em fornecedores via compras.criarFornecedor/atualizar (NAO terceiros.empresas); empresas_terceiras tem writes indiretos (ensureFromFornecedor, contrato/OS).
@@ -122,10 +123,8 @@
 - [Blacklist visibility backend gate](blacklist-visibility-backend-gate.md) — Lista_Negra é admin_master-only; gateie em employees.list E faça o cacheKey variar por papel (senão vaza por cache).
 - [Self-heal date/timestamp typecast](selfheal-date-timestamp-typecast.md) — cure UPDATE into date/timestamp col needs `::date`/`now()`, NOT `to_char` text; type error is swallowed by catch + capped log → cura silently no-ops. Verify via direct Neon pg, not executeSql.
 - [Date object String().slice bug](date-object-string-slice-bug.md) — `String(pgDateObj).slice(0,10)` → "Fri May 15" not "2026-05-15"; always `instanceof Date ? .toISOString().slice(0,10) : String(v).slice(0,10)` when value may come from DB driver.
-
 - [RQ cache-hit hydration race](rq-cache-hit-hydration-race.md) — dois useEffects (um hidrata de query.data, outro reseta por outra dep) anulam estado em cache hit; unifique num só effect chaveado pela identidade do dado.
 - [Conceder obra implica empresa](grant-obra-implies-company.md) — usuário comum: empresas visíveis = user_companies + DONAS das obras de getEffectiveAllowedObraIds; sem isso, obra concedida sem vínculo de empresa some (só vê como Adm).
-
 - [Per-bank deterministic parser gate](per-bank-deterministic-parser-gate.md) — parser determinístico por banco só pode emitir linhas quando confirma SEU banco (isBancoX); gating por "≥1 linha" sequestra o fallback de IA de outros bancos.
 - [Cheque devolvido — forma de pagamento](cheque-devolvido-forma-pagamento.md) — vínculo 'ajuste' exige forma_pagamento (dinheiro/depósito/cheque próprio/outro); statusBadge() de qualquer tela deve tratar compensado_pix.
 - [criarManual explicit-id IDOR](cheques-criar-manual-idor.md) — INSERT de 1 linha que aceita FK id explícito (fornecedorId/contaBancariaId) deve validar ownership da empresa; assertCompanyAccess só autoriza a empresa, não o recurso referenciado.
