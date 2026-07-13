@@ -228,7 +228,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
   const enabled = !!obraId;
 
   const score = trpc.scorecard.getScore.useQuery(
-    { companyId, obraId: obraId! },
+    { companyId, obraId: obraId!, orcamentoId: proj?.orcamentoId ?? undefined },
     { enabled, refetchInterval: 60_000 }
   );
   const ferramentas = trpc.scorecard.ferramentasList.useQuery(

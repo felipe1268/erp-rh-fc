@@ -1,4 +1,49 @@
 /**
+ * Rev. 4199 - SCORECARD: FIX DEFINITIVO — ORÇAMENTO EM EMPRESA DIFERENTE DO GRUPO AGORA É ENCONTRADO.
+ *
+ * MOTIVAÇÃO:
+ * A query de busca do orçamento no Scorecard (getScore + getMetasDesvios) filtrava por
+ * `"companyId" = ${companyId}` como cláusula OUTER (antes do OR). Quando o orçamento está
+ * registrado em uma empresa diferente do grupo (ex.: companyId do orçamento = B, mas o projeto
+ * planejamento_projetos.company_id = A), NENHUM dos 3 caminhos passava — o filtro externo
+ * eliminava a linha antes do OR ser avaliado. O badge "Cronograma vinculado" na lista de
+ * orçamentos confirmava o vínculo via planejamento_projetos.orcamento_id, mas o Scorecard
+ * retornava "Nenhum orçamento vinculado".
+ *
+ * ROOT CAUSE:
+ * - orcamentos.companyId ≠ planejamento_projetos.company_id (empresas diferentes do grupo).
+ * - planejamento_projetos.orcamento_id (FK direta) IS SET — confirmado pelo badge "Cronograma
+ *   vinculado" em OrcamentoLista (via orcamento.ts list procedure, linhas 1741-1745).
+ * - O path 1 (id = orcamentoId) nunca chegava a ser testado porque "companyId" = A filtrava
+ *   o orçamento de companyId B antes.
+ *
+ * O QUE FOI FEITO:
+ * 1. Backend getScore (scorecard.ts):
+ *    - Adicionado parâmetro opcional `orcamentoId` ao input.
+ *    - Query orcRow reescrita com 3 caminhos SEM filtro companyId no nível outer:
+ *      Path 1: `id = orcamentoId` (sem companyId — FK vem do projeto, confiável)
+ *      Path 2: `"companyId" = ${companyId} AND "obraId" = ${obraId}` (match via obra)
+ *      Path 3: `"companyId" = ${companyId} AND id IN (SELECT orcamento_id FROM
+ *               planejamento_projetos WHERE obra_id = ${obraId} AND orcamento_id IS NOT NULL)`
+ *    - ORDER BY garante prioridade 1→2→3.
+ *
+ * 2. Backend getMetasDesvios (scorecard.ts):
+ *    - Mesma reestruturação: companyId movido para DENTRO dos paths 2 e 3.
+ *    - Path 1 (orcamentoId direto) não exige companyId match.
+ *
+ * 3. Frontend ScorecardTab.tsx:
+ *    - getScore query passa `orcamentoId: proj?.orcamentoId ?? undefined` (antes não passava).
+ *    - getMetasDesvios já passava desde Rev. 4197.
+ *
+ * ARQUIVOS TOCADOS:
+ * - server/routers/scorecard.ts (getScore + getMetasDesvios)
+ * - client/src/pages/planejamento/ScorecardTab.tsx
+ * - shared/version.ts
+ *
+ * ZERO DELETE · ZERO ALTER DESTRUTIVO.
+ */
+
+/**
  * Rev. 4198 - SCORECARD METAS & DESVIOS: QUERY TRI-CAMINHOS PARA DETECTAR ORÇAMENTO VINCULADO.
  *
  * MOTIVAÇÃO:

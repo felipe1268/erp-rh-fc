@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4199** — **SCORECARD: FIX DEFINITIVO — ORÇAMENTO EM EMPRESA DIFERENTE DO GRUPO.** Root cause: `"companyId"` era filtro OUTER ao OR de 3 caminhos; quando orçamento está em empresa B e projeto em empresa A, nenhum path passava. Fix: companyId movido para dentro dos paths 2 e 3; path 1 (id=orcamentoId, FK direta do projeto) sem filtro de empresa. `getScore` também recebe `orcamentoId` agora. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4198** — **SCORECARD METAS & DESVIOS: QUERY TRI-CAMINHOS PARA DETECTAR ORÇAMENTO.** Query com OR em 3 caminhos: `id=orcamentoId` (prio 1) | `"obraId"=obraId` (prio 2) | `id IN (SELECT orcamento_id FROM planejamento_projetos WHERE obra_id=obraId)` (prio 3). Botão Atualizar invalida todos os caches do scorecard. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4197** — **SCORECARD METAS & DESVIOS: FIX VÍNCULO POR orcamentoId.** `getMetasDesvios` agora aceita `orcamentoId` opcional e prioriza lookup direto (`WHERE id=orcamentoId`) antes de fallback por `obraId`. Frontend passa `proj.orcamentoId`. ZERO DELETE · ZERO ALTER destrutivo.
@@ -62,9 +64,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4193** — **BANCO DE HORAS: HISTÓRICO DIA A DIA EXPANSÍVEL.** Toggle "Ver dia a dia" em cada card de crédito; `memorialCalculo` lazy. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4192** — **BANCO DE HORAS: CARGO DE CONFIANÇA (ART. 62 CLT) EXCLUÍDO AUTOMATICAMENTE.** Filtro `cargo_confianca=0` em todos os 4 pontos de leitura (getSaldoBancoMensal, getAlertasExpiracao, getAlertasSaldoNegativo, getAlertasSaldoPositivoTrimestral). Banner azul informativo na aba Saldos. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4192** — **BANCO DE HORAS: CARGO DE CONFIANÇA (ART. 62 CLT) EXCLUÍDO AUTOMATICAMENTE.** Filtro `cargo_confianca=0` em todos os 4 pontos de leitura. Banner azul informativo na aba Saldos. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4191** — **BANCO DE HORAS: HISTÓRICO REDESENHADO — CARDS MODERNOS COM SOLICITANTE, AUTORIZADOR, DATA/HORA E HORAS NÃO AUTORIZADAS.** Cards com barra lateral colorida, data+hora, "Solicitado por"/"Autorizado por", horas não autorizadas em âmbar. Backend: +3 colunas do `he_periods`. Fix TDZ. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -73,8 +75,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4189** — **BANCO DE HORAS: FIX CRÍTICO — LANÇAMENTOS NUNCA ERAM GRAVADOS + BACKFILL AUTOMÁTICO.** `String(period.dataFim).slice(0,10)` gerava `"Fri May 15"` → `::date` falha no Postgres. Fix: helper `toDateStr` + backfill 53 lançamentos. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4188** — **SCORECARD: FIX MULTI-ABA — ORÇAMENTO, SEGURANÇA, RH E METAS & DESVIOS RETORNAVAM VAZIO.** camelCase columns em `orcamentos`/`obra_funcionarios`/`employees` causavam "column does not exist" silencioso. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4187** — **SCORECARD: SUB-ABA "BANCO DE HORAS" NA ABA RH + FIX RETRY iOS WEBKIT.** Aba RH dividida em sub-abas Folha/Banco de Horas. Fix retry 3× backoff iOS WebKit. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4186** — **SCORECARD: REDESIGN COMPLETO — 6 ABAS TOP-LEVEL + DRE WATERFALL + METAS & DESVIOS.** `ScorecardTab.tsx` reescrito. 6 abas Pareto. DRE waterfall 3 colunas. Warning quando custoRealizado=0. ZERO DELETE · ZERO ALTER destrutivo.
 

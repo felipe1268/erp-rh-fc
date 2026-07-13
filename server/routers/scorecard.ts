@@ -97,21 +97,42 @@ export const scorecardRouter = router({
     }),
 
   getScore: protectedProcedure
-    .input(z.object({ companyId: z.number(), obraId: z.number() }))
+    .input(z.object({ companyId: z.number(), obraId: z.number(), orcamentoId: z.number().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return null;
-      const { companyId, obraId } = input;
+      const { companyId, obraId, orcamentoId } = input;
 
-      // Raw SQL com nomes camelCase entre aspas (orcamentos armazena colunas sem mapeamento snake_case)
+      // Busca o orçamento por 3 caminhos (sem filtro companyId no path 1 — orçamento pode
+      // estar em empresa diferente do grupo; o orcamentoId vem do FK do próprio projeto):
+      // 1. orcamentoId explícito (vínculo direto via planejamento_projetos.orcamento_id)
+      // 2. orcamentos."obraId" = obraId (vínculo via obra, mesmo companyId)
+      // 3. planejamento_projetos.orcamento_id para a mesma obra (fallback via cronograma)
       const orcRow = await db.execute(sql`
         SELECT id, status, codigo,
           "totalVenda"::numeric     AS "totalVenda",
           "totalCusto"::numeric     AS "totalCusto",
           "valorNegociado"::numeric AS "valorNegociado"
         FROM orcamentos
-        WHERE "companyId" = ${companyId} AND "obraId" = ${obraId} AND deleted_at IS NULL
-        ORDER BY id DESC LIMIT 1
+        WHERE deleted_at IS NULL
+          AND (
+            ${orcamentoId ? sql`id = ${orcamentoId}` : sql`FALSE`}
+            OR ("companyId" = ${companyId} AND "obraId" = ${obraId})
+            OR ("companyId" = ${companyId} AND id IN (
+              SELECT orcamento_id FROM planejamento_projetos
+              WHERE obra_id = ${obraId}
+                AND company_id = ${companyId}
+                AND orcamento_id IS NOT NULL
+            ))
+          )
+        ORDER BY
+          CASE
+            WHEN ${orcamentoId ? sql`id = ${orcamentoId}` : sql`FALSE`} THEN 1
+            WHEN "companyId" = ${companyId} AND "obraId" = ${obraId} THEN 2
+            ELSE 3
+          END,
+          id DESC
+        LIMIT 1
       `).then(r => r.rows as any[]).catch(() => [] as any[]);
 
       // Drizzle ORM para accidents (colunas camelCase sem mapeamento explícito)
@@ -1234,10 +1255,12 @@ export const scorecardRouter = router({
         try { const r = await q; return r?.rows ?? []; } catch (e: any) { return []; }
       };
 
-      // Busca o orçamento por 3 caminhos em ordem de prioridade:
-      // 1. orcamentoId explícito (vínculo direto do projeto)
-      // 2. orcamentos.obraId = obraId (vínculo via obra)
-      // 3. planejamento_projetos.orcamento_id para a mesma obra (vínculo via cronograma)
+      // Busca o orçamento por 3 caminhos em ordem de prioridade
+      // (sem filtro companyId no path 1 — orçamento pode estar em empresa diferente
+      // do grupo; o orcamentoId vem do FK do próprio projeto e é confiável):
+      // 1. orcamentoId explícito (vínculo direto via planejamento_projetos.orcamento_id)
+      // 2. orcamentos."obraId" = obraId (vínculo via obra, mesmo companyId)
+      // 3. planejamento_projetos.orcamento_id para a mesma obra (fallback via cronograma)
       const orcRows = await safe(db.execute(sql`
         SELECT id,
                "totalCusto"::numeric     AS total_custo,
@@ -1245,22 +1268,21 @@ export const scorecardRouter = router({
                "valorNegociado"::numeric AS valor_negociado,
                COALESCE("tempoObraMeses", 12)::int AS tempo_meses
         FROM orcamentos
-        WHERE "companyId" = ${companyId}
-          AND deleted_at IS NULL
+        WHERE deleted_at IS NULL
           AND (
             ${orcamentoId ? sql`id = ${orcamentoId}` : sql`FALSE`}
-            OR "obraId" = ${obraId}
-            OR id IN (
+            OR ("companyId" = ${companyId} AND "obraId" = ${obraId})
+            OR ("companyId" = ${companyId} AND id IN (
               SELECT orcamento_id FROM planejamento_projetos
               WHERE obra_id = ${obraId}
                 AND company_id = ${companyId}
                 AND orcamento_id IS NOT NULL
-            )
+            ))
           )
         ORDER BY
           CASE
             WHEN ${orcamentoId ? sql`id = ${orcamentoId}` : sql`FALSE`} THEN 1
-            WHEN "obraId" = ${obraId} THEN 2
+            WHEN "companyId" = ${companyId} AND "obraId" = ${obraId} THEN 2
             ELSE 3
           END,
           id DESC

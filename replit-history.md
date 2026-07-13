@@ -1,3 +1,4 @@
+- **Rev. 4187** — **SCORECARD: SUB-ABA "BANCO DE HORAS" NA ABA RH + FIX RETRY iOS WEBKIT.** Aba RH dividida em sub-abas Folha/Banco de Horas. Fix retry 3× backoff iOS WebKit. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4183** — **SCORECARD: PAINEL ANÁLISE GERENCIAL DA OBRA (CURVA ABC, RECOMPRAS, FERRAMENTAS, LOCAÇÕES).** `getAnalise` — 6 queries. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4182** — **PLANEJAMENTO: SCORECARD DO GESTOR COM KPIs, BÔNUS E CONTROLE DE FERRAMENTAS/RETRABALHO.** Score 0-100 em 5 dimensões ponderadas. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4181** — **COMPRAS: CONDIÇÃO DE PAGAMENTO VIRA SELECT PADRONIZADO NAS OCs.** Campo livre → `<Select>` com `TIPOS_PAGAMENTO`. ZERO DELETE · ZERO ALTER destrutivo.
