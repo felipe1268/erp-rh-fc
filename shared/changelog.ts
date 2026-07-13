@@ -1,4 +1,37 @@
 /**
+ * Rev. 4191 - BANCO DE HORAS: HISTÓRICO REDESENHADO — CARDS MODERNOS COM SOLICITANTE, AUTORIZADOR, DATA/HORA E HORAS NÃO AUTORIZADAS.
+ *
+ * MOTIVAÇÃO:
+ * A tela de histórico individual (dialog ao clicar no funcionário) estava em formato de tabela densa,
+ * sem deixar claro quem solicitou, quem autorizou, a hora exata do registro, e sem destacar
+ * lançamentos ainda não autorizados (períodos em análise).
+ *
+ * O QUE FOI FEITO:
+ * 1. Backend getLancamentos enriquecido: adicionados hp."criadoPor" (periodoCriadoPor),
+ *    hp."aprovadoPor" (periodoAprovadoPor) e hp."aprovadoEm" (periodoAprovadoEm) ao SELECT,
+ *    trazendo o responsável pela abertura do período e o autorizador com data de aprovação.
+ *
+ * 2. Frontend: tabela substituída por cards individuais com:
+ *    - Barra lateral colorida (verde=crédito autorizado, laranja=débito, âmbar=não autorizado, cinza=manual)
+ *    - Badge de tipo (+ Crédito / − Débito / Ajuste) + status de autorização na mesma linha
+ *    - Data do lançamento (DD/MM/AAAA) e hora de registro (HH:MM) lado a lado
+ *    - Período HE com intervalo de datas (DD/MM → DD/MM)
+ *    - Colunas "HE Realizada" e "Creditado/Debitado" exibidas como KPIs compactos
+ *    - Linha "Solicitado por: [nome]" (criadoPor do período ou do lançamento)
+ *    - Linha "Autorizado por: [nome] em DD/MM/AAAA" quando status=aprovado
+ *    - Badge "Não autorizado / Aguardando autorização" em âmbar para períodos em análise
+ *    - Lançamentos manuais identificados com "Lançamento manual sem período vinculado"
+ *
+ * 3. Fix de crash (TDZ): histDialogRow useMemo movido para após declaração de saldosMensal.
+ *
+ * ARQUIVOS:
+ * - server/routers/horasExtras.ts (getLancamentos: +3 colunas do he_periods)
+ * - client/src/pages/BancoHoras.tsx (redesign dialog + fix TDZ + import Calendar/User)
+ *
+ * ZERO DELETE · ZERO ALTER DESTRUTIVO.
+ */
+
+/**
  * Rev. 4190 - BANCO DE HORAS: HISTÓRICO INTERATIVO POR FUNCIONÁRIO COM FOTO E STATUS DE AUTORIZAÇÃO.
  *
  * MOTIVAÇÃO:

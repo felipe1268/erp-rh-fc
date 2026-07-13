@@ -11,6 +11,7 @@ import {
   ArrowLeftRight, AlertTriangle, Clock, CreditCard, RefreshCw,
   Users, FileText, Settings, Search, Printer, ChevronDown, ChevronRight, ChevronLeft,
   CalendarDays, Scale, Info, ShieldAlert, CheckCircle2, XCircle, HelpCircle, X,
+  Calendar, User,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -666,7 +667,7 @@ export default function BancoHoras() {
                   </DialogTitle>
                 </DialogHeader>
 
-                <div className="flex-1 overflow-y-auto min-h-0">
+                <div className="flex-1 overflow-y-auto min-h-0 pr-1">
                   {lancamentosSaldos.isLoading ? (
                     <div className="flex items-center justify-center py-12 text-muted-foreground">
                       <RefreshCw className="h-5 w-5 animate-spin mr-2" /> Carregando histórico...
@@ -677,112 +678,177 @@ export default function BancoHoras() {
                       <p>Nenhum lançamento encontrado.</p>
                     </div>
                   ) : (
-                    <table className="w-full text-sm">
-                      <thead className="sticky top-0 bg-white z-10">
-                        <tr className="border-b-2 border-gray-200 bg-gray-50/80">
-                          <th className="text-left py-2.5 px-3 font-semibold text-xs text-muted-foreground">Data</th>
-                          <th className="text-left py-2.5 px-3 font-semibold text-xs text-muted-foreground">Período HE</th>
-                          <th className="text-left py-2.5 px-3 font-semibold text-xs text-muted-foreground">Tipo</th>
-                          <th className="text-right py-2.5 px-3 font-semibold text-xs text-muted-foreground">HE Realizada</th>
-                          <th className="text-right py-2.5 px-3 font-semibold text-xs text-muted-foreground">Creditado</th>
-                          <th className="text-left py-2.5 px-3 font-semibold text-xs text-muted-foreground">Autorização</th>
-                          <th className="text-left py-2.5 px-3 font-semibold text-xs text-muted-foreground">Registrado por</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {lancamentosSaldosList.map((l: any) => {
-                          const isCredito = l.tipo === "credito";
-                          const isDebito = l.tipo === "debito";
-                          const isAjuste = l.tipo === "ajuste_vigencia";
-                          const periodStatus = l.periodoStatus as string | null;
-                          const isAutorizado = periodStatus === "aprovado";
-                          const isEmAndamento = periodStatus && periodStatus !== "aprovado";
-                          const isManual = !l.hePeriodId;
+                    <div className="space-y-2.5 py-1">
+                      {lancamentosSaldosList.map((l: any) => {
+                        const isCredito = l.tipo === "credito";
+                        const isDebito = l.tipo === "debito";
+                        const isAjuste = l.tipo === "ajuste_vigencia";
+                        const periodStatus = l.periodoStatus as string | null;
+                        const isAutorizado = periodStatus === "aprovado";
+                        const isEmAndamento = periodStatus && periodStatus !== "aprovado";
+                        const isManual = !l.hePeriodId;
 
-                          let periodoLabel = "—";
-                          if (l.periodoMesRef) {
-                            const [ano, mes] = String(l.periodoMesRef).split("-");
-                            const nomeMes = MESES_LONGOS[parseInt(mes, 10) - 1];
-                            periodoLabel = `${nomeMes} ${ano}`;
-                            if (l.periodoDataInicio && l.periodoDataFim) {
-                              const di = new Date(l.periodoDataInicio).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-                              const df = new Date(l.periodoDataFim).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-                              periodoLabel += ` (${di}→${df})`;
-                            }
+                        const accentColor = isAutorizado
+                          ? (isCredito ? "bg-green-500" : isDebito ? "bg-orange-500" : "bg-gray-400")
+                          : isEmAndamento ? "bg-amber-400"
+                          : "bg-gray-300";
+
+                        const cardBg = isEmAndamento
+                          ? "bg-amber-50/60 border-amber-200"
+                          : isAutorizado
+                            ? (isCredito ? "bg-green-50/40 border-green-100" : isDebito ? "bg-orange-50/40 border-orange-100" : "bg-gray-50 border-gray-200")
+                            : "bg-gray-50 border-gray-200";
+
+                        let periodoLabel = "";
+                        let periodoRange = "";
+                        if (l.periodoMesRef) {
+                          const [ano, mes] = String(l.periodoMesRef).split("-");
+                          periodoLabel = `${MESES_LONGOS[parseInt(mes, 10) - 1]} ${ano}`;
+                          if (l.periodoDataInicio && l.periodoDataFim) {
+                            const di = new Date(l.periodoDataInicio).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+                            const df = new Date(l.periodoDataFim).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+                            periodoRange = `${di} → ${df}`;
                           }
+                        }
 
-                          const heRealizada = Number(l.heTotalMins || 0);
-                          const heUtil = Number(l.heUtilMins || 0);
-                          const heFim = Number(l.heFimMins || 0);
+                        const dataLanc = l.data
+                          ? new Date(l.data).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })
+                          : "—";
+                        const horaLanc = l.criadoEm
+                          ? new Date(l.criadoEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+                          : null;
 
-                          return (
-                            <tr key={l.id} className="border-b border-gray-100 hover:bg-gray-50/70">
-                              <td className="py-2.5 px-3 text-xs font-medium whitespace-nowrap">
-                                {new Date(l.data).toLocaleDateString("pt-BR")}
-                              </td>
-                              <td className="py-2.5 px-3 text-xs text-muted-foreground whitespace-nowrap">
-                                {periodoLabel}
-                              </td>
-                              <td className="py-2.5 px-3">
-                                {isCredito && <Badge className="text-[10px] bg-green-100 text-green-700 border-green-200">+ Crédito</Badge>}
-                                {isDebito && <Badge className="text-[10px] bg-orange-100 text-orange-700 border-orange-200">− Débito</Badge>}
-                                {isAjuste && <Badge className="text-[10px] bg-gray-100 text-gray-600 border-gray-200">Ajuste</Badge>}
-                              </td>
-                              <td className="py-2.5 px-3 text-right text-xs">
-                                {heRealizada > 0 ? (
-                                  <span className="text-muted-foreground">
-                                    {minsToHHMM(heRealizada)}
-                                    {(heUtil > 0 || heFim > 0) && (
-                                      <span className="text-[10px] block text-gray-400">
-                                        {heUtil > 0 && `${minsToHHMM(heUtil)} úteis`}
-                                        {heUtil > 0 && heFim > 0 && " · "}
-                                        {heFim > 0 && `${minsToHHMM(heFim)} fim`}
-                                      </span>
-                                    )}
-                                  </span>
-                                ) : "—"}
-                              </td>
-                              <td className={`py-2.5 px-3 text-right font-bold text-sm ${isCredito ? "text-green-700" : isDebito ? "text-orange-700" : "text-gray-600"}`}>
-                                {isCredito ? "+" : isDebito ? "−" : ""}{minsToHHMM(Number(l.minutos))}
-                              </td>
-                              <td className="py-2.5 px-3">
-                                {isManual ? (
-                                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                                    <HelpCircle className="h-3.5 w-3.5 text-gray-400" /> Manual
-                                  </span>
-                                ) : isAutorizado ? (
-                                  <span className="flex items-center gap-1 text-xs text-green-700 font-medium">
-                                    <CheckCircle2 className="h-3.5 w-3.5" /> Autorizado
-                                  </span>
-                                ) : isEmAndamento ? (
-                                  <span className="flex items-center gap-1 text-xs text-amber-600 font-medium">
-                                    <RefreshCw className="h-3.5 w-3.5" /> Em análise
-                                  </span>
+                        const aprovadoEmFmt = l.periodoAprovadoEm
+                          ? new Date(l.periodoAprovadoEm).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })
+                          : null;
+
+                        const heRealizada = Number(l.heTotalMins || 0);
+                        const heUtil = Number(l.heUtilMins || 0);
+                        const heFim = Number(l.heFimMins || 0);
+                        const minutos = Number(l.minutos || 0);
+
+                        return (
+                          <div key={l.id} className={`flex gap-0 rounded-lg border overflow-hidden ${cardBg}`}>
+                            {/* Barra lateral colorida */}
+                            <div className={`w-1.5 shrink-0 ${accentColor}`} />
+
+                            <div className="flex-1 px-4 py-3 space-y-2.5">
+                              {/* Linha 1: tipo badge + status + data/hora */}
+                              <div className="flex items-center justify-between flex-wrap gap-2">
+                                <div className="flex items-center gap-2">
+                                  {isCredito && <Badge className="text-[10px] px-2 py-0.5 bg-green-100 text-green-700 border-green-200 font-semibold">+ Crédito</Badge>}
+                                  {isDebito && <Badge className="text-[10px] px-2 py-0.5 bg-orange-100 text-orange-700 border-orange-200 font-semibold">− Débito</Badge>}
+                                  {isAjuste && <Badge className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-600 border-gray-200 font-semibold">Ajuste</Badge>}
+
+                                  {isManual ? (
+                                    <span className="flex items-center gap-1 text-xs text-gray-500">
+                                      <HelpCircle className="h-3.5 w-3.5" /> Manual
+                                    </span>
+                                  ) : isAutorizado ? (
+                                    <span className="flex items-center gap-1 text-xs text-green-700 font-semibold">
+                                      <CheckCircle2 className="h-3.5 w-3.5" /> Autorizado
+                                    </span>
+                                  ) : isEmAndamento ? (
+                                    <span className="flex items-center gap-1 text-xs text-amber-700 font-semibold">
+                                      <RefreshCw className="h-3.5 w-3.5" /> Não autorizado
+                                    </span>
+                                  ) : null}
+                                </div>
+
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                  <Calendar className="h-3.5 w-3.5" />
+                                  <span className="font-medium text-gray-700">{dataLanc}</span>
+                                  {horaLanc && <span className="text-gray-400">· {horaLanc}</span>}
+                                </div>
+                              </div>
+
+                              {/* Linha 2: período HE (se vinculado) + horas */}
+                              <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-1">
+                                {periodoLabel ? (
+                                  <div className="text-xs text-muted-foreground">
+                                    <span className="text-gray-500 font-medium">Período HE:</span>{" "}
+                                    <span className="text-gray-700">{periodoLabel}</span>
+                                    {periodoRange && <span className="text-gray-400 ml-1">({periodoRange})</span>}
+                                  </div>
                                 ) : (
-                                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                                    <HelpCircle className="h-3.5 w-3.5" /> —
-                                  </span>
+                                  <div className="text-xs text-muted-foreground italic">Lançamento manual sem período vinculado</div>
                                 )}
-                              </td>
-                              <td className="py-2.5 px-3 text-xs text-muted-foreground max-w-[140px]">
-                                <div className="break-words">{l.criadoPor || "—"}</div>
-                                {l.descricao && <div className="text-[10px] text-gray-400 break-words">{l.descricao}</div>}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+
+                                <div className="flex items-center gap-4 shrink-0">
+                                  {heRealizada > 0 && (
+                                    <div className="text-center">
+                                      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">HE Realizada</div>
+                                      <div className="text-sm font-semibold text-gray-700">{minsToHHMM(heRealizada)}</div>
+                                      {(heUtil > 0 || heFim > 0) && (
+                                        <div className="text-[10px] text-gray-400">
+                                          {heUtil > 0 && `${minsToHHMM(heUtil)}ut`}
+                                          {heUtil > 0 && heFim > 0 && " · "}
+                                          {heFim > 0 && `${minsToHHMM(heFim)}fs`}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                  <div className="text-center">
+                                    <div className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                                      {isCredito ? "Creditado" : isDebito ? "Debitado" : "Ajuste"}
+                                    </div>
+                                    <div className={`text-base font-bold ${isCredito ? "text-green-700" : isDebito ? "text-orange-700" : "text-gray-600"}`}>
+                                      {isCredito ? "+" : isDebito ? "−" : ""}{minsToHHMM(minutos)}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Linha 3: quem solicitou / quem autorizou */}
+                              <div className="flex flex-wrap gap-x-6 gap-y-1 pt-1 border-t border-black/5">
+                                {(l.periodoCriadoPor || l.criadoPor) && (
+                                  <div className="flex items-center gap-1.5 text-xs">
+                                    <User className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                                    <span className="text-muted-foreground">Solicitado por:</span>
+                                    <span className="font-medium text-gray-700">{l.periodoCriadoPor || l.criadoPor}</span>
+                                  </div>
+                                )}
+                                {isAutorizado && l.periodoAprovadoPor && (
+                                  <div className="flex items-center gap-1.5 text-xs">
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />
+                                    <span className="text-muted-foreground">Autorizado por:</span>
+                                    <span className="font-medium text-gray-700">{l.periodoAprovadoPor}</span>
+                                    {aprovadoEmFmt && <span className="text-gray-400">em {aprovadoEmFmt}</span>}
+                                  </div>
+                                )}
+                                {isEmAndamento && (
+                                  <div className="flex items-center gap-1.5 text-xs text-amber-700">
+                                    <RefreshCw className="h-3.5 w-3.5 shrink-0" />
+                                    <span>Aguardando autorização do período</span>
+                                  </div>
+                                )}
+                                {l.descricao && (
+                                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground w-full">
+                                    <span className="italic break-words">{l.descricao}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
 
-                <div className="shrink-0 border-t pt-3 flex items-center justify-between text-xs text-muted-foreground">
-                  <span>
-                    <CheckCircle2 className="inline h-3 w-3 text-green-600 mr-1" />Autorizado = período de HE aprovado
-                    <span className="mx-2">·</span>
-                    <HelpCircle className="inline h-3 w-3 text-gray-400 mr-1" />Manual = débito/ajuste sem período vinculado
-                  </span>
-                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setHistDialogEmpId(null)}>Fechar</Button>
+                <div className="shrink-0 border-t pt-3 flex items-center justify-between">
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                    <span className="flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3 text-green-600" />Autorizado = período aprovado
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <RefreshCw className="h-3 w-3 text-amber-500" />Não autorizado = aguardando aprovação
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <HelpCircle className="h-3 w-3 text-gray-400" />Manual = sem período vinculado
+                    </span>
+                  </div>
+                  <Button size="sm" variant="outline" className="h-7 text-xs shrink-0" onClick={() => setHistDialogEmpId(null)}>Fechar</Button>
                 </div>
               </DialogContent>
             </Dialog>
