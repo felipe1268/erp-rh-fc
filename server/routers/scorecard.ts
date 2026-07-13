@@ -103,10 +103,10 @@ export const scorecardRouter = router({
       if (!db) return null;
       const { companyId, obraId, orcamentoId } = input;
 
-      // Busca o orçamento por 3 caminhos (sem filtro companyId no path 1 — orçamento pode
-      // estar em empresa diferente do grupo; o orcamentoId vem do FK do próprio projeto):
+      // Busca o orçamento por 3 caminhos. Orçamento pode estar em empresa diferente do grupo.
+      // A obra é unívoca (obra.companyId fixo), então buscar por obraId sem companyId é seguro.
       // 1. orcamentoId explícito (vínculo direto via planejamento_projetos.orcamento_id)
-      // 2. orcamentos."obraId" = obraId (vínculo via obra, mesmo companyId)
+      // 2. orcamentos."obraId" = obraId (vínculo via obra — sem filtro de companyId)
       // 3. planejamento_projetos.orcamento_id para a mesma obra (fallback via cronograma)
       const orcRow = await db.execute(sql`
         SELECT id, status, codigo,
@@ -117,7 +117,7 @@ export const scorecardRouter = router({
         WHERE deleted_at IS NULL
           AND (
             ${orcamentoId ? sql`id = ${orcamentoId}` : sql`FALSE`}
-            OR ("companyId" = ${companyId} AND "obraId" = ${obraId})
+            OR "obraId" = ${obraId}
             OR id IN (
               SELECT orcamento_id FROM planejamento_projetos
               WHERE obra_id = ${obraId}
@@ -128,7 +128,7 @@ export const scorecardRouter = router({
         ORDER BY
           CASE
             WHEN ${orcamentoId ? sql`id = ${orcamentoId}` : sql`FALSE`} THEN 1
-            WHEN "companyId" = ${companyId} AND "obraId" = ${obraId} THEN 2
+            WHEN "obraId" = ${obraId} THEN 2
             ELSE 3
           END,
           id DESC
@@ -1271,7 +1271,7 @@ export const scorecardRouter = router({
         WHERE deleted_at IS NULL
           AND (
             ${orcamentoId ? sql`id = ${orcamentoId}` : sql`FALSE`}
-            OR ("companyId" = ${companyId} AND "obraId" = ${obraId})
+            OR "obraId" = ${obraId}
             OR id IN (
               SELECT orcamento_id FROM planejamento_projetos
               WHERE obra_id = ${obraId}
@@ -1282,7 +1282,7 @@ export const scorecardRouter = router({
         ORDER BY
           CASE
             WHEN ${orcamentoId ? sql`id = ${orcamentoId}` : sql`FALSE`} THEN 1
-            WHEN "companyId" = ${companyId} AND "obraId" = ${obraId} THEN 2
+            WHEN "obraId" = ${obraId} THEN 2
             ELSE 3
           END,
           id DESC

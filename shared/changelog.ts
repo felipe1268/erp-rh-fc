@@ -1,4 +1,30 @@
 /**
+ * Rev. 4201 - SCORECARD: FIX RAIZ — BUSCA POR obraId SEM FILTRO companyId.
+ *
+ * MOTIVAÇÃO:
+ * O orçamento CUSTO_747_09_2025_R05 - FASE 4 NÃO tem o badge "Cronograma vinculado"
+ * (planejamento_projetos.orcamento_id não está setado para este orçamento).
+ * Logo paths 1 e 3 sempre falham. O único caminho funcional é o path 2 (por obraId),
+ * mas ele ainda filtrava "companyId" = C AND "obraId" = O — bloqueando quando o orçamento
+ * está em empresa diferente do grupo.
+ * Uma obra pertence a exatamente uma empresa (obra.companyId é fixo), portanto buscar
+ * orcamentos por "obraId" = ${obraId} sem filtro de companyId é seguro e unívoco.
+ *
+ * O QUE FOI FEITO:
+ * - getScore: path 2 alterado de `"companyId"=C AND "obraId"=O` para apenas `"obraId"=O`.
+ * - getMetasDesvios: mesma correção.
+ * - shared/version.ts bumped para 4201.
+ *
+ * COBERTURA FINAL DOS 3 CAMINHOS:
+ *   Path 1: id = orcamentoId → FK direta (sem companyId)
+ *   Path 2: "obraId" = obraId → vínculo via obra (sem companyId — obra é unívoca)
+ *   Path 3: id IN (SELECT orcamento_id FROM planejamento_projetos
+ *                  WHERE obra_id=O AND company_id=C AND orcamento_id IS NOT NULL)
+ *
+ * ZERO DELETE · ZERO ALTER DESTRUTIVO.
+ */
+
+/**
  * Rev. 4200 - SCORECARD: FIX COMPLEMENTAR — PATH 3 SEM FILTRO companyId EM orcamentos.
  *
  * MOTIVAÇÃO:
