@@ -18,14 +18,28 @@ Quando isso ocorre dentro de um `Promise.all`, a Promise inteira rejeita → o e
 
 ## A regra
 
-Sempre usar `REPLACE(col, ',', '.')::numeric` ao fazer cast de colunas VARCHAR para numeric:
+Colunas VARCHAR que deveriam ser numéricas podem conter:
+- Valores com vírgula BR: `"680,75"` → falha em `::numeric`
+- Valores não-numéricos: `"sim"` → falha em `::numeric` mesmo com REPLACE
+
+O padrão seguro definitivo é `CASE WHEN`:
+
+Sempre usar ao fazer cast de colunas VARCHAR para numeric:
 
 ```sql
--- Errado
+-- Errado (falha com "680,75" ou "sim")
 COALESCE(pp."salarioBrutoMes"::numeric, 0)
 
--- Correto
+-- Errado (falha com "sim")
 COALESCE(REPLACE(pp."salarioBrutoMes", ',', '.')::numeric, 0)
+
+-- CORRETO — seguro contra vírgula BR E valores texto livres
+COALESCE(
+  CASE WHEN pp."salarioBrutoMes" ~ '^-?[0-9]'
+    THEN REPLACE(pp."salarioBrutoMes", ',', '.')::numeric
+    ELSE NULL END,
+  0
+)
 ```
 
 Compatível com ambos os formatos:
