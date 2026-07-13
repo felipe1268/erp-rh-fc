@@ -263,6 +263,9 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
   });
   const { isAdminMaster, canViewPage, isSensitiveHidden } = usePermissions();
   const hideFinancial = !isAdminMaster && isSensitiveHidden("planejamento", "valores_planejamento");
+  // Rev. 4209 — useCompany movido para antes de canViewTab para que o gate
+  // de scorecard_beta_ativo seja visível dentro da função canViewTab.
+  const { selectedCompany, companyId } = useCompany();
 
   const TAB_TO_PAGEID: Record<string, string> = {
     "visao-geral": "visao_geral",
@@ -286,13 +289,14 @@ function PlanejamentoDetalheInner({ routeProjetoId }: { routeProjetoId: number }
 
   const canViewTab = (tabId: string): boolean => {
     if (isAdminMaster) return true;
+    // Rev. 4209 — Scorecard só visível quando empresa habilitou o beta.
+    if (tabId === "scorecard" && !(selectedCompany as any)?.scorecard_beta_ativo) return false;
     const pageId = TAB_TO_PAGEID[tabId];
     if (!pageId) return true;
     return canViewPage("planejamento", pageId);
   };
 
   const { user } = useAuth();
-  const { selectedCompany, companyId } = useCompany();
   const [refisInitSemana, setRefisInitSemana] = useState<string | null>(null);
   // Rev. 2255 — Inicializa `semanaVisualizacao` com a Monday da semana cutoff de
   // HOJE (default cutoffDow=4 igual ao child AvancoSemanal L6196-6198). Antes

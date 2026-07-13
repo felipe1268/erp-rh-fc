@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4209** — **SCORECARD: FIX BÔNUS (LL realizado→previsto quando sem custo real) + BETA GATE POR EMPRESA.** Bug bônus: `custoRealizado=0` → `llRealizado=contrato=R$9,5M` → bônus inflado R$19k; fix usa `lucroLiquidoPrevisto` como fallback. Gate: `companies.scorecard_beta_ativo SMALLINT DEFAULT 0`; `canViewTab("scorecard")` retorna false para não-Admin-Master; toggle em Configurações→"Scorecard do Gestor". ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4208** — **SCORECARD RH/FOLHA: FIX SEGURO DE VIDA (R$0→real) + VR/VA DOUBLE-COUNT + PONTO FALLBACK.** (1) Seguro: `employees.seguroVida` era texto "sim/não" → zero; fix usa `svc.premio_vg + svc.premio_apc` direto. (2) VR/VA: `valorTotal` já inclui tudo; `valorVa` separado = double-count; fix = coluna única `va_total`. (3) Ponto: `dias_na_obra` agora é `GREATEST(alocação, COUNT ponto)`; `relevant_emp` inclui UNION de `time_records`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4207** — **SCORECARD RH/FOLHA: FIX DIAS_NA_OBRA (150→30) + FOTO DO COLABORADOR.** Bug: `site_periods` CTE listava TODAS as linhas de `employee_site_history` sem agrupar por funcionário. ACACIO tinha 8 linhas → SUM somava 8× o overlap de Abril → 150 dias impossível. Fix: GROUP BY `"employeeId"` com `MIN("dataInicio")` + `CASE WHEN BOOL_OR("dataFim" IS NULL) THEN CURRENT_DATE ELSE MAX("dataFim")`. Foto: backend retorna `e."fotoUrl"` na CTE custos; frontend exibe avatar 28px (foto real ou iniciais com bg-indigo). ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4207** — **SCORECARD RH/FOLHA: FIX DIAS_NA_OBRA (150→30) + FOTO DO COLABORADOR.** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4206** — **SCORECARD RH/FOLHA: FIX CAST VARCHAR→NUMERIC COM PADRÃO SEGURO.** ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4204** — **SCORECARD RH/FOLHA: FIX employees camelCase + REDESIGN ABA + FÉRIAS + SEGURO DE VIDA.** Bug raiz: snake_case em `employees`; Fix camelCase + 3 queries paralelas + UI com seletor ano/mês. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4203** — **SCORECARD METAS & DESVIOS: FIX orcamento_itens camelCase + CONTRATOS DE TERCEIROS.** CTE `orca_itens` usava snake_case → lista vazia silenciosa. Fix + nova query `terceiro_contratos`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4201** — **SCORECARD: FIX RAIZ — BUSCA POR obraId SEM FILTRO companyId.** ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

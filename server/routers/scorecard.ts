@@ -436,13 +436,17 @@ export const scorecardRouter = router({
       const lucroPrevisto  = lucroLiquidoPrevisto;
       const lucroRealizado = lucroLiquidoRealizado;
 
-      // ── BÔNUS (calculado sobre o Lucro Líquido Realizado) ────────────────────
+      // ── BÔNUS (calculado sobre o Lucro Líquido) ─────────────────────────────
+      // Rev. 4209 — Quando não há custo real lançado no financeiro (obra nova ou
+      // sem baixas), lucroLiquidoRealizado = contrato inteiro → bônus inflado.
+      // Fallback: usa lucroLiquidoPrevisto como base conservadora nesses casos.
       const fatorBonus   = getBonusFator(scoreTotal);
       const bonusValor   = parseFloat(String(config.bonus_valor ?? "5"));
       const bonusTipo    = String(config.bonus_tipo ?? "percentual_lucro");
+      const llParaBonus  = custoRealizado > 0 ? lucroLiquidoRealizado : lucroLiquidoPrevisto;
       let bonusMaximo = 0;
       if (bonusTipo === "percentual_lucro") {
-        bonusMaximo = Math.max(0, lucroLiquidoRealizado) * (bonusValor / 100);
+        bonusMaximo = Math.max(0, llParaBonus) * (bonusValor / 100);
       } else {
         bonusMaximo = bonusValor;
       }
@@ -1718,5 +1722,34 @@ export const scorecardRouter = router({
         },
         funcionarios,
       };
+    }),
+
+  // ── Beta gate — visibilidade do Scorecard por empresa ────────────────────
+  // Rev. 4209: toggle que permite ao Admin Master liberar a aba Scorecard
+  // para os demais usuários. Default 0 = só Admin Master enxerga.
+  getScorecardBetaAtivo: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { ativo: false };
+      const r = await db.execute(sql`
+        SELECT scorecard_beta_ativo FROM companies WHERE id = ${input.companyId} LIMIT 1
+      `).catch(() => ({ rows: [] as any[] }));
+      return { ativo: !!((r.rows as any[])[0]?.scorecard_beta_ativo) };
+    }),
+
+  setScorecardBetaAtivo: protectedProcedure
+    .input(z.object({ companyId: z.number(), ativo: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin_master") {
+        throw new Error("Apenas Admin Master pode alterar esta configuração.");
+      }
+      const db = await getDb();
+      if (!db) throw new Error("DB indisponível");
+      await db.execute(sql`
+        UPDATE companies SET scorecard_beta_ativo = ${input.ativo ? 1 : 0}
+        WHERE id = ${input.companyId}
+      `);
+      return { ok: true };
     }),
 });

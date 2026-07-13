@@ -2340,6 +2340,13 @@ REGRAS DE EXTRAÇÃO:
           console.log(`[SyncSchema+] Coluna pwa_install_banner_ativo garantida em companies.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA companies pwa_install_banner_ativo:`, e?.message || e); }
 
+        // Rev. 4209 — Toggle de acesso ao Scorecard do Gestor (beta gate).
+        // Default 0 = só Admin Master vê a aba. Habilitado via Configurações.
+        try {
+          await db.execute(sql`ALTER TABLE companies ADD COLUMN IF NOT EXISTS scorecard_beta_ativo SMALLINT NOT NULL DEFAULT 0`);
+          console.log(`[SyncSchema+] Rev. 4209: coluna scorecard_beta_ativo garantida em companies.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA companies scorecard_beta_ativo:`, e?.message || e); }
+
         // Rev. 2914 — Necessidade de EPI/Uniforme por funcionário (configurável por tipo).
         try {
           await db.execute(sql`ALTER TABLE companies ADD COLUMN IF NOT EXISTS epi_nec_camisa SMALLINT NOT NULL DEFAULT 1`);

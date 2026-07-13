@@ -25,6 +25,7 @@ import { AlmoxarifadoConfigSection } from "@/pages/configuracoes/AlmoxarifadoCon
 import { PlanejamentoConfigSection } from "@/pages/configuracoes/PlanejamentoConfigSection";
 import { MedicaoConfigSection } from "@/pages/configuracoes/MedicaoConfigSection";
 import { IAConfigSection } from "@/pages/configuracoes/IAConfigSection";
+import { ScorecardBetaConfigSection } from "@/pages/configuracoes/ScorecardBetaConfigSection";
 import TemplatesDocsTab from "@/pages/configuracoes/TemplatesDocsTab";
 import XlsxTemplateTab from "@/pages/configuracoes/XlsxTemplateTab";
 import DocxTemplateTab from "@/pages/configuracoes/DocxTemplateTab";
@@ -734,6 +735,7 @@ export default function Configuracoes() {
                 <FinanceiroConfigSection onManageSocios={() => setActiveTab("socios")} />
                 <PlanejamentoConfigSection />
                 <MedicaoConfigSection />
+                <ScorecardBetaConfigSection />
               </div>
             </div>
 

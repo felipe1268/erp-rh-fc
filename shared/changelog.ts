@@ -1,4 +1,35 @@
 /**
+ * Rev. 4209 - SCORECARD: FIX BÔNUS (LL realizado → previsto quando sem custo real) + BETA GATE POR EMPRESA.
+ *
+ * PROBLEMA 1 — Bônus inflado em obras sem lançamentos financeiros:
+ *   Quando `custoRealizado = 0` (nenhuma despesa baixada no Financeiro), a fórmula
+ *   `lucroLiquidoRealizado = baseRef - 0 = valorContrato` (ex: R$9,5M).
+ *   Isso inflava o bônus máximo para 0,2% × R$9,5M = R$19.000 — completamente errado.
+ *   Fix: `llParaBonus = custoRealizado > 0 ? lucroLiquidoRealizado : lucroLiquidoPrevisto`.
+ *   Com alíquota de impostos configurada (ex: 10%), o bônus passa a usar o LL previsto correto.
+ *   NOTA: o LL Previsto em si exige que `aliquota_impostos` e `pct_custos_fixos` estejam
+ *   configurados via "Configurar impostos/overhead" na própria aba Scorecard — sem configuração,
+ *   LL Previsto = Lucro Bruto (fórmula correta, mas sem deduções fiscais).
+ *
+ * PROBLEMA 2 — Scorecard visível para todos sem validação prévia:
+ *   A aba "Scorecard do Gestor" aparecia para qualquer usuário com permissão `avaliacao_cliente`.
+ *   Pedido: manter invisível para todos exceto Admin Master até que o módulo esteja validado.
+ *   Fix: nova coluna `companies.scorecard_beta_ativo SMALLINT DEFAULT 0`.
+ *   `canViewTab("scorecard")` retorna false para não-Admin-Master quando a flag é 0.
+ *   Toggle disponível em Configurações → "Configurações por Módulo" → "Scorecard do Gestor".
+ *
+ * ARQUIVOS:
+ *   server/routers/scorecard.ts — bônus llParaBonus + getScorecardBetaAtivo + setScorecardBetaAtivo
+ *   server/_core/index.ts — SyncSchema+: companies.scorecard_beta_ativo
+ *   client/src/pages/planejamento/PlanejamentoDetalhe.tsx — canViewTab gate + useCompany movido
+ *   client/src/pages/configuracoes/ScorecardBetaConfigSection.tsx — novo componente de toggle
+ *   client/src/pages/Configuracoes.tsx — import + render de ScorecardBetaConfigSection
+ *   shared/version.ts — Rev. 4209
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4208 - SCORECARD RH/FOLHA: FIX SEGURO DE VIDA (R$0→real) + VR/VA DOUBLE-COUNT + PONTO COMO FALLBACK DE DIAS.
  *
  * PROBLEMA 1 — Seguro de Vida mostrava R$0:
