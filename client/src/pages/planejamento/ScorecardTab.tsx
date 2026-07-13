@@ -257,7 +257,14 @@ export default function ScorecardTab({ proj }: { proj: any }) {
   );
 
   const utils = trpc.useUtils();
-  const refetch = () => { utils.scorecard.getScore.invalidate(); utils.scorecard.ferramentasList.invalidate(); };
+  const refetch = () => {
+    utils.scorecard.getScore.invalidate();
+    utils.scorecard.ferramentasList.invalidate();
+    utils.scorecard.getMetasDesvios.invalidate();
+    utils.scorecard.getAnalise.invalidate();
+    utils.scorecard.getSeguranca.invalidate();
+    utils.scorecard.getCustosRH.invalidate();
+  };
 
   const deleteRetrabalho = trpc.scorecard.retrabalhoDelete.useMutation({
     onSuccess: () => { toast.success("Retrabalho removido."); refetch(); setDeleteId(null); },

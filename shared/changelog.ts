@@ -1,4 +1,31 @@
 /**
+ * Rev. 4198 - SCORECARD METAS & DESVIOS: QUERY TRI-CAMINHOS PARA DETECTAR ORÇAMENTO VINCULADO.
+ *
+ * MOTIVAÇÃO:
+ * Rev. 4197 adicionou fallback por orcamentoId, mas o bug persistia porque
+ * planejamento_projetos.orcamento_id pode estar NULL e orcamentos.obraId pode não
+ * bater com o obraId do projeto. Era necessário um terceiro caminho via JOIN reverso.
+ *
+ * O QUE FOI FEITO:
+ * 1. Backend (getMetasDesvios): query unificada com OR em 3 caminhos:
+ *    - id = orcamentoId (vínculo explícito do projeto, prio 1)
+ *    - "obraId" = obraId (orçamento vinculado diretamente à obra, prio 2)
+ *    - id IN (SELECT orcamento_id FROM planejamento_projetos WHERE obra_id=obraId)
+ *      (orçamento vinculado via cronograma para essa obra, prio 3)
+ *    ORDER BY garante que o mais específico é retornado primeiro.
+ *
+ * 2. Frontend (ScorecardTab): botão "Atualizar" agora invalida TODOS os caches
+ *    do scorecard (getMetasDesvios, getAnalise, getSeguranca, getCustosRH),
+ *    não apenas getScore e ferramentasList.
+ *
+ * ARQUIVOS:
+ * - server/routers/scorecard.ts (getMetasDesvios: query OR 3 caminhos)
+ * - client/src/pages/planejamento/ScorecardTab.tsx (refetch completo)
+ *
+ * ZERO DELETE · ZERO ALTER DESTRUTIVO.
+ */
+
+/**
  * Rev. 4197 - SCORECARD METAS & DESVIOS: FIX VÍNCULO DIRETO POR orcamentoId.
  *
  * MOTIVAÇÃO:

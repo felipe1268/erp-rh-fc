@@ -1234,29 +1234,38 @@ export const scorecardRouter = router({
         try { const r = await q; return r?.rows ?? []; } catch (e: any) { return []; }
       };
 
-      // Prioridade 1: vínculo direto pelo orcamentoId do projeto
-      // Prioridade 2: fallback por obraId (compatibilidade)
-      const orcRows = orcamentoId
-        ? await safe(db.execute(sql`
-            SELECT id,
-                   "totalCusto"::numeric     AS total_custo,
-                   "totalVenda"::numeric     AS total_venda,
-                   "valorNegociado"::numeric AS valor_negociado,
-                   COALESCE("tempoObraMeses", 12)::int AS tempo_meses
-            FROM orcamentos
-            WHERE id = ${orcamentoId} AND "companyId" = ${companyId} AND deleted_at IS NULL
-            LIMIT 1
-          `))
-        : await safe(db.execute(sql`
-            SELECT id,
-                   "totalCusto"::numeric     AS total_custo,
-                   "totalVenda"::numeric     AS total_venda,
-                   "valorNegociado"::numeric AS valor_negociado,
-                   COALESCE("tempoObraMeses", 12)::int AS tempo_meses
-            FROM orcamentos
-            WHERE "companyId" = ${companyId} AND "obraId" = ${obraId} AND deleted_at IS NULL
-            ORDER BY id DESC LIMIT 1
-          `));
+      // Busca o orçamento por 3 caminhos em ordem de prioridade:
+      // 1. orcamentoId explícito (vínculo direto do projeto)
+      // 2. orcamentos.obraId = obraId (vínculo via obra)
+      // 3. planejamento_projetos.orcamento_id para a mesma obra (vínculo via cronograma)
+      const orcRows = await safe(db.execute(sql`
+        SELECT id,
+               "totalCusto"::numeric     AS total_custo,
+               "totalVenda"::numeric     AS total_venda,
+               "valorNegociado"::numeric AS valor_negociado,
+               COALESCE("tempoObraMeses", 12)::int AS tempo_meses
+        FROM orcamentos
+        WHERE "companyId" = ${companyId}
+          AND deleted_at IS NULL
+          AND (
+            ${orcamentoId ? sql`id = ${orcamentoId}` : sql`FALSE`}
+            OR "obraId" = ${obraId}
+            OR id IN (
+              SELECT orcamento_id FROM planejamento_projetos
+              WHERE obra_id = ${obraId}
+                AND company_id = ${companyId}
+                AND orcamento_id IS NOT NULL
+            )
+          )
+        ORDER BY
+          CASE
+            WHEN ${orcamentoId ? sql`id = ${orcamentoId}` : sql`FALSE`} THEN 1
+            WHEN "obraId" = ${obraId} THEN 2
+            ELSE 3
+          END,
+          id DESC
+        LIMIT 1
+      `));
       if (!orcRows.length) return null;
       const orc = orcRows[0] as any;
       const orcId = orc.id;

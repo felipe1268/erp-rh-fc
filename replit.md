@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4198** — **SCORECARD METAS & DESVIOS: QUERY TRI-CAMINHOS PARA DETECTAR ORÇAMENTO.** Query com OR em 3 caminhos: `id=orcamentoId` (prio 1) | `"obraId"=obraId` (prio 2) | `id IN (SELECT orcamento_id FROM planejamento_projetos WHERE obra_id=obraId)` (prio 3). Botão Atualizar invalida todos os caches do scorecard. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4197** — **SCORECARD METAS & DESVIOS: FIX VÍNCULO POR orcamentoId.** `getMetasDesvios` agora aceita `orcamentoId` opcional e prioriza lookup direto (`WHERE id=orcamentoId`) antes de fallback por `obraId`. Frontend passa `proj.orcamentoId`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4196** — **BANCO DE HORAS: TABELA DIA A DIA REFATORADA COMO TABLE HTML.** Grid CSS causava sobreposição "TRABALHADOJORNADA" em mobile. Substituída por `<table>` com colunas de largura natural + `tabular-nums`. ZERO DELETE · ZERO ALTER destrutivo.
