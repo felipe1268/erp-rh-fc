@@ -1,4 +1,30 @@
 /**
+ * Rev. 4210 - SCORECARD RH/FOLHA: FIX CUSTO MO — PISO = dataInicio DA OBRA.
+ *
+ * PROBLEMA — Custo de mão de obra aparecia em meses ANTERIORES ao início da obra:
+ *   O CTE `site_periods` tinha dois ramos para identificar o período de um funcionário na obra:
+ *   - Ramo A (employee_site_history): usava MIN(dataInicio) sem clipar ao início da obra.
+ *   - Ramo B (obra_funcionarios sem history): usava COALESCE(dataAdmissao, createdAt) como
+ *     periodo_inicio. Para funcionários admitidos há anos (ex: Geraldo desde 2016), isso fazia
+ *     o sistema entender que ele estava na obra desde 2016 → folha de março aparecia na
+ *     REVTE-CIVIL (iniciada em maio/2026) com 31 dias de custo integral.
+ *
+ * FIX — Três mudanças em getCustosRH (server/routers/scorecard.ts):
+ *   1. Novo CTE `obra_inicio`: busca obras.dataInicio para o obraId recebido.
+ *   2. Ramo A: periodo_inicio = GREATEST(MIN(esh.dataInicio), obra.dataInicio).
+ *      Garante que mesmo transferências antigas não antecipem o custo.
+ *   3. Ramo B: troca dataAdmissao por obra_funcionarios.createdAt (= data real de cadastro
+ *      do funcionário nesta obra específica) + GREATEST(..., obra.dataInicio).
+ *      Isso resolve o caso Geraldo: cadastrado na equipe em 11/06 → período começa em 11/06,
+ *      não em 2016.
+ *
+ * RESULTADO: Nenhum funcionário pode gerar custo antes da data de início da obra. Sem exceções.
+ *
+ * ARQUIVOS: server/routers/scorecard.ts (getCustosRH, CTE site_periods, linhas ~1089-1138)
+ * ZERO DELETE · ZERO ALTER destrutivo
+ */
+
+/**
  * Rev. 4209 - SCORECARD: FIX BÔNUS (LL realizado → previsto quando sem custo real) + BETA GATE POR EMPRESA.
  *
  * PROBLEMA 1 — Bônus inflado em obras sem lançamentos financeiros:

@@ -1,3 +1,4 @@
+- [Scorecard MO site_periods floor](scorecard-mo-site-periods-floor.md) — obra_funcionarios fallback usava dataAdmissao (anos atrás) como periodo_inicio → custo retroativo inflado; fix: GREATEST(of2.createdAt, obra.dataInicio) + CTE obra_inicio como piso absoluto em ambos os ramos.
 - [VARCHAR BR decimal cast](varchar-br-decimal-cast.md) — colunas numéricas VARCHAR guardam "680,75" (vírgula BR); `::numeric` direto falha → Promise.all rejeita → UI mostra "Sem dados" silenciosamente. Use `REPLACE(col,',','.')::numeric`.
 - [orcamentos valor_negociado snake_case](orcamentos-valor-negociado-snake.md) — `orcamentos.valorNegociado` tem nome explícito `"valor_negociado"` (snake); safe() engole erros → diagnose silent failures com logging antes de mudar query logic.
 - [Billing module active/inactive toggle](billing-module-active-toggle.md) — isActive (comercializável) ≠ preço; grandfather: desativar módulo nunca revoga de quem já tem, só bloqueia ADICIONAR novo.

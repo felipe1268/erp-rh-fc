@@ -1085,13 +1085,21 @@ export const scorecardRouter = router({
 
       const [r, feriasR, seguroR] = await Promise.all([
         db.execute(sql`
-          WITH site_periods AS (
-            -- Colapsa todos os registros de history do funcionário em UMA faixa por obra:
-            -- início = dia que ele entrou pela primeira vez; fim = último dia registrado
-            -- (se qualquer linha tiver dataFim NULL = ainda ativo, usa CURRENT_DATE)
+          WITH
+          -- Piso absoluto: nenhum custo pode ser anterior à data de início da obra
+          obra_inicio AS (
+            SELECT COALESCE("dataInicio"::date, '2000-01-01'::date) AS data_inicio
+            FROM obras WHERE id = ${input.obraId}
+          ),
+          site_periods AS (
+            -- Ramo A: funcionários com registro formal de transferência/alocação
+            -- periodo_inicio = MAX(primeiro registro na obra, dataInicio da obra)
             SELECT
               esh."employeeId"                                               AS employee_id,
-              MIN(esh."dataInicio"::date)                                    AS periodo_inicio,
+              GREATEST(
+                MIN(esh."dataInicio"::date),
+                (SELECT data_inicio FROM obra_inicio)
+              )                                                              AS periodo_inicio,
               CASE
                 WHEN BOOL_OR(esh."dataFim" IS NULL) THEN CURRENT_DATE
                 ELSE MAX(esh."dataFim"::date)
@@ -1103,20 +1111,24 @@ export const scorecardRouter = router({
 
             UNION ALL
 
+            -- Ramo B: funcionários em obra_funcionarios SEM registro de history
+            -- periodo_inicio = MAX(data que foi cadastrado na obra, dataInicio da obra)
+            -- NÃO usa dataAdmissão (pode ser de anos atrás e infla custo retroativo)
             SELECT
-              e.id AS employee_id,
-              COALESCE(e."dataAdmissao"::date, e."createdAt"::date) AS periodo_inicio,
-              CURRENT_DATE AS periodo_fim
-            FROM employees e
-            WHERE e."companyId" = ${input.companyId}
+              of2."employeeId"                                               AS employee_id,
+              GREATEST(
+                of2."createdAt"::date,
+                (SELECT data_inicio FROM obra_inicio)
+              )                                                              AS periodo_inicio,
+              CURRENT_DATE                                                   AS periodo_fim
+            FROM obra_funcionarios of2
+            JOIN employees e ON e.id = of2."employeeId"
+            WHERE of2."obraId"    = ${input.obraId}
+              AND of2."companyId" = ${input.companyId}
               AND e.status NOT IN ('Desligado','Lista_Negra','Inativo')
-              AND e.id IN (
-                SELECT "employeeId" FROM obra_funcionarios
-                WHERE "obraId" = ${input.obraId} AND "companyId" = ${input.companyId}
-              )
               AND NOT EXISTS (
                 SELECT 1 FROM employee_site_history esh2
-                WHERE esh2."employeeId" = e.id
+                WHERE esh2."employeeId" = of2."employeeId"
                   AND esh2."obraId"     = ${input.obraId}
                   AND esh2."companyId"  = ${input.companyId}
               )
