@@ -54,14 +54,29 @@ function PeriodoDiasTable({ hePeriodId, employeeId }: { hePeriodId: number; empl
     <p className="text-xs text-muted-foreground italic py-1">Nenhum registro de ponto encontrado no período.</p>
   );
   const totalHE = dias.reduce((acc: number, d: any) => acc + (d.heMins || 0), 0);
+  const totalAutorizado = dias.filter((d: any) => d.autorizado).reduce((acc: number, d: any) => acc + (d.heMins || 0), 0);
+  const totalSemAutorizacao = dias.filter((d: any) => !d.autorizado).reduce((acc: number, d: any) => acc + (d.heMins || 0), 0);
   return (
     <div className="rounded border border-gray-100 overflow-hidden text-xs mt-1">
-      <div className="grid grid-cols-[90px_60px_56px_56px_56px_1fr] bg-gray-50 border-b border-gray-200 px-2 py-1 text-[10px] text-muted-foreground font-semibold uppercase tracking-wide gap-2">
+      {/* Legenda de totais por status */}
+      <div className="flex items-center gap-4 px-2 py-1.5 bg-gray-50 border-b border-gray-200 text-[10px]">
+        <span className="flex items-center gap-1 text-green-700 font-semibold">
+          <CheckCircle2 className="h-3 w-3" /> Autorizado: <strong>+{minsToHHMM(totalAutorizado)}</strong>
+        </span>
+        {totalSemAutorizacao > 0 && (
+          <span className="flex items-center gap-1 text-amber-700 font-semibold">
+            <AlertTriangle className="h-3 w-3" /> Sem autorização: <strong>+{minsToHHMM(totalSemAutorizacao)}</strong>
+          </span>
+        )}
+      </div>
+      {/* Cabeçalho da tabela */}
+      <div className="grid grid-cols-[28px_90px_56px_52px_52px_44px_1fr] bg-gray-50 border-b border-gray-200 px-2 py-1 text-[10px] text-muted-foreground font-semibold uppercase tracking-wide gap-1.5">
+        <span title="Status de autorização">Aut.</span>
         <span>Data</span>
         <span className="text-right">Trabalhado</span>
         <span className="text-right">Jornada</span>
         <span className="text-right">HE</span>
-        <span className="text-right">Adicional</span>
+        <span className="text-right">Adic.</span>
         <span>Horários</span>
       </div>
       {dias.map((d: any, i: number) => {
@@ -69,12 +84,25 @@ function PeriodoDiasTable({ hePeriodId, employeeId }: { hePeriodId: number; empl
         const isFeriado = !!d.feriado;
         const isDom = d.diaSemana === "Dom";
         const isSab = d.diaSemana === "Sáb";
-        const rowBg = isFeriado ? "bg-purple-50" : isDom ? "bg-red-50/40" : isSab ? "bg-amber-50/40" : i % 2 === 0 ? "bg-white" : "bg-gray-50/40";
+        const isAutorizado = !!d.autorizado;
+        const rowBg = !isAutorizado
+          ? "bg-amber-50/60"
+          : isFeriado ? "bg-purple-50"
+          : isDom ? "bg-red-50/40"
+          : isSab ? "bg-amber-50/30"
+          : i % 2 === 0 ? "bg-white" : "bg-gray-50/40";
         return (
-          <div key={i} className={`grid grid-cols-[90px_60px_56px_56px_56px_1fr] px-2 py-1.5 gap-2 items-center border-b border-gray-100 last:border-0 ${rowBg}`}>
+          <div key={i} className={`grid grid-cols-[28px_90px_56px_52px_52px_44px_1fr] px-2 py-1.5 gap-1.5 items-center border-b border-gray-100 last:border-0 ${rowBg}`}>
+            {/* Coluna de autorização */}
+            <span title={isAutorizado ? "HE autorizada pelo gestor" : "HE computada sem autorização prévia"}>
+              {isAutorizado
+                ? <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                : <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+              }
+            </span>
             <span className="font-medium text-gray-700 flex items-center gap-1">
               {dataBR}
-              <span className={`text-[10px] font-semibold px-1 py-0.5 rounded ${
+              <span className={`text-[10px] font-semibold px-0.5 rounded ${
                 isFeriado ? "bg-purple-100 text-purple-700" :
                 isDom ? "text-red-500" :
                 isSab ? "text-amber-600" :
@@ -83,14 +111,16 @@ function PeriodoDiasTable({ hePeriodId, employeeId }: { hePeriodId: number; empl
             </span>
             <span className="text-right text-gray-600">{d.trabalhado || "—"}</span>
             <span className="text-right text-gray-500">{d.jornada}</span>
-            <span className="text-right font-semibold text-green-700">+{minsToHHMM(d.heMins)}</span>
+            <span className={`text-right font-semibold ${isAutorizado ? "text-green-700" : "text-amber-600"}`}>
+              +{minsToHHMM(d.heMins)}
+            </span>
             <span className="text-right text-gray-500">{d.percentual}%</span>
             <span className="text-gray-400 truncate">{d.horarios}</span>
           </div>
         );
       })}
-      <div className="grid grid-cols-[90px_60px_56px_56px_56px_1fr] px-2 py-1.5 gap-2 bg-gray-100 border-t border-gray-200 font-semibold text-xs">
-        <span className="text-muted-foreground col-span-3 text-[10px] uppercase">Total</span>
+      <div className="grid grid-cols-[28px_90px_56px_52px_52px_44px_1fr] px-2 py-1.5 gap-1.5 bg-gray-100 border-t border-gray-200 font-semibold text-xs">
+        <span /><span className="text-[10px] text-muted-foreground uppercase col-span-3">Total</span>
         <span className="text-right text-green-700">+{minsToHHMM(totalHE)}</span>
         <span /><span />
       </div>

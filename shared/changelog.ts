@@ -1,4 +1,30 @@
 /**
+ * Rev. 4195 - BANCO DE HORAS: STATUS DE AUTORIZAÇÃO DIA A DIA — ✓ AUTORIZADO vs ⚠ SEM AUTORIZAÇÃO.
+ *
+ * MOTIVAÇÃO:
+ * A tabela de dias mostrava as HEs computadas do ponto, mas sem indicar quais tinham
+ * solicitação de HE aprovada pelo gestor (Art. 59 CLT). O usuário precisa distinguir
+ * HE autorizada vs HE computada sem autorização prévia para avaliar conformidade.
+ *
+ * O QUE FOI FEITO:
+ * 1. Backend (memorialCalculo): nova query busca solicitações de HE aprovadas para
+ *    o funcionário no intervalo do período (JOIN he_solicitacoes × he_solicitacao_funcionarios).
+ *    Cada item do array `dias[]` ganha campo `autorizado: boolean`.
+ *
+ * 2. Frontend (PeriodoDiasTable):
+ *    a. Coluna "Aut." adicionada à esquerda — ✓ verde (autorizado) ou ⚠ âmbar (sem autorização).
+ *    b. Fundo de linha âmbar para dias sem autorização (bg-amber-50/60).
+ *    c. Resumo superior mostra "Autorizado: +XhYY" e "Sem autorização: +XhYY".
+ *    d. HE não autorizada exibida em âmbar (não verde) na coluna HE.
+ *
+ * ARQUIVOS:
+ * - server/routers/horasExtras.ts (memorialCalculo: approvedSet + autorizado por dia)
+ * - client/src/pages/BancoHoras.tsx (PeriodoDiasTable: coluna Aut. + cores)
+ *
+ * ZERO DELETE · ZERO ALTER DESTRUTIVO.
+ */
+
+/**
  * Rev. 4194 - BANCO DE HORAS: TABELA DIA A DIA SEMPRE ABERTA + DIA DA SEMANA COLORIDO + FERIADO MARCADO.
  *
  * MOTIVAÇÃO:

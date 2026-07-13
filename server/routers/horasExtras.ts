@@ -450,6 +450,25 @@ export const horasExtrasRouter = router({
       );
       const feriadosIdx = indexFeriadosObservados(feriadosOcorr);
 
+      // Solicitações de HE aprovadas para este funcionário no período
+      const apprRows = ((await db.execute(sql`
+        SELECT s."dataSolicitacao"
+        FROM he_solicitacoes s
+        JOIN he_solicitacao_funcionarios sf ON sf."solicitacaoId" = s.id
+        WHERE s."companyId" = ${Number(period.companyId)}
+          AND sf."employeeId" = ${input.employeeId}
+          AND s.status = 'aprovada'
+          AND s."dataSolicitacao" >= ${dataIniStr}::date
+          AND s."dataSolicitacao" <= ${dataFimStr}::date
+      `)) as any).rows || [];
+      const approvedSet = new Set<string>();
+      for (const r of apprRows) {
+        const d = r.dataSolicitacao instanceof Date
+          ? r.dataSolicitacao.toISOString().slice(0, 10)
+          : String(r.dataSolicitacao).slice(0, 10);
+        approvedSet.add(d);
+      }
+
       const dias: any[] = [];
       const diasAtraso: any[] = [];
       let totalHEUtilGrossMins = 0;
@@ -505,6 +524,7 @@ export const horasExtrasRouter = router({
           feriado: isFeriado,
           obra: r.obraNome || null,
           cidade: r.obraCidade || null,
+          autorizado: approvedSet.has(dateStr),
         });
       }
 
