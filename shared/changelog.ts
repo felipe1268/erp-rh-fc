@@ -1,4 +1,37 @@
 /**
+ * Rev. 4190 - BANCO DE HORAS: HISTÓRICO INTERATIVO POR FUNCIONÁRIO COM FOTO E STATUS DE AUTORIZAÇÃO.
+ *
+ * MOTIVAÇÃO:
+ * O usuário precisava clicar no nome do funcionário e ver de onde veio cada minuto do banco de horas,
+ * em qual dia foi registrado, se está ou não autorizado — e ver a foto de cada colaborador na lista.
+ *
+ * O QUE FOI FEITO:
+ * 1. Foto (PersonPhoto xs) adicionada em CADA linha da tabela de Saldos.
+ *    Fallback automático com iniciais quando não há foto cadastrada.
+ *
+ * 2. Clique no nome (ou no botão "Histórico") abre um DIALOG modal com:
+ *    — Foto grande (lg) + nome + cargo + saldo atual + movimento do mês no cabeçalho.
+ *    — Tabela scrollável com até 100 lançamentos, cada um com:
+ *        • Data do lançamento
+ *        • Período HE: mês de referência + intervalo de datas (ex.: "Maio 2026 (15/04→15/05)")
+ *        • Tipo: badge colorido (+ Crédito / − Débito / Ajuste)
+ *        • HE Realizada: total de horas trabalhadas (heUtil/heFim quando disponível)
+ *        • Creditado: valor que entrou/saiu do banco
+ *        • Autorização: ✓ Autorizado (período aprovado), ⏳ Em análise (calculado),
+ *          ou — Manual (débito/ajuste sem período vinculado)
+ *        • Registrado por + descrição resumida
+ *
+ * 3. Backend getLancamentos enriquecido com JOIN em he_periods e he_period_employees:
+ *    — periodoMesRef, periodoDataInicio, periodoDataFim, periodoStatus (aprovado/calculado/etc.)
+ *    — destinacaoHE (banco_horas/pagamento), heTotalMins, heUtilMins, heFimMins
+ *
+ * 4. getSaldoBancoMensal agora inclui e."fotoUrl" no SELECT (necessário p/ foto na linha).
+ *
+ * ARQUIVOS: server/routers/horasExtras.ts, client/src/pages/BancoHoras.tsx.
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4189 - BANCO DE HORAS: FIX CRÍTICO — LANÇAMENTOS NUNCA ERAM GRAVADOS + BACKFILL AUTOMÁTICO.
  *
  * CAUSA-RAIZ:

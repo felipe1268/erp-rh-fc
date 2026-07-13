@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4190** — **BANCO DE HORAS: HISTÓRICO INTERATIVO COM FOTO E STATUS DE AUTORIZAÇÃO.** Foto (PersonPhoto xs) em cada linha da tabela de Saldos; clique no nome abre Dialog modal com foto grande + saldo + tabela rica de lançamentos: período HE, tipo (badge), HE Realizada (util/fim), Creditado, Autorização (✓ Autorizado / ⏳ Em análise / — Manual). Backend getLancamentos enriquecido com JOIN em `he_periods`+`he_period_employees`; `getSaldoBancoMensal` inclui `fotoUrl`. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4189** — **BANCO DE HORAS: FIX CRÍTICO — LANÇAMENTOS NUNCA ERAM GRAVADOS + BACKFILL AUTOMÁTICO.** `String(period.dataFim).slice(0,10)` gerava `"Fri May 15"` (Date object, não string ISO) → `"Fri May 15"::date` falha no Postgres → lancamentos nunca gravados, tela vazia. Fix: helper `toDateStr` com `instanceof Date ? .toISOString() : String()`. Backfill no SyncSchema+: detecta períodos aprovados sem lancamentos e reinssere com crédito ×1.5; 53 lancamentos recuperados para período mai/2026. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4188** — **SCORECARD: FIX MULTI-ABA — ORÇAMENTO, SEGURANÇA, RH E METAS & DESVIOS RETORNAVAM VAZIO.** Causa-raiz: `orcamentos`/`orcamento_itens`/`employees`/`obra_funcionarios` usam colunas camelCase (`"companyId"`, `"obraId"`, `"nomeCompleto"`, `"dataAdmissao"`, `"createdAt"`) mas as queries usavam snake_case, resultando em "column does not exist" silencioso. Fixes: (1) `getScore` — raw SQL com aspas duplas para orcamento (financeiro.valorContrato=0 resolvido); (2) `getMetasDesvios` — `company_id`/`obra_id`/`total_custo` → `"companyId"`/`"obraId"`/`"totalCusto"` etc.; (3) `getSeguranca` Q1/Q3/Q4/Q6 — subquery em `obra_funcionarios` com `"obraId"/"employeeId"` + `e."nomeCompleto"`; (4) `getCustosRH` UNION ALL — mesmos fixes + `"dataAdmissao"`/`"createdAt"`; (5) `ScorecardTab` — `getAnalise` enabled também em tabScore===operacional. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4188** — **SCORECARD: FIX MULTI-ABA — ORÇAMENTO, SEGURANÇA, RH E METAS & DESVIOS RETORNAVAM VAZIO.** camelCase columns em `orcamentos`/`obra_funcionarios`/`employees` causavam "column does not exist" silencioso. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4187** — **SCORECARD: SUB-ABA "BANCO DE HORAS" NA ABA RH + FIX RETRY iOS WEBKIT.** Aba RH dividida em sub-abas Folha/Banco de Horas. Fix retry 3× backoff iOS WebKit. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4185** — **SCORECARD: ABA "👥 RH / FOLHA" + BACKEND getMetasDesvios.** `getCustosRH` procedure com fracionação proporcional por dias de obra. `getMetasDesvios` procedure. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4184** — **SCORECARD: ABA SEGURANÇA — QUADRO CLT/TERCEIROS, ASO, TREINAMENTOS, ADVERTÊNCIAS E EPI.** `getSeguranca` procedure — 7 queries. KPIs + quadros + Curva ABC EPI. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4183** — **SCORECARD: PAINEL ANÁLISE GERENCIAL DA OBRA (CURVA ABC, RECOMPRAS, FERRAMENTAS, LOCAÇÕES).** `getAnalise` — 6 queries. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

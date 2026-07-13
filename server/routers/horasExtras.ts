@@ -1166,7 +1166,7 @@ export const horasExtrasRouter = router({
             AND date_trunc('month', bhl.data) = make_date(${input.ano}::int, ${input.mes}::int, 1)
           GROUP BY bhl."employeeId"
         )
-        SELECT e.id AS "employeeId", e."nomeCompleto", e.funcao,
+        SELECT e.id AS "employeeId", e."nomeCompleto", e.funcao, e."fotoUrl",
           COALESCE(a.saldo, 0)::int AS "saldoMinutos",
           COALESCE(m.movimento, 0)::int AS "movimentoMesMinutos",
           m."ultimoLancamento"
@@ -1196,17 +1196,34 @@ export const horasExtrasRouter = router({
       return rows;
     }),
 
-  // Get lancamentos history for a specific employee
+  // Get lancamentos history for a specific employee — Rev. 4190: enriquecido com
+  // dados do período HE (autorização, período de referência, destinação individual).
   getLancamentos: protectedProcedure
     .input(z.object({ employeeId: z.number(), companyId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
       const rows = ((await db.execute(sql`
-        SELECT * FROM banco_horas_lancamentos
-        WHERE "employeeId" = ${input.employeeId} AND "companyId" = ${input.companyId}
-        ORDER BY data DESC, "criadoEm" DESC
-        LIMIT 50
+        SELECT
+          bhl.id, bhl."employeeId", bhl."companyId", bhl."hePeriodId",
+          bhl.tipo, bhl.minutos, bhl.descricao, bhl."criadoPor", bhl."criadoEm", bhl.data,
+          hp."mesReferencia"    AS "periodoMesRef",
+          hp."dataInicio"       AS "periodoDataInicio",
+          hp."dataFim"          AS "periodoDataFim",
+          hp.status             AS "periodoStatus",
+          hpe."destinacao"      AS "destinacaoHE",
+          hpe."heTotalMins"     AS "heTotalMins",
+          hpe."heUtilMins"      AS "heUtilMins",
+          hpe."heFimMins"       AS "heFimMins"
+        FROM banco_horas_lancamentos bhl
+        LEFT JOIN he_periods hp  ON hp.id  = bhl."hePeriodId"
+        LEFT JOIN he_period_employees hpe
+               ON hpe."hePeriodId" = bhl."hePeriodId"
+              AND hpe."employeeId" = bhl."employeeId"
+        WHERE bhl."employeeId" = ${input.employeeId}
+          AND bhl."companyId"  = ${input.companyId}
+        ORDER BY bhl.data DESC, bhl."criadoEm" DESC
+        LIMIT 100
       `)) as any).rows || [];
       return rows;
     }),
