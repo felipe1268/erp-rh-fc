@@ -50,9 +50,11 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4217** — **REGRA DE OURO GRAVADA: SELETOR DE MÊS/ANO → SEMPRE `<PeriodSelectorCard>`.** Substituído seletor inline customizado da aba Segurança pelo componente padrão. `segMes: string → number | null`. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4218** — **SCORECARD SEGURANÇA: LEGENDA + monthStatus + TABELA COMPARATIVA + 4 GRÁFICOS.** PeriodSelectorCard agora suporta 3 estados de bolinha (azul/verde/cinza) + prop `showLegend`. Seletor Segurança ganhou bolinhas por mês e legenda. Tabela comparativa mês anterior × atual com ▲/▼ colorido (verde=melhora, vermelho=piora). 4 gráficos 2×2: DDS · Atestados · Acidentes · Dias Afastamento. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4216** — **SCORECARD: SEGURANÇA — GRADE CLT COM STATUS COMPLETO, DESLIGADOS VISÍVEIS, CIPA E PERÍODO DE EXPERIÊNCIA.** Root-cause das fotos ausentes: filtro `status NOT IN ('Desligado',...)` escondia desligados com foto. Q1 sem filtro. Novos campos: periodo_experiencia, cargo_cipa. Badges: Status · Exp. 1º/2º · CIPA · ASO · Advertências. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4217** — **REGRA DE OURO GRAVADA: SELETOR DE MÊS/ANO → SEMPRE `<PeriodSelectorCard>`.** `segMes: string → number | null`. ZERO DELETE · ZERO ALTER destrutivo.
+
+- **Rev. 4216** — **SCORECARD: SEGURANÇA — GRADE CLT COM STATUS, DESLIGADOS VISÍVEIS, CIPA, PERÍODO EXPERIÊNCIA.** Q1 sem filtro status. Badges: Status · Exp. 1º/2º · CIPA · ASO · Advertências. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 

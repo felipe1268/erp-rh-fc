@@ -2,6 +2,8 @@ import { ChevronLeft, ChevronRight, CalendarRange } from "lucide-react";
 
 const MESES_SHORT = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
+export type MonthDotStatus = "data" | "consolidated" | "none";
+
 interface PeriodSelectorCardProps {
   ano: number;
   /** null = "Ano todo" selecionado (só aparece se `onAnoTodo` for informado) */
@@ -14,23 +16,55 @@ interface PeriodSelectorCardProps {
   actions?: React.ReactNode;
   className?: string;
   /**
-   * Status por mês (1–12). "data" = mostra ponto azul; ausente/undefined = ponto cinza.
-   * Quando informado, todos os 12 meses recebem um ponto colorido indicando presença de dados.
+   * Status por mês (1–12).
+   * "data"        → ponto azul  (com lançamento)
+   * "consolidated"→ ponto verde (consolidado/encerrado)
+   * "none"        → ponto cinza (sem dados)
+   * Quando informado, todos os 12 meses recebem um ponto colorido.
    */
-  monthStatus?: Record<number, "data" | "none">;
+  monthStatus?: Record<number, MonthDotStatus>;
+  /** Mostra linha de legenda das bolinhas no cabeçalho (direita). Requer monthStatus. */
+  showLegend?: boolean;
+}
+
+function DotLegend() {
+  return (
+    <div className="flex items-center gap-3 text-[9px] text-gray-400 select-none">
+      <span className="flex items-center gap-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block flex-shrink-0" />
+        Com lançamento
+      </span>
+      <span className="flex items-center gap-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block flex-shrink-0" />
+        Consolidado
+      </span>
+      <span className="flex items-center gap-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-gray-300 inline-block flex-shrink-0" />
+        Sem dados
+      </span>
+    </div>
+  );
 }
 
 /**
- * Seletor de período padrão do sistema (Rev. 4126): navegação de ano + 12 meses em
- * pills + botão opcional "Ano todo" (mes=null) para telas que suportam visão anual.
+ * Seletor de período padrão do sistema (Rev. 4126 → Rev. 4218):
+ * navegação de ano + 12 meses em pills + botão opcional "Ano todo" (mes=null).
+ * Pontos coloridos opcionais por mês: azul=dados, verde=consolidado, cinza=vazio.
  */
 export default function PeriodSelectorCard({
-  ano, mes, onAno, onMes, onAnoTodo, actions, className, monthStatus,
+  ano, mes, onAno, onMes, onAnoTodo, actions, className, monthStatus, showLegend,
 }: PeriodSelectorCardProps) {
   const anoTodoSelecionado = mes === null;
+
+  const dotColor = (status: MonthDotStatus | undefined) => {
+    if (status === "data")        return "bg-blue-500";
+    if (status === "consolidated") return "bg-green-500";
+    return "bg-gray-300";
+  };
+
   return (
     <div className={`rounded-2xl border border-slate-200 shadow-sm bg-white overflow-hidden ${className ?? ""}`}>
-      <div className="px-4 py-3 flex items-center gap-2 border-b border-slate-100">
+      <div className="px-4 py-3 flex items-center gap-2 border-b border-slate-100 flex-wrap">
         <div className="flex items-center gap-1">
           <button
             type="button"
@@ -64,6 +98,12 @@ export default function PeriodSelectorCard({
             Ano todo
           </button>
         )}
+        {/* Legenda automática das bolinhas */}
+        {showLegend && monthStatus && (
+          <div className="flex-1 flex items-center justify-end">
+            <DotLegend />
+          </div>
+        )}
         {actions && (
           <div className="flex-1 flex items-center justify-end gap-1.5">{actions}</div>
         )}
@@ -72,6 +112,7 @@ export default function PeriodSelectorCard({
         {MESES_SHORT.map((m, i) => {
           const numMes = i + 1;
           const isSelected = mes === numMes;
+          const dot = monthStatus?.[numMes];
           return (
             <button
               key={m}
@@ -84,8 +125,8 @@ export default function PeriodSelectorCard({
                 }`}
             >
               {m}
-              {monthStatus && (
-                <span className={`w-1.5 h-1.5 rounded-full ${monthStatus[numMes] === "data" ? "bg-blue-500" : "bg-gray-300"}`} />
+              {monthStatus !== undefined && (
+                <span className={`w-1.5 h-1.5 rounded-full ${dotColor(dot)}`} />
               )}
             </button>
           );

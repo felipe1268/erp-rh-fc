@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import PeriodSelectorCard from "@/components/PeriodSelectorCard";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -259,6 +259,19 @@ export default function ScorecardTab({ proj }: { proj: any }) {
     { companyId, obraId: obraId!, mesRef: segMesRef },
     { enabled: enabled && tabScore === "seguranca", staleTime: 120_000 }
   );
+  // monthStatus para o PeriodSelectorCard — bolinhas azuis nos meses com dados
+  const segMonthStatus = useMemo(() => {
+    const hist: any[] = analiseSeguranca.data?.historico ?? [];
+    const result: Record<number, "data" | "consolidated" | "none"> = {};
+    hist.forEach((h) => {
+      const [y, m] = String(h.mes ?? "").split("-");
+      if (parseInt(y) !== segAno) return;
+      const numMes = parseInt(m);
+      const hasData = parseInt(String(h.atestados ?? 0)) > 0 || parseInt(String(h.dds ?? 0)) > 0 || parseInt(String(h.acidentes ?? 0)) > 0;
+      result[numMes] = hasData ? "data" : "none";
+    });
+    return result;
+  }, [analiseSeguranca.data, segAno]);
   const rhMesInicio = rhMes === "all" ? `${rhAno}-01` : `${rhAno}-${rhMes}`;
   const rhMesFim    = rhMes === "all" ? `${rhAno}-12` : `${rhAno}-${rhMes}`;
   const analiseRH = trpc.scorecard.getCustosRH.useQuery(
@@ -1395,6 +1408,8 @@ export default function ScorecardTab({ proj }: { proj: any }) {
             onAno={setSegAno}
             onMes={setSegMes}
             onAnoTodo={() => setSegMes(null)}
+            monthStatus={segMonthStatus}
+            showLegend
           />
 
           {analiseSeguranca.isLoading ? (
@@ -1412,14 +1427,32 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                 const chartData = (d.historico ?? []).map((h: any) => {
                   const [y, mm] = String(h.mes ?? "").split("-");
                   return {
-                    mes: `${MESES_BR[parseInt(mm ?? "1") - 1]}/${String(y ?? "").slice(2)}`,
+                    mesKey    : String(h.mes ?? ""),
+                    mes       : `${MESES_BR[parseInt(mm ?? "1") - 1]}/${String(y ?? "").slice(2)}`,
                     atestados : parseInt(String(h.atestados ?? 0)),
                     dds       : parseInt(String(h.dds ?? 0)),
                     acidentes : parseInt(String(h.acidentes ?? 0)),
+                    dias_ates : parseInt(String(h.dias_ates ?? 0)),
                     custo_ates: parseFloat(String(h.custo_ates ?? 0)),
                   };
                 });
                 const hasData = chartData.some(h => h.atestados > 0 || h.dds > 0 || h.acidentes > 0);
+                // ── Comparativo mês atual × mês anterior ──
+                const curMesKey  = segMes !== null ? `${segAno}-${String(segMes).padStart(2, "0")}` : null;
+                const prevDate   = segMes !== null ? new Date(segAno, segMes - 2, 1) : null;
+                const prevMesKey = prevDate ? `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}` : null;
+                const curH  = curMesKey  ? chartData.find(c => c.mesKey === curMesKey)  : null;
+                const prevH = prevMesKey ? chartData.find(c => c.mesKey === prevMesKey) : null;
+                const prevLabel = prevMesKey ? `${MESES_BR[parseInt(prevMesKey.split("-")[1]) - 1]}/${prevMesKey.split("-")[0].slice(2)}` : "—";
+                const curLabel  = curMesKey  ? `${MESES_BR[parseInt(curMesKey.split("-")[1])  - 1]}/${curMesKey.split("-")[0].slice(2)}`  : "—";
+                type CompRow = { label: string; prev: number | string; cur: number | string; higherIsBetter: boolean; isMonetary?: boolean };
+                const compRows: CompRow[] = curH ? [
+                  { label: "DDS Realizados",      prev: prevH?.dds ?? 0,       cur: curH.dds,       higherIsBetter: true  },
+                  { label: "Atestados",            prev: prevH?.atestados ?? 0, cur: curH.atestados, higherIsBetter: false },
+                  { label: "Dias Afastamento",     prev: prevH?.dias_ates ?? 0, cur: curH.dias_ates, higherIsBetter: false },
+                  { label: "Acidentes",            prev: prevH?.acidentes ?? 0, cur: curH.acidentes, higherIsBetter: false },
+                  { label: "Custo Atestados (R$)", prev: prevH?.custo_ates ?? 0,cur: curH.custo_ates,higherIsBetter: false, isMonetary: true },
+                ] : [];
 
                 return (
                   <>
@@ -1476,36 +1509,117 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                       </div>
                     )}
 
-                    {/* ── LINHA 4: Gráficos de tendência ─────────────────────── */}
+                    {/* ── COMPARATIVO: mês atual × mês anterior ───────────── */}
+                    {compRows.length > 0 && (
+                      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+                        <div className="px-3 py-1.5 bg-gray-50 border-b border-gray-100 flex items-center gap-1.5">
+                          <Activity className="w-3 h-3 text-gray-400" />
+                          <p className="text-[9px] font-bold uppercase tracking-wide text-gray-500">
+                            Comparativo: {prevLabel} → {curLabel}
+                          </p>
+                        </div>
+                        <table className="w-full text-[9px]">
+                          <thead>
+                            <tr className="text-gray-400 border-b border-gray-100">
+                              <th className="text-left px-3 py-1 font-semibold">Indicador</th>
+                              <th className="text-center px-2 py-1 font-semibold">{prevLabel}</th>
+                              <th className="text-center px-2 py-1 font-semibold">{curLabel}</th>
+                              <th className="text-center px-2 py-1 font-semibold">Δ</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {compRows.map((row, ri) => {
+                              const pv  = typeof row.prev === "number" ? row.prev : 0;
+                              const cv  = typeof row.cur  === "number" ? row.cur  : 0;
+                              const delta = cv - pv;
+                              const up  = delta > 0;
+                              const eq  = delta === 0;
+                              const good = eq ? null : (up === row.higherIsBetter);
+                              const deltaColor = eq ? "text-gray-400" : good ? "text-green-600" : "text-red-600";
+                              const fmtV = (v: number) => row.isMonetary ? fmt(v) : String(v);
+                              return (
+                                <tr key={ri} className={`border-b border-gray-50 ${ri % 2 === 0 ? "" : "bg-gray-50/50"}`}>
+                                  <td className="px-3 py-1.5 font-semibold text-gray-700">{row.label}</td>
+                                  <td className="px-2 py-1.5 text-center text-gray-500">{fmtV(pv)}</td>
+                                  <td className="px-2 py-1.5 text-center font-bold text-gray-800">{fmtV(cv)}</td>
+                                  <td className={`px-2 py-1.5 text-center font-bold ${deltaColor}`}>
+                                    {eq ? "—" : (
+                                      <span className="flex items-center justify-center gap-0.5">
+                                        {up ? "▲" : "▼"} {fmtV(Math.abs(delta))}
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                        <p className="text-[8px] text-gray-300 px-3 py-1">▲ verde = melhora · ▲ vermelho = piora (conforme direção esperada do indicador)</p>
+                      </div>
+                    )}
+
+                    {/* ── LINHA 4: Gráficos de tendência (4 gráficos 2×2) ──── */}
                     {hasData && (
                       <div className="grid grid-cols-2 gap-2">
-                        {/* Gráfico: Atestados por mês */}
+                        {/* Gráfico 1: DDS */}
                         <div className="bg-white border border-gray-100 rounded-xl px-2 pt-2 pb-1">
-                          <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wide mb-1">Atestados / Mês</p>
-                          <ResponsiveContainer width="100%" height={90}>
-                            <BarChart data={chartData} barSize={10} margin={{ top: 0, right: 2, left: -22, bottom: 0 }}>
-                              <XAxis dataKey="mes" tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                              <YAxis tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} allowDecimals={false} />
-                              <RcTooltip contentStyle={{ fontSize: 10 }} formatter={(v: any) => [v, "Atestados"]} />
-                              <Bar dataKey="atestados" radius={[2, 2, 0, 0]}>
-                                {chartData.map((_: any, i: number) => (
-                                  <Cell key={i} fill={chartData[i].atestados > 0 ? "#f59e0b" : "#e5e7eb"} />
-                                ))}
-                              </Bar>
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                        {/* Gráfico: DDS por mês */}
-                        <div className="bg-white border border-gray-100 rounded-xl px-2 pt-2 pb-1">
-                          <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wide mb-1">DDS / Mês</p>
-                          <ResponsiveContainer width="100%" height={90}>
+                          <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wide mb-1">DDS Realizados / Mês</p>
+                          <ResponsiveContainer width="100%" height={80}>
                             <BarChart data={chartData} barSize={10} margin={{ top: 0, right: 2, left: -22, bottom: 0 }}>
                               <XAxis dataKey="mes" tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
                               <YAxis tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} allowDecimals={false} />
                               <RcTooltip contentStyle={{ fontSize: 10 }} formatter={(v: any) => [v, "DDS"]} />
                               <Bar dataKey="dds" radius={[2, 2, 0, 0]}>
-                                {chartData.map((_: any, i: number) => (
-                                  <Cell key={i} fill={chartData[i].dds > 0 ? "#16a34a" : "#e5e7eb"} />
+                                {chartData.map((cd: any, i: number) => (
+                                  <Cell key={i} fill={cd.dds > 0 ? "#16a34a" : "#e5e7eb"} />
+                                ))}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                        {/* Gráfico 2: Atestados */}
+                        <div className="bg-white border border-gray-100 rounded-xl px-2 pt-2 pb-1">
+                          <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wide mb-1">Atestados / Mês</p>
+                          <ResponsiveContainer width="100%" height={80}>
+                            <BarChart data={chartData} barSize={10} margin={{ top: 0, right: 2, left: -22, bottom: 0 }}>
+                              <XAxis dataKey="mes" tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                              <YAxis tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                              <RcTooltip contentStyle={{ fontSize: 10 }} formatter={(v: any) => [v, "Atestados"]} />
+                              <Bar dataKey="atestados" radius={[2, 2, 0, 0]}>
+                                {chartData.map((cd: any, i: number) => (
+                                  <Cell key={i} fill={cd.atestados > 0 ? "#f59e0b" : "#e5e7eb"} />
+                                ))}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                        {/* Gráfico 3: Acidentes */}
+                        <div className="bg-white border border-gray-100 rounded-xl px-2 pt-2 pb-1">
+                          <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wide mb-1">Acidentes / Mês</p>
+                          <ResponsiveContainer width="100%" height={80}>
+                            <BarChart data={chartData} barSize={10} margin={{ top: 0, right: 2, left: -22, bottom: 0 }}>
+                              <XAxis dataKey="mes" tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                              <YAxis tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                              <RcTooltip contentStyle={{ fontSize: 10 }} formatter={(v: any) => [v, "Acidentes"]} />
+                              <Bar dataKey="acidentes" radius={[2, 2, 0, 0]}>
+                                {chartData.map((cd: any, i: number) => (
+                                  <Cell key={i} fill={cd.acidentes > 0 ? "#dc2626" : "#e5e7eb"} />
+                                ))}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                        {/* Gráfico 4: Dias de Afastamento */}
+                        <div className="bg-white border border-gray-100 rounded-xl px-2 pt-2 pb-1">
+                          <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wide mb-1">Dias Afastamento / Mês</p>
+                          <ResponsiveContainer width="100%" height={80}>
+                            <BarChart data={chartData} barSize={10} margin={{ top: 0, right: 2, left: -22, bottom: 0 }}>
+                              <XAxis dataKey="mes" tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                              <YAxis tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                              <RcTooltip contentStyle={{ fontSize: 10 }} formatter={(v: any) => [v, "Dias"]} />
+                              <Bar dataKey="dias_ates" radius={[2, 2, 0, 0]}>
+                                {chartData.map((cd: any, i: number) => (
+                                  <Cell key={i} fill={cd.dias_ates > 0 ? "#9333ea" : "#e5e7eb"} />
                                 ))}
                               </Bar>
                             </BarChart>

@@ -1,4 +1,26 @@
 /**
+ * Rev. 4218 - SCORECARD SEGURANÇA: LEGENDA + monthStatus NO SELETOR + TABELA COMPARATIVA + 4 GRÁFICOS.
+ *
+ * MELHORIA — Solicitado pelo usuário: (1) indicadores de dados nas bolinhas do seletor com legenda,
+ * (2) tabela mês atual × mês anterior com setas de tendência, (3) 4 gráficos em grade 2×2.
+ *
+ * PeriodSelectorCard (client/src/components/PeriodSelectorCard.tsx):
+ *   • Tipo `monthStatus` expandido: "data" (azul) | "consolidated" (verde) | "none" (cinza).
+ *   • Novo prop `showLegend`: exibe linha "● Com lançamento · ● Consolidado · ● Sem dados" no cabeçalho.
+ *   • Componente interno `DotLegend` reutilizável.
+ *
+ * ScorecardTab.tsx — aba Segurança:
+ *   • `useMemo` importado; `segMonthStatus` calculado a partir de `analiseSeguranca.data?.historico`.
+ *   • `<PeriodSelectorCard ... monthStatus={segMonthStatus} showLegend />`.
+ *   • `chartData` ganhou campos `mesKey` (para match) e `dias_ates`.
+ *   • Lógica de comparativo: `curH`/`prevH`/`compRows` com `higherIsBetter` por indicador.
+ *   • Tabela comparativa: Indicador | Mês Anterior | Mês Atual | Δ com ▲/▼ verde/vermelho.
+ *     - DDS: ▲ = bom (verde); Atestados/Acidentes/Dias/Custo: ▲ = ruim (vermelho).
+ *   • 4 gráficos 2×2: DDS (verde) · Atestados (âmbar) · Acidentes (vermelho) · Dias Afastamento (roxo).
+ *   • ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4217 - REGRA DE OURO: SELETOR DE MÊS/ANO — PADRONIZAÇÃO PARA PeriodSelectorCard EM TODA A PLATAFORMA.
  *
  * MELHORIA — Usuário definiu regra de ouro: todo seletor de período (mês/ano) deve usar o componente
