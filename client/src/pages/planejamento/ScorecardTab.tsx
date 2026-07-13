@@ -2195,66 +2195,152 @@ export default function ScorecardTab({ proj }: { proj: any }) {
 
               {/* ─── Sub-aba: Ferramentas Almox ─── */}
               {abaAnalise === "ferramentas" && (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {analise.data.ferramentasAlmox.length === 0 ? (
                     <p className="text-xs text-gray-400 text-center py-4">Nenhuma ferramenta cadastrada no almox desta obra.</p>
                   ) : (
-                    <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
-                      {analise.data.ferramentasAlmox.map((f: any, i: number) => {
-                        const qtdAlmox = parseFloat(String(f.quantidade_atual ?? 0));
-                        const emUso    = parseInt(String(f.em_uso_cnt ?? 0));
-                        const suspeita = f.suspeita_desvio === true || f.suspeita_desvio === "true";
-                        return (
-                          <div key={i} className={`rounded border px-2.5 py-2 text-xs ${suspeita ? "border-red-200 bg-red-50" : emUso > 0 ? "border-indigo-100 bg-indigo-50" : "border-gray-100 bg-gray-50"}`}>
-                            <div className="flex items-center gap-2">
-                              <span className="flex-1 font-medium text-gray-800 truncate">{f.nome}</span>
-                              {suspeita  ? <Badge className="bg-red-100 text-red-700 text-[9px]">⚠ Possível Desvio</Badge>
-                               : emUso > 0 ? <Badge className="bg-indigo-100 text-indigo-700 text-[9px]">Em Uso</Badge>
-                               : qtdAlmox > 0 ? <Badge className="bg-green-100 text-green-700 text-[9px]">No Almox</Badge>
-                               : <Badge className="bg-gray-100 text-gray-500 text-[9px]">Zerado</Badge>}
+                    <>
+                      <p className="text-[10px] text-gray-400">{analise.data.ferramentasAlmox.length} item(s) · toque para ampliar</p>
+                      <div className="space-y-2">
+                        {analise.data.ferramentasAlmox.map((f: any, i: number) => {
+                          const qtdAlmox  = parseFloat(String(f.quantidade_atual ?? 0));
+                          const emUso     = parseInt(String(f.em_uso_cnt ?? 0));
+                          const suspeita  = f.suspeita_desvio === true || f.suspeita_desvio === "true";
+                          const ehProprio = f.equipamento_vinculado_tipo === "proprio";
+                          const ehLocado  = f.equipamento_vinculado_tipo === "locado";
+                          const borderCls = suspeita ? "border-red-200 bg-red-50" : emUso > 0 ? "border-indigo-100 bg-indigo-50/60" : "border-gray-200 bg-white";
+                          return (
+                            <div key={i} className={`rounded-xl border ${borderCls} overflow-hidden`}>
+                              <div className="flex gap-3 p-3">
+                                {/* Foto / placeholder */}
+                                <div className="flex-shrink-0 w-14 h-14 rounded-lg overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center">
+                                  {f.foto_url
+                                    ? <img src={f.foto_url} alt={f.nome} className="w-full h-full object-cover" />
+                                    : <Wrench className="w-6 h-6 text-gray-300" />}
+                                </div>
+                                {/* Dados */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex flex-wrap items-start gap-1 mb-1">
+                                    <span className="font-semibold text-[11px] text-gray-900 break-words">{f.nome}</span>
+                                    <div className="flex flex-wrap gap-1 ml-auto">
+                                      {ehProprio && <Badge className="bg-indigo-100 text-indigo-700 text-[8px] px-1.5">🏗️ Equipamento Próprio</Badge>}
+                                      {ehLocado  && <Badge className="bg-amber-100 text-amber-700 text-[8px] px-1.5">🚜 Locado</Badge>}
+                                      {suspeita  && <Badge className="bg-red-100 text-red-700 text-[8px] px-1.5">⚠ Possível Desvio</Badge>}
+                                      {!suspeita && emUso > 0 && <Badge className="bg-indigo-100 text-indigo-700 text-[8px] px-1.5">Em Uso</Badge>}
+                                      {!suspeita && emUso === 0 && qtdAlmox > 0 && <Badge className="bg-green-100 text-green-700 text-[8px] px-1.5">No Almox</Badge>}
+                                      {!suspeita && emUso === 0 && qtdAlmox <= 0 && <Badge className="bg-gray-100 text-gray-500 text-[8px] px-1.5">Zerado</Badge>}
+                                    </div>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] text-gray-500">
+                                    {f.categoria && (
+                                      <span className="flex items-center gap-1">
+                                        <Package className="w-3 h-3 flex-shrink-0" />{f.categoria}
+                                      </span>
+                                    )}
+                                    <span className="flex items-center gap-1">
+                                      <span className="text-gray-400">Qtd almox:</span>
+                                      <strong className="text-gray-700">{qtdAlmox}</strong>
+                                    </span>
+                                    {emUso > 0 && (
+                                      <span className="col-span-2 flex items-center gap-1 text-indigo-600 font-medium">
+                                        <Users className="w-3 h-3 flex-shrink-0" />
+                                        Com: {f.em_uso_pessoas || `${emUso} pessoa(s)`}
+                                      </span>
+                                    )}
+                                    {f.criado_por_nome && (
+                                      <span className="flex items-center gap-1">
+                                        <span className="text-gray-400">Registrado por:</span> {f.criado_por_nome}
+                                      </span>
+                                    )}
+                                    {f.criado_em && (
+                                      <span className="flex items-center gap-1">
+                                        <Calendar className="w-3 h-3 flex-shrink-0 text-gray-400" />
+                                        {String(f.criado_em).slice(0, 10).split("-").reverse().join("/")}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
                             </div>
-                            <div className="flex gap-3 mt-1 text-[10px] text-gray-500">
-                              {f.categoria && <span>{f.categoria}</span>}
-                              <span>Almox: <strong>{qtdAlmox}</strong></span>
-                              {emUso > 0 && <span className="text-indigo-600">Em uso: <strong>{emUso}</strong> — {f.em_uso_pessoas}</span>}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    </>
                   )}
                 </div>
               )}
 
               {/* ─── Sub-aba: Locações ─── */}
               {abaAnalise === "locacoes" && (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {analise.data.locacoes.length === 0 ? (
-                    <p className="text-xs text-gray-400 text-center py-4">Nenhum equipamento locado registrado.</p>
-                  ) : (
-                    <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
-                      {analise.data.locacoes.map((l: any, i: number) => {
-                        const dias  = parseInt(String(l.dias_locado ?? 0));
-                        const custo = parseFloat(String(l.custo_estimado ?? 0));
-                        const statusColor = l.status === "em_uso" ? "border-blue-200 bg-blue-50" : l.status === "atrasado" ? "border-red-200 bg-red-50" : "border-gray-100 bg-gray-50";
-                        return (
-                          <div key={i} className={`rounded border px-2.5 py-2 text-xs ${statusColor}`}>
-                            <div className="flex items-center gap-2">
-                              <span className="flex-1 font-medium text-gray-800 truncate">{l.descricao}</span>
-                              <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${l.status === "em_uso" ? "bg-blue-200 text-blue-800" : l.status === "atrasado" ? "bg-red-200 text-red-800" : "bg-gray-200 text-gray-600"}`}>
-                                {l.status === "em_uso" ? "Em uso" : l.status === "atrasado" ? "Atrasado" : "Devolvido"}
-                              </span>
-                            </div>
-                            <div className="flex gap-3 mt-1 text-[10px] text-gray-500 flex-wrap">
-                              {l.fornecedor_nome && <span>{l.fornecedor_nome}</span>}
-                              <span>Início: {l.data_inicio}</span>
-                              <span>{dias} dia(s)</span>
-                              {custo > 0 && <span className="text-indigo-700 font-semibold">{fmt(custo)}</span>}
-                            </div>
-                          </div>
-                        );
-                      })}
+                    <div className="text-center py-6 space-y-1">
+                      <p className="text-xs text-gray-400">Nenhum equipamento locado ativo nesta obra.</p>
+                      <p className="text-[10px] text-gray-300">Cadastre locações no módulo Almoxarifado → Equipamentos Locados.</p>
                     </div>
+                  ) : (
+                    <>
+                      <p className="text-[10px] text-gray-400">{analise.data.locacoes.length} equipamento(s) locado(s) ativo(s)</p>
+                      <div className="space-y-2">
+                        {analise.data.locacoes.map((l: any, i: number) => {
+                          const dias   = parseInt(String(l.dias_locado ?? 0));
+                          const custo  = parseFloat(String(l.custo_estimado ?? 0));
+                          const vm     = parseFloat(String(l.valor_mensal ?? 0));
+                          const atrasado = l.status === "atrasado";
+                          const borderCls = atrasado ? "border-red-200 bg-red-50" : "border-amber-100 bg-amber-50/40";
+                          return (
+                            <div key={i} className={`rounded-xl border ${borderCls} overflow-hidden`}>
+                              <div className="flex gap-3 p-3">
+                                {/* Foto / placeholder */}
+                                <div className="flex-shrink-0 w-14 h-14 rounded-lg overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center">
+                                  {l.foto_url
+                                    ? <img src={l.foto_url} alt={l.descricao} className="w-full h-full object-cover" />
+                                    : <Wrench className="w-6 h-6 text-amber-300" />}
+                                </div>
+                                {/* Dados */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex flex-wrap items-start gap-1 mb-1">
+                                    <span className="font-semibold text-[11px] text-gray-900 break-words">{l.descricao}</span>
+                                    <span className={`ml-auto text-[8px] font-bold px-1.5 py-0.5 rounded-full ${atrasado ? "bg-red-200 text-red-800" : "bg-amber-200 text-amber-800"}`}>
+                                      🚜 {atrasado ? "ATRASADO" : "Em uso"}
+                                    </span>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] text-gray-500">
+                                    {l.fornecedor_nome && (
+                                      <span className="col-span-2 font-medium text-gray-700">{l.fornecedor_nome}</span>
+                                    )}
+                                    {l.funcionario_responsavel_nome && (
+                                      <span className="col-span-2 flex items-center gap-1 text-indigo-600">
+                                        <Users className="w-3 h-3 flex-shrink-0" />Com: {l.funcionario_responsavel_nome}
+                                      </span>
+                                    )}
+                                    <span className="flex items-center gap-1">
+                                      <Calendar className="w-3 h-3 flex-shrink-0 text-gray-400" />
+                                      Início: {l.data_inicio ? String(l.data_inicio).slice(0, 10).split("-").reverse().join("/") : "—"}
+                                    </span>
+                                    <span>{dias} dia(s) na obra</span>
+                                    {l.data_fim_prevista && (
+                                      <span className={`flex items-center gap-1 ${atrasado ? "text-red-600 font-semibold" : ""}`}>
+                                        Prev. devolução: {String(l.data_fim_prevista).slice(0, 10).split("-").reverse().join("/")}
+                                      </span>
+                                    )}
+                                    {vm > 0 && (
+                                      <span className="text-indigo-700 font-semibold">
+                                        {fmt(vm)}/mês
+                                        {custo > 0 && <span className="text-gray-400 font-normal"> · {fmt(custo)} total</span>}
+                                      </span>
+                                    )}
+                                    {l.numero_contrato_fornecedor && (
+                                      <span>Contrato: {l.numero_contrato_fornecedor}</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
                   )}
                 </div>
               )}

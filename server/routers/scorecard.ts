@@ -1163,11 +1163,13 @@ export const scorecardRouter = router({
           const r = await db.execute(sql`
             SELECT
               ai.id, ai.nome, ai.categoria, ai.quantidade_atual, ai.valor_unitario,
+              ai.foto_url,
+              ai.criado_por_nome, ai.criado_em,
               ai.equipamento_vinculado_tipo, ai.equipamento_vinculado_id,
-              ai.criado_em,
-              COALESCE(emp.cnt, 0)    AS em_uso_cnt,
-              COALESCE(emp.pessoas,'') AS em_uso_pessoas,
-              COALESCE(dev.total_dev, 0) AS total_devolvidos,
+              COALESCE(emp.cnt, 0)         AS em_uso_cnt,
+              COALESCE(emp.pessoas,'')     AS em_uso_pessoas,
+              COALESCE(emp.func_ids,'')    AS em_uso_func_ids,
+              COALESCE(dev.total_dev, 0)   AS total_devolvidos,
               -- Alerta: comprado mas nunca deu entrada no almox (qtd=0 e nenhum empréstimo)
               CASE WHEN ai.quantidade_atual <= 0 AND COALESCE(emp.cnt, 0) = 0
                         AND COALESCE(dev.total_dev, 0) = 0 THEN true ELSE false
@@ -1176,7 +1178,8 @@ export const scorecardRouter = router({
             LEFT JOIN (
               SELECT item_id,
                 COUNT(*)                                         AS cnt,
-                STRING_AGG(DISTINCT funcionario_nome, ', ')     AS pessoas
+                STRING_AGG(DISTINCT funcionario_nome, ', ')     AS pessoas,
+                STRING_AGG(DISTINCT funcionario_id::text, ',')  AS func_ids
               FROM warehouse_loans
               WHERE obra_id = ${input.obraId}
                 AND status  = 'emprestado'
@@ -1230,10 +1233,12 @@ export const scorecardRouter = router({
         }),
 
         // ── 6. EQUIPAMENTOS LOCADOS ───────────────────────────────────────────
+        // Busca tanto pelo obra_id direto quanto via vínculo em almoxarifado_itens
         safe("locacoes", async () => {
           const r = await db.execute(sql`
             SELECT
               el.id, el.descricao, el.categoria, el.status,
+              el.foto_url,
               el.data_inicio, el.data_fim_prevista, el.data_fim_real,
               el.valor_mensal, el.valor_diario,
               el.funcionario_responsavel_nome,
@@ -1252,10 +1257,22 @@ export const scorecardRouter = router({
                     COALESCE(el.data_fim_real::date, CURRENT_DATE) - el.data_inicio::date
                   )) / 30.0, 2)
                 ELSE NULL
-              END AS custo_estimado
+              END AS custo_estimado,
+              -- Sinaliza se é item próprio da empresa alocado temporariamente
+              COALESCE(ai_link.equipamento_vinculado_tipo, 'locado') AS tipo_vinculo,
+              ai_link.nome AS almox_nome
             FROM equipamentos_locados el
-            WHERE el.obra_id    = ${input.obraId}
-              AND el.company_id = ${input.companyId}
+            LEFT JOIN almoxarifado_itens ai_link
+              ON ai_link.equipamento_vinculado_tipo = 'locado'
+             AND ai_link.equipamento_vinculado_id   = el.id
+             AND ai_link.obra_id   = ${input.obraId}
+             AND ai_link.company_id = ${input.companyId}
+            WHERE el.company_id = ${input.companyId}
+              AND el.status != 'devolvido'
+              AND (
+                el.obra_id = ${input.obraId}
+                OR ai_link.id IS NOT NULL
+              )
             ORDER BY
               CASE el.status WHEN 'em_uso' THEN 0 WHEN 'atrasado' THEN 1 ELSE 2 END,
               el.data_inicio DESC

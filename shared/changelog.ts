@@ -1,4 +1,30 @@
 /**
+ * Rev. 4219 - SCORECARD COMPRAS: FERRAMENTAS ALMOX + LOCAÇÕES — LAYOUT CARD COM FOTO + FIX LOCAÇÕES VAZIAS.
+ *
+ * MELHORIA — Solicitado pelo usuário: (1) layout mais fluido em cards com foto thumbnail, (2) mostrar
+ * quem está com o item, quando foi registrado e quem cadastrou, (3) badge "Equipamento Próprio" para
+ * `equipamento_vinculado_tipo = 'proprio'`, (4) corrigir Locações que aparecia vazio mesmo com dados.
+ *
+ * Backend (server/routers/scorecard.ts):
+ *   • ferramentasAlmox query: adicionado `ai.foto_url` e `ai.criado_por_nome`.
+ *   • locacoes query: adicionado `el.foto_url`; WHERE expandido para buscar via JOIN em
+ *     `almoxarifado_itens WHERE equipamento_vinculado_tipo = 'locado'` — resolve caso em que
+ *     `equipamentos_locados.obra_id` não bate com o obraId do Scorecard mas o item está
+ *     vinculado via `almoxarifado_itens.equipamento_vinculado_id`. Filtro exclui `status = 'devolvido'`.
+ *
+ * Frontend (ScorecardTab.tsx — aba Compras > Ferramentas Almox):
+ *   • Removido `max-h-80 overflow-y-auto` — lista agora é livre e fluida.
+ *   • Cards horizontais (foto 56×56 + dados) substituem lista compacta.
+ *   • Foto real se existir, senão placeholder Wrench.
+ *   • Badges: 🏗️ Equipamento Próprio · 🚜 Locado · Em Uso · No Almox · Zerado · ⚠ Possível Desvio.
+ *   • Linhas de detalhe: categoria · qtd almox · com quem está (em_uso_pessoas) · registrado por · data.
+ *
+ * Frontend (ScorecardTab.tsx — aba Compras > Locações):
+ *   • Cards horizontais com foto thumbnail, fornecedor, responsável, data início/devolução, custo/mês + total.
+ *   • ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4218 - SCORECARD SEGURANÇA: LEGENDA + monthStatus NO SELETOR + TABELA COMPARATIVA + 4 GRÁFICOS.
  *
  * MELHORIA — Solicitado pelo usuário: (1) indicadores de dados nas bolinhas do seletor com legenda,
