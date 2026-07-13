@@ -1,4 +1,39 @@
 /**
+ * Rev. 4188 - SCORECARD: FIX MULTI-ABA — ORÇAMENTO, SEGURANÇA, RH E METAS & DESVIOS RETORNAVAM VAZIO.
+ *
+ * CAUSA-RAIZ:
+ * A tabela `orcamentos` armazena colunas como camelCase sem mapeamento snake_case no schema Drizzle
+ * (`companyId`, `obraId`, `totalVenda`, `totalCusto`, `valorNegociado`, `tempoObraMeses`).
+ * A tabela `employees` não possui coluna `obra_id` (nem snake_case nem camelCase). O vínculo
+ * funcionário↔obra existe exclusivamente em `obra_funcionarios` com colunas camelCase
+ * (`"obraId"`, `"employeeId"`, `"companyId"`). A tabela `orcamento_itens` também usa `"companyId"`.
+ *
+ * IMPACTO:
+ * - getScore: Drizzle ORM gerava WHERE "company_id" (snake) vs coluna real "companyId" (camel) →
+ *   orcamento não encontrado → financeiro.valorContrato = 0 → aba Resultado mostrava "Nenhum orçamento".
+ * - getMetasDesvios: raw SQL usava `company_id`/`obra_id`/`total_custo`/`total_venda` (snake) →
+ *   query falha silenciosa (caught por safe()) → procedure retornava null → aba Metas & Desvios vazia.
+ * - getSeguranca: `WHERE e.obra_id = ...` → "column obra_id does not exist" → aba Segurança zerada.
+ * - getCustosRH: UNION ALL com `e.obra_id`/`e.company_id`/`e.data_admissao`/`e.created_at` → erro
+ *   → query inteira falha → aba RH sem dados de folha.
+ * - Aba Operacional: `getAnalise` só era disparado quando tabScore === "compras" → locações/ferramentas
+ *   nunca carregadas ao navegar direto para Operacional.
+ *
+ * CORREÇÕES (ZERO DELETE · ZERO ALTER destrutivo):
+ * 1. getScore: substituiu Drizzle ORM por raw SQL com colunas entre aspas duplas para orcamentos.
+ * 2. getMetasDesvios: `company_id`→`"companyId"`, `obra_id`→`"obraId"`, `total_custo`→`"totalCusto"`,
+ *    `total_venda`→`"totalVenda"`, `valor_negociado`→`"valorNegociado"`, `tempo_obra_meses`→`"tempoObraMeses"`.
+ *    orcamento_itens: `company_id`→`"companyId"`.
+ * 3. getSeguranca Q1/Q3/Q4/Q6: substituiu `WHERE e.obra_id = ...` por subquery em `obra_funcionarios`
+ *    com `"obraId"`/`"employeeId"`/`"companyId"`; corrigiu `e.nome`→`e."nomeCompleto"`.
+ * 4. getCustosRH UNION ALL: substituiu `e.obra_id`/`e.company_id` por subquery obra_funcionarios;
+ *    corrigiu `e.data_admissao`→`e."dataAdmissao"`, `e.created_at`→`e."createdAt"`.
+ * 5. ScorecardTab.tsx: `getAnalise` agora enabled também em tabScore === "operacional".
+ *
+ * ARQUIVOS: server/routers/scorecard.ts, client/src/pages/planejamento/ScorecardTab.tsx.
+ */
+
+/**
  * Rev. 4187 - SCORECARD: ABA "👥 RH" GANHA SUB-ABA "BANCO DE HORAS" + FIX RETRY iOS WEBKIT.
  *
  * O QUE FOI FEITO:

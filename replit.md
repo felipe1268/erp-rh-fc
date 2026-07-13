@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4188** — **SCORECARD: FIX MULTI-ABA — ORÇAMENTO, SEGURANÇA, RH E METAS & DESVIOS RETORNAVAM VAZIO.** Causa-raiz: `orcamentos`/`orcamento_itens`/`employees`/`obra_funcionarios` usam colunas camelCase (`"companyId"`, `"obraId"`, `"nomeCompleto"`, `"dataAdmissao"`, `"createdAt"`) mas as queries usavam snake_case, resultando em "column does not exist" silencioso. Fixes: (1) `getScore` — raw SQL com aspas duplas para orcamento (financeiro.valorContrato=0 resolvido); (2) `getMetasDesvios` — `company_id`/`obra_id`/`total_custo` → `"companyId"`/`"obraId"`/`"totalCusto"` etc.; (3) `getSeguranca` Q1/Q3/Q4/Q6 — subquery em `obra_funcionarios` com `"obraId"/"employeeId"` + `e."nomeCompleto"`; (4) `getCustosRH` UNION ALL — mesmos fixes + `"dataAdmissao"`/`"createdAt"`; (5) `ScorecardTab` — `getAnalise` enabled também em tabScore===operacional. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4187** — **SCORECARD: SUB-ABA "BANCO DE HORAS" NA ABA RH + FIX RETRY iOS WEBKIT.** Aba RH dividida em sub-abas: "Folha / Custos" (inalterada) e "Banco de Horas" (nova). Banco: KPI strip (Funcionários/Total HE/HE Pagas/Saldo Banco), tabela expansível por funcionário, sub-tabela histórico HE por mês (destino Banco ou Pagamento, valor, status). Fix main.tsx: queries agora reentam até 3× com backoff exp (2s/4s/8s) em erros iOS WebKit ("The string did not match the expected pattern" / "Failed to fetch"), corrigindo a tela de erro pré-existente no Scorecard. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4186** — **SCORECARD: REDESIGN COMPLETO — 6 ABAS TOP-LEVEL + DRE WATERFALL + METAS & DESVIOS.** `ScorecardTab.tsx` reescrito. 6 abas Pareto: 📊 Resultado | 🎯 Metas & Desvios | 👥 RH/Folha | 🛡️ Segurança | 📦 Compras | 🔧 Operacional. DRE waterfall 3 colunas (Contrato | (−) Custo | = Lucro LL). Warning explícito quando custoRealizado=0 (remove bug "Lucro R$9.5M"). Metas & Desvios: KPIs orçamento vs OC + gráfico mensal + tabela item-a-item (dentro/acima/sem-ref). Score+dimensões+KPI strip sempre visíveis. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4186** — **SCORECARD: REDESIGN COMPLETO — 6 ABAS TOP-LEVEL + DRE WATERFALL + METAS & DESVIOS.** `ScorecardTab.tsx` reescrito. 6 abas Pareto. DRE waterfall 3 colunas. Warning quando custoRealizado=0. Score+dimensões+KPI strip sempre visíveis. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4185** — **SCORECARD: ABA "👥 RH / FOLHA" + BACKEND getMetasDesvios.** `getCustosRH` procedure com fracionação proporcional por dias de obra. `getMetasDesvios` procedure: join OC itens × orçamento itens por nome, desvios de preço, gasto mensal vs meta. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,10 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4183** — **SCORECARD: PAINEL ANÁLISE GERENCIAL DA OBRA (CURVA ABC, RECOMPRAS, FERRAMENTAS, LOCAÇÕES).** `getAnalise` — 6 queries. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4182** — **PLANEJAMENTO: SCORECARD DO GESTOR COM KPIs, BÔNUS E CONTROLE DE FERRAMENTAS/RETRABALHO.** Score 0-100 em 5 dimensões ponderadas. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4181** — **COMPRAS: CONDIÇÃO DE PAGAMENTO VIRA SELECT PADRONIZADO NAS OCs.** Campo livre → `<Select>` com `TIPOS_PAGAMENTO`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4176** — **COMPRAS/FINANCEIRO: PAINEL ANÁLISE SEPARADO DA TABELA (FULL-WIDTH).** `AnaliseDashPanel` 3 colunas horizontais + cabeçalho colapsável. Tabela full-width. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

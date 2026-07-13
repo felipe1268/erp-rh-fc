@@ -1,3 +1,4 @@
+- **Rev. 4181** — **COMPRAS: CONDIÇÃO DE PAGAMENTO VIRA SELECT PADRONIZADO NAS OCs.** Campo livre → `<Select>` com `TIPOS_PAGAMENTO`. ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4184** — **SCORECARD: ABA "🛡️ SEGURANÇA" — QUADRO CLT/TERCEIROS, ASO, TREINAMENTOS, ADVERTÊNCIAS E EPI.** `getSeguranca` procedure — 7 queries. KPIs + quadros + Curva ABC EPI. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4183** — **SCORECARD: PAINEL ANÁLISE GERENCIAL DA OBRA (CURVA ABC, RECOMPRAS, FERRAMENTAS, LOCAÇÕES).** Novo card colapsável "Análise Gerencial da Obra" com 4 abas. `getAnalise` — 6 queries. ZERO DELETE · ZERO ALTER destrutivo.

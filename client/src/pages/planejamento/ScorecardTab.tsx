@@ -237,7 +237,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
   );
   const analise = trpc.scorecard.getAnalise.useQuery(
     { companyId, obraId: obraId! },
-    { enabled: enabled && tabScore === "compras", staleTime: 120_000 }
+    { enabled: enabled && (tabScore === "compras" || tabScore === "operacional"), staleTime: 120_000 }
   );
   const analiseSeguranca = trpc.scorecard.getSeguranca.useQuery(
     { companyId, obraId: obraId! },

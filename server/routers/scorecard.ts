@@ -103,22 +103,16 @@ export const scorecardRouter = router({
       if (!db) return null;
       const { companyId, obraId } = input;
 
-      // Drizzle ORM para orcamentos (colunas camelCase sem mapeamento explícito)
-      // Pega o mais recente não-excluído
-      const orcRow = await db
-        .select({
-          id:             orcamentos.id,
-          codigo:         orcamentos.codigo,
-          status:         orcamentos.status,
-          totalVenda:     orcamentos.totalVenda,
-          totalCusto:     orcamentos.totalCusto,
-          valorNegociado: orcamentos.valorNegociado,
-        })
-        .from(orcamentos)
-        .where(and(eq(orcamentos.companyId, companyId), eq(orcamentos.obraId, obraId), isNull(orcamentos.deletedAt)))
-        .orderBy(desc(orcamentos.id))
-        .limit(1)
-        .catch(() => [] as any[]);
+      // Raw SQL com nomes camelCase entre aspas (orcamentos armazena colunas sem mapeamento snake_case)
+      const orcRow = await db.execute(sql`
+        SELECT id, status, codigo,
+          "totalVenda"::numeric     AS "totalVenda",
+          "totalCusto"::numeric     AS "totalCusto",
+          "valorNegociado"::numeric AS "valorNegociado"
+        FROM orcamentos
+        WHERE "companyId" = ${companyId} AND "obraId" = ${obraId} AND deleted_at IS NULL
+        ORDER BY id DESC LIMIT 1
+      `).then(r => r.rows as any[]).catch(() => [] as any[]);
 
       // Drizzle ORM para accidents (colunas camelCase sem mapeamento explícito)
       const acidentesRows = await db
@@ -579,7 +573,7 @@ export const scorecardRouter = router({
         safe("cltFuncionarios", async () => {
           const r = await db.execute(sql`
             SELECT
-              e.id, e.nome, e.cargo, e.status, e.cpf,
+              e.id, e."nomeCompleto" AS nome, e.cargo, e.status, e.cpf,
               aso.data_validade   AS aso_validade,
               aso.resultado       AS aso_resultado,
               CASE
@@ -609,10 +603,13 @@ export const scorecardRouter = router({
               FROM warnings
               WHERE employee_id = e.id AND deleted_at IS NULL
             ) wn ON true
-            WHERE e.obra_id    = ${input.obraId}
-              AND e.company_id = ${input.companyId}
+            WHERE e."companyId" = ${input.companyId}
               AND e.status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')
-            ORDER BY e.nome
+              AND e.id IN (
+                SELECT "employeeId" FROM obra_funcionarios
+                WHERE "obraId" = ${input.obraId} AND "companyId" = ${input.companyId}
+              )
+            ORDER BY e."nomeCompleto"
           `);
           return r.rows as any[];
         }),
@@ -667,10 +664,8 @@ export const scorecardRouter = router({
             WHERE t.company_id = ${input.companyId}
               AND t.deleted_at  IS NULL
               AND t.employee_id IN (
-                SELECT id FROM employees
-                WHERE obra_id    = ${input.obraId}
-                  AND company_id = ${input.companyId}
-                  AND status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')
+                SELECT "employeeId" FROM obra_funcionarios
+                WHERE "obraId" = ${input.obraId} AND "companyId" = ${input.companyId}
               )
             GROUP BY COALESCE(NULLIF(TRIM(t.norma), ''), 'Outros / Sem norma')
             ORDER BY total_funcionarios DESC
@@ -683,12 +678,15 @@ export const scorecardRouter = router({
           const r = await db.execute(sql`
             SELECT
               w.id, w.tipo_advertencia, w.data_ocorrencia, w.motivo,
-              e.nome AS funcionario_nome, e.cargo
+              e."nomeCompleto" AS funcionario_nome, e.cargo
             FROM warnings w
             JOIN employees e ON e.id = w.employee_id
-            WHERE e.obra_id    = ${input.obraId}
-              AND w.company_id = ${input.companyId}
+            WHERE w.company_id = ${input.companyId}
               AND w.deleted_at IS NULL
+              AND e.id IN (
+                SELECT "employeeId" FROM obra_funcionarios
+                WHERE "obraId" = ${input.obraId} AND "companyId" = ${input.companyId}
+              )
             ORDER BY w.data_ocorrencia DESC
             LIMIT 20
           `);
@@ -719,7 +717,7 @@ export const scorecardRouter = router({
         safe("epiPorFuncionario", async () => {
           const r = await db.execute(sql`
             SELECT
-              e.id AS employee_id, e.nome AS funcionario_nome, e.cargo,
+              e.id AS employee_id, e."nomeCompleto" AS funcionario_nome, e.cargo,
               COUNT(ed.id)                                                           AS total_entregas,
               SUM(ed.quantidade)                                                     AS total_unidades,
               SUM(COALESCE(ep.valor_produto::numeric, 0) * ed.quantidade)            AS custo_estimado,
@@ -730,7 +728,7 @@ export const scorecardRouter = router({
             WHERE ed.obra_id    = ${input.obraId}
               AND ed.company_id = ${input.companyId}
               AND ed.deleted_at IS NULL
-            GROUP BY e.id, e.nome, e.cargo
+            GROUP BY e.id, e."nomeCompleto", e.cargo
             ORDER BY custo_estimado DESC
             LIMIT 30
           `);
@@ -1062,15 +1060,18 @@ export const scorecardRouter = router({
 
           UNION ALL
 
-          -- Funcionários atualmente na obra sem nenhum registro de histórico
+          -- Funcionários atualmente na obra sem nenhum registro de histórico (via obra_funcionarios)
           SELECT
             e.id AS employee_id,
-            COALESCE(e.data_admissao::date, e.created_at::date) AS periodo_inicio,
+            COALESCE(e."dataAdmissao"::date, e."createdAt"::date) AS periodo_inicio,
             CURRENT_DATE AS periodo_fim
           FROM employees e
-          WHERE e.obra_id    = ${input.obraId}
-            AND e.company_id = ${input.companyId}
+          WHERE e."companyId" = ${input.companyId}
             AND e.status NOT IN ('Desligado','Lista_Negra','Inativo')
+            AND e.id IN (
+              SELECT "employeeId" FROM obra_funcionarios
+              WHERE "obraId" = ${input.obraId} AND "companyId" = ${input.companyId}
+            )
             AND NOT EXISTS (
               SELECT 1 FROM employee_site_history esh2
               WHERE esh2.employee_id = e.id
@@ -1234,12 +1235,13 @@ export const scorecardRouter = router({
       };
 
       const orcRows = await safe(db.execute(sql`
-        SELECT id, total_custo::numeric AS total_custo,
-               total_venda::numeric AS total_venda,
-               valor_negociado::numeric AS valor_negociado,
-               COALESCE(tempo_obra_meses, 12)::int AS tempo_meses
+        SELECT id,
+               "totalCusto"::numeric     AS total_custo,
+               "totalVenda"::numeric     AS total_venda,
+               "valorNegociado"::numeric AS valor_negociado,
+               COALESCE("tempoObraMeses", 12)::int AS tempo_meses
         FROM orcamentos
-        WHERE company_id = ${companyId} AND obra_id = ${obraId} AND deleted_at IS NULL
+        WHERE "companyId" = ${companyId} AND "obraId" = ${obraId} AND deleted_at IS NULL
         ORDER BY id DESC LIMIT 1
       `));
       if (!orcRows.length) return null;
@@ -1258,7 +1260,7 @@ export const scorecardRouter = router({
               COALESCE(NULLIF(meta_unit_total::text,'')::numeric,
                        NULLIF(custo_unit_total::text,'')::numeric, 0) AS preco_meta
             FROM orcamento_itens
-            WHERE orcamento_id = ${orcId} AND company_id = ${companyId}
+            WHERE orcamento_id = ${orcId} AND "companyId" = ${companyId}
               AND tipo IN ('insumo','servico','composicao')
             GROUP BY LOWER(TRIM(descricao)), descricao,
               COALESCE(NULLIF(meta_unit_total::text,'')::numeric,
