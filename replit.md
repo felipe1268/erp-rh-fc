@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4204** — **SCORECARD RH/FOLHA: FIX employees camelCase + REDESIGN ABA + FÉRIAS + SEGURO DE VIDA.** Bug raiz: `getCustosRH` usava `e.nome_completo`/`e.salario_base`/`e.company_id` (snake_case) mas `employees` tem colunas camelCase → PostgreSQL lançava "column does not exist" → estado vazio silencioso. Fix: `e."nomeCompleto"`, `e."salarioBase"`, `e."companyId"`. Novo backend: 3 queries paralelas (folha + férias + seguro de vida); retorna `mensal[]` por mês. Nova UI: seletor ano ‹›+ abas de mês (Ano Todo/Jan-Dez); tabela mensal clicável; KPI com Férias + Seg.Vida. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4203** — **SCORECARD METAS & DESVIOS: FIX orcamento_itens camelCase + CONTRATOS DE TERCEIROS.** CTE `orca_itens` usava snake_case (`orcamento_id`, `meta_unit_total`, `custo_unit_total`) para colunas camelCase → lista vazia silenciosa. Fix + nova query `terceiro_contratos` com medições aprovadas. Frontend: total comprometido = OCs + Contratos. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4202** — **SCORECARD: FIX DEFINITIVO — COLUNA valor_negociado (snake_case).** Causa raiz: schema define `numeric("valor_negociado",...)` (explícito), mas queries usavam `"valorNegociado"` → "column does not exist" silenciado pelo safe() → return null. Diagnóstico confirmou dados corretos (obraId=90001, orcId=42). Fix em getScore + getMetasDesvios. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4202** — **SCORECARD: FIX DEFINITIVO — COLUNA valor_negociado (snake_case).** Causa raiz: schema define `numeric("valor_negociado",...)` (explícito), mas queries usavam `"valorNegociado"` → "column does not exist" silenciado pelo safe() → return null. Fix em getScore + getMetasDesvios. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4201** — **SCORECARD: FIX RAIZ — BUSCA POR obraId SEM FILTRO companyId.** Path 2 simplificado para `"obraId"=O` sem companyId (obra é unívoca). getScore + getMetasDesvios. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4201** — **SCORECARD: FIX RAIZ — BUSCA POR obraId SEM FILTRO companyId.** Path 2 simplificado para `"obraId"=O` sem companyId. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4198** — **SCORECARD METAS & DESVIOS: QUERY TRI-CAMINHOS PARA DETECTAR ORÇAMENTO.** Query com OR em 3 caminhos: `id=orcamentoId` | `"obraId"=obraId` | `id IN (SELECT orcamento_id FROM planejamento_projetos WHERE obra_id=obraId)`. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -62,9 +64,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 - **Rev. 4196** — **BANCO DE HORAS: TABELA DIA A DIA REFATORADA COMO TABLE HTML.** Grid CSS causava sobreposição "TRABALHADOJORNADA" em mobile. Substituída por `<table>`. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4195** — **BANCO DE HORAS: STATUS DE AUTORIZAÇÃO DIA A DIA — ✓ AUTORIZADO vs ⚠ SEM AUTORIZAÇÃO.** Backend: `approvedSet`; Frontend: coluna Aut., fundo âmbar, resumo. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4195** — **BANCO DE HORAS: STATUS DE AUTORIZAÇÃO DIA A DIA — ✓ AUTORIZADO vs ⚠ SEM AUTORIZAÇÃO.** Backend: `approvedSet`; Frontend: coluna Aut., fundo âmbar, resumo. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4194** — **BANCO DE HORAS: TABELA DIA A DIA SEMPRE ABERTA + DIA DA SEMANA COLORIDO + FERIADO MARCADO.** Dom vermelho, Sáb âmbar, Feriado badge roxo. ZERO DELETE · ZERO ALTER destrutivo.
 

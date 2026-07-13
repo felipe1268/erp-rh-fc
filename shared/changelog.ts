@@ -1,4 +1,42 @@
 /**
+ * Rev. 4204 - SCORECARD RH/FOLHA: FIX COLUNA employees (camelCase) + REDESIGN ABA + FÉRIAS + SEGURO DE VIDA.
+ *
+ * RAIZ DO BUG "Sem dados de folha para esta obra no período":
+ *   A query getCustosRH tinha 4 referências a colunas da tabela `employees` em snake_case
+ *   quando o banco tem camelCase (tabela criada via self-heal, não Drizzle Kit migration):
+ *     - `e.nome_completo`  → `e."nomeCompleto"`  (SELECT + GROUP BY)
+ *     - `e.salario_base`   → `e."salarioBase"`   (SELECT + GROUP BY)
+ *     - `e.company_id`     → `e."companyId"`     (JOIN ON)
+ *   PostgreSQL lançava "column does not exist" → tRPC retornava erro → frontend mostrava
+ *   estado vazio silencioso (!analiseRH.data). ZERO dado aparecia para qualquer obra.
+ *
+ * NOVA ESTRUTURA DO BACKEND (getCustosRH):
+ *   - Três queries paralelas: folha principal + férias + seguro de vida
+ *   - Férias: vacation_periods status in (agendada/concluida/em_gozo) com valor_total real,
+ *     mapeadas por employee_id + mês de referência (data_pagamento ?? data_inicio)
+ *   - Seguro de vida: seguro_vida_coberturas (status=ativo) → employees."seguroVida" como
+ *     custo mensal, multiplicado pelo nº de meses do funcionário no período
+ *   - Novo retorno `mensal[]`: agregado por mês com qtdFuncionarios, salarioBruto, he,
+ *     vr, va, ferias, seguroVida, fgts, custoEmpresa, custoTotal
+ *   - `custo_total_empresa` = custo_folha + ferias + seguro_vida
+ *   - historico_mensal por funcionário também enriquecido com ferias/seguroVida/custoTotal
+ *
+ * NOVA UI DA ABA RH / FOLHA (ScorecardTab.tsx):
+ *   - Substituição dos text inputs de período por seletor ano (← ›) + botões de mês
+ *     (Ano Todo | Jan | Fev | … | Dez) — padrão white-card, botão ativo indigo
+ *   - Tabela mensal principal: colunas Salário, HE, VR+VA, Férias, Seg.Vida, FGTS, Total
+ *     Linha clicável filtra a tabela de funcionários para aquele mês
+ *   - KPI grid 2×4: Funcionários, Custo Total, Salário Bruto, VR+VA, Férias, Seg.Vida, HE, FGTS
+ *   - Tabela por funcionário: colunas adicionadas Férias + Seg. (Seg.Vida)
+ *   - Detalhe mensal expandível: 11 colunas incluindo férias/seguro/custoTotal
+ *   - Nota informativa: VT não incluso (variável por presença diária)
+ *
+ * Arquivos: server/routers/scorecard.ts, client/src/pages/planejamento/ScorecardTab.tsx,
+ *           shared/version.ts, shared/changelog.ts, replit.md.
+ * ZERO DELETE · ZERO ALTER DESTRUTIVO.
+ */
+
+/**
  * Rev. 4203 - SCORECARD METAS & DESVIOS: FIX COLUNA orcamento_itens (camelCase) + CONTRATOS DE TERCEIROS.
  *
  * DOIS PROBLEMAS CORRIGIDOS:
