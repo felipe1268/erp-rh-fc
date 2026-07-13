@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import PeriodSelectorCard from "@/components/PeriodSelectorCard";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
@@ -962,29 +963,30 @@ export default function ScorecardTab({ proj }: { proj: any }) {
           {/* ── Sub-aba: Folha ── */}
           {abaRH === "folha" && (() => {
             const MES_LABELS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-            const MES_NUMS   = ['01','02','03','04','05','06','07','08','09','10','11','12'];
+            const rhMonthStatus: Record<number, "data" | "none"> = Object.fromEntries(
+              Array.from({ length: 12 }, (_, i) => [i + 1, "none" as const])
+            );
+            for (const entry of (analiseRH.data?.mensal ?? [])) {
+              const [y, mm] = (entry.mes as string).split('-');
+              if (y === String(rhAno)) rhMonthStatus[parseInt(mm)] = "data";
+            }
             return (
           <div className="space-y-4">
-            {/* Seletor ano + mês */}
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-0.5 bg-gray-50 border border-gray-200 rounded px-1 py-0.5">
-                <button onClick={() => setRhAno(a => a - 1)} className="px-1.5 py-0.5 rounded text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 text-sm font-bold">‹</button>
-                <span className="text-xs font-bold text-gray-700 w-10 text-center">{rhAno}</span>
-                <button onClick={() => setRhAno(a => a + 1)} className="px-1.5 py-0.5 rounded text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 text-sm font-bold">›</button>
-              </div>
-              <div className="flex gap-0.5 flex-wrap">
-                {(['all', ...MES_NUMS] as string[]).map((m, i) => {
-                  const label  = i === 0 ? 'Ano Todo' : MES_LABELS[i - 1];
-                  const active = rhMes === m;
-                  return (
-                    <button key={m} onClick={() => setRhMes(m)}
-                      className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-colors ${active ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-indigo-50 hover:text-indigo-700'}`}>
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            {/* Seletor padronizado PeriodSelectorCard */}
+            <PeriodSelectorCard
+              ano={rhAno}
+              mes={rhMes === "all" ? null : parseInt(rhMes)}
+              onAno={(a) => setRhAno(a)}
+              onMes={(m) => setRhMes(String(m).padStart(2, '0'))}
+              onAnoTodo={() => setRhMes("all")}
+              monthStatus={rhMonthStatus}
+              actions={
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> Com dados</div>
+                  <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" /> Sem dados</div>
+                </div>
+              }
+            />
 
             {analiseRH.isLoading ? (
               <div className="flex items-center justify-center py-12 gap-2 text-gray-400">
