@@ -212,7 +212,6 @@ export default function BancoHoras() {
     return cltOnly.filter((e: any) => String(e.nomeCompleto || "").toLowerCase().includes(s));
   }, [empListaExcecao.data, excecaoSearch]);
   const lancamentosSaldosList = useMemo(() => (lancamentosSaldos.data ?? []) as any[], [lancamentosSaldos.data]);
-  const histDialogRow = useMemo(() => saldosMensal.find((s: any) => Number(s.employeeId) === histDialogEmpId) || saldos.find((s: any) => Number(s.employeeId) === histDialogEmpId) || null, [histDialogEmpId, saldosMensal, saldos]);
   const lancamentosExtratoList = useMemo(() => (lancamentosExtrato.data ?? []) as any[], [lancamentosExtrato.data]);
   const totalBancoMins = useMemo(() => saldos.reduce((acc: number, s: any) => acc + Number(s.saldoMinutos || 0), 0), [saldos]);
 
@@ -261,6 +260,7 @@ export default function BancoHoras() {
   // FIM do mês selecionado + o líquido movimentado NAQUELE mês (histórico real, via soma
   // de banco_horas_lancamentos — ver getSaldoBancoMensal). Mês atual == saldo ao vivo.
   const saldosMensal = useMemo(() => (saldoBancoMensal.data ?? []) as any[], [saldoBancoMensal.data]);
+  const histDialogRow = useMemo(() => saldosMensal.find((s: any) => Number(s.employeeId) === histDialogEmpId) || saldos.find((s: any) => Number(s.employeeId) === histDialogEmpId) || null, [histDialogEmpId, saldosMensal, saldos]);
   const totalBancoMensalMins = useMemo(
     () => saldosMensal.reduce((acc: number, s: any) => acc + Number(s.saldoMinutos || 0), 0),
     [saldosMensal],
