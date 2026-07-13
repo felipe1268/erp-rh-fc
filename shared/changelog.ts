@@ -1,4 +1,28 @@
 /**
+ * Rev. 4221 - SCORECARD SST: REDESIGN COMPLETO DA ABA SEGURANÇA → SST.
+ *
+ * MUDANÇAS:
+ * — Tab renomeada "Segurança" → "🦺 SST" (Saúde e Segurança do Trabalho).
+ * — Fix bolinhas do PeriodSelectorCard: inicializa todos os 12 meses como "none" e
+ *   também checa epi_entregas para marcar "data".
+ * — BACKEND: Q14 adicionada (epi_estoque_obra JOIN epis → estoque por obra);
+ *   novos campos no resumo: totalUnidadesEpi, totalEntregasEpi, itemMaisTrocado,
+ *   itemMenosTrocado, funcCobertosEpi; epiEstoque incluído no retorno.
+ * — FRONTEND: IIFE completamente reescrita com:
+ *     • Linha 2 de KPIs agora tem 6 cards (compliance + 3 EPI: entregas, unidades, custo).
+ *     • Dashboard EPI completo: gráficos mensais (unidades + custo), Curva ABC de consumo
+ *       ampliada, Top 5 maior uso EPI (com foto + barra de progresso), Top 5 menor uso
+ *       EPI (com foto), estoque desta obra em grid com badge "sem estoque".
+ *     • Atestados: seção expandida com Top 5 mais atestados (foto, cargo, CIDs),
+ *       CID breakdown (código + descrição + barra + dias afastamento), tabela detalhada
+ *       com CID como badge mono com tooltip de descrição.
+ *     • CID_LOOKUP: dicionário de 25 CIDs comuns com descrição em português.
+ *     • Comparativo agora inclui "EPIs Entregues" como 5ª linha.
+ *     • Gráficos de tendência refatorados para array declarativo (4 gráficos 2×2).
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4220 - SCORECARD RH/FOLHA: MATRÍCULA + CARGO MAIS LEGÍVEIS NA TABELA DE CUSTO POR FUNCIONÁRIO.
  *
  * MELHORIA — Matrícula agora exibida em fonte mono gray-500; cargo/função em indigo-500 negrito,

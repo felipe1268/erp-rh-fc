@@ -594,7 +594,7 @@ export const scorecardRouter = router({
       const mr = input.mesRef ?? null; // null = sem filtro (mostra tudo)
 
       const [clt, terceiros, treinamentosNorma, advertencias, advertenciasTerceiros, epiPorFuncionario, epiPorTipo,
-             acidentes, dds, apr, pt, atestados, historico] = await Promise.all([
+             acidentes, dds, apr, pt, atestados, historico, epiEstoque] = await Promise.all([
 
         // ── Q1: FUNCIONÁRIOS CLT com ASO + treinamentos + advertências ────────
         safe("cltFuncionarios", async () => {
@@ -1000,18 +1000,56 @@ export const scorecardRouter = router({
                 AND "deletedAt" IS NULL
                 AND "dataAcidente" >= (CURRENT_DATE - INTERVAL '11 months')
               GROUP BY TO_CHAR("dataAcidente", 'YYYY-MM')
+            ),
+            epi_agg AS (
+              SELECT TO_CHAR(ed.data_entrega, 'YYYY-MM') AS mes,
+                     COUNT(ed.id) AS epi_entregas,
+                     SUM(ed.quantidade) AS epi_unidades,
+                     ROUND(SUM(COALESCE(ep.valor_produto::numeric, 0) * ed.quantidade), 2) AS epi_custo
+              FROM epi_deliveries ed
+              JOIN epis ep ON ep.id = ed.epi_id
+              WHERE ed.company_id = ${input.companyId}
+                AND ed.obra_id    = ${input.obraId}
+                AND ed.deleted_at IS NULL
+                AND ed.data_entrega >= (CURRENT_DATE - INTERVAL '11 months')
+              GROUP BY TO_CHAR(ed.data_entrega, 'YYYY-MM')
             )
             SELECT m.mes,
-                   COALESCE(a.atestados, 0)  AS atestados,
-                   COALESCE(a.dias_ates, 0)  AS dias_ates,
-                   COALESCE(a.custo_ates, 0) AS custo_ates,
-                   COALESCE(d.dds, 0)        AS dds,
-                   COALESCE(c.acidentes, 0)  AS acidentes
+                   COALESCE(a.atestados, 0)    AS atestados,
+                   COALESCE(a.dias_ates, 0)    AS dias_ates,
+                   COALESCE(a.custo_ates, 0)   AS custo_ates,
+                   COALESCE(d.dds, 0)          AS dds,
+                   COALESCE(c.acidentes, 0)    AS acidentes,
+                   COALESCE(ep.epi_entregas, 0) AS epi_entregas,
+                   COALESCE(ep.epi_unidades, 0) AS epi_unidades,
+                   COALESCE(ep.epi_custo, 0)    AS epi_custo
             FROM meses m
-            LEFT JOIN ates      a ON a.mes = m.mes
-            LEFT JOIN dds_agg   d ON d.mes = m.mes
-            LEFT JOIN acid_agg  c ON c.mes = m.mes
+            LEFT JOIN ates      a  ON a.mes  = m.mes
+            LEFT JOIN dds_agg   d  ON d.mes  = m.mes
+            LEFT JOIN acid_agg  c  ON c.mes  = m.mes
+            LEFT JOIN epi_agg   ep ON ep.mes = m.mes
             ORDER BY m.mes
+          `);
+          return r.rows as any[];
+        }),
+
+        // ── Q14: ESTOQUE DE EPI DESTA OBRA ────────────────────────────────────
+        safe("epiEstoque", async () => {
+          const r = await db.execute(sql`
+            SELECT
+              ep.id, ep.nome, ep.categoria,
+              COALESCE(eo.quantidade, 0)    AS estoque_obra,
+              ep."quantidadeEstoque"        AS estoque_central,
+              COALESCE(ep.valor_produto::numeric, 0) AS valor_unit,
+              ep."tempoMinimoTroca"         AS tempo_troca
+            FROM epis ep
+            LEFT JOIN epi_estoque_obra eo
+              ON eo.epi_id    = ep.id
+             AND eo.obra_id   = ${input.obraId}
+             AND eo.company_id = ${input.companyId}
+            WHERE ep."companyId" = ${input.companyId}
+            ORDER BY COALESCE(eo.quantidade, 0) DESC, ep.nome
+            LIMIT 30
           `);
           return r.rows as any[];
         }),
@@ -1025,6 +1063,11 @@ export const scorecardRouter = router({
       const cltSemTreinamento = clt.filter((e: any) => parseInt(String(e.treinamentos_validos)) === 0).length;
       const terceirosSemDoc   = terceiros.filter((t: any) => parseInt(String(t.docs_preenchidos)) === 0).length;
       const totalCustoEpi     = epiPorTipo.reduce((s: number, e: any) => s + parseFloat(String(e.custo_total ?? 0)), 0);
+      const totalUnidadesEpi  = epiPorTipo.reduce((s: number, e: any) => s + parseInt(String(e.total_unidades ?? 0)), 0);
+      const totalEntregasEpi  = epiPorTipo.reduce((s: number, e: any) => s + parseInt(String(e.total_entregas ?? 0)), 0);
+      const itemMaisTrocado   = epiPorTipo.length > 0 ? epiPorTipo[0].epi_nome : null;
+      const itemMenosTrocado  = epiPorTipo.length > 1 ? epiPorTipo[epiPorTipo.length - 1].epi_nome : null;
+      const funcCobertosEpi   = epiPorFuncionario.length;
       const totalAdvertencias = advertencias.length + advertenciasTerceiros.length;
 
       const totalAcidentes    = acidentes.length;
@@ -1044,7 +1087,7 @@ export const scorecardRouter = router({
       return {
         clt, terceiros, treinamentosNorma,
         advertencias, advertenciasTerceiros,
-        epiPorFuncionario, epiPorTipo,
+        epiPorFuncionario, epiPorTipo, epiEstoque,
         acidentes, dds, apr, pt, atestados, historico,
         resumo: {
           totalClt, totalTerceiros,
@@ -1058,6 +1101,8 @@ export const scorecardRouter = router({
           totalAtestados, totalDiasAtestado,
           custoTotalAtestados, custoSalarioAtestados,
           custoEncargosAtestados, custoVrAtestados,
+          totalUnidadesEpi, totalEntregasEpi,
+          itemMaisTrocado, itemMenosTrocado, funcCobertosEpi,
         },
       };
     }),

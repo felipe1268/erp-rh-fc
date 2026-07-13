@@ -50,13 +50,15 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4221** — **SCORECARD SST: REDESIGN COMPLETO — ABA "SEGURANÇA" → "🦺 SST".** Fix bolinhas PeriodSelectorCard (inicializa todos 12 meses + checa epi_entregas). Q14 backend (estoque EPI por obra). Dashboard EPI: gráficos mensais, Curva ABC, Top 5 maior/menor uso c/ foto, estoque obra. Atestados: Top 5 c/ foto + CID breakdown (25 códigos BR) + tabela com badge CID. Comparativo + EPIs. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4220** — **SCORECARD RH: MATRÍCULA + CARGO LEGÍVEIS NA TABELA CUSTO POR FUNCIONÁRIO.** Matrícula em mono, cargo em indigo visível (oculto quando nulo). Aplicado nas 2 tabelas. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4219** — **SCORECARD COMPRAS: FERRAMENTAS ALMOX + LOCAÇÕES — LAYOUT CARD COM FOTO + FIX LOCAÇÕES VAZIAS.** Cards horizontais (foto thumbnail + dados) substituem lista compacta. Badge "🏗️ Equipamento Próprio" para `equipamento_vinculado_tipo='proprio'`. Locações agora encontra itens via JOIN em `almoxarifado_itens`. Foto, responsável, data início/devolução, custo/mês. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4218** — **SCORECARD SEGURANÇA: LEGENDA + monthStatus + TABELA COMPARATIVA + 4 GRÁFICOS.** PeriodSelectorCard 3 estados de bolinha + showLegend. Tabela mês anterior × atual com ▲/▼. 4 gráficos 2×2. ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4219** — **SCORECARD COMPRAS: FERRAMENTAS ALMOX + LOCAÇÕES — LAYOUT CARD COM FOTO + FIX LOCAÇÕES VAZIAS.** Cards horizontais, badge Próprio, JOIN almoxarifado_itens, foto/responsável/custo/mês. ZERO DELETE · ZERO ALTER destrutivo.
+
+- **Rev. 4218** — **SCORECARD SEGURANÇA: LEGENDA + monthStatus + TABELA COMPARATIVA + 4 GRÁFICOS.** ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4217** — **REGRA DE OURO GRAVADA: SELETOR DE MÊS/ANO → SEMPRE `<PeriodSelectorCard>`.** `segMes: string → number | null`. ZERO DELETE · ZERO ALTER destrutivo.
 

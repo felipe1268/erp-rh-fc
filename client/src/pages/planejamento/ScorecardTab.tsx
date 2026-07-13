@@ -65,7 +65,7 @@ function getBonusFatorLabel(score: number): { label: string; color: string } {
 }
 
 const DIMENSAO_META = [
-  { key: "seguranca",    label: "Segurança",    icon: <HardHat className="w-4 h-4" />,      color: "text-red-600",    bg: "bg-red-50 border-red-100" },
+  { key: "seguranca",    label: "SST",          icon: <HardHat className="w-4 h-4" />,      color: "text-red-600",    bg: "bg-red-50 border-red-100" },
   { key: "planejamento", label: "Prazo",        icon: <BarChart3 className="w-4 h-4" />,    color: "text-blue-600",   bg: "bg-blue-50 border-blue-100" },
   { key: "compras",      label: "Compras",      icon: <ShoppingCart className="w-4 h-4" />, color: "text-violet-600", bg: "bg-violet-50 border-violet-100" },
   { key: "almox",        label: "Almoxarifado", icon: <Package className="w-4 h-4" />,      color: "text-teal-600",   bg: "bg-teal-50 border-teal-100" },
@@ -259,16 +259,21 @@ export default function ScorecardTab({ proj }: { proj: any }) {
     { companyId, obraId: obraId!, mesRef: segMesRef },
     { enabled: enabled && tabScore === "seguranca", staleTime: 120_000 }
   );
-  // monthStatus para o PeriodSelectorCard — bolinhas azuis nos meses com dados
+  // monthStatus para o PeriodSelectorCard — bolinhas nos meses com dados SST
   const segMonthStatus = useMemo(() => {
     const hist: any[] = analiseSeguranca.data?.historico ?? [];
     const result: Record<number, "data" | "consolidated" | "none"> = {};
+    // Preenche TODOS os 12 meses como "none" primeiro
+    for (let m = 1; m <= 12; m++) result[m] = "none";
     hist.forEach((h) => {
-      const [y, m] = String(h.mes ?? "").split("-");
+      const [y, mm] = String(h.mes ?? "").split("-");
       if (parseInt(y) !== segAno) return;
-      const numMes = parseInt(m);
-      const hasData = parseInt(String(h.atestados ?? 0)) > 0 || parseInt(String(h.dds ?? 0)) > 0 || parseInt(String(h.acidentes ?? 0)) > 0;
-      result[numMes] = hasData ? "data" : "none";
+      const numMes = parseInt(mm);
+      const hasData = parseInt(String(h.atestados ?? 0)) > 0
+        || parseInt(String(h.dds ?? 0)) > 0
+        || parseInt(String(h.acidentes ?? 0)) > 0
+        || parseInt(String(h.epi_entregas ?? 0)) > 0;
+      if (hasData) result[numMes] = "data";
     });
     return result;
   }, [analiseSeguranca.data, segAno]);
@@ -469,7 +474,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
           { key: "resultado",   label: "📊 Resultado"       },
           { key: "metas",       label: "🎯 Metas & Desvios" },
           { key: "rh",          label: "👥 RH / Folha"      },
-          { key: "seguranca",   label: "🛡️ Segurança"      },
+          { key: "seguranca",   label: "🦺 SST"             },
           { key: "compras",     label: "📦 Compras"         },
           { key: "operacional", label: "🔧 Operacional"     },
         ] as const).map(t => (
@@ -1422,10 +1427,30 @@ export default function ScorecardTab({ proj }: { proj: any }) {
             <p className="text-xs text-gray-400 py-8 text-center">Sem dados disponíveis.</p>
           ) : (
             <div className="space-y-4">
-              {/* ── Conteúdo principal da aba Segurança ─────────────────────── */}
+              {/* ── Conteúdo principal da aba SST ────────────────────────────── */}
               {(() => {
                 const d      = analiseSeguranca.data!;
                 const r      = d.resumo;
+
+                // ── CID lookup ──────────────────────────────────────────────────
+                const CID_LOOKUP: Record<string, string> = {
+                  "J00":"Resfriado comum","J06":"Inf. resp. superior aguda","J11":"Influenza / gripe",
+                  "J20":"Bronquite aguda","J22":"Inf. resp. inferior","J45":"Asma","J40":"Bronquite",
+                  "R51":"Cefaleia / enxaqueca","M54":"Dorsalgia / dor lombar","M79":"Transt. musculares",
+                  "M75":"Lesão ombro","M77":"Tendinite / epicondilite","M50":"Lesão cervical",
+                  "K30":"Dispepsia","K59":"Alt. intestinal funcional","K21":"Refluxo","K29":"Gastrite",
+                  "A09":"Diarreia / gastroenterite","F32":"Episódio depressivo","F41":"Ansiedade",
+                  "I10":"Hipertensão","L30":"Dermatose / alergia pele",
+                  "R10":"Dor abdominal","R53":"Mal-estar / fadiga",
+                  "S":"Lesão / traumatismo","Z":"Consulta preventiva",
+                };
+                const getCidDesc = (cid: string | null): string => {
+                  if (!cid) return "";
+                  const c = String(cid).toUpperCase().trim();
+                  return CID_LOOKUP[c] || CID_LOOKUP[c.slice(0,3)] || CID_LOOKUP[c[0]] || "";
+                };
+
+                // ── Chart data ──────────────────────────────────────────────────
                 const chartData = (d.historico ?? []).map((h: any) => {
                   const [y, mm] = String(h.mes ?? "").split("-");
                   return {
@@ -1436,9 +1461,32 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                     acidentes : parseInt(String(h.acidentes ?? 0)),
                     dias_ates : parseInt(String(h.dias_ates ?? 0)),
                     custo_ates: parseFloat(String(h.custo_ates ?? 0)),
+                    epi_unidades: parseInt(String(h.epi_unidades ?? 0)),
+                    epi_custo   : parseFloat(String(h.epi_custo ?? 0)),
                   };
                 });
-                const hasData = chartData.some(h => h.atestados > 0 || h.dds > 0 || h.acidentes > 0);
+                const hasData = chartData.some(h => h.atestados > 0 || h.dds > 0 || h.acidentes > 0 || h.epi_unidades > 0);
+
+                // ── Top atestados por funcionário ───────────────────────────────
+                const atEstMap: Record<string, {nome:string;foto:string|null;cargo:string|null;count:number;dias:number;cids:string[]}> = {};
+                (d.atestados ?? []).forEach((a: any) => {
+                  const k = String(a.funcionario_nome ?? a.funcionarioNome ?? "?");
+                  if (!atEstMap[k]) atEstMap[k] = { nome: k, foto: a.foto_url ?? null, cargo: a.cargo ?? null, count: 0, dias: 0, cids: [] };
+                  atEstMap[k].count++;
+                  atEstMap[k].dias += parseInt(String(a.diasAfastamento ?? 0));
+                  if (a.cid) atEstMap[k].cids.push(String(a.cid));
+                });
+                const topAtestados = Object.values(atEstMap).sort((a,b) => b.count - a.count).slice(0, 5);
+
+                // ── CID breakdown ───────────────────────────────────────────────
+                const cidMap: Record<string, {cid:string;count:number;dias:number}> = {};
+                (d.atestados ?? []).forEach((a: any) => {
+                  const c = a.cid ? String(a.cid).toUpperCase().trim().slice(0,3) : "S/CID";
+                  if (!cidMap[c]) cidMap[c] = { cid: c, count: 0, dias: 0 };
+                  cidMap[c].count++;
+                  cidMap[c].dias += parseInt(String(a.diasAfastamento ?? 0));
+                });
+                const cidList = Object.values(cidMap).sort((a,b) => b.count - a.count).slice(0, 6);
                 // ── Comparativo mês atual × mês anterior ──
                 const curMesKey  = segMes !== null ? `${segAno}-${String(segMes).padStart(2, "0")}` : null;
                 const prevDate   = segMes !== null ? new Date(segAno, segMes - 2, 1) : null;
@@ -1449,23 +1497,34 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                 const curLabel  = curMesKey  ? `${MESES_BR[parseInt(curMesKey.split("-")[1])  - 1]}/${curMesKey.split("-")[0].slice(2)}`  : "—";
                 type CompRow = { label: string; prev: number | string; cur: number | string; higherIsBetter: boolean; isMonetary?: boolean };
                 const compRows: CompRow[] = curH ? [
-                  { label: "DDS Realizados",      prev: prevH?.dds ?? 0,       cur: curH.dds,       higherIsBetter: true  },
-                  { label: "Atestados",            prev: prevH?.atestados ?? 0, cur: curH.atestados, higherIsBetter: false },
-                  { label: "Dias Afastamento",     prev: prevH?.dias_ates ?? 0, cur: curH.dias_ates, higherIsBetter: false },
-                  { label: "Acidentes",            prev: prevH?.acidentes ?? 0, cur: curH.acidentes, higherIsBetter: false },
-                  { label: "Custo Atestados (R$)", prev: prevH?.custo_ates ?? 0,cur: curH.custo_ates,higherIsBetter: false, isMonetary: true },
+                  { label: "DDS Realizados",      prev: prevH?.dds ?? 0,         cur: curH.dds,           higherIsBetter: true  },
+                  { label: "Atestados",            prev: prevH?.atestados ?? 0,   cur: curH.atestados,     higherIsBetter: false },
+                  { label: "Dias Afastamento",     prev: prevH?.dias_ates ?? 0,   cur: curH.dias_ates,     higherIsBetter: false },
+                  { label: "Acidentes",            prev: prevH?.acidentes ?? 0,   cur: curH.acidentes,     higherIsBetter: false },
+                  { label: "EPIs Entregues",       prev: prevH?.epi_unidades ?? 0,cur: curH.epi_unidades,  higherIsBetter: true  },
+                  { label: "Custo Atestados (R$)", prev: prevH?.custo_ates ?? 0,  cur: curH.custo_ates,    higherIsBetter: false, isMonetary: true },
                 ] : [];
+
+                // ── Top 5 EPIs por funcionário ──────────────────────────────────
+                const topEpiFunc  = [...(d.epiPorFuncionario ?? [])].sort((a:any,b:any) => parseFloat(String(b.custo_total??0)) - parseFloat(String(a.custo_total??0))).slice(0,5);
+                const leastEpiFunc= [...(d.epiPorFuncionario ?? [])].sort((a:any,b:any) => parseFloat(String(a.custo_total??0)) - parseFloat(String(b.custo_total??0))).slice(0,5);
+                // Max custo para barra
+                const maxEpiCusto = Math.max(1, ...topEpiFunc.map((e:any) => parseFloat(String(e.custo_total??0))));
+                // Estoque EPI desta obra
+                const epiEstoque  = d.epiEstoque ?? [];
+                const estoqueTotal= epiEstoque.reduce((s:number,e:any)=>s+parseInt(String(e.estoque_obra??0)),0);
+                const epiCriticos = epiEstoque.filter((e:any)=>parseInt(String(e.estoque_obra??0))===0).length;
 
                 return (
                   <>
-                    {/* ── LINHA 1: KPIs grandes ──────────────────────────────── */}
+                    {/* ── LINHA 1: KPIs SST ──────────────────────────────────── */}
                     <div className="grid grid-cols-5 gap-1.5">
                       {[
-                        { label: "Efetivo CLT",  v: r.totalClt ?? 0,      sub: `+${r.totalTerceiros ?? 0} terc.`, color: "text-gray-800", bg: "bg-white border-gray-200" },
-                        { label: "Acidentes",    v: r.totalAcidentes ?? 0, sub: `${r.totalGraves ?? 0} grave(s)`,  color: (r.totalAcidentes ?? 0) > 0 ? "text-red-600" : "text-gray-400",  bg: (r.totalAcidentes ?? 0) > 0 ? "bg-red-50 border-red-200" : "bg-gray-50 border-gray-100" },
-                        { label: "DDS",          v: r.totalDds ?? 0,       sub: "realizados",                     color: (r.totalDds ?? 0) > 0 ? "text-green-700" : "text-gray-400", bg: (r.totalDds ?? 0) > 0 ? "bg-green-50 border-green-200" : "bg-gray-50 border-gray-100" },
+                        { label: "Efetivo CLT",  v: r.totalClt ?? 0,       sub: `+${r.totalTerceiros ?? 0} terc.`,         color: "text-gray-800",   bg: "bg-white border-gray-200" },
+                        { label: "Acidentes",    v: r.totalAcidentes ?? 0,  sub: `${r.totalGraves ?? 0} grave(s)`,          color: (r.totalAcidentes ?? 0) > 0 ? "text-red-600"   : "text-gray-400", bg: (r.totalAcidentes ?? 0) > 0  ? "bg-red-50 border-red-200"    : "bg-gray-50 border-gray-100" },
+                        { label: "DDS",          v: r.totalDds ?? 0,        sub: "realizados",                              color: (r.totalDds ?? 0) > 0      ? "text-green-700" : "text-gray-400", bg: (r.totalDds ?? 0) > 0        ? "bg-green-50 border-green-200" : "bg-gray-50 border-gray-100" },
                         { label: "APR / PT",     v: `${r.totalApr ?? 0}/${r.totalPt ?? 0}`, sub: `${(r.aprAbertas ?? 0) + (r.ptAbertas ?? 0)} ativ.`, color: "text-blue-700", bg: "bg-blue-50 border-blue-100" },
-                        { label: "Atestados",    v: r.totalAtestados ?? 0, sub: `${r.totalDiasAtestado ?? 0}d afas.`, color: (r.totalAtestados ?? 0) > 0 ? "text-amber-600" : "text-gray-400", bg: (r.totalAtestados ?? 0) > 0 ? "bg-amber-50 border-amber-200" : "bg-gray-50 border-gray-100" },
+                        { label: "Atestados",    v: r.totalAtestados ?? 0,  sub: `${r.totalDiasAtestado ?? 0}d afas.`,      color: (r.totalAtestados ?? 0) > 0  ? "text-amber-600" : "text-gray-400", bg: (r.totalAtestados ?? 0) > 0  ? "bg-amber-50 border-amber-200" : "bg-gray-50 border-gray-100" },
                       ].map((k, i) => (
                         <div key={i} className={`rounded-xl border px-1.5 py-2.5 text-center ${k.bg}`}>
                           <p className={`text-base font-bold leading-none ${k.color}`}>{k.v}</p>
@@ -1475,31 +1534,33 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                       ))}
                     </div>
 
-                    {/* ── LINHA 2: KPIs compliance ───────────────────────────── */}
-                    <div className="grid grid-cols-4 gap-1.5">
+                    {/* ── LINHA 2: Compliance + EPI KPIs ─────────────────────── */}
+                    <div className="grid grid-cols-6 gap-1.5">
                       {[
-                        { label: "Sem ASO",     v: r.cltSemAso ?? 0,          color: (r.cltSemAso ?? 0) > 0 ? "text-amber-600" : "text-gray-400", bg: (r.cltSemAso ?? 0) > 0 ? "bg-amber-50 border-amber-100" : "bg-gray-50 border-gray-100" },
-                        { label: "ASO Vencido", v: r.cltAsoVencido ?? 0,       color: (r.cltAsoVencido ?? 0) > 0 ? "text-red-600" : "text-gray-400", bg: (r.cltAsoVencido ?? 0) > 0 ? "bg-red-50 border-red-100" : "bg-gray-50 border-gray-100" },
-                        { label: "Advertências",v: r.totalAdvertencias ?? 0,   color: (r.totalAdvertencias ?? 0) > 0 ? "text-red-600" : "text-gray-400", bg: (r.totalAdvertencias ?? 0) > 0 ? "bg-red-50 border-red-100" : "bg-gray-50 border-gray-100" },
-                        { label: "Custo EPI",   v: fmt(r.totalCustoEpi ?? 0),  color: "text-indigo-700", bg: "bg-indigo-50 border-indigo-100" },
+                        { label: "Sem ASO",        v: r.cltSemAso ?? 0,             color: (r.cltSemAso ?? 0) > 0       ? "text-amber-600"  : "text-gray-400", bg: (r.cltSemAso ?? 0) > 0       ? "bg-amber-50 border-amber-100"  : "bg-gray-50 border-gray-100" },
+                        { label: "ASO Vencido",    v: r.cltAsoVencido ?? 0,          color: (r.cltAsoVencido ?? 0) > 0   ? "text-red-600"    : "text-gray-400", bg: (r.cltAsoVencido ?? 0) > 0   ? "bg-red-50 border-red-100"      : "bg-gray-50 border-gray-100" },
+                        { label: "Advertências",   v: r.totalAdvertencias ?? 0,      color: (r.totalAdvertencias ?? 0) > 0 ? "text-red-600"  : "text-gray-400", bg: (r.totalAdvertencias ?? 0) > 0 ? "bg-red-50 border-red-100"    : "bg-gray-50 border-gray-100" },
+                        { label: "EPIs Entregues", v: r.totalEntregasEpi ?? 0,       color: "text-indigo-700",              bg: "bg-indigo-50 border-indigo-100"  },
+                        { label: "Unidades EPI",   v: r.totalUnidadesEpi ?? 0,       color: "text-indigo-600",              bg: "bg-indigo-50 border-indigo-100"  },
+                        { label: "Custo EPI",      v: fmt(r.totalCustoEpi ?? 0),     color: "text-purple-700",              bg: "bg-purple-50 border-purple-100"  },
                       ].map((k, i) => (
-                        <div key={i} className={`rounded-lg border px-2 py-2 text-center ${k.bg}`}>
-                          <p className={`text-xs font-bold ${k.color}`}>{k.v}</p>
-                          <p className="text-[9px] text-gray-400 mt-0.5 leading-tight">{k.label}</p>
+                        <div key={i} className={`rounded-lg border px-1.5 py-2 text-center ${k.bg}`}>
+                          <p className={`text-xs font-bold leading-none ${k.color}`}>{k.v}</p>
+                          <p className="text-[8px] text-gray-400 mt-0.5 leading-tight">{k.label}</p>
                         </div>
                       ))}
                     </div>
 
-                    {/* ── LINHA 3: Custo total de atestados (destaque financeiro) */}
+                    {/* ── CUSTO ATESTADOS ─────────────────────────────────────── */}
                     {(r.totalAtestados ?? 0) > 0 && (
                       <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5">
                         <p className="text-[9px] font-bold uppercase tracking-wide text-amber-700 mb-1.5">Custo estimado de atestados</p>
                         <div className="grid grid-cols-4 gap-1 text-center">
                           {[
-                            { label: "Salário", v: fmt(r.custoSalarioAtestados ?? 0), color: "text-amber-700" },
-                            { label: "+ Encargos (33%)", v: fmt(r.custoEncargosAtestados ?? 0), color: "text-orange-700" },
-                            { label: "+ VR/VA", v: fmt(r.custoVrAtestados ?? 0), color: "text-yellow-700" },
-                            { label: "TOTAL", v: fmt(r.custoTotalAtestados ?? 0), color: "text-red-700 font-bold text-sm" },
+                            { label: "Salário",       v: fmt(r.custoSalarioAtestados ?? 0),  color: "text-amber-700" },
+                            { label: "+ Encargos 33%",v: fmt(r.custoEncargosAtestados ?? 0), color: "text-orange-700" },
+                            { label: "+ VR/VA",        v: fmt(r.custoVrAtestados ?? 0),       color: "text-yellow-700" },
+                            { label: "TOTAL",          v: fmt(r.custoTotalAtestados ?? 0),    color: "text-red-700 font-bold text-sm" },
                           ].map((k, i) => (
                             <div key={i} className="bg-white/70 rounded-lg px-1 py-1.5">
                               <p className={`text-xs font-bold leading-tight ${k.color}`}>{k.v}</p>
@@ -1507,18 +1568,186 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                             </div>
                           ))}
                         </div>
-                        <p className="text-[8px] text-amber-600 mt-1.5">* Salário proporcional (÷30×dias) + encargos (FGTS 8% + INSS Patronal 20% + outros 5%) + VR diário</p>
+                        <p className="text-[8px] text-amber-600 mt-1.5">* Salário proporcional (÷30×dias) + encargos (FGTS 8%+INSS 20%+outros 5%) + VR diário</p>
                       </div>
                     )}
 
-                    {/* ── COMPARATIVO: mês atual × mês anterior ───────────── */}
+                    {/* ══ DASHBOARD EPI ══════════════════════════════════════════ */}
+                    {(d.epiPorTipo?.length > 0 || epiEstoque.length > 0) && (
+                      <div className="rounded-2xl border-2 border-indigo-200 bg-indigo-50/40 p-3 space-y-3">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-700 flex items-center gap-1.5">
+                          🦺 Dashboard de EPI — Equipamento de Proteção Individual
+                        </p>
+
+                        {/* EPI: gráfico mensal */}
+                        {chartData.some(c => c.epi_unidades > 0) && (
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="bg-white border border-indigo-100 rounded-xl px-2 pt-2 pb-1">
+                              <p className="text-[9px] font-bold text-indigo-600 uppercase tracking-wide mb-1">Unidades EPI / Mês</p>
+                              <ResponsiveContainer width="100%" height={75}>
+                                <BarChart data={chartData} barSize={10} margin={{ top: 0, right: 2, left: -22, bottom: 0 }}>
+                                  <XAxis dataKey="mes" tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                                  <YAxis tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                                  <RcTooltip contentStyle={{ fontSize: 10 }} formatter={(v: any) => [v, "Unidades"]} />
+                                  <Bar dataKey="epi_unidades" radius={[2,2,0,0]}>
+                                    {chartData.map((_: any, i: number) => <Cell key={i} fill="#6366f1" />)}
+                                  </Bar>
+                                </BarChart>
+                              </ResponsiveContainer>
+                            </div>
+                            <div className="bg-white border border-purple-100 rounded-xl px-2 pt-2 pb-1">
+                              <p className="text-[9px] font-bold text-purple-600 uppercase tracking-wide mb-1">Custo EPI / Mês (R$)</p>
+                              <ResponsiveContainer width="100%" height={75}>
+                                <BarChart data={chartData} barSize={10} margin={{ top: 0, right: 2, left: -22, bottom: 0 }}>
+                                  <XAxis dataKey="mes" tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                                  <YAxis tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} allowDecimals={false} tickFormatter={(v: number) => v > 999 ? `${(v/1000).toFixed(0)}k` : String(v)} />
+                                  <RcTooltip contentStyle={{ fontSize: 10 }} formatter={(v: any) => [fmt(Number(v)), "Custo"]} />
+                                  <Bar dataKey="epi_custo" radius={[2,2,0,0]}>
+                                    {chartData.map((_: any, i: number) => <Cell key={i} fill="#a855f7" />)}
+                                  </Bar>
+                                </BarChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* EPI: Curva ABC */}
+                        {d.epiPorTipo?.length > 0 && (
+                          <div className="bg-white rounded-xl border border-indigo-100 overflow-hidden">
+                            <div className="px-3 py-1.5 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between">
+                              <p className="text-[9px] font-bold uppercase tracking-wide text-indigo-700">Curva ABC de EPI</p>
+                              <p className="text-[8px] text-gray-400">{r.itemMaisTrocado && <span>↑ mais: <b className="text-indigo-600">{r.itemMaisTrocado}</b></span>}{r.itemMenosTrocado && <span className="ml-2">↓ menos: <b className="text-gray-500">{r.itemMenosTrocado}</b></span>}</p>
+                            </div>
+                            <table className="w-full text-[10px]">
+                              <thead className="bg-gray-50/80">
+                                <tr>
+                                  <th className="text-left px-2 py-1 text-gray-500 font-semibold w-5">Cl.</th>
+                                  <th className="text-left px-2 py-1 text-gray-500 font-semibold">EPI</th>
+                                  <th className="text-right px-2 py-1 text-gray-500 font-semibold w-8">Un.</th>
+                                  <th className="text-right px-2 py-1 text-gray-500 font-semibold w-8">Entrg.</th>
+                                  <th className="text-right px-2 py-1 text-gray-500 font-semibold w-20">Custo</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {d.epiPorTipo.slice(0, 10).map((ep: any, i: number) => (
+                                  <tr key={i} className={`border-t border-gray-50 ${i % 2 === 0 ? "" : "bg-gray-50/50"}`}>
+                                    <td className="px-2 py-1">
+                                      <span className={`font-bold text-[9px] px-1 py-0.5 rounded ${ep.classe_abc === "A" ? "bg-green-100 text-green-700" : ep.classe_abc === "B" ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-400"}`}>{ep.classe_abc}</span>
+                                    </td>
+                                    <td className="px-2 py-1 text-gray-700 truncate max-w-[110px]">{ep.epi_nome}</td>
+                                    <td className="px-2 py-1 text-right text-gray-600">{ep.total_unidades}</td>
+                                    <td className="px-2 py-1 text-right text-gray-400">{ep.total_entregas}</td>
+                                    <td className="px-2 py-1 text-right font-semibold text-indigo-700">{fmt(parseFloat(String(ep.custo_total ?? 0)))}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+
+                        {/* EPI: top 5 mais e menos usam */}
+                        {d.epiPorFuncionario?.length > 0 && (
+                          <div className="grid grid-cols-2 gap-2">
+                            {/* Top 5 mais */}
+                            <div className="bg-white rounded-xl border border-indigo-100 overflow-hidden">
+                              <div className="px-2.5 py-1.5 bg-indigo-50 border-b border-indigo-100">
+                                <p className="text-[9px] font-bold text-indigo-700 uppercase tracking-wide">🏆 Top 5 — Maior uso EPI</p>
+                              </div>
+                              <div className="divide-y divide-gray-50">
+                                {topEpiFunc.map((e: any, i: number) => {
+                                  const nome = String(e.funcionario_nome ?? e.nome ?? "?");
+                                  const initials = nome.split(" ").filter(Boolean).slice(0,2).map((n:string)=>n[0]).join("");
+                                  const custo = parseFloat(String(e.custo_total ?? 0));
+                                  const pct = maxEpiCusto > 0 ? (custo / maxEpiCusto) * 100 : 0;
+                                  return (
+                                    <div key={i} className="flex items-center gap-2 px-2.5 py-1.5">
+                                      {e.foto_url ? (
+                                        <img src={e.foto_url} alt={nome} className="w-6 h-6 rounded-full object-cover shrink-0 ring-1 ring-indigo-200" />
+                                      ) : (
+                                        <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-[8px] font-bold flex items-center justify-center shrink-0">{initials}</div>
+                                      )}
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-[9px] font-semibold text-gray-800 truncate">{nome.split(" ").slice(0,2).join(" ")}</p>
+                                        <div className="h-1 bg-gray-100 rounded-full mt-0.5">
+                                          <div className="h-1 bg-indigo-400 rounded-full" style={{ width: `${pct}%` }} />
+                                        </div>
+                                      </div>
+                                      <span className="text-[9px] font-bold text-indigo-700 shrink-0">{fmt(custo)}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            {/* Top 5 menos */}
+                            <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+                              <div className="px-2.5 py-1.5 bg-gray-50 border-b border-gray-100">
+                                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wide">📉 Top 5 — Menor uso EPI</p>
+                              </div>
+                              <div className="divide-y divide-gray-50">
+                                {leastEpiFunc.map((e: any, i: number) => {
+                                  const nome = String(e.funcionario_nome ?? e.nome ?? "?");
+                                  const initials = nome.split(" ").filter(Boolean).slice(0,2).map((n:string)=>n[0]).join("");
+                                  const custo = parseFloat(String(e.custo_total ?? 0));
+                                  return (
+                                    <div key={i} className="flex items-center gap-2 px-2.5 py-1.5">
+                                      {e.foto_url ? (
+                                        <img src={e.foto_url} alt={nome} className="w-6 h-6 rounded-full object-cover shrink-0 ring-1 ring-gray-200" />
+                                      ) : (
+                                        <div className="w-6 h-6 rounded-full bg-gray-200 text-gray-600 text-[8px] font-bold flex items-center justify-center shrink-0">{initials}</div>
+                                      )}
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-[9px] font-semibold text-gray-700 truncate">{nome.split(" ").slice(0,2).join(" ")}</p>
+                                        <p className="text-[8px] text-gray-400">{e.cargo ?? ""}</p>
+                                      </div>
+                                      <span className="text-[9px] font-bold text-gray-500 shrink-0">{fmt(custo)}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* EPI: estoque desta obra */}
+                        {epiEstoque.length > 0 && (
+                          <div className="bg-white rounded-xl border border-indigo-100 overflow-hidden">
+                            <div className="px-3 py-1.5 bg-indigo-50/50 border-b border-indigo-100 flex items-center justify-between">
+                              <p className="text-[9px] font-bold text-indigo-700 uppercase tracking-wide">Estoque nesta Obra</p>
+                              <div className="flex items-center gap-2 text-[8px]">
+                                <span className="text-gray-500">{estoqueTotal} un. disponíveis</span>
+                                {epiCriticos > 0 && <span className="bg-red-100 text-red-700 font-bold px-1 py-0.5 rounded">{epiCriticos} sem estoque</span>}
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-0 divide-y divide-gray-50 max-h-44 overflow-y-auto">
+                              {epiEstoque.map((ep: any, i: number) => {
+                                const qtd = parseInt(String(ep.estoque_obra ?? 0));
+                                const central = parseInt(String(ep.estoque_central ?? 0));
+                                const vazio = qtd === 0;
+                                return (
+                                  <div key={i} className={`flex items-center gap-2 px-2.5 py-1.5 border-l ${i%2===1?"border-l-gray-100":""} ${vazio ? "bg-red-50/50" : ""}`}>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-[9px] font-medium text-gray-700 truncate">{ep.nome}</p>
+                                      {ep.categoria && <p className="text-[7px] text-gray-400">{ep.categoria}</p>}
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                      <p className={`text-[9px] font-bold ${vazio ? "text-red-600" : "text-indigo-700"}`}>{qtd} un.</p>
+                                      {central > 0 && <p className="text-[7px] text-gray-400">{central} central</p>}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ── COMPARATIVO: mês atual × mês anterior ───────────────── */}
                     {compRows.length > 0 && (
                       <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
                         <div className="px-3 py-1.5 bg-gray-50 border-b border-gray-100 flex items-center gap-1.5">
                           <Activity className="w-3 h-3 text-gray-400" />
-                          <p className="text-[9px] font-bold uppercase tracking-wide text-gray-500">
-                            Comparativo: {prevLabel} → {curLabel}
-                          </p>
+                          <p className="text-[9px] font-bold uppercase tracking-wide text-gray-500">Comparativo: {prevLabel} → {curLabel}</p>
                         </div>
                         <table className="w-full text-[9px]">
                           <thead>
@@ -1545,11 +1774,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                   <td className="px-2 py-1.5 text-center text-gray-500">{fmtV(pv)}</td>
                                   <td className="px-2 py-1.5 text-center font-bold text-gray-800">{fmtV(cv)}</td>
                                   <td className={`px-2 py-1.5 text-center font-bold ${deltaColor}`}>
-                                    {eq ? "—" : (
-                                      <span className="flex items-center justify-center gap-0.5">
-                                        {up ? "▲" : "▼"} {fmtV(Math.abs(delta))}
-                                      </span>
-                                    )}
+                                    {eq ? "—" : <span className="flex items-center justify-center gap-0.5">{up ? "▲" : "▼"} {fmtV(Math.abs(delta))}</span>}
                                   </td>
                                 </tr>
                               );
@@ -1560,77 +1785,35 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                       </div>
                     )}
 
-                    {/* ── LINHA 4: Gráficos de tendência (4 gráficos 2×2) ──── */}
+                    {/* ── GRÁFICOS DE TENDÊNCIA (2×2) ─────────────────────────── */}
                     {hasData && (
                       <div className="grid grid-cols-2 gap-2">
-                        {/* Gráfico 1: DDS */}
-                        <div className="bg-white border border-gray-100 rounded-xl px-2 pt-2 pb-1">
-                          <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wide mb-1">DDS Realizados / Mês</p>
-                          <ResponsiveContainer width="100%" height={80}>
-                            <BarChart data={chartData} barSize={10} margin={{ top: 0, right: 2, left: -22, bottom: 0 }}>
-                              <XAxis dataKey="mes" tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                              <YAxis tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} allowDecimals={false} />
-                              <RcTooltip contentStyle={{ fontSize: 10 }} formatter={(v: any) => [v, "DDS"]} />
-                              <Bar dataKey="dds" radius={[2, 2, 0, 0]}>
-                                {chartData.map((cd: any, i: number) => (
-                                  <Cell key={i} fill={cd.dds > 0 ? "#16a34a" : "#e5e7eb"} />
-                                ))}
-                              </Bar>
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                        {/* Gráfico 2: Atestados */}
-                        <div className="bg-white border border-gray-100 rounded-xl px-2 pt-2 pb-1">
-                          <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wide mb-1">Atestados / Mês</p>
-                          <ResponsiveContainer width="100%" height={80}>
-                            <BarChart data={chartData} barSize={10} margin={{ top: 0, right: 2, left: -22, bottom: 0 }}>
-                              <XAxis dataKey="mes" tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                              <YAxis tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} allowDecimals={false} />
-                              <RcTooltip contentStyle={{ fontSize: 10 }} formatter={(v: any) => [v, "Atestados"]} />
-                              <Bar dataKey="atestados" radius={[2, 2, 0, 0]}>
-                                {chartData.map((cd: any, i: number) => (
-                                  <Cell key={i} fill={cd.atestados > 0 ? "#f59e0b" : "#e5e7eb"} />
-                                ))}
-                              </Bar>
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                        {/* Gráfico 3: Acidentes */}
-                        <div className="bg-white border border-gray-100 rounded-xl px-2 pt-2 pb-1">
-                          <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wide mb-1">Acidentes / Mês</p>
-                          <ResponsiveContainer width="100%" height={80}>
-                            <BarChart data={chartData} barSize={10} margin={{ top: 0, right: 2, left: -22, bottom: 0 }}>
-                              <XAxis dataKey="mes" tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                              <YAxis tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} allowDecimals={false} />
-                              <RcTooltip contentStyle={{ fontSize: 10 }} formatter={(v: any) => [v, "Acidentes"]} />
-                              <Bar dataKey="acidentes" radius={[2, 2, 0, 0]}>
-                                {chartData.map((cd: any, i: number) => (
-                                  <Cell key={i} fill={cd.acidentes > 0 ? "#dc2626" : "#e5e7eb"} />
-                                ))}
-                              </Bar>
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                        {/* Gráfico 4: Dias de Afastamento */}
-                        <div className="bg-white border border-gray-100 rounded-xl px-2 pt-2 pb-1">
-                          <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wide mb-1">Dias Afastamento / Mês</p>
-                          <ResponsiveContainer width="100%" height={80}>
-                            <BarChart data={chartData} barSize={10} margin={{ top: 0, right: 2, left: -22, bottom: 0 }}>
-                              <XAxis dataKey="mes" tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                              <YAxis tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} allowDecimals={false} />
-                              <RcTooltip contentStyle={{ fontSize: 10 }} formatter={(v: any) => [v, "Dias"]} />
-                              <Bar dataKey="dias_ates" radius={[2, 2, 0, 0]}>
-                                {chartData.map((cd: any, i: number) => (
-                                  <Cell key={i} fill={cd.dias_ates > 0 ? "#9333ea" : "#e5e7eb"} />
-                                ))}
-                              </Bar>
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
+                        {([
+                          { key: "dds",       label: "DDS Realizados / Mês",   color: "#16a34a", unit: "DDS"       },
+                          { key: "atestados", label: "Atestados / Mês",        color: "#f59e0b", unit: "Atestados" },
+                          { key: "acidentes", label: "Acidentes / Mês",        color: "#dc2626", unit: "Acidentes" },
+                          { key: "dias_ates", label: "Dias Afastamento / Mês", color: "#9333ea", unit: "Dias"      },
+                        ] as const).map((g) => (
+                          <div key={g.key} className="bg-white border border-gray-100 rounded-xl px-2 pt-2 pb-1">
+                            <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wide mb-1">{g.label}</p>
+                            <ResponsiveContainer width="100%" height={75}>
+                              <BarChart data={chartData} barSize={10} margin={{ top: 0, right: 2, left: -22, bottom: 0 }}>
+                                <XAxis dataKey="mes" tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                                <YAxis tick={{ fontSize: 7, fill: "#9ca3af" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                                <RcTooltip contentStyle={{ fontSize: 10 }} formatter={(v: any) => [v, g.unit]} />
+                                <Bar dataKey={g.key} radius={[2, 2, 0, 0]}>
+                                  {chartData.map((cd: any, i: number) => (
+                                    <Cell key={i} fill={(cd[g.key] as number) > 0 ? g.color : "#e5e7eb"} />
+                                  ))}
+                                </Bar>
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        ))}
                       </div>
                     )}
 
-                    {/* ── ACIDENTES / INCIDENTES (alert em destaque) ─────────── */}
+                    {/* ── ACIDENTES ───────────────────────────────────────────── */}
                     {d.acidentes.length > 0 && (
                       <div className="rounded-xl border-2 border-red-300 bg-red-50 p-3">
                         <p className="text-[10px] font-bold uppercase tracking-wide text-red-600 mb-2 flex items-center gap-1.5">
@@ -1665,75 +1848,140 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                       </div>
                     )}
 
-                    {/* ── ATESTADOS: tabela com custo ─────────────────────────── */}
+                    {/* ── ATESTADOS + CID + TOP 5 ─────────────────────────────── */}
                     {d.atestados.length > 0 && (
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700 mb-1.5 flex items-center gap-1">
-                          <Heart className="w-3 h-3" />Atestados Médicos ({d.atestados.length})
-                          <span className="ml-1 text-[9px] font-normal text-gray-400">com custo estimado</span>
-                        </p>
-                        <div className="rounded-xl border border-amber-200 overflow-hidden">
-                          <table className="w-full text-[10px]">
-                            <thead className="bg-amber-50">
-                              <tr>
-                                <th className="text-left px-2 py-1.5 text-gray-500 font-semibold">Funcionário</th>
-                                <th className="text-center px-1.5 py-1.5 text-gray-500 font-semibold w-14">Data</th>
-                                <th className="text-center px-1.5 py-1.5 text-gray-500 font-semibold w-8">Dias</th>
-                                <th className="text-right px-1.5 py-1.5 text-gray-500 font-semibold w-16">Salário</th>
-                                <th className="text-right px-1.5 py-1.5 text-gray-500 font-semibold w-16">Encargos</th>
-                                <th className="text-right px-1.5 py-1.5 text-gray-500 font-semibold w-14">VR</th>
-                                <th className="text-right px-1.5 py-1.5 text-amber-700 font-bold w-18">Total</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {d.atestados.map((a: any, i: number) => {
-                                const dias     = parseInt(String(a.diasAfastamento ?? 0));
-                                const cSal     = parseFloat(String(a.custo_salario ?? 0));
-                                const cEnc     = parseFloat(String(a.custo_encargos ?? 0));
-                                const cVr      = parseFloat(String(a.custo_vr ?? 0));
-                                const cTotal   = parseFloat(String(a.custo_total ?? 0));
-                                const primeiroNome = String(a.funcionario_nome ?? "").split(" ").slice(0, 2).join(" ");
+                      <div className="space-y-3">
+                        {/* Top 5 mais atestados */}
+                        {topAtestados.length > 0 && (
+                          <div className="rounded-xl border border-amber-200 bg-amber-50/40 overflow-hidden">
+                            <div className="px-3 py-1.5 bg-amber-50 border-b border-amber-100">
+                              <p className="text-[9px] font-bold text-amber-700 uppercase tracking-wide">🏥 Top 5 — Mais Atestados</p>
+                            </div>
+                            <div className="divide-y divide-amber-50">
+                              {topAtestados.map((p, i) => {
+                                const initials = p.nome.split(" ").filter(Boolean).slice(0,2).map(n=>n[0]).join("");
+                                const uniqueCids = [...new Set(p.cids)].slice(0,3);
                                 return (
-                                  <tr key={i} className="border-t border-amber-100 hover:bg-amber-50/40">
-                                    <td className="px-2 py-1.5">
-                                      <div className="flex items-center gap-1.5">
-                                        {a.foto_url ? (
-                                          <img src={a.foto_url} alt={primeiroNome} className="w-5 h-5 rounded-full object-cover shrink-0" />
-                                        ) : (
-                                          <div className="w-5 h-5 rounded-full bg-amber-200 text-amber-700 text-[8px] font-bold flex items-center justify-center shrink-0">
-                                            {String(a.funcionario_nome ?? "?").split(" ").slice(0, 2).map((n: string) => n[0]).join("")}
-                                          </div>
-                                        )}
-                                        <div>
-                                          <p className="font-medium text-gray-800 leading-tight">{primeiroNome}</p>
-                                          {a.cid && <p className="text-gray-400 leading-tight font-mono">{a.cid}</p>}
-                                        </div>
+                                  <div key={i} className="flex items-center gap-2.5 px-3 py-2">
+                                    <span className="text-[9px] font-bold text-amber-400 w-4 shrink-0">#{i+1}</span>
+                                    {p.foto ? (
+                                      <img src={p.foto} alt={p.nome} className="w-8 h-8 rounded-full object-cover shrink-0 ring-2 ring-amber-200" />
+                                    ) : (
+                                      <div className="w-8 h-8 rounded-full bg-amber-200 text-amber-700 text-[9px] font-bold flex items-center justify-center shrink-0">{initials}</div>
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-[10px] font-bold text-gray-800 truncate">{p.nome.split(" ").slice(0,2).join(" ")}</p>
+                                      <div className="flex flex-wrap gap-1 mt-0.5">
+                                        {p.cargo && <span className="text-[7px] text-indigo-600 font-medium">{p.cargo}</span>}
+                                        {uniqueCids.map((cid, ci) => (
+                                          <span key={ci} className="text-[7px] bg-amber-100 text-amber-700 px-1 rounded font-mono" title={getCidDesc(cid)}>{cid}</span>
+                                        ))}
                                       </div>
-                                    </td>
-                                    <td className="px-1.5 py-1.5 text-center text-gray-400">{fDate(a.dataEmissao ?? a.dataemissao)}</td>
-                                    <td className="px-1.5 py-1.5 text-center">
-                                      {dias > 0 ? <span className="text-amber-600 font-bold">{dias}</span> : <span className="text-gray-300">—</span>}
-                                    </td>
-                                    <td className="px-1.5 py-1.5 text-right text-gray-600">{cSal > 0 ? fmt(cSal) : <span className="text-gray-300">—</span>}</td>
-                                    <td className="px-1.5 py-1.5 text-right text-orange-600">{cEnc > 0 ? fmt(cEnc) : <span className="text-gray-300">—</span>}</td>
-                                    <td className="px-1.5 py-1.5 text-right text-yellow-600">{cVr > 0 ? fmt(cVr) : <span className="text-gray-300">—</span>}</td>
-                                    <td className="px-1.5 py-1.5 text-right font-bold text-amber-700">{cTotal > 0 ? fmt(cTotal) : <span className="text-gray-300">—</span>}</td>
-                                  </tr>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                      <p className="text-[11px] font-bold text-amber-700">{p.count}×</p>
+                                      {p.dias > 0 && <p className="text-[8px] text-gray-400">{p.dias}d</p>}
+                                    </div>
+                                  </div>
                                 );
                               })}
-                            </tbody>
-                            {d.atestados.length > 1 && (
-                              <tfoot className="bg-amber-100">
+                            </div>
+                          </div>
+                        )}
+
+                        {/* CID breakdown */}
+                        {cidList.length > 0 && (
+                          <div className="rounded-xl border border-amber-100 bg-white overflow-hidden">
+                            <div className="px-3 py-1.5 bg-amber-50 border-b border-amber-100">
+                              <p className="text-[9px] font-bold text-amber-700 uppercase tracking-wide">CID — Causas de Afastamento</p>
+                            </div>
+                            <div className="grid grid-cols-2 divide-x divide-y divide-amber-50">
+                              {cidList.map((c, i) => {
+                                const desc = getCidDesc(c.cid);
+                                const maxCount = Math.max(1, ...cidList.map(cc=>cc.count));
+                                const pct = (c.count / maxCount) * 100;
+                                return (
+                                  <div key={i} className="px-3 py-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[9px] font-bold font-mono text-amber-700 shrink-0 w-10">{c.cid}</span>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-[8px] text-gray-600 truncate">{desc || "Sem descrição"}</p>
+                                        <div className="h-1 bg-amber-100 rounded-full mt-0.5">
+                                          <div className="h-1 bg-amber-400 rounded-full" style={{ width: `${pct}%` }} />
+                                        </div>
+                                      </div>
+                                      <span className="text-[9px] font-bold text-amber-700 shrink-0">{c.count}</span>
+                                    </div>
+                                    {c.dias > 0 && <p className="text-[7px] text-gray-400 mt-0.5 pl-12">{c.dias}d afastamento</p>}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Tabela detalhada de atestados */}
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700 mb-1.5 flex items-center gap-1">
+                            <Heart className="w-3 h-3" />Atestados Médicos ({d.atestados.length}) — custo estimado
+                          </p>
+                          <div className="rounded-xl border border-amber-200 overflow-hidden">
+                            <table className="w-full text-[10px]">
+                              <thead className="bg-amber-50">
                                 <tr>
-                                  <td colSpan={3} className="px-2 py-1.5 font-bold text-amber-800 text-[9px] uppercase">Total {d.atestados.length} atestados · {r.totalDiasAtestado ?? 0} dias</td>
-                                  <td className="px-1.5 py-1.5 text-right font-bold text-gray-700">{fmt(r.custoSalarioAtestados ?? 0)}</td>
-                                  <td className="px-1.5 py-1.5 text-right font-bold text-orange-700">{fmt(r.custoEncargosAtestados ?? 0)}</td>
-                                  <td className="px-1.5 py-1.5 text-right font-bold text-yellow-700">{fmt(r.custoVrAtestados ?? 0)}</td>
-                                  <td className="px-1.5 py-1.5 text-right font-bold text-amber-800">{fmt(r.custoTotalAtestados ?? 0)}</td>
+                                  <th className="text-left px-2 py-1.5 text-gray-500 font-semibold">Funcionário</th>
+                                  <th className="text-left px-1.5 py-1.5 text-gray-500 font-semibold w-18">CID</th>
+                                  <th className="text-center px-1.5 py-1.5 text-gray-500 font-semibold w-14">Data</th>
+                                  <th className="text-center px-1.5 py-1.5 text-gray-500 font-semibold w-8">Dias</th>
+                                  <th className="text-right px-1.5 py-1.5 text-amber-700 font-bold w-18">Total</th>
                                 </tr>
-                              </tfoot>
-                            )}
-                          </table>
+                              </thead>
+                              <tbody>
+                                {d.atestados.map((a: any, i: number) => {
+                                  const dias   = parseInt(String(a.diasAfastamento ?? 0));
+                                  const cTotal = parseFloat(String(a.custo_total ?? 0));
+                                  const nome   = String(a.funcionario_nome ?? "").split(" ").slice(0, 2).join(" ");
+                                  const initials = String(a.funcionario_nome ?? "?").split(" ").filter(Boolean).slice(0,2).map((n:string)=>n[0]).join("");
+                                  const cidDesc = getCidDesc(a.cid);
+                                  return (
+                                    <tr key={i} className="border-t border-amber-100 hover:bg-amber-50/40">
+                                      <td className="px-2 py-1.5">
+                                        <div className="flex items-center gap-1.5">
+                                          {a.foto_url ? (
+                                            <img src={a.foto_url} alt={nome} className="w-5 h-5 rounded-full object-cover shrink-0" />
+                                          ) : (
+                                            <div className="w-5 h-5 rounded-full bg-amber-200 text-amber-700 text-[8px] font-bold flex items-center justify-center shrink-0">{initials}</div>
+                                          )}
+                                          <p className="font-medium text-gray-800 leading-tight truncate">{nome}</p>
+                                        </div>
+                                      </td>
+                                      <td className="px-1.5 py-1.5">
+                                        {a.cid ? (
+                                          <span className="font-mono text-[8px] text-amber-700 bg-amber-100 px-1 py-0.5 rounded" title={cidDesc}>{String(a.cid).toUpperCase()}</span>
+                                        ) : <span className="text-gray-300">—</span>}
+                                      </td>
+                                      <td className="px-1.5 py-1.5 text-center text-gray-400">{fDate(a.dataEmissao ?? a.dataemissao)}</td>
+                                      <td className="px-1.5 py-1.5 text-center">
+                                        {dias > 0 ? <span className="text-amber-600 font-bold">{dias}</span> : <span className="text-gray-300">—</span>}
+                                      </td>
+                                      <td className="px-1.5 py-1.5 text-right font-bold text-amber-700">{cTotal > 0 ? fmt(cTotal) : <span className="text-gray-300">—</span>}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                              {d.atestados.length > 1 && (
+                                <tfoot className="bg-amber-100">
+                                  <tr>
+                                    <td colSpan={3} className="px-2 py-1.5 font-bold text-amber-800 text-[9px] uppercase">
+                                      Total {d.atestados.length} atestados · {r.totalDiasAtestado ?? 0} dias afastamento
+                                    </td>
+                                    <td></td>
+                                    <td className="px-1.5 py-1.5 text-right font-bold text-amber-800">{fmt(r.custoTotalAtestados ?? 0)}</td>
+                                  </tr>
+                                </tfoot>
+                              )}
+                            </table>
+                          </div>
                         </div>
                       </div>
                     )}
