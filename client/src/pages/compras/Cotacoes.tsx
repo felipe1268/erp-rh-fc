@@ -4991,8 +4991,20 @@ export default function Cotacoes() {
                             type="button"
                             disabled={excluirItensCotacao.isPending}
                             onClick={() => {
-                              if (!confirm(`Excluir ${mapaItemsChecked.size} ${mapaItemsChecked.size === 1 ? "item" : "itens"} da cotação?`)) return;
-                              excluirItensCotacao.mutate({ ids: [...mapaItemsChecked] });
+                              // Para pacotes: expandir cada ID selecionado para incluir todos os irmãos
+                              // do mesmo composicaoCodigo (que compartilham o grupo mas têm IDs distintos)
+                              const rawItems: any[] = mapa?.itens ?? [];
+                              const allIds = new Set([...mapaItemsChecked]);
+                              for (const id of mapaItemsChecked) {
+                                const raw = rawItems.find((i: any) => i.id === id);
+                                if (raw?.composicaoCodigo) {
+                                  rawItems
+                                    .filter((i: any) => i.composicaoCodigo === raw.composicaoCodigo)
+                                    .forEach((i: any) => allIds.add(i.id));
+                                }
+                              }
+                              if (!confirm(`Excluir ${allIds.size} ${allIds.size === 1 ? "item" : "itens"} da cotação?`)) return;
+                              excluirItensCotacao.mutate({ ids: [...allIds] });
                             }}
                             className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 transition-colors"
                           >

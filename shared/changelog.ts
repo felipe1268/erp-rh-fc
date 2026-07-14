@@ -1,4 +1,24 @@
 /**
+ * Rev. 4249 - FIX: EXCLUSÃO EM LOTE NÃO APAGAVA GRUPOS PACOTE.
+ *
+ * CAUSA RAIZ: Em cotações tipo Pacote, cada linha do mapa agrupa N itens do
+ * banco com o mesmo composicaoCodigo. A linha exibida usa `first.id` (o ID do
+ * primeiro item do grupo). Ao deletar só esse ID, os demais irmãos do grupo
+ * permanecem no banco — na próxima query o grupo reaparece com um novo `first`.
+ *
+ * FIX: No onClick do botão "Excluir", antes de chamar a mutation, expandir o
+ * conjunto de IDs: para cada ID selecionado, se o item tem `composicaoCodigo`,
+ * incluir TODOS os irmãos (mesmo composicaoCodigo) em `allIds`. Isso garante
+ * que o grupo inteiro seja deletado de uma vez.
+ *
+ * Lógica: `rawItems.filter(i => i.composicaoCodigo === raw.composicaoCodigo)`
+ * usando `mapa?.itens` (itens brutos antes do agrupamento visual).
+ *
+ * Sem alteração em `excluirItensCotacao` backend (já aceita array de IDs).
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4248 - SELEÇÃO MÚLTIPLA PARA EXCLUSÃO EM LOTE NO MAPA DE COTAÇÃO.
  *
  * ESCOPO: Checkboxes de multi-seleção agora aparecem para TODAS as cotações
