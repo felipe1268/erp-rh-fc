@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4246** — **TOTAL DO FORNECEDOR NO CABEÇALHO DO MAPA DE COTAÇÃO.** Valor total de cada fornecedor aparece agora no cabeçalho da coluna (pill verde para vencedor, cinza para demais), eliminando a necessidade de rolar até o rodapé. Usa `totaisPorFornecedor` (ao vivo) com fallback `totalOrcado`. Oculto quando total = 0. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4247** — **FIX: EXCLUIR/EDITAR ITENS EM COTAÇÕES TIPO PACOTE.** Guard `!it._grouped` bloqueava também o item-pai do pacote (_isPacoteGroup=true). Fix: `(!it._grouped || it._isPacoteGroup)` — filhos internos continuam bloqueados, item-pai libera os botões. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4245** — **EDITAR, EXCLUIR E INCLUIR ITENS NA COTAÇÃO.** Botões Pencil + Trash aparecem no hover de cada item (visíveis só em cotação "pendente"). Dialog "Editar Item": altera descrição, unidade, quantidade e flag somenteMo. Dialog "Incluir Item": cria item avulso (semVerba='avulso') sem vincular à SC. Excluir remove respostas e o item; bloqueia se item já em OC ativa. Backend: 3 novas procedures `editarItemCotacao` / `excluirItemCotacao` / `adicionarItemCotacao` (companyAccess + guard status≠aprovada). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4246** — **TOTAL DO FORNECEDOR NO CABEÇALHO DO MAPA DE COTAÇÃO.** Valor total de cada fornecedor aparece agora no cabeçalho da coluna (pill verde para vencedor, cinza para demais), eliminando a necessidade de rolar até o rodapé. Usa `totaisPorFornecedor` (ao vivo) com fallback `totalOrcado`. Oculto quando total = 0. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4237** — **RESULTADO FINANCEIRO: WATERFALL CORRETO (BRUTO → LÍQUIDO).** Fórmula: Receita − Custo Direto = Lucro Bruto → (−) Impostos → (−) Overhead → = Lucro Líquido. Linha 1 sempre visível (Lucro Bruto); Linha 2 condicional quando deduções configuradas. Sem deduções: Lucro Bruto em verde com CTA. PainelOrcamento: "Lucro Médio Mensal" renomeado para "Result. Bruto Mensal". ZERO DELETE · ZERO ALTER destrutivo.
 

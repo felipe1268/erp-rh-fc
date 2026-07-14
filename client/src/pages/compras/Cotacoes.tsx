@@ -5653,7 +5653,8 @@ export default function Cotacoes() {
                                       </div>
                                       <HistoricoPrecoPopover companyId={companyId} descricao={it.descricao} />
                                       {/* Rev. 4245 — botões editar/excluir visíveis no hover, só em pendente */}
-                                      {detalheFullscreen?.status === "pendente" && !it._grouped && (
+                                      {/* _grouped bloqueia filhos de pacote mas não o item-pai (isPacoteGroup) */}
+                                      {detalheFullscreen?.status === "pendente" && (!it._grouped || it._isPacoteGroup) && (
                                         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ml-1 shrink-0">
                                           <button
                                             title="Editar item"

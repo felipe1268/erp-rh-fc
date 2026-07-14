@@ -1,4 +1,20 @@
 /**
+ * Rev. 4247 - FIX: EXCLUIR/EDITAR ITENS EM COTAÇÕES TIPO PACOTE.
+ *
+ * CAUSA RAIZ: A guard `!it._grouped` bloqueava os botões de Pencil + Trash tanto
+ * nos filhos de pacote (correto) quanto no próprio item-pai do pacote (_isPacoteGroup=true,
+ * _grouped=true) — tornando impossível editar/excluir itens em qualquer cotação do tipo pacote.
+ *
+ * FIX: Condição alterada de `!it._grouped` para `(!it._grouped || it._isPacoteGroup)`.
+ * Resultado:
+ *   - Item-pai do pacote (_isPacoteGroup=true) → botões aparecem ✓
+ *   - Filhos internos (_grouped=true, _isPacoteGroup=false) → botões ocultos ✓
+ *   - Itens normais (_grouped=false) → botões aparecem ✓
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4246 - TOTAL DO FORNECEDOR NO CABEÇALHO DO MAPA DE COTAÇÃO.
  *
  * ESCOPO: O valor total de cada fornecedor agora aparece diretamente no
