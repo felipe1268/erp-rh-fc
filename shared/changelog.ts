@@ -1,4 +1,27 @@
 /**
+ * Rev. 4251 - ESPELHAMENTO AUTOMÁTICO DE ITENS DA COTAÇÃO NA SC VINCULADA.
+ *
+ * Quando um item é adicionado na cotação (avulso ou via EAP), se a cotação
+ * possui uma SC vinculada (solicitacaoId), o item é automaticamente criado
+ * também em `compras_solicitacoes_itens` com tag de rastreabilidade:
+ *   observacoes = "Adicionado na Cot. [NUM] por [Nome do usuário]"
+ *   motivoSemVerba = "avulso" (item avulso) ou "cotacao_eap" (item da EAP)
+ *
+ * O item da cotação (comprasCotacoesItens) recebe `solicitacaoItemId`
+ * apontando para o item criado na SC, mantendo a rastreabilidade bidirecional.
+ *
+ * Ambas as operações ocorrem em db.transaction — atômicas.
+ *
+ * Frontend (Solicitacoes.tsx): na aba "Saldo/Itens" da SC, itens com
+ * motivoSemVerba "avulso"/"cotacao_eap" E observacoes não-nulo exibem
+ * badge roxo "📋 Adicionado na Cot. X por Y" abaixo da descrição.
+ *
+ * Backend: getSaldoItensSC passa a retornar motivoSemVerba + observacoes.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4250 - FILTRO DE BUSCA + INCLUIR ITENS DA EAP NO MAPA DE COTAÇÃO.
  *
  * FEATURE 1 — Filtro de busca no mapa:

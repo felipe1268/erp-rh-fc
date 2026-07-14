@@ -968,6 +968,15 @@ function ConfirmAprovDialog({ confirmAprov, setConfirmAprov, aprovar, desaprovar
                                   {info.texto}
                                 </p>
                               )}
+                              {/* Rev. 4251 — badge para item espelhado de cotação */}
+                              {((item as any).motivoSemVerba === "avulso" || (item as any).motivoSemVerba === "cotacao_eap") && (item as any).observacoes && (
+                                <span
+                                  className="inline-flex items-center gap-0.5 mt-0.5 px-1.5 py-0.5 rounded text-[8px] font-semibold bg-violet-100 text-violet-700 border border-violet-200 whitespace-nowrap"
+                                  title={(item as any).observacoes}
+                                >
+                                  📋 {(item as any).observacoes}
+                                </span>
+                              )}
                             </td>
                             <td className="px-1 py-2 text-center text-[10px] text-gray-500">{item.unidade}</td>
                             <td className="px-2 py-2 text-right text-xs font-semibold text-blue-700 bg-blue-50/30 tabular-nums">{fmt(item.qtdEstaSC)}</td>

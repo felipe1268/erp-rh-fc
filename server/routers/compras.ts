@@ -6451,23 +6451,49 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
-      const [cot] = await db.select({ companyId: comprasCotacoes.companyId, status: comprasCotacoes.status }).from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
+      const [cot] = await db.select({
+        companyId: comprasCotacoes.companyId,
+        status: comprasCotacoes.status,
+        solicitacaoId: comprasCotacoes.solicitacaoId,
+        numeroCotacao: comprasCotacoes.numeroCotacao,
+      }).from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
       if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
       await _assertCompanyAccess(ctx.user, cot.companyId);
       if (cot.status === "aprovada") throw new TRPCError({ code: "BAD_REQUEST", message: "Cotação aprovada não pode ser editada." });
       const qtd = parseFloat(input.quantidade.replace(",", ".")) || 1;
-      const [novoItem] = await db.insert(comprasCotacoesItens).values({
-        cotacaoId: input.cotacaoId,
-        descricao: input.descricao.trim(),
-        unidade: input.unidade?.trim() || "un",
-        quantidade: String(qtd),
-        somenteMo: input.somenteMo ?? false,
-        semVerba: true,
-        motivoSemVerba: "avulso",
-        precoUnitario: "0",
-        total: "0",
-      }).returning();
-      return { ok: true, id: novoItem.id };
+      const descricao = input.descricao.trim();
+      const unidade = input.unidade?.trim() || "un";
+      const tag = `Adicionado na Cot. ${cot.numeroCotacao ?? `#${input.cotacaoId}`} por ${ctx.user.name ?? "usuário"}`;
+      return await db.transaction(async tx => {
+        // Rev. 4251 — espelhar item na SC vinculada (se existir)
+        let solicitacaoItemId: number | null = null;
+        if (cot.solicitacaoId) {
+          const [scItem] = await tx.insert(comprasSolicitacoesItens).values({
+            solicitacaoId: cot.solicitacaoId,
+            descricao,
+            unidade,
+            quantidade: String(qtd),
+            statusItem: "pendente",
+            semVerba: true,
+            motivoSemVerba: "avulso",
+            observacoes: tag,
+          }).returning({ id: comprasSolicitacoesItens.id });
+          solicitacaoItemId = scItem?.id ?? null;
+        }
+        const [novoItem] = await tx.insert(comprasCotacoesItens).values({
+          cotacaoId: input.cotacaoId,
+          solicitacaoItemId: solicitacaoItemId ?? undefined,
+          descricao,
+          unidade,
+          quantidade: String(qtd),
+          somenteMo: input.somenteMo ?? false,
+          semVerba: true,
+          motivoSemVerba: "avulso",
+          precoUnitario: "0",
+          total: "0",
+        }).returning();
+        return { ok: true, id: novoItem.id, solicitacaoItemId };
+      });
     }),
 
   // Rev. 4250 — Itens da EAP disponíveis para incluir na cotação
@@ -6508,7 +6534,8 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
       return itens;
     }),
 
-  // Rev. 4250 — Adiciona em lote itens selecionados da EAP à cotação
+  // Rev. 4250/4251 — Adiciona em lote itens selecionados da EAP à cotação
+  // Rev. 4251 — espelha automaticamente na SC vinculada (se existir)
   adicionarItensEAPCotacao: protectedProcedure
     .input(z.object({
       cotacaoId: z.number(),
@@ -6520,24 +6547,52 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
-      const [cot] = await db.select({ companyId: comprasCotacoes.companyId, status: comprasCotacoes.status })
-        .from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
+      const [cot] = await db.select({
+        companyId: comprasCotacoes.companyId,
+        status: comprasCotacoes.status,
+        solicitacaoId: comprasCotacoes.solicitacaoId,
+        numeroCotacao: comprasCotacoes.numeroCotacao,
+      }).from(comprasCotacoes).where(eq(comprasCotacoes.id, input.cotacaoId));
       if (!cot) throw new TRPCError({ code: "NOT_FOUND" });
       await _assertCompanyAccess(ctx.user, cot.companyId);
       if (cot.status === "aprovada") throw new TRPCError({ code: "BAD_REQUEST", message: "Cotação aprovada não pode ser editada." });
       if (input.itens.length === 0) return { ok: true, count: 0 };
-      await db.insert(comprasCotacoesItens).values(
-        input.itens.map(it => ({
-          cotacaoId: input.cotacaoId,
-          descricao: it.descricao.trim(),
-          unidade: it.unidade?.trim() || "un",
-          quantidade: String(parseFloat(it.quantidade.replace(",", ".")) || 1),
-          semVerba: false,
-          precoUnitario: "0",
-          total: "0",
-        }))
-      );
-      return { ok: true, count: input.itens.length };
+      const tag = `Adicionado na Cot. ${cot.numeroCotacao ?? `#${input.cotacaoId}`} por ${ctx.user.name ?? "usuário"}`;
+      return await db.transaction(async tx => {
+        // Para cada item da EAP, criar item na SC (se vinculada) e na cotação
+        const resultItems: { cotacaoItemId: number; scItemId: number | null }[] = [];
+        for (const it of input.itens) {
+          const descricao = it.descricao.trim();
+          const unidade = it.unidade?.trim() || "un";
+          const quantidade = String(parseFloat(it.quantidade.replace(",", ".")) || 1);
+          let solicitacaoItemId: number | null = null;
+          if (cot.solicitacaoId) {
+            const [scItem] = await tx.insert(comprasSolicitacoesItens).values({
+              solicitacaoId: cot.solicitacaoId,
+              descricao,
+              unidade,
+              quantidade,
+              statusItem: "pendente",
+              semVerba: false,
+              motivoSemVerba: "cotacao_eap",
+              observacoes: tag,
+            }).returning({ id: comprasSolicitacoesItens.id });
+            solicitacaoItemId = scItem?.id ?? null;
+          }
+          const [cotItem] = await tx.insert(comprasCotacoesItens).values({
+            cotacaoId: input.cotacaoId,
+            solicitacaoItemId: solicitacaoItemId ?? undefined,
+            descricao,
+            unidade,
+            quantidade,
+            semVerba: false,
+            precoUnitario: "0",
+            total: "0",
+          }).returning({ id: comprasCotacoesItens.id });
+          resultItems.push({ cotacaoItemId: cotItem.id, scItemId: solicitacaoItemId });
+        }
+        return { ok: true, count: input.itens.length, scMirrored: resultItems.filter(r => r.scItemId !== null).length };
+      });
     }),
 
   adicionarFornecedorMapa: protectedProcedure
@@ -11461,6 +11516,8 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
           situacao,
           fonteVinculo,
           semVerbaFlag: item.semVerba ?? false,
+          motivoSemVerba: item.motivoSemVerba ?? null,
+          observacoes: item.observacoes ?? null,
           insumos,
         };
       });
