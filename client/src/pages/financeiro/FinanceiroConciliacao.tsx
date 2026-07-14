@@ -627,6 +627,7 @@ export default function FinanceiroConciliacao() {
   const [vincularFormaPagamento, setVincularFormaPagamento] = useState<string>("");
   const registrarVinculoMut = (trpc as any).financial.registrarVinculoChequeDevolvido.useMutation();
   const estornarVinculoMut = (trpc as any).financial.estornarVinculoChequeDevolvido.useMutation();
+  const autoMarcarChequesDevMut = (trpc as any).financial.autoMarcarChequesDevolvidos.useMutation();
   const { data: pixGlobalData, isFetching: pixGlobalFetching } =
     (trpc as any).financial.searchPixTedGlobal.useQuery(
       {
@@ -1459,6 +1460,35 @@ export default function FinanceiroConciliacao() {
       chequeNumero: d.chequeNumero != null ? String(d.chequeNumero) : undefined,
     }))
     .filter((x: any) => Number.isFinite(x.debitoLineId) && x.debitoLineId > 0);
+  // Rev. 4260 — AUTO-MARCAR cheques devolvidos: quando o extrato mostra pares comp+dev,
+  // dispara automaticamente a mutation que sincroniza o status do Controle de Cheques
+  // para 'devolvido'. IDEMPOTENTE: nunca sobrescreve 'devolvido'/'compensado_pix'/etc.
+  // Usa uma key estável (sorted debitoIds) p/ não refazer a chamada no mesmo conjunto.
+  const autoMarcarKey = repDevol
+    .map((d: any) => Number(d.debitoId))
+    .filter((id: number) => id > 0)
+    .sort((a: number, b: number) => a - b)
+    .join(",");
+  const autoMarcarKeyRef = React.useRef<string>("");
+  React.useEffect(() => {
+    if (!companyId || !autoMarcarKey || autoMarcarKey === autoMarcarKeyRef.current) return;
+    const pares = repDevol
+      .filter((d: any) => Number(d.debitoId) > 0)
+      .map((d: any) => ({
+        debitoId: Number(d.debitoId),
+        chequeNumero: d.chequeNumero != null ? String(d.chequeNumero) : null,
+        doc: d.doc != null ? String(d.doc) : null,
+        valorCents: Number(d.valorCents) || 0,
+      }))
+      .filter((p: any) => p.valorCents > 0);
+    if (!pares.length) return;
+    autoMarcarKeyRef.current = autoMarcarKey;
+    autoMarcarChequesDevMut.mutate(
+      { companyId: Number(companyId), pares },
+      { onError: () => { autoMarcarKeyRef.current = ""; } },
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoMarcarKey, companyId]);
   const { data: vincLoteData } = (trpc as any).financial.getChequeDevolvidoVinculacao.useQuery(
     { companyId: Number(companyId), itens: vincItens },
     // Rev. 3769 — placeholderData: mantém o mapa anterior enquanto o report refaz (após

@@ -1,4 +1,53 @@
 /**
+ * Rev. 4260 - CONTROLE DE CHEQUES: STATUS "DEVOLVIDO" AUTOMÁTICO AO DETECTAR PAR COMP+DEV NO EXTRATO.
+ *
+ * PROBLEMA:
+ *   Quando o extrato bancário contém um par compensação+devolução (cheque devolvido por
+ *   falta de fundos ou outro motivo), o Controle de Cheques podia continuar exibindo
+ *   "Compensado" — porque a auto-baixa de `conciliarLancamento` (Rev. 4068) marcava o
+ *   cheque como compensado ao conciliar a LINHA DE COMPENSAÇÃO, antes que a linha de
+ *   devolução (crédito) aparecesse ou fosse processada. O usuário precisava clicar em
+ *   "Desconsiderar" no painel de Conciliação para que o status mudasse para "Devolvido".
+ *   Isso criava duplo entendimento: o cheque aparecia quitado no Controle enquanto o
+ *   banco havia devolvido o valor.
+ *
+ * SOLUÇÃO:
+ *
+ * Backend — `autoMarcarChequesDevolvidos` (financial.ts):
+ *   Procedure idempotente que recebe os pares comp+dev já detectados pela Conciliação
+ *   (debitoId, chequeNumero, doc, valorCents) e:
+ *   1. Normaliza o número do cheque (dígitos, sem zeros à esquerda).
+ *   2. Busca em financial_cheques por número+valor (status 'compensado' ou 'pendente').
+ *   3. Se encontra UMA correspondência unívoca → atualiza status='devolvido',
+ *      devolvido_em=COALESCE(existente, NOW()), updated_at=NOW().
+ *   4. Se ambíguo (≥2 cheques com mesmo número+valor) → não toca (safe).
+ *   Nunca altera status 'devolvido', 'sustado', 'cancelado', 'compensado_pix'.
+ *   Nunca toca as linhas do extrato (não desconsiderar — isso é decisão separada do usuário).
+ *   Gera audit log quando ≥1 cheque é atualizado.
+ *
+ * Frontend — FinanceiroConciliacao.tsx:
+ *   Novo `useEffect` que observa `autoMarcarKey` (sorted join dos debitoIds de repDevol).
+ *   Quando o conjunto de pares muda (extrato recarregado ou novo par detectado):
+ *     - Monta array de pares válidos (valorCents > 0).
+ *     - Chama `autoMarcarChequesDevMut` (fire-and-forget, não bloqueia UI).
+ *     - Usa `autoMarcarKeyRef` para evitar reenvio do mesmo conjunto já processado.
+ *     - Em caso de erro, limpa o ref para permitir retry na próxima renderização.
+ *
+ * RESULTADO:
+ *   Ao abrir a tela de Conciliação bancária para um período com cheques devolvidos,
+ *   o Controle de Cheques é automaticamente sincronizado: cheques que apareciam como
+ *   "Compensado" passam para "Devolvido" sem nenhuma ação manual do usuário.
+ *   A seção "Cheques devolvidos no banco" continua funcionando normalmente para o
+ *   usuário decidir sobre Vincular PIX/TED ou Desconsiderar da conciliação.
+ *
+ * ARQUIVOS:
+ *   server/routers/financial.ts — procedure autoMarcarChequesDevolvidos (após desconsiderarChequeDevolvido)
+ *   client/src/pages/financeiro/FinanceiroConciliacao.tsx — mutation + useEffect automático
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4259 - FIX: VALOR NEGOCIADO PACOTE — CORREÇÃO DE ARREDONDAMENTO NO ITEM ERRADO.
  *
  * PROBLEMA:

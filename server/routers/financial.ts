@@ -7250,6 +7250,64 @@ export const financialRouter = router({
     return { ok: true, afetados };
   }),
 
+  // Rev. 4260 — AUTO-MARCAR cheques devolvidos: quando o extrato mostra um par comp+dev
+  // para um cheque, mas o Controle ainda exibe 'compensado' (porque a auto-baixa de
+  // conciliarLancamento rodou antes da devolução aparecer no extrato), esta procedure
+  // atualiza o status para 'devolvido' SEM tocar as linhas do extrato (não desconsiderar).
+  // IDEMPOTENTE: pode ser chamada múltiplas vezes sem efeito colateral.
+  // Só altera status 'compensado'|'pendente' → 'devolvido'; nunca sobrescreve
+  // 'devolvido', 'sustado', 'cancelado', 'compensado_pix'.
+  // Ambíguo (mais de 1 cheque com mesmo nº+valor) → não toca.
+  autoMarcarChequesDevolvidos: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    pares: z.array(z.object({
+      debitoId: z.number(),
+      chequeNumero: z.string().nullable().optional(),
+      doc: z.string().nullable().optional(),
+      valorCents: z.number(),
+    })).min(1).max(200),
+  })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    await _assertFinanceiroCompanyAccess(ctx.user, input.companyId);
+    const norm = (s: any) => String(s ?? "").replace(/[^0-9]/g, "").replace(/^0+/, "");
+    let atualizados = 0;
+    for (const par of input.pares) {
+      try {
+        const alvo = norm(par.chequeNumero) || norm(par.doc);
+        if (!alvo || par.valorCents <= 0) continue;
+        const candRes = await dbExecute(db,
+          `SELECT id, numero_cheque AS "numeroCheque"
+             FROM financial_cheques
+            WHERE company_id=$1 AND excluido_em IS NULL
+              AND status IN ('compensado','pendente')
+              AND ROUND(ABS(valor)*100)=$2`,
+          [input.companyId, par.valorCents]);
+        const cands = (rows(candRes) as any[]).filter((c) => norm(c.numeroCheque) === alvo);
+        if (cands.length !== 1) continue;
+        const upd = await dbExecute(db,
+          `UPDATE financial_cheques
+              SET status='devolvido',
+                  devolvido_em=COALESCE(devolvido_em, NOW()),
+                  updated_at=NOW()
+            WHERE id=$1 AND company_id=$2 AND excluido_em IS NULL
+              AND status IN ('compensado','pendente')
+            RETURNING id`,
+          [cands[0].id, input.companyId]);
+        atualizados += rows(upd).length;
+      } catch (e: any) { console.error("[autoMarcarChequesDevolvidos] par", par.debitoId, "falhou:", e?.message || e); }
+    }
+    if (atualizados > 0) {
+      await createAuditLog({
+        userId: ctx.user?.id,
+        action: "cheque_auto_marcado_devolvido",
+        details: `${atualizados} cheque(s) marcado(s) automaticamente como devolvido (par comp+dev no extrato).`,
+        companyId: input.companyId,
+      });
+    }
+    return { atualizados };
+  }),
+
   // Rev. 3742 — RECONSIDERAR (desfaz o desconsiderar): volta as linhas para a conta do %.
   reconsiderarChequeDevolvido: protectedProcedure.input(z.object({
     companyId: z.number(),
