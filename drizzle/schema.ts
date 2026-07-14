@@ -6765,6 +6765,8 @@ export const comprasSolicitacoesItens = pgTable("compras_solicitacoes_itens", {
   incluirAjudante:    boolean("incluir_ajudante").default(true),
   metaMdoProfissional: numeric("meta_mdo_profissional", { precision: 18, scale: 4 }).default("0"),
   metaMdoAjudante:    numeric("meta_mdo_ajudante", { precision: 18, scale: 4 }).default("0"),
+  // Rev. 4243 — flag por item: indicar que somente mão de obra deve ser cotada (não o material).
+  somenteMo:          boolean("somente_mo").default(false),
 });
 
 export const comprasCotacoes = pgTable("compras_cotacoes", {
@@ -6818,6 +6820,8 @@ export const comprasCotacoesItens = pgTable("compras_cotacoes_itens", {
   total:            numeric({ precision: 14, scale: 2 }).default("0"),
   semVerba:         boolean("sem_verba").default(false),
   motivoSemVerba:   varchar("motivo_sem_verba", { length: 50 }),
+  // Rev. 4243 — propagado do item de SC: só mão de obra cotada para este item.
+  somenteMo:        boolean("somente_mo").default(false),
 });
 
 export const comprasCotacaoFornecedores = pgTable("compras_cotacao_fornecedores", {

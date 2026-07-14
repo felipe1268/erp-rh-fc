@@ -1,4 +1,25 @@
 /**
+ * Rev. 4243 - FLAG "SOMENTE MO" POR ITEM EM SC E COTAÇÕES.
+ *
+ * ESCOPO: toggle por item nas SCs de tipo "servico" (via EAP) + propagação automática
+ * para cotações vinculadas. Flag indica que o item requer apenas mão de obra,
+ * sem fornecimento de material.
+ *
+ * MUDANÇAS:
+ *   - drizzle/schema.ts: somente_mo BOOLEAN DEFAULT false em comprasSolicitacoesItens
+ *     e comprasCotacoesItens.
+ *   - server/_core/index.ts: ALTER TABLE ADD COLUMN IF NOT EXISTS somente_mo nas 2 tabelas.
+ *   - server/routers/compras.ts: somenteMo em criarSolicitacao, criarCotacao,
+ *     cotarItensRestantes, dividirCotacao, editarSolicitacao (input + insert);
+ *     getMapaCotacao select incluído.
+ *   - Solicitacoes.tsx: tipo ItemForm, toggle botão "MO" por item EAP, badge
+ *     "SOMENTE MO" no detalhe SC, somenteMo no itensPayload de handleSalvar.
+ *   - Cotacoes.tsx: badge "SOMENTE MO" nas 2 tabelas de itens (detalheFullscreen
+ *     e painel compacto).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+/**
  * Rev. 4242 - SCORECARD COMPRAS: FIX LOCAÇÕES — EXTRACT(days FROM integer) NÃO EXISTE NO POSTGRES.
  *
  * CAUSA RAIZ REAL (diagnóstico direto no Neon):

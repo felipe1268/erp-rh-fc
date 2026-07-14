@@ -6149,6 +6149,8 @@ REGRAS DE EXTRAÇÃO:
             ALTER TABLE compras_solicitacoes_itens ADD COLUMN IF NOT EXISTS incluir_ajudante BOOLEAN DEFAULT true;
             ALTER TABLE compras_solicitacoes_itens ADD COLUMN IF NOT EXISTS meta_mdo_profissional NUMERIC(18,4) DEFAULT 0;
             ALTER TABLE compras_solicitacoes_itens ADD COLUMN IF NOT EXISTS meta_mdo_ajudante NUMERIC(18,4) DEFAULT 0;
+            ALTER TABLE compras_solicitacoes_itens ADD COLUMN IF NOT EXISTS somente_mo BOOLEAN DEFAULT false;
+            ALTER TABLE compras_cotacoes_itens ADD COLUMN IF NOT EXISTS somente_mo BOOLEAN DEFAULT false;
             ALTER TABLE employees ADD COLUMN IF NOT EXISTS cargo_confianca SMALLINT NOT NULL DEFAULT 0;
             ALTER TABLE employees ADD COLUMN IF NOT EXISTS cargo_confianca_desde DATE;
             ALTER TABLE employees ADD COLUMN IF NOT EXISTS cargo_confianca_gratificacao VARCHAR(20);

@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4242** — **SCORECARD COMPRAS: FIX LOCAÇÕES — `EXTRACT(days FROM integer)` NÃO EXISTE NO POSTGRES.** Causa raiz real (diagnóstico direto no Neon): `date - date` retorna INTEGER, não interval; `EXTRACT(days FROM integer)` joga `pg_catalog.extract does not exist` → `safe()` captura e retorna `[]`. Fix: removido `EXTRACT(days FROM ...)` nas 2 ocorrências (Ramo A e B) — a subtração de datas já é integer. Query validada no Neon: 11 linhas retornadas. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4243** — **FLAG "SOMENTE MO" POR ITEM EM SC E COTAÇÕES.** Toggle por item em SCs de tipo "servico" (via seleção EAP): botão "MO" por item na lista de seleção de EAP; propagação automática para cotações vinculadas (criarCotacao, cotarItensRestantes, dividirCotacao). Schema: `somente_mo BOOLEAN DEFAULT false` em `comprasSolicitacoesItens` + `comprasCotacoesItens` (SyncSchema+ Rev. 4243). Badge "🔨 SOMENTE MO" no detalhe SC + badge "SOMENTE MO" nas 2 tabelas de itens de cotação (fullscreen + painel compacto). editarSolicitacao também aceita e persiste o flag. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4241** — **SCORECARD COMPRAS: FIX LOCAÇÕES — TYPE MISMATCH VARCHAR vs DATE NA UNION ALL.** Causa raiz real: `COALESCE(el.data_inicio [VARCHAR], ai.criado_em::date [DATE])` na UNION ALL quebra silenciosamente; `safe()` captura e retorna `[]`. Fix: SELECT usa `to_char(ai.criado_em,'YYYY-MM-DD')` (ambos TEXT); aritmética de data usa `COALESCE(el.data_inicio::date, ai.criado_em::date)` com cast explícito. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4242** — **SCORECARD COMPRAS: FIX LOCAÇÕES — `EXTRACT(days FROM integer)` NÃO EXISTE NO POSTGRES.** Causa raiz real (diagnóstico direto no Neon): `date - date` retorna INTEGER, não interval; `EXTRACT(days FROM integer)` joga `pg_catalog.extract does not exist` → `safe()` captura e retorna `[]`. Fix: removido `EXTRACT(days FROM ...)` nas 2 ocorrências (Ramo A e B) — a subtração de datas já é integer. Query validada no Neon: 11 linhas retornadas. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4237** — **RESULTADO FINANCEIRO: WATERFALL CORRETO (BRUTO → LÍQUIDO).** Fórmula: Receita − Custo Direto = Lucro Bruto → (−) Impostos → (−) Overhead → = Lucro Líquido. Linha 1 sempre visível (Lucro Bruto); Linha 2 condicional quando deduções configuradas. Sem deduções: Lucro Bruto em verde com CTA. PainelOrcamento: "Lucro Médio Mensal" renomeado para "Result. Bruto Mensal". ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -76,6 +76,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### 5 one-liners
 
+- **Rev. 4241** — **SCORECARD COMPRAS: FIX LOCAÇÕES — TYPE MISMATCH VARCHAR vs DATE NA UNION ALL.** `COALESCE(el.data_inicio [VARCHAR], ai.criado_em::date [DATE])` quebra silenciosamente; fix: `to_char` (TEXT) + cast explícito na aritmética. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4240** — **SCORECARD COMPRAS: FIX LOCAÇÕES — `origem='alugado'` + ícone 🔑.** Ramo A ampliado com `OR ai.origem='alugado'`; ferramentasAlmox exclui alugado; 🚜 → 🔑. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4239** — **ALMOXARIFADO: FIX VISUAL "QTD NÃO PERSISTE" — AVISO DE AGRUPAMENTO.** Card exibe SOMA de sub-items agrupados; dialog editava só `_subItems[0]`. Fix: `editandoSubItems` + painel azul. ZERO DELETE · ZERO ALTER destrutivo.
@@ -83,8 +85,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4237** — **RESULTADO FINANCEIRO: WATERFALL CORRETO (BRUTO → LÍQUIDO).** Receita − Custo Direto = Lucro Bruto → (−) Impostos → (−) Overhead → = Lucro Líquido. Linha 1 sempre visível; Linha 2 condicional. PainelOrcamento: "Lucro Médio Mensal" → "Result. Bruto Mensal". ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4226** — **SCORECARD SST: FIX CAST TIPOS — valor_produto NUMERIC + salarioBase VARCHAR.** REPLACE(numeric_col) quebra silenciosamente; epis.valor_produto é NUMERIC → COALESCE(ep.valor_produto,0); employees.salarioBase é VARCHAR → REPLACE(COALESCE,'0'),',','.'). Q6/Q7/Q12/Q13 corrigidos. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4225** — **SCORECARD SST: FIX FILTRO PERÍODO + CUSTO EPI + GRÁFICOS HISTÓRICO.** 5 bugs cirúrgicos: Q4/Q5 sem filtro de data, Q6 custo_estimado vs custo_total, Q6+Q7 sem período, Q13 valor_produto::numeric sem REPLACE. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

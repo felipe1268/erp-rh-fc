@@ -4328,6 +4328,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         incluirAjudante: z.boolean().optional(),
         metaMdoProfissional: z.number().optional(),
         metaMdoAjudante: z.number().optional(),
+        somenteMo: z.boolean().optional(),
       })),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -4449,6 +4450,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
             incluirAjudante: it.incluirAjudante ?? true,
             metaMdoProfissional: it.metaMdoProfissional ? String(it.metaMdoProfissional) : null,
             metaMdoAjudante: it.metaMdoAjudante ? String(it.metaMdoAjudante) : null,
+            somenteMo: it.somenteMo ?? false,
           }))
         ).returning();
       }
@@ -4506,6 +4508,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
                   precoUnitario: "0",
                   descontoPct: "0",
                   total: "0",
+                  somenteMo: inp?.somenteMo ?? it.somenteMo ?? false,
                 };
               })
             );
@@ -5125,6 +5128,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         quantidade: z.number(),
         precoUnitario: z.number(),
         descontoPct: z.number().optional(),
+        somenteMo: z.boolean().optional(),
       })),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -5253,6 +5257,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
               precoUnitario: String(it.precoUnitario),
               descontoPct: String(it.descontoPct ?? 0),
               total: it.total,
+              somenteMo: it.somenteMo ?? false,
             }))
           );
         }
@@ -5410,6 +5415,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
             total: String(movedItemTotal.toFixed(2)),
             semVerba: item.semVerba,
             motivoSemVerba: item.motivoSemVerba,
+            somenteMo: (item as any).somenteMo ?? false,
           } as any).returning();
 
           await tx.update(comprasCotacoesItens)
@@ -5654,6 +5660,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
             precoUnitario: "0",
             descontoPct: "0",
             total: "0",
+            somenteMo: it.somenteMo ?? false,
           })) as any
         );
         await tx.update(comprasSolicitacoes).set({ status: "cotacao", atualizadoEm: new Date().toISOString() }).where(eq(comprasSolicitacoes.id, sc.id));
@@ -5860,6 +5867,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
           incluirAjudante: comprasSolicitacoesItens.incluirAjudante,
           metaMdoProfissional: comprasSolicitacoesItens.metaMdoProfissional,
           metaMdoAjudante: comprasSolicitacoesItens.metaMdoAjudante,
+          somenteMo: comprasSolicitacoesItens.somenteMo,
         }).from(comprasSolicitacoesItens).where(inArray(comprasSolicitacoesItens.id, scItemIds));
       }
       const orcItemIds = scItens.map(s => s.orcamentoItemId).filter(Boolean) as number[];
@@ -13251,6 +13259,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
         incluirAjudante: z.boolean().optional(),
         metaMdoProfissional: z.number().optional(),
         metaMdoAjudante: z.number().optional(),
+        somenteMo: z.boolean().optional(),
       })).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -13389,6 +13398,7 @@ Operações saudáveis (sem déficit) continuam liberadas normalmente.`
                 incluirAjudante: it.incluirAjudante ?? true,
                 metaMdoProfissional: it.metaMdoProfissional ? String(it.metaMdoProfissional) : null,
                 metaMdoAjudante: it.metaMdoAjudante ? String(it.metaMdoAjudante) : null,
+                somenteMo: it.somenteMo ?? false,
               }))
             );
           }

@@ -2928,3 +2928,5 @@
 - **Rev. 3905** — **SST — PT WIZARD: GATES DE CHECKLIST + ENVOLVIDOS COM TERCEIROS.** Step 2: banners bloqueio + gate "Próximo". Step 3: terceiros da obra + badge âmbar "Terceiro"; limite 20→30. ZERO DELETE. Detalhe: `shared/changelog.ts`.
 
 - **Rev. 4077** — **CONTAS A PAGAR: NOVO FILTRO "SÓ FD / SEM FD" PRA ISOLAR TÍTULOS DE FATURAMENTO DIRETO NA LISTA.** `FinanceiroContasAPagar.tsx` ganhou estado `fdFilter` + toggle de 3 botões reaproveitando `fdBadgeInfo()`. ZERO DELETE · ZERO UPDATE · ZERO ALTER (100% frontend).
+
+- **Rev. 4225** — **SCORECARD SST: FIX FILTRO PERÍODO + CUSTO EPI + GRÁFICOS HISTÓRICO.** 5 bugs cirúrgicos: Q4/Q5 sem filtro de data, Q6 custo_estimado vs custo_total, Q6+Q7 sem período, Q13 valor_produto::numeric sem REPLACE. ZERO DELETE · ZERO ALTER destrutivo.

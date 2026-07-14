@@ -76,6 +76,7 @@ interface ItemForm {
   quantidadeServico?: number; coeficiente?: number; origemEap?: boolean;
   semVerba?: boolean; motivoSemVerba?: string;
   incluirAjudante?: boolean; metaMdoProfissional?: number; metaMdoAjudante?: number;
+  somenteMo?: boolean;
 }
 const MOTIVOS_SEM_VERBA = [
   { value: "quebra_dano", label: "Quebra / Dano" },
@@ -2216,6 +2217,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
       incluirAjudante: i.incluirAjudante,
       metaMdoProfissional: i.metaMdoProfissional,
       metaMdoAjudante: i.metaMdoAjudante,
+      somenteMo: i.somenteMo,
     }));
 
     if (editingSc) {
@@ -3662,6 +3664,24 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                                           </span>
                                         </div>
                                       )}
+                                      {selecionados.has(selKey(disc.nome, it.eapCodigo)) && (() => {
+                                        const scItem = itens.find(pi => pi.orcamentoItemId === it.id);
+                                        const isMo = scItem?.somenteMo ?? false;
+                                        return (
+                                          <div className="flex items-center gap-1.5 mt-0.5 ml-0.5 text-[9px]">
+                                            <button
+                                              type="button"
+                                              onClick={e => {
+                                                e.stopPropagation();
+                                                setItens(prev => prev.map(pi => pi.orcamentoItemId === it.id ? { ...pi, somenteMo: !isMo } : pi));
+                                              }}
+                                              className={`px-1.5 py-0 rounded text-[8px] font-bold border ${isMo ? "bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-200" : "bg-gray-50 text-gray-500 border-gray-300 hover:bg-gray-100"}`}
+                                            >
+                                              {isMo ? "✓ Somente MO" : "Somente MO"}
+                                            </button>
+                                          </div>
+                                        );
+                                      })()}
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0 text-xs text-gray-400">
                                       <span>{parseFloat(String(it.quantidade ?? "0")).toLocaleString("pt-BR")} {it.unidade || "vb"}</span>
@@ -5187,6 +5207,7 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                             incluirAjudante: it.incluirAjudante ?? true,
                             metaMdoProfissional: it.metaMdoProfissional ? parseFloat(it.metaMdoProfissional) : undefined,
                             metaMdoAjudante: it.metaMdoAjudante ? parseFloat(it.metaMdoAjudante) : undefined,
+                            somenteMo: it.somenteMo ?? false,
                           }));
                           setItens(scItens.length > 0 ? scItens : [newItem()]);
                           const eapIds = new Set<number>();
@@ -5606,6 +5627,11 @@ ${sc.observacoes ? `<div class="obs"><b>Observações da SC:</b><br>${esc(sc.obs
                                   {it.motivoSemVerba && <span className="text-[9px] text-red-500 italic">{it.motivoSemVerba === "quebra_dano" ? "Quebra/Dano" : it.motivoSemVerba === "furto" ? "Furto" : it.motivoSemVerba === "erro_orcamento" ? "Erro Orçamento" : it.motivoSemVerba === "qtd_insuficiente" ? "Qtd Insuficiente" : it.motivoSemVerba === "retrabalho" ? "Retrabalho" : "Outro"}</span>}
                                 </>
                               )}
+                            </div>
+                          )}
+                          {(it as any).somenteMo && (
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 border border-blue-200">🔨 SOMENTE MO</span>
                             </div>
                           )}
                         </div>
