@@ -935,7 +935,10 @@ export const scorecardRouter = router({
               e."fotoUrl"      AS foto_url,
               -- Salário efetivo: payroll_payments do mês, senão salarioBase do cadastro
               COALESCE(pp.salario_bruto,
-                REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric
+                CASE WHEN e."salarioBase" LIKE '%,%'
+                  THEN REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric
+                  ELSE COALESCE(NULLIF(TRIM(e."salarioBase"),''),'0')::numeric
+                END
               ) AS salario_base,
               -- Dias reais do mês do atestado
               EXTRACT(DAY FROM (
@@ -946,7 +949,10 @@ export const scorecardRouter = router({
               -- Custo: salário proporcional (sem encargos)
               ROUND(
                 COALESCE(pp.salario_bruto,
-                  REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric)
+                  CASE WHEN e."salarioBase" LIKE '%,%'
+                    THEN REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric
+                    ELSE COALESCE(NULLIF(TRIM(e."salarioBase"),''),'0')::numeric
+                  END)
                 / NULLIF(EXTRACT(DAY FROM (
                     date_trunc('month', a."dataEmissao"::date) + INTERVAL '1 month' - INTERVAL '1 day'
                   )), 0)
@@ -955,7 +961,10 @@ export const scorecardRouter = router({
               -- Custo: encargos patronais (33% do salário proporcional)
               ROUND(
                 COALESCE(pp.salario_bruto,
-                  REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric)
+                  CASE WHEN e."salarioBase" LIKE '%,%'
+                    THEN REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric
+                    ELSE COALESCE(NULLIF(TRIM(e."salarioBase"),''),'0')::numeric
+                  END)
                 * 0.33
                 / NULLIF(EXTRACT(DAY FROM (
                     date_trunc('month', a."dataEmissao"::date) + INTERVAL '1 month' - INTERVAL '1 day'
@@ -973,7 +982,10 @@ export const scorecardRouter = router({
               -- Custo total = (salário×1,33 + benefícios) / dias_mês × dias_afastado
               ROUND(
                 (COALESCE(pp.salario_bruto,
-                  REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric) * 1.33
+                  CASE WHEN e."salarioBase" LIKE '%,%'
+                    THEN REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric
+                    ELSE COALESCE(NULLIF(TRIM(e."salarioBase"),''),'0')::numeric
+                  END) * 1.33
                  + COALESCE(vr.beneficio_total, 0))
                 / NULLIF(EXTRACT(DAY FROM (
                     date_trunc('month', a."dataEmissao"::date) + INTERVAL '1 month' - INTERVAL '1 day'
@@ -984,7 +996,7 @@ export const scorecardRouter = router({
             JOIN employees e ON e.id = a."employeeId"
             -- Salário bruto do mês via folha (payroll_payments), se disponível
             LEFT JOIN LATERAL (
-              SELECT REPLACE(REPLACE(COALESCE(pp2."salarioBrutoMes",'0'),'.',''),',','.')::numeric AS salario_bruto
+              SELECT REPLACE(NULLIF(TRIM(pp2."salarioBrutoMes"),''),',','.')::numeric AS salario_bruto
               FROM payroll_payments pp2
               WHERE pp2."employeeId"   = a."employeeId"
                 AND pp2."mesReferencia" = TO_CHAR(a."dataEmissao"::date, 'YYYY-MM')
@@ -1029,13 +1041,16 @@ export const scorecardRouter = router({
                      ROUND(SUM(
                        (
                          COALESCE(
-                           (SELECT REPLACE(REPLACE(COALESCE(pp."salarioBrutoMes",'0'),'.',''),',','.')::numeric
+                           (SELECT REPLACE(NULLIF(TRIM(pp."salarioBrutoMes"),''),',','.')::numeric
                             FROM payroll_payments pp
                             WHERE pp."employeeId"    = a."employeeId"
                               AND pp."mesReferencia" = TO_CHAR(a."dataEmissao"::date, 'YYYY-MM')
                               AND pp."companyId"     = ${input.companyId}
                             ORDER BY pp.id DESC LIMIT 1),
-                           REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric
+                           CASE WHEN e."salarioBase" LIKE '%,%'
+                             THEN REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric
+                             ELSE COALESCE(NULLIF(TRIM(e."salarioBase"),''),'0')::numeric
+                           END
                          ) * 1.33
                          + COALESCE(
                            (SELECT REPLACE(REPLACE(COALESCE(vr."valorTotal",'0'),'.',''),',','.')::numeric

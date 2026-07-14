@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4231** — **SCORECARD SST: FIX CUSTO ATESTADOS — PARSER MISTO salarioBase + salarioBrutoMes.** `payroll_payments.salarioBrutoMes` usa decimal inglês (`"2650.32"`); double REPLACE removia o ponto decimal → R$ 265.032 em vez de R$ 2.650 (100× errado). `employees.salarioBase` tem formato misto (279 BR / 102 EN); EN sem vírgula quebrava igual. Fix: payroll → `REPLACE(NULLIF(TRIM(val),''),',','.')::numeric`; salarioBase → CASE WHEN LIKE '%,%'. Custo corrigido: R$ 667.266 → ~R$ 31.254. 6 ocorrências em Q12+Q13. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4230** — **SMO: FIX SALÁRIO DE REFERÊNCIA — MEDIANA COM FILTRO DE OUTLIERS.** `salarioRef` era MÉDIA (vulnerável a 1 funcionário com salário errado no cadastro → R$ 270.786 p/ pedreiro). Fix: `calcSalarioMediana()` — mediana + filtra valores >5× mediana bruta. 4 ocorrências corrigidas em smo.ts. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4229** — **SCORECARD SST: NOVA FÓRMULA CUSTO ATESTADOS — CUSTO REAL MENSAL.** `(salário_bruto×1,33 + VA/VR_mensal) ÷ dias_do_mês × dias_afastados`. Q12: 2 LATERAL JOINs em payroll_payments + vr_benefits. Q13 ates CTE: subconsultas correlacionadas. Frontend: labels atualizados. ZERO DELETE · ZERO ALTER destrutivo.

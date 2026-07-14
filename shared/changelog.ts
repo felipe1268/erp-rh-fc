@@ -1,4 +1,33 @@
 /**
+ * Rev. 4231 - SCORECARD SST: FIX CUSTO ATESTADOS — PARSER MISTO salarioBase + salarioBrutoMes.
+ *
+ * CAUSA-RAIZ — Rev. 4229 introduziu dois bugs encadeados em Q12 e Q13 (scorecard.ts):
+ *
+ * Bug 1 — `payroll_payments.salarioBrutoMes` usa formato decimal INGLÊS (`"2650.32"` = R$ 2.650,32).
+ * O double REPLACE `REPLACE(REPLACE(val,'.',''),',','.')` tratava o ponto como separador de milhar
+ * e o removia: `"2650.32"` → `"265032"` → R$ 265.032,00 (100× errado para TODOS os registros).
+ *
+ * Bug 2 — `employees.salarioBase` tem formato MISTO no banco:
+ *   - 279 funcionários: formato BR `"2.774,20"` (vírgula decimal) → double REPLACE funcionava ✓
+ *   - 102 funcionários: formato EN `"2301.73"` (ponto decimal) → double REPLACE removia o ponto
+ *     decimal: `"230173"` → R$ 230.173,00 (100× errado para esses 102 funcionários)
+ *
+ * RESULTADO: custo exibido era ~21× inflado — R$ 667.266,77 em vez de R$ 31.254,37.
+ * Diagnóstico validado via query direta no Neon antes de qualquer alteração.
+ *
+ * FIX Q12 (atestados):
+ *   - LATERAL JOIN payroll: `REPLACE(REPLACE(...))` → `REPLACE(NULLIF(TRIM(val),''),',','.')::numeric`
+ *     (ponto decimal inglês é preservado; string vazia vira NULL → fallback para salarioBase)
+ *   - Fallback salarioBase (4 ocorrências em custo_total/custo_salario/custo_encargos/salario_base):
+ *     CASE WHEN contém vírgula → double REPLACE (BR) ELSE cast direto (EN)
+ *
+ * FIX Q13 (histórico ates CTE):
+ *   - Mesmas correções para payroll subquery + fallback salarioBase
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4230 - SMO: FIX SALÁRIO DE REFERÊNCIA — MEDIANA COM FILTRO DE OUTLIERS (era MÉDIA).
  *
  * CAUSA-RAIZ — Em smo.ts, o `salarioRef` (base para cálculo de impacto financeiro da SMO)
