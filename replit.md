@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4223** — **SCORECARD SST: FIX COLUNAS CAMELCASE + NOVA PÁGINA "GESTOR SST POR OBRA".** Todas as tabelas SST (trainings, warnings, asos, epi_deliveries, accidents) usam colunas quoted camelCase na DB — queries usavam snake_case → "column does not exist" engolido pelo safe(). Corrigidas Q1/Q3/Q4/Q6/Q7/Q8/Q13. Nova página `/sst/gestor-por-obra` com tabela de todos os funcionários por obra + badges ASO/treinamentos/advertências/EPI/CIPA. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4222** — **SCORECARD SST: FIX DEFINITIVO "NENHUM COLABORADOR" — obra_funcionarios sem companyId.** 5 subqueries filtravam `obra_funcionarios` por `"companyId"` eliminando todos os funcionários em grupos de empresas. Removido o filtro das 5 ocorrências (Q1/Q3/Q4/Q11/historico). ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4221** — **SCORECARD SST: REDESIGN COMPLETO — ABA "SEGURANÇA" → "🦺 SST".** Fix bolinhas PeriodSelectorCard. Q14 backend estoque EPI. Dashboard EPI: gráficos, Curva ABC, Top 5 maior/menor uso c/ foto, estoque obra. Atestados: Top 5 c/ foto + CID breakdown (25 códigos BR). ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4221** — **SCORECARD SST: REDESIGN COMPLETO — ABA "SEGURANÇA" → "🦺 SST".** Fix bolinhas PeriodSelectorCard. Q14 backend estoque EPI. Dashboard EPI: gráficos, Curva ABC, Top 5 maior/menor uso c/ foto, estoque obra. Atestados: Top 5 c/ foto + CID breakdown. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4219** — **SCORECARD COMPRAS: FERRAMENTAS ALMOX + LOCAÇÕES — LAYOUT CARD COM FOTO + FIX LOCAÇÕES VAZIAS.** Cards horizontais, badge Próprio, JOIN almoxarifado_itens, foto/responsável/custo/mês. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,18 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4217** — **REGRA DE OURO GRAVADA: SELETOR DE MÊS/ANO → SEMPRE `<PeriodSelectorCard>`.** `segMes: string → number | null`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4216** — **SCORECARD: SEGURANÇA — GRADE CLT COM STATUS, DESLIGADOS VISÍVEIS, CIPA, PERÍODO EXPERIÊNCIA.** Q1 sem filtro status. Badges: Status · Exp. 1º/2º · CIPA · ASO · Advertências. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4214** — **SCORECARD: ABA SEGURANÇA — APR, PT, DDS, ACIDENTES E ATESTADOS.** ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4213** — **SCORECARD + EQUIPE: FIX RAMO A + BADGE "VEIO DA OBRA X".** ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4212** — **SCORECARD: BACKFILL AUTOMÁTICO employee_site_history PARA ALOCAÇÕES SEM HISTÓRICO.** ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4211** — **SCORECARD RH/FOLHA: FIX EQUIPE — ELIMINA DUPLICAÇÃO MULTI-OBRA E PONTO-SEM-ALOCAÇÃO.** ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4210** — **SCORECARD RH/FOLHA: FIX CUSTO MO — PISO = dataInicio DA OBRA.** ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4209** — **SCORECARD: FIX BÔNUS + BETA GATE POR EMPRESA.** ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 

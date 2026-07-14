@@ -587,7 +587,8 @@ export const scorecardRouter = router({
       if (!db) return null;
       const safe = async (label: string, fn: () => Promise<any[]>) => {
         try { return await fn(); } catch (e: any) {
-          console.warn(`[Scorecard.getSeguranca] ${label}:`, e?.message);
+          const pg = (e?.cause as any)?.cause ?? (e?.cause as any) ?? e;
+          console.warn(`[Scorecard.getSeguranca] ${label} ERROR:`, pg?.message ?? e?.message);
           return [];
         }
       };
@@ -640,22 +641,22 @@ export const scorecardRouter = router({
               ORDER BY cm."createdAt" DESC LIMIT 1
             ) cipa ON true
             LEFT JOIN LATERAL (
-              SELECT data_validade, resultado
+              SELECT "dataValidade" AS data_validade, resultado
               FROM asos
-              WHERE employee_id = e.id AND deleted_at IS NULL
-              ORDER BY data_validade DESC NULLS LAST LIMIT 1
+              WHERE "employeeId" = e.id AND "deletedAt" IS NULL
+              ORDER BY "dataValidade" DESC NULLS LAST LIMIT 1
             ) aso ON true
             LEFT JOIN LATERAL (
               SELECT
-                COUNT(*) FILTER (WHERE data_validade IS NULL OR data_validade::date >= CURRENT_DATE) AS validos,
-                COUNT(*) FILTER (WHERE data_validade IS NOT NULL AND data_validade::date < CURRENT_DATE) AS vencidos
+                COUNT(*) FILTER (WHERE "dataValidade" IS NULL OR "dataValidade"::date >= CURRENT_DATE) AS validos,
+                COUNT(*) FILTER (WHERE "dataValidade" IS NOT NULL AND "dataValidade"::date < CURRENT_DATE) AS vencidos
               FROM trainings
-              WHERE employee_id = e.id AND deleted_at IS NULL
+              WHERE "employeeId" = e.id AND "deletedAt" IS NULL
             ) tr ON true
             LEFT JOIN LATERAL (
               SELECT COUNT(*) AS cnt
               FROM warnings
-              WHERE employee_id = e.id AND deleted_at IS NULL
+              WHERE "employeeId" = e.id AND "deletedAt" IS NULL
             ) wn ON true
             WHERE e."companyId" = ${input.companyId}
               AND e.id IN (
@@ -721,14 +722,14 @@ export const scorecardRouter = router({
           const r = await db.execute(sql`
             SELECT
               COALESCE(NULLIF(TRIM(t.norma), ''), 'Outros / Sem norma') AS norma,
-              COUNT(DISTINCT t.employee_id) AS total_funcionarios,
-              COUNT(*) FILTER (WHERE t.data_validade IS NULL OR t.data_validade::date >= CURRENT_DATE) AS validos,
-              COUNT(*) FILTER (WHERE t.data_validade IS NOT NULL AND t.data_validade::date < CURRENT_DATE) AS vencidos,
-              MIN(t.data_validade) FILTER (WHERE t.data_validade IS NOT NULL AND t.data_validade::date >= CURRENT_DATE) AS proxima_validade
+              COUNT(DISTINCT t."employeeId") AS total_funcionarios,
+              COUNT(*) FILTER (WHERE t."dataValidade" IS NULL OR t."dataValidade"::date >= CURRENT_DATE) AS validos,
+              COUNT(*) FILTER (WHERE t."dataValidade" IS NOT NULL AND t."dataValidade"::date < CURRENT_DATE) AS vencidos,
+              MIN(t."dataValidade") FILTER (WHERE t."dataValidade" IS NOT NULL AND t."dataValidade"::date >= CURRENT_DATE) AS proxima_validade
             FROM trainings t
-            WHERE t.company_id = ${input.companyId}
-              AND t.deleted_at  IS NULL
-              AND t.employee_id IN (
+            WHERE t."companyId" = ${input.companyId}
+              AND t."deletedAt" IS NULL
+              AND t."employeeId" IN (
                 SELECT "employeeId" FROM obra_funcionarios
                 WHERE "obraId" = ${input.obraId}
               )
@@ -742,17 +743,17 @@ export const scorecardRouter = router({
         safe("advertencias", async () => {
           const r = await db.execute(sql`
             SELECT
-              w.id, w.tipo_advertencia, w.data_ocorrencia, w.motivo,
+              w.id, w."tipoAdvertencia" AS tipo_advertencia, w."dataOcorrencia" AS data_ocorrencia, w.motivo,
               e."nomeCompleto" AS funcionario_nome, e.cargo
             FROM warnings w
-            JOIN employees e ON e.id = w.employee_id
-            WHERE w.company_id = ${input.companyId}
-              AND w.deleted_at IS NULL
+            JOIN employees e ON e.id = w."employeeId"
+            WHERE w."companyId" = ${input.companyId}
+              AND w."deletedAt" IS NULL
               AND e.id IN (
                 SELECT "employeeId" FROM obra_funcionarios
                 WHERE "obraId" = ${input.obraId}
               )
-            ORDER BY w.data_ocorrencia DESC
+            ORDER BY w."dataOcorrencia" DESC
             LIMIT 20
           `);
           return r.rows as any[];
@@ -786,13 +787,13 @@ export const scorecardRouter = router({
               COUNT(ed.id)                                                           AS total_entregas,
               SUM(ed.quantidade)                                                     AS total_unidades,
               SUM(COALESCE(ep.valor_produto::numeric, 0) * ed.quantidade)            AS custo_estimado,
-              MAX(ed.data_entrega)                                                   AS ultima_entrega
+              MAX(ed."dataEntrega")                                                  AS ultima_entrega
             FROM epi_deliveries ed
-            JOIN employees e  ON e.id  = ed.employee_id
-            JOIN epis      ep ON ep.id = ed.epi_id
-            WHERE ed.obra_id    = ${input.obraId}
-              AND ed.company_id = ${input.companyId}
-              AND ed.deleted_at IS NULL
+            JOIN employees e  ON e.id  = ed."employeeId"
+            JOIN epis      ep ON ep.id = ed."epiId"
+            WHERE ed."obraId"    = ${input.obraId}
+              AND ed."companyId" = ${input.companyId}
+              AND ed."deletedAt" IS NULL
             GROUP BY e.id, e."nomeCompleto", e.cargo
             ORDER BY custo_estimado DESC
             LIMIT 30
@@ -810,13 +811,13 @@ export const scorecardRouter = router({
                 ep.valor_produto::numeric AS valor_unit,
                 SUM(ed.quantidade)                                          AS total_unidades,
                 SUM(COALESCE(ep.valor_produto::numeric, 0) * ed.quantidade) AS custo_total,
-                COUNT(DISTINCT ed.employee_id)                              AS num_funcionarios,
+                COUNT(DISTINCT ed."employeeId")                             AS num_funcionarios,
                 COUNT(ed.id)                                                AS total_entregas
               FROM epi_deliveries ed
-              JOIN epis ep ON ep.id = ed.epi_id
-              WHERE ed.obra_id    = ${input.obraId}
-                AND ed.company_id = ${input.companyId}
-                AND ed.deleted_at IS NULL
+              JOIN epis ep ON ep.id = ed."epiId"
+              WHERE ed."obraId"    = ${input.obraId}
+                AND ed."companyId" = ${input.companyId}
+                AND ed."deletedAt" IS NULL
               GROUP BY ep.id, ep.nome, ep.categoria, ep.valor_produto
             ),
             soma   AS (SELECT SUM(custo_total) AS total_geral FROM base),
@@ -846,14 +847,14 @@ export const scorecardRouter = router({
             SELECT
               a.id, a."dataAcidente", a."tipoAcidente", a.gravidade,
               a."diasAfastamento", a."localAcidente", a."descricao",
-              a."statusAcaoCorretiva" AS status_acao,
-              a."houve_cat"          AS houve_cat,
+              a.status_acao_corretiva AS status_acao,
+              a.houve_cat,
               e."nomeCompleto"       AS funcionario_nome, e.cargo
             FROM accidents a
             LEFT JOIN employees e ON e.id = a."employeeId"
             WHERE a."companyId" = ${input.companyId}
               AND a.obra_id     = ${input.obraId}
-              AND a."deletedAt" IS NULL
+              AND a.deleted_at  IS NULL
               AND (${mr}::text IS NULL OR TO_CHAR(a."dataAcidente", 'YYYY-MM') = ${mr})
             ORDER BY a."dataAcidente" DESC
           `);
@@ -997,22 +998,22 @@ export const scorecardRouter = router({
               SELECT TO_CHAR("dataAcidente", 'YYYY-MM') AS mes, COUNT(*) AS acidentes
               FROM accidents
               WHERE "companyId" = ${input.companyId} AND obra_id = ${input.obraId}
-                AND "deletedAt" IS NULL
+                AND deleted_at IS NULL
                 AND "dataAcidente" >= (CURRENT_DATE - INTERVAL '11 months')
               GROUP BY TO_CHAR("dataAcidente", 'YYYY-MM')
             ),
             epi_agg AS (
-              SELECT TO_CHAR(ed.data_entrega, 'YYYY-MM') AS mes,
+              SELECT TO_CHAR(ed."dataEntrega", 'YYYY-MM') AS mes,
                      COUNT(ed.id) AS epi_entregas,
                      SUM(ed.quantidade) AS epi_unidades,
                      ROUND(SUM(COALESCE(ep.valor_produto::numeric, 0) * ed.quantidade), 2) AS epi_custo
               FROM epi_deliveries ed
-              JOIN epis ep ON ep.id = ed.epi_id
-              WHERE ed.company_id = ${input.companyId}
-                AND ed.obra_id    = ${input.obraId}
-                AND ed.deleted_at IS NULL
-                AND ed.data_entrega >= (CURRENT_DATE - INTERVAL '11 months')
-              GROUP BY TO_CHAR(ed.data_entrega, 'YYYY-MM')
+              JOIN epis ep ON ep.id = ed."epiId"
+              WHERE ed."companyId" = ${input.companyId}
+                AND ed."obraId"    = ${input.obraId}
+                AND ed."deletedAt" IS NULL
+                AND ed."dataEntrega" >= (CURRENT_DATE - INTERVAL '11 months')
+              GROUP BY TO_CHAR(ed."dataEntrega", 'YYYY-MM')
             )
             SELECT m.mes,
                    COALESCE(a.atestados, 0)    AS atestados,
@@ -1105,6 +1106,88 @@ export const scorecardRouter = router({
           itemMaisTrocado, itemMenosTrocado, funcCobertosEpi,
         },
       };
+    }),
+
+  getGestorSSTPorObra: protectedProcedure
+    .input(z.object({ companyId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      try {
+        const r = await db.execute(sql`
+          SELECT
+            e.id,
+            e."nomeCompleto"  AS nome,
+            e.cargo,
+            e.status,
+            e."fotoUrl"       AS foto_url,
+            e."dataAdmissao",
+            o.id              AS obra_id,
+            o.nome            AS obra_nome,
+            -- ASO
+            aso.data_validade     AS aso_validade,
+            aso.resultado         AS aso_resultado,
+            CASE
+              WHEN aso.data_validade IS NULL                       THEN 'sem_aso'
+              WHEN aso.data_validade::date < CURRENT_DATE          THEN 'vencido'
+              ELSE 'valido'
+            END AS aso_status,
+            -- Treinamentos
+            COALESCE(tr.validos,  0) AS treinamentos_validos,
+            COALESCE(tr.vencidos, 0) AS treinamentos_vencidos,
+            -- Advertências
+            COALESCE(wn.cnt, 0)      AS num_advertencias,
+            -- CIPA
+            cipa.cargo_cipa,
+            -- EPI entregas nesta obra
+            COALESCE(epi.total_entregas, 0) AS epi_entregas
+          FROM obra_funcionarios of2
+          JOIN employees  e ON e.id  = of2."employeeId"
+          JOIN obras      o ON o.id  = of2."obraId"
+          LEFT JOIN LATERAL (
+            SELECT "dataValidade" AS data_validade, resultado
+            FROM asos
+            WHERE "employeeId" = e.id AND "deletedAt" IS NULL
+            ORDER BY "dataValidade" DESC NULLS LAST LIMIT 1
+          ) aso ON true
+          LEFT JOIN LATERAL (
+            SELECT
+              COUNT(*) FILTER (WHERE "dataValidade" IS NULL OR "dataValidade"::date >= CURRENT_DATE) AS validos,
+              COUNT(*) FILTER (WHERE "dataValidade" IS NOT NULL AND "dataValidade"::date < CURRENT_DATE) AS vencidos
+            FROM trainings
+            WHERE "employeeId" = e.id AND "deletedAt" IS NULL
+          ) tr ON true
+          LEFT JOIN LATERAL (
+            SELECT COUNT(*) AS cnt
+            FROM warnings
+            WHERE "employeeId" = e.id AND "deletedAt" IS NULL
+          ) wn ON true
+          LEFT JOIN LATERAL (
+            SELECT cm."cargoCipa" AS cargo_cipa
+            FROM cipa_members cm
+            WHERE cm."employeeId" = e.id
+              AND cm."companyId"  = ${input.companyId}
+              AND cm."statusMembro" = 'Ativo'
+              AND (cm."fimEstabilidade" IS NULL OR cm."fimEstabilidade"::date >= CURRENT_DATE)
+            ORDER BY cm."createdAt" DESC LIMIT 1
+          ) cipa ON true
+          LEFT JOIN LATERAL (
+            SELECT COUNT(*) AS total_entregas
+            FROM epi_deliveries
+            WHERE "employeeId" = e.id AND "obraId" = of2."obraId" AND "deletedAt" IS NULL
+          ) epi ON true
+          WHERE e."companyId" = ${input.companyId}
+            AND e.status NOT IN ('Desligado', 'Lista_Negra', 'Inativo')
+            AND e."deletedAt" IS NULL
+            AND of2."isActive" = 1
+          ORDER BY o.nome, e."nomeCompleto"
+        `);
+        return r.rows as any[];
+      } catch (e: any) {
+        const pg = (e?.cause as any)?.cause ?? (e?.cause as any) ?? e;
+        console.warn('[Scorecard.getGestorSSTPorObra] ERROR:', pg?.message ?? e?.message);
+        return [];
+      }
     }),
 
   getAnalise: protectedProcedure

@@ -274,6 +274,7 @@ const DashboardAprAnalise = lazyWithRetry(() => import("./pages/sst/DashboardApr
 const DashboardPermissaoTrabalho = lazyWithRetry(() => import("./pages/sst/DashboardPermissaoTrabalho"));
 const RegistroAcidentes = lazyWithRetry(() => import("./pages/sst/RegistroAcidentes"));
 const IntegracaoPublica = lazyWithRetry(() => import("./pages/sst/IntegracaoPublica"));
+const GestorSSTPorObra = lazyWithRetry(() => import("./pages/sst/GestorSSTPorObra"));
 const PainelJuridico = lazyWithRetry(() => import("./pages/PainelJuridico"));
 const PainelTrabalhista = lazyWithRetry(() => import("./pages/PainelTrabalhista"));
 const PainelTributario = lazyWithRetry(() => import("./pages/PainelTributario"));
@@ -554,6 +555,7 @@ function Router() {
         <Route path={"/sst/dashboard-apr"} component={() => <RouteGuard component={DashboardAprAnalise} route="/sst/dashboard-apr" />} />
         <Route path={"/sst/dashboard-pt"} component={() => <RouteGuard component={DashboardPermissaoTrabalho} route="/sst/dashboard-pt" />} />
         <Route path={"/sst/acidentes"} component={() => <RouteGuard component={RegistroAcidentes} route="/sst/acidentes" />} />
+        <Route path={"/sst/gestor-por-obra"} component={() => <RouteGuard component={GestorSSTPorObra} route="/sst/gestor-por-obra" />} />
         <Route path={"/modulo-pj"} component={() => <RouteGuard component={ModuloPJ} route="/modulo-pj" />} />
         <Route path={"/contrato-pj/:id"} component={() => <RouteGuard component={ContratoPJView} route="/modulo-pj" />} />
         <Route path={"/contrato-pj/:contractId/aditivo/:aditivoId"} component={() => <RouteGuard component={AditivoPJView} route="/modulo-pj" />} />

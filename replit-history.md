@@ -1,3 +1,9 @@
+- **Rev. 4214** — **SCORECARD: ABA SEGURANÇA — APR, PT, DDS, ACIDENTES E ATESTADOS.** ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4213** — **SCORECARD + EQUIPE: FIX RAMO A + BADGE "VEIO DA OBRA X".** ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4212** — **SCORECARD: BACKFILL AUTOMÁTICO employee_site_history PARA ALOCAÇÕES SEM HISTÓRICO.** ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4211** — **SCORECARD RH/FOLHA: FIX EQUIPE — ELIMINA DUPLICAÇÃO MULTI-OBRA E PONTO-SEM-ALOCAÇÃO.** ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4210** — **SCORECARD RH/FOLHA: FIX CUSTO MO — PISO = dataInicio DA OBRA.** ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4209** — **SCORECARD: FIX BÔNUS + BETA GATE POR EMPRESA.** ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4208** — **SCORECARD RH/FOLHA: FIX SEGURO DE VIDA (R$0→real) + VR/VA DOUBLE-COUNT + PONTO FALLBACK.** ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4206** — **SCORECARD RH/FOLHA: FIX CAST VARCHAR→NUMERIC COM PADRÃO SEGURO.** ZERO DELETE · ZERO ALTER destrutivo.
 - **Rev. 4205** — **SCORECARD RH/FOLHA: FIX camelCase em payroll_payments + employee_site_history + vr_benefits + vacation_periods.** 289 linhas existiam mas ficavam invisíveis. ZERO DELETE · ZERO ALTER destrutivo.

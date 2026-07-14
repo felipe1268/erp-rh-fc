@@ -1,4 +1,36 @@
 /**
+ * Rev. 4223 - SCORECARD SST: FIX COLUNAS CAMELCASE + NOVA PÁGINA "GESTOR SST POR OBRA".
+ *
+ * CAUSA-RAIZ DAS QUERIES FALHANDO — todas as tabelas SST (trainings, warnings, asos,
+ * epi_deliveries, accidents) foram criadas manualmente com colunas quoted camelCase
+ * ("employeeId", "companyId", "deletedAt", "dataValidade" etc.). As queries raw SQL em
+ * getSeguranca usavam snake_case (employee_id, company_id, deleted_at, data_validade)
+ * que não existem na DB → PostgreSQL lançava "column does not exist" engolido pelo safe().
+ *
+ * FIX — substituídas todas as referências snake_case pelas quoted camelCase corretas:
+ *  • Q1 laterals (asos/trainings/warnings): employee_id→"employeeId", deleted_at→"deletedAt",
+ *    data_validade→"dataValidade"
+ *  • Q3 treinamentosNorma: company_id→"companyId", deleted_at→"deletedAt",
+ *    employee_id→"employeeId", data_validade→"dataValidade"
+ *  • Q4 advertencias: employee_id→"employeeId", company_id→"companyId",
+ *    deleted_at→"deletedAt", data_ocorrencia→"dataOcorrencia", tipo_advertencia→"tipoAdvertencia"
+ *  • Q6 epiPorFuncionario: employee_id→"employeeId", epi_id→"epiId", obra_id→"obraId",
+ *    company_id→"companyId", deleted_at→"deletedAt", data_entrega→"dataEntrega"
+ *  • Q7 epiPorTipo: mesmos fixes + employee_id→"employeeId"
+ *  • Q8 acidentes: "deletedAt"→deleted_at (explícito no schema), "statusAcaoCorretiva"→status_acao_corretiva
+ *  • Q13 histórico epi_agg: mesmos fixes de epi_deliveries; acid_agg: "deletedAt"→deleted_at
+ *
+ * NOVA PÁGINA — Gestor SST por Obra (/sst/gestor-por-obra):
+ *  • Novo endpoint getGestorSSTPorObra em scorecard.ts: retorna todos os funcionários
+ *    ativos por obra com status ASO, treinamentos (válidos/vencidos), advertências,
+ *    cargo CIPA e contagem de EPIs entregues.
+ *  • Página GestorSSTPorObra.tsx: 4 KPIs no topo, filtro por obra + busca por nome/cargo,
+ *    tabela agrupada por obra com badges coloridos por status.
+ *  • Registrada em App.tsx (/sst/gestor-por-obra) e menu SST Dashboards no DashboardLayout.
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4222 - SCORECARD SST: FIX DEFINITIVO "NENHUM COLABORADOR" — obra_funcionarios sem companyId.
  *
  * CAUSA-RAIZ — getSeguranca tinha 5 subqueries do tipo:

@@ -218,6 +218,7 @@ const menuSectionsSST: MenuSection[] = [
       { icon: ClipboardCheck, label: "DDS — Diálogo Diário", path: "/sst/dds-dashboard" },
       { icon: ShieldAlert, label: "APR — Análise de Risco", path: "/sst/dashboard-apr" },
       { icon: FileText, label: "Permissão de Trabalho (PT)", path: "/sst/dashboard-pt" },
+      { icon: MapPin, label: "Gestor SST por Obra", path: "/sst/gestor-por-obra" },
     ],
   },
 ];
