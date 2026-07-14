@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4221** — **SCORECARD SST: REDESIGN COMPLETO — ABA "SEGURANÇA" → "🦺 SST".** Fix bolinhas PeriodSelectorCard (inicializa todos 12 meses + checa epi_entregas). Q14 backend (estoque EPI por obra). Dashboard EPI: gráficos mensais, Curva ABC, Top 5 maior/menor uso c/ foto, estoque obra. Atestados: Top 5 c/ foto + CID breakdown (25 códigos BR) + tabela com badge CID. Comparativo + EPIs. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4222** — **SCORECARD SST: FIX DEFINITIVO "NENHUM COLABORADOR" — obra_funcionarios sem companyId.** 5 subqueries filtravam `obra_funcionarios` por `"companyId"` eliminando todos os funcionários em grupos de empresas. Removido o filtro das 5 ocorrências (Q1/Q3/Q4/Q11/historico). ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4220** — **SCORECARD RH: MATRÍCULA + CARGO LEGÍVEIS NA TABELA CUSTO POR FUNCIONÁRIO.** Matrícula em mono, cargo em indigo visível (oculto quando nulo). Aplicado nas 2 tabelas. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4221** — **SCORECARD SST: REDESIGN COMPLETO — ABA "SEGURANÇA" → "🦺 SST".** Fix bolinhas PeriodSelectorCard. Q14 backend estoque EPI. Dashboard EPI: gráficos, Curva ABC, Top 5 maior/menor uso c/ foto, estoque obra. Atestados: Top 5 c/ foto + CID breakdown (25 códigos BR). ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 

@@ -1,4 +1,21 @@
 /**
+ * Rev. 4222 - SCORECARD SST: FIX DEFINITIVO "NENHUM COLABORADOR" — obra_funcionarios sem companyId.
+ *
+ * CAUSA-RAIZ — getSeguranca tinha 5 subqueries do tipo:
+ *   SELECT "employeeId" FROM obra_funcionarios WHERE "obraId" = X AND "companyId" = Y
+ * O filtro "companyId" eliminava TODOS os funcionários porque as linhas em
+ * obra_funcionarios podem ter um companyId diferente do usuário logado (grupos
+ * de empresas irmãs compartilham o mesmo pool de funcionários). O getCustosRH
+ * usa employee_site_history sem esse filtro e por isso funciona.
+ *
+ * FIX — removido AND "companyId" = ${input.companyId} das 5 subqueries de
+ * obra_funcionarios dentro do getSeguranca (Q1-CLT, Q3-treinamentos, Q4-advertências,
+ * Q11-atestados, Q-historico-atestados). O isolamento de tenant é mantido pelos
+ * filtros de companyId nos JOINs externos (e."companyId", w.company_id, a."companyId").
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4221 - SCORECARD SST: REDESIGN COMPLETO DA ABA SEGURANÇA → SST.
  *
  * MUDANÇAS:

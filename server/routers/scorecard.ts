@@ -660,7 +660,7 @@ export const scorecardRouter = router({
             WHERE e."companyId" = ${input.companyId}
               AND e.id IN (
                 SELECT "employeeId" FROM obra_funcionarios
-                WHERE "obraId" = ${input.obraId} AND "companyId" = ${input.companyId}
+                WHERE "obraId" = ${input.obraId}
               )
             ORDER BY
               CASE e.status
@@ -730,7 +730,7 @@ export const scorecardRouter = router({
               AND t.deleted_at  IS NULL
               AND t.employee_id IN (
                 SELECT "employeeId" FROM obra_funcionarios
-                WHERE "obraId" = ${input.obraId} AND "companyId" = ${input.companyId}
+                WHERE "obraId" = ${input.obraId}
               )
             GROUP BY COALESCE(NULLIF(TRIM(t.norma), ''), 'Outros / Sem norma')
             ORDER BY total_funcionarios DESC
@@ -750,7 +750,7 @@ export const scorecardRouter = router({
               AND w.deleted_at IS NULL
               AND e.id IN (
                 SELECT "employeeId" FROM obra_funcionarios
-                WHERE "obraId" = ${input.obraId} AND "companyId" = ${input.companyId}
+                WHERE "obraId" = ${input.obraId}
               )
             ORDER BY w.data_ocorrencia DESC
             LIMIT 20
@@ -951,7 +951,7 @@ export const scorecardRouter = router({
               AND (${mr}::text IS NULL OR TO_CHAR(a."dataEmissao", 'YYYY-MM') = ${mr})
               AND e.id IN (
                 SELECT "employeeId" FROM obra_funcionarios
-                WHERE "obraId" = ${input.obraId} AND "companyId" = ${input.companyId}
+                WHERE "obraId" = ${input.obraId}
               )
             ORDER BY a."dataEmissao" DESC
             LIMIT 60
@@ -981,7 +981,7 @@ export const scorecardRouter = router({
               JOIN employees e ON e.id = a."employeeId"
               WHERE a."companyId" = ${input.companyId}
                 AND a."deletedAt" IS NULL
-                AND e.id IN (SELECT "employeeId" FROM obra_funcionarios WHERE "obraId" = ${input.obraId} AND "companyId" = ${input.companyId})
+                AND e.id IN (SELECT "employeeId" FROM obra_funcionarios WHERE "obraId" = ${input.obraId})
                 AND a."dataEmissao" >= (CURRENT_DATE - INTERVAL '11 months')
               GROUP BY TO_CHAR(a."dataEmissao", 'YYYY-MM')
             ),
