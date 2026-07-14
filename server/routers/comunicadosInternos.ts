@@ -413,7 +413,6 @@ export const comunicadosInternosRouter = router({
       const baseConds: any[] = [
         eq(employees.companyId, input.companyId),
         eq(employees.status, "Ativo"),
-        isNull((employees as any).deletedAt),
       ];
       if (destinatariosIds && destinatariosIds.length > 0) {
         baseConds.push(inArray(employees.id, destinatariosIds));

@@ -291,9 +291,10 @@ export default function ComunicadosInternos() {
     const temFiltro = !!q || !!filtroObra || filtroAssinatura !== "todos";
     const filtradosFunc = funcionarios.filter((f: any) => {
       if (q) {
+        const codigoExib = f.matricula || `#${String(f.id).padStart(4, "0")}`;
         const match =
           (f.nomeCompleto || "").toLowerCase().includes(q) ||
-          (f.matricula || "").toLowerCase().includes(q) ||
+          codigoExib.toLowerCase().includes(q) ||
           (f.cargo || "").toLowerCase().includes(q);
         if (!match) return false;
       }
@@ -480,7 +481,7 @@ export default function ComunicadosInternos() {
                     return (
                       <tr key={f.id} className={`border-b border-slate-200 ${assinou ? "bg-emerald-50/30 print:bg-white" : ""}`}>
                         <td className="px-2 py-2 text-slate-500 align-top">{idx + 1}</td>
-                        <td className="px-2 py-2 text-slate-700 font-mono align-top">{f.matricula || "-"}</td>
+                        <td className="px-2 py-2 text-slate-700 font-mono align-top">{f.matricula || `#${String(f.id).padStart(4, "0")}`}</td>
                         <td className="px-2 py-2 text-slate-800 font-medium align-top">
                           {f.nomeCompleto}
                           <div className="text-[10px] font-semibold text-indigo-600 flex items-center gap-1">
