@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4235** — **SCORECARD SST: CUSTO PROPORCIONAL PARA ATESTADOS EM HORAS.** Atestados com `horas_afastamento>0` e `diasAfastamento=0` agora calculam custo: `(salário×1,33 + benef) ÷ dias_mês ÷ 8h × horas`. Backend: `custo_horas` adicionado ao Q12. Frontend: badge teal "Xh" + label "proporcional" na coluna Dias; custo em teal com "Xh × valor/h" na coluna Total. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4234** — **SCORECARD SST: LIGHTBOX DE FOTO + TOOLTIP "—" SEM DIAS.** Clicar na foto/avatar na tabela de atestados abre Dialog lightbox com foto ampliada (ou iniciais 7xl em fundo âmbar se sem foto). Coluna "Dias" com "—" ganha tooltip "Atestado em horas — dias não informados no registro". ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4233** — **SCORECARD SST: REGRA INSS 15 DIAS — CUSTO ATESTADOS PELA LEI 8.213/91.** Art. 59 da Lei 8.213/91: dias 1-15 = empresa; do 16º dia = INSS (auxílio-doença). Carlos Alberto (90d, CID K40) exibia R$ 8.452,36 → custo correto empresa = apenas 15 dias. Backend Q12: `dias_empresa = LEAST(dias,15)`, `dias_inss = GREATEST(dias-15,0)`, todas as 4 fórmulas de custo (custo_salario/encargos/vr/total) usam `LEAST`. Q13: `custo_ates` idem; `dias_ates` permanece total real (para gráficos). Frontend: badge "INSS" azul, split "Xd emp. / Yd INSS" na coluna Dias, fundo azul suave, label "só empresa" no custo, nota da Lei 8.213/91 na legenda. ZERO DELETE · ZERO ALTER destrutivo.

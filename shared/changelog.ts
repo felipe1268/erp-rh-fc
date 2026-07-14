@@ -1,4 +1,25 @@
 /**
+ * Rev. 4235 - SCORECARD SST: CUSTO PROPORCIONAL PARA ATESTADOS EM HORAS.
+ *
+ * PROBLEMA: Atestados com `diasAfastamento=0` e `horas_afastamento>0` exibiam "—"
+ * em Dias e Total — sem custo calculado, mesmo havendo salário e horas registradas.
+ *
+ * FÓRMULA: custo_hora = (salário×1,33 + benefícios) / dias_mês / 8h
+ *          custo_atestado = custo_hora × horas_afastamento
+ *
+ * BACKEND (server/routers/scorecard.ts — Q12):
+ *   Adicionado `custo_horas` ao SELECT: mesma base de custo total, dividida por 8h,
+ *   multiplicada por `horas_afastamento::numeric`. Atestados em dias não são afetados.
+ *
+ * FRONTEND (client/src/pages/planejamento/ScorecardTab.tsx):
+ *   - Coluna Dias: badge verde-teal "Xh" + label "proporcional" para atestados em horas
+ *   - Coluna Total: valor em teal + label "Xh × valor/h"
+ *   - Caso sem horas E sem dias: mantém "—" com tooltip
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4234 - SCORECARD SST: LIGHTBOX DE FOTO + TOOLTIP "—" SEM DIAS.
  *
  * Feat: clicar na foto/avatar do funcionário na tabela de atestados abre um Dialog lightbox

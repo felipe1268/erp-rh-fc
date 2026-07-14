@@ -2008,6 +2008,9 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                     const diasInss=parseInt(String(a.dias_inss??0));
                                     const diasEmpresa=parseInt(String(a.dias_empresa??Math.min(dias,15)));
                                     const cTotal=parseFloat(String(a.custo_total??0));
+                                    const horas=parseFloat(String(a.horas_afastamento??0));
+                                    const custoHoras=parseFloat(String(a.custo_horas??0));
+                                    const isHoras=dias===0&&horas>0;
                                     const nome=String(a.funcionario_nome??"").split(" ").slice(0,2).join(" ");
                                     const initials=String(a.funcionario_nome??"?").split(" ").filter(Boolean).slice(0,2).map((n:string)=>n[0]).join("");
                                     const isInss=diasInss>0;
@@ -2044,13 +2047,23 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                                 </div>
                                               )}
                                             </div>
-                                          ):<span className="text-gray-300 cursor-help" title="Atestado em horas — dias não informados no registro">—</span>}
+                                          ):isHoras?(
+                                            <div className="flex flex-col items-center gap-0.5">
+                                              <span className="text-teal-700 font-bold bg-teal-50 border border-teal-200 px-1.5 py-0.5 rounded text-[9px]" title="Atestado em horas — custo calculado proporcionalmente">{horas}h</span>
+                                              <span className="text-[7px] text-teal-500 leading-none">proporcional</span>
+                                            </div>
+                                          ):<span className="text-gray-300 cursor-help" title="Horas não informadas no registro">—</span>}
                                         </td>
                                         <td className="px-1.5 py-1.5 text-right">
                                           {cTotal>0?(
                                             <div className="flex flex-col items-end gap-0.5">
                                               <span className="font-bold text-amber-700">{fmt(cTotal)}</span>
                                               {isInss&&<span className="text-[7px] text-blue-500 leading-none">só empresa</span>}
+                                            </div>
+                                          ):isHoras&&custoHoras>0?(
+                                            <div className="flex flex-col items-end gap-0.5">
+                                              <span className="font-bold text-teal-700">{fmt(custoHoras)}</span>
+                                              <span className="text-[7px] text-teal-500 leading-none">{horas}h × valor/h</span>
                                             </div>
                                           ):<span className="text-gray-300">—</span>}
                                         </td>

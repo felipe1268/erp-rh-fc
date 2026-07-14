@@ -995,7 +995,22 @@ export const scorecardRouter = router({
                     date_trunc('month', a."dataEmissao"::date) + INTERVAL '1 month' - INTERVAL '1 day'
                   )), 0)
                 * LEAST(COALESCE(a."diasAfastamento", 0), 15)
-              , 2) AS custo_total
+              , 2) AS custo_total,
+              -- Custo proporcional para atestados em HORAS:
+              -- (salário×1,33 + benefícios) / dias_mês / 8h × horas_afastamento
+              ROUND(
+                (COALESCE(pp.salario_bruto,
+                  CASE WHEN e."salarioBase" LIKE '%,%'
+                    THEN REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric
+                    ELSE COALESCE(NULLIF(TRIM(e."salarioBase"),''),'0')::numeric
+                  END) * 1.33
+                 + COALESCE(vr.beneficio_total, 0))
+                / NULLIF(EXTRACT(DAY FROM (
+                    date_trunc('month', a."dataEmissao"::date) + INTERVAL '1 month' - INTERVAL '1 day'
+                  )), 0)
+                / 8.0
+                * COALESCE(a."horas_afastamento"::numeric, 0)
+              , 2) AS custo_horas
             FROM atestados a
             JOIN employees e ON e.id = a."employeeId"
             -- Salário bruto do mês via folha (payroll_payments), se disponível
