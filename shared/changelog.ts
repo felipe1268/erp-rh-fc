@@ -1,4 +1,43 @@
 /**
+ * Rev. 4259 - FIX: VALOR NEGOCIADO PACOTE — CORREÇÃO DE ARREDONDAMENTO NO ITEM ERRADO.
+ *
+ * PROBLEMA:
+ *   `calcNegociadoPreview` (Cotacoes.tsx) distribui o valor negociado proporcionalmente
+ *   entre todos os itens da cotação, aplicando o resíduo de arredondamento ao
+ *   ÚLTIMO item do array (`result[result.length - 1]`).
+ *
+ *   Para cotações do tipo PACOTE, `mapa.itens` contém TODOS os itens brutos, incluindo
+ *   itens filhos de composição (ex: materiais individuas dentro de um serviço composto).
+ *   Esses itens filho têm `precoAtual = 0` (peso = 0 na distribuição) porque o preço
+ *   da composição fica inteiramente no primeiro item do grupo.
+ *
+ *   Se o último item em `mapa.itens` é um item filho (muito comum em pacotes grandes),
+ *   a correção de arredondamento cai nele:
+ *     editTotaisOverride[childKey] = small_correction (ex: +0,08)
+ *
+ *   Porém, no `handleSalvarPrecos` para tipo PACOTE (linhas 3537-3565), itens filhos
+ *   são enviados com `precoUnitario: 0, quantidade: 0` e SEM `totalOverride`. Resultado:
+ *   a correção se perde no save, e a soma dos overrides dos primeiros itens ≠ targetTotal.
+ *
+ *   Exemplo real: usuário digita R$2.100.000,00 → badge mostra R$2.100.041,42
+ *   (diferença = centavos da correção que ficou num item filho não salvo).
+ *
+ * CORREÇÃO (Cotacoes.tsx — função calcNegociadoPreview):
+ *   1. Computar `lastNonZeroIdx`: último índice em `itemTotais` onde `total > 0`.
+ *      Para cotações não-pacote (todos os itens têm preço), `lastNonZeroIdx` =
+ *      `itemTotais.length - 1` — comportamento idêntico ao anterior.
+ *   2. No loop de distribuição, substituir `idx === itemTotais.length - 1` por
+ *      `idx === lastNonZeroIdx`: o item que recebe o resíduo é agora o último
+ *      item COM peso real.
+ *   3. Na passagem de correção pós-soma, substituir `result[result.length - 1]`
+ *      por `result[lastNonZeroIdx]`: a correção de centavos cai no mesmo item real,
+ *      garantindo que `sum(novoTotal para primeiros itens) === targetTotal`.
+ *
+ * ARQUIVOS: client/src/pages/compras/Cotacoes.tsx
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4258 - MAPA DE COTAÇÃO: 3 OTIMIZAÇÕES DE PERFORMANCE (812 ITENS).
  *
  * OBJETIVO: eliminar os principais gargalos de renderização identificados no

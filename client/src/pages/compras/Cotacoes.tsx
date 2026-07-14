@@ -3481,11 +3481,19 @@ export default function Cotacoes() {
       const diferenca = valorFinal - totalGeral;
       const targetTotal = valorFinal;
 
+      // Rev. 4259 — para cotações PACOTE, itens filho têm precoAtual=0 (peso=0) e não recebem
+      // totalOverride no save. Aplicar o resíduo de arredondamento no ÚLTIMO item com total>0
+      // garante que a correção caia sempre num item de composição que é salvo com totalOverride.
+      let lastNonZeroIdx = itemTotais.length - 1;
+      for (let i = itemTotais.length - 1; i >= 0; i--) {
+        if (itemTotais[i].total > 0) { lastNonZeroIdx = i; break; }
+      }
+
       let acumulado = 0;
       const result = itemTotais.map((it, idx) => {
         const peso = it.total / totalGeral;
         let difItem: number;
-        if (idx === itemTotais.length - 1) {
+        if (idx === lastNonZeroIdx) {
           difItem = Math.round((diferenca - acumulado) * 100) / 100;
         } else {
           difItem = Math.round(diferenca * peso * 100) / 100;
@@ -3498,7 +3506,7 @@ export default function Cotacoes() {
       const somaNovoTotal = result.reduce((s, i) => s + i.novoTotal, 0);
       const diff = Math.round((targetTotal - somaNovoTotal) * 100) / 100;
       if (diff !== 0 && result.length > 0) {
-        const last = result[result.length - 1];
+        const last = result[lastNonZeroIdx];
         last.novoTotal = Math.round((last.novoTotal + diff) * 100) / 100;
         if (last.qtd > 0) {
           last.novoPreco = Math.round((last.novoTotal / last.qtd) * 100) / 100;

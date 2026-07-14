@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4259** — **FIX: VALOR NEGOCIADO PACOTE — CORREÇÃO DE ARREDONDAMENTO NO ITEM ERRADO.** `calcNegociadoPreview` aplicava o resíduo de arredondamento no **último item do array** (`result[result.length - 1]`). Para cotações PACOTE, esse item é frequentemente um **item filho** de composição (`precoAtual = 0`, `peso = 0`) que não recebe `totalOverride` no save — a correção se perdia, resultando em total ligeiramente errado (ex: R$2.100.041,42 vs R$2.100.000,00). Fix: `lastNonZeroIdx` (último item com `total > 0`) usado em AMBOS os pontos: distribuição inicial do resíduo e passagem de correção pós-soma. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4258** — **MAPA DE COTAÇÃO: 3 OTIMIZAÇÕES DE PERFORMANCE (812 ITENS).** (1) `mapaDescricoes`/`mapaInsumoCodigos`/`mapaFornIds` → `useMemo` para estabilizar chaves de query (evita refetch storm em `sugestoesRecompraQ`/`scoresQ`). (2) IIFE de ~80 linhas na `<tbody>` (filtro + agrupamento pacote/agrupar) substituída por `itensParaRenderizarMemo` (`useMemo([mapaQ.data, mapaFiltro, agruparItens])`). (3) `getMelhorPrecoItem()` O(n×m) no loop principal substituído por `melhorPrecoMap` (`Map<itemId,number>`, `useMemo([mapaQ.data])`). ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4257** — **CONTROLE DE CHEQUES: CARDS DO TOPO REFLETEM FILTROS ATIVOS.** Quando qualquer filtro client-side está ativo (fornecedor, data de vencimento, status), os 4 cards (Pendentes/Compensados/Devolvidos/Outros) derivam seus totais de `chequesFiltrados` em vez do `resumo` backend. `anyFiltroAtivo` booleano; `cardTotais` useMemo movido para após `chequesFiltrados` (evita TDZ). ZERO DELETE · ZERO ALTER destrutivo.
-
 ### 5 one-liners
+
+- **Rev. 4257** — **CONTROLE DE CHEQUES: CARDS DO TOPO REFLETEM FILTROS ATIVOS.** Quando qualquer filtro client-side está ativo (fornecedor, data de vencimento, status), os 4 cards derivam seus totais de `chequesFiltrados` em vez do `resumo` backend. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4256** — **CONTROLE DE CHEQUES: FILTRO POR DATA DE VENCIMENTO + FORNECEDOR + SOMATÓRIO.** Filtros client-side De/Até por `dataVencimento` + SearchableSelect fornecedor; banner azul com somatório. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -63,8 +65,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4254** — **MAPA COTAÇÃO PACOTE: COLUNAS SEPARADAS MAT | MDO | TOTAL GERAL.** Header linha 2 (pacote): QTD | Material | Mão de Obra | Total Geral (4 th). Sub-header fornecedor: `colSpan=5`, 5 flex divs. Linhas fornecedor: QTD, MAT (azul), MDO (laranja), Total Geral, Saldo. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4253** — **MAT/MDO EXATO NA PIPELINE COTAÇÃO → CONTRATO → MEDIÇÃO.** Schema: +`total_mat`/`total_mdo` em `compras_cotacao_respostas`; +`vlr_mat`/`vlr_mdo` em `terceiro_contrato_itens`; +4 colunas MAT/MDO em `terceiro_medicao_itens`. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4252** — **FIX: VALOR NEGOCIADO EXATO — SEM QUEBRADOS POR ARREDONDAMENTO.** `editTotaisOverride` preserva `novoTotal` exato; backend usa `totalOverride` quando presente. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 
