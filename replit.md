@@ -50,13 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4224** — **SCORECARD SST: REDESIGN COMPLETO — DASHBOARD RICO COM 12 BLOCOS INTERATIVOS.** Substituída toda a aba "🦺 SST" no ScorecardTab.tsx por dashboard moderno: 2×4 KPI Hero Cards, Gauge ASO SVG + Treinamentos progress bars + Custo Atestados breakdown (BLOCO 2), 6 mini-gráficos expandíveis via Dialog (BLOCO 3), comparativo mês atual×anterior (BLOCO 4), EPI Curva ABC horizontal + Top 5 + estoque (BLOCO 5), 7 seções colapsáveis (acidentes/atestados/advertências/DDS/APR+PT/equipe CLT/terceiros). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4225** — **SCORECARD SST: FIX FILTRO PERÍODO + CUSTO EPI + GRÁFICOS HISTÓRICO.** 5 bugs cirúrgicos corrigidos no backend: Q4 (advertências CLT) e Q5 (terceiros) sem filtro de data → Darcy aparecia em qualquer mês; Q6 (`custo_estimado` vs `custo_total`) → R$ 0,00 no Top 5 EPI; Q6+Q7 sem filtro de período → EPI ignorava mês selecionado; Q13 epi_agg com `valor_produto::numeric` sem REPLACE → crash silencioso no safe() zerava todos os gráficos histórico e bolinhas do PeriodSelectorCard. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4223** — **SCORECARD SST: FIX COLUNAS CAMELCASE + NOVA PÁGINA "GESTOR SST POR OBRA".** Todas as tabelas SST (trainings, warnings, asos, epi_deliveries, accidents) usam colunas quoted camelCase na DB — queries usavam snake_case → "column does not exist" engolido pelo safe(). Corrigidas Q1/Q3/Q4/Q6/Q7/Q8/Q13. Nova página `/sst/gestor-por-obra` com tabela de todos os funcionários por obra + badges ASO/treinamentos/advertências/EPI/CIPA. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4224** — **SCORECARD SST: REDESIGN COMPLETO — DASHBOARD RICO COM 12 BLOCOS INTERATIVOS.** Substituída toda a aba "🦺 SST" no ScorecardTab.tsx por dashboard moderno: 2×4 KPI Hero Cards, Gauge ASO SVG + Treinamentos progress bars + Custo Atestados breakdown (BLOCO 2), 6 mini-gráficos expandíveis via Dialog (BLOCO 3), comparativo mês atual×anterior (BLOCO 4), EPI Curva ABC horizontal + Top 5 + estoque (BLOCO 5), 7 seções colapsáveis (acidentes/atestados/advertências/DDS/APR+PT/equipe CLT/terceiros). ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
 
-- **Rev. 4222** — **SCORECARD SST: FIX DEFINITIVO "NENHUM COLABORADOR" — obra_funcionarios sem companyId.** Removido filtro companyId das 5 ocorrências (Q1/Q3/Q4/Q11/historico). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4223** — **SCORECARD SST: FIX COLUNAS CAMELCASE + NOVA PÁGINA "GESTOR SST POR OBRA".** Corrigidas Q1/Q3/Q4/Q6/Q7/Q8/Q13. Nova página `/sst/gestor-por-obra`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4221** — **SCORECARD SST: REDESIGN COMPLETO — ABA "SEGURANÇA" → "🦺 SST".** Fix bolinhas PeriodSelectorCard. Q14 backend estoque EPI. Dashboard EPI: gráficos, Curva ABC, Top 5 maior/menor uso c/ foto, estoque obra. Atestados: Top 5 c/ foto + CID breakdown. ZERO DELETE · ZERO ALTER destrutivo.
 

@@ -753,8 +753,9 @@ export const scorecardRouter = router({
                 SELECT "employeeId" FROM obra_funcionarios
                 WHERE "obraId" = ${input.obraId}
               )
+              AND (${mr}::text IS NULL OR TO_CHAR(w."dataOcorrencia"::date, 'YYYY-MM') = ${mr})
             ORDER BY w."dataOcorrencia" DESC
-            LIMIT 20
+            LIMIT 100
           `);
           return r.rows as any[];
         }),
@@ -773,8 +774,9 @@ export const scorecardRouter = router({
             WHERE wt.obra_id    = ${input.obraId}
               AND wt.company_id = ${input.companyId}
               AND wt.deleted_at IS NULL
+              AND (${mr}::text IS NULL OR TO_CHAR(wt.data_ocorrencia::date, 'YYYY-MM') = ${mr})
             ORDER BY wt.data_ocorrencia DESC
-            LIMIT 20
+            LIMIT 100
           `);
           return r.rows as any[];
         }),
@@ -784,18 +786,19 @@ export const scorecardRouter = router({
           const r = await db.execute(sql`
             SELECT
               e.id AS employee_id, e."nomeCompleto" AS funcionario_nome, e.cargo,
-              COUNT(ed.id)                                                           AS total_entregas,
-              SUM(ed.quantidade)                                                     AS total_unidades,
-              SUM(COALESCE(ep.valor_produto::numeric, 0) * ed.quantidade)            AS custo_estimado,
-              MAX(ed."dataEntrega")                                                  AS ultima_entrega
+              COUNT(ed.id)                                                                                          AS total_entregas,
+              SUM(ed.quantidade)                                                                                    AS total_unidades,
+              SUM(COALESCE(REPLACE(COALESCE(ep.valor_produto,'0'),',','.')::numeric, 0) * ed.quantidade)           AS custo_total,
+              MAX(ed."dataEntrega")                                                                                 AS ultima_entrega
             FROM epi_deliveries ed
             JOIN employees e  ON e.id  = ed."employeeId"
             JOIN epis      ep ON ep.id = ed."epiId"
             WHERE ed."obraId"    = ${input.obraId}
               AND ed."companyId" = ${input.companyId}
               AND ed."deletedAt" IS NULL
+              AND (${mr}::text IS NULL OR TO_CHAR(ed."dataEntrega"::date, 'YYYY-MM') = ${mr})
             GROUP BY e.id, e."nomeCompleto", e.cargo
-            ORDER BY custo_estimado DESC
+            ORDER BY custo_total DESC
             LIMIT 30
           `);
           return r.rows as any[];
@@ -808,16 +811,17 @@ export const scorecardRouter = router({
               SELECT
                 ep.nome        AS epi_nome,
                 ep.categoria,
-                ep.valor_produto::numeric AS valor_unit,
-                SUM(ed.quantidade)                                          AS total_unidades,
-                SUM(COALESCE(ep.valor_produto::numeric, 0) * ed.quantidade) AS custo_total,
-                COUNT(DISTINCT ed."employeeId")                             AS num_funcionarios,
-                COUNT(ed.id)                                                AS total_entregas
+                REPLACE(COALESCE(ep.valor_produto,'0'),',','.')::numeric AS valor_unit,
+                SUM(ed.quantidade)                                                                           AS total_unidades,
+                SUM(COALESCE(REPLACE(COALESCE(ep.valor_produto,'0'),',','.')::numeric, 0) * ed.quantidade)  AS custo_total,
+                COUNT(DISTINCT ed."employeeId")                                                              AS num_funcionarios,
+                COUNT(ed.id)                                                                                 AS total_entregas
               FROM epi_deliveries ed
               JOIN epis ep ON ep.id = ed."epiId"
               WHERE ed."obraId"    = ${input.obraId}
                 AND ed."companyId" = ${input.companyId}
                 AND ed."deletedAt" IS NULL
+                AND (${mr}::text IS NULL OR TO_CHAR(ed."dataEntrega"::date, 'YYYY-MM') = ${mr})
               GROUP BY ep.id, ep.nome, ep.categoria, ep.valor_produto
             ),
             soma   AS (SELECT SUM(custo_total) AS total_geral FROM base),
@@ -1003,17 +1007,17 @@ export const scorecardRouter = router({
               GROUP BY TO_CHAR("dataAcidente", 'YYYY-MM')
             ),
             epi_agg AS (
-              SELECT TO_CHAR(ed."dataEntrega", 'YYYY-MM') AS mes,
+              SELECT TO_CHAR(ed."dataEntrega"::date, 'YYYY-MM') AS mes,
                      COUNT(ed.id) AS epi_entregas,
                      SUM(ed.quantidade) AS epi_unidades,
-                     ROUND(SUM(COALESCE(ep.valor_produto::numeric, 0) * ed.quantidade), 2) AS epi_custo
+                     ROUND(SUM(COALESCE(REPLACE(COALESCE(ep.valor_produto,'0'),',','.')::numeric, 0) * ed.quantidade), 2) AS epi_custo
               FROM epi_deliveries ed
               JOIN epis ep ON ep.id = ed."epiId"
               WHERE ed."companyId" = ${input.companyId}
                 AND ed."obraId"    = ${input.obraId}
                 AND ed."deletedAt" IS NULL
-                AND ed."dataEntrega" >= (CURRENT_DATE - INTERVAL '11 months')
-              GROUP BY TO_CHAR(ed."dataEntrega", 'YYYY-MM')
+                AND ed."dataEntrega"::date >= (CURRENT_DATE - INTERVAL '11 months')
+              GROUP BY TO_CHAR(ed."dataEntrega"::date, 'YYYY-MM')
             )
             SELECT m.mes,
                    COALESCE(a.atestados, 0)    AS atestados,

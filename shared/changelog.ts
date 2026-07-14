@@ -1,4 +1,24 @@
 /**
+ * Rev. 4225 - SCORECARD SST: FIX FILTRO PERÍODO + CUSTO EPI + GRÁFICOS HISTÓRICO.
+ *
+ * OBJETIVO — Corrigir 5 bugs críticos no dashboard SST introduzidos na Rev. 4224.
+ *
+ * BUGS CORRIGIDOS:
+ *  • Q4 (advertências CLT): faltava filtro por `mr` → Darcy aparecia em QUALQUER mês. Adicionado
+ *    AND TO_CHAR(w."dataOcorrencia"::date,'YYYY-MM') = mr. LIMIT 20 → 100.
+ *  • Q5 (advertências terceiros): mesmo problema. Adicionado filtro equivalente.
+ *  • Q6 (epiPorFuncionario): (a) custo retornado como `custo_estimado`, frontend lia `custo_total`
+ *    → R$ 0,00 para todos. Renomeado para `custo_total`. (b) sem filtro de data; adicionado
+ *    AND TO_CHAR(ed."dataEntrega"::date,'YYYY-MM') = mr. (c) safe cast REPLACE vírgula BR.
+ *  • Q7 (epiPorTipo / Curva ABC): sem filtro de data; adicionado filtro por `mr`. Safe cast.
+ *  • Q13 (historico epi_agg): `ep.valor_produto::numeric` sem REPLACE → potencial crash silencioso
+ *    no safe() zerava TODOS os gráficos histórico e bolinhas do PeriodSelectorCard. Corrigido
+ *    com REPLACE(COALESCE(ep.valor_produto,'0'),',','.')::numeric e ::date explícito.
+ *
+ * ARQUIVOS: server/routers/scorecard.ts (Q4/Q5/Q6/Q7/Q13). ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4224 - SCORECARD SST: REDESIGN COMPLETO — DASHBOARD RICO COM 12 BLOCOS INTERATIVOS.
  *
  * OBJETIVO — Substituir a aba "🦺 SST" no ScorecardTab.tsx por um dashboard moderno e
