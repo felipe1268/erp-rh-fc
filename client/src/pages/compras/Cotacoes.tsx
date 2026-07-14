@@ -5106,6 +5106,17 @@ export default function Cotacoes() {
                                           </span>
                                         )}
                                       </div>
+                                      {/* Rev. 4245 — Total do fornecedor no cabeçalho */}
+                                      {(() => {
+                                        const totalVivo = ((mapa as any)?.totaisPorFornecedor ?? {})[p.fornecedorId];
+                                        const totalVal = totalVivo != null ? totalVivo : parseFloat(p.totalOrcado ?? "0");
+                                        if (totalVal <= 0) return null;
+                                        return (
+                                          <div className={`normal-case font-bold text-sm px-2 py-0.5 rounded-lg border ${isMelhor ? "bg-emerald-100 text-emerald-800 border-emerald-300" : "bg-gray-100 text-gray-700 border-gray-300"}`}>
+                                            {totalVal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                                          </div>
+                                        );
+                                      })()}
                                       <div className="flex items-center gap-1 flex-wrap justify-center">
                                         {p.selecionado ? (
                                           <span className="flex items-center gap-0.5 text-[9px] normal-case font-semibold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full border border-emerald-300">

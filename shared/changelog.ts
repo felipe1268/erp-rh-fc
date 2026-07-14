@@ -1,4 +1,22 @@
 /**
+ * Rev. 4246 - TOTAL DO FORNECEDOR NO CABEÇALHO DO MAPA DE COTAÇÃO.
+ *
+ * ESCOPO: O valor total de cada fornecedor agora aparece diretamente no
+ * cabeçalho da coluna (acima dos botões de ação), eliminando a necessidade
+ * de rolar até o rodapé para ver o grand total de uma cotação com muitos itens.
+ *
+ * MUDANÇAS:
+ *   - client/src/pages/compras/Cotacoes.tsx: no <th colSpan={4}> de cada
+ *     fornecedor, adicionado bloco entre o nome/badges e o toolbar de ações:
+ *     usa `mapa.totaisPorFornecedor[fornecedorId]` (total ao vivo baseado nas
+ *     respostas) com fallback para `p.totalOrcado` (valor persistido).
+ *     Pill verde (emerald) para o fornecedor vencedor; cinza para os demais.
+ *     Oculto quando total = 0 (sem preços preenchidos).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4245 - EDITAR, EXCLUIR E INCLUIR ITENS NA COTAÇÃO.
  *
  * ESCOPO: Agora é possível editar, excluir ou incluir itens diretamente no

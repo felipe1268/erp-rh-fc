@@ -50,9 +50,9 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4245** — **EDITAR, EXCLUIR E INCLUIR ITENS NA COTAÇÃO.** Botões Pencil + Trash aparecem no hover de cada item (visíveis só em cotação "pendente"). Dialog "Editar Item": altera descrição, unidade, quantidade e flag somenteMo. Dialog "Incluir Item": cria item avulso (semVerba='avulso') sem vincular à SC. Excluir remove respostas e o item; bloqueia se item já em OC ativa. Backend: 3 novas procedures `editarItemCotacao` / `excluirItemCotacao` / `adicionarItemCotacao` (companyAccess + guard status≠aprovada). ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4246** — **TOTAL DO FORNECEDOR NO CABEÇALHO DO MAPA DE COTAÇÃO.** Valor total de cada fornecedor aparece agora no cabeçalho da coluna (pill verde para vencedor, cinza para demais), eliminando a necessidade de rolar até o rodapé. Usa `totaisPorFornecedor` (ao vivo) com fallback `totalOrcado`. Oculto quando total = 0. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4244** — **DIALOGS DESCONTO/ACRÉSCIMO COMERCIAL: SOMENTE VALOR NEGOCIADO FINAL.** Seletor de tipo (R$ Desc./Acrés., %) removido de ambos os dialogs. Input único "Valor Negociado Total (R$)": usuário digita o valor final desejado; `calcNegociadoPreview(fornecedorId, valorInput)` (unificação de `calcDescontoPreview`+`calcAcrescimoPreview`) calcula a diferença (positiva=acréscimo/indigo, negativa=desconto/âmbar) e distribui proporcionalmente por peso. Preview dinâmico com badge e % automático. SyncSchema+ Rev.4243 adicionado fora do ColFix para garantir `somente_mo` no Neon. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4245** — **EDITAR, EXCLUIR E INCLUIR ITENS NA COTAÇÃO.** Botões Pencil + Trash aparecem no hover de cada item (visíveis só em cotação "pendente"). Dialog "Editar Item": altera descrição, unidade, quantidade e flag somenteMo. Dialog "Incluir Item": cria item avulso (semVerba='avulso') sem vincular à SC. Excluir remove respostas e o item; bloqueia se item já em OC ativa. Backend: 3 novas procedures `editarItemCotacao` / `excluirItemCotacao` / `adicionarItemCotacao` (companyAccess + guard status≠aprovada). ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4237** — **RESULTADO FINANCEIRO: WATERFALL CORRETO (BRUTO → LÍQUIDO).** Fórmula: Receita − Custo Direto = Lucro Bruto → (−) Impostos → (−) Overhead → = Lucro Líquido. Linha 1 sempre visível (Lucro Bruto); Linha 2 condicional quando deduções configuradas. Sem deduções: Lucro Bruto em verde com CTA. PainelOrcamento: "Lucro Médio Mensal" renomeado para "Result. Bruto Mensal". ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -76,6 +76,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### 5 one-liners
 
+- **Rev. 4244** — **DIALOGS DESCONTO/ACRÉSCIMO: SOMENTE VALOR NEGOCIADO FINAL.** Input único "Valor Negociado Total (R$)"; `calcNegociadoPreview` unificado; badge dinâmico Acréscimo/Desconto. ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4243** — **FLAG "SOMENTE MO" POR ITEM EM SC E COTAÇÕES.** Toggle por item; propagação automática nas cotações vinculadas; schema `somente_mo` via SyncSchema+; badge 🔨 SOMENTE MO. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4242** — **SCORECARD COMPRAS: FIX LOCAÇÕES — `EXTRACT(days FROM integer)` NÃO EXISTE NO POSTGRES.** Fix: removido `EXTRACT(days FROM ...)` nas 2 ocorrências — subtração de datas já é integer. ZERO DELETE · ZERO ALTER destrutivo.
@@ -83,8 +85,6 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 - **Rev. 4241** — **SCORECARD COMPRAS: FIX LOCAÇÕES — TYPE MISMATCH VARCHAR vs DATE NA UNION ALL.** `COALESCE(el.data_inicio [VARCHAR], ai.criado_em::date [DATE])` quebra silenciosamente; fix: `to_char` (TEXT) + cast explícito na aritmética. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4240** — **SCORECARD COMPRAS: FIX LOCAÇÕES — `origem='alugado'` + ícone 🔑.** Ramo A ampliado com `OR ai.origem='alugado'`; ferramentasAlmox exclui alugado; 🚜 → 🔑. ZERO DELETE · ZERO ALTER destrutivo.
-
-- **Rev. 4239** — **ALMOXARIFADO: FIX VISUAL "QTD NÃO PERSISTE" — AVISO DE AGRUPAMENTO.** Card exibe SOMA de sub-items agrupados; dialog editava só `_subItems[0]`. Fix: `editandoSubItems` + painel azul. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### Histórico completo
 
