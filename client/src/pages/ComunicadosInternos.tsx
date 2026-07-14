@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import RichTextEditor, { stripHtml, sanitizeHtml, isHtmlContent } from "@/components/RichTextEditor";
 import { renderTemplate } from "@shared/documentTemplates";
-import { Megaphone, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft, Printer, Eye, ChevronLeft, Pencil, CheckCircle2, RotateCcw, Lock, X, Maximize2, Minimize2, ClipboardSignature, Eraser, MonitorSmartphone, Users, Signature, Building2, Filter } from "lucide-react";
+import { Megaphone, Plus, Trash2, Upload, FileText, Search, Loader2, ArrowLeft, Printer, Eye, ChevronLeft, Pencil, CheckCircle2, RotateCcw, Lock, X, Maximize2, Minimize2, ClipboardSignature, Eraser, MonitorSmartphone, Users, Signature, Building2, Filter, Send, Mail, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { formatCPF } from "@/lib/formatters";
@@ -128,11 +128,17 @@ export default function ComunicadosInternos() {
   const [search, setSearch] = useState("");
   const [anoFiltro, setAnoFiltro] = useState<number | "todos">("todos");
   const [showDialog, setShowDialog] = useState(false);
-  const [form, setForm] = useState({ titulo: "", dataEmissao: new Date().toISOString().slice(0, 10), conteudo: "" });
+  const [form, setForm] = useState({
+    titulo: "", dataEmissao: new Date().toISOString().slice(0, 10), conteudo: "",
+    setor: "", emissorNome: "", emissorCargo: "", destinatariosIds: [] as number[],
+  });
   const [uploadingId, setUploadingId] = useState<number | null>(null);
   const [viewComunicadoId, setViewComunicadoId] = useState<number | null>(null);
   const [editId, setEditId] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState({ titulo: "", conteudo: "" });
+  const [editForm, setEditForm] = useState({ titulo: "", conteudo: "", setor: "", emissorNome: "", emissorCargo: "", destinatariosIds: [] as number[] });
+  // Rev. 4264 — FCSign modal state
+  const [fcSignDialog, setFcSignDialog] = useState<{ id: number; numero: string; titulo: string; emissorNome: string } | null>(null);
+  const [fcSignEmail, setFcSignEmail] = useState("");
   const [pendingText, setPendingText] = useState<{ id: number; text: string } | null>(null);
   const [novoFullscreen, setNovoFullscreen] = useState(false);
   const [editFullscreen, setEditFullscreen] = useState(false);
@@ -164,6 +170,12 @@ export default function ComunicadosInternos() {
 
   // Rev. 2747 — Comunicado consome o template Vigente (comunicado_interno) quando existir.
   const comTplQ = trpc.systemDocumentTemplates.getVigente.useQuery({ tipo: "comunicado_interno" });
+  // Rev. 4264 — funcionários para picker de emissor / destinatários (carrega quando dialog aberto)
+  const funcionariosPickerQ = trpc.comunicadosInternos.listarFuncionariosSimples.useQuery(
+    { companyId },
+    { enabled: (showDialog || editId !== null) && companyId > 0, staleTime: 60_000 },
+  );
+  const funcionariosPicker = funcionariosPickerQ.data || [];
   const { data: comunicados = [], isLoading } = trpc.comunicadosInternos.listar.useQuery(
     { companyId },
     { enabled: companyId > 0 }
@@ -174,7 +186,17 @@ export default function ComunicadosInternos() {
       utils.comunicadosInternos.listar.invalidate();
       toast.success("Comunicado criado");
       setShowDialog(false);
-      setForm({ titulo: "", dataEmissao: new Date().toISOString().slice(0, 10), conteudo: "" });
+      setForm({ titulo: "", dataEmissao: new Date().toISOString().slice(0, 10), conteudo: "", setor: "", emissorNome: "", emissorCargo: "", destinatariosIds: [] });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  // Rev. 4264 — solicita assinatura formal via FCSign
+  const solicitarFCSignMut = trpc.comunicadosInternos.solicitarAssinaturaFCSign.useMutation({
+    onSuccess: () => {
+      utils.comunicadosInternos.listar.invalidate();
+      toast.success("Convite FCSign enviado! O emissor receberá o link de assinatura por e-mail.");
+      setFcSignDialog(null);
+      setFcSignEmail("");
     },
     onError: (e) => toast.error(e.message),
   });
@@ -563,12 +585,23 @@ export default function ComunicadosInternos() {
                 <Lock className="h-3 w-3" /> Concluído
               </span>
             )}
+            {c.fcsignEnvelopeId ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700 border border-purple-200">
+                <UserCheck className="h-3 w-3" /> FCSign Enviado
+              </span>
+            ) : null}
             <div className="flex-1" />
             {!isConcluido && (
               <Button size="sm" className="bg-green-600 hover:bg-green-700" disabled={concluirMut.isPending}
                 onClick={() => { if (confirm("Concluir este comunicado? Após concluído, ele não poderá ser editado ou excluído.")) concluirMut.mutate({ id: c.id, companyId }); }}>
                 {concluirMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
                 Concluir
+              </Button>
+            )}
+            {!c.fcsignEnvelopeId && (
+              <Button size="sm" variant="outline" className="border-purple-300 text-purple-700 hover:bg-purple-50"
+                onClick={() => setFcSignDialog({ id: c.id, numero: c.numero, titulo: c.titulo, emissorNome: c.emissorNome || c.criadoPor || "" })}>
+                <Send className="h-4 w-4 mr-1" /> Solicitar Assinatura FCSign
               </Button>
             )}
             {isConcluido && isAdminMaster && (
@@ -693,11 +726,12 @@ export default function ComunicadosInternos() {
             <div className="mt-12 pt-6">
               <div className="flex justify-between gap-12">
                 <div className="flex-1 text-center">
-                  {c.criadoPor && (
-                    <p className="text-xs font-semibold text-[#1B2A4A] mb-1 mx-4">{c.criadoPor}</p>
+                  {(c.emissorNome || c.criadoPor) && (
+                    <p className="text-xs font-semibold text-[#1B2A4A] mb-1 mx-4">{c.emissorNome || c.criadoPor}</p>
                   )}
                   <div className="border-t border-gray-400 pt-2 mx-4">
-                    <p className="text-[10px] text-gray-500">Departamento de Recursos Humanos</p>
+                    {c.emissorCargo && <p className="text-[10px] text-gray-600 font-medium">{c.emissorCargo}</p>}
+                    <p className="text-[10px] text-gray-500">{c.setor || "Departamento de Recursos Humanos"}</p>
                   </div>
                 </div>
                 <div className="flex-1 text-center">
@@ -829,7 +863,7 @@ export default function ComunicadosInternos() {
                           {!isConcluido && (
                             <>
                               <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-amber-600 hover:bg-amber-50" title="Editar"
-                                onClick={() => { setEditId(c.id); setEditForm({ titulo: c.titulo, conteudo: c.conteudo || "" }); }}>
+                                onClick={() => { setEditId(c.id); setEditForm({ titulo: c.titulo, conteudo: c.conteudo || "", setor: (c as any).setor || "", emissorNome: (c as any).emissorNome || "", emissorCargo: (c as any).emissorCargo || "", destinatariosIds: (() => { try { const d = JSON.parse((c as any).destinatariosJson || "[]"); return Array.isArray(d) ? d.map((x: any) => Number(typeof x === "object" ? x.id : x)).filter(Boolean) : []; } catch { return []; } })() }); }}>
                                 <Pencil className="h-3.5 w-3.5" />
                               </Button>
                               <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-600 hover:bg-red-50" title="Excluir"
@@ -850,33 +884,130 @@ export default function ComunicadosInternos() {
       </div>
 
       <Dialog open={showDialog} onOpenChange={(open) => { setShowDialog(open); if (!open) setNovoFullscreen(false); }}>
-        <DialogContent className={`flex flex-col p-0 ${novoFullscreen ? "max-w-[98vw] w-[98vw] h-[96vh] max-h-[96vh]" : "max-w-3xl max-h-[88vh]"}`}>
-          <DialogHeader className="flex-shrink-0 px-6 pt-5 pb-3 border-b border-slate-200">
+        <DialogContent className={`flex flex-col p-0 ${novoFullscreen ? "max-w-[98vw] w-[98vw] h-[96vh] max-h-[96vh]" : "max-w-3xl max-h-[90vh]"}`}>
+          <DialogHeader className="flex-shrink-0 px-6 pt-5 pb-3 border-b border-slate-200 bg-white rounded-t-lg">
             <div className="flex items-center justify-between gap-2">
-              <DialogTitle className="flex items-center gap-2"><Megaphone className="h-5 w-5 text-blue-600" /> Novo Comunicado Interno</DialogTitle>
+              <DialogTitle className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center">
+                  <Megaphone className="h-4 w-4 text-blue-600" />
+                </div>
+                Novo Comunicado Interno
+              </DialogTitle>
               <Button variant="ghost" size="sm" className="h-8 w-8 p-0 mr-6" title={novoFullscreen ? "Sair da tela cheia" : "Tela cheia"}
                 onClick={() => setNovoFullscreen(v => !v)}>
                 {novoFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
               </Button>
             </div>
           </DialogHeader>
-          <div className="space-y-4 py-3 px-6 overflow-y-auto flex-1 min-h-0">
-            <div>
-              <Label>Título *</Label>
-              <Input className="mt-1" placeholder="Ex: Registro de Ponto" value={form.titulo} onChange={e => setForm({ ...form, titulo: e.target.value })} />
+          <div className="space-y-4 py-4 px-6 overflow-y-auto flex-1 min-h-0">
+            {/* Linha 1: Título + Data */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-2">
+                <Label>Título *</Label>
+                <Input className="mt-1" placeholder="Ex: Registro de Ponto" value={form.titulo} onChange={e => setForm({ ...form, titulo: e.target.value })} />
+              </div>
+              <div>
+                <Label>Data de Emissão *</Label>
+                <Input type="date" className="mt-1" value={form.dataEmissao} onChange={e => setForm({ ...form, dataEmissao: e.target.value })} />
+                <p className="text-[10px] text-slate-400 mt-1">Nº {String((comunicados.filter((c:any)=>c.ano===new Date(form.dataEmissao+"T12:00:00").getFullYear()).length)+1).padStart(3,"0")}/{new Date(form.dataEmissao+"T12:00:00").getFullYear()} (automático)</p>
+              </div>
             </div>
-            <div>
-              <Label>Data de Emissão *</Label>
-              <Input type="date" className="mt-1" value={form.dataEmissao} onChange={e => setForm({ ...form, dataEmissao: e.target.value })} />
-              <p className="text-xs text-slate-500 mt-1">A numeração ({String((comunicados.filter((c:any)=>c.ano===new Date(form.dataEmissao+"T12:00:00").getFullYear()).length)+1).padStart(3,"0")}/{new Date(form.dataEmissao+"T12:00:00").getFullYear()}) é gerada automaticamente.</p>
+            {/* Linha 2: Setor + Emissor + Cargo */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <Label>Setor / Departamento</Label>
+                <input
+                  list="setores-list"
+                  className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  placeholder="Ex: Departamento de RH"
+                  value={form.setor}
+                  onChange={e => setForm({ ...form, setor: e.target.value })}
+                />
+                <datalist id="setores-list">
+                  <option value="Diretoria" />
+                  <option value="Departamento de Recursos Humanos" />
+                  <option value="Departamento Administrativo" />
+                  <option value="Departamento Financeiro" />
+                  <option value="Departamento de Compras" />
+                  <option value="Departamento de Obras" />
+                  <option value="Departamento Jurídico" />
+                  <option value="Departamento Contábil" />
+                  <option value="Departamento Comercial" />
+                  <option value="Segurança do Trabalho" />
+                </datalist>
+              </div>
+              <div>
+                <Label>Emissor Responsável</Label>
+                <select
+                  className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  value={form.emissorNome}
+                  onChange={e => {
+                    const emp = funcionariosPicker.find((f: any) => f.nomeCompleto === e.target.value);
+                    setForm({ ...form, emissorNome: e.target.value, emissorCargo: emp ? (emp.cargo || emp.funcao || "") : form.emissorCargo });
+                  }}
+                >
+                  <option value="">— Selecione —</option>
+                  {funcionariosPicker.map((f: any) => (
+                    <option key={f.id} value={f.nomeCompleto}>{f.nomeCompleto}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label>Cargo do Emissor</Label>
+                <Input className="mt-1" placeholder="Ex: Gerente de RH" value={form.emissorCargo} onChange={e => setForm({ ...form, emissorCargo: e.target.value })} />
+              </div>
             </div>
+            {/* Linha 3: Destinatários para assinatura */}
+            <div>
+              <Label className="flex items-center gap-1.5">
+                <Users className="h-3.5 w-3.5 text-slate-500" />
+                Destinatários para Assinatura
+                <span className="text-[10px] text-slate-400 font-normal">(opcional — sem seleção = todos os funcionários ativos)</span>
+              </Label>
+              {funcionariosPickerQ.isLoading ? (
+                <div className="mt-1 h-28 border rounded-md flex items-center justify-center text-slate-400 text-xs"><Loader2 className="h-4 w-4 animate-spin mr-1" /> Carregando...</div>
+              ) : (
+                <div className="mt-1 border border-slate-200 rounded-md overflow-y-auto max-h-36 bg-slate-50">
+                  {funcionariosPicker.length === 0 ? (
+                    <p className="text-xs text-slate-400 p-3">Nenhum funcionário ativo encontrado</p>
+                  ) : (
+                    <div className="divide-y divide-slate-100">
+                      {funcionariosPicker.map((f: any) => (
+                        <label key={f.id} className="flex items-center gap-2 px-3 py-1.5 hover:bg-white cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600"
+                            checked={form.destinatariosIds.includes(f.id)}
+                            onChange={e => {
+                              const ids = e.target.checked
+                                ? [...form.destinatariosIds, f.id]
+                                : form.destinatariosIds.filter(id => id !== f.id);
+                              setForm({ ...form, destinatariosIds: ids });
+                            }}
+                          />
+                          <span className="text-xs text-slate-700 flex-1 min-w-0 truncate">{f.nomeCompleto}</span>
+                          <span className="text-[10px] text-slate-400 shrink-0">{f.cargo || f.funcao || ""}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              {form.destinatariosIds.length > 0 && (
+                <p className="text-[11px] text-blue-600 mt-1 flex items-center gap-1">
+                  <UserCheck className="h-3 w-3" />
+                  {form.destinatariosIds.length} destinatário(s) selecionado(s) — só eles aparecerão na lista de assinatura.
+                </p>
+              )}
+            </div>
+            {/* Conteúdo */}
             <div className="flex flex-col">
               <Label className="mb-1">Conteúdo</Label>
               <RichTextEditor
                 value={form.conteudo}
                 onChange={(html) => setForm({ ...form, conteudo: html })}
                 placeholder="Texto do comunicado..."
-                minHeight={novoFullscreen ? "calc(96vh - 360px)" : "260px"}
+                minHeight={novoFullscreen ? "calc(96vh - 520px)" : "220px"}
               />
             </div>
           </div>
@@ -885,7 +1016,19 @@ export default function ComunicadosInternos() {
             <Button onClick={() => {
               if (!form.titulo.trim()) { toast.error("Informe o título"); return; }
               if (!companyId) { toast.error("Selecione a empresa"); return; }
-              criarMut.mutate({ companyId, titulo: form.titulo.trim(), dataEmissao: form.dataEmissao, conteudo: form.conteudo || undefined });
+              const destinatariosJson = form.destinatariosIds.length > 0
+                ? JSON.stringify(form.destinatariosIds.map(id => ({ id, nome: funcionariosPicker.find((f: any) => f.id === id)?.nomeCompleto || "" })))
+                : undefined;
+              criarMut.mutate({
+                companyId,
+                titulo: form.titulo.trim(),
+                dataEmissao: form.dataEmissao,
+                conteudo: form.conteudo || undefined,
+                setor: form.setor.trim() || undefined,
+                emissorNome: form.emissorNome.trim() || undefined,
+                emissorCargo: form.emissorCargo.trim() || undefined,
+                destinatariosJson,
+              });
             }} disabled={criarMut.isPending} className="bg-blue-600 hover:bg-blue-700">
               {criarMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
               Criar Comunicado
@@ -895,20 +1038,113 @@ export default function ComunicadosInternos() {
       </Dialog>
 
       <Dialog open={editId !== null} onOpenChange={(open) => { if (!open) { setEditId(null); setEditFullscreen(false); } }}>
-        <DialogContent className={`flex flex-col p-0 ${editFullscreen ? "max-w-[98vw] w-[98vw] h-[96vh] max-h-[96vh]" : "max-w-3xl max-h-[88vh]"}`}>
-          <DialogHeader className="flex-shrink-0 px-6 pt-5 pb-3 border-b border-slate-200">
+        <DialogContent className={`flex flex-col p-0 ${editFullscreen ? "max-w-[98vw] w-[98vw] h-[96vh] max-h-[96vh]" : "max-w-3xl max-h-[90vh]"}`}>
+          <DialogHeader className="flex-shrink-0 px-6 pt-5 pb-3 border-b border-slate-200 bg-white rounded-t-lg">
             <div className="flex items-center justify-between gap-2">
-              <DialogTitle className="flex items-center gap-2"><Pencil className="h-5 w-5 text-amber-600" /> Editar Comunicado</DialogTitle>
+              <DialogTitle className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-lg bg-amber-50 flex items-center justify-center">
+                  <Pencil className="h-4 w-4 text-amber-600" />
+                </div>
+                Editar Comunicado
+              </DialogTitle>
               <Button variant="ghost" size="sm" className="h-8 w-8 p-0 mr-6" title={editFullscreen ? "Sair da tela cheia" : "Tela cheia"}
                 onClick={() => setEditFullscreen(v => !v)}>
                 {editFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
               </Button>
             </div>
           </DialogHeader>
-          <div className="space-y-4 py-3 px-6 overflow-y-auto flex-1 min-h-0">
+          <div className="space-y-4 py-4 px-6 overflow-y-auto flex-1 min-h-0">
             <div>
               <Label>Título *</Label>
               <Input className="mt-1" value={editForm.titulo} onChange={e => setEditForm({ ...editForm, titulo: e.target.value })} />
+            </div>
+            {/* Setor + Emissor + Cargo */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <Label>Setor / Departamento</Label>
+                <input
+                  list="setores-list-edit"
+                  className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  placeholder="Ex: Departamento de RH"
+                  value={editForm.setor}
+                  onChange={e => setEditForm({ ...editForm, setor: e.target.value })}
+                />
+                <datalist id="setores-list-edit">
+                  <option value="Diretoria" />
+                  <option value="Departamento de Recursos Humanos" />
+                  <option value="Departamento Administrativo" />
+                  <option value="Departamento Financeiro" />
+                  <option value="Departamento de Compras" />
+                  <option value="Departamento de Obras" />
+                  <option value="Departamento Jurídico" />
+                  <option value="Departamento Contábil" />
+                  <option value="Departamento Comercial" />
+                  <option value="Segurança do Trabalho" />
+                </datalist>
+              </div>
+              <div>
+                <Label>Emissor Responsável</Label>
+                <select
+                  className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  value={editForm.emissorNome}
+                  onChange={e => {
+                    const emp = funcionariosPicker.find((f: any) => f.nomeCompleto === e.target.value);
+                    setEditForm({ ...editForm, emissorNome: e.target.value, emissorCargo: emp ? (emp.cargo || emp.funcao || "") : editForm.emissorCargo });
+                  }}
+                >
+                  <option value="">— Selecione —</option>
+                  {funcionariosPicker.map((f: any) => (
+                    <option key={f.id} value={f.nomeCompleto}>{f.nomeCompleto}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label>Cargo do Emissor</Label>
+                <Input className="mt-1" placeholder="Ex: Gerente de RH" value={editForm.emissorCargo} onChange={e => setEditForm({ ...editForm, emissorCargo: e.target.value })} />
+              </div>
+            </div>
+            {/* Destinatários */}
+            <div>
+              <Label className="flex items-center gap-1.5">
+                <Users className="h-3.5 w-3.5 text-slate-500" />
+                Destinatários para Assinatura
+                <span className="text-[10px] text-slate-400 font-normal">(opcional)</span>
+              </Label>
+              {funcionariosPickerQ.isLoading ? (
+                <div className="mt-1 h-28 border rounded-md flex items-center justify-center text-slate-400 text-xs"><Loader2 className="h-4 w-4 animate-spin mr-1" /> Carregando...</div>
+              ) : (
+                <div className="mt-1 border border-slate-200 rounded-md overflow-y-auto max-h-32 bg-slate-50">
+                  {funcionariosPicker.length === 0 ? (
+                    <p className="text-xs text-slate-400 p-3">Nenhum funcionário ativo encontrado</p>
+                  ) : (
+                    <div className="divide-y divide-slate-100">
+                      {funcionariosPicker.map((f: any) => (
+                        <label key={f.id} className="flex items-center gap-2 px-3 py-1.5 hover:bg-white cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="h-3.5 w-3.5 rounded border-slate-300 text-amber-600"
+                            checked={editForm.destinatariosIds.includes(f.id)}
+                            onChange={e => {
+                              const ids = e.target.checked
+                                ? [...editForm.destinatariosIds, f.id]
+                                : editForm.destinatariosIds.filter(id => id !== f.id);
+                              setEditForm({ ...editForm, destinatariosIds: ids });
+                            }}
+                          />
+                          <span className="text-xs text-slate-700 flex-1 min-w-0 truncate">{f.nomeCompleto}</span>
+                          <span className="text-[10px] text-slate-400 shrink-0">{f.cargo || f.funcao || ""}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              {editForm.destinatariosIds.length > 0 && (
+                <p className="text-[11px] text-amber-600 mt-1 flex items-center gap-1">
+                  <UserCheck className="h-3 w-3" />
+                  {editForm.destinatariosIds.length} destinatário(s) selecionado(s).
+                </p>
+              )}
             </div>
             <div className="flex flex-col">
               <Label className="mb-1">Conteúdo</Label>
@@ -916,7 +1152,7 @@ export default function ComunicadosInternos() {
                 value={editForm.conteudo}
                 onChange={(html) => setEditForm({ ...editForm, conteudo: html })}
                 placeholder="Texto do comunicado..."
-                minHeight={editFullscreen ? "calc(96vh - 280px)" : "320px"}
+                minHeight={editFullscreen ? "calc(96vh - 520px)" : "240px"}
               />
             </div>
           </div>
@@ -925,10 +1161,72 @@ export default function ComunicadosInternos() {
             <Button onClick={() => {
               if (!editForm.titulo.trim()) { toast.error("Informe o título"); return; }
               if (!editId) return;
-              atualizarMut.mutate({ id: editId, companyId, titulo: editForm.titulo.trim(), conteudo: editForm.conteudo || null });
+              const destinatariosJson = editForm.destinatariosIds.length > 0
+                ? JSON.stringify(editForm.destinatariosIds.map(id => ({ id, nome: funcionariosPicker.find((f: any) => f.id === id)?.nomeCompleto || "" })))
+                : null;
+              atualizarMut.mutate({
+                id: editId, companyId,
+                titulo: editForm.titulo.trim(),
+                conteudo: editForm.conteudo || null,
+                setor: editForm.setor.trim() || null,
+                emissorNome: editForm.emissorNome.trim() || null,
+                emissorCargo: editForm.emissorCargo.trim() || null,
+                destinatariosJson,
+              });
             }} disabled={atualizarMut.isPending} className="bg-amber-600 hover:bg-amber-700">
               {atualizarMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Pencil className="h-4 w-4 mr-1" />}
               Salvar Alterações
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rev. 4264 — Dialog FCSign: solicita assinatura formal do emissor responsável */}
+      <Dialog open={fcSignDialog !== null} onOpenChange={(open) => { if (!open) { setFcSignDialog(null); setFcSignEmail(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-purple-50 flex items-center justify-center">
+                <Send className="h-4 w-4 text-purple-600" />
+              </div>
+              Solicitar Assinatura FCSign
+            </DialogTitle>
+          </DialogHeader>
+          {fcSignDialog && (
+            <div className="space-y-4 py-1">
+              <div className="bg-slate-50 rounded-lg p-3 text-sm">
+                <p className="font-semibold text-slate-700 truncate">CI Nº {fcSignDialog.numero} — {fcSignDialog.titulo}</p>
+                {fcSignDialog.emissorNome && <p className="text-slate-500 text-xs mt-0.5">Emissor: {fcSignDialog.emissorNome}</p>}
+              </div>
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-xs text-purple-700">
+                <p className="font-semibold flex items-center gap-1.5 mb-1"><Mail className="h-3.5 w-3.5" /> Como funciona?</p>
+                <p>O emissor responsável receberá um e-mail com link para assinar o comunicado digitalmente via FCSign. O link expira em 30 dias.</p>
+              </div>
+              <div>
+                <Label>E-mail do Emissor Responsável *</Label>
+                <Input
+                  type="email"
+                  className="mt-1"
+                  placeholder="nome@fcengenharia.com.br"
+                  value={fcSignEmail}
+                  onChange={e => setFcSignEmail(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setFcSignDialog(null); setFcSignEmail(""); }}>Cancelar</Button>
+            <Button
+              className="bg-purple-600 hover:bg-purple-700"
+              disabled={solicitarFCSignMut.isPending || !fcSignEmail.trim()}
+              onClick={() => {
+                if (!fcSignDialog) return;
+                if (!fcSignEmail.trim()) { toast.error("Informe o e-mail do emissor"); return; }
+                solicitarFCSignMut.mutate({ id: fcSignDialog.id, companyId, emissorEmail: fcSignEmail.trim() });
+              }}
+            >
+              {solicitarFCSignMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}
+              Enviar Convite FCSign
             </Button>
           </DialogFooter>
         </DialogContent>

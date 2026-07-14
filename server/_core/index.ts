@@ -3531,6 +3531,17 @@ REGRAS DE EXTRAÇÃO:
           console.log(`[SyncSchema+] Rev. 2079: tabela comunicado_assinaturas garantida.`);
         } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.2079 comunicado_assinaturas:`, e?.message || e); }
 
+        // Rev. 4264 — Comunicados Internos: setor, emissor responsável, destinatários selecionados e
+        // link com envelope FCSign para assinatura formal do gestor.
+        try {
+          await db.execute(sql`ALTER TABLE comunicados_internos ADD COLUMN IF NOT EXISTS setor VARCHAR(255)`);
+          await db.execute(sql`ALTER TABLE comunicados_internos ADD COLUMN IF NOT EXISTS emissor_nome VARCHAR(255)`);
+          await db.execute(sql`ALTER TABLE comunicados_internos ADD COLUMN IF NOT EXISTS emissor_cargo VARCHAR(255)`);
+          await db.execute(sql`ALTER TABLE comunicados_internos ADD COLUMN IF NOT EXISTS destinatarios_json TEXT`);
+          await db.execute(sql`ALTER TABLE comunicados_internos ADD COLUMN IF NOT EXISTS fcsign_envelope_id INTEGER`);
+          console.log(`[SyncSchema+] Rev. 4264: colunas setor/emissor_nome/emissor_cargo/destinatarios_json/fcsign_envelope_id garantidas em comunicados_internos.`);
+        } catch (e: any) { console.error(`[SyncSchema+] FALHA Rev.4264 comunicados_internos colunas:`, e?.message || e); }
+
         // Rev. 2082 — link Categoria (financial_accounts) → Centro de Custo (financial_cost_centers).
         // Coluna opcional; permite que ao cadastrar a categoria inline no modal "Novo Lançamento" o
         // usuário já associe a um centro de custo existente.

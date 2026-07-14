@@ -9414,6 +9414,12 @@ export const comunicadosInternos = pgTable("comunicados_internos", {
   deletedAt: timestamp("deleted_at", { mode: "string" }),
   deletedBy: varchar("deleted_by", { length: 255 }),
   deletedByUserId: integer("deleted_by_user_id"),
+  // Rev. 4264 — setor emissor, responsável, destinatários selecionados e link FCSign
+  setor: varchar({ length: 255 }),
+  emissorNome: varchar("emissor_nome", { length: 255 }),
+  emissorCargo: varchar("emissor_cargo", { length: 255 }),
+  destinatariosJson: text("destinatarios_json"),
+  fcsignEnvelopeId: integer("fcsign_envelope_id"),
 }, (t) => [
   index("idx_comunicados_company").on(t.companyId),
   index("idx_comunicados_ano").on(t.companyId, t.ano),

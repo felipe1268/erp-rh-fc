@@ -1,10 +1,12 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
-import { comunicadosInternos, comunicadoAssinaturas, employees, obraFuncionarios, obras } from "../../drizzle/schema";
-import { eq, and, sql, desc, isNull, asc, inArray, ne } from "drizzle-orm";
+import { comunicadosInternos, comunicadoAssinaturas, employees, obraFuncionarios, obras, integrasignEnvelopes, integrasignSignatarios } from "../../drizzle/schema";
+import { eq, and, sql, desc, isNull, asc, inArray } from "drizzle-orm";
 import { storagePut } from "../storage";
 import { TRPCError } from "@trpc/server";
+import crypto from "crypto";
+import { enviarConviteAssinatura } from "../services/integrasignEmail";
 
 async function extractTextFromBuffer(buffer: Buffer, ext: string): Promise<string | null> {
   try {
@@ -35,7 +37,18 @@ function formatNumero(seq: number, ano: number): string {
 }
 
 async function ensureOwnership(db: any, id: number, companyId: number) {
-  const [row] = await db.select({ id: comunicadosInternos.id, companyId: comunicadosInternos.companyId, status: comunicadosInternos.status })
+  const [row] = await db.select({
+    id: comunicadosInternos.id,
+    companyId: comunicadosInternos.companyId,
+    status: comunicadosInternos.status,
+    numero: comunicadosInternos.numero,
+    titulo: comunicadosInternos.titulo,
+    conteudo: comunicadosInternos.conteudo,
+    emissorNome: comunicadosInternos.emissorNome,
+    emissorCargo: comunicadosInternos.emissorCargo,
+    criadoPor: comunicadosInternos.criadoPor,
+    fcsignEnvelopeId: comunicadosInternos.fcsignEnvelopeId,
+  })
     .from(comunicadosInternos).where(eq(comunicadosInternos.id, id));
   if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Comunicado não encontrado" });
   if (row.companyId !== companyId) throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado" });
@@ -54,12 +67,37 @@ export const comunicadosInternosRouter = router({
         .orderBy(desc(comunicadosInternos.ano), desc(comunicadosInternos.sequencia));
     }),
 
+  // Rev. 4264 — lista simplificada para pickers de emissor e destinatários no dialog.
+  listarFuncionariosSimples: protectedProcedure
+    .input(z.object({ companyId: z.number().int().positive() }))
+    .query(async ({ input }) => {
+      const db = (await getDb())!;
+      return await db.select({
+        id: employees.id,
+        nomeCompleto: employees.nomeCompleto,
+        cargo: employees.cargo,
+        funcao: employees.funcao,
+        matricula: employees.matricula,
+      })
+        .from(employees)
+        .where(and(
+          eq(employees.companyId, input.companyId),
+          eq(employees.status, "Ativo"),
+          isNull((employees as any).deletedAt),
+        ))
+        .orderBy(asc(employees.nomeCompleto));
+    }),
+
   criar: protectedProcedure
     .input(z.object({
       companyId: z.number().int().positive(),
       titulo: z.string().min(1).max(255),
       dataEmissao: z.string(),
       conteudo: z.string().optional(),
+      setor: z.string().max(255).optional(),
+      emissorNome: z.string().max(255).optional(),
+      emissorCargo: z.string().max(255).optional(),
+      destinatariosJson: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
@@ -92,6 +130,10 @@ export const comunicadosInternosRouter = router({
           criadoPor: ctx.user.name ?? "Sistema",
           criadoPorUserId: ctx.user.id,
           status: "rascunho",
+          setor: input.setor || null,
+          emissorNome: input.emissorNome || null,
+          emissorCargo: input.emissorCargo || null,
+          destinatariosJson: input.destinatariosJson || null,
         }).returning();
 
         return row;
@@ -104,6 +146,10 @@ export const comunicadosInternosRouter = router({
       companyId: z.number().int().positive(),
       titulo: z.string().min(1).max(255).optional(),
       conteudo: z.string().optional().nullable(),
+      setor: z.string().max(255).optional().nullable(),
+      emissorNome: z.string().max(255).optional().nullable(),
+      emissorCargo: z.string().max(255).optional().nullable(),
+      destinatariosJson: z.string().optional().nullable(),
     }))
     .mutation(async ({ input }) => {
       const db = (await getDb())!;
@@ -114,6 +160,10 @@ export const comunicadosInternosRouter = router({
       const data: any = { updatedAt: sql`NOW()` };
       if (input.titulo !== undefined) data.titulo = input.titulo;
       if (input.conteudo !== undefined) data.conteudo = input.conteudo;
+      if (input.setor !== undefined) data.setor = input.setor;
+      if (input.emissorNome !== undefined) data.emissorNome = input.emissorNome;
+      if (input.emissorCargo !== undefined) data.emissorCargo = input.emissorCargo;
+      if (input.destinatariosJson !== undefined) data.destinatariosJson = input.destinatariosJson;
       await db.update(comunicadosInternos).set(data).where(eq(comunicadosInternos.id, input.id));
       return { success: true };
     }),
@@ -137,6 +187,78 @@ export const comunicadosInternosRouter = router({
         updatedAt: sql`NOW()`,
       }).where(eq(comunicadosInternos.id, input.id));
       return { success: true };
+    }),
+
+  // Rev. 4264 — Solicita assinatura formal do emissor responsável via FCSign (integrasign).
+  // Cria envelope com 1 signatário (o emissor/responsável). Email obrigatório no input.
+  solicitarAssinaturaFCSign: protectedProcedure
+    .input(z.object({
+      id: z.number().int().positive(),
+      companyId: z.number().int().positive(),
+      emissorEmail: z.string().email({ message: "E-mail do emissor obrigatório para assinatura FCSign" }),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = (await getDb())!;
+      const row = await ensureOwnership(db, input.id, input.companyId);
+
+      if (row.fcsignEnvelopeId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Este comunicado já possui um envelope FCSign ativo." });
+      }
+
+      const emissorNome = row.emissorNome || row.criadoPor || ctx.user.name || "Responsável";
+      const emissorCargo = row.emissorCargo || "Responsável";
+      const titulo = `CI Nº ${row.numero} — ${row.titulo}`;
+      const textoContrato = row.conteudo
+        ? String(row.conteudo).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().substring(0, 5000)
+        : `Comunicado Interno Nº ${row.numero}: ${row.titulo}`;
+
+      const token = crypto.randomBytes(48).toString("hex");
+      const tokenExpira = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 dias
+
+      const [envelope] = await db.insert(integrasignEnvelopes).values({
+        companyId: input.companyId,
+        titulo,
+        descricao: `Assinatura formal de Comunicado Interno — módulo RH/Comunicados.`,
+        textoContrato,
+        status: "pendente",
+        totalSignatariosObrigatorios: 1,
+        criadoPorId: ctx.user.id,
+        criadoPorNome: ctx.user.name ?? "Sistema",
+        dataEnvio: sql`NOW()`,
+      } as any).returning();
+
+      await db.insert(integrasignSignatarios).values({
+        companyId: input.companyId,
+        envelopeId: envelope.id,
+        papel: "diretor",
+        ordemAssinatura: 1,
+        nome: emissorNome,
+        email: input.emissorEmail,
+        cargo: emissorCargo,
+        token,
+        tokenExpiraEm: tokenExpira.toISOString(),
+        status: "pendente",
+      } as any).returning();
+
+      // Salva o id do envelope no comunicado
+      await db.update(comunicadosInternos)
+        .set({ fcsignEnvelopeId: envelope.id } as any)
+        .where(eq(comunicadosInternos.id, input.id));
+
+      // Envia convite (try/catch não-bloqueante — não falha a mutation se email cair)
+      try {
+        await enviarConviteAssinatura({
+          email: input.emissorEmail,
+          nome: emissorNome,
+          papel: "diretor",
+          titulo,
+          token,
+        });
+      } catch (emailErr: any) {
+        console.warn(`[ComunicadosInternos] FCSign criado (id=${envelope.id}), falha no email:`, emailErr?.message || emailErr);
+      }
+
+      return { envelopeId: envelope.id };
     }),
 
   reverter: protectedProcedure
@@ -233,8 +355,9 @@ export const comunicadosInternosRouter = router({
       return { success: true };
     }),
 
-  // Rev. 2079 — Lista para Assinatura: devolve TODOS os funcionários ATIVOS da empresa
-  // com o status de assinatura (presente/ausente) pra este comunicado.
+  // Rev. 2079 — Lista para Assinatura: devolve funcionários ATIVOS da empresa
+  // (todos ou apenas os da lista de destinatários do comunicado) com status de assinatura.
+  // Rev. 4264 — quando destinatariosJson está preenchido, filtra para só esses IDs.
   listarFuncionariosParaAssinatura: protectedProcedure
     .input(z.object({
       comunicadoId: z.number().int().positive(),
@@ -243,7 +366,33 @@ export const comunicadosInternosRouter = router({
     .query(async ({ input }) => {
       const db = (await getDb())!;
       await ensureOwnership(db, input.comunicadoId, input.companyId);
-      // Funcionários ATIVOS da empresa (exclui Desligado/Inativo + soft-deleted).
+
+      // Busca destinatariosJson do comunicado para filtrar quando configurado
+      const [comRow] = await db.select({ destinatariosJson: comunicadosInternos.destinatariosJson })
+        .from(comunicadosInternos)
+        .where(eq(comunicadosInternos.id, input.comunicadoId));
+      const destinatariosJson = comRow?.destinatariosJson ?? null;
+      let destinatariosIds: number[] | null = null;
+      if (destinatariosJson) {
+        try {
+          const parsed = JSON.parse(destinatariosJson);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            destinatariosIds = parsed
+              .map((d: any) => Number(typeof d === "object" ? (d.id ?? d) : d))
+              .filter((n: number) => !isNaN(n) && n > 0);
+          }
+        } catch { /* ignora JSON inválido */ }
+      }
+
+      const baseConds: any[] = [
+        eq(employees.companyId, input.companyId),
+        eq(employees.status, "Ativo"),
+        isNull((employees as any).deletedAt),
+      ];
+      if (destinatariosIds && destinatariosIds.length > 0) {
+        baseConds.push(inArray(employees.id, destinatariosIds));
+      }
+
       const ativos = await db.select({
         id: employees.id,
         matricula: employees.matricula,
@@ -255,13 +404,9 @@ export const comunicadosInternosRouter = router({
         fotoUrl: employees.fotoUrl,
       })
         .from(employees)
-        .where(and(
-          eq(employees.companyId, input.companyId),
-          eq(employees.status, "Ativo"),
-          isNull((employees as any).deletedAt),
-        ))
+        .where(and(...baseConds))
         .orderBy(asc(employees.nomeCompleto));
-      // Assinaturas registradas pra este comunicado
+
       const assinaturas = await db.select({
         id: comunicadoAssinaturas.id,
         employeeId: comunicadoAssinaturas.employeeId,
@@ -274,8 +419,7 @@ export const comunicadosInternosRouter = router({
           eq(comunicadoAssinaturas.comunicadoId, input.comunicadoId),
           eq(comunicadoAssinaturas.companyId, input.companyId),
         ));
-      // Obra ATUAL de cada funcionário = alocação ativa em obra_funcionarios (isActive=1)
-      // → nome em obras. (Mesma fonte usada no raio-X do colaborador.)
+
       const ativoIdsParaObra = ativos.map(a => a.id);
       const alocacoes = ativoIdsParaObra.length > 0
         ? await db.select({
@@ -284,7 +428,6 @@ export const comunicadosInternosRouter = router({
             obraNome: obras.nome,
           })
             .from(obraFuncionarios)
-            // innerJoin com escopo de empresa NOS DOIS lados + obra não-excluída (tenancy)
             .innerJoin(obras, and(
               eq(obras.id, obraFuncionarios.obraId),
               eq(obras.companyId, input.companyId),
@@ -295,19 +438,17 @@ export const comunicadosInternosRouter = router({
               eq(obraFuncionarios.isActive, 1),
               inArray(obraFuncionarios.employeeId, ativoIdsParaObra),
             ))
-            // determinismo da "obra atual": alocação mais recente vence
             .orderBy(desc(obraFuncionarios.dataInicio), desc(obraFuncionarios.id))
         : [];
+
       const mapObra = new Map<number, { obraId: number; obraNome: string }>();
       for (const a of alocacoes) {
         if (!mapObra.has(a.employeeId)) mapObra.set(a.employeeId, { obraId: a.obraId, obraNome: a.obraNome });
       }
       const mapAssin = new Map<number, any>(assinaturas.map(a => [a.employeeId, a]));
-      // Conta APENAS assinaturas de funcionários atualmente ATIVOS (mantém KPI
-      // consistente com a tabela exibida — assinaturas órfãs de desligados ficam
-      // no banco mas não entram no percentual).
       const ativoIds = new Set(ativos.map(a => a.id));
       const totalAssinadosAtivos = assinaturas.filter(a => ativoIds.has(a.employeeId)).length;
+
       return {
         funcionarios: ativos.map(f => ({
           ...f,
@@ -317,31 +458,28 @@ export const comunicadosInternosRouter = router({
         })),
         totalAtivos: ativos.length,
         totalAssinados: totalAssinadosAtivos,
+        filtradoPorDestinatarios: !!(destinatariosIds && destinatariosIds.length > 0),
       };
     }),
 
-  // Rev. 2079 — Registra (ou substitui) a assinatura digital de um colaborador
-  // para um comunicado. assinaturaBase64 = PNG data URL ("data:image/png;base64,...").
+  // Rev. 2079 — Registra (ou substitui) a assinatura digital de um colaborador.
   assinar: protectedProcedure
     .input(z.object({
       comunicadoId: z.number().int().positive(),
       companyId: z.number().int().positive(),
       employeeId: z.number().int().positive(),
-      assinaturaBase64: z.string().min(50), // canvas vazio gera ~200 bytes; assinatura real bem maior
+      assinaturaBase64: z.string().min(50),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = (await getDb())!;
       await ensureOwnership(db, input.comunicadoId, input.companyId);
-      // Validar tamanho do payload (limita a 500KB pra evitar abuso)
       const maxLen = 500 * 1024;
       if (input.assinaturaBase64.length > maxLen) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Assinatura muito grande (máx. 500 KB)." });
       }
-      // Validar que é uma data URL de imagem
       if (!input.assinaturaBase64.startsWith("data:image/")) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Formato de assinatura inválido (esperado data:image/...)." });
       }
-      // Validar que o employee pertence à empresa e está ativo
       const [emp] = await db.select({ id: employees.id, status: employees.status, companyId: employees.companyId })
         .from(employees).where(eq(employees.id, input.employeeId));
       if (!emp || emp.companyId !== input.companyId) {
@@ -350,7 +488,6 @@ export const comunicadosInternosRouter = router({
       if (emp.status !== "Ativo") {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Apenas funcionários ATIVOS podem assinar." });
       }
-      // Upsert: deleta existente + insere nova (mantém auditoria via assinadoEm sempre atual)
       await db.delete(comunicadoAssinaturas).where(and(
         eq(comunicadoAssinaturas.comunicadoId, input.comunicadoId),
         eq(comunicadoAssinaturas.employeeId, input.employeeId),
@@ -366,7 +503,7 @@ export const comunicadosInternosRouter = router({
       return row;
     }),
 
-  // Rev. 2079 — Remove a assinatura digital de um colaborador para um comunicado.
+  // Rev. 2079 — Remove a assinatura digital de um colaborador.
   removerAssinatura: protectedProcedure
     .input(z.object({
       comunicadoId: z.number().int().positive(),

@@ -1,4 +1,50 @@
 /**
+ * Rev. 4264 - COMUNICADOS INTERNOS: SETOR/DEPARTAMENTO, EMISSOR RESPONSÁVEL, DESTINATÁRIOS PARA ASSINATURA E BOTÃO FCSIGN.
+ *
+ * PROBLEMA:
+ *   O módulo de Comunicados Internos não tinha como registrar o setor/departamento emissor,
+ *   o nome e cargo do responsável pela emissão, nem uma lista de destinatários para controle
+ *   de assinatura digital. O fluxo de FCSign não estava integrado ao módulo.
+ *
+ * SOLUÇÃO:
+ *
+ * Schema (SyncSchema+ — ZERO ALTER destrutivo):
+ *   Novas colunas em `comunicados_internos`:
+ *   - `setor` VARCHAR(255): departamento emissor (ex: "Departamento de RH")
+ *   - `emissor_nome` VARCHAR(255): nome do responsável pela emissão
+ *   - `emissor_cargo` VARCHAR(255): cargo do emissor
+ *   - `destinatarios_json` TEXT: JSON com array [{id, nome}] dos destinatários selecionados
+ *   - `fcsign_envelope_id` INTEGER: FK para integrasign_envelopes quando FCSign solicitado
+ *
+ * Backend — `server/routers/comunicadosInternos.ts` (reescrito):
+ *   - `listarFuncionariosSimples`: novo endpoint que retorna funcionários ativos (id, nomeCompleto, cargo, funcao)
+ *     para popular os selects de emissor e checkboxes de destinatários.
+ *   - `criar` / `atualizar`: aceita os novos campos (setor, emissorNome, emissorCargo, destinatariosJson).
+ *   - `listarFuncionariosParaAssinatura`: agora filtra por destinatáriosJson quando presente
+ *     (só mostra quem foi selecionado como destinatário), com campo `filtradoPorDestinatarios`.
+ *   - `solicitarAssinaturaFCSign`: nova mutation — cria envelope integrasign + signatário para o emissor,
+ *     salva fcsign_envelope_id no comunicado, dispara e-mail via `enviarConviteAssinatura` (não-bloqueante,
+ *     try/catch — falha de e-mail não aborta a mutation).
+ *
+ * Frontend — `client/src/pages/ComunicadosInternos.tsx`:
+ *   - Dialogs "Novo Comunicado" e "Editar": grid 3 colunas (Setor datalist, Emissor select, Cargo input)
+ *     + painel de checkboxes para destinatários (multi-select de funcionários ativos).
+ *   - Visualização do comunicado: exibe setor/emissor/cargo no cabeçalho do print.
+ *   - Toolbar de visualização: badge FCSign (azul = enviado, amarelo = pendente) + botão "Solicitar Assinatura FCSign".
+ *   - Modal FCSign: campo e-mail do emissor + botão "Enviar Convite FCSign" (roxo).
+ *   - `funcionariosPickerQ`: query para popular selects/checkboxes.
+ *   - `solicitarFCSignMut`: chama a mutation e fecha o modal ao sucesso.
+ *
+ * Arquivos principais:
+ *   - server/routers/comunicadosInternos.ts
+ *   - server/_core/index.ts (SyncSchema+ Rev.4264)
+ *   - drizzle/schema.ts (5 novas colunas em comunicadosInternos)
+ *   - client/src/pages/ComunicadosInternos.tsx
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4261 - CONTROLE DE CHEQUES: SINCRONIZAÇÃO AUTOMÁTICA COMPLETA — SENTIDO BANCO→CONTROLE (PENDENTE→COMPENSADO).
  *
  * PROBLEMA:
