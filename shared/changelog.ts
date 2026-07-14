@@ -1,4 +1,14 @@
 /**
+ * Rev. 4236 - SCORECARD SST: LIGHTBOX NO TOP 5 MAIS ATESTADOS.
+ *
+ * Estende o lightbox de foto (Rev. 4234) para o bloco "Top 5 — Mais Atestados".
+ * Clicar na foto/avatar da listagem do Top 5 abre o mesmo Dialog de ampliação.
+ *
+ * Arquivo: client/src/pages/planejamento/ScorecardTab.tsx
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4235 - SCORECARD SST: CUSTO PROPORCIONAL PARA ATESTADOS EM HORAS.
  *
  * PROBLEMA: Atestados com `diasAfastamento=0` e `horas_afastamento>0` exibiam "—"

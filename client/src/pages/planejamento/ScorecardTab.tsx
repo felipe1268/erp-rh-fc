@@ -1948,8 +1948,16 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                                       return (
                                         <div key={i} className="flex items-center gap-2">
                                           <span className="text-[8px] font-bold text-amber-300 w-3 shrink-0">{i+1}</span>
-                                          {p.foto?(<img src={p.foto} alt={p.nome} className="w-7 h-7 rounded-full object-cover shrink-0 ring-2 ring-amber-200"/>)
-                                            :(<div className="w-7 h-7 rounded-full bg-amber-200 text-amber-700 text-[9px] font-bold flex items-center justify-center shrink-0">{initials}</div>)}
+                                          <button
+                                            type="button"
+                                            title="Clique para ampliar a foto"
+                                            onClick={()=>setSstPhotoLightbox({url:p.foto??null,nome:p.nome,initials})}
+                                            className="shrink-0 focus:outline-none hover:ring-2 hover:ring-amber-400 rounded-full transition-all"
+                                          >
+                                            {p.foto
+                                              ?<img src={p.foto} alt={p.nome} className="w-7 h-7 rounded-full object-cover ring-2 ring-amber-200"/>
+                                              :<div className="w-7 h-7 rounded-full bg-amber-200 text-amber-700 text-[9px] font-bold flex items-center justify-center">{initials}</div>}
+                                          </button>
                                           <div className="flex-1 min-w-0">
                                             <p className="text-[9px] font-semibold text-gray-800 truncate">{p.nome.split(" ").slice(0,2).join(" ")}</p>
                                             <div className="flex gap-0.5 flex-wrap">
