@@ -291,7 +291,7 @@ export default function ComunicadosInternos() {
     const temFiltro = !!q || !!filtroObra || filtroAssinatura !== "todos";
     const filtradosFunc = funcionarios.filter((f: any) => {
       if (q) {
-        const codigoExib = f.matricula || `#${String(f.id).padStart(4, "0")}`;
+        const codigoExib = f.codigoInterno || "";
         const match =
           (f.nomeCompleto || "").toLowerCase().includes(q) ||
           codigoExib.toLowerCase().includes(q) ||
@@ -466,7 +466,7 @@ export default function ComunicadosInternos() {
                 <thead className="bg-slate-50 print:bg-slate-100">
                   <tr className="border-b-2 border-slate-300">
                     <th className="text-left px-2 py-2 font-bold text-slate-700 w-10">#</th>
-                    <th className="text-left px-2 py-2 font-bold text-slate-700 w-20">Matrícula</th>
+                    <th className="text-left px-2 py-2 font-bold text-slate-700 w-20">N° Interno</th>
                     <th className="text-left px-2 py-2 font-bold text-slate-700">Nome do Colaborador</th>
                     <th className="text-left px-2 py-2 font-bold text-slate-700 hidden sm:table-cell w-32">Cargo</th>
                     <th className="text-left px-2 py-2 font-bold text-slate-700" style={{ width: assinaturaMode === "digital" ? "260px" : "300px" }}>
@@ -481,7 +481,7 @@ export default function ComunicadosInternos() {
                     return (
                       <tr key={f.id} className={`border-b border-slate-200 ${assinou ? "bg-emerald-50/30 print:bg-white" : ""}`}>
                         <td className="px-2 py-2 text-slate-500 align-top">{idx + 1}</td>
-                        <td className="px-2 py-2 text-slate-700 font-mono align-top">{f.matricula || `#${String(f.id).padStart(4, "0")}`}</td>
+                        <td className="px-2 py-2 text-slate-700 font-mono align-top">{f.codigoInterno || "—"}</td>
                         <td className="px-2 py-2 text-slate-800 font-medium align-top">
                           {f.nomeCompleto}
                           <div className="text-[10px] font-semibold text-indigo-600 flex items-center gap-1">

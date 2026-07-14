@@ -81,7 +81,7 @@ export const comunicadosInternosRouter = router({
         nomeCompleto: employees.nomeCompleto,
         cargo: employees.cargo,
         funcao: employees.funcao,
-        matricula: employees.matricula,
+        codigoInterno: (employees as any).codigoInterno,
       })
         .from(employees)
         .where(and(
@@ -420,7 +420,7 @@ export const comunicadosInternosRouter = router({
 
       const ativos = await db.select({
         id: employees.id,
-        matricula: employees.matricula,
+        codigoInterno: (employees as any).codigoInterno,
         nomeCompleto: employees.nomeCompleto,
         cpf: employees.cpf,
         cargo: employees.cargo,
