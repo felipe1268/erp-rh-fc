@@ -1,4 +1,28 @@
 /**
+ * Rev. 4257 - CONTROLE DE CHEQUES: CARDS DO TOPO REFLETEM FILTROS ATIVOS.
+ *
+ * OBJETIVO: quando qualquer filtro client-side está ativo (fornecedor, data de
+ * vencimento, ou status "outros"/extrato), os 4 cards do topo (Pendentes,
+ * Compensados, Devolvidos, Outros) derivam seus totais de `chequesFiltrados`
+ * em vez do `resumo` backend — garantindo que "o que a tabela mostra é o que
+ * os cards mostram".
+ *
+ * LÓGICA (FinanceiroCheques.tsx):
+ *   anyFiltroAtivo = !!(fFornecedor || fVencDe || fVencAte || fStatus !== "todos")
+ *   cardTotais = useMemo:
+ *     - se anyFiltroAtivo=false → usa cardTotaisBackend (comportamento original)
+ *     - se anyFiltroAtivo=true  → agrupa chequesFiltrados por status,
+ *       soma qtd e valor, retorna {qtd, total, map}
+ *
+ * ORDEM DE DECLARAÇÃO (correção técnica):
+ *   cardTotaisBackend definido antes de chequesFiltrados (não depende dele).
+ *   cardTotais useMemo movido para DEPOIS de chequesFiltrados (depende dele).
+ *   Evita TDZ ReferenceError em runtime.
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4256 - CONTROLE DE CHEQUES: FILTRO POR DATA DE VENCIMENTO + FORNECEDOR + SOMATÓRIO.
  *
  * OBJETIVO: facilitar a consulta de cheques emitidos por período de vencimento

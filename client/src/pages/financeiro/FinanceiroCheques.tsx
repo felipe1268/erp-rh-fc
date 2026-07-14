@@ -448,7 +448,7 @@ export default function FinanceiroCheques() {
   // Rev. 3212 — os 3 cards de resumo agora aparecem TAMBÉM em "Ano todo" (mesSel=null):
   // com mês selecionado usam o agregado do mês (totaisMes); em "Ano todo" usam o do ano
   // (totais, que já vem de cheques.resumo({companyId,ano}) sem filtro de mês).
-  const cardTotais = mesSel != null
+  const cardTotaisBackend = mesSel != null
     ? { qtd: totaisMes.qtd, total: totaisMes.total, map: totaisMes.map }
     : { qtd: totais.qtdGeral, total: totais.totalGeral, map: totais.map };
   const cardTitulo = mesSel != null ? `Resumo de ${MESES[mesSel]}/${ano}` : `Resumo de ${ano} (ano todo)`;
@@ -499,6 +499,24 @@ export default function FinanceiroCheques() {
     }
     return arr;
   }, [cheques, fStatus, fVencDe, fVencAte, fFornecedor]);
+
+  // Rev. 4257 — quando qualquer filtro client-side está ativo (fornecedor, data,
+  // status "outros"/extrato), os cards derivam do chequesFiltrados em vez do resumo
+  // backend — "o que a tabela mostra é o que os cards mostram".
+  const anyFiltroAtivo = !!(fFornecedor || fVencDe || fVencAte || fStatus !== "todos");
+  const cardTotais = useMemo(() => {
+    if (!anyFiltroAtivo) return cardTotaisBackend;
+    const map: Record<string, { qtd: number; total: number }> = {};
+    for (const c of chequesFiltrados as any[]) {
+      const s = String(c.status || "indefinido");
+      if (!map[s]) map[s] = { qtd: 0, total: 0 };
+      map[s].qtd++;
+      map[s].total += Number(c.valor) || 0;
+    }
+    const qtd = (chequesFiltrados as any[]).length;
+    const total = (chequesFiltrados as any[]).reduce((s: number, c: any) => s + (Number(c.valor) || 0), 0);
+    return { qtd, total, map };
+  }, [anyFiltroAtivo, chequesFiltrados, cardTotaisBackend]);
 
   // Lista única de fornecedores dos cheques carregados (p/ select de filtro).
   const fornecedorFiltroOpts = useMemo((): SearchableSelectOption[] => {
