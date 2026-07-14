@@ -6807,6 +6807,7 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
         precoUnitario: z.number(),
         descontoPct: z.number().optional(),
         quantidade: z.number().optional(),
+        totalOverride: z.number().optional(), // Rev. 4252 — total exato negociado (evita drift de arredondamento)
       })),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -6827,7 +6828,9 @@ Se não conseguir identificar, retorne {"identificado": false}.` }],
           const itRow = await db.select({ quantidade: comprasCotacoesItens.quantidade }).from(comprasCotacoesItens).where(eq(comprasCotacoesItens.id, r.itemId));
           qty = n(itRow[0]?.quantidade ?? 1);
         }
-        const total = qty * r.precoUnitario * (1 - desc / 100);
+        // Rev. 4252 — usar totalOverride quando fornecido (valor negociado exato), evita drift de arredondamento
+        const totalCalc = qty * r.precoUnitario * (1 - desc / 100);
+        const total = (r.totalOverride !== undefined && r.totalOverride > 0) ? r.totalOverride : totalCalc;
         totalForn += total;
         await db.insert(comprasCotacaoRespostas).values({
           cotacaoId: input.cotacaoId, fornecedorId: input.fornecedorId, itemId: r.itemId,

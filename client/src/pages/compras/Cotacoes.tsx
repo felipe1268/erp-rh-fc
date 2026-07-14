@@ -983,6 +983,7 @@ export default function Cotacoes() {
   const [buscandoCnpjForn, setBuscandoCnpjForn] = useState(false);
   const [cnpjFornErro, setCnpjFornErro] = useState<string | null>(null);
   const [editPrecos, setEditPrecos] = useState<Record<string, string>>({});
+  const [editTotaisOverride, setEditTotaisOverride] = useState<Record<string, number>>({});
   const [editQtds, setEditQtds] = useState<Record<string, string>>({});
   const [editPrazo, setEditPrazo] = useState<Record<number, string>>({});
   const [editCondPag, setEditCondPag] = useState<Record<number, string>>({});
@@ -3397,10 +3398,13 @@ export default function Cotacoes() {
       const preview = calcNegociadoPreview(descontoModal.fornecedorId, descontoValor);
       if (!preview.length) return;
       const updates: Record<string, string> = {};
+      const totaisUpdates: Record<string, number> = {};
       for (const it of preview) {
         updates[it.key] = it.novoPreco.toFixed(2);
+        totaisUpdates[it.key] = it.novoTotal; // Rev. 4252 — guardar total exato
       }
       setEditPrecos(prev => ({ ...prev, ...updates }));
+      setEditTotaisOverride(prev => ({ ...prev, ...totaisUpdates }));
       setDescontoModal(null);
       setDescontoValor("");
       setDescontoPreviewing(false);
@@ -3412,10 +3416,13 @@ export default function Cotacoes() {
       const preview = calcNegociadoPreview(acrescimoModal.fornecedorId, acrescimoValor);
       if (!preview.length) return;
       const updates: Record<string, string> = {};
+      const totaisUpdates: Record<string, number> = {};
       for (const it of preview) {
         updates[it.key] = it.novoPreco.toFixed(2);
+        totaisUpdates[it.key] = it.novoTotal; // Rev. 4252 — guardar total exato
       }
       setEditPrecos(prev => ({ ...prev, ...updates }));
+      setEditTotaisOverride(prev => ({ ...prev, ...totaisUpdates }));
       setAcrescimoModal(null);
       setAcrescimoValor("");
       setAcrescimoPreviewing(false);
@@ -3425,7 +3432,7 @@ export default function Cotacoes() {
     function handleSalvarPrecos(fornecedorId: number) {
       if (!mapa || !showDetalhe) return;
       const isPacote = ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote';
-      let respostas: Array<{ itemId: number; precoUnitario: number; descontoPct: number; quantidade: number }>;
+      let respostas: Array<{ itemId: number; precoUnitario: number; descontoPct: number; quantidade: number; totalOverride?: number }>;
       if (isPacote) {
         const compGroups: Record<string, any[]> = {};
         const noComp: any[] = [];
@@ -3444,7 +3451,7 @@ export default function Cotacoes() {
           const compQtd = (first as any).composicaoQtdOrcada || parseFloat(first.quantidade ?? "0");
           const firstKey = `${first.id}_${fornecedorId}`;
           const precoComp = parseFloat(editPrecos[firstKey] ?? "0") || 0;
-          respostas.push({ itemId: first.id, precoUnitario: precoComp, descontoPct: 0, quantidade: compQtd });
+          respostas.push({ itemId: first.id, precoUnitario: precoComp, descontoPct: 0, quantidade: compQtd, totalOverride: editTotaisOverride[firstKey] });
           for (let i = 1; i < items.length; i++) {
             respostas.push({ itemId: items[i].id, precoUnitario: 0, descontoPct: 0, quantidade: 0 });
           }
@@ -3453,7 +3460,7 @@ export default function Cotacoes() {
           const key = `${it.id}_${fornecedorId}`;
           const qtyStr = editQtds[key];
           const qty = qtyStr && parseFloat(qtyStr) > 0 ? parseFloat(qtyStr) : parseFloat(it.quantidade);
-          respostas.push({ itemId: it.id, precoUnitario: parseFloat(editPrecos[key] ?? "0") || 0, descontoPct: 0, quantidade: qty });
+          respostas.push({ itemId: it.id, precoUnitario: parseFloat(editPrecos[key] ?? "0") || 0, descontoPct: 0, quantidade: qty, totalOverride: editTotaisOverride[key] });
         }
       } else {
         respostas = mapa.itens.map((it: any) => {
@@ -3465,6 +3472,7 @@ export default function Cotacoes() {
             precoUnitario: parseFloat(editPrecos[key] ?? "0") || 0,
             descontoPct: 0,
             quantidade: qty,
+            totalOverride: editTotaisOverride[key], // Rev. 4252 — valor exato negociado
           };
         });
       }
@@ -5842,12 +5850,18 @@ export default function Cotacoes() {
                                     const handleGroupedPrecoChange = (val: string) => {
                                       if (it._grouped) {
                                         const updates: Record<string, string> = { [key]: val };
+                                        const keysToRemove: string[] = [key];
                                         for (const ci of it._childItems) {
-                                          updates[`${ci.id}_${p.fornecedorId}`] = val;
+                                          const ck = `${ci.id}_${p.fornecedorId}`;
+                                          updates[ck] = val;
+                                          keysToRemove.push(ck);
                                         }
                                         setEditPrecos(prev => ({ ...prev, ...updates }));
+                                        // Rev. 4252 — edição manual invalida override de total negociado
+                                        setEditTotaisOverride(prev => { const n = { ...prev }; for (const k of keysToRemove) delete n[k]; return n; });
                                       } else {
                                         setEditPrecos(prev => ({ ...prev, [key]: val }));
+                                        setEditTotaisOverride(prev => { const n = { ...prev }; delete n[key]; return n; });
                                       }
                                     };
 

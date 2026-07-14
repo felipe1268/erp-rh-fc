@@ -1,4 +1,23 @@
 /**
+ * Rev. 4252 - FIX: VALOR NEGOCIADO EXATO — SEM QUEBRADOS POR ARREDONDAMENTO.
+ *
+ * BUG: ao aplicar "Valor Negociado" (Desconto/Acréscimo) no mapa de cotação,
+ * o total salvo diferia centavos/reais do valor digitado. Causa: a distribuição
+ * proporcional arredonda `precoUnitario` a 2 casas; na hora de salvar, o backend
+ * recomputa `total = qty × precoUnitario` → drift (ex: 183 × 715.37 ≠ alvo).
+ *
+ * FIX: o `calcNegociadoPreview` já calcula `novoTotal` exato (com correção de
+ * último item). Agora esse total é armazenado em `editTotaisOverride[key]` ao
+ * aplicar desconto/acréscimo. O `handleSalvarPrecos` inclui `totalOverride` por
+ * item nas respostas. O backend `salvarRespostasLote` usa `totalOverride` se
+ * fornecido, em vez de `qty × precoUnitario`.
+ *
+ * Edição manual de preço limpa o override do item alterado (não impacta os demais).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4251 - ESPELHAMENTO AUTOMÁTICO DE ITENS DA COTAÇÃO NA SC VINCULADA.
  *
  * Quando um item é adicionado na cotação (avulso ou via EAP), se a cotação
