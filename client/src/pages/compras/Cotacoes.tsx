@@ -4961,6 +4961,36 @@ export default function Cotacoes() {
                     </div>
                   )}
 
+                  {/* Rev. 4250 — Campo de busca de itens no mapa (topo) */}
+                  {(mapa?.participantes ?? []).length > 0 && (
+                    <div className="flex items-center gap-3 bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3">
+                      <div className="relative flex-1 max-w-sm">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+                        <input
+                          type="text"
+                          placeholder="Filtrar itens por descrição…"
+                          value={mapaFiltro}
+                          onChange={e => setMapaFiltro(e.target.value)}
+                          className="w-full pl-8 pr-8 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400 bg-gray-50 placeholder-gray-400"
+                        />
+                        {mapaFiltro && (
+                          <button onClick={() => setMapaFiltro("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      {mapaFiltro && (
+                        <span className="text-xs text-gray-400 shrink-0">
+                          {(() => {
+                            const tot = (mapa?.itens ?? []).length;
+                            const vis = (mapa?.itens ?? []).filter((it: any) => (it.descricao ?? "").toLowerCase().includes(mapaFiltro.toLowerCase())).length;
+                            return `${vis} de ${tot} item${tot !== 1 ? "s" : ""}`;
+                          })()}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
                   {/* Matriz de preços */}
                   {mapaQ.isLoading ? (
                     <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
@@ -5065,33 +5095,6 @@ export default function Cotacoes() {
                           </button>
                         </div>
                       )}
-                      {/* Rev. 4250 — Campo de busca de itens no mapa */}
-                      <div className="flex items-center gap-2 px-1 pb-1">
-                        <div className="relative flex-1 max-w-sm">
-                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
-                          <input
-                            type="text"
-                            placeholder="Filtrar itens por descrição…"
-                            value={mapaFiltro}
-                            onChange={e => setMapaFiltro(e.target.value)}
-                            className="w-full pl-8 pr-8 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white placeholder-gray-400"
-                          />
-                          {mapaFiltro && (
-                            <button onClick={() => setMapaFiltro("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                              <X className="h-3 w-3" />
-                            </button>
-                          )}
-                        </div>
-                        {mapaFiltro && (
-                          <span className="text-xs text-gray-400 shrink-0">
-                            {(() => {
-                              const tot = (mapa?.itens ?? []).length;
-                              const vis = (mapa?.itens ?? []).filter((it: any) => (it.descricao ?? "").toLowerCase().includes(mapaFiltro.toLowerCase())).length;
-                              return `${vis}/${tot} item${tot !== 1 ? "s" : ""}`;
-                            })()}
-                          </span>
-                        )}
-                      </div>
                       <div className="flex items-center justify-between gap-2 px-1">
                         <div className="flex items-center gap-2">
                           {detalheFullscreen?.status === "pendente" && (mapa?.participantes ?? []).length >= 2 && mapaItemsChecked.size === 0 && Object.keys(vencedorPorItem).length === 0 && (
