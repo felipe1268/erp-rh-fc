@@ -726,25 +726,38 @@ export default function ComunicadosInternos() {
               })()}
             </div>
 
-            <div className="mt-12 pt-6">
-              <div className="flex justify-between gap-12">
-                <div className="flex-1 text-center">
-                  {(c.emissorNome || c.criadoPor) && (
-                    <p className="text-xs font-semibold text-[#1B2A4A] mb-1 mx-4">{c.emissorNome || c.criadoPor}</p>
-                  )}
-                  <div className="border-t border-gray-400 pt-2 mx-4">
-                    {c.emissorCargo && <p className="text-[10px] text-gray-600 font-medium">{c.emissorCargo}</p>}
-                    <p className="text-[10px] text-gray-500">{c.setor || "Departamento de Recursos Humanos"}</p>
+            {/* Assinaturas — 1 bloco se emissor é da Direção/Sócio, 2 blocos caso contrário */}
+            {(() => {
+              const cargoLower = ((c as any).emissorCargo || "").toLowerCase();
+              const setorLower = ((c as any).setor || "").toLowerCase();
+              const ehDirecao = setorLower === "diretoria" || setorLower.includes("diretor")
+                || cargoLower.includes("diretor") || cargoLower.includes("sócio")
+                || cargoLower.includes("socio") || cargoLower.includes("administrador")
+                || cargoLower.includes("ceo") || cargoLower.includes("presidente");
+              return (
+                <div className="mt-12 pt-6">
+                  <div className={`flex gap-12 ${ehDirecao ? "justify-center" : "justify-between"}`}>
+                    <div className={`text-center ${ehDirecao ? "w-72" : "flex-1"}`}>
+                      {(c.emissorNome || c.criadoPor) && (
+                        <p className="text-xs font-semibold text-[#1B2A4A] mb-1 mx-4">{(c as any).emissorNome || c.criadoPor}</p>
+                      )}
+                      <div className="border-t border-gray-400 pt-2 mx-4">
+                        {(c as any).emissorCargo && <p className="text-[10px] text-gray-600 font-medium">{(c as any).emissorCargo}</p>}
+                        <p className="text-[10px] text-gray-500">{(c as any).setor || "Departamento de Recursos Humanos"}</p>
+                      </div>
+                    </div>
+                    {!ehDirecao && (
+                      <div className="flex-1 text-center">
+                        <p className="text-xs font-semibold text-[#1B2A4A] mb-1 mx-4">&nbsp;</p>
+                        <div className="border-t border-gray-400 pt-2 mx-4">
+                          <p className="text-[10px] text-gray-500">Direção</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div className="flex-1 text-center">
-                  <p className="text-xs font-semibold text-[#1B2A4A] mb-1 mx-4">&nbsp;</p>
-                  <div className="border-t border-gray-400 pt-2 mx-4">
-                    <p className="text-[10px] text-gray-500">Direção</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+              );
+            })()}
 
             <div className="mt-8 pt-4 border-t border-gray-200 flex justify-between text-[9px] text-gray-400">
               <span>Documento gerado pelo ERP - Gestão Integrada</span>

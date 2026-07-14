@@ -75,7 +75,7 @@ export const comunicadosInternosRouter = router({
     .query(async ({ input }) => {
       const db = (await getDb())!;
 
-      // 1. Todos os funcionários ativos
+      // 1. Todos os funcionários ativos (sem filtro deletedAt — status='Ativo' é suficiente)
       const emps = await db.select({
         id: employees.id,
         nomeCompleto: employees.nomeCompleto,
@@ -87,7 +87,6 @@ export const comunicadosInternosRouter = router({
         .where(and(
           eq(employees.companyId, input.companyId),
           eq(employees.status, "Ativo"),
-          isNull((employees as any).deletedAt),
         ))
         .orderBy(asc(employees.nomeCompleto));
 
