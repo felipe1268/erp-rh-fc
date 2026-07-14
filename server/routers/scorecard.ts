@@ -1478,6 +1478,22 @@ export const scorecardRouter = router({
         // ── 6. EQUIPAMENTOS LOCADOS ───────────────────────────────────────────
         // Busca tanto pelo obra_id direto quanto via vínculo em almoxarifado_itens
         safe("locacoes", async () => {
+          // DEBUG: ver o que existe no banco para diagnóstico
+          const dbg = await db.execute(sql`
+            SELECT
+              ai.id, ai.nome, ai.obra_id, ai.company_id, ai.ativo,
+              ai.origem, ai.equipamento_vinculado_tipo, ai.equipamento_vinculado_id
+            FROM almoxarifado_itens ai
+            WHERE ai.company_id = ${input.companyId}
+              AND ai.ativo = true
+              AND (
+                ai.equipamento_vinculado_tipo = 'locado'
+                OR ai.origem = 'alugado'
+              )
+            LIMIT 20
+          `);
+          console.log(`[DEBUG locacoes] obraId=${input.obraId} companyId=${input.companyId} — itens locados/alugados na empresa:`, JSON.stringify(dbg.rows));
+
           // Fonte primária: almoxarifado_itens com tipo = 'locado' para esta obra.
           // Isso garante que qualquer item marcado como locado no almox apareça aqui,
           // independentemente do obra_id em equipamentos_locados.
