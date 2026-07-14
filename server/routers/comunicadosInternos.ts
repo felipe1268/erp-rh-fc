@@ -68,21 +68,74 @@ export const comunicadosInternosRouter = router({
         .orderBy(desc(comunicadosInternos.ano), desc(comunicadosInternos.sequencia));
       if (rows.length === 0) return [];
       const ids = rows.map(r => r.id);
-      const assinCounts = await db
-        .select({ comunicadoId: comunicadoAssinaturas.comunicadoId, total: count(comunicadoAssinaturas.id) })
-        .from(comunicadoAssinaturas)
-        .where(inArray(comunicadoAssinaturas.comunicadoId, ids))
-        .groupBy(comunicadoAssinaturas.comunicadoId);
-      const assinMap = new Map(assinCounts.map(a => [a.comunicadoId, Number(a.total)]));
-      return rows.map(r => {
-        let totalDestinatarios = 0;
+
+      // Coleta todos os IDs de destinatários presentes nos JSONs (todos os comunicados)
+      const allDestIds = new Set<number>();
+      for (const r of rows) {
         if (r.destinatariosJson) {
           try {
             const d = JSON.parse(r.destinatariosJson as string);
-            if (Array.isArray(d)) totalDestinatarios = d.length;
+            if (Array.isArray(d)) {
+              d.forEach((x: any) => {
+                const id = Number(typeof x === "object" ? (x.id ?? x) : x);
+                if (!isNaN(id) && id > 0) allDestIds.add(id);
+              });
+            }
           } catch {}
         }
-        return { ...r, totalDestinatarios, totalAssinados: assinMap.get(r.id) ?? 0 };
+      }
+      // Quais desses IDs ainda são funcionários ATIVOS?
+      const activeDestSet = new Set<number>();
+      if (allDestIds.size > 0) {
+        const activeRows = await db
+          .select({ id: employees.id })
+          .from(employees)
+          .where(and(
+            inArray(employees.id, Array.from(allDestIds)),
+            eq(employees.status, "Ativo"),
+          ));
+        activeRows.forEach(e => activeDestSet.add(e.id));
+      }
+
+      // Conta assinaturas por comunicado APENAS de funcionários ainda ativos
+      const assinCounts = await db
+        .select({
+          comunicadoId: comunicadoAssinaturas.comunicadoId,
+          employeeId: comunicadoAssinaturas.employeeId,
+        })
+        .from(comunicadoAssinaturas)
+        .where(inArray(comunicadoAssinaturas.comunicadoId, ids));
+
+      // Mapa: comunicadoId → Set de employeeIds que assinaram e ainda são ativos
+      const assinActivePorCom = new Map<number, Set<number>>();
+      for (const a of assinCounts) {
+        if (!assinActivePorCom.has(a.comunicadoId)) assinActivePorCom.set(a.comunicadoId, new Set());
+        if (activeDestSet.has(a.employeeId) || allDestIds.size === 0) {
+          assinActivePorCom.get(a.comunicadoId)!.add(a.employeeId);
+        }
+      }
+
+      return rows.map(r => {
+        let destIds: number[] = [];
+        if (r.destinatariosJson) {
+          try {
+            const d = JSON.parse(r.destinatariosJson as string);
+            if (Array.isArray(d)) {
+              destIds = d
+                .map((x: any) => Number(typeof x === "object" ? (x.id ?? x) : x))
+                .filter((n: number) => !isNaN(n) && n > 0);
+            }
+          } catch {}
+        }
+        // Apenas destinatários que ainda são ativos
+        const activeDestIds = destIds.filter(id => activeDestSet.has(id));
+        const totalDestinatarios = activeDestIds.length;
+        // Assinaturas de destinatários ativos (ou todas se sem destinatários definidos)
+        const assinSet = assinActivePorCom.get(r.id);
+        const totalAssinados = destIds.length > 0
+          ? activeDestIds.filter(id => assinSet?.has(id)).length
+          : (assinSet?.size ?? 0);
+        return { ...r, totalDestinatarios, totalAssinados };
       });
     }),
 
@@ -228,15 +281,33 @@ export const comunicadosInternosRouter = router({
         try {
           const destArr = JSON.parse(row.destinatariosJson as string);
           if (Array.isArray(destArr) && destArr.length > 0) {
-            const [{ assinados }] = await db
-              .select({ assinados: count(comunicadoAssinaturas.id) })
-              .from(comunicadoAssinaturas)
-              .where(eq(comunicadoAssinaturas.comunicadoId, input.id));
-            if (Number(assinados) < destArr.length) {
-              throw new TRPCError({
-                code: "BAD_REQUEST",
-                message: `Aguardando assinaturas: ${Number(assinados)} de ${destArr.length} destinatário(s) assinaram. Todos devem assinar antes de concluir.`,
-              });
+            const rawIds = destArr
+              .map((x: any) => Number(typeof x === "object" ? (x.id ?? x) : x))
+              .filter((n: number) => !isNaN(n) && n > 0);
+            if (rawIds.length > 0) {
+              // Considera apenas destinatários ainda ATIVOS — desligados não bloqueiam conclusão
+              const activeDestinatarios = await db
+                .select({ id: employees.id })
+                .from(employees)
+                .where(and(inArray(employees.id, rawIds), eq(employees.status, "Ativo")));
+              const activeIds = activeDestinatarios.map(e => e.id);
+              const activeCount = activeIds.length;
+              if (activeCount > 0) {
+                // Verifica quantos dos ativos já assinaram
+                const [{ assinados }] = await db
+                  .select({ assinados: count(comunicadoAssinaturas.id) })
+                  .from(comunicadoAssinaturas)
+                  .where(and(
+                    eq(comunicadoAssinaturas.comunicadoId, input.id),
+                    inArray(comunicadoAssinaturas.employeeId, activeIds),
+                  ));
+                if (Number(assinados) < activeCount) {
+                  throw new TRPCError({
+                    code: "BAD_REQUEST",
+                    message: `Aguardando assinaturas: ${Number(assinados)} de ${activeCount} destinatário(s) ativo(s) assinaram. Todos devem assinar antes de concluir.`,
+                  });
+                }
+              }
             }
           }
         } catch (e: any) {

@@ -1,4 +1,41 @@
 /**
+ * Rev. 4266 - COMUNICADOS INTERNOS: AUDITORIA DE FUNCIONÁRIOS FANTASMA — TOTALDESTINATARIOS E GUARD USAM APENAS ATIVOS.
+ *
+ * PROBLEMA:
+ *   `totalDestinatarios` era calculado a partir do tamanho bruto do `destinatariosJson`, sem verificar
+ *   se o funcionário ainda está Ativo. Funcionários desligados após a criação do comunicado inflavam
+ *   o total e podiam bloquear a conclusão para sempre ("Aguardando Assinaturas" sem saída).
+ *   O guard do `concluir` também comparava contra `destArr.length` (JSON bruto), ignorando desligamentos.
+ *
+ * RAIZ DO PROBLEMA:
+ *   O JSON de destinatários é gravado na criação/edição do comunicado e nunca é atualizado quando
+ *   um funcionário é desligado. A única fonte de verdade sobre status atual é `employees.status='Ativo'`.
+ *
+ * SOLUÇÃO:
+ *
+ * Backend — `server/routers/comunicadosInternos.ts`:
+ *   - `listar`: batch-query única coleta todos os IDs únicos dos JSONs de destinatários de todos os
+ *     comunicados da página, executa um único SELECT em `employees WHERE id IN (...) AND status='Ativo'`,
+ *     e monta um Set de IDs ativos. `totalDestinatarios` = IDs do JSON ∩ ativos. `totalAssinados` =
+ *     assinaturas de funcionários que ainda são ativos E estão no JSON (via Map por comunicadoId).
+ *   - `concluir` guard: parse do JSON → query `employees WHERE id IN (...) AND status='Ativo'` →
+ *     conta assinaturas APENAS dos ativos via `inArray(employeeId, activeIds)`. Funcionários desligados
+ *     são ignorados tanto no denominador quanto no numerador do guard.
+ *   - `listarFuncionariosParaAssinatura`: já estava correto — filtra por `status='Ativo'` no baseConds
+ *     e calcula `totalAssinadosAtivos` via `ativoIds.has(a.employeeId)`.
+ *
+ * GARANTIA:
+ *   - Comunicados antigos com destinatários desligados: contagem cai automaticamente, não bloqueiam mais.
+ *   - Assinaturas de desligados: preservadas no banco, não contam pro progresso (nem positivo nem negativo).
+ *   - Sem DELETE, sem ALTER destrutivo.
+ *
+ * ARQUIVOS:
+ *   server/routers/comunicadosInternos.ts — listar (batch-query ativos), concluir (guard com ativos)
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4265 - COMUNICADOS INTERNOS: PROGRESSO DE ASSINATURAS + BLOQUEIO DE CONCLUSÃO ATÉ TODOS ASSINAREM.
  *
  * PROBLEMA:
