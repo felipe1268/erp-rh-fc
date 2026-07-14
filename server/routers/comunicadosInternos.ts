@@ -1,7 +1,7 @@
 import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { getDb } from "../db";
-import { comunicadosInternos, comunicadoAssinaturas, employees, obraFuncionarios, obras, integrasignEnvelopes, integrasignSignatarios } from "../../drizzle/schema";
+import { comunicadosInternos, comunicadoAssinaturas, employees, obraFuncionarios, obras, integrasignEnvelopes, integrasignSignatarios, jobFunctions } from "../../drizzle/schema";
 import { eq, and, sql, desc, isNull, asc, inArray } from "drizzle-orm";
 import { storagePut } from "../storage";
 import { TRPCError } from "@trpc/server";
@@ -67,11 +67,24 @@ export const comunicadosInternosRouter = router({
         .orderBy(desc(comunicadosInternos.ano), desc(comunicadosInternos.sequencia));
     }),
 
-  // Rev. 4264 — lista simplificada para pickers de emissor e destinatários no dialog.
+  // Rev. 4264 — lista simplificada: somente indiretos do escritório central
+  // (jobFunctions.categoriaMO = 'escritorio_central'), ativos e não-excluídos.
   listarFuncionariosSimples: protectedProcedure
     .input(z.object({ companyId: z.number().int().positive() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
+      // Busca IDs das funções mapeadas como escritório central nesta empresa
+      const funcoesEC = await db.select({ nome: jobFunctions.nome })
+        .from(jobFunctions)
+        .where(and(
+          eq(jobFunctions.companyId, input.companyId),
+          eq((jobFunctions as any).categoriaMO, "escritorio_central"),
+          eq(jobFunctions.isActive, 1),
+          isNull(jobFunctions.deletedAt),
+        ));
+      const nomesEC = funcoesEC.map((f: any) => f.nome as string).filter(Boolean);
+      if (nomesEC.length === 0) return [];
+
       return await db.select({
         id: employees.id,
         nomeCompleto: employees.nomeCompleto,
@@ -84,6 +97,7 @@ export const comunicadosInternosRouter = router({
           eq(employees.companyId, input.companyId),
           eq(employees.status, "Ativo"),
           isNull((employees as any).deletedAt),
+          sql`${employees.funcao} = ANY(${sql.raw(`ARRAY[${nomesEC.map(n => `'${n.replace(/'/g, "''")}'`).join(",")}]::text[]`)})`,
         ))
         .orderBy(asc(employees.nomeCompleto));
     }),
