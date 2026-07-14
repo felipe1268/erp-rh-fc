@@ -1469,8 +1469,8 @@ export default function FinanceiroConciliacao() {
     .filter((id: number) => id > 0)
     .sort((a: number, b: number) => a - b)
     .join(",");
-  const autoMarcarKeyRef = React.useRef<string>("");
-  React.useEffect(() => {
+  const autoMarcarKeyRef = useRef<string>("");
+  useEffect(() => {
     if (!companyId || !autoMarcarKey || autoMarcarKey === autoMarcarKeyRef.current) return;
     const pares = repDevol
       .filter((d: any) => Number(d.debitoId) > 0)
