@@ -139,6 +139,9 @@ export default function ComunicadosInternos() {
   // Rev. 4264 — FCSign modal state
   const [fcSignDialog, setFcSignDialog] = useState<{ id: number; numero: string; titulo: string; emissorNome: string } | null>(null);
   const [fcSignEmail, setFcSignEmail] = useState("");
+  // Rev. 4264 — Destinatários picker: busca + filtro somente indiretos (compartilhado entre dialogs)
+  const [buscaDest, setBuscaDest] = useState("");
+  const [somentIndiretos, setSomentIndiretos] = useState(false);
   const [pendingText, setPendingText] = useState<{ id: number; text: string } | null>(null);
   const [novoFullscreen, setNovoFullscreen] = useState(false);
   const [editFullscreen, setEditFullscreen] = useState(false);
@@ -958,48 +961,94 @@ export default function ComunicadosInternos() {
               </div>
             </div>
             {/* Linha 3: Destinatários para assinatura */}
-            <div>
-              <Label className="flex items-center gap-1.5">
-                <Users className="h-3.5 w-3.5 text-slate-500" />
-                Destinatários para Assinatura
-                <span className="text-[10px] text-slate-400 font-normal">(opcional — sem seleção = todos os funcionários ativos)</span>
-              </Label>
-              {funcionariosPickerQ.isLoading ? (
-                <div className="mt-1 h-28 border rounded-md flex items-center justify-center text-slate-400 text-xs"><Loader2 className="h-4 w-4 animate-spin mr-1" /> Carregando...</div>
-              ) : (
-                <div className="mt-1 border border-slate-200 rounded-md overflow-y-auto max-h-36 bg-slate-50">
-                  {funcionariosPicker.length === 0 ? (
-                    <p className="text-xs text-slate-400 p-3">Nenhum funcionário ativo encontrado</p>
+            {(() => {
+              const filtrados = funcionariosPicker.filter((f: any) => {
+                const matchBusca = !buscaDest.trim() || f.nomeCompleto?.toLowerCase().includes(buscaDest.toLowerCase());
+                const matchIndireto = !somentIndiretos || (f.categoriaMO === "indireta_obra" || f.categoriaMO === "escritorio_central");
+                return matchBusca && matchIndireto;
+              });
+              const todosVisivelsSelecionados = filtrados.length > 0 && filtrados.every((f: any) => form.destinatariosIds.includes(f.id));
+              return (
+                <div>
+                  <Label className="flex items-center gap-1.5 mb-1.5">
+                    <Users className="h-3.5 w-3.5 text-slate-500" />
+                    Destinatários para Assinatura
+                    <span className="text-[10px] text-slate-400 font-normal">(opcional)</span>
+                  </Label>
+                  {/* Barra de busca + toggle indiretos */}
+                  <div className="flex gap-2 mb-1.5">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                      <input
+                        type="text"
+                        className="w-full pl-8 pr-3 h-8 text-xs rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400"
+                        placeholder="Buscar por nome..."
+                        value={buscaDest}
+                        onChange={e => setBuscaDest(e.target.value)}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSomentIndiretos(v => !v)}
+                      className={`flex items-center gap-1.5 px-2.5 h-8 rounded-md text-xs border font-medium transition-colors ${somentIndiretos ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200 hover:border-blue-400 hover:text-blue-600"}`}
+                    >
+                      <UserCheck className="h-3.5 w-3.5" />
+                      Somente Indiretos
+                    </button>
+                  </div>
+                  {funcionariosPickerQ.isLoading ? (
+                    <div className="h-28 border rounded-md flex items-center justify-center text-slate-400 text-xs"><Loader2 className="h-4 w-4 animate-spin mr-1" /> Carregando...</div>
                   ) : (
-                    <div className="divide-y divide-slate-100">
-                      {funcionariosPicker.map((f: any) => (
-                        <label key={f.id} className="flex items-center gap-2 px-3 py-1.5 hover:bg-white cursor-pointer">
+                    <div className="border border-slate-200 rounded-md bg-slate-50">
+                      {/* Selecionar todos */}
+                      <div className="px-3 py-1.5 border-b border-slate-200 bg-white rounded-t-md flex items-center justify-between">
+                        <label className="flex items-center gap-2 cursor-pointer">
                           <input
                             type="checkbox"
                             className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600"
-                            checked={form.destinatariosIds.includes(f.id)}
+                            checked={todosVisivelsSelecionados}
                             onChange={e => {
-                              const ids = e.target.checked
-                                ? [...form.destinatariosIds, f.id]
-                                : form.destinatariosIds.filter(id => id !== f.id);
-                              setForm({ ...form, destinatariosIds: ids });
+                              const idsVisiveis = filtrados.map((f: any) => f.id);
+                              if (e.target.checked) {
+                                const merged = Array.from(new Set([...form.destinatariosIds, ...idsVisiveis]));
+                                setForm({ ...form, destinatariosIds: merged });
+                              } else {
+                                setForm({ ...form, destinatariosIds: form.destinatariosIds.filter(id => !idsVisiveis.includes(id)) });
+                              }
                             }}
                           />
-                          <span className="text-xs text-slate-700 flex-1 min-w-0 truncate">{f.nomeCompleto}</span>
-                          <span className="text-[10px] text-slate-400 shrink-0">{f.cargo || f.funcao || ""}</span>
+                          <span className="text-[11px] font-medium text-slate-600">Selecionar todos ({filtrados.length})</span>
                         </label>
-                      ))}
+                        {form.destinatariosIds.length > 0 && (
+                          <span className="text-[10px] text-blue-600 font-medium">{form.destinatariosIds.length} selecionado(s)</span>
+                        )}
+                      </div>
+                      <div className="overflow-y-auto max-h-32 divide-y divide-slate-100">
+                        {filtrados.length === 0 ? (
+                          <p className="text-xs text-slate-400 p-3">Nenhum resultado</p>
+                        ) : filtrados.map((f: any) => (
+                          <label key={f.id} className="flex items-center gap-2 px-3 py-1.5 hover:bg-white cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600"
+                              checked={form.destinatariosIds.includes(f.id)}
+                              onChange={e => {
+                                const ids = e.target.checked
+                                  ? [...form.destinatariosIds, f.id]
+                                  : form.destinatariosIds.filter(id => id !== f.id);
+                                setForm({ ...form, destinatariosIds: ids });
+                              }}
+                            />
+                            <span className="text-xs text-slate-700 flex-1 min-w-0 truncate">{f.nomeCompleto}</span>
+                            <span className="text-[10px] text-slate-400 shrink-0">{f.cargo || f.funcao || ""}</span>
+                          </label>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
-              )}
-              {form.destinatariosIds.length > 0 && (
-                <p className="text-[11px] text-blue-600 mt-1 flex items-center gap-1">
-                  <UserCheck className="h-3 w-3" />
-                  {form.destinatariosIds.length} destinatário(s) selecionado(s) — só eles aparecerão na lista de assinatura.
-                </p>
-              )}
-            </div>
+              );
+            })()}
             {/* Conteúdo */}
             <div className="flex flex-col">
               <Label className="mb-1">Conteúdo</Label>
@@ -1104,48 +1153,94 @@ export default function ComunicadosInternos() {
               </div>
             </div>
             {/* Destinatários */}
-            <div>
-              <Label className="flex items-center gap-1.5">
-                <Users className="h-3.5 w-3.5 text-slate-500" />
-                Destinatários para Assinatura
-                <span className="text-[10px] text-slate-400 font-normal">(opcional)</span>
-              </Label>
-              {funcionariosPickerQ.isLoading ? (
-                <div className="mt-1 h-28 border rounded-md flex items-center justify-center text-slate-400 text-xs"><Loader2 className="h-4 w-4 animate-spin mr-1" /> Carregando...</div>
-              ) : (
-                <div className="mt-1 border border-slate-200 rounded-md overflow-y-auto max-h-32 bg-slate-50">
-                  {funcionariosPicker.length === 0 ? (
-                    <p className="text-xs text-slate-400 p-3">Nenhum funcionário ativo encontrado</p>
+            {(() => {
+              const filtradosEdit = funcionariosPicker.filter((f: any) => {
+                const matchBusca = !buscaDest.trim() || f.nomeCompleto?.toLowerCase().includes(buscaDest.toLowerCase());
+                const matchIndireto = !somentIndiretos || (f.categoriaMO === "indireta_obra" || f.categoriaMO === "escritorio_central");
+                return matchBusca && matchIndireto;
+              });
+              const todosVisivelsSelecionados = filtradosEdit.length > 0 && filtradosEdit.every((f: any) => editForm.destinatariosIds.includes(f.id));
+              return (
+                <div>
+                  <Label className="flex items-center gap-1.5 mb-1.5">
+                    <Users className="h-3.5 w-3.5 text-slate-500" />
+                    Destinatários para Assinatura
+                    <span className="text-[10px] text-slate-400 font-normal">(opcional)</span>
+                  </Label>
+                  {/* Barra de busca + toggle indiretos */}
+                  <div className="flex gap-2 mb-1.5">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                      <input
+                        type="text"
+                        className="w-full pl-8 pr-3 h-8 text-xs rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-1 focus:ring-amber-500 placeholder:text-slate-400"
+                        placeholder="Buscar por nome..."
+                        value={buscaDest}
+                        onChange={e => setBuscaDest(e.target.value)}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSomentIndiretos(v => !v)}
+                      className={`flex items-center gap-1.5 px-2.5 h-8 rounded-md text-xs border font-medium transition-colors ${somentIndiretos ? "bg-amber-600 text-white border-amber-600" : "bg-white text-slate-600 border-slate-200 hover:border-amber-400 hover:text-amber-600"}`}
+                    >
+                      <UserCheck className="h-3.5 w-3.5" />
+                      Somente Indiretos
+                    </button>
+                  </div>
+                  {funcionariosPickerQ.isLoading ? (
+                    <div className="h-28 border rounded-md flex items-center justify-center text-slate-400 text-xs"><Loader2 className="h-4 w-4 animate-spin mr-1" /> Carregando...</div>
                   ) : (
-                    <div className="divide-y divide-slate-100">
-                      {funcionariosPicker.map((f: any) => (
-                        <label key={f.id} className="flex items-center gap-2 px-3 py-1.5 hover:bg-white cursor-pointer">
+                    <div className="border border-slate-200 rounded-md bg-slate-50">
+                      {/* Selecionar todos */}
+                      <div className="px-3 py-1.5 border-b border-slate-200 bg-white rounded-t-md flex items-center justify-between">
+                        <label className="flex items-center gap-2 cursor-pointer">
                           <input
                             type="checkbox"
                             className="h-3.5 w-3.5 rounded border-slate-300 text-amber-600"
-                            checked={editForm.destinatariosIds.includes(f.id)}
+                            checked={todosVisivelsSelecionados}
                             onChange={e => {
-                              const ids = e.target.checked
-                                ? [...editForm.destinatariosIds, f.id]
-                                : editForm.destinatariosIds.filter(id => id !== f.id);
-                              setEditForm({ ...editForm, destinatariosIds: ids });
+                              const idsVisiveis = filtradosEdit.map((f: any) => f.id);
+                              if (e.target.checked) {
+                                const merged = Array.from(new Set([...editForm.destinatariosIds, ...idsVisiveis]));
+                                setEditForm({ ...editForm, destinatariosIds: merged });
+                              } else {
+                                setEditForm({ ...editForm, destinatariosIds: editForm.destinatariosIds.filter(id => !idsVisiveis.includes(id)) });
+                              }
                             }}
                           />
-                          <span className="text-xs text-slate-700 flex-1 min-w-0 truncate">{f.nomeCompleto}</span>
-                          <span className="text-[10px] text-slate-400 shrink-0">{f.cargo || f.funcao || ""}</span>
+                          <span className="text-[11px] font-medium text-slate-600">Selecionar todos ({filtradosEdit.length})</span>
                         </label>
-                      ))}
+                        {editForm.destinatariosIds.length > 0 && (
+                          <span className="text-[10px] text-amber-600 font-medium">{editForm.destinatariosIds.length} selecionado(s)</span>
+                        )}
+                      </div>
+                      <div className="overflow-y-auto max-h-32 divide-y divide-slate-100">
+                        {filtradosEdit.length === 0 ? (
+                          <p className="text-xs text-slate-400 p-3">Nenhum resultado</p>
+                        ) : filtradosEdit.map((f: any) => (
+                          <label key={f.id} className="flex items-center gap-2 px-3 py-1.5 hover:bg-white cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="h-3.5 w-3.5 rounded border-slate-300 text-amber-600"
+                              checked={editForm.destinatariosIds.includes(f.id)}
+                              onChange={e => {
+                                const ids = e.target.checked
+                                  ? [...editForm.destinatariosIds, f.id]
+                                  : editForm.destinatariosIds.filter(id => id !== f.id);
+                                setEditForm({ ...editForm, destinatariosIds: ids });
+                              }}
+                            />
+                            <span className="text-xs text-slate-700 flex-1 min-w-0 truncate">{f.nomeCompleto}</span>
+                            <span className="text-[10px] text-slate-400 shrink-0">{f.cargo || f.funcao || ""}</span>
+                          </label>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
-              )}
-              {editForm.destinatariosIds.length > 0 && (
-                <p className="text-[11px] text-amber-600 mt-1 flex items-center gap-1">
-                  <UserCheck className="h-3 w-3" />
-                  {editForm.destinatariosIds.length} destinatário(s) selecionado(s).
-                </p>
-              )}
-            </div>
+              );
+            })()}
             <div className="flex flex-col">
               <Label className="mb-1">Conteúdo</Label>
               <RichTextEditor
