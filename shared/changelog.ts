@@ -1,4 +1,36 @@
 /**
+ * Rev. 4229 - SCORECARD SST: NOVA FÓRMULA CUSTO ATESTADOS — CUSTO REAL MENSAL DO FUNCIONÁRIO.
+ *
+ * OBJETIVO — Calcular o custo do afastamento com base no custo total mensal real do funcionário,
+ * não apenas no salário base dividido por 30.
+ *
+ * NOVA FÓRMULA:
+ *   custo_atestado = (salário_bruto × 1,33 + benefícios_VA_VR) / dias_do_mês × dias_afastados
+ *
+ *   Onde:
+ *   - salário_bruto: payroll_payments.salarioBrutoMes (folha fechada do mês), com fallback para
+ *     employees.salarioBase se a folha ainda não foi calculada.
+ *   - benefícios_VA_VR: vr_benefits.valorTotal do mês (total mensal, não valor diário estimado).
+ *   - dias_do_mês: dias reais do mês (28/29/30/31) via EXTRACT(DAY FROM last_day_of_month).
+ *   - dias_afastados: atestados.diasAfastamento.
+ *
+ * BACKEND — Q12 (atestados list) e Q13 (ates CTE do histórico):
+ *   - Q12: substituiu LATERAL de valorDiario por dois LATERAL JOINs:
+ *     1. payroll_payments pp → salarioBrutoMes com REPLACE duplo (milhar+decimal BR)
+ *     2. vr_benefits vr → valorTotal com REPLACE duplo
+ *     Manteve custo_salario, custo_encargos, custo_vr como colunas separadas (compatibilidade frontend).
+ *   - Q13 ates CTE: substituiu fórmula fixa (salario/30×1,33) por subconsultas correlacionadas
+ *     idênticas à do Q12 (payroll_payments + vr_benefits).
+ *
+ * FRONTEND — ScorecardTab.tsx:
+ *   - Subtitle KPI: "salário + encargos + VR" → "salário + encargos + benefícios"
+ *   - Label breakdown: "+ VR/VA diário" → "+ Benefícios (VA/VR)"
+ *   - Rodapé memória: fórmula explícita "(sal.bruto×1,33 + benefícios) ÷ dias do mês × dias afastado"
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4228 - SCORECARD SST: FOTO DE CADASTRO EM ACIDENTES, ADVERTÊNCIAS E TOP 5 EPI.
  *
  * OBJETIVO — Exibir foto do funcionário (fotoUrl) em todas as seções do dashboard SST.

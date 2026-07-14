@@ -1568,7 +1568,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                     <div className="grid grid-cols-4 gap-2">
                       {([
                         { label:"Atestados",      v: r.totalAtestados??0,         sub:`${r.totalDiasAtestado??0} dias afastamento`,             icon:"🏥",  vc:(r.totalAtestados??0)>0?"text-amber-600":"text-gray-400",   bc:(r.totalAtestados??0)>0?"bg-amber-50 border-amber-200":"bg-gray-50 border-gray-100"   },
-                        { label:"Custo Atestados",v: fmt(r.custoTotalAtestados??0),sub:"salário + encargos + VR",                                icon:"💰",  vc:"text-orange-700",  bc:"bg-orange-50 border-orange-100"  },
+                        { label:"Custo Atestados",v: fmt(r.custoTotalAtestados??0),sub:"salário + encargos + benefícios",                          icon:"💰",  vc:"text-orange-700",  bc:"bg-orange-50 border-orange-100"  },
                         { label:"EPIs Entregues", v: r.totalEntregasEpi??0,        sub:`${r.totalUnidadesEpi??0} unidades — ${fmt(r.totalCustoEpi??0)}`, icon:"🦺", vc:"text-indigo-700",  bc:"bg-indigo-50 border-indigo-100"  },
                         { label:"Advertências",   v: r.totalAdvertencias??0,       sub:`${r.terceirosSemDoc??0} terceiros sem documentação`,      icon:"🚨",  vc:(r.totalAdvertencias??0)>0?"text-red-700":"text-gray-400",   bc:(r.totalAdvertencias??0)>0?"bg-red-50 border-red-200":"bg-gray-50 border-gray-100"   },
                       ] as const).map((k,i) => (
@@ -1659,7 +1659,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                             {([
                               { label:"Salário proporcional", v:r.custoSalarioAtestados??0,  clr:"text-amber-700",  bg:"bg-amber-50"  },
                               { label:"+ Encargos (33%)",     v:r.custoEncargosAtestados??0,  clr:"text-orange-700", bg:"bg-orange-50" },
-                              { label:"+ VR/VA diário",       v:r.custoVrAtestados??0,        clr:"text-yellow-700", bg:"bg-yellow-50" },
+                              { label:"+ Benefícios (VA/VR)",  v:r.custoVrAtestados??0,        clr:"text-yellow-700", bg:"bg-yellow-50" },
                             ] as const).map((x,i)=>(
                               <div key={i} className={`flex items-center justify-between rounded-lg px-2 py-1.5 ${x.bg}`}>
                                 <span className="text-[8px] text-gray-500">{x.label}</span>
@@ -1670,7 +1670,7 @@ export default function ScorecardTab({ proj }: { proj: any }) {
                               <span className="text-[10px] font-bold text-red-700 uppercase">TOTAL</span>
                               <span className="text-base font-black text-red-700">{fmt(r.custoTotalAtestados??0)}</span>
                             </div>
-                            <p className="text-[7px] text-gray-400">* sal. proporcional + FGTS/INSS/outros + VR diário</p>
+                            <p className="text-[7px] text-gray-400">* (sal.bruto×1,33 + benefícios) ÷ dias do mês × dias afastado</p>
                           </div>
                         )}
                       </div>

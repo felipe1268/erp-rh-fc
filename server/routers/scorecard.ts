@@ -920,7 +920,12 @@ export const scorecardRouter = router({
           return r.rows as any[];
         }),
 
-        // ── Q12: ATESTADOS — CLT desta obra, com custo (salário + encargos + VR) ──
+        // ── Q12: ATESTADOS — CLT desta obra, com custo (salário + encargos + benefícios) ──
+        // Fórmula: (custo_mensal_total / dias_do_mês) × dias_afastados
+        //   custo_mensal_total = salário_bruto×1,33 + VA/VR do mês
+        //   salário_bruto: payroll_payments.salarioBrutoMes se existir, senão employees.salarioBase
+        //   VA/VR: vr_benefits.valorTotal do mês
+        //   dias_do_mês: dias reais do mês (28/29/30/31)
         safe("atestados", async () => {
           const r = await db.execute(sql`
             SELECT
@@ -928,30 +933,71 @@ export const scorecardRouter = router({
               a."horas_afastamento", a.cid, a.motivo, a."dataRetorno",
               e."nomeCompleto" AS funcionario_nome, e.cargo,
               e."fotoUrl"      AS foto_url,
-              REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric AS salario_base,
-              -- Custo proporcional do salário (salário/30 × dias)
-              ROUND(REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric / 30
-                    * COALESCE(a."diasAfastamento", 0), 2)            AS custo_salario,
-              -- Encargos trabalhistas: FGTS 8% + INSS patronal 20% + RAT+Terceiros 5% = 33%
-              ROUND(REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric / 30
-                    * COALESCE(a."diasAfastamento", 0) * 0.33, 2)     AS custo_encargos,
-              -- VR proporcional (valorDiario × dias)
-              ROUND(COALESCE(vr.valor_diario, 0)
-                    * COALESCE(a."diasAfastamento", 0), 2)            AS custo_vr,
-              -- Custo total do dia pago sem produção
+              -- Salário efetivo: payroll_payments do mês, senão salarioBase do cadastro
+              COALESCE(pp.salario_bruto,
+                REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric
+              ) AS salario_base,
+              -- Dias reais do mês do atestado
+              EXTRACT(DAY FROM (
+                date_trunc('month', a."dataEmissao"::date) + INTERVAL '1 month' - INTERVAL '1 day'
+              ))::integer AS dias_mes,
+              -- Benefícios VA/VR totais do mês
+              COALESCE(vr.beneficio_total, 0) AS beneficio_mensal,
+              -- Custo: salário proporcional (sem encargos)
               ROUND(
-                (REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric / 30 * 1.33)
+                COALESCE(pp.salario_bruto,
+                  REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric)
+                / NULLIF(EXTRACT(DAY FROM (
+                    date_trunc('month', a."dataEmissao"::date) + INTERVAL '1 month' - INTERVAL '1 day'
+                  )), 0)
                 * COALESCE(a."diasAfastamento", 0)
-                + COALESCE(vr.valor_diario, 0) * COALESCE(a."diasAfastamento", 0),
-              2) AS custo_total
+              , 2) AS custo_salario,
+              -- Custo: encargos patronais (33% do salário proporcional)
+              ROUND(
+                COALESCE(pp.salario_bruto,
+                  REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric)
+                * 0.33
+                / NULLIF(EXTRACT(DAY FROM (
+                    date_trunc('month', a."dataEmissao"::date) + INTERVAL '1 month' - INTERVAL '1 day'
+                  )), 0)
+                * COALESCE(a."diasAfastamento", 0)
+              , 2) AS custo_encargos,
+              -- Custo: benefícios proporcional (VA/VR total ÷ dias mês × dias afastado)
+              ROUND(
+                COALESCE(vr.beneficio_total, 0)
+                / NULLIF(EXTRACT(DAY FROM (
+                    date_trunc('month', a."dataEmissao"::date) + INTERVAL '1 month' - INTERVAL '1 day'
+                  )), 0)
+                * COALESCE(a."diasAfastamento", 0)
+              , 2) AS custo_vr,
+              -- Custo total = (salário×1,33 + benefícios) / dias_mês × dias_afastado
+              ROUND(
+                (COALESCE(pp.salario_bruto,
+                  REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric) * 1.33
+                 + COALESCE(vr.beneficio_total, 0))
+                / NULLIF(EXTRACT(DAY FROM (
+                    date_trunc('month', a."dataEmissao"::date) + INTERVAL '1 month' - INTERVAL '1 day'
+                  )), 0)
+                * COALESCE(a."diasAfastamento", 0)
+              , 2) AS custo_total
             FROM atestados a
             JOIN employees e ON e.id = a."employeeId"
+            -- Salário bruto do mês via folha (payroll_payments), se disponível
             LEFT JOIN LATERAL (
-              SELECT COALESCE(NULLIF(TRIM(vr2."valorDiario"), ''), '0')::numeric AS valor_diario
+              SELECT REPLACE(REPLACE(COALESCE(pp2."salarioBrutoMes",'0'),'.',''),',','.')::numeric AS salario_bruto
+              FROM payroll_payments pp2
+              WHERE pp2."employeeId"   = a."employeeId"
+                AND pp2."mesReferencia" = TO_CHAR(a."dataEmissao"::date, 'YYYY-MM')
+                AND pp2."companyId"    = ${input.companyId}
+              ORDER BY pp2.id DESC LIMIT 1
+            ) pp ON true
+            -- Benefícios VA/VR totais do mês
+            LEFT JOIN LATERAL (
+              SELECT REPLACE(REPLACE(COALESCE(vr2."valorTotal",'0'),'.',''),',','.')::numeric AS beneficio_total
               FROM vr_benefits vr2
-              WHERE vr2."employeeId" = a."employeeId"
-                AND vr2."mesReferencia" = TO_CHAR(a."dataEmissao", 'YYYY-MM')
-              ORDER BY vr2."createdAt" DESC LIMIT 1
+              WHERE vr2."employeeId"   = a."employeeId"
+                AND vr2."mesReferencia" = TO_CHAR(a."dataEmissao"::date, 'YYYY-MM')
+              ORDER BY vr2.id DESC LIMIT 1
             ) vr ON true
             WHERE a."companyId" = ${input.companyId}
               AND a."deletedAt" IS NULL
@@ -981,7 +1027,28 @@ export const scorecardRouter = router({
                      COUNT(*) AS atestados,
                      SUM(COALESCE(a."diasAfastamento", 0)) AS dias_ates,
                      ROUND(SUM(
-                       (REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric / 30 * 1.33)
+                       (
+                         COALESCE(
+                           (SELECT REPLACE(REPLACE(COALESCE(pp."salarioBrutoMes",'0'),'.',''),',','.')::numeric
+                            FROM payroll_payments pp
+                            WHERE pp."employeeId"    = a."employeeId"
+                              AND pp."mesReferencia" = TO_CHAR(a."dataEmissao"::date, 'YYYY-MM')
+                              AND pp."companyId"     = ${input.companyId}
+                            ORDER BY pp.id DESC LIMIT 1),
+                           REPLACE(REPLACE(COALESCE(e."salarioBase",'0'),'.',''),',','.')::numeric
+                         ) * 1.33
+                         + COALESCE(
+                           (SELECT REPLACE(REPLACE(COALESCE(vr."valorTotal",'0'),'.',''),',','.')::numeric
+                            FROM vr_benefits vr
+                            WHERE vr."employeeId"    = a."employeeId"
+                              AND vr."mesReferencia" = TO_CHAR(a."dataEmissao"::date, 'YYYY-MM')
+                            ORDER BY vr.id DESC LIMIT 1),
+                           0
+                         )
+                       )
+                       / NULLIF(EXTRACT(DAY FROM (
+                           date_trunc('month', a."dataEmissao"::date) + INTERVAL '1 month' - INTERVAL '1 day'
+                         )), 0)
                        * COALESCE(a."diasAfastamento", 0)
                      ), 2) AS custo_ates
               FROM atestados a
