@@ -501,13 +501,15 @@ export default function FinanceiroCheques() {
   }, [cheques, fStatus, fVencDe, fVencAte, fFornecedor]);
 
   // Lista única de fornecedores dos cheques carregados (p/ select de filtro).
-  const fornecedoresNosСheques = useMemo(() => {
+  const fornecedorFiltroOpts = useMemo((): SearchableSelectOption[] => {
     const nomes = new Set<string>();
     for (const c of cheques as any[]) {
       const n = String(c.fornecedorNome || "").trim();
       if (n) nomes.add(n);
     }
-    return Array.from(nomes).sort((a, b) => a.localeCompare(b, "pt-BR"));
+    return Array.from(nomes)
+      .sort((a, b) => a.localeCompare(b, "pt-BR"))
+      .map((nome) => ({ value: nome, label: nome }));
   }, [cheques]);
 
   // Somatório dos cheques filtrados por data de vencimento (quando o filtro está ativo).
@@ -1020,29 +1022,20 @@ export default function FinanceiroCheques() {
                   <SelectItem value="divergente">⚠ Divergências</SelectItem>
                 </SelectContent>
               </Select>
-              {/* Filtro por fornecedor — Rev. 4256 */}
-              <div className="relative min-w-[200px] flex-1">
-                <User className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
-                <select
-                  className="w-full h-9 pl-8 pr-8 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring appearance-none"
+              {/* Filtro por fornecedor com busca — Rev. 4256 */}
+              <div className="min-w-[220px] flex-1">
+                <SearchableSelect
+                  options={[
+                    { value: "", label: "Todos os fornecedores" },
+                    ...fornecedorFiltroOpts,
+                  ]}
                   value={fFornecedor}
-                  onChange={(e) => setFFornecedor(e.target.value)}
-                >
-                  <option value="">Todos os fornecedores</option>
-                  {fornecedoresNosСheques.map((nome) => (
-                    <option key={nome} value={nome}>{nome}</option>
-                  ))}
-                </select>
-                {fFornecedor && (
-                  <button
-                    type="button"
-                    onClick={() => setFFornecedor("")}
-                    className="absolute right-2 top-2.5 text-muted-foreground hover:text-red-500"
-                    title="Limpar filtro de fornecedor"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                )}
+                  onValueChange={(v) => setFFornecedor(v)}
+                  placeholder="Todos os fornecedores"
+                  searchPlaceholder="Digitar para filtrar…"
+                  emptyMessage="Nenhum fornecedor encontrado."
+                  className="w-full"
+                />
               </div>
             </div>
 
