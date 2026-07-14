@@ -67,32 +67,52 @@ export const comunicadosInternosRouter = router({
         .orderBy(desc(comunicadosInternos.ano), desc(comunicadosInternos.sequencia));
     }),
 
-  // Rev. 4264 — lista todos os funcionários ativos com sua categoriaMO (via join jobFunctions)
-  // para que o frontend possa filtrar por "somente indiretos" com toggle.
+  // Rev. 4264 — lista todos os funcionários ativos com sua categoriaMO.
+  // Usa 2 queries Drizzle ORM (evita raw SQL com ambiguidade de casing de coluna)
+  // e faz o join em JS pelo nome da função.
   listarFuncionariosSimples: protectedProcedure
     .input(z.object({ companyId: z.number().int().positive() }))
     .query(async ({ input }) => {
       const db = (await getDb())!;
-      const rows = await db.execute(sql`
-        SELECT
-          e.id,
-          e."nomeCompleto",
-          e.cargo,
-          e.funcao,
-          e.matricula,
-          jf.categoria_mo AS "categoriaMO"
-        FROM employees e
-        LEFT JOIN job_functions jf
-          ON jf.company_id = e."companyId"
-          AND lower(trim(jf.nome)) = lower(trim(e.funcao))
-          AND jf.is_active = 1
-          AND jf.deleted_at IS NULL
-        WHERE e."companyId" = ${input.companyId}
-          AND e.status = 'Ativo'
-          AND e."deletedAt" IS NULL
-        ORDER BY e."nomeCompleto" ASC
-      `);
-      return (rows as any).rows ?? rows;
+
+      // 1. Todos os funcionários ativos
+      const emps = await db.select({
+        id: employees.id,
+        nomeCompleto: employees.nomeCompleto,
+        cargo: employees.cargo,
+        funcao: employees.funcao,
+        matricula: employees.matricula,
+      })
+        .from(employees)
+        .where(and(
+          eq(employees.companyId, input.companyId),
+          eq(employees.status, "Ativo"),
+          isNull((employees as any).deletedAt),
+        ))
+        .orderBy(asc(employees.nomeCompleto));
+
+      if (emps.length === 0) return [];
+
+      // 2. Mapa funcao.nome → categoriaMO para esta empresa
+      const jfs = await db.select({
+        nome: jobFunctions.nome,
+        categoriaMO: (jobFunctions as any).categoriaMO,
+      })
+        .from(jobFunctions)
+        .where(and(
+          eq(jobFunctions.companyId, input.companyId),
+          eq(jobFunctions.isActive, 1),
+          isNull(jobFunctions.deletedAt),
+        ));
+
+      const catMap = new Map<string, string | null>(
+        jfs.map((j: any) => [j.nome?.trim().toLowerCase(), j.categoriaMO ?? null])
+      );
+
+      return emps.map(e => ({
+        ...e,
+        categoriaMO: catMap.get(e.funcao?.trim().toLowerCase() ?? "") ?? null,
+      }));
     }),
 
   criar: protectedProcedure
