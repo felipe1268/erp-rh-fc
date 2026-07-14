@@ -1009,11 +1009,9 @@ export default function Cotacoes() {
   const [editModuloMedicao, setEditModuloMedicao] = useState<Record<number, string>>({});
   const [editingFornId, setEditingFornId] = useState<number | null>(null);
   const [descontoModal, setDescontoModal] = useState<{ fornecedorId: number } | null>(null);
-  const [descontoTipo, setDescontoTipo] = useState<"valor" | "percentual" | "final">("valor");
   const [descontoValor, setDescontoValor] = useState("");
   const [descontoPreviewing, setDescontoPreviewing] = useState(false);
   const [acrescimoModal, setAcrescimoModal] = useState<{ fornecedorId: number } | null>(null);
-  const [acrescimoTipo, setAcrescimoTipo] = useState<"valor" | "percentual" | "final">("valor");
   const [acrescimoValor, setAcrescimoValor] = useState("");
   const [acrescimoPreviewing, setAcrescimoPreviewing] = useState(false);
   const [showGerenciarCond, setShowGerenciarCond] = useState(false);
@@ -3301,10 +3299,10 @@ export default function Cotacoes() {
       });
     }
 
-    function calcDescontoPreview(fornecedorId: number, tipo: "valor" | "percentual", valorInput: string) {
+    function calcNegociadoPreview(fornecedorId: number, valorInput: string) {
       if (!mapa) return [];
       const itens = mapa.itens ?? [];
-      const isPacote = ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote';
+      const parseBR = (v: string) => parseFloat(v.replace(/\./g, "").replace(",", ".")) || 0;
 
       const itemTotais = itens.map((it: any) => {
         const key = `${it.id}_${fornecedorId}`;
@@ -3316,34 +3314,24 @@ export default function Cotacoes() {
       const totalGeral = itemTotais.reduce((s, i) => s + i.total, 0);
       if (totalGeral <= 0) return [];
 
-      const parseBR = (v: string) => parseFloat(v.replace(/\./g, "").replace(",", ".")) || 0;
-      let valorDesc: number;
-      if (tipo === "percentual") {
-        valorDesc = totalGeral * (parseFloat(valorInput) || 0) / 100;
-      } else if (tipo === "final") {
-        const valorFinal = parseBR(valorInput);
-        if (valorFinal <= 0 || valorFinal >= totalGeral) return [];
-        valorDesc = totalGeral - valorFinal;
-      } else {
-        valorDesc = parseBR(valorInput);
-      }
+      const valorFinal = parseBR(valorInput);
+      if (valorFinal <= 0 || valorFinal === totalGeral) return [];
 
-      if (valorDesc <= 0 || valorDesc > totalGeral) return [];
+      const diferenca = valorFinal - totalGeral;
+      const targetTotal = valorFinal;
 
-      const targetTotal = totalGeral - valorDesc;
-
-      let descontoAcumulado = 0;
+      let acumulado = 0;
       const result = itemTotais.map((it, idx) => {
         const peso = it.total / totalGeral;
-        let descItem: number;
+        let difItem: number;
         if (idx === itemTotais.length - 1) {
-          descItem = Math.round((valorDesc - descontoAcumulado) * 100) / 100;
+          difItem = Math.round((diferenca - acumulado) * 100) / 100;
         } else {
-          descItem = Math.round(valorDesc * peso * 100) / 100;
-          descontoAcumulado += descItem;
+          difItem = Math.round(diferenca * peso * 100) / 100;
+          acumulado += difItem;
         }
-        const novoPreco = Math.max(0, Math.round((it.precoAtual - descItem / it.qtd) * 100) / 100);
-        return { ...it, descItem, novoPreco, novoTotal: Math.round(novoPreco * it.qtd * 100) / 100 };
+        const novoPreco = Math.max(0, Math.round((it.precoAtual + difItem / it.qtd) * 100) / 100);
+        return { ...it, difItem, novoPreco, novoTotal: Math.round(novoPreco * it.qtd * 100) / 100 };
       });
 
       const somaNovoTotal = result.reduce((s, i) => s + i.novoTotal, 0);
@@ -3357,7 +3345,7 @@ export default function Cotacoes() {
           const diffFinal = Math.round((targetTotal - result.reduce((s, i) => s + i.novoTotal, 0)) * 100) / 100;
           if (diffFinal !== 0) last.novoTotal = Math.round((last.novoTotal + diffFinal) * 100) / 100;
         }
-        last.descItem = Math.round((last.total - last.novoTotal) * 100) / 100;
+        last.difItem = Math.round((last.novoTotal - last.total) * 100) / 100;
       }
 
       return result;
@@ -3365,7 +3353,7 @@ export default function Cotacoes() {
 
     function aplicarDesconto() {
       if (!descontoModal) return;
-      const preview = calcDescontoPreview(descontoModal.fornecedorId, descontoTipo, descontoValor);
+      const preview = calcNegociadoPreview(descontoModal.fornecedorId, descontoValor);
       if (!preview.length) return;
       const updates: Record<string, string> = {};
       for (const it of preview) {
@@ -3375,73 +3363,12 @@ export default function Cotacoes() {
       setDescontoModal(null);
       setDescontoValor("");
       setDescontoPreviewing(false);
-      toast.success("Desconto comercial aplicado! Clique 'Salvar' para gravar.");
-    }
-
-    function calcAcrescimoPreview(fornecedorId: number, tipo: "valor" | "percentual" | "final", valorInput: string) {
-      if (!mapa) return [];
-      const itens = mapa.itens ?? [];
-
-      const itemTotais = itens.map((it: any) => {
-        const key = `${it.id}_${fornecedorId}`;
-        const precoAtual = parseFloat(editPrecos[key] ?? "0") || 0;
-        const qtd = parseFloat(editQtds[key] ?? String(it.quantidade ?? "1")) || 1;
-        return { id: it.id, descricao: it.descricao ?? it.titulo ?? `Item #${it.id}`, precoAtual, qtd, total: precoAtual * qtd, key };
-      });
-
-      const totalGeral = itemTotais.reduce((s, i) => s + i.total, 0);
-      if (totalGeral <= 0) return [];
-
-      const parseBR = (v: string) => parseFloat(v.replace(/\./g, "").replace(",", ".")) || 0;
-      let valorAcr: number;
-      if (tipo === "percentual") {
-        valorAcr = totalGeral * (parseFloat(valorInput) || 0) / 100;
-      } else if (tipo === "final") {
-        const valorFinal = parseBR(valorInput);
-        if (valorFinal <= totalGeral) return [];
-        valorAcr = valorFinal - totalGeral;
-      } else {
-        valorAcr = parseBR(valorInput);
-      }
-
-      if (valorAcr <= 0) return [];
-
-      const targetTotal = totalGeral + valorAcr;
-
-      let acrescimoAcumulado = 0;
-      const result = itemTotais.map((it, idx) => {
-        const peso = it.total / totalGeral;
-        let acrItem: number;
-        if (idx === itemTotais.length - 1) {
-          acrItem = Math.round((valorAcr - acrescimoAcumulado) * 100) / 100;
-        } else {
-          acrItem = Math.round(valorAcr * peso * 100) / 100;
-          acrescimoAcumulado += acrItem;
-        }
-        const novoPreco = Math.round((it.precoAtual + acrItem / it.qtd) * 100) / 100;
-        return { ...it, acrItem, novoPreco, novoTotal: Math.round(novoPreco * it.qtd * 100) / 100 };
-      });
-
-      const somaNovoTotal = result.reduce((s, i) => s + i.novoTotal, 0);
-      const diff = Math.round((targetTotal - somaNovoTotal) * 100) / 100;
-      if (diff !== 0 && result.length > 0) {
-        const last = result[result.length - 1];
-        last.novoTotal = Math.round((last.novoTotal + diff) * 100) / 100;
-        if (last.qtd > 0) {
-          last.novoPreco = Math.round((last.novoTotal / last.qtd) * 100) / 100;
-          last.novoTotal = Math.round(last.novoPreco * last.qtd * 100) / 100;
-          const diffFinal = Math.round((targetTotal - result.reduce((s, i) => s + i.novoTotal, 0)) * 100) / 100;
-          if (diffFinal !== 0) last.novoTotal = Math.round((last.novoTotal + diffFinal) * 100) / 100;
-        }
-        last.acrItem = Math.round((last.novoTotal - last.total) * 100) / 100;
-      }
-
-      return result;
+      toast.success("Valor negociado aplicado! Clique 'Salvar' para gravar.");
     }
 
     function aplicarAcrescimo() {
       if (!acrescimoModal) return;
-      const preview = calcAcrescimoPreview(acrescimoModal.fornecedorId, acrescimoTipo, acrescimoValor);
+      const preview = calcNegociadoPreview(acrescimoModal.fornecedorId, acrescimoValor);
       if (!preview.length) return;
       const updates: Record<string, string> = {};
       for (const it of preview) {
@@ -3451,7 +3378,7 @@ export default function Cotacoes() {
       setAcrescimoModal(null);
       setAcrescimoValor("");
       setAcrescimoPreviewing(false);
-      toast.success("Acréscimo comercial aplicado! Clique 'Salvar' para gravar.");
+      toast.success("Valor negociado aplicado! Clique 'Salvar' para gravar.");
     }
 
     function handleSalvarPrecos(fornecedorId: number) {
@@ -5399,12 +5326,12 @@ export default function Cotacoes() {
                                                 {salvarRespostas.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} {salvarRespostas.isPending ? `${Math.round(salvarProgress ?? 0)}%` : "Salvar"}
                                               </Button>
                                               <Button size="sm" variant="outline"
-                                                onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); setDescontoModal({ fornecedorId: p.fornecedorId }); setDescontoTipo("valor"); setDescontoValor(""); setDescontoPreviewing(false); }}
+                                                onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); setDescontoModal({ fornecedorId: p.fornecedorId }); setDescontoValor(""); setDescontoPreviewing(false); }}
                                                 className="h-6 text-[10px] border-amber-200 text-amber-700 hover:bg-amber-50 gap-1 px-2">
                                                 <TrendingDown className="h-3 w-3" /> Desconto
                                               </Button>
                                               <Button size="sm" variant="outline"
-                                                onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); setAcrescimoModal({ fornecedorId: p.fornecedorId }); setAcrescimoTipo("valor"); setAcrescimoValor(""); setAcrescimoPreviewing(false); }}
+                                                onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); setAcrescimoModal({ fornecedorId: p.fornecedorId }); setAcrescimoValor(""); setAcrescimoPreviewing(false); }}
                                                 className="h-6 text-[10px] border-indigo-200 text-indigo-700 hover:bg-indigo-50 gap-1 px-2">
                                                 <TrendingUp className="h-3 w-3" /> Acréscimo
                                               </Button>
@@ -6502,50 +6429,27 @@ export default function Cotacoes() {
               <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-200 px-5 py-3 rounded-t-xl flex items-center justify-between">
                 <div>
                   <h2 className="text-base font-bold text-amber-800 flex items-center gap-2"><TrendingDown className="h-4 w-4" /> Desconto Comercial</h2>
-                  <p className="text-[11px] text-amber-600">Distribui proporcionalmente entre os itens</p>
+                  <p className="text-[11px] text-amber-600">Digite o valor final negociado — distribui proporcionalmente entre os itens</p>
                 </div>
                 <button onClick={() => { setDescontoModal(null); setDescontoPreviewing(false); }} className="text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button>
               </div>
 
               <div className="px-5 py-4 space-y-3">
                 <div className="flex items-end gap-3">
-                  <div>
-                    <Label className="text-[11px] text-gray-600">Tipo</Label>
-                    <div className="flex gap-1.5 mt-1">
-                      <button onClick={() => { setDescontoTipo("valor"); setDescontoValor(""); setDescontoPreviewing(false); }}
-                        className={`py-1.5 px-2.5 rounded-lg text-xs font-medium border transition-colors ${descontoTipo === "valor" ? "bg-amber-100 border-amber-400 text-amber-800" : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
-                        R$ Desc.
-                      </button>
-                      <button onClick={() => { setDescontoTipo("percentual"); setDescontoValor(""); setDescontoPreviewing(false); }}
-                        className={`py-1.5 px-2.5 rounded-lg text-xs font-medium border transition-colors ${descontoTipo === "percentual" ? "bg-amber-100 border-amber-400 text-amber-800" : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
-                        %
-                      </button>
-                      <button onClick={() => { setDescontoTipo("final"); setDescontoValor(""); setDescontoPreviewing(false); }}
-                        className={`py-1.5 px-2.5 rounded-lg text-xs font-medium border transition-colors ${descontoTipo === "final" ? "bg-emerald-100 border-emerald-400 text-emerald-800" : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
-                        Valor Final
-                      </button>
-                    </div>
-                  </div>
                   <div className="flex-1">
-                    <Label className="text-[11px] text-gray-600">{descontoTipo === "valor" ? "Valor do Desconto (R$)" : descontoTipo === "percentual" ? "Percentual (%)" : "Valor Final Desejado (R$)"}</Label>
-                    {descontoTipo === "percentual" ? (
-                      <Input type="number" step="0.1" min="0" value={descontoValor}
-                        onChange={e => { setDescontoValor(e.target.value); setDescontoPreviewing(false); }}
-                        placeholder="3,5" className="mt-1 h-8 text-sm font-mono" autoFocus />
-                    ) : (
-                      <Input type="text" inputMode="decimal" value={descontoValor}
-                        onChange={e => {
-                          const raw = e.target.value.replace(/[^\d,]/g, "");
-                          const parts = raw.split(",");
-                          const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-                          const formatted = parts.length > 1 ? `${intPart},${parts[1].slice(0, 2)}` : intPart;
-                          setDescontoValor(formatted);
-                          setDescontoPreviewing(false);
-                        }}
-                        placeholder={descontoTipo === "valor" ? "1.500,00" : "50.000,00"} className="mt-1 h-8 text-sm font-mono" autoFocus />
-                    )}
+                    <Label className="text-[11px] text-gray-600">Valor Negociado Total (R$)</Label>
+                    <Input type="text" inputMode="decimal" value={descontoValor}
+                      onChange={e => {
+                        const raw = e.target.value.replace(/[^\d,]/g, "");
+                        const parts = raw.split(",");
+                        const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+                        const formatted = parts.length > 1 ? `${intPart},${parts[1].slice(0, 2)}` : intPart;
+                        setDescontoValor(formatted);
+                        setDescontoPreviewing(false);
+                      }}
+                      placeholder="Ex: 48.500,00" className="mt-1 h-8 text-sm font-mono" autoFocus />
                   </div>
-                  <Button size="sm" onClick={() => setDescontoPreviewing(true)} disabled={!descontoValor || (() => { const v = descontoTipo === "percentual" ? parseFloat(descontoValor) : parseFloat(descontoValor.replace(/\./g, "").replace(",", ".")); return isNaN(v) || v <= 0; })()}
+                  <Button size="sm" onClick={() => setDescontoPreviewing(true)} disabled={!descontoValor || (() => { const v = parseFloat(descontoValor.replace(/\./g, "").replace(",", ".")); return isNaN(v) || v <= 0; })()}
                     className="h-8 bg-amber-600 hover:bg-amber-700 text-white gap-1 text-xs">
                     <BarChart3 className="h-3.5 w-3.5" /> Calcular
                   </Button>
@@ -6553,15 +6457,16 @@ export default function Cotacoes() {
 
                 {(() => {
                   if (!descontoPreviewing) return null;
-                  const preview = calcDescontoPreview(descontoModal.fornecedorId, descontoTipo, descontoValor);
+                  const preview = calcNegociadoPreview(descontoModal.fornecedorId, descontoValor);
                   if (!preview.length) return (
                     <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
-                      <p className="text-xs text-red-600 font-medium">Valor inválido — verifique se não excede o total</p>
+                      <p className="text-xs text-red-600 font-medium">Valor inválido — deve ser diferente do total atual e maior que zero</p>
                     </div>
                   );
                   const totalOriginal = preview.reduce((s, i) => s + i.total, 0);
                   const totalNovo = preview.reduce((s, i) => s + i.novoTotal, 0);
-                  const totalDesconto = totalOriginal - totalNovo;
+                  const diferenca = totalNovo - totalOriginal;
+                  const isAcr = diferenca > 0;
                   return (
                     <div className="space-y-2">
                       <div className="flex gap-2">
@@ -6569,9 +6474,9 @@ export default function Cotacoes() {
                           <p className="text-[9px] text-gray-500 uppercase font-semibold">Original</p>
                           <p className="text-sm font-bold text-gray-700">{totalOriginal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
                         </div>
-                        <div className="flex-1 bg-amber-50 rounded-lg border border-amber-200 p-2 text-center">
-                          <p className="text-[9px] text-amber-600 uppercase font-semibold">Desconto ({(totalDesconto / totalOriginal * 100).toFixed(1)}%)</p>
-                          <p className="text-sm font-bold text-amber-700">- {totalDesconto.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+                        <div className={`flex-1 rounded-lg border p-2 text-center ${isAcr ? "bg-indigo-50 border-indigo-200" : "bg-amber-50 border-amber-200"}`}>
+                          <p className={`text-[9px] uppercase font-semibold ${isAcr ? "text-indigo-600" : "text-amber-600"}`}>{isAcr ? "Acréscimo" : "Desconto"} ({(Math.abs(diferenca) / totalOriginal * 100).toFixed(1)}%)</p>
+                          <p className={`text-sm font-bold ${isAcr ? "text-indigo-700" : "text-amber-700"}`}>{isAcr ? "+" : "−"} {Math.abs(diferenca).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
                         </div>
                         <div className="flex-1 bg-emerald-50 rounded-lg border border-emerald-200 p-2 text-center">
                           <p className="text-[9px] text-emerald-600 uppercase font-semibold">Novo Total</p>
@@ -6593,7 +6498,7 @@ export default function Cotacoes() {
                             {preview.map(it => (
                               <tr key={it.id}>
                                 <td className="px-2 py-1 text-gray-700 max-w-[160px] truncate" title={it.descricao}>{it.descricao}</td>
-                                <td className="px-2 py-1 text-right text-gray-400 line-through">{it.precoAtual.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
+                                <td className="px-2 py-1 text-right text-gray-400">{it.precoAtual.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
                                 <td className="px-2 py-1 text-right text-emerald-700 font-bold">{it.novoPreco.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
                                 <td className="px-2 py-1 text-right text-emerald-600">{it.novoTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td>
                               </tr>
@@ -6609,7 +6514,7 @@ export default function Cotacoes() {
               <div className="border-t border-gray-200 bg-gray-50 px-5 py-2.5 flex items-center justify-end gap-2 rounded-b-xl">
                 <Button size="sm" variant="outline" onClick={() => { setDescontoModal(null); setDescontoPreviewing(false); }} className="h-8 text-xs">Cancelar</Button>
                 <Button size="sm"
-                  disabled={!descontoPreviewing || calcDescontoPreview(descontoModal.fornecedorId, descontoTipo, descontoValor).length === 0}
+                  disabled={!descontoPreviewing || calcNegociadoPreview(descontoModal.fornecedorId, descontoValor).length === 0}
                   onClick={() => aplicarDesconto()}
                   className="h-8 bg-amber-600 hover:bg-amber-700 text-white gap-1.5 text-xs">
                   <CheckCircle className="h-3.5 w-3.5" /> Aplicar
@@ -6627,50 +6532,27 @@ export default function Cotacoes() {
               <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-indigo-200 px-5 py-3 rounded-t-xl flex items-center justify-between">
                 <div>
                   <h2 className="text-base font-bold text-indigo-800 flex items-center gap-2"><TrendingUp className="h-4 w-4" /> Acréscimo Comercial</h2>
-                  <p className="text-[11px] text-indigo-600">Distribui proporcionalmente entre os itens</p>
+                  <p className="text-[11px] text-indigo-600">Digite o valor final negociado — distribui proporcionalmente entre os itens</p>
                 </div>
                 <button onClick={() => { setAcrescimoModal(null); setAcrescimoPreviewing(false); }} className="text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button>
               </div>
 
               <div className="px-5 py-4 space-y-3">
                 <div className="flex items-end gap-3">
-                  <div>
-                    <Label className="text-[11px] text-gray-600">Tipo</Label>
-                    <div className="flex gap-1.5 mt-1">
-                      <button onClick={() => { setAcrescimoTipo("valor"); setAcrescimoValor(""); setAcrescimoPreviewing(false); }}
-                        className={`py-1.5 px-2.5 rounded-lg text-xs font-medium border transition-colors ${acrescimoTipo === "valor" ? "bg-indigo-100 border-indigo-400 text-indigo-800" : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
-                        R$ Acrésc.
-                      </button>
-                      <button onClick={() => { setAcrescimoTipo("percentual"); setAcrescimoValor(""); setAcrescimoPreviewing(false); }}
-                        className={`py-1.5 px-2.5 rounded-lg text-xs font-medium border transition-colors ${acrescimoTipo === "percentual" ? "bg-indigo-100 border-indigo-400 text-indigo-800" : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
-                        %
-                      </button>
-                      <button onClick={() => { setAcrescimoTipo("final"); setAcrescimoValor(""); setAcrescimoPreviewing(false); }}
-                        className={`py-1.5 px-2.5 rounded-lg text-xs font-medium border transition-colors ${acrescimoTipo === "final" ? "bg-purple-100 border-purple-400 text-purple-800" : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"}`}>
-                        Valor Final
-                      </button>
-                    </div>
-                  </div>
                   <div className="flex-1">
-                    <Label className="text-[11px] text-gray-600">{acrescimoTipo === "valor" ? "Valor do Acréscimo (R$)" : acrescimoTipo === "percentual" ? "Percentual (%)" : "Valor Final Desejado (R$)"}</Label>
-                    {acrescimoTipo === "percentual" ? (
-                      <Input type="number" step="0.1" min="0" value={acrescimoValor}
-                        onChange={e => { setAcrescimoValor(e.target.value); setAcrescimoPreviewing(false); }}
-                        placeholder="3,5" className="mt-1 h-8 text-sm font-mono" autoFocus />
-                    ) : (
-                      <Input type="text" inputMode="decimal" value={acrescimoValor}
-                        onChange={e => {
-                          const raw = e.target.value.replace(/[^\d,]/g, "");
-                          const parts = raw.split(",");
-                          const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-                          const formatted = parts.length > 1 ? `${intPart},${parts[1].slice(0, 2)}` : intPart;
-                          setAcrescimoValor(formatted);
-                          setAcrescimoPreviewing(false);
-                        }}
-                        placeholder={acrescimoTipo === "valor" ? "1.500,00" : "60.000,00"} className="mt-1 h-8 text-sm font-mono" autoFocus />
-                    )}
+                    <Label className="text-[11px] text-gray-600">Valor Negociado Total (R$)</Label>
+                    <Input type="text" inputMode="decimal" value={acrescimoValor}
+                      onChange={e => {
+                        const raw = e.target.value.replace(/[^\d,]/g, "");
+                        const parts = raw.split(",");
+                        const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+                        const formatted = parts.length > 1 ? `${intPart},${parts[1].slice(0, 2)}` : intPart;
+                        setAcrescimoValor(formatted);
+                        setAcrescimoPreviewing(false);
+                      }}
+                      placeholder="Ex: 62.000,00" className="mt-1 h-8 text-sm font-mono" autoFocus />
                   </div>
-                  <Button size="sm" onClick={() => setAcrescimoPreviewing(true)} disabled={!acrescimoValor || (() => { const v = acrescimoTipo === "percentual" ? parseFloat(acrescimoValor) : parseFloat(acrescimoValor.replace(/\./g, "").replace(",", ".")); return isNaN(v) || v <= 0; })()}
+                  <Button size="sm" onClick={() => setAcrescimoPreviewing(true)} disabled={!acrescimoValor || (() => { const v = parseFloat(acrescimoValor.replace(/\./g, "").replace(",", ".")); return isNaN(v) || v <= 0; })()}
                     className="h-8 bg-indigo-600 hover:bg-indigo-700 text-white gap-1 text-xs">
                     <BarChart3 className="h-3.5 w-3.5" /> Calcular
                   </Button>
@@ -6678,15 +6560,16 @@ export default function Cotacoes() {
 
                 {(() => {
                   if (!acrescimoPreviewing) return null;
-                  const preview = calcAcrescimoPreview(acrescimoModal.fornecedorId, acrescimoTipo, acrescimoValor);
+                  const preview = calcNegociadoPreview(acrescimoModal.fornecedorId, acrescimoValor);
                   if (!preview.length) return (
                     <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
-                      <p className="text-xs text-red-600 font-medium">Valor inválido — verifique o valor informado</p>
+                      <p className="text-xs text-red-600 font-medium">Valor inválido — deve ser diferente do total atual e maior que zero</p>
                     </div>
                   );
                   const totalOriginal = preview.reduce((s, i) => s + i.total, 0);
                   const totalNovo = preview.reduce((s, i) => s + i.novoTotal, 0);
-                  const totalAcrescimo = totalNovo - totalOriginal;
+                  const diferenca = totalNovo - totalOriginal;
+                  const isAcr = diferenca > 0;
                   return (
                     <div className="space-y-2">
                       <div className="flex gap-2">
@@ -6694,9 +6577,9 @@ export default function Cotacoes() {
                           <p className="text-[9px] text-gray-500 uppercase font-semibold">Original</p>
                           <p className="text-sm font-bold text-gray-700">{totalOriginal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
                         </div>
-                        <div className="flex-1 bg-indigo-50 rounded-lg border border-indigo-200 p-2 text-center">
-                          <p className="text-[9px] text-indigo-600 uppercase font-semibold">Acréscimo ({(totalAcrescimo / totalOriginal * 100).toFixed(1)}%)</p>
-                          <p className="text-sm font-bold text-indigo-700">+ {totalAcrescimo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+                        <div className={`flex-1 rounded-lg border p-2 text-center ${isAcr ? "bg-indigo-50 border-indigo-200" : "bg-amber-50 border-amber-200"}`}>
+                          <p className={`text-[9px] uppercase font-semibold ${isAcr ? "text-indigo-600" : "text-amber-600"}`}>{isAcr ? "Acréscimo" : "Desconto"} ({(Math.abs(diferenca) / totalOriginal * 100).toFixed(1)}%)</p>
+                          <p className={`text-sm font-bold ${isAcr ? "text-indigo-700" : "text-amber-700"}`}>{isAcr ? "+" : "−"} {Math.abs(diferenca).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
                         </div>
                         <div className="flex-1 bg-purple-50 rounded-lg border border-purple-200 p-2 text-center">
                           <p className="text-[9px] text-purple-600 uppercase font-semibold">Novo Total</p>
@@ -6734,7 +6617,7 @@ export default function Cotacoes() {
               <div className="border-t border-gray-200 bg-gray-50 px-5 py-2.5 flex items-center justify-end gap-2 rounded-b-xl">
                 <Button size="sm" variant="outline" onClick={() => { setAcrescimoModal(null); setAcrescimoPreviewing(false); }} className="h-8 text-xs">Cancelar</Button>
                 <Button size="sm"
-                  disabled={!acrescimoPreviewing || calcAcrescimoPreview(acrescimoModal.fornecedorId, acrescimoTipo, acrescimoValor).length === 0}
+                  disabled={!acrescimoPreviewing || calcNegociadoPreview(acrescimoModal.fornecedorId, acrescimoValor).length === 0}
                   onClick={() => aplicarAcrescimo()}
                   className="h-8 bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 text-xs">
                   <CheckCircle className="h-3.5 w-3.5" /> Aplicar

@@ -5302,6 +5302,12 @@ REGRAS DE EXTRAÇÃO:
             console.log(`[SyncSchema+] Rev. 4188 backfill BH: ${periodsToFix.length} período(s), ${totalFixados} lançamento(s) inserido(s).`);
         } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4188 backfill BH:", e?.message || e); }
 
+        try {
+          await db.execute(sql`ALTER TABLE compras_solicitacoes_itens ADD COLUMN IF NOT EXISTS somente_mo BOOLEAN DEFAULT false`);
+          await db.execute(sql`ALTER TABLE compras_cotacoes_itens ADD COLUMN IF NOT EXISTS somente_mo BOOLEAN DEFAULT false`);
+          console.log("[SyncSchema+] Rev. 4243: somente_mo garantida em compras_solicitacoes_itens + compras_cotacoes_itens.");
+        } catch (e: any) { console.error("[SyncSchema+] FALHA Rev.4243 somente_mo:", e?.message || e); }
+
       } catch (e: any) { console.error(`[SyncSchema+] ERROR:`, e?.message || e); }
     }).catch(e => console.error("[SyncSchema] Falha ao iniciar:", e));
     // Garantir colunas críticas adicionadas recentemente que o SyncSchema possa ter ignorado

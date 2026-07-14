@@ -1,4 +1,27 @@
 /**
+ * Rev. 4244 - DIALOGS DESCONTO/ACRÉSCIMO COMERCIAL: SOMENTE VALOR NEGOCIADO FINAL.
+ *
+ * ESCOPO: Simplificação dos dialogs "Desconto Comercial" e "Acréscimo Comercial"
+ * no painel de edição de cotações. Removido o seletor de tipo (R$ Acrés./Desc., %,
+ * Valor Final) — o usuário digita diretamente o VALOR NEGOCIADO TOTAL (valor final).
+ * A diferença (positiva = acréscimo, negativa = desconto) é distribuída
+ * proporcionalmente ao peso de cada item. Funciona bidirecionalmente: valor acima
+ * do total atual = acréscimo; abaixo = desconto. O preview mostra o badge correto
+ * em tempo real.
+ *
+ * MUDANÇAS:
+ *   - Cotacoes.tsx: removidos estados acrescimoTipo/descontoTipo e os setters.
+ *     Funções calcDescontoPreview + calcAcrescimoPreview fundidas em uma única
+ *     calcNegociadoPreview(fornecedorId, valorInput) que trata ± via diferença.
+ *     aplicarDesconto/aplicarAcrescimo simplificados para chamar calcNegociadoPreview.
+ *     Ambos os dialogs: seletor de tipo removido; input único "Valor Negociado
+ *     Total (R$)"; preview com badge dinâmico (Acréscimo/Desconto) baseado no sinal.
+ *   - server/_core/index.ts: SyncSchema+ Rev.4243 adicionado para garantir somente_mo
+ *     fora do bloco ColFix versionado (fix para coluna que não era criada no Neon).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+/**
  * Rev. 4243 - FLAG "SOMENTE MO" POR ITEM EM SC E COTAÇÕES.
  *
  * ESCOPO: toggle por item nas SCs de tipo "servico" (via EAP) + propagação automática
