@@ -5153,7 +5153,29 @@ export default function Cotacoes() {
                                   </th>
                                 );
                               })()}
-                              <th rowSpan={2} className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-2 min-w-56 max-w-md border-r border-gray-200 bg-gray-50 sticky left-0 z-30">Item</th>
+                              <th rowSpan={2} className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-2 min-w-56 max-w-md border-r border-gray-200 bg-gray-50 sticky left-0 z-30">
+                                <div className="flex items-center gap-3">
+                                  <span>Item</span>
+                                  {detalheFullscreen?.status === "pendente" && (
+                                    <div className="flex items-center gap-2 normal-case font-normal">
+                                      <button
+                                        onClick={() => setAddItemDialog(true)}
+                                        className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-medium transition-colors whitespace-nowrap"
+                                      >
+                                        <Plus className="h-3 w-3" />
+                                        Item avulso
+                                      </button>
+                                      <button
+                                        onClick={() => { setEapPickerOpen(true); setEapPickerSearch(""); setEapPickerSelected(new Set()); }}
+                                        className="flex items-center gap-1 text-[11px] text-emerald-600 hover:text-emerald-800 font-medium transition-colors whitespace-nowrap"
+                                      >
+                                        <ClipboardList className="h-3 w-3" />
+                                        da EAP
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </th>
                               <th rowSpan={2} className="text-center text-xs font-semibold text-gray-500 uppercase px-2 py-2 w-12 border-r border-gray-200 bg-gray-50">Un.</th>
                               <th colSpan={3} className="text-center text-xs font-semibold text-blue-600 uppercase px-2 py-2 border-r border-blue-100 bg-blue-50/60">
                                 {((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'servico'
@@ -6075,29 +6097,6 @@ export default function Cotacoes() {
                                 </React.Fragment>
                               );
                             })}
-                            {/* Rev. 4245/4250 — Botões incluir item avulso + da EAP */}
-                            {detalheFullscreen?.status === "pendente" && (
-                              <tr>
-                                <td colSpan={99} className="px-4 py-2 border-t border-dashed border-gray-200">
-                                  <div className="flex items-center gap-4">
-                                    <button
-                                      onClick={() => setAddItemDialog(true)}
-                                      className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
-                                    >
-                                      <Plus className="h-3.5 w-3.5" />
-                                      Incluir item avulso
-                                    </button>
-                                    <button
-                                      onClick={() => { setEapPickerOpen(true); setEapPickerSearch(""); setEapPickerSelected(new Set()); }}
-                                      className="flex items-center gap-1.5 text-xs text-emerald-600 hover:text-emerald-800 font-medium transition-colors"
-                                    >
-                                      <ClipboardList className="h-3.5 w-3.5" />
-                                      Incluir da EAP
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            )}
                           </tbody>
                           <tfoot>
                             {/* Totais */}
