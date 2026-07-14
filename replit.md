@@ -50,6 +50,8 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
+- **Rev. 4238** — **SCORECARD COMPRAS: SEPARAÇÃO LOCAÇÕES × EQUIP. PRÓPRIOS.** Query de locações reescrita: fonte primária = `almoxarifado_itens tipo='locado'` + LEFT JOIN `equipamentos_locados`; ferramentasAlmox exclui `tipo='locado'`; tab renomeada "Equip. Próprios". ZERO DELETE · ZERO ALTER destrutivo.
+
 - **Rev. 4237** — **RESULTADO FINANCEIRO: WATERFALL CORRETO (BRUTO → LÍQUIDO).** Fórmula: Receita − Custo Direto = Lucro Bruto → (−) Impostos → (−) Overhead → = Lucro Líquido. Linha 1 sempre visível (Lucro Bruto); Linha 2 condicional quando deduções configuradas. Sem deduções: Lucro Bruto em verde com CTA. PainelOrcamento: "Lucro Médio Mensal" renomeado para "Result. Bruto Mensal". ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4236** — **SCORECARD SST: LIGHTBOX NO TOP 5 MAIS ATESTADOS.** Estende o lightbox de foto (Rev. 4234) para o bloco "Top 5 — Mais Atestados" — clicar na foto/avatar abre Dialog de ampliação. ZERO DELETE · ZERO ALTER destrutivo.

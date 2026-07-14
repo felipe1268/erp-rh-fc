@@ -1442,6 +1442,7 @@ export const scorecardRouter = router({
                 OR ai.categoria ILIKE '%EPI%'
                 OR ai.equipamento_vinculado_tipo IS NOT NULL
               )
+              AND (ai.equipamento_vinculado_tipo IS NULL OR ai.equipamento_vinculado_tipo != 'locado')
             ORDER BY ai.nome
           `);
           return r.rows as any[];
@@ -1476,19 +1477,73 @@ export const scorecardRouter = router({
         // ── 6. EQUIPAMENTOS LOCADOS ───────────────────────────────────────────
         // Busca tanto pelo obra_id direto quanto via vínculo em almoxarifado_itens
         safe("locacoes", async () => {
+          // Fonte primária: almoxarifado_itens com tipo = 'locado' para esta obra.
+          // Isso garante que qualquer item marcado como locado no almox apareça aqui,
+          // independentemente do obra_id em equipamentos_locados.
           const r = await db.execute(sql`
             SELECT
-              el.id, el.descricao, el.categoria, el.status,
-              el.foto_url,
-              el.data_inicio, el.data_fim_prevista, el.data_fim_real,
-              el.valor_mensal, el.valor_diario,
+              ai.id,
+              ai.nome                             AS descricao,
+              ai.categoria,
+              COALESCE(el.status, 'em_uso')       AS status,
+              COALESCE(el.foto_url, ai.foto_url)  AS foto_url,
+              COALESCE(el.data_inicio, ai.criado_em::date)  AS data_inicio,
+              el.data_fim_prevista,
+              el.data_fim_real,
+              el.valor_mensal,
+              el.valor_diario,
               el.funcionario_responsavel_nome,
               el.numero_contrato_fornecedor,
               el.fornecedor_nome,
+              ai.quantidade_atual,
+              CASE
+                WHEN el.data_fim_real IS NOT NULL
+                THEN (el.data_fim_real::date - COALESCE(el.data_inicio, ai.criado_em::date))
+                ELSE (CURRENT_DATE - COALESCE(el.data_inicio, ai.criado_em::date))
+              END AS dias_locado,
+              CASE
+                WHEN el.valor_mensal IS NOT NULL AND el.valor_mensal > 0
+                THEN ROUND(
+                  el.valor_mensal *
+                  EXTRACT(days FROM (
+                    COALESCE(el.data_fim_real::date, CURRENT_DATE)
+                    - COALESCE(el.data_inicio, ai.criado_em::date)
+                  )) / 30.0, 2)
+                ELSE NULL
+              END AS custo_estimado,
+              'locado' AS tipo_vinculo
+            FROM almoxarifado_itens ai
+            LEFT JOIN equipamentos_locados el
+              ON el.id          = ai.equipamento_vinculado_id
+             AND el.company_id  = ${input.companyId}
+            WHERE ai.obra_id    = ${input.obraId}
+              AND ai.company_id = ${input.companyId}
+              AND ai.ativo      = true
+              AND ai.equipamento_vinculado_tipo = 'locado'
+
+            UNION ALL
+
+            -- Fallback: equipamentos_locados com obra_id direto que não têm
+            -- almoxarifado_itens vinculado nesta obra (evita duplicatas)
+            SELECT
+              el.id,
+              el.descricao,
+              el.categoria,
+              el.status,
+              el.foto_url,
+              el.data_inicio,
+              el.data_fim_prevista,
+              el.data_fim_real,
+              el.valor_mensal,
+              el.valor_diario,
+              el.funcionario_responsavel_nome,
+              el.numero_contrato_fornecedor,
+              el.fornecedor_nome,
+              NULL AS quantidade_atual,
               CASE
                 WHEN el.data_fim_real IS NOT NULL
                 THEN (el.data_fim_real::date - el.data_inicio::date)
-                ELSE (CURRENT_DATE  - el.data_inicio::date)
+                ELSE (CURRENT_DATE - el.data_inicio::date)
               END AS dias_locado,
               CASE
                 WHEN el.valor_mensal IS NOT NULL AND el.valor_mensal > 0
@@ -1499,24 +1554,23 @@ export const scorecardRouter = router({
                   )) / 30.0, 2)
                 ELSE NULL
               END AS custo_estimado,
-              -- Sinaliza se é item próprio da empresa alocado temporariamente
-              COALESCE(ai_link.equipamento_vinculado_tipo, 'locado') AS tipo_vinculo,
-              ai_link.nome AS almox_nome
+              'locado' AS tipo_vinculo
             FROM equipamentos_locados el
-            LEFT JOIN almoxarifado_itens ai_link
-              ON ai_link.equipamento_vinculado_tipo = 'locado'
-             AND ai_link.equipamento_vinculado_id   = el.id
-             AND ai_link.obra_id   = ${input.obraId}
-             AND ai_link.company_id = ${input.companyId}
             WHERE el.company_id = ${input.companyId}
-              AND el.status != 'devolvido'
-              AND (
-                el.obra_id = ${input.obraId}
-                OR ai_link.id IS NOT NULL
+              AND el.obra_id    = ${input.obraId}
+              AND el.status    != 'devolvido'
+              AND NOT EXISTS (
+                SELECT 1 FROM almoxarifado_itens ai2
+                WHERE ai2.equipamento_vinculado_id   = el.id
+                  AND ai2.equipamento_vinculado_tipo  = 'locado'
+                  AND ai2.obra_id    = ${input.obraId}
+                  AND ai2.company_id = ${input.companyId}
+                  AND ai2.ativo      = true
               )
+
             ORDER BY
-              CASE el.status WHEN 'em_uso' THEN 0 WHEN 'atrasado' THEN 1 ELSE 2 END,
-              el.data_inicio DESC
+              CASE status WHEN 'em_uso' THEN 0 WHEN 'atrasado' THEN 1 ELSE 2 END,
+              descricao
             LIMIT 60
           `);
           return r.rows as any[];

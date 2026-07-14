@@ -1,4 +1,29 @@
 /**
+ * Rev. 4238 - SCORECARD COMPRAS: SEPARAÇÃO LOCAÇÕES × EQUIP. PRÓPRIOS.
+ *
+ * PROBLEMA: A aba "Ferramentas Almox" listava itens com badge "Locado" misturados
+ * com ferramentas e equipamentos próprios. A aba "Locações" aparecia vazia porque
+ * a query começava de `equipamentos_locados` e falhava quando o `obra_id` não batia.
+ *
+ * CAUSA RAIZ: Os itens locados vivem em `almoxarifado_itens` com
+ * `equipamento_vinculado_tipo = 'locado'`. A query antiga invertia a lógica
+ * (partia de `equipamentos_locados` e LEFT JOIN para almox), então o filtro
+ * `el.obra_id = obraId OR ai_link.id IS NOT NULL` não encontrava nada.
+ *
+ * MUDANÇAS:
+ *   scorecard.ts — ferramentasAlmox:
+ *     Adicionado `AND (tipo IS NULL OR tipo != 'locado')` → exclui locados da lista.
+ *   scorecard.ts — locacoes:
+ *     Query reescrita: fonte primária = almoxarifado_itens tipo='locado' + LEFT JOIN
+ *     equipamentos_locados para detalhes (valor, fornecedor, contrato). UNION ALL
+ *     com equipamentos_locados.obra_id direto sem almox vinculado (fallback).
+ *   ScorecardTab.tsx:
+ *     Tab "🔧 Ferramentas Almox" → "🔧 Equip. Próprios" (mais preciso).
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4237 - RESULTADO FINANCEIRO DA OBRA: WATERFALL CORRETO (BRUTO → LÍQUIDO).
  *
  * PROBLEMA: A tela "Resultado Financeiro da Obra" exibia apenas 3 colunas
