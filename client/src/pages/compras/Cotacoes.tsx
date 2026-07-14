@@ -5667,7 +5667,16 @@ export default function Cotacoes() {
                               const hasComposicao = !it._grouped && ((it as any).composicaoInsumos ?? []).length > 0;
                               const hasPacoteExpand = it._isPacoteGroup && (it._childItems ?? []).length > 0;
                               const isExpanded = expandedComposicao[it.id] ?? false;
-                              const numFornCols = (mapa?.participantes ?? []).length * 4; // Rev. 1991: +1 col Saldo por fornecedor
+                              const numFornCols = (mapa?.participantes ?? []).length * 4;
+                              const isPacoteTipoMapa = ((mapa as any)?.tipoEfetivo ?? mapa?.cotacao?.tipo) === 'pacote';
+                              // Para grupos pacote: split MAT/MDO da meta a partir dos child items
+                              const pacoteMetaMat = (it._isPacoteGroup && isPacoteTipoMapa)
+                                ? Math.round((it._childItems ?? []).reduce((s: number, c: any) => s + parseFloat(c.metaUnitarioMat ?? "0") * parseFloat(c.quantidade ?? "0"), 0) * 100) / 100
+                                : 0;
+                              const pacoteMetaMdo = (it._isPacoteGroup && isPacoteTipoMapa)
+                                ? Math.round((it._childItems ?? []).reduce((s: number, c: any) => s + parseFloat(c.metaUnitarioMdo ?? "0") * parseFloat(c.quantidade ?? "0"), 0) * 100) / 100
+                                : 0;
+                              const showPacoteMatMdo = pacoteMetaMat > 0 || pacoteMetaMdo > 0; // Rev. 1991: +1 col Saldo por fornecedor
                               return (
                                 <React.Fragment key={it.id}>
                                 <tr className={`group border-b border-gray-100 hover:bg-gray-50/60 ${it._isPacoteGroup ? "bg-indigo-50/30" : ""} ${mapaItemsChecked.has(it.id) ? "bg-blue-50/40" : ""}`}>
@@ -5793,7 +5802,22 @@ export default function Cotacoes() {
                                     {metaQtdVal > 0 ? metaQtdVal.toLocaleString("pt-BR") : <span className="text-gray-300">—</span>}
                                   </td>
                                   <td className="px-3 py-2 text-blue-700 text-xs text-right bg-blue-50/30 font-semibold border-r border-blue-100">
-                                    {metaTot > 0 ? metaTot.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
+                                    {showPacoteMatMdo ? (
+                                      <div className="flex flex-col items-end gap-0.5">
+                                        {pacoteMetaMat > 0 && (
+                                          <div className="flex items-center justify-end gap-1">
+                                            <span className="text-[9px] text-blue-500 font-bold">MAT</span>
+                                            <span className="text-blue-700">{pacoteMetaMat.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                                          </div>
+                                        )}
+                                        {pacoteMetaMdo > 0 && (
+                                          <div className="flex items-center justify-end gap-1">
+                                            <span className="text-[9px] text-orange-500 font-bold">MDO</span>
+                                            <span className="text-orange-700">{pacoteMetaMdo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : metaTot > 0 ? metaTot.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
                                   </td>
                                   {/* Saldo Orçamentário — coluna única condensada */}
                                   {(() => {
@@ -5955,9 +5979,44 @@ export default function Cotacoes() {
                                         </td>
                                         <td key={`tot_${p.fornecedorId}`} className={`px-2 py-1 text-right border-r border-gray-100 ${rowCls} ${isBest ? "bg-emerald-50" : ""} ${vencedorPorItem[it.id] === p.fornecedorId ? "ring-1 ring-inset ring-emerald-400" : ""}`}>
                                           <div className="flex items-center justify-end gap-1">
+                                            {it._isPacoteGroup && isPacoteTipoMapa ? (() => {
+                                              const childItems = it._childItems as any[];
+                                              let matT = 0, mdoT = 0;
+                                              for (const c of childItems) {
+                                                const rr = mapa?.respostaMap?.[`${c.id}_${p.fornecedorId}`];
+                                                const price = parseFloat((rr as any)?.precoUnitario ?? "0");
+                                                const qty = parseFloat((rr as any)?.quantidade ?? c.quantidade ?? "1");
+                                                const tot = price * qty;
+                                                if (tot <= 0) continue;
+                                                const cMat = parseFloat(c.metaUnitarioMat ?? "0");
+                                                const cMdo = parseFloat(c.metaUnitarioMdo ?? "0");
+                                                if (cMdo > 0 && cMat === 0) mdoT += tot;
+                                                else matT += tot;
+                                              }
+                                              matT = Math.round(matT * 100) / 100;
+                                              mdoT = Math.round(mdoT * 100) / 100;
+                                              if (matT <= 0 && mdoT <= 0) return <span className="text-gray-300 text-xs">—</span>;
+                                              return (
+                                                <div className="flex flex-col items-end gap-0.5">
+                                                  {matT > 0 && (
+                                                    <div className="flex items-center justify-end gap-1">
+                                                      <span className="text-[9px] text-blue-500 font-bold">MAT</span>
+                                                      <span className={`text-xs font-semibold ${isMelhor ? "text-emerald-700" : "text-gray-700"}`}>{matT.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                                                    </div>
+                                                  )}
+                                                  {mdoT > 0 && (
+                                                    <div className="flex items-center justify-end gap-1">
+                                                      <span className="text-[9px] text-orange-500 font-bold">MDO</span>
+                                                      <span className={`text-xs font-semibold ${isMelhor ? "text-emerald-600" : "text-orange-700"}`}>{mdoT.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              );
+                                            })() : (
                                             <span className={`text-xs font-semibold ${isMelhor ? "text-emerald-700" : "text-gray-700"}`}>
                                               {displayTotal > 0 ? displayTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : <span className="text-gray-300">—</span>}
                                             </span>
+                                            )}
                                             {displayPreco > 0 && detalheFullscreen?.status !== "aprovada" && (
                                               <button
                                                 type="button"
