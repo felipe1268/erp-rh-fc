@@ -364,6 +364,31 @@ export default function FinanceiroCheques() {
     { enabled: !!companyId }
   );
   const conferirMut = (trpc as any).cheques.conferirExtrato.useMutation();
+  const autoCorrigirMut = (trpc as any).cheques.autoCorrigirDivergencias.useMutation();
+  // Rev. 4261 — Auto-corrige divergências banco×controle (pendente → compensado) quando
+  // o extrato mostra match FORTE (nº+valor único). Dispara ao carregar `verif`. Usa ref
+  // estável (ano|mes) p/ não reenviar no mesmo período.
+  const autoCorrigirKeyRef = React.useRef<string>("");
+  React.useEffect(() => {
+    if (!companyId || !verif) return;
+    const key = `${companyId}|${ano}|${mesSel ?? "all"}`;
+    if (autoCorrigirKeyRef.current === key) return;
+    autoCorrigirKeyRef.current = key;
+    autoCorrigirMut.mutate(
+      { companyId: Number(companyId), ano, mes: mesSel ?? undefined },
+      {
+        onSuccess: (r: any) => {
+          if (r?.atualizados > 0) {
+            utils?.cheques?.listar?.invalidate?.();
+            utils?.cheques?.verificarExtratoResumo?.invalidate?.();
+            utils?.cheques?.resumo?.invalidate?.();
+          }
+        },
+        onError: () => { autoCorrigirKeyRef.current = ""; },
+      },
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId, ano, mesSel, !!verif]);
 
   // ── Fontes p/ o lançamento manual moderno (Rev. 3335) ──
   // Favorecido = cadastro de fornecedores; Conta emitida = contas bancárias da empresa.

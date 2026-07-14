@@ -50,11 +50,13 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Top 2 detalhadas
 
-- **Rev. 4260** — **CONTROLE DE CHEQUES: STATUS "DEVOLVIDO" AUTOMÁTICO AO DETECTAR PAR COMP+DEV NO EXTRATO.** Quando a Conciliação identifica um par compensação+devolução (cheque devolvido/sem fundos) no extrato bancário, o Controle de Cheques agora atualiza o status automaticamente de "Compensado" → "Devolvido" — sem exigir clique em "Desconsiderar". Backend: `autoMarcarChequesDevolvidos` (procedure idempotente, casa por número+valor, só altera `compensado`|`pendente`, nunca sobrescreve `devolvido`/`compensado_pix`/`sustado`/`cancelado`). Frontend: `useEffect` em `FinanceiroConciliacao.tsx` dispara a mutation quando `repDevol` tem itens, usando chave estável (sorted debitoIds) para evitar chamadas repetidas. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4261** — **CONTROLE DE CHEQUES: SINCRONIZAÇÃO AUTOMÁTICA COMPLETA COM O EXTRATO (AMBOS OS SENTIDOS).** Complementa Rev. 4260 com o sentido inverso: quando o banco compensou um cheque (match forte por número+valor, único no extrato) mas o Controle ainda mostra "Pendente", o status atualiza automaticamente para "Compensado" + `conciliado=1` + `data_compensacao`. A mensagem "Divergências entre o controle e o extrato" desaparece para os casos de match forte. Backend: `autoCorrigirDivergencias` em `cheques.ts` (só toca status='pendente', match forte exigido, idempotente). Frontend: `useEffect` em `FinanceiroCheques.tsx` dispara ao carregar `verif`, invalida as queries ao atualizar. ZERO DELETE · ZERO ALTER destrutivo.
 
-- **Rev. 4259** — **FIX: VALOR NEGOCIADO PACOTE — CORREÇÃO DE ARREDONDAMENTO NO ITEM ERRADO.** `calcNegociadoPreview` aplicava o resíduo de arredondamento no **último item do array** (`result[result.length - 1]`). Para cotações PACOTE, esse item é frequentemente um **item filho** de composição (`precoAtual = 0`, `peso = 0`) que não recebe `totalOverride` no save — a correção se perdia, resultando em total ligeiramente errado (ex: R$2.100.041,42 vs R$2.100.000,00). Fix: `lastNonZeroIdx` (último item com `total > 0`) usado em AMBOS os pontos: distribuição inicial do resíduo e passagem de correção pós-soma. ZERO DELETE · ZERO ALTER destrutivo.
+- **Rev. 4260** — **CONTROLE DE CHEQUES: STATUS "DEVOLVIDO" AUTOMÁTICO AO DETECTAR PAR COMP+DEV NO EXTRATO.** Quando a Conciliação identifica um par compensação+devolução (cheque devolvido/sem fundos) no extrato bancário, o Controle de Cheques agora atualiza o status automaticamente de "Compensado" → "Devolvido". Backend: `autoMarcarChequesDevolvidos` (idempotente, casa por número+valor, nunca sobrescreve `devolvido`/`compensado_pix`). Frontend: `useEffect` em `FinanceiroConciliacao.tsx`. ZERO DELETE · ZERO ALTER destrutivo.
 
 ### 5 one-liners
+
+- **Rev. 4259** — **FIX: VALOR NEGOCIADO PACOTE — CORREÇÃO DE ARREDONDAMENTO NO ITEM ERRADO.** `lastNonZeroIdx` (último item com `total > 0`) usado em AMBOS os pontos de correção em `calcNegociadoPreview`. ZERO DELETE · ZERO ALTER destrutivo.
 
 - **Rev. 4258** — **MAPA DE COTAÇÃO: 3 OTIMIZAÇÕES DE PERFORMANCE (812 ITENS).** 3 `useMemo` + substituição de IIFE + `Map` para `getMelhorPrecoItem`. ZERO DELETE · ZERO ALTER destrutivo.
 
@@ -68,7 +70,7 @@ A comprehensive full-stack ERP system for FC Engenharia, managing HR, payroll, p
 
 ### Histórico completo
 
-Ver `replit-history.md` para revisões Rev. 4251 e anteriores.
+Ver `replit-history.md` para revisões Rev. 4252 e anteriores.
 
 ## User preferences
 

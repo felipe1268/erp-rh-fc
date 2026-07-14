@@ -1293,6 +1293,67 @@ export const chequesRouter = router({
     return { conferidos, backfilled, divergencias, jaConferidos };
   }),
 
+  // Rev. 4261 — AUTO-CORRIGIR divergências banco×controle: quando o banco compensou
+  // um cheque com match FORTE (número+valor, único no extrato) mas o controle ainda
+  // diz 'pendente', atualiza automaticamente para 'compensado' + conciliado=1 +
+  // data_compensacao. Só toca status='pendente'; nunca altera 'devolvido','sustado',
+  // 'cancelado','compensado_pix'. Elimina a mensagem "Divergências entre o controle
+  // e o extrato" para os casos pendente×banco-compensado. IDEMPOTENTE.
+  autoCorrigirDivergencias: protectedProcedure.input(z.object({
+    companyId: z.number(),
+    ano: z.number().int().optional(),
+    mes: z.number().int().min(1).max(12).optional(),
+  })).mutation(async ({ input, ctx }) => {
+    await assertCompanyAccess(ctx.user, input.companyId);
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+    const params: unknown[] = [input.companyId];
+    let extra = ""; let pi = 2;
+    if (input.ano != null) { extra += ` AND ano_ref=$${pi++}`; params.push(input.ano); }
+    if (input.mes != null) { extra += ` AND mes_ref=$${pi++}`; params.push(input.mes); }
+    const res = await dbExecute(db,
+      `SELECT id, numero_cheque AS "numeroCheque", valor, status,
+              data_compensacao AS "dataCompensacao", COALESCE(conciliado,0) AS conciliado
+         FROM financial_cheques
+        WHERE company_id=$1 AND excluido_em IS NULL AND status='pendente'${extra}`, params);
+    const matchCheque = await montarMatcherExtrato(db, input.companyId);
+    const alvos: { id: number; dt: string }[] = [];
+    for (const c of (res.rows as any[])) {
+      const cls = classificarExtrato(c.status, matchCheque(c));
+      // extratoDivergente = banco encontrou como compensado MAS status != 'compensado'
+      // (no nosso caso status='pendente'). extratoForte = match por nº+valor (único).
+      if (cls.extratoDivergente && cls.extratoForte) {
+        const dt = cls.extratoData || new Date().toISOString().slice(0, 10);
+        alvos.push({ id: c.id, dt });
+      }
+    }
+    if (alvos.length === 0) return { atualizados: 0 };
+    const CHUNK = 200;
+    let atualizados = 0;
+    for (let i = 0; i < alvos.length; i += CHUNK) {
+      const lote = alvos.slice(i, i + CHUNK);
+      let n = 1;
+      const valuesSql = lote.map(() => `($${n++}::int, $${n++}::date)`).join(",");
+      const flat: unknown[] = [];
+      for (const a of lote) { flat.push(a.id, a.dt); }
+      flat.push(input.companyId);
+      const upd = await dbExecute(db,
+        `UPDATE financial_cheques f
+            SET status='compensado',
+                conciliado=1,
+                data_compensacao=COALESCE(f.data_compensacao, v.dt),
+                data_conciliacao=COALESCE(f.data_conciliacao, v.dt),
+                updated_at=NOW()
+           FROM (VALUES ${valuesSql}) AS v(id, dt)
+          WHERE f.id = v.id AND f.company_id=$${n}
+            AND f.status='pendente' AND f.excluido_em IS NULL
+          RETURNING f.id`,
+        flat);
+      atualizados += (upd.rows?.length ?? 0);
+    }
+    return { atualizados };
+  }),
+
   // Rev. 3329 — LANÇAMENTO MANUAL de um único cheque (além da importação por
   // planilha/IA). Reaproveita TODA a higienização da importação: `sanitizeChequeRow`
   // valida datas reais, normaliza status na whitelist e DERIVA mês/ano da data; o

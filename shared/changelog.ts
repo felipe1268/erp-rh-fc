@@ -1,4 +1,52 @@
 /**
+ * Rev. 4261 - CONTROLE DE CHEQUES: SINCRONIZAÇÃO AUTOMÁTICA COMPLETA — SENTIDO BANCO→CONTROLE (PENDENTE→COMPENSADO).
+ *
+ * PROBLEMA:
+ *   O painel "Divergências entre o controle e o extrato" (FinanceiroCheques.tsx) listava
+ *   cheques onde o banco compensou (extrato bancário mostra a saída), mas o Controle ainda
+ *   exibia "Pendente". O diálogo dizia explicitamente "O ERP não corrige o status
+ *   automaticamente — revise cada caso e ajuste manualmente". O usuário precisava editar
+ *   cada cheque manualmente para mudar para "Compensado".
+ *
+ * SOLUÇÃO:
+ *
+ * Backend — `autoCorrigirDivergencias` (cheques.ts):
+ *   Procedure idempotente que:
+ *   1. Carrega todos os cheques com status='pendente' do período/empresa.
+ *   2. Executa `montarMatcherExtrato` (reutiliza o matcher existente — já exclui pares
+ *      comp+dev, detecta devolução, faz match por nº+valor OU valor+data).
+ *   3. Para cada cheque onde `cls.extratoDivergente && cls.extratoForte`:
+ *      - extratoDivergente: banco encontrou como compensado mas status ≠ 'compensado'
+ *      - extratoForte: match por número+valor, ÚNICO no extrato (sem ambiguidade)
+ *   4. Atualiza em lote (CHUNK=200): status='compensado', conciliado=1,
+ *      data_compensacao=COALESCE(existente, data extrato), data_conciliacao=COALESCE(existente, hoje).
+ *   Guarda: só toca status='pendente' no WHERE → idempotente e seguro para concorrência.
+ *   Nunca toca 'devolvido', 'sustado', 'cancelado', 'compensado_pix'.
+ *
+ * Frontend — FinanceiroCheques.tsx:
+ *   Novo `useEffect` que dispara quando `verif` (verificarExtratoResumo) carrega para o
+ *   companyId/ano/mes atual. Usa `autoCorrigirKeyRef` (key = "companyId|ano|mes") para
+ *   evitar chamadas repetidas no mesmo período. Em caso de sucesso com atualizados>0,
+ *   invalida `listar`, `verificarExtratoResumo` e `resumo` para refletir o novo status.
+ *
+ * RESULTADO:
+ *   Ao abrir o Controle de Cheques, os cheques compensados no banco com match forte
+ *   são automaticamente marcados como "Compensado". O painel de divergências mostra
+ *   somente casos que realmente precisam de análise manual (match fraco, ou status
+ *   devolvido/sustado que diverge do banco).
+ *
+ * CONJUNTO COMPLETO (Rev. 4260+4261):
+ *   Rev. 4260: banco devolveu → controle auto-marca 'devolvido' (via FinanceiroConciliacao)
+ *   Rev. 4261: banco compensou + controle='pendente' → controle auto-marca 'compensado'
+ *
+ * ARQUIVOS:
+ *   server/routers/cheques.ts — procedure autoCorrigirDivergencias (após conferirExtrato)
+ *   client/src/pages/financeiro/FinanceiroCheques.tsx — mutation autoCorrigirMut + useEffect
+ *
+ * ZERO DELETE · ZERO ALTER destrutivo.
+ */
+
+/**
  * Rev. 4260 - CONTROLE DE CHEQUES: STATUS "DEVOLVIDO" AUTOMÁTICO AO DETECTAR PAR COMP+DEV NO EXTRATO.
  *
  * PROBLEMA:
